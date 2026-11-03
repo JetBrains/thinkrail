@@ -45,6 +45,33 @@ test("file rows expose path, copy, paste, and confirmed delete actions", async (
 
 	const readme = page.getByTestId("file-node").filter({ hasText: "README.md" });
 	await expect(readme).toBeVisible();
+	const readmeBox = await readme.boundingBox();
+	if (!readmeBox) throw new Error("README row has no bounding box");
+	const touch = {
+		x: readmeBox.x + readmeBox.width / 2,
+		y: readmeBox.y + readmeBox.height / 2,
+	};
+	await readme.dispatchEvent("pointerdown", {
+		pointerType: "touch",
+		pointerId: 1,
+		isPrimary: true,
+		button: 0,
+		buttons: 1,
+		clientX: touch.x,
+		clientY: touch.y,
+	});
+	await expect(page.getByTestId("file-tree-actions")).toBeVisible({ timeout: 1_500 });
+	await readme.dispatchEvent("pointerup", {
+		pointerType: "touch",
+		pointerId: 1,
+		isPrimary: true,
+		button: 0,
+		buttons: 0,
+		clientX: touch.x,
+		clientY: touch.y,
+	});
+	await page.keyboard.press("Escape");
+
 	await readme.click({ button: "right" });
 	await expect(readme).toHaveClass(/bg-control-bg-selected/);
 	await page.getByTestId("file-tree-copy-relative").click();

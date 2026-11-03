@@ -6,7 +6,27 @@ import {
 	RiFolderFill,
 	RiFolderLine,
 } from "@remixicon/react";
-import type { KeyboardEvent, MouseEvent, ReactNode, Ref } from "react";
+import type { ComponentPropsWithoutRef, ReactNode, Ref } from "react";
+
+type TreeRowProps = {
+	ref?: Ref<HTMLButtonElement> | undefined;
+	testid: string;
+	kind: "dir" | "file";
+	expanded?: boolean;
+	active?: boolean;
+	highlighted?: boolean;
+	subtle?: boolean;
+	dataStatus?: string | undefined;
+	dataViewed?: boolean;
+	label: string;
+	labelClassName?: string;
+	trailing?: ReactNode;
+	highlight?: "self" | "wrapper";
+	onWarm?: ((trigger: "hover" | "focus") => void) | undefined;
+} & Omit<
+	ComponentPropsWithoutRef<"button">,
+	"children" | "className" | "onFocus" | "onPointerEnter" | "type"
+>;
 
 export function TreeRow({
 	ref,
@@ -27,32 +47,15 @@ export function TreeRow({
 	onContextMenu,
 	onKeyDown,
 	onWarm,
-}: {
-	ref?: Ref<HTMLButtonElement> | undefined;
-	testid: string;
-	kind: "dir" | "file";
-	expanded?: boolean;
-	active?: boolean;
-	highlighted?: boolean;
-	subtle?: boolean;
-	dataStatus?: string | undefined;
-	dataViewed?: boolean;
-	label: string;
-	labelClassName?: string;
-	trailing?: ReactNode;
-	highlight?: "self" | "wrapper";
-	onClick?: ((event: MouseEvent) => void) | undefined;
-	onDoubleClick?: (() => void) | undefined;
-	onContextMenu?: ((event: MouseEvent) => void) | undefined;
-	onKeyDown?: ((event: KeyboardEvent) => void) | undefined;
-	onWarm?: ((trigger: "hover" | "focus") => void) | undefined;
-}) {
+	...buttonProps
+}: TreeRowProps) {
 	const Chevron = expanded ? ChevronDown : ChevronRight;
 	const Folder = active ? RiFolderFill : RiFolderLine;
 	const FileIcon = active ? RiFileFill : RiFileLine;
 	const tone = subtle ? "text-text-subtle" : "text-text-muted";
 	return (
 		<button
+			{...buttonProps}
 			ref={ref}
 			type="button"
 			data-testid={testid}
