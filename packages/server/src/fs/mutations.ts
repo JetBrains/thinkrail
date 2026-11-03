@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { constants, copyFile, lstatSync, statSync } from "node:fs";
-import { extname, join as joinPath } from "node:path/posix";
+import { dirname, join } from "node:path";
+import { extname, join as joinWirePath } from "node:path/posix";
 import { promisify } from "node:util";
 import { claimAndTrashFile } from "../trash";
 import { resolveWorktreeFile } from "./files";
@@ -36,7 +37,7 @@ export async function copyWorkspaceFile(params: {
 	const sourceName = params.sourcePath.split("/").at(-1);
 	if (!sourceName) throw new Error("Copy source must name a file");
 	for (let attempt = 0; ; attempt += 1) {
-		const path = joinPath(params.destinationDirectory, copiedName(sourceName, attempt));
+		const path = joinWirePath(params.destinationDirectory, copiedName(sourceName, attempt));
 		const destination = resolveWorktreeFile(params.destinationWorkspaceId, path, {
 			followLeaf: false,
 		});
@@ -53,13 +54,10 @@ export async function deleteWorkspaceFile(workspaceId: string, path: string): Pr
 	const absolute = resolveWorktreeFile(workspaceId, path, { followLeaf: false });
 	if (!lstatSync(absolute).isFile()) throw new Error("Only regular files can be deleted");
 	const token = randomUUID();
-	const directory = absolute.slice(
-		0,
-		Math.max(absolute.lastIndexOf("/"), absolute.lastIndexOf("\\")),
-	);
+	const directory = dirname(absolute);
 	await claimAndTrashFile(
 		absolute,
-		`${directory}/.thinkrail-delete-${token}`,
-		`${directory}/.thinkrail-recovery-${token}`,
+		join(directory, `.thinkrail-delete-${token}`),
+		join(directory, `.thinkrail-recovery-${token}`),
 	);
 }
