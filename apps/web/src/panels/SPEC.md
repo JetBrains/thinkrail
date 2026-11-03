@@ -1308,7 +1308,8 @@ a project picker, the prompt hero, and the reused
 
   `PlanInteractionCard` turns these into the card's `interaction` through the same `useToolInteraction`
   adapter the chat uses, so a response submitted from the plan flows through the identical path as the
-  chat.
+  chat. It also gives the card the session's `ResourceScopeProvider` and an `onOpenFile` that opens a
+  preview tab, so a card's file previews render on the plan page as in the chat.
   When there's no pending question, the same slot instead shows the **agent's
   latest message** (`plan-agent-message`, `planView.lastAgentText` rendered Markdown inside a bounded
   scroll area — `max-h-[12rem] overflow-y-auto` so the full message stays readable without pushing
