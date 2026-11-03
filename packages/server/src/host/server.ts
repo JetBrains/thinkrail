@@ -121,7 +121,6 @@ import {
 	initSpeech,
 	type SpeechRelay,
 	setSpeechPublisher,
-	setSpeechVocabularyResolver,
 	speechStatus,
 	stopEngine,
 } from "../speech";
@@ -185,7 +184,6 @@ import {
 	refreshOpenProjectReviews,
 	stampSessionActivity,
 } from "./settledLifecycle";
-import { speechVocabulary } from "./speechVocabulary";
 import { resolveSubagentMaxConcurrent, resolveSubagentsEnabled } from "./subagentPolicy";
 import { taskObservation } from "./taskAnalytics";
 import {
@@ -814,7 +812,6 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			JSON.stringify({ channel: WS_CHANNELS.speechChanged, data: status }),
 		),
 	);
-	setSpeechVocabularyResolver(speechVocabulary);
 	void initSpeech().catch((err) => log.warn("voice input state could not be read", err));
 	setWatchPublisher(publishFsChanged);
 	setSkillPathClassifier(isProjectSkillPath);
@@ -1112,7 +1109,6 @@ function restoreSeamDefaults(): void {
 	setWorkspacePublisher(null);
 	setPiPackagesPublisher(null);
 	setSpeechPublisher(null);
-	setSpeechVocabularyResolver(null);
 	setWatchPublisher(null);
 	setSkillPathClassifier(null);
 	setFsNudgePublisher(null);

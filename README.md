@@ -55,7 +55,7 @@ create the tools it needs based on how you actually work.
   and is never sent until you press Enter. The same mic is in the New workspace prompt, PR descriptions,
   review comments and the agent's questions. Recognition runs locally with NVIDIA's open
   [Nemotron](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b) speech model (32 languages,
-  detected automatically) and is tuned to your project's file names, commands and skills; the one-time
+  detected automatically); the one-time
   ~750 MB download happens only when you first ask for it, and Settings → Voice input removes it.
 - **Find chats and run commands from one box.** `⌘K` (or a double tap of Shift) opens a palette that finds
   chats, workspaces and projects across every open project, runs the app's commands with their shortcuts

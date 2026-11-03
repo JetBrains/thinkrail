@@ -9,7 +9,6 @@ import { errorCodeOf } from "@thinkrail/shared/codedError";
 import { logger } from "../log";
 import { ensureEngine, holdEngine } from "./engine";
 import { engineInputs } from "./install";
-import { PHRASE_BOOST, speechPhrases, type VocabularySource } from "./vocabulary";
 
 const log = logger("speech");
 
@@ -17,36 +16,11 @@ const MAX_PENDING_BYTES = SPEECH_SAMPLE_RATE * 2 * 30;
 const MAX_FRAME_BYTES = 64 * 1024;
 const MAX_UPSTREAM_BUFFER_BYTES = 4 * 1024 * 1024;
 const COMMIT_TIMEOUT_MS = 8_000;
-const VOCABULARY_TIMEOUT_MS = 1_500;
 const LANGUAGE_TAG = /\s*<[a-z]{2,3}-[A-Z]{2}>\s*$/;
-
-export interface SpeechScope {
-	workspaceId?: string;
-	sessionId?: string;
-}
-
-export type VocabularyResolver = (scope: SpeechScope) => Promise<VocabularySource>;
-
-let resolveVocabulary: VocabularyResolver | null = null;
-
-export function setSpeechVocabularyResolver(fn: VocabularyResolver | null): void {
-	resolveVocabulary = fn;
-}
 
 export interface SpeechClientSocket {
 	send(message: string): unknown;
 	close(): void;
-}
-
-async function vocabularyFor(scope: SpeechScope): Promise<string[]> {
-	if (!resolveVocabulary) return [];
-	const timeout = Bun.sleep(VOCABULARY_TIMEOUT_MS).then(() => null);
-	try {
-		const source = await Promise.race([resolveVocabulary(scope), timeout]);
-		return source ? speechPhrases(source) : [];
-	} catch {
-		return [];
-	}
 }
 
 function errorCode(err: unknown): SpeechErrorCode {
@@ -81,16 +55,15 @@ class Dictation {
 		} catch {}
 	}
 
-	async begin(scope: SpeechScope): Promise<void> {
+	async begin(): Promise<void> {
 		const inputs = engineInputs();
 		if (!inputs) {
 			this.fail("SPEECH_NOT_INSTALLED");
 			return;
 		}
 		let endpoint: Awaited<ReturnType<typeof ensureEngine>>;
-		let phrases: string[];
 		try {
-			[endpoint, phrases] = await Promise.all([ensureEngine(inputs), vocabularyFor(scope)]);
+			endpoint = await ensureEngine(inputs);
 		} catch (err) {
 			this.fail(errorCode(err));
 			return;
@@ -106,11 +79,7 @@ class Dictation {
 			upstream.send(
 				JSON.stringify({
 					type: "session.update",
-					session: {
-						sample_rate: SPEECH_SAMPLE_RATE,
-						language: inputs.language,
-						...(phrases.length > 0 ? { speech_contexts: [{ phrases, boost: PHRASE_BOOST }] } : {}),
-					},
+					session: { sample_rate: SPEECH_SAMPLE_RATE, language: inputs.language },
 				}),
 			);
 			for (const frame of this.pending) upstream.send(frame);
@@ -224,10 +193,7 @@ export function createSpeechRelay(socket: SpeechClientSocket): SpeechRelay {
 			if (active === dictation) active = null;
 		});
 		active = dictation;
-		void dictation.begin({
-			...(message.workspaceId !== undefined ? { workspaceId: message.workspaceId } : {}),
-			...(message.sessionId !== undefined ? { sessionId: message.sessionId } : {}),
-		});
+		void dictation.begin();
 	};
 	return {
 		message(raw) {

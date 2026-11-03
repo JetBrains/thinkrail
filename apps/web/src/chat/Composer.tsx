@@ -45,7 +45,7 @@ import {
 	usePendingSelection,
 	useSlashCommandCompletion,
 } from "@/prompt";
-import type { DictationScope, MicButtonProps } from "@/speech";
+import type { MicButtonProps } from "@/speech";
 import { FileChip } from "./FileChip";
 import {
 	ModelEffortPicker,
@@ -178,7 +178,6 @@ interface ComposerProps {
 	onManageTemplates?: () => void;
 	templatesEmpty?: boolean;
 	Mic?: ComponentType<MicButtonProps>;
-	micScope?: DictationScope;
 }
 
 export interface ComposerHandle {
@@ -217,7 +216,6 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		onManageTemplates,
 		templatesEmpty,
 		Mic,
-		micScope,
 	},
 	handleRef,
 ) {
@@ -682,7 +680,6 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								fieldRef={ref}
 								apply={applyDictation}
 								onListeningChange={setDictating}
-								{...(micScope ? { scope: micScope } : {})}
 								fallback
 							/>
 						) : null}

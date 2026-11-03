@@ -62,7 +62,6 @@ export interface ResourceMicProps {
 	/** Writes the field's text and caret on every partial and final; it must never move focus. */
 	apply: (text: string, caret: number) => void;
 	onListeningChange?: (listening: boolean) => void;
-	scope?: { workspaceId?: string; sessionId?: string };
 	disabled?: boolean;
 	size?: "s" | "m";
 	className?: string;

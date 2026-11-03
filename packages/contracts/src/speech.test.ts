@@ -35,15 +35,10 @@ test("server messages parse only their closed shapes", () => {
 	expect(parseSpeechServerMessage(new ArrayBuffer(2))).toBeNull();
 });
 
-test("client messages carry optional string scope only", () => {
-	expect(parseSpeechClientMessage('{"type":"start","workspaceId":"w","sessionId":"s"}')).toEqual({
-		type: "start",
-		workspaceId: "w",
-		sessionId: "s",
-	});
+test("client messages are start and stop only", () => {
 	expect(parseSpeechClientMessage('{"type":"start"}')).toEqual({ type: "start" });
+	expect(parseSpeechClientMessage('{"type":"start","workspaceId":"w"}')).toEqual({ type: "start" });
 	expect(parseSpeechClientMessage('{"type":"stop"}')).toEqual({ type: "stop" });
-	expect(parseSpeechClientMessage('{"type":"start","workspaceId":1}')).toBeNull();
 	expect(parseSpeechClientMessage('{"type":"begin"}')).toBeNull();
 	expect(parseSpeechClientMessage("[")).toBeNull();
 });

@@ -7,7 +7,7 @@ import { resetEngineForTests, stopEngine } from "./engine";
 import { initSpeech, resetSpeechInstallForTests } from "./install";
 import { markerPath, modelsDir } from "./layout";
 import { hostTarget, SPEECH_MANIFEST_ENV } from "./manifest";
-import { createSpeechRelay, setSpeechVocabularyResolver } from "./relay";
+import { createSpeechRelay } from "./relay";
 import { resetSpeechStatusForTests } from "./status";
 
 const posix = process.platform !== "win32";
@@ -60,7 +60,6 @@ beforeEach(() => {
 
 afterEach(async () => {
 	await stopEngine();
-	setSpeechVocabularyResolver(null);
 	resetEngineForTests();
 	resetSpeechInstallForTests();
 	resetSpeechStatusForTests();
@@ -114,13 +113,9 @@ const word = () => new Uint8Array(16_000 * 2 * 0.16);
 test.skipIf(!posix)("a dictation streams partials, a final and an end", async () => {
 	installFixture();
 	await initSpeech();
-	setSpeechVocabularyResolver(async () => ({
-		commands: ["skill:brainstorming"],
-		paths: ["apps/web/src/store/useAppStore.tsx"],
-	}));
 	const client = clientSocket();
 	const relay = createSpeechRelay(client.socket);
-	relay.message(JSON.stringify({ type: "start", workspaceId: "w1" }));
+	relay.message(JSON.stringify({ type: "start" }));
 	relay.message(word());
 	await client.until("ready");
 	relay.message(word());
@@ -137,9 +132,7 @@ test.skipIf(!posix)("a dictation streams partials, a final and an end", async ()
 	const session = JSON.parse(readFileSync(process.env.FAKE_SPEECH_LOG ?? "", "utf8").trim());
 	expect(session.sample_rate).toBe(16_000);
 	expect(session.language).toBe("auto");
-	expect(session.speech_contexts[0].phrases).toContain("brainstorming");
-	expect(session.speech_contexts[0].phrases).toContain("useAppStore");
-	expect(session.speech_contexts[0].boost).toBe(3);
+	expect(session.speech_contexts).toBeUndefined();
 });
 
 test.skipIf(!posix)(

@@ -14,7 +14,7 @@ import type {
 	AskUserQuestionItem,
 	AskUserQuestionResult,
 } from "@thinkrail/pi-ask-user-question/core";
-import { useOptionalResourceHost, useResourceScope } from "@thinkrail/resource-renderers";
+import { useOptionalResourceHost } from "@thinkrail/resource-renderers";
 import { AttentionLine } from "@thinkrail/ui/attention-line";
 import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
@@ -910,7 +910,6 @@ function QuestionBody({
 }) {
 	const t = useT();
 	const Mic = useOptionalResourceHost()?.Mic;
-	const micScope = useMicScope();
 	const choiceRefs = useRef<Array<HTMLElement | null>>([]);
 	const noteRef = useRef<HTMLTextAreaElement>(null);
 	const focusNoteAfterRender = useRef(false);
@@ -1053,7 +1052,6 @@ function QuestionBody({
 															onListeningChange={onDictatingChange}
 															size="s"
 															className="absolute right-2 bottom-2"
-															{...(micScope ? { scope: micScope } : {})}
 														/>
 													) : null}
 												</div>
@@ -1204,15 +1202,6 @@ function restoreCaret(element: HTMLInputElement | HTMLTextAreaElement | null, ca
 	});
 }
 
-function useMicScope(): { workspaceId: string; sessionId?: string } | null {
-	const scope = useResourceScope();
-	if (!scope) return null;
-	return {
-		workspaceId: scope.workspaceId,
-		...(scope.sessionId ? { sessionId: scope.sessionId } : {}),
-	};
-}
-
 function OtherOptionRow({
 	inputRef,
 	multi,
@@ -1241,7 +1230,6 @@ function OtherOptionRow({
 	const t = useT();
 	const inputId = useId();
 	const Mic = useOptionalResourceHost()?.Mic;
-	const micScope = useMicScope();
 	const fieldRef = useRef<HTMLInputElement | null>(null);
 	const applyDictation = useCallback(
 		(next: string, caret: number) => {
@@ -1317,7 +1305,6 @@ function OtherOptionRow({
 					apply={applyDictation}
 					onListeningChange={onDictatingChange}
 					size="s"
-					{...(micScope ? { scope: micScope } : {})}
 				/>
 			) : null}
 		</label>

@@ -2,7 +2,7 @@ import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useInsertionEffect, useRef, useState } from "react";
-import { useOptionalResourceHost, useResourceScope } from "../host";
+import { useOptionalResourceHost } from "../host";
 import type { AnchorDraft, SurfaceReview } from "../registry";
 import {
 	type ReviewTextBinding,
@@ -47,7 +47,6 @@ export function ReviewComposer({
 	const setInput = input?.onChange ?? setLocal;
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const Mic = useOptionalResourceHost()?.Mic;
-	const scope = useResourceScope();
 	const [dictating, setDictating] = useState(false);
 	const latest = useRef({ state, setInput });
 	useInsertionEffect(() => {
@@ -130,14 +129,6 @@ export function ReviewComposer({
 						onListeningChange={setDictating}
 						disabled={busy}
 						size="s"
-						{...(scope
-							? {
-									scope: {
-										workspaceId: scope.workspaceId,
-										...(scope.sessionId ? { sessionId: scope.sessionId } : {}),
-									},
-								}
-							: {})}
 					/>
 				) : null}
 				<Button

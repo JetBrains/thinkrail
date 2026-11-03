@@ -197,7 +197,6 @@ export default function ChatView({
 		[workspaceId, sessionId],
 	);
 	const composerRef = useRef<ComposerHandle>(null);
-	const micScope = useMemo(() => ({ workspaceId, sessionId }), [workspaceId, sessionId]);
 	const transcriptRef = useRef<ChatTranscriptHandle>(null);
 	const resources = useChatResources(workspaceId, sessionId);
 	const freshResults = useFreshResults(
@@ -942,7 +941,6 @@ export default function ChatView({
 					onManageTemplates={onManageTemplates}
 					templatesEmpty={templatesEmpty}
 					Mic={MicButton}
-					micScope={micScope}
 				/>
 			</div>
 			<TemplateEditorDialog

@@ -1189,8 +1189,8 @@ and what it loaded, never pi's own types.
 - **Audio on a side socket.** **`SPEECH_SOCKET_ROUTE`** (`/speech?client=&protocol=`) carries one
   dictation at a time, outside the JSON request wire. Its replay cache hashes and retains every
   request, which cannot absorb 20 ms audio frames.
-  - Client to host: `SpeechClientMessage` JSON (`start {workspaceId?, sessionId?}` scopes the
-    recognition vocabulary; `stop` commits), with mono little-endian PCM16 binary frames at
+  - Client to host: `SpeechClientMessage` JSON (`start`, then `stop` to commit), with mono
+    little-endian PCM16 binary frames at
     **`SPEECH_SAMPLE_RATE`** (16 kHz) in between.
   - Host to client: `SpeechServerMessage` JSON (`ready`, `partial` replacing the previous partial,
     `final` committing it, `error {code}`, `ended`).

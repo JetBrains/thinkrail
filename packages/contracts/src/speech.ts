@@ -72,9 +72,7 @@ export interface SpeechStatus {
  * Client → host over the speech socket. `start` opens one dictation; PCM16 binary frames follow;
  * `stop` commits the buffered audio and waits for the last final.
  */
-export type SpeechClientMessage =
-	| { type: "start"; workspaceId?: string; sessionId?: string }
-	| { type: "stop" };
+export type SpeechClientMessage = { type: "start" } | { type: "stop" };
 
 /** Host → client over the speech socket; `partial` replaces the previous partial, `final` commits it. */
 export type SpeechServerMessage =
@@ -115,15 +113,5 @@ export function parseSpeechClientMessage(raw: string): SpeechClientMessage | nul
 	}
 	if (typeof value !== "object" || value === null) return null;
 	const type = Reflect.get(value, "type");
-	if (type === "stop") return { type };
-	if (type !== "start") return null;
-	const workspaceId = Reflect.get(value, "workspaceId");
-	const sessionId = Reflect.get(value, "sessionId");
-	if (workspaceId !== undefined && typeof workspaceId !== "string") return null;
-	if (sessionId !== undefined && typeof sessionId !== "string") return null;
-	return {
-		type,
-		...(workspaceId !== undefined ? { workspaceId } : {}),
-		...(sessionId !== undefined ? { sessionId } : {}),
-	};
+	return type === "stop" || type === "start" ? { type } : null;
 }

@@ -21,16 +21,10 @@ export interface DictationSnapshot {
 	error: { ownerId: string; code: DictationError } | null;
 }
 
-export interface DictationScope {
-	workspaceId?: string;
-	sessionId?: string;
-}
-
 export interface DictationTarget {
 	ownerId: string;
 	anchor: () => DictationAnchor;
 	write: (text: string, caret: number) => void;
-	scope?: DictationScope;
 }
 
 export interface SpeechSocketLike {
@@ -130,7 +124,7 @@ export function createDictationController(deps: DictationDeps) {
 
 		socket.onopen = () => {
 			if (ended) return;
-			send({ type: "start", ...target.scope });
+			send({ type: "start" });
 			for (const frame of early.splice(0)) socket.send(frame);
 			if (snapshot.phase === "stopping") send({ type: "stop" });
 		};

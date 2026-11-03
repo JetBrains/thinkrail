@@ -33,7 +33,7 @@ sends it.
   - **The mic-state derivation** (`micState.ts`).
   - **`MicButton`**, the one mic every voice field renders, and the chord registry (`hotkey.ts`).
 - **Public surface (barrel):** `MicButton`, `MicButtonProps`, `speechErrorKey`, `dictationShortcutLabel`,
-  `useFieldApply`, `DictationScope`.
+  `useFieldApply`.
 - **Internal:** capture, the controller, the text rule, the mic-state derivation, and the chord registry.
 - **Forbidden:**
   - Submitting, steering, or touching the agent.
@@ -46,7 +46,7 @@ sends it.
   - `start(target)` ends any running dictation first. One per page, so a second field never interleaves
     with the first.
   - It reads the target's anchor (its text and selection) once.
-  - It opens the socket, sends `start {workspaceId?, sessionId?}` on open, and opens the microphone
+  - It opens the socket, sends `start` on open, and opens the microphone
     in parallel. Up to 5 s of early frames are held until the socket opens.
   - Phases go `connecting` → `listening` (on the host's `ready`) → `stopping` → `idle`.
 - **Writing.** Each `partial` replaces the in-progress segment, and each `final` commits it. The field is
@@ -67,7 +67,7 @@ sends it.
 
 ## Mic button
 
-`MicButton {fieldRef, apply, onListeningChange?, scope?, fallback?}` is the only mic UI; `useFieldApply(ref,
+`MicButton {fieldRef, apply, onListeningChange?, fallback?, disabled?, size?}` is the only mic UI; `useFieldApply(ref,
 setValue)` is the `apply` for a plain controlled field. The field owner
 keeps its value, caret and submit path. `apply` must never move focus: late finals arrive after a blur
 has stopped the dictation, and focusing the field then would steal the user's next input. The composer

@@ -55,8 +55,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   websocket handler but is tagged at upgrade. Its `open` / `message` / `close` go straight to that
   socket's [[submodule-server-speech]] relay, so it never joins the `clientKey → socket` registry, the
   replay cache or any channel: binary 20 ms audio frames would otherwise be hashed and retained
-  per request. `host` composes the relay's project words (`speechVocabulary.ts`: the live session's
-  commands, otherwise the workspace's skill catalog, plus `git ls-files` under a 1 s budget) and publishes
+  per request. `host` publishes
   `speech.changed` whole to v103 sockets, which also get `ServerWelcome.speech`; static serving with
   `index.html` fallback, the `server.welcome` push, the **`?client=` page identity** read off the socket URL at
   upgrade (threaded to every handler as `RequestContext`; it addresses terminal output but no longer *owns*

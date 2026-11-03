@@ -50,7 +50,6 @@ function harness(capture: (sink: CaptureSink) => Promise<Capture> = async () => 
 			field.value = text;
 			field.caret = caret;
 		},
-		scope: { workspaceId: "w1", sessionId: "s1" },
 	});
 	return { controller, sockets, field, target };
 }
@@ -64,7 +63,7 @@ test("a dictation writes partials and finals into the field and keeps them on st
 	const socket = sockets[0];
 	if (!socket) throw new Error("no socket");
 	socket.open();
-	expect(socket.controls()[0]).toEqual({ type: "start", workspaceId: "w1", sessionId: "s1" });
+	expect(socket.controls()[0]).toEqual({ type: "start" });
 	socket.server({ type: "ready" });
 	expect(controller.snapshot().phase).toBe("listening");
 	socket.server({ type: "partial", text: "the sto" });

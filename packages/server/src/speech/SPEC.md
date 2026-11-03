@@ -34,8 +34,8 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
   - The install state machine.
   - The status store and its publisher.
 - **Public surface (barrel):** `initSpeech`, `installSpeech`, `cancelSpeechInstall`, `removeSpeech`,
-  `speechStatus`, `setSpeechPublisher`, `stopEngine`, `createSpeechRelay`, `setSpeechVocabularyResolver`,
-  `SpeechRelay`, `SpeechClientSocket`, `SpeechScope`, `VocabularyResolver`, `VocabularySource`.
+  `speechStatus`, `setSpeechPublisher`, `stopEngine`, `createSpeechRelay`, `SpeechRelay`,
+  `SpeechClientSocket`.
 - **Allowed deps:** `persistence` (`dataDir`), `subprocess` (the PATH probe and archive unpacking run
   bounded; the engine is supervised), `log`, `@thinkrail/contracts`, `@thinkrail/shared/codedError` and
   `/freePort`.
@@ -131,16 +131,12 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
 `start` answers `SPEECH_BUSY`, and a malformed control message answers `SPEECH_PROTOCOL`).
 
 1. **Start.**
-   - `start {workspaceId?, sessionId?}` reads the installed inputs (`SPEECH_NOT_INSTALLED` without
-     them) and holds the engine.
-   - In parallel it resolves the project words through the host's `setSpeechVocabularyResolver`, under
-     a 1.5 s budget (on timeout the words are empty).
-   - Then it opens the engine's realtime socket with `?api_key=`.
+   - `start` reads the installed inputs (`SPEECH_NOT_INSTALLED` without them), holds the engine, and
+     opens the engine's realtime socket with `?api_key=`.
 2. **While the engine starts**, up to 30 s of audio is buffered. Frames over 64 KiB, and frames past a
    4 MiB upstream buffer, are dropped.
-3. **On upstream open** it sends `session.update` (`sample_rate 16000`, the model's language, and
-   `speech_contexts [{phrases, boost 3}]` when there are words), flushes the buffer, and answers
-   `ready`.
+3. **On upstream open** it sends `session.update` (`sample_rate 16000` and the model's language),
+   flushes the buffer, and answers `ready`.
 4. **Events.** The engine's `delta` events are appends; the relay accumulates them and sends each as a
    replacing `partial`. `completed` becomes a `final` and resets the partial.
 5. **Stop.** `stop` sends `input_audio_buffer.commit`, or defers it until upstream opens. `committed`, or
@@ -150,16 +146,18 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
    releases the hold, exactly once. An engine error or a lost upstream sends `SPEECH_ENGINE_FAILED` first.
 6. **Language tags.** A trailing auto-detect language tag (`<en-US>`) is stripped from all text.
 
-**Vocabulary** (`speechPhrases`) — at most 300 phrases of 3–48 characters, each with a letter and no
-whitespace, in this order:
+**No word boosting.** Dictation sends no `speech_contexts`. Biasing recognition toward the project's
+names was built and then removed after measuring it against the real engine and model on synthesized
+sentences:
 
-1. commands and skill names (minus `skill:`);
-2. identifier-like file names and stems (camel, Pascal, snake or kebab case, or digits);
-3. other file names;
-4. folder names.
+| Boost list | Ordinary English | Spoken identifiers |
+|---|---|---|
+| 300 repo-wide file, folder, command and skill names at boost 3 | wrecked ("Please release-pi-packages.ymlen…") | wrong |
+| 20 recently touched code identifiers at boost 2 | mostly intact, but "settings dialog" became "settingsNavlog" | "use app store" → `useAppStore` |
+| 20 identifiers at boost 1.5 | intact | unchanged |
 
-Checked against the real engine and model: with boosting, a spoken "use app store dot t s x" became
-`useAppStore.tsx`. Without it, the same audio came out as "use app storets".
+The user chose to try the product without it. A future version would be an opt-in setting, not a
+default.
 
 ## Get right
 

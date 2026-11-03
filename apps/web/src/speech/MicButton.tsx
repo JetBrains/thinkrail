@@ -20,14 +20,13 @@ import { micAvailability } from "./capture";
 import { dictation, useDictationSnapshot } from "./dictation";
 import { dictationShortcutLabel, noteFallbackFocus, registerChordTarget } from "./hotkey";
 import { type MicState, micState } from "./micState";
-import type { DictationError, DictationScope } from "./session";
+import type { DictationError } from "./session";
 
 export interface MicButtonProps {
 	fieldRef: RefObject<HTMLTextAreaElement | HTMLInputElement | null>;
 	/** Writes the field's text and caret on every partial and final; it must never move focus. */
 	apply: (text: string, caret: number) => void;
 	onListeningChange?: (listening: boolean) => void;
-	scope?: DictationScope;
 	fallback?: boolean;
 	disabled?: boolean;
 	size?: "s" | "m";
@@ -149,7 +148,6 @@ export function MicButton({
 	fieldRef,
 	apply,
 	onListeningChange,
-	scope,
 	fallback = false,
 	disabled = false,
 	size = "m",
@@ -165,9 +163,9 @@ export function MicButton({
 	const state = micState(status, availability, blockedMicrophone(snapshot.error?.code));
 	const mine = snapshot.ownerId === id;
 	const active = mine && snapshot.phase !== "idle";
-	const latest = useRef({ apply, onListeningChange, scope, state, disabled });
+	const latest = useRef({ apply, onListeningChange, state, disabled });
 	useInsertionEffect(() => {
-		latest.current = { apply, onListeningChange, scope, state, disabled };
+		latest.current = { apply, onListeningChange, state, disabled };
 	});
 
 	const begin = useCallback(() => {
@@ -182,7 +180,6 @@ export function MicButton({
 				end: element.selectionEnd ?? element.value.length,
 			}),
 			write: (text, caret) => latest.current.apply(text, caret),
-			...(latest.current.scope ? { scope: latest.current.scope } : {}),
 		});
 	}, [id, fieldRef]);
 

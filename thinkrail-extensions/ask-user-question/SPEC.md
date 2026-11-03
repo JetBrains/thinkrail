@@ -89,7 +89,7 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   tree**: the visible line goes `aria-hidden` once the region carries the text, so a remount (region
   deliberately empty) still exposes the line.
   **Voice input.** The Other field and an open per-option note each carry the host's optional
-  `ResourceHost.Mic` ([[module-resource-renderers]]), scoped to the card's `ResourceScope`.
+  `ResourceHost.Mic` ([[module-resource-renderers]]).
   - Dictated text goes through `onText` / `onNote`, and the caret follows only while the field is
     focused.
   - The listening flag lives on the card: while any mic listens, Submit and Next are disabled, and
