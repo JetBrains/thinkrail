@@ -1,10 +1,11 @@
-import { realpathSync, rmSync, utimesSync } from "node:fs";
+import { readFileSync, realpathSync, rmSync, utimesSync } from "node:fs";
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import type { ToolCall, ToolResponsePendingDetails } from "@thinkrail/contracts";
 import type {
 	AskUserQuestionArgs,
 	AskUserQuestionOption,
+	AskUserQuestionResult,
 } from "@thinkrail/pi-ask-user-question/core";
 import {
 	enterDefaultWorkspace,
@@ -484,5 +485,369 @@ test("a coarse pointer reveals a returning page's text target without focusing i
 	} finally {
 		rmSync(session.path, { force: true });
 		await context.close();
+	}
+});
+
+async function box(
+	locator: Locator,
+): Promise<{ x: number; y: number; width: number; height: number }> {
+	const measured = await locator.boundingBox();
+	if (!measured) throw new Error("element has no box");
+	return measured;
+}
+
+function activeAsk(page: Page): Locator {
+	return page.locator('[data-testid="ask-user-question"][data-tone="active"]');
+}
+
+async function expectSessionToContain(path: string, needle: string): Promise<void> {
+	await expect
+		.poll(() => readFileSync(path, "utf8").includes(needle), { timeout: 10_000 })
+		.toBe(true);
+}
+
+const GEOMETRY_ROUND = {
+	questions: [
+		{
+			question: "Which short rollout should we use?",
+			header: "Short",
+			options: [
+				{ label: "Short alpha", description: "One line." },
+				{ label: "Short beta", description: "One line." },
+			],
+		},
+		{
+			question:
+				"Which long rollout should we use when the host restarts in the middle of a review?",
+			header: "Long",
+			options: [
+				{
+					label: "Long alpha (Recommended)",
+					description:
+						"Store the queue next to the transcript so it replays with the session and survives every host restart without a second store.",
+					recommendedReason: "The session already owns this state.",
+				},
+				{ label: "Long beta", description: "Write a separate file per workspace." },
+				{ label: "Long gamma", description: "Keep a shared index across workspaces." },
+				{ label: "Long delta", description: "Keep it in memory only." },
+			],
+		},
+		{
+			question: "Which checks should the long rollout run?",
+			header: "Checks",
+			multiSelect: true,
+			options: [
+				{ label: "Check lint", description: "Biome." },
+				{ label: "Check types", description: "tsc." },
+				{ label: "Check units", description: "bun test." },
+			],
+		},
+	],
+} satisfies AskUserQuestionArgs;
+
+test("paging and choosing never move the tabs, the question or the footer", async ({ page }) => {
+	await page.setViewportSize({ width: 1280, height: 1000 });
+	await openFixtureProject(page);
+	const session = seedQuestionnaire("steady paging", "ask-steady-paging", GEOMETRY_ROUND);
+
+	try {
+		await enterDefaultWorkspace(page);
+		await hideAuxiliaryWorkbench(page);
+		await openPersistedChatAfterInput(page, "steady paging");
+		const chatScroll = page.getByTestId("chat-scroll");
+		const card = activeAsk(page);
+		await expect(card.getByTestId("ask-option").first()).toBeFocused();
+		await waitForScrollStability(chatScroll);
+
+		const footer = card.locator('[data-testid="ask-continue"], [data-testid="ask-submit"]');
+		const geometry = async () => ({
+			tabs: (await box(card.getByTestId("ask-tab").first())).y,
+			question: (await box(card.getByTestId("ask-question-text"))).y,
+			footer: (await box(footer)).y,
+			height: (await box(card)).height,
+		});
+		const first = await geometry();
+		await card.getByTestId("ask-tab").nth(1).click();
+		await expect(card.getByTestId("ask-question-text")).toHaveText(/long rollout/);
+		expect(await geometry()).toEqual(first);
+		await card.getByTestId("ask-continue").click();
+		await expect(card.getByTestId("ask-question-text")).toHaveText(/checks/);
+		await waitForScrollStability(chatScroll);
+		expect(await geometry()).toEqual(first);
+		await page.keyboard.press("ArrowLeft");
+		await expect(card.getByTestId("ask-question-text")).toHaveText(/long rollout/);
+		expect(await geometry()).toEqual(first);
+
+		const other = card.getByTestId("ask-custom-row");
+		const otherTop = (await box(other)).y;
+		await card.getByTestId("ask-option").nth(0).click();
+		await expect(card.getByTestId("ask-note-toggle")).toBeVisible();
+		expect((await box(other)).y).toBe(otherTop);
+		await page.keyboard.press("ArrowDown");
+		await expect(card.getByTestId("ask-option").nth(1)).toHaveAttribute("data-selected", "true");
+		expect((await box(other)).y).toBe(otherTop);
+		expect(await geometry()).toEqual(first);
+		expect(await nestedVerticalScrollSurfaces(card)).toEqual([]);
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
+test("a note and Other grow in place, the note follows the pick, and the card keeps its largest height", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1280, height: 1000 });
+	await openFixtureProject(page);
+	const session = seedQuestionnaire("growing fields", "ask-growing-fields", KEYBOARD_ROUND);
+
+	try {
+		await enterDefaultWorkspace(page);
+		await hideAuxiliaryWorkbench(page);
+		await openPersistedChatAfterInput(page, "growing fields");
+		const card = activeAsk(page);
+		const options = card.getByTestId("ask-option");
+		await expect(options.first()).toBeFocused();
+		const resting = (await box(card)).height;
+
+		await options.first().click();
+		await card.getByTestId("ask-note-toggle").click();
+		await expect(card.getByTestId("ask-note")).toBeFocused();
+		for (const line of ["First line", "Second line", "Third line", "Fourth line"]) {
+			await page.keyboard.type(line);
+			await page.keyboard.press("Shift+Enter");
+		}
+		await page.keyboard.type("Fifth line");
+		const typed = (await box(card)).height;
+		expect(typed).toBeGreaterThan(resting);
+
+		await page.keyboard.press("Enter");
+		await expect(card.getByTestId("ask-note")).toHaveCount(0);
+		await expect(card.getByTestId("ask-note-text")).toContainText("Fifth line");
+		expect((await box(card)).height).toBeGreaterThanOrEqual(typed - 0.5);
+
+		await options.nth(2).click();
+		const note = card.getByTestId("ask-note-text");
+		await expect(note).toContainText("First line");
+		expect((await box(note)).y).toBeGreaterThan((await box(options.nth(2))).y);
+
+		await card.getByTestId("ask-tab").nth(1).click();
+		await expect(card.getByTestId("ask-question-text")).toHaveText(
+			"Which keyboard checks should run?",
+		);
+		expect((await box(card)).height).toBeGreaterThanOrEqual(typed - 0.5);
+
+		const custom = card.getByTestId("ask-custom");
+		await custom.fill(Array.from({ length: 14 }, (_, i) => `Own answer line ${i + 1}`).join("\n"));
+		await expect
+			.poll(() => custom.evaluate((field) => field.scrollHeight > field.clientHeight + 1))
+			.toBe(true);
+		const surfaces = await nestedVerticalScrollSurfaces(card);
+		expect(surfaces.map((surface) => surface.testId)).toEqual(["ask-custom"]);
+
+		await custom.fill("");
+		await card.getByTestId("ask-tab").first().click();
+		expect((await box(card)).height).toBeGreaterThanOrEqual(typed - 0.5);
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
+test("Discuss marks a question, choosing cancels it, and the round sends the discussion with the answers", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const session = seedQuestionnaire("discuss round", "ask-discuss-round", KEYBOARD_ROUND);
+
+	try {
+		await enterDefaultWorkspace(page);
+		await hideAuxiliaryWorkbench(page);
+		await openPersistedChatAfterInput(page, "discuss round");
+		const card = activeAsk(page);
+		const tabs = card.getByTestId("ask-tab");
+		await expect(card.getByTestId("ask-option").first()).toBeFocused();
+
+		await card.getByTestId("ask-discuss").click();
+		await expect(card.getByTestId("ask-discuss-panel")).toBeVisible();
+		await expect(card.getByTestId("ask-discuss-text")).toBeFocused();
+		await page.keyboard.type("What does a rollout change for me?");
+		const unclear = card.locator('[data-testid="ask-discuss-reason"][data-reason="unclear"]');
+		await unclear.click();
+		await expect(unclear).toHaveAttribute("aria-pressed", "true");
+		await expect(tabs.first()).toHaveAttribute("data-discuss", "true");
+
+		await card.getByTestId("ask-option").nth(1).click();
+		await expect(card.getByTestId("ask-discuss-panel")).toHaveCount(0);
+		await expect(card.getByTestId("ask-discuss")).toHaveAttribute("data-active", "false");
+		await expect(tabs.first()).toHaveAttribute("data-discuss", "false");
+
+		await card.getByTestId("ask-discuss").click();
+		await expect(card.getByTestId("ask-discuss-text")).toHaveValue(
+			"What does a rollout change for me?",
+		);
+		await expect(unclear).toHaveAttribute("aria-pressed", "true");
+
+		await card.getByTestId("ask-continue").click();
+		await card.getByTestId("ask-option").first().click();
+		await card.getByTestId("ask-submit").click();
+		await expect(card.getByTestId("ask-submit")).toHaveCount(0);
+
+		const record = page.locator('[data-testid="ask-user-question"][data-tone="answered"]');
+		await expect(record.getByTestId("ask-receipt-toggle")).toContainText(
+			"Answered 1 of 2 questions",
+		);
+		await expect(record.getByTestId("ask-receipt-toggle")).toContainText("1 to discuss");
+		const pair = record.getByTestId("ask-receipt-pair").first();
+		await expect(pair.getByTestId("ask-receipt-answer")).toContainText("Let’s discuss first");
+		await expect(pair.getByTestId("ask-receipt-answer")).toContainText("Unclear");
+		await expect(pair).toContainText("“What does a rollout change for me?”");
+		await expectSessionToContain(session.path, '"kind":"discuss"');
+		await expectSessionToContain(session.path, '"reason":"unclear"');
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
+test("Discuss and Other work from the keyboard alone", async ({ page }) => {
+	await openFixtureProject(page);
+	const session = seedQuestionnaire("keyboard discuss", "ask-keyboard-discuss", {
+		questions: [KEYBOARD_ROLLOUT],
+	});
+
+	try {
+		await enterDefaultWorkspace(page);
+		await hideAuxiliaryWorkbench(page);
+		await openPersistedChatAfterInput(page, "keyboard discuss");
+		const card = activeAsk(page);
+		const options = card.getByTestId("ask-option");
+		await expect(options.first()).toBeFocused();
+
+		await page.keyboard.press("End");
+		await expect(card.getByTestId("ask-custom")).toBeFocused();
+		await page.keyboard.press("ArrowDown");
+		await expect(options.first()).toBeFocused();
+		await page.keyboard.press("ArrowUp");
+		await expect(card.getByTestId("ask-custom")).toBeFocused();
+		await page.keyboard.type("draft");
+		await page.keyboard.press("ArrowDown");
+		await expect(options.first()).toBeFocused();
+		await expect(card.getByTestId("ask-custom-row")).toHaveAttribute("data-selected", "false");
+
+		await page.keyboard.press("Shift+Tab");
+		await expect(card.getByTestId("ask-discuss")).toBeFocused();
+		await page.keyboard.press("Enter");
+		await expect(card.getByTestId("ask-discuss-text")).toBeFocused();
+		await page.keyboard.type("Explain the rollouts first.");
+		await page.keyboard.press("Escape");
+		await expect(card.getByTestId("ask-discuss")).toBeFocused();
+		await page.keyboard.press("Tab");
+		const reason = card.getByTestId("ask-discuss-reason").first();
+		await expect(reason).toBeFocused();
+		await page.keyboard.press("Space");
+		await expect(reason).toHaveAttribute("aria-pressed", "true");
+		for (let step = 0; step < 3; step += 1) await page.keyboard.press("Tab");
+		await expect(card.getByTestId("ask-discuss-text")).toBeFocused();
+		await page.keyboard.press("Enter");
+
+		const record = page.locator('[data-testid="ask-user-question"][data-tone="answered"]');
+		await expect(record.getByTestId("ask-receipt-answer")).toContainText("Let’s discuss first");
+		await expect(record).toContainText("“Explain the rollouts first.”");
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
+test("the receipt folds to one line, remembers a manual fold and lists each question's options", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const result: AskUserQuestionResult = {
+		cancelled: false,
+		answers: [
+			{
+				questionIndex: 0,
+				question: KEYBOARD_ROLLOUT.question,
+				kind: "option",
+				answer: "Keyboard beta",
+				notes: "Only on weekdays.",
+			},
+			{
+				questionIndex: 1,
+				question: "Which keyboard checks should run?",
+				kind: "multi",
+				answer: "also the smoke run",
+				selected: ["Keyboard lint", "Keyboard units"],
+			},
+		],
+	};
+	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name: "receipt fold",
+		messages: [
+			{ role: "user", text: "Ask me these questions.", timestamp: BASE_TS },
+			{
+				role: "assistant",
+				content: [
+					{
+						type: "toolCall",
+						id: "ask-receipt-fold",
+						name: "ask_user_question",
+						arguments: KEYBOARD_ROUND,
+					},
+				],
+				stopReason: "toolUse",
+				timestamp: BASE_TS + 1_000,
+			},
+			{
+				role: "toolResult",
+				toolCallId: "ask-receipt-fold",
+				toolName: "ask_user_question",
+				content: [{ type: "text", text: "User has answered your questions." }],
+				details: result,
+				isError: false,
+				timestamp: BASE_TS + 2_000,
+			},
+		],
+	});
+
+	try {
+		await enterDefaultWorkspace(page);
+		await hideAuxiliaryWorkbench(page);
+		await openPersistedChat(page, "receipt fold");
+		const record = page.locator('[data-testid="ask-user-question"][data-tone="answered"]');
+		const header = record.getByTestId("ask-receipt-toggle");
+		await expect(header).toHaveAttribute("aria-expanded", "true");
+		await expect(header).toContainText("Answered 2 questions");
+		const pairs = record.getByTestId("ask-receipt-pair");
+		await expect(pairs).toHaveCount(2);
+		await expect(pairs.first().getByTestId("ask-receipt-answer")).toHaveText("Keyboard beta");
+		await expect(pairs.first()).toContainText("“Only on weekdays.”");
+		await expect(pairs.nth(1).getByTestId("ask-receipt-answer")).toContainText(
+			"Keyboard lint, Keyboard units",
+		);
+		await expect(record.getByTestId("ask-record-option")).toHaveCount(0);
+
+		await pairs.nth(1).getByTestId("ask-receipt-options-toggle").click();
+		const listed = pairs.nth(1).getByTestId("ask-record-option");
+		await expect(listed).toHaveCount(3);
+		await expect(listed.nth(0)).toHaveAttribute("data-selected", "true");
+		await expect(listed.nth(1)).toHaveAttribute("data-selected", "false");
+		await expect(listed.nth(1).getByTestId("ask-selection-status")).toHaveText("Not selected:");
+		await expect(pairs.nth(1).getByTestId("ask-record-custom")).toContainText("also the smoke run");
+
+		await header.click();
+		await expect(header).toHaveAttribute("aria-expanded", "false");
+		await expect(pairs).toHaveCount(0);
+		await expect(record.getByTestId("ask-receipt-summary")).toContainText("Keyboard beta");
+
+		const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+		await chatTabs.first().getByTestId("editor-tab-close").click();
+		await expect(chatTabs).toHaveCount(0);
+		await openPersistedChat(page, "receipt fold");
+		await expect(
+			page
+				.locator('[data-testid="ask-user-question"][data-tone="answered"]')
+				.getByTestId("ask-receipt-toggle"),
+		).toHaveAttribute("aria-expanded", "false");
+	} finally {
+		rmSync(session.path, { force: true });
 	}
 });

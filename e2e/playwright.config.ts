@@ -73,7 +73,7 @@ export default defineConfig({
 		{
 			name: "webkit",
 			use: { ...devices["Desktop Safari"] },
-			testMatch: /(?:^|[\\/])(?:ask-user-question|plan-ask)\.spec\.ts$/,
+			testMatch: /(?:^|[\\/])(?:ask-user-question|ask-previews|plan-ask)\.spec\.ts$/,
 		},
 	],
 	// Self-contained: build the web app, boot the host on an isolated port + state dir, and tear it all

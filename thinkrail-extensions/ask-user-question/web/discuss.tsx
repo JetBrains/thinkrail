@@ -9,7 +9,7 @@ import {
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import type { AskUserQuestionDiscussReason } from "@thinkrail/pi-ask-user-question/core";
-import { Button } from "@thinkrail/ui/button";
+import { Button, withIconClass } from "@thinkrail/ui/button";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import { AutosizeField } from "./AutosizeField";
@@ -24,6 +24,8 @@ const REASON_COPY: Record<
 	irrelevant: { label: "tools.ask.discussReason.irrelevant", Icon: IrrelevantGlyph },
 	context: { label: "tools.ask.discussReason.context", Icon: ContextGlyph },
 };
+
+const DiscussingGlyph = withIconClass(ChatFill, "text-feedback-info");
 
 export function discussReasonKey(reason: AskUserQuestionDiscussReason): MessageKey {
 	return REASON_COPY[reason].label;
@@ -45,13 +47,14 @@ export function DiscussToggle({
 			ref={buttonRef}
 			variant="ghost"
 			size="m"
-			iconLeft={active ? ChatFill : ChatLine}
+			selected={active}
+			iconLeft={active ? DiscussingGlyph : ChatLine}
 			tabIndex={0}
 			aria-pressed={active}
 			data-testid={tid("ask-discuss")}
 			data-active={active}
 			onClick={onToggle}
-			className={cn("shrink-0", active && "bg-feedback-info-subtle text-feedback-info")}
+			className="shrink-0"
 		>
 			{active ? t("tools.ask.discussing") : t("tools.ask.discuss")}
 		</Button>

@@ -58,8 +58,8 @@ export function QuestionBody({
 }: QuestionBodyProps) {
 	const tid = useTestId();
 	const choiceRefs = useRef<Array<HTMLElement | null>>([]);
-	const noteRef = useRef<HTMLTextAreaElement | null>(null);
-	const discussRef = useRef<HTMLTextAreaElement | null>(null);
+	const noteRef = useRef<HTMLElement | null>(null);
+	const discussRef = useRef<HTMLElement | null>(null);
 	const discussToggleRef = useRef<HTMLButtonElement | null>(null);
 	const pendingFocus = useRef<PendingFocus>(null);
 	const otherIndex = question.options.length;

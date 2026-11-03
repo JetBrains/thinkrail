@@ -76,6 +76,7 @@ test("single-select: focus, roving keys, and Enter resolve the tool", {
 
 	const record = answeredRecord(page);
 	await expect(record).toBeVisible({ timeout: 60_000 });
+	await record.getByTestId("ask-receipt-options-toggle").first().click();
 	const chosen = record.locator('[data-testid="ask-record-option"][data-selected="true"]');
 	await expect(chosen).toHaveCount(1);
 	await expect(record.locator('[data-testid="ask-record-option"]').nth(1)).toHaveAttribute(
@@ -158,7 +159,8 @@ test("multi-select: several options can be checked and submitted", { tag: "@agen
 	await page.keyboard.type("e2e-note-alpha");
 	await page.keyboard.press("Enter");
 	await expect(note).toHaveCount(0);
-	await expect(noteToggles.nth(0)).toContainText("Edit note");
+	await expect(noteToggles.nth(0)).toContainText("e2e-note-alpha");
+	await expect(noteToggles.nth(0)).toHaveAccessibleName(`Edit note for ${labels[0]}`);
 
 	await noteToggles.nth(1).click();
 	await expect(card.getByTestId("ask-note")).toBeFocused();
@@ -169,6 +171,7 @@ test("multi-select: several options can be checked and submitted", { tag: "@agen
 	await page.keyboard.press("Enter");
 	const record = answeredRecord(page);
 	await expect(record).toBeVisible({ timeout: 60_000 });
+	await record.getByTestId("ask-receipt-options-toggle").first().click();
 	await expect(
 		record.locator('[data-testid="ask-record-option"][data-selected="true"]'),
 	).toHaveCount(2);
@@ -193,7 +196,7 @@ test("multi-select: the free-text row is mandatory and additive — checks + typ
 	await expect(custom).toBeVisible();
 	await expect(customRow).toHaveAttribute("data-selected", "false");
 
-	await customRow.getByText("Other", { exact: true }).click();
+	await customRow.getByText("Other — your own answer").click();
 	await expect(custom).toBeFocused();
 	await expect(customRow).toHaveAttribute("data-selected", "false");
 
@@ -209,6 +212,8 @@ test("multi-select: the free-text row is mandatory and additive — checks + typ
 	await card.getByTestId("ask-submit").click();
 	const record = answeredRecord(page);
 	await expect(record).toBeVisible({ timeout: 60_000 });
+	await expect(record.getByTestId("ask-receipt-answer")).toContainText("my-extra-e2e-answer");
+	await record.getByTestId("ask-receipt-options-toggle").first().click();
 	await expect(
 		record.locator('[data-testid="ask-record-option"][data-selected="true"]'),
 	).toHaveCount(2);
@@ -345,10 +350,13 @@ test("multi-question: page arrows, Tab-to-note, and Enter on the last question s
 	await page.keyboard.press("Enter");
 	const record = answeredRecord(page);
 	await expect(record).toBeVisible({ timeout: 60_000 });
+	for (const toggle of await record.getByTestId("ask-receipt-options-toggle").all()) {
+		await toggle.click();
+	}
 	await expect(
 		record.locator('[data-testid="ask-record-option"][data-selected="true"]'),
 	).toHaveCount(2);
-	await expect(record).toContainText("Note: first line");
+	await expect(record).toContainText("first line");
 	await expect(record).toContainText("second line");
 });
 
@@ -404,4 +412,54 @@ test("the awaiting card survives closing and reopening the chat", { tag: "@agent
 	await expect(card.getByTestId("ask-option").first()).toBeFocused();
 	await page.keyboard.press("Enter");
 	await expect(answeredRecord(page)).toBeVisible({ timeout: 60_000 });
+});
+
+test("discuss: a question marked to discuss reaches the agent as a discussion, not an answer", {
+	tag: "@agent",
+}, async ({ page }) => {
+	test.setTimeout(180_000);
+	await ask(
+		page,
+		`Call the ask_user_question tool with EXACTLY ONE single-select question offering 2 short options and no previews. ${ONLY_TOOL} After I respond, reply in one or two short sentences.`,
+	);
+	const card = activeCard(page);
+	await expect(card).toBeVisible({ timeout: 90_000 });
+
+	await card.getByTestId("ask-discuss").click();
+	await expect(card.getByTestId("ask-discuss-text")).toBeFocused();
+	await page.keyboard.type("I do not understand what this decides.");
+	await card.locator('[data-testid="ask-discuss-reason"][data-reason="unclear"]').click();
+	await card.getByTestId("ask-submit").click();
+
+	const record = answeredRecord(page);
+	await expect(record).toBeVisible({ timeout: 60_000 });
+	await expect(record.getByTestId("ask-receipt-answer")).toContainText("Let’s discuss first");
+	await expect(record).toContainText("I do not understand what this decides.");
+	await expect(
+		page
+			.locator('[data-testid="chat-message"][data-role="system"]')
+			.filter({ hasText: "✓ Done" })
+			.first(),
+	).toBeVisible({ timeout: 90_000 });
+});
+
+test("file preview: a mockup the agent writes renders inside its question", {
+	tag: "@agent",
+}, async ({ page }) => {
+	test.setTimeout(240_000);
+	await ask(
+		page,
+		"First write the file .thinkrail/context/mockups/e2e-preview.html with exactly this content: <h1>Sidebar preview</h1>. Then call the ask_user_question tool with EXACTLY ONE single-select question offering 2 short options; set previewFile of the FIRST option to .thinkrail/context/mockups/e2e-preview.html and give the second option no preview. Do nothing else.",
+	);
+	const card = activeCard(page);
+	await expect(card).toBeVisible({ timeout: 150_000 });
+	const pane = card.getByTestId("ask-preview");
+	await expect(pane).toHaveAttribute("data-preview", "file");
+	await expect(pane.getByTestId("html-frame-box")).toBeVisible({ timeout: 30_000 });
+	await card.getByTestId("ask-option").nth(1).click();
+	await expect(pane.getByTestId("ask-preview-none")).toBeVisible();
+	await card.getByTestId("ask-skip").click();
+	await expect(
+		page.locator('[data-testid="ask-user-question"][data-tone="skipped"]').first(),
+	).toBeVisible({ timeout: 30_000 });
 });
