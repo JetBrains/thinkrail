@@ -102,11 +102,12 @@ extension had to adopt and wire up. It was replaced so voice is a property of th
 - **Focus following.** Document `focusin` / `focusout` track the eligible field that has focus (see
   Fields). Focus moving into the layer's own DOM (`[data-dictation-layer]`) does not count as leaving.
   While a dictation runs, its field stays the target even without focus.
-- **The mic** is rendered through a portal and repositioned every animation frame against the field's
-  rect: inside the right edge, at the bottom corner of a field 40 px or taller, centred vertically on a
+- **The mic** is rendered through a portal and re-placed against the field's rect whenever the field,
+  the page or its container resizes or anything scrolls (one `requestAnimationFrame` per burst; no idle
+  frame loop, which kept the desktop renderer awake at 60 Hz): inside the right edge, at the bottom corner of a field 40 px or taller, centred vertically on a
   single line. A field narrower than 96 px gets no mic, though the chord still works there.
   - It portals into the field's nearest `[role="dialog"]` or Radix popper wrapper, absolutely
-    positioned against it, so it sits inside that layer's focus trap and outside-click guard. Elsewhere
+    positioned against it (including its scroll offset and border), so it sits inside that layer's focus trap and outside-click guard. Elsewhere
     it is fixed to the viewport.
   - It is a plain element, not a Radix popover: an always-open dismissable layer swallowed Escape for
     dialogs underneath.
@@ -125,7 +126,9 @@ extension had to adopt and wire up. It was replaced so voice is a property of th
   - When the controller goes idle or changes owner, the field is unlocked and the end is announced.
   - Owners are per element (`WeakMap`), so starting another field ends the first.
 - **Chord.** ⌘⇧Space on Apple, Ctrl+Shift+Space elsewhere, through one pair of window capture listeners.
-  - The target is the focused eligible field. If none is focused, and no modal layer is open and focus
+  - The target is the field being dictated into when it has focus (it is read-only meanwhile, so no
+    longer eligible, and a second press must still reach it to stop). Otherwise it is the focused
+    eligible field. If none is focused, and no modal layer is open and focus
     is in no other text entry (Monaco, xterm, a password), it falls back to the most recently focused
     `[data-dictation-fallback]` field, the chat composer, else the first one on the page. The chord
     focuses it. Otherwise the chord passes through untouched.
