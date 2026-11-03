@@ -93,6 +93,7 @@ export {
 	configurePiRuntimeFactory,
 	configurePiRuntimeGenerationInitializer,
 	configurePiRuntimeSessionExtensionExclusions,
+	getPiRuntime,
 	getPiRuntimeGeneration,
 	type PiRuntimeGeneration,
 	type PiRuntimeGenerationInitializer,

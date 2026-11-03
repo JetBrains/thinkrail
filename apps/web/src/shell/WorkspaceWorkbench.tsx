@@ -33,6 +33,7 @@ import { ProjectTree } from "../panels/ProjectTree";
 import { ReviewPanel, selectActiveReviewedPath } from "../panels/ReviewPanel";
 import { reviewFlagForPaths, reviewFlags, tabReviewPaths } from "../panels/reviewModel";
 import { SpecsPanel } from "../panels/SpecsPanel";
+import { SubscriptionLimits } from "../panels/SubscriptionLimits";
 import { TerminalWorkbenchBody, useTerminalClose } from "../panels/TerminalWorkbench";
 import { useWorkspaceReview } from "../panels/useWorkspaceReview";
 import { useWorkspaceSpecs } from "../panels/useWorkspaceSpecs";
@@ -651,6 +652,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			),
 			files: <FilesPanel key={workspaceId} workspaceId={workspaceId} />,
 			review: <ReviewPanel key={workspaceId} workspaceId={workspaceId} failed={review.failed} />,
+			limits: (
+				<QuietScrollArea className="h-full" viewportClassName="p-panel-inset">
+					<SubscriptionLimits />
+				</QuietScrollArea>
+			),
 			plan: railPlanSessionId ? (
 				<ErrorBoundary
 					label={t("shell.workbench.panel.planRail")}

@@ -73,7 +73,7 @@ export interface Project {
 	 * grant; absent (a record that predates pi-level trust) reads as untrusted. Never enables MCP servers by itself.
 	 */
 	piResourceTrust?: "granted" | "untrusted";
-	/** Approved repo-defined MCP entries: server name → fingerprint of the original project-file entry. */
+	/** Approved repo-defined MCP entries: server name в†’ fingerprint of the original project-file entry. */
 	mcpApprovals?: Record<string, string>;
 	/** Per-project enablement/exposure of user-level MCP servers (never written to `.pi/mcp.json`). */
 	mcpOverrides?: Record<string, McpProjectOverride>;
@@ -151,7 +151,7 @@ export type BranchReviewState = "open" | "merged" | "closed";
 export interface OpenBranchReview {
 	kind: "pull-request" | "merge-request";
 	number: number;
-	/** The review's web page, when the provider reported one — what makes the `PR #N` chip a link. */
+	/** The review's web page, when the provider reported one вЂ” what makes the `PR #N` chip a link. */
 	url?: string;
 	/** Absent on a pre-v78 host, which only ever reported open reviews. */
 	state?: BranchReviewState;
@@ -194,7 +194,7 @@ export interface ReviewChecks {
 
 export interface ReviewDetails {
 	draft: boolean;
-	/** The branch the PR merges into now — it may have been retargeted since the workspace was made. */
+	/** The branch the PR merges into now вЂ” it may have been retargeted since the workspace was made. */
 	base?: string;
 	/** Absent when the PR has no checks. */
 	checks?: ReviewChecks;
@@ -212,7 +212,7 @@ export interface ReviewDetails {
 export interface MergePrResult {
 	/** `false` when GitHub queued the PR (merge queue / auto-merge) instead of merging it now. */
 	merged: boolean;
-	/** `deleteBranch` only: whether `origin/<branch>` is gone — never deleted for a queued PR. */
+	/** `deleteBranch` only: whether `origin/<branch>` is gone вЂ” never deleted for a queued PR. */
 	branchDeleted: boolean;
 	/** Why the deletion after a successful merge failed. */
 	deleteError?: string;
@@ -348,7 +348,7 @@ export interface TodoItem {
 	commitSubject?: string;
 	artifacts?: TodoArtifact[];
 	/**
-	 * The item's review decoration — **host-derived on `todo.list`, present only on reviewable items**
+	 * The item's review decoration вЂ” **host-derived on `todo.list`, present only on reviewable items**
 	 * (those carrying a host change set). Review state is user-owned and host-stored (a sidecar, never the
 	 * agent-writable plan file), so an agent re-plan can't flip a review decision.
 	 */
@@ -389,13 +389,13 @@ export interface TodoPlan {
 	 */
 	summary?: string;
 	/**
-	 * Worktree changes attributed to NO item of this plan — **host-derived on `todo.list`, present only
+	 * Worktree changes attributed to NO item of this plan вЂ” **host-derived on `todo.list`, present only
 	 * when non-empty**. The honesty section of the review map: work no item claims (edits before the
 	 * first work window, after the last `done`, or in a chat that never planned) stays visible instead
 	 * of silently absent.
 	 */
 	unattributed?: GitFileChange[];
-	/** Committed counterpart of `unattributed`: `base..HEAD` commits no item owns, as wire-only `done` items (`origin: "adopted"`) — host-derived, never stored. See submodule-server-todos. */
+	/** Committed counterpart of `unattributed`: `base..HEAD` commits no item owns, as wire-only `done` items (`origin: "adopted"`) вЂ” host-derived, never stored. See submodule-server-todos. */
 	adoptedCommits?: TodoItem[];
 }
 
@@ -803,14 +803,14 @@ export interface PiPackageInput {
 	source: string;
 	/** `true` when a pasted `pi install` line carried `-l` / `--local`. */
 	local: boolean;
-	/** The bare name `source` was inferred from (`bigpowers` → `npm:bigpowers`); absent otherwise. */
+	/** The bare name `source` was inferred from (`bigpowers` в†’ `npm:bigpowers`); absent otherwise. */
 	bareName?: string;
 }
 
 /**
- * The install field's forgiving forms, reduced to what pi accepts: a pasted `pi install …` line (its
- * `-l` is reported, not dropped), a pi.dev or npmjs.com package URL and a bare npm name become `npm:…`;
- * everything else — `npm:` / `git:` sources, git URLs, paths — is returned trimmed. Never throws.
+ * The install field's forgiving forms, reduced to what pi accepts: a pasted `pi install вЂ¦` line (its
+ * `-l` is reported, not dropped), a pi.dev or npmjs.com package URL and a bare npm name become `npm:вЂ¦`;
+ * everything else вЂ” `npm:` / `git:` sources, git URLs, paths вЂ” is returned trimmed. Never throws.
  */
 export function parsePiPackageInput(raw: string): PiPackageInput {
 	let source = unwrapQuotes(raw.trim());
@@ -833,7 +833,7 @@ export function parsePiPackageInput(raw: string): PiPackageInput {
 	return { source, local };
 }
 
-/** Strips one balanced pair of surrounding quotes or backticks — a pasted `\`pi install …\`` or `"npm:x"`. */
+/** Strips one balanced pair of surrounding quotes or backticks вЂ” a pasted `\`pi install вЂ¦\`` or `"npm:x"`. */
 function unwrapQuotes(text: string): string {
 	const first = text[0];
 	if (first && "`'\"".includes(first) && text.length >= 2 && text.endsWith(first)) {
@@ -964,7 +964,7 @@ export interface PiLooseExtension {
 	error?: string;
 }
 
-/** One of pi's built-in extensions the host runs (`mcp`, `tool-search`), toggled through `±builtin:<name>` in pi settings. */
+/** One of pi's built-in extensions the host runs (`mcp`, `tool-search`), toggled through `В±builtin:<name>` in pi settings. */
 export interface PiBuiltinExtension {
 	name: string;
 	enabled: boolean;
@@ -1169,6 +1169,52 @@ export type JbcentralQuotaSnapshot =
 	| { state: "stale"; remaining: number; total: number; observedAt: number }
 	| { state: "unavailable" };
 
+export const SUBSCRIPTION_PROVIDER_IDS = [
+	"codex",
+	"claude",
+	"antigravity",
+	"openrouter",
+	"opencode-go",
+	"kimi-coding",
+	"deepseek",
+] as const;
+
+export type SubscriptionProviderId = (typeof SUBSCRIPTION_PROVIDER_IDS)[number];
+
+/** One metered window a provider reports, such as a 5-hour session or a weekly cap. */
+export interface SubscriptionUsageWindow {
+	/** Share of the window already consumed, 0-100. */
+	usedPercent: number;
+	/** Window length in seconds, when the provider states one. */
+	windowSeconds: number | null;
+	/** Epoch milliseconds when the window resets, when the provider states one. */
+	resetsAt: number | null;
+	/** Model or lane name, when the provider meters per model. */
+	model?: string;
+}
+
+/** Money a provider bills, reported instead of a percentage. */
+export interface SubscriptionUsageSpend {
+	usedUsd: number;
+	limitUsd: number | null;
+}
+
+export type SubscriptionUsage =
+	| { state: "ok"; windows: SubscriptionUsageWindow[]; spend?: SubscriptionUsageSpend }
+	| { state: "sign-in" }
+	| { state: "unsupported" }
+	| { state: "unavailable" };
+
+export interface SubscriptionUsageRow {
+	providerId: SubscriptionProviderId;
+	usage: SubscriptionUsage;
+}
+
+export interface SubscriptionUsageSnapshot {
+	observedAt: number;
+	rows: SubscriptionUsageRow[];
+}
+
 export type LoginFrame =
 	| { kind: "authUrl"; url: string; instructions?: string }
 	| { kind: "deviceCode"; userCode: string; verificationUri: string; expiresInSeconds?: number }
@@ -1344,7 +1390,7 @@ export function isFontWeightOffset(value: unknown): value is number {
 	);
 }
 
-export type LayoutToolId = "projects" | "specs" | "files" | "review" | "plan";
+export type LayoutToolId = "projects" | "specs" | "files" | "review" | "plan" | "limits";
 
 export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";
 
@@ -1438,7 +1484,7 @@ export interface AppConfig extends ThemePreference {
 	favoriteModels: WireModel[];
 	/** Models most recently chosen for a chat, newest first; host-maintained, never client-written. */
 	recentModels: WireModel[];
-	/** When false, a `request_changes` verdict records findings and waits — no automated fix cycle. */
+	/** When false, a `request_changes` verdict records findings and waits вЂ” no automated fix cycle. */
 	reviewAutoFix: boolean;
 	/** When false, the worker's in-session `request_review` tool is withheld; the Review button still works. */
 	agentReviewEnabled: boolean;
@@ -1482,7 +1528,7 @@ export interface ExtensionCatalogEntry {
 /** How many recently chosen models the host remembers. */
 export const RECENT_MODELS_LIMIT = 5;
 
-/** The `settings.update` payload: `null` clears an optional override back to unset (⇒ the default). */
+/** The `settings.update` payload: `null` clears an optional override back to unset (в‡’ the default). */
 export type AppConfigUpdate = Partial<
 	Omit<
 		AppConfig,
@@ -1951,7 +1997,7 @@ export interface ReviewComment {
 	status: ReviewCommentStatus;
 	anchorState: ReviewAnchorState;
 	sessionId?: string;
-	/** Who authored the remark — the human (default, absent) or the plan's reviewer agent. */
+	/** Who authored the remark вЂ” the human (default, absent) or the plan's reviewer agent. */
 	author?: "user" | "agent";
 	/** Provenance of an agent finding: the plan step (in its session) and the newest reviewed commit sha. */
 	origin?: { todoId: string; reviewedSha: string; sessionId: string };
@@ -2003,7 +2049,7 @@ export interface ReviewChangedPayload extends ReviewSnapshot {
 	workspaceId: string;
 }
 
-/** A plan review that failed after `todo.startReview` acknowledged — the detached button/auto path has no
+/** A plan review that failed after `todo.startReview` acknowledged вЂ” the detached button/auto path has no
  * chat of its own, so the owning plan session raises the failure as a toast. `sessionId` routes it to that
  * plan only; duplicate views of one session dedupe on the toast body. See apps/web/src/panels/SPEC.md. */
 export interface ReviewFailedPayload {
@@ -2091,7 +2137,7 @@ function isReviewFinding(f: unknown): f is ReviewFixComment {
 	return true;
 }
 
-/** Validate the review subagent's parsed JSON verdict (untrusted — model output). Every finding field and
+/** Validate the review subagent's parsed JSON verdict (untrusted вЂ” model output). Every finding field and
  * its enum/line coherence is checked, and the verdict/finding cardinality is enforced: a `request_changes`
  * with no actionable finding is rejected (it would strand the worker), while an `approve` may carry none. */
 export function isPlanReviewResult(value: unknown): value is PlanReviewResult {

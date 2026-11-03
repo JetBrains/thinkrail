@@ -28,8 +28,15 @@ treatment.
 
 ## Boundary
 
-- **Owns:** `ProjectTree`. Each top-level project row is a compact IDE-tree row at the shared `--panel-row-height` (`web-spacing`):
-  **always-visible chevron** + folder/name + a collapsed-only plain workspace count + an **always-visible Create
+- **Owns:** `SubscriptionLimits` — the **Limits** tool. It is an ordinary right-rail tool beside Specs, Files,
+  Review and the TODO List (`LAYOUT_TOOLS` carries `"limits"`), so the operator places it where it suits them
+  instead of living in a fixed block. It renders one row per subscription, polled once a minute through
+  `usage.subscriptions`: only what the host observed — a provider that refuses (`unavailable`) is not listed,
+  Antigravity says it needs a sign-in, and OpenCode Go / Kimi / DeepSeek fold into one collapsed "no limits"
+  group. It owns no provider knowledge beyond labels; the normalized window and money shapes come from the host
+  (see `submodule-server-usage`). Rows never invent a number, and the tool body renders nothing until the host
+  speaks `SUBSCRIPTION_USAGE_PROTOCOL_VERSION`.
+- **Owns:** `ProjectTree`. Each top-level project row is a compact IDE-tree row at the shared `--panel-row-height` (`web-spacing`):  **always-visible chevron** + folder/name + a collapsed-only plain workspace count + an **always-visible Create
   workspace `+` in a fixed right-edge column**. That `+` is the **same control as the Projects-header Add
   project `+`** — both are `IconButton` ghost `s`, so they render identically and their glyphs
   line up on one vertical axis (both sit at the row's `pr-xs` right edge). The Create workspace `+` carries a
@@ -1617,7 +1624,7 @@ own section. The kebab menu (`plan-menu`, a
   and routing every close back through `store.dismissToast` (so the store stays the single source of truth).
   Errors persist until dismissed; success/info time out. The **integration piece** — the primitives stay
   presentational.
-- **Public surface:** layout-agnostic feature renderers (`ProjectTree`, `WelcomePanel`, file/diff/doc/chat
+- **Public surface:** layout-agnostic feature renderers (`ProjectTree`, `SubscriptionLimits`, `WelcomePanel`, file/diff/doc/chat
   panes, singleton side tools, terminal bodies, Settings, and `Toaster`), imported **per-file** so
   Monaco/shiki/xterm stay lazy. Tab strips, group headers, side stacks, and center topology are not panel
   surfaces; the shell layout module wraps these renderers.
