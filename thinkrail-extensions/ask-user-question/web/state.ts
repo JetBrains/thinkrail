@@ -148,7 +148,6 @@ export function answerSupportsNote(answer: AskUserQuestionAnswer): boolean {
 export interface RecapState {
 	selectedLabels: string[];
 	customAnswer: string | null;
-	showOptions: boolean;
 }
 
 export function deriveRecapState(answer: AskUserQuestionAnswer | undefined): RecapState {
@@ -160,11 +159,7 @@ export function deriveRecapState(answer: AskUserQuestionAnswer | undefined): Rec
 				: [];
 	const customAnswer =
 		answer && (answer.kind === "custom" || answer.kind === "multi") ? answer.answer : null;
-	return {
-		selectedLabels,
-		customAnswer,
-		showOptions: !!answer && answer.kind !== "custom",
-	};
+	return { selectedLabels, customAnswer };
 }
 
 export type ChoiceKeyAction =

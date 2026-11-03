@@ -130,4 +130,28 @@ describe("every control is an explicit tab stop (WebKit skips buttons without on
 		expect(html).toContain('data-testid="ask-preview-none"');
 		expect(controlsWithoutTabStop(html)).toEqual([]);
 	});
+
+	it("covers the answered receipt's fold and per-question Options toggles", () => {
+		const html = renderToStaticMarkup(
+			<AskUserQuestionCard
+				toolCallId="call-tab-stops-receipt"
+				toolName="ask_user_question"
+				args={{ questions: [single, multi] }}
+				result={{
+					details: {
+						cancelled: false,
+						answers: [
+							{ questionIndex: 0, question: single.question, kind: "option", answer: BOTTOM },
+						],
+					},
+				}}
+				status="done"
+				streaming={false}
+				interaction={interaction}
+			/>,
+		);
+		expect(html).toContain('data-testid="ask-receipt-toggle"');
+		expect(html).toContain('data-testid="ask-receipt-options-toggle"');
+		expect(controlsWithoutTabStop(html)).toEqual([]);
+	});
 });

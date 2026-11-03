@@ -25,6 +25,10 @@ const REASON_COPY: Record<
 	context: { label: "tools.ask.discussReason.context", Icon: ContextGlyph },
 };
 
+export function discussReasonKey(reason: AskUserQuestionDiscussReason): MessageKey {
+	return REASON_COPY[reason].label;
+}
+
 export function DiscussToggle({
 	active,
 	buttonRef,

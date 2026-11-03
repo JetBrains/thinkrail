@@ -408,22 +408,15 @@ describe("deriveAnswers", () => {
 describe("deriveRecapState", () => {
 	const base = { questionIndex: 0, question: "Which?" };
 
-	it("hides the options of a skipped question", () => {
-		expect(deriveRecapState(undefined)).toEqual({
-			selectedLabels: [],
-			customAnswer: null,
-			showOptions: false,
-		});
+	it("marks nothing for a skipped or discussed question", () => {
+		const empty = { selectedLabels: [], customAnswer: null };
+		expect(deriveRecapState(undefined)).toEqual(empty);
+		expect(deriveRecapState({ ...base, kind: "discuss", answer: null })).toEqual(empty);
 	});
 
 	it("marks a single authored option selected", () => {
-		const answer: AskUserQuestionAnswer = {
-			...base,
-			kind: "option",
-			answer: "A",
-		};
-		const expected = { selectedLabels: ["A"], customAnswer: null, showOptions: true };
-		expect(deriveRecapState(answer)).toEqual(expected);
+		const answer: AskUserQuestionAnswer = { ...base, kind: "option", answer: "A" };
+		expect(deriveRecapState(answer)).toEqual({ selectedLabels: ["A"], customAnswer: null });
 	});
 
 	it("keeps multi selections and additive custom text", () => {
@@ -433,25 +426,12 @@ describe("deriveRecapState", () => {
 			answer: "extra",
 			selected: ["A", "B"],
 		};
-		const expected = {
-			selectedLabels: ["A", "B"],
-			customAnswer: "extra",
-			showOptions: true,
-		};
-		expect(deriveRecapState(answer)).toEqual(expected);
+		expect(deriveRecapState(answer)).toEqual({ selectedLabels: ["A", "B"], customAnswer: "extra" });
 	});
 
-	it("shows a custom answer without the authored options", () => {
-		const answer: AskUserQuestionAnswer = {
-			...base,
-			kind: "custom",
-			answer: "mine",
-		};
-		expect(deriveRecapState(answer)).toEqual({
-			selectedLabels: [],
-			customAnswer: "mine",
-			showOptions: false,
-		});
+	it("reports a custom answer as the own-answer row", () => {
+		const answer: AskUserQuestionAnswer = { ...base, kind: "custom", answer: "mine" };
+		expect(deriveRecapState(answer)).toEqual({ selectedLabels: [], customAnswer: "mine" });
 	});
 });
 

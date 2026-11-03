@@ -29,7 +29,13 @@ import {
 import { GhostPage } from "./ghost";
 import { QuestionBody } from "./QuestionBody";
 import { readAskUserQuestionResult } from "./readResult";
-import { ComposingCard, ResolvedRecord, SupersededRecord, WaitingCard } from "./record";
+import {
+	AnsweredReceipt,
+	ClosedRecord,
+	ComposingCard,
+	SupersededRecord,
+	WaitingCard,
+} from "./record";
 import {
 	answerSupportsNote,
 	type ChoiceNudge,
@@ -267,12 +273,18 @@ export function AskUserQuestionCard({
 
 	if (resolvedResult) {
 		return (
-			<ResolvedRecord questions={questions} result={resolvedResult} rawText={resultText(result)} />
+			<AnsweredReceipt
+				toolCallId={toolCallId}
+				questions={questions}
+				result={resolvedResult}
+				rawText={resultText(result)}
+				prepareLayoutChange={interaction?.prepareLayoutChange}
+			/>
 		);
 	}
-	if (superseded) return <SupersededRecord questions={questions} />;
+	if (superseded) return <SupersededRecord />;
 	if (ended || status === "error") {
-		return <ResolvedRecord questions={questions} result={null} rawText={resultText(result)} />;
+		return <ClosedRecord error={status === "error"} rawText={resultText(result)} />;
 	}
 	if (streaming || questions.length === 0) return <ComposingCard count={questions.length} />;
 	if (submitted) {
