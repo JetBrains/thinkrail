@@ -57,3 +57,19 @@ test.skipIf(process.platform === "win32")("the watchdog keeps the child's exit c
 	const child = spawnSupervised([bun, "-e", "process.exit(5)"], { exitWithParent: true });
 	expect(await child.exited).toBe(5);
 });
+
+test.skipIf(process.platform === "win32")(
+	"a watched child killed by a signal still reports a null exit",
+	async () => {
+		const marker = `supervised-signal-${process.pid}-${Date.now()}`;
+		const child = spawnSupervised([bun, "-e", "setInterval(() => {}, 1000)", marker], {
+			exitWithParent: true,
+		});
+		const deadline = Date.now() + 5_000;
+		while (Bun.spawnSync(["pgrep", "-f", marker]).exitCode !== 0 && Date.now() < deadline) {
+			await Bun.sleep(50);
+		}
+		Bun.spawnSync(["pkill", "-KILL", "-f", marker]);
+		expect(await child.exited).toBeNull();
+	},
+);

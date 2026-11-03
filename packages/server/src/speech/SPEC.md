@@ -114,9 +114,11 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
 - **Crash.** An unexpected exit reads as `stopped`, and the next dictation starts it again.
 - **Orphans.**
   - On POSIX the engine runs with `exitWithParent`, so it dies with a killed or crashed host.
-  - Windows has no such watchdog. There the engine's pid goes to `<dataDir>/speech/engine.pid` and is
-    removed on a normal stop. The next `initSpeech` stops a still-running `nemo-speech.exe` with that pid,
-    checked by image name through `tasklist`.
+  - Windows has no such watchdog. There the host's pid and the engine's pid go to
+    `<dataDir>/speech/engine.pid`, removed on a normal stop.
+  - The next `initSpeech` reaps that engine only when its owning host is gone. A desktop app and a CLI
+    sharing the data dir therefore never kill each other's live engine. The engine is checked by image
+    name (`nemo-speech.exe`) through `tasklist`.
 - **Shutdown.** `stopEngine()` (host `stop()`, install, removal) kills a running or starting engine and
   waits for the child's exit.
 - **Fixture.** `fakeNemoSpeech.ts` stands in for the CLI in unit and e2e tests. It answers `--version`,

@@ -120,8 +120,17 @@ class EngineRun {
 function recordWindowsEngine(pid: number): void {
 	if (process.platform !== "win32" || pid === 0) return;
 	try {
-		writeFileSync(enginePidPath(), String(pid));
+		writeFileSync(enginePidPath(), `${process.pid} ${pid}`);
 	} catch {}
+}
+
+function processAlive(pid: number): boolean {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 function forgetWindowsEngine(): void {
@@ -130,14 +139,16 @@ function forgetWindowsEngine(): void {
 
 export async function reapOrphanEngine(): Promise<void> {
 	if (process.platform !== "win32") return;
-	let pid: number;
+	let recorded: number[];
 	try {
-		pid = Number(readFileSync(enginePidPath(), "utf8"));
-		rmSync(enginePidPath(), { force: true });
+		recorded = readFileSync(enginePidPath(), "utf8").trim().split(" ").map(Number);
 	} catch {
 		return;
 	}
-	if (!Number.isSafeInteger(pid) || pid <= 0) return;
+	const [owner = 0, pid = 0] = recorded;
+	if (!Number.isSafeInteger(owner) || !Number.isSafeInteger(pid) || pid <= 0) return;
+	if (owner !== process.pid && processAlive(owner)) return;
+	rmSync(enginePidPath(), { force: true });
 	const listed = await runBounded(["tasklist", "/FI", `PID eq ${pid}`, "/FO", "CSV", "/NH"], {
 		timeoutMs: 5_000,
 	});
@@ -208,8 +219,9 @@ export async function stopEngine(): Promise<void> {
 	current = null;
 	if (!run) return;
 	await run.shutdown();
+	if (current !== null) return;
 	forgetWindowsEngine();
-	if (current === null) setEngineState("stopped");
+	setEngineState("stopped");
 }
 
 export function setEngineIdleMsForTests(ms: number): void {

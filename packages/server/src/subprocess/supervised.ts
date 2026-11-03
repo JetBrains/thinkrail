@@ -10,7 +10,7 @@ export type SupervisedOptions = {
 };
 
 const WATCHDOG =
-	'exec 3<&0; "$@" </dev/null & child=$!; (read _ <&3; kill "$child" 2>/dev/null) & watcher=$!; wait "$child"; status=$?; kill "$watcher" 2>/dev/null; exit "$status"';
+	'exec 3<&0; "$@" </dev/null & child=$!; (read _ <&3; kill "$child" 2>/dev/null) & watcher=$!; wait "$child"; status=$?; kill "$watcher" 2>/dev/null; if [ "$status" -gt 128 ]; then trap - "$(kill -l "$status")"; kill -s "$(kill -l "$status")" $$; fi; exit "$status"';
 
 export type Supervised = {
 	pid: number;
