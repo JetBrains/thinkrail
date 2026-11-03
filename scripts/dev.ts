@@ -5,8 +5,8 @@ import { printStartupMark } from "@thinkrail/shared/startupMark";
 
 const host = process.env.THINKRAIL_HOST ?? "localhost";
 const rawPort = process.env.THINKRAIL_PORT;
-const preferred = parsePort(rawPort) || 24242;
-if (rawPort?.trim() && parsePort(rawPort) === undefined) {
+const preferred = parsePort(rawPort) ?? 24242;
+if (rawPort !== undefined && parsePort(rawPort) === undefined) {
 	console.warn(`thinkrail dev: ignoring invalid THINKRAIL_PORT=${rawPort}; using ${preferred}`);
 }
 const port = await findFreePort(preferred, host);

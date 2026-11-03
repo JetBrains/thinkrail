@@ -95,7 +95,7 @@ const host = process.env.THINKRAIL_HOST ?? "localhost";
 const staticDir = process.env.THINKRAIL_STATIC_DIR;
 const rawPort = process.env.THINKRAIL_PORT;
 const envPort = parsePort(rawPort);
-if (rawPort?.trim() && envPort === undefined) {
+if (rawPort !== undefined && envPort === undefined) {
 	console.warn(
 		`thinkrail dev: ignoring invalid THINKRAIL_PORT=${rawPort}; using a free port from 24242`,
 	);
