@@ -25,3 +25,7 @@ export function stagingDir(): string {
 export function markerPath(): string {
 	return join(speechDir(), "installed.json");
 }
+
+export function enginePidPath(): string {
+	return join(speechDir(), "engine.pid");
+}

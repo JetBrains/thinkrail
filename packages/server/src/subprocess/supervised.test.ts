@@ -24,3 +24,36 @@ test("a failed launch is a null exit, never a throw", async () => {
 	expect(child.stderrTail().length).toBeGreaterThan(0);
 	await child.stop();
 });
+
+test.skipIf(process.platform === "win32")(
+	"a child spawned with exitWithParent dies when its host is killed outright",
+	async () => {
+		const marker = `supervised-orphan-${process.pid}-${Date.now()}`;
+		const host = Bun.spawn(
+			[
+				bun,
+				"-e",
+				`const { spawnSupervised } = await import(${JSON.stringify(`${import.meta.dir}/supervised.ts`)});
+				spawnSupervised([process.execPath, "-e", "setInterval(() => {}, 1000)", ${JSON.stringify(marker)}], { exitWithParent: true });
+				console.log("ready");
+				setInterval(() => {}, 1000);`,
+			],
+			{ stdout: "pipe", stderr: "inherit" },
+		);
+		const reader = host.stdout.getReader();
+		await reader.read();
+		const running = () => Bun.spawnSync(["pgrep", "-f", marker]).exitCode === 0;
+		expect(running()).toBe(true);
+		host.kill("SIGKILL");
+		await host.exited;
+		const deadline = Date.now() + 5_000;
+		while (running() && Date.now() < deadline) await Bun.sleep(100);
+		expect(running()).toBe(false);
+	},
+	15_000,
+);
+
+test.skipIf(process.platform === "win32")("the watchdog keeps the child's exit code", async () => {
+	const child = spawnSupervised([bun, "-e", "process.exit(5)"], { exitWithParent: true });
+	expect(await child.exited).toBe(5);
+});

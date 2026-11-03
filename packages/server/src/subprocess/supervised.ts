@@ -5,7 +5,12 @@ const STDERR_TAIL_BYTES = 4096;
 export type SupervisedOptions = {
 	cwd?: string;
 	env?: Record<string, string | undefined>;
+	/** POSIX: the child dies with the host even when the host is SIGKILLed. */
+	exitWithParent?: boolean;
 };
+
+const WATCHDOG =
+	'exec 3<&0; "$@" </dev/null & child=$!; (read _ <&3; kill "$child" 2>/dev/null) & watcher=$!; wait "$child"; status=$?; kill "$watcher" 2>/dev/null; exit "$status"';
 
 export type Supervised = {
 	pid: number;
@@ -22,9 +27,15 @@ function drainTail(stream: ReadableStream<Uint8Array>, keep: (text: string) => v
 }
 
 export function spawnSupervised(argv: string[], opts: SupervisedOptions = {}): Supervised {
-	let proc: Bun.Subprocess<"ignore", "pipe", "pipe">;
+	const watched = opts.exitWithParent === true && process.platform !== "win32";
+	let proc: Bun.Subprocess<"ignore" | "pipe", "pipe", "pipe">;
 	try {
-		proc = Bun.spawn(argv, spawnOptions(opts));
+		proc = watched
+			? Bun.spawn(["/bin/sh", "-c", WATCHDOG, "sh", ...argv], {
+					...spawnOptions(opts),
+					stdin: "pipe",
+				})
+			: Bun.spawn(argv, spawnOptions(opts));
 	} catch (cause) {
 		const message = cause instanceof Error ? cause.message : String(cause);
 		return {

@@ -51,6 +51,12 @@ never what a particular child's output means.
   - It has no deadline; the caller owns the lifetime. `stop()` runs the same tree kill as expiry and
     resolves on the direct child's exit.
   - `exited` is the exit code, or `null` after a signal or a failed launch, and is never a throw.
+  - `exitWithParent` (POSIX only) runs the child under a tiny `/bin/sh` watchdog.
+    - The watchdog holds a stdin pipe from the host and kills the child when that pipe reaches EOF.
+      That happens when the host dies, even by SIGKILL, which no exit handler sees.
+    - It passes the child's exit code through, and the group kill still stops both.
+    - Why it exists: Playwright and crash-killed hosts left detached engines holding ~1 GB each,
+      found running hours later.
 - **Public surface:** `runBounded`, `streamBounded`, `spawnSupervised`, `BoundedRun`, `BoundedBytesRun`,
   `BoundedRunOptions`, `BoundedBytesRunOptions`, `BoundedStream`, `BoundedStreamOptions`, `Supervised`,
   `SupervisedOptions`.

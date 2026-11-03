@@ -14,7 +14,7 @@ import { CodedError, errorCodeOf } from "@thinkrail/shared/codedError";
 import { logger } from "../log";
 import { runBounded } from "../subprocess";
 import { downloadVerified } from "./download";
-import { stopEngine } from "./engine";
+import { reapOrphanEngine, stopEngine } from "./engine";
 import { markerPath, modelsDir, runtimeBinary, runtimeDir, speechDir, stagingDir } from "./layout";
 import { hostTarget, loadManifest, type RuntimePin, type SpeechManifest } from "./manifest";
 import { type PathRuntime, probePathRuntime } from "./pathRuntime";
@@ -150,6 +150,7 @@ export async function initSpeech(): Promise<void> {
 		runtime: runtimeInfo(),
 		downloadBytes: downloadBytes(),
 	});
+	await reapOrphanEngine().catch(() => {});
 	if (runtimePin()) pathRuntime = await probePathRuntime(pins().runtimeVersion);
 	await refresh();
 }

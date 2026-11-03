@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { findFreePort } from "@thinkrail/shared/freePort";
 import { logger } from "../log";
-import { type Supervised, spawnSupervised } from "../subprocess";
+import { runBounded, type Supervised, spawnSupervised } from "../subprocess";
 import type { EngineInputs } from "./install";
+import { enginePidPath } from "./layout";
 import { setEngineState } from "./status";
 
 const log = logger("speech");
@@ -70,20 +72,24 @@ class EngineRun {
 		const port = await findFreePort(0, HOST, 0);
 		if (signal.aborted) throw engineFailed("the speech engine start was cancelled");
 		const apiKey = randomUUID();
-		const child = spawnSupervised([
-			inputs.bin,
-			"serve",
-			"--host",
-			HOST,
-			"--port",
-			String(port),
-			"--api-key",
-			apiKey,
-			"--no-ui",
-			"--asr-model",
-			inputs.modelPath,
-		]);
+		const child = spawnSupervised(
+			[
+				inputs.bin,
+				"serve",
+				"--host",
+				HOST,
+				"--port",
+				String(port),
+				"--api-key",
+				apiKey,
+				"--no-ui",
+				"--asr-model",
+				inputs.modelPath,
+			],
+			{ exitWithParent: true },
+		);
 		this.child = child;
+		recordWindowsEngine(child.pid);
 		try {
 			await waitReady(child, port, apiKey, signal);
 		} catch (err) {
@@ -109,6 +115,35 @@ class EngineRun {
 		await this.child?.stop();
 		await this.ready.catch(() => {});
 	}
+}
+
+function recordWindowsEngine(pid: number): void {
+	if (process.platform !== "win32" || pid === 0) return;
+	try {
+		writeFileSync(enginePidPath(), String(pid));
+	} catch {}
+}
+
+function forgetWindowsEngine(): void {
+	if (process.platform === "win32") rmSync(enginePidPath(), { force: true });
+}
+
+export async function reapOrphanEngine(): Promise<void> {
+	if (process.platform !== "win32") return;
+	let pid: number;
+	try {
+		pid = Number(readFileSync(enginePidPath(), "utf8"));
+		rmSync(enginePidPath(), { force: true });
+	} catch {
+		return;
+	}
+	if (!Number.isSafeInteger(pid) || pid <= 0) return;
+	const listed = await runBounded(["tasklist", "/FI", `PID eq ${pid}`, "/FO", "CSV", "/NH"], {
+		timeoutMs: 5_000,
+	});
+	if (!listed.ok || !/nemo-speech\.exe/i.test(listed.out)) return;
+	await runBounded(["taskkill", "/PID", String(pid), "/T", "/F"], { timeoutMs: 5_000 });
+	log.info("stopped a speech engine left by a previous run");
 }
 
 let current: EngineRun | null = null;
@@ -173,6 +208,7 @@ export async function stopEngine(): Promise<void> {
 	current = null;
 	if (!run) return;
 	await run.shutdown();
+	forgetWindowsEngine();
 	if (current === null) setEngineState("stopped");
 }
 
