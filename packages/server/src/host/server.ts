@@ -380,7 +380,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				return new Response("ok");
 			}
 			if (url.pathname.startsWith(FILES_PREFIX)) {
-				return serveWorktreeFile(url.pathname);
+				return serveWorktreeFile(url.pathname, url.searchParams.get("maxBytes"));
 			}
 			if (url.pathname.startsWith(BLOB_PREFIX)) {
 				return serveBlob(url.pathname, req.signal);

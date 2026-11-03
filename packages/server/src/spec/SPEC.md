@@ -41,9 +41,10 @@ core/SPEC.md), not an async wrapper — that would still block the loop in one p
   **`specSnapshot(root) → SpecSnapshot`** — the search palette's read: every spec of a repo
   **root** (path, id, title, type, full content) through the same per-root reused `SpecIndex`,
   memoized so a keystroke never re-walks the tree. Every build runs on `setImmediate`, the first one
-  too: a root's first read answers an empty snapshot, and a stale one keeps answering until its rebuild
-  lands; the snapshot says `rebuilding` while a build is pending, so a caller reports "indexing" and
-  asks again instead of serving the stale build as final. A build happens only on a read — after the
+  too: a root's first read answers an empty snapshot with `built: false`, and a stale one keeps answering
+  until its rebuild lands; `rebuilding` is the pending build's promise (else `null`), so a caller can tell a
+  cold root from a warm empty one, wait briefly for the build, and report "refreshing" instead of serving
+  the stale build as final. A build happens only on a read — after the
   60 s TTL or after `invalidateSpecSnapshot(root)` (the host calls it on `workspace.fsChanged`) marked
   the root stale — never eagerly, so a worktree an agent keeps writing in costs nothing while nobody
   searches it. At most eight roots are kept (least recently read out first), and

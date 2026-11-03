@@ -39,7 +39,7 @@ export interface SpecSnapshotEntry {
 const SNAPSHOT_TTL_MS = 60_000;
 const SNAPSHOT_ROOTS = 8;
 const snapshots = new Map<string, { at: number; entries: readonly SpecSnapshotEntry[] }>();
-const rebuilding = new Set<string>();
+const rebuilding = new Map<string, Promise<void>>();
 
 function buildSnapshot(root: string): SpecSnapshotEntry[] {
 	try {
@@ -62,33 +62,40 @@ function buildSnapshot(root: string): SpecSnapshotEntry[] {
 
 export interface SpecSnapshot {
 	readonly entries: readonly SpecSnapshotEntry[];
-	readonly rebuilding: boolean;
+	readonly built: boolean;
+	readonly rebuilding: Promise<void> | null;
 }
 
 export function specSnapshot(root: string, now = Date.now()): SpecSnapshot {
 	const cached = snapshots.get(root);
-	if (!cached) {
-		scheduleSnapshotRebuild(root);
-		return { entries: [], rebuilding: true };
-	}
+	if (!cached) return { entries: [], built: false, rebuilding: scheduleSnapshotRebuild(root) };
 	snapshots.delete(root);
 	snapshots.set(root, cached);
-	if (now - cached.at >= SNAPSHOT_TTL_MS) scheduleSnapshotRebuild(root);
-	return { entries: cached.entries, rebuilding: rebuilding.has(root) };
+	const pending =
+		now - cached.at >= SNAPSHOT_TTL_MS
+			? scheduleSnapshotRebuild(root)
+			: (rebuilding.get(root) ?? null);
+	return { entries: cached.entries, built: true, rebuilding: pending };
 }
 
-function scheduleSnapshotRebuild(root: string): void {
-	if (rebuilding.has(root)) return;
-	rebuilding.add(root);
+function scheduleSnapshotRebuild(root: string): Promise<void> {
+	const pending = rebuilding.get(root);
+	if (pending) return pending;
+	const { promise, resolve } = Promise.withResolvers<void>();
+	rebuilding.set(root, promise);
 	setImmediate(() => {
-		if (!rebuilding.delete(root)) return;
-		snapshots.delete(root);
-		snapshots.set(root, { at: Date.now(), entries: buildSnapshot(root) });
-		for (const oldest of snapshots.keys()) {
-			if (snapshots.size <= SNAPSHOT_ROOTS) break;
-			evictSpecRoot(oldest);
+		if (rebuilding.get(root) === promise) {
+			rebuilding.delete(root);
+			snapshots.delete(root);
+			snapshots.set(root, { at: Date.now(), entries: buildSnapshot(root) });
+			for (const oldest of snapshots.keys()) {
+				if (snapshots.size <= SNAPSHOT_ROOTS) break;
+				evictSpecRoot(oldest);
+			}
 		}
+		resolve();
 	});
+	return promise;
 }
 
 export function invalidateSpecSnapshot(root: string): void {

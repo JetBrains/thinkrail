@@ -18,14 +18,33 @@ export function compareHits(a: SearchHit, b: SearchHit): number {
 	return a.tier - b.tier || b.score - a.score;
 }
 
+export interface GroupOutcome {
+	readonly state?: SearchGroupState;
+	readonly timeCut?: boolean;
+	readonly fileList?: number;
+}
+
+export function groupOf(
+	kind: SearchKind,
+	hits: SearchHit[],
+	total: number,
+	{ state = "ready", timeCut = false, fileList }: GroupOutcome = {},
+): SearchGroup {
+	const cut = {
+		...(timeCut ? { time: true as const } : {}),
+		...(fileList === undefined ? {} : { fileList }),
+	};
+	return { kind, hits, total, state, ...(timeCut || fileList !== undefined ? { cut } : {}) };
+}
+
 export function buildGroup(
 	kind: SearchKind,
 	hits: SearchHit[],
 	limit: number,
-	state: SearchGroupState = "ready",
+	outcome: GroupOutcome = {},
 ): SearchGroup {
 	hits.sort(compareHits);
-	return { kind, hits: hits.slice(0, limit), total: hits.length, state };
+	return groupOf(kind, hits.slice(0, limit), hits.length, outcome);
 }
 
 export function emptyGroup(kind: SearchKind, state: SearchGroupState = "ready"): SearchGroup {

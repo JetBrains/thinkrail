@@ -10,7 +10,7 @@ import {
 	prepareContent,
 	searchHitFields,
 } from "@thinkrail/contracts";
-import type { HistorySession } from "../history";
+import type { HistorySession, HistoryState } from "../history";
 import type { SpecSnapshot } from "../spec";
 import type { StoredPlanFile } from "../todos";
 import type { FileListCache } from "./files";
@@ -19,6 +19,8 @@ import {
 	compactWhitespace,
 	compareHits,
 	type Deadline,
+	emptyGroup,
+	groupOf,
 	lineAround,
 	snippetAround,
 } from "./hits";
@@ -86,11 +88,9 @@ export function searchFiles(
 	input: ProviderInput,
 	stat: FileStat,
 ): SearchGroup {
-	const list = lists.peek(root.root);
-	if (!list) {
-		void lists.load(root.root);
-		return buildGroup("file", [], input.limit, "indexing");
-	}
+	const view = lists.peek(root.root);
+	if (!view) return emptyGroup("file", "indexing");
+	const { list, state } = view;
 	const hits: FileHit[] = [];
 	const foldedTerms = input.terms.map((term) => ({
 		text: foldMatchText(term.text),
@@ -156,18 +156,11 @@ export function searchFiles(
 			break;
 		}
 	}
-	return {
-		kind: "file",
-		hits: page,
-		total: hits.length - missing,
-		state: list.failed
-			? "failed"
-			: lists.reloading(root.root)
-				? "indexing"
-				: truncated || list.truncated
-					? "truncated"
-					: "ready",
-	};
+	return groupOf("file", page, hits.length - missing, {
+		state,
+		timeCut: truncated,
+		...(list.truncated ? { fileList: list.paths.length } : {}),
+	});
 }
 
 export function searchSpecs(
@@ -178,10 +171,11 @@ export function searchSpecs(
 	const hits: SpecHit[] = [];
 	const folded = foldedTermsOf(input);
 	const bodyTerms = folded.some((text) => text.length >= MIN_BODY_TERM_LENGTH);
-	const { entries, rebuilding } = snapshot(root.root);
+	const { entries, built, rebuilding } = snapshot(root.root);
+	const state = !built ? "indexing" : rebuilding ? "refreshing" : "ready";
 	for (const entry of entries) {
 		if (input.deadline.expired()) {
-			return buildGroup("spec", hits, input.limit, "truncated");
+			return buildGroup("spec", hits, input.limit, { state, timeCut: true });
 		}
 		const match = matchFields(
 			input.terms,
@@ -215,7 +209,7 @@ export function searchSpecs(
 			ranges: { snippet: wireRanges(contentRanges(folded, prepareContent(snippet))) },
 		});
 	}
-	return buildGroup("spec", hits, input.limit, rebuilding ? "indexing" : "ready");
+	return buildGroup("spec", hits, input.limit, { state });
 }
 
 export interface ChatLabel {
@@ -227,13 +221,13 @@ function lastActivity(session: HistorySession): number {
 	return session.entries[session.entries.length - 1]?.timestamp ?? 0;
 }
 
-function groupState(truncated: boolean, indexing: boolean): SearchGroup["state"] {
-	return truncated ? "truncated" : indexing ? "indexing" : "ready";
+function pendingState(history: HistoryState): "indexing" | "refreshing" | null {
+	return history === "cold" ? "indexing" : history === "refreshing" ? "refreshing" : null;
 }
 
 export function searchTranscripts(
 	sessions: readonly HistorySession[],
-	indexing: boolean,
+	history: HistoryState,
 	label: (cwd: string) => ChatLabel | null,
 	input: ProviderInput,
 ): SearchGroup {
@@ -281,24 +275,28 @@ export function searchTranscripts(
 		"transcript",
 		found.map((entry) => entry.hit),
 		input.limit,
-		groupState(truncated, indexing),
+		{ state: pendingState(history) ?? "ready", timeCut: truncated },
 	);
 }
 
 export function searchPlans(
 	workspaces: readonly Pick<Workspace, "id" | "projectId" | "worktreePath">[],
 	plans: (root: string) => StoredPlanFile[],
-	knownSessions: ReadonlySet<string> | null,
+	knownSessions: ReadonlySet<string>,
 	input: ProviderInput,
-	historyIndexing = false,
+	history: HistoryState,
 ): SearchGroup {
 	const hits: SearchHit[] = [];
+	const pending = pendingState(history);
 	let unindexed = false;
+	const state = () => (unindexed && pending ? pending : "ready");
 	for (const workspace of workspaces) {
 		for (const file of plans(workspace.worktreePath)) {
-			if (input.deadline.expired()) return buildGroup("plan", hits, input.limit, "truncated");
-			if (knownSessions && !knownSessions.has(file.sessionId)) {
-				unindexed = true;
+			if (input.deadline.expired()) {
+				return buildGroup("plan", hits, input.limit, { state: state(), timeCut: true });
+			}
+			if (!knownSessions.has(file.sessionId)) {
+				if (pending) unindexed = true;
 				continue;
 			}
 			const plan = file.read();
@@ -325,5 +323,5 @@ export function searchPlans(
 			}
 		}
 	}
-	return buildGroup("plan", hits, input.limit, historyIndexing && unindexed ? "indexing" : "ready");
+	return buildGroup("plan", hits, input.limit, { state: state() });
 }

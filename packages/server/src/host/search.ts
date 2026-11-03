@@ -4,7 +4,8 @@ import { listProjects } from "../projects";
 import { createSearchService, type SearchService } from "../search";
 import { invalidateSpecSnapshot, specSnapshot } from "../spec";
 import { listStoredPlans } from "../todos";
-import { listAllWorkspaceRecords } from "../workspaces";
+import { ensureWatch } from "../watch";
+import { listAllWorkspaceRecords, listWorkspaces } from "../workspaces";
 
 let service: SearchService | null = null;
 
@@ -17,6 +18,8 @@ export function hostSearch(): SearchService {
 			specs: specSnapshot,
 			plans: listStoredPlans,
 			invalidateSpecs: invalidateSpecSnapshot,
+			ensureDefault: (projectId) => listWorkspaces(projectId, { includeDiffStats: false }),
+			watchRoot: (workspaceId) => void ensureWatch(workspaceId, { prewarm: true }),
 			stat: readableFileSize,
 		});
 	}

@@ -15,6 +15,8 @@ interface SessionRecord {
 	entries: HistoryEntry[];
 }
 
+export type HistoryState = "cold" | "refreshing" | "ready";
+
 export interface HistorySession {
 	readonly sessionId: string;
 	readonly cwd: string;
@@ -139,9 +141,11 @@ export class HistoryIndex {
 		return !this.built || this.building !== null;
 	}
 
-	async sessions(): Promise<{ sessions: readonly HistorySession[]; indexing: boolean }> {
-		const indexing = await this.freshen();
-		return { sessions: [...this.records.values()], indexing };
+	async sessions(): Promise<{ sessions: readonly HistorySession[]; state: HistoryState }> {
+		this.ensureFresh();
+		if (this.building) await Promise.race([this.building, Bun.sleep(COLD_BUILD_BUDGET_MS)]);
+		const state = !this.built ? "cold" : this.building ? "refreshing" : "ready";
+		return { sessions: [...this.records.values()], state };
 	}
 
 	async search(input: {

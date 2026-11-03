@@ -1,6 +1,3 @@
-import type { Dirent } from "node:fs";
-import { readdir } from "node:fs/promises";
-import { join } from "node:path";
 import { foldMatchText } from "@thinkrail/contracts";
 import { gitAsyncStream, nonInteractiveGitEnv } from "../git";
 import { logger } from "../log";
@@ -14,43 +11,28 @@ export interface FileList {
 
 export interface IndexedFileList extends FileList {
 	readonly folded: readonly string[];
-	readonly failed?: boolean;
 }
 
 export function indexFileList(list: FileList): IndexedFileList {
 	return { ...list, folded: list.paths.map((path) => foldMatchText(path)) };
 }
 
-const FAILED_LIST: IndexedFileList = { paths: [], folded: [], truncated: false, failed: true };
+const EMPTY_LIST: IndexedFileList = { paths: [], folded: [], truncated: false };
 
 export const FILE_LIST_LIMITS = {
-	maxFiles: 100_000,
+	maxFiles: 128_000,
 	maxBytes: 16 * 1024 * 1024,
-	walkMaxFiles: 20_000,
 	ttlMs: 60_000,
+	retryMs: 5_000,
 	gitTimeoutMs: 15_000,
 	maxRoots: 8,
+	maxCachedPaths: 256_000,
 } as const;
 
-const WALK_IGNORED = new Set([".git", "node_modules", ".hg", ".svn"]);
-const UNTRACKED_EXCLUDES = [...WALK_IGNORED]
+const HIDDEN_DIRECTORIES = new Set([".git", "node_modules", ".hg", ".svn"]);
+const UNTRACKED_EXCLUDES = [...HIDDEN_DIRECTORIES]
 	.filter((name) => name !== ".git")
 	.flatMap((name) => ["-x", name]);
-const TRANSIENT_MESSAGE =
-	/too many open files|resource temporarily unavailable|cannot allocate memory/i;
-const TRANSIENT_CODES = new Set(["EMFILE", "ENFILE", "EAGAIN", "ENOMEM"]);
-
-export function isTransientListFailure(failure: {
-	readonly timedOut?: boolean | undefined;
-	readonly code?: string | undefined;
-	readonly message?: string | undefined;
-}): boolean {
-	return (
-		failure.timedOut === true ||
-		TRANSIENT_CODES.has(failure.code ?? "") ||
-		TRANSIENT_MESSAGE.test(failure.message ?? "")
-	);
-}
 
 export class FileListUnavailable extends Error {
 	override readonly name = "FileListUnavailable";
@@ -69,7 +51,6 @@ export function parseNulList(
 		let seenBytes = 0;
 		let truncated = false;
 		const flush = () => {
-			if (pendingBytes === 0) return;
 			const joined = new Uint8Array(pendingBytes);
 			let offset = 0;
 			for (const part of pending) {
@@ -89,15 +70,15 @@ export function parseNulList(
 			let start = 0;
 			for (let index = 0; index < chunk.byteLength; index += 1) {
 				if (chunk[index] !== 0) continue;
+				if (paths.length >= limits.maxFiles) {
+					truncated = true;
+					break outer;
+				}
 				const part = chunk.subarray(start, index);
 				pending.push(part);
 				pendingBytes += part.byteLength;
 				flush();
 				start = index + 1;
-				if (paths.length >= limits.maxFiles) {
-					truncated = true;
-					break outer;
-				}
 			}
 			if (start < chunk.byteLength) {
 				const rest = chunk.subarray(start);
@@ -105,12 +86,15 @@ export function parseNulList(
 				pendingBytes += rest.byteLength;
 			}
 		}
-		if (!truncated) flush();
+		if (!truncated && pendingBytes > 0) {
+			if (paths.length >= limits.maxFiles) truncated = true;
+			else flush();
+		}
 		return { paths, truncated };
 	})();
 }
 
-async function gitFileList(root: string): Promise<FileList | null> {
+async function gitFileList(root: string): Promise<FileList> {
 	const run = gitAsyncStream(
 		root,
 		["ls-files", "-co", "--exclude-standard", ...UNTRACKED_EXCLUDES, "-z"],
@@ -136,55 +120,15 @@ async function gitFileList(root: string): Promise<FileList | null> {
 	if (list?.truncated) void reader.cancel().catch(() => {});
 	const exit = await run.exited;
 	if (list && (exit.ok || list.truncated)) return list;
-	if (isTransientListFailure({ timedOut: exit.timedOut, message: exit.err })) {
-		throw new FileListUnavailable(exit.timedOut ? "git ls-files timed out" : "git ls-files failed");
-	}
-	return null;
-}
-
-type ReadDir = (path: string) => Promise<Dirent[]>;
-
-const readDirEntries: ReadDir = (path) => readdir(path, { withFileTypes: true });
-
-export async function walkFileList(
-	root: string,
-	read: ReadDir = readDirEntries,
-): Promise<FileList> {
-	const paths: string[] = [];
-	let truncated = false;
-	const queue: string[] = [""];
-	while (queue.length > 0 && !truncated) {
-		const rel = queue.shift() ?? "";
-		let entries: Dirent[];
-		try {
-			entries = await read(join(root, rel));
-		} catch (error) {
-			const failure = error as NodeJS.ErrnoException;
-			if (isTransientListFailure({ code: failure.code, message: failure.message })) throw error;
-			continue;
-		}
-		for (const entry of entries) {
-			if (WALK_IGNORED.has(entry.name)) continue;
-			const path = rel ? `${rel}/${entry.name}` : entry.name;
-			if (entry.isDirectory()) queue.push(path);
-			else if (entry.isFile()) {
-				paths.push(path);
-				if (paths.length >= FILE_LIST_LIMITS.walkMaxFiles) {
-					truncated = true;
-					break;
-				}
-			}
-		}
-	}
-	return { paths, truncated };
+	throw new FileListUnavailable(exit.timedOut ? "git ls-files timed out" : "git ls-files failed");
 }
 
 function isHiddenFromSearch(path: string): boolean {
-	return path.split("/").some((segment) => WALK_IGNORED.has(segment));
+	return path.split("/").some((segment) => HIDDEN_DIRECTORIES.has(segment));
 }
 
 export async function listRootFiles(root: string): Promise<FileList> {
-	const list = (await gitFileList(root)) ?? (await walkFileList(root));
+	const list = await gitFileList(root);
 	const seen = new Set<string>();
 	const paths: string[] = [];
 	for (const path of list.paths) {
@@ -195,54 +139,56 @@ export async function listRootFiles(root: string): Promise<FileList> {
 	return { paths, truncated: list.truncated };
 }
 
+export type FileListState = "ready" | "refreshing" | "failed";
+
+export interface FileListView {
+	readonly list: IndexedFileList;
+	readonly state: FileListState;
+}
+
+interface CachedList {
+	readonly at: number;
+	readonly list: IndexedFileList;
+	readonly failedAt: number | null;
+}
+
 export class FileListCache {
-	private readonly lists = new Map<string, { at: number; list: IndexedFileList }>();
-	private readonly loading = new Map<string, Promise<IndexedFileList>>();
+	private readonly lists = new Map<string, CachedList>();
+	private readonly loading = new Map<string, Promise<void>>();
 	private readonly overtaken = new Set<string>();
+	private readonly failing = new Set<string>();
 
 	constructor(
 		private readonly loader: (root: string) => Promise<FileList> = listRootFiles,
 		private readonly now: () => number = Date.now,
 	) {}
 
-	peek(root: string): IndexedFileList | null {
+	refresh(root: string): Promise<void> {
+		const cached = this.lists.get(root);
+		if (!cached || this.due(cached)) return this.load(root);
+		return this.loading.get(root) ?? Promise.resolve();
+	}
+
+	peek(root: string): FileListView | null {
+		void this.refresh(root);
 		const cached = this.lists.get(root);
 		if (!cached) return null;
 		this.lists.delete(root);
 		this.lists.set(root, cached);
-		if (this.now() - cached.at > FILE_LIST_LIMITS.ttlMs) void this.load(root);
-		return cached.list;
+		const state =
+			cached.failedAt !== null ? "failed" : this.loading.has(root) ? "refreshing" : "ready";
+		return { list: cached.list, state };
 	}
 
-	reloading(root: string): boolean {
-		return this.loading.has(root);
-	}
-
-	load(root: string): Promise<IndexedFileList> {
+	load(root: string): Promise<void> {
 		const inFlight = this.loading.get(root);
 		if (inFlight) return inFlight;
 		const promise = this.loader(root)
-			.then((list) => indexFileList(list))
-			.catch((error: unknown): IndexedFileList | null => {
-				log.warn("file list load failed", error);
-				return null;
-			})
-			.then((loaded) => {
-				this.loading.delete(root);
-				const overtaken = this.overtaken.delete(root);
-				const kept = this.lists.get(root);
-				if (loaded === null && kept) return kept.list;
-				const list = loaded ?? FAILED_LIST;
-				const stale = overtaken || loaded === null;
-				this.lists.delete(root);
-				this.lists.set(root, { at: stale ? Number.NEGATIVE_INFINITY : this.now(), list });
-				while (this.lists.size > FILE_LIST_LIMITS.maxRoots) {
-					const oldest = this.lists.keys().next().value;
-					if (oldest === undefined) break;
-					this.lists.delete(oldest);
-				}
-				return list;
-			});
+			.then(
+				(list) => this.install(root, indexFileList(list)),
+				(error: unknown) => this.fail(root, error),
+			)
+			.finally(() => this.loading.delete(root));
 		this.loading.set(root, promise);
 		return promise;
 	}
@@ -250,6 +196,59 @@ export class FileListCache {
 	invalidate(root: string): void {
 		if (this.loading.has(root)) this.overtaken.add(root);
 		const cached = this.lists.get(root);
-		if (cached) this.lists.set(root, { at: Number.NEGATIVE_INFINITY, list: cached.list });
+		if (cached && cached.failedAt === null) {
+			this.lists.set(root, { ...cached, at: Number.NEGATIVE_INFINITY });
+		}
+	}
+
+	private due(cached: CachedList): boolean {
+		const now = this.now();
+		return cached.failedAt !== null
+			? now - cached.failedAt >= FILE_LIST_LIMITS.retryMs
+			: now - cached.at > FILE_LIST_LIMITS.ttlMs;
+	}
+
+	private install(root: string, list: IndexedFileList): void {
+		const overtaken = this.overtaken.delete(root);
+		this.failing.delete(root);
+		this.lists.delete(root);
+		this.lists.set(root, {
+			at: overtaken ? Number.NEGATIVE_INFINITY : this.now(),
+			list,
+			failedAt: null,
+		});
+		this.evict(root);
+	}
+
+	private fail(root: string, error: unknown): void {
+		this.overtaken.delete(root);
+		if (!this.failing.has(root)) {
+			this.failing.add(root);
+			log.warn("file list load failed", error);
+		}
+		const kept = this.lists.get(root);
+		this.lists.delete(root);
+		this.lists.set(root, {
+			at: kept?.at ?? Number.NEGATIVE_INFINITY,
+			list: kept?.list ?? EMPTY_LIST,
+			failedAt: this.now(),
+		});
+		this.evict(root);
+	}
+
+	private evict(keep: string): void {
+		let paths = 0;
+		for (const cached of this.lists.values()) paths += cached.list.paths.length;
+		for (const [root, cached] of this.lists) {
+			if (
+				this.lists.size <= FILE_LIST_LIMITS.maxRoots &&
+				paths <= FILE_LIST_LIMITS.maxCachedPaths
+			) {
+				return;
+			}
+			if (root === keep) continue;
+			this.lists.delete(root);
+			paths -= cached.list.paths.length;
+		}
 	}
 }

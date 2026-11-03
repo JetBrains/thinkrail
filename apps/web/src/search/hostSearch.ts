@@ -81,7 +81,7 @@ export function hostSearchStatus(state: HostSearchState): HostSearchStatus | nul
 	const states = new Set(state.groups.map((group) => group.state));
 	if (states.has("failed")) return "failed";
 	if (!state.pending && states.has("indexing")) return "indexing";
-	if (states.has("truncated")) return "truncated";
+	if (state.groups.some((group) => group.cut)) return "truncated";
 	return null;
 }
 

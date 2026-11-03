@@ -1,6 +1,17 @@
-import { type Dirent, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import {
+	closeSync,
+	type Dirent,
+	fstatSync,
+	openSync,
+	readdirSync,
+	readFileSync,
+	readSync,
+	realpathSync,
+	statSync,
+} from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { FileNode, ResourceMeta } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 import { loadWorkspaces } from "../persistence";
 import { decodeText, resourceMeta } from "./content";
 
@@ -103,12 +114,37 @@ export function readDir(workspaceId: string, path: string): FileNode[] {
 		.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "dir" ? -1 : 1));
 }
 
+function readBounded(abs: string, maxBytes: number): Uint8Array {
+	if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) {
+		throw new Error("maxBytes must be a non-negative integer");
+	}
+	const tooLarge = () =>
+		new CodedError("FILE_TOO_LARGE", "The file is larger than the read allows");
+	const fd = openSync(abs, "r");
+	try {
+		if (fstatSync(fd).size > maxBytes) throw tooLarge();
+		const buffer = Buffer.allocUnsafe(maxBytes + 1);
+		let read = 0;
+		while (read < buffer.length) {
+			const chunk = readSync(fd, buffer, read, buffer.length - read, read);
+			if (chunk === 0) break;
+			read += chunk;
+		}
+		if (read > maxBytes) throw tooLarge();
+		return buffer.subarray(0, read);
+	} finally {
+		closeSync(fd);
+	}
+}
+
 export function readFile(
 	workspaceId: string,
 	path: string,
+	options: { readonly maxBytes?: number } = {},
 ): { content: string; meta: ResourceMeta } {
 	const { abs } = resolveInWorktree(workspaceId, path, true);
-	const bytes = readFileSync(abs);
+	const bytes =
+		options.maxBytes === undefined ? readFileSync(abs) : readBounded(abs, options.maxBytes);
 	const meta = resourceMeta(bytes, path);
 	return { content: meta.text ? decodeText(bytes) : "", meta };
 }

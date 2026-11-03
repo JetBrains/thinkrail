@@ -105,3 +105,29 @@ test.skipIf(process.platform === "win32")(
 		expect(readableFileSize(root, "dir-link")).toBe("missing");
 	},
 );
+
+test("readFile with maxBytes reads at most the cap and refuses a larger file, contained as before", () => {
+	writeFileSync(join(root, "exact.txt"), "12345");
+	expect(readFile("w1", "exact.txt", { maxBytes: 5 }).content).toBe("12345");
+	expect(readFile("w1", "exact.txt", { maxBytes: 6 }).meta.byteLength).toBe(5);
+	expect(() => readFile("w1", "exact.txt", { maxBytes: 4 })).toThrow(
+		expect.objectContaining({ code: "FILE_TOO_LARGE" }),
+	);
+	writeFileSync(join(root, "empty.txt"), "");
+	expect(readFile("w1", "empty.txt", { maxBytes: 0 }).content).toBe("");
+	expect(() => readFile("w1", "exact.txt", { maxBytes: 0 })).toThrow(
+		expect.objectContaining({ code: "FILE_TOO_LARGE" }),
+	);
+	expect(() => readFile("w1", "exact.txt", { maxBytes: -1 })).toThrow("non-negative integer");
+	expect(() => readFile("w1", "exact.txt", { maxBytes: 1.5 })).toThrow("non-negative integer");
+	writeFileSync(join(dataDir, "outside.txt"), "secret");
+	expect(() => readFile("w1", "../outside.txt", { maxBytes: 100 })).toThrow();
+	writeFileSync(
+		join(root, "picture.png"),
+		Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+	);
+	expect(readFile("w1", "picture.png", { maxBytes: 100 })).toMatchObject({
+		content: "",
+		meta: { text: false },
+	});
+});

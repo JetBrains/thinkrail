@@ -574,8 +574,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   when readable, a spec's `path` / `specId` / `size` and the body line a `content` hit matched (`snippet`), a
   plan's `sessionId`, a transcript's `sessionId` / `messageIndex` + `anchorText`; a size lets the client
   decline to preview a large file; nothing else rides the wire — sort keys stay on the host), **`SearchGroup`** (one per kind:
-  capped `hits`, the true `total`, and a `state` of `ready` / `truncated` / `indexing` / `failed` — a
-  client re-asks only on `indexing`), **`SearchQueryResult`** (the groups), **`SearchPreviewTarget`** / **`SearchPreviewResult`** (the
+  capped `hits`, the true `total`, a lifecycle `state` — `ready`, `indexing` (never loaded: the client
+  polls), `refreshing` (a reload runs behind these hits: the client re-asks quietly), `failed` (the last
+  good hits may stay) — and an independent **`SearchGroupCut`**: `time` when the scan ran out of budget,
+  `fileList` = how many files of the root are listed when a limit cut the list), **`SearchQueryResult`** (the groups), **`SearchPreviewTarget`** / **`SearchPreviewResult`** (the
   `chat` target only, with the hit's `anchorText` so the host can re-find a message compaction moved: a
   bounded transcript window or `unavailable` — files and specs render client-side over `fs.readFile`), and the limits `MAX_SEARCH_QUERY_LENGTH`,
   `MAX_SEARCH_GROUP_LIMIT`, `MAX_SEARCH_PREVIEW_BYTES` (the preview pane's

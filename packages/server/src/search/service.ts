@@ -15,7 +15,7 @@ import {
 	parseMatchTerms,
 	SEARCH_KINDS,
 } from "@thinkrail/contracts";
-import type { HistorySession } from "../history";
+import type { HistorySession, HistoryState } from "../history";
 import { logger } from "../log";
 import type { SpecSnapshot } from "../spec";
 import type { StoredPlanFile } from "../todos";
@@ -34,13 +34,20 @@ import {
 
 const log = logger("search");
 
+export interface HistoryRead {
+	readonly sessions: readonly HistorySession[];
+	readonly state: HistoryState;
+}
+
 export interface SearchReaders {
 	readonly projects: () => Project[];
 	readonly workspaces: () => Workspace[];
-	readonly sessions: () => Promise<{ sessions: readonly HistorySession[]; indexing: boolean }>;
+	readonly sessions: () => Promise<HistoryRead>;
 	readonly specs: (root: string) => SpecSnapshot;
 	readonly plans: (root: string) => StoredPlanFile[];
 	readonly invalidateSpecs: (root: string) => void;
+	readonly ensureDefault: (projectId: string) => Promise<unknown>;
+	readonly watchRoot: (workspaceId: string) => void;
 	readonly files?: FileListCache;
 	readonly stat: FileStat;
 	readonly now?: () => number;
@@ -55,19 +62,17 @@ export interface SearchService {
 const DEFAULT_SEARCH_GROUP_LIMIT = 20;
 
 export const SEARCH_BUDGET = {
+	reloadWaitMs: 150,
 	queryMs: 300,
 	providerMs: 120,
 	previewMessages: 7,
 	previewMessageChars: 600,
+	previewIndexRounds: 40,
 } as const;
 
 function clampLimit(limit: number | undefined): number {
 	if (typeof limit !== "number" || !Number.isFinite(limit)) return DEFAULT_SEARCH_GROUP_LIMIT;
 	return Math.max(1, Math.min(MAX_SEARCH_GROUP_LIMIT, Math.floor(limit)));
-}
-
-function isDefaultRecord(workspace: Workspace, project: Project): boolean {
-	return workspace.kind === "default" || workspace.worktreePath === project.path;
 }
 
 export function resolveSearchRoot(
@@ -85,15 +90,22 @@ export function resolveSearchRoot(
 	const project = projects.find((candidate) => candidate.id === context.projectId);
 	if (!project) return null;
 	const defaultRecord = workspaces.find(
-		(workspace) => workspace.projectId === project.id && isDefaultRecord(workspace, project),
+		(workspace) => workspace.projectId === project.id && workspace.kind === "default",
 	);
 	if (!defaultRecord) return null;
 	return { root: project.path, projectId: project.id, workspaceId: defaultRecord.id };
 }
 
+function settledWithin(waits: readonly (Promise<unknown> | null)[], ms: number): Promise<void> {
+	const pending = waits.filter((wait): wait is Promise<unknown> => wait !== null);
+	if (pending.length === 0) return Promise.resolve();
+	return Promise.race([Promise.allSettled(pending).then(() => {}), Bun.sleep(ms)]);
+}
+
 export function createSearchService(readers: SearchReaders): SearchService {
 	const files = readers.files ?? new FileListCache();
 	const now = readers.now ?? (() => performance.now());
+	const ensuring = new Map<string, Promise<unknown>>();
 
 	const openWorkspaces = (projects: readonly Project[]) => {
 		const open = new Set(projects.map((project) => project.id));
@@ -111,11 +123,67 @@ export function createSearchService(readers: SearchReaders): SearchService {
 		return (cwd: string) => byPath.get(cwd) ?? null;
 	};
 
+	const ensureDefault = (projectId: string): Promise<unknown> => {
+		let pending = ensuring.get(projectId);
+		if (!pending) {
+			pending = readers.ensureDefault(projectId).finally(() => ensuring.delete(projectId));
+			ensuring.set(projectId, pending);
+		}
+		return pending;
+	};
+
+	const rootFor = async (context: WsParams<"search.query">["context"]) => {
+		const projects = readers.projects();
+		const found = resolveSearchRoot(projects, openWorkspaces(projects), context);
+		const projectId = context.projectId;
+		if (found || !projectId || !projects.some((project) => project.id === projectId)) {
+			return { root: found, failed: false };
+		}
+		try {
+			await ensureDefault(projectId);
+		} catch (error) {
+			log.warn("search could not provision the project's folder", error);
+			return { root: null, failed: true };
+		}
+		const again = readers.projects();
+		const root = resolveSearchRoot(again, openWorkspaces(again), context);
+		return { root, failed: root === null };
+	};
+
+	const specRebuild = (root: string): Promise<void> | null => {
+		try {
+			return readers.specs(root).rebuilding;
+		} catch {
+			return null;
+		}
+	};
+
+	const readHistory = (): Promise<HistoryRead | null> =>
+		readers.sessions().catch((error: unknown) => {
+			log.warn("search could not read the chat history", error);
+			return null;
+		});
+
 	return {
 		async query(params) {
 			const terms = parseMatchTerms(params.query.slice(0, MAX_SEARCH_QUERY_LENGTH));
 			const kinds = new Set<SearchKind>(params.kinds ?? SEARCH_KINDS);
 			if (terms.length === 0) return { groups: [...kinds].map((kind) => emptyGroup(kind)) };
+
+			const rooted = kinds.has("file") || kinds.has("spec");
+			const { root, failed: rootFailed } = rooted
+				? await rootFor(params.context)
+				: { root: null, failed: false };
+			if (root) readers.watchRoot(root.workspaceId);
+			const history = kinds.has("transcript") || kinds.has("plan") ? readHistory() : null;
+			await settledWithin(
+				[
+					root && kinds.has("file") ? files.refresh(root.root) : null,
+					root && kinds.has("spec") ? specRebuild(root.root) : null,
+					history,
+				],
+				SEARCH_BUDGET.reloadWaitMs,
+			);
 
 			const limit = clampLimit(params.limit);
 			const started = now();
@@ -127,9 +195,7 @@ export function createSearchService(readers: SearchReaders): SearchService {
 					now,
 				),
 			});
-			const projects = readers.projects();
-			const workspaces = openWorkspaces(projects);
-			const root = resolveSearchRoot(projects, workspaces, params.context);
+			const rootless = (kind: SearchKind) => emptyGroup(kind, rootFailed ? "failed" : "ready");
 
 			const groups: SearchGroup[] = [];
 			const push = (kind: SearchKind, run: () => SearchGroup) => {
@@ -142,48 +208,41 @@ export function createSearchService(readers: SearchReaders): SearchService {
 				}
 			};
 			push("file", () =>
-				root ? searchFiles(root, files, input(), readers.stat) : emptyGroup("file"),
+				root ? searchFiles(root, files, input(), readers.stat) : rootless("file"),
 			);
-			push("spec", () => (root ? searchSpecs(root, readers.specs, input()) : emptyGroup("spec")));
+			push("spec", () => (root ? searchSpecs(root, readers.specs, input()) : rootless("spec")));
 
-			let sessions: { sessions: readonly HistorySession[]; indexing: boolean } | null = null;
-			if (kinds.has("transcript") || kinds.has("plan")) {
-				try {
-					sessions = await readers.sessions();
-				} catch (error) {
-					log.warn("search could not read the chat history", error);
-					sessions = null;
-				}
-			}
-			const history = sessions;
-			if (history) {
-				const label = chatLabeler(workspaces);
-				push("transcript", () =>
-					searchTranscripts(history.sessions, history.indexing, label, input()),
-				);
-			} else if (kinds.has("transcript")) {
-				groups.push(emptyGroup("transcript", "failed"));
-			}
+			const read = history ? await history : null;
+			const workspaces = openWorkspaces(readers.projects());
+			push("transcript", () =>
+				read
+					? searchTranscripts(read.sessions, read.state, chatLabeler(workspaces), input())
+					: emptyGroup("transcript", "failed"),
+			);
 			push("plan", () =>
-				searchPlans(
-					workspaces,
-					readers.plans,
-					sessions ? new Set(sessions.sessions.map((session) => session.sessionId)) : null,
-					input(),
-					sessions?.indexing ?? false,
-				),
+				read
+					? searchPlans(
+							workspaces,
+							readers.plans,
+							new Set(read.sessions.map((session) => session.sessionId)),
+							input(),
+							read.state,
+						)
+					: emptyGroup("plan", "failed"),
 			);
 			return { groups };
 		},
 
 		async preview(target) {
-			const workspaces = openWorkspaces(readers.projects());
-			const { sessions } = await readers.sessions();
-			const session = sessions.find((candidate) => candidate.sessionId === target.sessionId);
-			if (!session || !chatLabeler(workspaces)(session.cwd)) {
-				return { kind: "unavailable" };
+			for (let round = 0; ; round += 1) {
+				const { sessions, state } = await readers.sessions();
+				const session = sessions.find((candidate) => candidate.sessionId === target.sessionId);
+				if (session || state === "ready" || round >= SEARCH_BUDGET.previewIndexRounds) {
+					const workspaces = openWorkspaces(readers.projects());
+					if (!session || !chatLabeler(workspaces)(session.cwd)) return { kind: "unavailable" };
+					return transcriptPreview(session, target.messageIndex, target.anchorText?.slice(0, 120));
+				}
 			}
-			return transcriptPreview(session, target.messageIndex, target.anchorText?.slice(0, 120));
 		},
 
 		invalidateRoot(root) {

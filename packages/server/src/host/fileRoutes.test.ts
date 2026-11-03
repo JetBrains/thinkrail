@@ -125,6 +125,21 @@ test("/files streams the worktree's current bytes with sniffed headers and never
 	expect((await serveWorktreeFile("/files/w1")).status).toBe(404);
 });
 
+test("/files with maxBytes serves a file within the cap, refuses a larger one, and rejects a bad cap", async () => {
+	writeFileSync(join(repo, "notes.md"), "# edited\n");
+	const within = await serveWorktreeFile("/files/w1/notes.md", "9");
+	expect(within.status).toBe(200);
+	expect(within.headers.get("Content-Length")).toBe("9");
+	expect(await within.text()).toBe("# edited\n");
+	const over = await serveWorktreeFile("/files/w1/notes.md", "8");
+	expect(over.status).toBe(413);
+	expect(over.headers.get("Cache-Control")).toBe("no-store");
+	for (const bad of ["-1", "1.5", "lots", ""]) {
+		expect((await serveWorktreeFile("/files/w1/notes.md", bad)).status).toBe(400);
+	}
+	expect((await serveWorktreeFile("/files/w1/gone.md", "9")).status).toBe(404);
+});
+
 test("/blob refuses objects above the response cap before reading their content", async () => {
 	const large = join(repo, "large.bin");
 	writeFileSync(large, "");

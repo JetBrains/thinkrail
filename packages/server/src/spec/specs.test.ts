@@ -122,15 +122,15 @@ const snapshotIds = (root: string) => specSnapshot(root).entries.map((entry) => 
 test("a spec snapshot builds off the request, and a change is rebuilt only when it is read", async () => {
 	evictSpecRoot(worktree);
 	writeSpec("SPEC.md", "id: root\ntype: module-design\ntitle: Root");
-	expect(specSnapshot(worktree)).toEqual({ entries: [], rebuilding: true });
+	expect(specSnapshot(worktree)).toMatchObject({ entries: [], built: false });
 	await settle();
-	expect(specSnapshot(worktree)).toMatchObject({ rebuilding: false });
+	expect(specSnapshot(worktree)).toMatchObject({ built: true, rebuilding: null });
 	expect(snapshotIds(worktree)).toEqual(["root"]);
 
 	writeSpec("auth/SPEC.md", "id: auth\ntype: module-design\ntitle: Auth");
 	invalidateSpecSnapshot(worktree);
 	await settle();
-	expect(specSnapshot(worktree)).toMatchObject({ rebuilding: true });
+	expect(specSnapshot(worktree).rebuilding).not.toBeNull();
 	expect(snapshotIds(worktree)).toEqual(["root"]);
 	await settle();
 	expect(snapshotIds(worktree).sort()).toEqual(["auth", "root"]);
@@ -142,7 +142,7 @@ test("an evicted root is never brought back by a build still pending for it", as
 	specSnapshot(worktree);
 	evictSpecRoot(worktree);
 	await settle();
-	expect(specSnapshot(worktree)).toEqual({ entries: [], rebuilding: true });
+	expect(specSnapshot(worktree)).toMatchObject({ entries: [], built: false });
 	await settle();
 	expect(snapshotIds(worktree)).toEqual(["root"]);
 	evictSpecRoot(worktree);

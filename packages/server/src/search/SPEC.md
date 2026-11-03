@@ -25,8 +25,9 @@ reader's own containment rule), the same shape as `host/historyScope.ts`.
 - **Internals:** the file-list cache, root resolution and the providers are composed by the service and
   reached by tests per file, never through the barrel.
 - **Allowed deps:** `contracts` (DTOs, the matcher, the content matcher and `searchHitFields`), `git`
-  (`gitAsyncStream` for `ls-files`), `log` (a failed load or provider, error type only), Node `fs`
-  (`readdir` for a walk); `history`, `spec` and `todos` for types only — their readers are injected. A file hit's size and readability come from the
+  (`gitAsyncStream` for `ls-files`), `log` (a failed load or provider, error type only); `history`,
+  `spec` and `todos` for types only — their readers, the Default provisioning and the root watch are
+  injected. A file hit's size and readability come from the
   injected `stat`, never a second containment rule here.
 - **Forbidden:** `host`, `workspaces`, `projects`, `persistence`, `agent` (projects and records are
   injected; a preview never attaches a pi session); writing anything; a second matcher.
@@ -34,10 +35,14 @@ reader's own containment rule), the same shape as `host/historyScope.ts`.
 ## Root and eligibility
 
 `resolveSearchRoot` turns the client's context into **one** root: the active workspace's worktree, else
-on Project Home the context project's folder through its Default record (the record's `workspaceId`
-names the root, so every file and spec hit carries a workspace the client reads and opens through
-`fs.readFile` / the preview tab without provisioning). No root — no context project, a closed project,
-a project whose Default record is not persisted yet — answers empty `file` and `spec` groups. Other
+on Project Home the context project's folder through its Default record (`kind: "default"`; the record's
+`workspaceId` names the root, so every file and spec hit carries a workspace the client reads and opens
+through `fs.readFile` / the preview tab). An open project whose Default record does not exist yet gets it
+from the injected `ensureDefault` (the host composes `listWorkspaces`, the same lazy creation
+`workspace.list` does), once per project however many queries ask meanwhile; if that fails, `file` and
+`spec` answer `failed`. No root — no context project, a closed or unknown project — answers empty `file` and
+`spec` groups. The resolved root is watched through the injected `watchRoot` (the host's prewarm-pool
+watch, not awaited) so its changes reach `invalidateRoot` from its first search on. Other
 open projects' folders and sibling worktrees are never searched (the field walked back global
 multi-root file search: one root is faster and predictable). Transcripts come from sessions
 whose `cwd` is a persisted worktree of an open project (pi-CLI sessions and closed projects are
@@ -51,31 +56,35 @@ plan files whose session has no transcript on disk (orphans).
   with the terms as parsed (a quoted term is a literal); a body or transcript match takes each term's
   text as a case-insensitive substring, so a quoted phrase matches as one. `kinds` narrows the providers; the
   per-group `limit` is clamped to `MAX_SEARCH_GROUP_LIMIT`, `total` keeps the true count.
-- **Budgets:** each provider gets `SEARCH_BUDGET.providerMs`, all within `queryMs`; a provider that
-  runs out of time returns what it has as `truncated`. A throwing provider reports `failed` (the
-  client never polls a failed group). A file list that has never loaded reports the group `indexing`
-  and starts loading (single-flight per root); a list or spec snapshot that is being reloaded behind a
-  stale answer reports `indexing` too, with the stale hits — so the client's bounded polling picks up
-  the refreshed corpus instead of taking the stale page as final.
+- **Lifecycle (per group `state`):** `indexing` — the corpus has never loaded (a file list, the first
+  spec snapshot, a cold history index; or a plan whose session a cold index has not reached) and the
+  client polls; `refreshing` — a reload runs behind the hits shown (the client re-asks quietly a few
+  times); `failed` — the provider threw, the history read failed (transcripts and plans both), or the
+  root's last list load failed (its last good hits still answer, and the group stays `failed`, also while
+  a retry runs, until a load succeeds); else `ready`. Before the providers run, the query waits — at most
+  `reloadWaitMs` (150 ms), in parallel — for the reloads the asked corpora have in flight, cold ones
+  included, so a small or medium root answers fresh in one reply and only a slow reload is re-asked.
+- **Budgets and cuts:** each provider gets `SEARCH_BUDGET.providerMs`, all within `queryMs` counted
+  after that wait; a provider that runs out of time returns what it has with `cut.time`. A file list cut at
+  a limit answers with `cut.fileList`, the number of files actually listed, so the client can say how many
+  are searched. Lifecycle and cuts are independent: a capped list can be refreshing and out of time at
+  once.
 - **Files:** `git ls-files -co --exclude-standard -z` streamed through `gitAsyncStream` and a capped
-  NUL parser (`FILE_LIST_LIMITS`: 100k names / 16 MB, then `truncated`), a bounded `readdir` walk for a
-  folder git refuses (not a repository); `node_modules` and VCS directories are always hidden, and the
-  untracked side excludes them before the cap counts them. A path git lists once per conflict stage is
-  listed once. A failure that may pass — a timeout, descriptor or memory pressure, in git or in the
-  walk — rejects the load instead of answering a partial or empty list; a folder the walk may not read
-  is skipped. Lists are cached per root with a
-  twin folded by the matcher's own fold (`foldMatchText`), and each term is folded the same way, so the prefilter never drops a path the matcher
-  would accept (at most `maxRoots` roots, least recently asked first out, so switching workspaces
-  keeps the recent ones warm; a list cut at its cap is still searched and its group reported
-  `truncated`) and revalidated
-  stale-while-reloading after a TTL or on `workspace.fsChanged` (`invalidateRoot`; the host's
-  `search.query` handler watches the context workspace, so a root searched from Project Home or before
-  any panel asked for it still hears its changes) — the old list keeps
-  answering until the reload lands, and a reload that throws keeps it too, left stale so the next ask
-  retries; a root with nothing cached answers its group `failed` while the next ask retries. A change
-  that lands while a load runs leaves the loaded list stale, so the next ask loads again (the load may
-  have enumerated the tree before the change). A change therefore never blanks the active workspace's
-  files, and none is lost. Matching is two-pass: a substring prefilter over every term runs the matcher
+  NUL parser (`FILE_LIST_LIMITS`: 128k names / 16 MiB of names; a list is capped only when an entry beyond
+  a limit was seen, so a root of exactly 128k files is complete); `node_modules` and VCS directories are
+  always hidden, and the untracked side excludes them before the cap counts them. A path git lists once
+  per conflict stage is listed once. Every search root is a git working tree (`openProject` refuses a
+  non-repository), so a git failure — a timeout, descriptor or memory pressure, not a repository — rejects
+  the load (`FileListUnavailable`); it is logged once per root until a load succeeds and retried no sooner
+  than `retryMs` (5 s) later, so a broken repository never spawns git per keystroke. Lists are cached per
+  root with a twin folded by the matcher's own fold (`foldMatchText`), and each term is folded the same
+  way, so the prefilter never drops a path the matcher would accept. At most `maxRoots` roots and
+  `maxCachedPaths` paths are held together (least recently asked first out, so switching workspaces keeps
+  the recent ones warm). A list is revalidated stale-while-reloading after a TTL or on
+  `workspace.fsChanged` (`invalidateRoot`) — the old list keeps answering until the reload lands. A change
+  that lands while a load runs leaves the loaded list stale, so the next ask loads again (the load may have
+  enumerated the tree before the change). A change therefore never blanks the active workspace's files,
+  and none is lost. Matching is two-pass: a substring prefilter over every term runs the matcher
   on the plain hits first, then every remaining path that passes a cheap subsequence test (a quoted term
   must still be a substring) goes through the matcher too (acronym, camel-hump and subsequence tiers),
   both passes bounded by the deadline. 100k paths answer in tens of milliseconds. Each returned file
@@ -84,11 +93,12 @@ plan files whose session has no transcript on disk (orphans).
   deleted in the worktree and not staged — not a regular file (a checked-out submodule, a tracked symlink
   to a directory) or refused by the file reader (a tracked symlink out of the worktree or into `.git`) is
   neither a hit nor counted — every hit previews and opens — and the next matches fill the page;
-  the matches the page keeps are always checked, and the walk checks the budget after each path it
-  finds gone, so a mass of deleted paths answers `truncated` in time rather than stalling the host.
+  the matches the page keeps are always checked, and the check stops at the budget after each path it
+  finds gone, so a mass of deleted paths answers `cut.time` in time rather than stalling the host.
 - **Specs:** the `spec` module's per-root snapshot — every build runs off the request path, the first
-  included (a root's first read answers `indexing` with no hits), and only on a read after its TTL lapsed
-  or the worktree changed, the previous snapshot answering meanwhile (title / id / path through the
+  included (a root's first read answers `indexing` with no hits unless the build lands within the wait),
+  and only on a read after its TTL lapsed or the worktree changed, the previous snapshot answering
+  meanwhile as `refreshing` (title / id / path through the
   matcher; a body match from three characters becomes a `content`-tier hit with the matching line as
   `snippet`).
 - **Content folding:** spec bodies and messages match through `matchContent`, so a body folds exactly
@@ -99,18 +109,21 @@ plan files whose session has no transcript on disk (orphans).
 - **Transcripts:** hits are substring-AND over entries, one per message, `content` tier with an equal score so the timestamp alone orders them newest first (a
   user message never outranks a newer assistant one), carrying `messageIndex` / `anchorText` for the
   client's drift-tolerant jump. The scan visits the newest chat first and each chat's newest message
-  first, checking the budget before every message, so a budget that runs out (`truncated`) leaves only
+  first, checking the budget before every message, so a budget that runs out (`cut.time`) leaves only
   older messages unsearched.
 - **Plans:** group and item titles through the matcher; hits carry the plan's session so the client
   opens the chat and its plan. A plan file is parsed again only when it changed (`todos`'
-  per-file memo). While the history index is still building, a plan whose session it has not reached yet
-  is skipped and the group answers `indexing`, so the client asks again once the session is known.
+  per-file memo). While the history index is cold or refreshing, a plan whose session it has not reached
+  yet is skipped and the group answers `indexing` or `refreshing`, so the client asks again once the
+  session is known; a ready index skips it as an orphan.
 
 ## Preview
 
 `search.preview` has one target, `chat`: a window of `previewMessages` entries around the focused
-message from the history index (never a pi session), each entry cut at `previewMessageChars`; a session
-that is not an open project's workspace chat answers `unavailable`. The focus is the hit's message while
+message from the history index (never a pi session), each entry cut at `previewMessageChars`. A preview
+is asked once per settled selection, so it waits for a cold or refreshing index to reach the session
+(bounded rounds of the index's own wait) before answering; a session still unknown then, or one that is
+not an open project's workspace chat, answers `unavailable`. The focus is the hit's message while
 it still starts with the target's `anchorText` (cut at 120 characters), else the nearest message that
 does — compaction or a branch may have shifted the index since the search — else none. Files and specs are not previewed
 by the host — the client renders them through the shared resource renderers over `fs.readFile` (code,
@@ -118,9 +131,9 @@ images, HTML, markdown), the same path as a preview tab; a plan has no preview.
 
 ## Get right
 
-- The host never blocks a keystroke on a corpus build: file lists load off the request, spec
-  snapshots build off the request (and only when read), plans are re-parsed only when changed, and
-  the history index keeps its cold-build budget. A throwing provider or history read is logged
+- The host never blocks a keystroke on a corpus build beyond the bounded reload wait: file lists load off
+  the request, spec snapshots build off the request (and only when read), plans are re-parsed only when
+  changed, and the history index keeps its build budget. A throwing provider or history read is logged
   (`log`, error type only) and answers its group `failed`.
 - Hit ids are stable (`kind:id[:locator]`) so the browser can keep a selection across replies; a
   transcript hit's locator is its message's pi entry id (`HistoryEntry.entryId`), never its index,

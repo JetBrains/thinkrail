@@ -1,4 +1,4 @@
-import { mkdirSync, statSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import type {
 	Ack,
 	OpenBranchReview,
@@ -124,7 +124,7 @@ import {
 	surveyResponse,
 } from "../feedback";
 import { fontsDir, listInstalledFonts, readUserFonts } from "../fonts";
-import { readDir, readFile, resolveWorktreeFile } from "../fs";
+import { readDir, readFile } from "../fs";
 import {
 	commitsAheadOf,
 	countPushDivergence,
@@ -879,13 +879,11 @@ const handlers: WsHandlers = {
 	},
 	"fs.readFile": (p) => {
 		void ensureWatch(p.workspaceId);
-		if (
-			p.maxBytes !== undefined &&
-			statSync(resolveWorktreeFile(p.workspaceId, p.path)).size > p.maxBytes
-		) {
-			throw new CodedError("FILE_TOO_LARGE", "The file is larger than the read allows");
-		}
-		return readFile(p.workspaceId, p.path);
+		return readFile(
+			p.workspaceId,
+			p.path,
+			p.maxBytes === undefined ? {} : { maxBytes: p.maxBytes },
+		);
 	},
 	"spec.graph": (p) => {
 		void ensureWatch(p.workspaceId);
@@ -1464,10 +1462,7 @@ const handlers: WsHandlers = {
 		});
 	},
 
-	"search.query": (p) => {
-		if (p.context.workspaceId) void ensureWatch(p.context.workspaceId);
-		return hostSearch().query(p);
-	},
+	"search.query": (p) => hostSearch().query(p),
 	"search.preview": (p) => hostSearch().preview(p),
 
 	"review.get": async (p) => {

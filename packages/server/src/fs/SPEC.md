@@ -22,7 +22,9 @@ bytes are** — the one byte-level classification every content read in the host
   listed node to a changed path (Windows' `relative()` would otherwise yield `src\auth`). (`.thinkrail/` is **not** hidden — it is shown like any
   other dir, so future host-managed content there stays visible; its ephemeral `context/` is kept out of
   git, not out of the tree.) `readFile` answers **`{ content, meta }`**: a file is read as bytes and
-  decoded only when it is text, so `content` is `""` for a byte-only resource and the client fetches
+  decoded only when it is text; with `{ maxBytes }` it opens the file once and reads at most `maxBytes + 1`
+  bytes, refusing a larger file with `CodedError("FILE_TOO_LARGE")` before classifying — whatever the file
+  grows to meanwhile (`maxBytes` must be a non-negative integer), so `content` is `""` for a byte-only resource and the client fetches
   those bytes over the host's `/files` route instead of receiving mojibake.
   **`resolveWorktreeFile(workspaceId, path)`** returns the
   contained absolute path for the host to stream a file's raw bytes over HTTP (the `/files/…` route
@@ -64,8 +66,8 @@ bytes are** — the one byte-level classification every content read in the host
   string it pairs with is valid text).
 - **Public surface (barrel):** `readDir`, `readFile`, `readableFileSize`, `resolveWorktreeFile`, `workspaceRelativePath`, `classifyBytes`,
   `CONTENT_SNIFF_BYTES`, `mimeFromPath`, `hashBytes`, `decodeText`, `resourceMeta`.
-- **Allowed deps:** `persistence` (workspace lookup); `contracts` (`FileNode`, `ResourceMeta`); Node
-  `fs`/`path`/`crypto`.
+- **Allowed deps:** `persistence` (workspace lookup); `contracts` (`FileNode`, `ResourceMeta`); `shared`
+  (`CodedError`); Node `fs`/`path`/`crypto`.
 - **Forbidden:** `host`; sibling features.
 
 ## Get right

@@ -1,4 +1,3 @@
-import type { SearchContext, Workspace } from "@thinkrail/contracts";
 import { t as globalT, useT } from "@thinkrail/locales/react";
 import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -28,7 +27,6 @@ import {
 	waitingItems,
 } from "../search";
 import {
-	isDefaultWorkspace,
 	type SettingsSection,
 	selectActiveWorkspace,
 	selectContextProject,
@@ -60,20 +58,6 @@ import {
 } from "./paletteCatalog";
 import { createPaletteNavigator } from "./paletteNavigation";
 import { readSettingsShortcutLabel } from "./useAppShortcuts";
-
-export function paletteSearchContext(
-	contextProjectId: string | null,
-	activeWorkspaceId: string | null,
-	workspaces: Readonly<Record<string, readonly Workspace[]>>,
-): SearchContext {
-	const workspaceId =
-		activeWorkspaceId ??
-		(contextProjectId ? workspaces[contextProjectId]?.find(isDefaultWorkspace)?.id : undefined);
-	return {
-		...(contextProjectId ? { projectId: contextProjectId } : {}),
-		...(workspaceId ? { workspaceId } : {}),
-	};
-}
 
 const LOCAL_SCOPES: readonly SearchScope[] = ["all", "work", "commands"];
 const HOST_SCOPES: readonly SearchScope[] = ["all", "work", "files", "specs", "commands"];
@@ -161,7 +145,10 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			for (const workspace of list) workspaceNames.set(workspace.id, workspaceName(t, workspace));
 		}
 		return {
-			context: paletteSearchContext(contextProject?.id ?? null, activeWorkspaceId, workspaces),
+			context: {
+				...(contextProject ? { projectId: contextProject.id } : {}),
+				...(activeWorkspaceId ? { workspaceId: activeWorkspaceId } : {}),
+			},
 			openHit: (hit) => {
 				void openHostHit(hit, hostHitTargets).catch((err: unknown) =>
 					toast.error(errorText(err, globalT("search.item.openFailed"))),

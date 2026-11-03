@@ -116,8 +116,9 @@ Verified against the installed `dist/core/session-manager.{js,d.ts}`. Re-verify 
 
 ## Boundary
 - **Narrow read for the search palette:** `HistoryIndex.sessions()` answers every indexed session's
-  identity, `title` and entries (read-only) with the same freshness, cold-build budget and `indexing`
-  flag as `search()`; the `search` module matches entries with the shared content matcher, so no second
+  identity, `title` and entries (read-only) with the same freshness as `search()`, waiting up to the
+  build budget for a cold build **or** a warm revalidation, and a `state` (`cold` / `refreshing` /
+  `ready`, **`HistoryState`**) instead of the prompt-recall `indexing` flag; the `search` module matches entries with the shared content matcher, so no second
   parse of the corpus exists (prompt recall keeps its own `matchesTerms` / `makeSnippet`).
 - **Public surface (`index.ts`):** `HistoryIndex` (+ `HistorySession`), `getHistoryIndex()`, `clampLimit`, `extractSession`, types. **No test helpers** — `writeFixtureSession`/`defaultSessionDirFor`
   are disk-writing test-only builders and must not enter the runtime module graph; they're reachable only

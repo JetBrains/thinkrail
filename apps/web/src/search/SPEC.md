@@ -85,7 +85,7 @@ flight plus the latest queued input, and fencing — a reply paints only when it
 it is the controller's latest request and the welcome generation is unchanged; a failed request paints
 every asked group `failed` (never a spinner that cannot end). An
 `indexing` group polls — ten times every 300 ms, then every second, about 30 s in all — asking only the
-kinds still indexing; `truncated` and `failed` never poll. The host is asked only for the scope's kinds
+kinds still indexing; `refreshing`, a cut group and `failed` never poll. The host is asked only for the scope's kinds
 (`scopeKinds`) and never on a page or for an empty query.
 
 **Result lifecycle.** A reply for the input already on screen (a poll, a reconnect's re-ask) replaces

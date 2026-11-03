@@ -275,10 +275,12 @@ describe("host search results", () => {
 		const state = (groups: SearchGroup[], pending = false, stale = false) =>
 			hostSearchStatus({ groups, pending, stale });
 		expect(state([group("ready")])).toBeNull();
-		expect(state([group("truncated"), group("failed", [], "spec")])).toBe("failed");
+		const cut = { ...group("ready"), cut: { time: true as const } };
+		expect(state([cut, group("failed", [], "spec")])).toBe("failed");
 		expect(state([group("indexing")])).toBe("indexing");
 		expect(state([group("indexing")], true)).toBeNull();
-		expect(state([group("truncated")])).toBe("truncated");
+		expect(state([cut])).toBe("truncated");
+		expect(state([{ ...group("refreshing"), cut: { fileList: 128_000 } }])).toBe("truncated");
 		expect(state([group("failed")], false, true)).toBeNull();
 	});
 });

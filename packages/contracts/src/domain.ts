@@ -1966,13 +1966,21 @@ export type SearchHit =
 			anchorText: string;
 	  });
 
-export type SearchGroupState = "ready" | "truncated" | "indexing" | "failed";
+/** `indexing`: never loaded yet; `refreshing`: a reload runs behind these hits; `failed`: the last load failed (its last good hits stay). */
+export type SearchGroupState = "ready" | "indexing" | "refreshing" | "failed";
+
+/** Why a group may miss hits: the scan ran out of time, or only `fileList` files of the root are listed. */
+export interface SearchGroupCut {
+	time?: true;
+	fileList?: number;
+}
 
 export interface SearchGroup {
 	kind: SearchKind;
 	hits: SearchHit[];
 	total: number;
 	state: SearchGroupState;
+	cut?: SearchGroupCut;
 }
 
 export interface SearchQueryResult {

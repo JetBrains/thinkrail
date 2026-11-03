@@ -7,14 +7,7 @@ import { MATCH_TIER } from "@thinkrail/contracts";
 import type { HistorySession } from "../history";
 import type { SpecSnapshotEntry } from "../spec";
 import type { StoredPlanFile } from "../todos";
-import {
-	type FileList,
-	FileListCache,
-	isTransientListFailure,
-	listRootFiles,
-	parseNulList,
-	walkFileList,
-} from "./files";
+import { type FileList, FileListCache, listRootFiles, parseNulList } from "./files";
 import { searchFiles, searchTranscripts } from "./providers";
 import { createSearchService, resolveSearchRoot, type SearchReaders } from "./service";
 
@@ -35,9 +28,18 @@ describe("parseNulList", () => {
 		expect(list).toEqual({ paths: ["a.ts", "src/b.ts", "odd name", "last"], truncated: false });
 	});
 
-	test("caps the number of entries and the bytes read", async () => {
-		const capped = await parseNulList(chunks("a\0b\0c\0d\0"), { maxFiles: 2, maxBytes: 1_000 });
+	test("caps the number of entries and the bytes read, and a list exactly at the cap is complete", async () => {
+		const limits = { maxFiles: 2, maxBytes: 1_000 };
+		const capped = await parseNulList(chunks("a\0b\0c\0d\0"), limits);
 		expect(capped).toEqual({ paths: ["a", "b"], truncated: true });
+		expect(await parseNulList(chunks("a\0b\0"), limits)).toEqual({
+			paths: ["a", "b"],
+			truncated: false,
+		});
+		expect(await parseNulList(chunks("a\0b\0c"), limits)).toEqual({
+			paths: ["a", "b"],
+			truncated: true,
+		});
 		const bytes = await parseNulList(chunks("a\0", "b\0", "c\0"), { maxFiles: 10, maxBytes: 3 });
 		expect(bytes).toEqual({ paths: ["a"], truncated: true });
 	});
@@ -86,8 +88,8 @@ describe("listRootFiles", () => {
 		]);
 	});
 
-	test("a plain folder falls back to a bounded walk that skips node_modules", async () => {
-		expect(await listRootFiles(plain)).toEqual({ paths: ["a.txt"], truncated: false });
+	test("a folder git refuses fails the load instead of answering a partial list", async () => {
+		await expect(listRootFiles(plain)).rejects.toThrow("git ls-files failed");
 	});
 
 	test("a path git lists once per conflict stage is listed once", async () => {
@@ -113,42 +115,6 @@ describe("listRootFiles", () => {
 		} finally {
 			rmSync(repo, { recursive: true, force: true });
 		}
-	});
-
-	test("a walk skips a folder it may not read but gives up on a failure that may pass", async () => {
-		const dirent = (name: string, directory: boolean) =>
-			({ name, isDirectory: () => directory, isFile: () => !directory }) as never;
-		const failure = (code: string) => Object.assign(new Error(code), { code });
-		const root = join(tmpdir(), "walk-root");
-		const tree: Record<string, () => unknown[]> = {
-			[join(root, "")]: () => [
-				dirent("a.txt", false),
-				dirent("locked", true),
-				dirent("busy", true),
-			],
-			[join(root, "locked")]: () => {
-				throw failure("EACCES");
-			},
-			[join(root, "busy")]: () => [],
-		};
-		const read = async (path: string) => (tree[path]?.() ?? []) as never;
-		expect(await walkFileList(root, read)).toEqual({ paths: ["a.txt"], truncated: false });
-		tree[join(root, "busy")] = () => {
-			throw failure("EMFILE");
-		};
-		await expect(walkFileList(root, read)).rejects.toThrow("EMFILE");
-		expect(await walkFileList("/gone", async () => Promise.reject(failure("ENOENT")))).toEqual({
-			paths: [],
-			truncated: false,
-		});
-	});
-
-	test("only a failure that may pass counts as transient", () => {
-		expect(isTransientListFailure({ timedOut: true })).toBe(true);
-		expect(isTransientListFailure({ code: "EMFILE" })).toBe(true);
-		expect(isTransientListFailure({ message: "fatal: Too many open files" })).toBe(true);
-		expect(isTransientListFailure({ message: "fatal: not a git repository" })).toBe(false);
-		expect(isTransientListFailure({ code: "EACCES" })).toBe(false);
 	});
 });
 
@@ -184,8 +150,8 @@ describe("chat providers", () => {
 	const recent = session("recent", "Quantum banana", 9_000, ["refresh the cache"]);
 
 	test("a budget that runs out leaves older messages unsearched, never the newest chat's", () => {
-		const group = searchTranscripts([old, recent], false, label, input("refresh", 3));
-		expect(group.state).toBe("truncated");
+		const group = searchTranscripts([old, recent], "ready", label, input("refresh", 3));
+		expect(group).toMatchObject({ state: "ready", cut: { time: true } });
 		expect(group.hits.map(messageOf)).toEqual([
 			["recent", 0],
 			["old", 499],
@@ -217,7 +183,7 @@ describe("chat providers", () => {
 		});
 		const byMessage = (session: HistorySession) =>
 			Object.fromEntries(
-				searchTranscripts([session], false, label, input("refresh", 10)).hits.map((hit) =>
+				searchTranscripts([session], "ready", label, input("refresh", 10)).hits.map((hit) =>
 					hit.kind === "transcript" ? [hit.anchorText, [hit.id, hit.messageIndex]] : [],
 				),
 			);
@@ -241,7 +207,7 @@ describe("chat providers", () => {
 				entryId: `entry-${index}`,
 			})),
 		};
-		const ids = searchTranscripts([queued], false, label, input("refresh", 10)).hits.map(
+		const ids = searchTranscripts([queued], "ready", label, input("refresh", 10)).hits.map(
 			(hit) => hit.id,
 		);
 		expect(ids.sort()).toEqual([
@@ -275,17 +241,20 @@ describe("FileListCache", () => {
 		deferred.finish(["a.ts"]);
 		await cold;
 		files.invalidate("/r");
-		expect(files.peek("/r")?.paths).toEqual(["a.ts"]);
-		expect(files.reloading("/r")).toBe(true);
+		expect(files.peek("/r")).toMatchObject({ list: { paths: ["a.ts"] }, state: "refreshing" });
 		files.invalidate("/r");
 		deferred.finish(["a.ts", "b.ts"]);
 		await Bun.sleep(0);
-		expect(files.peek("/r")?.paths).toEqual(["a.ts", "b.ts"]);
-		expect(files.reloading("/r")).toBe(true);
+		expect(files.peek("/r")).toMatchObject({
+			list: { paths: ["a.ts", "b.ts"] },
+			state: "refreshing",
+		});
 		deferred.finish(["a.ts", "b.ts", "c.ts"]);
 		await Bun.sleep(0);
-		expect(files.peek("/r")?.paths).toEqual(["a.ts", "b.ts", "c.ts"]);
-		expect(files.reloading("/r")).toBe(false);
+		expect(files.peek("/r")).toMatchObject({
+			list: { paths: ["a.ts", "b.ts", "c.ts"] },
+			state: "ready",
+		});
 		expect(deferred.loads()).toBe(3);
 	});
 
@@ -296,8 +265,7 @@ describe("FileListCache", () => {
 		files.invalidate("/r");
 		deferred.finish(["a.ts"]);
 		await cold;
-		expect(files.peek("/r")?.paths).toEqual(["a.ts"]);
-		expect(files.reloading("/r")).toBe(true);
+		expect(files.peek("/r")).toMatchObject({ list: { paths: ["a.ts"] }, state: "refreshing" });
 	});
 
 	test("a file git still lists but the worktree deleted is neither a hit nor counted", async () => {
@@ -344,7 +312,7 @@ describe("FileListCache", () => {
 			},
 		);
 		expect(checks).toBe(5);
-		expect(group).toMatchObject({ state: "truncated", hits: [] });
+		expect(group).toMatchObject({ state: "ready", cut: { time: true }, hits: [] });
 	});
 
 	test("a scan that ran out of time still answers the matches it found", async () => {
@@ -359,7 +327,7 @@ describe("FileListCache", () => {
 			{ terms: [{ text: "keep", literal: false }], limit: 20, deadline: { expired: () => true } },
 			() => 1,
 		);
-		expect(group.state).toBe("truncated");
+		expect(group).toMatchObject({ state: "ready", cut: { time: true } });
 		expect(group.hits).toHaveLength(20);
 	});
 
@@ -384,29 +352,63 @@ describe("FileListCache", () => {
 		expect(group.total).toBe(1);
 	});
 
-	test("a first load that fails answers failed and is tried again on the next ask", async () => {
+	test("a failed load answers failed with the last good list and is retried only after the retry interval", async () => {
 		let fail = true;
-		const files = new FileListCache(async () => {
-			if (fail) throw new Error("EMFILE");
-			return { paths: ["src/refresh.ts"], truncated: false };
-		});
+		let clock = 0;
+		let loads = 0;
+		const files = new FileListCache(
+			async () => {
+				loads += 1;
+				if (fail) throw new Error("EMFILE");
+				return { paths: ["src/refresh.ts"], truncated: false };
+			},
+			() => clock,
+		);
 		const root = { root: "/r", projectId: "p1", workspaceId: "w1" };
 		const input = (query: string) => ({
 			terms: [{ text: query, literal: false }],
 			limit: 20,
 			deadline: { expired: () => false },
 		});
+		const present = () => 1;
 		await files.load("/r");
 		fail = false;
-		const present = () => 1;
+		clock = 4_000;
 		expect(searchFiles(root, files, input("refresh"), present)).toMatchObject({
 			state: "failed",
 			hits: [],
 		});
 		await Bun.sleep(0);
+		expect(loads).toBe(1);
+		clock = 5_000;
+		files.peek("/r");
+		await Bun.sleep(0);
+		expect(searchFiles(root, files, input("refresh"), present)).toMatchObject({ state: "ready" });
 		expect(searchFiles(root, files, input("refresh"), present).hits.map(pathOf)).toEqual([
 			"src/refresh.ts",
 		]);
+
+		fail = true;
+		files.invalidate("/r");
+		files.peek("/r");
+		await Bun.sleep(0);
+		const stale = searchFiles(root, files, input("refresh"), present);
+		expect(stale.state).toBe("failed");
+		expect(stale.hits.map(pathOf)).toEqual(["src/refresh.ts"]);
+		files.invalidate("/r");
+		clock = 6_000;
+		files.peek("/r");
+		await Bun.sleep(0);
+		expect(loads).toBe(3);
+	});
+
+	test("cached lists are bounded by count and by the paths they hold together", async () => {
+		const big = Array.from({ length: 100_000 }, (_, index) => `f-${index}.ts`);
+		const files = new FileListCache(async () => ({ paths: big, truncated: false }));
+		for (const root of ["/a", "/b", "/c"]) await files.load(root);
+		expect(files.peek("/a")).toBeNull();
+		expect(files.peek("/b")?.list.paths).toHaveLength(100_000);
+		expect(files.peek("/c")?.list.paths).toHaveLength(100_000);
 	});
 });
 
@@ -564,10 +566,12 @@ function readers(overrides: Partial<SearchReaders> = {}): SearchReaders {
 	return {
 		projects: () => [project, other],
 		workspaces: () => [defaultOne, feature, closedProjectWorkspace],
-		sessions: async () => ({ sessions, indexing: false }),
-		specs: (root) => ({ entries: specs[root] ?? [], rebuilding: false }),
+		sessions: async () => ({ sessions, state: "ready" }),
+		specs: (root) => ({ entries: specs[root] ?? [], built: true, rebuilding: null }),
 		plans: (root) => plans[root] ?? [],
 		invalidateSpecs: () => {},
+		ensureDefault: async () => [],
+		watchRoot: () => {},
 		stat: () => 1,
 		...overrides,
 	};
@@ -588,9 +592,14 @@ describe("search.query", () => {
 	test("answers every kind for a typed query: files and specs from the one root, transcripts and plans from the open projects", async () => {
 		const files = new FileListCache(async (root) => lists[root] ?? { paths: [], truncated: false });
 		await Promise.all(Object.keys(lists).map((root) => files.load(root)));
-		const service = createSearchService(readers({ files }));
+		const watched: string[] = [];
+		const service = createSearchService(
+			readers({ files, watchRoot: (workspaceId) => watched.push(workspaceId) }),
+		);
 		const result = await service.query({ query: "refresh", context });
 		const byKind = Object.fromEntries(result.groups.map((group) => [group.kind, group]));
+		expect(watched).toEqual(["w-feature"]);
+		expect(JSON.stringify(result)).not.toContain("timestamp");
 
 		expect(byKind.file?.hits.map((hit) => hit.id)).toEqual(["file:w-feature:src/auth/refresh.ts"]);
 		expect(byKind.file?.hits[0]).toMatchObject({ projectId: "p1", workspaceId: "w-feature" });
@@ -665,7 +674,7 @@ describe("search.query", () => {
 		const service = createSearchService(
 			readers({
 				files: new FileListCache(async () => ({ paths: [], truncated: false })),
-				sessions: async () => ({ sessions: [accented], indexing: false }),
+				sessions: async () => ({ sessions: [accented], state: "ready" }),
 				specs: () => ({
 					entries: [
 						{
@@ -676,7 +685,8 @@ describe("search.query", () => {
 							content: "# Root\n\nЕщё одна ёлка.\n",
 						},
 					],
-					rebuilding: false,
+					built: true,
+					rebuilding: null,
 				}),
 			}),
 		);
@@ -695,7 +705,7 @@ describe("search.query", () => {
 		const building = createSearchService(
 			readers({
 				files: new FileListCache(async () => ({ paths: [], truncated: false })),
-				sessions: async () => ({ sessions: [], indexing: true }),
+				sessions: async () => ({ sessions: [], state: "cold" }),
 			}),
 		);
 		const cold = await building.query({ query: "refresh", kinds: ["plan"], context });
@@ -722,49 +732,62 @@ describe("search.query", () => {
 		expect(narrowed.groups.map((group) => group.kind)).toEqual(["transcript"]);
 	});
 
-	test("a cold file list reports indexing, loads once, and answers on the next query", async () => {
+	test("a corpus that loads within the wait answers fresh at once; one slower than the wait answers what it has", async () => {
 		let loads = 0;
-		const files = new FileListCache(async (root) => {
+		const quick = new FileListCache(async (root) => {
 			loads += 1;
 			return lists[root] ?? { paths: [], truncated: false };
 		});
-		const service = createSearchService(readers({ files }));
+		const service = createSearchService(readers({ files: quick }));
 		const cold = await service.query({ query: "refresh", kinds: ["file"], context });
-		expect(cold.groups[0]).toMatchObject({ kind: "file", state: "indexing", hits: [] });
-		await Bun.sleep(0);
-		const warm = await service.query({ query: "refresh", kinds: ["file"], context });
-		expect(warm.groups[0]?.state).toBe("ready");
-		expect(warm.groups[0]?.hits).toHaveLength(1);
-		expect(loads).toBe(1);
-	});
+		expect(cold.groups[0]).toMatchObject({ kind: "file", state: "ready" });
+		expect(cold.groups[0]?.hits).toHaveLength(1);
+		service.invalidateRoot("/repos/one-auth");
+		const reloaded = await service.query({ query: "refresh", kinds: ["file"], context });
+		expect(reloaded.groups[0]?.state).toBe("ready");
+		expect(loads).toBe(2);
 
-	test("a root invalidated after a change keeps answering while it reloads, and the other roots stay cold", async () => {
-		let loads = 0;
-		const files = new FileListCache(async (root) => {
-			loads += 1;
+		const gate = Promise.withResolvers<void>();
+		let slowLoads = 0;
+		const slow = new FileListCache(async (root) => {
+			slowLoads += 1;
+			if (slowLoads > 1) await gate.promise;
 			return lists[root] ?? { paths: [], truncated: false };
 		});
-		await files.load("/repos/one-auth");
-		const service = createSearchService(readers({ files }));
-		const warm = await service.query({ query: "refresh", kinds: ["file"], context });
-		expect(warm.groups[0]).toMatchObject({ kind: "file", state: "ready" });
-		expect(warm.groups[0]?.hits.map((hit) => hit.id)).toEqual([
-			"file:w-feature:src/auth/refresh.ts",
-		]);
-		expect(loads).toBe(1);
-
-		service.invalidateRoot("/repos/one-auth");
-		const stale = await service.query({ query: "refresh", kinds: ["file"], context });
-		expect(stale.groups[0]?.state).toBe("indexing");
-		expect(stale.groups[0]?.hits).toHaveLength(1);
+		await slow.load("/repos/one-auth");
+		const slowService = createSearchService(readers({ files: slow }));
+		slowService.invalidateRoot("/repos/one-auth");
+		const refreshing = await slowService.query({ query: "refresh", kinds: ["file"], context });
+		expect(refreshing.groups[0]).toMatchObject({ state: "refreshing" });
+		expect(refreshing.groups[0]?.hits).toHaveLength(1);
+		gate.resolve();
 		await Bun.sleep(0);
-		expect(loads).toBe(2);
-		const fresh = await service.query({ query: "refresh", kinds: ["file"], context });
+		const fresh = await slowService.query({ query: "refresh", kinds: ["file"], context });
 		expect(fresh.groups[0]?.state).toBe("ready");
-		expect(files.peek("/repos/one")).toBeNull();
+		expect(slow.peek("/repos/one")).toBeNull();
 	});
 
-	test("a failed reload keeps the stale list answering, and a spec snapshot being rebuilt reports indexing", async () => {
+	test("a cold corpus slower than the wait answers indexing; a spec snapshot being rebuilt answers refreshing", async () => {
+		const files = new FileListCache(() => new Promise<FileList>(() => {}));
+		const service = createSearchService(
+			readers({
+				files,
+				specs: (root) => ({
+					entries: specs[root] ?? [],
+					built: true,
+					rebuilding: new Promise<void>(() => {}),
+				}),
+			}),
+		);
+		const result = await service.query({ query: "refresh", kinds: ["file", "spec"], context });
+		expect(result.groups.map((group) => [group.kind, group.state])).toEqual([
+			["file", "indexing"],
+			["spec", "refreshing"],
+		]);
+		expect(result.groups[1]?.hits).toHaveLength(1);
+	});
+
+	test("a failed reload answers failed with the last good hits, and a failed history read fails plans and messages", async () => {
 		let fail = false;
 		const files = new FileListCache(async (root) => {
 			if (fail) throw new Error("EMFILE");
@@ -773,24 +796,59 @@ describe("search.query", () => {
 		await files.load("/repos/one-auth");
 		fail = true;
 		files.invalidate("/repos/one-auth");
-		expect(files.peek("/repos/one-auth")?.paths).toHaveLength(3);
-		await Bun.sleep(0);
-		expect(files.peek("/repos/one-auth")?.paths).toHaveLength(3);
-		expect(files.reloading("/repos/one-auth")).toBe(true);
-
 		const service = createSearchService(
 			readers({
 				files,
-				specs: (root) => ({ entries: specs[root] ?? [], rebuilding: true }),
+				sessions: async () => {
+					throw new Error("history unreadable");
+				},
 			}),
 		);
-		const result = await service.query({
-			query: "refresh",
-			kinds: ["spec"],
-			context,
-		});
-		expect(result.groups[0]).toMatchObject({ kind: "spec", state: "indexing" });
-		expect(result.groups[0]?.hits).toHaveLength(1);
+		const result = await service.query({ query: "refresh", context });
+		const byKind = Object.fromEntries(result.groups.map((group) => [group.kind, group]));
+		expect(byKind.file).toMatchObject({ state: "failed" });
+		expect(byKind.file?.hits).toHaveLength(1);
+		expect(byKind.plan).toMatchObject({ state: "failed", hits: [] });
+		expect(byKind.transcript).toMatchObject({ state: "failed", hits: [] });
+	});
+
+	test("an open project without its Default record yet gets it provisioned once and is searched; a failed provision fails the root", async () => {
+		let records: Workspace[] = [];
+		let ensured = 0;
+		const files = new FileListCache(async (root) => lists[root] ?? { paths: [], truncated: false });
+		const service = createSearchService(
+			readers({
+				files,
+				workspaces: () => records,
+				ensureDefault: async () => {
+					ensured += 1;
+					await Bun.sleep(1);
+					records = [defaultOne];
+				},
+			}),
+		);
+		const home = { projectId: "p1" };
+		const [first, second] = await Promise.all([
+			service.query({ query: "refresh", kinds: ["file"], context: home }),
+			service.query({ query: "refresh", kinds: ["file"], context: home }),
+		]);
+		expect(ensured).toBe(1);
+		expect(first.groups[0]?.hits.map((hit) => hit.id).sort()).toEqual([
+			"file:w-default:docs/refresh-notes.md",
+			"file:w-default:src/auth/refresh.ts",
+		]);
+		expect(second.groups[0]?.state).toBe("ready");
+
+		const broken = createSearchService(
+			readers({
+				workspaces: () => [],
+				ensureDefault: async () => {
+					throw new Error("folder gone");
+				},
+			}),
+		);
+		const failed = await broken.query({ query: "refresh", kinds: ["file", "spec"], context: home });
+		expect(failed.groups.map((group) => group.state)).toEqual(["failed", "failed"]);
 	});
 
 	test("the file-list cache keeps a bounded number of roots, and no root answers empty file and spec groups", async () => {
@@ -811,7 +869,7 @@ describe("search.query", () => {
 		]);
 	});
 
-	test("a source list cut at its cap is still searched and reported truncated, and acronyms reach the matcher", async () => {
+	test("a source list cut at its cap is still searched and says how many files it holds, and acronyms reach the matcher", async () => {
 		const files = new FileListCache(async () => ({
 			paths: ["src/auth/UserController.ts", "src/auth/refresh.ts"],
 			truncated: true,
@@ -829,12 +887,12 @@ describe("search.query", () => {
 			kinds: ["file"],
 			context,
 		});
-		expect(capped.groups[0]).toMatchObject({ state: "truncated", total: 1 });
+		expect(capped.groups[0]).toMatchObject({ state: "ready", total: 1, cut: { fileList: 2 } });
 		const acronym = await service.query({ query: "uc", kinds: ["file"], context });
 		expect(acronym.groups[0]?.hits.map(pathOf)).toEqual(["src/auth/UserController.ts"]);
 	});
 
-	test("a provider that runs out of its budget answers what it has as truncated", async () => {
+	test("a provider that runs out of its budget answers what it has and says it was cut short", async () => {
 		const many: FileList = {
 			paths: Array.from({ length: 5_000 }, (_, index) => `src/refresh-${index}.ts`),
 			truncated: false,
@@ -859,7 +917,7 @@ describe("search.query", () => {
 			context,
 		});
 		const file = result.groups[0];
-		expect(file?.state).toBe("truncated");
+		expect(file).toMatchObject({ state: "ready", cut: { time: true } });
 		expect(file?.total).toBeGreaterThan(0);
 		expect(file?.total).toBeLessThan(5_000);
 	});
@@ -922,6 +980,24 @@ describe("search.preview", () => {
 		expect(await focused(0, "Done: the refresh")).toEqual([1]);
 		expect(await focused(5, "please refresh")).toEqual([0]);
 		expect(await focused(1, "a message that is gone")).toEqual([]);
+	});
+
+	test("a preview waits for the history index to reach a chat it has not indexed yet", async () => {
+		let reads = 0;
+		const service = createSearchService(
+			readers({
+				sessions: async () => {
+					reads += 1;
+					return reads < 3
+						? { sessions: [], state: reads === 1 ? "cold" : "refreshing" }
+						: { sessions, state: "ready" };
+				},
+			}),
+		);
+		expect(await service.preview({ kind: "chat", sessionId: "s1" })).toMatchObject({
+			kind: "transcript",
+		});
+		expect(reads).toBe(3);
 	});
 
 	test("a chat whose folder is no open project's workspace has no preview", async () => {
