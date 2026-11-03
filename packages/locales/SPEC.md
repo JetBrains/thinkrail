@@ -13,7 +13,7 @@ tags: [i18n]
 The single owner of ThinkRail's UI strings and of the rules every locale source obeys
 ([[architecture]] Decision 23). It ships the bundled catalogs — `en.json` is the English source of truth
 and the file translators start from, and each `<tag>.json` beside it is a translation (currently
-Spanish, Japanese, Russian, and Simplified Chinese) — and the pure functions that validate a catalog,
+Bengali, Spanish, Japanese, Russian, and Simplified Chinese) — and the pure functions that validate a catalog,
 name a file's language, and pick the language to render. Its `./react`
 entry holds the **one** i18next instance every browser surface (`apps/web`, `packages/ui`, extension web
 halves) renders through, so they cannot drift onto separate instances.
