@@ -701,6 +701,21 @@ the palette ranks with — kept here so host-side search can rank with the same 
   returning `JbcentralActionResult`; none accepts an executable, artifact path, output, URL, or secret from
   the client) / **`jbcentralQuota`** (v59; optional `force` bypasses completed-cache age but still joins an
   in-flight read; disabled/unhealthy returns `hidden` without invoking quota)) /
+  the **background-creation set** (v103, **`WORKSPACE_CREATION_PROTOCOL_VERSION`**; a client facing an
+  older host falls back to `workspace.create`): **`workspace.startCreate`** (`{ projectId, name?, baseRef?,
+  kickoff? }` → a **`WorkspaceCreation`** as soon as the host has reserved its branch and path — the
+  checkout runs afterwards; `kickoff` is a **`WorkspaceKickoff`** `{ text, images?, model?, thinkingLevel? }`
+  the host holds and sends as the first chat message once the workspace exists, so it survives the window
+  closing) / **`workspace.listCreations`** (every creation the host still holds, all projects — a
+  (re)connecting client's hydration) / **`workspace.resumeCreation`** (`{ id }`; runs an `interrupted` or
+  `failed` creation again) / **`workspace.dismissCreation`** (`{ id }` → `{ kickoff? }`; cleans up and drops
+  an `interrupted` or `failed` creation, returning its full kickoff so *Edit & retry* can prefill the
+  dialog). A creation's `state` is `running` while the host works on it, `interrupted` when the host
+  restarted mid-create (never resumed on its own), `failed` with `failure: { message, code? }` (git's text,
+  for display); `phase` is `preparing` (fetch + worktree registration) or `checking-out` (with
+  `progress: { done, total }` files once git reports it); `kickoff` on the wire is only a preview
+  `{ text, imageCount }` — images stay host-side. `workspace.create` stays: it starts a creation and
+  resolves the finished `Workspace` /
   **`workspace.listExisting`** (the selected project's unattached Git worktrees, with detached rows
   disabled by status) / **`workspace.openExisting`** (revalidate + register one branch-backed checkout as
   `kind: "external"`, emitting the ordinary `workspace.created`, without mutating Git or disk) /
@@ -874,7 +889,13 @@ the palette ranks with — kept here so host-side search can rank with the same 
   publisher (never a per-client optimistic mutation). `created`/`updated` carry the **full persisted
   `Workspace` snapshot** (idempotent under the transport's last-value replay, so e.g. an agent rename
   racing a manual one merges by `id` — never a delta); `removed` carries a **`WorkspaceRemoved`** id
-  pair (`{ projectId, id }` — the record is already gone) / **`review.changed`** — a workspace's review
+  pair (`{ projectId, id }` — the record is already gone) / the **creation pair** (v103) —
+  **`workspace.creationChanged`** (the full `WorkspaceCreation` snapshot on every state, phase or progress
+  change; progress is throttled host-side) and **`workspace.creationRemoved`**
+  (**`WorkspaceCreationRemoved`** `{ id, projectId, workspace?, sessionId?, kickoffError? }`: with
+  `workspace` when the creation became that workspace (same id; the ordinary `workspace.created` also
+  fires), plus `sessionId` of the chat the host started from the kickoff or `kickoffError` when that chat
+  could not start; without `workspace` when it was dismissed) / **`review.changed`** — a workspace's review
   state changed (emitted by the server's `reviews` publisher on every mutation — UI edits, agent
   `resolve_comment` calls, re-anchoring — so all clients converge, same pattern as the trio) /
   **`turn.changed`** — the `TurnChangeSet` the host just recorded for a settled agent run (emitted by the
