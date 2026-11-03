@@ -231,7 +231,12 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `log.warn/error(msg, err)` calls as `host_logged` — so host diagnostics that carry an error go through
   the logger, never `console.*`. The host's `resolveNewChatModel` composes AppConfig settings with pi's global default model, the agent's settled available
   model list and Pi thinking clamp; `model.default`, `session.create`, and newly-created review chats share
-  that resolver, and creation passes its model and effort explicitly. A `session.create` that **named** a
+  that resolver, and creation passes its model and effort explicitly. Without an explicit model, an
+  available saved model or an available pi global default, it first applies pi's model preference to
+  connections whose wire auth kind is not `env`, then to the whole available catalog. An ambient API key
+  must not preempt a configured subscription; explicit selections, available saved defaults and pi's
+  global default still take precedence, including environment-backed ones. This changes only new-chat resolution, never an existing session's model or a failed request's
+  connection. A `session.create` that **named** a
   model and every `session.setModel` also record the resolved model as recent through `settings`'
   `noteRecentModel` — a default-resolved creation is the host's choice, not the user's, and is not
   recorded. `model.contextSettings` and `model.setContextWindow` delegate to agent's `modelContext`
