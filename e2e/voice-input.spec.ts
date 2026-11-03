@@ -133,6 +133,10 @@ test("the keyboard chord toggles dictation and Esc stops it, keeping the text", 
 	await expect(mic(page)).toHaveAttribute("data-mic-state", "listening");
 	await expect(input).toBeFocused();
 	await expect(input).toHaveValue(/Hello/, { timeout: 15_000 });
+	await page.keyboard.press("ControlOrMeta+Shift+Space");
+	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
+	await page.keyboard.press("ControlOrMeta+Shift+Space");
+	await expect(mic(page)).toHaveAttribute("data-mic-state", "listening");
 	await page.keyboard.press("Escape");
 	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
 	await expect(input).toHaveValue(/^Hello/);

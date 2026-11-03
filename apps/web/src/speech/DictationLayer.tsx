@@ -52,9 +52,10 @@ function layerContainer(field: HTMLElement): HTMLElement | null {
 }
 
 /**
- * Keeps the mic inside the field's right edge every frame: at the bottom corner of a tall field, centred
- * on a single line. Inside a dialog or popover it is positioned against that container (they are
- * positioned and often transformed, which would skew a fixed element); elsewhere against the viewport.
+ * Keeps the mic inside the field's right edge: at the bottom corner of a tall field, centred on a
+ * single line. Inside a dialog or popover it is positioned against that container, including its
+ * scroll offset (they are positioned and often transformed, which would skew a fixed element);
+ * elsewhere against the viewport. It re-places on resize and scroll, never on an idle frame loop.
  */
 function followField(
 	mic: HTMLElement,
@@ -63,21 +64,37 @@ function followField(
 ): () => void {
 	let frame = 0;
 	const place = () => {
+		frame = 0;
 		const rect = field.getBoundingClientRect();
 		const origin = container?.getBoundingClientRect();
+		const left =
+			container && origin ? origin.left + container.clientLeft - container.scrollLeft : 0;
+		const top = container && origin ? origin.top + container.clientTop - container.scrollTop : 0;
 		const tall = rect.height >= TALL_FIELD_HEIGHT;
-		mic.style.left = `${rect.right - 2 - (origin?.left ?? 0)}px`;
-		mic.style.top = `${(tall ? rect.bottom - 2 : rect.top + rect.height / 2) - (origin?.top ?? 0)}px`;
+		mic.style.left = `${rect.right - 2 - left}px`;
+		mic.style.top = `${(tall ? rect.bottom - 2 : rect.top + rect.height / 2) - top}px`;
 		mic.dataset.placement = tall ? "corner" : "middle";
-		frame = requestAnimationFrame(place);
+	};
+	const schedule = () => {
+		if (frame === 0) frame = requestAnimationFrame(place);
 	};
 	place();
-	return () => cancelAnimationFrame(frame);
+	const resized = new ResizeObserver(schedule);
+	resized.observe(field);
+	resized.observe(document.documentElement);
+	if (container) resized.observe(container);
+	window.addEventListener("resize", schedule);
+	document.addEventListener("scroll", schedule, true);
+	return () => {
+		cancelAnimationFrame(frame);
+		resized.disconnect();
+		window.removeEventListener("resize", schedule);
+		document.removeEventListener("scroll", schedule, true);
+	};
 }
 
 function fitsMic(field: HTMLElement): boolean {
-	const rect = field.getBoundingClientRect();
-	return rect.width >= MIN_FIELD_WIDTH;
+	return field.getBoundingClientRect().width >= MIN_FIELD_WIDTH;
 }
 
 function LevelMeter({ level }: { level: number }) {
@@ -198,6 +215,7 @@ export function DictationLayer() {
 				},
 				release: stopDictation,
 				lastFallback: () => lastFallback.current,
+				dictating: dictatingElement,
 			}),
 		[],
 	);
@@ -218,14 +236,14 @@ export function DictationLayer() {
 	const field = listening ?? focused;
 	const container = field ? layerContainer(field) : null;
 	const micRef = useRef<HTMLDivElement>(null);
-	const visible = state.kind !== "hidden" && field !== null;
+	const shown = state.kind !== "hidden" && field !== null && field.isConnected && fitsMic(field);
 	useLayoutEffect(() => {
 		const mic = micRef.current;
-		if (!mic || !field || !visible) return;
+		if (!mic || !field || !shown) return;
 		return followField(mic, field, container);
-	}, [field, container, visible]);
+	}, [field, container, shown]);
 
-	if (!visible || !field.isConnected || !fitsMic(field)) return null;
+	if (!shown || !field) return null;
 
 	const active = listening === field;
 	const starting = active && snapshot.phase === "connecting";

@@ -29,7 +29,11 @@ export function dictationShortcutLabel(platform?: string): string {
  * The field the chord dictates into: the focused text field, else, when nothing else owns the
  * keyboard (no modal, no other editor focused), the most recently focused chat composer.
  */
-export function chordTarget(lastFallback: HTMLElement | null): HTMLElement | null {
+export function chordTarget(
+	lastFallback: HTMLElement | null,
+	dictating: HTMLElement | null,
+): HTMLElement | null {
+	if (dictating?.contains(document.activeElement)) return dictating;
 	const focused = dictationFieldOf(document.activeElement);
 	if (focused) return focused;
 	if (hasLayer(document, MODAL_LAYER_SELECTOR) || isTextEntryTarget(document.activeElement)) {
@@ -44,6 +48,8 @@ export interface ChordHandlers {
 	press: (target: HTMLElement) => boolean;
 	release: () => void;
 	lastFallback: () => HTMLElement | null;
+	/** The field a dictation is running in: read-only meanwhile, so no longer "eligible". */
+	dictating: () => HTMLElement | null;
 }
 
 /** ⌘⇧Space / Ctrl+Shift+Space: a tap toggles, holding past `HOLD_MS` is push-to-talk. */
@@ -51,7 +57,7 @@ export function installDictationChord(handlers: ChordHandlers): () => void {
 	let held: number | null = null;
 	const onKeyDown = (event: KeyboardEvent) => {
 		if (!isDictationChord(event)) return;
-		const target = chordTarget(handlers.lastFallback());
+		const target = chordTarget(handlers.lastFallback(), handlers.dictating());
 		if (!target) return;
 		event.preventDefault();
 		event.stopPropagation();
