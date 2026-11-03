@@ -291,6 +291,30 @@ posix(
 	},
 );
 
+posix("dismissing an interrupted creation never touches a folder opened since", async () => {
+	hook("sleep 5");
+	const creation = startWorkspaceCreation("p1");
+	await until(() => listWorkspaceCreations()[0]?.phase === "checking-out");
+	await stopWorkspaceCreations();
+	interruptWorkspaceCreations();
+	const path = join(dataDir, "worktrees", "repo", "workspace-1");
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([
+			{ id: "p1", name: "repo", path: repo, slug: "repo", lastOpened: 1 },
+			{ id: "p2", name: "taken", path, slug: "taken", lastOpened: 2 },
+		]),
+	);
+
+	const dismissing = dismissWorkspaceCreation(creation.id);
+	expect(() => resumeWorkspaceCreation(creation.id)).toThrow("being dismissed");
+	await expect(dismissWorkspaceCreation(creation.id)).rejects.toThrow("already being dismissed");
+	await dismissing;
+	expect(existsSync(path)).toBe(true);
+	expect(gitOut(repo, "branch", "--list", "workspace-1")).toContain("workspace-1");
+	expect(listWorkspaceCreations()).toEqual([]);
+});
+
 test("checkout failure text drops progress lines and keeps git's last words", () => {
 	expect(
 		checkoutFailureText(

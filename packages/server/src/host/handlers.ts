@@ -688,7 +688,10 @@ const handlers: WsHandlers = {
 		creationClients.set(creation.id, ctx.clientKey);
 		return creation;
 	},
-	"workspace.dismissCreation": (p) => dismissWorkspaceCreation(p.id),
+	"workspace.dismissCreation": (p) => {
+		creationClients.delete(p.id);
+		return dismissWorkspaceCreation(p.id);
+	},
 	"workspace.listExisting": (params) => listExistingWorktrees(params.projectId),
 	"workspace.openExisting": async (p) => {
 		return provisionInitialTerminal(

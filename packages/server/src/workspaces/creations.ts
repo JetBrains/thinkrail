@@ -33,6 +33,7 @@ import {
 } from "./creationRecords";
 import {
 	assertManagedPathFree,
+	managedPathOwned,
 	planManagedWorkspace,
 	registerManagedWorkspace,
 } from "./workspaces";
@@ -61,6 +62,7 @@ export function setCheckoutStallForTests(ms: number | undefined): void {
 }
 
 const running = new Map<string, { abort: AbortController; done: Promise<Workspace> }>();
+const discarding = new Set<string>();
 
 class CreationAborted extends Error {}
 
@@ -161,6 +163,10 @@ async function cleanupCreation(
 	projectPath: string,
 	record: WorkspaceCreationRecord,
 ): Promise<boolean> {
+	if (managedPathOwned(record.worktreePath)) {
+		log.warn(`left ${record.worktreePath} alone: ThinkRail has it open now`);
+		return true;
+	}
 	const timeout = { timeoutMs: SLOW_GIT_TIMEOUT_MS };
 	let entries = await gitWorktreeEntries(projectPath);
 	if (entries.some((entry) => samePath(entry.path, record.worktreePath))) {
@@ -331,11 +337,18 @@ function holdsLeftovers(record: WorkspaceCreationRecord): boolean {
 }
 
 async function discard(record: WorkspaceCreationRecord): Promise<void> {
-	const project = getProjects().find((candidate) => candidate.id === record.projectId);
-	if (project && holdsLeftovers(record) && !(await cleanupCreation(project.path, record)))
-		throw new Error(`Could not remove the partial workspace at ${record.worktreePath}`);
-	deleteCreation(record.id);
-	emitCreation({ kind: "removed", removed: { id: record.id, projectId: record.projectId } });
+	if (discarding.has(record.id))
+		throw new Error("This workspace creation is already being dismissed");
+	discarding.add(record.id);
+	try {
+		const project = getProjects().find((candidate) => candidate.id === record.projectId);
+		if (project && holdsLeftovers(record) && !(await cleanupCreation(project.path, record)))
+			throw new Error(`Could not remove the partial workspace at ${record.worktreePath}`);
+		deleteCreation(record.id);
+		emitCreation({ kind: "removed", removed: { id: record.id, projectId: record.projectId } });
+	} finally {
+		discarding.delete(record.id);
+	}
 }
 
 function run(id: string): Promise<Workspace> {
@@ -403,6 +416,7 @@ export function resumeWorkspaceCreation(id: string): WorkspaceCreation {
 	const record = findCreation(id);
 	if (!record) throw new Error(`Unknown workspace creation: ${id}`);
 	if (record.state === "running") return creationView(record);
+	if (discarding.has(id)) throw new Error("This workspace creation is being dismissed");
 	if (record.failure?.code === "WORKSPACE_PATH_TAKEN")
 		throw new Error("The workspace folder is now open elsewhere in ThinkRail; use Edit & retry");
 	const updated = updateCreation(id, (r) => {

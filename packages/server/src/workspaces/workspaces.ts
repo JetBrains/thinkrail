@@ -262,12 +262,16 @@ export function planManagedWorkspace(
 	};
 }
 
-export function assertManagedPathFree(path: string): void {
+export function managedPathOwned(path: string): boolean {
 	const wanted = canonicalPath(path);
-	const owner =
+	return (
 		loadWorkspaces().some((workspace) => canonicalPath(workspace.worktreePath) === wanted) ||
-		loadProjects().some((project) => canonicalPath(project.path) === wanted);
-	if (owner)
+		loadProjects().some((project) => canonicalPath(project.path) === wanted)
+	);
+}
+
+export function assertManagedPathFree(path: string): void {
+	if (managedPathOwned(path))
 		throw new CodedError(
 			"WORKSPACE_PATH_TAKEN",
 			`The workspace folder is already open in ThinkRail: ${path}`,
