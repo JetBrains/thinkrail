@@ -142,11 +142,12 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   and the **archive** primitives, split so the fast record-drop
   and the slow git reclaim are separable (the host archives off the request's critical path):
   `forgetWorkspace(id)` (drop the persistence record, return the removed record or `null` — gone from
-  `listWorkspaces` immediately), `reclaimWorktree(ws)` (the slow half — `git worktree remove --force`,
-  keeps the branch; hardened: rm + `prune` if git fails; **refuses both user-owned kinds and,
+  `listWorkspaces` immediately), `reclaimWorktree(ws)` (the async slow half — `git worktree remove --force`,
+  keeps the branch; asynchronous rm + `prune` if git fails, so reclamation never blocks the host's event
+  loop; **refuses both user-owned kinds and,
   defense-in-depth, any record whose `worktreePath` resolves to the project folder** — the rm-fallback must
   never see the user's repo or an attached checkout, however a corrupt/hand-edited record got there), and
-  `removeWorkspace(id)` (the synchronous composition of the two, kept for callers/tests that want the whole
+  `removeWorkspace(id)` (the awaited composition of the two, kept for callers/tests that want the whole
   archive in one call).
 - **Default workspace (`kind: "default"`):** exactly one per project. `listWorkspaces` **ensures** it
   — find-or-create by `projectId`+`kind` (id a plain `randomUUID`; the `kind` field is the marker,
