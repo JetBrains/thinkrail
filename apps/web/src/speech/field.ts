@@ -99,6 +99,15 @@ function textControlWriter(element: HTMLInputElement | HTMLTextAreaElement): Fie
 	};
 }
 
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+/** `Selection.modify` steps whole characters (grapheme clusters), never UTF-16 units. */
+function graphemeCount(text: string): number {
+	let count = 0;
+	for (const _ of graphemes.segment(text)) count += 1;
+	return count;
+}
+
 /** One character beside the selection, as the browser reads it (a line or block break reads as "\n"). */
 function neighbour(selection: Selection, direction: "backward" | "forward"): string {
 	const saved = selection.getRangeAt(0).cloneRange();
@@ -142,7 +151,8 @@ function editableWriter(host: HTMLElement): FieldWriter {
 			if (next) document.execCommand("insertText", false, next);
 			else if (!selection.isCollapsed) document.execCommand("delete");
 			writing = false;
-			for (let i = 0; i < next.length; i += 1) selection.modify("extend", "backward", "character");
+			const characters = graphemeCount(next);
+			for (let i = 0; i < characters; i += 1) selection.modify("extend", "backward", "character");
 			span = selection.getRangeAt(0).cloneRange();
 			selection.collapseToEnd();
 		},

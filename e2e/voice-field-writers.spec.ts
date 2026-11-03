@@ -50,6 +50,21 @@ test("contenteditable dictation after a typed trailing space keeps every word", 
 	await expect(p.locator("#e")).toHaveText("hello fix the bug");
 });
 
+test("contenteditable dictation in Devanagari or with emoji never eats the user's text", async ({
+	page: p,
+}) => {
+	await page(p, '<div id="e" contenteditable="true"></div>');
+	await p.locator("#e").click();
+	await p.keyboard.type("hello");
+	await dictate(p, "#e", ["नमस्ते", "नमस्ते दुनिया"]);
+	await expect(p.locator("#e")).toHaveText("hello नमस्ते दुनिया");
+	await page(p, '<div id="e" contenteditable="true"></div>');
+	await p.locator("#e").click();
+	await p.keyboard.type("hello");
+	await dictate(p, "#e", ["ok 👍", "ok 👍 done"]);
+	await expect(p.locator("#e")).toHaveText("hello ok 👍 done");
+});
+
 test("contenteditable dictation at the start of a new line adds no leading space", async ({
 	page: p,
 }) => {

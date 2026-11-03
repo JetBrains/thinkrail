@@ -78,8 +78,11 @@ sends it.
     caret moves only while the field still has focus.
   - **Contenteditable** takes each update as one `execCommand("insertText")` over the span the previous
     one left, so the editor's own input handling and undo run.
-    - The span is re-measured backwards from the caret after every insert. A fixed start plus an offset
-      drifted once Chrome rewrote a neighbouring `&nbsp;` ("hello fix" came out as "hellofix thex").
+    - The span is re-measured backwards from the caret after every insert, counting grapheme clusters
+      (`Intl.Segmenter`), which is what `Selection.modify` steps by.
+      - A fixed start plus an offset drifted once Chrome rewrote a neighbouring `&nbsp;` ("hello fix"
+        came out as "hellofix thex").
+      - Counting UTF-16 units ate the user's text before Devanagari or emoji.
     - The neighbouring characters for `separators` are read with `Selection.modify`, so a line or block
       break reads as a break and a new line gets no leading space.
     - Without focus there is no selection to write through, so a final arriving after a blur leaves the
