@@ -12,7 +12,7 @@ import {
 	buildQuestionnaireResponse,
 	isAskUserQuestionArgs,
 } from "@thinkrail/pi-ask-user-question/core";
-import { THINKRAIL_GUIDANCE } from "./guidance";
+import { thinkrailGuidance } from "./guidance";
 
 function askThroughHost(session: ExtensionSessionServices): AskUserQuestionAsker {
 	return async ({ toolCallId, signal }) => {
@@ -39,11 +39,16 @@ export default defineServerExtension({
 	extensions: [],
 	settings: { richPreviews: { type: "boolean", default: true } },
 	sessionExtensions: (session) => [
-		createAskUserQuestionExtension({
-			ask: askThroughHost(session),
-			announce: (toolCallId) => session.expectToolResponse(toolCallId),
-			guidance: THINKRAIL_GUIDANCE,
-		}),
+		(pi) => {
+			const filePreviews = session.setting("richPreviews");
+			return createAskUserQuestionExtension({
+				ask: askThroughHost(session),
+				announce: (toolCallId) => session.expectToolResponse(toolCallId),
+				guidance: thinkrailGuidance(filePreviews, session.workspaceFiles.scratchDir),
+				filePreviews,
+				checkFile: session.workspaceFiles.check,
+			})(pi);
+		},
 	],
 	interactiveTools: { [ASK_USER_QUESTION_TOOL_NAME]: { describeResponse } },
 });
