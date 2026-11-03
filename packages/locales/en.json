@@ -2354,7 +2354,7 @@
 	"speech.error.installBusy": "Voice input is already downloading.",
 	"speech.error.microphoneFailed": "The microphone could not be opened.",
 	"speech.error.notInstalled": "Voice input isn't set up yet.",
-	"speech.mic.blocked.denied": "Microphone access is blocked. Allow ThinkRail (or this browser) in System Settings → Privacy & Security → Microphone, then click to try again.",
+	"speech.mic.blocked.denied": "Microphone access is blocked. In a browser, allow it in the site settings (the icon left of the address); on a Mac, also allow ThinkRail or the browser in System Settings → Privacy & Security → Microphone. Then click to try again.",
 	"speech.mic.blocked.noDevice": "No microphone found. Connect one, then click to try again.",
 	"speech.mic.installing": "Downloading voice input… {{percent}}% · click to cancel",
 	"speech.mic.setup": "Set up voice input",
