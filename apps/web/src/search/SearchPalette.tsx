@@ -35,8 +35,8 @@ import { shortcutKeys } from "../commands";
 import { AttentionDot } from "../components/AttentionDot";
 import { RunningIcon } from "../components/RunningIcon";
 import { hasPlatformModifier } from "../lib";
-import { NO_ARRIVALS, noteArrivals, type PinnedRow, withPinned } from "./arrivals";
-import { hostItems, hostTotals } from "./hostItems";
+import { NO_ARRIVALS, noteArrivals } from "./arrivals";
+import { hostItems, hostOverflow } from "./hostItems";
 import {
 	createHostPreviewLoader,
 	type HostPreviewLoader,
@@ -55,7 +55,6 @@ import {
 	stripScopePrefix,
 	withScopePrefix,
 } from "./query";
-import { matchingIds } from "./rank";
 import { scopeChordIndex } from "./scopeChord";
 import { buildSections, flattenRows } from "./sections";
 
@@ -118,7 +117,6 @@ function PaletteContent({
 	const [expanded, setExpanded] = useState<ReadonlySet<string>>(NO_GROUPS);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [arrivals, setArrivals] = useState(NO_ARRIVALS);
-	const [pinned, setPinned] = useState<PinnedRow | null>(null);
 	const onScreen = useRef<ReadonlySet<string>>(new Set());
 	const holdingSelection = useRef(false);
 	const [previewOpen, setPreviewOpen] = useState(readPreviewOpen);
@@ -156,10 +154,6 @@ function PaletteContent({
 		const holding = holdingSelection.current;
 		setArrivals((current) => noteArrivals(current, landed, shown, holding));
 	}, [hostState.groups, hostState.stale]);
-	const localMatches = useMemo(
-		() => matchingIds(rootItems, parsed.terms),
-		[rootItems, parsed.terms],
-	);
 	const hostRows = useMemo(() => {
 		if (!host || !hostState.groups || hostState.groups.length === 0) return [];
 		const context = {
@@ -167,18 +161,14 @@ function PaletteContent({
 			openHit: host.openHit,
 			projectName: host.projectName,
 			workspaceName: host.workspaceName,
-			localIds: localMatches,
 			late: arrivals.late,
 			staleTerms: hostState.stale ? parsed.terms : null,
 		};
 		return hostItems(context, hostState.groups);
-	}, [host, hostState.groups, hostState.stale, parsed.terms, localMatches, t, arrivals]);
-	const allItems = useMemo(() => {
-		const listed = new Set([...localMatches, ...hostRows.map((item) => item.id)]);
-		return withPinned([...rootItems, ...hostRows], pinned, hostInput, listed);
-	}, [rootItems, hostRows, localMatches, pinned, hostInput]);
-	const totals = useMemo(
-		() => (hostState.groups && !hostState.stale ? hostTotals(hostState.groups) : {}),
+	}, [host, hostState.groups, hostState.stale, parsed.terms, t, arrivals]);
+	const allItems = useMemo(() => [...rootItems, ...hostRows], [rootItems, hostRows]);
+	const overflow = useMemo(
+		() => (hostState.groups && !hostState.stale ? hostOverflow(hostState.groups) : {}),
 		[hostState.groups, hostState.stale],
 	);
 	const hostStatus = hostSearchStatus(hostState);
@@ -187,7 +177,7 @@ function PaletteContent({
 			buildSections({
 				t,
 				parsed,
-				hostTotals: totals,
+				hostOverflow: overflow,
 				rootItems: allItems,
 				waiting,
 				actions: emptyActions,
@@ -196,7 +186,7 @@ function PaletteContent({
 				nowMs,
 				keep: selectedId,
 			}),
-		[t, parsed, totals, allItems, waiting, emptyActions, expanded, learning, nowMs, selectedId],
+		[t, parsed, overflow, allItems, waiting, emptyActions, expanded, learning, nowMs, selectedId],
 	);
 	const rows = useMemo(() => flattenRows(sections), [sections]);
 	useLayoutEffect(() => {
@@ -223,14 +213,11 @@ function PaletteContent({
 		const row = rows[(index + rows.length) % rows.length];
 		if (!row) return;
 		setSelectedId(row.item.id);
-		const hostRow = row.item === pinned?.item || hostRows.includes(row.item);
-		setPinned(hostRow ? { item: row.item, input: hostInput } : null);
 	};
 
 	const resetQuery = (next: string) => {
 		setQuery(next);
 		setSelectedId(null);
-		setPinned(null);
 		setArrivals(NO_ARRIVALS);
 	};
 
@@ -762,8 +749,6 @@ function Preview({
 	previews: HostPreviewLoader;
 	host: PaletteHost | undefined;
 }) {
-	const preview = item.preview?.() ?? null;
-	const Icon = item.icon;
 	return (
 		<aside
 			data-testid="search-preview"
@@ -774,30 +759,38 @@ function Preview({
 				<FilePreview t={t} item={item} file={item.file} host={host} />
 			) : item.previewTarget ? (
 				<HostPreview t={t} item={item} target={item.previewTarget} previews={previews} />
-			) : preview ? (
-				<>
-					<div className="flex items-center gap-8 tr-title-card text-text-default">
-						<Icon aria-hidden className="size-16 shrink-0 text-primary" />
-						<span className="min-w-0 truncate">{preview.title}</span>
-					</div>
-					{preview.subtitle ? (
-						<p className="mt-4 truncate tr-text-metadata text-text-subtle">{preview.subtitle}</p>
-					) : null}
-					{preview.fields.length > 0 ? (
-						<dl className="mt-12 grid grid-cols-[auto_1fr] gap-x-12 gap-y-4 tr-text-ui">
-							{preview.fields.map(([label, value]) => (
-								<div key={label} className="contents">
-									<dt className="text-text-subtle">{label}</dt>
-									<dd className="min-w-0 truncate text-text-default">{value}</dd>
-								</div>
-							))}
-						</dl>
-					) : null}
-				</>
 			) : (
-				<p className="tr-text-ui text-text-subtle">{t("search.palette.noPreview")}</p>
+				<PreviewCard t={t} item={item} />
 			)}
 		</aside>
+	);
+}
+
+function PreviewCard({ t, item }: { t: Translator; item: PaletteItem }) {
+	const preview = item.preview?.() ?? null;
+	if (!preview)
+		return <p className="tr-text-ui text-text-subtle">{t("search.palette.noPreview")}</p>;
+	const Icon = item.icon;
+	return (
+		<>
+			<div className="flex items-center gap-8 tr-title-card text-text-default">
+				<Icon aria-hidden className="size-16 shrink-0 text-primary" />
+				<span className="min-w-0 truncate">{preview.title}</span>
+			</div>
+			{preview.subtitle ? (
+				<p className="mt-4 truncate tr-text-metadata text-text-subtle">{preview.subtitle}</p>
+			) : null}
+			{preview.fields.length > 0 ? (
+				<dl className="mt-12 grid grid-cols-[auto_1fr] gap-x-12 gap-y-4 tr-text-ui">
+					{preview.fields.map(([label, value]) => (
+						<div key={label} className="contents">
+							<dt className="text-text-subtle">{label}</dt>
+							<dd className="min-w-0 truncate text-text-default">{value}</dd>
+						</div>
+					))}
+				</dl>
+			) : null}
+		</>
 	);
 }
 
@@ -875,13 +868,18 @@ function HostPreview({
 			clearTimeout(timer);
 		};
 	}, [key, previews]);
+	if (result?.kind === "unavailable") {
+		return (
+			<div data-testid="search-host-preview" data-state="unavailable">
+				<PreviewCard t={t} item={item} />
+			</div>
+		);
+	}
 	return (
 		<div data-testid="search-host-preview" data-state={result?.kind ?? "loading"}>
 			<PreviewHeading item={item} title={result?.kind === "transcript" ? result.title : ""} />
 			{result === null ? (
 				<p className="mt-12 tr-text-ui text-text-subtle">{t("search.palette.previewLoading")}</p>
-			) : result.kind === "unavailable" ? (
-				<p className="mt-12 tr-text-ui text-text-subtle">{t("search.palette.noPreview")}</p>
 			) : (
 				<ol className="mt-12 flex flex-col gap-8">
 					{result.messages.map((message) => (

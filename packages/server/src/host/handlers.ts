@@ -1464,9 +1464,9 @@ const handlers: WsHandlers = {
 		});
 	},
 
-	"search.query": (p, ctx) => {
+	"search.query": (p) => {
 		if (p.context.workspaceId) void ensureWatch(p.context.workspaceId);
-		return hostSearch().query(ctx.clientKey, p);
+		return hostSearch().query(p);
 	},
 	"search.preview": (p) => hostSearch().preview(p),
 

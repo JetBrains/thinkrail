@@ -27,12 +27,10 @@ import {
 	type FileStat,
 	type ProviderInput,
 	type SearchRoot,
-	searchChatTitles,
 	searchFiles,
 	searchPlans,
 	searchSpecs,
 	searchTranscripts,
-	searchWorkspaces,
 } from "./providers";
 
 const log = logger("search");
@@ -50,10 +48,9 @@ export interface SearchReaders {
 }
 
 export interface SearchService {
-	query(clientKey: string, params: WsParams<"search.query">): Promise<SearchQueryResult>;
+	query(params: WsParams<"search.query">): Promise<SearchQueryResult>;
 	preview(target: SearchPreviewTarget): Promise<SearchPreviewResult>;
 	invalidateRoot(root: string): void;
-	forgetClient(clientKey: string): void;
 }
 
 export const SEARCH_BUDGET = {
@@ -96,7 +93,6 @@ export function resolveSearchRoot(
 export function createSearchService(readers: SearchReaders): SearchService {
 	const files = readers.files ?? new FileListCache();
 	const now = readers.now ?? (() => performance.now());
-	const latestSeq = new Map<string, number>();
 
 	const openWorkspaces = (projects: readonly Project[]) => {
 		const open = new Set(projects.map((project) => project.id));
@@ -115,16 +111,10 @@ export function createSearchService(readers: SearchReaders): SearchService {
 	};
 
 	return {
-		async query(clientKey, params) {
-			const seq = params.seq;
-			const previous = latestSeq.get(clientKey) ?? Number.NEGATIVE_INFINITY;
-			if (seq < previous) return { seq, groups: [], superseded: true };
-			latestSeq.set(clientKey, seq);
-			const superseded = () => latestSeq.get(clientKey) !== seq;
-
+		async query(params) {
 			const terms = parseMatchTerms(params.query.slice(0, MAX_SEARCH_QUERY_LENGTH));
 			const kinds = new Set<SearchKind>(params.kinds ?? SEARCH_KINDS);
-			if (terms.length === 0) return { seq, groups: [...kinds].map((kind) => emptyGroup(kind)) };
+			if (terms.length === 0) return { groups: [...kinds].map((kind) => emptyGroup(kind)) };
 
 			const limit = clampLimit(params.limit);
 			const started = now();
@@ -150,14 +140,13 @@ export function createSearchService(readers: SearchReaders): SearchService {
 					groups.push(emptyGroup(kind, "failed"));
 				}
 			};
-			push("workspace", () => searchWorkspaces(workspaces, input()));
 			push("file", () =>
 				root ? searchFiles(root, files, input(), readers.stat) : emptyGroup("file"),
 			);
 			push("spec", () => (root ? searchSpecs(root, readers.specs, input()) : emptyGroup("spec")));
 
 			let sessions: { sessions: readonly HistorySession[]; indexing: boolean } | null = null;
-			if (kinds.has("chat") || kinds.has("transcript") || kinds.has("plan")) {
+			if (kinds.has("transcript") || kinds.has("plan")) {
 				try {
 					sessions = await readers.sessions();
 				} catch (error) {
@@ -165,17 +154,14 @@ export function createSearchService(readers: SearchReaders): SearchService {
 					sessions = null;
 				}
 			}
-			if (superseded()) return { seq, groups: [], superseded: true };
 			const history = sessions;
 			if (history) {
 				const label = chatLabeler(workspaces);
-				push("chat", () => searchChatTitles(history.sessions, history.indexing, label, input()));
 				push("transcript", () =>
 					searchTranscripts(history.sessions, history.indexing, label, input()),
 				);
-			} else {
-				if (kinds.has("chat")) groups.push(emptyGroup("chat", "failed"));
-				if (kinds.has("transcript")) groups.push(emptyGroup("transcript", "failed"));
+			} else if (kinds.has("transcript")) {
+				groups.push(emptyGroup("transcript", "failed"));
 			}
 			push("plan", () =>
 				searchPlans(
@@ -186,8 +172,7 @@ export function createSearchService(readers: SearchReaders): SearchService {
 					sessions?.indexing ?? false,
 				),
 			);
-			if (superseded()) return { seq, groups: [], superseded: true };
-			return { seq, groups };
+			return { groups };
 		},
 
 		async preview(target) {
@@ -203,10 +188,6 @@ export function createSearchService(readers: SearchReaders): SearchService {
 		invalidateRoot(root) {
 			files.invalidate(root);
 			readers.invalidateSpecs(root);
-		},
-
-		forgetClient(clientKey) {
-			latestSeq.delete(clientKey);
 		},
 	};
 }

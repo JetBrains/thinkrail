@@ -12,8 +12,8 @@ tags: [search, public-surface-checked]
 ## Responsibility
 
 Answer the search palette's `search.query` and `search.preview` for the corpora only the host can see —
-file names, spec titles and bodies, TODO plans, chat titles and transcripts, and the workspaces of
-projects the client has not expanded — ranking them with the one matcher from [[module-contracts]] so
+file names, spec titles and bodies, TODO plans and chat transcripts (chat titles and workspaces the palette
+lists itself, from the host's session records and workspace lists) — ranking them with the one matcher from [[module-contracts]] so
 the browser can merge host hits with its own by tier and score. Registry-free: `host/search.ts`
 composes `createSearchService` with injected readers (open projects, persisted workspace records, the
 history index, spec snapshots, stored plans, and the file check — `fs`'s `readableFileSize`, the
@@ -40,7 +40,7 @@ names the root, so every file and spec hit carries a workspace the client reads 
 `fs.readFile` / the preview tab without provisioning). No root — no context project, a closed project,
 a project whose Default record is not persisted yet — answers empty `file` and `spec` groups. Other
 open projects' folders and sibling worktrees are never searched (the field walked back global
-multi-root file search: one root is faster and predictable). Chats and transcripts come from sessions
+multi-root file search: one root is faster and predictable). Transcripts come from sessions
 whose `cwd` is a persisted worktree of an open project (pi-CLI sessions and closed projects are
 dropped, like `history.search`'s labels); plans from every open project's workspace records, skipping
 plan files whose session has no transcript on disk (orphans).
@@ -52,11 +52,6 @@ plan files whose session has no transcript on disk (orphans).
   with the terms as parsed (a quoted term is a literal); a body or transcript match takes each term's
   text as a case-insensitive substring, so a quoted phrase matches as one. `kinds` narrows the providers; the
   per-group `limit` is clamped to `MAX_SEARCH_GROUP_LIMIT`, `total` keeps the true count.
-- **Per-client superseding:** the service remembers the latest `seq` per `clientKey`; an older `seq`
-  is answered `{ superseded: true }` immediately, and a query that was overtaken while it awaited the
-  history index returns `superseded` instead of stale groups. `seq` is the client's monotonic counter
-  across reopen and reconnect; `forgetClient` drops a reaped client's counter (the host calls it from
-  its client reap).
 - **Budgets:** each provider gets `SEARCH_BUDGET.providerMs`, all within `queryMs`; a provider that
   runs out of time returns what it has as `truncated`. A throwing provider reports `failed` (the
   client never polls a failed group). A file list that has never loaded reports the group `indexing`
@@ -99,8 +94,7 @@ plan files whose session has no transcript on disk (orphans).
   matcher; a body match from three characters becomes a `content`-tier hit with the matching line as
   `snippet`). Body matching folds case only, unlike the matcher's diacritic folding: folding every
   body per keystroke costs too much.
-- **Chats and transcripts:** two providers with a budget each. Title hits through the matcher over every
-  chat. Transcript hits are substring-AND over entries (the history index's rule; case folded only), one
+- **Transcripts:** hits are substring-AND over entries (the history index's rule; case folded only), one
   per message, `content` tier with an equal score so the timestamp alone orders them newest first (a
   user message never outranks a newer assistant one), carrying `messageIndex` / `anchorText` for the
   client's drift-tolerant jump. The scan visits the newest chat first and each chat's newest message
@@ -110,8 +104,6 @@ plan files whose session has no transcript on disk (orphans).
   opens the chat and its plan. A plan file is parsed again only when it changed (`todos`'
   per-file memo). While the history index is still building, a plan whose session it has not reached yet
   is skipped and the group answers `indexing`, so the client asks again once the session is known.
-- **Workspaces:** name, branch and `#<pr>` through the matcher over persisted records — the client
-  dedupes against the workspaces it already knows.
 
 ## Preview
 

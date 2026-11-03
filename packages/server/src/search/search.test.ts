@@ -15,7 +15,7 @@ import {
 	parseNulList,
 	walkFileList,
 } from "./files";
-import { searchChatTitles, searchFiles, searchTranscripts } from "./providers";
+import { searchFiles, searchTranscripts } from "./providers";
 import { createSearchService, resolveSearchRoot, type SearchReaders } from "./service";
 
 const encoder = new TextEncoder();
@@ -245,12 +245,6 @@ describe("chat providers", () => {
 			"transcript:q:entry-1",
 			"transcript:q:entry-2",
 		]);
-	});
-
-	test("titles are matched over every chat, apart from the transcript budget", () => {
-		const group = searchChatTitles([old, recent], false, label, input("banana", 0));
-		expect(group.state).toBe("ready");
-		expect(group.hits.map((hit) => hit.id)).toEqual(["chat:recent"]);
 	});
 });
 
@@ -587,15 +581,13 @@ const lists: Record<string, FileList> = {
 const context = { projectId: "p1", workspaceId: "w-feature" };
 
 describe("search.query", () => {
-	test("answers every kind for a typed query: files and specs from the one root, chats from the open projects", async () => {
+	test("answers every kind for a typed query: files and specs from the one root, transcripts and plans from the open projects", async () => {
 		const files = new FileListCache(async (root) => lists[root] ?? { paths: [], truncated: false });
 		await Promise.all(Object.keys(lists).map((root) => files.load(root)));
 		const service = createSearchService(readers({ files }));
-		const result = await service.query("c1", { seq: 1, query: "refresh", context });
-		expect(result.superseded).toBeUndefined();
+		const result = await service.query({ query: "refresh", context });
 		const byKind = Object.fromEntries(result.groups.map((group) => [group.kind, group]));
 
-		expect(byKind.workspace?.hits.map((hit) => hit.id)).toEqual(["workspace:w-feature"]);
 		expect(byKind.file?.hits.map((hit) => hit.id)).toEqual(["file:w-feature:src/auth/refresh.ts"]);
 		expect(byKind.file?.hits[0]).toMatchObject({ projectId: "p1", workspaceId: "w-feature" });
 		expect(byKind.spec?.hits).toEqual([
@@ -605,8 +597,6 @@ describe("search.query", () => {
 				snippet: "The auth refresh lives in the token module.",
 			}),
 		]);
-		expect(byKind.chat?.hits.map((hit) => hit.id)).toEqual(["chat:s1"]);
-		expect(byKind.chat?.hits[0]).toMatchObject({ workspaceId: "w-feature", projectId: "p1" });
 		expect(byKind.transcript?.hits.map((hit) => hit.id)).toEqual([
 			"transcript:s1:m1",
 			"transcript:s1:m0",
@@ -630,29 +620,29 @@ describe("search.query", () => {
 		}));
 		await files.load("/repos/one-auth");
 		const service = createSearchService(readers({ files }));
-		const paths = async (seq: number, query: string) =>
-			(await service.query("c1", { seq, query, kinds: ["file"], context })).groups[0]?.hits
+		const paths = async (query: string) =>
+			(await service.query({ query, kinds: ["file"], context })).groups[0]?.hits
 				.map((hit) => hit.path)
 				.sort();
-		expect(await paths(1, "cafe")).toEqual(["docs/Café.md", "src/cafe/menu.ts"]);
-		expect(await paths(2, "CAFÉ")).toEqual(["docs/Café.md", "src/cafe/menu.ts"]);
-		expect(await paths(3, "fb")).toEqual(["src/FooBar.ts"]);
-		expect(await paths(4, '"fb"')).toEqual([]);
+		expect(await paths("cafe")).toEqual(["docs/Café.md", "src/cafe/menu.ts"]);
+		expect(await paths("CAFÉ")).toEqual(["docs/Café.md", "src/cafe/menu.ts"]);
+		expect(await paths("fb")).toEqual(["src/FooBar.ts"]);
+		expect(await paths('"fb"')).toEqual([]);
 	});
 
 	test("a quoted phrase is one term for transcripts and spec bodies", async () => {
 		const service = createSearchService(
 			readers({ files: new FileListCache(async () => ({ paths: [], truncated: false })) }),
 		);
-		const ids = async (seq: number, query: string) =>
-			(
-				await service.query("c1", { seq, query, kinds: ["transcript", "spec"], context })
-			).groups.flatMap((group) => group.hits.map((hit) => hit.id));
-		expect(await ids(1, "flow token")).toContain("transcript:s1:m0");
-		expect(await ids(2, '"token flow"')).toContain("transcript:s1:m0");
-		expect(await ids(3, '"flow token"')).toEqual([]);
-		expect(await ids(4, '"the token module"')).toEqual(["spec:w-feature:SPEC.md"]);
-		expect(await ids(5, '"module token"')).toEqual([]);
+		const ids = async (query: string) =>
+			(await service.query({ query, kinds: ["transcript", "spec"], context })).groups.flatMap(
+				(group) => group.hits.map((hit) => hit.id),
+			);
+		expect(await ids("flow token")).toContain("transcript:s1:m0");
+		expect(await ids('"token flow"')).toContain("transcript:s1:m0");
+		expect(await ids('"flow token"')).toEqual([]);
+		expect(await ids('"the token module"')).toEqual(["spec:w-feature:SPEC.md"]);
+		expect(await ids('"module token"')).toEqual([]);
 	});
 
 	test("a plan whose session the history has not reached yet answers indexing, so it is asked again", async () => {
@@ -662,12 +652,12 @@ describe("search.query", () => {
 				sessions: async () => ({ sessions: [], indexing: true }),
 			}),
 		);
-		const cold = await building.query("c1", { seq: 1, query: "refresh", kinds: ["plan"], context });
+		const cold = await building.query({ query: "refresh", kinds: ["plan"], context });
 		expect(cold.groups[0]).toMatchObject({ kind: "plan", state: "indexing", hits: [] });
 		const built = createSearchService(
 			readers({ files: new FileListCache(async () => ({ paths: [], truncated: false })) }),
 		);
-		const warm = await built.query("c1", { seq: 1, query: "refresh", kinds: ["plan"], context });
+		const warm = await built.query({ query: "refresh", kinds: ["plan"], context });
 		expect(warm.groups[0]?.state).toBe("ready");
 		expect(warm.groups[0]?.hits.map((hit) => hit.id)).toContain("plan:w-feature:s1:t1");
 	});
@@ -676,15 +666,14 @@ describe("search.query", () => {
 		const service = createSearchService(
 			readers({ files: new FileListCache(async () => lists["/repos/one"] as FileList) }),
 		);
-		const empty = await service.query("c1", { seq: 1, query: "   ", context });
+		const empty = await service.query({ query: "   ", context });
 		expect(empty.groups.every((group) => group.hits.length === 0)).toBe(true);
-		const narrowed = await service.query("c1", {
-			seq: 2,
+		const narrowed = await service.query({
 			query: "refresh",
-			kinds: ["chat"],
+			kinds: ["transcript"],
 			context,
 		});
-		expect(narrowed.groups.map((group) => group.kind)).toEqual(["chat"]);
+		expect(narrowed.groups.map((group) => group.kind)).toEqual(["transcript"]);
 	});
 
 	test("a cold file list reports indexing, loads once, and answers on the next query", async () => {
@@ -694,10 +683,10 @@ describe("search.query", () => {
 			return lists[root] ?? { paths: [], truncated: false };
 		});
 		const service = createSearchService(readers({ files }));
-		const cold = await service.query("c1", { seq: 1, query: "refresh", kinds: ["file"], context });
+		const cold = await service.query({ query: "refresh", kinds: ["file"], context });
 		expect(cold.groups[0]).toMatchObject({ kind: "file", state: "indexing", hits: [] });
 		await Bun.sleep(0);
-		const warm = await service.query("c1", { seq: 2, query: "refresh", kinds: ["file"], context });
+		const warm = await service.query({ query: "refresh", kinds: ["file"], context });
 		expect(warm.groups[0]?.state).toBe("ready");
 		expect(warm.groups[0]?.hits).toHaveLength(1);
 		expect(loads).toBe(1);
@@ -711,7 +700,7 @@ describe("search.query", () => {
 		});
 		await files.load("/repos/one-auth");
 		const service = createSearchService(readers({ files }));
-		const warm = await service.query("c1", { seq: 1, query: "refresh", kinds: ["file"], context });
+		const warm = await service.query({ query: "refresh", kinds: ["file"], context });
 		expect(warm.groups[0]).toMatchObject({ kind: "file", state: "ready" });
 		expect(warm.groups[0]?.hits.map((hit) => hit.id)).toEqual([
 			"file:w-feature:src/auth/refresh.ts",
@@ -719,12 +708,12 @@ describe("search.query", () => {
 		expect(loads).toBe(1);
 
 		service.invalidateRoot("/repos/one-auth");
-		const stale = await service.query("c1", { seq: 2, query: "refresh", kinds: ["file"], context });
+		const stale = await service.query({ query: "refresh", kinds: ["file"], context });
 		expect(stale.groups[0]?.state).toBe("indexing");
 		expect(stale.groups[0]?.hits).toHaveLength(1);
 		await Bun.sleep(0);
 		expect(loads).toBe(2);
-		const fresh = await service.query("c1", { seq: 3, query: "refresh", kinds: ["file"], context });
+		const fresh = await service.query({ query: "refresh", kinds: ["file"], context });
 		expect(fresh.groups[0]?.state).toBe("ready");
 		expect(files.peek("/repos/one")).toBeNull();
 	});
@@ -749,8 +738,7 @@ describe("search.query", () => {
 				specs: (root) => ({ entries: specs[root] ?? [], rebuilding: true }),
 			}),
 		);
-		const result = await service.query("c1", {
-			seq: 1,
+		const result = await service.query({
 			query: "refresh",
 			kinds: ["spec"],
 			context,
@@ -766,8 +754,7 @@ describe("search.query", () => {
 		expect(files.peek("/root-9")).not.toBeNull();
 
 		const service = createSearchService(readers({ files }));
-		const homeless = await service.query("c1", {
-			seq: 1,
+		const homeless = await service.query({
 			query: "refresh",
 			kinds: ["file", "spec"],
 			context: {},
@@ -791,14 +778,13 @@ describe("search.query", () => {
 				workspaces: () => [feature],
 			}),
 		);
-		const capped = await service.query("c1", {
-			seq: 1,
+		const capped = await service.query({
 			query: "refresh",
 			kinds: ["file"],
 			context,
 		});
 		expect(capped.groups[0]).toMatchObject({ state: "truncated", total: 1 });
-		const acronym = await service.query("c1", { seq: 2, query: "uc", kinds: ["file"], context });
+		const acronym = await service.query({ query: "uc", kinds: ["file"], context });
 		expect(acronym.groups[0]?.hits.map((hit) => hit.path)).toEqual(["src/auth/UserController.ts"]);
 	});
 
@@ -821,8 +807,7 @@ describe("search.query", () => {
 				},
 			}),
 		);
-		const result = await service.query("c1", {
-			seq: 1,
+		const result = await service.query({
 			query: "refresh",
 			kinds: ["file"],
 			context,
@@ -831,34 +816,6 @@ describe("search.query", () => {
 		expect(file?.state).toBe("truncated");
 		expect(file?.total).toBeGreaterThan(0);
 		expect(file?.total).toBeLessThan(5_000);
-	});
-
-	test("an older seq from the same client is superseded, also when a newer one arrived mid-flight", async () => {
-		const gate = Promise.withResolvers<void>();
-		const service = createSearchService(
-			readers({
-				sessions: async () => {
-					await gate.promise;
-					return { sessions, indexing: false };
-				},
-			}),
-		);
-		const first = service.query("c1", { seq: 1, query: "refresh", kinds: ["chat"], context });
-		const second = service.query("c1", { seq: 2, query: "refresh", kinds: ["chat"], context });
-		const stale = await service.query("c1", { seq: 1, query: "refresh", kinds: ["chat"], context });
-		expect(stale).toEqual({ seq: 1, groups: [], superseded: true });
-		gate.resolve();
-		expect(await first).toEqual({ seq: 1, groups: [], superseded: true });
-		const latest = await second;
-		expect(latest.superseded).toBeUndefined();
-		expect(latest.groups[0]?.hits).toHaveLength(1);
-		const otherClient = await service.query("c2", {
-			seq: 0,
-			query: "refresh",
-			kinds: ["chat"],
-			context,
-		});
-		expect(otherClient.superseded).toBeUndefined();
 	});
 
 	test("limits clamp per group and the total survives, and a throwing provider reports failed", async () => {
@@ -878,7 +835,7 @@ describe("search.query", () => {
 				},
 			}),
 		);
-		const result = await service.query("c1", { seq: 1, query: "refresh", limit: 500, context });
+		const result = await service.query({ query: "refresh", limit: 500, context });
 		const file = result.groups.find((group) => group.kind === "file");
 		expect(file?.hits).toHaveLength(50);
 		expect(file?.total).toBe(80);

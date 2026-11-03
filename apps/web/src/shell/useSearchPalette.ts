@@ -232,6 +232,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			},
 			contextProjectId: contextProject?.id ?? null,
 			firstPrompts,
+			transcriptPreviews: hostSearch,
 			navigateToProject: (projectId) => {
 				paletteNavigator.beginPick();
 				goToProjectHome(projectId);
@@ -271,6 +272,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		layoutDocumentsByWorkspace,
 		activeWorkspaceId,
 		firstPrompts,
+		hostSearch,
 	]);
 
 	return {

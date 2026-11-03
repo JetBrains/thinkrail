@@ -1,5 +1,5 @@
 import type { RemixiconComponentType } from "@remixicon/react";
-import type { MatchField, MatchRange, SearchPreviewTarget } from "@thinkrail/contracts";
+import type { MatchRange, SearchPreviewTarget } from "@thinkrail/contracts";
 import type { CommandShortcut } from "../commands";
 import type { ChatTitleSource } from "../lib";
 import type { SessionAttention } from "../store";
@@ -57,7 +57,6 @@ export interface PaletteItem {
 	readonly contextBoost?: number;
 	readonly match?: PaletteMatch;
 	readonly late?: number;
-	readonly hostFields?: readonly MatchField[];
 	readonly previewTarget?: SearchPreviewTarget;
 	readonly file?: PaletteFile;
 	readonly disabledReason?: string;

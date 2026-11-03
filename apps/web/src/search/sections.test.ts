@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { RiChat2Line, RiCommandLine, RiGitBranchLine } from "@remixicon/react";
+import { RiChat2Line, RiCommandLine, RiFileTextLine, RiGitBranchLine } from "@remixicon/react";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { EMPTY_LEARNING, recordPick } from "./learning";
 import type { PaletteItem } from "./model";
@@ -181,46 +181,28 @@ describe("buildSections", () => {
 	});
 
 	test("host hits beyond the returned page count into the more row in All and into the meta of a scope", () => {
-		const two = [chat("h1", "Auth one"), chat("h2", "Auth two")];
-		const hostTotals = { chats: { total: 20, ids: new Set(two.map((item) => item.id)) } };
-		const all = sections("auth", { rootItems: two, hostTotals });
-		const chats = all.find((section) => section.id === "chats");
-		expect(chats?.meta).toBe("20");
-		expect(chats?.items.at(-1)?.item).toMatchObject({
+		const file = (id: string, title: string): PaletteItem => ({
+			id: `file:${id}`,
+			kind: "file",
+			title,
+			group: "files",
+			scope: "files",
+			icon: RiFileTextLine,
+		});
+		const two = [file("h1", "auth-one.ts"), file("h2", "auth-two.ts")];
+		const hostOverflow = { files: 18 };
+		const all = sections("auth", { rootItems: two, hostOverflow });
+		const files = all.find((section) => section.id === "files");
+		expect(files?.meta).toBe("20");
+		expect(files?.items.at(-1)?.item).toMatchObject({
 			kind: "more",
-			title: "18 more in Chats",
-			more: { kind: "scope", scope: "work" },
+			title: "18 more in Files",
+			more: { kind: "scope", scope: "files" },
 		});
-		const scoped = sections("@auth", { rootItems: two, hostTotals });
-		const scopedChats = scoped.find((section) => section.id === "chats");
-		expect(scopedChats?.meta).toBe("20 matches · showing 2, refine the query for the rest");
-		expect(scopedChats?.items.every((row) => row.item.kind !== "more")).toBe(true);
-	});
-
-	test("local rows the host page left out count among its overflow, so a chat shown twice is never counted twice", () => {
-		const local = Array.from({ length: 40 }, (_, index) => chat(`c${index}`, `Auth ${index}`));
-		const page = new Set(local.slice(0, 20).map((item) => item.id));
-		const all = sections("auth", {
-			rootItems: local,
-			hostTotals: { chats: { total: 40, ids: page } },
-		});
-		const chats = all.find((section) => section.id === "chats");
-		expect(chats?.meta).toBe("40");
-		expect(chats?.items.at(-1)?.item.title).toBe("36 more in Chats");
-	});
-
-	test("a local row that only its subtitle matches is not taken to be one of the host's hits", () => {
-		const page = Array.from({ length: 50 }, (_, index) => chat(`h${index}`, `Auth ${index}`));
-		const local = Array.from({ length: 5 }, (_, index) =>
-			chat(`l${index}`, `Notes ${index}`, { subtitle: "Auth project" }),
-		);
-		const scoped = sections("@auth", {
-			rootItems: [...page, ...local],
-			hostTotals: { chats: { total: 55, ids: new Set(page.map((item) => item.id)) } },
-		});
-		expect(scoped.find((section) => section.id === "chats")?.meta).toBe(
-			"60 matches · showing 55, refine the query for the rest",
-		);
+		const scoped = sections("/auth", { rootItems: two, hostOverflow });
+		const scopedFiles = scoped.find((section) => section.id === "files");
+		expect(scopedFiles?.meta).toBe("20 matches · showing 2, refine the query for the rest");
+		expect(scopedFiles?.items.every((row) => row.item.kind !== "more")).toBe(true);
 	});
 
 	test("the selected row is never hidden under a group's cap", () => {
@@ -229,23 +211,5 @@ describe("buildSections", () => {
 			flattenRows(sections("keep", { rootItems: many, keep })).map((row) => row.item.id);
 		expect(rows(null)).not.toContain("chat:k6");
 		expect(rows("chat:k6")).toContain("chat:k6");
-	});
-
-	test("a local workspace the host matches by its branch counts among the host's hits", () => {
-		const local = Array.from({ length: 60 }, (_, index) =>
-			workspace(`w${index}`, `Notes ${index}`, {
-				subtitle: `One · auth-${index}`,
-				hostFields: [
-					{ key: "title", text: `Notes ${index}` },
-					{ key: "subtitle", text: `auth-${index}`, secondary: true },
-				],
-			}),
-		);
-		const page = new Set(local.slice(0, 50).map((item) => item.id));
-		const scoped = sections("@auth", {
-			rootItems: local,
-			hostTotals: { workspaces: { total: 60, ids: page } },
-		});
-		expect(scoped.find((section) => section.id === "workspaces")?.meta).toBe("60");
 	});
 });

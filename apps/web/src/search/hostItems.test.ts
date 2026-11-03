@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { RiGitBranchLine } from "@remixicon/react";
 import {
 	MATCH_TIER,
 	parseMatchTerms,
@@ -9,10 +8,7 @@ import {
 import { currentTranslator } from "@thinkrail/locales/react";
 import { hostItems } from "./hostItems";
 import { EMPTY_LEARNING } from "./learning";
-import type { PaletteItem } from "./model";
-import { parseSearchQuery } from "./query";
-import { matchingIds, rankItems } from "./rank";
-import { buildSections, flattenRows } from "./sections";
+import { rankItems } from "./rank";
 
 const hit = (
 	overrides: Partial<SearchHit> & Pick<SearchHit, "id" | "kind" | "title">,
@@ -46,21 +42,15 @@ const groups: SearchGroup[] = [
 		],
 	},
 	{
-		kind: "chat",
+		kind: "plan",
 		state: "ready",
-		total: 2,
+		total: 1,
 		hits: [
 			hit({
-				id: "chat:local",
-				kind: "chat",
-				title: "Known locally",
-				sessionId: "local",
-				workspaceId: "w1",
-			}),
-			hit({
-				id: "chat:remote",
-				kind: "chat",
-				title: "Only the host knows",
+				id: "plan:w1:remote:t1",
+				kind: "plan",
+				title: "Refresh the token",
+				subtitle: "Auth plan",
 				sessionId: "remote",
 				workspaceId: "w1",
 			}),
@@ -96,7 +86,6 @@ function items(late: Record<string, number> = {}, staleQuery: string | null = nu
 			openHit: (opened_) => opened.push(opened_),
 			projectName: () => "One",
 			workspaceName: () => "Auth refresh",
-			localIds: new Set(["chat:local"]),
 			late: new Map(Object.entries(late)),
 			staleTerms: staleQuery === null ? null : parseMatchTerms(staleQuery),
 		},
@@ -127,13 +116,17 @@ describe("hostItems", () => {
 		expect(opened[0]?.id).toBe("file:p1:w1:src/auth/refresh.ts");
 	});
 
-	test("drops host chats the client already lists, keeps the rest, and flags late arrivals", () => {
+	test("maps every hit to one row and flags late arrivals", () => {
 		const { result } = items({ "transcript:remote:3": 1 });
 		expect(result.map((item) => item.id)).toEqual([
 			"file:p1:w1:src/auth/refresh.ts",
-			"chat:remote",
+			"plan:w1:remote:t1",
 			"transcript:remote:3",
 		]);
+		expect(result.find((item) => item.kind === "plan")).toMatchObject({
+			subtitle: "Auth plan · One › Auth refresh",
+			group: "plans",
+		});
 		expect(result.find((item) => item.kind === "transcript")).toMatchObject({
 			late: 1,
 			subtitle: "Only the host knows · One › Auth refresh",
@@ -142,18 +135,18 @@ describe("hostItems", () => {
 	});
 
 	test("ranking trusts the host's match and sorts late rows after every row that was already there", () => {
-		const { result } = items({ "chat:remote": 1 });
+		const { result } = items({ "plan:w1:remote:t1": 1 });
 		const extra = {
-			...(result.find((item) => item.id === "chat:remote") as object),
-			id: "chat:other",
+			...(result.find((item) => item.id === "plan:w1:remote:t1") as object),
+			id: "plan:w1:remote:t2",
 			late: 0,
 		};
 		const ranked = rank([...result, extra as (typeof result)[number]], "refresh");
 		expect(ranked.map((entry) => entry.item.id)).toEqual([
 			"file:p1:w1:src/auth/refresh.ts",
-			"chat:other",
+			"plan:w1:remote:t2",
 			"transcript:remote:3",
-			"chat:remote",
+			"plan:w1:remote:t1",
 		]);
 		expect(ranked[0]?.match.fields).toEqual([
 			{ key: "title", ranges: [[0, 7]] },
@@ -164,7 +157,7 @@ describe("hostItems", () => {
 	test("a later arrival cohort sorts after an earlier one, whatever its tier", () => {
 		const { result } = items({ "file:p1:w1:src/auth/refresh.ts": 2, "transcript:remote:3": 1 });
 		expect(rank(result, "refresh").map((entry) => entry.item.id)).toEqual([
-			"chat:remote",
+			"plan:w1:remote:t1",
 			"transcript:remote:3",
 			"file:p1:w1:src/auth/refresh.ts",
 		]);
@@ -198,61 +191,5 @@ describe("hostItems", () => {
 				],
 			},
 		});
-	});
-
-	test("a host hit whose local twin does not match the query is kept, still one row per id", () => {
-		const local: PaletteItem = {
-			id: "workspace:w-def",
-			kind: "workspace",
-			title: "project folder",
-			subtitle: "One · project folder",
-			group: "workspaces",
-			scope: "work",
-			icon: RiGitBranchLine,
-		};
-		const host: SearchGroup = {
-			kind: "workspace",
-			state: "ready",
-			total: 1,
-			hits: [
-				hit({
-					id: "workspace:w-def",
-					kind: "workspace",
-					title: "project folder",
-					subtitle: "release-zqx",
-					workspaceId: "w-def",
-					ranges: { subtitle: [[0, 11]] },
-				}),
-			],
-		};
-		const rowsFor = (query: string) => {
-			const parsed = parseSearchQuery(query);
-			const rows = hostItems(
-				{
-					t: currentTranslator(),
-					openHit: () => {},
-					projectName: () => "One",
-					workspaceName: () => undefined,
-					localIds: matchingIds([local], parsed.terms),
-					late: new Map(),
-					staleTerms: null,
-				},
-				[host],
-			);
-			return flattenRows(
-				buildSections({
-					t: currentTranslator(),
-					parsed,
-					rootItems: [local, ...rows],
-					waiting: [],
-					actions: [],
-					expanded: new Set(),
-					learning: EMPTY_LEARNING,
-					nowMs: 0,
-				}),
-			).map((row) => row.item.id);
-		};
-		expect(rowsFor("release-zqx")).toEqual(["workspace:w-def"]);
-		expect(rowsFor("project folder")).toEqual(["workspace:w-def"]);
 	});
 });

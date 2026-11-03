@@ -71,9 +71,7 @@ describe("openHostHit", () => {
 		expect(await open(hit({ kind: "transcript", sessionId: "s1" }))).toEqual(["navigate w1 s1"]);
 	});
 
-	test("a chat or workspace navigates, and a hit without a workspace does nothing", async () => {
-		expect(await open(hit({ kind: "chat", sessionId: "s1" }))).toEqual(["navigate w1 s1"]);
-		expect(await open(hit({ kind: "workspace" }))).toEqual(["navigate w1"]);
+	test("a hit without a workspace does nothing", async () => {
 		const { workspaceId: _, ...homeless } = hit({ kind: "file", path: "a.ts" });
 		expect(await open(homeless)).toEqual([]);
 	});

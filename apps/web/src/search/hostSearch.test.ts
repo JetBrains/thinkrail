@@ -106,14 +106,13 @@ describe("host search controller", () => {
 		h.fire();
 		expect(h.requests).toHaveLength(1);
 
-		h.requests[0]?.resolve({ seq: h.requests[0].params.seq, groups: [group()] });
+		h.requests[0]?.resolve({ groups: [group()] });
 		await h.settle();
 		expect(h.requests).toHaveLength(2);
 		expect(h.requests[1]?.params.query).toBe("refr");
-		expect(h.requests[1]?.params.seq).toBeGreaterThan(h.requests[0]?.params.seq ?? 0);
 		expect(h.emitted.at(-1)).toEqual(shownState(null, true));
 
-		h.requests[1]?.resolve({ seq: h.requests[1].params.seq, groups: [group()] });
+		h.requests[1]?.resolve({ groups: [group()] });
 		await h.settle();
 		expect(h.emitted.at(-1)).toEqual(shownState([group()], false));
 
@@ -121,25 +120,22 @@ describe("host search controller", () => {
 		expect(h.emitted.at(-1)).toEqual(shownState([group()], true, true));
 		h.fire();
 		h.requests[2]?.resolve({
-			seq: h.requests[2].params.seq,
 			groups: [group("ready", ["file:p1::b.ts"])],
 		});
 		await h.settle();
 		expect(h.emitted.at(-1)).toEqual(shownState([group("ready", ["file:p1::b.ts"])], false));
 	});
 
-	test("a superseded latest reply ends empty instead of pending forever, a stale reply never paints, a failed request says so and stops", async () => {
+	test("a reply to an input the user typed past never paints, and a failed request says so and stops", async () => {
 		const h = harness();
 		h.controller.update(input("auth"));
 		h.fire();
-		h.requests[0]?.resolve({ seq: h.requests[0].params.seq, groups: [], superseded: true });
-		await h.settle();
-		expect(h.emitted.at(-1)).toEqual(shownState([], false));
-
-		h.controller.update(input("auth"));
-		expect(h.requests).toHaveLength(1);
 		h.controller.update(input("other"));
 		h.fire();
+		h.requests[0]?.resolve({ groups: [group()] });
+		await h.settle();
+		expect(h.emitted.at(-1)).toEqual(shownState(null, true));
+		expect(h.requests.map((request) => request.params.query)).toEqual(["auth", "other"]);
 		h.requests[1]?.reject();
 		await h.settle();
 		const failed = h.emitted.at(-1) as HostSearchState;
@@ -156,7 +152,7 @@ describe("host search controller", () => {
 		h.controller.update({ ...input("re") });
 		h.fire();
 		expect(h.requests.map((request) => request.params.query)).toEqual(["re"]);
-		h.requests[0]?.resolve({ seq: h.requests[0].params.seq, groups: [group("indexing", [])] });
+		h.requests[0]?.resolve({ groups: [group("indexing", [])] });
 		await h.settle();
 		expect(h.emitted.at(-1)?.pending).toBe(true);
 		h.controller.update({ ...input("re") });
@@ -167,11 +163,11 @@ describe("host search controller", () => {
 		expect(h.emitted.at(-1)).toEqual(shownState(null, false));
 		h.controller.update(input("again"));
 		h.fire();
-		h.requests[1]?.resolve({ seq: h.requests[1].params.seq, groups: [group()] });
+		h.requests[1]?.resolve({ groups: [group()] });
 		await h.settle();
 		expect(h.emitted.at(-1)).toEqual(shownState(null, true));
 		expect(h.requests).toHaveLength(3);
-		h.requests[2]?.resolve({ seq: h.requests[2].params.seq, groups: [group()] });
+		h.requests[2]?.resolve({ groups: [group()] });
 		await h.settle();
 		expect(h.emitted.at(-1)).toEqual(shownState([group()], false));
 	});
@@ -180,13 +176,13 @@ describe("host search controller", () => {
 		const h = harness();
 		h.controller.update(input("spec"));
 		h.fire();
-		h.requests[0]?.resolve({ seq: h.requests[0].params.seq, groups: [group("indexing", [])] });
+		h.requests[0]?.resolve({ groups: [group("indexing", [])] });
 		await h.settle();
 		expect(h.emitted.at(-1)).toEqual(shownState([group("indexing", [])], true));
 		expect(h.timers.at(-1)?.ms).toBe(HOST_SEARCH.indexingPollMs);
 		h.fire();
 		expect(h.requests).toHaveLength(2);
-		h.requests[1]?.resolve({ seq: h.requests[1].params.seq, groups: [group("ready")] });
+		h.requests[1]?.resolve({ groups: [group("ready")] });
 		await h.settle();
 		expect(h.emitted.at(-1)).toEqual(shownState([group("ready")], false));
 
@@ -197,7 +193,7 @@ describe("host search controller", () => {
 
 		h.controller.update({ ...input("spec"), enabled: false });
 		expect(h.emitted.at(-1)).toEqual(shownState(null, false));
-		h.requests[2]?.resolve({ seq: h.requests[2].params.seq, groups: [group("ready")] });
+		h.requests[2]?.resolve({ groups: [group("ready")] });
 		await h.settle();
 		expect(h.emitted.at(-1)).toEqual(shownState(null, false));
 	});
@@ -207,14 +203,12 @@ describe("host search controller", () => {
 		h.controller.update(input("auth", ["file", "spec"]));
 		h.fire();
 		h.requests[0]?.resolve({
-			seq: h.requests[0].params.seq,
 			groups: [group("indexing", ["a", "b"]), group("ready", ["s"], "spec")],
 		});
 		await h.settle();
 		h.fire();
 		expect(h.requests[1]?.params.kinds).toEqual(["file"]);
 		h.requests[1]?.resolve({
-			seq: h.requests[1].params.seq,
 			groups: [{ ...group("ready", ["c", "a"]), total: 40 }],
 		});
 		await h.settle();
@@ -234,7 +228,7 @@ describe("host search controller", () => {
 		const delays: number[] = [];
 		for (let poll = 0; poll <= HOST_SEARCH.maxIndexingPolls; poll += 1) {
 			const request = h.requests.at(-1);
-			request?.resolve({ seq: request.params.seq, groups: [group("indexing", [])] });
+			request?.resolve({ groups: [group("indexing", [])] });
 			await h.settle();
 			const timer = h.timers.at(-1);
 			if (timer && !timer.cancelled) delays.push(timer.ms);

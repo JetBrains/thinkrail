@@ -1,8 +1,6 @@
 import { RiMoreLine } from "@remixicon/react";
-import { type MatchTerm, matchFields } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
-import type { HostTotal } from "./hostItems";
 import { frecencyScore, type LearningSnapshot } from "./learning";
 import type { PaletteItem, PaletteRow, PaletteSection } from "./model";
 import type { ParsedQuery, SearchScope } from "./query";
@@ -11,7 +9,7 @@ import { compareRanked, pickTopHit, plainRow, type RankedItem, rankItems, toRow 
 export interface SectionsInput {
 	readonly t: Translator;
 	readonly parsed: ParsedQuery;
-	readonly hostTotals?: Readonly<Record<string, HostTotal>>;
+	readonly hostOverflow?: Readonly<Record<string, number>>;
 	readonly rootItems: readonly PaletteItem[];
 	readonly waiting: readonly PaletteItem[];
 	readonly actions: readonly PaletteItem[];
@@ -106,28 +104,13 @@ function cappedSection(
 	};
 }
 
-function hostOverflow(
-	entries: readonly RankedItem[],
-	total: HostTotal | undefined,
-	terms: readonly MatchTerm[],
-): number {
-	if (!total) return 0;
-	const counted = entries.filter(
-		(entry) =>
-			!total.ids.has(entry.item.id) &&
-			matchFields(terms, entry.item.hostFields ?? [{ key: "title", text: entry.item.title }]) !==
-				null,
-	).length;
-	return Math.max(0, total.total - total.ids.size - counted);
-}
-
 function groupRanked(
 	t: Translator,
 	ranked: readonly RankedItem[],
 	scoped: boolean,
 	input: SectionsInput,
 ): PaletteSection[] {
-	const hostTotals = input.hostTotals ?? {};
+	const hostOverflow = input.hostOverflow ?? {};
 	const groups = new Map<string, RankedItem[]>();
 	for (const entry of ranked) {
 		const bucket = groups.get(entry.item.group) ?? [];
@@ -136,7 +119,7 @@ function groupRanked(
 	}
 	const parts: { first: RankedItem; section: PaletteSection }[] = [];
 	for (const [group, entries] of groups) {
-		const overflow = hostOverflow(entries, hostTotals[group], input.parsed.terms);
+		const overflow = hostOverflow[group] ?? 0;
 		const section = cappedSection(
 			t,
 			group,

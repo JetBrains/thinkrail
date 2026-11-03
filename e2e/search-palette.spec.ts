@@ -612,7 +612,7 @@ test("host rows that land after the user moved the selection never push it or th
 					JSON.stringify({
 						id: frame.id,
 						ok: true,
-						result: { seq: query.seq, groups: groups(query, names, state) },
+						result: { groups: groups(query, names, state) },
 					}),
 				);
 			answered += 1;

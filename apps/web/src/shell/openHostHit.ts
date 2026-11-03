@@ -53,9 +53,5 @@ export async function openHostHit(hit: SearchHit, targets: HostHitTargets): Prom
 				targets.openPlan(workspace.id);
 			}
 			return;
-		case "chat":
-		case "workspace":
-			await targets.navigateToWorkspace(workspace, hit.sessionId);
-			return;
 	}
 }

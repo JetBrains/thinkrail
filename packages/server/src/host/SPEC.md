@@ -650,8 +650,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
 
 - **Search composition (`search.ts`):** `search.query` / `search.preview` go to one lazily created
   `SearchService` ([[submodule-server-search]]) fed with `listProjects`, `listAllWorkspaceRecords`, the
-  history index's `sessions()`, `specSnapshot` and `listStoredPlans`; the handler passes the socket's
-  `clientKey` so the service can supersede an older `seq` per client. The `workspace.fsChanged`
+  history index's `sessions()`, `specSnapshot` and `listStoredPlans`; a query carries no client state.
+  The `workspace.fsChanged`
   publisher also calls `invalidateRoot(worktreePath)` so a watched workspace's file list and spec
   snapshot refresh on the next keystroke, and `search.query` watches its context workspace
   (`ensureWatch`), so the root it searches is watched from its first search on.

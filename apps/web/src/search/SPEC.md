@@ -81,11 +81,9 @@ neither a prompt nor attention is not listed.
 ## Host search
 
 `useHostSearch` wraps the pure `createHostSearchController`: a 100 ms debounce, at most one request in
-flight plus the latest queued input, a monotonic `seq` seeded from the clock (a reloaded page never
-reissues a number the host has seen) for the host's per-client superseding, and fencing — a reply
-paints only when it answers the current input, its `seq` is the latest issued and the welcome
-generation is unchanged; a latest reply the host still marked `superseded` paints an empty result and
-stops, and a failed request paints every asked group `failed` (never a spinner that cannot end). An
+flight plus the latest queued input, and fencing — a reply paints only when it answers the current input,
+it is the controller's latest request and the welcome generation is unchanged; a failed request paints
+every asked group `failed` (never a spinner that cannot end). An
 `indexing` group polls — ten times every 300 ms, then every second, about 30 s in all — asking only the
 kinds still indexing; `truncated` and `failed` never poll. The host is asked only for the scope's kinds
 (`scopeKinds`) and never on a page or for an empty query.
@@ -96,16 +94,16 @@ the groups it answers but keeps every hit the previous page showed that the new 
 selection; the rows go when the query changes. While a new input is pending the previous host rows stay
 on screen — replaced, never blanked — but they answered another query (`stale`): `rematchHit` matches
 each again against the current terms on the fields the host matches it on (a file's path, a spec's
-title / id / path, a chat's or plan's title, a workspace's name and branch), so it takes the tier the
+title / id / path, a plan's title), so it takes the tier the
 host's answer will give it, and a body or message hit stays in the `content` tier and must still
 contain every term in its snippet as a case-folded substring — the content providers' rule, so never an
 acronym; a row that no longer matches leaves at once, and Enter can only open a row
 the typed text matches; their counts are ignored.
 A fresh reply's rows carry the host's matcher result as `PaletteItem.match`, ranked with the local rows
-by the same tiers instead of re-matching the title. A host chat or workspace hit is dropped only when
-its local twin matches the query too (`matchingIds`), so a twin the query misses — a Default workspace
-whose branch its row does not show, a chat still labelled by its first prompt — never hides the host's
-hit, and either way one row per id remains. Rows that land while the user holds a selection
+by the same tiers instead of re-matching the title. The host is asked only for what the palette cannot
+list itself — files, specs, plans and message text; chats and workspaces are the store's rows (a chat row
+previews its transcript, the Default workspace is found by its branch), so no section mixes local and host
+rows and one row per id holds by construction. Rows that land while the user holds a selection
 join an arrival cohort (`noteArrivals`, `PaletteItem.late`): each later reply's newcomers sort after
 every row already on screen and every earlier cohort, across tiers and groups — a group that already
 shows rows continues below all of them in a section of its own (`cohortParts`) — and they neither take
@@ -114,13 +112,10 @@ the top hit nor unseat the one shown, so neither the selection nor a row above i
 more than it sent for the group, the row stays with the first rows — the one way a reply can still add a
 row above the selection (or move that row back up) is a host count that grows past what the group shows.
 A newcomer is a hit neither on screen nor in the previous reply for the same search (stale groups list
-nothing), so a hit already held behind a group's cap — re-sent by an indexing poll — never becomes late. The selected host row never
-leaves the list while the same search stands — the same text, scope and root (`withPinned`): a reply
-that no longer brings it keeps it (a local twin the query misses does not stand in for it), no group's cap hides it (`keep`), and a changed root or a host that
-stops searching drops it. A group's "N more" is the host's count beyond its page less the local rows the
-page left out that the host's own fields also match (a chat's title; a workspace's name, branch and PR
-number — `PaletteItem.hostFields`), so a chat both the browser and the host know is never counted twice,
-while a local row only its project label matches is not taken for one of the host's hits. Results the palette shows as final but are not complete say so in a status line and the
+nothing), so a hit already held behind a group's cap — re-sent by an indexing poll — never becomes late. The selected host row stays
+while the same search stands — a reply for it keeps every hit already shown, and no group's cap hides the
+selection (`keep`); a changed root or a host that stops searching drops it. A host group's "N more" is
+the host's count beyond the hits it sent. Results the palette shows as final but are not complete say so in a status line and the
 live region: part of the search failed, it is still indexing after polling stopped, or a provider ran
 out of time (`hostSearchStatus`). A file or spec hit without a workspace is dropped (nothing could read
 or open it). A host row opens through the injected `PaletteHost.openHit`. The `/` and `#` scopes are

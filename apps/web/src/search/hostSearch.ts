@@ -19,8 +19,6 @@ export const HOST_SEARCH = {
 	maxIndexingPolls: 37,
 } as const;
 
-let nextSeq = Date.now();
-
 export interface HostSearchInput {
 	readonly enabled: boolean;
 	readonly text: string;
@@ -92,7 +90,6 @@ export interface HostSearchControllerDeps {
 	readonly generation: () => number;
 	readonly emit: (state: HostSearchState) => void;
 	readonly schedule?: (run: () => void, ms: number) => () => void;
-	readonly nextSeq?: () => number;
 }
 
 export interface HostSearchController {
@@ -113,9 +110,9 @@ function pollDelay(polls: number): number {
 
 export function createHostSearchController(deps: HostSearchControllerDeps): HostSearchController {
 	const schedule = deps.schedule ?? defaultSchedule;
-	const seqOf = deps.nextSeq ?? (() => nextSeq++);
 	let current: { input: HostSearchInput; generation: number } | null = null;
-	let issued: { seq: number; generation: number } | null = null;
+	let issued: { token: number; generation: number } | null = null;
+	let tokens = 0;
 	let inFlight = false;
 	let queued: { input: HostSearchInput; kinds: readonly SearchKind[] } | null = null;
 	let cancelDebounce: (() => void) | null = null;
@@ -136,13 +133,13 @@ export function createHostSearchController(deps: HostSearchControllerDeps): Host
 			queued = { input: request, kinds };
 			return;
 		}
-		const seq = seqOf();
+		tokens += 1;
+		const token = tokens;
 		const generation = deps.generation();
-		issued = { seq, generation };
+		issued = { token, generation };
 		inFlight = true;
 		const result = await deps
 			.request({
-				seq,
 				query: request.text,
 				kinds: [...kinds],
 				context: request.context,
@@ -156,12 +153,8 @@ export function createHostSearchController(deps: HostSearchControllerDeps): Host
 			void issue(next.input, next.kinds);
 			return;
 		}
-		if (!issued || issued.seq !== seq || deps.generation() !== generation) return;
+		if (!issued || issued.token !== token || deps.generation() !== generation) return;
 		if (current === null || !sameHostInput(current.input, request)) return;
-		if (result?.superseded) {
-			show(request, [], false);
-			return;
-		}
 		const previous = shown && sameHostInput(shown.input, request) ? shown.groups : null;
 		const groups = mergeHostGroups(previous, result ? result.groups : failedGroups(kinds));
 		const indexing = groups
@@ -174,7 +167,7 @@ export function createHostSearchController(deps: HostSearchControllerDeps): Host
 			polls += 1;
 			cancelPoll = schedule(() => {
 				cancelPoll = null;
-				if (issued?.seq === seq) void issue(request, indexing);
+				if (issued?.token === token) void issue(request, indexing);
 			}, delay);
 		}
 	};

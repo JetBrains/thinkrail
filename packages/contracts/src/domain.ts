@@ -1922,7 +1922,7 @@ export interface HistorySearchResult {
 	indexing: boolean;
 }
 
-export const SEARCH_KINDS = ["chat", "transcript", "workspace", "file", "spec", "plan"] as const;
+export const SEARCH_KINDS = ["transcript", "file", "spec", "plan"] as const;
 
 export type SearchKind = (typeof SEARCH_KINDS)[number];
 
@@ -1974,10 +1974,7 @@ export interface SearchGroup {
 }
 
 export interface SearchQueryResult {
-	seq: number;
 	groups: SearchGroup[];
-	/** A newer `seq` from the same client arrived while this one ran; `groups` is empty. */
-	superseded?: true;
 }
 
 /** The transcript window around a chat hit; files and specs render client-side through `fs.readFile`. */

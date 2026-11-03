@@ -207,41 +207,6 @@ function groupState(truncated: boolean, indexing: boolean): SearchGroup["state"]
 	return truncated ? "truncated" : indexing ? "indexing" : "ready";
 }
 
-export function searchChatTitles(
-	sessions: readonly HistorySession[],
-	indexing: boolean,
-	label: (cwd: string) => ChatLabel | null,
-	input: ProviderInput,
-): SearchGroup {
-	const hits: SearchHit[] = [];
-	let truncated = false;
-	for (let index = 0; index < sessions.length; index += 1) {
-		if (index % SCAN_CHECK_EVERY === SCAN_CHECK_EVERY - 1 && input.deadline.expired()) {
-			truncated = true;
-			break;
-		}
-		const session = sessions[index];
-		if (!session?.title) continue;
-		const where = label(session.cwd);
-		if (!where) continue;
-		const match = matchFields(input.terms, [{ key: "title", text: session.title }]);
-		if (!match) continue;
-		hits.push({
-			id: `chat:${session.sessionId}`,
-			kind: "chat",
-			title: session.title,
-			tier: match.tier,
-			score: match.score,
-			ranges: rangesOf(match),
-			projectId: where.projectId,
-			workspaceId: where.workspaceId,
-			sessionId: session.sessionId,
-			timestamp: lastActivity(session),
-		});
-	}
-	return buildGroup("chat", hits, input.limit, groupState(truncated, indexing));
-}
-
 export function searchTranscripts(
 	sessions: readonly HistorySession[],
 	indexing: boolean,
@@ -327,35 +292,4 @@ export function searchPlans(
 		}
 	}
 	return buildGroup("plan", hits, input.limit, historyIndexing && unindexed ? "indexing" : "ready");
-}
-
-export function searchWorkspaces(
-	workspaces: readonly Workspace[],
-	input: ProviderInput,
-): SearchGroup {
-	const hits: SearchHit[] = [];
-	for (const workspace of workspaces) {
-		const fields: MatchField[] = [
-			{ key: "title", text: workspace.name },
-			{ key: "subtitle", text: workspace.branch, secondary: true },
-		];
-		if (workspace.review) {
-			fields.push({ key: "keywords", text: `#${workspace.review.number}`, secondary: true });
-		}
-		const match = matchFields(input.terms, fields);
-		if (!match) continue;
-		hits.push({
-			id: `workspace:${workspace.id}`,
-			kind: "workspace",
-			title: workspace.name,
-			subtitle: workspace.branch,
-			tier: match.tier,
-			score: match.score,
-			ranges: rangesOf(match),
-			projectId: workspace.projectId,
-			workspaceId: workspace.id,
-			...(workspace.lastActiveAt ? { timestamp: workspace.lastActiveAt } : {}),
-		});
-	}
-	return buildGroup("workspace", hits, input.limit);
 }

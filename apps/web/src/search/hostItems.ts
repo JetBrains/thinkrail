@@ -1,11 +1,4 @@
-import {
-	RiChat2Line,
-	RiChatHistoryLine,
-	RiFileTextLine,
-	RiGitBranchLine,
-	RiListCheck3,
-	RiNodeTree,
-} from "@remixicon/react";
+import { RiChatHistoryLine, RiFileTextLine, RiListCheck3, RiNodeTree } from "@remixicon/react";
 import {
 	MATCH_TIER,
 	type MatchField,
@@ -20,28 +13,18 @@ import type { Translator } from "@thinkrail/locales/react";
 import type { PaletteItem, PaletteMatch } from "./model";
 
 export const HOST_GROUP_OF_KIND: Readonly<Record<SearchKind, string>> = {
-	chat: "chats",
 	transcript: "transcripts",
-	workspace: "workspaces",
 	file: "files",
 	spec: "specs",
 	plan: "plans",
 };
 
-export interface HostTotal {
-	readonly total: number;
-	readonly ids: ReadonlySet<string>;
-}
-
-export function hostTotals(groups: readonly SearchGroup[]): Record<string, HostTotal> {
-	const totals: Record<string, HostTotal> = {};
+export function hostOverflow(groups: readonly SearchGroup[]): Record<string, number> {
+	const overflow: Record<string, number> = {};
 	for (const group of groups) {
-		totals[HOST_GROUP_OF_KIND[group.kind]] = {
-			total: group.total,
-			ids: new Set(group.hits.map((hit) => hit.id)),
-		};
+		overflow[HOST_GROUP_OF_KIND[group.kind]] = Math.max(0, group.total - group.hits.length);
 	}
-	return totals;
+	return overflow;
 }
 
 export interface HostItemContext {
@@ -49,7 +32,6 @@ export interface HostItemContext {
 	readonly openHit: (hit: SearchHit) => void;
 	readonly projectName: (projectId: string) => string | undefined;
 	readonly workspaceName: (workspaceId: string) => string | undefined;
-	readonly localIds: ReadonlySet<string>;
 	readonly late: ReadonlyMap<string, number>;
 	readonly staleTerms: readonly MatchTerm[] | null;
 }
@@ -64,12 +46,6 @@ function hostFields(hit: SearchHit): MatchField[] {
 				...(hit.specId ? [{ key: "id", text: hit.specId, secondary: true }] : []),
 				...(hit.path ? [{ key: "path", text: hit.path, path: true, secondary: true }] : []),
 			];
-		case "workspace":
-			return [
-				{ key: "title", text: hit.title },
-				...(hit.subtitle ? [{ key: "subtitle", text: hit.subtitle, secondary: true }] : []),
-			];
-		case "chat":
 		case "plan":
 		case "transcript":
 			return [{ key: "title", text: hit.title }];
@@ -235,31 +211,6 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem | null 
 							},
 						}
 					: {}),
-			};
-		case "chat":
-			if (context.localIds.has(hit.id)) return null;
-			return {
-				...base,
-				kind: "chat",
-				title: hit.title,
-				subtitle: where(context, hit),
-				group: "chats",
-				scope: "work",
-				icon: RiChat2Line,
-				...matchOf(hit, { title: hit.ranges?.title ?? [] }),
-				...(hit.sessionId ? { previewTarget: { kind: "chat", sessionId: hit.sessionId } } : {}),
-			};
-		case "workspace":
-			if (context.localIds.has(hit.id)) return null;
-			return {
-				...base,
-				kind: "workspace",
-				title: hit.title,
-				subtitle: [context.projectName(hit.projectId), hit.subtitle].filter(Boolean).join(" · "),
-				group: "workspaces",
-				scope: "work",
-				icon: RiGitBranchLine,
-				...matchOf(hit, { title: hit.ranges?.title ?? [] }),
 			};
 	}
 }

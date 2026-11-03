@@ -556,16 +556,15 @@ the palette ranks with — kept here so host-side search can rank with the same 
   so the jump affordance lives there instead; `messageIndex` anchors jump-to-message into
   `session.getMessages` order, `anchorText` makes the anchor drift-tolerant), and
   **`HistorySearchResult`** (the prompts + full-text messages sections, with totals and indexing status);
-  the **search palette DTOs** (`SEARCH_PROTOCOL_VERSION`, v106): **`SearchKind`** (`chat` / `transcript` /
-  `workspace` / `file` / `spec` / `plan`), **`SearchContext`** (the active workspace + context project the
+  the **search palette DTOs** (`SEARCH_PROTOCOL_VERSION`, v106): **`SearchKind`** (`transcript` / `file` /
+  `spec` / `plan` — chats and workspaces are the palette's own rows), **`SearchContext`** (the active workspace + context project the
   host turns into its one file/spec root), **`SearchHit`** (a stable `kind:id[:locator]` id, title / subtitle / `snippet`,
   the shared matcher's `tier` + `score` and highlight `ranges` so the browser merges host hits with its
   local ones by the same rule, and the navigation target — `projectId` / `workspaceId` / `sessionId` /
   `messageIndex` + `anchorText` / root-relative `path` / `specId` — and a file or spec hit's byte `size`, so
   the client declines to preview a large one), **`SearchGroup`** (one per kind:
   capped `hits`, the true `total`, and a `state` of `ready` / `truncated` / `indexing` / `failed` — a
-  client re-asks only on `indexing`), **`SearchQueryResult`** (`seq` echoed; `superseded` when a newer
-  `seq` from the same client overtook it), **`SearchPreviewTarget`** / **`SearchPreviewResult`** (the
+  client re-asks only on `indexing`), **`SearchQueryResult`** (the groups), **`SearchPreviewTarget`** / **`SearchPreviewResult`** (the
   `chat` target only, with the hit's `anchorText` so the host can re-find a message compaction moved: a
   bounded transcript window or `unavailable` — files and specs render client-side over `fs.readFile`), and the limits `MAX_SEARCH_QUERY_LENGTH`,
   `MAX_SEARCH_GROUP_LIMIT`, `DEFAULT_SEARCH_GROUP_LIMIT`, `MAX_SEARCH_PREVIEW_BYTES` (the preview pane's
@@ -854,8 +853,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   boundary?, chunkIds? }` → ack; `chunkIds` maps stack URLs to PostHog source-map chunk ids; a fire-and-forget UI error for host error tracking — the payload is raw and untrusted,
   the host is the only sanitizer; `CLIENT_ERROR_REPORT_PROTOCOL_VERSION` pins its v90 introduction so a
   newer client never sends it to an older host) / **`search.query`** + **`search.preview`** (the palette's host
-  providers from `SEARCH_PROTOCOL_VERSION`, v106: `{ seq, query, kinds?, context, limit? }` → per-kind
-  groups with the shared matcher's tiers, or `superseded` for an overtaken `seq`; a preview is a bounded
+  providers from `SEARCH_PROTOCOL_VERSION`, v106: `{ query, kinds?, context, limit? }` → per-kind
+  groups with the shared matcher's tiers; a preview is a bounded
   transcript read that never attaches a session) / **`history.search`** (the prompt-recall + conversation-search read; results capped,
   recency-ordered; the messages section is assistant-only — a user-role hit surfaces as a jumpable
   `PromptHit` instead, never a separate `MessageHit`) / the **`review.*` set** — **`get`** (the open

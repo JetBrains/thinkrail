@@ -11,7 +11,7 @@ export type SearchScope = (typeof SEARCH_SCOPES)[number];
 
 const SCOPE_KINDS: Record<SearchScope, readonly SearchKind[]> = {
 	all: SEARCH_KINDS,
-	work: ["chat", "transcript", "workspace", "plan"],
+	work: ["transcript", "plan"],
 	files: ["file"],
 	specs: ["spec"],
 	commands: [],

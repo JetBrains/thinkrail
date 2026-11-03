@@ -1180,7 +1180,6 @@ export interface WsMethodMap {
 	};
 	"search.query": {
 		params: {
-			seq: number;
 			query: string;
 			kinds?: SearchKind[];
 			context: SearchContext;

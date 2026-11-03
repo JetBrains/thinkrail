@@ -1,21 +1,3 @@
-import { type HostSearchInput, sameHostInput } from "./hostSearch";
-import type { PaletteItem } from "./model";
-
-export interface PinnedRow {
-	readonly item: PaletteItem;
-	readonly input: HostSearchInput;
-}
-
-export function withPinned(
-	items: readonly PaletteItem[],
-	pinned: PinnedRow | null,
-	input: HostSearchInput,
-	listed: ReadonlySet<string>,
-): readonly PaletteItem[] {
-	if (!pinned || !sameHostInput(pinned.input, input)) return items;
-	return listed.has(pinned.item.id) ? items : [...items, pinned.item];
-}
-
 export interface Arrivals {
 	readonly late: ReadonlyMap<string, number>;
 	readonly cohort: number;
