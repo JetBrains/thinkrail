@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { dictationText, spokenText } from "./text";
+import { dictationText, separators, spokenText } from "./text";
 
 test("finals and the live partial join with single spaces", () => {
 	expect(spokenText([], "")).toBe("");
@@ -37,4 +37,10 @@ test("no speech leaves the field as it was, minus the replaced selection", () =>
 		text: "a  d",
 		caret: 2,
 	});
+});
+
+test("separators follow the same rule for every field kind", () => {
+	expect(separators("hello ", "world")).toEqual({ lead: "", trail: " " });
+	expect(separators("@", "")).toEqual({ lead: "", trail: "" });
+	expect(separators("Fix it", ".")).toEqual({ lead: " ", trail: "" });
 });

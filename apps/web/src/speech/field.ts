@@ -1,4 +1,4 @@
-import { type DictationAnchor, dictationText } from "./text";
+import { type DictationAnchor, dictationText, separators } from "./text";
 
 const TEXT_INPUT_TYPES = new Set(["text", "search", "url", "email", "tel", ""]);
 const EXCLUDED_ROOTS = ".monaco-editor, .xterm";
@@ -117,14 +117,17 @@ function editableWriter(host: HTMLElement): FieldWriter {
 	start.collapse(true);
 	const before = start.cloneRange();
 	before.setStart(host, 0);
-	const lead = /\S$/.test(before.toString()) ? " " : "";
+	const after = (initial && host.contains(initial.endContainer) ? initial : start).cloneRange();
+	after.collapse(false);
+	after.setEnd(host, host.childNodes.length);
+	const { lead, trail } = separators(before.toString(), after.toString());
 	let replaceSelection = initial && !initial.collapsed && host.contains(initial.endContainer);
 	let insertedLength = 0;
 	let writing = false;
 	return {
 		replace(spoken) {
 			if (!host.contains(document.activeElement) || !selection) return;
-			const next = spoken ? `${lead}${spoken}` : "";
+			const next = spoken ? `${lead}${spoken}${trail}` : "";
 			if (replaceSelection && initial) {
 				selection.removeAllRanges();
 				selection.addRange(initial);
