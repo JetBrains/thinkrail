@@ -52,6 +52,8 @@ type GitAsyncOptions = {
 	network?: boolean;
 	signal?: AbortSignal;
 	redactStderr?: (text: string) => string;
+	idleTimeoutMs?: number;
+	onStderr?: (text: string) => void;
 };
 
 class GitTimeoutError extends CodedError {
@@ -200,6 +202,8 @@ export async function gitAsync(
 		timeoutMs: opts.timeoutMs ?? NETWORK_TIMEOUT_MS,
 		env: opts.env ?? nonInteractiveGitEnv(),
 		...(opts.signal ? { signal: opts.signal } : {}),
+		...(opts.idleTimeoutMs !== undefined ? { idleTimeoutMs: opts.idleTimeoutMs } : {}),
+		...(opts.onStderr ? { onStderr: opts.onStderr } : {}),
 	});
 	if (opts.redactStderr) run.err = opts.redactStderr(run.err);
 	if (run.timedOut) {
@@ -215,7 +219,7 @@ export async function gitAsync(
 export function gitAsyncStream(
 	cwd: string,
 	args: string[],
-	opts: Omit<GitAsyncOptions, "signal" | "redactStderr"> = {},
+	opts: Omit<GitAsyncOptions, "signal" | "redactStderr" | "idleTimeoutMs" | "onStderr"> = {},
 ): BoundedStream {
 	return streamBounded(["git", "-C", cwd, ...args], {
 		timeoutMs: opts.timeoutMs ?? NETWORK_TIMEOUT_MS,
@@ -226,7 +230,7 @@ export function gitAsyncStream(
 export async function gitAsyncBytes(
 	cwd: string,
 	args: string[],
-	opts: GitAsyncOptions = {},
+	opts: Omit<GitAsyncOptions, "idleTimeoutMs" | "onStderr"> = {},
 ): Promise<GitAsyncBytesResult> {
 	const run = await runBounded(["git", "-C", cwd, ...args], {
 		timeoutMs: opts.timeoutMs ?? NETWORK_TIMEOUT_MS,
