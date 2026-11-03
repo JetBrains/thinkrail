@@ -21,6 +21,7 @@ import { dictation, useDictationSnapshot } from "./dictation";
 import { dictationShortcutLabel, noteFallbackFocus, registerChordTarget } from "./hotkey";
 import { type MicState, micState } from "./micState";
 import type { DictationError } from "./session";
+import { dictationText } from "./text";
 
 export interface MicButtonProps {
 	fieldRef: RefObject<HTMLTextAreaElement | HTMLInputElement | null>;
@@ -172,14 +173,17 @@ export function MicButton({
 		const element = fieldRef.current;
 		if (!element) return;
 		element.focus();
+		const anchor = {
+			base: element.value,
+			start: element.selectionStart ?? element.value.length,
+			end: element.selectionEnd ?? element.value.length,
+		};
 		dictation.start({
 			ownerId: id,
-			anchor: () => ({
-				base: element.value,
-				start: element.selectionStart ?? element.value.length,
-				end: element.selectionEnd ?? element.value.length,
-			}),
-			write: (text, caret) => latest.current.apply(text, caret),
+			replace: (spoken) => {
+				const { text, caret } = dictationText(anchor, spoken);
+				latest.current.apply(text, caret);
+			},
 		});
 	}, [id, fieldRef]);
 

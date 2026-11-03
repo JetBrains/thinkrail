@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { type Capture, CaptureFailure, type CaptureSink } from "./capture";
 import { createDictationController, type SpeechSocketLike } from "./session";
+import { dictationText } from "./text";
 
 class FakeSocket implements SpeechSocketLike {
 	readyState = 0;
@@ -43,14 +44,17 @@ function harness(capture: (sink: CaptureSink) => Promise<Capture> = async () => 
 		startCapture: capture,
 	});
 	const field = { value: "Refactor", caret: 8 };
-	const target = (ownerId = "composer") => ({
-		ownerId,
-		anchor: () => ({ base: field.value, start: field.caret, end: field.caret }),
-		write: (text: string, caret: number) => {
-			field.value = text;
-			field.caret = caret;
-		},
-	});
+	const target = (ownerId = "composer") => {
+		const anchor = { base: field.value, start: field.caret, end: field.caret };
+		return {
+			ownerId,
+			replace: (spoken: string) => {
+				const { text, caret } = dictationText(anchor, spoken);
+				field.value = text;
+				field.caret = caret;
+			},
+		};
+	};
 	return { controller, sockets, field, target };
 }
 

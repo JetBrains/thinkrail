@@ -9,7 +9,7 @@ import {
 	type CaptureFailureReason,
 	type CaptureSink,
 } from "./capture";
-import { type DictationAnchor, dictationText, spokenText } from "./text";
+import { spokenText } from "./text";
 
 export type DictationPhase = "idle" | "connecting" | "listening" | "stopping";
 export type DictationError = SpeechErrorCode | CaptureFailureReason;
@@ -23,8 +23,8 @@ export interface DictationSnapshot {
 
 export interface DictationTarget {
 	ownerId: string;
-	anchor: () => DictationAnchor;
-	write: (text: string, caret: number) => void;
+	/** Receives everything recognized so far; the target places it relative to where it started. */
+	replace: (spoken: string) => void;
 }
 
 export interface SpeechSocketLike {
@@ -63,7 +63,6 @@ export function createDictationController(deps: DictationDeps) {
 
 	function start(target: DictationTarget): void {
 		current?.end();
-		const anchor = target.anchor();
 		const finals: string[] = [];
 		let partial = "";
 		let capture: Capture | null = null;
@@ -78,8 +77,7 @@ export function createDictationController(deps: DictationDeps) {
 			if (socket.readyState === OPEN) socket.send(JSON.stringify(message));
 		};
 		const render = () => {
-			const { text, caret } = dictationText(anchor, spokenText(finals, partial));
-			target.write(text, caret);
+			target.replace(spokenText(finals, partial));
 		};
 		const end = (error?: DictationError) => {
 			if (ended) return;
