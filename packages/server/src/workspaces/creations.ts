@@ -364,8 +364,6 @@ export function startWorkspaceCreation(
 	opts: { name?: string; baseRef?: string; kickoff?: WorkspaceKickoff } = {},
 ): WorkspaceCreation {
 	const plan = planManagedWorkspace(projectId, opts.name, opts.baseRef);
-	const kickoff =
-		opts.kickoff && (opts.kickoff.text || opts.kickoff.images?.length) ? opts.kickoff : undefined;
 	const record: WorkspaceCreationRecord = {
 		id: randomUUID(),
 		projectId,
@@ -377,7 +375,7 @@ export function startWorkspaceCreation(
 		phase: "preparing",
 		startedAt: Date.now(),
 		...(plan.renamed ? { renamed: true as const } : {}),
-		...(kickoff ? { kickoff } : {}),
+		...(opts.kickoff ? { kickoff: opts.kickoff } : {}),
 	};
 	addCreation(record);
 	run(record.id);

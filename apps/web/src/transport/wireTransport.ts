@@ -14,6 +14,8 @@ import type {
 	SessionStateRecord,
 	TurnChangeSet,
 	Workspace,
+	WorkspaceCreation,
+	WorkspaceCreationRemoved,
 	WorkspaceFsChangedPayload,
 	WorkspaceRemoved,
 	WsParams,
@@ -33,6 +35,7 @@ import {
 	TOOL_RESPONSE_PROTOCOL_VERSION,
 	TURN_CHANGES_PROTOCOL_VERSION,
 	USER_THEMES_PROTOCOL_VERSION,
+	WORKSPACE_CREATION_PROTOCOL_VERSION,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
 import { currentLocale } from "@thinkrail/locales/react";
@@ -272,6 +275,17 @@ export function retireWorkspace(projectId: string, workspaceId: string): void {
 	}
 }
 
+function refreshWorkspaceCreations(connectionGeneration: number): void {
+	void getTransport()
+		.request("workspace.listCreations", {})
+		.then((creations) => {
+			const current = useAppStore.getState();
+			if (!isConnectedGeneration(current, connectionGeneration)) return;
+			current.setWorkspaceCreations(creations);
+		})
+		.catch(() => {});
+}
+
 export function initTransport(): WsTransport {
 	if (transport) return transport;
 	const piEvents = createPiEventBatcher((payloads) =>
@@ -316,6 +330,9 @@ export function initTransport(): WsTransport {
 		refreshLocalLocales(connectionGeneration);
 		refreshUserThemes(connectionGeneration);
 		refreshUserFonts(connectionGeneration);
+		if (welcome.protocolVersion >= WORKSPACE_CREATION_PROTOCOL_VERSION)
+			refreshWorkspaceCreations(connectionGeneration);
+		else useAppStore.getState().setWorkspaceCreations([]);
 		if (welcome.protocolVersion >= SESSION_STATE_PROTOCOL_VERSION) {
 			hydrateSessionStates(connectionGeneration);
 		} else {
@@ -436,6 +453,14 @@ export function initTransport(): WsTransport {
 		) {
 			hydrateSessionStates(store.connectionGeneration);
 		}
+	});
+
+	transport.subscribe(WS_CHANNELS.workspaceCreationChanged, (data) => {
+		useAppStore.getState().applyWorkspaceCreation(data as WorkspaceCreation);
+	});
+
+	transport.subscribe(WS_CHANNELS.workspaceCreationRemoved, (data) => {
+		useAppStore.getState().applyWorkspaceCreationRemoved(data as WorkspaceCreationRemoved);
 	});
 
 	transport.subscribe(WS_CHANNELS.workspaceUpdated, (data) => {

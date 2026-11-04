@@ -390,6 +390,7 @@ export const workspaceCreationHandoff: CreationHandoff = async (workspace, kicko
 		...(kickoff.model ? { model: kickoff.model } : {}),
 		...(kickoff.thinkingLevel ? { thinkingLevel: kickoff.thinkingLevel } : {}),
 	});
+	if (!kickoff.text && !kickoff.images?.length) return { sessionId };
 	try {
 		await sendUserMessage("prompt", sessionId, kickoff.text, clientKey, () =>
 			promptSession(sessionId, kickoff.text, kickoff.images),
@@ -688,9 +689,10 @@ const handlers: WsHandlers = {
 		creationClients.set(creation.id, ctx.clientKey);
 		return creation;
 	},
-	"workspace.dismissCreation": (p) => {
+	"workspace.dismissCreation": async (p) => {
+		const dismissed = await dismissWorkspaceCreation(p.id);
 		creationClients.delete(p.id);
-		return dismissWorkspaceCreation(p.id);
+		return dismissed;
 	},
 	"workspace.listExisting": (params) => listExistingWorktrees(params.projectId),
 	"workspace.openExisting": async (p) => {
