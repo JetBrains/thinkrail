@@ -1,5 +1,8 @@
 {
 	"app.errorBoundary.label": "アプリ",
+	"app.githubStar.action": "GitHub で見る",
+	"app.githubStar.message": "GitHub リポジトリをご覧ください。スターはほかの人が見つける助けになり、Issue は改善の助けになります。",
+	"app.githubStar.title": "ThinkRail は役に立っていますか？ご意見はありますか？",
 	"app.transport.mcpUnavailable": "ホストが再接続するまで MCP サーバーは利用できません。",
 	"app.transport.requestFailed": "リクエストに失敗しました",
 	"app.transport.requestFailedFallback": "リクエストに失敗しました。",
@@ -176,9 +179,6 @@
 	"chat.failure.modelUnavailable": "このモデルはこの接続では利用できません。モデルピッカーで別のモデルを選んで、もう一度お試しください。",
 	"chat.failure.openProviderSettings": "プロバイダー設定を開く",
 	"chat.failure.truncated": "応答が完了前に途切れました。エージェントに続行を依頼してください。",
-	"chat.githubStar.action": "GitHub で見る",
-	"chat.githubStar.message": "GitHub リポジトリをご覧ください。スターはほかの人が見つける助けになり、Issue は改善の助けになります。",
-	"chat.githubStar.title": "ThinkRail は役に立っていますか？ご意見はありますか？",
 	"chat.history.deleteChat": "チャットをゴミ箱に移動",
 	"chat.history.error": "検索を利用できません",
 	"chat.history.expandHint_other": "会話内の一致 {{count}} 件 · ⇥ 展開",

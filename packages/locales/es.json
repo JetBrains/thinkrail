@@ -1,5 +1,8 @@
 {
 	"app.errorBoundary.label": "aplicación",
+	"app.githubStar.action": "Ver en GitHub",
+	"app.githubStar.message": "Visita el repositorio de GitHub: tu estrella puede ayudar a otros a encontrarlo y tus issues pueden ayudarnos a mejorarlo.",
+	"app.githubStar.title": "¿ThinkRail te resulta útil o tienes comentarios?",
 	"app.transport.mcpUnavailable": "Los servidores MCP no están disponibles hasta que el host se vuelva a conectar.",
 	"app.transport.requestFailed": "la solicitud falló",
 	"app.transport.requestFailedFallback": "La solicitud falló.",
@@ -201,9 +204,6 @@
 	"chat.failure.error": "La ejecución del agente terminó con un error.",
 	"chat.failure.openProviderSettings": "Abrir los ajustes de proveedores",
 	"chat.failure.truncated": "La respuesta se truncó antes de completarse. Pide al agente que continúe.",
-	"chat.githubStar.action": "Ver en GitHub",
-	"chat.githubStar.message": "Visita el repositorio de GitHub: tu estrella puede ayudar a otros a encontrarlo y tus issues pueden ayudarnos a mejorarlo.",
-	"chat.githubStar.title": "¿ThinkRail te resulta útil o tienes comentarios?",
 	"chat.history.deleteChat": "Mover el chat a la papelera",
 	"chat.history.error": "búsqueda no disponible",
 	"chat.history.expandHint_many": "{{count}} coincidencias en las conversaciones · ⇥ expandir",

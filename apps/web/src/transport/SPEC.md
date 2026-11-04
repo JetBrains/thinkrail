@@ -34,7 +34,7 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   response can, and the request it named is already gone from `pending`, so nothing would replay or re-ack it;
   `resume` repairs them all at once by restating the truth rather than confirming the confirmations —, channel
   `subscribe` with last-value replay for snapshots; append-only terminal data and the one-shot terminal
-  exit/detach + session-creation/deletion + `provider.changed` invalidation + addressed `feedback.interview`
+  exit/detach + session-creation/deletion + `provider.changed` invalidation + addressed `feedback.interview` and `feedback.githubStar`
   channels, plus scoped `session.resourcesChanged` invalidations and per-session `mcp.status` snapshots, are never cached or replayed to late
   subscribers. Resource metadata hydration belongs to the mounted chat integration, not replayed
   invalidation payloads. Reconnect/backoff;
@@ -46,7 +46,7 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   one atomic delivery at roughly 30 Hz, a 128-event forced-flush ceiling, and `flush`/`dispose` lifecycle);
   `wireTransport.ts` (`initTransport`/
   `getTransport` singleton; routes `server.welcome`, **`host.updateAvailable`**, **`project.updated`**, `pi.event`, `pi.extensionUi`,
-  **`session.created`**, **`session.deleted`**, **`provider.changed`**, addressed **`feedback.interview`**, **the
+  **`session.created`**, **`session.deleted`**, **`provider.changed`**, addressed **`feedback.interview`** and **`feedback.githubStar`**, **the
   `workspace.created`/`updated`/`removed` lifecycle trio, and `workspace.fsChanged`** into the store — and
   folds every connection transition through
   `setStatus`, whose connected generation gives active-workspace hydration a distinct trigger on every
@@ -72,7 +72,9 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   then `feedback.interview` via the idempotent `showSurveyInvitation()`, only from a v97+ host (an older host
   still sends the retired interview invitation on that channel) — the shell holds the invitation
   behind onboarding and the consent dialog, and additional analytics may be off (a surviving host claim
-  re-delivers the addressed event immediately after welcome). `loadInAppSurvey()` installs `feedback.survey` (asked in `currentLocale()`, so PostHog's
+  re-delivers the addressed event immediately after welcome). `feedback.githubStar` raises one info toast (60 s,
+  a "View on GitHub" action opening `REPO_URL`); the host decides when and sends it once, so the client keeps no
+  count or gate of its own. `loadInAppSurvey()` installs `feedback.survey` (asked in `currentLocale()`, so PostHog's
   translation for the UI language is shown when it has one; a language switch applies on the next load)
   into the store after welcome, when Settings opens, when the survey window opens, and after a
   `SURVEY_CHANGED` refusal; it never rejects, and a stale reply is dropped by generation, so

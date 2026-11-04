@@ -1,5 +1,8 @@
 {
 	"app.errorBoundary.label": "应用",
+	"app.githubStar.action": "在 GitHub 上查看",
+	"app.githubStar.message": "看看 GitHub 仓库：你的星标能帮助别人发现它，你提的 issue 能帮助我们改进它！",
+	"app.githubStar.title": "觉得 ThinkRail 有用，或者有反馈？",
 	"app.transport.mcpUnavailable": "在 host 重新连接之前，MCP 服务器不可用。",
 	"app.transport.requestFailed": "请求失败",
 	"app.transport.requestFailedFallback": "请求失败。",
@@ -189,9 +192,6 @@
 	"chat.failure.modelUnavailable": "当前连接无法使用此模型。请在模型选择器中选择其他模型后重试。",
 	"chat.failure.openProviderSettings": "打开提供方设置",
 	"chat.failure.truncated": "回答在完成前被截断，请让 agent 继续。",
-	"chat.githubStar.action": "在 GitHub 上查看",
-	"chat.githubStar.message": "看看 GitHub 仓库：你的星标能帮助别人发现它，你提的 issue 能帮助我们改进它！",
-	"chat.githubStar.title": "觉得 ThinkRail 有用，或者有反馈？",
 	"chat.history.deleteChat": "将会话移入废纸篓",
 	"chat.history.error": "搜索不可用",
 	"chat.history.expandHint_one": "会话中有 {{count}} 处匹配 · ⇥ 展开",

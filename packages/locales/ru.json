@@ -1,5 +1,8 @@
 {
 	"app.errorBoundary.label": "приложение",
+	"app.githubStar.action": "Открыть на GitHub",
+	"app.githubStar.message": "Загляните в репозиторий на GitHub: ваша звезда поможет другим его найти, а ваши issue помогут нам сделать его лучше!",
+	"app.githubStar.title": "ThinkRail полезен или есть что сказать?",
 	"app.transport.mcpUnavailable": "MCP-серверы недоступны, пока хост не подключится снова.",
 	"app.transport.requestFailed": "не удалось выполнить запрос",
 	"app.transport.requestFailedFallback": "Не удалось выполнить запрос.",
@@ -219,9 +222,6 @@
 	"chat.failure.modelUnavailable": "Эта модель недоступна для данного подключения. Выберите другую модель в списке и повторите попытку.",
 	"chat.failure.openProviderSettings": "Открыть настройки провайдеров",
 	"chat.failure.truncated": "Ответ оборвался до завершения. Попросите агента продолжить.",
-	"chat.githubStar.action": "Открыть на GitHub",
-	"chat.githubStar.message": "Загляните в репозиторий на GitHub: ваша звезда поможет другим его найти, а ваши issue помогут нам сделать его лучше!",
-	"chat.githubStar.title": "ThinkRail полезен или есть что сказать?",
 	"chat.history.deleteChat": "Переместить чат в корзину",
 	"chat.history.error": "поиск недоступен",
 	"chat.history.expandHint_few": "{{count}} совпадения в беседах · ⇥ развернуть",
