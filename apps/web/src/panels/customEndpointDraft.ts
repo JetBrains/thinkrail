@@ -80,6 +80,26 @@ export function addManualModel(draft: EndpointDraft, rawId: string): EndpointDra
 	return { ...draft, models: [...draft.models, row] };
 }
 
+/**
+ * Set a model's context window by hand. Relay endpoints rarely report the
+ * real window from `/v1/models`, and pi's default applies when the field is
+ * absent — an empty value clears back to that automatic behaviour.
+ */
+export function setModelContextWindow(
+	draft: EndpointDraft,
+	id: string,
+	raw: string,
+): EndpointDraft {
+	const trimmed = raw.trim();
+	const parsed = trimmed === "" ? null : Number(trimmed);
+	const contextWindow =
+		parsed !== null && Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+	return {
+		...draft,
+		models: draft.models.map((model) => (model.id === id ? { ...model, contextWindow } : model)),
+	};
+}
+
 export function mergeProbe(
 	draft: EndpointDraft,
 	probe: Extract<CustomEndpointProbe, { ok: true }>,

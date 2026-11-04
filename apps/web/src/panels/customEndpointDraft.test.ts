@@ -11,6 +11,7 @@ import {
 	mergeProbe,
 	newEndpointDraft,
 	probeTarget,
+	setModelContextWindow,
 } from "./customEndpointDraft";
 
 function model(id: string, patch: Partial<CustomEndpointModel> = {}): CustomEndpointModel {
@@ -159,4 +160,40 @@ test("an edit can change the path but not the origin of a saved server", () => {
 	expect(addressMoved({ ...draft, baseUrl: "https://other.example/v1" })).toBe(true);
 	expect(canSave({ ...draft, baseUrl: "https://other.example/v1" })).toBe(false);
 	expect(addressMoved({ ...newEndpointDraft(), baseUrl: "https://other.example/v1" })).toBe(false);
+});
+
+test("a hand-set context window overrides the unreported relay value and can be cleared back to auto", () => {
+	const draft = addManualModel(newEndpointDraft(), "relay/glm");
+	expect(draft.models[0]?.contextWindow).toBeNull();
+	const set = setModelContextWindow(draft, "relay/glm", "262144");
+	expect(set.models[0]?.contextWindow).toBe(262_144);
+	const cleared = setModelContextWindow(set, "relay/glm", "");
+	expect(cleared.models[0]?.contextWindow).toBeNull();
+	const garbage = setModelContextWindow(set, "relay/glm", "12.5");
+	expect(garbage.models[0]?.contextWindow).toBeNull();
+	const unknown = setModelContextWindow(set, "relay/other", "131072");
+	expect(unknown.models[0]?.contextWindow).toBe(262_144);
+});
+
+test("a probe without window numbers keeps a hand-set context window", () => {
+	const withManual = setModelContextWindow(
+		addManualModel(newEndpointDraft(), "relay/glm"),
+		"relay/glm",
+		"262144",
+	);
+	const reprobed = mergeProbe(withManual, {
+		ok: true,
+		baseUrl: "https://gw.example/v1",
+		models: [
+			{
+				id: "relay/glm",
+				contextWindow: null,
+				maxTokens: null,
+				reasoning: null,
+				vision: null,
+				tools: null,
+			},
+		],
+	});
+	expect(reprobed.models[0]?.contextWindow).toBe(262_144);
 });
