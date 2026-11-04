@@ -33,7 +33,15 @@ QR). Welcome's first step says which network to use.
   into their **live** workspaces (`workspace.list`, split by contracts' `partitionWorkspaces` with the host's
   `settleIdleDays` from its welcome — the Settled shelf is not shown on the phone), Default first, branch as
   the second line; the expanded set lives in `App` so returning from a chat keeps the tree; per-host
-  "unreachable" notice with its reason; the header's gear opens the settings screen, where computers are
+  "unreachable" notice with its reason; the IDE tree's actions, on touch (`TreeActions.tsx` over `sheet.tsx`'s
+  bottom `Sheet` / `ConfirmSheet` / `RenameSheet`, built on the shared `@thinkrail/ui/dialog`, with the IDE's
+  strings): a project row's **+** creates a worktree off the default branch (`workspace.create`, a pending
+  "Creating worktree…" row) and opens it — so it lands in a new chat — and its **⋯** offers New worktree,
+  Rename (`project.rename`) and Close project (confirmed, `project.close`); a workspace row's **⋯** offers
+  Rename (worktrees only), Mark as read / unread, Settle (blocked while running or unread, as in the IDE; the
+  phone hides the Settled shelf, so it is unsettled on the computer) and Remove (confirmed; "Remove from
+  ThinkRail" for an external folder). Rows update from the host's pushes; a failure shows in a dismissible
+  banner at the top of the tree; the header's gear opens the settings screen, where computers are
   added; a tapped workspace always lands in a chat, as the IDE does (`WorkspaceScreen.tsx`'s `WorkspaceOpener`):
   the newest chat the host holds `live`, else the newest from history (`session.getMessages` attaches a disk
   session, the same reopen the IDE does), else a new one via `session.create`; back returns to the tree. When
@@ -48,7 +56,7 @@ QR). Welcome's first step says which network to use.
   `session.respondToTool`). It re-reads `session.getMessages` (coalesced 400ms) on the session's pi events
   rather than reducing the event stream; `main.tsx` registers the built-in tool cards and mounts the
   `TooltipProvider` the composer needs;
-  `layout.tsx` (`Screen` frame, `ListRow`, loading/failed/empty states — a screen waits on `Loader`, the shared `RunningIcon` R mark at 56px over a caption: "Connecting to …" until a host's channel is up, then "Loading…"; a project expanding in the tree waits on an inline 14px one), `status.ts` (row marks from
+  `layout.tsx` (`Screen` frame, `ListRow`, loading/failed/empty states — a screen waits on `Loader`, the shared `RunningIcon` R mark at 56px over a caption: "Connecting to …" until a host's channel is up, then "Loading…"; a project expanding in the tree waits on an inline 20px one), `status.ts` (row marks from
   contracts' `sessionAttention`: the shared `RunningIcon` replaces the row glyph while a session in scope
   runs, the shared `AttentionDot` shows while one needs input or has an unread result — the IDE tree's
   vocabulary), `useHostRequest.ts` (one wire read per screen), `scanPairLink.ts` (the in-app QR scan via
@@ -102,7 +110,9 @@ and stay in the IDE.
 **Type scale.** `index.css` re-points the shared primitive font sizes (`--tr-font-size-s10`…`s24`) to a touch
 scale — the IDE's 14px UI text becomes 17px (iOS body), its 12px metadata 15px, every other step up in
 proportion — so every semantic `tr-*` style, including the shared chat, tree and settings components,
-grows together without forking a class; the tree's glyphs take 18px to match. The IDE's desktop density
+grows together without forking a class. The tree reads at list size: project names `tr-heading-sm` (19px) with 22px
+glyphs, workspace names `tr-title-section` (17px) in the default text colour with 20px glyphs, every row at
+least a touch target. The IDE's desktop density
 stays as is.
 
 The native shell's background is the Dark palette's `background`, read from the manifest by
@@ -129,6 +139,8 @@ git-ignored like `ios/`. See
 
 ## Not yet here
 
+- Adding a project (open / create / clone need the computer's folders), picking the new worktree's base branch,
+  opening an existing worktree, and the Settled shelf.
 - Live token streaming: the transcript refreshes from `session.getMessages` on pi events instead of running
   the IDE's pi-event reducer (it lives in the web store; moving it into [[module-chat-ui]] is the next step).
 - Code highlighting (no `CodeHighlighterProvider` yet — code renders plain), extension tool cards beyond the

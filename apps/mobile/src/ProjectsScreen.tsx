@@ -1,4 +1,10 @@
-import { RiArrowDownSLine, RiArrowRightSLine, RiSettings3Line } from "@remixicon/react";
+import {
+	RiAddLine,
+	RiArrowDownSLine,
+	RiArrowRightSLine,
+	RiCloseLine,
+	RiSettings3Line,
+} from "@remixicon/react";
 import {
 	DEFAULT_CONFIG,
 	DEFAULT_WORKSPACE_NAME,
@@ -6,19 +12,23 @@ import {
 	partitionWorkspaces,
 	type Workspace,
 	WS_CHANNELS,
+	type WsResult,
 } from "@thinkrail/contracts";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import type {
+	DeviceWireClient,
 	RemoteSessionItem,
 	RemoteSessionsController,
 	SavedHost,
 } from "@thinkrail/remote-client";
 import { AttentionDot } from "@thinkrail/ui/attention-dot";
 import { Button, IconButton } from "@thinkrail/ui/button";
-import { ProjectGlyph, WorkspaceGlyph, WorkspaceLabel } from "@thinkrail/ui/project-tree";
+import { ProjectGlyph, WorkspaceBranch, WorkspaceGlyph } from "@thinkrail/ui/project-tree";
 import { RunningIcon } from "@thinkrail/ui/running-icon";
+import { useState } from "react";
 import { LoadedList, Loader, Screen } from "./layout";
 import { scopeStatus } from "./status";
+import { ProjectActions, type ReportFailure, WorkspaceActions } from "./TreeActions";
 import { useHostRequest } from "./useHostRequest";
 
 const PROJECT_PUSHES = [WS_CHANNELS.projectUpdated];
@@ -60,6 +70,7 @@ export function ProjectsScreen({
 	onOpen: (hostKey: string, project: Project, workspace: Workspace) => void;
 }) {
 	const t = useT();
+	const [failure, setFailure] = useState<string | null>(null);
 	return (
 		<Screen
 			title={t("mobile.projects.title")}
@@ -73,6 +84,21 @@ export function ProjectsScreen({
 				/>
 			}
 		>
+			{failure ? (
+				<div
+					role="alert"
+					className="flex items-center gap-8 border-b border-feedback-error-muted bg-feedback-error-subtle py-4 pr-4 pl-16"
+				>
+					<p className="m-0 min-w-0 flex-1 text-feedback-error tr-text-metadata">{failure}</p>
+					<IconButton
+						size="l"
+						className="size-touch shrink-0"
+						icon={RiCloseLine}
+						label={t("common.dismiss")}
+						onClick={() => setFailure(null)}
+					/>
+				</div>
+			) : null}
 			{hosts.flatMap((host) => {
 				const reason = unreachable.get(host.hostKey);
 				return reason === undefined
@@ -108,6 +134,7 @@ export function ProjectsScreen({
 						items={items.filter((item) => item.hostKey === host.hostKey)}
 						expanded={expanded}
 						onToggle={onToggle}
+						onFailure={setFailure}
 						onOpen={(project, workspace) => onOpen(host.hostKey, project, workspace)}
 					/>
 				))}
@@ -122,6 +149,7 @@ function HostProjects({
 	items,
 	expanded,
 	onToggle,
+	onFailure,
 	onOpen,
 }: {
 	host: SavedHost;
@@ -130,6 +158,7 @@ function HostProjects({
 	items: RemoteSessionItem[];
 	expanded: ReadonlySet<string>;
 	onToggle: (key: string) => void;
+	onFailure: ReportFailure;
 	onOpen: (project: Project, workspace: Workspace) => void;
 }) {
 	const t = useT();
@@ -155,39 +184,117 @@ function HostProjects({
 				{(projects) =>
 					projects.map((project) => {
 						const key = expansionKey(host.hostKey, project.id);
-						const status = scopeStatus(items, (item) => item.record.projectId === project.id);
-						const isExpanded = expanded.has(key);
-						const Chevron = isExpanded ? RiArrowDownSLine : RiArrowRightSLine;
 						return (
-							<li key={project.id}>
-								<button
-									type="button"
-									aria-expanded={isExpanded}
-									onClick={() => onToggle(key)}
-									className="flex min-h-touch w-full items-center gap-4 border-0 bg-transparent px-12 text-left active:bg-control-bg-hovered"
-								>
-									<Chevron aria-hidden className="size-20 shrink-0 text-text-muted" />
-									<ProjectGlyph selected={false} running={status.running} className="size-18" />
-									<span className="min-w-0 flex-1 truncate text-text-default tr-text-ui">
-										{project.name}
-									</span>
-									{status.attention ? <AttentionDot /> : null}
-								</button>
-								{isExpanded ? (
-									<ProjectWorkspaces
-										host={host}
-										project={project}
-										controller={controller}
-										items={items}
-										onOpen={(workspace) => onOpen(project, workspace)}
-									/>
-								) : null}
-							</li>
+							<ProjectRow
+								key={project.id}
+								host={host}
+								project={project}
+								client={client}
+								controller={controller}
+								items={items}
+								expanded={expanded.has(key)}
+								onToggle={() => onToggle(key)}
+								onFailure={onFailure}
+								onOpen={(workspace) => onOpen(project, workspace)}
+							/>
 						);
 					})
 				}
 			</LoadedList>
 		</section>
+	);
+}
+
+/** A project row: tap to expand; **+** creates a worktree off the default branch and opens it, ⋯ holds the project menu. */
+function ProjectRow({
+	host,
+	project,
+	client,
+	controller,
+	items,
+	expanded,
+	onToggle,
+	onFailure,
+	onOpen,
+}: {
+	host: SavedHost;
+	project: Project;
+	client: DeviceWireClient | null;
+	controller: RemoteSessionsController;
+	items: RemoteSessionItem[];
+	expanded: boolean;
+	onToggle: () => void;
+	onFailure: ReportFailure;
+	onOpen: (workspace: Workspace) => void;
+}) {
+	const t = useT();
+	const [creating, setCreating] = useState(false);
+	const status = scopeStatus(items, (item) => item.record.projectId === project.id);
+	const Chevron = expanded ? RiArrowDownSLine : RiArrowRightSLine;
+	const newWorktree = (): void => {
+		if (!client || creating) return;
+		if (!expanded) onToggle();
+		setCreating(true);
+		client
+			.request<WsResult<"workspace.create">>("workspace.create", { projectId: project.id })
+			.then(onOpen, (error: unknown) =>
+				onFailure(
+					t("mobile.tree.actionFailed", {
+						action: t("panels.newWorkspace.createFailed"),
+						reason: error instanceof Error ? error.message : String(error),
+					}),
+				),
+			)
+			.finally(() => setCreating(false));
+	};
+	return (
+		<li>
+			<div className="flex items-center pr-4">
+				<button
+					type="button"
+					aria-expanded={expanded}
+					onClick={onToggle}
+					className="flex min-h-touch min-w-0 flex-1 items-center gap-8 border-0 bg-transparent py-8 pl-12 text-left active:bg-control-bg-hovered"
+				>
+					<Chevron aria-hidden className="size-20 shrink-0 text-text-muted" />
+					<ProjectGlyph selected={false} running={status.running} className="size-22" />
+					<span className="min-w-0 flex-1 truncate text-text-default tr-heading-sm">
+						{project.name}
+					</span>
+					{status.attention ? <AttentionDot /> : null}
+				</button>
+				{client ? (
+					<>
+						<IconButton
+							size="l"
+							className="size-touch shrink-0"
+							icon={RiAddLine}
+							label={t("mobile.tree.newWorktree")}
+							loading={creating}
+							disabled={creating}
+							onClick={newWorktree}
+						/>
+						<ProjectActions
+							project={project}
+							client={client}
+							onNewWorktree={newWorktree}
+							onFailure={onFailure}
+						/>
+					</>
+				) : null}
+			</div>
+			{expanded ? (
+				<ProjectWorkspaces
+					host={host}
+					project={project}
+					controller={controller}
+					items={items}
+					creating={creating}
+					onFailure={onFailure}
+					onOpen={onOpen}
+				/>
+			) : null}
+		</li>
 	);
 }
 
@@ -197,17 +304,23 @@ function ProjectWorkspaces({
 	project,
 	controller,
 	items,
+	creating,
+	onFailure,
 	onOpen,
 }: {
 	host: SavedHost;
 	project: Project;
 	controller: RemoteSessionsController;
 	items: RemoteSessionItem[];
+	/** A worktree is being created here: a pending row shows until it opens. */
+	creating: boolean;
+	onFailure: ReportFailure;
 	onOpen: (workspace: Workspace) => void;
 }) {
 	const t = useT();
+	const client = controller.clientFor(host.hostKey);
 	const loaded = useHostRequest<Workspace[]>(
-		controller.clientFor(host.hostKey),
+		client,
 		"workspace.list",
 		{
 			projectId: project.id,
@@ -234,50 +347,63 @@ function ProjectWorkspaces({
 					}).live,
 				}
 			: loaded;
+	const pending = (text: string) => (
+		<div
+			role="status"
+			className="flex min-h-touch items-center gap-12 pr-12 pl-40 text-text-muted tr-text-reading"
+		>
+			<RunningIcon className="size-20 text-primary" />
+			{text}
+		</div>
+	);
 
 	return (
-		<LoadedList
-			loaded={live}
-			empty={t("mobile.project.empty")}
-			loading={
-				<div
-					role="status"
-					className="flex min-h-touch items-center gap-8 pr-12 pl-40 text-text-muted tr-text-ui"
-				>
-					<RunningIcon className="size-14 text-primary" />
-					{t("mobile.list.loading")}
-				</div>
-			}
-		>
-			{(workspaces) =>
-				workspaces.map((workspace) => {
-					const status = statusOf(workspace);
-					const twoLine = workspace.branch !== workspace.name;
-					return (
-						<li key={workspace.id}>
-							<button
-								type="button"
-								onClick={() => onOpen(workspace)}
-								className={`flex min-h-touch w-full gap-8 border-0 bg-transparent py-4 pr-12 pl-40 text-left active:bg-control-bg-hovered ${twoLine ? "items-start pt-8" : "items-center"}`}
-							>
-								<WorkspaceGlyph
-									kind={workspace.kind}
-									active={false}
-									running={status.running}
-									twoLine={twoLine}
-									className="size-18"
-								/>
-								<WorkspaceLabel
-									name={workspaceName(t, workspace)}
-									branch={twoLine ? workspace.branch : undefined}
-									active={false}
-								/>
-								{status.attention ? <AttentionDot /> : null}
-							</button>
-						</li>
-					);
-				})
-			}
-		</LoadedList>
+		<>
+			<LoadedList
+				loaded={live}
+				empty={t("mobile.project.empty")}
+				loading={pending(t("mobile.list.loading"))}
+			>
+				{(workspaces) =>
+					workspaces.map((workspace) => {
+						const status = statusOf(workspace);
+						const twoLine = workspace.branch !== workspace.name;
+						return (
+							<li key={workspace.id} className="flex items-center pr-4">
+								<button
+									type="button"
+									onClick={() => onOpen(workspace)}
+									className={`flex min-h-touch min-w-0 flex-1 gap-12 border-0 bg-transparent py-8 pl-40 text-left active:bg-control-bg-hovered ${twoLine ? "items-start" : "items-center"}`}
+								>
+									<WorkspaceGlyph
+										kind={workspace.kind}
+										active={false}
+										running={status.running}
+										twoLine={twoLine}
+										className="size-20"
+									/>
+									<span className="flex min-w-0 flex-1 flex-col gap-2">
+										<span className="truncate text-text-default tr-title-section">
+											{workspaceName(t, workspace)}
+										</span>
+										{twoLine ? <WorkspaceBranch branch={workspace.branch} /> : null}
+									</span>
+									{status.attention ? <AttentionDot /> : null}
+								</button>
+								{client ? (
+									<WorkspaceActions
+										workspace={workspace}
+										client={client}
+										status={status}
+										onFailure={onFailure}
+									/>
+								) : null}
+							</li>
+						);
+					})
+				}
+			</LoadedList>
+			{creating ? pending(t("panels.projectTree.creatingWorktree")) : null}
+		</>
 	);
 }
