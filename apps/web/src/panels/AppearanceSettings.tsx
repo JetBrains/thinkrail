@@ -39,6 +39,7 @@ import {
 import { errorText, getTransport, supportsFonts } from "@/transport";
 import { CustomFontsGroup } from "./CustomFontsSettings";
 import { CustomThemesGroup } from "./CustomThemesSettings";
+import { FontScaleControl } from "./FontScaleSettings";
 import { FontsGroup } from "./FontsSettings";
 import { LineWidthControl } from "./LineWidthSettings";
 import { SegmentedControl, type SegmentedControlOption } from "./SegmentedControl";
@@ -341,6 +342,9 @@ export function AppearanceSettings() {
 
 	return (
 		<SettingsPageContainer testId="settings-appearance">
+			<SettingsGroup title={t("settings.appearance.fontScale.group")}>
+				<FontScaleControl />
+			</SettingsGroup>
 			<SettingsGroup title={t("settings.appearance.themeGroup")}>
 				<SettingsRow
 					label={t("settings.appearance.themeMode")}

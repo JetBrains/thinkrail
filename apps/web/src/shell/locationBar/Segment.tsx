@@ -18,16 +18,16 @@ export function Segment({
 			data-testid={testid}
 			className={cn("flex min-w-0 flex-col justify-center pl-8", className)}
 		>
-			<span className="flex h-14 min-w-0 items-center gap-4 truncate pl-8 text-text-subtle tr-text-metadata">
+			<span className="flex h-topbar-caption min-w-0 items-center gap-4 truncate pl-8 text-text-subtle tr-text-metadata">
 				{caption}
 			</span>
-			<div className="flex h-20 min-w-0 items-center gap-4">{children}</div>
+			<div className="flex h-topbar-value min-w-0 items-center gap-4">{children}</div>
 		</div>
 	);
 }
 
 export const pillClass =
-	"group/pill window-no-drag inline-flex h-20 min-w-0 items-center gap-4 rounded-sm px-8 text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:bg-control-bg-selected data-[state=open]:text-text-default";
+	"group/pill window-no-drag inline-flex h-topbar-value min-w-0 items-center gap-4 rounded-sm px-8 text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:bg-control-bg-selected data-[state=open]:text-text-default";
 
 export function PillChevron({ className }: { className?: string | undefined }) {
 	return (
@@ -61,7 +61,7 @@ const CHIP_TONE: Record<ChipTone, { rest: string; hover: string }> = {
 
 export function chipClass(tone: ChipTone, interactive = false): string {
 	return cn(
-		"inline-flex h-20 shrink-0 items-center gap-4 whitespace-nowrap rounded-full px-8 tr-text-emphasis [&_svg]:size-12 [&_svg]:shrink-0",
+		"inline-flex h-topbar-value shrink-0 items-center gap-4 whitespace-nowrap rounded-full px-8 tr-text-emphasis [&_svg]:size-12 [&_svg]:shrink-0",
 		CHIP_TONE[tone].rest,
 		interactive &&
 			cn(
@@ -91,7 +91,7 @@ const SPLIT_TONE: Record<SplitTone, { frame: string; hover: string }> = {
 
 export function splitFrameClass(tone: SplitTone): string {
 	return cn(
-		"inline-flex h-20 shrink-0 items-stretch overflow-hidden rounded-sm border",
+		"inline-flex h-topbar-value shrink-0 items-stretch overflow-hidden rounded-sm border",
 		SPLIT_TONE[tone].frame,
 	);
 }

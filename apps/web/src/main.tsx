@@ -7,7 +7,7 @@ import { initChatPreferencesPersistence } from "./chat/chatPreferences";
 import { initModelVisibilityPersistence } from "./chat/modelVisibility";
 import { ErrorBoundary, setErrorBoundaryReporter } from "./components/ErrorBoundary";
 import { registerWebExtensions } from "./extensions";
-import { initializeFonts } from "./fonts";
+import { applyFontScale, initializeFonts, readFontScale } from "./fonts";
 import { useLocaleSync } from "./i18n";
 import { initNavigation } from "./navigation";
 import { initFilesTreePersistence } from "./panels/filesTreeState";
@@ -26,6 +26,7 @@ import {
 initializeThemes();
 applyThemePreference(readThemeHint());
 initializeFonts();
+applyFontScale(readFontScale());
 initTransport();
 installClientErrorReporting();
 setErrorBoundaryReporter((error, reportId) =>

@@ -38,7 +38,10 @@ The sibling dependency graph is: `layoutState → layout`; `chatReconciliation �
 The topbar keeps ThinkRail identity, connection state, Settings, and compact location context, and doubles
 as the **window title bar** when a native host removes its own strip ([[module-desktop]], *Native window
 chrome*). It is a fixed `h-topbar-row` (`--topbar-row-height`, 40px — macOS title-bar proportions, so
-native traffic lights sit centred in it) with `px-16`, and it is host-agnostic: the only host-shaped input
+native traffic lights sit centred in it) with `px-16`. The two rows a segment stacks are
+`h-topbar-caption` (`--topbar-caption-height`, 14px) and `h-topbar-value` (`--topbar-value-height`, 20px)
+rather than bare utilities, because the reader's font scale grows all three heights together: at 160% the
+text is 1.6× taller, and a row that kept its height would cut the glyphs it holds. It is host-agnostic: the only host-shaped input
 is three CSS custom properties on `<html>`. `--window-chrome-inset-left` / `--window-chrome-inset-right`
 are consumed through the `w-window-chrome-inset-*` spacing tokens by one `aria-hidden` edge spacer on each
 side (`window-chrome-inset-left|right`); unset (any browser) they resolve to `0px` and the header looks as
