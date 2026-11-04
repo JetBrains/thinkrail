@@ -1,6 +1,6 @@
 import { realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { deflateSync } from "node:zlib";
+import { crc32, deflateSync } from "node:zlib";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
@@ -15,22 +15,10 @@ import { pagedPdf } from "./fixtures/repo";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 import { stubResourceWire } from "./perf/interactionDriver";
 
-// Pins that compiled renderers refresh on selection, saved threads and on-disk edits, and that a late
-// image event from an unmounted element never reaches the current image.
-
-async function settled(page: Page, _checkpoint: string): Promise<void> {
+async function nextFrames(page: Page): Promise<void> {
 	await page.evaluate(async () => {
 		for (let frame = 0; frame < 2; frame += 1) await new Promise(requestAnimationFrame);
 	});
-}
-
-function crc32(bytes: Uint8Array): number {
-	let crc = 0xffffffff;
-	for (const byte of bytes) {
-		crc ^= byte;
-		for (let bit = 0; bit < 8; bit += 1) crc = crc & 1 ? (crc >>> 1) ^ 0xedb88320 : crc >>> 1;
-	}
-	return (crc ^ 0xffffffff) >>> 0;
 }
 
 function pngChunk(type: string, data: Buffer): Buffer {
@@ -75,11 +63,10 @@ async function openChange(
 	return worktreePath;
 }
 
-async function saveComment(page: Page, surface: Locator, text: string): Promise<void> {
+async function saveComment(surface: Locator, text: string): Promise<void> {
 	await surface.getByTestId("review-composer-input").fill(text);
 	await surface.getByTestId("review-composer-save").click();
 	await expect(surface.getByTestId("review-composer")).toHaveCount(0);
-	await settled(page, `saved ${text}`);
 }
 
 test("the CSV diff follows selection, saved threads and on-disk edits", async ({ page }) => {
@@ -94,32 +81,28 @@ test("the CSV diff follows selection, saved threads and on-disk edits", async ({
 	await expect(outlined).toHaveCount(1);
 	await expect(outlined).toHaveText("1");
 	await expect(diff.getByTestId("review-composer")).toBeVisible();
-	await settled(page, "first cell");
 
 	await cell("9").click();
 	await expect(outlined).toHaveCount(1);
 	await expect(outlined).toHaveText("9");
-	await settled(page, "second cell");
 
 	await cell("7").click({ modifiers: ["Shift"] });
 	await expect(outlined).toHaveCount(3);
-	await settled(page, "range");
 
 	await cell("2").click();
 	await expect(outlined).toHaveCount(1);
-	await saveComment(page, diff, "First note");
+	await saveComment(diff, "First note");
 	await expect(diff.getByTestId("review-thread-card")).toHaveCount(1);
 	await expect(diff.getByTestId("review-thread-card")).toContainText("First note");
 	await expect(diff.locator("td", { hasText: "2" }).first().getByRole("button")).toHaveCount(2);
 
 	await cell("8").click();
-	await saveComment(page, diff, "Second note");
+	await saveComment(diff, "Second note");
 	await expect(diff.getByTestId("review-thread-card")).toHaveCount(2);
 
 	writeFileSync(join(worktree, "fresh.csv"), rows("edited-two"));
 	await expect(diff).toContainText("edited-two");
 	await expect(diff).not.toContainText("edited-one");
-	await settled(page, "disk edit");
 });
 
 test("the JSON diff follows selection, saved threads and on-disk edits", async ({ page }) => {
@@ -134,23 +117,20 @@ test("the JSON diff follows selection, saved threads and on-disk edits", async (
 
 	await node("/alpha").click();
 	await expect(composer).toContainText("/alpha");
-	await settled(page, "first node");
 	await node("/gamma").click();
 	await expect(composer).toContainText("/gamma");
 	await expect(composer).not.toContainText("/alpha");
-	await settled(page, "second node");
 
-	await saveComment(page, diff, "Gamma note");
+	await saveComment(diff, "Gamma note");
 	await expect(diff.getByTestId("review-thread-card")).toHaveCount(1);
 	await expect(diff.locator('[data-json-pointer="/gamma"]').first()).toContainText("1");
 	await node("/alpha").click();
-	await saveComment(page, diff, "Alpha note");
+	await saveComment(diff, "Alpha note");
 	await expect(diff.getByTestId("review-thread-card")).toHaveCount(2);
 
 	writeFileSync(join(worktree, "fresh.json"), json("edited-two"));
 	await expect(diff).toContainText("edited-two");
 	await expect(diff).not.toContainText("edited-one");
-	await settled(page, "disk edit");
 });
 
 test("the notebook diff follows selection, saved threads and on-disk edits", async ({ page }) => {
@@ -176,22 +156,19 @@ test("the notebook diff follows selection, saved threads and on-disk edits", asy
 
 	await comment(0).click();
 	await expect(cells.nth(0).getByTestId("review-composer")).toBeVisible();
-	await settled(page, "first cell");
 	await comment(2).click();
 	await expect(cells.nth(2).getByTestId("review-composer")).toBeVisible();
 	await expect(cells.nth(0).getByTestId("review-composer")).toHaveCount(0);
-	await settled(page, "second cell");
 
-	await saveComment(page, cells.nth(2), "Gamma note");
+	await saveComment(cells.nth(2), "Gamma note");
 	await expect(cells.nth(2).getByTestId("review-thread-card")).toHaveCount(1);
 	await comment(0).click();
-	await saveComment(page, cells.nth(0), "Alpha note");
+	await saveComment(cells.nth(0), "Alpha note");
 	await expect(diff.getByTestId("review-thread-card")).toHaveCount(2);
 
 	writeFileSync(join(worktree, "fresh.ipynb"), notebook("edited-two"));
 	await expect(diff).toContainText("edited-two");
 	await expect(diff).not.toContainText("edited-one");
-	await settled(page, "disk edit");
 });
 
 const imagePixels = (image: Locator) =>
@@ -216,7 +193,6 @@ test("the PDF diff follows paging, region threads and on-disk edits", async ({ p
 	await expect(diff).toContainText("3 / 5");
 	await previous.click();
 	await expect(diff).toContainText("2 / 5");
-	await settled(page, "paged");
 
 	const modified = diff.getByRole("img", { name: "Modified PDF page 2" });
 	await expect(modified).toBeVisible();
@@ -228,7 +204,7 @@ test("the PDF diff follows paging, region threads and on-disk edits", async ({ p
 	await page.mouse.up();
 	await expect(page.getByTestId("region-selection")).toBeVisible();
 	await page.locator('[data-testid="review-add-icon"]:visible').click();
-	await saveComment(page, page.locator("body"), "Page two note");
+	await saveComment(page.locator("body"), "Page two note");
 	await expect(page.getByTestId("review-thread-card")).toHaveCount(1);
 	await expect(page.getByTestId("region-comment-marker")).toHaveCount(1);
 
@@ -236,7 +212,6 @@ test("the PDF diff follows paging, region threads and on-disk edits", async ({ p
 	writeFileSync(join(worktree, "fresh.pdf"), pagedPdf(5, "TWO"));
 	await expect.poll(() => imagePixels(modified), { timeout: 15_000 }).not.toBe(before);
 	await expect(diff).toContainText("2 / 5");
-	await settled(page, "disk edit");
 });
 
 const BROKEN_IMAGE = "data:image/png;base64,AAAA";
@@ -257,14 +232,12 @@ test("the image view follows zoom and on-disk edits", async ({ page }) => {
 	await expect(view).toContainText("120%");
 	await view.getByRole("button", { name: "Zoom out" }).click();
 	await expect(view).toContainText("100%");
-	await settled(page, "zoomed");
 
 	writeFileSync(join(worktreePath, "fresh.png"), IMAGE_B);
 	await expect(view).toContainText("80 × 20");
 	await expect(view).not.toContainText("40 × 30");
 	writeFileSync(join(worktreePath, "fresh.png"), IMAGE_A);
 	await expect(view).toContainText("40 × 30");
-	await settled(page, "disk edit");
 });
 
 test("the image diff follows modes and on-disk edits", async ({ page }) => {
@@ -275,13 +248,12 @@ test("the image diff follows modes and on-disk edits", async ({ page }) => {
 	const modes = page.getByTestId("image-diff-mode").getByRole("button");
 	for (let mode = (await modes.count()) - 1; mode >= 0; mode -= 1) {
 		await modes.nth(mode).click();
-		await settled(page, `mode ${mode}`);
+		await expect(modes.nth(mode)).toHaveAttribute("data-active", "true");
 	}
 	writeFileSync(join(worktree, "fresh.png"), IMAGE_C);
 	await expect(diff).toContainText("16 × 64");
 	await expect(diff).not.toContainText("80 × 20");
 	await expect(diff).toContainText("40 × 30");
-	await settled(page, "disk edit");
 });
 
 interface HeldImage {
@@ -297,8 +269,7 @@ declare global {
 	}
 }
 
-// Holds the src of each resource image, so a test decides when an element loads, including after it left the
-// document. React sets `src` as an attribute and again as a property on mount, so both paths are held.
+// React sets an image's `src` as an attribute and again as a property on mount, so both are held.
 const holdImageSources = () => {
 	const held: HeldImage[] = [];
 	window.__heldImages = held;
@@ -373,7 +344,7 @@ test("the image view hides the old size while a replacement loads", async ({ pag
 	const held = await heldCount(page);
 	writeFileSync(join(worktreePath, "swap.png"), IMAGE_B);
 	await expect.poll(() => heldCount(page)).toBeGreaterThan(held);
-	await settled(page, "replacement loading");
+	await nextFrames(page);
 	await expect(view).not.toContainText("40 × 30");
 	await expect(async () => {
 		await releaseMounted(page);
@@ -393,7 +364,7 @@ test("the image diff hides the old size while a replacement loads", async ({ pag
 	const held = await heldCount(page);
 	writeFileSync(join(worktree, "swap.png"), IMAGE_C);
 	await expect.poll(() => heldCount(page)).toBeGreaterThan(held);
-	await settled(page, "replacement loading");
+	await nextFrames(page);
 	await expect(diff).not.toContainText("80 × 20");
 	await expect(async () => {
 		await releaseMounted(page);
@@ -424,7 +395,7 @@ for (const stale of ["load", "error"] as const) {
 
 		const late = await releaseImage(page, first, stale === "error" ? BROKEN_IMAGE : undefined);
 		expect(late).toEqual({ outcome: stale, connected: false });
-		await settled(page, `late ${stale}`);
+		await nextFrames(page);
 		await expect(view).toContainText("80 × 20");
 		await expect(view).not.toContainText("40 × 30");
 	});
@@ -449,7 +420,7 @@ for (const stale of ["load", "error"] as const) {
 
 		const late = await releaseImage(page, stuck, stale === "error" ? BROKEN_IMAGE : undefined);
 		expect(late).toEqual({ outcome: stale, connected: false });
-		await settled(page, `late ${stale}`);
+		await nextFrames(page);
 		await expect(diff).toContainText("16 × 64");
 		await expect(diff).not.toContainText("80 × 20");
 	});
@@ -481,10 +452,11 @@ test("history search highlights the current query and follows the selection", as
 	await query.fill("module");
 	await expect(marks.first()).toHaveText("module");
 	await expect(marks.filter({ hasText: "needle" })).toHaveCount(0);
-	await settled(page, "second query");
+	const selected = page.locator('[data-testid="history-item"][data-selected="true"]');
+	const before = await selected.textContent();
 	await query.press("ArrowUp");
-	await expect(marks.first()).toHaveText("module");
-	await settled(page, "selection moved");
+	await expect(selected).toHaveCount(1);
+	await expect(selected).not.toHaveText(before ?? "");
 });
 
 test("the Resources inspector moves its selection and detail with the arrow keys", async ({
@@ -520,5 +492,4 @@ test("the Resources inspector moves its selection and detail with the arrow keys
 
 	await page.keyboard.press("ArrowUp");
 	await expect(selected).toHaveAttribute("data-resource-id", first);
-	await settled(page, "selection restored");
 });

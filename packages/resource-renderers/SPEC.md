@@ -337,8 +337,10 @@ prose styles target is unchanged; the boolean attributes the sanitizer lets thro
 standalone checkbox's `checked`/`disabled`) are mapped to `true` because React drops an empty-string
 boolean.
 
-`thinkrail/image` renders host-backed byte URLs with fit, natural-size, button/wheel zoom, intrinsic
-dimensions, and byte size, always on the `.media-backdrop` transparency checkerboard (the view's image
+`thinkrail/image` keys each `<img>` by its image identity, so a replaced element's late `load` or `error`
+never reaches a handler and handlers carry no identity guard. A stored size applies only while its identity
+matches the current image. The renderer shows host-backed byte URLs with fit, natural-size, button/wheel zoom,
+intrinsic dimensions, and byte size, always on the `.media-backdrop` transparency checkerboard (the view's image
 and both diff frames; the difference blend keeps a flat canvas so the checker cannot leak into the
 subtraction), because on a solid dark canvas a dark logo on a transparent PNG is indistinguishable from
 an image that failed to load. A drag over the rendered intrinsic box produces one normalized `region`

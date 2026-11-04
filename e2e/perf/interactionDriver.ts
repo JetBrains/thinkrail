@@ -2,7 +2,6 @@ export type InteractionStep =
 	| { op: "click"; selector: string; hasText?: string; double?: boolean }
 	| { op: "wait"; selector: string; hasText?: string }
 	| { op: "clickEach"; selector: string; count: number; stride?: number }
-	| { op: "clickRepeat"; selector: string; count: number }
 	| { op: "openChat"; title: string }
 	| { op: "type"; selector: string; text: string; pauseMs: number }
 	| {
@@ -19,7 +18,6 @@ export interface InteractionSpec {
 	measured: InteractionStep[];
 }
 
-// Runs inside the page, so Chromium and WKWebView get identical synthetic input and identical timing code.
 export async function driveInteraction(spec: InteractionSpec): Promise<string> {
 	const TIMEOUT_MS = 30_000;
 	const nextFrames = async (count = 2) => {
@@ -62,11 +60,7 @@ export async function driveInteraction(spec: InteractionSpec): Promise<string> {
 		}
 	};
 	const setValue = (element: HTMLElement, value: string) => {
-		const prototype =
-			element instanceof HTMLTextAreaElement
-				? HTMLTextAreaElement.prototype
-				: HTMLInputElement.prototype;
-		Object.getOwnPropertyDescriptor(prototype, "value")?.set?.call(element, value);
+		Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(element, value);
 		element.dispatchEvent(new Event("input", { bubbles: true }));
 	};
 	const run = async (step: InteractionStep) => {
@@ -80,11 +74,6 @@ export async function driveInteraction(spec: InteractionSpec): Promise<string> {
 				const total = candidates(step.selector).length;
 				const nth = total === 0 ? 0 : (index * (step.stride ?? 1)) % total;
 				press(await find(step.selector, undefined, nth));
-				await nextFrames();
-			}
-		} else if (step.op === "clickRepeat") {
-			for (let index = 0; index < step.count; index += 1) {
-				press(await find(step.selector));
 				await nextFrames();
 			}
 		} else if (step.op === "openChat") {
@@ -148,7 +137,6 @@ export interface StubbedResources {
 	createdAt: string;
 }
 
-// Answers resource reads in the page, so both engines see the same records without a Playwright route.
 export function stubResourceWire({ subagents, createdAt }: StubbedResources): void {
 	const send = WebSocket.prototype.send;
 	WebSocket.prototype.send = function (data) {

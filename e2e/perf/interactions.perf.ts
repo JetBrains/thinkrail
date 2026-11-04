@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Page, test } from "@playwright/test";
@@ -23,13 +23,14 @@ import {
 	attachRenderProfiler,
 	detachRenderProfiler,
 	installRenderProfiler,
+	recordScenarioRun,
 	startMainThreadProbe,
 } from "./renderProfiler";
 
-const OUT_DIR = process.env.THINKRAIL_PERF_OUT ?? join(tmpdir(), "thinkrail-perf-runs");
 const RUNS = Number(process.env.THINKRAIL_PERF_RUNS ?? 5);
-const ENGINES = (process.env.THINKRAIL_PERF_ENGINES ?? "chromium,wkwebview").split(",");
-const SELECTED = process.env.THINKRAIL_PERF_INTERACTIONS?.split(",");
+const ENGINES = (process.env.THINKRAIL_PERF_ENGINES ?? "chromium").split(",");
+const SELECTED = process.env.THINKRAIL_PERF_INTERACTIONS?.split(",") ?? [];
+const CPU_RATE = Number(process.env.THINKRAIL_PERF_CPU ?? 1);
 const WK_TIMEOUT_MS = 170_000;
 const RESOURCE_STUB = { subagents: 60, createdAt: "2026-01-01T00:00:00.000Z" };
 
@@ -108,21 +109,19 @@ const INTERACTIONS = {
 	"notebook-diff-select": textDiff("perf.ipynb", notebookText, "notebook-diff", [
 		{ op: "clickEach", selector: testid("notebook-comment-cell-worktree"), count: 12, stride: 2 },
 	]),
-	"pdf-diff-pages": {
-		seed: async (page) => {
-			const { worktreePath } = await createWorkspaceViaDialog(page);
-			commitFile(worktreePath, "perf.pdf", pagedPdf(30, "BASE"), "add perf.pdf");
-			writeFileSync(join(worktreePath, "perf.pdf"), pagedPdf(30, "EDIT"));
-		},
-		setup: [...openUncommittedChange("perf.pdf"), { op: "wait", selector: testid("pdf-diff") }],
-		measured: [
+	"pdf-diff-pages": textDiff(
+		"perf.pdf",
+		(edit) => pagedPdf(30, edit ? "EDIT" : "BASE"),
+		"pdf-diff",
+		[
 			{
-				op: "clickRepeat",
+				op: "clickEach",
 				selector: `${testid("pdf-diff")} button[aria-label="Next PDF page"]`,
 				count: 15,
+				stride: 0,
 			},
 		],
-	},
+	),
 	"image-view-zoom": {
 		seed: async (page) => {
 			await createWorkspaceViaDialog(page);
@@ -135,9 +134,10 @@ const INTERACTIONS = {
 		],
 		measured: [
 			{
-				op: "clickRepeat",
+				op: "clickEach",
 				selector: `${testid("image-view")} button[aria-label="Zoom in"]`,
 				count: 30,
+				stride: 0,
 			},
 		],
 	},
@@ -205,11 +205,13 @@ const INTERACTIONS = {
 			await createWorkspaceViaDialog(page);
 		},
 		setup: [{ op: "wait", selector: testid("tool-rail-files") }],
-		measured: [{ op: "clickRepeat", selector: testid("tool-rail-files"), count: 20 }],
+		measured: [{ op: "clickEach", selector: testid("tool-rail-files"), count: 20, stride: 0 }],
 	},
 } satisfies Record<string, Interaction>;
 
 function wkHarness(): string {
+	if (process.platform !== "darwin") throw new Error("the wkwebview engine needs macOS");
+	if (CPU_RATE !== 1) throw new Error("the wkwebview engine cannot throttle the CPU");
 	const binary = join(tmpdir(), "thinkrail-wk-harness");
 	execFileSync("swiftc", [
 		"-O",
@@ -252,9 +254,15 @@ function runInWebView(binary: string, url: string, interaction: Interaction): st
 	}
 }
 
-function record(result: ScenarioRun): void {
-	mkdirSync(OUT_DIR, { recursive: true });
-	writeFileSync(join(OUT_DIR, `${result.scenario}-${result.run}.json`), JSON.stringify(result));
+interface DrivenRun extends Pick<ScenarioRun, "wallMs" | "profile"> {
+	isolated: boolean;
+}
+
+function drivenRun(raw: string): DrivenRun {
+	const run = JSON.parse(raw) as DrivenRun;
+	if (run.profile.commits === 0 || run.profile.totalMs <= 0)
+		throw new Error("no profiled commits: the host is not serving the profiling build");
+	return run;
 }
 
 const NO_MAIN_THREAD = { taskMs: 0, scriptMs: 0, layoutMs: 0, styleMs: 0, heapDeltaMb: 0 };
@@ -271,7 +279,7 @@ test.afterEach(async ({ page }) => {
 
 for (let run = 1; run <= RUNS; run += 1) {
 	for (const [name, interaction] of Object.entries(INTERACTIONS) as [string, Interaction][]) {
-		if (SELECTED && !SELECTED.includes(name)) continue;
+		if (!SELECTED.includes("all") && !SELECTED.includes(name)) continue;
 		for (const engine of ENGINES) {
 			test(`${name} ${engine} run ${run}`, async ({ page }) => {
 				test.setTimeout(240_000);
@@ -282,28 +290,34 @@ for (let run = 1; run <= RUNS; run += 1) {
 				if (engine === "chromium") {
 					if (interaction.resources) await page.addInitScript(stubResourceWire, RESOURCE_STUB);
 					await page.reload();
-					const stop = await startMainThreadProbe(page, 1);
-					const raw = await page.evaluate(driveInteraction, { setup, measured });
-					const result = JSON.parse(raw) as Pick<ScenarioRun, "wallMs" | "profile">;
+					await page.evaluate(driveInteraction, { setup, measured: [] });
+					const stop = await startMainThreadProbe(page, CPU_RATE);
+					const { isolated, ...result } = drivenRun(
+						await page.evaluate(driveInteraction, { setup: [], measured }),
+					);
+					if (!isolated) throw new Error("page is not cross-origin isolated");
 					const mainThread = await stop();
-					record({ scenario: name, run, cpuRate: 1, counters: {}, mainThread, ...result });
+					recordScenarioRun({
+						scenario: name,
+						run,
+						cpuRate: CPU_RATE,
+						counters: {},
+						mainThread,
+						...result,
+					} satisfies ScenarioRun);
 					return;
 				}
 				await page.goto("about:blank");
 				harness ??= wkHarness();
-				const result = JSON.parse(runInWebView(harness, url, interaction)) as Pick<
-					ScenarioRun,
-					"wallMs" | "profile"
-				> & { isolated: boolean };
-				record({
+				const { isolated, ...result } = drivenRun(runInWebView(harness, url, interaction));
+				recordScenarioRun({
 					scenario: `${name}@wkwebview`,
 					run,
 					cpuRate: 1,
-					counters: { isolated: result.isolated ? 1 : 0 },
+					counters: { isolated: isolated ? 1 : 0 },
 					mainThread: NO_MAIN_THREAD,
-					wallMs: result.wallMs,
-					profile: result.profile,
-				});
+					...result,
+				} satisfies ScenarioRun);
 			});
 		}
 	}

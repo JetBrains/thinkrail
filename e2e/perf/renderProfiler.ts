@@ -1,3 +1,5 @@
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { Page, Request, Route } from "@playwright/test";
 
 export interface ComponentCost {
@@ -305,6 +307,13 @@ export async function attachRenderProfiler(
 
 export async function detachRenderProfiler(page: Page): Promise<void> {
 	await page.unrouteAll({ behavior: "ignoreErrors" });
+}
+
+const OUT_DIR = process.env.THINKRAIL_PERF_OUT ?? join(process.cwd(), "test-results", "perf-runs");
+
+export function recordScenarioRun<T extends { scenario: string; run: number }>(result: T): void {
+	mkdirSync(OUT_DIR, { recursive: true });
+	writeFileSync(join(OUT_DIR, `${result.scenario}-${result.run}.json`), JSON.stringify(result));
 }
 
 export interface MainThreadCost {

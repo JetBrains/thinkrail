@@ -38,10 +38,7 @@ export default function PdfDiff({
 	const [worktreePages, setWorktreePages] = useState<ReadonlySet<number>>(NO_PAGES);
 	const originalLoaded = usePdfDocument(original);
 	const modifiedLoaded = usePdfDocument(modified);
-	const queue = useMemo(
-		() => new PdfRenderQueue(2),
-		[modifiedLoaded.identity, originalLoaded.identity],
-	);
+	const [queue] = useState(() => new PdfRenderQueue(2));
 	const pageRefs = useRef(new Map<number, HTMLElement>());
 	const placementReportedRef = useRef(false);
 	const basePageCount = originalLoaded.settled ? (originalLoaded.document?.numPages ?? 0) : null;

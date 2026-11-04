@@ -140,13 +140,13 @@ coverage of every file/diff renderer.
 
 - Ref access in render: `useVirtualRows` (reads the visible-anchor ref while adjusting state during render;
   state would cost a render per scroll), `useWorkspaceRead`, `useBranchStatus`,
-  `useBranchList`, `useTemplateCommandPicker`, `usePendingSelection`, `MonacoEditor`, `AskUserQuestionCard`,
+  `useTemplateCommandPicker`, `MonacoEditor`, `AskUserQuestionCard`,
   `useScrollViewState`, Pierre diff/file's `useThreadAnnotations`, `PierreDiffSurface`, `PierreFileSurface`,
-  image diff's `ImageContent`, `ImageView`, `PdfView`, `usePdfDocument`.
-- Manual memo dependencies cannot be preserved: `CsvDiff`, `JsonDiff`, `NotebookDiffSurface`, `PdfDiff`.
-- Other: `useLiveTabContent` (`??=`), `HistoryOverlay`'s `Highlight` (mutates a closure counter).
+  `PdfView`, `usePdfDocument`.
+- Other: `useLiveTabContent` (`??=`).
 
-A new bailout is a regression unless it joins this list.
+A new bailout is a regression unless it joins this list. A `useMemo` dependency that continues past an optional
+link (`review?.base.threads`) is read into a local first, or the compiler cannot preserve the memo.
 
 **Render cost is measured on a separate profiling build, never the shipped one.** `bun run --cwd apps/web
 build:profile` (`vite build --mode profile`) emits `dist-profile/`: the same compiled production code with
