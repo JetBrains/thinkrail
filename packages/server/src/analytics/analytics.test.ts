@@ -174,10 +174,6 @@ const ADDITIONAL_EVENTS = {
 		name: "review_decided",
 		params: { actor: "agent", verdict: "approved" },
 	},
-	github_star_toast: {
-		name: "github_star_toast",
-		params: { tag: "shown" },
-	},
 	pr_action_finished: {
 		name: "pr_action_finished",
 		params: { action: "created", outcome: "succeeded", reason: "none", source: "plan_page" },
@@ -214,7 +210,6 @@ const EXPECTED_KEYS: Record<AnalyticsEvent["name"], string[]> = {
 	review_comment_sent: [...ENV_KEYS, "outdated"],
 	review_comment_resolved: [...ENV_KEYS, "actor", "outcome"],
 	review_decided: [...ENV_KEYS, "actor", "verdict"],
-	github_star_toast: [...ENV_KEYS, "tag"],
 	pr_action_finished: [...ENV_KEYS, "action", "outcome", "reason", "source"],
 };
 

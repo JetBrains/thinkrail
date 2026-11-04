@@ -1,5 +1,4 @@
 import { getBuiltinModels, getBuiltinProviders } from "@earendil-works/pi-ai/providers/all";
-import type { GithubStarToastTag } from "@thinkrail/contracts";
 import type { AcquisitionRecord, AttributionTouch } from "../persistence";
 
 export type BuildKind = "source" | "binary" | "desktop";
@@ -92,7 +91,6 @@ export type AdditionalAnalyticsEvent =
 			name: "acquisition_linked";
 			params: AcquisitionCampaignProperties & { journey_id: string; bridge_id: string };
 	  }
-	| { name: "github_star_toast"; params: { tag: GithubStarToastTag } }
 	| {
 			name: "setup_state_observed";
 			params: {

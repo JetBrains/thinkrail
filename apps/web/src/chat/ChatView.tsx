@@ -48,7 +48,6 @@ import {
 } from "./Composer";
 import { ExtraUsageNotice } from "./ExtraUsageNotice";
 import { mentionLookup } from "./fileTargets";
-import { askForGithubStarOnTenthPrompt } from "./githubStarPrompt";
 import { HistoryOverlay } from "./HistoryOverlay";
 import { parseModelRef, RunModelLabel } from "./ModelEffortLabel";
 import type { ModelSelection } from "./ModelEffortPicker";
@@ -599,7 +598,6 @@ export default function ChatView({
 					: "session.prompt";
 		getTransport()
 			.request(method, params)
-			.then(askForGithubStarOnTenthPrompt)
 			.catch((err) => {
 				useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
 				if (queued) restoreTextToDraft(text);

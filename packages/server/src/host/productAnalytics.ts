@@ -6,7 +6,7 @@ import type {
 	ProviderStatusReport,
 	ReviewComment,
 } from "@thinkrail/contracts";
-import { GITHUB_STAR_TOAST_TAGS, isJbcentralConnected } from "@thinkrail/contracts";
+import { isJbcentralConnected } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import { settledAvailableModels, usePiRuntime } from "../agent";
 import {
@@ -59,14 +59,6 @@ export function captureAdditional(
 	try {
 		capture?.(event);
 	} catch {}
-}
-
-export function captureGithubStarToast(
-	capture: AdditionalAnalyticsCapture | null,
-	params: { tag?: unknown } | null | undefined,
-): void {
-	const tag = GITHUB_STAR_TOAST_TAGS.find((known) => known === params?.tag);
-	if (tag) captureAdditional(capture, { name: "github_star_toast", params: { tag } });
 }
 
 export function captureReviewCommentAdded(

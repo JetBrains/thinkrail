@@ -813,7 +813,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`client.reportError`** (`ClientErrorReport { kind: render | window | rejection, type, stack?,
   boundary?, chunkIds? }` → ack; `chunkIds` maps stack URLs to PostHog source-map chunk ids; a fire-and-forget UI error for host error tracking — the payload is raw and untrusted,
   the host is the only sanitizer; `CLIENT_ERROR_REPORT_PROTOCOL_VERSION` pins its v90 introduction so a
-  newer client never sends it to an older host) / **`client.githubStarToast`** (`{ tag: shown | ignored | dismissed | github_click }` → ack; the host captures it only under the additional analytics grant; `GITHUB_STAR_TOAST_PROTOCOL_VERSION` pins it to v103) / **`history.search`** (the prompt-recall + conversation-search read; results capped,
+  newer client never sends it to an older host) / **`history.search`** (the prompt-recall + conversation-search read; results capped,
   recency-ordered; the messages section is assistant-only — a user-role hit surfaces as a jumpable
   `PromptHit` instead, never a separate `MessageHit`) / the **`review.*` set** — **`get`** (the open
   review + comments, lazily created; re-anchored on read) / **`commentAdd`**/**`commentUpdate`**/

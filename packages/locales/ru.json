@@ -220,7 +220,6 @@
 	"chat.failure.openProviderSettings": "Открыть настройки провайдеров",
 	"chat.failure.truncated": "Ответ оборвался до завершения. Попросите агента продолжить.",
 	"chat.githubStar.action": "Открыть на GitHub",
-	"chat.githubStar.actionStars": "Открыть на GitHub | ☆ {{stars}}",
 	"chat.githubStar.message": "Загляните в репозиторий на GitHub: ваша звезда поможет другим его найти, а ваши issue помогут нам сделать его лучше!",
 	"chat.githubStar.title": "ThinkRail полезен или есть что сказать?",
 	"chat.history.deleteChat": "Переместить чат в корзину",

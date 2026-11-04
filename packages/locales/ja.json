@@ -177,7 +177,6 @@
 	"chat.failure.openProviderSettings": "プロバイダー設定を開く",
 	"chat.failure.truncated": "応答が完了前に途切れました。エージェントに続行を依頼してください。",
 	"chat.githubStar.action": "GitHub で見る",
-	"chat.githubStar.actionStars": "GitHub で見る | ☆ {{stars}}",
 	"chat.githubStar.message": "GitHub リポジトリをご覧ください。スターはほかの人が見つける助けになり、Issue は改善の助けになります。",
 	"chat.githubStar.title": "ThinkRail は役に立っていますか？ご意見はありますか？",
 	"chat.history.deleteChat": "チャットをゴミ箱に移動",

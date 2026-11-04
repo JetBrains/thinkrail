@@ -202,7 +202,6 @@
 	"chat.failure.openProviderSettings": "Abrir los ajustes de proveedores",
 	"chat.failure.truncated": "La respuesta se truncó antes de completarse. Pide al agente que continúe.",
 	"chat.githubStar.action": "Ver en GitHub",
-	"chat.githubStar.actionStars": "Ver en GitHub | ☆ {{stars}}",
 	"chat.githubStar.message": "Visita el repositorio de GitHub: tu estrella puede ayudar a otros a encontrarlo y tus issues pueden ayudarnos a mejorarlo.",
 	"chat.githubStar.title": "¿ThinkRail te resulta útil o tienes comentarios?",
 	"chat.history.deleteChat": "Mover el chat a la papelera",
