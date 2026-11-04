@@ -18,6 +18,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { formatContext } from "@/chat/modelPicker";
@@ -329,6 +330,7 @@ function EndpointDialog({
 								placeholder={t("settings.customEndpoints.manualPlaceholder")}
 								onChange={(event) => setManualId(event.currentTarget.value)}
 								onKeyDown={(event) => {
+									if (isImeComposing(event.nativeEvent)) return;
 									if (event.key !== "Enter") return;
 									event.preventDefault();
 									addManual();

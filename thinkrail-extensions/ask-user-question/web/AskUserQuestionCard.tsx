@@ -17,6 +17,7 @@ import type {
 import { useOptionalResourceHost } from "@thinkrail/resource-renderers";
 import { AttentionLine } from "@thinkrail/ui/attention-line";
 import { Button } from "@thinkrail/ui/button";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	Fragment,
@@ -137,10 +138,7 @@ interface RecapState {
 	showOptions: boolean;
 }
 
-export function deriveRecapState(
-	answer: AskUserQuestionAnswer | undefined,
-	variant: "review" | "resolved",
-): RecapState {
+export function deriveRecapState(answer: AskUserQuestionAnswer | undefined): RecapState {
 	const selectedLabels =
 		answer?.kind === "multi"
 			? (answer.selected ?? [])
@@ -152,7 +150,7 @@ export function deriveRecapState(
 	return {
 		selectedLabels,
 		customAnswer,
-		showOptions: variant === "review" || (!!answer && answer.kind !== "custom"),
+		showOptions: !!answer && answer.kind !== "custom",
 	};
 }
 
@@ -229,10 +227,9 @@ export interface ChoiceNudge {
 export function nudgeShowsOnPage(
 	nudge: ChoiceNudge | null,
 	page: number,
-	onReview: boolean,
 	answered: boolean,
 ): boolean {
-	return !!nudge && !onReview && nudge.question === page && !answered;
+	return !!nudge && nudge.question === page && !answered;
 }
 
 export function questionPageForKey(key: string, current: number, last: number): number | null {
@@ -262,7 +259,7 @@ export function shouldFocusPageTarget(textEntryTarget: boolean, coarsePointer: b
 }
 
 const panelDomId = (toolCallId: string) => `ask-panel-${toolCallId}`;
-const tabDomId = (toolCallId: string, page: number | "review") => `ask-tab-${toolCallId}-${page}`;
+const tabDomId = (toolCallId: string, page: number) => `ask-tab-${toolCallId}-${page}`;
 
 export function createQuestionAttentionClaim(): (scope: object, toolCallId: string) => boolean {
 	const claims = new WeakMap<object, Set<string>>();
@@ -517,17 +514,15 @@ export function AskUserQuestionCard({
 	}
 
 	const multipleQuestions = questions.length > 1;
-	const reviewTab = questions.length;
-	const onReview = tab >= reviewTab;
-	const idx = Math.min(tab, questions.length - 1);
+	const lastPage = questions.length - 1;
+	const idx = Math.min(tab, lastPage);
 	const q = questions[idx];
 	const state = stateFor(idx);
 	if (!q) return <WaitingCard>{t("tools.ask.preparing")}</WaitingCard>;
 
-	const showContinue = multipleQuestions && !onReview;
-	const canSubmit =
-		canRespond && (onReview || !multipleQuestions ? answers.length > 0 : answeredIndices.has(idx));
-	const nudgeVisible = nudgeShowsOnPage(nudge, idx, onReview, answeredIndices.has(idx));
+	const showContinue = idx < lastPage;
+	const canSubmit = canRespond && answers.length > 0;
+	const nudgeVisible = nudgeShowsOnPage(nudge, idx, answeredIndices.has(idx));
 
 	const confirmQuestion = (nextState: QState) => {
 		const nextStates = { ...states, [idx]: nextState };
@@ -539,7 +534,7 @@ export function AskUserQuestionCard({
 		}
 		setNudge(null);
 		setStates(nextStates);
-		if (multipleQuestions) setTab(Math.min(idx + 1, reviewTab));
+		if (idx < lastPage) setTab(idx + 1);
 		else reply({ answers: nextAnswers, cancelled: false });
 	};
 
@@ -550,7 +545,7 @@ export function AskUserQuestionCard({
 		confirmQuestion(confirmStateFor(state, !!q.multiSelect, { kind: "custom" }));
 
 	const onCardKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-		if (event.nativeEvent.isComposing) return;
+		if (isImeComposing(event.nativeEvent)) return;
 		if (
 			event.key === "Escape" &&
 			event.shiftKey &&
@@ -571,10 +566,10 @@ export function AskUserQuestionCard({
 			isTextEntryTarget(event.target)
 		)
 			return;
-		const next = questionPageForKey(event.key, tab, reviewTab);
+		const next = questionPageForKey(event.key, idx, lastPage);
 		if (next == null) return;
 		event.preventDefault();
-		if (next !== tab) setTab(next);
+		if (next !== idx) setTab(next);
 	};
 
 	return (
@@ -604,19 +599,11 @@ export function AskUserQuestionCard({
 								id={tabDomId(toolCallId, i)}
 								controls={panelDomId(toolCallId)}
 								label={question.header || t("tools.ask.questionTab", { number: i + 1 })}
-								active={tab === i}
+								active={idx === i}
 								answered={answeredIndices.has(i)}
 								onClick={() => setTab(i)}
 							/>
 						))}
-						<TabChip
-							id={tabDomId(toolCallId, "review")}
-							controls={panelDomId(toolCallId)}
-							label={t("tools.ask.reviewTab")}
-							active={onReview}
-							answered={false}
-							onClick={() => setTab(reviewTab)}
-						/>
 					</div>
 				) : null}
 
@@ -625,48 +612,41 @@ export function AskUserQuestionCard({
 						? {
 								role: "tabpanel",
 								id: panelDomId(toolCallId),
-								"aria-labelledby": tabDomId(toolCallId, onReview ? "review" : idx),
+								"aria-labelledby": tabDomId(toolCallId, idx),
 							}
 						: {})}
 					className="flex flex-col gap-12 p-12"
 				>
-					{onReview ? (
-						<ReviewView questions={questions} answers={answers} onJump={setTab} />
-					) : (
-						<QuestionBody
-							question={q}
-							state={state}
-							pageKeys={multipleQuestions}
-							onSelect={(label, cursor) => patch(idx, selectOptionPatch(state, label, cursor))}
-							onToggleMulti={(label, cursor) => patch(idx, toggleMultiPatch(state, label, cursor))}
-							onCursor={(cursor) => {
-								if (cursor !== state.cursor) patch(idx, { cursor });
-							}}
-							onConfirmChoice={confirmChoice}
-							onCustomText={(text) => patch(idx, customTextPatch(text))}
-							onToggleCustom={() => patch(idx, { customActive: !state.customActive })}
-							onConfirmCustom={confirmCustom}
-							onOpenNote={(label, cursor) =>
-								patch(
-									idx,
-									q.multiSelect
-										? { cursor, noteFor: label }
-										: { cursor, option: label, customActive: false, noteFor: label },
-								)
-							}
-							onCloseNote={() => patch(idx, { noteFor: null })}
-							onNote={(label, text) => patch(idx, { notes: { ...state.notes, [label]: text } })}
-						/>
-					)}
+					<QuestionBody
+						question={q}
+						state={state}
+						pageKeys={multipleQuestions}
+						onSelect={(label, cursor) => patch(idx, selectOptionPatch(state, label, cursor))}
+						onToggleMulti={(label, cursor) => patch(idx, toggleMultiPatch(state, label, cursor))}
+						onCursor={(cursor) => {
+							if (cursor !== state.cursor) patch(idx, { cursor });
+						}}
+						onConfirmChoice={confirmChoice}
+						onCustomText={(text) => patch(idx, customTextPatch(text))}
+						onToggleCustom={() => patch(idx, { customActive: !state.customActive })}
+						onConfirmCustom={confirmCustom}
+						onOpenNote={(label, cursor) =>
+							patch(
+								idx,
+								q.multiSelect
+									? { cursor, noteFor: label }
+									: { cursor, option: label, customActive: false, noteFor: label },
+							)
+						}
+						onCloseNote={() => patch(idx, { noteFor: null })}
+						onNote={(label, text) => patch(idx, { notes: { ...state.notes, [label]: text } })}
+					/>
 
 					<div className="flex flex-col gap-8 sm:flex-row sm:items-center sm:justify-between">
 						<ModeHint
-							question={onReview ? undefined : q}
-							review={onReview}
+							question={q}
 							multipleQuestions={multipleQuestions}
-							noteAvailable={
-								!onReview && answers.some((a) => a.questionIndex === idx && answerSupportsNote(a))
-							}
+							noteAvailable={answers.some((a) => a.questionIndex === idx && answerSupportsNote(a))}
 						/>
 						<div className="flex items-center justify-end gap-12">
 							{nudgeVisible ? (
@@ -696,7 +676,7 @@ export function AskUserQuestionCard({
 									variant="primary"
 									size="l"
 									data-testid="ask-continue"
-									onClick={() => setTab(Math.min(tab + 1, reviewTab))}
+									onClick={() => setTab(idx + 1)}
 									className="shrink-0"
 								>
 									{t("tools.ask.next")}
@@ -826,28 +806,15 @@ function TabChip({
 
 function ModeHint({
 	question,
-	review,
 	multipleQuestions,
 	noteAvailable,
 }: {
-	question: AskUserQuestionItem | undefined;
-	review: boolean;
+	question: AskUserQuestionItem;
 	multipleQuestions: boolean;
 	noteAvailable: boolean;
 }) {
 	const t = useT();
-	if (review) {
-		return (
-			<span
-				data-testid="ask-shortcuts"
-				className="flex items-center gap-4 text-text-muted tr-text-metadata"
-			>
-				<ListChecks className="size-14 shrink-0" />
-				{t("tools.ask.hintReview")}
-			</span>
-		);
-	}
-	const multiSelect = !!question?.multiSelect;
+	const multiSelect = !!question.multiSelect;
 	return (
 		<span
 			data-testid="ask-shortcuts"
@@ -1019,7 +986,7 @@ function QuestionBody({
 														const action = noteKeyAction(
 															event.key,
 															event.shiftKey,
-															event.nativeEvent.isComposing,
+															isImeComposing(event.nativeEvent),
 														);
 														if (action === "none") return;
 														event.stopPropagation();
@@ -1231,6 +1198,7 @@ function OtherOptionRow({
 				placeholder={t("tools.ask.otherPlaceholder")}
 				onChange={(event) => onText(event.target.value)}
 				onKeyDown={(event) => {
+					if (isImeComposing(event.nativeEvent)) return;
 					if (
 						(event.key === "ArrowUp" || event.key === "ArrowDown") &&
 						!event.shiftKey &&
@@ -1242,7 +1210,7 @@ function OtherOptionRow({
 						onMove(event.key);
 						return;
 					}
-					if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+					if (event.key === "Enter") {
 						event.preventDefault();
 						onConfirm();
 					}
@@ -1296,60 +1264,6 @@ function Indicator({
 	);
 }
 
-function ReviewView({
-	questions,
-	answers,
-	onJump,
-}: {
-	questions: AskUserQuestionItem[];
-	answers: AskUserQuestionAnswer[];
-	onJump: (index: number) => void;
-}) {
-	const t = useT();
-	const byIndex = new Map(answers.map((a) => [a.questionIndex, a]));
-	const unanswered = questions.map((q, i) => ({ q, i })).filter(({ i }) => !byIndex.has(i));
-	return (
-		<div className="flex flex-col gap-8">
-			<div className="flex items-start gap-8">
-				<MessageCircleQuestion className="mt-2 size-16 shrink-0 text-text-muted" />
-				<p
-					tabIndex={-1}
-					data-testid="ask-review-title"
-					data-ask-page-start="true"
-					data-ask-page-focus="true"
-					className="rounded-sm tr-title-dialog text-text-default outline-none focus-visible:ring-2 focus-visible:ring-primary"
-				>
-					{t("tools.ask.reviewTitle")}
-				</p>
-			</div>
-			<ul className="flex flex-col gap-12">
-				{questions.map((q, i) => (
-					<li key={q.question} data-testid="ask-review-item" className="flex flex-col gap-4">
-						<span className="text-text-muted tr-text-metadata">
-							{q.header || t("tools.ask.questionTab", { number: i + 1 })}
-						</span>
-						<QuestionRecap question={q} answer={byIndex.get(i)} variant="review" />
-					</li>
-				))}
-			</ul>
-			{unanswered.length > 0 ? (
-				<button
-					type="button"
-					data-testid="ask-unanswered"
-					onClick={() => onJump(unanswered[0]?.i ?? 0)}
-					className="self-start rounded-sm text-feedback-warning tr-text-metadata outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary"
-				>
-					{t("tools.ask.unanswered", {
-						questions: unanswered
-							.map(({ q, i }) => q.header || t("tools.ask.questionTab", { number: i + 1 }))
-							.join(", "),
-					})}
-				</button>
-			) : null}
-		</div>
-	);
-}
-
 function ResolvedRecord({
 	questions,
 	result,
@@ -1379,7 +1293,7 @@ function ResolvedRecord({
 			className="flex flex-col gap-12"
 		>
 			{questions.map((q, i) => (
-				<QuestionRecap key={q.question} question={q} answer={byIndex.get(i)} variant="resolved" />
+				<QuestionRecap key={q.question} question={q} answer={byIndex.get(i)} />
 			))}
 			{questions.length === 0 ? (
 				<div className="text-text-muted tr-text-metadata">{rawText || t("tools.ask.answered")}</div>
@@ -1391,80 +1305,62 @@ function ResolvedRecord({
 function QuestionRecap({
 	question,
 	answer,
-	variant,
 }: {
 	question: AskUserQuestionItem;
 	answer: AskUserQuestionAnswer | undefined;
-	variant: "review" | "resolved";
 }) {
 	const t = useT();
-	const reviewing = variant === "review";
-	const { selectedLabels, customAnswer, showOptions } = deriveRecapState(answer, variant);
+	const { selectedLabels, customAnswer, showOptions } = deriveRecapState(answer);
 	const selected = new Set(selectedLabels);
 
 	return (
 		<div className="flex flex-col gap-4">
 			<div className="flex items-start gap-8">
 				<MessageCircleQuestion className="mt-2 size-14 shrink-0 text-text-muted" />
-				<p
-					data-testid={reviewing ? "ask-review-question" : undefined}
-					className={cn("tr-text-ui", reviewing ? "text-text-default" : "text-text-muted")}
-				>
-					{question.question}
-				</p>
+				<p className="tr-text-ui text-text-muted">{question.question}</p>
 			</div>
 			{showOptions ? (
-				<>
-					<ul className="flex flex-col gap-2 pl-[calc(0.875rem+var(--space-8))]">
-						{question.options.map((opt) => {
-							const isSel = selected.has(opt.label);
-							return (
-								<li
-									key={opt.label}
-									data-testid={reviewing ? "ask-review-option" : "ask-record-option"}
-									data-selected={isSel}
-									className={cn(
-										"flex items-center gap-4 tr-text-ui",
-										isSel ? "text-text-default" : "text-text-muted",
-									)}
-								>
-									{isSel ? (
-										<Check aria-hidden="true" className="size-14 shrink-0 text-feedback-success" />
-									) : (
-										<span
-											aria-hidden="true"
-											className="size-12 shrink-0 rounded-full border border-border-default"
-										/>
-									)}
-									<span data-testid="ask-selection-status" className="sr-only">
-										{isSel ? t("tools.ask.selected") : t("tools.ask.notSelected")}
-									</span>
-									<span>{splitRecommended(opt.label).text}</span>
-								</li>
-							);
-						})}
-						{customAnswer ? (
+				<ul className="flex flex-col gap-2 pl-[calc(0.875rem+var(--space-8))]">
+					{question.options.map((opt) => {
+						const isSel = selected.has(opt.label);
+						return (
 							<li
-								data-testid={reviewing ? "ask-review-custom" : "ask-record-custom"}
-								className="flex items-center gap-4 tr-text-ui text-text-default"
+								key={opt.label}
+								data-testid="ask-record-option"
+								data-selected={isSel}
+								className={cn(
+									"flex items-center gap-4 tr-text-ui",
+									isSel ? "text-text-default" : "text-text-muted",
+								)}
 							>
-								<Check aria-hidden="true" className="size-14 shrink-0 text-feedback-success" />
+								{isSel ? (
+									<Check aria-hidden="true" className="size-14 shrink-0 text-feedback-success" />
+								) : (
+									<span
+										aria-hidden="true"
+										className="size-12 shrink-0 rounded-full border border-border-default"
+									/>
+								)}
 								<span data-testid="ask-selection-status" className="sr-only">
-									{t("tools.ask.selectedCustom")}
+									{isSel ? t("tools.ask.selected") : t("tools.ask.notSelected")}
 								</span>
-								<span>{t("tools.ask.quotedAnswer", { answer: customAnswer })}</span>
+								<span>{splitRecommended(opt.label).text}</span>
 							</li>
-						) : null}
-					</ul>
-					{!answer ? (
-						<div
-							data-testid="ask-review-unanswered"
-							className="flex items-center gap-4 pl-[calc(0.875rem+var(--space-8))] text-text-muted tr-text-metadata italic"
+						);
+					})}
+					{customAnswer ? (
+						<li
+							data-testid="ask-record-custom"
+							className="flex items-center gap-4 tr-text-ui text-text-default"
 						>
-							<SkipForward className="size-12 shrink-0" /> {t("tools.ask.notAnswered")}
-						</div>
+							<Check aria-hidden="true" className="size-14 shrink-0 text-feedback-success" />
+							<span data-testid="ask-selection-status" className="sr-only">
+								{t("tools.ask.selectedCustom")}
+							</span>
+							<span>{t("tools.ask.quotedAnswer", { answer: customAnswer })}</span>
+						</li>
 					) : null}
-				</>
+				</ul>
 			) : !answer ? (
 				<div className="flex items-center gap-4 pl-[calc(0.875rem+var(--space-8))] text-text-muted tr-text-metadata italic">
 					<SkipForward className="size-12 shrink-0" /> {t("tools.ask.skipped")}

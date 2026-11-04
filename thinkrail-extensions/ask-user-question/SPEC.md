@@ -73,11 +73,12 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   **awaiting** — interactive while Pi is blocked, after reconnect, or after any number of host restarts.
 - **Controls never stream** — while args stream it shows a stable composing placeholder and the
   complete questionnaire reveals atomically at message end (rationale in the component's jsdoc).
-- **Multi-question completion is review-gated** — every question page advances with **Next**, including
-  the final question; only the synthetic **Review & submit** page exposes **Submit**. Its review entries
-  show the full original question plus every option with selected markers (and custom answer / note), so
-  the submission can be checked in context. Selection status is also exposed as screen-reader text —
-  never by icon/color alone. A single question keeps its direct **Submit** action.
+- **Multi-question completion submits from the last question** — earlier pages advance with **Next**;
+  the last question shows **Submit**, enabled once any question is answered, and confirming it submits.
+  Unanswered questions are sent as not answered without a warning: the chips' answered marks already show
+  the gaps. A synthetic **Review & submit** page once gated submission; it was removed as an extra step
+  that re-showed what the chips and pages already showed. A single question keeps its direct **Submit**.
+  The resolved record exposes selection status as screen-reader text — never by icon/color alone.
 - **Per-call UI state survives virtualization** — a module-level cache keyed by `toolCallId` (dropped
   once no longer awaiting), since react-virtuoso unmounts off-screen rows. This is the pattern the
   activity fold's expansion state reuses.
@@ -130,8 +131,7 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   row* (inside the Other field they stay caret keys, exactly as ←/→ do — a free-text field keeps the keys
   that move through text, and only ↑/↓ lift out of it), Space
   selects/toggles an authored choice, and Enter confirms (single-select chooses the focused option;
-  multi-select confirms its non-empty set), advancing to the next question/review or directly submitting
-  a one-question call. Reaching Other focuses its text input, ready to type — but **text, not focus, is
+  multi-select confirms its non-empty set), advancing to the next question or, on the last one, submitting. Reaching Other focuses its text input, ready to type — but **text, not focus, is
   what makes Other the answer** (`customTextPatch`): the cursor wraps *through* that row, so activating on
   arrival would clear a single-select pick and paint an empty row as chosen just for passing over it.
   Typing claims the answer (exclusively on single-select, additively on multi-select), emptying the field
@@ -140,10 +140,8 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   input via `htmlFor`** — `<button>` is a labelable element too, so on multi-select the implicit control
   would be the include/exclude toggle above the input in tree order, and clicking the row's chrome would
   flip an empty checkbox instead of putting the caret in the field (on touch, the only way in).
-  The **review heading** is the review page's keyboard landing point. It keeps focus visibly beside the recap
-  start instead of arming an offscreen Submit/Unanswered action at the footer; Tab reaches those real controls
-  in ordinary order after the reader reviews the answers. On multi-question cards Left/Right moves without wrapping
-  across question pages and the final review page; text inputs retain those keys. The question chips are
+  On multi-question cards Left/Right moves without wrapping across question pages; text inputs retain
+  those keys. The question chips are
   a real `tablist` over the shared question `tabpanel` (each chip `aria-controls` it, the active chip
   labels it) with **automatic activation** — an arrow/click switches the page outright and focus follows
   *into* the panel rather than staying on the chip, since the page is what the user came to act on.
@@ -179,7 +177,9 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   the key (it cancels the composition, so the note stays open) but the gesture still must not reach the
   card — declining to finish while also declining to swallow would let `Shift+Escape` bubble out and take
   the questionnaire down with the text being composed. The card's skip therefore also **ignores any
-  keystroke the IME is composing**, which covers the Other field, whose free text has no inner guard.
+  keystroke the IME owns**, and so does the Other field: its ↑/↓ and Enter wait for the composition
+  to end, so while composing the arrows move through IME candidates, not questionnaire choices
+  ([[module-web]]'s text-field rule).
   `Shift+Escape` is otherwise the deliberate card-local skip; plain Escape outside a note never declines.
   Tab still reaches
   Other, Skip, and footer actions. A compact visible shortcut legend makes the interaction discoverable,

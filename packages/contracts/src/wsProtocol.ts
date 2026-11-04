@@ -1305,6 +1305,7 @@ export type WsErrorCode =
 	| "PACKAGE_SETTINGS_WRITE_FAILED"
 	| "REQUEST_REPLAY_OVERFLOW"
 	| "INSTALLED_FONTS_UNAVAILABLE"
+	| "GIT_TIMEOUT"
 	| SpeechErrorCode;
 
 export interface WsResponse {

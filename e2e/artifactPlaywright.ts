@@ -50,7 +50,7 @@ export function artifactPlaywrightConfig(
 	managedFixtures: boolean,
 ): PlaywrightTestConfig {
 	return {
-		testDir: "./e2e",
+		testDir: ".",
 		testIgnore: "workflows/**",
 		grepInvert: /@agent|@dev-seam/,
 		fullyParallel: true,
@@ -59,13 +59,13 @@ export function artifactPlaywrightConfig(
 		retries: process.env.CI ? 1 : 0,
 		timeout: 30_000,
 		reporter: process.env.CI
-			? [["github"], ["html", { open: "never", outputFolder: `playwright-report-${name}` }]]
+			? [["github"], ["html", { open: "never", outputFolder: `../playwright-report-${name}` }]]
 			: "list",
-		outputDir: `test-results-${name}`,
+		outputDir: `../test-results-${name}`,
 		...(managedFixtures
 			? {
-					globalSetup: "./e2e/global-setup.ts",
-					globalTeardown: "./e2e/global-teardown.ts",
+					globalSetup: "./global-setup.ts",
+					globalTeardown: "./global-teardown.ts",
 				}
 			: {}),
 		use: {

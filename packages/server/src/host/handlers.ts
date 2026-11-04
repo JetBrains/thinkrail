@@ -138,7 +138,7 @@ import {
 	originUrls,
 	type PushTargetStatus,
 	prefetchBranch,
-	remoteRefOid,
+	remoteRefOidAsync,
 } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
 import { clampLimit, getHistoryIndex } from "../history";
@@ -690,7 +690,9 @@ const handlers: WsHandlers = {
 			pushesElsewhere: splitPushUrl !== null,
 			published:
 				measured?.published ??
-				(splitPushUrl ? null : remoteRefOid(ws.worktreePath, `origin/${ws.branch}`) !== null),
+				(splitPushUrl
+					? null
+					: (await remoteRefOidAsync(ws.worktreePath, `origin/${ws.branch}`)) !== null),
 			...(measured?.published && measured.ahead !== undefined && measured.behind !== undefined
 				? { ahead: measured.ahead, behind: measured.behind }
 				: {}),

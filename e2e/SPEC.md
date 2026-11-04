@@ -180,7 +180,7 @@ large delta.
 
 `bun run perf:render [--runs N] [--out file] [--cpu N] [--scenario a,b] [playwright args]` is an opt-in
 measurement run, never a gate. It builds `apps/web/dist-profile` (see [[module-web]]), boots the ordinary
-isolated host on it through `playwright.perf.config.ts`, and runs `e2e/perf/*.perf.ts` — a pattern the
+isolated host on it through `e2e/playwright.perf.config.ts`, and runs `e2e/perf/*.perf.ts` — a pattern the
 default config does not match. It uses the worktree's serial lane (port block and state dir), so do not
 run it alongside another serial E2E run in the same worktree. Defaults: 5 runs, output
 `$TMPDIR/thinkrail-render-profile.json`. Unknown `--scenario` names fail before the build. A failed

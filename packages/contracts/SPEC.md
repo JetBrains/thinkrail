@@ -44,9 +44,12 @@ the palette ranks with — kept here so host-side search can rank with the same 
   either; and the closed `SPEECH_ERROR_CODES` (§ Voice input), each naming a voice state the UI words
   differently), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
-  for it or Error Tracking must tell it apart (it never sees `message`): **`REQUEST_REPLAY_OVERFLOW`** is the
-  latter — the host's replay namespace for this page is full ([[submodule-server-host]]), and the page treats
-  it as an ordinary retryable failure. Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
+  for it or Error Tracking must tell it apart (it never sees `message`). Two codes exist for the latter:
+  **`REQUEST_REPLAY_OVERFLOW`** — the host's replay namespace for this page is full
+  ([[submodule-server-host]]), and the page treats it as an ordinary retryable failure — and **`GIT_TIMEOUT`**
+  — a sync git killed at its deadline ([[submodule-server-git]]); an older client wraps it like any unknown
+  code, so it needs no protocol bump.
+  Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
   (`NativeUpdateState` / `NativeUpdateBridge`, `NativeWindowState` / `NativeWindowControlsBridge`,
