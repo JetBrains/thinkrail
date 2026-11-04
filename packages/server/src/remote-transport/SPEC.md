@@ -29,9 +29,11 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for rationale 
     input is untrusted: every frame is shape-, type- and bound-checked; the label is trimmed and capped).
   - `signalingSession.ts` — `createHostHandshake`, the pure host-side authorization state machine
     (`hello` → `challenge` → `proof` → `accepted`/`rejected`), dependency-injected over the `remote`
-    module's token consume / proof verify / device registry, so an unauthorized peer never reaches
-    SDP/ICE exchange. A **`resume`** frame re-authorizes an already-paired device by its registered key
-    (`findDevice`) with no token — the path a reconnect takes, since the QR token is one-time.
+    module's token consume / proof + MAC verify / device registry, so an unauthorized peer never reaches
+    SDP/ICE exchange. `hello` names the QR token by its id and a first pairing's `proof` must carry the
+    token HMAC. A **`resume`** frame re-authorizes an already-paired device by its registered key
+    (`findDevice`) with no token — the path a reconnect takes, since the QR token is one-time. Both carry
+    the device's fresh `nonce`; an accepted step returns it with the challenge.
   - `channel.ts` — `RemoteChannel`, the byte-channel interface the wire protocol runs over.
   - `weriftRemoteChannel.ts` — `toRemoteChannel`, adapting a werift `RTCDataChannel` to `RemoteChannel`;
     every send and receive goes through contracts' channel framing, so a large result is chunked.
@@ -45,18 +47,25 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for rationale 
     Exposing the broker on the LAN is safe by the relay's zero-knowledge design: it sees routing only, and
     pairing stays a host-verified one-time token plus device key.
   - `hostPeer.ts` — `createWeriftHostPeer`, the host as WebRTC **offerer** (creates the DataChannel + offer,
-    emits local SDP/ICE, consumes the device's answer/candidates, surfaces a `RemoteChannel`), behind a
-    `HostPeer` interface so the orchestrator is testable with a fake. It gathers through contracts'
+    emits local SDP/ICE, consumes the device's answer/candidates, surfaces a `RemoteChannel`) over the public
+    STUN servers only, behind a `HostPeer` interface so the orchestrator is testable with a fake. werift
+    gathers every candidate before it emits the offer, so an unreachable TURN would stall it; TURN is the
+    device's (see [[module-relay]]). It gathers through contracts'
     `PUBLIC_STUN_URLS` (tests pass none), so a phone off the host's network can still connect peer-to-peer;
     there is no TURN until one is deployed.
   - `hostSession.ts` — `createHostSession`, one device session's orchestration: runs the handshake, and only
-    after `accepted` starts the peer and relays the device's answer/candidates into it, handing out the open
-    `RemoteChannel` with its `PairedDevice`. An end-to-end in-process test drives a real werift device
-    through the handshake + WebRTC to a byte-moving channel.
+    after `accepted` starts the peer. It signs the offer with the host identity key over
+    `offerTranscript(nonce, challenge, sdp)` and accepts only an answer the paired device key signed over
+    `answerTranscript(challenge, sdp)` — a spliced answer rejects and closes the session — then hands out the
+    open `RemoteChannel` with its `PairedDevice`. An end-to-end in-process test drives a real werift device
+    through the handshake + signed SDPs + WebRTC to a byte-moving channel.
   - `hostBrokerClient.ts` — `createHostBrokerClient` (and the `connectHostBroker` WebSocket wrapper): the
-    host's outbound broker client. It registers by public key, maps each brokered session to a
-    `HostSession`, and relays signaling payloads in and out, speaking the shared broker protocol from
-    `contracts` rather than importing the relay service.
+    host's outbound broker client. It registers by public key and answers the relay's challenge with a
+    signature, maps each brokered session to a `HostSession`, and relays
+    signaling payloads in and out, speaking the shared broker protocol from `contracts` rather than importing
+    the relay service. `connectHostBroker` reconnects with capped exponential backoff and re-registers when
+    the relay restarts or the network drops; a dropped connection closes the sessions it brokered (their
+    devices re-dial). A test runs it against a real relay over loopback.
   - `remoteAccess.ts` — `startRemoteAccess`, the composition root: loads identity, connects to the broker,
     runs each device's handshake + WebRTC, and mints one-time pairing links (`issueLink`) carrying every
     `advertised` relay address (default: the connect URL) and the computer's name. The host's `remote`
@@ -77,6 +86,9 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for rationale 
 
 - **Authorize before negotiate:** the handshake must reach `accepted` before any `offer`/`answer`/`candidate`
   is relayed; a rejected or out-of-order handshake is terminal.
+- **The relay is untrusted:** nothing it carries is a bearer secret (token id + HMAC, never the token), and
+  both SDPs are signed, so a malicious or compromised relay cannot pair its own key, impersonate the host,
+  or sit in the middle of the DTLS channel. It can only refuse service.
 - Device frames are always validated by `parseDeviceMessage`; the host never trusts raw signaling input.
 - The pure core (protocol + handshake) carries no network or WebRTC dependency and is unit-tested in full;
   the WebRTC adapter and the signaling server are separate, later slices.
@@ -88,4 +100,5 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for rationale 
   live `RemoteWireBridge`s (today pushes reach only Bun sockets). `bridgeRemoteWire` is the adapter for this;
   the wiring is invasive (one wrapper over ~20 publish sites) and only verifiable with the full stack.
 - The web "add project by link" flow (device side: native WebRTC + the wire client over the channel).
-- coturn deployment/config and the second channel tunnelling `/files` and `/blob`.
+- The second channel tunnelling `/files` and `/blob`. (coturn credentials and the deploy recipe live in
+  [[module-relay]].)

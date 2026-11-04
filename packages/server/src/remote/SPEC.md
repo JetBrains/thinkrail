@@ -25,17 +25,21 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for the produc
     (what the QR carries), a short fingerprint, `sign`, and `verifySignature` / `publicKeyFromRaw` for
     checking a device's key.
   - `pairingToken.ts` — an **in-memory**, single-use, short-TTL store of pending QR pairings
-    (`createPairingTokens`). A leaked QR cannot be replayed and nothing survives a restart.
+    (`createPairingTokens`), keyed by `pairingTokenId` (base64url SHA-256 of the token), because the relay
+    carries `hello` and must never see the token itself. A leaked QR cannot be replayed and nothing survives a
+    restart.
   - `pairingUri.ts` — build/parse the `thinkrail://pair?v=1&s=…&t=…&k=…&p=…[&n=…]` URI: one `s` per relay
     address the host is reachable at (Wi‑Fi/LAN, Tailscale — the device races them), the one-time token, host
     public key, project ref, and optionally the computer's name. A link with a single `s` stays valid.
-  - `pairing.ts` — `newChallenge()` and `verifyPairingProof()` (a device signs the host challenge to prove
-    it holds its key); the challenge/signature travel over the transport the later phase provides.
+  - `pairing.ts` — `newChallenge()`, `verifyPairingProof()` (a device signs the host challenge to prove it
+    holds its key), `pairingTokenId()`, and `pairingMac` / `verifyPairingMac` — the HMAC-SHA256 under the QR
+    token over `pairingMacInput(devicePublicKey, challenge)` that proves a first-pairing device read the QR
+    and binds that to its own key, so a relay that saw the `hello` cannot pair a key of its own.
   - `deviceRegistry.ts` — the persisted list of paired devices (`remote-devices.json`, `0600`): add
     (re-pairing a key replaces its entry), revoke, look up by key.
 - **Public surface:** the `index.ts` barrel.
-- **Allowed deps:** `persistence` (`dataDir`), `node:crypto`, `node:fs`, `node:path`. No `contracts` yet
-  (no wire types until the transport phase), never `host` or any other sibling feature.
+- **Allowed deps:** `persistence` (`dataDir`), `contracts` (the pairing URI and `pairingAuth` transcripts),
+  `node:crypto`, `node:fs`, `node:path`; never `host` or any other sibling feature.
 - **Forbidden:** importing a transport/relay/WebRTC concern, `host`, or browser code; being bundled into
   the browser.
 

@@ -88,6 +88,7 @@ export type {
 } from "./match";
 export { MATCH_TIER, matchFields, parseMatchTerms } from "./match";
 export type * from "./nativeClient";
+export * from "./pairingAuth";
 export * from "./pairingUri";
 export type * from "./piProtocol";
 export {

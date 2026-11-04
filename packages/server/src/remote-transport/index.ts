@@ -1,6 +1,7 @@
 export type { RemoteChannel } from "./channel";
 export {
 	type BrokerClientSocket,
+	type BrokerConnection,
 	connectHostBroker,
 	createHostBrokerClient,
 	type HostBrokerClient,

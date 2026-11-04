@@ -12,6 +12,13 @@ export {
 	publicKeyFromRaw,
 	verifySignature,
 } from "./identity";
-export { newChallenge, type PairingProof, verifyPairingProof } from "./pairing";
+export {
+	newChallenge,
+	type PairingProof,
+	pairingMac,
+	pairingTokenId,
+	verifyPairingMac,
+	verifyPairingProof,
+} from "./pairing";
 export { createPairingTokens, type PairingRequest, type PairingTokens } from "./pairingToken";
 export { buildPairingUri, type PairingUriParams, parsePairingUri } from "./pairingUri";

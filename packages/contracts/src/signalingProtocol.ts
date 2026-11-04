@@ -1,23 +1,26 @@
 const MAX_LABEL = 64;
 const MAX_FIELD = 8192;
 
-/** Frames a device sends over the signaling channel (untrusted on the host — validated by `parseDeviceMessage`). */
+/**
+ * Frames a device sends over the signaling channel (untrusted on the host — validated by `parseDeviceMessage`).
+ * The relay carries them, so none is a bearer secret: `hello` names the QR token only by its hash
+ * (`pairingTokenId`), the token itself proves itself as an HMAC in `proof`, and the answer is signed by the
+ * device key so a relay cannot splice in its own WebRTC endpoint. See `pairingAuth.ts`.
+ */
 export type DeviceMessage =
-	| { kind: "hello"; token: string; devicePublicKey: string; label: string }
-	| { kind: "resume"; devicePublicKey: string }
-	| { kind: "proof"; signature: string }
-	| { kind: "offer"; sdp: string }
-	| { kind: "answer"; sdp: string }
+	| { kind: "hello"; tokenId: string; devicePublicKey: string; label: string; nonce: string }
+	| { kind: "resume"; devicePublicKey: string; nonce: string }
+	| { kind: "proof"; signature: string; mac?: string }
+	| { kind: "answer"; sdp: string; signature: string }
 	| { kind: "candidate"; candidate: string }
 	| { kind: "bye" };
 
-/** Frames the host sends back over the signaling channel. */
+/** Frames the host sends back over the signaling channel. The offer is signed by the host key. */
 export type HostMessage =
 	| { kind: "challenge"; challenge: string }
 	| { kind: "accepted" }
 	| { kind: "rejected"; reason: string }
-	| { kind: "offer"; sdp: string }
-	| { kind: "answer"; sdp: string }
+	| { kind: "offer"; sdp: string; signature: string }
 	| { kind: "candidate"; candidate: string }
 	| { kind: "bye" };
 
@@ -48,25 +51,33 @@ export function parseDeviceMessage(raw: string): DeviceMessage | null {
 	switch (message.kind) {
 		case "hello": {
 			const trimmed = label(message.label);
-			return field(message.token) && field(message.devicePublicKey) && trimmed
+			return field(message.tokenId) &&
+				field(message.devicePublicKey) &&
+				field(message.nonce) &&
+				trimmed
 				? {
 						kind: "hello",
-						token: message.token,
+						tokenId: message.tokenId,
 						devicePublicKey: message.devicePublicKey,
 						label: trimmed,
+						nonce: message.nonce,
 					}
 				: null;
 		}
 		case "resume":
-			return field(message.devicePublicKey)
-				? { kind: "resume", devicePublicKey: message.devicePublicKey }
+			return field(message.devicePublicKey) && field(message.nonce)
+				? { kind: "resume", devicePublicKey: message.devicePublicKey, nonce: message.nonce }
 				: null;
 		case "proof":
-			return field(message.signature) ? { kind: "proof", signature: message.signature } : null;
-		case "offer":
-			return field(message.sdp) ? { kind: "offer", sdp: message.sdp } : null;
+			if (!field(message.signature)) return null;
+			if (message.mac === undefined) return { kind: "proof", signature: message.signature };
+			return field(message.mac)
+				? { kind: "proof", signature: message.signature, mac: message.mac }
+				: null;
 		case "answer":
-			return field(message.sdp) ? { kind: "answer", sdp: message.sdp } : null;
+			return field(message.sdp) && field(message.signature)
+				? { kind: "answer", sdp: message.sdp, signature: message.signature }
+				: null;
 		case "candidate":
 			return field(message.candidate) ? { kind: "candidate", candidate: message.candidate } : null;
 		case "bye":
@@ -88,9 +99,9 @@ export function parseHostMessage(raw: string): HostMessage | null {
 		case "rejected":
 			return field(message.reason) ? { kind: "rejected", reason: message.reason } : null;
 		case "offer":
-			return field(message.sdp) ? { kind: "offer", sdp: message.sdp } : null;
-		case "answer":
-			return field(message.sdp) ? { kind: "answer", sdp: message.sdp } : null;
+			return field(message.sdp) && field(message.signature)
+				? { kind: "offer", sdp: message.sdp, signature: message.signature }
+				: null;
 		case "candidate":
 			return field(message.candidate) ? { kind: "candidate", candidate: message.candidate } : null;
 		case "bye":

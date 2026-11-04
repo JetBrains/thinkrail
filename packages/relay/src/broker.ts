@@ -1,11 +1,18 @@
-import { randomUUID } from "node:crypto";
-import { type BrokerToClient, type ClientToBroker, parseClientMessage } from "@thinkrail/contracts";
+import { createPublicKey, randomBytes, randomUUID, verify } from "node:crypto";
+import {
+	type BrokerToClient,
+	type ClientToBroker,
+	type IceServer,
+	parseClientMessage,
+	registerTranscript,
+} from "@thinkrail/contracts";
 
 /**
  * The zero-knowledge signaling broker. It pairs a device to the host it names (by the host's public key) and
  * relays opaque signaling frames between them, multiplexed per session so one host serves many devices. It
  * never parses `data`: the WebRTC DataChannel it helps set up is end-to-end encrypted, and the pairing
- * challenge/proof it relays are host-enforced, so the broker learns neither session content nor secrets.
+ * challenge/proof it relays are host-enforced, so the broker learns neither session content nor secrets. A host
+ * proves it owns the key it registers, so no one can take over its address.
  */
 export interface BrokerSocket {
 	send(message: BrokerToClient): void;
@@ -16,12 +23,15 @@ export interface Broker {
 	connect(connId: string, socket: BrokerSocket): void;
 	receive(connId: string, raw: string): void;
 	disconnect(connId: string): void;
+	/** True while a connection has neither registered as a host nor connected as a device. */
+	isPending(connId: string): boolean;
 	readonly hostCount: number;
 	readonly sessionCount: number;
 }
 
 type ConnState =
 	| { role: "new" }
+	| { role: "proving"; hostKey: string; nonce: string }
 	| { role: "host"; hostKey: string }
 	| { role: "device"; session: string };
 
@@ -35,8 +45,36 @@ interface Session {
 	deviceId: string;
 }
 
-export function createBroker(deps: { newSessionId?: () => string } = {}): Broker {
+export interface BrokerDeps {
+	newSessionId?: () => string;
+	newNonce?: () => string;
+	/** Checks a host's Ed25519 signature against the raw (base64url) public key it registers. */
+	verifyHost?: (hostKey: string, data: Uint8Array, signature: string) => boolean;
+	/**
+	 * Short-lived TURN credentials for a connecting device; none when the relay runs no TURN. Only the device
+	 * gets them: one side's relay candidate crosses any NAT (TURN permissions are per IP), and the host's
+	 * WebRTC stack waits for every candidate before offering, so an unreachable TURN would stall it.
+	 */
+	iceFor?: () => IceServer[];
+	maxSessionsPerHost?: number;
+}
+
+const DEFAULT_MAX_SESSIONS_PER_HOST = 64;
+
+export function verifyEd25519(hostKey: string, data: Uint8Array, signature: string): boolean {
+	try {
+		const key = createPublicKey({ key: { kty: "OKP", crv: "Ed25519", x: hostKey }, format: "jwk" });
+		return verify(null, data, key, Buffer.from(signature, "base64url"));
+	} catch {
+		return false;
+	}
+}
+
+export function createBroker(deps: BrokerDeps = {}): Broker {
 	const newSessionId = deps.newSessionId ?? randomUUID;
+	const newNonce = deps.newNonce ?? (() => randomBytes(32).toString("base64url"));
+	const verifyHost = deps.verifyHost ?? verifyEd25519;
+	const maxSessionsPerHost = deps.maxSessionsPerHost ?? DEFAULT_MAX_SESSIONS_PER_HOST;
 	const conns = new Map<string, Conn>();
 	const hosts = new Map<string, string>();
 	const sessions = new Map<string, Session>();
@@ -54,35 +92,65 @@ export function createBroker(deps: { newSessionId?: () => string } = {}): Broker
 		}
 	};
 
+	const fail = (conn: Conn, reason: string): void => {
+		conn.socket.send({ t: "error", reason });
+		conn.socket.close();
+	};
+
+	const sessionsOf = (hostConnId: string): number => {
+		let count = 0;
+		for (const session of sessions.values()) if (session.hostId === hostConnId) count += 1;
+		return count;
+	};
+
 	const handle = (conn: Conn, connId: string, message: ClientToBroker): void => {
 		if (conn.state.role === "new") {
 			if (message.t === "register") {
-				const existing = hosts.get(message.hostKey);
-				if (existing !== undefined && existing !== connId) {
-					conns.get(existing)?.socket.close();
-					conns.delete(existing);
-					dropHostSessions(existing);
-				}
-				hosts.set(message.hostKey, connId);
-				conn.state = { role: "host", hostKey: message.hostKey };
+				const nonce = newNonce();
+				conn.state = { role: "proving", hostKey: message.hostKey, nonce };
+				conn.socket.send({ t: "challenge", nonce });
 				return;
 			}
 			if (message.t === "connect") {
 				const hostId = hosts.get(message.hostKey);
 				if (hostId === undefined) {
-					conn.socket.send({ t: "error", reason: "no host available" });
-					conn.socket.close();
+					fail(conn, "no host available");
+					return;
+				}
+				if (sessionsOf(hostId) >= maxSessionsPerHost) {
+					fail(conn, "host busy");
 					return;
 				}
 				const session = newSessionId();
+				const ice = deps.iceFor?.();
 				sessions.set(session, { hostId, deviceId: connId });
 				conn.state = { role: "device", session };
-				conn.socket.send({ t: "ready" });
+				conn.socket.send(ice ? { t: "ready", ice } : { t: "ready" });
 				conns.get(hostId)?.socket.send({ t: "open", session });
 				return;
 			}
-			conn.socket.send({ t: "error", reason: "expected register or connect" });
-			conn.socket.close();
+			fail(conn, "expected register or connect");
+			return;
+		}
+
+		if (conn.state.role === "proving") {
+			const { hostKey, nonce } = conn.state;
+			if (
+				message.t !== "prove" ||
+				!verifyHost(hostKey, registerTranscript(nonce), message.signature)
+			) {
+				fail(conn, "host key proof rejected");
+				return;
+			}
+			const existing = hosts.get(hostKey);
+			if (existing !== undefined && existing !== connId) {
+				conns.get(existing)?.socket.close();
+				conns.delete(existing);
+				dropHostSessions(existing);
+			}
+			hosts.set(hostKey, connId);
+			conn.state = { role: "host", hostKey };
+			conn.socket.send({ t: "registered" });
 			return;
 		}
 
@@ -133,8 +201,7 @@ export function createBroker(deps: { newSessionId?: () => string } = {}): Broker
 			if (!conn) return;
 			const message = parseClientMessage(raw);
 			if (!message) {
-				conn.socket.send({ t: "error", reason: "malformed message" });
-				conn.socket.close();
+				fail(conn, "malformed message");
 				return;
 			}
 			handle(conn, connId, message);
@@ -152,6 +219,10 @@ export function createBroker(deps: { newSessionId?: () => string } = {}): Broker
 				if (session)
 					conns.get(session.hostId)?.socket.send({ t: "close", session: conn.state.session });
 			}
+		},
+		isPending(connId) {
+			const role = conns.get(connId)?.state.role;
+			return role === "new" || role === "proving";
 		},
 		get hostCount() {
 			return hosts.size;

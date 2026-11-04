@@ -308,5 +308,14 @@ The `install.ps1` suite starts PowerShell once in a warm-up hook with its own bu
 the first `powershell.exe` launch on a fresh hosted runner has taken up to 31 s (2–14 s in passing runs),
 a one-time environment cost that no single test's budget should absorb.
 
+### Relay image
+
+`relay-image.yml` publishes the signaling relay (`packages/relay`) to GHCR as
+`ghcr.io/<owner>/thinkrail-relay`. A `relay-v<semver>` tag pushes `:<semver>` and `:latest`; a manual run
+pushes `:sha-<commit>` only, so a test build never moves `latest`. The job tests the relay and `contracts`
+(its protocol), bundles `dist/relay.js` and builds `packages/relay/Dockerfile`, which needs no workspace
+install. It holds no deployment credentials: deployments pull a pinned version, and production
+infrastructure and secrets stay outside this public repository.
+
 Website deployment contains no signing credentials. CODEOWNERS and the main-branch rules protect the
 public recipes; local builds and public PR jobs never publish user-facing release artifacts.

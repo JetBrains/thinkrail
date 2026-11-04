@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { sign as edSign, generateKeyPairSync, type KeyObject } from "node:crypto";
-import { newChallenge, verifyPairingProof } from "./pairing";
+import { newChallenge, pairingMac, verifyPairingMac, verifyPairingProof } from "./pairing";
 
 function deviceKey(): { publicKey: string; privateKey: KeyObject } {
 	const { publicKey, privateKey } = generateKeyPairSync("ed25519");
@@ -40,4 +40,14 @@ test("verifyPairingProof rejects a replayed challenge, a wrong key, and garbage"
 
 test("newChallenge is unique", () => {
 	expect(newChallenge()).not.toBe(newChallenge());
+});
+
+test("verifyPairingMac binds the QR token to the device key and the challenge", () => {
+	const challenge = newChallenge();
+	const mac = pairingMac("token", "device-key", challenge);
+	expect(verifyPairingMac("token", "device-key", challenge, mac)).toBe(true);
+	expect(verifyPairingMac("other-token", "device-key", challenge, mac)).toBe(false);
+	expect(verifyPairingMac("token", "relay-key", challenge, mac)).toBe(false);
+	expect(verifyPairingMac("token", "device-key", newChallenge(), mac)).toBe(false);
+	expect(verifyPairingMac("token", "device-key", challenge, "short")).toBe(false);
 });

@@ -16,6 +16,10 @@ test("parseClientMessage accepts valid client frames", () => {
 		session: "S1",
 	});
 	expect(parseClientMessage(JSON.stringify({ t: "close" }))).toEqual({ t: "close" });
+	expect(parseClientMessage(JSON.stringify({ t: "prove", signature: "sig" }))).toEqual({
+		t: "prove",
+		signature: "sig",
+	});
 });
 
 test("parseBrokerMessage accepts valid broker frames", () => {
@@ -24,6 +28,14 @@ test("parseBrokerMessage accepts valid broker frames", () => {
 		session: "S1",
 	});
 	expect(parseBrokerMessage(JSON.stringify({ t: "ready" }))).toEqual({ t: "ready" });
+	expect(parseBrokerMessage(JSON.stringify({ t: "challenge", nonce: "n" }))).toEqual({
+		t: "challenge",
+		nonce: "n",
+	});
+	expect(parseBrokerMessage(JSON.stringify({ t: "registered" }))).toEqual({ t: "registered" });
+	const ice = [{ urls: ["turn:turn.example:3478"], username: "u", credential: "c" }];
+	expect(parseBrokerMessage(JSON.stringify({ t: "ready", ice }))).toEqual({ t: "ready", ice });
+
 	expect(parseBrokerMessage(JSON.stringify({ t: "frame", data: "d" }))).toEqual({
 		t: "frame",
 		data: "d",
@@ -42,6 +54,10 @@ test("both parsers reject bad json, unknown types, missing fields, and oversized
 	).toBeNull();
 	expect(parseBrokerMessage(JSON.stringify({ t: "open" }))).toBeNull();
 	expect(parseBrokerMessage(JSON.stringify({ t: "nope" }))).toBeNull();
+	expect(
+		parseBrokerMessage(JSON.stringify({ t: "ready", ice: [{ urls: ["http://x"] }] })),
+	).toBeNull();
+	expect(parseBrokerMessage(JSON.stringify({ t: "ready", ice: "nope" }))).toBeNull();
 });
 
 test("encodeBrokerFrame round-trips", () => {

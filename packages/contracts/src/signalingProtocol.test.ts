@@ -11,12 +11,27 @@ import {
 test("parseDeviceMessage accepts valid device frames and trims the label", () => {
 	expect(
 		parseDeviceMessage(
-			JSON.stringify({ kind: "hello", token: "t", devicePublicKey: "k", label: "  Phone  " }),
+			JSON.stringify({
+				kind: "hello",
+				tokenId: "t",
+				devicePublicKey: "k",
+				label: "  Phone  ",
+				nonce: "n",
+			}),
 		),
-	).toEqual({ kind: "hello", token: "t", devicePublicKey: "k", label: "Phone" });
-	expect(parseDeviceMessage(JSON.stringify({ kind: "answer", sdp: "s" }))).toEqual({
+	).toEqual({ kind: "hello", tokenId: "t", devicePublicKey: "k", label: "Phone", nonce: "n" });
+	expect(
+		parseDeviceMessage(JSON.stringify({ kind: "resume", devicePublicKey: "k", nonce: "n" })),
+	).toEqual({ kind: "resume", devicePublicKey: "k", nonce: "n" });
+	expect(parseDeviceMessage(JSON.stringify({ kind: "proof", signature: "s", mac: "m" }))).toEqual({
+		kind: "proof",
+		signature: "s",
+		mac: "m",
+	});
+	expect(parseDeviceMessage(JSON.stringify({ kind: "answer", sdp: "s", signature: "g" }))).toEqual({
 		kind: "answer",
 		sdp: "s",
+		signature: "g",
 	});
 	expect(parseDeviceMessage(JSON.stringify({ kind: "bye" }))).toEqual({ kind: "bye" });
 });
@@ -27,9 +42,10 @@ test("parseHostMessage accepts valid host frames", () => {
 		challenge: "c",
 	});
 	expect(parseHostMessage(JSON.stringify({ kind: "accepted" }))).toEqual({ kind: "accepted" });
-	expect(parseHostMessage(JSON.stringify({ kind: "offer", sdp: "o" }))).toEqual({
+	expect(parseHostMessage(JSON.stringify({ kind: "offer", sdp: "o", signature: "g" }))).toEqual({
 		kind: "offer",
 		sdp: "o",
+		signature: "g",
 	});
 	expect(parseHostMessage(JSON.stringify({ kind: "rejected", reason: "no" }))).toEqual({
 		kind: "rejected",
@@ -37,15 +53,24 @@ test("parseHostMessage accepts valid host frames", () => {
 	});
 });
 
-test("both parsers reject bad json, unknown kinds, missing fields, and empty labels", () => {
+test("both parsers reject bad json, unknown kinds, missing fields, unsigned SDP, and empty labels", () => {
 	expect(parseDeviceMessage("not json")).toBeNull();
 	expect(parseDeviceMessage(JSON.stringify({ kind: "proof" }))).toBeNull();
+	expect(parseDeviceMessage(JSON.stringify({ kind: "answer", sdp: "s" }))).toBeNull();
+	expect(parseDeviceMessage(JSON.stringify({ kind: "resume", devicePublicKey: "k" }))).toBeNull();
 	expect(
 		parseDeviceMessage(
-			JSON.stringify({ kind: "hello", token: "t", devicePublicKey: "k", label: "  " }),
+			JSON.stringify({
+				kind: "hello",
+				tokenId: "t",
+				devicePublicKey: "k",
+				label: "  ",
+				nonce: "n",
+			}),
 		),
 	).toBeNull();
 	expect(parseHostMessage(JSON.stringify({ kind: "challenge" }))).toBeNull();
+	expect(parseHostMessage(JSON.stringify({ kind: "offer", sdp: "o" }))).toBeNull();
 	expect(parseHostMessage(JSON.stringify({ kind: "nope" }))).toBeNull();
 });
 

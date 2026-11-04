@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { type ClientToBroker, parseClientMessage } from "@thinkrail/contracts";
+import { type ClientToBroker, parseClientMessage, registerTranscript } from "@thinkrail/contracts";
 import { createHostBrokerClient } from "./hostBrokerClient";
 import type { HostSession } from "./hostSession";
 import type { DeviceMessage, HostMessage } from "./signalingProtocol";
@@ -21,7 +21,7 @@ function fixture() {
 	}[] = [];
 	const client = createHostBrokerClient({
 		hostKey: "HOSTKEY",
-		socket,
+		sign: (data) => new TextEncoder().encode(`signed:${new TextDecoder().decode(data)}`),
 		openSession: (sessionId, toDevice) => {
 			const record = { sessionId, toDevice, received: [] as DeviceMessage[], closed: false };
 			opened.push(record);
@@ -35,13 +35,22 @@ function fixture() {
 			return session;
 		},
 	});
-	return { client, outbound, opened };
+	client.attach(socket);
+	return { client, outbound, opened, socket };
 }
 
-test("start registers the host by key", () => {
+test("attach registers the host by key and answers the broker's challenge with a signature", () => {
 	const { client, outbound } = fixture();
-	client.start();
 	expect(outbound).toEqual([{ t: "register", hostKey: "HOSTKEY" }]);
+	client.receive(JSON.stringify({ t: "challenge", nonce: "N1" }));
+	const prove = outbound.at(-1);
+	if (prove?.t !== "prove") throw new Error("expected a proof");
+	expect(Buffer.from(prove.signature, "base64url").toString()).toBe(
+		`signed:${new TextDecoder().decode(registerTranscript("N1"))}`,
+	);
+	expect(client.registered).toBe(false);
+	client.receive(JSON.stringify({ t: "registered" }));
+	expect(client.registered).toBe(true);
 });
 
 test("an opened session is created and device frames route into it", () => {
@@ -49,9 +58,9 @@ test("an opened session is created and device frames route into it", () => {
 	client.receive(JSON.stringify({ t: "open", session: "S1" }));
 	expect(client.sessionCount).toBe(1);
 
-	const hello = { kind: "hello", token: "t", devicePublicKey: "k", label: "Phone" };
-	client.receive(JSON.stringify({ t: "frame", session: "S1", data: JSON.stringify(hello) }));
-	expect(opened[0]?.received).toEqual([hello as DeviceMessage]);
+	const resume = { kind: "resume", devicePublicKey: "k", nonce: "n" };
+	client.receive(JSON.stringify({ t: "frame", session: "S1", data: JSON.stringify(resume) }));
+	expect(opened[0]?.received).toEqual([resume as DeviceMessage]);
 });
 
 test("host signaling for a session is framed back through the broker", () => {
@@ -73,4 +82,17 @@ test("close ends the session; unknown sessions and malformed frames are ignored"
 	client.receive(JSON.stringify({ t: "close", session: "S1" }));
 	expect(opened[0]?.closed).toBe(true);
 	expect(client.sessionCount).toBe(0);
+});
+
+test("a dropped broker connection closes its sessions, and a reattach registers again", () => {
+	const { client, outbound, opened, socket } = fixture();
+	client.receive(JSON.stringify({ t: "registered" }));
+	client.receive(JSON.stringify({ t: "open", session: "S1" }));
+	client.detach();
+	expect(opened[0]?.closed).toBe(true);
+	expect(client.sessionCount).toBe(0);
+	expect(client.registered).toBe(false);
+
+	client.attach(socket);
+	expect(outbound.at(-1)).toEqual({ t: "register", hostKey: "HOSTKEY" });
 });

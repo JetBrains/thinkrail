@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { parsePairingUri } from "../remote";
-import type { HostBrokerClient, HostBrokerDeps } from "./hostBrokerClient";
+import type { BrokerConnection, HostBrokerDeps } from "./hostBrokerClient";
 import { startRemoteAccess } from "./remoteAccess";
 
 const identity = {
@@ -10,19 +10,14 @@ const identity = {
 };
 
 function fakeConnect() {
-	const captured: { url?: string; deps?: Omit<HostBrokerDeps, "socket"> } = {};
+	const captured: { url?: string; deps?: HostBrokerDeps } = {};
 	let stopped = false;
-	const connect = (url: string, deps: Omit<HostBrokerDeps, "socket">): HostBrokerClient => {
+	const connect = (url: string, deps: HostBrokerDeps): BrokerConnection => {
 		captured.url = url;
 		captured.deps = deps;
 		return {
-			start: () => {},
-			receive: () => {},
 			stop: () => {
 				stopped = true;
-			},
-			get sessionCount() {
-				return 0;
 			},
 		};
 	};

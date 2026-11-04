@@ -7,10 +7,12 @@ import {
 	loadOrCreateIdentity,
 	newChallenge,
 	type PairedDevice,
+	verifyPairingMac,
 	verifyPairingProof,
+	verifySignature,
 } from "../remote";
 import type { RemoteChannel } from "./channel";
-import { connectHostBroker, type HostBrokerClient, type HostBrokerDeps } from "./hostBrokerClient";
+import { type BrokerConnection, connectHostBroker, type HostBrokerDeps } from "./hostBrokerClient";
 import { createWeriftHostPeer } from "./hostPeer";
 import { createHostSession } from "./hostSession";
 import type { RelayAddress } from "./localRelay";
@@ -35,7 +37,7 @@ export interface RemoteAccessOptions {
 	identity?: HostIdentity;
 	onPaired?: (device: PairedDevice, channel: RemoteChannel) => void;
 	/** Broker connector; defaults to a real WebSocket. Injected in tests. */
-	connect?: (url: string, deps: Omit<HostBrokerDeps, "socket">) => HostBrokerClient;
+	connect?: (url: string, deps: HostBrokerDeps) => BrokerConnection;
 }
 
 /**
@@ -54,16 +56,24 @@ export function startRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
 
 	const client = connect(options.relayUrl, {
 		hostKey: identity.publicKey,
+		sign: identity.sign,
 		openSession: (_sessionId, toDevice) => {
 			const handshake = createHostHandshake({
 				newChallenge,
-				consumeToken: (token) => tokens.consume(token),
+				consumeToken: (tokenId) => tokens.consume(tokenId),
 				verifyProof: verifyPairingProof,
+				verifyMac: verifyPairingMac,
 				registerDevice: (device) => void addDevice(device),
 				findDevice: (key) => findDeviceByKey(key),
 			});
 			const peer = createWeriftHostPeer();
-			const session = createHostSession({ handshake, peer, send: toDevice });
+			const session = createHostSession({
+				handshake,
+				peer,
+				send: toDevice,
+				sign: identity.sign,
+				verify: verifySignature,
+			});
 			session.onChannel((channel, device) => options.onPaired?.(device, channel));
 			return session;
 		},

@@ -1,17 +1,26 @@
+import { type IceServer, parseIceServers } from "./iceServers";
+
 const MAX_KEY = 512;
 const MAX_DATA = 256 * 1024;
 
-/** A frame a client (host or device) sends to the signaling broker. `data` is opaque signaling. */
+/**
+ * A frame a client (host or device) sends to the signaling broker. `data` is opaque signaling. A host proves
+ * it owns the key it registers (`register` → broker `challenge` → `prove`), so no one can take over its
+ * address on a shared relay.
+ */
 export type ClientToBroker =
 	| { t: "register"; hostKey: string }
+	| { t: "prove"; signature: string }
 	| { t: "connect"; hostKey: string }
 	| { t: "frame"; data: string; session?: string }
 	| { t: "close"; session?: string };
 
 /** A frame the signaling broker sends to a client. */
 export type BrokerToClient =
+	| { t: "challenge"; nonce: string }
+	| { t: "registered" }
 	| { t: "open"; session: string }
-	| { t: "ready" }
+	| { t: "ready"; ice?: IceServer[] }
 	| { t: "frame"; data: string; session?: string }
 	| { t: "close"; session?: string }
 	| { t: "error"; reason: string };
@@ -27,6 +36,10 @@ export function parseClientMessage(raw: string): ClientToBroker | null {
 	switch (message.t) {
 		case "register":
 			return bounded(message.hostKey, MAX_KEY) ? { t: "register", hostKey: message.hostKey } : null;
+		case "prove":
+			return bounded(message.signature, MAX_KEY)
+				? { t: "prove", signature: message.signature }
+				: null;
 		case "connect":
 			return bounded(message.hostKey, MAX_KEY) ? { t: "connect", hostKey: message.hostKey } : null;
 		case "frame":
@@ -48,10 +61,17 @@ export function parseBrokerMessage(raw: string): BrokerToClient | null {
 	const message = parseObject(raw);
 	if (!message) return null;
 	switch (message.t) {
+		case "challenge":
+			return bounded(message.nonce, MAX_KEY) ? { t: "challenge", nonce: message.nonce } : null;
+		case "registered":
+			return { t: "registered" };
 		case "open":
 			return bounded(message.session, MAX_KEY) ? { t: "open", session: message.session } : null;
-		case "ready":
-			return { t: "ready" };
+		case "ready": {
+			if (message.ice === undefined) return { t: "ready" };
+			const ice = parseIceServers(message.ice);
+			return ice ? { t: "ready", ice } : null;
+		}
 		case "frame":
 			if (!bounded(message.data, MAX_DATA)) return null;
 			return typeof message.session === "string"

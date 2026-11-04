@@ -1,12 +1,15 @@
 import {
+	answerTranscript,
 	type DeviceMessage,
 	encodeBrokerFrame,
 	encodeDeviceMessage,
 	type HostMessage,
-	PUBLIC_STUN_URLS,
+	offerTranscript,
+	pairingMacInput,
 	parseBrokerMessage,
 	parseHostMessage,
 	parsePairingUri,
+	withPublicStun,
 } from "@thinkrail/contracts";
 import { toDeviceChannel } from "./deviceChannel";
 import { createDeviceWireClient, type DeviceWireClient } from "./deviceWireClient";
@@ -43,6 +46,66 @@ function bytesToBase64url(bytes: Uint8Array): string {
 	let binary = "";
 	for (const byte of bytes) binary += String.fromCharCode(byte);
 	return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+const encoder = new TextEncoder();
+
+function utf8(value: string): Uint8Array<ArrayBuffer> {
+	const bytes = encoder.encode(value);
+	const out = new Uint8Array(new ArrayBuffer(bytes.length));
+	out.set(bytes);
+	return out;
+}
+
+function randomToken(): string {
+	return bytesToBase64url(crypto.getRandomValues(new Uint8Array(32)));
+}
+
+/** `pairingTokenId`: the QR token's public name, so the relay-visible `hello` never carries the token. */
+async function tokenIdOf(token: string): Promise<string> {
+	return bytesToBase64url(new Uint8Array(await crypto.subtle.digest("SHA-256", utf8(token))));
+}
+
+async function pairingMac(
+	token: string,
+	devicePublicKey: string,
+	challenge: string,
+): Promise<string> {
+	const key = await crypto.subtle.importKey(
+		"raw",
+		utf8(token),
+		{ name: "HMAC", hash: "SHA-256" },
+		false,
+		["sign"],
+	);
+	const mac = await crypto.subtle.sign("HMAC", key, pairingMacInput(devicePublicKey, challenge));
+	return bytesToBase64url(new Uint8Array(mac));
+}
+
+/** True when the offer was signed by the host key the device paired with, so no relay spliced in its own. */
+async function hostSigned(
+	hostKey: string,
+	nonce: string,
+	challenge: string,
+	message: { sdp: string; signature: string },
+): Promise<boolean> {
+	try {
+		const key = await crypto.subtle.importKey(
+			"raw",
+			base64urlToBytes(hostKey),
+			{ name: "Ed25519" },
+			false,
+			["verify"],
+		);
+		return await crypto.subtle.verify(
+			{ name: "Ed25519" },
+			key,
+			base64urlToBytes(message.signature),
+			offerTranscript(nonce, challenge, message.sdp),
+		);
+	} catch {
+		return false;
+	}
 }
 
 interface DeviceKey {
@@ -97,16 +160,7 @@ interface OpenParams {
 async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 	const key = await loadOrCreateDeviceKey();
 	const client = createDeviceWireClient();
-	const resumeFrame: DeviceMessage = { kind: "resume", devicePublicKey: key.publicKeyRaw };
-	const firstFrame: DeviceMessage =
-		params.token !== undefined
-			? {
-					kind: "hello",
-					token: params.token,
-					devicePublicKey: key.publicKeyRaw,
-					label: params.label,
-				}
-			: resumeFrame;
+	const tokenId = params.token !== undefined ? await tokenIdOf(params.token) : undefined;
 
 	let closed = false;
 	let backoff = 500;
@@ -123,18 +177,21 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 		active = null;
 	};
 
-	const sign = async (challenge: string): Promise<string> => {
-		const signature = await crypto.subtle.sign(
-			{ name: "Ed25519" },
-			key.privateKey,
-			base64urlToBytes(challenge),
-		);
+	const sign = async (data: Uint8Array<ArrayBuffer>): Promise<string> => {
+		const signature = await crypto.subtle.sign({ name: "Ed25519" }, key.privateKey, data);
 		return bytesToBase64url(new Uint8Array(signature));
 	};
 
 	let relayUrl = params.relayUrls[0] ?? "";
 
-	const attempt = async (initiate: DeviceMessage): Promise<void> => {
+	/** One connection attempt: `pairing` sends the QR token's `hello`, otherwise the device `resume`s. */
+	const attempt = async (pairing: boolean): Promise<void> => {
+		const nonce = randomToken();
+		let challenge = "";
+		const initiate: DeviceMessage =
+			pairing && tokenId !== undefined
+				? { kind: "hello", tokenId, devicePublicKey: key.publicKeyRaw, label: params.label, nonce }
+				: { kind: "resume", devicePublicKey: key.publicKeyRaw, nonce };
 		const picked = await openFirstRelay(params.relayUrls, (url) => new WebSocket(url));
 		if (closed) {
 			picked.socket.close();
@@ -143,9 +200,7 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 		relayUrl = picked.url;
 		const ws = picked.socket;
 		return new Promise<void>((resolve, reject) => {
-			const pc = new RTCPeerConnection({
-				iceServers: PUBLIC_STUN_URLS.map((urls) => ({ urls })),
-			});
+			const pc = new RTCPeerConnection({ iceServers: withPublicStun() });
 			active = { ws, pc };
 			let settled = false;
 			let over = false;
@@ -184,17 +239,35 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 
 			const onHost = async (message: HostMessage): Promise<void> => {
 				switch (message.kind) {
-					case "challenge":
-						send({ kind: "proof", signature: await sign(message.challenge) });
+					case "challenge": {
+						challenge = message.challenge;
+						const signature = await sign(base64urlToBytes(challenge));
+						send(
+							pairing && params.token !== undefined
+								? {
+										kind: "proof",
+										signature,
+										mac: await pairingMac(params.token, key.publicKeyRaw, challenge),
+									}
+								: { kind: "proof", signature },
+						);
 						return;
+					}
 					case "rejected":
 						dropped(message.reason);
 						return;
 					case "offer": {
+						if (!challenge || !(await hostSigned(params.hostKey, nonce, challenge, message))) {
+							dropped("host identity check failed");
+							return;
+						}
 						await pc.setRemoteDescription({ type: "offer", sdp: message.sdp });
 						const answer = await pc.createAnswer();
 						await pc.setLocalDescription(answer);
-						if (answer.sdp) send({ kind: "answer", sdp: answer.sdp });
+						if (answer.sdp) {
+							const signature = await sign(answerTranscript(challenge, answer.sdp));
+							send({ kind: "answer", sdp: answer.sdp, signature });
+						}
 						return;
 					}
 					case "candidate":
@@ -212,7 +285,10 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 				const frame = parseBrokerMessage(event.data);
 				if (!frame) return;
 				if (frame.t === "error") return dropped(frame.reason);
-				if (frame.t === "ready") return send(initiate);
+				if (frame.t === "ready") {
+					if (frame.ice) pc.setConfiguration({ iceServers: withPublicStun(frame.ice) });
+					return send(initiate);
+				}
 				if (frame.t === "frame") {
 					const host = parseHostMessage(frame.data);
 					if (host) {
@@ -232,11 +308,11 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 		backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
 		setTimeout(() => {
 			if (closed) return;
-			attempt(resumeFrame).catch(() => scheduleReconnect());
+			attempt(false).catch(() => scheduleReconnect());
 		}, delay);
 	};
 
-	await attempt(firstFrame);
+	await attempt(params.token !== undefined);
 
 	return {
 		client,
