@@ -9,9 +9,14 @@ import {
 	staleHighlight,
 } from "./highlightCode";
 import type { HighlightReply, HighlightRequest } from "./highlighter.worker";
+import { assembleHighlight } from "./highlightHtml";
 
 function render(code: string, lang: string) {
 	return `<pre class="highlights ${lang}"><code>${code}</code></pre>`;
+}
+
+function requestsOf(posted: HighlightRequest[]) {
+	return posted.flatMap((request) => (request.kind === "highlight" ? [request] : []));
 }
 
 function fakeWorker(options: { throws?: boolean } = {}) {
@@ -35,9 +40,10 @@ function fakeWorker(options: { throws?: boolean } = {}) {
 		},
 	});
 	function answer(index: number) {
-		const request = posted[index];
+		const request = requestsOf(posted)[index];
 		if (!request || !events) throw new Error(`no request ${index}`);
-		events.reply({ id: request.id, html: render(request.code, request.lang) });
+		if (request.kind !== "highlight") throw new Error("not a highlight request");
+		events.reply({ id: request.id, result: { html: render(request.code, request.lang) } });
 	}
 	return {
 		client,
@@ -58,9 +64,9 @@ test("rapid calls on one key post the first and the latest only", async () => {
 	const results = ["a", "ab", "abc", "abcd", "abcde"].map((code) =>
 		client.highlightCode(code, "ts", "k"),
 	);
-	expect(posted.map((request) => request.code)).toEqual(["a"]);
+	expect(requestsOf(posted).map((request) => request.code)).toEqual(["a"]);
 	answer(0);
-	expect(posted.map((request) => request.code)).toEqual(["a", "abcde"]);
+	expect(requestsOf(posted).map((request) => request.code)).toEqual(["a", "abcde"]);
 	answer(1);
 	expect(await Promise.all(results)).toEqual([
 		render("a", "typescript"),
@@ -76,7 +82,7 @@ test("calls on different keys are never coalesced", async () => {
 	const { client, posted } = fakeWorker();
 	void client.highlightCode("one", "py", "k1");
 	void client.highlightCode("two", "py", "k2");
-	expect(posted.map((request) => request.code)).toEqual(["one", "two"]);
+	expect(requestsOf(posted).map((request) => request.code)).toEqual(["one", "two"]);
 });
 
 test("a repeated call on a key resolves from the cache without a second post", async () => {
@@ -100,7 +106,7 @@ test("plain fences and mermaid never spawn the worker", async () => {
 test("a fence language outside the Monaco catalog goes to the worker", () => {
 	const { client, posted } = fakeWorker();
 	void client.highlightCode("x", "Elixir", "k");
-	expect(posted[0]?.lang).toBe("elixir");
+	expect(requestsOf(posted)[0]?.lang).toBe("elixir");
 });
 
 test("a throwing worker constructor leaves every later block plain", async () => {
@@ -128,7 +134,7 @@ test("a worker error leaves pending and later blocks plain", async () => {
 test("an unsupported language answers plain without stopping the worker", async () => {
 	const { client, posted, events, answer, counts } = fakeWorker();
 	const unknown = client.highlightCode("x", "not-a-language", "k1");
-	events()?.reply({ id: posted[0]?.id ?? -1, html: null });
+	events()?.reply({ id: requestsOf(posted)[0]?.id ?? -1, result: null });
 	expect(await unknown).toBeNull();
 	const known = client.highlightCode("y", "ts", "k2");
 	answer(1);
@@ -240,7 +246,7 @@ test("an idle key starts a fresh request on its next call", async () => {
 	await first;
 	await flush();
 	void client.highlightCode("b", "ts", "k");
-	expect(posted.map((request) => request.code)).toEqual(["a", "b"]);
+	expect(requestsOf(posted).map((request) => request.code)).toEqual(["a", "b"]);
 });
 
 test("the real worker answers with highlighted html", async () => {
@@ -252,9 +258,70 @@ test("the real worker answers with highlighted html", async () => {
 			resolve(event.data),
 		);
 		worker.addEventListener("error", reject);
-		worker.postMessage({ id: 7, code: "const x: number = 1;", lang: "typescript" });
+		worker.postMessage({
+			kind: "highlight",
+			id: 7,
+			key: "real",
+			code: "const x: number = 1;",
+			lang: "typescript",
+		} satisfies HighlightRequest);
 	});
 	worker.terminate();
 	expect(reply.id).toBe(7);
-	expect(reply.html).toContain('class="highlights');
+	expect(JSON.stringify(reply.result)).toContain("highlights");
 }, 20_000);
+
+test("a line update joins the shown lines, and a release clears them", async () => {
+	const { client, posted, events, counts } = fakeWorker();
+	const reply = (index: number, update: { from: number; lines: string[]; tail: string }) => {
+		const id = requestsOf(posted)[index]?.id ?? -1;
+		events()?.reply({ id, result: { update: { open: "<pre><code>", ...update } } });
+	};
+	const first = client.highlightCode("a\nb", "ts", "k");
+	reply(0, { from: 0, lines: ["A"], tail: "B" });
+	expect(await first).toBe(assembleHighlight("<pre><code>", ["A"], "B"));
+	const second = client.highlightCode("a\nb\nc", "ts", "k");
+	reply(1, { from: 1, lines: ["B"], tail: "C" });
+	expect(await second).toBe(assembleHighlight("<pre><code>", ["A", "B"], "C"));
+	const rewrite = client.highlightCode("z", "ts", "k");
+	reply(2, { from: 0, lines: [], tail: "Z" });
+	expect(await rewrite).toBe(assembleHighlight("<pre><code>", [], "Z"));
+	client.release("k");
+	expect(posted.at(-1)).toEqual({ kind: "release", key: "k" });
+	const stale = client.highlightCode("q", "ts", "k");
+	reply(3, { from: 2, lines: [], tail: "Q" });
+	expect(await stale).toBeNull();
+	expect(counts().spawned).toBe(1);
+});
+
+test("a release drops the queued request and ignores the reply still on its way", async () => {
+	const { client, posted, answer, events } = fakeWorker();
+	void client.highlightCode("a\n", "ts", "k");
+	answer(0);
+	await flush();
+	void client.highlightCode("a\nb\n", "ts", "k");
+	const queued = client.highlightCode("a\nb\nc\n", "ts", "k");
+	const inFlight = requestsOf(posted).at(-1);
+	if (!inFlight) throw new Error("no request");
+	client.release("k");
+	expect(await queued).toBeNull();
+	const update = { open: "<pre><code>", lines: ["a", "b"], tail: "" };
+	events()?.reply({ id: inFlight.id, result: { update: { ...update, from: 0 } } });
+	await flush();
+	expect(posted.map((request) => request.kind)).toEqual(["highlight", "highlight", "release"]);
+
+	const next = client.highlightCode("z\n", "ts", "k");
+	const nextRequest = requestsOf(posted).at(-1);
+	if (!nextRequest) throw new Error("no request");
+	events()?.reply({
+		id: nextRequest.id,
+		result: { update: { open: "<pre><code>", from: 2, lines: [], tail: "X" } },
+	});
+	expect(await next).toBeNull();
+});
+
+test("a release before the worker exists does not start it", () => {
+	const { client, counts } = fakeWorker();
+	client.release("k");
+	expect(counts().spawned).toBe(0);
+});

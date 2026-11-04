@@ -70,7 +70,7 @@ renderers are registered by the host's `extensions/registry.ts`. Unregistered to
 - **Public surface:** the side-effect `register` import + shared `CodeBlock`/`Collapsible` for sibling
   renderers. No barrel (chat pulls shiki — per-file imports, as in the parent).
 - **Allowed deps:** parent chat primitives (`toolRegistry`, `Markdown`, `ChatActions`, `interactionState`,
-  `fileTargets`, `foldState`);
+  `fileTargets`, `foldState`, `HighlightedHtml`);
   `contracts` (types and pure guards); `@thinkrail/ui/*` (including
   `attention-line`, the "Your input is needed" line shared with extension prompts);
   `@thinkrail/extension-api/web`; `lib`; `@remixicon/react`.
