@@ -17,23 +17,28 @@ interface FeedbackState {
 	submittedSurveyId: string | null;
 	submittedIteration: number | null;
 	lastInvitedAt: number | null;
+	githubStarAsked: boolean;
 }
 
 type FeedbackPublisher = (clientKey: string) => boolean;
 
 const INVITATION_INTERVAL = 10;
+const FIRST_INVITATION_AT = 20;
+const GITHUB_STAR_ASK_AT = 10;
 const DEFAULT_STATE: FeedbackState = {
 	acceptedMessages: 0,
-	nextInvitationAt: INVITATION_INTERVAL,
+	nextInvitationAt: FIRST_INVITATION_AT,
 	dismissed: false,
 	submittedSurveyId: null,
 	submittedIteration: null,
 	lastInvitedAt: null,
+	githubStarAsked: false,
 };
 
 let cachedState: FeedbackState | null = null;
 let claimedClient: string | null = null;
 let publishInvitation: FeedbackPublisher | null = null;
+let publishGithubStar: FeedbackPublisher | null = null;
 
 function isNonNegativeSafeInteger(value: unknown): value is number {
 	return Number.isSafeInteger(value) && (value as number) >= 0;
@@ -52,8 +57,9 @@ function parseState(value: unknown): FeedbackState | null {
 	const submittedSurveyId = completionId(value);
 	const submittedIteration = completionIteration(value);
 	const lastInvitedAt = invitedAt(value);
+	const githubStarAsked = candidate.githubStarAsked ?? false;
 	if (submittedSurveyId === undefined || submittedIteration === undefined) return null;
-	if (lastInvitedAt === undefined) return null;
+	if (lastInvitedAt === undefined || typeof githubStarAsked !== "boolean") return null;
 	return {
 		acceptedMessages: candidate.acceptedMessages,
 		nextInvitationAt: candidate.nextInvitationAt,
@@ -61,6 +67,7 @@ function parseState(value: unknown): FeedbackState | null {
 		submittedSurveyId,
 		submittedIteration,
 		lastInvitedAt,
+		githubStarAsked,
 	};
 }
 
@@ -132,6 +139,10 @@ export function setFeedbackPublisher(publisher: FeedbackPublisher | null): void 
 	if (publisher === null) claimedClient = null;
 }
 
+export function setGithubStarPublisher(publisher: FeedbackPublisher | null): void {
+	publishGithubStar = publisher;
+}
+
 export function surveyIsCompleted(id: string, iteration: number): boolean {
 	const current = loadState();
 	return current.submittedSurveyId === id && current.submittedIteration === iteration;
@@ -157,8 +168,24 @@ export function recordAcceptedMessage(clientKey: string): void {
 	} catch {
 		return;
 	}
+	if (askForGithubStar(clientKey)) return;
 	if (surveyRefreshDue()) void refreshInAppSurvey().then(() => maybeOffer(clientKey));
 	else maybeOffer(clientKey);
+}
+
+function askForGithubStar(clientKey: string): boolean {
+	const current = loadState();
+	if (current.githubStarAsked || current.acceptedMessages < GITHUB_STAR_ASK_AT) return false;
+	try {
+		if (publishGithubStar?.(clientKey) !== true) return false;
+	} catch {
+		return false;
+	}
+	cachedState = { ...loadState(), githubStarAsked: true };
+	try {
+		writeState(cachedState);
+	} catch {}
+	return true;
 }
 
 function maybeOffer(clientKey: string): void {
@@ -231,4 +258,5 @@ export function resetFeedbackForTests(): void {
 	cachedState = null;
 	claimedClient = null;
 	publishInvitation = null;
+	publishGithubStar = null;
 }
