@@ -1,9 +1,9 @@
 import type { Theme } from "@pierre/highlights";
 import type { ResourceMeta } from "@thinkrail/contracts";
+import type { editor } from "monaco-editor/editor/editor.api.js";
 import type { ComponentProps, ComponentType, ReactNode } from "react";
 import { createContext, useContext } from "react";
 import type ReactMarkdown from "react-markdown";
-import type { LanguageRegistration, ThemeRegistration } from "shiki/core";
 import type { ResourceEnvironment, SurfaceReview } from "./registry";
 
 type ReactMarkdownProps = ComponentProps<typeof ReactMarkdown>;
@@ -26,17 +26,14 @@ export interface ResourceCodeLanguage {
 	extensions: readonly string[];
 	aliases: readonly string[];
 	filenames?: readonly string[];
-	load: () => Promise<{ default: LanguageRegistration[] }>;
 }
 
 export interface ResourceCodeHost {
 	languages: readonly ResourceCodeLanguage[];
 	languageId(value: string): string | null;
-	theme(options: {
-		name: string;
-		type: "light" | "dark";
-		readVariable: (name: string) => string;
-	}): ThemeRegistration;
+	editorTheme(
+		readVariable: (name: string) => string,
+	): Pick<editor.IStandaloneThemeData, "rules" | "colors">;
 	pierreTheme: Theme;
 }
 

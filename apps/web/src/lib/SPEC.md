@@ -79,8 +79,8 @@ not this module; the theme-aware highlighter remains app-local.
   that lets a no-op attention write be dropped before it reaches the store. Optional terminal recall is workspace-local history, not a second
   selected-tab authority; the layout owner validates it against current membership. Also the shared
   code highlighting, **kept out of the barrel** so the eager `@/lib` import stays free of it:
-  `highlighter.ts` owns the curated Shiki grammar/id/file-association catalog for the desktop Monaco
-  renderer (loaded on a language's first use), and chat borrows only its aliases. Chat code is highlighted
+  `highlighter.ts` owns the curated id/alias/file-association catalog for the desktop Monaco
+  renderer, and chat borrows only its aliases. Chat code is highlighted
   off the main thread with `@pierre/highlights`, whose one WASM file holds all 152 languages:
   `highlightCode.ts` resolves the language alias (`mermaid`, empty and the plain-text names answer `null` with
   no worker) and posts to one lazy `highlighter.worker.ts` per page, which calls `chatHighlighter.ts`. The
@@ -104,8 +104,8 @@ not this module; the theme-aware highlighter remains app-local.
   `highlightHtml.ts` holds the Pierre-free helpers the client and the DOM share: `assembleHighlight` joins the
   lines and marks the unfinished one, and `applyHighlightHtml` parses only the added part into the shown block: `stable` is the shown HTML that later updates keep, and `added` is the unfinished line plus the lines finished since. A block without its tail marker is replaced whole rather than patched.
   It is the one place outside `highlightCode` that reads the markup. `chat/HighlightedHtml` mounts it. These files stay out of the barrel and are imported per-file (`@/lib/highlighter`,
-  `@/lib/highlightCode`). `shell/AppResourceHost` hands the catalog to the resource renderers, while every
-  grammar and the worker load on first use; theme
+  `@/lib/highlightCode`). `shell/AppResourceHost` hands the catalog to the resource renderers, while the
+  worker and its one WASM file load on first use; theme
   identity/palettes never live in `lib`. Collision-safe browser identity composition lives here too:
   **`tupleKey()`** length-prefixes independent strings, **`parseTupleKey()`** reads only its requested
   namespace, and **`layoutResourceIdentity()`** gives every frontend-local placement/cache alias one

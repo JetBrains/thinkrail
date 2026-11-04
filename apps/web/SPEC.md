@@ -189,7 +189,7 @@ The renderer engines (`@pierre/diffs`, `jsondiffpatch`, `pdfjs-dist`, `@shikijs/
 [[module-resource-renderers]]' dependencies; the app keeps `react-virtuoso` for its own panes
 (catalog-pinned, shared with the package). The chunking contract still holds for the app build. `pdfjs-dist` and its `pdf.worker.min.mjs` worker URL are reached only from
 the lazy PDF renderer chunks; neither belongs in the entry graph. Pierre, its Shiki
-language/theme graph and worker entry, plus Monaco, its curated Shiki grammars and adapter, remain behind
+language/theme graph and worker entry, plus Monaco and its Pierre token provider, remain behind
 resource-loader dynamic imports. Only lazy Pierre renderer modules mount the provider, and every mounted
 surface acquires Pierre's module-singleton worker pool; an ordinary workspace therefore neither loads Pierre
 nor initializes its pool. Renderer metadata and loaders are the only eager edge. A production build must
@@ -309,9 +309,8 @@ themselves.
 - **Every code surface is catalog-agnostic.** xterm and Monaco rebuild from generic variables after the
   atomic `[data-theme]` signal, including an optional selected-text foreground. Monaco chooses
   `vs`/`vs-dark` or the corresponding high-contrast base from manifest appearance/contrast metadata,
-  never a theme id. Shiki uses one code-owned semantic CSS-variable TextMate map: chat consumes its live
-  references, while Monaco resolves that same map to hex for `@shikijs/monaco`; Pierre's separate
-  `thinkrail` registration also emits live variable references. None needs a per-theme import or selector,
+  never a theme id. One code-owned table maps Pierre token kinds to semantic CSS variables: chat and Pierre
+  diffs consume its live references, while Monaco resolves that same table to hex. None needs a per-theme import or selector,
   and only strict Monaco re-resolves after a swap. Pierre's own inherited diff variables carry semantic feedback
   and canvas colours into its Shadow DOM. Mermaid re-derives from the same variables. Reads for
   strict consumers still pass through `lib.cssColorToHex`. Data-driven tests enforce the existing

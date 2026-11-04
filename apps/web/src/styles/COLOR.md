@@ -90,16 +90,15 @@ the scale, never a new number in a class name.
 
 ## Non-CSS consumers
 
-Monaco, Pierre, xterm, mermaid and Shiki cannot wear a class for their painted internals. Monaco, xterm,
+Monaco, Pierre, xterm and mermaid cannot wear a class for their painted internals. Monaco, xterm,
 and mermaid read tokens through `getComputedStyle` and rebuild after the `[data-theme]` swap; Monaco now
 has only `EDITOR_THEME` and paints desktop files on `container-workspace-bg`. Pierre's open Shadow DOM
 inherits one `.pierre-code-surface` custom-property bridge: `THINKRAIL_PIERRE_THEME` maps Pierre's token
 kinds to the existing `--code-*` syntax roles, while `--diffs-bg*`, number foregrounds, and
 addition/deletion bases map to the workspace/content canvas, muted text, and feedback success/error roles.
 Those values remain live variable references, so Pierre needs neither a per-theme registration nor a
-re-highlight after a swap. Monaco and chat share the single `THINKRAIL_SHIKI_THEME` TextMate definition;
-chat keeps its live CSS-variable form, while Monaco resolves the same variables to hex for its strict theme
-API. All consumers therefore name the same semantic tokens everything else does, with one name per value.
+re-highlight after a swap. Chat and Pierre diffs keep the live CSS-variable form of that table, while Monaco resolves the same variables
+to hex for its strict theme API. All consumers therefore name the same semantic tokens everything else does, with one name per value.
 The roles these consumers *share* with components (`--container-*-bg`, `--text-muted`) stay published and
 mapped in `@theme inline`; the ones **only** they read (`--editor-selection-*`,
 `--editor-find-match-bg`, `--widget-shadow`, and the stylesheet-only `--media-checker-tile`) are
@@ -112,7 +111,7 @@ the remainder comes from its own built-in palette:
 
 | consumer | we set | the rest comes from |
 | --- | --- | --- |
-| Monaco | desktop file canvas/foreground/gutter; active + inactive line numbers; cursor + both selection colours; current-line fill/border; indent guides; bracket match + six bracket-pair colours; word/selection/find highlights; sticky-scroll canvas/shadow; fold/whitespace paint; editor + hover widgets; menu, quick-input and input surfaces/states; focus border; widget/scrollbar shadows + slider states; every TextMate syntax rule | `vs` / `vs-dark` / `hc-black` / `hc-light` via `inherit: true` — suggest/peek/debug, minimap and other unlisted specialist surfaces |
+| Monaco | desktop file canvas/foreground/gutter; active + inactive line numbers; cursor + both selection colours; current-line fill/border; indent guides; bracket match + six bracket-pair colours; word/selection/find highlights; sticky-scroll canvas/shadow; fold/whitespace paint; editor + hover widgets; menu, quick-input and input surfaces/states; focus border; widget/scrollbar shadows + slider states; every Pierre token rule | `vs` / `vs-dark` / `hc-black` / `hc-light` via `inherit: true` — suggest/peek/debug, minimap and other unlisted specialist surfaces |
 | Pierre | file/diff canvas and gutter, foreground/line numbers/selection, syntax variables, success additions, error deletions, separator/annotation surfaces, code family/size | Pierre core layout/effects for properties not bridged; no `@pierre/theme` preset is applied |
 | xterm | background, foreground, cursor, both selection colours, all 16 ANSI | xterm defaults for `cursorAccent` and `selectionInactiveBackground` |
 | mermaid | the `themeVariables` map in `thinkrail-extensions/visualize/web/mermaid.ts` | mermaid's `base` theme for anything absent from that map |
@@ -178,7 +177,7 @@ hovered rows vanished the same way. 1.15 is the line that separates a visible fi
 one; every bundled theme clears it on all six surfaces (the weakest live pair is Light's
 hover-on-content at 1.165).
 
-`themes/runtime.test.ts` pins application; `themes/shiki.test.ts` pins the syntax-variable map. See [`themes/SPEC.md`](../themes/SPEC.md) for the manifest itself and
+`themes/runtime.test.ts` pins application; `themes/editor.test.ts` pins the syntax-variable map. See [`themes/SPEC.md`](../themes/SPEC.md) for the manifest itself and
 [TYPOGRAPHY.md](./TYPOGRAPHY.md) for the parallel type system.
 
 ## Scope: the app and its UI SDK/extensions

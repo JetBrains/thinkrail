@@ -1,8 +1,8 @@
-import type { Theme, ThemeStyle } from "@pierre/highlights";
+import type { Theme } from "@pierre/highlights";
 
-type Syntax = NonNullable<ThemeStyle["syntax"]>;
+type Syntax = Record<string, { color?: string }>;
 
-const BASE_SYNTAX: Syntax = {
+export const PIERRE_BASE_SYNTAX: Syntax = {
 	comment: { color: "comment" },
 	"comment.doc": { color: "comment-doc" },
 	keyword: { color: "keyword" },
@@ -44,5 +44,5 @@ export const THINKRAIL_PIERRE_THEME: Theme = {
 		prefix: "--code-",
 		defaults: { background: "var(--container-content-bg)" },
 	},
-	style: { syntax: BASE_SYNTAX },
+	style: { syntax: PIERRE_BASE_SYNTAX },
 };
