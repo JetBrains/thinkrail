@@ -54,15 +54,16 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `installWelcomeSnapshot`, whose separate `welcomeGeneration` is the cold-navigation readiness edge; after
   every welcome it re-reads each project whose workspace list this surface already holds with
   `includeDiffStats: false`, generation-fencing the result, folding already-known rows through
-  `updateWorkspace`, and retiring through `applyWorkspaceRemoved` each row it held when the read was sent
-  that the reply no longer lists and the store still holds, so a pushed full workspace snapshot or
+  `updateWorkspace`, and retiring through `retireWorkspace` (the live `workspace.removed` path, including
+  its MCP login cancellation) each row it held when the read was sent that the reply no longer lists and
+  the store still holds, so a pushed full workspace snapshot or
   removal missed while disconnected (including a rename) cannot stay stale; rows that arrived after the
   read was sent are never retired by it, and it adds no rows (creation stays with the push and backfill);
   the full host-update lifecycle snapshot via `applyHostUpdate`, project snapshots via
   `applyProjectUpdated`, consecutive `pi.event` frames through the batcher into one
   `handlePiEvents(payloads)` store commit, `pi.extensionUi` via `applyExtUi(request)`,
   `workspace.created` via `addWorkspace(workspace)`, `workspace.updated` via `updateWorkspace(workspace)`,
-  `workspace.removed` via `applyWorkspaceRemoved(projectId, id)`, `session.created` via `noteClosedChats`
+  `workspace.removed` via `retireWorkspace(projectId, id)` (`applyWorkspaceRemoved` plus login cancellation), `session.created` via `noteClosedChats`
   (peer-created domain state enters history only, never local placement), `session.deleted` via the idempotent
   `deleteChat(workspaceId, sessionId)` tombstone fold (an online fast path; because this event channel is
   deliberately not replayed, workbench hydration repairs any deletion missed while disconnected from the next
@@ -143,8 +144,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   the settled status, including a connected edge; the bounded browser poll remains a refresh helper, not
   the sole completion path. The streak budget resets once nothing is starting; disposal cancels the timer
   and suppresses late watcher callbacks. Independent watchers share reads only under the tail rule above.
-Workspace removal cancels its active MCP login through `provider.loginCancel` after retiring the local
-modal. Late login frames for tombstoned workspaces are cancelled instead of installed; the MCP start
+Workspace removal, live or reconciled on reconnect, cancels its active MCP login through
+`provider.loginCancel` after retiring the local modal. Late login frames for tombstoned workspaces are cancelled instead of installed; the MCP start
 response path does the same if removal preceded its acknowledgement. Cancellation is best-effort over
 the existing reconnect-safe request transport; the host's bounded probe lifetime remains the final cleanup.
 **Client error reports** (`errorReports.ts`): `installClientErrorReporting()` listens for window `error` /

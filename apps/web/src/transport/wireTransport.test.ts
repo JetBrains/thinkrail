@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import {
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
@@ -11,7 +11,9 @@ import {
 	USER_THEMES_PROTOCOL_VERSION,
 	type Workspace,
 } from "@thinkrail/contracts";
+import type { LoginState } from "../auth";
 import { useAppStore } from "../store";
+import * as wireTransport from "./wireTransport";
 import {
 	applyWorkspaceListRefresh,
 	mergeSessionStateRecords,
@@ -153,5 +155,34 @@ describe("the reconnect workspace list refresh", () => {
 		const state = useAppStore.getState();
 		expect(state.workspaces.p1?.map((row) => row.id)).toEqual(["w1"]);
 		expect(state.removedWorkspaceIds.w1).toBeUndefined();
+	});
+
+	test("cancels the MCP login of a retired workspace like a live removal does", () => {
+		const requests: [string, unknown][] = [];
+		const transport = {
+			request: (method: string, params: unknown) => {
+				requests.push([method, params]);
+				return Promise.resolve({ ok: true });
+			},
+		} as unknown as ReturnType<typeof wireTransport.getTransport>;
+		const spy = spyOn(wireTransport, "getTransport").mockReturnValue(transport);
+		try {
+			const login: LoginState = {
+				loginId: "login_1",
+				providerId: "mcp",
+				target: { kind: "mcp", workspaceId: "w2", serverName: "docs" },
+				status: "active",
+			};
+			useAppStore.setState({
+				projects: [project("p1")],
+				workspaces: { p1: [workspace("w1"), workspace("w2")] },
+				activeLogin: login,
+			});
+			applyWorkspaceListRefresh("p1", ["w1", "w2"], [workspace("w1")]);
+			expect(useAppStore.getState().activeLogin).toBeNull();
+			expect(requests).toEqual([["provider.loginCancel", { loginId: "login_1" }]]);
+		} finally {
+			spy.mockRestore();
+		}
 	});
 });

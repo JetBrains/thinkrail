@@ -255,8 +255,19 @@ export function applyWorkspaceListRefresh(
 		if (listed.has(workspaceId)) continue;
 		const held = useAppStore.getState().workspaces[projectId];
 		if (held?.some((workspace) => workspace.id === workspaceId)) {
-			store.applyWorkspaceRemoved(projectId, workspaceId);
+			retireWorkspace(projectId, workspaceId);
 		}
+	}
+}
+
+export function retireWorkspace(projectId: string, workspaceId: string): void {
+	const state = useAppStore.getState();
+	const login = state.activeLogin;
+	state.applyWorkspaceRemoved(projectId, workspaceId);
+	if (login?.target?.workspaceId === workspaceId) {
+		void getTransport()
+			.request("provider.loginCancel", { loginId: login.loginId })
+			.catch(() => {});
 	}
 }
 
@@ -428,14 +439,7 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.workspaceRemoved, (data) => {
 		const { projectId, id } = data as WorkspaceRemoved;
-		const state = useAppStore.getState();
-		const login = state.activeLogin;
-		state.applyWorkspaceRemoved(projectId, id);
-		if (login?.target?.workspaceId === id) {
-			void getTransport()
-				.request("provider.loginCancel", { loginId: login.loginId })
-				.catch(() => {});
-		}
+		retireWorkspace(projectId, id);
 	});
 
 	transport.subscribe(WS_CHANNELS.reviewChanged, (data) => {
