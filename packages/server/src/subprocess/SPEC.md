@@ -16,7 +16,7 @@ never what a particular child's output means.
 
 ## Boundary
 
-- **Owns:** `runBounded(argv, { timeoutMs, cwd?, env?, stdout?, signal? })` →
+- **Owns:** `runBounded(argv, { timeoutMs, cwd?, env?, stdout?, signal?, stdin? })` →
   `{ ok, out, err, timedOut, launchFailed, waitedMs, aborted? }`: capture both streams and complete on the child's
   **exit**; stdout defaults to decoded text, while `stdout: "bytes"` preserves it as `Uint8Array` for
   callers reading opaque content (stderr remains text diagnostics). POSIX children are detached
@@ -143,9 +143,10 @@ never what a particular child's output means.
   from the snapshot silently misses that repair. Both halves are pinned separately — a caller's `env`/`cwd`
   arriving at the child, and a post-startup mutation being visible to one spawned without `env` — because a
   test that only asserts the defaults cannot tell the two apart.
-- `stdin` is always `ignore`, and both output streams are always piped and **read from the moment of
-  spawn**; text is decoded incrementally and byte stdout is accumulated without decoding — an undrained
-  pipe is how a chatty child deadlocks. The readers are
+- `stdin` is `ignore` unless the caller passes bytes, which Bun writes while the output streams drain (a
+  child that exits without reading them is still an ordinary exit). Both output streams are always piped
+  and **read from the moment of spawn**; text is decoded incrementally and byte stdout is accumulated
+  without decoding — an undrained pipe is how a chatty child deadlocks. The readers are
   cancelled once the outcome is decided *and* the grace above has run, never before it. Every
   timer is `unref`'d, so a bounded wait never holds shutdown open, and `waitedMs` comes from
   `performance.now()`, so a clock adjustment cannot render a negative wait.

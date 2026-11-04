@@ -611,6 +611,52 @@ test.if(process.platform === "linux")(
 	},
 );
 
+test.if(process.platform === "linux")(
+	"on Linux a doc in a subfolder of the git-ignored scratch dir still sends an event",
+	async () => {
+		const dir = process.env.THINKRAIL_DATA_DIR;
+		if (!dir) throw new Error("missing fixture data directory");
+		const worktree = join(dir, "repo");
+		const scratch = join(worktree, ".thinkrail", "context");
+		mkdirSync(join(scratch, "topic"), { recursive: true });
+		expect(Bun.spawnSync(["git", "init", "-q", worktree]).success).toBe(true);
+		writeFileSync(join(worktree, ".gitignore"), ".thinkrail/\n");
+		writeFileSync(join(scratch, ".gitignore"), "*\n");
+		writeFileSync(join(scratch, "topic", "doc.md"), "v1\n");
+		writeFileSync(
+			join(dir, "workspaces.json"),
+			JSON.stringify([
+				{
+					id: "scratch",
+					projectId: "p",
+					name: "scratch",
+					branch: "main",
+					worktreePath: worktree,
+					baseBranch: "main",
+				},
+			]),
+		);
+		const b = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+		const collector = await collectSocket(b.port, "scratch");
+		collector.socket.send(
+			JSON.stringify({
+				id: "ready",
+				method: "workspace.watchReady",
+				params: { workspaceId: "scratch" },
+			}),
+		);
+		expect((await collector.waitForFrame((frame) => frame.id === "ready")).ok).toBe(true);
+		writeFileSync(join(scratch, "topic", "doc.md"), "v2\n");
+		mkdirSync(join(scratch, "fresh"));
+		writeFileSync(join(scratch, "fresh", "new.md"), "x\n");
+		const published = (path: string) => (frame: SocketFrame) =>
+			frame.channel === WS_CHANNELS.workspaceFsChanged &&
+			(frame.data as WorkspaceFsChangedPayload).paths.includes(path);
+		await collector.waitForFrame(published(".thinkrail/context/topic/doc.md"));
+		await collector.waitForFrame(published(".thinkrail/context/fresh/new.md"));
+	},
+);
+
 test("shutdown is idempotent and releases the port", async () => {
 	const options = { port: grabFreePort(), host: "localhost", portMode: "exact" as const };
 	const first = await boot(options);

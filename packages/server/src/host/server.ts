@@ -23,6 +23,7 @@ import {
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
+import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import {
 	admissionContextFor,
 	bumpPackageSwitchGeneration,
@@ -236,6 +237,11 @@ const RECENT_FOLDER_CHECK_BUDGET_MS = 250;
 const log = logger("host");
 
 const isRequestId = (id: unknown): id is string => typeof id === "string";
+
+const onScratchDirPath = (path: string) =>
+	path === WORKSPACE_CONTEXT_DIR ||
+	WORKSPACE_CONTEXT_DIR.startsWith(`${path}/`) ||
+	path.startsWith(`${WORKSPACE_CONTEXT_DIR}/`);
 
 function formatReplayLoad(load: ReplayLoad): string {
 	const occupancy = ({ pending, settled, abandoned }: ReplayLoad[string]) =>
@@ -774,7 +780,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setIgnoredPathsResolver((worktreePath, paths) =>
 		ignoredPaths(
 			worktreePath,
-			paths.filter((path) => !mayHoldProjectSkills(path)),
+			paths.filter((path) => !mayHoldProjectSkills(path) && !onScratchDirPath(path)),
 		),
 	);
 	setFsNudgePublisher(publishFsChanged);

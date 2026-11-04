@@ -16,13 +16,14 @@ export type BoundedRunOptions = {
 	env?: Record<string, string | undefined>;
 	stdout?: "text";
 	signal?: AbortSignal;
+	stdin?: Uint8Array;
 };
 
 export type BoundedBytesRunOptions = Omit<BoundedRunOptions, "stdout"> & {
 	stdout: "bytes";
 };
 
-export type BoundedStreamOptions = Omit<BoundedRunOptions, "stdout" | "signal">;
+export type BoundedStreamOptions = Omit<BoundedRunOptions, "stdout" | "signal" | "stdin">;
 export type BoundedStream = {
 	stdout: ReadableStream<Uint8Array>;
 	exited: Promise<BoundedRunBase>;
@@ -123,11 +124,15 @@ async function killTree(proc: Bun.Subprocess): Promise<void> {
 	proc.kill("SIGKILL");
 }
 
-function spawnOptions(opts: { cwd?: string; env?: Record<string, string | undefined> }) {
+function spawnOptions(opts: {
+	cwd?: string;
+	env?: Record<string, string | undefined>;
+	stdin?: Uint8Array;
+}) {
 	return {
 		cwd: opts.cwd ?? process.cwd(),
 		env: opts.env ?? process.env,
-		stdin: "ignore",
+		stdin: opts.stdin ?? "ignore",
 		stdout: "pipe",
 		stderr: "pipe",
 		detached: process.platform !== "win32",

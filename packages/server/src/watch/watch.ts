@@ -8,7 +8,7 @@ import type {
 import { logger } from "../log";
 import { loadWorkspaces } from "../persistence";
 import { type Coalescer, createCoalescer } from "./coalesce";
-import { type TreeWatcher, watchTree } from "./tree";
+import { NOTHING_IGNORED, type TreeWatcher, watchTree } from "./tree";
 
 const log = logger("watch");
 
@@ -23,8 +23,8 @@ const IGNORED_NAMES = new Set([".DS_Store"]);
 const REPO_META_DEBOUNCE_MS = 300;
 const WATCH_EACH_DIRECTORY = process.platform === "linux";
 const STARTED = Promise.resolve();
-const NOTHING_IGNORED: ReadonlySet<string> = new Set();
-const WATCHED_GIT_DIRS = new Set(["refs", "reftable", "info"]);
+const WATCHED_GIT_DIRS = new Set(["refs", "reftable", "info", "modules"]);
+const SKIPPED_SUBMODULE_DIRS = new Set(["objects", "logs", "lfs", "hooks"]);
 
 type WatchPublisher = (payload: WorkspaceFsChangedPayload) => void;
 type SkillPathClassifier = (relativePath: string) => boolean;
@@ -140,7 +140,11 @@ function isSkippedDir(relPath: string): boolean {
 	const segments = relPath.split("/");
 	if (segments.includes("node_modules")) return true;
 	const git = segments.indexOf(".git");
-	return git > 0 || (git === 0 && segments.length > 1 && !WATCHED_GIT_DIRS.has(segments[1] ?? ""));
+	if (git !== 0 || segments.length === 1) return git > 0;
+	if (!WATCHED_GIT_DIRS.has(segments[1] ?? "")) return true;
+	return (
+		segments[1] === "modules" && segments.some((segment) => SKIPPED_SUBMODULE_DIRS.has(segment))
+	);
 }
 
 function ignoredWorktreeDirs(worktreePath: string, paths: string[]): Promise<ReadonlySet<string>> {
@@ -231,18 +235,16 @@ export function ensureWatch(
 	});
 
 	try {
+		const skillChangeOf = (rel: string): WorkspaceSkillChange =>
+			isSkillPath === null ? "unknown" : isSkillPath(rel) ? "detected" : "none";
 		const onEvent = (rel: string | null) => {
 			if (rel === null || isRepoMetaPath(rel)) scheduleRepoMeta(workspaceId, watcher);
 			if (rel !== null && isIgnoredPath(rel)) return;
-			const skillChange: WorkspaceSkillChange =
-				rel === null
-					? "unknown"
-					: isSkillPath === null
-						? "unknown"
-						: isSkillPath(rel)
-							? "detected"
-							: "none";
-			coalescer.add(rel, skillChange);
+			coalescer.add(rel, rel === null ? "unknown" : skillChangeOf(rel));
+		};
+		const onMissed = (rel: string) => {
+			if (isRepoMetaPath(rel)) scheduleRepoMeta(workspaceId, watcher);
+			if (!isIgnoredPath(rel)) coalescer.add(null, skillChangeOf(rel));
 		};
 		const onError = () => {
 			log.warn(`worktree watcher failed for workspace ${workspaceId}`);
@@ -251,6 +253,7 @@ export function ensureWatch(
 		const watcher = WATCH_EACH_DIRECTORY
 			? watchTree(ws.worktreePath, {
 					onEvent,
+					onMissed,
 					onError,
 					skipDir: isSkippedDir,
 					ignoredDirs: (paths) => ignoredWorktreeDirs(ws.worktreePath, paths),
