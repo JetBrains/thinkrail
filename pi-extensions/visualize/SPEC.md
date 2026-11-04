@@ -89,8 +89,8 @@ result in pi's terminal UI. It knows nothing about ThinkRail. ThinkRail composes
 
 ## Boundary
 
-- **Allowed deps:** `lovely-mermaid` (exact pin); peers `@earendil-works/pi-ai` (`StringEnum`),
-  `@earendil-works/pi-coding-agent`, `@earendil-works/pi-tui`, `typebox`.
+- **Allowed deps:** `lovely-mermaid` (exact pin); peers `@earendil-works/pi-coding-agent`,
+  `@earendil-works/pi-tui`, `typebox`.
 - **Forbidden:** anything from ThinkRail (`@thinkrail/*`, `apps/*`, `packages/server`), `mermaid`,
   `linkedom`, Bun-specific APIs.
 

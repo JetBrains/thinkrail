@@ -279,7 +279,12 @@ re-opened transcripts provider-valid.
     flight; needs-input is never held. The command change listener and the delegation lifecycle listener
     republish the parent's state on a coalesced `setImmediate`, after the same-tick completion delivery
     that wakes the parent has already flipped it to running — so the last finishing child never flashes
-    the dot before the woken turn. A completion that does not wake the parent (user stop) releases the hold
+    the dot before the woken turn. The portable packages own that same-tick wake, also while their
+    post-settle idle flush is pending ([[module-pi-subagents]] Result delivery). Queuing the republish
+    behind that flush's `setTimeout(0)` instead was rejected: it leans on cross-module timer order and
+    still flashes whenever the flush runs late. The one remaining flash is a wake pi defers: a result
+    landing during the `agent_settled` emission, after this listener published idle. Only a settle handler
+    could deliver one there; ThinkRail's are synchronous and command exits arrive as I/O callbacks. A completion that does not wake the parent (user stop) releases the hold
     on that republish; a delivery gated by a reload or trash hold also releases first, and its later wake
     clears the unread again. Disk-only sessions have no live work and never hold. The same fact is published as
     `backgroundWork`, so clients show the idle chat as working (contracts' `isSessionWorking`) instead of
@@ -743,13 +748,12 @@ re-opened transcripts provider-valid.
     readout; crash recovery still comes from child transcripts and reconciliation. This is
     delegated spend's only accounting channel: delegation tools must never return `AgentToolResult.usage`,
     which pi would sum a second time. The write is best-effort, like pi's cache warmer: a failed append is
-    logged and never fails the child run. `recordSessionUsage` reports only whether pi took the usage into
-    its session; persistence stays uncertain. pi moves the leaf to a new entry before persisting it, so a
-    failed append restores the previous leaf (later entries must never chain to an unpersisted id, or a
-    reopened chat loses its history before it) and truncates an existing transcript back to its pre-append
-    size (a torn partial line would swallow the next entry); pi's initial file creation is outside this
-    repair. A usage entry pi kept only in memory counts in this process and is restored on disk by
-    reconciliation after the chat is reopened. Closing
+    logged and never fails the child run. `recordSessionUsage` reports whether pi took the usage into its
+    session: since pi 1.5 a failed append leaves pi's memory and leaf as they were (later entries never
+    chain to an unpersisted id), so the host reports `false`, the recorder keeps its watermark and the
+    increment rides the next write or reconciliation. The host still truncates an existing transcript back
+    to its pre-append size (pi appends with one `appendFileSync`, so a failed write can leave a torn partial
+    line that would swallow the next entry); pi's initial file creation is outside this repair. Closing
     a chat keeps its entry writable until its teardown cascade settles, so runs that cascade stops are
     still recorded; attach is refused during teardown, so the transcript keeps one writer. A deletion
     tombstone suppresses the write, because pi's append would recreate the trashed file. Graceful host
@@ -770,7 +774,8 @@ re-opened transcripts provider-valid.
     ignore floating-point noise) are missing, never as a negative correction. Forked children
     (header `parentSession`) are skipped because their copied history carries the parent's own spend.
     A host-injected `setSubagentConcurrencyResolver` supplies each service's per-chat
-    limit at creation, and `refreshSubagentConcurrency(workspaceId?)` re-resolves and live-resizes the
+    limit at creation (`null`, the default, leaves new services on the core limit), and
+    `refreshSubagentConcurrency(workspaceId?)` re-resolves and live-resizes the
     cached services (core `setMaxConcurrentPerParent`) after a global or workspace limit change; `subagentsFor(workspaceId, isEnabled, canDeliverCompletion)` creates one retained portable
     `Subagents` owner per parent; its extension is injected on every resource load. A host-injected
     `setSubagentsEnabledResolver` maps that
@@ -1159,7 +1164,11 @@ re-opened transcripts provider-valid.
   set; this module owns compose-time filtering and live activation timing);
   the `set_title` seam (`setTitleToolHost` + `TitleToolHost`/`SET_TITLE_TOOL_NAME`/`SetTitleParams`);
   the bundled-artifact seam (`registerBundledRuntime` +
-  `BundledExtensions`/`BundledExtensionFactory`).
+  `BundledExtensions`/`BundledExtensionFactory`). The publishers, resolvers and handlers above that
+  `createServer` installs return to their module default at its `stop()` — no-op publishers and, via
+  `null`, the default resolver policy, no concurrency resolver, and the unavailable `request_review` /
+  `resolve_comment` / `set_title` handlers. The PI runtime, its factories, the session manager factory
+  and `registerBundledRuntime` are not reset by `stop()`; whoever configures them restores them.
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (types + test
   fixtures + **pure catalog helpers value-imported from the package root** — today exactly
   `getSupportedThinkingLevels` + `clampThinkingLevel`, data-only projections over `Model`; *dispatch*
@@ -1201,7 +1210,7 @@ context-budget limitations and their upgrade checks live in [[pi-compatibility]]
 
 Pi owns provider retry; the host never adds one. Pi retries only errors that match its retryable
 patterns: "Anthropic stream ended before message_stop" does, "Could not parse Anthropic SSE event" does
-not. `patches/@earendil-works%2Fpi-ai@1.4.0.patch` (root `patchedDependencies`, upstream
+not. `patches/@earendil-works%2Fpi-ai@1.5.0.patch` (root `patchedDependencies`, upstream
 earendil-works/pi#10390, #564) fixes two defects in pi-ai's `anthropic-messages` SSE parser that end a
 turn with that parse error. The two fixes have different outcomes:
 
@@ -1265,6 +1274,15 @@ normalized title is already current. A live session writes through `AgentSession
 session opens its exact transcript with `SessionManager.open(...).appendSessionInfo(...)` without attaching an
 agent or resolving a model. Both paths publish the same `session_info_changed` Pi event, while
 `SessionSummary.title` remains the hydration projection.
+
+**The name rides the state record.** Every `SessionStateRecord` the manager builds carries `title`: a live
+entry reads `AgentSession.sessionName`, and it is part of `publishEntryState`'s dedupe key, so the publish
+that follows every registered-session event — a rename's `session_info_changed` included — pushes the new
+name; a disk row reads the manager the collector has just opened (not the listing's `SessionInfo.name`,
+which an awaited discovery can leave older than the transcript read beside it), and a disk-only rename
+publishes that chat's complete record (`diskStateRecord`, state + title + first prompt) after its event.
+`""` means unnamed. It costs no transcript read — the collector and the rename already hold the manager —
+and the name is read as pi stores it, never re-validated by the write rule.
 
 The guarded write remains authoritative across the async race. `onlyIfUnnamed` performs the check immediately
 beside the append and is the compare-and-set the `set_title` handler uses (its `false` return is how the

@@ -23,6 +23,7 @@ import { reviewRefreshRows, scheduleLifecyclePass, stampSessionActivity } from "
 let dataDir: string;
 let repo: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
+const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
 const DAY_MS = 24 * 60 * 60_000;
 
 function git(cwd: string, ...args: string[]): void {
@@ -45,6 +46,7 @@ function row(overrides: Partial<Workspace>): Workspace {
 beforeEach(() => {
 	dataDir = realpathSync(mkdtempSync(join(tmpdir(), "trpi-settled-")));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
+	process.env.PI_CODING_AGENT_DIR = join(dataDir, "pi");
 	resetConfigCache();
 	repo = join(dataDir, "repo");
 	mkdirSync(repo);
@@ -66,6 +68,8 @@ afterEach(() => {
 	resetConfigCache();
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
+	if (savedAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+	else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
 });
 
 test("review refresh covers live rows every pass and idle rows on a 30-minute pace, never parked or closed ones", () => {

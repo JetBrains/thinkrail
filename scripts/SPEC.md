@@ -43,18 +43,36 @@ The extension boundary follows [[module-thinkrail-extensions]] and is registered
 
 These are static literal-import checks, not a runtime module resolver. Negative filesystem fixtures cover the same discovery and scan entrypoint as the real workspace gate.
 
-`ci:flakes` (`bun run ci:flakes [--days 14] [--repo …] [--workflow ci.yml]`) prints a Markdown report of the
-CI workflow's test failures over a window, read through `gh api`: runs, per-attempt jobs, and the logs of failed
-test jobs only. Pure parsers read bun `(fail)` lines keyed by their `##[group]<file>:` context (the closing
-`N tests failed:` summary only repeats them) and Playwright `failed`/`flaky` summary blocks. A change is a PR —
-its PR runs and merge-queue entries count once — or, without a PR, a branch. Per test it counts failures,
-Playwright flaky passes, distinct changes, merge-queue failures, and failures whose SHA later passed the same
-job or a whole run. A test is flake-classified on a passing rerun, a flaky mark, failures for 3+ changes, or
-merge-queue failures for 2+ changes; the rest are listed apart as probably genuine. Failed steps no parsed test
-explains (build, install, download, or a step failing beside a test failure) are listed by step, and an
-attempt counts as flake-only only when every failure in it is a flake-classified test. It automates the hand
-analysis behind the 2026-10 CI-flake series; it is a diagnostic, never a gate, and has no scheduled run. Flaky
-passes in otherwise green jobs are not seen, because only failed jobs' logs are read.
+`ci:flakes` (`bun run ci:flakes [--days 14] [--repo …] [--workflow ci.yml] [--concurrency 8]`) prints a
+Markdown report of the CI workflow's test failures over a window, read through `gh api`; a call failing with a
+GitHub 5xx or a timeout is retried twice with backoff, since one transient error would discard the whole run. REST supplies the runs,
+the per-attempt jobs of every run that failed, was re-run, or holds a failed job, and failed test jobs' logs;
+GraphQL, batched 100 nodes a query (about one rate-limit point per 100 check runs), supplies the PRs updated in
+the window and every run's check runs of all attempts with their annotations. A job a re-run carried over from an
+earlier attempt (started before it was created) is dropped, so an attempt counts only what it ran, and an
+attempt-1 failure counts even when attempt 2 passed. Pure parsers read bun `(fail)` lines keyed by their
+`##[group]<file>:` context (the closing `N tests failed:` summary only repeats them) and Playwright
+`failed`/`flaky` summary blocks, from a failed job's log or else from the `🎭 Playwright Run Summary` annotation
+every Playwright job publishes, so a test that failed then passed on retry inside a green job is seen.
+
+A change is a PR or, without one, a branch. A run resolves to its PR by head repository and branch (the latest PR
+opened by then, since GitHub links only open same-repo PRs to runs) or by its merge-queue `pr-<N>` branch, so a
+PR's runs and queue entries count once. PRs linked because one's base branch is, or was before a retarget,
+another's head branch form a stack that counts as one change: members carry each other's commits, so one
+deterministic failure would otherwise count once per member. A base resolves to the PR that owned that head
+branch when the base was set (the newest opened by then, or the branch's only PR), so a reused branch name
+never joins a later PR to an old stack. A merge-queue entry whose
+`gh-readonly-queue/…/pr-<N>-<sha>` base is another entry's head SHA contains that entry's commits, so a test or
+step both failed counts for the lower entry's change; a failure the lower entry lacked stays the entry's own. Per
+test it counts failures, Playwright flaky passes, distinct changes, merge-queue failures, and failures whose SHA
+later passed the same job or a whole run. A test is flake-classified on a passing rerun, a flaky mark, failures
+for 3+ changes, or merge-queue failures for 2+ changes; the rest are listed apart as probably genuine. Failed
+steps no parsed test explains (build, install, download, or a step failing beside a test failure) are listed by
+step, and an attempt counts as flake-only only when every failure in it is a flake-classified test. Known limits:
+stacks are seen only through base branches, so PRs sharing commits while all targeting `main` stay apart, and a
+parent PR untouched in the window is not fetched; independent failures inside one stack collapse into one
+change, leaving reruns and flaky marks as their evidence; at most 100 check runs per run are read. It automates
+the hand analysis behind the 2026-10 CI-flake series; it is a diagnostic, never a gate, and has no scheduled run.
 
 `check:spec-surface` enrolls only valid specs tagged `public-surface-checked`. Enrollment is explicit so adding prose cannot silently turn enforcement off: an enrolled spec must retain a bare backticked identifier list and a discoverable TypeScript barrel, or the check fails. Unenrolled prose surfaces remain descriptive and are reported only by `--list-skipped`.
 

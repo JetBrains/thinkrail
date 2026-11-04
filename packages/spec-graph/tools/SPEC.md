@@ -22,8 +22,7 @@ None edit prose.
 - **Public surface:** the `index.ts` **barrel** exporting `registerSpecTools(pi)`; the extension entry
   (`../index.ts`) is the only caller.
 - **Allowed deps:** `core/` (via its barrel), `@earendil-works/pi-coding-agent` (types and public
-  truncation helpers), `@earendil-works/pi-ai` (`StringEnum`, from the package root), `typebox`, Node
-  built-ins. Project writes remain confined to write tools; any tool may capture oversized responses
+  truncation helpers), `typebox`, Node built-ins. Project writes remain confined to write tools; any tool may capture oversized responses
   in private OS temporary files, never in the project.
 - **Forbidden:** reaching into `core/` leaf files (import only the barrel); any `@thinkrail/*` package.
 
@@ -50,7 +49,9 @@ file; the other four are read-only.
   place by `core`'s `updateFrontmatterText`, so comments, nested/unknown fields, field order, and the
   file's line endings are preserved.
 - Frontmatter field keys the tools read/write come from `core`'s `FIELDS` registry, and params over a
-  finite vocabulary use `StringEnum` seeded by the `core/` tuple (`spec_create.type` ← `SPEC_TYPES`,
+  finite vocabulary use `shared.ts`'s `stringEnum` (a TypeBox `Type.Unsafe` over
+  `{ type: "string", enum }`, the shape every provider accepts, unlike `Type.Union` of literals; pi-ai's
+  `StringEnum` is pi-schema-typed since pi 1.5) seeded by the `core/` tuple (`spec_create.type` ← `SPEC_TYPES`,
   `spec_create.status` ← `SPEC_STATUSES`, `spec_graph.direction` ← `SLICE_DIRECTIONS`,
   `spec_graph.edge` ← `LINK_KINDS`) — never re-typed literals, so a `core` rename flows here with no edit
   (pinned by `tools/tools.test.ts`).

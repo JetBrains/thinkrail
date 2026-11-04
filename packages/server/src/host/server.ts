@@ -56,6 +56,7 @@ import {
 	setModelListingPublisher,
 	setModelsFilePublisher,
 	setPiPackagesPublisher,
+	setRequestReviewHandler,
 	setReviewCommentHandler,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
@@ -1007,14 +1008,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		requestReplays.clear();
 		persistTerminalSessions();
 		closeAllTerminals();
-		setFeedbackPublisher(null);
-		configureSurveySource(null);
-		setSettingsPublisher(null);
-		setModelsFilePublisher(null);
-		setModelListingPublisher(null);
-		setJbcentralAppliedPublisher(() => {});
-		setJbcentralChangedPublisher(() => {});
-		setLogoutPublisher(() => {});
+		restoreSeamDefaults();
 		server.stop(true);
 	};
 	const shutdown = (): Promise<void> => {
@@ -1045,6 +1039,52 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		stop,
 		shutdown,
 	};
+}
+
+function restoreSeamDefaults(): void {
+	setPiTrustSeed(null);
+	setSessionProjectResolver(() => null);
+	setTerminalPublisher(() => "unavailable");
+	setFeedbackPublisher(null);
+	configureSurveySource(null);
+	setSkillAdmissionResolver(null);
+	setMcpPolicyResolver(null);
+	setMcpToolGrantWriter(() => {});
+	setSubagentsEnabledResolver(null);
+	setSubagentConcurrencyResolver(null);
+	setAgentReviewEnabledResolver(null);
+	setDisabledExtensionsResolver(null);
+	setDisabledPackagesResolver(null);
+	setProjectPublisher(null);
+	setTerminalTabsPublisher(() => {});
+	setWorkspacePublisher(null);
+	setPiPackagesPublisher(null);
+	setWatchPublisher(null);
+	setSkillPathClassifier(null);
+	setFsNudgePublisher(null);
+	setWatchStartedPublisher(null);
+	setRepoMetaPublisher(null);
+	setReviewPublisher(() => {});
+	setReviewFailedPublisher(() => {});
+	setReviewCommentHandler(null);
+	setRequestReviewHandler(null);
+	setTitleToolHost(null);
+	setSettingsPublisher(null);
+	setSessionCreatedPublisher(() => {});
+	setSessionStatePublisher(() => {});
+	setSessionDeletedPublisher(() => {});
+	setMcpLoginPublisher(() => {});
+	setMcpStatusPublisher(() => {});
+	setSessionResourcesPublisher(() => {});
+	setTurnPublisher(() => {});
+	setSessionPublisher(() => {});
+	setExtUiPublisher(() => {});
+	setLoginPublisher(() => {});
+	setJbcentralAppliedPublisher(() => {});
+	setJbcentralChangedPublisher(() => {});
+	setLogoutPublisher(() => {});
+	setModelsFilePublisher(null);
+	setModelListingPublisher(null);
 }
 
 async function serveStatic(pathname: string, staticDir: string): Promise<Response> {

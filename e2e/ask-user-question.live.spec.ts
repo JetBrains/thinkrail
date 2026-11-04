@@ -266,7 +266,7 @@ test("skip: declining resolves the tool as a skipped record", { tag: "@agent" },
 	await expect(skipped).toContainText("skipped");
 });
 
-test("multi-question: page arrows, Tab-to-note, and Enter reach review before submit", {
+test("multi-question: page arrows, Tab-to-note, and Enter on the last question submits", {
 	tag: "@agent",
 }, async ({ page }) => {
 	test.setTimeout(180_000);
@@ -279,7 +279,7 @@ test("multi-question: page arrows, Tab-to-note, and Enter reach review before su
 	await expect(card).toBeVisible({ timeout: 90_000 });
 
 	const tabs = card.getByTestId("ask-tab");
-	await expect(tabs).toHaveCount(3);
+	await expect(tabs).toHaveCount(2);
 
 	const panel = card.getByRole("tabpanel");
 	await expect(tabs.nth(0)).toHaveAttribute(
@@ -291,13 +291,7 @@ test("multi-question: page arrows, Tab-to-note, and Enter reach review before su
 		(await tabs.nth(0).getAttribute("id")) ?? "",
 	);
 
-	const questionTexts: string[] = [];
-	const optionLabels: string[][] = [];
 	await expect(tabs.nth(0)).toHaveAttribute("data-active", "true");
-	questionTexts.push((await card.getByTestId("ask-question-text").innerText()).trim());
-	optionLabels.push(
-		(await card.getByTestId("ask-option-label").allTextContents()).map((label) => label.trim()),
-	);
 	const firstChoice = card.getByTestId("ask-option").first();
 	const noteToggle = card.getByTestId("ask-note-toggle");
 	await expect(firstChoice).toBeFocused();
@@ -337,11 +331,9 @@ test("multi-question: page arrows, Tab-to-note, and Enter reach review before su
 	await expect(card.getByTestId("ask-submit")).toHaveCount(0);
 	await card.getByTestId("ask-continue").click();
 	await expect(tabs.nth(1)).toHaveAttribute("data-active", "true");
-	questionTexts.push((await card.getByTestId("ask-question-text").innerText()).trim());
-	optionLabels.push(
-		(await card.getByTestId("ask-option-label").allTextContents()).map((label) => label.trim()),
-	);
 	await expect(card.getByTestId("ask-option").first()).toBeFocused();
+	await expect(card.getByTestId("ask-continue")).toHaveCount(0);
+	await expect(card.getByTestId("ask-submit")).toBeEnabled();
 
 	await page.keyboard.press("ArrowLeft");
 	await expect(tabs.nth(0)).toHaveAttribute("data-active", "true");
@@ -350,38 +342,6 @@ test("multi-question: page arrows, Tab-to-note, and Enter reach review before su
 	await expect(tabs.nth(1)).toHaveAttribute("data-active", "true");
 	await expect(card.getByTestId("ask-option").first()).toBeFocused();
 
-	await page.keyboard.press("Enter");
-	await expect(tabs.nth(2)).toHaveAttribute("data-active", "true");
-	await expect(card).toContainText("Review your answers");
-	await expect(card.getByTestId("ask-continue")).toHaveCount(0);
-	await expect(card.getByTestId("ask-submit")).toBeEnabled();
-	const reviewItems = card.getByTestId("ask-review-item");
-	await expect(reviewItems).toHaveCount(2);
-	for (let i = 0; i < 2; i++) {
-		const item = reviewItems.nth(i);
-		await expect(item.getByTestId("ask-review-question")).toHaveText(questionTexts[i] ?? "");
-		const reviewOptions = item.getByTestId("ask-review-option");
-		const labels = optionLabels[i] ?? [];
-		await expect(reviewOptions).toHaveCount(labels.length);
-		for (let j = 0; j < labels.length; j++) {
-			const option = reviewOptions.nth(j);
-			await expect(option).toContainText(labels[j] ?? "");
-			await expect(option.getByTestId("ask-selection-status")).toHaveText(
-				j === 0 ? "Selected:" : "Not selected:",
-			);
-		}
-		await expect(
-			item.locator('[data-testid="ask-review-option"][data-selected="true"]'),
-		).toContainText(labels[0] ?? "");
-	}
-	await expect(card.locator('[data-testid="ask-tab"][data-answered="true"]')).toHaveCount(2);
-	await expect(card.getByTestId("ask-review-title")).toBeFocused();
-	await page.keyboard.press("Enter");
-	await expect(card).toHaveAttribute("data-tone", "active");
-	await page.keyboard.press("Tab");
-	await expect(card.getByTestId("ask-skip")).toBeFocused();
-	await page.keyboard.press("Tab");
-	await expect(card.getByTestId("ask-submit")).toBeFocused();
 	await page.keyboard.press("Enter");
 	const record = answeredRecord(page);
 	await expect(record).toBeVisible({ timeout: 60_000 });

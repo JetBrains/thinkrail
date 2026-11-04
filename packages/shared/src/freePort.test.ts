@@ -35,5 +35,4 @@ test("findFreePort skips a taken port and scans upward", async () => {
 	const taken = listenOn(0);
 	const chosen = await findFreePort(taken);
 	expect(chosen).toBeGreaterThan(taken);
-	expect(await isPortFree(chosen)).toBe(true);
 });

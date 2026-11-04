@@ -191,7 +191,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   Empty/newly-hydrated groups and completion by deletion do not count. These memory-only observations
   retain a grant's capture before asynchronous work and never replay across revocation.
   `stop()` → immediate agent-session cleanup, then `persistTerminalSessions()` **before**
-  `closeAllTerminals()`, then watcher/socket disposal; `shutdown()` memoizes one asynchronous graceful
+  `closeAllTerminals()`, then watcher/socket disposal and `restoreSeamDefaults()`: every resolver,
+  handler and publisher `createServer` installed is scoped to the server's lifetime and returns to its
+  module default, so a later server in the same process (the unit suite boots many) never inherits a
+  stopped one's policy or publish path; `shutdown()` memoizes one asynchronous graceful
   path: bounded `settleSessionsForShutdown()` + awaited `shutdownAnalytics()` first, then
   `turnTracker.drain()` for the receipts those settlements started, then `stop()`). The
   bounded settle includes hidden delegation children even when their parent is
@@ -526,15 +529,15 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `reviews.resolveCommentFromAgent` (the worker tool seam) and `reanchorWorkspace` (the fs-watch tee):
   both re-read the snapshot from disk before writing, and neither removes a comment nor closes the
   review, so landing in a send's gap can't invalidate the package's ids.
-- **A review send lands in the conversation already on screen, else the key's chat.** Both send
+- **A review send lands in its explicit chat context, else the key's chat.** Both send
   handlers route through `sendToFileChat`: comments are grouped by `reviews.reviewSessionKey` (the
   anchor's path, or the review-level bucket for anchorless remarks — pinned like a file so a second
   overall remark continues one discussion), and each group lands, in order of preference, in the
-  client's **last open chat** (the optional `sessionId` the send carries — the conversation the user
-  is already in), else the key's pinned chat (`reviews.fileReviewSession`), else a NEW chat; whatever
+  client's explicit chat context (the optional `sessionId` the send carries from a chat card), else
+  the key's pinned chat (`reviews.fileReviewSession`), else a NEW chat; whatever
   received the package becomes the key's pin (`markCommentsSent`), so the sidebar's "open the
   discussion" always follows the comments. **A send that names its chat is one package**: when the client
-  passes `sessionId` (a chat card's own chat, or the last open chat) every comment goes into that chat in one
+  passes `sessionId` (a chat card's own chat) every comment goes into that chat in one
   structured message, because grouping exists to route each key to its own chat, and per-key packages into
   the same chat made the agent take one review — a before/after mockup's two files — in separate turns.
   **`review.sendBatch` answers with every session it touched**, in group
@@ -584,7 +587,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   this is a catalog invalidation, never an output broadcast. Resource ownership and teardown stay in agent.
 - **Session-state composition:** before serving, the host supplies every workspace `{id,cwd}`, initializes
   lifecycle/receipt metadata, and installs the workspace→project resolver. `session.stateList` returns the
-  complete all-workspace snapshot; `session.state` broadcasts full records; completion acknowledgement and
+  complete all-workspace snapshot; `session.state` broadcasts full records (each carries the chat's `title`,
+  so a rename while a client was away reaches it through the next snapshot); completion acknowledgement and
   nudge handlers validate workspace/session identity through the same registry. The WS open handler
   subscribes every client after welcome. `session.activityList` remains an inert `[]` compatibility method
   for one window and has no push channel.
@@ -616,8 +620,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
 - **Chat titles:** `session.rename` resolves `workspaceId` to its cwd and delegates title validation plus the
   unconditional durable write to `agent`; it never patches one client directly. Automatic titles come only
   from the agent's `set_title` (above); sends carry no naming work. Both manual and automatic
-  writes converge every client through the existing `pi.event`/`session_info_changed` channel and
-  `session.list` repair; no new push channel exists.
+  writes converge every client through the existing `pi.event`/`session_info_changed` channel and the
+  titled `session.state` record (see Session-state composition), with `session.list` repair; no new push
+  channel exists.
 
 `RunningServer.startAttributionClaim()` is the explicit launcher-readiness signal and rechecks the saved
 enabled/confirmed choice before entering analytics attribution.

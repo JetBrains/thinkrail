@@ -97,3 +97,9 @@ test("image zoom state is bounded and defaults to 2-up diffs", () => {
 	expect(imageDiffViewState({ mode: "onion" })).toBe("onion");
 	expect(formatByteLength(currentTranslator(), 1536)).toBe("1.5 KB");
 });
+
+test("image byte length moves to MB when the KB figure rounds to 1024", () => {
+	expect(formatByteLength(currentTranslator(), 1024 * 1024 - 1)).toBe("1.0 MB");
+	expect(formatByteLength(currentTranslator(), 1024 * 1024 - 600)).toBe("1023 KB");
+	expect(formatByteLength(currentTranslator(), 1024 * 1024)).toBe("1.0 MB");
+});

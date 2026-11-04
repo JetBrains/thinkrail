@@ -73,4 +73,4 @@ are peer dependencies supplied by your pi install). Works under Node (vanilla pi
 
 ## License
 
-Apache-2.0 — part of [ThinkRail](https://thinkrail.ai).
+Apache-2.0 — part of [ThinkRail](https://thinkrail.ai/?utm_source=pi-package&utm_medium=referral&utm_campaign=pi-visualize&utm_content=readme).

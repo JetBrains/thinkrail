@@ -239,6 +239,13 @@ test("source-map credentials reach only the web and desktop build steps", () => 
 	]);
 });
 
+test("the Electrobun toolchain downloads with retries before the first desktop build", () => {
+	const runs = action.runs.steps.map((step) => step.run ?? "");
+	const download = runs.findIndex((run) => run.includes(".github/scripts/prepare-electrobun.sh"));
+	expect(download).toBeGreaterThanOrEqual(0);
+	expect(download).toBeLessThan(runs.findIndex((run) => run.includes("bun run desktop:build")));
+});
+
 test("Windows packaging places System32 tar ahead of Git tar", () => {
 	const root = fixture();
 	const bin = join(root, "bin");
