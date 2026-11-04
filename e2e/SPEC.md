@@ -232,6 +232,10 @@ Playwright run writes no output, so the last good file survives.
   `rootDir`, `gitHead`, `dirty` and `dirtyTreeHash` (sha256 of `git status --porcelain` plus `git diff HEAD`;
   untracked file contents are not hashed).
 
+**Renderer freshness** (`resource-freshness.spec.ts`) pins that compiled renderers refresh on selection, saved
+threads and on-disk edits. It also holds image sources in the page, so a late `load` or `error` fires on an unmounted
+image, and checks that the current image keeps its size.
+
 ## Desktop-backed mode
 
 `bun run e2e:desktop` runs the complete no-agent suite against the host embedded in the packaged

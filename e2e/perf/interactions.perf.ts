@@ -10,6 +10,7 @@ import {
 } from "../fixtures/app";
 import { commitFile } from "../fixtures/git";
 import { E2E_FIXTURE_REPO } from "../fixtures/paths";
+import { pagedPdf } from "../fixtures/repo";
 import { seedWorkspaceSession } from "../fixtures/sessions";
 import {
 	driveInteraction,
@@ -72,31 +73,6 @@ function notebookText(edit: boolean): string {
 	return JSON.stringify({ cells, metadata: {}, nbformat: 4, nbformat_minor: 5 });
 }
 
-function pdfText(pages: number, label: string): string {
-	const objects = ["<< /Type /Catalog /Pages 2 0 R >>"];
-	const kids = Array.from({ length: pages }, (_, page) => `${4 + page * 2} 0 R`).join(" ");
-	objects.push(`<< /Type /Pages /Kids [${kids}] /Count ${pages} >>`);
-	objects.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
-	for (let page = 0; page < pages; page += 1) {
-		const stream = `BT /F1 24 Tf 30 100 Td (${label} ${page + 1}) Tj ET`;
-		objects.push(
-			`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Contents ${5 + page * 2} 0 R /Resources << /Font << /F1 3 0 R >> >> >>`,
-			`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
-		);
-	}
-	let body = "%PDF-1.4\n";
-	const offsets: number[] = [];
-	objects.forEach((object, index) => {
-		offsets.push(body.length);
-		body += `${index + 1} 0 obj\n${object}\nendobj\n`;
-	});
-	const xref = body.length;
-	const entries = offsets
-		.map((offset) => `${String(offset).padStart(10, "0")} 00000 n \n`)
-		.join("");
-	return `${body}xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${entries}trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
-}
-
 interface Interaction extends InteractionSpec {
 	seed: (page: Page) => Promise<void>;
 	resources?: boolean;
@@ -135,8 +111,8 @@ const INTERACTIONS = {
 	"pdf-diff-pages": {
 		seed: async (page) => {
 			const { worktreePath } = await createWorkspaceViaDialog(page);
-			commitFile(worktreePath, "perf.pdf", pdfText(30, "BASE"), "add perf.pdf");
-			writeFileSync(join(worktreePath, "perf.pdf"), pdfText(30, "EDIT"));
+			commitFile(worktreePath, "perf.pdf", pagedPdf(30, "BASE"), "add perf.pdf");
+			writeFileSync(join(worktreePath, "perf.pdf"), pagedPdf(30, "EDIT"));
 		},
 		setup: [...openUncommittedChange("perf.pdf"), { op: "wait", selector: testid("pdf-diff") }],
 		measured: [

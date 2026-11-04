@@ -25,7 +25,7 @@ export function gitAs(cwd: string, ...args: string[]): string {
 export function commitFile(
 	worktree: string,
 	path: string,
-	content: string,
+	content: string | Buffer,
 	subject: string,
 ): string {
 	writeFileSync(join(worktree, path), content);
