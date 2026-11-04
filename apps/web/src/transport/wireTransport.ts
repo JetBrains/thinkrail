@@ -35,15 +35,13 @@ import {
 	USER_THEMES_PROTOCOL_VERSION,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
-import { currentLocale, t } from "@thinkrail/locales/react";
-import { REPO_URL } from "../constants/branding";
+import { currentLocale } from "@thinkrail/locales/react";
 import { isConnectedGeneration, useAppStore } from "../store";
+import { githubStarToast } from "./githubStar";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 import { WsTransport } from "./transport";
 
 let transport: WsTransport | null = null;
-
-const GITHUB_STAR_ASK_MS = 60_000;
 
 export function supportsHostUpdateRun(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= HOST_UPDATE_RUN_PROTOCOL_VERSION;
@@ -395,17 +393,8 @@ export function initTransport(): WsTransport {
 		state.showSurveyInvitation();
 	});
 
-	transport.subscribe(WS_CHANNELS.feedbackGithubStar, () => {
-		useAppStore.getState().pushToast({
-			variant: "info",
-			title: t("app.githubStar.title"),
-			message: t("app.githubStar.message"),
-			durationMs: GITHUB_STAR_ASK_MS,
-			action: {
-				label: t("app.githubStar.action"),
-				onClick: () => window.open(REPO_URL, "_blank", "noopener,noreferrer"),
-			},
-		});
+	transport.subscribe(WS_CHANNELS.feedbackGithubStar, (data) => {
+		useAppStore.getState().pushToast(githubStarToast(data));
 	});
 
 	transport.subscribe(WS_CHANNELS.workspaceCreated, (data) => {

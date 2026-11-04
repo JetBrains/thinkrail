@@ -1,6 +1,7 @@
 {
 	"app.errorBoundary.label": "приложение",
 	"app.githubStar.action": "Открыть на GitHub",
+	"app.githubStar.actionStars": "Открыть на GitHub | ☆ {{stars}}",
 	"app.githubStar.message": "Загляните в репозиторий на GitHub: ваша звезда поможет другим его найти, а ваши issue помогут нам сделать его лучше!",
 	"app.githubStar.title": "ThinkRail полезен или есть что сказать?",
 	"app.transport.mcpUnavailable": "MCP-серверы недоступны, пока хост не подключится снова.",

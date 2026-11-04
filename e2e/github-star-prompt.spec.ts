@@ -17,11 +17,11 @@ async function openWithHostSocket(page: Page): Promise<() => WebSocketRoute> {
 	};
 }
 
-function askForStar(socket: WebSocketRoute): void {
-	socket.send(JSON.stringify({ channel: WS_CHANNELS.feedbackGithubStar, data: {} }));
+function askForStar(socket: WebSocketRoute, stars: number | null): void {
+	socket.send(JSON.stringify({ channel: WS_CHANNELS.feedbackGithubStar, data: { stars } }));
 }
 
-test("the host's star ask raises one toast whose action opens the repo", async ({
+test("the host's star ask raises one toast with its star count, and the action opens the repo", async ({
 	page,
 	context,
 }) => {
@@ -34,9 +34,9 @@ test("the host's star ask raises one toast whose action opens the repo", async (
 		.filter({ hasText: "Find ThinkRail useful or have feedback?" });
 	await expect(ask).toHaveCount(0);
 
-	askForStar(socket());
+	askForStar(socket(), 1234);
 	await expect(ask).toBeVisible();
-	await expect(ask.getByTestId("toast-action")).toHaveText("View on GitHub");
+	await expect(ask.getByTestId("toast-action")).toHaveText("View on GitHub | ☆ 1.2k");
 
 	const [popup] = await Promise.all([
 		context.waitForEvent("page"),
@@ -47,15 +47,18 @@ test("the host's star ask raises one toast whose action opens the repo", async (
 	await expect(ask).toHaveCount(0);
 });
 
-test("the star ask stays up for 60 seconds", async ({ page }) => {
+test("without a star count the button is plain, and the ask stays up for 60 seconds", async ({
+	page,
+}) => {
 	await page.clock.install();
 	const socket = await openWithHostSocket(page);
 	const ask = page
 		.getByTestId("toast")
 		.filter({ hasText: "Find ThinkRail useful or have feedback?" });
 
-	askForStar(socket());
+	askForStar(socket(), null);
 	await expect(ask).toBeVisible();
+	await expect(ask.getByTestId("toast-action")).toHaveText("View on GitHub");
 	await page.mouse.move(0, 0);
 	await page.clock.fastForward(55_000);
 	await expect(ask).toBeVisible();

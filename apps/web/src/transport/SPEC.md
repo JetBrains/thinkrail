@@ -72,9 +72,10 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   then `feedback.interview` via the idempotent `showSurveyInvitation()`, only from a v97+ host (an older host
   still sends the retired interview invitation on that channel) — the shell holds the invitation
   behind onboarding and the consent dialog, and additional analytics may be off (a surviving host claim
-  re-delivers the addressed event immediately after welcome). `feedback.githubStar` raises one info toast (60 s,
-  a "View on GitHub" action opening `REPO_URL`); the host decides when and sends it once, so the client keeps no
-  count or gate of its own. `loadInAppSurvey()` installs `feedback.survey` (asked in `currentLocale()`, so PostHog's
+  re-delivers the addressed event immediately after welcome). `feedback.githubStar` raises one info toast (`githubStar.ts`: 60 s,
+  a "View on GitHub" action opening `REPO_URL`, labelled `| ☆ 7.1k` with the host-read star count formatted like the
+  website, plain when the payload has none); the host decides when, reads the count and sends it once, so the client
+  keeps no count or gate of its own and never contacts GitHub. `loadInAppSurvey()` installs `feedback.survey` (asked in `currentLocale()`, so PostHog's
   translation for the UI language is shown when it has one; a language switch applies on the next load)
   into the store after welcome, when Settings opens, when the survey window opens, and after a
   `SURVEY_CHANGED` refusal; it never rejects, and a stale reply is dropped by generation, so
