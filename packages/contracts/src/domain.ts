@@ -1245,6 +1245,33 @@ export interface GithubAuthStatus {
 	scopes?: string[];
 }
 
+/** How a phone reaches this host: its Wi‑Fi/LAN or Tailscale address, or a configured relay. */
+export type RemoteRoute = "lan" | "tailscale" | "relay";
+
+export interface RemoteAddress {
+	url: string;
+	route: RemoteRoute;
+}
+
+export interface RemotePairedDevice {
+	id: string;
+	label: string;
+	pairedAt: number;
+}
+
+/** Phone access as Settings shows it; `addresses` is empty while off or when no network is up. */
+export interface RemoteAccessStatus {
+	enabled: boolean;
+	addresses: RemoteAddress[];
+	devices: RemotePairedDevice[];
+}
+
+/** A one-time `thinkrail://pair` link for the QR, valid until `expiresAt` (epoch ms). */
+export interface RemotePairingLink {
+	link: string;
+	expiresAt: number;
+}
+
 export interface HostEnvironmentVar {
 	name: string;
 	value: string;

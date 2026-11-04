@@ -22,9 +22,14 @@ export interface RemoteAccess {
 	readonly identity: HostIdentity;
 	/** The relay addresses every pairing link carries, in the order the device should prefer them. */
 	readonly addresses: readonly RelayAddress[];
-	/** Mints a one-time pairing link (the `thinkrail://pair` URI) for a project. */
-	issueLink(projectRef: string): string;
+	/** Mints a one-time pairing link (the `thinkrail://pair` URI) for a project, with when it expires. */
+	issueLink(projectRef: string): PairingLink;
 	stop(): void;
+}
+
+export interface PairingLink {
+	link: string;
+	expiresAt: number;
 }
 
 export interface RemoteAccessOptions {
@@ -83,14 +88,15 @@ export function startRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
 		identity,
 		addresses,
 		issueLink(projectRef) {
-			const { token } = tokens.issue(projectRef);
-			return buildPairingUri({
+			const { token, expiresAt } = tokens.issue(projectRef);
+			const link = buildPairingUri({
 				signalingUrls: addresses.map((address) => address.url),
 				token,
 				hostPublicKey: identity.publicKey,
 				projectRef,
 				...(options.hostName ? { hostName: options.hostName } : {}),
 			});
+			return { link, expiresAt };
 		},
 		stop: () => client.stop(),
 	};

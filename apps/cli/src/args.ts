@@ -43,9 +43,9 @@ Options:
                  The saved sharing preference lives in Settings → Privacy.
   --verbose      Debug-level logging (terminal + the rotated log files under
                  ~/.thinkrail/logs).
-  --remote       Let a phone or another machine drive this host: prints a pairing
-                 QR and link. Runs its own relay, reachable on the same Wi-Fi and
-                 over Tailscale.
+  --remote       Turn phone access on for this run and print a pairing QR and
+                 link (Settings → Phone access turns it on for good). Runs its own
+                 relay, reachable on the same Wi-Fi and over Tailscale.
   --relay <url>  Use this signaling relay instead of the built-in one; implies
                  --remote.
   -v, --version  Print the version and exit.

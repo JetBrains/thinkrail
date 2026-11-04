@@ -35,6 +35,8 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for the produc
     holds its key), `pairingTokenId()`, and `pairingMac` / `verifyPairingMac` — the HMAC-SHA256 under the QR
     token over `pairingMacInput(devicePublicKey, challenge)` that proves a first-pairing device read the QR
     and binds that to its own key, so a relay that saw the `hello` cannot pair a key of its own.
+  - `accessSetting.ts` — whether the user left phone access on (`remote-access.json`, `0600`); off when
+    never set or unreadable.
   - `deviceRegistry.ts` — the persisted list of paired devices (`remote-devices.json`, `0600`): add
     (re-pairing a key replaces its entry), revoke, look up by key.
 - **Public surface:** the `index.ts` barrel.

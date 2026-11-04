@@ -55,7 +55,7 @@ function attachProcessSignals(server: RunningServer): RunningServer {
 			return server.port;
 		},
 		startAttributionClaim: () => server.startAttributionClaim(),
-		...(server.remote ? { remote: server.remote } : {}),
+		remote: server.remote,
 		stop,
 		shutdown,
 	};

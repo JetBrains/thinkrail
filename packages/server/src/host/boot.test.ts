@@ -494,7 +494,7 @@ test("boot keeps the remote access handle so the launcher can mint a pairing lin
 		remote: { relayUrl },
 	});
 
-	expect(b.server.remote?.issueLink("default")).toStartWith("thinkrail://pair?");
+	expect(b.server.remote.issueLink("default").link).toStartWith("thinkrail://pair?");
 });
 
 test("stop() releases the port", async () => {

@@ -65,6 +65,11 @@ the palette ranks with — kept here so host-side search can rank with the same 
   so a phone off the host's network can connect peer-to-peer without a ThinkRail server; `IceServer`,
   `parseIceServers` (bounded, `stun:`/`turn:` schemes only) for the TURN credentials a relay attaches to the
   device's `ready` frame, and `withPublicStun(extra)`.
+- **Phone access (`remote.*`, `REMOTE_ACCESS_PROTOCOL_VERSION`, v103):** `remote.status` /
+  `remote.setEnabled { enabled }` / `remote.revokeDevice { id }` return `RemoteAccessStatus` (`enabled`,
+  reachable `RemoteAddress`es, `RemotePairedDevice`s without their keys); `remote.issueLink` returns a
+  `RemotePairingLink` (`link`, `expiresAt`). Only the computer's own clients may call them
+  (`REMOTE_ACCESS_LOCAL_ONLY` for a paired device); `REMOTE_ACCESS_OFF` when a code is asked for while off.
 - **Remote auth transcripts (`pairingAuth.ts`):** `registerTranscript`, `offerTranscript`,
   `answerTranscript`, `pairingMacInput` — the domain-separated (`thinkrail/<purpose>/v1`) byte strings the
   host, device and relay sign or MAC, shared so every party builds them identically; the crypto stays per

@@ -113,11 +113,10 @@ import {
 } from "../projects";
 import {
 	bridgeRemoteWire,
-	type LocalRelay,
-	type RemoteAccess,
+	createRemoteAccessControl,
+	type RemoteAccessControl,
+	type RemoteChannel,
 	type RemoteWireBridge,
-	startLocalRelay,
-	startRemoteAccess,
 } from "../remote-transport";
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
 import { getConfig, setSettingsPublisher } from "../settings";
@@ -201,8 +200,9 @@ export interface CreateServerOptions {
 	 */
 	accessToken?: string;
 	/**
-	 * When set, paired devices can drive the host remotely over a signaling relay: `relayUrl` when given,
-	 * else a relay the host runs itself, reachable at this machine's Wi‑Fi/LAN and Tailscale addresses.
+	 * Turns phone access on for this run (`--remote`), whatever Settings says: paired devices drive the host
+	 * over a signaling relay — `relayUrl` when given, else one the host runs itself, reachable at this
+	 * machine's Wi‑Fi/LAN and Tailscale addresses. Without it, access follows the Settings switch.
 	 */
 	remote?: { relayUrl?: string | undefined };
 	staticDir?: string;
@@ -237,8 +237,8 @@ export interface CreateServerOptions {
 export interface RunningServer {
 	readonly port: number;
 	startAttributionClaim: () => void;
-	/** Present when the host was started with `remote`; mints pairing links and tears the connection down. */
-	remote?: RemoteAccess;
+	/** Phone access: on/off, pairing links, paired devices. Off unless Settings or `remote` turned it on. */
+	remote: RemoteAccessControl;
 	stop: () => void;
 	shutdown: () => Promise<void>;
 }
@@ -513,6 +513,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 									clientKey: ws.data.clientKey,
 									protocolVersion: ws.data.protocolVersion,
 									...(hostUpdate ? { runHostUpdate: requestHostUpdate } : {}),
+									remoteAccess,
 								});
 								return JSON.stringify({ id: requestId, ok: true, result });
 							} catch (err) {
@@ -595,32 +596,39 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	};
 	server.publish = forwardingPublish;
 
-	let remoteAccess: RemoteAccess | undefined;
-	let localRelay: LocalRelay | undefined;
-	if (remote) {
-		let relayUrl = remote.relayUrl;
-		if (!relayUrl) {
-			localRelay = startLocalRelay();
-			relayUrl = localRelay.connectUrl;
-		}
-		remoteAccess = startRemoteAccess({
-			relayUrl,
-			...(localRelay ? { advertised: localRelay.addresses } : {}),
-			hostName: computerName(),
-			onPaired: (device, channel) => {
-				const clientKey = `remote:${device.id}`;
-				const bridge = bridgeRemoteWire(channel, {
-					clientKey,
-					dispatch: (method, params) =>
-						handleRequest(method, params, { clientKey, protocolVersion: PROTOCOL_VERSION }),
-					errorCodeOf,
-				});
-				remoteBridges.add(bridge);
-				channel.onClose(() => remoteBridges.delete(bridge));
-				// The device has no WS "open" event, so hand it the same welcome snapshot over the bridge.
-				bridge.push(WS_CHANNELS.serverWelcome, buildWelcome());
-			},
-		});
+	const deviceChannels = new Map<string, Set<RemoteChannel>>();
+	const remoteAccess = createRemoteAccessControl({
+		...(remote?.relayUrl ? { relayUrl: remote.relayUrl } : {}),
+		hostName: computerName(),
+		onPaired: (device, channel) => {
+			const clientKey = `remote:${device.id}`;
+			const bridge = bridgeRemoteWire(channel, {
+				clientKey,
+				dispatch: (method, params) =>
+					handleRequest(method, params, { clientKey, protocolVersion: PROTOCOL_VERSION }),
+				errorCodeOf,
+			});
+			remoteBridges.add(bridge);
+			const channels = deviceChannels.get(device.id) ?? new Set<RemoteChannel>();
+			channels.add(channel);
+			deviceChannels.set(device.id, channels);
+			channel.onClose(() => {
+				remoteBridges.delete(bridge);
+				channels.delete(channel);
+			});
+			// The device has no WS "open" event, so hand it the same welcome snapshot over the bridge.
+			bridge.push(WS_CHANNELS.serverWelcome, buildWelcome());
+		},
+		onRevoked: (deviceId) => {
+			for (const channel of deviceChannels.get(deviceId) ?? []) channel.close();
+			deviceChannels.delete(deviceId);
+		},
+	});
+	try {
+		if (remote) remoteAccess.setEnabled(true, { persist: false });
+		else remoteAccess.restore();
+	} catch (err) {
+		log.warn("phone access could not start", err as Error);
 	}
 
 	const backpressureReconciler = setInterval(() => {
@@ -1087,8 +1095,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		persistTerminalSessions();
 		closeAllTerminals();
 		restoreSeamDefaults();
-		remoteAccess?.stop();
-		localRelay?.stop();
+		remoteAccess.stop();
 		server.stop(true);
 	};
 	const shutdown = (): Promise<void> => {
@@ -1116,7 +1123,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			return server.port ?? port;
 		},
 		startAttributionClaim: startAttributionClaimWhenReady,
-		...(remoteAccess ? { remote: remoteAccess } : {}),
+		remote: remoteAccess,
 		stop,
 		shutdown,
 	};

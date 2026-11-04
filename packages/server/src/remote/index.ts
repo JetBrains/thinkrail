@@ -1,3 +1,4 @@
+export { loadRemoteAccessEnabled, saveRemoteAccessEnabled } from "./accessSetting";
 export {
 	addDevice,
 	findDeviceByKey,

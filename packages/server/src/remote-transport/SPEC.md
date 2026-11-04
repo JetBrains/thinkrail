@@ -68,9 +68,14 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for rationale 
     devices re-dial). A test runs it against a real relay over loopback.
   - `remoteAccess.ts` — `startRemoteAccess`, the composition root: loads identity, connects to the broker,
     runs each device's handshake + WebRTC, and mints one-time pairing links (`issueLink`) carrying every
-    `advertised` relay address (default: the connect URL) and the computer's name. The host's `remote`
-    option starts the local relay when it names no `relayUrl`. On the server
-    public surface for the CLI.
+    `advertised` relay address (default: the connect URL) and the computer's name, with their expiry.
+  - `remoteAccessControl.ts` — `createRemoteAccessControl`, the runtime switch the host owns: `setEnabled`
+    starts the relay (the host's own via `startLocalRelay` unless a `relayUrl` is configured) plus
+    `startRemoteAccess`, and stopping tears both down, which closes every live device channel; the choice
+    persists through the `remote` module's setting (`restore` brings it back at startup) unless the caller
+    passes `persist: false` for a one-run `--remote`. `issueLink` refuses while off; `revokeDevice` drops the
+    registry entry and asks the host to close that device's open channels. Access is **off by default** —
+    nothing listens for a phone until Settings or `--remote` turns it on.
   - `remoteWireBridge.ts` — `bridgeRemoteWire`, which runs the host wire protocol over a `RemoteChannel`:
     it decodes request frames, dispatches them through the host's `handleRequest` (injected), replies with
     the WS's `{ id, ok, result | error }` framing, and `push`es `{ channel, data }` events. Replay/ack is
@@ -95,10 +100,5 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for rationale 
 
 ## Not yet here (next slices)
 
-- **Host integration in `createServer`:** move `startRemoteAccess` into the host composition so each paired
-  channel is bridged with the real `handleRequest`, and mirror every `server.publish` fan-out to the set of
-  live `RemoteWireBridge`s (today pushes reach only Bun sockets). `bridgeRemoteWire` is the adapter for this;
-  the wiring is invasive (one wrapper over ~20 publish sites) and only verifiable with the full stack.
-- The web "add project by link" flow (device side: native WebRTC + the wire client over the channel).
 - The second channel tunnelling `/files` and `/blob`. (coturn credentials and the deploy recipe live in
   [[module-relay]].)

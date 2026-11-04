@@ -421,6 +421,7 @@ export const SettingsSection = {
 	Feedback: "feedback",
 	Extensions: "extensions",
 	Environment: "environment",
+	Phone: "phone",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
 

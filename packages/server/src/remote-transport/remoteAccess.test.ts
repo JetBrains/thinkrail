@@ -35,7 +35,7 @@ test("issueLink mints a parseable one-time pairing link for the project", () => 
 	const { connect } = fakeConnect();
 	const access = startRemoteAccess({ relayUrl: "ws://relay:1", identity, connect });
 
-	const parsed = parsePairingUri(access.issueLink("proj-42"));
+	const parsed = parsePairingUri(access.issueLink("proj-42").link);
 	expect(parsed).toMatchObject({
 		signalingUrls: ["ws://relay:1"],
 		hostPublicKey: "HOSTPUBKEY",
@@ -45,7 +45,7 @@ test("issueLink mints a parseable one-time pairing link for the project", () => 
 	expect(parsed?.token.length).toBeGreaterThan(0);
 
 	// One-time: two links carry distinct tokens.
-	expect(parsePairingUri(access.issueLink("proj-42"))?.token).not.toBe(parsed?.token);
+	expect(parsePairingUri(access.issueLink("proj-42").link)?.token).not.toBe(parsed?.token);
 });
 
 test("the link carries the advertised relay addresses and the host name instead of the connect URL", () => {
@@ -60,7 +60,7 @@ test("the link carries the advertised relay addresses and the host name instead 
 		identity,
 		connect,
 	});
-	expect(parsePairingUri(access.issueLink("p"))).toMatchObject({
+	expect(parsePairingUri(access.issueLink("p").link)).toMatchObject({
 		signalingUrls: ["ws://192.168.0.20:24243", "ws://100.101.102.103:24243"],
 		hostName: "Studio Mac",
 	});
