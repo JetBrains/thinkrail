@@ -311,7 +311,7 @@ function EndpointDialog({
 												name: model.id,
 											})}
 											title={t("settings.customEndpoints.contextHint")}
-											className={cn(INPUT_CLASS, "tr-code-text w-32 text-right")}
+											className={cn(INPUT_CLASS, "tr-code-text w-96 text-right")}
 											placeholder={t("settings.customEndpoints.contextPlaceholder")}
 											value={model.contextWindow ?? ""}
 											disabled={busy || !model.selected}

@@ -175,6 +175,70 @@ test("a hand-set context window overrides the unreported relay value and can be 
 	expect(unknown.models[0]?.contextWindow).toBe(262_144);
 });
 
+test("a probe that reports a window cannot clobber a hand-set value", () => {
+	const withManual = setModelContextWindow(
+		addManualModel(newEndpointDraft(), "relay/glm"),
+		"relay/glm",
+		"262144",
+	);
+	const reprobed = mergeProbe(withManual, {
+		ok: true,
+		baseUrl: "https://gw.example/v1",
+		models: [
+			{
+				id: "relay/glm",
+				contextWindow: 65_536,
+				maxTokens: 16_384,
+				reasoning: null,
+				vision: null,
+				tools: null,
+			},
+		],
+	});
+	expect(reprobed.models[0]?.contextWindow).toBe(262_144);
+});
+
+test("clearing hands the row back to automatic — the next probe restores the detected window", () => {
+	const cleared = setModelContextWindow(
+		setModelContextWindow(addManualModel(newEndpointDraft(), "relay/glm"), "relay/glm", "262144"),
+		"relay/glm",
+		"",
+	);
+	expect(cleared.models[0]?.contextWindow).toBeNull();
+	const reprobed = mergeProbe(cleared, {
+		ok: true,
+		baseUrl: "https://gw.example/v1",
+		models: [
+			{
+				id: "relay/glm",
+				contextWindow: 65_536,
+				maxTokens: 16_384,
+				reasoning: null,
+				vision: null,
+				tools: null,
+			},
+		],
+	});
+	expect(reprobed.models[0]?.contextWindow).toBe(65_536);
+});
+
+test("saving strips the client-only edit marker alongside the selection flag", () => {
+	const withManual = setModelContextWindow(
+		addManualModel(newEndpointDraft(), "relay/glm"),
+		"relay/glm",
+		"262144",
+	);
+	const params = draftParams(withManual);
+	expect(params.models[0]).toEqual({
+		id: "relay/glm",
+		contextWindow: 262_144,
+		maxTokens: null,
+		reasoning: null,
+		vision: null,
+		tools: null,
+	});
+});
+
 test("a probe without window numbers keeps a hand-set context window", () => {
 	const withManual = setModelContextWindow(
 		addManualModel(newEndpointDraft(), "relay/glm"),
