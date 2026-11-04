@@ -17,7 +17,8 @@ feature state, theme selection, and token generation stay with the app.
 
 Primitives expose per-file `@thinkrail/ui/<primitive>` subpaths, not a root component barrel; this keeps
 lazy chunks independent and preserves the shadcn convention. `./utils` exposes `cn`; `./keyboard` exposes
-`isImeComposing` and `yieldEscapeToIme`; `./theme` exposes
+`isImeComposing`, `yieldEscapeToIme` and the platform modifier (`isApplePlatform`, `hasPlatformModifier`:
+Cmd on Apple, Ctrl elsewhere — shared so the app's shortcuts and an extension's card read one definition); `./theme` exposes
 only `onThemeSwap`, a DOM MutationObserver subscription to the completed `data-theme` signal, with
 explicit cleanup. It knows nothing about the theme catalog or preferences. `./fonts` is the same seam for
 the font settings: `onFontsChange` / `fontsRevision` over the `data-fonts` signal, `resolveFont(className)`

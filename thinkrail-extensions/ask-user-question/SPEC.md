@@ -116,13 +116,14 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   order, is titled "Other — your own answer", and holds a two-line field. Other was always rendered; it
   read as one more option ("Other" plus a grey placeholder, last row) and lost to agent-authored look-alikes.
   Note, Other and discuss text share `AutosizeField`: measured growth from 2 to 8 lines, then an inner
-  scroll (the system WKWebView of older macOS lacks `field-sizing`); Enter confirms, Shift+Enter adds a line.
+  scroll (the system WKWebView of older macOS lacks `field-sizing`); Enter closes the field, Shift+Enter adds
+  a line (see the keyboard model below).
 - **Previews.** A question's own preview — its subject — spans the width above the options: markdown at
   natural height folded at 240 px under an overlaid **Show all** (overlaid so a late measurement never
   shifts the layout), a mermaid fence or a file/diff in a fixed 240 px frame. Option previews (single-select
   only) sit beside the options in one fixed 380 px pane (options 2/5, pane 3/5 when the card is at least
-  `@2xl` wide — a container query, since the chat column decides; stacked below that) showing the selected
-  option's preview, or the cursor's before any pick: markdown (mermaid renders), or a workspace file or
+  `@2xl` wide — a container query, since the chat column decides; stacked below that) showing the preview
+  of the option under the cursor (on Other or the button, the picked option's): markdown (mermaid renders), or a workspace file or
   before → after diff through `FramedResourcePreview` in its compact chrome — Open in tab and Full screen
   only, with width presets and Split/Inline in full screen. An option without one says "No preview for this
   option", never another option's preview; rows that have one carry a type glyph. PgUp/PgDn on an option
@@ -133,9 +134,9 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   file preview degrades to its path and an Open file link; the plan page provides the session's resource
   scope and `onOpenFile` so previews render there as in chat. A picked file preview is echoed as its path.
   The 240 px fold, the 380 px pane and the 8-line field cap are unconfirmed starting values.
-- **Discuss first.** A ghost **Discuss** toggle beside each question marks it; a panel under the question
-  offers optional reason chips (Unclear / Not relevant / Need more context) and optional text, and Enter in
-  the text confirms the question. The options stay visible, muted; choosing one, checking one, opening a
+- **Discuss first.** A ghost **Discuss** toggle beside each question (or `d` on an option) marks it; a
+  panel under the question offers optional reason chips (Unclear / Not relevant / Need more context) and
+  optional text. The options stay visible, muted; choosing one, checking one, opening a
   note or typing Other cancels the mark while keeping the typed reason and text for a re-mark. The chip
   shows an info chat glyph (plus screen-reader text). The answer is `kind: "discuss"`. The toggle appears
   only for a host at protocol 103 or later (`interaction.hostProtocol`), the version whose server half
@@ -204,90 +205,52 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   composites to near-invisibility (accent @20% over the flattened surfaces), leaving keyboard users
   with no visible cursor — the one file the app-wide focus-ring sweep missed. `ring-primary-soft`
   remains only as the awaiting card's decorative active halo, which is not a focus indicator.
-- **Claude-style local keyboard selector** — one authored choice is in the Tab order; Up/Down wraps
-  through every authored choice **and Other**, Home/End jumps to the first/Other target *from a choice
-  row* (inside the Other field they stay caret keys, exactly as ←/→ do — a free-text field keeps the keys
-  that move through text, and ↑/↓ lift out of it only when the browser could not move the caret, so a
-  wrapped long answer is never left by accident and, on single-select, never loses to the option above), Space
-  selects/toggles an authored choice, and Enter confirms (single-select chooses the focused option;
-  multi-select confirms its non-empty set), advancing to the next question or, on the last one, submitting. Reaching Other focuses its text input, ready to type — but **text, not focus, is
-  what makes Other the answer** (`customTextPatch`): the cursor wraps *through* that row, so activating on
-  arrival would clear a single-select pick and paint an empty row as chosen just for passing over it.
-  Typing claims the answer (exclusively on single-select, additively on multi-select), emptying the field
-  hands it back, multi-select keeps its explicit checkbox for excluding text it should not submit, Up/Down
-  leaves or wraps, and Enter confirms non-empty text. The row is a `<label>` **explicitly bound to its
-  field via `htmlFor`** — `<button>` is a labelable element too, so on multi-select the implicit control
-  would be the include/exclude toggle above the input in tree order, and clicking the row's chrome would
-  flip an empty checkbox instead of putting the caret in the field (on touch, the only way in).
-  On multi-question cards Left/Right moves without wrapping across question pages; text inputs retain
-  those keys. The question chips are
-  a real `tablist` over the shared question `tabpanel` (each chip `aria-controls` it, the active chip
-  labels it) with **automatic activation** — an arrow/click switches the page outright and focus follows
-  *into* the panel rather than staying on the chip, since the page is what the user came to act on.
-  **A confirm gesture is never a silent no-op**: Enter with nothing to confirm (an empty multi-select set,
-  an untouched Other row with no pick above it) says “Choose an option first” beside the action it was
-  aiming at, clearing as soon as the question becomes answerable, and spoken through the same live-region
-  pattern as the attention line. The complaint belongs to the **question that raised it**
-  (`nudgeShowsOnPage`) — paging on inside its short life must not leave a warning on a question the user
-  never tried to confirm — and each gesture is stamped, so a *second* fruitless Enter empties the region
-  for a frame before refilling it: an unchanged live-region string is silence, which is the very no-op the
-  nudge exists to end.
-  Both Enter paths route through one reducer (`confirmStateFor`), so "confirm what this question has"
-  cannot mean two things. From an Other row that *does* have a pick above it, Enter confirms that pick.
-  From the Other row it commits the state **exactly as it stands** and never re-derives activation from the
-  text: typing already keeps `customActive` in step keystroke by keystroke, so re-patching at confirm time
-  could only contradict the row on screen — resurrecting multi-select text the user explicitly unchecked, or
-  submitting text left over from an earlier edit while the card still paints the option picked after it.
-  What is confirmed always matches what is drawn.
-  A note remains an explicit secondary control on every **checked choice**: the selected single-select
-  option, or **each checked multi-select option** — one note control per check, in the slot
-  **directly beneath its own option row**, appearing the moment the choice is made. (Multi-select notes
-  were missing entirely, and the single-select note had drifted to the bottom of the list where it read
-  as belonging to the last option — both reported as a regression; the contract always allowed notes.)
-  The wire carries **one `notes` string per answer**, so a multi answer joins its per-option notes as
-  `label: note` lines (newline-separated — notes themselves may be multiline). The control reads "Add note"
-  or shows the saved note itself; the option it belongs to is carried by `aria-label` ("Add/Edit note for
-  …"), and adjacency carries it visually. Tab reaches it and Enter opens it (the legend only promises `Tab
-  note` once a choice exists to hang one on — `answerSupportsNote`). In the editor
-  Enter finishes and returns focus to the choice (so does ↑/↓ where the caret cannot move), Shift+Enter
-  remains the multiline escape hatch, and
-  Escape also returns **without discarding typed text** — **including `Shift+Escape`**, which the open
-  editor consumes rather than letting the card's skip gesture throw away the note mid-sentence.
-  That holds **mid-IME-composition too**, where Escape is *consumed rather than finishing*: the IME owns
-  the key (it cancels the composition, so the note stays open) but the gesture still must not reach the
-  card — declining to finish while also declining to swallow would let `Shift+Escape` bubble out and take
-  the questionnaire down with the text being composed. The card's skip therefore also **ignores any
-  keystroke the IME owns**, and so does the Other field: its ↑/↓ and Enter wait for the composition
-  to end, so while composing the arrows move through IME candidates, not questionnaire choices
-  ([[module-web]]'s text-field rule).
-  `Shift+Escape` is otherwise the deliberate card-local skip; plain Escape outside a note never declines.
-  Tab still reaches
-  Other, Skip, and footer actions. A compact visible shortcut legend makes the interaction discoverable,
-  and the choices are checked rows with `aria-checked` — never `aria-pressed`, which
-  announced an exclusive pick as a toggle button and said nothing about the set. The container role
-  carries single vs multi (`radiogroup` vs `group` of checkboxes), and
-  each row is announced with its position in the choices. The note controls live **between the rows,
-  each under its checked choice**, because adjacency is what tells the user which choice a note belongs
-  to — the earlier notes-below-the-list layout read as the note belonging to the last option and was
-  reported as a regression. That interleaving is what forced the container role: a `listbox` may own
-  nothing but `option`/`group` (interactive descendants are non-conforming and some ATs flatten or skip
-  them — review finding on the multi-note change; `aria-posinset` only numbers options, it cannot make
-  stray children conforming), so the choices are a **`radiogroup` of `radio` rows (single-select) / a
-  `group` of `checkbox` rows (multi-select)** with `aria-checked`, whose contracts place no constraint
-  on sibling content — the note editor and toggle are ordinary named controls beside them. Each role's
-  keyboard contract is honored, not just its markup (second review finding: a radio whose arrows only
-  move focus exposes the focused row as unchecked while Enter would submit it — the semantic state
-  would contradict both the cursor and the answer): **single-select arrows select as they move** (the
-  APG radio contract; Space also selects, Enter stays the separate confirm), landing on the Other row
-  moves focus without selecting (it is a text field, not a radio), and **multi-select arrows only move**
-  with Space toggling (the checkbox contract). Selection is still never submission — Enter confirms. The **Other row
-  stays a sibling below the rows**. Movement is driven by the choice refs, not DOM containment, so the
-  keys are unaffected.
-  Deselecting a choice whose note editor is open also clears `noteFor` in the same update
-  (`toggleMultiPatch` / `selectOptionPatch`) while keeping the typed note text: a stale `noteFor` would
-  remount the open editor on re-check, stealing a focus action the user never took.
-  Bare-letter/number shortcuts and global chords are deliberately absent so
-  browser extensions, custom text, and explicit decline stay safe.
+- **Explicit-selection keyboard model** (chosen by the user over the earlier Claude-style "Enter confirms
+  and moves on"). One authored choice is in the Tab order. **↑/↓ only move**, wrapping through the
+  options, **Other** and the **primary button** (Next on earlier pages, Submit on the last — skipped while
+  Submit is disabled); Home/End jump to the first option / Other. On an option **Enter picks it**
+  (single-select) or **checks / unchecks it** (multi-select) and stays — no row key moves on or submits;
+  **Space opens that option's note** (picking / checking it first); **`d` marks the question for
+  discussion** and focuses its text. Enter on the primary button goes on or sends; **the platform
+  modifier + Enter** (`hasPlatformModifier`: Cmd on Apple, Ctrl elsewhere) **submits from anywhere in the
+  card**, fields included; **←/→ switch questions** without wrapping outside text fields; Tab keeps moving
+  focus (taking it for paging would trap keyboard users in the card — the terminal, which has no focus
+  order, pages with Tab too). A legend states all of it. Inside the Other field ←/→/Home/End stay caret
+  keys and ↑/↓ lift out only where the browser could not move the caret, so a wrapped long answer is
+  never left by accident. Reaching Other focuses its field — but **text, not focus, makes Other the
+  answer** (`customTextPatch`): typing claims it (exclusively on single-select, additively on
+  multi-select), emptying hands it back, and multi-select keeps its explicit include checkbox. The row is
+  a `<label>` **explicitly bound to its field via `htmlFor`** — `<button>` is labelable too, so on
+  multi-select the implicit control would be the include toggle and clicking the row's chrome would flip an
+  empty checkbox instead of putting the caret in the field.
+  **Fields park focus on their own row.** Enter (no modifier) or plain Escape closes the note, Other or
+  discuss text and moves focus to that field's row — the saved-note button, the Other row, the discuss
+  panel (`tabIndex=-1` targets). From a parked row Enter reopens the field (on the Other row it also
+  re-picks Other when it has text) and ↑/↓ continue the choice order. Parking was chosen over returning
+  to the options because, with Enter picking, a habitual second Enter there would replace a typed Other
+  answer or uncheck the option a note was written for. `Shift+Escape` in a note is **consumed** (it closes
+  the note rather than letting the card's skip throw it away mid-sentence), also mid-IME-composition,
+  where Escape is consumed rather than finishing; in Other and the discuss text it stays the card's skip.
+  The card's skip and every field ignore keystrokes the IME owns ([[module-web]]'s text-field rule).
+  Plain Escape outside a field never declines.
+  On multi-question cards the chips are a real `tablist` over the shared `tabpanel` with **automatic
+  activation** — an arrow/click switches the page and focus follows into it.
+  **A submit gesture is never a silent no-op**: the chord with nothing answered says “Choose an option
+  first” beside the actions, clearing once the question becomes answerable and spoken through the
+  attention line's live-region pattern; the complaint belongs to the question it was raised on
+  (`nudgeShowsOnPage`) and each gesture is stamped so a repeat is announced again.
+  A note is a secondary control on every **checked choice**, in the slot **directly beneath its own
+  option row**; the wire carries **one `notes` string per answer**, so a multi answer joins per-option
+  notes as `label: note` lines. The control reads "Add note" or shows the saved note (named "Add/Edit note
+  for …", with the note as its description). The choices are checked rows with `aria-checked` — never
+  `aria-pressed` — in a **`radiogroup` of `radio` rows / `group` of `checkbox` rows** (a `listbox` cannot
+  hold the interleaved note controls). Single-select focus **no longer checks** a radio: a deliberate
+  departure from APG's radio keys, safe because Enter now checks the focused row instead of submitting it,
+  so the announced state never contradicts the answer. Deselecting a choice whose note editor is open
+  clears `noteFor` in the same update (`toggleMultiPatch` / `selectOptionPatch`) while keeping the text.
+  The only letter is `d` on an option row and the only chord the platform modifier + Enter, both
+  card-local; other letters and digits stay free so browser extensions, custom text and explicit decline
+  stay safe.
 - **Recommended-reason affordance** — a recommended option (label suffix `(Recommended)` **or** a
   non-empty `recommendedReason` — a reason *implies* recommended, defensively) renders its rationale
   **inline** as a `Why: …` block inside the option card (below the description; `Why:` in the accent

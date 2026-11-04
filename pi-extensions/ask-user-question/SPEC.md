@@ -92,24 +92,25 @@ answer mailbox.
 - **The terminal questionnaire matches ThinkRail's card.**
   - Same answer model: `src/questionnaire.ts` ports the card's `deriveAnswer` on purpose, because the card
     may not import a pi package.
-  - Single-select: ↑↓ move and select. Multi-select: Space toggles.
-  - Other opens a pi-tui `Editor`; typing on its row starts it. `n` adds a note; a single-select note
-    follows the selection instead of staying on the option it was written for.
-  - `d` on an option row (never inside an editor, never on the Other row) marks the question "discuss first"
-    and opens the editor for the optional text; confirming it confirms the question. A marked question's tab
-    shows ` ?`.
-  - The question preview prints above the options; a file preview prints as `preview: <path>`
-    (`<before> → <path>`), and an option without one says "No preview for this option".
-  - The "Recommended" badge and the `Why:` line.
-  - The selected option's markdown preview: beside the list from 100 columns, below it otherwise, capped
-    at 24 lines.
-  - One page per question, no review page (matching the card): confirming the last one submits, and its
-    "Submit answers" row (the card's Submit button) sends whatever is answered, the rest as not answered.
-    Esc to skip, and a "Chat about this" row.
+  - Same keys: ↑↓ only move; Enter picks an option (single-select) or checks / unchecks it
+    (multi-select) and never moves on; Space opens the option's note (picking it first); `d` on an option
+    row (never inside an editor, never on the Other row) marks the question "discuss first" and opens its
+    editor; Tab / → and Shift+Tab / ← page; Ctrl+Enter submits where the terminal reports it (Kitty CSI-u
+    or modifyOtherKeys — elsewhere it arrives as a plain Enter and picks); Esc skips (the card's skip is
+    Shift+Esc because the chat composer owns plain Escape).
+  - Rows: the options, a `✎` row under an option with a saved note, a `?` discussion row above the options
+    while the question is marked, Other (typing on its row starts its editor), **Next →** on earlier pages
+    or **Submit answers** on the last page (single-question rounds included), and "Chat about this".
+    Editors save on Enter or Esc without confirming and park the cursor on their own row, where Enter
+    reopens them — so a second Enter never changes the answer. The cursor is kept per page as a row key,
+    so rows appearing above it never move it.
+  - A single-select note follows the selection; a marked question's tab shows ` ?`; the "Recommended"
+    badge and the `Why:` line; one page per question and no review page, the unanswered sent as not
+    answered.
+  - The question preview prints above the options; the option preview follows the cursor (beside the list
+    from 100 columns, below it otherwise, capped at 24 lines; a file preview prints `preview: <path>`, and
+    "No preview for this option" otherwise — also for an own answer).
   - Known limit: no viewport for a questionnaire taller than the terminal.
-  - Known limit: on a single-select last page, ↓ selects each option it crosses, so reaching "Submit
-    answers" that way answers that question with its last option; ↑ from the first option reaches it
-    without selecting.
 - **The dialog walker trades richness for reach.**
   - One `select` per question, with "Other…", "Discuss this…" and "Chat about this"; "Discuss this…" then
     asks an `input` for the optional text.

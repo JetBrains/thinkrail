@@ -547,8 +547,9 @@ only. Questionnaire coverage uses canonical persisted tool-call/ack fixtures (su
 restart-repaired response path) to pin six-question rounds beyond four, tall-page and restored-page reveal,
 coarse-pointer focus, tabs/question/footer at one y across paging and choosing, notes and Other growing in
 place under a height that never shrinks, Discuss marking/cancelling/sending (asserted in the session file),
-the receipt's fold, per-question Options and remembered manual fold, and keyboard-only flows including
-Discuss and leaving Other with arrows (`ask-user-question.spec.ts`). `ask-previews.spec.ts` writes mockups
+the receipt's fold, per-question Options and remembered manual fold, and the keyboard model (arrows only
+move, Enter picks, Space opens a note, `d` discusses, fields park on their own row, the platform chord
+submits or nudges) (`ask-user-question.spec.ts`). `ask-previews.spec.ts` writes mockups
 into the fixture repository (removed in `finally`) and pins the question preview and the option pane (HTML,
 before/after, mermaid, none) at one card height, full-screen keys that never page or skip, a file removed
 under its preview, and the picked file's path in the persisted answer; `plan-ask.spec.ts` adds the same file
