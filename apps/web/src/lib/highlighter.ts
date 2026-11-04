@@ -15,7 +15,6 @@ export interface ShikiFileLanguage {
 	extensions: readonly string[];
 	aliases: readonly string[];
 	filenames?: readonly string[];
-	chat?: boolean;
 	load: () => Promise<ShikiLanguageModule>;
 }
 
@@ -24,35 +23,30 @@ export const SHIKI_FILE_LANGUAGES: readonly ShikiFileLanguage[] = [
 		id: "typescript",
 		extensions: [".ts", ".cts", ".mts"],
 		aliases: ["TypeScript", "ts", "cts", "mts"],
-		chat: true,
 		load: () => import("@shikijs/langs/typescript"),
 	},
 	{
 		id: "tsx",
 		extensions: [".tsx"],
 		aliases: ["TSX"],
-		chat: true,
 		load: () => import("@shikijs/langs/tsx"),
 	},
 	{
 		id: "javascript",
 		extensions: [".js", ".cjs", ".mjs"],
 		aliases: ["JavaScript", "js", "cjs", "mjs"],
-		chat: true,
 		load: () => import("@shikijs/langs/javascript"),
 	},
 	{
 		id: "jsx",
 		extensions: [".jsx"],
 		aliases: ["JSX"],
-		chat: true,
 		load: () => import("@shikijs/langs/jsx"),
 	},
 	{
 		id: "json",
 		extensions: [".json"],
 		aliases: ["JSON"],
-		chat: true,
 		load: () => import("@shikijs/langs/json"),
 	},
 	{
@@ -65,21 +59,18 @@ export const SHIKI_FILE_LANGUAGES: readonly ShikiFileLanguage[] = [
 		id: "shellscript",
 		extensions: [".sh", ".bash", ".zsh"],
 		aliases: ["Shell", "shell", "bash", "sh", "zsh"],
-		chat: true,
 		load: () => import("@shikijs/langs/bash"),
 	},
 	{
 		id: "python",
 		extensions: [".py", ".pyw", ".pyi"],
 		aliases: ["Python", "py"],
-		chat: true,
 		load: () => import("@shikijs/langs/python"),
 	},
 	{
 		id: "css",
 		extensions: [".css"],
 		aliases: ["CSS"],
-		chat: true,
 		load: () => import("@shikijs/langs/css"),
 	},
 	{
@@ -92,21 +83,18 @@ export const SHIKI_FILE_LANGUAGES: readonly ShikiFileLanguage[] = [
 		id: "html",
 		extensions: [".html", ".htm", ".xhtml", ".shtml"],
 		aliases: ["HTML", "htm", "xhtml"],
-		chat: true,
 		load: () => import("@shikijs/langs/html-derivative"),
 	},
 	{
 		id: "markdown",
 		extensions: [".md", ".markdown", ".mdown", ".mkdn", ".mdx"],
 		aliases: ["Markdown", "md"],
-		chat: true,
 		load: () => import("@shikijs/langs/markdown"),
 	},
 	{
 		id: "yaml",
 		extensions: [".yaml", ".yml"],
 		aliases: ["YAML", "yml"],
-		chat: true,
 		load: () => import("@shikijs/langs/yaml"),
 	},
 	{
@@ -143,7 +131,6 @@ export const SHIKI_FILE_LANGUAGES: readonly ShikiFileLanguage[] = [
 		id: "scala",
 		extensions: [".scala"],
 		aliases: ["Scala"],
-		chat: true,
 		load: () => import("@shikijs/langs/scala"),
 	},
 	{
@@ -199,7 +186,6 @@ export const SHIKI_FILE_LANGUAGES: readonly ShikiFileLanguage[] = [
 		id: "diff",
 		extensions: [".diff", ".patch"],
 		aliases: ["Diff", "Patch"],
-		chat: true,
 		load: () => import("@shikijs/langs/diff"),
 	},
 	{
@@ -255,23 +241,16 @@ export const SHIKI_FILE_LANGUAGES: readonly ShikiFileLanguage[] = [
 
 const SHIKI_LANGUAGE_BY_ALIAS = new Map(
 	SHIKI_FILE_LANGUAGES.flatMap((language) =>
-		[language.id, ...language.aliases].map((alias) => [alias.toLowerCase(), language.id] as const),
+		[language.id, ...language.aliases].map((alias) => [alias.toLowerCase(), language] as const),
 	),
 );
-const CHAT_SHIKI_LANGUAGES = new Map(
-	SHIKI_FILE_LANGUAGES.filter((language) => language.chat).map((language) => [
-		language.id,
-		language,
-	]),
-);
 
-export function shikiLanguageId(value: string): string | null {
-	return SHIKI_LANGUAGE_BY_ALIAS.get(value.trim().toLowerCase()) ?? null;
+function shikiLanguage(value: string) {
+	return SHIKI_LANGUAGE_BY_ALIAS.get(value.trim().toLowerCase());
 }
 
-export function chatShikiLanguageId(lang: string) {
-	const canonical = shikiLanguageId(lang);
-	return canonical && CHAT_SHIKI_LANGUAGES.has(canonical) ? canonical : null;
+export function shikiLanguageId(value: string): string | null {
+	return shikiLanguage(value)?.id ?? null;
 }
 
 export function createChatHighlighter(engine: () => RegexEngine | Promise<RegexEngine>) {
@@ -290,27 +269,25 @@ export function createChatHighlighter(engine: () => RegexEngine | Promise<RegexE
 		return highlighterPromise;
 	}
 
-	function loadLanguage(hl: HighlighterCore, id: string) {
-		let load = languageLoads.get(id);
+	function loadLanguage(hl: HighlighterCore, language: ShikiFileLanguage) {
+		let load = languageLoads.get(language.id);
 		if (!load) {
-			const language = CHAT_SHIKI_LANGUAGES.get(id);
-			if (!language) return Promise.reject(new Error(`Not a chat language: ${id}`));
 			load = hl.loadLanguage(language.load()).catch((error: unknown) => {
-				languageLoads.delete(id);
+				languageLoads.delete(language.id);
 				throw error;
 			});
-			languageLoads.set(id, load);
+			languageLoads.set(language.id, load);
 		}
 		return load;
 	}
 
 	return async function highlight(code: string, lang: string) {
-		const canonical = chatShikiLanguageId(lang);
-		if (!canonical) return null;
+		const language = shikiLanguage(lang);
+		if (!language) return null;
 		const hl = await getHighlighter();
 		try {
-			await loadLanguage(hl, canonical);
-			return hl.codeToHtml(code, { lang: canonical, theme: THINKRAIL_SHIKI_THEME_NAME });
+			await loadLanguage(hl, language);
+			return hl.codeToHtml(code, { lang: language.id, theme: THINKRAIL_SHIKI_THEME_NAME });
 		} catch {
 			return null;
 		}

@@ -643,8 +643,8 @@ content's own height.
   Themes own one TextMate scope definition: chat uses its live CSS-variable form, while Monaco resolves that
   same definition plus its complete editor/widget/menu/input colour map to hex and defines the Monaco theme from
   it directly. Token colours come from `shikiTokens.ts`, a Monaco-free owner of one Shiki highlighter, its
-  per-language grammar loads and the colour→scope map. Its curated language catalog is shared with the chat
-  highlighter and extended for the desktop file formats; missing Monaco language ids are registered with their
+  per-language grammar loads and the colour→scope map. Its curated language catalog is the same one the chat
+  highlighter uses; missing Monaco language ids are registered with their
   file associations, then each catalog id gets a `registerTokensProviderFactory` entry. A swap loads the
   highlighter theme under the other of two names and rebuilds the scope map from the same converted Monaco rules it
   defines, redefines Monaco, and selects `EDITOR_THEME`. The normal/high-contrast base comes from manifest

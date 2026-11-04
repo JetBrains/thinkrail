@@ -78,8 +78,10 @@ not this module; the theme-aware highlighter remains app-local.
   Shiki highlighter, **kept out of the barrel** so the eager `@/lib` import stays shiki-free:
   `highlighter.ts` owns the curated grammar/id/file-association catalog shared by chat and the desktop
   Monaco renderer (both load a grammar on its language's first use), plus
-  `createChatHighlighter(engine)`: `themes`' one generic CSS-variable registration and each chat grammar
-  loaded on first use. Chat code is highlighted off the main thread:
+  `createChatHighlighter(engine)`: `themes`' one generic CSS-variable registration and any catalog grammar
+  loaded on first use. Chat highlights the whole catalog — with lazy grammar loads an unused language costs
+  nothing, so a chat-only subset would only drift from the files ThinkRail opens. Chat code is highlighted
+  off the main thread:
   `highlightCode.ts` resolves the language alias (unknown and `mermaid` answer `null` with no worker),
   then posts to one lazy `highlighter.worker.ts` per page, which uses the Oniguruma WASM engine. Per
   caller key at most one request is in flight; a newer call replaces the waiting one, which resolves

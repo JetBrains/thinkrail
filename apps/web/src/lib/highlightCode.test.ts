@@ -95,6 +95,15 @@ test("a repeated call on a key resolves from the cache without a second post", a
 	expect(posted).toHaveLength(1);
 });
 
+test("an alias of any catalog language reaches the worker under its canonical id", async () => {
+	const { client, posted, answer } = fakeWorker();
+	const pending = client.highlightCode("fn main() {}", "rs", "k");
+	expect(posted.map((request) => request.lang)).toEqual(["rust"]);
+	answer(0);
+	expect(await pending).toBe(render("fn main() {}", "rust"));
+	expect(client.cachedHighlight("fn main() {}", "Rust")).toBe(render("fn main() {}", "rust"));
+});
+
 test("unknown languages and mermaid never spawn the worker", async () => {
 	const { client, counts } = fakeWorker();
 	expect(await client.highlightCode("graph TD", "mermaid", "k")).toBeNull();
