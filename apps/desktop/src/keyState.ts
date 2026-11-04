@@ -7,6 +7,9 @@ export interface KeyState {
 	cmdDown: boolean;
 	mouseAfterKey: boolean;
 	keyAfterModifiers: boolean;
+	/** Seconds since the last key-down event; distinguishes a held, repeating
+	 * key (events keep arriving) from a stale state that lost its key-up. */
+	sinceKeyDown: number | null;
 }
 
 const HID_SYSTEM_STATE = 1;
@@ -50,6 +53,7 @@ export function decodeKeyState(sample: KeySample): KeyState {
 		cmdDown: (sample.flags & COMMAND_FLAG) !== 0n,
 		mouseAfterKey: sample.sinceMouseUp < sample.sinceKeyDown,
 		keyAfterModifiers: sample.sinceKeyDown < sample.sinceFlagsChanged,
+		sinceKeyDown: Number.isFinite(sample.sinceKeyDown) ? sample.sinceKeyDown : null,
 	};
 }
 
