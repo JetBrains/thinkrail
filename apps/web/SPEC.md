@@ -29,7 +29,7 @@ event stream as a chat-centric, multi-session IDE shell.
 
 ## Internal modules
 
-Each is a bounded sub-module; `navigation`/`transport`/`store`/`updates`/`prompt`/`lib`/`extensions`/`search`/`commands` expose an `index.ts` **barrel** (their only public
+Each is a bounded sub-module; `navigation`/`transport`/`store`/`updates`/`lib`/`extensions`/`search`/`commands` expose an `index.ts` **barrel** (their only public
 surface). `panels`/`chat` are imported **per-file by design** — barreling them would pull
 the lazily-loaded Monaco/shiki/xterm chunks into the eager bundle and break the shadcn per-primitive
 convention; their boundary is held by convention + spec. Sibling edges live here, not in the leaves.
@@ -40,8 +40,7 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | `transport` | the WS client + its singleton/store wiring | yes | [transport/SPEC.md](src/transport/SPEC.md) |
 | `store` | Zustand: domain projections, one local workbench frame, per-workspace views/attention, chat runtimes | yes | [store/SPEC.md](src/store/SPEC.md) |
 | `panels` | layout-agnostic, store-driven feature views | no | [panels/SPEC.md](src/panels/SPEC.md) |
-| `chat` | pi conversation UI primitives: content-block renderers + the tool-renderer registry | no | [chat/SPEC.md](src/chat/SPEC.md) |
-| `prompt` | lifecycle-neutral slash completion + prompt-template slot editing | yes | [prompt/SPEC.md](src/prompt/SPEC.md) |
+| `chat` | the chat's app-integration layer (`ChatView`, `ChatTranscript`, store/transport hooks); the renderers, registry and composer are `@thinkrail/chat-ui` | no | [chat/SPEC.md](src/chat/SPEC.md) |
 | `auth` | in-app provider login: the presentational OAuth dialog + its client-side state reducer | yes | [auth/SPEC.md](src/auth/SPEC.md) |
 | `shell` | responsive composition + frontend-local workbench ownership (bounded `layout/` and `layoutState/` children) | no | [shell/SPEC.md](src/shell/SPEC.md) |
 | `search` | the global search palette: query grammar, ranking + client-local learning, store-derived work items, double-Shift gesture | yes | [search/SPEC.md](src/search/SPEC.md) |
@@ -58,14 +57,17 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 Leaf utilities without their own spec: `constants/` (branding — the product name, storage/event prefixes, and the one
 `BRAND_MARK_SEGMENTS` monogram regions, joined into the `BRAND_MARK_PATH` the shell logo fills and clipped to by the components' working badge), `clientPreferences.ts` (feature-neutral
 access to the optional native stable string adapter, and `firstPaintPreferenceStorage` — that adapter, else
-`localStorage` — which the theme and font first-paint hints share), and `styles/` — which holds the three
-design-system SOURCES (`typography.json`, `colors.json`, `spacing.json`), their generated CSS, and the
-structural token contract; per-theme palettes belong to `themes`. Each system is specced beside its source:
+`localStorage` — which the theme and font first-paint hints share), and `styles/` — the structural token contract
+(`tokens.css`), the global base, the adoption guards and the design-system docs. The three design-system
+SOURCES (`typography.json`, `colors.json`, `spacing.json`), the bundled theme palettes, their generators and
+the generated CSS live in [`@thinkrail/design-tokens`](../../packages/design-tokens/SPEC.md), shared with
+`apps/mobile`; `index.css` imports its `styles.css`. Each system's usage rules are specced here:
 [TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md), [COLOR.md](src/styles/COLOR.md) and [SPACING.md](src/styles/SPACING.md);
 the in-app notice and toast look built on them is [NOTIFICATIONS.md](src/styles/NOTIFICATIONS.md).
-Outside `src/`, **[`scripts/`](scripts/SPEC.md)** is the build-time generator module — it runs under Bun,
-never ships, and turns those three JSON sources into `styles/generated/` (plus the vendored provider
-marks into `chat/generated/`).
+Outside `src/`, **[`scripts/`](scripts/SPEC.md)** is the build-time tooling module — it runs under Bun,
+never ships, and generates the vendored provider marks into `packages/chat-ui/src/generated/`, runs the React Compiler
+census, and owns the adoption-guard source scan; the web `*:generate` / `*:check` scripts delegate the
+token generators to `@thinkrail/design-tokens`.
 `index.html` names the product and links the local, symbol-only SVG favicon derived from the same
 ThinkRail artwork as the shell logo (compact enough for browser-tab sizes and light/dark browser chrome).
 `main.tsx` is the entry/composition root — it synchronously builds the bundled theme catalog, resolves and
@@ -165,10 +167,9 @@ change. `dist/` therefore has no profiler timers (`actualStartTime` is absent fr
 - `search` → `commands` (the command contract its rows render), `store` (work-item reads — the session snapshot, chat titles, attention — and the `doubleShiftSearch` preference), `transport` (the backend endpoint that qualifies browser preference keys), `contracts` (the shared tiered matcher + domain types), `clientPreferences` (native-stable learning/preview/double-Shift persistence), `constants`, `components` (`AttentionDot`, `RunningIcon`), `lib`, `ui`, React, Remix Icon. It never imports `panels`, `chat` or `shell`: the command catalog and its handlers are composed in `shell` and injected as props
 - `commands` → `lib` (platform shortcut glyphs), `@thinkrail/locales` (group-label keys, type-only), Remix Icon types. It owns no handlers and binds no keys; `shell` supplies both
 - `notifications` → `store` (session-state reads, prompt + `activateWorkspaceFromRoute` / `openSearch` actions), `ui` (the permission preface dialog), `contracts` (type-only — `SessionState`/`SessionCompletion`/`NativeNotificationBridge`), React, and Remix Icon; the master-toggle Settings panel lives in `panels`, and `shell` mounts the observer/preface. It emits through a capability-selected channel: the page Notifications API, or the native desktop channel when the optional `__THINKRAIL_NATIVE_NOTIFICATIONS__` bridge is present (capability detection only, no `desktop` branch). No Service Worker: a closed app has no live client to notify
-- `panels` → `@thinkrail/resource-renderers` (registry, review contract, `ReviewThreadCard`, draft context, `createAskAgentRequest`), `store`, `transport`, `ui`, `components` (`ErrorBoundary` for feature bodies + quiet scroll surfaces for panel-owned lists/xterm), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `prompt` (`NewWorkspaceDialog` consumes the shared slash/template behavior), `chat` (`NewWorkspaceDialog` eagerly reuses `chat/ModelEffortPicker`+`useModelCatalog`+`useModelPreferences`, `ModelsSettings` the older `ModelSelector`+`ThinkingSelector`, `VisibleModelsSettings` `chat/modelPicker`'s `formatContext` + `chat/ProviderGlyph`, and `ProvidersSettings` the `chat/modelPicker` connection-kind vocabulary, `useProviderAuth` the sign-in `chat/ExtraUsageNotice` — all shiki-free, so the eager import stays split-safe; `TemplatesSettings` reuses `chat/TemplateEditorDialog` for its New/Edit flows — see `panels/SPEC.md`'s `TemplatesSettings` paragraph; `ProjectTrustNotice` and `NewWorkspaceDialog` share `chat/projectTrust` + `chat/useProjectTrustSummary` with the Skills dialog's trust banner), `auth` (`useProviderAuth` — shared by `ProvidersSettings`, `ConnectProviderDialog` and the onboarding wizard — and `McpSettings` mount `auth/LoginDialog`), `notifications` (`NotificationsSettings` requests browser permission on enable via the barrel), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping), `fonts` (`AppearanceSettings`' font groups read the bundled faces, per-device probes and the weight preview; `TerminalInstance` follows the code font through `@thinkrail/ui/fonts`), `i18n` (`LanguageSettings` renders its language derivations and `useSystemLanguages`), and `react-virtuoso` (the lazily loaded Changes review list); the renderer engines are [[module-resource-renderers]]' own dependencies
-- `chat` → `contracts` (pi message types, **type-only**), `ui`, `extension-api/web`, `@thinkrail/resource-renderers` (`ChatTranscript` provides the chat's `ResourceScope` to its rows), `ext-visualize/web`, `extensions` (registration only), `components` (`useNow`, and the `RunningIcon` badge in the stream footer), `prompt` (shared slash/template behavior), `lib`, `clientPreferences`; `store` + `transport`  (**app-integration files only** — the renderers stay store-free; see `chat/SPEC.md` for the current set)
-- `prompt` → `contracts` (slash/template types only), `@thinkrail/ui/utils` (`cn`), `@thinkrail/ui/button` (the template slot hint is a shared `Button`), and React; it has no lifecycle integration dependency
-- `extensions` → `ext-*/web`, `extension-api/web`, `chat/toolRegistry` (registration only; no ChatView import)
+- `panels` → `@thinkrail/resource-renderers` (registry, review contract, `ReviewThreadCard`, draft context, `createAskAgentRequest`), `store`, `transport`, `ui`, `components` (`ErrorBoundary` for feature bodies + quiet scroll surfaces for panel-owned lists/xterm), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `@thinkrail/chat-ui/prompt` (`NewWorkspaceDialog` consumes the shared slash/template behavior), `chat` (`NewWorkspaceDialog` eagerly reuses `chat/ModelEffortPicker`+`useModelCatalog`+`useModelPreferences`, `ModelsSettings` the older `ModelSelector`+`ThinkingSelector`, `VisibleModelsSettings` `chat/modelPicker`'s `formatContext` + `chat/ProviderGlyph`, and `ProvidersSettings` the `chat/modelPicker` connection-kind vocabulary, `useProviderAuth` the sign-in `chat/ExtraUsageNotice` — all shiki-free, so the eager import stays split-safe; `TemplatesSettings` reuses `chat/TemplateEditorDialog` for its New/Edit flows — see `panels/SPEC.md`'s `TemplatesSettings` paragraph; `ProjectTrustNotice` and `NewWorkspaceDialog` share `chat/projectTrust` + `chat/useProjectTrustSummary` with the Skills dialog's trust banner), `auth` (`useProviderAuth` — shared by `ProvidersSettings`, `ConnectProviderDialog` and the onboarding wizard — and `McpSettings` mount `auth/LoginDialog`), `notifications` (`NotificationsSettings` requests browser permission on enable via the barrel), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping), `fonts` (`AppearanceSettings`' font groups read the bundled faces, per-device probes and the weight preview; `TerminalInstance` follows the code font through `@thinkrail/ui/fonts`), `i18n` (`LanguageSettings` renders its language derivations and `useSystemLanguages`), and `react-virtuoso` (the lazily loaded Changes review list); the renderer engines are [[module-resource-renderers]]' own dependencies
+- `chat` → `@thinkrail/chat-ui` (every renderer, the registry, the composer, `prompt` behaviour), `contracts` (pi message types, **type-only**), `ui`, `extension-api/web`, `@thinkrail/resource-renderers` (`ChatTranscript` provides the chat's `ResourceScope` to its rows), `extensions` (registration only), `components` (`useNow`), `lib`, `clientPreferences`; `store` + `transport`  (**app-integration files only** — the renderers stay store-free; see `chat/SPEC.md` for the current set)
+- `extensions` → `ext-*/web`, `extension-api/web`, `@thinkrail/chat-ui/toolRegistry` (registration only; no ChatView import)
 - `auth` → `ui`, `lib` (`copyText`; the dialog is store/transport-free — the panel integrates it; the state types need no imports)
 - `store` → `transport` (**type-only** — `ConnectionStatus`), `chat` (**type-only** — `ChatTurn`/`ToolResultState`), `auth` (**type-only** — `LoginState`; the `foldLoginFrame` reducer lives in `store`, like `reduceExtUi`), `contracts` (domain + custom-preset types, never current-layout DTOs), `lib` (shared path/array primitives — a leaf, so no cycle), and `shell/layout` (**type-only** for web-local frame/view state)
 - `transport` → `contracts`, `store` (welcome routing; the `store → transport` back-edge is type-only, so
@@ -245,7 +246,7 @@ themselves.
   standalone elevated surfaces (dialogs, user-message bubbles)). Spacing is **one canonical numeric
   scale** — `0 / 2 / 4 / 6 / 8 / 12 / 16 / 24 / 32 / 40 / 64` — where the step name *is* its pixel value, so
   `p-8` / `gap-12` / `py-4` resolve to exactly that many pixels; it is generated from a single JSON source
-  (`src/styles/spacing.json` → `src/styles/generated/spacing.css`), so each canonical length is written
+  (`@thinkrail/design-tokens` `styles/spacing.json` → `styles/generated/spacing.css`), so each canonical length is written
   once in the JSON rather than re-declared at call sites. A value several surfaces must move together is a
   named **layout role** aliasing a step (`p-panel-inset`, `h-panel-row`), never a repeated literal.
   `src/styles/SPACING.md` (`web-spacing`) is the authoritative system; `src/styles/spacingUsage.test.ts`
@@ -262,8 +263,8 @@ themselves.
   row (`TreeRow`) and the active editor tab (`Workbench`) swap to `Ri…Fill`; everything else (buttons,
   chevrons, status, composer, chat, menus) stays `Ri…Line`. Icons with no Line/Fill pair
   (`RiParagraph`/`RiDraggable`/`RiLinkM`/`RiListCheck3`) render their single style in both states.
-  **Project-custom glyphs** that Remix lacks live as SVGs in `public/custom-icons/` and render through
-  the `CustomIcon` primitive (`components/CustomIcon`) — a `currentColor` CSS `mask-image` span, so they
+  **Project-custom glyphs** that Remix lacks live as SVGs in `packages/ui/icons/` and render through
+  the `CustomIcon` primitive (`@thinkrail/ui/custom-icon`, styles in `@thinkrail/ui/custom-icon.css`) — a `currentColor` CSS `mask-image` span, so they
   theme and swap Line/Fill by state exactly like Remix glyphs. The **Changes** tool uses the custom
   `file-diff` glyph; **Review** uses `RiDiscussLine`/`RiDiscussFill`.
   Three tiers: `size-12` (12px) for **chat-content** indicators (tool activity, plan/todo status,
@@ -279,7 +280,8 @@ themselves.
   + `mt-2`) so the glyph hangs on its title, while a single-line row stays vertically centred
   (`items-center`, no nudge). Menu-item icons are centralized once in `packages/ui/menu-styles.ts` (`menuItemClass`
   `[&_svg]:size-14` + `gap-4`).
-- **`src/themes` is the theme contract and catalog; `src/styles/tokens.css` is structural.** A bundled
+- **`src/themes` is the theme catalog; the manifest contract and palettes live in
+  `@thinkrail/design-tokens`; `src/styles/tokens.css` is structural.** A bundled
   theme is one strict, complete `*.theme.json` manifest: appearance/contrast metadata + semantic UI
   colors + all 16 ANSI colors + a semantic syntax palette. Selected-text foreground overrides are the
   only nullable color slots (`null` retains the consumer default). A build-time glob validates the set at
@@ -315,15 +317,15 @@ themselves.
   strict consumers still pass through `lib.cssColorToHex`. Data-driven tests enforce the existing
   contrast floor (body/muted ≥ 4.5:1 and hint ≥ 3:1 on the primary declared surfaces) for every discovered
   manifest.
-- Radius tokens **are** Tailwind's radius namespace: `tokens.css` declares `--radius-xs/sm/md/lg` in an
+- Radius tokens **are** Tailwind's radius namespace: `@thinkrail/design-tokens` `styles/shape.css` declares `--radius-xs/sm/md/lg` in an
   `@theme static` block that first resets Tailwind's default scale (`--radius-*: initial`). So
   `rounded-<step>` and its side variants resolve to the live tokens, an undeclared step such as
   `rounded-xl` is never generated, and `static` keeps every variable emitted for hand-written CSS. This
   replaces the earlier rule of spelling the colliding tokens as arbitrary values
   (`rounded-[var(--radius-md)]`): the collision is removed at its source instead of worked around at ~300
   call sites, and the guard rejects any arbitrary radius value.
-- **Typography comes from `styles/typography.json` via generated semantic classes — nothing else.**
-  `styles/generated/typography.css` (committed, regenerated by `bun run typography:generate`, drift-gated
+- **Typography comes from `typography.json` (`@thinkrail/design-tokens`) via generated semantic classes — nothing else.**
+  Its `styles/generated/typography.css` (committed, regenerated by `bun run typography:generate`, drift-gated
   by `typography:check`) emits the primitive `--tr-*` custom properties, the `<body>` base, and one class
   per semantic style: `tr-brand-*`, `tr-heading-*`, `tr-title-*`, `tr-text-*`, `tr-code-*` plus one
   `tr-prose-<surface>` system per markdown surface (`tr-prose-chat`, `tr-prose-doc` — same element set,
@@ -352,7 +354,7 @@ themselves.
   `font-[var(--font-mono)]` is ambiguous — Tailwind compiles it to an invalid `font-weight`, so it
   silently does nothing; the working form is `font-(family-name:--font-mono)`
   (`styles/fontClasses.test.ts` fails on the bare form).
-- **Fonts ship inside the artifact.** `styles/generated/fonts.css` imports self-hosted variable faces
+- **Fonts ship inside the artifact.** `@thinkrail/design-tokens` `styles/generated/fonts.css` imports self-hosted variable faces
   (fontsource; Geist Variable + JetBrains Mono Variable, both with real italics — shared with
   `apps/website`, so their versions live in the root `workspaces.catalog`). Which packages those are is
   declared per family as `selfHosted` in `styles/typography.json`, so the stack and the bundled faces

@@ -1,9 +1,16 @@
+import type { ChatMessageOrder } from "@thinkrail/chat-ui/chatMessageOrder";
 import type { ComposerGrowthLimit, SubagentOverride } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { T, useT } from "@thinkrail/locales/react";
+import {
+	SegmentedControl,
+	type SegmentedControlOption,
+	SettingsGroup,
+	SettingsPageContainer,
+	SettingsRow,
+} from "@thinkrail/ui/settings";
 import { cn } from "@thinkrail/ui/utils";
 import {
-	type ChatMessageOrder,
 	moveStreamingResponseHandle,
 	STREAMING_RESPONSE_MOVEMENT_LIMITS,
 	type StreamingResponseMovement,
@@ -11,10 +18,7 @@ import {
 import { selectActiveWorkspace, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { LineWidthControl } from "./LineWidthSettings";
-import { SegmentedControl, type SegmentedControlOption } from "./SegmentedControl";
-import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
 import { SETTINGS_RANGE_INPUT, SETTINGS_RANGE_STACKED, SettingsRangeTrack } from "./SettingsRange";
-import { SettingsRow } from "./SettingsRow";
 import { SubagentSettings } from "./SubagentSettings";
 import { saveSettings } from "./saveSettings";
 

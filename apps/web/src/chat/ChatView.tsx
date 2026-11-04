@@ -1,3 +1,35 @@
+import type { ResultTarget } from "@thinkrail/chat-ui/ChatActions";
+import {
+	Composer,
+	type ComposerHandle,
+	type ComposerSubmitDisposition,
+	type MentionCandidate,
+	type SubmitBehavior,
+} from "@thinkrail/chat-ui/Composer";
+import { ExtraUsageNotice } from "@thinkrail/chat-ui/ExtraUsageNotice";
+import { mentionLookup } from "@thinkrail/chat-ui/fileTargets";
+import { parseModelRef, RunModelLabel } from "@thinkrail/chat-ui/ModelEffortLabel";
+import type { ModelSelection } from "@thinkrail/chat-ui/ModelEffortPicker";
+import {
+	compactSubmissionError,
+	mergeNativeChatCommands,
+	parseNativeChatCommand,
+	prepareNameChatCommand,
+} from "@thinkrail/chat-ui/nativeCommands";
+import {
+	type ParsedTemplate,
+	templateToSlashCommand,
+	useTemplateCommandPicker,
+} from "@thinkrail/chat-ui/prompt";
+import { QueueStrip } from "@thinkrail/chat-ui/QueueStrip";
+import {
+	CommandLogView,
+	newestResourceId,
+	ResourcesAttention,
+	ResourcesButton,
+	ResourcesDock,
+	ResourcesInspector,
+} from "@thinkrail/chat-ui/resources";
 import {
 	type PromptHit,
 	type QueueLane,
@@ -20,7 +52,6 @@ import {
 import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useNow } from "@/components/useNow";
-import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
 import {
 	EMPTY_RUNTIME,
 	SettingsSection,
@@ -36,37 +67,10 @@ import {
 	workspaceName,
 } from "@/store";
 import { errorText, getTransport, watchMcpWorkspace } from "@/transport";
-import type { ResultTarget } from "./ChatActions";
 import { ChatHeader } from "./ChatHeader";
 import ChatTranscript, { type ChatTranscriptHandle } from "./ChatTranscript";
-import {
-	Composer,
-	type ComposerHandle,
-	type ComposerSubmitDisposition,
-	type MentionCandidate,
-	type SubmitBehavior,
-} from "./Composer";
-import { ExtraUsageNotice } from "./ExtraUsageNotice";
-import { mentionLookup } from "./fileTargets";
 import { HistoryOverlay } from "./HistoryOverlay";
-import { parseModelRef, RunModelLabel } from "./ModelEffortLabel";
-import type { ModelSelection } from "./ModelEffortPicker";
-import {
-	compactSubmissionError,
-	mergeNativeChatCommands,
-	parseNativeChatCommand,
-	prepareNameChatCommand,
-} from "./nativeCommands";
-import { QueueStrip } from "./QueueStrip";
 import { deriveRecentPrompts } from "./recentPrompts";
-import {
-	CommandLogView,
-	newestResourceId,
-	ResourcesAttention,
-	ResourcesButton,
-	ResourcesDock,
-	ResourcesInspector,
-} from "./resources";
 import { SkillsDialog } from "./SkillsDialog";
 import { SubagentTranscriptDialog, SubagentTranscriptPane } from "./SubagentTranscriptDialog";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
@@ -75,8 +79,8 @@ import { inspectedResult, resultTargetKey, useFreshResults } from "./useFreshRes
 import { useModelCatalog } from "./useModelCatalog";
 import { useModelPreferences } from "./useModelPreferences";
 import { useSessionStats } from "./useSessionStats";
-import "./tools/register";
-import type { ChatAttachment } from "./types";
+import "@thinkrail/chat-ui/tools/register";
+import type { ChatAttachment } from "@thinkrail/chat-ui/types";
 import { useHistorySearch } from "./useHistorySearch";
 
 const TRY_AGAIN_PROMPT = "Try again.";

@@ -22,6 +22,7 @@ import {
 	CommandList,
 } from "@thinkrail/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { SETTINGS_TAG } from "@thinkrail/ui/settings";
 import { SkeletonRows } from "@thinkrail/ui/skeleton";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
@@ -34,7 +35,6 @@ import {
 	type InstalledFonts,
 	isRoleDefault,
 } from "./fontCatalog";
-import { SETTINGS_TAG } from "./SettingsGroup";
 import { SettingsNotice } from "./SettingsNotice";
 import { useSettingsDialogContainer } from "./settingsDialogContainer";
 

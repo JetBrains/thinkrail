@@ -6,8 +6,6 @@ import {
 	RiFileCopyLine as Copy,
 	RiExternalLinkLine as ExternalLink,
 	RiFolderOpenLine as FolderOpen,
-	RiGitBranchLine as GitBranch,
-	RiHome2Line as House,
 	RiLoader4Line as Loader2,
 	RiMailOpenLine as MailOpen,
 	RiMailUnreadLine as MailUnread,
@@ -15,16 +13,12 @@ import {
 	RiPencilLine as Pencil,
 	RiAddLine as Plus,
 	RiCheckboxCircleLine,
-	RiFolderFill,
-	RiFolderLine,
-	RiFolderOpenFill,
-	RiGitBranchFill,
-	RiHome2Fill,
 	RiDeleteBin6Line as Trash2,
 	RiCloseLine as X,
 } from "@remixicon/react";
 import type { EditorInfo, Project, Workspace } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { AttentionDot } from "@thinkrail/ui/attention-dot";
 import { IconButton } from "@thinkrail/ui/button";
 import {
 	ContextMenu,
@@ -43,11 +37,15 @@ import {
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
+import {
+	ProjectGlyph,
+	WorkspaceBranch,
+	WorkspaceGlyph,
+	WorkspaceLabel,
+} from "@thinkrail/ui/project-tree";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { cn } from "@thinkrail/ui/utils";
 import { type MouseEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { AttentionDot } from "@/components/AttentionDot";
-import { RunningIcon } from "@/components/RunningIcon";
 import { copyText, platformShortcutLabel } from "@/lib";
 import { useNow } from "../components/useNow";
 import {
@@ -531,7 +529,6 @@ function ProjectRow({
 		altShortcut: platformShortcutLabel("N", { alt: true }),
 	});
 	const Chevron = isExpanded ? ChevronDown : ChevronRight;
-	const Folder = isSelected ? RiFolderFill : RiFolderLine;
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const openingDialogRef = useRef(false);
@@ -546,11 +543,7 @@ function ProjectRow({
 		canRename,
 		onRename: (_target, name) => onRename(name),
 	});
-	const folderIcon = isRunning ? (
-		<RunningIcon className={`size-14 ${isSelected ? "text-primary" : "text-text-muted"}`} />
-	) : (
-		<Folder className={`size-14 shrink-0 ${isSelected ? "text-primary" : "text-text-muted"}`} />
-	);
+	const folderIcon = <ProjectGlyph selected={isSelected} running={isRunning} />;
 	const nameClass = `truncate tr-text-ui ${isSelected ? "text-text-default" : "text-text-muted"}`;
 	const openDialogAfterMenu = (openDialog: () => void) => {
 		openingDialogRef.current = true;
@@ -767,17 +760,6 @@ function WorkspaceRow({
 	const isExternal = isExternalWorkspace(workspace);
 	const isSettled = settled !== null;
 	const settleBlocked = isRunning || needsAttention;
-	const Icon = isActive
-		? isDefault
-			? RiHome2Fill
-			: isExternal
-				? RiFolderOpenFill
-				: RiGitBranchFill
-		: isDefault
-			? House
-			: isExternal
-				? FolderOpen
-				: GitBranch;
 	const isTwoLine = !isSettled && workspace.branch !== workspace.name;
 	const displayName = workspaceName(t, workspace);
 	const [menuOpen, setMenuOpen] = useState(false);
@@ -799,23 +781,15 @@ function WorkspaceRow({
 	});
 
 	const identityClass = `flex min-w-0 flex-1 gap-4 text-left ${isTwoLine ? "items-start" : "items-center"}`;
-	const identityIcon = isRunning ? (
-		<RunningIcon
-			className={cn("size-14", isTwoLine && "mt-2", isActive ? "text-primary" : "text-text-muted")}
-		/>
-	) : (
-		<Icon
-			className={`${isTwoLine ? "mt-2 " : ""}size-14 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`}
+	const identityIcon = (
+		<WorkspaceGlyph
+			kind={workspace.kind}
+			active={isActive}
+			running={isRunning}
+			twoLine={isTwoLine}
 		/>
 	);
-	const branchLabel = isTwoLine ? (
-		<span
-			data-testid="workspace-branch"
-			className="truncate text-text-subtle tr-text-metadata leading-tight"
-		>
-			{workspace.branch}
-		</span>
-	) : null;
+	const branchLabel = isTwoLine ? <WorkspaceBranch branch={workspace.branch} /> : null;
 
 	const reasonChip = settled ? (
 		<span
@@ -900,15 +874,11 @@ function WorkspaceRow({
 				) : (
 					<button type="button" onClick={onSelect} className={identityClass}>
 						{identityIcon}
-						<span className="flex min-w-0 flex-1 flex-col">
-							<span
-								data-testid="workspace-name"
-								className={`truncate tr-text-ui leading-tight ${isActive ? "text-primary" : "text-text-muted"}`}
-							>
-								{displayName}
-							</span>
-							{branchLabel}
-						</span>
+						<WorkspaceLabel
+							name={displayName}
+							branch={isTwoLine ? workspace.branch : undefined}
+							active={isActive}
+						/>
 					</button>
 				)}
 				{reasonChip}

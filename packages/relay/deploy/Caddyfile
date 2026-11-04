@@ -1,0 +1,6 @@
+{$RELAY_DOMAIN} {
+	reverse_proxy relay:24243
+	log {
+		output discard
+	}
+}

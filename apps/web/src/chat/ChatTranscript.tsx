@@ -1,4 +1,36 @@
 import { RiArrowDownLine as ArrowDown, RiArrowUpLine as ArrowUp } from "@remixicon/react";
+import {
+	ACTIVITY_BREADCRUMB_HEIGHT,
+	ActivityBreadcrumbTrail,
+} from "@thinkrail/chat-ui/activityBreadcrumbs";
+import { type ChatActions, ChatActionsContext } from "@thinkrail/chat-ui/ChatActions";
+import type { ChatMessageOrder } from "@thinkrail/chat-ui/chatMessageOrder";
+import {
+	type PendingExtUi,
+	PendingExtUiContext,
+	PendingExtUiPrompt,
+} from "@thinkrail/chat-ui/ExtUiPrompt";
+import { FoldGeometryProvider } from "@thinkrail/chat-ui/foldState";
+import {
+	awaitingToolCallIdOf,
+	deriveInteractionStates,
+	InteractionStatesContext,
+} from "@thinkrail/chat-ui/interactionState";
+import { deriveMessageActions } from "@thinkrail/chat-ui/messageActions";
+import {
+	type ChatRow,
+	deriveRows,
+	projectRows,
+	rowIndexForTurn,
+	rowsHaveToolCall,
+	stabilizeRows,
+} from "@thinkrail/chat-ui/rows";
+import {
+	type StreamStatus,
+	StreamStatusSlot,
+	streamStatus,
+} from "@thinkrail/chat-ui/StreamIndicator";
+import { ChatTurnView } from "@thinkrail/chat-ui/turns";
 import type { GitDiffScope, TurnChangeSet } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { t as translate, useT } from "@thinkrail/locales/react";
@@ -29,29 +61,8 @@ import {
 	useAppStore,
 } from "@/store";
 import { getTransport, respondToTool } from "@/transport";
-import { ACTIVITY_BREADCRUMB_HEIGHT, ActivityBreadcrumbTrail } from "./activityBreadcrumbs";
-import { type ChatActions, ChatActionsContext } from "./ChatActions";
-import type { ChatMessageOrder } from "./chatPreferences";
-import { type PendingExtUi, PendingExtUiContext, PendingExtUiPrompt } from "./ExtUiPrompt";
-import { FoldGeometryProvider } from "./foldState";
-import {
-	awaitingToolCallIdOf,
-	deriveInteractionStates,
-	InteractionStatesContext,
-} from "./interactionState";
-import { deriveMessageActions } from "./messageActions";
 import { turnAnchorText } from "./recentPrompts";
 import { estimateChatRowHeights } from "./rowHeightEstimates";
-import {
-	type ChatRow,
-	deriveRows,
-	projectRows,
-	rowIndexForTurn,
-	rowsHaveToolCall,
-	stabilizeRows,
-} from "./rows";
-import { type StreamStatus, StreamStatusSlot, streamStatus } from "./StreamIndicator";
-import { ChatTurnView } from "./turns";
 import { useChatScroll } from "./useChatScroll";
 import { useTranscriptSync } from "./useTranscriptSync";
 import { useWindowFocused } from "./useWindowFocused";

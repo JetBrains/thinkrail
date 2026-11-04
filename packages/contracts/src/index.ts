@@ -1,10 +1,14 @@
+export * from "./brokerProtocol";
+export * from "./channelFraming";
 export type * from "./domain";
 export {
 	ACCEPTED_IMAGE_TYPES,
 	base64EncodedLength,
 	CODE_FONT_SIZE,
 	COMPOSER_GROWTH_LIMITS,
+	chatTitle,
 	clampToCodePoints,
+	compactAgeOf,
 	compareResourceHistory,
 	DEFAULT_CONFIG,
 	DEFAULT_WORKSPACE_NAME,
@@ -71,7 +75,9 @@ export {
 	USER_FONT_EXTENSIONS,
 	USER_FONT_UPLOAD_HEADER,
 	USER_FONTS_ROUTE,
+	unnamedChatTitle,
 } from "./domain";
+export * from "./iceServers";
 export type {
 	FieldMatch,
 	MatchField,
@@ -82,6 +88,8 @@ export type {
 } from "./match";
 export { MATCH_TIER, matchFields, parseMatchTerms } from "./match";
 export type * from "./nativeClient";
+export * from "./pairingAuth";
+export * from "./pairingUri";
 export type * from "./piProtocol";
 export {
 	assistantToolCallsAreExecutable,
@@ -89,7 +97,10 @@ export {
 	isSessionWorking,
 	isTranscriptMessageRole,
 	sameModel,
+	sessionAttention,
 } from "./piProtocol";
 export type { QuitConfirmationDependencies } from "./quitConfirmation";
 export { createQuitConfirmation, QUIT_CONFIRMATION } from "./quitConfirmation";
+export * from "./signalingProtocol";
+export * from "./workspaceSettling";
 export * from "./wsProtocol";

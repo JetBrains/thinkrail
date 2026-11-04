@@ -1,4 +1,10 @@
 import {
+	deriveInteractionStates,
+	type InteractionState,
+} from "@thinkrail/chat-ui/interactionState";
+import { isInteractiveTool } from "@thinkrail/chat-ui/toolRegistry";
+import type { ChatTurn, ToolResultState } from "@thinkrail/chat-ui/types";
+import {
 	type GitFileChange,
 	isSessionWorking,
 	type ReviewComment,
@@ -9,9 +15,6 @@ import {
 	type TodoPlan,
 } from "@thinkrail/contracts";
 import type { ToolStatus } from "@thinkrail/extension-api/web";
-import { deriveInteractionStates, type InteractionState } from "./interactionState";
-import { isInteractiveTool } from "./toolRegistry";
-import type { ChatTurn, ToolResultState } from "./types";
 
 export type ItemChangeSet =
 	| { kind: "commit"; sha: string; files: GitFileChange[] }

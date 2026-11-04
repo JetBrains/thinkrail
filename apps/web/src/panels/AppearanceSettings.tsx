@@ -21,6 +21,14 @@ import {
 	DropdownMenuRadioItem,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
+import {
+	SETTINGS_ROWS_CONTAINER,
+	SegmentedControl,
+	type SegmentedControlOption,
+	SettingsGroup,
+	SettingsPageContainer,
+	SettingsRow,
+} from "@thinkrail/ui/settings";
 import { cn } from "@thinkrail/ui/utils";
 import { useState, useSyncExternalStore } from "react";
 import { toast, useAppStore } from "@/store";
@@ -41,12 +49,9 @@ import { CustomFontsGroup } from "./CustomFontsSettings";
 import { CustomThemesGroup } from "./CustomThemesSettings";
 import { FontsGroup } from "./FontsSettings";
 import { LineWidthControl } from "./LineWidthSettings";
-import { SegmentedControl, type SegmentedControlOption } from "./SegmentedControl";
 import { SettingsDisclosure } from "./SettingsDisclosure";
 import { useFolderActions } from "./SettingsFolder";
-import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
 import { SettingsNotice } from "./SettingsNotice";
-import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
 
 type Appearance = ThemeDescriptor["appearance"];
 type Contrast = ThemeDescriptor["contrast"];

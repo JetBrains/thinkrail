@@ -1,0 +1,62 @@
+name: Relay image
+
+# Publishes the signaling relay (packages/relay) as a container image to GHCR on a `relay-v<semver>` tag.
+# The image is the self-contained bundle (dist/relay.js), so deployments pull a versioned artifact instead
+# of building from source. See .github/SPEC.md → Relay image.
+on:
+  push:
+    tags: ["relay-v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: relay-image-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Build and push relay image
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - name: Test the relay and its protocol
+        run: |
+          bun run --cwd packages/relay test
+          bun run --cwd packages/contracts test
+      - name: Bundle the relay
+        run: bun run --cwd packages/relay build
+      - id: meta
+        name: Image name and tags
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          image="ghcr.io/${OWNER,,}/thinkrail-relay"
+          if [[ "$REF_NAME" =~ ^relay-v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            tags="$image:${BASH_REMATCH[1]},$image:latest"
+          else
+            tags="$image:sha-${GITHUB_SHA::12}"
+          fi
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packages/relay/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}

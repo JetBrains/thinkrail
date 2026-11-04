@@ -423,7 +423,7 @@ the shared **`useProviderAuth`** hook, which `ProvidersSettings` uses too: the s
 (above), re-read once whenever one of them opens — Central's install state and similar host-local facts change
 without a push — `startLogin` / `logout`, and the store-driven
 `LoginDialog` node. For an `anthropic` login started as `oauth` (`LoginState.method`), the node carries the sign-in
-`chat/ExtraUsageNotice` while the report's `warnings.anthropicExtraUsage` is not `false`
+`@thinkrail/chat-ui/ExtraUsageNotice` while the report's `warnings.anthropicExtraUsage` is not `false`
 (`warnsExtraUsageOnSignIn`; an older host's report has no `warnings`, so the notice shows). Exactly one surface mounts that node: Settings → Providers while Settings is open, otherwise the
 connect surface (`ownsLoginDialog`), so a login never renders two stacked dialogs. **Post-connect handoff:**
 when a provider that was not configured when the surface opened becomes configured — an OAuth / API-key
@@ -626,7 +626,7 @@ a project picker, the prompt hero, and the reused
   **store-driven two-pane shell**: one nav list, rendered once, beside a scrollable content pane. At `md`+
   the list is a rail grouped **Agent** (Models, Providers, MCP servers, Prompt templates, Environment) ·
   **Interface** (Chat, Appearance, Language, Layout, Terminal) · **System** (Workspaces, Integrations, Extensions,
-  Notifications, Privacy, Updates). Integrations keeps section id `github`: today it is the GitHub CLI page
+  Notifications, Phone access, Privacy, Updates). Integrations keeps section id `github`: today it is the GitHub CLI page
   and it is the home for further integrations. Below `md` the same list is a horizontal scrolling strip without group labels. The
   Feedback card (`settings-nav-feedback`, “Share feedback”) belongs to that list at
   every width, pinned to the rail's bottom at `md`+. The pure nav data — groups, protocol and
@@ -635,7 +635,8 @@ a project picker, the prompt hero, and the reused
   so the dialog only renders it. `settingsOpen`/`settingsSection` live in the store so the gear AND the
   Welcome banner can open it deep-linked to a section. Escape closes the dialog except while focus is in an
   input carrying `data-settings-draft-input`, where Escape reverts that draft instead.
-  **Shared Settings primitives** keep every page one shape (shell's injected Layout section reuses them):
+  **Shared Settings primitives** keep every page one shape (shell's injected Layout section and the phone's
+  settings screen reuse them; they live in `@thinkrail/ui/settings`):
   `SettingsPageContainer` stacks a page's groups with spacing and a divider drawn only between children
   that actually render (each child keeps its element key, so a conditional group never remounts its
   siblings); `SettingsGroup` is a titled block of `SettingsRow`s — label, optional description, one
@@ -1036,6 +1037,12 @@ a project picker, the prompt hero, and the reused
   channel — the visible, in-app acquisition path that does not depend on an
   out-of-focus event. The notification pipeline, suppression, and away-path permission preface live in
   [[submodule-web-notifications]].
+  **`PhoneAccessSettings`** (`phone`, from `REMOTE_ACCESS_PROTOCOL_VERSION`) is phone access over `remote.*`:
+  the switch applies at once (no draft — it starts or stops a listener), while on it shows a one-time
+  pairing code with its expiry and a Copy link action, polls `remote.status` so a phone that pairs closes the
+  code with a toast, and lists paired phones with Revoke. The QR is an `<img>` of the `qrcode` SVG, which
+  carries its own black-on-white: a scanner needs dark modules on a light field in every theme, so this image
+  is the one place UI colour is not a token. `PhoneAccessView` is the props-only half the unit test renders.
   **`PrivacySettings`** manages the additional-data preference and
   confirmation together; the event contract belongs to [[submodule-server-analytics]]. The pane ends with a link to the analytics section of the project readme.
   **`AnalyticsConsentDialog`** mounts once through shell after a capable host's unconfirmed config hydrates,

@@ -19,6 +19,7 @@ export {
 	getTransport,
 	initTransport,
 	loadInAppSurvey,
+	mountRemoteSession,
 	respondToTool,
 	runHostUpdate,
 	supportsChangeMutations,

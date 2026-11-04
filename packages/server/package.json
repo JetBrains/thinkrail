@@ -25,6 +25,7 @@
 		"@thinkrail/ext-web-access": "workspace:*",
 		"@thinkrail/extension-api": "workspace:*",
 		"@thinkrail/locales": "workspace:*",
+		"@thinkrail/relay": "workspace:*",
 		"@thinkrail/shared": "workspace:*",
 		"bun-pty": "0.5.1",
 		"jsonc-parser": "3.3.1",
@@ -39,7 +40,8 @@
 		"pino-roll": "4.0.0",
 		"posthog-node": "5.46.1",
 		"trash": "10.1.1",
-		"typebox": "catalog:"
+		"typebox": "catalog:",
+		"werift": "0.25.2"
 	},
 	"devDependencies": {
 		"@types/bun": "catalog:",

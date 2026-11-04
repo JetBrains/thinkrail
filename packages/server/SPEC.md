@@ -52,7 +52,8 @@ e2e).
   `@earendil-works/pi-coding-agent` + `@earendil-works/pi-ai` (runtime), `extension-api` (`./server` types)
   + every `thinkrail-extensions/*` **server subpath only** (the registry's composition edge; the host no
   longer depends directly on a pi package an extension owns), `pino` + its pretty/rolling
-  destinations (host diagnostics), `jsonc-parser` (targeted shared Pi configuration edits), Bun/Node.
+  destinations (host diagnostics), `jsonc-parser` (targeted shared Pi configuration edits),
+  `werift` (pure-TS host-side WebRTC for the `remote-transport` data path), Bun/Node.
 - **Deployment obligation:** product behavior lives in the owning server feature module and is composed by
   `host`; launchers only supply boot options and packaged resources. When a demonstrated second environment
   needs a different implementation, the owning feature defines one narrow injected port rather than a
@@ -103,6 +104,8 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `editors` | detect installed editors/IDEs, launch one at a worktree, reveal a worktree in the file manager | [editors/SPEC.md](src/editors/SPEC.md) |
 | `history` | prompt recall + conversation search over pi's session files | [history/SPEC.md](src/history/SPEC.md) |
 | `templates` | file CRUD over pi's prompt-template dirs (global + project scoped) | [templates/SPEC.md](src/templates/SPEC.md) |
+| `remote` | host identity keypair, paired-device registry, one-time QR pairing tokens + `thinkrail://pair` URI, and challenge proof verification — the transport-agnostic core of remote "add project by QR" access | [remote/SPEC.md](src/remote/SPEC.md) |
+| `remote-transport` | the signaling protocol, the host-side authorize-before-negotiate handshake, the WebRTC data path behind `RemoteChannel`, and the runtime on/off control for phone access | [remote-transport/SPEC.md](src/remote-transport/SPEC.md) |
 
 `src/index.ts` re-exports `host` + the `agent` barrel's `registerBundledRuntime` seam; explicit package
 subpaths expose build support and sanctioned history fixtures without widening the runtime barrel. `src/dev.ts` boots
@@ -113,6 +116,9 @@ the host from env via `bootHost` for dev/e2e.
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
 - `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `fonts`, `history`, `templates`, `analytics`, `feedback`, `log`, `persistence` (`dataDir`, for the crash report)
+- `remote` → `persistence` (`dataDir` — identity + paired-device files)
+- `remote-transport` → `remote` (types + the injected pairing primitives for the host handshake)
+- `host` → `remote-transport` (`createRemoteAccessControl` + `bridgeRemoteWire`: paired devices drive `handleRequest` and receive the mirrored `server.publish` fan-out; the `remote.*` methods reach the control through `RequestContext.remoteAccess`, which only this computer's own sockets carry, so a paired device gets `REMOTE_ACCESS_LOCAL_ONLY`) — listed among `host`'s composed modules above
 - `workspaces` → `projects`, `git`, `persistence`
 - `branch-review` → `git`, `subprocess`
 - `pr` → `workspaces`, `git`, `todos`, `branch-review` (provider detection + gh-output parsing + the shared CLI runner), `github` (`ghSetupProblem` — the named compare-fallback reason)

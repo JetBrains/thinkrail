@@ -23,6 +23,8 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		allowed: ["apps/cli", "packages/server", "packages/shared"],
 	},
 	{ root: "packages/contracts", allowed: [] },
+	{ root: "packages/relay", allowed: ["packages/contracts"] },
+	{ root: "packages/remote-client", allowed: ["packages/contracts"] },
 	{ root: "packages/shared", allowed: ["packages/contracts"] },
 	{ root: "packages/pi-delegation", allowed: [] },
 	{ root: "packages/pi-background-commands", allowed: [] },
@@ -33,6 +35,7 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		allowed: [
 			"packages/contracts",
 			"packages/locales",
+			"packages/relay",
 			"packages/shared",
 			"packages/spec-graph",
 			"packages/pi-delegation",
@@ -46,14 +49,39 @@ const MODULE_RULES: readonly ModuleRule[] = [
 	{
 		root: "apps/web",
 		allowed: [
+			"packages/chat-ui",
 			"packages/contracts",
+			"packages/design-tokens",
 			"packages/locales",
 			"packages/ui",
 			"packages/extension-api",
+			"packages/remote-client",
 			"packages/resource-renderers",
 		],
 	},
 	{ root: "apps/cli", allowed: ["packages/server", "packages/shared"] },
+	{ root: "packages/design-tokens", allowed: ["packages/contracts"] },
+	{
+		root: "packages/chat-ui",
+		allowed: [
+			"packages/contracts",
+			"packages/extension-api",
+			"packages/locales",
+			"packages/ui",
+			"thinkrail-extensions/visualize",
+		],
+	},
+	{
+		root: "apps/mobile",
+		allowed: [
+			"packages/chat-ui",
+			"packages/contracts",
+			"packages/design-tokens",
+			"packages/locales",
+			"packages/remote-client",
+			"packages/ui",
+		],
+	},
 	{
 		root: "apps/desktop",
 		allowed: ["packages/server", "packages/shared", "packages/contracts", "packages/locales"],

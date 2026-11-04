@@ -1,8 +1,8 @@
+import { ExtraUsageNotice } from "@thinkrail/chat-ui/ExtraUsageNotice";
 import type { ProviderStatusReport } from "@thinkrail/contracts";
 import { t as translate } from "@thinkrail/locales/react";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { LoginDialog, type LoginState } from "@/auth";
-import { ExtraUsageNotice } from "@/chat/ExtraUsageNotice";
 import { selectLoginBusy, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { reloadProviderStatus, useProviderStatus } from "./useProviderStatus";

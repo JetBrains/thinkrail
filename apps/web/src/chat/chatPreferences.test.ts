@@ -1,13 +1,15 @@
 import { describe, expect, test } from "bun:test";
+import {
+	DEFAULT_CHAT_MESSAGE_ORDER,
+	isChatMessageOrder,
+} from "@thinkrail/chat-ui/chatMessageOrder";
 import { STORAGE_PREFIX } from "../constants/branding";
 import { useAppStore } from "../store";
 import {
 	CHAT_MESSAGE_ORDER_PREFERENCE_KEY,
 	chatMessageOrderFromStorageEvent,
 	chatMessageOrderStorageKey,
-	DEFAULT_CHAT_MESSAGE_ORDER,
 	initChatPreferencesPersistence,
-	isChatMessageOrder,
 	moveStreamingResponseHandle,
 	parseChatMessageOrder,
 	parseStreamingResponseMovement,

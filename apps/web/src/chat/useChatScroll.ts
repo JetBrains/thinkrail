@@ -1,3 +1,6 @@
+import type { ChatRevealOptions } from "@thinkrail/chat-ui/ChatActions";
+import type { ChatMessageOrder } from "@thinkrail/chat-ui/chatMessageOrder";
+import type { FoldAnchorResolver } from "@thinkrail/chat-ui/foldState";
 import {
 	type PointerEventHandler,
 	type RefCallback,
@@ -10,9 +13,7 @@ import {
 	useState,
 } from "react";
 import type { VirtuosoHandle } from "react-virtuoso";
-import type { ChatRevealOptions } from "./ChatActions";
-import type { ChatMessageOrder, StreamingResponseMovement } from "./chatPreferences";
-import type { FoldAnchorResolver } from "./foldState";
+import type { StreamingResponseMovement } from "./chatPreferences";
 import {
 	createReadingBandController,
 	headerHeightScrollTarget,

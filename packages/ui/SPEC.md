@@ -28,12 +28,58 @@ change wins once its faces load, a change to none of the listed fields is skippe
 `data-font-faces` signal) re-applies an unchanged font. It knows nothing about the settings or the runtime
 that publishes them.
 
-Workspace imports may reach `contracts` and `@thinkrail/locales/react` (the shared i18next instance, for
+Workspace imports may reach `contracts` (types — `project-tree` reads `Workspace["kind"]`) and `@thinkrail/locales/react` (the shared i18next instance, for
 primitive-owned strings such as the dialog's screen-reader Close and the toast's Dismiss label) only. External dependencies are React, Radix, cmdk,
 react-resizable-panels, Remix Icon, class-variance-authority, clsx and tailwind-merge. Host internals,
 pi, app stores, transport and theme runtime are forbidden. Tokens remain global CSS variables generated
-under `apps/web/src/styles`; utilities follow [[web-color]], [[web-spacing]] and [[web-typography]].
+by `@thinkrail/design-tokens`, imported by each host stylesheet; utilities follow [[web-color]], [[web-spacing]] and [[web-typography]].
 The app's Tailwind sources and adoption guards include this package and extension web halves.
+
+## Custom glyphs
+
+`custom-icon` (`CustomIcon`, `CustomIconName`) renders a project glyph Remix lacks from `icons/*.svg` as a
+`currentColor` CSS `mask-image` span, so it sizes with `size-*` and colours with `text-*` exactly like a Remix
+icon; its classes live in `custom-icon.css`, which every host stylesheet imports (the SVGs resolve relative to
+it, so the bundler ships them). Today: `file-diff-line` / `file-diff-fill` (the Changes review glyph).
+
+## Project tree
+
+`project-tree` is the visual identity of the project tree's rows, shared by the IDE's `panels/ProjectTree`
+and `apps/mobile`: `ProjectGlyph` (folder, Fill when selected, or the running badge), `WorkspaceGlyph` (home
+for Default, open folder for an external folder, branch for a worktree; Fill when active; the running badge
+while working), `WorkspaceLabel` (name, with `WorkspaceBranch` as the second line when the branch differs)
+keeping the `workspace-name` / `workspace-branch` test ids. Row geometry, menus, rename and actions stay
+with the host: the IDE's 22px panel rows, the phone's 44px touch rows.
+
+## Settings rows
+
+`settings` holds the props-only Settings primitives the IDE's Settings dialog (and its injected Layout
+section) and `apps/mobile`'s settings screen share: `SettingsPageContainer`, `SettingsGroup`, `SettingsRow`
+(`SETTINGS_ROWS_CONTAINER`), `SettingsSubheading`, `SETTINGS_TAG`, `SegmentedControl` and `SettingsRadioCards`. Their behavior contract is in
+`apps/web/src/panels/SPEC.md` (Shared Settings primitives); what a row reads or writes stays with its host.
+
+## Status marks
+
+The two store-free session status marks the web app and `apps/mobile` share. `./brand-mark` exports the
+"TR" monogram geometry (`BRAND_MARK_SEGMENTS`, `BRAND_MARK_PATH`) they and the web logo draw from.
+
+- **`attention-dot`** (`AttentionDot`) — the store-free, static green/accent dot whose sole accessible label is “Needs
+  attention.” It carries no reason, count, tooltip, motion, or clearing behavior; callers decide only whether
+  it is present. It is the one marker for both needs-input and unread-result attention.
+- **`running-icon`** (`RunningIcon`) — the store-free **“ThinkRail is working” badge**: the brand monogram inside a
+  rounded-square frame, drawn in `currentColor` so it sizes with `size-*` and colours with `text-*` like a
+  Remix icon, with the accessible label “Agent working”. While motion is allowed, the frame (two halves
+  leaving a gap on the left and meeting on the right) and the six letter strokes of the monogram draw and
+  erase on one 3.263s cycle (`loader-*` keyframes in `@thinkrail/design-tokens/styles/motion.css`, so every host stylesheet that imports the tokens animates it); a beat with only the frame showing is
+  part of the design. Each letter stroke is a wide line clipped to its region of `BRAND_MARK_SEGMENTS` (`./brand-mark`), the
+  same segments `BRAND_MARK_PATH` — the web shell's logo — is joined from, so the fully drawn badge is the shell's mark rather than a
+  second copy that could drift. Only the stroke centre-lines, the frame, and the small gap between the R's
+  stem and top bar (the stem stroke stops short) are local animation geometry. Reduced motion leaves every
+  stroke at its fully drawn dash: the static, complete badge. This loader replaced a ring with a lapping
+  train and a pulsing monogram; before that the row's own identity glyph breathed, dropped because a
+  dimming folder reads as “disabled” at 14px. Callers pass only size/colour classes and decide from
+  normalized host state whether a top-level session is running; the icon renders no dot, spinner, count,
+  tooltip, or idle state.
 
 ## Button system
 

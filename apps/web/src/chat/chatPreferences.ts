@@ -1,3 +1,8 @@
+import {
+	type ChatMessageOrder,
+	DEFAULT_CHAT_MESSAGE_ORDER,
+	isChatMessageOrder,
+} from "@thinkrail/chat-ui/chatMessageOrder";
 import { getStablePreferenceAdapter, type StablePreferenceAdapter } from "../clientPreferences";
 import { STORAGE_PREFIX } from "../constants/branding";
 import {
@@ -11,9 +16,6 @@ export type { StablePreferenceAdapter } from "../clientPreferences";
 export type { StreamingResponseMovement } from "../store";
 export { DEFAULT_STREAMING_RESPONSE_MOVEMENT } from "../store";
 
-export const CHAT_MESSAGE_ORDERS = ["oldest-first", "newest-first"] as const;
-export type ChatMessageOrder = (typeof CHAT_MESSAGE_ORDERS)[number];
-export const DEFAULT_CHAT_MESSAGE_ORDER: ChatMessageOrder = "oldest-first";
 export const CHAT_MESSAGE_ORDER_PREFERENCE_KEY = "chat-message-order";
 export const STREAMING_RESPONSE_MOVEMENT_PREFERENCE_KEY = "streaming-response-movement";
 export const STREAMING_RESPONSE_MOVEMENT_LIMITS = {
@@ -26,10 +28,6 @@ export const STREAMING_RESPONSE_MOVEMENT_LIMITS = {
 } as const;
 function defaultStreamingResponseMovement(): StreamingResponseMovement {
 	return { ...DEFAULT_STREAMING_RESPONSE_MOVEMENT };
-}
-
-export function isChatMessageOrder(value: unknown): value is ChatMessageOrder {
-	return CHAT_MESSAGE_ORDERS.some((order) => order === value);
 }
 
 export function chatMessageOrderStorageKey(httpBase: string): string {

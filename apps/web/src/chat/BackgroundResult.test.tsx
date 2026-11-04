@@ -1,4 +1,8 @@
 import { expect, test } from "bun:test";
+import { BackgroundCommandResult, SubagentResult } from "@thinkrail/chat-ui/BackgroundResult";
+import { type ChatActions, ChatActionsContext } from "@thinkrail/chat-ui/ChatActions";
+import { messagesToRuntime } from "@thinkrail/chat-ui/hydrate";
+import { deriveRows } from "@thinkrail/chat-ui/rows";
 import {
 	BACKGROUND_COMMAND_COMPLETION_CUSTOM_TYPE,
 	type BackgroundCommandCompletionDetails,
@@ -6,10 +10,6 @@ import {
 } from "@thinkrail/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { EMPTY_RUNTIME, reduceSessionEvent } from "@/store";
-import { BackgroundCommandResult, SubagentResult } from "./BackgroundResult";
-import { type ChatActions, ChatActionsContext } from "./ChatActions";
-import { messagesToRuntime } from "./hydrate";
-import { deriveRows } from "./rows";
 
 const details: BackgroundCommandCompletionDetails = {
 	id: "command",

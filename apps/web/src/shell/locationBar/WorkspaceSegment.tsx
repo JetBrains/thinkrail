@@ -26,8 +26,8 @@ import {
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
+import { RunningIcon } from "@thinkrail/ui/running-icon";
 import { useEffect, useMemo, useState } from "react";
-import { RunningIcon } from "../../components/RunningIcon";
 import { copyText, platformShortcutLabel } from "../../lib";
 import { RemoveWorkspaceDialog } from "../../panels/RemoveWorkspaceDialog";
 import {

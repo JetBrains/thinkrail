@@ -1,9 +1,9 @@
 import { WORKSPACE_SETTLE_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
+import { SettingsRadioCards, type SettingsRadioChoice } from "@thinkrail/ui/settings";
 import { toast, useAppStore } from "../store";
 import { getTransport } from "../transport";
-import { SettingsRadioCards, type SettingsRadioChoice } from "./SettingsRadioCards";
 
 type IdleChoice = `${number}` | "never";
 

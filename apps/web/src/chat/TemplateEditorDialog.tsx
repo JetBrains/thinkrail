@@ -1,3 +1,4 @@
+import { assembleTemplate, stripFrontmatter } from "@thinkrail/chat-ui/prompt";
 import type { TemplateInfo, TemplateScope } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
@@ -12,7 +13,6 @@ import { Textarea } from "@thinkrail/ui/textarea";
 import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { assembleTemplate, stripFrontmatter } from "@/prompt";
 import { useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 

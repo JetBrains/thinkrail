@@ -1,3 +1,4 @@
+import { Markdown } from "@thinkrail/chat-ui/Markdown";
 import {
 	type ResourceEnvironment,
 	ResourceEnvironmentProvider,
@@ -10,7 +11,6 @@ import {
 	registerBundledResourceRenderers,
 } from "@thinkrail/resource-renderers";
 import { type ReactNode, useMemo } from "react";
-import { Markdown } from "../chat/Markdown";
 import { cssColorToHex, usePhoneViewport } from "../lib";
 import { SHIKI_FILE_LANGUAGES, shikiLanguageId } from "../lib/highlighter";
 import { openFileComparisonInTab, openFileInTab } from "../panels/openTabs";

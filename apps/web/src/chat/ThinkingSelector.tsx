@@ -1,10 +1,10 @@
 import { RiCheckLine as Check, RiArrowDownSLine as ChevronDown } from "@remixicon/react";
+import { LEVEL_LABEL } from "@thinkrail/chat-ui/modelPicker";
 import type { ThinkingLevel } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
-import { LEVEL_LABEL } from "./modelPicker";
 
 export function ThinkingSelector({
 	level,

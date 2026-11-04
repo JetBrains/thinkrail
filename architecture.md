@@ -29,12 +29,15 @@ dials it over the network; a phone reaches the selected host over Tailscale.
 
 ```
 apps/cli        browser host launcher: boot server + open browser ── depends on ─▶ packages/server
-apps/web        UI client (mobile-first)                           ── depends on ─▶ packages/contracts, packages/locales, packages/ui, packages/extension-api/web, packages/resource-renderers, thinkrail-extensions/*/web
+apps/web        UI client (mobile-first)                           ── depends on ─▶ packages/chat-ui, packages/contracts, packages/design-tokens, packages/locales, packages/ui, packages/extension-api/web, packages/resource-renderers, thinkrail-extensions/*/web
+apps/mobile     Capacitor sessions client over remote access        ── depends on ─▶ packages/chat-ui, packages/contracts, packages/remote-client, packages/design-tokens, packages/locales, packages/ui
 apps/desktop    Electrobun local-host launcher                     ── depends on ─▶ packages/server, packages/contracts, packages/shared, packages/locales
 apps/website    public landing + blog + /vibecoding (Cloudflare Pages) ── depends on ─▶ packages/website-analytics
 packages/website-analytics  dependency-free browser analytics policy for the public website
 packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/locales, packages/shared, packages/pi-background-commands, packages/pi-delegation, packages/pi-subagents, packages/extension-api/server, thinkrail-extensions/*/server
 packages/contracts  the wire (types plus tiny pure runtime)
+packages/relay      standalone zero-knowledge signaling relay for remote access (hosted or self-hosted; GHCR
+                    image) ── depends on ─▶ packages/contracts
 packages/locales    UI string catalogs (bundled en.json) + pure catalog rules; ./react holds the one i18next
                     instance ── depends on ─▶ nothing in the workspace (i18next, react-i18next)
 packages/shared     shellEnv (server-side only)
@@ -56,9 +59,14 @@ thinkrail-extensions/*  ThinkRail extensions: a pi capability + ./server and ./w
                     registry file per side (Decision 21; visualize and ask-user-question shipped) ── depends on ─▶ pi-extensions/*,
                     packages/extension-api, packages/ui, packages/locales (web half)
 packages/extension-api  types + define* helpers for extension halves ── depends on ─▶ packages/contracts, packages/locales (types)
+packages/design-tokens  theme palettes + manifest contract, colour/spacing/typography sources, their generated
+                    CSS and applyPalette — the one visual language for every UI host ── may depend on ─▶ packages/contracts
 packages/ui         owned shadcn/Radix primitives + cn + onThemeSwap ── may depend on ─▶ packages/contracts, packages/locales
 packages/resource-renderers  file/diff renderers, registry + review surfaces behind a host seam ── may depend on ─▶
                     packages/contracts, packages/locales, packages/ui
+packages/chat-ui    the store-free chat: transcript model, turn + tool renderers, registry, Markdown, Composer,
+                    Resources dock, prompt behaviour — shared by web and mobile ── may depend on ─▶
+                    packages/contracts, packages/locales, packages/ui, packages/extension-api/web, ext-visualize/web
 ```
 
 Artifact verification is a separate source-only workspace, [[module-artifact-tests]]. It depends on

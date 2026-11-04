@@ -13,6 +13,12 @@ import {
 } from "@thinkrail/contracts";
 import { T, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
+import {
+	SETTINGS_ROWS_CONTAINER,
+	SettingsGroup,
+	SettingsRow,
+	SettingsSubheading,
+} from "@thinkrail/ui/settings";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
@@ -41,10 +47,8 @@ import {
 	mainFontOptions,
 } from "./fontCatalog";
 import { SettingsDisclosure } from "./SettingsDisclosure";
-import { SettingsGroup, SettingsSubheading } from "./SettingsGroup";
 import { SettingsNotice } from "./SettingsNotice";
 import { SETTINGS_RANGE_INPUT, SettingsRangeTrack } from "./SettingsRange";
-import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
 import { SettingsSwitch } from "./SettingsSwitch";
 import { saveSettings } from "./saveSettings";
 import { SETTINGS_INPUT, useSettingsDraft } from "./settingsDraft";

@@ -93,6 +93,16 @@ export function isSessionWorking(state: SessionState): boolean {
 	return state.execution === "running" || state.backgroundWork === true;
 }
 
+export type SessionAttention = "needs-input" | "error" | "unread" | "running";
+
+export function sessionAttention(state: SessionState): SessionAttention | null {
+	if (state.needsInput !== null) return "needs-input";
+	if (state.completionUnread && state.completion?.outcome === "failed") return "error";
+	if (state.completionUnread) return "unread";
+	if (isSessionWorking(state)) return "running";
+	return null;
+}
+
 export function canMarkCompletionUnread(state: SessionState): boolean {
 	return (
 		!isSessionWorking(state) &&

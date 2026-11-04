@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import hcDark from "../themes/bundled/high-contrast-dark.theme.json";
-import hcLight from "../themes/bundled/high-contrast-light.theme.json";
+import hcDark from "@thinkrail/design-tokens/themes/high-contrast-dark.theme.json";
+import hcLight from "@thinkrail/design-tokens/themes/high-contrast-light.theme.json";
 import { stripAnsiDim, terminalContrastFloor } from "./terminalContrast";
 
 const AA = 4.5;

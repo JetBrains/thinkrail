@@ -4,7 +4,7 @@ type: submodule-design
 status: active
 title: themes — bundled manifest catalog and application
 parent: module-web
-depends-on: [module-contracts]
+depends-on: [module-contracts, module-design-tokens]
 tags: [ui, themes]
 ---
 
@@ -28,11 +28,10 @@ cannot express through the manifest keys is a product decision for all themes, n
 
 ## Boundary
 
-- **Owns:** the versioned `ThemeManifest` contract + JSON schema; the bundled manifest set; catalog
-  construction (bundled + user) and fixed/system resolution; user-theme validation, its per-file issue
+- **Owns:** catalog construction (bundled + user) and fixed/system resolution; user-theme validation, its per-file issue
   list and its client-side cache; deterministic pair derivation and same-appearance fallback;
-  operating-system color-scheme reads/subscription; atomic CSS-custom-property application; the versioned
-  first-paint preference hint; the semantic syntax-variable contract; Shiki's generic CSS-variable TextMate
+  operating-system color-scheme reads/subscription; the atomic theme switch (palette via the package's
+  `applyPalette`, then `[data-theme]`); the versioned first-paint preference hint; Shiki's generic CSS-variable TextMate
   scope map; and the hex resolver + Monaco colour-key map that adapt that same definition for the strict
   desktop editor API.
 - **Public surface:** `index.ts` only — `initializeThemes` (the synchronous bootstrap: bundled
@@ -44,7 +43,8 @@ cannot express through the manifest keys is a product decision for all themes, n
   `writeThemeHint`, and the manifest/descriptor/preference-result types plus the Shiki registration and its
   `resolveThinkrailShikiTheme` strict-consumer adapter.
 - **Allowed external deps:** `@thinkrail/contracts` for the opaque ids, theme preference shapes and
-  configured default; browser DOM/media/storage APIs and Vite's build-time glob; Shiki types only, to type
+  configured default; `@thinkrail/design-tokens` for the manifest contract, the bundled sources and
+  `applyPalette`; browser DOM/media/storage APIs; Shiki types only, to type
   the generic registration.
 - **Forbidden:** server/shared/pi; store, transport, panels, shell, or component state; reading files or
   discovering themes itself (user files arrive only through `installUserThemes`); executable theme code;
@@ -52,89 +52,9 @@ cannot express through the manifest keys is a product decision for all themes, n
 
 ## Manifest contract
 
-A theme is exactly one `*.theme.json` file. Schema version 2 is strict and self-contained: id,
-label/order, light-or-dark appearance, normal-or-high contrast metadata, a complete semantic UI palette
-(only the derived keys below may be omitted), all 16 terminal ANSI colors, and a complete semantic syntax
-palette. Color values are canonical
-six/eight-digit hex; the two selected-text foreground overrides may explicitly be `null` to retain the
-consumer's native foreground. There is no inheritance or partial overlay. The engine owns appearance-level
-effects, TextMate/Monaco scope mapping, and CSS-token mapping, so those mechanics never leak into
-manifests. Typography, spacing, radii, fonts, and motion remain product tokens, not theme values; the
-user's font choice is a separate host setting ([[submodule-web-fonts]]), so changing the theme never
-changes a font.
-
-**The manifest is a user-kept file format, so its schema evolves compatibly.** The parser accepts every
-schema version released for user files (v2 is the first) and migrates older ones in code to the current
-shape before validation, so a theme a user saved never breaks on upgrade. Consequently a key added in a
-later version must be derivable from keys every earlier version already has — the way v2's `header`
-equals the v1 `content` — or it cannot be added; a value a palette genuinely needs to vary starts as a
-derived default. Compatibility is backward only: a file declaring a newer `schemaVersion` than the
-running app knows, or carrying a key it does not know, is reported as `invalid-theme` rather than
-guessed at.
-
-**A manifest supplies the palette, not the roles.** It answers *which colour*; what each colour is
-*for* is the semantic layer declared in `styles/colors.json` — `container-elevated-bg`,
-`feedback-warning`, `text-subtle` — which is the only layer components name, and which owns the alpha
-scale. The split is what lets a theme be a palette swap with no component change, and it is why this
-module's variables (`--elevated`, `--border-strong`, `--muted`) are internal: reaching one from a component
-bypasses the role it belongs to. See [`styles/COLOR.md`](../styles/COLOR.md).
-
-**One key per role that themes may vary independently.** Schema version 2 splits `header` out of
-`content`, which previously wrote both `--bg-dark` and `--surface-content` and so pinned the app header
-to the code canvas in every theme. Every bundled manifest ships `header` equal to its `content`, so the
-split changed no pixel — it made a knob exist. The same move is what any future divergence needs: a role
-can only vary between themes if the manifest has a key for it.
-
-The primary control has an explicit opaque-fill contract: `accentSolid` is its resting fill,
-`accentHover` its hover fill, and `onAccent` the label on both. The separate `accent` remains the
-foreground/ring/border and tint source. This lets a palette vary opaque controls without silently
-changing every accent tint: the Minimal palettes align their resting fill with their accent, while the
-standard Light keeps its brighter independent solid fill. The destructive control has the same contract
-on the danger hue: `danger` is its resting fill (and the feedback colour), `dangerHover` its hover fill, and
-`onDanger` the label on both — `schema.test.ts` holds `onDanger` to AA on both fills and keeps the hover
-step distinguishable (≥ 1.15) from the resting fill. `dangerHover` and `onDanger` joined v2 after user
-files shipped, so by the compatibility rule above both are optional and derived from keys every v2 file
-has: `dangerHover` defaults to `danger` darkened 12% toward black (the step every bundled theme uses)
-and `onDanger` to the palette's own `text` or `background`, whichever reads better on both fills.
-Bundled manifests still set both explicitly.
-
-**The manifest→variable name is derived, not mapped.** A key writes to its kebab-cased name —
-`borderStrong` → `--border-strong`, `editorSelection` → `--editor-selection`. `runtime.ts` applies that
-rule when it writes the palette to the document root, and `scripts/colors.ts` applies the same rule when
-it resolves a role's `from`; neither consults a table, because the table *was* the drift path (and its
-names — `--blue` for `info`, `--border2` for `borderStrong` — had stopped describing what they held).
-There is no `palette` section in `colors.json` and no generated TypeScript: `generate-colors.ts` emits
-exactly one artifact, `styles/generated/colors.css` (the roles, the per-appearance `effects`, and the
-Tailwind `@theme inline` map). What keeps the two lists honest is coverage, not a mapping — the
-generator refuses to run unless **every** `THEME_COLOR_KEYS` entry is claimed by at least one role, so a
-key added to the manifest schema and forgotten in `colors.json` cannot reach a build, and a role naming
-a key that does not exist fails the same gate.
-
-**A manifest must also be legible, not merely complete.** `schema.test.ts` enforces WCAG AA on every
-resting surface (`background`, `content`, `sidebar`, `header`, `elevated`, `input`) and a lower 3.0
-floor on the transient `hover` surface — the latter being our line rather than the standard's, so that
-a theme borrowed from elsewhere keeps its signature colours. `accent` and `success` are exempt from
-`input` alone: neither is ever rendered as text on a control. Separately, `onAccent` must clear AA on
-**both** primary fills (`accentSolid` and `accentHover`), so a theme cannot darken its hover step far enough
-to swallow the primary button's own label. Legibility alone proved insufficient: High Contrast Light
-once shipped its `hover` fill — the palette source of the selected/hovered control roles — at 1.05:1
-against its own sidebar, an invisible selection with every check green, so the suite also pins
-hover-vs-surface **distinguishability** (≥ 1.15 against every resting surface — `content` included,
-because PlanPane and the workbench backdrop host hovered controls there, which Light's original
-`hover == content` palette made invisible). A new manifest that reads poorly fails to merge; see
-[`styles/COLOR.md`](../styles/COLOR.md) for the reasoning.
-
-**A `contrast: "high"` manifest is held to AAA (7.0) resting and full AA (4.5) even on hover**, `hint`
-excepted. High contrast is the entire reason those two themes exist, so the ordinary AA floor is the
-wrong gate for them: it lets one decay into a merely-adequate theme while every check stays green. That
-is not hypothetical — when the palette went green, High Contrast Light's `accent` fell from 8.98 to 5.17
-and its `success` from 7.39 to 5.08, and nothing failed. The stricter floor is what makes "high contrast"
-a property the suite enforces rather than a label in the manifest.
-
-Bundled files are discovered by a build-time glob rather than named in a code catalog, and validated
-all-or-nothing at bootstrap. The files are our own, so any invalid or duplicate manifest, missing
-configured default, or catalog without at least one light and one dark manifest **fails loudly** (unit
-tests catch it before merge). Runtime and JSON-schema validation agree.
+The `*.theme.json` manifest format, its schema evolution rule, the palette→variable naming, the
+legibility floors and the bundled set are owned by [[module-design-tokens]]
+(`packages/design-tokens/SPEC.md`). This module consumes them through that package's barrel.
 
 **User theme files are held to the same schema but fail soft.** Each file is validated on its own; an
 unusable one becomes a `UserThemeIssue` (the host's read codes, `invalid-theme`, `id-too-long`, or `duplicate-id`

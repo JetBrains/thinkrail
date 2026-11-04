@@ -5,6 +5,7 @@ import { Glob } from "bun";
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const SOURCES = [
 	"apps/web/src",
+	"packages/chat-ui/src",
 	"packages/ui",
 	"packages/resource-renderers/src",
 	"thinkrail-extensions/*/web",

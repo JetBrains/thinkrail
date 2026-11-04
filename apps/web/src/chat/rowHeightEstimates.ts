@@ -1,5 +1,5 @@
-import { type ChatRow, LARGE_USER_MESSAGE } from "./rows";
-import { isInteractiveTool, resolveProminence } from "./toolRegistry";
+import { type ChatRow, LARGE_USER_MESSAGE } from "@thinkrail/chat-ui/rows";
+import { isInteractiveTool, resolveProminence } from "@thinkrail/chat-ui/toolRegistry";
 
 const MAX_ESTIMATED_HEIGHT = 20_000;
 const MIN_ESTIMATED_HEIGHT = 20;

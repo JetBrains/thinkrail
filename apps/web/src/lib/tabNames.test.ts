@@ -8,7 +8,6 @@ import {
 	defaultTerminalIndex,
 	defaultTerminalTitle,
 	diffTabName,
-	fallbackChatTitle,
 	planDocumentName,
 	terminalName,
 } from "./tabNames";
@@ -63,19 +62,8 @@ test("Changes and diff tab names tag every non-default scope in the current lang
 	expect(diffTabName(de, { kind: "uncommitted" }, "src/a.ts")).toBe("a.ts · nicht festgeschrieben");
 });
 
-test("an unnamed chat shows its first prompt's head, cut at a word boundary; a real name always wins", () => {
+test("chatLabel words contracts' chat title and falls back to the translated default name", () => {
 	const t = currentTranslator();
-	expect(fallbackChatTitle("Fix the login redirect")).toBe("Fix the login redirect");
-	expect(
-		fallbackChatTitle("Please refactor the authentication module so that tokens refresh quietly"),
-	).toBe("Please refactor the authentication module so…");
-	expect(fallbackChatTitle(`${"a".repeat(30)} ${"b".repeat(17)} tail words here`)).toBe(
-		`${"a".repeat(30)} ${"b".repeat(17)}…`,
-	);
-	expect(fallbackChatTitle("x".repeat(60))).toBe(`${"x".repeat(48)}…`);
-	expect(fallbackChatTitle(`${"x".repeat(47)}😀${"y".repeat(10)}`)).toBe(`${"x".repeat(47)}…`);
-	expect(fallbackChatTitle("")).toBeUndefined();
-	expect(fallbackChatTitle(undefined)).toBeUndefined();
 	expect(chatDisplayName(t, "Named", "Fix the login redirect")).toBe("Named");
 	expect(chatDisplayName(t, "", "Fix the login redirect")).toBe("Fix the login redirect");
 	expect(chatDisplayName(t, "", undefined)).toBe("Chat");

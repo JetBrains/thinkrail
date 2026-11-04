@@ -14,7 +14,7 @@ test("shows the theme folder, the example link, and one notice per broken file",
 	);
 	expect(markup).toContain("/home/me/.thinkrail/themes");
 	expect(markup).toContain('data-testid="custom-themes-open-folder"');
-	expect(markup).toContain("/blob/v1.2.3/apps/web/src/themes/bundled/dark.theme.json");
+	expect(markup).toContain("/blob/v1.2.3/packages/design-tokens/themes/dark.theme.json");
 	expect(markup).toContain('data-testid="custom-theme-issue-copy.theme.json"');
 	expect(markup).toContain("Another theme file already uses this id");
 });

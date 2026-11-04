@@ -7,6 +7,7 @@ import { channel, posthogProjectKey, version } from "@thinkrail/shared/version";
 import { type CliOptions, parseArgs, parseSubcommand, USAGE } from "./args";
 import { openUiThenStartAttribution } from "./attributionReadiness";
 import { BINARY_SOURCE_MAP_BASE } from "./binarySourceMap";
+import { renderQr } from "./qr";
 import { runUninstall } from "./uninstall";
 import { createCliHostUpdate, runUpdate } from "./update";
 
@@ -78,6 +79,7 @@ async function bootstrap(build: BuildKind): Promise<void> {
 			...(options.open ? { openExternal: openBrowser } : {}),
 		},
 		...(hostUpdate ? { hostUpdate } : {}),
+		...(options.remote ? { remote: { relayUrl: options.relayUrl } } : {}),
 		...(options.projectDir ? { projectPath: resolve(process.cwd(), options.projectDir) } : {}),
 	});
 	if (port !== requested) {
@@ -89,6 +91,44 @@ async function bootstrap(build: BuildKind): Promise<void> {
 	printStartupMark({ status: "host ready", endpoint: url });
 	console.log(`thinkrail → ${url}`);
 	openUiThenStartAttribution(options.open, url, openBrowser, server.startAttributionClaim);
+
+	const remote = server.remote;
+	const { enabled, addresses } = remote.state();
+	if (options.remote && !enabled) {
+		console.warn("thinkrail remote: phone access could not start; see the log for details.");
+	} else if (options.remote) {
+		const projectRef = options.projectDir ? resolve(process.cwd(), options.projectDir) : "default";
+		const route = { lan: "Wi-Fi/LAN", tailscale: "Tailscale", relay: "relay" } as const;
+		if (addresses.length === 0) {
+			console.warn(
+				"thinkrail remote: no Wi-Fi/LAN or Tailscale address on this computer, so a phone can't reach it." +
+					" Connect to a network (or start Tailscale) and restart with --remote.",
+			);
+			return;
+		}
+		console.log(
+			`thinkrail remote: reachable at\n${addresses
+				.map((address) => `  ${address.url}  (${route[address.route]})`)
+				.join("\n")}`,
+		);
+		const printPairing = async (): Promise<void> => {
+			const { link } = remote.issueLink(projectRef);
+			console.log(
+				`thinkrail remote: scan this QR (or paste the link) on another device:\n  ${link}`,
+			);
+			console.log(await renderQr(link));
+			console.log(
+				"thinkrail remote: the code works once and expires in a few minutes" +
+					(process.stdin.isTTY ? "; press Enter for a new one." : "."),
+			);
+		};
+		await printPairing();
+		if (process.stdin.isTTY) {
+			process.stdin.on("data", (chunk) => {
+				if (String(chunk).includes("\n")) void printPairing();
+			});
+		}
+	}
 }
 
 export async function launch(build: BuildKind): Promise<void> {

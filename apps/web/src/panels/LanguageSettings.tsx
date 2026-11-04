@@ -2,6 +2,13 @@ import { RiExternalLinkLine as ExternalLink } from "@remixicon/react";
 import type { LocalLocaleFileErrorCode, LocalLocalesSnapshot } from "@thinkrail/contracts";
 import { languageName, SYSTEM_LOCALE } from "@thinkrail/locales";
 import { T, useT } from "@thinkrail/locales/react";
+import {
+	SettingsGroup,
+	SettingsPageContainer,
+	SettingsRadioCards,
+	type SettingsRadioChoice,
+	SettingsRow,
+} from "@thinkrail/ui/settings";
 import { type ReactNode, useMemo } from "react";
 import {
 	effectiveLocale,
@@ -13,9 +20,6 @@ import {
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { type FolderActions, SettingsFolderRow, useFolderActions } from "./SettingsFolder";
-import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
-import { SettingsRadioCards, type SettingsRadioChoice } from "./SettingsRadioCards";
-import { SettingsRow } from "./SettingsRow";
 
 const REPO_URL = "https://github.com/JetBrains/thinkrail";
 export const CONTRIBUTE_TRANSLATIONS_URL = `${REPO_URL}/blob/main/CONTRIBUTING.md#translations`;

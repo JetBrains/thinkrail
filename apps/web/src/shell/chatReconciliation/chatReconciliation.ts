@@ -1,6 +1,6 @@
+import { messagesToRuntime } from "@thinkrail/chat-ui/hydrate";
 import { t } from "@thinkrail/locales/react";
 import { useEffect, useRef } from "react";
-import { messagesToRuntime } from "../../chat/hydrate";
 import { type LayoutAttention, readLayoutSelection, tupleKey } from "../../lib";
 import {
 	type CenterNavigationStamp,

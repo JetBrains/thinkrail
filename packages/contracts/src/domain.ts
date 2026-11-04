@@ -57,6 +57,48 @@ export function firstPromptOfTexts(texts: Iterable<string>): string | undefined 
 	return undefined;
 }
 
+const UNNAMED_CHAT_TITLE_LENGTH = 48;
+
+export function unnamedChatTitle(firstPrompt: string | null | undefined): string | undefined {
+	if (!firstPrompt) return undefined;
+	if (firstPrompt.length <= UNNAMED_CHAT_TITLE_LENGTH) return firstPrompt;
+	const boundary = firstPrompt.slice(0, UNNAMED_CHAT_TITLE_LENGTH + 1).lastIndexOf(" ");
+	const cut =
+		boundary > UNNAMED_CHAT_TITLE_LENGTH / 2
+			? firstPrompt.slice(0, boundary)
+			: clampToCodePoints(firstPrompt, UNNAMED_CHAT_TITLE_LENGTH);
+	return `${cut.trimEnd()}…`;
+}
+
+export interface ChatTitle {
+	text: string;
+	source: "name" | "prompt";
+	tooltip?: string;
+}
+
+export function chatTitle(
+	name: string | null | undefined,
+	firstPrompt: string | null | undefined,
+): ChatTitle | null {
+	const named = name?.trim();
+	if (named) return { text: named, source: "name" };
+	const unnamed = unnamedChatTitle(firstPrompt);
+	return unnamed && firstPrompt ? { text: unnamed, source: "prompt", tooltip: firstPrompt } : null;
+}
+
+export type CompactAgeUnit = "underHour" | "hours" | "days" | "weeks" | "months";
+
+export function compactAgeOf(ms: number, now: number): { unit: CompactAgeUnit; count: number } {
+	const hours = Math.max(0, Math.floor((now - ms) / 3_600_000));
+	if (hours < 1) return { unit: "underHour", count: 0 };
+	if (hours < 24) return { unit: "hours", count: hours };
+	const days = Math.floor(hours / 24);
+	if (days < 14) return { unit: "days", count: days };
+	const weeks = Math.floor(days / 7);
+	if (weeks < 10) return { unit: "weeks", count: weeks };
+	return { unit: "months", count: Math.floor(days / 30) };
+}
+
 export interface Project {
 	id: string;
 	name: string;
@@ -1201,6 +1243,33 @@ export interface GithubAuthStatus {
 	connected: boolean;
 	login?: string;
 	scopes?: string[];
+}
+
+/** How a phone reaches this host: its Wi‑Fi/LAN or Tailscale address, or a configured relay. */
+export type RemoteRoute = "lan" | "tailscale" | "relay";
+
+export interface RemoteAddress {
+	url: string;
+	route: RemoteRoute;
+}
+
+export interface RemotePairedDevice {
+	id: string;
+	label: string;
+	pairedAt: number;
+}
+
+/** Phone access as Settings shows it; `addresses` is empty while off or when no network is up. */
+export interface RemoteAccessStatus {
+	enabled: boolean;
+	addresses: RemoteAddress[];
+	devices: RemotePairedDevice[];
+}
+
+/** A one-time `thinkrail://pair` link for the QR, valid until `expiresAt` (epoch ms). */
+export interface RemotePairingLink {
+	link: string;
+	expiresAt: number;
 }
 
 export interface HostEnvironmentVar {

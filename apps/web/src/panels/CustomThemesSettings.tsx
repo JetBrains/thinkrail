@@ -1,12 +1,12 @@
 import type { UserThemesSnapshot } from "@thinkrail/contracts";
 import { T, type Translator, useT } from "@thinkrail/locales/react";
+import { SettingsGroup } from "@thinkrail/ui/settings";
 import type { ReactNode } from "react";
 import type { UserThemeIssue } from "@/themes";
 import { repoSourceUrl } from "./LanguageSettings";
 import { type FolderActions, SettingsFileIssues, SettingsFolderRow } from "./SettingsFolder";
-import { SettingsGroup } from "./SettingsGroup";
 
-const EXAMPLE_THEME_PATH = "apps/web/src/themes/bundled/dark.theme.json";
+const EXAMPLE_THEME_PATH = "packages/design-tokens/themes/dark.theme.json";
 
 function issueLabel(t: Translator, issue: UserThemeIssue): string {
 	switch (issue.error) {

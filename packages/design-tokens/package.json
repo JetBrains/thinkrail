@@ -1,0 +1,35 @@
+{
+	"name": "@thinkrail/design-tokens",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts",
+		"./styles.css": "./styles/index.css",
+		"./styles/*": "./styles/*",
+		"./themes/*": "./themes/*",
+		"./scripts/*": "./scripts/*.ts"
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"test": "bun test",
+		"typography:generate": "bun scripts/generate-typography.ts",
+		"typography:validate": "bun scripts/validate-typography.ts",
+		"typography:check": "bun scripts/generate-typography.ts --check",
+		"colors:generate": "bun scripts/generate-colors.ts",
+		"colors:check": "bun scripts/generate-colors.ts --check",
+		"spacing:generate": "bun scripts/generate-spacing.ts",
+		"spacing:check": "bun scripts/generate-spacing.ts --check"
+	},
+	"dependencies": {
+		"@fontsource-variable/geist": "catalog:",
+		"@fontsource-variable/jetbrains-mono": "catalog:",
+		"@fontsource-variable/orbitron": "catalog:",
+		"@thinkrail/contracts": "workspace:*"
+	},
+	"devDependencies": {
+		"@types/bun": "catalog:",
+		"typescript": "catalog:",
+		"vite": "8.1.6"
+	}
+}

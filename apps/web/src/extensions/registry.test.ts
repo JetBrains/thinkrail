@@ -1,8 +1,4 @@
 import { expect, test } from "bun:test";
-import askUserQuestion from "@thinkrail/ext-ask-user-question/web";
-import visualize, { MermaidView } from "@thinkrail/ext-visualize/web";
-import type { ToolRenderProps } from "@thinkrail/extension-api/web";
-import { currentTranslator } from "@thinkrail/locales/react";
 import {
 	DefaultToolRenderer,
 	getToolChrome,
@@ -10,7 +6,11 @@ import {
 	getToolSummary,
 	isInteractiveTool,
 	resolveProminence,
-} from "../chat/toolRegistry";
+} from "@thinkrail/chat-ui/toolRegistry";
+import askUserQuestion from "@thinkrail/ext-ask-user-question/web";
+import visualize, { MermaidView } from "@thinkrail/ext-visualize/web";
+import type { ToolRenderProps } from "@thinkrail/extension-api/web";
+import { currentTranslator } from "@thinkrail/locales/react";
 import { registerWebExtensions, webExtensions } from "./index";
 
 const props: ToolRenderProps = {

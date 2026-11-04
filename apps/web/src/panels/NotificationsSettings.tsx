@@ -1,6 +1,7 @@
 import { RiArrowDownSLine, RiArrowRightSLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "@thinkrail/ui/settings";
 import { useId, useState } from "react";
 import {
 	type NotificationChannel,
@@ -10,7 +11,6 @@ import {
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { SettingsNotice } from "./SettingsNotice";
-import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
 import { SettingsSwitch } from "./SettingsSwitch";
 
 function HowToEnableInstructions() {

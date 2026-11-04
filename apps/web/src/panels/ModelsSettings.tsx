@@ -6,6 +6,7 @@ import {
 } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { SettingsGroup, SettingsPageContainer, SettingsRow } from "@thinkrail/ui/settings";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
 import { ThinkingSelector } from "@/chat/ThinkingSelector";
@@ -14,8 +15,6 @@ import { useModelPreferences } from "@/chat/useModelPreferences";
 import { selectCatalogModel, selectPickerModels, toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { ModelContextSettings } from "./ModelContextSettings";
-import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
-import { SettingsRow } from "./SettingsRow";
 import { SettingsSwitch } from "./SettingsSwitch";
 import { VisibleModelsSettings } from "./VisibleModelsSettings";
 

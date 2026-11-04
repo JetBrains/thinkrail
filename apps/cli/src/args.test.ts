@@ -27,8 +27,25 @@ describe("parseArgs", () => {
 			verbose: false,
 			staticDir: undefined,
 			projectDir: undefined,
+			remote: false,
+			relayUrl: undefined,
 			help: false,
 			version: false,
+		});
+	});
+
+	test("--remote enables remote access; --relay sets the URL and implies --remote", () => {
+		expect(parseArgs(["--remote"], {})).toMatchObject({
+			remote: true,
+			relayUrl: undefined,
+		});
+		expect(parseArgs(["--relay", "ws://r:9"], {})).toMatchObject({
+			remote: true,
+			relayUrl: "ws://r:9",
+		});
+		expect(parseArgs([], { THINKRAIL_RELAY_URL: "ws://env:1" })).toMatchObject({
+			remote: false,
+			relayUrl: "ws://env:1",
 		});
 	});
 

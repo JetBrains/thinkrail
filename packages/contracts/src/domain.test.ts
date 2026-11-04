@@ -3,7 +3,9 @@ import {
 	ACCEPTED_IMAGE_TYPES,
 	base64EncodedLength,
 	CODE_FONT_SIZE,
+	chatTitle,
 	clampToCodePoints,
+	compactAgeOf,
 	compareResourceHistory,
 	DEFAULT_CONFIG,
 	FIRST_PROMPT_MAX_LENGTH,
@@ -33,6 +35,7 @@ import {
 	resourceTallyTotal,
 	TODO_NUDGE_PREFIX,
 	tallyResources,
+	unnamedChatTitle,
 } from "./domain";
 
 describe("isRetriedAttempt", () => {
@@ -595,4 +598,31 @@ describe("font settings", () => {
 		expect(isFontWeightOffset(15)).toBe(false);
 		expect(isFontWeightOffset(140)).toBe(false);
 	});
+});
+
+test("an unnamed chat's title is its first prompt's head, cut at a word boundary; a real name always wins", () => {
+	expect(unnamedChatTitle("Fix the login redirect")).toBe("Fix the login redirect");
+	expect(
+		unnamedChatTitle("Please refactor the authentication module so that tokens refresh quietly"),
+	).toBe("Please refactor the authentication module so…");
+	expect(unnamedChatTitle(`${"a".repeat(30)} ${"b".repeat(17)} tail words here`)).toBe(
+		`${"a".repeat(30)} ${"b".repeat(17)}…`,
+	);
+	expect(unnamedChatTitle("x".repeat(60))).toBe(`${"x".repeat(48)}…`);
+	expect(unnamedChatTitle(`${"x".repeat(47)}😀${"y".repeat(10)}`)).toBe(`${"x".repeat(47)}…`);
+	expect(unnamedChatTitle("")).toBeUndefined();
+	expect(unnamedChatTitle(undefined)).toBeUndefined();
+	expect(chatTitle("  Named ", "Fix it")).toEqual({ text: "Named", source: "name" });
+	expect(chatTitle("", "Fix it")).toEqual({ text: "Fix it", source: "prompt", tooltip: "Fix it" });
+	expect(chatTitle(" ", undefined)).toBeNull();
+});
+
+test("compact age buckets elapsed time into the dense-row units", () => {
+	const now = 100 * 86_400_000;
+	expect(compactAgeOf(now - 20 * 60_000, now)).toEqual({ unit: "underHour", count: 0 });
+	expect(compactAgeOf(now + 60_000, now)).toEqual({ unit: "underHour", count: 0 });
+	expect(compactAgeOf(now - 5 * 3_600_000, now)).toEqual({ unit: "hours", count: 5 });
+	expect(compactAgeOf(now - 13 * 86_400_000, now)).toEqual({ unit: "days", count: 13 });
+	expect(compactAgeOf(now - 15 * 86_400_000, now)).toEqual({ unit: "weeks", count: 2 });
+	expect(compactAgeOf(now - 90 * 86_400_000, now)).toEqual({ unit: "months", count: 3 });
 });
