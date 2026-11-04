@@ -60,7 +60,15 @@ const ASK_TARGETS = {
 		{ label: "cli", description: "terminal" },
 	],
 };
-const KEY = { up: "\x1b[A", down: "\x1b[B", enter: "\r", escape: "\x1b", space: " " };
+const KEY = {
+	up: "\x1b[A",
+	down: "\x1b[B",
+	enter: "\r",
+	escape: "\x1b",
+	space: " ",
+	tab: "\t",
+	ctrlEnter: "\x1b[13;5u",
+};
 
 const EXPECTATIONS: Record<string, Expectation> = {
 	"@thinkrail/pi-ask-user-question": {
@@ -84,7 +92,7 @@ const EXPECTATIONS: Record<string, Expectation> = {
 				tool: "ask_user_question",
 				name: "terminal-answer",
 				args: { questions: [ASK_LIBRARY] },
-				ui: { mode: "tui", keys: [KEY.down, KEY.enter] },
+				ui: { mode: "tui", keys: [KEY.down, KEY.enter, KEY.ctrlEnter] },
 				expectText: ['"Which library?"="luxon"'],
 				expectRender: { width: 80, contains: ["✓ Lib: luxon"] },
 			},
@@ -94,7 +102,7 @@ const EXPECTATIONS: Record<string, Expectation> = {
 				args: { questions: [ASK_TARGETS] },
 				ui: {
 					mode: "tui",
-					keys: [KEY.space, KEY.down, KEY.down, "t", "r", "a", "y", KEY.enter],
+					keys: [KEY.enter, KEY.down, KEY.down, "t", "r", "a", "y", KEY.enter, KEY.ctrlEnter],
 				},
 				expectText: ['"Which targets?"="web"', 'user\'s own answer: "tray"'],
 				expectRender: { width: 80, contains: ["✓ Targets: web, “tray”"] },
@@ -156,14 +164,17 @@ const EXPECTATIONS: Record<string, Expectation> = {
 						},
 					],
 				},
-				ui: { mode: "tui", keys: [KEY.enter] },
+				ui: { mode: "tui", keys: [KEY.enter, KEY.ctrlEnter] },
 				expectText: ['"You want dates formatted with date-fns?"="Looks right"'],
 			},
 			{
 				tool: "ask_user_question",
 				name: "terminal-discuss-and-answer",
 				args: { questions: [ASK_LIBRARY, ASK_TARGETS] },
-				ui: { mode: "tui", keys: ["d", "w", "h", "y", KEY.enter, KEY.space, KEY.enter] },
+				ui: {
+					mode: "tui",
+					keys: ["d", "w", "h", "y", KEY.enter, KEY.tab, KEY.enter, KEY.ctrlEnter],
+				},
 				expectText: [
 					'"Which library?"=(the user wants to discuss this question first). user notes: why.',
 					'"Which targets?"="web"',
@@ -175,7 +186,7 @@ const EXPECTATIONS: Record<string, Expectation> = {
 				tool: "ask_user_question",
 				name: "terminal-every-question-discussed",
 				args: { questions: [ASK_LIBRARY] },
-				ui: { mode: "tui", keys: ["d", KEY.enter] },
+				ui: { mode: "tui", keys: ["d", KEY.enter, KEY.ctrlEnter] },
 				expectText: ["discuss this question first", "ask it again in a later round"],
 			},
 			{

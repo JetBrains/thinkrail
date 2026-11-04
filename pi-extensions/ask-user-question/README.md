@@ -16,11 +16,13 @@ pi install npm:@thinkrail/pi-ask-user-question
   options. A single option is allowed for one purpose: confirming an inference ("Looks right"). One call
   carries every question the agent can ask now. The run pauses until you answer.
 - **A questionnaire in the terminal.**
-  - One page per question; confirming the last one submits. **Submit answers** on the last page sends
-    what you have answered so far.
-  - ↑↓ to move (in single-select this also selects), Space to toggle in multi-select, Enter to confirm.
-  - **Other** for your own answer: type on its row.
-  - `n` attaches a note to an option; in single-select the note follows your choice.
+  - One page per question: **Next →** (or Tab / →) moves on, Shift+Tab / ← goes back. **Submit answers**
+    on the last page — or Ctrl+Enter anywhere, where the terminal reports it — sends what you have
+    answered so far.
+  - ↑↓ only move; Enter picks an option (checks or unchecks it in multi-select) and never moves on.
+  - **Other** for your own answer: type on its row; Enter or Esc in its editor keeps the text.
+  - Space attaches a note to an option (picking it first); the saved note gets its own row, and in
+    single-select the note follows your choice.
   - `d` marks the question **discuss first**, with an optional line on what to explain; the agent then
     explains the question instead of guessing and asks it again later. Choosing an option cancels it.
   - The recommended option shows a `Why:` line.

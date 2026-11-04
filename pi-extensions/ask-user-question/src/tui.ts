@@ -43,10 +43,15 @@ import {
 } from "./questionnaire.ts";
 
 type Row =
+	| { kind: "discussion" }
 	| { kind: "option"; index: number }
+	| { kind: "note"; index: number }
 	| { kind: "other" }
+	| { kind: "next" }
 	| { kind: "submit" }
 	| { kind: "chat" };
+
+const rowKey = (row: Row): string => ("index" in row ? `${row.kind}:${row.index}` : row.kind);
 
 type Mode =
 	| { kind: "browse" }
@@ -57,9 +62,9 @@ type Mode =
 const WIDE_PREVIEW_MIN_WIDTH = 100;
 const MAX_PREVIEW_LINES = 24;
 const ROW_INDENT = 5;
-const NEEDS_CHOICE = "Choose an option first";
 const NEEDS_ANSWER = "Answer at least one question first, or press Esc to skip";
 const SUBMIT_LABEL = "Submit answers";
+const NEXT_LABEL = "Next →";
 const NO_PREVIEW = "No preview for this option";
 const DISCUSS_MARK = "Discuss first";
 
@@ -113,7 +118,7 @@ function headerOf(question: { header?: string | undefined } | undefined, index: 
 export class QuestionnaireComponent implements Component, Focusable {
 	private hasFocus = false;
 	private page = 0;
-	private readonly cursors: number[];
+	private readonly cursors: string[];
 	private readonly states: QuestionState[];
 	private mode: Mode = { kind: "browse" };
 	private nudge: string | null = null;
@@ -128,9 +133,9 @@ export class QuestionnaireComponent implements Component, Focusable {
 		private readonly finish: (outcome: AskOutcome) => void,
 	) {
 		this.states = args.questions.map(() => emptyQuestionState());
-		this.cursors = args.questions.map(() => 0);
+		this.cursors = args.questions.map(() => "option:0");
 		this.editor = new Editor(tui, editorTheme(theme));
-		this.editor.onSubmit = (text) => this.saveEditor(text, true);
+		this.editor.onSubmit = (text) => this.saveEditor(text);
 	}
 
 	get focused(): boolean {
@@ -152,11 +157,20 @@ export class QuestionnaireComponent implements Component, Focusable {
 	}
 
 	private get cursor(): number {
-		return this.cursors[this.page] ?? 0;
+		const rows = this.rows();
+		const key = this.cursors[this.page] ?? "option:0";
+		const found = rows.findIndex((row) => rowKey(row) === key);
+		if (found >= 0) return found;
+		const owner = key.startsWith("note:") ? `option:${key.slice(5)}` : "option:0";
+		return Math.max(
+			0,
+			rows.findIndex((row) => rowKey(row) === owner),
+		);
 	}
 
 	private set cursor(value: number) {
-		this.cursors[this.page] = value;
+		const row = this.rows()[value];
+		if (row) this.cursors[this.page] = rowKey(row);
 	}
 
 	private question(): AskUserQuestionItem {
@@ -172,10 +186,19 @@ export class QuestionnaireComponent implements Component, Focusable {
 	}
 
 	private rows(): Row[] {
+		const state = this.state();
 		return [
-			...this.question().options.map((_, index): Row => ({ kind: "option", index })),
+			...(state.discuss ? [{ kind: "discussion" } as const] : []),
+			...this.question().options.flatMap((option, index): Row[] =>
+				state.notes[option.label]?.trim()
+					? [
+							{ kind: "option", index },
+							{ kind: "note", index },
+						]
+					: [{ kind: "option", index }],
+			),
 			{ kind: "other" },
-			...(this.multiple && this.page === this.lastPage ? [{ kind: "submit" } as const] : []),
+			this.page < this.lastPage ? { kind: "next" } : { kind: "submit" },
 			{ kind: "chat" },
 		];
 	}
@@ -198,8 +221,11 @@ export class QuestionnaireComponent implements Component, Focusable {
 	handleInput(data: string): void {
 		if (this.settled) return;
 		if (this.mode.kind !== "browse") {
-			if (matchesKey(data, Key.escape)) this.saveEditor(this.editor.getText(), false);
-			else this.editor.handleInput(data);
+			if (matchesKey(data, Key.escape)) this.saveEditor(this.editor.getText());
+			else if (matchesKey(data, Key.ctrl("enter"))) {
+				this.saveEditor(this.editor.getText());
+				this.submit();
+			} else this.editor.handleInput(data);
 			this.refresh();
 			return;
 		}
@@ -211,6 +237,10 @@ export class QuestionnaireComponent implements Component, Focusable {
 	private browse(data: string): void {
 		if (matchesKey(data, Key.escape)) {
 			this.settle({ kind: "answered", result: { answers: [], cancelled: true } });
+			return;
+		}
+		if (matchesKey(data, Key.ctrl("enter"))) {
+			this.submit();
 			return;
 		}
 		if (this.multiple) {
@@ -235,18 +265,15 @@ export class QuestionnaireComponent implements Component, Focusable {
 	private act(row: Row | undefined, data: string): void {
 		if (!row) return;
 		if (matchesKey(data, Key.enter)) this.activate(row);
-		else if (matchesKey(data, Key.space)) this.toggle(row);
-		else if (row.kind === "option" && data === "n") this.openNote(row.index);
-		else if (row.kind === "option" && data === "d") this.openDiscuss();
+		else if (matchesKey(data, Key.space)) {
+			if (row.kind === "option") this.openNote(row.index);
+			else this.activate(row);
+		} else if (row.kind === "option" && data === "d") this.openDiscuss();
 		else if (row.kind === "other" && isPrintable(data)) this.openOther(data);
 	}
 
 	private moveTo(cursor: number): void {
 		this.cursor = cursor;
-		const row = this.rows()[cursor];
-		if (row?.kind === "option" && !this.question().multiSelect) {
-			this.select(row.index);
-		}
 	}
 
 	private goToPage(page: number): void {
@@ -259,31 +286,10 @@ export class QuestionnaireComponent implements Component, Focusable {
 		this.states[this.page] = selectSingleOption(this.state(), option.label);
 	}
 
-	private toggle(row: Row): void {
-		if (row.kind === "chat" || row.kind === "submit") {
-			this.activate(row);
-			return;
-		}
-		const question = this.question();
-		const state = this.state();
-		if (row.kind === "other") {
-			if (!state.customText.trim()) {
-				this.openOther();
-				return;
-			}
-			if (question.multiSelect) state.customActive = !state.customActive;
-			else {
-				state.customActive = true;
-				state.option = null;
-			}
-			return;
-		}
-		const option = question.options[row.index];
+	private toggle(index: number): void {
+		const option = this.question().options[index];
 		if (!option) return;
-		if (!question.multiSelect) {
-			this.select(row.index);
-			return;
-		}
+		const state = this.state();
 		state.discuss = null;
 		state.multi = state.multi.includes(option.label)
 			? state.multi.filter((label) => label !== option.label)
@@ -298,23 +304,23 @@ export class QuestionnaireComponent implements Component, Focusable {
 			case "submit":
 				this.submit();
 				return;
+			case "next":
+				this.goToPage(this.page + 1);
+				return;
 			case "other":
 				this.openOther();
 				return;
+			case "note":
+				this.openNote(row.index);
+				return;
+			case "discussion":
+				this.openDiscuss();
+				return;
 			case "option":
-				if (!this.question().multiSelect) this.select(row.index);
-				this.confirm();
+				if (this.question().multiSelect) this.toggle(row.index);
+				else this.select(row.index);
 				return;
 		}
-	}
-
-	private confirm(): void {
-		if (!deriveAnswer(this.question(), this.page, this.state())) {
-			this.nudge = NEEDS_CHOICE;
-			return;
-		}
-		if (this.page < this.lastPage) this.goToPage(this.page + 1);
-		else this.submit();
 	}
 
 	private submit(): void {
@@ -333,12 +339,7 @@ export class QuestionnaireComponent implements Component, Focusable {
 
 	private openDiscuss(): void {
 		const state = this.state();
-		if (!state.discuss) {
-			state.discuss = { text: "" };
-			state.option = null;
-			state.multi = [];
-			state.customActive = false;
-		}
+		if (!state.discuss) state.discuss = { text: "" };
 		this.mode = { kind: "discuss" };
 		this.editor.setText(state.discuss.text);
 	}
@@ -350,22 +351,29 @@ export class QuestionnaireComponent implements Component, Focusable {
 		const state = this.state();
 		if (question.multiSelect) {
 			if (!state.multi.includes(option.label)) state.multi = [...state.multi, option.label];
+			state.discuss = null;
 		} else this.select(index);
 		this.mode = { kind: "note", label: option.label };
-		this.editor.setText(state.notes[option.label] ?? "");
+		this.editor.setText(this.state().notes[option.label] ?? "");
 	}
 
-	private saveEditor(text: string, submitted: boolean): void {
+	private park(key: string): void {
+		this.cursors[this.page] = key;
+	}
+
+	private saveEditor(text: string): void {
 		const mode = this.mode;
 		const state = this.state();
 		this.mode = { kind: "browse" };
 		if (mode.kind === "note") {
 			state.notes = { ...state.notes, [mode.label]: text.trim() };
+			const index = this.question().options.findIndex((option) => option.label === mode.label);
+			this.park(state.notes[mode.label] ? `note:${index}` : `option:${index}`);
 			return;
 		}
 		if (mode.kind === "discuss") {
 			state.discuss = { ...(state.discuss ?? {}), text: text.trim() };
-			if (submitted) this.confirm();
+			this.park("discussion");
 			return;
 		}
 		if (mode.kind !== "other") return;
@@ -373,7 +381,7 @@ export class QuestionnaireComponent implements Component, Focusable {
 		state.customActive = state.customText !== "";
 		if (state.customActive) state.discuss = null;
 		if (state.customActive && !this.question().multiSelect) state.option = null;
-		if (submitted && state.customActive) this.confirm();
+		this.park("other");
 	}
 
 	render(width: number): string[] {
@@ -410,7 +418,6 @@ export class QuestionnaireComponent implements Component, Focusable {
 		const head = (room: number) => [
 			...wrapIndented(this.theme.bold(question.question), room, 1),
 			...this.renderQuestionPreview(question, room),
-			...this.renderDiscussion(room),
 			"",
 			...this.renderRows(question, room),
 		];
@@ -434,13 +441,17 @@ export class QuestionnaireComponent implements Component, Focusable {
 		];
 	}
 
-	private previewSource(question: AskUserQuestionItem): AskUserQuestionOption | undefined {
+	private previewSource(
+		question: AskUserQuestionItem,
+	): { option: AskUserQuestionOption | null } | undefined {
 		if (question.multiSelect) return undefined;
 		if (!question.options.some(hasPreview)) return undefined;
-		const state = this.state();
 		const row = this.rows()[this.cursor];
-		const focused = row?.kind === "option" ? question.options[row.index] : undefined;
-		return question.options.find((option) => option.label === state.option) ?? focused;
+		if (row?.kind === "option" || row?.kind === "note")
+			return { option: question.options[row.index] ?? null };
+		const state = this.state();
+		if (state.customActive) return { option: null };
+		return { option: question.options.find((option) => option.label === state.option) ?? null };
 	}
 
 	private markdownLines(markdown: string, width: number): string[] {
@@ -451,7 +462,9 @@ export class QuestionnaireComponent implements Component, Focusable {
 		return shown;
 	}
 
-	private renderPreview(option: AskUserQuestionOption, width: number): string[] {
+	private renderPreview(source: { option: AskUserQuestionOption | null }, width: number): string[] {
+		const { option } = source;
+		if (!option) return [this.theme.fg("muted", "Preview"), this.theme.fg("dim", NO_PREVIEW)];
 		const title = this.theme.fg("muted", `Preview · ${splitRecommended(option.label).text}`);
 		if (option.previewFile) return [title, filePreviewLine(option, this.theme)];
 		if (!option.preview) return [title, this.theme.fg("dim", NO_PREVIEW)];
@@ -466,18 +479,23 @@ export class QuestionnaireComponent implements Component, Focusable {
 		return ["", ...this.markdownLines(question.preview, room).map((line) => `   ${line}`)];
 	}
 
-	private renderDiscussion(width: number): string[] {
+	private renderDiscussion(width: number, focused: boolean, index: number): string[] {
 		const discuss = this.state().discuss;
 		if (!discuss) return [];
-		const lines = ["", ...wrapIndented(this.theme.fg("accent", DISCUSS_MARK), width, 1)];
+		const label = this.theme.fg("accent", focused ? this.theme.bold(DISCUSS_MARK) : DISCUSS_MARK);
+		const lines = wrapIndented(label, width, ROW_INDENT, ` ${this.pointer(index)} ? `);
 		if (this.mode.kind === "discuss") {
 			lines.push(
-				...wrapIndented(this.theme.fg("muted", "What should the agent explain?"), width, 1),
+				...wrapIndented(
+					this.theme.fg("muted", "What should the agent explain?"),
+					width,
+					ROW_INDENT,
+				),
 				...this.renderEditor(width),
 			);
 		} else if (discuss.text)
 			lines.push(...wrapIndented(this.theme.fg("muted", discuss.text), width, ROW_INDENT));
-		return lines;
+		return [...lines, ""];
 	}
 
 	private renderEditor(width: number): string[] {
@@ -499,6 +517,25 @@ export class QuestionnaireComponent implements Component, Focusable {
 			on ? theme.fg("accent", multi ? "☑" : "●") : theme.fg("muted", multi ? "☐" : "○");
 		for (const [index, row] of this.rows().entries()) {
 			const focused = index === this.cursor;
+			if (row.kind === "discussion") {
+				lines.push(...this.renderDiscussion(width, focused, index));
+				continue;
+			}
+			if (row.kind === "note") {
+				const option = question.options[row.index];
+				const note = option ? state.notes[option.label]?.trim() : undefined;
+				const editing = this.mode.kind === "note" && this.mode.label === option?.label;
+				if (!note || editing) continue;
+				lines.push(
+					...wrapIndented(
+						theme.fg(focused ? "accent" : "muted", `✎ ${note}`),
+						width,
+						ROW_INDENT,
+						` ${this.pointer(index)}   `,
+					),
+				);
+				continue;
+			}
 			if (row.kind === "option") {
 				const option = question.options[row.index];
 				if (!option) continue;
@@ -520,10 +557,7 @@ export class QuestionnaireComponent implements Component, Focusable {
 					lines.push(...wrapIndented(theme.fg("muted", option.description), width, ROW_INDENT));
 				if (reason)
 					lines.push(...wrapIndented(theme.fg("dim", `Why: ${reason}`), width, ROW_INDENT));
-				const note = state.notes[option.label]?.trim();
 				const editing = this.mode.kind === "note" && this.mode.label === option.label;
-				if (note && !editing)
-					lines.push(...wrapIndented(theme.fg("muted", `Note: ${note}`), width, ROW_INDENT));
 				if (editing) {
 					lines.push(...wrapIndented(theme.fg("muted", `Note for ${text}:`), width, ROW_INDENT));
 					lines.push(...this.renderEditor(width));
@@ -542,8 +576,8 @@ export class QuestionnaireComponent implements Component, Focusable {
 				if (this.mode.kind === "other") lines.push(...this.renderEditor(width));
 				continue;
 			}
-			if (row.kind === "submit") {
-				const label = theme.bold(SUBMIT_LABEL);
+			if (row.kind === "submit" || row.kind === "next") {
+				const label = theme.bold(row.kind === "submit" ? SUBMIT_LABEL : NEXT_LABEL);
 				lines.push(
 					"",
 					...wrapIndented(
@@ -571,12 +605,10 @@ export class QuestionnaireComponent implements Component, Focusable {
 		if (this.mode.kind === "note") return "Enter save note · Shift+Enter new line · Esc back";
 		if (this.mode.kind === "other") return "Enter save · Shift+Enter new line · Esc back";
 		if (this.mode.kind === "discuss")
-			return "Enter confirm · Shift+Enter new line · Esc back · choose an option to cancel";
+			return "Enter save · Shift+Enter new line · Esc back · choose an option to cancel";
 		const pages = this.multiple ? " · ←→/Tab questions" : "";
-		const choose = this.question().multiSelect
-			? "↑↓ move · Space toggle"
-			: "↑↓ move & select · Space select";
-		return `${choose} · Enter confirm · n note · d discuss${pages} · Esc skip`;
+		const pick = this.question().multiSelect ? "Enter toggle" : "Enter select";
+		return `↑↓ move · ${pick} · Space note · d discuss · Ctrl+Enter submit${pages} · Esc skip`;
 	}
 }
 
