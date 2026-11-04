@@ -140,6 +140,7 @@ import {
 	seedWorkspaceHead,
 	setWorkspacePublisher,
 } from "../workspaces";
+import { broadcastFrame } from "./broadcast";
 import { BLOB_PREFIX, FILES_PREFIX, serveBlob, serveWorktreeFile } from "./fileRoutes";
 import { serveUserFonts } from "./fontRoutes";
 import { setFsNudgePublisher } from "./fsNudge";
@@ -299,6 +300,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	);
 
 	const sockets = new Map<string, Bun.ServerWebSocket<SocketData>>();
+	// Per-socket delivery covers the same audience as server.publish — each
+	// socket's own subscriptions decide which channels it hears — while
+	// surfacing the per-consumer drop a broadcast silently suffers under
+	// backpressure.
+	const broadcast = (channel: string, data: unknown) =>
+		broadcastFrame(sockets.values(), channel, data);
 	const reapTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	const requestReplays = new RequestReplayCache<string>();
 	const abandonmentReports = new AbandonmentReportBudget();
@@ -561,10 +568,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const publishHostUpdate = (notice: HostUpdateNotice): void => {
 		if (!hostUpdateActive) return;
 		hostUpdateNotice = notice;
-		server.publish(
-			WS_CHANNELS.hostUpdateAvailable,
-			JSON.stringify({ channel: WS_CHANNELS.hostUpdateAvailable, data: notice }),
-		);
+		broadcast(WS_CHANNELS.hostUpdateAvailable, notice);
 	};
 
 	const clearHostUpdateTimer = (): void => {
@@ -702,18 +706,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				});
 			} catch {}
 		}
-		server.publish(
-			WS_CHANNELS.projectUpdated,
-			JSON.stringify({ channel: WS_CHANNELS.projectUpdated, data: project }),
-		);
+		broadcast(WS_CHANNELS.projectUpdated, project);
 	});
 
 	setTerminalTabsPublisher((workspaceId, tabs) => {
 		const data: TerminalTabsPush = { workspaceId, tabs };
-		server.publish(
-			WS_CHANNELS.terminalTabs,
-			JSON.stringify({ channel: WS_CHANNELS.terminalTabs, data }),
-		);
+		broadcast(WS_CHANNELS.terminalTabs, data);
 	});
 
 	setWorkspacePublisher((event) => {
@@ -725,14 +723,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					: WS_CHANNELS.workspaceRemoved;
 		const data =
 			event.kind === "removed" ? { projectId: event.projectId, id: event.id } : event.workspace;
-		server.publish(channel, JSON.stringify({ channel, data }));
+		broadcast(channel, data);
 	});
 
 	const publishFsChanged = (payload: WorkspaceFsChangedPayload) => {
-		server.publish(
-			WS_CHANNELS.workspaceFsChanged,
-			JSON.stringify({ channel: WS_CHANNELS.workspaceFsChanged, data: payload }),
-		);
+		broadcast(WS_CHANNELS.workspaceFsChanged, payload);
 		reanchorWorkspace(payload.workspaceId);
 		if (
 			payload.truncated ||
@@ -754,15 +749,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	};
 	primeUserPiSettings();
 	for (const workspace of listAllWorkspaceRecords()) primeProjectPiSettings(workspace.worktreePath);
-	setPiPackagesPublisher(() =>
-		server.publish(
-			WS_CHANNELS.packagesChanged,
-			JSON.stringify({ channel: WS_CHANNELS.packagesChanged, data: {} }),
-		),
-	);
+	setPiPackagesPublisher(() => broadcast(WS_CHANNELS.packagesChanged, {}));
 	const stopUserMcpWatch = watchUserMcpConfig({ onSettingsChanged: handlePiSettingsFileChanged });
-	const nudge = (channel: WsChannel) => () =>
-		server.publish(channel, JSON.stringify({ channel, data: {} }));
+	const nudge = (channel: WsChannel) => () => broadcast(channel, {});
 	const stopLocalesWatch = watchLocalLocales({ onChange: nudge(WS_CHANNELS.localesChanged) });
 	const stopThemesWatch = watchUserThemes({ onChange: nudge(WS_CHANNELS.themesChanged) });
 	const stopFontsWatch = watchUserFonts({ onChange: nudge(WS_CHANNELS.fontsChanged) });
@@ -780,19 +769,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 
 	setReviewPublisher((payload) => {
-		server.publish(
-			WS_CHANNELS.reviewChanged,
-			JSON.stringify({
-				channel: WS_CHANNELS.reviewChanged,
-				data: markClientStale(payload, payload.workspaceId),
-			}),
-		);
+		broadcast(WS_CHANNELS.reviewChanged, markClientStale(payload, payload.workspaceId));
 	});
 	setReviewFailedPublisher((payload) => {
-		server.publish(
-			WS_CHANNELS.reviewFailed,
-			JSON.stringify({ channel: WS_CHANNELS.reviewFailed, data: payload }),
-		);
+		broadcast(WS_CHANNELS.reviewFailed, payload);
 	});
 	setReviewCommentHandler((sessionId, commentId, note) => {
 		const capture = additionalCapture();
@@ -805,10 +785,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	reconcilePendingReviewsOnBoot();
 
 	setSettingsPublisher((config, appliedUpdate) => {
-		server.publish(
-			WS_CHANNELS.settingsChanged,
-			JSON.stringify({ channel: WS_CHANNELS.settingsChanged, data: config }),
-		);
+		broadcast(WS_CHANNELS.settingsChanged, config);
 		if (applyAdditionalAnalyticsSettings(config, appliedUpdate)) {
 			setupObservation.clear();
 			runObservation.clear();
@@ -836,27 +813,18 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 
 	setSessionCreatedPublisher((payload: SessionCreatedPayload) => {
-		server.publish(
-			WS_CHANNELS.sessionCreated,
-			JSON.stringify({ channel: WS_CHANNELS.sessionCreated, data: payload }),
-		);
+		broadcast(WS_CHANNELS.sessionCreated, payload);
 	});
 
 	setSessionStatePublisher((record: SessionStateRecord) => {
 		stampSessionActivity(record);
-		server.publish(
-			WS_CHANNELS.sessionState,
-			JSON.stringify({ channel: WS_CHANNELS.sessionState, data: record }),
-		);
+		broadcast(WS_CHANNELS.sessionState, record);
 	});
 
 	setSessionDeletedPublisher((payload: SessionDeletedPayload) => {
 		runObservation.forget(payload.sessionId);
 		taskObservation.forget(payload.sessionId);
-		server.publish(
-			WS_CHANNELS.sessionDeleted,
-			JSON.stringify({ channel: WS_CHANNELS.sessionDeleted, data: payload }),
-		);
+		broadcast(WS_CHANNELS.sessionDeleted, payload);
 	});
 
 	setMcpLoginPublisher((push, ownerClientKey) => {
@@ -868,17 +836,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 
 	setMcpStatusPublisher((snapshot) => {
-		server.publish(
-			WS_CHANNELS.mcpStatus,
-			JSON.stringify({ channel: WS_CHANNELS.mcpStatus, data: snapshot }),
-		);
+		broadcast(WS_CHANNELS.mcpStatus, snapshot);
 	});
 
 	setSessionResourcesPublisher((payload) => {
-		server.publish(
-			WS_CHANNELS.sessionResourcesChanged,
-			JSON.stringify({ channel: WS_CHANNELS.sessionResourcesChanged, data: payload }),
-		);
+		broadcast(WS_CHANNELS.sessionResourcesChanged, payload);
 	});
 
 	const turnTracker = new TurnTracker((sessionId) => {
@@ -891,10 +853,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 	});
 	setTurnPublisher((turn) => {
-		server.publish(
-			WS_CHANNELS.turnChanged,
-			JSON.stringify({ channel: WS_CHANNELS.turnChanged, data: turn }),
-		);
+		broadcast(WS_CHANNELS.turnChanged, turn);
 	});
 	setSessionPublisher((payload) => {
 		runObservation.observe(payload.sessionId, payload.event);
@@ -903,10 +862,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			const workspaceId = getSessionWorkspaceId(payload.sessionId);
 			if (workspaceId) taskObservation.toolStarted(workspaceId, payload.sessionId, payload.event);
 		}
-		server.publish(
-			WS_CHANNELS.piEvent,
-			JSON.stringify({ channel: WS_CHANNELS.piEvent, data: payload }),
-		);
+		broadcast(WS_CHANNELS.piEvent, payload);
 		if (isTodoToolEnd(payload.event)) {
 			const workspaceId = getSessionWorkspaceId(payload.sessionId);
 			const observeCompletion = taskObservation.toolFinished(payload.sessionId, payload.event);
@@ -919,11 +875,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 
 	setExtUiPublisher((request, audience) => {
-		const frame = JSON.stringify({ channel: WS_CHANNELS.piExtensionUi, data: request });
 		if (!audience) {
-			server.publish(WS_CHANNELS.piExtensionUi, frame);
+			broadcast(WS_CHANNELS.piExtensionUi, request);
 			return;
 		}
+		const frame = JSON.stringify({ channel: WS_CHANNELS.piExtensionUi, data: request });
 		for (const ws of sockets.values()) {
 			if (ws.data.protocolVersion >= audience.belowProtocol) continue;
 			try {
@@ -933,16 +889,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 
 	const publishProviderChanged = () => {
-		server.publish(
-			WS_CHANNELS.providerChanged,
-			JSON.stringify({ channel: WS_CHANNELS.providerChanged, data: {} }),
-		);
+		broadcast(WS_CHANNELS.providerChanged, {});
 	};
 	setLoginPublisher((push, generation) => {
-		server.publish(
-			WS_CHANNELS.providerLogin,
-			JSON.stringify({ channel: WS_CHANNELS.providerLogin, data: push }),
-		);
+		broadcast(WS_CHANNELS.providerLogin, push);
 		if (push.frame.kind === "success" && !push.target) publishProviderChanged();
 		trackLoginOutcome(push, generation);
 	});

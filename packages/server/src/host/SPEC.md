@@ -11,7 +11,12 @@ tags: [host, public-surface-checked]
 ## Responsibility
 
 The wire and composition root: `Bun.serve` HTTP+WS, static SPA serving, the WS method→handler registry,
-channel fan-out, and the process-boot wrapper both launchers share.
+channel fan-out, and the process-boot wrapper both launchers share. Channel fan-out is per-socket
+(`broadcast`): every open socket subscribes to every channel, and a consumer that cannot take a frame
+(Bun reports `-1` backpressured or `0` unavailable) is closed rather than silently dropped — event
+frames have no replay, so a dropped frame desyncs that client until it reconnects and resyncs on the
+welcome (#1179). A socket's own channel subscriptions decide what it hears — most channels are
+subscribed at open; `themes`/`packages`/`fonts` gate on protocol version.
 
 ## Boundary
 
