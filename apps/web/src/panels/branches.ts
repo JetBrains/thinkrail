@@ -1,5 +1,5 @@
 import type { BranchList } from "@thinkrail/contracts";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import { getTransport } from "../transport";
 
 const NO_BRANCHES: BranchList = { local: [], remote: [], defaultBranch: "" };
@@ -19,8 +19,7 @@ export function useBranchList(
 	const [branches, setBranches] = useState<BranchList | null>(null);
 	const [failed, setFailed] = useState(false);
 	const [refreshing, setRefreshing] = useState(false);
-	const latestOnLoaded = useRef(onLoaded);
-	latestOnLoaded.current = onLoaded;
+	const notifyLoaded = useEffectEvent((list: BranchList) => onLoaded?.(list));
 	const generation = useRef(0);
 
 	useEffect(() => {
@@ -34,7 +33,7 @@ export function useBranchList(
 			const list = loaded ?? NO_BRANCHES;
 			setBranches(list);
 			setFailed(loaded === null);
-			latestOnLoaded.current?.(list);
+			notifyLoaded(list);
 		});
 		return () => {
 			generation.current += 1;

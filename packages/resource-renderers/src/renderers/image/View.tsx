@@ -5,7 +5,7 @@ import {
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ResourceViewProps } from "../../registry";
 import { RegionReviewSurface } from "../RegionReviewSurface";
 import { placedRegionThreadIds, type Size } from "../regionReview";
@@ -34,8 +34,6 @@ export default function ImageView({
 	const [zoom, setZoom] = useState(initial.zoom);
 	const stamp = contentStamp(content);
 	const identity = content.kind === "bytes" ? JSON.stringify([stamp, content.url]) : stamp;
-	const identityRef = useRef(identity);
-	identityRef.current = identity;
 	const [loaded, setLoaded] = useState<{ identity: string; size: Size } | null>(null);
 	const natural = loaded?.identity === identity ? loaded.size : null;
 	const source = content.kind === "bytes" ? imageSourceUrl(content.url, content.hash) : null;
@@ -44,10 +42,6 @@ export default function ImageView({
 			content.kind === "bytes" ? placedRegionThreadIds(review?.threads ?? [], natural) : NO_THREADS,
 		[content.kind, natural, review?.threads],
 	);
-
-	useEffect(() => {
-		setLoaded((current) => (current?.identity === identity ? current : null));
-	}, [identity]);
 
 	useEffect(() => {
 		onPlacedThreadIds?.(placed);
@@ -143,7 +137,6 @@ export default function ImageView({
 							}
 							draggable={false}
 							onLoad={(event) => {
-								if (identityRef.current !== identity) return;
 								const size = {
 									width: event.currentTarget.naturalWidth,
 									height: event.currentTarget.naturalHeight,
@@ -151,7 +144,7 @@ export default function ImageView({
 								setLoaded(size.width > 0 && size.height > 0 ? { identity, size } : null);
 							}}
 							onError={() => {
-								if (identityRef.current === identity) setLoaded(null);
+								setLoaded(null);
 							}}
 						/>
 					</RegionReviewSurface>

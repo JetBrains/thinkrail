@@ -1,5 +1,5 @@
 import { type Translator, useT } from "@thinkrail/locales/react";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import type { ResourceContent, ResourceDiffProps } from "../../registry";
 import type { Size } from "../regionReview";
 import { contentStamp, diffContentStamp } from "../reviewComposerState";
@@ -25,8 +25,6 @@ function ImageContent({
 	identity: string;
 	onSize: (loaded: LoadedSize) => void;
 }) {
-	const identityRef = useRef(identity);
-	identityRef.current = identity;
 	if (content.kind !== "bytes") return null;
 	return (
 		<img
@@ -36,7 +34,6 @@ function ImageContent({
 			className="block h-full w-full object-contain"
 			draggable={false}
 			onLoad={(event) => {
-				if (identityRef.current !== identity) return;
 				const size = {
 					width: event.currentTarget.naturalWidth,
 					height: event.currentTarget.naturalHeight,
@@ -44,7 +41,7 @@ function ImageContent({
 				onSize(size.width > 0 && size.height > 0 ? { identity, size } : null);
 			}}
 			onError={() => {
-				if (identityRef.current === identity) onSize(null);
+				onSize(null);
 			}}
 		/>
 	);
@@ -81,13 +78,6 @@ export default function ImageDiff({
 	const [loadedModified, setLoadedModified] = useState<LoadedSize>(null);
 	const originalSize = loadedOriginal?.identity === originalIdentity ? loadedOriginal.size : null;
 	const modifiedSize = loadedModified?.identity === modifiedIdentity ? loadedModified.size : null;
-
-	useEffect(() => {
-		setLoadedOriginal((current) => (current?.identity === originalIdentity ? current : null));
-	}, [originalIdentity]);
-	useEffect(() => {
-		setLoadedModified((current) => (current?.identity === modifiedIdentity ? current : null));
-	}, [modifiedIdentity]);
 
 	const originalSide: VisualDiffSide = {
 		present: original.kind === "bytes",

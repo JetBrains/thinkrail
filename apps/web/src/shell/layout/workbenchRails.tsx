@@ -195,6 +195,7 @@ export function AuxiliaryRegionRail({
 	trailing?: ReactNode;
 }) {
 	const t = useT();
+	const { selectionEpochRef } = shared;
 	const entries = projectAuxiliaryRail(shared.document, attention, region);
 	const groups = shared.document[region].groups;
 	const draggedAuxiliary =
@@ -203,7 +204,7 @@ export function AuxiliaryRegionRail({
 			: null;
 	const activate = (entry: AuxiliaryRailEntry) => {
 		shared.onUserNavigation();
-		shared.selectionEpochRef.current += 1;
+		selectionEpochRef.current += 1;
 		const result = activateAuxiliaryRailEntry(
 			shared.document,
 			attention,

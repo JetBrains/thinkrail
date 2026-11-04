@@ -78,15 +78,16 @@ export default function CsvDiff({
 	const cardRefs = useRef(new Map<string, HTMLDivElement>());
 	const rowRefs = useRef(new Map<string, HTMLTableRowElement>());
 	const handledFocusRef = useRef<string | null>(null);
+	const baseThreads = review?.base.threads;
+	const worktreeThreads = review?.worktree.threads;
 	const placed = useMemo(() => {
 		const ids = new Set<string>();
-		for (const id of placedTableThreadIds(review?.base.threads ?? [], originalTable.rows))
-			ids.add(id);
-		for (const id of placedTableThreadIds(review?.worktree.threads ?? [], modifiedTable.rows)) {
+		for (const id of placedTableThreadIds(baseThreads ?? [], originalTable.rows)) ids.add(id);
+		for (const id of placedTableThreadIds(worktreeThreads ?? [], modifiedTable.rows)) {
 			ids.add(id);
 		}
 		return ids;
-	}, [modifiedTable.rows, originalTable.rows, review?.base.threads, review?.worktree.threads]);
+	}, [modifiedTable.rows, originalTable.rows, baseThreads, worktreeThreads]);
 	const threadEntries = useMemo(() => {
 		const result = new Map<string, ThreadEntry[]>();
 		let number = 0;

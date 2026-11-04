@@ -61,15 +61,19 @@ function highlightTerms(query: string): HighlightTerms {
 	};
 }
 
-function Highlight({ text, highlight }: { text: string; highlight: HighlightTerms }) {
-	if (!highlight) return <>{text}</>;
-	const { terms, pattern } = highlight;
+function splitHighlightParts(text: string, pattern: RegExp) {
 	let offset = 0;
-	const parts = text.split(pattern).map((part) => {
+	return text.split(pattern).map((part) => {
 		const start = offset;
 		offset += part.length;
 		return { text: part, key: `${start}:${part}` };
 	});
+}
+
+function Highlight({ text, highlight }: { text: string; highlight: HighlightTerms }) {
+	if (!highlight) return <>{text}</>;
+	const { terms, pattern } = highlight;
+	const parts = splitHighlightParts(text, pattern);
 	return (
 		<>
 			{parts.map(({ text: part, key }) =>

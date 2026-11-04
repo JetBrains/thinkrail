@@ -1,4 +1,4 @@
-import { type RefObject, useCallback, useLayoutEffect, useRef, useState } from "react";
+import { type RefObject, useCallback, useEffectEvent, useLayoutEffect, useState } from "react";
 
 // Restore focus and a caret/selection to a prompt textarea after a React-driven value change (a
 // template insertion, slash completion, or slot step): the consumer requests a selection and it is
@@ -10,8 +10,7 @@ export function usePendingSelection(
 	onApply?: (start: number) => void,
 ): (start: number, end?: number) => void {
 	const [pending, setPending] = useState<{ start: number; end: number } | null>(null);
-	const onApplyRef = useRef(onApply);
-	onApplyRef.current = onApply;
+	const applied = useEffectEvent((start: number) => onApply?.(start));
 
 	useLayoutEffect(() => {
 		if (pending === null) return;
@@ -20,7 +19,7 @@ export function usePendingSelection(
 			el.focus();
 			el.setSelectionRange(pending.start, pending.end);
 		}
-		onApplyRef.current?.(pending.start);
+		applied(pending.start);
 		setPending(null);
 	}, [pending, ref]);
 

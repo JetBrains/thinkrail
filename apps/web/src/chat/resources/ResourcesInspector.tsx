@@ -387,7 +387,7 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 		/>
 	);
 
-	const section = (group: Category) => {
+	const renderSection = (group: Category) => {
 		if (group.live.length === 0 && group.total === 0) return null;
 		const title =
 			group.kind === "command"
@@ -498,7 +498,7 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 		</span>
 	);
 
-	const sections = groups.map(section).filter((node) => node !== null);
+	const sections = groups.map(renderSection).filter((node) => node !== null);
 
 	return (
 		<Dialog open={props.open} onOpenChange={props.onOpenChange} modal={false}>

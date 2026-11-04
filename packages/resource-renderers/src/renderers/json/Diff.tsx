@@ -47,6 +47,8 @@ export default function JsonDiff({
 		() => (modifiedText === null ? null : scanJson(modifiedText)),
 		[modifiedText],
 	);
+	const baseThreads = review?.base.threads;
+	const worktreeThreads = review?.worktree.threads;
 	const classification = useMemo(
 		() => classifyJsonDiff(originalDocument?.value, modifiedDocument?.value),
 		[modifiedDocument?.value, originalDocument?.value],
@@ -59,8 +61,8 @@ export default function JsonDiff({
 				originalDocument,
 				modifiedDocument,
 				classification,
-				baseThreads: review?.base.threads ?? [],
-				worktreeThreads: review?.worktree.threads ?? [],
+				baseThreads: baseThreads ?? [],
+				worktreeThreads: worktreeThreads ?? [],
 			}),
 		[
 			classification,
@@ -68,8 +70,8 @@ export default function JsonDiff({
 			modifiedText,
 			originalDocument,
 			originalText,
-			review?.base.threads,
-			review?.worktree.threads,
+			baseThreads,
+			worktreeThreads,
 		],
 	);
 	const composer = useStampedComposer<SelectedNode>(diffContentStamp(original, modified));

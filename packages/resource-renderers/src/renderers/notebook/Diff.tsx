@@ -126,15 +126,16 @@ function NotebookDiffSurface({
 	const cellRefs = useRef(new Map<string, HTMLElement>());
 	const handledFocusRef = useRef<string | null>(null);
 	const { attach: attachScroller } = useScrollViewState<HTMLDivElement>(viewState, onViewState);
+	const baseThreads = review?.base.threads;
+	const worktreeThreads = review?.worktree.threads;
 	const placement = useMemo(() => {
 		const ids = new Set<string>();
-		for (const id of placedNotebookThreadIds(review?.base.threads ?? [], originalDocument))
-			ids.add(id);
-		for (const id of placedNotebookThreadIds(review?.worktree.threads ?? [], modifiedDocument)) {
+		for (const id of placedNotebookThreadIds(baseThreads ?? [], originalDocument)) ids.add(id);
+		for (const id of placedNotebookThreadIds(worktreeThreads ?? [], modifiedDocument)) {
 			ids.add(id);
 		}
 		return ids;
-	}, [modifiedDocument, originalDocument, review?.base.threads, review?.worktree.threads]);
+	}, [modifiedDocument, originalDocument, baseThreads, worktreeThreads]);
 	const layout = useMemo(() => {
 		const baseKey = new Map<string, string>();
 		const worktreeKey = new Map<string, string>();
