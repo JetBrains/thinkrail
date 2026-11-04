@@ -220,6 +220,14 @@ Playwright run writes no output, so the last good file survives.
   frames), CDP main-thread task/script/layout/style ms and heap delta, scenario counters (deltas, mounted
   chats), and markdown subtree root renders, self ms, and self ms per delta. Main-thread time includes
   Playwright's `routeWebSocket` relay, so compare it only across variants of the same scenario.
+- **Interactions.** `interactions.perf.ts` replays short user actions on the renderers and panes the host rarely
+  streams into: CSV, JSON, notebook, PDF and image diffs, image zoom, the Resources inspector, history search and
+  the tool rail. Filter with `bun run perf:render interactions.perf`, `THINKRAIL_PERF_INTERACTIONS=a,b` and
+  `THINKRAIL_PERF_ENGINES=chromium,wkwebview`. One in-page driver runs the setup and the measured steps, so both
+  engines get the same synthetic input. Seeding still uses the Playwright page. The `wkwebview` engine (macOS,
+  needs `swiftc`) opens the same host URL in a visible `WKWebView` built from `perf/wkwebview/harness.swift`, the
+  engine the macOS desktop app uses, after the Playwright page leaves the app. That page is not cross-origin
+  isolated, so React durations there have 1 ms precision, and it has no long tasks or CDP main-thread numbers.
 - **Variants.** Run the command from a worktree root to measure that worktree; the output records
   `rootDir`, `gitHead`, `dirty` and `dirtyTreeHash` (sha256 of `git status --porcelain` plus `git diff HEAD`;
   untracked file contents are not hashed).
