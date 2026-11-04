@@ -6,7 +6,7 @@ const LINE_NUMBER = (line: string, type: string | null) =>
 const COLLAPSED_CONTEXT = "[data-unmodified-lines]";
 const DELETIONS_SIDE = "[data-deletions]";
 const GUTTER_UTILITY_CELL = "[data-column-number]:has([data-gutter-utility-slot])";
-const HIGHLIGHTED_TOKEN = `${LINE} [style*="--diffs-token-"]`;
+const HIGHLIGHTED_TOKEN = `${LINE} [style*="--code-"]`;
 const WORKER_SCRIPT = /\/assets\/worker-[^/]*\.js$/;
 
 export async function holdPierreWorkers(
@@ -30,6 +30,10 @@ export async function holdPierreWorkers(
 
 export function pierreLines(surface: Locator, text?: string): Locator {
 	return surface.locator(LINE, text === undefined ? {} : { hasText: text });
+}
+
+export function pierreLineNumbers(surface: Locator): Locator {
+	return surface.locator("[data-column-number]");
 }
 
 export function pierreCollapsedContext(surface: Locator): Locator {

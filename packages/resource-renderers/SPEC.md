@@ -205,7 +205,7 @@ keeps it.
 
 - **Allowed deps:** `@thinkrail/contracts` (types), `@thinkrail/locales` (the `MessageKey` type and
   `./react` for its UI strings — `useT`, `<T>`, `localeOf`), `@thinkrail/ui` primitives, React, and the renderer
-  engines (`monaco-editor`, `@shikijs/monaco`, `shiki`, `@pierre/diffs`, `pdfjs-dist`,
+  engines (`monaco-editor`, `@shikijs/monaco`, `shiki`, `@pierre/diffs`, `@pierre/highlights`, `pdfjs-dist`,
   `react-markdown`, `rehype-raw`, `rehype-sanitize`, `diff`, `jsondiffpatch`, `react-virtuoso`,
   `node-htmldiff`).
 - **Forbidden:** the web app (store, transport, panels, chat, shell, lib, themes), extensions, the server, and
@@ -466,7 +466,7 @@ instead of reflowing the document at the pane width for a frame. The sanitizer a
 buttons and inputs with styled elements; spot (region) comments on HTML are not offered yet.
 
 Pierre parses the two complete text sides (`absent` → `null`) with the current ignore-whitespace value,
-uses the `thinkrail` CSS-variable Shiki theme, word-level inline changes, collapsed unchanged regions with
+uses the host's `pierreTheme` (registered as `thinkrail`, CSS variables only, highlighted by `@pierre/highlights`), word-level inline changes, collapsed unchanged regions with
 line-info hunk separators, and split/unified layout; phone-class viewports force unified and hide the
 Split/Inline segments, so no control promises a layout the viewport refuses. The collapse threshold
 (`COLLAPSED_CONTEXT_THRESHOLD`, 3 lines) is git's own default hunk context (`-U3`), so what Pierre

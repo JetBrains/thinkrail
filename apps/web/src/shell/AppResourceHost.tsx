@@ -20,7 +20,7 @@ import { resourceBytesUrl } from "../panels/resourcePane";
 import { SendReviewButton } from "../panels/SendReviewButton";
 import { useFileReview } from "../panels/useReviewCommenting";
 import { selectFileChangeSince, selectHostSearchReady, useAppStore } from "../store";
-import { resolveThinkrailShikiTheme } from "../themes";
+import { resolveThinkrailShikiTheme, THINKRAIL_PIERRE_THEME } from "../themes";
 import { getTransport, wsErrorCode } from "../transport";
 
 registerBundledResourceRenderers();
@@ -39,6 +39,7 @@ const HOST: ResourceHost = {
 		languages: SHIKI_FILE_LANGUAGES,
 		languageId: shikiLanguageId,
 		theme: (options) => resolveThinkrailShikiTheme({ ...options, toHex: cssColorToHex }),
+		pierreTheme: THINKRAIL_PIERRE_THEME,
 	},
 	bytesUrl: resourceBytesUrl,
 	openFile: (workspaceId, path, options) => {

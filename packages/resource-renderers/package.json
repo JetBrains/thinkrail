@@ -12,6 +12,7 @@
 	},
 	"dependencies": {
 		"@pierre/diffs": "1.6.4",
+		"@pierre/highlights": "catalog:",
 		"@remixicon/react": "catalog:",
 		"@shikijs/monaco": "4.5.0",
 		"@thinkrail/contracts": "workspace:*",

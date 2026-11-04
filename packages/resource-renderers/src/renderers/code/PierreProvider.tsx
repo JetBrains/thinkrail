@@ -1,16 +1,18 @@
-import { registerCustomCSSVariableTheme } from "@pierre/diffs";
+import { registerCustomTheme } from "@pierre/diffs";
 import { WorkerPoolContext } from "@pierre/diffs/react";
 import { getOrCreateWorkerPoolSingleton, type WorkerPoolManager } from "@pierre/diffs/worker";
 import { type ReactNode, useState } from "react";
-
-registerCustomCSSVariableTheme("thinkrail", {
-	background: "var(--container-content-bg)",
-	foreground: "var(--code-foreground)",
-});
+import { type ResourceCodeHost, useResourceHost } from "../../host";
 
 const POOL_SIZE = 4;
 
-function pierreWorkerPool(): WorkerPoolManager {
+let themeRegistered = false;
+
+function pierreWorkerPool(theme: ResourceCodeHost["pierreTheme"]): WorkerPoolManager {
+	if (!themeRegistered) {
+		registerCustomTheme("thinkrail", () => Promise.resolve(theme), "zed");
+		themeRegistered = true;
+	}
 	return getOrCreateWorkerPoolSingleton({
 		poolOptions: {
 			poolSize: POOL_SIZE,
@@ -19,11 +21,16 @@ function pierreWorkerPool(): WorkerPoolManager {
 					type: "module",
 				}),
 		},
-		highlighterOptions: { theme: "thinkrail", lineDiffType: "word" },
+		highlighterOptions: {
+			theme: "thinkrail",
+			lineDiffType: "word",
+			preferredHighlighter: "highlights",
+		},
 	});
 }
 
 export default function PierreProvider({ children }: { children: ReactNode }) {
-	const [pool] = useState(pierreWorkerPool);
+	const { pierreTheme } = useResourceHost().code;
+	const [pool] = useState(() => pierreWorkerPool(pierreTheme));
 	return <WorkerPoolContext.Provider value={pool}>{children}</WorkerPoolContext.Provider>;
 }
