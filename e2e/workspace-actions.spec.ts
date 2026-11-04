@@ -9,6 +9,7 @@ import {
 	worktreeRows,
 } from "./fixtures/app";
 import { E2E_EDITOR_LOG } from "./fixtures/paths";
+import { E2eWire } from "./fixtures/wire";
 
 test.beforeEach(() => {
 	rmSync(E2E_EDITOR_LOG, { force: true });
@@ -136,6 +137,46 @@ test("an open inline rename survives reconnect", async ({ page }) => {
 	await expect.poll(() => socketsOpened).toBeGreaterThan(1);
 	await expect(row.getByTestId("workspace-name")).toHaveText("Rename After Reconnect");
 	await expect(row.getByTestId("workspace-branch")).toHaveText(created.branch);
+});
+
+test("a workspace removed while the window was disconnected leaves its sidebar after reconnect", async ({
+	page,
+}) => {
+	let firstSocket: WebSocketRoute | undefined;
+	let socketsOpened = 0;
+	let releaseReconnect: () => void = () => {};
+	const reconnectAllowed = new Promise<void>((resolve) => {
+		releaseReconnect = resolve;
+	});
+	await page.routeWebSocket(/\/ws(\?|$)/, async (socket) => {
+		socketsOpened += 1;
+		if (socketsOpened > 1) await reconnectAllowed;
+		firstSocket ??= socket;
+		socket.connectToServer();
+	});
+
+	await openFixtureProject(page);
+	const created = await createWorkspaceViaDialog(page);
+	await settleAfterCreate(page);
+	await expect(worktreeRows(page)).toHaveCount(1);
+
+	await firstSocket?.close();
+	await expect(page.getByTestId("connection-status")).not.toHaveAttribute(
+		"data-status",
+		"connected",
+	);
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+	try {
+		await wire.request("workspace.remove", { id: created.id }, 60_000);
+	} finally {
+		wire.close();
+	}
+	await expect(worktreeRows(page)).toHaveCount(1);
+
+	releaseReconnect();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect.poll(() => socketsOpened).toBeGreaterThan(1);
+	await expect(worktreeRows(page)).toHaveCount(0);
 });
 
 test("the Default workspace's kebab menu offers only non-mutating actions", async ({ page }) => {

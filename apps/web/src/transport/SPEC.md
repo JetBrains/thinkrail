@@ -53,9 +53,11 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   reconnect; the complete welcome (protocol + open/recent project views + optional config) via the atomic
   `installWelcomeSnapshot`, whose separate `welcomeGeneration` is the cold-navigation readiness edge; after
   every welcome it re-reads each project whose workspace list this surface already holds with
-  `includeDiffStats: false`, generation-fencing the result and folding only already-known rows through
-  `updateWorkspace`, so a pushed full workspace snapshot missed while disconnected (including a rename)
-  cannot stay stale without misrepresenting this metadata repair as membership reconciliation;
+  `includeDiffStats: false`, generation-fencing the result, folding already-known rows through
+  `updateWorkspace`, and retiring through `applyWorkspaceRemoved` each row it held when the read was sent
+  that the reply no longer lists and the store still holds, so a pushed full workspace snapshot or
+  removal missed while disconnected (including a rename) cannot stay stale; rows that arrived after the
+  read was sent are never retired by it, and it adds no rows (creation stays with the push and backfill);
   the full host-update lifecycle snapshot via `applyHostUpdate`, project snapshots via
   `applyProjectUpdated`, consecutive `pi.event` frames through the batcher into one
   `handlePiEvents(payloads)` store commit, `pi.extensionUi` via `applyExtUi(request)`,

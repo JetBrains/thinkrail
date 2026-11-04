@@ -1,15 +1,19 @@
-import { expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
+	type Project,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	type SessionStateRecord,
 	TOOL_RESPONSE_PROTOCOL_VERSION,
 	USER_THEMES_PROTOCOL_VERSION,
+	type Workspace,
 } from "@thinkrail/contracts";
+import { useAppStore } from "../store";
 import {
+	applyWorkspaceListRefresh,
 	mergeSessionStateRecords,
 	supportsChangeMutations,
 	supportsHostUpdateRun,
@@ -92,4 +96,62 @@ test("buffered state replaces its stale snapshot row before activation binding",
 			[record("target", "completion:newer"), record("target", "completion:latest")],
 		),
 	).toEqual([record("target", "completion:latest"), other]);
+});
+
+describe("the reconnect workspace list refresh", () => {
+	const project = (id: string): Project => ({
+		id,
+		name: id,
+		path: `/repos/${id}`,
+		slug: id,
+		lastOpened: 0,
+	});
+	const workspace = (id: string, name = id): Workspace => ({
+		id,
+		projectId: "p1",
+		name,
+		branch: id,
+		baseBranch: "main",
+		worktreePath: `/worktrees/${id}`,
+	});
+	const initial = useAppStore.getInitialState();
+	beforeEach(() => useAppStore.setState(initial, true));
+	afterEach(() => useAppStore.setState(initial, true));
+
+	test("retires rows the host no longer lists and refreshes the ones it still does", () => {
+		useAppStore.setState({
+			projects: [project("p1")],
+			workspaces: { p1: [workspace("w1"), workspace("w2"), workspace("w3")] },
+		});
+		applyWorkspaceListRefresh(
+			"p1",
+			["w1", "w2", "w3"],
+			[workspace("w1", "renamed"), workspace("w3")],
+		);
+		const state = useAppStore.getState();
+		expect(state.workspaces.p1?.map((row) => [row.id, row.name])).toEqual([
+			["w1", "renamed"],
+			["w3", "w3"],
+		]);
+		expect(state.removedWorkspaceIds.w2).toBe(true);
+	});
+
+	test("keeps rows that arrived after the read was sent and adds none of its own", () => {
+		useAppStore.setState({
+			projects: [project("p1")],
+			workspaces: { p1: [workspace("w1"), workspace("w-pushed")] },
+		});
+		applyWorkspaceListRefresh("p1", ["w1"], [workspace("w1"), workspace("w-unknown")]);
+		const state = useAppStore.getState();
+		expect(state.workspaces.p1?.map((row) => row.id)).toEqual(["w1", "w-pushed"]);
+		expect(state.removedWorkspaceIds["w-pushed"]).toBeUndefined();
+	});
+
+	test("ignores a reply for a project that closed meanwhile", () => {
+		useAppStore.setState({ projects: [], workspaces: { p1: [workspace("w1")] } });
+		applyWorkspaceListRefresh("p1", ["w1"], []);
+		const state = useAppStore.getState();
+		expect(state.workspaces.p1?.map((row) => row.id)).toEqual(["w1"]);
+		expect(state.removedWorkspaceIds.w1).toBeUndefined();
+	});
 });
