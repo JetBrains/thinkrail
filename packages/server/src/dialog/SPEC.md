@@ -14,7 +14,9 @@ The host's native directory picker, so the browser "Open project" gets a real OS
 
 - **Owns:** `selectDirectory()` — the host's native folder picker, per OS via `pickersFor(platform)`:
   macOS `osascript` (`choose folder`), Linux `zenity` then `kdialog`, Windows a PowerShell
-  `FolderBrowserDialog`. `THINKRAIL_PICK_DIR` overrides it for dev/e2e and is resolved before native
+  `FolderBrowserDialog` whose script forces `[Console]::OutputEncoding` to UTF-8 before any output:
+  a captured PowerShell pipe defaults to the OEM code page, which would deliver a non-ASCII picked
+  path as mojibake and the host would resolve a missing folder (#1188). `THINKRAIL_PICK_DIR` overrides it for dev/e2e and is resolved before native
   availability checks. It returns `null` **only** when the user cancels. Picker completion is classified
   from exit code plus diagnostics: AppleScript's `-128` marker and Linux exit 1 without stderr are
   cancellation; Linux exit 1 with diagnostics (including GTK's `Failed to open display`) and every

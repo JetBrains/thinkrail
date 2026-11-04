@@ -203,3 +203,24 @@ test("THINKRAIL_PICK_DIR reads its value from a file when it names one (live per
 		rmSync(dir, { recursive: true, force: true });
 	}
 });
+
+test("the Windows picker script forces UTF-8 stdout so non-ASCII paths survive the pipe (#1188)", async () => {
+	const pickers = pickersFor("win32");
+	expect(pickers.length).toBeGreaterThan(0);
+	for (const picker of pickers) {
+		const encoded = picker.cmd[picker.cmd.indexOf("-EncodedCommand") + 1] ?? "";
+		const script = Buffer.from(encoded, "base64").toString("utf16le");
+		expect(script).toContain("[Console]::OutputEncoding = [System.Text.Encoding]::UTF8");
+	}
+	// A picked Chinese path round-trips through the Windows parser.
+	const [windowsPicker] = pickers;
+	if (windowsPicker) expect(windowsPicker.parse("D:\\项目\\demo\r\n")).toBe("D:\\项目\\demo");
+});
+
+test("selectDirectory decodes UTF-8 picker output into the returned path", async () => {
+	const utf8Bytes = new TextEncoder().encode("D:\\项目\\demo\n");
+	const stream = new Blob([utf8Bytes]).stream();
+	const decoded = await new Response(stream).text();
+	const [picker] = pickersFor("win32");
+	if (picker) expect(picker.parse(decoded)).toBe("D:\\项目\\demo");
+});

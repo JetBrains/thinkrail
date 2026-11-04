@@ -44,6 +44,11 @@ const noNonZeroCancellation = (): boolean => false;
 
 const WINDOWS_PICKER = [
 	"$ErrorActionPreference = 'Stop'",
+	// A captured PowerShell pipe encodes stdout with the OEM code page (GBK
+	// on a Chinese system), so a picked path with non-ASCII characters would
+	// reach the host as UTF-8 mojibake and resolve to a missing folder (#1188).
+	// Force UTF-8 before anything is written.
+	"[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
 	"Add-Type -AssemblyName System.Windows.Forms",
 	"$owner = New-Object System.Windows.Forms.Form",
 	"$owner.TopMost = $true",
