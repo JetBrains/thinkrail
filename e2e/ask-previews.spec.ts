@@ -10,7 +10,7 @@ import {
 	openFixtureProject,
 	openPersistedChat,
 } from "./fixtures/app";
-import { waitForScrollStability } from "./fixtures/chatScroll";
+import { clickTranscriptControl, waitForScrollStability } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
@@ -179,8 +179,8 @@ test("previews show the question's subject and the picked option in fixed frames
 		await options.first().click();
 		await expect(pane).toHaveAttribute("data-preview", "file");
 		await card.getByTestId("ask-continue").click();
-		await card.getByTestId("ask-option").first().click();
-		await card.getByTestId("ask-submit").click();
+		await clickTranscriptControl(card.getByTestId("ask-option").first());
+		await clickTranscriptControl(card.getByTestId("ask-submit"));
 		await expect(
 			page.locator('[data-testid="ask-user-question"][data-tone="answered"]'),
 		).toBeVisible();

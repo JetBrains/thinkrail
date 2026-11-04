@@ -14,6 +14,7 @@ import {
 	openPersistedChat,
 } from "./fixtures/app";
 import {
+	clickTranscriptControl,
 	moveMouseToChatViewport,
 	nestedVerticalScrollSurfaces,
 	readChatScrollGeometry,
@@ -688,8 +689,8 @@ test("Discuss marks a question, choosing cancels it, and the round sends the dis
 		await expect(unclear).toHaveAttribute("aria-pressed", "true");
 
 		await card.getByTestId("ask-continue").click();
-		await card.getByTestId("ask-option").first().click();
-		await card.getByTestId("ask-submit").click();
+		await clickTranscriptControl(card.getByTestId("ask-option").first());
+		await clickTranscriptControl(card.getByTestId("ask-submit"));
 		await expect(card.getByTestId("ask-submit")).toHaveCount(0);
 
 		const record = page.locator('[data-testid="ask-user-question"][data-tone="answered"]');
