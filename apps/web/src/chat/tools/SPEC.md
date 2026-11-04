@@ -58,7 +58,7 @@ renderers are registered by the host's `extensions/registry.ts`. Unregistered to
 - **`subagent/`** — delegation renderers for `pi-subagents`: `AgentCard` (the `Agent` tool — **primary**;
   also registered for `get_subagent_result`, routine) and the pure `runDetails` readers/formatters (the
   parent chat's background result row reuses them); own child spec ([subagent/SPEC.md](subagent/SPEC.md)).
-- **Shared pieces** — `CodeBlock` (shiki), `Collapsible` ("Show all N lines" fold for long output;
+- **Shared pieces** — `CodeBlock` (Pierre highlighting), `Collapsible` ("Show all N lines" fold for long output;
   callers supply a stable tool-call-derived id so state and geometry anchoring survive virtualization),
   `ToolFileLink` + exact-reference linked text backed by the parent chat module's shared
   `workspaceFileTarget` + `lib`'s `projectRelativePath`. Pure `toolHelpers` (arg readers, `resultText`,
@@ -68,7 +68,7 @@ renderers are registered by the host's `extensions/registry.ts`. Unregistered to
 ## Boundary
 
 - **Public surface:** the side-effect `register` import + shared `CodeBlock`/`Collapsible` for sibling
-  renderers. No barrel (chat pulls shiki — per-file imports, as in the parent).
+  renderers. No barrel (chat pulls the highlighter — per-file imports, as in the parent).
 - **Allowed deps:** parent chat primitives (`toolRegistry`, `Markdown`, `ChatActions`, `interactionState`,
   `fileTargets`, `foldState`, `HighlightedHtml`);
   `contracts` (types and pure guards); `@thinkrail/ui/*` (including

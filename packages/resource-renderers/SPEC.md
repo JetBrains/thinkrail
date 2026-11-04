@@ -179,8 +179,8 @@ keeps it.
   once extensions render files. The package therefore owns only the props contract; its tests render through
   a test-only react-markdown + GFM helper.
 - **Host values are plain and static.** The extraction first resolved markdown and code through lazy loaders
-  read with `use`, to keep chat's markdown and the Shiki catalog out of the entry graph. Both were already in
-  it — chat imports its markdown statically, and that pulls `lib/highlighter` and `@shikijs/core` — so the
+  read with `use`, to keep chat's markdown and the language catalog out of the entry graph. Both were already in
+  it — chat imports its markdown statically, and that pulls `lib/codeLanguages` — so the
   loaders deferred nothing (rolldown reported the markdown import as ineffective) while costing a suspended
   render on first mount and a loader-identity contract a host could break. Plain values removed both, and the
   web eager graph shrank by about 1.5 kB. Preferences got their own context for the same reason the values are
@@ -204,7 +204,7 @@ keeps it.
 
 - **Allowed deps:** `@thinkrail/contracts` (types), `@thinkrail/locales` (the `MessageKey` type and
   `./react` for its UI strings — `useT`, `<T>`, `localeOf`), `@thinkrail/ui` primitives, React, and the renderer
-  engines (`monaco-editor`, `@shikijs/monaco`, `shiki`, `@pierre/diffs`, `@pierre/highlights`, `pdfjs-dist`,
+  engines (`monaco-editor`, `@pierre/diffs`, `@pierre/highlights`, `pdfjs-dist`,
   `react-markdown`, `rehype-raw`, `rehype-sanitize`, `diff`, `jsondiffpatch`, `react-virtuoso`,
   `node-htmldiff`).
 - **Forbidden:** the web app (store, transport, panels, chat, shell, lib, themes), extensions, the server, and
@@ -422,7 +422,7 @@ images in the app document, routes SVG data images through the empty-sandbox `No
 **relative** images from the host `/files` route through the same injected byte-URL composer the
 markdown preview uses (a traversal above the worktree is inert text, never a request), and renders
 links plus every remote image URL as inert text — a notebook's `![plot](figures/x.png)` is repository
-content, a third-party URL is not. Notebook language metadata must resolve through the shared Shiki catalog; missing
+content, a third-party URL is not. Notebook language metadata must resolve through the shared language catalog; missing
 metadata defaults to Python and unknown values render as plain text. ANSI is removed from stream and error
 output. MIME bundles choose image (PNG, JPEG, GIF, SVG), HTML, JSON, then plain text. SVG output stays a
 data image inside the inert frame document.

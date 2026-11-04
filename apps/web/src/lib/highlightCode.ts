@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, useSyncExternalStore } from "react";
-import { shikiLanguageId } from "./highlighter";
+import { codeLanguageId } from "./codeLanguages";
 import type { HighlightReply, HighlightRequest } from "./highlighter.worker";
 import {
 	assembleHighlight,
@@ -51,7 +51,7 @@ const PLAIN_LANGUAGES = new Set(["mermaid", "plain", "plaintext", "text", "txt"]
 export function chatLanguageId(value: string) {
 	const name = value.trim().toLowerCase();
 	if (!name || PLAIN_LANGUAGES.has(name)) return null;
-	return shikiLanguageId(name) ?? name;
+	return codeLanguageId(name) ?? name;
 }
 
 export function createHighlightClient({ spawn }: HighlightClientDeps) {

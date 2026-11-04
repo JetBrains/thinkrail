@@ -3,6 +3,7 @@ import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import { shikiStub } from "./shikiStub";
 import { posthogSourceMapUpload, sourceMapRelease } from "./sourceMapUpload";
 
 function envPort(name: string): number | undefined {
@@ -22,6 +23,7 @@ export default defineConfig(({ mode }) => {
 	const release = profile ? null : sourceMapRelease();
 	return {
 		plugins: [
+			shikiStub(),
 			react(),
 			babel({ presets: [reactCompilerPreset()] }),
 			tailwindcss(),
@@ -50,7 +52,7 @@ export default defineConfig(({ mode }) => {
 				"/fonts": { target: `http://localhost:${hostPort}` },
 			},
 		},
-		worker: { format: "es" },
+		worker: { format: "es", plugins: () => [shikiStub()] },
 		build: profile
 			? { outDir: "dist-profile", minify: false }
 			: { outDir: "dist", ...(release ? { sourcemap: "hidden" as const } : {}) },
