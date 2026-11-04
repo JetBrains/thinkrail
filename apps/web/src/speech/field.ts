@@ -1,3 +1,4 @@
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { type DictationAnchor, dictationText, separators } from "./text";
 
 const TEXT_INPUT_TYPES = new Set(["text", "search", "url", "email", "tel", ""]);
@@ -63,7 +64,7 @@ function selectionOf(element: HTMLInputElement | HTMLTextAreaElement): Dictation
 
 function swallowEnter(element: HTMLElement): () => void {
 	const onKeyDown = (event: KeyboardEvent) => {
-		if (event.key !== "Enter") return;
+		if (event.key !== "Enter" || isImeComposing(event)) return;
 		event.preventDefault();
 		event.stopImmediatePropagation();
 	};

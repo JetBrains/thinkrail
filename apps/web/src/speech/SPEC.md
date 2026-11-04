@@ -141,6 +141,8 @@ extension had to adopt and wire up. It was replaced so voice is a property of th
     focuses it. Otherwise the chord passes through untouched.
   - A tap toggles. A press that started a dictation and is held ≥ 300 ms stops on release
     (push-to-talk). Repeats are swallowed.
+- **An active IME owns its keys** (apps/web's IME rule): the chord, the lock's Enter swallow and the
+  dictation's Escape all yield to an open composition (`isImeComposing`).
 - **Submit holding** is generic: the lock swallows Enter, ⌘↩ included. A field whose owner has its own
   submit button can hold it on `thinkrail:dictation`, as the composer does with Send. Buttons elsewhere
   are not disabled.

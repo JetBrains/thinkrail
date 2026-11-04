@@ -1,3 +1,4 @@
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { useSyncExternalStore } from "react";
 import { dictation } from "./dictation";
 import { announceDictation, fieldWriter } from "./field";
@@ -41,7 +42,7 @@ export function startDictation(element: HTMLElement): void {
 	const writer = fieldWriter(element);
 	const unlock = writer.lock();
 	const onKeyDown = (event: KeyboardEvent) => {
-		if (event.key !== "Escape") return;
+		if (event.key !== "Escape" || isImeComposing(event)) return;
 		event.preventDefault();
 		event.stopImmediatePropagation();
 		dictation.stop(owner);

@@ -1,3 +1,4 @@
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import {
 	hasLayer,
 	hasPlatformModifier,
@@ -56,7 +57,7 @@ export interface ChordHandlers {
 export function installDictationChord(handlers: ChordHandlers): () => void {
 	let held: number | null = null;
 	const onKeyDown = (event: KeyboardEvent) => {
-		if (!isDictationChord(event)) return;
+		if (!isDictationChord(event) || isImeComposing(event)) return;
 		const target = chordTarget(handlers.lastFallback(), handlers.dictating());
 		if (!target) return;
 		event.preventDefault();
