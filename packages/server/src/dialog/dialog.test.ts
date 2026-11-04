@@ -26,6 +26,9 @@ test("Windows picker: a PowerShell FolderBrowserDialog, -Sta, owned by a top-mos
 		const flag = picker.cmd.indexOf("-EncodedCommand");
 		expect(flag).toBeGreaterThan(-1);
 		const script = Buffer.from(picker.cmd[flag + 1] ?? "", "base64").toString("utf16le");
+		expect(script).toContain(
+			"[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)",
+		);
 		expect(script).toContain("FolderBrowserDialog");
 		expect(script).toContain("$owner.TopMost = $true");
 		expect(script).toContain("$d.ShowDialog($owner)");
@@ -36,6 +39,36 @@ test("Windows picker: a PowerShell FolderBrowserDialog, -Sta, owned by a top-mos
 		expect(script).toContain("} catch { }");
 	}
 });
+
+for (const shell of ["powershell.exe", "pwsh.exe"]) {
+	test.skipIf(process.platform !== "win32" || !Bun.which(shell))(
+		`${shell} picker output preserves Unicode paths under a legacy console code page`,
+		async () => {
+			const picker = pickersFor("win32").find((candidate) => candidate.cmd[0] === shell);
+			if (!picker) throw new Error(`missing picker for ${shell}`);
+			const flag = picker.cmd.indexOf("-EncodedCommand");
+			const script = Buffer.from(picker.cmd[flag + 1] ?? "", "base64").toString("utf16le");
+			const path = "C:\\用户\\中文 项目\\日本語-é-🚆";
+			const probe = [
+				"[Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding(936)",
+				script.slice(0, script.indexOf("Add-Type -AssemblyName System.Windows.Forms")),
+				`Write-Output '${path}'`,
+			].join("\n");
+			const proc = Bun.spawn(
+				[...picker.cmd.slice(0, flag + 1), Buffer.from(probe, "utf16le").toString("base64")],
+				{ stdout: "pipe", stderr: "pipe", windowsHide: true },
+			);
+			const [stdout, stderr, code] = await Promise.all([
+				new Response(proc.stdout).text(),
+				new Response(proc.stderr).text(),
+				proc.exited,
+			]);
+			expect(stderr).toBe("");
+			expect(code).toBe(0);
+			expect(picker.parse(stdout)).toBe(path);
+		},
+	);
+}
 
 test("pickers distinguish cancellation from a failed non-zero exit", () => {
 	const execution = { stdout: "", stderr: "", code: 1 };

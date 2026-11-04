@@ -45,6 +45,9 @@ The host's native directory picker, so the browser "Open project" gets a real OS
   The script is handed over as `-EncodedCommand` (base64/UTF-16LE), not `-Command`: it is multi-line and
   contains the double quotes of P/Invoke signatures, which Windows argv quoting plus PowerShell's own
   re-parse do not preserve.
+  Standard output is explicitly BOM-less UTF-8, matching the host's `Response.text()` decoder;
+  `-EncodedCommand` only encodes the script input and does not set the output encoding. Relying on
+  Windows PowerShell's legacy console code page corrupts non-ASCII paths before filesystem lookup.
 - **Public surface (barrel):** `selectDirectory` (+ `pickersFor` / `Picker` and the two message builders
   `pickerFailure` / `noPickerMessage`, exposed for unit tests).
 - **Allowed deps:** Bun (`Bun.spawn`, with `windowsHide`; see `architecture.md` Invariants),

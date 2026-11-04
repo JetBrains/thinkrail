@@ -44,6 +44,7 @@ const noNonZeroCancellation = (): boolean => false;
 
 const WINDOWS_PICKER = [
 	"$ErrorActionPreference = 'Stop'",
+	"[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)",
 	"Add-Type -AssemblyName System.Windows.Forms",
 	"$owner = New-Object System.Windows.Forms.Form",
 	"$owner.TopMost = $true",
