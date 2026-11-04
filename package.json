@@ -132,7 +132,7 @@
 		"esbuild"
 	],
 	"patchedDependencies": {
-		"@pierre/diffs@1.5.1": "patches/@pierre%2Fdiffs@1.5.1.patch",
+		"@pierre/diffs@1.6.4": "patches/@pierre%2Fdiffs@1.6.4.patch",
 		"@earendil-works/pi-ai@1.5.0": "patches/@earendil-works%2Fpi-ai@1.5.0.patch"
 	}
 }

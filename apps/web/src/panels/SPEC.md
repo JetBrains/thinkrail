@@ -1842,7 +1842,7 @@ own section. The kebab menu (`plan-menu`, a
   **Pierre owns every diff and every phone-class code file.** Threads with a `lineRange` become
   `lineAnnotations` at the range's end line (`base` → `deletions`, `worktree` → `additions`) and render
   `ReviewThreadCard`; annotation metadata and arrays preserve comment-id identity across unrelated
-  review pushes. Because Pierre 1.5.1 keys React annotation wrappers by array index, each mount keeps
+  review pushes. Because Pierre keys React annotation wrappers by array index, each mount keeps
   append-only comment-id slots with tombstones and reserves the always-present first slot for the composer.
   Line-number selection and the gutter utility open a composer on that exact side. A
   selection crossing both side spaces (unified view, a drag from a deleted line into an added one) opens
@@ -1870,7 +1870,7 @@ own section. The kebab menu (`plan-menu`, a
   doing so synchronously inside a pointer handler of a text drag crashes it: a Pierre-free page reproduces
   the signature, while a moved plain element, the same slot move deferred to a frame, or a diff under
   ~100 lines does not. Invariant: a Pierre surface never inserts, removes, or moves a `<slot>`
-  synchronously from a pointer or mouse handler. `patches/@pierre%2Fdiffs@1.5.1.patch` (root
+  synchronously from a pointer or mouse handler. `patches/@pierre%2Fdiffs@1.6.4.patch` (root
   `patchedDependencies`) carries the open upstream proposal pierrecomputer/pierre#1185 (issue
   pierrecomputer/pierre#1184) plus two additions it lacks: placement is a no-op while a mouse button is
   held outside Pierre's own selection session — armed by `pointermove` and by `pointerleave`, so a drag
@@ -1882,7 +1882,7 @@ own section. The kebab menu (`plan-menu`, a
   Chromium whenever the patched behavior is missing, including a Pierre release that carries only
   #1185. A Pierre bump keeps them green and, once a release contains the fix, deletes the patch file and
   its `patchedDependencies` entry. The same patch also fixes `FileDiff.trimColumnRows`: when a
-  virtualized window's end shrinks, 1.5.1 trims the annotation and no-newline rows trailing the last
+  virtualized window's end shrinks, Pierre trims the annotation and no-newline rows trailing the last
   kept line along with the dropped lines, and later appended chunks never re-emit them, so a composer,
   thread, or toolbar on that line vanishes until a full render (seen when a composer's focus scroll
   moved the window). Rows trailing a kept line now stay; separators, which precede their line, still go.

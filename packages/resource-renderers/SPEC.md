@@ -523,7 +523,7 @@ row, as before virtualization. Virtualizing small diffs bought nothing and cost 
 virtualized instance's hydrate measures its offset (forcing layout) while its container is still
 empty; in the stacked list, whose end sits at maximum scroll so the last header can reach the top,
 that collapsed layout clamps `scrollTop`, and Virtuoso's size correction compounds the jump until the
-reviewed section leaves the render window. And `@pierre/diffs` 1.5.1's virtualized in-place column
+reviewed section leaves the render window. And `@pierre/diffs`'s virtualized in-place column
 re-render can drop annotation rows that the instance still records, leaving a just-opened composer
 slotted nowhere until something forces a `rerender()`. Large diffs still carry that annotation risk.
 
