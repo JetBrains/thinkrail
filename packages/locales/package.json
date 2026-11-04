@@ -1,7 +1,23 @@
 {
+	"name": "@thinkrail/locales",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts",
+		"./react": "./src/react.tsx",
+		"./en.json": "./en.json"
+	},
+	"scripts": {
+		"test": "bun test",
+		"typecheck": "tsc --noEmit"
+	},
 	"dependencies": {
 		"i18next": "26.5.11",
 		"react-i18next": "17.1.9"
+	},
+	"peerDependencies": {
+		"react": "catalog:"
 	},
 	"devDependencies": {
 		"@types/bun": "catalog:",
@@ -10,21 +26,5 @@
 		"react": "catalog:",
 		"react-dom": "catalog:",
 		"typescript": "catalog:"
-	},
-	"exports": {
-		".": "./src/index.ts",
-		"./react": "./src/react.tsx",
-		"./en.json": "./en.json"
-	},
-	"name": "@thinkrail/locales",
-	"peerDependencies": {
-		"react": "catalog:"
-	},
-	"private": true,
-	"scripts": {
-		"test": "bun test",
-		"typecheck": "tsc --noEmit"
-	},
-	"type": "module",
-	"version": "0.0.0"
+	}
 }
