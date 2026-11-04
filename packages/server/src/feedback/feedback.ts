@@ -22,7 +22,10 @@ interface FeedbackState {
 }
 
 type FeedbackPublisher = (clientKey: string) => boolean;
-type GithubStarPublisher = (clientKey: string, ask: GithubStarAsk) => boolean;
+interface GithubStarPublisher {
+	canAsk: (clientKey: string) => boolean;
+	ask: (clientKey: string, ask: GithubStarAsk) => boolean;
+}
 
 const INVITATION_INTERVAL = 10;
 const FIRST_INVITATION_AT = 20;
@@ -179,11 +182,10 @@ export function recordAcceptedMessage(clientKey: string): void {
 function askForGithubStar(clientKey: string): boolean {
 	if (githubStarAskInFlight) return true;
 	const current = loadState();
-	if (
-		publishGithubStar === null ||
-		current.githubStarAsked ||
-		current.acceptedMessages < GITHUB_STAR_ASK_AT
-	) {
+	if (current.githubStarAsked || current.acceptedMessages < GITHUB_STAR_ASK_AT) return false;
+	try {
+		if (publishGithubStar?.canAsk(clientKey) !== true) return false;
+	} catch {
 		return false;
 	}
 	githubStarAskInFlight = true;
@@ -196,7 +198,7 @@ function askForGithubStar(clientKey: string): boolean {
 
 function deliverGithubStar(clientKey: string, ask: GithubStarAsk): void {
 	try {
-		if (publishGithubStar?.(clientKey, ask) !== true) return;
+		if (publishGithubStar?.ask(clientKey, ask) !== true) return;
 	} catch {
 		return;
 	}

@@ -651,15 +651,24 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 	});
 
-	setGithubStarPublisher((clientKey, ask) => {
+	const githubStarSocket = (clientKey: string) => {
 		const ws = sockets.get(clientKey);
-		if (!ws || ws.data.protocolVersion < GITHUB_STAR_PROTOCOL_VERSION) return false;
-		try {
-			return ws.send(JSON.stringify({ channel: WS_CHANNELS.feedbackGithubStar, data: ask })) !== 0;
-		} catch {
-			ws.close();
-			return false;
-		}
+		return ws && ws.data.protocolVersion >= GITHUB_STAR_PROTOCOL_VERSION ? ws : undefined;
+	};
+	setGithubStarPublisher({
+		canAsk: (clientKey) => githubStarSocket(clientKey) !== undefined,
+		ask: (clientKey, ask) => {
+			const ws = githubStarSocket(clientKey);
+			if (!ws) return false;
+			try {
+				return (
+					ws.send(JSON.stringify({ channel: WS_CHANNELS.feedbackGithubStar, data: ask })) !== 0
+				);
+			} catch {
+				ws.close();
+				return false;
+			}
+		},
 	});
 
 	setSkillAdmissionResolver((workspaceId) => {
