@@ -120,12 +120,7 @@ function neighbour(selection: Selection, direction: "backward" | "forward"): str
 	return text;
 }
 
-/**
- * Contenteditable regions take each update as one `insertText` over the span the previous one left,
- * so the editor's own input handling and undo run. The span is re-measured from the caret after every
- * insert, because the browser may rewrite neighbouring spaces (`&nbsp;`) and shift fixed offsets.
- * Without focus there is no selection to write through, so a final after a blur keeps the last partial.
- */
+/** Contenteditable regions take each update as one `insertText` over the previous one's span. */
 function editableWriter(host: HTMLElement): FieldWriter {
 	const selection = window.getSelection();
 	let span: Range | null = null;

@@ -51,12 +51,7 @@ function layerContainer(field: HTMLElement): HTMLElement | null {
 	return field.closest<HTMLElement>('[role="dialog"], [data-radix-popper-content-wrapper]');
 }
 
-/**
- * Keeps the mic inside the field's right edge: at the bottom corner of a tall field, centred on a
- * single line. Inside a dialog or popover it is positioned against that container, including its
- * scroll offset (they are positioned and often transformed, which would skew a fixed element);
- * elsewhere against the viewport. It re-places on resize and scroll, never on an idle frame loop.
- */
+/** Keeps the mic inside the field's right edge, against `container` when given, else the viewport. */
 function followField(
 	mic: HTMLElement,
 	field: HTMLElement,

@@ -34,10 +34,7 @@ export function useDictatingElement(): HTMLElement | null {
 	return useSyncExternalStore(dictation.subscribe, dictatingElement);
 }
 
-/**
- * Dictates into `element`: locks it, writes every update through its field writer, and stops on Esc,
- * on blur, or when the element leaves the page.
- */
+/** Dictates into `element`: locks it, writes through its field writer, and stops on Esc or blur. */
 export function startDictation(element: HTMLElement): void {
 	const owner = ownerOf(element);
 	element.focus();

@@ -238,8 +238,8 @@ link your installation to the website visit that brought you here — only where
 website or no consent is required — and that link expires after 30 days.
 
 Voice input never sends your audio or transcripts anywhere: both stay on the computer running ThinkRail. Its one
-download comes straight from NVIDIA's GitHub release and Hugging Face repository, and a voice failure's error report
-carries only its error code, like any other.
+download comes straight from NVIDIA's GitHub release and Hugging Face repository, and a voice failure is reported like
+any other error: its type, code and location, never its message.
 
 Feedback surveys are separate from usage analytics. ThinkRail may invite you to a short survey, and you can
 also open it from **Settings → Feedback**. Your answers, including anything you type, are sent to the
