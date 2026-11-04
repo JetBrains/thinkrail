@@ -663,9 +663,11 @@ content's own height.
   `createFileEditor` applies it and the theme refresh defines it. The host's `code.editorTheme` resolves the
   Pierre color table chat uses, plus the complete editor/widget/menu/input colour map, to hex; Monaco defines
   its theme from that. Token scopes are Pierre's token names. A swap redefines Monaco and
-  selects `EDITOR_THEME`, with no new tokenizing. The curated language catalog is shared with chat aliases;
-  missing Monaco language ids are registered with their file associations, then each catalog id gets a
-  `registerTokensProviderFactory` entry. The normal/high-contrast base comes from manifest
+  selects `EDITOR_THEME`, with no new tokenizing. `support/editorLanguages.ts` merges the curated catalog with
+  the `@pierre/diffs` extension table, so editor and diffs share one table and catalog files keep their language.
+  Monaco matches file names without case, so the table keys `BUCK`, `BUILD`, `PACKAGE` and `WORKSPACE` stay out: otherwise a file named `build` opens as Python. A real Bazel or Buck file is plain in the editor and Python in diffs.
+  Missing Monaco language ids are registered with their file associations, then each id gets a
+  `registerTokensProviderFactory` entry. A table language Pierre has no lexer for stays plain. The normal/high-contrast base comes from manifest
   appearance/contrast metadata—never a known id—and remains inherited for specialist colours outside the
   explicit map. Reads pass through `lib.cssColorToHex`; an absent or unparseable token is
   omitted so the selected base palette wins rather than crashing the panel. Pierre diffs emit `--code-*`
@@ -675,7 +677,7 @@ content's own height.
   editor selection-foreground override when provided.
 - **Monaco tokenizes through one Pierre `LiveTokenizer` per model.** `pierreTokens.ts` is Monaco-free apart from
   types. `@pierre/highlights` compiles its WASM on import, so the factory's `create()` imports it when Monaco
-  first meets a model of a catalog language, never during a preload. On a 5,000-line TS file the first open's
+  first meets a model of a registered language, never during a preload. On a 5,000-line TS file the first open's
   largest long task is 72 ms in Chromium, about the same as tokenizing with a grammar engine, and all lines are
   ready in 212 ms (Chromium) and 337 ms (WebKit). Each tokenizer holds its own WASM instance: about 0.5 MB for
   1,000 lines. Only the visible file of each editor group has a model (split groups show up to four), and a
@@ -696,8 +698,8 @@ content's own height.
   retried load succeeds. `create()` never throws, and nothing suspends on the highlighter: a Suspense fallback
   is held for at least 300 ms. Without `WebAssembly` (WebKit Lockdown Mode) the import fails and files stay
   plain. Lines of 20,000 characters or more stay plain. A model over 20 MB or 300,000 lines builds no tokenizer:
-  Monaco never colors one (limits read through `getValueLength` and `getLineCount`). Only languages in the catalog
-  are registered, although Pierre has more lexers.
+  Monaco never colors one (limits read through `getValueLength` and `getLineCount`). `.v` opens as Verilog: Coq
+  shares the extension and has no way in by file name. `.m` opens as Objective-C, not the table's Wolfram.
 - **The code view preloads before the first open.** Loading the Monaco chunk and initializing Monaco only
   after the tab mounted, behind a fallback held for at least 300 ms, made the
   first open about 420 ms at 1x CPU (840 ms at 4x) against 65 ms for a warm one. With the app's idle

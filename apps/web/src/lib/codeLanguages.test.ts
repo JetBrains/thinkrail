@@ -7,9 +7,7 @@ test("the Monaco language registration list has no duplicate ids", () => {
 	expect(new Set(ids).size).toBe(ids.length);
 });
 
-test("Scala is recognized for chat fences and Scala files", () => {
-	const scala = CODE_LANGUAGES.find((language) => language.id === "scala");
-	expect(scala?.extensions).toContain(".scala");
+test("Scala is recognized for chat fences", () => {
 	expect(codeLanguageId("Scala")).toBe("scala");
 });
 

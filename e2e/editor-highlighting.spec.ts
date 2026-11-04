@@ -8,6 +8,9 @@ const FILES = {
 	"config.yaml": "name: sample\ncount: 3\n",
 	"fence.md": "# Fence\n\n```sh\necho fenced\n```\n",
 	"notes.zzz": "export plain words\n",
+	"main.zig": "pub fn main() void {}\n",
+	"mix.ex": "defmodule Sample do\nend\n",
+	"report.mdx": 'import { Chart } from "./Chart";\n',
 };
 
 function visibleTokens(page: Page) {
@@ -23,7 +26,7 @@ async function openFile(page: Page, name: string, text: string) {
 	await expect(page.locator('[data-testid="editor-pane"]:visible')).toContainText(text);
 }
 
-test("Monaco colours each catalog language on first use and leaves unknown files plain", async ({
+test("Monaco colours catalog and other Pierre languages on first use and leaves unknown files plain", async ({
 	page,
 }) => {
 	const pageErrors: string[] = [];
@@ -41,10 +44,21 @@ test("Monaco colours each catalog language on first use and leaves unknown files
 	await openFile(page, "config.yaml", "count");
 	await expect(visibleTokens(page).filter({ hasText: /^name$/ })).not.toHaveClass(/\bmtk1\b/);
 
+	await page.getByTestId("file-node").filter({ hasText: "report.mdx" }).dblclick();
+	await page.getByTestId("view-toggle-code").click();
+	await expect(visibleCode(page)).toContainText("Chart");
+	await expect(visibleTokens(page).filter({ hasText: /^import/ })).not.toHaveClass(/\bmtk1\b/);
+
 	await page.getByTestId("file-node").filter({ hasText: "fence.md" }).dblclick();
 	await page.getByTestId("view-toggle-code").click();
 	await expect(visibleCode(page)).toContainText("echo fenced");
 	await expect(visibleTokens(page).filter({ hasText: /^echo/ })).not.toHaveClass(/\bmtk1\b/);
+
+	await openFile(page, "main.zig", "pub fn");
+	await expect(visibleTokens(page).filter({ hasText: /pub/ })).not.toHaveClass(/\bmtk1\b/);
+
+	await openFile(page, "mix.ex", "defmodule");
+	await expect(visibleTokens(page).filter({ hasText: /defmodule/ })).not.toHaveClass(/\bmtk1\b/);
 
 	await openFile(page, "notes.zzz", "plain words");
 	await expect(visibleTokens(page).filter({ hasText: "export plain words" })).toHaveClass(
