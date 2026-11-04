@@ -561,7 +561,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `interrupted` before it serves, installs the creation publisher (`workspace.creationChanged` /
   `workspace.creationRemoved`, subscribed only by v103+ sockets) and the **handoff**
   `workspaceCreationHandoff`: when a checkout finishes it provisions the initial terminal and, when the create
-  carried a kickoff, starts the chat through `startChat` (the kickoff's model/effort, else the saved defaults)
+  carried a kickoff, waits for the workspace watcher (`ensureWatch`, the readiness the browser's own chat start
+  awaits) and starts the chat through `startChat` (the kickoff's model/effort, else the saved defaults)
   and sends its text/images through `sendUserMessage` under the `clientKey` that started (or last resumed) the
   creation, so the chat runs even with no window open. A prompt rejected inside the ack window comes back as
   `kickoffError` beside the `sessionId`; an empty kickoff starts the chat without a prompt, so the start

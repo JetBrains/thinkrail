@@ -386,6 +386,7 @@ export const workspaceCreationHandoff: CreationHandoff = async (workspace, kicko
 	creationClients.delete(workspace.id);
 	provisionInitialTerminal(workspace);
 	if (!kickoff) return {};
+	await ensureWatch(workspace.id, { prewarm: false });
 	const { sessionId } = await startChat(workspace.id, {
 		...(kickoff.model ? { model: kickoff.model } : {}),
 		...(kickoff.thinkingLevel ? { thinkingLevel: kickoff.thinkingLevel } : {}),
