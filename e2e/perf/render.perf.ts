@@ -18,10 +18,9 @@ import { longMarkdown } from "./longMarkdown";
 import {
 	assertProfilingReady,
 	attachRenderProfiler,
+	type Counters,
 	detachRenderProfiler,
 	MARKDOWN_SUBTREE,
-	type MainThreadCost,
-	type RenderProfile,
 	readRenderProfile,
 	recordScenarioRun,
 	resetRenderProfile,
@@ -49,20 +48,6 @@ const SUBTREE_ROOTS = {
 
 function pause(ms: number) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-interface Counters {
-	[name: string]: number;
-}
-
-export interface ScenarioRun {
-	scenario: string;
-	run: number;
-	cpuRate: number;
-	wallMs: number;
-	counters: Counters;
-	mainThread: MainThreadCost;
-	profile: RenderProfile;
 }
 
 async function nextFrames(page: Page, count = 2): Promise<void> {

@@ -219,12 +219,17 @@ const IMAGE_A = solidPng(40, 30, 40);
 const IMAGE_B = solidPng(80, 20, 200);
 const IMAGE_C = solidPng(16, 64, 120);
 
-test("the image view follows zoom and on-disk edits", async ({ page }) => {
+async function openCommittedImage(page: Page, path: string): Promise<string> {
 	await openFixtureProject(page);
 	const { worktreePath } = await createWorkspaceViaDialog(page);
-	commitFile(worktreePath, "fresh.png", IMAGE_A, "add fresh.png");
+	commitFile(worktreePath, path, IMAGE_A, `add ${path}`);
 	await revealWorkbenchTool(page, "files");
-	await page.getByTestId("file-node").filter({ hasText: "fresh.png" }).dblclick();
+	await page.getByTestId("file-node").filter({ hasText: path }).dblclick();
+	return worktreePath;
+}
+
+test("the image view follows zoom and on-disk edits", async ({ page }) => {
+	const worktreePath = await openCommittedImage(page, "fresh.png");
 	const view = page.getByTestId("image-view");
 	await expect(view).toContainText("40 × 30");
 
@@ -313,6 +318,12 @@ const releaseMounted = (page: Page) =>
 		}
 	});
 
+const releaseUntilSize = (page: Page, surface: Locator, size: string) =>
+	expect(async () => {
+		await releaseMounted(page);
+		await expect(surface).toContainText(size, { timeout: 500 });
+	}).toPass();
+
 const heldCount = (page: Page) => page.evaluate(() => window.__heldImages?.length ?? 0);
 
 async function releaseImage(page: Page, index: number, src?: string) {
@@ -330,46 +341,30 @@ async function releaseImage(page: Page, index: number, src?: string) {
 
 test("the image view hides the old size while a replacement loads", async ({ page }) => {
 	await page.addInitScript(holdImageSources);
-	await openFixtureProject(page);
-	const { worktreePath } = await createWorkspaceViaDialog(page);
-	commitFile(worktreePath, "swap.png", IMAGE_A, "add swap.png");
-	await revealWorkbenchTool(page, "files");
-	await page.getByTestId("file-node").filter({ hasText: "swap.png" }).dblclick();
+	const worktreePath = await openCommittedImage(page, "swap.png");
 	const view = page.getByTestId("image-view");
-	await expect(async () => {
-		await releaseMounted(page);
-		await expect(view).toContainText("40 × 30", { timeout: 500 });
-	}).toPass();
+	await releaseUntilSize(page, view, "40 × 30");
 
 	const held = await heldCount(page);
 	writeFileSync(join(worktreePath, "swap.png"), IMAGE_B);
 	await expect.poll(() => heldCount(page)).toBeGreaterThan(held);
 	await nextFrames(page);
 	await expect(view).not.toContainText("40 × 30");
-	await expect(async () => {
-		await releaseMounted(page);
-		await expect(view).toContainText("80 × 20", { timeout: 500 });
-	}).toPass();
+	await releaseUntilSize(page, view, "80 × 20");
 });
 
 test("the image diff hides the old size while a replacement loads", async ({ page }) => {
 	await page.addInitScript(holdImageSources);
 	const worktree = await openChange(page, "swap.png", IMAGE_A, IMAGE_B);
 	const diff = page.getByTestId("image-diff");
-	await expect(async () => {
-		await releaseMounted(page);
-		await expect(diff).toContainText("80 × 20", { timeout: 500 });
-	}).toPass();
+	await releaseUntilSize(page, diff, "80 × 20");
 
 	const held = await heldCount(page);
 	writeFileSync(join(worktree, "swap.png"), IMAGE_C);
 	await expect.poll(() => heldCount(page)).toBeGreaterThan(held);
 	await nextFrames(page);
 	await expect(diff).not.toContainText("80 × 20");
-	await expect(async () => {
-		await releaseMounted(page);
-		await expect(diff).toContainText("16 × 64", { timeout: 500 });
-	}).toPass();
+	await releaseUntilSize(page, diff, "16 × 64");
 });
 
 for (const stale of ["load", "error"] as const) {
@@ -377,11 +372,7 @@ for (const stale of ["load", "error"] as const) {
 		page,
 	}) => {
 		await page.addInitScript(holdImageSources);
-		await openFixtureProject(page);
-		const { worktreePath } = await createWorkspaceViaDialog(page);
-		commitFile(worktreePath, "late.png", IMAGE_A, "add late.png");
-		await revealWorkbenchTool(page, "files");
-		await page.getByTestId("file-node").filter({ hasText: "late.png" }).dblclick();
+		const worktreePath = await openCommittedImage(page, "late.png");
 		const view = page.getByTestId("image-view");
 		await expect(view).toBeVisible();
 		await expect.poll(() => heldCount(page)).toBeGreaterThan(0);
@@ -462,10 +453,7 @@ test("history search highlights the current query and follows the selection", as
 test("the Resources inspector moves its selection and detail with the arrow keys", async ({
 	page,
 }) => {
-	await page.addInitScript(stubResourceWire, {
-		subagents: 5,
-		createdAt: "2026-01-01T00:00:00.000Z",
-	});
+	await page.addInitScript(stubResourceWire, 5);
 	await openFixtureProject(page);
 	seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
 		name: "Resource freshness",

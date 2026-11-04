@@ -9,8 +9,7 @@ import {
 	runE2eProcess,
 	signalExitCode,
 } from "../processRunner";
-import type { ScenarioRun } from "./render.perf";
-import { type ComponentCost, MARKDOWN_SUBTREE } from "./renderProfiler";
+import { type ComponentCost, MARKDOWN_SUBTREE, type ScenarioRun } from "./renderProfiler";
 import { isScenarioName, SCENARIO_NAMES } from "./scenarios";
 
 const bun = process.execPath;

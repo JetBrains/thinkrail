@@ -120,7 +120,7 @@ export async function driveInteraction(spec: InteractionSpec): Promise<string> {
 
 	await find('[data-testid="connection-status"][data-status="connected"]');
 	for (const step of spec.setup) await run(step);
-	await new Promise((resolve) => setTimeout(resolve, 1_000));
+	if (spec.setup.length > 0) await new Promise((resolve) => setTimeout(resolve, 1_000));
 	await nextFrames();
 	const profiler = window.__thinkrailRenderProfiler;
 	if (!profiler) throw new Error("render profiler is not installed");
@@ -129,15 +129,10 @@ export async function driveInteraction(spec: InteractionSpec): Promise<string> {
 	for (const step of spec.measured) await run(step);
 	await nextFrames();
 	const wallMs = performance.now() - startedAt;
-	return JSON.stringify({ wallMs, isolated: crossOriginIsolated, profile: profiler.snapshot() });
+	return JSON.stringify({ wallMs, profile: profiler.snapshot() });
 }
 
-export interface StubbedResources {
-	subagents: number;
-	createdAt: string;
-}
-
-export function stubResourceWire({ subagents, createdAt }: StubbedResources): void {
+export function stubResourceWire(subagents: number): void {
 	const send = WebSocket.prototype.send;
 	WebSocket.prototype.send = function (data) {
 		const frame =
@@ -166,7 +161,7 @@ export function stubResourceWire({ subagents, createdAt }: StubbedResources): vo
 					parentSessionId: frame.params?.sessionId,
 					task: `Inspect module ${index}`,
 					status: "running",
-					createdAt,
+					createdAt: "2026-01-01T00:00:00.000Z",
 				})),
 			});
 			return;

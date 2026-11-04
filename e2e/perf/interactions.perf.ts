@@ -18,12 +18,13 @@ import {
 	type InteractionStep,
 	stubResourceWire,
 } from "./interactionDriver";
-import type { ScenarioRun } from "./render.perf";
 import {
+	assertProfilingReady,
 	attachRenderProfiler,
 	detachRenderProfiler,
 	installRenderProfiler,
 	recordScenarioRun,
+	type ScenarioRun,
 	startMainThreadProbe,
 } from "./renderProfiler";
 
@@ -32,7 +33,7 @@ const ENGINES = (process.env.THINKRAIL_PERF_ENGINES ?? "chromium").split(",");
 const SELECTED = process.env.THINKRAIL_PERF_INTERACTIONS?.split(",") ?? [];
 const CPU_RATE = Number(process.env.THINKRAIL_PERF_CPU ?? 1);
 const WK_TIMEOUT_MS = 170_000;
-const RESOURCE_STUB = { subagents: 60, createdAt: "2026-01-01T00:00:00.000Z" };
+const RESOURCE_ROWS = 60;
 
 const testid = (id: string) => `[data-testid="${id}"]`;
 const openUncommittedChange = (path: string): InteractionStep[] => [
@@ -226,9 +227,7 @@ function runInWebView(binary: string, url: string, interaction: Interaction): st
 	const dir = mkdtempSync(join(tmpdir(), "thinkrail-wk-"));
 	const init = [
 		`(${installRenderProfiler.toString()})({});`,
-		...(interaction.resources
-			? [`(${stubResourceWire.toString()})(${JSON.stringify(RESOURCE_STUB)});`]
-			: []),
+		...(interaction.resources ? [`(${stubResourceWire.toString()})(${RESOURCE_ROWS});`] : []),
 	].join("\n");
 	const { setup, measured } = interaction;
 	const drive = `(${driveInteraction.toString()})(${JSON.stringify({ setup, measured })})`;
@@ -254,16 +253,7 @@ function runInWebView(binary: string, url: string, interaction: Interaction): st
 	}
 }
 
-interface DrivenRun extends Pick<ScenarioRun, "wallMs" | "profile"> {
-	isolated: boolean;
-}
-
-function drivenRun(raw: string): DrivenRun {
-	const run = JSON.parse(raw) as DrivenRun;
-	if (run.profile.commits === 0 || run.profile.totalMs <= 0)
-		throw new Error("no profiled commits: the host is not serving the profiling build");
-	return run;
-}
+type DrivenRun = Pick<ScenarioRun, "wallMs" | "profile">;
 
 const NO_MAIN_THREAD = { taskMs: 0, scriptMs: 0, layoutMs: 0, styleMs: 0, heapDeltaMb: 0 };
 let harness: string | undefined;
@@ -288,15 +278,15 @@ for (let run = 1; run <= RUNS; run += 1) {
 				const url = page.url();
 				const { setup, measured } = interaction;
 				if (engine === "chromium") {
-					if (interaction.resources) await page.addInitScript(stubResourceWire, RESOURCE_STUB);
+					if (interaction.resources) await page.addInitScript(stubResourceWire, RESOURCE_ROWS);
 					await page.reload();
 					await page.evaluate(driveInteraction, { setup, measured: [] });
 					const stop = await startMainThreadProbe(page, CPU_RATE);
-					const { isolated, ...result } = drivenRun(
+					const result = JSON.parse(
 						await page.evaluate(driveInteraction, { setup: [], measured }),
-					);
-					if (!isolated) throw new Error("page is not cross-origin isolated");
+					) as DrivenRun;
 					const mainThread = await stop();
+					await assertProfilingReady(page);
 					recordScenarioRun({
 						scenario: name,
 						run,
@@ -304,20 +294,22 @@ for (let run = 1; run <= RUNS; run += 1) {
 						counters: {},
 						mainThread,
 						...result,
-					} satisfies ScenarioRun);
+					});
 					return;
 				}
 				await page.goto("about:blank");
 				harness ??= wkHarness();
-				const { isolated, ...result } = drivenRun(runInWebView(harness, url, interaction));
+				const result = JSON.parse(runInWebView(harness, url, interaction)) as DrivenRun;
+				if (result.profile.commits === 0 || result.profile.totalMs <= 0)
+					throw new Error("no profiled commits: the host is not serving the profiling build");
 				recordScenarioRun({
 					scenario: `${name}@wkwebview`,
 					run,
 					cpuRate: 1,
-					counters: { isolated: isolated ? 1 : 0 },
+					counters: {},
 					mainThread: NO_MAIN_THREAD,
 					...result,
-				} satisfies ScenarioRun);
+				});
 			});
 		}
 	}

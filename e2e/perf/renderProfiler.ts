@@ -309,9 +309,23 @@ export async function detachRenderProfiler(page: Page): Promise<void> {
 	await page.unrouteAll({ behavior: "ignoreErrors" });
 }
 
+export interface Counters {
+	[name: string]: number;
+}
+
+export interface ScenarioRun {
+	scenario: string;
+	run: number;
+	cpuRate: number;
+	wallMs: number;
+	counters: Counters;
+	mainThread: MainThreadCost;
+	profile: RenderProfile;
+}
+
 const OUT_DIR = process.env.THINKRAIL_PERF_OUT ?? join(process.cwd(), "test-results", "perf-runs");
 
-export function recordScenarioRun<T extends { scenario: string; run: number }>(result: T): void {
+export function recordScenarioRun(result: ScenarioRun): void {
 	mkdirSync(OUT_DIR, { recursive: true });
 	writeFileSync(join(OUT_DIR, `${result.scenario}-${result.run}.json`), JSON.stringify(result));
 }

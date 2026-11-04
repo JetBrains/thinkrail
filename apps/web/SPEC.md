@@ -140,7 +140,7 @@ coverage of every file/diff renderer.
 
 - Ref access in render: `useVirtualRows` (reads the visible-anchor ref while adjusting state during render;
   state would cost a render per scroll), `useWorkspaceRead`, `useBranchStatus`,
-  `useTemplateCommandPicker`, `MonacoEditor`, `AskUserQuestionCard`,
+  `useTemplateCommandPicker`, `AskUserQuestionCard`,
   `useScrollViewState`, Pierre diff/file's `useThreadAnnotations`, `PierreDiffSurface`, `PierreFileSurface`,
   `PdfView`, `usePdfDocument`.
 - Other: `useLiveTabContent` (`??=`).
