@@ -1,5 +1,9 @@
 {
 	"app.errorBoundary.label": "アプリ",
+	"app.githubStar.action": "GitHub で見る",
+	"app.githubStar.actionStars": "GitHub で見る | ☆ {{stars}}",
+	"app.githubStar.message": "GitHub リポジトリをご覧ください。スターはほかの人が見つける助けになり、Issue は改善の助けになります。",
+	"app.githubStar.title": "ThinkRail は役に立っていますか？ご意見はありますか？",
 	"app.transport.mcpUnavailable": "ホストが再接続するまで MCP サーバーは利用できません。",
 	"app.transport.requestFailed": "リクエストに失敗しました",
 	"app.transport.requestFailedFallback": "リクエストに失敗しました。",

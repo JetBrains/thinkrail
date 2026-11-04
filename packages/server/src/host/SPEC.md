@@ -607,7 +607,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   delivery failure or final client reap after the reconnect grace releases the claim, while a transient
   reconnect retains and re-delivers it after `server.welcome`. A host restart has no claim to re-deliver, and
   the welcome clears the frontend's stale popup projection. Popup `feedback.respond` actions are ordinary
-  replay-safe requests and never alter the Settings link.
+  replay-safe requests and never alter the Settings link. A second injected publisher (`canAsk` + `ask`, both
+  true only for a v103+ socket) sends the one-time star ask (`GithubStarAsk`, the star count the feedback module
+  read) as addressed `feedback.githubStar` to the same client key.
 - **Survey submission:** after `initializeAnalytics` the host configures the feedback survey source from
   analytics' `surveyEndpoint()`, so unkeyed, CI and test runs never fetch and `THINKRAIL_POSTHOG_HOST`
   applies. A source dev host fetches only when `THINKRAIL_DEV_POSTHOG=1` and `THINKRAIL_POSTHOG_PROJECT_KEY`
@@ -697,8 +699,8 @@ enabled/confirmed choice before entering analytics attribution.
   (published from auth's Central/runtime invalidation seam and on a successful provider login) + **`host.updateAvailable`** (published for each
   retained CLI-update lifecycle replacement) use push channels. Every
   **broadcast** push channel a client should hear must be `ws.subscribe`d in the WS
-  `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Four channels are deliberately
-  **not** subscribed and not broadcast: `feedback.interview`, `terminal.data`, `terminal.exit`, and
+  `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Five channels are deliberately
+  **not** subscribed and not broadcast: `feedback.interview`, `feedback.githubStar`, `terminal.data`, `terminal.exit`, and
   `terminal.detached` are sent with `ws.send` to one addressed client. Adding an addressed channel means
   wiring a publisher, not a subscription.
 - **Terminal backpressure never trusts the `drain` event alone.** A backpressured `ws.send` latches the

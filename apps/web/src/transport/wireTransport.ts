@@ -37,6 +37,7 @@ import {
 } from "@thinkrail/contracts";
 import { currentLocale } from "@thinkrail/locales/react";
 import { isConnectedGeneration, useAppStore } from "../store";
+import { githubStarToast } from "./githubStar";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 import { WsTransport } from "./transport";
 
@@ -390,6 +391,10 @@ export function initTransport(): WsTransport {
 		const state = useAppStore.getState();
 		if ((state.protocolVersion ?? 0) < FEEDBACK_SURVEY_PROTOCOL_VERSION) return;
 		state.showSurveyInvitation();
+	});
+
+	transport.subscribe(WS_CHANNELS.feedbackGithubStar, (data) => {
+		useAppStore.getState().pushToast(githubStarToast(data));
 	});
 
 	transport.subscribe(WS_CHANNELS.workspaceCreated, (data) => {
