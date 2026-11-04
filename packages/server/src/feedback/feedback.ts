@@ -1,7 +1,8 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { SurveyInvitationResponse } from "@thinkrail/contracts";
+import type { GithubStarAsk, SurveyInvitationResponse } from "@thinkrail/contracts";
 import { dataDir } from "../persistence";
+import { fetchGithubStars } from "./githubStars";
 import {
 	currentInAppSurvey,
 	refreshInAppSurvey,
@@ -21,6 +22,7 @@ interface FeedbackState {
 }
 
 type FeedbackPublisher = (clientKey: string) => boolean;
+type GithubStarPublisher = (clientKey: string, ask: GithubStarAsk) => boolean;
 
 const INVITATION_INTERVAL = 10;
 const FIRST_INVITATION_AT = 20;
@@ -38,7 +40,8 @@ const DEFAULT_STATE: FeedbackState = {
 let cachedState: FeedbackState | null = null;
 let claimedClient: string | null = null;
 let publishInvitation: FeedbackPublisher | null = null;
-let publishGithubStar: FeedbackPublisher | null = null;
+let publishGithubStar: GithubStarPublisher | null = null;
+let githubStarAskInFlight = false;
 
 function isNonNegativeSafeInteger(value: unknown): value is number {
 	return Number.isSafeInteger(value) && (value as number) >= 0;
@@ -139,7 +142,7 @@ export function setFeedbackPublisher(publisher: FeedbackPublisher | null): void 
 	if (publisher === null) claimedClient = null;
 }
 
-export function setGithubStarPublisher(publisher: FeedbackPublisher | null): void {
+export function setGithubStarPublisher(publisher: GithubStarPublisher | null): void {
 	publishGithubStar = publisher;
 }
 
@@ -174,18 +177,33 @@ export function recordAcceptedMessage(clientKey: string): void {
 }
 
 function askForGithubStar(clientKey: string): boolean {
+	if (githubStarAskInFlight) return true;
 	const current = loadState();
-	if (current.githubStarAsked || current.acceptedMessages < GITHUB_STAR_ASK_AT) return false;
-	try {
-		if (publishGithubStar?.(clientKey) !== true) return false;
-	} catch {
+	if (
+		publishGithubStar === null ||
+		current.githubStarAsked ||
+		current.acceptedMessages < GITHUB_STAR_ASK_AT
+	) {
 		return false;
+	}
+	githubStarAskInFlight = true;
+	void fetchGithubStars().then((stars) => {
+		githubStarAskInFlight = false;
+		deliverGithubStar(clientKey, { stars });
+	});
+	return true;
+}
+
+function deliverGithubStar(clientKey: string, ask: GithubStarAsk): void {
+	try {
+		if (publishGithubStar?.(clientKey, ask) !== true) return;
+	} catch {
+		return;
 	}
 	cachedState = { ...loadState(), githubStarAsked: true };
 	try {
 		writeState(cachedState);
 	} catch {}
-	return true;
 }
 
 function maybeOffer(clientKey: string): void {
@@ -259,4 +277,5 @@ export function resetFeedbackForTests(): void {
 	claimedClient = null;
 	publishInvitation = null;
 	publishGithubStar = null;
+	githubStarAskInFlight = false;
 }

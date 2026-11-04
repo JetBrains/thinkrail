@@ -651,11 +651,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 	});
 
-	setGithubStarPublisher((clientKey) => {
+	setGithubStarPublisher((clientKey, ask) => {
 		const ws = sockets.get(clientKey);
 		if (!ws || ws.data.protocolVersion < GITHUB_STAR_PROTOCOL_VERSION) return false;
 		try {
-			return ws.send(JSON.stringify({ channel: WS_CHANNELS.feedbackGithubStar, data: {} })) !== 0;
+			return ws.send(JSON.stringify({ channel: WS_CHANNELS.feedbackGithubStar, data: ask })) !== 0;
 		} catch {
 			ws.close();
 			return false;

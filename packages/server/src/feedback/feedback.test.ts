@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { GithubStarAsk } from "@thinkrail/contracts";
 import {
 	completeSurvey,
 	recordAcceptedMessage,
@@ -13,6 +14,7 @@ import {
 	setGithubStarPublisher,
 	surveyIsCompleted,
 } from "./feedback";
+import { setGithubStarsFetchForTests } from "./githubStars";
 import {
 	configureSurveySource,
 	refreshInAppSurvey,
@@ -74,6 +76,7 @@ beforeEach(async () => {
 
 afterEach(() => {
 	resetFeedbackForTests();
+	setGithubStarsFetchForTests(null);
 	resetSurveyForTests();
 	rmSync(directory, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
@@ -481,54 +484,105 @@ test("a malformed invitation time resets the file to the defaults", () => {
 	expect(stored()).toEqual(feedback({ acceptedMessages: 1 }));
 });
 
-test("the GitHub star ask goes once, on the tenth accepted message, to the sending client", () => {
-	const asked: string[] = [];
-	setGithubStarPublisher((clientKey) => {
-		asked.push(clientKey);
+function githubStars(stars: number | null, calls: { count: number } = { count: 0 }): typeof fetch {
+	return (async () => {
+		calls.count += 1;
+		return stars === null
+			? new Response("rate limited", { status: 403 })
+			: new Response(JSON.stringify({ stargazers_count: stars }));
+	}) as unknown as typeof fetch;
+}
+
+test("the GitHub star ask goes once, on the tenth accepted message, with the star count", async () => {
+	const asked: Array<[string, GithubStarAsk]> = [];
+	const calls = { count: 0 };
+	setGithubStarsFetchForTests(githubStars(7124, calls));
+	setGithubStarPublisher((clientKey, ask) => {
+		asked.push([clientKey, ask]);
 		return true;
 	});
 	for (let count = 0; count < 9; count += 1) recordAcceptedMessage("client-a");
-	expect(asked).toEqual([]);
+	expect(calls.count).toBe(0);
 	recordAcceptedMessage("client-b");
-	expect(asked).toEqual(["client-b"]);
+	recordAcceptedMessage("client-a");
+	await Bun.sleep(0);
+	expect(asked).toEqual([["client-b", { stars: 7124 }]]);
+	expect(calls.count).toBe(1);
 	for (let count = 0; count < 20; count += 1) recordAcceptedMessage("client-a");
-	expect(asked).toEqual(["client-b"]);
+	await Bun.sleep(0);
+	expect(asked).toHaveLength(1);
 	expect(stored().githubStarAsked).toBe(true);
 
 	resetFeedbackForTests();
-	setGithubStarPublisher((clientKey) => {
-		asked.push(clientKey);
+	setGithubStarsFetchForTests(githubStars(7124, calls));
+	setGithubStarPublisher((clientKey, ask) => {
+		asked.push([clientKey, ask]);
 		return true;
 	});
 	recordAcceptedMessage("client-a");
-	expect(asked).toEqual(["client-b"]);
+	await Bun.sleep(0);
+	expect(asked).toHaveLength(1);
+	expect(calls.count).toBe(1);
 });
 
-test("an undelivered GitHub star ask retries on the next message", () => {
+test("an unreachable GitHub still asks, without a count", async () => {
+	const asked: GithubStarAsk[] = [];
+	setGithubStarsFetchForTests((async () => {
+		throw new Error("offline");
+	}) as unknown as typeof fetch);
+	setGithubStarPublisher((_clientKey, ask) => {
+		asked.push(ask);
+		return true;
+	});
+	for (let count = 0; count < 10; count += 1) recordAcceptedMessage("client-a");
+	await Bun.sleep(0);
+	expect(asked).toEqual([{ stars: null }]);
+
+	resetFeedbackForTests();
+	writeFileSync(
+		join(directory, "feedback.json"),
+		JSON.stringify(feedback({ acceptedMessages: 9 })),
+	);
+	setGithubStarsFetchForTests(githubStars(null));
+	setGithubStarPublisher((_clientKey, ask) => {
+		asked.push(ask);
+		return true;
+	});
+	recordAcceptedMessage("client-a");
+	await Bun.sleep(0);
+	expect(asked).toEqual([{ stars: null }, { stars: null }]);
+});
+
+test("an undelivered GitHub star ask retries on the next message", async () => {
 	const asked: string[] = [];
+	setGithubStarsFetchForTests(githubStars(7124));
 	setGithubStarPublisher(() => false);
 	for (let count = 0; count < 10; count += 1) recordAcceptedMessage("client-a");
+	await Bun.sleep(0);
 	expect(stored().githubStarAsked).toBe(false);
 	setGithubStarPublisher(() => {
 		throw new Error("socket closed");
 	});
 	recordAcceptedMessage("client-a");
+	await Bun.sleep(0);
 	setGithubStarPublisher((clientKey) => {
 		asked.push(clientKey);
 		return true;
 	});
 	recordAcceptedMessage("client-a");
+	await Bun.sleep(0);
 	expect(asked).toEqual(["client-a"]);
 	expect(stored()).toEqual(feedback({ acceptedMessages: 12, githubStarAsked: true }));
 });
 
-test("an install already past ten messages is asked once, and a due survey waits one message", () => {
+test("an install already past ten messages is asked once, and a due survey waits one message", async () => {
 	writeFileSync(
 		join(directory, "feedback.json"),
 		JSON.stringify({ acceptedMessages: 30, nextInvitationAt: 10, dismissed: false }),
 	);
 	resetFeedbackForTests();
 	const sent: string[] = [];
+	setGithubStarsFetchForTests(githubStars(7124));
 	setGithubStarPublisher(() => {
 		sent.push("star");
 		return true;
@@ -538,6 +592,8 @@ test("an install already past ten messages is asked once, and a due survey waits
 		return true;
 	});
 	recordAcceptedMessage("client-a");
+	recordAcceptedMessage("client-a");
+	await Bun.sleep(0);
 	expect(sent).toEqual(["star"]);
 	recordAcceptedMessage("client-a");
 	expect(sent).toEqual(["star", "survey"]);
