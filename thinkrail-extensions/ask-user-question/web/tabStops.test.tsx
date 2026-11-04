@@ -50,20 +50,20 @@ const body = (question: AskUserQuestionItem, qState: QState) =>
 			state={qState}
 			pageKeys
 			discussAvailable
+			primaryEnabled
+			onFocusPrimary={() => false}
 			onSelect={noop}
 			onToggleMulti={noop}
 			onCursor={noop}
-			onConfirmChoice={noop}
 			onCustomText={noop}
 			onToggleCustom={noop}
-			onConfirmCustom={noop}
+			onReopenCustom={noop}
 			onOpenNote={noop}
 			onCloseNote={noop}
 			onNote={noop}
 			onToggleDiscuss={noop}
 			onDiscussReason={noop}
 			onDiscussText={noop}
-			onConfirmDiscuss={noop}
 			onTogglePreview={noop}
 		/>,
 	);

@@ -64,26 +64,49 @@ export function DiscussToggle({
 export function DiscussPanel({
 	reason,
 	text,
+	panelRef,
 	fieldRef,
 	onReason,
 	onText,
-	onConfirm,
-	onLeave,
+	onDone,
+	onReopen,
+	onUp,
+	onDown,
 }: {
 	reason: AskUserQuestionDiscussReason | null;
 	text: string;
+	panelRef: (node: HTMLFieldSetElement | null) => void;
 	fieldRef: (node: HTMLTextAreaElement | null) => void;
 	onReason: (reason: AskUserQuestionDiscussReason) => void;
 	onText: (text: string) => void;
-	onConfirm: () => void;
-	onLeave: () => void;
+	onDone: () => void;
+	onReopen: () => void;
+	onUp: () => void;
+	onDown: () => void;
 }) {
 	const t = useT();
 	const tid = useTestId();
 	return (
-		<div
+		<fieldset
+			ref={panelRef}
+			aria-label={t("tools.ask.discussing")}
+			tabIndex={-1}
 			data-testid={tid("ask-discuss-panel")}
-			className="flex flex-col gap-8 rounded-md border border-feedback-info-muted bg-feedback-info-subtle p-12"
+			onKeyDown={(event) => {
+				if (event.target !== event.currentTarget) return;
+				if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;
+				if (event.key === "Enter" || event.key === " ") {
+					event.preventDefault();
+					onReopen();
+				} else if (event.key === "ArrowUp") {
+					event.preventDefault();
+					onUp();
+				} else if (event.key === "ArrowDown") {
+					event.preventDefault();
+					onDown();
+				}
+			}}
+			className="flex min-w-0 flex-col gap-8 rounded-md border border-feedback-info-muted bg-feedback-info-subtle p-12 outline-none focus-visible:ring-2 focus-visible:ring-primary"
 		>
 			<div className="flex items-start gap-8 tr-text-ui text-text-default">
 				<ChatLine aria-hidden="true" className="mt-2 size-16 shrink-0 text-feedback-info" />
@@ -123,26 +146,22 @@ export function DiscussPanel({
 				data-ask-discuss-text=""
 				data-ask-page-focus="true"
 				aria-label={t("tools.ask.discussTextLabel")}
-				aria-keyshortcuts="Enter Shift+Enter Escape"
+				aria-keyshortcuts="Enter Escape Shift+Enter Meta+Enter Control+Enter"
 				value={text}
 				placeholder={t("tools.ask.discussPlaceholder")}
 				onChange={(event) => onText(event.target.value)}
 				onKeyDown={(event) => {
 					if (isImeComposing(event.nativeEvent)) return;
-					if (event.key === "Enter" && !event.shiftKey) {
-						event.preventDefault();
-						onConfirm();
-						return;
-					}
-					if (event.key === "Escape" && !event.shiftKey) {
+					const modified = event.shiftKey || event.altKey || event.ctrlKey || event.metaKey;
+					if ((event.key === "Enter" || event.key === "Escape") && !modified) {
 						event.preventDefault();
 						event.stopPropagation();
-						onLeave();
+						onDone();
 					}
 				}}
 				className="bg-container-elevated-bg"
 			/>
 			<div className="text-text-muted tr-text-metadata">{t("tools.ask.discussHint")}</div>
-		</div>
+		</fieldset>
 	);
 }

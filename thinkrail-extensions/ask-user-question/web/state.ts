@@ -142,11 +142,6 @@ export function hasPreview(target: {
 	return !!target.previewFile || !!target.preview?.trim();
 }
 
-export function answerSupportsNote(answer: AskUserQuestionAnswer): boolean {
-	if (answer.kind === "option") return true;
-	return answer.kind === "multi" && (answer.selected?.length ?? 0) > 0;
-}
-
 export interface RecapState {
 	selectedLabels: string[];
 	customAnswer: string | null;
@@ -167,18 +162,36 @@ export function deriveRecapState(answer: AskUserQuestionAnswer | undefined): Rec
 export type ChoiceKeyAction =
 	| { type: "move"; index: number }
 	| { type: "select" }
-	| { type: "confirm" }
+	| { type: "note" }
+	| { type: "discuss" }
 	| { type: "none" };
 
-export function choiceKeyAction(key: string, index: number, count: number): ChoiceKeyAction {
+export function choiceKeyAction(
+	key: string,
+	index: number,
+	count: number,
+	otherIndex: number,
+): ChoiceKeyAction {
 	if (count <= 0) return { type: "none" };
 	if (key === "ArrowDown") return { type: "move", index: (index + 1) % count };
 	if (key === "ArrowUp") return { type: "move", index: (index - 1 + count) % count };
 	if (key === "Home") return { type: "move", index: 0 };
-	if (key === "End") return { type: "move", index: count - 1 };
-	if (key === " " || key === "Spacebar") return { type: "select" };
-	if (key === "Enter") return { type: "confirm" };
+	if (key === "End") return { type: "move", index: otherIndex };
+	if (key === "Enter") return { type: "select" };
+	if (key === " " || key === "Spacebar") return { type: "note" };
+	if (key === "d") return { type: "discuss" };
 	return { type: "none" };
+}
+
+export function paneOptionIndex(
+	question: AskUserQuestionItem,
+	state: QState,
+	cursor: number,
+): number | null {
+	if (cursor >= 0 && cursor < question.options.length) return cursor;
+	if (state.customActive) return null;
+	const picked = question.options.findIndex((option) => option.label === state.option);
+	return picked >= 0 ? picked : null;
 }
 
 export function customTextPatch(text: string): Partial<QState> {
@@ -230,27 +243,35 @@ export function toggleMultiPatch(state: QState, label: string, cursor: number): 
 	};
 }
 
-export type ConfirmSource = { kind: "choice"; label: string; cursor: number } | { kind: "custom" };
-
-export function confirmStateFor(
+export function openNotePatch(
 	state: QState,
 	multiSelect: boolean,
-	source: ConfirmSource,
-): QState {
-	if (source.kind === "custom") return state;
-	return multiSelect
-		? { ...state, cursor: source.cursor }
-		: { ...state, ...selectOptionPatch(state, source.label, source.cursor) };
+	label: string,
+	cursor: number,
+): Partial<QState> {
+	if (!multiSelect) return { ...selectOptionPatch(state, label, cursor), noteFor: label };
+	return {
+		cursor,
+		noteFor: label,
+		...(state.multi.includes(label) ? {} : { multi: [...state.multi, label] }),
+		...(state.discuss ? { discuss: false } : {}),
+	};
 }
 
-export function noteKeyAction(
-	key: string,
-	shiftKey: boolean,
+export function fieldKeyAction(
+	event: {
+		key: string;
+		shiftKey: boolean;
+		altKey: boolean;
+		ctrlKey: boolean;
+		metaKey: boolean;
+	},
 	isComposing: boolean,
 ): "finish" | "consume" | "none" {
-	if (key === "Escape") return isComposing ? "consume" : "finish";
+	if (event.key === "Escape") return isComposing ? "consume" : "finish";
 	if (isComposing) return "none";
-	if (key === "Enter" && !shiftKey) return "finish";
+	const modified = event.shiftKey || event.altKey || event.ctrlKey || event.metaKey;
+	if (event.key === "Enter" && !modified) return "finish";
 	return "none";
 }
 

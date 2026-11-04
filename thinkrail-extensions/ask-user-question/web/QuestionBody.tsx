@@ -9,111 +9,124 @@ import { type LiftKey, NoteSlot, OptionRow, OtherRow } from "./controls";
 import { DiscussPanel, DiscussToggle } from "./discuss";
 import { useTestId } from "./ghost";
 import { OptionPreviewPane, PreviewGlyph, previewSource, QuestionPreview } from "./previews";
-import { choiceKeyAction, hasPreview, type QState, splitRecommended } from "./state";
+import {
+	choiceKeyAction,
+	hasPreview,
+	paneOptionIndex,
+	type QState,
+	splitRecommended,
+} from "./state";
 
 export interface QuestionBodyProps {
 	question: AskUserQuestionItem;
 	state: QState;
 	pageKeys: boolean;
 	discussAvailable: boolean;
+	primaryEnabled: boolean;
+	onFocusPrimary: () => boolean;
 	onOpenFile?: ((path: string) => void) | undefined;
 	onSelect: (label: string, cursor: number) => void;
 	onToggleMulti: (label: string, cursor: number) => void;
 	onCursor: (cursor: number) => void;
-	onConfirmChoice: (label: string, cursor: number) => void;
 	onCustomText: (text: string) => void;
 	onToggleCustom: () => void;
-	onConfirmCustom: () => void;
+	onReopenCustom: () => void;
 	onOpenNote: (label: string, cursor: number) => void;
 	onCloseNote: () => void;
 	onNote: (label: string, text: string) => void;
 	onToggleDiscuss: () => void;
 	onDiscussReason: (reason: AskUserQuestionDiscussReason) => void;
 	onDiscussText: (text: string) => void;
-	onConfirmDiscuss: () => void;
 	onTogglePreview: () => void;
 }
 
-type PendingFocus = "note" | "discuss" | null;
+const focusOf = (element: HTMLElement | null | undefined) =>
+	element?.focus({ preventScroll: true });
 
 export function QuestionBody({
 	question,
 	state,
 	pageKeys,
 	discussAvailable,
+	primaryEnabled,
+	onFocusPrimary,
 	onOpenFile,
 	onSelect,
 	onToggleMulti,
 	onCursor,
-	onConfirmChoice,
 	onCustomText,
 	onToggleCustom,
-	onConfirmCustom,
+	onReopenCustom,
 	onOpenNote,
 	onCloseNote,
 	onNote,
 	onToggleDiscuss,
 	onDiscussReason,
 	onDiscussText,
-	onConfirmDiscuss,
 	onTogglePreview,
 }: QuestionBodyProps) {
 	const tid = useTestId();
 	const choiceRefs = useRef<Array<HTMLElement | null>>([]);
+	const noteButtonRefs = useRef(new Map<string, HTMLElement>());
 	const noteRef = useRef<HTMLElement | null>(null);
+	const otherRowRef = useRef<HTMLElement | null>(null);
 	const discussRef = useRef<HTMLElement | null>(null);
+	const discussPanelRef = useRef<HTMLElement | null>(null);
 	const discussToggleRef = useRef<HTMLButtonElement | null>(null);
 	const paneScrollRef = useRef<HTMLElement | null>(null);
-	const pendingFocus = useRef<PendingFocus>(null);
+	const pendingFocus = useRef<(() => HTMLElement | null | undefined) | null>(null);
 	const otherIndex = question.options.length;
-	const choiceCount = otherIndex + 1;
+	const choiceCount = otherIndex + (primaryEnabled ? 2 : 1);
 	const cursor = Math.min(Math.max(state.cursor, 0), Math.max(otherIndex - 1, 0));
 	const discussing = discussAvailable && state.discuss;
 	const customOwnsPageFocus =
 		!discussing && state.customActive && (!question.multiSelect || state.multi.length === 0);
 	const questionPreview = previewSource(question);
 	const paneShown = !question.multiSelect && question.options.some(hasPreview);
-	const paneOption = !paneShown
-		? null
-		: state.customActive
-			? null
-			: (question.options.find((option) => option.label === state.option) ??
-				question.options[cursor] ??
-				null);
+	const paneIndex = paneShown ? paneOptionIndex(question, state, state.cursor) : null;
+	const paneOption = paneIndex == null ? null : (question.options[paneIndex] ?? null);
 
 	useEffect(() => {
-		const target = pendingFocus.current;
-		if (!target) return;
-		const element = target === "note" ? noteRef.current : discussRef.current;
+		const resolve = pendingFocus.current;
+		if (!resolve) return;
+		const element = resolve();
 		if (!element) return;
 		pendingFocus.current = null;
-		element.focus({ preventScroll: true });
+		focusOf(element);
 	});
 
+	const moveTo = (index: number) => {
+		if (index > otherIndex) {
+			if (onFocusPrimary()) return;
+			index = 0;
+		}
+		onCursor(index);
+		focusOf(choiceRefs.current[index]);
+	};
+
+	const move = (key: string, from: number) => {
+		const action = choiceKeyAction(key, from, choiceCount, otherIndex);
+		if (action.type === "move") moveTo(action.index);
+	};
+
 	const openNote = (label: string, index: number) => {
-		pendingFocus.current = "note";
+		pendingFocus.current = () => noteRef.current;
 		onOpenNote(label, index);
 	};
 
-	const toggleDiscuss = () => {
-		pendingFocus.current = state.discuss ? null : "discuss";
-		onToggleDiscuss();
-	};
-
-	const focusChoice = (index: number) => {
-		if (index < otherIndex) onCursor(index);
-		choiceRefs.current[index]?.focus({ preventScroll: true });
-	};
-
-	const moveCursor = (index: number) => {
-		focusChoice(index);
-		const target = question.options[index];
-		if (!question.multiSelect && target) onSelect(target.label, index);
-	};
-
-	const finishNote = (index: number) => {
+	const finishNote = (label: string) => {
+		pendingFocus.current = () => noteButtonRefs.current.get(label);
 		onCloseNote();
-		requestAnimationFrame(() => choiceRefs.current[index]?.focus({ preventScroll: true }));
+	};
+
+	const openDiscuss = () => {
+		pendingFocus.current = () => discussRef.current;
+		if (!state.discuss) onToggleDiscuss();
+	};
+
+	const toggleDiscuss = () => {
+		pendingFocus.current = state.discuss ? null : () => discussRef.current;
+		onToggleDiscuss();
 	};
 
 	const onChoiceKeyDown = (
@@ -128,14 +141,15 @@ export function QuestionBody({
 			pane.scrollBy({ top: (event.key === "PageDown" ? 0.9 : -0.9) * pane.clientHeight });
 			return;
 		}
-		const action = choiceKeyAction(event.key, index, choiceCount);
-		if (action.type === "none") return;
+		const action = choiceKeyAction(event.key, index, choiceCount, otherIndex);
+		if (action.type === "none" || (action.type === "discuss" && !discussAvailable)) return;
 		event.preventDefault();
-		if (action.type === "move") moveCursor(action.index);
+		if (action.type === "move") moveTo(action.index);
 		else if (action.type === "select") {
 			if (question.multiSelect) onToggleMulti(label, index);
 			else onSelect(label, index);
-		} else if (action.type === "confirm") onConfirmChoice(label, index);
+		} else if (action.type === "note") openNote(label, index);
+		else openDiscuss();
 	};
 
 	return (
@@ -163,13 +177,18 @@ export function QuestionBody({
 				<DiscussPanel
 					reason={state.discussReason}
 					text={state.discussText}
+					panelRef={(node) => {
+						discussPanelRef.current = node;
+					}}
 					fieldRef={(node) => {
 						discussRef.current = node;
 					}}
 					onReason={onDiscussReason}
 					onText={onDiscussText}
-					onConfirm={onConfirmDiscuss}
-					onLeave={() => discussToggleRef.current?.focus({ preventScroll: true })}
+					onDone={() => focusOf(discussPanelRef.current)}
+					onReopen={() => focusOf(discussRef.current)}
+					onUp={() => focusOf(discussToggleRef.current)}
+					onDown={() => moveTo(cursor)}
 				/>
 			) : null}
 			{questionPreview ? (
@@ -216,6 +235,7 @@ export function QuestionBody({
 										multi={!!question.multiSelect}
 										pageKeys={pageKeys}
 										previewKeys={paneShown}
+										discussKey={discussAvailable}
 										glyph={source ? <PreviewGlyph source={source} /> : null}
 										onFocus={() => onCursor(index)}
 										onKeyDown={(event) => onChoiceKeyDown(event, option.label, index)}
@@ -233,9 +253,14 @@ export function QuestionBody({
 										fieldRef={(node) => {
 											noteRef.current = node;
 										}}
+										buttonRef={(node) => {
+											if (node) noteButtonRefs.current.set(option.label, node);
+											else noteButtonRefs.current.delete(option.label);
+										}}
 										onOpen={() => openNote(option.label, index)}
 										onNote={(text) => onNote(option.label, text)}
-										onFinish={() => finishNote(index)}
+										onFinish={() => finishNote(option.label)}
+										onArrow={(key: LiftKey) => moveTo(key === "ArrowUp" ? index : index + 1)}
 									/>
 								</div>
 							);
@@ -243,6 +268,9 @@ export function QuestionBody({
 					</div>
 
 					<OtherRow
+						rowRef={(node) => {
+							otherRowRef.current = node;
+						}}
 						fieldRef={(node) => {
 							choiceRefs.current[otherIndex] = node;
 						}}
@@ -250,13 +278,15 @@ export function QuestionBody({
 						active={state.customActive}
 						text={state.customText}
 						pageFocus={!discussing && (question.options.length === 0 || customOwnsPageFocus)}
+						onFocusField={() => onCursor(otherIndex)}
 						onToggle={onToggleCustom}
 						onText={onCustomText}
-						onMove={(key: LiftKey) => {
-							const action = choiceKeyAction(key, otherIndex, choiceCount);
-							if (action.type === "move") moveCursor(action.index);
+						onMove={(key: LiftKey) => move(key, otherIndex)}
+						onDone={() => focusOf(otherRowRef.current)}
+						onReopen={() => {
+							onReopenCustom();
+							focusOf(choiceRefs.current[otherIndex]);
 						}}
-						onConfirm={onConfirmCustom}
 					/>
 				</div>
 

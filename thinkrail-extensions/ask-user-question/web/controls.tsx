@@ -8,13 +8,13 @@ import {
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
-import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { isApplePlatform, isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import type { KeyboardEvent, ReactNode } from "react";
 import { useId } from "react";
 import { AutosizeField } from "./AutosizeField";
 import { useTestId } from "./ghost";
-import { noteKeyAction, readRecommendation } from "./state";
+import { fieldKeyAction, readRecommendation } from "./state";
 
 export type LiftKey = "ArrowUp" | "ArrowDown";
 
@@ -142,13 +142,13 @@ export function TabChip({
 export function ModeHint({
 	multiSelect,
 	multipleQuestions,
-	noteAvailable,
 	previewKeys,
+	discussKey,
 }: {
 	multiSelect: boolean;
 	multipleQuestions: boolean;
-	noteAvailable: boolean;
 	previewKeys: boolean;
+	discussKey: boolean;
 }) {
 	const t = useT();
 	return (
@@ -161,13 +161,16 @@ export function ModeHint({
 			) : (
 				<CircleDot className="size-14 shrink-0" />
 			)}
-			<span>{multiSelect ? t("tools.ask.hintMoveMulti") : t("tools.ask.hintMoveSingle")}</span>
-			<span>{multiSelect ? t("tools.ask.hintSpaceToggle") : t("tools.ask.hintSpaceSelect")}</span>
-			<span>{t("tools.ask.hintEnter")}</span>
-			<span>{noteAvailable ? t("tools.ask.hintTabNote") : t("tools.ask.hintTab")}</span>
+			<span>{t("tools.ask.hintMove")}</span>
+			<span>{multiSelect ? t("tools.ask.hintEnterToggle") : t("tools.ask.hintEnterSelect")}</span>
+			<span>{t("tools.ask.hintSpaceNote")}</span>
+			{discussKey ? <span>{t("tools.ask.hintDiscussKey")}</span> : null}
+			<span>
+				{isApplePlatform() ? t("tools.ask.hintSubmitApple") : t("tools.ask.hintSubmitOther")}
+			</span>
+			{multipleQuestions ? <span>{t("tools.ask.hintQuestions")}</span> : null}
 			{previewKeys ? <span>{t("tools.ask.hintPreviewScroll")}</span> : null}
 			<span>{t("tools.ask.hintSkip")}</span>
-			{multipleQuestions ? <span>{t("tools.ask.hintQuestions")}</span> : null}
 		</span>
 	);
 }
@@ -183,6 +186,7 @@ export function OptionRow({
 	multi,
 	pageKeys,
 	previewKeys,
+	discussKey,
 	glyph,
 	onFocus,
 	onKeyDown,
@@ -198,6 +202,7 @@ export function OptionRow({
 	multi: boolean;
 	pageKeys: boolean;
 	previewKeys: boolean;
+	discussKey: boolean;
 	glyph?: ReactNode;
 	onFocus: () => void;
 	onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
@@ -213,7 +218,7 @@ export function OptionRow({
 			{...(multi
 				? { role: "checkbox", "aria-checked": selected }
 				: { role: "radio", "aria-checked": selected })}
-			aria-keyshortcuts={`ArrowUp ArrowDown Home End Space Enter${pageKeys ? " ArrowLeft ArrowRight" : ""}${previewKeys ? " PageUp PageDown" : ""} Shift+Escape`}
+			aria-keyshortcuts={`ArrowUp ArrowDown Home End Enter Space${discussKey ? " D" : ""}${pageKeys ? " ArrowLeft ArrowRight" : ""}${previewKeys ? " PageUp PageDown" : ""} Meta+Enter Control+Enter Shift+Escape`}
 			tabIndex={cursor ? 0 : -1}
 			data-testid={tid("ask-option")}
 			data-ask-option=""
@@ -264,23 +269,33 @@ export function NoteSlot({
 	editing,
 	note,
 	fieldRef,
+	buttonRef,
 	onOpen,
 	onNote,
 	onFinish,
+	onArrow,
 }: {
 	optionText: string;
 	selected: boolean;
 	editing: boolean;
 	note: string;
 	fieldRef: (node: HTMLTextAreaElement | null) => void;
+	buttonRef: (node: HTMLButtonElement | null) => void;
 	onOpen: () => void;
 	onNote: (text: string) => void;
 	onFinish: () => void;
+	onArrow: (key: LiftKey) => void;
 }) {
 	const t = useT();
 	const tid = useTestId();
 	const noteId = useId();
 	const saved = note.trim();
+	const onButtonKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+		if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;
+		if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+		event.preventDefault();
+		onArrow(event.key);
+	};
 	return (
 		<div
 			className={cn("flex min-h-24 flex-col px-12 pt-2", selected && (editing || saved) && "pb-8")}
@@ -302,11 +317,7 @@ export function NoteSlot({
 								liftWhenCaretStays(event.currentTarget, lift, onFinish);
 								return;
 							}
-							const action = noteKeyAction(
-								event.key,
-								event.shiftKey,
-								isImeComposing(event.nativeEvent),
-							);
+							const action = fieldKeyAction(event, isImeComposing(event.nativeEvent));
 							if (action === "none") return;
 							event.stopPropagation();
 							if (action === "consume") return;
@@ -317,12 +328,14 @@ export function NoteSlot({
 					/>
 				) : saved ? (
 					<button
+						ref={buttonRef}
 						type="button"
 						tabIndex={0}
 						data-testid={tid("ask-note-toggle")}
 						aria-label={t("tools.ask.editNoteLabel", { option: optionText })}
 						aria-describedby={noteId}
 						onClick={onOpen}
+						onKeyDown={onButtonKeyDown}
 						className="flex min-w-0 flex-1 items-start gap-4 rounded-sm px-4 py-2 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 					>
 						<Pencil aria-hidden="true" className="mt-2 size-14 shrink-0 text-text-muted" />
@@ -336,6 +349,7 @@ export function NoteSlot({
 					</button>
 				) : (
 					<Button
+						ref={buttonRef}
 						variant="ghost"
 						size="s"
 						iconLeft={Pencil}
@@ -343,6 +357,7 @@ export function NoteSlot({
 						data-testid={tid("ask-note-toggle")}
 						aria-label={t("tools.ask.addNoteLabel", { option: optionText })}
 						onClick={onOpen}
+						onKeyDown={onButtonKeyDown}
 					>
 						{t("tools.ask.addNote")}
 					</Button>
@@ -353,37 +368,56 @@ export function NoteSlot({
 }
 
 export function OtherRow({
+	rowRef,
 	fieldRef,
 	multi,
 	active,
 	text,
 	pageFocus,
+	onFocusField,
 	onToggle,
 	onText,
 	onMove,
-	onConfirm,
+	onDone,
+	onReopen,
 }: {
+	rowRef: (node: HTMLLabelElement | null) => void;
 	fieldRef: (node: HTMLTextAreaElement | null) => void;
 	multi: boolean;
 	active: boolean;
 	text: string;
 	pageFocus: boolean;
+	onFocusField: () => void;
 	onToggle: () => void;
 	onText: (text: string) => void;
 	onMove: (key: LiftKey) => void;
-	onConfirm: () => void;
+	onDone: () => void;
+	onReopen: () => void;
 }) {
 	const t = useT();
 	const tid = useTestId();
 	const inputId = useId();
 	return (
 		<label
+			ref={rowRef}
 			htmlFor={inputId}
+			tabIndex={-1}
 			data-testid={tid("ask-custom-row")}
 			data-ask-custom-row=""
 			data-selected={active}
+			onKeyDown={(event) => {
+				if (event.target !== event.currentTarget) return;
+				if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;
+				if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+					event.preventDefault();
+					onMove(event.key);
+				} else if (event.key === "Enter" || event.key === " ") {
+					event.preventDefault();
+					onReopen();
+				}
+			}}
 			className={cn(
-				"flex cursor-text items-start gap-8 rounded-sm border px-12 py-8 transition-colors focus-within:border-control-border-active focus-within:ring-2 focus-within:ring-primary",
+				"flex cursor-text items-start gap-8 rounded-sm border px-12 py-8 outline-none transition-colors focus-within:border-control-border-active focus-within:ring-2 focus-within:ring-primary",
 				active
 					? "border-primary bg-primary-subtle"
 					: "border-border-default hover:bg-control-bg-hovered",
@@ -418,9 +452,10 @@ export function OtherRow({
 					data-testid={tid("ask-custom")}
 					data-ask-page-focus={pageFocus || undefined}
 					aria-label={t("tools.ask.otherLabel")}
-					aria-keyshortcuts="ArrowUp ArrowDown Enter Shift+Enter Shift+Escape"
+					aria-keyshortcuts="ArrowUp ArrowDown Enter Escape Shift+Enter Meta+Enter Control+Enter Shift+Escape"
 					value={text}
 					placeholder={t("tools.ask.otherPlaceholder")}
+					onFocus={onFocusField}
 					onChange={(event) => onText(event.target.value)}
 					onKeyDown={(event) => {
 						const lift = liftOutKey(event);
@@ -429,9 +464,10 @@ export function OtherRow({
 							return;
 						}
 						if (isImeComposing(event.nativeEvent)) return;
-						if (event.key === "Enter" && !event.shiftKey) {
+						const modified = event.shiftKey || event.altKey || event.ctrlKey || event.metaKey;
+						if ((event.key === "Enter" || event.key === "Escape") && !modified) {
 							event.preventDefault();
-							onConfirm();
+							onDone();
 						}
 					}}
 				/>

@@ -3,7 +3,7 @@ import { useT } from "@thinkrail/locales/react";
 import type { AskUserQuestionResult } from "@thinkrail/pi-ask-user-question/core";
 import { AttentionLine } from "@thinkrail/ui/attention-line";
 import { Button } from "@thinkrail/ui/button";
-import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { hasPlatformModifier, isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	type KeyboardEvent,
@@ -16,6 +16,7 @@ import {
 } from "react";
 import { ModeHint, TabChip } from "./controls";
 import {
+	activeQuestionPage,
 	createQuestionAttentionClaim,
 	currentQuestionPageStart,
 	focusCurrentQuestionPage,
@@ -37,15 +38,14 @@ import {
 	WaitingCard,
 } from "./record";
 import {
-	answerSupportsNote,
 	type ChoiceNudge,
-	confirmStateFor,
 	customTextPatch,
 	deriveAnswers,
 	discussReasonPatch,
 	emptyQState,
 	hasPreview,
 	nudgeShowsOnPage,
+	openNotePatch,
 	parseQuestions,
 	type QState,
 	questionPageForKey,
@@ -121,6 +121,7 @@ export function AskUserQuestionCard({
 	const revealElement = interaction?.revealElement;
 	const cancelAutomaticReveal = interaction?.cancelAutomaticReveal;
 	const cardRef = useRef<HTMLElement>(null);
+	const primaryRef = useRef<HTMLButtonElement>(null);
 	const questions = useMemo(() => parseQuestions(args), [args]);
 	const resolvedResult =
 		readAskUserQuestionResult(interaction?.state.response) ?? readAskUserQuestionResult(result);
@@ -313,18 +314,37 @@ export function AskUserQuestionCard({
 	const canSubmit = canRespond && answers.length > 0;
 	const nudgeVisible = nudgeShowsOnPage(nudge, idx, answeredIndices.has(idx));
 
-	const confirmQuestion = (page: number, nextState: QState) => {
-		const nextStates = { ...states, [page]: nextState };
-		const nextAnswers = deriveAnswers(questions, nextStates);
-		if (!nextAnswers.some((answer) => answer.questionIndex === page)) {
+	const submitRound = () => {
+		if (!canRespond) return;
+		if (answers.length === 0) {
 			nudgeSeq.current += 1;
-			setNudge({ question: page, seq: nudgeSeq.current });
+			setNudge({ question: idx, seq: nudgeSeq.current });
 			return;
 		}
 		setNudge(null);
-		setStates(nextStates);
-		if (page < lastPage) setTab(page + 1);
-		else reply({ answers: nextAnswers, cancelled: false });
+		reply({ answers, cancelled: false });
+	};
+
+	const focusPrimary = () => {
+		const button = primaryRef.current;
+		if (!button || button.disabled) return false;
+		button.focus({ preventScroll: true });
+		return true;
+	};
+
+	const onPrimaryKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+		if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;
+		if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+		const card = cardRef.current;
+		if (!card) return;
+		const page = activeQuestionPage(card);
+		const target =
+			event.key === "ArrowUp"
+				? page.querySelector<HTMLElement>("[data-ask-custom-row] textarea")
+				: page.querySelector<HTMLElement>("[data-ask-option]");
+		if (!target) return;
+		event.preventDefault();
+		target.focus({ preventScroll: true });
 	};
 
 	const onCardKeyDown = (event: KeyboardEvent<HTMLElement>) => {
@@ -341,6 +361,17 @@ export function AskUserQuestionCard({
 			event.preventDefault();
 			event.stopPropagation();
 			reply({ answers: [], cancelled: true });
+			return;
+		}
+		if (
+			event.key === "Enter" &&
+			hasPlatformModifier(event.nativeEvent) &&
+			!event.altKey &&
+			!event.shiftKey
+		) {
+			event.preventDefault();
+			event.stopPropagation();
+			submitRound();
 			return;
 		}
 		if (
@@ -365,7 +396,7 @@ export function AskUserQuestionCard({
 				data-testid="ask-user-question"
 				data-tone={canRespond ? "active" : "idle"}
 				aria-label={t("tools.ask.cardLabel")}
-				aria-keyshortcuts="Shift+Escape"
+				aria-keyshortcuts="Shift+Escape Meta+Enter Control+Enter"
 				onKeyDown={onCardKeyDown}
 				className={cn(
 					"@container overflow-hidden rounded-lg border bg-clip-padding bg-container-elevated-bg",
@@ -419,6 +450,8 @@ export function AskUserQuestionCard({
 											state={pageState}
 											pageKeys={multipleQuestions}
 											discussAvailable={discussAvailable}
+											primaryEnabled={page < lastPage || canSubmit}
+											onFocusPrimary={focusPrimary}
 											onOpenFile={onOpenFile}
 											onSelect={(label, cursor) =>
 												patch(page, selectOptionPatch(pageState, label, cursor))
@@ -429,37 +462,14 @@ export function AskUserQuestionCard({
 											onCursor={(cursor) => {
 												if (cursor !== pageState.cursor) patch(page, { cursor });
 											}}
-											onConfirmChoice={(label, cursor) =>
-												confirmQuestion(
-													page,
-													confirmStateFor(pageState, !!question.multiSelect, {
-														kind: "choice",
-														label,
-														cursor,
-													}),
-												)
-											}
 											onCustomText={(text) => patch(page, customTextPatch(text))}
 											onToggleCustom={() => patch(page, toggleCustomPatch(pageState))}
-											onConfirmCustom={() =>
-												confirmQuestion(
-													page,
-													confirmStateFor(pageState, !!question.multiSelect, { kind: "custom" }),
-												)
-											}
+											onReopenCustom={() => {
+												if (pageState.customText.trim())
+													patch(page, customTextPatch(pageState.customText));
+											}}
 											onOpenNote={(label, cursor) =>
-												patch(
-													page,
-													question.multiSelect
-														? { cursor, noteFor: label, discuss: false }
-														: {
-																cursor,
-																option: label,
-																customActive: false,
-																noteFor: label,
-																discuss: false,
-															},
-												)
+												patch(page, openNotePatch(pageState, !!question.multiSelect, label, cursor))
 											}
 											onCloseNote={() => patch(page, { noteFor: null })}
 											onNote={(label, text) =>
@@ -473,7 +483,6 @@ export function AskUserQuestionCard({
 											onTogglePreview={() =>
 												patch(page, { previewExpanded: !pageState.previewExpanded })
 											}
-											onConfirmDiscuss={() => confirmQuestion(page, pageState)}
 										/>
 									</GhostPage>
 								</div>
@@ -485,8 +494,8 @@ export function AskUserQuestionCard({
 						<ModeHint
 							multiSelect={!!q.multiSelect}
 							multipleQuestions={multipleQuestions}
-							noteAvailable={answers.some((a) => a.questionIndex === idx && answerSupportsNote(a))}
 							previewKeys={!q.multiSelect && q.options.some(hasPreview)}
+							discussKey={discussAvailable}
 						/>
 						<div className="flex items-center justify-end gap-12">
 							{nudgeVisible ? (
@@ -514,10 +523,12 @@ export function AskUserQuestionCard({
 							</Button>
 							{showContinue ? (
 								<Button
+									ref={primaryRef}
 									variant="primary"
 									size="l"
 									tabIndex={0}
 									data-testid="ask-continue"
+									onKeyDown={onPrimaryKeyDown}
 									onClick={() => setTab(idx + 1)}
 									className="shrink-0"
 								>
@@ -525,10 +536,12 @@ export function AskUserQuestionCard({
 								</Button>
 							) : (
 								<Button
+									ref={primaryRef}
 									variant="primary"
 									size="l"
 									tabIndex={0}
 									data-testid="ask-submit"
+									onKeyDown={onPrimaryKeyDown}
 									onClick={() => reply({ answers, cancelled: false })}
 									disabled={!canSubmit}
 									className="shrink-0"

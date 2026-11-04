@@ -12,6 +12,7 @@ import {
 	hideAuxiliaryWorkbench,
 	openFixtureProject,
 	openPersistedChat,
+	pressPlatformShortcut,
 } from "./fixtures/app";
 import {
 	clickTranscriptControl,
@@ -201,35 +202,55 @@ test("the keyboard alone reaches every control and answers a two-page questionna
 		await openPersistedChatAfterInput(page, "keyboard round");
 		const card = page.locator('[data-testid="ask-user-question"][data-tone="active"]');
 		const options = card.getByTestId("ask-option");
+		const questionText = card.getByTestId("ask-question-text");
 		await expect(options.first()).toBeFocused();
 
 		await page.keyboard.press("ArrowDown");
 		await expect(options.nth(1)).toBeFocused();
-		await expect(options.nth(1)).toHaveAttribute("data-selected", "true");
-
-		await page.keyboard.press("Tab");
-		await expect(card.getByTestId("ask-note-toggle")).toBeFocused();
+		await expect(options.nth(1)).toHaveAttribute("data-selected", "false");
 		await page.keyboard.press("Enter");
-		await expect(card.getByTestId("ask-note")).toBeFocused();
+		await expect(options.nth(1)).toHaveAttribute("data-selected", "true");
+		await expect(options.nth(1)).toBeFocused();
+		await expect(questionText).toHaveText(KEYBOARD_ROLLOUT.question);
+
+		await page.keyboard.press("Space");
+		const note = card.getByTestId("ask-note");
+		await expect(note).toBeFocused();
 		await page.keyboard.type("Typed without a mouse.");
 		await page.keyboard.press("Enter");
+		const noteToggle = card.getByTestId("ask-note-toggle");
+		await expect(noteToggle).toBeFocused();
+		await expect(noteToggle).toContainText("Typed without a mouse.");
+		await page.keyboard.press("Enter");
+		await expect(note).toBeFocused();
+		await page.keyboard.press("Escape");
+		await expect(noteToggle).toBeFocused();
+		await page.keyboard.press("ArrowUp");
 		await expect(options.nth(1)).toBeFocused();
 
 		for (const target of ["ask-note-toggle", "ask-custom", "ask-skip", "ask-continue"]) {
 			await page.keyboard.press("Tab");
 			await expect(card.getByTestId(target)).toBeFocused();
 		}
+		await page.keyboard.press("ArrowUp");
+		await expect(card.getByTestId("ask-custom")).toBeFocused();
+		await page.keyboard.press("ArrowDown");
+		await expect(card.getByTestId("ask-continue")).toBeFocused();
 		await page.keyboard.press("Enter");
-		await expect(card.getByTestId("ask-question-text")).toHaveText(
-			"Which keyboard checks should run?",
-		);
+		await expect(questionText).toHaveText("Which keyboard checks should run?");
 		await expect(options.first()).toBeFocused();
 
-		await page.keyboard.press("Space");
-		await page.keyboard.press("ArrowDown");
-		await page.keyboard.press("Space");
-		await expect(card.locator('[data-testid="ask-option"][data-selected="true"]')).toHaveCount(2);
 		await page.keyboard.press("Enter");
+		await page.keyboard.press("ArrowDown");
+		await page.keyboard.press("Enter");
+		await expect(card.locator('[data-testid="ask-option"][data-selected="true"]')).toHaveCount(2);
+		await expect(questionText).toHaveText("Which keyboard checks should run?");
+		await page.keyboard.press("ArrowLeft");
+		await expect(questionText).toHaveText(KEYBOARD_ROLLOUT.question);
+		await page.keyboard.press("ArrowRight");
+		await expect(questionText).toHaveText("Which keyboard checks should run?");
+
+		await pressPlatformShortcut(page, "Enter");
 		await expect(
 			page.locator('[data-testid="ask-user-question"][data-tone="answered"]'),
 		).toBeVisible();
@@ -261,8 +282,11 @@ test("a click hands the keyboard to the clicked option even where clicks do not 
 		await expect(options.nth(2)).toBeFocused();
 		await expect(options.nth(2)).toHaveAttribute("data-selected", "true");
 		await page.keyboard.press("ArrowUp");
-		await expect(options.nth(1)).toHaveAttribute("data-selected", "true");
 		await expect(options.nth(1)).toBeFocused();
+		await expect(options.nth(2)).toHaveAttribute("data-selected", "true");
+		await page.keyboard.press("Enter");
+		await expect(options.nth(1)).toHaveAttribute("data-selected", "true");
+		await expect(options.nth(2)).toHaveAttribute("data-selected", "false");
 	} finally {
 		rmSync(session.path, { force: true });
 	}
@@ -585,6 +609,7 @@ test("paging and choosing never move the tabs, the question or the footer", asyn
 		await expect(card.getByTestId("ask-note-toggle")).toBeVisible();
 		expect((await box(other)).y).toBe(otherTop);
 		await page.keyboard.press("ArrowDown");
+		await page.keyboard.press("Enter");
 		await expect(card.getByTestId("ask-option").nth(1)).toHaveAttribute("data-selected", "true");
 		expect((await box(other)).y).toBe(otherTop);
 		expect(await geometry()).toEqual(first);
@@ -709,7 +734,9 @@ test("Discuss marks a question, choosing cancels it, and the round sends the dis
 	}
 });
 
-test("Discuss and Other work from the keyboard alone", async ({ page }) => {
+test("Other, notes and Discuss park on their own row, and the platform chord submits", async ({
+	page,
+}) => {
 	await openFixtureProject(page);
 	const session = seedQuestionnaire("keyboard discuss", "ask-keyboard-discuss", {
 		questions: [KEYBOARD_ROLLOUT],
@@ -721,38 +748,80 @@ test("Discuss and Other work from the keyboard alone", async ({ page }) => {
 		await openPersistedChatAfterInput(page, "keyboard discuss");
 		const card = activeAsk(page);
 		const options = card.getByTestId("ask-option");
+		const custom = card.getByTestId("ask-custom");
+		const customRow = card.getByTestId("ask-custom-row");
 		await expect(options.first()).toBeFocused();
 
 		await page.keyboard.press("End");
-		await expect(card.getByTestId("ask-custom")).toBeFocused();
+		await expect(custom).toBeFocused();
 		await page.keyboard.press("ArrowDown");
 		await expect(options.first()).toBeFocused();
 		await page.keyboard.press("ArrowUp");
-		await expect(card.getByTestId("ask-custom")).toBeFocused();
+		await expect(custom).toBeFocused();
+
 		await page.keyboard.type("draft");
+		await expect(customRow).toHaveAttribute("data-selected", "true");
+		await page.keyboard.press("Enter");
+		await expect(customRow).toBeFocused();
+		await expect(custom).toHaveValue("draft");
+		await page.keyboard.press("Enter");
+		await expect(custom).toBeFocused();
+		await page.keyboard.press("Escape");
+		await expect(customRow).toBeFocused();
 		await page.keyboard.press("ArrowDown");
-		await expect(options.first()).toBeFocused();
-		await expect(card.getByTestId("ask-custom-row")).toHaveAttribute("data-selected", "false");
+		await expect(card.getByTestId("ask-submit")).toBeFocused();
+		await page.keyboard.press("ArrowUp");
+		await expect(custom).toBeFocused();
 
 		await page.keyboard.press("Shift+Tab");
-		await expect(card.getByTestId("ask-discuss")).toBeFocused();
-		await page.keyboard.press("Enter");
-		await expect(card.getByTestId("ask-discuss-text")).toBeFocused();
+		await expect(options.last()).toBeFocused();
+		await page.keyboard.press("d");
+		const discussText = card.getByTestId("ask-discuss-text");
+		await expect(discussText).toBeFocused();
 		await page.keyboard.type("Explain the rollouts first.");
+		await page.keyboard.press("Enter");
+		const panel = card.getByTestId("ask-discuss-panel");
+		await expect(panel).toBeFocused();
+		await page.keyboard.press("Enter");
+		await expect(discussText).toBeFocused();
 		await page.keyboard.press("Escape");
-		await expect(card.getByTestId("ask-discuss")).toBeFocused();
+		await expect(panel).toBeFocused();
 		await page.keyboard.press("Tab");
 		const reason = card.getByTestId("ask-discuss-reason").first();
 		await expect(reason).toBeFocused();
 		await page.keyboard.press("Space");
 		await expect(reason).toHaveAttribute("aria-pressed", "true");
-		for (let step = 0; step < 3; step += 1) await page.keyboard.press("Tab");
-		await expect(card.getByTestId("ask-discuss-text")).toBeFocused();
-		await page.keyboard.press("Enter");
 
+		await pressPlatformShortcut(page, "Enter");
 		const record = page.locator('[data-testid="ask-user-question"][data-tone="answered"]');
 		await expect(record.getByTestId("ask-receipt-answer")).toContainText("Let’s discuss first");
 		await expect(record).toContainText("“Explain the rollouts first.”");
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
+test("the platform chord with nothing answered asks for a choice instead of sending", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const session = seedQuestionnaire("empty chord", "ask-empty-chord", {
+		questions: [KEYBOARD_ROLLOUT],
+	});
+
+	try {
+		await enterDefaultWorkspace(page);
+		await hideAuxiliaryWorkbench(page);
+		await openPersistedChatAfterInput(page, "empty chord");
+		const card = activeAsk(page);
+		await expect(card.getByTestId("ask-option").first()).toBeFocused();
+		await pressPlatformShortcut(page, "Enter");
+		await expect(card.getByTestId("ask-needs-choice")).toBeVisible();
+		await expect(card).toHaveAttribute("data-tone", "active");
+		await page.keyboard.press("Enter");
+		await expect(card.getByTestId("ask-needs-choice")).toHaveCount(0);
+		await expect(card.getByTestId("ask-shortcuts")).toContainText("Enter select");
+		await expect(card.getByTestId("ask-shortcuts")).toContainText("Space note");
 	} finally {
 		rmSync(session.path, { force: true });
 	}

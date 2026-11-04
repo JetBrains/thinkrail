@@ -9,17 +9,17 @@ import {
 	shouldFocusPageTarget,
 } from "./focus";
 import {
-	answerSupportsNote,
 	choiceKeyAction,
-	confirmStateFor,
 	customTextPatch,
 	deriveAnswer,
 	deriveAnswers,
 	deriveRecapState,
 	discussReasonPatch,
 	emptyQState,
-	noteKeyAction,
+	fieldKeyAction,
 	nudgeShowsOnPage,
+	openNotePatch,
+	paneOptionIndex,
 	parseQuestions,
 	type QState,
 	questionPageForKey,
@@ -54,25 +54,29 @@ describe("parseQuestions", () => {
 });
 
 describe("keyboard interaction", () => {
-	it("wraps authored-choice movement and supports Home/End", () => {
-		expect(choiceKeyAction("ArrowDown", 2, 3)).toEqual({ type: "move", index: 0 });
-		expect(choiceKeyAction("ArrowUp", 0, 3)).toEqual({ type: "move", index: 2 });
-		expect(choiceKeyAction("Home", 2, 3)).toEqual({ type: "move", index: 0 });
-		expect(choiceKeyAction("End", 0, 3)).toEqual({ type: "move", index: 2 });
+	it("arrows only move: they wrap through the options, Other and the primary button", () => {
+		const count = 5;
+		const other = 3;
+		expect(choiceKeyAction("ArrowDown", 2, count, other)).toEqual({ type: "move", index: 3 });
+		expect(choiceKeyAction("ArrowDown", 3, count, other)).toEqual({ type: "move", index: 4 });
+		expect(choiceKeyAction("ArrowDown", 4, count, other)).toEqual({ type: "move", index: 0 });
+		expect(choiceKeyAction("ArrowUp", 0, count, other)).toEqual({ type: "move", index: 4 });
+		expect(choiceKeyAction("Home", 3, count, other)).toEqual({ type: "move", index: 0 });
+		expect(choiceKeyAction("End", 0, count, other)).toEqual({ type: "move", index: other });
 	});
 
-	it("maps Space and Enter without consuming bare letter or number keys", () => {
-		expect(choiceKeyAction(" ", 0, 2)).toEqual({ type: "select" });
-		expect(choiceKeyAction("Enter", 0, 2)).toEqual({ type: "confirm" });
-		expect(choiceKeyAction("N", 0, 2)).toEqual({ type: "none" });
-		expect(choiceKeyAction("n", 0, 2)).toEqual({ type: "none" });
-		expect(choiceKeyAction("1", 0, 2)).toEqual({ type: "none" });
+	it("skips the primary button when it cannot be pressed", () => {
+		expect(choiceKeyAction("ArrowDown", 3, 4, 3)).toEqual({ type: "move", index: 0 });
+		expect(choiceKeyAction("ArrowUp", 0, 4, 3)).toEqual({ type: "move", index: 3 });
 	});
 
-	it("includes Other as the final wrapping choice target", () => {
-		expect(choiceKeyAction("ArrowDown", 2, 4)).toEqual({ type: "move", index: 3 });
-		expect(choiceKeyAction("End", 0, 4)).toEqual({ type: "move", index: 3 });
-		expect(choiceKeyAction("ArrowDown", 3, 4)).toEqual({ type: "move", index: 0 });
+	it("Enter picks, Space opens the note, d marks Discuss; other letters and digits stay free", () => {
+		expect(choiceKeyAction("Enter", 0, 4, 2)).toEqual({ type: "select" });
+		expect(choiceKeyAction(" ", 0, 4, 2)).toEqual({ type: "note" });
+		expect(choiceKeyAction("d", 0, 4, 2)).toEqual({ type: "discuss" });
+		expect(choiceKeyAction("D", 0, 4, 2)).toEqual({ type: "none" });
+		expect(choiceKeyAction("n", 0, 4, 2)).toEqual({ type: "none" });
+		expect(choiceKeyAction("1", 0, 4, 2)).toEqual({ type: "none" });
 	});
 
 	it("clamps Left/Right to the question pages", () => {
@@ -82,22 +86,34 @@ describe("keyboard interaction", () => {
 		expect(questionPageForKey("ArrowDown", 1, 2)).toBeNull();
 	});
 
-	it("finishes notes on Enter/Escape but preserves Shift+Enter and IME composition", () => {
-		expect(noteKeyAction("Enter", false, false)).toBe("finish");
-		expect(noteKeyAction("Escape", false, false)).toBe("finish");
-		expect(noteKeyAction("Enter", true, false)).toBe("none");
-		expect(noteKeyAction("Enter", false, true)).toBe("none");
+	const key = (
+		k: string,
+		mods: Partial<Record<"shiftKey" | "altKey" | "ctrlKey" | "metaKey", boolean>> = {},
+	) => ({
+		key: k,
+		shiftKey: false,
+		altKey: false,
+		ctrlKey: false,
+		metaKey: false,
+		...mods,
+	});
+
+	it("a field finishes on plain Enter or Escape and keeps Shift+Enter and the submit chord", () => {
+		expect(fieldKeyAction(key("Enter"), false)).toBe("finish");
+		expect(fieldKeyAction(key("Escape"), false)).toBe("finish");
+		expect(fieldKeyAction(key("Enter", { shiftKey: true }), false)).toBe("none");
+		expect(fieldKeyAction(key("Enter", { metaKey: true }), false)).toBe("none");
+		expect(fieldKeyAction(key("Enter", { ctrlKey: true }), false)).toBe("none");
 	});
 
 	it("closes the note on Shift+Escape rather than letting it skip the questionnaire", () => {
-		expect(noteKeyAction("Escape", true, false)).toBe("finish");
+		expect(fieldKeyAction(key("Escape", { shiftKey: true }), false)).toBe("finish");
 	});
 
 	it("keeps Escape inside the editor mid-composition — consumed, not finished, and never bubbled", () => {
-		expect(noteKeyAction("Escape", true, true)).toBe("consume");
-		expect(noteKeyAction("Escape", false, true)).toBe("consume");
-		expect(noteKeyAction("Enter", false, true)).toBe("none");
-		expect(noteKeyAction("Enter", true, true)).toBe("none");
+		expect(fieldKeyAction(key("Escape", { shiftKey: true }), true)).toBe("consume");
+		expect(fieldKeyAction(key("Escape"), true)).toBe("consume");
+		expect(fieldKeyAction(key("Enter"), true)).toBe("none");
 	});
 
 	it("claims attention once per tool call and mounted-chat scope", () => {
@@ -133,59 +149,45 @@ describe("keyboard interaction", () => {
 	});
 });
 
-describe("confirmStateFor", () => {
-	it("single-select: a choice-row confirm chooses the focused label and drops Other", () => {
-		expect(
-			confirmStateFor(state({ customText: "typed", customActive: true }), false, {
-				kind: "choice",
-				label: "B",
-				cursor: 1,
-			}),
-		).toMatchObject({ option: "B", customActive: false, customText: "typed", cursor: 1 });
-	});
-
-	it("multi-select: a choice-row confirm commits the set it has — Space toggles, Enter does not", () => {
-		expect(
-			confirmStateFor(state({ multi: ["A"] }), true, { kind: "choice", label: "B", cursor: 1 }),
-		).toMatchObject({ multi: ["A"], option: null, cursor: 1 });
-	});
-
-	it("Other-row confirm commits the state as it stands, never re-derived from the text", () => {
-		const leftover = state({ option: "A", customText: "stale", customActive: false });
-		expect(confirmStateFor(leftover, false, { kind: "custom" })).toEqual(leftover);
-		const excluded = state({ multi: ["A"], customText: "excluded", customActive: false });
-		expect(confirmStateFor(excluded, true, { kind: "custom" })).toEqual(excluded);
-	});
-
-	it("round-trips with deriveAnswer: the confirmed answer always matches the painted row", () => {
-		const single = q();
-		const multi = q({ multiSelect: true });
-		const afterPick = state({ option: "A", customText: "stale", customActive: false });
-		expect(
-			deriveAnswer(single, 0, confirmStateFor(afterPick, false, { kind: "custom" })),
-		).toMatchObject({ kind: "option", answer: "A" });
-		const afterUncheck = state({ multi: ["A"], customText: "excluded", customActive: false });
-		expect(deriveAnswer(multi, 0, confirmStateFor(afterUncheck, true, { kind: "custom" }))).toEqual(
-			{
-				questionIndex: 0,
-				question: "Which?",
-				kind: "multi",
-				answer: null,
-				selected: ["A"],
-			},
-		);
-		const typed = state({ ...customTextPatch("mine") });
-		expect(
-			deriveAnswer(single, 0, confirmStateFor(typed, false, { kind: "custom" })),
-		).toMatchObject({
-			kind: "custom",
-			answer: "mine",
+describe("openNotePatch", () => {
+	it("single-select: picks the option (carrying the question's note) and opens its editor", () => {
+		expect(openNotePatch(state({ option: "A", notes: { A: "why" } }), false, "B", 1)).toEqual({
+			cursor: 1,
+			option: "B",
+			customActive: false,
+			notes: { B: "why" },
+			noteFor: "B",
 		});
-		const untouched = state({ option: "A" });
-		expect(
-			deriveAnswer(single, 0, confirmStateFor(untouched, false, { kind: "custom" })),
-		).toMatchObject({ kind: "option", answer: "A" });
-		expect(deriveAnswer(multi, 0, confirmStateFor(state(), true, { kind: "custom" }))).toBeNull();
+	});
+
+	it("multi-select: checks an unchecked option, keeps a checked one, and cancels Discuss", () => {
+		expect(openNotePatch(state({ multi: ["A"] }), true, "B", 1)).toEqual({
+			cursor: 1,
+			noteFor: "B",
+			multi: ["A", "B"],
+		});
+		expect(openNotePatch(state({ multi: ["A"], discuss: true }), true, "A", 0)).toEqual({
+			cursor: 0,
+			noteFor: "A",
+			discuss: false,
+		});
+	});
+});
+
+describe("paneOptionIndex", () => {
+	const question = q({
+		options: [
+			{ label: "A", description: "a", preview: "a" },
+			{ label: "B", description: "b" },
+		],
+	});
+	it("shows the option under the cursor, whatever is picked", () => {
+		expect(paneOptionIndex(question, state({ option: "A" }), 1)).toBe(1);
+	});
+	it("on Other or the button it shows the pick, and nothing for an own answer", () => {
+		expect(paneOptionIndex(question, state({ option: "A" }), 2)).toBe(0);
+		expect(paneOptionIndex(question, state({ option: null }), 2)).toBeNull();
+		expect(paneOptionIndex(question, state({ customActive: true, option: "A" }), 2)).toBeNull();
 	});
 });
 
@@ -530,24 +532,6 @@ describe("choice patches", () => {
 	});
 });
 
-describe("answerSupportsNote", () => {
-	const base = { questionIndex: 0, question: "Which?" };
-	it("a picked single-select option can carry a note", () => {
-		expect(answerSupportsNote({ ...base, kind: "option", answer: "A" })).toBe(true);
-	});
-	it("a multi answer supports notes only once something is checked", () => {
-		expect(answerSupportsNote({ ...base, kind: "multi", answer: null, selected: ["A"] })).toBe(
-			true,
-		);
-		expect(answerSupportsNote({ ...base, kind: "multi", answer: "typed", selected: [] })).toBe(
-			false,
-		);
-	});
-	it("a custom answer has no option to hang a note on", () => {
-		expect(answerSupportsNote({ ...base, kind: "custom", answer: "mine" })).toBe(false);
-	});
-});
-
 describe("discuss first", () => {
 	it("is a distinct answer carrying the optional reason and text, never a selection", () => {
 		const s = state({
@@ -595,11 +579,5 @@ describe("discuss first", () => {
 		const marked = state({ discuss: true, customText: "own" });
 		expect(toggleCustomPatch(marked)).toEqual({ customActive: true, discuss: false });
 		expect(toggleCustomPatch({ ...marked, customActive: true })).toEqual({ customActive: false });
-	});
-
-	it("never offers a note on a discuss answer", () => {
-		expect(
-			answerSupportsNote({ questionIndex: 0, question: "Which?", kind: "discuss", answer: null }),
-		).toBe(false);
 	});
 });
