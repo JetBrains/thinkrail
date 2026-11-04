@@ -8,12 +8,13 @@ function connection(): RemoteConnection {
 	return {
 		client: {
 			attach: () => {},
-			request: async () => null,
+			request: () => Promise.reject(new Error("not used")),
 			subscribe: () => () => {},
 			close: () => {},
 		},
 		hostKey: "KEY",
 		relayUrl: "ws://relay:1",
+		relayUrls: ["ws://relay:1"],
 		projectRef: "proj",
 		close: () => {},
 	};
