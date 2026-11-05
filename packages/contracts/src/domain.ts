@@ -5,6 +5,7 @@ export interface SessionStateRecord {
 	workspaceId: string;
 	projectId: string;
 	state: SessionState;
+	title?: string;
 	firstPrompt?: string;
 }
 
@@ -1495,6 +1496,10 @@ export type AppConfigUpdate = Partial<
 };
 
 export type SurveyInvitationResponse = "postpone" | "never";
+
+export interface GithubStarAsk {
+	stars: number | null;
+}
 
 export const SURVEY_OPEN_TEXT_LIMIT = 2000;
 

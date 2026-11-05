@@ -155,6 +155,8 @@ test("agent run plan ignores ambient skip, trusts only internal build readiness,
 		"x",
 		"playwright",
 		"test",
+		"-c",
+		"e2e/playwright.config.ts",
 		"e2e/agent.live.spec.ts",
 		"--workers=1",
 	]);

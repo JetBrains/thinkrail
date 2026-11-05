@@ -1,7 +1,8 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { SurveyInvitationResponse } from "@thinkrail/contracts";
+import type { GithubStarAsk, SurveyInvitationResponse } from "@thinkrail/contracts";
 import { dataDir } from "../persistence";
+import { fetchGithubStars } from "./githubStars";
 import {
 	currentInAppSurvey,
 	refreshInAppSurvey,
@@ -17,23 +18,33 @@ interface FeedbackState {
 	submittedSurveyId: string | null;
 	submittedIteration: number | null;
 	lastInvitedAt: number | null;
+	githubStarAsked: boolean;
 }
 
 type FeedbackPublisher = (clientKey: string) => boolean;
+interface GithubStarPublisher {
+	canAsk: (clientKey: string) => boolean;
+	ask: (clientKey: string, ask: GithubStarAsk) => boolean;
+}
 
 const INVITATION_INTERVAL = 10;
+const FIRST_INVITATION_AT = 20;
+const GITHUB_STAR_ASK_AT = 10;
 const DEFAULT_STATE: FeedbackState = {
 	acceptedMessages: 0,
-	nextInvitationAt: INVITATION_INTERVAL,
+	nextInvitationAt: FIRST_INVITATION_AT,
 	dismissed: false,
 	submittedSurveyId: null,
 	submittedIteration: null,
 	lastInvitedAt: null,
+	githubStarAsked: false,
 };
 
 let cachedState: FeedbackState | null = null;
 let claimedClient: string | null = null;
 let publishInvitation: FeedbackPublisher | null = null;
+let publishGithubStar: GithubStarPublisher | null = null;
+let githubStarAskInFlight = false;
 
 function isNonNegativeSafeInteger(value: unknown): value is number {
 	return Number.isSafeInteger(value) && (value as number) >= 0;
@@ -52,8 +63,9 @@ function parseState(value: unknown): FeedbackState | null {
 	const submittedSurveyId = completionId(value);
 	const submittedIteration = completionIteration(value);
 	const lastInvitedAt = invitedAt(value);
+	const githubStarAsked = candidate.githubStarAsked ?? false;
 	if (submittedSurveyId === undefined || submittedIteration === undefined) return null;
-	if (lastInvitedAt === undefined) return null;
+	if (lastInvitedAt === undefined || typeof githubStarAsked !== "boolean") return null;
 	return {
 		acceptedMessages: candidate.acceptedMessages,
 		nextInvitationAt: candidate.nextInvitationAt,
@@ -61,6 +73,7 @@ function parseState(value: unknown): FeedbackState | null {
 		submittedSurveyId,
 		submittedIteration,
 		lastInvitedAt,
+		githubStarAsked,
 	};
 }
 
@@ -132,6 +145,10 @@ export function setFeedbackPublisher(publisher: FeedbackPublisher | null): void 
 	if (publisher === null) claimedClient = null;
 }
 
+export function setGithubStarPublisher(publisher: GithubStarPublisher | null): void {
+	publishGithubStar = publisher;
+}
+
 export function surveyIsCompleted(id: string, iteration: number): boolean {
 	const current = loadState();
 	return current.submittedSurveyId === id && current.submittedIteration === iteration;
@@ -157,8 +174,38 @@ export function recordAcceptedMessage(clientKey: string): void {
 	} catch {
 		return;
 	}
+	if (askForGithubStar(clientKey)) return;
 	if (surveyRefreshDue()) void refreshInAppSurvey().then(() => maybeOffer(clientKey));
 	else maybeOffer(clientKey);
+}
+
+function askForGithubStar(clientKey: string): boolean {
+	if (githubStarAskInFlight) return true;
+	const current = loadState();
+	if (current.githubStarAsked || current.acceptedMessages < GITHUB_STAR_ASK_AT) return false;
+	try {
+		if (publishGithubStar?.canAsk(clientKey) !== true) return false;
+	} catch {
+		return false;
+	}
+	githubStarAskInFlight = true;
+	void fetchGithubStars().then((stars) => {
+		githubStarAskInFlight = false;
+		deliverGithubStar(clientKey, { stars });
+	});
+	return true;
+}
+
+function deliverGithubStar(clientKey: string, ask: GithubStarAsk): void {
+	try {
+		if (publishGithubStar?.ask(clientKey, ask) !== true) return;
+	} catch {
+		return;
+	}
+	cachedState = { ...loadState(), githubStarAsked: true };
+	try {
+		writeState(cachedState);
+	} catch {}
 }
 
 function maybeOffer(clientKey: string): void {
@@ -231,4 +278,6 @@ export function resetFeedbackForTests(): void {
 	cachedState = null;
 	claimedClient = null;
 	publishInvitation = null;
+	publishGithubStar = null;
+	githubStarAskInFlight = false;
 }

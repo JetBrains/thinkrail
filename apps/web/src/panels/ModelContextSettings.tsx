@@ -11,6 +11,7 @@ import {
 import type { MessageKey } from "@thinkrail/locales";
 import { localeOf, type Translator, t as translate, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { toast, useAppStore } from "@/store";
@@ -233,6 +234,7 @@ function ContextLimitControl({
 									if (!skip) commitValue();
 								}}
 								onKeyDown={(event) => {
+									if (isImeComposing(event.nativeEvent)) return;
 									if (event.key === "Enter") {
 										event.preventDefault();
 										if (commitValue()) restoreFocus.current = event.currentTarget;

@@ -809,7 +809,7 @@ export default function ChatView({
 				stillRunning={stillRunning}
 				readMcpOutput={supportsMcp ? readMcpOutput : undefined}
 				openMcpSettings={supportsMcp ? openMcpSettings : undefined}
-				openProviderSettings={supportsMcp ? openProviderSettings : undefined}
+				openProviderSettings={openProviderSettings}
 				findModel={findModel}
 				resourcesOverlay={
 					resources.visible ? (

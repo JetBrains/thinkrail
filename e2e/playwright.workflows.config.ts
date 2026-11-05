@@ -1,5 +1,5 @@
 import { defineConfig } from "@playwright/test";
-import { REAL_CENTRAL_E2E_ENV } from "./e2e/fixtures/centralAgent";
+import { REAL_CENTRAL_E2E_ENV } from "./fixtures/centralAgent";
 
 delete process.env[REAL_CENTRAL_E2E_ENV];
 
@@ -13,7 +13,7 @@ delete process.env[REAL_CENTRAL_E2E_ENV];
  * Design: e2e/workflows/SPEC.md (module-workflow-tests).
  */
 export default defineConfig({
-	testDir: "./e2e/workflows",
+	testDir: "./workflows",
 	// Serial: scenarios share process-wide seams (setSessionPublisher, setSessionManagerFactory).
 	fullyParallel: false,
 	workers: 1,
@@ -22,6 +22,7 @@ export default defineConfig({
 	// Live scenarios drive a real provider through multi-step flows — well above the browser-suite 30s.
 	timeout: 240_000,
 	reporter: "list",
-	globalSetup: "./e2e/global-setup.ts",
-	globalTeardown: "./e2e/global-teardown.ts",
+	outputDir: "../test-results",
+	globalSetup: "./global-setup.ts",
+	globalTeardown: "./global-teardown.ts",
 });

@@ -78,7 +78,7 @@ describe("keyboard interaction", () => {
 		expect(choiceKeyAction("ArrowDown", 3, 4)).toEqual({ type: "move", index: 0 });
 	});
 
-	it("clamps Left/Right across questions plus review", () => {
+	it("clamps Left/Right to the question pages", () => {
 		expect(questionPageForKey("ArrowLeft", 0, 2)).toBe(0);
 		expect(questionPageForKey("ArrowRight", 0, 2)).toBe(1);
 		expect(questionPageForKey("ArrowRight", 2, 2)).toBe(2);
@@ -196,18 +196,17 @@ describe("nudgeShowsOnPage", () => {
 	const nudge = { question: 1, seq: 3 };
 
 	it("shows only on the question that raised it", () => {
-		expect(nudgeShowsOnPage(nudge, 1, false, false)).toBe(true);
-		expect(nudgeShowsOnPage(nudge, 0, false, false)).toBe(false);
-		expect(nudgeShowsOnPage(nudge, 2, false, false)).toBe(false);
+		expect(nudgeShowsOnPage(nudge, 1, false)).toBe(true);
+		expect(nudgeShowsOnPage(nudge, 0, false)).toBe(false);
+		expect(nudgeShowsOnPage(nudge, 2, false)).toBe(false);
 	});
 
-	it("clears once that question is answerable, and never shows on review", () => {
-		expect(nudgeShowsOnPage(nudge, 1, false, true)).toBe(false);
-		expect(nudgeShowsOnPage(nudge, 1, true, false)).toBe(false);
+	it("clears once that question is answerable", () => {
+		expect(nudgeShowsOnPage(nudge, 1, true)).toBe(false);
 	});
 
 	it("is absent with no outstanding gesture", () => {
-		expect(nudgeShowsOnPage(null, 0, false, false)).toBe(false);
+		expect(nudgeShowsOnPage(null, 0, false)).toBe(false);
 	});
 });
 
@@ -397,31 +396,25 @@ describe("deriveAnswers", () => {
 describe("deriveRecapState", () => {
 	const base = { questionIndex: 0, question: "Which?" };
 
-	it("shows every option for an unanswered review but not for a resolved skipped record", () => {
-		expect(deriveRecapState(undefined, "review")).toEqual({
-			selectedLabels: [],
-			customAnswer: null,
-			showOptions: true,
-		});
-		expect(deriveRecapState(undefined, "resolved")).toEqual({
+	it("hides the options of a skipped question", () => {
+		expect(deriveRecapState(undefined)).toEqual({
 			selectedLabels: [],
 			customAnswer: null,
 			showOptions: false,
 		});
 	});
 
-	it("marks a single authored option selected in both recap variants", () => {
+	it("marks a single authored option selected", () => {
 		const answer: AskUserQuestionAnswer = {
 			...base,
 			kind: "option",
 			answer: "A",
 		};
 		const expected = { selectedLabels: ["A"], customAnswer: null, showOptions: true };
-		expect(deriveRecapState(answer, "review")).toEqual(expected);
-		expect(deriveRecapState(answer, "resolved")).toEqual(expected);
+		expect(deriveRecapState(answer)).toEqual(expected);
 	});
 
-	it("keeps multi selections and additive custom text in both recap variants", () => {
+	it("keeps multi selections and additive custom text", () => {
 		const answer: AskUserQuestionAnswer = {
 			...base,
 			kind: "multi",
@@ -433,22 +426,16 @@ describe("deriveRecapState", () => {
 			customAnswer: "extra",
 			showOptions: true,
 		};
-		expect(deriveRecapState(answer, "review")).toEqual(expected);
-		expect(deriveRecapState(answer, "resolved")).toEqual(expected);
+		expect(deriveRecapState(answer)).toEqual(expected);
 	});
 
-	it("shows authored options around a custom answer only during review", () => {
+	it("shows a custom answer without the authored options", () => {
 		const answer: AskUserQuestionAnswer = {
 			...base,
 			kind: "custom",
 			answer: "mine",
 		};
-		expect(deriveRecapState(answer, "review")).toEqual({
-			selectedLabels: [],
-			customAnswer: "mine",
-			showOptions: true,
-		});
-		expect(deriveRecapState(answer, "resolved")).toEqual({
+		expect(deriveRecapState(answer)).toEqual({
 			selectedLabels: [],
 			customAnswer: "mine",
 			showOptions: false,

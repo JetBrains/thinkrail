@@ -141,7 +141,7 @@ async function wheelUntilChatElementIntersects(
 	await expect.poll(async () => (await readChatViewportIntersection(target)).intersects).toBe(true);
 }
 
-test("a persisted tall questionnaire reveals page changes and a restored page without hidden review focus", async ({
+test("a persisted tall questionnaire reveals page changes and a restored page", async ({
 	page,
 }) => {
 	await page.setViewportSize({ width: 1280, height: 720 });
@@ -209,26 +209,17 @@ test("a persisted tall questionnaire reveals page changes and a restored page wi
 
 		await reopenedFirstOption.click();
 		await page.setViewportSize({ width: 1280, height: 440 });
-		const reviewNext = reopenedCard.getByTestId("ask-continue");
-		await wheelUntilChatElementIntersects(page, chatScroll, reviewNext);
-		await reviewNext.click();
-
-		const reviewTitle = reopenedCard.getByTestId("ask-review-title");
+		await expect(reopenedCard.getByTestId("ask-continue")).toHaveCount(0);
 		const submit = reopenedCard.getByTestId("ask-submit");
-		await expect(reviewTitle).toBeFocused();
-		await expect
-			.poll(async () => (await readChatViewportIntersection(reviewTitle)).intersects)
-			.toBe(true);
+		await wheelUntilChatElementIntersects(page, chatScroll, submit);
 		await expect(submit).toBeEnabled();
-		await expect
-			.poll(async () => (await readChatViewportIntersection(submit)).intersects)
-			.toBe(false);
-		await page.keyboard.press("Enter");
-		await expect(reopenedCard).toHaveAttribute("data-tone", "active");
-		await expect(reopenedCard.getByTestId("ask-sent")).toHaveCount(0);
 
 		expect(await nestedVerticalScrollSurfaces(reopenedCard)).toEqual([]);
-		await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+		const { distanceFromEnd } = await readChatScrollGeometry(chatScroll);
+		await expect(chatScroll).toHaveAttribute(
+			"data-follow-state",
+			distanceFromEnd <= 1 ? "following" : "detached",
+		);
 	} finally {
 		rmSync(session.path, { force: true });
 	}
@@ -286,7 +277,7 @@ test("a key pressed before a reopened questionnaire's first frame does not cance
 	}
 });
 
-test("a questionnaire with more than four questions exposes every page and the full review", async ({
+test("a questionnaire with more than four questions exposes every page and submits from the last", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -308,17 +299,15 @@ test("a questionnaire with more than four questions exposes every page and the f
 
 		const card = page.locator('[data-testid="ask-user-question"][data-tone="active"]');
 		await expect(card).toBeVisible();
-		await expect(card.getByTestId("ask-tab")).toHaveCount(7);
+		await expect(card.getByTestId("ask-tab")).toHaveCount(6);
 		await card.getByTestId("ask-tab").nth(5).click();
 		await expect(card.getByTestId("ask-question-text")).toHaveText(
 			"Which choice should question 6 use?",
 		);
+		await expect(card.getByTestId("ask-continue")).toHaveCount(0);
+		await expect(card.getByTestId("ask-submit")).toBeDisabled();
 		await card.getByTestId("ask-option").first().click();
-		await card.getByTestId("ask-continue").click();
-
-		await expect(card.getByTestId("ask-review-title")).toBeVisible();
-		await expect(card.getByTestId("ask-review-item")).toHaveCount(6);
-		await expect(card.getByTestId("ask-unanswered")).toContainText("Q1, Q2, Q3, Q4, Q5");
+		await expect(card.getByTestId("ask-submit")).toBeEnabled();
 	} finally {
 		rmSync(session.path, { force: true });
 	}

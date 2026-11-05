@@ -6,6 +6,7 @@ import {
 	type Workspace,
 } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import {
 	type FocusEvent,
 	type KeyboardEvent,
@@ -19,6 +20,11 @@ import { supportsWorkspaceSettling, toast, useAppStore } from "../store";
 import { errorText, getTransport, prewarmWorkspaceSkillLoad } from "../transport";
 
 const PREWARM_WORKSPACE_LIMIT = 8;
+
+export function goToProjectHome(projectId: string): void {
+	useAppStore.getState().selectProject(projectId, { reveal: true });
+	void loadProjectWorkspaces(projectId).catch(() => {});
+}
 
 export async function loadProjectWorkspaces(projectId: string): Promise<Workspace[]> {
 	const rows = await getTransport().request("workspace.list", { projectId });
@@ -221,6 +227,7 @@ export function useInlineRename<T extends Renameable>(options: {
 		inputProps: {
 			onBlur: (event) => controller.commit(event.currentTarget.value),
 			onKeyDown: (event) => {
+				if (isImeComposing(event.nativeEvent)) return;
 				if (event.key === "Enter") {
 					event.preventDefault();
 					event.currentTarget.blur();

@@ -180,7 +180,7 @@ large delta.
 
 `bun run perf:render [--runs N] [--out file] [--cpu N] [--scenario a,b] [playwright args]` is an opt-in
 measurement run, never a gate. It builds `apps/web/dist-profile` (see [[module-web]]), boots the ordinary
-isolated host on it through `playwright.perf.config.ts`, and runs `e2e/perf/*.perf.ts` — a pattern the
+isolated host on it through `e2e/playwright.perf.config.ts`, and runs `e2e/perf/*.perf.ts` — a pattern the
 default config does not match. It uses the worktree's serial lane (port block and state dir), so do not
 run it alongside another serial E2E run in the same worktree. Defaults: 5 runs, output
 `$TMPDIR/thinkrail-render-profile.json`. Unknown `--scenario` names fail before the build. A failed
@@ -373,9 +373,10 @@ convergence with draft invalidation, sanitized read/write failures with Retry, m
 and pre-v76 hiding.
 
 General and private-restart fixtures seed additional analytics off with consent already confirmed, so
-unrelated scenarios stay unblocked. They also seed the automatic survey invitation as permanently
-dismissed: the serial agent lane intentionally accumulates accepted prompts across scenarios, while dedicated
-feedback coverage injects and asserts the addressed invitation channel directly. The cold-start onboarding
+unrelated scenarios stay unblocked. The shared fixture (`global-setup.ts`) also seeds the automatic survey
+invitation as permanently dismissed and the one-time GitHub star ask as already sent: the serial agent lane intentionally accumulates
+accepted prompts across scenarios, while dedicated feedback and `github-star-prompt.spec.ts` coverage injects and
+asserts the addressed channels directly. The cold-start onboarding
 wizard is likewise seeded dismissed (`onboardingDismissed: true`, in the config file and again over the
 settings wire, since the host may have loaded its config first), and only `onboarding.spec.ts` re-arms it
 over the settings wire, restoring it afterwards. The wizard gate decides once per page load, so that spec's
@@ -461,17 +462,19 @@ lands in the sandbox and a new detection source is pinned everywhere at once.
   `e2e/fixtures/git.ts` is the one place specs shell out to `git` (`git`, `gitQuiet`, `gitText`, `gitAs`,
   `commitFile`); `gitAs`/`commitFile` pin a throwaway e2e identity so a seeded commit's authorship never
   depends on the developer machine's real git config. `e2e/fixtures/pierre.ts` is the one place specs
-  touch `@pierre/diffs`' DOM (`pierreLines`, `pierreLineNumber`, `selectPierreLine`,
-  `pierreCollapsedContext`, `pierreDeletionsSide`): a Pierre release that renames `data-line`,
-  `data-column-number`, `data-unmodified-lines` or `data-deletions` is a one-file repair, and no spec
-  encodes how a line is selected. `e2e/phone-review.spec.ts` is the phone-class gate for the review
+  touch `@pierre/diffs`' DOM and worker (`pierreLines`, `pierreLineNumber`, `selectPierreLine`,
+  `pierreCollapsedContext`, `pierreDeletionsSide`, `holdPierreWorkers`): a Pierre release that renames
+  `data-line`, `data-column-number`, `data-unmodified-lines` or `data-deletions` is a one-file repair, and no spec
+  encodes how a line is selected. A probe that reveals a line inside a Pierre surface holds the worker script
+  (`holdPierreWorkers`) until the reveal is requested: a loaded runner lays the rows out only after the
+  reveal, so the line must still come into view then. `e2e/phone-review.spec.ts` is the phone-class gate for the review
   surface — Pierre file rendering, unified-only diffs, tap-to-comment and inline placement at
   `PHONE_VIEWPORT` — reached the way the desktop shell reaches a phone today: open at desktop width, then
   resize and hide the auxiliary stacks.
 - **Consumes:** the built web artifact, the host's public boot/wire behavior, sanctioned server test-fixture
-  exports, CLI binary, the locator from [[module-artifact-tests]], shared retrying teardown helper, git,
-  Chromium, and Playwright. Standalone native/installer smoke and shared artifact probes are owned by
-  that test workspace, outside Playwright discovery.
+  exports, CLI binary, the locator and ready-document poller from [[module-artifact-tests]], shared
+  retrying teardown helper, git, Chromium, and Playwright. Standalone native/installer smoke and shared
+  artifact probes are owned by that test workspace, outside Playwright discovery.
 - **Forbidden:** fake application backends, provider fakes in production boot paths, browser imports into
   product modules, default/no-agent tests depending on developer state, agent tests reading anything beyond
   the explicitly authorized Central artifact, or parallel workers sharing one mutable host.
@@ -505,10 +508,12 @@ geometry cannot clamp before the row mounts. Chat-title coverage uses persisted 
 native `/name` path, open-tab and closed-history inline rename paths, keyboard focus recovery, bounded
 long-history scrolling, and reload durability without involving a provider. First-prompt label coverage
 (`chat-title-fallback.spec.ts`) seeds unnamed transcripts to pin the host-projected label on the tab strip,
-Recently closed and the session switcher (`data-title-source="prompt"`, full line as tooltip, word-boundary
-cut), an inline rename that starts from the empty real title and replaces the label, and the instant label
+Recently closed and the search palette's chat rows (`data-title-source="prompt"`, full line as tooltip,
+word-boundary cut, found by words past the cut), an inline rename that starts from the empty real title and replaces the label, and the instant label
 from the optimistic first send; it cannot persist a sent prompt without a provider, so the live path's
-durability is the server unit test's. Visualize coverage
+durability is the server unit test's. Palette name coverage (`search-palette.spec.ts`) seeds a named chat in
+a workspace the page never opened, finds it by a word only its title holds, renames it from a second wire
+client while the palette stays open, and pins that the page sent no `session.list` for either. Visualize coverage
 (`visualize.spec.ts`) independently seeds short historical tool-call/result transcripts through the
 sanctioned session fixture before workspace entry. It pins completed/default-expanded diagrams,
 fullscreen SVG growth, pan/reset/Escape and claimed WebKit pinch gestures, exact comparison pros/cons
@@ -552,3 +557,8 @@ no `pi` executable on `PATH` for default and custom `PI_CODING_AGENT_DIR`; deskt
 staged `.ts` PI runtime and physical resources. Real Central acceptance remains explicitly authorized and
 isolated: the dedicated `@agent` suite stages the opaque artifact, validates the exact model, and proves a
 real turn rather than accepting another provider or a fake agent.
+
+A file the host rewrites in place (pi's `settings.json`) is read once, after the UI state that the host's
+reply settles: a read overlapping the rewrite returns the old bytes followed by the new file's tail, and
+`expect.poll` rethrows that parse error instead of polling again. When no UI state marks the write, the poll
+parses through a helper that treats a torn read as "not yet".

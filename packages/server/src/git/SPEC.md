@@ -19,7 +19,33 @@ ref off the workspace-create critical path.
 
 - **Owns:** `git(cwd, args)` (spawn git *sync*, capture trimmed stdout/stderr + ok; `opts.raw` keeps
   decoded stdout untrimmed) and its module-internal `gitBytes(cwd, args, opts?)` twin (sync,
-  byte-preserving, retained for `reviews`' synchronous snapshot pass). `gitAsync(cwd, args, opts?)` and
+  byte-preserving, retained for `reviews`' synchronous snapshot pass). **Every sync call has a deadline**
+  (`opts.timeoutMs`, default 10s): a sync spawn holds the host's single event loop for as long as git
+  runs, so an unbounded one turned a hung git (a stuck fsmonitor, a dead network mount, a held lock) into
+  a frozen host. On expiry git gets `SIGTERM` (so it removes its `.lock` files; a `SIGKILL` would leave
+  `index.lock` and lock the repo for every later write) and the call **throws** (see below), with the same
+  `timed out after <n>s — …` wording as the async runners; the rest of git's process group is
+  then killed, so hooks, filters and credential helpers do not outlive it. `worktree remove` and whole-tree
+  reads (`gitUncommittedPaths`' tracked diff and untracked listing) pass **`SLOW_GIT_TIMEOUT_MS`** (5 minutes)
+  instead, so a large but healthy repository still finishes. Index writers (the initial `add -A` + `commit` of
+  `initProject`, `gitCommitPaths`' add and commit) pass **`INDEX_WRITE_TIMEOUT_MS`**: the same 5 minutes, but
+  `null` (no deadline) on Windows, where the timeout kill is `TerminateProcess` and git cannot remove
+  `index.lock`. `createWorkspace`'s `worktree add` passes `timeoutMs: null`: a large checkout legitimately
+  runs for minutes. `renameWorkspace`'s `branch -m` also passes `null`: a kill between deleting the old ref and
+  creating the new one leaves the worktree without a branch, and nothing here can recover it. Known gap: a Windows read that refreshes the index (`status`, `diff`) and hits its deadline
+  can still leave `index.lock` behind. **A timeout is not an answer, so sync git throws on it by default:**
+  `git`/`gitBytes` throw a **`GitTimeoutError`** (`CodedError("GIT_TIMEOUT")`, so error tracking tells a
+  hung git apart without message text) worded `Could not <opts.action>: timed out …` (default action
+  `run git <subcommand>`; `opts.consequence` appends a sentence). Most sync callers read `!ok` or empty
+  output as a fact ("no remotes", "identity unset", "unborn HEAD"); a killed git returning that would make
+  them create a workspace from a local decoy ref, push with the wrong SSH command, or commit as ThinkRail.
+  **`opts.onTimeout: "return"`** opts out and returns `ok: false`, `failure: "timeout"` — only for a caller
+  that must act on the timeout itself or for which any failure is a soft skip: `gitCommitPaths`' staging
+  and commit (they must restore the index or inspect HEAD first), `readBlobAt` (optional review context),
+  `workspaces`' `recordWorkspaceHead` (a background activity sample) and `reclaimWorktree`'s
+  `worktree remove` / `prune` (cleanup that falls back to `rm` + prune). The async runners still return the
+  timeout; their fact readers pass it through **`throwOnTimeout(result, action, consequence?)`**. `setSyncGitTimeoutForTests(ms)` shortens the 10s default so hang tests finish
+  fast; `undefined` restores it. `gitAsync(cwd, args, opts?)` and
   **`gitAsyncBytes(cwd, args, opts?)`** are the bounded async twins over `subprocess.runBounded`; the latter
   preserves stdout as `Uint8Array`, while stderr remains decoded diagnostics. They keep network-bound ops
   like `fetch` **and request-path historical reads** off the event loop: this module owns only the
@@ -75,12 +101,14 @@ ref off the workspace-create critical path.
   `--end-of-options`: the `origin/<b>` shorthand goes through git's disambiguation and can resolve to a
   tag or a local branch of that name, so the call sites would have raced over different objects. "One way"
   is literal — no caller re-spells the `rev-parse` by hand;
-  **`nonInteractiveGitEnv()`** — the default environment both runners spawn under (`git`'s only option is
-  `raw`; `gitAsync` alone accepts an `opts.env` override, e.g. `pr`'s non-interactive push, which layers its
+  **`nonInteractiveGitEnv()`** — the default environment both runners spawn under (`git`'s options are only
+  `raw` and `timeoutMs`; `gitAsync` alone accepts an `opts.env` override, e.g. `pr`'s non-interactive push, which layers its
   own SSH batch-mode settings): `process.env` plus `GIT_TERMINAL_PROMPT=0`, and **nothing else** by default.
   It reads no config and rewrites none of the user's ssh setup on its own;
-  **Request-path reads run through `gitAsync`** — `resolveDiffRange`,
-  `gitStatus`, `gitDiffFile`, `listCommits`, `listBranches` and the workspace badge fan-out are async, so a
+  **Request-path reads run through `gitAsync`** — `resolveDiffRange` (its `resolvedOriginalOid` too),
+  `gitStatus` (its live branch too), `gitDiffFile`, `listCommits`,
+  `listBranches`, `prefetchBranch`, `countPushDivergence`, the host's branch-status `published` probe
+  (`remoteRefOidAsync`, the async spelling of `remoteRefOid`) and the workspace badge fan-out are async, so a
   multi-spawn read can never freeze the host's single cooperative event loop (profiled at 119–246ms of
   frozen loop per `workspace.list` before the migration). The sync runner stays for **writers** (their
   load→mutate→save atomicity depends on not interleaving — `gitCommitPaths`' index snapshot/restore, the
@@ -153,7 +181,9 @@ ref off the workspace-create critical path.
   the worktree), each carrying per-file `added`/`removed` line counts (`git diff --numstat`, its rename-mangled paths resolved
   via `numstatPath` to match `--name-status`; binary rows dropped; untracked files count their whole
   content as added only when `fs.classifyBytes` agrees it is text, so invalid UTF-8, NUL-bearing, and
-  magic-typed untracked files omit counts exactly as their `ResourceMeta` does) for the Changes tree's `+/−` badges;
+  magic-typed untracked files omit counts exactly as their `ResourceMeta` does) for the Changes tree's `+/−` badges.
+  Untracked files are read asynchronously, at most 2MB each and 32MB per call in path order; files past
+  either cap omit their count, so a worktree full of unignored output cannot stall the read;
   `gitDiffFile(workspaceId, path, scope?)` → `{ original, modified, originalOid, meta: { original, modified } }` — `originalOid` is the range's resolved immutable start (or `null`) and both
   sides of one file's change for the center diff tab (`original` = the file at the range's start ref, raw,
   empty when absent there —
@@ -274,19 +304,29 @@ ref off the workspace-create critical path.
   magic or a glob (`:(top)*`) can't expand beyond the proved delta and defeat the exact-path guarantee or
   the `.thinkrail/` exclusion. **The index is preserved across failure:** the
   checkout's real index **file** (`rev-parse --git-path index` — per-worktree in a linked worktree) is
-  snapshotted byte-for-byte before staging and written back on every failure path, so a skipped commit
-  leaves the user's staging area exactly as it was — *including index-only state a tree round-trip would
+  snapshotted byte-for-byte before staging and written back on every failure path where HEAD did not
+  move, so a skipped commit leaves the user's staging area exactly as it was — *including index-only state a tree round-trip would
   drop* (an intent-to-add entry from `git add -N` has no tree representation, so a `write-tree`/`read-tree`
   snapshot would silently unstage it). Staging succeeds but committing is fallible (an unset identity, an
   unavailable signing key), and a best-effort feature must not leave the user's next commit carrying files
   they never staged. An index with unmerged entries (a conflicted merge in flight) bails out untouched; a
-  half-merged worktree is nothing to auto-commit anyway. Returns `null` for an empty path set, when those paths had nothing to commit
-  (`git diff --cached --quiet -- <paths>`), or on any git failure — the caller (`todos/artifacts`) treats
-  that as "fall back to path-list artifacts" and never lets it throw. It is the one git primitive that
-  **writes** the user's branch; the caller serializes it per workspace.
+  half-merged worktree is nothing to auto-commit anyway. A commit that **landed** before git reported
+  failure (a `post-commit` hook killed at the deadline: HEAD moved to a child of the old HEAD) is kept and
+  its sha returned. **The index is restored only when HEAD is proven unchanged** (the post-commit read
+  succeeded and equals the pre-staging HEAD): if HEAD moved to a commit that is not provably ours (a
+  `prepare-commit-msg` hook rewrote the subject, another writer committed), the index is kept and `null`
+  returned — restoring there would stage a reversal of that commit; at worst the paths stay staged.
+  Returns `null` for an empty path set, when those paths had nothing to commit
+  (`git diff --cached --quiet -- <paths>`), or on a git failure — the caller (`todos/artifacts`) treats
+  that as "fall back to path-list artifacts". A **timeout throws `GIT_TIMEOUT`** instead (after restoring
+  the index when HEAD is unchanged), and the caller's reconcile catch keeps its baselines so the next
+  settle retries or adopts a commit that landed. The exception is a commit that timed out after HEAD moved
+  to a commit that is not ours: it returns `null` with the index kept, like any other failure there. It is
+  the one git primitive that **writes** the user's branch; the caller serializes it per workspace.
   **`gitHeadSha(workspaceId)`** → `string | null` — `rev-parse HEAD` (`null` on an unborn HEAD), recorded
-  into the todos baseline sidecar at `in_progress`. **`headShaAt(repoPath)`** is the same read for a caller
-  that already holds the workspace record, so it never re-resolves an id another writer may have removed.
+  into the todos baseline sidecar at `in_progress`. **`headShaAt(repoPath, opts?)`** is the same read for a caller
+  that already holds the workspace record, so it never re-resolves an id another writer may have removed;
+  `opts` pass through to `git` (a background caller passes `onTimeout: "return"` and reads `null`).
   **`readCommitSubject(workspaceId, sha)`** → `string | null` — a commit's subject line (`null` when the
   sha is malformed or unresolvable), the sync read behind the todos module's adopted-commit review
   resolver (`base..HEAD` commits owned by no plan item).
@@ -308,7 +348,9 @@ ref off the workspace-create critical path.
   `gitignored`, so the Files tree can dim them. It never throws: a non-repository, a failure or a timeout
   reports nothing. Names git must C-quote (a `"`, `\` or control character) are never reported, because
   `check-ignore -z` needs stdin, which the bounded runners do not offer.
-- **Public surface (barrel):** `git`, `gitAsync`, `gitAsyncBytes`, `gitAsyncStream`, `nonInteractiveGitEnv`, `remoteRefOid`, `remoteTrackingRef`, `gitStatus`,
+- **Public surface (barrel):** `git`, `gitAsync`, `gitAsyncBytes`, `gitAsyncStream`, `nonInteractiveGitEnv`, `SLOW_GIT_TIMEOUT_MS`, `INDEX_WRITE_TIMEOUT_MS`, `throwOnTimeout`,
+  `setSyncGitTimeoutForTests`,
+  `remoteRefOid`, `remoteRefOidAsync`, `remoteTrackingRef`, `gitStatus`,
   `gitUncommittedPaths`, `gitDiffFile`,
   `readBlobAt`, `readBlobBytesAt`, `readBlobBytesAtAsync`, `readBlobStreamAtAsync`, `readBlobSizeAtAsync`,
   `readPathModeAtAsync`, `readCommitSubject`, `commitsAheadOf`, `originUrls`, `countPushTargetDivergence`,
@@ -366,7 +408,8 @@ ref off the workspace-create critical path.
   Elapsed seconds are floored at 1: `Math.round` renders a sub-500ms wait as `0s`, which reads as a bug.
   **It is a lower bound, not a ceiling.** `setTimeout` cannot fire while the loop is blocked, and the
   *sync* runner blocks it by design (`spawnSyncCaptured`), so the real wait is the budget plus whatever
-  sibling `git()` calls hold the loop for — measured at 6× the budget under a deliberate storm. Hence the
+  sibling `git()` calls hold the loop for — measured at 6× the budget under a deliberate storm (each of
+  those calls now has its own deadline, so the overshoot is bounded too, not closed). Hence the
   message reports the **elapsed** time rather than the configured budget: the number the user reads is
   never a fiction. Closing the gap would mean moving git off the loop entirely, which this ticket does not
   buy. The timer is `unref`'d: it exists to *bound* a wait, so it must never itself be the reason the host
