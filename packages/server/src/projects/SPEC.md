@@ -50,7 +50,12 @@ bootstrap it into one so it can be opened.
   `notDirectory` — so the UI picks between opening, an init offer, or an error) and **`initProject`**
   (bootstrap a plain directory: `git init` + `git add -A` + an **allow-empty** initial commit — committing
   the folder's contents, or an empty commit when it is empty, so the repo gets a HEAD and `git worktree
-  add` works; an already-a-repo path short-circuits to `openProject`; a missing / non-dir path throws).
+  add` works; an already-a-repo path short-circuits to `openProject`; a missing / non-dir path throws; a
+  timed-out top-level probe throws `GIT_TIMEOUT` rather than classifying a slow repo as `initable`; a
+  top-level probe git refuses with "dubious ownership" (e.g. a WSL share opened from Windows) throws with
+  git's stderr rather than offering `git init` inside what may be an existing repo; a
+  timed-out `user.name`/`user.email` probe throws rather than committing as ThinkRail; a failed
+  init/add/commit throws with git's stderr and removes `.git` only when this call created it).
   **`createProject(parentPath, name)`** is the start-from-nothing path: `name` must be one plain folder
   name (no separators, not `.`/`..`), the resolved parent is created when missing, the target folder is
   made — an existing **empty** folder is reused, a non-empty one or a file rejects — and then gets the same

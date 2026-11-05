@@ -20,7 +20,7 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   brand icon set both launchers ship (`assets/` and its generator, `scripts/generate-icons.ts`).
 - **Public surface:** `@thinkrail/shared/shellEnv` → `resolveShellEnv()`, `repairShellEnv()`, `mergePath()`,
   `loginShellImports()`, `parseLoginShellEnv()`, `LOGIN_ENV_MARKER`, `localeRepair()`, `launchEnvKeys()`;
-  `@thinkrail/shared/freePort` → `findFreePort()`, `isPortFree()`;
+  `@thinkrail/shared/freePort` → `findFreePort()`, `isPortFree()`, `parsePort()`;
   `@thinkrail/shared/startupMark` → the static recursive wordmark plus the pure responsive/ANSI renderer
   and interactive-output gate used by every launcher;
   `@thinkrail/shared/version` → the baked `{ version, channel, commit }` release identity shared by CLI,
@@ -43,7 +43,17 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   probing; the minimum supported version and the global opaque PI-extension path; a one-directional auth
   verdict; an artifact-location watcher; `add pi` / `remove pi` / `login` / `update --install` actions; and
   the per-OS official install plan. It never edits PI model or credential configuration.
-- **/spawn** — `spawnSyncCaptured()` (sync capture → `{ launched, exitCode, stdout, stderr }`),
+- **/spawn** — `spawnSyncCaptured()` (sync capture → `{ launched, exitCode, timedOut, stdout, stderr }`;
+  `timeoutMs` runs the child in its own process group (POSIX), sends the child `SIGTERM` at the deadline
+  and, once it exits, `SIGKILL`s the whole group, so grandchildren holding a hang (a hook, an ssh helper)
+  die with it; `SIGTERM` first lets git remove its `.lock` files, which a `SIGKILL` would leave behind and
+  so lock the repo for every later write; a direct child that ignores `SIGTERM` is not bounded; it sets
+  `timedOut`, so a caller can name a hang rather than read it as an ordinary nonzero exit. A child in its
+  own group misses the terminal's Ctrl-C, and the blocked host cannot run its `SIGINT` handler until the
+  child exits, so when the host has a controlling terminal a small `/bin/sh` supervisor stays in the
+  host's group, starts the command in a new group (`setsid`, else `set -m`) and turns Ctrl-C, a terminal
+  hang-up or a quit into a group `SIGTERM`, so closing the terminal never orphans a hung command. Without a terminal the child is spawned detached directly, so the desktop host pays
+  no extra fork),
   `spawnSyncCapturedBytes()` (the same launch and exit semantics with **`stdout` left as bytes**, for a
   caller reading binary child output the UTF-8 decoder would replace — stderr stays decoded text, since a
   diagnostic is only ever read as text) and
@@ -92,7 +102,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   terminals copy it (`server/src/terminal`), and so does the in-process agent's own bash.
 - **/freePort** — `findFreePort(preferred, host?)`: the first free port at or above `preferred`, so a
   host can pick an open port instead of colliding with one already running. `isPortFree(port, host?)`:
-  the underlying single-port check.
+  the underlying single-port check. `parsePort(value)`: strict port parse (plain decimal digits, 0-65535, else `undefined`), so an empty,
+  `0x10`, `1e3` or out-of-range `THINKRAIL_PORT` is ignored instead of becoming port 0 or `NaN`.
 - **/startupMark** — the launchers' one boot signature: a committed 42×20 `TR` silhouette built from a
   cyclic `THINKRAIL·` field, composed with the product identity, a caller-supplied honest status, and its
   resolved endpoint. At 72+ columns it is a right-hand lockup; from 42–71 it stacks, and below 42 it uses

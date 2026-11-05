@@ -75,7 +75,15 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   a failed turn can't look like nothing happened. A provider error that matches a known
   model-unavailable signature (`model_not_found`, Anthropic's `not_found_error` on `model:`, OpenRouter's
   `No endpoints found`, Bedrock's model access denial, …) leads with a localized "pick another model"
-  notice above the provider's verbatim text, since these are account/plan limits a retry cannot fix. Only the current settlement-derived failure carries the
+  notice above the provider's verbatim text, since these are account/plan limits a retry cannot fix. A
+  **subscription-limit** error (`subscriptionLimit`: Claude's "Third-party apps now draw from your extra
+  usage", ChatGPT's Subscription Sharing limits and Codex's "You have hit your ChatGPT usage limit") keeps
+  the provider's text unannotated — it already says what happened — and swaps **Try again** for that
+  provider's usage-page link plus **Open provider settings** (`openProviderSettings`, omitted without a
+  provider); a retry fails until the user adds usage, waits for a reset, or connects an API key or another
+  provider, after which any send continues the same chat (#1147). The signatures are a data table of pattern →
+  usage URL + link label; linkifying URLs inside the error text was rejected because Anthropic's carries no
+  scheme. Neither affordance goes stale, so historical matching turns keep them. Only the current settlement-derived failure carries the
   web-local `try-again` recovery action; its **Try again** button sends one visible ordinary `Try again.` user
   message through `ChatView`'s existing immediate-send path. Rejected sends, extension notifications, and
   generic app errors stay non-actionable because the missing prompt or repair may not be in Pi's context.
@@ -495,10 +503,10 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   only while the card still holds focus. Plus `openSubagentTranscript(childSessionId)` — the subagent
   cards' transcript link (no provider → the cards hide the action) — and `markResultSeen(target)`, a
   background result row reporting that the user opened it.
-  The optional MCP actions — `readMcpOutput(toolCallId)` (`mcp.readOutput` for this chat),
-  `openMcpSettings()` (Settings › MCP servers) and `openProviderSettings()` (Settings › Providers for
-  provider-backed authentication) — are supplied by `ChatView` (through `ChatTranscript`'s provider)
-  only on an MCP-capable host;
+  `openProviderSettings()` (Settings › Providers) is supplied by `ChatView` on every host — the MCP
+  cards' provider-backed sign-in and the subscription-limit `ErrorTurn` use it. The optional MCP actions —
+  `readMcpOutput(toolCallId)` (`mcp.readOutput` for this chat) and `openMcpSettings()` (Settings › MCP
+  servers) — are supplied (through `ChatTranscript`'s provider) only on an MCP-capable host;
   without them (older host, the plan page's provider, or `null`) the MCP cards hide Full output and Sign in
   ([tools/mcp/SPEC.md](tools/mcp/SPEC.md)). Optional `findModel(ref)` resolves a run's `provider/id`
   against the full model catalog (`ChatView` over `useModelCatalog`, hidden models included — a run may use
