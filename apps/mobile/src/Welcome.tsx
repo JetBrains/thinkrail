@@ -25,7 +25,7 @@ export function Welcome({
 		<main className="flex h-full flex-col overflow-y-auto px-24 pt-safe-top pb-safe-bottom">
 			<header className="flex flex-col items-center gap-8 pt-48 text-center">
 				<h1 className="m-0 text-primary tr-brand-hero">{BRAND}</h1>
-				<p className="m-0 text-text-muted tr-text-reading">{t("mobile.welcome.tagline")}</p>
+				<p className="m-0 text-text-default tr-heading-sm">{t("mobile.welcome.tagline")}</p>
 			</header>
 
 			<ol className="mx-0 my-auto flex list-none flex-col gap-16 px-0 py-24">

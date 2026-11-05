@@ -258,7 +258,7 @@ function ProjectRow({
 				>
 					<Chevron aria-hidden className="size-20 shrink-0 text-text-muted" />
 					<ProjectGlyph selected={false} running={status.running} className="size-22" />
-					<span className="min-w-0 flex-1 truncate text-text-default tr-heading-sm">
+					<span className="min-w-0 flex-1 truncate text-text-default tr-text-ui">
 						{project.name}
 					</span>
 					{status.attention ? <AttentionDot /> : null}
@@ -383,7 +383,7 @@ function ProjectWorkspaces({
 										className="size-20"
 									/>
 									<span className="flex min-w-0 flex-1 flex-col gap-2">
-										<span className="truncate text-text-default tr-title-section">
+										<span className="truncate text-text-default tr-text-ui">
 											{workspaceName(t, workspace)}
 										</span>
 										{twoLine ? <WorkspaceBranch branch={workspace.branch} /> : null}
