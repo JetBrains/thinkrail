@@ -45,16 +45,17 @@ for (const picker of pickersFor("win32")) {
 			const flag = picker.cmd.indexOf("-EncodedCommand");
 			expect(flag).toBeGreaterThan(-1);
 			const script = Buffer.from(picker.cmd[flag + 1] ?? "", "base64").toString("utf16le");
-			const headless = script.replace(
-				/\$owner =[\s\S]*?\$owner\.Close\(\)/,
-				[
-					"$d = New-Object System.Windows.Forms.FolderBrowserDialog",
-					"$d.SelectedPath = $env:THINKRAIL_TEST_PICKED_PATH",
-					"$ok = $env:THINKRAIL_TEST_PICKED_PATH -ne ''",
-				].join("\n"),
-			);
-			expect(headless).not.toContain("ShowDialog");
-			expect(headless).not.toContain("$owner");
+			const lines = script.split("\n");
+			const gui = lines.indexOf("Add-Type -AssemblyName System.Windows.Forms");
+			const output = lines.at(-1) ?? "";
+			expect(gui).toBeGreaterThan(0);
+			expect(output).toBe("if ($ok) { Write-Output $d.SelectedPath }");
+			const headless = [
+				...lines.slice(0, gui),
+				"$d = [pscustomobject]@{ SelectedPath = $env:THINKRAIL_TEST_PICKED_PATH }",
+				"$ok = [bool]$env:THINKRAIL_TEST_PICKED_PATH",
+				output,
+			].join("\n");
 			const cmd = [...picker.cmd];
 			cmd[flag + 1] = Buffer.from(
 				`[Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding(936)\n${headless}`,
