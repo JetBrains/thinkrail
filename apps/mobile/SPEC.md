@@ -27,9 +27,9 @@ code** in place when the phone must pair again (revoked, the key changed, an exp
 passing failure, nothing when only an app update helps; its close button forgets a computer that no longer
 accepts this phone (no confirm — it is useless now; the last one leaves for Welcome) and otherwise hides it
 from the tree until it fails anew or connects, while Settings → Computers still lists it. The tree shows an unreachable computer as a banner with **Reconnect**;
-Settings → Computers lists each paired computer by name with Connected / Connecting… / the failure, plus
-**Reconnect** and **Forget** (confirmed; it disconnects and drops the computer, so reconnecting needs a new
-QR). Welcome fits one screen without scrolling: three one-line steps (which network, how to turn access on, scan) and the scan button, with the paste field folded behind **Enter link manually**.
+Settings → Computers lists each paired computer by name with Connected / Connecting… / the failure,
+**Forget** at the right edge of that line (confirmed in place; it disconnects and drops the computer, so
+reconnecting needs a new QR) and, only when it is unreachable, **Reconnect** under the reason. Welcome fits one screen without scrolling: three one-line steps (which network, how to turn access on, scan) and the scan button, with the paste field folded behind **Enter link manually**.
 
 ## Boundary
 

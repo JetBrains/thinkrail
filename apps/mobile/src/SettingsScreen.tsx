@@ -149,8 +149,8 @@ export function SettingsScreen({
 	);
 }
 
-/** A paired computer: its name, whether it is reachable now, and the reconnect / forget actions. */
-function ComputerRow({
+/** A paired computer: its name and whether it is reachable now, Forget at the row's right edge (confirmed in place), and Reconnect under the reason when it is unreachable. */
+export function ComputerRow({
 	host,
 	status,
 	onReconnect,
@@ -188,6 +188,17 @@ function ComputerRow({
 						{detail}
 					</span>
 				</div>
+				{confirming ? null : (
+					<Button
+						variant="ghost"
+						tone="danger"
+						data-testid="settings-computer-forget"
+						className="-my-8 h-touch shrink-0 rounded-md"
+						onClick={() => setConfirming(true)}
+					>
+						{t("mobile.hosts.forget")}
+					</Button>
+				)}
 			</div>
 			{confirming ? (
 				<div className="flex flex-col gap-8 pl-32">
@@ -212,23 +223,13 @@ function ComputerRow({
 						</Button>
 					</div>
 				</div>
-			) : (
-				<div className="flex gap-8 pl-32">
-					{status.kind === "unreachable" ? (
-						<Button variant="outline" className="h-touch rounded-md" onClick={onReconnect}>
-							{t("mobile.hosts.reconnect")}
-						</Button>
-					) : null}
-					<Button
-						variant="ghost"
-						tone="danger"
-						className="h-touch rounded-md"
-						onClick={() => setConfirming(true)}
-					>
-						{t("mobile.hosts.forget")}
+			) : status.kind === "unreachable" ? (
+				<div className="flex pl-32">
+					<Button variant="outline" className="h-touch rounded-md" onClick={onReconnect}>
+						{t("mobile.hosts.reconnect")}
 					</Button>
 				</div>
-			)}
+			) : null}
 		</div>
 	);
 }

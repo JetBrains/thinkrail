@@ -841,7 +841,7 @@
 	"mobile.pair.scanInstructions": "Point the camera at the QR code in your terminal",
 	"mobile.pair.scanNotPairLink": "That QR code isn't a ThinkRail pairing link.",
 	"mobile.project.empty": "This project has no workspaces yet.",
-	"mobile.projects.addHint": "Run thinkrail --remote on the computer and scan the QR code it prints. The phone connects over the same Wi‑Fi, or over Tailscale when you're away.",
+	"mobile.projects.addHint": "In ThinkRail on the computer, click the QR icon in the top bar and scan the code. The phone connects over the same Wi‑Fi, or over Tailscale when you're away.",
 	"mobile.projects.allHidden": "No computers to show. Open Settings → Computers to reconnect or pair one.",
 	"mobile.projects.connecting": "Connecting to {{host}}…",
 	"mobile.projects.empty": "No projects yet. Open one in ThinkRail on your computer and it appears here.",
