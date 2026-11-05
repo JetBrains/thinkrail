@@ -72,7 +72,15 @@ reconnecting needs a new QR) and, only when it is unreachable, **Reconnect** und
   dialog (`select` / `confirm` / `input` / `editor`) comes from `session.state`'s `needsInput` (`extUiDialog.ts`),
   so a phone that opens a chat after it was raised still sees it: on its tool card when that call is in the
   transcript, else docked above the composer, answered through `session.extUiReply` and hidden at once.
-  Text buttons in the transcript and the dock are `touch` tall. Paths in tool cards are relative to the
+  Text buttons in the transcript and the dock are `touch` tall. What the IDE shows around its transcript the
+  phone shows too (`liveSession.ts`): **Try again** under a provider failure (sends the IDE's `Try again.`);
+  the shared `QueueStrip` above the field — seeded from `session.list`'s `queue`, then live from `queue_update` —
+  whose edit puts a queued message back in the field and remove drops it (`session.removeQueued`), and stop
+  restores the queue to the field (`session.abort` with `restoreQueue`); the shared `StreamIndicator` under
+  the transcript while it runs; and the `pi.extensionUi` pushes no `session.state` carries — an extension's
+  `notify` as a system/error row placed after the turn it arrived after (phone-only, gone when the chat is
+  reopened, as in an IDE reload), a provider notice as the shared `ExtraUsageNotice` above the field.
+  `setStatus` / `setWidget` / `setTitle` are IDE chrome and not shown. Paths in tool cards are relative to the
   workspace's `worktreePath`. An Agent card's **Open transcript** pushes `SubagentScreen.tsx`, the IDE's
   subagent transcript dialog as a stack screen over `subagent.getTranscript`, re-read while the run is
   queued or running; back returns to the chat as left. Diagrams (fenced mermaid and visualize) render inline

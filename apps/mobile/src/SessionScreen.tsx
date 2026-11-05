@@ -6,6 +6,7 @@ import {
 	type ComposerSubmitDisposition,
 	type SubmitBehavior,
 } from "@thinkrail/chat-ui/Composer";
+import { ExtraUsageNotice } from "@thinkrail/chat-ui/ExtraUsageNotice";
 import {
 	type PendingExtUi,
 	PendingExtUiContext,
@@ -20,12 +21,20 @@ import {
 import type { ModelEffortPickerHandle, ModelSelection } from "@thinkrail/chat-ui/ModelEffortPicker";
 import { deriveMessageActions } from "@thinkrail/chat-ui/messageActions";
 import type { ModelPreferences } from "@thinkrail/chat-ui/modelPreferences";
+import { QueueStrip } from "@thinkrail/chat-ui/QueueStrip";
 import { deriveRows, rowsHaveToolCall } from "@thinkrail/chat-ui/rows";
+import { StreamIndicator, streamStatus } from "@thinkrail/chat-ui/StreamIndicator";
 import { ChatTurnView } from "@thinkrail/chat-ui/turns";
 import type { ChatAttachment } from "@thinkrail/chat-ui/types";
 import {
 	DEFAULT_CONFIG,
+	type ExtUiRequest,
+	type ProviderWarning,
+	type QueueLane,
+	type RemovedQueuedMessage,
 	type SessionEventPayload,
+	type SessionQueueContent,
+	type SessionQueueState,
 	type SessionState,
 	type SlashCommandInfo,
 	type ThinkingLevel,
@@ -40,6 +49,14 @@ import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { phoneDialog } from "./extUiDialog";
 import { Loader, Notice, Screen } from "./layout";
+import {
+	NO_QUEUE,
+	type PhoneNote,
+	phoneExtUi,
+	queuedDraft,
+	queueOf,
+	withNotes,
+} from "./liveSession";
 import { ModelSheet } from "./ModelSheet";
 import { useHostRequest } from "./useHostRequest";
 import { useWorkspaceChats } from "./WorkspaceScreen";
@@ -60,7 +77,11 @@ export interface OpenSession {
 const REFRESH_COALESCE_MS = 400;
 /** Text buttons inside the transcript and the dialog dock are touch targets on a phone. */
 const TOUCH_BUTTONS = "[&_[data-slot=button]:not([data-icon-only])]:min-h-touch";
+/** Icon buttons in the strips above the composer are touch-sized too. */
+const TOUCH_ICONS = "[&_[data-icon-only]]:size-touch";
 const NO_PROMPTS: string[] = [];
+/** The IDE's "Try again" after a provider failure: one more turn on the same conversation. */
+const TRY_AGAIN_PROMPT = "Try again.";
 
 /** The phone has no picker preferences store: the picker shows the catalog, with no favorites or defaults. */
 const PHONE_MODEL_PREFERENCES: ModelPreferences = {
@@ -123,6 +144,18 @@ export function SessionScreen({
 	);
 	const commands = useHostRequest<SlashCommandInfo[]>(client, "session.getCommands", { sessionId });
 	const chats = useWorkspaceChats(client, workspaceId, items);
+	/** Live from `queue_update`; until the first one, what the chat list read reported. */
+	const [liveQueue, setLiveQueue] = useState<SessionQueueState | null>(null);
+	const queue =
+		liveQueue ??
+		(chats.kind === "ready"
+			? chats.value.find((chat) => chat.sessionId === sessionId)?.queue
+			: undefined) ??
+		NO_QUEUE;
+	const [notes, setNotes] = useState<PhoneNote[]>([]);
+	const [notice, setNotice] = useState<ProviderWarning | null>(null);
+	const [disablingNotice, setDisablingNotice] = useState(false);
+	const lastTurnId = useRef<string | null>(null);
 
 	useEffect(() => {
 		if (!client) return;
@@ -145,16 +178,26 @@ export function SessionScreen({
 		};
 		refresh();
 		const unsubscribe = client.subscribe(WS_CHANNELS.piEvent, (data) => {
-			if ((data as SessionEventPayload).sessionId !== sessionId || pending) return;
+			const payload = data as SessionEventPayload;
+			if (payload.sessionId !== sessionId) return;
+			const nextQueue = queueOf(payload.event);
+			if (nextQueue) setLiveQueue(nextQueue);
+			if (pending) return;
 			pending = setTimeout(() => {
 				pending = undefined;
 				refresh();
 			}, REFRESH_COALESCE_MS);
 		});
+		const unsubscribeExtUi = client.subscribe(WS_CHANNELS.piExtensionUi, (data) => {
+			const shown = phoneExtUi(data as ExtUiRequest, sessionId, lastTurnId.current);
+			if (shown?.kind === "note") setNotes((current) => [...current, shown.note]);
+			else if (shown?.kind === "notice") setNotice(shown.notice);
+		});
 		return () => {
 			cancelled = true;
 			if (pending) clearTimeout(pending);
 			unsubscribe();
+			unsubscribeExtUi();
 		};
 	}, [client, sessionId, workspaceId]);
 
@@ -162,10 +205,15 @@ export function SessionScreen({
 		() => (messages ? messagesToRuntime(messages, undefined, { idScope: sessionId }) : null),
 		[messages, sessionId],
 	);
+	const turns = useMemo(() => (runtime ? withNotes(runtime.turns, notes) : []), [runtime, notes]);
+	useEffect(() => {
+		lastTurnId.current = runtime?.turns.at(-1)?.id ?? null;
+	}, [runtime]);
 	const rows = useMemo(
-		() => (runtime ? deriveRows(runtime.turns, runtime.toolResults, isStreaming) : []),
-		[runtime, isStreaming],
+		() => (runtime ? deriveRows(turns, runtime.toolResults, isStreaming) : []),
+		[runtime, turns, isStreaming],
 	);
+	const status = isStreaming && runtime ? streamStatus(runtime.turns, null) : null;
 	const messageActions = useMemo(
 		() => deriveMessageActions(rows, isStreaming),
 		[rows, isStreaming],
@@ -255,6 +303,37 @@ export function SessionScreen({
 		);
 	};
 
+	const restoreQueued = (content: SessionQueueContent): void => {
+		const restored = queuedDraft(draft, content);
+		setDraft(restored.text);
+		composerRef.current?.restoreAttachments(
+			restored.images.map((image, index) => ({
+				name: `queued-image-${index + 1}`,
+				content: image,
+			})),
+		);
+		composerRef.current?.refocus();
+	};
+
+	const removeQueued = (kind: QueueLane, index: number, restore: boolean): void => {
+		client
+			?.request<RemovedQueuedMessage>("session.removeQueued", { sessionId, kind, index })
+			.then(({ removed, queue: next }) => {
+				setLiveQueue(next);
+				if (restore && removed) restoreQueued({ steering: [removed], followUp: [] });
+			})
+			.catch((error: unknown) => setSendError(reasonOf(error)));
+	};
+
+	const disableNotice = (): void => {
+		if (!notice) return;
+		setDisablingNotice(true);
+		request("provider.disableWarning", { warning: notice })
+			.then(() => setNotice(null))
+			.catch((error: unknown) => setSendError(reasonOf(error)))
+			.finally(() => setDisablingNotice(false));
+	};
+
 	const onSubmit = (
 		text: string,
 		attachments: ChatAttachment[],
@@ -269,6 +348,10 @@ export function SessionScreen({
 			.then(() => send(text, attachments, "send"))
 			.catch((error: unknown) => setSendError(reasonOf(error)));
 		return { accepted: true };
+	};
+
+	const tryAgain = (): void => {
+		if (client) send(TRY_AGAIN_PROMPT, [], "send");
 	};
 
 	const onSelectThinking = (level: ThinkingLevel): void => {
@@ -329,6 +412,22 @@ export function SessionScreen({
 										<PendingExtUiPrompt pending={pendingExtUi} />
 									</div>
 								) : null}
+								{notice === "anthropicExtraUsage" ? (
+									<ExtraUsageNotice
+										context="chat"
+										className={cn("mx-chat-gutter mt-8", TOUCH_ICONS)}
+										onDismiss={() => setNotice(null)}
+										onDisable={disableNotice}
+										disabling={disablingNotice}
+									/>
+								) : null}
+								<div className={TOUCH_ICONS}>
+									<QueueStrip
+										queue={queue}
+										onEdit={(kind, index) => removeQueued(kind, index, true)}
+										onRemove={(kind, index) => removeQueued(kind, index, false)}
+									/>
+								</div>
 								<div className="flex min-w-0 items-center px-chat-gutter pt-8">
 									<ModelSheet
 										ref={pickerRef}
@@ -362,9 +461,15 @@ export function SessionScreen({
 									externalModelPicker={externalPicker}
 									onSubmit={onSubmit}
 									onAbort={() => {
-										request("session.abort", { sessionId }).catch((error: unknown) =>
-											setSendError(reasonOf(error)),
-										);
+										client
+											?.request<{ restoredQueue?: SessionQueueContent }>("session.abort", {
+												sessionId,
+												restoreQueue: true,
+											})
+											.then(({ restoredQueue }) => {
+												if (restoredQueue) restoreQueued(restoredQueue);
+											})
+											.catch((error: unknown) => setSendError(reasonOf(error)));
 									}}
 								/>
 							</footer>
@@ -384,12 +489,14 @@ export function SessionScreen({
 									<div key={row.id}>
 										<ChatTurnView
 											row={row}
+											onTryAgain={isStreaming ? undefined : tryAgain}
 											agentResponded={messageActions.agentRespondedByUserId.get(row.id) ?? false}
 											isFinalAnswer={messageActions.finalAnswerRowIds.has(row.id)}
 										/>
 									</div>
 								))
 							)}
+							{status ? <StreamIndicator status={status} /> : null}
 							<div ref={bottom} />
 						</div>
 					</Screen>
