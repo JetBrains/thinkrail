@@ -20,6 +20,7 @@ function held(downKeys: number[], cmdDown = true): KeyState {
 		cmdDown,
 		mouseAfterKey: false,
 		keyAfterModifiers: false,
+		sinceKeyDown: 0.05,
 	};
 }
 
