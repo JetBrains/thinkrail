@@ -430,7 +430,9 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   banner a session error gets — an extension crash must not read as chatter); every other level stays a
   `system` turn. Level is the *only* input, so the host's own error notifies ride the same road: the
   `Review send failed: …` that `host/handlers` publishes after a rolled-back send renders as that banner
-  too. That is deliberate — a send that silently rolled back is exactly what a user must not scroll past. A **fire-and-forget** ext-UI frame (`notify`/`setStatus`/`setWidget`/`setTitle`/`notice`)
+  too. That is deliberate — a send that silently rolled back is exactly what a user must not scroll past.
+  `setEditorText` replaces only the addressed runtime's `draft`, including an empty string, without
+  submitting the text. A **fire-and-forget** ext-UI frame (`notify`/`setStatus`/`setWidget`/`setTitle`/`setEditorText`/`notice`)
   that has **no runtime to land in** is held in **`extUiOrphans`** (bounded, newest 64) instead of being
   dropped, and **both** runtime-installing actions — `openChatSession` *and* `hydrateSession` — drain that
   session's frames through the shared `replayExtUiOrphans` the moment its runtime exists. The admission
