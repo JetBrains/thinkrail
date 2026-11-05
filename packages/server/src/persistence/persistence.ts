@@ -303,7 +303,6 @@ export type WorkspaceCreationRecord = Omit<WorkspaceCreation, "kickoff"> & {
 	worktreePath: string;
 	renamed?: true;
 	baseOid?: string;
-	checkoutPid?: number;
 	kickoff?: WorkspaceKickoff;
 };
 

@@ -707,8 +707,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   checkout runs afterwards; `kickoff` is a **`WorkspaceKickoff`** `{ text, images?, model?, thinkingLevel? }`
   the host holds and sends as the first chat message once the workspace exists, so it survives the window
   closing) / **`workspace.listCreations`** (every creation the host still holds, all projects — a
-  (re)connecting client's hydration) / **`workspace.resumeCreation`** (`{ id }`; runs an `interrupted` or
-  `failed` creation again) / **`workspace.dismissCreation`** (`{ id }` → `{ kickoff? }`; cleans up and drops
+  (re)connecting client's hydration) / **`workspace.retryCreation`** (`{ id }`; cleans up an `interrupted` or
+  `failed` creation and runs it again from the start) / **`workspace.dismissCreation`** (`{ id }` → `{ kickoff? }`; cleans up and drops
   an `interrupted` or `failed` creation, returning its full kickoff so *Edit & retry* can prefill the
   dialog). A creation's `state` is `running` while the host works on it, `interrupted` when the host
   restarted mid-create (never resumed on its own), `failed` with `failure: { message, code?, cleanedUp? }` (git's text,

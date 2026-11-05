@@ -18,7 +18,6 @@ export type BoundedRunOptions = {
 	signal?: AbortSignal;
 	idleTimeoutMs?: number;
 	onStderr?: (text: string) => void;
-	onSpawn?: (pid: number) => void;
 };
 
 export type BoundedBytesRunOptions = Omit<BoundedRunOptions, "stdout"> & {
@@ -27,7 +26,7 @@ export type BoundedBytesRunOptions = Omit<BoundedRunOptions, "stdout"> & {
 
 export type BoundedStreamOptions = Omit<
 	BoundedRunOptions,
-	"stdout" | "signal" | "idleTimeoutMs" | "onStderr" | "onSpawn"
+	"stdout" | "signal" | "idleTimeoutMs" | "onStderr"
 >;
 export type BoundedStream = {
 	stdout: ReadableStream<Uint8Array>;
@@ -301,7 +300,6 @@ export async function runBounded(
 		return opts.stdout === "bytes" ? { ...failed, out: new Uint8Array() } : { ...failed, out: "" };
 	}
 
-	opts.onSpawn?.(proc.pid);
 	const idle = idleDeadline(opts.idleTimeoutMs);
 	const out =
 		opts.stdout === "bytes"
@@ -348,46 +346,4 @@ export async function runBounded(
 		waitedMs: waitedMs(),
 	};
 	return out.kind === "bytes" ? { ...result, out: out.value() } : { ...result, out: out.value() };
-}
-
-function processAlive(pid: number): boolean {
-	try {
-		process.kill(pid, 0);
-		return true;
-	} catch {
-		return false;
-	}
-}
-
-function commandOf(pid: number): string {
-	const ps = Bun.spawnSync(["ps", "-o", "comm=", "-p", String(pid)], {
-		stdout: "pipe",
-		stderr: "ignore",
-	});
-	return ps.success ? new TextDecoder().decode(ps.stdout).trim() : "";
-}
-
-export async function stopOrphanedGroup(
-	pid: number,
-	expectedCommand: string,
-	graceMs = 5_000,
-): Promise<"gone" | "stopped" | "unverified"> {
-	if (process.platform === "win32") return processAlive(pid) ? "unverified" : "gone";
-	if (!processAlive(pid)) return "gone";
-	if (!commandOf(pid).split("/").pop()?.startsWith(expectedCommand)) return "gone";
-	const signalGroup = (signal: NodeJS.Signals) => {
-		try {
-			process.kill(-pid, signal);
-		} catch {
-			try {
-				process.kill(pid, signal);
-			} catch {}
-		}
-	};
-	signalGroup("SIGTERM");
-	const deadline = Date.now() + graceMs;
-	while (processAlive(pid) && Date.now() < deadline) await Bun.sleep(50);
-	if (processAlive(pid)) signalGroup("SIGKILL");
-	while (processAlive(pid) && Date.now() < deadline + graceMs) await Bun.sleep(50);
-	return processAlive(pid) ? "unverified" : "stopped";
 }

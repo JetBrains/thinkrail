@@ -42,12 +42,12 @@ function statusReason(t: Translator, creation: WorkspaceCreation): string | null
 	return null;
 }
 
-export function resumeCreation(id: string): void {
+export function retryCreation(id: string): void {
 	getTransport()
-		.request("workspace.resumeCreation", { id })
+		.request("workspace.retryCreation", { id })
 		.then((creation) => useAppStore.getState().applyWorkspaceCreation(creation))
 		.catch((err: unknown) =>
-			toast.error(errorText(err), translate("panels.workspaceCreation.resumeFailed")),
+			toast.error(errorText(err), translate("panels.workspaceCreation.retryFailed")),
 		);
 }
 
@@ -89,20 +89,12 @@ function CreationActions({
 			<span className="flex shrink-0 items-center gap-4">
 				<IconButton
 					icon={Refresh}
-					label={
-						creation.state === "failed"
-							? t("panels.workspaceCreation.retryLabel", { name })
-							: t("panels.workspaceCreation.resumeLabel", { name })
-					}
-					tooltip={
-						creation.state === "failed"
-							? t("panels.workspaceCreation.retry")
-							: t("panels.workspaceCreation.resume")
-					}
+					label={t("panels.workspaceCreation.retryLabel", { name })}
+					tooltip={t("panels.workspaceCreation.retry")}
 					variant="ghost"
 					size="s"
-					data-testid="workspace-creation-resume"
-					onClick={() => resumeCreation(creation.id)}
+					data-testid="workspace-creation-retry"
+					onClick={() => retryCreation(creation.id)}
 					className={HOVER_CONTROL_CLASS}
 				/>
 				{creation.state === "failed" ? (
@@ -163,12 +155,10 @@ function CreationActions({
 			<Button
 				variant="primary"
 				size="m"
-				data-testid="workspace-creation-resume"
-				onClick={() => resumeCreation(creation.id)}
+				data-testid="workspace-creation-retry"
+				onClick={() => retryCreation(creation.id)}
 			>
-				{creation.state === "failed"
-					? t("panels.workspaceCreation.retry")
-					: t("panels.workspaceCreation.resume")}
+				{t("panels.workspaceCreation.retry")}
 			</Button>
 		</div>
 	);

@@ -10,7 +10,7 @@ export {
 	dismissWorkspaceCreation,
 	interruptWorkspaceCreations,
 	listWorkspaceCreations,
-	resumeWorkspaceCreation,
+	retryWorkspaceCreation,
 	setWorkspaceCreationHandoff,
 	startWorkspaceCreation,
 	stopWorkspaceCreations,

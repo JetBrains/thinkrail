@@ -18,7 +18,6 @@ import {
 	remoteTrackingRef,
 	resolveCommitOid,
 	SLOW_GIT_TIMEOUT_MS,
-	stopOrphanedGit,
 } from "../git";
 import { logger } from "../log";
 import { dataDir, loadWorkspaces, type WorkspaceCreationRecord } from "../persistence";
@@ -200,31 +199,6 @@ function branchStillExists(projectPath: string, ref: string): boolean {
 	return git(projectPath, ["show-ref", "--verify", "--quiet", ref], { onTimeout: "return" }).ok;
 }
 
-async function stopOrphanedCheckout(id: string): Promise<void> {
-	const record = findCreation(id);
-	if (!record?.checkoutPid) return;
-	const outcome = await stopOrphanedGit(record.checkoutPid);
-	if (outcome === "unverified")
-		fail(
-			"WORKTREE_CHECKOUT_FAILED",
-			`An earlier git checkout (pid ${record.checkoutPid}) may still be writing ${record.worktreePath}; stop it and try again`,
-		);
-	updateCreation(
-		id,
-		(r) => {
-			delete r.checkoutPid;
-		},
-		{ emit: false },
-	);
-}
-
-function removeStaleIndexLock(worktreePath: string): void {
-	const lock = git(worktreePath, ["rev-parse", "--git-path", "index.lock"], {
-		action: "locate the worktree index",
-	});
-	if (lock.ok && lock.out) rmSync(resolve(worktreePath, lock.out), { force: true });
-}
-
 async function prepare(id: string, project: Project, signal: AbortSignal): Promise<void> {
 	let record = findCreation(id);
 	if (!record) throw new CreationAborted();
@@ -275,7 +249,6 @@ async function checkOut(id: string, signal: AbortSignal): Promise<void> {
 	const record = findCreation(id);
 	if (!record) throw new CreationAborted();
 	assertManagedPathFree(record.worktreePath);
-	removeStaleIndexLock(record.worktreePath);
 	const progress = progressFeed(id);
 	const checkout = await gitAsync(
 		record.worktreePath,
@@ -284,26 +257,11 @@ async function checkOut(id: string, signal: AbortSignal): Promise<void> {
 			timeoutMs: Number.POSITIVE_INFINITY,
 			idleTimeoutMs: stallMs,
 			onStderr: progress.feed,
-			onSpawn: (pid) =>
-				updateCreation(
-					id,
-					(r) => {
-						r.checkoutPid = pid;
-					},
-					{ emit: false },
-				),
 			signal,
 		},
 	);
 	progress.stop();
 	if (signal.aborted) throw new CreationAborted();
-	updateCreation(
-		id,
-		(r) => {
-			delete r.checkoutPid;
-		},
-		{ emit: false },
-	);
 	if (checkout.failure === "timeout")
 		fail(
 			"WORKTREE_CHECKOUT_STALLED",
@@ -322,8 +280,7 @@ async function execute(id: string, signal: AbortSignal): Promise<Workspace> {
 	let project: Project | undefined;
 	try {
 		project = projectOf(initial);
-		await stopOrphanedCheckout(id);
-		if (initial.phase === "preparing") await prepare(id, project, signal);
+		await prepare(id, project, signal);
 		await checkOut(id, signal);
 		const done = findCreation(id);
 		if (!done) throw new CreationAborted();
@@ -366,10 +323,7 @@ async function execute(id: string, signal: AbortSignal): Promise<Workspace> {
 					...(cleaned && record.baseOid ? { cleanedUp: true as const } : {}),
 				};
 				delete r.progress;
-				if (cleaned) {
-					delete r.baseOid;
-					r.phase = "preparing";
-				}
+				if (cleaned) delete r.baseOid;
 			});
 		throw err;
 	}
@@ -384,7 +338,6 @@ async function discard(record: WorkspaceCreationRecord): Promise<void> {
 		throw new Error("This workspace creation is already being dismissed");
 	discarding.add(record.id);
 	try {
-		await stopOrphanedCheckout(record.id);
 		const project = getProjects().find((candidate) => candidate.id === record.projectId);
 		if (project && holdsLeftovers(record) && !(await cleanupCreation(project.path, record)))
 			throw new Error(`Could not remove the partial workspace at ${record.worktreePath}`);
@@ -454,7 +407,7 @@ export function listWorkspaceCreations(): WorkspaceCreation[] {
 	return creationRecords().map(creationView);
 }
 
-export function resumeWorkspaceCreation(id: string): WorkspaceCreation {
+export function retryWorkspaceCreation(id: string): WorkspaceCreation {
 	const record = findCreation(id);
 	if (!record) throw new Error(`Unknown workspace creation: ${id}`);
 	if (record.state === "running") return creationView(record);
@@ -463,6 +416,7 @@ export function resumeWorkspaceCreation(id: string): WorkspaceCreation {
 		throw new Error("The workspace folder is now open elsewhere in ThinkRail; use Edit & retry");
 	const updated = updateCreation(id, (r) => {
 		r.state = "running";
+		r.phase = "preparing";
 		delete r.failure;
 		delete r.progress;
 	});

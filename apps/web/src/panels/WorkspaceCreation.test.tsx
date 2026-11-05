@@ -48,7 +48,7 @@ test("a running creation shows its percent and progress, with no actions (no can
 	expect(markup).toContain('data-state="running"');
 	expect(markup).toContain(text("panels.workspaceCreation.creatingAt", { percent: 42 }));
 	expect(markup).toContain("<progress");
-	expect(markup).not.toContain('data-testid="workspace-creation-resume"');
+	expect(markup).not.toContain('data-testid="workspace-creation-retry"');
 	expect(markup).not.toContain('data-testid="workspace-creation-dismiss"');
 
 	const card = view(creation());
@@ -58,17 +58,17 @@ test("a running creation shows its percent and progress, with no actions (no can
 	expect(card).toContain("2 images attached");
 });
 
-test("an interrupted creation offers Resume and Discard", () => {
+test("an interrupted creation offers Retry and Discard", () => {
 	const interrupted = creation({ state: "interrupted" });
 	const markup = row(interrupted);
 	expect(markup).toContain(text("panels.workspaceCreation.interruptedAt", { percent: 42 }));
-	expect(markup).toContain('data-testid="workspace-creation-resume"');
+	expect(markup).toContain('data-testid="workspace-creation-retry"');
 	expect(markup).toContain('data-testid="workspace-creation-dismiss"');
 	expect(markup).not.toContain('data-testid="workspace-creation-edit-retry"');
 	expect(markup).not.toContain("<progress");
 
 	const card = view(interrupted);
-	expect(card).toContain(text("panels.workspaceCreation.resume"));
+	expect(card).toContain(text("panels.workspaceCreation.retry"));
 	expect(card).toContain(text("panels.workspaceCreation.discard"));
 });
 

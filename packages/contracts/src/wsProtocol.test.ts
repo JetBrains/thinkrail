@@ -256,7 +256,7 @@ test("background workspace creation is pinned to v104", () => {
 	expect(PROTOCOL_VERSION).toBe(104);
 	expect(WS_METHODS.workspaceStartCreate).toBe("workspace.startCreate");
 	expect(WS_METHODS.workspaceListCreations).toBe("workspace.listCreations");
-	expect(WS_METHODS.workspaceResumeCreation).toBe("workspace.resumeCreation");
+	expect(WS_METHODS.workspaceRetryCreation).toBe("workspace.retryCreation");
 	expect(WS_METHODS.workspaceDismissCreation).toBe("workspace.dismissCreation");
 	expect(WS_CHANNELS.workspaceCreationChanged).toBe("workspace.creationChanged");
 	expect(WS_CHANNELS.workspaceCreationRemoved).toBe("workspace.creationRemoved");

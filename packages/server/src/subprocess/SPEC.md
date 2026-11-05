@@ -16,7 +16,7 @@ never what a particular child's output means.
 
 ## Boundary
 
-- **Owns:** `runBounded(argv, { timeoutMs, cwd?, env?, stdout?, signal?, idleTimeoutMs?, onStderr?, onSpawn? })` →
+- **Owns:** `runBounded(argv, { timeoutMs, cwd?, env?, stdout?, signal?, idleTimeoutMs?, onStderr? })` →
   `{ ok, out, err, timedOut, launchFailed, waitedMs, aborted? }`: capture both streams and complete on the child's
   **exit**; stdout defaults to decoded text, while `stdout: "bytes"` preserves it as `Uint8Array` for
   callers reading opaque content (stderr remains text diagnostics). POSIX children are detached
@@ -34,12 +34,7 @@ never what a particular child's output means.
   is reported exactly like `timeoutMs` (`timedOut: true`, tree killed) — the bound for a child that may
   legitimately run for hours as long as it keeps talking (a large `git checkout --progress`).
   **`onStderr`** receives each decoded stderr chunk as it arrives (the full text is still captured in
-  `err`); it is a pass-through, never parsed here. **`onSpawn`** reports the child's pid once launched, so a
-  caller can persist it across a host crash. **`stopOrphanedGroup(pid, expectedCommand)`** stops such a
-  survivor from an earlier host: it acts only on a live process whose command name still starts with
-  `expectedCommand` (pid reuse never hits an unrelated process), sends its group SIGTERM, then SIGKILL after a
-  grace, and reports `gone` / `stopped` / `unverified` (Windows has no group signal here, so a live pid is
-  `unverified`).
+  `err`); it is a pass-through, never parsed here.
 - **Also owns:** `streamBounded(argv, { timeoutMs, cwd?, env? })` → `{ stdout, exited }` — the same
   spawn, deadline, group kill and stderr capture, for the one caller that must relay a child's stdout
   while it is still being produced (the host's `/blob` route). Completion is still the child's exit,
@@ -52,7 +47,7 @@ never what a particular child's output means.
   truncated relay for a complete one; cancelling the stream kills the child. `exited` resolves to the
   same shape `runBounded` returns, minus `out`. Streaming does not accept an abort signal; consumers
   cancel its stdout stream instead.
-- **Public surface:** `runBounded`, `streamBounded`, `stopOrphanedGroup`, `BoundedRun`, `BoundedBytesRun`, `BoundedRunOptions`,
+- **Public surface:** `runBounded`, `streamBounded`, `BoundedRun`, `BoundedBytesRun`, `BoundedRunOptions`,
   `BoundedBytesRunOptions`, `BoundedStream`, `BoundedStreamOptions`.
 - **Allowed deps:** Bun/Node process APIs. Nothing else — it knows no feature, no wire type, no
   persistence.

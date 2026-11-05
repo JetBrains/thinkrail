@@ -1,6 +1,6 @@
 import { CodedError } from "@thinkrail/shared/codedError";
 import { spawnSyncCaptured, spawnSyncCapturedBytes } from "@thinkrail/shared/spawn";
-import { type BoundedStream, runBounded, stopOrphanedGroup, streamBounded } from "../subprocess";
+import { type BoundedStream, runBounded, streamBounded } from "../subprocess";
 
 const NETWORK_TIMEOUT_MS = 55_000;
 const SYNC_TIMEOUT_MS = 10_000;
@@ -54,7 +54,6 @@ type GitAsyncOptions = {
 	redactStderr?: (text: string) => string;
 	idleTimeoutMs?: number;
 	onStderr?: (text: string) => void;
-	onSpawn?: (pid: number) => void;
 };
 
 class GitTimeoutError extends CodedError {
@@ -205,7 +204,6 @@ export async function gitAsync(
 		...(opts.signal ? { signal: opts.signal } : {}),
 		...(opts.idleTimeoutMs !== undefined ? { idleTimeoutMs: opts.idleTimeoutMs } : {}),
 		...(opts.onStderr ? { onStderr: opts.onStderr } : {}),
-		...(opts.onSpawn ? { onSpawn: opts.onSpawn } : {}),
 	});
 	if (opts.redactStderr) run.err = opts.redactStderr(run.err);
 	if (run.timedOut) {
@@ -218,17 +216,10 @@ export async function gitAsync(
 	};
 }
 
-export function stopOrphanedGit(pid: number): Promise<"gone" | "stopped" | "unverified"> {
-	return stopOrphanedGroup(pid, "git");
-}
-
 export function gitAsyncStream(
 	cwd: string,
 	args: string[],
-	opts: Omit<
-		GitAsyncOptions,
-		"signal" | "redactStderr" | "idleTimeoutMs" | "onStderr" | "onSpawn"
-	> = {},
+	opts: Omit<GitAsyncOptions, "signal" | "redactStderr" | "idleTimeoutMs" | "onStderr"> = {},
 ): BoundedStream {
 	return streamBounded(["git", "-C", cwd, ...args], {
 		timeoutMs: opts.timeoutMs ?? NETWORK_TIMEOUT_MS,
@@ -239,7 +230,7 @@ export function gitAsyncStream(
 export async function gitAsyncBytes(
 	cwd: string,
 	args: string[],
-	opts: Omit<GitAsyncOptions, "idleTimeoutMs" | "onStderr" | "onSpawn"> = {},
+	opts: Omit<GitAsyncOptions, "idleTimeoutMs" | "onStderr"> = {},
 ): Promise<GitAsyncBytesResult> {
 	const run = await runBounded(["git", "-C", cwd, ...args], {
 		timeoutMs: opts.timeoutMs ?? NETWORK_TIMEOUT_MS,

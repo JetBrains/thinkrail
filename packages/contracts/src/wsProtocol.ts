@@ -280,7 +280,7 @@ export const WS_METHODS = {
 	workspaceCreate: "workspace.create",
 	workspaceStartCreate: "workspace.startCreate",
 	workspaceListCreations: "workspace.listCreations",
-	workspaceResumeCreation: "workspace.resumeCreation",
+	workspaceRetryCreation: "workspace.retryCreation",
 	workspaceDismissCreation: "workspace.dismissCreation",
 	workspaceRename: "workspace.rename",
 	workspaceListExisting: "workspace.listExisting",
@@ -779,7 +779,7 @@ export interface WsMethodMap {
 		result: WorkspaceCreation;
 	};
 	"workspace.listCreations": { params: Record<string, never>; result: WorkspaceCreation[] };
-	"workspace.resumeCreation": { params: { id: string }; result: WorkspaceCreation };
+	"workspace.retryCreation": { params: { id: string }; result: WorkspaceCreation };
 	"workspace.dismissCreation": {
 		params: { id: string };
 		result: { kickoff?: WorkspaceKickoff };

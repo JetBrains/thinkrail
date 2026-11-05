@@ -4,10 +4,8 @@ import {
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
-	readFileSync,
 	realpathSync,
 	rmSync,
-	symlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -25,7 +23,7 @@ import {
 	dismissWorkspaceCreation,
 	interruptWorkspaceCreations,
 	listWorkspaceCreations,
-	resumeWorkspaceCreation,
+	retryWorkspaceCreation,
 	setCheckoutStallForTests,
 	setWorkspaceCreationHandoff,
 	startWorkspaceCreation,
@@ -170,7 +168,7 @@ posix("a stalled checkout fails, cleans up, and keeps a retryable record", async
 	const [record] = listWorkspaceCreations();
 	expect(record).toMatchObject({
 		state: "failed",
-		phase: "preparing",
+		phase: "checking-out",
 		failure: { code: "WORKTREE_CHECKOUT_STALLED", cleanedUp: true },
 	});
 	expect(registered()).toEqual([realpathSync.native(repo)]);
@@ -179,7 +177,7 @@ posix("a stalled checkout fails, cleans up, and keeps a retryable record", async
 
 	setCheckoutStallForTests(undefined);
 	hook("true");
-	resumeWorkspaceCreation(creation.id);
+	retryWorkspaceCreation(creation.id);
 	const workspace = await awaitWorkspaceCreation(creation.id);
 	expect(workspace.branch).toBe("workspace-1");
 	expect(listWorkspaceCreations()).toEqual([]);
@@ -208,7 +206,7 @@ posix("a failing checkout reports git's error and dismiss hands the kickoff back
 	expect(removed().at(-1)).toEqual({ id: creation.id, projectId: "p1" });
 });
 
-posix("a checkout cut short by shutdown comes back interrupted and resumes cleanly", async () => {
+posix("a checkout cut short by shutdown comes back interrupted and retries cleanly", async () => {
 	hook("sleep 5");
 	const creation = startWorkspaceCreation("p1");
 	await until(() => listWorkspaceCreations()[0]?.phase === "checking-out");
@@ -220,35 +218,11 @@ posix("a checkout cut short by shutdown comes back interrupted and resumes clean
 	});
 
 	hook("true");
-	resumeWorkspaceCreation(creation.id);
+	retryWorkspaceCreation(creation.id);
 	const workspace = await awaitWorkspaceCreation(creation.id);
 	expect(existsSync(join(workspace.worktreePath, "README.md"))).toBe(true);
 	expect(gitOut(workspace.worktreePath, "status", "--porcelain")).toBe("");
 	expect(gitOut(workspace.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe("workspace-1");
-});
-
-posix("resuming after a crash first stops the checkout the dead host left running", async () => {
-	hook("sleep 5");
-	const creation = startWorkspaceCreation("p1");
-	await until(() => listWorkspaceCreations()[0]?.phase === "checking-out");
-	await stopWorkspaceCreations();
-	interruptWorkspaceCreations();
-	const fakeGit = join(dataDir, "git");
-	symlinkSync("/bin/sleep", fakeGit);
-	const orphan = Bun.spawn([fakeGit, "30"], { detached: true, stdout: "ignore", stderr: "ignore" });
-	const file = join(dataDir, "workspace-creations.json");
-	const records = JSON.parse(readFileSync(file, "utf8"));
-	records[0].checkoutPid = orphan.pid;
-	writeFileSync(file, JSON.stringify(records));
-
-	hook("true");
-	resumeWorkspaceCreation(creation.id);
-	try {
-		await awaitWorkspaceCreation(creation.id);
-		expect(orphan.killed || orphan.exitCode !== null || orphan.signalCode !== null).toBe(true);
-	} finally {
-		orphan.kill("SIGKILL");
-	}
 });
 
 posix("a folder that is still being created cannot be opened as a project", async () => {
@@ -324,7 +298,7 @@ posix(
 		await expect(awaitWorkspaceCreation(creation.id)).rejects.toThrow("already open in ThinkRail");
 		expect(listWorkspaceCreations()[0]?.failure?.code).toBe("WORKSPACE_PATH_TAKEN");
 		expect(existsSync(join(path, "README.md"))).toBe(true);
-		expect(() => resumeWorkspaceCreation(creation.id)).toThrow("Edit & retry");
+		expect(() => retryWorkspaceCreation(creation.id)).toThrow("Edit & retry");
 
 		await dismissWorkspaceCreation(creation.id);
 		expect(existsSync(join(path, "README.md"))).toBe(true);
@@ -348,7 +322,7 @@ posix("dismissing an interrupted creation never touches a folder opened since", 
 	);
 
 	const dismissing = dismissWorkspaceCreation(creation.id);
-	expect(() => resumeWorkspaceCreation(creation.id)).toThrow("being dismissed");
+	expect(() => retryWorkspaceCreation(creation.id)).toThrow("being dismissed");
 	await expect(dismissWorkspaceCreation(creation.id)).rejects.toThrow("already being dismissed");
 	await dismissing;
 	expect(existsSync(path)).toBe(true);

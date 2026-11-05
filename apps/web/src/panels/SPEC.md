@@ -621,7 +621,7 @@ a project picker, the prompt hero, and the reused
   **`WorkspaceCreation.tsx`** renders a creation in the two places the user waits: `WorkspaceCreationRow`
   under its project in `ProjectTree` (spinner + `Creating… N%` + a `<progress>` bar while running; failed:
   `Couldn't create` in the error colour, interrupted: `Interrupted at N%` in the warning colour, the reason in a
-  tooltip, with Retry/Resume, Edit & retry (failed only) and Dismiss/Discard; **a running creation has no
+  tooltip, with Retry, Edit & retry (failed only) and Dismiss/Discard; **a running creation has no
   actions** — there is no cancel), and `WorkspaceCreationView`, the shell's main pane for the selected creation
   (phase title, `x of y files · from <base>`, the held prompt, git's reason and the same actions; it says the
   partial folder and branch were removed only when the host reports `cleanedUp`). `ProjectTree` hides a

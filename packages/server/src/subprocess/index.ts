@@ -6,6 +6,5 @@ export {
 	type BoundedStream,
 	type BoundedStreamOptions,
 	runBounded,
-	stopOrphanedGroup,
 	streamBounded,
 } from "./runBounded";

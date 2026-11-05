@@ -108,18 +108,19 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   **Cleanup never touches a folder ThinkRail has open** (`managedPathOwned`: a workspace at that path or a
   project at or inside it), re-checked after every await before each destructive step, and the host's
   project-open door refuses a folder a creation still owns (`creationOwnsPath`), so nothing can adopt it
-  mid-cleanup; a branch checked out in another worktree is left alone. The running checkout's pid is
-  persisted (`checkoutPid`): a host crash may leave that detached git alive, so Resume and Discard first stop
-  it (`stopOrphanedGit` — only a live process still named `git`, its group SIGTERM then SIGKILL) and only then
-  touch `index.lock`; when that can't be verified (Windows) the action fails rather than racing a live writer. **Host restart:** graceful shutdown aborts running
-  jobs (`stopWorkspaceCreations`) and `interruptWorkspaceCreations` marks every leftover `running` record
-  `interrupted` at start — never resumed on its own (the user decides; a resumed checkout restarts the file pass
-  from 0%). A record whose workspace already exists is dropped; one whose project is gone is dropped without
-  git work. `resumeWorkspaceCreation` re-runs an interrupted or failed record — `preparing` clears any half-made
-  attempt first, `checking-out` removes the worktree's stale `index.lock` and checks out again — but refuses
-  `WORKSPACE_PATH_TAKEN` (the folder is someone else's now). `dismissWorkspaceCreation` cleans up whatever the
-  record still holds, drops it, and returns its full kickoff (Edit & retry prefills from it); an in-memory latch
-  refuses a second dismiss or a resume while one runs. Projects resolve through `getProjects()`, so closing a
+  mid-cleanup; a branch checked out in another worktree is left alone. **Host restart:** graceful shutdown
+  aborts running jobs (`stopWorkspaceCreations`) and `interruptWorkspaceCreations` marks every leftover
+  `running` record `interrupted` at start — never restarted on its own (the user decides). A record whose
+  project is gone is dropped without git work. **Retry is cleanup plus a fresh run, never a resume in place**
+  (`retryWorkspaceCreation`, for `interrupted` and `failed` alike): a killed checkout never writes the index, so
+  re-running it in the half-written folder rewrites every file anyway (measured no faster than a fresh create),
+  and an in-place resume would have to prove that a crashed host's detached git had exited before touching its
+  `index.lock` — pid bookkeeping that cannot be made safe across reboots, pid reuse and Windows. A survivor
+  instead fails safely: `worktree remove --force --force` cannot empty a folder git is still writing, cleanup
+  reports not-done, and the record stays retryable. Retry refuses `WORKSPACE_PATH_TAKEN` (the folder is someone
+  else's now). `dismissWorkspaceCreation` cleans up whatever the record still holds, drops it, and returns its
+  full kickoff (Edit & retry prefills from it); an in-memory latch refuses a second dismiss or a retry while one
+  runs. Projects resolve through `getProjects()`, so closing a
   project (a soft flag) never strands a creation.
   `renameWorkspace` (**sync**; sets the sanitized, casing- and script-preserving display `name` and always
   sets `renamed: true`, so automatic naming never touches it again. **`opts.branch`** is the agent's English
@@ -298,7 +299,7 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `changed` with the `WorkspaceCreation` view, `removed` with `WorkspaceCreationRemoved`); the host owns the
   handoff that turns a finished creation into a terminal and a chat, so this module never reaches `agent`.
 - **Public surface (barrel):** `createWorkspace`, `startWorkspaceCreation`, `awaitWorkspaceCreation`,
-  `listWorkspaceCreations`, `resumeWorkspaceCreation`, `dismissWorkspaceCreation`,
+  `listWorkspaceCreations`, `retryWorkspaceCreation`, `dismissWorkspaceCreation`,
   `interruptWorkspaceCreations`, `stopWorkspaceCreations`, `setWorkspaceCreationHandoff`, `CreationHandoff`,
   `setWorkspaceCreationPublisher`, `WorkspaceCreationEvent`, `creationOwnsPath`, `listExistingWorktrees`,
   `openExistingWorktree`,

@@ -241,7 +241,7 @@ import {
 	recordWorkspaceActivity,
 	refreshUserOwnedWorkspace,
 	renameWorkspace,
-	resumeWorkspaceCreation,
+	retryWorkspaceCreation,
 	settleWorkspace,
 	setWorkspaceDiffBase,
 	setWorkspaceReview,
@@ -699,8 +699,8 @@ const handlers: WsHandlers = {
 		return creation;
 	},
 	"workspace.listCreations": () => listWorkspaceCreations(),
-	"workspace.resumeCreation": (p, ctx) => {
-		const creation = resumeWorkspaceCreation(p.id);
+	"workspace.retryCreation": (p, ctx) => {
+		const creation = retryWorkspaceCreation(p.id);
 		creationClients.set(creation.id, ctx.clientKey);
 		return creation;
 	},
