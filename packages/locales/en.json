@@ -2375,6 +2375,7 @@
 	"shell.phone.disconnect": "Disconnect",
 	"shell.phone.making": "Making a pairing code…",
 	"shell.phone.offHint": "Turn on to pair the ThinkRail phone app with this computer. Phones connect over the same Wi‑Fi, or anywhere with Tailscale.",
+	"shell.phone.pairAnother": "Pair another phone",
 	"shell.phone.scanUntil": "Scan in the ThinkRail phone app · works once, until {{time}}",
 	"shell.projectHome.projects": "Projects",
 	"shell.quitHint.hold": "Hold {{shortcut}} or press twice to quit",

@@ -2387,6 +2387,7 @@
 	"shell.phone.disconnect": "Отключить",
 	"shell.phone.making": "Создаём код для подключения…",
 	"shell.phone.offHint": "Включите, чтобы подключить к этому компьютеру приложение ThinkRail на телефоне. Телефон подключается через тот же Wi‑Fi или из любого места через Tailscale.",
+	"shell.phone.pairAnother": "Подключить ещё телефон",
 	"shell.phone.scanUntil": "Отсканируйте в приложении ThinkRail на телефоне · одноразовый, до {{time}}",
 	"shell.projectHome.projects": "Проекты",
 	"shell.quitHint.hold": "Удерживайте {{shortcut}} или нажмите дважды, чтобы выйти",

@@ -1,4 +1,10 @@
-import { RiFileCopyLine, RiQrCodeLine, RiRefreshLine, RiSmartphoneLine } from "@remixicon/react";
+import {
+	RiCheckboxCircleFill,
+	RiFileCopyLine,
+	RiQrCodeLine,
+	RiRefreshLine,
+	RiSmartphoneLine,
+} from "@remixicon/react";
 import { REMOTE_ACCESS_PROTOCOL_VERSION, type RemoteAccessStatus } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
@@ -17,6 +23,8 @@ export interface PhoneAccessPanelProps {
 	headingId: string;
 	status: RemoteAccessStatus | null;
 	pairing: ShownPairing | null;
+	issuing: boolean;
+	justPaired: string | null;
 	expired: boolean;
 	pending: boolean;
 	onToggle: (enabled: boolean) => void;
@@ -31,6 +39,8 @@ export function PhoneAccessPanel({
 	headingId,
 	status,
 	pairing,
+	issuing,
+	justPaired,
 	expired,
 	pending,
 	onToggle,
@@ -79,43 +89,67 @@ export function PhoneAccessPanel({
 					className="flex flex-col items-center gap-8 border-border-muted border-b px-12 py-12"
 				>
 					{pairing ? (
-						<img
-							src={pairing.qrSrc}
-							alt={t("settings.phone.qrAlt")}
-							className={`size-192 rounded-sm ${expired ? "opacity-30" : ""}`}
-						/>
-					) : (
-						<div className="size-192 rounded-sm bg-container-content-bg" />
-					)}
-					<p className="m-0 text-center tr-text-metadata text-text-muted">
-						{!pairing
-							? t("shell.phone.making")
-							: expired
-								? t("settings.phone.expired")
-								: t("shell.phone.scanUntil", { time: clockTime(pairing.expiresAt) })}
-					</p>
-					<div className="flex items-center gap-8">
-						<Button
-							variant="outline"
-							size="m"
-							iconLeft={RiRefreshLine}
-							data-testid="phone-quick-new-code"
-							onClick={onShowCode}
-						>
-							{t("settings.phone.newCode")}
-						</Button>
-						{pairing ? (
-							<IconButton
-								variant="ghost"
-								size="m"
-								icon={RiFileCopyLine}
-								label={t("settings.phone.copyLink")}
-								tooltip={t("settings.phone.copyLink")}
-								data-testid="phone-quick-copy-link"
-								onClick={() => onCopyLink(pairing.link)}
+						<>
+							<img
+								src={pairing.qrSrc}
+								alt={t("settings.phone.qrAlt")}
+								className={`size-192 rounded-sm ${expired ? "opacity-30" : ""}`}
 							/>
-						) : null}
-					</div>
+							<p className="m-0 text-center tr-text-metadata text-text-muted">
+								{expired
+									? t("settings.phone.expired")
+									: t("shell.phone.scanUntil", { time: clockTime(pairing.expiresAt) })}
+							</p>
+							<div className="flex items-center gap-8">
+								<Button
+									variant="outline"
+									size="m"
+									iconLeft={RiRefreshLine}
+									data-testid="phone-quick-new-code"
+									onClick={onShowCode}
+								>
+									{t("settings.phone.newCode")}
+								</Button>
+								<IconButton
+									variant="ghost"
+									size="m"
+									icon={RiFileCopyLine}
+									label={t("settings.phone.copyLink")}
+									tooltip={t("settings.phone.copyLink")}
+									data-testid="phone-quick-copy-link"
+									onClick={() => onCopyLink(pairing.link)}
+								/>
+							</div>
+						</>
+					) : issuing ? (
+						<>
+							<div className="size-192 rounded-sm bg-container-content-bg" />
+							<p className="m-0 text-center tr-text-metadata text-text-muted">
+								{t("shell.phone.making")}
+							</p>
+						</>
+					) : (
+						<>
+							{justPaired ? (
+								<p
+									data-testid="phone-quick-paired"
+									className="m-0 flex items-center gap-8 tr-text-ui text-text-default"
+								>
+									<RiCheckboxCircleFill aria-hidden className="size-16 shrink-0 text-primary" />
+									{t("settings.phone.paired", { name: justPaired })}
+								</p>
+							) : null}
+							<Button
+								variant="outline"
+								size="m"
+								iconLeft={RiQrCodeLine}
+								data-testid="phone-quick-show-code"
+								onClick={onShowCode}
+							>
+								{justPaired ? t("shell.phone.pairAnother") : t("settings.phone.showCode")}
+							</Button>
+						</>
+					)}
 				</div>
 			)}
 
@@ -184,6 +218,8 @@ function PhoneAccessPopoverBody({
 			headingId={headingId}
 			status={access.status}
 			pairing={access.pairing}
+			issuing={access.issuing}
+			justPaired={access.justPaired}
 			expired={access.expired}
 			pending={access.pending}
 			onToggle={access.toggle}

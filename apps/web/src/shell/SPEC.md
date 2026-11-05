@@ -83,7 +83,8 @@ Right before host connection status sits the **phone access** shortcut (`PhoneAc
 at `REMOTE_ACCESS_PROTOCOL_VERSION`): a QR icon, tinted primary while access is on, opening a popover that
 mounts `usePhoneAccess({ autoCode: true })` from panels only while open — the relay switch (so a user never
 needs `--remote`), a one-time pairing QR minted as soon as access is on with its expiry, New code and Copy
-link, the paired phones each with **Disconnect** (`remote.revokeDevice`), and **All phone settings**, which
+link — or, once a phone pairs from it, "<phone> is paired." with **Pair another phone** — the paired phones each
+with **Disconnect** (`remote.revokeDevice`), and **All phone settings**, which
 opens Settings → Phone access. `PhoneAccessPanel` is its props-only half the unit test renders.
 
 Before it, the topbar conditionally renders the **JetBrains recurring-quota

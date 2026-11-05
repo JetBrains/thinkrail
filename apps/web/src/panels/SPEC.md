@@ -1043,7 +1043,10 @@ a project picker, the prompt hero, and the reused
   code with a toast, and lists paired phones with Revoke. The QR is an `<img>` of the `qrcode` SVG, which
   carries its own black-on-white: a scanner needs dark modules on a light field in every theme, so this image
   is the one place UI colour is not a token. `PhoneAccessView` is the props-only half the unit test renders;
-  the state and requests live in `usePhoneAccess`, which the topbar's quick panel shares.
+  the requests live in `usePhoneAccess`, which the topbar's quick panel shares, and every transition in the
+  pure `phoneAccessState.ts` reducer (unit-tested): a phone pairing from the shown code replaces it with who
+  paired, a failed mint ends the wait, and turning access off bumps a generation so a code minted before it —
+  dead once the relay restarts — is never shown.
   **`PrivacySettings`** manages the additional-data preference and
   confirmation together; the event contract belongs to [[submodule-server-analytics]]. The pane ends with a link to the analytics section of the project readme.
   **`AnalyticsConsentDialog`** mounts once through shell after a capable host's unconfirmed config hydrates,

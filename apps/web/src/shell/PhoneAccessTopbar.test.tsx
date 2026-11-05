@@ -24,6 +24,8 @@ function render(over: Partial<PhoneAccessPanelProps>): string {
 				headingId="h"
 				status={off}
 				pairing={null}
+				issuing={false}
+				justPaired={null}
 				expired={false}
 				pending={false}
 				onToggle={() => {}}
@@ -58,4 +60,25 @@ test("on without a network address: a warning instead of a code nobody can use",
 	const markup = render({ status: { ...on, addresses: [] } });
 	expect(markup).toContain('data-testid="phone-quick-no-network"');
 	expect(markup).not.toContain('data-testid="phone-quick-code"');
+});
+
+test("after a phone pairs: says so and offers to pair another instead of waiting on a code", () => {
+	const markup = render({ status: on, pairing: null, justPaired: "Phone" });
+	expect(markup).toContain('data-testid="phone-quick-paired"');
+	expect(markup).toContain('data-testid="phone-quick-show-code"');
+	expect(markup).not.toContain("Making a pairing code");
+});
+
+test("while a code is being made: the placeholder and nothing to press", () => {
+	const markup = render({ status: on, pairing: null, issuing: true });
+	expect(markup).toContain("Making a pairing code");
+	expect(markup).not.toContain('data-testid="phone-quick-show-code"');
+	expect(markup).not.toContain('data-testid="phone-quick-paired"');
+});
+
+test("no code and none being made (a mint failed): Show code, never a stuck placeholder", () => {
+	const markup = render({ status: on, pairing: null, issuing: false });
+	expect(markup).toContain('data-testid="phone-quick-show-code"');
+	expect(markup).not.toContain("Making a pairing code");
+	expect(markup).not.toContain('data-testid="phone-quick-paired"');
 });

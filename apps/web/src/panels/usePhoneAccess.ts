@@ -1,20 +1,28 @@
-import type { RemoteAccessStatus, RemotePairingLink } from "@thinkrail/contracts";
+import type { RemoteAccessStatus } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import QRCode from "qrcode";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { toast } from "@/store";
 import { getTransport } from "@/transport";
+import {
+	initialPhoneAccess,
+	newDevice,
+	phoneAccessReducer,
+	type ShownPairing,
+	shouldAutoIssue,
+} from "./phoneAccessState";
+
+export type { ShownPairing } from "./phoneAccessState";
 
 const PAIRING_POLL_MS = 2_000;
-
-export interface ShownPairing extends RemotePairingLink {
-	/** The QR as an image URL; the image carries its own black-on-white so it scans in any theme. */
-	qrSrc: string;
-}
 
 export interface PhoneAccess {
 	status: RemoteAccessStatus | null;
 	pairing: ShownPairing | null;
+	/** A code is being minted. */
+	issuing: boolean;
+	/** The phone that just paired from the shown code, until the next code is asked for. */
+	justPaired: string | null;
 	expired: boolean;
 	pending: boolean;
 	toggle: (enabled: boolean) => void;
@@ -23,49 +31,57 @@ export interface PhoneAccess {
 	revoke: (deviceId: string) => void;
 }
 
+async function qrImage(link: string): Promise<string> {
+	const svg = await QRCode.toString(link, { type: "svg" });
+	return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
 /**
  * Phone access over `remote.*`, shared by Settings → Phone access and the topbar quick panel: reads the
  * status on mount, switches the relay at once, mints a one-time code and, while one is shown, polls
- * `remote.status` so a phone that pairs closes the code with a toast. `autoCode` mints a code as soon as
- * access is on — the quick panel opens straight onto a scannable QR.
+ * `remote.status` so a phone that pairs replaces the code with "paired" and a toast. `autoCode` mints a code as
+ * soon as access is on — the quick panel opens straight onto a scannable QR. The transitions live in the
+ * pure `phoneAccessReducer`; this hook only runs the requests.
  */
 export function usePhoneAccess({ autoCode = false }: { autoCode?: boolean } = {}): PhoneAccess {
 	const t = useT();
-	const [status, setStatus] = useState<RemoteAccessStatus | null>(null);
-	const [pairing, setPairing] = useState<ShownPairing | null>(null);
+	const [state, dispatch] = useReducer(phoneAccessReducer, initialPhoneAccess);
 	const [expired, setExpired] = useState(false);
 	const [pending, setPending] = useState(false);
-	const knownDevices = useRef<Set<string>>(new Set());
-	const autoIssued = useRef(false);
+	const statusRef = useRef<RemoteAccessStatus | null>(null);
+	statusRef.current = state.status;
+	const generationRef = useRef(0);
+	generationRef.current = state.generation;
 
-	const adopt = useCallback((next: RemoteAccessStatus): void => {
-		knownDevices.current = new Set(next.devices.map((device) => device.id));
-		setStatus(next);
-		if (!next.enabled) {
-			setPairing(null);
-			autoIssued.current = false;
-		}
-	}, []);
+	const adopt = useCallback(
+		(status: RemoteAccessStatus) => dispatch({ type: "status", status }),
+		[],
+	);
 
-	const showCode = useCallback((): void => {
-		getTransport()
-			.request("remote.issueLink", {})
-			.then(async (issued) => {
-				const svg = await QRCode.toString(issued.link, { type: "svg" });
-				setPairing({
-					...issued,
-					qrSrc: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+	const issue = useCallback(
+		(auto: boolean): void => {
+			const generation = generationRef.current;
+			dispatch({ type: "issuing", auto });
+			getTransport()
+				.request("remote.issueLink", {})
+				.then(async (issued) => {
+					const pairing = { ...issued, qrSrc: await qrImage(issued.link) };
+					dispatch({ type: "issued", pairing, generation });
+				})
+				.catch(() => {
+					dispatch({ type: "issueFailed", generation });
+					toast.error(t("settings.phone.pairFailed"));
 				});
-			})
-			.catch(() => toast.error(t("settings.phone.pairFailed")));
-	}, [t]);
+		},
+		[t],
+	);
 
 	useEffect(() => {
 		let cancelled = false;
 		getTransport()
 			.request("remote.status", {})
-			.then((next) => {
-				if (!cancelled) adopt(next);
+			.then((status) => {
+				if (!cancelled) adopt(status);
 			})
 			.catch(() => {});
 		return () => {
@@ -74,11 +90,10 @@ export function usePhoneAccess({ autoCode = false }: { autoCode?: boolean } = {}
 	}, [adopt]);
 
 	useEffect(() => {
-		if (!autoCode || !status?.enabled || pairing || autoIssued.current) return;
-		autoIssued.current = true;
-		showCode();
-	}, [autoCode, status?.enabled, pairing, showCode]);
+		if (autoCode && shouldAutoIssue(state)) issue(true);
+	}, [autoCode, state, issue]);
 
+	const { pairing } = state;
 	useEffect(() => {
 		if (!pairing) return;
 		setExpired(Date.now() >= pairing.expiresAt);
@@ -86,18 +101,15 @@ export function usePhoneAccess({ autoCode = false }: { autoCode?: boolean } = {}
 			setExpired(Date.now() >= pairing.expiresAt);
 			void getTransport()
 				.request("remote.status", {})
-				.then((next) => {
-					const added = next.devices.find((device) => !knownDevices.current.has(device.id));
-					adopt(next);
-					if (added) {
-						setPairing(null);
-						toast.success(t("settings.phone.paired", { name: added.label }));
-					}
+				.then((status) => {
+					const added = newDevice(statusRef.current, status);
+					dispatch({ type: "polled", status });
+					if (added) toast.success(t("settings.phone.paired", { name: added.label }));
 				})
 				.catch(() => {});
 		}, PAIRING_POLL_MS);
 		return () => clearInterval(timer);
-	}, [pairing, adopt, t]);
+	}, [pairing, t]);
 
 	const toggle = (enabled: boolean): void => {
 		setPending(true);
@@ -122,5 +134,16 @@ export function usePhoneAccess({ autoCode = false }: { autoCode?: boolean } = {}
 			.catch(() => toast.error(t("settings.phone.revokeFailed")));
 	};
 
-	return { status, pairing, expired, pending, toggle, showCode, copyLink, revoke };
+	return {
+		status: state.status,
+		pairing: state.pairing,
+		issuing: state.issuing,
+		justPaired: state.justPaired,
+		expired,
+		pending,
+		toggle,
+		showCode: () => issue(false),
+		copyLink,
+		revoke,
+	};
 }
