@@ -6,6 +6,7 @@ import {
 	type PhoneAccessEvent,
 	type PhoneAccessState,
 	phoneAccessReducer,
+	phoneReach,
 	type ShownPairing,
 	shouldAutoIssue,
 } from "./phoneAccessState";
@@ -15,8 +16,9 @@ const on: RemoteAccessStatus = {
 	enabled: true,
 	addresses: [{ url: "ws://192.168.0.2:24243", route: "lan" }],
 	devices: [],
+	relay: { kind: "builtIn", port: 24243, publicCheck: { state: "closed", ip: "80.0.0.1" } },
 };
-const phone = { id: "d1", label: "Mobile", pairedAt: 1 };
+const phone = { id: "d1", label: "Mobile", pairedAt: 1, connected: false };
 const onWithPhone: RemoteAccessStatus = { ...on, devices: [phone] };
 const code: ShownPairing = { link: "thinkrail://pair?v=1", expiresAt: 10, qrSrc: "data:x" };
 
@@ -134,6 +136,53 @@ test("the quick panel mints one code on its own per on-stretch, and only where a
 		{ type: "status", status: on },
 	);
 	expect(shouldAutoIssue(backOn)).toBe(true);
+
+	const checking: RemoteAccessStatus = {
+		...on,
+		relay: { kind: "builtIn", port: 24243, publicCheck: { state: "checking" } },
+	};
+	expect(shouldAutoIssue(run({ type: "status", status: checking }))).toBe(false);
+});
+
+test("phoneReach names each route a phone has and whether it works from other networks", () => {
+	expect(phoneReach(off)).toBeNull();
+	expect(phoneReach(null)).toBeNull();
+
+	const home = phoneReach(on);
+	expect(home).toMatchObject({
+		lan: ["192.168.0.2"],
+		tailscale: [],
+		routes: ["lan"],
+		anywhere: false,
+	});
+
+	const tailnet = phoneReach({
+		...on,
+		addresses: [...on.addresses, { url: "ws://100.101.102.103:24243", route: "tailscale" }],
+	});
+	expect(tailnet).toMatchObject({
+		tailscale: ["100.101.102.103"],
+		routes: ["lan", "tailscale"],
+		anywhere: true,
+	});
+
+	const vps = phoneReach({
+		...on,
+		addresses: [{ url: "ws://203.0.113.7:24243", route: "public" }],
+		relay: { kind: "builtIn", port: 24243, publicCheck: { state: "reachable", ip: "203.0.113.7" } },
+	});
+	expect(vps).toMatchObject({ lan: [], routes: ["public"], anywhere: true });
+
+	const external = phoneReach({
+		...on,
+		addresses: [{ url: "wss://relay.example", route: "relay" }],
+		relay: { kind: "external", url: "wss://relay.example" },
+	});
+	expect(external).toMatchObject({
+		external: "wss://relay.example",
+		routes: ["relay"],
+		anywhere: true,
+	});
 });
 
 test("a status read that stays off does not count as another off", () => {

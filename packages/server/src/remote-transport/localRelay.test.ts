@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { relayAddresses, startLocalRelay } from "./localRelay";
 
-const noPublic = async (): Promise<undefined> => undefined;
+const noPublic = { discoverPublic: async () => ({ state: "offline" as const }) };
 
 const entry = (address: string, internal = false) => ({
 	address,
@@ -30,17 +30,78 @@ test("lists LAN, then Tailscale, then public addresses and skips loopback, link-
 	]);
 });
 
-test("adds the public address found behind NAT once discovery settles", async () => {
+test("adds the public address found behind NAT once the check settles", async () => {
 	const looked: number[] = [];
-	const relay = startLocalRelay(0, async (port) => {
-		looked.push(port);
-		return "203.0.113.7";
+	const relay = startLocalRelay(0, {
+		interfaces: () => ({ en0: [entry("10.0.0.5")] }),
+		discoverPublic: async (port) => {
+			looked.push(port);
+			return { state: "reachable", ip: "203.0.113.7" };
+		},
+	});
+	try {
+		expect(relay.publicCheck).toEqual({ state: "checking" });
+		await relay.ready;
+		expect(looked).toEqual([relay.port]);
+		expect(relay.publicCheck).toEqual({ state: "reachable", ip: "203.0.113.7" });
+		expect(relay.addresses).toEqual([
+			{ url: `ws://10.0.0.5:${relay.port}`, route: "lan" },
+			{ url: `ws://203.0.113.7:${relay.port}`, route: "public" },
+		]);
+	} finally {
+		relay.stop();
+	}
+});
+
+test("a closed public address is reported but never advertised", async () => {
+	const relay = startLocalRelay(0, {
+		interfaces: () => ({ en0: [entry("192.168.0.20")] }),
+		discoverPublic: async () => ({ state: "closed", ip: "80.0.0.1" }),
 	});
 	try {
 		await relay.ready;
-		const port = Number(new URL(relay.connectUrl).port);
-		expect(looked).toEqual([port]);
-		expect(relay.addresses.at(-1)).toEqual({ url: `ws://203.0.113.7:${port}`, route: "public" });
+		expect(relay.publicCheck).toEqual({ state: "closed", ip: "80.0.0.1" });
+		expect(relay.addresses.map((address) => address.route)).toEqual(["lan"]);
+	} finally {
+		relay.stop();
+	}
+});
+
+test("a public interface address needs no lookup", () => {
+	let looked = false;
+	const relay = startLocalRelay(0, {
+		interfaces: () => ({ eth0: [entry("203.0.113.9")] }),
+		discoverPublic: async () => {
+			looked = true;
+			return { state: "offline" };
+		},
+	});
+	try {
+		expect(relay.publicCheck).toEqual({ state: "interface", ip: "203.0.113.9" });
+		expect(looked).toBe(false);
+	} finally {
+		relay.stop();
+	}
+});
+
+test("addresses follow the network live and the public check reruns when they change", async () => {
+	let interfaces: Record<string, ReturnType<typeof entry>[]> = { en0: [entry("192.168.0.20")] };
+	let checks = 0;
+	const relay = startLocalRelay(0, {
+		interfaces: () => interfaces,
+		discoverPublic: async () => {
+			checks += 1;
+			return { state: "offline" };
+		},
+	});
+	try {
+		await relay.ready;
+		expect(relay.addresses.map((address) => address.route)).toEqual(["lan"]);
+		interfaces = { en0: [entry("192.168.0.20")], utun4: [entry("100.101.102.103")] };
+		expect(relay.addresses.map((address) => address.route)).toEqual(["lan", "tailscale"]);
+		await relay.ready;
+		expect(relay.addresses.map((address) => address.route)).toEqual(["lan", "tailscale"]);
+		expect(checks).toBe(2);
 	} finally {
 		relay.stop();
 	}

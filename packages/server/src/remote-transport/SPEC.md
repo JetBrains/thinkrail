@@ -44,9 +44,11 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for rationale 
     addresses survive a restart; a free port when it is taken), the host connecting over loopback. Its
     `addresses` (`relayAddresses`) are this machine's private-LAN IPv4 addresses, then its Tailscale ones
     (100.64.0.0/10), then any public one on an interface — what a phone on the same Wi‑Fi, the same tailnet, or
-    the internet (a VPS) can reach, with no server deployed. With no public interface address it adds the one
-    `publicAddress.ts` finds after start; `ready` settles once that lookup has, so `--remote`'s first QR
-    carries it, and links read the addresses per issue.
+    the internet (a VPS) can reach, with no server deployed. Addresses are read **live** from the interfaces,
+    so Tailscale starting later or a Wi‑Fi change lands in the next link; each change of that set re-runs the
+    public check (`publicCheck`: `interface` for a public IP on this machine, else `publicAddress.ts`'s
+    `reachable` / `closed` / `offline`), and only a `reachable` one is advertised. `ready` settles once the
+    current check has, so `--remote`'s first QR carries what it finds.
     Exposing the broker on the LAN is safe by the relay's zero-knowledge design: it sees routing only, and
     pairing stays a host-verified one-time token plus device key.
   - `publicAddress.ts` — `discoverPublicAddress`, the public side of a host behind 1:1 NAT (a cloud VM
@@ -80,9 +82,11 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for rationale 
     starts the relay (the host's own via `startLocalRelay` unless a `relayUrl` is configured) plus
     `startRemoteAccess`, and stopping tears both down, which closes every live device channel; the choice
     persists through the `remote` module's setting (`restore` brings it back at startup) unless the caller
-    passes `persist: false` for a one-run `--remote`. `issueLink` refuses while off; `revokeDevice` drops the
-    registry entry and asks the host to close that device's open channels. Access is **off by default** —
-    nothing listens for a phone until Settings or `--remote` turns it on.
+    passes `persist: false` for a one-run `--remote`. `issueLink` refuses while off. It owns the live device
+    channels, so `state()` marks each paired device `connected` and `revokeDevice` drops the registry entry and
+    closes that device's open channels itself; `state().relay` reports the built-in relay's port and public
+    check, or the configured URL, for Settings' network check. Access is **off by default** — nothing
+    listens for a phone until Settings or `--remote` turns it on.
   - `remoteWireBridge.ts` — `bridgeRemoteWire`, which runs the host wire protocol over a `RemoteChannel`:
     it decodes request frames, dispatches them through the host's `handleRequest` (injected), replies with
     the WS's `{ id, ok, result | error }` framing, and `push`es `{ channel, data }` events. Replay/ack is

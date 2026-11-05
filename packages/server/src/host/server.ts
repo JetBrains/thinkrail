@@ -115,7 +115,6 @@ import {
 	bridgeRemoteWire,
 	createRemoteAccessControl,
 	type RemoteAccessControl,
-	type RemoteChannel,
 	type RemoteWireBridge,
 } from "../remote-transport";
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
@@ -596,7 +595,6 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	};
 	server.publish = forwardingPublish;
 
-	const deviceChannels = new Map<string, Set<RemoteChannel>>();
 	const remoteAccess = createRemoteAccessControl({
 		...(remote?.relayUrl ? { relayUrl: remote.relayUrl } : {}),
 		hostName: computerName(),
@@ -609,19 +607,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				errorCodeOf,
 			});
 			remoteBridges.add(bridge);
-			const channels = deviceChannels.get(device.id) ?? new Set<RemoteChannel>();
-			channels.add(channel);
-			deviceChannels.set(device.id, channels);
-			channel.onClose(() => {
-				remoteBridges.delete(bridge);
-				channels.delete(channel);
-			});
+			channel.onClose(() => remoteBridges.delete(bridge));
 			// The device has no WS "open" event, so hand it the same welcome snapshot over the bridge.
 			bridge.push(WS_CHANNELS.serverWelcome, buildWelcome());
-		},
-		onRevoked: (deviceId) => {
-			for (const channel of deviceChannels.get(deviceId) ?? []) channel.close();
-			deviceChannels.delete(deviceId);
 		},
 	});
 	try {

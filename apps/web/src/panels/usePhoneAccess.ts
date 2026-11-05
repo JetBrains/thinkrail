@@ -14,7 +14,8 @@ import {
 
 export type { ShownPairing } from "./phoneAccessState";
 
-const PAIRING_POLL_MS = 2_000;
+/** While access is on: a phone pairing, a phone (dis)connecting, the network check settling or changing. */
+const STATUS_POLL_MS = 2_000;
 
 export interface PhoneAccess {
 	status: RemoteAccessStatus | null;
@@ -38,9 +39,10 @@ async function qrImage(link: string): Promise<string> {
 
 /**
  * Phone access over `remote.*`, shared by Settings → Phone access and the topbar quick panel: reads the
- * status on mount, switches the relay at once, mints a one-time code and, while one is shown, polls
- * `remote.status` so a phone that pairs replaces the code with "paired" and a toast. `autoCode` mints a code as
- * soon as access is on — the quick panel opens straight onto a scannable QR. The transitions live in the
+ * status on mount, switches the relay at once, mints a one-time code and, while access is on, polls
+ * `remote.status` so a phone that pairs replaces the code with "paired" and a toast, and connected phones and the
+ * network check stay current. `autoCode` mints a code as soon as access is on — the quick panel opens straight
+ * onto a scannable QR. The transitions live in the
  * pure `phoneAccessReducer`; this hook only runs the requests.
  */
 export function usePhoneAccess({ autoCode = false }: { autoCode?: boolean } = {}): PhoneAccess {
@@ -49,9 +51,11 @@ export function usePhoneAccess({ autoCode = false }: { autoCode?: boolean } = {}
 	const [expired, setExpired] = useState(false);
 	const [pending, setPending] = useState(false);
 	const statusRef = useRef<RemoteAccessStatus | null>(null);
-	statusRef.current = state.status;
 	const generationRef = useRef(0);
-	generationRef.current = state.generation;
+	useEffect(() => {
+		statusRef.current = state.status;
+		generationRef.current = state.generation;
+	}, [state.status, state.generation]);
 
 	const adopt = useCallback(
 		(status: RemoteAccessStatus) => dispatch({ type: "status", status }),
@@ -97,8 +101,14 @@ export function usePhoneAccess({ autoCode = false }: { autoCode?: boolean } = {}
 	useEffect(() => {
 		if (!pairing) return;
 		setExpired(Date.now() >= pairing.expiresAt);
+		const timer = setInterval(() => setExpired(Date.now() >= pairing.expiresAt), STATUS_POLL_MS);
+		return () => clearInterval(timer);
+	}, [pairing]);
+
+	const enabled = state.status?.enabled === true;
+	useEffect(() => {
+		if (!enabled) return;
 		const timer = setInterval(() => {
-			setExpired(Date.now() >= pairing.expiresAt);
 			void getTransport()
 				.request("remote.status", {})
 				.then((status) => {
@@ -107,9 +117,9 @@ export function usePhoneAccess({ autoCode = false }: { autoCode?: boolean } = {}
 					if (added) toast.success(t("settings.phone.paired", { name: added.label }));
 				})
 				.catch(() => {});
-		}, PAIRING_POLL_MS);
+		}, STATUS_POLL_MS);
 		return () => clearInterval(timer);
-	}, [pairing, t]);
+	}, [enabled, t]);
 
 	const toggle = (enabled: boolean): void => {
 		setPending(true);

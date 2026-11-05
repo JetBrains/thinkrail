@@ -1257,13 +1257,32 @@ export interface RemotePairedDevice {
 	id: string;
 	label: string;
 	pairedAt: number;
+	/** The device has a live connection to this host right now. */
+	connected: boolean;
 }
+
+/**
+ * Whether the internet reaches the host's own relay. `interface`: a public IP sits on this machine (not
+ * verifiable from inside, so the firewall is the user's to check); `reachable` / `closed`: the public address
+ * STUN reported, and whether the relay answered there; `offline`: STUN could not be reached.
+ */
+export type RemotePublicCheck =
+	| { state: "checking" }
+	| { state: "interface" | "reachable" | "closed"; ip: string }
+	| { state: "offline" };
+
+/** The relay phones dial: the host's own on `port`, or one configured with `--relay`. */
+export type RemoteRelay =
+	| { kind: "builtIn"; port: number; publicCheck: RemotePublicCheck }
+	| { kind: "external"; url: string };
 
 /** Phone access as Settings shows it; `addresses` is empty while off or when no network is up. */
 export interface RemoteAccessStatus {
 	enabled: boolean;
 	addresses: RemoteAddress[];
 	devices: RemotePairedDevice[];
+	/** Absent while access is off. */
+	relay?: RemoteRelay;
 }
 
 /** A one-time `thinkrail://pair` link for the QR, valid until `expiresAt` (epoch ms). */

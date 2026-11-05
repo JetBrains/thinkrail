@@ -2,7 +2,9 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { PairedDevice } from "../remote";
 import { addDevice, loadRemoteAccessEnabled, saveRemoteAccessEnabled } from "../remote";
+import type { RemoteChannel } from "./channel";
 import type { LocalRelay } from "./localRelay";
 import type { RemoteAccess, RemoteAccessOptions } from "./remoteAccess";
 import { createRemoteAccessControl, type RemoteAccessControlOptions } from "./remoteAccessControl";
@@ -15,7 +17,9 @@ function fixture(over: Partial<RemoteAccessControlOptions> = {}) {
 		events.push("relay:start");
 		return {
 			connectUrl: "ws://127.0.0.1:1",
+			port: 1,
 			addresses: [{ url: "ws://192.168.0.2:1", route: "lan" }],
+			publicCheck: { state: "closed", ip: "203.0.113.7" },
 			ready: Promise.resolve(),
 			stop: () => events.push("relay:stop"),
 		};
@@ -30,10 +34,8 @@ function fixture(over: Partial<RemoteAccessControlOptions> = {}) {
 			stop: () => events.push("access:stop"),
 		};
 	};
-	const revoked: string[] = [];
 	const control = createRemoteAccessControl({
 		onPaired: () => {},
-		onRevoked: (id) => revoked.push(id),
 		dataDir: dir,
 		startLocal,
 		startAccess,
@@ -44,7 +46,6 @@ function fixture(over: Partial<RemoteAccessControlOptions> = {}) {
 		control,
 		events,
 		started,
-		revoked,
 		cleanup: () => rmSync(dir, { recursive: true, force: true }),
 	};
 }
@@ -53,6 +54,7 @@ test("access is off by default and pairing needs it on", () => {
 	const f = fixture();
 	try {
 		expect(f.control.state()).toEqual({ enabled: false, addresses: [], devices: [] });
+		expect(f.control.state().relay).toBeUndefined();
 		expect(() => f.control.issueLink("default")).toThrow();
 		expect(f.events).toEqual([]);
 	} finally {
@@ -66,6 +68,11 @@ test("turning it on starts the host's own relay and remembers the choice; off te
 		const on = f.control.setEnabled(true);
 		expect(on.enabled).toBe(true);
 		expect(on.addresses).toEqual([{ url: "ws://192.168.0.2:1", route: "lan" }]);
+		expect(on.relay).toEqual({
+			kind: "builtIn",
+			port: 1,
+			publicCheck: { state: "closed", ip: "203.0.113.7" },
+		});
 		expect(f.started[0]?.relayUrl).toBe("ws://127.0.0.1:1");
 		expect(loadRemoteAccessEnabled(f.dir)).toBe(true);
 		expect(f.control.issueLink("default").link).toStartWith("thinkrail://pair");
@@ -87,6 +94,7 @@ test("a configured relay is used instead of a local one, and a one-run start is 
 		f.control.setEnabled(true, { persist: false });
 		expect(f.events).toEqual(["access:start"]);
 		expect(f.started[0]?.relayUrl).toBe("wss://relay.example");
+		expect(f.control.state().relay).toEqual({ kind: "external", url: "wss://relay.example" });
 		expect(loadRemoteAccessEnabled(f.dir)).toBe(false);
 	} finally {
 		f.cleanup();
@@ -104,14 +112,56 @@ test("restore brings access back only when it was left on", () => {
 	}
 });
 
-test("revoking a device drops it from the registry and closes its live connections", () => {
+function fakeChannel() {
+	const closers: (() => void)[] = [];
+	const channel: RemoteChannel = {
+		send: () => {},
+		onMessage: () => {},
+		onClose: (handler) => closers.push(handler),
+		close: () => {
+			for (const handler of closers) handler();
+		},
+		open: true,
+	};
+	return channel;
+}
+
+test("a device shows connected while it has a live channel, and revoking closes it", () => {
 	const f = fixture();
 	try {
-		addDevice({ id: "d1", label: "Phone", publicKey: "P1", pairedAt: 1 }, f.dir);
+		const phone: PairedDevice = { id: "d1", label: "Phone", publicKey: "P1", pairedAt: 1 };
+		addDevice(phone, f.dir);
 		addDevice({ id: "d2", label: "Tablet", publicKey: "P2", pairedAt: 2 }, f.dir);
+		f.control.setEnabled(true, { persist: false });
+		const channel = fakeChannel();
+		let closed = false;
+		channel.onClose(() => {
+			closed = true;
+		});
+		f.started[0]?.onPaired?.(phone, channel);
+		expect(f.control.state().devices.map((d) => [d.id, d.connected])).toEqual([
+			["d1", true],
+			["d2", false],
+		]);
+
 		const after = f.control.revokeDevice("d1");
 		expect(after.devices.map((d) => d.id)).toEqual(["d2"]);
-		expect(f.revoked).toEqual(["d1"]);
+		expect(closed).toBe(true);
+	} finally {
+		f.cleanup();
+	}
+});
+
+test("a closed channel leaves the device paired but no longer connected", () => {
+	const f = fixture();
+	try {
+		const phone: PairedDevice = { id: "d1", label: "Phone", publicKey: "P1", pairedAt: 1 };
+		addDevice(phone, f.dir);
+		f.control.setEnabled(true, { persist: false });
+		const channel = fakeChannel();
+		f.started[0]?.onPaired?.(phone, channel);
+		channel.close();
+		expect(f.control.state().devices).toEqual([{ ...phone, connected: false }]);
 	} finally {
 		f.cleanup();
 	}

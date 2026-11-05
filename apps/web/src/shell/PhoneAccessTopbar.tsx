@@ -10,10 +10,18 @@ import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { useCallback, useEffect, useId, useState } from "react";
+import { type PhoneRoute, phoneReach } from "../panels/phoneAccessState";
 import { SettingsSwitch } from "../panels/SettingsSwitch";
 import { type ShownPairing, usePhoneAccess } from "../panels/usePhoneAccess";
 import { SettingsSection, useAppStore } from "../store";
 import { getTransport } from "../transport";
+
+const ROUTE_NAME = {
+	lan: "shell.phone.routeLan",
+	tailscale: "shell.phone.routeTailscale",
+	public: "shell.phone.routePublic",
+	relay: "shell.phone.routeRelay",
+} as const satisfies Record<PhoneRoute, string>;
 
 function clockTime(epochMs: number): string {
 	return new Date(epochMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -52,6 +60,8 @@ export function PhoneAccessPanel({
 	const t = useT();
 	const enabled = status?.enabled ?? false;
 	const devices = status?.devices ?? [];
+	const reach = phoneReach(status);
+	const checking = reach?.publicCheck?.state === "checking";
 
 	return (
 		<div className="flex w-288 flex-col">
@@ -150,6 +160,21 @@ export function PhoneAccessPanel({
 							</Button>
 						</>
 					)}
+					{reach ? (
+						<p
+							data-testid="phone-quick-reach"
+							data-anywhere={reach.anywhere}
+							className="m-0 text-center tr-text-metadata text-text-muted"
+						>
+							{checking
+								? t("shell.phone.reachChecking")
+								: reach.anywhere
+									? t("shell.phone.reachVia", {
+											routes: reach.routes.map((route) => t(ROUTE_NAME[route])).join(" · "),
+										})
+									: t("shell.phone.reachLanOnly")}
+						</p>
+					) : null}
 				</div>
 			)}
 
@@ -163,12 +188,21 @@ export function PhoneAccessPanel({
 							<li
 								key={device.id}
 								data-testid={`phone-quick-device-${device.id}`}
+								data-connected={device.connected}
 								className="flex h-panel-row items-center gap-8 px-12"
 							>
-								<RiSmartphoneLine aria-hidden className="size-14 shrink-0 text-text-muted" />
+								<RiSmartphoneLine
+									aria-hidden
+									className={`size-14 shrink-0 ${device.connected ? "text-feedback-success" : "text-text-muted"}`}
+								/>
 								<span className="min-w-0 flex-1 truncate tr-text-ui text-text-default">
 									{device.label}
 								</span>
+								{device.connected ? (
+									<span className="shrink-0 tr-text-metadata text-text-muted">
+										{t("shell.phone.connected")}
+									</span>
+								) : null}
 								<Button
 									variant="ghost"
 									tone="danger"

@@ -330,7 +330,13 @@ function remoteAccessStatus(state: RemoteAccessState): RemoteAccessStatus {
 	return {
 		enabled: state.enabled,
 		addresses: state.addresses.map(({ url, route }) => ({ url, route })),
-		devices: state.devices.map(({ id, label, pairedAt }) => ({ id, label, pairedAt })),
+		devices: state.devices.map(({ id, label, pairedAt, connected }) => ({
+			id,
+			label,
+			pairedAt,
+			connected,
+		})),
+		...(state.relay ? { relay: state.relay } : {}),
 	};
 }
 

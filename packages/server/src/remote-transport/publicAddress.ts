@@ -40,16 +40,20 @@ export interface PublicAddressDeps {
 	answersAt?: (ip: string, port: number) => Promise<boolean>;
 }
 
+/** What the internet-facing check found, once it has run. */
+export type PublicDiscovery = { state: "reachable" | "closed"; ip: string } | { state: "offline" };
+
 /**
  * The public address of a host behind 1:1 NAT (a cloud VM whose interface carries only a private IP): the
- * STUN-mapped address, kept only when the relay answers there, so a home router's address — which does not
- * forward the port — is never advertised.
+ * STUN-mapped address, `reachable` only when the relay answers there, so a home router's address — which does
+ * not forward the port — is reported `closed` and never advertised.
  */
 export async function discoverPublicAddress(
 	port: number,
 	deps: PublicAddressDeps = {},
-): Promise<string | undefined> {
+): Promise<PublicDiscovery> {
 	const ip = await (deps.mappedAddress ?? stunMappedAddress)();
-	if (ip === undefined) return undefined;
-	return (await (deps.answersAt ?? relayAnswersAt)(ip, port)) ? ip : undefined;
+	if (ip === undefined) return { state: "offline" };
+	const reachable = await (deps.answersAt ?? relayAnswersAt)(ip, port);
+	return { state: reachable ? "reachable" : "closed", ip };
 }

@@ -9,7 +9,8 @@ const off: RemoteAccessStatus = { enabled: false, addresses: [], devices: [] };
 const on: RemoteAccessStatus = {
 	enabled: true,
 	addresses: [{ url: "ws://192.168.0.2:24243", route: "lan" }],
-	devices: [{ id: "d1", label: "Phone", pairedAt: Date.UTC(2026, 10, 2) }],
+	devices: [{ id: "d1", label: "Phone", pairedAt: Date.UTC(2026, 10, 2), connected: true }],
+	relay: { kind: "builtIn", port: 24243, publicCheck: { state: "closed", ip: "80.0.0.1" } },
 };
 const pairing: ShownPairing = {
 	link: "thinkrail://pair?v=1",
@@ -81,4 +82,20 @@ test("no code and none being made (a mint failed): Show code, never a stuck plac
 	expect(markup).toContain('data-testid="phone-quick-show-code"');
 	expect(markup).not.toContain("Making a pairing code");
 	expect(markup).not.toContain('data-testid="phone-quick-paired"');
+});
+
+test("the panel says which networks reach this computer and marks connected phones", () => {
+	const markup = render({ status: on, pairing });
+	expect(markup).toContain('data-testid="phone-quick-reach" data-anywhere="false"');
+	expect(markup).toContain("Same Wi‑Fi only");
+	expect(markup).toContain('data-testid="phone-quick-device-d1" data-connected="true"');
+
+	const tailnet = render({
+		status: {
+			...on,
+			addresses: [...on.addresses, { url: "ws://100.101.102.103:24243", route: "tailscale" }],
+		},
+		pairing,
+	});
+	expect(tailnet).toContain("Connects over Wi‑Fi · Tailscale");
 });

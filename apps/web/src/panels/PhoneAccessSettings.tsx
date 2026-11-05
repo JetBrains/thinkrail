@@ -3,6 +3,8 @@ import type { RemoteAccessStatus } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { SettingsGroup, SettingsPageContainer, SettingsRow } from "@thinkrail/ui/settings";
+import { PhoneAccessNetwork } from "./PhoneAccessNetwork";
+import { phoneReach } from "./phoneAccessState";
 import { SettingsNotice } from "./SettingsNotice";
 import { SettingsSwitch } from "./SettingsSwitch";
 import { type ShownPairing, usePhoneAccess } from "./usePhoneAccess";
@@ -41,6 +43,7 @@ export function PhoneAccessView({
 	const t = useT();
 	const enabled = status?.enabled ?? false;
 	const devices = status?.devices ?? [];
+	const reach = phoneReach(status);
 
 	return (
 		<SettingsPageContainer testId="settings-phone">
@@ -118,6 +121,7 @@ export function PhoneAccessView({
 					</div>
 				) : null}
 			</SettingsGroup>
+			{reach ? <PhoneAccessNetwork reach={reach} /> : null}
 			<SettingsGroup title={t("settings.phone.devices")} testId="phone-access-devices">
 				{devices.length === 0 ? (
 					<p className="py-12 tr-text-metadata text-text-muted">{t("settings.phone.noDevices")}</p>
@@ -126,12 +130,19 @@ export function PhoneAccessView({
 						<div
 							key={device.id}
 							data-testid={`phone-access-device-${device.id}`}
+							data-connected={device.connected}
 							className="flex items-center gap-8 border-border-muted border-b py-12"
 						>
 							<RiSmartphoneLine className="size-14 shrink-0 text-text-muted" />
 							<div className="flex min-w-0 flex-1 flex-col gap-2">
 								<span className="truncate tr-text-ui text-text-default">{device.label}</span>
 								<span className="tr-text-metadata text-text-muted">
+									{device.connected ? (
+										<span className="text-feedback-success">
+											{t("settings.phone.connectedNow")}
+											{" · "}
+										</span>
+									) : null}
 									{t("settings.phone.pairedOn", { date: calendarDate(device.pairedAt) })}
 								</span>
 							</div>

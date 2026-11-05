@@ -1039,13 +1039,17 @@ a project picker, the prompt hero, and the reused
   [[submodule-web-notifications]].
   **`PhoneAccessSettings`** (`phone`, from `REMOTE_ACCESS_PROTOCOL_VERSION`) is phone access over `remote.*`:
   the switch applies at once (no draft — it starts or stops a listener), while on it shows a one-time
-  pairing code with its expiry and a Copy link action, polls `remote.status` so a phone that pairs closes the
-  code with a toast, and lists paired phones with Revoke. The QR is an `<img>` of the `qrcode` SVG, which
+  pairing code with its expiry and a Copy link action, polls `remote.status` while on so a phone that pairs
+  closes the code with a toast, and lists paired phones (marked "Connected now" while live) with Revoke.
+  `PhoneAccessNetwork` is the network check below it — one row per route (same Wi‑Fi, Tailscale, Internet,
+  or the `--relay` URL alone) with the addresses found and what a missing or closed route needs — plus a
+  Wi‑Fi-only notice pointing at Tailscale. Both views read routes from the one `phoneReach` derivation. The QR is an `<img>` of the `qrcode` SVG, which
   carries its own black-on-white: a scanner needs dark modules on a light field in every theme, so this image
   is the one place UI colour is not a token. `PhoneAccessView` is the props-only half the unit test renders;
   the requests live in `usePhoneAccess`, which the topbar's quick panel shares, and every transition in the
   pure `phoneAccessState.ts` reducer (unit-tested): a phone pairing from the shown code replaces it with who
-  paired, a failed mint ends the wait, and turning access off bumps a generation so a code minted before it —
+  paired, a failed mint ends the wait, the quick panel's own code waits for the internet check so it carries a
+  public address found, and turning access off bumps a generation so a code minted before it —
   dead once the relay restarts — is never shown.
   **`PrivacySettings`** manages the additional-data preference and
   confirmation together; the event contract belongs to [[submodule-server-analytics]]. The pane ends with a link to the analytics section of the project readme.

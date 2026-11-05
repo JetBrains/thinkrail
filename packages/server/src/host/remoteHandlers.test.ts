@@ -6,7 +6,16 @@ function fakeControl() {
 	let state: RemoteAccessState = {
 		enabled: false,
 		addresses: [],
-		devices: [{ id: "d1", label: "Phone", publicKey: "SECRET-KEY", pairedAt: 7, lastSeenAt: 9 }],
+		devices: [
+			{
+				id: "d1",
+				label: "Phone",
+				publicKey: "SECRET-KEY",
+				pairedAt: 7,
+				lastSeenAt: 9,
+				connected: true,
+			},
+		],
 	};
 	const control: RemoteAccessControl = {
 		state: () => state,
@@ -15,6 +24,9 @@ function fakeControl() {
 				...state,
 				enabled,
 				addresses: enabled ? [{ url: "ws://192.168.0.2:1", route: "lan" }] : [],
+				...(enabled
+					? { relay: { kind: "builtIn", port: 1, publicCheck: { state: "offline" } } as const }
+					: {}),
 			};
 			return state;
 		},
@@ -50,13 +62,14 @@ test("this computer's client switches access, mints codes only while on, and nev
 	expect(await handleRequest("remote.status", {}, ctx)).toEqual({
 		enabled: false,
 		addresses: [],
-		devices: [{ id: "d1", label: "Phone", pairedAt: 7 }],
+		devices: [{ id: "d1", label: "Phone", pairedAt: 7, connected: true }],
 	});
 	await expect(handleRequest("remote.issueLink", {}, ctx)).rejects.toMatchObject({
 		code: "REMOTE_ACCESS_OFF",
 	});
 	expect(await handleRequest("remote.setEnabled", { enabled: true }, ctx)).toMatchObject({
 		enabled: true,
+		relay: { kind: "builtIn", port: 1, publicCheck: { state: "offline" } },
 	});
 	expect(await handleRequest("remote.issueLink", {}, ctx)).toEqual({
 		link: "thinkrail://pair?v=1",

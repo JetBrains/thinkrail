@@ -1,6 +1,7 @@
 import { networkInterfaces } from "node:os";
+import type { RemotePublicCheck } from "@thinkrail/contracts";
 import { startBroker } from "@thinkrail/relay";
-import { discoverPublicAddress } from "./publicAddress";
+import { discoverPublicAddress, type PublicDiscovery } from "./publicAddress";
 
 export const LOCAL_RELAY_PORT = 24243;
 
@@ -15,14 +16,22 @@ export interface RelayAddress {
 export interface LocalRelay {
 	/** Where the host itself connects (loopback). */
 	readonly connectUrl: string;
-	/** Where a phone can reach it: Wi‑Fi/LAN addresses first, then Tailscale, then public. */
+	readonly port: number;
+	/** Where a phone can reach it, read live: Wi‑Fi/LAN first, then Tailscale, then public. */
 	readonly addresses: readonly RelayAddress[];
-	/** Settles once the public address behind NAT has been looked for, so a first QR can carry it. */
+	/** Whether the internet reaches this relay, re-checked whenever this machine's addresses change. */
+	readonly publicCheck: RemotePublicCheck;
+	/** Settles once the current public check has, so a first QR can carry what it finds. */
 	readonly ready: Promise<void>;
 	stop(): void;
 }
 
 type Interfaces = ReturnType<typeof networkInterfaces>;
+
+export interface LocalRelayDeps {
+	interfaces?: () => Interfaces;
+	discoverPublic?: (port: number) => Promise<PublicDiscovery>;
+}
 
 const octets = (ip: string): number[] => ip.split(".").map((part) => Number.parseInt(part, 10));
 
@@ -60,35 +69,59 @@ export function relayAddresses(
  * interfaces at the fixed port (so a paired phone's saved addresses survive a restart), or a free one when that
  * is taken.
  */
-export function startLocalRelay(
-	port = LOCAL_RELAY_PORT,
-	discoverPublic: (port: number) => Promise<string | undefined> = discoverPublicAddress,
-): LocalRelay {
+export function startLocalRelay(port = LOCAL_RELAY_PORT, deps: LocalRelayDeps = {}): LocalRelay {
+	const interfaces = deps.interfaces ?? networkInterfaces;
+	const discoverPublic = deps.discoverPublic ?? discoverPublicAddress;
 	let running: ReturnType<typeof startBroker>;
 	try {
 		running = startBroker({ port, host: "0.0.0.0" });
 	} catch {
 		running = startBroker({ port: 0, host: "0.0.0.0" });
 	}
+	const boundPort = running.port;
 	let stopped = false;
-	let addresses = relayAddresses(running.port);
-	const ready = addresses.some((address) => address.route === "public")
-		? Promise.resolve()
-		: discoverPublic(running.port)
-				.then((ip) => {
-					if (ip === undefined || stopped) return;
-					const url = `ws://${ip}:${running.port}`;
-					if (!addresses.some((address) => address.url === url)) {
-						addresses = [...addresses, { url, route: "public" }];
-					}
-				})
-				.catch(() => {});
+	let checkedFor: string | null = null;
+	let publicCheck: RemotePublicCheck = { state: "checking" };
+	let pending: Promise<void> = Promise.resolve();
+
+	const local = (): RelayAddress[] => {
+		const addresses = relayAddresses(boundPort, interfaces());
+		const fingerprint = addresses.map((address) => address.url).join(" ");
+		if (fingerprint === checkedFor || stopped) return addresses;
+		checkedFor = fingerprint;
+		const onInterface = addresses.find((address) => address.route === "public");
+		if (onInterface) {
+			publicCheck = { state: "interface", ip: new URL(onInterface.url).hostname };
+			pending = Promise.resolve();
+		} else {
+			publicCheck = { state: "checking" };
+			pending = discoverPublic(boundPort)
+				.catch((): PublicDiscovery => ({ state: "offline" }))
+				.then((found) => {
+					if (checkedFor === fingerprint && !stopped) publicCheck = found;
+				});
+		}
+		return addresses;
+	};
+	local();
+
 	return {
-		connectUrl: `ws://127.0.0.1:${running.port}`,
+		connectUrl: `ws://127.0.0.1:${boundPort}`,
+		port: boundPort,
 		get addresses() {
-			return addresses;
+			const addresses = local();
+			if (publicCheck.state !== "reachable") return addresses;
+			const found: RelayAddress = { url: `ws://${publicCheck.ip}:${boundPort}`, route: "public" };
+			return [...addresses, found];
 		},
-		ready,
+		get publicCheck() {
+			local();
+			return publicCheck;
+		},
+		get ready() {
+			local();
+			return pending;
+		},
 		stop: () => {
 			stopped = true;
 			running.stop();

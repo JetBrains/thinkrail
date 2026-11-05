@@ -1,3 +1,4 @@
+import type { RemoteRelay } from "@thinkrail/contracts";
 import {
 	loadDevices,
 	loadRemoteAccessEnabled,
@@ -18,7 +19,9 @@ export interface RemoteAccessState {
 	enabled: boolean;
 	/** Where a phone can reach this host while access is on; empty when off or when no network is up. */
 	addresses: readonly RelayAddress[];
-	devices: readonly PairedDevice[];
+	devices: readonly (PairedDevice & { connected: boolean })[];
+	/** Absent while access is off. */
+	relay?: RemoteRelay;
 }
 
 export interface RemoteAccessControlOptions {
@@ -26,8 +29,6 @@ export interface RemoteAccessControlOptions {
 	relayUrl?: string;
 	hostName?: string;
 	onPaired: (device: PairedDevice, channel: RemoteChannel) => void;
-	/** A revoked device's live connections must close; the registry alone only stops its next resume. */
-	onRevoked: (deviceId: string) => void;
 	/** Where the setting and device registry live; the host data dir by default. Injected in tests. */
 	dataDir?: string;
 	startLocal?: () => LocalRelay;
@@ -62,6 +63,18 @@ export function createRemoteAccessControl(
 	const startLocal = options.startLocal ?? startLocalRelay;
 	const startAccess = options.startAccess ?? startRemoteAccess;
 	let running: { access: RemoteAccess; relay: LocalRelay | null } | null = null;
+	const channels = new Map<string, Set<RemoteChannel>>();
+
+	const track = (device: PairedDevice, channel: RemoteChannel): void => {
+		const open = channels.get(device.id) ?? new Set<RemoteChannel>();
+		open.add(channel);
+		channels.set(device.id, open);
+		channel.onClose(() => {
+			open.delete(channel);
+			if (open.size === 0 && channels.get(device.id) === open) channels.delete(device.id);
+		});
+		options.onPaired(device, channel);
+	};
 
 	const start = (): void => {
 		if (running) return;
@@ -71,7 +84,7 @@ export function createRemoteAccessControl(
 				relayUrl: relay ? relay.connectUrl : (options.relayUrl ?? ""),
 				...(relay ? { advertised: () => relay.addresses } : {}),
 				...(options.hostName ? { hostName: options.hostName } : {}),
-				onPaired: options.onPaired,
+				onPaired: track,
 			});
 			running = { access, relay };
 		} catch (error) {
@@ -87,10 +100,19 @@ export function createRemoteAccessControl(
 		running = null;
 	};
 
+	const relayOf = (current: NonNullable<typeof running>): RemoteRelay =>
+		current.relay
+			? { kind: "builtIn", port: current.relay.port, publicCheck: current.relay.publicCheck }
+			: { kind: "external", url: options.relayUrl ?? "" };
+
 	const state = (): RemoteAccessState => ({
 		enabled: running !== null,
 		addresses: running ? running.access.addresses : [],
-		devices: loadDevices(options.dataDir),
+		devices: loadDevices(options.dataDir).map((device) => ({
+			...device,
+			connected: channels.has(device.id),
+		})),
+		...(running ? { relay: relayOf(running) } : {}),
 	});
 
 	return {
@@ -108,7 +130,9 @@ export function createRemoteAccessControl(
 		},
 		revokeDevice(deviceId) {
 			revokeDevice(deviceId, options.dataDir);
-			options.onRevoked(deviceId);
+			// The registry alone only stops the next resume; a live connection must close too.
+			for (const channel of channels.get(deviceId) ?? []) channel.close();
+			channels.delete(deviceId);
 			return state();
 		},
 		restore() {

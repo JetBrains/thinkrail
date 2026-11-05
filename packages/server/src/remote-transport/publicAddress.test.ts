@@ -2,14 +2,17 @@ import { expect, test } from "bun:test";
 import { startBroker } from "@thinkrail/relay";
 import { discoverPublicAddress, relayAnswersAt } from "./publicAddress";
 
-test("keeps the STUN-mapped address only when the relay answers there", async () => {
+test("the STUN-mapped address is reachable only when the relay answers there", async () => {
 	const mappedAddress = async () => "203.0.113.7";
-	expect(await discoverPublicAddress(24243, { mappedAddress, answersAt: async () => true })).toBe(
-		"203.0.113.7",
-	);
+	expect(
+		await discoverPublicAddress(24243, { mappedAddress, answersAt: async () => true }),
+	).toEqual({
+		state: "reachable",
+		ip: "203.0.113.7",
+	});
 	expect(
 		await discoverPublicAddress(24243, { mappedAddress, answersAt: async () => false }),
-	).toBeUndefined();
+	).toEqual({ state: "closed", ip: "203.0.113.7" });
 });
 
 test("finds nothing when STUN is unreachable, without probing", async () => {
@@ -21,7 +24,7 @@ test("finds nothing when STUN is unreachable, without probing", async () => {
 			return true;
 		},
 	});
-	expect(found).toBeUndefined();
+	expect(found).toEqual({ state: "offline" });
 	expect(probed).toEqual([]);
 });
 
