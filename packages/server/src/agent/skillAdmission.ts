@@ -1,4 +1,4 @@
-import type { Project, SkillDecision } from "@thinkrail/contracts";
+import { isSkillGroupEnabled, type Project, type SkillDecision } from "@thinkrail/contracts";
 
 export type { SkillDecision };
 
@@ -8,6 +8,8 @@ export interface SkillAdmissionContext {
 	acknowledged: readonly string[];
 	disabled: readonly string[];
 	disabledGroups: readonly string[];
+	enabledGroups: readonly string[];
+	otherAgentSkills: boolean;
 	overrides: Readonly<Record<string, "on" | "off">>;
 }
 
@@ -15,10 +17,16 @@ export function admissionContextFor(
 	project:
 		| Pick<
 				Project,
-				"trusted" | "piResourceTrust" | "acknowledgedSkills" | "disabledSkills" | "disabledGroups"
+				| "trusted"
+				| "piResourceTrust"
+				| "acknowledgedSkills"
+				| "disabledSkills"
+				| "disabledGroups"
+				| "enabledGroups"
 		  >
 		| undefined,
 	overrides: Readonly<Record<string, "on" | "off">> = {},
+	otherAgentSkills = false,
 ): SkillAdmissionContext {
 	return {
 		trusted: project?.trusted === true,
@@ -26,6 +34,8 @@ export function admissionContextFor(
 		acknowledged: project?.acknowledgedSkills ?? [],
 		disabled: project?.disabledSkills ?? [],
 		disabledGroups: project?.disabledGroups ?? [],
+		enabledGroups: project?.enabledGroups ?? [],
+		otherAgentSkills,
 		overrides,
 	};
 }
@@ -45,8 +55,9 @@ export function decideSkill(skill: SkillFacts, ctx: SkillAdmissionContext): Skil
 	const override = ctx.overrides[skill.name];
 	if (override === "off") return "disabled";
 	if (override === "on") return "load";
-	if (ctx.disabledGroups.includes(skill.group)) return "disabled";
-	if (skill.isPlugin && ctx.disabledGroups.includes("@plugins")) return "disabled";
+	if (!isSkillGroupEnabled(ctx, skill.group, ctx.otherAgentSkills)) return "disabled";
+	if (skill.isPlugin && !isSkillGroupEnabled(ctx, "@plugins", ctx.otherAgentSkills))
+		return "disabled";
 	if (ctx.disabled.includes(skill.name)) return "disabled";
 	return "load";
 }

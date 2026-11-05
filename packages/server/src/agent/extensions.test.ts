@@ -34,6 +34,8 @@ function ctx(trusted: boolean, acknowledged: string[] = []): SkillAdmissionConte
 		acknowledged,
 		disabled: [],
 		disabledGroups: [],
+		enabledGroups: [],
+		otherAgentSkills: true,
 		overrides: {},
 	};
 }
@@ -243,6 +245,8 @@ describe("listSkillCommands", () => {
 				acknowledged: [],
 				disabled: [],
 				disabledGroups: [],
+				enabledGroups: [],
+				otherAgentSkills: true,
 				overrides: {},
 			});
 			expect(enabled.some((command) => command.name === "skill:personal-widget")).toBe(true);
@@ -253,6 +257,8 @@ describe("listSkillCommands", () => {
 				acknowledged: [],
 				disabled: [],
 				disabledGroups: ["personal"],
+				enabledGroups: [],
+				otherAgentSkills: true,
 				overrides: {},
 			});
 			expect(groupOff.some((command) => command.name === "skill:personal-widget")).toBe(false);
@@ -368,6 +374,8 @@ describe("buildResourceLoader", () => {
 				acknowledged: [],
 				disabled: [],
 				disabledGroups: [],
+				enabledGroups: [],
+				otherAgentSkills: true,
 				overrides: {},
 			};
 			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
@@ -403,6 +411,8 @@ describe("buildResourceLoader", () => {
 				acknowledged: [],
 				disabled: [],
 				disabledGroups: [],
+				enabledGroups: [],
+				otherAgentSkills: true,
 				overrides: {},
 			};
 			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
@@ -437,6 +447,8 @@ describe("buildResourceLoader", () => {
 				acknowledged: [],
 				disabled: [],
 				disabledGroups: [],
+				enabledGroups: [],
+				otherAgentSkills: true,
 				overrides: {},
 			};
 			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });

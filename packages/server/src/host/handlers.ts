@@ -982,13 +982,19 @@ const handlers: WsHandlers = {
 		const { projectId } = params;
 		const project = listProjects().find((candidate) => candidate.id === projectId);
 		if (!project) throw new Error(`Unknown project: ${projectId}`);
-		return listSkillCommands(project.path, admissionContextFor(project));
+		return listSkillCommands(
+			project.path,
+			admissionContextFor(project, {}, getConfig().otherAgentSkills),
+		);
 	},
 	"skills.state": (params) => {
 		const { workspaceId } = params;
 		const ws = getWorkspace(workspaceId);
 		const project = listProjects().find((p) => p.id === ws.projectId);
-		return listSkillCatalog(ws.worktreePath, admissionContextFor(project, ws.skillOverrides ?? {}));
+		return listSkillCatalog(
+			ws.worktreePath,
+			admissionContextFor(project, ws.skillOverrides ?? {}, getConfig().otherAgentSkills),
+		);
 	},
 	"extension.list": () => listExtensionCatalog(new Set(getConfig().disabledExtensions)),
 	"packages.list": (p) => packagesList(p),
@@ -1030,7 +1036,10 @@ const handlers: WsHandlers = {
 		const { projectId } = params;
 		const project = listProjects().find((p) => p.id === projectId);
 		if (!project) throw new Error(`Unknown project: ${projectId}`);
-		return listSkillCatalog(project.path, admissionContextFor(project));
+		return listSkillCatalog(
+			project.path,
+			admissionContextFor(project, {}, getConfig().otherAgentSkills),
+		);
 	},
 	"workspace.setSkillOverride": (p) => {
 		return setWorkspaceSkillOverride(p.id, p.name, p.override);

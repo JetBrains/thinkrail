@@ -68,6 +68,8 @@ export interface Project {
 	acknowledgedSkills?: string[];
 	disabledSkills?: string[];
 	disabledGroups?: string[];
+	/** Skill groups switched on for this project although `AppConfig.otherAgentSkills` leaves them off. */
+	enabledGroups?: string[];
 	/**
 	 * pi-level trust for the project's native `.pi/` resources, separate from the alias-skill `trusted`
 	 * grant; absent (a record that predates pi-level trust) reads as untrusted. Never enables MCP servers by itself.
@@ -1452,6 +1454,8 @@ export interface AppConfig extends ThemePreference {
 	/** Idle days after which a quiet workspace settles onto its project's shelf; `null` = never. */
 	settleIdleDays: number | null;
 	disabledExtensions: string[];
+	/** Load skills from other agents' user directories and Claude plugins in projects that do not decide for themselves. */
+	otherAgentSkills: boolean;
 	/** pi package identities (`PiPackageSummary.identity`) switched off host-wide; pi has no such setting. */
 	disabledPackages: string[];
 	/** UI language: `"system"` (follow the browser) or a BCP-47 tag; an unavailable tag renders English. */
@@ -1481,6 +1485,18 @@ export interface ExtensionCatalogEntry {
 
 /** How many recently chosen models the host remembers. */
 export const RECENT_MODELS_LIMIT = 5;
+
+export const OTHER_AGENT_SKILL_GROUPS: readonly string[] = ["personal", "@plugins"];
+
+export function isSkillGroupEnabled(
+	project: { disabledGroups?: readonly string[]; enabledGroups?: readonly string[] } | undefined,
+	group: string,
+	otherAgentSkills: boolean,
+): boolean {
+	if (project?.enabledGroups?.includes(group)) return true;
+	if (project?.disabledGroups?.includes(group)) return false;
+	return otherAgentSkills || !OTHER_AGENT_SKILL_GROUPS.includes(group);
+}
 
 /** The `settings.update` payload: `null` clears an optional override back to unset (⇒ the default). */
 export type AppConfigUpdate = Partial<
@@ -1789,6 +1805,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
 	settleIdleDays: SETTLE_IDLE_DAYS.default,
 	disabledExtensions: [],
+	otherAgentSkills: false,
 	disabledPackages: [],
 	locale: SYSTEM_LOCALE_PREFERENCE,
 	onboardingDismissed: false,

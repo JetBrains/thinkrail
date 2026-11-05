@@ -506,6 +506,8 @@ function admissionCacheKey(cwd: string, ctx: SkillAdmissionContext): string {
 		[...ctx.acknowledged].sort(),
 		[...ctx.disabled].sort(),
 		[...ctx.disabledGroups].sort(),
+		[...ctx.enabledGroups].sort(),
+		ctx.otherAgentSkills,
 		Object.entries(ctx.overrides).sort(([a], [b]) => a.localeCompare(b)),
 		[...disabledExtensions()].sort(),
 		packagePolicyKey(),

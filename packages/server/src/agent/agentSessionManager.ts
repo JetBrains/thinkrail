@@ -666,6 +666,8 @@ const defaultSkillAdmission = (): SkillAdmissionContext => ({
 	acknowledged: [],
 	disabled: [],
 	disabledGroups: [],
+	enabledGroups: [],
+	otherAgentSkills: false,
 	overrides: {},
 });
 let skillAdmissionResolver: (workspaceId: string) => SkillAdmissionContext = defaultSkillAdmission;
