@@ -77,9 +77,12 @@ const MODULE_RULES: readonly ModuleRule[] = [
 			"packages/chat-ui",
 			"packages/contracts",
 			"packages/design-tokens",
+			"packages/extension-api",
 			"packages/locales",
 			"packages/remote-client",
 			"packages/ui",
+			"thinkrail-extensions/ask-user-question",
+			"thinkrail-extensions/visualize",
 		],
 	},
 	{

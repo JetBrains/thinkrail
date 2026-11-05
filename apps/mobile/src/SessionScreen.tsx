@@ -2,18 +2,25 @@ import { RiHistoryLine } from "@remixicon/react";
 import { type ChatActions, ChatActionsContext } from "@thinkrail/chat-ui/ChatActions";
 import {
 	Composer,
+	type ComposerHandle,
 	type ComposerSubmitDisposition,
 	type SubmitBehavior,
 } from "@thinkrail/chat-ui/Composer";
+import {
+	type PendingExtUi,
+	PendingExtUiContext,
+	PendingExtUiPrompt,
+} from "@thinkrail/chat-ui/ExtUiPrompt";
 import { messagesToRuntime } from "@thinkrail/chat-ui/hydrate";
 import {
+	awaitingToolCallIdOf,
 	deriveInteractionStates,
 	InteractionStatesContext,
 } from "@thinkrail/chat-ui/interactionState";
 import type { ModelEffortPickerHandle, ModelSelection } from "@thinkrail/chat-ui/ModelEffortPicker";
 import { deriveMessageActions } from "@thinkrail/chat-ui/messageActions";
 import type { ModelPreferences } from "@thinkrail/chat-ui/modelPreferences";
-import { deriveRows } from "@thinkrail/chat-ui/rows";
+import { deriveRows, rowsHaveToolCall } from "@thinkrail/chat-ui/rows";
 import { ChatTurnView } from "@thinkrail/chat-ui/turns";
 import type { ChatAttachment } from "@thinkrail/chat-ui/types";
 import {
@@ -29,7 +36,9 @@ import {
 import { useT } from "@thinkrail/locales/react";
 import type { RemoteSessionItem, RemoteSessionsController } from "@thinkrail/remote-client";
 import { IconButton } from "@thinkrail/ui/button";
+import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { phoneDialog } from "./extUiDialog";
 import { Loader, Notice, Screen } from "./layout";
 import { ModelSheet } from "./ModelSheet";
 import { useHostRequest } from "./useHostRequest";
@@ -47,6 +56,8 @@ export interface OpenSession {
 }
 
 const REFRESH_COALESCE_MS = 400;
+/** Text buttons inside the transcript and the dialog dock are touch targets on a phone. */
+const TOUCH_BUTTONS = "[&_[data-slot=button]:not([data-icon-only])]:min-h-touch";
 const NO_PROMPTS: string[] = [];
 
 /** The phone has no picker preferences store: the picker shows the catalog, with no favorites or defaults. */
@@ -91,7 +102,13 @@ export function SessionScreen({
 	const [thinkingLevel, setThinkingLevel] = useState(session.thinkingLevel);
 	const [sendError, setSendError] = useState<string | null>(session.unsent?.reason ?? null);
 	const bottom = useRef<HTMLDivElement>(null);
+	const composerRef = useRef<ComposerHandle>(null);
 	const isStreaming = state?.execution === "running";
+	/** Hides a dialog the moment it is answered, before the host's next state drops it. */
+	const [answeredDialogId, setAnsweredDialogId] = useState<string | null>(null);
+	const dialog = phoneDialog(state, answeredDialogId);
+	const dialogDrafts = useRef(new Map<string, string>());
+	const revealedDialogs = useRef(new Set<string>());
 
 	const models = useHostRequest<WireModel[]>(client, "model.list", {});
 	/** The model picker lives above the field on a phone; `/model` in the composer opens it through this. */
@@ -149,20 +166,52 @@ export function SessionScreen({
 		() => deriveMessageActions(rows, isStreaming),
 		[rows, isStreaming],
 	);
+	const focusScope = useMemo(() => ({ sessionId }), [sessionId]);
+	const awaitingToolCallId = awaitingToolCallIdOf(state ?? null);
 	const interactionContext = useMemo(
 		() => ({
 			states: runtime
 				? deriveInteractionStates(runtime.turns, runtime.toolResponses, runtime.toolResults)
 				: {},
-			focusScope: {},
+			focusScope,
+			awaitingToolCallId,
 		}),
-		[runtime],
+		[runtime, focusScope, awaitingToolCallId],
 	);
+	const pendingExtUi = useMemo<PendingExtUi | null>(() => {
+		if (!client || !dialog) return null;
+		const { id } = dialog;
+		return {
+			request: dialog,
+			reply: (value) => {
+				setAnsweredDialogId(id);
+				dialogDrafts.current.delete(id);
+				client
+					.request("session.extUiReply", { response: { id, value } })
+					.catch((error: unknown) => {
+						setAnsweredDialogId(null);
+						setSendError(reasonOf(error));
+					});
+			},
+			draft: () => dialogDrafts.current.get(id),
+			rememberDraft: (text) => {
+				dialogDrafts.current.set(id, text);
+			},
+			claimReveal: () => {
+				if (revealedDialogs.current.has(id)) return false;
+				revealedDialogs.current.add(id);
+				return true;
+			},
+		};
+	}, [client, dialog]);
+	const dialogOnToolCard =
+		pendingExtUi?.request.toolCallId !== undefined &&
+		rowsHaveToolCall(rows, pendingExtUi.request.toolCallId);
 	const chatActions = useMemo<ChatActions | null>(
 		() =>
 			client && {
 				cancelAutomaticReveal: () => {},
-				focusComposer: () => {},
+				focusComposer: () => composerRef.current?.refocus(),
 				openSubagentTranscript: () => {},
 				respondToTool: (toolCallId, response) =>
 					client
@@ -238,94 +287,110 @@ export function SessionScreen({
 	};
 
 	return (
-		<Screen
-			title={session.title}
-			back={{ label: backLabel, onBack }}
-			action={
-				chats.kind === "ready" && chats.value.length > 1 ? (
-					<IconButton
-						size="l"
-						className="size-touch shrink-0"
-						icon={RiHistoryLine}
-						label={t("mobile.workspace.history")}
-						onClick={onHistory}
-					/>
-				) : undefined
-			}
-			footer={
-				<footer className="@container bg-container-workspace-bg pb-safe-bottom">
-					{sendError ? (
-						<p
-							role="alert"
-							className="m-0 px-chat-gutter py-8 text-feedback-error tr-text-metadata"
-						>
-							{t("mobile.session.sendFailed", { reason: sendError })}
-						</p>
-					) : null}
-					<div className="flex min-w-0 items-center px-chat-gutter pt-8">
-						<ModelSheet
-							ref={pickerRef}
-							models={models.kind === "ready" ? models.value : []}
-							current={model}
-							level={thinkingLevel}
-							onSelect={onSelectModel}
-							onSelectLevel={onSelectThinking}
-						/>
-					</div>
-					<Composer
-						value={draft}
-						onChange={setDraft}
-						isStreaming={isStreaming}
-						growthLimit={DEFAULT_CONFIG.composerGrowthLimit}
-						commands={commands.kind === "ready" ? commands.value : []}
-						templatePending={false}
-						mentionCandidates={[]}
-						recentPrompts={NO_PROMPTS}
-						models={models.kind === "ready" ? models.value : []}
-						modelsRefreshing={models.kind === "loading"}
-						onRefreshModels={() => {}}
-						currentModel={model}
-						thinkingLevel={thinkingLevel}
-						modelPreferences={PHONE_MODEL_PREFERENCES}
-						onMentionQuery={() => {}}
-						onSlashActive={() => {}}
-						onSelectModel={onSelectModel}
-						onSelectThinking={onSelectThinking}
-						externalModelPicker={externalPicker}
-						onSubmit={onSubmit}
-						onAbort={() => {
-							request("session.abort", { sessionId }).catch((error: unknown) =>
-								setSendError(reasonOf(error)),
-							);
-						}}
-					/>
-				</footer>
-			}
-		>
-			<ChatActionsContext.Provider value={chatActions}>
+		<ChatActionsContext.Provider value={chatActions}>
+			<PendingExtUiContext.Provider value={pendingExtUi}>
 				<InteractionStatesContext.Provider value={interactionContext}>
-					<div className="@container flex flex-col gap-8 px-chat-gutter py-16">
-						{loadError ? (
-							<Notice text={t("mobile.list.failed", { reason: loadError })} alert />
-						) : messages === null ? (
-							<Loader text={t("mobile.session.loading")} />
-						) : rows.length === 0 ? (
-							<Notice text={t("mobile.session.empty")} />
-						) : (
-							rows.map((row) => (
-								<div key={row.id}>
-									<ChatTurnView
-										row={row}
-										agentResponded={messageActions.agentRespondedByUserId.get(row.id) ?? false}
-										isFinalAnswer={messageActions.finalAnswerRowIds.has(row.id)}
+					<Screen
+						title={session.title}
+						back={{ label: backLabel, onBack }}
+						action={
+							chats.kind === "ready" && chats.value.length > 1 ? (
+								<IconButton
+									size="l"
+									className="size-touch shrink-0"
+									icon={RiHistoryLine}
+									label={t("mobile.workspace.history")}
+									onClick={onHistory}
+								/>
+							) : undefined
+						}
+						footer={
+							<footer className="@container bg-container-workspace-bg pb-safe-bottom">
+								{sendError ? (
+									<p
+										role="alert"
+										className="m-0 px-chat-gutter py-8 text-feedback-error tr-text-metadata"
+									>
+										{t("mobile.session.sendFailed", { reason: sendError })}
+									</p>
+								) : null}
+								{pendingExtUi && !dialogOnToolCard ? (
+									<div
+										data-testid="ext-ui-dock"
+										className={cn(
+											"flex max-h-[60dvh] min-h-0 flex-col overflow-y-auto px-chat-gutter pt-8",
+											TOUCH_BUTTONS,
+										)}
+									>
+										<PendingExtUiPrompt pending={pendingExtUi} />
+									</div>
+								) : null}
+								<div className="flex min-w-0 items-center px-chat-gutter pt-8">
+									<ModelSheet
+										ref={pickerRef}
+										models={models.kind === "ready" ? models.value : []}
+										current={model}
+										level={thinkingLevel}
+										onSelect={onSelectModel}
+										onSelectLevel={onSelectThinking}
 									/>
 								</div>
-							))
-						)}
-						<div ref={bottom} />
-					</div>
+								<Composer
+									ref={composerRef}
+									value={draft}
+									onChange={setDraft}
+									isStreaming={isStreaming}
+									growthLimit={DEFAULT_CONFIG.composerGrowthLimit}
+									commands={commands.kind === "ready" ? commands.value : []}
+									templatePending={false}
+									mentionCandidates={[]}
+									recentPrompts={NO_PROMPTS}
+									models={models.kind === "ready" ? models.value : []}
+									modelsRefreshing={models.kind === "loading"}
+									onRefreshModels={() => {}}
+									currentModel={model}
+									thinkingLevel={thinkingLevel}
+									modelPreferences={PHONE_MODEL_PREFERENCES}
+									onMentionQuery={() => {}}
+									onSlashActive={() => {}}
+									onSelectModel={onSelectModel}
+									onSelectThinking={onSelectThinking}
+									externalModelPicker={externalPicker}
+									onSubmit={onSubmit}
+									onAbort={() => {
+										request("session.abort", { sessionId }).catch((error: unknown) =>
+											setSendError(reasonOf(error)),
+										);
+									}}
+								/>
+							</footer>
+						}
+					>
+						<div
+							className={cn("@container flex flex-col gap-8 px-chat-gutter py-16", TOUCH_BUTTONS)}
+						>
+							{loadError ? (
+								<Notice text={t("mobile.list.failed", { reason: loadError })} alert />
+							) : messages === null ? (
+								<Loader text={t("mobile.session.loading")} />
+							) : rows.length === 0 ? (
+								<Notice text={t("mobile.session.empty")} />
+							) : (
+								rows.map((row) => (
+									<div key={row.id}>
+										<ChatTurnView
+											row={row}
+											agentResponded={messageActions.agentRespondedByUserId.get(row.id) ?? false}
+											isFinalAnswer={messageActions.finalAnswerRowIds.has(row.id)}
+										/>
+									</div>
+								))
+							)}
+							<div ref={bottom} />
+						</div>
+					</Screen>
 				</InteractionStatesContext.Provider>
-			</ChatActionsContext.Provider>
-		</Screen>
+			</PendingExtUiContext.Provider>
+		</ChatActionsContext.Provider>
 	);
 }

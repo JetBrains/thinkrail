@@ -3,7 +3,10 @@ import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { registerPhoneExtensions } from "./extensions";
 import "./index.css";
+
+registerPhoneExtensions();
 
 const root = document.getElementById("root");
 if (root)

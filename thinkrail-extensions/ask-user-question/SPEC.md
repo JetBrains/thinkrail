@@ -182,7 +182,8 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   ([[module-web]]'s text-field rule).
   `Shift+Escape` is otherwise the deliberate card-local skip; plain Escape outside a note never declines.
   Tab still reaches
-  Other, Skip, and footer actions. A compact visible shortcut legend makes the interaction discoverable,
+  Other, Skip, and footer actions. A compact visible shortcut legend makes the interaction discoverable (hidden on a coarse
+  pointer, where there is no keyboard to discover),
   and the choices are checked rows with `aria-checked` — never `aria-pressed`, which
   announced an exclusive pick as a toggle button and said nothing about the set. The container role
   carries single vs multi (`radiogroup` vs `group` of checkboxes), and

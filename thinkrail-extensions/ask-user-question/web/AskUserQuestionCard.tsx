@@ -818,7 +818,7 @@ function ModeHint({
 	return (
 		<span
 			data-testid="ask-shortcuts"
-			className="flex flex-wrap items-center gap-4 text-text-muted tr-text-metadata"
+			className="flex flex-wrap items-center gap-4 text-text-muted tr-text-metadata pointer-coarse:hidden"
 		>
 			{multiSelect ? (
 				<ListChecks className="size-14 shrink-0" />

@@ -4,6 +4,7 @@
 
 @source "../../../packages/ui";
 @source "../../../packages/chat-ui/src";
+@source "../../../thinkrail-extensions/*/web/**/*.{ts,tsx}";
 
 @custom-variant button-disabled (&:is([data-disabled="true"], :disabled:not([data-loading])));
 

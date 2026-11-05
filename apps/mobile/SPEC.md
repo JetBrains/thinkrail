@@ -66,7 +66,13 @@ reconnecting needs a new QR) and, only when it is unreachable, **Reconnect** und
   over models grouped by provider (`modelSections.ts`, current provider first, a search field only past 8
   models); a tap picks and closes, and the composer's `/model` opens it — send / steer / follow-up /
   interrupt through the same `session.*` methods as the IDE, tool-card answers through
-  `session.respondToTool`). It re-reads `session.getMessages` (coalesced 400ms) on the session's pi events
+  `session.respondToTool`). Extension cards come from `extensions.ts`, the phone's registry over the same
+  `@thinkrail/ext-*/web` descriptors the IDE registers (ask-user-question, visualize), with the host's
+  `awaitingToolCallId` from `session.state` so only the call the agent waits on accepts an answer. An extension
+  dialog (`select` / `confirm` / `input` / `editor`) comes from `session.state`'s `needsInput` (`extUiDialog.ts`),
+  so a phone that opens a chat after it was raised still sees it: on its tool card when that call is in the
+  transcript, else docked above the composer, answered through `session.extUiReply` and hidden at once.
+  Text buttons in the transcript and the dock are `touch` tall. It re-reads `session.getMessages` (coalesced 400ms) on the session's pi events
   rather than reducing the event stream; `main.tsx` registers the built-in tool cards and mounts the
   `TooltipProvider` the composer needs;
   `layout.tsx` (`Screen` frame, `ListRow`, loading/failed/empty states — a screen waits on `Loader`, the shared `RunningIcon` R mark at 56px over a caption: "Connecting to …" until a host's channel is up, then "Loading…"; a project expanding in the tree waits on an inline 20px one), `status.ts` (row marks from
@@ -79,7 +85,8 @@ reconnecting needs a new QR) and, only when it is unreachable, **Reconnect** und
   it on-device). Live status comes from the controller's `session.state` stream; lists are read on screen
   entry, and a workspace's chats re-read when a session appears or leaves in it.
 - **Allowed deps:** `@thinkrail/remote-client` (the entire remote engine), `@thinkrail/chat-ui` (the chat
-  renderers and composer — never a copy of them), `@thinkrail/contracts`,
+  renderers and composer — never a copy of them), `@thinkrail/ext-*/web` and `@thinkrail/extension-api/web`
+  (extension tool cards), `@thinkrail/contracts`,
   `@thinkrail/design-tokens` (palettes, semantic CSS, `applyPalette`), `@thinkrail/locales/react`,
   `@thinkrail/ui` primitives, Remix Icon, `@capacitor/barcode-scanner`, React, Vite, Tailwind v4, Capacitor, platform APIs. Never
   `server`, `pi`, `web`, or `shared`.
@@ -156,8 +163,7 @@ git-ignored like `ios/`. See
   opening an existing worktree, and the Settled shelf.
 - Live token streaming: the transcript refreshes from `session.getMessages` on pi events instead of running
   the IDE's pi-event reducer (it lives in the web store; moving it into [[module-chat-ui]] is the next step).
-- Code highlighting (no `CodeHighlighterProvider` yet — code renders plain), extension tool cards beyond the
-  built-ins (e.g. ask-user-question, registered by the IDE's `extensions` module), extension UI dialogs
-  (`ExtUiPrompt` over `piExtensionUi`), templates and `@` mentions in the composer, picker favorites, the
+- Code highlighting (no `CodeHighlighterProvider` yet — code renders plain), an extension's status line and
+  widgets (`setStatus` / `setWidget`), templates and `@` mentions in the composer, picker favorites, the
   Resources dock, and push notifications (a content-less "wake" push would need a
   relay feature, since the relay is zero-knowledge).
