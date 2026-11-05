@@ -3,25 +3,36 @@ import { useT } from "@thinkrail/locales/react";
 import { AttentionDot } from "@thinkrail/ui/attention-dot";
 import { IconButton } from "@thinkrail/ui/button";
 import { RunningIcon } from "@thinkrail/ui/running-icon";
+import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
 import type { ScopeStatus } from "./status";
 import type { Loaded } from "./useHostRequest";
+
+/** The IDE surface a screen stands for: the project tree is the sidebar, everything else the workspace. */
+export type ScreenSurface = "workspace" | "sidebar";
 
 export function Screen({
 	title,
 	back,
 	action,
 	footer,
+	surface = "workspace",
 	children,
 }: {
 	title: string;
+	surface?: ScreenSurface;
 	back?: { label: string; onBack: () => void };
 	action?: ReactNode;
 	footer?: ReactNode;
 	children: ReactNode;
 }) {
 	return (
-		<main className="flex h-full flex-col pt-safe-top">
+		<main
+			className={cn(
+				"flex h-full flex-col pt-safe-top",
+				surface === "sidebar" ? "bg-container-sidebar-bg" : "bg-container-workspace-bg",
+			)}
+		>
 			<header className="flex min-h-touch items-center gap-4 border-b border-border-default bg-container-header-bg px-8 py-4">
 				{back ? (
 					<IconButton

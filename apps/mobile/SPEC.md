@@ -116,6 +116,9 @@ four mobile layout roles: `touch` (44px, the minimum tap target, `h-touch` / `mi
 [[module-chat-ui]] asks every host to define). Text comes from `mobile.*` keys in
 `packages/locales/en.json` (the i18n gate scans `apps/mobile/src`).
 
+A screen stands on the IDE surface it replaces: the project tree on `container-sidebar-bg` (the IDE's
+sidebar), the chat and every other screen on `container-workspace-bg`; `Screen`'s `surface` picks it.
+
 Screen headers follow iOS: a sub-screen shows an icon-only back arrow (its destination is the arrow's
 accessible label, not visible text) with the title centered; the top level shows the large left title.
 

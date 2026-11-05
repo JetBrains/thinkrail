@@ -87,6 +87,7 @@ export function ProjectsScreen({
 	return (
 		<Screen
 			title={t("mobile.projects.title")}
+			surface="sidebar"
 			action={
 				<IconButton
 					size="l"
