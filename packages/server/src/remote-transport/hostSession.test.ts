@@ -3,7 +3,7 @@ import { answerTranscript, offerTranscript } from "@thinkrail/contracts";
 import type { PairedDevice } from "../remote";
 import type { RemoteChannel } from "./channel";
 import type { HostPeer, HostPeerSignal } from "./hostPeer";
-import { createHostSession, type HostSessionDeps } from "./hostSession";
+import { createHostSession, type HostSessionDeps, OUTDATED_APP_REASON } from "./hostSession";
 import type { HostMessage } from "./signalingProtocol";
 import { createHostHandshake } from "./signalingSession";
 
@@ -138,6 +138,17 @@ test("an answer not signed by the paired device key is rejected and closes the s
 	expect(sent.at(-1)?.kind).toBe("rejected");
 	s.receive({ kind: "candidate", candidate: "late" });
 	expect(calls.candidates).toEqual([]);
+});
+
+test("an unreadable frame tells an older app to update and ends the session", () => {
+	const { peer, calls } = fakePeer();
+	const sent: HostMessage[] = [];
+	const s = session(peer, sent);
+	s.receiveUnreadable();
+	expect(sent).toEqual([{ kind: "rejected", reason: OUTDATED_APP_REASON, code: "outdated_app" }]);
+	expect(calls.closed).toBe(1);
+	s.receive(hello);
+	expect(sent).toHaveLength(1);
 });
 
 test("the opened channel is handed out with the authorized device", () => {

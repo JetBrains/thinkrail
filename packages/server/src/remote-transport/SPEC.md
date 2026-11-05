@@ -91,6 +91,9 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for rationale 
 
 - **Authorize before negotiate:** the handshake must reach `accepted` before any `offer`/`answer`/`candidate`
   is relayed; a rejected or out-of-order handshake is terminal.
+- **Never leave a device waiting:** every refusal is a `rejected` frame with a `RejectCode` (`invalid_code`,
+  `unknown_device`, `denied`), and a device frame that does not parse — an app older than the host — is
+  answered `outdated_app` and ends the session instead of being dropped silently.
 - **The relay is untrusted:** nothing it carries is a bearer secret (token id + HMAC, never the token), and
   both SDPs are signed, so a malicious or compromised relay cannot pair its own key, impersonate the host,
   or sit in the middle of the DTLS channel. It can only refuse service.

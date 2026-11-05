@@ -19,9 +19,18 @@ export interface HostSessionDeps {
 export interface HostSession {
 	/** Feeds a device signaling frame: the authorization handshake first, then WebRTC negotiation. */
 	receive(message: DeviceMessage): void;
+	/**
+	 * Feeds a frame that did not parse. A device built for this protocol never sends one, so it means the app
+	 * is older than the host: say so and end the session, rather than drop it and leave the phone waiting.
+	 */
+	receiveUnreadable(): void;
 	onChannel(handler: (channel: RemoteChannel, device: PairedDevice) => void): void;
 	close(): void;
 }
+
+/** What an older app, which knows no reject codes, shows the user as-is. */
+export const OUTDATED_APP_REASON =
+	"this ThinkRail app is older than the one on the computer; update it on the phone and scan a new QR code";
 
 /**
  * One remote device session on the host: runs the authorize-before-negotiate handshake, and only once the
@@ -72,7 +81,7 @@ export function createHostSession(deps: HostSessionDeps): HostSession {
 					Buffer.from(message.signature, "base64url"),
 				);
 				if (!genuine) {
-					deps.send({ kind: "rejected", reason: "answer signature rejected" });
+					deps.send({ kind: "rejected", reason: "answer signature rejected", code: "denied" });
 					close();
 					return;
 				}
@@ -80,6 +89,11 @@ export function createHostSession(deps: HostSessionDeps): HostSession {
 			} else if (message.kind === "candidate") {
 				void deps.peer.addCandidate(message.candidate);
 			}
+		},
+		receiveUnreadable() {
+			if (closed) return;
+			deps.send({ kind: "rejected", reason: OUTDATED_APP_REASON, code: "outdated_app" });
+			close();
 		},
 		onChannel(handler) {
 			emitChannel = handler;

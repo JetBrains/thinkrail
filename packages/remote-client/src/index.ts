@@ -1,3 +1,4 @@
+export { type RemoteConnectCode, RemoteConnectError } from "./connectError";
 export { type DeviceChannel, toDeviceChannel } from "./deviceChannel";
 export {
 	connectRemoteProject,

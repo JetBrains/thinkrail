@@ -53,6 +53,15 @@ test("parseHostMessage accepts valid host frames", () => {
 	});
 });
 
+test("a rejection keeps a known code and drops one it does not know", () => {
+	expect(
+		parseHostMessage(JSON.stringify({ kind: "rejected", reason: "old", code: "outdated_app" })),
+	).toEqual({ kind: "rejected", reason: "old", code: "outdated_app" });
+	expect(
+		parseHostMessage(JSON.stringify({ kind: "rejected", reason: "new", code: "from_the_future" })),
+	).toEqual({ kind: "rejected", reason: "new" });
+});
+
 test("both parsers reject bad json, unknown kinds, missing fields, unsigned SDP, and empty labels", () => {
 	expect(parseDeviceMessage("not json")).toBeNull();
 	expect(parseDeviceMessage(JSON.stringify({ kind: "proof" }))).toBeNull();

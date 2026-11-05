@@ -58,7 +58,7 @@ test("happy path: hello → challenge, valid proof → accepted + authorized + d
 test("an invalid or expired token is rejected before any challenge", () => {
 	const { deps: d, registered } = deps();
 	const step = createHostHandshake(d).handle({ ...hello, tokenId: "bad-id" });
-	expect(step.send?.kind).toBe("rejected");
+	expect(step.send).toMatchObject({ kind: "rejected", code: "invalid_code" });
 	expect(step.done).toBe(true);
 	expect(registered).toHaveLength(0);
 });
@@ -107,7 +107,7 @@ test("resume for an unknown device is rejected", () => {
 		devicePublicKey: "STRANGER",
 		nonce: "N",
 	});
-	expect(step.send?.kind).toBe("rejected");
+	expect(step.send).toMatchObject({ kind: "rejected", code: "unknown_device" });
 	expect(step.done).toBe(true);
 });
 

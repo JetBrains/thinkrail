@@ -37,7 +37,12 @@ test("over a real relay the host proves its key, registers, and receives a devic
 		sign: identity.sign,
 		openSession: (sessionId): HostSession => {
 			opened.push(sessionId);
-			return { receive: () => {}, onChannel: () => {}, close: () => {} };
+			return {
+				receive: () => {},
+				receiveUnreadable: () => {},
+				onChannel: () => {},
+				close: () => {},
+			};
 		},
 	});
 	const devices: WebSocket[] = [];

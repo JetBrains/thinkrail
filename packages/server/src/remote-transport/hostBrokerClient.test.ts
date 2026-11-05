@@ -17,16 +17,26 @@ function fixture() {
 		sessionId: string;
 		toDevice: (m: HostMessage) => void;
 		received: DeviceMessage[];
+		unreadable: number;
 		closed: boolean;
 	}[] = [];
 	const client = createHostBrokerClient({
 		hostKey: "HOSTKEY",
 		sign: (data) => new TextEncoder().encode(`signed:${new TextDecoder().decode(data)}`),
 		openSession: (sessionId, toDevice) => {
-			const record = { sessionId, toDevice, received: [] as DeviceMessage[], closed: false };
+			const record = {
+				sessionId,
+				toDevice,
+				received: [] as DeviceMessage[],
+				unreadable: 0,
+				closed: false,
+			};
 			opened.push(record);
 			const session: HostSession = {
 				receive: (message) => void record.received.push(message),
+				receiveUnreadable: () => {
+					record.unreadable += 1;
+				},
 				onChannel: () => {},
 				close: () => {
 					record.closed = true;
@@ -61,6 +71,21 @@ test("an opened session is created and device frames route into it", () => {
 	const resume = { kind: "resume", devicePublicKey: "k", nonce: "n" };
 	client.receive(JSON.stringify({ t: "frame", session: "S1", data: JSON.stringify(resume) }));
 	expect(opened[0]?.received).toEqual([resume as DeviceMessage]);
+});
+
+test("a frame the host cannot read reaches the session as unreadable instead of vanishing", () => {
+	const { client, opened } = fixture();
+	client.receive(JSON.stringify({ t: "open", session: "S1" }));
+	const oldHello = {
+		kind: "hello",
+		token: "raw",
+		devicePublicKey: "k",
+		label: "Phone",
+		nonce: "n",
+	};
+	client.receive(JSON.stringify({ t: "frame", session: "S1", data: JSON.stringify(oldHello) }));
+	expect(opened[0]?.received).toEqual([]);
+	expect(opened[0]?.unreadable).toBe(1);
 });
 
 test("host signaling for a session is framed back through the broker", () => {

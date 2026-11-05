@@ -76,8 +76,10 @@ export function createHostBrokerClient(deps: HostBrokerDeps): HostBrokerClient {
 				sessions.set(sessionId, deps.openSession(sessionId, toDevice));
 			} else if (message.t === "frame" && message.session !== undefined) {
 				const session = sessions.get(message.session);
+				if (!session) return;
 				const device = parseDeviceMessage(message.data);
-				if (session && device) session.receive(device);
+				if (device) session.receive(device);
+				else session.receiveUnreadable();
 			} else if (message.t === "close" && message.session !== undefined) {
 				sessions.get(message.session)?.close();
 				sessions.delete(message.session);

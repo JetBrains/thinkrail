@@ -31,7 +31,11 @@ uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `loc
     attempt, reconnects included, races the host's relay addresses (`relayPicker.ts`'s `openFirstRelay`: the
     first socket to open wins, the rest close; none within 6s is a `RelayUnreachableError`, code
     `relay_unreachable`), so a phone moving between the host's Wi‑Fi and Tailscale takes whichever route
-    works. The peer gathers through contracts' `PUBLIC_STUN_URLS`.
+    works. The peer gathers through contracts' `PUBLIC_STUN_URLS`. A failed attempt rejects with a
+    `RemoteConnectError` (`connectError.ts`) whose code names the cause — the relay's `no host available` /
+    `host busy`, the host's coded `rejected` (read by reason from a host too old to send a code), a host key
+    mismatch, a dropped relay — and an attempt with no open data channel after `CONNECT_TIMEOUT_MS` (20s) fails
+    as `host_silent` when the host never answered, else `no_direct_route`, so the app never waits forever.
   - `hostRegistry.ts` — the locally-stored set of paired hosts over an injected `KeyValueStore`; a host keeps
     every advertised `relayUrls` (older entries only the one `relayUrl`).
   - `remoteSessions.ts` — one wire client per host, aggregating live sessions into one list, plus each host's

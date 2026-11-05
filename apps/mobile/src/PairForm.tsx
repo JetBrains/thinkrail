@@ -49,7 +49,7 @@ function usePairing(pair: PairState, onPair: (link: string) => Promise<boolean>)
 				: scanProblem?.kind === "failed"
 					? t("mobile.pair.scanFailed", { reason: scanProblem.reason })
 					: pair.kind === "failed"
-						? t("mobile.pair.failed", { reason: pair.reason })
+						? pair.reason
 						: null;
 
 	return { link, setLink, scanning, pairing: pair.kind === "pairing", scan, submit, problem };

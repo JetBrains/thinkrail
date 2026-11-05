@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { RejectCode } from "@thinkrail/contracts";
 import type { PairedDevice, PairingProof, PairingRequest } from "../remote";
 import type { DeviceMessage, HostMessage } from "./signalingProtocol";
 
@@ -63,9 +64,9 @@ export function createHostHandshake(deps: HandshakeDeps): HostHandshake {
 	const newDeviceId = deps.newDeviceId ?? randomUUID;
 	let state: State = { phase: "await-hello" };
 
-	const reject = (reason: string): HandshakeStep => {
+	const reject = (reason: string, code: RejectCode = "denied"): HandshakeStep => {
 		state = { phase: "closed" };
-		return { send: { kind: "rejected", reason }, done: true };
+		return { send: { kind: "rejected", reason, code }, done: true };
 	};
 
 	return {
@@ -75,7 +76,7 @@ export function createHostHandshake(deps: HandshakeDeps): HostHandshake {
 			if (state.phase === "await-hello") {
 				if (message.kind === "hello") {
 					const request = deps.consumeToken(message.tokenId);
-					if (!request) return reject("invalid or expired pairing code");
+					if (!request) return reject("invalid or expired pairing code", "invalid_code");
 					const challenge = deps.newChallenge();
 					state = {
 						phase: "await-proof",
@@ -90,7 +91,8 @@ export function createHostHandshake(deps: HandshakeDeps): HostHandshake {
 				}
 				if (message.kind === "resume") {
 					const known = deps.findDevice(message.devicePublicKey);
-					if (!known) return reject("unknown device; pair again with a fresh link");
+					if (!known)
+						return reject("unknown device; pair again with a fresh link", "unknown_device");
 					const challenge = deps.newChallenge();
 					state = {
 						phase: "await-proof",

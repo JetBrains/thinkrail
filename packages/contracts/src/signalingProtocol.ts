@@ -15,11 +15,29 @@ export type DeviceMessage =
 	| { kind: "candidate"; candidate: string }
 	| { kind: "bye" };
 
-/** Frames the host sends back over the signaling channel. The offer is signed by the host key. */
+/**
+ * Why the host turned a device away, so the device can say what to do next instead of echoing `reason`:
+ * `invalid_code` — the QR token is unknown, expired or used; `unknown_device` — a `resume` from a device the
+ * host has no record of (revoked or never paired); `outdated_app` — the device sent a frame this host's
+ * protocol cannot read, i.e. the phone app is older than the host; `denied` — any other failed check.
+ */
+export type RejectCode = "invalid_code" | "unknown_device" | "outdated_app" | "denied";
+
+const REJECT_CODES: readonly RejectCode[] = [
+	"invalid_code",
+	"unknown_device",
+	"outdated_app",
+	"denied",
+];
+
+/**
+ * Frames the host sends back over the signaling channel. The offer is signed by the host key. `rejected`
+ * carries a human `reason` (older devices show only that) and, from hosts that know it, a `code`.
+ */
 export type HostMessage =
 	| { kind: "challenge"; challenge: string }
 	| { kind: "accepted" }
-	| { kind: "rejected"; reason: string }
+	| { kind: "rejected"; reason: string; code?: RejectCode }
 	| { kind: "offer"; sdp: string; signature: string }
 	| { kind: "candidate"; candidate: string }
 	| { kind: "bye" };
@@ -96,8 +114,13 @@ export function parseHostMessage(raw: string): HostMessage | null {
 			return field(message.challenge) ? { kind: "challenge", challenge: message.challenge } : null;
 		case "accepted":
 			return { kind: "accepted" };
-		case "rejected":
-			return field(message.reason) ? { kind: "rejected", reason: message.reason } : null;
+		case "rejected": {
+			if (!field(message.reason)) return null;
+			const code = REJECT_CODES.find((known) => known === message.code);
+			return code
+				? { kind: "rejected", reason: message.reason, code }
+				: { kind: "rejected", reason: message.reason };
+		}
 		case "offer":
 			return field(message.sdp) && field(message.signature)
 				? { kind: "offer", sdp: message.sdp, signature: message.signature }
