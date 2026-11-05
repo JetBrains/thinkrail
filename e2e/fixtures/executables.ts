@@ -1,5 +1,5 @@
-import { chmodSync, existsSync, writeFileSync } from "node:fs";
-import { delimiter, join } from "node:path";
+import { chmodSync, copyFileSync, existsSync, writeFileSync } from "node:fs";
+import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { LOGIN_ENV_MARKER } from "@thinkrail/shared/shellEnv";
 
@@ -12,6 +12,44 @@ export function resolveBunExecutable(env: NodeJS.ProcessEnv = process.env): stri
 		.find(existsSync);
 	if (!executable) throw new Error("bun executable not found for the e2e host");
 	return executable;
+}
+
+export function writeFakeCentral(fakeBinDir: string): void {
+	const source = fileURLToPath(new URL("./bin/central", import.meta.url));
+	if (process.platform === "win32") {
+		const bash = resolveGitBashExecutable();
+		writeFileSync(join(fakeBinDir, "central.cmd"), `@echo off\r\n"${bash}" "${source}" %*\r\n`);
+		return;
+	}
+
+	const target = join(fakeBinDir, "central");
+	copyFileSync(source, target);
+	chmodSync(target, 0o755);
+}
+
+function resolveGitBashExecutable(): string {
+	const gitName = process.platform === "win32" ? "git.exe" : "git";
+	const git = (process.env.PATH ?? "")
+		.split(delimiter)
+		.filter(Boolean)
+		.map((directory) => join(directory, gitName))
+		.find(existsSync);
+	if (!git) throw new Error("Git is required to locate the E2E Central shell on Windows");
+
+	let directory = dirname(git);
+	while (true) {
+		for (const candidate of [
+			join(directory, "bin", "bash.exe"),
+			join(directory, "usr", "bin", "bash.exe"),
+		]) {
+			if (existsSync(candidate)) return candidate;
+		}
+		const parent = dirname(directory);
+		if (parent === directory) break;
+		directory = parent;
+	}
+
+	throw new Error("Git Bash was not found next to the E2E Git executable");
 }
 
 export function hermeticE2ePath(fakeBinDir: string): string {

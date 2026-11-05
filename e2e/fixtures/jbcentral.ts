@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page } from "@playwright/test";
 import { JBCENTRAL_STATUS_TTL_MS } from "@thinkrail/shared/jbcentral";
@@ -50,7 +50,8 @@ export function assertOnlyReviewedArgv(): void {
 }
 
 export function runCentralOnHost(...argv: string[]): void {
-	execFileSync(join(E2E_FAKE_BIN_DIR, "central"), argv, {
+	const central = join(E2E_FAKE_BIN_DIR, process.platform === "win32" ? "central.cmd" : "central");
+	execFileSync(central, argv, {
 		env: {
 			PATH: "/usr/bin:/bin",
 			HOME: E2E_HOME_DIR,
@@ -59,14 +60,15 @@ export function runCentralOnHost(...argv: string[]): void {
 			CENTRAL_STUB_EXTENSION_SOURCE: E2E_CENTRAL_EXTENSION_SOURCE,
 		},
 		stdio: "ignore",
+		shell: process.platform === "win32",
 	});
 }
 
 export function setCentralInstalled(installed: boolean): void {
-	const live = join(E2E_FAKE_BIN_DIR, "central");
-	const hidden = join(E2E_FAKE_BIN_DIR, "central.uninstalled");
+	const live = join(E2E_FAKE_BIN_DIR, process.platform === "win32" ? "central.cmd" : "central");
+	const hidden = `${live}.uninstalled`;
 	if (installed === existsSync(live)) return;
-	execFileSync("mv", [installed ? hidden : live, installed ? live : hidden]);
+	renameSync(installed ? hidden : live, installed ? live : hidden);
 }
 
 export async function connectCentral(page: Page): Promise<void> {
