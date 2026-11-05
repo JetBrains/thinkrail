@@ -250,7 +250,11 @@ async function start(): Promise<void> {
 		now: () => performance.now(),
 		every,
 	});
-	const commandGate = createRepeatGate({ isKeyDown: () => readKeys()?.keyDown ?? null, every });
+	const commandGate = createRepeatGate({
+		isKeyDown: () => readKeys()?.keyDown ?? null,
+		sinceKeyDown: () => readKeys()?.sinceKeyDown ?? null,
+		every,
+	});
 	ApplicationMenu.on("application-menu-clicked", (event) => {
 		const action = readMenuAction(event);
 		const target = menuTarget;

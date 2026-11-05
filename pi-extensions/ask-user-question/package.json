@@ -1,6 +1,6 @@
 {
 	"name": "@thinkrail/pi-ask-user-question",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "A pi extension adding an `ask_user_question` tool: the agent asks structured multiple-choice questions instead of guessing, answered in a terminal questionnaire, in an RPC host's dialogs, or in a host's own UI such as ThinkRail, the agentic IDE built on pi.",
 	"license": "Apache-2.0",
 	"type": "module",

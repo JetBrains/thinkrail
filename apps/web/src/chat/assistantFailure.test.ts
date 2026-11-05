@@ -1,6 +1,11 @@
 import { afterEach, expect, test } from "bun:test";
 import { applyLocale, currentTranslator } from "@thinkrail/locales/react";
-import { assistantFailure, errorTurnText } from "./assistantFailure";
+import {
+	assistantFailure,
+	CLAUDE_USAGE_URL,
+	errorTurnText,
+	subscriptionLimit,
+} from "./assistantFailure";
 
 afterEach(() => applyLocale("en", {}));
 
@@ -46,4 +51,28 @@ test("a provider's model-unavailable error leads with a pick-another-model notic
 		);
 	expect(errorTurnText(t, { text: "429 rate limited", failure: "error" })).toBe("429 rate limited");
 	expect(errorTurnText(t, { text: "model_not_found" })).toBe("model_not_found");
+});
+
+test("a subscription-limit error resolves to the provider's usage page and keeps its text verbatim", () => {
+	const t = currentTranslator();
+	const claude =
+		'400 {"type":"error","error":{"type":"invalid_request_error","message":"Third-party apps now draw from your extra usage, not your plan limits. Add more at claude.ai/settings/usage and keep going."},"request_id":"req_011CgYFw5EqMVmQ8L5y3bZ4k"}';
+	expect(subscriptionLimit({ text: claude, failure: "error" })).toEqual({
+		url: CLAUDE_USAGE_URL,
+		label: "chat.extraUsage.manage",
+	});
+	expect(errorTurnText(t, { text: claude, failure: "error" })).toBe(claude);
+	const chatgpt = [
+		'OpenAI API error (429): {"code":"subscription_sharing_usage_limit_exceeded","message":"The ChatGPT user has reached their Subscription Sharing usage limit. Ask the user to try again after their usage limit resets or use an API key instead."}\nCheck your ChatGPT usage: https://chatgpt.com/settings/usage',
+		"The ChatGPT user has reached their Subscription Sharing usage limit. Ask the user to try again after their usage limit resets or use an API key instead.",
+		'OpenAI API error (429): {"code":"subscription_sharing_workplace_individual_usage_limit_exceeded"}',
+		"You have hit your ChatGPT usage limit (plus plan). Try again in ~42 min.",
+	];
+	for (const text of chatgpt)
+		expect(subscriptionLimit({ text, failure: "error" })).toEqual({
+			url: "https://chatgpt.com/settings/usage",
+			label: "chat.failure.checkChatgptUsage",
+		});
+	expect(subscriptionLimit({ text: "429 rate limited", failure: "error" })).toBeNull();
+	expect(subscriptionLimit({ text: chatgpt[1] ?? "" })).toBeNull();
 });
