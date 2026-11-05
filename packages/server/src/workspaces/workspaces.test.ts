@@ -1355,7 +1355,7 @@ test("explicit target preserves managed creation, local exclude and default plac
 	expect(noWirePath).toBe(true);
 	const ordinary = await createWorkspace("p1");
 	expect(ordinary.worktreePath).toBe(join(dataDir, "worktrees", "repo", ordinary.branch));
-	removeWorkspace(ws.id);
+	await removeWorkspace(ws.id);
 	expect(existsSync(target)).toBe(false);
 	expect(gitOut(repo, "show-ref", "--verify", `refs/heads/${ws.branch}`)).not.toBe("");
 });
