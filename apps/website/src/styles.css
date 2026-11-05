@@ -2705,7 +2705,7 @@ html:not(.anim) .term-caret {
 /* ── Blog Post Navigation ───────────────────────────────────────────────── */
 
 .blog-post-install {
-	margin-top: var(--space-2xl);
+	margin-block: var(--space-2xl);
 }
 
 .blog-post-nav {

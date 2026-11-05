@@ -64,12 +64,16 @@ const author = await postAuthor(post);
 			</div>
 		</header>
 
+		<section class="blog-post-install" aria-label="Install ThinkRail">
+			<InstallPicker idPrefix="blog-top" />
+		</section>
+
 		<div class="blog-post-content">
 			<Content />
 		</div>
 
 		<section class="blog-post-install" aria-label="Install ThinkRail">
-			<InstallPicker />
+			<InstallPicker idPrefix="blog-bottom" />
 		</section>
 
 		<nav class="blog-post-nav">
