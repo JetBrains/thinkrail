@@ -63,7 +63,15 @@ export function App() {
 	}, []);
 	const t = useT();
 	const [failures, setFailures] = useState<ReadonlyMap<string, HostFailure>>(() => new Map());
+	/** Computers whose banner the user closed: hidden from the tree until they fail anew or connect. */
+	const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => new Set());
 	const markFailure = useCallback((hostKey: string, failure: HostFailure | null) => {
+		setDismissed((current) => {
+			if (!current.has(hostKey)) return current;
+			const next = new Set(current);
+			next.delete(hostKey);
+			return next;
+		});
 		setFailures((current) => {
 			if (failure === null && !current.has(hostKey)) return current;
 			const next = new Map(current);
@@ -181,20 +189,18 @@ export function App() {
 		<div className="relative h-full">
 			<Layer covered={top !== null}>
 				<ProjectsScreen
-					hosts={hosts}
+					hosts={hosts.filter((host) => !dismissed.has(host.hostKey))}
 					controller={controller}
 					items={items}
-					unreachable={
-						new Map(
-							[...failures].map(
-								([hostKey, failure]) => [hostKey, failureText(t, failure)] as const,
-							),
-						)
-					}
+					unreachable={failures}
+					pair={pair}
+					onPair={pairWith}
 					expanded={expanded}
 					onToggle={toggleProject}
 					onSettings={() => setRoute({ kind: "settings" })}
 					onReconnect={(host) => void connectHost(host)}
+					onForget={(host) => forgetHost(host.hostKey)}
+					onDismiss={(host) => setDismissed((current) => new Set(current).add(host.hostKey))}
 					onOpen={(hostKey, project, workspace) =>
 						setRoute({ kind: "workspace", hostKey, project, workspace })
 					}

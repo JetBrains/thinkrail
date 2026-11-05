@@ -22,7 +22,11 @@ host-authorized: the QR's one-time token, then the device key. `hostStatus.ts` t
 Tailscale"), a `RemoteConnectError` code with its own what-to-do line (expired QR, phone access off, app
 older than the computer, no direct route, …), or the raw message of anything unexpected. A computer lost for
 good (`onLost` — it revoked this phone) shows that banner in place of its projects and pops any of its
-screens back to the tree. The tree shows an unreachable computer as a banner with **Reconnect**;
+screens back to the tree. `HostBanner` offers the one action that fixes the failure (`recoveryOf`): **Scan QR
+code** in place when the phone must pair again (revoked, the key changed, an expired code), **Reconnect** for a
+passing failure, nothing when only an app update helps; its close button forgets a computer that no longer
+accepts this phone (no confirm — it is useless now; the last one leaves for Welcome) and otherwise hides it
+from the tree until it fails anew or connects, while Settings → Computers still lists it. The tree shows an unreachable computer as a banner with **Reconnect**;
 Settings → Computers lists each paired computer by name with Connected / Connecting… / the failure, plus
 **Reconnect** and **Forget** (confirmed; it disconnects and drops the computer, so reconnecting needs a new
 QR). Welcome fits one screen without scrolling: three one-line steps (which network, how to turn access on, scan) and the scan button, with the paste field folded behind **Enter link manually**.

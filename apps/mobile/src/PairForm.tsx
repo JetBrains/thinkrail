@@ -15,7 +15,7 @@ import { type ScanOutcome, scanPairLink } from "./scanPairLink";
 type ScanProblem = Exclude<ScanOutcome, { kind: "link" } | { kind: "cancelled" }>;
 
 /** The pairing flow both entry points share: the in-app QR scan, the pasted link, and the one problem line. */
-function usePairing(pair: PairState, onPair: (link: string) => Promise<boolean>) {
+export function usePairing(pair: PairState, onPair: (link: string) => Promise<boolean>) {
 	const t = useT();
 	const [link, setLink] = useState("");
 	const [scanning, setScanning] = useState(false);
@@ -55,7 +55,7 @@ function usePairing(pair: PairState, onPair: (link: string) => Promise<boolean>)
 	return { link, setLink, scanning, pairing: pair.kind === "pairing", scan, submit, problem };
 }
 
-type Pairing = ReturnType<typeof usePairing>;
+export type Pairing = ReturnType<typeof usePairing>;
 
 function LinkField({ pairing }: { pairing: Pairing }) {
 	const t = useT();

@@ -22,11 +22,14 @@ import type {
 	SavedHost,
 } from "@thinkrail/remote-client";
 import { AttentionDot } from "@thinkrail/ui/attention-dot";
-import { Button, IconButton } from "@thinkrail/ui/button";
+import { IconButton } from "@thinkrail/ui/button";
 import { ProjectGlyph, WorkspaceBranch, WorkspaceGlyph } from "@thinkrail/ui/project-tree";
 import { RunningIcon } from "@thinkrail/ui/running-icon";
 import { useState } from "react";
-import { LoadedList, Loader, Screen } from "./layout";
+import type { PairState } from "./App";
+import { HostBanner } from "./HostBanner";
+import type { HostFailure } from "./hostStatus";
+import { LoadedList, Loader, Notice, Screen } from "./layout";
 import { scopeStatus } from "./status";
 import { ProjectActions, type ReportFailure, WorkspaceActions } from "./TreeActions";
 import { useHostRequest } from "./useHostRequest";
@@ -51,22 +54,31 @@ export function ProjectsScreen({
 	controller,
 	items,
 	unreachable,
+	pair,
+	onPair,
 	expanded,
 	onToggle,
 	onSettings,
 	onReconnect,
+	onForget,
+	onDismiss,
 	onOpen,
 }: {
+	/** The computers to show — a computer whose banner was closed is left out until it fails again. */
 	hosts: SavedHost[];
 	controller: RemoteSessionsController;
 	items: RemoteSessionItem[];
-	/** Hosts that failed to connect, keyed by host key, with the reason to show. */
-	unreachable: ReadonlyMap<string, string>;
+	/** Hosts that failed to connect, keyed by host key, with why. */
+	unreachable: ReadonlyMap<string, HostFailure>;
+	pair: PairState;
+	onPair: (link: string) => Promise<boolean>;
 	/** Expanded projects, keyed `hostKey:projectId`, kept by the app so returning from a chat keeps the tree. */
 	expanded: ReadonlySet<string>;
 	onToggle: (key: string) => void;
 	onSettings: () => void;
 	onReconnect: (host: SavedHost) => void;
+	onForget: (host: SavedHost) => void;
+	onDismiss: (host: SavedHost) => void;
 	onOpen: (hostKey: string, project: Project, workspace: Workspace) => void;
 }) {
 	const t = useT();
@@ -99,28 +111,22 @@ export function ProjectsScreen({
 					/>
 				</div>
 			) : null}
+			{hosts.length === 0 ? <Notice text={t("mobile.projects.allHidden")} /> : null}
 			{hosts.flatMap((host) => {
-				const reason = unreachable.get(host.hostKey);
-				return reason === undefined
+				const failure = unreachable.get(host.hostKey);
+				return failure === undefined
 					? []
 					: [
-							<div
+							<HostBanner
 								key={host.hostKey}
-								role="status"
-								className="flex items-center gap-12 border-b border-feedback-warning-muted bg-feedback-warning-subtle px-16 py-12"
-							>
-								<p className="m-0 min-w-0 flex-1 text-feedback-warning tr-text-metadata">
-									{t("mobile.projects.unreachable", { host: host.label, reason })}
-								</p>
-								<Button
-									variant="outline"
-									tone="warning"
-									className="h-touch shrink-0 rounded-md"
-									onClick={() => onReconnect(host)}
-								>
-									{t("mobile.hosts.reconnect")}
-								</Button>
-							</div>,
+								host={host}
+								failure={failure}
+								pair={pair}
+								onPair={onPair}
+								onReconnect={() => onReconnect(host)}
+								onForget={() => onForget(host)}
+								onDismiss={() => onDismiss(host)}
+							/>,
 						];
 			})}
 			{hosts

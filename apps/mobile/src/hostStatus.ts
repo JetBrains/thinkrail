@@ -47,3 +47,24 @@ export const failureText = (t: Translator, failure: HostFailure): string => {
 		return t(REMOTE_TEXT[failure.code]);
 	return t("mobile.hosts.errorFailure", { message: failure.message });
 };
+
+/**
+ * What the banner offers for a failure: `repair` — this phone must pair again (revoked, the computer's key
+ * changed, an expired code), so it scans a new QR; `reconnect` — a passing problem a retry can fix; `none` —
+ * nothing on the phone fixes it (the app is too old for the computer and needs an update).
+ */
+export type HostRecovery = "repair" | "reconnect" | "none";
+
+export const recoveryOf = (failure: HostFailure): HostRecovery => {
+	if (failure.kind !== "remote") return "reconnect";
+	switch (failure.code) {
+		case "unknown_device":
+		case "identity_mismatch":
+		case "code_expired":
+			return "repair";
+		case "app_outdated":
+			return "none";
+		default:
+			return "reconnect";
+	}
+};
