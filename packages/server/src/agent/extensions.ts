@@ -46,6 +46,7 @@ import { requestReviewExtension } from "./requestReviewTool";
 import { reviewToolExtension } from "./reviewTool";
 import { decideSkill, type SkillAdmissionContext } from "./skillAdmission";
 import { skillCarryover } from "./skillCarryover";
+import { skillCatalog } from "./skillCatalog";
 import {
 	type CompatibilitySkillSource,
 	candidateCompatibilitySkillRoots,
@@ -361,7 +362,7 @@ function installedDeclarations(packageManager: DefaultPackageManager): Set<strin
 }
 
 export function childBaseExtensionFactories(): InlineExtension[] {
-	return [oversizedImageGuard, skillCarryover];
+	return [oversizedImageGuard, skillCatalog, skillCarryover];
 }
 
 export function childExtensionFactories(): InlineExtension[] {
@@ -398,6 +399,7 @@ export async function buildResourceLoader(
 		requestReviewExtension,
 		setTitleExtension,
 		oversizedImageGuard,
+		skillCatalog,
 		skillCarryover,
 		...extraFactories,
 	];

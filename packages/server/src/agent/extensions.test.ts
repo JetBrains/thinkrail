@@ -28,6 +28,7 @@ import { createPiSettings } from "./packages";
 import { writeFixturePiPackage } from "./packages/testFixtures";
 import type { SkillAdmissionContext } from "./skillAdmission";
 import { skillCarryover } from "./skillCarryover";
+import { skillCatalog } from "./skillCatalog";
 
 function ctx(trusted: boolean, acknowledged: string[] = []): SkillAdmissionContext {
 	return {
@@ -796,8 +797,12 @@ describe("registry extensions", () => {
 		}
 	});
 
-	it("guards every child's images and compacted skills from the base set, not the opt-in curated set", () => {
-		expect(childBaseExtensionFactories()).toEqual([oversizedImageGuard, skillCarryover]);
+	it("guards every child's images, skill catalog and compacted skills from the base set, not the opt-in curated set", () => {
+		expect(childBaseExtensionFactories()).toEqual([
+			oversizedImageGuard,
+			skillCatalog,
+			skillCarryover,
+		]);
 		expect(childExtensionFactories()).not.toContain(oversizedImageGuard);
 		expect(childExtensionFactories()).not.toContain(skillCarryover);
 	});
