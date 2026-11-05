@@ -1042,7 +1042,8 @@ a project picker, the prompt hero, and the reused
   pairing code with its expiry and a Copy link action, polls `remote.status` so a phone that pairs closes the
   code with a toast, and lists paired phones with Revoke. The QR is an `<img>` of the `qrcode` SVG, which
   carries its own black-on-white: a scanner needs dark modules on a light field in every theme, so this image
-  is the one place UI colour is not a token. `PhoneAccessView` is the props-only half the unit test renders.
+  is the one place UI colour is not a token. `PhoneAccessView` is the props-only half the unit test renders;
+  the state and requests live in `usePhoneAccess`, which the topbar's quick panel shares.
   **`PrivacySettings`** manages the additional-data preference and
   confirmation together; the event contract belongs to [[submodule-server-analytics]]. The pane ends with a link to the analytics section of the project readme.
   **`AnalyticsConsentDialog`** mounts once through shell after a capable host's unconfirmed config hydrates,

@@ -1,21 +1,13 @@
 import { RiFileCopyLine, RiQrCodeLine, RiSmartphoneLine } from "@remixicon/react";
-import type { RemoteAccessStatus, RemotePairingLink } from "@thinkrail/contracts";
+import type { RemoteAccessStatus } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { SettingsGroup, SettingsPageContainer, SettingsRow } from "@thinkrail/ui/settings";
-import QRCode from "qrcode";
-import { useEffect, useRef, useState } from "react";
-import { toast } from "@/store";
-import { getTransport } from "@/transport";
 import { SettingsNotice } from "./SettingsNotice";
 import { SettingsSwitch } from "./SettingsSwitch";
+import { type ShownPairing, usePhoneAccess } from "./usePhoneAccess";
 
-const PAIRING_POLL_MS = 2_000;
-
-export interface ShownPairing extends RemotePairingLink {
-	/** The QR as an image URL; the image carries its own black-on-white so it scans in any theme. */
-	qrSrc: string;
-}
+export type { ShownPairing } from "./usePhoneAccess";
 
 export interface PhoneAccessViewProps {
 	status: RemoteAccessStatus | null;
@@ -161,98 +153,17 @@ export function PhoneAccessView({
 }
 
 export function PhoneAccessSettings() {
-	const t = useT();
-	const [status, setStatus] = useState<RemoteAccessStatus | null>(null);
-	const [pairing, setPairing] = useState<ShownPairing | null>(null);
-	const [expired, setExpired] = useState(false);
-	const [pending, setPending] = useState(false);
-	const knownDevices = useRef<Set<string>>(new Set());
-
-	const adopt = (next: RemoteAccessStatus): void => {
-		knownDevices.current = new Set(next.devices.map((device) => device.id));
-		setStatus(next);
-		if (!next.enabled) setPairing(null);
-	};
-
-	useEffect(() => {
-		let cancelled = false;
-		getTransport()
-			.request("remote.status", {})
-			.then((next) => {
-				if (!cancelled) adopt(next);
-			})
-			.catch(() => {});
-		return () => {
-			cancelled = true;
-		};
-	}, []);
-
-	useEffect(() => {
-		if (!pairing) return;
-		setExpired(Date.now() >= pairing.expiresAt);
-		const timer = setInterval(() => {
-			setExpired(Date.now() >= pairing.expiresAt);
-			void getTransport()
-				.request("remote.status", {})
-				.then((next) => {
-					const added = next.devices.find((device) => !knownDevices.current.has(device.id));
-					adopt(next);
-					if (added) {
-						setPairing(null);
-						toast.success(t("settings.phone.paired", { name: added.label }));
-					}
-				})
-				.catch(() => {});
-		}, PAIRING_POLL_MS);
-		return () => clearInterval(timer);
-	}, [pairing, t]);
-
-	const toggle = (enabled: boolean): void => {
-		setPending(true);
-		getTransport()
-			.request("remote.setEnabled", { enabled })
-			.then(adopt)
-			.catch(() => toast.error(t("settings.phone.changeFailed")))
-			.finally(() => setPending(false));
-	};
-
-	const showCode = (): void => {
-		getTransport()
-			.request("remote.issueLink", {})
-			.then(async (issued) => {
-				const svg = await QRCode.toString(issued.link, { type: "svg" });
-				setPairing({
-					...issued,
-					qrSrc: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
-				});
-			})
-			.catch(() => toast.error(t("settings.phone.pairFailed")));
-	};
-
-	const copyLink = (link: string): void => {
-		void navigator.clipboard
-			?.writeText(link)
-			.then(() => toast.success(t("settings.phone.linkCopied")))
-			.catch(() => {});
-	};
-
-	const revoke = (deviceId: string): void => {
-		getTransport()
-			.request("remote.revokeDevice", { id: deviceId })
-			.then(adopt)
-			.catch(() => toast.error(t("settings.phone.revokeFailed")));
-	};
-
+	const access = usePhoneAccess();
 	return (
 		<PhoneAccessView
-			status={status}
-			pairing={pairing}
-			expired={expired}
-			pending={pending}
-			onToggle={toggle}
-			onShowCode={showCode}
-			onCopyLink={copyLink}
-			onRevoke={revoke}
+			status={access.status}
+			pairing={access.pairing}
+			expired={access.expired}
+			pending={access.pending}
+			onToggle={access.toggle}
+			onShowCode={access.showCode}
+			onCopyLink={access.copyLink}
+			onRevoke={access.revoke}
 		/>
 	);
 }

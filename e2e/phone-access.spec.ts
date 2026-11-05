@@ -37,3 +37,32 @@ test("phone access is off by default, turns on from Settings with a scannable co
 	await page.keyboard.press("Escape");
 	await expect(dialog).toBeHidden();
 });
+
+test("the topbar QR button opens a quick panel that turns phone access on straight onto a code", async ({
+	page,
+}) => {
+	await page.goto("/");
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+
+	const button = page.getByTestId("open-phone-access");
+	await expect(button).toHaveAttribute("data-active", "false");
+	await button.click();
+	const popover = page.getByTestId("phone-access-popover");
+	const toggle = popover.getByTestId("phone-quick-toggle");
+	await expect(toggle).toHaveAttribute("data-active", "false");
+	await expect(popover.getByTestId("phone-quick-code")).toBeHidden();
+
+	await toggle.click();
+	try {
+		await expect(toggle).toHaveAttribute("data-active", "true");
+		await expect(button).toHaveAttribute("data-active", "true");
+		await expect(popover.getByRole("img", { name: "Pairing QR code" })).toHaveAttribute(
+			"src",
+			/^data:image\/svg\+xml/,
+		);
+	} finally {
+		if ((await toggle.getAttribute("data-active")) === "true") await toggle.click();
+	}
+	await expect(toggle).toHaveAttribute("data-active", "false");
+	await expect(button).toHaveAttribute("data-active", "false");
+});
