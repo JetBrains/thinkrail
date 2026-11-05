@@ -180,6 +180,24 @@ function ollamaContext(parameters: unknown): number | null {
 	return match ? positiveInt(Number(match[1])) : null;
 }
 
+function ollamaInfoContext(modelInfo: unknown): number | null {
+	if (!isObject(modelInfo)) return null;
+	const architecture = modelInfo["general.architecture"];
+	if (typeof architecture === "string") {
+		const reported = positiveInt(modelInfo[`${architecture}.context_length`]);
+		if (reported !== null) return reported;
+	}
+	let found: number | null = null;
+	for (const [key, value] of Object.entries(modelInfo)) {
+		if (!/^[^.]*\.context_length$/.test(key)) continue;
+		const length = positiveInt(value);
+		if (length === null) continue;
+		if (found !== null && found !== length) return null;
+		found = length;
+	}
+	return found;
+}
+
 async function enrichOllama(
 	root: string,
 	key: string | undefined,
@@ -196,7 +214,10 @@ async function enrichOllama(
 			if (!capabilities.includes("completion")) return null;
 			return {
 				...model,
-				contextWindow: model.contextWindow ?? ollamaContext(show.parameters),
+				contextWindow:
+					model.contextWindow ??
+					ollamaContext(show.parameters) ??
+					ollamaInfoContext(show.model_info),
 				reasoning: capabilities.includes("thinking"),
 				vision: capabilities.includes("vision"),
 				tools: capabilities.includes("tools"),
