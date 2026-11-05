@@ -135,7 +135,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 102;
+export const PROTOCOL_VERSION = 103;
+export const GITHUB_STAR_PROTOCOL_VERSION = 103;
 export const FONTS_PROTOCOL_VERSION = 102;
 export const CUSTOM_ENDPOINTS_PROTOCOL_VERSION = 101;
 export const PI_PACKAGES_PROTOCOL_VERSION = 100;
@@ -433,6 +434,7 @@ export const WS_CHANNELS = {
 	settingsChanged: "settings.changed",
 	hostUpdateAvailable: "host.updateAvailable",
 	feedbackInterview: "feedback.interview",
+	feedbackGithubStar: "feedback.githubStar",
 	reviewChanged: "review.changed",
 	reviewFailed: "review.failed",
 	turnChanged: "turn.changed",

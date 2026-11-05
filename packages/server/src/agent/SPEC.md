@@ -125,7 +125,8 @@ re-opened transcripts provider-valid.
     and a failed re-read keeps the last listing. Failures log only a closed count, never provider ids or
     the provider's error text. Direct API keys and other subscriptions keep pi's catalog: no listing was verified to
     agree with pi's aliases there.
-  - `modelDefaults` — `preferredDefaultModel(available)`: pi's `defaultModelPerProvider` in pi's order,
+  - `modelDefaults` — `piDefaultModelRef()` reads pi's global `defaultProvider`/`defaultModel`, undefined when
+    either is unset or the file is unreadable. `preferredDefaultModel(available)`: pi's `defaultModelPerProvider` in pi's order,
     then any available model whose id is one of those defaults, else the first available model. Pi does
     not export that map, so the host mirrors it under a parity test against the installed dist; the first
     pass is what pi's own `findInitialModel` would pick. The same-id pass covers a provider whose own
@@ -350,9 +351,10 @@ re-opened transcripts provider-valid.
     `listAvailableModels` / `listSettledModels` (the same snapshot without starting a refresh) / **`clampThinkingForModel`** (pi's `clampThinkingLevel` for a `{model, level}`
     pair — `model.clampThinking`; the host uses it so defaults and live-session effort changes follow Pi).
     Earlier, #394 showed ThinkRail's `available[0]` differed from Pi's pick and hit a proxy 400. ThinkRail
-    now resolves new-chat defaults host-side from `AppConfig`, falling back to `preferredDefaultModel`
-    (pi's provider default, then the first available model) when the saved default is unavailable,
-    without rewriting that setting. `available[0]` alone was catalog order — `openai/gpt-4`, an 8K-context
+    resolves new-chat defaults host-side from `AppConfig`, falling back to pi's global `settings.json`
+    default (`piDefaultModelRef`), then `preferredDefaultModel` (pi's provider default, then the first
+    available model), when an earlier choice is unset or unavailable, without rewriting either setting.
+    Project `.pi/settings.json` defaults do not apply to new chats. `available[0]` alone was catalog order — `openai/gpt-4`, an 8K-context
     model, for a fresh OpenAI connection. An explicitly requested unavailable model is rejected rather
     than silently substituted. The host passes the chosen model explicitly so the UI and session agree.
     Plan review uses this same `resolveNewChatModel({})` for unset reviewer overrides: AppConfig

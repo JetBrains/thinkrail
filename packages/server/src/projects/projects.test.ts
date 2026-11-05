@@ -260,6 +260,18 @@ test("createProject: makes the folder and missing parents, bootstraps a repo, an
 	expect(listProjects().map((p) => p.id)).toEqual([project.id]);
 });
 
+test("createProject: preserves Unicode parent and project names on disk and in saved records", () => {
+	const parent = join(dataDir, "中文测试");
+	const path = join(parent, "项目-🚀");
+	const project = withoutUserGitConfig(() => createProject(parent, "项目-🚀"));
+
+	expect(project.path).toBe(realpathSync(path));
+	expect(project.name).toBe("项目-🚀");
+	expect(resolve(gitOut(path, "rev-parse", "--show-toplevel"))).toBe(project.path);
+	expect(gitOut(path, "rev-parse", "HEAD")).not.toBe("");
+	expect(getProjects().map((p) => p.path)).toEqual([project.path]);
+});
+
 test("createProject: reuses an empty folder but rejects a non-empty one or a file", () => {
 	mkdirSync(join(dataDir, "empty"));
 	expect(withoutUserGitConfig(() => createProject(dataDir, "empty")).path).toBe(
@@ -409,6 +421,38 @@ posix("initProject keeps a .git it did not create when the initial commit fails"
 	});
 
 	expect(readFileSync(join(dir, ".git", "sentinel"), "utf8")).toBe("user data\n");
+});
+
+posix("initProject shows git's own error when the initial commit fails", () => {
+	const dir = join(dataDir, "add-stderr");
+	mkdirSync(dir);
+	writeFileSync(join(dir, "file.txt"), "x\n");
+
+	withGitWrapper(
+		'*" add "*) echo "fatal: detected dubious ownership in repository" >&2; exit 128;;',
+		() => {
+			expect(() => withoutUserGitConfig(() => initProject(dir))).toThrow(
+				/git add failed: .*\nfatal: detected dubious ownership in repository/,
+			);
+		},
+	);
+});
+
+posix("a repository git refuses to trust is an error, never an init offer", () => {
+	const repo = join(dataDir, "untrusted-repo");
+	makeRepo(repo);
+	const head = gitOut(repo, "rev-parse", "HEAD");
+
+	withGitWrapper(
+		'*" --show-toplevel "*) echo "fatal: detected dubious ownership in repository" >&2; exit 128;;',
+		() => {
+			expect(() => inspectProjectPath(repo)).toThrow(/dubious ownership/);
+			expect(() => initProject(repo)).toThrow(/dubious ownership/);
+		},
+	);
+
+	expect(gitOut(repo, "rev-parse", "HEAD")).toBe(head);
+	expect(listProjects()).toHaveLength(0);
 });
 
 posix("initProject removes the .git it created when the initial commit fails", () => {

@@ -14,7 +14,11 @@ function wireModel(provider: string, id: string): WireModel {
 	};
 }
 
-function resolver(config: Partial<AppConfig>, models: WireModel[]) {
+function resolver(
+	config: Partial<AppConfig>,
+	models: WireModel[],
+	piDefault?: { provider: string; id: string },
+) {
 	const clampCalls: Array<{ provider: string; id: string; level: ThinkingLevel }> = [];
 	return {
 		clampCalls,
@@ -22,6 +26,7 @@ function resolver(config: Partial<AppConfig>, models: WireModel[]) {
 			resolveNewChatModel(requested, {
 				getConfig: () => ({ ...DEFAULT_CONFIG, ...config }),
 				listSettledModels: async () => models,
+				piDefaultModelRef: () => piDefault,
 				clampThinkingForModel: async (model, level) => {
 					clampCalls.push({ ...model, level });
 					return model.provider === "limited" && level === "high" ? "medium" : level;
@@ -96,4 +101,25 @@ test("new-chat model resolution prefers pi's provider default over catalog order
 	const { resolve } = resolver({}, [legacy, current]);
 
 	expect(await resolve()).toEqual({ model: current, thinkingLevel: "medium" });
+});
+
+test("new-chat model resolution uses pi's configured default when no default is saved", async () => {
+	const { resolve } = resolver({}, [first, second], { provider: "second", id: "two" });
+
+	expect(await resolve()).toEqual({ model: second, thinkingLevel: "medium" });
+});
+
+test("a saved default wins over pi's configured default", async () => {
+	const { resolve } = resolver({ defaultModel: first }, [first, second], {
+		provider: "second",
+		id: "two",
+	});
+
+	expect(await resolve()).toEqual({ model: first, thinkingLevel: "medium" });
+});
+
+test("an unavailable pi default falls through to the preferred model", async () => {
+	const { resolve } = resolver({}, [first, second], { provider: "missing", id: "gone" });
+
+	expect(await resolve()).toEqual({ model: first, thinkingLevel: "medium" });
 });
