@@ -13,6 +13,7 @@ import {
 	git,
 	gitAsync,
 	listRemotes,
+	nonInteractiveGitEnv,
 	remoteNameOf,
 	remoteRefOid,
 	remoteTrackingRef,
@@ -43,7 +44,7 @@ const log = logger("workspaces");
 
 export const CHECKOUT_STALL_MS = 10 * 60_000;
 const PROGRESS_PUSH_MS = 250;
-const PROGRESS_LINE = /Updating files:\s+(\d+)%\s+\((\d+)\/(\d+)\)/;
+const PROGRESS_LINE = /(?:Updating files|Filtering content):\s+(\d+)%\s+\((\d+)\/(\d+)\)/;
 
 export type CreationHandoff = (
 	workspace: Workspace,
@@ -85,7 +86,13 @@ export function checkoutFailureText(stderr: string): string {
 	const lines = stderr
 		.split(/[\r\n]+/)
 		.map((line) => line.trim())
-		.filter((line) => line && !PROGRESS_LINE.test(line) && !line.startsWith("Updating files:"));
+		.filter(
+			(line) =>
+				line &&
+				!PROGRESS_LINE.test(line) &&
+				!line.startsWith("Updating files:") &&
+				!line.startsWith("Filtering content:"),
+		);
 	return lines.slice(-6).join("\n");
 }
 
@@ -246,18 +253,48 @@ async function prepare(id: string, project: Project, signal: AbortSignal): Promi
 	});
 }
 
-async function checkOut(id: string, signal: AbortSignal): Promise<void> {
+function stallText(): string {
+	return stallMs >= 60_000
+		? `${Math.round(stallMs / 60_000)} minutes`
+		: `${Math.round(stallMs / 1000)} seconds`;
+}
+
+function noHooksDir(): string {
+	const dir = join(dataDir(), "no-hooks");
+	mkdirSync(dir, { recursive: true });
+	return dir;
+}
+
+function checkoutConfig(projectPath: string): string[] {
+	const config = ["-c", `core.hooksPath=${noHooksDir()}`];
+	const workers = git(projectPath, ["config", "--get", "checkout.workers"], {
+		onTimeout: "return",
+	});
+	if (!workers.ok) config.push("-c", "checkout.workers=0");
+	return config;
+}
+
+async function checkOut(id: string, projectPath: string, signal: AbortSignal): Promise<void> {
 	const record = findCreation(id);
-	if (!record) throw new CreationAborted();
+	if (!record?.baseOid) throw new CreationAborted();
 	assertManagedPathFree(record.worktreePath);
 	const progress = progressFeed(id);
 	const checkout = await gitAsync(
 		record.worktreePath,
-		["checkout", "--progress", "-f", record.branch, "--"],
+		[
+			...checkoutConfig(projectPath),
+			"checkout",
+			"--progress",
+			"--no-recurse-submodules",
+			"-f",
+			record.branch,
+			"--",
+		],
 		{
 			timeoutMs: Number.POSITIVE_INFINITY,
 			idleTimeoutMs: stallMs,
 			onStderr: progress.feed,
+			env: { ...nonInteractiveGitEnv(), LC_ALL: "C" },
 			signal,
 		},
 	);
@@ -266,12 +303,37 @@ async function checkOut(id: string, signal: AbortSignal): Promise<void> {
 	if (checkout.failure === "timeout")
 		fail(
 			"WORKTREE_CHECKOUT_STALLED",
-			`git checkout made no progress for ${stallMs >= 60_000 ? `${Math.round(stallMs / 60_000)} minutes` : `${Math.round(stallMs / 1000)} seconds`} and was stopped`,
+			`git checkout made no progress for ${stallText()} and was stopped`,
 		);
 	if (!checkout.ok)
 		fail(
 			"WORKTREE_CHECKOUT_FAILED",
 			`git checkout failed: ${checkoutFailureText(checkout.err) || "git exited with an error"}`,
+		);
+	const hook = await gitAsync(
+		record.worktreePath,
+		[
+			"hook",
+			"run",
+			"--ignore-missing",
+			"post-checkout",
+			"--",
+			"0".repeat(record.baseOid.length),
+			record.baseOid,
+			"1",
+		],
+		{ timeoutMs: Number.POSITIVE_INFINITY, idleTimeoutMs: stallMs, signal },
+	);
+	if (signal.aborted) throw new CreationAborted();
+	if (hook.failure === "timeout")
+		fail(
+			"WORKTREE_CHECKOUT_STALLED",
+			`The post-checkout hook made no progress for ${stallText()} and was stopped`,
+		);
+	if (!hook.ok)
+		fail(
+			"WORKTREE_CHECKOUT_FAILED",
+			`The post-checkout hook failed: ${hook.err || "it exited with an error"}`,
 		);
 }
 
@@ -282,7 +344,7 @@ async function execute(id: string, signal: AbortSignal): Promise<Workspace> {
 	try {
 		project = projectOf(initial);
 		await prepare(id, project, signal);
-		await checkOut(id, signal);
+		await checkOut(id, project.path, signal);
 		const done = findCreation(id);
 		if (!done) throw new CreationAborted();
 		const workspace = registerManagedWorkspace(done);

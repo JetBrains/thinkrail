@@ -4,6 +4,7 @@ import {
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
+	readFileSync,
 	realpathSync,
 	rmSync,
 	writeFileSync,
@@ -134,26 +135,65 @@ posix("a slow checkout never blocks the host's event loop (#874)", async () => {
 	expect(removed()).toEqual([{ id: creation.id, projectId: "p1", workspace }]);
 });
 
-posix("checkout progress reaches clients and the handoff starts the held chat", async () => {
-	hook(
-		"printf 'Updating files:  50%% (1/2)\\r' >&2; sleep 0.4; printf 'Updating files: 100%% (2/2), done.\\n' >&2",
-	);
-	const handed: unknown[] = [];
-	setWorkspaceCreationHandoff(async (workspace, kickoff) => {
-		handed.push({ id: workspace.id, kickoff });
-		return { sessionId: "s-1" };
-	});
-	const kickoff = { text: "Fix the login flow", images: [] };
-	const creation = startWorkspaceCreation("p1", { name: "Login fix", kickoff });
-	expect(creation.kickoff).toEqual({ text: "Fix the login flow", imageCount: 0 });
-	expect(creation.name).toBe("Login fix");
+posix(
+	"real git checkout progress reaches clients and the handoff starts the held chat",
+	async () => {
+		for (let i = 0; i < 40; i++) writeFileSync(join(repo, `f${i}.txt`), `${i}\n`);
+		git(repo, "add", "-A");
+		git(repo, "commit", "-m", "files");
+		const savedDelay = process.env.GIT_PROGRESS_DELAY;
+		process.env.GIT_PROGRESS_DELAY = "0";
+		const handed: unknown[] = [];
+		setWorkspaceCreationHandoff(async (workspace, kickoff) => {
+			handed.push({ id: workspace.id, kickoff });
+			return { sessionId: "s-1" };
+		});
+		try {
+			const kickoff = { text: "Fix the login flow", images: [] };
+			const creation = startWorkspaceCreation("p1", { name: "Login fix", kickoff });
+			expect(creation.kickoff).toEqual({ text: "Fix the login flow", imageCount: 0 });
+			expect(creation.name).toBe("Login fix");
 
-	const workspace = await awaitWorkspaceCreation(creation.id);
-	expect(changed().some((c) => c.progress?.done === 1 && c.progress.total === 2)).toBe(true);
-	expect(changed().some((c) => c.phase === "checking-out")).toBe(true);
-	expect(handed).toEqual([{ id: creation.id, kickoff }]);
-	expect(removed().at(-1)).toMatchObject({ id: creation.id, sessionId: "s-1" });
-	expect(workspace).toMatchObject({ name: "Login fix", renamed: true, branch: "login-fix" });
+			const workspace = await awaitWorkspaceCreation(creation.id);
+			const last = changed().findLast((c) => c.progress);
+			expect(last?.progress?.total).toBe(42);
+			expect(changed().some((c) => c.phase === "checking-out")).toBe(true);
+			expect(handed).toEqual([{ id: creation.id, kickoff }]);
+			expect(removed().at(-1)).toMatchObject({ id: creation.id, sessionId: "s-1" });
+			expect(workspace).toMatchObject({ name: "Login fix", renamed: true, branch: "login-fix" });
+		} finally {
+			if (savedDelay === undefined) delete process.env.GIT_PROGRESS_DELAY;
+			else process.env.GIT_PROGRESS_DELAY = savedDelay;
+		}
+	},
+);
+
+posix(
+	"post-checkout sees a new worktree (null old oid) exactly once, as plain worktree add reports it",
+	async () => {
+		const args = join(dataDir, "hook-args");
+		hook(`echo "$*" >> "${args}"`);
+		const creation = startWorkspaceCreation("p1");
+		await awaitWorkspaceCreation(creation.id);
+		const head = gitOut(repo, "rev-parse", "main");
+		expect(readFileSync(args, "utf8")).toBe(`${"0".repeat(head.length)} ${head} 1\n`);
+	},
+);
+
+posix("a repo with submodules and submodule.recurse creates like plain worktree add", async () => {
+	const sub = join(dataDir, "sub");
+	mkdirSync(sub);
+	git(sub, "init", "-b", "main");
+	git(sub, "config", "user.email", "t@thinkrail.test");
+	git(sub, "config", "user.name", "test");
+	git(sub, "commit", "--allow-empty", "-m", "s");
+	git(repo, "-c", "protocol.file.allow=always", "submodule", "add", sub, "sub");
+	git(repo, "commit", "-m", "sub");
+	git(repo, "config", "submodule.recurse", "true");
+
+	const workspace = await awaitWorkspaceCreation(startWorkspaceCreation("p1").id);
+	expect(existsSync(join(workspace.worktreePath, "a.txt"))).toBe(true);
+	expect(gitOut(workspace.worktreePath, "status", "--porcelain")).toBe("");
 });
 
 posix("a stalled checkout fails, cleans up, and keeps a retryable record", async () => {
