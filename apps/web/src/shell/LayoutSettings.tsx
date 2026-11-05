@@ -18,6 +18,7 @@ import { t as translate, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { Switch } from "@thinkrail/ui/switch";
 import { cn } from "@thinkrail/ui/utils";
 import { useMemo, useRef, useState } from "react";
 import { randomId } from "../lib";
@@ -201,6 +202,24 @@ export function LayoutSettings() {
 
 	return (
 		<div data-testid="settings-layout" className={SETTINGS_ROWS_CONTAINER}>
+			<SettingsRow
+				label={t("workbench.layoutSettings.previewTabs")}
+				description={t("workbench.layoutSettings.previewTabsDescription")}
+				control={
+					<Switch
+						checked={preferences.previewTabsEnabled}
+						label={t("workbench.layoutSettings.previewTabs")}
+						testId="layout-preview-tabs"
+						onCheckedChange={(previewTabsEnabled) => {
+							const state = useAppStore.getState();
+							state.setLocalLayoutPreferences({
+								...state.localLayoutPreferences,
+								previewTabsEnabled,
+							});
+						}}
+					/>
+				}
+			/>
 			<div className="grid gap-8 sm:grid-cols-2">
 				{presets.map((preset) => {
 					const isStoredDefault = preset.id === preferences.defaultPresetId;

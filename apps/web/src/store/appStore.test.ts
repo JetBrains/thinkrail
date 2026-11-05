@@ -4550,8 +4550,11 @@ test("disabled preview tabs keep each resource and publish keep intents", () => 
 	expect(state.previewTabByWorkspace.ws1).toBeUndefined();
 	expect(state.layoutIntents).toMatchObject([
 		{ kind: "open", intent: "keep" },
-		{ kind: "open", intent: "keep", claimPreview: false },
+		{ kind: "open", intent: "keep" },
 	]);
+	expect(state.layoutIntents.some((intent) => intent.kind === "open" && intent.claimPreview)).toBe(
+		false,
+	);
 });
 
 test("turning preview tabs back on restores the reusable preview slot", () => {

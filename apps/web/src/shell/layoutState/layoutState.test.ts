@@ -240,6 +240,28 @@ describe("frontend-local layout state", () => {
 		expect(local.getItem(localLayoutStorageKey(endpoint, "surface-a"))).not.toBeNull();
 	});
 
+	test("saved layout preferences without a preview setting keep previews enabled", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "preview-default");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		await initializeLocalLayoutState();
+		useAppStore.getState().setLocalLayoutPreferences({
+			...useAppStore.getState().localLayoutPreferences,
+			maxSideGroups: 9,
+		});
+		const key = localLayoutStorageKey(endpoint, "preview-default");
+		const raw = JSON.parse(local.getItem(key) ?? "null");
+		delete raw.preferences.previewTabsEnabled;
+		local.setItem(key, JSON.stringify(raw));
+		resetLayoutStateForTests();
+		resetStore();
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		await initializeLocalLayoutState();
+		expect(useAppStore.getState().localLayoutPreferences.previewTabsEnabled).toBe(true);
+		expect(useAppStore.getState().localLayoutPreferences.maxSideGroups).toBe(9);
+	});
+
 	test("a ready layout installs a new workspace view", async () => {
 		const local = new MemoryStorage();
 		const session = new MemoryStorage();
