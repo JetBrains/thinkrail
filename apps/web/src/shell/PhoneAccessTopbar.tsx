@@ -188,7 +188,7 @@ export function PhoneAccessPanel({
 				<Button
 					variant="ghost"
 					size="m"
-					className="w-full justify-start"
+					className="w-full"
 					data-testid="phone-quick-settings"
 					onClick={onOpenSettings}
 				>
@@ -267,13 +267,12 @@ export function PhoneAccessTopbar() {
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
 				<IconButton
-					variant="ghost"
+					variant={enabled ? "soft-primary" : "ghost"}
 					size="m"
 					icon={RiQrCodeLine}
 					label={label}
 					tooltip={label}
 					selected={open}
-					className={enabled ? "text-primary" : undefined}
 					data-testid="open-phone-access"
 					data-active={enabled}
 				/>
