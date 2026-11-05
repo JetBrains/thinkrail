@@ -91,6 +91,17 @@ compaction to keep the request small and deterministic, restoring the settings b
 It neither changes the provider/effort selection nor proves removal of a fixed output cap; the focused
 SDK reserve-independence canary owns that assertion.
 
+## Optional GitLab association
+
+Project opening now offers a skippable GitLab association dialog. Generic workspace fixtures register a
+locator handler that explicitly chooses Skip when that dialog intercepts a later interaction; registration
+replaces the previous handler for that page. The common open helper awaits Skip before beginning a
+multi-action menu sequence. Project navigation tests using their own open path register the same handler;
+the held-picker race test instead dismisses explicitly before releasing its reply barrier. This models the user's dismissal,
+not a disabled product feature or a force-click through the modal. `issues-association.spec.ts` deliberately
+uses no auto-dismiss handler and verifies the prompt, single token field, and Skip preserving the project
+and access to Default. These helpers are shared by source, binary and desktop browser modes.
+
 ## Repository cloning
 
 `clone-project.spec.ts` clones disposable local `file:` repositories through the Welcome and rail menus,

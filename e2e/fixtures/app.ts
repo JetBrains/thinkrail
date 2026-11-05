@@ -113,6 +113,7 @@ function resetState(): void {
 }
 
 export async function stagePlainFolder(page: Page): Promise<string> {
+	await handleOptionalIssueAssociation(page);
 	await disposeLiveSessions(page);
 	resetState();
 	rmSync(E2E_PLAIN_DIR, { recursive: true, force: true });
@@ -176,7 +177,22 @@ export async function resetApp(page: Page): Promise<void> {
 	resetState();
 }
 
+export async function skipIssueAssociation(page: Page): Promise<void> {
+	const dialog = page.getByTestId("issues-associate-dialog");
+	await expect(dialog).toBeVisible();
+	await dialog.getByTestId("issues-associate-skip").click();
+	await expect(dialog).toBeHidden();
+}
+
+export async function handleOptionalIssueAssociation(page: Page): Promise<void> {
+	await page.removeLocatorHandler(page.getByTestId("issues-associate-dialog"));
+	await page.addLocatorHandler(page.getByTestId("issues-associate-dialog"), async () => {
+		await skipIssueAssociation(page);
+	});
+}
+
 export async function openAppFresh(page: Page): Promise<void> {
+	await handleOptionalIssueAssociation(page);
 	await resetApp(page);
 	await page.goto("/");
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
@@ -184,8 +200,11 @@ export async function openAppFresh(page: Page): Promise<void> {
 
 export async function openFixtureProject(page: Page): Promise<void> {
 	await openAppFresh(page);
+	await page.removeLocatorHandler(page.getByTestId("issues-associate-dialog"));
 	await page.getByTestId("add-project-menu").click();
 	await page.getByTestId("menu-open-project").click();
+	await skipIssueAssociation(page);
+	await handleOptionalIssueAssociation(page);
 	await expect(page.getByTestId("project-item").first()).toBeVisible();
 	await expect(page.getByTestId("welcome")).toBeVisible();
 	await expect(defaultWorkspaceRow(page)).toBeVisible();

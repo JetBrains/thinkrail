@@ -4,8 +4,10 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
 	defaultWorkspaceRow,
+	handleOptionalIssueAssociation,
 	openAppFresh,
 	openFixtureProject,
+	skipIssueAssociation,
 	stagePlainFolder,
 	worktreeRows,
 } from "./fixtures/app";
@@ -16,6 +18,10 @@ import {
 	E2E_PICK_DIR_POINTER,
 	E2E_PLAIN_DIR,
 } from "./fixtures/paths";
+
+test.beforeEach(async ({ page }) => {
+	await handleOptionalIssueAssociation(page);
+});
 
 function parseWsFrame(message: unknown): Record<string, unknown> | null {
 	if (typeof message !== "string") return null;
@@ -173,6 +179,7 @@ test("picker failure falls back to host-path entry on every host platform", asyn
 test("manual path from the rail supersedes a picker started from Welcome", async ({ page }) => {
 	const pickerReply = await holdNextPickerReply(page, E2E_FIXTURE_REPO);
 	await openAppFresh(page);
+	await page.removeLocatorHandler(page.getByTestId("issues-associate-dialog"));
 	const manualRepo = seedSecondRepo();
 	writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
 
@@ -186,6 +193,7 @@ test("manual path from the rail supersedes a picker started from Welcome", async
 	await pathDialog.getByTestId("open-project-path-input").fill(manualRepo);
 	await pathDialog.getByTestId("open-project-path-submit").click();
 	await expect(page.getByTestId("welcome-title")).toHaveText("second-project");
+	await skipIssueAssociation(page);
 
 	pickerReply.release();
 	await pickerReply.acknowledged;
