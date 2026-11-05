@@ -1,4 +1,5 @@
 export * from "./feedback";
+export { setGithubStarsFetchForTests } from "./githubStars";
 export type { ParsedSurveySubmission, SurveySource } from "./survey";
 export {
 	configureSurveySource,

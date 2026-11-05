@@ -7,6 +7,7 @@ import {
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton, withIconClass } from "@thinkrail/ui/button";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { menuItemClass } from "@thinkrail/ui/menu-styles";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
@@ -136,6 +137,7 @@ function ClosedChatRow({
 
 	const onNameKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
 		event.stopPropagation();
+		if (isImeComposing(event.nativeEvent)) return;
 		if (event.key === "Enter") {
 			event.preventDefault();
 			restoreRowFocusRef.current = true;

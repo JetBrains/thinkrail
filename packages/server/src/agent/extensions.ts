@@ -225,9 +225,10 @@ export function toSkillCommands(skills: readonly Skill[]): SlashCommandInfo[] {
 	}));
 }
 
-let disabledExtensionsResolver: () => ReadonlySet<string> = () => new Set();
-export function setDisabledExtensionsResolver(resolver: () => ReadonlySet<string>): void {
-	disabledExtensionsResolver = resolver;
+const noneDisabled = (): ReadonlySet<string> => new Set();
+let disabledExtensionsResolver: () => ReadonlySet<string> = noneDisabled;
+export function setDisabledExtensionsResolver(resolver: (() => ReadonlySet<string>) | null): void {
+	disabledExtensionsResolver = resolver ?? noneDisabled;
 }
 
 export function disabledExtensions(): ReadonlySet<string> {

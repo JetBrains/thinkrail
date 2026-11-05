@@ -14,7 +14,8 @@ pi install npm:@thinkrail/pi-ask-user-question
   `(Recommended)`), and `multiSelect` when several answers are valid. One call carries every question the
   agent can ask now. The run pauses until you answer.
 - **A questionnaire in the terminal.**
-  - One page per question, then **Review & submit**.
+  - One page per question; confirming the last one submits. **Submit answers** on the last page sends
+    what you have answered so far.
   - ↑↓ to move (in single-select this also selects), Space to toggle in multi-select, Enter to confirm.
   - **Other** for your own answer: type on its row.
   - `n` attaches a note to an option.
@@ -51,3 +52,7 @@ export default createAskUserQuestionExtension({
 
 `@thinkrail/pi-ask-user-question/core` exports the schema-independent pieces such a host needs outside the
 tool: the result types, the model-facing envelope builder, the acknowledgement text and the validation.
+
+## License
+
+Apache-2.0 — part of [ThinkRail](https://thinkrail.ai/?utm_source=pi-package&utm_medium=referral&utm_campaign=pi-ask-user-question&utm_content=readme).

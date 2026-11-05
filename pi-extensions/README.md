@@ -12,8 +12,15 @@ checklist.
    - `name: "@thinkrail/pi-<name>"`, `version: "0.0.0"` (the first changeset produces the first
      real version), `private` absent, `license: "Apache-2.0"`, `repository.directory`,
      `publishConfig: { access: "public", provenance: true }`.
+   - `homepage` and the README's ThinkRail link carry `utm_source=pi-package&utm_medium=referral`,
+     `utm_campaign=pi-<name>` and `utm_content=homepage` / `readme`: pi.dev and npm send no referrer.
    - `keywords` include `"pi-package"` and a `pi` manifest (`extensions`, `skills` …) **only** for an
      installable extension. A portable library (no factory) gets neither.
+   - `pi.video`: a short MP4 demo for the pi.dev gallery, kept outside `files` at
+     `.github/readme-assets/pi-packages/<name>.mp4` and linked by its raw GitHub URL on `main`. Record it
+     in vanilla `pi` from the local source (`pi -e ./pi-extensions/<name>/index.ts`), e.g. with a VHS
+     tape: 1920×1080, H.264, no audio, ≈20 s, ending on the result. pi.dev shows no poster, so the
+     first frame is the thumbnail: open on about a second of the final frame.
    - `files`: everything the entrypoints and `exports` transitively import, tests excluded. The parity
      gate installs from the tarball, so an omission fails there.
    - Pi SDK packages (`@earendil-works/pi-ai`, `pi-coding-agent`, `pi-tui`, `pi-agent-core`, `typebox`) are

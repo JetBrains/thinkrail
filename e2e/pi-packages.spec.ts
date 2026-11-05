@@ -137,13 +137,12 @@ test("a pi package installed from Settings reaches a chat, switches off and on, 
 		await expect(resources.getByTestId("package-resource-toggle-hello.ts")).toHaveCount(0);
 
 		await page.getByTestId("builtin-toggle-tool-search").click();
-		await expect
-			.poll(() => JSON.stringify(readSettings().extensions), { timeout: 15_000 })
-			.toContain("-builtin:tool-search");
 		await expect(page.getByTestId("builtin-toggle-tool-search")).toHaveAttribute(
 			"data-active",
 			"false",
+			{ timeout: 15_000 },
 		);
+		expect(JSON.stringify(readSettings().extensions)).toContain("-builtin:tool-search");
 		await page.getByTestId("builtin-toggle-tool-search").click();
 		await expect(page.getByTestId("builtin-toggle-tool-search")).toHaveAttribute(
 			"data-active",
@@ -186,10 +185,12 @@ test("a hand-dropped extension file is listed as a local file with its tools and
 		await openExtensionsSettings(page);
 		await expect(row.getByTestId("package-chip-loose_tool")).toBeVisible({ timeout: 30_000 });
 		await row.getByTestId("loose-extension-toggle").click();
-		await expect
-			.poll(() => JSON.stringify(readSettings().extensions), { timeout: 15_000 })
-			.toContain("-extensions/loose-e2e.ts");
-		await expect(row.getByTestId("loose-extension-toggle")).toHaveAttribute("data-active", "false");
+		await expect(row.getByTestId("loose-extension-toggle")).toHaveAttribute(
+			"data-active",
+			"false",
+			{ timeout: 15_000 },
+		);
+		expect(JSON.stringify(readSettings().extensions)).toContain("-extensions/loose-e2e.ts");
 	} finally {
 		rmSync(loose, { force: true });
 	}

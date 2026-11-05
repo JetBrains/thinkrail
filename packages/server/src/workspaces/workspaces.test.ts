@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import {
+	chmodSync,
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
@@ -10,9 +11,10 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative, resolve } from "node:path";
+import { delimiter, join, relative, resolve } from "node:path";
 import type { Workspace } from "@thinkrail/contracts";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
+import { setSyncGitTimeoutForTests } from "../git";
 import {
 	backfillWorkspaceActivity,
 	completeInitialTerminalReservation,
@@ -63,6 +65,8 @@ const canSymlink = (() => {
 		rmSync(probe, { recursive: true, force: true });
 	}
 })();
+
+const posix = test.skipIf(process.platform === "win32");
 
 let dataDir: string;
 let repo: string;
@@ -198,6 +202,30 @@ test("createWorkspace checks out the remote-tracking ref, not a local branch of 
 	expect(ws.baseBranch).toBe("origin/main");
 	expect(gitOut(ws.worktreePath, "rev-parse", "HEAD")).toBe(originSha);
 });
+
+posix(
+	"a remote list that times out fails createWorkspace instead of checking out a local decoy",
+	async () => {
+		const remoteRepo = join(dataDir, "remote.git");
+		git(repo, "init", "--bare", remoteRepo);
+		git(repo, "remote", "add", "origin", remoteRepo);
+		git(repo, "push", "origin", "main");
+		git(repo, "fetch", "origin");
+		writeFileSync(join(repo, "decoy.md"), "decoy\n");
+		git(repo, "add", "-A");
+		git(repo, "commit", "-m", "decoy");
+		git(repo, "update-ref", "refs/heads/origin/main", "HEAD");
+
+		setSyncGitTimeoutForTests(2_000);
+		const create = withGitWrapper('case " $* " in *" remote ") sleep 30;; esac', () =>
+			createWorkspace("p1", undefined, "origin/main"),
+		).finally(() => setSyncGitTimeoutForTests(undefined));
+
+		await expect(create).rejects.toThrow(/^Could not list the remotes: timed out/);
+		expect(existsSync(join(dataDir, "worktrees", "repo"))).toBe(false);
+		expect(await worktrees()).toHaveLength(0);
+	},
+);
 
 test("createWorkspace fails with git's own words when the base fetch fails", async () => {
 	git(repo, "remote", "add", "origin", join(dataDir, "missing.git"));
@@ -378,6 +406,45 @@ test("external workspace branch metadata converges on refresh and list", async (
 		listWorkspaceRecords("p1").find((candidate) => candidate.id === workspace.id)?.branch,
 	).toBe("feature/list-refresh");
 });
+
+async function withGitWrapper<T>(script: string, run: () => T | Promise<T>): Promise<T> {
+	const bin = join(dataDir, "wrapped-bin");
+	mkdirSync(bin, { recursive: true });
+	writeFileSync(join(bin, "git"), `#!/bin/sh\n${script}\nexec "${Bun.which("git")}" "$@"\n`);
+	chmodSync(join(bin, "git"), 0o755);
+	const path = process.env.PATH;
+	process.env.PATH = `${bin}${delimiter}${path ?? ""}`;
+	try {
+		return await run();
+	} finally {
+		if (path === undefined) delete process.env.PATH;
+		else process.env.PATH = path;
+	}
+}
+
+posix(
+	"a git that hangs reading the branch keeps the stored Default branch instead of saving HEAD",
+	async () => {
+		const [stored] = await listWorkspaces("p1");
+		expect(stored?.branch).toBe("main");
+		const events: WorkspaceLifecycleEvent[] = [];
+		setWorkspacePublisher((event) => events.push(event));
+
+		const hang = 'case "$*" in *symbolic-ref*) sleep 30;; esac';
+		setSyncGitTimeoutForTests(2_000);
+		const listed = await withGitWrapper(hang, async () => {
+			const result = await listWorkspaces("p1", { includeDiffStats: false });
+			refreshUserOwnedWorkspace(stored?.id ?? "");
+			return result;
+		}).finally(() => setSyncGitTimeoutForTests(undefined));
+
+		expect(listed.find((w) => w.id === stored?.id)?.branch).toBe("main");
+		expect(events).toHaveLength(0);
+		const record = listWorkspaceRecords("p1").find((w) => w.id === stored?.id);
+		expect(record?.branch).toBe("main");
+		expect(record?.baseBranch).toBe(stored?.baseBranch ?? "");
+	},
+);
 
 test("createWorkspace seeds a self-ignoring .thinkrail/context scratch dir kept out of git", async () => {
 	const ws = await createWorkspace("p1");

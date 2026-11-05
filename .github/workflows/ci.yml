@@ -27,7 +27,7 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_ref }}
           OUTSIDE_APP: ^(apps/website/|packages/website-analytics/|\.github/workflows/site(-preview|-preview-cleanup)?\.yml$|\.github/(readme-assets/|pr-assets/|ISSUE_TEMPLATE/|PULL_REQUEST_TEMPLATE\.md$|CODEOWNERS$|SPEC\.md$)|(README|CONTRIBUTING|CODE_OF_CONDUCT)\.md$|LICENSE$)
-          ARTIFACT_PATHS: ^(apps/cli/|apps/desktop/|packages/artifact-tests/|packages/shared/(assets/|scripts/generate-icons\.ts$|src/(version|windowsIdentity)\.ts$)|packages/server/src/(buildSupport|agent/extensions)\.ts$|e2e/(run-binary|run-desktop|artifactPlaywright)\.ts$|playwright\.(binary|desktop)\.config\.ts$|\.github/(workflows|actions|scripts)/|patches/|(package\.json|bun\.lock|turbo\.json)$)
+          ARTIFACT_PATHS: ^(apps/cli/|apps/desktop/|packages/artifact-tests/|packages/shared/(assets/|scripts/generate-icons\.ts$|src/(version|windowsIdentity)\.ts$)|packages/server/src/(buildSupport|agent/extensions)\.ts$|e2e/(run-binary|run-desktop|artifactPlaywright|playwright\.(binary|desktop)\.config)\.ts$|\.github/(workflows|actions|scripts)/|patches/|(package\.json|bun\.lock|turbo\.json)$)
         run: |
           if git fetch --no-tags --depth=1 origin "$BASE" && files=$(git diff --name-only --no-renames FETCH_HEAD HEAD); then
             if grep -qvE "$OUTSIDE_APP" <<< "$files"; then app=true; else app=false; fi
@@ -68,6 +68,8 @@ jobs:
       - run: bun run check:i18n
       - run: bun run check:compiler
       - run: bun run lint
+      - name: Download the Electrobun toolchain
+        run: .github/scripts/prepare-electrobun.sh
       - run: bun run typecheck
 
   test:
@@ -234,6 +236,9 @@ jobs:
           bun-version-file: package.json
           no-cache: true
       - run: bun install --frozen-lockfile
+      - name: Download the Electrobun toolchain
+        shell: bash
+        run: bash .github/scripts/prepare-electrobun.sh
       - run: bun run desktop:build
       - run: bun run smoke:desktop
 
@@ -283,6 +288,8 @@ jobs:
           done
           cat "$RUNNER_TEMP/xvfb.log"
           exit 1
+      - name: Download the Electrobun toolchain
+        run: .github/scripts/prepare-electrobun.sh
       - run: bun run desktop:build
       - name: Smoke native desktop window and packaged runtime
         if: ${{ matrix.shard == 1 }}

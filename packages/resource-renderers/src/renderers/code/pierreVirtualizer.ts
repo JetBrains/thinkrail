@@ -76,7 +76,7 @@ export class PierreVirtualizer extends Virtualizer {
 		if (!position) return false;
 		const top = this.getOffsetInScrollContainer(connected.container) + position.top;
 		this.scrollTo({ top: top - root.clientHeight / 2, behavior: "instant" });
-		return true;
+		return top >= root.scrollTop && top < root.scrollTop + root.clientHeight;
 	}
 }
 

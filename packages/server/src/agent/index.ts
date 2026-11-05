@@ -67,7 +67,7 @@ export {
 	listModelContextSettings,
 	setModelContextWindow,
 } from "./modelContext";
-export { preferredDefaultModel } from "./modelDefaults";
+export { piDefaultModelRef, preferredDefaultModel } from "./modelDefaults";
 export { setModelsFilePublisher } from "./modelsFile";
 export * from "./oneshot";
 export {

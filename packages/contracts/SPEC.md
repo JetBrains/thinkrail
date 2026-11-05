@@ -13,7 +13,8 @@ tags: [wire]
 
 The browser↔host wire spine: the single source of truth for the protocol. Types plus a small
 dependency-free runtime: the WS method/channel constants, protocol/feature versions, the small config
-default, narrow cross-ring guards, and the quit-confirmation rule both clients drive. The one package
+default, narrow cross-ring guards, the quit-confirmation rule both clients drive, and the search matcher
+the palette ranks with — kept here so host-side search can rank with the same copy. The one package
 `apps/web` may depend on—which is what lets the UI ship independently of the host.
 
 ## Boundary
@@ -42,16 +43,29 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   not be read, a failure analytics tells apart from a lost connection while the font picker offers Retry for
   either), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
-  for it or Error Tracking must tell it apart (it never sees `message`): **`REQUEST_REPLAY_OVERFLOW`** is the
-  latter — the host's replay namespace for this page is full ([[submodule-server-host]]), and the page treats
-  it as an ordinary retryable failure. Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
+  for it or Error Tracking must tell it apart (it never sees `message`). Two codes exist for the latter:
+  **`REQUEST_REPLAY_OVERFLOW`** — the host's replay namespace for this page is full
+  ([[submodule-server-host]]), and the page treats it as an ordinary retryable failure — and **`GIT_TIMEOUT`**
+  — a sync git killed at its deadline ([[submodule-server-git]]); an older client wraps it like any unknown
+  code, so it needs no protocol bump.
+  Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
   (`NativeUpdateState` / `NativeUpdateBridge`, `NativeWindowState` / `NativeWindowControlsBridge`,
   `NativeQuitHint` / `NativeCommand` / `NativeShortcutsBridge`, and
   `NativeNotificationInput` / `NativeNotificationBridge`, and `NativeMenuBridge` (translated native menu
   labels), the optional shell-local desktop capabilities);
-  `QUIT_CONFIRMATION` + **`createQuitConfirmation`** + `QuitConfirmationDependencies` from `quitConfirmation`; the value
+  `QUIT_CONFIRMATION` + **`createQuitConfirmation`** + `QuitConfirmationDependencies` from `quitConfirmation`;
+  **`matchFields`** + `parseMatchTerms` + `MATCH_TIER` and the `Match*` types from
+  `match` (the one search matcher: fixed tiers exact > prefix > word start/camel hump/acronym > substring >
+  bounded subsequence of at least three characters, every term required, a quoted `MatchTerm` (`literal`)
+  matched contiguously only, case and Latin diacritics folded — precomposed or decomposed, the ranges
+  still indexing the original text and spanning the marks they cover — combining marks part of their
+  word (never a word start), a secondary field never above substring and, at an equal tier, never chosen
+  over a primary one, path fields matched on the basename first, field-keyed highlight ranges — the
+  browser's palette ranks with it, and it lives here so host-side search ranks with this one copy and
+  their tiers cannot drift);
+  the value
   re-exports
   `DEFAULT_CONFIG`, `DEFAULT_WORKSPACE_NAME` (the host's name for a project's default workspace; clients
   word it in their language until it is renamed), `SYSTEM_LOCALE_PREFERENCE` + **`isLocalePreference(value)`** (`"system"` or a canonical
@@ -209,9 +223,14 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
     `{ workspaceId, sessionId, title }`, rejects a title whose trimmed single-line form is blank or exceeds
     `SESSION_TITLE_MAX_LENGTH` (80), and returns an ack; `SESSION_RENAME_PROTOCOL_VERSION` pins the
     mutation and controls to v66 so a newer client hides them against older hosts. The existing Pi event
-    `session_info_changed { name?: string }` is the one live domain update for manual and automatic changes,
-    and `session.list`/`session.getMessages` repair a missed event. No title source/provenance, uniqueness,
-    workspace coupling, or new push channel crosses the wire; session ids remain canonical.
+    `session_info_changed { name?: string }` is the live event for manual and automatic changes, and
+    `session.list`/`session.getMessages` repair a missed event. **`SessionStateRecord.title`** (optional,
+    additive, no version gate) carries the same durable name on every normalized-state record — the
+    `session.stateList` snapshot and each `session.state` push, including the full record a host publishes
+    after renaming a chat that is not live — so a client knows every chat's name, and catches up on a rename
+    it missed, from the state it already installs. A host that sends the field always sends it: `""` is
+    authoritatively unnamed, absent means an older host. No title source/provenance, uniqueness, workspace
+    coupling, or new push channel crosses the wire; session ids remain canonical.
     **`SessionSummary.firstPrompt`** and **`SessionStateRecord.firstPrompt`** (optional, additive, no
     version gate) carry `firstPromptHead` of the transcript's first user prompt beside the title: the
     display fallback for a chat that has no name, never a name — no mutation accepts it, nothing writes
@@ -835,7 +854,10 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   session id; a non-replayable domain event broadcast after permanent deletion so every client removes the chat
   and blocks stale hydration) / **`settings.changed`** (the full `AppConfig`, including custom preset definitions, broadcast so every
   client converges) / **`feedback.interview`** (an empty, addressed invitation sent only to a protocol v97
-  client when the launched in-app survey is eligible; not broadcast, subscribed, or replayed) / **`provider.login`** — the session-less
+  client when the launched in-app survey is eligible; not broadcast, subscribed, or replayed) / **`feedback.githubStar`**
+  (`GithubStarAsk { stars: number | null }`, the addressed one-time GitHub star ask with the host-read star count, sent
+  only to a client at `GITHUB_STAR_PROTOCOL_VERSION`, v103; not
+  broadcast, subscribed, or replayed) / **`provider.login`** — the session-less
   in-app login stream (a `LoginPush`
   per frame, keyed by `loginId`; the sibling of `pi.extensionUi`, since a login runs on the Welcome screen
   before any session exists) / **`provider.changed`** — a data-free invalidation broadcast after a watched
@@ -1162,7 +1184,8 @@ pending dialog its exact replayable request), nullable latest `completion` (stab
 owner-global `completionUnread` receipt projection (held false while an idle session has background work).
 `isSessionWorking` is the one *working* test: `execution` running or `backgroundWork`; an older host omits
 the flag, which reads as false. `SessionStateRecord` adds session/workspace/project
-attribution; `SessionSummary.state` carries the exact attached session's state.
+attribution plus the chat's `title` and `firstPrompt`; `SessionSummary.state` carries the exact attached
+session's state.
 
 `session.stateList` is an authoritative all-workspace snapshot of every top-level live or disk session and
 fails rather than returning an incomplete scan. `session.state` pushes a full record after the causative Pi

@@ -34,6 +34,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { Textarea } from "@thinkrail/ui/textarea";
 import { cn } from "@thinkrail/ui/utils";
@@ -61,7 +62,6 @@ import {
 	applyTemplateSlotEdit,
 	beginTemplateSlotSession,
 	finalizeTemplateSlotSession,
-	isPromptKeyEventComposing,
 	type ParsedTemplate,
 	SlashCommandMenu,
 	selectedSlashCommandValue,
@@ -606,7 +606,7 @@ export function NewWorkspaceDialog({
 						rows={6}
 						className="min-h-[160px]"
 						onKeyDown={(e) => {
-							if (isPromptKeyEventComposing(e.nativeEvent)) return;
+							if (isImeComposing(e.nativeEvent)) return;
 							if (slotSession && !slashCompletion.open) {
 								if (e.key === "Tab") {
 									e.preventDefault();

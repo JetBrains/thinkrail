@@ -125,6 +125,7 @@ function createOwner(options: SubagentsExtensionOptions, retained: boolean): Sub
 	let closed = false;
 	let flushing = false;
 	let flushScheduled = false;
+	let wakeDeferred = false;
 	let turnEnd: { runContinues: boolean } | undefined;
 	let owedWake = false;
 	const pending = new Set<HeldCompletion>();
@@ -175,6 +176,10 @@ function createOwner(options: SubagentsExtensionOptions, retained: boolean): Sub
 					if (!closed) pending.add(completion);
 					break;
 				}
+				if (completion === carrier && parentIdle()) {
+					wakeDeferred = true;
+					scheduleFlush();
+				}
 			}
 			return deliveredWake;
 		} finally {
@@ -185,7 +190,7 @@ function createOwner(options: SubagentsExtensionOptions, retained: boolean): Sub
 	function flushCompletions(flush: { atTurnEnd?: boolean } = {}): void {
 		if (closed) return;
 		if (parentIdle()) {
-			if (!flushScheduled) deliver({ idle: true });
+			if (!wakeDeferred) deliver({ idle: true });
 			return;
 		}
 		if (flush.atTurnEnd && turnEnd && deliver({ idle: false, ...turnEnd })) owedWake = true;
@@ -196,6 +201,7 @@ function createOwner(options: SubagentsExtensionOptions, retained: boolean): Sub
 		flushScheduled = true;
 		setTimeout(() => {
 			flushScheduled = false;
+			wakeDeferred = false;
 			flushCompletions();
 		}, 0);
 	}
@@ -224,6 +230,7 @@ function createOwner(options: SubagentsExtensionOptions, retained: boolean): Sub
 		pi.on("turn_start", () => {
 			turnEnd = undefined;
 			owedWake = false;
+			wakeDeferred = false;
 		});
 		pi.on("agent_end", () => {
 			turnEnd = undefined;

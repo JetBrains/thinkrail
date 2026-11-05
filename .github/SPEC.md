@@ -84,6 +84,12 @@ the one binary headless tests launch, and start it in the background right after
 step joins it, failing with its status, just before the browser tests, so the download overlaps the build
 instead of preceding it.
 
+Jobs that typecheck or build the desktop app first download Electrobun's Hutch toolchain (Hutch, Cottontail,
+the Electrobun core and its Bun toolchain, all GitHub release assets) through
+`.github/scripts/prepare-electrobun.sh`, which retries `electrobun prepare` a bounded number of times;
+`electrobun build` and the typecheck's own `prepare` then find it in `~/.hutch`. Before that step, a dropped
+release download (`ReleaseDownloadFailed`, a timed-out Hutch index) failed whole desktop jobs, 6 in two weeks.
+
 Native artifact smokes run only in shard 1: repeating an identical probe per shard adds no coverage and
 multiplies exposure to runner-environment faults.
 
@@ -139,8 +145,10 @@ Its stable public outputs are:
 - `desktop-update-manifest-path` / `desktop-update-archive-path` — Electrobun's updater metadata and
   full application archive, both non-empty on every desktop target.
 
-The recipe stamps the shared version, builds and smokes the CLI, invokes the normal Electrobun dev and
-channel builds, runs expanded-app and first-install smoke, then collects exact target/channel outputs.
+The recipe stamps the shared version, builds and smokes the CLI, downloads the Electrobun toolchain through
+`prepare-electrobun.sh` (above), invokes the normal Electrobun dev and channel builds, runs expanded-app and
+first-install smoke, then collects exact target/channel outputs. Before that step joined the recipe, a
+dropped Cottontail download failed the linux-arm64 build of the 0.3.1 stable release.
 Update outputs preserve Electrobun's generated basenames and compressed bytes. The manifest is the exact
 `<stable|canary>-<macos|win|linux>-<arm64|x64>-update.json`. Its `artifact.file` is the archive basename:
 `stable-<platform>-ThinkRail[.app].tar.zst` for stable or

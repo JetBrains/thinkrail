@@ -229,6 +229,10 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   test persists only after its printed marker arrives and asserts the replay contains it. A non-forced close
   that expects "not busy" also waits for a printed marker first: until startup finishes, rc files run short
   child processes (`$(groups)`, `lesspipe`, `dircolors`) that correctly make the shell read as busy.
+  Every test that waits on a real shell carries the file's terminal budget, not Bun's 5 s default (a
+  developer's dotfiles alone can take seconds to start one). Shells get a temp `HISTFILE` and `ZDOTDIR`:
+  macOS's `/etc/zshrc` rebuilds `HISTFILE` from `ZDOTDIR`, so a temp `HISTFILE` alone still appended to the
+  developer's real history.
 - `e2e/terminals.spec.ts` — the rapid re-entry regression, reload survival, second-client takeover,
   cross-client tab convergence, addressed-output isolation. Its output markers likewise never appear
   contiguously in the typed command: keystroke echo reaches the screen first, split across output batches.
