@@ -122,6 +122,19 @@ export function App() {
 		[controller, registry, connectHost, t],
 	);
 
+	useEffect(
+		() =>
+			controller.onLost((hostKey, error) => {
+				// The computer ended this phone's access for good (revoked, …): say so in the tree's banner and
+				// leave any screen of that computer — its data is no longer this phone's to show.
+				markFailure(hostKey, failureOf(error));
+				setRoute((current) =>
+					"hostKey" in current && current.hostKey === hostKey ? { kind: "projects" } : current,
+				);
+			}),
+		[controller, markFailure],
+	);
+
 	useEffect(() => {
 		const unsubscribe = controller.subscribe(() => setItems(controller.items()));
 		for (const host of registry.list()) void connectHost(host);

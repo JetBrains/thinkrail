@@ -36,6 +36,10 @@ uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `loc
     `host busy`, the host's coded `rejected` (read by reason from a host too old to send a code), a host key
     mismatch, a dropped relay — and an attempt with no open data channel after `CONNECT_TIMEOUT_MS` (20s) fails
     as `host_silent` when the host never answered, else `no_direct_route`, so the app never waits forever.
+    A closed data channel counts as a drop like a failed peer, so a phone the computer revoked reconnects,
+    and a reconnect refused for good (`unknown_device`, `identity_mismatch`, `app_outdated`) stops retrying,
+    closes the connection and fires `onLost`; `remoteSessions` then drops that host and tells its `onLost`
+    listeners.
   - `hostRegistry.ts` — the locally-stored set of paired hosts over an injected `KeyValueStore`; a host keeps
     every advertised `relayUrls` (older entries only the one `relayUrl`).
   - `remoteSessions.ts` — one wire client per host, aggregating live sessions into one list, plus each host's

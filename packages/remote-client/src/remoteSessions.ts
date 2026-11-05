@@ -1,4 +1,5 @@
 import { type ServerWelcome, type SessionStateRecord, WS_CHANNELS } from "@thinkrail/contracts";
+import type { RemoteConnectError } from "./connectError";
 import { connectSavedHost, type RemoteConnection } from "./deviceConnector";
 import type { DeviceWireClient } from "./deviceWireClient";
 import type { SavedHost } from "./hostRegistry";
@@ -19,6 +20,11 @@ export interface RemoteSessionsController {
 	/** The host's `server.welcome` (protocol version, config), once it has arrived. */
 	welcomeFor(hostKey: string): ServerWelcome | null;
 	subscribe(listener: () => void): () => void;
+	/**
+	 * Hears a host whose connection ended for good (the computer revoked this phone, …); the host is already
+	 * dropped from the controller, so `clientFor` is null and its sessions are gone.
+	 */
+	onLost(listener: (hostKey: string, error: RemoteConnectError) => void): () => void;
 	/** Closes one host's connection and drops its sessions (the phone forgot that computer). */
 	disconnect(hostKey: string): void;
 	stop(): void;
@@ -43,6 +49,7 @@ export function createRemoteSessions(
 ): RemoteSessionsController {
 	const hosts = new Map<string, HostEntry>();
 	const listeners = new Set<() => void>();
+	const lostListeners = new Set<(hostKey: string, error: RemoteConnectError) => void>();
 	const notify = (): void => {
 		for (const listener of listeners) listener();
 	};
@@ -54,6 +61,12 @@ export function createRemoteSessions(
 			const sessions = new Map<string, SessionStateRecord>();
 			const entry: HostEntry = { label: host.label, connection, sessions, welcome: null };
 			hosts.set(host.hostKey, entry);
+			connection.onLost((error) => {
+				if (hosts.get(host.hostKey) !== entry) return;
+				hosts.delete(host.hostKey);
+				notify();
+				for (const listener of lostListeners) listener(host.hostKey, error);
+			});
 
 			connection.client.subscribe(WS_CHANNELS.serverWelcome, (data) => {
 				entry.welcome = data as ServerWelcome;
@@ -89,6 +102,10 @@ export function createRemoteSessions(
 			listeners.add(listener);
 			return () => void listeners.delete(listener);
 		},
+		onLost(listener) {
+			lostListeners.add(listener);
+			return () => void lostListeners.delete(listener);
+		},
 		disconnect(hostKey) {
 			const entry = hosts.get(hostKey);
 			if (!entry) return;
@@ -100,6 +117,7 @@ export function createRemoteSessions(
 			for (const entry of hosts.values()) entry.connection.close();
 			hosts.clear();
 			listeners.clear();
+			lostListeners.clear();
 		},
 	};
 }

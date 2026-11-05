@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { type SessionState, type SessionStateRecord, WS_CHANNELS } from "@thinkrail/contracts";
+import { RemoteConnectError } from "./connectError";
 import type { RemoteConnection } from "./deviceConnector";
 import type { DeviceWireClient } from "./deviceWireClient";
 import type { SavedHost } from "./hostRegistry";
@@ -24,6 +25,7 @@ const rec = (sessionId: string): SessionStateRecord => ({
 function fakeConnection(host: SavedHost, seed: SessionStateRecord[]) {
 	let onState: (data: unknown) => void = () => {};
 	let closed = false;
+	let lost: (error: RemoteConnectError) => void = () => {};
 	const client: DeviceWireClient = {
 		attach: () => {},
 		request<T>(method: string): Promise<T> {
@@ -43,12 +45,16 @@ function fakeConnection(host: SavedHost, seed: SessionStateRecord[]) {
 		relayUrl: host.relayUrl,
 		relayUrls: [host.relayUrl],
 		projectRef: "",
+		onLost: (handler) => {
+			lost = handler;
+		},
 		close: () => {
 			closed = true;
 		},
 	};
 	return {
 		connection,
+		lose: (error: RemoteConnectError) => lost(error),
 		pushState: (record: SessionStateRecord) => onState(record),
 		isClosed: () => closed,
 	};
@@ -131,4 +137,27 @@ test("disconnect closes one host, drops its sessions and lets it connect again",
 
 	await controller.connect(laptop);
 	expect(controller.clientFor(laptop.hostKey)).not.toBeNull();
+});
+
+test("a host lost for good is dropped with its sessions and reported to onLost listeners", async () => {
+	const laptopFake = fakeConnection(laptop, [rec("s1")]);
+	const serverFake = fakeConnection(server, [rec("s2")]);
+	const fakes = new Map([
+		[laptop.hostKey, laptopFake],
+		[server.hostKey, serverFake],
+	]);
+	const controller = createRemoteSessions(async (host) => {
+		const fake = fakes.get(host.hostKey);
+		if (!fake) throw new Error("unknown host");
+		return fake.connection;
+	});
+	await controller.connect(laptop);
+	await controller.connect(server);
+	const heard: [string, string][] = [];
+	controller.onLost((hostKey, error) => heard.push([hostKey, error.code]));
+
+	laptopFake.lose(new RemoteConnectError("unknown_device", "revoked"));
+	expect(heard).toEqual([["K1", "unknown_device"]]);
+	expect(controller.clientFor("K1")).toBeNull();
+	expect(controller.items().map((item) => item.record.sessionId)).toEqual(["s2"]);
 });

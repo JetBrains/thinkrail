@@ -94,6 +94,8 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for rationale 
 - **Never leave a device waiting:** every refusal is a `rejected` frame with a `RejectCode` (`invalid_code`,
   `unknown_device`, `denied`), and a device frame that does not parse — an app older than the host — is
   answered `outdated_app` and ends the session instead of being dropped silently.
+- **A closed wire ends the peer:** the host peer closes its WebRTC connection once its data channel closes
+  (Revoke closes a device's channels), so the device sees the connection end and its `resume` is refused.
 - **The relay is untrusted:** nothing it carries is a bearer secret (token id + HMAC, never the token), and
   both SDPs are signed, so a malicious or compromised relay cannot pair its own key, impersonate the host,
   or sit in the middle of the DTLS channel. It can only refuse service.

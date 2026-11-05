@@ -55,6 +55,9 @@ export function createWeriftHostPeer(
 			const channel = pc.createDataChannel("wire");
 			channel.stateChanged.subscribe((state) => {
 				if (state === "open") emitChannel(toRemoteChannel(channel));
+				// The wire is the peer's only use: once it closes (a revoked device, a dropped phone), tear the
+				// whole connection down so the device sees it end rather than sit on a live peer with no channel.
+				else if (state === "closed") void pc.close();
 			});
 			const offer = await pc.createOffer();
 			await pc.setLocalDescription(offer);

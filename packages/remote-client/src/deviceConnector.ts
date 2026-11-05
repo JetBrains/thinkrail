@@ -26,8 +26,20 @@ export interface RemoteConnection {
 	/** The computer's name from the pairing link, when it sent one. */
 	hostName?: string;
 	projectRef: string;
+	/**
+	 * Called once when the connection is gone for good: a reconnect the host refused in a way retrying cannot
+	 * fix (this phone was revoked, the host key changed, the app is too old). The connection is closed by then.
+	 */
+	onLost(handler: (error: RemoteConnectError) => void): void;
 	close(): void;
 }
+
+/** Refusals a retry cannot fix; anything else (no network, a host restarting) keeps reconnecting. */
+const TERMINAL: ReadonlySet<string> = new Set([
+	"unknown_device",
+	"identity_mismatch",
+	"app_outdated",
+]);
 
 const DEVICE_KEY_STORAGE = "thinkrail.remote.deviceKey";
 const MAX_BACKOFF_MS = 10_000;
@@ -250,6 +262,9 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 				}
 			});
 			pc.addEventListener("datachannel", (event) => {
+				event.channel.addEventListener("close", () =>
+					dropped(new RemoteConnectError("relay_lost", "the computer closed the connection")),
+				);
 				event.channel.addEventListener("open", () => {
 					client.attach(toDeviceChannel(event.channel));
 					clearTimeout(timer);
@@ -336,13 +351,25 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 		});
 	};
 
+	let lostHandler: (error: RemoteConnectError) => void = () => {};
+	const lose = (error: RemoteConnectError): void => {
+		if (closed) return;
+		closed = true;
+		teardownActive();
+		client.close();
+		lostHandler(error);
+	};
+
 	const scheduleReconnect = (): void => {
 		if (closed) return;
 		const delay = backoff;
 		backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
 		setTimeout(() => {
 			if (closed) return;
-			attempt(false).catch(() => scheduleReconnect());
+			attempt(false).catch((error: unknown) => {
+				if (error instanceof RemoteConnectError && TERMINAL.has(error.code)) lose(error);
+				else scheduleReconnect();
+			});
 		}, delay);
 	};
 
@@ -354,6 +381,9 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 		relayUrl,
 		relayUrls: params.relayUrls,
 		projectRef: params.projectRef,
+		onLost: (handler) => {
+			lostHandler = handler;
+		},
 		close: () => {
 			closed = true;
 			teardownActive();
