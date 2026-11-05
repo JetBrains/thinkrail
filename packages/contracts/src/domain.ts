@@ -1497,6 +1497,10 @@ export type AppConfigUpdate = Partial<
 
 export type SurveyInvitationResponse = "postpone" | "never";
 
+export interface GithubStarAsk {
+	stars: number | null;
+}
+
 export const SURVEY_OPEN_TEXT_LIMIT = 2000;
 
 export type SurveyRatingScale = 3 | 5 | 7 | 10;

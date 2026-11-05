@@ -85,7 +85,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   **`installWelcomeSnapshot(protocolVersion, projects, recentProjects,
   config?, hostPlatform?, hostUpdate?, hostAppVersion?, speech?)`** installs protocol + both sorted project views + optional config,
   host platform, optional host-update lifecycle snapshot, the voice-input **`speech`** status (`null` from a
-  pre-v103 host) + navigation repair and then advances that readiness
+  pre-v104 host) + navigation repair and then advances that readiness
   edge in one Zustand write; route validation and capability reads never observe a partial welcome.
   `installSpeechStatus` replaces `speech` whole on each `speech.changed` push.
   `installProjectSnapshot` remains the project-only primitive for focused

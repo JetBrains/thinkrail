@@ -1115,7 +1115,7 @@ interface AppState {
 	fontWeightOffset: number;
 	userFonts: UserFontsSnapshot | null;
 	installUserFonts: (snapshot: UserFontsSnapshot | null) => void;
-	/** Voice input as the host reports it; `null` before a v103 welcome or from an older host. */
+	/** Voice input as the host reports it; `null` before a v104 welcome or from an older host. */
 	speech: SpeechStatus | null;
 	installSpeechStatus: (status: SpeechStatus | null) => void;
 	onboardingDismissed: boolean;

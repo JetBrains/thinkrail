@@ -14,6 +14,7 @@ import type {
 import {
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
+	GITHUB_STAR_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
@@ -98,6 +99,7 @@ import {
 	refreshInAppSurvey,
 	releaseInvitation,
 	setFeedbackPublisher,
+	setGithubStarPublisher,
 } from "../feedback";
 import { watchUserFonts } from "../fonts";
 import { watchLocalLocales } from "../locales";
@@ -689,6 +691,26 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 	});
 
+	const githubStarSocket = (clientKey: string) => {
+		const ws = sockets.get(clientKey);
+		return ws && ws.data.protocolVersion >= GITHUB_STAR_PROTOCOL_VERSION ? ws : undefined;
+	};
+	setGithubStarPublisher({
+		canAsk: (clientKey) => githubStarSocket(clientKey) !== undefined,
+		ask: (clientKey, ask) => {
+			const ws = githubStarSocket(clientKey);
+			if (!ws) return false;
+			try {
+				return (
+					ws.send(JSON.stringify({ channel: WS_CHANNELS.feedbackGithubStar, data: ask })) !== 0
+				);
+			} catch {
+				ws.close();
+				return false;
+			}
+		},
+	});
+
 	setSkillAdmissionResolver((workspaceId) => {
 		try {
 			const { projectId, skillOverrides } = getWorkspace(workspaceId);
@@ -1095,6 +1117,7 @@ function restoreSeamDefaults(): void {
 	setSessionProjectResolver(() => null);
 	setTerminalPublisher(() => "unavailable");
 	setFeedbackPublisher(null);
+	setGithubStarPublisher(null);
 	configureSurveySource(null);
 	setSkillAdmissionResolver(null);
 	setMcpPolicyResolver(null);

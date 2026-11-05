@@ -855,7 +855,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   session id; a non-replayable domain event broadcast after permanent deletion so every client removes the chat
   and blocks stale hydration) / **`settings.changed`** (the full `AppConfig`, including custom preset definitions, broadcast so every
   client converges) / **`feedback.interview`** (an empty, addressed invitation sent only to a protocol v97
-  client when the launched in-app survey is eligible; not broadcast, subscribed, or replayed) / **`provider.login`** — the session-less
+  client when the launched in-app survey is eligible; not broadcast, subscribed, or replayed) / **`feedback.githubStar`**
+  (`GithubStarAsk { stars: number | null }`, the addressed one-time GitHub star ask with the host-read star count, sent
+  only to a client at `GITHUB_STAR_PROTOCOL_VERSION`, v103; not
+  broadcast, subscribed, or replayed) / **`provider.login`** — the session-less
   in-app login stream (a `LoginPush`
   per frame, keyed by `loginId`; the sibling of `pi.extensionUi`, since a login runs on the Welcome screen
   before any session exists) / **`provider.changed`** — a data-free invalidation broadcast after a watched
@@ -1174,9 +1177,9 @@ and what it loaded, never pi's own types.
 
 ## Voice input
 
-`speech.ts` (re-exported from `index.ts`) is the wire for local dictation, from **`SPEECH_PROTOCOL_VERSION`**, v103:
+`speech.ts` (re-exported from `index.ts`) is the wire for local dictation, from **`SPEECH_PROTOCOL_VERSION`**, v104:
 
-- **Control on the main wire.** `ServerWelcome.speech` seeds a **`SpeechStatus`** (a v103 host always
+- **Control on the main wire.** `ServerWelcome.speech` seeds a **`SpeechStatus`** (a v104 host always
   sends it):
   - `supported` — whether the host platform has a pinned runtime;
   - `install` — `not-installed` | `installing` with phase, byte progress and model | `ready` | `failed`

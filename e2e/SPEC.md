@@ -373,9 +373,10 @@ convergence with draft invalidation, sanitized read/write failures with Retry, m
 and pre-v76 hiding.
 
 General and private-restart fixtures seed additional analytics off with consent already confirmed, so
-unrelated scenarios stay unblocked. They also seed the automatic survey invitation as permanently
-dismissed: the serial agent lane intentionally accumulates accepted prompts across scenarios, while dedicated
-feedback coverage injects and asserts the addressed invitation channel directly. The cold-start onboarding
+unrelated scenarios stay unblocked. The shared fixture (`global-setup.ts`) also seeds the automatic survey
+invitation as permanently dismissed and the one-time GitHub star ask as already sent: the serial agent lane intentionally accumulates
+accepted prompts across scenarios, while dedicated feedback and `github-star-prompt.spec.ts` coverage injects and
+asserts the addressed channels directly. The cold-start onboarding
 wizard is likewise seeded dismissed (`onboardingDismissed: true`, in the config file and again over the
 settings wire, since the host may have loaded its config first), and only `onboarding.spec.ts` re-arms it
 over the settings wire, restoring it afterwards. The wizard gate decides once per page load, so that spec's

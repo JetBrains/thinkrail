@@ -39,6 +39,7 @@ import {
 } from "@thinkrail/contracts";
 import { currentLocale } from "@thinkrail/locales/react";
 import { isConnectedGeneration, useAppStore } from "../store";
+import { githubStarToast } from "./githubStar";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 import { WsTransport } from "./transport";
 
@@ -234,16 +235,45 @@ function refreshUserFonts(connectionGeneration: number): void {
 function refreshLoadedWorkspaceLists(connectionGeneration: number): void {
 	const snapshot = useAppStore.getState();
 	const openProjectIds = new Set(snapshot.projects.map((project) => project.id));
-	for (const projectId of Object.keys(snapshot.workspaces)) {
+	for (const [projectId, held] of Object.entries(snapshot.workspaces)) {
 		if (!openProjectIds.has(projectId)) continue;
+		const heldAtRequest = held.map((workspace) => workspace.id);
 		void getTransport()
 			.request("workspace.list", { projectId, includeDiffStats: false })
 			.then((workspaces) => {
 				const current = useAppStore.getState();
 				if (!isConnectedGeneration(current, connectionGeneration)) return;
-				if (!current.projects.some((project) => project.id === projectId)) return;
-				for (const workspace of workspaces) current.updateWorkspace(workspace);
+				applyWorkspaceListRefresh(projectId, heldAtRequest, workspaces);
 			})
+			.catch(() => {});
+	}
+}
+
+export function applyWorkspaceListRefresh(
+	projectId: string,
+	heldAtRequest: readonly string[],
+	workspaces: readonly Workspace[],
+): void {
+	const store = useAppStore.getState();
+	if (!store.projects.some((project) => project.id === projectId)) return;
+	for (const workspace of workspaces) store.updateWorkspace(workspace);
+	const listed = new Set(workspaces.map((workspace) => workspace.id));
+	for (const workspaceId of heldAtRequest) {
+		if (listed.has(workspaceId)) continue;
+		const held = useAppStore.getState().workspaces[projectId];
+		if (held?.some((workspace) => workspace.id === workspaceId)) {
+			retireWorkspace(projectId, workspaceId);
+		}
+	}
+}
+
+export function retireWorkspace(projectId: string, workspaceId: string): void {
+	const state = useAppStore.getState();
+	const login = state.activeLogin;
+	state.applyWorkspaceRemoved(projectId, workspaceId);
+	if (login?.target?.workspaceId === workspaceId) {
+		void getTransport()
+			.request("provider.loginCancel", { loginId: login.loginId })
 			.catch(() => {});
 	}
 }
@@ -403,6 +433,10 @@ export function initTransport(): WsTransport {
 		state.showSurveyInvitation();
 	});
 
+	transport.subscribe(WS_CHANNELS.feedbackGithubStar, (data) => {
+		useAppStore.getState().pushToast(githubStarToast(data));
+	});
+
 	transport.subscribe(WS_CHANNELS.workspaceCreated, (data) => {
 		const store = useAppStore.getState();
 		store.addWorkspace(data as Workspace);
@@ -421,14 +455,7 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.workspaceRemoved, (data) => {
 		const { projectId, id } = data as WorkspaceRemoved;
-		const state = useAppStore.getState();
-		const login = state.activeLogin;
-		state.applyWorkspaceRemoved(projectId, id);
-		if (login?.target?.workspaceId === id) {
-			void getTransport()
-				.request("provider.loginCancel", { loginId: login.loginId })
-				.catch(() => {});
-		}
+		retireWorkspace(projectId, id);
 	});
 
 	transport.subscribe(WS_CHANNELS.reviewChanged, (data) => {
