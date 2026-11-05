@@ -1,4 +1,5 @@
 import type { WireModel } from "@thinkrail/contracts";
+import { createPiSettings } from "./packages";
 
 export const PI_DEFAULT_MODEL_PER_PROVIDER: Readonly<Record<string, string>> = {
 	"amazon-bedrock": "us.anthropic.claude-opus-4-6-v1",
@@ -56,4 +57,13 @@ export function preferredDefaultModel<T extends Pick<WireModel, "provider" | "id
 		if (match) return match;
 	}
 	return available[0];
+}
+
+export function piDefaultModelRef() {
+	const { defaultProvider: provider, defaultModel: id } = createPiSettings(
+		process.cwd(),
+		undefined,
+		{ projectTrusted: false, packages: "all" },
+	).getGlobalSettings();
+	return provider && id ? { provider, id } : undefined;
 }
