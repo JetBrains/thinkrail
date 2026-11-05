@@ -138,7 +138,7 @@ Green gates are necessary but not sufficient:
 ## Stack
 
 Bun + Turbo monorepo · TypeScript strict · React 19 + Zustand + Tailwind v4 · in-process `pi`
-(Node >= 22.19). App state lives under `~/.thinkrail`.
+(Node >= 22.19). App state lives under `~/.oh-my-thinkrail`.
 
 Dependencies pin exact versions. Cross-cutting dependencies are pinned once in the root
 `workspaces.catalog` and referenced through `catalog:`; peer dependencies and local protocols are the

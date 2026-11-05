@@ -29,7 +29,7 @@ export const USAGE = `Usage: thinkrail [options] [project-dir]
 
 Boots the ThinkRail engine host in-process and opens the browser to the app.
 The \`update\` subcommand re-downloads + installs the latest build for your channel;
-\`uninstall\` removes ThinkRail from this machine (your ~/.thinkrail app state is kept
+\`uninstall\` removes ThinkRail from this machine (your ~/.oh-my-thinkrail app state is kept
 unless you ask for it to go). Both take \`--help\`.
 
 Options:
@@ -39,7 +39,7 @@ Options:
   --no-analytics Disable additional usage analytics this run.
                  The saved sharing preference lives in Settings → Privacy.
   --verbose      Debug-level logging (terminal + the rotated log files under
-                 ~/.thinkrail/logs).
+                 ~/.oh-my-thinkrail/logs).
   -v, --version  Print the version and exit.
   -h, --help     Show this help.
 

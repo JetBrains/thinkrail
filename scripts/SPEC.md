@@ -15,7 +15,10 @@ Repository-wide development orchestration and conformance gates that do not belo
 
 ## Boundary
 
-- **Owns:** the multi-process development launcher; the on-demand provider sign-in smoke (`smoke:logins`); exact-version/catalog validation; the PI binary-seam canary; module dependency/import boundary validation; the UI-text gate (`check:i18n`); declared-spec-surface to TypeScript-barrel conformance; the on-demand CI flake report (`ci:flakes`); and focused root contract tests that compose otherwise independent product implementations.
+- **Owns:** the multi-process development launcher — `dev.ts` picks ports, starts turbo and opens the
+  browser, while `dev-server.ts` is the server package's `dev` script: it re-execs `bun --watch` with the
+  repository root as cwd, because Bun only watches files under its cwd and otherwise prints one
+  "not in the project directory" warning per imported file outside the package; the on-demand provider sign-in smoke (`smoke:logins`); exact-version/catalog validation; the PI binary-seam canary; module dependency/import boundary validation; the UI-text gate (`check:i18n`); declared-spec-surface to TypeScript-barrel conformance; the on-demand CI flake report (`ci:flakes`); and focused root contract tests that compose otherwise independent product implementations.
 - **Public surface:** the root `package.json` commands consumed by developers, Husky, and CI.
 - **Allowed deps:** Bun/Node, the developer's authenticated `gh` CLI (read-only, `ci:flakes` only), the TypeScript compiler API, `pi-spec-graph/core` for the canonical spec/frontmatter model, and `mdast-util-from-markdown` for CommonMark block structure; read-only inspection of workspace manifests and source trees; the public package metadata and bundle outputs each check validates; and test-only imports of real product internals when a root harness must prove a cross-package contract without creating a product dependency.
 - **Forbidden:** product runtime logic, a second source of package or feature behavior, editing source as part of a check, or application-internal imports outside focused root contract tests. A root contract test may compose implementations but must not become the protocol source or a product dependency.

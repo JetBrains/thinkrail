@@ -13,6 +13,7 @@ import {
 	RiGitPullRequestLine,
 	RiLayout2Fill,
 	RiLayout2Line,
+	RiListCheck2,
 	RiListCheck3,
 	RiTaskFill,
 	RiTaskLine,
@@ -51,6 +52,8 @@ export function tabIcon(tab: LayoutTab, active = false, cls = "size-14 shrink-0"
 					return active ? <RiFileFill className={cls} /> : <RiFileLine className={cls} />;
 				case "review":
 					return active ? <RiDiscussFill className={cls} /> : <RiDiscussLine className={cls} />;
+				case "issues":
+					return <RiListCheck2 className={cls} />;
 				case "plan":
 					return active ? <RiTaskFill className={cls} /> : <RiTaskLine className={cls} />;
 				default:

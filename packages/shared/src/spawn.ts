@@ -112,7 +112,8 @@ function spawnSyncRaw(argv: readonly string[], options: SpawnSyncOptions): Spawn
 			...(plan.detached ? { detached: true } : {}),
 			...(options.maxBuffer !== undefined ? { maxBuffer: options.maxBuffer } : {}),
 		});
-		const timedOut = result.exitedDueToTimeout === true;
+		// A child that exited successfully was not stalled; only a non-zero exit can be a timeout.
+		const timedOut = result.exitedDueToTimeout === true && result.exitCode !== 0;
 		if (timedOut && plan.detached) killGroup(result.pid);
 		return {
 			launched: true,

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, jest, test } from "bun:test";
+import { afterAll, beforeAll, expect, jest, spyOn, test } from "bun:test";
 import {
 	existsSync,
 	mkdirSync,
@@ -71,6 +71,7 @@ import {
 	renameSession,
 	requestSessionReload,
 	respondToTool,
+	sessionReuseStatus,
 	setAgentReviewEnabledResolver,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
@@ -3477,6 +3478,79 @@ test("listing skips a non-session sidecar log in the pi sessions dir (#876)", as
 	expect((await listSessions("ws-sidecar", cwd)).map((row) => row.sessionId)).toEqual([session.id]);
 });
 
+for (const ownership of ["same", "foreign"] as const) {
+	test(`sessionReuseStatus rechecks ${ownership} live ownership and busy state after a delayed disk list`, async () => {
+		const cwd = tmpCwd("trpi-reuse-race-");
+		const workspaceId = "ws-reuse-race";
+		const owner = ownership === "same" ? workspaceId : "ws-reuse-race-foreign";
+		const fixture = writeFixtureSession(
+			defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd),
+			{
+				cwd,
+				messages: [
+					{ role: "user", text: "persisted turn", timestamp: 1_000 },
+					{ role: "assistant", text: "persisted reply", stopReason: "stop", timestamp: 1_001 },
+				],
+			},
+		);
+		let releaseList = () => {};
+		const listGate = new Promise<void>((resolve) => {
+			releaseList = resolve;
+		});
+		let listStarted = () => {};
+		const listing = new Promise<void>((resolve) => {
+			listStarted = resolve;
+		});
+		let releasePrompt = () => {};
+		const promptGate = new Promise<void>((resolve) => {
+			releasePrompt = resolve;
+		});
+		let promptStarted = () => {};
+		const streaming = new Promise<void>((resolve) => {
+			promptStarted = resolve;
+		});
+		const originalList = SessionManager.list.bind(SessionManager);
+		let delayed = false;
+		const listSpy = spyOn(SessionManager, "list").mockImplementation(async (...args) => {
+			const infos = await originalList(...args);
+			if (!delayed) {
+				delayed = true;
+				listStarted();
+				await listGate;
+			}
+			return infos;
+		});
+		let prompting: Promise<void> | undefined;
+		let status: ReturnType<typeof sessionReuseStatus> | undefined;
+		try {
+			status = sessionReuseStatus(fixture.id, workspaceId, cwd);
+			await listing;
+			expect(hasSession(fixture.id)).toBe(false);
+			expect(await ensureSessionAttached(fixture.id, owner, cwd)).toBe(true);
+			fauxA.setResponses([
+				async () => {
+					promptStarted();
+					await promptGate;
+					return fauxAssistantMessage("RACE_REPLY");
+				},
+			]);
+			prompting = promptSession(fixture.id, "keep streaming during the reuse probe");
+			prompting.catch(() => {});
+			await streaming;
+			expect((await getSessionMessages(fixture.id, owner, cwd)).summary.isStreaming).toBe(true);
+			releaseList();
+			expect(await status).toBe(ownership === "same" ? "busy" : false);
+		} finally {
+			releaseList();
+			releasePrompt();
+			await status?.catch(() => {});
+			await prompting?.catch(() => {});
+			listSpy.mockRestore();
+			if (hasSession(fixture.id)) await removeSession(fixture.id);
+		}
+	}, 120000);
+}
+
 test("disk-reopen: a disposed session is re-listed from disk and re-opened with its transcript (restart survival)", async () => {
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 	try {
@@ -3488,13 +3562,19 @@ test("disk-reopen: a disposed session is re-listed from disk and re-opened with 
 			model: toWireModel(fauxA.getModel()),
 		});
 		await promptSession(s.sessionId, "persist me");
+		// Even a disk-backed id cannot cross a live workspace boundary.
+		expect(await sessionReuseStatus(s.sessionId, "ws-foreign", cwd)).toBe(false);
 		await removeSession(s.sessionId);
+		expect(await sessionReuseStatus(s.sessionId, "ws-disk", cwd)).toBe("idle");
+		expect(hasSession(s.sessionId)).toBe(false);
+		expect(await sessionReuseStatus("missing", "ws-disk", cwd)).toBe(false);
 
 		const fromDisk = (await listSessions("ws-disk", cwd)).find((x) => x.sessionId === s.sessionId);
 		expect(fromDisk).toBeDefined();
 		expect(fromDisk?.live).toBe(false);
 
 		const otherCwd = tmpCwd("trpi-other-");
+		expect(await sessionReuseStatus(s.sessionId, "ws-other", otherCwd)).toBe(false);
 		expect((await listSessions("ws-other", otherCwd)).map((x) => x.sessionId)).not.toContain(
 			s.sessionId,
 		);
@@ -3571,6 +3651,7 @@ test("deleteSession tombstones its id so a stale transcript cannot reattach in t
 		expect(existsSync(info.path)).toBe(false);
 
 		writeFileSync(info.path, staleTranscript);
+		expect(await sessionReuseStatus(session.sessionId, "ws-delete", cwd)).toBe(false);
 		await expect(getSessionMessages(session.sessionId, "ws-delete", cwd)).rejects.toThrow(
 			`Unknown session: ${session.sessionId}`,
 		);
@@ -3606,6 +3687,9 @@ test("a malformed detached transcript is never treated as authoritative absence"
 		removeSession(session.sessionId);
 		writeFileSync(info.path, "not a pi transcript\n");
 
+		await expect(sessionReuseStatus(session.sessionId, "ws-delete-corrupt", cwd)).rejects.toThrow(
+			"unreadable or malformed",
+		);
 		await expect(listSessions("ws-delete-corrupt", cwd)).rejects.toThrow("unreadable or malformed");
 		await expect(
 			listSessionStates([{ id: "ws-delete-corrupt", projectId: "p-delete-corrupt", cwd }]),
@@ -4180,6 +4264,7 @@ test("compactSession rejects an overlapping manual compaction", async () => {
 			await new Promise((resolve) => setTimeout(resolve, 20));
 		}
 
+		expect(await sessionReuseStatus(sessionId, "ws-compact-lock", cwd)).toBe("busy");
 		overlappingCompaction = compactSession(sessionId, "second");
 		overlappingCompaction.catch(() => {});
 		const overlapOutcome = await Promise.race([

@@ -6,19 +6,23 @@ import {
 	mkdtempSync,
 	readFileSync,
 	realpathSync,
+	renameSync,
 	rmSync,
 	symlinkSync,
+	unlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join, relative, resolve } from "node:path";
-import type { Workspace } from "@thinkrail/contracts";
+import type { Workspace, WsParams } from "@thinkrail/contracts";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import { setSyncGitTimeoutForTests } from "../git";
+import { createWorkspaceAtPathWithBranch, listGitWorktrees } from "./index";
 import {
 	backfillWorkspaceActivity,
 	completeInitialTerminalReservation,
 	createWorkspace,
+	createWorkspaceAtPath,
 	ensureWorkspaceScratchDir,
 	forgetWorkspace,
 	listExistingWorktrees,
@@ -104,6 +108,39 @@ afterEach(() => {
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
+});
+
+test("listGitWorktrees reads all actual registrations without changing workspace records", async () => {
+	const managed = await createWorkspace("p1", "Registered workspace");
+	const detached = join(dataDir, "detached checkout");
+	git(repo, "worktree", "add", "--detach", detached, "main");
+	const missing = join(dataDir, "missing checkout");
+	git(repo, "worktree", "add", "-b", "missing-branch", missing, "main");
+	rmSync(missing, { recursive: true, force: true });
+	const recordsBefore = listWorkspaceRecords("p1");
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((event) => events.push(event));
+
+	const entries = await listGitWorktrees("p1");
+	expect(entries).toEqual([
+		{ path: repo, branch: "main", prunable: false },
+		...registeredWorktrees(repo)
+			.slice(1)
+			.map((path) => ({
+				path,
+				branch: path === detached ? null : path === missing ? "missing-branch" : managed.branch,
+				prunable: path === missing,
+			})),
+	]);
+	expect(entries.map((entry) => entry.path)).toContain(managed.worktreePath);
+	expect(entries).toContainEqual({ path: detached, branch: null, prunable: false });
+	expect(entries).toContainEqual({ path: missing, branch: "missing-branch", prunable: true });
+	expect(listWorkspaceRecords("p1")).toEqual(recordsBefore);
+	expect(events).toEqual([]);
+});
+
+test("listGitWorktrees rejects projects that are not open", async () => {
+	await expect(listGitWorktrees("unknown")).rejects.toThrow("Unknown project: unknown");
 });
 
 test("createWorkspace cuts a fresh branch from baseRef and records it as the base", async () => {
@@ -1010,7 +1047,7 @@ test.skipIf(!canSymlink)(
 		symlinkSync(outside, join(repo, ".thinkrail"));
 		expect(() => ensureWorkspaceScratchDir(def)).toThrow("not a real directory");
 		expect(existsSync(join(outside, "context"))).toBe(false);
-		rmSync(join(repo, ".thinkrail"));
+		unlinkSync(join(repo, ".thinkrail"));
 
 		mkdirSync(join(repo, ".thinkrail", "context"), { recursive: true });
 		const planted = join(outside, "planted");
@@ -1279,4 +1316,270 @@ test("setWorkspaceReview persists a trimmed snapshot and stays silent when nothi
 	expect(setWorkspaceReview(ws.id, review, "some-other-branch")).toBeNull();
 	expect(listWorkspaceRecords("p1").find((row) => row.id === ws.id)?.review).toBeUndefined();
 	expect(events).toHaveLength(3);
+});
+
+test("explicit target preserves managed creation, local exclude and default placement", async () => {
+	const target = join(repo, ".worktrees", "42");
+	const exclude = join(repo, ".git", "info", "exclude");
+	writeFileSync(exclude, "# custom\nkeep-me");
+	writeFileSync(join(repo, ".gitignore"), "user-owned\n");
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((event) => {
+		if (event.kind === "created")
+			expect(listWorkspaceRecords("p1")).toContainEqual(event.workspace);
+		events.push(event);
+	});
+	const ws = await createWorkspaceAtPath("p1", target, "My Feature", "main");
+	expect(ws).toMatchObject({
+		projectId: "p1",
+		worktreePath: target,
+		name: "My Feature",
+		branch: "my-feature",
+		baseBranch: "main",
+		renamed: true,
+		initialTerminalPending: true,
+	});
+	expect(ws.kind).toBeUndefined();
+	expect(ws.lastActiveAt).toBeGreaterThan(0);
+	expect(events).toEqual([{ kind: "created", workspace: ws }]);
+	expect(readFileSync(join(target, WORKSPACE_CONTEXT_DIR, ".gitignore"), "utf8")).toBe("*\n");
+	expect(gitOut(target, "symbolic-ref", "--short", "HEAD")).toBe(ws.branch);
+	expect(gitOut(repo, "check-ignore", ".worktrees/42/README.md")).toBe(".worktrees/42/README.md");
+	const after = readFileSync(exclude, "utf8");
+	expect(after).toBe("# custom\nkeep-me\n/.worktrees/\n");
+	const second = await createWorkspaceAtPath("p1", join(repo, ".worktrees", "43"), "My Feature");
+	expect(second.branch).toBe("my-feature-2");
+	expect(readFileSync(exclude, "utf8")).toBe(after);
+	expect(readFileSync(join(repo, ".gitignore"), "utf8")).toBe("user-owned\n");
+	const noWirePath: "targetPath" extends keyof WsParams<"workspace.create"> ? false : true = true;
+	expect(noWirePath).toBe(true);
+	const ordinary = await createWorkspace("p1");
+	expect(ordinary.worktreePath).toBe(join(dataDir, "worktrees", "repo", ordinary.branch));
+	removeWorkspace(ws.id);
+	expect(existsSync(target)).toBe(false);
+	expect(gitOut(repo, "show-ref", "--verify", `refs/heads/${ws.branch}`)).not.toBe("");
+});
+
+test("explicit target exact branch preserves spelling and managed lifecycle", async () => {
+	const branch = "Issues/Owned_Branch-ABC123";
+	const target = join(repo, ".worktrees", "exact");
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((event) => {
+		if (event.kind === "created")
+			expect(listWorkspaceRecords("p1")).toContainEqual(event.workspace);
+		events.push(event);
+	});
+	const ws = await createWorkspaceAtPathWithBranch("p1", target, branch, "main");
+	expect(ws).toMatchObject({
+		branch,
+		name: branch,
+		worktreePath: target,
+		baseBranch: "main",
+		renamed: true,
+		initialTerminalPending: true,
+	});
+	expect(ws.lastActiveAt).toBeGreaterThan(0);
+	expect(gitOut(target, "symbolic-ref", "--short", "HEAD")).toBe(branch);
+	expect(gitOut(repo, "symbolic-ref", "--short", "HEAD")).toBe("main");
+	expect(readFileSync(join(target, WORKSPACE_CONTEXT_DIR, ".gitignore"), "utf8")).toBe("*\n");
+	expect(events).toEqual([{ kind: "created", workspace: ws }]);
+});
+
+test("explicit target exact branch collision rejects without suffix or checkout", async () => {
+	const branch = "Issues/Owned_Branch-ABC123";
+	git(repo, "branch", branch);
+	const before = gitOut(repo, "show-ref", "--heads");
+	const target = join(repo, ".worktrees", "collision");
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((event) => events.push(event));
+	await expect(createWorkspaceAtPathWithBranch("p1", target, branch)).rejects.toThrow(
+		/already exists/,
+	);
+	expect(gitOut(repo, "show-ref", "--heads")).toBe(before);
+	expect(gitOut(repo, "symbolic-ref", "--short", "HEAD")).toBe("main");
+	expect(registeredWorktrees(repo)).toEqual([repo]);
+	expect(existsSync(target)).toBe(false);
+	expect(listWorkspaceRecords("p1")).toEqual([]);
+	expect(events).toEqual([]);
+});
+
+test("explicit target exact branch rejects unsafe and invalid refs without mutation", async () => {
+	const before = gitOut(repo, "show-ref", "--heads");
+	const target = join(repo, ".worktrees", "invalid");
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((event) => events.push(event));
+	for (const branch of ["", "-option", "bad name", "bad..ref", "bad.lock", "@{-1}", "refs/"]) {
+		await expect(createWorkspaceAtPathWithBranch("p1", target, branch)).rejects.toThrow();
+	}
+	expect(gitOut(repo, "show-ref", "--heads")).toBe(before);
+	expect(registeredWorktrees(repo)).toEqual([repo]);
+	expect(existsSync(target)).toBe(false);
+	expect(listWorkspaceRecords("p1")).toEqual([]);
+	expect(events).toEqual([]);
+});
+
+test("explicit target rejects existing file and empty directory without suffixing or publishing", async () => {
+	const parent = join(repo, ".worktrees");
+	mkdirSync(parent);
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((event) => events.push(event));
+	for (const kind of ["file", "directory"]) {
+		const target = join(parent, kind);
+		if (kind === "file") writeFileSync(target, "keep\n");
+		else mkdirSync(target);
+		await expect(createWorkspaceAtPath("p1", target)).rejects.toThrow(/already exists/);
+		expect(existsSync(target)).toBe(true);
+		expect(existsSync(`${target}-2`)).toBe(false);
+	}
+	expect(readFileSync(join(parent, "file"), "utf8")).toBe("keep\n");
+	expect(listWorkspaceRecords("p1")).toHaveLength(0);
+	expect(events).toHaveLength(0);
+	expect(gitOut(repo, "show-ref", "--verify", "refs/heads/workspace-1")).toBe("");
+});
+
+test("explicit target rejects missing but registered and persisted paths", async () => {
+	const target = join(repo, ".worktrees", "registered");
+	git(repo, "worktree", "add", target, "-b", "registered");
+	rmSync(target, { recursive: true, force: true });
+	await expect(createWorkspaceAtPath("p1", target)).rejects.toThrow(/registered/);
+	expect(registeredWorktrees(repo)).toContain(target);
+	const persisted = join(repo, ".worktrees", "persisted");
+	const ws = await createWorkspace("p1");
+	writeFileSync(
+		join(dataDir, "workspaces.json"),
+		JSON.stringify([{ ...ws, worktreePath: persisted }]),
+	);
+	await expect(createWorkspaceAtPath("p1", persisted)).rejects.toThrow(/registered/);
+	expect(existsSync(persisted)).toBe(false);
+});
+
+test("explicit target refuses outside, relative, nested paths and linked-project roots", async () => {
+	for (const target of [
+		join(dataDir, "outside"),
+		join(repo, "wrong", "42"),
+		join(repo, ".worktrees"),
+		join(repo, ".worktrees", "nested", "42"),
+		".worktrees/42",
+	]) {
+		await expect(createWorkspaceAtPath("p1", target)).rejects.toThrow(/direct child/);
+	}
+	const linked = join(dataDir, "linked");
+	git(repo, "worktree", "add", linked, "-b", "linked");
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([{ id: "p1", name: "linked", path: linked, slug: "linked", lastOpened: 1 }]),
+	);
+	await expect(createWorkspaceAtPath("p1", join(linked, ".worktrees", "42"))).rejects.toThrow(
+		/main working tree/,
+	);
+	expect(existsSync(join(linked, ".worktrees"))).toBe(false);
+});
+
+test("explicit target refuses a junction parent escape even on Windows", async () => {
+	const outside = join(dataDir, "outside");
+	mkdirSync(outside);
+	symlinkSync(outside, join(repo, ".worktrees"), process.platform === "win32" ? "junction" : "dir");
+	await expect(createWorkspaceAtPath("p1", join(repo, ".worktrees", "42"))).rejects.toThrow(
+		/real directory/,
+	);
+	expect(existsSync(join(outside, "42"))).toBe(false);
+});
+
+test.skipIf(!canSymlink)(
+	"explicit target rejects dangling leaf symlinks without following them",
+	async () => {
+		mkdirSync(join(repo, ".worktrees"));
+		const target = join(repo, ".worktrees", "42");
+		const outside = join(dataDir, "missing");
+		symlinkSync(outside, target);
+		await expect(createWorkspaceAtPath("p1", target)).rejects.toThrow(/already exists/);
+		expect(existsSync(outside)).toBe(false);
+	},
+);
+
+test("explicit target revalidates a parent replaced while Git listing yields", async () => {
+	const outside = join(dataDir, "outside");
+	mkdirSync(outside);
+	const pending = createWorkspaceAtPath("p1", join(repo, ".worktrees", "42"));
+	symlinkSync(outside, join(repo, ".worktrees"), process.platform === "win32" ? "junction" : "dir");
+	await expect(pending).rejects.toThrow(/real directory/);
+	expect(existsSync(join(outside, "42"))).toBe(false);
+	expect(listWorkspaceRecords("p1")).toHaveLength(0);
+});
+
+test("explicit target Git failure never deletes, retries or publishes a workspace", async () => {
+	const target = join(repo, ".worktrees", "42");
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((event) => events.push(event));
+	await expect(createWorkspaceAtPath("p1", target, "failure", "missing-base")).rejects.toThrow(
+		/git worktree add failed/,
+	);
+	expect(events).toHaveLength(0);
+	expect(listWorkspaceRecords("p1")).toHaveLength(0);
+	expect(existsSync(`${target}-2`)).toBe(false);
+	expect(readFileSync(join(repo, "README.md"), "utf8")).toBe("# repo\n");
+});
+
+test("explicit target rejects a junction in Git metadata without modifying its target", async () => {
+	const info = join(repo, ".git", "info");
+	const outside = join(dataDir, "outside-info");
+	mkdirSync(outside);
+	const exclude = join(outside, "exclude");
+	writeFileSync(exclude, "# keep outside\n");
+	rmSync(info, { recursive: true });
+	symlinkSync(outside, info, process.platform === "win32" ? "junction" : "dir");
+	await expect(createWorkspaceAtPath("p1", join(repo, ".worktrees", "42"))).rejects.toThrow(
+		/real directory/,
+	);
+	expect(readFileSync(exclude, "utf8")).toBe("# keep outside\n");
+	expect(listWorkspaceRecords("p1")).toHaveLength(0);
+});
+
+test.skipIf(!canSymlink)(
+	"explicit target rejects a symlink exclude without modifying its target",
+	async () => {
+		const outside = join(dataDir, "outside-exclude");
+		writeFileSync(outside, "# keep outside\n");
+		const exclude = join(repo, ".git", "info", "exclude");
+		unlinkSync(exclude);
+		symlinkSync(outside, exclude);
+		await expect(createWorkspaceAtPath("p1", join(repo, ".worktrees", "42"))).rejects.toThrow(
+			/regular file/,
+		);
+		expect(readFileSync(outside, "utf8")).toBe("# keep outside\n");
+		expect(listWorkspaceRecords("p1")).toHaveLength(0);
+	},
+);
+
+test("Git refuses file and nonempty targets appearing after the application's last check", () => {
+	// Exercise the external boundary directly: there is no atomic reservation between our
+	// final lstat and Git. Git may accept an empty directory, but must preserve these entries.
+	for (const kind of ["file", "nonempty"]) {
+		const target = join(repo, ".worktrees", kind);
+		mkdirSync(join(repo, ".worktrees"), { recursive: true });
+		expect(existsSync(target)).toBe(false);
+		const sentinel = kind === "file" ? target : join(target, "keep.txt");
+		if (kind === "nonempty") mkdirSync(target);
+		writeFileSync(sentinel, "concurrent content\n");
+		const result = Bun.spawnSync(
+			["git", "-C", repo, "worktree", "add", target, "-b", `race-${kind}`, "main"],
+			{ stdout: "pipe", stderr: "pipe" },
+		);
+		expect(result.success).toBe(false);
+		expect(readFileSync(sentinel, "utf8")).toBe("concurrent content\n");
+		expect(registeredWorktrees(repo)).not.toContain(target);
+	}
+});
+
+test("explicit target rejects a junction Git directory before appending excludes", async () => {
+	const outside = join(dataDir, "outside-git");
+	renameSync(join(repo, ".git"), outside);
+	symlinkSync(outside, join(repo, ".git"), process.platform === "win32" ? "junction" : "dir");
+	const exclude = join(outside, "info", "exclude");
+	const before = readFileSync(exclude, "utf8");
+	await expect(createWorkspaceAtPath("p1", join(repo, ".worktrees", "42"))).rejects.toThrow(
+		/real directory/,
+	);
+	expect(readFileSync(exclude, "utf8")).toBe(before);
+	expect(listWorkspaceRecords("p1")).toHaveLength(0);
 });

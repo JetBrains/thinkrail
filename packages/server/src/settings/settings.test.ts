@@ -808,7 +808,12 @@ test("a custom preset may place every layout tool, the TODO List included", () =
 			visible: true,
 			width: 0.28,
 			groups: [
-				{ id: "custom-right", weight: 1, folded: false, tools: ["specs", "plan", "review"] },
+				{
+					id: "custom-right",
+					weight: 1,
+					folded: false,
+					tools: ["specs", "plan", "review", "issues"],
+				},
 			],
 		},
 	};

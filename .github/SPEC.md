@@ -132,6 +132,12 @@ macOS and Linux ARM64 acceptance belongs to the release matrix. The Windows jobs
 dependencies without the Actions cache: restoring it took longer than a fresh install, and with no Windows
 job on main every PR and merge group kept its own copy, about half of the repository's cache quota.
 
+## Preview artifacts
+
+`build-preview.yml` runs manually or on pushes to this fork's feature branch. It uploads unsigned
+Windows CLI and desktop preview bundles, retained for 14 days. It never publishes npm packages,
+tags, GitHub Releases or signed installers; protected release/signing gates remain separate.
+
 ## Native build contract
 
 The private native matrix checks out an explicit public source commit and invokes

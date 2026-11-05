@@ -30,6 +30,27 @@ create the tools it needs based on how you actually work.
 
 *A `pi` session and the change it made, scoped to an isolated git-worktree workspace.*
 
+## GitLab Issues integration (fork preview)
+
+This fork includes an Issues panel for a project's GitLab connection and a Kanban-style issue list, plus an
+optional GitLab association step after opening or cloning a project and an association/reconnect/disconnect
+menu in the panel. Associate with an HTTP(S) GitLab repository address and a personal access token.
+Non-local HTTP shows a plaintext-transmission warning that must be acknowledged for that exact instance.
+The host stores the token in the operating system credential vault (Windows Credential Manager, macOS
+Keychain, Linux Secret Service) and restores it on request; if the vault is unavailable the connection
+fails instead of falling back to a plaintext file. Disconnect deletes the saved token and keeps only the
+public project binding. Connecting needs no project trust (you type the address and token yourself); the
+Tomato stage actions, which touch your worktree and the remote repository, still require a trusted project.
+
+The panel offers design and implementation icons on each Issue title row. Design opens an Issue-titled
+session in Default; implementation directly creates or reuses the owned `.worktrees/issue-<IID>` workspace
+and an Issue-titled session. Starting either requires project trust, but no design approval or confirmation
+dialog is required to start implementation, and starting does not change workflow labels. Approval and
+Issue closure remain in GitLab. Delivery (push, merge request, CI gating and merging) is not implemented:
+the provider primitives alone do not authorize a merge, and no merge is performed.
+Existing GitHub pull-request actions retain their GitHub behavior. Real GitLab CE, cross-machine recovery and
+upstream-merge compatibility are not yet verified.
+
 ## What you get
 
 - **Isolated workspaces.** Open any git repo as a project and cut workspaces from it as `git worktree`s,
@@ -89,16 +110,16 @@ create the tools it needs based on how you actually work.
   reports. The server is saved to `pi`'s `models.json`, so its models appear in the chat model picker and in
   the `pi` CLI alike.
 - **Desktop app or browser.** A native desktop app, or the `thinkrail` CLI that opens the same app in your
-  browser. Both embed the same engine host; app state lives under `~/.thinkrail`.
+  browser. Both embed the same engine host; app state lives under `~/.oh-my-thinkrail`.
 - **Your language.** Settings → Language follows your system language or a language you pick; English,
   Japanese, Russian, Simplified Chinese, and Spanish are built in. Add a language ThinkRail doesn't ship yet by
-  dropping a translated `en.json` into `~/.thinkrail/locales` — it applies as you save. Agent replies and
+  dropping a translated `en.json` into `~/.oh-my-thinkrail/locales` — it applies as you save. Agent replies and
   tool output stay as the agent wrote them.
 - **Your themes.** Settings → Appearance ships dark, light, minimal and high-contrast themes. Make your own
-  by copying a bundled `*.theme.json`, changing its id and colors, and saving it to `~/.thinkrail/themes`.
+  by copying a bundled `*.theme.json`, changing its id and colors, and saving it to `~/.oh-my-thinkrail/themes`.
 - **Your fonts.** Settings → Appearance picks the interface and code fonts from the bundled Geist and
   JetBrains Mono, any font installed on your computer, or font files you drop in (kept in
-  `~/.thinkrail/fonts`), with fallback fonts for icon glyphs, a code size, ligatures and a text-weight slider.
+  `~/.oh-my-thinkrail/fonts`), with fallback fonts for icon glyphs, a code size, ligatures and a text-weight slider.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/readme-assets/specs-dark.png">
@@ -192,7 +213,7 @@ directly on any platform: it re-runs the installer for the installed channel and
 `<prefix>/bin/thinkrail[.exe]`; pass `--channel` or `--version` only for an explicit override.
 
 `thinkrail uninstall` removes the executable, the PATH entry the installer added, and the install metadata,
-and asks whether to delete your `~/.thinkrail` app state (kept by default — `--remove-data` deletes it,
+and asks whether to delete your `~/.oh-my-thinkrail` app state (kept by default — `--remove-data` deletes it,
 `-y` skips the questions).
 
 Prefer a manual install? Download a binary and `SHA256SUMS` from the releases page and verify the checksum.

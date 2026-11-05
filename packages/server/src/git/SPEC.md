@@ -24,7 +24,10 @@ ref off the workspace-create critical path.
   runs, so an unbounded one turned a hung git (a stuck fsmonitor, a dead network mount, a held lock) into
   a frozen host. On expiry git gets `SIGTERM` (so it removes its `.lock` files; a `SIGKILL` would leave
   `index.lock` and lock the repo for every later write) and the call **throws** (see below), with the same
-  `timed out after <n>s — …` wording as the async runners; the rest of git's process group is
+  `timed out after <n>s — …` wording as the async runners (below 1s it reports the measured
+  milliseconds instead, so an immediately-fired deadline is not misread as "1s"). A timeout never
+  triggers an automatic replay, since the same runner executes mutations with uncertain outcomes.
+  A child that exited successfully is never reported as timed out; the rest of git's process group is
   then killed, so hooks, filters and credential helpers do not outlive it. `worktree remove` and whole-tree
   reads (`gitUncommittedPaths`' tracked diff and untracked listing) pass **`SLOW_GIT_TIMEOUT_MS`** (5 minutes)
   instead, so a large but healthy repository still finishes. Index writers (the initial `add -A` + `commit` of
@@ -249,7 +252,10 @@ ref off the workspace-create critical path.
   (`symbolic-ref --short HEAD`, unborn-safe; detached → literal `HEAD`), consumed by the `workspaces`
   module for a user-owned workspace's folder-truth `branch`, with **`tryCurrentBranch`** its fallible form
   (`null` when the path is not a readable worktree root, so a refresh never persists an I/O failure as a
-  detach); **`canonicalPath(path)`** — the symlink-resolved form any path compared against git output must
+  detach). Both read the branch from `<gitdir>/HEAD` first — following a `.git` file to a linked
+  worktree's own gitdir — so the per-project folder-truth walk that `listWorkspaces` performs costs no
+  child process; an unreadable or unexpected layout falls back to the git spawn rather than guessing, and
+  a detached `HEAD` keeps the top-level `HEAD` semantics below; **`canonicalPath(path)`** — the symlink-resolved form any path compared against git output must
   take (git resolves symlinks, a caller's path does not), shared with `workspaces`' worktree-identity
   checks; `prefetchBranch(projectId, ref)` — best-effort background
   `git fetch` of a configured remote ref (via `gitAsync`), so a later `createWorkspace` branches off a

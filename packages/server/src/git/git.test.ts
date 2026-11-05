@@ -60,6 +60,23 @@ beforeEach(() => {
 	);
 });
 
+test("reading the branch needs no git spawn, and linked worktrees keep their own HEAD", () => {
+	// The fast path reads `<gitdir>/HEAD`; a stub `git` that always fails proves it was never spawned.
+	expect(tryCurrentBranch(repo)).toBe("main");
+	const worktree = join(dataDir, "linked-worktree");
+	git(repo, "worktree", "add", "-b", "feature/from-link", worktree);
+	expect(tryCurrentBranch(worktree)).toBe("feature/from-link");
+	const originalPath = process.env.PATH;
+	process.env.PATH = join(dataDir, "empty-path");
+	try {
+		expect(tryCurrentBranch(repo)).toBe("main");
+		expect(tryCurrentBranch(worktree)).toBe("feature/from-link");
+	} finally {
+		if (originalPath === undefined) delete process.env.PATH;
+		else process.env.PATH = originalPath;
+	}
+}, 30_000);
+
 afterEach(() => {
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;

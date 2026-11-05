@@ -1,7 +1,16 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import {
+	appendFileSync,
+	existsSync,
+	lstatSync,
+	mkdirSync,
+	readFileSync,
+	realpathSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { rm } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import {
 	DEFAULT_WORKSPACE_NAME,
 	type DiffStats,
@@ -133,6 +142,14 @@ async function gitWorktreeEntries(repoPath: string): Promise<GitWorktreeEntry[]>
 	return entries;
 }
 
+export async function listGitWorktrees(
+	projectId: string,
+): Promise<readonly Readonly<{ path: string; branch: string | null; prunable: boolean }>[]> {
+	const project = openProjectById(projectId);
+	const entries = await gitWorktreeEntries(project.path);
+	return entries.map((entry) => ({ ...entry, branch: entry.branch ?? null }));
+}
+
 export async function listExistingWorktrees(
 	projectId: string,
 ): Promise<ExistingWorktreeCandidate[]> {
@@ -239,12 +256,143 @@ export async function createWorkspace(
 	name?: string,
 	baseRef?: string,
 ): Promise<Workspace> {
-	const project = openProjectById(projectId);
+	return createManagedWorkspace(projectId, name, baseRef);
+}
 
-	const displayName = name ? toDisplayName(name) : null;
-	const branch = displayName
-		? uniqueBranch(project, toBranch(displayName))
-		: nextAutoBranch(project);
+/** Server-only capability; deliberately separate from the public createWorkspace wire door. */
+export async function createWorkspaceAtPath(
+	projectId: string,
+	targetPath: string,
+	name?: string,
+	baseRef?: string,
+): Promise<Workspace> {
+	return createManagedWorkspace(projectId, name, baseRef, targetPath);
+}
+
+export async function createWorkspaceAtPathWithBranch(
+	projectId: string,
+	targetPath: string,
+	branch: string,
+	baseRef?: string,
+	name?: string,
+): Promise<Workspace> {
+	return createManagedWorkspace(projectId, name, baseRef, targetPath, branch);
+}
+
+function exactBranch(project: Project, branch: string): string {
+	assertSafeRef(branch);
+	if (!git(project.path, ["check-ref-format", `refs/heads/${branch}`]).ok)
+		throw new Error(`Invalid workspace branch: ${branch}`);
+	if (git(project.path, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]).ok)
+		throw new Error(`Workspace branch already exists: ${branch}`);
+	return branch;
+}
+
+function explicitTarget(project: Project, targetPath: string): string {
+	const root = realpathSync.native(project.path);
+	const parent = join(root, ".worktrees");
+	const target = resolve(targetPath);
+	if (!isAbsolute(targetPath) || dirname(target) !== parent)
+		throw new Error(
+			"Workspace target must be a direct child of the real project .worktrees directory",
+		);
+	const entry = lstatSync(parent, { throwIfNoEntry: false });
+	if (entry && (!entry.isDirectory() || realpathSync.native(parent) !== parent))
+		throw new Error(`Workspace target parent must be a real directory: ${parent}`);
+	if (lstatSync(target, { throwIfNoEntry: false }))
+		throw new Error(`Workspace target already exists: ${target}`);
+	if (loadWorkspaces().some((ws) => canonicalPath(ws.worktreePath) === target))
+		throw new Error(`Workspace target is already registered: ${target}`);
+	return target;
+}
+
+async function validateExplicitTarget(project: Project, targetPath: string): Promise<string> {
+	const target = explicitTarget(project, targetPath);
+	validateGitEntry(project);
+	const entries = await gitWorktreeEntries(project.path);
+	if (!entries[0] || canonicalPath(entries[0].path) !== canonicalPath(project.path))
+		throw new Error("Explicit workspace targets require the project's main working tree");
+	if (entries.some((entry) => canonicalPath(entry.path) === target))
+		throw new Error(`Workspace target is already registered with Git: ${target}`);
+	// The registry read yielded; re-check repository-controlled parents and app records.
+	return explicitTarget(project, targetPath);
+}
+
+function validateGitEntry(project: Project): void {
+	// Git may canonicalize a symlinked .git directory. A regular gitfile is allowed.
+	const gitEntry = join(realpathSync.native(project.path), ".git");
+	if (lstatSync(gitEntry, { throwIfNoEntry: false })?.isSymbolicLink())
+		throw new Error(`Git metadata must be a real directory: ${gitEntry}`);
+}
+
+function localExcludePath(project: Project): string {
+	validateGitEntry(project);
+	const located = git(project.path, [
+		"rev-parse",
+		"--path-format=absolute",
+		"--git-path",
+		"info/exclude",
+	]);
+	if (!located.ok) throw new Error(`Could not locate the local Git exclude file: ${located.err}`);
+	if (!isAbsolute(located.out)) throw new Error("Git exclude path must be absolute");
+	// --path-format=absolute can resolve symlinks (verified on Git for Windows).
+	// Keep Git's default spelling too, so canonicalization cannot hide a redirected leaf/parent.
+	const lexical = git(project.path, ["rev-parse", "--git-path", "info/exclude"]);
+	if (!lexical.ok) throw new Error(`Could not locate the local Git exclude file: ${lexical.err}`);
+	const file = resolve(located.out);
+	validateExcludeComponents(resolve(project.path, lexical.out));
+	validateExcludeComponents(file);
+	return file;
+}
+
+// Metadata can live outside the repo. Walk from the root so lstat never intentionally
+// traverses a linked parent. External replacement after a check is still possible.
+function validateExcludeComponents(file: string): void {
+	const directories: string[] = [];
+	for (let dir = dirname(file); ; dir = dirname(dir)) {
+		directories.unshift(dir);
+		if (dirname(dir) === dir) break;
+	}
+	for (const dir of directories) {
+		const entry = lstatSync(dir, { throwIfNoEntry: false });
+		if (!entry) continue;
+		if (entry.isSymbolicLink() || !entry.isDirectory())
+			throw new Error(`Git metadata must be a real directory: ${dir}`);
+	}
+	const entry = lstatSync(file, { throwIfNoEntry: false });
+	if (entry && (entry.isSymbolicLink() || !entry.isFile()))
+		throw new Error(`Git exclude must be a regular file: ${file}`);
+}
+
+function excludeLocalWorktrees(project: Project): void {
+	const file = localExcludePath(project);
+	mkdirSync(dirname(file), { recursive: true });
+	// Revalidate created directories too, before reading/appending the leaf.
+	validateExcludeComponents(file);
+	const entry = lstatSync(file, { throwIfNoEntry: false });
+	const content = entry ? readFileSync(file, "utf8") : "";
+	if (content.split(/\r?\n/).includes("/.worktrees/")) return;
+	appendFileSync(file, `${content && !content.endsWith("\n") ? "\n" : ""}/.worktrees/\n`);
+}
+
+async function createManagedWorkspace(
+	projectId: string,
+	name?: string,
+	baseRef?: string,
+	targetPath?: string,
+	requestedBranch?: string,
+): Promise<Workspace> {
+	const project = openProjectById(projectId);
+	if (targetPath !== undefined) await validateExplicitTarget(project, targetPath);
+
+	// A caller that reserves an exact ref may still want a readable name (`issue-42` on `issue-42-<uuid>`).
+	const displayName = name ? toDisplayName(name) : (requestedBranch ?? null);
+	const branch =
+		requestedBranch !== undefined
+			? exactBranch(project, requestedBranch)
+			: displayName
+				? uniqueBranch(project, toBranch(displayName))
+				: nextAutoBranch(project);
 	const wsName = displayName ?? branch;
 
 	const base = baseRef?.trim();
@@ -275,8 +423,13 @@ export async function createWorkspace(
 			);
 	}
 
-	const worktreePath = join(dataDir(), "worktrees", project.slug, branch);
+	const worktreePath =
+		targetPath === undefined
+			? join(dataDir(), "worktrees", project.slug, branch)
+			: await validateExplicitTarget(project, targetPath);
+	if (targetPath !== undefined) excludeLocalWorktrees(project);
 	mkdirSync(dirname(worktreePath), { recursive: true });
+	if (targetPath !== undefined) explicitTarget(project, targetPath);
 	const added = git(
 		project.path,
 		[

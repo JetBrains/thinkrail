@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join, relative, resolve, sep } from "node:path";
 import { dataDir, loadProjects, loadWorkspaces, saveProjects, saveWorkspaces } from "./persistence";
 
@@ -81,4 +81,11 @@ test("a value that is not an absolute path on this host is left as stored", () =
 test("a relative THINKRAIL_DATA_DIR still names one absolute data directory", () => {
 	process.env.THINKRAIL_DATA_DIR = relative(process.cwd(), root);
 	expect(dataDir()).toBe(root);
+});
+
+test("this fork's app state defaults to its own home directory, not the installed product's", () => {
+	delete process.env.THINKRAIL_DATA_DIR;
+	expect(dataDir()).toBe(join(homedir(), ".oh-my-thinkrail"));
+	process.env.THINKRAIL_DATA_DIR = "/explicit/override";
+	expect(dataDir()).toBe(resolve("/explicit/override"));
 });

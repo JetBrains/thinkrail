@@ -5,7 +5,7 @@ status: active
 title: shell — responsive frame
 parent: module-web
 tags: [ui]
-references: [module-desktop, module-contracts]
+references: [module-desktop, module-contracts, submodule-web-issues]
 ---
 
 ## Responsibility
@@ -16,7 +16,7 @@ The responsive composition root: top-level app chrome, active-project/workspace 
 
 - **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-project/workspace routing; single Settings, analytics-consent, survey-invitation, survey-window, attention-notification permission-preface, and Toaster mounts plus the keyboard-opened Create workspace dialog and the `Mod+K` / double-Shift search palette host (and the once-mounted attention-notification observer from [[submodule-web-notifications]]); theme application and global shortcuts; the command catalog the palette runs ([[submodule-web-commands]], [[submodule-web-search]]); the injected Layout, Keyboard and optional application Update settings sections; and integration of the workbench engine with store, persistence, panels, transport-backed domain state, and error boundaries.
 - **Public surface:** `Shell`.
-- **Allowed deps:** child layout modules; `updates`; `search` + `commands` (the palette and the command contract it composes for it); `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types, wire constants, and the shared `createQuitConfirmation` rule), `@thinkrail/ui/*`, `@thinkrail/locales` (UI strings), `i18n` (`useLocaleSync`, mounted once), `components/ErrorBoundary`, `components/QuietScrollArea`, `constants`, `lib`, and `themes`.
+- **Allowed deps:** child layout modules; `updates`; `search` + `commands` (the palette and the command contract it composes for it); `panels`; `issues` (the arrangement-agnostic project Issues tool through its barrel); `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types, wire constants, and the shared `createQuitConfirmation` rule), `@thinkrail/ui/*`, `@thinkrail/locales` (UI strings), `i18n` (`useLocaleSync`, mounted once), `components/ErrorBoundary`, `components/QuietScrollArea`, `constants`, `lib`, and `themes`.
 - **Forbidden:** server/shared/pi imports; being imported by panels/store/transport; putting arrangement knowledge into a feature panel; or sending current frame/view state through transport.
 
 ## Internal modules
@@ -34,6 +34,8 @@ Every child is a directory module with `index.ts` as its public surface:
 The sibling dependency graph is: `layoutState → layout`; `chatReconciliation → layout + layoutState`; `terminalReconciliation → layout`; `layoutIntents → layout + chatReconciliation + terminalReconciliation`; `legacySelection` reaches store selectors/actions only; and `WorkspaceWorkbench` composes each active orchestration barrel with `layout`, panels, and render callbacks. Chat resource availability is isolated behind a per-session selector component; the parent workbench never subscribes to the whole `sessions` record, so a streaming runtime cannot invalidate every tab renderer and side tool behind it. Siblings import only through barrels. Tests live with the orchestration module that owns the behavior rather than making store tests import shell runtime effects.
 
 ## Composition
+
+`WorkspaceWorkbench` mounts [[submodule-web-issues]]'s `IssuesTool` with the active workspace's project id. The Issues singleton is registered in the layout catalog, right-rail built-in presets, and the palette's localized Show tool commands (Task Line icon). The feature owns protocol-v103 gating, connection lifetime and the v104/v106 stage actions; shell runs none of them itself and fabricates no capability. It answers the tool's one `onLaunchSession({ workspaceId, sessionId })` callback by refreshing `workspace.list` for the project, activating the returned workspace and opening that chat tab (`openIssueSession`), never creating or prompting a session of its own.
 
 The topbar keeps ThinkRail identity, connection state, Settings, and compact location context, and doubles
 as the **window title bar** when a native host removes its own strip ([[module-desktop]], *Native window

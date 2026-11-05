@@ -27,6 +27,12 @@ import {
 	GITHUB_STAR_PROTOCOL_VERSION,
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
+	ISSUES_ACTIONS_PROTOCOL_VERSION,
+	ISSUES_APPROVAL_PROTOCOL_VERSION,
+	ISSUES_AUTH_PROTOCOL_VERSION,
+	ISSUES_DESIGN_APPROVAL_PROTOCOL_VERSION,
+	ISSUES_IMPLEMENTATION_PROTOCOL_VERSION,
+	ISSUES_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
 	isCustomEndpointId,
 	isTodoReviewFixMessage,
@@ -68,6 +74,7 @@ import {
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	WS_CHANNELS,
 	WS_METHODS,
+	type WsMethodMap,
 } from "./wsProtocol";
 
 test("retired workspace activity keeps only its empty snapshot compatibility method", () => {
@@ -568,4 +575,108 @@ test("custom endpoints are pinned to v101 and own only custom-* providers", () =
 	expect(WS_METHODS.customEndpointsProbe).toBe("customEndpoints.probe");
 	expect(isCustomEndpointId(`${CUSTOM_ENDPOINT_ID_PREFIX}gateway`)).toBe(true);
 	expect(isCustomEndpointId("ollama")).toBe(false);
+});
+
+test("issues read RPCs are registered at v103", () => {
+	expect(ISSUES_PROTOCOL_VERSION).toBe(103);
+	expect(WS_METHODS.issuesConnection).toBe("issues.connection");
+	expect(WS_METHODS.issuesConnect).toBe("issues.connect");
+	expect(WS_METHODS.issuesDisconnect).toBe("issues.disconnect");
+	expect(WS_METHODS.issuesList).toBe("issues.list");
+});
+
+test("the repository-address hint is registered at the v105 Issues auth floor", () => {
+	expect(ISSUES_AUTH_PROTOCOL_VERSION).toBe(105);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ISSUES_AUTH_PROTOCOL_VERSION);
+	expect(WS_METHODS.issuesRepositoryAddress).toBe("issues.repositoryAddress");
+});
+
+test("six closed Issue actions are registered at v104", () => {
+	expect(PROTOCOL_VERSION).toBe(108);
+	expect(ISSUES_ACTIONS_PROTOCOL_VERSION).toBe(104);
+	expect(ISSUES_PROTOCOL_VERSION).toBe(103);
+	expect(WS_METHODS.issuesLaunchDesign).toBe("issues.launchDesign");
+	expect(WS_METHODS.issuesLaunchImplementation).toBe("issues.launchImplementation");
+	expect(WS_METHODS.issuesPublishDesign).toBe("issues.publishDesign");
+	expect(WS_METHODS.issuesPublishImplementation).toBe("issues.publishImplementation");
+	expect(WS_METHODS.issuesValidateDesign).toBe("issues.validateDesign");
+	expect(WS_METHODS.issuesValidateImplementation).toBe("issues.validateImplementation");
+});
+
+test("app-originated Issue approvals are registered at v106", () => {
+	expect(ISSUES_APPROVAL_PROTOCOL_VERSION).toBe(106);
+	expect(PROTOCOL_VERSION).toBe(108);
+	expect(ISSUES_AUTH_PROTOCOL_VERSION).toBe(105);
+	expect(ISSUES_ACTIONS_PROTOCOL_VERSION).toBe(104);
+	expect(ISSUES_PROTOCOL_VERSION).toBe(103);
+	expect(WS_METHODS.issuesApproveDesign).toBe("issues.approveDesign");
+	expect(WS_METHODS.issuesApproveImplementation).toBe("issues.approveImplementation");
+	const approval: WsMethodMap["issues.approveDesign"] = {
+		params: {
+			projectId: "local-project",
+			reference: {
+				provider: "gitlab",
+				instanceUrl: "https://gitlab.example",
+				projectId: "42",
+				number: 7,
+			},
+		},
+		result: { approved: false, reason: "unproven" },
+	};
+	expect(approval.result.approved).toBe(false);
+	// Approval carries no caller-supplied actor, role or version.
+	expect(Object.keys(approval.params).sort()).toEqual(["projectId", "reference"]);
+});
+
+test("the approved-design read is registered at v107", () => {
+	expect(ISSUES_DESIGN_APPROVAL_PROTOCOL_VERSION).toBe(107);
+	expect(PROTOCOL_VERSION).toBe(108);
+	expect(ISSUES_APPROVAL_PROTOCOL_VERSION).toBe(106);
+	expect(ISSUES_AUTH_PROTOCOL_VERSION).toBe(105);
+	expect(ISSUES_ACTIONS_PROTOCOL_VERSION).toBe(104);
+	expect(ISSUES_PROTOCOL_VERSION).toBe(103);
+	expect(WS_METHODS.issuesDesignApproval).toBe("issues.designApproval");
+	const designApproval: WsMethodMap["issues.designApproval"] = {
+		params: {
+			projectId: "local-project",
+			reference: {
+				provider: "gitlab",
+				instanceUrl: "https://gitlab.example",
+				projectId: "42",
+				number: 7,
+			},
+		},
+		result: { approvedDesignVersion: `design:${"a".repeat(64)}` },
+	};
+	expect(designApproval.result.approvedDesignVersion).toBe(`design:${"a".repeat(64)}`);
+	// The read takes the shared target only: no caller version, path or actor is accepted.
+	expect(Object.keys(designApproval.params).sort()).toEqual(["projectId", "reference"]);
+});
+
+test("the implementation start is registered at v108", () => {
+	expect(ISSUES_IMPLEMENTATION_PROTOCOL_VERSION).toBe(108);
+	expect(PROTOCOL_VERSION).toBe(108);
+	expect(ISSUES_DESIGN_APPROVAL_PROTOCOL_VERSION).toBe(107);
+	expect(ISSUES_APPROVAL_PROTOCOL_VERSION).toBe(106);
+	expect(ISSUES_AUTH_PROTOCOL_VERSION).toBe(105);
+	expect(ISSUES_ACTIONS_PROTOCOL_VERSION).toBe(104);
+	expect(ISSUES_PROTOCOL_VERSION).toBe(103);
+	expect(WS_METHODS.issuesStartImplementation).toBe("issues.startImplementation");
+	const start: WsMethodMap["issues.startImplementation"] = {
+		params: {
+			projectId: "local-project",
+			reference: {
+				provider: "gitlab",
+				instanceUrl: "https://gitlab.example",
+				projectId: "42",
+				number: 7,
+			},
+		},
+		result: { workspaceId: "workspace", sessionId: "session" },
+	};
+	expect(start.result.sessionId).toBe("session");
+	// The confirmation gate carries no caller version, path, actor or credential.
+	expect(Object.keys(start.params).sort()).toEqual(["projectId", "reference"]);
+	// The legacy launch action keeps its v104 gate and params for older clients.
+	expect(WS_METHODS.issuesLaunchImplementation).toBe("issues.launchImplementation");
 });
