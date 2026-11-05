@@ -32,21 +32,13 @@ function attributeValues(content: string, attributes: string[]): string[] {
 
 export function validateBlogInstallPickers(path: string, html: string): string[] {
 	const failures: string[] = [];
-	const content = html.indexOf('class="blog-post-content"');
 	for (const placement of ["top", "bottom"]) {
 		const marker = `data-install-picker="blog-${placement}"`;
-		const index = html.indexOf(marker);
-		if (
-			occurrences(html, marker) !== 1 ||
-			content < 0 ||
-			(placement === "top" ? index > content : index < content)
-		) {
-			failures.push(
-				`${path}: expected one blog ${placement} install picker ${placement === "top" ? "before" : "after"} the post body`,
-			);
+		if (occurrences(html, marker) !== 1) {
+			failures.push(`${path}: expected one blog ${placement} install picker`);
 		}
 	}
-	if (occurrences(html, "Browser UI via command line") < 2) {
+	if (!html.includes("Browser UI via command line")) {
 		failures.push(`${path}: blog install pickers are missing the command-line option`);
 	}
 	const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);

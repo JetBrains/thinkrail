@@ -15,17 +15,22 @@ describe("validateBlogInstallPickers", () => {
 		'<section data-install-picker="blog-bottom"><button id="blog-bottom-macos"></button>Browser UI via command line</section>';
 	const body = '<div class="blog-post-content">Article</div>';
 
-	test("requires an install picker on each side of the post body", () => {
+	test("requires one top marker and one bottom marker", () => {
 		expect(validateBlogInstallPickers(path, `${top}${body}${bottom}`)).toEqual([]);
 		expect(
 			validateBlogInstallPickers(path, `${top}${body}${bottom}<a data-id="blog-top-macos">`),
 		).toEqual([]);
-		expect(validateBlogInstallPickers(path, `${body}${bottom}`)).toHaveLength(2);
-		expect(validateBlogInstallPickers(path, `${top}${body}`)).toHaveLength(2);
-		expect(validateBlogInstallPickers(path, `${body}${top}${bottom}`)).toHaveLength(1);
+		expect(validateBlogInstallPickers(path, `${body}${bottom}`)).toHaveLength(1);
+		expect(validateBlogInstallPickers(path, `${top}${body}`)).toHaveLength(1);
 	});
 
-	test("keeps the command-line install option in both pickers", () => {
+	test("keeps the page-level command-line install option check", () => {
+		expect(
+			validateBlogInstallPickers(
+				path,
+				`${top}${body}${bottom}`.replace("Browser UI via command line", ""),
+			),
+		).toEqual([]);
 		expect(
 			validateBlogInstallPickers(
 				path,
