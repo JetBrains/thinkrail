@@ -327,13 +327,14 @@ function installedDeclarations(packageManager: DefaultPackageManager): Set<strin
 }
 
 export function childBaseExtensionFactories(): InlineExtension[] {
-	return [oversizedImageGuard, skillCatalog, skillCarryover];
+	return [oversizedImageGuard, skillCarryover];
 }
 
 export function childExtensionFactories(): InlineExtension[] {
 	return [
 		headlessSearchPolicy,
 		specGraphExtension,
+		skillCatalog,
 		...registryInlineExtensions("childExtensions", isExtensionDisabled),
 	];
 }

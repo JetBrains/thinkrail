@@ -210,10 +210,14 @@ export function suggestSkills(
 	prompt: string,
 	exclude: ReadonlySet<string> = new Set(),
 ): Skill[] {
-	const candidates = new Set(unlisted.filter((skill) => !exclude.has(skill.name)));
+	const candidates = new Set(
+		unlisted.filter((skill) => !exclude.has(skill.name)).map((skill) => skill.filePath),
+	);
 	if (candidates.size === 0) return [];
 	return searchSkills(skills, prompt, SEARCH_MAX_LIMIT)
-		.filter((match) => candidates.has(match.skill) && (match.nameHit || match.distinctive >= 2))
+		.filter(
+			(match) => candidates.has(match.skill.filePath) && (match.nameHit || match.distinctive >= 2),
+		)
 		.slice(0, HINT_LIMIT)
 		.map((match) => match.skill);
 }
@@ -263,7 +267,9 @@ export function skillCatalog(pi: ExtensionAPI): void {
 	pi.on("before_agent_start", (event, ctx) => {
 		const options = event.systemPromptOptions;
 		skills = options.skills;
-		if (!options.selectedTools.includes("read") || options.hiddenTools.includes("read")) {
+		const callable = (tool: string) =>
+			options.selectedTools.includes(tool) && !options.hiddenTools.includes(tool);
+		if (!callable("read") || !callable(SKILL_SEARCH_TOOL)) {
 			delete options.sections.skills;
 			return;
 		}
