@@ -553,7 +553,7 @@
 	"mcp.entries.nameInvalid": "使用できるのは英字、数字、- と _ のみです。",
 	"mcp.entries.nameRequired": "サーバーに名前を付けてください。",
 	"mcp.entries.noServers": "サーバーが見つかりません。",
-	"mcp.entries.notReference_other": "{{labels}}は参照ではありません。{{hint}}",
+	"mcp.entries.notReference_other": "{{labels}}の値は参照ではありません。{{hint}}",
 	"mcp.entries.projectInvalidJson": "プロジェクトの .pi/mcp.json は有効な JSON ではありません。",
 	"mcp.entries.projectMissingServer": "プロジェクトの .pi/mcp.json に \"{{name}}\" の定義がなくなりました。",
 	"mcp.entries.projectTakesPrecedence": "ここではこのプロジェクト自身の \"{{name}}\" が優先されます。",

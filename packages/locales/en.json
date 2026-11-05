@@ -623,7 +623,7 @@
 	"mcp.entries.nameRequired": "Name the server.",
 	"mcp.entries.noServers": "No servers found.",
 	"mcp.entries.notReference_one": "The value of {{labels}} is not a reference. {{hint}}",
-	"mcp.entries.notReference_other": "The value of {{labels}} is not a reference. {{hint}}",
+	"mcp.entries.notReference_other": "The values of {{labels}} are not references. {{hint}}",
 	"mcp.entries.projectInvalidJson": "The project's .pi/mcp.json is not valid JSON.",
 	"mcp.entries.projectMissingServer": "The project's .pi/mcp.json no longer defines \"{{name}}\".",
 	"mcp.entries.projectTakesPrecedence": "This project's own \"{{name}}\" takes precedence here.",
