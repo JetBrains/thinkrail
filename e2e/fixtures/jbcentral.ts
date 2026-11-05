@@ -1,8 +1,8 @@
-import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page } from "@playwright/test";
 import { JBCENTRAL_STATUS_TTL_MS } from "@thinkrail/shared/jbcentral";
+import { runFakeCentral } from "./executables";
 import {
 	E2E_CENTRAL_EXTENSION_SOURCE,
 	E2E_CENTRAL_LOG,
@@ -50,17 +50,12 @@ export function assertOnlyReviewedArgv(): void {
 }
 
 export function runCentralOnHost(...argv: string[]): void {
-	const central = join(E2E_FAKE_BIN_DIR, process.platform === "win32" ? "central.cmd" : "central");
-	execFileSync(central, argv, {
-		env: {
-			PATH: "/usr/bin:/bin",
-			HOME: E2E_HOME_DIR,
-			CENTRAL_STUB_STATE: E2E_CENTRAL_STATE,
-			CENTRAL_STUB_LOG: E2E_CENTRAL_LOG,
-			CENTRAL_STUB_EXTENSION_SOURCE: E2E_CENTRAL_EXTENSION_SOURCE,
-		},
-		stdio: "ignore",
-		shell: process.platform === "win32",
+	runFakeCentral(E2E_FAKE_BIN_DIR, argv, {
+		PATH: "/usr/bin:/bin",
+		HOME: E2E_HOME_DIR,
+		CENTRAL_STUB_STATE: E2E_CENTRAL_STATE,
+		CENTRAL_STUB_LOG: E2E_CENTRAL_LOG,
+		CENTRAL_STUB_EXTENSION_SOURCE: E2E_CENTRAL_EXTENSION_SOURCE,
 	});
 }
 

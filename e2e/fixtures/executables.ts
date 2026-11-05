@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { chmodSync, copyFileSync, existsSync, writeFileSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,14 +28,21 @@ export function writeFakeCentral(fakeBinDir: string): void {
 	chmodSync(target, 0o755);
 }
 
+export function writeFakeGit(fakeBinDir: string): void {
+	if (process.platform !== "win32") return;
+	const git = resolveWindowsGitExecutable();
+	writeFileSync(join(fakeBinDir, "git.cmd"), `@echo off\r\n"${git}" %*\r\n`);
+}
+
+export function runFakeCentral(fakeBinDir: string, argv: string[], env: NodeJS.ProcessEnv): void {
+	const windows = process.platform === "win32";
+	const command = windows ? resolveGitBashExecutable() : join(fakeBinDir, "central");
+	const args = windows ? [fileURLToPath(new URL("./bin/central", import.meta.url)), ...argv] : argv;
+	execFileSync(command, args, { env, stdio: "ignore" });
+}
+
 function resolveGitBashExecutable(): string {
-	const gitName = process.platform === "win32" ? "git.exe" : "git";
-	const git = (process.env.PATH ?? "")
-		.split(delimiter)
-		.filter(Boolean)
-		.map((directory) => join(directory, gitName))
-		.find(existsSync);
-	if (!git) throw new Error("Git is required to locate the E2E Central shell on Windows");
+	const git = resolveWindowsGitExecutable();
 
 	let directory = dirname(git);
 	while (true) {
@@ -50,6 +58,16 @@ function resolveGitBashExecutable(): string {
 	}
 
 	throw new Error("Git Bash was not found next to the E2E Git executable");
+}
+
+function resolveWindowsGitExecutable(): string {
+	const git = (process.env.PATH ?? "")
+		.split(delimiter)
+		.filter(Boolean)
+		.map((directory) => join(directory, "git.exe"))
+		.find(existsSync);
+	if (!git) throw new Error("Git is required to locate the E2E Central shell on Windows");
+	return git;
 }
 
 export function hermeticE2ePath(fakeBinDir: string): string {

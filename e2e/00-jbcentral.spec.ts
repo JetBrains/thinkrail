@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import {
@@ -14,13 +14,13 @@ import {
 	centralInvocations,
 	connectCentral,
 	openProviders,
+	setCentralInstalled,
 	waitForCentralState,
 } from "./fixtures/jbcentral";
 import {
 	E2E_CENTRAL_ARTIFACT,
 	E2E_CENTRAL_EXTENSION_SOURCE,
 	E2E_CENTRAL_STATE,
-	E2E_FAKE_BIN_DIR,
 	E2E_PI_AGENT_DIR,
 } from "./fixtures/paths";
 
@@ -93,15 +93,13 @@ test("connects and follows external add, replacement, and remove without a host 
 
 test("guides absent, outdated, malformed, and failed Central version states", async ({ page }) => {
 	await openAppFresh(page);
-	const central = join(E2E_FAKE_BIN_DIR, "central");
-	const hidden = join(E2E_FAKE_BIN_DIR, "central.hidden");
-	renameSync(central, hidden);
+	setCentralInstalled(false);
 	try {
 		await openProviders(page);
 		await waitForCentralState(page, "absent");
 		await expect(page.getByTestId("jetbrains-needs-install")).toBeVisible();
 	} finally {
-		renameSync(hidden, central);
+		setCentralInstalled(true);
 	}
 
 	await page.getByTestId("jetbrains-recheck").click();
