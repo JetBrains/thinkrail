@@ -20,7 +20,6 @@ export function formatLfsSize(bytes: number): string {
 	const units = ["KB", "MB", "GB", "TB"];
 	let value = bytes / 1024;
 	let unit = 0;
-	// Compare the rounded figure: 1023.6 KB would otherwise be shown as "1024 KB".
 	while (Number(formatLfsValue(value)) >= 1024 && unit < units.length - 1) {
 		value /= 1024;
 		unit += 1;
