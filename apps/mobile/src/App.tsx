@@ -15,6 +15,7 @@ import { ProjectsScreen } from "./ProjectsScreen";
 import { type DevicePreferences, readPreferences, writePreferences } from "./preferences";
 import { SessionScreen } from "./SessionScreen";
 import { SettingsScreen } from "./SettingsScreen";
+import { SubagentScreen } from "./SubagentScreen";
 import { isPairLink } from "./scanPairLink";
 import { localStore } from "./store";
 import { applyDevicePreferences } from "./theme";
@@ -31,13 +32,14 @@ interface InWorkspace {
 	workspace: Workspace;
 }
 
-/** The project tree → a workspace's main chat (opened while `workspace` resolves it) ⇄ its chat history. */
+/** The project tree → a workspace's main chat (opened while `workspace` resolves it) ⇄ its chat history or a subagent's transcript. */
 type Route =
 	| { kind: "projects" }
 	| { kind: "settings" }
 	| ({ kind: "workspace" } & InWorkspace)
 	| ({ kind: "chat"; chat: OpenChat } & InWorkspace)
 	| ({ kind: "history"; chat: OpenChat } & InWorkspace)
+	| ({ kind: "subagent"; chat: OpenChat; childSessionId: string } & InWorkspace)
 	| { kind: "newWorktree"; hostKey: string; project: Project };
 
 export function App() {
@@ -163,8 +165,14 @@ export function App() {
 	}, [controller, registry, pairWith, connectHost]);
 
 	const back = useCallback((): boolean => {
-		if (route.kind === "history") {
-			setRoute({ ...route, kind: "chat" });
+		if (route.kind === "history" || route.kind === "subagent") {
+			setRoute({
+				kind: "chat",
+				hostKey: route.hostKey,
+				project: route.project,
+				workspace: route.workspace,
+				chat: route.chat,
+			});
 			return true;
 		}
 		if (route.kind !== "projects") {
@@ -262,11 +270,16 @@ export function App() {
 					/>
 				</Layer>
 			) : null}
-			{top?.kind === "chat" || top?.kind === "history" ? (
-				<Layer covered={top.kind === "history"}>
+			{top?.kind === "chat" || top?.kind === "history" || top?.kind === "subagent" ? (
+				<Layer covered={top.kind !== "chat"}>
 					<SessionScreen
 						key={top.chat.sessionId}
-						session={{ hostKey: top.hostKey, workspaceId: top.workspace.id, ...top.chat }}
+						session={{
+							hostKey: top.hostKey,
+							workspaceId: top.workspace.id,
+							workspaceRoot: top.workspace.worktreePath,
+							...top.chat,
+						}}
 						state={
 							items.find(
 								(item) =>
@@ -278,6 +291,25 @@ export function App() {
 						backLabel={t("mobile.projects.title")}
 						onBack={back}
 						onHistory={() => setRoute({ ...top, kind: "history" })}
+						onOpenSubagent={(childSessionId) =>
+							setRoute({ ...top, kind: "subagent", childSessionId })
+						}
+					/>
+				</Layer>
+			) : null}
+			{top?.kind === "subagent" ? (
+				<Layer covered={false}>
+					<SubagentScreen
+						key={top.childSessionId}
+						subagent={{
+							workspaceId: top.workspace.id,
+							parentSessionId: top.chat.sessionId,
+							childSessionId: top.childSessionId,
+						}}
+						client={controller.clientFor(top.hostKey)}
+						workspaceRoot={top.workspace.worktreePath}
+						backLabel={top.chat.title}
+						onBack={back}
 					/>
 				</Layer>
 			) : null}

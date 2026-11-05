@@ -72,7 +72,11 @@ reconnecting needs a new QR) and, only when it is unreachable, **Reconnect** und
   dialog (`select` / `confirm` / `input` / `editor`) comes from `session.state`'s `needsInput` (`extUiDialog.ts`),
   so a phone that opens a chat after it was raised still sees it: on its tool card when that call is in the
   transcript, else docked above the composer, answered through `session.extUiReply` and hidden at once.
-  Text buttons in the transcript and the dock are `touch` tall. It re-reads `session.getMessages` (coalesced 400ms) on the session's pi events
+  Text buttons in the transcript and the dock are `touch` tall. Paths in tool cards are relative to the
+  workspace's `worktreePath`. An Agent card's **Open transcript** pushes `SubagentScreen.tsx`, the IDE's
+  subagent transcript dialog as a stack screen over `subagent.getTranscript`, re-read while the run is
+  queued or running; back returns to the chat as left. Diagrams (fenced mermaid and visualize) render inline
+  with the shared fullscreen pan/zoom view; changed-file lists are text only, since the phone opens no files. It re-reads `session.getMessages` (coalesced 400ms) on the session's pi events
   rather than reducing the event stream; `main.tsx` registers the built-in tool cards and mounts the
   `TooltipProvider` the composer needs;
   `layout.tsx` (`Screen` frame, `ListRow`, loading/failed/empty states — a screen waits on `Loader`, the shared `RunningIcon` R mark at 56px over a caption: "Connecting to …" until a host's channel is up, then "Loading…"; a project expanding in the tree waits on an inline 20px one), `status.ts` (row marks from

@@ -48,6 +48,8 @@ export interface OpenSession {
 	hostKey: string;
 	sessionId: string;
 	workspaceId: string;
+	/** Tool cards and file lists show paths relative to it. */
+	workspaceRoot?: string;
 	title: string;
 	model: WireModel | null;
 	thinkingLevel: ThinkingLevel;
@@ -83,6 +85,7 @@ export function SessionScreen({
 	backLabel,
 	onBack,
 	onHistory,
+	onOpenSubagent,
 }: {
 	session: OpenSession;
 	state: SessionState | undefined;
@@ -91,6 +94,7 @@ export function SessionScreen({
 	backLabel: string;
 	onBack: () => void;
 	onHistory: () => void;
+	onOpenSubagent: (childSessionId: string) => void;
 }) {
 	const t = useT();
 	const { hostKey, sessionId, workspaceId } = session;
@@ -212,7 +216,7 @@ export function SessionScreen({
 			client && {
 				cancelAutomaticReveal: () => {},
 				focusComposer: () => composerRef.current?.refocus(),
-				openSubagentTranscript: () => {},
+				openSubagentTranscript: onOpenSubagent,
 				respondToTool: (toolCallId, response) =>
 					client
 						.request("session.respondToTool", { sessionId, toolCallId, response })
@@ -220,7 +224,7 @@ export function SessionScreen({
 				resultOpener: () => undefined,
 				revealChatElement: (element) => element.scrollIntoView({ block: "nearest" }),
 			},
-		[client, sessionId],
+		[client, sessionId, onOpenSubagent],
 	);
 
 	useEffect(() => {
