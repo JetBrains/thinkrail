@@ -175,6 +175,12 @@ interface ComposerProps {
 	onPickTemplate?: (name: string) => void;
 	onManageTemplates?: () => void;
 	templatesEmpty?: boolean;
+	/**
+	 * A model picker the host renders outside the input — a phone puts its own above the field, as a bottom
+	 * sheet without a focused search box. With it the composer draws no picker in the shell, and `/model`
+	 * opens this one instead.
+	 */
+	externalModelPicker?: ModelEffortPickerHandle;
 }
 
 export interface ComposerHandle {
@@ -212,6 +218,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		onPickTemplate,
 		onManageTemplates,
 		templatesEmpty,
+		externalModelPicker,
 	},
 	handleRef,
 ) {
@@ -307,7 +314,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
 	const openModelPicker = (query: string) => {
 		replaceDraft("");
-		pickerRef.current?.open(query);
+		if (externalModelPicker) externalModelPicker.open(query);
+		else pickerRef.current?.open(query);
 	};
 
 	const submitText = (raw: string, behavior: SubmitBehavior) => {
@@ -572,18 +580,20 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					)}
 				>
 					<div className="col-start-1 row-start-2 flex min-w-0 items-center self-end">
-						<ModelEffortPicker
-							ref={pickerRef}
-							models={models}
-							current={currentModel}
-							level={thinkingLevel}
-							refreshing={modelsRefreshing}
-							onRefresh={onRefreshModels}
-							onSelect={onSelectModel}
-							onSelectLevel={onSelectThinking}
-							preferences={modelPreferences}
-							className="max-w-[60vw] px-4 sm:max-w-[320px]"
-						/>
+						{externalModelPicker ? null : (
+							<ModelEffortPicker
+								ref={pickerRef}
+								models={models}
+								current={currentModel}
+								level={thinkingLevel}
+								refreshing={modelsRefreshing}
+								onRefresh={onRefreshModels}
+								onSelect={onSelectModel}
+								onSelectLevel={onSelectThinking}
+								preferences={modelPreferences}
+								className="max-w-[60vw] px-4 sm:max-w-[320px]"
+							/>
+						)}
 					</div>
 					<div
 						className={cn(

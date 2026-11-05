@@ -817,6 +817,7 @@
 	"mobile.hosts.reconnect": "Reconnect",
 	"mobile.list.failed": "Couldn't load: {{reason}}",
 	"mobile.list.loading": "Loading…",
+	"mobile.model.title": "Model and effort",
 	"mobile.pair.cancel": "Cancel",
 	"mobile.pair.connect": "Connect",
 	"mobile.pair.connecting": "Connecting…",

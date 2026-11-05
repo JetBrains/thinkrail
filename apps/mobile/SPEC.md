@@ -58,7 +58,10 @@ QR). Welcome fits one screen without scrolling: three one-line steps (which netw
   ages from `compactAgeOf`; and `SessionScreen.tsx`, the IDE's chat on a phone: it renders the
   [[module-chat-ui]] components unchanged (`messagesToRuntime` → `deriveRows` → `ChatTurnView` for the
   transcript, the shared `Composer` with its slash commands from `session.getCommands`, the model/effort
-  picker over `model.list` → `session.setModel` / `session.setThinkingLevel`, send / steer / follow-up /
+  picker over `model.list` → `session.setModel` / `session.setThinkingLevel` — on a phone the row above the
+  field, `ModelSheet.tsx`: a bottom sheet (no autofocus, so no keyboard) with effort chips that apply at once
+  over models grouped by provider (`modelSections.ts`, current provider first, a search field only past 8
+  models); a tap picks and closes, and the composer's `/model` opens it — send / steer / follow-up /
   interrupt through the same `session.*` methods as the IDE, tool-card answers through
   `session.respondToTool`). It re-reads `session.getMessages` (coalesced 400ms) on the session's pi events
   rather than reducing the event stream; `main.tsx` registers the built-in tool cards and mounts the

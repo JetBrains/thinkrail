@@ -10,7 +10,7 @@ import {
 	deriveInteractionStates,
 	InteractionStatesContext,
 } from "@thinkrail/chat-ui/interactionState";
-import type { ModelSelection } from "@thinkrail/chat-ui/ModelEffortPicker";
+import type { ModelEffortPickerHandle, ModelSelection } from "@thinkrail/chat-ui/ModelEffortPicker";
 import { deriveMessageActions } from "@thinkrail/chat-ui/messageActions";
 import type { ModelPreferences } from "@thinkrail/chat-ui/modelPreferences";
 import { deriveRows } from "@thinkrail/chat-ui/rows";
@@ -31,6 +31,7 @@ import type { RemoteSessionItem, RemoteSessionsController } from "@thinkrail/rem
 import { IconButton } from "@thinkrail/ui/button";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader, Notice, Screen } from "./layout";
+import { ModelSheet } from "./ModelSheet";
 import { useHostRequest } from "./useHostRequest";
 import { useWorkspaceChats } from "./WorkspaceScreen";
 
@@ -91,6 +92,12 @@ export function SessionScreen({
 	const isStreaming = state?.execution === "running";
 
 	const models = useHostRequest<WireModel[]>(client, "model.list", {});
+	/** The model picker lives above the field on a phone; `/model` in the composer opens it through this. */
+	const pickerRef = useRef<ModelEffortPickerHandle>(null);
+	const externalPicker = useMemo<ModelEffortPickerHandle>(
+		() => ({ open: (query) => pickerRef.current?.open(query) }),
+		[],
+	);
 	const commands = useHostRequest<SlashCommandInfo[]>(client, "session.getCommands", { sessionId });
 	const chats = useWorkspaceChats(client, workspaceId, items);
 
@@ -253,6 +260,16 @@ export function SessionScreen({
 							{t("mobile.session.sendFailed", { reason: sendError })}
 						</p>
 					) : null}
+					<div className="flex min-w-0 items-center px-chat-gutter pt-8">
+						<ModelSheet
+							ref={pickerRef}
+							models={models.kind === "ready" ? models.value : []}
+							current={model}
+							level={thinkingLevel}
+							onSelect={onSelectModel}
+							onSelectLevel={onSelectThinking}
+						/>
+					</div>
 					<Composer
 						value={draft}
 						onChange={setDraft}
@@ -272,6 +289,7 @@ export function SessionScreen({
 						onSlashActive={() => {}}
 						onSelectModel={onSelectModel}
 						onSelectThinking={onSelectThinking}
+						externalModelPicker={externalPicker}
 						onSubmit={onSubmit}
 						onAbort={() => {
 							request("session.abort", { sessionId }).catch((error: unknown) =>

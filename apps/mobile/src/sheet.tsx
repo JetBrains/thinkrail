@@ -4,18 +4,28 @@ import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@thinkrail/ui/dialog";
 import { type ReactNode, useState } from "react";
 
-/** The phone's action sheet: the shared dialog, docked to the bottom edge, with a Cancel row. */
+/**
+ * The phone's action sheet: the shared dialog, docked to the bottom edge, with a closing row (Cancel unless
+ * `closeLabel` says otherwise). A tall body scrolls inside the sheet. `autoFocus={false}` keeps focus off the
+ * sheet's first field, so a picker with a search box opens without raising the keyboard.
+ */
 export function Sheet({
 	open,
 	onOpenChange,
 	title,
 	description,
+	closeLabel,
+	autoFocus = true,
+	testId,
 	children,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	title: string;
 	description?: ReactNode;
+	closeLabel?: string;
+	autoFocus?: boolean;
+	testId?: string;
 	children: ReactNode;
 }) {
 	const t = useT();
@@ -24,9 +34,11 @@ export function Sheet({
 			<DialogContent
 				hideClose
 				{...(description ? {} : { "aria-describedby": undefined })}
-				className="top-auto bottom-0 left-0 max-w-none translate-x-0 translate-y-0 gap-0 rounded-b-none p-0 pb-safe-bottom"
+				{...(autoFocus ? {} : { onOpenAutoFocus: (event: Event) => event.preventDefault() })}
+				data-testid={testId}
+				className="top-auto bottom-0 left-0 flex max-h-[85vh] max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-b-none p-0 pb-safe-bottom"
 			>
-				<div className="flex flex-col gap-4 border-b border-border-muted px-16 py-12 text-center">
+				<div className="flex shrink-0 flex-col gap-4 border-b border-border-muted px-16 py-12 text-center">
 					<DialogTitle className="truncate text-text-muted tr-text-metadata">{title}</DialogTitle>
 					{description ? (
 						<DialogDescription className="text-text-muted tr-text-metadata">
@@ -34,13 +46,13 @@ export function Sheet({
 						</DialogDescription>
 					) : null}
 				</div>
-				{children}
+				<div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>
 				<button
 					type="button"
 					onClick={() => onOpenChange(false)}
-					className="min-h-touch w-full border-0 border-t border-border-default bg-transparent px-16 py-12 text-text-default tr-title-card active:bg-control-bg-hovered"
+					className="min-h-touch w-full shrink-0 border-0 border-t border-border-default bg-transparent px-16 py-12 text-text-default tr-title-card active:bg-control-bg-hovered"
 				>
-					{t("common.cancel")}
+					{closeLabel ?? t("common.cancel")}
 				</button>
 			</DialogContent>
 		</Dialog>

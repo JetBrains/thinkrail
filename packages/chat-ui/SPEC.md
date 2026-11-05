@@ -13,7 +13,8 @@ title: chat-ui — the shared, store-free conversation UI
 The presentational half of ThinkRail's chat, shared by every UI host (`apps/web`, `apps/mobile`): the
 transcript model and its derivations (`hydrate` → `rows`), the turn and tool renderers (`turns`,
 `ActivityGroup`, `ToolCard`, the built-in `tools/**` cards behind the `toolRegistry`), `Markdown`, the
-`Composer` with its model/effort picker, `QueueStrip`, `StreamIndicator`, `ExtUiPrompt`, the Resources
+`Composer` with its model/effort picker (or, given `externalModelPicker`, none in the field — `/model` opens
+the host's own, as the phone's sheet above the field), `QueueStrip`, `StreamIndicator`, `ExtUiPrompt`, the Resources
 dock/inspector (`resources/`), and the command-aware input behaviour (`prompt/`). Everything here takes
 props or reads a context a host provides; nothing reaches a store, a transport, storage, or routing.
 
