@@ -260,6 +260,18 @@ test("createProject: makes the folder and missing parents, bootstraps a repo, an
 	expect(listProjects().map((p) => p.id)).toEqual([project.id]);
 });
 
+test("createProject: preserves Unicode parent and project names on disk and in saved records", () => {
+	const parent = join(dataDir, "中文测试");
+	const path = join(parent, "项目-🚀");
+	const project = withoutUserGitConfig(() => createProject(parent, "项目-🚀"));
+
+	expect(project.path).toBe(realpathSync(path));
+	expect(project.name).toBe("项目-🚀");
+	expect(resolve(gitOut(path, "rev-parse", "--show-toplevel"))).toBe(project.path);
+	expect(gitOut(path, "rev-parse", "HEAD")).not.toBe("");
+	expect(getProjects().map((p) => p.path)).toEqual([project.path]);
+});
+
 test("createProject: reuses an empty folder but rejects a non-empty one or a file", () => {
 	mkdirSync(join(dataDir, "empty"));
 	expect(withoutUserGitConfig(() => createProject(dataDir, "empty")).path).toBe(
