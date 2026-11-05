@@ -316,12 +316,14 @@ export interface LocalLayoutPreferences {
 	defaultPresetId: string;
 	maxSideGroups: number;
 	maxBottomGroups: number;
+	previewTabsEnabled: boolean;
 }
 
 export const DEFAULT_LOCAL_LAYOUT_PREFERENCES: LocalLayoutPreferences = {
 	defaultPresetId: "balanced",
 	maxSideGroups: 6,
 	maxBottomGroups: 3,
+	previewTabsEnabled: true,
 };
 
 export interface LocalLayoutStatePayload {
@@ -2977,8 +2979,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const resolvedId = availableEditorTabId(tabs, tab);
 			const resolvedTab = resolvedId === tab.id ? tab : { ...tab, id: resolvedId };
 			const previewCompatible = isPreviewCompatibleTabKind(resolvedTab.kind);
-			const effectiveIntent = previewCompatible ? intent : "keep";
-			const claimPreview = previewCompatible && options.claimPreview === true;
+			const canPreview = previewCompatible && s.localLayoutPreferences.previewTabsEnabled;
+			const effectiveIntent = canPreview ? intent : "keep";
+			const claimPreview = canPreview && options.claimPreview === true;
 			const preview = s.previewTabByWorkspace[wsId];
 			const activeTabByWorkspace =
 				options.activate === false

@@ -2456,6 +2456,8 @@
 	"workbench.layoutSettings.maxSideGroups": "侧边分组上限",
 	"workbench.layoutSettings.nameLabel": "自定义预设名称",
 	"workbench.layoutSettings.namePlaceholder": "布局名称",
+	"workbench.layoutSettings.previewTabs": "预览标签页",
+	"workbench.layoutSettings.previewTabsDescription": "单击文件、规范或更改时复用临时标签页。关闭后，每个标签页都会保留。",
 	"workbench.layoutSettings.renameNamed": "重命名 {{name}}",
 	"workbench.layoutSettings.reset": "重置…",
 	"workbench.layoutSettings.resetDescription": "将此窗口重排为 {{name}}。",

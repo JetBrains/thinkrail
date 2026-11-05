@@ -1,3 +1,5 @@
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
@@ -5,8 +7,62 @@ import {
 	openFixtureProject,
 	revealWorkbenchTool,
 } from "./fixtures/app";
+import { E2E_DATA_DIR } from "./fixtures/paths";
 
 const PAST_SETTLE_WINDOW_MS = 300;
+
+async function setPreviewTabs(page: import("@playwright/test").Page, enabled: boolean) {
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-layout").click();
+	const toggle = page.getByTestId("layout-preview-tabs");
+	await expect(toggle).toHaveAttribute("aria-checked", String(!enabled));
+	await toggle.click();
+	await expect(toggle).toHaveAttribute("aria-checked", String(enabled));
+	await page.keyboard.press("Escape");
+}
+
+test("preview tabs can be disabled for files, specs, and changes and persist across reload", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1440, height: 1000 });
+	await openWorkspaceFiles(page);
+	await setPreviewTabs(page, false);
+	const tabs = page.locator('[data-testid="editor-tab"]:not([data-kind="chat"])');
+	await page.getByTestId("file-node").filter({ hasText: "README.md" }).click();
+	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).click();
+	await expect(tabs).toHaveCount(2);
+	await expect(page.locator('[data-testid="editor-tab"][data-preview="true"]')).toHaveCount(0);
+	await page.screenshot({ path: test.info().outputPath("preview-tabs-disabled.png") });
+
+	await revealWorkbenchTool(page, "specs");
+	await page.locator('[data-testid="spec-node"][data-spec-id="sample-root"]').click();
+	await expect(tabs).toHaveCount(3);
+	await expect(page.locator('[data-testid="editor-tab"][data-preview="true"]')).toHaveCount(0);
+
+	writeFileSync(
+		join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1", "README.md"),
+		"# sample-project\n\npreview preference change\n",
+	);
+	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("change-item").filter({ hasText: "README.md" }).click();
+	await expect(tabs).toHaveCount(4);
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="changes"]')).toHaveAttribute(
+		"data-preview",
+		"false",
+	);
+
+	await page.reload();
+	await expect(tabs).toHaveCount(4);
+	await setPreviewTabs(page, true);
+	await revealWorkbenchTool(page, "files");
+	await page.getByTestId("file-node").filter({ hasText: "LINKS.md" }).click();
+	await expect(tabs).toHaveCount(5);
+	await expect(tabs.last()).toHaveAttribute("data-preview", "true");
+	await page.getByTestId("file-node").filter({ hasText: "ALERTS.md" }).click();
+	await expect(tabs).toHaveCount(5);
+	await expect(tabs.last()).toContainText("ALERTS.md");
+	await expect(tabs.last()).toHaveAttribute("data-preview", "true");
+});
 
 async function freezePageTimers(page: import("@playwright/test").Page): Promise<void> {
 	await page.clock.pauseAt(Date.now() + 1_000);
@@ -154,6 +210,18 @@ async function holdFileReads(page: import("@playwright/test").Page, path: string
 		},
 	};
 }
+
+test("a file read finishing after preview tabs are disabled opens a kept tab", async ({ page }) => {
+	const reads = await holdFileReads(page, "notes.txt");
+	await openWorkspaceFiles(page);
+	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
+	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).click();
+	await expect.poll(reads.heldCount).toBe(1);
+	await setPreviewTabs(page, false);
+	reads.release();
+	await expect(page.getByTestId("editor-tab")).toHaveCount(2);
+	await expect(page.locator('[data-testid="editor-tab"][data-preview="true"]')).toHaveCount(0);
+});
 
 async function nextFrames(page: import("@playwright/test").Page): Promise<void> {
 	await page.evaluate(

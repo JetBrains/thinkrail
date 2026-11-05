@@ -2878,6 +2878,8 @@
 	"workbench.layoutSettings.nameLabel": "Custom preset name",
 	"workbench.layoutSettings.namePlaceholder": "Layout name",
 	"workbench.layoutSettings.planNeedsNewerHost": "This host is too old to save a layout with the TODO List. Update it, or remove the TODO List from the layout and try again.",
+	"workbench.layoutSettings.previewTabs": "Preview tabs",
+	"workbench.layoutSettings.previewTabsDescription": "Single-click files, specs, and changes to reuse a temporary tab. Turn off to keep each tab open.",
 	"workbench.layoutSettings.renameNamed": "Rename {{name}}",
 	"workbench.layoutSettings.reset": "Reset…",
 	"workbench.layoutSettings.resetDescription": "Rearranges this window into {{name}}.",
