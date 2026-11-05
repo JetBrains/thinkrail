@@ -202,6 +202,7 @@ function branchStillExists(projectPath: string, ref: string): boolean {
 async function prepare(id: string, project: Project, signal: AbortSignal): Promise<void> {
 	let record = findCreation(id);
 	if (!record) throw new CreationAborted();
+	assertManagedPathFree(record.worktreePath);
 	if (record.baseOid && !(await cleanupCreation(project.path, record)))
 		fail("WORKTREE_ADD_FAILED", `Could not clear the earlier attempt at ${record.worktreePath}`);
 	const checkoutBase = await ensureBaseFetched(project, record.baseBranch, signal);

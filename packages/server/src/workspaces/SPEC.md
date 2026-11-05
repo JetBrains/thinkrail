@@ -111,7 +111,7 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   mid-cleanup; a branch checked out in another worktree is left alone. **Host restart:** graceful shutdown
   aborts running jobs (`stopWorkspaceCreations`) and `interruptWorkspaceCreations` marks every leftover
   `running` record `interrupted` at start — never restarted on its own (the user decides). A record whose
-  project is gone is dropped without git work. **Retry is cleanup plus a fresh run, never a resume in place**
+  workspace already exists is dropped; one whose project is gone is dropped without git work. **Retry is cleanup plus a fresh run, never a resume in place**
   (`retryWorkspaceCreation`, for `interrupted` and `failed` alike): a killed checkout never writes the index, so
   re-running it in the half-written folder rewrites every file anyway (measured no faster than a fresh create),
   and an in-place resume would have to prove that a crashed host's detached git had exited before touching its

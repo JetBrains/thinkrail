@@ -236,6 +236,32 @@ posix("a folder that is still being created cannot be opened as a project", asyn
 	expect(creationOwnsPath(path)).toBe(false);
 });
 
+posix(
+	"retrying an interrupted creation whose folder was opened since never touches it",
+	async () => {
+		hook("sleep 5");
+		const creation = startWorkspaceCreation("p1");
+		await until(() => listWorkspaceCreations()[0]?.phase === "checking-out");
+		await stopWorkspaceCreations();
+		interruptWorkspaceCreations();
+		const path = join(dataDir, "worktrees", "repo", "workspace-1");
+		writeFileSync(
+			join(dataDir, "projects.json"),
+			JSON.stringify([
+				{ id: "p1", name: "repo", path: repo, slug: "repo", lastOpened: 1 },
+				{ id: "p2", name: "taken", path, slug: "taken", lastOpened: 2 },
+			]),
+		);
+		retryWorkspaceCreation(creation.id);
+		await expect(awaitWorkspaceCreation(creation.id)).rejects.toThrow("already open in ThinkRail");
+		const [record] = listWorkspaceCreations();
+		expect(record?.failure?.code).toBe("WORKSPACE_PATH_TAKEN");
+		expect(record?.failure?.cleanedUp).toBeUndefined();
+		expect(existsSync(path)).toBe(true);
+		expect(gitOut(repo, "branch", "--list", "workspace-1")).toContain("workspace-1");
+	},
+);
+
 posix("discarding an interrupted creation removes its folder and branch", async () => {
 	hook("sleep 5");
 	const creation = startWorkspaceCreation("p1");
