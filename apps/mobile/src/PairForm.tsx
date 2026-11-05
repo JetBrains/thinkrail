@@ -100,7 +100,7 @@ function Problem({ text }: { text: string | null }) {
 	) : null;
 }
 
-/** First run: the scan button, then the paste field. */
+/** First run: the scan button; the paste field stays folded behind a quiet link so the screen fits without scrolling. */
 export function PairForm({
 	pair,
 	onPair,
@@ -110,6 +110,7 @@ export function PairForm({
 }) {
 	const t = useT();
 	const pairing = usePairing(pair, onPair);
+	const [manual, setManual] = useState(false);
 	return (
 		<form
 			className="flex flex-col gap-12"
@@ -118,6 +119,7 @@ export function PairForm({
 				void pairing.submit();
 			}}
 		>
+			<Problem text={pairing.problem} />
 			<Button
 				type="button"
 				className="h-touch rounded-md"
@@ -128,16 +130,25 @@ export function PairForm({
 			>
 				{t("mobile.pair.scan")}
 			</Button>
-			<div className="flex items-center gap-12 text-text-subtle tr-text-eyebrow">
-				<span aria-hidden className="h-px flex-1 bg-border-default" />
-				{t("mobile.pair.orPaste")}
-				<span aria-hidden className="h-px flex-1 bg-border-default" />
-			</div>
-			<LinkField pairing={pairing} />
-			<Problem text={pairing.problem} />
-			<div className="flex">
-				<ConnectButton pairing={pairing} />
-			</div>
+			{manual ? (
+				<>
+					<LinkField pairing={pairing} />
+					<div className="flex">
+						<ConnectButton pairing={pairing} />
+					</div>
+				</>
+			) : (
+				<Button
+					type="button"
+					variant="ghost"
+					className="h-touch rounded-md"
+					iconLeft={RiLinkM}
+					disabled={pairing.pairing}
+					onClick={() => setManual(true)}
+				>
+					{t("mobile.pair.manual")}
+				</Button>
+			)}
 		</form>
 	);
 }

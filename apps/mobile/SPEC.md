@@ -22,7 +22,7 @@ host-authorized: the QR's one-time token, then the device key. `hostStatus.ts` t
 Tailscale") or the host's own error. The tree shows an unreachable computer as a banner with **Reconnect**;
 Settings → Computers lists each paired computer by name with Connected / Connecting… / the failure, plus
 **Reconnect** and **Forget** (confirmed; it disconnects and drops the computer, so reconnecting needs a new
-QR). Welcome's first step says which network to use.
+QR). Welcome fits one screen without scrolling: three one-line steps (which network, how to turn access on, scan) and the scan button, with the paste field folded behind **Enter link manually**.
 
 ## Boundary
 
