@@ -56,8 +56,11 @@ test("an installed extension can replace and paste text into its chat composer",
 			page.getByTestId("slash-command").filter({ hasText: "/fixture-set-editor" }),
 		).toBeVisible();
 		await page.getByTestId("chat-send").click();
-		await expect(input).toHaveValue("Extension draft 中文\nnext line");
-		await shot(page, "extension-editor", "replaced-draft");
+		try {
+			await expect(input).toHaveValue("Extension draft 中文\nnext line");
+		} finally {
+			await shot(page, "extension-editor", "replaced-draft");
+		}
 
 		await input.fill("/fixture-paste-editor");
 		await page.getByTestId("chat-send").click();
