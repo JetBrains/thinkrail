@@ -223,6 +223,24 @@ test("a file read finishing after preview tabs are disabled opens a kept tab", a
 	await expect(page.locator('[data-testid="editor-tab"][data-preview="true"]')).toHaveCount(0);
 });
 
+test("disabled previews keep a slower earlier file without stealing the newer file's focus", async ({
+	page,
+}) => {
+	const reads = await holdFileReads(page, "notes.txt");
+	await openWorkspaceFiles(page);
+	await setPreviewTabs(page, false);
+	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).click();
+	await expect.poll(reads.heldCount).toBe(1);
+	await page.getByTestId("file-node").filter({ hasText: "README.md" }).click();
+	const tabs = page.locator('[data-testid="editor-tab"]:not([data-kind="chat"])');
+	await expect(tabs).toHaveCount(1);
+	await expect(tabs.first()).toContainText("README.md");
+	reads.release();
+	await expect(tabs).toHaveCount(2);
+	await expect(tabs.filter({ hasText: "README.md" })).toHaveAttribute("data-active", "true");
+	await expect(page.locator('[data-testid="editor-tab"][data-preview="true"]')).toHaveCount(0);
+});
+
 async function nextFrames(page: import("@playwright/test").Page): Promise<void> {
 	await page.evaluate(
 		() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),

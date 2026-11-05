@@ -30,7 +30,7 @@ const { useAppStore } = await import("../store");
 type WorkspaceLayoutDocument = ReturnType<
 	typeof useAppStore.getState
 >["layoutDocumentsByWorkspace"][string];
-const { openChangesTab, openDiffInTab } = await import("./openTabs");
+const { openChangesTab, openDiffInTab, openFileInTab } = await import("./openTabs");
 
 const workspace = (overrides: Partial<Workspace> = {}): Workspace => ({
 	id: "w1",
@@ -56,6 +56,10 @@ function resetStore(): void {
 		navTickByWorkspace: {},
 		fsChangesByWorkspace: {},
 		previewTabByWorkspace: {},
+		localLayoutPreferences: {
+			...useAppStore.getState().localLayoutPreferences,
+			previewTabsEnabled: true,
+		},
 	});
 }
 
@@ -483,4 +487,86 @@ test("a removed workspace rejects a late review-tab request", async () => {
 	useAppStore.setState({ removedWorkspaceIds: { w1: true } });
 	await openChangesTab("w1", { kind: "branch" }, {}, "keep");
 	expect(useAppStore.getState().tabsByWorkspace.w1 ?? []).toHaveLength(0);
+});
+
+for (const enabledAtCompletion of [false, true]) {
+	test(`overtaken file reads follow preview preference ${enabledAtCompletion} at completion`, async () => {
+		useAppStore.setState({
+			activeWorkspaceId: "w1",
+			layoutAttentionByWorkspace: {
+				w1: {
+					selectedByGroup: {},
+					lastFocusedCenterGroupId: "center",
+					lastFocusedSideGroupId: {},
+					navigationClockByGroup: { center: 0 },
+				},
+			},
+		});
+		useAppStore.getState().setLocalLayoutPreferences({
+			...useAppStore.getState().localLayoutPreferences,
+			previewTabsEnabled: !enabledAtCompletion,
+		});
+		const first = openFileInTab("w1", "slow.txt", "preview");
+		const slow = pending;
+		const second = openFileInTab("w1", "fast.txt", "preview");
+		pending?.resolve({ content: "fast" });
+		await second;
+		useAppStore.getState().setLocalLayoutPreferences({
+			...useAppStore.getState().localLayoutPreferences,
+			previewTabsEnabled: enabledAtCompletion,
+		});
+		slow?.resolve({ content: "slow" });
+		await first;
+
+		const state = useAppStore.getState();
+		expect(
+			state.tabsByWorkspace.w1?.map((tab) => (tab.kind === "file" ? tab.path : tab.kind)),
+		).toEqual(enabledAtCompletion ? ["fast.txt"] : ["fast.txt", "slow.txt"]);
+		const opens = openIntents();
+		if (!enabledAtCompletion) {
+			expect(opens.at(-1)).toMatchObject({
+				kind: "open",
+				intent: "keep",
+				tab: { path: "slow.txt" },
+				activate: false,
+			});
+		}
+		expect(state.activeTabByWorkspace.w1).toBe(
+			state.tabsByWorkspace.w1?.find((tab) => tab.kind === "file" && tab.path === "fast.txt")?.id,
+		);
+	});
+}
+
+test("disabled previews retain overtaken Changes opens without stealing focus", async () => {
+	useAppStore.setState({
+		activeWorkspaceId: "w1",
+		layoutAttentionByWorkspace: {
+			w1: {
+				selectedByGroup: {},
+				lastFocusedCenterGroupId: "center",
+				lastFocusedSideGroupId: {},
+				navigationClockByGroup: { center: 0 },
+			},
+		},
+	});
+	const changes = openChangesTab("w1", { kind: "branch" }, {}, "preview");
+	await openChangesTab("w1", { kind: "uncommitted" }, {}, "keep");
+	useAppStore.getState().setLocalLayoutPreferences({
+		...useAppStore.getState().localLayoutPreferences,
+		previewTabsEnabled: false,
+	});
+	await changes;
+
+	expect(useAppStore.getState().tabsByWorkspace.w1?.map((tab) => tab.id)).toEqual([
+		changesTabId("w1", { kind: "uncommitted" }),
+		changesTabId("w1", { kind: "branch" }),
+	]);
+	expect(openIntents().at(-1)).toMatchObject({
+		kind: "open",
+		intent: "keep",
+		activate: false,
+	});
+	expect(useAppStore.getState().activeTabByWorkspace.w1).toBe(
+		changesTabId("w1", { kind: "uncommitted" }),
+	);
 });
