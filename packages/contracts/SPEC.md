@@ -188,6 +188,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
     `AppConfig.disabledExtensions` list keys on, `tools` the names its parent factories register, and
     `settings` (`ExtensionSettingDescriptor[]`, `{ key, default: boolean }`, absent below
     `EXTENSION_SETTINGS_PROTOCOL_VERSION` = v104) the boolean settings the extension declares.
+    `ASK_DISCUSS_PROTOCOL_VERSION` (v104) is the host version that renders `ask_user_question`
+    `kind: "discuss"` answers; the card withholds Discuss below it.
   - **`SessionSummary`** — a chat session as the host reports it for hydration (read side); `live`
     distinguishes an in-memory session from a disk-only one. A frontend hydrates locally placed sessions and
     lists the rest in chat history for explicit reopen. The optional **`openTodos`** (count of non-`done`

@@ -11,6 +11,7 @@ import {
 import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	ASK_DISCUSS_PROTOCOL_VERSION,
 	BRANCH_STATUS_PROTOCOL_VERSION,
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
@@ -587,4 +588,10 @@ test("extension settings are pinned to v104", () => {
 	expect(EXTENSION_SETTINGS_PROTOCOL_VERSION).toBe(104);
 	expect(PROTOCOL_VERSION).toBe(104);
 	expect(DEFAULT_CONFIG.extensionSettings).toEqual({});
+});
+
+test("ask_user_question discuss answers are pinned to v104, after the GitHub star ask", () => {
+	expect(ASK_DISCUSS_PROTOCOL_VERSION).toBe(104);
+	expect(ASK_DISCUSS_PROTOCOL_VERSION).toBeGreaterThan(GITHUB_STAR_PROTOCOL_VERSION);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ASK_DISCUSS_PROTOCOL_VERSION);
 });

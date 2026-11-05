@@ -1,3 +1,4 @@
+import { ASK_DISCUSS_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { resultText, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
 import type { AskUserQuestionResult } from "@thinkrail/pi-ask-user-question/core";
@@ -60,7 +61,6 @@ const panelDomId = (toolCallId: string) => `ask-panel-${toolCallId}`;
 const tabDomId = (toolCallId: string, page: number) => `ask-tab-${toolCallId}-${page}`;
 
 const claimQuestionAttention = createQuestionAttentionClaim();
-const DISCUSS_HOST_PROTOCOL = 103;
 const ATTENTION_SETTLE_FRAMES = 30;
 
 interface CachedCardState {
@@ -133,7 +133,7 @@ export function AskUserQuestionCard({
 	);
 	const liveProtocol = interaction?.hostProtocol;
 	if (liveProtocol !== undefined && liveProtocol !== hostProtocol) setHostProtocol(liveProtocol);
-	const discussAvailable = (hostProtocol ?? 0) >= DISCUSS_HOST_PROTOCOL;
+	const discussAvailable = (hostProtocol ?? 0) >= ASK_DISCUSS_PROTOCOL_VERSION;
 	const awaiting = !resolvedResult && !superseded && !ended && status !== "error";
 	const [states, setStates] = useState<Record<number, QState>>(
 		() => cardStateCache.get(toolCallId)?.states ?? {},
