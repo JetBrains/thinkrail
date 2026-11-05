@@ -371,13 +371,17 @@ current desktop-first hierarchy rather than freezing obsolete CLI-only instructi
   active); the terminal keeps its static install transcript — `main.ts` guards make every
   landing-only enhancement inert (no sections → no scroll-spy; only the landing command tabs drive the
   terminal replay).
-- **Every article ends with the install picker.** `src/components/InstallPicker.astro` is the
+- **Every article opens and ends with the install picker.** `src/components/InstallPicker.astro` is the
   blog picker markup (OS tabs, desktop downloads, **Browser UI via command line** disclosure with Windows
   shell tabs). `src/pages/blog/[slug].astro` renders it in a `.blog-post-install`
-  section after the post body. It sits inside `.blog-post`,
-  so its downloads, copies, and disclosure opens report `blog_post`, and outside `.blog-post-content`, so
-  the prose cascade never restyles it. `main.ts` drives that picker; posts keep their
-  own prose install guidance, and `validateBuild.ts` requires the picker on every article.
+  section after the article header and another after the post body. Each instance uses a unique
+  `idPrefix` (`blog-top` or `blog-bottom`) for its tab and panel IDs. They sit inside `.blog-post`,
+  so their downloads, copies, and disclosure opens report `blog_post`, and outside `.blog-post-content`, so
+  the prose cascade never restyles them. `main.ts` initializes each picker independently with the
+  same detected OS and scopes tab selection, keyboard navigation, and Windows shell selection to
+  its instance. Posts keep their own prose install guidance. `validateBuild.ts` requires both
+  placements and unique IDs on every article. Both placements retain the `blog_post` analytics
+  location from the shared event schema.
   Post cards are whole-card links that signal hover on the border alone (no underline, no movement)
   and share the landing feature cards' surface, which keeps the `--elevated` tag chips visible on
   them. Theming: BaseHead (theme guard, fonts, analytics) + the `src/theme.ts` toggle via the
