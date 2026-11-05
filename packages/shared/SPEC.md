@@ -20,7 +20,7 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   brand icon set both launchers ship (`assets/` and its generator, `scripts/generate-icons.ts`).
 - **Public surface:** `@thinkrail/shared/shellEnv` → `resolveShellEnv()`, `repairShellEnv()`, `mergePath()`,
   `loginShellImports()`, `parseLoginShellEnv()`, `LOGIN_ENV_MARKER`, `localeRepair()`, `launchEnvKeys()`;
-  `@thinkrail/shared/freePort` → `findFreePort()`, `isPortFree()`;
+  `@thinkrail/shared/freePort` → `findFreePort()`, `isPortFree()`, `parsePort()`;
   `@thinkrail/shared/startupMark` → the static recursive wordmark plus the pure responsive/ANSI renderer
   and interactive-output gate used by every launcher;
   `@thinkrail/shared/version` → the baked `{ version, channel, commit }` release identity shared by CLI,
@@ -102,7 +102,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   terminals copy it (`server/src/terminal`), and so does the in-process agent's own bash.
 - **/freePort** — `findFreePort(preferred, host?)`: the first free port at or above `preferred`, so a
   host can pick an open port instead of colliding with one already running. `isPortFree(port, host?)`:
-  the underlying single-port check.
+  the underlying single-port check. `parsePort(value)`: strict port parse (plain decimal digits, 0-65535, else `undefined`), so an empty,
+  `0x10`, `1e3` or out-of-range `THINKRAIL_PORT` is ignored instead of becoming port 0 or `NaN`.
 - **/startupMark** — the launchers' one boot signature: a committed 42×20 `TR` silhouette built from a
   cyclic `THINKRAIL·` field, composed with the product identity, a caller-supplied honest status, and its
   resolved endpoint. At 72+ columns it is a right-hand lockup; from 42–71 it stacks, and below 42 it uses

@@ -333,7 +333,7 @@ test("openExistingWorktree adopts idempotently and removal never reclaims the ch
 		"An existing worktree cannot be renamed by ThinkRail",
 	);
 
-	removeWorkspace(workspace.id);
+	await removeWorkspace(workspace.id);
 	expect(listWorkspaceRecords("p1").some((candidate) => candidate.id === workspace.id)).toBe(false);
 	expect(readFileSync(join(external, "uncommitted.txt"), "utf8")).toBe("keep untracked\n");
 	expectCheckoutUnchanged();
@@ -757,11 +757,45 @@ test("forgetWorkspace drops the record + returns it, but leaves the worktree for
 	expect(await worktrees()).toHaveLength(0);
 	expect(registeredWorktrees(repo)).toContain(ws.worktreePath);
 
-	reclaimWorktree(forgotten as NonNullable<typeof forgotten>);
+	await reclaimWorktree(forgotten as NonNullable<typeof forgotten>);
 	expect(registeredWorktrees(repo)).not.toContain(ws.worktreePath);
 
 	expect(forgetWorkspace(ws.id)).toBeNull();
 });
+
+test.skipIf(process.platform === "win32").each([false, true])(
+	"worktree reclamation keeps the event loop responsive (filesystem fallback: %s)",
+	async (fallback) => {
+		const ws = await createWorkspace("p1");
+		const executable = Bun.which("git");
+		if (!executable) throw new Error("Git is required for this test");
+		const marker = join(dataDir, "reclaim-started");
+		const bin = join(dataDir, "bin");
+		mkdirSync(bin);
+		writeFileSync(
+			join(bin, "git"),
+			`#!/bin/sh\nif [ "$3" = worktree ] && [ "$4" = remove ]; then\n  touch "${marker}"\n  sleep 0.3\n  ${fallback ? "exit 1" : ":"}\nfi\nexec "${executable}" "$@"\n`,
+		);
+		chmodSync(join(bin, "git"), 0o755);
+		const savedPath = process.env.PATH;
+		process.env.PATH = `${bin}${delimiter}${savedPath ?? ""}`;
+		let servedDuringReclaim = false;
+		const heartbeat = setInterval(() => {
+			if (existsSync(marker) && existsSync(ws.worktreePath)) servedDuringReclaim = true;
+		}, 10);
+		try {
+			await reclaimWorktree(ws);
+			expect(servedDuringReclaim).toBe(true);
+			expect(existsSync(ws.worktreePath)).toBe(false);
+			expect(registeredWorktrees(repo)).not.toContain(ws.worktreePath);
+			expect(gitOut(repo, "show-ref", "--verify", `refs/heads/${ws.branch}`)).not.toBe("");
+		} finally {
+			clearInterval(heartbeat);
+			if (savedPath === undefined) delete process.env.PATH;
+			else process.env.PATH = savedPath;
+		}
+	},
+);
 
 test("membership mutations emit lifecycle events through the injected publisher", async () => {
 	const events: WorkspaceLifecycleEvent[] = [];
@@ -784,7 +818,7 @@ test("membership mutations emit lifecycle events through the injected publisher"
 test("a null publisher makes lifecycle emits silent no-ops", async () => {
 	setWorkspacePublisher(null);
 	const ws = await createWorkspace("p1");
-	expect(() => removeWorkspace(ws.id)).not.toThrow();
+	await expect(removeWorkspace(ws.id)).resolves.toBeUndefined();
 	expect(await worktrees()).toHaveLength(0);
 });
 
@@ -794,7 +828,7 @@ test("removeWorkspace cleans up even when the worktree dir is already gone", asy
 
 	rmSync(ws.worktreePath, { recursive: true, force: true });
 
-	expect(() => removeWorkspace(ws.id)).not.toThrow();
+	await expect(removeWorkspace(ws.id)).resolves.toBeUndefined();
 	expect(await worktrees()).toHaveLength(0);
 
 	const list = Bun.spawnSync(["git", "-C", repo, "worktree", "list"], { stdout: "pipe" });
@@ -913,11 +947,11 @@ test("the Default workspace is non-removable and non-renamable — loud server-s
 	if (!def) throw new Error("expected the ensured Default workspace");
 
 	expect(() => forgetWorkspace(def.id)).toThrow("The Default workspace cannot be removed");
-	expect(() => removeWorkspace(def.id)).toThrow("The Default workspace cannot be removed");
+	await expect(removeWorkspace(def.id)).rejects.toThrow("The Default workspace cannot be removed");
 	expect(() => renameWorkspace(def.id, "anything")).toThrow(
 		"The Default workspace cannot be renamed",
 	);
-	reclaimWorktree(def);
+	await reclaimWorktree(def);
 	expect(existsSync(join(repo, "README.md"))).toBe(true);
 	expect((await listWorkspaces("p1"))[0]?.id).toBe(def.id);
 });
@@ -990,7 +1024,7 @@ test("reclaimWorktree refuses a record pointing at the project folder even witho
 	const def = (await listWorkspaces("p1"))[0];
 	if (!def) throw new Error("expected the ensured Default workspace");
 	const { kind: _dropped, ...corrupt } = def;
-	reclaimWorktree(corrupt);
+	await reclaimWorktree(corrupt);
 	expect(existsSync(join(repo, "README.md"))).toBe(true);
 });
 

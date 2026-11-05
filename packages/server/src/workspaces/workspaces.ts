@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import {
 	DEFAULT_WORKSPACE_NAME,
@@ -702,24 +703,23 @@ export function forgetWorkspace(id: string): Workspace | null {
 	return ws;
 }
 
-export function reclaimWorktree(ws: Workspace): void {
+export async function reclaimWorktree(ws: Workspace): Promise<void> {
 	if (ws.kind === "default" || ws.kind === "external") return;
 	const project = loadProjects().find((p) => p.id === ws.projectId);
 	if (!project) return;
 	if (resolve(ws.worktreePath) === resolve(project.path)) return;
-	const removed = git(project.path, ["worktree", "remove", "--force", ws.worktreePath], {
+	const removed = await gitAsync(project.path, ["worktree", "remove", "--force", ws.worktreePath], {
 		timeoutMs: SLOW_GIT_TIMEOUT_MS,
-		onTimeout: "return",
 	});
 	if (!removed.ok) {
-		rmSync(ws.worktreePath, { recursive: true, force: true });
-		git(project.path, ["worktree", "prune"], { onTimeout: "return" });
+		await rm(ws.worktreePath, { recursive: true, force: true });
+		await gitAsync(project.path, ["worktree", "prune"]);
 	}
 }
 
-export function removeWorkspace(id: string): void {
+export async function removeWorkspace(id: string): Promise<void> {
 	const ws = forgetWorkspace(id);
-	if (ws) reclaimWorktree(ws);
+	if (ws) await reclaimWorktree(ws);
 }
 
 export async function workspaceDiffStats(id: string): Promise<DiffStats> {

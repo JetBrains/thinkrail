@@ -250,7 +250,11 @@ async function start(): Promise<void> {
 		now: () => performance.now(),
 		every,
 	});
-	const commandGate = createRepeatGate({ isKeyDown: () => readKeys()?.keyDown ?? null, every });
+	const commandGate = createRepeatGate({
+		isKeyDown: () => readKeys()?.keyDown ?? null,
+		sinceKeyDown: () => readKeys()?.sinceKeyDown ?? null,
+		every,
+	});
 	ApplicationMenu.on("application-menu-clicked", (event) => {
 		const action = readMenuAction(event);
 		const target = menuTarget;
@@ -455,7 +459,7 @@ async function start(): Promise<void> {
 		hidden:
 			process.env.THINKRAIL_DESKTOP_HIDDEN === "1" ||
 			process.env.THINKRAIL_DESKTOP_E2E_HOST === "1",
-		frame: { x: 80, y: 60, width: 1440, height: 920 },
+		frame: { width: 1440, height: 920 },
 		...(neutral
 			? {}
 			: {
