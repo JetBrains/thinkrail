@@ -2336,9 +2336,12 @@ own section. The kebab menu (`plan-menu`, a
   an instant review tab would flash and then be replaced. Freshness stamps (`loadedTick`, plus a diff's
   `loadedTarget`) are captured before the read leaves, never from newer state at response time. The local
   per-group navigation clock is captured at request time: a stale preview completion loses to later
-  attention; deliberate keep still commits. If the destination group disappeared, the shell reroutes to
-  current last focus, and if a newer local transition already placed the canonical resource, completion
-  selects that placement instead of duplicating it. Preview placement and attention commit locally. Unit
+  attention; deliberate keep still commits. When preview tabs are disabled, read completions and settled
+  Changes opens also commit as kept tabs even after newer navigation, without taking focus from it.
+  These cancellation checks read the current preference, just as the final store open does. If the
+  destination group disappeared, the shell reroutes to current last focus, and if a newer local transition
+  already placed the canonical resource, completion selects that placement instead of duplicating it.
+  Preview placement and attention commit locally. Unit
   and E2E tests pin double-click coalescing, stale-read rejection, per-group isolation, local identity
   convergence, and promote-by-keyboard/touch.
 - **Row actions: one menu, two triggers.** Every **file** row (both views) is wrapped in
