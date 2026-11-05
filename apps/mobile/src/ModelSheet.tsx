@@ -7,7 +7,7 @@ import { sameModel, type ThinkingLevel, type WireModel } from "@thinkrail/contra
 import { useT } from "@thinkrail/locales/react";
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { modelSections, SEARCH_THRESHOLD } from "./modelSections";
-import { Sheet } from "./sheet";
+import { PageSheet } from "./sheet";
 
 export interface ModelSheetProps {
 	models: WireModel[];
@@ -18,10 +18,10 @@ export interface ModelSheetProps {
 }
 
 /**
- * The phone's model picker, in place of the desktop popover: the composer pill opens a bottom sheet with the
+ * The phone's model picker, in place of the desktop popover: the composer pill opens a full page (back arrow closes) with the
  * effort levels as touch-size chips (they apply at once) over the models grouped by provider (a tap picks one
  * and closes). Its search field only appears for a long list and never takes focus by itself, so opening the
- * sheet never raises the keyboard. `/model <query>` opens it through the same handle as on desktop.
+ * page never raises the keyboard. `/model <query>` opens it through the same handle as on desktop.
  */
 export const ModelSheet = forwardRef<ModelEffortPickerHandle, ModelSheetProps>(function ModelSheet(
 	{ models, current, level, onSelect, onSelectLevel },
@@ -61,11 +61,10 @@ export const ModelSheet = forwardRef<ModelEffortPickerHandle, ModelSheetProps>(f
 				/>
 				<RiArrowDownSLine aria-hidden className="size-14 shrink-0 text-text-muted" />
 			</button>
-			<Sheet
+			<PageSheet
 				open={open}
 				onOpenChange={setOpen}
 				title={t("mobile.model.title")}
-				closeLabel={t("common.done")}
 				autoFocus={false}
 				testId="model-sheet"
 			>
@@ -162,7 +161,7 @@ export const ModelSheet = forwardRef<ModelEffortPickerHandle, ModelSheetProps>(f
 						</section>
 					))
 				)}
-			</Sheet>
+			</PageSheet>
 		</>
 	);
 });

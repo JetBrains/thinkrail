@@ -17,6 +17,7 @@ import { SessionScreen } from "./SessionScreen";
 import { SettingsScreen } from "./SettingsScreen";
 import { SubagentScreen } from "./SubagentScreen";
 import { isPairLink } from "./scanPairLink";
+import { closeTopLayer } from "./sheet";
 import { localStore } from "./store";
 import { applyDevicePreferences } from "./theme";
 import { Welcome } from "./Welcome";
@@ -184,7 +185,7 @@ export function App() {
 
 	useEffect(() => {
 		const listener = CapApp.addListener("backButton", () => {
-			if (!back()) void CapApp.minimizeApp();
+			if (!closeTopLayer() && !back()) void CapApp.minimizeApp();
 		});
 		return () => {
 			void listener.then((handle) => handle.remove());

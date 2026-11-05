@@ -42,8 +42,9 @@ reconnecting needs a new QR) and, only when it is unreachable, **Reconnect** und
   the second line; the expanded set lives in `App` so returning from a chat keeps the tree; per-host
   "unreachable" notice with its reason; the IDE tree's actions, on touch (`TreeActions.tsx` over `sheet.tsx`'s
   bottom `Sheet` / `ConfirmSheet` / `RenameSheet`, built on the shared `@thinkrail/ui/dialog`, with the IDE's
-  strings): a project row's **+** opens `NewWorktreeScreen.tsx`, the IDE's New workspace dialog on a phone —
-  an optional task, the base branch (a sheet over `git.listBranches`, default first, via `baseBranches`) and
+  strings; short action menus and confirmations stay bottom sheets, a list you pick from — models, base
+  branches — opens as a full page with a back arrow, never a floating inset window): a project row's **+** opens `NewWorktreeScreen.tsx`, the IDE's New workspace dialog on a phone —
+  an optional task, the base branch (its own stack screen over `git.listBranches`, default first, via `baseBranches`) and
   the model + effort (`ModelSheet`, starting from `model.default`); its one button runs `newWorktree.ts`'s
   `startWorktree` (`workspace.create` → `session.create` with a picked model → `session.prompt` with the task)
   and lands in that chat, a first message that did not go back in its field with why — and its **⋯** offers New worktree,
@@ -62,7 +63,7 @@ reconnecting needs a new QR) and, only when it is unreachable, **Reconnect** und
   [[module-chat-ui]] components unchanged (`messagesToRuntime` → `deriveRows` → `ChatTurnView` for the
   transcript, the shared `Composer` with its slash commands from `session.getCommands`, the model/effort
   picker over `model.list` → `session.setModel` / `session.setThinkingLevel` — on a phone the row above the
-  field, `ModelSheet.tsx`: a bottom sheet (no autofocus, so no keyboard) with effort chips that apply at once
+  field, `ModelSheet.tsx`: a full page with a back arrow (`sheet.tsx`'s `PageSheet`; no autofocus, so no keyboard) with effort chips that apply at once
   over models grouped by provider (`modelSections.ts`, current provider first, a search field only past 8
   models); a tap picks and closes, and the composer's `/model` opens it — send / steer / follow-up /
   interrupt through the same `session.*` methods as the IDE, tool-card answers through
@@ -167,7 +168,7 @@ git-ignored, so the setup script is the only place native configuration is writt
 `AndroidManifest.xml`, copies the launcher icons from `packages/shared/assets/android`, syncs, and opens
 Android Studio. The WebView is served from `http://localhost` (`server.androidScheme`), not the default
 `https`, because an https page may not open a `ws://` relay (mixed content); localhost stays a secure
-context, so SubtleCrypto still works. The hardware back button walks the app's own routes (chat history →
+context, so SubtleCrypto still works. The hardware back button first closes an open sheet or page (`closeTopLayer`), then walks the app's own routes (chat history →
 chat → tree, settings → tree) and only backgrounds the app from the tree. `android/` is
 git-ignored like `ios/`. See
 `RUNBOOK-mobile.md` for signing and on-device steps.

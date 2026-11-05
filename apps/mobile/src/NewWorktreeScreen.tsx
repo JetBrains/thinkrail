@@ -19,7 +19,7 @@ import {
 	startWorktree,
 	WorktreeStartError,
 } from "./newWorktree";
-import { Sheet } from "./sheet";
+import { PageSheet } from "./sheet";
 import { useHostRequest } from "./useHostRequest";
 
 const NO_PARAMS = {};
@@ -187,7 +187,7 @@ export function NewWorktreeScreen({
 				</ul>
 			</div>
 
-			<Sheet
+			<PageSheet
 				open={branchSheet}
 				onOpenChange={setBranchSheet}
 				title={t("mobile.newWorktree.base")}
@@ -225,7 +225,7 @@ export function NewWorktreeScreen({
 							);
 						})
 					: null}
-			</Sheet>
+			</PageSheet>
 		</Screen>
 	);
 }

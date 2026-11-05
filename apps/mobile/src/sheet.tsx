@@ -3,6 +3,7 @@ import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@thinkrail/ui/dialog";
 import { type ReactNode, useState } from "react";
+import { ScreenHeader } from "./layout";
 
 /**
  * The phone's action sheet: the shared dialog, docked to the bottom edge, with a closing row (Cancel unless
@@ -57,6 +58,56 @@ export function Sheet({
 			</DialogContent>
 		</Dialog>
 	);
+}
+
+/**
+ * A picker as a full page over the current screen, the phone's stack-screen look: the screen header with a
+ * back arrow that closes it, the body scrolling under it. For lists long enough to read as a page (models);
+ * short action menus stay a bottom `Sheet`. `autoFocus={false}` as on `Sheet`.
+ */
+export function PageSheet({
+	open,
+	onOpenChange,
+	title,
+	autoFocus = true,
+	testId,
+	children,
+}: {
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	title: string;
+	autoFocus?: boolean;
+	testId?: string;
+	children: ReactNode;
+}) {
+	const t = useT();
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent
+				hideClose
+				aria-describedby={undefined}
+				{...(autoFocus ? {} : { onOpenAutoFocus: (event: Event) => event.preventDefault() })}
+				data-testid={testId}
+				className="inset-0 flex max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-0 bg-container-workspace-bg p-0 pt-safe-top shadow-none"
+			>
+				<ScreenHeader
+					title={title}
+					back={{ label: t("common.back"), onBack: () => onOpenChange(false) }}
+					Title={DialogTitle}
+				/>
+				<div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-safe-bottom">
+					{children}
+				</div>
+			</DialogContent>
+		</Dialog>
+	);
+}
+
+/** Closes the topmost open sheet, page or dialog the way Escape does; false when none is open. For the Android back button. */
+export function closeTopLayer(): boolean {
+	if (!document.querySelector('[data-modal-layer][data-state="open"]')) return false;
+	document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+	return true;
 }
 
 export function SheetAction({
