@@ -228,7 +228,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   only sanitizer) and always acks. Error tracking also rides two `server.ts` seams: every failed WS request
   is reported with its registered method (CodedErrors included), and `observeLoggedErrors` routes host
   `log.warn/error(msg, err)` calls as `host_logged` — so host diagnostics that carry an error go through
-  the logger, never `console.*`. The host's `resolveNewChatModel` composes AppConfig settings with the agent's settled available
+  the logger, never `console.*`. The host's `resolveNewChatModel` composes AppConfig settings with pi's global default model, the agent's settled available
   model list and Pi thinking clamp; `model.default`, `session.create`, and newly-created review chats share
   that resolver, and creation passes its model and effort explicitly. A `session.create` that **named** a
   model and every `session.setModel` also record the resolved model as recent through `settings`'
