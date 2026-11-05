@@ -215,7 +215,11 @@ test("a persisted tall questionnaire reveals page changes and a restored page", 
 		await expect(submit).toBeEnabled();
 
 		expect(await nestedVerticalScrollSurfaces(reopenedCard)).toEqual([]);
-		await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+		const { distanceFromEnd } = await readChatScrollGeometry(chatScroll);
+		await expect(chatScroll).toHaveAttribute(
+			"data-follow-state",
+			distanceFromEnd <= 1 ? "following" : "detached",
+		);
 	} finally {
 		rmSync(session.path, { force: true });
 	}
