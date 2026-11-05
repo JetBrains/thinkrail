@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { WorkspaceFsChangedPayload, WorkspaceSkillChange } from "@thinkrail/contracts";
@@ -7,6 +15,7 @@ import { createCoalescer } from "./coalesce";
 import {
 	ensureWatch,
 	isIgnoredPath,
+	setIgnoredPathsResolver,
 	setRepoMetaPublisher,
 	setSkillPathClassifier,
 	setWatchPublisher,
@@ -183,6 +192,7 @@ afterEach(() => {
 	setRepoMetaPublisher(null);
 	setWatchStartedPublisher(null);
 	setSkillPathClassifier(null);
+	setIgnoredPathsResolver(null);
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
@@ -326,6 +336,251 @@ test("ignored churn (node_modules) never publishes", async () => {
 	expect(payloads.filter((p) => p.paths.some((x) => x.includes("node_modules")))).toHaveLength(0);
 });
 
+test.if(process.platform === "linux")(
+	"on Linux the root .git stays watched when the resolver would ignore it",
+	async () => {
+		mkdirSync(join(worktree, ".git", "refs", "heads"), { recursive: true });
+		mkdirSync(join(worktree, ".git", "reftable"));
+		const asked: string[] = [];
+		setIgnoredPathsResolver(async (_root, paths) => {
+			asked.push(...paths);
+			return new Set(paths);
+		});
+		const nudges: string[] = [];
+		setRepoMetaPublisher((id) => nudges.push(id));
+		await ensureWatch("ws1");
+		expect(asked.filter((path) => path.split("/")[0] === ".git")).toEqual([]);
+		writeFileSync(join(worktree, ".git", "HEAD"), "ref: refs/heads/next\n");
+		await waitFor(() => nudges.length > 0);
+		nudges.length = 0;
+		writeFileSync(join(worktree, ".git", "refs", "heads", "next"), "0\n");
+		await waitFor(() => nudges.length > 0);
+		nudges.length = 0;
+		writeFileSync(join(worktree, ".git", "reftable", "tables.list"), "0\n");
+		await waitFor(() => nudges.length > 0);
+	},
+);
+
+test.if(process.platform === "linux")(
+	"on Linux a commit inside a submodule nudges the repo-meta sink",
+	async () => {
+		const git = (cwd: string, ...args: string[]) => {
+			const result = Bun.spawnSync([
+				"git",
+				"-C",
+				cwd,
+				"-c",
+				"user.email=t@t",
+				"-c",
+				"user.name=t",
+				"-c",
+				"commit.gpgsign=false",
+				"-c",
+				"protocol.file.allow=always",
+				...args,
+			]);
+			if (!result.success) throw new Error(result.stderr.toString());
+		};
+		const repo = (dir: string) => {
+			mkdirSync(dir, { recursive: true });
+			git(dir, "init", "-q");
+			git(dir, "commit", "-q", "--allow-empty", "-m", "init");
+		};
+		const leaf = join(dataDir, "leaf");
+		const nest = join(dataDir, "nest");
+		repo(leaf);
+		repo(nest);
+		git(nest, "submodule", "add", "-q", leaf, "inner");
+		git(nest, "commit", "-q", "-m", "inner");
+		repo(worktree);
+		git(worktree, "submodule", "add", "-q", leaf, "sub");
+		git(worktree, "submodule", "add", "-q", leaf, "libs/foo");
+		git(worktree, "submodule", "add", "-q", nest, "nest");
+		git(worktree, "submodule", "update", "-q", "--init", "--recursive");
+		const nudges: string[] = [];
+		setRepoMetaPublisher((id) => nudges.push(id));
+		await ensureWatch("ws1");
+		for (const path of ["sub", "libs/foo", "nest/inner"]) {
+			await sleep(400);
+			nudges.length = 0;
+			git(join(worktree, path), "commit", "-q", "--allow-empty", "-m", path);
+			await waitFor(() => nudges.length > 0);
+		}
+	},
+	20_000,
+);
+
+test.if(process.platform === "linux")(
+	"on Linux a git metadata change re-checks folders skipped as ignored",
+	async () => {
+		mkdirSync(join(worktree, ".git", "info"), { recursive: true });
+		mkdirSync(join(worktree, "dist"));
+		writeFileSync(join(worktree, "dist", "index.js"), "x\n");
+		const ignored = new Set(["dist"]);
+		setIgnoredPathsResolver(async (_root, paths) => new Set(paths.filter((p) => ignored.has(p))));
+		const nudges: string[] = [];
+		setRepoMetaPublisher((id) => nudges.push(id));
+		await ensureWatch("ws1");
+		ignored.clear();
+		writeFileSync(join(worktree, ".git", "info", "exclude"), "\n");
+		await waitFor(() => nudges.length > 0);
+		await waitFor(() => payloads.some((p) => p.paths.includes("dist/index.js")));
+		await sleep(100);
+		payloads.length = 0;
+		writeFileSync(join(worktree, "dist", "index.js"), "y\n");
+		await waitFor(() => payloads.some((p) => p.paths.includes("dist/index.js")));
+	},
+);
+
+test.if(process.platform === "linux")(
+	"on Linux readiness waits until every folder is watched",
+	async () => {
+		mkdirSync(join(worktree, "a", "b", "c"), { recursive: true });
+		setIgnoredPathsResolver(async () => {
+			await sleep(400);
+			return new Set();
+		});
+		await ensureWatch("ws1");
+		payloads.length = 0;
+		writeFileSync(join(worktree, "a", "b", "c", "x.ts"), "x\n");
+		await waitFor(() => payloads.some((p) => p.paths.includes("a/b/c/x.ts")));
+	},
+);
+
+function inotifyWatches(): number {
+	let count = 0;
+	for (const fd of readdirSync("/proc/self/fdinfo")) {
+		try {
+			const info = readFileSync(`/proc/self/fdinfo/${fd}`, "utf8");
+			count += info.split("\n").filter((line) => line.startsWith("inotify wd:")).length;
+		} catch {}
+	}
+	return count;
+}
+
+test.if(process.platform === "linux")(
+	"on Linux skipped and ignored folders hold no inotify watch, and stop releases them",
+	async () => {
+		for (const dir of [
+			"src",
+			"node_modules/a/b",
+			"tmp/x/y",
+			".git/objects/ab",
+			".git/logs/refs",
+			".git/refs/heads",
+			".git/modules/sub/objects/ab",
+			".git/modules/libs/foo/logs/refs",
+			".git/modules/libs/foo/refs/heads",
+			"sub/.git/objects/cd",
+		]) {
+			mkdirSync(join(worktree, dir), { recursive: true });
+		}
+		const asked: string[] = [];
+		setIgnoredPathsResolver(async (root, paths) => {
+			expect(root).toBe(worktree);
+			asked.push(...paths);
+			return new Set(paths.filter((path) => path === "tmp"));
+		});
+		const before = inotifyWatches();
+		expect(await ensureWatch("ws1")).toEqual({ startupNudge: true });
+		expect(asked).toContain("tmp");
+		expect(inotifyWatches() - before).toBe(12);
+		payloads.length = 0;
+		writeFileSync(join(worktree, "tmp", "x", "out.txt"), "x\n");
+		mkdirSync(join(worktree, "src", "node_modules", "pkg"), { recursive: true });
+		mkdirSync(join(worktree, "late", "node_modules", "pkg"), { recursive: true });
+		writeFileSync(join(worktree, "late", "x.ts"), "x\n");
+		await waitFor(() => payloads.some((p) => p.paths.includes("late/x.ts")));
+		await sleep(400);
+		expect(inotifyWatches() - before).toBe(13);
+		expect(payloads.some((p) => p.paths.some((x) => x.startsWith("tmp/")))).toBe(false);
+		stopWatch("ws1");
+		await waitFor(() => inotifyWatches() === before);
+	},
+);
+
+test.if(process.platform === "linux")(
+	"on Linux a nested workspace's start makes the outer one refetch without a skill change",
+	async () => {
+		const inner = join(worktree, "p", "in");
+		mkdirSync(inner, { recursive: true });
+		writeFileSync(
+			join(dataDir, "workspaces.json"),
+			JSON.stringify(
+				[
+					{ id: "ws1", path: worktree },
+					{ id: "ws2", path: inner },
+				].map(({ id, path }) => ({
+					id,
+					projectId: "p1",
+					name: id,
+					branch: id,
+					worktreePath: path,
+					baseBranch: "main",
+				})),
+			),
+		);
+		await ensureWatch("ws1");
+		payloads.length = 0;
+		writeFileSync(join(inner, "before.ts"), "x\n");
+		void ensureWatch("ws2");
+		const outer = () => payloads.filter((p) => p.workspaceId === "ws1");
+		await waitFor(() => outer().some((p) => p.truncated || p.paths.includes("p/in/before.ts")));
+		expect(outer().map((p) => p.skillChange)).not.toContain("unknown");
+	},
+);
+
+test.if(process.platform === "linux")(
+	"on Linux an outer workspace's start makes a nested one refetch its skill folders as a skill change",
+	async () => {
+		const inner = join(worktree, "p", "in");
+		mkdirSync(join(inner, ".claude", "skills", "s"), { recursive: true });
+		writeFileSync(
+			join(dataDir, "workspaces.json"),
+			JSON.stringify(
+				[
+					{ id: "ws1", path: worktree },
+					{ id: "ws2", path: inner },
+				].map(({ id, path }) => ({
+					id,
+					projectId: "p1",
+					name: id,
+					branch: id,
+					worktreePath: path,
+					baseBranch: "main",
+				})),
+			),
+		);
+		await ensureWatch("ws2");
+		payloads.length = 0;
+		void ensureWatch("ws1");
+		await waitFor(() =>
+			payloads.some((p) => p.workspaceId === "ws2" && p.truncated && p.skillChange === "detected"),
+		);
+	},
+);
+
+test.if(process.platform === "linux")(
+	"on Linux stopping a large watcher releases its inotify watches over several turns",
+	async () => {
+		for (let top = 0; top < 30; top++) {
+			for (let sub = 0; sub < 100; sub++) {
+				mkdirSync(join(worktree, `t${top}`, `s${sub}`), { recursive: true });
+			}
+		}
+		const before = inotifyWatches();
+		await ensureWatch("ws1");
+		const watched = inotifyWatches() - before;
+		expect(watched).toBe(3031);
+		stopWatch("ws1");
+		await new Promise((resolve) => setImmediate(resolve));
+		const left = inotifyWatches() - before;
+		expect(left).toBeGreaterThan(0);
+		expect(left).toBeLessThan(watched);
+		await waitFor(() => inotifyWatches() === before);
+	},
+);
+
 test("unknown workspace and stopWatch are safe no-ops; stopped watchers stay silent", async () => {
 	ensureWatch("nope");
 	ensureWatch("ws1");
@@ -372,16 +627,18 @@ test("stopping before readiness settles callers conservatively without a late pu
 });
 
 test("a deleted-and-recreated worktree root (same path, new inode) is re-watched on the next read", async () => {
-	ensureWatch("ws1");
-	await sleep(100);
+	mkdirSync(join(worktree, "src"));
+	await ensureWatch("ws1");
+	mkdirSync(`${worktree}-next/src`, { recursive: true });
 	rmSync(worktree, { recursive: true, force: true });
-	mkdirSync(worktree);
-	ensureWatch("ws1");
-	await sleep(100);
+	renameSync(`${worktree}-next`, worktree);
+	await ensureWatch("ws1");
 	payloads.length = 0;
 	writeFileSync(join(worktree, "reborn.ts"), "x\n");
-	await waitFor(() => payloads.some((p) => p.paths.includes("reborn.ts") || p.truncated), 3000);
-	expect(payloads.some((p) => p.workspaceId === "ws1")).toBe(true);
+	writeFileSync(join(worktree, "src", "deep.ts"), "x\n");
+	await waitFor(() =>
+		["reborn.ts", "src/deep.ts"].every((path) => payloads.some((p) => p.paths.includes(path))),
+	);
 });
 
 function seedWorkspaces(ids: string[]): Map<string, string> {

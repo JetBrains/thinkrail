@@ -194,12 +194,13 @@ function executionDiagnostics(run: {
 export async function gitAsync(
 	cwd: string,
 	args: string[],
-	opts: GitAsyncOptions & { raw?: boolean } = {},
+	opts: GitAsyncOptions & { raw?: boolean; stdin?: Uint8Array } = {},
 ): Promise<GitResult> {
 	const run = await runBounded(["git", "-C", cwd, ...args], {
 		timeoutMs: opts.timeoutMs ?? NETWORK_TIMEOUT_MS,
 		env: opts.env ?? nonInteractiveGitEnv(),
 		...(opts.signal ? { signal: opts.signal } : {}),
+		...(opts.stdin ? { stdin: opts.stdin } : {}),
 	});
 	if (opts.redactStderr) run.err = opts.redactStderr(run.err);
 	if (run.timedOut) {

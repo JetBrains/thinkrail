@@ -114,7 +114,14 @@ channel fan-out, and the process-boot wrapper both launchers share.
   cached read so the siblings never import each other—the
   **`watch` wiring** (inject the
   `workspace.fsChanged` publish callback into `watch` and inject `agent`'s project-skill path classifier so
-  each capped batch carries independent `skillChange: none|detected|unknown` evidence; expose
+  each capped batch carries independent `skillChange: none|detected|unknown` evidence; inject `git`'s
+  `ignoredPaths` (`setIgnoredPathsResolver`) without the folders `agent`'s `mayHoldProjectSkills` matches,
+  so the Linux watcher still detects a skill edit under an ignored `.claude/` (an ignored folder inside a
+  skill is still watched unless its name starts with a dot, like `.venv`), and without `.thinkrail/context`,
+  the folders on the way to it and everything under it, so neither its seeded `*` `.gitignore` nor a user
+  rule like `.thinkrail/` silences the agent's docs there (the cost: on Linux an ignored tree there takes
+  a watch per folder, as with the recursive watcher, so a big built or unpacked tree belongs elsewhere);
+  expose
   **`workspace.watchReady`** as the typed preflight that awaits a fresh watcher's conservative startup nudge
   before a web skill-loading flow
   captures its baseline and reports whether the watcher was already known ready (the client's replay-safe

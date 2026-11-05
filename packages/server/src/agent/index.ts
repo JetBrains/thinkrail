@@ -123,7 +123,7 @@ export {
 	type SkillDecision,
 	type SkillFacts,
 } from "./skillAdmission";
-export { isProjectSkillPath } from "./skillSources";
+export { isProjectSkillPath, mayHoldProjectSkills } from "./skillSources";
 export {
 	SET_TITLE_TOOL_NAME,
 	type SetTitleParams,

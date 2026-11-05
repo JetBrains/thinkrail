@@ -342,12 +342,20 @@ ref off the workspace-create critical path.
   `null`. Returning the canonical sha lets the adopted-commit review resolver reject an abbreviated /
   non-canonical id, and the shared cap guarantees it never accepts a commit past the newest
   `COMMIT_LIST_MAX` — for which no adopted item is ever emitted. Kept in lock-step with `listCommits`.
-  **`ignoredPaths(worktreePath, paths)`** → the subset git ignores (`git -c core.quotePath=false
-  check-ignore -- <paths>`, arguments chunked under 24k chars for Windows' command-line limit; tracked files
-  never count, and a path inside an ignored folder does). The host uses it to mark `fs.readDir` nodes
-  `gitignored`, so the Files tree can dim them. It never throws: a non-repository, a failure or a timeout
-  reports nothing. Names git must C-quote (a `"`, `\` or control character) are never reported, because
-  `check-ignore -z` needs stdin, which the bounded runners do not offer.
+  **`ignoredPaths(worktreePath, paths)`** → the subset git ignores (tracked files never count, and a path
+  inside an ignored folder does). One `git check-ignore --no-index --stdin -z` run takes every path. Only
+  the paths it matches go to `git -c core.quotePath=false check-ignore -- <paths>` with the index
+  (arguments chunked under 24k chars for Windows' command-line limit, run in parallel), because that check
+  scans the whole index for each path: one level of 22,650 folders in a repo with 67,500 tracked files
+  took 1.3 s that way and 12 s as one `--stdin` run, past the 10 s timeout (then nothing counts as
+  ignored), while the `--no-index` run takes 70 ms. A sparse checkout skips that run, which doesn't read a
+  `.gitignore` that exists only in the index (skip-worktree). Its mark is `info/sparse-checkout` in the
+  worktree's git dir; `git sparse-checkout disable` leaves the file, which then only costs speed.
+  Each path goes as `./<path>`: git reads a name like `:!x` as pathspec magic and fails the run, and
+  `check-ignore` refuses `--literal-pathspecs`. The host uses it to mark `fs.readDir` nodes `gitignored`,
+  so the Files tree can dim them. It never throws: a non-repository, a failure or a timeout reports
+  nothing. Names git must C-quote (a `"`, `\` or control character) are never reported, because `-z` needs
+  `--stdin`, which makes the index check of a 10,000-entry ignored folder 5.2 s instead of 0.45 s.
 - **Public surface (barrel):** `git`, `gitAsync`, `gitAsyncBytes`, `gitAsyncStream`, `nonInteractiveGitEnv`, `SLOW_GIT_TIMEOUT_MS`, `INDEX_WRITE_TIMEOUT_MS`, `throwOnTimeout`,
   `setSyncGitTimeoutForTests`,
   `remoteRefOid`, `remoteRefOidAsync`, `remoteTrackingRef`, `gitStatus`,
