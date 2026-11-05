@@ -198,12 +198,19 @@ export async function openAppFresh(page: Page): Promise<void> {
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 }
 
-export async function openFixtureProject(page: Page): Promise<void> {
+export async function openFixtureProject(
+	page: Page,
+	options: { issueAssociationSupported?: boolean } = {},
+): Promise<void> {
 	await openAppFresh(page);
 	await page.removeLocatorHandler(page.getByTestId("issues-associate-dialog"));
 	await page.getByTestId("add-project-menu").click();
 	await page.getByTestId("menu-open-project").click();
-	await skipIssueAssociation(page);
+	if (options.issueAssociationSupported === false) {
+		await expect(page.getByTestId("issues-associate-dialog")).toHaveCount(0);
+	} else if (await page.getByTestId("issues-associate-dialog").isVisible()) {
+		await skipIssueAssociation(page);
+	}
 	await handleOptionalIssueAssociation(page);
 	await expect(page.getByTestId("project-item").first()).toBeVisible();
 	await expect(page.getByTestId("welcome")).toBeVisible();

@@ -14,8 +14,8 @@ import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { shot } from "./fixtures/screenshots";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
-async function openResourceChat(page: Page) {
-	await openFixtureProject(page);
+async function openResourceChat(page: Page, issueAssociationSupported = true) {
+	await openFixtureProject(page, { issueAssociationSupported });
 	seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
 		name: "Resource UI",
 		messages: [{ role: "user", text: "Inspect this chat's resources.", timestamp: Date.now() }],
@@ -183,7 +183,7 @@ test("an older host hides Resources without issuing unsupported resource reads",
 	const wire = await observeResourceWire(page, {
 		protocolVersion: CHAT_RESOURCES_PROTOCOL_VERSION - 1,
 	});
-	await openResourceChat(page);
+	await openResourceChat(page, false);
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await expect(page.getByTestId("resources-trigger")).toHaveCount(0);
 	expect(wire.reads).toBe(0);
