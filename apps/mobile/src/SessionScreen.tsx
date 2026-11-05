@@ -42,6 +42,8 @@ export interface OpenSession {
 	title: string;
 	model: WireModel | null;
 	thinkingLevel: ThinkingLevel;
+	/** A first message that could not be sent when the chat was started: back in the field, with why. */
+	unsent?: { text: string; reason: string };
 }
 
 const REFRESH_COALESCE_MS = 400;
@@ -84,10 +86,10 @@ export function SessionScreen({
 	const client = controller.clientFor(hostKey);
 	const [messages, setMessages] = useState<TranscriptMessage[] | null>(null);
 	const [loadError, setLoadError] = useState<string | null>(null);
-	const [draft, setDraft] = useState("");
+	const [draft, setDraft] = useState(session.unsent?.text ?? "");
 	const [model, setModel] = useState(session.model);
 	const [thinkingLevel, setThinkingLevel] = useState(session.thinkingLevel);
-	const [sendError, setSendError] = useState<string | null>(null);
+	const [sendError, setSendError] = useState<string | null>(session.unsent?.reason ?? null);
 	const bottom = useRef<HTMLDivElement>(null);
 	const isStreaming = state?.execution === "running";
 

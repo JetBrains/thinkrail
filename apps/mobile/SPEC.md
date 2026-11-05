@@ -42,8 +42,11 @@ QR). Welcome fits one screen without scrolling: three one-line steps (which netw
   the second line; the expanded set lives in `App` so returning from a chat keeps the tree; per-host
   "unreachable" notice with its reason; the IDE tree's actions, on touch (`TreeActions.tsx` over `sheet.tsx`'s
   bottom `Sheet` / `ConfirmSheet` / `RenameSheet`, built on the shared `@thinkrail/ui/dialog`, with the IDE's
-  strings): a project row's **+** creates a worktree off the default branch (`workspace.create`, a pending
-  "Creating worktree…" row) and opens it — so it lands in a new chat — and its **⋯** offers New worktree,
+  strings): a project row's **+** opens `NewWorktreeScreen.tsx`, the IDE's New workspace dialog on a phone —
+  an optional task, the base branch (a sheet over `git.listBranches`, default first, via `baseBranches`) and
+  the model + effort (`ModelSheet`, starting from `model.default`); its one button runs `newWorktree.ts`'s
+  `startWorktree` (`workspace.create` → `session.create` with a picked model → `session.prompt` with the task)
+  and lands in that chat, a first message that did not go back in its field with why — and its **⋯** offers New worktree,
   Rename (`project.rename`) and Close project (confirmed, `project.close`); a workspace row's **⋯** offers
   Rename (worktrees only), Mark as read / unread, Settle (blocked while running or unread, as in the IDE; the
   phone hides the Settled shelf, so it is unsettled on the computer) and Remove (confirmed; "Remove from

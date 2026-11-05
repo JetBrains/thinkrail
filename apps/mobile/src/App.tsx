@@ -1,5 +1,5 @@
 import { App as CapApp } from "@capacitor/app";
-import type { Project, Workspace } from "@thinkrail/contracts";
+import { chatTitle, type Project, type Workspace } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import {
 	connectRemoteProject,
@@ -10,6 +10,7 @@ import {
 } from "@thinkrail/remote-client";
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { failureOf, failureText, type HostFailure, type HostStatus } from "./hostStatus";
+import { NewWorktreeScreen } from "./NewWorktreeScreen";
 import { ProjectsScreen } from "./ProjectsScreen";
 import { type DevicePreferences, readPreferences, writePreferences } from "./preferences";
 import { SessionScreen } from "./SessionScreen";
@@ -36,7 +37,8 @@ type Route =
 	| { kind: "settings" }
 	| ({ kind: "workspace" } & InWorkspace)
 	| ({ kind: "chat"; chat: OpenChat } & InWorkspace)
-	| ({ kind: "history"; chat: OpenChat } & InWorkspace);
+	| ({ kind: "history"; chat: OpenChat } & InWorkspace)
+	| { kind: "newWorktree"; hostKey: string; project: Project };
 
 export function App() {
 	const registry = useMemo(() => createHostRegistry(localStore), []);
@@ -201,11 +203,37 @@ export function App() {
 					onReconnect={(host) => void connectHost(host)}
 					onForget={(host) => forgetHost(host.hostKey)}
 					onDismiss={(host) => setDismissed((current) => new Set(current).add(host.hostKey))}
+					onNewWorktree={(hostKey, project) => setRoute({ kind: "newWorktree", hostKey, project })}
 					onOpen={(hostKey, project, workspace) =>
 						setRoute({ kind: "workspace", hostKey, project, workspace })
 					}
 				/>
 			</Layer>
+			{top?.kind === "newWorktree" ? (
+				<Layer covered={false}>
+					<NewWorktreeScreen
+						project={top.project}
+						client={controller.clientFor(top.hostKey)}
+						backLabel={t("mobile.projects.title")}
+						onBack={back}
+						onStarted={({ workspace, chat, promptError }, prompt) =>
+							setRoute({
+								kind: "chat",
+								hostKey: top.hostKey,
+								project: top.project,
+								workspace,
+								chat: {
+									...chat,
+									title: prompt
+										? (chatTitle(undefined, prompt)?.text ?? prompt)
+										: t("store.chatTab.defaultName"),
+									...(promptError ? { unsent: { text: prompt, reason: promptError } } : {}),
+								},
+							})
+						}
+					/>
+				</Layer>
+			) : null}
 			{top?.kind === "settings" ? (
 				<Layer covered={false}>
 					<SettingsScreen

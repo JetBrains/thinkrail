@@ -12,7 +12,6 @@ import {
 	partitionWorkspaces,
 	type Workspace,
 	WS_CHANNELS,
-	type WsResult,
 } from "@thinkrail/contracts";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import type {
@@ -62,6 +61,7 @@ export function ProjectsScreen({
 	onReconnect,
 	onForget,
 	onDismiss,
+	onNewWorktree,
 	onOpen,
 }: {
 	/** The computers to show — a computer whose banner was closed is left out until it fails again. */
@@ -79,6 +79,7 @@ export function ProjectsScreen({
 	onReconnect: (host: SavedHost) => void;
 	onForget: (host: SavedHost) => void;
 	onDismiss: (host: SavedHost) => void;
+	onNewWorktree: (hostKey: string, project: Project) => void;
 	onOpen: (hostKey: string, project: Project, workspace: Workspace) => void;
 }) {
 	const t = useT();
@@ -142,6 +143,7 @@ export function ProjectsScreen({
 						onToggle={onToggle}
 						onFailure={setFailure}
 						onOpen={(project, workspace) => onOpen(host.hostKey, project, workspace)}
+						onNewWorktree={(project) => onNewWorktree(host.hostKey, project)}
 					/>
 				))}
 		</Screen>
@@ -157,6 +159,7 @@ function HostProjects({
 	onToggle,
 	onFailure,
 	onOpen,
+	onNewWorktree,
 }: {
 	host: SavedHost;
 	heading: boolean;
@@ -166,6 +169,7 @@ function HostProjects({
 	onToggle: (key: string) => void;
 	onFailure: ReportFailure;
 	onOpen: (project: Project, workspace: Workspace) => void;
+	onNewWorktree: (project: Project) => void;
 }) {
 	const t = useT();
 	const client = controller.clientFor(host.hostKey);
@@ -202,6 +206,7 @@ function HostProjects({
 								onToggle={() => onToggle(key)}
 								onFailure={onFailure}
 								onOpen={(workspace) => onOpen(project, workspace)}
+								onNewWorktree={() => onNewWorktree(project)}
 							/>
 						);
 					})
@@ -222,6 +227,7 @@ function ProjectRow({
 	onToggle,
 	onFailure,
 	onOpen,
+	onNewWorktree,
 }: {
 	host: SavedHost;
 	project: Project;
@@ -232,27 +238,11 @@ function ProjectRow({
 	onToggle: () => void;
 	onFailure: ReportFailure;
 	onOpen: (workspace: Workspace) => void;
+	onNewWorktree: () => void;
 }) {
 	const t = useT();
-	const [creating, setCreating] = useState(false);
 	const status = scopeStatus(items, (item) => item.record.projectId === project.id);
 	const Chevron = expanded ? RiArrowDownSLine : RiArrowRightSLine;
-	const newWorktree = (): void => {
-		if (!client || creating) return;
-		if (!expanded) onToggle();
-		setCreating(true);
-		client
-			.request<WsResult<"workspace.create">>("workspace.create", { projectId: project.id })
-			.then(onOpen, (error: unknown) =>
-				onFailure(
-					t("mobile.tree.actionFailed", {
-						action: t("panels.newWorkspace.createFailed"),
-						reason: error instanceof Error ? error.message : String(error),
-					}),
-				),
-			)
-			.finally(() => setCreating(false));
-	};
 	return (
 		<li>
 			<div className="flex items-center pr-4">
@@ -276,14 +266,12 @@ function ProjectRow({
 							className="size-touch shrink-0"
 							icon={RiAddLine}
 							label={t("mobile.tree.newWorktree")}
-							loading={creating}
-							disabled={creating}
-							onClick={newWorktree}
+							onClick={onNewWorktree}
 						/>
 						<ProjectActions
 							project={project}
 							client={client}
-							onNewWorktree={newWorktree}
+							onNewWorktree={onNewWorktree}
 							onFailure={onFailure}
 						/>
 					</>
@@ -295,7 +283,6 @@ function ProjectRow({
 					project={project}
 					controller={controller}
 					items={items}
-					creating={creating}
 					onFailure={onFailure}
 					onOpen={onOpen}
 				/>
@@ -310,7 +297,6 @@ function ProjectWorkspaces({
 	project,
 	controller,
 	items,
-	creating,
 	onFailure,
 	onOpen,
 }: {
@@ -318,8 +304,6 @@ function ProjectWorkspaces({
 	project: Project;
 	controller: RemoteSessionsController;
 	items: RemoteSessionItem[];
-	/** A worktree is being created here: a pending row shows until it opens. */
-	creating: boolean;
 	onFailure: ReportFailure;
 	onOpen: (workspace: Workspace) => void;
 }) {
@@ -364,52 +348,49 @@ function ProjectWorkspaces({
 	);
 
 	return (
-		<>
-			<LoadedList
-				loaded={live}
-				empty={t("mobile.project.empty")}
-				loading={pending(t("mobile.list.loading"))}
-			>
-				{(workspaces) =>
-					workspaces.map((workspace) => {
-						const status = statusOf(workspace);
-						const twoLine = workspace.branch !== workspace.name;
-						return (
-							<li key={workspace.id} className="flex items-center pr-4">
-								<button
-									type="button"
-									onClick={() => onOpen(workspace)}
-									className={`flex min-h-touch min-w-0 flex-1 gap-12 border-0 bg-transparent py-8 pl-40 text-left active:bg-control-bg-hovered ${twoLine ? "items-start" : "items-center"}`}
-								>
-									<WorkspaceGlyph
-										kind={workspace.kind}
-										active={false}
-										running={status.running}
-										twoLine={twoLine}
-										className="size-20"
-									/>
-									<span className="flex min-w-0 flex-1 flex-col gap-2">
-										<span className="truncate text-text-default tr-text-ui">
-											{workspaceName(t, workspace)}
-										</span>
-										{twoLine ? <WorkspaceBranch branch={workspace.branch} /> : null}
+		<LoadedList
+			loaded={live}
+			empty={t("mobile.project.empty")}
+			loading={pending(t("mobile.list.loading"))}
+		>
+			{(workspaces) =>
+				workspaces.map((workspace) => {
+					const status = statusOf(workspace);
+					const twoLine = workspace.branch !== workspace.name;
+					return (
+						<li key={workspace.id} className="flex items-center pr-4">
+							<button
+								type="button"
+								onClick={() => onOpen(workspace)}
+								className={`flex min-h-touch min-w-0 flex-1 gap-12 border-0 bg-transparent py-8 pl-40 text-left active:bg-control-bg-hovered ${twoLine ? "items-start" : "items-center"}`}
+							>
+								<WorkspaceGlyph
+									kind={workspace.kind}
+									active={false}
+									running={status.running}
+									twoLine={twoLine}
+									className="size-20"
+								/>
+								<span className="flex min-w-0 flex-1 flex-col gap-2">
+									<span className="truncate text-text-default tr-text-ui">
+										{workspaceName(t, workspace)}
 									</span>
-									{status.attention ? <AttentionDot /> : null}
-								</button>
-								{client ? (
-									<WorkspaceActions
-										workspace={workspace}
-										client={client}
-										status={status}
-										onFailure={onFailure}
-									/>
-								) : null}
-							</li>
-						);
-					})
-				}
-			</LoadedList>
-			{creating ? pending(t("panels.projectTree.creatingWorktree")) : null}
-		</>
+									{twoLine ? <WorkspaceBranch branch={workspace.branch} /> : null}
+								</span>
+								{status.attention ? <AttentionDot /> : null}
+							</button>
+							{client ? (
+								<WorkspaceActions
+									workspace={workspace}
+									client={client}
+									status={status}
+									onFailure={onFailure}
+								/>
+							) : null}
+						</li>
+					);
+				})
+			}
+		</LoadedList>
 	);
 }

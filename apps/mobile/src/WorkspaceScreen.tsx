@@ -34,6 +34,8 @@ export interface OpenChat {
 	title: string;
 	model: SessionSummary["model"];
 	thinkingLevel: SessionSummary["thinkingLevel"];
+	/** Set when the chat was started with a first message that did not go. */
+	unsent?: { text: string; reason: string };
 }
 
 const byRecent = (a: SessionSummary, b: SessionSummary) => b.updatedAt - a.updatedAt;
