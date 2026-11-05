@@ -7,8 +7,6 @@ export interface KeyState {
 	cmdDown: boolean;
 	mouseAfterKey: boolean;
 	keyAfterModifiers: boolean;
-	/** Seconds since the last key-down event; distinguishes a held, repeating
-	 * key (events keep arriving) from a stale state that lost its key-up. */
 	sinceKeyDown: number | null;
 }
 

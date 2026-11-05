@@ -53,8 +53,6 @@ test("a repeating key keeps the latch armed — events keep arriving", () => {
 	const h = harness(true, 0.01);
 	h.press();
 	expect(h.forwards()).toBe(1);
-	// Hold Cmd+W across closable tabs: the OS keeps delivering key-down
-	// repeats, so freshness stays live and no later repeat may fire.
 	h.setSinceKeyDown(0.05);
 	h.tick();
 	h.press();
@@ -71,13 +69,21 @@ test("a stale key state — held with no key-down events — releases the latch 
 	h.press();
 	expect(h.forwards()).toBe(1);
 	expect(h.polling()).toBe(true);
-	// The KVM lost the key-up packet: the state still reads down, but no
-	// key-down event has arrived for seconds. The latch must release.
 	h.setSinceKeyDown(4.2);
 	h.tick();
 	expect(h.polling()).toBe(false);
 	h.press();
 	expect(h.forwards()).toBe(2);
+});
+
+test("a long macOS delay-until-repeat keeps the latch armed before the first repeat", () => {
+	const h = harness(true, 0.01);
+	h.press();
+	h.setSinceKeyDown(1.9);
+	h.tick();
+	h.press();
+	expect(h.forwards()).toBe(1);
+	expect(h.polling()).toBe(true);
 });
 
 test("release still wins when the key genuinely lifts", () => {

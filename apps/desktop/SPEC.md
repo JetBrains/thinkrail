@@ -196,7 +196,8 @@ Other menu shortcuts are forwarded `NativeCommand`s: the menu action is the comm
 `nativeCommand`. A shared `repeatGate` makes them edge-triggered: after a forward with a key down, further
 actions drop until no non-modifier key is down, so key-repeat never fires a command twice — a genuinely
 held key keeps producing key-down events (macOS auto-repeat) and the latch holds while they flow. The
-latch also releases when the state reads a key down but no key-down event has arrived for 750 ms: a
+latch also releases when the state reads a key down but no key-down event has arrived for 2.5 s — longer
+than macOS's slowest delay-until-repeat (~1.8 s), so a held key's first repeat still finds the latch armed: a
 synthetic-input stack (KVM-over-IP, remote desktop) that loses a key-up packet leaves a phantom "down"
 that produces no events, and without this staleness release every gated command stays dead until restart
 (#1199). A click with no key down, or unreadable key state, always forwards; unreadable event freshness
