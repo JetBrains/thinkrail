@@ -935,7 +935,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   Personal or plugin group stays off, a `skills-other-agents-off` note points to the per-project switch and
   Settings → Extensions. A `skills-size` line shows the loaded skills' count and an estimated per-request
   listing cost (`skillCatalogSize`: name + description + path + per-entry markup at ~4 chars/token, an
-  estimate rather than pi's figure), in warning colour above `LARGE_SKILL_CATALOG_TOKENS` (10K) with a hint
+  estimate rather than pi's figure; a `manualOnly` skill counts as on but costs nothing, since pi never
+  lists it), in warning colour above `LARGE_SKILL_CATALOG_TOKENS` (10K) with a hint
   to switch unused groups off. All props-driven; behavior detail lives in the components' jsdoc.
 - **Live session telemetry follows Pi's finalized boundaries.** `SessionStatsBar` renders only the host's
   authoritative `session.getStats` snapshot; the web never derives billed totals or context usage from

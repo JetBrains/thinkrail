@@ -50,6 +50,7 @@ import {
 	firstPromptOfTexts,
 	isTranscriptMessageRole,
 	normalizeSessionTitle,
+	OTHER_AGENT_SKILL_GROUPS,
 	sameModel,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 } from "@thinkrail/contracts";
@@ -94,6 +95,7 @@ import {
 	buildResourceLoader,
 	disabledExtensions,
 	isLoaderPackagePolicyStale,
+	listSkillCatalog,
 	loadsDisabledExtensionSkills,
 	packagePolicyKey,
 	providerExtensionPaths,
@@ -865,6 +867,32 @@ export function refreshExtensionTools(): void {
 		else applyExtensionTools(entry);
 		scheduleEntryStatePublish(entry);
 	}
+}
+
+export async function refreshSkillAdmission(): Promise<void> {
+	await Promise.all(
+		[...sessions.values()].map(async (entry) => {
+			if (entry.disposed || entry.resourcesClosing) return;
+			const { session } = entry;
+			try {
+				const catalog = await listSkillCatalog(
+					session.sessionManager.getCwd(),
+					skillAdmissionResolver(entry.workspaceId),
+				);
+				const loaded = new Set(session.resourceLoader.getSkills().skills.map((s) => s.name));
+				const stale = catalog.some(
+					(skill) =>
+						(skill.plugin !== undefined || OTHER_AGENT_SKILL_GROUPS.includes(skill.group)) &&
+						(skill.decision === "load") !== loaded.has(skill.name),
+				);
+				if (stale) await requestSessionReload(session.sessionId);
+			} catch (error) {
+				if (!entry.disposed && !entry.resourcesClosing && !hasFailedMcpReload(session.sessionId)) {
+					log.warn(`skill admission reload failed for ${session.sessionId}`, error as Error);
+				}
+			}
+		}),
+	);
 }
 
 function hasDeletionTombstone(sessionId: string): boolean {

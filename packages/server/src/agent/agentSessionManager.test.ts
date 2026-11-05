@@ -63,6 +63,7 @@ import {
 	refreshAgentReviewTool,
 	refreshAvailableModels,
 	refreshExtensionTools,
+	refreshSkillAdmission,
 	refreshSubagentTools,
 	reloadSessionResources,
 	removeQueuedSession,
@@ -4295,5 +4296,43 @@ test("an extension failing in session_start reaches the client, named, before th
 	} finally {
 		setExtUiPublisher(() => {});
 		rmSync(extensionPath, { force: true });
+	}
+});
+
+test("switching other agents' skills host-wide reloads an open chat's skill set", async () => {
+	const claudeDir = tmpCwd("trpi-other-agent-claude-");
+	const skillDir = join(claudeDir, "skills", "tr-other-agent-probe");
+	mkdirSync(skillDir, { recursive: true });
+	writeFileSync(
+		join(skillDir, "SKILL.md"),
+		"---\nname: tr-other-agent-probe\ndescription: A personal skill another agent keeps.\n---\nBody.\n",
+	);
+	const priorClaudeDir = process.env.CLAUDE_CONFIG_DIR;
+	process.env.CLAUDE_CONFIG_DIR = claudeDir;
+	let otherAgentSkills = false;
+	setSkillAdmissionResolver(() =>
+		admissionContextFor({ piResourceTrust: "granted" }, {}, otherAgentSkills),
+	);
+	const probe = (sessionId: string) =>
+		getSessionCommands(sessionId).some((command) => command.name === "skill:tr-other-agent-probe");
+	let sessionId: string | undefined;
+	try {
+		({ sessionId } = await createSession({
+			cwd: tmpCwd("trpi-other-agent-skills-"),
+			workspaceId: "ws-other-agent-skills",
+			model: toWireModel(fauxA.getModel()),
+		}));
+		expect(probe(sessionId)).toBe(false);
+		otherAgentSkills = true;
+		await refreshSkillAdmission();
+		expect(probe(sessionId)).toBe(true);
+		otherAgentSkills = false;
+		await refreshSkillAdmission();
+		expect(probe(sessionId)).toBe(false);
+	} finally {
+		if (sessionId) await removeSession(sessionId);
+		setSkillAdmissionResolver(() => admissionContextFor({ piResourceTrust: "granted" }));
+		if (priorClaudeDir === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+		else process.env.CLAUDE_CONFIG_DIR = priorClaudeDir;
 	}
 });

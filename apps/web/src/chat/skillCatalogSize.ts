@@ -9,14 +9,16 @@ export function skillCatalogSize(entries: readonly SkillCatalogEntry[]): {
 	tokens: number;
 } {
 	const loaded = entries.filter((entry) => entry.decision === "load");
-	const chars = loaded.reduce(
-		(sum, entry) =>
-			sum +
-			ENTRY_MARKUP_CHARS +
-			entry.name.length +
-			(entry.description?.length ?? 0) +
-			entry.sourceInfo.path.length,
-		0,
-	);
+	const chars = loaded
+		.filter((entry) => !entry.manualOnly)
+		.reduce(
+			(sum, entry) =>
+				sum +
+				ENTRY_MARKUP_CHARS +
+				entry.name.length +
+				(entry.description?.length ?? 0) +
+				entry.sourceInfo.path.length,
+			0,
+		);
 	return { count: loaded.length, tokens: Math.round(chars / CHARS_PER_TOKEN) };
 }

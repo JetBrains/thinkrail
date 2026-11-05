@@ -18,3 +18,8 @@ test("the catalog size counts only loaded skills and estimates their listing tok
 	expect(size.tokens).toBe(Math.round((2 * (100 + 1 + 296 + 11)) / 4));
 	expect(skillCatalogSize([])).toEqual({ count: 0, tokens: 0 });
 });
+
+test("a manual-only skill counts as on but adds nothing to the listing estimate", () => {
+	const manual = { ...entry("m", "load"), manualOnly: true };
+	expect(skillCatalogSize([manual])).toEqual({ count: 1, tokens: 0 });
+});

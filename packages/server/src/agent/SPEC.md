@@ -1001,7 +1001,8 @@ re-opened transcripts provider-valid.
     `SkillCatalogEntry.group`) + **`enabledGroups`**, resolved through the contracts' `isSkillGroupEnabled`
     against the host's `AppConfig.otherAgentSkills` (off by default, so `personal` and Claude plugins load
     only after a host-wide or per-project opt-in; `project`/`bundled`/`pi` — including pi's own
-    `~/.agents/skills` — stay on), layered with the workspace's per-skill `skillOverrides` (the trust gate is
+    `~/.agents/skills` — stay on; `refreshSkillAdmission()` reloads, through the gated `requestSessionReload`,
+    only live sessions whose loaded Personal/plugin skills differ from the new decision), layered with the workspace's per-skill `skillOverrides` (the trust gate is
     checked before the toggle layer, so an "on" override can never un-gate an untrusted alias, and a per-skill
     `on` beats a group disable). `skillsGate` filters + relabels in one `skillsOverride`; only `load` skills
     reach the system prompt / `/skill:` list. A **disabled registry extension's** skill roots

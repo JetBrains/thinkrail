@@ -618,6 +618,7 @@ export async function listSkillCatalog(
 			gated,
 			group,
 			...(source?.plugin ? { plugin: source.plugin } : {}),
+			...(skill.disableModelInvocation ? { manualOnly: true } : {}),
 			decision: decideSkill(
 				{ name: skill.name, isProjectAlias: gated, group, isPlugin },
 				admission,
