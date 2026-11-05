@@ -7,6 +7,7 @@ import {
 	DEFAULT_MAX_LINES,
 	truncateHead,
 } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
 import { SpecIndex, type SpecType } from "../core/index.ts";
 
 const indexes = new Map<string, SpecIndex>();
@@ -75,4 +76,11 @@ export function scaffoldBody(type: SpecType): string {
 	const headings = SCAFFOLD_HEADINGS[type];
 	if (!headings || headings.length === 0) return "";
 	return `${headings.map((h) => `## ${h}\n`).join("\n")}`;
+}
+
+export function stringEnum<const T extends readonly string[]>(
+	values: T,
+	options: { description: string },
+) {
+	return Type.Unsafe<T[number]>({ type: "string", enum: [...values], ...options });
 }

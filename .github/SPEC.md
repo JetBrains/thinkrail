@@ -145,8 +145,10 @@ Its stable public outputs are:
 - `desktop-update-manifest-path` / `desktop-update-archive-path` — Electrobun's updater metadata and
   full application archive, both non-empty on every desktop target.
 
-The recipe stamps the shared version, builds and smokes the CLI, invokes the normal Electrobun dev and
-channel builds, runs expanded-app and first-install smoke, then collects exact target/channel outputs.
+The recipe stamps the shared version, builds and smokes the CLI, downloads the Electrobun toolchain through
+`prepare-electrobun.sh` (above), invokes the normal Electrobun dev and channel builds, runs expanded-app and
+first-install smoke, then collects exact target/channel outputs. Before that step joined the recipe, a
+dropped Cottontail download failed the linux-arm64 build of the 0.3.1 stable release.
 Update outputs preserve Electrobun's generated basenames and compressed bytes. The manifest is the exact
 `<stable|canary>-<macos|win|linux>-<arm64|x64>-update.json`. Its `artifact.file` is the archive basename:
 `stable-<platform>-ThinkRail[.app].tar.zst` for stable or

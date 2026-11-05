@@ -228,7 +228,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   only sanitizer) and always acks. Error tracking also rides two `server.ts` seams: every failed WS request
   is reported with its registered method (CodedErrors included), and `observeLoggedErrors` routes host
   `log.warn/error(msg, err)` calls as `host_logged` — so host diagnostics that carry an error go through
-  the logger, never `console.*`. The host's `resolveNewChatModel` composes AppConfig settings with the agent's settled available
+  the logger, never `console.*`. The host's `resolveNewChatModel` composes AppConfig settings with pi's global default model, the agent's settled available
   model list and Pi thinking clamp; `model.default`, `session.create`, and newly-created review chats share
   that resolver, and creation passes its model and effort explicitly. A `session.create` that **named** a
   model and every `session.setModel` also record the resolved model as recent through `settings`'
@@ -529,15 +529,15 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `reviews.resolveCommentFromAgent` (the worker tool seam) and `reanchorWorkspace` (the fs-watch tee):
   both re-read the snapshot from disk before writing, and neither removes a comment nor closes the
   review, so landing in a send's gap can't invalidate the package's ids.
-- **A review send lands in the conversation already on screen, else the key's chat.** Both send
+- **A review send lands in its explicit chat context, else the key's chat.** Both send
   handlers route through `sendToFileChat`: comments are grouped by `reviews.reviewSessionKey` (the
   anchor's path, or the review-level bucket for anchorless remarks — pinned like a file so a second
   overall remark continues one discussion), and each group lands, in order of preference, in the
-  client's **last open chat** (the optional `sessionId` the send carries — the conversation the user
-  is already in), else the key's pinned chat (`reviews.fileReviewSession`), else a NEW chat; whatever
+  client's explicit chat context (the optional `sessionId` the send carries from a chat card), else
+  the key's pinned chat (`reviews.fileReviewSession`), else a NEW chat; whatever
   received the package becomes the key's pin (`markCommentsSent`), so the sidebar's "open the
   discussion" always follows the comments. **A send that names its chat is one package**: when the client
-  passes `sessionId` (a chat card's own chat, or the last open chat) every comment goes into that chat in one
+  passes `sessionId` (a chat card's own chat) every comment goes into that chat in one
   structured message, because grouping exists to route each key to its own chat, and per-key packages into
   the same chat made the agent take one review — a before/after mockup's two files — in separate turns.
   **`review.sendBatch` answers with every session it touched**, in group
@@ -607,7 +607,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   delivery failure or final client reap after the reconnect grace releases the claim, while a transient
   reconnect retains and re-delivers it after `server.welcome`. A host restart has no claim to re-deliver, and
   the welcome clears the frontend's stale popup projection. Popup `feedback.respond` actions are ordinary
-  replay-safe requests and never alter the Settings link.
+  replay-safe requests and never alter the Settings link. A second injected publisher (`canAsk` + `ask`, both
+  true only for a v103+ socket) sends the one-time star ask (`GithubStarAsk`, the star count the feedback module
+  read) as addressed `feedback.githubStar` to the same client key.
 - **Survey submission:** after `initializeAnalytics` the host configures the feedback survey source from
   analytics' `surveyEndpoint()`, so unkeyed, CI and test runs never fetch and `THINKRAIL_POSTHOG_HOST`
   applies. A source dev host fetches only when `THINKRAIL_DEV_POSTHOG=1` and `THINKRAIL_POSTHOG_PROJECT_KEY`
@@ -697,8 +699,8 @@ enabled/confirmed choice before entering analytics attribution.
   (published from auth's Central/runtime invalidation seam and on a successful provider login) + **`host.updateAvailable`** (published for each
   retained CLI-update lifecycle replacement) use push channels. Every
   **broadcast** push channel a client should hear must be `ws.subscribe`d in the WS
-  `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Four channels are deliberately
-  **not** subscribed and not broadcast: `feedback.interview`, `terminal.data`, `terminal.exit`, and
+  `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Five channels are deliberately
+  **not** subscribed and not broadcast: `feedback.interview`, `feedback.githubStar`, `terminal.data`, `terminal.exit`, and
   `terminal.detached` are sent with `ws.send` to one addressed client. Adding an addressed channel means
   wiring a publisher, not a subscription.
 - **Terminal backpressure never trusts the `drain` event alone.** A backpressured `ws.send` latches the

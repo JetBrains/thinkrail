@@ -1,4 +1,3 @@
-import { StringEnum } from "@earendil-works/pi-ai/compat";
 import {
 	DEFAULT_MAX_BYTES,
 	DEFAULT_MAX_LINES,
@@ -13,6 +12,7 @@ import {
 	formatPlan,
 	formatTodo,
 	storeFor,
+	stringEnum,
 	textResult,
 	withNudges,
 } from "./shared.ts";
@@ -21,7 +21,7 @@ const MAX_PAGE_LINES = DEFAULT_MAX_LINES - 10;
 
 const parameters = Type.Object({
 	status: Type.Optional(
-		StringEnum(TODO_STATUSES, {
+		stringEnum(TODO_STATUSES, {
 			description:
 				"Filter to one status: pending | in_progress | done (flat across groups). Omit for the whole plan.",
 		}),

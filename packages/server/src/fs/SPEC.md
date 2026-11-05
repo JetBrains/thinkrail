@@ -38,7 +38,9 @@ bytes are** — the one byte-level classification every content read in the host
   `\` into `/` themselves.
   **Content classification** (`content.ts`, pure, no dependency): `CONTENT_SNIFF_BYTES` names the shared
   8 KiB bounded-head size; `classifyBytes(bytes)` → `{ text, mime? }` — **mime** is what the *bytes*
-  prove (magic numbers for png/jpeg/gif/webp/avif/bmp/ico/pdf/zip/gzip/woff/woff2, plus `image/svg+xml` for
+  prove (magic numbers for png/jpeg/gif/webp/avif/bmp/ico/pdf/zip/gzip/woff/woff2; AVIF accepts `avif` or
+  `avis` in the initial `ftyp` box's major or compatible brands, bounded by that box and the sniff head;
+  plus `image/svg+xml` for
   text whose root element is `<svg>`, directly or behind an XML prolog — a prolog alone is not an
   image, and `application/vnd.git-lfs` for a text file of at most 1 KiB that is exactly the three-line pointer
   `git lfs` itself writes — `version`, `oid sha256:`, `size`, in that order, nothing else, so no prose

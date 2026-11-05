@@ -3,7 +3,6 @@ import { t } from "@thinkrail/locales/react";
 import {
 	type CenterNavigationStamp,
 	layoutOpenOptionsForNavigation,
-	selectLastOpenChatSession,
 	toast,
 	useAppStore,
 } from "../store";
@@ -32,11 +31,6 @@ async function showReviewChat(
 	);
 }
 
-function preferredChat(workspaceId: string, chatSessionId?: string): { sessionId?: string } {
-	const sessionId = chatSessionId ?? selectLastOpenChatSession(useAppStore.getState(), workspaceId);
-	return sessionId ? { sessionId } : {};
-}
-
 export async function sendReviewComment(
 	workspaceId: string,
 	id: string,
@@ -47,7 +41,7 @@ export async function sendReviewComment(
 		const sent = await getTransport().request("review.sendComment", {
 			workspaceId,
 			id,
-			...preferredChat(workspaceId, chatSessionId),
+			...(chatSessionId ? { sessionId: chatSessionId } : {}),
 		});
 		await showReviewChat(workspaceId, sent, navigation);
 	} catch (err) {
@@ -66,7 +60,7 @@ export async function sendReviewBatch(
 		const { sessions } = await getTransport().request("review.sendBatch", {
 			workspaceId,
 			...(commentIds ? { commentIds } : {}),
-			...preferredChat(workspaceId, chatSessionId),
+			...(chatSessionId ? { sessionId: chatSessionId } : {}),
 		});
 		for (const [index, sent] of sessions.entries()) {
 			await showReviewChat(workspaceId, sent, navigation, index > 0);
