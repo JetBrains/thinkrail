@@ -1,18 +1,18 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
-import { resolveBunExecutable } from "./e2e/fixtures/executables";
+import { resolveBunExecutable } from "./fixtures/executables";
 import base from "./playwright.config";
 
 const server = base.webServer;
 if (!server || Array.isArray(server)) throw new Error("perf config expects one e2e webServer");
 
-const profileDir = fileURLToPath(new URL("./apps/web/dist-profile", import.meta.url));
+const profileDir = fileURLToPath(new URL("../apps/web/dist-profile", import.meta.url));
 const bun = JSON.stringify(resolveBunExecutable());
 const host = `${bun} packages/server/src/dev.ts`;
 
 export default defineConfig({
 	...base,
-	testDir: "./e2e/perf",
+	testDir: "./perf",
 	testMatch: "**/*.perf.ts",
 	testIgnore: [],
 	fullyParallel: false,

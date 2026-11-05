@@ -68,7 +68,7 @@ try {
 			"playwright",
 			"test",
 			"-c",
-			"playwright.desktop.config.ts",
+			"e2e/playwright.desktop.config.ts",
 			...process.argv.slice(2),
 		],
 		{

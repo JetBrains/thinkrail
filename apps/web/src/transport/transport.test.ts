@@ -101,6 +101,11 @@ describe("WsTransport channel replay", () => {
 			WS_CHANNELS.feedbackInterview,
 			{},
 		],
+		[
+			"does not replay the addressed GitHub star ask to a late subscriber",
+			WS_CHANNELS.feedbackGithubStar,
+			{},
+		],
 	])("%s", (_name, channel, data) => {
 		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
 		transport.connect();

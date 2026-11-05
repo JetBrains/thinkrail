@@ -183,7 +183,8 @@ treatment.
   **`useOpenProject`** hook (reused by `ProjectTree` **and**
   `WelcomePanel`, so the flow is identical in the Projects view and the Welcome screen): `project.open` reactivates
   a closed known path under its same id (or opens a new one), then the initiating client selects Project
-  Home while every client receives `project.updated`; on failure `project.inspect` → either offers to
+  Home while every client receives `project.updated`; on failure (except `GIT_TIMEOUT`, which shows its error at once
+  rather than run the same hung probe again) `project.inspect` → either offers to
   bootstrap the folder into a repo — a modal **`ConfirmDialog`**
   (confirm → `project.init`) — when it's `initable`, or surfaces the error in a **`NoticeDialog`** — so a
   non-git folder is never a silent no-op. The native picker remains the local fast path and keeps its raised
@@ -1899,10 +1900,13 @@ own section. The kebab menu (`plan-menu`, a
   replaces the workspace's comment list, and rebuilding each open file's threads from it handed every mounted
   renderer a new `review`. Monaco, which the compiler skips, re-rendered twice for one comment on another
   file (`e2e/perf/reviewThreadIsolation.perf.ts` pins it at zero). The pair, the hook and
-  `SendReviewButton` take an optional chat session id: without it a send targets the last open chat (else
-  the file's pinned review chat); with it — a file shown in a chat tool card, whose `ResourcePreview` reads
-  the chat's scope — the host's explicit `sessionId` wins over the pinned chat, so feedback lands in the chat
-  that showed the file. The shell's `AppResourceHost` exposes exactly these (bound per call) as the
+  `SendReviewButton` take an optional chat session id: without it the host routes each file to its pinned
+  review chat, creating one on its first send. Open tabs never supply an implicit override: a sidebar or
+  file-pane send must not move an existing discussion into an unrelated chat, and Send all must preserve
+  per-file routing. With an explicit id — a file shown in a chat tool card, whose `ResourcePreview` reads
+  the chat's scope — that `sessionId` wins over the pinned chat, so feedback lands in the chat that showed
+  the file. This does not infer file authorship from turn snapshots, which cover the whole workspace's
+  interval rather than exclusive writes. The shell's `AppResourceHost` exposes exactly these (bound per call) as the
   renderers' `FileReview` / `ReviewSend` host capabilities.
   A batch answers with EVERY session it touched (one per group), so a multi-file batch opens every chat
   it started and focuses the first — a chat the user never saw would still be an agent working on their
