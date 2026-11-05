@@ -12,6 +12,35 @@ import {
 
 const ESC = "\u001b";
 
+test("extension editor setters replace their own chat's composer text, including an empty draft", () => {
+	const frames: ExtUiRequest[] = [];
+	setExtUiPublisher((frame) => frames.push(frame));
+	try {
+		const first = createWebUiContext("editor-a");
+		const second = createWebUiContext("editor-b");
+		first.setEditorText("Draft 中文\nnext line");
+		second.pasteToEditor("Pasted draft");
+		first.setEditorText("");
+		expect(frames).toEqual([
+			{
+				id: expect.any(String),
+				sessionId: "editor-a",
+				kind: "setEditorText",
+				text: "Draft 中文\nnext line",
+			},
+			{
+				id: expect.any(String),
+				sessionId: "editor-b",
+				kind: "setEditorText",
+				text: "Pasted draft",
+			},
+			{ id: expect.any(String), sessionId: "editor-a", kind: "setEditorText", text: "" },
+		]);
+	} finally {
+		setExtUiPublisher(() => {});
+	}
+});
+
 test("extension-UI bridge: confirm round-trips, a cancel resolves undefined, dispose dismisses", async () => {
 	const frames: ExtUiRequest[] = [];
 	setExtUiPublisher((f) => frames.push(f));

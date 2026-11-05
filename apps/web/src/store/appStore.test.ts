@@ -1500,6 +1500,36 @@ test("closeChatRuntime drops only its own runtime", () => {
 	expect(rt("b").isStreaming).toBe(true);
 });
 
+test("extension editor text replaces only the addressed draft and can clear it", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	store.openChatSession("ws1", "b", null, "medium");
+	store.setChatDraft("a", "Old draft");
+	store.setChatDraft("b", "Other chat");
+	store.applyExtUi({
+		id: "edit-a",
+		sessionId: "a",
+		kind: "setEditorText",
+		text: "New 中文\ndraft",
+	});
+	expect(rt("a").draft).toBe("New 中文\ndraft");
+	expect(rt("b").draft).toBe("Other chat");
+	store.applyExtUi({ id: "clear-a", sessionId: "a", kind: "setEditorText", text: "" });
+	expect(rt("a").draft).toBe("");
+	expect(rt("b").draft).toBe("Other chat");
+});
+
+test("extension editor text received before a chat opens is applied in order", () => {
+	const store = useAppStore.getState();
+	store.applyExtUi({ id: "edit-first", sessionId: "later", kind: "setEditorText", text: "First" });
+	store.applyExtUi({ id: "edit-last", sessionId: "later", kind: "setEditorText", text: "Last" });
+	store.openChatSession("ws1", "other", null, "medium");
+	expect(rt("other").draft).toBe("");
+	store.openChatSession("ws1", "later", null, "medium");
+	expect(rt("later").draft).toBe("Last");
+	expect(useAppStore.getState().extUiOrphans).toEqual([]);
+});
+
 test("applyExtUi routes a dialog to its session; the reply clears only that one", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");

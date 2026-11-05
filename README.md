@@ -65,7 +65,8 @@ create the tools it needs based on how you actually work.
   a diff. Settings → Extensions lists the ThinkRail extensions the agent gets and lets you switch each one
   off — and installs any `pi` package by source (npm, git or a local folder), for you or for a repository,
   showing what each one adds and letting you switch packages, their individual extensions and skills, and
-  pi's built-ins on or off; open chats pick a change up when their turn ends. The questions and visualize
+  pi's built-ins on or off; open chats pick a change up when their turn ends. Extensions can also put
+  draft text back into their chat's composer. The questions and visualize
   tools are also published as plain `pi` packages, one each —
   `pi install npm:@thinkrail/pi-ask-user-question` for the questions
   ([`@thinkrail/pi-ask-user-question`](https://www.npmjs.com/package/@thinkrail/pi-ask-user-question)) and
