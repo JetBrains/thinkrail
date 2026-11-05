@@ -38,6 +38,7 @@ import {
 	MODEL_PICKER_PROTOCOL_VERSION,
 	normalizeSessionTitle,
 	ONBOARDING_PROTOCOL_VERSION,
+	OTHER_AGENT_SKILLS_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
@@ -319,8 +320,14 @@ test("project create and the onboarding dismissal are pinned to v94", () => {
 
 test("the GitHub star ask is pinned to v103", () => {
 	expect(GITHUB_STAR_PROTOCOL_VERSION).toBe(103);
-	expect(PROTOCOL_VERSION).toBe(103);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(GITHUB_STAR_PROTOCOL_VERSION);
 	expect(WS_CHANNELS.feedbackGithubStar).toBe("feedback.githubStar");
+});
+
+test("the other agents' skills opt-in is pinned to v104", () => {
+	expect(OTHER_AGENT_SKILLS_PROTOCOL_VERSION).toBe(104);
+	expect(PROTOCOL_VERSION).toBe(104);
+	expect(DEFAULT_CONFIG.otherAgentSkills).toBe(false);
 });
 
 test("in-app surveys are pinned to v97", () => {
