@@ -7,9 +7,13 @@
 	},
 	"fontFamilies": {
 		"interface": {
+			"note": "Geist has no CJK, and on iOS 26 WebKit `-apple-system` claims characters it cannot draw, so Chinese, Japanese and Korean rendered as boxes. `TR Kana` / `TR Han` / `TR Hangul` (styles/cjk.css) are Apple's CJK faces limited to their own scripts, named before the system font; other systems skip them.",
 			"stack": [
 				"Geist Variable",
 				"Geist",
+				"TR Kana",
+				"TR Han",
+				"TR Hangul",
 				"-apple-system",
 				"BlinkMacSystemFont",
 				"Segoe UI",
@@ -43,6 +47,9 @@
 				"Orbitron",
 				"Geist Variable",
 				"Geist",
+				"TR Kana",
+				"TR Han",
+				"TR Hangul",
 				"-apple-system",
 				"BlinkMacSystemFont",
 				"Segoe UI",

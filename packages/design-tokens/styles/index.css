@@ -1,4 +1,5 @@
 @import "./generated/fonts.css";
+@import "./cjk.css";
 @import "./generated/typography.css";
 @import "./generated/colors.css";
 @import "./generated/spacing.css";

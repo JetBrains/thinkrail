@@ -21,11 +21,11 @@
 
 :root {
 	/* Font families — a user-selectable family defaults to its `-default` stack */
-	--tr-font-family-interface-default: "Geist Variable", Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	--tr-font-family-interface-default: "Geist Variable", Geist, "TR Kana", "TR Han", "TR Hangul", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	--tr-font-family-interface: var(--tr-font-family-interface-default);
 	--tr-font-family-code-default: "JetBrains Mono Variable", "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
 	--tr-font-family-code: var(--tr-font-family-code-default);
-	--tr-font-family-brand: "Orbitron Variable", Orbitron, "Geist Variable", Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	--tr-font-family-brand: "Orbitron Variable", Orbitron, "Geist Variable", Geist, "TR Kana", "TR Han", "TR Hangul", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
 	/* Font ligatures — set on every style of that family */
 	--tr-font-ligatures-code: none;

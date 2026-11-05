@@ -23,7 +23,7 @@ It knows nothing about catalogs, preferences, user themes, or any app's layout â
   `isThemeIdSlug`, the key lists and types), `bundledThemeSources()` (the Vite build-time glob over
   `themes/*.theme.json`; call it only from bundled code), and `applyPalette(root, manifest)` with the
   `paletteVariable` / `ANSI_VARIABLES` / `SYNTAX_VARIABLES` naming it applies.
-- `./styles.css`: imports fonts, typography, colours, spacing, shape and motion in that order. A host imports it right
+- `./styles.css`: imports fonts, the CJK fallbacks, typography, colours, spacing, shape and motion in that order. A host imports it right
   after `@import "tailwindcss"`; the generated files carry their own `@theme inline` maps, so a host gets
   the semantic utilities (`bg-container-workspace-bg`, `tr-text-ui`, `p-8`) and nothing of Tailwind's stock
   palette.
@@ -46,6 +46,12 @@ It knows nothing about catalogs, preferences, user themes, or any app's layout â
   validity and drift (`*:check`).
 
 ## Shape
+
+`styles/cjk.css` declares `TR Kana` / `TR Han` / `TR Hangul`: Apple's Hiragino, PingFang and Apple SD Gothic
+Neo by `local()` only, each limited by `unicode-range` to its own scripts, named in the interface and brand
+stacks before `-apple-system`. Geist has no CJK and iOS 26 WebKit's `-apple-system` claims glyphs it cannot draw,
+so CJK otherwise rendered as boxes on the phone; naming PingFang in the stack unrestricted would also take
+every other script Geist lacks (Greek came out full-width). Nothing is downloaded; other systems skip them.
 
 `styles/shape.css` replaces Tailwind's radius scale with four steps (`@theme static`, reset first): `sm`
 (4px) is the default corner for standalone controls; `xs` (2px) is the text-run tier, a tint behind running

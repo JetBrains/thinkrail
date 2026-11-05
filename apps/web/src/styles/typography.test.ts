@@ -109,6 +109,18 @@ describe("typography source", () => {
 		expect(Object.values(typography.lineHeights)).not.toContain(1.65);
 	});
 
+	it("names the range-limited CJK aliases before -apple-system, which on iOS 26 swallows CJK as boxes", () => {
+		for (const id of ["interface", "brand"]) {
+			const stack = resolveFamily(typography, id).stack;
+			const system = stack.indexOf("-apple-system");
+			for (const face of ["TR Kana", "TR Han", "TR Hangul"]) {
+				const at = stack.indexOf(face);
+				expect(at, `${id} names ${face}`).toBeGreaterThan(-1);
+				expect(at, `${id} names ${face} before -apple-system`).toBeLessThan(system);
+			}
+		}
+	});
+
 	it("names a semantic style for the document base instead of repeating one", () => {
 		expect(isRef(typography.rootStyle)).toBe(true);
 		expect(typography.rootStyle.$ref).toBe("ui.default");
