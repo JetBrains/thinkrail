@@ -198,6 +198,14 @@ function ollamaInfoContext(modelInfo: unknown): number | null {
 	return found;
 }
 
+function isOllamaCloudEndpoint(root: string): boolean {
+	try {
+		return new URL(root).hostname === "ollama.com";
+	} catch {
+		return false;
+	}
+}
+
 async function enrichOllama(
 	root: string,
 	key: string | undefined,
@@ -205,6 +213,7 @@ async function enrichOllama(
 ): Promise<CustomEndpointModel[] | undefined> {
 	const version = await detail(`${root}/api/version`, key);
 	if (!isObject(version) || typeof version.version !== "string") return undefined;
+	const honorsReportedContext = isOllamaCloudEndpoint(root);
 	const shown = await Promise.all(
 		models.map(async (model, index) => {
 			if (index >= MAX_DETAIL_PROBES) return model;
@@ -217,7 +226,7 @@ async function enrichOllama(
 				contextWindow:
 					model.contextWindow ??
 					ollamaContext(show.parameters) ??
-					ollamaInfoContext(show.model_info),
+					(honorsReportedContext ? ollamaInfoContext(show.model_info) : null),
 				reasoning: capabilities.includes("thinking"),
 				vision: capabilities.includes("vision"),
 				tools: capabilities.includes("tools"),
