@@ -42,8 +42,6 @@ function gitToplevel(path: string): string | null {
 	const result = git(path, ["rev-parse", "--show-toplevel"], {
 		action: "read the repository root",
 	});
-	// Git refuses a repository it does not trust (for example a WSL share opened from Windows).
-	// That folder may already be a repository, so it must never be offered for `git init`.
 	if (!result.ok && /dubious ownership/i.test(result.err))
 		throw new Error(`Git refused to open ${path}:\n${result.err}`);
 	return result.ok && result.out ? resolve(result.out) : null;
