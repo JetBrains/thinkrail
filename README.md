@@ -57,8 +57,9 @@ create the tools it needs based on how you actually work.
   searches, and maintains it through dedicated `spec_*` tools, so intent survives the session. The
   read-only Specs tool renders the graph as a tree in the workbench.
 - **Skills and workflows.** Portable Agent Skills you already keep for other coding agents are read in
-  place, and bundled workflows guide project setup, design brainstorming, and shipping a pull request —
-  pushing the workspace branch and opening or updating its GitHub PR through your own `gh`.
+  place; a large library is listed within a small prompt budget and the rest stays one search away.
+  Bundled workflows guide project setup, design brainstorming, and shipping a pull request — pushing
+  the workspace branch and opening or updating its GitHub PR through your own `gh`.
 - **Agent tools beyond the shell.** Web research, structured multiple-choice questions the agent asks you
   in the chat instead of guessing, and inline diagrams, option comparisons and file previews rendered right
   in the chat — when the agent proposes a UI change it shows a before/after mockup you can comment on like
