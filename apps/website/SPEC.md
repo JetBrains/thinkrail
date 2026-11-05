@@ -379,8 +379,8 @@ current desktop-first hierarchy rather than freezing obsolete CLI-only instructi
   so their downloads, copies, and disclosure opens report `blog_post`, and outside `.blog-post-content`, so
   the prose cascade never restyles them. `main.ts` initializes each picker independently with the
   same detected OS and scopes tab selection, keyboard navigation, and Windows shell selection to
-  its instance. Posts keep their own prose install guidance. `validateBuild.ts` requires both
-  placements and unique IDs on every article. Both placements retain the `blog_post` analytics
+  its instance. Posts keep their own prose install guidance. `validateBuild.ts` requires one marker
+  for each picker and unique IDs on every article. Both placements retain the `blog_post` analytics
   location from the shared event schema.
   Post cards are whole-card links that signal hover on the border alone (no underline, no movement)
   and share the landing feature cards' surface, which keeps the `--elevated` tag chips visible on
