@@ -113,9 +113,12 @@ function validateExtensionSettings(value: unknown): ExtensionSettingValues {
 	for (const [name, settings] of Object.entries(value)) {
 		if (name.trim().length === 0 || !isPlainObject(settings)) throw invalid();
 		const entries = Object.entries(settings);
-		if (!entries.every(([key, flag]) => key.trim().length > 0 && typeof flag === "boolean"))
-			throw invalid();
-		result[name] = Object.fromEntries(entries) as Record<string, boolean>;
+		const flags = entries.filter(
+			(entry): entry is [string, boolean] =>
+				entry[0].trim().length > 0 && typeof entry[1] === "boolean",
+		);
+		if (flags.length !== entries.length) throw invalid();
+		result[name] = Object.fromEntries(flags);
 	}
 	return result;
 }
