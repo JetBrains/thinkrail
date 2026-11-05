@@ -84,9 +84,8 @@ function IssueActionRow({ issue, capabilities, pending, error, onRun }: IssueAct
 						<IconButton
 							key={action}
 							size="s"
-							variant="ghost"
+							variant={done ? "soft-primary" : "ghost"}
 							icon={ACTION_ICON[action]}
-							className={done ? "text-primary" : undefined}
 							label={label}
 							tooltip={reason === null ? label : `${label} — ${t(ISSUE_ACTION_REASON_KEY[reason])}`}
 							data-testid={`issue-action-${action}`}

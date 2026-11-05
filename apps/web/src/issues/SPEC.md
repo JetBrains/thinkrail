@@ -127,7 +127,7 @@ product and therefore appear nowhere: no control, menu entry, label or disabled 
 them. The two controls sit **on the issue title row, right-aligned**, as icon-only `IconButton`s (quill = run
 design, code box = run implementation) inside their own `TooltipProvider`; each keeps its action name as
 `aria-label`, a blocked one names its reason in the same tooltip plus `data-reason`, and a completed one is
-tinted `text-primary` with `data-done`. A pending action disables every control. Dispatch goes through the one
+rendered with the shared `soft-primary` button variant and `data-done`. A pending action disables every control. Dispatch goes through the one
 `onRunAction(issue, action)` prop, whose keyed result the tool turns into the `actionPending`/`actionError`
 props the panel renders.
 
