@@ -10,7 +10,7 @@ export interface CliOptions {
 	staticDir: string | undefined;
 	projectDir: string | undefined;
 	remote: boolean;
-	/** An external relay; unset runs the relay inside the host, reachable over Wi‑Fi/LAN and Tailscale. */
+	/** An external relay; unset runs the relay inside the host, reachable over Wi‑Fi/LAN, Tailscale and a public IP. */
 	relayUrl: string | undefined;
 	help: boolean;
 	version: boolean;
@@ -45,7 +45,8 @@ Options:
                  ~/.thinkrail/logs).
   --remote       Turn phone access on for this run and print a pairing QR and
                  link (Settings → Phone access turns it on for good). Runs its own
-                 relay, reachable on the same Wi-Fi and over Tailscale.
+                 relay, reachable on the same Wi-Fi, over Tailscale, and at a
+                 public IP (a VPS) when its port answers there.
   --relay <url>  Use this signaling relay instead of the built-in one; implies
                  --remote.
   -v, --version  Print the version and exit.

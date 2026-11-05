@@ -16,6 +16,7 @@ function fixture(over: Partial<RemoteAccessControlOptions> = {}) {
 		return {
 			connectUrl: "ws://127.0.0.1:1",
 			addresses: [{ url: "ws://192.168.0.2:1", route: "lan" }],
+			ready: Promise.resolve(),
 			stop: () => events.push("relay:stop"),
 		};
 	};
@@ -24,7 +25,7 @@ function fixture(over: Partial<RemoteAccessControlOptions> = {}) {
 		events.push("access:start");
 		return {
 			identity: { publicKey: "K", fingerprint: "f", sign: () => new Uint8Array() },
-			addresses: options.advertised ?? [{ url: options.relayUrl, route: "relay" }],
+			addresses: options.advertised?.() ?? [{ url: options.relayUrl, route: "relay" }],
 			issueLink: () => ({ link: "thinkrail://pair?v=1", expiresAt: 5 }),
 			stop: () => events.push("access:stop"),
 		};

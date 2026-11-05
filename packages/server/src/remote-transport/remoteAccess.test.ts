@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { parsePairingUri } from "../remote";
 import type { BrokerConnection, HostBrokerDeps } from "./hostBrokerClient";
+import type { RelayAddress } from "./localRelay";
 import { startRemoteAccess } from "./remoteAccess";
 
 const identity = {
@@ -50,12 +51,13 @@ test("issueLink mints a parseable one-time pairing link for the project", () => 
 
 test("the link carries the advertised relay addresses and the host name instead of the connect URL", () => {
 	const { connect } = fakeConnect();
+	const advertised: RelayAddress[] = [
+		{ url: "ws://192.168.0.20:24243", route: "lan" },
+		{ url: "ws://100.101.102.103:24243", route: "tailscale" },
+	];
 	const access = startRemoteAccess({
 		relayUrl: "ws://127.0.0.1:24243",
-		advertised: [
-			{ url: "ws://192.168.0.20:24243", route: "lan" },
-			{ url: "ws://100.101.102.103:24243", route: "tailscale" },
-		],
+		advertised: () => advertised,
 		hostName: "Studio Mac",
 		identity,
 		connect,
@@ -65,6 +67,11 @@ test("the link carries the advertised relay addresses and the host name instead 
 		hostName: "Studio Mac",
 	});
 	expect(access.addresses.map((address) => address.route)).toEqual(["lan", "tailscale"]);
+
+	advertised.push({ url: "ws://203.0.113.7:24243", route: "public" });
+	expect(parsePairingUri(access.issueLink("p").link)?.signalingUrls).toContain(
+		"ws://203.0.113.7:24243",
+	);
 });
 
 test("stop tears down the broker client", () => {

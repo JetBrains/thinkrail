@@ -43,9 +43,16 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for rationale 
     is configured: `@thinkrail/relay`'s broker on all interfaces at port 24243 (fixed, so a phone's saved
     addresses survive a restart; a free port when it is taken), the host connecting over loopback. Its
     `addresses` (`relayAddresses`) are this machine's private-LAN IPv4 addresses, then its Tailscale ones
-    (100.64.0.0/10) — what a phone on the same Wi‑Fi or the same tailnet can reach, with no server deployed.
+    (100.64.0.0/10), then any public one on an interface — what a phone on the same Wi‑Fi, the same tailnet, or
+    the internet (a VPS) can reach, with no server deployed. With no public interface address it adds the one
+    `publicAddress.ts` finds after start; `ready` settles once that lookup has, so `--remote`'s first QR
+    carries it, and links read the addresses per issue.
     Exposing the broker on the LAN is safe by the relay's zero-knowledge design: it sees routing only, and
     pairing stays a host-verified one-time token plus device key.
+  - `publicAddress.ts` — `discoverPublicAddress`, the public side of a host behind 1:1 NAT (a cloud VM
+    whose interface holds only a private IP): the STUN server-reflexive address from a werift gather, kept
+    only when the relay's `/health` answers there. That self-probe is what tells a VPS from a home router,
+    which does not forward the port, so a laptop never advertises its router's address.
   - `hostPeer.ts` — `createWeriftHostPeer`, the host as WebRTC **offerer** (creates the DataChannel + offer,
     emits local SDP/ICE, consumes the device's answer/candidates, surfaces a `RemoteChannel`) over the public
     STUN servers only, behind a `HostPeer` interface so the orchestrator is testable with a fake. werift
@@ -82,7 +89,7 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for rationale 
     omitted (the DataChannel has no mid-stream reconnect to replay).
 - **Public surface:** the `index.ts` barrel.
 - **Allowed deps:** `remote` (types + the injected pairing primitives), `contracts` (the shared broker-frame
-  protocol), `@thinkrail/relay` (only `startBroker`, for the local relay), `werift` (host-side WebRTC),
+  protocol and public STUN servers), `@thinkrail/relay` (only `startBroker`, for the local relay), `werift` (host-side WebRTC),
   `node:crypto`, `node:os`; later the `host` wire protocol behind
   `RemoteChannel`. Never the browser.
 - **Forbidden:** importing `host` today, browser bundling, hand-rolled transport crypto.

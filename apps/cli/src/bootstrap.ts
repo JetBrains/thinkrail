@@ -93,15 +93,21 @@ async function bootstrap(build: BuildKind): Promise<void> {
 	openUiThenStartAttribution(options.open, url, openBrowser, server.startAttributionClaim);
 
 	const remote = server.remote;
+	if (options.remote) await remote.ready();
 	const { enabled, addresses } = remote.state();
 	if (options.remote && !enabled) {
 		console.warn("thinkrail remote: phone access could not start; see the log for details.");
 	} else if (options.remote) {
 		const projectRef = options.projectDir ? resolve(process.cwd(), options.projectDir) : "default";
-		const route = { lan: "Wi-Fi/LAN", tailscale: "Tailscale", relay: "relay" } as const;
+		const route = {
+			lan: "Wi-Fi/LAN",
+			tailscale: "Tailscale",
+			public: "public IP",
+			relay: "relay",
+		} as const;
 		if (addresses.length === 0) {
 			console.warn(
-				"thinkrail remote: no Wi-Fi/LAN or Tailscale address on this computer, so a phone can't reach it." +
+				"thinkrail remote: no Wi-Fi/LAN, Tailscale or public address on this computer, so a phone can't reach it." +
 					" Connect to a network (or start Tailscale) and restart with --remote.",
 			);
 			return;
@@ -111,6 +117,12 @@ async function bootstrap(build: BuildKind): Promise<void> {
 				.map((address) => `  ${address.url}  (${route[address.route]})`)
 				.join("\n")}`,
 		);
+		const publicAddress = addresses.find((address) => address.route === "public");
+		if (publicAddress) {
+			console.log(
+				`thinkrail remote: from outside, a phone needs TCP ${new URL(publicAddress.url).port} and UDP open in this machine's firewall.`,
+			);
+		}
 		const printPairing = async (): Promise<void> => {
 			const { link } = remote.issueLink(projectRef);
 			console.log(

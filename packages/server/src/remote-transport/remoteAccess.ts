@@ -35,8 +35,8 @@ export interface PairingLink {
 export interface RemoteAccessOptions {
 	/** The signaling broker (relay) URL the host connects to. */
 	relayUrl: string;
-	/** The addresses a device reaches that relay at, put in the link; defaults to `relayUrl` itself. */
-	advertised?: readonly RelayAddress[];
+	/** The addresses a device reaches that relay at, read per link; defaults to `relayUrl` itself. */
+	advertised?: () => readonly RelayAddress[];
 	/** The computer's name, shown on the paired device. */
 	hostName?: string;
 	identity?: HostIdentity;
@@ -55,9 +55,8 @@ export function startRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
 	const identity = options.identity ?? loadOrCreateIdentity();
 	const tokens = createPairingTokens();
 	const connect = options.connect ?? connectHostBroker;
-	const addresses: readonly RelayAddress[] = options.advertised ?? [
-		{ url: options.relayUrl, route: "relay" },
-	];
+	const configured: readonly RelayAddress[] = [{ url: options.relayUrl, route: "relay" }];
+	const advertised = options.advertised ?? (() => configured);
 
 	const client = connect(options.relayUrl, {
 		hostKey: identity.publicKey,
@@ -86,11 +85,13 @@ export function startRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
 
 	return {
 		identity,
-		addresses,
+		get addresses() {
+			return advertised();
+		},
 		issueLink(projectRef) {
 			const { token, expiresAt } = tokens.issue(projectRef);
 			const link = buildPairingUri({
-				signalingUrls: addresses.map((address) => address.url),
+				signalingUrls: advertised().map((address) => address.url),
 				token,
 				hostPublicKey: identity.publicKey,
 				projectRef,

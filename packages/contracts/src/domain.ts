@@ -1245,8 +1245,8 @@ export interface GithubAuthStatus {
 	scopes?: string[];
 }
 
-/** How a phone reaches this host: its Wi‑Fi/LAN or Tailscale address, or a configured relay. */
-export type RemoteRoute = "lan" | "tailscale" | "relay";
+/** How a phone reaches this host: its Wi‑Fi/LAN, Tailscale or public address, or a configured relay. */
+export type RemoteRoute = "lan" | "tailscale" | "public" | "relay";
 
 export interface RemoteAddress {
 	url: string;

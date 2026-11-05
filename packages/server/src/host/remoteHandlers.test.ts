@@ -24,6 +24,7 @@ function fakeControl() {
 			return state;
 		},
 		restore: () => state,
+		ready: () => Promise.resolve(),
 		stop: () => {},
 	};
 	return control;

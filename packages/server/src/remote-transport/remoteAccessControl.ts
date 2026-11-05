@@ -41,6 +41,8 @@ export interface RemoteAccessControl {
 	 * the same way; a one-run launch flag (`--remote`) passes false.
 	 */
 	setEnabled(enabled: boolean, options?: { persist?: boolean }): RemoteAccessState;
+	/** Settles once the addresses a phone can reach are known (the public one is looked up after start). */
+	ready(): Promise<void>;
 	/** Mints a one-time pairing link; throws while access is off. */
 	issueLink(projectRef: string): PairingLink;
 	revokeDevice(deviceId: string): RemoteAccessState;
@@ -67,7 +69,7 @@ export function createRemoteAccessControl(
 		try {
 			const access = startAccess({
 				relayUrl: relay ? relay.connectUrl : (options.relayUrl ?? ""),
-				...(relay ? { advertised: relay.addresses } : {}),
+				...(relay ? { advertised: () => relay.addresses } : {}),
 				...(options.hostName ? { hostName: options.hostName } : {}),
 				onPaired: options.onPaired,
 			});
@@ -99,6 +101,7 @@ export function createRemoteAccessControl(
 			if (persist) saveRemoteAccessEnabled(enabled, options.dataDir);
 			return state();
 		},
+		ready: () => running?.relay?.ready ?? Promise.resolve(),
 		issueLink(projectRef) {
 			if (!running) throw new Error("Phone access is off.");
 			return running.access.issueLink(projectRef);
