@@ -68,6 +68,7 @@ function resetStore(): void {
 			defaultPresetId: "balanced",
 			maxSideGroups: 6,
 			maxBottomGroups: 3,
+			previewTabsEnabled: true,
 		},
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
@@ -202,6 +203,7 @@ describe("frontend-local layout state", () => {
 			defaultPresetId: "focused",
 			maxSideGroups: 8,
 			maxBottomGroups: 4,
+			previewTabsEnabled: false,
 		});
 
 		resetLayoutStateForTests();
@@ -212,6 +214,7 @@ describe("frontend-local layout state", () => {
 			defaultPresetId: "focused",
 			maxSideGroups: 8,
 			maxBottomGroups: 4,
+			previewTabsEnabled: false,
 		});
 	});
 

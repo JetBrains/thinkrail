@@ -28,6 +28,7 @@ import {
 import {
 	captureCenterNavigation,
 	chatTabId,
+	DEFAULT_LOCAL_LAYOUT_PREFERENCES,
 	type FileTab,
 	isCenterNavigationCurrent,
 	isFileComparison,
@@ -157,6 +158,7 @@ beforeEach(() => {
 		workbenchFrame: null,
 		workspaceViewsByWorkspace: {},
 		layoutStateReady: false,
+		localLayoutPreferences: { ...DEFAULT_LOCAL_LAYOUT_PREFERENCES },
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
 		layoutProjectionEpoch: 0,
@@ -4537,6 +4539,34 @@ test("explicitly passive hydration never becomes navigation just because the cac
 function fileTab(workspaceId: string, name: string): FileTab {
 	return { kind: "file", id: `${workspaceId}:${name}`, workspaceId, name, path: name, content: "" };
 }
+
+test("disabled preview tabs keep each resource and publish keep intents", () => {
+	const store = useAppStore.getState();
+	store.setLocalLayoutPreferences({ ...store.localLayoutPreferences, previewTabsEnabled: false });
+	store.openTab(fileTab("ws1", "a.ts"), "preview");
+	store.openTab(fileTab("ws1", "b.ts"), "preview", true, { claimPreview: true });
+	const state = useAppStore.getState();
+	expect(state.tabsByWorkspace.ws1?.map((tab) => tab.name)).toEqual(["a.ts", "b.ts"]);
+	expect(state.previewTabByWorkspace.ws1).toBeUndefined();
+	expect(state.layoutIntents).toMatchObject([
+		{ kind: "open", intent: "keep" },
+		{ kind: "open", intent: "keep", claimPreview: false },
+	]);
+});
+
+test("turning preview tabs back on restores the reusable preview slot", () => {
+	const store = useAppStore.getState();
+	store.setLocalLayoutPreferences({ ...store.localLayoutPreferences, previewTabsEnabled: false });
+	store.openTab(fileTab("ws1", "kept.ts"), "preview");
+	store.setLocalLayoutPreferences({ ...store.localLayoutPreferences, previewTabsEnabled: true });
+	store.openTab(fileTab("ws1", "first.ts"), "preview");
+	store.openTab(fileTab("ws1", "second.ts"), "preview");
+	expect(useAppStore.getState().tabsByWorkspace.ws1?.map((tab) => tab.name)).toEqual([
+		"kept.ts",
+		"second.ts",
+	]);
+	expect(useAppStore.getState().previewTabByWorkspace.ws1).toBe("ws1:second.ts");
+});
 
 test("a preview open replaces the previous preview tab at its index (the strip never reshuffles)", () => {
 	const store = useAppStore.getState();
