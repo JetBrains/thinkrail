@@ -149,7 +149,7 @@ test("a hint names only unlisted skills the prompt matches distinctively, once e
 	expect(suggestSkills(skills, [], "quokka invoices")).toEqual([]);
 });
 
-test("a pi session with an oversized catalog gets the budgeted section and finds unlisted skills", async () => {
+async function catalogFixture() {
 	const cwd = mkdtempSync(join(tmpdir(), "thinkrail-skill-catalog-"));
 	const agentDir = join(cwd, ".pi-agent");
 	const write = (name: string, description: string) => {
@@ -163,6 +163,7 @@ test("a pi session with an oversized catalog gets the budgeted section and finds
 	for (let i = 0; i < 300; i++)
 		write(`chore-${i}`, `Handles routine chore ${i}. ${"Filler ".repeat(30)}`);
 	write("zz-invoice-ledger", "Reconcile invoices against the ledger.");
+	write("zz-quokka-payments", "Settle quokka payments with the bank.");
 	const faux = createFauxCore({
 		provider: "catalog-probe",
 		api: "catalog-probe",
@@ -179,27 +180,6 @@ test("a pi session with an oversized catalog gets the budgeted section and finds
 		],
 		tokensPerSecond: 1_000_000,
 	});
-	const results: string[] = [];
-	const skillSections: string[] = [];
-	const hints: string[] = [];
-	faux.setResponses([
-		(context) => {
-			const hint = JSON.stringify(context.messages).match(/Skills not listed[^"]*/)?.[0];
-			if (hint) hints.push(hint);
-			const system = context.messages.find((message) => message.role === "system");
-			skillSections.push(system?.role === "system" ? (system.sections?.skills ?? "") : "");
-			return fauxAssistantMessage(fauxToolCall(SKILL_SEARCH_TOOL, { query: "invoice ledger" }), {
-				stopReason: "toolUse",
-			});
-		},
-		(context) => {
-			const last = context.messages.at(-1);
-			if (last?.role === "toolResult")
-				for (const part of last.content) if (part.type === "text") results.push(part.text);
-			return fauxAssistantMessage("done");
-		},
-		() => fauxAssistantMessage("again"),
-	]);
 	const runtime = await ModelRuntime.create({
 		credentials: new InMemoryCredentialStore(),
 		modelsPath: null,
@@ -220,15 +200,51 @@ test("a pi session with an oversized catalog gets the budgeted section and finds
 		extensionFactories: [skillCatalog],
 	});
 	await resourceLoader.reload();
-	const { session } = await createAgentSession({
-		cwd,
-		agentDir,
-		model: faux.getModel(),
-		modelRuntime: runtime,
-		settingsManager,
-		resourceLoader,
-		sessionManager: SessionManager.inMemory(cwd),
-	});
+	const createSession = (tools?: string[]) =>
+		createAgentSession({
+			cwd,
+			agentDir,
+			model: faux.getModel(),
+			modelRuntime: runtime,
+			settingsManager,
+			resourceLoader,
+			sessionManager: SessionManager.inMemory(cwd),
+			...(tools ? { tools } : {}),
+		});
+	return { cwd, agentDir, faux, createSession };
+}
+
+test("a pi session with an oversized catalog gets the budgeted section and finds unlisted skills", async () => {
+	const { cwd, agentDir, faux, createSession } = await catalogFixture();
+	const results: string[] = [];
+	const skillSections: string[] = [];
+	const hints: string[] = [];
+	const lastHint = (messages: unknown) =>
+		[...JSON.stringify(messages).matchAll(/Skills not listed[^"]*/g)].at(-1)?.[0];
+	faux.setResponses([
+		(context) => {
+			const hint = lastHint(context.messages);
+			if (hint) hints.push(hint);
+			const system = context.messages.find((message) => message.role === "system");
+			skillSections.push(system?.role === "system" ? (system.sections?.skills ?? "") : "");
+			return fauxAssistantMessage(fauxToolCall(SKILL_SEARCH_TOOL, { query: "invoice ledger" }), {
+				stopReason: "toolUse",
+			});
+		},
+		(context) => {
+			const last = context.messages.at(-1);
+			if (last?.role === "toolResult")
+				for (const part of last.content) if (part.type === "text") results.push(part.text);
+			return fauxAssistantMessage("done");
+		},
+		() => fauxAssistantMessage("again"),
+		(context) => {
+			const hint = lastHint(context.messages);
+			if (hint) hints.push(hint);
+			return fauxAssistantMessage("settled");
+		},
+	]);
+	const { session } = await createSession();
 	try {
 		await session.prompt("Reconcile this month's invoices.");
 		const section = skillSections[0] ?? "";
@@ -248,6 +264,31 @@ test("a pi session with an oversized catalog gets the budgeted section and finds
 		expect(hintEntries(entries)).toHaveLength(1);
 		await session.prompt("Reconcile the invoices against the ledger again.");
 		expect(hintEntries(session.sessionManager.getBranch())).toHaveLength(1);
+		await session.prompt("Settle the quokka payments.");
+		expect(hintEntries(session.sessionManager.getBranch())).toHaveLength(2);
+		expect(hints.at(-1)).toContain("- zz-quokka-payments: Settle quokka payments with the bank.");
+	} finally {
+		session.dispose();
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("a session that cannot call skill_search keeps pi's full skill listing", async () => {
+	const { cwd, faux, createSession } = await catalogFixture();
+	const skillSections: string[] = [];
+	faux.setResponses([
+		(context) => {
+			const system = context.messages.find((message) => message.role === "system");
+			skillSections.push(system?.role === "system" ? (system.sections?.skills ?? "") : "");
+			return fauxAssistantMessage("done");
+		},
+	]);
+	const { session } = await createSession(["read"]);
+	try {
+		await session.prompt("Reconcile this month's invoices.");
+		const section = skillSections[0] ?? "";
+		expect(section).not.toContain(SKILL_SEARCH_TOOL);
+		expect(section).toContain("<name>zz-invoice-ledger</name>");
 	} finally {
 		session.dispose();
 		rmSync(cwd, { recursive: true, force: true });

@@ -690,8 +690,10 @@ re-opened transcripts provider-valid.
     message. The count-aware cap also degrades a raw >2000px `read`-tool image to a note instead of a
     brick once a session crosses 21 images. Pure core (`guardOversizedImages`, `imageDimensions`)
     unit-tested with hand-built header bytes.
-  - `skillCatalog` — the skill-listing budget (#1210): an inline extension in both
-    `buildResourceLoader`'s shared factories and `childBaseExtensionFactories`. Pi lists every admitted
+  - `skillCatalog` — the skill-listing budget (#1210): an inline extension in `buildResourceLoader`'s
+    shared factories and the opt-in `childExtensionFactories` — never the tool-free base set, since it
+    registers `skill_search` (pi-delegation decision #25), so a child gets it only with `extensions: true`
+    and its `tools` allowlist still decides whether the search is callable. Pi lists every admitted
     skill's name, full description and location in the system prompt with no cap, and portable aliases
     import other agents' whole libraries, so one machine sent 1,395 skills (~165K tokens) on every
     request, which compaction can never shrink. Modeled on Claude Code's listing budget and Codex's
@@ -717,7 +719,9 @@ re-opened transcripts provider-valid.
     section is memoized on the budget and the skill set, so it changes only on reload or a model with a
     different window: per-turn relevance filtering was rejected because every change re-sends the
     whole section (a mid-conversation patch, or a full cache miss where the model has none). A session
-    without a declared `read` tool keeps pi's section. Admission (`skillsGate`) still decides what is
+    that cannot call both `read` and `skill_search` (absent from `selectedTools` or hidden) keeps pi's
+    full section, so a narrow allowlist never loses unlisted skills it could not search for. Unlisted
+    membership for the hint is keyed by `filePath`, since pi shallow-copies every skill per run. Admission (`skillsGate`) still decides what is
     loadable; the budget decides only what is listed, so Settings → Skills and `/skill:` are unchanged.
   - `skillCarryover` — the post-compaction skill restorer: an inline extension in both
     `buildResourceLoader`'s shared factories and `childBaseExtensionFactories`, so delegated children
