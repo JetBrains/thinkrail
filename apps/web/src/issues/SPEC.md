@@ -9,7 +9,8 @@ depends-on: [module-contracts, module-locales, module-ui]
 
 ## Responsibility
 
-Arrangement-agnostic GitLab connection form and compact kanban summary tool for the right workbench rail. `index.ts` is the public surface, and exports exactly: `IssuesTool`; `IssuesPanel` and `IssuesPanelProps`; `supportsIssues`; `supportsIssueAuth`; the skippable `GitLabAssociationDialog` and `GitLabAssociationDialogProps` used after a project opens; `ProjectOpenGesture`; the dual-entry rule `shouldPromptAssociation`; and the `notifyIssueAssociation` signal a successful post-open connect raises. `GitLabAssociationForm.tsx` is internal: the one address/instance/consent/token form both the panel and the dialog render, so a second token path cannot drift into existence.
+Arrangement-agnostic repository connection form and compact kanban summary tool for the right workbench
+rail, covering GitLab and GitHub repositories with identical issue and label presentation. `index.ts` is the public surface, and exports exactly: `IssuesTool`; `IssuesPanel` and `IssuesPanelProps`; `supportsIssues`; `supportsIssueAuth`; the skippable `IssueAssociationDialog` and `IssueAssociationDialogProps` used after a project opens; `ProjectOpenGesture`; the dual-entry rule `shouldPromptAssociation`; and the `notifyIssueAssociation` signal a successful post-open connect raises. `IssueAssociationForm.tsx` is internal: the one address/instance/consent/token form both the panel and the dialog render, so a second token path cannot drift into existence.
 
 ## Boundary
 
@@ -42,8 +43,13 @@ connection, then list only when connected; connect refreshes the list. Refresh i
 stage mutations.
 
 **Dual entry.** A project can be associated from the Issues tool (the panel form) or from the prompt the
-panels module opens right after a project is adopted. Both render `GitLabAssociationForm.tsx`, so address,
-instance/consent, prefill, token clearing and submit behavior exist once. `GitLabAssociationDialog` is
+The provider is derived, never chosen in the UI: `resolveIssueRepositoryAddress` keeps requiring an
+explicit instance for every host except `github.com` and `gitlab.com`, and `associationFormState`
+marks a GitHub target with `issues.githubUnsupported` — clearing `input` and blocking submit — when the
+host protocol is below 110. Issue rows, labels and stage grouping do not branch on provider.
+
+panels module opens right after a project is adopted. Both render `IssueAssociationForm.tsx`, so address,
+instance/consent, prefill, token clearing and submit behavior exist once. `IssueAssociationDialog` is
 that prompt: `{ projectId, initialRepositoryUrl?, onClose, onAssociated? }`. Its only dismissal is
 Cancel/close (`issues.associateSkip`), which associates nothing, retries nothing, and changes no project
 state; a successful connect calls `onAssociated(connection)` and then `onClose()`, and the panels caller
@@ -211,7 +217,7 @@ responsible for credential transport risk and destination-scoped confirmation.
 `repositoryAddress.test.ts` pins known-root resolution, custom-root confirmation, explicit
 subpath boundaries, ports, nested groups, suffix/trailing-slash semantics and unsafe inputs.
 `issues.test.ts` also pins the dual-entry rule (`shouldPromptAssociation`), and the
-`GitLabAssociationBody` markup (rendered outside the client-only portal through the dialog root):
+`IssueAssociationBody` markup (rendered outside the client-only portal through the dialog root):
 the host hint only prefills the editable address, exactly one shared form/token field/submit exist,
 the skip control is present and stays present-but-disabled while a connect is pending, no
 unsupported-host copy or fake connect error appears, and an SSH or

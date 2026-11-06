@@ -1369,9 +1369,21 @@ new method. Earlier Issues floors stay pinned
 `ISSUES_PROTOCOL_VERSION = 103`), so older clients keep their existing gates. This adds no merge, push,
 MR or CI capability.
 
+## Issues GitHub provider (v110)
+
+`ISSUES_GITHUB_PROTOCOL_VERSION = 110` raises `PROTOCOL_VERSION` to 110. `IssueReference.provider`
+is `"gitlab" | "github"`, and `issueProviderForInstanceUrl(instanceUrl)` is the only rule that picks
+one: canonical host `github.com` is `"github"`, every other canonical HTTP(S) host is `"gitlab"`, and
+a non-canonical instance is `null`. `isIssueReference` requires the declared provider to equal that
+derived value, so a forged or cross-host pair is rejected. `issueWebUrl(provider, instanceUrl,
+projectPath, number)` builds the one published issue URL (`https://github.com/<owner>/<repo>/issues/N`
+or `<instance>/<path>/-/issues/N`) and `isIssueWebUrl(value, reference)` checks it structurally against
+the reference, because a GitHub reference carries the numeric repository id rather than a path. No
+GitHub Enterprise host, provider setting, SSH address or caller-supplied URL is accepted.
+
 ## Issues localized session startup protocol (v109)
 
-`PROTOCOL_VERSION = 109` and `ISSUES_SESSION_STARTUP_PROTOCOL_VERSION = 109` add
+`ISSUES_SESSION_STARTUP_PROTOCOL_VERSION = 109` and `PROTOCOL_VERSION = 110` add
 `issues.beginDesign(IssueSessionStartupTarget)` and
 `issues.beginImplementation(IssueSessionStartupTarget)`, each returning `IssueSessionLaunch`.
 `IssueSessionStartupTarget extends IssueTarget` with required `locale: string`: the effective

@@ -14,7 +14,9 @@ sessions and isolated Git worktrees.
 
 ## Current scope
 
-GitLab integration is experimental. It includes:
+Issues integration is experimental and covers GitLab and GitHub repositories. The provider follows the
+repository address — only `github.com` is GitHub, every other host is GitLab — and both use an access
+token. It includes:
 
 - HTTP(S) project association from the Issues panel or after opening or cloning a repository.
 - Personal access tokens stored in the host's OS credential vault, with explicit consent for non-local
@@ -27,10 +29,12 @@ GitLab integration is experimental. It includes:
   The skill requires confirmed summary publication before handoff; automatic turn-end posting is not enforced.
 
 Starting implementation does not require design approval and does not change Issue labels. Approval
-and Issue closure remain in GitLab. Automated push/MR/CI/merge delivery is not implemented.
+and Issue closure remain in the tracker. Automated push/MR/CI/merge delivery is not implemented.
 
-GitHub Issues integration and complete cross-machine handoffs remain project goals, not finished
-capabilities. Existing upstream GitHub pull-request features are separate from Issues integration.
+Reads, listing, Issue sessions and summary publication work on both providers with identical issue and
+label presentation. Approval receipts, design/implementation publication and merge stay GitLab-only for
+now and are refused on GitHub; GitHub Enterprise Server and complete cross-machine handoffs remain
+project goals. Existing upstream GitHub pull-request features are separate from Issues integration.
 
 ## Development
 

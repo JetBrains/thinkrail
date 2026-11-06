@@ -8,12 +8,12 @@ parent: module-server
 
 ## Responsibility
 
-Own the host-only project binding and live connection lifecycle, bounded GitLab CE reads and
-low-level provider writes, pure Tomato version/approval validation, and injected local publication/evidence
+Own the host-only project binding and live connection lifecycle, bounded reads and low-level provider
+writes for GitLab CE and GitHub, pure Tomato version/approval validation, and injected local publication/evidence
 orchestration and an injected workspace/session coordinator. Host composition supplies the connection/list
 wire handlers, metadata persistence and the OS credential-store adapter; a separate concrete host workflow receipt adapter exists
 and is composed by server-only host actions. The exported workspace coordinator has a concrete host persistence
-seam and is composed by server-only host actions. MR/CI authorization and a GitHub adapter are not implemented. See the
+seam and is composed by server-only host actions. MR/CI authorization and GitHub write workflows are not implemented. See the
 [approved workflow design](../../../../docs/plans/2026-11-04-issues-workflow-design.md).
 
 ## Public surface
@@ -31,12 +31,22 @@ only public binding fields plus connection status; opaque credential IDs are not
 a server-only lazy asynchronous seam, not a wire contract. Host composition supplies both adapters.
 
 `remoteFor(localProjectId, reference)` is a synchronous server-only capability lookup, not an RPC
-or workflow action. It validates the full reference and requires a live client plus exact GitLab
-provider, canonical instance URL and verified numeric remote project id equality with the current
-binding. It returns the already-authenticated client, never reconstructing one from persisted metadata
-and never exposing a token accessor. The lookup snapshots current connect state; callers must obtain
+or workflow action. It validates the full reference and requires a live client plus exact canonical
+instance URL and verified numeric remote project id equality with the current binding; the provider
+follows the instance host through `issueProviderForInstanceUrl`, never the caller. It returns the
+neutral read port, never reconstructing a client from persisted metadata and never exposing a token
+accessor. `workflowFor(localProjectId, reference)` is the GitLab-only companion: it refuses a
+non-GitLab provider with a static `RESOURCE_UNAVAILABLE` before any request, then returns the same
+client narrowed to the workflow surface. The lookup snapshots current connect state; callers must obtain
 it for each operation. A previously returned client is not revoked by later disconnect/reconnect, and
 this seam does not provide operation-wide connection-change detection or workflow authorization.
+
+`github.ts` implements the same neutral read port against `https://api.github.com`: `Bearer` token,
+`application/vnd.github+json` and a pinned `X-GitHub-Api-Version`; `owner/repo` while associating and
+`/repositories/<id>` afterwards; the issues endpoint filtered by `pull_request` absence, `open`/`closed`
+mapped to the workflow's stage words, comments read and created as notes, `Link rel="next"` pagination
+bounded to `api.github.com`, and the same byte, deadline, redirect and token-echo refusals as GitLab.
+A rejected request logs only its status; 401, 403 and 404 keep distinct readable reasons.
 
 The barrel also exports `createGitLabClient`, its options and read models, `tomatoLabels`,
 `designVersion`, `implementationVersion`, `approvalPublication`, `validateApproval`, and their types.
