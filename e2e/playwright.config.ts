@@ -68,7 +68,14 @@ export default defineConfig({
 		baseURL: `http://localhost:${PORT}`,
 		trace: "on-first-retry",
 	},
-	projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+	projects: [
+		{ name: "chromium", use: { ...devices["Desktop Chrome"] } },
+		{
+			name: "webkit",
+			use: { ...devices["Desktop Safari"] },
+			testMatch: /(?:^|[\\/])(?:ask-user-question|ask-previews|plan-ask)\.spec\.ts$/,
+		},
+	],
 	// Self-contained: build the web app, boot the host on an isolated port + state dir, and tear it all
 	// down after. `bun run e2e` needs nothing else running.
 	webServer: {
