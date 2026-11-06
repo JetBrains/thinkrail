@@ -21,6 +21,10 @@ GitLab integration is experimental. It includes:
   HTTP connections and no plaintext storage fallback.
 - An issue list with **Design** and **Implement** actions. Sessions use the Issue title; implementation
   creates or reuses an owned `.worktrees/issue-<IID>` workspace. The two activities can interleave.
+- New Issue sessions load the built-in Tomato workflow skill and start once with the Issue body and
+  complete comments, using the effective interface language. Reopening a session only opens its history.
+  Session-bound tools read current Issue context and publish deliberate summaries without exposing tokens.
+  The skill requires confirmed summary publication before handoff; automatic turn-end posting is not enforced.
 
 Starting implementation does not require design approval and does not change Issue labels. Approval
 and Issue closure remain in GitLab. Automated push/MR/CI/merge delivery is not implemented.

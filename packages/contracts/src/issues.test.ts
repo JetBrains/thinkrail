@@ -10,6 +10,7 @@ import {
 	isIssuePublication,
 	isIssueReference,
 	isIssueSessionLaunch,
+	isIssueSessionStartupTarget,
 	isIssueTarget,
 	requiresIssueHttpConsent,
 } from "./index";
@@ -373,4 +374,56 @@ test("connection guard validates optional exact consent shape separately from au
 	expect(hasIssueHttpConsent({ ...input, instanceUrl: "http://localhost" })).toBe(true);
 	// Legacy outer objects remain permissive; host request boundaries may enforce exact keys.
 	expect(isIssueConnectionInput({ ...input, extra: true })).toBe(true);
+});
+
+test("startup target requires an exact canonical effective locale, not a preference", () => {
+	const target = {
+		projectId: "p",
+		reference: {
+			provider: "gitlab",
+			instanceUrl: "https://gitlab.com",
+			projectId: "17",
+			number: 1,
+		},
+	};
+	for (const locale of ["en", "zh-CN", "pt-BR", "de"])
+		expect(isIssueSessionStartupTarget({ ...target, locale })).toBe(true);
+	// Both tags are well-formed and canonical; only the 35-character wire bound differs.
+	expect(isIssueSessionStartupTarget({ ...target, locale: "en-x-aaaa-bbbb-cccc-dddd" })).toBe(true);
+	expect(
+		isIssueSessionStartupTarget({ ...target, locale: "en-x-aaaaaaaa-bbbbbbbb-cccccccc-dddddddd" }),
+	).toBe(false);
+	expect(isIssueSessionStartupTarget(target)).toBe(false);
+	for (const locale of [
+		"system",
+		"",
+		"pt-br",
+		"en_US",
+		" en",
+		"en ",
+		null,
+		undefined,
+		7,
+		`en-x-${"a".repeat(31)}`,
+	])
+		expect(isIssueSessionStartupTarget({ ...target, locale })).toBe(false);
+	expect(isIssueSessionStartupTarget({ ...target, locale: "en", prompt: "run" })).toBe(false);
+	expect(
+		isIssueSessionStartupTarget({
+			...target,
+			locale: "en",
+			reference: { ...target.reference, token: "secret" },
+		}),
+	).toBe(false);
+	expect(
+		isIssueSessionStartupTarget({
+			...target,
+			locale: "en",
+			reference: { ...target.reference, instanceUrl: "https://GITLAB.com/" },
+		}),
+	).toBe(false);
+	expect(isIssueTarget({ ...target, locale: "en" })).toBe(false);
+	expect(
+		isIssueSessionStartupTarget(Object.assign(Object.create(null), target, { locale: "en" })),
+	).toBe(false);
 });

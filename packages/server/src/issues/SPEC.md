@@ -223,6 +223,37 @@ ownership and any session-pending fence fail closed; lookup never creates, adopt
 or inspects/starts sessions. Future host current-HEAD verification must use this owned worktree,
 never a caller-supplied path or SHA. This lookup observes ownership, not a Git lock.
 
+## Session startup context
+
+`session.ts` is a pure startup-prompt boundary, not a session service or lifecycle store. Its prompt
+factory and association/context types are exported through the Issues barrel for host composition.
+`BoundIssueSession` records `sessionId`, `workspaceId`, local `projectId`, provider-qualified
+`reference`, explicit `stage: "design" | "implementation"`, and effective `locale`. It contains no
+client, binding, credential or approval state. `IssueStartupContext` accepts only a reference,
+`GitLabIssue`, complete `GitLabNote[]` as `notes`, verified Issue `link`, explicit stage and locale;
+callers must finish all note pagination before calling. Completeness cannot be proven from an array.
+
+`createIssueStartupPrompt(context)` begins with `/skill:tomato-issue-workflow ` (a literal space
+before arguments, as required by the SDK parser), names the stage and
+response locale, and instructs reading the entire context. Design delegates to the existing ThinkRail
+brainstorming process without implementation; implementation uses existing plans/TODOs, verification
+and review without a design approval gate. Both require confirmed `issue_record_summary` publication
+to the bound Issue comments before conclusions or yielding, including blocked/partial work, with key
+decisions, results, validation and next steps only. Missing/uncertain context or publication blocks
+success; transcripts, internal reasoning, raw tool output and secrets must not be published.
+
+The reference uses the shared strict action identity guard. Links must be canonical credential-free
+HTTP(S), on that instance beneath its base path, ending in `/<project path>/-/issues/<bound IID>`;
+the caller still owns verifying that path against the numeric remote project. Locale must be an
+effective canonical BCP-47 tag (shared 35-character bound), never `system`; English and Chinese have
+explicit language instructions and other tags get a BCP-47 language instruction. Only explicitly
+projected Issue/note fields enter a JSON block marked untrusted external data. JSON escapes angle
+brackets and line separators so supplied text cannot close its delimiters; raw data cannot override
+stage, language, workspace rules or tool permissions. No project configuration or PAT input exists.
+The whole UTF-8 prompt is capped at 128 KiB; excessive context fails with a static error rather than
+silently truncating any description or comment. No I/O, new dependency, host/agent/UI integration,
+worktree/session creation, or side effects belong to this slice.
+
 ## Dependencies and forbidden reaches
 
 Bun/Node platform APIs, `@thinkrail/shared/codedError`, and root `@thinkrail/contracts` issue DTOs and

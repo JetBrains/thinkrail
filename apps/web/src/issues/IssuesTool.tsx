@@ -4,9 +4,10 @@ import type {
 	IssueSessionLaunch,
 	IssueSummary,
 } from "@thinkrail/contracts";
-import { useT } from "@thinkrail/locales/react";
+import { localeOf, useT } from "@thinkrail/locales/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { QuietScrollArea } from "../components/QuietScrollArea";
+import { availableLocales } from "../i18n";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { IssuesPanel } from "./IssuesPanel";
@@ -21,12 +22,14 @@ import {
 	issueKey,
 	issueSnapshotAfterLoad,
 	issueSnapshotUpdate,
+	issueStartupLocale,
 	loadIssueSnapshot,
 	runIssueAction,
 	subscribeIssueAssociation,
 	supportsIssueActions,
 	supportsIssueAuth,
 	supportsIssueImplementation,
+	supportsIssueSessionStartup,
 	supportsIssues,
 } from "./model";
 
@@ -45,6 +48,8 @@ export function IssuesTool({
 	onTrustProject?: () => void;
 }) {
 	const t = useT();
+	const localLocales = useAppStore((s) => s.localLocales);
+	const locale = issueStartupLocale(localeOf(t), availableLocales(localLocales));
 	const version = useAppStore((s) => s.protocolVersion);
 	const status = useAppStore((s) => s.status);
 	const generation = useAppStore((s) => s.connectionGeneration);
@@ -54,6 +59,7 @@ export function IssuesTool({
 	const capabilities = useMemo<IssueActionCapabilities>(
 		() => ({
 			actionsSupported: supportsIssueActions(version),
+			startupSupported: supportsIssueSessionStartup(version),
 			implementationSupported: supportsIssueImplementation(version),
 			trusted,
 		}),
@@ -132,8 +138,10 @@ export function IssuesTool({
 			setActionErrorIssue(null);
 			const result = await runIssueAction(
 				action,
-				issueActionCall({ projectId, reference }, (requested, params) =>
-					transport.request(requested, params),
+				issueActionCall(
+					{ projectId, reference, locale },
+					(requested, params) => transport.request(requested, params),
+					version,
 				),
 				(launch) => onLaunchSession?.(launch),
 			);
@@ -147,7 +155,7 @@ export function IssuesTool({
 			if (action === "implement") void refresh();
 			return result;
 		},
-		[onLaunchSession, projectId, refresh],
+		[onLaunchSession, projectId, refresh, locale, version],
 	);
 
 	useEffect(

@@ -50,6 +50,7 @@ import {
 	setDisabledExtensionsResolver,
 	setDisabledPackagesResolver,
 	setExtUiPublisher,
+	setIssueToolHost,
 	setMcpLoginPublisher,
 	setMcpPolicyResolver,
 	setMcpStatusPublisher,
@@ -147,6 +148,7 @@ import { serveUserFonts } from "./fontRoutes";
 import { setFsNudgePublisher } from "./fsNudge";
 import { handleRequest, requestErrorReport, requestMethodDiagnostic } from "./handlers";
 import { provisionInitialTerminal } from "./initialTerminal";
+import { issuesHost } from "./issues";
 import { trackLoginOutcome } from "./loginAnalytics";
 import {
 	additionalCapture,
@@ -824,6 +826,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 	installRequestReviewSeam();
 	setTitleToolHost(titleToolHost);
+	setIssueToolHost(issuesHost.agentSessions);
 	reconcilePendingReviewsOnBoot();
 
 	setSettingsPublisher((config, appliedUpdate) => {
@@ -1092,6 +1095,7 @@ function restoreSeamDefaults(): void {
 	setReviewCommentHandler(null);
 	setRequestReviewHandler(null);
 	setTitleToolHost(null);
+	setIssueToolHost(null);
 	setSettingsPublisher(null);
 	setSessionCreatedPublisher(() => {});
 	setSessionStatePublisher(() => {});

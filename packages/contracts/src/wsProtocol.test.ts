@@ -33,6 +33,7 @@ import {
 	ISSUES_DESIGN_APPROVAL_PROTOCOL_VERSION,
 	ISSUES_IMPLEMENTATION_PROTOCOL_VERSION,
 	ISSUES_PROTOCOL_VERSION,
+	ISSUES_SESSION_STARTUP_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
 	isCustomEndpointId,
 	isTodoReviewFixMessage,
@@ -592,7 +593,7 @@ test("the repository-address hint is registered at the v105 Issues auth floor", 
 });
 
 test("six closed Issue actions are registered at v104", () => {
-	expect(PROTOCOL_VERSION).toBe(108);
+	expect(PROTOCOL_VERSION).toBe(109);
 	expect(ISSUES_ACTIONS_PROTOCOL_VERSION).toBe(104);
 	expect(ISSUES_PROTOCOL_VERSION).toBe(103);
 	expect(WS_METHODS.issuesLaunchDesign).toBe("issues.launchDesign");
@@ -605,7 +606,7 @@ test("six closed Issue actions are registered at v104", () => {
 
 test("app-originated Issue approvals are registered at v106", () => {
 	expect(ISSUES_APPROVAL_PROTOCOL_VERSION).toBe(106);
-	expect(PROTOCOL_VERSION).toBe(108);
+	expect(PROTOCOL_VERSION).toBe(109);
 	expect(ISSUES_AUTH_PROTOCOL_VERSION).toBe(105);
 	expect(ISSUES_ACTIONS_PROTOCOL_VERSION).toBe(104);
 	expect(ISSUES_PROTOCOL_VERSION).toBe(103);
@@ -630,7 +631,7 @@ test("app-originated Issue approvals are registered at v106", () => {
 
 test("the approved-design read is registered at v107", () => {
 	expect(ISSUES_DESIGN_APPROVAL_PROTOCOL_VERSION).toBe(107);
-	expect(PROTOCOL_VERSION).toBe(108);
+	expect(PROTOCOL_VERSION).toBe(109);
 	expect(ISSUES_APPROVAL_PROTOCOL_VERSION).toBe(106);
 	expect(ISSUES_AUTH_PROTOCOL_VERSION).toBe(105);
 	expect(ISSUES_ACTIONS_PROTOCOL_VERSION).toBe(104);
@@ -655,7 +656,7 @@ test("the approved-design read is registered at v107", () => {
 
 test("the implementation start is registered at v108", () => {
 	expect(ISSUES_IMPLEMENTATION_PROTOCOL_VERSION).toBe(108);
-	expect(PROTOCOL_VERSION).toBe(108);
+	expect(PROTOCOL_VERSION).toBe(109);
 	expect(ISSUES_DESIGN_APPROVAL_PROTOCOL_VERSION).toBe(107);
 	expect(ISSUES_APPROVAL_PROTOCOL_VERSION).toBe(106);
 	expect(ISSUES_AUTH_PROTOCOL_VERSION).toBe(105);
@@ -679,4 +680,28 @@ test("the implementation start is registered at v108", () => {
 	expect(Object.keys(start.params).sort()).toEqual(["projectId", "reference"]);
 	// The legacy launch action keeps its v104 gate and params for older clients.
 	expect(WS_METHODS.issuesLaunchImplementation).toBe("issues.launchImplementation");
+});
+
+test("localized startup adds v109 methods without moving legacy floors", () => {
+	expect(ISSUES_SESSION_STARTUP_PROTOCOL_VERSION).toBe(109);
+	expect(PROTOCOL_VERSION).toBe(109);
+	expect(ISSUES_ACTIONS_PROTOCOL_VERSION).toBe(104);
+	expect(ISSUES_IMPLEMENTATION_PROTOCOL_VERSION).toBe(108);
+	expect(WS_METHODS.issuesBeginDesign).toBe("issues.beginDesign");
+	expect(WS_METHODS.issuesBeginImplementation).toBe("issues.beginImplementation");
+	const design: WsMethodMap["issues.beginDesign"] = {
+		params: {
+			projectId: "p",
+			reference: {
+				provider: "gitlab",
+				instanceUrl: "https://gitlab.com",
+				projectId: "17",
+				number: 1,
+			},
+			locale: "zh-CN",
+		},
+		result: { workspaceId: "w", sessionId: "s" },
+	};
+	const implementation: WsMethodMap["issues.beginImplementation"] = design;
+	expect(implementation.params.locale).toBe("zh-CN");
 });

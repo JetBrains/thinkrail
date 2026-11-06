@@ -1368,3 +1368,16 @@ new method. Earlier Issues floors stay pinned
 `ISSUES_AUTH_PROTOCOL_VERSION = 105`, `ISSUES_ACTIONS_PROTOCOL_VERSION = 104`,
 `ISSUES_PROTOCOL_VERSION = 103`), so older clients keep their existing gates. This adds no merge, push,
 MR or CI capability.
+
+## Issues localized session startup protocol (v109)
+
+`PROTOCOL_VERSION = 109` and `ISSUES_SESSION_STARTUP_PROTOCOL_VERSION = 109` add
+`issues.beginDesign(IssueSessionStartupTarget)` and
+`issues.beginImplementation(IssueSessionStartupTarget)`, each returning `IssueSessionLaunch`.
+`IssueSessionStartupTarget extends IssueTarget` with required `locale: string`: the effective
+canonical BCP-47 language, validated by `isLocalePreference`, excluding `system` and bounded to
+35 characters. `isIssueSessionStartupTarget` requires exact own keys on plain objects and the
+existing exact canonical action reference. No preference sentinel, path, prompt, workspace, session,
+provider configuration or token is accepted. The host starts the stage agent in the supplied language;
+the browser only navigates the returned launch. Existing v104/v108 methods retain their shapes
+and floors and open sessions without the new automatic startup guarantee. No other Issues floor changes.

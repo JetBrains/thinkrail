@@ -1,3 +1,5 @@
+import { isLocalePreference } from "./domain";
+
 export interface IssueReference {
 	provider: "gitlab";
 	instanceUrl: string;
@@ -154,6 +156,10 @@ export interface IssueTarget {
 	projectId: string;
 	reference: IssueReference;
 }
+/** Effective client language for automatic stage startup (v109), never the system preference. */
+export interface IssueSessionStartupTarget extends IssueTarget {
+	locale: string;
+}
 /** Shared by launchImplementation and publishImplementation; host derives commit/workspace identity. */
 export interface IssueImplementationTarget extends IssueTarget {
 	approvedDesignVersion: string;
@@ -202,6 +208,14 @@ function actionTarget(value: Record<string, unknown>): boolean {
 }
 export function isIssueTarget(value: unknown): value is IssueTarget {
 	return exact(value, ["projectId", "reference"]) && actionTarget(value);
+}
+export function isIssueSessionStartupTarget(value: unknown): value is IssueSessionStartupTarget {
+	return (
+		exact(value, ["projectId", "reference", "locale"]) &&
+		actionTarget(value) &&
+		value.locale !== "system" &&
+		isLocalePreference(value.locale)
+	);
 }
 export function isIssueImplementationTarget(value: unknown): value is IssueImplementationTarget {
 	return (

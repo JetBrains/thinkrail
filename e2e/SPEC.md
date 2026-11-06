@@ -102,6 +102,20 @@ not a disabled product feature or a force-click through the modal. `issues-assoc
 uses no auto-dismiss handler and verifies the prompt, single token field, and Skip preserving the project
 and access to Default. These helpers are shared by source, binary and desktop browser modes.
 
+## Issue startup UI protocol
+
+`issues-startup.spec.ts` mounts the Issues rail and intercepts only issue connection/list/start
+RPC replies through `page.routeWebSocket`, advertising v109 or v108. It explicitly grants the disposable
+project trust with `E2eWire` and seeds a persisted chat before workspace entry. The browser connects
+with a fixture-only PAT, switches between system English and bundled Chinese while the tool stays
+mounted, and clicks design, implementation, then design again. Exact wire assertions pin localized
+v109 begin params, locale-free legacy calls, and one request per click. Returned IDs reopen the same
+persisted chat through real shell navigation, without `session.create` or `session.prompt`. The PAT
+appears only on connect; no approval, publication or other stage mutation RPC is allowed.
+No GitLab HTTP, credential vault, provider or agent execution occurs: these are browser UI/protocol
+checks, not evidence of model startup or host once-only semantics. Host unit/HTTP fixtures own those
+contracts.
+
 ## Repository cloning
 
 `clone-project.spec.ts` clones disposable local `file:` repositories through the Welcome and rail menus,

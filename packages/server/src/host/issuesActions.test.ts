@@ -121,6 +121,8 @@ function fixture() {
 		return new Response(JSON.stringify(result));
 	}) as typeof fetch;
 	const savedTokens = new Map<string, string>();
+	const prompts: { sessionId: string; prompt: string }[] = [];
+	const createdTitles: string[] = [];
 	const options = {
 		dir,
 		credentials: {
@@ -136,16 +138,27 @@ function fixture() {
 		},
 		fetch: fetcher,
 		sessions: {
-			create: async () => {
+			create: async (
+				_args: unknown,
+				_guard: unknown,
+				createOptions?: { title?: string | undefined },
+			) => {
 				created++;
+				if (createOptions?.title !== undefined) createdTitles.push(createOptions.title);
 				return { sessionId: `session-${created}`, model: null, thinkingLevel: "off" as const };
 			},
 			status: async () => "idle" as const,
+		},
+		start: async (sessionId: string, _workspaceId: string, _cwd: string, prompt: string) => {
+			prompts.push({ sessionId, prompt });
 		},
 	};
 	const host = createIssuesHost(options);
 	return {
 		dir,
+		prompts,
+		createdTitles,
+		notes,
 		host,
 		target,
 		input,
@@ -199,12 +212,40 @@ test("actions validate exact envelopes before connection, filesystem or session 
 	expect(existsSync(join(f.dir, "issue-workspaces"))).toBe(false);
 });
 
-test("design launch creates and reuses an empty Default session without a worktree", async () => {
+for (const [name, launch] of [
+	[
+		"design",
+		(host: ReturnType<typeof createIssuesHost>, target: ReturnType<typeof fixture>["target"]) =>
+			host.launchDesign(target),
+	],
+	[
+		"implementation",
+		(host: ReturnType<typeof createIssuesHost>, target: ReturnType<typeof fixture>["target"]) =>
+			host.startImplementation(target),
+	],
+] as const) {
+	test(`legacy ${name} launch names a newly created session with the Issue title and reuses without renaming`, async () => {
+		const f = fixture();
+		await f.host.connect({ projectId: "one", input: f.input });
+		const first = await launch(f.host, f.target);
+		expect(f.createdTitles).toEqual(["Task"]);
+		expect(f.prompts).toHaveLength(0);
+		expect(existsSync(join(f.dir, "issue-sessions"))).toBe(false);
+		const restored = createIssuesHost(f.options);
+		expect(await launch(restored, f.target)).toEqual(first);
+		expect(f.createdTitles).toEqual(["Task"]);
+		expect(f.created).toBe(1);
+	});
+}
+
+test("design begin binds and prompts a Default session once without a worktree", async () => {
 	const f = fixture();
 	await f.host.connect({ projectId: "one", input: f.input });
-	const first = await f.host.launchDesign(f.target);
-	expect(await f.host.launchDesign(f.target)).toEqual(first);
+	const first = await f.host.beginDesign({ ...f.target, locale: "en" });
+	expect(await f.host.beginDesign({ ...f.target, locale: "en" })).toEqual(first);
 	expect(f.created).toBe(1);
+	expect(f.prompts).toHaveLength(1);
+	expect(f.prompts[0]?.prompt).toContain("/skill:tomato-issue-workflow");
 	expect(listWorkspaceRecords("one").find((w) => w.id === first.workspaceId)?.kind).toBe("default");
 	expect(existsSync(join(f.dir, ".worktrees"))).toBe(false);
 });
@@ -279,6 +320,8 @@ test("implementation publication requires owned checkout; fresh actual HEAD inva
 		...f.target,
 		approvedDesignVersion: version,
 	});
+	expect(f.prompts).toHaveLength(0);
+	expect(existsSync(join(f.dir, "issue-sessions"))).toBe(false);
 	const workspace = listWorkspaceRecords("one").find((w) => w.id === launched.workspaceId);
 	expect(workspace).toBeDefined();
 	if (!workspace) throw new Error("missing workspace");
@@ -304,7 +347,6 @@ test("implementation publication requires owned checkout; fresh actual HEAD inva
 	);
 	expect((await f.host.validateImplementation(f.target))?.approved).toBe(false);
 }, 60000);
-
 for (const boundary of ["before release", "after unlink"] as const)
 	test(`capability change ${boundary} respects the durable launch commit point`, async () => {
 		const f = fixture();
@@ -402,7 +444,6 @@ test("an in-progress issue starts implementation with no label write and no desi
 	expect(f.created).toBe(1);
 	expect(listWorkspaceRecords("one").find((w) => w.id === launch.workspaceId)).toBeDefined();
 }, 60000);
-
 test("implementation starts without approval or label writes and reuses the issue-prefixed workspace", async () => {
 	const f = fixture();
 	await f.host.connect({ projectId: "one", input: f.input });
@@ -415,7 +456,7 @@ test("implementation starts without approval or label writes and reuses the issu
 	expect(f.events).toEqual([]);
 	expect(await f.host.startImplementation(f.target)).toEqual(first);
 	expect(f.created).toBe(1);
-	const design = await f.host.launchDesign(f.target);
+	const design = await f.host.beginDesign({ ...f.target, locale: "en" });
 	expect(design.workspaceId).not.toBe(first.workspaceId);
 	expect(await f.host.startImplementation(f.target)).toEqual(first);
 	expect(f.created).toBe(2);
@@ -425,3 +466,154 @@ test("implementation starts without approval or label writes and reuses the issu
 			readdirSync(join(f.dir, "issue-workflow")).length > 0,
 	).toBe(false);
 }, 60000);
+test("bound tools read fresh complete context and durably deduplicate caller operations", async () => {
+	const f = fixture();
+	await f.host.connect({ projectId: "one", input: f.input });
+	const launched = await f.host.beginDesign({ ...f.target, locale: "en" });
+	f.issue.description = "fresh description";
+	f.notes.push({ id: 1, body: "fresh note", created_at: "2026-01-01T00:00:00Z" });
+	const context = await f.host.agentSessions.context(launched.sessionId);
+	expect(context).toContain("fresh description");
+	expect(context).toContain("fresh note");
+	expect(context).not.toContain(f.input.token);
+	const receipt = await f.host.agentSessions.recordSummary(
+		launched.sessionId,
+		"turn:1.summary",
+		"Verified result",
+	);
+	expect(receipt.noteId).toBe(2);
+	const restored = createIssuesHost(f.options);
+	expect(
+		await restored.agentSessions.recordSummary(
+			launched.sessionId,
+			"turn:1.summary",
+			"Verified result",
+		),
+	).toEqual(receipt);
+	expect(f.notes).toHaveLength(2);
+	await expect(
+		restored.agentSessions.recordSummary(launched.sessionId, "turn:1.summary", "Changed"),
+	).rejects.toThrow("reconciliation");
+	await expect(restored.agentSessions.context("unbound")).rejects.toThrow();
+	await expect(
+		restored.agentSessions.recordSummary(launched.sessionId, "new", "界".repeat(11000)),
+	).rejects.toThrow();
+	setProjectTrust("one", false);
+	await expect(restored.agentSessions.context(launched.sessionId)).rejects.toThrow();
+});
+
+test("uncertain initial dispatch leaves a durable fence and never dispatches again", async () => {
+	const f = fixture();
+	let attempts = 0;
+	const host = createIssuesHost({
+		...f.options,
+		start: async () => {
+			attempts++;
+			throw new Error("not accepted");
+		},
+	});
+	await host.connect({ projectId: "one", input: f.input });
+	await expect(host.beginDesign({ ...f.target, locale: "en" })).rejects.toThrow();
+	await expect(
+		createIssuesHost(f.options).beginDesign({ ...f.target, locale: "en" }),
+	).rejects.toThrow("reconciliation");
+	expect(attempts).toBe(1);
+	expect(f.created).toBe(1);
+	expect(f.prompts).toHaveLength(0);
+});
+
+for (const stage of ["design", "implementation"] as const) {
+	test(`new ${stage} begins once, restores only open, and uses the request locale`, async () => {
+		const f = fixture();
+		await f.host.connect({ projectId: "one", input: f.input });
+		const begin = stage === "design" ? f.host.beginDesign : f.host.beginImplementation;
+		const first = await begin({ ...f.target, locale: "zh-CN" });
+		expect(f.createdTitles).toEqual(["Task"]);
+		f.issue.title = "Changed";
+		expect(f.prompts).toHaveLength(1);
+		expect(f.prompts[0]?.prompt).toContain("zh-CN");
+		const restored = createIssuesHost(f.options);
+		expect(
+			await (stage === "design" ? restored.beginDesign : restored.beginImplementation)({
+				...f.target,
+				locale: "en",
+			}),
+		).toEqual(first);
+		expect(f.prompts).toHaveLength(1);
+		expect(f.created).toBe(1);
+		expect(f.createdTitles).toEqual(["Task"]);
+	}, 60000);
+	test(`new ${stage} reopens legacy empty sessions without association or sends`, async () => {
+		const f = fixture();
+		await f.host.connect({ projectId: "one", input: f.input });
+		const first = await (stage === "design" ? f.host.launchDesign : f.host.startImplementation)(
+			f.target,
+		);
+		expect(f.prompts).toHaveLength(0);
+		expect(existsSync(join(f.dir, "issue-sessions"))).toBe(false);
+		const restored = createIssuesHost(f.options);
+		expect(
+			await (stage === "design" ? restored.beginDesign : restored.beginImplementation)({
+				...f.target,
+				locale: "en",
+			}),
+		).toEqual(first);
+		expect(f.prompts).toHaveLength(0);
+		await expect(restored.agentSessions.context(first.sessionId)).rejects.toThrow();
+	}, 60000);
+	test(`new ${stage} context failure precedes any workspace or session creation`, async () => {
+		const f = fixture();
+		await f.host.connect({ projectId: "one", input: f.input });
+		let reads = 0;
+		f.onRead = () => {
+			// Title, prompt issue, then complete notes: fail on notes, not the first read.
+			if (++reads === 3) throw new Error("context unavailable");
+		};
+		await expect(
+			(stage === "design" ? f.host.beginDesign : f.host.beginImplementation)({
+				...f.target,
+				locale: "en",
+			}),
+		).rejects.toThrow();
+		expect(f.created).toBe(0);
+		expect(listWorkspaceRecords("one")).toEqual([]);
+		expect(existsSync(join(f.dir, ".worktrees"))).toBe(false);
+	}, 60000);
+}
+
+test("new begin requests require exact references and an explicit effective locale", async () => {
+	const f = fixture();
+	for (const begin of [f.host.beginDesign, f.host.beginImplementation]) {
+		for (const input of [
+			f.target,
+			{ ...f.target, locale: "system" },
+			{ ...f.target, locale: "en", token: "secret" },
+			{ ...f.target, locale: "en", reference: { ...f.target.reference, extra: true } },
+		])
+			await expect(begin(input)).rejects.toThrow("Invalid Issue request");
+	}
+	expect(f.requests).toBe(0);
+	expect(f.created).toBe(0);
+});
+
+for (const stage of ["design", "implementation"] as const)
+	test(`busy ${stage} reopen sends nothing and creates no replacement`, async () => {
+		const f = fixture();
+		await f.host.connect({ projectId: "one", input: f.input });
+		await (stage === "design" ? f.host.beginDesign : f.host.beginImplementation)({
+			...f.target,
+			locale: "en",
+		});
+		const restored = createIssuesHost({
+			...f.options,
+			sessions: { ...f.options.sessions, status: async () => "busy" as const },
+		});
+		await expect(
+			(stage === "design" ? restored.beginDesign : restored.beginImplementation)({
+				...f.target,
+				locale: "en",
+			}),
+		).rejects.toThrow();
+		expect(f.prompts).toHaveLength(1);
+		expect(f.created).toBe(1);
+	}, 60000);

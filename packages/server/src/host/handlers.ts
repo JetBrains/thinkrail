@@ -21,6 +21,7 @@ import {
 	ISSUES_DESIGN_APPROVAL_PROTOCOL_VERSION,
 	ISSUES_IMPLEMENTATION_PROTOCOL_VERSION,
 	ISSUES_PROTOCOL_VERSION,
+	ISSUES_SESSION_STARTUP_PROTOCOL_VERSION,
 	isControlMessage,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
@@ -260,6 +261,8 @@ import { provisionInitialTerminal } from "./initialTerminal";
 import {
 	issuesApproveDesign,
 	issuesApproveImplementation,
+	issuesBeginDesign,
+	issuesBeginImplementation,
 	issuesConnect,
 	issuesConnection,
 	issuesDesignApproval,
@@ -416,6 +419,20 @@ function withIssuesImplementationProtocol<P, R>(handler: (params: P) => R) {
 				"Issue implementation starts are unavailable for this protocol version.",
 			);
 		}
+		return handler(params);
+	};
+}
+
+function withIssuesSessionStartupProtocol<P, R>(handler: (params: P) => R) {
+	return (params: P, ctx: RequestContext): R => {
+		if (
+			ctx.protocolVersion !== undefined &&
+			ctx.protocolVersion < ISSUES_SESSION_STARTUP_PROTOCOL_VERSION
+		)
+			throw new CodedError(
+				"RESOURCE_UNAVAILABLE",
+				"Issue session startup is unavailable for this protocol version.",
+			);
 		return handler(params);
 	};
 }
@@ -1104,6 +1121,10 @@ const handlers: WsHandlers = {
 		return listSkillCatalog(ws.worktreePath, admissionContextFor(project, ws.skillOverrides ?? {}));
 	},
 	"extension.list": () => listExtensionCatalog(new Set(getConfig().disabledExtensions)),
+	"issues.beginDesign": withIssuesSessionStartupProtocol((p) => issuesBeginDesign(p)),
+	"issues.beginImplementation": withIssuesSessionStartupProtocol((p) =>
+		issuesBeginImplementation(p),
+	),
 	"issues.approveDesign": withIssuesApprovalProtocol((p) => issuesApproveDesign(p)),
 	"issues.approveImplementation": withIssuesApprovalProtocol((p) => issuesApproveImplementation(p)),
 	"issues.connection": withIssuesProtocol((p) => issuesConnection(p)),

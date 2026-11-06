@@ -1,11 +1,13 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
-import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import { observeLoggedErrors } from "../log";
 import {
+	compactSession,
 	createSession,
 	disposeAllSessions,
 	followUpSession,
@@ -17,7 +19,9 @@ import {
 	requestSessionReload,
 	sessionReuseStatus,
 	setSessionManagerFactory,
+	setSessionPublisher,
 	settleSessionsForShutdown,
+	startInitialSessionPrompt,
 } from "./agentSessionManager";
 import { configurePiRuntime } from "./piRuntime";
 
@@ -74,6 +78,7 @@ beforeAll(async () => {
 			"  });",
 			'  pi.on("input", async (event) => {',
 			'    if (event.text.startsWith("slow:")) await held(inputHold);',
+			'    if (event.text === "handled:") return { action: "handled" };',
 			"  });",
 			'  pi.registerCommand("gate-wait", {',
 			'    description: "wait for the test latch",',
@@ -218,6 +223,9 @@ test("removing a queued message keeps the others when the run settles with a rel
 	writeFileSync(reloadHold, "");
 	try {
 		const removal = removeQueuedSession(p.sessionId, "followUp", 1);
+		await expect(
+			startInitialSessionPrompt(p.sessionId, "cannot enter during removal"),
+		).rejects.toThrow(/busy|admitted/);
 		await turn;
 		await Bun.sleep(100);
 		rmSync(inputHold, { force: true });
@@ -243,4 +251,169 @@ test("nothing is admitted while a reload runs", async () => {
 	await reload;
 	faux.setResponses([fauxAssistantMessage("ok")]);
 	await promptSession(p.sessionId, "hello");
+});
+
+test("initial admission acknowledges native preflight, not elapsed time or the whole model turn", async () => {
+	const p = await parent();
+	faux.setResponses([fauxAssistantMessage("word ".repeat(60))]);
+	writeFileSync(inputHold, "");
+	let accepted = false;
+	const admission = startInitialSessionPrompt(p.sessionId, "slow: initial").then(() => {
+		accepted = true;
+	});
+	try {
+		await Bun.sleep(80);
+		expect(accepted).toBe(false);
+		await expect(startInitialSessionPrompt(p.sessionId, "duplicate")).rejects.toThrow(
+			/admitted|busy/,
+		);
+		await expect(reloadSessionResources(p.sessionId)).rejects.toThrow(/admitted|busy/);
+	} finally {
+		rmSync(inputHold, { force: true });
+	}
+	await admission;
+	expect(accepted).toBe(true);
+	expect(getSessionState(p.sessionId).execution).toBe("running");
+	await expect(startInitialSessionPrompt(p.sessionId, "must not steer")).rejects.toThrow(/busy/);
+	expect(getSessionState(p.sessionId).queuedCount).toBe(0);
+	await waitFor(() => getSessionState(p.sessionId).execution !== "running");
+	const { messages } = await getSessionMessages(p.sessionId, p.workspaceId, p.cwd);
+	expect(userTexts(messages)).toEqual(["slow: initial"]);
+});
+
+test("initial admission rejects reload, compaction, unknown sessions and invalid text", async () => {
+	const p = await parent();
+	await expect(startInitialSessionPrompt("missing", "hello")).rejects.toThrow(/Unknown session/);
+	for (const text of ["", " \n", "a".repeat(131073), "\u{1f600}".repeat(32769)]) {
+		await expect(startInitialSessionPrompt(p.sessionId, text)).rejects.toThrow(/text|prompt/i);
+	}
+	const reload = requestSessionReload(p.sessionId);
+	await expect(startInitialSessionPrompt(p.sessionId, "hello")).rejects.toThrow(/reloading/);
+	await reload;
+	let finish!: () => void;
+	const compact = spyOn(AgentSession.prototype, "compact").mockImplementation(
+		() =>
+			new Promise((resolve) => {
+				finish = () => resolve({} as never);
+			}),
+	);
+	try {
+		const compaction = compactSession(p.sessionId);
+		await expect(startInitialSessionPrompt(p.sessionId, "hello")).rejects.toThrow(/compaction/);
+		finish();
+		await compaction;
+	} finally {
+		compact.mockRestore();
+	}
+});
+
+test("initial admission rejects handled input and a command rather than claiming a model start", async () => {
+	const p = await parent();
+	await expect(startInitialSessionPrompt(p.sessionId, "handled:")).rejects.toThrow(
+		/not started|not accepted/i,
+	);
+	writeFileSync(latch, "");
+	await expect(startInitialSessionPrompt(p.sessionId, "/gate-wait")).rejects.toThrow(
+		/not started|not accepted/i,
+	);
+	expect(await sessionReuseStatus(p.sessionId, p.workspaceId, p.cwd)).toBe("idle");
+});
+
+test("initial admission propagates pre-ack failures and refuses missing or queued acknowledgement", async () => {
+	const p = await parent();
+	const failure = new Error("preflight failed");
+	const prompt = spyOn(AgentSession.prototype, "prompt");
+	try {
+		prompt.mockImplementationOnce(async () => {
+			throw failure;
+		});
+		await expect(startInitialSessionPrompt(p.sessionId, "hello")).rejects.toBe(failure);
+		prompt.mockImplementationOnce(async () => {});
+		await expect(startInitialSessionPrompt(p.sessionId, "hello")).rejects.toThrow(
+			/not started|not accepted/i,
+		);
+		prompt.mockImplementationOnce(async (_text, options) => {
+			options?.preflightResult?.("queued");
+		});
+		await expect(startInitialSessionPrompt(p.sessionId, "hello")).rejects.toThrow(
+			/not started|not accepted/i,
+		);
+		expect(await sessionReuseStatus(p.sessionId, p.workspaceId, p.cwd)).toBe("idle");
+	} finally {
+		prompt.mockRestore();
+	}
+});
+
+test("initial prompt provider errors settle through the normal session event stream", async () => {
+	const p = await parent();
+	const events: string[] = [];
+	let terminal: unknown;
+	setSessionPublisher((payload) => {
+		if (payload.sessionId !== p.sessionId) return;
+		events.push(payload.event.type);
+		if (payload.event.type === "agent_settled") terminal = payload.event.terminal;
+	});
+	try {
+		faux.setResponses([
+			fauxAssistantMessage("", { stopReason: "error", errorMessage: "initial provider failed" }),
+		]);
+		await startInitialSessionPrompt(p.sessionId, "hello");
+		await waitFor(() => events.includes("agent_settled"));
+		expect(events).toContain("agent_start");
+		expect(events).toContain("agent_end");
+		expect(terminal).toEqual({ stopReason: "error", errorMessage: "initial provider failed" });
+		expect(getSessionState(p.sessionId).execution).not.toBe("running");
+		expect(await sessionReuseStatus(p.sessionId, p.workspaceId, p.cwd)).toBe("idle");
+	} finally {
+		setSessionPublisher(() => {});
+	}
+});
+
+test("initial admission rejects native credential preflight failure and releases its reservation", async () => {
+	const p = await parent();
+	const configured = spyOn(ModelRuntime.prototype, "hasConfiguredAuth").mockReturnValue(false);
+	const check = spyOn(ModelRuntime.prototype, "checkAuth").mockResolvedValue(undefined);
+	try {
+		await expect(startInitialSessionPrompt(p.sessionId, "hello")).rejects.toThrow(
+			/API key|Authentication/,
+		);
+		expect(await sessionReuseStatus(p.sessionId, p.workspaceId, p.cwd)).toBe("idle");
+	} finally {
+		configured.mockRestore();
+		check.mockRestore();
+	}
+});
+
+test("initial acknowledgement does not release admission early; late rejection is consumed and logged", async () => {
+	const p = await parent();
+	const failure = new Error("failure after acknowledgement");
+	const observed: { scope: string; error: unknown }[] = [];
+	let fail!: (error: Error) => void;
+	const prompt = spyOn(AgentSession.prototype, "prompt").mockImplementation((_text, options) => {
+		options?.preflightResult?.("started");
+		return new Promise((_resolve, reject) => {
+			fail = reject;
+		});
+	});
+	observeLoggedErrors((scope, error) => observed.push({ scope, error }));
+	try {
+		await startInitialSessionPrompt(p.sessionId, "hello");
+		await expect(startInitialSessionPrompt(p.sessionId, "second")).rejects.toThrow(/admitted/);
+		await expect(reloadSessionResources(p.sessionId)).rejects.toThrow(/admitted/);
+		fail(failure);
+		await waitFor(() => observed.some((entry) => entry.error === failure));
+		expect(observed).toContainEqual({ scope: "agent", error: failure });
+		expect(await sessionReuseStatus(p.sessionId, p.workspaceId, p.cwd)).toBe("idle");
+		expect(prompt).toHaveBeenCalledTimes(1);
+	} finally {
+		prompt.mockRestore();
+		observeLoggedErrors(null);
+	}
+});
+
+test("initial admission rejects a closing session", async () => {
+	const p = await parent();
+	const shutdown = settleSessionsForShutdown();
+	await expect(startInitialSessionPrompt(p.sessionId, "hello")).rejects.toThrow(/closing/);
+	await shutdown;
 });

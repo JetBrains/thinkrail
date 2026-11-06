@@ -1,6 +1,6 @@
 ---
 name: choosing-a-workflow
-description: "Use at the start of new project onboarding, PR lifecycle work including PR checks, or any change to what the product does — a feature, a behavior change, or a bug fix. Not for continuing work already routed to a workflow, non-PR questions, checks, explanations, or edits that change no behavior."
+description: "Use at the start of an explicitly requested Tomato Issue design or implementation session, new project onboarding, PR lifecycle work including PR checks, or any change to what the product does — a feature, a behavior change, or a bug fix. Not for continuing work already routed to a workflow, incidental Issue references, non-PR questions, checks, explanations, or edits that change no behavior outside an explicit Issue session."
 ---
 
 # Choosing a Workflow
@@ -12,7 +12,10 @@ it from memory.
 
 ## Classify
 
-For a new piece of work, read the request and use what is already known to answer three questions:
+First, an **explicitly requested Tomato Issue design or implementation session** routes to
+**tomato-issue-workflow**. An incidental Issue number, URL, bug reference, or PR's linked Issue
+is not this route. Work already in an Issue session resumes that worker rather than re-routing.
+For all other new work, read the request and use what is already known to answer three questions:
 
 1. **Is this project onboarding?** No spec graph yet — an empty or effectively empty workspace where
    the user brings a raw idea, or an existing codebase being set up or specced for the first time.
@@ -34,6 +37,7 @@ If the route is genuinely ambiguous from the request alone, ask one short clarif
 
 | Classification | Route |
 |---|---|
+| Explicit Tomato Issue design or implementation session | Read and follow **tomato-issue-workflow** |
 | Project onboarding — no spec graph yet | Read and follow **setting-up-a-project** |
 | PR lifecycle work | Read and follow **shipping-a-pr** |
 | A feature, behavior change, or bug fix | Read and follow **brainstorming** |
@@ -44,8 +48,8 @@ implementation first and return to **shipping-a-pr** only after it lands.
 
 ## Red flags — stop and re-route
 
-- You started implementing a feature, behavior change, or bug fix without going through
-  **brainstorming**.
+- You started implementing a feature, behavior change, or bug fix outside an explicit Issue
+  implementation session without going through **brainstorming**.
 - "It's small" or "the request is already specific" — neither is a reason to skip; the workflow
   scales down, it does not switch off.
 - You loaded **brainstorming** for work that changes no behavior (a rename, a typo, a question).
@@ -54,6 +58,6 @@ implementation first and return to **shipping-a-pr** only after it lands.
 
 ## Handoff
 
-This skill ends by naming exactly one of: **setting-up-a-project**, **shipping-a-pr**,
+This skill ends by naming exactly one of: **tomato-issue-workflow**, **setting-up-a-project**, **shipping-a-pr**,
 **brainstorming**, or **no matching workflow** (proceed directly). Adding a workflow to the family
 adds a row to the table above — see the **writing-workflow-skills** skill.

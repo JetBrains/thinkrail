@@ -874,6 +874,26 @@ re-opened transcripts provider-valid.
     costs one prompt-cache miss per chat, early in it. The write policy and the workspace half of that state are
     not here: the host injects both through `setTitleToolHost({ apply, workspaceNeedsName })`, because naming
     composes `agent` + `workspaces`.
+    The bound Issue tools (`issueTools.ts`) are always registered for top-level sessions by the named
+    `issue-tools` inline extension in `sharedFactories`, shared by source/dev and bundled CLI/desktop
+    loaders, never by the curated child extension set. `issue_context` accepts exactly `{}`;
+    `issue_record_summary` accepts exactly `{ operationId, summary }`. Both schemas forbid additional
+    properties and execute-time validation enforces the same keys. Operation IDs are 1–128 ASCII
+    characters, starting with an alphanumeric and otherwise allowing alphanumerics, `.`, `_`, `:`, `-`;
+    summaries must be nonblank and at most 32,000 UTF-8 bytes (not JavaScript string length), and are
+    passed through unchanged. Neither tool accepts an issue reference, project, path, session or token.
+    Session identity comes only from `ctx.sessionManager.getSessionId()`. The host is injected via
+    `setIssueToolHost` with `IssueToolHost.context(sessionId): Promise<string>` and
+    `recordSummary(sessionId, operationId, summary): Promise<{ noteId: number; url?: string }>`;
+    the host owns association lookup, authorization, safe context/receipt projection and publication.
+    Agent imports no host/issues implementation. The default host is unavailable and a `null` setter
+    restores it. Invalid input throws a static `RANGE_INVALID` CodedError before dispatch; all host
+    failures collapse to a fresh static `RESOURCE_UNAVAILABLE` CodedError without a cause, raw message
+    or log. Context returns host text, summary returns the host receipt as JSON text and details.
+    Only the setter and host type are exported through the agent barrel; tool factories and the
+    extension remain module-internal integration helpers. There is no Issue `before_agent_start` hook
+    or global prompt guideline: this seam has no synchronous bound-association lookup, so ordinary
+    sessions receive only the tools' descriptions, never an unconditional Issue-workflow rule.
     Cascades: `removeSession`/`disposeAllSessions` fire
     `disposeSessionChildren` — `removeSession` returns that cascade, the **delete transaction
     awaits it before `publishDeleted`/resolving** (safe: the cascade carries its own swallow, so a
@@ -1108,6 +1128,18 @@ re-opened transcripts provider-valid.
     [MCP servers](#mcp-servers).
     Both session paths pass it as `resourceLoader`. `buildResourceLoader` stays internal; the seam +
     its types are on the barrel.
+- **Idle-only initial prompt admission:** `startInitialSessionPrompt(sessionId, text): Promise<void>`
+  requires nonblank text of at most 128 KiB UTF-8 (no issue-specific marker or payload format). It uses
+  the manager's existing live-entry lookup, reload guard, idle/closing/compaction/admission blockers,
+  and preflight reservation, checked and acquired without an intervening await. It calls Pi's `prompt`
+  directly, never the steering-capable `promptSession` and never a steering/follow-up queue. Only Pi's
+  native `preflightResult("started")` acknowledges success, after preparation and before the provider
+  turn completes; `handled`, `queued`, completion without acknowledgement, and pre-ack failures reject.
+  There is no timer-based success. The reservation follows normal `agent_start`/prompt-finally release,
+  not acknowledgement, so a second initial admission cannot enter the preflight gap. Post-ack runtime
+  failures remain on the normal Pi event stream; a rejected detached prompt is consumed and logged
+  through the existing agent logger/error classifier. No additional queue, persisted state, replay,
+  or lifetime exactly-once guarantee is introduced: another initial prompt is allowed once idle again.
 - **Public surface (barrel):** the manager operations (incl. `respondToTool` +
   `settleSessionsForShutdown`) + `CreateSessionInput`/`CreateSessionResult` + `SessionEventPayload`;
   the runtime-generation facade (`usePiRuntime`, candidate prepare/activate, current generation id, and the
@@ -1174,6 +1206,8 @@ re-opened transcripts provider-valid.
   the extension on/off seams **`setDisabledExtensionsResolver`** + **`refreshExtensionTools`** (host owns the
   set; this module owns compose-time filtering and live activation timing);
   the `set_title` seam (`setTitleToolHost` + `TitleToolHost`/`SET_TITLE_TOOL_NAME`/`SetTitleParams`);
+  the bound Issue seam (`setIssueToolHost` + `IssueToolHost`), whose `null` reset restores static
+  unavailability (host composition owns installation and shutdown reset);
   the bundled-artifact seam (`registerBundledRuntime` +
   `BundledExtensions`/`BundledExtensionFactory`). The publishers, resolvers and handlers above that
   `createServer` installs return to their module default at its `stop()` — no-op publishers and, via

@@ -33,6 +33,8 @@ export type {
 	IssuesServiceOptions,
 } from "./service";
 export { createIssuesService } from "./service";
+export type { BoundIssueSession, IssueStartupContext } from "./session";
+export { createIssueStartupPrompt } from "./session";
 export type {
 	IssueWorkflowOptions,
 	WorkflowPersistence,

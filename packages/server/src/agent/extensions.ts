@@ -29,6 +29,7 @@ import {
 import { type BundledTrashHelpers, setBundledTrashHelpers } from "../trash";
 import { headlessSearchPolicy } from "./headlessSearch";
 import { oversizedImageGuard } from "./imageGuard";
+import { issueToolsExtension } from "./issueTools";
 import {
 	createPiSettings,
 	disabledPackages,
@@ -353,6 +354,7 @@ export async function buildResourceLoader(
 		reviewToolExtension,
 		requestReviewExtension,
 		setTitleExtension,
+		{ name: "issue-tools", factory: issueToolsExtension },
 		oversizedImageGuard,
 		skillCarryover,
 		...extraFactories,

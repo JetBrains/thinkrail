@@ -6,7 +6,7 @@ import type {
 	IssueSessionLaunch,
 	IssueSummary,
 } from "@thinkrail/contracts";
-import { EN, type MessageKey } from "@thinkrail/locales";
+import { EN, type MessageKey, resolveLocale } from "@thinkrail/locales";
 import { Dialog } from "@thinkrail/ui/dialog";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -35,6 +35,7 @@ import {
 	issueHttpConsent,
 	issueKey,
 	issueSnapshotAfterLoad,
+	issueStartupLocale,
 	loadIssueSnapshot,
 	notifyIssueAssociation,
 	reconnectOutcome,
@@ -49,6 +50,7 @@ import {
 	supportsIssueApproval,
 	supportsIssueAuth,
 	supportsIssueImplementation,
+	supportsIssueSessionStartup,
 	supportsIssues,
 } from "./model";
 
@@ -959,12 +961,16 @@ test("a transport failure or a junk launch is a keyed action error, never a laun
 });
 
 test("the action call set carries exactly the design launch and the v108 start", async () => {
-	const target = { projectId: "p", reference: summary.reference };
+	const target = { projectId: "p", reference: summary.reference, locale: "ja" };
 	const sent: string[] = [];
-	const call = issueActionCall(target, (method) => {
-		sent.push(method);
-		return Promise.resolve({ workspaceId: "w", sessionId: "s" } as never);
-	});
+	const call = issueActionCall(
+		target,
+		(method) => {
+			sent.push(method);
+			return Promise.resolve({ workspaceId: "w", sessionId: "s" } as never);
+		},
+		108,
+	);
 	expect(Object.keys(call).sort()).toEqual(["launchDesign", "startImplementation"]);
 	await call.launchDesign();
 	await call.startImplementation();
@@ -1021,4 +1027,51 @@ test("an action failure shows beside the row that raised it", () => {
 		onRunAction: async () => ({ ok: true, launch: { workspaceId: "w1", sessionId: "s1" } }),
 	});
 	expect(otherRow).not.toContain('data-testid="issue-action-error"');
+});
+
+test("startup floor sends the exact effective locale only to v109 methods", async () => {
+	expect(supportsIssueSessionStartup(null)).toBe(false);
+	expect(supportsIssueSessionStartup(108)).toBe(false);
+	expect(supportsIssueSessionStartup(109)).toBe(true);
+	expect(supportsIssueSessionStartup(110)).toBe(true);
+	for (const version of [104, 108, 109, 110]) {
+		for (const locale of ["ja", "zh-CN", "pt-BR"]) {
+			const target = { projectId: "p", reference: summary.reference, locale };
+			const sent: unknown[] = [];
+			const call = issueActionCall(
+				target,
+				(method, params) => {
+					sent.push([method, params]);
+					return Promise.resolve({ workspaceId: "w", sessionId: "s" } as never);
+				},
+				version,
+			);
+			await call.launchDesign();
+			if (version >= 108) await call.startImplementation();
+			const legacy = { projectId: "p", reference: summary.reference };
+			expect(sent).toEqual(
+				version >= 109
+					? [
+							["issues.beginDesign", target],
+							["issues.beginImplementation", target],
+						]
+					: version >= 108
+						? [
+								["issues.launchDesign", legacy],
+								["issues.startImplementation", legacy],
+							]
+						: [["issues.launchDesign", legacy]],
+			);
+		}
+	}
+});
+
+test("startup locale follows the resolved translator language and canonical supported tags", () => {
+	expect(issueStartupLocale("zh-cn", ["en", "zh-CN"])).toBe("zh-CN");
+	expect(issueStartupLocale("pt-br", ["en", "pt-BR"])).toBe("pt-BR");
+	expect(issueStartupLocale("ja", ["en", "ja"])).toBe("ja");
+	const resolvedSystemLanguage = resolveLocale("system", ["en", "ja"], ["ja-JP"]);
+	expect(issueStartupLocale(resolvedSystemLanguage, ["en", "ja"])).toBe("ja");
+	expect(issueStartupLocale("system", ["en", "ja"])).toBe("en");
+	expect(issueStartupLocale("missing", ["en", "ja"])).toBe("en");
 });
