@@ -55,6 +55,7 @@ export interface PreparedLayoutClose {
 
 export interface WorkbenchProps {
 	workspaceId: string;
+	worktreePath: string;
 	document: WorkspaceLayoutDocument;
 	attention: LayoutAttention;
 	maxSideGroups: number;
@@ -584,6 +585,7 @@ export function findLayoutGroupTabs(
 
 export interface SharedGroupProps {
 	workspaceId: string;
+	worktreePath: string;
 	document: WorkspaceLayoutDocument;
 	readAttention: () => LayoutAttention;
 	selectionEpochRef: React.MutableRefObject<number>;
