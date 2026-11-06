@@ -116,7 +116,10 @@ test("a pending ask_user_question is answerable from the plan page", async ({ pa
 		await expect(card.getByTestId("ask-question-text")).toHaveText("Which rollout should we use?");
 		await card.getByTestId("ask-option").filter({ hasText: "Green" }).click();
 		await card.getByTestId("ask-submit").click();
-		await expect(card.getByTestId("ask-sent")).toBeVisible();
+		await expect(card).toHaveCount(0);
+		await page.locator('[data-testid="editor-tab"][data-kind="chat"]').first().click();
+		const record = page.locator('[data-testid="ask-user-question"][data-tone="answered"]');
+		await expect(record.getByTestId("ask-receipt-answer")).toHaveText("Green");
 	} finally {
 		rmSync(session.path, { force: true });
 	}
