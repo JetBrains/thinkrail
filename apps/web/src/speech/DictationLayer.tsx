@@ -153,9 +153,18 @@ function OfferCard({
 
 /**
  * The page's one voice-input surface: it follows focus to whatever text field is active (the app's or
- * an extension's), shows a mic in that field's corner, and owns the dictation chord.
+ * an extension's), shows a mic in that field's corner, and owns the dictation chord. Turned off in
+ * Settings, it renders nothing and listens to nothing.
  */
 export function DictationLayer() {
+	const enabled = useAppStore((s) => s.voiceInputEnabled);
+	useEffect(() => {
+		if (!enabled) stopDictation();
+	}, [enabled]);
+	return enabled ? <ActiveDictationLayer /> : null;
+}
+
+function ActiveDictationLayer() {
 	const t = useT();
 	const status = useAppStore((s) => s.speech);
 	const snapshot = useDictationSnapshot();

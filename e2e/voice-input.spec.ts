@@ -265,6 +265,44 @@ test("the chord never reaches the composer behind an open dialog", async ({ page
 	await page.keyboard.press("Escape");
 });
 
+async function setVoiceInput(
+	baseURL: string | undefined,
+	voiceInputEnabled: boolean,
+): Promise<void> {
+	const wire = await hostWire(baseURL);
+	try {
+		await wire.request("settings.update", { config: { voiceInputEnabled } });
+	} finally {
+		wire.close();
+	}
+}
+
+test("turning voice input off stops a dictation, hides every mic and frees the chord", async ({
+	page,
+	baseURL,
+}) => {
+	await openChat(page);
+	const input = page.getByTestId("chat-input");
+	await input.fill("");
+	await page.keyboard.press("ControlOrMeta+Shift+Space");
+	await expect(mic(page)).toHaveAttribute("data-mic-state", "listening");
+	try {
+		await setVoiceInput(baseURL, false);
+		await expect(mic(page)).toHaveCount(0);
+		await expect(input).not.toHaveAttribute("readonly", "");
+		await input.focus();
+		await page.keyboard.press("ControlOrMeta+Shift+Space");
+		await page.waitForTimeout(300);
+		await expect(mic(page)).toHaveCount(0);
+		await expect(input).not.toHaveAttribute("readonly", "");
+	} finally {
+		await setVoiceInput(baseURL, true);
+	}
+	await input.blur();
+	await input.focus();
+	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready");
+});
+
 test("Settings shows the install and Remove deletes its files and brings the offer back", async ({
 	page,
 }) => {
