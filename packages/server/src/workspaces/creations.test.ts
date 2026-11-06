@@ -13,6 +13,13 @@ import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 import type { WorkspaceCreation, WorkspaceCreationRemoved } from "@thinkrail/contracts";
 import {
+	createProject,
+	initProject,
+	inspectCloneDestination,
+	openProject,
+	setProjectPathGuard,
+} from "../projects";
+import {
 	creationOwnsPath,
 	setWorkspaceCreationPublisher,
 	type WorkspaceCreationEvent,
@@ -514,6 +521,29 @@ posix("a cleanup that cannot finish claims nothing and leaves the record retryab
 		expect(existsSync(join(workspace.worktreePath, "locked"))).toBe(false);
 	} finally {
 		if (existsSync(join(path, "locked"))) chmodSync(join(path, "locked"), 0o755);
+	}
+});
+
+posix("every project door refuses a creation's folder, including a ~ path", async () => {
+	setProjectPathGuard((path) => {
+		if (creationOwnsPath(path)) throw new Error("still creating");
+	});
+	const savedHome = process.env.HOME;
+	process.env.HOME = dataDir;
+	hook("sleep 1");
+	try {
+		const creation = startWorkspaceCreation("p1");
+		await until(() => listWorkspaceCreations()[0]?.phase === "checking-out");
+		expect(() => openProject("~/worktrees/repo/workspace-1")).toThrow("still creating");
+		expect(() => initProject("~/worktrees/repo/workspace-1")).toThrow("still creating");
+		expect(() => createProject("~/worktrees/repo/workspace-1", "nested")).toThrow("still creating");
+		expect(() =>
+			inspectCloneDestination(join(dataDir, "worktrees", "repo", "workspace-1"), "c"),
+		).toThrow("still creating");
+		await awaitWorkspaceCreation(creation.id);
+	} finally {
+		setProjectPathGuard(null);
+		process.env.HOME = savedHome;
 	}
 });
 

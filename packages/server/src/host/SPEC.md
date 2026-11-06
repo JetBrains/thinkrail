@@ -571,8 +571,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   after it reach the chat through the session's own event stream. Waiting for the whole send ack (up to 10 s,
   or the entire first turn) kept the finished workspace on "Creating…" for that long. An empty kickoff starts
   the chat without a prompt, so the start surface always lands in a chat. The client key is remembered in memory only and dropped after the handoff or
-  a successful dismiss. `project.open` and `project.init` refuse a folder an in-flight creation owns, so a
-  half-made worktree can never be adopted as a project while its cleanup may still remove it.
+  a successful dismiss. The host installs `projects`' path guard with `workspaces`' `creationOwnsPath`, so
+  opening, initializing, creating or cloning a project at or inside a folder that is still being created is
+  refused — a half-made worktree can never be adopted while its cleanup may still remove it.
   `workspace.create` stays a start-and-await over the same job (wire and e2e callers);
   its setup observation, like `startCreate`'s, wraps the whole job.
 - **Project lifecycle fan-out:** `createServer` installs the `projects` module's publisher and maps every

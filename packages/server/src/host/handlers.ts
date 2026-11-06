@@ -226,7 +226,6 @@ import {
 	awaitWorkspaceCreation,
 	type CreationHandoff,
 	createWorkspace,
-	creationOwnsPath,
 	dismissWorkspaceCreation,
 	ensureWorkspaceScratchDir,
 	forgetWorkspace,
@@ -381,11 +380,6 @@ async function startChat(
 }
 
 const creationClients = new Map<string, string>();
-
-function assertNotCreationFolder(path: string): void {
-	if (creationOwnsPath(path))
-		throw new Error("This folder belongs to a workspace ThinkRail is still creating");
-}
 
 export const workspaceCreationHandoff: CreationHandoff = async (workspace, kickoff) => {
 	const clientKey = creationClients.get(workspace.id) ?? "";
@@ -632,17 +626,9 @@ function invalidSurveyOnThrow<T>(build: () => T): T {
 }
 
 const handlers: WsHandlers = {
-	"project.open": (params) =>
-		observeSetupAction("project_open", () => {
-			assertNotCreationFolder(params.path);
-			return openProject(params.path);
-		}),
+	"project.open": (params) => observeSetupAction("project_open", () => openProject(params.path)),
 	"project.inspect": (params) => inspectProjectPath(params.path),
-	"project.init": (params) =>
-		observeSetupAction("project_init", () => {
-			assertNotCreationFolder(params.path);
-			return initProject(params.path);
-		}),
+	"project.init": (params) => observeSetupAction("project_init", () => initProject(params.path)),
 	"project.create": (params) =>
 		observeSetupAction("project_create", () =>
 			createProject(params.parentPath, params.name, params.displayName),
