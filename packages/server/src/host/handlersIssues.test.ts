@@ -434,3 +434,45 @@ test("the v108 implementation start rejects older protocols and forwards the sha
 		expect(String(error)).not.toContain("/tmp/elsewhere");
 	}
 });
+
+test("v109 begin methods gate old clients before delegation and preserve request locale", async () => {
+	for (const call of [
+		{ method: "issues.beginDesign", name: "issuesBeginDesign" },
+		{ method: "issues.beginImplementation", name: "issuesBeginImplementation" },
+	] as const) {
+		const result = { workspaceId: "workspace", sessionId: "session" };
+		const params = { ...actionTarget, locale: "zh-CN" };
+		const spy = spyOn(issues, call.name).mockResolvedValue(result);
+		try {
+			for (const protocolVersion of [104, 108])
+				await expect(
+					handleRequest(call.method, params, { clientKey: "begin", protocolVersion }),
+				).rejects.toThrow("Issue session startup is unavailable for this protocol version.");
+			expect(spy).not.toHaveBeenCalled();
+			for (const protocolVersion of [109, 110, undefined]) {
+				expect(
+					await handleRequest(call.method, params, {
+						clientKey: "begin",
+						...(protocolVersion === undefined ? {} : { protocolVersion }),
+					}),
+				).toEqual(result);
+				expect(spy).toHaveBeenLastCalledWith(params);
+			}
+		} finally {
+			spy.mockRestore();
+		}
+		for (const params of [
+			actionTarget,
+			{ ...actionTarget, locale: "system" },
+			{ ...actionTarget, locale: "en", token: "private-PAT" },
+		]) {
+			const error = await handleRequest(call.method, params, {
+				clientKey: "begin",
+				protocolVersion: 109,
+			}).catch((error: unknown) => error);
+			expect(error).toBeInstanceOf(CodedError);
+			expect((error as CodedError).code).toBe("RANGE_INVALID");
+			expect(String(error)).not.toContain("private-PAT");
+		}
+	}
+});

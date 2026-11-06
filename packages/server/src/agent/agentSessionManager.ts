@@ -2338,6 +2338,44 @@ async function steerEntry(
 	if (entry.toolResponseWaiters.supersede()) publishEntryState(entry);
 }
 
+/** Start an idle chat's initial prompt; acknowledge Pi admission, not model-turn completion. */
+export async function startInitialSessionPrompt(sessionId: string, text: string): Promise<void> {
+	const entry = mustGetEntry(sessionId);
+	admitRun(entry);
+	const blocked = reloadBlockedReason(entry);
+	if (blocked) throw new Error(`Can't start an initial prompt while ${blocked}.`);
+	if (!text.trim() || Buffer.byteLength(text, "utf8") > 128 * 1024) {
+		throw new Error("Initial prompt text must be nonblank and at most 128 KiB UTF-8.");
+	}
+	const release = admitPreflight(entry);
+	return new Promise<void>((resolve, reject) => {
+		let accepted = false;
+		// The run outlives this acknowledgement. Always observe its rejection and release via the
+		// normal lifecycle, not at acknowledgement (Pi may not have emitted agent_start yet).
+		void (async () => {
+			try {
+				await entry.session.prompt(text, {
+					preflightResult: (disposition) => {
+						if (disposition !== "started") {
+							reject(new Error("Initial prompt was not started."));
+							return;
+						}
+						cancelExtUiForSession(sessionId);
+						accepted = true;
+						resolve();
+					},
+				});
+				if (!accepted) reject(new Error("Initial prompt was not accepted."));
+			} catch (error) {
+				if (!accepted) reject(error);
+				else log.warn(`initial session prompt failed for ${sessionId}`, error);
+			} finally {
+				release();
+			}
+		})();
+	});
+}
+
 export async function promptSession(
 	sessionId: string,
 	text: string,

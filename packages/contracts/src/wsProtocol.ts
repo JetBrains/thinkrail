@@ -94,6 +94,7 @@ import type {
 	IssuePublication,
 	IssueRepositoryAddress,
 	IssueSessionLaunch,
+	IssueSessionStartupTarget,
 	IssueTarget,
 } from "./issues";
 import type {
@@ -148,7 +149,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 108;
+export const PROTOCOL_VERSION = 109;
+export const ISSUES_SESSION_STARTUP_PROTOCOL_VERSION = 109;
 export const GITHUB_STAR_PROTOCOL_VERSION = 103;
 export const ISSUES_IMPLEMENTATION_PROTOCOL_VERSION = 108;
 export const ISSUES_DESIGN_APPROVAL_PROTOCOL_VERSION = 107;
@@ -252,6 +254,8 @@ export const WS_METHODS = {
 	issuesDesignApproval: "issues.designApproval",
 	issuesDisconnect: "issues.disconnect",
 	issuesList: "issues.list",
+	issuesBeginDesign: "issues.beginDesign",
+	issuesBeginImplementation: "issues.beginImplementation",
 	issuesLaunchDesign: "issues.launchDesign",
 	issuesLaunchImplementation: "issues.launchImplementation",
 	issuesPublishDesign: "issues.publishDesign",
@@ -733,6 +737,8 @@ export interface WsMethodMap {
 	"issues.approveDesign": { params: IssueTarget; result: IssueApprovalResult };
 	"issues.approveImplementation": { params: IssueTarget; result: IssueApprovalResult };
 	"issues.designApproval": { params: IssueTarget; result: IssueDesignApproval };
+	"issues.beginDesign": { params: IssueSessionStartupTarget; result: IssueSessionLaunch };
+	"issues.beginImplementation": { params: IssueSessionStartupTarget; result: IssueSessionLaunch };
 	"issues.launchDesign": { params: IssueTarget; result: IssueSessionLaunch };
 	"issues.launchImplementation": { params: IssueImplementationTarget; result: IssueSessionLaunch };
 	"issues.publishDesign": { params: IssueDesignPublicationInput; result: IssuePublication };

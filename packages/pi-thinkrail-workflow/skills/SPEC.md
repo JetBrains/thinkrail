@@ -199,9 +199,10 @@ flowchart LR
 | `importing-a-codebase` | worker — existing codebase → first spec graph (derive + adopt existing docs + minimal interview) | `setting-up-a-project` + narrow self-trigger | active; covered by a tagged `@agent` e2e; route-in also observed by the routing suite; the doc-adoption offer observed green by the harness's importing suite (2026-07: adoption + no-candidates regression scenarios; the pre-change skill run red against the same scenario as the before/after control); the rationale ("why") and known-limitation questions are unverified by use (the importing suite stayed green after they landed, 2026-10, but does not assert them) |
 | `asking-user-questions` | concept — multi-round interviews (design tree / frontier), question quality, options, inference confirmation, degradation | — (reached by name, rule 4) | active; the multi-round interview model unverified by use; the earlier single-round norm was observed (2026-07 manual: loaded through brainstorming's reference, a round composed + resolved) |
 | `writing-specs` | concept — the spec quality bar (short / honest / on-rails) for every spec-producing flow | — (reached by name, rule 4) | active; observed by use (2026-07 manual: self-triggered for a spec revision and applied) |
-| `choosing-a-workflow` | router (root) — classification + routing for workflow-eligible work | — (conditional pointer from the always-on rule, rule 4) | active; every classification, including the default entry for small behavior changes and bug reports, observed green by the routing suite (2026-10) |
+| `choosing-a-workflow` | router (root) — classification + routing for workflow-eligible work | — (conditional pointer from the always-on rule, rule 4) | active; ordinary classifications observed green by the routing suite (2026-10); explicit Tomato Issue-session routing unverified by use |
 | `writing-workflow-skills` | worker — authoring checklist for adding workflows | — (self-trigger only, rule 4) | active |
 | `shipping-a-pr` | worker — PR lifecycle (create with gates / body or screenshot maintenance / up-to-date sync / checks / review comments — phases as sibling docs) | `choosing-a-workflow` (root) + narrow self-trigger | active; snapshot-by-default completion and verification reuse unverified by use (rule 14 suspended) |
+| `tomato-issue-workflow` | worker — explicitly launched Tomato Issue design/implementation session; delegates design to `brainstorming`, uses existing implementation planning and verification, records sanitized Issue handoff | `choosing-a-workflow` (root) for explicit Issue sessions + narrow self-trigger | active; unverified by use |
 
 The family is open and grows from real use; candidates (research/spike, refactor, a composing
 skill in the composer pattern with its stage workers, and **extending an existing spec graph** — the
@@ -262,6 +263,12 @@ with no UI for it, skipped or declined answers, a workspace with no pre-existing
 configured here. What
 follows is only the rationale the skill bodies don't state:
 
+- **`tomato-issue-workflow`** ([[submodule-tomato-issue-workflow]]) is a narrowly addressed
+  Issue-session worker, not a replacement default for behavior changes or incidental Issue links.
+  Its approved name is a local exception to rule 15. It composes existing work practices without
+  adding a role, runtime, or implementation approval gate; the host remains the authority for
+  Issue associations and side effects. Explicit invocation can reach it even for design-only work
+  outside the always-on entry rule; that rule and ordinary routes are unchanged.
 - **`brainstorming`** applies the discipline this repo holds itself to ("the spec leads the code")
   to every change in what the product does: request → interviewed design in a spec-graph `task-spec`
   → amended durable specs → implementation. It is the default for a feature, a behavior change, or a

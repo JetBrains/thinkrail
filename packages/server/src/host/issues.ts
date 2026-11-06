@@ -9,6 +9,7 @@ import {
 	isIssueTarget,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { sessionReuseStatus, startInitialSessionPrompt } from "../agent";
 import { gitAsync, originUrls } from "../git";
 import {
 	createIssuesService,
@@ -21,8 +22,15 @@ import {
 import { logger } from "../log";
 import { dataDir } from "../persistence";
 import { getProjects } from "../projects";
+import { getConfig } from "../settings";
+import { getWorkspace } from "../workspaces";
+import {
+	createIssueAgentSessionHost,
+	type IssueAgentSessionHostOptions,
+} from "./issueAgentSessions";
 import { createIssueCredentials } from "./issueCredentials";
-import { createIssuesActions, type IssueActionSessions } from "./issuesActions";
+import { createIssueSessionStore, type IssueSessionStore } from "./issueSessions";
+import { createIssuesActions, type IssueActionSessions, privateDirectory } from "./issuesActions";
 import { createIssueWorkflowPersistence } from "./issueWorkflowPersistence";
 
 function invalid(): never {
@@ -179,6 +187,7 @@ export function createIssuesHost(
 		dir?: string;
 		fetch?: IssuesServiceOptions["fetch"];
 		sessions?: IssueActionSessions;
+		start?: IssueAgentSessionHostOptions["start"];
 		/** Tests must inject a disposable store; production uses the host OS vault. */
 		credentials?: IssueCredentialStore;
 	} = {},
@@ -206,8 +215,31 @@ export function createIssuesHost(
 		await issues.restore(projectId);
 		project(projectId, trusted);
 	}
+	let store: IssueSessionStore | undefined;
+	const agentSessions = createIssueAgentSessionHost({
+		service,
+		store: () => {
+			if (!store) {
+				privateDirectory(root);
+				const path = join(root, "issue-sessions");
+				privateDirectory(path);
+				store = createIssueSessionStore(path);
+			}
+			return store;
+		},
+		project: (id) => project(id, true),
+		workspace: getWorkspace,
+		status: options.sessions?.status ?? sessionReuseStatus,
+		start:
+			options.start ?? ((id, _workspaceId, _cwd, prompt) => startInitialSessionPrompt(id, prompt)),
+		locale: () => {
+			const locale = getConfig().locale;
+			return locale === "system" ? Intl.DateTimeFormat().resolvedOptions().locale : locale;
+		},
+	});
 	return {
-		...createIssuesActions(service, root, options.sessions),
+		agentSessions,
+		...createIssuesActions(service, root, options.sessions, agentSessions),
 		async connection(params: unknown) {
 			const { projectId } = request(params);
 			project(projectId, false);
@@ -271,19 +303,21 @@ export function createIssuesHost(
 	};
 }
 
-const host = createIssuesHost();
-export const issuesApproveDesign = host.approveDesign;
-export const issuesApproveImplementation = host.approveImplementation;
-export const issuesConnection = host.connection;
-export const issuesConnect = host.connect;
-export const issuesDesignApproval = host.designApproval;
-export const issuesDisconnect = host.disconnect;
-export const issuesList = host.list;
-export const issuesLaunchDesign = host.launchDesign;
-export const issuesLaunchImplementation = host.launchImplementation;
-export const issuesPublishDesign = host.publishDesign;
-export const issuesPublishImplementation = host.publishImplementation;
-export const issuesRepositoryAddress = host.repositoryAddress;
-export const issuesStartImplementation = host.startImplementation;
-export const issuesValidateDesign = host.validateDesign;
-export const issuesValidateImplementation = host.validateImplementation;
+export const issuesHost = createIssuesHost();
+export const issuesBeginDesign = issuesHost.beginDesign;
+export const issuesBeginImplementation = issuesHost.beginImplementation;
+export const issuesApproveDesign = issuesHost.approveDesign;
+export const issuesApproveImplementation = issuesHost.approveImplementation;
+export const issuesConnection = issuesHost.connection;
+export const issuesConnect = issuesHost.connect;
+export const issuesDesignApproval = issuesHost.designApproval;
+export const issuesDisconnect = issuesHost.disconnect;
+export const issuesList = issuesHost.list;
+export const issuesLaunchDesign = issuesHost.launchDesign;
+export const issuesLaunchImplementation = issuesHost.launchImplementation;
+export const issuesPublishDesign = issuesHost.publishDesign;
+export const issuesPublishImplementation = issuesHost.publishImplementation;
+export const issuesRepositoryAddress = issuesHost.repositoryAddress;
+export const issuesStartImplementation = issuesHost.startImplementation;
+export const issuesValidateDesign = issuesHost.validateDesign;
+export const issuesValidateImplementation = issuesHost.validateImplementation;

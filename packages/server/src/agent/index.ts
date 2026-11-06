@@ -33,6 +33,7 @@ export {
 	setDisabledExtensionsResolver,
 	setDisabledPackagesResolver,
 } from "./extensions";
+export { type IssueToolHost, setIssueToolHost } from "./issueTools";
 export {
 	effectiveMcpServerConfig,
 	mcpEntryFingerprint,

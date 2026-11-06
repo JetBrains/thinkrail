@@ -31,6 +31,7 @@ async function fixture() {
 	const workspaces: WorkspaceHandle[] = [];
 	const trees: { path: string; branch: string | null; prunable?: boolean }[] = [];
 	const sessions = new Map<string, "idle" | "busy">();
+	const bound = new Map<string, string>();
 	const events: string[] = [];
 	const createdNames: string[] = [];
 	let failSave = 0;
@@ -76,6 +77,7 @@ async function fixture() {
 			kind: "default",
 		}),
 		sessionExists: async (sessionId) => sessions.get(sessionId) ?? false,
+		boundSession: async (stage, workspaceId) => bound.get(`${stage}:${workspaceId}`),
 		createSession: async (workspaceId) => {
 			events.push(`session:${workspaceId}`);
 			if (failSession) throw new Error("secret session error");
@@ -90,6 +92,7 @@ async function fixture() {
 		workspaces,
 		trees,
 		sessions,
+		bound,
 		events,
 		createdNames,
 		options,
@@ -97,11 +100,11 @@ async function fixture() {
 		failSave: (n: number) => {
 			failSave = n;
 		},
-		failCreate: () => {
-			failCreate = true;
+		failCreate: (on = true) => {
+			failCreate = on;
 		},
-		failSession: () => {
-			failSession = true;
+		failSession: (on = true) => {
+			failSession = on;
 		},
 	};
 }
@@ -151,21 +154,54 @@ test("completed-save failure halts before session; matching pending ownership ca
 	expect(f.events.filter((event) => event === "create")).toHaveLength(1);
 });
 
-test("uncertain create leaves pending and never automatically repeats creation", async () => {
+test("an abandoned worktree reservation that left nothing on disk is re-reserved", async () => {
 	const f = await fixture();
 	f.failCreate();
 	await expect(f.coordinator().implementation(ref)).rejects.toThrow();
-	await expect(f.coordinator().implementation(ref)).rejects.toThrow();
-	expect(f.events.filter((event) => event === "create")).toHaveLength(1);
+	const abandoned = required([...f.records.values()][0]).implementation;
+	expect(abandoned?.state).toBe("pending");
+	f.failCreate(false);
+	const launch = await f.coordinator().implementation(ref);
+	const completed = required([...f.records.values()][0]).implementation;
+	expect(completed).toMatchObject({
+		state: "completed",
+		workspaceId: launch.workspaceId,
+		session: { id: launch.sessionId },
+	});
+	expect(completed?.branch).not.toBe(abandoned?.branch);
+	expect(f.events.filter((event) => event === "create")).toHaveLength(2);
+	expect(f.workspaces).toHaveLength(1);
 });
 
-test("session failure retains completed workspace but blocks automatic session retries", async () => {
+test("an abandoned pending marker adopts the session the host already bound", async () => {
 	const f = await fixture();
-	f.failSession();
-	await expect(f.coordinator().implementation(ref)).rejects.toThrow();
-	expect([...f.records.values()][0]?.implementation?.state).toBe("completed");
-	await expect(f.coordinator().implementation(ref)).rejects.toThrow("reconciliation");
+	f.failSave(2);
+	await expect(f.coordinator().design(ref)).rejects.toThrow("reconciliation");
+	const sessionId = required([...f.sessions.keys()][0]);
+	expect(required([...f.records.values()][0]).sessionPending).toEqual({
+		stage: "design",
+		workspaceId: "default",
+	});
+	// The host binds the created session immediately; only the association save was lost.
+	f.bound.set("design:default", sessionId);
+	expect(await f.coordinator().design(ref)).toEqual({ workspaceId: "default", sessionId });
+	expect(f.sessions.size).toBe(1);
 	expect(f.events.filter((event) => event.startsWith("session:"))).toHaveLength(1);
+	const record = required([...f.records.values()][0]);
+	expect(record).not.toHaveProperty("sessionPending");
+	expect(record.design).toEqual({ workspaceId: "default", sessionId });
+});
+
+test("an abandoned pending marker with no bound session is cleared and retried once", async () => {
+	const f = await fixture();
+	f.failSave(4);
+	await expect(f.coordinator().implementation(ref)).rejects.toThrow("reconciliation");
+	const record = required([...f.records.values()][0]);
+	expect(record.sessionPending?.stage).toBe("implementation");
+	const rebound = await f.coordinator().implementation(ref);
+	expect(rebound.sessionId).not.toBe("");
+	expect(f.sessions.size).toBe(2);
+	expect(required([...f.records.values()][0])).not.toHaveProperty("sessionPending");
 });
 
 test("concurrent launches serialize one issue and share one session", async () => {
@@ -280,41 +316,6 @@ test("design busy session is not prompted or replaced", async () => {
 	await expect(f.coordinator().design(ref)).rejects.toThrow();
 	expect(f.events.filter((event) => event.startsWith("session:"))).toHaveLength(1);
 });
-
-for (const stage of ["design", "implementation"] as const) {
-	test(`${stage} successful session creation with failed association blocks every retry`, async () => {
-		const f = await fixture();
-		const save = f.options.save;
-		const createSession = f.options.createSession;
-		let failNextSave = false;
-		f.options.save = async (key, record) => {
-			if (failNextSave) {
-				failNextSave = false;
-				throw new Error("uncertain association save");
-			}
-			await save(key, record);
-		};
-		f.options.createSession = async (workspaceId) => {
-			const id = await createSession(workspaceId);
-			failNextSave = true;
-			return id;
-		};
-		const launch = () =>
-			stage === "design" ? f.coordinator().design(ref) : f.coordinator().implementation(ref);
-		await expect(launch()).rejects.toThrow("reconciliation");
-		expect(f.sessions.size).toBe(1);
-		await expect(launch()).rejects.toThrow("reconciliation");
-		await expect(f.coordinator().design(ref)).rejects.toThrow("reconciliation");
-		await expect(f.coordinator().implementation(ref)).rejects.toThrow("reconciliation");
-		expect(f.events.filter((event) => event.startsWith("session:"))).toHaveLength(1);
-		expect(required([...f.records.values()][0])).toMatchObject({
-			sessionPending: {
-				stage,
-				workspaceId: stage === "design" ? "default" : "ws-0",
-			},
-		});
-	});
-}
 
 test("successful sessions clear pending markers without discarding either stage's records", async () => {
 	const f = await fixture();

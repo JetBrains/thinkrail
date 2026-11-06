@@ -5,9 +5,11 @@ import {
 	type IssueImplementationTarget,
 	type IssueReference,
 	type IssueSessionLaunch,
+	type IssueSessionStartupTarget,
 	type IssueTarget,
 	isIssueDesignPublicationInput,
 	isIssueImplementationTarget,
+	isIssueSessionStartupTarget,
 	isIssueTarget,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
@@ -30,10 +32,13 @@ import {
 	listWorkspaces,
 } from "../workspaces";
 import { createHostSession } from "./createHostSession";
+import type { IssueAgentSessionHost } from "./issueAgentSessions";
 import { createIssueWorkflowPersistence } from "./issueWorkflowPersistence";
 import { createIssueWorkspacePersistence } from "./issueWorkspacePersistence";
 
 type Action =
+	| "beginDesign"
+	| "beginImplementation"
 	| "approveDesign"
 	| "approveImplementation"
 	| "launchDesign"
@@ -53,6 +58,7 @@ function invalid(): never {
 	throw new CodedError("RANGE_INVALID", "Invalid Issue request.");
 }
 type ParsedAction =
+	| { action: "beginDesign" | "beginImplementation"; args: IssueSessionStartupTarget }
 	| {
 			action:
 				| "approveDesign"
@@ -74,6 +80,10 @@ function snapshot<T extends IssueTarget>(value: T): T {
 }
 function parse(value: unknown, action: Action): ParsedAction {
 	switch (action) {
+		case "beginDesign":
+		case "beginImplementation":
+			if (!isIssueSessionStartupTarget(value)) invalid();
+			return { action, args: snapshot(value) };
 		case "publishDesign":
 			if (!isIssueDesignPublicationInput(value)) invalid();
 			return { action, args: snapshot(value) };
@@ -92,7 +102,7 @@ function trusted(projectId: string) {
 	return project;
 }
 // Walk every existing ancestor: recursive mkdir must never traverse a symlink/junction.
-function privateDirectory(path: string): void {
+export function privateDirectory(path: string): void {
 	const parent = dirname(path);
 	if (parent !== path) privateDirectory(parent);
 	try {
@@ -111,9 +121,15 @@ export function createIssuesActions(
 	service: () => Promise<IssuesService>,
 	dir: string,
 	sessions: IssueActionSessions = {},
+	agentSessions?: IssueAgentSessionHost,
 ) {
 	function run(
-		action: "launchDesign" | "launchImplementation" | "startImplementation",
+		action:
+			| "beginDesign"
+			| "beginImplementation"
+			| "launchDesign"
+			| "launchImplementation"
+			| "startImplementation",
 		input: unknown,
 	): Promise<IssueSessionLaunch>;
 	function run(
@@ -135,7 +151,13 @@ export function createIssuesActions(
 		if (trusted(projectId).path !== initialProject.path) stop();
 		const remote = issues.remoteFor(projectId, reference);
 		let pinned: WorkspaceHandle | undefined;
-		let sessionTitle: string | undefined;
+		let startupPrompt: string | undefined;
+		const startup =
+			request.action === "beginDesign" || request.action === "beginImplementation"
+				? request.args
+				: undefined;
+		const stage =
+			action === "launchDesign" || action === "beginDesign" ? "design" : "implementation";
 		function guard() {
 			if (
 				trusted(projectId).path !== initialProject.path ||
@@ -229,6 +251,8 @@ export function createIssuesActions(
 					},
 					currentImplementationCommit: currentCommit,
 				});
+				let preparedPrompt: string | undefined;
+				let sessionTitle: string | undefined;
 				const coordinator = createIssueWorkspaceCoordinator({
 					projectId,
 					projectPath: () => checked(() => trusted(projectId).path),
@@ -238,6 +262,14 @@ export function createIssuesActions(
 					listGitWorktrees: (id) => checked(() => listGitWorktrees(id)),
 					createWorkspaceAtPath: (id, path, branch, name) =>
 						checked(() => createWorkspaceAtPathWithBranch(id, path, branch, undefined, name)),
+					boundSession: (stage, workspaceId) =>
+						checked(async () => {
+							if (!agentSessions) stop();
+							const found = await checked(() =>
+								agentSessions.findAssociation({ projectId, reference, stage, workspaceId }),
+							);
+							return found?.sessionId;
+						}),
 					defaultWorkspace: (id) =>
 						checked(async () => {
 							const rows = await checked(() => listWorkspaces(id, { includeDiffStats: false }));
@@ -254,26 +286,68 @@ export function createIssuesActions(
 					createSession: (workspaceId) =>
 						checked(async () => {
 							if (!find({ workspaceId })) stop();
-							sessionTitle ??= (await checked(() => wrapped.issue(reference.number))).title;
+							// This port is called only after the coordinator decides a new session is needed.
+							const title =
+								sessionTitle ?? (await checked(() => wrapped.issue(reference.number))).title;
 							const created = await checked(() =>
-								(sessions.create ?? createHostSession)({ workspaceId }, guard, {
-									title: sessionTitle,
-								}),
+								(sessions.create ?? createHostSession)({ workspaceId }, guard, { title }),
 							);
+							if (startup) {
+								if (!agentSessions || preparedPrompt === undefined) stop();
+								await checked(() =>
+									agentSessions.bind({
+										sessionId: created.sessionId,
+										workspaceId,
+										projectId,
+										reference,
+										stage,
+										locale: startup.locale,
+									}),
+								);
+								// Only this newly created and durably bound session may start.
+								startupPrompt = preparedPrompt;
+							}
 							return created.sessionId;
 						}),
 				});
+				async function launch(kind: "design" | "implementation") {
+					if (startup) {
+						sessionTitle = (await checked(() => wrapped.issue(reference.number))).title;
+						if (!agentSessions) stop();
+						// Read all context before the coordinator can create a worktree or session.
+						preparedPrompt = await checked(() =>
+							agentSessions.prepare({
+								projectId,
+								reference,
+								stage,
+								locale: startup.locale,
+							}),
+						);
+					}
+					const result = await checked(() =>
+						kind === "design"
+							? coordinator.design(reference)
+							: coordinator.implementation(reference),
+					);
+					if (startupPrompt !== undefined) {
+						if (!agentSessions) stop();
+						await checked(() => agentSessions.start(result.sessionId, startupPrompt));
+					}
+					return result;
+				}
 				switch (request.action) {
 					case "approveDesign":
 						return checked(() => workflow.approveStage(reference, "design"));
 					case "approveImplementation":
 						return checked(() => workflow.approveStage(reference, "implementation"));
+					case "beginDesign":
 					case "launchDesign":
-						return checked(() => coordinator.design(reference));
+						return launch("design");
+					case "beginImplementation":
 					case "launchImplementation":
 					case "startImplementation":
 						// No approval gate: an explicit click starts (or reuses) the Issue worktree.
-						return checked(() => coordinator.implementation(reference));
+						return launch("implementation");
 					case "publishDesign":
 						return checked(() =>
 							workflow.publishDesign(
@@ -298,6 +372,8 @@ export function createIssuesActions(
 		);
 	}
 	return {
+		beginDesign: (input: unknown) => run("beginDesign", input),
+		beginImplementation: (input: unknown) => run("beginImplementation", input),
 		approveDesign: (input: unknown) => run("approveDesign", input),
 		approveImplementation: (input: unknown) => run("approveImplementation", input),
 		launchDesign: (input: unknown) => run("launchDesign", input),

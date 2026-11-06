@@ -205,9 +205,16 @@ store or runtime. It reserves a provider-qualified ownership record before creat
 `.worktrees/issue-<IID>`, persists the registered workspace before starting a session, and reuses recorded idle
 sessions. A pending create is recoverable only when both Git registration and a managed workspace match
 its reserved branch/path; it never adopts an unrelated checkout, overwrites a destination, chooses a
-suffix, deletes a checkout, or prompts a busy session. Session creation also requires a durable pending
-marker before the side effect; failure to save its resulting association blocks all subsequent launches
-until reconciliation instead of creating duplicate sessions. The host composes the coordinator under its durable launch fence. Host composition must use the server-only exact-branch
+suffix, deletes a checkout, or prompts a busy session. A pending create that left no directory, no Git
+worktree entry and no workspace registration created nothing, so it is re-reserved with a fresh branch
+rather than blocking. Session creation also requires a durable pending marker before the side effect.
+
+That marker is reconciled only from evidence the host already recorded: the session it bound for the
+same stage and workspace (written immediately after creation, before the association save). When that
+binding exists the launch adopts it; when it does not, nothing bound the stage and the marker is
+cleared so the action can run again, accepting at most one unreferenced session if a process died
+between creation and binding. Launch actions reconcile; read-only lookups such as
+`ownedImplementation` keep refusing any marker without writing. The host composes the coordinator under its durable launch fence. Host composition must use the server-only exact-branch
 workspace capability; the generic name-to-unique-branch API remains unsuitable.
 
 `implementation(reference)` requires no design approval, version, workflow-label transition or
@@ -222,6 +229,37 @@ root's `.worktrees/issue-<IID>` and its parent must be real directories, not lin
 ownership and any session-pending fence fail closed; lookup never creates, adopts, recovers, saves,
 or inspects/starts sessions. Future host current-HEAD verification must use this owned worktree,
 never a caller-supplied path or SHA. This lookup observes ownership, not a Git lock.
+
+## Session startup context
+
+`session.ts` is a pure startup-prompt boundary, not a session service or lifecycle store. Its prompt
+factory and association/context types are exported through the Issues barrel for host composition.
+`BoundIssueSession` records `sessionId`, `workspaceId`, local `projectId`, provider-qualified
+`reference`, explicit `stage: "design" | "implementation"`, and effective `locale`. It contains no
+client, binding, credential or approval state. `IssueStartupContext` accepts only a reference,
+`GitLabIssue`, complete `GitLabNote[]` as `notes`, verified Issue `link`, explicit stage and locale;
+callers must finish all note pagination before calling. Completeness cannot be proven from an array.
+
+`createIssueStartupPrompt(context)` begins with `/skill:tomato-issue-workflow ` (a literal space
+before arguments, as required by the SDK parser), names the stage and
+response locale, and instructs reading the entire context. Design delegates to the existing ThinkRail
+brainstorming process without implementation; implementation uses existing plans/TODOs, verification
+and review without a design approval gate. Both require confirmed `issue_record_summary` publication
+to the bound Issue comments before conclusions or yielding, including blocked/partial work, with key
+decisions, results, validation and next steps only. Missing/uncertain context or publication blocks
+success; transcripts, internal reasoning, raw tool output and secrets must not be published.
+
+The reference uses the shared strict action identity guard. Links must be canonical credential-free
+HTTP(S), on that instance beneath its base path, ending in `/<project path>/-/issues/<bound IID>`;
+the caller still owns verifying that path against the numeric remote project. Locale must be an
+effective canonical BCP-47 tag (shared 35-character bound), never `system`; English and Chinese have
+explicit language instructions and other tags get a BCP-47 language instruction. Only explicitly
+projected Issue/note fields enter a JSON block marked untrusted external data. JSON escapes angle
+brackets and line separators so supplied text cannot close its delimiters; raw data cannot override
+stage, language, workspace rules or tool permissions. No project configuration or PAT input exists.
+The whole UTF-8 prompt is capped at 128 KiB; excessive context fails with a static error rather than
+silently truncating any description or comment. No I/O, new dependency, host/agent/UI integration,
+worktree/session creation, or side effects belong to this slice.
 
 ## Dependencies and forbidden reaches
 

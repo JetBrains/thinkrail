@@ -80,6 +80,7 @@ function IssueActionRow({ issue, capabilities, pending, error, onRun }: IssueAct
 				)}
 				{actions.map(({ action, reason, done }) => {
 					const label = t(ISSUE_ACTION_KEY[action]);
+					const hint = capabilities.startupSupported === false ? t("mcp.action.openChat") : label;
 					return (
 						<IconButton
 							key={action}
@@ -87,7 +88,7 @@ function IssueActionRow({ issue, capabilities, pending, error, onRun }: IssueAct
 							variant={done ? "soft-primary" : "ghost"}
 							icon={ACTION_ICON[action]}
 							label={label}
-							tooltip={reason === null ? label : `${label} — ${t(ISSUE_ACTION_REASON_KEY[reason])}`}
+							tooltip={reason === null ? hint : `${label} — ${t(ISSUE_ACTION_REASON_KEY[reason])}`}
 							data-testid={`issue-action-${action}`}
 							data-reason={reason ?? undefined}
 							data-done={done ? "true" : undefined}

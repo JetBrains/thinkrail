@@ -638,7 +638,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
 enabled/confirmed choice before entering analytics attribution.
 
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
-  `BootHostOptions`, `BootedHost`, `BuildKind`, `reportDesktopError`.
+  `BootHostOptions`, `BootedHost`, `BuildKind`, `reportDesktopError`,
+  `createIssueAgentSessionHost`, `IssueAgentSessionHost`, `IssueAgentSessionHostOptions`,
+  `createIssueSessionStore`, `IssueSessionAssociation`, `IssueSessionStore`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
   `boot.ts`; `codedError`); `persistence` (`dataDir` — where `crashLog.ts` writes); `pi-todos/core` (reduced synchronous
   task snapshots, with group status still core-owned); the feature modules it composes (per the parent dependency graph, incl. `fs`'s
@@ -895,8 +897,11 @@ reliable (local storage; network filesystem guarantees are not asserted). This s
 local directory. `withLaunch(localProjectId, reference, operation, beforeRelease?)` acquires and flushes an exclusive
 `wx` fence for `(localProjectId, IID)` before invoking the callback, which must wrap the entire
 process-local Issue workspace coordinator operation. Different remote bindings contend for the same
-numeric destination. Existing fences always require reconciliation: no waiting, timeout, stale-owner
-inference or takeover. A thrown callback or storage error before release leaves the fence; only a
+numeric destination. A fence names its owning `pid`, and an existing one is reconciled only by
+provable death of that owner (`ESRCH`), never by waiting, timeout or a guess: a fence written by an
+older build without a `pid` records no owner that could still be running and is reconciled the same
+way. A live owner, an unreadable or foreign fence, and a fence describing another key keep blocking.
+A thrown callback or storage error before release leaves the fence while its process lives; only a
 successful callback followed by all required write/directory flushes may remove its own fence.
 The optional synchronous `beforeRelease` guard runs after those flushes, immediately before unlink;
 a thrown guard retains the fence. Successful unlink is the explicit release commit point: no fallible
@@ -975,8 +980,7 @@ covers the entire action, including workflow work, with one coordinator construc
 callback; failures retain uncertainty for explicit reconciliation, never automatic retries.
 
 Workspace ports use project-constrained `listWorkspaceRecords`, authoritative `listGitWorktrees`,
-exact-branch creation and `listWorkspaces({includeDiffStats:false})` for Default. Design launches only
-create/reuse empty Default sessions, never worktrees or prompts. Implementation launches use the
+exact-branch creation and `listWorkspaces({includeDiffStats:false})` for Default. Design launches create/reuse Default sessions without worktrees and use bound Issue startup. Implementation launches use the
 coordinator's ownership ports without a workflow readiness check or design receipt. The recorded
 session is reused for every re-entry; no version is compared and no workflow label is written.
 Session reuse uses agent's nonprompting `sessionReuseStatus`; creation delegates to the existing
@@ -988,7 +992,7 @@ runs on that same coordinator/fence, followed by `git.resolveCommitOid(worktreeP
 another ownership check. Workspace id, path and branch are pinned across all current-commit reads in
 the action. The workflow repeatedly invokes this port around publication and implementation approval;
 a stale receipt cannot authorize a changed checkout HEAD. No recursive `withLaunch`, caller SHA,
-worktree adoption, prompts, push, MR, merge or CI capability is introduced.
+worktree adoption, push, MR, merge or CI capability is introduced.
 
 #### Implementation start (v108)
 
@@ -1034,3 +1038,82 @@ reconciliation error. Implementation receipts are never consulted or exposed, so
 implementation cannot stand in for a design approval. The answer is only that digest: no note id,
 body, commit, token or other receipt field crosses the wire, and failures remain the adapter's static
 `CodedError` messages rather than raw store contents.
+
+### Durable Issue session associations and once-only publication
+
+`issueSessions.ts` exports `createIssueSessionStore(root)`. This is a standalone host-owned,
+credential-free metadata namespace, not a credential store or agent adapter. The root must already
+exist on trusted, privately owned local storage; it is not created or discovered by this service.
+No session enumeration API, network access, vault access, agent calls or logs are provided; the
+stage lookup above reads only the store's own bindings.
+`bind(association)` durably fixes sessionId, workspaceId, local projectId, remote Issue reference,
+stage (`design|implementation`) and effective canonical BCP-47 locale (never `system`). Identical
+canonical identities are idempotent; every ownership/context change fails closed. `get(sessionId)`
+returns that association or null for an absent session. `findAssociation({projectId, reference,
+stage, workspaceId})` returns the one binding that matches all four, null when none does, and stops
+when two do: it is the coordinator's only evidence that an interrupted launch had already created its
+session. IDs are bounded safe opaque identifiers
+(including UUIDs and test identifiers such as `session`); references are exact, bounded GitLab
+HTTP(S) references without credentials/query/fragment, canonicalized before comparison.
+
+A SHA-256 session-id directory contains immutable, exclusive-created `bind.json`,
+`startup.pending`, `startup.completed`, and contiguous numbered summary `.intent`/`.completed`
+pairs. All accessed metadata must be regular files, never symlinks; roots/session directories
+must be real directories. Exact-shape bounded JSON is revalidated on reads, with no secret fields
+accepted. This assumes trusted ancestors and no hostile concurrent filesystem replacement.
+`reserveStartup(sessionId)` flushes an exclusive intent before returning true; callers must reserve
+before agent dispatch and invoke `completeStartup` only after the initial message is accepted.
+A valid completion takes precedence and makes reservation return false; any uncompleted intent,
+even torn or empty, requires explicit reconciliation. The service never dispatches that message.
+
+`recordSummary(sessionId, operationId, body, send)` flushes an exclusive intent containing the body's
+SHA-256 digest before invoking `send` exactly once. The callback returns a positive safe-integer
+confirmed note ID. A flushed completion stores only the digest, operation/session identity and note
+ID, not the raw summary body. The same completed operation/body returns its note ID without another
+send; changed bodies and any pending/invalid journal tail stop. Both summary bodies (128 KiB UTF-8)
+and record sizes (16 KiB) are bounded; at most 1,000 summary operations are retained per session.
+Cross-process arbitration is exclusive `wx` creation of the next immutable intent, not a process-local
+lock. A callback failure, process crash or failed completion leaves the intent permanently in place;
+no timeout, takeover, deletion or automatic replay exists. No fallible unlock/unlink follows commit.
+
+Immutable exclusive files deliberately replace rename-based replacement: rename could overwrite a
+competitor's claim. Success requires file fsync/close and directory/root flush where supported;
+readers independently flush complete records before trusting them. As with workflow persistence,
+Windows unsupported directory-open/fsync errors are tolerated: file bytes are flushed, but portable
+power-loss durability of directory entries is not promised. Reliable local exclusive-create/fsync
+semantics and durable root provisioning belong to the caller. This section introduces no wiring,
+agent behavior or UI surface.
+
+
+### Bound Issue agent composition
+
+`issueAgentSessions.ts` exports injected `createIssueAgentSessionHost` and host/options types;
+`issueSessions.ts` exports `IssueSessionStore`. `createIssuesHost` composes both with the same lazy
+IssuesService, trusted project and managed workspace lookup. The private `<dataDir>/issue-sessions`
+root is provisioned lazily before session creation. Server composition installs context/summary
+callbacks with `setIssueToolHost` after session services are available and clears them on shutdown.
+No credential crosses this seam. The new v109 `issues.beginDesign` and
+`issues.beginImplementation` actions require the exact `IssueSessionStartupTarget` (including its
+effective locale) and are gated independently at `ISSUES_SESSION_STARTUP_PROTOCOL_VERSION`.
+
+Only a new begin action prefetches the issue and complete notes and builds
+`createIssueStartupPrompt`, before the coordinator can create a worktree. Only a session actually
+created by that coordinator call is bound to the Issue and eligible for one startup prompt. Reused
+sessions, including legacy sessions with no association, return their IDs without rebinding or sending.
+The locale comes from the request, never the host preference. Legacy `launchDesign`,
+`launchImplementation`, and `startImplementation` retain their empty-session behavior and never
+associate or autostart. Newly created legacy and begin sessions use the guarded Issue title; reused
+sessions are never renamed. Binding is durably stored before the coordinator stores its launch association;
+only after both writes does the host reserve startup, send once, and record acceptance. Uncertain
+startup and failed launches retain reconciliation fences. The existing workspace launch fence covers
+the entire operation. Prefetch on a reused begin is permitted, but never causes a subsequent send.
+
+`issue_context` requires a durable association, current trust, matching workspace ownership and live
+exact remote capability. Every call fetches a fresh issue, complete paginated notes and verified remote
+project path and returns the bounded untrusted-data startup projection, never cached context.
+`issue_record_summary` validates a nonblank 32,000 UTF-8 byte body and caller-generated operation ID
+matching the tool's 1–128 ASCII alphanumeric/dot/underscore/colon/hyphen contract. The store binds that
+ID and exact body digest to the session before one authenticated note write. Confirmed retries return
+only the note ID; changed bodies or uncertain writes require reconciliation. Trust, project path,
+workspace path and remote identity are checked around asynchronous work. No automatic turn-end
+publication exists: the skill and startup prompt require confirmed summary publication before handoff.

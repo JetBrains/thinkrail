@@ -84,6 +84,7 @@ export {
 	isIssuePublication,
 	isIssueReference,
 	isIssueSessionLaunch,
+	isIssueSessionStartupTarget,
 	isIssueTarget,
 	requiresIssueHttpConsent,
 } from "./issues";

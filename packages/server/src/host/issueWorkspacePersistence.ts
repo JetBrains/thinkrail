@@ -14,8 +14,10 @@ import { isAbsolute, join, resolve } from "node:path";
 import { type IssueReference, isIssueReference } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import type { IssueWorkspaceRecord } from "../issues";
+import { logger } from "../log";
 
 const maxBytes = 16384;
+const log = logger("issues");
 function stop(): never {
 	throw new CodedError("RESOURCE_UNAVAILABLE", "Issue workspace requires reconciliation.");
 }
@@ -151,6 +153,53 @@ function hash(key: string) {
 	return createHash("sha256").update(key).digest("hex");
 }
 
+const fenceMaxBytes = 512;
+
+function alive(pid: number): boolean {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch (error) {
+		return (error as NodeJS.ErrnoException).code !== "ESRCH";
+	}
+}
+
+/** Reconciles only a provably dead owner; a live, foreign or unreadable fence keeps blocking. */
+function abandonedFence(path: string, projectId: string, number: number): boolean {
+	let text: string;
+	try {
+		const stat = lstatSync(path);
+		if (!stat.isFile() || stat.size === 0 || stat.size > fenceMaxBytes) return false;
+		const fd = openSync(path, "r");
+		try {
+			const bytes = Buffer.alloc(fenceMaxBytes + 1);
+			let length = 0;
+			while (length < bytes.length) {
+				const count = readSync(fd, bytes, length, bytes.length - length, null);
+				if (!count) break;
+				length += count;
+			}
+			text = new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(0, length));
+		} finally {
+			closeSync(fd);
+		}
+	} catch {
+		return false;
+	}
+	let value: unknown;
+	try {
+		value = JSON.parse(text);
+	} catch {
+		return false;
+	}
+	if (!object(value) || value.projectId !== projectId || value.number !== number) return false;
+	if (!shape(value, ["projectId", "number"], ["pid"])) return false;
+	if (!Object.hasOwn(value, "pid")) return true;
+	return (
+		Number.isSafeInteger(value.pid) && (value.pid as number) > 0 && !alive(value.pid as number)
+	);
+}
+
 export interface IssueWorkspacePersistencePorts {
 	load(key: string): Promise<IssueWorkspaceRecord | null>;
 	save(key: string, record: IssueWorkspaceRecord): Promise<void>;
@@ -178,9 +227,24 @@ export function createIssueWorkspacePersistence(root: string) {
 				const expected = keyFor(projectId, ref);
 				directory();
 				const lock = join(dir, `${hash(JSON.stringify([projectId, ref.number]))}.lock`);
-				const fd = openSync(lock, "wx", 0o600);
+				let fd: number;
 				try {
-					writeFileSync(fd, JSON.stringify({ projectId, number: ref.number }));
+					fd = openSync(lock, "wx", 0o600);
+				} catch (error) {
+					if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+					// A fence whose owner is provably gone is reconciliation, not takeover of live work.
+					if (!abandonedFence(lock, projectId, ref.number)) throw error;
+					log.warn(`reclaimed launch fence abandoned by a dead owner for Issue ${ref.number}`);
+					try {
+						unlinkSync(lock);
+					} catch (gone) {
+						// Another instance may have reclaimed the same dead fence first.
+						if ((gone as NodeJS.ErrnoException).code !== "ENOENT") throw gone;
+					}
+					fd = openSync(lock, "wx", 0o600);
+				}
+				try {
+					writeFileSync(fd, JSON.stringify({ projectId, number: ref.number, pid: process.pid }));
 					fsyncSync(fd);
 				} finally {
 					closeSync(fd);

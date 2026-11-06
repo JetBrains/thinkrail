@@ -245,7 +245,7 @@ test("round trips pending and completed associations without credentials", async
 	}
 });
 
-test("a crashed process leaves its durable launch fence", async () => {
+test("a fence left by a provably dead owner is reclaimed", async () => {
 	const { dir, store } = setup();
 	const moduleUrl = new URL("./issueWorkspacePersistence.ts", import.meta.url).href;
 	const child = Bun.spawn(
@@ -258,7 +258,55 @@ test("a crashed process leaves its durable launch fence", async () => {
 	);
 	expect(await child.exited).toBe(23);
 	expect(readdirSync(dir).filter((name) => name.endsWith(".lock"))).toHaveLength(1);
-	await expect(store.withLaunch("local", ref, async () => {})).rejects.toMatchObject(failure);
+	await store.withLaunch("local", ref, async (ports) => {
+		await ports.save(key(), record);
+	});
+	expect(readdirSync(dir).some((name) => name.endsWith(".lock"))).toBe(false);
+});
+
+test("an ownerless fence from an older build is reclaimed", async () => {
+	const { dir, store } = setup();
+	const lock = join(
+		dir,
+		`${createHash("sha256")
+			.update(JSON.stringify(["local", 3]))
+			.digest("hex")}.lock`,
+	);
+	writeFileSync(lock, JSON.stringify({ projectId: "local", number: 3 }));
+	await store.withLaunch("local", ref, async (ports) => {
+		await ports.save(key(), record);
+	});
+	expect(readdirSync(dir).some((name) => name.endsWith(".lock"))).toBe(false);
+});
+
+test("a fence held by a live owner is never reclaimed", async () => {
+	const { dir } = setup();
+	const moduleUrl = new URL("./issueWorkspacePersistence.ts", import.meta.url).href;
+	const child = Bun.spawn(
+		[
+			process.execPath,
+			"--eval",
+			`import {createIssueWorkspacePersistence} from ${JSON.stringify(moduleUrl)}; await createIssueWorkspacePersistence(${JSON.stringify(dir)}).withLaunch("local", ${JSON.stringify(ref)}, async () => { console.log("held"); await Bun.sleep(30_000); });`,
+		],
+		{ stdout: "pipe", stderr: "pipe" },
+	);
+	try {
+		const reader = child.stdout.getReader();
+		const decoder = new TextDecoder();
+		let output = "";
+		while (!output.includes("held")) {
+			const chunk = await reader.read();
+			if (chunk.done) break;
+			output += decoder.decode(chunk.value);
+		}
+		expect(output).toContain("held");
+		await expect(
+			createIssueWorkspacePersistence(dir).withLaunch("local", ref, async () => {}),
+		).rejects.toMatchObject(failure);
+	} finally {
+		child.kill();
+		await child.exited;
+	}
 });
 
 test("swallowed port errors cannot release a fence or overwrite a record", async () => {

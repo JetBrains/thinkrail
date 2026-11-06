@@ -14,7 +14,7 @@ Arrangement-agnostic GitLab connection form and compact kanban summary tool for 
 ## Boundary
 
 Depends on contracts (credential-free summary/connection DTOs, the `IssueSessionLaunch` DTO with
-`isIssueSessionLaunch`, the read, auth, action, approval, design-approval and implementation protocol
+`isIssueSessionLaunch`, the read, auth, action, approval, design-approval, implementation and localized-startup protocol
 floors, `canonicalIssueInstanceUrl`, `requiresIssueHttpConsent`, `isIssueConnectionInput`), locales, UI
 controls
 (including the shared dialog primitive), React, the transport barrel, store selectors for connection
@@ -136,11 +136,15 @@ repository has no other trust affordance, so an untrusted project disables both 
 and the panel offers a one-click "Trust project" (`project.setTrust` via the shell, then a store update and
 refresh). `needs-trust` yields to `needs-newer-host` when the host is also too old.
 
-Launching design calls the host-side v104 `issues.launchDesign` (`ISSUES_ACTIONS_PROTOCOL_VERSION`).
-Implementation dispatches `issues.startImplementation({projectId, reference})` directly at v108.
-There is no confirmation dialog, approved-design read, version gate or label mutation. The server
-creates or reuses the owned `.worktrees/issue-<IID>` workspace and its recorded idle session.
-Design and implementation can be revisited in either order; GitLab owns approval and closure.
+At v109 (`ISSUES_SESSION_STARTUP_PROTOCOL_VERSION`), design calls `issues.beginDesign` and
+implementation calls `issues.beginImplementation`, each with exactly `{projectId, reference, locale}`.
+The locale is the current `useT()` translator's resolved language, normalized canonically against
+available bundled/local locales, never the saved `system` preference or a host locale fallback.
+The host owns starting the stage agent; the tool never sends a prompt or configures a provider.
+Older hosts retain `issues.launchDesign` (v104) / `issues.startImplementation` (v108), with no locale
+field and no automatic agent startup; their tooltips explain that they open a chat instead of claiming
+a run. Missing original floors still disable the existing buttons. No confirmation, approval read,
+version minting or label mutation occurs. Design and implementation can be revisited in either order.
 
 The host still exposes v106 `issues.approveDesign` / `issues.approveImplementation` and the v107
 `issues.designApproval` read; this panel deliberately dispatches none of them. Related host-side actions
@@ -148,12 +152,12 @@ this panel does not consume are `issues.launchImplementation`, `issues.publishDe
 `issues.publishImplementation`, `issues.validateDesign` and `issues.validateImplementation`. The summary
 read carries no approval state — `IssueSummary` has no receipt and no design version — and the panel no
 longer reads, mints or forwards a design digest: no click-time `designApproval` call, no
-`approvedDesignVersion` field, and `IssueActionCall` holds exactly `launchDesign` and
-`startImplementation`. A host denial, a transport failure or a malformed `IssueSessionLaunch` becomes the
+`approvedDesignVersion` field. `IssueActionCall` holds exactly `launchDesign` and
+`startImplementation` as UI aliases, routing to the v109 begin methods or legacy session methods by host version. A host denial, a transport failure or a malformed `IssueSessionLaunch` becomes the
 keyed `issues.error.action`; `issues.error.unsupported` remains the catalog's keyed refusal for a host
 below a control's floor, while the control itself stays disabled with `needs-newer-host`. Credentials and
 transport text are never echoed in UI errors and the token never leaves the form. A successful launch is forwarded once to the optional
-`onLaunchSession({ workspaceId, sessionId })`; the tool creates no session and prompts none, and re-reads
+`onLaunchSession({ workspaceId, sessionId })`; the tool creates no session and sends no prompt, and re-reads
 the summaries after a start; starting does not move stage labels. Without `onLaunchSession` the launch
 still happens and navigates nowhere. The shell answers that callback by refreshing `workspace.list` for the
 project, activating the returned workspace and opening its chat tab — again without creating or prompting a
@@ -229,7 +233,7 @@ stale action error when a fresh error-free snapshot lands. It also pins safe lin
 errors, reconnect coordinates rendered read-only, read-only summaries, the non-local HTTP risk
 checkbox in both required and acknowledged states, and the supplied `onOpenIssue` launch control.
 
-`issues.test.ts` pins the stage Actions surface too: the v104 launch and v108 implementation floors
+`issues.test.ts` pins the stage Actions surface too: the v104 launch, v108 implementation and v109 localized startup floors
 (`supportsIssueActions`/`supportsIssueImplementation`), the pure `issueActions` matrix across every stage,
 closed issues and each host floor separately (an old host keeps design and disables only implementation),
 catalog text for every action and reason, the rendered row of controls on an in-progress issue with no

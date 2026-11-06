@@ -5,6 +5,7 @@ import {
 	ISSUES_AUTH_PROTOCOL_VERSION,
 	ISSUES_IMPLEMENTATION_PROTOCOL_VERSION,
 	ISSUES_PROTOCOL_VERSION,
+	ISSUES_SESSION_STARTUP_PROTOCOL_VERSION,
 	type IssueConnection,
 	type IssueConnectionInput,
 	type IssueList,
@@ -18,7 +19,7 @@ import {
 	type WsParams,
 	type WsResult,
 } from "@thinkrail/contracts";
-import type { MessageKey } from "@thinkrail/locales";
+import { canonicalLocale, type MessageKey, resolveLocale } from "@thinkrail/locales";
 import { resolveIssueRepositoryAddress, suggestIssueRepositoryAddress } from "./repositoryAddress";
 
 export function supportsIssues(version: number | null): boolean {
@@ -42,6 +43,16 @@ export function supportsIssueApproval(version: number | null): boolean {
 /** The host-side confirmation gate that starts implementation, v108. */
 export function supportsIssueImplementation(version: number | null): boolean {
 	return version !== null && version >= ISSUES_IMPLEMENTATION_PROTOCOL_VERSION;
+}
+
+/** Automatic localized agent startup, separate from legacy session creation. */
+export function supportsIssueSessionStartup(version: number | null): boolean {
+	return version !== null && version >= ISSUES_SESSION_STARTUP_PROTOCOL_VERSION;
+}
+
+/** Consume the active translator language, which already resolves the system preference. */
+export function issueStartupLocale(language: string, available: readonly string[]): string {
+	return canonicalLocale(resolveLocale(language, available, [])) ?? "en";
 }
 
 export type ProjectOpenGesture = "open" | "init" | "clone" | "create";
@@ -107,6 +118,7 @@ export interface IssueActionAvailability {
  */
 export interface IssueActionCapabilities {
 	actionsSupported: boolean;
+	startupSupported?: boolean;
 	implementationSupported: boolean;
 	/** The host refuses every stage action for an untrusted project. */
 	trusted: boolean;
@@ -181,6 +193,7 @@ export interface IssueActionCall {
 }
 
 export interface IssueActionRequest {
+	locale: string;
 	projectId: string;
 	reference: IssueReference;
 }
@@ -189,8 +202,16 @@ export interface IssueActionRequest {
 export function issueActionCall(
 	request: IssueActionRequest,
 	send: <M extends WsMethodName>(method: M, params: WsParams<M>) => Promise<WsResult<M>>,
+	version: number | null,
 ): IssueActionCall {
 	const params = { projectId: request.projectId, reference: request.reference };
+	if (supportsIssueSessionStartup(version)) {
+		const startup = { ...params, locale: request.locale };
+		return {
+			launchDesign: () => send("issues.beginDesign", startup),
+			startImplementation: () => send("issues.beginImplementation", startup),
+		};
+	}
 	return {
 		launchDesign: () => send("issues.launchDesign", params),
 		startImplementation: () => send("issues.startImplementation", params),
