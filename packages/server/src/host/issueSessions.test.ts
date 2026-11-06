@@ -41,6 +41,51 @@ test("immutable session binding persists across instances and rejects another id
 	);
 });
 
+test("stage lookup finds only this Issue's binding for one stage and workspace", async () => {
+	const { store } = setup();
+	await store.bind(association({ sessionId: "design-one" }));
+	await store.bind(
+		association({ sessionId: "implementation-one", stage: "implementation", workspaceId: "work" }),
+	);
+	await store.bind(
+		association({
+			sessionId: "other-issue",
+			reference: { ...ref, number: 4 },
+		}),
+	);
+	await store.bind(association({ sessionId: "other-workspace", workspaceId: "elsewhere" }));
+	const query = { projectId: "local", reference: ref, stage: "design" as const };
+	expect(await store.findAssociation({ ...query, workspaceId: "workspace" })).toMatchObject({
+		sessionId: "design-one",
+	});
+	expect(await store.findAssociation({ ...query, workspaceId: "elsewhere" })).toMatchObject({
+		sessionId: "other-workspace",
+	});
+	expect(await store.findAssociation({ ...query, workspaceId: "missing" })).toBeNull();
+	expect(
+		await store.findAssociation({
+			projectId: "local",
+			reference: ref,
+			stage: "implementation",
+			workspaceId: "work",
+		}),
+	).toMatchObject({ sessionId: "implementation-one" });
+});
+
+test("one stage and workspace can never hold two bindings", async () => {
+	const { store } = setup();
+	await store.bind(association({ sessionId: "first" }));
+	await store.bind(association({ sessionId: "second" }));
+	await expect(
+		store.findAssociation({
+			projectId: "local",
+			reference: ref,
+			stage: "design",
+			workspaceId: "workspace",
+		}),
+	).rejects.toThrow("requires reconciliation");
+});
+
 test("multiple trailing slashes stay canonical across repeated binds and reads", async () => {
 	const { root, store } = setup();
 	const input = association({

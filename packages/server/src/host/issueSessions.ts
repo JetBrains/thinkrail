@@ -234,6 +234,44 @@ export function createIssueSessionStore(root: string) {
 		get(sessionId: string): Promise<IssueSessionAssociation | null> {
 			return guarded(() => load(sessionId)?.binding ?? null);
 		},
+		/** The single session this Issue already bound for one stage in one workspace, if any. */
+		findAssociation(query: {
+			projectId: string;
+			reference: IssueReference;
+			stage: "design" | "implementation";
+			workspaceId: string;
+		}): Promise<IssueSessionAssociation | null> {
+			return guarded(() => {
+				if (
+					!id(query.projectId) ||
+					!id(query.workspaceId) ||
+					(query.stage !== "design" && query.stage !== "implementation")
+				)
+					stop();
+				const wanted = reference(query.reference);
+				directory(dir);
+				let found: IssueSessionAssociation | null = null;
+				for (const name of readdirSync(dir)) {
+					const path = join(dir, name);
+					const stat = lstatSync(path);
+					if (stat.isSymbolicLink() || !stat.isDirectory()) stop();
+					const raw = read(join(path, "bind.json"));
+					if (raw === null) stop();
+					const binding = association(raw);
+					if (hash(binding.sessionId) !== name) stop();
+					if (
+						binding.projectId !== query.projectId ||
+						binding.stage !== query.stage ||
+						binding.workspaceId !== query.workspaceId ||
+						JSON.stringify(binding.reference) !== JSON.stringify(wanted)
+					)
+						continue;
+					if (found) stop();
+					found = binding;
+				}
+				return found;
+			});
+		},
 		reserveStartup(sessionId: string): Promise<boolean> {
 			return guarded(() => {
 				const { path } = required(sessionId);

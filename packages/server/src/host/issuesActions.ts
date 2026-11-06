@@ -262,6 +262,14 @@ export function createIssuesActions(
 					listGitWorktrees: (id) => checked(() => listGitWorktrees(id)),
 					createWorkspaceAtPath: (id, path, branch, name) =>
 						checked(() => createWorkspaceAtPathWithBranch(id, path, branch, undefined, name)),
+					boundSession: (stage, workspaceId) =>
+						checked(async () => {
+							if (!agentSessions) stop();
+							const found = await checked(() =>
+								agentSessions.findAssociation({ projectId, reference, stage, workspaceId }),
+							);
+							return found?.sessionId;
+						}),
 					defaultWorkspace: (id) =>
 						checked(async () => {
 							const rows = await checked(() => listWorkspaces(id, { includeDiffStats: false }));

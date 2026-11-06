@@ -1044,11 +1044,15 @@ body, commit, token or other receipt field crosses the wire, and failures remain
 `issueSessions.ts` exports `createIssueSessionStore(root)`. This is a standalone host-owned,
 credential-free metadata namespace, not a credential store or agent adapter. The root must already
 exist on trusted, privately owned local storage; it is not created or discovered by this service.
-No session enumeration, network access, vault access, agent calls or logs are provided.
+No session enumeration API, network access, vault access, agent calls or logs are provided; the
+stage lookup above reads only the store's own bindings.
 `bind(association)` durably fixes sessionId, workspaceId, local projectId, remote Issue reference,
 stage (`design|implementation`) and effective canonical BCP-47 locale (never `system`). Identical
 canonical identities are idempotent; every ownership/context change fails closed. `get(sessionId)`
-returns that association or null for an absent session. IDs are bounded safe opaque identifiers
+returns that association or null for an absent session. `findAssociation({projectId, reference,
+stage, workspaceId})` returns the one binding that matches all four, null when none does, and stops
+when two do: it is the coordinator's only evidence that an interrupted launch had already created its
+session. IDs are bounded safe opaque identifiers
 (including UUIDs and test identifiers such as `session`); references are exact, bounded GitLab
 HTTP(S) references without credentials/query/fragment, canonicalized before comparison.
 

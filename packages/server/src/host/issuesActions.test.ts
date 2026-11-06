@@ -1,7 +1,8 @@
 import { afterEach, expect, spyOn, test } from "bun:test";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import * as fs from "node:fs";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { designVersion, implementationVersion } from "../issues";
@@ -248,6 +249,42 @@ test("design begin binds and prompts a Default session once without a worktree",
 	expect(f.prompts[0]?.prompt).toContain("/skill:tomato-issue-workflow");
 	expect(listWorkspaceRecords("one").find((w) => w.id === first.workspaceId)?.kind).toBe("default");
 	expect(existsSync(join(f.dir, ".worktrees"))).toBe(false);
+});
+
+test("a pending session marker adopts the session the host already bound", async () => {
+	const f = fixture();
+	await f.host.connect({ projectId: "one", input: f.input });
+	const first = await f.host.beginDesign({ ...f.target, locale: "en" });
+	const recordPath = join(
+		f.dir,
+		"issue-workspaces",
+		`${createHash("sha256")
+			.update(
+				JSON.stringify([
+					"one",
+					"gitlab",
+					"https://gitlab.example",
+					f.target.reference.projectId,
+					f.target.reference.number,
+				]),
+			)
+			.digest("hex")}.json`,
+	);
+	// A crash after the association save was lost leaves only its pending marker.
+	writeFileSync(
+		recordPath,
+		JSON.stringify({
+			projectId: "one",
+			reference: f.target.reference,
+			design: { workspaceId: first.workspaceId },
+			sessionPending: { stage: "design", workspaceId: first.workspaceId },
+		}),
+	);
+	const restored = createIssuesHost(f.options);
+	expect(await restored.beginDesign({ ...f.target, locale: "en" })).toEqual(first);
+	expect(f.created).toBe(1);
+	expect(f.prompts).toHaveLength(1);
+	expect(JSON.parse(readFileSync(recordPath, "utf8"))).not.toHaveProperty("sessionPending");
 });
 
 test("design publication receipts survive a host restart and contain no credential", async () => {

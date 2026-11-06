@@ -30,7 +30,7 @@ interface CompletedWorkspace extends Omit<PendingWorkspace, "state"> {
 export interface IssueWorkspaceRecord {
 	projectId: string;
 	reference: IssueReference;
-	/** Durable uncertainty fence; only explicit reconciliation may clear a failed launch. */
+	/** Durable uncertainty fence; only provable reconciliation of the recorded stage may clear it. */
 	sessionPending?: { stage: "design" | "implementation"; workspaceId: string };
 	design?: { workspaceId: string; sessionId?: string };
 	implementation?: PendingWorkspace | CompletedWorkspace;
@@ -66,6 +66,11 @@ export interface IssueWorkspaceOptions {
 	sessionExists(sessionId: string, workspaceId: string): Awaitable<false | "idle" | "busy">;
 	/** Create an empty session only. Prompting is outside this coordinator. */
 	createSession(workspaceId: string): Awaitable<string>;
+	/** The session this Issue already bound for that stage and workspace; the recovery evidence. */
+	boundSession?(
+		stage: "design" | "implementation",
+		workspaceId: string,
+	): Awaitable<string | undefined>;
 }
 
 // Different remote bindings can contend for the same numeric path in a local project.
@@ -99,6 +104,7 @@ export function createIssueWorkspaceCoordinator(options: IssueWorkspaceOptions) 
 	async function run<T>(
 		input: IssueReference,
 		action: (key: string, record: IssueWorkspaceRecord) => Promise<T>,
+		recover = false,
 	): Promise<T> {
 		if (!isIssueReference(input) || !projectId) stop();
 		const reference = {
@@ -115,11 +121,10 @@ export function createIssueWorkspaceCoordinator(options: IssueWorkspaceOptions) 
 				const record = (await options.load(key)) ?? { projectId, reference };
 				if (
 					!isIssueReference(record.reference) ||
-					keyFor(record.projectId, record.reference) !== key ||
-					record.sessionPending !== undefined
+					keyFor(record.projectId, record.reference) !== key
 				)
 					stop();
-				return action(key, record);
+				return action(key, recover ? await recoverPending(key, record) : rejectPending(record));
 			});
 		tails.set(slot, task);
 		try {
@@ -129,6 +134,47 @@ export function createIssueWorkspaceCoordinator(options: IssueWorkspaceOptions) 
 		} finally {
 			if (tails.get(slot) === task) tails.delete(slot);
 		}
+	}
+
+	function rejectPending(record: IssueWorkspaceRecord): IssueWorkspaceRecord {
+		if (record.sessionPending !== undefined) stop();
+		return record;
+	}
+
+	/**
+	 * A pending marker records that a session may have been created. The binding the host writes
+	 * immediately after creation is the only proof of which session it was: adopt it when it exists,
+	 * otherwise nothing bound this stage and the marker is cleared so the action can try again.
+	 */
+	async function recoverPending(
+		key: string,
+		record: IssueWorkspaceRecord,
+	): Promise<IssueWorkspaceRecord> {
+		const pending = record.sessionPending;
+		if (!pending) return record;
+		if (!options.boundSession) stop();
+		const sessionId = await options.boundSession(pending.stage, pending.workspaceId);
+		const recovered: IssueWorkspaceRecord = {
+			projectId: record.projectId,
+			reference: record.reference,
+		};
+		if (record.design) recovered.design = { ...record.design };
+		if (record.implementation) recovered.implementation = { ...record.implementation };
+		if (sessionId) {
+			if (pending.stage === "design") {
+				recovered.design = { workspaceId: pending.workspaceId, sessionId };
+			} else {
+				const implementation = recovered.implementation;
+				if (
+					implementation?.state !== "completed" ||
+					implementation.workspaceId !== pending.workspaceId
+				)
+					stop();
+				recovered.implementation = { ...implementation, session: { id: sessionId } };
+			}
+		}
+		await options.save(key, recovered);
+		return recovered;
 	}
 
 	async function projectRoot(): Promise<string> {
@@ -200,6 +246,12 @@ export function createIssueWorkspaceCoordinator(options: IssueWorkspaceOptions) 
 	async function resolveImplementation(key: string, record: IssueWorkspaceRecord, path: string) {
 		let ownership = record.implementation;
 		let ws: WorkspaceHandle;
+		if (ownership?.state === "pending") {
+			const { occupied, trees } = await implementationPathState(path);
+			const registered = await options.findWorkspace({ worktreePath: path });
+			// An abandoned reservation that left no directory, Git entry or registration created nothing.
+			if (!occupied && trees.length === 0 && !registered) ownership = undefined;
+		}
 		if (ownership) {
 			ws = await verifyImplementation(ownership, path);
 		} else {
@@ -240,52 +292,60 @@ export function createIssueWorkspaceCoordinator(options: IssueWorkspaceOptions) 
 			});
 		},
 		design(reference: IssueReference): Promise<IssueSessionLaunch> {
-			return run(reference, async (key, record) => {
-				const root = await projectRoot();
-				const ws = await options.defaultWorkspace(projectId);
-				if (
-					!ws.id ||
-					ws.projectId !== projectId ||
-					ws.kind !== "default" ||
-					!samePath(ws.worktreePath, root)
-				)
-					stop();
-				const workspaceId = ws.id;
-				const existing =
-					record.design?.workspaceId === workspaceId ? record.design.sessionId : undefined;
-				if (existing && (await sessionStatus(workspaceId, existing)) === "idle")
-					return { workspaceId, sessionId: existing };
-				await options.save(key, {
-					...record,
-					design: { workspaceId, ...(existing ? { sessionId: existing } : {}) },
-					sessionPending: { stage: "design", workspaceId },
-				});
-				const sessionId = await newSession(workspaceId);
-				await options.save(key, { ...record, design: { workspaceId, sessionId } });
-				return { workspaceId, sessionId };
-			});
+			return run(
+				reference,
+				async (key, record) => {
+					const root = await projectRoot();
+					const ws = await options.defaultWorkspace(projectId);
+					if (
+						!ws.id ||
+						ws.projectId !== projectId ||
+						ws.kind !== "default" ||
+						!samePath(ws.worktreePath, root)
+					)
+						stop();
+					const workspaceId = ws.id;
+					const existing =
+						record.design?.workspaceId === workspaceId ? record.design.sessionId : undefined;
+					if (existing && (await sessionStatus(workspaceId, existing)) === "idle")
+						return { workspaceId, sessionId: existing };
+					await options.save(key, {
+						...record,
+						design: { workspaceId, ...(existing ? { sessionId: existing } : {}) },
+						sessionPending: { stage: "design", workspaceId },
+					});
+					const sessionId = await newSession(workspaceId);
+					await options.save(key, { ...record, design: { workspaceId, sessionId } });
+					return { workspaceId, sessionId };
+				},
+				true,
+			);
 		},
 		implementation(reference: IssueReference): Promise<IssueSessionLaunch> {
-			return run(reference, async (key, record) => {
-				// The workflow start gate moves the issue to in-progress; the coordinator never trusts
-				// a caller-supplied stage or version and reuses the recorded session for every re-entry.
-				const path = join(await projectRoot(), ".worktrees", `issue-${record.reference.number}`);
-				const ownership = await resolveImplementation(key, record, path);
-				const { workspaceId, session } = ownership;
-				const status = await sessionStatus(workspaceId, session?.id);
-				if (session && status === "idle") return { workspaceId, sessionId: session.id };
-				await options.save(key, {
-					...record,
-					implementation: ownership,
-					sessionPending: { stage: "implementation", workspaceId },
-				});
-				const sessionId = await newSession(workspaceId);
-				await options.save(key, {
-					...record,
-					implementation: { ...ownership, session: { id: sessionId } },
-				});
-				return { workspaceId, sessionId };
-			});
+			return run(
+				reference,
+				async (key, record) => {
+					// The workflow start gate moves the issue to in-progress; the coordinator never trusts
+					// a caller-supplied stage or version and reuses the recorded session for every re-entry.
+					const path = join(await projectRoot(), ".worktrees", `issue-${record.reference.number}`);
+					const ownership = await resolveImplementation(key, record, path);
+					const { workspaceId, session } = ownership;
+					const status = await sessionStatus(workspaceId, session?.id);
+					if (session && status === "idle") return { workspaceId, sessionId: session.id };
+					await options.save(key, {
+						...record,
+						implementation: ownership,
+						sessionPending: { stage: "implementation", workspaceId },
+					});
+					const sessionId = await newSession(workspaceId);
+					await options.save(key, {
+						...record,
+						implementation: { ...ownership, session: { id: sessionId } },
+					});
+					return { workspaceId, sessionId };
+				},
+				true,
+			);
 		},
 	};
 }

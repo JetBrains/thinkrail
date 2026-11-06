@@ -205,9 +205,16 @@ store or runtime. It reserves a provider-qualified ownership record before creat
 `.worktrees/issue-<IID>`, persists the registered workspace before starting a session, and reuses recorded idle
 sessions. A pending create is recoverable only when both Git registration and a managed workspace match
 its reserved branch/path; it never adopts an unrelated checkout, overwrites a destination, chooses a
-suffix, deletes a checkout, or prompts a busy session. Session creation also requires a durable pending
-marker before the side effect; failure to save its resulting association blocks all subsequent launches
-until reconciliation instead of creating duplicate sessions. The host composes the coordinator under its durable launch fence. Host composition must use the server-only exact-branch
+suffix, deletes a checkout, or prompts a busy session. A pending create that left no directory, no Git
+worktree entry and no workspace registration created nothing, so it is re-reserved with a fresh branch
+rather than blocking. Session creation also requires a durable pending marker before the side effect.
+
+That marker is reconciled only from evidence the host already recorded: the session it bound for the
+same stage and workspace (written immediately after creation, before the association save). When that
+binding exists the launch adopts it; when it does not, nothing bound the stage and the marker is
+cleared so the action can run again, accepting at most one unreferenced session if a process died
+between creation and binding. Launch actions reconcile; read-only lookups such as
+`ownedImplementation` keep refusing any marker without writing. The host composes the coordinator under its durable launch fence. Host composition must use the server-only exact-branch
 workspace capability; the generic name-to-unique-branch API remains unsuitable.
 
 `implementation(reference)` requires no design approval, version, workflow-label transition or

@@ -106,6 +106,8 @@ export function createIssueAgentSessionHost(options: IssueAgentSessionHostOption
 		locale: options.locale,
 		prepare,
 		bind: (value: IssueSessionAssociation) => options.store().bind(value),
+		findAssociation: (query: Parameters<IssueSessionStore["findAssociation"]>[0]) =>
+			options.store().findAssociation(query),
 		async start(sessionId: string, prompt?: string) {
 			const found = await binding(sessionId);
 			const { checked } = await access(found, found);
