@@ -17,7 +17,7 @@ jobs:
   changes:
     name: Classify changes
     timeout-minutes: 5
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     outputs:
       app: ${{ steps.classify.outputs.app }}
       artifacts: ${{ steps.classify.outputs.artifacts }}
@@ -46,7 +46,7 @@ jobs:
   lint:
     name: Lint & Typecheck
     timeout-minutes: 15
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -75,7 +75,7 @@ jobs:
   test:
     name: Unit Tests
     timeout-minutes: 15
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -95,7 +95,7 @@ jobs:
     timeout-minutes: 10
     needs: changes
     if: needs.changes.outputs.app == 'true'
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -115,11 +115,11 @@ jobs:
       - run: bun run check:pi-packages
 
   e2e-shard:
-    name: E2E (no-agent) shard ${{ matrix.shard }}/2
+    name: E2E (macOS, no-agent) shard ${{ matrix.shard }}/2
     timeout-minutes: 30
     needs: changes
     if: needs.changes.outputs.app == 'true'
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     strategy:
       fail-fast: false
       matrix:
@@ -158,11 +158,11 @@ jobs:
           retention-days: 7
 
   binary-shard:
-    name: Binary smoke & e2e shard ${{ matrix.shard }}/4
+    name: Binary smoke & e2e (macOS) shard ${{ matrix.shard }}/4
     timeout-minutes: 30
     needs: changes
     if: needs.changes.outputs.artifacts == 'true'
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     strategy:
       fail-fast: false
       matrix:
@@ -243,11 +243,11 @@ jobs:
       - run: bun run smoke:desktop
 
   desktop-shard:
-    name: Desktop smoke & e2e shard ${{ matrix.shard }}/4
+    name: Desktop smoke & e2e (macOS) shard ${{ matrix.shard }}/4
     timeout-minutes: 45
     needs: changes
     if: needs.changes.outputs.artifacts == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: macos-latest
     strategy:
       fail-fast: false
       matrix:
@@ -266,39 +266,17 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Start Playwright Chromium download
         run: .github/scripts/install-playwright.sh start
-      - name: Install desktop runtime packages
-        uses: ./.github/actions/desktop-apt
-        timeout-minutes: 20
-      - name: Start virtual display
-        run: |
-          for attempt in 1 2 3; do
-            Xvfb :99 -screen 0 1280x1024x24 -nolisten tcp > "$RUNNER_TEMP/xvfb.log" 2>&1 &
-            xvfb_pid=$!
-            for _ in $(seq 100); do
-              if xdpyinfo -display :99 > /dev/null 2>&1; then
-                echo "DISPLAY=:99" >> "$GITHUB_ENV"
-                exit 0
-              fi
-              sleep 0.1
-            done
-            kill -9 "$xvfb_pid" 2> /dev/null || true
-            wait "$xvfb_pid" 2> /dev/null || true
-            rm -f /tmp/.X99-lock /tmp/.X11-unix/X99
-            echo "::warning::Xvfb did not accept a client on attempt $attempt; restarting"
-          done
-          cat "$RUNNER_TEMP/xvfb.log"
-          exit 1
       - name: Download the Electrobun toolchain
         run: .github/scripts/prepare-electrobun.sh
       - run: bun run desktop:build
       - name: Smoke native desktop window and packaged runtime
         if: ${{ matrix.shard == 1 }}
-        run: env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 bun run smoke:desktop
+        run: bun run smoke:desktop
       - name: Install Playwright Chromium
         timeout-minutes: 5
         run: .github/scripts/install-playwright.sh wait
       - name: Run no-agent e2e against the embedded desktop host
-        run: env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 bun run e2e:desktop --shard=${{ matrix.shard }}/4
+        run: bun run e2e:desktop --shard=${{ matrix.shard }}/4
       - name: Upload Playwright report
         if: ${{ failure() }}
         uses: actions/upload-artifact@v5
@@ -313,7 +291,7 @@ jobs:
     timeout-minutes: 5
     needs: [changes, lint, test, pi-packages, e2e-shard, binary-shard, binary-windows, desktop-shard, desktop-windows]
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - env:
           NEEDS: ${{ toJSON(needs) }}
