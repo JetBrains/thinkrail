@@ -30,7 +30,7 @@ const { useAppStore } = await import("../store");
 type WorkspaceLayoutDocument = ReturnType<
 	typeof useAppStore.getState
 >["layoutDocumentsByWorkspace"][string];
-const { openChangesTab, openDiffInTab } = await import("./openTabs");
+const { openChangesTab, openDiffInTab, openFileInTab } = await import("./openTabs");
 
 const workspace = (overrides: Partial<Workspace> = {}): Workspace => ({
 	id: "w1",
@@ -483,4 +483,63 @@ test("a removed workspace rejects a late review-tab request", async () => {
 	useAppStore.setState({ removedWorkspaceIds: { w1: true } });
 	await openChangesTab("w1", { kind: "branch" }, {}, "keep");
 	expect(useAppStore.getState().tabsByWorkspace.w1 ?? []).toHaveLength(0);
+});
+
+const fileResult = (content: string) => ({
+	content,
+	meta: { hash: "h", byteLength: content.length, text: true, mime: "text/markdown" },
+});
+
+const openedFileTab = () => {
+	const tab = (useAppStore.getState().tabsByWorkspace.w1 ?? []).find((t) => t.kind === "file");
+	if (tab?.kind !== "file") throw new Error("no file tab opened");
+	return tab;
+};
+
+test("opening a file at a line asks for the source view and carries a one-shot reveal", async () => {
+	const open = openFileInTab("w1", "docs/guide.md", "keep", undefined, { line: 12, col: 4 });
+	pending?.resolve(fileResult("# Guide\n"));
+	await open;
+	expect(openedFileTab()).toMatchObject({
+		path: "docs/guide.md",
+		rendererId: "thinkrail/code",
+		reveal: { line: 12, col: 4, tick: 1 },
+	});
+	expect(useAppStore.getState().activeTabByWorkspace.w1).toBe(openedFileTab().id);
+});
+
+test("an already open file is revealed again with a new tick, without a host read", async () => {
+	const first = openFileInTab("w1", "docs/guide.md", "keep");
+	pending?.resolve(fileResult("# Guide\n"));
+	await first;
+	const opened = openedFileTab();
+	expect(opened.reveal).toBeUndefined();
+	expect(opened.rendererId).toBeUndefined();
+	useAppStore.getState().setTabViewState("w1", opened.id, { scrollTop: 40 });
+	requests.length = 0;
+
+	await openFileInTab("w1", "docs/guide.md", "keep", undefined, { line: 3 });
+	expect(requests).toHaveLength(0);
+	expect(openedFileTab()).toMatchObject({
+		rendererId: "thinkrail/code",
+		reveal: { line: 3, tick: 1 },
+	});
+	expect(openedFileTab().viewState).toBeUndefined();
+	useAppStore.getState().consumeFileTabReveal("w1", opened.id, 1);
+	expect(openedFileTab().reveal).toBeUndefined();
+
+	await openFileInTab("w1", "docs/guide.md", "keep", undefined, { line: 3 });
+	expect(openedFileTab().reveal).toEqual({ line: 3, tick: 1 });
+	await openFileInTab("w1", "docs/guide.md", "keep", undefined, { line: 9 });
+	expect(openedFileTab().reveal).toEqual({ line: 9, tick: 2 });
+	useAppStore.getState().consumeFileTabReveal("w1", opened.id, 1);
+	expect(openedFileTab().reveal).toEqual({ line: 9, tick: 2 });
+});
+
+test("a line requested while the same file's read is in flight still lands", async () => {
+	const plain = openFileInTab("w1", "src/a.ts", "preview");
+	const atLine = openFileInTab("w1", "src/a.ts", "keep", undefined, { line: 7 });
+	pending?.resolve(fileResult("a\n"));
+	await Promise.all([plain, atLine]);
+	expect(openedFileTab().reveal).toEqual({ line: 7, tick: 1 });
 });

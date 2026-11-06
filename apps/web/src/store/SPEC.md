@@ -713,7 +713,11 @@ target's diff under the new target's label; the cached value is what the mount c
 and `DiffTab` share `rendererId` plus opaque `viewState`, written by workspace-explicit `setTabRenderer`
 and `setTabViewState` so an unmount callback settling after a workspace switch still updates its owning tab.
 The registry owns view-state interpretation; changing renderer or phone/desktop implementation drops the
-prior opaque state, and each implementation rejects state it cannot interpret. Diff-only presentation keeps
+prior opaque state, and each implementation rejects state it cannot interpret. A `FileTab` may also carry a
+one-shot **`reveal`** (`{ line, col?, tick }`, written by `panels`' `openFileInTab` when a caller names a
+position) that the pane consumes through **`consumeFileTabReveal(workspaceId, id, tick)`** — tick-matched, so
+a newer request is never cleared by an older handler; like the Changes tab's reveal it is transient and
+never part of the persisted layout tab. Diff-only presentation keeps
 `view` split|inline via
 `setDiffTabView` (split by default) and `ignoreWhitespace` via `setDiffTabIgnoreWhitespace`. Legacy persisted
 `view` on file documents and `rendered` on diff documents are outside the accepted cache shape and are
@@ -767,7 +771,10 @@ Files tree's remembered look per workspace: All-mode `expanded` folders, Changed
 folders (one set for every scope), `scroll` per view (`all` / `changedList` / `changedTree`, each tagged with
 the scope and compare target it belongs to, so another scope or target branch starts at the top), and `seenActivePath`. **`revealInFiles`** expands
 every ancestor of a path and records it as seen in one write, so the auto-reveal can tell on return whether
-the active file changed meanwhile; every write is idempotent (an unchanged view keeps its identity) and a
+the active file changed meanwhile; **`revealFolderInFiles(workspaceId, path)`** is the explicit folder
+reveal in one write — `filesMode: "all"`, the folder and its ancestors expanded, a `reveal-tool` intent for
+**Files**, and the transient **`filesRevealRequest`** (`{ workspaceId, path }`, dropped with its workspace,
+cleared by **`clearFilesRevealRequest`** once the tree has taken it), leaving `seenActivePath` alone; every write is idempotent (an unchanged view keeps its identity) and a
 removed workspace's view is dropped in `applyWorkspaceRemoved`. Persistence lives outside the store, in
 `panels/filesTreeState`. **`selectActiveFilePath`** is the path of the active file or diff tab, else `null`.
 **`diffScopeByWorkspace`** + **`setDiffScope(workspaceId, scope)`** hold *what* each workspace's Changes

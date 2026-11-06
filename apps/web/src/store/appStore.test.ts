@@ -3377,6 +3377,33 @@ test("revealInFiles expands every ancestor folder and records the revealed file"
 	expect(selectFilesTreeView(useAppStore.getState(), "w1")).toBe(view);
 });
 
+test("revealFolderInFiles shows the folder in All files without touching the active-file reveal", () => {
+	useAppStore.setState({
+		filesTreeByWorkspace: {},
+		filesMode: "changed",
+		filesRevealRequest: null,
+		layoutIntents: [],
+		removedWorkspaceIds: nullProto<Record<string, true>>(),
+	});
+	useAppStore.getState().revealFolderInFiles("w1", "src/auth");
+	const state = useAppStore.getState();
+	expect(state.filesMode).toBe("all");
+	expect(selectFilesTreeView(state, "w1").expanded).toEqual(["src", "src/auth"]);
+	expect(selectFilesTreeView(state, "w1").seenActivePath).toBeNull();
+	expect(state.filesRevealRequest).toEqual({ workspaceId: "w1", path: "src/auth" });
+	expect(state.layoutIntents).toEqual([
+		expect.objectContaining({ kind: "reveal-tool", workspaceId: "w1", tool: "files" }),
+	]);
+	useAppStore.getState().clearFilesRevealRequest();
+	expect(useAppStore.getState().filesRevealRequest).toBeNull();
+
+	useAppStore.setState({
+		removedWorkspaceIds: { ...nullProto<Record<string, true>>(), gone: true },
+	});
+	useAppStore.getState().revealFolderInFiles("gone", "src");
+	expect(useAppStore.getState().filesRevealRequest).toBeNull();
+});
+
 test("selectActiveFilePath follows the active file tab and ignores other tabs", () => {
 	const file: FileTab = {
 		kind: "file",

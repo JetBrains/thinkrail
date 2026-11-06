@@ -57,6 +57,8 @@ export function FilePane({ tab }: { tab: FileTab }) {
 		resourceBytesUrl(tab.workspaceId, tab.path),
 	);
 	const reviews = [review.worktree];
+	const consumeReveal = (tick: number) =>
+		useAppStore.getState().consumeFileTabReveal(tab.workspaceId, tab.id, tick);
 	const showToolbar = candidates.length >= 2 || fileHasDraft;
 	const saveViewState = (state: unknown) => {
 		const current = useAppStore
@@ -108,6 +110,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 						onPlacedThreadIds={onPlacedThreadIds}
 						viewState={tab.viewState}
 						onViewState={saveViewState}
+						{...(tab.reveal ? { reveal: tab.reveal, onRevealHandled: consumeReveal } : {})}
 					/>
 				</Suspense>
 			</div>

@@ -1250,6 +1250,8 @@
 	"panels.surveyInvitation.take": "Take the survey",
 	"panels.surveyInvitation.title": "Help shape ThinkRail",
 	"panels.terminalInstance.detached": "This terminal is open somewhere else.",
+	"panels.terminalInstance.linkHintApple": "Cmd+click to open",
+	"panels.terminalInstance.linkHintOther": "Ctrl+click to open",
 	"panels.terminalInstance.outputTruncated": "[output truncated]",
 	"panels.terminalInstance.processExited": "[process exited]",
 	"panels.terminalInstance.processExitedWithCode": "[process exited with code {{code}}]",

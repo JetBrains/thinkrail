@@ -2,8 +2,9 @@ import type {
 	TerminalDataPush,
 	TerminalDetachedPush,
 	TerminalExitPush,
+	TerminalPathTarget,
 } from "@thinkrail/contracts";
-import { WS_CHANNELS } from "@thinkrail/contracts";
+import { TERMINAL_LINKS_PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import { ClipboardAddon } from "@xterm/addon-clipboard";
 import { FitAddon } from "@xterm/addon-fit";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
@@ -15,13 +16,16 @@ import "@xterm/xterm/css/xterm.css";
 import { i18n, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { type ResolvedFont, resolveFont, watchFont } from "@thinkrail/ui/fonts";
+import { hasPlatformModifier, isApplePlatform } from "@thinkrail/ui/keyboard";
 import { onThemeSwap } from "@thinkrail/ui/theme";
 import { type QuietScrollEdges, QuietScrollFrame } from "@/components/QuietScrollArea";
 import { cssColorToHex } from "@/lib";
 import { SettingsSection, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
+import { openFileInTab } from "./openTabs";
 import { createPtySizeSync, runAfterTerminalRelayout } from "./ptySizeSync";
 import { stripAnsiDim, terminalContrastFloor } from "./terminalContrast";
+import { createTerminalLinkProvider, type TerminalLinkTarget } from "./terminalLinks";
 import { createTerminalPrebindBuffer } from "./terminalPrebindBuffer";
 
 const RESIZE_DEBOUNCE_MS = 60;
@@ -103,6 +107,50 @@ function tryLoad(fn: () => void): void {
 	} catch {}
 }
 
+function resolveTerminalPaths(
+	id: string | null,
+	candidates: string[],
+): Promise<TerminalPathTarget[]> {
+	const { protocolVersion } = useAppStore.getState();
+	if (
+		id === null ||
+		protocolVersion === null ||
+		protocolVersion < TERMINAL_LINKS_PROTOCOL_VERSION
+	) {
+		return Promise.resolve([]);
+	}
+	return getTransport()
+		.request("terminal.resolvePaths", { id, candidates })
+		.then(({ targets }) => targets);
+}
+
+function openTerminalLink(workspaceId: string, target: TerminalLinkTarget): void {
+	if (target.kind === "url") {
+		window.open(target.url, "_blank", "noopener,noreferrer");
+	} else if (target.kind === "dir") {
+		useAppStore.getState().revealFolderInFiles(workspaceId, target.path);
+	} else {
+		const at =
+			target.line === undefined
+				? undefined
+				: { line: target.line, ...(target.col === undefined ? {} : { col: target.col }) };
+		void openFileInTab(workspaceId, target.path, "keep", undefined, at);
+	}
+}
+
+function showLinkHint(element: HTMLElement | undefined, visible: boolean): void {
+	if (!element) return;
+	if (!visible) {
+		element.removeAttribute("title");
+		return;
+	}
+	element.title = i18n.t(
+		isApplePlatform()
+			? "panels.terminalInstance.linkHintApple"
+			: "panels.terminalInstance.linkHintOther",
+	);
+}
+
 interface Props {
 	tabKey: string;
 	workspaceId: string;
@@ -160,6 +208,15 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		tryLoad(() => term.loadAddon(webFonts));
 		termRef.current = term;
 		term.open(host);
+		const linkProvider = term.registerLinkProvider(
+			createTerminalLinkProvider({
+				buffer: () => term.buffer.active,
+				resolve: (candidates) => resolveTerminalPaths(serverIdRef.current, candidates),
+				open: (target) => openTerminalLink(workspaceId, target),
+				isActivation: (event) => hasPlatformModifier(event),
+				showHint: (visible) => showLinkHint(term.element, visible),
+			}),
+		);
 		const updateScrollEdges = () => {
 			const buffer = term.buffer.active;
 			const next = {
@@ -385,6 +442,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			onViewportScroll.dispose();
 			onBufferWrite.dispose();
 			onTerminalResize.dispose();
+			linkProvider.dispose();
 			unsubscribe();
 			unsubscribeExit();
 			unsubscribeDetached();

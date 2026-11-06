@@ -12,6 +12,7 @@ import {
 	createChangesTab,
 	type EditorTab,
 	type FileComparisonTab,
+	type FileTab,
 	isCenterNavigationCurrent,
 	layoutOpenOptionsForNavigation,
 	selectDiffTabTargetRef,
@@ -28,6 +29,26 @@ function baseName(path: string): string {
 	return path.split("/").pop() || path;
 }
 
+const SOURCE_RENDERER_ID = "thinkrail/code";
+
+export interface FilePosition {
+	line: number;
+	col?: number;
+}
+
+type AdjustTab = (tab: EditorTab) => EditorTab;
+
+function revealedAt(tab: EditorTab, at: FilePosition): EditorTab {
+	if (tab.kind !== "file") return tab;
+	const next: FileTab = {
+		...tab,
+		rendererId: SOURCE_RENDERER_ID,
+		reveal: { ...at, tick: (tab.reveal?.tick ?? 0) + 1 },
+	};
+	if (tab.rendererId !== SOURCE_RENDERER_ID) delete next.viewState;
+	return next;
+}
+
 const inFlight = new Map<
 	string,
 	{
@@ -35,6 +56,7 @@ const inFlight = new Map<
 		claimPreview: boolean;
 		navigation: CenterNavigationStamp | null;
 		requestedAt: number;
+		adjust?: AdjustTab;
 	}
 >();
 
@@ -51,6 +73,7 @@ async function openReadTab<T>(
 	build: (payload: T, loadedTick: number) => EditorTab,
 	requestedNavigation?: CenterNavigationStamp | null,
 	claimPreview = false,
+	adjust?: AdjustTab,
 ): Promise<void> {
 	const navigation =
 		requestedNavigation === undefined
@@ -65,6 +88,7 @@ async function openReadTab<T>(
 		if (intent === "keep") pending.intent = "keep";
 		pending.navigation = navigation;
 		pending.requestedAt = navTick(workspaceId);
+		if (adjust) pending.adjust = adjust;
 		return;
 	}
 	const cached = (store.tabsByWorkspace[workspaceId] ?? []).find(
@@ -78,7 +102,12 @@ async function openReadTab<T>(
 			claimPreview &&
 			(!navigation || isCenterNavigationCurrent(store, workspaceId, navigation));
 		const options = layoutOpenOptionsForNavigation(store, workspaceId, navigation);
-		store.openTab(cached, intent, true, claim ? { ...options, claimPreview: true } : options);
+		store.openTab(
+			adjust ? adjust(cached) : cached,
+			intent,
+			true,
+			claim ? { ...options, claimPreview: true } : options,
+		);
 		return;
 	}
 	const flight = {
@@ -86,6 +115,7 @@ async function openReadTab<T>(
 		claimPreview: intent === "preview" || claimPreview,
 		navigation,
 		requestedAt: navTick(workspaceId),
+		...(adjust ? { adjust } : {}),
 	};
 	inFlight.set(id, flight);
 	const loadedTick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
@@ -101,7 +131,8 @@ async function openReadTab<T>(
 				(tab.kind === "file" || tab.kind === "diff") &&
 				layoutResourceIdentity(tab) === resourceIdentity,
 		);
-		const tab = installedCache ?? build(payload, loadedTick);
+		const built = installedCache ?? build(payload, loadedTick);
+		const tab = flight.adjust ? flight.adjust(built) : built;
 		const options = layoutOpenOptionsForNavigation(currentState, workspaceId, flight.navigation);
 		useAppStore
 			.getState()
@@ -124,6 +155,7 @@ export function openFileInTab(
 	reported: string,
 	intent: TabIntent,
 	requestedNavigation?: CenterNavigationStamp | null,
+	at?: FilePosition,
 ): Promise<void> {
 	const path = projectRelativePath(
 		reported,
@@ -147,6 +179,8 @@ export function openFileInTab(
 			loadedTick,
 		}),
 		requestedNavigation,
+		false,
+		at ? (tab) => revealedAt(tab, at) : undefined,
 	);
 }
 
