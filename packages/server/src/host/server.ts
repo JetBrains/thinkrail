@@ -971,7 +971,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			if (workspaceId)
 				void maybeAttachChangeArtifacts(workspaceId, payload.sessionId).then(async () => {
 					await observeCompletion();
-					maybeAutoReReview(workspaceId, payload.sessionId);
+					await maybeAutoReReview(workspaceId, payload.sessionId);
 				});
 		}
 	});
