@@ -2,7 +2,7 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
-import ts from "typescript";
+import { type Argument, parseSync, Visitor } from "oxc-parser";
 
 interface Manifest {
 	name?: string;
@@ -162,57 +162,71 @@ interface SourceImport {
 	typeOnly: boolean;
 }
 
-function importSpecifiers(path: string): SourceImport[] {
-	const source = ts.createSourceFile(
-		path,
-		readFileSync(path, "utf8"),
-		ts.ScriptTarget.Latest,
-		false,
-		path.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-	);
+function stringLiteralValue(node: Argument | null | undefined): string | undefined {
+	if (node?.type === "Literal" && typeof node.value === "string") return node.value;
+	if (node?.type === "TemplateLiteral" && node.expressions.length === 0) {
+		return node.quasis[0]?.value.cooked ?? undefined;
+	}
+	return undefined;
+}
+
+function parseLang(path: string) {
+	if (path.endsWith(".tsx")) return "tsx";
+	return /\.[mc]?ts$/.test(path) ? "ts" : "jsx";
+}
+
+function importSpecifiers(path: string, file: string): SourceImport[] {
+	const { program, errors } = parseSync(path, readFileSync(path, "utf8"), {
+		lang: parseLang(path),
+	});
+	if (errors.length > 0) {
+		throw new Error(`cannot parse ${file}: ${errors.map((error) => error.message).join("; ")}`);
+	}
 	const specifiers: SourceImport[] = [];
-	const add = (node: ts.Expression | undefined, typeOnly = false): void => {
-		if (node && ts.isStringLiteralLike(node)) specifiers.push({ specifier: node.text, typeOnly });
+	const add = (node: Argument | null | undefined, typeOnly = false): void => {
+		const specifier = stringLiteralValue(node);
+		if (specifier !== undefined) specifiers.push({ specifier, typeOnly });
 	};
-	const visit = (node: ts.Node): void => {
-		if (ts.isImportDeclaration(node)) {
-			const clause = node.importClause;
-			const bindings = clause?.namedBindings;
-			const typeOnly =
-				clause?.isTypeOnly ||
-				(!clause?.name &&
-					bindings &&
-					ts.isNamedImports(bindings) &&
-					bindings.elements.length > 0 &&
-					bindings.elements.every((element) => element.isTypeOnly));
-			add(node.moduleSpecifier, !!typeOnly);
-		} else if (ts.isExportDeclaration(node)) {
-			const clause = node.exportClause;
-			const typeOnly =
-				node.isTypeOnly ||
-				(clause &&
-					ts.isNamedExports(clause) &&
-					clause.elements.length > 0 &&
-					clause.elements.every((element) => element.isTypeOnly));
-			add(node.moduleSpecifier, !!typeOnly);
-		} else if (
-			ts.isImportEqualsDeclaration(node) &&
-			ts.isExternalModuleReference(node.moduleReference)
-		) {
-			add(node.moduleReference.expression, node.isTypeOnly);
-		} else if (ts.isCallExpression(node)) {
-			if (
-				node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-				(ts.isIdentifier(node.expression) && node.expression.text === "require")
-			) {
+	new Visitor({
+		ImportDeclaration(node) {
+			add(
+				node.source,
+				node.importKind === "type" ||
+					(node.specifiers.length > 0 &&
+						node.specifiers.every(
+							(specifier) =>
+								specifier.type === "ImportSpecifier" && specifier.importKind === "type",
+						)),
+			);
+		},
+		ExportNamedDeclaration(node) {
+			add(
+				node.source,
+				node.exportKind === "type" ||
+					(node.specifiers.length > 0 &&
+						node.specifiers.every((specifier) => specifier.exportKind === "type")),
+			);
+		},
+		ExportAllDeclaration(node) {
+			add(node.source, node.exportKind === "type");
+		},
+		TSImportEqualsDeclaration(node) {
+			if (node.moduleReference.type === "TSExternalModuleReference") {
+				add(node.moduleReference.expression, node.importKind === "type");
+			}
+		},
+		ImportExpression(node) {
+			add(node.source);
+		},
+		CallExpression(node) {
+			if (node.callee.type === "Identifier" && node.callee.name === "require") {
 				add(node.arguments[0]);
 			}
-		} else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
-			add(node.argument.literal, true);
-		}
-		ts.forEachChild(node, visit);
-	};
-	visit(source);
+		},
+		TSImportType(node) {
+			add(node.source, true);
+		},
+	}).visit(program);
 	return specifiers;
 }
 
@@ -357,7 +371,8 @@ export function moduleBoundaryViolations(root: string): string[] {
 			}
 		}
 		for (const path of sourceFiles(modulePath)) {
-			for (const sourceImport of importSpecifiers(path)) {
+			const file = normalized(relative(absoluteRoot, path));
+			for (const sourceImport of importSpecifiers(path, file)) {
 				const target = workspaceTarget(sourceImport.specifier, path, absoluteRoot, packages);
 				const violation = sourceViolation(
 					rule,
@@ -366,9 +381,7 @@ export function moduleBoundaryViolations(root: string): string[] {
 					target,
 				);
 				if (violation) {
-					violations.push(
-						`${normalized(relative(absoluteRoot, path))}: import ${JSON.stringify(sourceImport.specifier)} ${violation}`,
-					);
+					violations.push(`${file}: import ${JSON.stringify(sourceImport.specifier)} ${violation}`);
 				}
 			}
 		}
