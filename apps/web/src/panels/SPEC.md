@@ -982,16 +982,19 @@ a project picker, the prompt hero, and the reused
   together with those rules;
   **`VoiceSettings`** (from `SPEECH_PROTOCOL_VERSION`, in the Interface group after Keyboard) shows the
   store's `speech` status ([[submodule-web-speech]]). An unsupported platform gets a warning notice and
-  nothing else. Otherwise it has these rows:
-  - **Status:** not set up, downloading with a percentage, ready with the engine state, or the failure in
-    error colour. Its action is Download (with the size), Try again, or Cancel download.
-  - **Model:** a Multilingual / English only segmented control. Selecting the other model sends
-    `speech.install {model}`, which downloads it and deletes the current one. Disabled while installing.
-  - **Speech engine:** ThinkRail's managed copy or the user's own `nemo-speech` on PATH, with version
-    and backend.
+  nothing else. Otherwise its rows say what the user can do, never how voice is built: no engine,
+  version, backend or PATH text, which an earlier version showed and users found unreadable (the
+  speech SPECs carry those details).
+  - **Voice input:** a switch for `AppConfig.voiceInputEnabled` (`settings.update`). While it is off,
+    only this row and Delete voice files remain.
+  - **Status:** not set up (with the download size), downloading with a percentage, ready, or the
+    failure in error colour. Its action is Download, Try again, or Cancel download.
+  - **Language:** an All languages / English only segmented control. Selecting the other one sends
+    `speech.install {model}`, which downloads that model and deletes the current one. Disabled while
+    installing.
   - **Shortcut:** the platform chord.
-  - **Disk space:** the bytes ThinkRail's speech files use, and **Remove** (`speech.remove`), which
-    never touches a PATH install.
+  - **Delete voice files:** shown only while ThinkRail's speech files use disk. It states the space it
+    frees and sends `speech.remove`, which never touches a `nemo-speech` on PATH.
   The mic itself is not here: the page-level dictation layer ([[submodule-web-speech]]) shows it on
   whichever text field has focus;
   **`TerminalSettings`** — a **Scrollback** segmented control (`store.terminalReplayKb`, five presets from

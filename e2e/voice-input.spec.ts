@@ -303,7 +303,7 @@ test("turning voice input off stops a dictation, hides every mic and frees the c
 	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready");
 });
 
-test("Settings shows the install and Remove deletes its files and brings the offer back", async ({
+test("Settings turns voice input off and back on, and Delete frees its files and brings the offer back", async ({
 	page,
 }) => {
 	await openChat(page);
@@ -312,15 +312,29 @@ test("Settings shows the install and Remove deletes its files and brings the off
 	await page.getByTestId("settings-nav-voice").click();
 	const voice = page.getByTestId("settings-voice");
 	await expect(voice.getByTestId("settings-voice-status")).toContainText("Ready");
-	await expect(voice.getByTestId("settings-voice-runtime")).toContainText("nemo-speech 0.3.0");
-	await expect(voice.getByTestId("settings-voice-model-multilingual")).toHaveAttribute(
+	await expect(voice).not.toContainText("nemo-speech");
+	await expect(voice.getByTestId("settings-voice-language-all")).toHaveAttribute(
 		"data-active",
 		"true",
 	);
-	await voice.getByTestId("settings-voice-remove").click();
+
+	const toggle = voice.getByTestId("settings-voice-toggle");
+	await toggle.click();
+	await expect(toggle).toHaveAttribute("data-active", "false");
+	await expect(voice.getByTestId("settings-voice-status")).toHaveCount(0);
+	await expect(voice.getByTestId("settings-voice-files")).toBeVisible();
+	await page.keyboard.press("Escape");
+	await page.getByTestId("chat-input").focus();
+	await expect(mic(page)).toHaveCount(0);
+
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-voice").click();
+	await toggle.click();
+	await expect(toggle).toHaveAttribute("data-active", "true");
+	await voice.getByTestId("settings-voice-delete").click();
 	await expect(voice.getByTestId("settings-voice-install")).toBeVisible();
-	await expect(voice.getByTestId("settings-voice-remove")).toBeDisabled();
-	await expect(voice.getByTestId("settings-voice-storage")).toContainText("Nothing stored");
+	await expect(voice.getByTestId("settings-voice-status")).toContainText("Not set up");
+	await expect(voice.getByTestId("settings-voice-files")).toHaveCount(0);
 	expect(existsSync(SPEECH_DIR)).toBe(false);
 	await page.keyboard.press("Escape");
 	await page.getByTestId("chat-input").focus();

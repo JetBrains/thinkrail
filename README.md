@@ -56,8 +56,8 @@ create the tools it needs based on how you actually work.
   streams in where your cursor is and is never sent until you press Enter. The code editor and the terminal
   are left out on purpose. Recognition runs locally with NVIDIA's open
   [Nemotron](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b) speech model (32 languages,
-  detected automatically); the one-time ~750 MB download happens only when you first ask for it, and
-  Settings → Voice input removes it.
+  detected automatically); the one-time ~750 MB download happens only when you first ask for it.
+  Settings → Voice input turns it off or deletes the download.
 - **Find chats and run commands from one box.** `⌘K` (or a double tap of Shift) opens a palette that finds
   chats, workspaces and projects across every open project, runs the app's commands with their shortcuts
   shown, and jumps to a Settings section. With nothing typed it lists the chats waiting for you.
