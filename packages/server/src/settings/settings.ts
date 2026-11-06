@@ -46,6 +46,7 @@ const ACCEPTED_UPDATE_KEYS = {
 	fileLineWidth: true,
 	chatLineWidthBounded: true,
 	fileLineWidthBounded: true,
+	voiceInputEnabled: true,
 	customLayoutPresets: true,
 	favoriteModels: true,
 	defaultModel: true,
@@ -181,6 +182,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	for (const [name, value] of [
 		["chatLineWidthBounded", runtimeUpdate.chatLineWidthBounded],
 		["fileLineWidthBounded", runtimeUpdate.fileLineWidthBounded],
+		["voiceInputEnabled", runtimeUpdate.voiceInputEnabled],
 		["analyticsEnabled", runtimeUpdate.analyticsEnabled],
 		["analyticsConsentConfirmed", runtimeUpdate.analyticsConsentConfirmed],
 		["notificationsEnabled", runtimeUpdate.notificationsEnabled],

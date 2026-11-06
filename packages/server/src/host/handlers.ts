@@ -16,6 +16,7 @@ import type {
 import {
 	BRANCH_STATUS_PROTOCOL_VERSION,
 	isControlMessage,
+	isSpeechModel,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
@@ -189,6 +190,7 @@ import {
 } from "../reviews";
 import { getConfig, noteRecentModel, updateConfig } from "../settings";
 import { evictSpecIndex, projectHasSpecs, specGraph } from "../spec";
+import { cancelSpeechInstall, installSpeech, removeSpeech } from "../speech";
 import {
 	deleteTemplate,
 	getTemplate,
@@ -1079,6 +1081,19 @@ const handlers: WsHandlers = {
 	"fonts.list": () => readUserFonts(),
 	"fonts.installed": () => listInstalledFonts(),
 	"fonts.reveal": () => revealDataFolder(fontsDir()),
+	"speech.install": (p) => {
+		if (!isSpeechModel(p.model)) throw new Error("unknown voice model");
+		installSpeech(p.model);
+		return { ok: true };
+	},
+	"speech.cancelInstall": () => {
+		cancelSpeechInstall();
+		return { ok: true };
+	},
+	"speech.remove": async () => {
+		await removeSpeech();
+		return { ok: true };
+	},
 	"project.acknowledgeSkills": (p) => {
 		return acknowledgeProjectSkills(p.id, p.names);
 	},

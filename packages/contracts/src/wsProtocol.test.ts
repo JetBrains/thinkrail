@@ -56,6 +56,7 @@ import {
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	SESSION_TITLE_MAX_LENGTH,
+	SPEECH_PROTOCOL_VERSION,
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
@@ -242,6 +243,15 @@ test("tool responses replace the ask-only answer method at v93", () => {
 	expect(TOOL_RESPONSE_PROTOCOL_VERSION).toBe(93);
 	expect(WS_METHODS.sessionRespondToTool).toBe("session.respondToTool");
 	expect(WS_METHODS.sessionAnswerQuestion).toBe("session.answerQuestion");
+});
+
+test("voice input is pinned to v106", () => {
+	expect(SPEECH_PROTOCOL_VERSION).toBe(106);
+	expect(PROTOCOL_VERSION).toBe(106);
+	expect(WS_METHODS.speechInstall).toBe("speech.install");
+	expect(WS_METHODS.speechCancelInstall).toBe("speech.cancelInstall");
+	expect(WS_METHODS.speechRemove).toBe("speech.remove");
+	expect(WS_CHANNELS.speechChanged).toBe("speech.changed");
 });
 
 test("user-selectable fonts are pinned to v102", () => {
@@ -586,7 +596,7 @@ test("custom endpoints are pinned to v101 and own only custom-* providers", () =
 
 test("extension settings are pinned to v105", () => {
 	expect(EXTENSION_SETTINGS_PROTOCOL_VERSION).toBe(105);
-	expect(PROTOCOL_VERSION).toBe(105);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(EXTENSION_SETTINGS_PROTOCOL_VERSION);
 	expect(DEFAULT_CONFIG.extensionSettings).toEqual({});
 });
 

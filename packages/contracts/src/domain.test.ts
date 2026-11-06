@@ -143,6 +143,10 @@ describe("config defaults", () => {
 			fileLineWidthBounded: true,
 		});
 	});
+
+	test("voice input is on by default", () => {
+		expect(DEFAULT_CONFIG.voiceInputEnabled).toBe(true);
+	});
 });
 
 describe("JetBrains Central health", () => {

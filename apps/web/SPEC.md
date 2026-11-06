@@ -54,6 +54,7 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | `fonts` | the host font settings + custom font files applied as the user-adjustable typography tokens | yes | [fonts/SPEC.md](src/fonts/SPEC.md) |
 | `i18n` | active language: synced preference + browser languages + bundled/local catalogs → the shared i18next instance, `<html lang>`, desktop menu labels | yes | [i18n/SPEC.md](src/i18n/SPEC.md) |
 | `lib` | shared path/array primitives + highlighting | yes | [lib/SPEC.md](src/lib/SPEC.md) |
+| `speech` | local voice dictation for every text field: one page-level layer, mic capture → `/speech` socket → the focused field | yes | [speech/SPEC.md](src/speech/SPEC.md) |
 
 Leaf utilities without their own spec: `constants/` (branding — the product name, storage/event prefixes, and the one
 `BRAND_MARK_SEGMENTS` monogram regions, joined into the `BRAND_MARK_PATH` the shell logo fills and clipped to by the components' working badge), `clientPreferences.ts` (feature-neutral
@@ -179,6 +180,7 @@ change. `dist/` therefore has no profiler timers (`actualStartTime` is absent fr
 - `fonts` → `contracts`, `constants` (the first-paint hint key), `clientPreferences` (native-stable hint storage and the desktop signal); `transport` hydrates the store's custom-font snapshot, `shell`'s fonts effect applies the settings and installs the faces, `main.tsx` applies the hint before React, and `panels` (the Appearance font groups) reads its bundled faces, probes and weight preview
 - `i18n` → `store`, `contracts` (types), `@thinkrail/locales`; `transport` hydrates the store's local-language snapshot, `main.tsx`'s `App` mounts `useLocaleSync` once and `panels` renders the Language page from its pure derivations
 - **Any module may → `@thinkrail/locales/react`** (`useT`, `<T>`, `currentLocale`) for its UI text — the one cross-cutting edge besides `lib`; user-facing text is never a literal ([[architecture]] Decision 23)
+- `speech` → `transport` (`openSpeechSocket`, `speech.*` requests), `store` (the host's `speech` status), `contracts`, `ui`, `lib` (platform chord, modal and text-entry checks), React, Remix Icon; `main.tsx` mounts its `DictationLayer` once, which serves every text field on the page; `chat`'s composer imports only `DICTATION_EVENT`, and `panels` (Settings → Voice input) its labels
 - leaves (`clientPreferences`, `constants`, `utils`, `styles`) → none internal
 
 Rules: a panel never imports another panel sideways; nothing imports `shell` (it's the composition root).
