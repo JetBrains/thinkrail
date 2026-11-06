@@ -142,16 +142,6 @@ import {
 	supportsWorkspaceSettling,
 } from "./selectors";
 
-export interface StreamingResponseMovement {
-	settle: number;
-	trigger: number;
-}
-
-export const DEFAULT_STREAMING_RESPONSE_MOVEMENT: StreamingResponseMovement = {
-	settle: 75,
-	trigger: 100,
-};
-
 export interface FileTab {
 	kind: "file";
 	id: string;
@@ -1090,7 +1080,6 @@ interface AppState {
 	chatLineWidthBounded: boolean;
 	fileLineWidthBounded: boolean;
 	chatMessageOrder: ChatMessageOrder;
-	streamingResponseMovement: StreamingResponseMovement;
 	defaultModel: WireModel | undefined;
 	defaultEffort: ThinkingLevel | undefined;
 	reviewModel: WireModel | undefined;
@@ -1415,8 +1404,6 @@ interface AppState {
 	closeSearch: () => void;
 	setDoubleShiftSearch: (enabled: boolean) => void;
 	setChatMessageOrder: (order: ChatMessageOrder) => void;
-	setStreamingResponseMovement: (movement: StreamingResponseMovement) => void;
-	setChatPreferences: (order: ChatMessageOrder, movement: StreamingResponseMovement) => void;
 	applyConfig: (config: AppConfig) => void;
 	requestToolView: (workspaceId: string, tool: LayoutToolId) => void;
 	requestChangesView: (workspaceId: string, path: string | null, scope?: GitDiffScope) => void;
@@ -2383,7 +2370,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 	chatLineWidthBounded: DEFAULT_CONFIG.chatLineWidthBounded,
 	fileLineWidthBounded: DEFAULT_CONFIG.fileLineWidthBounded,
 	chatMessageOrder: "oldest-first",
-	streamingResponseMovement: { ...DEFAULT_STREAMING_RESPONSE_MOVEMENT },
 	customLayoutPresets: DEFAULT_CONFIG.customLayoutPresets,
 	defaultModel: DEFAULT_CONFIG.defaultModel,
 	defaultEffort: DEFAULT_CONFIG.defaultEffort,
@@ -4455,9 +4441,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closeSurveyWindow: () => set({ surveyWindowOpen: false }),
 	setInAppSurvey: (survey) => set({ inAppSurvey: survey }),
 	setChatMessageOrder: (chatMessageOrder) => set({ chatMessageOrder }),
-	setStreamingResponseMovement: (streamingResponseMovement) => set({ streamingResponseMovement }),
-	setChatPreferences: (chatMessageOrder, streamingResponseMovement) =>
-		set({ chatMessageOrder, streamingResponseMovement }),
 	applyConfig: (config) => set(configPatch(config)),
 	requestToolView: (workspaceId, tool) =>
 		set((state) =>
