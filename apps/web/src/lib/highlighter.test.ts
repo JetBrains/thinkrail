@@ -1,11 +1,7 @@
 import { expect, test } from "bun:test";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
-import {
-	chatShikiLanguageId,
-	createChatHighlighter,
-	SHIKI_FILE_LANGUAGES,
-	shikiLanguageId,
-} from "./highlighter";
+import { createOnigurumaEngine } from "shiki/engine/oniguruma";
+import { createChatHighlighter, SHIKI_FILE_LANGUAGES, shikiLanguageId } from "./highlighter";
 
 test("the Monaco Shiki language registration list has no duplicate ids", () => {
 	const ids = SHIKI_FILE_LANGUAGES.map((language) => language.id);
@@ -15,17 +11,37 @@ test("the Monaco Shiki language registration list has no duplicate ids", () => {
 test("Scala is recognized for chat fences and Scala files", () => {
 	const scala = SHIKI_FILE_LANGUAGES.find((language) => language.id === "scala");
 	expect(scala?.extensions).toContain(".scala");
-	expect(scala?.chat).toBe(true);
 	expect(shikiLanguageId("Scala")).toBe("scala");
-	expect(chatShikiLanguageId("scala")).toBe("scala");
 });
 
-test("a Scala chat fence renders with Shiki tokens", async () => {
-	const highlight = createChatHighlighter(createJavaScriptRegexEngine);
-	const html = await highlight('object Greeting { val message: String = "hello" }', "scala");
-	expect(html).not.toBeNull();
-	expect(html).toContain("<span");
+const tokenColors = (html: string | null) => new Set(html?.match(/color:[^;"]+/g));
+
+test("Java chat fences resolve by id and name", () => {
+	expect(shikiLanguageId("java")).toBe("java");
+	expect(shikiLanguageId("Java")).toBe("java");
 });
+
+const JAVA_FENCE = 'public class Greeting { private String message = "hello"; }';
+const ENGINES = {
+	"JS regex": createJavaScriptRegexEngine,
+	"Oniguruma WASM": () => createOnigurumaEngine(import("shiki/wasm")),
+};
+
+for (const [name, engine] of Object.entries(ENGINES)) {
+	test(`a Java chat fence renders colored tokens with the ${name} engine`, async () => {
+		const html = await createChatHighlighter(engine)(JAVA_FENCE, "java");
+		expect(tokenColors(html).size).toBeGreaterThan(1);
+	});
+
+	test(`every catalog language highlights a chat fence with the ${name} engine`, async () => {
+		const highlight = createChatHighlighter(engine);
+		for (const { id } of SHIKI_FILE_LANGUAGES) {
+			expect(await highlight('function main() { return "x" + 1; } // note', id), id).toContain(
+				"<span",
+			);
+		}
+	}, 30_000);
+}
 
 test("every Monaco language id is supplied by its Shiki grammar", async () => {
 	const modules = await Promise.all(SHIKI_FILE_LANGUAGES.map((language) => language.load()));
