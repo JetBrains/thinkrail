@@ -1,3 +1,6 @@
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { expect, test, type WebSocketRoute } from "@playwright/test";
 import { INITIAL_TERMINAL_TAB_KEY } from "@thinkrail/contracts";
 import {
@@ -517,9 +520,10 @@ test("Shift+Enter sends Meta+Enter without a stray carriage return", async ({ pa
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
 	await waitTerminalReady(page);
-	const term = visibleTerminalScreen(page);
+	const capture = join(mkdtempSync(join(tmpdir(), "tr-shift-enter-")), "bytes.txt");
 
-	await runInTerminal(page, "cat -v");
+	await runInTerminal(page, `cat -v > ${capture}`);
+	await expect.poll(() => existsSync(capture)).toBe(true);
 	await visibleTerminal(page).locator(".xterm-helper-textarea").focus();
 	await page.keyboard.type("A");
 
@@ -542,14 +546,10 @@ test("Shift+Enter sends Meta+Enter without a stray carriage return", async ({ pa
 	await page.keyboard.type("B");
 	await page.keyboard.press("Enter");
 
-	const catRows = async () => {
-		const rows = (await term.innerText()).split("\n").map((row) => row.trim());
-		return rows.slice(rows.findIndex((row) => row.endsWith("cat -v")) + 1);
-	};
-	await expect
-		.poll(async () => (await catRows()).filter((row) => row !== "").sort())
-		.toEqual(["A^[", "A^[", "B", "B"]);
-	expect((await catRows()).slice(0, 4)).not.toContain("");
+	await page.keyboard.press("Control+d");
+
+	// Cooked tty: ESC CR becomes "A", ESC, newline (icrnl), so cat -v writes "A^[\n"; a leaked CR would add a blank line and a doubled key a repeated character.
+	await expect.poll(() => readFileSync(capture, "utf8")).toBe("A^[\nB\n");
 });
 
 test("a shell that dies while detached is not re-attached as if alive", async ({ page }) => {
