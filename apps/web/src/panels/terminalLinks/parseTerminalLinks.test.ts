@@ -164,6 +164,14 @@ describe("path shapes", () => {
 		expect(links("--outFile=dist/out.js")).toEqual([path("dist/out.js", "dist/out.js")]);
 	});
 
+	test("box-drawing and arrow glyphs glued to a path are not part of it", () => {
+		expect(links("  ╭─[src/a.ts:3:1]")).toEqual([path("src/a.ts:3:1", "src/a.ts", 3, 1)]);
+		expect(links("│src/b.ts └→src/c.ts:2")).toEqual([
+			path("src/b.ts", "src/b.ts"),
+			path("src/c.ts:2", "src/c.ts", 2),
+		]);
+	});
+
 	test("unicode names are paths too", () => {
 		expect(links("docs/заметки.md:2")).toEqual([path("docs/заметки.md:2", "docs/заметки.md", 2)]);
 	});
@@ -235,6 +243,14 @@ describe("URLs", () => {
 		]);
 		expect(links("'https://example.com/x'")).toEqual([url("https://example.com/x")]);
 		expect(links("<https://example.com>")).toEqual([url("https://example.com")]);
+	});
+
+	test("a long run of closers is trimmed in linear time", () => {
+		const started = performance.now();
+		expect(links(`https://example.com/a${")".repeat(20_000)}`)).toEqual([
+			url("https://example.com/a"),
+		]);
+		expect(performance.now() - started).toBeLessThan(200);
 	});
 
 	test("parentheses are kept only when balanced", () => {

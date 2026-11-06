@@ -1,4 +1,8 @@
-import type { TerminalPathTarget } from "@thinkrail/contracts";
+import {
+	MAX_TERMINAL_PATH_CANDIDATES,
+	MAX_TERMINAL_PATH_LENGTH,
+	type TerminalPathTarget,
+} from "@thinkrail/contracts";
 import type { IBufferRange, ILink, ILinkProvider } from "@xterm/xterm";
 import { parseTerminalLinks, type TerminalLink } from "./parseTerminalLinks";
 
@@ -44,7 +48,6 @@ export interface TerminalLinkProviderOptions {
 }
 
 const MAX_WRAPPED_ROWS = 32;
-const MAX_CANDIDATES = 64;
 const RESOLUTION_TTL_MS = 2_000;
 const NO_TARGET: TerminalPathTarget = { kind: null, relPath: null };
 
@@ -170,8 +173,14 @@ export function createTerminalLinkProvider(options: TerminalLinkProviderOptions)
 				return;
 			}
 			const paths = [
-				...new Set(onRow.filter(({ link }) => link.kind === "path").map(({ link }) => link.path)),
-			].slice(0, MAX_CANDIDATES);
+				...new Set(
+					onRow
+						.filter(
+							({ link }) => link.kind === "path" && link.path.length <= MAX_TERMINAL_PATH_LENGTH,
+						)
+						.map(({ link }) => link.path),
+				),
+			].slice(0, MAX_TERMINAL_PATH_CANDIDATES);
 			const pending = lookup(paths);
 			void Promise.all(
 				onRow.map(async ({ link, range }) => {

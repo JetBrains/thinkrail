@@ -21,8 +21,9 @@ const MAX_POSITION = 10_000_000;
 const URL_PATTERN = /\b(https?|file):\/\/[^\s<>"'`]+/g;
 const TRAILING_URL_PUNCTUATION = /[.,;:!?'"]$/;
 const CLOSERS: Record<string, string> = { ")": "(", "]": "[", "}": "{", ">": "<" };
+const OPENERS = new Set(Object.values(CLOSERS));
 const PYTHON_FRAME = /File ("([^"\n]+)", line (\d+))/g;
-const PATH_TOKEN = /(?:[A-Za-z]:[\\/])?[^\s"'`<>()|;,:=*?!{}&]+/g;
+const PATH_TOKEN = /(?:[A-Za-z]:[\\/])?[^\s"'`<>()|;,:=*?!{}&\u2190-\u21ff\u2500-\u257f]+/g;
 const QUOTE_OPENS_AFTER = /[\s([{=:,]/;
 const QUOTE_CLOSES_BEFORE = /[\s)\]}:,.;(]/;
 const LOCATION_SUFFIXES = [
@@ -43,16 +44,21 @@ function count(text: string, char: string): number {
 }
 
 function trimUrl(url: string): string {
-	let trimmed = url;
-	while (trimmed.length > 0) {
-		const last = trimmed.slice(-1);
+	const brackets = new Map<string, number>();
+	for (const char of url) {
+		if (char in CLOSERS || OPENERS.has(char)) brackets.set(char, (brackets.get(char) ?? 0) + 1);
+	}
+	let end = url.length;
+	while (end > 0) {
+		const last = url[end - 1] ?? "";
 		const opener = CLOSERS[last];
-		if (TRAILING_URL_PUNCTUATION.test(last)) trimmed = trimmed.slice(0, -1);
-		else if (opener !== undefined && count(trimmed, last) > count(trimmed, opener)) {
-			trimmed = trimmed.slice(0, -1);
+		if (TRAILING_URL_PUNCTUATION.test(last)) end -= 1;
+		else if (opener !== undefined && (brackets.get(last) ?? 0) > (brackets.get(opener) ?? 0)) {
+			brackets.set(last, (brackets.get(last) ?? 0) - 1);
+			end -= 1;
 		} else break;
 	}
-	return trimmed;
+	return url.slice(0, end);
 }
 
 function position(lineText: string | undefined, colText: string | undefined): Position {

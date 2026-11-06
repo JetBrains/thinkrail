@@ -128,6 +128,14 @@ describe("createTerminalLinkProvider", () => {
 		expect(links?.[0]?.decorations).toEqual({ pointerCursor: true, underline: true });
 	});
 
+	test("a candidate the host would refuse as too long is never sent", async () => {
+		const long = `x/${"a".repeat(5_000)}.ts`;
+		const h = harness([row(`${long} b.ts`, false, long.length + 10)], () => exists("b.ts"));
+		const links = await h.linksAt(1);
+		expect(h.asked).toEqual([["b.ts"]]);
+		expect(links?.map((link) => link.text)).toEqual(["b.ts"]);
+	});
+
 	test("a line with nothing link-shaped answers at once with no links", async () => {
 		const h = harness([row("hello world")]);
 		expect(await h.linksAt(1)).toBeUndefined();
