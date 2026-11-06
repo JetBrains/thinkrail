@@ -5,6 +5,7 @@ import { isAbsolute, join, resolve } from "node:path";
 import {
 	type AppConfig,
 	DEFAULT_CONFIG,
+	type ExtensionSettingValues,
 	type HostEnvironment,
 	isComposerGrowthLimit,
 	isJbcentralQuotaRefreshSeconds,
@@ -354,6 +355,19 @@ function storedNameList(value: unknown): string[] {
 	];
 }
 
+function storedExtensionSettings(value: unknown): ExtensionSettingValues {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+	const result: ExtensionSettingValues = {};
+	for (const [name, settings] of Object.entries(value)) {
+		if (!settings || typeof settings !== "object" || Array.isArray(settings)) continue;
+		const flags = Object.entries(settings).filter(
+			(entry): entry is [string, boolean] => typeof entry[1] === "boolean",
+		);
+		if (flags.length > 0) result[name] = Object.fromEntries(flags);
+	}
+	return result;
+}
+
 export function loadConfig(): AppConfig {
 	const raw = readJson<unknown>("config.json", {});
 	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return structuredClone(DEFAULT_CONFIG);
@@ -432,6 +446,7 @@ export function loadConfig(): AppConfig {
 			? value.settleIdleDays
 			: DEFAULT_CONFIG.settleIdleDays,
 		disabledExtensions: storedNameList(value.disabledExtensions),
+		extensionSettings: storedExtensionSettings(value.extensionSettings),
 		disabledPackages: storedNameList(value.disabledPackages),
 		locale: isLocalePreference(value.locale) ? value.locale : DEFAULT_CONFIG.locale,
 		onboardingDismissed: value.onboardingDismissed === true,

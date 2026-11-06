@@ -56,7 +56,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   socket's [[submodule-server-speech]] relay, so it never joins the `clientKey → socket` registry, the
   replay cache or any channel: binary 20 ms audio frames would otherwise be hashed and retained
   per request. `host` publishes
-  `speech.changed` whole to v105 sockets, which also get `ServerWelcome.speech`; static serving with
+  `speech.changed` whole to v106 sockets, which also get `ServerWelcome.speech`; static serving with
   `index.html` fallback, the `server.welcome` push, the **`?client=` page identity** read off the socket URL at
   upgrade (threaded to every handler as `RequestContext`; it addresses terminal output but no longer *owns*
   PTYs — see [[submodule-server-terminal]]) plus the `clientKey → socket` registry and the **replay-namespace
@@ -434,7 +434,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   publisher asks `refreshSubagentTools()` to reevaluate all live sessions after a global update that
   carries `subagentsEnabled` (likewise `refreshAgentReviewTool()` for `agentReviewEnabled`,
   `refreshSubagentConcurrency()` for `subagentMaxConcurrent`, and `refreshExtensionTools()` for
-  `disabledExtensions`) — not after
+  `disabledExtensions` or `extensionSettings`) — not after
   every publish, since `recentModels` now publishes on each model switch and a tool-set rebuild per idle
   session would be pure churn — and
   `workspace.setSubagentsOverride` persists through `workspaces` then refreshes only that workspace. The
@@ -443,7 +443,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   contracts default (`resolveSubagentMaxConcurrent`; an unknown workspace uses the global value — a limit
   has no fail-closed meaning), and `workspace.setSubagentMaxConcurrent` persists then resizes only that
   workspace's service. Extension on/off is global only: `setDisabledExtensionsResolver` returns
-  `AppConfig.disabledExtensions` as a set (unknown names are inert), and `extension.list` answers with the
+  `AppConfig.disabledExtensions` as a set (unknown names are inert), `setExtensionSettingsResolver` returns
+  `AppConfig.extensionSettings` the same way (cleared on shutdown), and `extension.list` answers with the
   `extensions` catalog joined with that same setting — the switch itself writes through `settings.update`,
   so there is no extension write method. **Installed pi packages** follow the same pattern one level up:
   `setDisabledPackagesResolver` returns `AppConfig.disabledPackages`, a change to either list calls

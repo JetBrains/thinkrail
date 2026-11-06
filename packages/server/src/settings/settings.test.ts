@@ -448,6 +448,44 @@ test("a malformed disabled-extensions update is rejected; a malformed stored lis
 	expect(getConfig().disabledExtensions).toEqual([]);
 });
 
+test("extension settings merge per extension and key, persist, and drop non-boolean stored values", () => {
+	expect(DEFAULT_CONFIG.extensionSettings).toEqual({});
+	const published: AppConfigUpdate[] = [];
+	setSettingsPublisher((_config, applied) => published.push(applied));
+	expect(getConfig().extensionSettings).toEqual({});
+	updateConfig({ extensionSettings: { "ask-user-question": { richPreviews: false } } });
+	const next = updateConfig({
+		extensionSettings: { "ask-user-question": { other: true }, retired: { flag: true } },
+	});
+	expect(next.extensionSettings).toEqual({
+		"ask-user-question": { richPreviews: false, other: true },
+		retired: { flag: true },
+	});
+	expect(published.at(-1)?.extensionSettings).toEqual({
+		"ask-user-question": { other: true },
+		retired: { flag: true },
+	});
+	resetConfigCache();
+	expect(getConfig().extensionSettings["ask-user-question"]).toEqual({
+		richPreviews: false,
+		other: true,
+	});
+
+	for (const value of [null, [], { x: true }, { x: { flag: "yes" } }, { "": { flag: true } }]) {
+		const invalid = { extensionSettings: value } as unknown as AppConfigUpdate;
+		expect(() => updateConfig(invalid)).toThrow(
+			"extensionSettings must map extension names to boolean settings",
+		);
+	}
+
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({ extensionSettings: { a: { on: true, bad: "x" }, b: "nope", c: { bad: 1 } } }),
+	);
+	resetConfigCache();
+	expect(getConfig().extensionSettings).toEqual({ a: { on: true } });
+});
+
 test("disabled packages default empty, round-trip deduped, and reject a malformed list", () => {
 	expect(DEFAULT_CONFIG.disabledPackages).toEqual([]);
 	expect(getConfig().disabledPackages).toEqual([]);

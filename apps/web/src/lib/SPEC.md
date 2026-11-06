@@ -39,8 +39,10 @@ not this module; the theme-aware highlighter remains app-local.
   here because `chat/` may not import from `panels/`, which is what let three private twins of it
   accumulate), **`platformShortcutLabel()`** +
   **`hasPlatformModifier()`** + **`platformFamily()`** (one Apple-vs-other definition for shortcut chrome and
-  global handlers, plus the `apple` / `windows` / `linux` / `other` family for per-OS shortcut tables; all
-  default to the browser-reported platform but accept an explicit platform string so non-browser callers and
+  global handlers — the definition itself lives in `@thinkrail/ui/keyboard` so extension cards share it, and
+  `hasPlatformModifier` is re-exported here to keep the app's shortcut helpers on one import; plus the
+  `apple` / `windows` / `linux` / `other` family for per-OS shortcut tables; all default to the
+  browser-reported platform but accept an explicit platform string so non-browser callers and
   tests never inherit a host runtime's synthetic `navigator` accidentally; the label optionally renders the
   Alt variant — `⌥⌘N` / `Ctrl+Alt+N` — so shortcut chrome never composes modifier glyphs itself), and
   **`copyText()`**
@@ -78,7 +80,7 @@ not this module; the theme-aware highlighter remains app-local.
   Shiki highlighter, **kept out of the barrel** so the eager `@/lib` import stays shiki-free:
   `highlighter.ts` owns the curated grammar/id/file-association catalog shared by chat and the desktop
   Monaco renderer (both load a grammar on its language's first use), plus
-  `createChatHighlighter(engine)`: `themes`' one generic CSS-variable registration and each chat grammar
+  `createChatHighlighter(engine)`: `themes`' one generic CSS-variable registration and each catalog grammar
   loaded on first use. Chat code is highlighted off the main thread:
   `highlightCode.ts` resolves the language alias (unknown and `mermaid` answer `null` with no worker),
   then posts to one lazy `highlighter.worker.ts` per page, which uses the Oniguruma WASM engine. Per

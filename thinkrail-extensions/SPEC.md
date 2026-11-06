@@ -19,15 +19,19 @@ host-level setting keyed on the descriptor `name`; the extension declares nothin
 install or discover a new extension is deliberately not designed.
 
 The first extension (`visualize`, [[module-ext-visualize]]) ships both halves; the host composes them from
-the two registry files below ([[submodule-server-extensions]], [[submodule-web-extensions]]). Install UX,
-marketplace, per-extension settings, a per-workspace on/off override, extension-contributed wire methods,
-panels and store contributions are explicit deferrals, not gaps. The on/off switch covers everything an
+the two registry files below ([[submodule-server-extensions]], [[submodule-web-extensions]]). **Per-extension
+settings** exist for booleans: a descriptor declares `settings`, Settings → Extensions shows each as a nested
+switch under its extension (copy from locale keys; disabled while the extension is off; hidden for an older
+host), the value lives in `AppConfig.extensionSettings`, and a change reloads open chats when their current
+turn ends — ask-user-question's `richPreviews` was the first consumer. Install UX, marketplace, other setting
+types, a per-workspace on/off override, extension-contributed wire methods, panels and store contributions
+are explicit deferrals, not gaps. The on/off switch covers everything an
 extension contributes — its factories, its tools in live sessions, and the skills of its `skillPackages`
 — the way removing a package in pi drops its extensions and skills together.
 
 ## Shape — two entrypoints, no root barrel
 
-- `./server` — default export `defineServerExtension({ name, title?, description?, extensions, sessionExtensions?, interactiveTools?, childExtensions?, skillPackages? })`
+- `./server` — default export `defineServerExtension({ name, title?, description?, extensions, sessionExtensions?, interactiveTools?, settings?, childExtensions?, skillPackages? })`
   (`title` / `description` are Settings display copy).
   `extensions` / `childExtensions` are pi `ExtensionFactory`s the host composes into every parent session /
   the curated child set, registered as named `InlineExtension`s so pi diagnostics keep an identity.

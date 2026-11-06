@@ -12,8 +12,8 @@ tags: [testing, playwright, e2e]
 ## Responsibility
 
 The real-browser system gate for ThinkRail's host/UI integration: build the shipped web client, boot an
-isolated host, seed real git and persistence fixtures, drive Chromium through the wire, and clean up every
-machine-global resource it used. The default suite excludes provider-backed `@agent` tests; those remain
+isolated host, seed real git and persistence fixtures, drive Chromium (and WebKit for the questionnaire
+specs) through the wire, and clean up every machine-global resource it used. The default suite excludes provider-backed `@agent` tests; those remain
 explicit, authenticated, on-demand runs.
 
 ## Execution model
@@ -575,10 +575,21 @@ asks for a before/after UI proposal without naming the tool and expects mockup f
 the single shared image strip, the collapsed JSON tree, Full output through the real `mcp.readOutput`
 (a recorded file and an expired one), Sign in deep links into Settings › MCP servers or Providers according
 to pi's reported authentication kind (provider identity remains visible), and the raw-text fallback for a truncated listing; its element shots under `e2e/screenshots/mcp-tool-cards/` are review evidence
-only. Questionnaire paging uses canonical persisted tool-call/ack fixtures to pin six-question rounds beyond
-four, tall-page reveal,
-fresh-chat restored-page reveal, visible review focus, and coarse-pointer focus
-without provider variability; desktop package tests separately pin the stable
+only. Questionnaire coverage uses canonical persisted tool-call/ack fixtures (submitting one exercises the
+restart-repaired response path) to pin six-question rounds beyond four, tall-page and restored-page reveal,
+coarse-pointer focus, tabs/question/footer at one y across paging and choosing, notes and Other growing in
+place under a height that never shrinks, Discuss marking/cancelling/sending (asserted in the session file),
+the receipt's fold, per-question Options and remembered manual fold, and the keyboard model (arrows only
+move, Enter picks, Space opens a note, `d` discusses, fields park on their own row, the platform chord
+submits or nudges) (`ask-user-question.spec.ts`). `ask-previews.spec.ts` writes mockups
+into the fixture repository (removed in `finally`) and pins the question preview and the option pane (HTML,
+before/after, mermaid, none) at one card height, full-screen keys that never page or skip, a file removed
+under its preview, and the picked file's path in the persisted answer; `plan-ask.spec.ts` adds the same file
+preview on the plan page. These three specs also run in a **`webkit` Playwright project**: the macOS desktop
+is the system WKWebView, whose Tab skips buttons without an explicit `tabindex` (the regression this lane
+exists for). CI installs WebKit with its system deps; Linux WebKitGTK may not reproduce the macOS Tab rule,
+so the card's markup guard (every control an explicit tab stop) is the platform-independent net. All of this
+runs without provider variability; desktop package tests separately pin the stable
 backend-profile/window adapter required across dynamic-port restarts. Streaming-band coverage remains
 `@agent` because only Pi's real row growth exercises that lifecycle. Stream-mount coverage injects
 synthetic `pi.event` frames into the page wire (`fixtures/streamReplay.ts`) under CPU throttling to prove

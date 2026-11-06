@@ -413,7 +413,8 @@ two routes:
 - for a rich inline card, rendering from its `toolCall` args and replying through the props-only
   **`ToolRenderProps.interaction`**. `ToolRendererBody` fills it through `useToolInteraction`
   (`toolInteraction.ts`), and the plan page does the same for its card. The adapter reads `ChatActions`,
-  `interactionState` and the fold-geometry context, and fills `interaction` for every tool whose renderer
+  `interactionState`, the fold-geometry context and the store's `protocolVersion` (passed as
+  `hostProtocol` so a renderer can withhold an affordance an older host cannot serve), and fills `interaction` for every tool whose renderer
   is registered `interactive` (`isInteractiveTool`) — it knows no tool by name. Its `state.accepting` is
   true only while the host's `needsInput` names this call (`awaitingToolCallIdOf`, carried in the
   interaction context; a pre-v93 host's `kind: "question"` / `question:<id>` is read the same way for one

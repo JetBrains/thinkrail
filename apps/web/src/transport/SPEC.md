@@ -170,8 +170,8 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   `watchMcpWorkspace`, `ConnectionStatus`,
   `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
   `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`,
-  `supportsUserThemes`, `supportsFonts`, `supportsSpeech`, `openSpeechSocket`, `hostUrl`, `uploadUserFont`,
-  `supportsToolResponses`, `respondToTool`,
+  `supportsUserThemes`, `supportsFonts`, `supportsExtensionSettings`, `supportsSpeech`, `openSpeechSocket`,
+  `hostUrl`, `uploadUserFont`, `supportsToolResponses`, `respondToTool`,
   `installClientErrorReporting`, `reportClientError`, `clientErrorReport`. `respondToTool(sessionId,
   toolCallId, response)` is the one place a tool response leaves the client (chat and plan page both use
   it): it sends `session.respondToTool` to a v93+ host and the retired `session.answerQuestion` below
@@ -182,10 +182,12 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   custom-font snapshot (`fonts.list`, refreshed on every welcome and `fonts.changed`), and `uploadUserFont`
   is the one binary upload — a `PUT` of the raw file to the host's `/fonts/` route with the upload guard
   header, answered by that file's `UserFontFile` entry — while `hostUrl` resolves a host-relative path
-  (custom face URLs) against the endpoint. `openSpeechSocket()` opens the dictation side socket
-  (`/speech?protocol=`) on the same endpoint for [[submodule-web-speech]]. It carries binary audio and
-  never a request. `server.welcome`'s `speech` seed and every `speech.changed` push install the store's
-  `speech` status whole; `supportsSpeech` (v105) gates the same way. `supportsPlanReview` is exported
+  (custom face URLs) against the endpoint; `supportsExtensionSettings` (v105) lets `ExtensionsSettings`
+  offer per-extension setting switches only to a host that stores `extensionSettings`. `openSpeechSocket()`
+  opens the dictation side socket (`/speech?protocol=`) on the same endpoint for [[submodule-web-speech]].
+  It carries binary audio and never a request. `server.welcome`'s `speech` seed and every `speech.changed`
+  push install the store's `speech` status whole; `supportsSpeech` (v106) gates the same way.
+  `supportsPlanReview` is exported
   because a sibling panel (`PlanPane`) gates the plan-review UI on it — an older host serves no
   `todo.startReview`/`reviewAll`, so the client must not offer them; `supportsPlanSummaryGeneration` (v69) is
   exported because `chat/useChatTodos` gates the auto-summary `todo.generateSummary` request on it — an older
