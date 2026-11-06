@@ -190,6 +190,7 @@ beforeEach(() => {
 		fileLineWidth: DEFAULT_CONFIG.fileLineWidth,
 		chatLineWidthBounded: DEFAULT_CONFIG.chatLineWidthBounded,
 		fileLineWidthBounded: DEFAULT_CONFIG.fileLineWidthBounded,
+		voiceInputEnabled: DEFAULT_CONFIG.voiceInputEnabled,
 		chatMessageOrder: "oldest-first",
 		streamingResponseMovement: { settle: 75, trigger: 100 },
 		toasts: [],
@@ -4029,6 +4030,15 @@ test("applyConfig defaults absent or malformed line-width fields independently",
 		chatLineWidthBounded: true,
 		fileLineWidthBounded: false,
 	});
+});
+
+test("applyConfig projects the voice input switch and reads an absent one as on", () => {
+	useAppStore.getState().applyConfig({ ...DEFAULT_CONFIG, voiceInputEnabled: false });
+	expect(useAppStore.getState().voiceInputEnabled).toBe(false);
+	const older = { ...DEFAULT_CONFIG };
+	Reflect.deleteProperty(older, "voiceInputEnabled");
+	useAppStore.getState().applyConfig(older);
+	expect(useAppStore.getState().voiceInputEnabled).toBe(true);
 });
 
 test("applyConfig projects the host-wide subagent default", () => {
