@@ -897,8 +897,11 @@ reliable (local storage; network filesystem guarantees are not asserted). This s
 local directory. `withLaunch(localProjectId, reference, operation, beforeRelease?)` acquires and flushes an exclusive
 `wx` fence for `(localProjectId, IID)` before invoking the callback, which must wrap the entire
 process-local Issue workspace coordinator operation. Different remote bindings contend for the same
-numeric destination. Existing fences always require reconciliation: no waiting, timeout, stale-owner
-inference or takeover. A thrown callback or storage error before release leaves the fence; only a
+numeric destination. A fence names its owning `pid`, and an existing one is reconciled only by
+provable death of that owner (`ESRCH`), never by waiting, timeout or a guess: a fence written by an
+older build without a `pid` records no owner that could still be running and is reconciled the same
+way. A live owner, an unreadable or foreign fence, and a fence describing another key keep blocking.
+A thrown callback or storage error before release leaves the fence while its process lives; only a
 successful callback followed by all required write/directory flushes may remove its own fence.
 The optional synchronous `beforeRelease` guard runs after those flushes, immediately before unlink;
 a thrown guard retains the fence. Successful unlink is the explicit release commit point: no fallible
