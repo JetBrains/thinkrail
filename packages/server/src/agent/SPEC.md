@@ -856,7 +856,10 @@ re-opened transcripts provider-valid.
     never compares equal to the restored set) joins the extension policy generation
     above, and each session loader records the key it last resolved under — together with the
     **extension setting values** (`AppConfig.extensionSettings`, reaching `agent` through a host-injected
-    resolver like the disabled set; a `settings.update` of them calls `refreshExtensionTools`);
+    resolver like the disabled set; a `settings.update` of them calls `refreshExtensionTools`). A reload
+    snapshots the setting values once, and its extension factories read that snapshot, never the live
+    values, so the recorded key always describes the tools actually loaded, even across a change and revert
+    during the reload.
     `isLoaderPolicyStale` is one more predicate of the reconciliation `applyExtensionTools` runs at
     registration, after every reload and on `refreshExtensionTools`, so a session prepared under an older
     policy or older setting values reloads when it registers (or once its turn ends) and a change

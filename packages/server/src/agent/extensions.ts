@@ -261,15 +261,12 @@ export function extensionSettings(): ExtensionSettingValues {
 	}
 }
 
-const extensionSettingValue = (extension: string, key: string): boolean | undefined =>
-	extensionSettings()[extension]?.[key];
-
 const byKey = <T>([a]: [string, T], [b]: [string, T]): number => a.localeCompare(b);
 
 /** The extension setting values as one stable string: a change marks every loader built before stale. */
-export function extensionSettingsKey(): string {
+export function extensionSettingsKey(values = extensionSettings()): string {
 	return JSON.stringify(
-		Object.entries(extensionSettings())
+		Object.entries(values)
 			.sort(byKey)
 			.map(([name, values]) => [name, Object.entries(values).sort(byKey)]),
 	);
@@ -336,8 +333,8 @@ export function packagePolicyKey(): string {
 
 const loaderPolicies = new WeakMap<ResourceLoader, string>();
 
-function loaderPolicyKey(): string {
-	return `${packagePolicyKey()}\0${extensionSettingsKey()}`;
+function loaderPolicyKey(settings = extensionSettings()): string {
+	return `${packagePolicyKey()}\0${extensionSettingsKey(settings)}`;
 }
 
 /** `true` when the loader last resolved under a package policy or extension settings other than the current ones. */
@@ -385,13 +382,16 @@ export async function buildResourceLoader(
 ): Promise<ResourceLoader> {
 	let disabledAtReload = disabledExtensions();
 	const isDisabledAtReload = (name: string): boolean => disabledAtReload.has(name);
+	let settingsAtReload = extensionSettings();
+	const settingAtReload = (extension: string, key: string): boolean | undefined =>
+		settingsAtReload[extension]?.[key];
 	const sharedFactories: InlineExtension[] = [
 		...registryInlineExtensions(
 			"extensions",
 			isDisabledAtReload,
 			serverExtensions,
 			session,
-			extensionSettingValue,
+			settingAtReload,
 		),
 		headlessSearchPolicy,
 		reviewToolExtension,
@@ -430,8 +430,9 @@ export async function buildResourceLoader(
 	const applyCurrentPolicy = (loader: ResourceLoader): void => {
 		settingsManager.setProjectTrusted(getAdmission().piResourceTrusted);
 		disabledAtReload = disabledExtensions();
+		settingsAtReload = extensionSettings();
 		refreshSkillPaths(disabledAtReload);
-		loaderPolicies.set(loader, loaderPolicyKey());
+		loaderPolicies.set(loader, loaderPolicyKey(settingsAtReload));
 	};
 	// pi's reload installs a declared package that is missing; the packages layer learns of it here.
 	const noticingInstalls = async (reload: () => Promise<void>): Promise<void> => {

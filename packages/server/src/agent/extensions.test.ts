@@ -586,6 +586,51 @@ describe("registry extensions", () => {
 		}
 	});
 
+	it("loads extensions with the settings snapshot it records, so a change-and-revert mid-reload stays consistent", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-settings-race-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		const off = { "ask-user-question": { richPreviews: false } };
+		const on = { "ask-user-question": { richPreviews: true } };
+		let reads: Record<string, Record<string, boolean>>[] = [];
+		let settled = on;
+		setExtensionSettingsResolver(() => reads.shift() ?? settled);
+		try {
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(
+				project,
+				settingsManager,
+				() => ctx(true),
+				[],
+				[],
+				hostServices,
+			);
+			const askSchema = () =>
+				JSON.stringify(
+					loader
+						.getExtensions()
+						.extensions.flatMap((extension) => [...extension.tools.values()])
+						.find((tool) => tool.definition.name === "ask_user_question")?.definition.parameters,
+				);
+			expect(askSchema()).toContain("previewFile");
+			reads = [off, on];
+			settled = off;
+			await loader.reload();
+			reads = [];
+			expect(askSchema()).not.toContain("previewFile");
+			expect(isLoaderPolicyStale(loader)).toBe(false);
+		} finally {
+			setExtensionSettingsResolver(null);
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("treats a throwing extension settings resolver as no stored values", () => {
 		setExtensionSettingsResolver(() => {
 			throw new Error("broken config");
