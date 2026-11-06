@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
 import {
 	closeSync,
+	fchmodSync,
 	fsyncSync,
 	mkdirSync,
 	openSync,
 	readFileSync,
 	renameSync,
 	rmSync,
+	statSync,
 	writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
@@ -85,13 +87,22 @@ function readJson<T>(file: string, fallback: T, accepts: (raw: unknown) => boole
 	return fallback;
 }
 
-function writeJsonAtomic(file: string, value: unknown, mode = 0o666): void {
+const NEW_FILE_MODE = 0o600;
+
+function replacementMode(target: string): number {
+	const existing = statSync(target, { throwIfNoEntry: false });
+	return existing ? existing.mode & 0o777 : NEW_FILE_MODE;
+}
+
+function writeJsonAtomic(file: string, value: unknown, mode?: number): void {
 	mkdirSync(dataDir(), { recursive: true });
 	const target = join(dataDir(), file);
 	const temporary = `${target}.${randomUUID()}.tmp`;
+	const permissions = mode ?? replacementMode(target);
 	try {
-		const fd = openSync(temporary, "w", mode);
+		const fd = openSync(temporary, "w", permissions);
 		try {
+			fchmodSync(fd, permissions);
 			writeFileSync(fd, `${JSON.stringify(value, null, "\t")}\n`);
 			fsyncSync(fd);
 		} finally {

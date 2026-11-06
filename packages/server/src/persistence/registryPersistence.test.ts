@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import {
+	chmodSync,
 	mkdtempSync,
 	readdirSync,
 	readFileSync,
 	realpathSync,
 	rmSync,
+	statSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -17,6 +19,7 @@ import {
 	loadProjects,
 	loadTerminalSessions,
 	loadWorkspaces,
+	saveConfig,
 	saveProjects,
 	saveTerminalSessions,
 	saveWorkspaces,
@@ -106,4 +109,54 @@ test("registry saves replace the file whole and leave no temp files", () => {
 	expect(loadWorkspaces().map((ws) => ws.id)).toEqual(["a"]);
 	expect(loadTerminalSessions()).toEqual({ a: [{ tabKey: "t", title: "zsh" }] });
 	expect(readdirSync(root).sort()).toEqual(["projects.json", "terminals.json", "workspaces.json"]);
+});
+
+const posixOnly = process.platform === "win32" ? test.skip : test;
+
+function permissions(file: string): number {
+	return statSync(join(root, file)).mode & 0o777;
+}
+
+function withUmask(mask: number, run: () => void): void {
+	const previous = process.umask(mask);
+	try {
+		run();
+	} finally {
+		process.umask(previous);
+	}
+}
+
+const registrySaves: Array<[string, () => void]> = [
+	["projects.json", () => saveProjects([project("a")])],
+	["workspaces.json", () => saveWorkspaces([workspace("a")])],
+	[
+		"terminals.json",
+		() => saveTerminalSessions({ a: [{ tabKey: "t", title: "zsh", recorded: "out" }] }),
+	],
+	["config.json", () => saveConfig(DEFAULT_CONFIG)],
+];
+
+posixOnly("a save under a looser umask keeps a private registry file private", () => {
+	for (const [file, save] of registrySaves) {
+		withUmask(0o077, save);
+		expect(permissions(file)).toBe(0o600);
+		withUmask(0o022, save);
+		expect(permissions(file)).toBe(0o600);
+	}
+});
+
+posixOnly("a save keeps the exact permissions the user gave an existing file", () => {
+	for (const [file, save] of registrySaves) {
+		save();
+		chmodSync(join(root, file), 0o640);
+		withUmask(0o077, save);
+		expect(permissions(file)).toBe(0o640);
+	}
+});
+
+posixOnly("a new registry file is created owner-only whatever the umask", () => {
+	for (const [file, save] of registrySaves) {
+		withUmask(0o022, save);
+		expect(permissions(file)).toBe(0o600);
+	}
 });

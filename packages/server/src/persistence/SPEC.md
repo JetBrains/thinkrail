@@ -32,7 +32,10 @@ at their own doors, so an object a create call returns never differs from what i
 
 Every JSON save is a complete-copy replacement: write a sibling temp file, fsync it, rename it over the
 target. A crash, power loss, or full disk mid-save therefore leaves the previous file whole, never an
-empty or torn one. The registry and config loads (`projects`, `workspaces`, `terminals`, `config`,
+empty or torn one. A rename replaces the file's inode, so the replacement carries the permissions
+explicitly instead of inheriting the process umask: an existing file keeps its exact mode, a new file is
+owner-only (`0600`), and `environment.json` is always `0600`. Otherwise one launch under a looser umask
+could turn a private `terminals.json`, which holds recorded shell output, world-readable. The registry and config loads (`projects`, `workspaces`, `terminals`, `config`,
 `environment`) tell a missing file (its empty default) apart from an unreadable one: an I/O error, a parse
 failure, or the wrong top-level shape (array vs object) renames the file to `<file>.corrupt-<epoch-ms>`
 (best effort) and loads the empty default. The next save then cannot overwrite the only copy of the
