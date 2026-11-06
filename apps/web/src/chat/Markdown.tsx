@@ -100,6 +100,10 @@ function Anchor({ href, children }: { href?: string | undefined; children?: Reac
 	);
 }
 
+export function fenceLanguage(className: string | undefined) {
+	return /language-([\w+#]+)/.exec(className ?? "")?.[1];
+}
+
 function CodeBlock({
 	className,
 	children,
@@ -107,7 +111,7 @@ function CodeBlock({
 	className?: string | undefined;
 	children?: ReactNode;
 }) {
-	const lang = /language-(\w+)/.exec(className ?? "")?.[1];
+	const lang = fenceLanguage(className);
 	const code = String(children ?? "").replace(/\n$/, "");
 	if (lang === "mermaid") return <MermaidBlock code={code} />;
 	if (!lang) {

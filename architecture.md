@@ -379,8 +379,12 @@ dependency. This keeps test process drivers outside both launchers and the serve
     edge), which filters registry factories **and their skills** at every loader (re)load and withholds a
     disabled extension's tools from live sessions through pi's active-tool API — reloading an idle session
     only when that extension's skills are loaded in it — while web renderers stay registered so past
-    transcripts render. Install UX, marketplace, per-extension settings, a per-workspace on/off override
-    and runtime-loaded third-party extensions remain explicit deferrals. Rejected: runtime-loaded
+    transcripts render. Per-extension boolean settings have shipped the same way: declared on the
+    descriptor, stored in `AppConfig.extensionSettings`, read by an extension's session factories through
+    its own `setting(key)` view, applied by a reload once the turn ends. Host-owned file checks reach
+    extensions through the session seam (`workspaceFiles`), so the SDK stays types + `define*`. Install UX,
+    marketplace, other setting types, a per-workspace on/off override and runtime-loaded third-party
+    extensions remain explicit deferrals. Rejected: runtime-loaded
     bundles now (React singleton, versioned UI API, security story first), a logical extension inside
     the apps (three physical homes, no boundary), generated factory lists derived from descriptors
     (functions yield no import specifiers); keeping path-based dev loading beside the inline composition

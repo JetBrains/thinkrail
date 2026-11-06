@@ -2,7 +2,12 @@ import { expect, test } from "bun:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { AgentMessage } from "@thinkrail/contracts";
 import { TOOL_RESPONSE_CUSTOM_TYPE } from "@thinkrail/contracts";
-import { type InteractiveTools, interactiveTools, serverExtensions } from "../extensions";
+import {
+	extensionSessionServices,
+	type InteractiveTools,
+	interactiveTools,
+	serverExtensions,
+} from "../extensions";
 import {
 	assessRespondability,
 	awaitingToolCallId,
@@ -64,7 +69,14 @@ function composeAsk(waiters: ToolResponseWaiters): {
 			if (event === "message_end") messageEnd = handler;
 		},
 	} as unknown as ExtensionAPI;
-	for (const factory of entry?.extension.sessionExtensions?.(services) ?? []) factory(pi);
+	const extension = entry?.extension;
+	const session =
+		extension &&
+		extensionSessionServices(extension, {
+			...services,
+			workspaceFiles: { check: async () => {}, scratchDir: "" },
+		});
+	for (const factory of (session && extension?.sessionExtensions?.(session)) ?? []) factory(pi);
 	if (!tool) throw new Error("the ask-user-question extension registered no tool");
 	return { tool, messageEnd };
 }

@@ -13,6 +13,7 @@ import askUserQuestion from "./index";
 interface CapturedTool {
 	name: string;
 	description: string;
+	parameters: unknown;
 	promptGuidelines?: string[];
 	execute: (
 		id: string,
@@ -41,8 +42,18 @@ type MessageEndHandler = (event: { message: unknown }) => unknown;
 function compose(
 	respond: (toolCallId: string, signal: AbortSignal | undefined) => Promise<ToolResponse>,
 	expectToolResponse: (toolCallId: string) => void = () => {},
+	richPreviews: () => boolean = () => true,
+	check: (path: string, cwd: string) => Promise<void> = async () => {},
 ) {
-	const session: ExtensionSessionServices = { expectToolResponse, awaitToolResponse: respond };
+	const session: ExtensionSessionServices = {
+		expectToolResponse,
+		awaitToolResponse: respond,
+		setting: (key) => {
+			if (key !== "richPreviews") throw new Error(`unexpected setting ${key}`);
+			return richPreviews();
+		},
+		workspaceFiles: { check, scratchDir: ".thinkrail/context/mockups/" },
+	};
 	const factories = askUserQuestion.sessionExtensions?.(session) ?? [];
 	let tool: CapturedTool | undefined;
 	const handlers = new Map<string, MessageEndHandler>();
@@ -175,5 +186,116 @@ describe("the ask-user-question server half", () => {
 				{},
 			),
 		).rejects.toThrow(ASK_STOPPED_ERROR);
+	});
+
+	test("declares the rich-preview setting, on by default", () => {
+		expect(askUserQuestion.settings).toEqual({ richPreviews: { type: "boolean", default: true } });
+	});
+
+	test("rich previews offer file fields and the mockup guidance; off, neither is offered", () => {
+		const optionFields = (tool: CapturedTool) =>
+			Object.keys(
+				(
+					tool.parameters as {
+						properties: {
+							questions: {
+								items: {
+									properties: { options: { items: { properties: Record<string, unknown> } } };
+								};
+							};
+						};
+					}
+				).properties.questions.items.properties.options.items.properties,
+			);
+		const rich = compose(async () => ({ kind: "deferred" })).tool;
+		expect(optionFields(rich)).toContain("previewFile");
+		expect(rich.description).toContain("`.thinkrail/context/mockups/`");
+		const plain = compose(
+			async () => ({ kind: "deferred" }),
+			() => {},
+			() => false,
+		).tool;
+		expect(optionFields(plain)).not.toContain("previewFile");
+		expect(plain.description).not.toContain("previewFile");
+		expect(plain.description).toContain("Discuss button");
+	});
+
+	test("reads the setting each time pi loads the factory, so a reload sees a change", () => {
+		let rich = true;
+		const respond = async () => ({ kind: "deferred" as const });
+		const { factories } = compose(
+			respond,
+			() => {},
+			() => rich,
+		);
+		const load = () => {
+			let description = "";
+			const pi = {
+				registerTool: (definition: CapturedTool) => {
+					description = definition.description;
+				},
+				on: () => {},
+			} as unknown as ExtensionAPI;
+			for (const factory of factories) factory(pi);
+			return description;
+		};
+		expect(load()).toContain("previewFile");
+		rich = false;
+		expect(load()).not.toContain("previewFile");
+	});
+
+	test("checks preview files through the host's workspace files before asking", async () => {
+		const checked: string[] = [];
+		let waited = false;
+		const { tool } = compose(
+			async () => {
+				waited = true;
+				return { kind: "deferred" };
+			},
+			() => {},
+			() => true,
+			async (path, cwd) => {
+				checked.push(`${cwd}:${path}`);
+				throw new Error("no such file");
+			},
+		);
+		const withFile = {
+			questions: [
+				{
+					...args.questions[0],
+					options: [
+						{ label: "date-fns", description: "small", previewFile: "mockups/a.html" },
+						{ label: "luxon", description: "rich" },
+					],
+				},
+			],
+		};
+		const result = await tool.execute("tc", withFile, undefined, undefined, { cwd: "/ws" });
+		expect(text(result)).toContain(
+			"cannot show questions[0].options[0].previewFile (mockups/a.html)",
+		);
+		expect(checked).toEqual(["/ws:mockups/a.html"]);
+		expect(waited).toBe(false);
+	});
+
+	test("a late discuss answer reads like a live one", () => {
+		const describe =
+			askUserQuestion.interactiveTools?.[ASK_USER_QUESTION_TOOL_NAME]?.describeResponse;
+		const answer = {
+			cancelled: false,
+			answers: [
+				{
+					questionIndex: 0,
+					question: "Which library?",
+					kind: "discuss" as const,
+					answer: null,
+					reason: "unclear" as const,
+					notes: "what is luxon?",
+				},
+			],
+		};
+		const late = describe?.(args, answer);
+		expect(late).toBe(text(buildQuestionnaireResponse(answer, args)));
+		expect(late).toContain("the user wants to discuss this question first");
 	});
 });

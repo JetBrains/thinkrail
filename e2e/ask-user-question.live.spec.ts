@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { activeWorktreeRow, openWorkspaceChat } from "./fixtures/app";
+import { activeWorktreeRow, openWorkspaceChat, pressPlatformShortcut } from "./fixtures/app";
 
 async function ask(page: Page, prompt: string): Promise<void> {
 	await openWorkspaceChat(page);
@@ -44,38 +44,39 @@ test("single-select: focus, roving keys, and Enter resolve the tool", {
 	const options = card.getByTestId("ask-option");
 	await expect(options.first()).toBeFocused();
 	await expect(card.getByTestId("ask-shortcuts")).toContainText("↑↓ move");
-	await expect(card.getByTestId("ask-shortcuts")).toContainText("Enter confirm");
-	await expect(card.getByTestId("ask-shortcuts")).toContainText("Tab actions");
+	await expect(card.getByTestId("ask-shortcuts")).toContainText("Enter select");
+	await expect(card.getByTestId("ask-shortcuts")).toContainText("Space note");
 
 	await expect(card.getByTestId("ask-submit")).toBeDisabled();
 	await expect(card.getByTestId("ask-skip")).toBeEnabled();
 
 	await page.keyboard.press("ArrowDown");
 	await expect(options.nth(1)).toBeFocused();
+	await expect(options.nth(1)).toHaveAttribute("data-selected", "false");
+	await page.keyboard.press("Enter");
 	await expect(options.nth(1)).toHaveAttribute("data-selected", "true");
 	await expect(card.getByTestId("ask-submit")).toBeEnabled();
 
 	await page.keyboard.press("End");
 	await expect(card.getByTestId("ask-custom")).toBeFocused();
 	await expect(card.getByTestId("ask-custom-row")).toHaveAttribute("data-selected", "false");
-	await expect(options.nth(1)).toHaveAttribute("data-selected", "true");
 	await page.keyboard.press("ArrowUp");
 	await expect(options.last()).toBeFocused();
-	await expect(options.last()).toHaveAttribute("data-selected", "true");
+	await expect(options.nth(1)).toHaveAttribute("data-selected", "true");
 	await expect(card.getByTestId("ask-custom-row")).toHaveAttribute("data-selected", "false");
-	await expect(card.getByTestId("ask-submit")).toBeEnabled();
 
 	await page.keyboard.press("Home");
-	await expect(options.first()).toHaveAttribute("data-selected", "true");
+	await expect(options.first()).toBeFocused();
+	await expect(options.nth(1)).toHaveAttribute("data-selected", "true");
 	await page.keyboard.press("ArrowDown");
 	await expect(options.nth(1)).toBeFocused();
-	await expect(options.nth(1)).toHaveAttribute("data-selected", "true");
-	await page.keyboard.press("Enter");
+	await pressPlatformShortcut(page, "Enter");
 
 	await expect(page.getByTestId("chat-input")).toBeFocused();
 
 	const record = answeredRecord(page);
 	await expect(record).toBeVisible({ timeout: 60_000 });
+	await record.getByTestId("ask-receipt-options-toggle").first().click();
 	const chosen = record.locator('[data-testid="ask-record-option"][data-selected="true"]');
 	await expect(chosen).toHaveCount(1);
 	await expect(record.locator('[data-testid="ask-record-option"]').nth(1)).toHaveAttribute(
@@ -130,17 +131,17 @@ test("multi-select: several options can be checked and submitted", { tag: "@agen
 	const options = card.getByTestId("ask-option");
 	await expect(options.first()).toBeFocused();
 
-	await page.keyboard.press("Enter");
+	await pressPlatformShortcut(page, "Enter");
 	await expect(card.getByTestId("ask-needs-choice")).toBeVisible();
 	await expect(card.locator('[data-testid="ask-option"][data-selected="true"]')).toHaveCount(0);
 	await expect(card).toBeVisible();
 
 	await expect(card.getByTestId("ask-note-toggle")).toHaveCount(0);
 
-	await page.keyboard.press("Space");
+	await page.keyboard.press("Enter");
 	await expect(card.getByTestId("ask-note-toggle")).toHaveCount(1);
 	await page.keyboard.press("ArrowDown");
-	await page.keyboard.press("Space");
+	await page.keyboard.press("Enter");
 	await expect(card.locator('[data-testid="ask-option"][data-selected="true"]')).toHaveCount(2);
 	await expect(card.getByTestId("ask-needs-choice")).toHaveCount(0);
 
@@ -158,17 +159,19 @@ test("multi-select: several options can be checked and submitted", { tag: "@agen
 	await page.keyboard.type("e2e-note-alpha");
 	await page.keyboard.press("Enter");
 	await expect(note).toHaveCount(0);
-	await expect(noteToggles.nth(0)).toContainText("Edit note");
+	await expect(noteToggles.nth(0)).toContainText("e2e-note-alpha");
+	await expect(noteToggles.nth(0)).toHaveAccessibleName(`Edit note for ${labels[0]}`);
 
 	await noteToggles.nth(1).click();
 	await expect(card.getByTestId("ask-note")).toBeFocused();
 	await page.keyboard.type("e2e-note-beta");
 	await page.keyboard.press("Enter");
-	await expect(options.nth(1)).toBeFocused();
+	await expect(noteToggles.nth(1)).toBeFocused();
 
-	await page.keyboard.press("Enter");
+	await pressPlatformShortcut(page, "Enter");
 	const record = answeredRecord(page);
 	await expect(record).toBeVisible({ timeout: 60_000 });
+	await record.getByTestId("ask-receipt-options-toggle").first().click();
 	await expect(
 		record.locator('[data-testid="ask-record-option"][data-selected="true"]'),
 	).toHaveCount(2);
@@ -193,7 +196,7 @@ test("multi-select: the free-text row is mandatory and additive — checks + typ
 	await expect(custom).toBeVisible();
 	await expect(customRow).toHaveAttribute("data-selected", "false");
 
-	await customRow.getByText("Other", { exact: true }).click();
+	await customRow.getByText("Other — your own answer").click();
 	await expect(custom).toBeFocused();
 	await expect(customRow).toHaveAttribute("data-selected", "false");
 
@@ -209,6 +212,8 @@ test("multi-select: the free-text row is mandatory and additive — checks + typ
 	await card.getByTestId("ask-submit").click();
 	const record = answeredRecord(page);
 	await expect(record).toBeVisible({ timeout: 60_000 });
+	await expect(record.getByTestId("ask-receipt-answer")).toContainText("my-extra-e2e-answer");
+	await record.getByTestId("ask-receipt-options-toggle").first().click();
 	await expect(
 		record.locator('[data-testid="ask-record-option"][data-selected="true"]'),
 	).toHaveCount(2);
@@ -240,6 +245,8 @@ test("freeform: a typed answer via 'Type your own answer' resolves the tool", {
 	await expect(card.getByTestId("ask-custom-row")).toHaveAttribute("data-selected", "true");
 	await expect(card.getByTestId("ask-submit")).toBeEnabled();
 	await page.keyboard.press("Enter");
+	await expect(card.getByTestId("ask-custom-row")).toBeFocused();
+	await pressPlatformShortcut(page, "Enter");
 
 	const record = answeredRecord(page);
 	await expect(record).toBeVisible({ timeout: 60_000 });
@@ -266,7 +273,7 @@ test("skip: declining resolves the tool as a skipped record", { tag: "@agent" },
 	await expect(skipped).toContainText("skipped");
 });
 
-test("multi-question: page arrows, Tab-to-note, and Enter on the last question submits", {
+test("multi-question: page arrows, Space-to-note, Enter picks and the platform chord submits", {
 	tag: "@agent",
 }, async ({ page }) => {
 	test.setTimeout(180_000);
@@ -296,11 +303,9 @@ test("multi-question: page arrows, Tab-to-note, and Enter on the last question s
 	const noteToggle = card.getByTestId("ask-note-toggle");
 	await expect(firstChoice).toBeFocused();
 	await page.keyboard.press("Space");
-	await page.keyboard.press("Tab");
-	await expect(noteToggle).toBeFocused();
-	await page.keyboard.press("Enter");
 	let note = card.getByTestId("ask-note");
 	await expect(note).toBeFocused();
+	await expect(firstChoice).toHaveAttribute("data-selected", "true");
 	await page.keyboard.type("first line");
 	await page.keyboard.press("Shift+Enter");
 	await page.keyboard.type("second line");
@@ -308,23 +313,23 @@ test("multi-question: page arrows, Tab-to-note, and Enter on the last question s
 	await page.keyboard.press("Shift+Escape");
 	await expect(note).toHaveCount(0);
 	await expect(card).toBeVisible();
-	await expect(firstChoice).toBeFocused();
-	await page.keyboard.press("Tab");
 	await expect(noteToggle).toBeFocused();
 	await page.keyboard.press("Enter");
 	await expect(note).toHaveValue("first line\nsecond line");
 
 	await page.keyboard.press("Escape");
-	await expect(firstChoice).toBeFocused();
+	await expect(noteToggle).toBeFocused();
 	await expect(note).toHaveCount(0);
+	await page.keyboard.press("ArrowUp");
+	await expect(firstChoice).toBeFocused();
 	await page.keyboard.press("Tab");
 	await expect(noteToggle).toBeFocused();
 	await page.keyboard.press("Enter");
 	note = card.getByTestId("ask-note");
 	await expect(note).toHaveValue("first line\nsecond line");
 	await page.keyboard.press("Enter");
-	await expect(firstChoice).toBeFocused();
-	await expect(card.getByTestId("ask-shortcuts")).toContainText("Tab note/actions");
+	await expect(noteToggle).toBeFocused();
+	await expect(card.getByTestId("ask-shortcuts")).toContainText("Space note");
 	await expect(card.getByTestId("ask-shortcuts")).toContainText("Shift+Esc skip");
 	await expect(card.getByTestId("ask-shortcuts")).toContainText("←→ questions");
 
@@ -343,12 +348,17 @@ test("multi-question: page arrows, Tab-to-note, and Enter on the last question s
 	await expect(card.getByTestId("ask-option").first()).toBeFocused();
 
 	await page.keyboard.press("Enter");
+	await expect(tabs.nth(1)).toHaveAttribute("data-active", "true");
+	await pressPlatformShortcut(page, "Enter");
 	const record = answeredRecord(page);
 	await expect(record).toBeVisible({ timeout: 60_000 });
+	for (const toggle of await record.getByTestId("ask-receipt-options-toggle").all()) {
+		await toggle.click();
+	}
 	await expect(
 		record.locator('[data-testid="ask-record-option"][data-selected="true"]'),
 	).toHaveCount(2);
-	await expect(record).toContainText("Note: first line");
+	await expect(record).toContainText("first line");
 	await expect(record).toContainText("second line");
 });
 
@@ -402,6 +412,57 @@ test("the awaiting card survives closing and reopening the chat", { tag: "@agent
 	const card = activeCard(page);
 	await expect(card).toBeVisible({ timeout: 30_000 });
 	await expect(card.getByTestId("ask-option").first()).toBeFocused();
-	await page.keyboard.press("Enter");
+	await expect(card.getByTestId("ask-option").first()).toHaveAttribute("data-selected", "true");
+	await pressPlatformShortcut(page, "Enter");
 	await expect(answeredRecord(page)).toBeVisible({ timeout: 60_000 });
+});
+
+test("discuss: a question marked to discuss reaches the agent as a discussion, not an answer", {
+	tag: "@agent",
+}, async ({ page }) => {
+	test.setTimeout(180_000);
+	await ask(
+		page,
+		`Call the ask_user_question tool with EXACTLY ONE single-select question offering 2 short options and no previews. ${ONLY_TOOL} After I respond, reply in one or two short sentences.`,
+	);
+	const card = activeCard(page);
+	await expect(card).toBeVisible({ timeout: 90_000 });
+
+	await card.getByTestId("ask-discuss").click();
+	await expect(card.getByTestId("ask-discuss-text")).toBeFocused();
+	await page.keyboard.type("I do not understand what this decides.");
+	await card.locator('[data-testid="ask-discuss-reason"][data-reason="unclear"]').click();
+	await card.getByTestId("ask-submit").click();
+
+	const record = answeredRecord(page);
+	await expect(record).toBeVisible({ timeout: 60_000 });
+	await expect(record.getByTestId("ask-receipt-answer")).toContainText("Let’s discuss first");
+	await expect(record).toContainText("I do not understand what this decides.");
+	await expect(
+		page
+			.locator('[data-testid="chat-message"][data-role="system"]')
+			.filter({ hasText: "✓ Done" })
+			.first(),
+	).toBeVisible({ timeout: 90_000 });
+});
+
+test("file preview: a mockup the agent writes renders inside its question", {
+	tag: "@agent",
+}, async ({ page }) => {
+	test.setTimeout(240_000);
+	await ask(
+		page,
+		"First write the file .thinkrail/context/mockups/e2e-preview.html with exactly this content: <h1>Sidebar preview</h1>. Then call the ask_user_question tool with EXACTLY ONE single-select question offering 2 short options; set previewFile of the FIRST option to .thinkrail/context/mockups/e2e-preview.html and give the second option no preview. Do nothing else.",
+	);
+	const card = activeCard(page);
+	await expect(card).toBeVisible({ timeout: 150_000 });
+	const pane = card.getByTestId("ask-preview");
+	await expect(pane).toHaveAttribute("data-preview", "file");
+	await expect(pane.getByTestId("html-frame-box")).toBeVisible({ timeout: 30_000 });
+	await card.getByTestId("ask-option").nth(1).click();
+	await expect(pane.getByTestId("ask-preview-none")).toBeVisible();
+	await card.getByTestId("ask-skip").click();
+	await expect(
+		page.locator('[data-testid="ask-user-question"][data-tone="skipped"]').first(),
+	).toBeVisible({ timeout: 30_000 });
 });

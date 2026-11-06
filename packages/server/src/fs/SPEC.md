@@ -16,7 +16,8 @@ bytes are** — the one byte-level classification every content read in the host
 ## Boundary
 
 - **Owns:** `readDir`/`readFile(workspaceId, path)` — every path resolved + contained to the worktree
-  root; `.git` hidden; directories sorted first. `readDir` reports worktree-relative paths with `/`
+  root; `.git` hidden; directories sorted first; a symlink lists as `dir` only when its target is a
+  directory inside the worktree, otherwise as `file`. `readDir` reports worktree-relative paths with `/`
   separators on every OS — the same form git status and watch events use — so a browser can match a
   listed node to a changed path (Windows' `relative()` would otherwise yield `src\auth`). (`.thinkrail/` is **not** hidden — it is shown like any
   other dir, so future host-managed content there stays visible; its ephemeral `context/` is kept out of

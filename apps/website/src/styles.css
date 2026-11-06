@@ -961,7 +961,14 @@ p.hero-lede {
 
 .cli-install .install-os-tabs {
 	max-width: 100%;
+	margin-bottom: -1px;
 	overflow-x: auto;
+	overflow-y: hidden;
+	scrollbar-width: none;
+}
+
+.cli-install .install-os-tabs::-webkit-scrollbar {
+	display: none;
 }
 
 .cli-install .install-line {
