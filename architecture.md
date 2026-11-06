@@ -339,7 +339,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
     (`change.revert`/`change.undo`, [[submodule-server-changes]]); the client never sends bytes to
     write. ThinkRail hosts no VS Code extensions: language intelligence (TextMate grammars, Shiki) is
     imported as libraries. Active content (HTML, SVG, notebook outputs) renders only inside sandboxed,
-    network-denying frames. The renderers, registry and review surfaces are one package
+    network-denying frames. The one exception is agent mockups the host marks as scripted (its own
+    scratch dir): they run scripts in an opaque-origin frame and may load https scripts, styles, fonts
+    and images from CDNs and compile WebAssembly, but still make no fetch/XHR/WebSocket requests. The renderers, registry and review surfaces are one package
     ([[module-resource-renderers]]) behind a host seam (markdown, code highlighting, byte URLs, link
     navigation), so every surface that shows a file uses the same stack. Detail:
     [[module-resource-renderers]], [[submodule-web-panels]],

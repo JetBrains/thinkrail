@@ -23,7 +23,7 @@ describe("compact chrome", () => {
 	const notice = (compact: boolean) =>
 		renderToStaticMarkup(
 			<ResourceEnvironmentProvider value={{ mobile: false, compact }}>
-				<HtmlPreviewNotice viewport="responsive" onViewport={() => {}} />
+				<HtmlPreviewNotice scripted={false} viewport="responsive" onViewport={() => {}} />
 			</ResourceEnvironmentProvider>,
 		);
 

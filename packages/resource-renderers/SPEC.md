@@ -51,10 +51,14 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   state and a caller needs no reset). Its `compact` flag (carried to the lazy views as
   `ResourceEnvironment.compact`, and reset by an explicit `compact={false}`) drops the renderer toggles,
   Send review and the HTML notice with its viewport presets — the chrome a small embedded frame cannot
-  afford; the views themselves are unchanged;
+  afford; the views themselves are unchanged. Its
+  `fitContent` flag offers the view (or diff) `onNaturalHeight`; a renderer that lays out at its own height calls it, and
+  from then on (for that renderer implementation) the frame drops the caller's height and grows with the
+  view. Views that never call it keep the caller's bounded box;
 - **`FramedResourcePreview`** — `ResourcePreview` in a caller-sized frame with **Open in tab** (the file, or
   the comparison for a diff) and **Full screen** (a dialog with the full chrome, sharing renderer and view
-  state), every action an explicit tab stop; nothing without a host and a workspace scope. It is the one
+  state), every action an explicit tab stop; nothing without a host and a workspace scope. `fitContent`
+  applies to the inline frame only; the full-screen dialog always fills its box. It is the one
   framed preview of visualize's file card and the questionnaire's previews ([[module-ext-visualize]],
   [[module-ext-ask-user-question]]) — lifted from visualize when the second consumer arrived;
 - the pieces every surface composes a renderer from, so a file tab, a diff tab, a Changes section and
@@ -109,6 +113,12 @@ A host wraps renderers in `ResourceHostProvider` with one static `ResourceHost` 
   `ReviewSend` — the host's review surface and Send review control; the optional session routes sends. The
   seam is a component, not a hook on the host object: passing hooks around as values breaks React's rules and
   made the React Compiler bail out of the preview; a before/after nests two `FileReview`s.
+- `scriptedHtml?: { subscribe(onChange), allows(workspaceId, path) }` — whether an HTML file may run
+  scripts (see `thinkrail/html`). The host owns this trust decision because only it knows which paths it
+  writes itself; the package never names a host path. `useScriptedHtml` reads it through
+  `useSyncExternalStore`, so a view mounted before the host's evidence loads (a restored mockup tab) turns
+  scripted when it arrives, and static again when it goes. `allows` runs on every host change, so it must
+  be cheap. Absent, every HTML file is static.
 Build the value once (the app does at module scope). Its functions are memo inputs: `documentComponents`
 defines its link and image components per call, so a new `bytesUrl`/`openFile` identity would remount every
 link and image in open previews and notebook cells. The reader's line-width preference
@@ -452,15 +462,89 @@ style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'; 
 'none'; child-src 'none'`. The diff is the shared visual frame constrained to 2-up sandboxed documents only.
 It advertises no anchor geometry, so HTML threads remain in the pane-owned unplaced strip and Source is the
 only authoring candidate. View and diff share a **preview width** switch in the notice bar — Desktop 1280 /
-Tablet 768 / Phone 390 / Fill, default Desktop, persisted as `{ viewport }` view state and adopted whenever the
+Tablet 768 / Phone 390 / Fill, default Desktop (Fill for a fitted chat card, below), persisted as `{ viewport }` view state and adopted whenever the
 caller's view state changes (`useHtmlViewport`, so a chat card follows a width chosen in its full screen): the frame renders at
 the design width and is CSS-scaled down to its box (never up), keeping its own vertical scroll, so a narrow
 pane, a 2-up half or a chat card shows the true layout shrunk rather than an accidental mobile reflow; Fill
-is the old reflow. Scaling is pure geometry on the wrapper — the iframe keeps `sandbox=""` and nothing
-measures the document (no `allow-same-origin`); the wrapper's box is measured in a layout effect (the package's
+is the old reflow. Scaling is pure geometry on the wrapper — a static iframe keeps `sandbox=""` and nothing
+measures its document (no `allow-same-origin`); the wrapper's box is measured in a layout effect (the package's
 one `useElementSize`, shared with the SVG view and the region surfaces), so the first paint is already fitted
 instead of reflowing the document at the pane width for a frame. The sanitizer also strips form controls, so mockups draw
 buttons and inputs with styled elements; spot (region) comments on HTML are not offered yet.
+
+**Scripted mockups.** When the host's `scriptedHtml.allows(workspaceId, path)` answers true, the view and each diff
+side render a *scripted* document instead, in every surface: a chat card, its full screen, a file tab, a
+comparison. Every other HTML file stays static. The package does not decide trust. ThinkRail answers true
+only for a path under the agent's mockup scratch dir (`isMockupPath`: canonical only, no `.`, `..` or empty
+segment and no backslash, so `mockups/../index.html` stays static) that a finished, successful `visualize`
+call in a loaded session of the same workspace showed, and never in the desktop shell
+([[module-web]] owns the rule). The path prefix alone is not trust: a cloned repo can commit a file there.
+The policy, in `htmlDocument.ts`:
+
+- iframe `sandbox="allow-scripts"` only — no `allow-same-origin`, popups, forms or top navigation, so the
+  document runs in an opaque origin and cannot read the app, its storage or the host API;
+- CSP exactly `default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval' https:; style-src
+  'unsafe-inline' https:; img-src data: blob: https:; font-src data: https:; connect-src 'none';
+  form-action 'none'; base-uri 'none'; frame-src 'none'; object-src 'none'`: inline and https (CDN)
+  scripts and styles run, WebAssembly compiles, `fetch`/XHR/WebSocket and workers are blocked;
+- the sanitizer keeps scripts, event handlers, forms and controls and https stylesheet links; it still
+  removes `base`, `object`, `embed`, `iframe`, `frame`, `frameset`, `portal`, `meta http-equiv` and every
+  other `link`; `src`/`href` keep only `#fragment`, `data:`, `blob:` and `https:` URLs, and an anchor keeps
+  only a fragment `href` (other targets become inert `data-href` text, as in static mode).
+
+The sandbox cannot stop a frame from navigating itself (`location.assign`, no click). `ScriptedHtmlFrame`
+checks a handshake instead of counting loads, because a document that navigates while it is still loading
+never fires its own `load`: the single `load` the parent sees then belongs to the remote page. Each build
+puts a fresh random nonce into the bootstrap, which removes its own `<script>` element before author code
+runs, so the page cannot read the nonce. The bootstrap posts `ready` with the nonce from its `load`
+handler, `leave` from `pagehide`, and adds it to every height report. The parent accepts a message only
+when `event.source` is the frame's `contentWindow` and the nonce matches the current build. It drops the
+frame for a notice (`html-navigation-blocked`) until the source changes when: `leave` arrives; a second
+`load` of the same build fires; or no `ready` arrives within 2 s of the first `load`. Until then a remote
+page may show briefly, but none of its messages are accepted. Remounting instead would loop with a mockup
+that always navigates.
+
+Accepted cost: an https script or image URL can carry data out (`connect-src` does not cover GETs a script
+or image makes), so a scripted document can leak its own content to a CDN host it names. That content is
+what the agent wrote into the scratch dir, and the user approved CDN loading for mockups.
+
+Accepted cost: `'wasm-unsafe-eval'` lets a mockup compile WebAssembly, so a game engine or a data tool
+built to WASM can run in a card. It gives no new access: `eval` and `new Function` stay blocked, the
+module runs in the same sandbox, and it still cannot fetch. The added exposure is a bug in the browser's
+WASM compiler. Heavy CPU use was already possible with plain JS.
+
+The host's live theme reaches the frame without a reload. `hostTheme.ts` collects the custom-property
+names declared on `:root` rules of the page's stylesheets (recursing into `@layer`/`@media` groups,
+skipping cross-origin sheets) and on the root's inline style, then resolves each through
+`getComputedStyle`. It does not enumerate computed styles: WebKit (the desktop shell) does not list custom
+properties there. The result is one plain `:root { color-scheme; --…: value }` rule first in `<head>`, so
+an author's own `:root` variables (`--text`, `--border`…) win on source order; the guideline says to link
+the theme file, not copy it in, since a pasted copy would win the same way. Then a zero-specificity
+`:where(html)` base (workspace background, default text colour, interface family and size), so an author's
+own element styles still apply. The builder prepends, before any author content: charset, CSP, that
+`<style data-thinkrail-theme>` and a bootstrap script (`frameMessages.ts`). A relative
+`<link href="thinkrail-theme.css">` is removed, so in the app the live tokens replace it. The snapshot is
+an external store (`useSyncExternalStore`) refreshed on `onThemeSwap` and `onFontsChange`; the srcdoc is
+rebuilt only when the source changes, and a theme change is `postMessage`d (`thinkrail:theme`, also sent on
+every frame load) and swapped into the style element by the bootstrap, which then dispatches
+`thinkrail:themechange` on the frame's `window` so canvas or d3 code that reads token colours can redraw.
+Script state therefore survives a theme switch.
+
+The bootstrap also reports the document height (`documentElement`'s box, through a `ResizeObserver` on
+`html` and `body`) as `thinkrail:height`. The parent accepts it only under the handshake rules above and
+when the height is a finite non-negative number. A view offered `onNaturalHeight`
+(the chat card's `fitContent`) sizes the frame to the reported height, clamps the *rendered* box (after
+design-width scaling) to `HTML_CONTENT_HEIGHT` (120–1600 px on screen), drops its padding, and calls
+`onNaturalHeight` after the first report, so the card goes from its bounded box straight to the content
+height. A fitted card with no stored width defaults to Fill, so a chart or widget draws at the card's own
+width and text size instead of a 1280 px layout shrunk to about half; a width the user picks still
+applies. A document whose scaled height passes 1600 px scrolls inside the frame. A document sized from the frame
+(`100vh`, `height: 100%` on `html`/`body`) stays at whatever height it first had; the agent guideline
+forbids that. Tabs and full screen keep filling their container. A diff side is scripted when its own path
+is; the notice says scripts run when either side does. A diff offered `onNaturalHeight` fits the same way
+when every present side is scripted: both frames take the larger reported height, `VisualDiff`'s
+`fitContent` drops its viewport-bounded side boxes, and it calls `onNaturalHeight` once each present side
+has reported. A diff with a static side keeps the bounded box, since a static frame reports nothing.
 
 Pierre parses the two complete text sides (`absent` → `null`) with the current ignore-whitespace value,
 uses the `thinkrail` CSS-variable Shiki theme, word-level inline changes, collapsed unchanged regions with

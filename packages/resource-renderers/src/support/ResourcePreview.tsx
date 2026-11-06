@@ -44,6 +44,7 @@ export interface ResourcePreviewProps {
 	actions?: ReactNode;
 	className?: string | undefined;
 	compact?: boolean | undefined;
+	fitContent?: boolean | undefined;
 }
 
 interface ResolvedProps extends ResourcePreviewProps {
@@ -179,6 +180,7 @@ function StaleNotice({ files }: { files: readonly { path: string; file: ReadyFil
 function PreviewFrame({
 	testid,
 	className,
+	natural = false,
 	toolbar,
 	notice,
 	strip,
@@ -186,6 +188,7 @@ function PreviewFrame({
 }: {
 	testid: string;
 	className: string | undefined;
+	natural?: boolean;
 	toolbar: ReactNode;
 	notice: ReactNode;
 	strip: ReactNode;
@@ -194,12 +197,17 @@ function PreviewFrame({
 	return (
 		<div
 			data-testid={testid}
-			className={cn("flex min-h-0 flex-col overflow-hidden bg-container-workspace-bg", className)}
+			data-natural-height={natural || undefined}
+			className={cn(
+				"flex min-h-0 flex-col overflow-hidden bg-container-workspace-bg",
+				className,
+				natural && "h-auto",
+			)}
 		>
 			{toolbar}
 			{notice}
 			{strip}
-			<div className="min-h-0 flex-1">
+			<div className={natural ? "flex-none" : "min-h-0 flex-1"}>
 				<Suspense fallback={loading}>{children}</Suspense>
 			</div>
 		</div>
@@ -270,11 +278,14 @@ function ReviewedPreviewView(props: ResolvedProps & { file: ReadyFile; review: S
 		useRendererSelection(resource, "view", rendererId);
 	const paths = useMemo(() => [path], [path]);
 	const reviews = useMemo(() => [review], [review]);
+	const [naturalKey, setNaturalKey] = useState<string | null>(null);
+	const fit = props.fitContent === true;
 
 	return (
 		<PreviewFrame
 			testid="resource-preview"
 			className={props.className}
+			natural={fit && naturalKey === implementationKey}
 			notice={<StaleNotice files={[{ path, file }]} />}
 			toolbar={
 				<PreviewToolbar props={props} paths={paths} candidates={candidates} renderer={renderer} />
@@ -298,6 +309,7 @@ function ReviewedPreviewView(props: ResolvedProps & { file: ReadyFile; review: S
 				content={file.content}
 				review={review}
 				onPlacedThreadIds={onPlacedThreadIds}
+				{...(fit ? { onNaturalHeight: () => setNaturalKey(implementationKey) } : {})}
 				{...implementationViewState(props, implementationKey)}
 			/>
 		</PreviewFrame>
@@ -348,11 +360,14 @@ function ReviewedPreviewDiff(
 		() => surfaceLineCount(original.content, modified.content),
 		[original.content, modified.content],
 	);
+	const [naturalKey, setNaturalKey] = useState<string | null>(null);
+	const fit = props.fitContent === true;
 
 	return (
 		<PreviewFrame
 			testid="resource-preview-diff"
 			className={props.className}
+			natural={fit && naturalKey === implementationKey}
 			notice={
 				<StaleNotice
 					files={[
@@ -397,6 +412,7 @@ function ReviewedPreviewDiff(
 				review={review}
 				onPlacedThreadIds={onPlacedThreadIds}
 				lineCount={lineCount}
+				{...(fit ? { onNaturalHeight: () => setNaturalKey(implementationKey) } : {})}
 				{...implementationViewState(props, implementationKey)}
 			/>
 		</PreviewFrame>

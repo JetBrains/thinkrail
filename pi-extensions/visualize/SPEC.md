@@ -18,7 +18,7 @@ result in pi's terminal UI. It knows nothing about ThinkRail. ThinkRail composes
 
 - **Default export** — the pi `ExtensionFactory` with the default configuration; what `pi install`
   loads through the `pi` manifest.
-- **`createVisualizeExtension({ validateMermaid?, checkFile?, scratchDir? })`** — returns an `ExtensionFactory` with an injected
+- **`createVisualizeExtension({ validateMermaid?, checkFile?, scratchDir?, mockupGuideline? })`** — returns an `ExtensionFactory` with an injected
   `MermaidValidator: (source) => void | Promise<void>`. The validator **replaces** the default check
   (never supplements it, so a stricter engine can accept syntax the probe would reject). The package
   keeps shape checks, empty-source rejection, source enumeration, awaiting the callback and wrapping any
@@ -26,7 +26,10 @@ result in pi's terminal UI. It knows nothing about ThinkRail. ThinkRail composes
   model to correct and retry. `checkFile: (path, cwd) => void | Promise<void>` is the same seam for
   file previews (every `path`/`before`, wrapped into a `` cannot show `path` `` diagnostic asking the
   model to write the file first); without it paths are not checked, because the package stays
-  `node:`-free. `scratchDir` names where the prompt guideline sends mockups.
+  `node:`-free. `scratchDir` names where the prompt guideline sends mockups. `mockupGuideline` replaces
+  the guideline's clause on how to write a mockup (a verb phrase such as "write … under …"); the package
+  keeps the clauses on showing it with `type: "file"`, `before`, and current content, so a host that runs
+  scripts or ships a theme file can say so without restating them.
 - **The tool contract** renderers key on: the name `"visualize"`, its argument shape
   (`type: "diagram" | "comparison" | "file"`, `title?`, `mermaid?`, `options?[]`, `path?`, `before?`),
   and `details` = the validated params. Changing this shape is a breaking change for every renderer,
@@ -41,9 +44,9 @@ result in pi's terminal UI. It knows nothing about ThinkRail. ThinkRail composes
   then edits in place. The flip side is that a rendered file is always its current content: iterating on a
   mockup updates every earlier card, so the guideline tells the agent to copy a proposal it wants to keep
   visible and pass the copy as `before`. The tool's one `promptGuidelines` entry asks the agent to write a self-contained
-  HTML mockup (inline CSS, `data:` images, controls drawn with styled elements because hosts may strip
-  scripts, form controls and external resources) and show it this way whenever it proposes or asks
-  about a UI change. The model-facing result and the terminal are one line naming the path(s); a
+  HTML mockup (by default inline CSS, `data:` images, controls drawn with styled elements because hosts
+  may strip scripts, form controls and external resources; a host replaces that clause through
+  `mockupGuideline`) and show it this way whenever it proposes or asks about a UI change. The model-facing result and the terminal are one line naming the path(s); a
   terminal user opens them in a browser.
 - **Dependency-light for vanilla users: `lovely-mermaid`.** The package depends on `lovely-mermaid` only
   (zero dependencies, ~1 MB, synchronous, Apache-2.0). It is the maintained successor of `grok-mermaid`,

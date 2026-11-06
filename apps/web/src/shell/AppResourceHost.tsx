@@ -20,6 +20,7 @@ import { useFileReview } from "../panels/useReviewCommenting";
 import { selectFileChangeSince, useAppStore } from "../store";
 import { resolveThinkrailShikiTheme } from "../themes";
 import { getTransport } from "../transport";
+import { hasDesktopBridge, isVisualizedMockup } from "./scriptedMockups";
 
 registerBundledResourceRenderers();
 
@@ -53,6 +54,12 @@ const HOST: ResourceHost = {
 		}),
 	FileReview,
 	ReviewSend,
+	scriptedHtml: {
+		subscribe: (onChange) => useAppStore.subscribe(onChange),
+		allows: (workspaceId, path) =>
+			!hasDesktopBridge(globalThis) &&
+			isVisualizedMockup(useAppStore.getState(), workspaceId, path),
+	},
 };
 
 export function AppResourceHost({ children }: { children: ReactNode }) {

@@ -4,8 +4,9 @@ import { type HtmlViewport, htmlViewport } from "./viewport";
 export function useHtmlViewport(
 	viewState: unknown,
 	onViewState: ((state: unknown) => void) | undefined,
+	fallback?: HtmlViewport,
 ): readonly [HtmlViewport, (viewport: HtmlViewport) => void] {
-	const incoming = htmlViewport(viewState);
+	const incoming = htmlViewport(viewState, fallback);
 	const [state, setState] = useState({ incoming, viewport: incoming });
 	let viewport = state.viewport;
 	if (state.incoming !== incoming) {

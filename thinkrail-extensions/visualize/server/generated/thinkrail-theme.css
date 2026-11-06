@@ -1,0 +1,176 @@
+/*
+ * GENERATED — do not edit. Source: `src/styles/colors.json` (v1.1.0).
+ * Regenerate with `bun run colors:generate`; `colors:check` fails when this file is stale.
+ *
+ * ThinkRail's semantic colour tokens for standalone HTML mockups: the bundled Light theme, and
+ * Dark under `prefers-color-scheme: dark`. Inside ThinkRail the live theme replaces this file.
+ */
+
+:root {
+	color-scheme: light dark;
+	--accent: #2a7314;
+	--accent-hover: #59d915;
+	--accent-solid: #8dff4f;
+	--on-accent: #000000;
+	--bubble-accent: #2a7314;
+	--background: #ffffff;
+	--header: #f4f4f5;
+	--content: #e4e4e7;
+	--sidebar: #fafafa;
+	--input: #f4f4f5;
+	--elevated: #ffffff;
+	--hover: #d4d4d8;
+	--border: #e4e4e7;
+	--border-strong: #d4d4d8;
+	--text: #27272a;
+	--muted: #52525b;
+	--hint: #71717a;
+	--selection: #6b57ff38;
+	--editor-selection: #cfe0fb;
+	--info: #2265cf;
+	--success: #167230;
+	--danger: #d02533;
+	--danger-hover: #b7212d;
+	--on-danger: #ffffff;
+	--warning: #946300;
+	--ansi-black: #000000;
+	--ansi-red: #cd3131;
+	--ansi-green: #00bc00;
+	--ansi-yellow: #949800;
+	--ansi-blue: #0451a5;
+	--ansi-magenta: #bc05bc;
+	--ansi-cyan: #0598bc;
+	--ansi-white: #555555;
+	--ansi-bright-black: #666666;
+	--ansi-bright-red: #cd3131;
+	--ansi-bright-green: #14ce14;
+	--ansi-bright-yellow: #b5ba00;
+	--ansi-bright-blue: #0451a5;
+	--ansi-bright-magenta: #bc05bc;
+	--ansi-bright-cyan: #0598bc;
+	--ansi-bright-white: #a5a5a5;
+	--sunken: rgba(0, 0, 0, 0.05);
+	--overlay: rgba(0, 0, 0, 0.5);
+	--shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.1);
+	--shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
+	--shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.14);
+	--text-default: var(--text);
+	--text-muted: var(--muted);
+	--text-subtle: var(--hint);
+	--text-disabled: color-mix(in srgb, var(--text) 60%, transparent);
+	--text-on-primary: var(--on-accent);
+	--text-link: var(--info);
+	--container-workspace-bg: var(--background);
+	--container-sidebar-bg: var(--sidebar);
+	--container-terminal-bg: var(--sidebar);
+	--container-header-bg: var(--header);
+	--container-content-bg: var(--content);
+	--container-elevated-bg: var(--elevated);
+	--control-bg: var(--input);
+	--control-bg-hovered: var(--hover);
+	--control-bg-selected: var(--hover);
+	--control-primary-bg: var(--accent-solid);
+	--control-primary-bg-hovered: var(--accent-hover);
+	--control-primary-text: var(--on-accent);
+	--control-border-default: var(--border);
+	--control-border-active: var(--border-strong);
+	--control-disabled-bg: color-mix(in srgb, var(--input) 60%, transparent);
+	--control-disabled-text: color-mix(in srgb, var(--text) 60%, transparent);
+	--control-disabled-border: color-mix(in srgb, var(--border) 60%, transparent);
+	--control-primary-disabled-bg: color-mix(in srgb, var(--accent) 60%, transparent);
+	--control-primary-disabled-text: color-mix(in srgb, var(--on-accent) 60%, transparent);
+	--control-destructive-bg: var(--danger);
+	--control-soft-primary-bg-hovered: color-mix(in srgb, var(--accent) 12%, transparent);
+	--control-destructive-bg-hovered: var(--danger-hover);
+	--control-destructive-text: var(--on-danger);
+	--control-destructive-disabled-bg: color-mix(in srgb, var(--danger) 60%, transparent);
+	--control-destructive-disabled-text: color-mix(in srgb, var(--on-danger) 60%, transparent);
+	--border-default: var(--border-strong);
+	--border-muted: var(--border);
+	--primary: var(--accent);
+	--primary-subtle: color-mix(in srgb, var(--accent) 10%, transparent);
+	--primary-soft: color-mix(in srgb, var(--accent) 20%, transparent);
+	--primary-muted: color-mix(in srgb, var(--accent) 40%, transparent);
+	--on-primary-soft: color-mix(in srgb, var(--on-accent) 20%, transparent);
+	--feedback-info: var(--info);
+	--feedback-info-subtle: color-mix(in srgb, var(--info) 12%, transparent);
+	--feedback-info-muted: color-mix(in srgb, var(--info) 40%, transparent);
+	--feedback-success: var(--success);
+	--feedback-success-subtle: color-mix(in srgb, var(--success) 12%, transparent);
+	--feedback-success-muted: color-mix(in srgb, var(--success) 40%, transparent);
+	--feedback-error: var(--danger);
+	--feedback-error-subtle: color-mix(in srgb, var(--danger) 12%, transparent);
+	--feedback-error-muted: color-mix(in srgb, var(--danger) 40%, transparent);
+	--feedback-warning: var(--warning);
+	--feedback-warning-subtle: color-mix(in srgb, var(--warning) 12%, transparent);
+	--feedback-warning-muted: color-mix(in srgb, var(--warning) 40%, transparent);
+	--bubble-user-bg: color-mix(in srgb, var(--bubble-accent) 10%, transparent);
+	--bubble-user-border: color-mix(in srgb, var(--bubble-accent) 40%, transparent);
+	--selection-text: var(--selection-foreground, inherit);
+	--selection-bg: var(--selection);
+	--selection-bg-muted: color-mix(in srgb, var(--selection) 40%, transparent);
+	--editor-selection-bg: var(--editor-selection);
+	--editor-selection-text: var(--editor-selection-foreground);
+	--editor-selection-highlight-bg: color-mix(in srgb, var(--editor-selection) 20%, transparent);
+	--editor-find-match-bg: color-mix(in srgb, var(--warning) 40%, transparent);
+	--widget-shadow: color-mix(in srgb, var(--text) 20%, transparent);
+	--media-checker-tile: color-mix(in srgb, var(--text) 20%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--accent: #8dff4f;
+		--accent-hover: #59d915;
+		--accent-solid: #8dff4f;
+		--on-accent: #0a0a0a;
+		--bubble-accent: #8dff4f;
+		--background: #09090b;
+		--header: #18181b;
+		--content: #18181b;
+		--sidebar: #101013;
+		--input: #18181b;
+		--elevated: #09090b;
+		--hover: #27272a;
+		--border: #27272a;
+		--border-strong: #3f3f46;
+		--text: #f4f4f5;
+		--muted: #babac1;
+		--hint: #71717a;
+		--selection: #6ac8ff26;
+		--editor-selection: #6ac8ff26;
+		--info: #6ac8ff;
+		--success: #41cb66;
+		--danger: #ff4b75;
+		--danger-hover: #e04267;
+		--on-danger: #0a0a0a;
+		--warning: #ffd54b;
+		--ansi-black: #000000;
+		--ansi-red: #cd3131;
+		--ansi-green: #0dbc79;
+		--ansi-yellow: #e5e510;
+		--ansi-blue: #2472c8;
+		--ansi-magenta: #bc3fbc;
+		--ansi-cyan: #11a8cd;
+		--ansi-white: #e5e5e5;
+		--ansi-bright-black: #666666;
+		--ansi-bright-red: #f14c4c;
+		--ansi-bright-green: #23d18b;
+		--ansi-bright-yellow: #f5f543;
+		--ansi-bright-blue: #3b8eea;
+		--ansi-bright-magenta: #d670d6;
+		--ansi-bright-cyan: #29b8db;
+		--ansi-bright-white: #e5e5e5;
+		--sunken: rgba(0, 0, 0, 0.12);
+		--overlay: rgba(0, 0, 0, 0.5);
+		--shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+		--shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
+		--shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.4);
+	}
+}
+
+:where(html) {
+	background: var(--container-workspace-bg);
+	color: var(--text-default);
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	font-size: 13px;
+}

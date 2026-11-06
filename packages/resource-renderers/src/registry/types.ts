@@ -63,6 +63,7 @@ export interface ResourceViewProps {
 	onPlacedThreadIds?(ids: ReadonlySet<string>): void;
 	viewState?: unknown;
 	onViewState?(state: unknown): void;
+	onNaturalHeight?(): void;
 }
 
 export interface HunkActions {
@@ -96,6 +97,7 @@ export interface ResourceDiffProps {
 	viewState?: unknown;
 	onViewState?(state: unknown): void;
 	virtualize?: boolean;
+	onNaturalHeight?(): void;
 }
 
 export type ResourceAnchorCapability = "line" | `structural:${string}` | "region";

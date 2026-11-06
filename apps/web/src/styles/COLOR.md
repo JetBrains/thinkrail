@@ -19,6 +19,8 @@ styles/colors.schema.json      the editor-facing contract for it
 scripts/colors.ts              load / validate / render — the only place a derivation is written
 scripts/generate-colors.ts     writes the output; `--check` fails when it is stale
 styles/generated/colors.css    GENERATED: the roles, the `@theme inline` map, the effect blocks
+thinkrail-extensions/visualize/server/generated/thinkrail-theme.css
+                               GENERATED: palette + roles + effects for bundled Light/Dark, for mockups
 themes/runtime.ts              writes the active manifest onto the document root
 styles/colorUsage.test.ts      the adoption guard
 ```
@@ -27,6 +29,13 @@ styles/colorUsage.test.ts      the adoption guard
 `tokens.css` (structure only), not in `index.css` (no `--color-*` at all), not in `runtime.ts` (which
 now derives variable names rather than tabulating them). Editing the generated file fails
 `bun run colors:check`, which runs in pre-commit and in `apps/web`'s build.
+
+**The mockup theme file is a second rendering of the same source.** `renderThemeFile` emits the bundled
+Light palette (and ANSI colours) with every role derivation on `:root`, the Dark palette under
+`prefers-color-scheme: dark`, the appearance effects for each, and a `:where(html)` base. The agent links
+it from its HTML mockups so they read right in a plain browser; inside ThinkRail the frame gets the live
+theme instead. It is written by `colors:generate` and checked by `colors:check` like `colors.css`, so a
+role or palette change cannot leave it stale.
 
 **Variable names are derived, not chosen.** A manifest key writes to its kebab-cased name —
 `borderStrong` → `--border-strong`, `editorSelection` → `--editor-selection`. `colors.json` and

@@ -1,6 +1,7 @@
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { AnchorDraft, SurfaceReview } from "../registry";
 import { RegionReviewSurface } from "./RegionReviewSurface";
@@ -49,10 +50,16 @@ function aspectOf(size: Size | null): number | null {
 	return size && size.width > 0 && size.height > 0 ? size.width / size.height : null;
 }
 
-function frameClass(size: Size | null, maximumHeight: 58 | 68, backdrop = true): string {
+function frameClass(
+	size: Size | null,
+	maximumHeight: 58 | 68,
+	backdrop = true,
+	fit = false,
+): string {
 	const fallback =
 		maximumHeight === 58 ? "h-[min(58vh,640px)] w-full" : "h-[min(68vh,720px)] w-full";
-	return `${aspectOf(size) ? "mx-auto w-full" : fallback} min-h-40 border border-border-muted ${backdrop ? "media-backdrop" : "bg-container-content-bg"}`;
+	const box = fit ? "w-full" : aspectOf(size) ? "mx-auto w-full" : fallback;
+	return `${box} min-h-40 border border-border-muted ${backdrop ? "media-backdrop" : "bg-container-content-bg"}`;
 }
 
 function frameStyle(size: Size | null, maximumHeight: 58 | 68): React.CSSProperties | undefined {
@@ -80,6 +87,7 @@ function SideSurface({
 	commentLabel,
 	contentStamp,
 	emptyLabel,
+	fit,
 }: {
 	label: string;
 	selectionKey: string;
@@ -87,6 +95,7 @@ function SideSurface({
 	commentLabel: string;
 	contentStamp: string;
 	emptyLabel: string;
+	fit: boolean;
 }) {
 	return (
 		<div className="flex min-w-0 flex-col gap-4">
@@ -96,7 +105,7 @@ function SideSurface({
 				intrinsicSize={side.intrinsicSize}
 				contentStamp={contentStamp}
 				selectionKey={selectionKey}
-				className={frameClass(side.intrinsicSize, 58)}
+				className={frameClass(side.intrinsicSize, 58, true, fit)}
 				{...(frameStyle(side.intrinsicSize, 58)
 					? { style: frameStyle(side.intrinsicSize, 58) }
 					: {})}
@@ -122,6 +131,7 @@ export function VisualDiff({
 	onViewState,
 	modes = ALL_MODES,
 	emptyLabel,
+	fitContent = false,
 }: {
 	prefix: "image" | "svg" | "html";
 	noun: VisualDiffNoun;
@@ -135,6 +145,7 @@ export function VisualDiff({
 	onViewState?: ((state: unknown) => void) | undefined;
 	modes?: readonly VisualDiffMode[] | undefined;
 	emptyLabel?: string | undefined;
+	fitContent?: boolean;
 }) {
 	const t = useT();
 	const emptyText = emptyLabel ?? t("viewer.image.noImage");
@@ -186,7 +197,7 @@ export function VisualDiff({
 	return (
 		<div
 			data-testid={`${prefix}-diff`}
-			className="flex h-full min-h-0 flex-col bg-container-content-bg"
+			className={cn("flex flex-col bg-container-content-bg", fitContent ? null : "h-full min-h-0")}
 		>
 			{availableModes.length > 1 ? (
 				<div className="flex shrink-0 flex-wrap items-center gap-4 border-border-default border-b bg-container-header-bg px-8 py-4">
@@ -219,9 +230,14 @@ export function VisualDiff({
 					) : null}
 				</div>
 			) : null}
-			<div className="min-h-0 flex-1 overflow-auto p-12">
+			<div className={fitContent ? "p-12" : "min-h-0 flex-1 overflow-auto p-12"}>
 				{mode === "2-up" ? (
-					<div className="grid min-h-full grid-cols-1 gap-12 md:grid-cols-2">
+					<div
+						className={cn(
+							"grid grid-cols-1 gap-12 md:grid-cols-2",
+							fitContent ? null : "min-h-full",
+						)}
+					>
 						<SideSurface
 							label={t("viewer.side.old")}
 							selectionKey={`${selectionKey}:base`}
@@ -229,6 +245,7 @@ export function VisualDiff({
 							commentLabel={commentLabel}
 							contentStamp={contentStamp}
 							emptyLabel={emptyText}
+							fit={fitContent}
 						/>
 						<SideSurface
 							label={t("viewer.side.new")}
@@ -237,6 +254,7 @@ export function VisualDiff({
 							commentLabel={commentLabel}
 							contentStamp={contentStamp}
 							emptyLabel={emptyText}
+							fit={fitContent}
 						/>
 					</div>
 				) : (

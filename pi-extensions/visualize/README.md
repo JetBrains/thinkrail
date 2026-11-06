@@ -66,6 +66,16 @@ export default createVisualizeExtension({
 
 Without `checkFile` paths are not checked (the package stays `node:`-free).
 
+A host that renders richer mockups can replace how the guideline tells the model to write one. The
+package keeps the rest: show it with `type: "file"`, and copy a proposal to keep it as `before`.
+
+```ts
+export default createVisualizeExtension({
+  scratchDir: ".scratch/mockups/",
+  mockupGuideline: "write a self-contained HTML file under `.scratch/mockups/`; scripts may run",
+});
+```
+
 ## Requirements
 
 pi ≥ the version listed under `devDependencies` in this package's `package.json` (the pi SDK packages

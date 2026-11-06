@@ -195,4 +195,14 @@ describe("visualize extension", () => {
 			loadTool(undefined, { scratchDir: ".scratch/mockups/" }).promptGuidelines?.[0],
 		).toContain("`.scratch/mockups/`");
 	});
+
+	test("a host mockup guideline replaces how to write the mockup but keeps how to show it", () => {
+		const guideline = loadTool(undefined, {
+			scratchDir: ".scratch/mockups/",
+			mockupGuideline: "write a scripted HTML file that links `theme.css`",
+		}).promptGuidelines?.[0];
+		expect(guideline).toContain("write a scripted HTML file that links `theme.css` and show it");
+		expect(guideline).toContain("current content");
+		expect(guideline).not.toContain("hosts may strip scripts");
+	});
 });

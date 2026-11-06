@@ -12,7 +12,8 @@
 			"!designs",
 			"!**/.claude",
 			"!apps/web/src/styles/generated",
-			"!apps/web/src/chat/generated"
+			"!apps/web/src/chat/generated",
+			"!thinkrail-extensions/visualize/server/generated"
 		]
 	},
 	"formatter": {

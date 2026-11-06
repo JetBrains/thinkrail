@@ -24,7 +24,7 @@ they are *generators*: they use `node:fs` and `node:path`, which must never reac
 | `generate-typography.ts` | CLI. Writes `src/styles/generated/typography.css` and `src/styles/generated/fonts.css` (the `@import`s for the self-hosted faces); `--check` fails instead of writing when a committed file is stale. |
 | `validate-typography.ts` | CLI. Validates `src/styles/typography.json` and prints a summary. The enforced gate. |
 | `colors.ts` | the library: load → validate → render. The **only** place a colour derivation (a palette alias or an alpha step) is written. |
-| `generate-colors.ts` | CLI. Writes `src/styles/generated/colors.css` — the roles, the appearance-level effects, and the Tailwind map; `--check` fails when it is stale. |
+| `generate-colors.ts` | CLI. Writes `src/styles/generated/colors.css` — the roles, the appearance-level effects, and the Tailwind map — and `thinkrail-extensions/visualize/server/generated/thinkrail-theme.css`, the standalone mockup theme (bundled Light, Dark under `prefers-color-scheme`); `--check` fails when either is stale. |
 | `spacing.ts` | the library: load → validate → render. It enforces step identity and is the only place the generated spacing-CSS shape and `--spacing: 1px` (number = px) base are derived; the step lengths live only in `spacing.json`. |
 | `spacing.test.ts` | Pins the spacing source validator's closed root/metadata shapes and value types against the schema. |
 | `generate-spacing.ts` | CLI. Writes `src/styles/generated/spacing.css` — the `--space-<n>` tokens + the Tailwind base; `--check` fails when it is stale. |
@@ -55,7 +55,7 @@ in agreement about the same functions.
 
 - **Allowed deps:** `node:fs`, `node:path`, `node:module` (resolving the vendored glyph set), the three JSON sources + their schemas, the dev-only `@lobehub/icons-static-svg` files read as *data*, and two further reads
   taken as *data*, never as imports: `src/themes/schema.ts` (for `colors.ts`, so the roles and
-  `THEME_COLOR_KEYS` cannot drift) and `apps/web/package.json` (for `typography.ts`, so a `selfHosted`
+  `THEME_COLOR_KEYS` cannot drift), the bundled `light` / `dark` theme manifests (for the mockup theme file) and `apps/web/package.json` (for `typography.ts`, so a `selfHosted`
   entry and the installed font packages cannot drift).
 - **Forbidden:** runtime imports of React, Tailwind, `src/`, or any `@thinkrail/*` package, any runtime
   (non-dev) dependency, and any network or shell access. Adoption guards read source as data; generators
@@ -72,7 +72,7 @@ in agreement about the same functions.
   `src/styles/typography.test.ts` + `src/styles/typographyUsage.test.ts` +
   `src/styles/colorUsage.test.ts` + `src/styles/spacingUsage.test.ts`. Nothing in the shipped app may import from here — the generated
   CSS is the interface.
-- **Writes:** `src/styles/generated/` and `src/chat/generated/`, plus the census's `compiler-census.baseline.txt`. Both directories are committed (so every typography, colour, spacing
+- **Writes:** `src/styles/generated/`, `src/chat/generated/` and `thinkrail-extensions/visualize/server/generated/` (the one output outside `src/`: the server half embeds it and may not import the app), plus the census's `compiler-census.baseline.txt`. The directories are committed (so every typography, colour, spacing
   or glyph change is reviewable as a diff) and excluded from biome in `biome.json`.
 
 ## Invariants

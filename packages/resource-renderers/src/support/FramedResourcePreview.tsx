@@ -13,6 +13,7 @@ export interface FramedResourcePreviewProps {
 	title: string;
 	frameClassName: string;
 	compact?: boolean | undefined;
+	fitContent?: boolean | undefined;
 	testIdPrefix: string;
 }
 
@@ -22,6 +23,7 @@ export function FramedResourcePreview({
 	title,
 	frameClassName,
 	compact,
+	fitContent,
 	testIdPrefix,
 }: FramedResourcePreviewProps) {
 	const t = useT();
@@ -58,6 +60,7 @@ export function FramedResourcePreview({
 			<ResourcePreview
 				{...shared}
 				compact={compact}
+				fitContent={fitContent}
 				className={cn("rounded-sm border border-border-default", frameClassName)}
 				actions={
 					<>

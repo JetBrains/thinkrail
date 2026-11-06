@@ -49,7 +49,8 @@ exercise the bundled factories/skills, run **two scripted provider turns** — t
 pi-ai faux `streamSimple` under its own `api` name that calls `visualize` with a dangling flowchart edge,
 so the probe asserts the strict mermaid parse error reaches the transcript as an `isError` tool result
 (the packaged host composes the ThinkRail extension registry, never the portable package's best-effort
-probe; [[module-ext-visualize]]), and on a second prompt calls `ask_user_question`, so the probe sees the
+probe; [[module-ext-visualize]]) and that the turn wrote the embedded `thinkrail-theme.css` into the
+workspace's mockup dir (a text import the bundle must carry), and on a second prompt calls `ask_user_question`, so the probe sees the
 session block with `needsInput.kind === "tool-response"`, answers through `session.respondToTool`, and reads
 the answer back as the call's non-error tool result (the registry's per-session composition and the host
 mailbox inside the artifact; [[module-ext-ask-user-question]]) — start pi's bundled MCP engine in a real chat (a written-out

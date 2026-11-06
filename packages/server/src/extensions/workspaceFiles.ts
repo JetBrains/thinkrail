@@ -1,8 +1,9 @@
 import { realpath, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
+import { isMockupPath, MOCKUP_DIR } from "@thinkrail/contracts";
 import type { WorkspaceFiles } from "@thinkrail/extension-api/server";
 
-export const MOCKUP_DIR = ".thinkrail/context/mockups/";
+export { MOCKUP_DIR };
 
 function inside(root: string, candidate: string): string | null {
 	const rel = relative(root, candidate);
@@ -19,8 +20,15 @@ export async function checkWorkspaceFile(path: string, cwd: string): Promise<voi
 	const info = await stat(absolute).catch(() => undefined);
 	if (!info) throw new Error("no such file");
 	if (!info.isFile()) throw new Error("not a regular file");
-	if (inside(await realpath(cwd), await realpath(absolute)) === null) {
+	const real = await realpath(absolute);
+	if (inside(await realpath(cwd), real) === null) {
 		throw new Error("the path must stay inside the workspace (a link points outside it)");
+	}
+	const mockups = isMockupPath(path)
+		? await realpath(resolve(cwd, MOCKUP_DIR)).catch(() => null)
+		: undefined;
+	if (mockups === null || (mockups !== undefined && inside(mockups, real) === null)) {
+		throw new Error("a mockup must stay inside the mockup directory (a link points outside it)");
 	}
 }
 

@@ -6,6 +6,18 @@ export const SOURCE_PATH = join(STYLES_DIR, "colors.json");
 export const GENERATED_CSS_PATH = join(STYLES_DIR, "generated", "colors.css");
 export const THEMES_DIR = join(import.meta.dir, "..", "src", "themes");
 export const THEME_SCHEMA_PATH = join(THEMES_DIR, "schema.ts");
+export const BUNDLED_THEMES_DIR = join(THEMES_DIR, "bundled");
+export const THEME_FILE_PATH = join(
+	import.meta.dir,
+	"..",
+	"..",
+	"..",
+	"thinkrail-extensions",
+	"visualize",
+	"server",
+	"generated",
+	"thinkrail-theme.css",
+);
 
 export const paletteVar = (key: string) =>
 	`--${key.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase()}`;
@@ -148,6 +160,67 @@ export function renderCss(colors: Colors): string {
 		"",
 		"@theme inline {",
 		...themeLines,
+		"}",
+		"",
+	].join("\n");
+}
+
+export interface ThemePalette {
+	readonly colors: Readonly<Record<string, string | null>>;
+	readonly ansi: Readonly<Record<string, string>>;
+}
+
+export function loadThemePalette(id: string, dir = BUNDLED_THEMES_DIR): ThemePalette {
+	const manifest = JSON.parse(readFileSync(join(dir, `${id}.theme.json`), "utf8")) as ThemePalette;
+	return { colors: manifest.colors, ansi: manifest.ansi };
+}
+
+function paletteLines(palette: ThemePalette, indent: string): string[] {
+	return [
+		...Object.entries(palette.colors)
+			.filter((entry): entry is [string, string] => entry[1] !== null)
+			.map(([key, color]) => `${indent}${paletteVar(key)}: ${color};`),
+		...Object.entries(palette.ansi).map(
+			([key, color]) => `${indent}${paletteVar(`ansi-${key}`)}: ${color};`,
+		),
+	];
+}
+
+function effectLines(colors: Colors, appearance: "dark" | "light", indent: string): string[] {
+	return Object.entries(colors.effects).map(([n, e]) => `${indent}--${n}: ${e[appearance]};`);
+}
+
+export function renderThemeFile(
+	colors: Colors,
+	themes: { readonly light: ThemePalette; readonly dark: ThemePalette },
+): string {
+	const roleLines = Object.entries(colors.roles)
+		.filter(([name, role]) => !aliasesPaletteVar(name, role))
+		.map(([name, role]) => `\t${roleVar(name)}: ${derive(colors, role)};`);
+	return [
+		HEADER(
+			colors.metadata.version,
+			"ThinkRail's semantic colour tokens for standalone HTML mockups: the bundled Light theme, and\n * Dark under `prefers-color-scheme: dark`. Inside ThinkRail the live theme replaces this file.",
+		),
+		":root {",
+		"\tcolor-scheme: light dark;",
+		...paletteLines(themes.light, "\t"),
+		...effectLines(colors, "light", "\t"),
+		...roleLines,
+		"}",
+		"",
+		"@media (prefers-color-scheme: dark) {",
+		"\t:root {",
+		...paletteLines(themes.dark, "\t\t"),
+		...effectLines(colors, "dark", "\t\t"),
+		"\t}",
+		"}",
+		"",
+		":where(html) {",
+		"\tbackground: var(--container-workspace-bg);",
+		"\tcolor: var(--text-default);",
+		'\tfont-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;',
+		"\tfont-size: 13px;",
 		"}",
 		"",
 	].join("\n");
