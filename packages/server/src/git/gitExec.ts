@@ -233,10 +233,13 @@ export async function gitRunHook(
 	args: string[],
 	opts: Pick<GitAsyncOptions, "timeoutMs" | "idleTimeoutMs" | "signal"> = {},
 ): Promise<GitResult> {
-	const ran = await gitAsync(cwd, ["hook", "run", "--ignore-missing", hook, "--", ...args], opts);
-	if (ran.ok || !ran.err.includes("is not a git command")) return ran;
+	const probe = await gitAsync(cwd, ["hook", "-h"], {
+		env: { ...nonInteractiveGitEnv(), LC_ALL: "C" },
+	});
+	if (!probe.err.includes("'hook' is not a git command"))
+		return gitAsync(cwd, ["hook", "run", "--ignore-missing", hook, "--", ...args], opts);
 	const located = await gitAsync(cwd, ["rev-parse", "--git-path", `hooks/${hook}`]);
-	if (!located.ok) return ran;
+	if (!located.ok) return located;
 	const script = resolve(cwd, located.out);
 	if (!executable(script)) return { ok: true, out: "", err: "" };
 	const run = await runBounded([script, ...args], {

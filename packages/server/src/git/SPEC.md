@@ -54,11 +54,13 @@ ref off the workspace-create critical path.
   it for credential-bearing URL rewrites). `opts.network`
   marks fetch/push solely so a no-output timeout can name the remote. `gitAsync` alone also passes
   `opts.idleTimeoutMs` (a silence deadline that output resets) and `opts.onStderr` (live stderr chunks)
-  through to the runner; **`gitRunHook(cwd, hook, args, opts?)`** runs a repository hook the way git itself
-  would — `git hook run --ignore-missing` (so `core.hooksPath` and git's environment apply), and on a git
-  older than 2.36, which has no `hook` command, the script `rev-parse --git-path hooks/<hook>` names, when it is
-  executable, through the same bounded runner — the shape of `workspaces`' long `checkout --progress`, which may run for hours but
-  must not hang silently. **A timeout keeps whatever git wrote
+  through to the runner — the shape of `workspaces`' long `checkout --progress`, which may run for hours but
+  must not hang silently. **`gitRunHook(cwd, hook, args,
+  opts?)`** runs a repository hook the way git itself would: `git hook run --ignore-missing`, so
+  `core.hooksPath` and git's hook environment apply. Git older than 2.36 has no `hook` command; a
+  `git hook -h` probe under `LC_ALL=C` recognises it by the untranslated `'hook' is not a git command`, and only
+  then is the executable script that `rev-parse --git-path hooks/<hook>` names run directly through the same
+  bounded runner (with the caller's deadlines). **A timeout keeps whatever git wrote
   before the kill**: the runner drains continuously, so on
   expiry its `err` already holds the real diagnosis — a publickey rejection, a proxy's refusal, `remote:`
   progress proving a large transfer was simply still running. When git wrote *nothing*, an explicitly
