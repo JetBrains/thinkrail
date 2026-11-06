@@ -190,6 +190,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 				writeToPty(bytes);
 				return false;
 			}
+			if (event.isComposing) return true;
 			const action = terminalKeyAction(
 				event,
 				platformFamily(),
@@ -197,6 +198,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 				useAppStore.getState().terminalShiftEnterNewline,
 			);
 			if (action === null) return true;
+			event.preventDefault();
 			if (action === "copy") void copyText(term.getSelection());
 			else if (action === "newline") writeToPty(SHIFT_ENTER_SEQUENCE);
 			return false;

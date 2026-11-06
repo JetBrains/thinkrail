@@ -61,6 +61,7 @@ import {
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
+	TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION,
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 	TOOL_RESPONSE_CUSTOM_TYPE,
@@ -248,7 +249,7 @@ test("tool responses replace the ask-only answer method at v93", () => {
 
 test("voice input is pinned to v107", () => {
 	expect(SPEECH_PROTOCOL_VERSION).toBe(107);
-	expect(PROTOCOL_VERSION).toBe(107);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SPEECH_PROTOCOL_VERSION);
 	expect(WS_METHODS.speechInstall).toBe("speech.install");
 	expect(WS_METHODS.speechCancelInstall).toBe("speech.cancelInstall");
 	expect(WS_METHODS.speechRemove).toBe("speech.remove");
@@ -606,6 +607,12 @@ test("extension settings are pinned to v105", () => {
 	expect(EXTENSION_SETTINGS_PROTOCOL_VERSION).toBe(105);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(EXTENSION_SETTINGS_PROTOCOL_VERSION);
 	expect(DEFAULT_CONFIG.extensionSettings).toEqual({});
+});
+
+test("the Shift+Enter terminal setting is pinned to v108", () => {
+	expect(TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION).toBe(108);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION);
+	expect(DEFAULT_CONFIG.terminalShiftEnterNewline).toBe(true);
 });
 
 test("ask_user_question discuss answers are pinned to v105, after background workspace creation", () => {
