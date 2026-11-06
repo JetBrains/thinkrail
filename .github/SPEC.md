@@ -28,6 +28,22 @@ pipeline.
 
 ## CI
 
+### Fork development policy: Windows only
+
+During active fork development, only `ci.yml` and `build-preview.yml` remain active. CI retains
+Windows lint/typecheck, existing Windows-targeted unit checks and native CLI/desktop smoke; the
+`CI passed` aggregate requires all three jobs to succeed (no allowed skipped jobs). Full POSIX
+unit, source/browser, binary-browser and desktop-browser suites are temporarily suspended, not
+claimed covered by the Windows smokes. No Linux/macOS runner is scheduled by active workflows.
+
+Website deploy/preview/cleanup and npm publication recipes are retained as `.yml.disabled` files
+and therefore do not run. Restoring them and the broader CI matrix is a deliberate later change;
+the historical cross-platform policy below describes that suspended coverage, not active jobs.
+Windows preview artifacts build on main/feature pushes or manual dispatch and remain unsigned;
+there is no automatic tag, GitHub Release or npm publication.
+
+### Suspended cross-platform coverage
+
 Workflow Bun setup reads the root `package.json` `packageManager` pin through `bun-version-file`.
 Desktop's packaged runtime remains Electrobun-owned (see [[module-desktop]]).
 

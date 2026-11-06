@@ -3,7 +3,7 @@ name: Preview artifacts
 on:
   workflow_dispatch:
   push:
-    branches: [feat/tomato-issues-workflow]
+    branches: [main, feat/tomato-issues-workflow]
 
 permissions:
   contents: read
