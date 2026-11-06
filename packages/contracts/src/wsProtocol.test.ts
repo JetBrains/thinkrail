@@ -611,7 +611,7 @@ test("extension settings are pinned to v105", () => {
 
 test("the Shift+Enter terminal setting is pinned to v108", () => {
 	expect(TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION).toBe(108);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION);
+	expect(PROTOCOL_VERSION).toBe(108);
 	expect(DEFAULT_CONFIG.terminalShiftEnterNewline).toBe(true);
 });
 
