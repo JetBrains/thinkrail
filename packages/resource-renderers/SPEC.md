@@ -483,10 +483,10 @@ The policy, in `htmlDocument.ts`:
 
 - iframe `sandbox="allow-scripts"` only — no `allow-same-origin`, popups, forms or top navigation, so the
   document runs in an opaque origin and cannot read the app, its storage or the host API;
-- CSP exactly `default-src 'none'; script-src 'unsafe-inline' https:; style-src 'unsafe-inline' https:;
-  img-src data: blob: https:; font-src data: https:; connect-src 'none'; form-action 'none'; base-uri
-  'none'; frame-src 'none'; object-src 'none'`: inline and https (CDN) scripts and styles run, `fetch`/XHR/
-  WebSocket are blocked;
+- CSP exactly `default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval' https:; style-src
+  'unsafe-inline' https:; img-src data: blob: https:; font-src data: https:; connect-src 'none';
+  form-action 'none'; base-uri 'none'; frame-src 'none'; object-src 'none'`: inline and https (CDN)
+  scripts and styles run, WebAssembly compiles, `fetch`/XHR/WebSocket and workers are blocked;
 - the sanitizer keeps scripts, event handlers, forms and controls and https stylesheet links; it still
   removes `base`, `object`, `embed`, `iframe`, `frame`, `frameset`, `portal`, `meta http-equiv` and every
   other `link`; `src`/`href` keep only `#fragment`, `data:`, `blob:` and `https:` URLs, and an anchor keeps
@@ -507,6 +507,11 @@ that always navigates.
 Accepted cost: an https script or image URL can carry data out (`connect-src` does not cover GETs a script
 or image makes), so a scripted document can leak its own content to a CDN host it names. That content is
 what the agent wrote into the scratch dir, and the user approved CDN loading for mockups.
+
+Accepted cost: `'wasm-unsafe-eval'` lets a mockup compile WebAssembly, so a game engine or a data tool
+built to WASM can run in a card. It gives no new access: `eval` and `new Function` stay blocked, the
+module runs in the same sandbox, and it still cannot fetch. The added exposure is a bug in the browser's
+WASM compiler. Heavy CPU use was already possible with plain JS.
 
 The host's live theme reaches the frame without a reload. `hostTheme.ts` collects the custom-property
 names declared on `:root` rules of the page's stylesheets (recursing into `@layer`/`@media` groups,
