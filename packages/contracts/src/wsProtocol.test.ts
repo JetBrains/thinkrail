@@ -35,6 +35,8 @@ import {
 	isToolResponsePending,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
+	MAX_TERMINAL_PATH_CANDIDATES,
+	MAX_TERMINAL_PATH_LENGTH,
 	MCP_PROTOCOL_VERSION,
 	MCP_TOOL_GRANTS_PROTOCOL_VERSION,
 	MODEL_PICKER_PROTOCOL_VERSION,
@@ -61,6 +63,7 @@ import {
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
+	TERMINAL_LINKS_PROTOCOL_VERSION,
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 	TOOL_RESPONSE_CUSTOM_TYPE,
@@ -248,7 +251,7 @@ test("tool responses replace the ask-only answer method at v93", () => {
 
 test("voice input is pinned to v107", () => {
 	expect(SPEECH_PROTOCOL_VERSION).toBe(107);
-	expect(PROTOCOL_VERSION).toBe(107);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SPEECH_PROTOCOL_VERSION);
 	expect(WS_METHODS.speechInstall).toBe("speech.install");
 	expect(WS_METHODS.speechCancelInstall).toBe("speech.cancelInstall");
 	expect(WS_METHODS.speechRemove).toBe("speech.remove");
@@ -612,4 +615,12 @@ test("ask_user_question discuss answers are pinned to v105, after background wor
 	expect(ASK_DISCUSS_PROTOCOL_VERSION).toBe(105);
 	expect(ASK_DISCUSS_PROTOCOL_VERSION).toBeGreaterThan(WORKSPACE_CREATION_PROTOCOL_VERSION);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ASK_DISCUSS_PROTOCOL_VERSION);
+});
+
+test("terminal path links are pinned to v109", () => {
+	expect(TERMINAL_LINKS_PROTOCOL_VERSION).toBe(109);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(TERMINAL_LINKS_PROTOCOL_VERSION);
+	expect(WS_METHODS.terminalResolvePaths).toBe("terminal.resolvePaths");
+	expect(MAX_TERMINAL_PATH_CANDIDATES).toBe(64);
+	expect(MAX_TERMINAL_PATH_LENGTH).toBe(4096);
 });

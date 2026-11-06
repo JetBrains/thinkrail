@@ -8,19 +8,23 @@ export function parseProcChildren(contents: string): number[] {
 		.filter((pid) => Number.isInteger(pid) && pid > 0);
 }
 
-function childrenViaProc(pid: number): boolean | null {
+function isPlausiblePid(pid: number): boolean {
+	return Number.isInteger(pid) && pid > 0;
+}
+
+function childrenViaProc(pid: number): number[] | null {
 	try {
-		return parseProcChildren(readFileSync(`/proc/${pid}/task/${pid}/children`, "utf8")).length > 0;
+		return parseProcChildren(readFileSync(`/proc/${pid}/task/${pid}/children`, "utf8"));
 	} catch {
 		return null;
 	}
 }
 
-function childrenViaPgrep(pid: number): boolean | null {
+function childrenViaPgrep(pid: number): number[] | null {
 	const run = spawnSyncCaptured(["pgrep", "-P", String(pid)]);
 	if (!run.launched) return null;
-	if (run.exitCode === 0) return true;
-	if (run.exitCode === 1) return false;
+	if (run.exitCode === 0) return parseProcChildren(run.stdout);
+	if (run.exitCode === 1) return [];
 	return null;
 }
 
@@ -42,8 +46,13 @@ function childrenViaCim(pid: number): boolean | null {
 	return null;
 }
 
+export function childProcesses(pid: number): number[] | null {
+	if (!isPlausiblePid(pid) || process.platform === "win32") return null;
+	return childrenViaProc(pid) ?? childrenViaPgrep(pid);
+}
+
 export function hasChildProcesses(pid: number): boolean {
-	if (!Number.isInteger(pid) || pid <= 0) return false;
+	if (!isPlausiblePid(pid)) return false;
 	if (process.platform === "win32") return childrenViaCim(pid) ?? false;
-	return childrenViaProc(pid) ?? childrenViaPgrep(pid) ?? false;
+	return (childProcesses(pid)?.length ?? 0) > 0;
 }

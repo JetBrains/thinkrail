@@ -44,6 +44,17 @@ bytes are** — the one byte-level classification every content read in the host
   the root itself. `reviews` normalizes anchors through it. It keeps host
   semantics, so a backslash on POSIX stays part of a file name; callers that hold model-written paths turn
   `\` into `/` themselves.
+  **`locateWorktreeEntries(workspaceId, candidates, bases)`** answers, per printed path, the first
+  `{ kind: "file" | "dir", path }` that exists when the path is resolved against each absolute base in order
+  and finally the worktree root, else `null` — the terminal's link lookup (`terminal.resolvePaths`, composed
+  by `host`). A leading `~` or `~/` expands to the host's home directory *before* the containment check, so it
+  confirms only a home that holds the worktree. Every attempt passes the same gate `readFile` does — lexical
+  containment through `workspaceRelativePath`, no `.git`, the existing symlink chain contained — so a
+  crafted terminal line can never make the host stat or name anything outside the worktree, and the root
+  itself is never an answer. Bases are compared against both the stored and the real worktree root, because
+  an OS-reported cwd is canonical (`/private/var/…` on macOS) while the stored root may not be. The candidate
+  list is wire input and is validated first: an array of at most `MAX_TERMINAL_PATH_CANDIDATES` strings,
+  each non-empty and at most `MAX_TERMINAL_PATH_LENGTH` long.
   **Content classification** (`content.ts`, pure, no dependency): `CONTENT_SNIFF_BYTES` names the shared
   8 KiB bounded-head size; `classifyBytes(bytes)` → `{ text, mime? }` — **mime** is what the *bytes*
   prove (magic numbers for png/jpeg/gif/webp/avif/bmp/ico/pdf/zip/gzip/woff/woff2; AVIF accepts `avif` or
@@ -65,10 +76,11 @@ bytes are** — the one byte-level classification every content read in the host
   fallback and treating
   `null` bytes as absence (`hash`/`byteLength` null, `text: true` — nothing to decode, and the empty
   string it pairs with is valid text).
-- **Public surface (barrel):** `readDir`, `readFile`, `readableFileSize`, `resolveWorktreeFile`, `workspaceRelativePath`, `classifyBytes`,
+- **Public surface (barrel):** `readDir`, `readFile`, `readableFileSize`, `resolveWorktreeFile`, `workspaceRelativePath`,
+  `locateWorktreeEntries`, `WorktreeEntry`, `classifyBytes`,
   `CONTENT_SNIFF_BYTES`, `mimeFromPath`, `hashBytes`, `decodeText`, `resourceMeta`.
-- **Allowed deps:** `persistence` (workspace lookup); `contracts` (`FileNode`, `ResourceMeta`); `shared`
-  (`CodedError`); Node `fs`/`path`/`crypto`.
+- **Allowed deps:** `persistence` (workspace lookup); `contracts` (`FileNode`, `ResourceMeta`, the terminal
+  path-candidate limits); `shared` (`CodedError`); Node `fs`/`path`/`crypto`/`os` (`homedir`).
 - **Forbidden:** `host`; sibling features.
 
 ## Get right

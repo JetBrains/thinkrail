@@ -8,8 +8,14 @@ import {
 	realpathSync,
 	statSync,
 } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import type { FileNode, ResourceMeta } from "@thinkrail/contracts";
+import {
+	type FileNode,
+	MAX_TERMINAL_PATH_CANDIDATES,
+	MAX_TERMINAL_PATH_LENGTH,
+	type ResourceMeta,
+} from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { loadWorkspaces } from "../persistence";
 import { decodeText, resourceMeta } from "./content";
@@ -55,6 +61,12 @@ function assertExistingAncestorContained(root: string, abs: string): void {
 	}
 }
 
+function worktreeRoot(workspaceId: string): string {
+	const ws = loadWorkspaces().find((workspace) => workspace.id === workspaceId);
+	if (!ws) throw new Error(`Unknown workspace: ${workspaceId}`);
+	return ws.worktreePath;
+}
+
 function resolveUnderRoot(root: string, path: string, followLeaf: boolean): string {
 	const abs = resolve(root, path);
 	if (!isContained(resolve(root), abs)) throw new Error("Path escapes the worktree");
@@ -68,9 +80,8 @@ function resolveInWorktree(
 	path: string,
 	followLeaf: boolean,
 ): { root: string; abs: string } {
-	const ws = loadWorkspaces().find((workspace) => workspace.id === workspaceId);
-	if (!ws) throw new Error(`Unknown workspace: ${workspaceId}`);
-	return { root: ws.worktreePath, abs: resolveUnderRoot(ws.worktreePath, path, followLeaf) };
+	const root = worktreeRoot(workspaceId);
+	return { root, abs: resolveUnderRoot(root, path, followLeaf) };
 }
 
 export function readableFileSize(root: string, path: string): number | "missing" | null {
@@ -157,4 +168,76 @@ export function resolveWorktreeFile(
 	options: { followLeaf?: boolean } = {},
 ): string {
 	return resolveInWorktree(workspaceId, path, options.followLeaf !== false).abs;
+}
+
+export interface WorktreeEntry {
+	kind: "file" | "dir";
+	path: string;
+}
+
+function assertPathCandidates(candidates: unknown): asserts candidates is readonly string[] {
+	if (
+		!Array.isArray(candidates) ||
+		candidates.length > MAX_TERMINAL_PATH_CANDIDATES ||
+		!candidates.every(
+			(candidate) =>
+				typeof candidate === "string" &&
+				candidate.length > 0 &&
+				candidate.length <= MAX_TERMINAL_PATH_LENGTH,
+		)
+	) {
+		throw new Error("Invalid path candidates");
+	}
+}
+
+function expandHome(path: string, home: string): string {
+	if (path === "~") return home;
+	if (path.startsWith("~/") || (sep === "\\" && path.startsWith("~\\"))) {
+		return join(home, path.slice(2));
+	}
+	return path;
+}
+
+function realOrNull(path: string): string | null {
+	try {
+		return realpathSync(path);
+	} catch {
+		return null;
+	}
+}
+
+function existingKind(root: string, rel: string): WorktreeEntry["kind"] | null {
+	try {
+		const stats = statSync(resolveUnderRoot(root, rel, true));
+		if (stats.isDirectory()) return "dir";
+		return stats.isFile() ? "file" : null;
+	} catch {
+		return null;
+	}
+}
+
+export function locateWorktreeEntries(
+	workspaceId: string,
+	candidates: readonly string[],
+	bases: readonly string[],
+	home: string = homedir(),
+): (WorktreeEntry | null)[] {
+	assertPathCandidates(candidates);
+	const root = worktreeRoot(workspaceId);
+	const roots = [...new Set([resolve(root), realOrNull(root) ?? resolve(root)])];
+	const searched = [...new Set([...bases.filter((base) => isAbsolute(base)), root])];
+	return candidates.map((candidate) => {
+		const expanded = expandHome(candidate, home);
+		for (const base of searched) {
+			const abs = resolve(base, expanded);
+			const rel = roots.reduce<string | null>(
+				(found, r) => found ?? workspaceRelativePath(r, abs),
+				null,
+			);
+			if (!rel) continue;
+			const kind = existingKind(root, rel);
+			if (kind) return { kind, path: rel };
+		}
+		return null;
+	});
 }

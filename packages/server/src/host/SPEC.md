@@ -681,6 +681,11 @@ enabled/confirmed choice before entering analytics attribution.
   routes, `fonts`' `fontFileKind`/`saveUserFont` for `/fonts/`); Bun/Node.
 - **Forbidden:** being imported by any feature module; importing `web`/`cli`/`desktop`.
 
+- **Terminal link lookup is composed here.** `terminal.resolvePaths` asks `terminal`'s `terminalCwds(id)` for
+  the PTY's workspace and the directories its output is relative to, then hands them to `fs`'s
+  `locateWorktreeEntries`, which owns containment and existence; an unknown id is an error. Neither feature
+  imports the other.
+
 - **Settled-lifecycle wiring (`settledLifecycle.ts`).** The host is where the three activity sources meet the
   `workspaces` writers: the normalized session-state publisher stamps `recordWorkspaceActivity(record.workspaceId)`
   whenever a record reports `execution: "running"` (a user prompt flips it, so both user and agent turns

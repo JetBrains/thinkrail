@@ -125,7 +125,7 @@ import {
 	surveyResponse,
 } from "../feedback";
 import { fontsDir, listInstalledFonts, readUserFonts } from "../fonts";
-import { readDir, readFile } from "../fs";
+import { locateWorktreeEntries, readDir, readFile } from "../fs";
 import {
 	commitsAheadOf,
 	countPushDivergence,
@@ -205,6 +205,7 @@ import {
 	listTerminals,
 	reserveTerminal,
 	resizeTerminal,
+	terminalCwds,
 	writeTerminal,
 } from "../terminal";
 import { readUserThemes, themesDir } from "../themes";
@@ -1057,6 +1058,16 @@ const handlers: WsHandlers = {
 	},
 	"terminal.close": (p) => {
 		return closeTerminalTab(p.workspaceId, p.tabKey, p.force ?? false);
+	},
+	"terminal.resolvePaths": (p) => {
+		const located = terminalCwds(p.id);
+		if (!located) throw new Error("Unknown terminal");
+		const entries = locateWorktreeEntries(located.workspaceId, p.candidates, located.cwds);
+		return {
+			targets: entries.map((entry) =>
+				entry ? { kind: entry.kind, relPath: entry.path } : { kind: null, relPath: null },
+			),
+		};
 	},
 	"skill.list": (params) => {
 		const { projectId } = params;
