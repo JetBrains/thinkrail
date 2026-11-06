@@ -8,7 +8,6 @@ import {
 	RiFolderOpenLine as FolderOpen,
 	RiGitBranchLine as GitBranch,
 	RiHome2Line as House,
-	RiLoader4Line as Loader2,
 	RiMailOpenLine as MailOpen,
 	RiMailUnreadLine as MailUnread,
 	RiMore2Line as MoreVertical,
@@ -23,7 +22,7 @@ import {
 	RiDeleteBin6Line as Trash2,
 	RiCloseLine as X,
 } from "@remixicon/react";
-import type { EditorInfo, Project, Workspace } from "@thinkrail/contracts";
+import type { EditorInfo, Project, Workspace, WorkspaceCreation } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
 import {
@@ -86,6 +85,7 @@ import {
 } from "./settledShelfNotice";
 import { startProjectSetupChat } from "./setupPrompt";
 import { useOpenProject } from "./useOpenProject";
+import { WorkspaceCreationRow } from "./WorkspaceCreation";
 import {
 	canRenameProject,
 	canRenameWorkspace,
@@ -106,13 +106,26 @@ import {
 const HOVER_CONTROL_CLASS =
 	"shrink-0 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100";
 
+function groupCreationsByProject(
+	creations: Record<string, WorkspaceCreation>,
+): Record<string, WorkspaceCreation[]> {
+	const grouped: Record<string, WorkspaceCreation[]> = {};
+	for (const creation of Object.values(creations)) {
+		grouped[creation.projectId] = [...(grouped[creation.projectId] ?? []), creation];
+	}
+	for (const list of Object.values(grouped)) list.sort((a, b) => a.startedAt - b.startedAt);
+	return grouped;
+}
+
 export function ProjectTree() {
 	const t = useT();
 	const projects = useAppStore((s) => s.projects);
 	const recentProjects = useAppStore((s) => s.recentProjects);
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
 	const workspaces = useAppStore((s) => s.workspaces);
-	const worktreeCreations = useAppStore((s) => s.worktreeCreationsByProject);
+	const workspaceCreations = useAppStore((s) => s.workspaceCreations);
+	const activeCreationId = useAppStore((s) => s.activeCreationId);
+	const creationsByProject = groupCreationsByProject(workspaceCreations);
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const activeWorkspaceLiveLatch = useAppStore((s) => s.activeWorkspaceLiveLatch);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
@@ -328,44 +341,49 @@ export function ProjectTree() {
 									partition={selectWorkspacePartition(partitionState, project.id, now)}
 									shelfExpanded={settledShelfExpanded[project.id] === true}
 									shelfShown={settledShelfShown[project.id] ?? SETTLED_SHELF_PAGE}
-									renderRow={(ws, settled) => (
-										<WorkspaceRow
-											key={ws.id}
-											workspace={ws}
-											settled={settled}
-											now={now}
-											isActive={activeWorkspaceId === ws.id}
-											needsAttention={selectWorkspaceNeedsAttention(stateProjection, ws.id)}
-											isRunning={selectWorkspaceIsRunning(stateProjection, ws.id)}
-											canRename={canRenameWorkspace(protocolVersion, ws)}
-											canSettle={canSettleWorkspace(protocolVersion, ws)}
-											readAction={
-												supportsWorkspaceReadState(protocolVersion)
-													? selectWorkspaceReadAction(stateProjection, ws.id)
-													: null
-											}
-											editors={editors}
-											onSelect={() => selectWorkspace(ws)}
-											onOpenIn={(editor) => openWorkspaceIn(ws, editor)}
-											onCopyPath={() => void copyText(ws.worktreePath)}
-											onReveal={() => revealWorkspace(ws)}
-											onRename={(name) => renameWorkspace(ws, name)}
-											onSettle={() => settleWorkspace(ws.id)}
-											onKeepActive={() => unsettleWorkspace(ws.id)}
-											onMarkRead={() => markWorkspaceRead(ws.id)}
-											onMarkUnread={() => markWorkspaceUnread(ws.id)}
-										/>
-									)}
+									renderRow={(ws, settled) =>
+										workspaceCreations[ws.id] ? null : (
+											<WorkspaceRow
+												key={ws.id}
+												workspace={ws}
+												settled={settled}
+												now={now}
+												isActive={activeWorkspaceId === ws.id}
+												needsAttention={selectWorkspaceNeedsAttention(stateProjection, ws.id)}
+												isRunning={selectWorkspaceIsRunning(stateProjection, ws.id)}
+												canRename={canRenameWorkspace(protocolVersion, ws)}
+												canSettle={canSettleWorkspace(protocolVersion, ws)}
+												readAction={
+													supportsWorkspaceReadState(protocolVersion)
+														? selectWorkspaceReadAction(stateProjection, ws.id)
+														: null
+												}
+												editors={editors}
+												onSelect={() => selectWorkspace(ws)}
+												onOpenIn={(editor) => openWorkspaceIn(ws, editor)}
+												onCopyPath={() => void copyText(ws.worktreePath)}
+												onReveal={() => revealWorkspace(ws)}
+												onRename={(name) => renameWorkspace(ws, name)}
+												onSettle={() => settleWorkspace(ws.id)}
+												onKeepActive={() => unsettleWorkspace(ws.id)}
+												onMarkRead={() => markWorkspaceRead(ws.id)}
+												onMarkUnread={() => markWorkspaceUnread(ws.id)}
+											/>
+										)
+									}
 								/>
 							)}
-							{isExpanded && (worktreeCreations[project.id] ?? 0) > 0 && (
-								<div
-									data-testid="worktree-creating-row"
-									className="flex items-center gap-8 py-4 pr-8 pl-16 tr-text-ui text-text-muted"
-								>
-									<Loader2 className="size-14 shrink-0 animate-spin motion-reduce:animate-none" />
-									{t("panels.projectTree.creatingWorktree")}
-								</div>
+							{isExpanded && (creationsByProject[project.id]?.length ?? 0) > 0 && (
+								<ul aria-label={t("panels.workspaceCreation.listLabel")}>
+									{creationsByProject[project.id]?.map((creation) => (
+										<WorkspaceCreationRow
+											key={creation.id}
+											creation={creation}
+											isActive={activeCreationId === creation.id}
+											onSelect={() => useAppStore.getState().selectCreation(creation.id)}
+										/>
+									))}
+								</ul>
 							)}
 						</li>
 					);

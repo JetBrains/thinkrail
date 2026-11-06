@@ -443,7 +443,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   codeFont, codeFontSize, codeLigatures, fontWeightOffset }` — an extensible bag; the five font fields join at
   v102 and normalize together through `normalizeFontSettings` (host load, web store, fonts runtime); the line-width fields join
   the wire at protocol v61, `terminalWindowsShell` at v62, and `voiceInputEnabled` (default `true`) with voice input
-  at v104. `onboardingDismissed` (v94, default `false`)
+  at v105. `onboardingDismissed` (v94, default `false`)
   records that the user finished or skipped the cold-start onboarding wizard, so it never returns. **`DEFAULT_MODEL_PROTOCOL_VERSION`** pins
   v72's AppConfig `defaultModel`/`defaultEffort` and host-side default resolution; the Settings controls are
   hidden against older hosts. `defaultModel` is a full allowlisted `WireModel`, `defaultEffort` is an optional
@@ -703,6 +703,23 @@ the palette ranks with — kept here so host-side search can rank with the same 
   returning `JbcentralActionResult`; none accepts an executable, artifact path, output, URL, or secret from
   the client) / **`jbcentralQuota`** (v59; optional `force` bypasses completed-cache age but still joins an
   in-flight read; disabled/unhealthy returns `hidden` without invoking quota)) /
+  the **background-creation set** (v104, **`WORKSPACE_CREATION_PROTOCOL_VERSION`**; a client facing an
+  older host falls back to `workspace.create`): **`workspace.startCreate`** (`{ projectId, name?, baseRef?,
+  kickoff? }` → a **`WorkspaceCreation`** as soon as the host has reserved its branch and path — the
+  checkout runs afterwards; `kickoff` is a **`WorkspaceKickoff`** `{ text, images?, model?, thinkingLevel? }`
+  the host holds and sends as the first chat message once the workspace exists, so it survives the window
+  closing) / **`workspace.listCreations`** (every creation the host still holds, all projects — a
+  (re)connecting client's hydration) / **`workspace.retryCreation`** (`{ id }`; cleans up an `interrupted` or
+  `failed` creation and runs it again from the start) / **`workspace.dismissCreation`** (`{ id }` → `{ kickoff? }`; cleans up and drops
+  an `interrupted` or `failed` creation, returning its full kickoff so *Edit & retry* can prefill the
+  dialog). A creation's `state` is `running` while the host works on it, `interrupted` when the host
+  restarted mid-create (never resumed on its own), `failed` with `failure: { message, code?, cleanedUp? }` (git's text,
+  for display; `code` is one of `WORKTREE_ADD_FAILED`, `WORKTREE_CHECKOUT_FAILED`,
+  `WORKTREE_CHECKOUT_STALLED`, `WORKSPACE_PATH_TAKEN`; `cleanedUp` only when a partial folder or branch existed
+  and the host removed it); `phase` is `preparing` (fetch + worktree registration) or `checking-out` (with
+  `progress: { done, total }` files once git reports it); `kickoff` on the wire is only a preview
+  `{ text, imageCount }` — images stay host-side. `workspace.create` stays: it starts a creation and
+  resolves the finished `Workspace` /
   **`workspace.listExisting`** (the selected project's unattached Git worktrees, with detached rows
   disabled by status) / **`workspace.openExisting`** (revalidate + register one branch-backed checkout as
   `kind: "external"`, emitting the ordinary `workspace.created`, without mutating Git or disk) /
@@ -876,7 +893,13 @@ the palette ranks with — kept here so host-side search can rank with the same 
   publisher (never a per-client optimistic mutation). `created`/`updated` carry the **full persisted
   `Workspace` snapshot** (idempotent under the transport's last-value replay, so e.g. an agent rename
   racing a manual one merges by `id` — never a delta); `removed` carries a **`WorkspaceRemoved`** id
-  pair (`{ projectId, id }` — the record is already gone) / **`review.changed`** — a workspace's review
+  pair (`{ projectId, id }` — the record is already gone) / the **creation pair** (v104) —
+  **`workspace.creationChanged`** (the full `WorkspaceCreation` snapshot on every state, phase or progress
+  change; progress is throttled host-side) and **`workspace.creationRemoved`**
+  (**`WorkspaceCreationRemoved`** `{ id, projectId, workspace?, sessionId?, kickoffError? }`: with
+  `workspace` when the creation became that workspace (same id; the ordinary `workspace.created` also
+  fires), plus `sessionId` of the chat the host started from the kickoff or `kickoffError` when that chat
+  could not start; without `workspace` when it was dismissed) / **`review.changed`** — a workspace's review
   state changed (emitted by the server's `reviews` publisher on every mutation — UI edits, agent
   `resolve_comment` calls, re-anchoring — so all clients converge, same pattern as the trio) /
   **`turn.changed`** — the `TurnChangeSet` the host just recorded for a settled agent run (emitted by the
@@ -1178,9 +1201,9 @@ and what it loaded, never pi's own types.
 
 ## Voice input
 
-`speech.ts` (re-exported from `index.ts`) is the wire for local dictation, from **`SPEECH_PROTOCOL_VERSION`**, v104:
+`speech.ts` (re-exported from `index.ts`) is the wire for local dictation, from **`SPEECH_PROTOCOL_VERSION`**, v105:
 
-- **Control on the main wire.** `ServerWelcome.speech` seeds a **`SpeechStatus`** (a v104 host always
+- **Control on the main wire.** `ServerWelcome.speech` seeds a **`SpeechStatus`** (a v105 host always
   sends it):
   - `supported` — whether the host platform has a pinned runtime;
   - `install` — `not-installed` | `installing` with phase, byte progress and model | `ready` | `failed`
