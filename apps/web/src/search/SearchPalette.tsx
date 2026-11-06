@@ -4,6 +4,7 @@ import { type Translator, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	type KeyboardEvent as ReactKeyboardEvent,
@@ -328,7 +329,7 @@ function PaletteContent({
 					{previewItem ? <Preview t={t} item={previewItem} /> : null}
 				</div>
 				<footer className="flex h-32 shrink-0 items-center gap-12 border-border-muted border-t px-12 tr-text-metadata text-text-subtle">
-					<div className="flex h-16 min-w-0 flex-1 flex-wrap gap-x-12 overflow-hidden">
+					<div className="@container flex h-16 min-w-0 flex-1 flex-wrap gap-x-12 overflow-hidden">
 						<Hint keys={["↑", "↓"]} label={t("search.hint.select")} />
 						<Hint keys={["↵"]} label={t(enterLabel(selected?.item))} />
 						<Hint keys={["Tab"]} label={t("search.hint.scope")} />
@@ -399,10 +400,12 @@ function Keycaps({ keys }: { keys: readonly string[] }) {
 
 function Hint({ keys, label }: { keys: readonly string[]; label: string }) {
 	return (
-		<span className="flex shrink-0 items-center gap-4">
-			<Keycaps keys={keys} />
-			{label}
-		</span>
+		<IconTooltip label={label} side="top">
+			<span className="flex shrink-0 items-center gap-4">
+				<Keycaps keys={keys} />
+				<span className="hidden @[296px]:inline">{label}</span>
+			</span>
+		</IconTooltip>
 	);
 }
 
