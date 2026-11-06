@@ -124,10 +124,9 @@ The installer takes `--channel stable|nightly` and `--version`; a pinned version
 selected channel:
 
 ```bash
-thinkrail update --channel stable
-thinkrail update --channel nightly
-thinkrail update --channel stable --version 0.3.1
-thinkrail update --channel nightly --version 0.4.0-nightly.2
+curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --channel nightly
+curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --channel stable --version 0.3.1
+curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --channel nightly --version 0.4.0-nightly.2
 ```
 
 On Windows the options are environment variables (`THINKRAIL_CHANNEL`, `THINKRAIL_VERSION`, `THINKRAIL_PREFIX`, `THINKRAIL_NO_MODIFY_PATH`):
@@ -142,6 +141,8 @@ If you keep ThinkRail running, it periodically checks for updates and, when it f
 `thinkrail uninstall` removes the executable, the PATH entry the installer added, and the install metadata; it then asks whether to delete your `~/.thinkrail` app state (kept by default; `--remove-data` deletes it, and `-y` skips the questions).
 
 If you prefer a manual install, download a binary and the `SHA256SUMS` from the releases page, and verify the checksum. For self-update to work, rename it to `thinkrail` (`thinkrail.exe` on Windows) and place it at `<prefix>/bin/thinkrail[.exe]`; a binary kept under its release filename or elsewhere must be replaced manually or reinstalled with the script.
+
+</details>
 
 ### Platform notes
 
