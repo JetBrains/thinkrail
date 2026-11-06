@@ -9,11 +9,11 @@ parent: module-web
 # `apps/web/scripts`
 
 Build-time tooling for `apps/web`. **Nothing here ships**: these modules run under Bun on a developer's
-machine or in CI, never in the browser bundle. They read files from `src/`, write generated files back
-into `src/`, and exit with a status code.
+machine or in CI, never in the browser bundle. They read files from `src/`, and the generators write
+generated files back into `src/`; every script exits with a status code.
 
 The directory holds four pipelines — typography, colour, spacing and provider glyphs — built the same way, plus the
-React Compiler census: a diagnostic whose baseline is a ratchet gate. They live here rather than in `src/` because
+React Compiler census, a diagnostic whose baseline is a ratchet gate, and the build's typecheck step. They live here rather than in `src/` because
 they are *generators*: they use `node:fs` and `node:path`, which must never reach browser-bundled code.
 
 ## What it owns
@@ -36,6 +36,7 @@ they are *generators*: they use `node:fs` and `node:path`, which must never reac
 | `compiler-census.ts` | CLI. Runs `babel-plugin-react-compiler` with a logger over app, shared UI, and extension web sources (tests, stories and generated data excluded) and prints every function the compiler bails out on as `file:line: [fn] category: reason`, plus totals; `--json` prints the full census. Run: `bun run --cwd apps/web compiler:census [--json]`. `--write` renders the bailed-out functions to `compiler-census.baseline.txt` as `file fnName`, line-free so edits above them don't churn it. `fnName` is lexical, never positional: the binding a function is assigned to (through wrapping calls like `memo(…)`), else its own name, qualified by its named enclosing functions (`factory.Row`). Two compiler units in one file with the same identity fail the census, because neither a line nor an ordinal survives an insertion above them. `--check` (`bun run check:compiler`, CI) fails on any drift and names each function that newly bails out or now compiles. A new bail-out is fixed, or accepted by regenerating (`bun run compiler:census:generate`). |
 | `compiler-census.baseline.txt` | The committed census baseline. |
 | `compiler-census.test.ts` | pins that a function's baseline identity survives inserting a sibling before it, that nested functions are qualified by their owners, and that indistinguishable compiler units are rejected. |
+| `build-typecheck.ts` | The `tsc --noEmit` step of `bun run build`. `THINKRAIL_WEB_BUILD_TYPECHECK=0` skips it, so CI's browser and artifact jobs bundle without re-running the web typecheck that its Lint & Typecheck job already gates ([[module-ci-release]]); local and release builds still typecheck. |
 
 `designSources.ts` owns the shared adoption-guard and compiler-census source scan: app source, `packages/ui`, and every
 `thinkrail-extensions/*/web` source tree, excluding tests, generated output, and installed dependencies.

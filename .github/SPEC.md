@@ -92,6 +92,11 @@ the Electrobun core and its Bun toolchain, all GitHub release assets) through
 `electrobun build` and the typecheck's own `prepare` then find it in `~/.hutch`. Before that step, a dropped
 release download (`ReleaseDownloadFailed`, a timed-out Hutch index) failed whole desktop jobs, 6 in two weeks.
 
+Every web build inside a browser or artifact job skips the web `tsc --noEmit` its build script otherwise
+runs (`THINKRAIL_WEB_BUILD_TYPECHECK=0` at workflow level): the identical command already gates the run in
+Lint & Typecheck, which no classifier skips, and repeating it cost about 20 s on each of a full run's thirteen
+web builds, critical path included. The generator `--check`s stay in the build, so they keep gating.
+
 Native artifact smokes run only in shard 1: repeating an identical probe per shard adds no coverage and
 multiplies exposure to runner-environment faults.
 
