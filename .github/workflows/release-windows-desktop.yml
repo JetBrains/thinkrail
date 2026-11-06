@@ -2,8 +2,6 @@ name: Release Windows desktop
 
 on:
   workflow_dispatch:
-  push:
-    branches: [windows-desktop-release]
 
 permissions:
   contents: read
