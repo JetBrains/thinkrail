@@ -64,6 +64,7 @@ import {
 	TURN_CHANGES_PROTOCOL_VERSION,
 	USER_THEMES_PROTOCOL_VERSION,
 	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
+	WORKSPACE_CREATION_PROTOCOL_VERSION,
 	WORKSPACE_READ_STATE_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	WS_CHANNELS,
@@ -250,6 +251,17 @@ test("user-selectable fonts are pinned to v102", () => {
 	expect(WS_CHANNELS.fontsChanged).toBe("fonts.changed");
 });
 
+test("background workspace creation is pinned to v104", () => {
+	expect(WORKSPACE_CREATION_PROTOCOL_VERSION).toBe(104);
+	expect(PROTOCOL_VERSION).toBe(104);
+	expect(WS_METHODS.workspaceStartCreate).toBe("workspace.startCreate");
+	expect(WS_METHODS.workspaceListCreations).toBe("workspace.listCreations");
+	expect(WS_METHODS.workspaceRetryCreation).toBe("workspace.retryCreation");
+	expect(WS_METHODS.workspaceDismissCreation).toBe("workspace.dismissCreation");
+	expect(WS_CHANNELS.workspaceCreationChanged).toBe("workspace.creationChanged");
+	expect(WS_CHANNELS.workspaceCreationRemoved).toBe("workspace.creationRemoved");
+});
+
 test("user theme files are pinned to v92", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(USER_THEMES_PROTOCOL_VERSION);
 	expect(USER_THEMES_PROTOCOL_VERSION).toBe(92);
@@ -319,7 +331,7 @@ test("project create and the onboarding dismissal are pinned to v94", () => {
 
 test("the GitHub star ask is pinned to v103", () => {
 	expect(GITHUB_STAR_PROTOCOL_VERSION).toBe(103);
-	expect(PROTOCOL_VERSION).toBe(103);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(GITHUB_STAR_PROTOCOL_VERSION);
 	expect(WS_CHANNELS.feedbackGithubStar).toBe("feedback.githubStar");
 });
 

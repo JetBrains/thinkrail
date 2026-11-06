@@ -927,7 +927,6 @@
 	"panels.projectTree.copyPath": "パスをコピー",
 	"panels.projectTree.createWorkspace": "ワークスペースを作成",
 	"panels.projectTree.createWorkspaceShortcut": "ワークスペースを作成({{shortcut}} または {{altShortcut}})",
-	"panels.projectTree.creatingWorktree": "ワークツリーを作成中…",
 	"panels.projectTree.expandProject": "プロジェクトを展開",
 	"panels.projectTree.keepActive": "アクティブのまま維持",
 	"panels.projectTree.keepActiveLabel": "{{name}} をアクティブのまま維持",

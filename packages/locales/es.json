@@ -1010,7 +1010,6 @@
 	"panels.projectTree.copyPath": "Copiar ruta",
 	"panels.projectTree.createWorkspace": "Crear espacio de trabajo",
 	"panels.projectTree.createWorkspaceShortcut": "Crear espacio de trabajo ({{shortcut}} o {{altShortcut}})",
-	"panels.projectTree.creatingWorktree": "Creando worktree…",
 	"panels.projectTree.expandProject": "Expandir proyecto",
 	"panels.projectTree.keepActive": "Mantener activo",
 	"panels.projectTree.keepActiveLabel": "Mantener {{name}} activo",

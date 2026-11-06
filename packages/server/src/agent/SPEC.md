@@ -321,6 +321,8 @@ re-opened transcripts provider-valid.
     New-session and pre-session entrypoints capture the current generation; operations on a live session use
     that session's retained runtime. `abort` remains available as the cancellation control path.
     `prompt`/`steer`/`followUp` (with images) /
+    — `promptSession`'s optional `onPreflight` fires with pi's `preflightResult` (model and auth validated,
+    the run started, queued or handled), which lets a caller stop waiting before the agent's turn ends
     — **both `promptSession` and `followUpSession` resolve the delivery mode against the session's
     LIVE `isStreaming`, never the caller's belief about it**: `prompt()` throws mid-turn (so it falls
     back to `steer`), and pi's `followUp()` only *enqueues* into a queue that a run already in flight
