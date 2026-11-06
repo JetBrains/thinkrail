@@ -131,8 +131,13 @@ extension had to adopt and wire up. It was replaced so voice is a property of th
   - Pressing the mic never moves focus (`onMouseDown` prevents default). Dictation failures are toasts.
 - **Lifecycle** (`control.ts`).
   - `startDictation(field)` focuses the field, takes its writer, locks it, announces
-    `thinkrail:dictation`, and starts the page's one dictation. Esc (captured), blur, or a newer start
-    ends it.
+    `thinkrail:dictation`, and starts the page's one dictation. Blur or a newer start ends it; the
+    chord or the mic stop it on purpose.
+  - **Esc is not a dictation key** (user decision). It keeps whatever meaning the page gives it:
+    Escape in a dialog closes the dialog, whose field blur then ends the dictation and drops its draft
+    with it, exactly as for typed text. An earlier version stopped dictation on Esc. A dialog's
+    dismiss runs first, so making Esc stop dictation without closing the dialog would have needed a
+    second window capture owner of Escape.
   - When the controller goes idle or changes owner, the field is unlocked and the end is announced.
   - Owners are per element (`WeakMap`), so starting another field ends the first.
 - **Chord.** ⌘⇧Space on Apple, Ctrl+Shift+Space elsewhere, through one pair of window capture listeners.
@@ -144,8 +149,8 @@ extension had to adopt and wire up. It was replaced so voice is a property of th
     focuses it. Otherwise the chord passes through untouched.
   - A tap toggles. A press that started a dictation and is held ≥ 300 ms stops on release
     (push-to-talk). Repeats are swallowed.
-- **An active IME owns its keys** (apps/web's IME rule): the chord, the lock's Enter swallow and the
-  dictation's Escape all yield to an open composition (`isImeComposing`).
+- **An active IME owns its keys** (apps/web's IME rule): the chord and the lock's Enter swallow
+  both yield to an open composition (`isImeComposing`).
 - **Submit holding** is generic: the lock swallows Enter, ⌘↩ included. A field whose owner has its own
   submit button can hold it on `thinkrail:dictation`, as the composer does with Send. Buttons elsewhere
   are not disabled.

@@ -1,4 +1,3 @@
-import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { useSyncExternalStore } from "react";
 import { dictation } from "./dictation";
 import { announceDictation, fieldWriter } from "./field";
@@ -35,27 +34,19 @@ export function useDictatingElement(): HTMLElement | null {
 	return useSyncExternalStore(dictation.subscribe, dictatingElement);
 }
 
-/** Dictates into `element`: locks it, writes through its field writer, and stops on Esc or blur. */
+/** Dictates into `element`: locks it, writes through its field writer, and stops on blur. */
 export function startDictation(element: HTMLElement): void {
 	const owner = ownerOf(element);
 	element.focus();
 	const writer = fieldWriter(element);
 	const unlock = writer.lock();
-	const onKeyDown = (event: KeyboardEvent) => {
-		if (event.key !== "Escape" || isImeComposing(event)) return;
-		event.preventDefault();
-		event.stopImmediatePropagation();
-		dictation.stop(owner);
-	};
 	const onBlur = () =>
 		setTimeout(() => {
 			if (!document.hasFocus() || !element.contains(document.activeElement)) dictation.stop(owner);
 		});
-	element.addEventListener("keydown", onKeyDown, true);
 	element.addEventListener("blur", onBlur);
 	const release = () => {
 		unlock();
-		element.removeEventListener("keydown", onKeyDown, true);
 		element.removeEventListener("blur", onBlur);
 		announceDictation(element, false);
 	};

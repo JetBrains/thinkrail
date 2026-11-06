@@ -121,7 +121,7 @@ test("dictation streams into the draft, locks it while listening, and never send
 	await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toHaveCount(0);
 });
 
-test("the keyboard chord toggles dictation and Esc stops it, keeping the text", async ({
+test("the keyboard chord toggles dictation, keeping the text, and Esc is not a dictation key", async ({
 	page,
 }) => {
 	await openChat(page);
@@ -138,6 +138,9 @@ test("the keyboard chord toggles dictation and Esc stops it, keeping the text", 
 	await page.keyboard.press("ControlOrMeta+Shift+Space");
 	await expect(mic(page)).toHaveAttribute("data-mic-state", "listening");
 	await page.keyboard.press("Escape");
+	await page.waitForTimeout(300);
+	await expect(mic(page)).toHaveAttribute("data-mic-state", "listening");
+	await page.keyboard.press("ControlOrMeta+Shift+Space");
 	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
 	await expect(input).toHaveValue(/^Hello/);
 
@@ -224,8 +227,13 @@ test("a dialog's field gets the mic inside the dialog and Enter cannot create mi
 	await dialogMic.click();
 	await expect(dialogMic).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
 	await expect(prompt).toHaveValue(FAKE_SPEECH_TEXT);
+
+	await dialogMic.click();
+	await expect(dialogMic).toHaveAttribute("data-mic-state", "listening");
 	await page.keyboard.press("Escape");
 	await expect(dialog).toBeHidden();
+	await page.getByTestId("chat-input").focus();
+	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
 });
 
 test("a review comment takes dictation and ⌘↩ cannot send it mid-dictation", async ({ page }) => {
@@ -277,7 +285,7 @@ test("any field a page adds gets voice, with no code in it; passwords never do",
 	await page.keyboard.press("End");
 	await page.keyboard.press("ControlOrMeta+Shift+Space");
 	await expect(rich).toHaveText(`Note: ${FAKE_SPEECH_TEXT}`, { timeout: 15_000 });
-	await page.keyboard.press("Escape");
+	await page.keyboard.press("ControlOrMeta+Shift+Space");
 	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
 	await page.locator("#ext-secret").focus();
 	await expect(mic(page)).toBeHidden();
