@@ -195,7 +195,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   handler and publisher `createServer` installed is scoped to the server's lifetime and returns to its
   module default, so a later server in the same process (the unit suite boots many) never inherits a
   stopped one's policy or publish path; `shutdown()` memoizes one asynchronous graceful
-  path: bounded `settleSessionsForShutdown()` + awaited `shutdownAnalytics()` first, then
+  path: bounded `settleSessionsForShutdown()` + awaited `shutdownAnalytics()` + `stopWorkspaceCreations()`
+  (running checkouts are killed so the next start reports them `interrupted`) first, then
   `turnTracker.drain()` for the receipts those settlements started, then `stop()`). The
   bounded settle includes hidden delegation children even when their parent is
   idle, plus child cascades already started by a concurrent removal, so graceful quit does not let a
@@ -551,10 +552,22 @@ channel fan-out, and the process-boot wrapper both launchers share.
   recovery, when the transcript is genuinely gone from disk (there is no UI to close a review and
   start over, so wedging it would be worse); every other re-open failure throws rather than silently
   forking the conversation.
-- **Scratch-dir seeding on chat start:** the `session.create` handler calls `workspaces`'
-  `ensureWorkspaceScratchDir` before creating the session — the Default workspace's gitignored
-  `.thinkrail/context/` lands in the user's repo only when a chat actually starts there (and a
-  worktree's deleted scratch dir self-heals). Host-composed — no new module edges.
+- **Scratch-dir seeding on chat start:** every chat start (`session.create` and the creation handoff below)
+  goes through one `startChat` that calls `workspaces`' `ensureWorkspaceScratchDir` before creating the
+  session — the Default workspace's gitignored `.thinkrail/context/` lands in the user's repo only when a chat
+  actually starts there (and a worktree's deleted scratch dir self-heals). Host-composed — no new module edges.
+- **Background workspace creation (v103):** `workspace.startCreate` / `listCreations` / `resumeCreation` /
+  `dismissCreation` front `workspaces`' creation job, and `createServer` marks leftover running creations
+  `interrupted` before it serves, installs the creation publisher (`workspace.creationChanged` /
+  `workspace.creationRemoved`, subscribed only by v103+ sockets) and the **handoff**
+  `workspaceCreationHandoff`: when a checkout finishes it provisions the initial terminal and, when the create
+  carried a kickoff, starts the chat through `startChat` (the kickoff's model/effort, else the saved defaults)
+  and sends its text/images through `sendUserMessage` under the `clientKey` that started (or last resumed) the
+  creation, so the chat runs even with no window open. A prompt rejected inside the ack window comes back as
+  `kickoffError` beside the `sessionId`; an empty kickoff starts the chat without a prompt, so the start
+  surface always lands in a chat. The client key is remembered in memory only and dropped after the handoff or
+  a successful dismiss. `workspace.create` stays a start-and-await over the same job (wire and e2e callers);
+  its setup observation, like `startCreate`'s, wraps the whole job.
 - **Project lifecycle fan-out:** `createServer` installs the `projects` module's publisher and maps every
   authoritative open/reopen/close snapshot to **`project.updated`**. The WS `open` handler subscribes to
   that channel and hydrates two views in `server.welcome`: `projects` (open records only) and
@@ -695,6 +708,7 @@ enabled/confirmed choice before entering analytics attribution.
 - WS commands return values directly; only events + extension-UI + **`project.updated`** (published from
   the `projects` module's injected publisher) + the workspace lifecycle trio
   (`workspace.created`/`updated`/`removed`, published from the `workspaces` module's injected publisher) +
+  the creation pair (`workspace.creationChanged`/`creationRemoved`, from its creation publisher) +
   **`session.deleted`** (published from the agent module's injected publisher) + **`provider.changed`**
   (published from auth's Central/runtime invalidation seam and on a successful provider login) + **`host.updateAvailable`** (published for each
   retained CLI-update lifecycle replacement) use push channels. Every

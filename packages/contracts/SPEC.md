@@ -711,8 +711,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `failed` creation again) / **`workspace.dismissCreation`** (`{ id }` → `{ kickoff? }`; cleans up and drops
   an `interrupted` or `failed` creation, returning its full kickoff so *Edit & retry* can prefill the
   dialog). A creation's `state` is `running` while the host works on it, `interrupted` when the host
-  restarted mid-create (never resumed on its own), `failed` with `failure: { message, code? }` (git's text,
-  for display); `phase` is `preparing` (fetch + worktree registration) or `checking-out` (with
+  restarted mid-create (never resumed on its own), `failed` with `failure: { message, code?, cleanedUp? }` (git's text,
+  for display; `code` is one of `WORKTREE_ADD_FAILED`, `WORKTREE_CHECKOUT_FAILED`,
+  `WORKTREE_CHECKOUT_STALLED`, `WORKSPACE_PATH_TAKEN`; `cleanedUp` only when a partial folder or branch existed
+  and the host removed it); `phase` is `preparing` (fetch + worktree registration) or `checking-out` (with
   `progress: { done, total }` files once git reports it); `kickoff` on the wire is only a preview
   `{ text, imageCount }` — images stay host-side. `workspace.create` stays: it starts a creation and
   resolves the finished `Workspace` /
