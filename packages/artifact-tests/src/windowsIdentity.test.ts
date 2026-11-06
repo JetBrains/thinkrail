@@ -113,7 +113,12 @@ test("verifies fork string and fixed numeric versions independently", () => {
 		const build = (value: WindowsFileIdentity) =>
 			executable(
 				frames.map(({ bytes }) => bytes),
-				[iconGroup(1, frames.map(({ size }, index) => ({ size, iconID: index + 1 })))],
+				[
+					iconGroup(
+						1,
+						frames.map(({ size }, index) => ({ size, iconID: index + 1 })),
+					),
+				],
 				value,
 			);
 		expect(windowsIdentityMismatches(build(fork), fork, icon)).toEqual([]);

@@ -33,10 +33,10 @@ jobs:
       - name: Check release source formatting
         run: bunx biome check .github/scripts/windows-release.ts .github/scripts/windows-release.test.ts packages/shared/src/windowsIdentity.ts packages/shared/src/windowsIdentity.test.ts apps/desktop/electrobun.config.ts apps/desktop/src/buildConfig.test.ts packages/artifact-tests/src/windowsIdentity.ts packages/artifact-tests/src/windowsIdentity.test.ts
       - name: Resolve upstream once and stamp release identity
-        id: metadata
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bun .github/scripts/windows-release.ts prepare
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: bun .github/scripts/windows-release.ts prepare "$env:RELEASE_REPOSITORY"
       - name: Prepare desktop toolchain
         shell: bash
         run: bash .github/scripts/prepare-electrobun.sh
@@ -92,4 +92,5 @@ jobs:
       - name: Refuse existing tag/release and publish at exact checkout SHA
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bun .github/scripts/windows-release.ts publish
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: bun .github/scripts/windows-release.ts publish "$env:RELEASE_REPOSITORY"

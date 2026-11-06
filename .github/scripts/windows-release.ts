@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { appendFileSync, copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const upstreamRepository = "JetBrains/thinkrail";
@@ -90,7 +90,7 @@ function assertAbsent(repository: string, tag: string): void {
 }
 
 function repository(): string {
-	const value = process.env.GITHUB_REPOSITORY;
+	const value = process.argv[3];
 	if (!value || !/^[\w.-]+\/[\w.-]+$/.test(value)) throw new Error("GITHUB_REPOSITORY required");
 	return value;
 }
@@ -106,13 +106,6 @@ if (import.meta.main) {
 		assertAbsent(repository(), metadata.tag);
 		writeFileSync(".windows-release.json", `${JSON.stringify(metadata, null, 2)}\n`);
 		writeFileSync("packages/shared/src/version.ts", stampVersion(metadata));
-		if (!process.env.GITHUB_OUTPUT) throw new Error("GITHUB_OUTPUT required");
-		appendFileSync(
-			process.env.GITHUB_OUTPUT,
-			Object.entries(metadata)
-				.map(([key, value]) => `${key}=${value}\n`)
-				.join(""),
-		);
 	} else if (command === "collect") {
 		const metadata = JSON.parse(readFileSync(".windows-release.json", "utf8")) as Metadata;
 		collectAssets(metadata, "apps/desktop/artifacts/win-x64-ThinkRail-Setup.zip", "release-assets");
