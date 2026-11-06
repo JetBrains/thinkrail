@@ -152,8 +152,9 @@ test("a hint names only unlisted skills the prompt matches distinctively, once e
 async function catalogFixture() {
 	const cwd = mkdtempSync(join(tmpdir(), "thinkrail-skill-catalog-"));
 	const agentDir = join(cwd, ".pi-agent");
-	const write = (name: string, description: string) => {
-		const dir = join(agentDir, "skills", name);
+	const hostSkills = join(cwd, "host-skills");
+	const write = (root: string, name: string, description: string) => {
+		const dir = join(root, name);
 		mkdirSync(dir, { recursive: true });
 		writeFileSync(
 			join(dir, "SKILL.md"),
@@ -161,9 +162,9 @@ async function catalogFixture() {
 		);
 	};
 	for (let i = 0; i < 300; i++)
-		write(`chore-${i}`, `Handles routine chore ${i}. ${"Filler ".repeat(30)}`);
-	write("zz-invoice-ledger", "Reconcile invoices against the ledger.");
-	write("zz-quokka-payments", "Settle quokka payments with the bank.");
+		write(hostSkills, `chore-${i}`, `Handles routine chore ${i}. ${"Filler ".repeat(30)}`);
+	write(join(agentDir, "skills"), "aa-invoice-ledger", "Reconcile invoices against the ledger.");
+	write(join(agentDir, "skills"), "aa-quokka-payments", "Settle quokka payments with the bank.");
 	const faux = createFauxCore({
 		provider: "catalog-probe",
 		api: "catalog-probe",
@@ -197,6 +198,7 @@ async function catalogFixture() {
 		cwd,
 		agentDir,
 		settingsManager,
+		additionalSkillPaths: [hostSkills],
 		extensionFactories: [skillCatalog],
 	});
 	await resourceLoader.reload();
@@ -250,14 +252,15 @@ test("a pi session with an oversized catalog gets the budgeted section and finds
 		const section = skillSections[0] ?? "";
 		expect(section).toContain(`call ${SKILL_SEARCH_TOOL}`);
 		expect(section).toMatch(/<name>chore-\d+<\/name>/);
-		expect(section).not.toContain("<name>zz-invoice-ledger</name>");
+		expect(section).not.toContain("<name>aa-invoice-ledger</name>");
+		expect(section).not.toContain("<name>aa-quokka-payments</name>");
 		expect(section.length).toBeLessThan(catalogBudgetChars(faux.getModel()) + 40);
 		expect(results.join("\n")).toContain(
-			"- zz-invoice-ledger: Reconcile invoices against the ledger.",
+			"- aa-invoice-ledger: Reconcile invoices against the ledger.",
 		);
-		expect(results.join("\n")).toContain(join(agentDir, "skills", "zz-invoice-ledger", "SKILL.md"));
+		expect(results.join("\n")).toContain(join(agentDir, "skills", "aa-invoice-ledger", "SKILL.md"));
 		expect(hints).toHaveLength(1);
-		expect(hints[0]).toContain("- zz-invoice-ledger: Reconcile invoices against the ledger.");
+		expect(hints[0]).toContain("- aa-invoice-ledger: Reconcile invoices against the ledger.");
 		const entries = session.sessionManager.getBranch();
 		const hintEntries = (branch: typeof entries) =>
 			branch.filter((e) => e.type === "custom_message" && e.customType === SKILL_HINT_CUSTOM_TYPE);
@@ -266,7 +269,7 @@ test("a pi session with an oversized catalog gets the budgeted section and finds
 		expect(hintEntries(session.sessionManager.getBranch())).toHaveLength(1);
 		await session.prompt("Settle the quokka payments.");
 		expect(hintEntries(session.sessionManager.getBranch())).toHaveLength(2);
-		expect(hints.at(-1)).toContain("- zz-quokka-payments: Settle quokka payments with the bank.");
+		expect(hints.at(-1)).toContain("- aa-quokka-payments: Settle quokka payments with the bank.");
 	} finally {
 		session.dispose();
 		rmSync(cwd, { recursive: true, force: true });
@@ -288,7 +291,7 @@ test("a session that cannot call skill_search keeps pi's full skill listing", as
 		await session.prompt("Reconcile this month's invoices.");
 		const section = skillSections[0] ?? "";
 		expect(section).not.toContain(SKILL_SEARCH_TOOL);
-		expect(section).toContain("<name>zz-invoice-ledger</name>");
+		expect(section).toContain("<name>aa-invoice-ledger</name>");
 	} finally {
 		session.dispose();
 		rmSync(cwd, { recursive: true, force: true });
