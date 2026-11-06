@@ -175,6 +175,7 @@ test("a keyed gateway is found, saved to models.json, chatted with, edited and r
 
 	await openProviders(page);
 	await endpoint.getByTestId("custom-endpoints-edit").click();
+	await dialog.getByTestId("custom-endpoints-detect").click();
 	await expect(dialog.getByTestId("custom-endpoints-status")).toHaveAttribute("data-tone", "ok");
 	await expect(
 		dialog
