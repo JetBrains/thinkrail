@@ -26,7 +26,7 @@ async function openLanguageSettings(page: Page) {
 }
 
 test.afterEach(async ({ page }) => {
-	for (const name of ["de.json", "fr.json"]) removeLocale(name);
+	for (const name of ["de.json", "fr.json", "ja.json"]) removeLocale(name);
 	if (page.isClosed()) return;
 	const section = await openLanguageSettings(page);
 	const system = section.getByTestId("language-system");
@@ -78,6 +78,83 @@ test("a local language file is listed, selectable, live-reloaded, and survives d
 	writeLocale("de.json", JSON.stringify({ "settings.nav.language": "Sprache" }));
 	await expect(page.getByTestId("language-de")).toHaveAttribute("data-active", "true");
 	await expect(page.locator("html")).toHaveAttribute("lang", "de");
+});
+
+test("a built-in translation downloads only when picked and renders after a reload", async ({
+	page,
+}) => {
+	const translationFiles: string[] = [];
+	page.on("request", (request) => {
+		if (/\/assets\/(?:es|ja|ru|zh-CN)-[\w-]+\.json$/.test(request.url())) {
+			translationFiles.push(request.url());
+		}
+	});
+	await openFixtureProject(page);
+	const section = await openLanguageSettings(page);
+	expect(translationFiles).toEqual([]);
+
+	await section.getByTestId("language-es").click();
+	await expect(page.locator("html")).toHaveAttribute("lang", "es");
+	await expect(page.getByTestId("settings-nav-language")).toContainText("Idioma");
+	expect(translationFiles).toHaveLength(1);
+	expect(translationFiles[0]).toContain("/assets/es-");
+
+	await page.reload();
+	await openLanguageSettings(page);
+	await expect(page.locator("html")).toHaveAttribute("lang", "es");
+	await expect(page.getByTestId("settings-nav-language")).toContainText("Idioma");
+});
+
+test("a local file for a built-in language downloads its translation only when that language is picked", async ({
+	page,
+}) => {
+	writeLocale("ja.json", JSON.stringify({ "settings.nav.language": "言語 (local)" }));
+	const translationFiles: string[] = [];
+	page.on("request", (request) => {
+		if (/\/assets\/(?:es|ja|ru|zh-CN)-[\w-]+\.json$/.test(request.url())) {
+			translationFiles.push(request.url());
+		}
+	});
+	await openFixtureProject(page);
+	const section = await openLanguageSettings(page);
+	await expect(section.getByTestId("language-ja")).toContainText(
+		"Built-in, customized by local file",
+	);
+	await expect(page.locator("html")).toHaveAttribute("lang", "en");
+	expect(translationFiles).toEqual([]);
+
+	await section.getByTestId("language-es").click();
+	await expect(page.getByTestId("settings-nav-language")).toContainText("Idioma");
+	expect(translationFiles).toHaveLength(1);
+	expect(translationFiles[0]).toContain("/assets/es-");
+
+	await section.getByTestId("language-ja").click();
+	await expect(page.locator("html")).toHaveAttribute("lang", "ja");
+	await expect(page.getByTestId("settings-nav-language")).toContainText("言語 (local)");
+	expect(translationFiles).toHaveLength(2);
+	expect(translationFiles[1]).toContain("/assets/ja-");
+});
+
+test("a translation that failed to download loads when its selected row is clicked again", async ({
+	page,
+}) => {
+	const translation = /\/assets\/es-[\w-]+\.json$/;
+	await page.route(translation, (route) => route.abort());
+	await openFixtureProject(page);
+	const section = await openLanguageSettings(page);
+	const failed = page.waitForEvent("requestfailed", (request) => translation.test(request.url()));
+	await section.getByTestId("language-es").click();
+	await failed;
+	await expect(section.getByTestId("language-es")).toHaveAttribute("data-active", "true");
+	await expect(page.locator("html")).toHaveAttribute("lang", "en");
+	await expect(page.getByTestId("settings-nav-language")).toContainText("Language");
+
+	await page.unroute(translation);
+	await page.waitForTimeout(500);
+	await expect(page.locator("html")).toHaveAttribute("lang", "en");
+	await section.getByTestId("language-es").click();
+	await expect(page.locator("html")).toHaveAttribute("lang", "es");
+	await expect(page.getByTestId("settings-nav-language")).toContainText("Idioma");
 });
 
 test("switching language re-renders cached labels, markup strings and a mounted editor's controls, including live catalog edits", async ({

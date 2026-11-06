@@ -25,8 +25,8 @@ instance ([[module-locales]] `./react`). Components never do this themselves: th
   `languagechange`), and the one apply effect — install overlays, switch language, set `<html lang>`,
   push the desktop menu and dialog labels through the optional `__THINKRAIL_NATIVE_MENU__` bridge (`pushNativeMenuLabels`).
 - **Public surface (barrel):** `useLocaleSync()` (mounted once by `main.tsx`'s `App`),
-  `useSystemLanguages()`, `localeSignature`, and the pure `languageOptions`, `effectiveLocale`,
-  `availableLocales`, `localOverlays`.
+  `useSystemLanguages()`, `localeSignature`, `retryLocale()`, and the pure `languageOptions`,
+  `effectiveLocale`, `availableLocales`, `localOverlays`.
 - **Allowed deps:** `store`, `@thinkrail/locales`, `@thinkrail/contracts` (types).
 - **Forbidden:** rendering UI (the Language page lives in `panels`), reading files, a second i18next
   instance.
@@ -39,7 +39,13 @@ instance ([[module-locales]] `./react`). Components never do this themselves: th
   re-renders and recomputes ([[module-locales]] § Render reads the translator as a value).
 
 - English is installed synchronously before first paint, so nothing renders keys while the host
-  connects; local strings arrive later and re-render in place.
+  connects; a bundled translation file and local strings arrive later and re-render in place. When an
+  apply settles, `<html lang>` and the desktop labels follow `currentLocale()`, the language that really
+  renders: after a failed download, the first chain language with strings (English unless a local file
+  covers it). The next language or catalog change retries the download, and so does `retryLocale()`,
+  which the Language page calls when the already selected row is clicked again. `useLocaleSync` leaves the
+  rejection unhandled on purpose, so the global unhandled-rejection reporter sends it to error tracking as
+  `TranslationLoadError`.
 - A selected local tag that disappears (file deleted, now broken, or a host without
   `LOCALES_PROTOCOL_VERSION`) renders English while the preference stays untouched, and returns when the
   file does.

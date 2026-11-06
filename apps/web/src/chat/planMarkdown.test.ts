@@ -229,8 +229,8 @@ test("unattributed changes compile as their own section, after the items", () =>
 	);
 });
 
-test("the export follows the interface language, plural forms included", () => {
-	applyLocale("ru", {
+test("the export follows the interface language, plural forms included", async () => {
+	await applyLocale("ru", {
 		ru: {
 			"chat.planExport.title": "План — {{title}}",
 			"chat.planExport.progress": "Готово: {{done}} из {{total}}",
