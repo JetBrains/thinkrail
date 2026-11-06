@@ -174,6 +174,37 @@ test("clicking the mic while a model downloads cancels the download", async ({ p
 	}
 });
 
+test("switching voice input off mid-download keeps the download's progress and Cancel in Settings", async ({
+	page,
+	baseURL,
+}) => {
+	await openChat(page);
+	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready");
+	const stopServer = await serveSlowModel();
+	const wire = await hostWire(baseURL);
+	try {
+		await page.getByTestId("open-settings").click();
+		await page.getByTestId("settings-nav-voice").click();
+		const voice = page.getByTestId("settings-voice");
+		await voice.getByTestId("settings-voice-language-english").click();
+		await expect(voice.getByTestId("settings-voice-status")).toContainText("Downloading");
+		await voice.getByTestId("settings-voice-toggle").click();
+		await expect(voice.getByTestId("settings-voice-toggle")).toHaveAttribute(
+			"data-active",
+			"false",
+		);
+		await expect(voice.getByTestId("settings-voice-language")).toHaveCount(0);
+		await voice.getByTestId("settings-voice-cancel").click();
+		await expect(voice.getByTestId("settings-voice-status")).toHaveCount(0);
+		expect(existsSync(join(SPEECH_DIR, "models", "english.gguf.partial"))).toBe(false);
+	} finally {
+		await wire.request("settings.update", { config: { voiceInputEnabled: true } });
+		wire.close();
+		await stopServer();
+	}
+	await page.keyboard.press("Escape");
+});
+
 test("a dialog's field gets the mic inside the dialog and Enter cannot create mid-dictation", async ({
 	page,
 }) => {

@@ -986,7 +986,8 @@ a project picker, the prompt hero, and the reused
   version, backend or PATH text, which an earlier version showed and users found unreadable (the
   speech SPECs carry those details).
   - **Voice input:** a switch for `AppConfig.voiceInputEnabled` (`settings.update`). While it is off,
-    only this row and Delete voice files remain.
+    only this row and Delete voice files remain, plus Status while a download is still running, so its
+    progress and Cancel never disappear.
   - **Status:** not set up (with the download size), downloading with a percentage, ready, or the
     failure in error colour. Its action is Download, Try again, or Cancel download.
   - **Language:** an All languages / English only segmented control. Selecting the other one sends

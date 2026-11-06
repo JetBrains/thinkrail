@@ -96,38 +96,40 @@ export function VoiceSettings() {
 					/>
 				}
 			/>
+			{enabled || installing ? (
+				<SettingsRow
+					label={t("settings.voice.status")}
+					description={<StatusText status={status} />}
+					testId="settings-voice-status"
+					control={
+						installing ? (
+							<Button
+								variant="outline"
+								size="m"
+								data-testid="settings-voice-cancel"
+								onClick={() => void cancelInstall()}
+							>
+								{t("settings.voice.cancel")}
+							</Button>
+						) : install.status === "ready" ? null : (
+							<Button
+								variant="primary"
+								size="m"
+								data-testid="settings-voice-install"
+								onClick={() =>
+									void installModel(install.status === "failed" ? install.model : "multilingual")
+								}
+							>
+								{install.status === "failed"
+									? t("speech.offer.retry")
+									: t("settings.voice.download")}
+							</Button>
+						)
+					}
+				/>
+			) : null}
 			{enabled ? (
 				<>
-					<SettingsRow
-						label={t("settings.voice.status")}
-						description={<StatusText status={status} />}
-						testId="settings-voice-status"
-						control={
-							installing ? (
-								<Button
-									variant="outline"
-									size="m"
-									data-testid="settings-voice-cancel"
-									onClick={() => void cancelInstall()}
-								>
-									{t("settings.voice.cancel")}
-								</Button>
-							) : install.status === "ready" ? null : (
-								<Button
-									variant="primary"
-									size="m"
-									data-testid="settings-voice-install"
-									onClick={() =>
-										void installModel(install.status === "failed" ? install.model : "multilingual")
-									}
-								>
-									{install.status === "failed"
-										? t("speech.offer.retry")
-										: t("settings.voice.download")}
-								</Button>
-							)
-						}
-					/>
 					<SettingsRow
 						label={t("settings.voice.language")}
 						description={t("settings.voice.languageDescription")}
