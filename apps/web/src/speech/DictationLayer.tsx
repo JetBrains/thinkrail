@@ -4,7 +4,14 @@ import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton, withIconClass } from "@thinkrail/ui/button";
 import { Popover, PopoverAnchor, PopoverContent } from "@thinkrail/ui/popover";
 import { cn } from "@thinkrail/ui/utils";
-import { useEffect, useInsertionEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+	startTransition,
+	useEffect,
+	useInsertionEffect,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
@@ -185,11 +192,11 @@ function ActiveDictationLayer() {
 			if (insideLayer(event.target)) return;
 			const field = dictationFieldOf(event.target);
 			if (field?.hasAttribute("data-dictation-fallback")) lastFallback.current = field;
-			setFocused(field);
+			startTransition(() => setFocused(field));
 		};
 		const onFocusOut = (event: FocusEvent) => {
 			if (insideLayer(event.relatedTarget)) return;
-			if (!dictationFieldOf(event.relatedTarget)) setFocused(null);
+			if (!dictationFieldOf(event.relatedTarget)) startTransition(() => setFocused(null));
 		};
 		document.addEventListener("focusin", onFocusIn);
 		document.addEventListener("focusout", onFocusOut);

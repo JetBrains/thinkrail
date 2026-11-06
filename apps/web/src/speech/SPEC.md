@@ -104,7 +104,10 @@ extension had to adopt and wire up. It was replaced so voice is a property of th
   switching off stops a running dictation. Downloaded files stay until deleted.
 - **Focus following.** Document `focusin` / `focusout` track the eligible field that has focus (see
   Fields). Focus moving into the layer's own DOM (`[data-dictation-layer]`) does not count as leaving.
-  While a dictation runs, its field stays the target even without focus.
+  While a dictation runs, its field stays the target even without focus. The focused-field state is
+  a transition (`startTransition`): mounting the mic on focus is not urgent and must not delay the
+  field's first keystrokes. Rendered synchronously, it held off WebKit's text input long enough for a
+  questionnaire's page-change focus to win the race.
 - **The mic** is rendered through a portal and re-placed against the field's rect whenever the field,
   the page or its container resizes or anything scrolls (one `requestAnimationFrame` per burst; no idle
   frame loop, which kept the desktop renderer awake at 60 Hz): inside the right edge, at the bottom corner of a field 40 px or taller, centred vertically on a
