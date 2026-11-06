@@ -114,6 +114,12 @@ describe("githubSlug", () => {
 		["https://github.com/acme/widgets", "acme/widgets"],
 		["git@github.com:acme/widgets.git", "acme/widgets"],
 		["ssh://git@github.com/acme/widgets", "acme/widgets"],
+		["ssh://git@github.com:22/o/r.git", "o/r"],
+		["ssh://git@github.com/o/r.git", "o/r"],
+		["https://GitHub.com/o/r", "o/r"],
+		["https://user:tok@github.com/o/r/", "o/r"],
+		["https://github.com/o/r.git/", "o/r"],
+		["GIT@GitHub.com:o/r.git", "o/r"],
 		["https://gitlab.com/acme/widgets.git", null],
 		["/tmp/some/bare/repo.git", null],
 	])("%s → %p", (url, slug) => {

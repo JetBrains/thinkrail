@@ -47,7 +47,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `wireTransport.ts` (`initTransport`/
   `getTransport` singleton; routes `server.welcome`, **`host.updateAvailable`**, **`project.updated`**, `pi.event`, `pi.extensionUi`,
   **`session.created`**, **`session.deleted`**, **`provider.changed`**, addressed **`feedback.interview`** and **`feedback.githubStar`**, **the
-  `workspace.created`/`updated`/`removed` lifecycle trio, and `workspace.fsChanged`** into the store — and
+  `workspace.created`/`updated`/`removed` lifecycle trio, the `workspace.creationChanged`/`creationRemoved`
+  pair, and `workspace.fsChanged`** into the store — and
   folds every connection transition through
   `setStatus`, whose connected generation gives active-workspace hydration a distinct trigger on every
   reconnect; the complete welcome (protocol + open/recent project views + optional config) via the atomic
@@ -59,6 +60,9 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   the store still holds, so a pushed full workspace snapshot or
   removal missed while disconnected (including a rename) cannot stay stale; rows that arrived after the
   read was sent are never retired by it, and it adds no rows (creation stays with the push and backfill);
+  on a v104+ host it also re-reads `workspace.listCreations` (older hosts install an empty set), first
+  re-listing the watched creation's project when the creation is gone, so a create that finished while
+  disconnected lands on its workspace instead of racing the list refresh;
   the full host-update lifecycle snapshot via `applyHostUpdate`, project snapshots via
   `applyProjectUpdated`, consecutive `pi.event` frames through the batcher into one
   `handlePiEvents(payloads)` store commit, `pi.extensionUi` via `applyExtUi(request)`,

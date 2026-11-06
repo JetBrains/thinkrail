@@ -53,9 +53,10 @@ export function safeId(
 }
 
 export async function directory(path: string, create = false): Promise<boolean> {
-	if (path !== parse(path).root && !(await directory(dirname(path), create))) return false;
+	const isRoot = path === parse(path).root;
+	if (!isRoot && !(await directory(dirname(path), create))) return false;
 	try {
-		if (create) {
+		if (create && !isRoot) {
 			try {
 				await mkdir(path, { mode: 0o700 });
 				await syncDirectory(dirname(path));

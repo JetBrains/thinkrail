@@ -459,7 +459,7 @@ async function start(): Promise<void> {
 		hidden:
 			process.env.THINKRAIL_DESKTOP_HIDDEN === "1" ||
 			process.env.THINKRAIL_DESKTOP_E2E_HOST === "1",
-		frame: { x: 80, y: 60, width: 1440, height: 920 },
+		frame: { width: 1440, height: 920 },
 		...(neutral
 			? {}
 			: {
