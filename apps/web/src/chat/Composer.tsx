@@ -490,7 +490,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			data-testid="chat-composer"
 			data-expanded={expanded}
 			data-streaming={isStreaming}
-			className="relative flex shrink-0 flex-col border-border-muted border-t bg-container-workspace-bg"
+			className="relative flex shrink-0 flex-col border-control-border-default border-t bg-control-bg transition-colors focus-within:border-control-border-active"
 		>
 			{mentionOpen ? (
 				<div
@@ -563,199 +563,195 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				}
 			/>
 
-			<div className="p-chat-gutter">
+			<div
+				data-testid="chat-composer-shell"
+				className={cn(
+					"relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto] items-end gap-x-4 gap-y-4 overflow-hidden p-4",
+					expanded && growthLimit === "half-chat" && "max-h-[50cqh]",
+				)}
+			>
+				<div className="col-start-1 row-start-2 flex min-w-0 items-center self-end">
+					<ModelEffortPicker
+						ref={pickerRef}
+						models={models}
+						current={currentModel}
+						level={thinkingLevel}
+						refreshing={modelsRefreshing}
+						onRefresh={onRefreshModels}
+						onSelect={onSelectModel}
+						onSelectLevel={onSelectThinking}
+						preferences={modelPreferences}
+						className="max-w-[60vw] px-4 sm:max-w-[320px]"
+					/>
+				</div>
 				<div
-					data-testid="chat-composer-shell"
 					className={cn(
-						"relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto] items-end gap-x-4 gap-y-4 overflow-hidden rounded-md border border-control-border-default bg-control-bg bg-clip-padding p-4 transition-colors focus-within:border-control-border-active",
-						expanded && growthLimit === "half-chat" && "max-h-[50cqh]",
+						"relative col-span-3 col-start-1 row-start-1 min-h-0 overflow-hidden tr-text-ui",
+						COMPOSER_EDITOR_LIMIT_CLASS[growthLimit],
 					)}
 				>
-					<div className="col-start-1 row-start-2 flex min-w-0 items-center self-end">
-						<ModelEffortPicker
-							ref={pickerRef}
-							models={models}
-							current={currentModel}
-							level={thinkingLevel}
-							refreshing={modelsRefreshing}
-							onRefresh={onRefreshModels}
-							onSelect={onSelectModel}
-							onSelectLevel={onSelectThinking}
-							preferences={modelPreferences}
-							className="max-w-[60vw] px-4 sm:max-w-[320px]"
-						/>
-					</div>
 					<div
-						className={cn(
-							"relative col-span-3 col-start-1 row-start-1 min-h-0 overflow-hidden rounded-sm tr-text-ui",
-							COMPOSER_EDITOR_LIMIT_CLASS[growthLimit],
-						)}
+						ref={editorSizerRef}
+						data-testid="chat-input-sizer"
+						aria-hidden
+						className="invisible w-full whitespace-pre-wrap break-words px-12 py-8 tr-text-ui"
 					>
-						<div
-							ref={editorSizerRef}
-							data-testid="chat-input-sizer"
-							aria-hidden
-							className="invisible w-full whitespace-pre-wrap break-words px-12 py-8 tr-text-ui"
-						>
-							{`${value}\u200b`}
-						</div>
-						{slots ? (
-							<div
-								ref={attachBackdrop}
-								data-testid="slot-backdrop"
-								aria-hidden
-								className="pointer-events-none absolute inset-0 overflow-hidden rounded-sm"
-							>
-								<div className="w-full whitespace-pre-wrap break-words px-12 py-8 tr-text-ui">
-									{withOffsets(highlightSegments(value, slots, slotIdx)).map((seg) => (
-										<span
-											key={seg.start}
-											data-testid={seg.state === "plain" ? undefined : "slot-highlight"}
-											data-slot-state={seg.state === "plain" ? undefined : seg.state}
-											className={`text-transparent ${highlightTint(seg.state)}`}
-										>
-											{seg.text}
-										</span>
-									))}
-								</div>
-							</div>
-						) : null}
-						<textarea
-							ref={ref}
-							data-testid="chat-input"
-							value={value}
-							onScroll={syncBackdropScroll}
-							onChange={(e) => {
-								const next = e.target.value;
-								const nextCaret = e.target.selectionStart;
-								setSubmitError(null);
-								const recalled = recallIdxRef.current;
-								if (recalled !== null && next !== recentPrompts[recalled]) {
-									recallIdxRef.current = null;
-								}
-								if (slotSession) {
-									setSlotSession(applyTemplateSlotEdit(value, next, nextCaret, slotSession));
-								}
-								onChange(next);
-								setCaret(nextCaret);
-							}}
-							onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
-							onClick={(e) => setCaret(e.currentTarget.selectionStart)}
-							onKeyDown={onKeyDown}
-							onPaste={onPaste}
-							onDrop={onDrop}
-							rows={1}
-							placeholder={
-								isStreaming
-									? t("chat.composer.placeholderStreaming")
-									: expanded
-										? t("chat.composer.placeholderExpanded")
-										: t("chat.composer.placeholder")
-							}
-							className={cn(
-								"absolute inset-0 size-full resize-none overflow-x-hidden overflow-y-auto rounded-sm bg-transparent px-12 py-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted",
-								expanded ? "whitespace-pre-wrap" : "whitespace-nowrap",
-							)}
-						/>
+						{`${value}\u200b`}
 					</div>
-					<div className="col-start-3 row-start-2 flex shrink-0 items-center gap-4 self-end">
-						<IconButton
-							icon={History}
-							data-testid="history-open"
-							data-history-trigger
-							label={t("chat.composer.searchHistory")}
-							onClick={openHistory}
-						/>
-						{isStreaming ? (
-							<Button
-								variant="ghost"
-								size="m"
-								iconLeft={StopFill}
-								data-testid="chat-abort"
-								aria-label={t("chat.composer.stop")}
-								tooltip={t("chat.composer.stop")}
-								onClick={onAbort}
-								className="shrink-0 @max-md:w-24 @max-md:px-0"
-							>
-								<span className={WIDE_ONLY}>{t("chat.composer.stop")}</span>
-							</Button>
-						) : null}
+					{slots ? (
 						<div
-							data-testid="chat-send-pill"
-							data-armed={canSend}
-							className={cn(SEND_PILL, canSend ? SEND_PILL_ARMED : SEND_PILL_INERT)}
+							ref={attachBackdrop}
+							data-testid="slot-backdrop"
+							aria-hidden
+							className="pointer-events-none absolute inset-0 overflow-hidden"
 						>
-							<button
-								type="button"
-								data-testid="chat-send"
-								aria-label={isStreaming ? t("chat.composer.steer") : t("chat.composer.send")}
-								onClick={() => submit(isStreaming ? "steer" : "send")}
-								disabled={!canSend}
-								className={cn(
-									SEND_MAIN,
-									"tr-text-action hover:bg-control-primary-bg-hovered",
-									isStreaming ? "rounded-r-none pr-4" : "pr-12",
-								)}
-							>
-								<ArrowUp className={cn("size-16", COMPACT_ONLY)} />
-								<span className={WIDE_ONLY}>
-									{isStreaming ? t("chat.composer.steer") : t("chat.composer.send")}
-								</span>
-								<kbd aria-hidden className={cn(KEYCAP, WIDE_ONLY)}>
-									<EnterKey className="size-12" />
-								</kbd>
-							</button>
-							{isStreaming ? (
-								<Popover open={sendMenuOpen} onOpenChange={setSendMenuOpen}>
-									<IconTooltip label={t("chat.composer.sendOptions")} wrapTrigger>
-										<PopoverTrigger asChild>
-											<button
-												type="button"
-												data-testid="send-menu"
-												aria-label={t("chat.composer.sendOptions")}
-												className={cn(
-													SEND_MORE,
-													canSend
-														? "hover:bg-control-primary-bg-hovered"
-														: "hover:text-text-default",
-												)}
-											>
-												<ChevronDown className="size-14" />
-											</button>
-										</PopoverTrigger>
-									</IconTooltip>
-									<PopoverContent side="top" align="end" className="w-[320px] p-4">
-										<div className="flex flex-col gap-2">
-											{STREAMING_SEND_MODES.map((mode) => (
-												<button
-													key={mode.behavior}
-													type="button"
-													data-testid={mode.testid}
-													disabled={!canSend}
-													onClick={() => {
-														setSendMenuOpen(false);
-														submit(mode.behavior);
-													}}
-													className="group flex w-full flex-col gap-2 rounded-sm px-8 py-4 text-left hover:bg-control-bg-hovered disabled:pointer-events-none"
-												>
-													<span className="flex w-full items-baseline justify-between gap-8">
-														<span className="text-text-default tr-text-ui group-disabled:text-control-disabled-text">
-															{t(mode.name)}
-														</span>
-														<span className="shrink-0 text-text-muted tr-text-metadata group-disabled:text-control-disabled-text">
-															{mode.keys}
-														</span>
-													</span>
-													<span className="text-text-muted tr-text-metadata group-disabled:text-control-disabled-text">
-														{t(mode.meaning)}
-													</span>
-												</button>
-											))}
-										</div>
-									</PopoverContent>
-								</Popover>
-							) : null}
+							<div className="w-full whitespace-pre-wrap break-words px-12 py-8 tr-text-ui">
+								{withOffsets(highlightSegments(value, slots, slotIdx)).map((seg) => (
+									<span
+										key={seg.start}
+										data-testid={seg.state === "plain" ? undefined : "slot-highlight"}
+										data-slot-state={seg.state === "plain" ? undefined : seg.state}
+										className={`text-transparent ${highlightTint(seg.state)}`}
+									>
+										{seg.text}
+									</span>
+								))}
+							</div>
 						</div>
+					) : null}
+					<textarea
+						ref={ref}
+						data-testid="chat-input"
+						value={value}
+						onScroll={syncBackdropScroll}
+						onChange={(e) => {
+							const next = e.target.value;
+							const nextCaret = e.target.selectionStart;
+							setSubmitError(null);
+							const recalled = recallIdxRef.current;
+							if (recalled !== null && next !== recentPrompts[recalled]) {
+								recallIdxRef.current = null;
+							}
+							if (slotSession) {
+								setSlotSession(applyTemplateSlotEdit(value, next, nextCaret, slotSession));
+							}
+							onChange(next);
+							setCaret(nextCaret);
+						}}
+						onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
+						onClick={(e) => setCaret(e.currentTarget.selectionStart)}
+						onKeyDown={onKeyDown}
+						onPaste={onPaste}
+						onDrop={onDrop}
+						rows={1}
+						placeholder={
+							isStreaming
+								? t("chat.composer.placeholderStreaming")
+								: expanded
+									? t("chat.composer.placeholderExpanded")
+									: t("chat.composer.placeholder")
+						}
+						className={cn(
+							"absolute inset-0 size-full resize-none overflow-x-hidden overflow-y-auto bg-transparent px-12 py-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted",
+							expanded ? "whitespace-pre-wrap" : "whitespace-nowrap",
+						)}
+					/>
+				</div>
+				<div className="col-start-3 row-start-2 flex shrink-0 items-center gap-4 self-end">
+					<IconButton
+						icon={History}
+						data-testid="history-open"
+						data-history-trigger
+						label={t("chat.composer.searchHistory")}
+						onClick={openHistory}
+					/>
+					{isStreaming ? (
+						<Button
+							variant="ghost"
+							size="m"
+							iconLeft={StopFill}
+							data-testid="chat-abort"
+							aria-label={t("chat.composer.stop")}
+							tooltip={t("chat.composer.stop")}
+							onClick={onAbort}
+							className="shrink-0 @max-md:w-24 @max-md:px-0"
+						>
+							<span className={WIDE_ONLY}>{t("chat.composer.stop")}</span>
+						</Button>
+					) : null}
+					<div
+						data-testid="chat-send-pill"
+						data-armed={canSend}
+						className={cn(SEND_PILL, canSend ? SEND_PILL_ARMED : SEND_PILL_INERT)}
+					>
+						<button
+							type="button"
+							data-testid="chat-send"
+							aria-label={isStreaming ? t("chat.composer.steer") : t("chat.composer.send")}
+							onClick={() => submit(isStreaming ? "steer" : "send")}
+							disabled={!canSend}
+							className={cn(
+								SEND_MAIN,
+								"tr-text-action hover:bg-control-primary-bg-hovered",
+								isStreaming ? "rounded-r-none pr-4" : "pr-12",
+							)}
+						>
+							<ArrowUp className={cn("size-16", COMPACT_ONLY)} />
+							<span className={WIDE_ONLY}>
+								{isStreaming ? t("chat.composer.steer") : t("chat.composer.send")}
+							</span>
+							<kbd aria-hidden className={cn(KEYCAP, WIDE_ONLY)}>
+								<EnterKey className="size-12" />
+							</kbd>
+						</button>
+						{isStreaming ? (
+							<Popover open={sendMenuOpen} onOpenChange={setSendMenuOpen}>
+								<IconTooltip label={t("chat.composer.sendOptions")} wrapTrigger>
+									<PopoverTrigger asChild>
+										<button
+											type="button"
+											data-testid="send-menu"
+											aria-label={t("chat.composer.sendOptions")}
+											className={cn(
+												SEND_MORE,
+												canSend ? "hover:bg-control-primary-bg-hovered" : "hover:text-text-default",
+											)}
+										>
+											<ChevronDown className="size-14" />
+										</button>
+									</PopoverTrigger>
+								</IconTooltip>
+								<PopoverContent side="top" align="end" className="w-[320px] p-4">
+									<div className="flex flex-col gap-2">
+										{STREAMING_SEND_MODES.map((mode) => (
+											<button
+												key={mode.behavior}
+												type="button"
+												data-testid={mode.testid}
+												disabled={!canSend}
+												onClick={() => {
+													setSendMenuOpen(false);
+													submit(mode.behavior);
+												}}
+												className="group flex w-full flex-col gap-2 rounded-sm px-8 py-4 text-left hover:bg-control-bg-hovered disabled:pointer-events-none"
+											>
+												<span className="flex w-full items-baseline justify-between gap-8">
+													<span className="text-text-default tr-text-ui group-disabled:text-control-disabled-text">
+														{t(mode.name)}
+													</span>
+													<span className="shrink-0 text-text-muted tr-text-metadata group-disabled:text-control-disabled-text">
+														{mode.keys}
+													</span>
+												</span>
+												<span className="text-text-muted tr-text-metadata group-disabled:text-control-disabled-text">
+													{t(mode.meaning)}
+												</span>
+											</button>
+										))}
+									</div>
+								</PopoverContent>
+							</Popover>
+						) : null}
 					</div>
 				</div>
 			</div>

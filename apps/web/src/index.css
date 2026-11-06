@@ -337,8 +337,7 @@
 	pointer-events: none;
 	z-index: 10;
 }
-/* The composer wears the CHAT INPUT's skin (see chat/Composer.tsx's textarea): same input surface,
-   border, radius and focus treatment — only the buttons differ. No accent chrome of its own. */
+/* The composer is a bounded card on the chat input's surface and focus colors. No accent chrome. */
 .media-backdrop {
 	background-color: var(--container-content-bg);
 	background-image: repeating-conic-gradient(var(--media-checker-tile) 0% 25%, transparent 0% 50%);
@@ -397,8 +396,7 @@
    sits IN the document flow directly below its anchor — spliced between markdown segments in the
    preview, held by a Monaco view zone in source/diff — with a status-colored left bar (the
    inline-edit presentation, adopted for comments). */
-/* The card IS the composer's component, minus the buttons row (same chrome: border2, radius-md,
-   bg-dark, the same paddings) — no accent bars of its own. */
+/* The card is the review composer minus the buttons row. No accent bars of its own. */
 .review-thread {
 	pointer-events: auto;
 	display: flex;
