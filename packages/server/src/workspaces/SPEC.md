@@ -102,8 +102,10 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   failing hook fails the create as it fails `worktree add`. The checkout runs under `LC_ALL=C`
   (git translates its progress label) and with `checkout.workers=0` unless the user configured
   `checkout.workers` (parallel checkout, ~2× on large trees). Progress (`Updating files` and `Filtering content:
-  N% (x/y)`) is pushed at most every 250 ms and persisted only per 10% (the record can carry kickoff images),
-  best-effort: a failing write or push is logged and never disturbs the checkout.
+  N% (x/y)`) is pushed at most every 250 ms, with a push still waiting on that throttle sent as soon as the
+  checkout ends (so clients always see its last count, even for a checkout faster than one interval), and
+  persisted only per 10% (the record can carry kickoff images), best-effort: a failing write or push is
+  logged and never disturbs the checkout.
   **No overall deadline: the checkout and the hook run as long as they keep writing output; 10 minutes of
   silence (`idleTimeoutMs`) kills either as `WORKTREE_CHECKOUT_STALLED`.** Known limit: a single filter or
   hook that stays silent for longer (a huge LFS object) hits the same window on every retry; a configurable

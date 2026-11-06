@@ -150,7 +150,9 @@ function progressFeed(id: string) {
 			}
 		},
 		stop() {
+			if (!timer) return;
 			clearTimeout(timer);
+			push();
 		},
 	};
 }
