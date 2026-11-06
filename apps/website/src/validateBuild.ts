@@ -30,6 +30,22 @@ function attributeValues(content: string, attributes: string[]): string[] {
 	return [...content.matchAll(expression)].map((match) => match[1] ?? "");
 }
 
+export function validateBlogInstallPickers(path: string, html: string): string[] {
+	const failures: string[] = [];
+	for (const placement of ["top", "bottom"]) {
+		const marker = `data-install-picker="blog-${placement}"`;
+		if (occurrences(html, marker) !== 1) {
+			failures.push(`${path}: expected one blog ${placement} install picker`);
+		}
+	}
+	if (!html.includes("Browser UI via command line")) {
+		failures.push(`${path}: blog install pickers are missing the command-line option`);
+	}
+	const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
+	if (new Set(ids).size !== ids.length) failures.push(`${path}: duplicate element IDs`);
+	return failures;
+}
+
 export function relativeLinkTargets(pagePath: string, html: string): string[] {
 	const page = `https://thinkrail.ai/${pagePath.replace(/index\.html$/, "")}`;
 	return [
@@ -139,7 +155,7 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		{
 			name: "introducingThinkRail",
 			html: pages.introducingThinkRail,
-			expectedDownloads: 2,
+			expectedDownloads: 3,
 		},
 		...islandPages.map((name) => ({ name, html: pages[name], expectedDownloads: 1 })),
 	] as const;
@@ -233,10 +249,7 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 	}
 	for (const [path, html] of htmlPages) {
 		if (!/^blog\/[^/]+\/index\.html$/.test(path)) continue;
-		const picker = html.indexOf('data-install-picker="blog"');
-		if (picker < 0 || html.indexOf("Browser UI via command line", picker) < 0) {
-			failures.push(`${path}: blog install picker is missing`);
-		}
+		failures.push(...validateBlogInstallPickers(path, html));
 		for (const url of relativeLinkTargets(path, html)) {
 			if (!(await outputPathExists(distDirectory, url))) {
 				failures.push(`${path}: missing local output for ${url}`);

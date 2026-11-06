@@ -382,8 +382,7 @@ for (const row of document.querySelectorAll<HTMLElement>("[data-desktop-platform
 	);
 }
 
-const installPicker = document.querySelector<HTMLElement>("[data-install-picker]");
-if (installPicker) {
+for (const installPicker of document.querySelectorAll<HTMLElement>("[data-install-picker]")) {
 	const platformTabs = [
 		...installPicker.querySelectorAll<HTMLButtonElement>("[data-install-platform]"),
 	];

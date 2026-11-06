@@ -1,7 +1,51 @@
 import { describe, expect, test } from "bun:test";
-import { relativeLinkTargets, validateAnalyticsPages } from "./validateBuild";
+import {
+	relativeLinkTargets,
+	validateAnalyticsPages,
+	validateBlogInstallPickers,
+} from "./validateBuild";
 
 const analyticsRuntime = "data-posthog-project data-gtm-container content_viewed";
+
+describe("validateBlogInstallPickers", () => {
+	const path = "blog/article/index.html";
+	const top =
+		'<section data-install-picker="blog-top"><button id="blog-top-macos"></button>Browser UI via command line</section>';
+	const bottom =
+		'<section data-install-picker="blog-bottom"><button id="blog-bottom-macos"></button>Browser UI via command line</section>';
+	const body = '<div class="blog-post-content">Article</div>';
+
+	test("requires one top marker and one bottom marker", () => {
+		expect(validateBlogInstallPickers(path, `${top}${body}${bottom}`)).toEqual([]);
+		expect(
+			validateBlogInstallPickers(path, `${top}${body}${bottom}<a data-id="blog-top-macos">`),
+		).toEqual([]);
+		expect(validateBlogInstallPickers(path, `${body}${bottom}`)).toHaveLength(1);
+		expect(validateBlogInstallPickers(path, `${top}${body}`)).toHaveLength(1);
+	});
+
+	test("keeps the page-level command-line install option check", () => {
+		expect(
+			validateBlogInstallPickers(
+				path,
+				`${top}${body}${bottom}`.replace("Browser UI via command line", ""),
+			),
+		).toEqual([]);
+		expect(
+			validateBlogInstallPickers(
+				path,
+				`${top}${body}${bottom}`.replaceAll("Browser UI via command line", ""),
+			),
+		).toEqual([`${path}: blog install pickers are missing the command-line option`]);
+	});
+
+	test("rejects repeated pickers and duplicate tab IDs", () => {
+		expect(validateBlogInstallPickers(path, `${top}${top}${body}${bottom}`)).toHaveLength(2);
+		expect(
+			validateBlogInstallPickers(path, `${top}${body}${bottom}<a id="blog-top-macos">`),
+		).toEqual([`${path}: duplicate element IDs`]);
+	});
+});
 
 describe("relativeLinkTargets", () => {
 	test("resolves a post's relative links against the post URL", () => {
