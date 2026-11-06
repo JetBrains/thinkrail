@@ -12,6 +12,8 @@ session state.
   removal gate against the installed SDK, update the registry, and report what was removed or retained.
 - Read the owning `SPEC.md` when work is governed by or may alter a module boundary, contract,
   invariant, documented behavior, or architecture decision.
+- For subagent model/effort reporting, read `packages/pi-delegation/SPEC.md` for current-run response
+  metadata, pre-response selection, and invocation isolation.
 - Localized work does not require unrelated specs or a full repository map.
 
 ## Module structure and boundaries
