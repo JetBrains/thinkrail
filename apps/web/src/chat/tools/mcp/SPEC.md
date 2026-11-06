@@ -45,7 +45,7 @@ standalone render) or a host older than MCP hides them.
 - **Full output** appears when `details.fullOutputPath` is recorded and the provider offers
   `readMcpOutput`; `ChatView` implements it as `mcp.readOutput({ workspaceId, sessionId, toolCallId })`.
   The card never sends or links the path — the host reads exactly the file the result recorded. The text
-  opens in a dialog sized to content (up to 85vh) instead of inline, because up to 1 MiB in a row would
+  opens in a dialog sized to content (bounded by the dialog primitive) instead of inline, because up to 1 MiB in a row would
   distort the virtualized transcript's geometry. States: loading, text (noting host truncation),
   *expired* (pi's temporary file is gone), *unavailable*, and a request failure with Try again. A loaded
   answer is kept while the card stays mounted; a failure re-reads on the next open. Like the shared image

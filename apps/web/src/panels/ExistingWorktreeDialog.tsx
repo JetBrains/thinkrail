@@ -118,7 +118,7 @@ export function ExistingWorktreeDialog({
 
 				{loadError ? (
 					<div className="flex flex-col items-start gap-8 rounded-sm bg-feedback-error-subtle p-12 text-feedback-error tr-text-ui">
-						<p>{loadError}</p>
+						<p className="max-w-full">{loadError}</p>
 						<Button
 							variant="outline"
 							size="m"
