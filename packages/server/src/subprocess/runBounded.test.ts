@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DRAIN_GRACE_MS, runBounded, streamBounded } from "./runBounded";
+import { DRAIN_GRACE_MS, runBounded, stopOrphanedGroup, streamBounded } from "./runBounded";
 
 const posix = test.skipIf(process.platform === "win32");
 
@@ -329,6 +329,23 @@ test("the idle deadline lets a chatty child run past it and stops a silent one",
 	expect(silent.timedOut).toBe(true);
 	expect(silent.err).toBe("start");
 	expect(silent.waitedMs).toBeLessThan(2_000);
+});
+
+posix("stopping an orphan kills only a live process of the expected command", async () => {
+	const fakeGit = join(dir, "git");
+	symlinkSync("/bin/sleep", fakeGit);
+	const orphan = Bun.spawn([fakeGit, "30"], { detached: true, stdout: "ignore", stderr: "ignore" });
+	const other = Bun.spawn(["sleep", "30"], { detached: true, stdout: "ignore", stderr: "ignore" });
+	try {
+		expect(await stopOrphanedGroup(other.pid, "git")).toBe("gone");
+		expect(await gone(other.pid)).toBe(false);
+		expect(await stopOrphanedGroup(orphan.pid, "git")).toBe("stopped");
+		expect(await gone(orphan.pid)).toBe(true);
+		expect(await stopOrphanedGroup(orphan.pid, "git")).toBe("gone");
+	} finally {
+		orphan.kill("SIGKILL");
+		other.kill("SIGKILL");
+	}
 });
 
 test("streamBounded hands stdout over as it arrives and closes on a clean exit", async () => {

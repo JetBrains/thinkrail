@@ -1,4 +1,5 @@
 export {
+	creationOwnsPath,
 	setWorkspaceCreationPublisher,
 	type WorkspaceCreationEvent,
 } from "./creationRecords";

@@ -567,7 +567,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   creation, so the chat runs even with no window open. A prompt rejected inside the ack window comes back as
   `kickoffError` beside the `sessionId`; an empty kickoff starts the chat without a prompt, so the start
   surface always lands in a chat. The client key is remembered in memory only and dropped after the handoff or
-  a successful dismiss. `workspace.create` stays a start-and-await over the same job (wire and e2e callers);
+  a successful dismiss. `project.open` and `project.init` refuse a folder an in-flight creation owns, so a
+  half-made worktree can never be adopted as a project while its cleanup may still remove it.
+  `workspace.create` stays a start-and-await over the same job (wire and e2e callers);
   its setup observation, like `startCreate`'s, wraps the whole job.
 - **Project lifecycle fan-out:** `createServer` installs the `projects` module's publisher and maps every
   authoritative open/reopen/close snapshot to **`project.updated`**. The WS `open` handler subscribes to

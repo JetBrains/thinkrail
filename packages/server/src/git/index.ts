@@ -46,6 +46,7 @@ export {
 	nonInteractiveGitEnv,
 	SLOW_GIT_TIMEOUT_MS,
 	setSyncGitTimeoutForTests,
+	stopOrphanedGit,
 	throwOnTimeout,
 } from "./gitExec";
 export { ignoredPaths } from "./ignored";

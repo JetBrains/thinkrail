@@ -1,4 +1,6 @@
+import { isAbsolute, relative } from "node:path";
 import type { WorkspaceCreation, WorkspaceCreationRemoved } from "@thinkrail/contracts";
+import { canonicalPath } from "../git";
 import {
 	loadWorkspaceCreations,
 	saveWorkspaceCreations,
@@ -77,6 +79,14 @@ export function deleteCreation(id: string): WorkspaceCreationRecord | undefined 
 	if (!record) return undefined;
 	saveWorkspaceCreations(all.filter((candidate) => candidate !== record));
 	return record;
+}
+
+export function creationOwnsPath(path: string): boolean {
+	const wanted = canonicalPath(path);
+	return loadWorkspaceCreations().some((record) => {
+		const rel = relative(canonicalPath(record.worktreePath), wanted);
+		return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+	});
 }
 
 export function creationBranchReserved(branch: string): boolean {

@@ -1335,6 +1335,7 @@ interface AppState {
 	) => void;
 	applyWorkspaceCreationRemoved: (removed: WorkspaceCreationRemoved) => void;
 	selectCreation: (id: string) => void;
+	landOnFinishedCreation: (projectId: string, id: string) => void;
 	consumeCreationChat: () => CreationChatHandoff | null;
 	openWorkspaceRetry: (draft: WorkspaceRetryDraft) => void;
 	clearWorkspaceRetry: () => void;
@@ -3691,6 +3692,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 					...(sentPrompt ? { sentPrompt } : {}),
 				},
 			});
+	},
+	landOnFinishedCreation: (projectId, id) => {
+		const state = get();
+		if (state.activeWorkspaceId !== null || state.activeCreationId !== null) return;
+		if (state.selectedProjectId !== projectId) return;
+		const finished = state.workspaces[projectId]?.find((w) => w.id === id);
+		if (finished) state.activateWorkspace(finished);
 	},
 	selectCreation: (id) =>
 		set((state) => {

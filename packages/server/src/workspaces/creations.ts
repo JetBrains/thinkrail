@@ -18,6 +18,7 @@ import {
 	remoteTrackingRef,
 	resolveCommitOid,
 	SLOW_GIT_TIMEOUT_MS,
+	stopOrphanedGit,
 } from "../git";
 import { logger } from "../log";
 import { dataDir, loadWorkspaces, type WorkspaceCreationRecord } from "../persistence";
@@ -163,12 +164,15 @@ async function cleanupCreation(
 	projectPath: string,
 	record: WorkspaceCreationRecord,
 ): Promise<boolean> {
-	if (managedPathOwned(record.worktreePath)) {
+	const taken = () => {
+		if (!managedPathOwned(record.worktreePath)) return false;
 		log.warn(`left ${record.worktreePath} alone: ThinkRail has it open now`);
 		return true;
-	}
+	};
+	if (taken()) return true;
 	const timeout = { timeoutMs: SLOW_GIT_TIMEOUT_MS };
 	let entries = await gitWorktreeEntries(projectPath);
+	if (taken()) return true;
 	if (entries.some((entry) => samePath(entry.path, record.worktreePath))) {
 		const removed = await gitAsync(
 			projectPath,
@@ -181,6 +185,7 @@ async function cleanupCreation(
 		}
 		entries = await gitWorktreeEntries(projectPath);
 	}
+	if (taken()) return true;
 	if (existsSync(record.worktreePath) && isManagedPath(record.worktreePath))
 		rmSync(record.worktreePath, { recursive: true, force: true });
 	if (!record.baseOid || entries.some((entry) => entry.branch === record.branch)) return true;
@@ -193,6 +198,24 @@ async function cleanupCreation(
 
 function branchStillExists(projectPath: string, ref: string): boolean {
 	return git(projectPath, ["show-ref", "--verify", "--quiet", ref], { onTimeout: "return" }).ok;
+}
+
+async function stopOrphanedCheckout(id: string): Promise<void> {
+	const record = findCreation(id);
+	if (!record?.checkoutPid) return;
+	const outcome = await stopOrphanedGit(record.checkoutPid);
+	if (outcome === "unverified")
+		fail(
+			"WORKTREE_CHECKOUT_FAILED",
+			`An earlier git checkout (pid ${record.checkoutPid}) may still be writing ${record.worktreePath}; stop it and try again`,
+		);
+	updateCreation(
+		id,
+		(r) => {
+			delete r.checkoutPid;
+		},
+		{ emit: false },
+	);
 }
 
 function removeStaleIndexLock(worktreePath: string): void {
@@ -261,11 +284,26 @@ async function checkOut(id: string, signal: AbortSignal): Promise<void> {
 			timeoutMs: Number.POSITIVE_INFINITY,
 			idleTimeoutMs: stallMs,
 			onStderr: progress.feed,
+			onSpawn: (pid) =>
+				updateCreation(
+					id,
+					(r) => {
+						r.checkoutPid = pid;
+					},
+					{ emit: false },
+				),
 			signal,
 		},
 	);
 	progress.stop();
 	if (signal.aborted) throw new CreationAborted();
+	updateCreation(
+		id,
+		(r) => {
+			delete r.checkoutPid;
+		},
+		{ emit: false },
+	);
 	if (checkout.failure === "timeout")
 		fail(
 			"WORKTREE_CHECKOUT_STALLED",
@@ -284,6 +322,7 @@ async function execute(id: string, signal: AbortSignal): Promise<Workspace> {
 	let project: Project | undefined;
 	try {
 		project = projectOf(initial);
+		await stopOrphanedCheckout(id);
 		if (initial.phase === "preparing") await prepare(id, project, signal);
 		await checkOut(id, signal);
 		const done = findCreation(id);
@@ -345,6 +384,7 @@ async function discard(record: WorkspaceCreationRecord): Promise<void> {
 		throw new Error("This workspace creation is already being dismissed");
 	discarding.add(record.id);
 	try {
+		await stopOrphanedCheckout(record.id);
 		const project = getProjects().find((candidate) => candidate.id === record.projectId);
 		if (project && holdsLeftovers(record) && !(await cleanupCreation(project.path, record)))
 			throw new Error(`Could not remove the partial workspace at ${record.worktreePath}`);

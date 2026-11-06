@@ -139,6 +139,25 @@ test("a watched creation that finished during a disconnect lands on its workspac
 	expect(useAppStore.getState()).toMatchObject({ activeCreationId: null, activeWorkspaceId: "c1" });
 });
 
+test("a watched creation finished during a disconnect lands on its workspace once the list loads", () => {
+	const store = useAppStore.getState();
+	store.applyWorkspaceCreation(creation());
+	store.selectCreation("c1");
+	store.setWorkspaceCreations([]);
+	expect(useAppStore.getState().selectedProjectId).toBe("p1");
+	useAppStore.setState({ workspaces: { p1: [workspace] } });
+	store.landOnFinishedCreation("p1", "c1");
+	expect(useAppStore.getState().activeWorkspaceId).toBe("c1");
+});
+
+test("landing never overrides a selection the user made meanwhile", () => {
+	const store = useAppStore.getState();
+	useAppStore.setState({ workspaces: { p1: [workspace] } });
+	store.activateWorkspace({ id: "w0", projectId: "p1" });
+	store.landOnFinishedCreation("p1", "c1");
+	expect(useAppStore.getState().activeWorkspaceId).toBe("w0");
+});
+
 test("a watched creation dismissed during a disconnect lands on its project", () => {
 	const store = useAppStore.getState();
 	store.applyWorkspaceCreation(creation());

@@ -105,8 +105,13 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   clears a missing or locked registration), a leftover directory only once git no longer lists it and only
   under `dataDir/worktrees`, then `update-ref -d refs/heads/<branch> <baseOid>`, which refuses a branch that
   moved — and keeps the record `failed`, with `cleanedUp: true` only when something existed and was removed.
-  **Cleanup never touches a folder ThinkRail has open** (`managedPathOwned`: any workspace or project path),
-  and a branch checked out in another worktree is left alone. **Host restart:** graceful shutdown aborts running
+  **Cleanup never touches a folder ThinkRail has open** (`managedPathOwned`: a workspace at that path or a
+  project at or inside it), re-checked after every await before each destructive step, and the host's
+  project-open door refuses a folder a creation still owns (`creationOwnsPath`), so nothing can adopt it
+  mid-cleanup; a branch checked out in another worktree is left alone. The running checkout's pid is
+  persisted (`checkoutPid`): a host crash may leave that detached git alive, so Resume and Discard first stop
+  it (`stopOrphanedGit` — only a live process still named `git`, its group SIGTERM then SIGKILL) and only then
+  touch `index.lock`; when that can't be verified (Windows) the action fails rather than racing a live writer. **Host restart:** graceful shutdown aborts running
   jobs (`stopWorkspaceCreations`) and `interruptWorkspaceCreations` marks every leftover `running` record
   `interrupted` at start — never resumed on its own (the user decides; a resumed checkout restarts the file pass
   from 0%). A record whose workspace already exists is dropped; one whose project is gone is dropped without
@@ -295,7 +300,8 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
 - **Public surface (barrel):** `createWorkspace`, `startWorkspaceCreation`, `awaitWorkspaceCreation`,
   `listWorkspaceCreations`, `resumeWorkspaceCreation`, `dismissWorkspaceCreation`,
   `interruptWorkspaceCreations`, `stopWorkspaceCreations`, `setWorkspaceCreationHandoff`, `CreationHandoff`,
-  `setWorkspaceCreationPublisher`, `WorkspaceCreationEvent`, `listExistingWorktrees`, `openExistingWorktree`,
+  `setWorkspaceCreationPublisher`, `WorkspaceCreationEvent`, `creationOwnsPath`, `listExistingWorktrees`,
+  `openExistingWorktree`,
   `listWorkspaces`, `listWorkspaceRecords`, `listAllWorkspaceRecords`, `forgetWorkspace`,
   `reclaimWorktree`, `removeWorkspace`,
   `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `refreshUserOwnedWorkspace`,
