@@ -255,7 +255,7 @@ treatment.
   destructive confirmation. Paste remains available for repeated destinations, creates a collision-free
   ` copy`/` copy N` name, and an empty tree accepts paste at the workspace root. Delete moves the file to
   the host OS trash and leaves any already-open read-only tab on its existing stale-content contract.
-  Mutation actions appear only from `FS_MUTATIONS_PROTOCOL_VERSION` (v105); path copy remains client-only.
+  Mutation actions appear only from `FS_MUTATIONS_PROTOCOL_VERSION` (v106); path copy remains client-only.
   The watcher is authoritative after copy/delete—rows are never patched optimistically. The tree's look is remembered per workspace across reloads (`store.filesTreeByWorkspace`:
   All expanded folders, Changed-tree collapsed folders shared by every scope, scroll per view through
   `RememberedScrollArea` — a Changed view's scroll belongs to its scope and compare target, so changing
@@ -1164,7 +1164,12 @@ a project picker, the prompt hero, and the reused
   `ExtensionsCatalog` — title, description, tool-name chips and a `@thinkrail/ui/switch`
   (`extension-toggle-<name>`) whose state is **`store.disabledExtensions`**, not the catalog's snapshot; a
   toggle writes the whole list through `settings.update { disabledExtensions }` and converges on the
-  broadcast. Unknown names already in the list are carried through. **Installed** and **pi built-in**
+  broadcast. Unknown names already in the list are carried through. A catalog entry's declared `settings`
+  render as nested switches under its row (`extension-setting-<name>-<key>`, copy from a static
+  `MessageKey` map — a setting without copy is not shown), valued from **`store.extensionSettings`** else the
+  declared default, disabled while the extension is off, and written one key at a time through
+  `settings.update { extensionSettings: { name: { key: value } } }` (the host merges); they appear only
+  while `supportsExtensionSettings(protocolVersion)` holds. **Installed** and **pi built-in**
   (`PiPackagesSettings.tsx`, props-driven; every `packages.*` request and the row state live in the
   **`usePiPackages`** hook, `usePiPackages.ts`, so the page component only composes) exist only while
   `supportsPiPackages(protocolVersion)` holds — against an older host the page is the bundled group
@@ -1310,7 +1315,8 @@ a project picker, the prompt hero, and the reused
 
   `PlanInteractionCard` turns these into the card's `interaction` through the same `useToolInteraction`
   adapter the chat uses, so a response submitted from the plan flows through the identical path as the
-  chat.
+  chat. It also gives the card the session's `ResourceScopeProvider` and an `onOpenFile` that opens a
+  preview tab, so a card's file previews render on the plan page as in the chat.
   When there's no pending question, the same slot instead shows the **agent's
   latest message** (`plan-agent-message`, `planView.lastAgentText` rendered Markdown inside a bounded
   scroll area — `max-h-[12rem] overflow-y-auto` so the full message stays readable without pushing

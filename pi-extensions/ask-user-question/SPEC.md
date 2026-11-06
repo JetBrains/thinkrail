@@ -20,7 +20,7 @@ answer mailbox.
 
 - **Default export**: the factory with the built-in asker, which `pi install` loads through the `pi`
   manifest.
-- **`createAskUserQuestionExtension({ ask?, announce?, guidance? })`**:
+- **`createAskUserQuestionExtension({ ask?, announce?, guidance?, filePreviews?, checkFile? })`**:
   - `ask: AskUserQuestionAsker` replaces the built-in asking. The embedder is then the UI, so there is no
     `hasUI` gate.
   - `announce(toolCallId)` is called from the `message_end` hook for the ask call the batch keeps, when
@@ -28,15 +28,24 @@ answer mailbox.
     outside `execute()` starts tracking here, so only calls this extension runs are tracked.
   - `guidance` replaces the description, `promptSnippet` and `promptGuidelines`, for a host whose UI
     behaves differently, such as ThinkRail's composer supersede.
-- **`./core`**: no runtime imports. Exports the tool name, limits, reserved labels, result types and texts,
-  plus `validateQuestionnaire`, `buildQuestionnaireResponse`, `outcomeResult`, `isAckDetails`,
+  - `filePreviews` (default **off**) registers the file-preview fields. Vanilla pi keeps them off because
+    nothing there renders files. `checkFile(path, cwd)` is awaited once per distinct path before asking;
+    its error fails the call with a text telling the model to write the file first.
+- **`./core`**: no runtime imports. Exports the tool name, limits, reserved labels, discuss reasons, result
+  types and texts, plus `validateQuestionnaire`, `previewFileSources`, `buildQuestionnaireResponse`,
+  `outcomeResult`, `isAckDetails`,
   `isAskUserQuestionArgs`, `isAskUserQuestionResult`, `isolateAskUserQuestionBatch` and
   `executableAskCallIds`. These are what an embedder needs to repair or continue a question outside
   `execute()`.
 - **The tool contract**, which renderers and embedders key on:
   - the name;
-  - the argument shape: `questions[]` of `{ question, header, options[]{ label, description, preview?,
-    recommendedReason? }, multiSelect? }`;
+  - the argument shape: `questions[]` of `{ question, header, preview?, options[]{ label, description,
+    preview?, recommendedReason? }, multiSelect? }`, plus `previewFile` / `previewBefore` on a question and
+    on each option when `filePreviews` is on (workspace-relative; `previewBefore` makes a before → after
+    diff; `preview` and `previewFile` exclude each other);
+  - the answer `kind`: `option`, `custom`, `multi`, or `discuss` (with an optional `reason` — `unclear`,
+    `irrelevant`, `context` — and the text in `notes`). A picked file preview is echoed as `previewFile`
+    (and `previewBefore`), a path, never the file's content;
   - the result per outcome:
 
     | Outcome | `content` | `details` | `terminate` |
@@ -53,6 +62,19 @@ answer mailbox.
 
 ## Decisions
 
+- **One option is allowed, for one purpose.** Validation accepts 1–4 options so an inference can be
+  confirmed with a single "Looks right": corrections arrive through Other, disagreement through discuss.
+  The schema and guidance keep saying "2-4 options" and name the exception, so the model does not read the
+  minimum as an invitation.
+- **Discuss is an answer, not an escape.** A question marked "discuss first" is answered with
+  `kind: "discuss"`; the envelope renders it as `"Q"=(the user wants to discuss this question first:
+  <reason>)` plus the notes, and appends one instruction: do not guess those answers, explain each in plain
+  words, ask again in a later round. The result is an ordinary `answered` outcome — never an error, never
+  `terminate` — even when every question is marked, so the agent explains in the same turn (unconfirmed
+  with the user; both design reviews agreed). "Chat about this" stays the deferral that ends the turn.
+- **Two preview levels.** A question's own preview is its subject (the design to approve, the current
+  state); it is shown above the options and never echoed back, because the model wrote it. Option previews
+  compare alternatives and stay single-select only; an option may honestly have none.
 - **The asker owns the Stop/Submit race.** `execute()` never inspects the signal. The built-in askers keep
   an answer given before Stop and resolve `abandoned` otherwise: the stopped text with `terminate`, so pi
   makes no further model request into the aborted run (a thrown error would leave pi to issue one that
@@ -70,29 +92,41 @@ answer mailbox.
 - **The terminal questionnaire matches ThinkRail's card.**
   - Same answer model: `src/questionnaire.ts` ports the card's `deriveAnswer` on purpose, because the card
     may not import a pi package.
-  - Single-select: ↑↓ move and select. Multi-select: Space toggles.
-  - Other opens a pi-tui `Editor`; typing on its row starts it. `n` adds a note.
-  - The "Recommended" badge and the `Why:` line.
-  - The selected option's markdown preview: beside the list from 100 columns, below it otherwise, capped
-    at 24 lines.
-  - One page per question, no review page (matching the card): confirming the last one submits, and its
-    "Submit answers" row (the card's Submit button) sends whatever is answered, the rest as not answered.
-    Esc to skip, and a "Chat about this" row.
+  - Same keys: ↑↓ only move; Enter picks an option (single-select) or checks / unchecks it
+    (multi-select) and never moves on; Space opens the option's note (picking it first); `d` on an option
+    row (never inside an editor, never on the Other row) marks the question "discuss first" and opens its
+    editor; Tab / → and Shift+Tab / ← page; Ctrl+Enter submits where the terminal reports it (Kitty CSI-u
+    or modifyOtherKeys — elsewhere it arrives as a plain Enter and picks); Esc skips (the card's skip is
+    Shift+Esc because the chat composer owns plain Escape).
+  - Rows: the options, a `✎` row under an option with a saved note, a `?` discussion row above the options
+    while the question is marked, Other (typing on its row starts its editor), **Next →** on earlier pages
+    or **Submit answers** on the last page (single-question rounds included), and "Chat about this".
+    Editors save on Enter or Esc without confirming and park the cursor on their own row, where Enter
+    reopens them — so a second Enter never changes the answer. The cursor is kept per page as a row key,
+    so rows appearing above it never move it.
+  - A single-select note follows the selection; a marked question's tab shows ` ?`; the "Recommended"
+    badge and the `Why:` line; one page per question and no review page, the unanswered sent as not
+    answered.
+  - The question preview prints above the options; the option preview follows the cursor (beside the list
+    from 100 columns, below it otherwise, capped at 24 lines; a file preview prints `preview: <path>`, and
+    "No preview for this option" otherwise — also for an own answer).
   - Known limit: no viewport for a questionnaire taller than the terminal.
-  - Known limit: on a single-select last page, ↓ selects each option it crosses, so reaching "Submit
-    answers" that way answers that question with its last option; ↑ from the first option reaches it
-    without selecting.
 - **The dialog walker trades richness for reach.**
-  - One `select` per question, with "Other…" and "Chat about this".
-  - Multi-select is a single `input` of "1,3; own text".
-  - Previews go into the title (600 characters). No notes and no review page.
+  - One `select` per question, with "Other…", "Discuss this…" and "Chat about this"; "Discuss this…" then
+    asks an `input` for the optional text.
+  - Multi-select is a single `input` of "1,3; own text"; a leading `?` marks the question for discussion
+    with the rest as its text. One input keeps the walker to one dialog per question, where a separate
+    select first would double the dialogs of every multi-select question.
+  - The question preview and file paths go into the title (600 characters). No notes, reasons or review
+    page.
   - Dismissing any dialog declines the whole questionnaire.
 - **One ask per batch.** A `message_end` hook keeps the first ask as the only tool call, because pi's
   sequential-abort hole leaves unexecuted siblings without results. The model re-issues them after the
   answer. The tool is `sequential` and `model-only`, so codemode scripts cannot call it.
 - **No cap on the number of questions; length limits are advisory.** The limits live in field descriptions
   only: a schema `maxLength` would reject the whole call and echo every argument back. Reserved labels
-  ("Other", "Type something.", "Chat about this", "Next →") are rejected because the UIs add them.
+  ("Other", "Type something.", "Chat about this", "Discuss this…", "Next →") are rejected because the UIs
+  add them.
 
 ## Boundary
 

@@ -223,6 +223,39 @@ posix("a git without `git hook run` still fires post-checkout directly", async (
 	expect(readFileSync(args, "utf8")).toBe(`${"0".repeat(head.length)} ${head} 1\n`);
 });
 
+posix(
+	"the last checkout progress reaches clients even when git exits inside the push throttle",
+	async () => {
+		const bin = join(dataDir, "fast-progress-git-bin");
+		mkdirSync(bin);
+		writeFileSync(
+			join(bin, "git"),
+			[
+				"#!/bin/sh",
+				'case " $* " in',
+				'*" checkout --progress "*)',
+				`\t"${Bun.which("git")}" "$@" 2>/dev/null || exit $?`,
+				"\tprintf 'Updating files:  50%% (21/42)\\r' >&2",
+				"\tsleep 0.1",
+				"\tprintf 'Updating files: 100%% (42/42), done.\\n' >&2",
+				"\texit 0;;",
+				"esac",
+				`exec "${Bun.which("git")}" "$@"`,
+				"",
+			].join("\n"),
+		);
+		chmodSync(join(bin, "git"), 0o755);
+		const savedPath = process.env.PATH;
+		process.env.PATH = `${bin}${delimiter}${savedPath ?? ""}`;
+		try {
+			await awaitWorkspaceCreation(startWorkspaceCreation("p1").id);
+		} finally {
+			process.env.PATH = savedPath;
+		}
+		expect(changed().findLast((c) => c.progress)?.progress).toEqual({ done: 42, total: 42 });
+	},
+);
+
 posix("a repo with submodules and submodule.recurse creates like plain worktree add", async () => {
 	const sub = join(dataDir, "sub");
 	mkdirSync(sub);

@@ -49,6 +49,10 @@ export {
 export { createAskAgentRequest } from "./renderers/code/changeBlocks";
 export { registerBundledResourceRenderers } from "./renderers/register";
 export { ReviewDraftContext, type ReviewDraftPersistence } from "./renderers/reviewDraftState";
+export {
+	FramedResourcePreview,
+	type FramedResourcePreviewProps,
+} from "./support/FramedResourcePreview";
 export { GuardedRendererDiff } from "./support/GuardedRendererDiff";
 export { surfaceLineCount, VIRTUALIZED_DIFF_LINES } from "./support/largeDiff";
 export { type RendererLayout, RendererToggles } from "./support/RendererToggles";

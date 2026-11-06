@@ -135,9 +135,11 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 105;
-export const FS_MUTATIONS_PROTOCOL_VERSION = 105;
+export const PROTOCOL_VERSION = 106;
+export const FS_MUTATIONS_PROTOCOL_VERSION = 106;
 export const WORKSPACE_CREATION_PROTOCOL_VERSION = 104;
+export const EXTENSION_SETTINGS_PROTOCOL_VERSION = 105;
+export const ASK_DISCUSS_PROTOCOL_VERSION = 105;
 export const GITHUB_STAR_PROTOCOL_VERSION = 103;
 export const FONTS_PROTOCOL_VERSION = 102;
 export const CUSTOM_ENDPOINTS_PROTOCOL_VERSION = 101;

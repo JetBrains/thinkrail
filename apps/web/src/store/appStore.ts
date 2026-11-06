@@ -53,6 +53,7 @@ import {
 	canMarkCompletionUnread,
 	customMessageText,
 	DEFAULT_CONFIG,
+	type ExtensionSettingValues,
 	isBackgroundCommandCompletionMessage,
 	isControlMessage,
 	isLineWidth,
@@ -1124,6 +1125,7 @@ interface AppState {
 	reviewAutoFix: boolean;
 	agentReviewEnabled: boolean;
 	disabledExtensions: string[];
+	extensionSettings: ExtensionSettingValues;
 	disabledPackages: string[];
 	locale: string;
 	localLocales: LocalLocalesSnapshot | null;
@@ -1540,6 +1542,10 @@ function configPatch(config: AppConfig) {
 		disabledExtensions: Array.isArray(config.disabledExtensions)
 			? config.disabledExtensions
 			: DEFAULT_CONFIG.disabledExtensions,
+		extensionSettings:
+			config.extensionSettings && typeof config.extensionSettings === "object"
+				? config.extensionSettings
+				: DEFAULT_CONFIG.extensionSettings,
 		disabledPackages: Array.isArray(config.disabledPackages)
 			? config.disabledPackages
 			: DEFAULT_CONFIG.disabledPackages,
@@ -2439,6 +2445,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	reviewAutoFix: DEFAULT_CONFIG.reviewAutoFix,
 	agentReviewEnabled: DEFAULT_CONFIG.agentReviewEnabled,
 	disabledExtensions: DEFAULT_CONFIG.disabledExtensions,
+	extensionSettings: DEFAULT_CONFIG.extensionSettings,
 	disabledPackages: DEFAULT_CONFIG.disabledPackages,
 	locale: DEFAULT_CONFIG.locale,
 	localLocales: null,
