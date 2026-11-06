@@ -82,7 +82,7 @@ function branchExists(repoPath: string, branch: string): boolean {
 
 function nameTaken(project: Project, candidate: string): boolean {
 	return (
-		creationBranchReserved(candidate) ||
+		creationBranchReserved(project.id, candidate) ||
 		branchExists(project.path, candidate) ||
 		existsSync(managedWorktreePath(project, candidate))
 	);

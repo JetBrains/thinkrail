@@ -477,6 +477,46 @@ posix(
 	},
 );
 
+posix("a folder that appears at the reserved path is reported and never deleted", async () => {
+	const origin = join(dataDir, "origin.git");
+	git(dataDir, "init", "--bare", "-b", "main", origin);
+	git(repo, "remote", "add", "origin", origin);
+	git(repo, "push", "origin", "main");
+	git(repo, "update-ref", "-d", "refs/remotes/origin/main");
+	const creation = startWorkspaceCreation("p1", { baseRef: "origin/main" });
+	const path = join(dataDir, "worktrees", "repo", "workspace-1");
+	mkdirSync(path, { recursive: true });
+	writeFileSync(join(path, "precious.txt"), "keep\n");
+
+	await expect(awaitWorkspaceCreation(creation.id)).rejects.toThrow("already exists");
+	expect(readFileSync(join(path, "precious.txt"), "utf8")).toBe("keep\n");
+	expect(listWorkspaceCreations()[0]?.failure?.cleanedUp).toBeUndefined();
+	await dismissWorkspaceCreation(creation.id);
+	expect(existsSync(join(path, "precious.txt"))).toBe(true);
+});
+
+posix("a cleanup that cannot finish claims nothing and leaves the record retryable", async () => {
+	hook("mkdir -p locked && touch locked/f && chmod 555 locked && exit 1");
+	const path = join(dataDir, "worktrees", "repo", "workspace-1");
+	const creation = startWorkspaceCreation("p1");
+	try {
+		await expect(awaitWorkspaceCreation(creation.id)).rejects.toThrow("post-checkout hook failed");
+		const [record] = listWorkspaceCreations();
+		expect(record?.state).toBe("failed");
+		expect(record?.failure?.cleanedUp).toBeUndefined();
+		expect(existsSync(path)).toBe(true);
+
+		chmodSync(join(path, "locked"), 0o755);
+		hook("true");
+		retryWorkspaceCreation(creation.id);
+		const workspace = await awaitWorkspaceCreation(creation.id);
+		expect(workspace.branch).toBe("workspace-1");
+		expect(existsSync(join(workspace.worktreePath, "locked"))).toBe(false);
+	} finally {
+		if (existsSync(join(path, "locked"))) chmodSync(join(path, "locked"), 0o755);
+	}
+});
+
 test("checkout failure text drops progress lines and keeps git's last words", () => {
 	expect(
 		checkoutFailureText(

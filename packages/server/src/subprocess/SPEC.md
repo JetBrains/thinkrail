@@ -34,7 +34,8 @@ never what a particular child's output means.
   is reported exactly like `timeoutMs` (`timedOut: true`, tree killed) — the bound for a child that may
   legitimately run for hours as long as it keeps talking (a large `git checkout --progress`).
   **`onStderr`** receives each decoded stderr chunk as it arrives (the full text is still captured in
-  `err`); it is a pass-through, never parsed here.
+  `err`); it is a pass-through, never parsed here, and a callback that throws is ignored so the drain and the
+  idle deadline keep working.
 - **Also owns:** `streamBounded(argv, { timeoutMs, cwd?, env? })` → `{ stdout, exited }` — the same
   spawn, deadline, group kill and stderr capture, for the one caller that must relay a child's stdout
   while it is still being produced (the host's `/blob` route). Completion is still the child's exit,

@@ -307,7 +307,9 @@ export async function runBounded(
 			: textSink(proc.stdout, idle.touch);
 	const err = textSink(proc.stderr, (text) => {
 		idle.touch();
-		opts.onStderr?.(text);
+		try {
+			opts.onStderr?.(text);
+		} catch {}
 	});
 	const drained = Promise.all([out.done, err.done]);
 	const deadline = delay(boundedTimeout(opts.timeoutMs));

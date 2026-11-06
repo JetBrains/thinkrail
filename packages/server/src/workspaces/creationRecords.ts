@@ -89,8 +89,10 @@ export function creationOwnsPath(path: string): boolean {
 	});
 }
 
-export function creationBranchReserved(branch: string): boolean {
-	return loadWorkspaceCreations().some((record) => record.branch === branch);
+export function creationBranchReserved(projectId: string, branch: string): boolean {
+	return loadWorkspaceCreations().some(
+		(record) => record.projectId === projectId && record.branch === branch,
+	);
 }
 
 export function repointCreationBases(projectId: string, from: string, to: string): void {

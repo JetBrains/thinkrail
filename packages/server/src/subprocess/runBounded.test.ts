@@ -331,6 +331,24 @@ test("the idle deadline lets a chatty child run past it and stops a silent one",
 	expect(silent.waitedMs).toBeLessThan(2_000);
 });
 
+test("a throwing stderr callback neither stops the drain nor trips the idle deadline", async () => {
+	const result = await runBounded(
+		bun(
+			'let n = 0; const t = setInterval(() => { process.stderr.write("line " + n + "\\n"); if (++n === 6) clearInterval(t); }, 60);',
+		),
+		{
+			timeoutMs: 10_000,
+			idleTimeoutMs: 200,
+			onStderr: () => {
+				throw new Error("callback failed");
+			},
+		},
+	);
+	expect(result.ok).toBe(true);
+	expect(result.timedOut).toBe(false);
+	expect(result.err).toContain("line 5");
+});
+
 test("streamBounded hands stdout over as it arrives and closes on a clean exit", async () => {
 	const run = streamBounded(
 		bun(

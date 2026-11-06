@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type {
 	Project,
@@ -107,9 +108,13 @@ function progressFeed(id: string) {
 	const push = () => {
 		timer = undefined;
 		lastPush = Date.now();
-		const record = findCreation(id);
-		if (!record || !last) return;
-		emitCreation({ kind: "changed", creation: { ...creationView(record), progress: last } });
+		try {
+			const record = findCreation(id);
+			if (!record || !last) return;
+			emitCreation({ kind: "changed", creation: { ...creationView(record), progress: last } });
+		} catch (err) {
+			log.warn(`could not publish the progress of workspace creation ${id}`, err);
+		}
 	};
 	return {
 		feed(text: string) {
@@ -127,13 +132,17 @@ function progressFeed(id: string) {
 				if (decile !== lastSavedDecile) {
 					lastSavedDecile = decile;
 					const progress = last;
-					updateCreation(
-						id,
-						(record) => {
-							record.progress = progress;
-						},
-						{ emit: false },
-					);
+					try {
+						updateCreation(
+							id,
+							(record) => {
+								record.progress = progress;
+							},
+							{ emit: false },
+						);
+					} catch (err) {
+						log.warn(`could not save the progress of workspace creation ${id}`, err);
+					}
 				}
 				if (timer) continue;
 				timer = setTimeout(push, Math.max(0, PROGRESS_PUSH_MS - (Date.now() - lastPush)));
@@ -167,40 +176,64 @@ async function ensureBaseFetched(project: Project, baseBranch: string, signal: A
 	return remoteTrackingRef(baseBranch, remotes) ?? baseBranch;
 }
 
+interface CleanupResult {
+	clean: boolean;
+	removed: boolean;
+}
+
+async function deleteOwnBranch(
+	projectPath: string,
+	branch: string,
+	baseOid: string,
+	entries: { branch?: string }[],
+): Promise<boolean> {
+	const ref = `refs/heads/${branch}`;
+	if (!branchStillExists(projectPath, ref)) return true;
+	if (entries.some((entry) => entry.branch === branch)) return false;
+	const deleted = await gitAsync(projectPath, ["update-ref", "-d", ref, baseOid], {
+		timeoutMs: SLOW_GIT_TIMEOUT_MS,
+	});
+	if (deleted.ok || !branchStillExists(projectPath, ref)) return true;
+	log.warn(`left branch ${branch} in place after a failed create: ${deleted.err}`);
+	return false;
+}
+
 async function cleanupCreation(
 	projectPath: string,
 	record: WorkspaceCreationRecord,
-): Promise<boolean> {
+): Promise<CleanupResult> {
+	const untouched = { clean: true, removed: false };
 	const taken = () => {
 		if (!managedPathOwned(record.worktreePath)) return false;
 		log.warn(`left ${record.worktreePath} alone: ThinkRail has it open now`);
 		return true;
 	};
-	if (taken()) return true;
-	const timeout = { timeoutMs: SLOW_GIT_TIMEOUT_MS };
+	if (taken()) return untouched;
+	let removed = false;
 	let entries = await gitWorktreeEntries(projectPath);
-	if (taken()) return true;
+	if (taken()) return untouched;
 	if (entries.some((entry) => samePath(entry.path, record.worktreePath))) {
-		const removed = await gitAsync(
+		const removal = await gitAsync(
 			projectPath,
 			["worktree", "remove", "--force", "--force", record.worktreePath],
-			timeout,
+			{ timeoutMs: SLOW_GIT_TIMEOUT_MS },
 		);
-		if (!removed.ok) {
-			log.warn(`could not remove the partial worktree ${record.worktreePath}: ${removed.err}`);
-			return false;
+		if (!removal.ok) {
+			log.warn(`could not remove the partial worktree ${record.worktreePath}: ${removal.err}`);
+			return { clean: false, removed: false };
 		}
+		removed = true;
 		entries = await gitWorktreeEntries(projectPath);
 	}
-	if (taken()) return true;
-	if (existsSync(record.worktreePath) && isManagedPath(record.worktreePath))
-		rmSync(record.worktreePath, { recursive: true, force: true });
-	if (!record.baseOid || entries.some((entry) => entry.branch === record.branch)) return true;
-	const ref = `refs/heads/${record.branch}`;
-	const deleted = await gitAsync(projectPath, ["update-ref", "-d", ref, record.baseOid], timeout);
-	if (!deleted.ok && branchStillExists(projectPath, ref))
-		log.warn(`left branch ${record.branch} in place after a failed create: ${deleted.err}`);
-	return true;
+	if (taken()) return { clean: true, removed };
+	if (existsSync(record.worktreePath) && isManagedPath(record.worktreePath)) {
+		await rm(record.worktreePath, { recursive: true, force: true });
+		removed = true;
+	}
+	if (!record.baseOid) return { clean: true, removed };
+	const branchExisted = branchStillExists(projectPath, `refs/heads/${record.branch}`);
+	const branchGone = await deleteOwnBranch(projectPath, record.branch, record.baseOid, entries);
+	return { clean: branchGone, removed: removed || (branchExisted && branchGone) };
 }
 
 function branchStillExists(projectPath: string, ref: string): boolean {
@@ -211,12 +244,22 @@ async function prepare(id: string, project: Project, signal: AbortSignal): Promi
 	let record = findCreation(id);
 	if (!record) throw new CreationAborted();
 	assertManagedPathFree(record.worktreePath);
-	if (record.baseOid && !(await cleanupCreation(project.path, record)))
+	if (record.baseOid && !(await cleanupCreation(project.path, record)).clean)
 		fail("WORKTREE_ADD_FAILED", `Could not clear the earlier attempt at ${record.worktreePath}`);
+	if (record.baseOid)
+		record = updateCreation(
+			id,
+			(r) => {
+				delete r.baseOid;
+			},
+			{ emit: false },
+		);
 	const checkoutBase = await ensureBaseFetched(project, record.baseBranch, signal);
 	const baseOid =
 		resolveCommitOid(project.path, checkoutBase) ??
 		fail("WORKTREE_ADD_FAILED", `Could not resolve ${checkoutBase} to a commit`);
+	if (existsSync(record.worktreePath))
+		fail("WORKTREE_ADD_FAILED", `The workspace folder already exists: ${record.worktreePath}`);
 	record = updateCreation(
 		id,
 		(r) => {
@@ -224,8 +267,6 @@ async function prepare(id: string, project: Project, signal: AbortSignal): Promi
 		},
 		{ emit: false },
 	);
-	if (existsSync(record.worktreePath))
-		fail("WORKTREE_ADD_FAILED", `The workspace folder already exists: ${record.worktreePath}`);
 	mkdirSync(dirname(record.worktreePath), { recursive: true });
 	const added = await gitAsync(
 		project.path,
@@ -243,11 +284,25 @@ async function prepare(id: string, project: Project, signal: AbortSignal): Promi
 		{ timeoutMs: SLOW_GIT_TIMEOUT_MS, signal },
 	);
 	if (signal.aborted) throw new CreationAborted();
-	if (!added.ok)
+	if (!added.ok) {
+		await deleteOwnBranch(
+			project.path,
+			record.branch,
+			baseOid,
+			await gitWorktreeEntries(project.path),
+		).catch(() => false);
+		updateCreation(
+			id,
+			(r) => {
+				delete r.baseOid;
+			},
+			{ emit: false },
+		);
 		fail(
 			"WORKTREE_ADD_FAILED",
 			`git worktree add failed: ${added.err || "git exited with an error"}`,
 		);
+	}
 	updateCreation(id, (r) => {
 		r.phase = "checking-out";
 		delete r.progress;
@@ -346,10 +401,10 @@ async function execute(id: string, signal: AbortSignal): Promise<Workspace> {
 		const message = err instanceof Error ? err.message : String(err);
 		log.warn(`workspace creation ${id} failed`, err);
 		const record = findCreation(id);
-		let cleaned = false;
-		if (record && project && errorCodeOf(err) !== "WORKSPACE_PATH_TAKEN") {
+		let cleanup: CleanupResult = { clean: false, removed: false };
+		if (record?.baseOid && project && errorCodeOf(err) !== "WORKSPACE_PATH_TAKEN") {
 			try {
-				cleaned = await cleanupCreation(project.path, record);
+				cleanup = await cleanupCreation(project.path, record);
 			} catch (cleanupErr) {
 				log.warn(`cleanup after the failed workspace creation ${id} failed`, cleanupErr);
 			}
@@ -361,10 +416,10 @@ async function execute(id: string, signal: AbortSignal): Promise<Workspace> {
 				r.failure = {
 					message,
 					...(code ? { code } : {}),
-					...(cleaned && record.baseOid ? { cleanedUp: true as const } : {}),
+					...(cleanup.clean && cleanup.removed ? { cleanedUp: true as const } : {}),
 				};
 				delete r.progress;
-				if (cleaned) delete r.baseOid;
+				if (cleanup.clean) delete r.baseOid;
 			});
 		throw err;
 	}
@@ -380,7 +435,7 @@ async function discard(record: WorkspaceCreationRecord): Promise<void> {
 	discarding.add(record.id);
 	try {
 		const project = getProjects().find((candidate) => candidate.id === record.projectId);
-		if (project && holdsLeftovers(record) && !(await cleanupCreation(project.path, record)))
+		if (project && holdsLeftovers(record) && !(await cleanupCreation(project.path, record)).clean)
 			throw new Error(`Could not remove the partial workspace at ${record.worktreePath}`);
 		deleteCreation(record.id);
 		emitCreation({ kind: "removed", removed: { id: record.id, projectId: record.projectId } });

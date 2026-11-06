@@ -70,7 +70,7 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `Workspace.baseBranch` records **creation provenance** — the ref the worktree was cut from, which never
   moves afterwards (what the diff is measured *against* is the separate, re-pointable `diffBase`; see
   `setWorkspaceDiffBase`); **branch name made unique
-  against refs, worktree dirs *and* in-flight creations** — archiving leaves the branch behind and renaming frees a
+  against refs, worktree dirs *and* the project's in-flight creations** — archiving leaves the branch behind and renaming frees a
   branch name whose worktree directory stays occupied, so candidate names skip both, and a creation holds its
   name from the first instant; path
   `dataDir/worktrees/<project-slug>/<branch>`; **seeds the ephemeral per-workspace scratch dir**
@@ -102,7 +102,8 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   failing hook fails the create as it fails `worktree add`. The checkout runs under `LC_ALL=C`
   (git translates its progress label) and with `checkout.workers=0` unless the user configured
   `checkout.workers` (parallel checkout, ~2× on large trees). Progress (`Updating files` and `Filtering content:
-  N% (x/y)`) is pushed at most every 250 ms and persisted only per 10% (the record can carry kickoff images).
+  N% (x/y)`) is pushed at most every 250 ms and persisted only per 10% (the record can carry kickoff images),
+  best-effort: a failing write or push is logged and never disturbs the checkout.
   **No overall deadline: the checkout and the hook run as long as they keep writing output; 10 minutes of
   silence (`idleTimeoutMs`) kills either as `WORKTREE_CHECKOUT_STALLED`.** Known limit: a single filter or
   hook that stays silent for longer (a huge LFS object) hits the same window on every retry; a configurable
@@ -111,10 +112,16 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   (`setWorkspaceCreationHandoff`) runs, and the record is deleted with a `removed` event carrying the workspace
   plus the handoff's `sessionId` / `kickoffError`. **On failure** (`WORKTREE_ADD_FAILED`,
   `WORKTREE_CHECKOUT_FAILED`, `WORKTREE_CHECKOUT_STALLED`, `WORKSPACE_PATH_TAKEN`; the message is git's
-  stderr minus progress lines, for display only) the job cleans up — `worktree remove --force --force` (it also
-  clears a missing or locked registration), a leftover directory only once git no longer lists it and only
-  under `dataDir/worktrees`, then `update-ref -d refs/heads/<branch> <baseOid>`, which refuses a branch that
-  moved — and keeps the record `failed`, with `cleanedUp: true` only when something existed and was removed.
+  stderr minus progress lines, for display only) the job cleans up **only what it provably created**. The
+  ownership marker is the persisted `baseOid`, written only after the folder was confirmed absent, right
+  before `worktree add`: a folder that appears at the reserved path earlier (e.g. during the fallback fetch)
+  fails the create untouched, and a failed `worktree add` compare-and-deletes only the branch it may have
+  made and drops the marker. With the marker, cleanup runs `worktree remove --force --force` (it also clears a
+  missing or locked registration), removes a leftover directory (async, only once git no longer lists it and
+  only under `dataDir/worktrees`), then `update-ref -d refs/heads/<branch> <baseOid>`, which refuses a branch
+  that moved. It reports whether nothing of ours remains (`clean`) and whether it removed anything; the record
+  keeps `failed` with `cleanedUp: true` only when both hold, and keeps its marker — so Retry and Dismiss clean
+  up again — whenever anything is left.
   **Cleanup never touches a folder ThinkRail has open** (`managedPathOwned`: a workspace at that path or a
   project at or inside it), re-checked after every await before each destructive step, and the host's
   project-open door refuses a folder a creation still owns (`creationOwnsPath`), so nothing can adopt it
