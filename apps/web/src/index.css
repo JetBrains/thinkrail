@@ -50,6 +50,8 @@
 
 	--spacing-panel-header-row: var(--panel-header-row-height);
 	--spacing-topbar-row: var(--topbar-row-height);
+	--spacing-topbar-caption: var(--topbar-caption-height);
+	--spacing-topbar-value: var(--topbar-value-height);
 	--spacing-panel-header-control: var(--panel-header-control-height);
 	--spacing-panel-row: var(--panel-row-height);
 	--spacing-panel-inset: var(--panel-inset);

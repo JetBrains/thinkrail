@@ -315,6 +315,27 @@ The allowlist is deliberately tiny, and each entry is enforced by name in
 | `panels/FontPicker.tsx` | its `FamilyName` draws a family in that face by scoping `--tr-font-family-interface` on its own element — the picker rows, the trigger label, the fallback chips and the Custom fonts family list — the one token write outside `fonts/`, and never on `:root` |
 | `index.css`, `styles/tokens.css`, `styles/global.css` | the mapping layers themselves; `.pierre-code-surface` passes the code family, the dense size, the code row height and the code ligatures (`font-variant-ligatures`, which Pierre's Shadow DOM inherits; its `--diffs-font-features` stays unset) into Pierre's Shadow DOM, and `.xterm .xterm-rows` pins `font-variant-ligatures: none`, because xterm's DOM renderer joins same-styled cells into one text run and the terminal never draws ligatures |
 
+### The reader's font scale
+
+`fonts/scale.ts` holds the scale — its limits, its stored value, and the arithmetic that turns one
+number into sizes — and `fonts/runtime.ts` is the one place that writes the result, because it is also
+the writer of the reader's font preference and the two own the same tokens. They are composed into a
+single application (`scaledTokens`), so applying a preference cannot drop the scale's geometry and
+applying a scale cannot drop the reader's code size.
+
+It writes `--tr-font-size-*`, the code trio (`--tr-font-size-code`, `--tr-font-size-code-dense`,
+`--tr-code-row-height`) and the top bar's three row heights on `:root`, from the values
+`typography.json` already declares, scaled by the single number the reader picks (80%–160%). The code
+trio derives from one number — `code = round(size × scale)`, `dense = code − editorDelta`,
+`row = round(dense × lineHeight)` — so at 160% the 11px dense size becomes 19px on 25px rows rather than
+19px on the 14px rows the default preference would otherwise leave behind. At 100% with the default
+preference it removes every override, so the generated CSS applies verbatim. The scale multiplies the
+reader's own code size when they set one in Settings › Appearance › Fonts, and never overwrites it.
+
+Monaco, Pierre and the terminal measure a font in JS rather than reading it per paint, so the write ends
+by publishing the fonts revision on `<html>` — that is what makes a drag reach a surface that already
+measured the old size.
+
 The OTP code is **not** an exception any more: it is the named `code.otp` style (`.tr-code-otp`).
 
 ## Adding or changing a style

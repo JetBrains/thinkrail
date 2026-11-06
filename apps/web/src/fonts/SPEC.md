@@ -12,18 +12,25 @@ tags: [ui, typography]
 ## Responsibility
 
 Turns the host's font settings (`interfaceFont`, `codeFont`, `codeFontSize`, `codeLigatures`,
-`fontWeightOffset` — [[module-contracts]]) and the host's custom font files into the user-adjustable
-typography tokens on `:root`, and tells code surfaces when the result changed. It is the only writer of
-those tokens; the defaults themselves stay in `typography.json` ([[web-typography]]).
+`fontWeightOffset` — [[module-contracts]]), the reader's interface font scale, and the host's custom font
+files into the user-adjustable typography tokens on `:root`, and tells code surfaces when the result
+changed. It is the only writer of those tokens; the defaults themselves stay in `typography.json`
+([[web-typography]]).
 
 ## Boundary
 
 - **Owns:** composing a role's stack from its choice; writing exactly the user tokens
-  (`--tr-font-family-{interface,code}`, `--tr-font-size-code`, `--tr-code-row-height`,
-  `--tr-font-weight-offset`, `--tr-font-ligatures-code`) on `document.documentElement`; the custom
-  `FontFace` registry; per-device probes (renders here? monospaced?); the versioned first-paint hint; the
+  (`--tr-font-family-{interface,code}`, `--tr-font-size-code`, `--tr-font-size-code-dense`,
+  `--tr-code-row-height`, `--tr-font-weight-offset`, `--tr-font-ligatures-code`), the scaled
+  `--tr-font-size-<id>` of every size `typography.json` declares, and the scaled top-bar heights
+  (`--topbar-row-height`, `--topbar-caption-height`, `--topbar-value-height`) on
+  `document.documentElement`; the interface scale and its stored value; the custom `FontFace` registry; per-device probes (renders here? monospaced?); the versioned first-paint hint; the
   weight preview used while the Settings slider drags.
-- **Public surface:** `index.ts` only — `initializeFonts`, `applyFontPreference`,
+- **Public surface:** `index.ts` only — `initializeFonts`, `applyFontPreference`, `applyFontScale`,
+  `currentFontScale`, `currentCodeSize`, `scaledTokens`, `readFontScale` / `writeFontScale`,
+  `FONT_SCALE_MIN` / `FONT_SCALE_MAX` / `FONT_SCALE_STEP` / `DEFAULT_FONT_SCALE`, `fontScalePercent`,
+  `fontScalePosition`, `codeSize` / `denseCodeSize` / `codeRowHeight`, `clampFontScale`,
+  `scaledFontSize`, and the `BASE_*` defaults the slider and its tests pin against,
   `previewFontWeightOffset`, `installUserFonts`, `subscribeFontFaces` / `fontFacesRevision`,
   `bundledFaces`, `probeFont`, `weightResponse`, `textWeightRange`, `sharesHostFonts`, `writeFontsHint`,
   `DEFAULT_FONT_PREFERENCE`, `previewStack`, `refFamily` / `roleFamily` (a ref, or no choice, to its
@@ -31,9 +38,11 @@ those tokens; the defaults themselves stay in `typography.json` ([[web-typograph
   `BundledFaces` types. The preference is the contracts' `FontSettings`, normalized by
   `normalizeFontSettings` like the host and the store.
 - **Allowed deps:** `@thinkrail/contracts`; `clientPreferences` (native-stable hint storage);
-  `constants` (the branding storage prefix); browser DOM, CSSOM, canvas and `FontFace` APIs.
-- **Forbidden:** store, transport, panels, shell; any typography value other than the tokens above; face
-  names — bundled faces are read back from the generated `--tr-font-family-<role>-default` tokens.
+  `constants` (the branding storage prefix); `styles/typography.json` as the read-only source of the
+  default sizes and line heights the scale multiplies; browser DOM, CSSOM, canvas and `FontFace` APIs.
+- **Forbidden:** store, transport, panels, shell; editing a `typography.json` value or emitting any token
+  that is not listed above; face names — bundled faces are read back from the generated
+  `--tr-font-family-<role>-default` tokens.
 
 ## Runtime contract
 
@@ -43,6 +52,15 @@ size, weight and ligatures. A chosen stack is the chosen family, then the fallba
 bundled stack; a fallback on the default face keeps the bundled face first, because the bundled stack ends
 in a generic family that would swallow anything after it. A bundled face chosen for the other role is
 referenced by that role's first bundled family.
+
+The preference and the scale are **composed into one write** (`scaledTokens(preference, scale)`), because
+they own the same tokens: a scale applied on its own is undone by the next `applyFontPreference`, and a
+preference applied on its own drops the scale's geometry. One function means call order cannot matter —
+the shell may apply a preference before, after or without a scale. The scale multiplies the reader's own
+code size rather than the stylesheet default, so scaling never overwrites their choice, and the code trio
+is derived from one number: `code = round(codeSize × scale)`, `dense = code − editorDelta`,
+`row = round(dense × lineHeight)`. At scale 1 with the default preference every token is removed, so the
+generated CSS applies verbatim; the scale is persisted per device beside the first-paint hint.
 
 Application is atomic from consumers' view: every token is written first and the `data-fonts` revision on
 `<html>` is published last and only when it changes, mirroring `data-theme`. `@thinkrail/ui/fonts`'s

@@ -29,6 +29,8 @@
 
 	--panel-header-row-height: 28px;
 	--topbar-row-height: 40px;
+	--topbar-caption-height: 14px;
+	--topbar-value-height: 20px;
 	--panel-header-control-height: calc(var(--panel-header-row-height) - var(--space-4));
 	--panel-row-height: 22px;
 	--panel-inset: var(--space-8);

@@ -149,7 +149,7 @@ function ArmButton({
 	);
 }
 
-const valueText = "flex h-20 items-center gap-4 px-8 tr-text-ui";
+const valueText = "flex h-topbar-value items-center gap-4 px-8 tr-text-ui";
 
 function RemoteValueView({ value }: { value: RemoteValue }) {
 	const t = useT();
