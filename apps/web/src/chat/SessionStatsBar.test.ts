@@ -83,10 +83,12 @@ describe("SessionStatsBar pi-style formatting", () => {
 	});
 });
 
-it("formats a turn's elapsed time with the interface language's units", () => {
+it("formats a turn's elapsed time with the interface language's units", async () => {
 	expect(formatElapsed(currentTranslator(), 5_000)).toBe("5s");
 	expect(formatElapsed(currentTranslator(), 65_000)).toBe("1m 5s");
-	applyLocale("ru", { ru: { "chat.elapsed.minutesSeconds": "{{minutes}} мин {{seconds}} с" } });
+	await applyLocale("ru", {
+		ru: { "chat.elapsed.minutesSeconds": "{{minutes}} мин {{seconds}} с" },
+	});
 	try {
 		expect(formatElapsed(currentTranslator(), 65_000)).toBe("1 мин 5 с");
 	} finally {

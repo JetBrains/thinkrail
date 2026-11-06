@@ -8,6 +8,12 @@ test("renders English synchronously with no setup", () => {
 	expect(currentLocale()).toBe("en");
 });
 
+test("a bundled language renders once its catalog has loaded", async () => {
+	await applyLocale("es", {});
+	expect(t("desktop.menu.edit")).toBe("Editar");
+	expect(currentLocale()).toBe("es");
+});
+
 test("a local overlay wins and missing strings fall back to English", () => {
 	applyLocale("de", { de: { "desktop.menu.edit": "Bearbeiten" } });
 	expect(currentLocale()).toBe("de");
@@ -135,8 +141,8 @@ test("interpolation can never complete a tag: a value-built attributed tag is re
 	expect(markup).toBe("· from <code>0</code>");
 });
 
-test("plural forms follow the language's own rules, with or without the number", () => {
-	applyLocale("ru", {
+test("plural forms follow the language's own rules, with or without the number", async () => {
+	await applyLocale("ru", {
 		ru: {
 			"tools.read.firstLines_one": "первая {{count}} строка",
 			"tools.read.firstLines_few": "первые {{count}} строки",
@@ -165,10 +171,10 @@ test("plural forms follow the language's own rules, with or without the number",
 	]);
 });
 
-test("a partly translated counter stays in its language instead of falling back to English", () => {
-	applyLocale("ru", { ru: { "tools.read.firstLines_other": "первые {{count}} строк" } });
+test("a partly translated counter stays in its language instead of falling back to English", async () => {
+	await applyLocale("ru", { ru: { "tools.read.firstLines_other": "первые {{count}} строк" } });
 	expect(t("tools.read.firstLines", { count: 3 })).toBe("первые 3 строк");
-	applyLocale("ja", { ja: { "tools.read.firstLines_other": "最初の{{count}}行" } });
+	await applyLocale("ja", { ja: { "tools.read.firstLines_other": "最初の{{count}}行" } });
 	expect([1, 4].map((count) => t("tools.read.firstLines", { count }))).toEqual([
 		"最初の1行",
 		"最初の4行",
