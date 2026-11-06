@@ -2351,6 +2351,7 @@ export async function promptSession(
 	sessionId: string,
 	text: string,
 	images?: ImageContent[],
+	opts: { onPreflight?: () => void } = {},
 ): Promise<void> {
 	const entry = mustGetEntry(sessionId);
 	admitRun(entry);
@@ -2360,17 +2361,22 @@ export async function promptSession(
 	}
 	const release = admitPreflight(entry);
 	try {
-		await entry.session.prompt(text, answeringDialogs(entry, images));
+		await entry.session.prompt(text, answeringDialogs(entry, images, opts.onPreflight));
 	} finally {
 		release();
 	}
 }
 
-function answeringDialogs(entry: Entry, images: ImageContent[] | undefined): PromptOptions {
+function answeringDialogs(
+	entry: Entry,
+	images: ImageContent[] | undefined,
+	onPreflight?: () => void,
+): PromptOptions {
 	return {
 		...(images ? { images } : {}),
 		preflightResult: (disposition) => {
 			if (disposition !== "handled") cancelExtUiForSession(entry.session.sessionId);
+			onPreflight?.();
 		},
 	};
 }

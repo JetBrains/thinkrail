@@ -15,6 +15,7 @@ import {
 	type TemplateReadLocation,
 	type ThinkingLevel,
 	type WireModel,
+	WORKSPACE_CREATION_PROTOCOL_VERSION,
 	type Workspace,
 } from "@thinkrail/contracts";
 import { i18n, T, useT } from "@thinkrail/locales/react";
@@ -75,7 +76,13 @@ import {
 	useSlashCommandCompletion,
 	useTemplateCommandPicker,
 } from "@/prompt";
-import { selectCatalogModel, selectPickerModels, toast, useAppStore } from "@/store";
+import {
+	selectCatalogModel,
+	selectPickerModels,
+	toast,
+	useAppStore,
+	type WorkspaceRetryDraft,
+} from "@/store";
 import { createSessionWithSkillBaseline, errorText, getTransport } from "@/transport";
 import { BranchPicker } from "./BranchPicker";
 import { useBranchList } from "./branches";
@@ -107,12 +114,14 @@ export function NewWorkspaceDialog({
 	projectId,
 	initialPrompt,
 	promptNote,
+	retryDraft,
 	onOpenChange,
 }: {
 	open: boolean;
 	projectId: string;
 	initialPrompt?: string;
 	promptNote?: string;
+	retryDraft?: WorkspaceRetryDraft;
 	onOpenChange: (open: boolean) => void;
 }) {
 	const t = useT();
@@ -204,13 +213,28 @@ export function NewWorkspaceDialog({
 	useEffect(() => {
 		if (!open) return;
 		setSelectedProjectId(projectId);
-		updatePromptDraft(initialPrompt ?? "", null);
+		updatePromptDraft(retryDraft?.kickoff?.text ?? initialPrompt ?? "", null);
 		setTarget("worktree");
 		setCreating(false);
 		attachedImages.reset();
+		const retryImages = retryDraft?.kickoff?.images ?? [];
+		attachedImages.restore(
+			retryImages.map((content) => ({
+				name: i18n.t("chat.promptImages.fallbackName"),
+				content,
+			})),
+		);
 		hostDefaultAsked.current = false;
 		setExplicitPair(false);
-	}, [open, projectId, initialPrompt, updatePromptDraft, attachedImages.reset]);
+	}, [
+		open,
+		projectId,
+		initialPrompt,
+		retryDraft,
+		updatePromptDraft,
+		attachedImages.reset,
+		attachedImages.restore,
+	]);
 
 	useEffect(() => {
 		if (!open) return;
@@ -303,8 +327,15 @@ export function NewWorkspaceDialog({
 
 	useEffect(() => {
 		if (!open) return;
+		const retryModel = retryDraft?.kickoff?.model;
+		if (retryModel) {
+			setModel(retryModel);
+			setThinkingLevel(retryDraft?.kickoff?.thinkingLevel ?? "medium");
+			setExplicitPair(true);
+			return;
+		}
 		return applyHostDefault();
-	}, [open, applyHostDefault]);
+	}, [open, applyHostDefault, retryDraft]);
 
 	useEffect(() => {
 		if (!open || !model) return;
@@ -356,8 +387,9 @@ export function NewWorkspaceDialog({
 		refreshing,
 		refresh: refreshBranches,
 	} = useBranchList(open ? selectedProjectId : null, (list) => {
-		setBaseRef(list.defaultBranch);
-		prefetchBase(list.defaultBranch);
+		const initial = retryDraft?.baseRef ?? list.defaultBranch;
+		setBaseRef(initial);
+		prefetchBase(initial);
 	});
 	const submitEnabled = !creating && !templatePending && attachedImages.pending === 0;
 
@@ -374,20 +406,41 @@ export function NewWorkspaceDialog({
 				return;
 			}
 			workspace = def;
+		} else if (protocolVersion !== null && protocolVersion >= WORKSPACE_CREATION_PROTOCOL_VERSION) {
+			const kickoff = {
+				text,
+				...(attachments.length > 0 ? { images: attachments.map((a) => a.content) } : {}),
+				...(model && explicitPair ? { model, thinkingLevel } : {}),
+			};
+			const started = async () =>
+				getTransport().request("workspace.startCreate", {
+					projectId: selectedProjectId,
+					...(baseRef ? { baseRef } : {}),
+					kickoff,
+				});
+			const creation = await started().catch((err: unknown) => {
+				toast.error(errorText(err), t("panels.newWorkspace.createFailed"));
+				setCreating(false);
+				return null;
+			});
+			if (!creation) return;
+			const store = useAppStore.getState();
+			store.applyWorkspaceCreation(creation, { text, attachments });
+			void refreshProjectWorkspaces(creation.projectId).catch(() => {});
+			store.selectCreation(creation.id);
+			onOpenChange(false);
+			return;
 		} else {
-			useAppStore.getState().beginWorktreeCreation(selectedProjectId);
 			const createWorktree = async () =>
 				getTransport().request("workspace.create", {
 					projectId: selectedProjectId,
 					...(baseRef ? { baseRef } : {}),
 				});
-			const created = await createWorktree()
-				.catch((err: unknown) => {
-					toast.error(errorText(err), t("panels.newWorkspace.createFailed"));
-					setCreating(false);
-					return null;
-				})
-				.finally(() => useAppStore.getState().endWorktreeCreation(selectedProjectId));
+			const created = await createWorktree().catch((err: unknown) => {
+				toast.error(errorText(err), t("panels.newWorkspace.createFailed"));
+				setCreating(false);
+				return null;
+			});
 			if (!created) return;
 			workspace = created;
 		}

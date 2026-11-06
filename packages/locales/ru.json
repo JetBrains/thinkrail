@@ -1121,7 +1121,6 @@
 	"panels.projectTree.copyPath": "Копировать путь",
 	"panels.projectTree.createWorkspace": "Создать рабочую область",
 	"panels.projectTree.createWorkspaceShortcut": "Создать рабочую область ({{shortcut}} или {{altShortcut}})",
-	"panels.projectTree.creatingWorktree": "Создание рабочего дерева…",
 	"panels.projectTree.expandProject": "Развернуть проект",
 	"panels.projectTree.keepActive": "Оставить активной",
 	"panels.projectTree.keepActiveLabel": "Оставить {{name}} активной",

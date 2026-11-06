@@ -25,6 +25,16 @@ function emit(project: Project): void {
 	publishProject?.(project);
 }
 
+let guardProjectPath: ((path: string) => void) | null = null;
+
+export function setProjectPathGuard(fn: ((path: string) => void) | null): void {
+	guardProjectPath = fn;
+}
+
+export function assertProjectPathAllowed(path: string): void {
+	guardProjectPath?.(path);
+}
+
 export function resolveProjectPath(path: string): string {
 	const home =
 		(process.platform === "win32" ? process.env.USERPROFILE : process.env.HOME) || homedir();
@@ -96,6 +106,7 @@ export function getProjects(): Project[] {
 
 export function openProject(inputPath: string, displayName?: string): Project {
 	const path = resolveProjectPath(inputPath);
+	assertProjectPathAllowed(path);
 	const root = gitToplevel(path);
 	if (!root) throw new CodedError("NOT_GIT", `Not a git repository: ${path}`);
 
@@ -385,6 +396,7 @@ export function inspectProjectPath(inputPath: string): ProjectPathStatus {
 
 export function initProject(inputPath: string): Project {
 	const path = resolveProjectPath(inputPath);
+	assertProjectPathAllowed(path);
 	const status = inspectResolvedProjectPath(path);
 	if (status.kind === "missing") throw new Error(`No such folder: ${path}`);
 	if (status.kind === "notDirectory") throw new Error(`Not a folder: ${path}`);
@@ -403,8 +415,9 @@ export function createProject(
 		throw new Error(`Invalid project folder name: ${requestedName}`);
 	}
 	const parent = resolveProjectPath(parentPath);
-	mkdirSync(parent, { recursive: true });
 	const path = join(parent, name);
+	assertProjectPathAllowed(path);
+	mkdirSync(parent, { recursive: true });
 	let created = false;
 	try {
 		if (!statSync(path).isDirectory()) throw new Error(`Not a folder: ${path}`);

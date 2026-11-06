@@ -20,6 +20,8 @@ import {
 	type TurnChangeSet,
 	type WireModel,
 	type Workspace,
+	type WorkspaceCreation,
+	type WorkspaceKickoff,
 } from "@thinkrail/contracts";
 import {
 	claimBrowserAttributionAttemptIn,
@@ -295,6 +297,24 @@ export function loadWorkspaces(): Workspace[] {
 
 export function saveWorkspaces(workspaces: Workspace[]): void {
 	writeJson("workspaces.json", workspaces);
+}
+
+export type WorkspaceCreationRecord = Omit<WorkspaceCreation, "kickoff"> & {
+	worktreePath: string;
+	renamed?: true;
+	baseOid?: string;
+	kickoff?: WorkspaceKickoff;
+};
+
+export function loadWorkspaceCreations(): WorkspaceCreationRecord[] {
+	return readJson<WorkspaceCreationRecord[]>("workspace-creations.json", []).map((creation) => ({
+		...creation,
+		worktreePath: storedDirectory(creation.worktreePath),
+	}));
+}
+
+export function saveWorkspaceCreations(creations: WorkspaceCreationRecord[]): void {
+	writeJsonAtomic("workspace-creations.json", creations);
 }
 
 export interface PersistedTerminalTab {
