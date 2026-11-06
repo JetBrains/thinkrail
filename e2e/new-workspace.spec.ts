@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import {
@@ -306,6 +306,39 @@ test("Enter in the prompt creates; Shift+Enter inserts a newline", async ({ page
 	await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toHaveCount(0);
 });
 
+test("a slow checkout runs in the background while the rest of the app stays usable (#874)", async ({
+	page,
+}) => {
+	await openAppFresh(page);
+	const { repo } = seedRemoteProject("slow-checkout");
+	const hook = join(repo, ".git", "hooks", "post-checkout");
+	writeFileSync(hook, "#!/bin/sh\nsleep 3\n");
+	chmodSync(hook, 0o755);
+	const dialog = await openPickedProjectWorkspaceDialog(page, repo);
+	await dialog.getByTestId("ws-prompt").fill("Start in the new checkout");
+
+	await page.getByTestId("create-workspace").click();
+	await expect(dialog).toBeHidden({ timeout: 2_000 });
+	const row = page.getByTestId("workspace-creation-row");
+	await expect(row).toHaveAttribute("data-state", "running");
+	await expect(row).toHaveAttribute("data-active", "true");
+	const view = page.getByTestId("workspace-creation-view");
+	await expect(view.getByTestId("workspace-creation-prompt")).toHaveText(
+		"Start in the new checkout",
+	);
+
+	await page.getByTestId("project-item").first().click();
+	await expect(view).toHaveCount(0);
+	await row.locator("button").first().click();
+	await expect(view).toBeVisible();
+
+	await expect(row).toHaveCount(0, { timeout: 30_000 });
+	await expect(worktreeRows(page)).toHaveCount(1);
+	await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toContainText(
+		"Start in the new checkout",
+	);
+});
+
 test("a base whose fetch fails reports git's error, not a request timeout", async ({ page }) => {
 	const remote = join(E2E_DATA_DIR, "dangling-head-remote.git");
 	const repo = join(E2E_DATA_DIR, "dangling-head-fixture");
@@ -331,14 +364,23 @@ test("a base whose fetch fails reports git's error, not a request timeout", asyn
 		await expect(dialog.getByTestId("ws-branch-picker")).toContainText("origin/main");
 
 		await page.getByTestId("create-workspace").click();
+		await expect(dialog).toBeHidden();
 
 		const toast = page.getByTestId("toast");
 		await expect(toast).toContainText("Couldn't create workspace");
 		await expect(toast).toContainText("Could not fetch origin/main");
 		await expect(worktreeRows(page)).toHaveCount(0);
-		await expect(dialog).toBeVisible();
-		await expect(page.getByTestId("create-workspace")).toBeEnabled();
-		await expect(page.getByTestId("worktree-creating-row")).toHaveCount(0);
+		const failed = page.getByTestId("workspace-creation-row");
+		await expect(failed).toHaveAttribute("data-state", "failed");
+		await expect(failed.getByTestId("workspace-creation-status")).toHaveText("Couldn't create");
+		const view = page.getByTestId("workspace-creation-view");
+		await expect(view.getByTestId("workspace-creation-reason")).toContainText(
+			"Could not fetch origin/main",
+		);
+
+		await view.getByTestId("workspace-creation-dismiss").click();
+		await expect(failed).toHaveCount(0);
+		await expect(view).toHaveCount(0);
 	} finally {
 		writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
 		rmSync(repo, { recursive: true, force: true });

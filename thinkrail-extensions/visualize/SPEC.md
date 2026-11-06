@@ -43,13 +43,14 @@ its defensive fallback.
 - Invalid syntax surfaces as the package's `isError` tool result asking the model to correct and retry;
   the extension injects no prompt and forces no retry.
 
-File previews get `workspaceFileChecker`: a path must be relative, stay inside the session cwd (lexically
-and after resolving links, with the host read guard's containment rule, so `..draft.html` is a name and not
-a parent), name a regular file and stay out of `.git`, else the tool result asks the model to write it first
-— the same paths the host's `fs.readFile` then serves, so the card never reports what the tool accepted as
-unreadable. `scratchDir` is
-`.thinkrail/context/mockups/`, inside the host's gitignored scratch dir, so mockups never become
-project changes.
+The factory is composed per parent session (`sessionExtensions`) so file previews use the host's
+`session.workspaceFiles` ([[submodule-server-extensions]]), shared with ask-user-question instead of copied:
+a path must be relative, stay inside the session cwd (lexically and after resolving links, with the host
+read guard's containment rule, so `..draft.html` is a name and not a parent), name a regular file and stay
+out of `.git`, else the tool result asks the model to write it first — the same paths the host's
+`fs.readFile` then serves, so the card never reports what the tool accepted as unreadable. `scratchDir` is
+`.thinkrail/context/mockups/`, inside the host's gitignored scratch dir, so mockups never become project
+changes.
 
 The host composes this descriptor from the server registry ([[submodule-server-extensions]]); a strict
 validation call through that composition is pinned in `packages/server` (dev) and in the artifact probes
@@ -59,11 +60,12 @@ validation call through that composition is pinned in `packages/server` (dev) an
 
 Diagrams, comparison options and recommended choices preserve the existing chat presentation. A
 completed `type: "file"` call renders `FileCard`: the title, the `before → path` links (through
-`onOpenFile`), and [[module-resource-renderers]]' `ResourcePreview` for the path and `before` — the same
-renderers, diff and review comments as diff review. The card frame is a fixed 480px box (Monaco and bounded
-diffs need a height) whose toolbar adds **Open in tab** (`host.openFile` keep, or `host.openComparison` for a
-before/after) and **Full screen** (a dialog rendering the same preview with Split/Inline; renderer choice and
-view state, such as the HTML preview width, are shared with the card). A card always shows the file's
+`onOpenFile`), and [[module-resource-renderers]]' `FramedResourcePreview` for the path and `before` — the
+same renderers, diff and review comments as diff review. The card frame is a fixed 480px box (Monaco and
+bounded diffs need a height) whose toolbar adds **Open in tab** (`host.openFile` keep, or
+`host.openComparison` for a before/after) and **Full screen** (a dialog rendering the same preview with
+Split/Inline; renderer choice and view state, such as the HTML preview width, are shared with the card).
+The frame and its actions live in the SDK because the questionnaire's previews use the same one. A card always shows the file's
 **current** content, never a snapshot from the tool call: editing a mockup updates every card that shows it
 (review comments follow the file). A mockup deleted under a mounted card leaves it on its last loaded version
 under a "Couldn't refresh" notice; a card mounted afterwards shows the load error. That is the price

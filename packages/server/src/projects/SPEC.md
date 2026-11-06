@@ -46,6 +46,10 @@ bootstrap it into one so it can be opened.
   project folder. The workspace-side half of the same door is `openExistingWorktree`
   ([[submodule-server-workspaces]]); reading the workspace records for it stays within the `persistence`
   dep — this module still never imports its sibling. `setProjectPublisher` is the host-injected push seam; this module never imports `host`.
+  **`setProjectPathGuard(fn)`** is the host-injected veto on project folders: every door that adopts or writes
+  a folder — `openProject` and `initProject` on the resolved path (after `~` expansion), `createProject` on
+  the new folder and `inspectCloneDestination` on the clone target, each before anything is written — calls
+  it, so the host can refuse a folder `workspaces` is still creating without this module importing it.
   It also owns **`inspectProjectPath`** (classify a path — `repo` / `initable` / `missing` /
   `notDirectory` — so the UI picks between opening, an init offer, or an error) and **`initProject`**
   (bootstrap a plain directory: `git init` + `git add -A` + an **allow-empty** initial commit — committing
@@ -120,7 +124,7 @@ and truncating first can separate a secret suffix from the URL prefix needed to 
 
 - **Public surface (barrel):** `cloneProject`, `inspectCloneDestination`, `startProjectClone`, `cancelProjectClone`, `openProject`, `listProjects`, `listRecentProjects`,
   `refreshRecentProjectFolders`, `closeProject`, `renameProject`,
-  `getProjects`, `setProjectPublisher`, `inspectProjectPath`, `initProject`, `createProject`, `setProjectTrust`,
+  `getProjects`, `setProjectPublisher`, `setProjectPathGuard`, `inspectProjectPath`, `initProject`, `createProject`, `setProjectTrust`,
   `setProjectSkillEnabled`, `setProjectGroupEnabled`, `acknowledgeProjectSkills`,
   `approveProjectMcpServer`, `setProjectMcpOverride`, `grantProjectMcpTool`, `revokeProjectMcpTool`,
   `setPiTrustSeed`.

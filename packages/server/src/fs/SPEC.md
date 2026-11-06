@@ -42,8 +42,9 @@ bytes are** — the one byte-level classification every content read in the host
   prove (magic numbers for png/jpeg/gif/webp/avif/bmp/ico/pdf/zip/gzip/woff/woff2; AVIF accepts `avif` or
   `avis` in the initial `ftyp` box's major or compatible brands, bounded by that box and the sniff head;
   plus `image/svg+xml` for
-  text whose root element is `<svg>`, directly or behind an XML prolog — a prolog alone is not an
-  image, and `application/vnd.git-lfs` for a text file of at most 1 KiB that is exactly the three-line pointer
+  text whose first element is `<svg>` or `<svg/>`, after any XML declarations, comments, processing
+  instructions or doctype in the bounded head — a nested or quoted `<svg>` does not establish the root,
+  and `application/vnd.git-lfs` for a text file of at most 1 KiB that is exactly the three-line pointer
   `git lfs` itself writes — `version`, `oid sha256:`, `size`, in that order, nothing else, so no prose
   that merely quotes a pointer can be mistaken for one — so a `.png` whose content is a pointer is
   reported as the pointer it is, not as an image that failed to decode); **text** is "no recognized binary magic number, no NUL byte in the first 8 KiB, and a strict

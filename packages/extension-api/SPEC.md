@@ -46,7 +46,9 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   - the chat's `focusScope`, so the card claims attention focus once per chat mount;
   - `prepareLayoutChange`, which keeps the reader's place when the card changes size;
   - `revealElement(element, ToolRevealOptions)` and `cancelAutomaticReveal()`;
-  - `focusComposer()`.
+  - `focusComposer()`;
+  - `hostProtocol` — the connected host's protocol version, so a renderer can withhold an affordance an
+    older host would not understand (the app's `supports*` gates, handed through tool-agnostically).
 
   Without it, a renderer shows the call read-only from `result`, as in a subagent transcript. The
   renderer stays props-driven: it never reaches the chat's contexts, store or transport. `state` and
@@ -59,13 +61,18 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
 - `./server` exposes `ServerExtension` and `defineServerExtension`, with pi `ExtensionFactory` types
   only. Descriptors carry `name` (the identity — the Settings on/off switch and `disabledExtensions` key
   on it), optional display copy `title` / `description` for the Settings catalog, `extensions`, optional
-  `sessionExtensions`, optional `interactiveTools`, optional `childExtensions` and optional
+  `sessionExtensions`, optional `interactiveTools`, optional `settings` (declared per-extension settings —
+  today only `{ type: "boolean", default }`; the values live in the host's config keyed by extension name
+  and the Settings copy is the app's locale keys), optional `childExtensions` and optional
   `skillPackages` specifiers. Its identity
   helper preserves factories, order and optional-field absence; loading and skill resolution remain host
   responsibilities.
 - `sessionExtensions(session: ExtensionSessionServices) => ExtensionFactory[]` is how an extension uses
   per-session state the host owns: the host calls it once per parent session with that session's
-  services. The services are the interactive-tool mailbox:
+  services: `setting(key)` (the extension's own declared setting, read inside a factory body so a pi
+  reload sees a changed value), `workspaceFiles` (`check(path, cwd)` — the host's rule for which workspace
+  files the UI may show — and `scratchDir`, the gitignored directory for mockups), and the interactive-tool
+  mailbox:
   - `expectToolResponse(toolCallId)` announces a call the extension will execute and await, from its
     `message_end` hook, before pi runs it. The host tracks only announced calls, so a switched-off
     extension or a same-name tool from another package never becomes a host-tracked interaction.

@@ -21,6 +21,7 @@ import {
 	PROTOCOL_VERSION,
 	USER_FONTS_ROUTE,
 	USER_THEMES_PROTOCOL_VERSION,
+	WORKSPACE_CREATION_PROTOCOL_VERSION,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
@@ -49,6 +50,7 @@ import {
 	setAgentReviewEnabledResolver,
 	setDisabledExtensionsResolver,
 	setDisabledPackagesResolver,
+	setExtensionSettingsResolver,
 	setExtUiPublisher,
 	setMcpLoginPublisher,
 	setMcpPolicyResolver,
@@ -111,6 +113,7 @@ import {
 	openProject,
 	refreshRecentProjectFolders,
 	setPiTrustSeed,
+	setProjectPathGuard,
 	setProjectPublisher,
 } from "../projects";
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
@@ -135,17 +138,28 @@ import {
 	stopAllWatches,
 } from "../watch";
 import {
+	creationOwnsPath,
 	getWorkspace,
+	interruptWorkspaceCreations,
 	listAllWorkspaceRecords,
 	recordWorkspaceHead,
 	refreshUserOwnedWorkspace,
+	replayPendingHandoffs,
 	seedWorkspaceHead,
+	setWorkspaceCreationHandoff,
+	setWorkspaceCreationPublisher,
 	setWorkspacePublisher,
+	stopWorkspaceCreations,
 } from "../workspaces";
 import { BLOB_PREFIX, FILES_PREFIX, serveBlob, serveWorktreeFile } from "./fileRoutes";
 import { serveUserFonts } from "./fontRoutes";
 import { setFsNudgePublisher } from "./fsNudge";
-import { handleRequest, requestErrorReport, requestMethodDiagnostic } from "./handlers";
+import {
+	handleRequest,
+	requestErrorReport,
+	requestMethodDiagnostic,
+	workspaceCreationHandoff,
+} from "./handlers";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { trackLoginOutcome } from "./loginAnalytics";
 import {
@@ -403,6 +417,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.workspaceUpdated);
 				ws.subscribe(WS_CHANNELS.workspaceRemoved);
 				ws.subscribe(WS_CHANNELS.workspaceFsChanged);
+				if (ws.data.protocolVersion >= WORKSPACE_CREATION_PROTOCOL_VERSION) {
+					ws.subscribe(WS_CHANNELS.workspaceCreationChanged);
+					ws.subscribe(WS_CHANNELS.workspaceCreationRemoved);
+				}
 				ws.subscribe(WS_CHANNELS.settingsChanged);
 				if (hostUpdate) ws.subscribe(WS_CHANNELS.hostUpdateAvailable);
 				ws.subscribe(WS_CHANNELS.reviewChanged);
@@ -713,6 +731,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setAgentReviewEnabledResolver(() => getConfig().agentReviewEnabled !== false);
 
 	setDisabledExtensionsResolver(() => new Set(getConfig().disabledExtensions));
+	setExtensionSettingsResolver(() => getConfig().extensionSettings ?? {});
 	setDisabledPackagesResolver(() => new Set(getConfig().disabledPackages));
 
 	setProjectPublisher((project) => {
@@ -736,6 +755,22 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			WS_CHANNELS.terminalTabs,
 			JSON.stringify({ channel: WS_CHANNELS.terminalTabs, data }),
 		);
+	});
+
+	interruptWorkspaceCreations();
+	setProjectPathGuard((path) => {
+		if (creationOwnsPath(path))
+			throw new Error("This folder belongs to a workspace ThinkRail is still creating");
+	});
+	setWorkspaceCreationHandoff(workspaceCreationHandoff);
+	void replayPendingHandoffs().catch((err) => log.warn("replaying workspace handoffs failed", err));
+	setWorkspaceCreationPublisher((event) => {
+		const channel =
+			event.kind === "changed"
+				? WS_CHANNELS.workspaceCreationChanged
+				: WS_CHANNELS.workspaceCreationRemoved;
+		const data = event.kind === "changed" ? event.creation : event.removed;
+		server.publish(channel, JSON.stringify({ channel, data }));
 	});
 
 	setWorkspacePublisher((event) => {
@@ -850,6 +885,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		if (appliedUpdate.disabledPackages !== undefined) bumpPackageSwitchGeneration();
 		if (
 			appliedUpdate.disabledExtensions !== undefined ||
+			appliedUpdate.extensionSettings !== undefined ||
 			appliedUpdate.disabledPackages !== undefined
 		) {
 			refreshExtensionTools();
@@ -1036,7 +1072,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const shutdown = (): Promise<void> => {
 		shutdownPromise ??= (async () => {
 			stopHostUpdateChecks();
-			await Promise.allSettled([settleSessionsForShutdown(), shutdownAnalytics()]);
+			await Promise.allSettled([
+				settleSessionsForShutdown(),
+				shutdownAnalytics(),
+				stopWorkspaceCreations(),
+			]);
 			await turnTracker.drain();
 			stop();
 		})();
@@ -1077,10 +1117,14 @@ function restoreSeamDefaults(): void {
 	setSubagentConcurrencyResolver(null);
 	setAgentReviewEnabledResolver(null);
 	setDisabledExtensionsResolver(null);
+	setExtensionSettingsResolver(null);
 	setDisabledPackagesResolver(null);
 	setProjectPublisher(null);
 	setTerminalTabsPublisher(() => {});
 	setWorkspacePublisher(null);
+	setWorkspaceCreationPublisher(null);
+	setWorkspaceCreationHandoff(null);
+	setProjectPathGuard(null);
 	setPiPackagesPublisher(null);
 	setWatchPublisher(null);
 	setSkillPathClassifier(null);

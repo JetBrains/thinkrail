@@ -19,6 +19,7 @@ import {
 } from "@remixicon/react";
 import type { ReviewComment, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { ResourceScopeProvider } from "@thinkrail/resource-renderers";
 import { Button, buttonVariants, IconButton } from "@thinkrail/ui/button";
 import {
 	DropdownMenu,
@@ -77,7 +78,7 @@ import {
 import { errorText, getTransport, respondToTool, supportsPlanReview } from "../transport";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { openChatInTab } from "./openChat";
-import { openDiffInTab } from "./openTabs";
+import { openDiffInTab, openFileInTab } from "./openTabs";
 import { PlanCommitsMenu } from "./PlanCommitsMenu";
 import { FileRow } from "./planFileRow";
 import {
@@ -664,24 +665,36 @@ function PlanCardSection({
 	);
 }
 
-function PlanInteractionCard({ pending }: { pending: PendingInteraction }) {
+function PlanInteractionCard({
+	workspaceId,
+	sessionId,
+	pending,
+}: {
+	workspaceId: string;
+	sessionId: string;
+	pending: PendingInteraction;
+}) {
 	const interaction = useToolInteraction(pending.toolCallId, pending.toolName);
 	const Renderer = getToolRenderer(pending.toolName);
+	const scope = useMemo(() => ({ workspaceId, sessionId }), [workspaceId, sessionId]);
 	return (
-		<Renderer
-			toolCallId={pending.toolCallId}
-			toolName={pending.toolName}
-			args={pending.args}
-			result={pending.result}
-			status={pending.status}
-			streaming={pending.streaming}
-			interaction={interaction}
-		/>
+		<ResourceScopeProvider value={scope}>
+			<Renderer
+				toolCallId={pending.toolCallId}
+				toolName={pending.toolName}
+				args={pending.args}
+				result={pending.result}
+				status={pending.status}
+				streaming={pending.streaming}
+				interaction={interaction}
+				onOpenFile={(path) => void openFileInTab(workspaceId, path, "preview")}
+			/>
+		</ResourceScopeProvider>
 	);
 }
 
 // Keep the session's live slot isolated from the heavy PlanPane.
-function PlanSessionLive({ sessionId }: { workspaceId: string; sessionId: string }) {
+function PlanSessionLive({ workspaceId, sessionId }: { workspaceId: string; sessionId: string }) {
 	const t = useT();
 	const runtime = useAppStore((s) => s.sessions[sessionId]);
 	const [focusScope] = useState<object>(() => ({}));
@@ -715,7 +728,11 @@ function PlanSessionLive({ sessionId }: { workspaceId: string; sessionId: string
 					}}
 				>
 					<div data-testid="plan-ask" className="mb-8">
-						<PlanInteractionCard pending={pending} />
+						<PlanInteractionCard
+							workspaceId={workspaceId}
+							sessionId={sessionId}
+							pending={pending}
+						/>
 					</div>
 				</InteractionStatesContext.Provider>
 			</ChatActionsContext.Provider>

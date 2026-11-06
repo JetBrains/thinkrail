@@ -48,7 +48,15 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   workspace files, with the registry's toggle, the unplaced strip, review commenting and Send review, and
   caller slots (`leading`, `actions`, controlled `rendererId` / `layout`, and an opaque `viewState` it tags
   with the renderer implementation that wrote it, so a renderer switch never restores another renderer's
-  state and a caller needs no reset);
+  state and a caller needs no reset). Its `compact` flag (carried to the lazy views as
+  `ResourceEnvironment.compact`, and reset by an explicit `compact={false}`) drops the renderer toggles,
+  Send review and the HTML notice with its viewport presets — the chrome a small embedded frame cannot
+  afford; the views themselves are unchanged;
+- **`FramedResourcePreview`** — `ResourcePreview` in a caller-sized frame with **Open in tab** (the file, or
+  the comparison for a diff) and **Full screen** (a dialog with the full chrome, sharing renderer and view
+  state), every action an explicit tab stop; nothing without a host and a workspace scope. It is the one
+  framed preview of visualize's file card and the questionnaire's previews ([[module-ext-visualize]],
+  [[module-ext-ask-user-question]]) — lifted from visualize when the second consumer arrived;
 - the pieces every surface composes a renderer from, so a file tab, a diff tab, a Changes section and
   `ResourcePreview` run one sequence:
   - `useRendererSelection(resource, intent, rendererId)` — candidates for the environment's phone class, the

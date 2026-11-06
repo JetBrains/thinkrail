@@ -4,20 +4,22 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DefaultPackageManager, SettingsManager } from "@earendil-works/pi-coding-agent";
-import { registryInlineExtensions } from "../extensions";
+import { type HostSessionServices, registryInlineExtensions, workspaceFiles } from "../extensions";
 import {
 	buildResourceLoader,
 	bumpPackagesRevision,
 	childBaseExtensionFactories,
 	childExtensionFactories,
 	disabledExtensions,
-	isLoaderPackagePolicyStale,
+	extensionSettings,
+	isLoaderPolicyStale,
 	listProjectAliasSkillNames,
 	listSkillCatalog,
 	listSkillCommands,
 	providerExtensionPaths,
 	setDisabledExtensionsResolver,
 	setDisabledPackagesResolver,
+	setExtensionSettingsResolver,
 	setInstalledPackagesListener,
 } from "./extensions";
 import { headlessSearchPolicy } from "./headlessSearch";
@@ -452,10 +454,23 @@ describe("buildResourceLoader", () => {
 	});
 });
 
+const hostServices: HostSessionServices = {
+	expectToolResponse: () => {},
+	awaitToolResponse: async () => ({ kind: "deferred" }),
+	workspaceFiles,
+};
+
 describe("registry extensions", () => {
 	async function visualizeTool(cwd: string, agentDir: string) {
 		const settingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted: true });
-		const loader = await buildResourceLoader(cwd, settingsManager, () => ctx(true));
+		const loader = await buildResourceLoader(
+			cwd,
+			settingsManager,
+			() => ctx(true),
+			[],
+			[],
+			hostServices,
+		);
 		const extension = loader
 			.getExtensions()
 			.extensions.find((candidate) => candidate.tools.has("visualize"));
@@ -506,7 +521,14 @@ describe("registry extensions", () => {
 		setDisabledExtensionsResolver(() => disabled);
 		try {
 			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
-			const loader = await buildResourceLoader(project, settingsManager, () => ctx(true));
+			const loader = await buildResourceLoader(
+				project,
+				settingsManager,
+				() => ctx(true),
+				[],
+				[],
+				hostServices,
+			);
 			const paths = () => loader.getExtensions().extensions.map((extension) => extension.path);
 			const tools = () =>
 				loader.getExtensions().extensions.flatMap((extension) => [...extension.tools.keys()]);
@@ -526,6 +548,97 @@ describe("registry extensions", () => {
 			setDisabledExtensionsResolver(() => new Set());
 			restore();
 			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("marks a loader stale when an extension setting changes and current again after reload", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-settings-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		let values: Record<string, Record<string, boolean>> = {};
+		setExtensionSettingsResolver(() => values);
+		try {
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(
+				project,
+				settingsManager,
+				() => ctx(true),
+				[],
+				[],
+				hostServices,
+			);
+			expect(isLoaderPolicyStale(loader)).toBe(false);
+			values = { "ask-user-question": { richPreviews: false } };
+			expect(isLoaderPolicyStale(loader)).toBe(true);
+			await loader.reload();
+			expect(isLoaderPolicyStale(loader)).toBe(false);
+			values = { "ask-user-question": { richPreviews: false } };
+			expect(isLoaderPolicyStale(loader)).toBe(false);
+		} finally {
+			setExtensionSettingsResolver(null);
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("loads extensions with the settings snapshot it records, so a change-and-revert mid-reload stays consistent", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-settings-race-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		const off = { "ask-user-question": { richPreviews: false } };
+		const on = { "ask-user-question": { richPreviews: true } };
+		let reads: Record<string, Record<string, boolean>>[] = [];
+		let settled = on;
+		setExtensionSettingsResolver(() => reads.shift() ?? settled);
+		try {
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(
+				project,
+				settingsManager,
+				() => ctx(true),
+				[],
+				[],
+				hostServices,
+			);
+			const askSchema = () =>
+				JSON.stringify(
+					loader
+						.getExtensions()
+						.extensions.flatMap((extension) => [...extension.tools.values()])
+						.find((tool) => tool.definition.name === "ask_user_question")?.definition.parameters,
+				);
+			expect(askSchema()).toContain("previewFile");
+			reads = [off, on];
+			settled = off;
+			await loader.reload();
+			reads = [];
+			expect(askSchema()).not.toContain("previewFile");
+			expect(isLoaderPolicyStale(loader)).toBe(false);
+		} finally {
+			setExtensionSettingsResolver(null);
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("treats a throwing extension settings resolver as no stored values", () => {
+		setExtensionSettingsResolver(() => {
+			throw new Error("broken config");
+		});
+		try {
+			expect(extensionSettings()).toEqual({});
+		} finally {
+			setExtensionSettingsResolver(null);
 		}
 	});
 
@@ -722,12 +835,12 @@ describe("pi packages", () => {
 			expect(tools()).toContain("fixture_hello");
 			expect(skills()).toContain("triage");
 			expect(prompts()).toContain("standup");
-			expect(isLoaderPackagePolicyStale(loader)).toBe(false);
+			expect(isLoaderPolicyStale(loader)).toBe(false);
 
 			disabled = new Set([`local:${pkg}`]);
-			expect(isLoaderPackagePolicyStale(loader)).toBe(true);
+			expect(isLoaderPolicyStale(loader)).toBe(true);
 			await loader.reload();
-			expect(isLoaderPackagePolicyStale(loader)).toBe(false);
+			expect(isLoaderPolicyStale(loader)).toBe(false);
 			expect(tools()).not.toContain("fixture_hello");
 			expect(skills()).not.toContain("triage");
 			expect(prompts()).not.toContain("standup");
@@ -747,9 +860,9 @@ describe("pi packages", () => {
 			);
 
 			bumpPackagesRevision();
-			expect(isLoaderPackagePolicyStale(loader)).toBe(true);
+			expect(isLoaderPolicyStale(loader)).toBe(true);
 			await loader.reload();
-			expect(isLoaderPackagePolicyStale(loader)).toBe(false);
+			expect(isLoaderPolicyStale(loader)).toBe(false);
 		} finally {
 			setDisabledPackagesResolver(() => new Set());
 			restore();
