@@ -17,10 +17,12 @@ import { ModelContextSettings } from "./ModelContextSettings";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
 import { SettingsRow } from "./SettingsRow";
 import { SettingsSwitch } from "./SettingsSwitch";
+import { useSettingsDialogContainer } from "./settingsDialogContainer";
 import { VisibleModelsSettings } from "./VisibleModelsSettings";
 
 export function ModelsSettings() {
 	const t = useT();
+	const container = useSettingsDialogContainer();
 	const defaultModel = useAppStore((s) => s.defaultModel);
 	const defaultEffort = useAppStore((s) => s.defaultEffort);
 	const reviewModel = useAppStore((s) => s.reviewModel);
@@ -140,6 +142,7 @@ export function ModelsSettings() {
 								placeholder={t("settings.models.firstAvailable")}
 								disabled={saving || reading}
 								preferences={preferences}
+								container={container}
 							/>
 							<ThinkingSelector
 								level={level}
@@ -148,6 +151,7 @@ export function ModelsSettings() {
 									void saveConfig({ defaultEffort }, t("settings.models.saveEffortFailed"))
 								}
 								disabled={saving || reading}
+								container={container}
 							/>
 						</div>
 					</div>
@@ -172,11 +176,13 @@ export function ModelsSettings() {
 							defaultOption={reviewerPlaceholder}
 							onSelectDefault={() => updateReviewer({ reviewModel: null, reviewEffort: null })}
 							preferences={preferences}
+							container={container}
 						/>
 						<ThinkingSelector
 							level={reviewerEffortLevel}
 							levels={reviewerEffortModel?.thinkingLevels ?? []}
 							onSelect={(level) => updateReviewer({ reviewEffort: level })}
+							container={container}
 						/>
 					</div>
 				</div>
