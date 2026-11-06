@@ -57,4 +57,12 @@ test("slugify matches GitHub-style heading anchors", () => {
 	expect(slugify("Getting Started")).toBe("getting-started");
 	expect(slugify("Hello, World!")).toBe("hello-world");
 	expect(slugify("  Trim  Me  ")).toBe("trim-me");
+	expect(slugify("foo_bar")).toBe("foo_bar");
+	expect(slugify("Café")).toBe("caf");
+});
+
+test("slugify keeps unicode letters when the ASCII slug would be empty", () => {
+	expect(slugify("中文")).toBe("中文");
+	expect(slugify("日本語")).toBe("日本語");
+	expect(slugify("!!!")).toBe("");
 });

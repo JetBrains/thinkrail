@@ -1,13 +1,29 @@
-import { useMemo } from "react";
-import { type ResourceHost, type ResourceMarkdown, useResourceHost } from "../host";
+import { cn } from "@thinkrail/ui/utils";
+import { type ReactNode, type RefObject, useMemo } from "react";
+import {
+	type ResourceHost,
+	type ResourceMarkdown,
+	type ResourceMarkdownProps,
+	useResourceHost,
+	useResourcePreferences,
+} from "../host";
 import type { ResourceViewProps } from "../registry";
 import { stripFrontmatter } from "./frontmatter";
+import { MarkdownOutline } from "./MarkdownOutline";
 import { alertComponents, remarkGithubAlerts } from "./markdownAlerts";
 import { documentRehypePlugins } from "./markdownHtml";
-import { documentComponents, remarkHeadingIds } from "./markdownLinks";
+import { documentComponents, headingIdPlugin, remarkHeadingIds } from "./markdownLinks";
+import {
+	extractMarkdownOutline,
+	flattenOutlineHeadings,
+	headingIdsInSlice,
+	MARKDOWN_OUTLINE_NARROW_WIDTH,
+	type OutlineHeading,
+} from "./outlineHeadings";
 import { type ComposerInsert, PreviewCommenting } from "./PreviewCommenting";
 import { ReviewThreadCard } from "./ReviewThreadCard";
 import { frontmatterOffset, indivisibleSpans, snapSplitLine } from "./sourceLines";
+import { useElementSize } from "./useElementSize";
 import { useScrollViewState } from "./useScrollViewState";
 
 const DOCUMENT_PROSE = [
@@ -40,12 +56,14 @@ export function MarkdownDocument({
 	path,
 	Markdown,
 	links,
+	headingIds,
 }: {
 	content: string;
 	workspaceId: string;
 	path: string;
 	Markdown: ResourceMarkdown;
 	links: Pick<ResourceHost, "bytesUrl" | "openFile">;
+	headingIds?: readonly string[];
 }) {
 	const components = useMemo(
 		() => documentComponents({ workspaceId, path }, links),
@@ -55,7 +73,10 @@ export function MarkdownDocument({
 		<Markdown
 			text={stripFrontmatter(content)}
 			className={DOCUMENT_PROSE}
-			remarkPlugins={[remarkGithubAlerts, remarkHeadingIds]}
+			remarkPlugins={[
+				remarkGithubAlerts,
+				headingIds ? headingIdPlugin(headingIds) : remarkHeadingIds,
+			]}
 			rehypePlugins={documentRehypePlugins()}
 			components={{ ...alertComponents, ...components }}
 		/>
@@ -110,6 +131,89 @@ function splicedSegments(
 	return segments;
 }
 
+export function MarkdownSplicedArticle({
+	content,
+	headings,
+	Markdown,
+	components,
+	inserts,
+}: {
+	content: string;
+	headings: readonly OutlineHeading[];
+	Markdown: ResourceMarkdown;
+	components: ResourceMarkdownProps["components"];
+	inserts: readonly FlowInsert[];
+}) {
+	const stripped = stripFrontmatter(content);
+	const rawOffset = frontmatterOffset(content, stripped);
+	const segments = splicedSegments(stripped, rawOffset, [...inserts]);
+	return (
+		<article className="mx-auto max-w-[78ch] px-24 py-16">
+			{segments.map((segment) => (
+				<div key={segment.key}>
+					{segment.text && (
+						<Markdown
+							text={segment.text}
+							className={DOCUMENT_PROSE}
+							remarkPlugins={[
+								remarkGithubAlerts,
+								headingIdPlugin(
+									headingIdsInSlice(headings, segment.stampOffset - rawOffset, segment.text),
+								),
+							]}
+							rehypePlugins={documentRehypePlugins(segment.stampOffset)}
+							components={components}
+						/>
+					)}
+					{segment.nodes}
+				</div>
+			))}
+		</article>
+	);
+}
+
+const PREVIEW_SCROLLER =
+	"relative h-full min-h-0 min-w-0 flex-1 overflow-auto bg-container-workspace-bg motion-safe:animate-reveal";
+
+function MarkdownPreviewShell({
+	headings,
+	scrollerRef,
+	children,
+}: {
+	headings: readonly OutlineHeading[];
+	scrollerRef: RefObject<HTMLDivElement | null>;
+	children: ReactNode;
+}) {
+	const { markdownOutlineVisible, setMarkdownOutlineVisible, markdownOutlineSide } =
+		useResourcePreferences();
+	const side = markdownOutlineSide ?? "right";
+	const { ref: sizeRef, size } = useElementSize<HTMLDivElement>();
+	const showToggle = flattenOutlineHeadings(headings).length >= 2;
+	const open =
+		showToggle &&
+		(markdownOutlineVisible ?? (size !== null && size.width >= MARKDOWN_OUTLINE_NARROW_WIDTH));
+	return (
+		<div
+			ref={sizeRef}
+			className={cn(
+				"relative flex h-full min-h-0 bg-container-workspace-bg",
+				side === "left" && "flex-row-reverse",
+			)}
+		>
+			{children}
+			{showToggle ? (
+				<MarkdownOutline
+					headings={headings}
+					open={open}
+					side={side}
+					scrollerRef={scrollerRef}
+					onOpenChange={setMarkdownOutlineVisible}
+				/>
+			) : null}
+		</div>
+	);
+}
+
 export default function MarkdownPreview({
 	resource,
 	content,
@@ -125,69 +229,69 @@ export default function MarkdownPreview({
 		() => documentComponents({ workspaceId, path }, links),
 		[path, workspaceId, links],
 	);
-	const { attach: attachScroller } = useScrollViewState<HTMLDivElement>(viewState, onViewState);
-	if (!review) {
-		return (
-			<div
-				ref={attachScroller}
-				data-testid="markdown-preview"
-				className="h-full overflow-auto bg-container-workspace-bg motion-safe:animate-reveal"
-			>
-				<article className="mx-auto max-w-[78ch] px-24 py-16">
-					<MarkdownDocument
-						content={text}
-						workspaceId={workspaceId}
-						path={path}
-						Markdown={Markdown}
-						links={links}
-					/>
-				</article>
-			</div>
-		);
-	}
-
-	const stripped = stripFrontmatter(text);
-	const rawOffset = frontmatterOffset(text, stripped);
-	const mdProps = (stampOffset: number) => ({
-		className: DOCUMENT_PROSE,
-		remarkPlugins: [remarkGithubAlerts, remarkHeadingIds],
-		rehypePlugins: documentRehypePlugins(stampOffset),
-		components: { ...alertComponents, ...components },
-	});
-	const threadInserts: FlowInsert[] = review.threads.flatMap((thread) => {
-		const range = thread.anchor.selectors.find((selector) => selector.kind === "lineRange");
-		return range?.kind === "lineRange"
-			? [
-					{
-						key: thread.id,
-						line: range.endLine,
-						node: <ReviewThreadCard key={thread.id} thread={thread} actions={review.actions} />,
-					},
-				]
-			: [];
-	});
-	return (
+	const { elementRef: scrollerRef, attach: attachScroller } = useScrollViewState<HTMLDivElement>(
+		viewState,
+		onViewState,
+	);
+	const headings = useMemo(() => extractMarkdownOutline(text), [text]);
+	const headingIds = useMemo(
+		() => flattenOutlineHeadings(headings).map((entry) => entry.heading.id),
+		[headings],
+	);
+	const documentView = !review ? (
+		<div ref={attachScroller} data-testid="markdown-preview" className={PREVIEW_SCROLLER}>
+			<article className="mx-auto max-w-[78ch] px-24 py-16">
+				<MarkdownDocument
+					content={text}
+					workspaceId={workspaceId}
+					path={path}
+					Markdown={Markdown}
+					links={links}
+					headingIds={headingIds}
+				/>
+			</article>
+		</div>
+	) : (
 		<PreviewCommenting
 			source={text}
 			review={review}
-			{...(onViewState ? { viewState, onViewState } : {})}
+			scrollerRef={scrollerRef}
+			attachScroller={attachScroller}
 		>
 			{(composer: ComposerInsert | null) => {
-				const inserts = composer
-					? [...threadInserts, { key: "composer", line: composer.line, node: composer.node }]
-					: threadInserts;
-				const segments = splicedSegments(stripped, rawOffset, inserts);
+				const threadInserts: FlowInsert[] = review.threads.flatMap((thread) => {
+					const range = thread.anchor.selectors.find((selector) => selector.kind === "lineRange");
+					return range?.kind === "lineRange"
+						? [
+								{
+									key: thread.id,
+									line: range.endLine,
+									node: (
+										<ReviewThreadCard key={thread.id} thread={thread} actions={review.actions} />
+									),
+								},
+							]
+						: [];
+				});
 				return (
-					<article className="mx-auto max-w-[78ch] px-24 py-16">
-						{segments.map((segment) => (
-							<div key={segment.key}>
-								{segment.text && <Markdown text={segment.text} {...mdProps(segment.stampOffset)} />}
-								{segment.nodes}
-							</div>
-						))}
-					</article>
+					<MarkdownSplicedArticle
+						content={text}
+						headings={headings}
+						Markdown={Markdown}
+						components={{ ...alertComponents, ...components }}
+						inserts={
+							composer
+								? [...threadInserts, { key: "composer", line: composer.line, node: composer.node }]
+								: threadInserts
+						}
+					/>
 				);
 			}}
 		</PreviewCommenting>
+	);
+	return (
+		<MarkdownPreviewShell headings={headings} scrollerRef={scrollerRef}>
+			{documentView}
+		</MarkdownPreviewShell>
 	);
 }
