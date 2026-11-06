@@ -392,6 +392,11 @@ themselves.
   check. The dialog and popover primitives guard their own Escape. #875: the rule was once stated for
   `Composer` alone, and 16 other fields drifted until the [[module-ui]] source scan caught them.
   Global modifier shortcuts (`Mod+K`, `Ctrl+R`, …) are app chords, not text-field keys, and stay ungated.
+- **Tab skips plain buttons in the macOS desktop.** It renders in the system WKWebView, which leaves a
+  `<button>` without an explicit `tabindex` out of the Tab order and does not focus one on click. Chromium
+  hides both; Playwright's macOS WebKit reproduces the Tab half only. A surface that must work from the keyboard gives every control an
+  explicit tab stop — the questionnaire card does, pinned by a markup test and a WebKit e2e lane
+  ([[module-ext-ask-user-question]]); the rest of the app has not been swept yet (known gap).
 - **Every host HTTP route the app composes is proxied by the Vite dev server.** The app reaches the host
   over `/ws`, over the two byte routes `/files` and `/blob` (images, PDFs, notebooks, markdown-relative
   images), always composed through one function (`panels/resourcePane.resourceBytesUrl`), and over

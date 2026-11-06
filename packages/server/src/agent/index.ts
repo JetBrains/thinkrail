@@ -32,6 +32,7 @@ export {
 	registerBundledRuntime,
 	setDisabledExtensionsResolver,
 	setDisabledPackagesResolver,
+	setExtensionSettingsResolver,
 } from "./extensions";
 export {
 	effectiveMcpServerConfig,

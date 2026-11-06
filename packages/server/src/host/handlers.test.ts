@@ -7,6 +7,7 @@ import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type {
+	AppConfig,
 	Project,
 	Template,
 	TemplateInfo,
@@ -552,6 +553,30 @@ test("model.default and new session creation share the AppConfig default resolut
 	}
 });
 
+test("settings.update merges extension settings per key and rejects a malformed value", async () => {
+	await handleRequest(
+		"settings.update",
+		{ config: { extensionSettings: { "ask-user-question": { richPreviews: false } } } },
+		CTX,
+	);
+	const config = (await handleRequest(
+		"settings.update",
+		{ config: { extensionSettings: { "ask-user-question": { other: true } } } },
+		CTX,
+	)) as AppConfig;
+	expect(config.extensionSettings["ask-user-question"]).toEqual({
+		richPreviews: false,
+		other: true,
+	});
+	await expect(
+		handleRequest(
+			"settings.update",
+			{ config: { extensionSettings: { "ask-user-question": { richPreviews: "no" } } } } as never,
+			CTX,
+		),
+	).rejects.toThrow("extensionSettings must map extension names to boolean settings");
+});
+
 test("extension.list reflects disabledExtensions written through settings.update", async () => {
 	expect(await handleRequest("extension.list", {}, CTX)).toEqual([
 		{
@@ -569,6 +594,7 @@ test("extension.list reflects disabledExtensions written through settings.update
 			enabled: true,
 			tools: ["ask_user_question"],
 			hasChildExtensions: false,
+			settings: [{ key: "richPreviews", default: true }],
 		},
 		{
 			name: "web-access",

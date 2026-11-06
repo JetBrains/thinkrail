@@ -23,10 +23,17 @@ list for registry extensions.
   entries?, session?)` (flattens `extensions` / `childExtensions` into pi `InlineExtension`s named after
   the extension — one factory keeps the bare name, several get `name#n` — so pi diagnostics show
   `<inline:visualize>` instead of a position; each factory asks `isDisabled(name)` **when pi loads it**, so
-  a reload re-decides membership without rebuilding the loader. A parent flatten given a `session` appends
-  `sessionExtensions(session)` after the static factories under the same naming; it calls it once per
-  flatten, so every parent session's factories close over its own services. Without a session, and in the
-  child set, session factories are absent), `omitDisabledRegistryExtensions(result, isDisabled)` (drops a disabled
+  a reload re-decides membership without rebuilding the loader. A parent flatten given the host's
+  `HostSessionServices` appends `sessionExtensions(services)` after the static factories under the same
+  naming; it calls it once per flatten, so every parent session's factories close over its own services.
+  Each extension gets its **own view** (`extensionSessionServices`): `setting(key)` answers only that
+  extension's declared settings — the stored value from the injected `ExtensionSettingValue` lookup, else
+  the declared default; an undeclared key throws — and is read **inside the factory body**, so every pi
+  (re)load sees current values. Without services, and in the child set, session factories are absent),
+  `workspaceFiles` (the host's file check shared by extension server halves through the session seam —
+  `checkWorkspaceFile` + `MOCKUP_DIR`: a path must be relative, stay inside the session cwd lexically and
+  after resolving links, name a regular file and stay out of `.git`, the paths the host's `fs.readFile`
+  then serves; `extension-api` stays contract-only, so the check lives here, not in the SDK), `omitDisabledRegistryExtensions(result, isDisabled)` (drops a disabled
   extension's `<inline:…>` entries from a pi `LoadExtensionsResult`, for the parent loader's
   `extensionsOverride`, so a disabled extension is absent rather than present-and-empty),
   `preferRegistryTools(result)` (also composed into that override, after the disabled filter). It moves a
@@ -40,10 +47,11 @@ list for registry extensions.
   matching by name rather than by recomputed names keeps it independent of how many per-session factories
   a session got),
   `listExtensionCatalog(disabled)` (the Settings catalog: per entry `name`, `title` — falling back to
-  `name` — optional `description`, `hasChildExtensions`, `enabled = !disabled.has(name)`, and the tool names
+  `name` — optional `description`, `hasChildExtensions`, `enabled = !disabled.has(name)`, the declared
+  `settings` (`key` + `default`), and the tool names
   its **parent** factories register against a recording stub `ExtensionAPI` whose every other member is
-  inert. Per-session factories are built for this with an inert session whose `awaitToolResponse`
-  rejects. The tools are computed once per process, never from a live session, and a factory that throws against the stub
+  inert. Per-session factories are built for this with an inert session whose `awaitToolResponse` and
+  `workspaceFiles.check` reject and whose `setting` answers the declared defaults. The tools are computed once per process, never from a live session, and a factory that throws against the stub
   keeps the tools it recorded before throwing), and `resolveExtensionSkillRoots(entry)` (the owner-scoped skill resolver: the extension's
   entry file from `specifier`, then each `skillPackages` manifest via `createRequire(extensionEntry)`,
   returning its `pi.skills` directories; a named package with no skills fails loudly),
@@ -55,7 +63,8 @@ list for registry extensions.
   as a string precisely because a descriptor holds functions, which yield no module identity.
 - **Public surface (barrel):** `serverExtensions`, `ServerExtensionEntry`, `registryInlineExtensions`,
   `RegistryExtensionKind`, `ExtensionDisabled`, `omitDisabledRegistryExtensions`, `preferRegistryTools`,
-  `registryExtensionName`,
+  `registryExtensionName`, `extensionSessionServices`, `HostSessionServices`, `ExtensionSettingValue`,
+  `checkWorkspaceFile`, `workspaceFiles`, `MOCKUP_DIR`,
   `listExtensionCatalog`,
   `resolveExtensionSkillRoots`, `STAGED_HOST_SKILLS_ROUTE`, `stagedExtensionSkillRoute`,
   `extensionSkillRoots`, `interactiveTools`, `InteractiveTools`, `ExtensionSessionServices`,
