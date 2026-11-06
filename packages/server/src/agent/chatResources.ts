@@ -130,6 +130,20 @@ function subagentHistory(workspaceId: string, sessionId: string): ReturnType<typ
 	return historyOf({ workspaceId, sessionId }, "subagent", ownedChildren(workspaceId, sessionId));
 }
 
+export function interruptedSessionResources(
+	workspaceId: string,
+	sessionId: string,
+	commands: BackgroundCommands,
+): ResourceRecord[] {
+	return [
+		...commandHistory(workspaceId, sessionId, commands).finished,
+		...subagentHistory(workspaceId, sessionId).finished,
+	].filter(
+		(record) =>
+			record.summary.interrupted && (record.kind === "command" || record.summary.detached === true),
+	);
+}
+
 function commandSummaries(records: readonly ResourceRecord[]): BackgroundCommandSummary[] {
 	return records.flatMap((record) => (record.kind === "command" ? [record.summary] : []));
 }
