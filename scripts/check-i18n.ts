@@ -2,7 +2,29 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
-import ts from "typescript";
+import { type CallExpression, type Node, SyntaxKind } from "tsrs/ast";
+import {
+	isAsExpression,
+	isBinaryExpression,
+	isCallExpression,
+	isConditionalExpression,
+	isIdentifier,
+	isJsxAttribute,
+	isJsxElement,
+	isJsxExpression,
+	isJsxFragment,
+	isJsxText,
+	isNoSubstitutionTemplateLiteral,
+	isParenthesizedExpression,
+	isPropertyAccessExpression,
+	isPropertyAssignment,
+	isStringLiteral,
+	isTemplateExpression,
+	isTemplateHead,
+	isTemplateMiddle,
+	isTemplateTail,
+} from "tsrs/ast/is";
+import { API, ScriptKind } from "tsrs/async";
 import { renderReachViolations } from "./i18nRenderReach";
 
 export const I18N_ROOTS = [
@@ -70,55 +92,55 @@ function looksLikeProse(text: string): boolean {
 	return hasLetters(trimmed) && (/\s/.test(trimmed) || /^\p{Lu}\p{Ll}/u.test(trimmed));
 }
 
-function literalParts(node: ts.Node): ts.Node[] {
-	if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return [node];
-	if (ts.isTemplateExpression(node)) {
+function literalParts(node: Node): Node[] {
+	if (isStringLiteral(node) || isNoSubstitutionTemplateLiteral(node)) return [node];
+	if (isTemplateExpression(node)) {
 		return [node.head, ...node.templateSpans.map((span) => span.literal)];
 	}
-	if (ts.isParenthesizedExpression(node) || ts.isAsExpression(node)) {
+	if (isParenthesizedExpression(node) || isAsExpression(node)) {
 		return literalParts(node.expression);
 	}
-	if (ts.isConditionalExpression(node)) {
+	if (isConditionalExpression(node)) {
 		return [...literalParts(node.whenTrue), ...literalParts(node.whenFalse)];
 	}
-	if (ts.isBinaryExpression(node)) {
+	if (isBinaryExpression(node)) {
 		const kind = node.operatorToken.kind;
 		if (
-			kind === ts.SyntaxKind.PlusToken ||
-			kind === ts.SyntaxKind.BarBarToken ||
-			kind === ts.SyntaxKind.QuestionQuestionToken
+			kind === SyntaxKind.PlusToken ||
+			kind === SyntaxKind.BarBarToken ||
+			kind === SyntaxKind.QuestionQuestionToken
 		) {
 			return [...literalParts(node.left), ...literalParts(node.right)];
 		}
-		if (kind === ts.SyntaxKind.AmpersandAmpersandToken) return literalParts(node.right);
+		if (kind === SyntaxKind.AmpersandAmpersandToken) return literalParts(node.right);
 	}
 	return [];
 }
 
-function literalText(node: ts.Node): string {
+function literalText(node: Node): string {
 	if (
-		ts.isStringLiteral(node) ||
-		ts.isNoSubstitutionTemplateLiteral(node) ||
-		ts.isTemplateHead(node) ||
-		ts.isTemplateMiddle(node) ||
-		ts.isTemplateTail(node)
+		isStringLiteral(node) ||
+		isNoSubstitutionTemplateLiteral(node) ||
+		isTemplateHead(node) ||
+		isTemplateMiddle(node) ||
+		isTemplateTail(node)
 	) {
 		return node.text;
 	}
 	return "";
 }
 
-function isToastCall(node: ts.CallExpression): boolean {
+function isToastCall(node: CallExpression): boolean {
 	const callee = node.expression;
 	return (
-		ts.isPropertyAccessExpression(callee) &&
-		ts.isIdentifier(callee.expression) &&
+		isPropertyAccessExpression(callee) &&
+		isIdentifier(callee.expression) &&
 		callee.expression.text === "toast"
 	);
 }
 
-function isErrorTextCall(node: ts.CallExpression): boolean {
-	return ts.isIdentifier(node.expression) && node.expression.text === "errorText";
+function isErrorTextCall(node: CallExpression): boolean {
+	return isIdentifier(node.expression) && node.expression.text === "errorText";
 }
 
 export interface I18nViolation {
@@ -127,55 +149,56 @@ export interface I18nViolation {
 	text: string;
 }
 
-export function sourceViolations(path: string, source: string): Omit<I18nViolation, "file">[] {
-	const sourceFile = ts.createSourceFile(
-		path,
-		source,
-		ts.ScriptTarget.Latest,
-		true,
-		path.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-	);
+export async function sourceViolations(
+	api: API,
+	path: string,
+	source: string,
+): Promise<Omit<I18nViolation, "file">[]> {
+	const retained = await api.createSourceFile(path, source, {
+		scriptKind: path.endsWith("x") ? ScriptKind.TSX : ScriptKind.TS,
+	});
+	const { sourceFile } = retained;
 	const found: Omit<I18nViolation, "file">[] = [];
-	const report = (node: ts.Node, text: string) => {
+	const report = (node: Node, text: string) => {
 		const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
 		found.push({ line: line + 1, text: text.trim().replace(/\s+/g, " ").slice(0, 80) });
 	};
-	const reportParts = (node: ts.Node, test: (text: string) => boolean) => {
+	const reportParts = (node: Node, test: (text: string) => boolean) => {
 		for (const part of literalParts(node)) {
 			const text = literalText(part);
 			if (test(text)) report(part, text);
 		}
 	};
-	const visit = (node: ts.Node): void => {
-		if (ts.isJsxText(node)) {
+	const visit = (node: Node): void => {
+		if (isJsxText(node)) {
 			if (hasLetters(node.text)) report(node, node.text);
-		} else if (ts.isJsxAttribute(node)) {
+		} else if (isJsxAttribute(node)) {
 			const name = node.name.getText(sourceFile);
 			const value = node.initializer;
 			if (value && isTextAttribute(name)) {
-				if (ts.isStringLiteral(value)) {
+				if (isStringLiteral(value)) {
 					if (hasLetters(value.text)) report(value, value.text);
-				} else if (ts.isJsxExpression(value) && value.expression) {
+				} else if (isJsxExpression(value) && value.expression) {
 					reportParts(value.expression, hasLetters);
 				}
 			}
 		} else if (
-			ts.isJsxExpression(node) &&
+			isJsxExpression(node) &&
 			node.expression &&
-			(ts.isJsxElement(node.parent) || ts.isJsxFragment(node.parent))
+			(isJsxElement(node.parent) || isJsxFragment(node.parent))
 		) {
 			reportParts(node.expression, hasLetters);
-		} else if (ts.isPropertyAssignment(node)) {
-			const name =
-				ts.isIdentifier(node.name) || ts.isStringLiteral(node.name) ? node.name.text : "";
+		} else if (isPropertyAssignment(node)) {
+			const name = isIdentifier(node.name) || isStringLiteral(node.name) ? node.name.text : "";
 			if (TEXT_PROPERTIES.has(name)) reportParts(node.initializer, looksLikeProse);
-		} else if (ts.isCallExpression(node)) {
+		} else if (isCallExpression(node)) {
 			if (isToastCall(node) && node.arguments[0]) reportParts(node.arguments[0], hasLetters);
 			if (isErrorTextCall(node) && node.arguments[1]) reportParts(node.arguments[1], hasLetters);
 		}
-		ts.forEachChild(node, visit);
+		node.forEachChild(visit);
 	};
 	visit(sourceFile);
+	await retained.dispose();
 	return found;
 }
 
@@ -202,16 +225,15 @@ function sourceFiles(root: string): string[] {
 	return files;
 }
 
-export function i18nViolations(repoRoot: string): I18nViolation[] {
+export async function i18nViolations(api: API, repoRoot: string): Promise<I18nViolation[]> {
 	const root = resolve(repoRoot);
-	return I18N_ROOTS.flatMap((dir) =>
-		sourceFiles(join(root, dir)).flatMap((path) =>
-			sourceViolations(path, readFileSync(path, "utf8")).map((violation) => ({
-				file: relative(root, path).split(sep).join("/"),
-				...violation,
-			})),
-		),
-	);
+	const violations: I18nViolation[] = [];
+	for (const path of I18N_ROOTS.flatMap((dir) => sourceFiles(join(root, dir)))) {
+		const file = relative(root, path).split(sep).join("/");
+		for (const violation of await sourceViolations(api, path, readFileSync(path, "utf8")))
+			violations.push({ file, ...violation });
+	}
+	return violations;
 }
 
 const KEY_CONSUMER_ROOTS = [...I18N_ROOTS, "apps/desktop/src", "packages/locales/src"] as const;
@@ -260,7 +282,12 @@ function consumerSources(root: string): string[] {
 
 if (import.meta.main) {
 	const root = join(import.meta.dir, "..");
-	const violations = i18nViolations(root);
+	const api = new API({ cwd: root });
+	const scan = async () => ({
+		violations: await i18nViolations(api, root),
+		stale: await renderReachViolations(api, root, ["apps/web/tsconfig.json"]),
+	});
+	const { violations, stale } = await scan().finally(() => api.close());
 	const problems = catalogProblems(
 		readFileSync(join(root, "packages/locales/en.json"), "utf8"),
 		consumerSources(root),
@@ -274,7 +301,6 @@ if (import.meta.main) {
 		console.error("packages/locales/en.json:");
 		for (const problem of problems) console.error(`  ${problem}`);
 	}
-	const stale = renderReachViolations(root, ["apps/web/tsconfig.json"]);
 	if (stale.length > 0) {
 		console.error(
 			"Render-time reads of the global translator (pass useT()'s translator; see packages/locales/SPEC.md):",

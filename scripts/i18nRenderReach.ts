@@ -1,5 +1,39 @@
-import { dirname, join, relative, sep } from "node:path";
-import ts from "typescript";
+import { join, relative, sep } from "node:path";
+import type {
+	ArrowFunction,
+	CallExpression,
+	Expression,
+	FunctionDeclaration,
+	FunctionExpression,
+	GetAccessorDeclaration,
+	Identifier,
+	MethodDeclaration,
+	Node,
+	SourceFile,
+} from "tsrs/ast";
+import {
+	isArrowFunction,
+	isCallExpression,
+	isClassDeclaration,
+	isClassExpression,
+	isExportSpecifier,
+	isFunctionDeclaration,
+	isFunctionExpression,
+	isGetAccessorDeclaration,
+	isIdentifier,
+	isImportSpecifier,
+	isJsxAttribute,
+	isJsxElement,
+	isJsxExpression,
+	isJsxFragment,
+	isMethodDeclaration,
+	isParenthesizedExpression,
+	isPropertyAccessExpression,
+	isPropertyAssignment,
+	isSourceFile,
+	isVariableDeclaration,
+} from "tsrs/ast/is";
+import { type API, type Checker, SymbolFlags, type Symbol as TsSymbol } from "tsrs/async";
 
 export interface RenderReachViolation {
 	file: string;
@@ -33,185 +67,241 @@ const SYNCHRONOUS_CALLBACKS = new Set([
 ]);
 
 type FunctionNode =
-	| ts.FunctionDeclaration
-	| ts.FunctionExpression
-	| ts.ArrowFunction
-	| ts.MethodDeclaration
-	| ts.GetAccessorDeclaration;
+	| FunctionDeclaration
+	| FunctionExpression
+	| ArrowFunction
+	| MethodDeclaration
+	| GetAccessorDeclaration;
 
-function isFunctionNode(node: ts.Node): node is FunctionNode {
+function isFunctionNode(node: Node): node is FunctionNode {
 	return (
-		ts.isFunctionDeclaration(node) ||
-		ts.isFunctionExpression(node) ||
-		ts.isArrowFunction(node) ||
-		ts.isMethodDeclaration(node) ||
-		ts.isGetAccessorDeclaration(node)
+		isFunctionDeclaration(node) ||
+		isFunctionExpression(node) ||
+		isArrowFunction(node) ||
+		isMethodDeclaration(node) ||
+		isGetAccessorDeclaration(node)
 	);
 }
 
+function declaredName(node: FunctionNode): Node | undefined {
+	return isArrowFunction(node) ? undefined : node.name;
+}
+
 function functionName(node: FunctionNode): string | undefined {
-	if (node.name && ts.isIdentifier(node.name)) return node.name.text;
-	let parent: ts.Node = node.parent;
-	while (ts.isCallExpression(parent) || ts.isParenthesizedExpression(parent))
-		parent = parent.parent;
-	if (ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) return parent.name.text;
+	const name = declaredName(node);
+	if (name && isIdentifier(name)) return name.text;
+	let parent: Node = node.parent;
+	while (isCallExpression(parent) || isParenthesizedExpression(parent)) parent = parent.parent;
+	if (isVariableDeclaration(parent) && isIdentifier(parent.name)) return parent.name.text;
 	return undefined;
 }
 
 function isComponentOrHook(node: FunctionNode): boolean {
-	if (ts.isMethodDeclaration(node) && ts.isClassLike(node.parent)) {
-		return ts.isIdentifier(node.name) && node.name.text === "render";
+	if (
+		isMethodDeclaration(node) &&
+		(isClassDeclaration(node.parent) || isClassExpression(node.parent))
+	) {
+		return isIdentifier(node.name) && node.name.text === "render";
 	}
 	const name = functionName(node);
 	return !!name && (/^[A-Z]/.test(name) || /^use[A-Z]/.test(name));
 }
 
-function enclosingFunction(node: ts.Node): FunctionNode | undefined {
+function enclosingFunction(node: Node): FunctionNode | undefined {
 	for (let current = node.parent; current; current = current.parent) {
 		if (isFunctionNode(current)) return current;
 	}
 	return undefined;
 }
 
-function calleeName(call: ts.CallExpression): string | undefined {
+function calleeName(call: CallExpression): string | undefined {
 	const callee = call.expression;
-	if (ts.isIdentifier(callee)) return callee.text;
-	if (ts.isPropertyAccessExpression(callee)) return callee.name.text;
+	if (isIdentifier(callee)) return callee.text;
+	if (isPropertyAccessExpression(callee)) return callee.name.text;
 	return undefined;
 }
 
 function isRenderProp(fn: FunctionNode): boolean {
 	const container = fn.parent;
-	if (!ts.isJsxExpression(container)) return false;
+	if (!isJsxExpression(container)) return false;
 	const owner = container.parent;
-	if (ts.isJsxElement(owner) || ts.isJsxFragment(owner)) return true;
-	return ts.isJsxAttribute(owner) && /^(?:render[A-Z]?|children$)/.test(owner.name.getText());
+	if (isJsxElement(owner) || isJsxFragment(owner)) return true;
+	return isJsxAttribute(owner) && /^(?:render[A-Z]?|children$)/.test(owner.name.getText());
 }
 
 function runsSynchronouslyIn(fn: FunctionNode): boolean {
 	if (isRenderProp(fn)) return true;
 	const parent = fn.parent;
-	if (ts.isCallExpression(parent) && parent.arguments.includes(fn as ts.Expression)) {
+	if (isCallExpression(parent) && parent.arguments.includes(fn as Expression)) {
 		const name = calleeName(parent);
 		return !!name && SYNCHRONOUS_CALLBACKS.has(name);
 	}
-	return ts.isParenthesizedExpression(parent) && ts.isCallExpression(parent.parent);
+	return isParenthesizedExpression(parent) && isCallExpression(parent.parent);
 }
 
-function ownerWhenEvaluated(node: ts.Node): FunctionNode | undefined {
+function ownerWhenEvaluated(node: Node): FunctionNode | undefined {
 	let fn = enclosingFunction(node);
 	while (fn && runsSynchronouslyIn(fn)) fn = enclosingFunction(fn);
 	return fn;
 }
 
-function isGetterLike(node: ts.Node): node is FunctionNode {
+function isGetterLike(node: Node): node is FunctionNode {
 	return (
-		ts.isGetAccessorDeclaration(node) ||
-		((ts.isArrowFunction(node) || ts.isFunctionExpression(node)) &&
-			ts.isPropertyAssignment(node.parent) &&
-			ts.isIdentifier(node.parent.name) &&
+		isGetAccessorDeclaration(node) ||
+		((isArrowFunction(node) || isFunctionExpression(node)) &&
+			isPropertyAssignment(node.parent) &&
+			isIdentifier(node.parent.name) &&
 			node.parent.name.text === "get")
 	);
 }
 
-function isRenderSeam(node: ts.Node): node is FunctionNode {
+function isRenderSeam(node: Node): node is FunctionNode {
 	return (
-		(ts.isArrowFunction(node) || ts.isFunctionExpression(node)) &&
-		ts.isPropertyAssignment(node.parent) &&
-		ts.isIdentifier(node.parent.name) &&
+		(isArrowFunction(node) || isFunctionExpression(node)) &&
+		isPropertyAssignment(node.parent) &&
+		isIdentifier(node.parent.name) &&
 		node.parent.name.text === "summary"
 	);
 }
 
-export function renderReachViolations(
+async function resolvedSymbols(
+	checker: Checker,
+	nodes: readonly Node[],
+): Promise<Map<Node, TsSymbol | undefined>> {
+	const symbols = nodes.length > 0 ? await checker.getSymbolAtLocation(nodes) : [];
+	const aliases = new Map<TsSymbol, Promise<TsSymbol>>();
+	for (const symbol of symbols) {
+		if (symbol && symbol.flags & SymbolFlags.Alias && !aliases.has(symbol))
+			aliases.set(symbol, checker.getAliasedSymbol(symbol));
+	}
+	const targets = new Map<TsSymbol, TsSymbol>();
+	for (const [alias, target] of aliases) targets.set(alias, await target);
+	return new Map(
+		nodes.map((node, index) => {
+			const symbol = symbols[index];
+			return [node, symbol && (targets.get(symbol) ?? symbol)];
+		}),
+	);
+}
+
+function symbolSites(file: SourceFile): Node[] {
+	const sites: Node[] = [];
+	const visit = (node: Node): void => {
+		if (isIdentifier(node)) sites.push(node);
+		else {
+			const name = isFunctionNode(node)
+				? declaredName(node)
+				: isVariableDeclaration(node)
+					? node.name
+					: undefined;
+			if (name && !isIdentifier(name)) sites.push(name);
+		}
+		node.forEachChild(visit);
+	};
+	visit(file);
+	return sites;
+}
+
+export async function renderReachViolations(
+	api: API,
 	repoRoot: string,
 	tsconfigs: readonly string[],
-): RenderReachViolation[] {
+): Promise<RenderReachViolation[]> {
 	const violations: RenderReachViolation[] = [];
 	const seen = new Set<string>();
 	for (const tsconfig of tsconfigs) {
 		const configPath = join(repoRoot, tsconfig);
-		const config = ts.readConfigFile(configPath, ts.sys.readFile);
-		const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, dirname(configPath));
-		const program = ts.createProgram(parsed.fileNames, parsed.options);
-		const checker = program.getTypeChecker();
-		const resolve = (symbol: ts.Symbol | undefined): ts.Symbol | undefined =>
-			symbol && symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
+		const config = await api.readConfigFile(configPath);
+		const parsed = await api.parseJsonConfigFileContent(config.config, {
+			configFileName: configPath,
+		});
+		const program = await api.createProgram(parsed.fileNames, parsed.options);
+		const checker = program.getProject().checker;
+		const files: SourceFile[] = [];
+		for (const name of await program.getSourceFileNames()) {
+			const file = await program.getSourceFile(name);
+			if (file) files.push(file);
+		}
 
-		const localeModule = program
-			.getSourceFiles()
-			.find((file) =>
-				file.fileName.endsWith(["packages", "locales", "src", "react.tsx"].join("/")),
-			);
-		const moduleSymbol = localeModule ? checker.getSymbolAtLocation(localeModule) : undefined;
-		if (!localeModule || !moduleSymbol) continue;
-		const readers = new Set(
-			checker
-				.getExportsOfModule(moduleSymbol)
-				.filter((symbol) => LOCALE_READERS.has(symbol.name))
-				.map((symbol) => resolve(symbol)),
+		const localeModule = files.find((file) =>
+			file.fileName.endsWith(["packages", "locales", "src", "react.tsx"].join("/")),
 		);
-		const sources = program
-			.getSourceFiles()
-			.filter(
-				(file) =>
-					!file.isDeclarationFile &&
-					!file.fileName.includes("/node_modules/") &&
-					!/\.(?:test|spec)\.tsx?$/.test(file.fileName) &&
-					file !== localeModule,
-			);
+		const moduleSymbol = localeModule ? await checker.getSymbolAtLocation(localeModule) : undefined;
+		if (!localeModule || !moduleSymbol) continue;
+		const exported = (await checker.getExportsOfModule(moduleSymbol)).filter((symbol) =>
+			LOCALE_READERS.has(symbol.name),
+		);
+		const readers = new Set(
+			await Promise.all(
+				exported.map((symbol) =>
+					symbol.flags & SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol,
+				),
+			),
+		);
+		const sources = files.filter(
+			(file) =>
+				!file.isDeclarationFile &&
+				!file.fileName.includes("/node_modules/") &&
+				!/\.(?:test|spec)\.tsx?$/.test(file.fileName) &&
+				file !== localeModule,
+		);
+		const symbolAt = new Map<Node, TsSymbol | undefined>();
+		for (const file of sources) {
+			for (const [node, symbol] of await resolvedSymbols(checker, symbolSites(file)))
+				symbolAt.set(node, symbol);
+		}
 
-		const translatingFunctions = new Set<ts.Symbol>();
-		const translatingValues = new Set<ts.Symbol>();
-		const symbolOf = (node: ts.Node) => resolve(checker.getSymbolAtLocation(node));
-		const callable = (node: ts.Identifier): ts.Expression =>
-			ts.isPropertyAccessExpression(node.parent) && node.parent.name === node ? node.parent : node;
-		const isLocaleRead = (node: ts.Identifier): boolean => {
+		const translatingFunctions = new Set<TsSymbol>();
+		const translatingValues = new Set<TsSymbol>();
+		const symbolOf = (node: Node) => symbolAt.get(node);
+		const callable = (node: Identifier): Expression =>
+			isPropertyAccessExpression(node.parent) && node.parent.name === node ? node.parent : node;
+		const isLocaleRead = (node: Identifier): boolean => {
 			const symbol = symbolOf(node);
 			if (!symbol) return false;
 			if (readers.has(symbol) || translatingValues.has(symbol)) return true;
 			if (!translatingFunctions.has(symbol)) return false;
 			const expression = callable(node);
-			if (!ts.isCallExpression(expression.parent)) return false;
+			if (!isCallExpression(expression.parent)) return false;
 			const call = expression.parent;
 			if (call.expression === expression) return true;
 			const name = calleeName(call);
 			return !!name && SYNCHRONOUS_CALLBACKS.has(name) && call.arguments.includes(expression);
 		};
-		const isTranslatingReference = (node: ts.Expression): boolean => {
-			const target = ts.isPropertyAccessExpression(node) ? node.name : node;
-			if (!ts.isIdentifier(target)) return false;
+		const isTranslatingReference = (node: Expression): boolean => {
+			const target = isPropertyAccessExpression(node) ? node.name : node;
+			if (!isIdentifier(target)) return false;
 			const symbol = symbolOf(target);
 			return !!symbol && translatingFunctions.has(symbol);
 		};
 		const readsLocaleWhenCalled = (fn: FunctionNode): boolean => {
 			let found = false;
-			const visit = (node: ts.Node): void => {
+			const visit = (node: Node): void => {
 				if (found) return;
-				if (ts.isIdentifier(node) && ownerWhenEvaluated(node) === fn && isLocaleRead(node)) {
+				if (isIdentifier(node) && ownerWhenEvaluated(node) === fn && isLocaleRead(node)) {
 					found = true;
 					return;
 				}
-				ts.forEachChild(node, visit);
+				node.forEachChild(visit);
 			};
 			for (const parameter of fn.parameters)
 				if (parameter.initializer) visit(parameter.initializer);
 			if (fn.body) visit(fn.body);
 			return found;
 		};
-		const functionSymbol = (fn: FunctionNode): ts.Symbol | undefined => {
-			if (fn.name) return symbolOf(fn.name);
-			let parent: ts.Node = fn.parent;
-			while (ts.isCallExpression(parent) || ts.isParenthesizedExpression(parent))
-				parent = parent.parent;
-			return ts.isVariableDeclaration(parent) ? symbolOf(parent.name) : undefined;
+		const functionSymbol = (fn: FunctionNode): TsSymbol | undefined => {
+			const name = declaredName(fn);
+			if (name) return symbolOf(name);
+			let parent: Node = fn.parent;
+			while (isCallExpression(parent) || isParenthesizedExpression(parent)) parent = parent.parent;
+			return isVariableDeclaration(parent) ? symbolOf(parent.name) : undefined;
 		};
 
 		let grew = true;
 		while (grew) {
 			grew = false;
 			for (const file of sources) {
-				const visit = (node: ts.Node): void => {
+				const visit = (node: Node): void => {
 					if (
 						isFunctionNode(node) &&
 						!isComponentOrHook(node) &&
@@ -225,27 +315,27 @@ export function renderReachViolations(
 						}
 					}
 					if (isGetterLike(node) && readsLocaleWhenCalled(node)) {
-						let holder: ts.Node = node;
-						while (holder.parent && !ts.isVariableDeclaration(holder) && !ts.isSourceFile(holder)) {
+						let holder: Node = node;
+						while (holder.parent && !isVariableDeclaration(holder) && !isSourceFile(holder)) {
 							holder = holder.parent;
 						}
-						const symbol = ts.isVariableDeclaration(holder) ? symbolOf(holder.name) : undefined;
+						const symbol = isVariableDeclaration(holder) ? symbolOf(holder.name) : undefined;
 						if (symbol && !translatingValues.has(symbol)) {
 							translatingValues.add(symbol);
 							grew = true;
 						}
 					}
-					ts.forEachChild(node, visit);
+					node.forEachChild(visit);
 				};
 				visit(file);
 			}
 		}
 
 		for (const file of sources) {
-			const visit = (node: ts.Node): void => {
+			const visit = (node: Node): void => {
 				if (
-					ts.isPropertyAssignment(node) &&
-					ts.isIdentifier(node.name) &&
+					isPropertyAssignment(node) &&
+					isIdentifier(node.name) &&
 					node.name.text === "summary" &&
 					isTranslatingReference(node.initializer)
 				) {
@@ -264,13 +354,13 @@ export function renderReachViolations(
 						text: isGetterLike(node) ? "translating getter" : "summary reads the global translator",
 					});
 				}
-				if (ts.isIdentifier(node) && !ts.isImportSpecifier(node.parent)) {
+				if (isIdentifier(node) && !isImportSpecifier(node.parent)) {
 					const owner = ownerWhenEvaluated(node);
 					const expression = callable(node);
 					const atModuleLoad =
 						!owner &&
-						!ts.isExportSpecifier(node.parent) &&
-						ts.isCallExpression(expression.parent) &&
+						!isExportSpecifier(node.parent) &&
+						isCallExpression(expression.parent) &&
 						expression.parent.expression === expression;
 					if (((owner && isComponentOrHook(owner)) || atModuleLoad) && isLocaleRead(node)) {
 						const { line } = file.getLineAndCharacterOfPosition(node.getStart(file));
@@ -285,7 +375,7 @@ export function renderReachViolations(
 						}
 					}
 				}
-				ts.forEachChild(node, visit);
+				node.forEachChild(visit);
 			};
 			visit(file);
 		}
