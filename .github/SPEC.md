@@ -79,12 +79,13 @@ no job is re-run automatically. They install Chromium without `--with-deps`: the
 carries its shared libraries, and the extra apt packages (CJK/Thai/X fonts) feed no assertion while their
 Ubuntu-mirror download was the slowest step of the job, often for minutes. A missing library fails
 Chromium's launch loudly. The one exception is the source no-agent E2E job, which also runs the
-questionnaire specs under WebKit: the image lacks WebKit's libraries, so that job installs WebKit
-`--with-deps`, which always adds Playwright's font set. The Azure mirror sometimes trickles one of those
-fonts for minutes, which an HTTP timeout never catches, so each WebKit attempt is capped at 150 s (a
-healthy install takes about a minute) and retried. The retry reuses the archives already downloaded over
-a fresh connection, and apt also gets a 20 s HTTP timeout with five retries for outright stalls. The browsers themselves
-are not cached: the Playwright CDN download takes seconds, no slower than an Actions-cache restore of the same bytes. Jobs download only Chromium's headless shell,
+questionnaire specs under WebKit. The image lacks WebKit's libraries, so that job installs the packages
+Playwright's `install-deps --dry-run webkit` reports missing, minus its font and X-server group
+(`fonts-*`, `xfonts-*`, `ttf-*`, `xvfb`), not `--with-deps`, which always adds that group. Those fonts
+feed no assertion, and the Azure mirror trickled one of them for minutes, past the wait deadline, in two of
+four shard runs; apt also gets a 20 s HTTP timeout with five retries for outright stalls. The browsers
+themselves are not cached: the Playwright CDN download takes seconds, no slower than an Actions-cache
+restore of the same bytes. Jobs download only Chromium's headless shell,
 the one binary headless tests launch, and start it in the background right after `bun install`; a wait
 step joins it, failing with its status, just before the browser tests, so the download overlaps the build
 instead of preceding it.
