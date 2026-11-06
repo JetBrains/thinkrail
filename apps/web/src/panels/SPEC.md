@@ -608,26 +608,37 @@ a project picker, the prompt hero, and the reused
   so `resources: true` travels only when the notice named pi-level resources; it folds the updated project
   back into the store and re-previews); personal + bundled skills show regardless. When the menu is closed, **Enter submits** (matching the submit button's
   `↵` affordance) and
-  **Shift+Enter** inserts a newline. Worktree-mode submit = `workspace.create({ projectId, baseRef })` → set active,
-  and the dialog itself expands the project and refreshes its authoritative `workspace.list` (fire-and-forget;
-  the `workspace.created` push is not relied on because an unloaded project list drops it) — there is no
-  `onCreated` callback, so every mount site (`ProjectTree`, `WelcomePanel`, the shell's keyboard-opened
-  instance) gets the same post-create fold → **always open a
-  fresh chat** (`session.create({ workspaceId, model?, thinkingLevel? })` — a held model + effort apply even
-  without a prompt, and travel together; with no held model the host still applies the saved/fallback
-  defaults, explicitly passing the resolved pair whenever a model is available) → the typed
-  prompt **and any attached images** are additionally sent as the first message (fire-and-forget `prompt`,
-  forwarding `images` alongside `text`, with an optimistic user turn carrying the same attachments). The
-  prompt hero accepts **image paste/drop** through the shared `usePromptImages` controller (same
-  `imageAttachment` decode/downscale + chip surface as the chat `Composer`); submit is **held while any
-  image is still decoding**, and a start with **only images and no text** is a valid kick-off. An **empty
-  prompt with no images leaves the just-opened composer ready** — submitting the start-working
-  surface always lands the user in a chat, never on a bare receipt (folder mode: the same tail after
-  entering Default). A **rejected** kick-off `prompt` (a bad model / missing API key — e.g. picking a
-  nonexistent model) surfaces as an `error` turn in the just-opened chat via `store.appendErrorTurn` (with
-  `transport`'s `errorText`) rather than vanishing. The two rejections with **no chat to host a turn** raise a
-  `store.toast.error` instead: a failed **`workspace.create`** (keeps the dialog open to retry) and a failed
-  **`session.create`** (the dialog has already closed, the workspace exists — the toast is the only place left
+  **Shift+Enter** inserts a newline. **Worktree-mode submit on a v103+ host** = `workspace.startCreate({
+  projectId, baseRef, kickoff })`, where the kickoff always travels — text, any attached images, and the held
+  model + effort only when picked explicitly — so the host can start the chat even if this window closes. The
+  dialog folds the returned creation (keeping the full prompt locally, see [[submodule-web-store]]), expands
+  the project and refreshes its `workspace.list` (fire-and-forget), **selects the creation and closes at
+  once**: the checkout runs in the background ([[submodule-server-workspaces]]) and the user may keep working
+  anywhere. A rejected `startCreate` (an invalid ref, an unknown project) keeps the dialog open with a
+  `store.toast.error`. Against an **older host** the dialog falls back to `workspace.create` → set active →
+  `session.create({ workspaceId, model?, thinkingLevel? })` → fire-and-forget `prompt` with an optimistic user
+  turn, as before. That legacy path shows only the dialog's own *Creating…* button state — the old sidebar
+  pending-row counter was removed with the host-owned creations, a deliberate gap for the transition window
+  in which a newer web meets an older host. The prompt hero accepts **image paste/drop** through the shared `usePromptImages`
+  controller (same `imageAttachment` decode/downscale + chip surface as the chat `Composer`); submit is
+  **held while any image is still decoding**, and a start with **only images and no text** is a valid
+  kick-off. An **empty prompt with no images still lands the user in a chat** — the host starts it without a
+  prompt (folder mode: the same tail after entering Default). A **rejected** kick-off prompt (a bad model /
+  missing API key) surfaces as an `error` turn, after the user's message, in the chat the handoff opens; a
+  failed chat start toasts instead. `retryDraft` (Edit & retry) reopens the dialog prefilled with the failed
+  creation's prompt, images, model + effort and base branch.
+  **`WorkspaceCreation.tsx`** renders a creation in the two places the user waits: `WorkspaceCreationRow`
+  under its project in `ProjectTree` (spinner + `Creating… N%` + a `<progress>` bar while running; failed:
+  `Couldn't create` in the error colour, interrupted: `Interrupted at N%` in the warning colour, the reason in a
+  tooltip, with Retry, Edit & retry (failed only) and Dismiss/Discard; **a running creation has no
+  actions** — there is no cancel), and `WorkspaceCreationView`, the shell's main pane for the selected creation
+  (phase title, `x of y files · from <base>`, the held prompt, git's reason and the same actions; it says the
+  partial folder and branch were removed only when the host reports `cleanedUp`). `ProjectTree` hides a
+  workspace row while a creation with its id still exists, so the row becomes the workspace only once the
+  host has handed it off. `useCreationChatHandoff` (mounted by the shell) opens the chat the host started
+  through `openChatInTab` and appends the rejected-kickoff error. The two rejections with **no chat to host
+  a turn** raise a `store.toast.error`: a failed create (the creation row stays) and a failed chat start (the
+  workspace exists — the toast is the only place left
   to report the dropped kick-off). (`gh` status lives in `SettingsDialog`, not the
   create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear opens — a
   **store-driven two-pane shell**: one nav list, rendered once, beside a scrollable content pane. At `md`+

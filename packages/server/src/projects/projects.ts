@@ -25,6 +25,16 @@ function emit(project: Project): void {
 	publishProject?.(project);
 }
 
+let guardProjectPath: ((path: string) => void) | null = null;
+
+export function setProjectPathGuard(fn: ((path: string) => void) | null): void {
+	guardProjectPath = fn;
+}
+
+export function assertProjectPathAllowed(path: string): void {
+	guardProjectPath?.(path);
+}
+
 export function resolveProjectPath(path: string): string {
 	const home =
 		(process.platform === "win32" ? process.env.USERPROFILE : process.env.HOME) || homedir();
@@ -42,7 +52,13 @@ function gitToplevel(path: string): string | null {
 	const result = git(path, ["rev-parse", "--show-toplevel"], {
 		action: "read the repository root",
 	});
+	if (!result.ok && /dubious ownership/i.test(result.err))
+		throw new Error(`Git refused to open ${path}:\n${result.err}`);
 	return result.ok && result.out ? resolve(result.out) : null;
+}
+
+function gitStepFailed(step: string, path: string, err: string): Error {
+	return new Error(err ? `${step} failed: ${path}\n${err}` : `${step} failed: ${path}`);
 }
 
 function slugify(name: string): string {
@@ -90,6 +106,7 @@ export function getProjects(): Project[] {
 
 export function openProject(inputPath: string, displayName?: string): Project {
 	const path = resolveProjectPath(inputPath);
+	assertProjectPathAllowed(path);
 	const root = gitToplevel(path);
 	if (!root) throw new CodedError("NOT_GIT", `Not a git repository: ${path}`);
 
@@ -372,6 +389,7 @@ export function inspectProjectPath(inputPath: string): ProjectPathStatus {
 
 export function initProject(inputPath: string): Project {
 	const path = resolveProjectPath(inputPath);
+	assertProjectPathAllowed(path);
 	const status = inspectResolvedProjectPath(path);
 	if (status.kind === "missing") throw new Error(`No such folder: ${path}`);
 	if (status.kind === "notDirectory") throw new Error(`Not a folder: ${path}`);
@@ -390,8 +408,9 @@ export function createProject(
 		throw new Error(`Invalid project folder name: ${requestedName}`);
 	}
 	const parent = resolveProjectPath(parentPath);
-	mkdirSync(parent, { recursive: true });
 	const path = join(parent, name);
+	assertProjectPathAllowed(path);
+	mkdirSync(parent, { recursive: true });
 	let created = false;
 	try {
 		if (!statSync(path).isDirectory()) throw new Error(`Not a folder: ${path}`);
@@ -417,9 +436,9 @@ function bootstrapRepository(path: string): void {
 	const createdGitDir = !existsSync(gitDir);
 	try {
 		const init = git(path, ["init", "-b", "main"]);
-		if (!init.ok) throw new Error(`git init failed: ${path}`);
+		if (!init.ok) throw gitStepFailed("git init", path, init.err);
 		const added = git(path, ["add", "-A"], { timeoutMs: INDEX_WRITE_TIMEOUT_MS });
-		if (!added.ok) throw new Error(`git add failed: ${path}`);
+		if (!added.ok) throw gitStepFailed("git add", path, added.err);
 
 		const identity: string[] = [];
 		const identityProbe = { action: "read the git identity" };
@@ -430,7 +449,7 @@ function bootstrapRepository(path: string): void {
 		const commit = git(path, [...identity, "commit", "--allow-empty", "-m", "Initial commit"], {
 			timeoutMs: INDEX_WRITE_TIMEOUT_MS,
 		});
-		if (!commit.ok) throw new Error(`git commit failed: ${path}`);
+		if (!commit.ok) throw gitStepFailed("git commit", path, commit.err);
 	} catch (err) {
 		if (createdGitDir) rmSync(gitDir, { recursive: true, force: true });
 		throw err;

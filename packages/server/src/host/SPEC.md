@@ -195,7 +195,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   handler and publisher `createServer` installed is scoped to the server's lifetime and returns to its
   module default, so a later server in the same process (the unit suite boots many) never inherits a
   stopped one's policy or publish path; `shutdown()` memoizes one asynchronous graceful
-  path: bounded `settleSessionsForShutdown()` + awaited `shutdownAnalytics()` first, then
+  path: bounded `settleSessionsForShutdown()` + awaited `shutdownAnalytics()` + `stopWorkspaceCreations()`
+  (running checkouts are killed so the next start reports them `interrupted`) first, then
   `turnTracker.drain()` for the receipts those settlements started, then `stop()`). The
   bounded settle includes hidden delegation children even when their parent is
   idle, plus child cascades already started by a concurrent removal, so graceful quit does not let a
@@ -228,7 +229,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   only sanitizer) and always acks. Error tracking also rides two `server.ts` seams: every failed WS request
   is reported with its registered method (CodedErrors included), and `observeLoggedErrors` routes host
   `log.warn/error(msg, err)` calls as `host_logged` — so host diagnostics that carry an error go through
-  the logger, never `console.*`. The host's `resolveNewChatModel` composes AppConfig settings with the agent's settled available
+  the logger, never `console.*`. The host's `resolveNewChatModel` composes AppConfig settings with pi's global default model, the agent's settled available
   model list and Pi thinking clamp; `model.default`, `session.create`, and newly-created review chats share
   that resolver, and creation passes its model and effort explicitly. A `session.create` that **named** a
   model and every `session.setModel` also record the resolved model as recent through `settings`'
@@ -551,10 +552,30 @@ channel fan-out, and the process-boot wrapper both launchers share.
   recovery, when the transcript is genuinely gone from disk (there is no UI to close a review and
   start over, so wedging it would be worse); every other re-open failure throws rather than silently
   forking the conversation.
-- **Scratch-dir seeding on chat start:** the `session.create` handler calls `workspaces`'
-  `ensureWorkspaceScratchDir` before creating the session — the Default workspace's gitignored
-  `.thinkrail/context/` lands in the user's repo only when a chat actually starts there (and a
-  worktree's deleted scratch dir self-heals). Host-composed — no new module edges.
+- **Scratch-dir seeding on chat start:** every chat start (`session.create` and the creation handoff below)
+  goes through one `startChat` that calls `workspaces`' `ensureWorkspaceScratchDir` before creating the
+  session — the Default workspace's gitignored `.thinkrail/context/` lands in the user's repo only when a chat
+  actually starts there (and a worktree's deleted scratch dir self-heals). Host-composed — no new module edges.
+- **Background workspace creation (v104):** `workspace.startCreate` / `listCreations` / `retryCreation` /
+  `dismissCreation` front `workspaces`' creation job, and `createServer` marks leftover running creations
+  `interrupted` before it serves, installs the creation publisher (`workspace.creationChanged` /
+  `workspace.creationRemoved`, subscribed only by v104+ sockets) and the **handoff**
+  `workspaceCreationHandoff` (then replays any handoff a crash cut short): when a checkout finishes it provisions the initial terminal and, when the create
+  carried a kickoff, waits for the workspace watcher (`ensureWatch`, the readiness the browser's own chat start
+  awaits) and starts the chat through `startChat` (the kickoff's model/effort, else the saved defaults)
+  and sends its text/images through `sendUserMessage` under the `clientKey` that started (or last retried) the
+  creation, so the chat runs even with no window open. **The handoff waits only for pi's preflight, never the agent's turn:**
+  `promptSession`'s `onPreflight` resolves once pi has validated the model and auth and started (or queued /
+  handled) the run, so the creation is handed back — and its chat opened — within moments; a rejection
+  before that point (no model, no API key) comes back as `kickoffError` beside the `sessionId`, and failures
+  after it reach the chat through the session's own event stream. Waiting for the whole send ack (up to 10 s,
+  or the entire first turn) kept the finished workspace on "Creating…" for that long. An empty kickoff starts
+  the chat without a prompt, so the start surface always lands in a chat. The client key is remembered in memory only and dropped after the handoff or
+  a successful dismiss. The host installs `projects`' path guard with `workspaces`' `creationOwnsPath`, so
+  opening, initializing, creating or cloning a project at or inside a folder that is still being created is
+  refused — a half-made worktree can never be adopted while its cleanup may still remove it.
+  `workspace.create` stays a start-and-await over the same job (wire and e2e callers);
+  its setup observation, like `startCreate`'s, wraps the whole job.
 - **Project lifecycle fan-out:** `createServer` installs the `projects` module's publisher and maps every
   authoritative open/reopen/close snapshot to **`project.updated`**. The WS `open` handler subscribes to
   that channel and hydrates two views in `server.welcome`: `projects` (open records only) and
@@ -607,7 +628,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   delivery failure or final client reap after the reconnect grace releases the claim, while a transient
   reconnect retains and re-delivers it after `server.welcome`. A host restart has no claim to re-deliver, and
   the welcome clears the frontend's stale popup projection. Popup `feedback.respond` actions are ordinary
-  replay-safe requests and never alter the Settings link.
+  replay-safe requests and never alter the Settings link. A second injected publisher (`canAsk` + `ask`, both
+  true only for a v103+ socket) sends the one-time star ask (`GithubStarAsk`, the star count the feedback module
+  read) as addressed `feedback.githubStar` to the same client key.
 - **Survey submission:** after `initializeAnalytics` the host configures the feedback survey source from
   analytics' `surveyEndpoint()`, so unkeyed, CI and test runs never fetch and `THINKRAIL_POSTHOG_HOST`
   applies. A source dev host fetches only when `THINKRAIL_DEV_POSTHOG=1` and `THINKRAIL_POSTHOG_PROJECT_KEY`
@@ -693,12 +716,13 @@ enabled/confirmed choice before entering analytics attribution.
 - WS commands return values directly; only events + extension-UI + **`project.updated`** (published from
   the `projects` module's injected publisher) + the workspace lifecycle trio
   (`workspace.created`/`updated`/`removed`, published from the `workspaces` module's injected publisher) +
+  the creation pair (`workspace.creationChanged`/`creationRemoved`, from its creation publisher) +
   **`session.deleted`** (published from the agent module's injected publisher) + **`provider.changed`**
   (published from auth's Central/runtime invalidation seam and on a successful provider login) + **`host.updateAvailable`** (published for each
   retained CLI-update lifecycle replacement) use push channels. Every
   **broadcast** push channel a client should hear must be `ws.subscribe`d in the WS
-  `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Four channels are deliberately
-  **not** subscribed and not broadcast: `feedback.interview`, `terminal.data`, `terminal.exit`, and
+  `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Five channels are deliberately
+  **not** subscribed and not broadcast: `feedback.interview`, `feedback.githubStar`, `terminal.data`, `terminal.exit`, and
   `terminal.detached` are sent with `ws.send` to one addressed client. Adding an addressed channel means
   wiring a publisher, not a subscription.
 - **Terminal backpressure never trusts the `drain` event alone.** A backpressured `ws.send` latches the

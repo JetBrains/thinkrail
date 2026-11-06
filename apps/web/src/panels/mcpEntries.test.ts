@@ -95,7 +95,7 @@ test("malformed and escaped references are hidden and rejected in env, headers a
 			oauth: { clientSecret: MCP_HIDDEN_VALUE },
 		});
 		expect(mcpSecretIssues(currentTranslator(), entry)).toEqual([
-			`env TOKEN, header Authorization and oauth clientSecret are not references. ${HINT}`,
+			`The values of env TOKEN, header Authorization and oauth clientSecret are not references. ${HINT}`,
 		]);
 	}
 	const reference = `\${literal $TOKEN} \${LATER}`;
@@ -124,7 +124,7 @@ test("literal values are found in env, headers, oauth secrets and URL credential
 	expect(mcpLiteralValues(remote)).toEqual(["header Authorization", "oauth clientSecret"]);
 	expect(mcpUrlCredentials(remote)).toEqual(["user info", 'query "token"']);
 	expect(mcpSecretIssues(currentTranslator(), remote)).toEqual([
-		`header Authorization and oauth clientSecret are not references. ${HINT}`,
+		`The values of header Authorization and oauth clientSecret are not references. ${HINT}`,
 		`The URL carries a credential (user info, query "token"). pi sends the URL as written — pass the secret in a header instead, such as Authorization: Bearer \${TOKEN}.`,
 	]);
 	expect(
@@ -317,7 +317,7 @@ test("the form saves references only: a plain or empty value, or a credential in
 			"user",
 			[],
 		).values,
-	).toBe(`"API_KEY" is not a reference. ${HINT}`);
+	).toBe(`The value of "API_KEY" is not a reference. ${HINT}`);
 	expect(
 		validateMcpDraft(
 			currentTranslator(),
@@ -334,7 +334,7 @@ test("the form saves references only: a plain or empty value, or a credential in
 			"user",
 			[],
 		).values,
-	).toBe(`"API_KEY", "EMPTY" and "MODE" are not references. ${HINT}`);
+	).toBe(`The values of "API_KEY", "EMPTY" and "MODE" are not references. ${HINT}`);
 	expect(
 		validateMcpDraft(
 			currentTranslator(),
@@ -443,7 +443,7 @@ test("import issues add name rules for the chosen scope and the project-file aut
 			[],
 			["gh"],
 		),
-	).toEqual([`env GITHUB_TOKEN is not a reference. ${HINT}`]);
+	).toEqual([`The value of env GITHUB_TOKEN is not a reference. ${HINT}`]);
 });
 
 test("dialogs show plain values hidden; an untouched marker keeps the written value, anything new must be a reference", () => {
@@ -477,7 +477,7 @@ test("dialogs show plain values hidden; an untouched marker keeps the written va
 	expect(
 		mcpEditedEntry(currentTranslator(), { ...shown, env: { ...shownEnv, MODE: "prod" } }, written)
 			.issues,
-	).toEqual([`env MODE is not a reference. ${HINT}`]);
+	).toEqual([`The value of env MODE is not a reference. ${HINT}`]);
 	expect(
 		mcpEditedEntry(
 			currentTranslator(),
