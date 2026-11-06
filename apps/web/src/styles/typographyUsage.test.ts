@@ -35,6 +35,7 @@ const PRIMITIVE_ALLOWLIST = new Set([
 	"panels/TerminalInstance.tsx",
 	"packages/resource-renderers/src/renderers/code/pierreVirtualizer.ts",
 	"thinkrail-extensions/visualize/web/mermaid.ts",
+	"packages/resource-renderers/src/renderers/html/hostTheme.ts",
 ]);
 
 const componentFiles = () => FILES.filter((p) => !PRIMITIVE_ALLOWLIST.has(rel(p)));

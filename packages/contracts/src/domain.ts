@@ -122,6 +122,15 @@ export type SettledOverride = "settled" | "active";
 
 export const DEFAULT_WORKSPACE_NAME = "Default";
 
+export const MOCKUP_DIR = ".thinkrail/context/mockups/";
+
+/** True only for a canonical workspace-relative path: no `.`, `..` or empty segment, no backslash. */
+export function isMockupPath(path: string): boolean {
+	if (!path.startsWith(MOCKUP_DIR) || path.includes("\\")) return false;
+	const rest = path.slice(MOCKUP_DIR.length).split("/");
+	return rest.every((segment) => segment !== "" && segment !== "." && segment !== "..");
+}
+
 export interface Workspace {
 	id: string;
 	projectId: string;

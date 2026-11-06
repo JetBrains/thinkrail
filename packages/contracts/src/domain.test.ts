@@ -21,9 +21,11 @@ import {
 	isJbcentralQuotaRefreshSeconds,
 	isLiveResource,
 	isLocalePreference,
+	isMockupPath,
 	isPlanReviewResult,
 	isRetriedAttempt,
 	JBCENTRAL_QUOTA_REFRESH_SECONDS,
+	MOCKUP_DIR,
 	normalizeFontSettings,
 	parsePiPackageInput,
 	REQUEST_IMAGE_BASE64_BUDGET,
@@ -594,5 +596,26 @@ describe("font settings", () => {
 		expect(isFontWeightOffset(130)).toBe(true);
 		expect(isFontWeightOffset(15)).toBe(false);
 		expect(isFontWeightOffset(140)).toBe(false);
+	});
+});
+
+describe("isMockupPath", () => {
+	test("matches files under the mockup scratch dir only", () => {
+		expect(MOCKUP_DIR).toBe(".thinkrail/context/mockups/");
+		expect(isMockupPath(".thinkrail/context/mockups/chart.html")).toBe(true);
+		expect(isMockupPath(".thinkrail/context/mockups/nested/a.html")).toBe(true);
+		expect(isMockupPath(".thinkrail/context/mockups/")).toBe(false);
+		expect(isMockupPath(".thinkrail/context/mockupsx/a.html")).toBe(false);
+		expect(isMockupPath("docs/.thinkrail/context/mockups/a.html")).toBe(false);
+		expect(isMockupPath("index.html")).toBe(false);
+	});
+
+	test("rejects non-canonical paths that resolve elsewhere", () => {
+		expect(isMockupPath(".thinkrail/context/mockups/../../../index.html")).toBe(false);
+		expect(isMockupPath(".thinkrail/context/mockups/a/../b.html")).toBe(false);
+		expect(isMockupPath(".thinkrail/context/mockups/./a.html")).toBe(false);
+		expect(isMockupPath(".thinkrail/context/mockups//a.html")).toBe(false);
+		expect(isMockupPath(".thinkrail/context/mockups/a/")).toBe(false);
+		expect(isMockupPath(".thinkrail/context/mockups/..\\..\\index.html")).toBe(false);
 	});
 });

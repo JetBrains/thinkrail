@@ -13,6 +13,7 @@ export {
 	type ResourceReviewSendProps,
 	type ResourceScope,
 	ResourceScopeProvider,
+	type ResourceScriptedHtml,
 	useOptionalResourceHost,
 	useResourceScope,
 } from "./host";

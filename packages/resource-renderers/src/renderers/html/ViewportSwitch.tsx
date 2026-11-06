@@ -4,9 +4,11 @@ import { useResourceEnvironment } from "../../host";
 import { HTML_VIEWPORT_LABELS, HTML_VIEWPORTS, type HtmlViewport } from "./viewport";
 
 export function HtmlPreviewNotice({
+	scripted,
 	viewport,
 	onViewport,
 }: {
+	scripted: boolean;
 	viewport: HtmlViewport;
 	onViewport: (viewport: HtmlViewport) => void;
 }) {
@@ -14,9 +16,15 @@ export function HtmlPreviewNotice({
 	if (useResourceEnvironment().compact) return null;
 	return (
 		<div className="flex shrink-0 flex-wrap items-center gap-8 border-border-default border-b bg-feedback-info-subtle px-12 py-4 tr-text-metadata text-feedback-info">
-			<span data-testid="html-disabled-notice" className="mr-auto">
-				{t("viewer.html.disabledNotice")}
-			</span>
+			{scripted ? (
+				<span data-testid="html-scripted-notice" className="mr-auto">
+					{t("viewer.html.scriptedNotice")}
+				</span>
+			) : (
+				<span data-testid="html-disabled-notice" className="mr-auto">
+					{t("viewer.html.disabledNotice")}
+				</span>
+			)}
 			<fieldset
 				data-testid="html-viewport"
 				aria-label={t("viewer.html.viewport.label")}

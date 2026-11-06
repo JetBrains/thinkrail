@@ -73,6 +73,12 @@ export interface ResourceHost {
 	): () => void;
 	FileReview: ComponentType<ResourceFileReviewProps>;
 	ReviewSend: ComponentType<ResourceReviewSendProps>;
+	scriptedHtml?: ResourceScriptedHtml;
+}
+
+export interface ResourceScriptedHtml {
+	subscribe(onChange: () => void): () => void;
+	allows(workspaceId: string, path: string): boolean;
 }
 
 export interface ResourcePreferences {

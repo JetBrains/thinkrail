@@ -35,10 +35,30 @@ export function htmlFrameGeometry(
 	return { width, height: box.height / scale, scale };
 }
 
-export function htmlViewport(viewState: unknown): HtmlViewport {
+export function htmlViewport(viewState: unknown, fallback: HtmlViewport = "desktop"): HtmlViewport {
 	const value =
 		typeof viewState === "object" && viewState !== null
 			? (viewState as { viewport?: unknown }).viewport
 			: undefined;
-	return HTML_VIEWPORTS.find((candidate) => candidate === value) ?? "desktop";
+	return HTML_VIEWPORTS.find((candidate) => candidate === value) ?? fallback;
+}
+
+export const HTML_CONTENT_HEIGHT = { min: 120, max: 1600 } as const;
+
+export function clampContentHeight(height: number): number {
+	if (!Number.isFinite(height)) return HTML_CONTENT_HEIGHT.min;
+	return Math.min(HTML_CONTENT_HEIGHT.max, Math.max(HTML_CONTENT_HEIGHT.min, Math.ceil(height)));
+}
+
+export function htmlFitGeometry(
+	viewport: HtmlViewport,
+	boxWidth: number,
+	contentHeight: number | null,
+): HtmlFrameGeometry {
+	const { width, scale } = htmlFrameGeometry(viewport, { width: boxWidth, height: 0 });
+	const content =
+		contentHeight !== null && Number.isFinite(contentHeight) ? Math.ceil(contentHeight) : 0;
+	const rendered = Math.ceil(content * scale);
+	const box = clampContentHeight(rendered);
+	return { width, height: box === rendered ? content : box / scale, scale };
 }

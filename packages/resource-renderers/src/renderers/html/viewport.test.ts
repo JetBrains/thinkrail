@@ -27,4 +27,6 @@ test("the persisted viewport is read defensively and defaults to desktop", () =>
 	expect(htmlViewport({ viewport: "tablet" })).toBe("tablet");
 	expect(htmlViewport({ viewport: "watch" })).toBe("desktop");
 	expect(htmlViewport(undefined)).toBe("desktop");
+	expect(htmlViewport(undefined, "responsive")).toBe("responsive");
+	expect(htmlViewport({ viewport: "tablet" }, "responsive")).toBe("tablet");
 });

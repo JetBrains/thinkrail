@@ -362,6 +362,16 @@ popups. Payload types are derived from SDK event factories, not copied into loca
 can be a raw URL, a popup object, or serialized navigation JSON; bounded decoding retains only a string
 URL and the HTTP/HTTPS/mailto allowlist, which the preload routing reuses.
 
+**The desktop shell runs no framed scripts, so HTML mockups stay static there.** Electrobun 2.0.5
+registers its `hostBridge`/`bunBridge` WebKit script message handlers for every frame and never reads
+`frameInfo`, so a script in a `sandbox="allow-scripts"` frame could post raw RPC packets (`quitApp`,
+`preferenceWrite`, ...) past the preload. The web app keeps mockups static when the Electrobun global is
+present ([[module-web]]). Enabling them needs Electrobun to drop messages where
+`!message.frameInfo.isMainFrame`; the npm package ships the native wrapper prebuilt, so a
+`patchedDependencies` patch cannot. The same change must stop opening external URLs from a
+`will-navigate` verdict, which a framed script could trigger with no click. Found by reading the
+Electrobun source, not by a desktop run.
+
 A desktop preload sends typed, one-way route, local-preference, page-zoom, and title-bar double-click
 messages, and is the only writer of the window-chrome CSS properties described above. It wraps
 `history.replaceState` and `history.pushState` before page scripts and also reports initial/hash/pop
