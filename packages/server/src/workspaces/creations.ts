@@ -12,6 +12,7 @@ import { CodedError, errorCodeOf } from "@thinkrail/shared/codedError";
 import {
 	git,
 	gitAsync,
+	gitRunHook,
 	listRemotes,
 	nonInteractiveGitEnv,
 	remoteNameOf,
@@ -310,18 +311,10 @@ async function checkOut(id: string, projectPath: string, signal: AbortSignal): P
 			"WORKTREE_CHECKOUT_FAILED",
 			`git checkout failed: ${checkoutFailureText(checkout.err) || "git exited with an error"}`,
 		);
-	const hook = await gitAsync(
+	const hook = await gitRunHook(
 		record.worktreePath,
-		[
-			"hook",
-			"run",
-			"--ignore-missing",
-			"post-checkout",
-			"--",
-			"0".repeat(record.baseOid.length),
-			record.baseOid,
-			"1",
-		],
+		"post-checkout",
+		["0".repeat(record.baseOid.length), record.baseOid, "1"],
 		{ timeoutMs: Number.POSITIVE_INFINITY, idleTimeoutMs: stallMs, signal },
 	);
 	if (signal.aborted) throw new CreationAborted();

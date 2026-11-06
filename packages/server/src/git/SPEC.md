@@ -54,7 +54,10 @@ ref off the workspace-create critical path.
   it for credential-bearing URL rewrites). `opts.network`
   marks fetch/push solely so a no-output timeout can name the remote. `gitAsync` alone also passes
   `opts.idleTimeoutMs` (a silence deadline that output resets) and `opts.onStderr` (live stderr chunks)
-  through to the runner — the shape of `workspaces`' long `checkout --progress`, which may run for hours but
+  through to the runner; **`gitRunHook(cwd, hook, args, opts?)`** runs a repository hook the way git itself
+  would — `git hook run --ignore-missing` (so `core.hooksPath` and git's environment apply), and on a git
+  older than 2.36, which has no `hook` command, the script `rev-parse --git-path hooks/<hook>` names, when it is
+  executable, through the same bounded runner — the shape of `workspaces`' long `checkout --progress`, which may run for hours but
   must not hang silently. **A timeout keeps whatever git wrote
   before the kill**: the runner drains continuously, so on
   expiry its `err` already holds the real diagnosis — a publickey rejection, a proxy's refusal, `remote:`
@@ -352,7 +355,7 @@ ref off the workspace-create critical path.
   `gitignored`, so the Files tree can dim them. It never throws: a non-repository, a failure or a timeout
   reports nothing. Names git must C-quote (a `"`, `\` or control character) are never reported, because
   `check-ignore -z` needs stdin, which the bounded runners do not offer.
-- **Public surface (barrel):** `git`, `gitAsync`, `gitAsyncBytes`, `gitAsyncStream`, `nonInteractiveGitEnv`, `SLOW_GIT_TIMEOUT_MS`, `INDEX_WRITE_TIMEOUT_MS`, `throwOnTimeout`,
+- **Public surface (barrel):** `git`, `gitAsync`, `gitAsyncBytes`, `gitAsyncStream`, `gitRunHook`, `nonInteractiveGitEnv`, `SLOW_GIT_TIMEOUT_MS`, `INDEX_WRITE_TIMEOUT_MS`, `throwOnTimeout`,
   `setSyncGitTimeoutForTests`,
   `remoteRefOid`, `remoteRefOidAsync`, `remoteTrackingRef`, `gitStatus`,
   `gitUncommittedPaths`, `gitDiffFile`,

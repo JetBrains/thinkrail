@@ -10,7 +10,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { delimiter, join, resolve } from "node:path";
 import type { WorkspaceCreation, WorkspaceCreationRemoved } from "@thinkrail/contracts";
 import {
 	creationOwnsPath,
@@ -179,6 +179,41 @@ posix(
 		expect(readFileSync(args, "utf8")).toBe(`${"0".repeat(head.length)} ${head} 1\n`);
 	},
 );
+
+posix("a failing post-checkout hook fails the create like worktree add and cleans up", async () => {
+	hook("echo hook says no >&2; exit 1");
+	const creation = startWorkspaceCreation("p1");
+	await expect(awaitWorkspaceCreation(creation.id)).rejects.toThrow(
+		"The post-checkout hook failed: hook says no",
+	);
+	expect(listWorkspaceCreations()[0]?.failure).toMatchObject({
+		code: "WORKTREE_CHECKOUT_FAILED",
+		cleanedUp: true,
+	});
+	expect(registered()).toEqual([realpathSync.native(repo)]);
+	expect(gitOut(repo, "branch", "--list", "workspace-1")).toBe("");
+});
+
+posix("a git without `git hook run` still fires post-checkout directly", async () => {
+	const args = join(dataDir, "hook-args");
+	hook(`echo "$*" >> "${args}"`);
+	const bin = join(dataDir, "old-git-bin");
+	mkdirSync(bin);
+	writeFileSync(
+		join(bin, "git"),
+		`#!/bin/sh\nif [ "$3" = "hook" ]; then echo "git: 'hook' is not a git command. See 'git --help'." >&2; exit 1; fi\nexec "${Bun.which("git")}" "$@"\n`,
+	);
+	chmodSync(join(bin, "git"), 0o755);
+	const savedPath = process.env.PATH;
+	process.env.PATH = `${bin}${delimiter}${savedPath ?? ""}`;
+	try {
+		await awaitWorkspaceCreation(startWorkspaceCreation("p1").id);
+	} finally {
+		process.env.PATH = savedPath;
+	}
+	const head = gitOut(repo, "rev-parse", "main");
+	expect(readFileSync(args, "utf8")).toBe(`${"0".repeat(head.length)} ${head} 1\n`);
+});
 
 posix("a repo with submodules and submodule.recurse creates like plain worktree add", async () => {
 	const sub = join(dataDir, "sub");

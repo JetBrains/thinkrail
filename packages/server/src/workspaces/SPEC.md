@@ -90,13 +90,23 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   path synchronously, persists a record in `workspace-creations.json` (`state: running`, `phase: preparing`, the
   full kickoff incl. images) and returns its `WorkspaceCreation` view before any git runs. The job then
   (1) fetches a missing remote base, resolves the OID, and runs `worktree add --no-checkout` through `gitAsync`
-  (no file writes, so it is quick), (2) moves to `phase: checking-out` and runs `git checkout --progress -f
-  <branch> --` in the new worktree — the two-step split exists because git reports checkout progress only with
-  `--progress` (plain `worktree add` stays silent without a TTY) and because a killed `worktree add` leaves its
-  registration locked `initializing`, while a killed `checkout` keeps branch and registration and can simply run
-  again. Progress (`Updating files: N% (x/y)`) is pushed at most every 250 ms and persisted only per 10% (the
-  record can carry kickoff images). **No overall deadline: the checkout runs as long as git keeps writing
-  output; 10 minutes of silence (`idleTimeoutMs`) kills it as `WORKTREE_CHECKOUT_STALLED`.** On success the
+  (no file writes, so it is quick), (2) moves to `phase: checking-out` and runs `git checkout --progress
+  --no-recurse-submodules -f <branch> --` in the new worktree — the split exists because git reports checkout
+  progress only with `--progress` (plain `worktree add` stays silent without a TTY), and a killed `worktree add`
+  leaves its registration locked `initializing`. **The split must stay indistinguishable from plain
+  `worktree add`**, which internally runs `reset --hard --no-recurse-submodules` and then `post-checkout <null
+  oid> <new HEAD> 1`: the checkout therefore never recurses into submodules (with `submodule.recurse=true` a
+  recursing checkout dies on the new worktree's missing `modules/` dir) and runs with hooks suppressed
+  (`core.hooksPath` pointed at an empty dir under the data dir), after which `git`'s `gitRunHook` fires the
+  user's `post-checkout` once with `<null oid> <baseOid> 1`, the arguments that let it detect a new worktree; a
+  failing hook fails the create as it fails `worktree add`. The checkout runs under `LC_ALL=C`
+  (git translates its progress label) and with `checkout.workers=0` unless the user configured
+  `checkout.workers` (parallel checkout, ~2× on large trees). Progress (`Updating files` and `Filtering content:
+  N% (x/y)`) is pushed at most every 250 ms and persisted only per 10% (the record can carry kickoff images).
+  **No overall deadline: the checkout and the hook run as long as they keep writing output; 10 minutes of
+  silence (`idleTimeoutMs`) kills either as `WORKTREE_CHECKOUT_STALLED`.** Known limit: a single filter or
+  hook that stays silent for longer (a huge LFS object) hits the same window on every retry; a configurable
+  window is a follow-up. On success the
   record becomes the `Workspace` (same id) through `registerManagedWorkspace`, the injected **handoff**
   (`setWorkspaceCreationHandoff`) runs, and the record is deleted with a `removed` event carrying the workspace
   plus the handoff's `sessionId` / `kickoffError`. **On failure** (`WORKTREE_ADD_FAILED`,
