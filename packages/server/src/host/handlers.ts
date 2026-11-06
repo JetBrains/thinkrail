@@ -1059,10 +1059,10 @@ const handlers: WsHandlers = {
 	"terminal.close": (p) => {
 		return closeTerminalTab(p.workspaceId, p.tabKey, p.force ?? false);
 	},
-	"terminal.resolvePaths": (p) => {
-		const located = terminalCwds(p.id);
-		if (!located) throw new Error("Unknown terminal");
-		const entries = locateWorktreeEntries(located.workspaceId, p.candidates, located.cwds);
+	"terminal.resolvePaths": async (p) => {
+		const terminal = terminalCwds(p.id);
+		if (!terminal) throw new Error("Unknown terminal");
+		const entries = await locateWorktreeEntries(terminal.workspaceId, p.candidates, terminal.cwds);
 		return {
 			targets: entries.map((entry) =>
 				entry ? { kind: entry.kind, relPath: entry.path } : { kind: null, relPath: null },

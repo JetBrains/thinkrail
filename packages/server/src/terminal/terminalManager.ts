@@ -92,10 +92,9 @@ const completions = createTerminalCompletionQueue((clientKey, channel, data) =>
 const DEFAULT_PTY_SIZE = { cols: 80, rows: 24 } as const;
 const CWD_CACHE_MS = 1_000;
 
-const processTable = systemProcessTable();
 const workingDirectories = createWorkingDirectoryCache({
 	ttlMs: CWD_CACHE_MS,
-	lookup: (pid) => processWorkingDirectories(pid, processTable),
+	lookup: (pid) => processWorkingDirectories(pid, systemProcessTable()),
 });
 
 function replayBudgetChars(): number {
@@ -318,10 +317,13 @@ export function attachTerminal(
 	return { id, created: true, ...(replay ? { replay } : {}) };
 }
 
-export function terminalCwds(id: string): { workspaceId: string; cwds: string[] } | null {
+export function terminalCwds(
+	id: string,
+): { workspaceId: string; cwds: () => Promise<string[]> } | null {
 	const entry = terminals.get(id);
 	if (!entry) return null;
-	return { workspaceId: entry.workspaceId, cwds: workingDirectories(entry.pty.pid) };
+	const { pid } = entry.pty;
+	return { workspaceId: entry.workspaceId, cwds: () => workingDirectories(pid) };
 }
 
 export function listTerminals(workspaceId: string): TerminalTabInfo[] {

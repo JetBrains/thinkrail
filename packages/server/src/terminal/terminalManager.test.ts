@@ -382,14 +382,15 @@ unixTerminalTest(
 		writeTerminal(attached.id, "cd sub && printf 'TR_%s\\n' MOVED\r", "client-1");
 		await waitForTerminalOutput(attached.id, "TR_MOVED");
 		const expected = realpathSync(sub);
+		const terminal = terminalCwds(attached.id);
+		expect(terminal?.workspaceId).toBe(WS);
 		const deadline = Date.now() + TERMINAL_CONDITION_TIMEOUT_MS;
-		let named = terminalCwds(attached.id);
-		while (!named?.cwds.includes(expected) && Date.now() < deadline) {
+		let cwds = (await terminal?.cwds()) ?? [];
+		while (!cwds.includes(expected) && Date.now() < deadline) {
 			await Bun.sleep(100);
-			named = terminalCwds(attached.id);
+			cwds = (await terminal?.cwds()) ?? [];
 		}
-		expect(named?.workspaceId).toBe(WS);
-		expect(named?.cwds[0]).toBe(expected);
+		expect(cwds[0]).toBe(expected);
 	},
 	TERMINAL_TEST_TIMEOUT_MS,
 );

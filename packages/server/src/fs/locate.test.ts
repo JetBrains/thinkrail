@@ -3,7 +3,14 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MAX_TERMINAL_PATH_CANDIDATES, MAX_TERMINAL_PATH_LENGTH } from "@thinkrail/contracts";
-import { locateWorktreeEntries } from "./files";
+import { locateWorktreeEntries as locate } from "./files";
+
+const locateWorktreeEntries = (
+	workspaceId: string,
+	candidates: readonly string[],
+	bases: readonly string[],
+	home?: string,
+) => locate(workspaceId, candidates, async () => bases, home);
 
 let dataDir: string;
 let root: string;
@@ -38,9 +45,9 @@ afterEach(() => {
 });
 
 describe("locateWorktreeEntries", () => {
-	test("names existing files and folders worktree-relative, and nothing else", () => {
+	test("names existing files and folders worktree-relative, and nothing else", async () => {
 		expect(
-			locateWorktreeEntries(
+			await locateWorktreeEntries(
 				"w1",
 				["src/auth/login.ts", "./src/auth", "launcher.py", "nope.ts"],
 				[],
@@ -53,22 +60,22 @@ describe("locateWorktreeEntries", () => {
 		]);
 	});
 
-	test("a path is looked up from each base in order, then the worktree root", () => {
+	test("a path is looked up from each base in order, then the worktree root", async () => {
 		const sub = join(root, "sub");
-		expect(locateWorktreeEntries("w1", ["y.py", "./y.py", "../launcher.py"], [sub])).toEqual([
+		expect(await locateWorktreeEntries("w1", ["y.py", "./y.py", "../launcher.py"], [sub])).toEqual([
 			{ kind: "file", path: "sub/y.py" },
 			{ kind: "file", path: "sub/y.py" },
 			{ kind: "file", path: "launcher.py" },
 		]);
-		expect(locateWorktreeEntries("w1", ["launcher.py"], [sub])).toEqual([
+		expect(await locateWorktreeEntries("w1", ["launcher.py"], [sub])).toEqual([
 			{ kind: "file", path: "launcher.py" },
 		]);
-		expect(locateWorktreeEntries("w1", ["y.py"], [])).toEqual([null]);
+		expect(await locateWorktreeEntries("w1", ["y.py"], [])).toEqual([null]);
 	});
 
-	test("an absolute path inside the worktree is named; one outside never is", () => {
+	test("an absolute path inside the worktree is named; one outside never is", async () => {
 		expect(
-			locateWorktreeEntries(
+			await locateWorktreeEntries(
 				"w1",
 				[join(root, "sub", "y.py"), join(outside, "secret.txt"), outside, "/"],
 				[],
@@ -76,9 +83,9 @@ describe("locateWorktreeEntries", () => {
 		).toEqual([{ kind: "file", path: "sub/y.py" }, null, null, null]);
 	});
 
-	test("climbing out of the worktree from a base is refused", () => {
+	test("climbing out of the worktree from a base is refused", async () => {
 		expect(
-			locateWorktreeEntries(
+			await locateWorktreeEntries(
 				"w1",
 				["../outside/secret.txt", "../../outside/secret.txt"],
 				[join(root, "sub")],
@@ -86,69 +93,91 @@ describe("locateWorktreeEntries", () => {
 		).toEqual([null, null]);
 	});
 
-	test("a base outside the worktree cannot reach out, and falls back to the root", () => {
+	test("a base outside the worktree cannot reach out, and falls back to the root", async () => {
 		writeFileSync(join(root, "secret.txt"), "decoy\n");
-		expect(locateWorktreeEntries("w1", ["secret.txt"], [outside])).toEqual([
+		expect(await locateWorktreeEntries("w1", ["secret.txt"], [outside])).toEqual([
 			{ kind: "file", path: "secret.txt" },
 		]);
 		rmSync(join(root, "secret.txt"));
-		expect(locateWorktreeEntries("w1", ["secret.txt"], [outside])).toEqual([null]);
+		expect(await locateWorktreeEntries("w1", ["secret.txt"], [outside])).toEqual([null]);
 	});
 
-	test("~ expands to the home directory before containment is checked", () => {
-		expect(locateWorktreeEntries("w1", ["~/sub/y.py", "~"], [], dataDir)).toEqual([null, null]);
-		expect(locateWorktreeEntries("w1", ["~/sub/y.py", "~/src"], [], root)).toEqual([
+	test("~ expands to the home directory before containment is checked", async () => {
+		expect(await locateWorktreeEntries("w1", ["~/sub/y.py", "~"], [], dataDir)).toEqual([
+			null,
+			null,
+		]);
+		expect(await locateWorktreeEntries("w1", ["~/sub/y.py", "~/src"], [], root)).toEqual([
 			{ kind: "file", path: "sub/y.py" },
 			{ kind: "dir", path: "src" },
 		]);
-		expect(locateWorktreeEntries("w1", ["~/worktree/launcher.py"], [], dataDir)).toEqual([
+		expect(await locateWorktreeEntries("w1", ["~/worktree/launcher.py"], [], dataDir)).toEqual([
 			{ kind: "file", path: "launcher.py" },
 		]);
 	});
 
-	test("git metadata and the worktree root itself are never answers", () => {
-		expect(locateWorktreeEntries("w1", [".git/config", ".git", ".", "./", root], [])).toEqual([
-			null,
-			null,
-			null,
-			null,
-			null,
-		]);
+	test("git metadata and the worktree root itself are never answers", async () => {
+		expect(await locateWorktreeEntries("w1", [".git/config", ".git", ".", "./", root], [])).toEqual(
+			[null, null, null, null, null],
+		);
 	});
 
-	test("a base reported in canonical form still matches the stored root", () => {
+	test("a base reported in canonical form still matches the stored root", async () => {
 		const canonicalSub = join(realpathSync(root), "sub");
-		expect(locateWorktreeEntries("w1", ["y.py"], [canonicalSub])).toEqual([
+		expect(await locateWorktreeEntries("w1", ["y.py"], [canonicalSub])).toEqual([
 			{ kind: "file", path: "sub/y.py" },
 		]);
 	});
 
-	test("relative bases are ignored rather than resolved against the host's cwd", () => {
-		expect(locateWorktreeEntries("w1", ["y.py"], ["sub"])).toEqual([null]);
+	test("relative bases are ignored rather than resolved against the host's cwd", async () => {
+		expect(await locateWorktreeEntries("w1", ["y.py"], ["sub"])).toEqual([null]);
 	});
 
-	test("names with spaces are looked up as given", () => {
-		expect(locateWorktreeEntries("w1", ["my file.ts"], [])).toEqual([
+	test("names with spaces are looked up as given", async () => {
+		expect(await locateWorktreeEntries("w1", ["my file.ts"], [])).toEqual([
 			{ kind: "file", path: "my file.ts" },
 		]);
 	});
 
-	test("an unknown workspace is an error", () => {
-		expect(() => locateWorktreeEntries("nope", ["a.ts"], [])).toThrow("Unknown workspace");
+	test("the shell is not asked for its directories when every path is anchored", async () => {
+		let asked = 0;
+		const bases = async () => {
+			asked += 1;
+			return [join(root, "sub")];
+		};
+		expect(
+			await locate("w1", [join(root, "launcher.py"), "~/src", "/etc/hosts"], bases, root),
+		).toEqual([{ kind: "file", path: "launcher.py" }, { kind: "dir", path: "src" }, null]);
+		expect(asked).toBe(0);
+		expect(await locate("w1", ["~/src", "y.py"], bases, root)).toEqual([
+			{ kind: "dir", path: "src" },
+			{ kind: "file", path: "sub/y.py" },
+		]);
+		expect(asked).toBe(1);
 	});
 
-	test("malformed candidate lists are rejected", () => {
+	test("a base provider that fails leaves the worktree root", async () => {
+		expect(
+			await locate("w1", ["launcher.py", "y.py"], () => Promise.reject(new Error("probe failed"))),
+		).toEqual([{ kind: "file", path: "launcher.py" }, null]);
+	});
+
+	test("an unknown workspace is an error", async () => {
+		await expect(locateWorktreeEntries("nope", ["a.ts"], [])).rejects.toThrow("Unknown workspace");
+	});
+
+	test("malformed candidate lists are rejected", async () => {
 		const reject = (candidates: unknown) =>
-			expect(() => locateWorktreeEntries("w1", candidates as string[], [])).toThrow(
+			expect(locateWorktreeEntries("w1", candidates as string[], [])).rejects.toThrow(
 				"Invalid path candidates",
 			);
-		reject("src");
-		reject([1]);
-		reject([""]);
-		reject(["x".repeat(MAX_TERMINAL_PATH_LENGTH + 1)]);
-		reject(Array.from({ length: MAX_TERMINAL_PATH_CANDIDATES + 1 }, () => "a.ts"));
+		await reject("src");
+		await reject([1]);
+		await reject([""]);
+		await reject(["x".repeat(MAX_TERMINAL_PATH_LENGTH + 1)]);
+		await reject(Array.from({ length: MAX_TERMINAL_PATH_CANDIDATES + 1 }, () => "a.ts"));
 		expect(
-			locateWorktreeEntries(
+			await locateWorktreeEntries(
 				"w1",
 				Array.from({ length: MAX_TERMINAL_PATH_CANDIDATES }, () => "launcher.py"),
 				[],
@@ -159,12 +188,12 @@ describe("locateWorktreeEntries", () => {
 
 const symlinkTest = process.platform === "win32" ? test.skip : test;
 
-symlinkTest("a symlink is followed only while its target stays inside the worktree", () => {
+symlinkTest("a symlink is followed only while its target stays inside the worktree", async () => {
 	symlinkSync(join(root, "src"), join(root, "srclink"));
 	symlinkSync(outside, join(root, "escape"));
 	symlinkSync(join(outside, "secret.txt"), join(root, "leak.txt"));
 	expect(
-		locateWorktreeEntries(
+		await locateWorktreeEntries(
 			"w1",
 			["srclink/auth/login.ts", "escape/secret.txt", "escape", "leak.txt"],
 			[],

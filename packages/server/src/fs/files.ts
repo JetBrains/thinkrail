@@ -216,20 +216,22 @@ function existingKind(root: string, rel: string): WorktreeEntry["kind"] | null {
 	}
 }
 
-export function locateWorktreeEntries(
+export async function locateWorktreeEntries(
 	workspaceId: string,
 	candidates: readonly string[],
-	bases: readonly string[],
+	bases: () => Promise<readonly string[]>,
 	home: string = homedir(),
-): (WorktreeEntry | null)[] {
+): Promise<(WorktreeEntry | null)[]> {
 	assertPathCandidates(candidates);
 	const root = worktreeRoot(workspaceId);
+	const expanded = candidates.map((candidate) => expandHome(candidate, home));
+	const anchored = expanded.every((path) => isAbsolute(path));
+	const given = anchored ? [] : await bases().catch((): readonly string[] => []);
 	const roots = [...new Set([resolve(root), realOrNull(root) ?? resolve(root)])];
-	const searched = [...new Set([...bases.filter((base) => isAbsolute(base)), root])];
-	return candidates.map((candidate) => {
-		const expanded = expandHome(candidate, home);
+	const searched = [...new Set([...given.filter((base) => isAbsolute(base)), root])];
+	return expanded.map((path) => {
 		for (const base of searched) {
-			const abs = resolve(base, expanded);
+			const abs = resolve(base, path);
 			const rel = roots.reduce<string | null>(
 				(found, r) => found ?? workspaceRelativePath(r, abs),
 				null,

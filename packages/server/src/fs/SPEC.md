@@ -44,10 +44,12 @@ bytes are** — the one byte-level classification every content read in the host
   the root itself. `reviews` normalizes anchors through it. It keeps host
   semantics, so a backslash on POSIX stays part of a file name; callers that hold model-written paths turn
   `\` into `/` themselves.
-  **`locateWorktreeEntries(workspaceId, candidates, bases)`** answers, per printed path, the first
+  **`locateWorktreeEntries(workspaceId, candidates, bases)`** (async) answers, per printed path, the first
   `{ kind: "file" | "dir", path }` that exists when the path is resolved against each absolute base in order
   and finally the worktree root, else `null` — the terminal's link lookup (`terminal.resolvePaths`, composed
-  by `host`). A leading `~` or `~/` expands to the host's home directory *before* the containment check, so it
+  by `host`). `bases` is a lazy provider, called only when some candidate is still relative after `~`
+  expansion: the host's base directories cost process probes, and an absolute or `~/` path needs none. A
+  provider that fails leaves the worktree root. A leading `~` or `~/` expands to the host's home directory *before* the containment check, so it
   confirms only a home that holds the worktree. Every attempt passes the same gate `readFile` does — lexical
   containment through `workspaceRelativePath`, no `.git`, the existing symlink chain contained — so a
   crafted terminal line can never make the host stat or name anything outside the worktree, and the root
