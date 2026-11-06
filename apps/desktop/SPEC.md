@@ -571,6 +571,10 @@ CI-only and are never shipped as user configuration.
 
 ## Auto-update policy
 
+This fork packages an empty updater base URL, so its desktop builds never offer JetBrains upstream
+updates. Publishing a fork-owned feed is deferred; the unsigned manual Windows release contract lives
+in [[module-ci-release]]. The mechanism below remains available but is disabled by that metadata.
+
 Desktop updates check after window readiness and on a jittered six-hour schedule, but stop at an available
 release. Downloading and installation each require an explicit user action; closing Settings or quitting
 normally installs nothing. Same-version and downgrade manifests are ineligible.

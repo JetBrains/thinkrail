@@ -30,6 +30,7 @@ test("selects real Bun and preserves the physical runtime resources without reti
 		version,
 	});
 	expect(config.runtime).toEqual({ exitOnLastWindowClosed: true });
+	expect(config.release).toEqual({ baseUrl: "", generatePatch: false });
 	expect(config.build).toMatchObject({
 		mainProcess: "bun",
 		bun: { entrypoint: "src/index.ts", version: rootManifest.packageManager.replace(/^bun@/, "") },

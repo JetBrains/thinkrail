@@ -34,13 +34,17 @@ export function windowsFileIdentity(release: {
 		productName,
 		companyName: "JetBrains s.r.o.",
 		copyright: "Copyright © 2026 JetBrains s.r.o.",
-		fileVersion: fileVersionParts.join("."),
+		fileVersion: /^\d+\.\d+\.\d+\.[0-9a-f]{8}$/.test(release.version)
+			? release.version
+			: fileVersionParts.join("."),
 		fileVersionParts,
 	};
 }
 
 function windowsVersionParts(version: string): [number, number, number, number] {
-	const match = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/.exec(version);
+	const match = /^(\d+)\.(\d+)\.(\d+)(?:\.[0-9a-f]{8}|-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/.exec(
+		version,
+	);
 	if (!match) throw new Error(`version "${version}" is not major.minor.patch[-prerelease]`);
 	const build = match[4]?.split(".").at(-1);
 	const parts: [number, number, number, number] = [

@@ -36,6 +36,24 @@ label presentation. Approval receipts, design/implementation publication and mer
 now and are refused on GitHub; GitHub Enterprise Server and complete cross-machine handoffs remain
 project goals. Existing upstream GitHub pull-request features are separate from Issues integration.
 
+## Windows Desktop releases
+
+Run **Actions → Release Windows desktop → Run workflow** and select the branch to build (the
+workflow must first be merged into the default branch to appear there). It builds only Windows x64
+Desktop and publishes the installer to this repository's [Releases](https://github.com/caozisheng/oh-my-thinkrail/releases)
+after expanded-app and installer smoke checks pass.
+
+Versions use the latest official `JetBrains/thinkrail` Release plus the first eight characters of
+this fork's build commit, for example `0.3.2.abcdef01`. The installer is
+`oh-my-thinkrail-<version>-windows-x64.zip`; `SHA256SUMS` and `build-info.json` record its checksum,
+full fork commit and upstream version provenance. The upstream version is a label, not a guarantee
+that this fork contains every change in that upstream release. Existing tags/releases are never overwritten.
+
+These are **unsigned, independent fork builds**, not JetBrains-signed distributions. Windows
+SmartScreen may warn. Extract the complete ZIP and keep the setup EXE beside its payload when running
+setup. Automatic desktop updates are disabled; install subsequent releases manually. Release builds
+carry no upstream PostHog project key. Source-run privacy behavior is unchanged below.
+
 ## Development
 
 Use the Bun version pinned in `package.json`, Node.js **22.19+**, and Git. Agent sessions also need a

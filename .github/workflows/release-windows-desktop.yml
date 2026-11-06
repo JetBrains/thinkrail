@@ -1,0 +1,95 @@
+name: Release Windows desktop
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [windows-desktop-release]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-windows-desktop
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and smoke unsigned Windows x64 desktop
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+      - run: bun install --frozen-lockfile
+      - name: Test release helpers
+        run: bun test ./.github/scripts/windows-release.test.ts packages/shared/src/windowsIdentity.test.ts apps/desktop/src/buildConfig.test.ts
+      - name: Check release source formatting
+        run: bunx biome check .github/scripts/windows-release.ts .github/scripts/windows-release.test.ts packages/shared/src/windowsIdentity.ts packages/shared/src/windowsIdentity.test.ts apps/desktop/electrobun.config.ts apps/desktop/src/buildConfig.test.ts
+      - name: Resolve upstream once and stamp release identity
+        id: metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun .github/scripts/windows-release.ts prepare
+      - name: Prepare desktop toolchain
+        shell: bash
+        run: bash .github/scripts/prepare-electrobun.sh
+      - name: Build and smoke expanded desktop launcher
+        shell: bash
+        run: |
+          set -eu
+          bun run desktop:build
+          launcher=$(bun -e 'import { locateDesktopLauncher } from "@thinkrail/artifact-tests"; console.log(locateDesktopLauncher("apps/desktop"));')
+          bun run smoke:desktop "$launcher"
+      - name: Package stable desktop installer
+        shell: bash
+        run: |
+          set -eu
+          system32="$(cygpath -u "$SYSTEMROOT")/System32"
+          export PATH="$system32:$PATH"
+          echo "Electrobun tar: $(command -v tar)"
+          bun run desktop:package:stable
+      - name: Smoke stable installer
+        run: bun run smoke:desktop:installer apps/desktop/artifacts/win-x64-ThinkRail-Setup.zip stable
+      - name: Collect versioned installer, checksum and build provenance
+        run: bun .github/scripts/windows-release.ts collect
+      - uses: actions/upload-artifact@v5
+        with:
+          name: windows-desktop-release-${{ github.run_id }}
+          path: |
+            release-assets/*.zip
+            release-assets/SHA256SUMS
+            release-assets/build-info.json
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish verified Windows desktop release
+    needs: build
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+      - uses: actions/download-artifact@v5
+        with:
+          name: windows-desktop-release-${{ github.run_id }}
+          path: release-assets
+      - name: Refuse existing tag/release and publish at exact checkout SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun .github/scripts/windows-release.ts publish

@@ -123,7 +123,10 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   `ThinkRail` on stable, `ThinkRail Nightly` on nightly and `ThinkRail Dev` on unstamped builds. The
   publisher and copyright are JetBrains s.r.o., as in `LICENSE` and the signing certificate. The version
   takes the four numeric parts Windows requires: `X.Y.Z` plus the prerelease's trailing number
-  (`0.3.0-nightly.6` → `0.3.0.6`), else `.0`. An unknown channel or a part above 65535 throws, so a
+  (`0.3.0-nightly.6` → `0.3.0.6`), else `.0`. Fork versions `X.Y.Z.<8 lowercase hex>`
+  retain the full version in string properties and map to `X.Y.Z.0` in numeric PE fields, even when
+  the commit suffix contains only digits; commit ids are not sortable Windows build numbers.
+  An unknown channel or a part above 65535 throws, so a
   release build fails rather than ship wrong properties. The CLI compile, the desktop `postBuild` and
   both Windows smokes (CLI and desktop) derive from it, so they cannot disagree.
 - **/assets** — the native icon set: the hand-authored `icon.svg` and the rasters generated from it.

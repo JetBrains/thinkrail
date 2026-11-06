@@ -20,6 +20,17 @@ test("names each channel and maps its version to four numeric parts", () => {
 	});
 });
 
+test("maps fork commit versions to the upstream numeric file version", () => {
+	for (const commit of ["4d6586d8", "12345678"]) {
+		expect(windowsFileIdentity({ version: `0.3.2.${commit}`, channel: "stable" })).toMatchObject({
+			fileVersion: `0.3.2.${commit}`,
+			fileVersionParts: [0, 3, 2, 0],
+		});
+	}
+	expect(() => windowsFileIdentity({ version: "0.3.2.notasha", channel: "stable" })).toThrow();
+	expect(() => windowsFileIdentity({ version: "65536.3.2.abcdef12", channel: "stable" })).toThrow();
+});
+
 test("rejects an unknown channel and versions Windows cannot carry", () => {
 	expect(() => windowsFileIdentity({ version: "0.2.0", channel: "beta" })).toThrow(
 		'unknown release channel "beta"',
