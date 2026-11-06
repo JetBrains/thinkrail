@@ -340,22 +340,7 @@ async function execute(id: string, signal: AbortSignal): Promise<Workspace> {
 		await checkOut(id, project.path, signal);
 		const done = findCreation(id);
 		if (!done) throw new CreationAborted();
-		const workspace = registerManagedWorkspace(done);
-		let outcome: { sessionId?: string; kickoffError?: string } = {};
-		if (handoff) {
-			try {
-				outcome = await handoff(workspace, done.kickoff);
-			} catch (err) {
-				outcome = { kickoffError: err instanceof Error ? err.message : String(err) };
-			}
-		}
-		const latest = loadWorkspaces().find((candidate) => candidate.id === id) ?? workspace;
-		deleteCreation(id);
-		emitCreation({
-			kind: "removed",
-			removed: { id, projectId: latest.projectId, workspace: latest, ...outcome },
-		});
-		return latest;
+		return await handOff(registerManagedWorkspace(done), done.kickoff);
 	} catch (err) {
 		if (err instanceof CreationAborted || signal.aborted) throw err;
 		const message = err instanceof Error ? err.message : String(err);
@@ -402,6 +387,24 @@ async function discard(record: WorkspaceCreationRecord): Promise<void> {
 	} finally {
 		discarding.delete(record.id);
 	}
+}
+
+async function handOff(workspace: Workspace, kickoff: WorkspaceKickoff | undefined) {
+	let outcome: { sessionId?: string; kickoffError?: string } = {};
+	if (handoff) {
+		try {
+			outcome = await handoff(workspace, kickoff);
+		} catch (err) {
+			outcome = { kickoffError: err instanceof Error ? err.message : String(err) };
+		}
+	}
+	const latest = loadWorkspaces().find((candidate) => candidate.id === workspace.id) ?? workspace;
+	deleteCreation(workspace.id);
+	emitCreation({
+		kind: "removed",
+		removed: { id: workspace.id, projectId: latest.projectId, workspace: latest, ...outcome },
+	});
+	return latest;
 }
 
 function run(id: string): Promise<Workspace> {
@@ -495,10 +498,7 @@ export function interruptWorkspaceCreations(): void {
 	const workspaces = new Set(loadWorkspaces().map((workspace) => workspace.id));
 	for (const record of creationRecords()) {
 		if (record.state !== "running" || running.has(record.id)) continue;
-		if (workspaces.has(record.id)) {
-			deleteCreation(record.id);
-			continue;
-		}
+		if (workspaces.has(record.id)) continue;
 		const project = getProjects().find((candidate) => candidate.id === record.projectId);
 		if (!project) {
 			deleteCreation(record.id);
@@ -507,6 +507,15 @@ export function interruptWorkspaceCreations(): void {
 		updateCreation(record.id, (r) => {
 			r.state = "interrupted";
 		});
+	}
+}
+
+export async function replayPendingHandoffs(): Promise<void> {
+	const workspaces = new Map(loadWorkspaces().map((workspace) => [workspace.id, workspace]));
+	for (const record of creationRecords()) {
+		const workspace = workspaces.get(record.id);
+		if (!workspace || running.has(record.id)) continue;
+		await handOff(workspace, record.kickoff);
 	}
 }
 

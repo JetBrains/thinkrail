@@ -398,10 +398,16 @@ export const workspaceCreationHandoff: CreationHandoff = async (workspace, kicko
 		...(kickoff.thinkingLevel ? { thinkingLevel: kickoff.thinkingLevel } : {}),
 	});
 	if (!kickoff.text && !kickoff.images?.length) return { sessionId };
+	let preflighted: () => void = () => {};
+	const preflight = new Promise<void>((resolve) => {
+		preflighted = resolve;
+	});
+	const sent = sendUserMessage("prompt", sessionId, kickoff.text, clientKey, () =>
+		promptSession(sessionId, kickoff.text, kickoff.images, { onPreflight: preflighted }),
+	);
+	sent.catch(() => {});
 	try {
-		await sendUserMessage("prompt", sessionId, kickoff.text, clientKey, () =>
-			promptSession(sessionId, kickoff.text, kickoff.images),
-		);
+		await Promise.race([preflight, sent]);
 		return { sessionId };
 	} catch (err) {
 		return { sessionId, kickoffError: err instanceof Error ? err.message : String(err) };

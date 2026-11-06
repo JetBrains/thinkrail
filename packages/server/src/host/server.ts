@@ -141,6 +141,7 @@ import {
 	listAllWorkspaceRecords,
 	recordWorkspaceHead,
 	refreshUserOwnedWorkspace,
+	replayPendingHandoffs,
 	seedWorkspaceHead,
 	setWorkspaceCreationHandoff,
 	setWorkspaceCreationPublisher,
@@ -754,6 +755,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 
 	interruptWorkspaceCreations();
 	setWorkspaceCreationHandoff(workspaceCreationHandoff);
+	void replayPendingHandoffs().catch((err) => log.warn("replaying workspace handoffs failed", err));
 	setWorkspaceCreationPublisher((event) => {
 		const channel =
 			event.kind === "changed"

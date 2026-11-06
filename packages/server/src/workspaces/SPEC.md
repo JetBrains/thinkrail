@@ -121,7 +121,10 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   mid-cleanup; a branch checked out in another worktree is left alone. **Host restart:** graceful shutdown
   aborts running jobs (`stopWorkspaceCreations`) and `interruptWorkspaceCreations` marks every leftover
   `running` record `interrupted` at start — never restarted on its own (the user decides). A record whose
-  workspace already exists is dropped; one whose project is gone is dropped without git work. **Retry is cleanup plus a fresh run, never a resume in place**
+  workspace already exists died mid-handoff: it stays, and `replayPendingHandoffs` (run by the host once its
+  handoff is installed) hands it off again, so the held prompt is never silently lost — at worst, a crash
+  between pi accepting the prompt and the record's deletion sends it twice. A record whose project is gone is
+  dropped without git work. **Retry is cleanup plus a fresh run, never a resume in place**
   (`retryWorkspaceCreation`, for `interrupted` and `failed` alike): a killed checkout never writes the index, so
   re-running it in the half-written folder rewrites every file anyway (measured no faster than a fresh create),
   and an in-place resume would have to prove that a crashed host's detached git had exited before touching its
@@ -310,7 +313,8 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   handoff that turns a finished creation into a terminal and a chat, so this module never reaches `agent`.
 - **Public surface (barrel):** `createWorkspace`, `startWorkspaceCreation`, `awaitWorkspaceCreation`,
   `listWorkspaceCreations`, `retryWorkspaceCreation`, `dismissWorkspaceCreation`,
-  `interruptWorkspaceCreations`, `stopWorkspaceCreations`, `setWorkspaceCreationHandoff`, `CreationHandoff`,
+  `interruptWorkspaceCreations`, `replayPendingHandoffs`, `stopWorkspaceCreations`,
+  `setWorkspaceCreationHandoff`, `CreationHandoff`,
   `setWorkspaceCreationPublisher`, `WorkspaceCreationEvent`, `creationOwnsPath`, `listExistingWorktrees`,
   `openExistingWorktree`,
   `listWorkspaces`, `listWorkspaceRecords`, `listAllWorkspaceRecords`, `forgetWorkspace`,

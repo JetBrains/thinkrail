@@ -24,6 +24,7 @@ import {
 	dismissWorkspaceCreation,
 	interruptWorkspaceCreations,
 	listWorkspaceCreations,
+	replayPendingHandoffs,
 	retryWorkspaceCreation,
 	setCheckoutStallForTests,
 	setWorkspaceCreationHandoff,
@@ -438,6 +439,43 @@ posix("a create that fails before anything exists never claims a cleanup", async
 	expect(record?.failure?.code).toBe("WORKTREE_ADD_FAILED");
 	expect(record?.failure?.cleanedUp).toBeUndefined();
 });
+
+posix(
+	"a host that died mid-handoff replays it at start instead of dropping the held prompt",
+	async () => {
+		const workspace = await createWorkspace("p1");
+		const file = join(dataDir, "workspace-creations.json");
+		writeFileSync(
+			file,
+			JSON.stringify([
+				{
+					id: workspace.id,
+					projectId: "p1",
+					name: workspace.name,
+					branch: workspace.branch,
+					worktreePath: workspace.worktreePath,
+					baseBranch: workspace.baseBranch,
+					state: "running",
+					phase: "checking-out",
+					startedAt: 1,
+					kickoff: { text: "still here" },
+				},
+			]),
+		);
+		interruptWorkspaceCreations();
+		expect(listWorkspaceCreations()[0]?.state).toBe("running");
+
+		const handed: unknown[] = [];
+		setWorkspaceCreationHandoff(async (ws, kickoff) => {
+			handed.push({ id: ws.id, kickoff });
+			return { sessionId: "s-replayed" };
+		});
+		await replayPendingHandoffs();
+		expect(handed).toEqual([{ id: workspace.id, kickoff: { text: "still here" } }]);
+		expect(listWorkspaceCreations()).toEqual([]);
+		expect(removed().at(-1)).toMatchObject({ id: workspace.id, sessionId: "s-replayed" });
+	},
+);
 
 test("checkout failure text drops progress lines and keeps git's last words", () => {
 	expect(

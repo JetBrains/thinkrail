@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
-import { createFauxCore } from "@earendil-works/pi-ai/providers/faux";
+import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type {
 	Project,
@@ -61,6 +61,8 @@ let repo: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 const savedTestAgentDir = process.env.PI_CODING_AGENT_DIR;
 
+let handlerFaux: ReturnType<typeof createFauxCore> | null = null;
+
 async function setupDefaultModelRuntime(): Promise<() => void> {
 	const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
 	const agentDir = join(dataDir, "agent");
@@ -82,6 +84,7 @@ async function setupDefaultModelRuntime(): Promise<() => void> {
 		maxTokens: 4_096,
 	};
 	const faux = createFauxCore({ provider: "handler", api: "faux", models: [model] });
+	handlerFaux = faux;
 	runtime.registerProvider("handler", {
 		api: "faux",
 		baseUrl: "http://faux.local",
@@ -481,6 +484,13 @@ test("a background create hands the finished workspace a terminal and the held c
 		const models = (await handleRequest("model.list", {}, CTX)) as WireModel[];
 		const selected = models.find((model) => model.provider === "handler");
 		if (!selected) throw new Error("handler test model was not available");
+		handlerFaux?.setResponses([
+			async () => {
+				await Bun.sleep(4_000);
+				return fauxAssistantMessage("done");
+			},
+		]);
+		const started = Date.now();
 		const creation = (await handleRequest(
 			"workspace.startCreate",
 			{ projectId: "p1", kickoff: { text: "Start here", model: selected } },
@@ -488,6 +498,7 @@ test("a background create hands the finished workspace a terminal and the held c
 		)) as WorkspaceCreation;
 		expect(creation).toMatchObject({ state: "running", kickoff: { text: "Start here" } });
 		const workspace = await awaitWorkspaceCreation(creation.id);
+		expect(Date.now() - started).toBeLessThan(3_000);
 
 		expect(workspace.initialTerminalPending).toBeUndefined();
 		expect(removed).toHaveLength(1);

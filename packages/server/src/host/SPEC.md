@@ -560,13 +560,17 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `dismissCreation` front `workspaces`' creation job, and `createServer` marks leftover running creations
   `interrupted` before it serves, installs the creation publisher (`workspace.creationChanged` /
   `workspace.creationRemoved`, subscribed only by v103+ sockets) and the **handoff**
-  `workspaceCreationHandoff`: when a checkout finishes it provisions the initial terminal and, when the create
+  `workspaceCreationHandoff` (then replays any handoff a crash cut short): when a checkout finishes it provisions the initial terminal and, when the create
   carried a kickoff, waits for the workspace watcher (`ensureWatch`, the readiness the browser's own chat start
   awaits) and starts the chat through `startChat` (the kickoff's model/effort, else the saved defaults)
   and sends its text/images through `sendUserMessage` under the `clientKey` that started (or last retried) the
-  creation, so the chat runs even with no window open. A prompt rejected inside the ack window comes back as
-  `kickoffError` beside the `sessionId`; an empty kickoff starts the chat without a prompt, so the start
-  surface always lands in a chat. The client key is remembered in memory only and dropped after the handoff or
+  creation, so the chat runs even with no window open. **The handoff waits only for pi's preflight, never the agent's turn:**
+  `promptSession`'s `onPreflight` resolves once pi has validated the model and auth and started (or queued /
+  handled) the run, so the creation is handed back — and its chat opened — within moments; a rejection
+  before that point (no model, no API key) comes back as `kickoffError` beside the `sessionId`, and failures
+  after it reach the chat through the session's own event stream. Waiting for the whole send ack (up to 10 s,
+  or the entire first turn) kept the finished workspace on "Creating…" for that long. An empty kickoff starts
+  the chat without a prompt, so the start surface always lands in a chat. The client key is remembered in memory only and dropped after the handoff or
   a successful dismiss. `project.open` and `project.init` refuse a folder an in-flight creation owns, so a
   half-made worktree can never be adopted as a project while its cleanup may still remove it.
   `workspace.create` stays a start-and-await over the same job (wire and e2e callers);
