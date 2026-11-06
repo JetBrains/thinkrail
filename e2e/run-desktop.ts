@@ -43,7 +43,7 @@ function waitForReady(exited: Promise<number>): Promise<string> {
 }
 
 await holdE2eIdleSleep();
-globalSetup();
+await globalSetup();
 const desktop = Bun.spawn([launcher], {
 	cwd: repoRoot,
 	env: {
