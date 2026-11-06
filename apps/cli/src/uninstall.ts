@@ -30,7 +30,7 @@ export const RC_BLOCK_END = "# <<< thinkrail PATH <<<";
 export const UNINSTALL_USAGE = `Usage: thinkrail uninstall [options]
 
 Remove ThinkRail from this machine: the executable, the installer's PATH entry, the install
-metadata, and the binary's staging cache. Your app state (~/.thinkrail) is kept unless you ask
+metadata, and the binary's staging cache. Your app state (~/.oh-my-thinkrail) is kept unless you ask
 for it to be removed. pi's own state (~/.pi) is never touched.
 
 Options:

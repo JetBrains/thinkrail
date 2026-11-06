@@ -10,7 +10,7 @@
 		"./history-test-fixtures": "./src/history/testFixtures.ts"
 	},
 	"scripts": {
-		"dev": "bun run --watch src/dev.ts",
+		"dev": "bun run ../../scripts/dev-server.ts",
 		"typecheck": "tsc --noEmit",
 		"test": "bun test"
 	},

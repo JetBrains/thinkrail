@@ -17,6 +17,7 @@ import {
 	RiLayoutBottomLine,
 	RiLayoutLeftLine,
 	RiLayoutRightLine,
+	RiListCheck2,
 	RiListCheck3,
 	RiMailUnreadLine,
 	RiNodeTree,
@@ -41,6 +42,7 @@ const TOOL_LABELS: Record<PaletteTool, MessageKey> = {
 	files: "workbench.tool.files",
 	review: "workbench.tool.review",
 	plan: "workbench.tool.plan",
+	issues: "workbench.tool.issues",
 };
 
 const TOOL_ICONS: Record<PaletteTool, RemixiconComponentType> = {
@@ -48,6 +50,7 @@ const TOOL_ICONS: Record<PaletteTool, RemixiconComponentType> = {
 	files: RiFolderLine,
 	review: RiFileList3Line,
 	plan: RiListCheck3,
+	issues: RiListCheck2,
 };
 
 export interface PaletteCatalogDeps {

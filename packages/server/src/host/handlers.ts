@@ -15,6 +15,12 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	BRANCH_STATUS_PROTOCOL_VERSION,
+	ISSUES_ACTIONS_PROTOCOL_VERSION,
+	ISSUES_APPROVAL_PROTOCOL_VERSION,
+	ISSUES_AUTH_PROTOCOL_VERSION,
+	ISSUES_DESIGN_APPROVAL_PROTOCOL_VERSION,
+	ISSUES_IMPLEMENTATION_PROTOCOL_VERSION,
+	ISSUES_PROTOCOL_VERSION,
 	isControlMessage,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
@@ -247,9 +253,27 @@ import {
 } from "../workspaces";
 import { ackSend } from "./ackSend";
 import { sessionProviderAnalytics, trackChatStarted } from "./authAnalytics";
+import { createHostSession } from "./createHostSession";
 import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
 import { provisionInitialTerminal } from "./initialTerminal";
+import {
+	issuesApproveDesign,
+	issuesApproveImplementation,
+	issuesConnect,
+	issuesConnection,
+	issuesDesignApproval,
+	issuesDisconnect,
+	issuesLaunchDesign,
+	issuesLaunchImplementation,
+	issuesList,
+	issuesPublishDesign,
+	issuesPublishImplementation,
+	issuesRepositoryAddress,
+	issuesStartImplementation,
+	issuesValidateDesign,
+	issuesValidateImplementation,
+} from "./issues";
 import { dropLogin, recordLoginStart } from "./loginAnalytics";
 import {
 	mcpAdd,
@@ -321,6 +345,95 @@ type WsHandler<M extends WsMethodName> = (
 ) => WsResult<M> | Promise<WsResult<M>>;
 
 type WsHandlers = { [M in WsMethodName]: WsHandler<M> };
+
+function withIssuesProtocol<P, R>(handler: (params: P) => R) {
+	return (params: P, ctx: RequestContext): R => {
+		if (ctx.protocolVersion !== undefined && ctx.protocolVersion < ISSUES_PROTOCOL_VERSION) {
+			throw new CodedError(
+				"RESOURCE_UNAVAILABLE",
+				"Issues are unavailable for this protocol version.",
+			);
+		}
+		return handler(params);
+	};
+}
+
+function withIssuesAuthProtocol<P, R>(handler: (params: P) => R) {
+	return (params: P, ctx: RequestContext): R => {
+		if (ctx.protocolVersion !== undefined && ctx.protocolVersion < ISSUES_AUTH_PROTOCOL_VERSION) {
+			log.warn(
+				`issue request gated: client protocol ${ctx.protocolVersion} < ${ISSUES_AUTH_PROTOCOL_VERSION}`,
+			);
+			throw new CodedError(
+				"RESOURCE_UNAVAILABLE",
+				"Issue associations are unavailable for this protocol version.",
+			);
+		}
+		return handler(params);
+	};
+}
+
+function withIssuesApprovalProtocol<P, R>(handler: (params: P) => R) {
+	return (params: P, ctx: RequestContext): R => {
+		if (
+			ctx.protocolVersion !== undefined &&
+			ctx.protocolVersion < ISSUES_APPROVAL_PROTOCOL_VERSION
+		) {
+			throw new CodedError(
+				"RESOURCE_UNAVAILABLE",
+				"Issue approvals are unavailable for this protocol version.",
+			);
+		}
+		return handler(params);
+	};
+}
+
+function withIssuesDesignApprovalProtocol<P, R>(
+	handler: (params: P, protocolVersion: number | undefined) => R,
+) {
+	return (params: P, ctx: RequestContext): R => {
+		if (
+			ctx.protocolVersion !== undefined &&
+			ctx.protocolVersion < ISSUES_DESIGN_APPROVAL_PROTOCOL_VERSION
+		) {
+			throw new CodedError(
+				"RESOURCE_UNAVAILABLE",
+				"Issue design approvals are unavailable for this protocol version.",
+			);
+		}
+		return handler(params, ctx.protocolVersion);
+	};
+}
+
+function withIssuesImplementationProtocol<P, R>(handler: (params: P) => R) {
+	return (params: P, ctx: RequestContext): R => {
+		if (
+			ctx.protocolVersion !== undefined &&
+			ctx.protocolVersion < ISSUES_IMPLEMENTATION_PROTOCOL_VERSION
+		) {
+			throw new CodedError(
+				"RESOURCE_UNAVAILABLE",
+				"Issue implementation starts are unavailable for this protocol version.",
+			);
+		}
+		return handler(params);
+	};
+}
+
+function withIssuesActionsProtocol<P, R>(handler: (params: P) => R) {
+	return (params: P, ctx: RequestContext): R => {
+		if (
+			ctx.protocolVersion !== undefined &&
+			ctx.protocolVersion < ISSUES_ACTIONS_PROTOCOL_VERSION
+		) {
+			throw new CodedError(
+				"RESOURCE_UNAVAILABLE",
+				"Issue actions are unavailable for this protocol version.",
+			);
+		}
+		return handler(params);
+	};
+}
 
 async function archiveTeardown(ws: Workspace): Promise<void> {
 	try {
@@ -991,6 +1104,28 @@ const handlers: WsHandlers = {
 		return listSkillCatalog(ws.worktreePath, admissionContextFor(project, ws.skillOverrides ?? {}));
 	},
 	"extension.list": () => listExtensionCatalog(new Set(getConfig().disabledExtensions)),
+	"issues.approveDesign": withIssuesApprovalProtocol((p) => issuesApproveDesign(p)),
+	"issues.approveImplementation": withIssuesApprovalProtocol((p) => issuesApproveImplementation(p)),
+	"issues.connection": withIssuesProtocol((p) => issuesConnection(p)),
+	"issues.connect": withIssuesAuthProtocol((p) => issuesConnect(p)),
+	"issues.designApproval": withIssuesDesignApprovalProtocol((p, protocolVersion) =>
+		issuesDesignApproval(p, protocolVersion),
+	),
+	"issues.disconnect": withIssuesProtocol((p) => issuesDisconnect(p)),
+	"issues.list": withIssuesProtocol((p) => issuesList(p)),
+	"issues.launchDesign": withIssuesActionsProtocol((p) => issuesLaunchDesign(p)),
+	"issues.launchImplementation": withIssuesActionsProtocol((p) => issuesLaunchImplementation(p)),
+	"issues.publishDesign": withIssuesActionsProtocol((p) => issuesPublishDesign(p)),
+	"issues.publishImplementation": withIssuesActionsProtocol((p) => issuesPublishImplementation(p)),
+	"issues.repositoryAddress": withIssuesAuthProtocol((p) => issuesRepositoryAddress(p)),
+	"issues.startImplementation": withIssuesImplementationProtocol((p) =>
+		issuesStartImplementation(p),
+	),
+	"issues.validateDesign": withIssuesActionsProtocol((p) => issuesValidateDesign(p)),
+	"issues.validateImplementation": withIssuesActionsProtocol((p) =>
+		issuesValidateImplementation(p),
+	),
+
 	"packages.list": (p) => packagesList(p),
 	"packages.install": (p) => packagesInstall(p),
 	"packages.remove": (p) => packagesRemove(p),
@@ -1055,23 +1190,7 @@ const handlers: WsHandlers = {
 		await reloadSessionResources(params.sessionId);
 		return { ok: true } as const;
 	},
-	"session.create": async (p) => {
-		const ws = getWorkspace(p.workspaceId);
-		ensureWorkspaceScratchDir(ws);
-		const defaults = await resolveNewChatModel(p);
-		const created = await createSession({
-			cwd: ws.worktreePath,
-			workspaceId: p.workspaceId,
-			...(defaults.model ? { model: defaults.model } : {}),
-			thinkingLevel: defaults.thinkingLevel,
-		});
-		if (p.model && created.model) noteRecentModel(created.model);
-		trackChatStarted({
-			sessionId: created.sessionId,
-			model: defaults.model ? created.model : null,
-		});
-		return created;
-	},
+	"session.create": (p) => createHostSession(p),
 	"session.prompt": (p, ctx) => {
 		return sendUserMessage("prompt", p.sessionId, p.text, ctx.clientKey, () =>
 			promptSession(p.sessionId, p.text, p.images),

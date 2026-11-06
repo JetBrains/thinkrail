@@ -72,6 +72,21 @@ export {
 	USER_FONT_UPLOAD_HEADER,
 	USER_FONTS_ROUTE,
 } from "./domain";
+export type * from "./issues";
+export {
+	canonicalIssueInstanceUrl,
+	hasIssueHttpConsent,
+	isIssueApprovalResult,
+	isIssueConnectionInput,
+	isIssueDesignApproval,
+	isIssueDesignPublicationInput,
+	isIssueImplementationTarget,
+	isIssuePublication,
+	isIssueReference,
+	isIssueSessionLaunch,
+	isIssueTarget,
+	requiresIssueHttpConsent,
+} from "./issues";
 export type {
 	FieldMatch,
 	MatchField,

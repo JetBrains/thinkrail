@@ -15,6 +15,7 @@ import {
 	reloadSessionResources,
 	removeQueuedSession,
 	requestSessionReload,
+	sessionReuseStatus,
 	setSessionManagerFactory,
 	settleSessionsForShutdown,
 } from "./agentSessionManager";
@@ -149,6 +150,8 @@ async function parent() {
 test("an idle session reloads immediately and extensions see the reload lifecycle", async () => {
 	const p = await parent();
 	const before = reloads();
+	expect(await sessionReuseStatus(p.sessionId, p.workspaceId, p.cwd)).toBe("idle");
+	expect(await sessionReuseStatus(p.sessionId, "foreign", p.cwd)).toBe(false);
 	expect(await requestSessionReload(p.sessionId)).toBe("reloaded");
 	expect(reloads()).toBe(before + 1);
 	await reloadSessionResources(p.sessionId);
@@ -161,6 +164,7 @@ test("a reload requested while the turn streams is deferred and runs at settleme
 	faux.setResponses([fauxAssistantMessage("word ".repeat(60))]);
 	const turn = promptSession(p.sessionId, "Say many words.");
 	await waitFor(() => getSessionState(p.sessionId).execution === "running");
+	expect(await sessionReuseStatus(p.sessionId, p.workspaceId, p.cwd)).toBe("busy");
 	expect(await requestSessionReload(p.sessionId)).toBe("deferred");
 	await expect(reloadSessionResources(p.sessionId)).rejects.toThrow(/busy/);
 	expect(reloads()).toBe(before);
@@ -175,6 +179,7 @@ test("a prompt held in preflight (a slash command) defers the reload until it is
 	const command = promptSession(p.sessionId, "/gate-wait");
 	await Bun.sleep(50);
 	expect(getSessionState(p.sessionId).execution).not.toBe("running");
+	expect(await sessionReuseStatus(p.sessionId, p.workspaceId, p.cwd)).toBe("busy");
 	expect(await requestSessionReload(p.sessionId)).toBe("deferred");
 	expect(reloads()).toBe(before);
 	writeFileSync(latch, "");
@@ -233,6 +238,7 @@ test("removing a queued message keeps the others when the run settles with a rel
 test("nothing is admitted while a reload runs", async () => {
 	const p = await parent();
 	const reload = requestSessionReload(p.sessionId);
+	expect(await sessionReuseStatus(p.sessionId, p.workspaceId, p.cwd)).toBe("busy");
 	await expect(promptSession(p.sessionId, "hello")).rejects.toThrow(/reloading/);
 	await reload;
 	faux.setResponses([fauxAssistantMessage("ok")]);

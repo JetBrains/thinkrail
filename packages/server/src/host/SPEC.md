@@ -221,7 +221,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   next attach repairs it to an answerable ack; explicit user Stop remains the terminal-abort path); `handlers.ts` (the WS method→handler
   registry, typed `WsHandlers = { [M in WsMethodName]: WsHandler<M> }`, so a missing, extra, or mistyped
   handler fails typecheck; `handleRequest` narrows the wire's `unknown` params once, at dispatch, and
-  params are not shape-validated at runtime. The registry includes `workspace.rename` as the direct manual door into
+  most params are not shape-validated at runtime; `issues.*` is an explicit exception (below). The registry includes `workspace.rename` as the direct manual door into
   `renameWorkspace(id, name)` (no `branch` option) — the workspaces module changes only the
   display label, persists, and publishes it, so the handler never mutates Git, emits, or patches a client
   separately; `project.rename` likewise delegates to the projects module's `renameProject`, which owns validation and the push. `client.reportError` hands the untrusted browser report to analytics' `reportClientError` (the
@@ -551,7 +551,15 @@ channel fan-out, and the process-boot wrapper both launchers share.
   recovery, when the transcript is genuinely gone from disk (there is no UI to close a review and
   start over, so wedging it would be worse); every other re-open failure throws rather than silently
   forking the conversation.
-- **Scratch-dir seeding on chat start:** the `session.create` handler calls `workspaces`'
+- **Host session creation:** `createHostSession.ts` owns the existing new-chat orchestration;
+  `session.create` delegates directly. It reuses workspace lookup/scratch seeding, new-chat model
+  resolution, agent creation, explicit-model recent history and chat-start analytics, without adding
+  lifecycle or tool setup. After model resolution it re-reads the workspace and rejects a removed or
+  replaced record (identity, project or path changed), for every caller. An optional synchronous guard
+  runs before starting, after model resolution, immediately before agent creation and after creation
+  resolves. A failed post-create guard does not delete or otherwise clean up the possibly-created
+  session; the caller's pending marker owns that uncertainty.
+- **Scratch-dir seeding on chat start:** `createHostSession` calls `workspaces`'
   `ensureWorkspaceScratchDir` before creating the session — the Default workspace's gitignored
   `.thinkrail/context/` lands in the user's repo only when a chat actually starts there (and a
   worktree's deleted scratch dir self-heals). Host-composed — no new module edges.
@@ -767,3 +775,262 @@ sound route is snapshot-at-add, never freeze-on-drift.
 One optional persisted `ReviewComment` field carries finding provenance: `origin?: { todoId, reviewedSha,
 sessionId }` — **landed**. The wire `stale?: boolean` is derived by the host per client snapshot, never
 stored. No new tool parameter, no new `status`/`anchorState` enum value.
+
+
+## Issues read composition (v103)
+
+`issues.ts` lazily creates the public issues service for `issues.connection`, `issues.connect`,
+`issues.disconnect`, and `issues.list`. The adapter validates unknown params itself (exact request
+keys, nonblank local project id, and the contracts connection-input guard with exact input keys),
+because the dispatcher only casts (the connection input may carry only an exact-instance
+`httpConsent`). It checks membership through `projects.getProjects` and requires **no** project trust:
+connecting is the user's own explicit address+token entry, not repo-defined code, and a plain repository
+offers no trust affordance at all. The v104/v106 stage actions stay trust-gated because they touch the
+worktree, git and remote state. `issues.connect` is gated at the v105 Issues auth protocol; the other
+read/connection RPCs keep the v103 floor. Connection metadata and disconnect remain available without
+trust so a user can inspect or release an existing credential. These are read/connection RPCs only:
+no stage actions, generic credential framework, or agent/session injection.
+
+### Association address hint (v105)
+
+`issues.repositoryAddress({ projectId })` also sits at the v105 Issues auth floor with
+`issues.connect`, because it prefills the form that will carry a token. The call takes no path:
+the exact-key request guard accepts only `projectId`, and the host resolves the registered project
+through `getProjects`, requiring membership and `trusted === true` like connect/list. It then runs the
+existing bounded local `git` read `originUrls(project.path)`: no fetch, no `ls-remote`, no credential
+helper, no network. The host answers the configured `origin` fetch URL only when the project has a
+single remote named `origin` and the value is already a credential-free canonical HTTP(S) address
+(`canonicalIssueInstanceUrl`); it is returned as git spells it minus trailing slashes so the web
+resolver owns the instance/project split. SSH/SCP, userinfo, query/fragment, no-origin,
+multiple-remote, and unreadable repositories all answer `{ repositoryUrl: null }`, and a git failure
+is never surfaced: errors are the existing static `CodedError` messages and never echo git output or
+a token. `PROTOCOL_VERSION` stays at the auth floor; no new capability flag is introduced.
+
+The lazy initialization promise is shared; a failed load clears it so a repaired binding file can be
+retried. The adapter owns `<dataDir>/issue-bindings.json`: only local project id, HTTPS instance URL,
+and canonical remote project id are stored, never token or connected state. A missing file means no
+bindings; malformed/extra-key rows fail closed with the service's fixed load error. Each upsert
+synchronously rereads and merges the latest file, writes a unique same-directory temporary file, then
+renames it atomically and removes temporary debris. This non-yielding critical section prevents lost
+updates across adapter instances in one process; it is not a cross-process lock. The file also carries
+only credential metadata: optional UUID `credentialId`, an exact canonical HTTP acknowledgment, and bounded
+cleanup UUIDs. Disconnect stops local use immediately, awaits an in-flight connect/restore, commits a record
+with no active credential, deletes those vault entries and resolves only after deletion; failure rejects and
+leaves runtime restoration blocked for retry. The public binding survives.
+
+A connection or list request lazily calls the service's `restore`, which reads only the active vault
+credential and re-verifies the numeric project within the existing deadline. A project without a stored
+credential stays metadata-only and never touches the vault. Startup performs no vault read and no network request; there is no retry loop. Action
+composition restores before acquiring its remote capability so durable credentials work after restart.
+
+The token exists only in the injected OS-vault primitive and transient process memory for authenticated
+reads; it must not be persisted in JSON, logged, returned, or attached to error causes. The production
+adapter (`Bun.secrets`, Windows machine-local) scopes vault names to the host data directory and has no
+plaintext fallback; tests inject a disposable store. Host ingress logs only the
+registered method; existing classifier-only reporting and the service's fixed credential-safe errors
+remain authoritative. Existing replay behavior is unchanged: a SHA-256 payload fingerprint (not raw
+params) and serialized credential-free response are retained. A replay of a completed connect or
+disconnect returns its original response, not current connection state; clients must query
+`issues.connection` for current state and use a new request id for a fresh operation. Transport must
+be appropriately protected: this composition does not introduce authentication or encryption.
+
+### Host-only Issue credential primitive
+
+`issueCredentials.ts` exposes `createIssueCredentials({ namespace, secrets?, platform? })`
+with lazy OS-vault `get(credentialId)`, `set(credentialId, token)`, and `delete(credentialId)`
+operations via `Bun.secrets`, under the dedicated `ThinkRailIssues` service. The future host
+composition must supply its canonical data-directory identity as the namespace, identical across
+restarts of one profile and distinct across profiles. The primitive does not resolve paths or
+canonicalize namespaces; it rejects blank, control-bearing, or over-4096-character namespaces.
+Account names are `v1-` plus SHA-256 of the JSON tuple `[namespace, credentialId]`, exposing
+neither value in vault metadata. IDs must be canonical lowercase UUIDv4 strings, allocated by
+the service for each credential generation, not derived from a project/remote binding. Separate
+IDs isolate pending/current generations so rollback or cleanup of one cannot overwrite or delete
+another; setting the same ID still replaces that generation's value. There is no binding-object API.
+Tokens are nonblank printable ASCII, at most 4096 characters, preserved byte-for-byte (never trimmed).
+Only trusted host `get` returns a token; sets/deletes return no secret or public metadata.
+Windows writes request `persist: "local"`; other platforms omit that Windows-only flag.
+All invalid input, malformed vault results, and vault failures become a fixed
+`CodedError("RESOURCE_UNAVAILABLE")` without raw errors, causes, or logging. There is no
+fallback to environment, memory, or JSON. Import/factory creation performs no vault operation;
+tests inject disposable backends and platforms and never access the real vault.
+
+This primitive is deliberately **not wired** into the current memory-only connection service.
+Its `get`/`set`/`delete` surface is intended for a future injected `IssueCredentialStore` port,
+not a service dependency today. It does not allocate IDs, implement connect verification,
+binding/vault transactionality, rollback, concurrent connect/disconnect ordering, reconnect, or
+credential lifecycle policy. Service-owned generation allocation and host-owned canonical namespace
+composition remain required integration constraints before the existing lifecycle above changes.
+
+### Durable issue workflow receipts
+
+`issueWorkflowPersistence.ts` implements the Issues `WorkflowPersistence` port independently of the
+connection adapter. The caller supplies an existing, privately owned storage directory. Each reference
+is strictly bounded and canonicalized (HTTPS URL, canonical numeric remote project id, positive IID),
+then keyed by SHA-256 of the JSON tuple `[provider, canonical instance URL, project id, IID]`.
+Records are credential-free, exact-shape validated, bounded JSON envelopes binding that reference to
+one revision. Receipt publication bodies, versions and implementation commit/design bindings must agree.
+A pending reservation names exactly one of `publish-design`, `publish-implementation`, `approve-design`,
+`approve-implementation` or `start-implementation`, and its version must match that operation's stage:
+a design digest for the three design-bound operations (including `start-implementation`, the version the
+user approved) and an implementation digest for the two implementation ones.
+
+Per-reference immutable `1.json`, `2.json`, … files are the journal. Exclusive `wx` creation of the
+next revision is the cross-process CAS claim, not rename or a process-local lock. Every file must be
+contiguous from 1 and valid; missing, torn, malformed, oversized or unexpected entries fail closed.
+A competing writer seeing a reserved/incomplete file must stop, never skip it. Nothing is overwritten,
+removed, replayed or taken over after a timeout. A lost CAS returns false only for a valid competing
+revision; corrupt/uncertain storage throws a static reconciliation error. No recovery policy is supplied.
+
+Success requires file fsync and close. Directory fsync is also required where supported; Windows
+unsupported directory-open/fsync errors are tolerated because Node/Bun cannot portably flush Windows
+directory metadata. Thus Windows guarantees a flushed file, not power-loss durability of its directory
+entry; a lost tail after power loss cannot be detected by this journal alone. The caller owns durable
+provisioning of the root directory. Filesystem/hardware fsync and exclusive-create semantics must be
+reliable (local storage; network filesystem guarantees are not asserted). This seam is composed with the server-only actions below, not new wire handlers.
+
+### Durable Issue workspace launches
+
+`issueWorkspacePersistence.ts` exports `createIssueWorkspacePersistence(root)` for an existing private
+local directory. `withLaunch(localProjectId, reference, operation, beforeRelease?)` acquires and flushes an exclusive
+`wx` fence for `(localProjectId, IID)` before invoking the callback, which must wrap the entire
+process-local Issue workspace coordinator operation. Different remote bindings contend for the same
+numeric destination. Existing fences always require reconciliation: no waiting, timeout, stale-owner
+inference or takeover. A thrown callback or storage error before release leaves the fence; only a
+successful callback followed by all required write/directory flushes may remove its own fence.
+The optional synchronous `beforeRelease` guard runs after those flushes, immediately before unlink;
+a thrown guard retains the fence. Successful unlink is the explicit release commit point: no fallible
+operation follows it that could report a committed launch as failed. Fence deletion is not directory-fsynced and is not claimed durable
+against power loss; a crash may retain or reintroduce the fence, safely blocking future launches until
+reconciliation rather than replaying uncertain work. Retained callback ports cannot operate after completion.
+
+Records use the full local-project/provider/instance/remote-project/IID key, checked exactly on every
+load/save. Bounded exact shapes validate ownership, design associations, pending/completed worktrees,
+sessions and pending session creation; unknown/torn records halt with a static reconciliation error.
+Records carry no design or implementation version: a completed association holds only
+`{workspaceId, worktreePath, branch, session: {id}}` and a pending session creation only
+`{stage, workspaceId}`, so re-entry reuses the recorded session and compares no version.
+Records contain only credential-free reference and workspace metadata. Saves snapshot validated input
+and atomically replace records using an exclusive own temporary file, file fsync and rename, followed
+by directory fsync. Only owned temporary files and successfully completed launch fences are removed;
+there is no rollback or automatic reconciliation. Directory fsync is best effort on Windows for the
+same unsupported/permission errors as the workflow receipt adapter. Durability relies on trusted local
+storage honoring file flush, rename and exclusive creation; network filesystems are outside this
+contract. This adapter does not compose host handlers, authenticate a binding, or perform Git/session
+operations itself.
+
+
+### Issue actions (v104)
+
+`createIssuesHost` composes `issuesActions.ts` with the **same lazy IssuesService** as connection/list.
+Its closed methods are `launchDesign`, `launchImplementation`, `publishDesign`,
+`publishImplementation`, `validateDesign`, `validateImplementation`, plus the v106 `approveDesign` /
+`approveImplementation` and v108 `startImplementation` below. All accept exact
+`{projectId, reference}` targets; implementation
+launch/publication additionally require a bounded `approvedDesignVersion`, and design publication
+requires bounded `expectedDescription` and `newDescription`. Nested references have exact keys,
+canonical HTTPS instance and numeric remote project identity. Caller paths, workspace/session ids, commits and arbitrary actions are rejected
+before side effects. Named bound exports from `issues.ts` register exactly these methods under
+`issues.*` in the typed dispatcher. `withIssuesActionsProtocol` rejects versions below
+`ISSUES_ACTIONS_PROTOCOL_VERSION = 104` before delegation with `RESOURCE_UNAVAILABLE` and the static,
+input-free message "Issue actions are unavailable for this protocol version." Undefined protocol
+versions remain permitted for in-process callers, matching the existing wrapper convention.
+Read/connection methods retain their v103 gate. Wire types do not replace unknown-input validation
+in the action methods; credentials are never added to responses or errors. `apps/web/src/issues`
+dispatches only `issues.launchDesign` and the v108 `issues.startImplementation` below, under
+`supportsIssueActions`/`supportsIssueImplementation`; publication, validation and approval stay
+host-side. No merge, push or merge-request mutation is introduced.
+
+#### App-originated approval (v106)
+
+`approveDesign` and `approveImplementation` are the same closed actions for app-originated approval
+and are registered at the v106 approval floor. `withIssuesApprovalProtocol` rejects versions below
+`ISSUES_APPROVAL_PROTOCOL_VERSION = 106` before delegation with `RESOURCE_UNAVAILABLE` and the
+static, input-free message "Issue approvals are unavailable for this protocol version."; older v104
+action and v103/105 read gates are unchanged, and undefined protocol versions remain permitted for
+in-process callers. Both accept only the exact `{projectId, reference}` `IssueTarget`: caller paths,
+workspace/session ids, commits, versions, actor ids, roles and tokens are rejected before side
+effects, and the host derives the actor from its own `currentUser` wrapper. They reuse the same
+trust/capability guards, point-in-time fence `beforeRelease`, `withLaunch` wrapper, wrapped
+`WorkflowRemote` (including that `currentUser` wrapper) and lazy IssuesService as the other actions,
+and they never take a caller SHA: an implementation approval reads HEAD through the same
+`ownedImplementation` + `resolveCommitOid` port used by publication. Each approval writes exactly one
+remote approval label record and leaves a durable workflow receipt; it does not create a note,
+merge request, push or merge, and it is not merge authorization. The Issues panel dispatches neither:
+an in-app approval is a separate decision from starting implementation.
+
+Each operation requires a current explicitly trusted project and an exact live `remoteFor` capability.
+The host captures client identity and rechecks it and the project path/trust before and after every
+injected await, remote dispatch, persistence, workspace and session port, except the committed fence
+release. Its final capability/ownership guard runs synchronously in `beforeRelease`, not after the
+fulfilled `withLaunch`: authorization is point-in-time at release, not perpetual. Capability changes
+after successful unlink return committed success; retries reuse the saved association rather than
+receiving a misleading reconciliation failure. Each of the seven
+WorkflowRemote methods is explicitly wrapped; a previously captured raw client cannot bypass later
+disconnect/reconnect or binding changes. Trust/connection preflight precedes persistence/fencing.
+The host provisions separate private `issue-workflow` and `issue-workspaces` directories under the
+configured dir/dataDir, rejecting symlink/junction directories and ancestors. Durable workflow receipts
+remain canonical per remote reference. The workspace adapter's cross-process `withLaunch` fence
+covers the entire action, including workflow work, with one coordinator constructed inside its
+callback; failures retain uncertainty for explicit reconciliation, never automatic retries.
+
+Workspace ports use project-constrained `listWorkspaceRecords`, authoritative `listGitWorktrees`,
+exact-branch creation and `listWorkspaces({includeDiffStats:false})` for Default. Design launches only
+create/reuse empty Default sessions, never worktrees or prompts. Implementation launches use the
+coordinator's ownership ports without a workflow readiness check or design receipt. The recorded
+session is reused for every re-entry; no version is compared and no workflow label is written.
+Session reuse uses agent's nonprompting `sessionReuseStatus`; creation delegates to the existing
+`createHostSession({workspaceId}, guard)` helper. Only those two session functions have optional
+factory-scoped test substitution, not an alternate lifecycle.
+
+Implementation publication derives its own full commit SHA: lookup-only `ownedImplementation`
+runs on that same coordinator/fence, followed by `git.resolveCommitOid(worktreePath, "HEAD")` and
+another ownership check. Workspace id, path and branch are pinned across all current-commit reads in
+the action. The workflow repeatedly invokes this port around publication and implementation approval;
+a stale receipt cannot authorize a changed checkout HEAD. No recursive `withLaunch`, caller SHA,
+worktree adoption, prompts, push, MR, merge or CI capability is introduced.
+
+#### Implementation start (v108)
+
+`issues.startImplementation({ projectId, reference })` → `IssueSessionLaunch` is the one action behind the
+confirmed implementation button. It is registered at the v108 implementation floor:
+`withIssuesImplementationProtocol` rejects versions below
+`ISSUES_IMPLEMENTATION_PROTOCOL_VERSION = 108` before delegation with `RESOURCE_UNAVAILABLE` and the
+static, input-free message "Issue implementation starts are unavailable for this protocol version.";
+undefined protocol versions remain permitted for in-process callers, and the earlier v103/104/105/106/107
+gates are unchanged. It accepts only the exact `IssueTarget`; a caller-supplied design version, stage,
+path, actor, workspace/session id or token is rejected by the same validators.
+
+The action runs inside the same trust/capability guards, `withLaunch` fence and wrapped
+`WorkflowRemote` as the other actions and performs exactly two ordered steps under that one fence:
+`issues.startImplementation` dispatches directly to `coordinator.implementation(reference)` inside
+the same trust/capability and whole-operation fence. It creates/reuses `.worktrees/issue-<IID>` without
+reading design receipts or mutating GitLab labels. The v104 legacy method validates its old request
+shape but also uses this version-free coordinator. No confirmation dialog or readiness port remains.
+
+#### Approved-design read (v107)
+
+`issues.designApproval({ projectId, reference })` → `IssueDesignApproval` is the credential-free
+approved-design read. It was introduced for the older implementation-launch contract that required the
+exact `design:<sha256>` digest; the v108 start gate above no longer consumes it, so it stays available
+without being part of the panel's implementation path. It is registered at the v107 design-approval floor: `withIssuesDesignApprovalProtocol` rejects versions
+below `ISSUES_DESIGN_APPROVAL_PROTOCOL_VERSION = 107` before delegation with `RESOURCE_UNAVAILABLE`
+and the static, input-free message "Issue design approvals are unavailable for this protocol
+version.", and it passes `ctx.protocolVersion` to `issues.designApproval(params, protocolVersion?)`,
+which repeats that same static floor for direct callers. Undefined protocol versions remain permitted
+for in-process callers, and the v103/104/105/106 gates are unchanged.
+
+The host adapter (`issues.ts`) accepts only the exact `{projectId, reference}` `IssueTarget` through
+the contracts guard — caller versions, paths, actor ids, commits and tokens are rejected with the
+static `RANGE_INVALID` "Invalid Issue request." before any read — requires project membership through
+`getProjects` but **no** project trust, and reads the **same** receipt store the actions write:
+`createIssueWorkflowPersistence` over `<dataDir>/issue-workflow`. It never creates or repairs that
+store (an absent directory is simply no receipt), performs no credential restore, no vault read, no
+network request and no git read, and returns `{ approvedDesignVersion }` only when the reference's
+design receipt exists, is `approved === true`, has no `pending` reservation and holds its validated
+publication version; every other case — missing receipt, unapproved, pending, malformed or
+unreconciled store — answers `{ approvedDesignVersion: null }` or the adapter's existing static
+reconciliation error. Implementation receipts are never consulted or exposed, so an approved
+implementation cannot stand in for a design approval. The answer is only that digest: no note id,
+body, commit, token or other receipt field crosses the wire, and failures remain the adapter's static
+`CodedError` messages rather than raw store contents.

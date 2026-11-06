@@ -5,7 +5,7 @@ status: active
 title: panels — feature views
 parent: module-web
 depends-on: [module-contracts]
-references: [central-integration]
+references: [central-integration, submodule-web-issues]
 tags: [ui]
 ---
 
@@ -437,6 +437,24 @@ toast naming the provider and the `model.list` count ("JetBrains AI connected �
 lets Welcome switch its hero to the `ConnectedLine`; the wizard neither toasts nor closes — it verifies in place
 (below). Settings keeps its own behavior (no auto-close),
 because a power user there may be adding a second provider.
+
+**Associating a project with GitLab.** After `project.open`, `project.init`, or a `CloneProjectDialog`
+success adopts a project — never after `CreateProjectDialog`, which made a repository with no remote —
+the shared `useOpenProject` flow offers the skippable [[submodule-web-issues]] association prompt, but only
+on a host at `supportsIssueAuth`. It asks `issues.repositoryAddress({ projectId })` for the project's
+`origin` hint and opens `GitLabAssociationDialog` with that hint as the form's address prefill. The hint is
+optional: a failed or `null` read still opens the dialog with an empty address. A successful connect there
+raises the barrel's `notifyIssueAssociation(projectId)` through the dialog's `onAssociated`, so an
+already-mounted Issues tool re-reads instead of keeping the snapshot it took before the association —
+the signal carries a project id only, never credential or connection state, so nothing is mirrored into
+the store. No association outcome
+reaches `explainOpenFailure`, rolls back the adopted project, or changes the `setup` intent, and
+Cancel/close (`issues.associateSkip`) simply dismisses the prompt; while a connect is pending the dialog
+refuses every dismissal (no close control, no escape, no outside click) and Skip stays disabled. Every open gesture starts the shared
+last-intent generation and each mounted hook registers a closer, so a superseding navigation in either
+surface closes a prompt whose intent is no longer current, and a late hint reply is dropped by the same
+fence. `CloneProjectDialog` stays token-free: the association is offered after cloning, never inside the
+clone form.
 
 **Starting from nothing.** "Start a new project" opens **`CreateProjectDialog`** (driven by `useOpenProject`'s
 `startNewProject`, so the rail "+" and Welcome share it): a project name, its derived folder name, and a
@@ -1630,8 +1648,11 @@ own section. The kebab menu (`plan-menu`, a
   `VisibleModelsSettings`' rows; `TemplateEditorDialog`, reused by `TemplatesSettings`; `ExtraUsageNotice`, the
   sign-in notice `useProviderAuth` passes to `LoginDialog`), `auth` (`LoginDialog`, mounted through
   `useProviderAuth` and by `McpSettings`), `@thinkrail/resource-renderers`, `lib`, `themes` (catalog + generic application contract),
-  `contracts`; `@remixicon/react`; and the heavy libs each lazy panel owns (`shiki`,
-  `@xterm/*`) loaded via `import()`.
+  `contracts`; `issues` (the arrangement-agnostic barrel only: `GitLabAssociationDialog` plus the
+  `supportsIssueAuth` floor, `shouldPromptAssociation` rule, `ProjectOpenGesture` type and
+  `notifyIssueAssociation` signal that gate and settle the post-open association prompt — panels never
+  imports `issues` internals), `@remixicon/react`; and the heavy libs each lazy
+  panel owns (`shiki`, `@xterm/*`) loaded via `import()`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.
 
 - **Ship — the branch's delivery state and actions, one implementation for topbar and Plan pane.**

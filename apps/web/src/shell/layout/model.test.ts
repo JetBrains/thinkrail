@@ -955,6 +955,18 @@ describe("workspace layout model", () => {
 		]);
 	});
 
+	test("built-in presets place Issues beside reference tools in the right rail", () => {
+		for (const preset of BUILTIN_LAYOUT_PRESETS) {
+			const reference = preset.right.groups.find((group) => group.tools.includes("specs"));
+			expect(reference?.tools).toContain("issues");
+			expect(
+				preset.right.groups.flatMap((group) => group.tools).filter((tool) => tool === "issues"),
+			).toHaveLength(1);
+			expect(preset.left.groups.flatMap((group) => group.tools)).not.toContain("issues");
+			expect(preset.bottom.groups.flatMap((group) => group.tools)).not.toContain("issues");
+		}
+	});
+
 	test("built-in presets carry the approved bottom topology", () => {
 		const balanced = BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === "balanced");
 		const focus = BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === "focus");
@@ -973,7 +985,7 @@ describe("workspace layout model", () => {
 
 	test("successful generated mutation sequences preserve every layout invariant", () => {
 		const directions = ["left", "right", "up", "down"] as const;
-		const tools = ["projects", "specs", "files", "plan", "review"] as const;
+		const tools = ["projects", "specs", "files", "plan", "review", "issues"] as const;
 		for (const initialSeed of [1, 7, 29, 97, 313]) {
 			let seed = initialSeed;
 			const random = () => {

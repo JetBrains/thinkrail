@@ -105,7 +105,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
    project the same panels differently; desktop docking does not define that projection. Detail:
    [[submodule-web-shell-layout]].
 6. **Workspaces are git worktrees.** project (git repo) → workspace (`git worktree` on its own
-   branch/cwd, under `~/.thinkrail/worktrees`) → {chats, files, terminals}. **Two deliberate
+   branch/cwd, under `~/.oh-my-thinkrail/worktrees`) → {chats, files, terminals}. **Two deliberate
    exceptions, both `kind`-marked on the wire and both *user-owned* — never renamed or reclaimed by
    ThinkRail:** every project carries exactly one built-in **Default workspace** (`kind: "default"`)
    whose cwd is the project folder itself (git's *main working tree*) — non-removable, non-renamable,
@@ -280,6 +280,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
     and desktop share host boot and graceful shutdown, but launchers enforce no process-wide single-instance
     or canonical-data-directory ownership policy. Each host binds its own loopback port; when multiple hosts
     point at the same mutable data directory, cross-process consistency is intentionally not guaranteed.
+    This fork's default app state lives under `~/.oh-my-thinkrail`, deliberately apart from the upstream
+    product's `~/.thinkrail`, so a dev or packaged fork build never shares projects, sessions, or settings
+    with an installed ThinkRail; `THINKRAIL_DATA_DIR` still overrides it.
     Desktop artifacts are additive; native WebKitGTK on Ubuntu 24.04+/glibc 2.38 is
     the supported Linux floor. The standard framework CLI/configuration owns bundling and installers;
     a documented pre-build hook prepares ThinkRail's physical resources and PI runtime. Release workflows
@@ -424,8 +427,8 @@ dependency. This keeps test process drivers outside both launchers and the serve
     each comparison (every future comparison must remember; the first patch missed nine of twelve sites);
     `realpath` as the canonical form (diverges from headers already on disk wherever a stored path crosses a
     symlink or 8.3 name); folding case (pi's own cwd identity is case-sensitive, and git and `resolve` both
-    keep on-disk case). Accepted cost: an older ThinkRail sharing `~/.thinkrail` fails reopen-from-Recent
-    (`ALREADY_OPEN`) for a healed project until it updates.
+    keep on-disk case). Accepted cost: an older build that re-spells a healed path still compares unequal
+    and fails reopen-from-Recent (`ALREADY_OPEN`) until it updates.
 
 23. **UI strings are keyed catalogs; local language files are runtime data, not code.** Every
     user-facing string in `apps/web`, `packages/ui`, and extension web halves is a named flat key
@@ -435,7 +438,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
     `placeholder`, `alt`, `label`) in those trees, so a new string cannot ship without a key. ThinkRail
     ships bundled catalogs (English plus translations held to `en.json` by a test); a user
     adds or overrides a language by dropping a flat i18next-JSON file into the **global** data dir
-    (`~/.thinkrail/locales/<tag>.json`) — never a workspace, so a cloned repo cannot rewrite the UI.
+    (`~/.oh-my-thinkrail/locales/<tag>.json`) — never a workspace, so a cloned repo cannot rewrite the UI.
     The host validates and watches those files ([[submodule-server-locales]]) and serves them over the
     wire; the web merges them over the bundled
     catalogs ([[submodule-web-i18n]]) with per-string fallback *local exact → bundled exact → bundled
@@ -444,7 +447,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
     data never carry translated text: defaults ThinkRail writes (untitled chats, default terminals, the
     host-named default workspace, chat round notices) are worded at render, so a switch re-words all of
     them, while names set by the user or the agent show verbatim. Theme manifests are the one other
-    runtime-loaded user resource, on the same model (`~/.thinkrail/themes/*.theme.json`, read by
+    runtime-loaded user resource, on the same model (`~/.oh-my-thinkrail/themes/*.theme.json`, read by
     [[submodule-server-themes]], validated by [[submodule-web-themes]]): a manifest is colour data only
     and is written as CSS custom-property values, never CSS or code. Code extensions stay compiled in
     (Decision 21) because a string map or a palette carries no executable surface and an extension does.

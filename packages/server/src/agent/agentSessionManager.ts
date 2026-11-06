@@ -1744,6 +1744,29 @@ export function listSessions(workspaceId: string, cwd: string): Promise<SessionS
 	return listSessionsInternal(workspaceId, cwd);
 }
 
+/** Read-only reuse snapshot; does not attach a disk session or reserve admission. */
+export async function sessionReuseStatus(
+	sessionId: string,
+	workspaceId: string,
+	cwd: string,
+): Promise<false | "idle" | "busy"> {
+	const entry = sessions.get(sessionId);
+	if (entry) {
+		if (entry.workspaceId !== workspaceId || isSessionDeleted(sessionId, workspaceId)) return false;
+		return entry.reloadRunning || reloadBlockedReason(entry) ? "busy" : "idle";
+	}
+	const listed = await listSessions(workspaceId, cwd);
+	// Listing yields: a newly attached live entry takes precedence over the disk snapshot.
+	const current = sessions.get(sessionId);
+	if (current) {
+		if (current.workspaceId !== workspaceId || isSessionDeleted(sessionId, workspaceId))
+			return false;
+		return current.reloadRunning || reloadBlockedReason(current) ? "busy" : "idle";
+	}
+	if (isSessionDeleted(sessionId, workspaceId)) return false;
+	return listed.some((session) => session.sessionId === sessionId) ? "idle" : false;
+}
+
 export interface SessionStateWorkspace {
 	id: string;
 	projectId: string;

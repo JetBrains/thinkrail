@@ -17,6 +17,69 @@ default, narrow cross-ring guards, the quit-confirmation rule both clients drive
 the palette ranks with — kept here so host-side search can rank with the same copy. The one package
 `apps/web` may depend on—which is what lets the UI ship independently of the host.
 
+## Issue integration
+
+`issues.ts` owns provider-qualified Issue references and credential-free summary/connection DTOs.
+The connection input is write-only: its token must never appear in readable connection state, Issue
+summaries, broadcasts or persisted browser state; the host stores it in the OS credential vault and never
+in project or binding metadata. Non-local HTTP needs an explicit acknowledgment bound to the exact
+canonical instance (scheme, host, port, base path); only literal loopback HTTP is exempt. Runtime guards
+reject credential-bearing or SSH instance URLs and invalid Issue numbers before a request reaches provider
+code. Shape validation is separate from that authorization policy, which the service enforces before any
+token-bearing request. `issues.connect` is gated at the v105 Issues auth protocol; reads keep their v103
+floor. Issue methods remain unavailable until
+registered and version-gated in the WS protocol; these DTOs alone do not enable a capability.
+
+`issues.repositoryAddress({ projectId })` → `IssueRepositoryAddress` (`{ repositoryUrl: string | null }`)
+sits at that same v105 floor because it feeds a token-bearing association form. It is a bounded, local
+read of the project's `origin` fetch URL: the host answers the URL only when it is already a
+credential-free canonical HTTP(S) address, and `null` for SSH/SCP, userinfo, query/fragment,
+no-origin, ambiguous multi-remote, or unreadable repositories. The DTO is a prefill hint, not an
+association, a credential or git output, and it never carries a path the caller supplied.
+
+The six stage-action contracts are exposed through the additive v104 Issues actions protocol:
+`launchDesign(IssueTarget)` and `launchImplementation(IssueImplementationTarget)` return
+`IssueSessionLaunch`; `publishDesign(IssueDesignPublicationInput)` and
+`publishImplementation(IssueImplementationTarget)` return credential-free `IssuePublication`
+(`stage`, `version`, `noteId`, `resetEventId`, `body`); `validateDesign(IssueTarget)` and
+`validateImplementation(IssueTarget)` return `IssueApprovalResult` (`approved: true` with
+`eventId`/`userId`, or `approved: false` with `reason: "unproven"`). Publication versions are
+stage-qualified lowercase SHA-256 digests; remote note/event/user IDs are positive safe integers,
+except `resetEventId`, a nonnegative safe integer boundary (zero means no prior event).
+No caller-provided SHA, path, workspace, title, or event payload is accepted.
+
+Action guards are separate from the legacy reference/connection guards and require exact own keys
+on plain request objects, including the nested reference. `IssueTarget.projectId` is a local id
+matching `/^[A-Za-z0-9][A-Za-z0-9_.-]{0,255}$/`; the reference's remote project id is a canonical
+positive decimal safe integer (at most 16 digits), with a positive safe Issue IID. Instance URLs
+are canonical HTTP(S) URLs (maximum 2048 characters), with no whitespace, control characters,
+backslash, raw `@`, query or fragment delimiters. `canonicalIssueInstanceUrl(value)` returns the
+WHATWG-normalized URL with all terminal slashes removed (both root and base path), or `null`.
+Actions require that exact canonical spelling. Legacy reference/connection guards accept normalizable
+spellings (including uppercase hosts and trailing slashes) and retain permissive outer unknown keys;
+project-id validation remains unchanged. Rejecting parser-repaired delimiters and controls there is an
+intentional tightening. SSH is never an association transport.
+
+`IssueConnectionInput.httpConsent?: { instanceUrl: string }` is write-only, optional, and when present
+must be a plain exact-own-key object with an already canonical HTTP(S) instance URL, even on HTTPS
+requests. Explicit `undefined` is malformed. `isIssueConnectionInput` validates shape, not authorization,
+so a missing consent can be satisfied by host-owned prior consent. The host must call
+`hasIssueHttpConsent(input, stored?)` before any token-bearing request. The optional stored argument
+has the same exact `{ instanceUrl }` shape; consent matches the canonical destination including scheme,
+port and base path, with no origin-wide or path-prefix grants. `requiresIssueHttpConsent(instance)`
+exempts HTTPS and only literal HTTP loopback (`localhost`, dotted-decimal `127.0.0.0/8`, `[::1]`);
+it does not resolve DNS or exempt LAN addresses, IPv4 aliases, mapped IPv6, or `localhost.`.
+Invalid instances fail closed. These exported helpers do not implement persistence or change the
+protocol/auth version gates. Result DTOs remain unchanged.
+
+Implementation inputs (`IssueImplementationTarget`, still used by the v104 `publishImplementation` and the
+legacy `launchImplementation` wire contract) require `approvedDesignVersion` matching
+`/^design:[a-f0-9]{64}$/`; the v108 `startImplementation` below takes the shared `IssueTarget` instead.
+Design publication's
+`expectedDescription` and `newDescription` each accept at most 262144 UTF-8 bytes, measured with
+`TextEncoder` without a Node dependency. Exact result guards reject extra credential fields;
+publication body remains opaque text, not a hardcoded title or event payload.
+
 ## Boundary
 
 - **Owns:** the wire — entity types, the `pi` event/message types (re-exported), the WS method & channel
@@ -1233,3 +1296,75 @@ so an already-loaded old client clears retired markers after reconnect. No activ
 
 `web` (types + the runtime exports listed above) and `server` (same, + mapping `session.*` to `AgentSession` methods). The
 shell panels need `domain` + `wsProtocol`; the `pi` types + `PiEvent` are the wire for the agent session.
+
+
+## Issues read protocol (v103)
+
+`ISSUES_PROTOCOL_VERSION = 103` introduces `issues.connection({ projectId })` →
+`IssueConnection | null`, `issues.connect({ projectId, input: IssueConnectionInput })` →
+`IssueConnection`, `issues.disconnect({ projectId })` → `{ ok: true }`, and
+`issues.list({ projectId })` → `IssueList`. `wsProtocol` imports these types directly from its own
+`./issues` module. The local project id is distinct from the remote id in connection input. Token
+input is write-only: connection/list responses contain no credential. These read/connection methods retain
+their v103 minimum independently of actions. The v105 auth floor registers `issues.connect` and the
+credential-free `issues.repositoryAddress` hint together; the hint reads the project's local `origin`
+configuration only and answers `null` rather than a Git URL it cannot hand to the form safely.
+
+
+## Issues actions protocol (v104)
+
+`PROTOCOL_VERSION = 104` and `ISSUES_ACTIONS_PROTOCOL_VERSION = 104` add exactly
+`issues.launchDesign(IssueTarget)` and `issues.launchImplementation(IssueImplementationTarget)` →
+`IssueSessionLaunch`; `issues.publishDesign(IssueDesignPublicationInput)` and
+`issues.publishImplementation(IssueImplementationTarget)` → `IssuePublication`; and
+`issues.validateDesign(IssueTarget)` and `issues.validateImplementation(IssueTarget)` →
+`IssueApprovalResult`. Both the method registry and typed map expose these closed methods. Runtime
+validation remains in the reviewed host action methods, not the wire casts. Result DTOs contain no
+request token or credentials. No arbitrary action, merge, or human-approval mutation is introduced.
+
+## Issues approval protocol (v106)
+
+`PROTOCOL_VERSION = 106` and `ISSUES_APPROVAL_PROTOCOL_VERSION = 106` add exactly
+`issues.approveDesign(IssueTarget)` and `issues.approveImplementation(IssueTarget)`, both returning
+`IssueApprovalResult`. These are the credential-free app-originated approval requests for the two
+fixed Tomato stages: the host derives the actor, role and version from fresh provider reads, so the
+wire carries no caller-supplied actor id, role, commit or version and no token. Unknown or extra
+request keys are rejected by the host action validators, not by the wire casts. `PROTOCOL_VERSION`
+moves to 106 while the earlier Issues floors stay pinned
+(`ISSUES_AUTH_PROTOCOL_VERSION = 105`, `ISSUES_ACTIONS_PROTOCOL_VERSION = 104`,
+`ISSUES_PROTOCOL_VERSION = 103`), so older clients keep their existing gates. Approving adds a remote
+approval label record; it is not merge, push or MR authorization, and no generic action is added.
+
+## Issues design-approval read protocol (v107)
+
+`ISSUES_DESIGN_APPROVAL_PROTOCOL_VERSION = 107` (top-level `PROTOCOL_VERSION` has since moved to 108
+with the implementation start below) added exactly one read:
+`issues.designApproval(IssueTarget)` → `IssueDesignApproval` (`{ approvedDesignVersion: string | null }`).
+It was introduced because the then-current implementation launch required the exact `design:<sha256>`
+digest the host minted and no earlier read exposed it. The v108 start below no longer consumes it, so it
+remains a read-only compatibility surface rather than part of the implementation path.
+`issues.ts` owns the DTO and its exact-key guard `isIssueDesignApproval`, which accepts only a 64-hex
+`design:` digest or `null` — never a fabricated version, implementation digest, token or extra key. Both
+the method registry (`WS_METHODS.issuesDesignApproval`) and the typed map expose the closed method; the
+shared `IssueTarget` params carry no caller version, path, actor or credential, and runtime validation
+stays in the host read. The earlier Issues floors stay pinned
+(`ISSUES_APPROVAL_PROTOCOL_VERSION = 106`, `ISSUES_AUTH_PROTOCOL_VERSION = 105`,
+`ISSUES_ACTIONS_PROTOCOL_VERSION = 104`, `ISSUES_PROTOCOL_VERSION = 103`), so older clients keep their
+existing gates. This adds no action, merge, push or MR capability.
+
+## Issues implementation start protocol (v108)
+
+`PROTOCOL_VERSION = 108` and `ISSUES_IMPLEMENTATION_PROTOCOL_VERSION = 108` add exactly one action:
+`issues.startImplementation(IssueTarget)` → `IssueSessionLaunch`. It directly creates or reuses an owned implementation workspace/session, with no confirmation,
+design receipt requirement or workflow-label mutation. Both the method registry
+(`WS_METHODS.issuesStartImplementation`) and the typed map expose the closed method. Params are the
+shared `{projectId, reference}` target — no caller-supplied design digest, commit, stage, workspace or
+session id, actor, path or token — and the result is the existing `IssueSessionLaunch`
+(`{workspaceId, sessionId}` with both ids nonempty). Runtime validation stays in the host action.
+`issues.launchImplementation` keeps its v104 registration and its `IssueImplementationTarget` params for
+older clients; the host no longer treats that digest as authorization, so a v108 client should use the
+new method. Earlier Issues floors stay pinned
+(`ISSUES_DESIGN_APPROVAL_PROTOCOL_VERSION = 107`, `ISSUES_APPROVAL_PROTOCOL_VERSION = 106`,
+`ISSUES_AUTH_PROTOCOL_VERSION = 105`, `ISSUES_ACTIONS_PROTOCOL_VERSION = 104`,
+`ISSUES_PROTOCOL_VERSION = 103`), so older clients keep their existing gates. This adds no merge, push,
+MR or CI capability.

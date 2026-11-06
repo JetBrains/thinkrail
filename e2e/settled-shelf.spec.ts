@@ -131,7 +131,7 @@ test("a pre-v78 host keeps the legacy workspace list without shelf affordances",
 			} else socket.send(message);
 		});
 	});
-	await openFixtureProject(page);
+	await openFixtureProject(page, { issueAssociationSupported: false });
 	await createWorkspaceViaDialog(page);
 	await createWorkspaceViaDialog(page);
 

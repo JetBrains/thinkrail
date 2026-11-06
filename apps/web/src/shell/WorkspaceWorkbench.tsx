@@ -3,6 +3,7 @@ import {
 	RiChatNewLine as MessageSquarePlus,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
+import type { IssueSessionLaunch, Workspace } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { t, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
@@ -23,11 +24,12 @@ import { useAutoPlanSummary } from "../chat/useChatTodos";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { preloadedLazy } from "../components/preloadedLazy";
 import { QuietScrollArea } from "../components/QuietScrollArea";
+import { IssuesTool } from "../issues";
 import { type LayoutAttention, layoutResourceIdentity } from "../lib";
 import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
 import { FilesPanel } from "../panels/FilesPanel";
-import { startChatInTab } from "../panels/openChat";
+import { openChatInTab, startChatInTab } from "../panels/openChat";
 import { fileComparisonTab, openFileInTab } from "../panels/openTabs";
 import { ProjectTree } from "../panels/ProjectTree";
 import { ReviewPanel, selectActiveReviewedPath } from "../panels/ReviewPanel";
@@ -37,6 +39,7 @@ import { TerminalWorkbenchBody, useTerminalClose } from "../panels/TerminalWorkb
 import { useWorkspaceReview } from "../panels/useWorkspaceReview";
 import { useWorkspaceSpecs } from "../panels/useWorkspaceSpecs";
 import { useLoadWorkspaceTurns } from "../panels/useWorkspaceTurns";
+import { loadProjectWorkspaces } from "../panels/workspaceActions";
 import {
 	createChangesTab,
 	type EditorTab,
@@ -93,6 +96,30 @@ import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./l
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
 import { useIdleEditorPreload } from "./useIdleEditorPreload";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
+
+/**
+ * Opens a host-launched issue session: refresh this project's workspaces so the new or reused
+ * worktree is in the store, activate the route onto it, then land its chat in a tab. The host
+ * already created the session; this never creates one, prompts one or writes issue state.
+ */
+export async function openIssueSession(
+	projectId: string,
+	launch: IssueSessionLaunch,
+): Promise<void> {
+	let rows: Workspace[];
+	try {
+		rows = await loadProjectWorkspaces(projectId);
+	} catch {
+		toast.error(t("shell.workbench.issueLaunchFailed"));
+		return;
+	}
+	const workspace = rows.find((row) => row.id === launch.workspaceId) ?? {
+		id: launch.workspaceId,
+		projectId,
+	};
+	useAppStore.getState().activateWorkspaceFromRoute(workspace, launch.sessionId);
+	await openChatInTab(launch.workspaceId, launch.sessionId);
+}
 
 function PlanSummaryAutoDraft({
 	workspaceId,
@@ -633,6 +660,21 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		[renderResourceBody, workspaceId],
 	);
 
+	const projectId = workspace?.projectId;
+	const trustProject = useCallback(() => {
+		if (projectId === undefined) return;
+		void getTransport()
+			.request("project.setTrust", { id: projectId, trusted: true, resources: true })
+			.then((project) => useAppStore.getState().applyProjectUpdated(project))
+			.catch((error: unknown) => toast.error(errorText(error), t("issues.trustAction")));
+	}, [projectId, t]);
+	const launchIssueSession = useCallback(
+		(launch: IssueSessionLaunch) => {
+			if (projectId === undefined) return;
+			void openIssueSession(projectId, launch);
+		},
+		[projectId],
+	);
 	const toolBodies = useMemo<Record<LayoutToolId, ReactNode>>(() => {
 		const bodies: Record<LayoutToolId, ReactNode> = {
 			projects: (
@@ -649,6 +691,15 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					<SpecsPanel workspaceId={workspaceId} failed={specs.failed} onRetry={specs.reload} />
 				</QuietScrollArea>
 			),
+			issues:
+				projectId !== undefined ? (
+					<IssuesTool
+						key={projectId}
+						projectId={projectId}
+						onLaunchSession={launchIssueSession}
+						onTrustProject={trustProject}
+					/>
+				) : null,
 			files: <FilesPanel key={workspaceId} workspaceId={workspaceId} />,
 			review: <ReviewPanel key={workspaceId} workspaceId={workspaceId} failed={review.failed} />,
 			plan: railPlanSessionId ? (
@@ -682,7 +733,17 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			);
 		}
 		return bodies;
-	}, [railPlanSessionId, review.failed, specs.failed, specs.reload, t, workspaceId]);
+	}, [
+		launchIssueSession,
+		trustProject,
+		railPlanSessionId,
+		review.failed,
+		specs.failed,
+		specs.reload,
+		t,
+		workspaceId,
+		projectId,
+	]);
 	const renderToolBody = useCallback((tool: LayoutToolId) => toolBodies[tool], [toolBodies]);
 
 	const isDefault = workspace != null && isDefaultWorkspace(workspace);

@@ -1130,6 +1130,15 @@ re-opened transcripts provider-valid.
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /
   `isProjectSkillPath(relativePath)` (watch-classification predicate);
+  `sessionReuseStatus(sessionId, workspaceId, cwd)` → `Promise<false | "idle" | "busy">` is a read-only
+  reuse probe: a live entry must belong to the workspace and be nondeleted; the reload gate's closing,
+  streaming/non-idle, admission-reservation and compaction blockers, plus a running reload, mean busy.
+  A foreign live id returns false without a disk fallback. With no live entry, strict
+  `listSessions(workspaceId, cwd)` establishes a known nondeleted disk session as idle (otherwise false);
+  listing errors propagate. After awaiting the listing, it rechecks live ownership and the same reload
+  blockers/running reload before using disk results; with no live entry it rechecks the deletion tombstone.
+  It never attaches an agent, prompts, reserves work, or creates lifecycle/store state.
+  This is a snapshot, not an admission guarantee.
   `reloadSessionResources(sessionId)` (active-chat reload; throws while the reload gate is blocked) +
   `requestSessionReload(sessionId)` (the deferring variant: `"reloaded"` now or `"deferred"` until the gate
   opens — settlement, the release of an admitted prompt, or a compaction's end; requests coalesce); the **`setSkillAdmissionResolver`** seam (host

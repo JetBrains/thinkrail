@@ -10,7 +10,7 @@ tags: [public-surface-checked]
 
 ## Responsibility
 
-A workspace is a `git worktree` on its own branch under the data dir — the anchor for files/git/terminals/
+A workspace is a `git worktree` on its own branch (under the data dir by default) — the anchor for files/git/terminals/
 chats. Its **display `name` is decoupled from its git `branch`**: `name` is a human-readable label
 (Title Case, spaces) and `branch` is a kebab slug derived from it — they were once held equal, and still
 coincide for the auto `workspace-N` placeholder, but a named workspace carries both distinctly.
@@ -23,7 +23,13 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
 
 ## Boundary
 
-- **Owns:** `listExistingWorktrees(projectId)` (**async** — parses `git worktree list --porcelain -z` read
+- **Owns:** `listGitWorktrees(projectId)` (**async**, server-only authoritative Git registry read through
+  `gitAsync`; resolves the open project with `openProjectById`, returns readonly entries with absolute
+  registered `path`, `branch: string | null` (detached → `null`), and `prunable: boolean`.
+  Paths retain Git's actual canonical registered spelling, resolved for the host platform, never inferred
+  from branch names or managed placement. Includes the default checkout, already represented worktrees,
+  detached checkouts and prunable registrations; no filtering, persistence or lifecycle mutation),
+  `listExistingWorktrees(projectId)` (**async** — parses `git worktree list --porcelain -z` read
   through `gitAsync`, the same request-path-read rule `git/SPEC.md` states for `gitStatus`/`listCommits`:
   this is the Existing-Worktree dialog's populate call, so a slow/large registry must not freeze the host's
   event loop; each listed path is resolved, since git prints `C:/…` on Windows and the row's path becomes the
@@ -252,7 +258,37 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `removed` carries `{ projectId, id }`) and the host maps `kind` → `workspace.*` channel. This makes the
   module the **single source of workspace lifecycle pushes** (the naming handler never pushes — rename
   self-publishes), so registry membership stays shared domain state across every client (architecture #9).
-- **Public surface (barrel):** `createWorkspace`, `listExistingWorktrees`, `openExistingWorktree`,
+- **Server-only explicit target:** `createWorkspaceAtPath(projectId, targetPath, name?, baseRef?)`
+  preserves name-to-unique-branch behavior. The separate server-only
+  `createWorkspaceAtPathWithBranch(projectId, targetPath, branch, baseRef?)` takes an exact branch:
+  validate with `assertSafeRef` and Git's branch-ref validation, reject an existing local branch,
+  and never slug, suffix, or reuse it. Its display name is the exact branch and is marked renamed.
+  This supports callers whose durable branch ownership must match the created branch exactly.
+  Both share ordinary managed creation (project ownership, scratch seeding, persistence,
+  terminal marker and lifecycle events). It has no feature-specific identifiers or concepts. The target
+  must be an absolute, direct child of the real project root's `.worktrees` directory; the project must
+  be the main working tree. Reject existing entries (including files, empty directories and dangling
+  symlinks), Git registrations (including prunable ones), and persisted workspace paths. Never suffix
+  the target, overwrite it, or reclaim anything on creation failure. Reject symlink/junction parents
+  and canonical parent escapes, revalidating after asynchronous reads/fetches before creation.
+  Seed an idempotent `/.worktrees/` rule in Git's local `info/exclude`, preserving existing content;
+  never modify the user's `.gitignore`. Request the absolute exclude path with
+  `rev-parse --path-format=absolute --git-path info/exclude`, but also inspect Git's default
+  cwd-relative spelling: Git for Windows can canonicalize symlinks in the absolute answer.
+  `lstat`-validate metadata path components as real directories (no symlinks/junctions), and
+  an existing exclude as a regular non-symlink file, before reading/appending; refuse a linked
+  `.git` directory too. Missing info directories may be created, then revalidated.
+  These checks do not atomically reserve external filesystem state: another process can replace
+  entries after validation. Git refuses an intervening file or nonempty target directory without
+  overwriting its contents (fixture-tested); it may accept an intervening empty directory.
+  No cross-process lock or stronger TOCTOU guarantee is claimed.
+  This is a server barrel capability only: `createWorkspace`
+  keeps its three-argument interface and data-dir placement; no public wire target-path field exists.
+  These remain managed workspaces: intentional lifecycle deletion still reclaims their checkout.
+  Failure can leave the local exclude rule, a branch/checkout or a Git registration (e.g. Git,
+  scratch seeding, persistence or publishing fails); no destructive rollback is attempted. Callers
+  own record-based recovery, not this generic module.
+- **Public surface (barrel):** `listGitWorktrees`, `createWorkspaceAtPath`, `createWorkspaceAtPathWithBranch`, `createWorkspace`, `listExistingWorktrees`, `openExistingWorktree`,
   `listWorkspaces`, `listWorkspaceRecords`, `listAllWorkspaceRecords`, `forgetWorkspace`,
   `reclaimWorktree`, `removeWorkspace`,
   `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `refreshUserOwnedWorkspace`,

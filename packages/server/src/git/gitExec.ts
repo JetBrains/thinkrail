@@ -18,7 +18,10 @@ const HEAD_CHARS = 1_200;
 const TAIL_CHARS = MAX_STDERR_CHARS - TRUNCATION_MARK.length - HEAD_CHARS;
 
 const STALLED = (waitedMs: number) =>
-	`timed out after ${Math.max(1, Math.round(waitedMs / 1000))}s`;
+	waitedMs < 1_000
+		? `timed out after ${Math.max(1, Math.round(waitedMs))}ms`
+		: `timed out after ${Math.round(waitedMs / 1000)}s`;
+
 const LOCAL_NO_ANSWER = "git did not exit";
 const NETWORK_NO_ANSWER =
 	"the remote never answered; if it uses SSH, a key that is not loaded is the usual cause (`ssh-add`)";

@@ -221,13 +221,13 @@ posix("a sync git timeout throws GIT_TIMEOUT unless the caller opts out", () => 
 	try {
 		const timeout = expect.objectContaining({ name: "GitTimeoutError", code: "GIT_TIMEOUT" });
 		expect(() => git(repo, ["-c", "a.b=c", "--literal-pathspecs", "add", "-A"])).toThrow(
-			/^Could not run git add: timed out after 1s — git did not exit$/,
+			/^Could not run git add: timed out after \d+(?:ms|s) — git did not exit$/,
 		);
 		expect(() => gitBytes(repo, ["cat-file", "blob", "HEAD:x"])).toThrow(timeout);
 		expect(() =>
 			git(repo, ["remote"], { action: "list the remotes", consequence: "Nothing was changed." }),
 		).toThrow(
-			"Could not list the remotes: timed out after 1s — git did not exit. Nothing was changed.",
+			/^Could not list the remotes: timed out after \d+(?:ms|s) — git did not exit\. Nothing was changed\.$/,
 		);
 		expect(git(repo, ["remote"], { onTimeout: "return" }).failure).toBe("timeout");
 		expect(gitBytes(repo, ["remote"], { onTimeout: "return" }).failure).toBe("timeout");

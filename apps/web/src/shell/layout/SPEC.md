@@ -126,7 +126,7 @@ decides how loud it reads, never a per-theme selector in the component.
 ## Layout grammar
 
 - **Center:** a recursive horizontal/vertical binary tree, maximum four leaves. A split replaces one leaf with equal halves. User creation/resize requires each child to remain at least 320 px wide and 180 px high. Empty leaves are valid frame slots and render the shell-provided empty surface. Remove/Merge promotes a sibling and rehomes every affected workspace's tabs deterministically.
-- **Auxiliary eligibility:** Projects, Specs, Files, and Review are singleton auxiliary-only tools owned by the frame; terminals are workspace resources and may occupy center or any auxiliary region. Hiding a singleton preserves its restore target. View/deep-link reveal restores or unfolds it in frame-local position and focuses the requested item in current workspace attention.
+- **Auxiliary eligibility:** Projects, Specs, Files, TODO List, Review, and Issues are singleton auxiliary-only tools owned by the frame; terminals are workspace resources and may occupy center or any auxiliary region. Hiding a singleton preserves its restore target. View/deep-link reveal restores or unfolds it in frame-local position and focuses the requested item in current workspace attention.
 - **Left/right:** ordered vertical frame stacks beside persistent full-height tool rails. Dragging an outer separator through its minimum hides that side and retains the last expanded width. Broad upper/lower body targets create adjacent groups; the rail's cluster-boundary zones offer the same commands for folded or hidden panes. Expanded bodies have a 120 px normal minimum; folded groups occupy no interior body space and retain their expanded weights, with restoration on the edge rail. An empty frame group remains available across workspaces until explicit removal and renders a named
   Add/Reveal surface rather than disappearing; a region with groups may stay hidden.
 - **Bottom:** ordered left-to-right frame groups resize on vertical separators. Folded groups retain only
@@ -237,7 +237,8 @@ preview, the four splits) and auxiliary terminals carry no splits.
 
 Balanced, Focus, and Review are web-owned resource-free frame definitions with a below-center bottom slot:
 Balanced and Review show it; Focus hides it. Balanced and Focus start with one center group; Review provides
-its deliberate vertical pair. Balanced's lower right group opens on the TODO List with Review beside it: on a
+its deliberate vertical pair. All three presets place Issues beside Specs and Files in the right reference pane; the Issues catalog label resolves through `workbench.tool.issues` and its rail icon uses Task Line/Fill. The pure layout engine never imports the Issues feature: shell injects its body.
+Balanced's lower right group opens on the TODO List with Review beside it: on a
 fresh workspace the plan is what there is to look at, while review comments only exist once there is a diff. Custom presets use the same grammar and capture geometry,
 topology, tools, folds, and empty structural slots, never workspace resources or terminal count. Preset node
 ids are template-local labels: instantiation mints frontend-local frame ids and returns the old→new group map

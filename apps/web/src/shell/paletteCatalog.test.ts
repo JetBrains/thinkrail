@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { RiListCheck2 } from "@remixicon/react";
 import type { Workspace } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { commandItems } from "../search";
@@ -62,6 +63,22 @@ function row(id: string, catalog: PaletteCatalogDeps, online = true) {
 }
 
 describe("palette project and Settings commands", () => {
+	test("Issues has a localized title and icon and reveals the workspace tool", () => {
+		const calls: unknown[][] = [];
+		const catalog = deps({
+			actions: { ...deps().actions, showTool: (...args) => calls.push(args) },
+		});
+		const command = buildCommands(catalog).find((item) => item.id === "view.show.issues");
+		expect(command).toBeDefined();
+		expect(command?.title).toBe(
+			catalog.t("commands.view.showTool", { tool: catalog.t("workbench.tool.issues") }),
+		);
+		expect(command?.icon).toBe(RiListCheck2);
+		command?.run();
+		expect(calls).toEqual([["w1", "issues"]]);
+		expect(row("view.show.issues", deps({ activeWorkspace: null }))).toBeUndefined();
+	});
+
 	test("Start a new project appears only on a host that serves project.create; a host path is always offered", () => {
 		expect(row("project.create", deps())?.title).toBe("Start a new project…");
 		expect(row("project.create", deps({ canCreateProject: false }))).toBeUndefined();

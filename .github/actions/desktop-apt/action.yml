@@ -12,7 +12,7 @@ runs:
         PACKAGES: dbus-x11 x11-utils xvfb libgtk-3-0 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-2
       run: |
         read -ra packages <<< "$PACKAGES"
-        sudo apt-get update
+        sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
         plan=$(apt-get -s install --no-install-recommends "${packages[@]}" | { grep '^Inst ' || true; } | sort)
         {
           echo "packages=$PACKAGES"
@@ -30,6 +30,6 @@ runs:
         read -ra packages <<< "$PACKAGES"
         cache=~/.cache/desktop-apt
         mkdir -p "$cache/partial"
-        sudo apt-get install -y --no-install-recommends -o Dir::Cache::Archives="$cache" "${packages[@]}"
+        sudo apt-get install -y --no-install-recommends -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Dir::Cache::Archives="$cache" "${packages[@]}"
         sudo apt-get autoclean -o Dir::Cache::Archives="$cache"
         sudo chown -R "$(id -u):$(id -g)" "$cache"

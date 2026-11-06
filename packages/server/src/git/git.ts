@@ -1,4 +1,4 @@
-import { readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import type {
@@ -284,7 +284,46 @@ function detachedAtTopLevel(repoPath: string, topLevel: GitResult): "HEAD" | nul
 	return topLevel.ok && canonicalPath(topLevel.out) === canonicalPath(repoPath) ? "HEAD" : null;
 }
 
+/**
+ * Reads the checked-out branch straight from `<gitdir>/HEAD`, avoiding a git spawn on a path that
+ * `listWorkspaces` walks for every project. `undefined` means the layout was not understood, so the
+ * caller falls back to git rather than guessing.
+ */
+function branchFromHeadFile(repoPath: string): string | null | undefined {
+	try {
+		const entry = resolve(repoPath, ".git");
+		const gitDir = statSync(entry).isDirectory()
+			? entry
+			: (() => {
+					const match = /^gitdir: (.+)$/m.exec(readFileSync(entry, "utf8"));
+					return match?.[1] ? resolve(repoPath, match[1].trim()) : undefined;
+				})();
+		if (!gitDir) return undefined;
+		const match = /^ref: refs\/heads\/(.+)$/m.exec(readFileSync(resolve(gitDir, "HEAD"), "utf8"));
+		if (!match?.[1]) return undefined;
+		const branch = match[1].trim();
+		return isValidBranchName(branch) ? branch : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+function isValidBranchName(branch: string): boolean {
+	const forbidden = ["\\", " ", "\t", "~", "^", ":", "?", "*", "[", "]"];
+	return (
+		branch.length > 0 &&
+		branch.length <= 255 &&
+		!forbidden.some((character) => branch.includes(character)) &&
+		!branch.startsWith("-") &&
+		!branch.includes("..") &&
+		!branch.endsWith("/") &&
+		!branch.startsWith("/")
+	);
+}
+
 export function tryCurrentBranch(repoPath: string): string | null {
+	const fast = branchFromHeadFile(repoPath);
+	if (fast !== undefined) return fast;
 	const head = git(repoPath, HEAD_BRANCH_ARGS, { action: READ_BRANCH });
 	if (head.ok && head.out) return head.out;
 	return detachedAtTopLevel(repoPath, git(repoPath, TOP_LEVEL_ARGS, { action: READ_BRANCH }));

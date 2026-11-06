@@ -84,6 +84,19 @@ import type {
 } from "./domain";
 import { isDelegationRunDetails } from "./domain";
 import type {
+	IssueApprovalResult,
+	IssueConnection,
+	IssueConnectionInput,
+	IssueDesignApproval,
+	IssueDesignPublicationInput,
+	IssueImplementationTarget,
+	IssueList,
+	IssuePublication,
+	IssueRepositoryAddress,
+	IssueSessionLaunch,
+	IssueTarget,
+} from "./issues";
+import type {
 	ExtUiResponse,
 	ImageContent,
 	QueueLane,
@@ -135,8 +148,14 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 103;
+export const PROTOCOL_VERSION = 108;
 export const GITHUB_STAR_PROTOCOL_VERSION = 103;
+export const ISSUES_IMPLEMENTATION_PROTOCOL_VERSION = 108;
+export const ISSUES_DESIGN_APPROVAL_PROTOCOL_VERSION = 107;
+export const ISSUES_APPROVAL_PROTOCOL_VERSION = 106;
+export const ISSUES_AUTH_PROTOCOL_VERSION = 105;
+export const ISSUES_ACTIONS_PROTOCOL_VERSION = 104;
+export const ISSUES_PROTOCOL_VERSION = 103;
 export const FONTS_PROTOCOL_VERSION = 102;
 export const CUSTOM_ENDPOINTS_PROTOCOL_VERSION = 101;
 export const PI_PACKAGES_PROTOCOL_VERSION = 100;
@@ -226,6 +245,22 @@ export interface SessionDeletedPayload {
 }
 
 export const WS_METHODS = {
+	issuesApproveDesign: "issues.approveDesign",
+	issuesApproveImplementation: "issues.approveImplementation",
+	issuesConnection: "issues.connection",
+	issuesConnect: "issues.connect",
+	issuesDesignApproval: "issues.designApproval",
+	issuesDisconnect: "issues.disconnect",
+	issuesList: "issues.list",
+	issuesLaunchDesign: "issues.launchDesign",
+	issuesLaunchImplementation: "issues.launchImplementation",
+	issuesPublishDesign: "issues.publishDesign",
+	issuesPublishImplementation: "issues.publishImplementation",
+	issuesRepositoryAddress: "issues.repositoryAddress",
+	issuesStartImplementation: "issues.startImplementation",
+	issuesValidateDesign: "issues.validateDesign",
+	issuesValidateImplementation: "issues.validateImplementation",
+
 	projectOpen: "project.open",
 	projectList: "project.list",
 	projectClose: "project.close",
@@ -695,6 +730,25 @@ export interface McpRenderedTarget {
 }
 
 export interface WsMethodMap {
+	"issues.approveDesign": { params: IssueTarget; result: IssueApprovalResult };
+	"issues.approveImplementation": { params: IssueTarget; result: IssueApprovalResult };
+	"issues.designApproval": { params: IssueTarget; result: IssueDesignApproval };
+	"issues.launchDesign": { params: IssueTarget; result: IssueSessionLaunch };
+	"issues.launchImplementation": { params: IssueImplementationTarget; result: IssueSessionLaunch };
+	"issues.publishDesign": { params: IssueDesignPublicationInput; result: IssuePublication };
+	"issues.publishImplementation": { params: IssueImplementationTarget; result: IssuePublication };
+	"issues.startImplementation": { params: IssueTarget; result: IssueSessionLaunch };
+	"issues.validateDesign": { params: IssueTarget; result: IssueApprovalResult };
+	"issues.validateImplementation": { params: IssueTarget; result: IssueApprovalResult };
+
+	"issues.connection": { params: { projectId: string }; result: IssueConnection | null };
+	"issues.connect": {
+		params: { projectId: string; input: IssueConnectionInput };
+		result: IssueConnection;
+	};
+	"issues.disconnect": { params: { projectId: string }; result: { ok: true } };
+	"issues.list": { params: { projectId: string }; result: IssueList };
+	"issues.repositoryAddress": { params: { projectId: string }; result: IssueRepositoryAddress };
 	"project.open": { params: { path: string }; result: Project };
 	"project.list": { params: Record<string, never>; result: Project[] };
 	"project.close": { params: { id: string }; result: Ack };
