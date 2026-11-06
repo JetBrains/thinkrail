@@ -462,6 +462,10 @@ lands in the sandbox and a new detection source is pinned everywhere at once.
   `e2e/fixtures/git.ts` is the one place specs shell out to `git` (`git`, `gitQuiet`, `gitText`, `gitAs`,
   `commitFile`); `gitAs`/`commitFile` pin a throwaway e2e identity so a seeded commit's authorship never
   depends on the developer machine's real git config. `e2e/fixtures/pierre.ts` is the one place specs
+  touch `@pierre/diffs`' DOM (`pierreLines`, `pierreLineNumber`, `selectPierreLine`,
+  `pierreCollapsedContext`, `pierreDeletionsSide`, `pierreCodeColumns`): a Pierre release that renames `data-line`,
+  `data-column-number`, `data-unmodified-lines` or `data-deletions` is a one-file repair, and no spec
+  encodes how a line is selected. `e2e/phone-review.spec.ts` is the phone-class gate for the review
   touch `@pierre/diffs`' DOM and worker (`pierreLines`, `pierreLineNumber`, `selectPierreLine`,
   `pierreCollapsedContext`, `pierreDeletionsSide`, `holdPierreWorkers`): a Pierre release that renames
   `data-line`, `data-column-number`, `data-unmodified-lines` or `data-deletions` is a one-file repair, and no spec
@@ -558,6 +562,10 @@ staged `.ts` PI runtime and physical resources. Real Central acceptance remains 
 isolated: the dedicated `@agent` suite stages the opaque artifact, validates the exact model, and proves a
 real turn rather than accepting another provider or a fake agent.
 
+`diff-horizontal-scroll.spec.ts` covers the bounded standalone diff and a real natural-height
+Changes review section taller than its surrounding scroller. It checks the controller against the
+visible ancestor edge before reaching the file end, and samples continuous unequal-column native
+thumb dragging for monotonic offsets and synchronized clamped column positions.
 A file the host rewrites in place (pi's `settings.json`) is read once, after the UI state that the host's
 reply settles: a read overlapping the rewrite returns the old bytes followed by the new file's tail, and
 `expect.poll` rethrows that parse error instead of polling again. When no UI state marks the write, the poll

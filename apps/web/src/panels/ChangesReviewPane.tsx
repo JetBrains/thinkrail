@@ -513,7 +513,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 									}
 								/>
 							) : null}
-							<div className="relative min-h-0 flex-1 bg-container-content-bg">
+							<div className="relative flex min-h-0 flex-1 flex-col bg-container-content-bg">
 								{showLargeNotice ? (
 									<div
 										data-testid="changes-review-large-notice"
@@ -541,7 +541,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 									ref={virtuoso}
 									data={files}
 									computeItemKey={(_index, change) => change.path}
-									className="h-full min-h-0 [overflow-anchor:none]"
+									className="min-h-0 flex-1 [overflow-anchor:none]"
 									increaseViewportBy={{ top: 200, bottom: 600 }}
 									scrollerRef={attachScroller}
 									onScroll={spyActiveSection}
@@ -571,7 +571,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 								/>
 								<div
 									data-testid="changes-review-triage"
-									className="absolute inset-x-0 bottom-0 flex h-32 items-center gap-8 overflow-hidden whitespace-nowrap border-border-default border-t bg-container-header-bg px-12"
+									className="flex h-32 shrink-0 items-center gap-8 overflow-hidden whitespace-nowrap border-border-default border-t bg-container-header-bg px-12"
 								>
 									<span className="shrink-0 tr-text-metadata text-text-muted">
 										{t("changes.review.progress", { viewed: viewedCount, total: files.length })}

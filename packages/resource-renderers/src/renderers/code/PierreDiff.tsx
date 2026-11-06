@@ -38,6 +38,7 @@ import {
 import { createDiffCache } from "./diffCache";
 import PierreProvider from "./PierreProvider";
 import { PierreScroller } from "./PierreScroller";
+import { usePierreHorizontalScroll } from "./pierreHorizontalScroll";
 import {
 	type BlockedSelection,
 	COLLAPSED_CONTEXT_THRESHOLD,
@@ -385,6 +386,7 @@ function PierreDiffSurface({
 		}
 		return result;
 	}, [review]);
+	const { barRef, onPostRender } = usePierreHorizontalScroll();
 	const options = useMemo(
 		() => ({
 			theme: "thinkrail",
@@ -395,12 +397,14 @@ function PierreDiffSurface({
 			lineDiffType: "word" as const,
 			parseDiffOptions: { ignoreWhitespace },
 			overflow: "scroll" as const,
+			unsafeCSS: "code::-webkit-scrollbar { height: 0; } code { scrollbar-width: none; }",
+			onPostRender,
 			disableFileHeader: true,
 			enableLineSelection: review !== undefined,
 			enableGutterUtility: review !== undefined,
 			onLineSelectionEnd: openSelection,
 		}),
-		[ignoreWhitespace, layout, openSelection, review],
+		[ignoreWhitespace, layout, onPostRender, openSelection, review],
 	);
 	const { elementRef: rootRef, attach: attachScroller } = useScrollViewState<HTMLDivElement>(
 		viewState,
@@ -428,6 +432,7 @@ function PierreDiffSurface({
 
 	return (
 		<PierreScroller
+			horizontalBarRef={barRef}
 			attach={attach}
 			testId="diff-view"
 			className="h-full overflow-auto bg-container-content-bg [overflow-anchor:none] pierre-code-surface pierre-diff-surface"
