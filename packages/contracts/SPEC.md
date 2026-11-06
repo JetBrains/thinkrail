@@ -339,7 +339,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   Pull request segments derive their next action from, independent of whether a review exists),
   **`ExistingWorktreeCandidate`** (a `workspace.listExisting` row: absolute `path` + `branch`, or a
   `detached` row the chooser disables),
-  `FileNode` (file-tree node; worktree-relative `/` path, `gitignored` set by the host when git ignores it),
+  `FileNode` (file-tree node; worktree-relative `/` path, `gitignored` set by the host when git ignores it).
+  `FS_MUTATIONS_PROTOCOL_VERSION` (v106, equal to the host `PROTOCOL_VERSION`) gates `fs.copy` (one regular source file into a destination
+  directory, returning its collision-free relative path) and `fs.delete` (recoverable OS-trash deletion);
+  clients hide both mutations from hosts through v105,
   **`ResourceMeta`** (what a resource's bytes *are*, host-decided and pinned by
   `RESOURCE_META_PROTOCOL_VERSION` = v75: sha-256 `hash` + `byteLength`, both `null` when the resource is
   absent; `text` = valid UTF-8, BOM-aware, and not claimed by a recognized binary magic number (an ASCII

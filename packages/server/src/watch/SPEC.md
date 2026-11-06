@@ -108,7 +108,13 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   while unwatched still records activity, while an unchanged HEAD is a no-op. It runs inside the registration's guarded
   region, and a throw there — from it or from anything after `entries.set` — tears the fresh entry down
   (`stopWatch`) rather than leaving a registered watcher whose readiness never settles.
-- **Public surface (barrel):** `ensureWatch`, `stopWatch`, `stopAllWatches`, `setWatchPublisher`,
-  `setRepoMetaPublisher`, `setWatchStartedPublisher`, `setSkillPathClassifier`.
+- **Host-owned mutations:** `notifyWorkspacePathsChanged(workspaceId, paths)` publishes an immediate,
+  exact, non-truncated invalidation after a successful host mutation. It deliberately bypasses the
+  external watcher filter, so mutations under visible-but-ignored trees such as `node_modules` still
+  converge; a later native watcher frame is a harmless duplicate. Skill relevance uses the same injected
+  classifier as native events.
+- **Public surface (barrel):** `ensureWatch`, `notifyWorkspacePathsChanged`, `stopWatch`,
+  `stopAllWatches`, `setWatchPublisher`, `setRepoMetaPublisher`, `setWatchStartedPublisher`,
+  `setSkillPathClassifier`.
 - **Allowed deps:** `persistence` (workspace lookup), `log`; `contracts` (payload type); Bun/Node.
 - **Forbidden:** `host`; sibling features; any pi package.

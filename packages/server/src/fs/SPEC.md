@@ -2,15 +2,15 @@
 id: submodule-server-fs
 type: submodule-design
 status: active
-title: fs — worktree file reads
+title: fs — contained worktree filesystem
 parent: module-server
-depends-on: [module-contracts]
+depends-on: [module-contracts, submodule-server-trash]
 tags: [public-surface-checked]
 ---
 
 ## Responsibility
 
-Read directories and files inside a workspace's worktree, path-contained, and decide **what a resource's
+Read and mutate files inside a workspace's worktree, path-contained, and decide **what a resource's
 bytes are** — the one byte-level classification every content read in the host shares.
 
 ## Boundary
@@ -37,6 +37,10 @@ bytes are** — the one byte-level classification every content read in the host
   the root itself. `reviews` normalizes anchors through it. It keeps host
   semantics, so a backslash on POSIX stays part of a file name; callers that hold model-written paths turn
   `\` into `/` themselves.
+  `copyWorkspaceFile` copies one regular file between contained workspace directories without overwriting:
+  a collision gains ` copy`, then ` copy N`, and the returned path is the actual worktree-relative name.
+  `deleteWorkspaceFile` accepts only a regular file, claims it under a hidden same-directory name before
+  awaiting the OS trash, and restores it on trash failure so a concurrent recreation is never removed.
   **Content classification** (`content.ts`, pure, no dependency): `CONTENT_SNIFF_BYTES` names the shared
   8 KiB bounded-head size; `classifyBytes(bytes)` → `{ text, mime? }` — **mime** is what the *bytes*
   prove (magic numbers for png/jpeg/gif/webp/avif/bmp/ico/pdf/zip/gzip/woff/woff2; AVIF accepts `avif` or
@@ -58,9 +62,9 @@ bytes are** — the one byte-level classification every content read in the host
   fallback and treating
   `null` bytes as absence (`hash`/`byteLength` null, `text: true` — nothing to decode, and the empty
   string it pairs with is valid text).
-- **Public surface (barrel):** `readDir`, `readFile`, `resolveWorktreeFile`, `workspaceRelativePath`, `classifyBytes`,
+- **Public surface (barrel):** `readDir`, `readFile`, `copyWorkspaceFile`, `deleteWorkspaceFile`, `resolveWorktreeFile`, `workspaceRelativePath`, `classifyBytes`,
   `CONTENT_SNIFF_BYTES`, `mimeFromPath`, `hashBytes`, `decodeText`, `resourceMeta`.
-- **Allowed deps:** `persistence` (workspace lookup); `contracts` (`FileNode`, `ResourceMeta`); Node
+- **Allowed deps:** `persistence` (workspace lookup); `trash` (recoverable deletion); `contracts` (`FileNode`, `ResourceMeta`); Node
   `fs`/`path`/`crypto`.
 - **Forbidden:** `host`; sibling features.
 

@@ -22,16 +22,19 @@ compiled artifact. The one way anything in the host destroys a user's file.
   Linux path also needs the statically installed `@stroncium/procfs` `processMountinfo` parser that a
   compiled bundle cannot reach through a template-literal `require`. `setTrashImplementationForTests`
   swaps the whole implementation for tests that must not touch a real recycle bin.
-- **Public surface (barrel):** `trashFile`, `setBundledTrashHelpers`, `setTrashImplementationForTests`,
+  `claimAndTrashFile(path, claim, recovery)` renames a regular file before the awaited trash move,
+  restoring it through a no-overwrite hard link or preserving it at `recovery` if another writer
+  recreated the destination.
+- **Public surface (barrel):** `trashFile`, `claimAndTrashFile`, `setBundledTrashHelpers`, `setTrashImplementationForTests`,
   `TrashImplementation`, `BundledTrashHelpers`.
 - **Allowed deps:** `trash` + `@stroncium/procfs` (external — its deep imports name their `.js` files,
   since Node ESM, which hosts the workflow harness, rejects directory and extensionless specifiers);
-  Node `child_process`/`util`.
+  Node `child_process`/`fs`/`util`.
 - **Forbidden:** `host`; sibling features; any permanent-`unlink` fallback.
 
 ## Consumers
 
-Two features need "remove this file, recoverably", which is why this is a module of its own rather than
+Three features need "remove this file, recoverably", which is why this is a module of its own rather than
 a helper inside either of them:
 
 - `agent` — a chat's delete moves pi's transcript to the trash and rolls its tombstone back when that
@@ -39,3 +42,4 @@ a helper inside either of them:
 - `changes` — a whole-file revert of an added/untracked file trashes the worktree file and records
   where, so the most likely destructive mistake in review stays recoverable even after the host's own
   undo receipt is gone (see [[submodule-server-changes]]).
+- `fs` — the Files tree's explicit Delete action claims and trashes a regular worktree file.

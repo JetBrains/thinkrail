@@ -249,7 +249,14 @@ treatment.
   reveals only if the active file differs from the persisted `seenActivePath`, and then skips the scroll
   restore so the two cannot fight. Auto-reveal never switches the side tab or the mode. Clicks still open
   the editor. A failed first status read shows no marks; a failed refresh keeps the last ones, like the
-  Changed list. The tree's look is remembered per workspace across reloads (`store.filesTreeByWorkspace`:
+  Changed list. Every row has the shared Radix **Context Menu**, opened by right-click, long press,
+  `ContextMenu`, or `Shift+F10`: files and folders copy relative or host-absolute paths; a regular file can
+  be copied into the session-only app clipboard, pasted beside a file or into a folder, and deleted after a
+  destructive confirmation. Paste remains available for repeated destinations, creates a collision-free
+  ` copy`/` copy N` name, and an empty tree accepts paste at the workspace root. Delete moves the file to
+  the host OS trash and leaves any already-open read-only tab on its existing stale-content contract.
+  Mutation actions appear only from `FS_MUTATIONS_PROTOCOL_VERSION` (v106); path copy remains client-only.
+  The watcher is authoritative after copy/delete—rows are never patched optimistically. The tree's look is remembered per workspace across reloads (`store.filesTreeByWorkspace`:
   All expanded folders, Changed-tree collapsed folders shared by every scope, scroll per view through
   `RememberedScrollArea` — a Changed view's scroll belongs to its scope and compare target, so changing
   either starts at the top), persisted by the `filesTreeState` module (native stable preferences, else

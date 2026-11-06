@@ -22,7 +22,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { Fragment, memo, type ReactNode, useEffect, useRef, useState } from "react";
-import { chatLabel, DOUBLE_CLICK_SETTLE_MS, type LayoutAttention, tupleKey } from "../../lib";
+import {
+	chatLabel,
+	copyText,
+	DOUBLE_CLICK_SETTLE_MS,
+	joinHostPath,
+	type LayoutAttention,
+	tupleKey,
+} from "../../lib";
 import {
 	type AuxiliaryRailControlProps,
 	RAIL_ENTRY_BUTTON_CLASS,
@@ -71,6 +78,7 @@ import {
 } from "./workbenchShared";
 
 export interface TabStripProps {
+	worktreePath: string;
 	document: WorkspaceLayoutDocument;
 	readAttention: () => LayoutAttention;
 	selectionEpochRef: React.MutableRefObject<number>;
@@ -122,7 +130,12 @@ const SPLIT_LABELS = {
 	down: "workbench.center.splitDown",
 } as const satisfies Record<CenterSplitDirection, MessageKey>;
 
+export function tabCopyRelativePath(tab: LayoutTab): string | null {
+	return tab.kind === "file" || tab.kind === "diff" ? tab.path : null;
+}
+
 export const TabStrip = memo(function TabStrip({
+	worktreePath,
 	document,
 	readAttention,
 	selectionEpochRef,
@@ -223,6 +236,7 @@ export const TabStrip = memo(function TabStrip({
 					{tabs.map((tab, index) => (
 						<WorkbenchTab
 							key={tab.id}
+							worktreePath={worktreePath}
 							tab={tab}
 							index={index}
 							reorderIndexes={{
@@ -370,6 +384,7 @@ export const TabStrip = memo(function TabStrip({
 TabStrip.displayName = "TabStrip";
 
 export interface WorkbenchTabProps {
+	worktreePath: string;
 	tab: LayoutTab;
 	index: number;
 	reorderIndexes?: { previous: number | undefined; next: number | undefined };
@@ -406,6 +421,7 @@ export interface WorkbenchTabProps {
 }
 
 export const WorkbenchTab = memo(function WorkbenchTab({
+	worktreePath,
 	tab,
 	index,
 	reorderIndexes,
@@ -435,6 +451,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 	onKeyDown,
 }: WorkbenchTabProps) {
 	const t = useT();
+	const copyRelativePath = tabCopyRelativePath(tab);
 	const {
 		setNodeRef: setDragRef,
 		isDragging,
@@ -656,7 +673,21 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 				: "editor-tab";
 	return (
 		<ContextMenu>
-			<ContextMenuTrigger asChild>
+			<ContextMenuTrigger
+				asChild
+				onKeyDown={(event) => {
+					if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+					event.preventDefault();
+					const rect = event.currentTarget.getBoundingClientRect();
+					event.currentTarget.dispatchEvent(
+						new MouseEvent("contextmenu", {
+							bubbles: true,
+							clientX: rect.left,
+							clientY: rect.bottom,
+						}),
+					);
+				}}
+			>
 				<div
 					ref={setDragRef}
 					role="presentation"
@@ -796,6 +827,27 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 						? t(rail?.vertical ? "workbench.tab.moveDownLast" : "workbench.tab.moveRightLast")
 						: t(rail?.vertical ? "workbench.tab.moveDown" : "workbench.tab.moveRight")}
 				</ContextMenuItem>
+				{copyRelativePath ? (
+					<>
+						<ContextMenuSeparator />
+						<ContextMenuItem
+							data-testid="tab-copy-absolute-path"
+							onSelect={() => {
+								void copyText(joinHostPath(worktreePath, copyRelativePath));
+							}}
+						>
+							{t("workbench.tab.copyAbsolutePath")}
+						</ContextMenuItem>
+						<ContextMenuItem
+							data-testid="tab-copy-relative-path"
+							onSelect={() => {
+								void copyText(copyRelativePath);
+							}}
+						>
+							{t("workbench.tab.copyRelativePath")}
+						</ContextMenuItem>
+					</>
+				) : null}
 				{location.area === "center" ? (
 					<>
 						<ContextMenuSeparator />

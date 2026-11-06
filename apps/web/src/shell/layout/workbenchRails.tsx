@@ -297,6 +297,7 @@ export function AuxiliaryRegionRail({
 						>
 							{entry.kind === "tool" && entry.tab && location ? (
 								<WorkbenchTab
+									worktreePath={shared.worktreePath}
 									tab={entry.tab}
 									index={anchor(entry)}
 									reorderIndexes={{ previous: previousIndex, next: nextIndex }}

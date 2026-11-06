@@ -12,6 +12,7 @@ import {
 } from "@thinkrail/ui/dialog";
 import { Switch } from "@thinkrail/ui/switch";
 import { useState } from "react";
+import { joinHostPath } from "@/lib";
 import { errorText, getTransport } from "@/transport";
 
 export const DEFAULT_PROJECT_PARENT = "~/thinkrail";
@@ -26,11 +27,6 @@ export function projectFolderName(name: string): string {
 		.toLowerCase()
 		.replace(/[^\p{L}\p{N}._-]+/gu, "-")
 		.replace(/^[-.]+|-+$/g, "");
-}
-
-export function joinHostPath(parent: string, folder: string): string {
-	const separator = parent.includes("\\") && !parent.includes("/") ? "\\" : "/";
-	return `${parent.replace(/[\\/]+$/, "")}${separator}${folder}`;
 }
 
 export function CreateProjectDialog({
