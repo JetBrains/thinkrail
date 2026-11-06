@@ -219,10 +219,15 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   never overridden. `shell/layoutState` owns this fan-out in the same transaction as the local write.
   Frame replacement reconciles each workspace's attention to a surviving group/tab. Navigation clocks advance
   at request time for local focus-changing opens and explicit re-selection; the stamp travels with the intent
-  so acceptance does not count twice. A slow completion is discarded when newer navigation overtakes it.
+  so acceptance does not count twice. While preview tabs are enabled, a slow preview completion is
+  discarded when newer navigation overtakes it. Kept opens still commit without stealing focus.
   Preview identity is workspace-local per center group: `preview` replaces that group's slot and `keep`
   promotes one-way. A coalesced preview→keep gesture carries `claimPreview` on its single final intent, so no
   intermediate state persists; a keep after a landed preview promotes that existing placement in place.
+  The frontend-local `previewTabsEnabled` preference defaults to true. When false, `openTab` converts
+  preview requests to keep requests and drops preview-slot claims before updating the cache and publishing
+  the layout intent. This applies equally to Files, Specs, and Changes, including delayed reads that
+  complete after the preference changes. Changing the preference does not close or rearrange existing tabs.
   Arrangement-agnostic opens enter the store, but only shell layout integration resolves them against that
   workspace's last focus and commits local placement. Reopening an existing canonical resource changes
   attention only unless non-identity metadata changed. A late chat-title event may repair cache/history

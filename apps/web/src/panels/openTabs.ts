@@ -58,7 +58,12 @@ async function openReadTab<T>(
 			: requestedNavigation;
 	const store = useAppStore.getState();
 	if (store.removedWorkspaceIds[workspaceId]) return;
-	if (intent === "preview" && !isCenterNavigationCurrent(store, workspaceId, navigation)) return;
+	if (
+		intent === "preview" &&
+		store.localLayoutPreferences.previewTabsEnabled &&
+		!isCenterNavigationCurrent(store, workspaceId, navigation)
+	)
+		return;
 	const pending = inFlight.get(id);
 	if (pending) {
 		if (intent === "preview" || claimPreview) pending.claimPreview = true;
@@ -95,7 +100,12 @@ async function openReadTab<T>(
 		const overtaken = flight.navigation
 			? !isCenterNavigationCurrent(currentState, workspaceId, flight.navigation)
 			: navTick(workspaceId) !== flight.requestedAt;
-		if (flight.intent === "preview" && overtaken) return;
+		if (
+			flight.intent === "preview" &&
+			currentState.localLayoutPreferences.previewTabsEnabled &&
+			overtaken
+		)
+			return;
 		const installedCache = (currentState.tabsByWorkspace[workspaceId] ?? []).find(
 			(tab) =>
 				(tab.kind === "file" || tab.kind === "diff") &&
@@ -252,7 +262,7 @@ export async function openChangesTab(
 	const overtaken = navigation
 		? !isCenterNavigationCurrent(state, workspaceId, navigation)
 		: navTick(workspaceId) !== requestedAt;
-	if (intent === "preview" && overtaken) return;
+	if (intent === "preview" && state.localLayoutPreferences.previewTabsEnabled && overtaken) return;
 	const id = changesTabId(workspaceId, scope);
 	const revealPath = options.revealPath
 		? projectRelativePath(options.revealPath, selectWorkspaceById(state, workspaceId)?.worktreePath)

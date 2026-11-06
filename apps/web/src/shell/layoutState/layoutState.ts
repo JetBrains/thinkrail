@@ -427,6 +427,10 @@ function parsePreferences(value: unknown): LocalLayoutPreferences | undefined {
 		defaultPresetId: value.defaultPresetId,
 		maxSideGroups: Number(value.maxSideGroups),
 		maxBottomGroups: Number(value.maxBottomGroups),
+		previewTabsEnabled:
+			typeof value.previewTabsEnabled === "boolean"
+				? value.previewTabsEnabled
+				: DEFAULT_LOCAL_LAYOUT_PREFERENCES.previewTabsEnabled,
 	};
 }
 
