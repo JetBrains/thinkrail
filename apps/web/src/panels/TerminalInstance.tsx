@@ -17,11 +17,12 @@ import { Button } from "@thinkrail/ui/button";
 import { type ResolvedFont, resolveFont, watchFont } from "@thinkrail/ui/fonts";
 import { onThemeSwap } from "@thinkrail/ui/theme";
 import { type QuietScrollEdges, QuietScrollFrame } from "@/components/QuietScrollArea";
-import { cssColorToHex } from "@/lib";
+import { copyText, cssColorToHex, platformFamily } from "@/lib";
 import { SettingsSection, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { createPtySizeSync, runAfterTerminalRelayout } from "./ptySizeSync";
 import { stripAnsiDim, terminalContrastFloor } from "./terminalContrast";
+import { SHIFT_ENTER_SEQUENCE, terminalKeyAction } from "./terminalKeys";
 import { createTerminalPrebindBuffer } from "./terminalPrebindBuffer";
 
 const RESIZE_DEBOUNCE_MS = 60;
@@ -177,13 +178,27 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		const onTerminalResize = term.onResize(updateScrollEdges);
 		updateScrollEdges();
 
-		term.attachCustomKeyEventHandler((event) => {
-			if (event.type !== "keydown" || event.keyCode !== IME_SENTINEL_KEYCODE) return true;
-			if (event.isComposing) return true;
-			const bytes = imeControlBytes(event);
-			if (bytes === null) return true;
+		const writeToPty = (data: string): void => {
 			const id = serverIdRef.current;
-			if (id) sendTerminalWrite(getTransport().request("terminal.write", { id, data: bytes }));
+			if (id) sendTerminalWrite(getTransport().request("terminal.write", { id, data }));
+		};
+		term.attachCustomKeyEventHandler((event) => {
+			if (event.type === "keydown" && event.keyCode === IME_SENTINEL_KEYCODE) {
+				if (event.isComposing) return true;
+				const bytes = imeControlBytes(event);
+				if (bytes === null) return true;
+				writeToPty(bytes);
+				return false;
+			}
+			const action = terminalKeyAction(
+				event,
+				platformFamily(),
+				term.hasSelection(),
+				useAppStore.getState().terminalShiftEnterNewline,
+			);
+			if (action === null) return true;
+			if (action === "copy") void copyText(term.getSelection());
+			else if (action === "newline") writeToPty(SHIFT_ENTER_SEQUENCE);
 			return false;
 		});
 

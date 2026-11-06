@@ -1097,6 +1097,7 @@ interface AppState {
 	jbcentralQuotaRefreshSeconds: number;
 	terminalReplayKb: number;
 	terminalWindowsShell: TerminalWindowsShell;
+	terminalShiftEnterNewline: boolean;
 	composerGrowthLimit: ComposerGrowthLimit;
 	chatLineWidth: number;
 	fileLineWidth: number;
@@ -1500,6 +1501,10 @@ function configPatch(config: AppConfig) {
 		jbcentralQuotaRefreshSeconds:
 			config.jbcentralQuotaRefreshSeconds ?? DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
 		terminalReplayKb: config.terminalReplayKb,
+		terminalShiftEnterNewline:
+			typeof config.terminalShiftEnterNewline === "boolean"
+				? config.terminalShiftEnterNewline
+				: DEFAULT_CONFIG.terminalShiftEnterNewline,
 		terminalWindowsShell: isTerminalWindowsShell(config.terminalWindowsShell)
 			? config.terminalWindowsShell
 			: DEFAULT_CONFIG.terminalWindowsShell,
@@ -2420,6 +2425,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	jbcentralQuotaRefreshSeconds: DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
 	terminalWindowsShell: DEFAULT_CONFIG.terminalWindowsShell,
+	terminalShiftEnterNewline: DEFAULT_CONFIG.terminalShiftEnterNewline,
 	composerGrowthLimit: DEFAULT_CONFIG.composerGrowthLimit,
 	chatLineWidth: DEFAULT_CONFIG.chatLineWidth,
 	fileLineWidth: DEFAULT_CONFIG.fileLineWidth,

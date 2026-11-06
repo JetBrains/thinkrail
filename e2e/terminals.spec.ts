@@ -513,6 +513,44 @@ test("Ctrl+C still interrupts while an input method is active", async ({ page })
 	await expect(term).toContainText("TR_INTERRUPTED_42");
 });
 
+test("Shift+Enter sends Meta+Enter without a stray carriage return", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+	const term = visibleTerminalScreen(page);
+
+	await runInTerminal(page, "cat -v");
+	await visibleTerminal(page).locator(".xterm-helper-textarea").focus();
+	await page.keyboard.type("A");
+
+	const cdp = await page.context().newCDPSession(page);
+	await cdp.send("Input.dispatchKeyEvent", {
+		type: "keyDown",
+		key: "Enter",
+		code: "Enter",
+		modifiers: 8,
+		windowsVirtualKeyCode: 13,
+		text: "\r",
+	});
+	await cdp.send("Input.dispatchKeyEvent", {
+		type: "keyUp",
+		key: "Enter",
+		code: "Enter",
+		modifiers: 8,
+		windowsVirtualKeyCode: 13,
+	});
+	await page.keyboard.type("B");
+	await page.keyboard.press("Enter");
+
+	const screenRows = async () => (await term.innerText()).split("\n").map((row) => row.trim());
+	await expect.poll(async () => (await screenRows()).filter((row) => row === "B").length).toBe(2);
+	const rows = (await screenRows()).slice(
+		(await screenRows()).findIndex((row) => row.endsWith("cat -v")) + 1,
+	);
+	expect(rows.filter((row) => row !== "").sort()).toEqual(["A^[", "A^[", "B", "B"]);
+	expect(rows.slice(0, 4)).not.toContain("");
+});
+
 test("a shell that dies while detached is not re-attached as if alive", async ({ page }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);

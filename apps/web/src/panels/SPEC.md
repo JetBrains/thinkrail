@@ -1011,7 +1011,9 @@ a project picker, the prompt hero, and the reused
   Windows hosts at `protocolVersion >= WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION`, a **Windows shell** picker
   (Auto / PowerShell 7 (pwsh) / Windows PowerShell / Command Prompt,
   `settings.update { terminalWindowsShell }` — see `submodule-server-terminal`'s shell-selection decision
-  for what each choice spawns). The protocol gate keeps a newer independently shipped client from presenting
+  for what each choice spawns), plus a **Shift+Enter inserts a newline** switch
+  (`store.terminalShiftEnterNewline`, default on, `settings.update { terminalShiftEnterNewline }`, read live by
+  open terminals — see the terminal key chords decision). The protocol gate keeps a newer independently shipped client from presenting
   a setting an older host preserves but does not act on. The Windows-shell
   half is split into a **props-driven** `WindowsShellSettings` component rather than reading the store
   inline like the replay picker: zustand's React binding feeds `renderToStaticMarkup` its frozen
@@ -2503,6 +2505,15 @@ own section. The kebab menu (`plan-menu`, a
   key handler intercepts keydown at `keyCode === 229` and derives the control bytes from `event.code`
   (which stays accurate under an IME) via `imeControlBytes`, writing them to the PTY itself; anything
   that isn't a rescued chord is left to normal text input.
+- **Terminal key chords.** The same single key handler (xterm allows one) runs the IME rescue first and then
+  the pure `terminalKeys.terminalKeyAction(event, platform, hasSelection, shiftEnterNewline)`.
+  **Ctrl+Shift+C** copies `term.getSelection()` through `copyText` off Apple platforms — Linux and Windows
+  terminals have no Cmd+C, and a bare Ctrl+C must stay SIGINT — and is swallowed whether or not anything is
+  selected, so it can never send `^C`. **Shift+Enter** writes `ESC CR` (`\x1b\r`, Meta+Enter) through the
+  same `terminal.write` path as typed input: Claude Code reads it as "newline, don't submit" and zsh inserts a
+  literal newline. Keydown and keypress are both swallowed, because xterm would otherwise emit a plain `\r`
+  from either. The Shift+Enter half is the Terminal setting **Shift+Enter inserts a newline**
+  (`terminalShiftEnterNewline`, default on); off, Shift+Enter behaves as plain Enter.
 - Heavy deps (Monaco / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
   A lazy chunk that fails to load (or a render throw) is contained by the `components/ErrorBoundary` the
   **shell** wraps each region in (see `shell/SPEC.md`), so a single panel degrades instead of blanking the
