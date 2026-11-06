@@ -25,6 +25,13 @@ We built a rich interface around the `pi` coding agent, isolated work into separ
 </picture>
 *From the left: An isolated workspace, a work session with an AI agent in that workspace, the code change made by the agent, and the the spec tree.*
 
+## Installation
+
+ThinkRail ships in two forms: a native desktop installer and the self-contained `thinkrail` CLI. You can install them from out [Landing page](https://thinkrail.ai/#install).
+
+For latest version, see the [Releases page](https://github.com/JetBrains/thinkrail/releases).
+
+
 ## What you get
 
 - **Isolated workspaces.** Open any git repo as a project and create `git worktree` workspaces from it, each with its own branch and working directory. Agents can then work in parallel without touching your original codebase; when they finish, merge the results you want to keep and delete the rest. You can also attach existing git worktrees or explicitly work in the project folder.
@@ -35,7 +42,7 @@ We built a rich interface around the `pi` coding agent, isolated work into separ
 
   * Once a GitHub PR is open, ThinkRail shows its CI checks and review decision, and lets you mark it ready, merge it, reopen it, or delete the remote branch.
 
-- **An IDE around the agent.** ThinkRail comes with Monaco editor tabs, a files tree integrated with git to show code changes as they happen, terminals, and document support.
+- **An IDE around the agent.** ThinkRail comes with Monaco editor tabs, a file tree integrated with git to show code changes as they happen, terminals, and document support.
 
 - **Powerful chat features.** You can open several concurrent work sessions per workspace, each with its own model. Send a prompt, or queue it as a follow-up, delegate to subagents, and work together on a shared plan: the agent updates it, and you review and edit.
 
@@ -48,11 +55,11 @@ We built a rich interface around the `pi` coding agent, isolated work into separ
 - **Agent tools beyond the shell.** Thanks to the ThinkRail GUI, your AI agent can ask you structured multiple-choice questions in the chat instead of guessing, draw Mermaid diagrams, and show comparisons and file previews. When the agent proposes a UI change, it shows a before/after mockup you can comment on like a diff.
 
   - Settings → Extensions lists the ThinkRail extensions the agent may use. It can also install any `pi` package by source (npm, git or a local folder), for you or for a repository, showing what each one adds and letting you switch individual packages, their extensions and skills, and `pi`'s built-ins on or off.
-  - The tools behind the questions, diagrams, and previews are also published as plain `pi` packages: `pi install npm:@thinkrail/pi-ask-user-question` for the questions ([![img](https://chat.mistral.ai/api/favicon/proxy?url=https%3A%2F%2Fwww.google.com%2Fs2%2Ffavicons%3Fdomain%3Dwww.npmjs.com%26sz%3D64) `@thinkrail/pi-ask-user-question`](https://www.npmjs.com/package/@thinkrail/pi-ask-user-question)) and `pi install npm:@thinkrail/pi-visualize` for the diagrams and previews ([![img](https://chat.mistral.ai/api/favicon/proxy?url=https%3A%2F%2Fwww.google.com%2Fs2%2Ffavicons%3Fdomain%3Dwww.npmjs.com%26sz%3D64) `@thinkrail/pi-visualize`](https://www.npmjs.com/package/@thinkrail/pi-visualize)), so a vanilla `pi` in the terminal gets the same tools.
+  - The tools behind the questions, diagrams, and previews are also published as plain `pi` packages: `pi install npm:@thinkrail/pi-ask-user-question` for the questions  [`@thinkrail/pi-ask-user-question`](https://www.npmjs.com/package/@thinkrail/pi-ask-user-question)) and `pi install npm:@thinkrail/pi-visualize` for the diagrams and previews [`@thinkrail/pi-visualize`](https://www.npmjs.com/package/@thinkrail/pi-visualize)), so a vanilla `pi` in the terminal gets the same tools.
 
 - **MCP servers.** Connect the MCP servers in your `pi` `mcp.json`, or configure them in Settings. ThinkRail asks in the chat before calls that the server does not mark read-only, or always allows the tools you trust in a project. Servers a repository defines stay off until you approve them. ThinkRail signs you in to OAuth servers from Settings and shows each chat's servers next to its background commands and subagents.
 
-- **Your providers, your credentials.** Sign in with [![img](https://chat.mistral.ai/api/favicon/proxy?url=https%3A%2F%2Fwww.google.com%2Fs2%2Ffavicons%3Fdomain%3Dwww.jetbrains.com%26sz%3D64) JetBrains AI](https://www.jetbrains.com/ai/) or connect any provider through `pi`'s own auth. ThinkRail has no accounts of its own.
+- **Your providers, your credentials.** Sign in with [JetBrains AI](https://www.jetbrains.com/ai/) or connect any provider through `pi`'s own auth. ThinkRail has no accounts of its own.
 
 - **Your `pi` setup.** ThinkRail reads your existing `pi` configuration (`~/.pi/agent`). To use another one (for example, a personal `~/.pi/agent-personal`), or to pass extra environment variables to the agent, terminals and MCP servers, set them in Settings → Environment. The configuration becomes active on the next start.
 
@@ -74,11 +81,9 @@ We built a rich interface around the `pi` coding agent, isolated work into separ
 </picture>
 *The project's spec graph as a tree (on the right), with the spec itself rendered alongside in the center.*
 
-## Install
+## Installation details
 
-ThinkRail ships in two forms: a native desktop installer and the self-contained `thinkrail` CLI. Both are published with `SHA256SUMS` on the [ releases page](https://github.com/JetBrains/thinkrail/releases).
-
-### 	Desktop
+### Desktop
 
 Download the `thinkrail-desktop-*` asset for your platform:
 
@@ -162,7 +167,7 @@ Additional product usage is shared only while **Share additional usage data** is
 
 Feedback surveys are separate from usage analytics. ThinkRail may invite you to a short survey, and you can also open it from **Settings → Feedback**. Your answers, including anything you type, are sent to the ThinkRail team only when you press **Send**, and tied to the same random installation ID, not to your name or account. Please don't include secrets, code, or personal data. To have your answers deleted, email [info@thinkrail.ai](mailto:info@thinkrail.ai).
 
-The ThinkRail apps and the ThinkRail website ([![img](https://chat.mistral.ai/api/favicon/proxy?url=https%3A%2F%2Fwww.google.com%2Fs2%2Ffavicons%3Fdomain%3Dthinkrail.ai%26sz%3D64) thinkrail.ai](https://thinkrail.ai/)) use PostHog Inc. services for analytics. The website also uses PostHog Surveys to collect feedback after a desktop download and, only if you choose to provide it, your email address, which is used to ask for further feedback and to send product updates. PostHog's privacy policy is at [![img](https://chat.mistral.ai/api/favicon/proxy?url=https%3A%2F%2Fwww.google.com%2Fs2%2Ffavicons%3Fdomain%3Dposthog.com%26sz%3D64) posthog.com/privacy](https://posthog.com/privacy).
+The ThinkRail apps and the ThinkRail website ([thinkrail.ai](https://thinkrail.ai/)) use PostHog Inc. services for analytics. The website also uses PostHog Surveys to collect feedback after a desktop download and, only if you choose to provide it, your email address, which is used to ask for further feedback and to send product updates. PostHog's privacy policy is at [posthog.com/privacy](https://posthog.com/privacy).
 
 ## Under the hood
 
