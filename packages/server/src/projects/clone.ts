@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { Project, WsParams } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { gitAsync } from "../git";
-import { openProject, resolveProjectPath } from "./projects";
+import { assertProjectPathAllowed, openProject, resolveProjectPath } from "./projects";
 
 const CLONE_TIMEOUT_MS = 30 * 60_000;
 const activeClones = new Map<string, Map<string, AbortController>>();
@@ -75,6 +75,7 @@ export function inspectCloneDestination(parentPath: string, requestedName: strin
 	}
 	if (!statSync(parent).isDirectory()) invalid("The parent path is not a folder.");
 	const path = join(parent, name);
+	assertProjectPathAllowed(path);
 	try {
 		lstatSync(path);
 	} catch (error) {
