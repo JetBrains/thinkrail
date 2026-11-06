@@ -998,8 +998,8 @@ a project picker, the prompt hero, and the reused
   (Auto / PowerShell 7 (pwsh) / Windows PowerShell / Command Prompt,
   `settings.update { terminalWindowsShell }` — see `submodule-server-terminal`'s shell-selection decision
   for what each choice spawns), plus a **Shift+Enter inserts a newline** switch
-  (`store.terminalShiftEnterNewline`, default on, `settings.update { terminalShiftEnterNewline }`, read live by
-  open terminals — see the terminal key chords decision). The protocol gate keeps a newer independently shipped client from presenting
+  (`store.terminalShiftEnterNewline`, default on, `settings.update { terminalShiftEnterNewline }`, shown only at
+  `protocolVersion >= TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION`, read live by open terminals — see the terminal key chords decision). The protocol gate keeps a newer independently shipped client from presenting
   a setting an older host preserves but does not act on. The Windows-shell
   half is split into a **props-driven** `WindowsShellSettings` component rather than reading the store
   inline like the replay picker: zustand's React binding feeds `renderToStaticMarkup` its frozen
@@ -2473,9 +2473,10 @@ own section. The kebab menu (`plan-menu`, a
   the pure `terminalKeys.terminalKeyAction(event, platform, hasSelection, shiftEnterNewline)`.
   **Ctrl+Shift+C** copies `term.getSelection()` through `copyText` off Apple platforms — Linux and Windows
   terminals have no Cmd+C, and a bare Ctrl+C must stay SIGINT — and is swallowed whether or not anything is
-  selected, so it can never send `^C`. **Shift+Enter** writes `ESC CR` (`\x1b\r`, Meta+Enter) through the
+  selected, so it can never send `^C`. **Shift+Enter** (not while an IME is composing) writes `ESC CR` (`\x1b\r`, Meta+Enter) through the
   same `terminal.write` path as typed input: Claude Code reads it as "newline, don't submit" and zsh inserts a
-  literal newline. Keydown and keypress are both swallowed, because xterm would otherwise emit a plain `\r`
+  literal newline. Keydown and keypress are both swallowed and `preventDefault`ed (xterm's handler
+  contract only stops its own processing; Chromium would otherwise open inspect-element on Ctrl+Shift+C), because xterm would otherwise emit a plain `\r`
   from either. The Shift+Enter half is the Terminal setting **Shift+Enter inserts a newline**
   (`terminalShiftEnterNewline`, default on); off, Shift+Enter behaves as plain Enter.
 - Heavy deps (Monaco / shiki / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
