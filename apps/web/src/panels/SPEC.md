@@ -610,7 +610,9 @@ a project picker, the prompt hero, and the reused
   anywhere. A rejected `startCreate` (an invalid ref, an unknown project) keeps the dialog open with a
   `store.toast.error`. Against an **older host** the dialog falls back to `workspace.create` → set active →
   `session.create({ workspaceId, model?, thinkingLevel? })` → fire-and-forget `prompt` with an optimistic user
-  turn, as before. The prompt hero accepts **image paste/drop** through the shared `usePromptImages`
+  turn, as before. That legacy path shows only the dialog's own *Creating…* button state — the old sidebar
+  pending-row counter was removed with the host-owned creations, a deliberate gap for the transition window
+  in which a newer web meets an older host. The prompt hero accepts **image paste/drop** through the shared `usePromptImages`
   controller (same `imageAttachment` decode/downscale + chip surface as the chat `Composer`); submit is
   **held while any image is still decoding**, and a start with **only images and no text** is a valid
   kick-off. An **empty prompt with no images still lands the user in a chat** — the host starts it without a
