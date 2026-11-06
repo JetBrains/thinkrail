@@ -81,7 +81,11 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   monotonic edges with different meanings: `setStatus("connected")` advances **`connectionGeneration`**
   for reconnect hydration, while **`welcomeGeneration`** advances only when one complete
   `server.welcome` snapshot lands. Every connection-status transition clears `protocolVersion`, so UI
-  capabilities remain unavailable between sockets and until the current socket's welcome is installed.
+  capabilities remain unavailable between sockets and until the current socket's welcome is installed;
+  **`welcomeProtocolVersion`** keeps the last installed welcome's protocol across a reconnect (in memory
+  only), for the one capability that must outlive a blip: **`selectHostSearchAvailable`** (the search
+  palette keeps its host scopes and rows) beside **`selectHostReachable`** (connected and this
+  connection's welcome — when a host search request may go out).
   **`installWelcomeSnapshot(protocolVersion, projects, recentProjects,
   config?, hostPlatform?, hostUpdate?)`** installs protocol + both sorted project views + optional config,
   host platform, optional host-update lifecycle snapshot + navigation repair and then advances that readiness

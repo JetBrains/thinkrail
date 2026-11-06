@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { RiChat2Line, RiCommandLine, RiGitBranchLine } from "@remixicon/react";
+import { RiChat2Line, RiCommandLine, RiFileTextLine, RiGitBranchLine } from "@remixicon/react";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { EMPTY_LEARNING, recordPick } from "./learning";
 import type { PaletteItem } from "./model";
@@ -125,6 +125,37 @@ describe("buildSections", () => {
 		});
 	});
 
+	test("a newcomer that landed while a selection was held never takes or unseats the top hit", () => {
+		const best = chat("best", "Refresh");
+		const ids = (rootItems: PaletteItem[]) =>
+			flattenRows(sections("refresh", { rootItems })).map((row) => [row.item.id, row.top ?? false]);
+		expect(ids([best])).toEqual([["chat:best", true]]);
+		expect(ids([best, chat("late", "Refresh", { late: 1 })])).toEqual([
+			["chat:best", true],
+			["chat:late", false],
+		]);
+		expect(ids([chat("alone", "Refresh", { late: 1 })])).toEqual([["chat:alone", false]]);
+	});
+
+	test("a group's more row sits below the rows on screen when only newcomers overflow it, and stays with its rows otherwise", () => {
+		const shown = ["one", "two", "three", "four"].map((name) => chat(name, `Fix refresh ${name}`));
+		const selected = workspace("sel", "Old xrefreshx space");
+		const rows = (rootItems: PaletteItem[]) =>
+			flattenRows(sections("refresh", { rootItems, keep: selected.id })).map((row) => row.item.id);
+		const before = rows([...shown, selected]);
+		expect(before.at(-1)).toBe(selected.id);
+		expect(before).not.toContain("more:chats");
+		const late = [
+			chat("l1", "Fix refresh late", { late: 1 }),
+			chat("l2", "Fix refresh later", { late: 1 }),
+		];
+		const after = rows([...shown, selected, ...late]);
+		expect(after.slice(0, before.length)).toEqual(before);
+		expect(after.slice(before.length)).toEqual(["more:chats"]);
+		const crowded = rows([...shown, chat("five", "Fix refresh five"), selected, ...late]);
+		expect(crowded.indexOf("more:chats")).toBeLessThan(crowded.indexOf(selected.id));
+	});
+
 	test("a scope lifts the cap and never shows a top hit", () => {
 		const result = sections("@auth");
 		expect(
@@ -147,5 +178,38 @@ describe("buildSections", () => {
 		});
 		const expanded = sections("@", { rootItems: many, expanded: new Set(["chats"]) });
 		expect(expanded.find((section) => section.id === "chats")?.items).toHaveLength(35);
+	});
+
+	test("host hits beyond the returned page count into the more row in All and into the meta of a scope", () => {
+		const file = (id: string, title: string): PaletteItem => ({
+			id: `file:${id}`,
+			kind: "file",
+			title,
+			group: "files",
+			scope: "files",
+			icon: RiFileTextLine,
+		});
+		const two = [file("h1", "auth-one.ts"), file("h2", "auth-two.ts")];
+		const hostOverflow = { files: 18 };
+		const all = sections("auth", { rootItems: two, hostOverflow });
+		const files = all.find((section) => section.id === "files");
+		expect(files?.meta).toBe("20");
+		expect(files?.items.at(-1)?.item).toMatchObject({
+			kind: "more",
+			title: "18 more in Files",
+			more: { kind: "scope", scope: "files" },
+		});
+		const scoped = sections("/auth", { rootItems: two, hostOverflow });
+		const scopedFiles = scoped.find((section) => section.id === "files");
+		expect(scopedFiles?.meta).toBe("20 matches · showing 2, refine the query for the rest");
+		expect(scopedFiles?.items.every((row) => row.item.kind !== "more")).toBe(true);
+	});
+
+	test("the selected row is never hidden under a group's cap", () => {
+		const many = Array.from({ length: 8 }, (_, index) => chat(`k${index}`, `Keep ${index}`));
+		const rows = (keep: string | null) =>
+			flattenRows(sections("keep", { rootItems: many, keep })).map((row) => row.item.id);
+		expect(rows(null)).not.toContain("chat:k6");
+		expect(rows("chat:k6")).toContain("chat:k6");
 	});
 });

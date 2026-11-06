@@ -19,6 +19,7 @@ import {
 	type ResourceKind,
 	type ResourceRecord,
 	resourceTallyTotal,
+	SEARCH_PROTOCOL_VERSION,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	type SessionResourceHistory,
@@ -116,6 +117,32 @@ export function isConnectedGeneration(
 
 interface ProtocolState {
 	protocolVersion: number | null;
+}
+
+export function selectHostSearchAvailable(state: {
+	welcomeProtocolVersion: number | null;
+}): boolean {
+	return (
+		state.welcomeProtocolVersion !== null && state.welcomeProtocolVersion >= SEARCH_PROTOCOL_VERSION
+	);
+}
+
+export function selectHostReachable(
+	state: ProtocolState & { status: string; welcomeGeneration: number },
+): boolean {
+	return (
+		state.status === "connected" && state.welcomeGeneration > 0 && state.protocolVersion !== null
+	);
+}
+
+export function selectHostSearchReady(
+	state: ProtocolState & { status: string; welcomeGeneration: number },
+): boolean {
+	return (
+		selectHostReachable(state) &&
+		state.protocolVersion !== null &&
+		state.protocolVersion >= SEARCH_PROTOCOL_VERSION
+	);
 }
 
 export function selectCanRenameChat(state: ProtocolState): boolean {
