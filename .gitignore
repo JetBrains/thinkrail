@@ -15,6 +15,7 @@ e2e/screenshots/
 e2e/.workflow-runs.jsonl
 
 docs/*
+!docs/proposals/
 .playwright-mcp/
 .claude/
 .mockups/
