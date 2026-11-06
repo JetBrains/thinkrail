@@ -155,7 +155,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   before ordinary locally placed-chat hydration; successful authoritative absence consumes it, while failures
   retain it for reconnect.
   The store owns no URL/history/storage access — `navigation` owns serialization and drivers. It owns the
-  **background-creation slice** (v103): `workspaceCreations` by id, folded from `workspace.creationChanged`
+  **background-creation slice** (v104): `workspaceCreations` by id, folded from `workspace.creationChanged`
   (`applyWorkspaceCreation`, which also raises one error toast when a running creation turns `failed`) and
   replaced on hydration (`setWorkspaceCreations`), and **`activeCreationId`** — mutually exclusive with
   `activeWorkspaceId`: `selectCreation` clears the workspace, and every workspace activation, `selectProject`,

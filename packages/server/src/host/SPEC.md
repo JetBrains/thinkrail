@@ -556,10 +556,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   goes through one `startChat` that calls `workspaces`' `ensureWorkspaceScratchDir` before creating the
   session — the Default workspace's gitignored `.thinkrail/context/` lands in the user's repo only when a chat
   actually starts there (and a worktree's deleted scratch dir self-heals). Host-composed — no new module edges.
-- **Background workspace creation (v103):** `workspace.startCreate` / `listCreations` / `retryCreation` /
+- **Background workspace creation (v104):** `workspace.startCreate` / `listCreations` / `retryCreation` /
   `dismissCreation` front `workspaces`' creation job, and `createServer` marks leftover running creations
   `interrupted` before it serves, installs the creation publisher (`workspace.creationChanged` /
-  `workspace.creationRemoved`, subscribed only by v103+ sockets) and the **handoff**
+  `workspace.creationRemoved`, subscribed only by v104+ sockets) and the **handoff**
   `workspaceCreationHandoff` (then replays any handoff a crash cut short): when a checkout finishes it provisions the initial terminal and, when the create
   carried a kickoff, waits for the workspace watcher (`ensureWatch`, the readiness the browser's own chat start
   awaits) and starts the chat through `startChat` (the kickoff's model/effort, else the saved defaults)
