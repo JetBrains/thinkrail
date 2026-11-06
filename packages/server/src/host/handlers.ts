@@ -1466,7 +1466,7 @@ const handlers: WsHandlers = {
 	"search.preview": (p) => hostSearch().preview(p),
 
 	"review.get": async (p) => {
-		ensureWatch(p.workspaceId);
+		void ensureWatch(p.workspaceId);
 		return markClientStale(await getReviewSnapshot(p.workspaceId), p.workspaceId);
 	},
 	"review.commentAdd": (p) => {
