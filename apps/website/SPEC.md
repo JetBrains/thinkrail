@@ -62,12 +62,17 @@ binary.
     (`scripts/build-blog.ts` + HTML string templates) is deleted.
   - *Lint caveat:* Biome parses only `.astro` frontmatter, so `noUnusedVariables`/`noUnusedImports`
     are disabled for `*.astro` in `biome.json` (template usage is invisible to it — every flag would
-    be a false positive). `astro check` covers the templates instead.
-  - *Test typecheck:* `astro check` follows `tsconfig.json`, which excludes `*.test.ts`. The
+    be a false positive). The typecheck covers the templates instead.
+  - *Typecheck:* `tsrs --runExternalCode` checks `.astro` files through `@astrojs/ts-content-mapper`
+    (`contentMappers` in `tsconfig.json`; the mapper runs under `node`). `astro sync` runs first to
+    generate `.astro/types.d.ts`. `astro/client` pulls Astro's own `.astro` components into the program
+    and `skipLibCheck` does not skip them, so Astro must be >= 7.4.4, whose components pass under
+    `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess`. Astro 7.4.4 requires Node >= 22.23.4,
+    so the contributor Node floor in `CONTRIBUTING.md` and `README.md` is 22.23.4, above the 22.19 that
+    `pi` needs at runtime. The repo has no `typescript` dependency.
+  - *Test typecheck:* The `.astro` typecheck follows `tsconfig.json`, which excludes `*.test.ts`. The
     `typecheck` script, not `build`, also runs `tsconfig.test.json` over the site tests, so root CI
     checks them and `site.yml` does not.
-  - *TypeScript 6 is website-only:* `astro check` (`@astrojs/check`) peers on TypeScript 5 or 6, so this
-    module is the repo's only `typescript` consumer; every other package typechecks with `tsrs`.
 
 The parent owns the route-composition edges; the vibecoding leaf has no sibling dependency:
 
@@ -279,11 +284,11 @@ claim Functions. Pinned Wrangler `4.124.0` deploys from `apps/website` so its co
 and local Pages/D1 workflows; production applies committed attribution migrations before deploy. The
 build compiles the Functions, and a local Pages/D1 smoke starts Pages from the checked-in configuration,
 applies the actual migration, and exercises create, bind, and redeem. `.github/workflows/site.yml` runs
-`bun run --filter @thinkrail/website build` (`astro check`, the Functions typecheck and build, `astro
-build`, and artifact validation) on pushes that
-touch this module, [[module-website-analytics]], the root package manifest, or the lockfile (plus manual
-dispatch). It verifies the provider URL before succeeding. `thinkrail.ai` is the project's custom apex
-domain; provider URLs are deployment probes, not product identities.
+`bun run --filter @thinkrail/website build` (the `.astro` and Functions typechecks, the Functions build,
+`astro build`, and artifact validation) on pushes that touch this module, [[module-website-analytics]],
+the root package manifest, or the lockfile (plus manual dispatch). It verifies the provider URL before
+succeeding. `thinkrail.ai` is the project's custom apex domain; provider URLs are deployment probes, not
+product identities.
 
 Production concurrency never cancels an in-flight publish. Cloudflare retains successful production
 deployments as rollback targets, so rollback selects the prior `main` deployment instead of running a
