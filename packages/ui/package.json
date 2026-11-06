@@ -25,7 +25,7 @@
 		"./utils": "./utils.ts"
 	},
 	"scripts": {
-		"typecheck": "tsc --noEmit",
+		"typecheck": "tsrs --noEmit",
 		"test": "bun test"
 	},
 	"dependencies": {
@@ -49,6 +49,7 @@
 		"@types/bun": "catalog:",
 		"@types/react": "catalog:",
 		"@types/react-dom": "catalog:",
+		"tsrs": "catalog:",
 		"typescript": "catalog:"
 	}
 }

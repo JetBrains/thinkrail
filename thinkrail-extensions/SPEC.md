@@ -133,8 +133,8 @@ the default tool renderer until step 2 — never visualize, whose renderer exist
 **Wrapping a third-party pi package** has no step 1 (nothing of ours to publish). Its server half lands
 alone, composing the package unchanged plus any ThinkRail policy, while app-local renderers keep rendering
 the same tool names; the web half follows when its renderers' dependencies are in the SDK. A raw-`.ts`
-package that fails the repo's strict `tsc` is imported through a declaration-paired JavaScript re-export
-(`piWebAccess.js` + `.d.ts`): bundlers and Bun follow the `.js`, `tsc` stops at the declaration.
+package that fails the repo's strict `tsrs` is imported through a declaration-paired JavaScript re-export
+(`piWebAccess.js` + `.d.ts`): bundlers and Bun follow the `.js`, `tsrs` stops at the declaration.
 
 ## Members
 

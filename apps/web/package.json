@@ -5,9 +5,9 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
-		"build": "bun run typography:check && bun run colors:check && bun run spacing:check && bun run provider-glyphs:check && tsc --noEmit && vite build",
+		"build": "bun run typography:check && bun run colors:check && bun run spacing:check && bun run provider-glyphs:check && vite build",
 		"build:profile": "vite build --mode profile",
-		"typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+		"typecheck": "tsrs --noEmit && tsrs --noEmit -p tsconfig.test.json",
 		"test": "bun test",
 		"preview": "vite preview",
 		"typography:generate": "bun scripts/generate-typography.ts",
@@ -64,6 +64,7 @@
 		"@vitejs/plugin-react": "6.1.2",
 		"babel-plugin-react-compiler": "1.0.0",
 		"tailwindcss": "catalog:",
+		"tsrs": "catalog:",
 		"typescript": "catalog:",
 		"vite": "8.1.6"
 	}
