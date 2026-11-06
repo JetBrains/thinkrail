@@ -67,7 +67,7 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   writes nothing outside the git dir, and a `git commit` moves `HEAD` without touching a worktree file.
   It is deliberately **not** matched on specific paths (`.git/HEAD`, `.git/logs/HEAD`, …): the platform
   streams coalesce and report *a* representative path per burst, so which git-internal path surfaces is not
-  reliable. A wildcard event (null filename) nudges it too. Two sources feed the one nudge:
+  reliable. A wildcard event (null filename) nudges it too. Three sources feed the one nudge:
   - `.git`-prefixed events seen by the recursive **root** watcher — covers a **repo root** workspace, whose
     `.git` directory lives inside the watched tree;
   - a second, **non-recursive** watcher on the worktree's git dir **when that dir lies outside the root**
@@ -78,6 +78,14 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
     line), never by shelling out — this module has no `git` sibling edge. Non-recursive because only the
     dir's top level holds the refs that move (`HEAD`, `index`, `ORIG_HEAD`) while `objects/`/`logs/` are
     pure storms; a missing/unreadable git dir (non-git folder) or a failed start degrades silently.
+
+  - **Shared Git metadata for linked worktrees:** the private gitdir points to
+    a common Git directory. A non-recursive watcher observes shared config
+    and packed-reference changes. Another watcher monitors the parent
+    directory of the configured remote-tracking ref, filtering events to
+    that ref and its lockfile. This detects terminal pushes without watching
+    every Git ref recursively. Config and HEAD changes can rebind the
+    remote-ref watcher. `stopWatch` closes all associated watchers and timers.
 
   `host` fans the nudge out to two convergences: `refreshUserOwnedWorkspace` (a user-owned workspace's
   folder-truth branch labels) **and** a pathless, skill-neutral `fsChanged` frame (`paths: []`,
