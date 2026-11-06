@@ -255,7 +255,7 @@ test("user-selectable fonts are pinned to v102", () => {
 
 test("background workspace creation is pinned to v104", () => {
 	expect(WORKSPACE_CREATION_PROTOCOL_VERSION).toBe(104);
-	expect(PROTOCOL_VERSION).toBe(104);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(WORKSPACE_CREATION_PROTOCOL_VERSION);
 	expect(WS_METHODS.workspaceStartCreate).toBe("workspace.startCreate");
 	expect(WS_METHODS.workspaceListCreations).toBe("workspace.listCreations");
 	expect(WS_METHODS.workspaceRetryCreation).toBe("workspace.retryCreation");
@@ -584,14 +584,14 @@ test("custom endpoints are pinned to v101 and own only custom-* providers", () =
 	expect(isCustomEndpointId("ollama")).toBe(false);
 });
 
-test("extension settings are pinned to v104", () => {
-	expect(EXTENSION_SETTINGS_PROTOCOL_VERSION).toBe(104);
-	expect(PROTOCOL_VERSION).toBe(104);
+test("extension settings are pinned to v105", () => {
+	expect(EXTENSION_SETTINGS_PROTOCOL_VERSION).toBe(105);
+	expect(PROTOCOL_VERSION).toBe(105);
 	expect(DEFAULT_CONFIG.extensionSettings).toEqual({});
 });
 
-test("ask_user_question discuss answers are pinned to v104, after the GitHub star ask", () => {
-	expect(ASK_DISCUSS_PROTOCOL_VERSION).toBe(104);
-	expect(ASK_DISCUSS_PROTOCOL_VERSION).toBeGreaterThan(GITHUB_STAR_PROTOCOL_VERSION);
+test("ask_user_question discuss answers are pinned to v105, after background workspace creation", () => {
+	expect(ASK_DISCUSS_PROTOCOL_VERSION).toBe(105);
+	expect(ASK_DISCUSS_PROTOCOL_VERSION).toBeGreaterThan(WORKSPACE_CREATION_PROTOCOL_VERSION);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ASK_DISCUSS_PROTOCOL_VERSION);
 });

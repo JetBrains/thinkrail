@@ -187,8 +187,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
     host-registry ThinkRail extension as `extension.list` reports it; `name` is the identity the
     `AppConfig.disabledExtensions` list keys on, `tools` the names its parent factories register, and
     `settings` (`ExtensionSettingDescriptor[]`, `{ key, default: boolean }`, absent below
-    `EXTENSION_SETTINGS_PROTOCOL_VERSION` = v104) the boolean settings the extension declares.
-    `ASK_DISCUSS_PROTOCOL_VERSION` (v104) is the host version that renders `ask_user_question`
+    `EXTENSION_SETTINGS_PROTOCOL_VERSION` = v105) the boolean settings the extension declares.
+    `ASK_DISCUSS_PROTOCOL_VERSION` (v105) is the host version that renders `ask_user_question`
     `kind: "discuss"` answers; the card withholds Discuss below it.
   - **`SessionSummary`** — a chat session as the host reports it for hydration (read side); `live`
     distinguishes an in-memory session from a disk-only one. A frontend hydrates locally placed sessions and
@@ -477,7 +477,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   from `EXTENSION_CATALOG_PROTOCOL_VERSION` = v82) names the host-registry extensions the user switched off —
   unknown names are kept and ignored, and the host applies it to new and open sessions (see
   [[submodule-server-extensions]]); `extensionSettings` (`ExtensionSettingValues`, default `{}`, on the wire from
-  `EXTENSION_SETTINGS_PROTOCOL_VERSION` = v104) maps extension name → setting key → boolean for the settings
+  `EXTENSION_SETTINGS_PROTOCOL_VERSION` = v105) maps extension name → setting key → boolean for the settings
   an `ExtensionCatalogEntry` declares — an absent key means the descriptor's `default`, and
   `settings.update { extensionSettings }` merges per key; `customLayoutPresets` is the bounded
   resource-free catalog and is the **only** layout value synchronized by the host; current/default preset

@@ -139,7 +139,7 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   optional text. The options stay visible, muted; choosing one, checking one, opening a
   note or typing Other cancels the mark while keeping the typed reason and text for a re-mark. The chip
   shows an info chat glyph (plus screen-reader text). The answer is `kind: "discuss"`. The toggle appears
-  only for a host at `ASK_DISCUSS_PROTOCOL_VERSION` (v104) or later (`interaction.hostProtocol`), the
+  only for a host at `ASK_DISCUSS_PROTOCOL_VERSION` (v105) or later (`interaction.hostProtocol`), the
   version whose server half renders discuss answers; an older host keeps the card without it, since its
   formatter would report an empty discuss as `(no answer)` and let the agent continue. The last known version is latched per
   call (and cached with its state), because the version is unknown between a disconnect and the next

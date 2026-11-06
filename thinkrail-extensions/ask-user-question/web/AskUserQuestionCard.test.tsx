@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { ASK_DISCUSS_PROTOCOL_VERSION, GITHUB_STAR_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import { ASK_DISCUSS_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import type { ToolInteraction } from "@thinkrail/extension-api/web";
 import type { AskUserQuestionItem } from "@thinkrail/pi-ask-user-question/core";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -68,7 +68,7 @@ describe("Discuss availability", () => {
 	const questions = [question(1, 2)];
 
 	it("withholds Discuss from a host older than the discuss protocol", () => {
-		expect(render(questions, GITHUB_STAR_PROTOCOL_VERSION)).not.toContain(
+		expect(render(questions, ASK_DISCUSS_PROTOCOL_VERSION - 1)).not.toContain(
 			'data-testid="ask-discuss"',
 		);
 		expect(render(questions)).not.toContain('data-testid="ask-discuss"');
