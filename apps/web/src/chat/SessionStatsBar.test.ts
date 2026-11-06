@@ -92,6 +92,6 @@ it("formats a turn's elapsed time with the interface language's units", async ()
 	try {
 		expect(formatElapsed(currentTranslator(), 65_000)).toBe("1 мин 5 с");
 	} finally {
-		applyLocale("en", {});
+		await applyLocale("en", {});
 	}
 });

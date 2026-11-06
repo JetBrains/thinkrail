@@ -252,6 +252,6 @@ test("the export follows the interface language, plural forms included", async (
 		expect(markdown).toContain("## Итог");
 		expect(markdown).toContain("2 шага готово");
 	} finally {
-		applyLocale("en", {});
+		await applyLocale("en", {});
 	}
 });
