@@ -67,7 +67,9 @@ binary.
     (`contentMappers` in `tsconfig.json`; the mapper runs under `node`). `astro sync` runs first to
     generate `.astro/types.d.ts`. `astro/client` pulls Astro's own `.astro` components into the program
     and `skipLibCheck` does not skip them, so Astro must be >= 7.4.4, whose components pass under
-    `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess`. The repo has no `typescript` dependency.
+    `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess`. Astro 7.4.4 requires Node >= 22.23.4,
+    so the contributor Node floor in `CONTRIBUTING.md` and `README.md` is 22.23.4, above the 22.19 that
+    `pi` needs at runtime. The repo has no `typescript` dependency.
   - *Test typecheck:* The `.astro` typecheck follows `tsconfig.json`, which excludes `*.test.ts`. The
     `typecheck` script, not `build`, also runs `tsconfig.test.json` over the site tests, so root CI
     checks them and `site.yml` does not.
