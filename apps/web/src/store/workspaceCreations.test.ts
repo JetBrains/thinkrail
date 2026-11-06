@@ -82,6 +82,23 @@ test("a creation finishing in the background neither steals focus nor opens a ch
 	});
 });
 
+test("a kickoff rejected while the user is elsewhere still raises a toast", () => {
+	const store = useAppStore.getState();
+	store.applyWorkspaceCreation(creation());
+	store.applyWorkspaceCreationRemoved({
+		id: "c1",
+		projectId: "p1",
+		workspace,
+		sessionId: "s1",
+		kickoffError: "No API key found",
+	});
+	expect(useAppStore.getState().toasts[0]).toMatchObject({
+		variant: "error",
+		message: "No API key found",
+	});
+	expect(useAppStore.getState().creationChatToOpen).toBeNull();
+});
+
 test("dismissing the active creation lands on its project", () => {
 	const store = useAppStore.getState();
 	store.applyWorkspaceCreation(creation({ state: "failed", failure: { message: "boom" } }));

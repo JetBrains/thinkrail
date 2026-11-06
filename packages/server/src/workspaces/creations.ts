@@ -321,7 +321,11 @@ async function execute(id: string, signal: AbortSignal): Promise<Workspace> {
 			updateCreation(id, (r) => {
 				r.state = "failed";
 				const code = errorCodeOf(err);
-				r.failure = { message, ...(code ? { code } : {}) };
+				r.failure = {
+					message,
+					...(code ? { code } : {}),
+					...(cleaned && record.baseOid ? { cleanedUp: true as const } : {}),
+				};
 				delete r.progress;
 				if (cleaned) {
 					delete r.baseOid;

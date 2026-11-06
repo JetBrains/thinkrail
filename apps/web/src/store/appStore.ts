@@ -3672,7 +3672,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 			sentCreationPrompts: omitKey(state.sentCreationPrompts, removed.id),
 			activeCreationId: wasActive ? null : state.activeCreationId,
 		});
-		if (!wasActive) return;
+		if (!wasActive) {
+			if (removed.kickoffError)
+				toast.error(removed.kickoffError, t("panels.newWorkspace.chatStartFailed"));
+			return;
+		}
 		if (!removed.workspace) {
 			get().selectProject(removed.projectId);
 			return;

@@ -275,15 +275,28 @@ export function retireWorkspace(projectId: string, workspaceId: string): void {
 	}
 }
 
+async function loadWorkspaceCreations(connectionGeneration: number): Promise<void> {
+	const creations = await getTransport().request("workspace.listCreations", {});
+	const before = useAppStore.getState();
+	const watched = before.activeCreationId
+		? before.workspaceCreations[before.activeCreationId]
+		: undefined;
+	if (watched && !creations.some((creation) => creation.id === watched.id)) {
+		const rows = await getTransport().request("workspace.list", {
+			projectId: watched.projectId,
+			includeDiffStats: false,
+		});
+		const current = useAppStore.getState();
+		if (!isConnectedGeneration(current, connectionGeneration)) return;
+		current.setWorkspaces(watched.projectId, rows);
+	}
+	const current = useAppStore.getState();
+	if (!isConnectedGeneration(current, connectionGeneration)) return;
+	current.setWorkspaceCreations(creations);
+}
+
 function refreshWorkspaceCreations(connectionGeneration: number): void {
-	void getTransport()
-		.request("workspace.listCreations", {})
-		.then((creations) => {
-			const current = useAppStore.getState();
-			if (!isConnectedGeneration(current, connectionGeneration)) return;
-			current.setWorkspaceCreations(creations);
-		})
-		.catch(() => {});
+	void loadWorkspaceCreations(connectionGeneration).catch(() => {});
 }
 
 export function initTransport(): WsTransport {

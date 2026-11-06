@@ -165,7 +165,7 @@ posix("a stalled checkout fails, cleans up, and keeps a retryable record", async
 	expect(record).toMatchObject({
 		state: "failed",
 		phase: "preparing",
-		failure: { code: "WORKTREE_CHECKOUT_STALLED" },
+		failure: { code: "WORKTREE_CHECKOUT_STALLED", cleanedUp: true },
 	});
 	expect(registered()).toEqual([realpathSync.native(repo)]);
 	expect(existsSync(join(dataDir, "worktrees", "repo", "workspace-1"))).toBe(false);
@@ -313,6 +313,14 @@ posix("dismissing an interrupted creation never touches a folder opened since", 
 	expect(existsSync(path)).toBe(true);
 	expect(gitOut(repo, "branch", "--list", "workspace-1")).toContain("workspace-1");
 	expect(listWorkspaceCreations()).toEqual([]);
+});
+
+posix("a create that fails before anything exists never claims a cleanup", async () => {
+	const creation = startWorkspaceCreation("p1", { baseRef: "no-such-branch" });
+	await expect(awaitWorkspaceCreation(creation.id)).rejects.toThrow("Could not resolve");
+	const [record] = listWorkspaceCreations();
+	expect(record?.failure?.code).toBe("WORKTREE_ADD_FAILED");
+	expect(record?.failure?.cleanedUp).toBeUndefined();
 });
 
 test("checkout failure text drops progress lines and keeps git's last words", () => {

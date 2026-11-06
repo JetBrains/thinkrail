@@ -76,7 +76,7 @@ test("a failed creation shows git's reason with Retry, Edit & retry and Dismiss"
 	const failed = creation({
 		state: "failed",
 		phase: "preparing",
-		failure: { message: "git checkout failed: No space left on device" },
+		failure: { message: "git checkout failed: No space left on device", cleanedUp: true },
 	});
 	const markup = row(failed);
 	expect(markup).toContain(text("panels.workspaceCreation.failed"));
@@ -89,9 +89,6 @@ test("a failed creation shows git's reason with Retry, Edit & retry and Dismiss"
 	expect(card).toContain(text("panels.workspaceCreation.editRetry"));
 	expect(card).toContain(text("panels.workspaceCreation.cleanedUp"));
 
-	const taken = view({ ...failed, failure: { message: "taken", code: "WORKSPACE_PATH_TAKEN" } });
-	expect(taken).not.toContain(text("panels.workspaceCreation.cleanedUp"));
-	expect(view({ ...failed, phase: "checking-out" })).not.toContain(
-		text("panels.workspaceCreation.cleanedUp"),
-	);
+	const nothingRemoved = view({ ...failed, failure: { message: "Could not fetch origin/main" } });
+	expect(nothingRemoved).not.toContain(text("panels.workspaceCreation.cleanedUp"));
 });

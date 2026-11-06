@@ -342,9 +342,7 @@ export function WorkspaceCreationView({ creation }: { creation: WorkspaceCreatio
 						className="h-4 w-full accent-primary"
 					/>
 				) : null}
-				{creation.state === "failed" &&
-				creation.phase === "preparing" &&
-				creation.failure?.code !== "WORKSPACE_PATH_TAKEN" ? (
+				{creation.state === "failed" && creation.failure?.cleanedUp ? (
 					<p className="text-text-muted tr-text-metadata">
 						{t("panels.workspaceCreation.cleanedUp")}
 					</p>
