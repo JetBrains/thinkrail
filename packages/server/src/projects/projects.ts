@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readdirSync, rmdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmdirSync, rmSync, statSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
@@ -10,7 +10,7 @@ import type {
 	ProjectPathStatus,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
-import { canonicalPath, git } from "../git";
+import { canonicalPath, git, INDEX_WRITE_TIMEOUT_MS } from "../git";
 import { loadProjects, loadWorkspaces, saveProjects } from "../persistence";
 
 type ProjectPublisher = (project: Project) => void;
@@ -23,6 +23,16 @@ export function setProjectPublisher(fn: ProjectPublisher | null): void {
 
 function emit(project: Project): void {
 	publishProject?.(project);
+}
+
+let guardProjectPath: ((path: string) => void) | null = null;
+
+export function setProjectPathGuard(fn: ((path: string) => void) | null): void {
+	guardProjectPath = fn;
+}
+
+export function assertProjectPathAllowed(path: string): void {
+	guardProjectPath?.(path);
 }
 
 export function resolveProjectPath(path: string): string {
@@ -39,8 +49,16 @@ export function resolveProjectPath(path: string): string {
 }
 
 function gitToplevel(path: string): string | null {
-	const result = git(path, ["rev-parse", "--show-toplevel"]);
+	const result = git(path, ["rev-parse", "--show-toplevel"], {
+		action: "read the repository root",
+	});
+	if (!result.ok && /dubious ownership/i.test(result.err))
+		throw new Error(`Git refused to open ${path}:\n${result.err}`);
 	return result.ok && result.out ? resolve(result.out) : null;
+}
+
+function gitStepFailed(step: string, path: string, err: string): Error {
+	return new Error(err ? `${step} failed: ${path}\n${err}` : `${step} failed: ${path}`);
 }
 
 function slugify(name: string): string {
@@ -88,6 +106,7 @@ export function getProjects(): Project[] {
 
 export function openProject(inputPath: string, displayName?: string): Project {
 	const path = resolveProjectPath(inputPath);
+	assertProjectPathAllowed(path);
 	const root = gitToplevel(path);
 	if (!root) throw new CodedError("NOT_GIT", `Not a git repository: ${path}`);
 
@@ -370,6 +389,7 @@ export function inspectProjectPath(inputPath: string): ProjectPathStatus {
 
 export function initProject(inputPath: string): Project {
 	const path = resolveProjectPath(inputPath);
+	assertProjectPathAllowed(path);
 	const status = inspectResolvedProjectPath(path);
 	if (status.kind === "missing") throw new Error(`No such folder: ${path}`);
 	if (status.kind === "notDirectory") throw new Error(`Not a folder: ${path}`);
@@ -388,8 +408,9 @@ export function createProject(
 		throw new Error(`Invalid project folder name: ${requestedName}`);
 	}
 	const parent = resolveProjectPath(parentPath);
-	mkdirSync(parent, { recursive: true });
 	const path = join(parent, name);
+	assertProjectPathAllowed(path);
+	mkdirSync(parent, { recursive: true });
 	let created = false;
 	try {
 		if (!statSync(path).isDirectory()) throw new Error(`Not a folder: ${path}`);
@@ -411,20 +432,26 @@ export function createProject(
 }
 
 function bootstrapRepository(path: string): void {
-	const init = git(path, ["init", "-b", "main"]);
-	if (!init.ok) throw new Error(`git init failed: ${path}`);
+	const gitDir = join(path, ".git");
+	const createdGitDir = !existsSync(gitDir);
 	try {
-		const added = git(path, ["add", "-A"]);
-		if (!added.ok) throw new Error(`git add failed: ${path}`);
+		const init = git(path, ["init", "-b", "main"]);
+		if (!init.ok) throw gitStepFailed("git init", path, init.err);
+		const added = git(path, ["add", "-A"], { timeoutMs: INDEX_WRITE_TIMEOUT_MS });
+		if (!added.ok) throw gitStepFailed("git add", path, added.err);
 
 		const identity: string[] = [];
-		if (!git(path, ["config", "user.name"]).out) identity.push("-c", "user.name=ThinkRail");
-		if (!git(path, ["config", "user.email"]).out)
+		const identityProbe = { action: "read the git identity" };
+		if (!git(path, ["config", "user.name"], identityProbe).out)
+			identity.push("-c", "user.name=ThinkRail");
+		if (!git(path, ["config", "user.email"], identityProbe).out)
 			identity.push("-c", "user.email=thinkrail@localhost");
-		const commit = git(path, [...identity, "commit", "--allow-empty", "-m", "Initial commit"]);
-		if (!commit.ok) throw new Error(`git commit failed: ${path}`);
+		const commit = git(path, [...identity, "commit", "--allow-empty", "-m", "Initial commit"], {
+			timeoutMs: INDEX_WRITE_TIMEOUT_MS,
+		});
+		if (!commit.ok) throw gitStepFailed("git commit", path, commit.err);
 	} catch (err) {
-		rmSync(join(path, ".git"), { recursive: true, force: true });
+		if (createdGitDir) rmSync(gitDir, { recursive: true, force: true });
 		throw err;
 	}
 }

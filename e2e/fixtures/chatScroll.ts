@@ -1,4 +1,4 @@
-import type { Locator, Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 export interface ChatScrollGeometry {
 	scrollTop: number;
@@ -33,6 +33,39 @@ export async function readChatScrollGeometry(chatScroll: Locator): Promise<ChatS
 			center: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
 		};
 	});
+}
+
+export async function waitForScrollStability(
+	chatScroll: Locator,
+	timeoutMs = 5_000,
+): Promise<void> {
+	await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false", { timeout: timeoutMs });
+	await chatScroll.evaluate(async (root) => {
+		const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
+		if (!scroller) throw new Error("missing Virtuoso scroller");
+		let previousTop = scroller.scrollTop;
+		let previousHeight = scroller.scrollHeight;
+		let stableFrames = 0;
+		for (let frame = 0; frame < 120; frame += 1) {
+			await new Promise(requestAnimationFrame);
+			const currentTop = scroller.scrollTop;
+			const currentHeight = scroller.scrollHeight;
+			stableFrames =
+				Math.abs(currentTop - previousTop) <= 0.5 && Math.abs(currentHeight - previousHeight) <= 0.5
+					? stableFrames + 1
+					: 0;
+			if (stableFrames >= 4) return;
+			previousTop = currentTop;
+			previousHeight = currentHeight;
+		}
+		throw new Error("chat scroll did not stabilize");
+	});
+	await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false", { timeout: timeoutMs });
+}
+
+export async function clickTranscriptControl(control: Locator): Promise<void> {
+	await waitForScrollStability(control.page().getByTestId("chat-scroll").filter({ has: control }));
+	await control.click();
 }
 
 export async function moveMouseToChatViewport(page: Page, chatScroll: Locator): Promise<void> {

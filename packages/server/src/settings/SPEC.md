@@ -15,7 +15,7 @@ effort defaults, terminal replay budget and Windows shell preference, chat compo
 visual line widths plus independent pane bounds, bounded custom layout-preset catalog, JetBrains quota
 display/cadence, the host-wide subagent default, plan-review policy, the host-registry extensions the
 user turned off, and the UI language preference (`locale`). `defaultModel` / `defaultEffort`
-select the defaults every new chat receives (unset model means the preferred available model — pi's provider default, else the first; unset effort means medium);
+select the defaults every new chat receives (unset model means pi's `settings.json` default when available, else the preferred available model — pi's provider default, else the first; unset effort means medium);
 `reviewModel` / `reviewEffort`
 select the reviewer runtime (unset means that same new-chat default); `reviewAutoFix: false` records a `request_changes`
 verdict and waits instead of auto-sending a fix. **`favoriteModels`** is the picker's starred list in display
@@ -63,6 +63,11 @@ interval (`1–3600`, default 30), because those values govern host process cade
   means, so a stale entry for a removed extension never breaks boot or a later update. A malformed stored
   list keeps its valid names. Settings owns only the list; `host` turns it into the agent's resolver and the
   live tool refresh ([[module-server]] § host-mediated policy).
+- `extensionSettings` maps extension `name` → setting key → boolean; absent means `{}` (every declared
+  default applies). A wire update must be an object of non-blank names to objects of non-blank keys with
+  boolean values, or the whole mutation is rejected; it is **merged per key** into the stored map, so a
+  Settings switch never resets an extension's other settings. Like `disabledExtensions`, undeclared names
+  and keys are kept and inert — the registry's descriptors decide what a key means.
 - `disabledPackages` is the same shape for installed pi packages, keyed by the package identity the
   catalog reports (`PiPackageSummary.identity`); it exists because pi has no "whole package off" setting
   and writing pi's per-resource filters would reset a user's own filters on re-enable. Validation,

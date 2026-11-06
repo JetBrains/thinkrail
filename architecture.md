@@ -88,7 +88,8 @@ dependency. This keeps test process drivers outside both launchers and the serve
    reuse is enforced by boundaries and conformance rather than parallel implementations.
 3. **The wire is versioned.** `contracts` is types plus a small dependency-free runtime: wire constants,
    versions, the config default, and guards. Any other runtime is a named exception in its spec, today
-   only the quit-confirmation rule; adding one updates this decision. `server.welcome` carries a
+   the quit-confirmation rule and the search matcher (the palette's ranking, kept in `contracts` so host-side
+   search can rank with the same copy); adding one updates this decision. `server.welcome` carries a
    protocol version so an independently-shipped UI can detect host-version drift.
 4. **Transport endpoint is a parameter.** Defaults to same-origin (`location.host`); a remote browser,
    desktop, or mobile client points it at the selected host's Tailscale MagicDNS name. Native resume state
@@ -135,7 +136,8 @@ dependency. This keeps test process drivers outside both launchers and the serve
    explicit reopen. This one auto-open attempt fires once per surface-workspace connection, not on every
    catalog re-read, and a surface resolving an exact-chat route target defers it entirely to that target.
    `session.created` supplies that history-only live delta when another frontend starts a session; reconnect
-   repairs a missed delta through `session.list`. The client is a **stateless
+   repairs a missed delta through `session.list`, and the normalized state snapshot carries every chat's
+   name, so a chat this client never listed is named without a `session.list`. The client is a **stateless
    projection of domain state**, never a second domain source of truth; it separately owns frontend-local
    navigation and workbench view state. An automatic agent run
    remains active through retries, compaction, and queued continuations: pi's `agent_end` is only an
@@ -377,8 +379,12 @@ dependency. This keeps test process drivers outside both launchers and the serve
     edge), which filters registry factories **and their skills** at every loader (re)load and withholds a
     disabled extension's tools from live sessions through pi's active-tool API — reloading an idle session
     only when that extension's skills are loaded in it — while web renderers stay registered so past
-    transcripts render. Install UX, marketplace, per-extension settings, a per-workspace on/off override
-    and runtime-loaded third-party extensions remain explicit deferrals. Rejected: runtime-loaded
+    transcripts render. Per-extension boolean settings have shipped the same way: declared on the
+    descriptor, stored in `AppConfig.extensionSettings`, read by an extension's session factories through
+    its own `setting(key)` view, applied by a reload once the turn ends. Host-owned file checks reach
+    extensions through the session seam (`workspaceFiles`), so the SDK stays types + `define*`. Install UX,
+    marketplace, other setting types, a per-workspace on/off override and runtime-loaded third-party
+    extensions remain explicit deferrals. Rejected: runtime-loaded
     bundles now (React singleton, versioned UI API, security story first), a logical extension inside
     the apps (three physical homes, no boundary), generated factory lists derived from descriptors
     (functions yield no import specifiers); keeping path-based dev loading beside the inline composition

@@ -45,9 +45,11 @@ export function delegationRootDir(): string {
 }
 
 const services = new Map<string, DelegationService>();
-let concurrencyResolver: ((workspaceId: string) => number) | undefined;
+let concurrencyResolver: ((workspaceId: string) => number) | null = null;
 
-export function setSubagentConcurrencyResolver(resolver: (workspaceId: string) => number): void {
+export function setSubagentConcurrencyResolver(
+	resolver: ((workspaceId: string) => number) | null,
+): void {
 	concurrencyResolver = resolver;
 }
 

@@ -19,7 +19,7 @@ import {
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import { createDelegationService, type DelegationService } from "pi-delegation";
+import { createDelegationService, type DelegationService, type RunOutcome } from "pi-delegation";
 import defaultSubagents, {
 	createSubagents,
 	createSubagentsExtension,
@@ -1506,6 +1506,116 @@ test("results released to an idle parent together wake exactly one run", async (
 		expect(JSON.stringify(session.messages)).not.toContain("SECOND_WAKE");
 	} finally {
 		owner.dispose();
+		await closeSession(session);
+	}
+});
+
+function heldOutcomes() {
+	const release = deferred();
+	const runs: Promise<RunOutcome>[] = [];
+	const held: DelegationService = {
+		...service,
+		async createChild(spec) {
+			const child = await service.createChild(spec);
+			const runQueued = child.runQueued;
+			child.runQueued = (task, options) => {
+				const run = runQueued(task, options).then(async (outcome) => {
+					await release.promise;
+					return outcome;
+				});
+				runs.push(run);
+				return run;
+			};
+			return child;
+		},
+	};
+	const delivered = async () => {
+		release.resolve();
+		await Promise.all(runs);
+	};
+	return { service: held, delivered };
+}
+
+test("a result landing before the post-settle flush wakes the idle parent in the same tick", async () => {
+	const outcomes = heldOutcomes();
+	const session = await makeSession(undefined, outcomes.service);
+	const counter = countSettles(session);
+	let sawReport = false;
+	try {
+		fauxB.setResponses([fauxAssistantMessage("BG_RESULT")]);
+		fauxA.setResponses([
+			background("Job."),
+			async () => {
+				await childHeld(session);
+				return fauxAssistantMessage("STARTED");
+			},
+			(context) => {
+				sawReport = requestText(context).includes("BG_RESULT");
+				return fauxAssistantMessage("WOKEN");
+			},
+		]);
+		await session.prompt("Delegate in the background.");
+		await outcomes.delivered();
+		expect(session.isStreaming).toBe(true);
+		await waitFor(() => !session.isStreaming && counter.settles === 2);
+		await macrotask();
+		expect(sawReport).toBe(true);
+		expect(counter.settles).toBe(2);
+		expect(deliveries(session)).toEqual(["wake"]);
+	} finally {
+		await closeSession(session);
+	}
+});
+
+test("results landing while Pi settles the idle parent wake it only once", async () => {
+	const outcomes = heldOutcomes();
+	let landWhileSettling = true;
+	const session = await makeSession(undefined, outcomes.service, (pi) => {
+		pi.on("agent_settled", async () => {
+			if (!landWhileSettling) return;
+			landWhileSettling = false;
+			await outcomes.delivered();
+		});
+		return createSubagentsExtension({ service: outcomes.service })(pi);
+	});
+	const counter = countSettles(session);
+	let reports = 0;
+	try {
+		fauxB.setResponses([
+			fauxAssistantMessage("FIRST_RESULT"),
+			fauxAssistantMessage("SECOND_RESULT"),
+		]);
+		fauxA.setResponses([
+			fauxAssistantMessage([
+				fauxToolCall("Agent", {
+					subagent_type: "bg-runner",
+					task: "One.",
+					run_in_background: true,
+				}),
+				fauxToolCall("Agent", {
+					subagent_type: "bg-runner",
+					task: "Two.",
+					run_in_background: true,
+				}),
+			]),
+			async () => {
+				await childHeld(session, 2);
+				return fauxAssistantMessage("STARTED_BOTH");
+			},
+			fauxAssistantMessage("WOKEN"),
+			(context) => {
+				const text = requestText(context);
+				reports = ["FIRST_RESULT", "SECOND_RESULT"].filter((r) => text.includes(r)).length;
+				return fauxAssistantMessage("REACTED");
+			},
+		]);
+		await session.prompt("Fan out in the background.");
+		await waitFor(() => !session.isStreaming && completions(session).length === 2);
+		await macrotask();
+		expect(counter.settles).toBe(2);
+		expect(deliveries(session)).toEqual(["wake", "run"]);
+		expect(reports).toBe(2);
+	} finally {
 		await closeSession(session);
 	}
 });

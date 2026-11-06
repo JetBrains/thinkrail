@@ -183,7 +183,8 @@ treatment.
   **`useOpenProject`** hook (reused by `ProjectTree` **and**
   `WelcomePanel`, so the flow is identical in the Projects view and the Welcome screen): `project.open` reactivates
   a closed known path under its same id (or opens a new one), then the initiating client selects Project
-  Home while every client receives `project.updated`; on failure `project.inspect` → either offers to
+  Home while every client receives `project.updated`; on failure (except `GIT_TIMEOUT`, which shows its error at once
+  rather than run the same hung probe again) `project.inspect` → either offers to
   bootstrap the folder into a repo — a modal **`ConfirmDialog`**
   (confirm → `project.init`) — when it's `initable`, or surfaces the error in a **`NoticeDialog`** — so a
   non-git folder is never a silent no-op. The native picker remains the local fast path and keeps its raised
@@ -600,26 +601,37 @@ a project picker, the prompt hero, and the reused
   so `resources: true` travels only when the notice named pi-level resources; it folds the updated project
   back into the store and re-previews); personal + bundled skills show regardless. When the menu is closed, **Enter submits** (matching the submit button's
   `↵` affordance) and
-  **Shift+Enter** inserts a newline. Worktree-mode submit = `workspace.create({ projectId, baseRef })` → set active,
-  and the dialog itself expands the project and refreshes its authoritative `workspace.list` (fire-and-forget;
-  the `workspace.created` push is not relied on because an unloaded project list drops it) — there is no
-  `onCreated` callback, so every mount site (`ProjectTree`, `WelcomePanel`, the shell's keyboard-opened
-  instance) gets the same post-create fold → **always open a
-  fresh chat** (`session.create({ workspaceId, model?, thinkingLevel? })` — a held model + effort apply even
-  without a prompt, and travel together; with no held model the host still applies the saved/fallback
-  defaults, explicitly passing the resolved pair whenever a model is available) → the typed
-  prompt **and any attached images** are additionally sent as the first message (fire-and-forget `prompt`,
-  forwarding `images` alongside `text`, with an optimistic user turn carrying the same attachments). The
-  prompt hero accepts **image paste/drop** through the shared `usePromptImages` controller (same
-  `imageAttachment` decode/downscale + chip surface as the chat `Composer`); submit is **held while any
-  image is still decoding**, and a start with **only images and no text** is a valid kick-off. An **empty
-  prompt with no images leaves the just-opened composer ready** — submitting the start-working
-  surface always lands the user in a chat, never on a bare receipt (folder mode: the same tail after
-  entering Default). A **rejected** kick-off `prompt` (a bad model / missing API key — e.g. picking a
-  nonexistent model) surfaces as an `error` turn in the just-opened chat via `store.appendErrorTurn` (with
-  `transport`'s `errorText`) rather than vanishing. The two rejections with **no chat to host a turn** raise a
-  `store.toast.error` instead: a failed **`workspace.create`** (keeps the dialog open to retry) and a failed
-  **`session.create`** (the dialog has already closed, the workspace exists — the toast is the only place left
+  **Shift+Enter** inserts a newline. **Worktree-mode submit on a v103+ host** = `workspace.startCreate({
+  projectId, baseRef, kickoff })`, where the kickoff always travels — text, any attached images, and the held
+  model + effort only when picked explicitly — so the host can start the chat even if this window closes. The
+  dialog folds the returned creation (keeping the full prompt locally, see [[submodule-web-store]]), expands
+  the project and refreshes its `workspace.list` (fire-and-forget), **selects the creation and closes at
+  once**: the checkout runs in the background ([[submodule-server-workspaces]]) and the user may keep working
+  anywhere. A rejected `startCreate` (an invalid ref, an unknown project) keeps the dialog open with a
+  `store.toast.error`. Against an **older host** the dialog falls back to `workspace.create` → set active →
+  `session.create({ workspaceId, model?, thinkingLevel? })` → fire-and-forget `prompt` with an optimistic user
+  turn, as before. That legacy path shows only the dialog's own *Creating…* button state — the old sidebar
+  pending-row counter was removed with the host-owned creations, a deliberate gap for the transition window
+  in which a newer web meets an older host. The prompt hero accepts **image paste/drop** through the shared `usePromptImages`
+  controller (same `imageAttachment` decode/downscale + chip surface as the chat `Composer`); submit is
+  **held while any image is still decoding**, and a start with **only images and no text** is a valid
+  kick-off. An **empty prompt with no images still lands the user in a chat** — the host starts it without a
+  prompt (folder mode: the same tail after entering Default). A **rejected** kick-off prompt (a bad model /
+  missing API key) surfaces as an `error` turn, after the user's message, in the chat the handoff opens; a
+  failed chat start toasts instead. `retryDraft` (Edit & retry) reopens the dialog prefilled with the failed
+  creation's prompt, images, model + effort and base branch.
+  **`WorkspaceCreation.tsx`** renders a creation in the two places the user waits: `WorkspaceCreationRow`
+  under its project in `ProjectTree` (spinner + `Creating… N%` + a `<progress>` bar while running; failed:
+  `Couldn't create` in the error colour, interrupted: `Interrupted at N%` in the warning colour, the reason in a
+  tooltip, with Retry, Edit & retry (failed only) and Dismiss/Discard; **a running creation has no
+  actions** — there is no cancel), and `WorkspaceCreationView`, the shell's main pane for the selected creation
+  (phase title, `x of y files · from <base>`, the held prompt, git's reason and the same actions; it says the
+  partial folder and branch were removed only when the host reports `cleanedUp`). `ProjectTree` hides a
+  workspace row while a creation with its id still exists, so the row becomes the workspace only once the
+  host has handed it off. `useCreationChatHandoff` (mounted by the shell) opens the chat the host started
+  through `openChatInTab` and appends the rejected-kickoff error. The two rejections with **no chat to host
+  a turn** raise a `store.toast.error`: a failed create (the creation row stays) and a failed chat start (the
+  workspace exists — the toast is the only place left
   to report the dropped kick-off). (`gh` status lives in `SettingsDialog`, not the
   create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear opens — a
   **store-driven two-pane shell**: one nav list, rendered once, beside a scrollable content pane. At `md`+
@@ -1145,7 +1157,12 @@ a project picker, the prompt hero, and the reused
   `ExtensionsCatalog` — title, description, tool-name chips and a `@thinkrail/ui/switch`
   (`extension-toggle-<name>`) whose state is **`store.disabledExtensions`**, not the catalog's snapshot; a
   toggle writes the whole list through `settings.update { disabledExtensions }` and converges on the
-  broadcast. Unknown names already in the list are carried through. **Installed** and **pi built-in**
+  broadcast. Unknown names already in the list are carried through. A catalog entry's declared `settings`
+  render as nested switches under its row (`extension-setting-<name>-<key>`, copy from a static
+  `MessageKey` map — a setting without copy is not shown), valued from **`store.extensionSettings`** else the
+  declared default, disabled while the extension is off, and written one key at a time through
+  `settings.update { extensionSettings: { name: { key: value } } }` (the host merges); they appear only
+  while `supportsExtensionSettings(protocolVersion)` holds. **Installed** and **pi built-in**
   (`PiPackagesSettings.tsx`, props-driven; every `packages.*` request and the row state live in the
   **`usePiPackages`** hook, `usePiPackages.ts`, so the page component only composes) exist only while
   `supportsPiPackages(protocolVersion)` holds — against an older host the page is the bundled group
@@ -1291,7 +1308,8 @@ a project picker, the prompt hero, and the reused
 
   `PlanInteractionCard` turns these into the card's `interaction` through the same `useToolInteraction`
   adapter the chat uses, so a response submitted from the plan flows through the identical path as the
-  chat.
+  chat. It also gives the card the session's `ResourceScopeProvider` and an `onOpenFile` that opens a
+  preview tab, so a card's file previews render on the plan page as in the chat.
   When there's no pending question, the same slot instead shows the **agent's
   latest message** (`plan-agent-message`, `planView.lastAgentText` rendered Markdown inside a bounded
   scroll area — `max-h-[12rem] overflow-y-auto` so the full message stays readable without pushing
@@ -1899,10 +1917,13 @@ own section. The kebab menu (`plan-menu`, a
   replaces the workspace's comment list, and rebuilding each open file's threads from it handed every mounted
   renderer a new `review`. Monaco, which the compiler skips, re-rendered twice for one comment on another
   file (`e2e/perf/reviewThreadIsolation.perf.ts` pins it at zero). The pair, the hook and
-  `SendReviewButton` take an optional chat session id: without it a send targets the last open chat (else
-  the file's pinned review chat); with it — a file shown in a chat tool card, whose `ResourcePreview` reads
-  the chat's scope — the host's explicit `sessionId` wins over the pinned chat, so feedback lands in the chat
-  that showed the file. The shell's `AppResourceHost` exposes exactly these (bound per call) as the
+  `SendReviewButton` take an optional chat session id: without it the host routes each file to its pinned
+  review chat, creating one on its first send. Open tabs never supply an implicit override: a sidebar or
+  file-pane send must not move an existing discussion into an unrelated chat, and Send all must preserve
+  per-file routing. With an explicit id — a file shown in a chat tool card, whose `ResourcePreview` reads
+  the chat's scope — that `sessionId` wins over the pinned chat, so feedback lands in the chat that showed
+  the file. This does not infer file authorship from turn snapshots, which cover the whole workspace's
+  interval rather than exclusive writes. The shell's `AppResourceHost` exposes exactly these (bound per call) as the
   renderers' `FileReview` / `ReviewSend` host capabilities.
   A batch answers with EVERY session it touched (one per group), so a multi-file batch opens every chat
   it started and focuses the first — a chat the user never saw would still be an agent working on their
@@ -2158,6 +2179,9 @@ own section. The kebab menu (`plan-menu`, a
   viewed files carry a check glyph, and clicking a row reveals that section (and expands it if it was
   collapsed) — the reveal remains anchored by path while asynchronous sections determine their heights,
   until a view-mode change or user wheel, touch, pointer, or keyboard input takes over. A timeout cannot bound remote reads.
+  Virtuoso re-issues a `scrollToIndex` for as long as item sizes keep changing, so the list's scroller
+  applies `scrollTo` only while a reveal is settling; otherwise a late-loading section would scroll a wheel
+  or a focused composer straight back to the revealed file.
   Finding navigation hands scrolling to the thread only after the section reveal, and disables further
   header corrections so the thread cannot be scrolled back out of view. The pane brings the **section**
   into view; the within-section reveal of a **comment** is a `reviewFocusRequest` that

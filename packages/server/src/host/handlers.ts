@@ -137,7 +137,7 @@ import {
 	originUrls,
 	type PushTargetStatus,
 	prefetchBranch,
-	remoteRefOid,
+	remoteRefOidAsync,
 } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
 import { clampLimit, getHistoryIndex } from "../history";
@@ -223,12 +223,16 @@ import {
 import { forgetWorkspaceTurns, listTurns } from "../turns";
 import { ensureWatch, stopWatch } from "../watch";
 import {
+	awaitWorkspaceCreation,
+	type CreationHandoff,
 	createWorkspace,
+	dismissWorkspaceCreation,
 	ensureWorkspaceScratchDir,
 	forgetWorkspace,
 	getWorkspace,
 	listAllWorkspaceRecords,
 	listExistingWorktrees,
+	listWorkspaceCreations,
 	listWorkspaceRecords,
 	listWorkspaces,
 	openExistingWorktree,
@@ -236,12 +240,14 @@ import {
 	recordWorkspaceActivity,
 	refreshUserOwnedWorkspace,
 	renameWorkspace,
+	retryWorkspaceCreation,
 	settleWorkspace,
 	setWorkspaceDiffBase,
 	setWorkspaceReview,
 	setWorkspaceSkillOverride,
 	setWorkspaceSubagentMaxConcurrent,
 	setWorkspaceSubagentsOverride,
+	startWorkspaceCreation,
 	unsettleWorkspace,
 	workspaceDiffStats,
 } from "../workspaces";
@@ -326,7 +332,7 @@ async function archiveTeardown(ws: Workspace): Promise<void> {
 	try {
 		await removeWorkspaceSessions(ws.id, ws.worktreePath);
 		await settleChangeArtifacts(ws.id);
-		reclaimWorktree(ws);
+		await reclaimWorktree(ws);
 	} catch {
 		log.warn(`workspace archive teardown failed for ${ws.id}`);
 	}
@@ -351,6 +357,56 @@ async function sendUserMessage(
 	}
 	return { ok: true };
 }
+
+async function startChat(
+	workspaceId: string,
+	choice: { model?: WireModel; thinkingLevel?: ThinkingLevel },
+): Promise<WsResult<"session.create">> {
+	const ws = getWorkspace(workspaceId);
+	ensureWorkspaceScratchDir(ws);
+	const defaults = await resolveNewChatModel(choice);
+	const created = await createSession({
+		cwd: ws.worktreePath,
+		workspaceId,
+		...(defaults.model ? { model: defaults.model } : {}),
+		thinkingLevel: defaults.thinkingLevel,
+	});
+	if (choice.model && created.model) noteRecentModel(created.model);
+	trackChatStarted({
+		sessionId: created.sessionId,
+		model: defaults.model ? created.model : null,
+	});
+	return created;
+}
+
+const creationClients = new Map<string, string>();
+
+export const workspaceCreationHandoff: CreationHandoff = async (workspace, kickoff) => {
+	const clientKey = creationClients.get(workspace.id) ?? "";
+	creationClients.delete(workspace.id);
+	provisionInitialTerminal(workspace);
+	if (!kickoff) return {};
+	await ensureWatch(workspace.id, { prewarm: false });
+	const { sessionId } = await startChat(workspace.id, {
+		...(kickoff.model ? { model: kickoff.model } : {}),
+		...(kickoff.thinkingLevel ? { thinkingLevel: kickoff.thinkingLevel } : {}),
+	});
+	if (!kickoff.text && !kickoff.images?.length) return { sessionId };
+	let preflighted: () => void = () => {};
+	const preflight = new Promise<void>((resolve) => {
+		preflighted = resolve;
+	});
+	const sent = sendUserMessage("prompt", sessionId, kickoff.text, clientKey, () =>
+		promptSession(sessionId, kickoff.text, kickoff.images, { onPreflight: preflighted }),
+	);
+	sent.catch(() => {});
+	try {
+		await Promise.race([preflight, sent]);
+		return { sessionId };
+	} catch (err) {
+		return { sessionId, kickoffError: err instanceof Error ? err.message : String(err) };
+	}
+};
 
 function revealDataFolder(dir: string) {
 	mkdirSync(dir, { recursive: true });
@@ -620,12 +676,30 @@ const handlers: WsHandlers = {
 		}
 		return updated;
 	},
-	"workspace.create": async (p) => {
-		return provisionInitialTerminal(
-			await observeSetupAction("worktree_create", () =>
-				createWorkspace(p.projectId, p.name, p.baseRef),
-			),
+	"workspace.create": (p) =>
+		observeSetupAction("worktree_create", () => createWorkspace(p.projectId, p.name, p.baseRef)),
+	"workspace.startCreate": (p, ctx) => {
+		const creation = startWorkspaceCreation(p.projectId, {
+			...(p.name ? { name: p.name } : {}),
+			...(p.baseRef ? { baseRef: p.baseRef } : {}),
+			...(p.kickoff ? { kickoff: p.kickoff } : {}),
+		});
+		creationClients.set(creation.id, ctx.clientKey);
+		void observeSetupAction("worktree_create", () => awaitWorkspaceCreation(creation.id)).catch(
+			() => {},
 		);
+		return creation;
+	},
+	"workspace.listCreations": () => listWorkspaceCreations(),
+	"workspace.retryCreation": (p, ctx) => {
+		const creation = retryWorkspaceCreation(p.id);
+		creationClients.set(creation.id, ctx.clientKey);
+		return creation;
+	},
+	"workspace.dismissCreation": async (p) => {
+		const dismissed = await dismissWorkspaceCreation(p.id);
+		creationClients.delete(p.id);
+		return dismissed;
 	},
 	"workspace.listExisting": (params) => listExistingWorktrees(params.projectId),
 	"workspace.openExisting": async (p) => {
@@ -688,7 +762,9 @@ const handlers: WsHandlers = {
 			pushesElsewhere: splitPushUrl !== null,
 			published:
 				measured?.published ??
-				(splitPushUrl ? null : remoteRefOid(ws.worktreePath, `origin/${ws.branch}`) !== null),
+				(splitPushUrl
+					? null
+					: (await remoteRefOidAsync(ws.worktreePath, `origin/${ws.branch}`)) !== null),
 			...(measured?.published && measured.ahead !== undefined && measured.behind !== undefined
 				? { ahead: measured.ahead, behind: measured.behind }
 				: {}),
@@ -1053,23 +1129,7 @@ const handlers: WsHandlers = {
 		await reloadSessionResources(params.sessionId);
 		return { ok: true } as const;
 	},
-	"session.create": async (p) => {
-		const ws = getWorkspace(p.workspaceId);
-		ensureWorkspaceScratchDir(ws);
-		const defaults = await resolveNewChatModel(p);
-		const created = await createSession({
-			cwd: ws.worktreePath,
-			workspaceId: p.workspaceId,
-			...(defaults.model ? { model: defaults.model } : {}),
-			thinkingLevel: defaults.thinkingLevel,
-		});
-		if (p.model && created.model) noteRecentModel(created.model);
-		trackChatStarted({
-			sessionId: created.sessionId,
-			model: defaults.model ? created.model : null,
-		});
-		return created;
-	},
+	"session.create": (p) => startChat(p.workspaceId, p),
 	"session.prompt": (p, ctx) => {
 		return sendUserMessage("prompt", p.sessionId, p.text, ctx.clientKey, () =>
 			promptSession(p.sessionId, p.text, p.images),

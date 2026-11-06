@@ -5,6 +5,7 @@ export interface SessionStateRecord {
 	workspaceId: string;
 	projectId: string;
 	state: SessionState;
+	title?: string;
 	firstPrompt?: string;
 }
 
@@ -1451,6 +1452,8 @@ export interface AppConfig extends ThemePreference {
 	/** Idle days after which a quiet workspace settles onto its project's shelf; `null` = never. */
 	settleIdleDays: number | null;
 	disabledExtensions: string[];
+	/** Values of settings bundled extensions declare, by extension name then setting key. */
+	extensionSettings: ExtensionSettingValues;
 	/** pi package identities (`PiPackageSummary.identity`) switched off host-wide; pi has no such setting. */
 	disabledPackages: string[];
 	/** UI language: `"system"` (follow the browser) or a BCP-47 tag; an unavailable tag renders English. */
@@ -1469,6 +1472,13 @@ export interface AppConfig extends ThemePreference {
 	fontWeightOffset: number;
 }
 
+export type ExtensionSettingValues = Record<string, Record<string, boolean>>;
+
+export interface ExtensionSettingDescriptor {
+	key: string;
+	default: boolean;
+}
+
 export interface ExtensionCatalogEntry {
 	name: string;
 	title: string;
@@ -1476,6 +1486,8 @@ export interface ExtensionCatalogEntry {
 	enabled: boolean;
 	tools: string[];
 	hasChildExtensions: boolean;
+	/** Absent before `EXTENSION_SETTINGS_PROTOCOL_VERSION`. */
+	settings?: ExtensionSettingDescriptor[];
 }
 
 /** How many recently chosen models the host remembers. */
@@ -1495,6 +1507,10 @@ export type AppConfigUpdate = Partial<
 };
 
 export type SurveyInvitationResponse = "postpone" | "never";
+
+export interface GithubStarAsk {
+	stars: number | null;
+}
 
 export const SURVEY_OPEN_TEXT_LIMIT = 2000;
 
@@ -1784,6 +1800,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
 	settleIdleDays: SETTLE_IDLE_DAYS.default,
 	disabledExtensions: [],
+	extensionSettings: {},
 	disabledPackages: [],
 	locale: SYSTEM_LOCALE_PREFERENCE,
 	onboardingDismissed: false,

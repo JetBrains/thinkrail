@@ -3,10 +3,11 @@ import { declarationsOf, disabledDeclarationIdentities, piDeclarationIdentity } 
 
 export type PackageDeclarationScope = "user" | "project";
 
-let disabledPackagesResolver: () => ReadonlySet<string> = () => new Set();
+const noneDisabled = (): ReadonlySet<string> => new Set();
+let disabledPackagesResolver: () => ReadonlySet<string> = noneDisabled;
 
-export function setDisabledPackagesResolver(resolver: () => ReadonlySet<string>): void {
-	disabledPackagesResolver = resolver;
+export function setDisabledPackagesResolver(resolver: (() => ReadonlySet<string>) | null): void {
+	disabledPackagesResolver = resolver ?? noneDisabled;
 }
 
 export function disabledPackages(): ReadonlySet<string> {

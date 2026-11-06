@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
-import { CLAUDE_USAGE_URL, ExtraUsageNotice } from "./ExtraUsageNotice";
+import { CLAUDE_USAGE_URL } from "./assistantFailure";
+import { ExtraUsageNotice } from "./ExtraUsageNotice";
 
 test("the chat notice links usage and offers dismiss and Don't warn again", () => {
 	const html = renderToStaticMarkup(

@@ -48,7 +48,15 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   workspace files, with the registry's toggle, the unplaced strip, review commenting and Send review, and
   caller slots (`leading`, `actions`, controlled `rendererId` / `layout`, and an opaque `viewState` it tags
   with the renderer implementation that wrote it, so a renderer switch never restores another renderer's
-  state and a caller needs no reset);
+  state and a caller needs no reset). Its `compact` flag (carried to the lazy views as
+  `ResourceEnvironment.compact`, and reset by an explicit `compact={false}`) drops the renderer toggles,
+  Send review and the HTML notice with its viewport presets — the chrome a small embedded frame cannot
+  afford; the views themselves are unchanged;
+- **`FramedResourcePreview`** — `ResourcePreview` in a caller-sized frame with **Open in tab** (the file, or
+  the comparison for a diff) and **Full screen** (a dialog with the full chrome, sharing renderer and view
+  state), every action an explicit tab stop; nothing without a host and a workspace scope. It is the one
+  framed preview of visualize's file card and the questionnaire's previews ([[module-ext-visualize]],
+  [[module-ext-ask-user-question]]) — lifted from visualize when the second consumer arrived;
 - the pieces every surface composes a renderer from, so a file tab, a diff tab, a Changes section and
   `ResourcePreview` run one sequence:
   - `useRendererSelection(resource, intent, rendererId)` — candidates for the environment's phone class, the
@@ -492,8 +500,10 @@ above the viewport and jumps to its end once the height lands. The scroller opts
 anchoring (`overflow-anchor: none`, as Pierre's own `CodeView` does) because Pierre corrects scroll
 itself. Annotation children stay in the light DOM but lay out only inside the render window, so the
 focus reveal first asks the virtualizer to center the thread's end line (`revealLine`, through the
-connected instance's `getLinePosition`) and then centers the card once it renders. A freshly opened
-diff composer gets the same treatment — Ask agent anchors it at the hunk's end line, which for a tall
+connected instance's `getLinePosition`) and then centers the card once it renders. `revealLine` reports
+success only when the line lands in the viewport: before the worker's first answer lays the rows out, the
+scroll is clamped short, and the reveal retries when the content grows instead of latching a miss. A
+freshly opened diff composer gets the same treatment — Ask agent anchors it at the hunk's end line, which for a tall
 hunk lies outside the window — and `ReviewComposer` defers its initial focus until its textarea has a
 box, since focusing an unrendered element is a silent no-op. Restored composers keep the restored
 scroll position instead.
