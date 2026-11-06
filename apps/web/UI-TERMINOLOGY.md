@@ -163,7 +163,7 @@ Children:
 |---|---|---|---|
 | Center Group | `CenterGroupView` in `Workbench` | `center-group` | One leaf: tab strip + locally selected body |
 | Group Header | `TabStrip` plus injected group controls in `Workbench` | `center-tab-strip` | Fixed one-row chrome containing the ARIA tablist, scrolling, searchable overflow, and group actions |
-| Tab | `WorkbenchTab` | `editor-tab` / `terminal-tab` | One canonical placement; `data-preview` marks a preview |
+| Tab | `WorkbenchTab` | `editor-tab` / `terminal-tab` | One canonical placement; `data-preview` marks a preview; file/diff menus expose `tab-copy-absolute-path` and `tab-copy-relative-path` without selecting the clicked tab |
 | — Tab Close | inline `X` action | `editor-tab-close` | Close the placement (not the underlying durable resource) |
 | New-Chat Button | injected center action | `new-chat` | Open a fresh chat tab |
 | Chat-History Menu | `shell/WorkspaceChatHistory.tsx` | `chat-history` | Reopen or delete closed/disk-only chats |

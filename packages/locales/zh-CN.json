@@ -2530,6 +2530,8 @@
 	"workbench.tab.alreadyAtStart": "已在开头",
 	"workbench.tab.chatName": "会话名称",
 	"workbench.tab.closeNamed": "关闭 {{name}}",
+	"workbench.tab.copyAbsolutePath": "复制绝对路径",
+	"workbench.tab.copyRelativePath": "复制相对路径",
 	"workbench.tab.focus": "聚焦标签页",
 	"workbench.tab.focusNextGroup": "聚焦下一个分组",
 	"workbench.tab.focusNextGroupUnavailable": "聚焦下一个分组：没有其他可见分组",

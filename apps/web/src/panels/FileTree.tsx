@@ -63,6 +63,10 @@ function parentPath(path: string): string {
 	return slash < 0 ? "." : path.slice(0, slash);
 }
 
+export function supportsFileMutations(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= FS_MUTATIONS_PROTOCOL_VERSION;
+}
+
 export function FileTree({
 	workspaceId,
 	marks,
@@ -73,9 +77,7 @@ export function FileTree({
 	const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
 	const expanded = useAppStore((s) => selectFilesTreeView(s, workspaceId).expanded);
 	const worktreePath = useAppStore((s) => selectWorkspaceById(s, workspaceId)?.worktreePath ?? "");
-	const supported = useAppStore(
-		(s) => s.protocolVersion !== null && s.protocolVersion >= FS_MUTATIONS_PROTOCOL_VERSION,
-	);
+	const supported = useAppStore((s) => supportsFileMutations(s.protocolVersion));
 	const clipboard = useAppStore((s) => s.fileClipboard);
 	const expandedPaths = useMemo(() => new Set(expanded), [expanded]);
 	const warm = useEditorWarm();

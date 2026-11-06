@@ -2411,6 +2411,8 @@
 	"workbench.tab.alreadyAtStart": "既に先頭です",
 	"workbench.tab.chatName": "チャット名",
 	"workbench.tab.closeNamed": "{{name}} を閉じる",
+	"workbench.tab.copyAbsolutePath": "絶対パスをコピー",
+	"workbench.tab.copyRelativePath": "相対パスをコピー",
 	"workbench.tab.focus": "タブにフォーカス",
 	"workbench.tab.focusNextGroup": "次のグループにフォーカス",
 	"workbench.tab.focusNextGroupUnavailable": "次のグループにフォーカス — 他に表示中のグループなし",

@@ -102,3 +102,62 @@ test("file rows expose path, copy, paste, and confirmed delete actions", async (
 	await page.getByRole("button", { name: "Cancel" }).click();
 	await expect(copied).toBeVisible();
 });
+
+test("file and diff tabs copy paths without activating the clicked tab", async ({
+	page,
+	context,
+}) => {
+	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	writeFileSync(join(workspace.worktreePath, "script.ts"), "export const changed = true;\n");
+	await revealWorkbenchTool(page, "files");
+
+	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
+	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).dblclick();
+	const readmeTab = page
+		.locator('[data-testid="editor-tab"][data-kind="file"]')
+		.filter({ hasText: "README.md" });
+	const notesTab = page
+		.locator('[data-testid="editor-tab"][data-kind="file"]')
+		.filter({ hasText: "notes.txt" });
+	await expect(notesTab).toHaveAttribute("data-active", "true");
+
+	await readmeTab.click({ button: "right" });
+	await page.getByTestId("tab-copy-absolute-path").click();
+	expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+		join(workspace.worktreePath, "README.md"),
+	);
+	await expect(notesTab).toHaveAttribute("data-active", "true");
+
+	await readmeTab.focus();
+	await page.keyboard.press("Shift+F10");
+	await page.getByTestId("tab-copy-relative-path").click();
+	expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("README.md");
+	await expect(notesTab).toHaveAttribute("data-active", "true");
+
+	await page.getByTestId("files-mode-changed").click();
+	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).dblclick();
+	const diffTab = page.locator('[data-testid="editor-tab"][data-kind="diff"]');
+	await expect(diffTab).toHaveAttribute("data-active", "true");
+	await notesTab.click();
+	await expect(notesTab).toHaveAttribute("data-active", "true");
+
+	await diffTab.click({ button: "right" });
+	await page.getByTestId("tab-copy-absolute-path").click();
+	expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+		join(workspace.worktreePath, "script.ts"),
+	);
+	await expect(notesTab).toHaveAttribute("data-active", "true");
+
+	await diffTab.click({ button: "right" });
+	await page.getByTestId("tab-copy-relative-path").click();
+	expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("script.ts");
+	await expect(notesTab).toHaveAttribute("data-active", "true");
+
+	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
+	const changesTab = page.locator('[data-testid="editor-tab"][data-kind="changes"]');
+	await changesTab.click({ button: "right" });
+	await expect(page.getByTestId("tab-copy-absolute-path")).toHaveCount(0);
+	await expect(page.getByTestId("tab-copy-relative-path")).toHaveCount(0);
+});

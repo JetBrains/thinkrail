@@ -255,7 +255,7 @@ treatment.
   destructive confirmation. Paste remains available for repeated destinations, creates a collision-free
   ` copy`/` copy N` name, and an empty tree accepts paste at the workspace root. Delete moves the file to
   the host OS trash and leaves any already-open read-only tab on its existing stale-content contract.
-  Mutation actions appear only from `FS_MUTATIONS_PROTOCOL_VERSION`; path copy remains client-only.
+  Mutation actions appear only from `FS_MUTATIONS_PROTOCOL_VERSION` (v105); path copy remains client-only.
   The watcher is authoritative after copy/delete—rows are never patched optimistically. The tree's look is remembered per workspace across reloads (`store.filesTreeByWorkspace`:
   All expanded folders, Changed-tree collapsed folders shared by every scope, scroll per view through
   `RememberedScrollArea` — a Changed view's scroll belongs to its scope and compare target, so changing

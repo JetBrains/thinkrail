@@ -336,8 +336,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`ExistingWorktreeCandidate`** (a `workspace.listExisting` row: absolute `path` + `branch`, or a
   `detached` row the chooser disables),
   `FileNode` (file-tree node; worktree-relative `/` path, `gitignored` set by the host when git ignores it).
-  `FS_MUTATIONS_PROTOCOL_VERSION` (v103) gates `fs.copy` (one regular source file into a destination
-  directory, returning its collision-free relative path) and `fs.delete` (recoverable OS-trash deletion),
+  `FS_MUTATIONS_PROTOCOL_VERSION` (v105, equal to the host `PROTOCOL_VERSION`) gates `fs.copy` (one regular source file into a destination
+  directory, returning its collision-free relative path) and `fs.delete` (recoverable OS-trash deletion);
+  clients hide both mutations from hosts through v104,
   **`ResourceMeta`** (what a resource's bytes *are*, host-decided and pinned by
   `RESOURCE_META_PROTOCOL_VERSION` = v75: sha-256 `hash` + `byteLength`, both `null` when the resource is
   absent; `text` = valid UTF-8, BOM-aware, and not claimed by a recognized binary magic number (an ASCII

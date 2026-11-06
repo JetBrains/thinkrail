@@ -2912,6 +2912,8 @@
 	"workbench.tab.alreadyAtStart": "already at start",
 	"workbench.tab.chatName": "Chat name",
 	"workbench.tab.closeNamed": "Close {{name}}",
+	"workbench.tab.copyAbsolutePath": "Copy absolute path",
+	"workbench.tab.copyRelativePath": "Copy relative path",
 	"workbench.tab.focus": "Focus tab",
 	"workbench.tab.focusNextGroup": "Focus next group",
 	"workbench.tab.focusNextGroupUnavailable": "Focus next group — no other visible group",

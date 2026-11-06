@@ -2977,6 +2977,8 @@
 	"workbench.tab.alreadyAtStart": "уже в начало",
 	"workbench.tab.chatName": "Название чата",
 	"workbench.tab.closeNamed": "Закрыть {{name}}",
+	"workbench.tab.copyAbsolutePath": "Копировать абсолютный путь",
+	"workbench.tab.copyRelativePath": "Копировать относительный путь",
 	"workbench.tab.focus": "Перейти к вкладке",
 	"workbench.tab.focusNextGroup": "Перейти к следующей группе",
 	"workbench.tab.focusNextGroupUnavailable": "Перейти к следующей группе — других видимых групп нет",

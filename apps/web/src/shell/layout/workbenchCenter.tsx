@@ -74,6 +74,7 @@ export const CenterGroupView = memo(function CenterGroupView({
 			}}
 		>
 			<TabStrip
+				worktreePath={shared.worktreePath}
 				document={shared.document}
 				readAttention={shared.readAttention}
 				selectionEpochRef={shared.selectionEpochRef}

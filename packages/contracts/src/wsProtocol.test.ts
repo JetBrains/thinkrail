@@ -252,16 +252,16 @@ test("user-selectable fonts are pinned to v102", () => {
 	expect(WS_CHANNELS.fontsChanged).toBe("fonts.changed");
 });
 
-test("file mutations are pinned to v103", () => {
-	expect(FS_MUTATIONS_PROTOCOL_VERSION).toBe(103);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(FS_MUTATIONS_PROTOCOL_VERSION);
+test("file mutations are pinned to the current v105 host", () => {
+	expect(FS_MUTATIONS_PROTOCOL_VERSION).toBe(105);
+	expect(PROTOCOL_VERSION).toBe(FS_MUTATIONS_PROTOCOL_VERSION);
 	expect(WS_METHODS.fsCopy).toBe("fs.copy");
 	expect(WS_METHODS.fsDelete).toBe("fs.delete");
 });
 
 test("background workspace creation is pinned to v104", () => {
 	expect(WORKSPACE_CREATION_PROTOCOL_VERSION).toBe(104);
-	expect(PROTOCOL_VERSION).toBe(104);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(WORKSPACE_CREATION_PROTOCOL_VERSION);
 	expect(WS_METHODS.workspaceStartCreate).toBe("workspace.startCreate");
 	expect(WS_METHODS.workspaceListCreations).toBe("workspace.listCreations");
 	expect(WS_METHODS.workspaceRetryCreation).toBe("workspace.retryCreation");
