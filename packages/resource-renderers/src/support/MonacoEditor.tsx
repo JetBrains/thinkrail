@@ -14,6 +14,7 @@ import {
 	fileEditorOptions,
 	remeasureEditorFonts,
 	revealLineNow,
+	revealPositionNow,
 	syncFileModel,
 } from "./monacoSetup";
 import {
@@ -44,6 +45,8 @@ export default function MonacoEditor({
 	review,
 	viewState,
 	onViewState,
+	reveal,
+	onRevealHandled,
 }: ResourceViewProps) {
 	const t = useT();
 	const { fileLineWidth, fileLineWidthBounded } = useResourcePreferences();
@@ -60,6 +63,7 @@ export default function MonacoEditor({
 	const threadsRef = useRef<ReturnType<typeof attachReviewThreads> | null>(null);
 	const decorationsRef = useRef<string[]>([]);
 	const freshMountRef = useRef(false);
+	const revealedRef = useRef<ResourceViewProps["reveal"]>(undefined);
 	const appliedRef = useRef({ scope, path, text, options });
 	const latestRef = useRef({
 		scope,
@@ -149,6 +153,14 @@ export default function MonacoEditor({
 	}, [options]);
 
 	useEffect(() => remeasureEditorFonts(font), [font]);
+
+	useLayoutEffect(() => {
+		const codeEditor = editorRef.current;
+		if (!codeEditor || !reveal || revealedRef.current === reveal) return;
+		revealedRef.current = reveal;
+		revealPositionNow(codeEditor, reveal.line, reveal.col);
+		onRevealHandled?.(reveal.tick);
+	}, [reveal, onRevealHandled]);
 
 	const closeComposer = () => threadsRef.current?.closeComposer();
 	const layoutReviewZones = () => threadsRef.current?.layout();

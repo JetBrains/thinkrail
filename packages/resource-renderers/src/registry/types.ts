@@ -56,6 +56,12 @@ export interface SurfaceReview {
 	onFocusHandled(): void;
 }
 
+export interface ResourceReveal {
+	line: number;
+	col?: number;
+	tick: number;
+}
+
 export interface ResourceViewProps {
 	resource: ResourceDescriptor;
 	content: ResourceContent;
@@ -63,6 +69,8 @@ export interface ResourceViewProps {
 	onPlacedThreadIds?(ids: ReadonlySet<string>): void;
 	viewState?: unknown;
 	onViewState?(state: unknown): void;
+	reveal?: ResourceReveal;
+	onRevealHandled?(tick: number): void;
 }
 
 export interface HunkActions {
