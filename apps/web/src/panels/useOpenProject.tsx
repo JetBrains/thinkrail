@@ -2,7 +2,7 @@ import type { Project } from "@thinkrail/contracts";
 import { T, useT } from "@thinkrail/locales/react";
 import { type ReactNode, useEffect, useState } from "react";
 import {
-	GitLabAssociationDialog,
+	IssueAssociationDialog,
 	notifyIssueAssociation,
 	type ProjectOpenGesture,
 	shouldPromptAssociation,
@@ -200,7 +200,7 @@ export function useOpenProject(
 				/>
 			) : null}
 			{association?.isCurrent() ? (
-				<GitLabAssociationDialog
+				<IssueAssociationDialog
 					projectId={association.projectId}
 					initialRepositoryUrl={association.repositoryUrl}
 					onClose={() => setAssociation(null)}

@@ -10,8 +10,8 @@ import { EN, type MessageKey, resolveLocale } from "@thinkrail/locales";
 import { Dialog } from "@thinkrail/ui/dialog";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { GitLabAssociationBody } from "./GitLabAssociationDialog";
-import { GitLabAssociationForm } from "./GitLabAssociationForm";
+import { IssueAssociationBody } from "./IssueAssociationDialog";
+import { IssueAssociationForm } from "./IssueAssociationForm";
 import { IssuesPanel, type IssuesPanelProps } from "./IssuesPanel";
 import {
 	associationDismissal,
@@ -49,6 +49,7 @@ import {
 	supportsIssueActions,
 	supportsIssueApproval,
 	supportsIssueAuth,
+	supportsIssueGithub,
 	supportsIssueImplementation,
 	supportsIssueSessionStartup,
 	supportsIssues,
@@ -85,6 +86,7 @@ function renderIssues(
 		issues?: readonly IssueSummary[];
 		pending?: boolean;
 		authSupported?: boolean;
+		githubSupported?: boolean;
 		error?: IssuePanelError;
 		onOpenIssue?: (reference: IssueSummary["reference"]) => void;
 		capabilities?: IssueActionCapabilities;
@@ -99,6 +101,7 @@ function renderIssues(
 		issues: props.issues ?? [],
 		pending: props.pending ?? false,
 		authSupported: props.authSupported ?? true,
+		githubSupported: props.githubSupported ?? true,
 		capabilities: props.capabilities ?? capable,
 		error: props.error,
 		onConnect: async (): Promise<ConnectResult> => ({ ok: true }),
@@ -121,7 +124,7 @@ function renderForm(
 	} = {},
 ): string {
 	return renderToStaticMarkup(
-		createElement(GitLabAssociationForm, {
+		createElement(IssueAssociationForm, {
 			connection: props.connection ?? null,
 			initialRepositoryUrl: props.initialRepositoryUrl,
 			initialAcknowledgedInstance: props.initialAcknowledgedInstance,
@@ -198,6 +201,19 @@ test("association form state derives its target, consent and submit gating", () 
 		instanceUrl: "https://gitlab.com",
 		projectId: "group/repo",
 		token: "glpat-1",
+	});
+
+	const github = associationFormState({
+		...fields,
+		address: "https://github.com/octo/app.git",
+		token: "ghp_1",
+	});
+	expect(github.target).toEqual({ instanceUrl: "https://github.com", projectId: "octo/app" });
+	expect(github.canSubmit).toBe(true);
+	expect(github.input).toEqual({
+		instanceUrl: "https://github.com",
+		projectId: "octo/app",
+		token: "ghp_1",
 	});
 
 	const http = {
@@ -639,7 +655,7 @@ function renderAssociation(
 		createElement(
 			Dialog,
 			{ open: true },
-			createElement(GitLabAssociationBody, {
+			createElement(IssueAssociationBody, {
 				projectId: "local-project",
 				initialRepositoryUrl,
 				onClose: () => {},
@@ -1027,6 +1043,29 @@ test("an action failure shows beside the row that raised it", () => {
 		onRunAction: async () => ({ ok: true, launch: { workspaceId: "w1", sessionId: "s1" } }),
 	});
 	expect(otherRow).not.toContain('data-testid="issue-action-error"');
+});
+
+test("GitHub association needs a host that can address GitHub references", () => {
+	expect(supportsIssueGithub(null)).toBe(false);
+	expect(supportsIssueGithub(109)).toBe(false);
+	expect(supportsIssueGithub(110)).toBe(true);
+	const fields = {
+		connection: null,
+		address: "https://github.com/octo/app.git",
+		instanceOverride: null,
+		advancedOpen: false,
+		acknowledged: null,
+		token: "ghp_1",
+		pending: false,
+		authSupported: true,
+	};
+	const supported = associationFormState({ ...fields, githubSupported: true });
+	expect(supported.providerNotice).toBeNull();
+	expect(supported.canSubmit).toBe(true);
+	const refused = associationFormState({ ...fields, githubSupported: false });
+	expect(refused.providerNotice).toBe("issues.githubUnsupported");
+	expect(refused.input).toBeNull();
+	expect(refused.canSubmit).toBe(false);
 });
 
 test("startup floor sends the exact effective locale only to v109 methods", async () => {

@@ -3,6 +3,7 @@ import {
 	ISSUES_ACTIONS_PROTOCOL_VERSION,
 	ISSUES_APPROVAL_PROTOCOL_VERSION,
 	ISSUES_AUTH_PROTOCOL_VERSION,
+	ISSUES_GITHUB_PROTOCOL_VERSION,
 	ISSUES_IMPLEMENTATION_PROTOCOL_VERSION,
 	ISSUES_PROTOCOL_VERSION,
 	ISSUES_SESSION_STARTUP_PROTOCOL_VERSION,
@@ -14,6 +15,7 @@ import {
 	type IssueSummary,
 	isIssueConnectionInput,
 	isIssueSessionLaunch,
+	issueProviderForInstanceUrl,
 	requiresIssueHttpConsent,
 	type WsMethodName,
 	type WsParams,
@@ -43,6 +45,11 @@ export function supportsIssueApproval(version: number | null): boolean {
 /** The host-side confirmation gate that starts implementation, v108. */
 export function supportsIssueImplementation(version: number | null): boolean {
 	return version !== null && version >= ISSUES_IMPLEMENTATION_PROTOCOL_VERSION;
+}
+
+/** GitHub Issues as a provider; an older host only understands GitLab references. */
+export function supportsIssueGithub(version: number | null): boolean {
+	return version !== null && version >= ISSUES_GITHUB_PROTOCOL_VERSION;
 }
 
 /** Automatic localized agent startup, separate from legacy session creation. */
@@ -338,6 +345,8 @@ export interface AssociationFormFields {
 	token: string;
 	pending: boolean;
 	authSupported: boolean;
+	/** False on a host that cannot address GitHub Issue references. */
+	githubSupported?: boolean;
 }
 
 export interface AssociationFormState {
@@ -355,6 +364,7 @@ export interface AssociationFormState {
 	input: IssueConnectionInput | null;
 	canSubmit: boolean;
 	authSupported: boolean;
+	providerNotice: MessageKey | null;
 }
 
 export function associationFormState(fields: AssociationFormFields): AssociationFormState {
@@ -386,11 +396,17 @@ export function associationFormState(fields: AssociationFormFields): Association
 				? base.projectId
 				: "";
 	const canonicalInstance = target ? canonicalIssueInstanceUrl(target.instanceUrl) : null;
+	const providerNotice: MessageKey | null =
+		canonicalInstance !== null &&
+		issueProviderForInstanceUrl(canonicalInstance) === "github" &&
+		fields.githubSupported === false
+			? "issues.githubUnsupported"
+			: null;
 	const consentRequired = canonicalInstance !== null && requiresIssueHttpConsent(canonicalInstance);
 	const consentAcknowledged =
 		canonicalInstance !== null && fields.acknowledged === canonicalInstance;
 	const input =
-		target && fields.authSupported
+		target && fields.authSupported && providerNotice === null
 			? issueConnectionInput(target, fields.token, fields.acknowledged)
 			: null;
 	return {
@@ -408,6 +424,7 @@ export function associationFormState(fields: AssociationFormFields): Association
 		input,
 		canSubmit: input !== null && !fields.pending,
 		authSupported: fields.authSupported,
+		providerNotice,
 	};
 }
 

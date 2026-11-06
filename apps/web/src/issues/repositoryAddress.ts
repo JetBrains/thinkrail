@@ -1,4 +1,4 @@
-import { canonicalIssueInstanceUrl } from "@thinkrail/contracts";
+import { canonicalIssueInstanceUrl, issueProviderForInstanceUrl } from "@thinkrail/contracts";
 
 export type IssueRepositoryAddressResult =
 	| { status: "valid"; instanceUrl: string; projectId: string }
@@ -71,7 +71,12 @@ export function resolveIssueRepositoryAddress(
 	}
 	const projectId = projectPath(projectSegments);
 	if (projectId === null) return { status: "invalid" };
-	if (explicitInstanceUrl === undefined && repository.url.origin !== "https://gitlab.com") {
+	// github.com is self-describing; every other host still needs its GitLab instance prefix.
+	if (
+		explicitInstanceUrl === undefined &&
+		issueProviderForInstanceUrl(repository.url.origin) !== "github" &&
+		repository.url.origin !== "https://gitlab.com"
+	) {
 		return { status: "needs-instance" };
 	}
 	return { status: "valid", instanceUrl, projectId };

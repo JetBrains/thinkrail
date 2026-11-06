@@ -28,6 +28,7 @@ import {
 	subscribeIssueAssociation,
 	supportsIssueActions,
 	supportsIssueAuth,
+	supportsIssueGithub,
 	supportsIssueImplementation,
 	supportsIssueSessionStartup,
 	supportsIssues,
@@ -55,6 +56,7 @@ export function IssuesTool({
 	const generation = useAppStore((s) => s.connectionGeneration);
 	const supported = supportsIssues(version);
 	const authSupported = supportsIssueAuth(version);
+	const githubSupported = supportsIssueGithub(version);
 	const trusted = useAppStore((s) => s.projects.find((p) => p.id === projectId)?.trusted === true);
 	const capabilities = useMemo<IssueActionCapabilities>(
 		() => ({
@@ -179,6 +181,7 @@ export function IssuesTool({
 				issues={active?.issues ?? []}
 				pending={active?.pending ?? true}
 				authSupported={authSupported}
+				githubSupported={githubSupported}
 				capabilities={capabilities}
 				error={active?.error ?? undefined}
 				onRefresh={() => {

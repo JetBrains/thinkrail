@@ -1,5 +1,5 @@
-export type { GitLabAssociationDialogProps } from "./GitLabAssociationDialog";
-export { GitLabAssociationDialog } from "./GitLabAssociationDialog";
+export type { IssueAssociationDialogProps } from "./IssueAssociationDialog";
+export { IssueAssociationDialog } from "./IssueAssociationDialog";
 export type { IssuesPanelProps } from "./IssuesPanel";
 export { IssuesPanel } from "./IssuesPanel";
 export { IssuesTool } from "./IssuesTool";

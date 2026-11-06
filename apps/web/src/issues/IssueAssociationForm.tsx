@@ -4,11 +4,13 @@ import { Button } from "@thinkrail/ui/button";
 import { useState } from "react";
 import { associationFormState, type ConnectResult, submitConnection } from "./model";
 
-export interface GitLabAssociationFormProps {
+export interface IssueAssociationFormProps {
 	connection: IssueConnection | null;
 	initialRepositoryUrl?: string | null | undefined;
 	pending: boolean;
 	authSupported: boolean;
+	/** False on a host that cannot address GitHub Issue references. */
+	githubSupported?: boolean;
 	onConnect: (input: IssueConnectionInput) => Promise<ConnectResult>;
 	onError?: ((error: "connect" | null) => void) | undefined;
 	onCancelReconnect?: (() => void) | undefined;
@@ -18,16 +20,17 @@ export interface GitLabAssociationFormProps {
 const inputClass =
 	"min-w-0 w-full rounded-sm border border-control-border-default bg-control-bg px-8 py-4 text-text-default tr-text-ui focus:border-control-border-active read-only:text-text-muted";
 
-export function GitLabAssociationForm({
+export function IssueAssociationForm({
 	connection,
 	initialRepositoryUrl,
 	pending,
 	authSupported,
+	githubSupported = true,
 	onConnect,
 	onError,
 	onCancelReconnect,
 	initialAcknowledgedInstance = null,
-}: GitLabAssociationFormProps) {
+}: IssueAssociationFormProps) {
 	const t = useT();
 	const [address, setAddress] = useState(initialRepositoryUrl?.trim() ?? "");
 	const [instanceEdit, setInstanceEdit] = useState<{ address: string; value: string } | null>(null);
@@ -44,6 +47,7 @@ export function GitLabAssociationForm({
 		canonicalInstance,
 		consentRequired,
 		consentAcknowledged,
+		providerNotice,
 		input,
 		canSubmit,
 	} = associationFormState({
@@ -55,6 +59,7 @@ export function GitLabAssociationForm({
 		token,
 		pending,
 		authSupported,
+		githubSupported,
 	});
 
 	return (
@@ -109,6 +114,11 @@ export function GitLabAssociationForm({
 						{addressNotice && (
 							<p role="note" className="text-feedback-warning">
 								{t(addressNotice)}
+							</p>
+						)}
+						{providerNotice && (
+							<p role="note" data-testid="issues-provider-notice" className="text-feedback-warning">
+								{t(providerNotice)}
 							</p>
 						)}
 						{advancedToggle && (

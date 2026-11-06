@@ -11,7 +11,7 @@ import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { useEffect, useReducer } from "react";
-import { GitLabAssociationForm } from "./GitLabAssociationForm";
+import { IssueAssociationForm } from "./IssueAssociationForm";
 import {
 	associationPanelState,
 	type ConnectResult,
@@ -34,6 +34,7 @@ export interface IssuesPanelProps {
 	issues: readonly IssueSummary[];
 	pending: boolean;
 	authSupported: boolean;
+	githubSupported: boolean;
 	capabilities: IssueActionCapabilities;
 	error?: IssuePanelError | undefined;
 	onConnect: (input: IssueConnectionInput) => Promise<ConnectResult>;
@@ -118,6 +119,7 @@ export function IssuesPanel({
 	issues,
 	pending,
 	authSupported,
+	githubSupported,
 	capabilities,
 	error,
 	onConnect,
@@ -224,10 +226,11 @@ export function IssuesPanel({
 				</p>
 			)}
 			{showForm && (
-				<GitLabAssociationForm
+				<IssueAssociationForm
 					connection={connection}
 					pending={pending}
 					authSupported={authSupported}
+					githubSupported={githubSupported}
 					onConnect={connect}
 					onError={(connectError) =>
 						dispatch(

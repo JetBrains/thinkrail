@@ -11,7 +11,7 @@ import {
 } from "@thinkrail/ui/dialog";
 import { useState } from "react";
 import { getTransport } from "../transport";
-import { GitLabAssociationForm } from "./GitLabAssociationForm";
+import { IssueAssociationForm } from "./IssueAssociationForm";
 import {
 	associationDismissal,
 	type ConnectResult,
@@ -19,26 +19,26 @@ import {
 	type IssuePanelError,
 } from "./model";
 
-export interface GitLabAssociationDialogProps {
+export interface IssueAssociationDialogProps {
 	projectId: string;
 	initialRepositoryUrl?: string | null | undefined;
 	onClose: () => void;
 	onAssociated?: ((connection: IssueConnection) => void) | undefined;
 }
 
-export interface GitLabAssociationBodyProps extends GitLabAssociationDialogProps {
+export interface IssueAssociationBodyProps extends IssueAssociationDialogProps {
 	pending: boolean;
 	onPendingChange: (pending: boolean) => void;
 }
 
-export function GitLabAssociationBody({
+export function IssueAssociationBody({
 	projectId,
 	initialRepositoryUrl,
 	onClose,
 	onAssociated,
 	pending,
 	onPendingChange,
-}: GitLabAssociationBodyProps) {
+}: IssueAssociationBodyProps) {
 	const t = useT();
 	const [error, setError] = useState<IssuePanelError | null>(null);
 
@@ -71,7 +71,7 @@ export function GitLabAssociationBody({
 					{t(ISSUE_ERROR_KEY[error])}
 				</p>
 			)}
-			<GitLabAssociationForm
+			<IssueAssociationForm
 				connection={null}
 				initialRepositoryUrl={initialRepositoryUrl}
 				pending={pending}
@@ -93,7 +93,7 @@ export function GitLabAssociationBody({
 	);
 }
 
-export function GitLabAssociationDialog(props: GitLabAssociationDialogProps) {
+export function IssueAssociationDialog(props: IssueAssociationDialogProps) {
 	const [pending, setPending] = useState(false);
 	const dismissal = associationDismissal(pending, props.onClose);
 	return (
@@ -105,7 +105,7 @@ export function GitLabAssociationDialog(props: GitLabAssociationDialogProps) {
 				onEscapeKeyDown={dismissal.onEscapeKeyDown}
 				onInteractOutside={dismissal.onInteractOutside}
 			>
-				<GitLabAssociationBody {...props} pending={pending} onPendingChange={setPending} />
+				<IssueAssociationBody {...props} pending={pending} onPendingChange={setPending} />
 			</DialogContent>
 		</Dialog>
 	);
