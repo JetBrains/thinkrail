@@ -78,8 +78,11 @@ artifact configs alike), a test that passes on that retry is reported flaky and 
 no job is re-run automatically. They install Chromium without `--with-deps`: the runner image already
 carries its shared libraries, and the extra apt packages (CJK/Thai/X fonts) feed no assertion while their
 Ubuntu-mirror download was the slowest step of the job, often for minutes. A missing library fails
-Chromium's launch loudly. The browsers themselves are not cached: the Playwright CDN download takes seconds,
-no slower than an Actions-cache restore of the same bytes. Jobs download only Chromium's headless shell,
+Chromium's launch loudly. The one exception is the source no-agent E2E job, which also runs the
+questionnaire specs under WebKit: the image lacks WebKit's libraries, so that job installs WebKit
+`--with-deps`, with apt set to a 20 s HTTP timeout and five retries, so a stalled mirror connection fails
+over to the next mirror within seconds instead of hanging until the wait deadline. The browsers themselves
+are not cached: the Playwright CDN download takes seconds, no slower than an Actions-cache restore of the same bytes. Jobs download only Chromium's headless shell,
 the one binary headless tests launch, and start it in the background right after `bun install`; a wait
 step joins it, failing with its status, just before the browser tests, so the download overlaps the build
 instead of preceding it.

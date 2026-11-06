@@ -2,6 +2,9 @@
 # Install Playwright's Chromium headless shell (plus WebKit and its system libraries with `start webkit`),
 # retrying the network download a bounded number of times.
 install() {
+	[ "${2:-}" != webkit ] ||
+		printf 'Acquire::Retries "5";\nAcquire::http::Timeout "20";\n' |
+		sudo tee /etc/apt/apt.conf.d/80-playwright-retries > /dev/null
 	for attempt in 1 2 3; do
 		bunx playwright install --only-shell chromium &&
 			{ [ "${2:-}" != webkit ] || bunx playwright install --with-deps webkit; } && return 0
