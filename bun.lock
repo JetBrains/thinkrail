@@ -38,7 +38,6 @@
       "devDependencies": {
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "apps/desktop": {
@@ -55,7 +54,6 @@
         "electrobun": "2.0.5",
         "resedit": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "apps/web": {
@@ -103,7 +101,6 @@
         "babel-plugin-react-compiler": "1.0.0",
         "tailwindcss": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
         "vite": "8.1.6",
       },
     },
@@ -149,7 +146,6 @@
         "@types/bun": "catalog:",
         "resedit": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/contracts": {
@@ -160,7 +156,6 @@
         "@earendil-works/pi-ai": "catalog:",
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/extension-api": {
@@ -175,7 +170,6 @@
         "@types/bun": "catalog:",
         "@types/react": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": "catalog:",
@@ -200,7 +194,6 @@
         "react": "catalog:",
         "react-dom": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
       "peerDependencies": {
         "react": "catalog:",
@@ -215,7 +208,6 @@
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
         "typebox": "catalog:",
-        "typescript": "catalog:",
       },
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": "*",
@@ -235,7 +227,6 @@
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
         "typebox": "catalog:",
-        "typescript": "catalog:",
       },
       "peerDependencies": {
         "@earendil-works/pi-agent-core": "*",
@@ -254,7 +245,6 @@
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
         "typebox": "catalog:",
-        "typescript": "catalog:",
       },
       "peerDependencies": {
         "@earendil-works/pi-agent-core": "*",
@@ -275,7 +265,6 @@
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
         "typebox": "catalog:",
-        "typescript": "catalog:",
       },
       "peerDependencies": {
         "@earendil-works/pi-agent-core": "*",
@@ -291,7 +280,6 @@
         "@earendil-works/pi-coding-agent": "catalog:",
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": "*",
@@ -305,7 +293,6 @@
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
         "typebox": "catalog:",
-        "typescript": "catalog:",
       },
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": "*",
@@ -341,7 +328,6 @@
         "@types/react-dom": "catalog:",
         "remark-gfm": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/server": {
@@ -377,7 +363,6 @@
       "devDependencies": {
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/shared": {
@@ -391,7 +376,6 @@
         "@types/bun": "catalog:",
         "resedit": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/spec-graph": {
@@ -405,7 +389,6 @@
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
         "typebox": "catalog:",
-        "typescript": "catalog:",
       },
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": "*",
@@ -437,7 +420,6 @@
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/website-analytics": {
@@ -446,7 +428,6 @@
       "devDependencies": {
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "pi-extensions/ask-user-question": {
@@ -459,7 +440,6 @@
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
         "typebox": "catalog:",
-        "typescript": "catalog:",
       },
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": "*",
@@ -479,7 +459,6 @@
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
         "typebox": "catalog:",
-        "typescript": "catalog:",
       },
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": "*",
@@ -505,7 +484,6 @@
         "@types/bun": "catalog:",
         "@types/react": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "thinkrail-extensions/visualize": {
@@ -527,7 +505,6 @@
         "@types/bun": "catalog:",
         "@types/react": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "thinkrail-extensions/web-access": {
@@ -542,7 +519,6 @@
         "@earendil-works/pi-coding-agent": "catalog:",
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
     },
   },

@@ -35,7 +35,6 @@
 		"@types/react": "catalog:",
 		"@types/react-dom": "catalog:",
 		"remark-gfm": "catalog:",
-		"tsrs": "catalog:",
-		"typescript": "catalog:"
+		"tsrs": "catalog:"
 	}
 }

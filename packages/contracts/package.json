@@ -14,7 +14,6 @@
 		"@earendil-works/pi-agent-core": "catalog:",
 		"@types/bun": "catalog:",
 		"@earendil-works/pi-ai": "catalog:",
-		"tsrs": "catalog:",
-		"typescript": "catalog:"
+		"tsrs": "catalog:"
 	}
 }

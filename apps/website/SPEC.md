@@ -66,6 +66,8 @@ binary.
   - *Test typecheck:* `astro check` follows `tsconfig.json`, which excludes `*.test.ts`. The
     `typecheck` script, not `build`, also runs `tsconfig.test.json` over the site tests, so root CI
     checks them and `site.yml` does not.
+  - *TypeScript 6 is website-only:* `astro check` (`@astrojs/check`) peers on TypeScript 5 or 6, so this
+    module is the repo's only `typescript` consumer; every other package typechecks with `tsrs`.
 
 The parent owns the route-composition edges; the vibecoding leaf has no sibling dependency:
 

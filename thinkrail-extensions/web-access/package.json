@@ -18,7 +18,6 @@
 	"devDependencies": {
 		"@earendil-works/pi-coding-agent": "catalog:",
 		"@types/bun": "catalog:",
-		"tsrs": "catalog:",
-		"typescript": "catalog:"
+		"tsrs": "catalog:"
 	}
 }
