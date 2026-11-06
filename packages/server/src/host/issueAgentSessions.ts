@@ -1,3 +1,4 @@
+import { issueWebUrl } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import type { IssueToolHost } from "../agent";
 import { createIssueStartupPrompt, type IssuesService } from "../issues";
@@ -62,7 +63,13 @@ export function createIssueAgentSessionHost(options: IssueAgentSessionHostOption
 		const notes = await checked(() => remote.notes(target.reference.number));
 		const project = await checked(() => remote.project());
 		if (String(project.id) !== target.reference.projectId) stop();
-		const link = `${target.reference.instanceUrl}/${project.pathWithNamespace}/-/issues/${target.reference.number}`;
+		const link = issueWebUrl(
+			target.reference.provider,
+			target.reference.instanceUrl,
+			project.pathWithNamespace,
+			target.reference.number,
+		);
+		if (link === null) stop();
 		return createIssueStartupPrompt({ ...target, issue, notes, link });
 	}
 	async function binding(sessionId: string) {

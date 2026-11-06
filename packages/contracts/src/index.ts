@@ -86,7 +86,9 @@ export {
 	isIssueSessionLaunch,
 	isIssueSessionStartupTarget,
 	isIssueTarget,
+	isIssueWebUrl,
 	issueProviderForInstanceUrl,
+	issueWebUrl,
 	requiresIssueHttpConsent,
 } from "./issues";
 export type {

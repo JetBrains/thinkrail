@@ -66,6 +66,106 @@ function fixture() {
 		},
 	};
 }
+describe("github Issues through the same service", () => {
+	const githubInput = { instanceUrl: "https://github.com", projectId: "octo/app", token };
+	const repository = {
+		id: 42,
+		full_name: "octo/app",
+		default_branch: "main",
+		clone_url: "https://github.com/octo/app.git",
+		ssh_url: "git@github.com:octo/app.git",
+	};
+	const githubIssue = {
+		number: 7,
+		title: "Wire the rail",
+		body: "Details",
+		state: "open",
+		labels: [{ name: "workflow::in-review" }, { name: "type::bug" }],
+		updated_at: "2026-01-01T00:00:00Z",
+		html_url: "https://github.com/octo/app/issues/7",
+	};
+	function githubFixture() {
+		const requests: { url: string; init: RequestInit }[] = [];
+		const fetcher = async (url: string, init: RequestInit) => {
+			requests.push({ url, init });
+			if (url.includes("/issues?")) return Response.json([githubIssue]);
+			return Response.json(repository);
+		};
+		return { fetcher, requests };
+	}
+
+	test("associating github.com stores the numeric repo id and lists provider-native issues", async () => {
+		const { fetcher, requests } = githubFixture();
+		const service = await createIssuesService({
+			persistence: { load: async () => [], save: async () => {} },
+			credentialStore: fakeVault(),
+			fetch: fetcher,
+		});
+		const connection = await service.connect("local", githubInput);
+		expect(connection).toEqual({
+			projectId: "local",
+			instanceUrl: "https://github.com",
+			remoteProjectId: "42",
+			connected: true,
+		});
+		expect(new Headers(requests[0]?.init.headers).get("Authorization")).toBe(`Bearer ${token}`);
+		const list = await service.list("local");
+		expect(list.issues).toEqual([
+			{
+				reference: {
+					provider: "github",
+					instanceUrl: "https://github.com",
+					projectId: "42",
+					number: 7,
+				},
+				title: "Wire the rail",
+				url: "https://github.com/octo/app/issues/7",
+				labels: ["workflow::in-review", "type::bug"],
+				stage: "in-review",
+				updatedAt: "2026-01-01T00:00:00Z",
+			},
+		]);
+	});
+
+	test("a github reference reaches reads but never the GitLab-only workflow surface", async () => {
+		const { fetcher } = githubFixture();
+		const service = await createIssuesService({
+			persistence: { load: async () => [], save: async () => {} },
+			credentialStore: fakeVault(),
+			fetch: fetcher,
+		});
+		await service.connect("local", githubInput);
+		const reference = {
+			provider: "github" as const,
+			instanceUrl: "https://github.com",
+			projectId: "42",
+			number: 7,
+		};
+		expect(service.remoteFor("local", reference).provider).toBe("github");
+		expect(() => service.workflowFor("local", reference)).toThrow(
+			"Issue workflow actions are unavailable for this provider.",
+		);
+	});
+
+	test("a reference whose provider contradicts its instance is rejected", async () => {
+		const { fetcher } = githubFixture();
+		const service = await createIssuesService({
+			persistence: { load: async () => [], save: async () => {} },
+			credentialStore: fakeVault(),
+			fetch: fetcher,
+		});
+		await service.connect("local", githubInput);
+		expect(() =>
+			service.remoteFor("local", {
+				provider: "gitlab",
+				instanceUrl: "https://gitlab.example",
+				projectId: "42",
+				number: 7,
+			}),
+		).toThrow();
+	});
+});
+
 describe("issues service", () => {
 	test("verifies then persists public binding, reads summaries, disconnects and restarts without credentials", async () => {
 		const f = fixture();

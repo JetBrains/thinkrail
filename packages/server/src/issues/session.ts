@@ -1,7 +1,7 @@
 import {
-	canonicalIssueInstanceUrl,
 	type IssueReference,
 	isIssueTarget,
+	isIssueWebUrl,
 	isLocalePreference,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
@@ -44,16 +44,7 @@ function positive(value: number): number {
 }
 
 function checkedLink(link: string, reference: IssueReference): string {
-	if (canonicalIssueInstanceUrl(link) !== link) invalid();
-	const prefix = `${reference.instanceUrl}/`;
-	const suffix = `/-/issues/${reference.number}`;
-	if (!link.startsWith(prefix) || !link.endsWith(suffix)) invalid();
-	const project = link.slice(prefix.length, -suffix.length).split("/");
-	if (
-		project.length < 2 ||
-		project.some((part) => !/^[A-Za-z0-9_.-]+$/.test(part) || part === "." || part === "..")
-	)
-		invalid();
+	if (!isIssueWebUrl(link, reference)) invalid();
 	return link;
 }
 
