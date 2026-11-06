@@ -99,7 +99,9 @@ mirror update or a different runner image changes that plan and so the key: the 
 by prefix, only the changed packages download, and `apt-get autoclean` drops versions the archive no longer
 offers, so a slow Ubuntu mirror costs little between image releases and while an image rolls out. A cache
 saved on a PR or merge-group ref is private to that ref, so the `CI cache` workflow seeds it on every push
-to main, the one scope every PR and merge group can restore. A cold install is bounded at twenty minutes
+to main, the one scope every PR and merge group can restore. The cache seed workflow uses the same
+twenty-minute install budget within a thirty-minute job, so a cold main-scoped cache can actually finish.
+A cold install is bounded at twenty minutes
 inside a forty-five-minute desktop shard budget: the Azure mirror can steadily deliver WebKitGTK too slowly
 for the former ten-minute limit. Apt retries downloads at most three times and uses thirty-second HTTP(S)
 inactivity timeouts for stalled connections; the outer limit still bounds a mirror that trickles bytes. The
