@@ -267,6 +267,52 @@ describe("listSkillCommands", () => {
 			rmSync(root, { recursive: true, force: true });
 		}
 	});
+
+	it("a switched-off personal skill never shadows a same-name project alias", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-skill-shadow-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		try {
+			writeSkill(join(home, ".claude", "skills"), "deploy", "personal deploy");
+			writeSkill(join(project, ".claude", "skills"), "deploy", "project deploy");
+			const admission: SkillAdmissionContext = {
+				trusted: true,
+				piResourceTrusted: true,
+				acknowledged: ["deploy"],
+				disabled: [],
+				disabledGroups: [],
+				enabledGroups: [],
+				otherAgentSkills: false,
+				overrides: {},
+			};
+			const commands = await listSkillCommands(project, admission);
+			expect(
+				commands.filter((command) => command.name === "skill:deploy").map((c) => c.description),
+			).toEqual(["project deploy"]);
+			const catalog = await listSkillCatalog(project, admission);
+			expect(
+				catalog
+					.filter((entry) => entry.name === "deploy")
+					.map((entry) => [entry.group, entry.decision])
+					.sort(),
+			).toEqual([
+				["personal", "disabled"],
+				["project", "load"],
+			]);
+			const optedIn = await listSkillCommands(project, { ...admission, otherAgentSkills: true });
+			expect(
+				optedIn.filter((command) => command.name === "skill:deploy").map((c) => c.description),
+			).toEqual(["personal deploy"]);
+		} finally {
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
 });
 
 describe("buildResourceLoader", () => {

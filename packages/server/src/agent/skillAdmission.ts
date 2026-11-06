@@ -62,6 +62,15 @@ export function decideSkill(skill: SkillFacts, ctx: SkillAdmissionContext): Skil
 	return "load";
 }
 
+export function sourceMayLoad(
+	source: Pick<SkillFacts, "group" | "isPlugin">,
+	ctx: SkillAdmissionContext,
+): boolean {
+	if (Object.values(ctx.overrides).includes("on")) return true;
+	if (!isSkillGroupEnabled(ctx, source.group, ctx.otherAgentSkills)) return false;
+	return !source.isPlugin || isSkillGroupEnabled(ctx, "@plugins", ctx.otherAgentSkills);
+}
+
 export function isSkillLoaded(skill: SkillFacts, ctx: SkillAdmissionContext): boolean {
 	return decideSkill(skill, ctx) === "load";
 }

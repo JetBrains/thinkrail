@@ -879,11 +879,13 @@ export async function refreshSkillAdmission(): Promise<void> {
 					session.sessionManager.getCwd(),
 					skillAdmissionResolver(entry.workspaceId),
 				);
-				const loaded = new Set(session.resourceLoader.getSkills().skills.map((s) => s.name));
+				const loaded = new Set(
+					session.resourceLoader.getSkills().skills.map((skill) => skill.filePath),
+				);
 				const stale = catalog.some(
 					(skill) =>
 						(skill.plugin !== undefined || OTHER_AGENT_SKILL_GROUPS.includes(skill.group)) &&
-						(skill.decision === "load") !== loaded.has(skill.name),
+						(skill.decision === "load") !== loaded.has(skill.sourceInfo.path),
 				);
 				if (stale) await requestSessionReload(session.sessionId);
 			} catch (error) {

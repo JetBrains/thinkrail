@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { decideSkill, isSkillLoaded, type SkillAdmissionContext } from "./skillAdmission";
+import {
+	decideSkill,
+	isSkillLoaded,
+	type SkillAdmissionContext,
+	sourceMayLoad,
+} from "./skillAdmission";
 
 const EMPTY: SkillAdmissionContext = {
 	trusted: false,
@@ -162,5 +167,25 @@ describe("decideSkill — other agents' skills are opt-in", () => {
 		expect(decideSkill(own("x", "personal"), { ...EMPTY, disabledGroups: ["personal"] })).toBe(
 			"disabled",
 		);
+	});
+});
+
+describe("sourceMayLoad — a root admission can load nothing from stays out of pi's name resolution", () => {
+	const OFF = { ...EMPTY, otherAgentSkills: false };
+	it("drops personal and plugin roots while their groups are off", () => {
+		expect(sourceMayLoad({ group: "personal", isPlugin: false }, OFF)).toBe(false);
+		expect(sourceMayLoad({ group: "superpowers", isPlugin: true }, OFF)).toBe(false);
+		expect(sourceMayLoad({ group: "project", isPlugin: false }, OFF)).toBe(true);
+	});
+	it("keeps them once a project opts in, or while any per-skill override is on", () => {
+		expect(
+			sourceMayLoad(
+				{ group: "personal", isPlugin: false },
+				{ ...OFF, enabledGroups: ["personal"] },
+			),
+		).toBe(true);
+		expect(
+			sourceMayLoad({ group: "personal", isPlugin: false }, { ...OFF, overrides: { x: "on" } }),
+		).toBe(true);
 	});
 });

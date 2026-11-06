@@ -1001,8 +1001,13 @@ re-opened transcripts provider-valid.
     `SkillCatalogEntry.group`) + **`enabledGroups`**, resolved through the contracts' `isSkillGroupEnabled`
     against the host's `AppConfig.otherAgentSkills` (off by default, so `personal` and Claude plugins load
     only after a host-wide or per-project opt-in; `project`/`bundled`/`pi` — including pi's own
-    `~/.agents/skills` — stay on; `refreshSkillAdmission()` reloads, through the gated `requestSessionReload`,
-    only live sessions whose loaded Personal/plugin skills differ from the new decision), layered with the workspace's per-skill `skillOverrides` (the trust gate is
+    `~/.agents/skills` — stay on. A compatibility root admission can load nothing from (its group off and
+    no per-skill `on` override, `sourceMayLoad`) is left out of `additionalSkillPaths` at every reload,
+    never filtered afterwards: pi resolves same-name skills first-wins before any override runs, so a
+    switched-off personal `deploy` would otherwise shadow a trusted project `deploy` and lose both.
+    `listSkillCatalog` lists the admitted load plus the left-out roots' skills (as off), so the Skills
+    dialog can still switch them on; `refreshSkillAdmission()` reloads, through the gated `requestSessionReload`,
+    only live sessions whose loaded Personal/plugin skill files differ from the new decision), layered with the workspace's per-skill `skillOverrides` (the trust gate is
     checked before the toggle layer, so an "on" override can never un-gate an untrusted alias, and a per-skill
     `on` beats a group disable). `skillsGate` filters + relabels in one `skillsOverride`; only `load` skills
     reach the system prompt / `/skill:` list. A **disabled registry extension's** skill roots
