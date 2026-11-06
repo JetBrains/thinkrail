@@ -150,6 +150,7 @@ export function createIssuesActions(
 		await issues.restore(projectId);
 		if (trusted(projectId).path !== initialProject.path) stop();
 		const remote = issues.remoteFor(projectId, reference);
+		const workflowRemote = issues.workflowFor(projectId, reference);
 		let pinned: WorkspaceHandle | undefined;
 		let startupPrompt: string | undefined;
 		const startup =
@@ -202,10 +203,10 @@ export function createIssuesActions(
 				const wrapped: WorkflowRemote = {
 					issue: (...a) => checked(() => remote.issue(...a)),
 					notes: (...a) => checked(() => remote.notes(...a)),
-					labelEvents: (...a) => checked(() => remote.labelEvents(...a)),
-					member: (...a) => checked(() => remote.member(...a)),
-					currentUser: (...a) => checked(() => remote.currentUser(...a)),
-					updateIssue: (...a) => checked(() => remote.updateIssue(...a)),
+					labelEvents: (...a) => checked(() => workflowRemote.labelEvents(...a)),
+					member: (...a) => checked(() => workflowRemote.member(...a)),
+					currentUser: (...a) => checked(() => workflowRemote.currentUser(...a)),
+					updateIssue: (...a) => checked(() => workflowRemote.updateIssue(...a)),
 					addNote: (...a) => checked(() => remote.addNote(...a)),
 				};
 				function find(query: { workspaceId: string } | { worktreePath: string }) {

@@ -11,12 +11,8 @@ import {
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { logger } from "../log";
-import {
-	createGitLabClient,
-	type GitLabClient,
-	type GitLabClientOptions,
-	type GitLabIssue,
-} from "./client";
+import { createGitLabClient, type GitLabClientOptions, type GitLabIssue } from "./client";
+import type { IssueRemote, IssueWorkflowRemote } from "./remote";
 
 export type IssueBinding = Omit<IssueConnection, "connected">;
 
@@ -51,8 +47,10 @@ export interface IssuesService {
 	restore(projectId: string): Promise<IssueConnection | null>;
 	disconnect(projectId: string): Promise<void>;
 	list(projectId: string): Promise<IssueList>;
-	/** Server-only authenticated capability; never serialize or expose through RPC. */
-	remoteFor(projectId: string, reference: IssueReference): GitLabClient;
+	/** Server-only authenticated read capability; never serialize or expose through RPC. */
+	remoteFor(projectId: string, reference: IssueReference): IssueRemote;
+	/** The GitLab-only workflow capability; a GitHub reference is refused before any request. */
+	workflowFor(projectId: string, reference: IssueReference): IssueWorkflowRemote;
 }
 
 const log = logger("issues");
@@ -170,7 +168,7 @@ export async function createIssuesService({
 	fetch,
 }: IssuesServiceOptions): Promise<IssuesService> {
 	const bindings = new Map<string, IssueStoredBinding>();
-	const clients = new Map<string, { client: GitLabClient; path: string }>();
+	const clients = new Map<string, { client: IssueWorkflowRemote; path: string }>();
 	type Operation = { cancelled: boolean; done: Promise<unknown> };
 	const pending = new Map<string, Operation>();
 	const disconnecting = new Map<string, Promise<void>>();
@@ -396,7 +394,23 @@ export async function createIssuesService({
 			const connected = clients.get(projectId);
 			if (!binding || !connected) return unavailable("Issue project is not connected.");
 			if (
-				reference.provider !== "gitlab" ||
+				reference.instanceUrl !== binding.instanceUrl ||
+				reference.projectId !== binding.remoteProjectId
+			)
+				invalid();
+			return connected.client;
+		},
+		workflowFor(projectId, reference) {
+			if (!isIssueReference(reference)) invalid();
+			if (reference.provider !== "gitlab")
+				throw new CodedError(
+					"RESOURCE_UNAVAILABLE",
+					"Issue workflow actions are unavailable for this provider.",
+				);
+			const binding = bindings.get(projectId);
+			const connected = clients.get(projectId);
+			if (!binding || !connected) return unavailable("Issue project is not connected.");
+			if (
 				reference.instanceUrl !== binding.instanceUrl ||
 				reference.projectId !== binding.remoteProjectId
 			)

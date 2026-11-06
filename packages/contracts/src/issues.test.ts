@@ -12,8 +12,41 @@ import {
 	isIssueSessionLaunch,
 	isIssueSessionStartupTarget,
 	isIssueTarget,
+	issueProviderForInstanceUrl,
 	requiresIssueHttpConsent,
 } from "./index";
+
+test("only github.com is GitHub; every other host stays GitLab", () => {
+	for (const [instanceUrl, provider] of [
+		["https://github.com", "github"],
+		["https://GitHub.com", "github"],
+		["https://gitlab.com", "gitlab"],
+		["https://gitlab.example.com", "gitlab"],
+		["http://192.168.110.77:8929", "gitlab"],
+		["https://github.example.com", "gitlab"],
+		["https://www.github.com", "gitlab"],
+	] as const)
+		expect(issueProviderForInstanceUrl(instanceUrl)).toBe(provider);
+	for (const invalid of [null, 7, "", "ssh://git@github.com", "https://user:secret@github.com"])
+		expect(issueProviderForInstanceUrl(invalid)).toBeNull();
+});
+
+test("a reference's provider must match its instance host", () => {
+	expect(
+		isIssueReference({
+			provider: "github",
+			instanceUrl: "https://github.com",
+			projectId: "42",
+			number: 7,
+		}),
+	).toBe(true);
+	for (const reference of [
+		{ provider: "github", instanceUrl: "https://gitlab.com", projectId: "42", number: 7 },
+		{ provider: "gitlab", instanceUrl: "https://github.com", projectId: "42", number: 7 },
+		{ provider: "bitbucket", instanceUrl: "https://github.com", projectId: "42", number: 7 },
+	])
+		expect(isIssueReference(reference)).toBe(false);
+});
 
 test("accepts a credential-free provider-qualified Issue reference", () => {
 	expect(

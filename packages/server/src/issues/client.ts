@@ -1,57 +1,24 @@
 import { CodedError } from "@thinkrail/shared/codedError";
 import { logger } from "../log";
+import type {
+	IssueLabelEvent,
+	IssueMember,
+	IssueMergeRequest,
+	IssueMergeRequestInput,
+	IssueNote,
+	IssueProject,
+	IssueRecord,
+	IssueUpdate,
+	IssueWorkflowRemote,
+} from "./remote";
 
-export interface GitLabIssue {
-	iid: number;
-	title: string;
-	description: string;
-	state: "opened" | "closed";
-	labels: string[];
-	updatedAt: string;
-}
-export interface GitLabNote {
-	id: number;
-	body: string;
-	createdAt: string;
-}
-export interface GitLabLabelEvent {
-	id: number;
-	action: "add" | "remove";
-	userId: number;
-	label: string | null;
-	createdAt: string;
-}
-export interface GitLabMember {
-	userId: number;
-	accessLevel: number;
-}
-export interface GitLabMergeRequest {
-	id: number;
-	iid: number;
-	webUrl: string;
-	state: "opened" | "closed" | "merged" | "locked";
-	sourceBranch: string;
-	targetBranch: string;
-	sha: string | null;
-	mergeStatus: string;
-	sourceProjectId: number | null;
-	targetProjectId: number | null;
-	draft: boolean | null;
-	detailedMergeStatus: string | null;
-	mergeCommitSha: string | null;
-	squashCommitSha: string | null;
-	headPipeline: { id: number | null; sha: string | null; status: string } | null;
-}
-export interface GitLabIssueUpdate {
-	description?: string;
-	labels?: string[];
-}
-export interface GitLabMergeRequestInput {
-	sourceBranch: string;
-	targetBranch: string;
-	title: string;
-	description: string;
-}
+export type GitLabIssue = IssueRecord;
+export type GitLabNote = IssueNote;
+export type GitLabLabelEvent = IssueLabelEvent;
+export type GitLabMember = IssueMember;
+export type GitLabMergeRequest = IssueMergeRequest;
+export type GitLabIssueUpdate = IssueUpdate;
+export type GitLabMergeRequestInput = IssueMergeRequestInput;
 export interface GitLabClientOptions {
 	instanceUrl: string;
 	project: string | number;
@@ -62,29 +29,9 @@ export interface GitLabClientOptions {
 	maxPages?: number;
 	maxItems?: number;
 }
-export interface GitLabProject {
-	id: number;
-	pathWithNamespace: string;
-	defaultBranch: string | null;
-	httpUrlToRepo: string | null;
-	sshUrlToRepo: string | null;
-}
-export interface GitLabClient {
-	project(): Promise<GitLabProject>;
-	currentUser(): Promise<{ id: number }>;
-	issue(iid: number): Promise<GitLabIssue>;
-	issues(): Promise<GitLabIssue[]>;
-	notes(iid: number): Promise<GitLabNote[]>;
-	labelEvents(iid: number): Promise<GitLabLabelEvent[]>;
-	member(userId: number): Promise<GitLabMember>;
-	updateIssue(iid: number, input: GitLabIssueUpdate): Promise<GitLabIssue>;
-	addNote(iid: number, body: string): Promise<GitLabNote>;
-	mergeRequests(sourceBranch: string): Promise<GitLabMergeRequest[]>;
-	createMergeRequest(input: GitLabMergeRequestInput): Promise<GitLabMergeRequest>;
-	mergeRequest(iid: number): Promise<GitLabMergeRequest>;
-	mergeMergeRequest(iid: number, sha: string): Promise<GitLabMergeRequest>;
-	closeIssue(iid: number): Promise<GitLabIssue>;
-}
+export type GitLabProject = IssueProject;
+export type GitLabClient = IssueWorkflowRemote;
+
 const log = logger("issues");
 
 function invalid(): never {
@@ -488,6 +435,7 @@ export function createGitLabClient(options: GitLabClientOptions): GitLabClient {
 				method: "PUT",
 				body: { state_event: "close" },
 			}),
+		provider: "gitlab" as const,
 		project: () =>
 			decoded("", (response) => {
 				const value = record(response);

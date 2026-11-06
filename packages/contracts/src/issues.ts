@@ -1,7 +1,8 @@
 import { isLocalePreference } from "./domain";
 
+export type IssueProvider = "gitlab" | "github";
 export interface IssueReference {
-	provider: "gitlab";
+	provider: IssueProvider;
 	instanceUrl: string;
 	projectId: string;
 	number: number;
@@ -83,6 +84,19 @@ export function canonicalIssueInstanceUrl(value: unknown): string | null {
 		return null;
 	}
 }
+/**
+ * One rule for every consumer: `github.com` is GitHub, every other host is GitLab. Null reports an
+ * instance that is not a canonical credential-free HTTP(S) URL, never a guessed provider.
+ */
+export function issueProviderForInstanceUrl(value: unknown): IssueProvider | null {
+	const canonical = canonicalIssueInstanceUrl(value);
+	if (canonical === null) return null;
+	try {
+		return new URL(canonical).hostname.toLowerCase() === "github.com" ? "github" : "gitlab";
+	} catch {
+		return null;
+	}
+}
 /** Fail closed for invalid instances; never resolves a hostname to infer loopback. */
 export function requiresIssueHttpConsent(instance: string): boolean {
 	const canonical = canonicalIssueInstanceUrl(instance);
@@ -121,8 +135,7 @@ export function hasIssueHttpConsent(input: IssueConnectionInput, stored?: unknow
 export function isIssueReference(value: unknown): value is IssueReference {
 	return (
 		record(value) &&
-		value.provider === "gitlab" &&
-		canonicalIssueInstanceUrl(value.instanceUrl) !== null &&
+		value.provider === issueProviderForInstanceUrl(value.instanceUrl) &&
 		typeof value.projectId === "string" &&
 		value.projectId.trim().length > 0 &&
 		typeof value.number === "number" &&

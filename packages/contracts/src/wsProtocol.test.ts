@@ -31,6 +31,7 @@ import {
 	ISSUES_APPROVAL_PROTOCOL_VERSION,
 	ISSUES_AUTH_PROTOCOL_VERSION,
 	ISSUES_DESIGN_APPROVAL_PROTOCOL_VERSION,
+	ISSUES_GITHUB_PROTOCOL_VERSION,
 	ISSUES_IMPLEMENTATION_PROTOCOL_VERSION,
 	ISSUES_PROTOCOL_VERSION,
 	ISSUES_SESSION_STARTUP_PROTOCOL_VERSION,
@@ -593,7 +594,7 @@ test("the repository-address hint is registered at the v105 Issues auth floor", 
 });
 
 test("six closed Issue actions are registered at v104", () => {
-	expect(PROTOCOL_VERSION).toBe(109);
+	expect(PROTOCOL_VERSION).toBe(110);
 	expect(ISSUES_ACTIONS_PROTOCOL_VERSION).toBe(104);
 	expect(ISSUES_PROTOCOL_VERSION).toBe(103);
 	expect(WS_METHODS.issuesLaunchDesign).toBe("issues.launchDesign");
@@ -606,7 +607,7 @@ test("six closed Issue actions are registered at v104", () => {
 
 test("app-originated Issue approvals are registered at v106", () => {
 	expect(ISSUES_APPROVAL_PROTOCOL_VERSION).toBe(106);
-	expect(PROTOCOL_VERSION).toBe(109);
+	expect(PROTOCOL_VERSION).toBe(110);
 	expect(ISSUES_AUTH_PROTOCOL_VERSION).toBe(105);
 	expect(ISSUES_ACTIONS_PROTOCOL_VERSION).toBe(104);
 	expect(ISSUES_PROTOCOL_VERSION).toBe(103);
@@ -631,7 +632,7 @@ test("app-originated Issue approvals are registered at v106", () => {
 
 test("the approved-design read is registered at v107", () => {
 	expect(ISSUES_DESIGN_APPROVAL_PROTOCOL_VERSION).toBe(107);
-	expect(PROTOCOL_VERSION).toBe(109);
+	expect(PROTOCOL_VERSION).toBe(110);
 	expect(ISSUES_APPROVAL_PROTOCOL_VERSION).toBe(106);
 	expect(ISSUES_AUTH_PROTOCOL_VERSION).toBe(105);
 	expect(ISSUES_ACTIONS_PROTOCOL_VERSION).toBe(104);
@@ -656,7 +657,7 @@ test("the approved-design read is registered at v107", () => {
 
 test("the implementation start is registered at v108", () => {
 	expect(ISSUES_IMPLEMENTATION_PROTOCOL_VERSION).toBe(108);
-	expect(PROTOCOL_VERSION).toBe(109);
+	expect(PROTOCOL_VERSION).toBe(110);
 	expect(ISSUES_DESIGN_APPROVAL_PROTOCOL_VERSION).toBe(107);
 	expect(ISSUES_APPROVAL_PROTOCOL_VERSION).toBe(106);
 	expect(ISSUES_AUTH_PROTOCOL_VERSION).toBe(105);
@@ -682,9 +683,29 @@ test("the implementation start is registered at v108", () => {
 	expect(WS_METHODS.issuesLaunchImplementation).toBe("issues.launchImplementation");
 });
 
+test("GitHub Issues changes the wire contract at v110", () => {
+	expect(ISSUES_GITHUB_PROTOCOL_VERSION).toBe(110);
+	expect(PROTOCOL_VERSION).toBe(ISSUES_GITHUB_PROTOCOL_VERSION);
+	expect(ISSUES_SESSION_STARTUP_PROTOCOL_VERSION).toBe(109);
+	const github: WsMethodMap["issues.beginDesign"] = {
+		params: {
+			projectId: "p",
+			reference: {
+				provider: "github",
+				instanceUrl: "https://github.com",
+				projectId: "42",
+				number: 7,
+			},
+			locale: "en",
+		},
+		result: { workspaceId: "workspace", sessionId: "session" },
+	};
+	expect(github.params.reference.provider).toBe("github");
+});
+
 test("localized startup adds v109 methods without moving legacy floors", () => {
 	expect(ISSUES_SESSION_STARTUP_PROTOCOL_VERSION).toBe(109);
-	expect(PROTOCOL_VERSION).toBe(109);
+	expect(PROTOCOL_VERSION).toBe(110);
 	expect(ISSUES_ACTIONS_PROTOCOL_VERSION).toBe(104);
 	expect(ISSUES_IMPLEMENTATION_PROTOCOL_VERSION).toBe(108);
 	expect(WS_METHODS.issuesBeginDesign).toBe("issues.beginDesign");
