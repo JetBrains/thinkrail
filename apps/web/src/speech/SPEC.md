@@ -99,6 +99,9 @@ Voice input reaches every text field, the app's and any extension's, without the
 An earlier version gave each field its own hand-placed mic component, which every field and every
 extension had to adopt and wire up. It was replaced so voice is a property of the page, not of fields.
 
+- **Off switch.** `AppConfig.voiceInputEnabled` (Settings → Voice input) gates the whole layer. Off, it
+  renders nothing and installs no focus or chord listeners, so the chord reaches the page untouched;
+  switching off stops a running dictation. Downloaded files stay until deleted.
 - **Focus following.** Document `focusin` / `focusout` track the eligible field that has focus (see
   Fields). Focus moving into the layer's own DOM (`[data-dictation-layer]`) does not count as leaving.
   While a dictation runs, its field stays the target even without focus.
