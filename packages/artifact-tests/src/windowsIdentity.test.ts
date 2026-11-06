@@ -107,6 +107,25 @@ test("accepts an executable whose default group shows ThinkRail's largest frame"
 	expect(windowsIdentityMismatches(allFrames, identity, icon)).toEqual([]);
 });
 
+test("verifies fork string and fixed numeric versions independently", () => {
+	for (const suffix of ["abcdef01", "12345678"]) {
+		const fork = windowsFileIdentity({ version: `0.3.2.${suffix}`, channel: "stable" });
+		const build = (value: WindowsFileIdentity) =>
+			executable(
+				frames.map(({ bytes }) => bytes),
+				[iconGroup(1, frames.map(({ size }, index) => ({ size, iconID: index + 1 })))],
+				value,
+			);
+		expect(windowsIdentityMismatches(build(fork), fork, icon)).toEqual([]);
+		expect(
+			windowsIdentityMismatches(build({ ...fork, fileVersion: "0.3.2.wrong" }), fork, icon),
+		).toHaveLength(2);
+		expect(
+			windowsIdentityMismatches(build({ ...fork, fileVersionParts: [0, 3, 2, 1] }), fork, icon),
+		).toEqual(["fixed file version is 0.3.2.1, expected 0.3.2.0"]);
+	}
+});
+
 test("names a stretched small frame, a foreign icon and wrong properties", () => {
 	expect(windowsIdentityMismatches(bunLayout(frames.toReversed()), identity, icon)).toEqual([
 		"the shell's default icon group lacks the ICO's largest frame",

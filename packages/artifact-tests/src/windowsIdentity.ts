@@ -129,9 +129,10 @@ export function windowsIdentityMismatches(
 			);
 		}
 	}
-	if (actual.fileVersion !== expected.fileVersion) {
+	const fixedVersion = expected.fileVersionParts.join(".");
+	if (actual.fileVersion !== fixedVersion) {
 		mismatches.push(
-			`fixed file version is ${actual.fileVersion || "missing"}, expected ${expected.fileVersion}`,
+			`fixed file version is ${actual.fileVersion || "missing"}, expected ${fixedVersion}`,
 		);
 	}
 	return mismatches;
