@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { ExtensionSessionServices } from "@thinkrail/extension-api/server";
 import extension from "./index";
+import { THEME_CSS } from "./themeFile";
 
 type ExecResult = { content: Array<{ type: string; text: string }>; details: unknown };
 type CapturedTool = {
@@ -31,18 +35,28 @@ const session: ExtensionSessionServices = {
 	},
 };
 
-function loadTool(): CapturedTool {
+type Handler = (event: unknown, ctx: { cwd: string }) => Promise<void> | void;
+
+function loadExtension(): { tool: CapturedTool; handlers: Map<string, Handler> } {
 	let captured: CapturedTool | undefined;
+	const handlers = new Map<string, Handler>();
 	const fakePi = {
 		registerTool: (def: CapturedTool) => {
 			captured = def;
+		},
+		on: (event: string, handler: Handler) => {
+			handlers.set(event, handler);
 		},
 	};
 	const factory = extension.sessionExtensions?.(session)[0];
 	if (!factory) throw new Error("server half declares no extension factory");
 	factory(fakePi as unknown as ExtensionAPI);
 	if (!captured) throw new Error("factory did not register a tool");
-	return captured;
+	return { tool: captured, handlers };
+}
+
+function loadTool(): CapturedTool {
+	return loadExtension().tool;
 }
 
 describe("visualize server half", () => {
@@ -148,7 +162,29 @@ describe("visualize server half", () => {
 		);
 	});
 
-	test("points the mockup guideline at the gitignored scratch directory", () => {
-		expect(loadTool().promptGuidelines?.[0]).toContain("`.thinkrail/context/mockups/`");
+	test("points the mockup guideline at the scratch directory and its theme file", () => {
+		const guideline = loadTool().promptGuidelines?.[0] ?? "";
+		expect(guideline).toContain("`.thinkrail/context/mockups/`");
+		expect(guideline).toContain('href="thinkrail-theme.css"');
+		expect(guideline).toContain("CDN libraries");
+		expect(guideline).toContain("`thinkrail:themechange`");
+		expect(guideline).toContain("and show it with visualize type 'file'");
+		expect(guideline).not.toContain("hosts may strip scripts");
+	});
+
+	test("writes the theme file into the session's scratch directory before the agent starts", async () => {
+		const cwd = mkdtempSync(join(tmpdir(), "visualize-theme-"));
+		mkdirSync(join(cwd, ".thinkrail/context"), { recursive: true });
+		try {
+			const start = loadExtension().handlers.get("before_agent_start");
+			await start?.({}, { cwd });
+			const written = readFileSync(
+				join(cwd, ".thinkrail/context/mockups/thinkrail-theme.css"),
+				"utf8",
+			);
+			expect(written).toBe(THEME_CSS);
+		} finally {
+			rmSync(cwd, { recursive: true, force: true });
+		}
 	});
 });

@@ -39,6 +39,22 @@ describe("workspace file checks shared by extension server halves", () => {
 		);
 	});
 
+	test("a mockup path cannot link to a file outside the mockup directory", async () => {
+		const cwd = mkdtempSync(join(tmpdir(), "workspace-mockup-link-"));
+		mkdirSync(join(cwd, MOCKUP_DIR), { recursive: true });
+		writeFileSync(join(cwd, "index.html"), "<script>repo()</script>");
+		writeFileSync(join(cwd, MOCKUP_DIR, "own.html"), "<p>own</p>");
+		symlinkSync(join(cwd, "index.html"), join(cwd, MOCKUP_DIR, "linked.html"));
+		symlinkSync(join(cwd, MOCKUP_DIR, "own.html"), join(cwd, MOCKUP_DIR, "alias.html"));
+		await expect(checkWorkspaceFile(`${MOCKUP_DIR}linked.html`, cwd)).rejects.toThrow(
+			"inside the mockup directory",
+		);
+		await expect(checkWorkspaceFile(`${MOCKUP_DIR}alias.html`, cwd)).resolves.toBeUndefined();
+		await expect(
+			checkWorkspaceFile(`${MOCKUP_DIR}../../../index.html`, cwd),
+		).resolves.toBeUndefined();
+	});
+
 	test("names the gitignored scratch directory for mockups", () => {
 		expect(workspaceFiles.scratchDir).toBe(".thinkrail/context/mockups/");
 		expect(workspaceFiles.check).toBe(checkWorkspaceFile);

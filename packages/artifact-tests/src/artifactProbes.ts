@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { defaultSessionDirFor, writeFixtureSession } from "@thinkrail/server/history-test-fixtures";
@@ -243,6 +243,15 @@ async function assertStrictVisualizeValidation(
 	assert(
 		/invalid Mermaid syntax in `mermaid`/.test(text) && /Parse error/.test(text),
 		`visualize rejected the diagram without the strict mermaid parse error: ${text}`,
+	);
+}
+
+function assertMockupThemeFile(worktreePath: string): void {
+	const path = join(worktreePath, ".thinkrail", "context", "mockups", "thinkrail-theme.css");
+	assert(existsSync(path), `the visualize extension did not write the mockup theme file: ${path}`);
+	assert(
+		readFileSync(path, "utf8").includes("--container-workspace-bg:"),
+		"the embedded mockup theme file has no semantic tokens",
 	);
 }
 
@@ -621,6 +630,7 @@ export default function syntheticExternalExtension(pi) {
 			"session resource loader omitted bundled skills",
 		);
 		await assertStrictVisualizeValidation(socket, workspace.id, created.sessionId);
+		assertMockupThemeFile(workspace.worktreePath);
 		await assertAskUserQuestionRoundTrip(socket, workspace.id, created.sessionId);
 		await within(
 			rpc(socket, "session.dispose", { sessionId: created.sessionId }),

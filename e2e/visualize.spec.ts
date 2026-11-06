@@ -1,122 +1,21 @@
-import { mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { expect, type Locator, type Page, test } from "@playwright/test";
-import type { ToolCall } from "@thinkrail/contracts";
-import {
-	enterDefaultWorkspace,
-	expandDisclosure,
-	openFixtureProject,
-	openPersistedChat,
-} from "./fixtures/app";
+import { rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { expect, test } from "@playwright/test";
 import { clickTranscriptControl, waitForScrollStability } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { pierreLines } from "./fixtures/pierre";
-import { seedWorkspaceSession } from "./fixtures/sessions";
+import {
+	MOCKUP_DIR,
+	mockupHtml,
+	nodeColors,
+	openAppearance,
+	openVisualization,
+	openVisualizationSession,
+	pickTheme,
+	writeMockups,
+} from "./fixtures/visualize";
 
-const BASE_TS = 1_700_920_000_000;
 const MALFORMED_SOURCE = "flowchart TD; Start --> --> broken";
-
-async function openVisualization(
-	page: Page,
-	name: string,
-	args: ToolCall["arguments"],
-	assistantText?: string,
-): Promise<Locator> {
-	return (await openVisualizationSession(page, name, args, assistantText)).card;
-}
-
-async function openVisualizationSession(
-	page: Page,
-	name: string,
-	args: ToolCall["arguments"],
-	assistantText?: string,
-): Promise<{ card: Locator; sessionId: string }> {
-	await openFixtureProject(page);
-	const messages: Parameters<typeof seedWorkspaceSession>[1]["messages"] = [
-		{ role: "user", text: "Show the visualization.", timestamp: BASE_TS },
-		{
-			role: "assistant",
-			content: [{ type: "toolCall", id: "visualize-1", name: "visualize", arguments: args }],
-			stopReason: "toolUse",
-			timestamp: BASE_TS + 1_000,
-		},
-		{
-			role: "toolResult",
-			toolCallId: "visualize-1",
-			toolName: "visualize",
-			content: [{ type: "text", text: "Visualization complete." }],
-			details: args,
-			isError: false,
-			timestamp: BASE_TS + 2_000,
-		},
-	];
-	if (assistantText !== undefined) {
-		messages.push({
-			role: "assistant",
-			text: assistantText,
-			stopReason: "stop",
-			timestamp: BASE_TS + 3_000,
-		});
-	}
-	const { id: sessionId } = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
-		name,
-		messages,
-	});
-	await enterDefaultWorkspace(page);
-	await openPersistedChat(page, name);
-	const card = page.locator('[data-testid="tool-card"][data-tool="visualize"]');
-	await expect(card).toHaveCount(1);
-	await expect(card).toBeVisible();
-	await expect(card).toHaveAttribute("data-status", "done");
-	await expect(card).toHaveAttribute("data-expanded", "true");
-	await expect(card.getByTestId("tool-visualize")).toHaveAttribute("data-status", "done");
-	return { card, sessionId };
-}
-
-const MOCKUP_DIR = ".thinkrail/context/mockups";
-
-function writeMockups(files: Record<string, string>): () => void {
-	const dir = join(E2E_FIXTURE_REPO, MOCKUP_DIR);
-	mkdirSync(dir, { recursive: true });
-	for (const [name, content] of Object.entries(files)) {
-		mkdirSync(dirname(join(dir, name)), { recursive: true });
-		writeFileSync(join(dir, name), content);
-	}
-	return () => rmSync(join(E2E_FIXTURE_REPO, ".thinkrail"), { recursive: true, force: true });
-}
-
-const mockupHtml = (label: string) =>
-	`<!doctype html><html><body><main><h1>Settings</h1><span class="cta">${label}</span></main></body></html>`;
-
-async function openAppearance(page: Page): Promise<Locator> {
-	await page.getByTestId("open-settings").click();
-	const dialog = page.getByTestId("settings-dialog");
-	await expect(dialog).toBeVisible();
-	await page.getByTestId("settings-nav-appearance").click();
-	await expect(dialog).toContainText("Theme");
-	// The fixed-mode theme list sits in a collapsed disclosure.
-	await expandDisclosure(dialog.getByTestId("theme-toggle"));
-	return dialog;
-}
-
-async function pickTheme(page: Page, id: string): Promise<void> {
-	const dialog = await openAppearance(page);
-	await dialog.locator(`[data-theme-id="${id}"]`).click();
-	await expect(page.locator("html")).toHaveAttribute("data-theme", id);
-	await page.keyboard.press("Escape");
-	await expect(dialog).toBeHidden();
-}
-
-async function nodeColors(node: Locator): Promise<{ actual: string; expected: string }> {
-	return node.evaluate((element) => {
-		const probe = document.createElement("div");
-		probe.style.backgroundColor = "var(--container-elevated-bg)";
-		document.body.append(probe);
-		const expected = getComputedStyle(probe).backgroundColor;
-		probe.remove();
-		return { actual: getComputedStyle(element).fill, expected };
-	});
-}
 
 test("completed visualize diagrams expand by default and support fullscreen zoom, pan and reset", async ({
 	page,
@@ -329,8 +228,8 @@ test("a file visualization renders the workspace file with the diff-review rende
 		const preview = file.getByTestId("resource-preview");
 		await expect(preview).toBeVisible();
 		await expect(preview.getByTestId("view-toggle-html")).toHaveAttribute("data-active", "true");
-		await expect(preview.getByTestId("html-disabled-notice")).toContainText(
-			"Scripts and external resources are disabled",
+		await expect(preview.getByTestId("html-scripted-notice")).toContainText(
+			"scripts and HTTPS libraries run in a sandbox",
 		);
 		await expect(preview.frameLocator("iframe").getByText("Save settings")).toBeVisible();
 
@@ -426,7 +325,7 @@ test("review comments on a visualized file are sent into the chat that shows it"
 	}
 });
 
-test("a file preview fits HTML to a design width and opens full screen and in a tab", async ({
+test("a file preview fills the card width, fits a picked design width, and opens full screen and in a tab", async ({
 	page,
 }) => {
 	const cleanup = writeMockups({ "wide.html": mockupHtml("Save settings") });
@@ -437,6 +336,9 @@ test("a file preview fits HTML to a design width and opens full screen and in a 
 		});
 		const preview = card.getByTestId("resource-preview");
 		const frame = preview.getByTestId("html-frame-box");
+		await expect(frame).toHaveAttribute("data-viewport", "responsive");
+		await expect(frame).toHaveAttribute("data-scale", "1.000");
+		await clickTranscriptControl(preview.getByTestId("html-viewport-desktop"));
 		await expect(frame).toHaveAttribute("data-viewport", "desktop");
 		expect(Number(await frame.getAttribute("data-scale"))).toBeLessThan(1);
 		await clickTranscriptControl(preview.getByTestId("html-viewport-phone"));

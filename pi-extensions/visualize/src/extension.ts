@@ -13,6 +13,7 @@ export interface VisualizeExtensionOptions {
 	validateMermaid?: MermaidValidator;
 	checkFile?: FileChecker;
 	scratchDir?: string;
+	mockupGuideline?: string;
 }
 
 const DESCRIPTION =
@@ -28,12 +29,17 @@ const DESCRIPTION =
 const PROMPT_SNIPPET =
 	"Show diagrams (raw mermaid), option comparisons, and files/mockups (rendered, or before/after) as rich cards — prefer over ASCII art or markdown tables for architecture, flows, trade-offs, and UI proposals.";
 
-function promptGuidelines(scratchDir: string | undefined): string[] {
+function defaultMockupGuideline(scratchDir: string | undefined): string {
 	const where = scratchDir
 		? `under \`${scratchDir}\``
 		: "in a scratch location outside version control";
+	return `write a self-contained HTML mockup ${where} (inline CSS and data: images only — hosts may strip scripts, form controls and external resources, so draw buttons and inputs with styled elements)`;
+}
+
+function promptGuidelines(options: VisualizeExtensionOptions): string[] {
+	const write = options.mockupGuideline ?? defaultMockupGuideline(options.scratchDir);
 	return [
-		`When you propose or ask about a visual/UI change, write a self-contained HTML mockup ${where} (inline CSS and data: images only — hosts may strip scripts, form controls and external resources, so draw buttons and inputs with styled elements) and show it with visualize type 'file'; set \`before\` to a mockup of the current UI to show the change. Hosts render a file's current content, so editing a mockup updates every place it was shown; to keep an earlier proposal visible, copy it and pass the copy as \`before\`.`,
+		`When you propose or ask about a visual/UI change, ${write} and show it with visualize type 'file'; set \`before\` to a mockup of the current UI to show the change. Hosts render a file's current content, so editing a mockup updates every place it was shown; to keep an earlier proposal visible, copy it and pass the copy as \`before\`.`,
 	];
 }
 
@@ -92,7 +98,7 @@ export function createVisualizeExtension(
 			label: "Visualize",
 			description: DESCRIPTION,
 			promptSnippet: PROMPT_SNIPPET,
-			promptGuidelines: promptGuidelines(options.scratchDir),
+			promptGuidelines: promptGuidelines(options),
 			parameters: VisualizeSchema,
 			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 				validateShape(params);

@@ -63,7 +63,8 @@ create the tools it needs based on how you actually work.
   in the chat instead of guessing — with mockups, diagrams and diffs right in the question, your own answer
   and notes, a one-click "Discuss" when a question is unclear, and a fully keyboard-driven card — and inline
   diagrams, option comparisons and file previews rendered right in the chat — when the agent proposes a UI
-  change it shows a before/after mockup you can comment on like a diff. Settings → Extensions lists the
+  change it shows a before/after mockup you can comment on like a diff. In the browser app, mockups run their scripts (charts
+  from d3 or Chart.js included) in a sandbox, follow your theme live and size the card to their content. Settings → Extensions lists the
   ThinkRail extensions the agent gets and lets you switch each one off (and, for questions, their rich
   previews) — and installs any `pi` package by source (npm, git or a local folder), for you or for a repository,
   showing what each one adds and letting you switch packages, their individual extensions and skills, and

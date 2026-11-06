@@ -52,6 +52,7 @@ export function FileCard({ args, status, onOpenFile }: ToolRenderProps) {
 				before={before}
 				title={before ? t("visualize.summary.fileComparison", { before, path }) : path}
 				frameClassName="h-[480px]"
+				fitContent
 				testIdPrefix="tool-visualize"
 			/>
 		</div>

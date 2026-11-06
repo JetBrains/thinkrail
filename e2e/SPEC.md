@@ -524,7 +524,12 @@ the renderer's plain-source fallback, not the tool-error branch. File previews w
 fixture repository (removed in `finally`) and pin the HTML renderer in the card, the before/after 2-up diff,
 a region comment's Send carrying the card's chat `sessionId` over the wire, HTML design-width scaling and the
 width switch, full screen, Open in tab, and a before/after opened as a comparison diff tab that survives a
-reload. A huge comparison opts in through Show diff anyway while an unrelated file changes every 400 ms (each
+reload. `visualize-mockups.spec.ts` (Chromium and WebKit) pins scripted mockups: a mockup's script runs in
+the card, its full screen and its tab under `sandbox="allow-scripts"`, the card grows to the clamped
+content height reported by the frame, a theme switch recolours a token-coloured element inside the frame
+and fires `thinkrail:themechange` without re-running its script, a mockup that navigates its own frame is
+replaced by the blocked notice, and an HTML file outside the mockup dir, also when reached through a
+`mockups/../` path, stays static with its scripts stripped. A huge comparison opts in through Show diff anyway while an unrelated file changes every 400 ms (each
 write its own watcher frame, past the 300 ms quiet flush), so updates keep landing inside the expensive first
 mount. These regressions need no provider,
 prompt submission, route mock, or screenshot. Extension on/off coverage (`extensions-settings.spec.ts`) drives the
@@ -553,9 +558,10 @@ submits or nudges) (`ask-user-question.spec.ts`). `ask-previews.spec.ts` writes 
 into the fixture repository (removed in `finally`) and pins the question preview and the option pane (HTML,
 before/after, mermaid, none) at one card height, full-screen keys that never page or skip, a file removed
 under its preview, and the picked file's path in the persisted answer; `plan-ask.spec.ts` adds the same file
-preview on the plan page. These three specs also run in a **`webkit` Playwright project**: the macOS desktop
-is the system WKWebView, whose Tab skips buttons without an explicit `tabindex` (the regression this lane
-exists for). CI installs WebKit with its system deps; Linux WebKitGTK may not reproduce the macOS Tab rule,
+preview on the plan page. These three specs and `visualize-mockups.spec.ts` also run in a **`webkit`
+Playwright project**: the macOS desktop is the system WKWebView, whose Tab skips buttons without an explicit
+`tabindex` (the regression this lane exists for) and whose computed styles do not list custom properties
+(which the mockup theme collection must not rely on). CI installs WebKit with its system deps; Linux WebKitGTK may not reproduce the macOS Tab rule,
 so the card's markup guard (every control an explicit tab stop) is the platform-independent net. All of this
 runs without provider variability; desktop package tests separately pin the stable
 backend-profile/window adapter required across dynamic-port restarts. Streaming-band coverage remains
