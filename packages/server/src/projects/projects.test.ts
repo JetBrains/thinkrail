@@ -30,6 +30,7 @@ import {
 	renameProject,
 	revokeProjectMcpTool,
 	setPiTrustSeed,
+	setProjectGroupEnabled,
 	setProjectMcpOverride,
 	setProjectPublisher,
 	setProjectTrust,
@@ -809,3 +810,15 @@ test.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
 		expect(listRecentProjects().map((project) => project.id)).toEqual(["locked"]);
 	},
 );
+
+test("a skill group switch records an explicit project choice in exactly one list", () => {
+	const dir = join(dataDir, "skills project");
+	makeRepo(dir);
+	const { id } = openProject(dir);
+	const on = setProjectGroupEnabled(id, "personal", true);
+	expect(on.enabledGroups).toEqual(["personal"]);
+	expect(on.disabledGroups).toEqual([]);
+	const off = setProjectGroupEnabled(id, "personal", false);
+	expect(off.enabledGroups).toEqual([]);
+	expect(off.disabledGroups).toEqual(["personal"]);
+});

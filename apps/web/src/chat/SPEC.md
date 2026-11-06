@@ -930,7 +930,14 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   behavior. It runs in **two modes** via an optional `workspace` prop: chat (`skills.state`, per-workspace
   skill overrides, + a **Reload** that applies changes to this chat's session via `session.reloadResources`,
   disabled while streaming) or project (`project.skills`, per-project-baseline toggles, no session) — the
-  latter reused by `panels` pre-session). All props-driven; behavior detail lives in the components' jsdoc.
+  latter reused by `panels` pre-session). Group state reads through the contracts' `isSkillGroupEnabled`
+  with `store.otherAgentSkills`, so the switches match the host gate; while that host default is off and a
+  Personal or plugin group stays off, a `skills-other-agents-off` note points to the per-project switch and
+  Settings → Extensions. A `skills-size` line shows the loaded skills' count and an estimated per-request
+  listing cost (`skillCatalogSize`: name + description + path + per-entry markup at ~4 chars/token, an
+  estimate rather than pi's figure; a `manualOnly` skill counts as on but costs nothing, since pi never
+  lists it), in warning colour above `LARGE_SKILL_CATALOG_TOKENS` (10K) with a hint
+  to switch unused groups off. All props-driven; behavior detail lives in the components' jsdoc.
 - **Live session telemetry follows Pi's finalized boundaries.** `SessionStatsBar` renders only the host's
   authoritative `session.getStats` snapshot; the web never derives billed totals or context usage from
   message content. Totals include delegated subagent spend, which the host records into the parent as pi
