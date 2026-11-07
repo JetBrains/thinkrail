@@ -22,7 +22,7 @@ import { SettingsSection, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { createPtySizeSync, runAfterTerminalRelayout } from "./ptySizeSync";
 import { stripAnsiDim, terminalContrastFloor } from "./terminalContrast";
-import { SHIFT_ENTER_SEQUENCE, terminalKeyAction } from "./terminalKeys";
+import { SHIFT_ENTER_SEQUENCE, shiftEnterNewlineActive, terminalKeyDecision } from "./terminalKeys";
 import { createTerminalPrebindBuffer } from "./terminalPrebindBuffer";
 
 const RESIZE_DEBOUNCE_MS = 60;
@@ -31,17 +31,6 @@ const RELAYOUT_TIMEOUT_MS = 4000;
 
 function sendTerminalWrite(send: Promise<unknown>): void {
 	void send.catch(() => {});
-}
-
-const IME_SENTINEL_KEYCODE = 229;
-
-// xterm #6065: an active IME reports keyCode 229, so xterm's chord table drops Ctrl+<letter>/Escape — see panels/SPEC.md.
-function imeControlBytes(event: KeyboardEvent): string | null {
-	if (event.altKey || event.metaKey) return null;
-	if (event.code === "Escape") return "\x1b";
-	if (!event.ctrlKey) return null;
-	const letter = /^Key([A-Z])$/.exec(event.code)?.[1];
-	return letter ? String.fromCharCode(letter.charCodeAt(0) - 64) : null;
 }
 
 function cssVar(name: string): string | undefined {
@@ -183,24 +172,21 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			if (id) sendTerminalWrite(getTransport().request("terminal.write", { id, data }));
 		};
 		term.attachCustomKeyEventHandler((event) => {
-			if (event.type === "keydown" && event.keyCode === IME_SENTINEL_KEYCODE) {
-				if (event.isComposing) return true;
-				const bytes = imeControlBytes(event);
-				if (bytes === null) return true;
-				writeToPty(bytes);
-				return false;
-			}
-			if (event.isComposing) return true;
-			const action = terminalKeyAction(
+			const { protocolVersion, terminalShiftEnterNewline } = useAppStore.getState();
+			const decision = terminalKeyDecision(
 				event,
 				platformFamily(),
 				term.hasSelection(),
-				useAppStore.getState().terminalShiftEnterNewline,
+				shiftEnterNewlineActive(protocolVersion, terminalShiftEnterNewline),
 			);
-			if (action === null) return true;
+			if (decision === null) return true;
+			if (typeof decision === "object") {
+				writeToPty(decision.write);
+				return false;
+			}
 			event.preventDefault();
-			if (action === "copy") void copyText(term.getSelection());
-			else if (action === "newline") writeToPty(SHIFT_ENTER_SEQUENCE);
+			if (decision === "copy") void copyText(term.getSelection());
+			else if (decision === "newline") writeToPty(SHIFT_ENTER_SEQUENCE);
 			return false;
 		});
 

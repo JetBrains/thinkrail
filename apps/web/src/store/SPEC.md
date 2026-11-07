@@ -563,7 +563,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   shell retains the pre-React preference hint instead of applying those placeholders over it. Reusing that
   readiness edge avoids a second derived config-hydration flag; after the first welcome, disconnect/reconnect
   keeps the last authoritative config while a later welcome can replace it. **`terminalReplayKb: number`**,
-  **`terminalWindowsShell: TerminalWindowsShell`**, **`terminalShiftEnterNewline: boolean`** (default on; a pre-v108 host reads as on),
+  **`terminalWindowsShell: TerminalWindowsShell`**, **`terminalShiftEnterNewline: boolean`** (default on; a pre-v108 host reads as on, and the terminal key handler treats that as off),
   **`composerGrowthLimit: ComposerGrowthLimit`**,
   **`chatLineWidth` / `fileLineWidth`**, their independent **`chatLineWidthBounded` /
   `fileLineWidthBounded`** switches, **`voiceInputEnabled`** (absent from an older host reads as on),
