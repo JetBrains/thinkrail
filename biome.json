@@ -29,6 +29,9 @@
 			},
 			"style": {
 				"noNonNullAssertion": "error"
+			},
+			"nursery": {
+				"noFloatingPromises": "error"
 			}
 		}
 	},
