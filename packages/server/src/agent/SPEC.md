@@ -690,6 +690,39 @@ re-opened transcripts provider-valid.
     message. The count-aware cap also degrades a raw >2000px `read`-tool image to a note instead of a
     brick once a session crosses 21 images. Pure core (`guardOversizedImages`, `imageDimensions`)
     unit-tested with hand-built header bytes.
+  - `skillCatalog` — the skill-listing budget (#1210): an inline extension in `buildResourceLoader`'s
+    shared factories and the opt-in `childExtensionFactories` — never the tool-free base set, since it
+    registers `skill_search` (pi-delegation decision #25), so a child gets it only with `extensions: true`
+    and its `tools` allowlist still decides whether the search is callable. Pi lists every admitted
+    skill's name, full description and location in the system prompt with no cap, and portable aliases
+    import other agents' whole libraries, so one machine sent 1,395 skills (~165K tokens) on every
+    request, which compaction can never shrink. Modeled on Claude Code's listing budget and Codex's
+    2% budget, plus Anthropic's tool search: when pi's own section would exceed **2% of the context
+    window, clamped to 4K–8K tokens and never above 10% of the window** (4K for a virtual or unknown
+    window), the `before_agent_start` handler sets `sections.skills` (pi lets a custom section replace
+    its own) to a listing within that budget: skills ranked project, then host-supplied (bundled and
+    extension skills, `temporary` scope), then pi-native user skills, then other agents' aliases
+    (`claude` / `codex` / `github-copilot` / `gemini` sources), pi order within a tier; descriptions
+    shortened to 240 characters; a header that says how many are listed and to call `skill_search`;
+    and a per-source count of the unlisted rest, so the omission is never silent. A catalog that fits
+    keeps pi's section untouched. `skill_search(query, limit?)` runs BM25 over name (weighted) and
+    description across every model-invocable admitted skill and returns names, descriptions and
+    `SKILL.md` locations, folding a trailing plural `s`; the model still loads a skill with `read`, so
+    `skillCarryover` sees it. The listing instruction alone did not make a live model search (it solved
+    the task without the skill), the recall gap tool-search docs and retrieval papers report, so the
+    host also hints: for a user-started run with a budgeted section, the prompt is searched against the
+    catalog and up to 3 **unlisted** skills matched distinctively — a matched term in at most 5% of the
+    catalog that is in the skill's name, or two such terms — come back as `before_agent_start`'s
+    `message`, a persisted `thinkrail/skill-hint` custom message (`display: false`; the web ignores
+    unknown custom types). It lands in the history tail after the user turn, so the cached prefix is
+    untouched, and each skill is hinted once per catalog. The
+    section is memoized on the budget and the skill set, so it changes only on reload or a model with a
+    different window: per-turn relevance filtering was rejected because every change re-sends the
+    whole section (a mid-conversation patch, or a full cache miss where the model has none). A session
+    that cannot call both `read` and `skill_search` (absent from `selectedTools` or hidden) keeps pi's
+    full section, so a narrow allowlist never loses unlisted skills it could not search for. Unlisted
+    membership for the hint is keyed by `filePath`, since pi shallow-copies every skill per run. Admission (`skillsGate`) still decides what is
+    loadable; the budget decides only what is listed, so Settings → Skills and `/skill:` are unchanged.
   - `skillCarryover` — the post-compaction skill restorer: an inline extension in both
     `buildResourceLoader`'s shared factories and `childBaseExtensionFactories`, so delegated children
     carry it too. Pi's compaction summarizes a loaded skill's body away while the system prompt keeps

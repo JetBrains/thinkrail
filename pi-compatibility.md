@@ -290,6 +290,13 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   `agent_settled` (the parent still reads idle, and each deferred request starts its own run); drop
   that hold once pi coalesces deferred wakes or reports the pending run. Run the `pi-subagents` and
   `pi-background-commands` suites and `agent/chatResources.test.ts`.
+- **Skill catalog budget** — [[submodule-server-agent]], `skillCatalog.ts`. Pi's
+  `formatSkillsForPrompt` lists every admitted skill with its full description and no cap, so a machine
+  with other agents' skills put 1,395 skills (~165K tokens) in every request (#1210). A host
+  `before_agent_start` handler replaces the `skills` section with a budgeted, ranked listing only when
+  pi's would overrun the budget, registers `skill_search` over the full set, and hints distinctly
+  matching unlisted skills after the user turn. Remove it when pi caps
+  or defers its skill listing natively; verify with `skillCatalog.test.ts`.
 - **Skill bodies across compaction** — [[submodule-server-agent]], `skillCarryover.ts`. Pi's compaction
   summarizes loaded skill text away (a `read` result reaches the summarizer cut to 2000 characters) and
   nothing re-supplies it, so a host `context` handler re-attaches compacted skill bodies to every

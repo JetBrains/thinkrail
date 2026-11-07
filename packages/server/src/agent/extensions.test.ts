@@ -28,6 +28,7 @@ import { createPiSettings } from "./packages";
 import { writeFixturePiPackage } from "./packages/testFixtures";
 import type { SkillAdmissionContext } from "./skillAdmission";
 import { skillCarryover } from "./skillCarryover";
+import { skillCatalog } from "./skillCatalog";
 
 function ctx(trusted: boolean, acknowledged: string[] = []): SkillAdmissionContext {
 	return {
@@ -655,13 +656,14 @@ describe("registry extensions", () => {
 
 	it("keeps the curated child set and appends registry children", () => {
 		const children = childExtensionFactories();
-		expect(children).toHaveLength(2 + registryInlineExtensions("childExtensions").length);
+		expect(children).toHaveLength(3 + registryInlineExtensions("childExtensions").length);
 		expect(children[0]).toBe(headlessSearchPolicy);
 		expect(typeof children[1]).toBe("function");
+		expect(children[2]).toBe(skillCatalog);
 		const names = (inlines: typeof children) =>
 			inlines.map((inline) => (typeof inline === "function" ? "fn" : inline.name));
-		expect(names(children.slice(2))).toEqual(names(registryInlineExtensions("childExtensions")));
-		expect(names(children.slice(2))).toEqual(["web-access"]);
+		expect(names(children.slice(3))).toEqual(names(registryInlineExtensions("childExtensions")));
+		expect(names(children.slice(3))).toEqual(["web-access"]);
 	});
 
 	it("loads web access with its skill and drops both while the extension is off", async () => {
@@ -796,10 +798,11 @@ describe("registry extensions", () => {
 		}
 	});
 
-	it("guards every child's images and compacted skills from the base set, not the opt-in curated set", () => {
+	it("guards every child's images and compacted skills from the tool-free base set, and offers the skill catalog only to opted-in children", () => {
 		expect(childBaseExtensionFactories()).toEqual([oversizedImageGuard, skillCarryover]);
 		expect(childExtensionFactories()).not.toContain(oversizedImageGuard);
 		expect(childExtensionFactories()).not.toContain(skillCarryover);
+		expect(childExtensionFactories()).toContain(skillCatalog);
 	});
 });
 
