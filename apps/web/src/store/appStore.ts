@@ -17,6 +17,7 @@ import type {
 	Project,
 	ProviderStatusReport,
 	ProviderWarning,
+	ProxyConfig,
 	RefreshedModels,
 	ResourceKind,
 	ResourceMeta,
@@ -58,6 +59,7 @@ import {
 	isControlMessage,
 	isLineWidth,
 	isLocalePreference,
+	isProxyConfig,
 	isSettleIdleDays,
 	isSubagentCompletionMessage,
 	isSubagentMaxConcurrent,
@@ -425,6 +427,7 @@ export const SettingsSection = {
 	Feedback: "feedback",
 	Extensions: "extensions",
 	Environment: "environment",
+	Proxy: "proxy",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
 
@@ -1123,6 +1126,7 @@ interface AppState {
 	disabledExtensions: string[];
 	extensionSettings: ExtensionSettingValues;
 	disabledPackages: string[];
+	proxy?: ProxyConfig;
 	locale: string;
 	localLocales: LocalLocalesSnapshot | null;
 	installLocalLocales: (snapshot: LocalLocalesSnapshot | null) => void;
@@ -1544,6 +1548,7 @@ function configPatch(config: AppConfig) {
 			? config.disabledPackages
 			: DEFAULT_CONFIG.disabledPackages,
 		locale: isLocalePreference(config.locale) ? config.locale : DEFAULT_CONFIG.locale,
+		...(isProxyConfig(config.proxy) ? { proxy: config.proxy } : {}),
 		onboardingDismissed: config.onboardingDismissed === true,
 		...normalizeFontSettings(config),
 	};

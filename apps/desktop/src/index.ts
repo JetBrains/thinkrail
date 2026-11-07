@@ -29,6 +29,7 @@ import {
 	readNativeLabels,
 	writeNativeLabels,
 } from "./nativeLabels";
+import { readSystemProxy } from "./network";
 import { createPageZoomGestureHandler, nextPageZoom } from "./pageZoom";
 import {
 	injectInitialDesktopPreferences,
@@ -305,6 +306,7 @@ async function start(): Promise<void> {
 		appVersion: version,
 		channel,
 		posthogProjectKey,
+		systemProxyResolver: () => readSystemProxy(),
 		...(Electrobun.app.isPackaged
 			? { openExternal: (url: string) => Utils.openExternal(url) }
 			: {}),

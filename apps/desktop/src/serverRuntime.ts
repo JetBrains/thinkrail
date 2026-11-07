@@ -1,3 +1,5 @@
+import type { SystemProxyInfo } from "@thinkrail/contracts";
+
 export interface DesktopHostOptions {
 	runtimeDir: string;
 	staticDir: string;
@@ -5,6 +7,7 @@ export interface DesktopHostOptions {
 	channel: string;
 	posthogProjectKey: string;
 	openExternal?: (url: string) => void;
+	systemProxyResolver?: () => SystemProxyInfo | null;
 }
 
 export interface DesktopHost {
