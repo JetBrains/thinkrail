@@ -33,9 +33,9 @@ they are *generators*: they use `node:fs` and `node:path`, which must never reac
 | `providerGlyphs.test.ts` | pins that every mapped mark exists in the vendored set and that coloured, oddly sized or non-path SVGs are rejected rather than flattened. |
 | `generatedFiles.ts` | what every generate CLI does with a rendered file: `--check` reports drift, otherwise write. The **only** definition of "stale", so the three pipelines and the tests cannot disagree. |
 | `generatedFiles.test.ts` | pins that definition — content drift and a missing file are stale, a CRLF working tree is not. |
-| `compiler-census.ts` | CLI. Runs `babel-plugin-react-compiler` with a logger over app, shared UI, and extension web sources (tests, stories and generated data excluded) and prints every function the compiler bails out on as `file:line: [fn] category: reason`, plus totals; `--json` prints the full census. Run: `bun run --cwd apps/web compiler:census [--json]`. `--write` renders the bailed-out functions to `compiler-census.baseline.txt` as `file fnName`, line-free so edits above them don't churn it. `fnName` is lexical, never positional: the binding a function is assigned to (through wrapping calls like `memo(…)`), else its own name, qualified by its named enclosing functions (`factory.Row`). Two compiler units in one file with the same identity fail the census, because neither a line nor an ordinal survives an insertion above them. `--check` (`bun run check:compiler`, CI) fails on any drift and names each function that newly bails out or now compiles. A new bail-out is fixed, or accepted by regenerating (`bun run compiler:census:generate`). |
+| `compiler-census.ts` | CLI. Runs the `oxc-transform-react` React Compiler with diagnostics on over app, shared UI, and extension web sources (tests, stories and generated data excluded) and prints every function the compiler bails out on as `file:line: [fn] category: reason`, plus totals ("functions memoized" counts `_c(N)` memo caches in the output, so a function compiled with no cache is not counted); `--json` prints the full census. Run: `bun run --cwd apps/web compiler:census [--json]`. `--write` renders the bailed-out functions to `compiler-census.baseline.txt` as `file fnName`, line-free so edits above them don't churn it. `fnName` is lexical, never positional: the binding a function is assigned to (through wrapping calls like `memo(…)`), else its own name, qualified by its named enclosing functions (`factory.Row`). Two compiler units in one file with the same identity fail the census, because neither a line nor an ordinal survives an insertion above them. `--check` (`bun run check:compiler`, CI) fails on any drift and names each function that newly bails out or now compiles. A new bail-out is fixed, or accepted by regenerating (`bun run compiler:census:generate`). |
 | `compiler-census.baseline.txt` | The committed census baseline. |
-| `compiler-census.test.ts` | pins that a function's baseline identity survives inserting a sibling before it, that nested functions are qualified by their owners, and that indistinguishable compiler units are rejected. |
+| `compiler-census.test.ts` | pins that a function's baseline identity survives inserting a sibling before it, that nested functions are qualified by their owners, that a function expression takes its variable's name, that a diagnostic after multi-byte text maps to the right unit, line and category, that same-named plain helpers are not units, that each child of a plain or non-component-shaped factory keeps its own key, that TypeScript wrappers, `"use memo"` and classes are handled as the compiler does, that an opt-out directive is recorded as a skip, that a diagnostic outside every unit fails the census, and that indistinguishable compiler units are rejected. |
 
 `designSources.ts` owns the shared adoption-guard and compiler-census source scan: app source, `packages/ui`, and every
 `thinkrail-extensions/*/web` source tree, excluding tests, generated output, and installed dependencies.
@@ -61,12 +61,27 @@ in agreement about the same functions.
   (non-dev) dependency, and any network or shell access. Adoption guards read source as data; generators
   read only their declared inputs. A generator that needed one of those would be
   the wrong shape.
-- **Census exception:** `compiler-census.ts` also uses `@babel/core` and `babel-plugin-react-compiler`
+- **Census exception:** `compiler-census.ts` also uses `oxc-transform-react` and `oxc-parser`
   and reads authored TypeScript from the shared source scan as *text*, so extracting a component into
   the SDK or an extension does not silently remove it from the report. It must pass the compiler the same options as
-  `reactCompilerPreset()` in `vite.config.ts` and mirror the preset's file filter, so its counts match
+  `react({ compiler })` in `vite.config.ts` and mirror plugin-react's file filter, so its counts match
   the real build. Build-time compiler validations differ from the lint rules (for example
   `StaticComponents` is lint-only), so its counts differ from an oxlint React scan by design.
+- **Census units:** a diagnostic belongs to the outermost compiler unit around its first label. The
+  census copies the compiler's `infer` rule by hand, so recheck it on an `oxc-transform-react` bump:
+  - A unit calls a hook or renders JSX in its own body or parameter defaults (nested functions and
+    classes don't count, so the children of a plain factory are units of their own).
+  - It is a `memo`/`forwardRef` argument (TypeScript `as`/`satisfies`/`!` around the argument are
+    ignored), a hook-named function, or a component-named function that takes at most a props
+    argument and a `ref`-named second one (a default value is allowed) and whose last `return` gives
+    back something renderable (not nothing, an object, a function, a class or a `new` value). A
+    function expression takes its variable's name; its own id is ignored, as the compiler does.
+  - A function with a `"use memo"` directive is a unit whatever its name or shape. Nothing inside a
+    class is.
+  - A unit under a `"use no memo"`/`"use no forget"` directive, its own or the file's, is recorded as
+    a `Skip`, because the compiler reports nothing for the skip itself.
+  - A diagnostic outside every unit (a file-wide lint suppression, or a shape the rule misses) fails
+    the census instead of getting a line-number key.
 - **Imported by:** `apps/web/package.json` scripts (`typography:generate` / `:validate` / `:check`,
   `colors:generate` / `:check`, `spacing:generate` / `:check`, `provider-glyphs:generate` / `:check`, `compiler:census:generate`, re-exported from the root `package.json`, plus `compiler:census:check` as the root `check:compiler`; `compiler:census` itself is web-only), and
   `src/styles/typography.test.ts` + `src/styles/typographyUsage.test.ts` +

@@ -5,7 +5,6 @@
 ../../packages/resource-renderers/src/renderers/csv/Diff.tsx CsvDiff
 ../../packages/resource-renderers/src/renderers/image/Diff.tsx ImageContent
 ../../packages/resource-renderers/src/renderers/image/View.tsx ImageView
-../../packages/resource-renderers/src/renderers/json/Diff.tsx JsonDiff
 ../../packages/resource-renderers/src/renderers/notebook/Diff.tsx NotebookDiffSurface
 ../../packages/resource-renderers/src/renderers/pdf/Diff.tsx PdfDiff
 ../../packages/resource-renderers/src/renderers/pdf/View.tsx PdfView
@@ -14,7 +13,6 @@
 ../../thinkrail-extensions/ask-user-question/web/AskUserQuestionCard.tsx AskUserQuestionCard
 src/chat/ChatTranscript.tsx useVirtualRows
 src/chat/HistoryOverlay.tsx Highlight
-src/chat/resources/ResourcesInspector.tsx ResourcesInspector
 src/panels/branches.ts useBranchList
 src/panels/useBranchStatus.ts useBranchStatus
 src/panels/useLiveTabContent.ts useLiveTabContent
