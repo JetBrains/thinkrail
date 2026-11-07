@@ -13,8 +13,8 @@ tags: [i18n]
 The single owner of ThinkRail's UI strings and of the rules every locale source obeys
 ([[architecture]] Decision 23). It ships the bundled catalogs — `en.json` is the English source of truth
 and the file translators start from, and each `<tag>.json` beside it is a translation (currently
-Spanish, Japanese, Russian, and Simplified Chinese) — and the pure functions that validate a catalog,
-name a file's language, and pick the language to render. Its `./react`
+Spanish, Japanese, Russian, Simplified Chinese, and Traditional Chinese (Taiwan)) — and the pure
+functions that validate a catalog, name a file's language, and pick the language to render. Its `./react`
 entry holds the **one** i18next instance every browser surface (`apps/web`, `packages/ui`, extension web
 halves) renders through, so they cannot drift onto separate instances.
 
@@ -52,8 +52,8 @@ halves) renders through, so they cannot drift onto separate instances.
     an explicit tag is used only when available; otherwise `"en"`. The script level exists because a
     system locale usually carries a region the catalog does not name: `zh-Hans-CN` reaches `zh-CN`
     (both maximize to `zh-Hans`) where a base-language comparison alone stops at `zh` and misses it.
-    Scripts never cross: `zh-TW` and `zh-HK` maximize to `zh-Hant` and fall through to `en` rather than
-    borrowing the Simplified catalog.
+    Scripts never cross: `zh-HK` and `zh-Hant` maximize to `zh-Hant` and reach the Taiwan catalog
+    `zh-TW`, never the Simplified one; without a Traditional catalog they fall through to `en`.
   - `baseLanguage(tag)` and `fallbackChain(tag)` (`[tag, base, "en"]`, deduped).
 - **`@thinkrail/locales/react`** (browser): the initialized i18next instance (`i18n`), `useT()` — the
   `Translator` for render, a value that is **replaced whenever the language or its strings change** (a
