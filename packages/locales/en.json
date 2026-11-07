@@ -1261,6 +1261,8 @@
 	"panels.terminalWorkbench.closeFailed": "Couldn't close the terminal",
 	"panels.terminalWorkbench.forceCloseRefused": "The terminal refused the forced close",
 	"panels.terminalWorkbench.newTerminal": "New terminal",
+	"panels.unplacedReview.commentIn": "Comment in {{renderer}}",
+	"panels.unplacedReview.commentingUnavailable": "To add a comment, switch to {{renderer}}.",
 	"panels.unplacedReview.showIn": "Show in {{renderer}}",
 	"panels.unplacedReview.title": "Comments not placed in {{renderer}}",
 	"panels.viewedMark.label": "Viewed",
