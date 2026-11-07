@@ -33,10 +33,12 @@ export async function resolveNewChatModel(
 	const availableModels = await dependencies.listSettledModels();
 	const findAvailable = (ref: Parameters<typeof sameModel>[1]) =>
 		availableModels.find((candidate) => sameModel(candidate, ref));
+	const configuredModels = availableModels.filter((candidate) => candidate.auth?.kind !== "env");
 	const model =
 		requested.model ??
 		findAvailable(config.defaultModel) ??
 		findAvailable(dependencies.piDefaultModelRef()) ??
+		preferredDefaultModel(configuredModels) ??
 		preferredDefaultModel(availableModels);
 	const level = requested.thinkingLevel ?? config.defaultEffort ?? "medium";
 	if (!model) return { model: null, thinkingLevel: level };
