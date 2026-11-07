@@ -1,43 +1,34 @@
 import { gitAsync } from "./gitExec";
 
-const MAX_ARGS_CHARS = 24_000;
 const TIMEOUT_MS = 10_000;
-
-function argChunks(paths: readonly string[]): string[][] {
-	const chunks: string[][] = [];
-	let current: string[] = [];
-	let length = 0;
-	for (const path of paths) {
-		if (current.length > 0 && length + path.length + 1 > MAX_ARGS_CHARS) {
-			chunks.push(current);
-			current = [];
-			length = 0;
-		}
-		current.push(path);
-		length += path.length + 1;
-	}
-	if (current.length > 0) chunks.push(current);
-	return chunks;
-}
+const PATHS_PER_BATCH = 512;
+const MAX_PARALLEL_BATCHES = 4;
 
 export async function ignoredPaths(
 	worktreePath: string,
 	paths: readonly string[],
 ): Promise<Set<string>> {
-	const runs = await Promise.all(
-		argChunks(paths).map((chunk) =>
-			gitAsync(worktreePath, ["-c", "core.quotePath=false", "check-ignore", "--", ...chunk], {
-				timeoutMs: TIMEOUT_MS,
-				raw: true,
-			}),
-		),
-	);
 	const ignored = new Set<string>();
-	for (const run of runs) {
-		if (!run.ok) continue;
-		for (const raw of run.out.split("\n")) {
-			const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
-			if (line && !line.startsWith('"')) ignored.add(line);
+	// Give each batch its own deadline without starting a git process for every batch at once.
+	for (let start = 0; start < paths.length; start += PATHS_PER_BATCH * MAX_PARALLEL_BATCHES) {
+		const runs = [];
+		const end = Math.min(start + PATHS_PER_BATCH * MAX_PARALLEL_BATCHES, paths.length);
+		for (let i = start; i < end; i += PATHS_PER_BATCH) {
+			// check-ignore refuses pathspec magic; a leading ./ makes each worktree path literal.
+			const input = paths.slice(i, i + PATHS_PER_BATCH).map((path) => `./${path}\0`);
+			runs.push(
+				gitAsync(worktreePath, ["check-ignore", "-z", "--stdin"], {
+					stdin: new Blob(input),
+					timeoutMs: TIMEOUT_MS,
+					raw: true,
+				}),
+			);
+		}
+		for (const run of await Promise.all(runs)) {
+			if (!run.ok) continue;
+			for (const path of run.out.split("\0")) {
+				if (path) ignored.add(path.slice(2));
+			}
 		}
 	}
 	return ignored;

@@ -11,6 +11,7 @@ export type BoundedRun = BoundedRunBase & { out: string };
 export type BoundedBytesRun = BoundedRunBase & { out: Uint8Array };
 
 export type BoundedRunOptions = {
+	stdin?: Blob;
 	timeoutMs: number;
 	cwd?: string;
 	env?: Record<string, string | undefined>;
@@ -152,11 +153,11 @@ async function killTree(proc: Bun.Subprocess): Promise<void> {
 	proc.kill("SIGKILL");
 }
 
-function spawnOptions(opts: { cwd?: string; env?: Record<string, string | undefined> }) {
+function spawnOptions(opts: Pick<BoundedRunOptions, "cwd" | "env" | "stdin">) {
 	return {
 		cwd: opts.cwd ?? process.cwd(),
 		env: opts.env ?? process.env,
-		stdin: "ignore",
+		stdin: opts.stdin ?? "ignore",
 		stdout: "pipe",
 		stderr: "pipe",
 		detached: process.platform !== "win32",

@@ -40,7 +40,7 @@ test("ignoredPaths reports ignored folders, files and everything inside an ignor
 	expect(await ignoredPaths(dir, ["src", "src/y.ts"])).toEqual(new Set());
 });
 
-test("ignoredPaths splits long listings and reports nothing outside a repository", async () => {
+test("ignoredPaths handles long listings and reports nothing outside a repository", async () => {
 	const dir = repo();
 	const many = Array.from({ length: 1500 }, (_, index) => `src/${"n".repeat(20)}-${index}.log`);
 	expect((await ignoredPaths(dir, many)).size).toBe(1500);
@@ -48,3 +48,25 @@ test("ignoredPaths splits long listings and reports nothing outside a repository
 	mkdirSync(plain);
 	expect(await ignoredPaths(plain, ["a.log"])).toEqual(new Set());
 });
+
+test("an invalid path in one batch does not discard ignored names in later batches", async () => {
+	const paths = [
+		"../outside.log",
+		...Array.from({ length: 1_500 }, (_, index) => `src/file-${index}.ts`),
+		"src/last.log",
+	];
+	expect(await ignoredPaths(repo(), paths)).toEqual(new Set(["src/last.log"]));
+});
+
+for (const [label, path] of [
+	["quote", 'src/a"b.log'],
+	["tab", "src/a\tb.log"],
+	["newline", "src/a\nb.log"],
+	["backslash", "src/a\\b.log"],
+	["pathspec magic", ":(glob)literal.log"],
+] as const) {
+	test(`ignoredPaths preserves a literal filename containing ${label}`, async () => {
+		const dir = repo();
+		expect(await ignoredPaths(dir, [path, "src/y.ts"])).toEqual(new Set([path]));
+	});
+}
