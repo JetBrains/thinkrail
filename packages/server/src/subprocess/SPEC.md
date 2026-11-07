@@ -16,7 +16,7 @@ never what a particular child's output means.
 
 ## Boundary
 
-- **Owns:** `runBounded(argv, { timeoutMs, cwd?, env?, stdout?, signal? })` →
+- **Owns:** `runBounded(argv, { timeoutMs, cwd?, env?, stdout?, signal?, idleTimeoutMs?, onStderr? })` →
   `{ ok, out, err, timedOut, launchFailed, waitedMs, aborted? }`: capture both streams and complete on the child's
   **exit**; stdout defaults to decoded text, while `stdout: "bytes"` preserves it as `Uint8Array` for
   callers reading opaque content (stderr remains text diagnostics). POSIX children are detached
@@ -30,6 +30,12 @@ never what a particular child's output means.
   so callers may safely clean up a partial clone directory. Only cancellation carries `aborted: true` (`ok: false`, neither
   timeout nor launch failure), retaining captured stdout/stderr with the same drain grace. Once exit or
   expiry wins, later aborts have no effect; the listener is removed before draining.
+  **`idleTimeoutMs`** is a second, resettable deadline: any stdout or stderr bytes restart it, and its expiry
+  is reported exactly like `timeoutMs` (`timedOut: true`, tree killed) — the bound for a child that may
+  legitimately run for hours as long as it keeps talking (a large `git checkout --progress`).
+  **`onStderr`** receives each decoded stderr chunk as it arrives (the full text is still captured in
+  `err`); it is a pass-through, never parsed here, and a callback that throws is ignored so the drain and the
+  idle deadline keep working.
 - **Also owns:** `streamBounded(argv, { timeoutMs, cwd?, env? })` → `{ stdout, exited }` — the same
   spawn, deadline, group kill and stderr capture, for the one caller that must relay a child's stdout
   while it is still being produced (the host's `/blob` route). Completion is still the child's exit,

@@ -44,12 +44,16 @@ import type {
 	UserThemesSnapshot,
 	WireModel,
 	Workspace,
+	WorkspaceCreation,
+	WorkspaceCreationRemoved,
 	WorkspaceFsChangedPayload,
+	WorkspaceKickoff,
 } from "@thinkrail/contracts";
 import {
 	canMarkCompletionUnread,
 	customMessageText,
 	DEFAULT_CONFIG,
+	type ExtensionSettingValues,
 	isBackgroundCommandCompletionMessage,
 	isControlMessage,
 	isLineWidth,
@@ -423,6 +427,19 @@ export const SettingsSection = {
 	Environment: "environment",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
+
+export interface CreationChatHandoff {
+	workspaceId: string;
+	sessionId?: string;
+	kickoffError?: string;
+	sentPrompt?: { text: string; attachments: ChatAttachment[] };
+}
+
+export interface WorkspaceRetryDraft {
+	projectId: string;
+	baseRef: string;
+	kickoff?: WorkspaceKickoff;
+}
 
 export interface Toast {
 	id: string;
@@ -1013,7 +1030,11 @@ interface AppState {
 	navTickByWorkspace: Record<string, number>;
 	closedChatsByWorkspace: Record<string, ClosedChat[]>;
 	chatStartsByWorkspace: Record<string, number>;
-	worktreeCreationsByProject: Record<string, number>;
+	workspaceCreations: Record<string, WorkspaceCreation>;
+	activeCreationId: string | null;
+	creationChatToOpen: CreationChatHandoff | null;
+	sentCreationPrompts: Record<string, { text: string; attachments: ChatAttachment[] }>;
+	workspaceRetryDraft: WorkspaceRetryDraft | null;
 	deletedSessionsByWorkspace: Record<string, Record<string, true>>;
 	terminalsByWorkspace: Record<string, TerminalTab[]>;
 	activeTerminalByWorkspace: Record<string, string | null>;
@@ -1100,6 +1121,7 @@ interface AppState {
 	reviewAutoFix: boolean;
 	agentReviewEnabled: boolean;
 	disabledExtensions: string[];
+	extensionSettings: ExtensionSettingValues;
 	disabledPackages: string[];
 	locale: string;
 	localLocales: LocalLocalesSnapshot | null;
@@ -1308,8 +1330,17 @@ interface AppState {
 	setActiveTerminalTab: (workspaceId: string, tabKey: string, syncLayout?: boolean) => void;
 	beginChatStart: (workspaceId: string) => void;
 	endChatStart: (workspaceId: string) => void;
-	beginWorktreeCreation: (projectId: string) => void;
-	endWorktreeCreation: (projectId: string) => void;
+	setWorkspaceCreations: (creations: WorkspaceCreation[]) => void;
+	applyWorkspaceCreation: (
+		creation: WorkspaceCreation,
+		sentPrompt?: { text: string; attachments: ChatAttachment[] },
+	) => void;
+	applyWorkspaceCreationRemoved: (removed: WorkspaceCreationRemoved) => void;
+	selectCreation: (id: string) => void;
+	landOnFinishedCreation: (projectId: string, id: string) => void;
+	consumeCreationChat: () => CreationChatHandoff | null;
+	openWorkspaceRetry: (draft: WorkspaceRetryDraft) => void;
+	clearWorkspaceRetry: () => void;
 	openChatSession: (
 		workspaceId: string,
 		sessionId: string,
@@ -1505,6 +1536,10 @@ function configPatch(config: AppConfig) {
 		disabledExtensions: Array.isArray(config.disabledExtensions)
 			? config.disabledExtensions
 			: DEFAULT_CONFIG.disabledExtensions,
+		extensionSettings:
+			config.extensionSettings && typeof config.extensionSettings === "object"
+				? config.extensionSettings
+				: DEFAULT_CONFIG.extensionSettings,
 		disabledPackages: Array.isArray(config.disabledPackages)
 			? config.disabledPackages
 			: DEFAULT_CONFIG.disabledPackages,
@@ -1551,6 +1586,7 @@ function workspaceActivationPatch(
 			AppState,
 			| "selectedProjectId"
 			| "activeWorkspaceId"
+			| "activeCreationId"
 			| "workspaceSelectionHistory"
 			| "activeWorkspaceLiveLatch"
 	  >
@@ -1569,6 +1605,7 @@ function workspaceActivationPatch(
 	return {
 		selectedProjectId: workspace.projectId,
 		activeWorkspaceId: workspace.id,
+		activeCreationId: null,
 		activeWorkspaceLiveLatch,
 		workspaceSelectionHistory: withWorkspaceSelected(state.workspaceSelectionHistory, workspace.id),
 	};
@@ -1609,12 +1646,15 @@ function pruneExpandedProjects(
 function reconcileProjectNavigation(
 	state: Pick<AppState, "selectedProjectId" | "activeWorkspaceId" | "workspaces">,
 	projects: Project[],
-): Pick<AppState, "selectedProjectId" | "activeWorkspaceId"> | Record<string, never> {
+):
+	| Pick<AppState, "selectedProjectId" | "activeWorkspaceId" | "activeCreationId">
+	| Record<string, never> {
 	const currentProjectId = selectActiveWorkspaceProjectId(state) ?? state.selectedProjectId;
 	if (!currentProjectId || projects.some((project) => project.id === currentProjectId)) return {};
 	return {
 		selectedProjectId: projects[0]?.id ?? null,
 		activeWorkspaceId: null,
+		activeCreationId: null,
 	};
 }
 
@@ -2314,7 +2354,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 	navTickByWorkspace: {},
 	closedChatsByWorkspace: {},
 	chatStartsByWorkspace: {},
-	worktreeCreationsByProject: {},
+	workspaceCreations: {},
+	activeCreationId: null,
+	creationChatToOpen: null,
+	sentCreationPrompts: {},
+	workspaceRetryDraft: null,
 	deletedSessionsByWorkspace: nullProto<Record<string, Record<string, true>>>(),
 	terminalsByWorkspace: {},
 	activeTerminalByWorkspace: {},
@@ -2394,6 +2438,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	reviewAutoFix: DEFAULT_CONFIG.reviewAutoFix,
 	agentReviewEnabled: DEFAULT_CONFIG.agentReviewEnabled,
 	disabledExtensions: DEFAULT_CONFIG.disabledExtensions,
+	extensionSettings: DEFAULT_CONFIG.extensionSettings,
 	disabledPackages: DEFAULT_CONFIG.disabledPackages,
 	locale: DEFAULT_CONFIG.locale,
 	localLocales: null,
@@ -2734,6 +2779,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((state) => ({
 			selectedProjectId,
 			activeWorkspaceId: null,
+			activeCreationId: null,
 			...(opts?.reveal
 				? { expandedProjectIds: withExpandedProject(state.expandedProjectIds, selectedProjectId) }
 				: {}),
@@ -2773,6 +2819,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set({
 			selectedProjectId: null,
 			activeWorkspaceId: null,
+			activeCreationId: null,
 			routeChatTarget: null,
 		}),
 	activateWorkspace: (workspace) => {
@@ -3590,23 +3637,94 @@ export const useAppStore = create<AppState>((set, get) => ({
 						activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: tabKey },
 					},
 		),
-	beginWorktreeCreation: (projectId) =>
-		set((s) => ({
-			worktreeCreationsByProject: {
-				...s.worktreeCreationsByProject,
-				[projectId]: (s.worktreeCreationsByProject[projectId] ?? 0) + 1,
-			},
-		})),
-	endWorktreeCreation: (projectId) =>
-		set((s) => {
-			const remaining = (s.worktreeCreationsByProject[projectId] ?? 0) - 1;
+	setWorkspaceCreations: (creations) => {
+		const state = get();
+		const workspaceCreations = Object.fromEntries(creations.map((c) => [c.id, c]));
+		const lostActive =
+			state.activeCreationId !== null && !workspaceCreations[state.activeCreationId]
+				? state.workspaceCreations[state.activeCreationId]
+				: undefined;
+		set({
+			workspaceCreations,
+			sentCreationPrompts: Object.fromEntries(
+				Object.entries(state.sentCreationPrompts).filter(([id]) => workspaceCreations[id]),
+			),
+			activeCreationId: lostActive ? null : state.activeCreationId,
+		});
+		if (!lostActive) return;
+		const finished = state.workspaces[lostActive.projectId]?.find((w) => w.id === lostActive.id);
+		if (finished) get().activateWorkspace(finished);
+		else get().selectProject(lostActive.projectId);
+	},
+	applyWorkspaceCreation: (creation, sentPrompt) => {
+		const previous = get().workspaceCreations[creation.id];
+		set((state) => ({
+			workspaceCreations: { ...state.workspaceCreations, [creation.id]: creation },
+			...(sentPrompt
+				? { sentCreationPrompts: { ...state.sentCreationPrompts, [creation.id]: sentPrompt } }
+				: {}),
+		}));
+		if (previous?.state === "running" && creation.state === "failed")
+			toast.error(
+				creation.failure?.message ?? creation.name,
+				t("panels.newWorkspace.createFailed"),
+			);
+	},
+	applyWorkspaceCreationRemoved: (removed) => {
+		const state = get();
+		if (!state.workspaceCreations[removed.id] && state.activeCreationId !== removed.id) return;
+		const wasActive = state.activeCreationId === removed.id;
+		const sentPrompt = state.sentCreationPrompts[removed.id];
+		set({
+			workspaceCreations: omitKey(state.workspaceCreations, removed.id),
+			sentCreationPrompts: omitKey(state.sentCreationPrompts, removed.id),
+			activeCreationId: wasActive ? null : state.activeCreationId,
+		});
+		if (!wasActive) {
+			if (removed.kickoffError)
+				toast.error(removed.kickoffError, t("panels.newWorkspace.chatStartFailed"));
+			return;
+		}
+		if (!removed.workspace) {
+			get().selectProject(removed.projectId);
+			return;
+		}
+		get().activateWorkspace(removed.workspace);
+		if (removed.sessionId || removed.kickoffError)
+			set({
+				creationChatToOpen: {
+					workspaceId: removed.workspace.id,
+					...(removed.sessionId ? { sessionId: removed.sessionId } : {}),
+					...(removed.kickoffError ? { kickoffError: removed.kickoffError } : {}),
+					...(sentPrompt ? { sentPrompt } : {}),
+				},
+			});
+	},
+	landOnFinishedCreation: (projectId, id) => {
+		const state = get();
+		if (state.activeWorkspaceId !== null || state.activeCreationId !== null) return;
+		if (state.selectedProjectId !== projectId) return;
+		const finished = state.workspaces[projectId]?.find((w) => w.id === id);
+		if (finished) state.activateWorkspace(finished);
+	},
+	selectCreation: (id) =>
+		set((state) => {
+			const creation = state.workspaceCreations[id];
+			if (!creation) return {};
 			return {
-				worktreeCreationsByProject:
-					remaining > 0
-						? { ...s.worktreeCreationsByProject, [projectId]: remaining }
-						: omitKey(s.worktreeCreationsByProject, projectId),
+				selectedProjectId: creation.projectId,
+				activeWorkspaceId: null,
+				activeCreationId: id,
+				routeChatTarget: null,
 			};
 		}),
+	consumeCreationChat: () => {
+		const handoff = get().creationChatToOpen;
+		if (handoff) set({ creationChatToOpen: null });
+		return handoff;
+	},
+	openWorkspaceRetry: (draft) => set({ workspaceRetryDraft: draft }),
+	clearWorkspaceRetry: () => set({ workspaceRetryDraft: null }),
 	beginChatStart: (workspaceId) =>
 		set((s) => ({
 			chatStartsByWorkspace: {

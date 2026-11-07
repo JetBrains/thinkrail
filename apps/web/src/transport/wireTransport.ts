@@ -14,6 +14,8 @@ import type {
 	SessionStateRecord,
 	TurnChangeSet,
 	Workspace,
+	WorkspaceCreation,
+	WorkspaceCreationRemoved,
 	WorkspaceFsChangedPayload,
 	WorkspaceRemoved,
 	WsParams,
@@ -21,6 +23,7 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
+	EXTENSION_SETTINGS_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
@@ -33,6 +36,7 @@ import {
 	TOOL_RESPONSE_PROTOCOL_VERSION,
 	TURN_CHANGES_PROTOCOL_VERSION,
 	USER_THEMES_PROTOCOL_VERSION,
+	WORKSPACE_CREATION_PROTOCOL_VERSION,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
 import { currentLocale } from "@thinkrail/locales/react";
@@ -49,6 +53,10 @@ export function supportsHostUpdateRun(protocolVersion: number | null): boolean {
 
 export function supportsUserThemes(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= USER_THEMES_PROTOCOL_VERSION;
+}
+
+export function supportsExtensionSettings(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= EXTENSION_SETTINGS_PROTOCOL_VERSION;
 }
 
 export function supportsPiPackages(protocolVersion: number | null): boolean {
@@ -272,6 +280,29 @@ export function retireWorkspace(projectId: string, workspaceId: string): void {
 	}
 }
 
+async function loadWorkspaceCreations(connectionGeneration: number): Promise<void> {
+	const creations = await getTransport().request("workspace.listCreations", {});
+	const before = useAppStore.getState();
+	if (!isConnectedGeneration(before, connectionGeneration)) return;
+	const watched = before.activeCreationId
+		? before.workspaceCreations[before.activeCreationId]
+		: undefined;
+	before.setWorkspaceCreations(creations);
+	if (!watched || creations.some((creation) => creation.id === watched.id)) return;
+	const rows = await getTransport().request("workspace.list", {
+		projectId: watched.projectId,
+		includeDiffStats: false,
+	});
+	const current = useAppStore.getState();
+	if (!isConnectedGeneration(current, connectionGeneration)) return;
+	current.setWorkspaces(watched.projectId, rows);
+	current.landOnFinishedCreation(watched.projectId, watched.id);
+}
+
+function refreshWorkspaceCreations(connectionGeneration: number): void {
+	void loadWorkspaceCreations(connectionGeneration).catch(() => {});
+}
+
 export function initTransport(): WsTransport {
 	if (transport) return transport;
 	const piEvents = createPiEventBatcher((payloads) =>
@@ -316,6 +347,9 @@ export function initTransport(): WsTransport {
 		refreshLocalLocales(connectionGeneration);
 		refreshUserThemes(connectionGeneration);
 		refreshUserFonts(connectionGeneration);
+		if (welcome.protocolVersion >= WORKSPACE_CREATION_PROTOCOL_VERSION)
+			refreshWorkspaceCreations(connectionGeneration);
+		else useAppStore.getState().setWorkspaceCreations([]);
 		if (welcome.protocolVersion >= SESSION_STATE_PROTOCOL_VERSION) {
 			hydrateSessionStates(connectionGeneration);
 		} else {
@@ -436,6 +470,14 @@ export function initTransport(): WsTransport {
 		) {
 			hydrateSessionStates(store.connectionGeneration);
 		}
+	});
+
+	transport.subscribe(WS_CHANNELS.workspaceCreationChanged, (data) => {
+		useAppStore.getState().applyWorkspaceCreation(data as WorkspaceCreation);
+	});
+
+	transport.subscribe(WS_CHANNELS.workspaceCreationRemoved, (data) => {
+		useAppStore.getState().applyWorkspaceCreationRemoved(data as WorkspaceCreationRemoved);
 	});
 
 	transport.subscribe(WS_CHANNELS.workspaceUpdated, (data) => {

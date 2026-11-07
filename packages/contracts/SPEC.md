@@ -183,9 +183,13 @@ the palette ranks with — kept here so host-side search can rank with the same 
     command autocomplete rows, returned by live `session.getCommands`, skill-only pre-session `skill.list`,
     and mapped prompt-template listings), and **`SkillCatalogEntry`** + **`SkillDecision`** (`load`/`untrusted`/`pending-ack`/
     `disabled`) — the workspace Skills manager's `skills.state` rows.
-  - **`ExtensionCatalogEntry`** (`{ name, title, description?, enabled, tools, hasChildExtensions }`) — one
+  - **`ExtensionCatalogEntry`** (`{ name, title, description?, enabled, tools, hasChildExtensions, settings? }`) — one
     host-registry ThinkRail extension as `extension.list` reports it; `name` is the identity the
-    `AppConfig.disabledExtensions` list keys on, `tools` the names its parent factories register.
+    `AppConfig.disabledExtensions` list keys on, `tools` the names its parent factories register, and
+    `settings` (`ExtensionSettingDescriptor[]`, `{ key, default: boolean }`, absent below
+    `EXTENSION_SETTINGS_PROTOCOL_VERSION` = v105) the boolean settings the extension declares.
+    `ASK_DISCUSS_PROTOCOL_VERSION` (v105) is the host version that renders `ask_user_question`
+    `kind: "discuss"` answers; the card withholds Discuss below it.
   - **`SessionSummary`** — a chat session as the host reports it for hydration (read side); `live`
     distinguishes an in-memory session from a disk-only one. A frontend hydrates locally placed sessions and
     lists the rest in chat history for explicit reopen. The optional **`openTodos`** (count of non-`done`
@@ -438,7 +442,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   terminalWindowsShell, composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded,
   fileLineWidthBounded, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
   favoriteModels, recentModels, reviewAutoFix, agentReviewEnabled, subagentsEnabled, subagentMaxConcurrent,
-  jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, disabledExtensions, onboardingDismissed, interfaceFont,
+  jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, disabledExtensions, extensionSettings, onboardingDismissed, interfaceFont,
   codeFont, codeFontSize, codeLigatures, fontWeightOffset }` — an extensible bag; the five font fields join at
   v102 and normalize together through `normalizeFontSettings` (host load, web store, fonts runtime); the line-width fields join
   the wire at protocol v61 and `terminalWindowsShell` at v62. `onboardingDismissed` (v94, default `false`)
@@ -472,7 +476,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   tool and applies live to open sessions — the Review button is independent (see [[submodule-server-host-plan-review]]); `disabledExtensions` (default `[]`, on the wire
   from `EXTENSION_CATALOG_PROTOCOL_VERSION` = v82) names the host-registry extensions the user switched off —
   unknown names are kept and ignored, and the host applies it to new and open sessions (see
-  [[submodule-server-extensions]]); `customLayoutPresets` is the bounded
+  [[submodule-server-extensions]]); `extensionSettings` (`ExtensionSettingValues`, default `{}`, on the wire from
+  `EXTENSION_SETTINGS_PROTOCOL_VERSION` = v105) maps extension name → setting key → boolean for the settings
+  an `ExtensionCatalogEntry` declares — an absent key means the descriptor's `default`, and
+  `settings.update { extensionSettings }` merges per key; `customLayoutPresets` is the bounded
   resource-free catalog and is the **only** layout value synchronized by the host; current/default preset
   and group limits are web-local); `analyticsEnabled` is the additional-data preference and host gate,
   default `false`, while `analyticsConsentConfirmed` defaults `false` and records completion of the initial
@@ -701,6 +708,23 @@ the palette ranks with — kept here so host-side search can rank with the same 
   returning `JbcentralActionResult`; none accepts an executable, artifact path, output, URL, or secret from
   the client) / **`jbcentralQuota`** (v59; optional `force` bypasses completed-cache age but still joins an
   in-flight read; disabled/unhealthy returns `hidden` without invoking quota)) /
+  the **background-creation set** (v104, **`WORKSPACE_CREATION_PROTOCOL_VERSION`**; a client facing an
+  older host falls back to `workspace.create`): **`workspace.startCreate`** (`{ projectId, name?, baseRef?,
+  kickoff? }` → a **`WorkspaceCreation`** as soon as the host has reserved its branch and path — the
+  checkout runs afterwards; `kickoff` is a **`WorkspaceKickoff`** `{ text, images?, model?, thinkingLevel? }`
+  the host holds and sends as the first chat message once the workspace exists, so it survives the window
+  closing) / **`workspace.listCreations`** (every creation the host still holds, all projects — a
+  (re)connecting client's hydration) / **`workspace.retryCreation`** (`{ id }`; cleans up an `interrupted` or
+  `failed` creation and runs it again from the start) / **`workspace.dismissCreation`** (`{ id }` → `{ kickoff? }`; cleans up and drops
+  an `interrupted` or `failed` creation, returning its full kickoff so *Edit & retry* can prefill the
+  dialog). A creation's `state` is `running` while the host works on it, `interrupted` when the host
+  restarted mid-create (never resumed on its own), `failed` with `failure: { message, code?, cleanedUp? }` (git's text,
+  for display; `code` is one of `WORKTREE_ADD_FAILED`, `WORKTREE_CHECKOUT_FAILED`,
+  `WORKTREE_CHECKOUT_STALLED`, `WORKSPACE_PATH_TAKEN`; `cleanedUp` only when a partial folder or branch existed
+  and the host removed it); `phase` is `preparing` (fetch + worktree registration) or `checking-out` (with
+  `progress: { done, total }` files once git reports it); `kickoff` on the wire is only a preview
+  `{ text, imageCount }` — images stay host-side. `workspace.create` stays: it starts a creation and
+  resolves the finished `Workspace` /
   **`workspace.listExisting`** (the selected project's unattached Git worktrees, with detached rows
   disabled by status) / **`workspace.openExisting`** (revalidate + register one branch-backed checkout as
   `kind: "external"`, emitting the ordinary `workspace.created`, without mutating Git or disk) /
@@ -874,7 +898,13 @@ the palette ranks with — kept here so host-side search can rank with the same 
   publisher (never a per-client optimistic mutation). `created`/`updated` carry the **full persisted
   `Workspace` snapshot** (idempotent under the transport's last-value replay, so e.g. an agent rename
   racing a manual one merges by `id` — never a delta); `removed` carries a **`WorkspaceRemoved`** id
-  pair (`{ projectId, id }` — the record is already gone) / **`review.changed`** — a workspace's review
+  pair (`{ projectId, id }` — the record is already gone) / the **creation pair** (v104) —
+  **`workspace.creationChanged`** (the full `WorkspaceCreation` snapshot on every state, phase or progress
+  change; progress is throttled host-side) and **`workspace.creationRemoved`**
+  (**`WorkspaceCreationRemoved`** `{ id, projectId, workspace?, sessionId?, kickoffError? }`: with
+  `workspace` when the creation became that workspace (same id; the ordinary `workspace.created` also
+  fires), plus `sessionId` of the chat the host started from the kickoff or `kickoffError` when that chat
+  could not start; without `workspace` when it was dismissed) / **`review.changed`** — a workspace's review
   state changed (emitted by the server's `reviews` publisher on every mutation — UI edits, agent
   `resolve_comment` calls, re-anchoring — so all clients converge, same pattern as the trio) /
   **`turn.changed`** — the `TurnChangeSet` the host just recorded for a settled agent run (emitted by the

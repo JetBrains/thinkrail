@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { cachedHighlight, highlightCode } from "@/lib/highlightCode";
+import { shikiLanguageId } from "@/lib/highlighter";
 import { longMarkdown } from "../../../../e2e/perf/longMarkdown";
-import { BlockMarkdown, Markdown } from "./Markdown";
+import { BlockMarkdown, fenceLanguage, Markdown } from "./Markdown";
 import { MARKDOWN_EDGE_FIXTURES } from "./markdownFixtures.test";
 
 function withoutCarriageReturns(html: string) {
@@ -61,4 +62,28 @@ test("static renders never read the highlight cache", { timeout: 20_000 }, async
 	const html = renderToStaticMarkup(<Markdown text={`\`\`\`ts\n${code}\n\`\`\``} />);
 	expect(html).toContain(code);
 	expect(html).not.toContain("shiki");
+});
+
+describe("fenceLanguage", () => {
+	const components = {
+		code: ({ className }: { className?: string | undefined }) => (
+			<i>{shikiLanguageId(fenceLanguage(className) ?? "")}</i>
+		),
+	};
+
+	for (const [tag, id] of [
+		["c", "c"],
+		["c++", "cpp"],
+		["c#", "csharp"],
+		["java", "java"],
+		["ts:src/a.ts", "typescript"],
+		["js{1,3}", "javascript"],
+	]) {
+		test(`resolves a ${tag} fence to ${id}`, () => {
+			const html = renderToStaticMarkup(
+				<Markdown text={`\`\`\`${tag}\ncode\n\`\`\``} components={components} />,
+			);
+			expect(html).toContain(`<i>${id}</i>`);
+		});
+	}
 });

@@ -367,7 +367,7 @@ export function createToolResponseWaiters(): ToolResponseWaiters {
 
 export function toolResponseSessionServices(
 	waiters: ToolResponseWaiters,
-): ExtensionSessionServices {
+): Pick<ExtensionSessionServices, "expectToolResponse" | "awaitToolResponse"> {
 	return {
 		expectToolResponse: (toolCallId) => waiters.expect(toolCallId),
 		awaitToolResponse: async (toolCallId, signal) => {

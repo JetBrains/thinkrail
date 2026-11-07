@@ -60,10 +60,12 @@ create the tools it needs based on how you actually work.
   place, and bundled workflows guide project setup, design brainstorming, and shipping a pull request —
   pushing the workspace branch and opening or updating its GitHub PR through your own `gh`.
 - **Agent tools beyond the shell.** Web research, structured multiple-choice questions the agent asks you
-  in the chat instead of guessing, and inline diagrams, option comparisons and file previews rendered right
-  in the chat — when the agent proposes a UI change it shows a before/after mockup you can comment on like
-  a diff. Settings → Extensions lists the ThinkRail extensions the agent gets and lets you switch each one
-  off — and installs any `pi` package by source (npm, git or a local folder), for you or for a repository,
+  in the chat instead of guessing — with mockups, diagrams and diffs right in the question, your own answer
+  and notes, a one-click "Discuss" when a question is unclear, and a fully keyboard-driven card — and inline
+  diagrams, option comparisons and file previews rendered right in the chat — when the agent proposes a UI
+  change it shows a before/after mockup you can comment on like a diff. Settings → Extensions lists the
+  ThinkRail extensions the agent gets and lets you switch each one off (and, for questions, their rich
+  previews) — and installs any `pi` package by source (npm, git or a local folder), for you or for a repository,
   showing what each one adds and letting you switch packages, their individual extensions and skills, and
   pi's built-ins on or off; open chats pick a change up when their turn ends. The questions and visualize
   tools are also published as plain `pi` packages, one each —

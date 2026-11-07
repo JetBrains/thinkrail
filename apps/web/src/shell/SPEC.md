@@ -137,10 +137,12 @@ Starting an agent session is seconds-long (watcher readiness + `session.create`)
 every chat-start path — the New-chat buttons (empty center and tab bar) and Settings › MCP servers' *Open a
 chat*, which share `panels/openChat`'s `startChatInTab`, `NewWorkspaceDialog`'s create-and-kick-off flow,
 and reopening a closed chat (`openChatInTab`) — brackets its request with the store's per-workspace
-chat-start counter (`beginChatStart`/`endChatStart`, a counter because starts can overlap); worktree
-creation does the same per-project (`beginWorktreeCreation`/`endWorktreeCreation`), which `ProjectTree`
-renders as a pending row under the project — the list stays put and the new worktree lands where the
-row was. Consumers show it as an inline pending state where the result will appear: the empty-center button flips to a disabled
+chat-start counter (`beginChatStart`/`endChatStart`, a counter because starts can overlap). Worktree
+creation is **host-owned state, not a client counter**: each background creation is a row under its project
+and, when selected, the shell renders `panels/WorkspaceCreation`'s view in `ProjectHome`'s main pane (its
+`main` slot) instead of the welcome surface — the list stays put and the new worktree lands where its row
+was. The shell also mounts the creation chat handoff and a second `NewWorkspaceDialog` for the store's Edit &
+retry draft. Consumers show it as an inline pending state where the result will appear: the empty-center button flips to a disabled
 spinner ("Starting chat…", also the double-click guard), and the chat-history trigger spins while a
 reopened chat hydrates. Workspace removal drops the counter with the rest of the per-workspace state.
 

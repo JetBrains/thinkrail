@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { isImeComposing, yieldEscapeToIme } from "./keyboard";
+import { hasPlatformModifier, isApplePlatform, isImeComposing, yieldEscapeToIme } from "./keyboard";
 
 function escapeEvent(init: { isComposing: boolean; keyCode: number }) {
 	let prevented = false;
@@ -15,6 +15,21 @@ function escapeEvent(init: { isComposing: boolean; keyCode: number }) {
 	} as unknown as KeyboardEvent;
 	return { event, prevented: () => prevented };
 }
+
+describe("the platform modifier", () => {
+	test("is Cmd on Apple platforms and Ctrl elsewhere, never both", () => {
+		expect(isApplePlatform("MacIntel")).toBe(true);
+		expect(isApplePlatform("iPhone")).toBe(true);
+		expect(isApplePlatform("Win32")).toBe(false);
+		const cmd = { metaKey: true, ctrlKey: false };
+		const ctrl = { metaKey: false, ctrlKey: true };
+		expect(hasPlatformModifier(cmd, "MacIntel")).toBe(true);
+		expect(hasPlatformModifier(ctrl, "MacIntel")).toBe(false);
+		expect(hasPlatformModifier(ctrl, "Linux x86_64")).toBe(true);
+		expect(hasPlatformModifier(cmd, "Win32")).toBe(false);
+		expect(hasPlatformModifier({ metaKey: true, ctrlKey: true }, "MacIntel")).toBe(false);
+	});
+});
 
 describe("isImeComposing", () => {
 	test("an event inside a composition belongs to the IME", () => {
