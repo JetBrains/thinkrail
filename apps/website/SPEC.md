@@ -371,6 +371,10 @@ current desktop-first hierarchy rather than freezing obsolete CLI-only instructi
   active); the terminal keeps its static install transcript — `main.ts` guards make every
   landing-only enhancement inert (no sections → no scroll-spy; only the landing command tabs drive the
   terminal replay).
+- **A post may have hand-authored sub-pages** at `src/pages/blog/<slug>/<page>.astro` (e.g.
+  `/blog/the-chat/languages/`, the list of highlighted languages linked from that post). They render
+  through `BlogLayout` but are not posts: no collection entry, no index/RSS/Files-list row, no install
+  picker. Their data is copied, not imported — the site never depends on `apps/web`.
 - **Every article ends with the install picker.** `src/components/InstallPicker.astro` is the
   blog picker markup (OS tabs, desktop downloads, **Browser UI via command line** disclosure with Windows
   shell tabs). `src/pages/blog/[slug].astro` renders it in a `.blog-post-install`
