@@ -21,6 +21,7 @@ function model(id: string, patch: Partial<CustomEndpointModel> = {}): CustomEndp
 		reasoning: null,
 		vision: null,
 		tools: null,
+		chatTemplateThinking: null,
 		...patch,
 	};
 }
@@ -159,4 +160,19 @@ test("an edit can change the path but not the origin of a saved server", () => {
 	expect(addressMoved({ ...draft, baseUrl: "https://other.example/v1" })).toBe(true);
 	expect(canSave({ ...draft, baseUrl: "https://other.example/v1" })).toBe(false);
 	expect(addressMoved({ ...newEndpointDraft(), baseUrl: "https://other.example/v1" })).toBe(false);
+});
+
+test("a re-detect keeps a chat-template thinking fact the server stopped reporting", () => {
+	const draft = editEndpointDraft({
+		...saved,
+		models: [model("hybrid", { reasoning: true, chatTemplateThinking: true })],
+	});
+	const merged = mergeProbe(draft, {
+		ok: true,
+		baseUrl: saved.baseUrl,
+		models: [model("hybrid", { contextWindow: 16_384 })],
+	});
+	expect(merged.models[0]).toMatchObject({ chatTemplateThinking: true, contextWindow: 16_384 });
+	expect(draftParams(merged).models[0]?.chatTemplateThinking).toBe(true);
+	expect(addManualModel(merged, "new").models.at(-1)?.chatTemplateThinking).toBeNull();
 });
