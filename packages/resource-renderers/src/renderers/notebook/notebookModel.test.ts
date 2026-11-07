@@ -267,3 +267,16 @@ test("200 disjoint notebook cells align within the bounded similarity budget", (
 		lineDiffs.mockRestore();
 	}
 });
+
+test("terminal control strings and character set changes leave notebook text intact", () => {
+	for (const sequence of [
+		"\x1bPprivate\x1b\\",
+		"\x1bXprivate\x9c",
+		"\x1b^private\x1b\\",
+		"\x1b_private\x9c",
+		"\x9dtitle\x07",
+		"\x1b(B",
+	]) {
+		expect(stripAnsi(`before${sequence}after`)).toBe("beforeafter");
+	}
+});
