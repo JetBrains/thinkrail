@@ -798,15 +798,15 @@ describe("file change signal", () => {
 	});
 });
 
-test("the host-named default workspace shows in the interface language until it is renamed", () => {
-	applyLocale("de", { de: { "store.workspace.defaultName": "Standard" } });
+test("the host-named default workspace shows in the interface language until it is renamed", async () => {
+	await applyLocale("de", { de: { "store.workspace.defaultName": "Standard" } });
 	try {
 		const t = currentTranslator();
 		expect(workspaceName(t, { kind: "default", name: "Default" })).toBe("Standard");
 		expect(workspaceName(t, { kind: "default", name: "Main checkout" })).toBe("Main checkout");
 		expect(workspaceName(t, { name: "Default" })).toBe("Default");
 	} finally {
-		applyLocale("en", {});
+		await applyLocale("en", {});
 	}
 });
 
