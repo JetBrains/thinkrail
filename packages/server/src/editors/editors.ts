@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { win32 } from "node:path";
 import type { EditorInfo } from "@thinkrail/contracts";
 import { spawnDetached } from "@thinkrail/shared/spawn";
 
@@ -32,10 +34,10 @@ export type WhichFn = (bin: string) => string | null;
 export const defaultWhich: WhichFn = (bin) =>
 	Bun.which(bin, { PATH: process.env.PATH ?? "" }) ?? null;
 
-export type SpawnFn = (cmd: string[]) => void;
+export type SpawnFn = (cmd: string[], options?: { windowsHide?: boolean }) => void;
 
-export const defaultSpawn: SpawnFn = (cmd) => {
-	if (!spawnDetached(cmd)) throw new Error("Failed to launch the requested application");
+export const defaultSpawn: SpawnFn = (cmd, options) => {
+	if (!spawnDetached(cmd, options)) throw new Error("Failed to launch the requested application");
 };
 
 export function listAvailableEditors(which: WhichFn = defaultWhich): EditorInfo[] {
@@ -80,14 +82,15 @@ export function revealInFileManager(
 	spawn: SpawnFn = defaultSpawn,
 	platform: NodeJS.Platform = process.platform,
 ): void {
+	if (!existsSync(worktreePath)) throw new Error(`Folder not found: ${worktreePath}`);
 	const cmd =
 		platform === "darwin"
 			? ["open", worktreePath]
 			: platform === "win32"
-				? ["explorer", worktreePath]
+				? ["explorer", win32.normalize(worktreePath)]
 				: ["xdg-open", worktreePath];
 	try {
-		spawn(cmd);
+		spawn(cmd, { windowsHide: false });
 	} catch {
 		throw new Error(`No file manager launcher available on this host (${platform}).`);
 	}
