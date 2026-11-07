@@ -38,6 +38,7 @@ import {
 	newEndpointDraft,
 	probeFailureText,
 	probeTarget,
+	setModelContextWindow,
 } from "./customEndpointDraft";
 import { SettingsGroup } from "./SettingsGroup";
 import { SettingsSwitch } from "./SettingsSwitch";
@@ -301,6 +302,25 @@ function EndpointDialog({
 											</span>
 											<ModelFacts model={model} />
 										</span>
+										<input
+											type="number"
+											min={1}
+											step={1024}
+											data-testid="custom-endpoints-context"
+											aria-label={t("settings.customEndpoints.contextLabel", {
+												name: model.id,
+											})}
+											title={t("settings.customEndpoints.contextHint")}
+											className={cn(INPUT_CLASS, "tr-code-text w-96 text-right")}
+											placeholder={t("settings.customEndpoints.contextPlaceholder")}
+											value={model.contextWindow ?? ""}
+											disabled={busy || !model.selected}
+											onChange={(event) =>
+												setDraft((current) =>
+													setModelContextWindow(current, model.id, event.target.value),
+												)
+											}
+										/>
 										<SettingsSwitch
 											checked={model.selected}
 											disabled={busy}

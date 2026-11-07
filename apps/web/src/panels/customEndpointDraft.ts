@@ -8,6 +8,8 @@ import type { Translator } from "@thinkrail/locales/react";
 
 export interface EndpointModelRow extends CustomEndpointModel {
 	selected: boolean;
+	/** Client-only: a hand-set context window survives re-probes until cleared. */
+	contextWindowEdited?: boolean;
 }
 
 export interface EndpointDraft {
@@ -80,18 +82,56 @@ export function addManualModel(draft: EndpointDraft, rawId: string): EndpointDra
 	return { ...draft, models: [...draft.models, row] };
 }
 
+/**
+ * Set a model's context window by hand. Relay endpoints rarely report the
+ * real window from `/v1/models`, and pi's default applies when the field is
+ * absent — an empty value clears back to that automatic behaviour.
+ */
+export function setModelContextWindow(
+	draft: EndpointDraft,
+	id: string,
+	raw: string,
+): EndpointDraft {
+	const trimmed = raw.trim();
+	const parsed = trimmed === "" ? null : Number(trimmed);
+	const contextWindow =
+		parsed !== null && Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+	return {
+		...draft,
+		models: draft.models.map((model) =>
+			model.id === id
+				? {
+						...model,
+						contextWindow,
+						// A hand-set value is sticky across re-probes; clearing hands
+						// the row back to automatic so the next probe restores the
+						// detected window.
+						contextWindowEdited: contextWindow !== null,
+					}
+				: model,
+		),
+	};
+}
+
 export function mergeProbe(
 	draft: EndpointDraft,
 	probe: Extract<CustomEndpointProbe, { ok: true }>,
 ): EndpointDraft {
 	const known = new Map(draft.models.map((model) => [model.id, model]));
 	const firstDetect = draft.models.length === 0;
-	const found: EndpointModelRow[] = probe.models.map((model) => {
+	const found: EndpointModelRow[] = probe.models.map((model): EndpointModelRow => {
 		const previous = known.get(model.id);
 		if (!previous) return { ...model, selected: firstDetect };
+		// A hand-set window wins over the probe — server listings are where
+		// relays under-report. Cleared rows follow the probe again.
+		const contextWindow =
+			previous.contextWindowEdited === true && previous.contextWindow !== null
+				? previous.contextWindow
+				: (model.contextWindow ?? previous.contextWindow);
 		return {
+			...previous,
 			...model,
-			contextWindow: model.contextWindow ?? previous.contextWindow,
+			contextWindow,
 			maxTokens:
 				model.contextWindow === null ? (model.maxTokens ?? previous.maxTokens) : model.maxTokens,
 			reasoning: model.reasoning ?? previous.reasoning,
@@ -119,7 +159,7 @@ export function draftParams(draft: EndpointDraft): CustomEndpointDraft {
 		...(key === undefined ? {} : { apiKey: key }),
 		models: draft.models
 			.filter((model) => model.selected)
-			.map(({ selected: _selected, ...model }) => model),
+			.map(({ selected: _selected, contextWindowEdited: _edited, ...model }) => model),
 	};
 }
 

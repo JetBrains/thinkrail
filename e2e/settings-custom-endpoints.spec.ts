@@ -107,6 +107,7 @@ test("a keyed gateway is found, saved to models.json, chatted with, edited and r
 	await expect(dialog.getByTestId("custom-endpoints-url")).toHaveValue(`${origin}/v1`);
 	const row = dialog.locator(`[data-testid="custom-endpoints-row"][data-model="${MODEL}"]`);
 	await expect(row).toContainText("66K");
+	await row.getByTestId("custom-endpoints-context").fill("262144");
 	const unreported = dialog.locator(
 		`[data-testid="custom-endpoints-row"][data-model="${UNREPORTED}"]`,
 	);
@@ -131,7 +132,7 @@ test("a keyed gateway is found, saved to models.json, chatted with, edited and r
 		baseUrl: `${origin}/v1`,
 		apiKey: KEY,
 		compat: { supportsStore: false, supportsDeveloperRole: false, maxTokensField: "max_tokens" },
-		models: [{ id: MODEL, contextWindow: 65_536, maxTokens: 16_384 }],
+		models: [{ id: MODEL, contextWindow: 262_144, maxTokens: 16_384 }],
 	});
 	await expect(
 		page.locator(`[data-testid="provider-row"][data-provider="${providerId}"]`),
