@@ -30,8 +30,7 @@ ref off the workspace-create critical path.
   instead, so a large but healthy repository still finishes. Index writers (the initial `add -A` + `commit` of
   `initProject`, `gitCommitPaths`' add and commit) pass **`INDEX_WRITE_TIMEOUT_MS`**: the same 5 minutes, but
   `null` (no deadline) on Windows, where the timeout kill is `TerminateProcess` and git cannot remove
-  `index.lock`. `createWorkspace`'s `worktree add` passes `timeoutMs: null`: a large checkout legitimately
-  runs for minutes. `renameWorkspace`'s `branch -m` also passes `null`: a kill between deleting the old ref and
+  `index.lock`. `renameWorkspace`'s `branch -m` also passes `null`: a kill between deleting the old ref and
   creating the new one leaves the worktree without a branch, and nothing here can recover it. Known gap: a Windows read that refreshes the index (`status`, `diff`) and hits its deadline
   can still leave `index.lock` behind. **A timeout is not an answer, so sync git throws on it by default:**
   `git`/`gitBytes` throw a **`GitTimeoutError`** (`CodedError("GIT_TIMEOUT")`, so error tracking tells a
@@ -53,7 +52,15 @@ ref off the workspace-create critical path.
   caller run prompt-free with its own environment and pins blob diagnostics to English; the captured runners'
   optional `opts.redactStderr` transforms diagnostics before any truncation or timeout wording (clone uses
   it for credential-bearing URL rewrites). `opts.network`
-  marks fetch/push solely so a no-output timeout can name the remote. **A timeout keeps whatever git wrote
+  marks fetch/push solely so a no-output timeout can name the remote. `gitAsync` alone also passes
+  `opts.idleTimeoutMs` (a silence deadline that output resets) and `opts.onStderr` (live stderr chunks)
+  through to the runner — the shape of `workspaces`' long `checkout --progress`, which may run for hours but
+  must not hang silently. **`gitRunHook(cwd, hook, args,
+  opts?)`** runs a repository hook the way git itself would: `git hook run --ignore-missing`, so
+  `core.hooksPath` and git's hook environment apply. Git older than 2.36 has no `hook` command; a
+  `git hook -h` probe under `LC_ALL=C` recognises it by the untranslated `'hook' is not a git command`, and only
+  then is the executable script that `rev-parse --git-path hooks/<hook>` names run directly through the same
+  bounded runner (with the caller's deadlines). **A timeout keeps whatever git wrote
   before the kill**: the runner drains continuously, so on
   expiry its `err` already holds the real diagnosis — a publickey rejection, a proxy's refusal, `remote:`
   progress proving a large transfer was simply still running. When git wrote *nothing*, an explicitly
@@ -112,7 +119,9 @@ ref off the workspace-create critical path.
   multi-spawn read can never freeze the host's single cooperative event loop (profiled at 119–246ms of
   frozen loop per `workspace.list` before the migration). The sync runner stays for **writers** (their
   load→mutate→save atomicity depends on not interleaving — `gitCommitPaths`' index snapshot/restore, the
-  `workspaces` writers) and for **micro-plumbing leaf helpers** shared with those writers
+  short `workspaces` writers; a workspace's creation is the exception, because its checkout can take
+  minutes: it runs entirely through `gitAsync` as a persisted background job, see
+  [[submodule-server-workspaces]]) and for **micro-plumbing leaf helpers** shared with those writers
   (`currentBranch`/`tryCurrentBranch`/`resolveDefaultBranch`/`resolveCommitOid`/`readBlobAt`/`gitHeadSha`
   — single fast local ref reads), plus `gitUncommittedPaths`, the deliberate lifecycle exception that
   snapshots a TODO work window before the agent can continue past its `in_progress` tool end;
@@ -348,7 +357,7 @@ ref off the workspace-create critical path.
   `gitignored`, so the Files tree can dim them. It never throws: a non-repository, a failure or a timeout
   reports nothing. Names git must C-quote (a `"`, `\` or control character) are never reported, because
   `check-ignore -z` needs stdin, which the bounded runners do not offer.
-- **Public surface (barrel):** `git`, `gitAsync`, `gitAsyncBytes`, `gitAsyncStream`, `nonInteractiveGitEnv`, `SLOW_GIT_TIMEOUT_MS`, `INDEX_WRITE_TIMEOUT_MS`, `throwOnTimeout`,
+- **Public surface (barrel):** `git`, `gitAsync`, `gitAsyncBytes`, `gitAsyncStream`, `gitRunHook`, `nonInteractiveGitEnv`, `SLOW_GIT_TIMEOUT_MS`, `INDEX_WRITE_TIMEOUT_MS`, `throwOnTimeout`,
   `setSyncGitTimeoutForTests`,
   `remoteRefOid`, `remoteRefOidAsync`, `remoteTrackingRef`, `gitStatus`,
   `gitUncommittedPaths`, `gitDiffFile`,

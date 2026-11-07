@@ -20,6 +20,7 @@ const KEY = {
 	tab: "\t",
 	shiftTab: "\x1b[Z",
 	space: " ",
+	ctrlEnter: "\x1b[13;5u",
 };
 
 const theme = {
@@ -99,8 +100,13 @@ function open(...questions: AskUserQuestionItem[]) {
 	};
 }
 
+const answered = (outcomes: AskOutcome[]) => {
+	const outcome = outcomes[0];
+	return outcome?.kind === "answered" ? outcome.result.answers : undefined;
+};
+
 describe("QuestionnaireComponent — single question", () => {
-	test("shows the question, marked options, the recommendation, Other and Chat", () => {
+	test("shows the question, marked options, the recommendation, Other, Submit and Chat", () => {
 		const { screen } = open(library);
 		const shown = screen();
 		expect(shown).toContain("Which library should we use for dates?");
@@ -109,15 +115,21 @@ describe("QuestionnaireComponent — single question", () => {
 		expect(shown).toContain("Why: smallest bundle for our usage");
 		expect(shown).toContain("○ luxon");
 		expect(shown).toContain("○ Other: type your own answer…");
+		expect(shown).toContain("Submit answers");
 		expect(shown).toContain("Chat about this");
-		expect(shown).toContain("↑↓ move & select");
+		expect(shown).toContain("↑↓ move · Enter select · Space note · d discuss · Ctrl+Enter submit");
 		expect(shown).not.toContain("Review & submit");
 	});
 
-	test("arrows move and select; Enter submits the selected option", () => {
+	test("arrows only move; Enter picks and stays; Submit answers or Ctrl+Enter sends", () => {
 		const { press, screen, outcomes } = open(library);
 		press(KEY.down);
+		expect(screen()).toContain("› ○ luxon");
+		press(KEY.enter);
 		expect(screen()).toContain("› ● luxon");
+		expect(outcomes).toEqual([]);
+		press(KEY.down, KEY.down);
+		expect(screen()).toContain("›   Submit answers");
 		press(KEY.enter);
 		expect(outcomes).toEqual([
 			{
@@ -137,35 +149,36 @@ describe("QuestionnaireComponent — single question", () => {
 		]);
 	});
 
-	test("Enter on the first row selects and submits it", () => {
+	test("Ctrl+Enter sends from an option row", () => {
 		const { press, outcomes } = open(library);
-		press(KEY.enter);
-		const outcome = outcomes[0];
-		expect(outcome?.kind === "answered" && outcome.result.answers[0]?.answer).toBe(
-			"date-fns (Recommended)",
-		);
+		press(KEY.enter, KEY.ctrlEnter);
+		expect(answered(outcomes)?.[0]?.answer).toBe("date-fns (Recommended)");
 	});
 
-	test("Other opens an editor; Enter saves and submits the own answer", () => {
+	test("Ctrl+Enter with nothing answered asks for an answer first", () => {
+		const { press, screen, outcomes } = open(library);
+		press(KEY.ctrlEnter);
+		expect(screen()).toContain("Answer at least one question first, or press Esc to skip");
+		expect(outcomes).toEqual([]);
+	});
+
+	test("Other opens an editor; Enter saves without sending and parks on the Other row", () => {
 		const { press, type, screen, outcomes } = open(library);
 		press(KEY.down, KEY.down, KEY.enter);
 		expect(screen()).toContain("Enter save · Shift+Enter new line · Esc back");
 		type("dayjs");
 		press(KEY.enter);
-		expect(outcomes[0]).toEqual({
-			kind: "answered",
-			result: {
-				cancelled: false,
-				answers: [
-					{
-						questionIndex: 0,
-						question: "Which library should we use for dates?",
-						kind: "custom",
-						answer: "dayjs",
-					},
-				],
+		expect(outcomes).toEqual([]);
+		expect(screen()).toContain("› ● Other: dayjs");
+		press(KEY.ctrlEnter);
+		expect(answered(outcomes)).toEqual([
+			{
+				questionIndex: 0,
+				question: "Which library should we use for dates?",
+				kind: "custom",
+				answer: "dayjs",
 			},
-		});
+		]);
 	});
 
 	test("typing on the Other row starts the own answer; Esc keeps and selects it", () => {
@@ -178,19 +191,18 @@ describe("QuestionnaireComponent — single question", () => {
 		expect(outcomes).toEqual([]);
 	});
 
-	test("n attaches a note to the focused option", () => {
+	test("Space opens the focused option's note; the saved note becomes its own row", () => {
 		const { press, type, screen, outcomes } = open(library);
-		press(KEY.down, "n");
+		press(KEY.down, KEY.space);
 		expect(screen()).toContain("Note for luxon:");
+		expect(screen()).toContain("● luxon");
 		type("for tz");
 		press(KEY.enter);
-		expect(screen()).toContain("Note: for tz");
+		expect(screen()).toContain("›   ✎ for tz");
 		press(KEY.enter);
-		const outcome = outcomes[0];
-		expect(outcome?.kind === "answered" && outcome.result.answers[0]).toMatchObject({
-			answer: "luxon",
-			notes: "for tz",
-		});
+		expect(screen()).toContain("Note for luxon:");
+		press(KEY.escape, KEY.ctrlEnter);
+		expect(answered(outcomes)?.[0]).toMatchObject({ answer: "luxon", notes: "for tz" });
 	});
 
 	test("Esc skips the whole questionnaire", () => {
@@ -212,77 +224,173 @@ describe("QuestionnaireComponent — single question", () => {
 	});
 });
 
+describe("QuestionnaireComponent — discuss, previews and one option", () => {
+	test("d on an option marks the question for discussion; its editor saves onto a row", () => {
+		const { press, type, screen, outcomes } = open(library);
+		press(KEY.down, "d");
+		expect(screen()).toContain("Discuss first");
+		expect(screen()).toContain("What should the agent explain?");
+		expect(screen()).toContain("○ luxon");
+		type("why dates at all?");
+		press(KEY.enter);
+		expect(outcomes).toEqual([]);
+		expect(screen()).toContain("› ? Discuss first");
+		press(KEY.ctrlEnter);
+		expect(answered(outcomes)).toEqual([
+			{
+				questionIndex: 0,
+				question: "Which library should we use for dates?",
+				kind: "discuss",
+				answer: null,
+				notes: "why dates at all?",
+			},
+		]);
+	});
+
+	test("d types into the Other editor instead of discussing", () => {
+		const { press, type, screen } = open(library);
+		press(KEY.down, KEY.down);
+		type("dayjs");
+		expect(screen()).not.toContain("Discuss first");
+		expect(screen()).toContain("dayjs");
+	});
+
+	test("picking an option after Esc cancels the discussion; the tab shows ?", () => {
+		const { press, screen, outcomes } = open(library, runtime);
+		press("d", KEY.escape);
+		expect(screen()).toContain("Lib ?");
+		expect(screen()).toContain("Discuss first");
+		press(KEY.down, KEY.enter);
+		expect(screen()).not.toContain("Discuss first");
+		press(KEY.tab, KEY.enter, KEY.ctrlEnter);
+		expect(answered(outcomes)?.map((a) => a.kind)).toEqual(["option", "option"]);
+	});
+
+	test("marking a discussion keeps the pick, and the pick returns when the mark is cancelled", () => {
+		const { press, screen } = open(library);
+		press(KEY.enter, "d", KEY.escape);
+		expect(screen()).toContain("● date-fns");
+		press(KEY.down, KEY.enter);
+		expect(screen()).not.toContain("Discuss first");
+		expect(screen()).toContain("● date-fns");
+	});
+
+	test("the note moves with the selection instead of being dropped", () => {
+		const { press, type, outcomes } = open(library);
+		press(KEY.space);
+		type("tree-shaking matters");
+		press(KEY.enter, KEY.down, KEY.enter, KEY.ctrlEnter);
+		expect(answered(outcomes)?.[0]).toMatchObject({
+			answer: "luxon",
+			notes: "tree-shaking matters",
+		});
+	});
+
+	test("the question preview prints above the options", () => {
+		const { screen } = open({ ...library, preview: "Today we use moment.js everywhere." });
+		const shown = screen();
+		expect(shown.indexOf("Today we use moment.js everywhere.")).toBeGreaterThan(
+			shown.indexOf("Which library should we use for dates?"),
+		);
+		expect(shown.indexOf("Today we use moment.js everywhere.")).toBeLessThan(
+			shown.indexOf("date-fns"),
+		);
+	});
+
+	test("file previews print their paths; the preview follows the cursor", () => {
+		const files: AskUserQuestionItem = {
+			question: "Which page layout?",
+			header: "Page",
+			previewFile: "mockups/today.html",
+			options: [
+				{
+					label: "Split",
+					description: "two columns",
+					previewFile: "mockups/split.html",
+					previewBefore: "mockups/today.html",
+				},
+				{ label: "Keep it", description: "no change" },
+			],
+		};
+		const { press, screen } = open(files);
+		expect(screen(120)).toContain("preview: mockups/today.html");
+		expect(screen(120)).toContain("preview: mockups/today.html → mockups/split.html");
+		press(KEY.down);
+		expect(screen(120)).toContain("No preview for this option");
+	});
+
+	test("a one-option confirmation is picked with Enter and sent", () => {
+		const { press, outcomes } = open({
+			question: "You want the queue in the right panel, collapsed when empty?",
+			header: "Confirm",
+			options: [{ label: "Looks right", description: "accurate as written" }],
+		});
+		press(KEY.enter, KEY.ctrlEnter);
+		expect(answered(outcomes)?.[0]?.answer).toBe("Looks right");
+	});
+});
+
 describe("QuestionnaireComponent — multi-select", () => {
-	test("Space toggles; Enter needs a choice and then submits the checked options", () => {
+	test("Enter checks and unchecks in place; Submit answers sends the checked options", () => {
 		const { press, screen, outcomes } = open(targets);
 		expect(screen()).toContain("☐ web");
-		press(KEY.enter);
-		expect(screen()).toContain("⚠ Choose an option first");
-		expect(outcomes).toEqual([]);
-		press(KEY.down, KEY.down, KEY.space, KEY.up, KEY.up, KEY.space);
+		expect(screen()).toContain("Enter toggle");
+		press(KEY.down, KEY.down, KEY.enter, KEY.up, KEY.up, KEY.enter);
 		expect(screen()).toContain("☑ desktop");
-		expect(screen()).not.toContain("Choose an option first");
+		expect(screen()).toContain("☑ web");
 		press(KEY.enter);
-		const outcome = outcomes[0];
-		expect(outcome?.kind === "answered" && outcome.result.answers[0]).toMatchObject({
+		expect(screen()).toContain("☐ web");
+		press(KEY.enter);
+		expect(outcomes).toEqual([]);
+		press(KEY.ctrlEnter);
+		expect(answered(outcomes)?.[0]).toMatchObject({
 			kind: "multi",
 			selected: ["desktop", "web"],
 			answer: null,
 		});
 	});
 
-	test("an own answer is added to the checked options and Space toggles it", () => {
+	test("an own answer is added to the checked options", () => {
 		const { press, type, screen, outcomes } = open(targets);
-		press(KEY.space, KEY.up, KEY.up, KEY.enter);
+		press(KEY.enter, KEY.up, KEY.up, KEY.up, KEY.enter);
 		type("tray");
 		press(KEY.escape);
 		expect(screen()).toContain("☑ Other: tray");
-		press(KEY.space);
-		expect(screen()).toContain("☐ Other: tray");
-		press(KEY.space, KEY.enter, KEY.escape);
-		expect(outcomes).toEqual([]);
+		press(KEY.ctrlEnter);
+		expect(answered(outcomes)?.[0]).toMatchObject({
+			kind: "multi",
+			selected: ["web"],
+			answer: "tray",
+		});
 	});
 });
 
 describe("QuestionnaireComponent — several questions", () => {
-	test("tabs page through the questions; confirming the last one submits", () => {
+	test("Next → and Tab page through the questions; the last page sends", () => {
 		const { press, screen, outcomes } = open(library, runtime);
 		expect(screen()).toContain(" Lib │ Runtime");
-		expect(screen()).not.toContain("Review & submit");
+		expect(screen()).toContain("Next →");
+		expect(screen()).not.toContain("Submit answers");
 		press(KEY.down, KEY.enter);
 		expect(screen()).toContain("Lib ✓");
+		expect(screen()).toContain("Which library should we use for dates?");
+		press(KEY.down, KEY.down, KEY.enter);
 		expect(screen()).toContain("Which runtime?");
-		press(KEY.tab);
-		expect(screen()).toContain("Which runtime?");
-		press(KEY.down, KEY.enter);
-		const outcome = outcomes[0];
-		expect(outcome?.kind === "answered" && outcome.result.answers.map((a) => a.answer)).toEqual([
-			"luxon",
-			"node",
-		]);
-	});
-
-	test("the last question submits even with an earlier one unanswered", () => {
-		const { press, outcomes } = open(library, runtime);
-		press(KEY.tab, KEY.enter);
-		const outcome = outcomes[0];
-		expect(
-			outcome?.kind === "answered" && outcome.result.answers.map((a) => a.questionIndex),
-		).toEqual([1]);
+		press(KEY.shiftTab);
+		expect(screen()).toContain("Which library should we use for dates?");
+		press(KEY.tab, KEY.down, KEY.enter);
+		expect(screen()).toContain("Submit answers");
+		press(KEY.ctrlEnter);
+		expect(answered(outcomes)?.map((a) => a.answer)).toEqual(["luxon", "node"]);
 	});
 
 	test("the last page's Submit answers row sends what is answered, leaving the rest unanswered", () => {
 		const { press, screen, outcomes } = open(library, runtime);
-		expect(screen()).not.toContain("Submit answers");
-		press(KEY.down, KEY.enter);
-		expect(screen()).toContain("Submit answers");
+		press(KEY.down, KEY.enter, KEY.tab);
 		press(KEY.up, KEY.up);
 		expect(screen()).toContain("›   Submit answers");
 		press(KEY.enter);
-		const outcome = outcomes[0];
-		expect(outcome?.kind === "answered" && outcome.result.answers.map((a) => a.answer)).toEqual([
-			"luxon",
-		]);
+		expect(answered(outcomes)?.map((a) => a.answer)).toEqual(["luxon"]);
 	});
 
 	test("Submit answers with nothing answered asks for an answer first", () => {
@@ -384,6 +492,7 @@ describe("askInTerminal", () => {
 		const controller = new AbortController();
 		const ctx = terminalContext((component) => {
 			component.handleInput(KEY.enter);
+			component.handleInput(KEY.ctrlEnter);
 			controller.abort();
 		});
 		const outcome = await askInTerminal({ toolCallId: "tc", args, signal: controller.signal, ctx });

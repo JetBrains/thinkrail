@@ -1,337 +1,110 @@
-import {
-	RiCheckLine as Check,
-	RiRecordCircleLine as CircleDot,
-	RiListCheck3 as ListChecks,
-	RiQuestionnaireLine as MessageCircleQuestion,
-	RiPencilLine as Pencil,
-	RiSkipForwardLine as SkipForward,
-} from "@remixicon/react";
+import { ASK_DISCUSS_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { resultText, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
-import type {
-	AskUserQuestionAnswer,
-	AskUserQuestionArgs,
-	AskUserQuestionItem,
-	AskUserQuestionResult,
-} from "@thinkrail/pi-ask-user-question/core";
-import { useOptionalResourceHost } from "@thinkrail/resource-renderers";
+import type { AskUserQuestionResult } from "@thinkrail/pi-ask-user-question/core";
 import { AttentionLine } from "@thinkrail/ui/attention-line";
 import { Button } from "@thinkrail/ui/button";
-import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { hasPlatformModifier, isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import {
-	Fragment,
 	type KeyboardEvent,
+	type ReactNode,
 	useEffect,
-	useId,
 	useLayoutEffect,
 	useMemo,
 	useRef,
 	useState,
 } from "react";
+import { ModeHint, TabChip } from "./controls";
+import {
+	activeQuestionPage,
+	createQuestionAttentionClaim,
+	currentQuestionPageStart,
+	focusCurrentQuestionPage,
+	focusQuestionAttention,
+	focusTargetKind,
+	hasCoarsePointer,
+	isInsidePreview,
+	isTextEntryTarget,
+	shouldClaimQuestionFocus,
+} from "./focus";
+import { GhostPage } from "./ghost";
+import { QuestionBody } from "./QuestionBody";
 import { readAskUserQuestionResult } from "./readResult";
+import {
+	AnsweredReceipt,
+	ClosedRecord,
+	ComposingCard,
+	SupersededRecord,
+	WaitingCard,
+} from "./record";
+import {
+	type ChoiceNudge,
+	customTextPatch,
+	deriveAnswers,
+	discussReasonPatch,
+	emptyQState,
+	hasPreview,
+	nudgeShowsOnPage,
+	openNotePatch,
+	parseQuestions,
+	type QState,
+	questionPageForKey,
+	selectOptionPatch,
+	toggleCustomPatch,
+	toggleMultiPatch,
+} from "./state";
 
 const noLayoutChange = () => () => undefined;
-
-export function parseQuestions(args: Record<string, unknown>): AskUserQuestionItem[] {
-	const qs = (args as Partial<AskUserQuestionArgs>).questions;
-	return Array.isArray(qs) ? qs.filter((q) => q && Array.isArray(q.options)) : [];
-}
-
-export function splitRecommended(label: string): { text: string; recommended: boolean } {
-	const m = /\s*\(recommended\)\s*$/i.exec(label);
-	return m
-		? { text: label.slice(0, m.index).trim(), recommended: true }
-		: { text: label, recommended: false };
-}
-
-export function readRecommendation(option: {
-	label: string;
-	recommendedReason?: string | undefined;
-}): {
-	text: string;
-	recommended: boolean;
-	reason?: string | undefined;
-} {
-	const { text, recommended } = splitRecommended(option.label);
-	const reason = option.recommendedReason?.trim() || undefined;
-	return { text, recommended: recommended || !!reason, reason };
-}
-
-export interface QState {
-	option: string | null;
-	customText: string;
-	customActive: boolean;
-	multi: string[];
-	cursor: number;
-	notes: Record<string, string>;
-	noteFor: string | null;
-}
-
-const emptyQState = (): QState => ({
-	option: null,
-	customText: "",
-	customActive: false,
-	multi: [],
-	cursor: 0,
-	notes: {},
-	noteFor: null,
-});
-
-export function deriveAnswer(
-	question: AskUserQuestionItem,
-	index: number,
-	state: QState,
-): AskUserQuestionAnswer | null {
-	const base = { questionIndex: index, question: question.question };
-	if (question.multiSelect) {
-		const valid = state.multi.filter((label) => question.options.some((o) => o.label === label));
-		const custom = state.customActive ? state.customText.trim() : "";
-		if (valid.length === 0 && !custom) return null;
-		const noteLines = valid.flatMap((label) => {
-			const note = state.notes[label]?.trim();
-			return note ? [`${splitRecommended(label).text}: ${note}`] : [];
-		});
-		return {
-			...base,
-			kind: "multi",
-			answer: custom || null,
-			selected: valid,
-			...(noteLines.length > 0 ? { notes: noteLines.join("\n") } : {}),
-		};
-	}
-	if (state.customActive && state.customText.trim()) {
-		return { ...base, kind: "custom", answer: state.customText.trim() };
-	}
-	if (state.option != null) {
-		const opt = question.options.find((o) => o.label === state.option);
-		if (!opt) return null;
-		const note = state.notes[state.option]?.trim();
-		return {
-			...base,
-			kind: "option",
-			answer: state.option,
-			...(opt.preview ? { preview: opt.preview } : {}),
-			...(note ? { notes: note } : {}),
-		};
-	}
-	return null;
-}
-
-export function deriveAnswers(
-	questions: AskUserQuestionItem[],
-	states: Record<number, QState>,
-): AskUserQuestionAnswer[] {
-	return questions
-		.map((question, index) => deriveAnswer(question, index, states[index] ?? emptyQState()))
-		.filter((answer): answer is AskUserQuestionAnswer => answer != null);
-}
-
-export function answerSupportsNote(answer: AskUserQuestionAnswer): boolean {
-	if (answer.kind === "option") return true;
-	return answer.kind === "multi" && (answer.selected?.length ?? 0) > 0;
-}
-
-interface RecapState {
-	selectedLabels: string[];
-	customAnswer: string | null;
-	showOptions: boolean;
-}
-
-export function deriveRecapState(answer: AskUserQuestionAnswer | undefined): RecapState {
-	const selectedLabels =
-		answer?.kind === "multi"
-			? (answer.selected ?? [])
-			: answer?.kind === "option" && answer.answer
-				? [answer.answer]
-				: [];
-	const customAnswer =
-		answer && (answer.kind === "custom" || answer.kind === "multi") ? answer.answer : null;
-	return {
-		selectedLabels,
-		customAnswer,
-		showOptions: !!answer && answer.kind !== "custom",
-	};
-}
-
-export type ChoiceKeyAction =
-	| { type: "move"; index: number }
-	| { type: "select" }
-	| { type: "confirm" }
-	| { type: "none" };
-
-export function choiceKeyAction(key: string, index: number, count: number): ChoiceKeyAction {
-	if (count <= 0) return { type: "none" };
-	if (key === "ArrowDown") return { type: "move", index: (index + 1) % count };
-	if (key === "ArrowUp") return { type: "move", index: (index - 1 + count) % count };
-	if (key === "Home") return { type: "move", index: 0 };
-	if (key === "End") return { type: "move", index: count - 1 };
-	if (key === " " || key === "Spacebar") return { type: "select" };
-	if (key === "Enter") return { type: "confirm" };
-	return { type: "none" };
-}
-
-export function customTextPatch(text: string): Partial<QState> {
-	return text.trim()
-		? { customText: text, customActive: true, option: null }
-		: { customText: text, customActive: false };
-}
-
-export function selectOptionPatch(state: QState, label: string, cursor: number): Partial<QState> {
-	return {
-		cursor,
-		option: label,
-		customActive: false,
-		...(state.noteFor != null && state.noteFor !== label ? { noteFor: null } : {}),
-	};
-}
-
-export function toggleMultiPatch(state: QState, label: string, cursor: number): Partial<QState> {
-	const removing = state.multi.includes(label);
-	return {
-		cursor,
-		multi: removing ? state.multi.filter((item) => item !== label) : [...state.multi, label],
-		...(removing && state.noteFor === label ? { noteFor: null } : {}),
-	};
-}
-
-export type ConfirmSource = { kind: "choice"; label: string; cursor: number } | { kind: "custom" };
-
-export function confirmStateFor(
-	state: QState,
-	multiSelect: boolean,
-	source: ConfirmSource,
-): QState {
-	if (source.kind === "custom") return state;
-	return multiSelect
-		? { ...state, cursor: source.cursor }
-		: { ...state, cursor: source.cursor, option: source.label, customActive: false };
-}
-
-export function noteKeyAction(
-	key: string,
-	shiftKey: boolean,
-	isComposing: boolean,
-): "finish" | "consume" | "none" {
-	if (key === "Escape") return isComposing ? "consume" : "finish";
-	if (isComposing) return "none";
-	if (key === "Enter" && !shiftKey) return "finish";
-	return "none";
-}
-
-export interface ChoiceNudge {
-	question: number;
-	seq: number;
-}
-
-export function nudgeShowsOnPage(
-	nudge: ChoiceNudge | null,
-	page: number,
-	answered: boolean,
-): boolean {
-	return !!nudge && nudge.question === page && !answered;
-}
-
-export function questionPageForKey(key: string, current: number, last: number): number | null {
-	if (key === "ArrowLeft") return Math.max(0, current - 1);
-	if (key === "ArrowRight") return Math.min(last, current + 1);
-	return null;
-}
-
-export type QuestionFocusTarget =
-	| "none"
-	| "non-editing"
-	| "empty-composer"
-	| "draft-composer"
-	| "editing"
-	| "modal";
-
-export function shouldClaimQuestionFocus(
-	target: QuestionFocusTarget,
-	coarsePointer: boolean,
-): boolean {
-	if (coarsePointer) return false;
-	return target === "none" || target === "non-editing" || target === "empty-composer";
-}
-
-export function shouldFocusPageTarget(textEntryTarget: boolean, coarsePointer: boolean): boolean {
-	return !(textEntryTarget && coarsePointer);
-}
 
 const panelDomId = (toolCallId: string) => `ask-panel-${toolCallId}`;
 const tabDomId = (toolCallId: string, page: number) => `ask-tab-${toolCallId}-${page}`;
 
-export function createQuestionAttentionClaim(): (scope: object, toolCallId: string) => boolean {
-	const claims = new WeakMap<object, Set<string>>();
-	return (scope, toolCallId) => {
-		let ids = claims.get(scope);
-		if (!ids) {
-			ids = new Set<string>();
-			claims.set(scope, ids);
-		}
-		if (ids.has(toolCallId)) return false;
-		ids.add(toolCallId);
-		return true;
-	};
-}
-
 const claimQuestionAttention = createQuestionAttentionClaim();
 const ATTENTION_SETTLE_FRAMES = 30;
-const MODAL_SURFACES = '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]';
-
-function focusTargetKind(active: Element | null, card: HTMLElement): QuestionFocusTarget {
-	if (!active || active === document.body) return "none";
-	if (card.contains(active)) return "non-editing";
-	if (!(active instanceof HTMLElement)) return "editing";
-	if (active.closest(MODAL_SURFACES)) return "modal";
-	if (active.closest(".monaco-editor, .xterm")) return "editing";
-	if (active.isContentEditable || active.closest('[contenteditable="true"]')) return "editing";
-	const control = active.closest("input, textarea, select, iframe");
-	if (!control) return "non-editing";
-	if (control instanceof HTMLTextAreaElement && control.dataset.testid === "chat-input") {
-		return control.value.length === 0 ? "empty-composer" : "draft-composer";
-	}
-	return "editing";
-}
-
-function hasCoarsePointer(): boolean {
-	return window.matchMedia("(pointer: coarse)").matches;
-}
-
-function isTextEntryTarget(target: EventTarget | null): boolean {
-	return (
-		target instanceof HTMLElement &&
-		(!!target.closest("input, textarea, select") ||
-			target.isContentEditable ||
-			!!target.closest('[contenteditable="true"]'))
-	);
-}
-
-function focusCurrentQuestionPage(card: HTMLElement): void {
-	const target = card.querySelector<HTMLElement>('[data-ask-page-focus="true"]:not([disabled])');
-	if (!target) return;
-	if (!shouldFocusPageTarget(isTextEntryTarget(target), hasCoarsePointer())) return;
-	target.focus({ preventScroll: true });
-}
-
-function focusQuestionAttention(card: HTMLElement): void {
-	const selected = card.querySelector<HTMLElement>(
-		'[data-testid="ask-option"][data-selected="true"], [data-testid="ask-custom-row"][data-selected="true"] input',
-	);
-	if (selected) selected.focus({ preventScroll: true });
-	else focusCurrentQuestionPage(card);
-}
-
-function currentQuestionPageStart(card: HTMLElement): HTMLElement {
-	return card.querySelector<HTMLElement>('[data-ask-page-start="true"]') ?? card;
-}
 
 interface CachedCardState {
 	states: Record<number, QState>;
 	tab: number;
 	submitted: boolean;
+	hostProtocol: number | undefined;
 }
 const cardStateCache = new Map<string, CachedCardState>();
+const stackHeights = new Map<string, { width: number; height: number }>();
+
+function PageStack({ toolCallId, children }: { toolCallId: string; children: ReactNode }) {
+	const holderRef = useRef<HTMLDivElement>(null);
+	const gridRef = useRef<HTMLDivElement>(null);
+
+	useLayoutEffect(() => {
+		const holder = holderRef.current;
+		const grid = gridRef.current;
+		if (!holder || !grid) return;
+		const keep = (rawWidth: number, height: number) => {
+			const width = Math.round(rawWidth);
+			const kept = stackHeights.get(toolCallId);
+			const next = kept && kept.width === width ? Math.max(kept.height, height) : height;
+			stackHeights.set(toolCallId, { width, height: next });
+			holder.style.setProperty("--ask-stack-height", `${next}px`);
+		};
+		const rect = grid.getBoundingClientRect();
+		keep(rect.width, rect.height);
+		if (typeof ResizeObserver === "undefined") return;
+		const observer = new ResizeObserver(([entry]) => {
+			if (entry) keep(entry.contentRect.width, entry.contentRect.height);
+		});
+		observer.observe(grid);
+		return () => observer.disconnect();
+	}, [toolCallId]);
+
+	return (
+		<div ref={holderRef} className="min-h-[var(--ask-stack-height,0px)]">
+			<div ref={gridRef} className="grid">
+				{children}
+			</div>
+		</div>
+	);
+}
 
 export function AskUserQuestionCard({
 	toolCallId,
@@ -340,6 +113,7 @@ export function AskUserQuestionCard({
 	status,
 	streaming,
 	interaction,
+	onOpenFile,
 }: ToolRenderProps) {
 	const t = useT();
 	const localFocusScope = useRef<object>({}).current;
@@ -347,12 +121,19 @@ export function AskUserQuestionCard({
 	const revealElement = interaction?.revealElement;
 	const cancelAutomaticReveal = interaction?.cancelAutomaticReveal;
 	const cardRef = useRef<HTMLElement>(null);
+	const primaryRef = useRef<HTMLButtonElement>(null);
 	const questions = useMemo(() => parseQuestions(args), [args]);
 	const resolvedResult =
 		readAskUserQuestionResult(interaction?.state.response) ?? readAskUserQuestionResult(result);
 	const superseded = interaction?.state.superseded ?? false;
 	const ended = interaction?.state.ended ?? false;
 	const canRespond = !!interaction && interaction.state.accepting;
+	const [hostProtocol, setHostProtocol] = useState(
+		() => interaction?.hostProtocol ?? cardStateCache.get(toolCallId)?.hostProtocol,
+	);
+	const liveProtocol = interaction?.hostProtocol;
+	if (liveProtocol !== undefined && liveProtocol !== hostProtocol) setHostProtocol(liveProtocol);
+	const discussAvailable = (hostProtocol ?? 0) >= ASK_DISCUSS_PROTOCOL_VERSION;
 	const awaiting = !resolvedResult && !superseded && !ended && status !== "error";
 	const [states, setStates] = useState<Record<number, QState>>(
 		() => cardStateCache.get(toolCallId)?.states ?? {},
@@ -378,9 +159,13 @@ export function AskUserQuestionCard({
 	}, [submitted]);
 
 	useEffect(() => {
-		if (awaiting) cardStateCache.set(toolCallId, { states, tab, submitted });
-		else cardStateCache.delete(toolCallId);
-	}, [toolCallId, awaiting, states, tab, submitted]);
+		if (awaiting) {
+			cardStateCache.set(toolCallId, { states, tab, submitted, hostProtocol });
+			return;
+		}
+		cardStateCache.delete(toolCallId);
+		stackHeights.delete(toolCallId);
+	}, [toolCallId, awaiting, states, tab, submitted, hostProtocol]);
 
 	useEffect(() => {
 		setNudgeSpoken(false);
@@ -407,7 +192,7 @@ export function AskUserQuestionCard({
 			const card = cardRef.current;
 			if (!card) return;
 			revealElement?.(currentQuestionPageStart(card), {
-				block: "start",
+				block: "nearest",
 				provenance: "user-navigation",
 				runway: "release",
 				stability: "bounded",
@@ -478,6 +263,9 @@ export function AskUserQuestionCard({
 
 	const answers = deriveAnswers(questions, states);
 	const answeredIndices = new Set(answers.map((a) => a.questionIndex));
+	const discussIndices = new Set(
+		answers.filter((a) => a.kind === "discuss").map((a) => a.questionIndex),
+	);
 
 	const reply = (r: AskUserQuestionResult) => {
 		if (!interaction || !canRespond) return;
@@ -494,15 +282,18 @@ export function AskUserQuestionCard({
 
 	if (resolvedResult) {
 		return (
-			<ResolvedRecord questions={questions} result={resolvedResult} rawText={resultText(result)} />
+			<AnsweredReceipt
+				toolCallId={toolCallId}
+				questions={questions}
+				result={resolvedResult}
+				rawText={resultText(result)}
+				prepareLayoutChange={interaction?.prepareLayoutChange}
+			/>
 		);
 	}
-	if (superseded) return <SupersededRecord questions={questions} />;
-	if (ended) {
-		return <ResolvedRecord questions={questions} result={null} rawText={resultText(result)} />;
-	}
-	if (status === "error") {
-		return <ResolvedRecord questions={questions} result={null} rawText={resultText(result)} />;
+	if (superseded) return <SupersededRecord />;
+	if (ended || status === "error") {
+		return <ClosedRecord error={status === "error"} rawText={resultText(result)} />;
 	}
 	if (streaming || questions.length === 0) return <ComposingCard count={questions.length} />;
 	if (submitted) {
@@ -517,35 +308,49 @@ export function AskUserQuestionCard({
 	const lastPage = questions.length - 1;
 	const idx = Math.min(tab, lastPage);
 	const q = questions[idx];
-	const state = stateFor(idx);
 	if (!q) return <WaitingCard>{t("tools.ask.preparing")}</WaitingCard>;
 
 	const showContinue = idx < lastPage;
 	const canSubmit = canRespond && answers.length > 0;
 	const nudgeVisible = nudgeShowsOnPage(nudge, idx, answeredIndices.has(idx));
 
-	const confirmQuestion = (nextState: QState) => {
-		const nextStates = { ...states, [idx]: nextState };
-		const nextAnswers = deriveAnswers(questions, nextStates);
-		if (!nextAnswers.some((answer) => answer.questionIndex === idx)) {
+	const submitRound = () => {
+		if (!canRespond) return;
+		if (answers.length === 0) {
 			nudgeSeq.current += 1;
 			setNudge({ question: idx, seq: nudgeSeq.current });
 			return;
 		}
 		setNudge(null);
-		setStates(nextStates);
-		if (idx < lastPage) setTab(idx + 1);
-		else reply({ answers: nextAnswers, cancelled: false });
+		reply({ answers, cancelled: false });
 	};
 
-	const confirmChoice = (label: string, cursor: number) =>
-		confirmQuestion(confirmStateFor(state, !!q.multiSelect, { kind: "choice", label, cursor }));
+	const focusPrimary = () => {
+		const button = primaryRef.current;
+		if (!button || button.disabled) return false;
+		button.focus({ preventScroll: true });
+		return true;
+	};
 
-	const confirmCustom = () =>
-		confirmQuestion(confirmStateFor(state, !!q.multiSelect, { kind: "custom" }));
+	const onPrimaryKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+		if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;
+		if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+		const card = cardRef.current;
+		if (!card) return;
+		const page = activeQuestionPage(card);
+		const target =
+			event.key === "ArrowUp"
+				? page.querySelector<HTMLElement>("[data-ask-custom-row] textarea")
+				: page.querySelector<HTMLElement>("[data-ask-option]");
+		if (!target) return;
+		event.preventDefault();
+		target.focus({ preventScroll: true });
+	};
 
 	const onCardKeyDown = (event: KeyboardEvent<HTMLElement>) => {
 		if (isImeComposing(event.nativeEvent)) return;
+		if (!(event.target instanceof Node) || !event.currentTarget.contains(event.target)) return;
+		if (isInsidePreview(event.target)) return;
 		if (
 			event.key === "Escape" &&
 			event.shiftKey &&
@@ -556,6 +361,17 @@ export function AskUserQuestionCard({
 			event.preventDefault();
 			event.stopPropagation();
 			reply({ answers: [], cancelled: true });
+			return;
+		}
+		if (
+			event.key === "Enter" &&
+			hasPlatformModifier(event.nativeEvent) &&
+			!event.altKey &&
+			!event.shiftKey
+		) {
+			event.preventDefault();
+			event.stopPropagation();
+			submitRound();
 			return;
 		}
 		if (
@@ -580,10 +396,10 @@ export function AskUserQuestionCard({
 				data-testid="ask-user-question"
 				data-tone={canRespond ? "active" : "idle"}
 				aria-label={t("tools.ask.cardLabel")}
-				aria-keyshortcuts="Shift+Escape"
+				aria-keyshortcuts="Shift+Escape Meta+Enter Control+Enter"
 				onKeyDown={onCardKeyDown}
 				className={cn(
-					"overflow-hidden rounded-lg border bg-clip-padding bg-container-elevated-bg",
+					"@container overflow-hidden rounded-lg border bg-clip-padding bg-container-elevated-bg",
 					canRespond ? "border-primary ring-2 ring-primary-soft" : "border-border-default",
 				)}
 			>
@@ -601,52 +417,85 @@ export function AskUserQuestionCard({
 								label={question.header || t("tools.ask.questionTab", { number: i + 1 })}
 								active={idx === i}
 								answered={answeredIndices.has(i)}
+								discuss={discussIndices.has(i)}
 								onClick={() => setTab(i)}
 							/>
 						))}
 					</div>
 				) : null}
 
-				<div
-					{...(multipleQuestions
-						? {
-								role: "tabpanel",
-								id: panelDomId(toolCallId),
-								"aria-labelledby": tabDomId(toolCallId, idx),
-							}
-						: {})}
-					className="flex flex-col gap-12 p-12"
-				>
-					<QuestionBody
-						question={q}
-						state={state}
-						pageKeys={multipleQuestions}
-						onSelect={(label, cursor) => patch(idx, selectOptionPatch(state, label, cursor))}
-						onToggleMulti={(label, cursor) => patch(idx, toggleMultiPatch(state, label, cursor))}
-						onCursor={(cursor) => {
-							if (cursor !== state.cursor) patch(idx, { cursor });
-						}}
-						onConfirmChoice={confirmChoice}
-						onCustomText={(text) => patch(idx, customTextPatch(text))}
-						onToggleCustom={() => patch(idx, { customActive: !state.customActive })}
-						onConfirmCustom={confirmCustom}
-						onOpenNote={(label, cursor) =>
-							patch(
-								idx,
-								q.multiSelect
-									? { cursor, noteFor: label }
-									: { cursor, option: label, customActive: false, noteFor: label },
-							)
-						}
-						onCloseNote={() => patch(idx, { noteFor: null })}
-						onNote={(label, text) => patch(idx, { notes: { ...state.notes, [label]: text } })}
-					/>
+				<div className="flex flex-col gap-12 p-12">
+					<PageStack toolCallId={toolCallId}>
+						{questions.map((question, page) => {
+							const active = page === idx;
+							const pageState = stateFor(page);
+							return (
+								<div
+									key={question.question}
+									data-ask-active={active}
+									aria-hidden={active ? undefined : true}
+									inert={!active}
+									{...(active && multipleQuestions
+										? {
+												role: "tabpanel",
+												id: panelDomId(toolCallId),
+												"aria-labelledby": tabDomId(toolCallId, idx),
+											}
+										: {})}
+									className={cn("col-start-1 row-start-1 min-w-0", !active && "invisible")}
+								>
+									<GhostPage value={!active}>
+										<QuestionBody
+											question={question}
+											state={pageState}
+											pageKeys={multipleQuestions}
+											discussAvailable={discussAvailable}
+											primaryEnabled={page < lastPage || canSubmit}
+											onFocusPrimary={focusPrimary}
+											onOpenFile={onOpenFile}
+											onSelect={(label, cursor) =>
+												patch(page, selectOptionPatch(pageState, label, cursor))
+											}
+											onToggleMulti={(label, cursor) =>
+												patch(page, toggleMultiPatch(pageState, label, cursor))
+											}
+											onCursor={(cursor) => {
+												if (cursor !== pageState.cursor) patch(page, { cursor });
+											}}
+											onCustomText={(text) => patch(page, customTextPatch(text))}
+											onToggleCustom={() => patch(page, toggleCustomPatch(pageState))}
+											onReopenCustom={() => {
+												if (pageState.customText.trim())
+													patch(page, customTextPatch(pageState.customText));
+											}}
+											onOpenNote={(label, cursor) =>
+												patch(page, openNotePatch(pageState, !!question.multiSelect, label, cursor))
+											}
+											onCloseNote={() => patch(page, { noteFor: null })}
+											onNote={(label, text) =>
+												patch(page, { notes: { ...pageState.notes, [label]: text } })
+											}
+											onToggleDiscuss={() => patch(page, { discuss: !pageState.discuss })}
+											onDiscussReason={(reason) =>
+												patch(page, discussReasonPatch(pageState, reason))
+											}
+											onDiscussText={(text) => patch(page, { discussText: text })}
+											onTogglePreview={() =>
+												patch(page, { previewExpanded: !pageState.previewExpanded })
+											}
+										/>
+									</GhostPage>
+								</div>
+							);
+						})}
+					</PageStack>
 
 					<div className="flex flex-col gap-8 sm:flex-row sm:items-center sm:justify-between">
 						<ModeHint
-							question={q}
+							multiSelect={!!q.multiSelect}
 							multipleQuestions={multipleQuestions}
-							noteAvailable={answers.some((a) => a.questionIndex === idx && answerSupportsNote(a))}
+							previewKeys={!q.multiSelect && q.options.some(hasPreview)}
+							discussKey={discussAvailable}
 						/>
 						<div className="flex items-center justify-end gap-12">
 							{nudgeVisible ? (
@@ -664,6 +513,7 @@ export function AskUserQuestionCard({
 							<Button
 								variant="ghost"
 								size="l"
+								tabIndex={0}
 								data-testid="ask-skip"
 								onClick={() => reply({ answers: [], cancelled: true })}
 								disabled={!canRespond}
@@ -673,9 +523,12 @@ export function AskUserQuestionCard({
 							</Button>
 							{showContinue ? (
 								<Button
+									ref={primaryRef}
 									variant="primary"
 									size="l"
+									tabIndex={0}
 									data-testid="ask-continue"
+									onKeyDown={onPrimaryKeyDown}
 									onClick={() => setTab(idx + 1)}
 									className="shrink-0"
 								>
@@ -683,9 +536,12 @@ export function AskUserQuestionCard({
 								</Button>
 							) : (
 								<Button
+									ref={primaryRef}
 									variant="primary"
 									size="l"
+									tabIndex={0}
 									data-testid="ask-submit"
+									onKeyDown={onPrimaryKeyDown}
 									onClick={() => reply({ answers, cancelled: false })}
 									disabled={!canSubmit}
 									className="shrink-0"
@@ -697,690 +553,6 @@ export function AskUserQuestionCard({
 					</div>
 				</div>
 			</section>
-		</div>
-	);
-}
-
-function SupersededRecord({ questions }: { questions: AskUserQuestionItem[] }) {
-	const t = useT();
-	return (
-		<div
-			data-testid="ask-user-question"
-			data-tone="superseded"
-			className="flex flex-col gap-4 text-text-muted tr-text-metadata"
-		>
-			<div className="flex items-center gap-4">
-				<SkipForward className="size-14 shrink-0" />
-				{t("tools.ask.superseded")}
-			</div>
-			{questions.map((q) => (
-				<div key={q.question} className="pl-[calc(0.875rem+var(--space-8))] text-text-muted">
-					{q.question}
-				</div>
-			))}
-		</div>
-	);
-}
-
-function WaitingCard({ children }: { children: React.ReactNode }) {
-	return (
-		<div
-			data-testid="ask-user-question"
-			data-tone="pending"
-			role="status"
-			className="flex items-center gap-4 rounded-lg border border-border-default bg-container-elevated-bg px-12 py-8 text-text-muted tr-text-metadata"
-		>
-			<MessageCircleQuestion className="size-14 shrink-0" />
-			{children}
-		</div>
-	);
-}
-
-function ComposingCard({ count }: { count: number }) {
-	const t = useT();
-	return (
-		<div className="flex flex-col gap-4">
-			<div className="text-text-muted tr-text-metadata">{t("tools.ask.composing")}</div>
-			<div
-				data-testid="ask-user-question"
-				data-tone="pending"
-				className="flex flex-col gap-8 rounded-lg border border-border-default bg-container-elevated-bg px-12 py-8"
-			>
-				<div className="flex items-center gap-4 text-text-muted tr-text-metadata">
-					<MessageCircleQuestion className="size-14 shrink-0" />
-					{count > 0 ? t("tools.ask.preparingReady", { count }) : t("tools.ask.preparing")}
-				</div>
-				<div className="flex animate-pulse flex-col gap-4" aria-hidden="true">
-					<div className="h-32 rounded-sm bg-control-bg-selected" />
-					<div className="h-32 rounded-sm bg-control-bg-selected" />
-				</div>
-			</div>
-		</div>
-	);
-}
-
-function TabChip({
-	id,
-	controls,
-	label,
-	active,
-	answered,
-	onClick,
-}: {
-	id: string;
-	controls: string;
-	label: string;
-	active: boolean;
-	answered: boolean;
-	onClick: () => void;
-}) {
-	return (
-		<button
-			type="button"
-			role="tab"
-			id={id}
-			aria-controls={controls}
-			aria-selected={active}
-			tabIndex={active ? 0 : -1}
-			data-testid="ask-tab"
-			data-active={active}
-			data-answered={answered}
-			onClick={onClick}
-			className={cn(
-				"flex shrink-0 items-center gap-4 whitespace-nowrap rounded-full px-8 py-2 tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary",
-				active ? "bg-primary-subtle text-primary" : "text-text-muted hover:bg-control-bg-hovered",
-			)}
-		>
-			<span
-				className={cn(
-					"flex size-14 items-center justify-center rounded-full border",
-					answered ? "border-primary text-primary" : "border-border-default",
-				)}
-			>
-				{answered ? <Check className="size-10" /> : null}
-			</span>
-			{label}
-		</button>
-	);
-}
-
-function ModeHint({
-	question,
-	multipleQuestions,
-	noteAvailable,
-}: {
-	question: AskUserQuestionItem;
-	multipleQuestions: boolean;
-	noteAvailable: boolean;
-}) {
-	const t = useT();
-	const multiSelect = !!question.multiSelect;
-	return (
-		<span
-			data-testid="ask-shortcuts"
-			className="flex flex-wrap items-center gap-4 text-text-muted tr-text-metadata"
-		>
-			{multiSelect ? (
-				<ListChecks className="size-14 shrink-0" />
-			) : (
-				<CircleDot className="size-14 shrink-0" />
-			)}
-			<span>{multiSelect ? t("tools.ask.hintMoveMulti") : t("tools.ask.hintMoveSingle")}</span>
-			<span>{multiSelect ? t("tools.ask.hintSpaceToggle") : t("tools.ask.hintSpaceSelect")}</span>
-			<span>{t("tools.ask.hintEnter")}</span>
-			<span>{noteAvailable ? t("tools.ask.hintTabNote") : t("tools.ask.hintTab")}</span>
-			<span>{t("tools.ask.hintSkip")}</span>
-			{multipleQuestions ? <span>{t("tools.ask.hintQuestions")}</span> : null}
-		</span>
-	);
-}
-
-function QuestionBody({
-	question,
-	state,
-	pageKeys,
-	onSelect,
-	onToggleMulti,
-	onCursor,
-	onConfirmChoice,
-	onCustomText,
-	onToggleCustom,
-	onConfirmCustom,
-	onOpenNote,
-	onCloseNote,
-	onNote,
-}: {
-	question: AskUserQuestionItem;
-	state: QState;
-	pageKeys: boolean;
-	onSelect: (label: string, cursor: number) => void;
-	onToggleMulti: (label: string, cursor: number) => void;
-	onCursor: (cursor: number) => void;
-	onConfirmChoice: (label: string, cursor: number) => void;
-	onCustomText: (text: string) => void;
-	onToggleCustom: () => void;
-	onConfirmCustom: () => void;
-	onOpenNote: (label: string, cursor: number) => void;
-	onCloseNote: () => void;
-	onNote: (label: string, text: string) => void;
-}) {
-	const t = useT();
-	const choiceRefs = useRef<Array<HTMLElement | null>>([]);
-	const noteRef = useRef<HTMLTextAreaElement>(null);
-	const focusNoteAfterRender = useRef(false);
-	const otherIndex = question.options.length;
-	const choiceCount = otherIndex + 1;
-	const cursor = Math.min(Math.max(state.cursor, 0), Math.max(otherIndex - 1, 0));
-	const customOwnsPageFocus =
-		state.customActive && (!question.multiSelect || state.multi.length === 0);
-	const anyPreview = !question.multiSelect && question.options.some((option) => option.preview);
-	const previewSource =
-		question.options.find((option) => option.label === state.option && option.preview) ??
-		question.options.find((option) => option.preview);
-
-	useEffect(() => {
-		if (!focusNoteAfterRender.current || !noteRef.current) return;
-		focusNoteAfterRender.current = false;
-		noteRef.current.focus({ preventScroll: true });
-	});
-
-	const openNote = (label: string, index: number) => {
-		focusNoteAfterRender.current = true;
-		onOpenNote(label, index);
-	};
-
-	const focusChoice = (index: number) => {
-		if (index < otherIndex) onCursor(index);
-		choiceRefs.current[index]?.focus({ preventScroll: true });
-	};
-
-	const moveCursor = (index: number) => {
-		focusChoice(index);
-		const target = question.options[index];
-		if (!question.multiSelect && target) onSelect(target.label, index);
-	};
-
-	const finishNote = (index: number) => {
-		onCloseNote();
-		requestAnimationFrame(() => choiceRefs.current[index]?.focus({ preventScroll: true }));
-	};
-
-	const onChoiceKeyDown = (
-		event: KeyboardEvent<HTMLButtonElement>,
-		label: string,
-		index: number,
-	) => {
-		if (event.altKey || event.ctrlKey || event.metaKey) return;
-		const action = choiceKeyAction(event.key, index, choiceCount);
-		if (action.type === "none") return;
-		event.preventDefault();
-		if (action.type === "move") moveCursor(action.index);
-		else if (action.type === "select") {
-			if (question.multiSelect) onToggleMulti(label, index);
-			else onSelect(label, index);
-		} else if (action.type === "confirm") onConfirmChoice(label, index);
-	};
-
-	return (
-		<div className="flex flex-col gap-12">
-			<div className="flex items-start gap-8">
-				<MessageCircleQuestion className="mt-2 size-16 shrink-0 text-text-muted" />
-				<p
-					data-testid="ask-question-text"
-					data-ask-page-start="true"
-					className="tr-title-dialog text-text-default"
-				>
-					{question.question}
-				</p>
-			</div>
-			<div className={cn("grid gap-8", anyPreview && "md:grid-cols-2")}>
-				<div className="flex min-w-0 flex-col gap-8">
-					<div
-						{...(question.multiSelect
-							? { role: "group", "aria-label": question.question }
-							: { role: "radiogroup", "aria-label": question.question })}
-						className="flex flex-col gap-8"
-					>
-						{question.options.map((option, index) => {
-							const selected = question.multiSelect
-								? state.multi.includes(option.label)
-								: state.option === option.label;
-							const ownsCursor = index === cursor;
-							const optionText = splitRecommended(option.label).text;
-							const noteText = state.notes[option.label]?.trim();
-							return (
-								<Fragment key={option.label}>
-									<OptionRow
-										buttonRef={(node) => {
-											choiceRefs.current[index] = node;
-										}}
-										label={option.label}
-										description={option.description}
-										recommendedReason={option.recommendedReason}
-										selected={selected}
-										cursor={ownsCursor}
-										pageFocus={ownsCursor && !customOwnsPageFocus}
-										multi={!!question.multiSelect}
-										pageKeys={pageKeys}
-										onFocus={() => onCursor(index)}
-										onKeyDown={(event) => onChoiceKeyDown(event, option.label, index)}
-										onClick={() =>
-											question.multiSelect
-												? onToggleMulti(option.label, index)
-												: onSelect(option.label, index)
-										}
-									/>
-									{selected ? (
-										<div className="pl-[calc(1.125rem+var(--space-8))]">
-											{state.noteFor === option.label ? (
-												<textarea
-													ref={noteRef}
-													data-testid="ask-note"
-													aria-label={t("tools.ask.noteLabel", { option: optionText })}
-													aria-keyshortcuts="Enter Shift+Enter Escape"
-													rows={2}
-													value={state.notes[option.label] ?? ""}
-													placeholder={t("tools.ask.notePlaceholder")}
-													onChange={(event) => onNote(option.label, event.target.value)}
-													onKeyDown={(event) => {
-														const action = noteKeyAction(
-															event.key,
-															event.shiftKey,
-															isImeComposing(event.nativeEvent),
-														);
-														if (action === "none") return;
-														event.stopPropagation();
-														if (action === "consume") return;
-														event.preventDefault();
-														finishNote(index);
-													}}
-													className="w-full resize-none rounded-sm border border-control-border-default bg-control-bg px-8 py-4 text-text-default tr-text-metadata outline-none focus-visible:border-control-border-active"
-												/>
-											) : (
-												<Button
-													variant="ghost"
-													size="s"
-													iconLeft={Pencil}
-													data-testid="ask-note-toggle"
-													aria-label={
-														noteText
-															? t("tools.ask.editNoteLabel", { option: optionText })
-															: t("tools.ask.addNoteLabel", { option: optionText })
-													}
-													onClick={() => openNote(option.label, index)}
-												>
-													{noteText ? t("tools.ask.editNote") : t("tools.ask.addNote")}
-												</Button>
-											)}
-										</div>
-									) : null}
-								</Fragment>
-							);
-						})}
-					</div>
-
-					<OtherOptionRow
-						inputRef={(node) => {
-							choiceRefs.current[otherIndex] = node;
-						}}
-						multi={!!question.multiSelect}
-						active={state.customActive}
-						text={state.customText}
-						pageFocus={question.options.length === 0 || customOwnsPageFocus}
-						onToggle={onToggleCustom}
-						onText={onCustomText}
-						onMove={(key) => {
-							const action = choiceKeyAction(key, otherIndex, choiceCount);
-							if (action.type === "move") moveCursor(action.index);
-						}}
-						onConfirm={onConfirmCustom}
-					/>
-				</div>
-
-				{anyPreview && previewSource?.preview ? (
-					<div
-						data-testid="ask-preview"
-						className="min-w-0 overflow-auto rounded-sm border border-border-default bg-control-bg px-8 py-4 tr-text-metadata"
-					>
-						<div className="mb-4 text-text-muted tr-text-metadata">
-							{t("tools.ask.preview", { label: previewSource.label })}
-						</div>
-						<PreviewMarkdown text={previewSource.preview} />
-					</div>
-				) : null}
-			</div>
-		</div>
-	);
-}
-
-function PreviewMarkdown({ text }: { text: string }) {
-	const Markdown = useOptionalResourceHost()?.markdown;
-	if (Markdown) return <Markdown text={text} />;
-	return <pre className="whitespace-pre-wrap tr-text-metadata text-text-default">{text}</pre>;
-}
-
-function OptionRow({
-	buttonRef,
-	label,
-	description,
-	recommendedReason,
-	selected,
-	cursor,
-	pageFocus,
-	multi,
-	pageKeys,
-	onFocus,
-	onKeyDown,
-	onClick,
-}: {
-	buttonRef: (node: HTMLButtonElement | null) => void;
-	label: string;
-	description: string;
-	recommendedReason?: string | undefined;
-	selected: boolean;
-	cursor: boolean;
-	pageFocus: boolean;
-	multi: boolean;
-	pageKeys: boolean;
-	onFocus: () => void;
-	onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
-	onClick: () => void;
-}) {
-	const t = useT();
-	const { text, recommended, reason } = readRecommendation({ label, recommendedReason });
-	return (
-		<button
-			ref={buttonRef}
-			type="button"
-			{...(multi
-				? { role: "checkbox", "aria-checked": selected }
-				: { role: "radio", "aria-checked": selected })}
-			aria-keyshortcuts={`ArrowUp ArrowDown Home End Space Enter${pageKeys ? " ArrowLeft ArrowRight" : ""} Shift+Escape`}
-			tabIndex={cursor ? 0 : -1}
-			data-testid="ask-option"
-			data-selected={selected}
-			data-cursor={cursor}
-			data-ask-page-focus={pageFocus || undefined}
-			onFocus={onFocus}
-			onKeyDown={onKeyDown}
-			onClick={onClick}
-			className={cn(
-				"flex items-start gap-8 rounded-sm border px-12 py-8 text-left outline-none transition-colors focus-visible:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary",
-				selected
-					? "border-primary bg-primary-subtle"
-					: "border-border-default hover:bg-control-bg-hovered",
-			)}
-		>
-			<Indicator selected={selected} multi={multi} />
-			<span className="flex min-w-0 flex-col gap-2">
-				<span className="flex items-center gap-4">
-					<span data-testid="ask-option-label" className="tr-text-ui text-text-default">
-						{text}
-					</span>
-					{recommended ? <RecommendedBadge /> : null}
-				</span>
-				{description ? (
-					<span className="text-text-muted tr-text-metadata">{description}</span>
-				) : null}
-				{reason ? (
-					<span
-						data-testid="ask-recommended-reason"
-						className="mt-2 text-text-muted tr-text-metadata"
-					>
-						<span className="tr-text-emphasis text-primary">{t("tools.ask.why")}</span> {reason}
-					</span>
-				) : null}
-			</span>
-		</button>
-	);
-}
-
-function OtherOptionRow({
-	inputRef,
-	multi,
-	active,
-	text,
-	pageFocus,
-	onToggle,
-	onText,
-	onMove,
-	onConfirm,
-}: {
-	inputRef: (node: HTMLInputElement | null) => void;
-	multi: boolean;
-	active: boolean;
-	text: string;
-	pageFocus: boolean;
-	onToggle: () => void;
-	onText: (text: string) => void;
-	onMove: (key: "ArrowUp" | "ArrowDown") => void;
-	onConfirm: () => void;
-}) {
-	const t = useT();
-	const inputId = useId();
-	return (
-		<label
-			htmlFor={inputId}
-			data-testid="ask-custom-row"
-			data-selected={active}
-			className={cn(
-				"flex cursor-text items-center gap-8 rounded-sm border px-12 py-8 transition-colors focus-within:border-control-border-active focus-within:ring-2 focus-within:ring-primary",
-				active
-					? "border-primary bg-primary-subtle"
-					: "border-border-default hover:bg-control-bg-hovered",
-			)}
-		>
-			{multi ? (
-				<button
-					type="button"
-					data-testid="ask-custom-toggle"
-					aria-label={active ? t("tools.ask.excludeCustom") : t("tools.ask.includeCustom")}
-					onClick={(e) => {
-						e.preventDefault();
-						onToggle();
-					}}
-					className="flex items-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
-				>
-					<Indicator selected={active} multi className="mt-0" />
-				</button>
-			) : (
-				<Indicator selected={active} multi={false} className="mt-0" />
-			)}
-			<span className="tr-text-ui text-text-default">{t("tools.ask.other")}</span>
-			<input
-				ref={inputRef}
-				id={inputId}
-				data-testid="ask-custom"
-				data-ask-page-focus={pageFocus || undefined}
-				aria-label={t("tools.ask.otherLabel")}
-				aria-keyshortcuts="ArrowUp ArrowDown Enter Shift+Escape"
-				value={text}
-				placeholder={t("tools.ask.otherPlaceholder")}
-				onChange={(event) => onText(event.target.value)}
-				onKeyDown={(event) => {
-					if (isImeComposing(event.nativeEvent)) return;
-					if (
-						(event.key === "ArrowUp" || event.key === "ArrowDown") &&
-						!event.shiftKey &&
-						!event.altKey &&
-						!event.ctrlKey &&
-						!event.metaKey
-					) {
-						event.preventDefault();
-						onMove(event.key);
-						return;
-					}
-					if (event.key === "Enter") {
-						event.preventDefault();
-						onConfirm();
-					}
-				}}
-				className="min-w-0 flex-1 border-none bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
-			/>
-		</label>
-	);
-}
-
-const RECOMMENDED_PILL =
-	"inline-flex items-center rounded-full bg-primary-subtle px-4 py-0 tr-text-label-pill text-primary";
-
-function RecommendedBadge() {
-	const t = useT();
-	return <span className={RECOMMENDED_PILL}>{t("tools.ask.recommended")}</span>;
-}
-
-function Indicator({
-	selected,
-	multi,
-	className,
-}: {
-	selected: boolean;
-	multi: boolean;
-	className?: string;
-}) {
-	if (multi) {
-		return (
-			<span
-				className={cn(
-					"mt-2 flex size-[18px] shrink-0 items-center justify-center rounded-sm border",
-					selected ? "border-primary bg-primary text-text-on-primary" : "border-border-default",
-					className,
-				)}
-			>
-				{selected ? <Check className="size-12" /> : null}
-			</span>
-		);
-	}
-	return (
-		<span
-			className={cn(
-				"mt-2 flex size-[18px] shrink-0 items-center justify-center rounded-full border",
-				selected ? "border-primary" : "border-border-default",
-				className,
-			)}
-		>
-			{selected ? <span className="size-8 rounded-full bg-primary" /> : null}
-		</span>
-	);
-}
-
-function ResolvedRecord({
-	questions,
-	result,
-	rawText,
-}: {
-	questions: AskUserQuestionItem[];
-	result: AskUserQuestionResult | null;
-	rawText: string;
-}) {
-	const t = useT();
-	if (!result) {
-		return (
-			<div
-				data-testid="ask-user-question"
-				data-tone="error"
-				className="text-feedback-error tr-text-metadata"
-			>
-				{rawText || t("tools.ask.closed")}
-			</div>
-		);
-	}
-	const byIndex = new Map(result.answers.map((a) => [a.questionIndex, a]));
-	return (
-		<div
-			data-testid="ask-user-question"
-			data-tone={result.cancelled ? "skipped" : "answered"}
-			className="flex flex-col gap-12"
-		>
-			{questions.map((q, i) => (
-				<QuestionRecap key={q.question} question={q} answer={byIndex.get(i)} />
-			))}
-			{questions.length === 0 ? (
-				<div className="text-text-muted tr-text-metadata">{rawText || t("tools.ask.answered")}</div>
-			) : null}
-		</div>
-	);
-}
-
-function QuestionRecap({
-	question,
-	answer,
-}: {
-	question: AskUserQuestionItem;
-	answer: AskUserQuestionAnswer | undefined;
-}) {
-	const t = useT();
-	const { selectedLabels, customAnswer, showOptions } = deriveRecapState(answer);
-	const selected = new Set(selectedLabels);
-
-	return (
-		<div className="flex flex-col gap-4">
-			<div className="flex items-start gap-8">
-				<MessageCircleQuestion className="mt-2 size-14 shrink-0 text-text-muted" />
-				<p className="tr-text-ui text-text-muted">{question.question}</p>
-			</div>
-			{showOptions ? (
-				<ul className="flex flex-col gap-2 pl-[calc(0.875rem+var(--space-8))]">
-					{question.options.map((opt) => {
-						const isSel = selected.has(opt.label);
-						return (
-							<li
-								key={opt.label}
-								data-testid="ask-record-option"
-								data-selected={isSel}
-								className={cn(
-									"flex items-center gap-4 tr-text-ui",
-									isSel ? "text-text-default" : "text-text-muted",
-								)}
-							>
-								{isSel ? (
-									<Check aria-hidden="true" className="size-14 shrink-0 text-feedback-success" />
-								) : (
-									<span
-										aria-hidden="true"
-										className="size-12 shrink-0 rounded-full border border-border-default"
-									/>
-								)}
-								<span data-testid="ask-selection-status" className="sr-only">
-									{isSel ? t("tools.ask.selected") : t("tools.ask.notSelected")}
-								</span>
-								<span>{splitRecommended(opt.label).text}</span>
-							</li>
-						);
-					})}
-					{customAnswer ? (
-						<li
-							data-testid="ask-record-custom"
-							className="flex items-center gap-4 tr-text-ui text-text-default"
-						>
-							<Check aria-hidden="true" className="size-14 shrink-0 text-feedback-success" />
-							<span data-testid="ask-selection-status" className="sr-only">
-								{t("tools.ask.selectedCustom")}
-							</span>
-							<span>{t("tools.ask.quotedAnswer", { answer: customAnswer })}</span>
-						</li>
-					) : null}
-				</ul>
-			) : !answer ? (
-				<div className="flex items-center gap-4 pl-[calc(0.875rem+var(--space-8))] text-text-muted tr-text-metadata italic">
-					<SkipForward className="size-12 shrink-0" /> {t("tools.ask.skipped")}
-				</div>
-			) : (
-				<div className="flex items-center gap-4 border-border-default border-l-2 pl-8">
-					<Check aria-hidden="true" className="size-14 shrink-0 text-feedback-success" />
-					<span data-testid="ask-selection-status" className="sr-only">
-						{t("tools.ask.selectedCustom")}
-					</span>
-					<span className="tr-text-ui text-text-default">
-						{t("tools.ask.quotedAnswer", { answer: answer.answer })}
-					</span>
-				</div>
-			)}
-			{answer?.notes ? (
-				<div className="pl-[calc(0.875rem+var(--space-8))] text-text-muted tr-text-metadata">
-					{t("tools.ask.note", { note: answer.notes })}
-				</div>
-			) : null}
 		</div>
 	);
 }

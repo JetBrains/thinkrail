@@ -138,11 +138,11 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
-      - name: Start Playwright Chromium download
-        run: .github/scripts/install-playwright.sh start
+      - name: Start Playwright Chromium and WebKit download
+        run: .github/scripts/install-playwright.sh start webkit
       - run: bun run build:web
-      - name: Install Playwright Chromium
-        timeout-minutes: 5
+      - name: Install Playwright Chromium and WebKit
+        timeout-minutes: 8
         run: .github/scripts/install-playwright.sh wait
       # `bun run e2e` boots the host on an isolated port + state dir, runs this job's slice of the
       # @agent-free suite headless, then tears it all down. It reuses the web build above.

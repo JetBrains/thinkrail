@@ -1,8 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionSessionServices } from "@thinkrail/extension-api/server";
 import extension from "./index";
 
 type ExecResult = { content: Array<{ type: string; text: string }>; details: unknown };
@@ -18,6 +16,21 @@ type CapturedTool = {
 	) => Promise<ExecResult>;
 };
 
+const checked: Array<{ path: string; cwd: string }> = [];
+
+const session: ExtensionSessionServices = {
+	expectToolResponse: () => {},
+	awaitToolResponse: async () => ({ kind: "deferred" }),
+	setting: () => false,
+	workspaceFiles: {
+		check: async (path, cwd) => {
+			checked.push({ path, cwd });
+			if (path === "missing.html") throw new Error("no such file");
+		},
+		scratchDir: ".thinkrail/context/mockups/",
+	},
+};
+
 function loadTool(): CapturedTool {
 	let captured: CapturedTool | undefined;
 	const fakePi = {
@@ -25,7 +38,7 @@ function loadTool(): CapturedTool {
 			captured = def;
 		},
 	};
-	const factory = extension.extensions[0];
+	const factory = extension.sessionExtensions?.(session)[0];
 	if (!factory) throw new Error("server half declares no extension factory");
 	factory(fakePi as unknown as ExtensionAPI);
 	if (!captured) throw new Error("factory did not register a tool");
@@ -33,11 +46,12 @@ function loadTool(): CapturedTool {
 }
 
 describe("visualize server half", () => {
-	test("composes one parent extension named visualize and no children or skills", () => {
+	test("composes one per-session parent extension named visualize and no children or skills", () => {
 		expect(extension.name).toBe("visualize");
 		expect(extension.title).toBe("Visualize");
 		expect(extension.description).toBeTruthy();
-		expect(extension.extensions).toHaveLength(1);
+		expect(extension.extensions).toHaveLength(0);
+		expect(extension.sessionExtensions?.(session)).toHaveLength(1);
 		expect(extension).not.toHaveProperty("childExtensions");
 		expect(extension).not.toHaveProperty("skillPackages");
 		expect(loadTool().name).toBe("visualize");
@@ -117,45 +131,21 @@ describe("visualize server half", () => {
 		}
 	});
 
-	test("shows workspace files and rejects missing, directory, and escaping paths", async () => {
-		const cwd = mkdtempSync(join(tmpdir(), "visualize-files-"));
-		mkdirSync(join(cwd, ".thinkrail/context/mockups"), { recursive: true });
-		writeFileSync(join(cwd, ".thinkrail/context/mockups/after.html"), "<p>after</p>");
-		writeFileSync(join(cwd, "before.html"), "<p>before</p>");
+	test("checks every file path through the host's workspace files", async () => {
+		checked.length = 0;
 		const tool = loadTool();
-		const run = (params: unknown) => tool.execute("id", params, undefined, undefined, { cwd });
+		const run = (params: unknown) =>
+			tool.execute("id", params, undefined, undefined, { cwd: "/workspace" });
 		await expect(
 			run({ type: "file", path: ".thinkrail/context/mockups/after.html", before: "before.html" }),
 		).resolves.toBeDefined();
+		expect(checked).toEqual([
+			{ path: ".thinkrail/context/mockups/after.html", cwd: "/workspace" },
+			{ path: "before.html", cwd: "/workspace" },
+		]);
 		await expect(run({ type: "file", path: "missing.html" })).rejects.toThrow(
 			/cannot show `path` \(missing\.html\): no such file/,
 		);
-		await expect(run({ type: "file", path: ".thinkrail" })).rejects.toThrow(/not a regular file/);
-		await expect(
-			run({ type: "file", path: "before.html", before: "../outside.html" }),
-		).rejects.toThrow(/cannot show `before`[\s\S]*inside it/);
-		await expect(run({ type: "file", path: join(cwd, "before.html") })).rejects.toThrow(
-			/relative to the workspace/,
-		);
-	});
-
-	test("file checks follow the host's read guard: dot-dot names pass, .git and escaping links do not", async () => {
-		const root = mkdtempSync(join(tmpdir(), "visualize-guard-"));
-		const cwd = join(root, "workspace");
-		const outside = join(root, "outside");
-		mkdirSync(join(cwd, ".git"), { recursive: true });
-		mkdirSync(outside);
-		writeFileSync(join(cwd, "..draft.html"), "<p>draft</p>");
-		writeFileSync(join(cwd, ".git", "config"), "[core]");
-		writeFileSync(join(outside, "secret.html"), "<p>secret</p>");
-		symlinkSync(outside, join(cwd, "linked"), "junction");
-		const tool = loadTool();
-		const run = (path: string) =>
-			tool.execute("id", { type: "file", path }, undefined, undefined, { cwd });
-
-		await expect(run("..draft.html")).resolves.toBeDefined();
-		await expect(run(".git/config")).rejects.toThrow(/\.git directory is not shown/);
-		await expect(run("linked/secret.html")).rejects.toThrow(/a link points outside it/);
 	});
 
 	test("points the mockup guideline at the gitignored scratch directory", () => {
