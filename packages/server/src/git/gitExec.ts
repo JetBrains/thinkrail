@@ -198,9 +198,10 @@ function executionDiagnostics(run: {
 export async function gitAsync(
 	cwd: string,
 	args: string[],
-	opts: GitAsyncOptions & { raw?: boolean } = {},
+	opts: GitAsyncOptions & { raw?: boolean; stdin?: Blob } = {},
 ): Promise<GitResult> {
 	const run = await runBounded(["git", "-C", cwd, ...args], {
+		...(opts.stdin && { stdin: opts.stdin }),
 		timeoutMs: opts.timeoutMs ?? NETWORK_TIMEOUT_MS,
 		env: opts.env ?? nonInteractiveGitEnv(),
 		...(opts.signal ? { signal: opts.signal } : {}),

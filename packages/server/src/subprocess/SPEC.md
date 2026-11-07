@@ -149,7 +149,7 @@ never what a particular child's output means.
   from the snapshot silently misses that repair. Both halves are pinned separately — a caller's `env`/`cwd`
   arriving at the child, and a post-startup mutation being visible to one spawned without `env` — because a
   test that only asserts the defaults cannot tell the two apart.
-- `stdin` is always `ignore`, and both output streams are always piped and **read from the moment of
+- `stdin` is ignored unless the caller supplies a Blob, and both output streams are always piped and **read from the moment of
   spawn**; text is decoded incrementally and byte stdout is accumulated without decoding — an undrained
   pipe is how a chatty child deadlocks. The readers are
   cancelled once the outcome is decided *and* the grace above has run, never before it. Every
