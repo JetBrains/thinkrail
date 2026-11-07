@@ -75,7 +75,13 @@ function literalParts(node: ts.Node): ts.Node[] {
 	if (ts.isTemplateExpression(node)) {
 		return [node.head, ...node.templateSpans.map((span) => span.literal)];
 	}
-	if (ts.isParenthesizedExpression(node) || ts.isAsExpression(node)) {
+	if (
+		ts.isParenthesizedExpression(node) ||
+		ts.isAsExpression(node) ||
+		ts.isTypeAssertionExpression(node) ||
+		ts.isSatisfiesExpression(node) ||
+		ts.isNonNullExpression(node)
+	) {
 		return literalParts(node.expression);
 	}
 	if (ts.isConditionalExpression(node)) {
