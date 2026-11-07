@@ -180,6 +180,32 @@ function ollamaContext(parameters: unknown): number | null {
 	return match ? positiveInt(Number(match[1])) : null;
 }
 
+function ollamaInfoContext(modelInfo: unknown): number | null {
+	if (!isObject(modelInfo)) return null;
+	const architecture = modelInfo["general.architecture"];
+	if (typeof architecture === "string") {
+		const reported = positiveInt(modelInfo[`${architecture}.context_length`]);
+		if (reported !== null) return reported;
+	}
+	let found: number | null = null;
+	for (const [key, value] of Object.entries(modelInfo)) {
+		if (!/^[^.]*\.context_length$/.test(key)) continue;
+		const length = positiveInt(value);
+		if (length === null) continue;
+		if (found !== null && found !== length) return null;
+		found = length;
+	}
+	return found;
+}
+
+function isOllamaCloudEndpoint(root: string): boolean {
+	try {
+		return new URL(root).hostname === "ollama.com";
+	} catch {
+		return false;
+	}
+}
+
 async function enrichOllama(
 	root: string,
 	key: string | undefined,
@@ -187,6 +213,7 @@ async function enrichOllama(
 ): Promise<CustomEndpointModel[] | undefined> {
 	const version = await detail(`${root}/api/version`, key);
 	if (!isObject(version) || typeof version.version !== "string") return undefined;
+	const honorsReportedContext = isOllamaCloudEndpoint(root);
 	const shown = await Promise.all(
 		models.map(async (model, index) => {
 			if (index >= MAX_DETAIL_PROBES) return model;
@@ -196,7 +223,10 @@ async function enrichOllama(
 			if (!capabilities.includes("completion")) return null;
 			return {
 				...model,
-				contextWindow: model.contextWindow ?? ollamaContext(show.parameters),
+				contextWindow:
+					model.contextWindow ??
+					ollamaContext(show.parameters) ??
+					(honorsReportedContext ? ollamaInfoContext(show.model_info) : null),
 				reasoning: capabilities.includes("thinking"),
 				vision: capabilities.includes("vision"),
 				tools: capabilities.includes("tools"),

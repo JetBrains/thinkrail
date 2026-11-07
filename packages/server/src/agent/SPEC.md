@@ -171,18 +171,25 @@ re-opened transcripts provider-valid.
       `max_input_tokens` / `max_output_tokens` (LiteLLM), `context_length`, llama.cpp `meta.n_ctx` — and from
       same-origin best-effort extras run in parallel (3s each): llama.cpp `/props` (per-slot `n_ctx`, an
       `enable_thinking` template, `supports_tools`), Ollama `/api/version` then `/api/show` per model
-      (`num_ctx`, capabilities; non-`completion` models dropped) and LM Studio `/api/v0/models` (loaded
-      context, `vlm`, `tool_use`; embeddings dropped). An extra that fails or 404s only leaves facts
-      unknown, so a gateway costs a few harmless 404s. Training lengths are ignored. Failures return a
-      closed reason, never a response body. Probes run on the host because the agent talks to the server
-      from there (and a browser would hit CORS).
+      (a Modelfile `num_ctx` when one is set, capabilities; non-`completion` models dropped) and LM Studio
+      `/api/v0/models` (loaded context, `vlm`, `tool_use`; embeddings dropped). An extra that fails or
+      404s only leaves facts unknown, so a gateway costs a few harmless 404s. Training lengths
+      (`n_ctx_train`) are ignored. Ollama `model_info["<architecture>.context_length"]` is the model's
+      metadata maximum, not the window a local server runs: with no `num_ctx` it loads
+      `OLLAMA_CONTEXT_LENGTH` and silently truncates past that. A local endpoint therefore leaves context
+      unknown unless `num_ctx` or the `/v1/models` listing already provided one. That metadata length is
+      recorded only for an endpoint known to serve the full window — Ollama cloud, host `ollama.com`.
+      `/api/version` of `0.0.0` is not that signal; source-built local servers report it too.
+      Failures return a closed reason, never a response body. Probes run on the host because the agent
+      talks to the server from there (and a browser would hit CORS).
     - **Write only reported facts (decision).** A model's `contextWindow`, `reasoning` and `input` are
       written only when reported; otherwise pi's defaults apply — 128K context, with pi's overflow
       recovery compacting and retrying once when the server returns a recognized "context exceeded"
-      error (accepted gap: a server that silently truncates, like Ollama by default, gives it nothing to
-      recover from). `maxTokens` is the reported max output when it fits the context, else ¼ of a known
-      context clamped to 256–16K (pi's 16K default would fail vLLM's prompt + `max_tokens` check on a
-      small context, and compaction cannot recover from that), else omitted. Cost is zero. A new provider
+      error (accepted gap: a server that silently truncates, like local Ollama with no Modelfile
+      `num_ctx`, gives it nothing to recover from). `maxTokens` is the reported max output when it fits
+      the context, else ¼ of a known context clamped to 256–16K (pi's 16K default would fail vLLM's
+      prompt + `max_tokens` check on a small context, and compaction cannot recover from that), else
+      omitted. Cost is zero. A new provider
       gets conservative compat (`supportsStore: false`, `supportsDeveloperRole: false`, `maxTokensField:
       "max_tokens"`) because pi detects compat from the URL and would send OpenAI-only fields to an unknown
       host; every OpenAI-compatible server accepts these. An edit keeps the provider's `compat` and every
