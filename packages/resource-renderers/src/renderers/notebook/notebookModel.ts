@@ -108,15 +108,22 @@ export function stripAnsi(text: string): string {
 			while (++index < text.length) {
 				const current = text.charCodeAt(index);
 				if (current === 0x9c || (control === 0x9d && current === 0x07)) break;
-				if (current === 0x1b && text.charCodeAt(index + 1) === 0x5c) {
-					index++;
+				if (current === 0x18 || current === 0x1a) break; // CAN or SUB cancels the string.
+				if (current === 0x1b) {
+					// Let the outer scanner handle ST or the start of a replacement escape.
+					index--;
 					break;
 				}
 			}
 			continue;
 		}
 		if (escaped) {
-			while (index < text.length && text.charCodeAt(index) >= 0x20 && text.charCodeAt(index) <= 0x2f) index++;
+			while (
+				index < text.length &&
+				text.charCodeAt(index) >= 0x20 &&
+				text.charCodeAt(index) <= 0x2f
+			)
+				index++;
 			continue;
 		}
 		if (code >= 0x80 && code <= 0x9f) continue;
