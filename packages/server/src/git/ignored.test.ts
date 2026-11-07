@@ -49,6 +49,15 @@ test("ignoredPaths handles long listings and reports nothing outside a repositor
 	expect(await ignoredPaths(plain, ["a.log"])).toEqual(new Set());
 });
 
+test("an invalid path in one batch does not discard ignored names in later batches", async () => {
+	const paths = [
+		"../outside.log",
+		...Array.from({ length: 1_500 }, (_, index) => `src/file-${index}.ts`),
+		"src/last.log",
+	];
+	expect(await ignoredPaths(repo(), paths)).toEqual(new Set(["src/last.log"]));
+});
+
 for (const [label, path] of [
 	["quote", 'src/a"b.log'],
 	["tab", "src/a\tb.log"],

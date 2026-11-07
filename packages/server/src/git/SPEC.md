@@ -354,7 +354,7 @@ ref off the workspace-create critical path.
   **`ignoredPaths(worktreePath, paths)`** → the subset Git ignores. The host uses it to mark `fs.readDir` nodes
   `gitignored` so the Files tree can dim them. Paths are literal, NUL-delimited records on stdin
   and stdout, including quotes, backslashes, tabs and newlines. Tracked files never count.
-  A non-repository, failure or timeout returns an empty set.
+  Large listings run in bounded parallel batches with a separate deadline for each batch. A failed or timed-out batch adds no paths; the other batches still contribute their matches.
 - **Public surface (barrel):** `git`, `gitAsync`, `gitAsyncBytes`, `gitAsyncStream`, `gitRunHook`, `nonInteractiveGitEnv`, `SLOW_GIT_TIMEOUT_MS`, `INDEX_WRITE_TIMEOUT_MS`, `throwOnTimeout`,
   `setSyncGitTimeoutForTests`,
   `remoteRefOid`, `remoteRefOidAsync`, `remoteTrackingRef`, `gitStatus`,
