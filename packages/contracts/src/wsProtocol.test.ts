@@ -59,6 +59,7 @@ import {
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
+	TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION,
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 	TOOL_RESPONSE_CUSTOM_TYPE,
@@ -586,8 +587,14 @@ test("custom endpoints are pinned to v101 and own only custom-* providers", () =
 
 test("extension settings are pinned to v105", () => {
 	expect(EXTENSION_SETTINGS_PROTOCOL_VERSION).toBe(105);
-	expect(PROTOCOL_VERSION).toBe(105);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(105);
 	expect(DEFAULT_CONFIG.extensionSettings).toEqual({});
+});
+
+test("the Shift+Enter terminal setting is pinned to v106", () => {
+	expect(TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION).toBe(106);
+	expect(PROTOCOL_VERSION).toBe(106);
+	expect(DEFAULT_CONFIG.terminalShiftEnterNewline).toBe(true);
 });
 
 test("ask_user_question discuss answers are pinned to v105, after background workspace creation", () => {

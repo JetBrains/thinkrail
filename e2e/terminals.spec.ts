@@ -1,3 +1,6 @@
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { expect, test, type WebSocketRoute } from "@playwright/test";
 import { INITIAL_TERMINAL_TAB_KEY } from "@thinkrail/contracts";
 import {
@@ -511,6 +514,42 @@ test("Ctrl+C still interrupts while an input method is active", async ({ page })
 
 	await runInTerminal(page, "echo TR_INTERRUPTED_$((21 + 21))");
 	await expect(term).toContainText("TR_INTERRUPTED_42");
+});
+
+test("Shift+Enter sends Meta+Enter without a stray carriage return", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+	const capture = join(mkdtempSync(join(tmpdir(), "tr-shift-enter-")), "bytes.txt");
+
+	await runInTerminal(page, `cat -v > ${capture}`);
+	await expect.poll(() => existsSync(capture)).toBe(true);
+	await visibleTerminal(page).locator(".xterm-helper-textarea").focus();
+	await page.keyboard.type("A");
+
+	const cdp = await page.context().newCDPSession(page);
+	await cdp.send("Input.dispatchKeyEvent", {
+		type: "keyDown",
+		key: "Enter",
+		code: "Enter",
+		modifiers: 8,
+		windowsVirtualKeyCode: 13,
+		text: "\r",
+	});
+	await cdp.send("Input.dispatchKeyEvent", {
+		type: "keyUp",
+		key: "Enter",
+		code: "Enter",
+		modifiers: 8,
+		windowsVirtualKeyCode: 13,
+	});
+	await page.keyboard.type("B");
+	await page.keyboard.press("Enter");
+
+	await page.keyboard.press("Control+d");
+
+	// Cooked tty: ESC CR becomes "A", ESC, newline (icrnl), so cat -v writes "A^[\n"; a leaked CR would add a blank line and a doubled key a repeated character.
+	await expect.poll(() => readFileSync(capture, "utf8")).toBe("A^[\nB\n");
 });
 
 test("a shell that dies while detached is not re-attached as if alive", async ({ page }) => {

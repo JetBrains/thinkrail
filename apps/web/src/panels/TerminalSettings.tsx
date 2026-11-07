@@ -1,12 +1,16 @@
 import type { HostPlatform, TerminalWindowsShell } from "@thinkrail/contracts";
-import { WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import {
+	TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION,
+	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
+} from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { SegmentedControl, type SegmentedControlOption } from "./SegmentedControl";
 import { SettingsRadioCards, type SettingsRadioChoice } from "./SettingsRadioCards";
-import { SETTINGS_ROWS_CONTAINER } from "./SettingsRow";
+import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
+import { SettingsSwitch } from "./SettingsSwitch";
 
 type ScrollbackOption = "0" | "16" | "64" | "256" | "1024";
 
@@ -99,10 +103,40 @@ export function WindowsShellSettings({
 	);
 }
 
+export function ShiftEnterSetting({
+	protocolVersion,
+	checked,
+	onChange,
+}: {
+	protocolVersion: number | null;
+	checked: boolean;
+	onChange: (checked: boolean) => void;
+}) {
+	const t = useT();
+	if (protocolVersion === null || protocolVersion < TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION) {
+		return null;
+	}
+	return (
+		<SettingsRow
+			label={t("settings.terminal.shiftEnter.title")}
+			description={t("settings.terminal.shiftEnter.description")}
+			control={
+				<SettingsSwitch
+					checked={checked}
+					label={t("settings.terminal.shiftEnter.title")}
+					testId="terminal-shift-enter-toggle"
+					onChange={onChange}
+				/>
+			}
+		/>
+	);
+}
+
 export function TerminalSettings() {
 	const t = useT();
 	const replayKb = useAppStore((s) => s.terminalReplayKb);
 	const windowsShell = useAppStore((s) => s.terminalWindowsShell);
+	const shiftEnterNewline = useAppStore((s) => s.terminalShiftEnterNewline);
 	const hostPlatform = useAppStore((s) => s.hostPlatform);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 
@@ -118,6 +152,12 @@ export function TerminalSettings() {
 		getTransport()
 			.request("settings.update", { config: { terminalWindowsShell: shell } })
 			.catch(() => toast.error(t("settings.terminal.shellFailed")));
+	};
+
+	const setShiftEnterNewline = (terminalShiftEnterNewline: boolean) => {
+		getTransport()
+			.request("settings.update", { config: { terminalShiftEnterNewline } })
+			.catch(() => toast.error(t("settings.terminal.shiftEnter.changeFailed")));
 	};
 
 	const scrollbackValue =
@@ -143,6 +183,12 @@ export function TerminalSettings() {
 					testId="terminal-scrollback-control"
 				/>
 			</div>
+
+			<ShiftEnterSetting
+				protocolVersion={protocolVersion}
+				checked={shiftEnterNewline}
+				onChange={setShiftEnterNewline}
+			/>
 
 			<WindowsShellSettings
 				platform={hostPlatform}
