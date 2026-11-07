@@ -916,9 +916,9 @@ function activeEditorLine(page: Page) {
 const numberedLines = (count: number) =>
 	`${Array.from({ length: count }, (_, index) => `line ${index + 1}`).join("\n")}\n`;
 
-test("Mod+click on a printed location opens the file at that line; a missing path is not a link", async ({
-	page,
-}) => {
+test("Mod+click on a printed location opens the file at that line; a missing path is not a link", {
+	tag: "@webkit",
+}, async ({ page }) => {
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
 	mkdirSync(join(workspace.worktreePath, "src"), { recursive: true });
@@ -979,9 +979,9 @@ test("a relative path is looked up from the directory the shell is in", async ({
 	await expect(activeEditorLine(page)).toHaveText("2");
 });
 
-test("Mod+click reveals a printed folder in Files and opens a printed URL in a new window", async ({
-	page,
-}) => {
+test("Mod+click reveals a printed folder in Files and opens a printed URL in a new window", {
+	tag: "@webkit",
+}, async ({ page }) => {
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
 	mkdirSync(join(workspace.worktreePath, "assets", "icons"), { recursive: true });
