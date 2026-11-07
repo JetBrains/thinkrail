@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { SHIFT_ENTER_SEQUENCE, type TerminalKeyEvent, terminalKeyAction } from "./terminalKeys";
+import { TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import {
+	SHIFT_ENTER_SEQUENCE,
+	shiftEnterNewlineActive,
+	type TerminalKeyEvent,
+	terminalKeyAction,
+	terminalKeyDecision,
+} from "./terminalKeys";
 
 function key(init: Partial<TerminalKeyEvent>): TerminalKeyEvent {
 	return {
@@ -72,5 +79,94 @@ describe("Shift+Enter", () => {
 
 	test("sends ESC CR", () => {
 		expect(SHIFT_ENTER_SEQUENCE).toBe("\x1b\r");
+	});
+});
+
+describe("the Shift+Enter setting against the host protocol", () => {
+	test("is honoured only from the protocol that stores it", () => {
+		const supported = TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION;
+		expect(shiftEnterNewlineActive(supported, true)).toBe(true);
+		expect(shiftEnterNewlineActive(supported + 1, true)).toBe(true);
+		expect(shiftEnterNewlineActive(supported, false)).toBe(false);
+	});
+
+	test("is off against an older host or while the protocol is unknown", () => {
+		expect(shiftEnterNewlineActive(TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION - 1, true)).toBe(false);
+		expect(shiftEnterNewlineActive(null, true)).toBe(false);
+	});
+});
+
+describe("the key handler decision", () => {
+	function imeKey(init: Partial<TerminalKeyEvent>, isComposing = false) {
+		return { ...key(init), keyCode: 229, isComposing };
+	}
+
+	test("runs the chords before the keyCode-229 rescue when no IME is composing", () => {
+		expect(
+			terminalKeyDecision(
+				imeKey({ key: "C", code: "KeyC", ctrlKey: true, shiftKey: true }),
+				"linux",
+				true,
+				true,
+			),
+		).toBe("copy");
+		expect(
+			terminalKeyDecision(
+				imeKey({ key: "C", code: "KeyC", ctrlKey: true, shiftKey: true }),
+				"linux",
+				false,
+				true,
+			),
+		).toBe("swallow");
+		expect(
+			terminalKeyDecision(
+				imeKey({ key: "Enter", code: "Enter", shiftKey: true }),
+				"linux",
+				false,
+				true,
+			),
+		).toBe("newline");
+	});
+
+	test("still rescues IME control chords that are not terminal chords", () => {
+		expect(
+			terminalKeyDecision(imeKey({ key: "c", code: "KeyC", ctrlKey: true }), "linux", false, true),
+		).toEqual({ write: "\x03" });
+		expect(terminalKeyDecision(imeKey({ code: "Escape" }), "apple", false, true)).toEqual({
+			write: "\x1b",
+		});
+		expect(
+			terminalKeyDecision(imeKey({ key: "a", code: "KeyA" }), "linux", false, true),
+		).toBeNull();
+	});
+
+	test("leaves everything to the IME while it composes", () => {
+		expect(
+			terminalKeyDecision(
+				imeKey({ key: "C", code: "KeyC", ctrlKey: true, shiftKey: true }, true),
+				"linux",
+				true,
+				true,
+			),
+		).toBeNull();
+		expect(
+			terminalKeyDecision(
+				{ ...key({ key: "Enter", code: "Enter", shiftKey: true }), keyCode: 13, isComposing: true },
+				"linux",
+				false,
+				true,
+			),
+		).toBeNull();
+	});
+
+	test("passes ordinary keys through", () => {
+		expect(
+			terminalKeyDecision(
+				{ ...key({ key: "a", code: "KeyA" }), keyCode: 65, isComposing: false },
+				"linux",
+				false,
+				true,
+			),
+		).toBeNull();
 	});
 });
