@@ -1,5 +1,16 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+	closeSync,
+	fchmodSync,
+	fsyncSync,
+	mkdirSync,
+	openSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import {
@@ -57,25 +68,49 @@ function storedDirectory(path: string): string {
 	return resolve(path);
 }
 
-function readJson<T>(file: string, fallback: T): T {
+function setAside(path: string): string | null {
+	const setAsidePath = `${path}.corrupt-${Date.now()}`;
 	try {
-		return JSON.parse(readFileSync(join(dataDir(), file), "utf8")) as T;
+		renameSync(path, setAsidePath);
+		return setAsidePath;
 	} catch {
-		return fallback;
+		return null;
 	}
 }
 
-function writeJson(file: string, value: unknown): void {
-	mkdirSync(dataDir(), { recursive: true });
-	writeFileSync(join(dataDir(), file), `${JSON.stringify(value, null, "\t")}\n`);
+function readJson<T>(file: string, fallback: T, accepts: (raw: unknown) => boolean): T {
+	const path = join(dataDir(), file);
+	try {
+		const raw: unknown = JSON.parse(readFileSync(path, "utf8"));
+		if (accepts(raw)) return raw as T;
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") return fallback;
+	}
+	setAside(path);
+	return fallback;
+}
+
+const NEW_FILE_MODE = 0o600;
+
+function replacementMode(target: string): number {
+	const existing = statSync(target, { throwIfNoEntry: false });
+	return existing ? existing.mode & 0o777 : NEW_FILE_MODE;
 }
 
 function writeJsonAtomic(file: string, value: unknown, mode?: number): void {
 	mkdirSync(dataDir(), { recursive: true });
 	const target = join(dataDir(), file);
 	const temporary = `${target}.${randomUUID()}.tmp`;
+	const permissions = mode ?? replacementMode(target);
 	try {
-		writeFileSync(temporary, `${JSON.stringify(value, null, "\t")}\n`, mode ? { mode } : undefined);
+		const fd = openSync(temporary, "w", permissions);
+		try {
+			fchmodSync(fd, permissions);
+			writeFileSync(fd, `${JSON.stringify(value, null, "\t")}\n`);
+			fsyncSync(fd);
+		} finally {
+			closeSync(fd);
+		}
 		renameSync(temporary, target);
 	} finally {
 		rmSync(temporary, { force: true });
@@ -107,13 +142,7 @@ function loadSessionMetadata<T>(
 		if ((caught as NodeJS.ErrnoException).code === "ENOENT") return { kind: "missing" };
 		error = caught;
 	}
-	const setAsidePath = `${path}.corrupt-${Date.now()}`;
-	try {
-		renameSync(path, setAsidePath);
-		return { kind: "set-aside", file, error, setAsidePath };
-	} catch {
-		return { kind: "set-aside", file, error, setAsidePath: null };
-	}
+	return { kind: "set-aside", file, error, setAsidePath: setAside(path) };
 }
 
 export const SESSION_RECEIPTS_VERSION = 1;
@@ -279,25 +308,25 @@ export function saveTurns(turns: PersistedTurns): void {
 }
 
 export function loadProjects(): Project[] {
-	return readJson<Project[]>("projects.json", []).map((project) => ({
+	return readJson<Project[]>("projects.json", [], Array.isArray).map((project) => ({
 		...project,
 		path: storedDirectory(project.path),
 	}));
 }
 
 export function saveProjects(projects: Project[]): void {
-	writeJson("projects.json", projects);
+	writeJsonAtomic("projects.json", projects);
 }
 
 export function loadWorkspaces(): Workspace[] {
-	return readJson<Workspace[]>("workspaces.json", []).map((workspace) => ({
+	return readJson<Workspace[]>("workspaces.json", [], Array.isArray).map((workspace) => ({
 		...workspace,
 		worktreePath: storedDirectory(workspace.worktreePath),
 	}));
 }
 
 export function saveWorkspaces(workspaces: Workspace[]): void {
-	writeJson("workspaces.json", workspaces);
+	writeJsonAtomic("workspaces.json", workspaces);
 }
 
 export type WorkspaceCreationRecord = Omit<WorkspaceCreation, "kickoff"> & {
@@ -327,11 +356,11 @@ export interface PersistedTerminalTab {
 export type PersistedTerminalSessions = Record<string, PersistedTerminalTab[]>;
 
 export function loadTerminalSessions(): PersistedTerminalSessions {
-	return readJson<PersistedTerminalSessions>("terminals.json", {});
+	return readJson<PersistedTerminalSessions>("terminals.json", {}, isRecord);
 }
 
 export function saveTerminalSessions(sessions: PersistedTerminalSessions): void {
-	writeJson("terminals.json", sessions);
+	writeJsonAtomic("terminals.json", sessions);
 }
 
 /** A persisted model list keeps only entries that still identify a model; anything else is dropped, not repaired. */
@@ -369,9 +398,7 @@ function storedExtensionSettings(value: unknown): ExtensionSettingValues {
 }
 
 export function loadConfig(): AppConfig {
-	const raw = readJson<unknown>("config.json", {});
-	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return structuredClone(DEFAULT_CONFIG);
-	const value = raw as Record<string, unknown>;
+	const value = readJson<Record<string, unknown>>("config.json", {}, isRecord);
 	const extensions = { ...value };
 	delete extensions.chatMessageOrder;
 	delete extensions.layout;
@@ -451,12 +478,11 @@ export function loadConfig(): AppConfig {
 }
 
 export function saveConfig(config: AppConfig): void {
-	writeJson("config.json", config);
+	writeJsonAtomic("config.json", config);
 }
 
 export function loadHostEnvironment(): HostEnvironment {
-	const raw = readJson<unknown>("environment.json", {});
-	const value = isRecord(raw) ? raw : {};
+	const value = readJson<Record<string, unknown>>("environment.json", {}, isRecord);
 	const vars = Array.isArray(value.vars)
 		? value.vars.filter(
 				(entry): entry is { name: string; value: string } =>
