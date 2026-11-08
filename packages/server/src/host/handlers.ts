@@ -188,7 +188,7 @@ import {
 	updateComment,
 } from "../reviews";
 import { getConfig, noteRecentModel, updateConfig } from "../settings";
-import { evictSpecIndex, projectHasSpecs, specGraph } from "../spec";
+import { evictSpecIndex, evictSpecRoot, projectHasSpecs, specGraph } from "../spec";
 import {
 	deleteTemplate,
 	getTemplate,
@@ -301,6 +301,7 @@ import {
 import { startPlanReview } from "./requestReview";
 import { withChangeLock, withReviewLock } from "./reviewLock";
 import { runObservation } from "./runAnalytics";
+import { hostSearch } from "./search";
 import { scheduleLifecyclePass } from "./settledLifecycle";
 import { taskObservation } from "./taskAnalytics";
 import {
@@ -795,6 +796,7 @@ const handlers: WsHandlers = {
 		const ws = forgetWorkspace(id);
 		if (ws) {
 			evictSpecIndex(ws.id);
+			evictSpecRoot(ws.worktreePath);
 			removeWorkspaceReviews(ws.id);
 			forgetWorkspaceChanges(ws.id);
 			forgetWorkspaceTurns(ws.id);
@@ -877,7 +879,11 @@ const handlers: WsHandlers = {
 	},
 	"fs.readFile": (p) => {
 		void ensureWatch(p.workspaceId);
-		return readFile(p.workspaceId, p.path);
+		return readFile(
+			p.workspaceId,
+			p.path,
+			p.maxBytes === undefined ? {} : { maxBytes: p.maxBytes },
+		);
 	},
 	"spec.graph": (p) => {
 		void ensureWatch(p.workspaceId);
@@ -1455,6 +1461,9 @@ const handlers: WsHandlers = {
 			limit: clampLimit(p.limit),
 		});
 	},
+
+	"search.query": (p) => hostSearch().query(p),
+	"search.preview": (p) => hostSearch().preview(p),
 
 	"review.get": async (p) => {
 		ensureWatch(p.workspaceId);

@@ -96,8 +96,10 @@ so the files diff cleanly.
   change, reviewed like one. Plural pairs carry real English singulars (`"1 group"`, never `"1 groups"`).
 - **A bundled translation is partial by design and guarded by a test, not at runtime.** A string it lacks
   renders English through the chain, so it can ship incomplete and fill in later. The Russian catalog
-  currently covers every key in `en.json` and all four CLDR categories for its plural families; a new
-  key still lands in `en.json` first and should be translated in Russian in the same change. `applyLocale` loads bundled catalogs as-is (`validateCatalog` and `completePlurals` run
+  covers all four CLDR categories for its plural families but not every key — the search palette's and
+  its command and keyboard strings are deliberately English for now, and a few newer strings lag; a new
+  key lands in `en.json` first and is translated in Russian in the same change unless its feature is left
+  English on purpose. `applyLocale` loads bundled catalogs as-is (`validateCatalog` and `completePlurals` run
   only on local files), so a catalog test requires every bundled translation to pass `validateCatalog`
   with nothing dropped, to hold only sorted `en.json` keys — plus a plural form for a category English
   lacks when the language needs one — and to carry every plural form its language needs. Changing an

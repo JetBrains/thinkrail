@@ -26,7 +26,8 @@ not this module; the theme-aware highlighter remains app-local.
   `ResourcePreview` because a package cannot import the app's `lib`; `panels/pathIdentity.test.ts` pins it to
   `projectRelativePath` for workspace-relative paths),
   **`viewport.ts`** → `isPhoneViewport()` plus the live `usePhoneViewport()` projection (coarse pointer
-  or a viewport below 768px is phone-class; both media queries are observed), and **`shallowEqualArrays()`** (element-wise `Object.is` — the "did this really change?" test behind the
+  or a viewport below 768px is phone-class; one combined media query is observed), built on the general
+  **`useMediaQuery(query)`** (false where `matchMedia` is missing), and **`shallowEqualArrays()`** (element-wise `Object.is` — the "did this really change?" test behind the
   store's snapshot-identity guard and `ErrorBoundary`'s reset keys), **`userText()`** (a user
   message's plain text — shared by `chat`'s transcript hydration/renderer and `store`'s live event
   fold, so "same message" means the same thing everywhere; it lives here because `store`'s edge to
@@ -109,7 +110,7 @@ not this module; the theme-aware highlighter remains app-local.
   to a string index that skips the check, so such writes assign onto the returned copy instead. The
   `biome-plugins/nullProto.grit` lint rule rejects `Object.create(null)` anywhere else in `apps/web/src`.
 - **Public surface (barrel):** `cssColorToHex`, `isPhoneViewport`,
-  `usePhoneViewport`, `normalizePath`, `isAbsolutePath`, `fileName`, `projectRelativePath` (canonical worktree-relative POSIX identity;
+  `usePhoneViewport`, `useMediaQuery`, `normalizePath`, `isAbsolutePath`, `fileName`, `projectRelativePath` (canonical worktree-relative POSIX identity;
   collapses in-root `.`/`..` aliases but preserves an attempted leading escape for host rejection; Windows
   drive-rooted containment compares path/root case-insensitively while preserving the candidate's casing),
   `shallowEqualArrays`, `userText`, `firstNonBlankLine` (first trimmed non-empty line, `undefined` when

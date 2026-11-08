@@ -998,6 +998,7 @@ interface AppState {
 	connectionGeneration: number;
 	welcomeGeneration: number;
 	protocolVersion: number | null;
+	welcomeProtocolVersion: number | null;
 	hostPlatform: HostPlatform | null;
 	hostAppVersion: string | null;
 	hostUpdate: HostUpdateNotice | null;
@@ -2323,6 +2324,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	connectionGeneration: 0,
 	welcomeGeneration: 0,
 	protocolVersion: null,
+	welcomeProtocolVersion: null,
 	hostPlatform: null,
 	hostAppVersion: null,
 	hostUpdate: null,
@@ -2636,6 +2638,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const openProjects = sortProjects(projects.filter((project) => project.closed !== true));
 			return {
 				protocolVersion,
+				welcomeProtocolVersion: protocolVersion,
 				workspaceSettlingSupported: supportsWorkspaceSettling(protocolVersion),
 				resourceSnapshots: supportsChatResources(protocolVersion)
 					? staleChatResources(state.resourceSnapshots)
