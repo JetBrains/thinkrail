@@ -10,6 +10,8 @@ session state.
 - Use `architecture.md` for system topology, cross-module decisions, and repo-wide invariants.
 - For a pi upgrade or a host workaround around pi, read `pi-compatibility.md`: verify every applicable
   removal gate against the installed SDK, update the registry, and report what was removed or retained.
+  An Electrobun upgrade or a host workaround around Electrobun/Hutch does the same with
+  `electrobun-compatibility.md`.
 - Read the owning `SPEC.md` when work is governed by or may alter a module boundary, contract,
   invariant, documented behavior, or architecture decision.
 - Localized work does not require unrelated specs or a full repository map.

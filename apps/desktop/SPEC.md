@@ -420,7 +420,7 @@ drivers and assertions live in the test package, which product code never import
 
 The package pins the Electrobun `2.0.5` npm bootstrap as a build-only dependency. That exact pin selects
 its paired Hutch `0.28.2` toolchain and SDK; direct global Hutch invocation and floating version overrides
-are not part of the build path. The pin is the lowest release that publishes a macOS x64 core, so Intel
+are not part of the build path. Every bump re-checks the removal gates in [[electrobun-compatibility]]. The pin is the lowest release that publishes a macOS x64 core, so Intel
 Macs build from the same unmodified `electrobun build` path as every other target; both macOS
 architectures target macOS 14 or later and build only on a native runner. The application explicitly
 selects the Bun main process (`build.mainProcess: "bun"`, Electrobun's default since 2.0.4). The packaged
