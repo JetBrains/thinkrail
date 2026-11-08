@@ -36,6 +36,7 @@ export interface ToolInteraction<R = unknown> {
 	revealElement: (element: HTMLElement, options: ToolRevealOptions) => void;
 	cancelAutomaticReveal: () => void;
 	focusComposer: () => void;
+	hostProtocol?: number | undefined;
 }
 
 export interface ToolRenderProps {

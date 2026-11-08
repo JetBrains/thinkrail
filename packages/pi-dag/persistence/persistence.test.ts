@@ -18,11 +18,11 @@ import {
 	writeFile,
 } from "node:fs/promises";
 import { hostname, tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, parse } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { canonicalJson, DagError, type DagFailureCode, LIMITS } from "../domain/index.ts";
-import { canonicalRoot, syncDirectory } from "./files.ts";
+import { canonicalRoot, directory, syncDirectory } from "./files.ts";
 import { snapshot } from "./fixtures.ts";
 import { createDagStore } from "./index.ts";
 
@@ -452,6 +452,29 @@ describe("containment and failure handling", () => {
 		} finally {
 			spy.mockRestore();
 		}
+	});
+
+	test("creating a storage directory never mkdirs the filesystem root, which Windows refuses", async () => {
+		const { root } = await fixture();
+		const realMkdir = fs.mkdir;
+		const spy = spyOn(fs, "mkdir").mockImplementation((async (
+			path: fsSync.PathLike,
+			options?: fsSync.MakeDirectoryOptions,
+		) => {
+			if (String(path) === parse(String(path)).root) {
+				throw Object.assign(new Error(`operation not permitted, mkdir '${path}'`), {
+					code: "EPERM",
+				});
+			}
+			return realMkdir(path, options);
+		}) as unknown as typeof fs.mkdir);
+		const target = join(root, "fresh", "nested");
+		try {
+			await expect(directory(target, true)).resolves.toBe(true);
+		} finally {
+			spy.mockRestore();
+		}
+		expect((await stat(target)).isDirectory()).toBe(true);
 	});
 
 	test("canonicalRoot fails closed instead of recursing without bound on a root that never resolves", () => {

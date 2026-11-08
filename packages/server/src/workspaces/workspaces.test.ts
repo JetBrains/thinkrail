@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import {
+	chmodSync,
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
@@ -10,13 +11,14 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative, resolve } from "node:path";
+import { delimiter, join, relative, resolve } from "node:path";
 import type { Workspace } from "@thinkrail/contracts";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
+import { setSyncGitTimeoutForTests } from "../git";
+import { createWorkspace } from "./creations";
 import {
 	backfillWorkspaceActivity,
 	completeInitialTerminalReservation,
-	createWorkspace,
 	ensureWorkspaceScratchDir,
 	forgetWorkspace,
 	listExistingWorktrees,
@@ -63,6 +65,8 @@ const canSymlink = (() => {
 		rmSync(probe, { recursive: true, force: true });
 	}
 })();
+
+const posix = test.skipIf(process.platform === "win32");
 
 let dataDir: string;
 let repo: string;
@@ -199,6 +203,30 @@ test("createWorkspace checks out the remote-tracking ref, not a local branch of 
 	expect(gitOut(ws.worktreePath, "rev-parse", "HEAD")).toBe(originSha);
 });
 
+posix(
+	"a remote list that times out fails createWorkspace instead of checking out a local decoy",
+	async () => {
+		const remoteRepo = join(dataDir, "remote.git");
+		git(repo, "init", "--bare", remoteRepo);
+		git(repo, "remote", "add", "origin", remoteRepo);
+		git(repo, "push", "origin", "main");
+		git(repo, "fetch", "origin");
+		writeFileSync(join(repo, "decoy.md"), "decoy\n");
+		git(repo, "add", "-A");
+		git(repo, "commit", "-m", "decoy");
+		git(repo, "update-ref", "refs/heads/origin/main", "HEAD");
+
+		setSyncGitTimeoutForTests(2_000);
+		const create = withGitWrapper('case " $* " in *" remote ") sleep 30;; esac', () =>
+			createWorkspace("p1", undefined, "origin/main"),
+		).finally(() => setSyncGitTimeoutForTests(undefined));
+
+		await expect(create).rejects.toThrow(/^Could not list the remotes: timed out/);
+		expect(existsSync(join(dataDir, "worktrees", "repo"))).toBe(false);
+		expect(await worktrees()).toHaveLength(0);
+	},
+);
+
 test("createWorkspace fails with git's own words when the base fetch fails", async () => {
 	git(repo, "remote", "add", "origin", join(dataDir, "missing.git"));
 
@@ -305,7 +333,7 @@ test("openExistingWorktree adopts idempotently and removal never reclaims the ch
 		"An existing worktree cannot be renamed by ThinkRail",
 	);
 
-	removeWorkspace(workspace.id);
+	await removeWorkspace(workspace.id);
 	expect(listWorkspaceRecords("p1").some((candidate) => candidate.id === workspace.id)).toBe(false);
 	expect(readFileSync(join(external, "uncommitted.txt"), "utf8")).toBe("keep untracked\n");
 	expectCheckoutUnchanged();
@@ -378,6 +406,45 @@ test("external workspace branch metadata converges on refresh and list", async (
 		listWorkspaceRecords("p1").find((candidate) => candidate.id === workspace.id)?.branch,
 	).toBe("feature/list-refresh");
 });
+
+async function withGitWrapper<T>(script: string, run: () => T | Promise<T>): Promise<T> {
+	const bin = join(dataDir, "wrapped-bin");
+	mkdirSync(bin, { recursive: true });
+	writeFileSync(join(bin, "git"), `#!/bin/sh\n${script}\nexec "${Bun.which("git")}" "$@"\n`);
+	chmodSync(join(bin, "git"), 0o755);
+	const path = process.env.PATH;
+	process.env.PATH = `${bin}${delimiter}${path ?? ""}`;
+	try {
+		return await run();
+	} finally {
+		if (path === undefined) delete process.env.PATH;
+		else process.env.PATH = path;
+	}
+}
+
+posix(
+	"a git that hangs reading the branch keeps the stored Default branch instead of saving HEAD",
+	async () => {
+		const [stored] = await listWorkspaces("p1");
+		expect(stored?.branch).toBe("main");
+		const events: WorkspaceLifecycleEvent[] = [];
+		setWorkspacePublisher((event) => events.push(event));
+
+		const hang = 'case "$*" in *symbolic-ref*) sleep 30;; esac';
+		setSyncGitTimeoutForTests(2_000);
+		const listed = await withGitWrapper(hang, async () => {
+			const result = await listWorkspaces("p1", { includeDiffStats: false });
+			refreshUserOwnedWorkspace(stored?.id ?? "");
+			return result;
+		}).finally(() => setSyncGitTimeoutForTests(undefined));
+
+		expect(listed.find((w) => w.id === stored?.id)?.branch).toBe("main");
+		expect(events).toHaveLength(0);
+		const record = listWorkspaceRecords("p1").find((w) => w.id === stored?.id);
+		expect(record?.branch).toBe("main");
+		expect(record?.baseBranch).toBe(stored?.baseBranch ?? "");
+	},
+);
 
 test("createWorkspace seeds a self-ignoring .thinkrail/context scratch dir kept out of git", async () => {
 	const ws = await createWorkspace("p1");
@@ -690,11 +757,45 @@ test("forgetWorkspace drops the record + returns it, but leaves the worktree for
 	expect(await worktrees()).toHaveLength(0);
 	expect(registeredWorktrees(repo)).toContain(ws.worktreePath);
 
-	reclaimWorktree(forgotten as NonNullable<typeof forgotten>);
+	await reclaimWorktree(forgotten as NonNullable<typeof forgotten>);
 	expect(registeredWorktrees(repo)).not.toContain(ws.worktreePath);
 
 	expect(forgetWorkspace(ws.id)).toBeNull();
 });
+
+test.skipIf(process.platform === "win32").each([false, true])(
+	"worktree reclamation keeps the event loop responsive (filesystem fallback: %s)",
+	async (fallback) => {
+		const ws = await createWorkspace("p1");
+		const executable = Bun.which("git");
+		if (!executable) throw new Error("Git is required for this test");
+		const marker = join(dataDir, "reclaim-started");
+		const bin = join(dataDir, "bin");
+		mkdirSync(bin);
+		writeFileSync(
+			join(bin, "git"),
+			`#!/bin/sh\nif [ "$3" = worktree ] && [ "$4" = remove ]; then\n  touch "${marker}"\n  sleep 0.3\n  ${fallback ? "exit 1" : ":"}\nfi\nexec "${executable}" "$@"\n`,
+		);
+		chmodSync(join(bin, "git"), 0o755);
+		const savedPath = process.env.PATH;
+		process.env.PATH = `${bin}${delimiter}${savedPath ?? ""}`;
+		let servedDuringReclaim = false;
+		const heartbeat = setInterval(() => {
+			if (existsSync(marker) && existsSync(ws.worktreePath)) servedDuringReclaim = true;
+		}, 10);
+		try {
+			await reclaimWorktree(ws);
+			expect(servedDuringReclaim).toBe(true);
+			expect(existsSync(ws.worktreePath)).toBe(false);
+			expect(registeredWorktrees(repo)).not.toContain(ws.worktreePath);
+			expect(gitOut(repo, "show-ref", "--verify", `refs/heads/${ws.branch}`)).not.toBe("");
+		} finally {
+			clearInterval(heartbeat);
+			if (savedPath === undefined) delete process.env.PATH;
+			else process.env.PATH = savedPath;
+		}
+	},
+);
 
 test("membership mutations emit lifecycle events through the injected publisher", async () => {
 	const events: WorkspaceLifecycleEvent[] = [];
@@ -717,7 +818,7 @@ test("membership mutations emit lifecycle events through the injected publisher"
 test("a null publisher makes lifecycle emits silent no-ops", async () => {
 	setWorkspacePublisher(null);
 	const ws = await createWorkspace("p1");
-	expect(() => removeWorkspace(ws.id)).not.toThrow();
+	await expect(removeWorkspace(ws.id)).resolves.toBeUndefined();
 	expect(await worktrees()).toHaveLength(0);
 });
 
@@ -727,7 +828,7 @@ test("removeWorkspace cleans up even when the worktree dir is already gone", asy
 
 	rmSync(ws.worktreePath, { recursive: true, force: true });
 
-	expect(() => removeWorkspace(ws.id)).not.toThrow();
+	await expect(removeWorkspace(ws.id)).resolves.toBeUndefined();
 	expect(await worktrees()).toHaveLength(0);
 
 	const list = Bun.spawnSync(["git", "-C", repo, "worktree", "list"], { stdout: "pipe" });
@@ -846,11 +947,11 @@ test("the Default workspace is non-removable and non-renamable — loud server-s
 	if (!def) throw new Error("expected the ensured Default workspace");
 
 	expect(() => forgetWorkspace(def.id)).toThrow("The Default workspace cannot be removed");
-	expect(() => removeWorkspace(def.id)).toThrow("The Default workspace cannot be removed");
+	await expect(removeWorkspace(def.id)).rejects.toThrow("The Default workspace cannot be removed");
 	expect(() => renameWorkspace(def.id, "anything")).toThrow(
 		"The Default workspace cannot be renamed",
 	);
-	reclaimWorktree(def);
+	await reclaimWorktree(def);
 	expect(existsSync(join(repo, "README.md"))).toBe(true);
 	expect((await listWorkspaces("p1"))[0]?.id).toBe(def.id);
 });
@@ -923,7 +1024,7 @@ test("reclaimWorktree refuses a record pointing at the project folder even witho
 	const def = (await listWorkspaces("p1"))[0];
 	if (!def) throw new Error("expected the ensured Default workspace");
 	const { kind: _dropped, ...corrupt } = def;
-	reclaimWorktree(corrupt);
+	await reclaimWorktree(corrupt);
 	expect(existsSync(join(repo, "README.md"))).toBe(true);
 });
 

@@ -5,6 +5,7 @@ const ADVANCE_DURATION_MS = 220;
 const TALL_ARRIVAL_SETTLE_MS = 300;
 const EDGE_STABILITY_FRAMES = 30;
 const GEOMETRY_EPSILON = 0.5;
+const SCROLL_REQUEST_EPSILON = 1e-6;
 
 export type ReadingBandLatestEdge = "top" | "bottom";
 
@@ -178,6 +179,7 @@ export function createReadingBandController(
 	let settlementAfterInput = false;
 	let nativeInputToken = 0;
 	let anchorCorrectionDeferred = false;
+	let lastScrollWrite: { requested: number; achieved: number; maxScrollTop: number } | null = null;
 
 	const publish = (patch: Partial<ReadingBandState>) => {
 		const next = { ...state, ...patch };
@@ -192,6 +194,21 @@ export function createReadingBandController(
 		state = next;
 		environment.onStateChange(snapshotOf(state));
 	};
+
+	const writeScrollTop = (top: number) => {
+		environment.writeScrollTop(top);
+		const bounds = environment.readScrollBounds();
+		lastScrollWrite = bounds
+			? { requested: top, achieved: bounds.scrollTop, maxScrollTop: bounds.maxScrollTop }
+			: null;
+	};
+
+	const scrollReached = (target: number, bounds: ReadingBandScrollBounds) =>
+		Math.abs(target - bounds.scrollTop) <= GEOMETRY_EPSILON ||
+		(lastScrollWrite !== null &&
+			Math.abs(lastScrollWrite.requested - target) <= SCROLL_REQUEST_EPSILON &&
+			lastScrollWrite.achieved === bounds.scrollTop &&
+			lastScrollWrite.maxScrollTop === bounds.maxScrollTop);
 
 	const writeRunwayHeight = (height: number) => {
 		const pixels = Math.max(0, Math.round(height));
@@ -252,8 +269,7 @@ export function createReadingBandController(
 		syncDerivedRoom(active);
 		const target = boundedScrollTarget(active.scrollTarget);
 		const bounds = environment.readScrollBounds();
-		const scrollSettled =
-			target === null || !bounds || Math.abs(target - bounds.scrollTop) <= GEOMETRY_EPSILON;
+		const scrollSettled = target === null || !bounds || scrollReached(target, bounds);
 		const runwaySettled =
 			active.runwayTarget === null ||
 			Math.abs(active.runwayTarget - runwayHeight) <= GEOMETRY_EPSILON;
@@ -263,7 +279,7 @@ export function createReadingBandController(
 	const applyInstantMotion = (active: ActiveMotion) => {
 		syncDerivedRoom(active);
 		const target = boundedScrollTarget(active.scrollTarget);
-		if (target !== null) environment.writeScrollTop(target);
+		if (target !== null) writeScrollTop(target);
 		if (active.runwayTarget !== null) writeRunwayHeight(active.runwayTarget);
 		if (active.runwayTarget !== null) publishRunway();
 	};
@@ -288,7 +304,7 @@ export function createReadingBandController(
 				} else {
 					if (active.instantScroll) {
 						const target = boundedScrollTarget(active.scrollTarget);
-						if (target !== null) environment.writeScrollTop(target);
+						if (target !== null) writeScrollTop(target);
 					}
 					const bounds = environment.readScrollBounds();
 					active.startScrollTop = bounds?.scrollTop ?? active.startScrollTop;
@@ -315,7 +331,7 @@ export function createReadingBandController(
 				? target
 				: active.startScrollTop + (target - active.startScrollTop) * eased;
 			const current = environment.readScrollBounds()?.scrollTop ?? next;
-			environment.writeScrollTop(active.kind === "follow" ? Math.max(next, current) : next);
+			writeScrollTop(active.kind === "follow" ? Math.max(next, current) : next);
 		}
 		if (active.runwayTarget !== null) {
 			writeRunwayHeight(
@@ -391,9 +407,7 @@ export function createReadingBandController(
 		const bounds = environment.readScrollBounds();
 		const initialScrollTarget = boundedScrollTarget(scrollTarget);
 		const scrollAlreadySettled =
-			initialScrollTarget === null ||
-			!bounds ||
-			Math.abs(initialScrollTarget - bounds.scrollTop) <= GEOMETRY_EPSILON;
+			initialScrollTarget === null || !bounds || scrollReached(initialScrollTarget, bounds);
 		const runwayAlreadySettled =
 			runwayTarget === null || Math.abs(runwayTarget - runwayHeight) <= GEOMETRY_EPSILON;
 		if (scrollAlreadySettled && runwayAlreadySettled && stabilityFrames === 0) {
@@ -405,7 +419,7 @@ export function createReadingBandController(
 			cancelMotion();
 			syncDerivedRoom(active);
 			const target = boundedScrollTarget(scrollTarget);
-			if (target !== null) environment.writeScrollTop(target);
+			if (target !== null) writeScrollTop(target);
 			if (runwayTarget !== null) writeRunwayHeight(runwayTarget);
 			if (runwayTarget !== null) publishRunway();
 			if (stabilityFrames > 0) {
@@ -417,7 +431,7 @@ export function createReadingBandController(
 				motion = active;
 				publish({ moving: true });
 				frame = environment.requestFrame(advanceMotion);
-			} else if (reevaluate) {
+			} else if (reevaluate && kind !== "follow") {
 				contentChanged();
 			}
 			return;
@@ -574,7 +588,7 @@ export function createReadingBandController(
 			if (room !== null) writeRunwayHeight(room);
 			publishRunway();
 			const liveTarget = boundedScrollTarget(stepHold.scrollTarget);
-			if (liveTarget !== null) environment.writeScrollTop(liveTarget);
+			if (liveTarget !== null) writeScrollTop(liveTarget);
 		}
 		return true;
 	};
@@ -583,7 +597,7 @@ export function createReadingBandController(
 		if (motion?.kind !== "anchor") return;
 		anchorCorrectionDeferred = false;
 		const target = boundedScrollTarget(motion.scrollTarget);
-		if (target !== null) environment.writeScrollTop(target);
+		if (target !== null) writeScrollTop(target);
 	};
 
 	const applyDeferredAnchor = () => {
@@ -593,7 +607,7 @@ export function createReadingBandController(
 		const target = boundedScrollTarget(motion.scrollTarget);
 		const bounds = environment.readScrollBounds();
 		if (target !== null && bounds && Math.abs(target - bounds.scrollTop) > GEOMETRY_EPSILON) {
-			environment.writeScrollTop(target);
+			writeScrollTop(target);
 		}
 	};
 
@@ -834,7 +848,7 @@ export function createReadingBandController(
 			if (neededRoom > runwayHeight + GEOMETRY_EPSILON) writeRunwayHeight(neededRoom);
 			publishRunway();
 			const bounds = environment.readScrollBounds();
-			if (bounds) environment.writeScrollTop(Math.min(bounds.maxScrollTop, Math.max(0, desired)));
+			if (bounds) writeScrollTop(Math.min(bounds.maxScrollTop, Math.max(0, desired)));
 		},
 		armImmediateTurn: () => {
 			mountPending = false;

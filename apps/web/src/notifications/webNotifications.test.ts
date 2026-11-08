@@ -171,7 +171,15 @@ describe("web notification channel", () => {
 
 	test("uses the body alone when there is no subtitle", () => {
 		const channel = createWebNotificationChannel();
-		channel.show(spec({ subtitle: undefined, body: "2 worktrees need your attention" }), () => {});
+		channel.show(
+			{
+				title: "ThinkRail",
+				body: "2 worktrees need your attention",
+				tag: "attention:s1",
+				target: { kind: "chat", workspaceId: "w1", sessionId: "s1" },
+			},
+			() => {},
+		);
 		expect(MockNotification.instances[0]?.options.body).toBe("2 worktrees need your attention");
 	});
 

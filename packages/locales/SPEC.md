@@ -12,8 +12,9 @@ tags: [i18n]
 
 The single owner of ThinkRail's UI strings and of the rules every locale source obeys
 ([[architecture]] Decision 23). It ships the bundled catalogs — `en.json` is the English source of truth
-and the file translators start from, and each `<tag>.json` beside it is a translation — and the pure
-functions that validate a catalog, name a file's language, and pick the language to render. Its `./react`
+and the file translators start from, and each `<tag>.json` beside it is a translation (currently
+Spanish, Japanese, Russian, and Simplified Chinese) — and the pure functions that validate a catalog,
+name a file's language, and pick the language to render. Its `./react`
 entry holds the **one** i18next instance every browser surface (`apps/web`, `packages/ui`, extension web
 halves) renders through, so they cannot drift onto separate instances.
 
@@ -94,8 +95,9 @@ so the files diff cleanly.
 - English output is the contract tests pin: a catalog edit that changes English wording is a product
   change, reviewed like one. Plural pairs carry real English singulars (`"1 group"`, never `"1 groups"`).
 - **A bundled translation is partial by design and guarded by a test, not at runtime.** A string it lacks
-  renders English through the chain, so it can ship incomplete and fill in later; a new key lands in
-  `en.json` first. `applyLocale` loads bundled catalogs as-is (`validateCatalog` and `completePlurals` run
+  renders English through the chain, so it can ship incomplete and fill in later. The Russian catalog
+  currently covers every key in `en.json` and all four CLDR categories for its plural families; a new
+  key still lands in `en.json` first and should be translated in Russian in the same change. `applyLocale` loads bundled catalogs as-is (`validateCatalog` and `completePlurals` run
   only on local files), so a catalog test requires every bundled translation to pass `validateCatalog`
   with nothing dropped, to hold only sorted `en.json` keys — plus a plural form for a category English
   lacks when the language needs one — and to carry every plural form its language needs. Changing an

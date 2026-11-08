@@ -2,6 +2,7 @@ import { RiFullscreenLine as Maximize2 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
+import { fontsLoaded, resolveFont, watchFont } from "@thinkrail/ui/fonts";
 import { onThemeSwap } from "@thinkrail/ui/theme";
 import { type ReactNode, useEffect, useState } from "react";
 import { renderMermaid } from "./mermaid";
@@ -23,24 +24,32 @@ export function MermaidView({
 
 	useEffect(() => {
 		let cancelled = false;
+		let generation = 0;
 		const run = () => {
-			renderMermaid(source).then((res) => {
-				if (cancelled) return;
-				if (res.svg !== undefined) {
-					setSvg(res.svg);
-					setError(null);
-				} else {
-					setError(res.error ?? "");
-				}
-			});
+			generation = generation + 1;
+			const current = generation;
+			const stale = () => cancelled || current !== generation;
+			fontsLoaded(resolveFont("tr-code-block"))
+				.then(() => (stale() ? null : renderMermaid(source)))
+				.then((res) => {
+					if (res === null || stale()) return;
+					if (res.svg !== undefined) {
+						setSvg(res.svg);
+						setError(null);
+					} else {
+						setError(res.error ?? "");
+					}
+				});
 		};
 		setSvg(null);
 		setError(null);
 		run();
 		const stopThemeWatch = onThemeSwap(run);
+		const stopFontsWatch = watchFont("tr-code-block", ["family"], run);
 		return () => {
 			cancelled = true;
 			stopThemeWatch();
+			stopFontsWatch();
 		};
 	}, [source]);
 

@@ -5,6 +5,7 @@ import { isAbsolute, join, resolve } from "node:path";
 import {
 	type AppConfig,
 	DEFAULT_CONFIG,
+	type ExtensionSettingValues,
 	type HostEnvironment,
 	isComposerGrowthLimit,
 	isJbcentralQuotaRefreshSeconds,
@@ -13,12 +14,15 @@ import {
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
 	isTerminalWindowsShell,
+	normalizeFontSettings,
 	normalizeThemePreference,
 	type Project,
 	type SessionCompletion,
 	type TurnChangeSet,
 	type WireModel,
 	type Workspace,
+	type WorkspaceCreation,
+	type WorkspaceKickoff,
 } from "@thinkrail/contracts";
 import {
 	claimBrowserAttributionAttemptIn,
@@ -296,6 +300,24 @@ export function saveWorkspaces(workspaces: Workspace[]): void {
 	writeJson("workspaces.json", workspaces);
 }
 
+export type WorkspaceCreationRecord = Omit<WorkspaceCreation, "kickoff"> & {
+	worktreePath: string;
+	renamed?: true;
+	baseOid?: string;
+	kickoff?: WorkspaceKickoff;
+};
+
+export function loadWorkspaceCreations(): WorkspaceCreationRecord[] {
+	return readJson<WorkspaceCreationRecord[]>("workspace-creations.json", []).map((creation) => ({
+		...creation,
+		worktreePath: storedDirectory(creation.worktreePath),
+	}));
+}
+
+export function saveWorkspaceCreations(creations: WorkspaceCreationRecord[]): void {
+	writeJsonAtomic("workspace-creations.json", creations);
+}
+
 export interface PersistedTerminalTab {
 	tabKey: string;
 	title: string;
@@ -324,13 +346,26 @@ function storedModels(value: unknown): WireModel[] {
 	);
 }
 
-function storedExtensionNames(value: unknown): string[] {
+function storedNameList(value: unknown): string[] {
 	if (!Array.isArray(value)) return [];
 	return [
 		...new Set(
 			value.filter((name): name is string => typeof name === "string" && name.trim().length > 0),
 		),
 	];
+}
+
+function storedExtensionSettings(value: unknown): ExtensionSettingValues {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+	const result: ExtensionSettingValues = {};
+	for (const [name, settings] of Object.entries(value)) {
+		if (!settings || typeof settings !== "object" || Array.isArray(settings)) continue;
+		const flags = Object.entries(settings).filter(
+			(entry): entry is [string, boolean] => typeof entry[1] === "boolean",
+		);
+		if (flags.length > 0) result[name] = Object.fromEntries(flags);
+	}
+	return result;
 }
 
 export function loadConfig(): AppConfig {
@@ -406,9 +441,12 @@ export function loadConfig(): AppConfig {
 		settleIdleDays: isSettleIdleDays(value.settleIdleDays)
 			? value.settleIdleDays
 			: DEFAULT_CONFIG.settleIdleDays,
-		disabledExtensions: storedExtensionNames(value.disabledExtensions),
+		disabledExtensions: storedNameList(value.disabledExtensions),
+		extensionSettings: storedExtensionSettings(value.extensionSettings),
+		disabledPackages: storedNameList(value.disabledPackages),
 		locale: isLocalePreference(value.locale) ? value.locale : DEFAULT_CONFIG.locale,
 		onboardingDismissed: value.onboardingDismissed === true,
+		...normalizeFontSettings(value),
 	};
 }
 

@@ -124,9 +124,10 @@ describe("projectRows message order", () => {
 
 	test("oldest-first preserves canonical row order and newest-first preserves row objects", () => {
 		const activity: ChatRow = { kind: "activity", id: "work", steps: [], live: false };
-		const rows: ChatRow[] = [messageRow("u1", "user"), activity];
+		const user = messageRow("u1", "user");
+		const rows: ChatRow[] = [user, activity];
 		expect(projectRows(rows, "oldest-first")).toBe(rows);
-		expect(projectRows(rows, "newest-first")).toEqual([activity, rows[0]]);
+		expect(projectRows(rows, "newest-first")).toEqual([activity, user]);
 		expect(projectRows(rows, "newest-first")[0]).toBe(activity);
 	});
 });

@@ -1,6 +1,7 @@
 import { useT } from "@thinkrail/locales/react";
+import { onFontsChange } from "@thinkrail/ui/fonts";
 import type { editor } from "monaco-editor/editor/editor.api.js";
-import { useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { type ResourceHost, useResourceHost, useResourcePreferences } from "../host";
 import type { ResourceDescriptor, ResourceViewProps, SurfaceReview } from "../registry";
 import { MonacoReviewZones } from "./MonacoReviewZones";
@@ -8,9 +9,11 @@ import { decorateEditorContextMenus } from "./monacoMenuIcons";
 import {
 	createFileEditor,
 	disposeFileEditor,
+	editorFont,
 	ensureMonaco,
 	fileEditorOptions,
 	languageForPath,
+	remeasureEditorFonts,
 	revealLineNow,
 	syncFileModel,
 	warmLanguage,
@@ -52,7 +55,8 @@ export default function MonacoEditor({
 	const path = resource.path;
 	const text = content.kind === "text" ? content.text : "";
 	const commentLabel = t("review.widget.commentOnSelection");
-	const options = fileEditorOptions(t, fileLineWidth, fileLineWidthBounded, resource.path);
+	const font = useSyncExternalStore(onFontsChange, editorFont);
+	const options = fileEditorOptions(t, fileLineWidth, fileLineWidthBounded, resource.path, font);
 	const containerRef = useRef<HTMLDivElement | null>(null);
 	const commentingRef = useRef<ReviewCommenting | null>(null);
 	const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
@@ -146,6 +150,8 @@ export default function MonacoEditor({
 		appliedRef.current = { ...appliedRef.current, options };
 		codeEditor.updateOptions(options);
 	}, [options]);
+
+	useEffect(() => remeasureEditorFonts(font), [font]);
 
 	const closeComposer = () => threadsRef.current?.closeComposer();
 	const layoutReviewZones = () => threadsRef.current?.layout();

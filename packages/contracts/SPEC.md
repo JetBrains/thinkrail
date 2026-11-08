@@ -13,7 +13,8 @@ tags: [wire]
 
 The browser↔host wire spine: the single source of truth for the protocol. Types plus a small
 dependency-free runtime: the WS method/channel constants, protocol/feature versions, the small config
-default, narrow cross-ring guards, and the quit-confirmation rule both clients drive. The one package
+default, narrow cross-ring guards, the quit-confirmation rule both clients drive, and the search matcher
+the palette ranks with — kept here so host-side search can rank with the same copy. The one package
 `apps/web` may depend on—which is what lets the UI ship independently of the host.
 
 ## Boundary
@@ -36,16 +37,35 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   being described), **`RANGE_INVALID`** (a span lies outside the side it names, or a range revert was
   asked of a byte-only resource), **`RECEIPT_UNKNOWN`** (an undo of a receipt the host no longer
   holds — the ring is 20 deep and dies with the process), and **`UNSUPPORTED_CHANGE`** (the selected
-  change is a symlink or mode-only mutation that this byte-oriented write path deliberately refuses)), so a client can react to one specific failure
+  change is a symlink or mode-only mutation that this byte-oriented write path deliberately refuses), plus
+  the four `feedback.survey.submit` refusals `SURVEY_INVALID`, `SURVEY_UNAVAILABLE`, `SURVEY_CHANGED` and
+  `SURVEY_NOT_SENT`, and `fonts.installed`'s `INSTALLED_FONTS_UNAVAILABLE`: the host's OS font service could
+  not be read, a failure analytics tells apart from a lost connection while the font picker offers Retry for
+  either), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
-  for it; everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
+  for it or Error Tracking must tell it apart (it never sees `message`). Two codes exist for the latter:
+  **`REQUEST_REPLAY_OVERFLOW`** — the host's replay namespace for this page is full
+  ([[submodule-server-host]]), and the page treats it as an ordinary retryable failure — and **`GIT_TIMEOUT`**
+  — a sync git killed at its deadline ([[submodule-server-git]]); an older client wraps it like any unknown
+  code, so it needs no protocol bump.
+  Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
   (`NativeUpdateState` / `NativeUpdateBridge`, `NativeWindowState` / `NativeWindowControlsBridge`,
   `NativeQuitHint` / `NativeCommand` / `NativeShortcutsBridge`, and
   `NativeNotificationInput` / `NativeNotificationBridge`, and `NativeMenuBridge` (translated native menu
   labels), the optional shell-local desktop capabilities);
-  `QUIT_CONFIRMATION` + **`createQuitConfirmation`** + `QuitConfirmationDependencies` from `quitConfirmation`; the value
+  `QUIT_CONFIRMATION` + **`createQuitConfirmation`** + `QuitConfirmationDependencies` from `quitConfirmation`;
+  **`matchFields`** + `parseMatchTerms` + `MATCH_TIER` and the `Match*` types from
+  `match` (the one search matcher: fixed tiers exact > prefix > word start/camel hump/acronym > substring >
+  bounded subsequence of at least three characters, every term required, a quoted `MatchTerm` (`literal`)
+  matched contiguously only, case and Latin diacritics folded — precomposed or decomposed, the ranges
+  still indexing the original text and spanning the marks they cover — combining marks part of their
+  word (never a word start), a secondary field never above substring and, at an equal tier, never chosen
+  over a primary one, path fields matched on the basename first, field-keyed highlight ranges — the
+  browser's palette ranks with it, and it lives here so host-side search ranks with this one copy and
+  their tiers cannot drift);
+  the value
   re-exports
   `DEFAULT_CONFIG`, `DEFAULT_WORKSPACE_NAME` (the host's name for a project's default workspace; clients
   word it in their language until it is renamed), `SYSTEM_LOCALE_PREFERENCE` + **`isLocalePreference(value)`** (`"system"` or a canonical
@@ -54,7 +74,18 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   user theme files are `UserThemesSnapshot` / `UserThemeFile`, served by `themes.list` from
   `USER_THEMES_PROTOCOL_VERSION`, v92, with each ok file's `manifest` deliberately `unknown` because the
   theme schema is owned by [[submodule-web-themes]]),
+  the font settings — `FONT_ROLES`, `FontFamilyRef` (a bundled face named by its role, or a family name),
+  `FontChoice` (family or `null` for the role's default, plus ≤ `FONT_FALLBACKS_MAX` distinct fallbacks),
+  `CODE_FONT_SIZE` (with the editor's `editorDelta`), `FONT_WEIGHT_OFFSET`, and the guards `isFontFamilyName`
+  (no CSS delimiters or control characters, ≤ `FONT_FAMILY_NAME_MAX_LENGTH`), `isFontFamilyRef`, `isFontRole`,
+  `isFontChoice`, `isCodeFontSize`, `isFontWeightOffset`, `fontFamilyRefKey`, `FontSettings` +
+  `normalizeFontSettings`, and `hasControlCharacter` (shared with the host's font file-name rule) — and user font files as
+  `UserFontsSnapshot` / `UserFontFile` (closed error codes, guarded by `isUserFontFile`) plus
+  `InstalledFontsResult`, served by `fonts.list` /
+  `fonts.installed` from `FONTS_PROTOCOL_VERSION`, v102, with `USER_FONTS_ROUTE`, `USER_FONT_UPLOAD_HEADER` and
+  `USER_FONT_EXTENSIONS` naming the host's `/fonts/` route and its upload guard,
   `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
+  `parsePiPackageInput` (§ pi packages),
   `JBCENTRAL_QUOTA_REFRESH_SECONDS`, `isJbcentralQuotaRefreshSeconds`, `isJbcentralConnected`,
   `SESSION_RENAME_PROTOCOL_VERSION`, `SESSION_TITLE_MAX_LENGTH`, `normalizeSessionTitle`,
   `FIRST_PROMPT_MAX_LENGTH` + **`firstPromptHead(text)`** + **`firstPromptOfTexts(texts)`** +
@@ -152,9 +183,13 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
     command autocomplete rows, returned by live `session.getCommands`, skill-only pre-session `skill.list`,
     and mapped prompt-template listings), and **`SkillCatalogEntry`** + **`SkillDecision`** (`load`/`untrusted`/`pending-ack`/
     `disabled`) — the workspace Skills manager's `skills.state` rows.
-  - **`ExtensionCatalogEntry`** (`{ name, title, description?, enabled, tools, hasChildExtensions }`) — one
+  - **`ExtensionCatalogEntry`** (`{ name, title, description?, enabled, tools, hasChildExtensions, settings? }`) — one
     host-registry ThinkRail extension as `extension.list` reports it; `name` is the identity the
-    `AppConfig.disabledExtensions` list keys on, `tools` the names its parent factories register.
+    `AppConfig.disabledExtensions` list keys on, `tools` the names its parent factories register, and
+    `settings` (`ExtensionSettingDescriptor[]`, `{ key, default: boolean }`, absent below
+    `EXTENSION_SETTINGS_PROTOCOL_VERSION` = v105) the boolean settings the extension declares.
+    `ASK_DISCUSS_PROTOCOL_VERSION` (v105) is the host version that renders `ask_user_question`
+    `kind: "discuss"` answers; the card withholds Discuss below it.
   - **`SessionSummary`** — a chat session as the host reports it for hydration (read side); `live`
     distinguishes an in-memory session from a disk-only one. A frontend hydrates locally placed sessions and
     lists the rest in chat history for explicit reopen. The optional **`openTodos`** (count of non-`done`
@@ -192,16 +227,24 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
     `{ workspaceId, sessionId, title }`, rejects a title whose trimmed single-line form is blank or exceeds
     `SESSION_TITLE_MAX_LENGTH` (80), and returns an ack; `SESSION_RENAME_PROTOCOL_VERSION` pins the
     mutation and controls to v66 so a newer client hides them against older hosts. The existing Pi event
-    `session_info_changed { name?: string }` is the one live domain update for manual and automatic changes,
-    and `session.list`/`session.getMessages` repair a missed event. No title source/provenance, uniqueness,
-    workspace coupling, or new push channel crosses the wire; session ids remain canonical.
+    `session_info_changed { name?: string }` is the live event for manual and automatic changes, and
+    `session.list`/`session.getMessages` repair a missed event. **`SessionStateRecord.title`** (optional,
+    additive, no version gate) carries the same durable name on every normalized-state record — the
+    `session.stateList` snapshot and each `session.state` push, including the full record a host publishes
+    after renaming a chat that is not live — so a client knows every chat's name, and catches up on a rename
+    it missed, from the state it already installs. A host that sends the field always sends it: `""` is
+    authoritatively unnamed, absent means an older host. No title source/provenance, uniqueness, workspace
+    coupling, or new push channel crosses the wire; session ids remain canonical.
     **`SessionSummary.firstPrompt`** and **`SessionStateRecord.firstPrompt`** (optional, additive, no
     version gate) carry `firstPromptHead` of the transcript's first user prompt beside the title: the
     display fallback for a chat that has no name, never a name — no mutation accepts it, nothing writes
     it into the session, and an older host simply omits it (the client shows its generic label).
   - the **extension-UI frames** **`ExtUiRequest`** / **`ExtUiResponse`** — our wire shape for pi's in-process
     `uiContext` calls (`select`/`confirm`/`input`/`editor` round-trip; `notify`/`setStatus`/`setWidget`/
-    `setTitle`/`dismiss` are fire-and-forget), carried on the `pi.extensionUi` channel. A round-trip
+    `setTitle`/`dismiss` are fire-and-forget), carried on the `pi.extensionUi` channel. One member is
+    host-authored, not pi's: `notice` (v99) carries a closed `ProviderWarning` code for a session, such
+    as the Anthropic extra-usage warning. It has no text, so the client localizes it, and older clients
+    ignore the unknown kind. A round-trip
     request's optional `toolCallId` names the tool call it is about; absent, it is tied to none (the host
     anchors a dialog only when it knows the call: explicitly, or while exactly one call runs). An explicit
     anchor may add `toolInput` — the input that call will run with, as the asking host saw it — which the
@@ -339,7 +382,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   whose registration the JetBrains AI (Central) extension replaced, derived from registration identity
   alone, never from Central's configuration; plus `canOAuth`/`canApiKey`/`canLogout`,
   which gate the strip's in-app Sign-in / Sign-out affordances — `canLogout` is true only for a removable
-  auth.json credential, false for env / runtime / models.json auth the host can't unset); the **in-app login wire** — **`LoginFrame`** (the streamed
+  auth.json credential, false for env / runtime / models.json auth the host can't unset; optional
+  `warnings`, v99: pi's global `warnings.*` switches keyed by the closed **`ProviderWarning`** code
+  (`anthropicExtraUsage`), absent from older hosts, where the client treats them as on); the **in-app login wire** — **`LoginFrame`** (the streamed
   flow updates: `authUrl` / `deviceCode` / `select` / `prompt` / `progress` / `success` / `error`, which
   **accumulate** client-side, never a credential value), **`LoginPush`** (the `provider.login` frame,
   `{ loginId, providerId, frame }`) and **`LoginReply`** (`{ loginId, value }` — the browser's answer to a
@@ -397,7 +442,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   terminalWindowsShell, composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded,
   fileLineWidthBounded, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
   favoriteModels, recentModels, reviewAutoFix, agentReviewEnabled, subagentsEnabled, subagentMaxConcurrent,
-  jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, disabledExtensions, onboardingDismissed }` — an extensible bag; the line-width fields join
+  jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, disabledExtensions, extensionSettings, onboardingDismissed, interfaceFont,
+  codeFont, codeFontSize, codeLigatures, fontWeightOffset }` — an extensible bag; the five font fields join at
+  v102 and normalize together through `normalizeFontSettings` (host load, web store, fonts runtime); the line-width fields join
   the wire at protocol v61 and `terminalWindowsShell` at v62. `onboardingDismissed` (v94, default `false`)
   records that the user finished or skipped the cold-start onboarding wizard, so it never returns. **`DEFAULT_MODEL_PROTOCOL_VERSION`** pins
   v72's AppConfig `defaultModel`/`defaultEffort` and host-side default resolution; the Settings controls are
@@ -429,7 +476,10 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   tool and applies live to open sessions — the Review button is independent (see [[submodule-server-host-plan-review]]); `disabledExtensions` (default `[]`, on the wire
   from `EXTENSION_CATALOG_PROTOCOL_VERSION` = v82) names the host-registry extensions the user switched off —
   unknown names are kept and ignored, and the host applies it to new and open sessions (see
-  [[submodule-server-extensions]]); `customLayoutPresets` is the bounded
+  [[submodule-server-extensions]]); `extensionSettings` (`ExtensionSettingValues`, default `{}`, on the wire from
+  `EXTENSION_SETTINGS_PROTOCOL_VERSION` = v105) maps extension name → setting key → boolean for the settings
+  an `ExtensionCatalogEntry` declares — an absent key means the descriptor's `default`, and
+  `settings.update { extensionSettings }` merges per key; `customLayoutPresets` is the bounded
   resource-free catalog and is the **only** layout value synchronized by the host; current/default preset
   and group limits are web-local); `analyticsEnabled` is the additional-data preference and host gate,
   default `false`, while `analyticsConsentConfirmed` defaults `false` and records completion of the initial
@@ -443,8 +493,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `server.welcome`, mutated via `settings.update`). Every new user chat receives the resolved model and
   effort explicitly, so the session agrees with `model.default`; explicit request fields win individually,
   while an effort-only request uses the configured or fallback model. Plan-review subagents keep their own model policy.
-  **`InterviewResponse`** is the closed `"book" | "postpone" | "never"` action accepted from the automatic
-  feedback popup. No usage count, eligibility, dismissal state, or client identity crosses the wire.
+  **`SurveyInvitationResponse`** is the closed `"postpone" | "never"` action accepted from the automatic
+  survey invitation. No usage count, eligibility, dismissal state, or client identity crosses the wire.
   Contracts deliberately exports no theme catalog enum/list/labels: a future manifest can mint an id
   unknown when the host was built, and a client missing it resolves a same-appearance bundled fallback;
   **`SpecGraphNode`/`SpecGraphSnapshot`** — the
@@ -628,6 +678,18 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   only settings **`isSharedModelContextTarget`** accepts (no override, or one inside the range): an
   override the app could not have written is changed only by naming its `{provider,id}`. Saves emit the
   existing `provider.changed` invalidation; no AppConfig state or raw configuration crosses the wire) /
+  **`customEndpoints.list`** / **`customEndpoints.probe`** / **`customEndpoints.save`** /
+  **`customEndpoints.remove`** (v101, `CUSTOM_ENDPOINTS_PROTOCOL_VERSION`; the user's OpenAI-compatible
+  servers stored as pi `models.json` providers whose ids carry **`CUSTOM_ENDPOINT_ID_PREFIX`** (`custom-`,
+  tested by `isCustomEndpointId`). A `CustomEndpointModel` carries only what a server reported —
+  `contextWindow` / `maxTokens` / `reasoning` / `vision` are `null` when it did not say (distinct from an
+  explicit `false`, so a re-detect can clear a capability), and a `tools` hint is never saved. Probing takes `{baseUrl, apiKey? | endpointId?}` (an `endpointId` without `apiKey` reuses
+  that endpoint's saved key host-side, only for its unchanged address) and returns either the normalized
+  `baseUrl` with the models, or a closed `CustomEndpointProbeFailure` (`invalid-url`, `unauthorized`,
+  `timeout`, `unreachable`, `not-openai` with an optional HTTP `status`, `no-models`) so the client
+  localizes it. Saves take a `CustomEndpointDraft` (absent `id` = add; absent `apiKey` = keep, `""` =
+  clear). Every list/save/remove returns `CustomEndpoint[]` (`id`, `name`, `baseUrl`, `hasApiKey` rather
+  than the key, models); a save or removal that changes `models.json` emits `provider.changed`) /
   **`model.clampThinking`** (pi's
   `clampThinkingLevel` for a `{model, level}` pair — the pre-session picker's effort adjustment, so no
   client re-derives pi's policy) / **`provider.status`**
@@ -638,12 +700,31 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   (**`loginStart`** — mints a `loginId` and runs pi's login flow **detached** (`type` `"oauth"` |
   `"api_key"`, issue #97 — both auth routes ride one channel; a flow can take minutes and must
   not sit on the request nor block the WS pump) / **`loginReply`** — answers a live `select`/`prompt`,
-  correlated by `loginId` / **`loginCancel`** / **`logout`** /
+  correlated by `loginId` / **`loginCancel`** / **`logout`** / **`disableWarning`** (v99,
+  **`PROVIDER_WARNINGS_PROTOCOL_VERSION`**: `{ warning: ProviderWarning }` turns off pi's global
+  `warnings.<warning>`, the chat notice's "Don't warn again"; no client-side way to turn it back on) /
   the **JetBrains AI** set **`jbcentralConnect`** / **`jbcentralDisconnect`** /
   **`jbcentralStartProxy`** / **`jbcentralUpdate`** / **`jbcentralLogin`** (native global Central actions
   returning `JbcentralActionResult`; none accepts an executable, artifact path, output, URL, or secret from
   the client) / **`jbcentralQuota`** (v59; optional `force` bypasses completed-cache age but still joins an
   in-flight read; disabled/unhealthy returns `hidden` without invoking quota)) /
+  the **background-creation set** (v104, **`WORKSPACE_CREATION_PROTOCOL_VERSION`**; a client facing an
+  older host falls back to `workspace.create`): **`workspace.startCreate`** (`{ projectId, name?, baseRef?,
+  kickoff? }` → a **`WorkspaceCreation`** as soon as the host has reserved its branch and path — the
+  checkout runs afterwards; `kickoff` is a **`WorkspaceKickoff`** `{ text, images?, model?, thinkingLevel? }`
+  the host holds and sends as the first chat message once the workspace exists, so it survives the window
+  closing) / **`workspace.listCreations`** (every creation the host still holds, all projects — a
+  (re)connecting client's hydration) / **`workspace.retryCreation`** (`{ id }`; cleans up an `interrupted` or
+  `failed` creation and runs it again from the start) / **`workspace.dismissCreation`** (`{ id }` → `{ kickoff? }`; cleans up and drops
+  an `interrupted` or `failed` creation, returning its full kickoff so *Edit & retry* can prefill the
+  dialog). A creation's `state` is `running` while the host works on it, `interrupted` when the host
+  restarted mid-create (never resumed on its own), `failed` with `failure: { message, code?, cleanedUp? }` (git's text,
+  for display; `code` is one of `WORKTREE_ADD_FAILED`, `WORKTREE_CHECKOUT_FAILED`,
+  `WORKTREE_CHECKOUT_STALLED`, `WORKSPACE_PATH_TAKEN`; `cleanedUp` only when a partial folder or branch existed
+  and the host removed it); `phase` is `preparing` (fetch + worktree registration) or `checking-out` (with
+  `progress: { done, total }` files once git reports it); `kickoff` on the wire is only a preview
+  `{ text, imageCount }` — images stay host-side. `workspace.create` stays: it starts a creation and
+  resolves the finished `Workspace` /
   **`workspace.listExisting`** (the selected project's unattached Git worktrees, with detached rows
   disabled by status) / **`workspace.openExisting`** (revalidate + register one branch-backed checkout as
   `kind: "external"`, emitting the ordinary `workspace.created`, without mutating Git or disk) /
@@ -713,7 +794,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   frames to the workspaces whose diff base that ref is, so their git-derived reads re-converge) / **`skills.state`** (`SkillCatalogEntry[]` — full catalog +
   per-skill `decision` + `group` — for a `workspaceId`) / **`extension.list`** (`ExtensionCatalogEntry[]`,
   no params — the host registry joined with `disabledExtensions`; v82, **`EXTENSION_CATALOG_PROTOCOL_VERSION`**;
-  there is no write method — the Settings switch writes `settings.update { disabledExtensions }`) / **`project.skills`** (the same, project-scoped, for
+  there is no write method — the Settings switch writes `settings.update { disabledExtensions }`) / **`packages.*`**
+  (installed pi packages; v99, § pi packages below) / **`project.skills`** (the same, project-scoped, for
   the pre-session manager) / **`session.reloadResources`** (re-scan skills + rebuild the system prompt for one
   running session; rejected while streaming) /
   `session.*` — `create`/`prompt`/`steer`/`followUp`/**`clearQueue`** (drain Pi's steering+followUp
@@ -737,10 +819,21 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   because values may be secrets; `get` → `HostEnvironmentStatus` with `restartRequired`, `launchOverridden`
   names and the `effectiveAgentDir`; `update` replaces the whole record and returns
   `{ ok: false, issues }` per field/row index instead of saving anything when it is invalid) /
-  **`feedback.respond`** (`{ action: InterviewResponse }` → ack; persists the automatic invitation's book,
-  postpone, or permanent-dismiss result; the Settings link never calls it;
-  `FEEDBACK_INTERVIEW_PROTOCOL_VERSION` pins the addressed channel's v56 introduction so the host does not
-  claim an independently shipped older client that omits the current `?protocol=` socket capability) /
+  **`feedback.respond`** (`{ action: SurveyInvitationResponse }` → ack; persists postpone or the permanent
+  dismissal; neither stops message counting) /
+  **`feedback.survey`** (`{ language? }`, the client's UI language → `{ survey: AppSurvey | null }`; the
+  launched survey named `in-app-feedback` in the PostHog translation that language matches, with
+  `AppSurvey.language` naming it, or the original text without `language`; null when it is off or this id
+  and iteration were already submitted) /
+  **`feedback.survey.submit`** (`SurveySubmitParams { submissionId, surveyId, iteration, language?, answers, others? }` → ack;
+  `language` echoes `AppSurvey.language`; `answers` hold only picked choices (as shown), ratings and open text,
+  while a choice question's typed **Other** text travels in `others`, so it is never read as a choice;
+  one call when the user presses Send, whatever the analytics setting; fails with `SURVEY_INVALID`,
+  `SURVEY_UNAVAILABLE`, `SURVEY_CHANGED` (the survey moved to another id or iteration — the client reloads
+  and restarts) or `SURVEY_NOT_SENT`; `FEEDBACK_SURVEY_PROTOCOL_VERSION` pins both methods and the
+  invitation channel to v97; `SURVEY_TRANSLATIONS_PROTOCOL_VERSION` pins `language` and `others` to v98 —
+  a client sends a pre-v98 host the older shape, Other text inline in `answers` and no `language`, and a
+  submission without `others` is read in that shape) /
   **`client.reportError`** (`ClientErrorReport { kind: render | window | rejection, type, stack?,
   boundary?, chunkIds? }` → ack; `chunkIds` maps stack URLs to PostHog source-map chunk ids; a fire-and-forget UI error for host error tracking — the payload is raw and untrusted,
   the host is the only sanitizer; `CLIENT_ERROR_REPORT_PROTOCOL_VERSION` pins its v90 introduction so a
@@ -784,8 +877,11 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   other frontends can list it in history without opening local placement) / **`session.deleted`** (workspace +
   session id; a non-replayable domain event broadcast after permanent deletion so every client removes the chat
   and blocks stale hydration) / **`settings.changed`** (the full `AppConfig`, including custom preset definitions, broadcast so every
-  client converges) / **`feedback.interview`** (an empty, addressed invitation sent only to the host-claimed
-  frontend; not broadcast, subscribed, or replayed) / **`provider.login`** — the session-less
+  client converges) / **`feedback.interview`** (an empty, addressed invitation sent only to a protocol v97
+  client when the launched in-app survey is eligible; not broadcast, subscribed, or replayed) / **`feedback.githubStar`**
+  (`GithubStarAsk { stars: number | null }`, the addressed one-time GitHub star ask with the host-read star count, sent
+  only to a client at `GITHUB_STAR_PROTOCOL_VERSION`, v103; not
+  broadcast, subscribed, or replayed) / **`provider.login`** — the session-less
   in-app login stream (a `LoginPush`
   per frame, keyed by `loginId`; the sibling of `pi.extensionUi`, since a login runs on the Welcome screen
   before any session exists) / **`provider.changed`** — a data-free invalidation broadcast after a watched
@@ -802,7 +898,13 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   publisher (never a per-client optimistic mutation). `created`/`updated` carry the **full persisted
   `Workspace` snapshot** (idempotent under the transport's last-value replay, so e.g. an agent rename
   racing a manual one merges by `id` — never a delta); `removed` carries a **`WorkspaceRemoved`** id
-  pair (`{ projectId, id }` — the record is already gone) / **`review.changed`** — a workspace's review
+  pair (`{ projectId, id }` — the record is already gone) / the **creation pair** (v104) —
+  **`workspace.creationChanged`** (the full `WorkspaceCreation` snapshot on every state, phase or progress
+  change; progress is throttled host-side) and **`workspace.creationRemoved`**
+  (**`WorkspaceCreationRemoved`** `{ id, projectId, workspace?, sessionId?, kickoffError? }`: with
+  `workspace` when the creation became that workspace (same id; the ordinary `workspace.created` also
+  fires), plus `sessionId` of the chat the host started from the kickoff or `kickoffError` when that chat
+  could not start; without `workspace` when it was dismissed) / **`review.changed`** — a workspace's review
   state changed (emitted by the server's `reviews` publisher on every mutation — UI edits, agent
   `resolve_comment` calls, re-anchoring — so all clients converge, same pattern as the trio) /
   **`turn.changed`** — the `TurnChangeSet` the host just recorded for a settled agent run (emitted by the
@@ -823,7 +925,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `(clientKey, requestId)` instead of executing the handler again. Two client→host frames that are *not* requests close
   that loop (hence **`WsClientMessage`**, discriminated on the key): **`WsAck`** (`{ ack: string[] }`) names
   responses the client has *read* — the only thing that distinguishes a reply the page received from one that
-  died in a socket buffer, and so the only thing that lets the host free a retained result — and **`WsResume`**
+  died in a socket buffer, and so the only thing that lets the host free a retained result — or requests whose
+  client deadline fired, which the host then abandons ([[submodule-server-host]]); an older host ignores a receipt
+  for work still running, so this needs no protocol bump — and **`WsResume`**
   (`{ resume: string[] }`), sent on every (re)connect ahead of the replays, names the complete set the page
   still considers unresolved, so the host can release everything else. `resume` exists because a receipt is only
   as reliable as the socket carrying it and nothing would ever re-send a lost one: restating the live set beats
@@ -838,20 +942,33 @@ v70 must not receive these requests. No native Pi background-task protocol is im
 without importing that package. Subagents retain their Pi child session ids and delegation statuses.
 
 - `session.resources({workspaceId, sessionId})` returns separate command and subagent summaries:
-  all currently active records plus bounded recent terminal records. The snapshot echoes workspace
+  every live record plus the newest twenty finished ones per kind. The snapshot echoes workspace
   and session identity. Commands mirror the owner's bounded snapshot; subagent summaries carry only
   child/parent ids, role, task, status, creation time, the child's actual `model` (`provider/id`) and
   effective `thinkingLevel` (both optional — absent from an older host), optional abort reason,
   `detached: true` for a background run (from the child's `info`; absent for a foreground run and from
   an older host) and — once terminal — the run duration [[module-pi-delegation]] measured
-  (`durationMs`), not usage or reports.
-  Subagent role/task summaries are capped at 200/2,000 characters, with the latest twenty terminal
-  children by creation order retained in the projection. These are runtime catalogs; neither historical
-  tool acknowledgements nor persisted PIDs supply live authority after restart.
+  (`durationMs`) and, from a v96 host, the finish time (`finishedAt`); not usage or reports.
+  Subagent role/task summaries are capped at 200/2,000 characters. Finished records outlive the host
+  ([[submodule-server-resource-history]]) but never carry authority: neither archived records,
+  historical tool acknowledgements nor persisted PIDs make anything stoppable after a restart.
+- **History (v96, `RESOURCE_HISTORY_PROTOCOL_VERSION`).** The snapshot adds `history`: per kind, a
+  `ResourceTally` of every finished record by `ResourceOutcome` (`done` / `failed` / `stopped` /
+  `interrupted`). `interrupted: true` on either summary means the host or the chat's teardown ended the
+  run, and such a run always travels with a terminal status — the owner's, or `stopped` / `aborted` when the
+  owner never settled it (`interruptedResource`) — so an older client reads it as Stopped, never as a live
+  row it cannot stop. `isLiveResource` is false for it whatever status it last reported.
+  `session.resourceHistory({workspaceId, sessionId, kind, before?, limit?})` pages one kind's finished
+  records newest first (default 20, at most 100) after an opaque-to-the-UI `{at, id}` cursor taken from
+  the last row it holds and answers `{kind, items, hasMore}`. Order, outcome and cursor are the shared
+  pure helpers `resourceHistoryCursor` / `compareResourceHistory` (finish time, else start time; id breaks
+  ties), `resourceOutcome`, `isLiveResource` and `resourceRecordId` over the `ResourceRecord` union, so the
+  host and the UI never derive them twice.
 - `backgroundCommand.output({workspaceId, sessionId, commandId})` returns the current bounded
-  `{available: true, command, output: {text, truncated}}`, or `{available: false}` for an unknown,
-  foreign or evicted command after validating its parent. Output REPLACES the previous snapshot;
-  truncation is explicit. It accepts no filesystem path or PID.
+  `{available: true, command, output: {text, truncated}}` — from a v96 host also the archived tail of a
+  finished command the owner no longer holds — or `{available: false}` for an unknown, foreign or
+  unarchived command after validating its parent. Output REPLACES the previous snapshot; truncation is
+  explicit. It accepts no filesystem path or PID.
 - `backgroundCommand.stop({workspaceId, sessionId, commandId})` and
   `subagent.stop({workspaceId, parentSessionId, childSessionId})` request cancellation of one owned
   resource. Known terminal resources are idempotent successes; unknown, expired or foreign ids
@@ -1012,6 +1129,81 @@ contracts only.
   not hold), `MCP_PATH_UNSAFE` (symlinked or non-regular project config path), `MCP_HANDLED_ELSEWHERE`,
   `LOGIN_NOT_OWNER`.
 
+## pi packages
+
+`PI_PACKAGES_PROTOCOL_VERSION` (100) gates the `packages.*` methods, the `packages.changed` channel and
+the `disabledPackages` setting. The DTOs describe what the host reads through pi's `DefaultPackageManager`
+and what it loaded, never pi's own types.
+
+- **`parsePiPackageInput(raw)`** (value export from `domain`) is the one reading of the Install field,
+  shared by the web dialog (echo, display name) and the host (`installPiPackage`, which receives the raw
+  text), so both agree by construction. It returns `{ source, local, bareName? }` and never throws: a
+  pasted `pi install [flags] <source>` line yields its source with `local: true` for `-l` / `--local`
+  (the dialog then selects the repository scope when one is available); a
+  `https://pi.dev/packages/<name>` or `https://[www.]npmjs.com/package/<name>[/v/<version>]` URL
+  (percent-encoded or not; a malformed encoding falls back to the raw text) yields `npm:<name>[@version]`;
+  a pasted command is read with shell quoting and backslash escapes (`pi install -l "./my tools"`,
+  `./my\ tools`) and names nothing when it has zero or several source words;
+  a bare npm spec (`@scope/name`, `name`, either with `@version`) yields `npm:…` with `bareName` set
+  unless it ends in an extension-file suffix (`.ts`, `.js`, …), which stays a path — the host prefers a
+  folder or file of that bare name when one exists next to the workspace, as pi's CLI would read it.
+  Everything else — `npm:` / `git:` / `builtin:` / `file:` sources, git URLs, absolute, `~` and
+  relative paths — is returned trimmed, so pi's own syntax keeps working unchanged. Deliberately not
+  inferred: `owner/repo` as a git shorthand (pi reads it as a path).
+
+- **`PiPackagesCatalog`** — `agentDir` and `settingsPath` (the effective pi folder; a client never hardcodes
+  `~/.pi/agent`), `projectSettingsPath` + `projectTrusted` when read for a workspace, then three groups:
+  `packages: PiPackageSummary[]` (one per declaration, with or without loadable resources; a
+  declaration with no install on disk has no `installedPath` and is the "Not installed" row; a user
+  declaration pi leaves aside because the repository declares the same identity is a row marked
+  `shadowed`), `loose: PiLooseExtension[]` (extensions pi discovers outside
+  any package — `<agentDir>/extensions`, `.pi/extensions`, explicit `extensions[]` entries) and `builtins:
+  PiBuiltinExtension[]` (the two pi built-ins the host runs, `mcp` and `tool-search`). There is no
+  "installing" row: installing is the Install dialog's request, and a source declared but absent from
+  disk is pi's to install at a chat's next load — until then it is listed as not installed so it can be
+  removed.
+- **`PiPackageSummary`** — `identity` (the host-wide switch key: npm by name, git by repo without ref, local
+  by resolved path — except a repository declaration's local source inside the worktree, keyed by the
+  repository (its main worktree) and the worktree-relative path so every worktree of the project shares
+  the switch and unrelated repositories do not; the host closes the switch
+  over pi's own equivalence, so switching off any declaration of a package switches off its aliases too), `source` **as declared** (`npm:@scope/pkg@1.2.0`, `../pkgs/tools`), `kind`, `scope`,
+  `name` / `version` / `description` from its `package.json`, `installedPath`, `switchKeys` (every
+  `disabledPackages` key that covers the package: its own `identity` and those of pi-equivalent
+  declarations — a client switching a package on removes them all, off adds `identity`), `enabled`
+  (the host's effective state: `false` when any of `switchKeys` is in `disabledPackages`; a client
+  renders it as is, never recomputes it), `shadowed` (a user declaration pi leaves aside because the
+  repository declares the same identity outright; a repository `autoload: false` override is a delta
+  over the user install, so its resources land on the user row and nothing is shadowed), and
+  `resources: PiPackageResource[]` — every extension, skill and prompt file (themes are terminal-only and
+  never listed) with pi's `enabled` (read-only here: a resource inside a package is switched with its
+  package), pi's `pi config` display name, and for an extension some loader has recorded the `tools`
+  and `commands` it registered or its load `error`. Every row
+  action names its target as `{ source, scope, workspaceId? }`: the same npm package may be declared at
+  user and project scope, and only the switch keys on `identity`.
+- Methods: **`packages.list { workspaceId? }`** (user scope alone without a workspace; repository
+  resources only when the project is pi-trusted) / **`packages.install { source, scope, workspaceId? }`**
+  (resolves to the new row with `enabled: true` — the host clears its `disabledPackages` entry — and is a
+  plain long request: the client sends a generous `timeoutMs`; a timeout does not mean failure, the
+  install may still complete on the host) / **`packages.remove`** / **`packages.update { packages }`**
+  (pi updates every declaration of an identity at both scopes together) / **`packages.checkUpdates`**
+  (the `{ source, scope }` declarations pi reports a newer version for — pi reports no target version
+  and skips pinned npm versions; `force` bypasses the host's short cache for the manual check) / **`packages.setResourceEnabled { path, type, scope, enabled }`**
+  (top-level resources only, written in pi's own format: a `±` pattern in the scope's resource array for
+  a loose file, `±builtin:<name>` in the scope that decides a built-in — the catalog's
+  `PiBuiltinExtension.scope`, which a client must send back; a resource inside a package is refused with
+  `PACKAGE_SOURCE_INVALID`) / **`packages.reveal { path }`**
+  (opens the install folder or a loose file's folder; the path must be in the current catalog). The
+  package switch is `settings.update { disabledPackages }`, converging on `settings.changed` like the
+  extension switches. **`packages.changed`** (no payload) tells an open page to re-list after an outside
+  edit, a chat load that installed something, or an update.
+- Error codes: `PACKAGE_SOURCE_INVALID` (also an unsupported `type` / `scope`, validated at the boundary),
+  `PACKAGE_OFFLINE` (npm/git only; local installs work offline), `PACKAGE_UNTRUSTED`, `PACKAGE_UNKNOWN`,
+  `PACKAGE_INSTALL_FAILED`, `PACKAGE_REMOVE_FAILED`, `PACKAGE_UPDATE_FAILED`,
+  `PACKAGE_SETTINGS_WRITE_FAILED`, and `PACKAGE_INSTALLED_UNLISTED` — the declaration was persisted but
+  the host could not produce the row; of the install codes only `PACKAGE_SOURCE_INVALID`,
+  `PACKAGE_OFFLINE`, `PACKAGE_UNTRUSTED`, `PACKAGE_INSTALL_FAILED` and `PACKAGE_SETTINGS_WRITE_FAILED`
+  are raised before anything is written, and a client may claim "nothing was added" only for those.
+
 ## Normalized session state
 
 `SessionState` carries orthogonal host facts: `execution` (`idle | running`) plus stable `runId`, nullable
@@ -1022,7 +1214,8 @@ pending dialog its exact replayable request), nullable latest `completion` (stab
 owner-global `completionUnread` receipt projection (held false while an idle session has background work).
 `isSessionWorking` is the one *working* test: `execution` running or `backgroundWork`; an older host omits
 the flag, which reads as false. `SessionStateRecord` adds session/workspace/project
-attribution; `SessionSummary.state` carries the exact attached session's state.
+attribution plus the chat's `title` and `firstPrompt`; `SessionSummary.state` carries the exact attached
+session's state.
 
 `session.stateList` is an authoritative all-workspace snapshot of every top-level live or disk session and
 fails rather than returning an incomplete scan. `session.state` pushes a full record after the causative Pi

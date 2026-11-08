@@ -27,7 +27,7 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_ref }}
           OUTSIDE_APP: ^(apps/website/|packages/website-analytics/|\.github/workflows/site(-preview|-preview-cleanup)?\.yml$|\.github/(readme-assets/|pr-assets/|ISSUE_TEMPLATE/|PULL_REQUEST_TEMPLATE\.md$|CODEOWNERS$|SPEC\.md$)|(README|CONTRIBUTING|CODE_OF_CONDUCT)\.md$|LICENSE$)
-          ARTIFACT_PATHS: ^(apps/cli/|apps/desktop/|packages/artifact-tests/|packages/shared/(assets/|scripts/generate-icons\.ts$|src/(version|windowsIdentity)\.ts$)|packages/server/src/(buildSupport|agent/extensions)\.ts$|e2e/(run-binary|run-desktop|artifactPlaywright)\.ts$|playwright\.(binary|desktop)\.config\.ts$|\.github/(workflows|actions|scripts)/|patches/|(package\.json|bun\.lock|turbo\.json)$)
+          ARTIFACT_PATHS: ^(apps/cli/|apps/desktop/|packages/artifact-tests/|packages/shared/(assets/|scripts/generate-icons\.ts$|src/(version|windowsIdentity)\.ts$)|packages/server/src/(buildSupport|agent/extensions)\.ts$|e2e/(run-binary|run-desktop|artifactPlaywright|playwright\.(binary|desktop)\.config)\.ts$|\.github/(workflows|actions|scripts)/|patches/|(package\.json|bun\.lock|turbo\.json)$)
         run: |
           if git fetch --no-tags --depth=1 origin "$BASE" && files=$(git diff --name-only --no-renames FETCH_HEAD HEAD); then
             if grep -qvE "$OUTSIDE_APP" <<< "$files"; then app=true; else app=false; fi
@@ -68,6 +68,8 @@ jobs:
       - run: bun run check:i18n
       - run: bun run check:compiler
       - run: bun run lint
+      - name: Download the Electrobun toolchain
+        run: .github/scripts/prepare-electrobun.sh
       - run: bun run typecheck
 
   test:
@@ -136,11 +138,17 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
-      - name: Install Playwright Chromium
-        run: .github/scripts/install-playwright.sh
-      # `bun run e2e` is self-contained: it builds the web app, boots the host on an isolated
-      # port + state dir, runs this job's slice of the @agent-free suite headless, then tears it all down.
+      - name: Start Playwright Chromium and WebKit download
+        run: .github/scripts/install-playwright.sh start webkit
+      - run: bun run build:web
+      - name: Install Playwright Chromium and WebKit
+        timeout-minutes: 8
+        run: .github/scripts/install-playwright.sh wait
+      # `bun run e2e` boots the host on an isolated port + state dir, runs this job's slice of the
+      # @agent-free suite headless, then tears it all down. It reuses the web build above.
       - run: bun run e2e
+        env:
+          THINKRAIL_E2E_SKIP_BUILD: "1"
       - name: Upload Playwright report
         if: ${{ failure() }}
         uses: actions/upload-artifact@v5
@@ -171,6 +179,8 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
+      - name: Start Playwright Chromium download
+        run: .github/scripts/install-playwright.sh start
       # Build the single-file binary for the runner's platform, then boot the artifact and assert it
       # serves the staged UI + skills, completes a real OAuth login up to its auth URL, and shuts down
       # cleanly — regressions in the extension/asset/provider-flow bundling only exist inside the
@@ -179,7 +189,8 @@ jobs:
       - run: bun run smoke:binary
         if: ${{ matrix.shard == 1 }}
       - name: Install Playwright Chromium
-        run: .github/scripts/install-playwright.sh
+        timeout-minutes: 5
+        run: .github/scripts/install-playwright.sh wait
       # This shard of the no-agent e2e suite against the artifact (grep-inverts @dev-seam too — the fake
       # login providers only exist in the dev boot): the broad net for works-from-source/broken-in-the-binary.
       - run: bun run e2e:binary --shard=${{ matrix.shard }}/4
@@ -225,6 +236,9 @@ jobs:
           bun-version-file: package.json
           no-cache: true
       - run: bun install --frozen-lockfile
+      - name: Download the Electrobun toolchain
+        shell: bash
+        run: bash .github/scripts/prepare-electrobun.sh
       - run: bun run desktop:build
       - run: bun run smoke:desktop
 
@@ -250,11 +264,11 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
+      - name: Start Playwright Chromium download
+        run: .github/scripts/install-playwright.sh start
       - name: Install desktop runtime packages
         uses: ./.github/actions/desktop-apt
         timeout-minutes: 10
-      - name: Install Playwright Chromium
-        run: .github/scripts/install-playwright.sh
       - name: Start virtual display
         run: |
           for attempt in 1 2 3; do
@@ -274,10 +288,15 @@ jobs:
           done
           cat "$RUNNER_TEMP/xvfb.log"
           exit 1
+      - name: Download the Electrobun toolchain
+        run: .github/scripts/prepare-electrobun.sh
       - run: bun run desktop:build
       - name: Smoke native desktop window and packaged runtime
         if: ${{ matrix.shard == 1 }}
         run: env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 bun run smoke:desktop
+      - name: Install Playwright Chromium
+        timeout-minutes: 5
+        run: .github/scripts/install-playwright.sh wait
       - name: Run no-agent e2e against the embedded desktop host
         run: env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 bun run e2e:desktop --shard=${{ matrix.shard }}/4
       - name: Upload Playwright report

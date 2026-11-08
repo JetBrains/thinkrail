@@ -15,13 +15,15 @@ PostHog EU. The module owns the closed event vocabulary, catalog bucketing, inst
 exception sanitization, delivery, consent gates and bounded shutdown. Host alone observes feature outcomes and captures events; feature
 modules remain analytics-free. Sibling dependency edges belong to [[module-server]].
 
-- **Public surface:** initialization, basic capture, consent-scoped additional capture, additional-data
+- **Public surface:** initialization, basic capture, consent-scoped additional capture, the survey endpoint
+  and response capture (`surveyEndpoint`, `SurveyEndpoint`, `captureSurveyResponse`), additional-data
   enablement, error reports (`reportError`, `reportFatalError`, `reportClientError`, `ErrorReport`, `ErrorSource`),
   shutdown/test reset, event types, bucket helpers and `BuildKind`.
 - **Allowed deps:** persistence, log, contracts types, pi-ai's built-in catalog, Node, and `posthog-node`
   inside the sink only (`errors.ts` is SDK-free; the sink adapts it into `before_send`).
 - **Forbidden:** importing host/feature siblings; being imported outside host; exposing the installation
-  UUID on the wire; copying rich feature payloads into telemetry; browser autocapture or a native-only sink.
+  UUID on the wire; copying rich feature payloads into telemetry except the survey response documented
+  below; browser autocapture or a native-only sink.
 
 ## Events
 
@@ -63,6 +65,19 @@ bounded browser-derived strings, never resource identities or arbitrary product 
 | `review_comment_resolved` | A comment's terminal outcome, by `actor` (`user`/`agent`) and `outcome` (`resolved`/`dismissed`); the human update and the agent `resolve_comment` tool, not draft deletes or Clear. An agent `resolved` is the agent's claim, never proof the concern was fixed. |
 | `pr_action_finished` | Outcome/category; created PRs remain distinct from updates, pushes and compare-page handoffs; `source` = `plan_page` when driven from the plan page's PR stage, else `other`. |
 | `acquisition_linked` | One successful browser-claim redemption, carrying the transient journey/bridge ids and normalized first/last acquisition fields. |
+
+`survey sent` stays outside both unions: it is the user's explicit submission, not usage telemetry.
+`captureSurveyResponse` sends it once per finished survey through the **basic** client, so it leaves whatever
+the additional preference or grant and under `--no-analytics`, but never from unkeyed, CI or `NODE_ENV=test`
+runs (no client exists). It is personless (`$process_person_profile: false`), keyed by the installation ID,
+carries the standard environment properties plus `$survey_id`, `$survey_iteration`, `$survey_submission_id`,
+`$survey_completed`, `$survey_language` (the PostHog translation shown, when one was), `$survey_questions`
+(`id` and original question text) and `$survey_response_<question id>` — the
+answer text, rating or choice. It is the one payload allowed to contain what the user wrote; the survey
+window says so before the first question. It returns whether the client accepted the event (queued, not
+delivered), so the host records completion only then. No `survey shown` or `survey dismissed` is sent.
+`surveyEndpoint()` exposes the key, host (`THINKRAIL_POSTHOG_HOST` wins) and fetch the survey list must use,
+or null whenever no client exists; the host is the only caller of both.
 
 The review-comment funnel is host-observed off existing wire/tool actions: `review_comment_added`
 off the `review.commentAdd` handler (human, `author:user`) and each plan-review finding the host files
@@ -184,9 +199,11 @@ update that explicitly includes `analyticsEnabled` changes the grant; unrelated 
 it. Settings changes write preference and confirmation together. Window behavior belongs to
 [[submodule-web-panels]]. Confirmed later launches do not prime or reopen.
 
-Only builds stamped with a project key report (see Data boundary); unkeyed source/dev builds, CI and
+Only builds stamped with a project key report (see Data boundary), plus a source dev host that opts in
+with `THINKRAIL_DEV_POSTHOG=1` and `THINKRAIL_POSTHOG_PROJECT_KEY`. Other unkeyed source/dev builds, CI and
 `NODE_ENV=test` create no vendor clients and claim no installation marker. `--no-analytics` / `THINKRAIL_NO_ANALYTICS` suppress only
-additional events without changing consent. Host-side analytics is the sole environment-policy reader
+additional events without changing consent; they do not suppress an explicitly sent survey. Host-side
+analytics is the sole environment-policy reader
 across launchers. Browser attribution is additionally limited to binary/desktop human runs with both
 preference and confirmation true, an injected launcher opener, and no prior attempt. Source, CI/test,
 per-run suppression, explicit off, and CLI `--no-open` do not consume the attempt. The dialog's
@@ -226,9 +243,12 @@ allow-listed shape above.
 The sink uses the launcher-supplied public key, EU endpoint, disabled GeoIP enrichment and
 `$process_person_profile: false`; key/endpoint/fetch injection supports tests and self-hosting. The
 repository carries no key: release CI stamps it into [[module-shared]]'s version seam, so source, dev
-and locally built artifacts (`channel=dev`, `0.0.0-*`) can never pollute production data. A 2026-10-06
+and locally built artifacts (`channel=dev`, `0.0.0-*`) do not report. A 2026-10-06
 spike of 275 `app_installed` from unstamped dev desktop/binary harness runs without `CI=1` motivated
-this; the `CI`/test mutes alone relied on every harness remembering them. The `phc_` key stays a public
+this; the `CI`/test mutes alone relied on every harness remembering them. The source dev host is the one
+exception: `THINKRAIL_DEV_POSTHOG=1` together with `THINKRAIL_POSTHOG_PROJECT_KEY` passes that key into
+`bootHost` and creates a real client, which sends basic events and survey answers. A normal dev run leaves
+the switch unset and stays unkeyed. CLI and desktop source runs still use the empty stamped key. The `phc_` key stays a public
 ingestion key extractable from shipped binaries, so this stops accidental pollution, not deliberate abuse. Personless
 processing does not remove UUID linkage; vendor IP-discard/retention policy is separate. Automated/schema,
 consent-revocation, migration, host-trigger and packaged loopback-delivery tests pin these boundaries.

@@ -88,6 +88,7 @@ import {
 	mcpSettingWrite,
 } from "./mcpServerView";
 import { startChatInTab } from "./openChat";
+import { SETTINGS_TAG } from "./SettingsGroup";
 
 const TONE_TEXT: Record<McpStateTone, string> = {
 	success: "text-feedback-success",
@@ -118,8 +119,7 @@ const ACTION_LABEL = {
 	"show-log": "mcp.action.showLog",
 } as const satisfies Record<McpRowAction, MessageKey>;
 
-const CHIP_CLASS =
-	"shrink-0 rounded-xs border border-border-default px-4 tr-text-label-pill text-text-muted";
+const CHIP_CLASS = cn(SETTINGS_TAG, "text-text-muted");
 
 type Settled<T> = { ok: true; value: T } | { ok: false; error: string };
 

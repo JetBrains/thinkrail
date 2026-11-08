@@ -1,4 +1,4 @@
-import type { AppConfigUpdate, ComposerGrowthLimit, SubagentOverride } from "@thinkrail/contracts";
+import type { ComposerGrowthLimit, SubagentOverride } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { T, useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
@@ -13,8 +13,10 @@ import { errorText, getTransport } from "@/transport";
 import { LineWidthControl } from "./LineWidthSettings";
 import { SegmentedControl, type SegmentedControlOption } from "./SegmentedControl";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
+import { SETTINGS_RANGE_INPUT, SETTINGS_RANGE_STACKED, SettingsRangeTrack } from "./SettingsRange";
 import { SettingsRow } from "./SettingsRow";
 import { SubagentSettings } from "./SubagentSettings";
+import { saveSettings } from "./saveSettings";
 
 type OptionSpec<T extends string> = SegmentedControlOption<T> & { label: MessageKey };
 
@@ -39,8 +41,7 @@ const GROWTH_OPTIONS: OptionSpec<ComposerGrowthLimit>[] = [
 
 const MOVEMENT_TRACK_SEGMENTS = Array.from({ length: 20 }, (_, index) => index * 5);
 
-const MOVEMENT_THUMB =
-	"pointer-events-none absolute inset-0 h-24 w-full appearance-none bg-transparent focus-visible:outline-none [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:size-16 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-border-default [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:shadow-sm [&::-moz-range-track]:bg-transparent [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:size-16 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-border-default [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:shadow-sm focus-visible:[&::-moz-range-thumb]:ring-2 focus-visible:[&::-moz-range-thumb]:ring-primary focus-visible:[&::-webkit-slider-thumb]:ring-2 focus-visible:[&::-webkit-slider-thumb]:ring-primary";
+const MOVEMENT_THUMB = cn(SETTINGS_RANGE_STACKED, SETTINGS_RANGE_INPUT);
 
 function StreamingResponseMovementControl({
 	value,
@@ -69,18 +70,10 @@ function StreamingResponseMovementControl({
 				<span>{t("settings.chat.movement.top")}</span>
 				<span>{t("settings.chat.movement.messageBox")}</span>
 			</div>
-			<div className="relative h-24">
-				<div className="absolute inset-x-0 top-1/2 flex h-4 -translate-y-1/2 overflow-hidden rounded-full bg-control-bg">
-					{MOVEMENT_TRACK_SEGMENTS.map((start) => (
-						<span
-							key={start}
-							className={cn(
-								"h-full flex-1",
-								start >= value.settle && start < value.trigger ? "bg-primary" : "bg-control-bg",
-							)}
-						/>
-					))}
-				</div>
+			<SettingsRangeTrack
+				steps={MOVEMENT_TRACK_SEGMENTS}
+				filled={(start) => start >= value.settle && start < value.trigger}
+			>
 				<input
 					type="range"
 					data-testid="streaming-movement-settle"
@@ -115,7 +108,7 @@ function StreamingResponseMovementControl({
 					onChange={(event) => update("trigger", event.currentTarget.value)}
 					className={MOVEMENT_THUMB}
 				/>
-			</div>
+			</SettingsRangeTrack>
 			<div className="flex items-center justify-between gap-8 text-text-muted tr-text-metadata">
 				<span>
 					<T
@@ -134,12 +127,6 @@ function StreamingResponseMovementControl({
 			</div>
 		</div>
 	);
-}
-
-function saveSetting(config: AppConfigUpdate, failure: string): void {
-	getTransport()
-		.request("settings.update", { config })
-		.catch((err: unknown) => toast.error(errorText(err), failure));
 }
 
 export function ChatSettings() {
@@ -161,7 +148,7 @@ export function ChatSettings() {
 
 	const selectGrowthLimit = (composerGrowthLimit: ComposerGrowthLimit) => {
 		if (composerGrowthLimit === growthLimit) return;
-		saveSetting({ composerGrowthLimit }, t("settings.chat.growthFailed"));
+		void saveSettings({ composerGrowthLimit }, t("settings.chat.growthFailed"));
 	};
 
 	const setWorkspaceSubagents = (override: SubagentOverride | null) => {
@@ -229,11 +216,14 @@ export function ChatSettings() {
 				globalLimit={subagentMaxConcurrent}
 				workspace={activeWorkspace}
 				onGlobalEnabledChange={(enabled) =>
-					saveSetting({ subagentsEnabled: enabled }, t("settings.chat.globalSubagentsFailed"))
+					void saveSettings({ subagentsEnabled: enabled }, t("settings.chat.globalSubagentsFailed"))
 				}
 				onWorkspaceEnabledChange={setWorkspaceSubagents}
 				onGlobalLimitChange={(value) =>
-					saveSetting({ subagentMaxConcurrent: value }, t("settings.chat.subagentLimitFailed"))
+					void saveSettings(
+						{ subagentMaxConcurrent: value },
+						t("settings.chat.subagentLimitFailed"),
+					)
 				}
 				onWorkspaceLimitChange={setWorkspaceSubagentLimit}
 			/>

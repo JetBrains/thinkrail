@@ -1,4 +1,4 @@
-import type { Locator } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 const LINE = "[data-line]";
 const LINE_NUMBER = (line: string, type: string | null) =>
@@ -7,6 +7,26 @@ const COLLAPSED_CONTEXT = "[data-unmodified-lines]";
 const DELETIONS_SIDE = "[data-deletions]";
 const GUTTER_UTILITY_CELL = "[data-column-number]:has([data-gutter-utility-slot])";
 const HIGHLIGHTED_TOKEN = `${LINE} [style*="--diffs-token-"]`;
+const WORKER_SCRIPT = /\/assets\/worker-[^/]*\.js$/;
+
+export async function holdPierreWorkers(
+	page: Page,
+): Promise<{ requested: Promise<void>; release: () => void }> {
+	let requested = () => {};
+	const firstRequest = new Promise<void>((resolve) => {
+		requested = resolve;
+	});
+	let release = () => {};
+	const released = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	await page.route(WORKER_SCRIPT, async (route) => {
+		requested();
+		await released;
+		await route.continue();
+	});
+	return { requested: firstRequest, release };
+}
 
 export function pierreLines(surface: Locator, text?: string): Locator {
 	return surface.locator(LINE, text === undefined ? {} : { hasText: text });

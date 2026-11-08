@@ -15,6 +15,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { copyText } from "@/lib";
@@ -40,12 +41,14 @@ function DeviceLink({ href, children }: { href: string; children?: ReactNode }) 
 export function LoginDialog({
 	state,
 	providerName,
+	notice,
 	onReply,
 	onCancel,
 	onClose,
 }: {
 	state: LoginState;
 	providerName: string;
+	notice?: ReactNode;
 	onReply: (value: string) => void;
 	onCancel: () => void;
 	onClose: () => void;
@@ -124,6 +127,8 @@ export function LoginDialog({
 						<DialogDescription>{state.instructions}</DialogDescription>
 					) : null}
 				</DialogHeader>
+
+				{notice && state.status !== "error" ? notice : null}
 
 				{state.status === "success" ? (
 					<p
@@ -270,6 +275,7 @@ export function LoginDialog({
 									type={state.input.secret ? "password" : "text"}
 									placeholder={state.input.placeholder ?? ""}
 									onKeyDown={(e) => {
+										if (isImeComposing(e.nativeEvent)) return;
 										if (e.key === "Enter") {
 											e.preventDefault();
 											submitPrompt();

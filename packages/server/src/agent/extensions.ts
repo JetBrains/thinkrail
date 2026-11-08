@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { dirname, join, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
 	createSyntheticSourceInfo,
@@ -12,14 +12,18 @@ import {
 	type PathMetadata,
 	type ResourceDiagnostic,
 	type ResourceLoader,
-	SettingsManager,
+	type SettingsManager,
 	type Skill,
 } from "@earendil-works/pi-coding-agent";
-import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
+import type {
+	ExtensionSettingValues,
+	SkillCatalogEntry,
+	SlashCommandInfo,
+} from "@thinkrail/contracts";
 import specGraphExtension from "pi-spec-graph";
 import {
-	type ExtensionSessionServices,
 	extensionSkillRoots,
+	type HostSessionServices,
 	omitDisabledRegistryExtensions,
 	preferRegistryTools,
 	registryInlineExtensions,
@@ -29,6 +33,15 @@ import {
 import { type BundledTrashHelpers, setBundledTrashHelpers } from "../trash";
 import { headlessSearchPolicy } from "./headlessSearch";
 import { oversizedImageGuard } from "./imageGuard";
+import {
+	createPiSettings,
+	disabledPackages,
+	recordLoadedExtensions,
+	setDisabledPackagesResolver,
+} from "./packages";
+
+export { disabledPackages, setDisabledPackagesResolver };
+
 import { requestReviewExtension } from "./requestReviewTool";
 import { reviewToolExtension } from "./reviewTool";
 import { decideSkill, type SkillAdmissionContext } from "./skillAdmission";
@@ -216,9 +229,10 @@ export function toSkillCommands(skills: readonly Skill[]): SlashCommandInfo[] {
 	}));
 }
 
-let disabledExtensionsResolver: () => ReadonlySet<string> = () => new Set();
-export function setDisabledExtensionsResolver(resolver: () => ReadonlySet<string>): void {
-	disabledExtensionsResolver = resolver;
+const noneDisabled = (): ReadonlySet<string> => new Set();
+let disabledExtensionsResolver: () => ReadonlySet<string> = noneDisabled;
+export function setDisabledExtensionsResolver(resolver: (() => ReadonlySet<string>) | null): void {
+	disabledExtensionsResolver = resolver ?? noneDisabled;
 }
 
 export function disabledExtensions(): ReadonlySet<string> {
@@ -230,6 +244,121 @@ export function disabledExtensions(): ReadonlySet<string> {
 }
 
 const isExtensionDisabled = (name: string): boolean => disabledExtensions().has(name);
+
+const noExtensionSettings = (): ExtensionSettingValues => ({});
+let extensionSettingsResolver: () => ExtensionSettingValues = noExtensionSettings;
+export function setExtensionSettingsResolver(
+	resolver: (() => ExtensionSettingValues) | null,
+): void {
+	extensionSettingsResolver = resolver ?? noExtensionSettings;
+}
+
+export function extensionSettings(): ExtensionSettingValues {
+	try {
+		return extensionSettingsResolver();
+	} catch {
+		return {};
+	}
+}
+
+const byKey = <T>([a]: [string, T], [b]: [string, T]): number => a.localeCompare(b);
+
+/** The extension setting values as one stable string: a change marks every loader built before stale. */
+export function extensionSettingsKey(values = extensionSettings()): string {
+	return JSON.stringify(
+		Object.entries(values)
+			.sort(byKey)
+			.map(([name, values]) => [name, Object.entries(values).sort(byKey)]),
+	);
+}
+
+const providerOwners = new Map<string, Set<string>>();
+
+function recordProviderOwners(result: LoadExtensionsResult): void {
+	const resolvedPaths = new Map(
+		result.extensions.map((extension) => [extension.path, extension.resolvedPath]),
+	);
+	const { pendingProviderRegistrations, pendingNativeProviderRegistrations } = result.runtime;
+	const registrations = [
+		...pendingProviderRegistrations,
+		...pendingNativeProviderRegistrations.map(({ provider, extensionPath }) => ({
+			name: provider.id,
+			extensionPath,
+		})),
+	];
+	for (const { name, extensionPath } of registrations) {
+		const path = resolvedPaths.get(extensionPath);
+		if (path === undefined || !isAbsolute(path)) continue;
+		const owners = providerOwners.get(name) ?? new Set<string>();
+		owners.add(path);
+		providerOwners.set(name, owners);
+	}
+}
+
+export function providerExtensionPaths(
+	loader: ResourceLoader,
+	provider: string,
+	projectTrusted: boolean,
+): string[] {
+	const owners = providerOwners.get(provider);
+	if (!owners) return [];
+	return loader
+		.getExtensions()
+		.extensions.flatMap((extension) =>
+			owners.has(extension.resolvedPath) &&
+			(projectTrusted || extension.sourceInfo.scope !== "project")
+				? [extension.resolvedPath]
+				: [],
+		);
+}
+
+let packagesRevision = 0;
+
+/** Marks that the set of installed pi packages changed on disk or in settings; loaders built before are stale. */
+export function bumpPackagesRevision(): void {
+	packagesRevision += 1;
+}
+
+let switchGeneration = 0;
+
+/** Every change to the package switch set; a loader that resolved across an off-and-on flip is stale. */
+export function bumpPackageSwitchGeneration(): void {
+	switchGeneration += 1;
+}
+
+/** The package policy a loader is built against: the install revision, the switch generation and the disabled set. */
+export function packagePolicyKey(): string {
+	return `${packagesRevision}\n${switchGeneration}\n${[...disabledPackages()].sort().join("\n")}`;
+}
+
+const loaderPolicies = new WeakMap<ResourceLoader, string>();
+
+function loaderPolicyKey(settings = extensionSettings()): string {
+	return `${packagePolicyKey()}\0${extensionSettingsKey(settings)}`;
+}
+
+/** `true` when the loader last resolved under a package policy or extension settings other than the current ones. */
+export function isLoaderPolicyStale(loader: ResourceLoader): boolean {
+	const recorded = loaderPolicies.get(loader);
+	return recorded !== undefined && recorded !== loaderPolicyKey();
+}
+
+let installedPackagesListener: (() => void) | null = null;
+/** Called when a session's resolve installed a declared package that was missing before it ran. */
+export function setInstalledPackagesListener(listener: (() => void) | null): (() => void) | null {
+	const previous = installedPackagesListener;
+	installedPackagesListener = listener;
+	return previous;
+}
+
+function installedDeclarations(packageManager: DefaultPackageManager): Set<string> {
+	return new Set(
+		packageManager
+			.listConfiguredPackages()
+			.filter((entry) => entry.installedPath !== undefined)
+			.map((entry) => `${entry.scope}\0${entry.source}`),
+	);
+}
 
 export function childBaseExtensionFactories(): InlineExtension[] {
 	return [oversizedImageGuard, skillCarryover];
@@ -249,12 +378,21 @@ export async function buildResourceLoader(
 	getAdmission: () => SkillAdmissionContext,
 	excludedExtensionPaths: readonly string[] = [],
 	extraFactories: InlineExtension[] = [],
-	session?: ExtensionSessionServices,
+	session?: HostSessionServices,
 ): Promise<ResourceLoader> {
 	let disabledAtReload = disabledExtensions();
 	const isDisabledAtReload = (name: string): boolean => disabledAtReload.has(name);
+	let settingsAtReload = extensionSettings();
+	const settingAtReload = (extension: string, key: string): boolean | undefined =>
+		settingsAtReload[extension]?.[key];
 	const sharedFactories: InlineExtension[] = [
-		...registryInlineExtensions("extensions", isDisabledAtReload, serverExtensions, session),
+		...registryInlineExtensions(
+			"extensions",
+			isDisabledAtReload,
+			serverExtensions,
+			session,
+			settingAtReload,
+		),
 		headlessSearchPolicy,
 		reviewToolExtension,
 		requestReviewExtension,
@@ -276,14 +414,34 @@ export async function buildResourceLoader(
 		settingsManager,
 		...skillInputs,
 		extensionFactories,
-		extensionsOverride: (result: LoadExtensionsResult) =>
-			preferRegistryTools(omitDisabledRegistryExtensions(result, isDisabledAtReload)),
+		extensionsOverride: (result: LoadExtensionsResult) => {
+			recordProviderOwners(result);
+			recordLoadedExtensions(result);
+			return preferRegistryTools(omitDisabledRegistryExtensions(result, isDisabledAtReload));
+		},
 	};
 	const devExtensionPaths = bundled ? [] : resolveDevPaths().extensionPaths;
-	const applyCurrentPolicy = (): void => {
+	const packageManager = new DefaultPackageManager({
+		cwd,
+		agentDir,
+		settingsManager,
+		builtinExtensions: builtinExtensionNames(extensionFactories),
+	});
+	const applyCurrentPolicy = (loader: ResourceLoader): void => {
 		settingsManager.setProjectTrusted(getAdmission().piResourceTrusted);
 		disabledAtReload = disabledExtensions();
+		settingsAtReload = extensionSettings();
 		refreshSkillPaths(disabledAtReload);
+		loaderPolicies.set(loader, loaderPolicyKey(settingsAtReload));
+	};
+	// pi's reload installs a declared package that is missing; the packages layer learns of it here.
+	const noticingInstalls = async (reload: () => Promise<void>): Promise<void> => {
+		const installedBefore = installedDeclarations(packageManager);
+		await reload();
+		const installedAfter = installedDeclarations(packageManager);
+		if ([...installedAfter].some((key) => !installedBefore.has(key))) {
+			installedPackagesListener?.();
+		}
 	};
 
 	const excluded = new Set(excludedExtensionPaths.map((path) => resolve(path)));
@@ -294,8 +452,8 @@ export async function buildResourceLoader(
 		});
 		const reloadTrusted = loader.reload.bind(loader);
 		loader.reload = async (options) => {
-			applyCurrentPolicy();
-			await reloadTrusted(options);
+			applyCurrentPolicy(loader);
+			await noticingInstalls(() => reloadTrusted(options));
 		};
 		await loader.reload();
 		return loader;
@@ -303,14 +461,8 @@ export async function buildResourceLoader(
 
 	// pi keeps a reference to this array and reads it on every reload, so it is rebuilt in place.
 	const additionalExtensionPaths: string[] = [...devExtensionPaths];
-	const packageManager = new DefaultPackageManager({
-		cwd,
-		agentDir,
-		settingsManager,
-		builtinExtensions: builtinExtensionNames(extensionFactories),
-	});
 	let discoveredMetadata = new Map<string, PathMetadata>();
-	const resolveExclusionPaths = async (): Promise<void> => {
+	const resolveExtensionPaths = async (): Promise<void> => {
 		await settingsManager.reload();
 		const resolvedResources = await packageManager.resolve();
 		const next: string[] = [];
@@ -321,9 +473,10 @@ export async function buildResourceLoader(
 				next.push(resource.path);
 				continue;
 			}
-			if (excluded.has(resolve(resource.path))) continue;
+			const path = resolve(resource.path);
+			if (excluded.has(path)) continue;
 			next.push(resource.path);
-			metadata.set(resolve(resource.path), resource.metadata);
+			metadata.set(path, resource.metadata);
 		}
 		additionalExtensionPaths.splice(
 			0,
@@ -340,9 +493,11 @@ export async function buildResourceLoader(
 	});
 	const reloadResolved = loader.reload.bind(loader);
 	loader.reload = async (options) => {
-		applyCurrentPolicy();
-		await resolveExclusionPaths();
-		await reloadResolved(options);
+		applyCurrentPolicy(loader);
+		await noticingInstalls(async () => {
+			await resolveExtensionPaths();
+			await reloadResolved(options);
+		});
 		relabelDiscoveredExtensions(loader, discoveredMetadata);
 	};
 	await loader.reload();
@@ -357,7 +512,7 @@ export async function isBuiltinExtensionEnabled(
 	name: string,
 ): Promise<boolean> {
 	const agentDir = getAgentDir();
-	const settingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted });
+	const settingsManager = createPiSettings(cwd, agentDir, { projectTrusted, packages: "none" });
 	const packageManager = new DefaultPackageManager({
 		cwd,
 		agentDir,
@@ -398,6 +553,7 @@ function admissionCacheKey(cwd: string, ctx: SkillAdmissionContext): string {
 		[...ctx.disabledGroups].sort(),
 		Object.entries(ctx.overrides).sort(([a], [b]) => a.localeCompare(b)),
 		[...disabledExtensions()].sort(),
+		packagePolicyKey(),
 	]);
 }
 
@@ -411,8 +567,9 @@ export async function listSkillCommands(
 	const cacheKey = admissionCacheKey(cwd, admission);
 	const cached = skillListCache.get(cacheKey);
 	if (cached && Date.now() - cached.at < SKILL_LIST_TTL_MS) return cached.value;
-	const settingsManager = SettingsManager.create(cwd, getAgentDir(), {
+	const settingsManager = createPiSettings(cwd, getAgentDir(), {
 		projectTrusted: admission.piResourceTrusted,
+		packages: "enabled",
 	});
 	const { additionalSkillPaths, skillsOverride } = resolveSkillInputs(
 		cwd,
@@ -441,7 +598,10 @@ export async function listProjectAliasSkillNames(cwd: string): Promise<string[]>
 		.filter((source) => source.scope === "project")
 		.map((source) => source.path);
 	if (projectPaths.length === 0) return [];
-	const settingsManager = SettingsManager.create(cwd, getAgentDir(), { projectTrusted: false });
+	const settingsManager = createPiSettings(cwd, getAgentDir(), {
+		projectTrusted: false,
+		packages: "none",
+	});
 	const loader = new DefaultResourceLoader({
 		cwd,
 		agentDir: getAgentDir(),
@@ -467,8 +627,9 @@ export async function listSkillCatalog(
 	const personal = discovered.filter((s) => s.scope === "user");
 	const project = discovered.filter((s) => s.scope === "project");
 	const allBundledSkillPaths = bundledSkillPaths();
-	const settingsManager = SettingsManager.create(cwd, getAgentDir(), {
+	const settingsManager = createPiSettings(cwd, getAgentDir(), {
 		projectTrusted: admission.piResourceTrusted,
+		packages: "enabled",
 	});
 	const loader = new DefaultResourceLoader({
 		cwd,

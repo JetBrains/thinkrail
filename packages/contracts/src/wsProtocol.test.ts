@@ -11,18 +11,26 @@ import {
 import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	ASK_DISCUSS_PROTOCOL_VERSION,
 	BRANCH_STATUS_PROTOCOL_VERSION,
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	CLIENT_ERROR_REPORT_PROTOCOL_VERSION,
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
+	CUSTOM_ENDPOINT_ID_PREFIX,
+	CUSTOM_ENDPOINTS_PROTOCOL_VERSION,
 	completionDelivery,
 	customMessageText,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
+	EXTENSION_SETTINGS_PROTOCOL_VERSION,
+	FEEDBACK_SURVEY_PROTOCOL_VERSION,
+	FONTS_PROTOCOL_VERSION,
+	GITHUB_STAR_PROTOCOL_VERSION,
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
+	isCustomEndpointId,
 	isTodoReviewFixMessage,
 	isToolResponsePending,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
@@ -32,12 +40,15 @@ import {
 	MODEL_PICKER_PROTOCOL_VERSION,
 	normalizeSessionTitle,
 	ONBOARDING_PROTOCOL_VERSION,
+	PI_PACKAGES_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
 	PROJECT_RENAME_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROJECT_TRUST_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
+	PROVIDER_WARNINGS_PROTOCOL_VERSION,
+	RESOURCE_HISTORY_PROTOCOL_VERSION,
 	RESOURCE_META_PROTOCOL_VERSION,
 	REVIEW_ACTIONS_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
@@ -47,6 +58,7 @@ import {
 	SESSION_TITLE_MAX_LENGTH,
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
+	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 	TOOL_RESPONSE_CUSTOM_TYPE,
@@ -54,6 +66,7 @@ import {
 	TURN_CHANGES_PROTOCOL_VERSION,
 	USER_THEMES_PROTOCOL_VERSION,
 	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
+	WORKSPACE_CREATION_PROTOCOL_VERSION,
 	WORKSPACE_READ_STATE_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	WS_CHANNELS,
@@ -231,6 +244,26 @@ test("tool responses replace the ask-only answer method at v93", () => {
 	expect(WS_METHODS.sessionAnswerQuestion).toBe("session.answerQuestion");
 });
 
+test("user-selectable fonts are pinned to v102", () => {
+	expect(FONTS_PROTOCOL_VERSION).toBe(102);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(FONTS_PROTOCOL_VERSION);
+	expect(WS_METHODS.fontsList).toBe("fonts.list");
+	expect(WS_METHODS.fontsInstalled).toBe("fonts.installed");
+	expect(WS_METHODS.fontsReveal).toBe("fonts.reveal");
+	expect(WS_CHANNELS.fontsChanged).toBe("fonts.changed");
+});
+
+test("background workspace creation is pinned to v104", () => {
+	expect(WORKSPACE_CREATION_PROTOCOL_VERSION).toBe(104);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(WORKSPACE_CREATION_PROTOCOL_VERSION);
+	expect(WS_METHODS.workspaceStartCreate).toBe("workspace.startCreate");
+	expect(WS_METHODS.workspaceListCreations).toBe("workspace.listCreations");
+	expect(WS_METHODS.workspaceRetryCreation).toBe("workspace.retryCreation");
+	expect(WS_METHODS.workspaceDismissCreation).toBe("workspace.dismissCreation");
+	expect(WS_CHANNELS.workspaceCreationChanged).toBe("workspace.creationChanged");
+	expect(WS_CHANNELS.workspaceCreationRemoved).toBe("workspace.creationRemoved");
+});
+
 test("user theme files are pinned to v92", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(USER_THEMES_PROTOCOL_VERSION);
 	expect(USER_THEMES_PROTOCOL_VERSION).toBe(92);
@@ -276,12 +309,39 @@ test("review details and the GitHub review actions are pinned to v88", () => {
 	expect(WS_METHODS.workspaceDeleteRemoteBranch).toBe("workspace.deleteRemoteBranch");
 });
 
+test("pi package management and the package switch are pinned to v100", () => {
+	expect(PI_PACKAGES_PROTOCOL_VERSION).toBe(100);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PI_PACKAGES_PROTOCOL_VERSION);
+	expect(WS_METHODS.packagesList).toBe("packages.list");
+	expect(WS_METHODS.packagesInstall).toBe("packages.install");
+	expect(WS_METHODS.packagesRemove).toBe("packages.remove");
+	expect(WS_METHODS.packagesUpdate).toBe("packages.update");
+	expect(WS_METHODS.packagesCheckUpdates).toBe("packages.checkUpdates");
+	expect(WS_METHODS.packagesSetResourceEnabled).toBe("packages.setResourceEnabled");
+	expect(WS_METHODS.packagesReveal).toBe("packages.reveal");
+	expect(WS_CHANNELS.packagesChanged).toBe("packages.changed");
+	expect(DEFAULT_CONFIG.disabledPackages).toEqual([]);
+});
+
 test("project create and the onboarding dismissal are pinned to v94", () => {
-	expect(PROTOCOL_VERSION).toBe(95);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ONBOARDING_PROTOCOL_VERSION);
 	expect(ONBOARDING_PROTOCOL_VERSION).toBe(94);
 	expect(WS_METHODS.projectCreate).toBe("project.create");
 	expect(WS_METHODS.providerDetect).toBe("provider.detect");
 	expect(DEFAULT_CONFIG.onboardingDismissed).toBe(false);
+});
+
+test("the GitHub star ask is pinned to v103", () => {
+	expect(GITHUB_STAR_PROTOCOL_VERSION).toBe(103);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(GITHUB_STAR_PROTOCOL_VERSION);
+	expect(WS_CHANNELS.feedbackGithubStar).toBe("feedback.githubStar");
+});
+
+test("in-app surveys are pinned to v97", () => {
+	expect(FEEDBACK_SURVEY_PROTOCOL_VERSION).toBe(97);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(FEEDBACK_SURVEY_PROTOCOL_VERSION);
+	expect(WS_METHODS.feedbackSurvey).toBe("feedback.survey");
+	expect(WS_METHODS.feedbackSurveySubmit).toBe("feedback.survey.submit");
 });
 
 test("repository cloning and cancellation are registered", () => {
@@ -444,6 +504,12 @@ test("chat resources introduce scoped reads and cancellation, never browser comm
 	expect(Object.values(WS_METHODS)).not.toContain("backgroundCommand.start");
 });
 
+test("resource history pages a chat's finished records from v96", () => {
+	expect(RESOURCE_HISTORY_PROTOCOL_VERSION).toBe(96);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(RESOURCE_HISTORY_PROTOCOL_VERSION);
+	expect(WS_METHODS.sessionResourceHistory).toBe("session.resourceHistory");
+});
+
 describe("completionDelivery", () => {
 	test("reads the delivery marker and treats a missing or unknown value as absent", () => {
 		expect(completionDelivery({ delivery: "wake" })).toBe("wake");
@@ -497,4 +563,35 @@ describe("tool response guards", () => {
 			}),
 		).toBeNull();
 	});
+});
+
+test("survey translations and separate Other text are pinned to v98", () => {
+	expect(SURVEY_TRANSLATIONS_PROTOCOL_VERSION).toBe(98);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SURVEY_TRANSLATIONS_PROTOCOL_VERSION);
+});
+
+test("provider warnings are pinned to v99", () => {
+	expect(PROVIDER_WARNINGS_PROTOCOL_VERSION).toBe(99);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PROVIDER_WARNINGS_PROTOCOL_VERSION);
+	expect(WS_METHODS.providerDisableWarning).toBe("provider.disableWarning");
+});
+
+test("custom endpoints are pinned to v101 and own only custom-* providers", () => {
+	expect(CUSTOM_ENDPOINTS_PROTOCOL_VERSION).toBe(101);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CUSTOM_ENDPOINTS_PROTOCOL_VERSION);
+	expect(WS_METHODS.customEndpointsProbe).toBe("customEndpoints.probe");
+	expect(isCustomEndpointId(`${CUSTOM_ENDPOINT_ID_PREFIX}gateway`)).toBe(true);
+	expect(isCustomEndpointId("ollama")).toBe(false);
+});
+
+test("extension settings are pinned to v105", () => {
+	expect(EXTENSION_SETTINGS_PROTOCOL_VERSION).toBe(105);
+	expect(PROTOCOL_VERSION).toBe(105);
+	expect(DEFAULT_CONFIG.extensionSettings).toEqual({});
+});
+
+test("ask_user_question discuss answers are pinned to v105, after background workspace creation", () => {
+	expect(ASK_DISCUSS_PROTOCOL_VERSION).toBe(105);
+	expect(ASK_DISCUSS_PROTOCOL_VERSION).toBeGreaterThan(WORKSPACE_CREATION_PROTOCOL_VERSION);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ASK_DISCUSS_PROTOCOL_VERSION);
 });

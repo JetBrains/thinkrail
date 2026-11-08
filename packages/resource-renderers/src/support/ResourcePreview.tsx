@@ -2,7 +2,12 @@ import { useT } from "@thinkrail/locales/react";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
-import { useResourceHost, useResourceScope } from "../host";
+import {
+	ResourceEnvironmentProvider,
+	useResourceEnvironment,
+	useResourceHost,
+	useResourceScope,
+} from "../host";
 import {
 	canonicalWorkspacePath,
 	describeResource,
@@ -38,6 +43,7 @@ export interface ResourcePreviewProps {
 	leading?: ReactNode;
 	actions?: ReactNode;
 	className?: string | undefined;
+	compact?: boolean | undefined;
 }
 
 interface ResolvedProps extends ResourcePreviewProps {
@@ -91,11 +97,21 @@ function useWorkspaceFile(workspaceId: string, path: string | undefined): Loaded
 
 export function ResourcePreview(props: ResourcePreviewProps) {
 	const scope = useResourceScope();
+	const environment = useResourceEnvironment();
 	const workspaceId = props.workspaceId ?? scope?.workspaceId;
 	if (!workspaceId)
 		throw new Error("ResourcePreview needs a workspace: pass workspaceId or a scope");
 	const sessionId = scope?.workspaceId === workspaceId ? scope.sessionId : undefined;
-	return <ScopedResourcePreview {...props} workspaceId={workspaceId} sessionId={sessionId} />;
+	const preview = (
+		<ScopedResourcePreview {...props} workspaceId={workspaceId} sessionId={sessionId} />
+	);
+	const compact = props.compact ?? environment.compact ?? false;
+	if (compact === (environment.compact ?? false)) return preview;
+	return (
+		<ResourceEnvironmentProvider value={{ ...environment, compact }}>
+			{preview}
+		</ResourceEnvironmentProvider>
+	);
 }
 
 function ScopedResourcePreview(
@@ -205,6 +221,7 @@ function PreviewToolbar({
 }) {
 	const t = useT();
 	const { ReviewSend } = useResourceHost();
+	const { compact } = useResourceEnvironment();
 	return (
 		<div
 			data-testid="resource-view-toggle"
@@ -213,13 +230,17 @@ function PreviewToolbar({
 			className="flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-12"
 		>
 			<div className="mr-auto flex min-w-0 items-center">{props.leading}</div>
-			<ReviewSend workspaceId={props.workspaceId} paths={paths} sessionId={props.sessionId} />
-			<RendererToggles
-				candidates={candidates}
-				renderer={renderer}
-				onRendererId={props.onRendererId}
-				layout={layout}
-			/>
+			{compact ? null : (
+				<>
+					<ReviewSend workspaceId={props.workspaceId} paths={paths} sessionId={props.sessionId} />
+					<RendererToggles
+						candidates={candidates}
+						renderer={renderer}
+						onRendererId={props.onRendererId}
+						layout={layout}
+					/>
+				</>
+			)}
 			{props.actions}
 		</div>
 	);

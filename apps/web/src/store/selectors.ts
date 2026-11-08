@@ -6,6 +6,7 @@ import {
 	DEFAULT_WORKSPACE_NAME,
 	firstPromptOfTexts,
 	type GitDiffScope,
+	isLiveResource,
 	isSessionWorking,
 	MCP_PROTOCOL_VERSION,
 	type McpServerResourceSummary,
@@ -14,14 +15,20 @@ import {
 	PROJECT_CLONE_PROTOCOL_VERSION,
 	PROJECT_TRUST_PROTOCOL_VERSION,
 	type Project,
+	RESOURCE_HISTORY_PROTOCOL_VERSION,
+	type ResourceKind,
+	type ResourceRecord,
+	resourceTallyTotal,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
+	type SessionResourceHistory,
 	type SessionResources,
 	type SessionState,
 	type SessionStateRecord,
 	type SpecGraphNode,
 	type SubagentResourceSummary,
 	sameModel,
+	tallyResources,
 	type WireModel,
 	WORKSPACE_READ_STATE_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
@@ -59,7 +66,12 @@ import type {
 	SessionRuntime,
 	TerminalTab,
 } from "./appStore";
-import type { ChatResourceRead, ChatResourceScope, ChatResourceState } from "./chatResources";
+import {
+	type ChatResourceRead,
+	type ChatResourceScope,
+	type ChatResourceState,
+	finishedChain,
+} from "./chatResources";
 
 export function selectLoginBusy(state: {
 	activeLogin: LoginState | null;
@@ -231,26 +243,30 @@ export function selectChatResourcesLoading(
 	);
 }
 
-export function selectChatResourcesStale(
+export type ChatResourcesStaleness =
+	| "disconnected"
+	| "refreshFailed"
+	| "unavailable"
+	| "refreshing";
+
+export function selectChatResourcesStaleness(
 	state: ChatResourceState,
 	scope: ChatResourceScope,
-): boolean {
+): ChatResourcesStaleness | null {
+	if (selectChatResourceAuthority(state, scope)) return null;
+	if (state.status !== "connected" || !supportsChatResources(state.protocolVersion))
+		return "disconnected";
 	const projection = selectChatResourceProjection(state, scope);
-	return (
-		!selectChatResourceAuthority(state, scope) &&
-		(!!projection?.snapshot ||
-			!!projection?.error ||
-			state.status !== "connected" ||
-			!supportsChatResources(state.protocolVersion))
-	);
+	if (projection?.error) return projection.retrying ? "refreshFailed" : "unavailable";
+	return projection?.snapshot ? "refreshing" : null;
 }
 
 export function isActiveBackgroundCommand(command: BackgroundCommandSummary): boolean {
-	return command.status === "running" || command.status === "stopping";
+	return isLiveResource({ kind: "command", summary: command });
 }
 
 export function isActiveSubagent(child: SubagentResourceSummary): boolean {
-	return child.status === "queued" || child.status === "running";
+	return isLiveResource({ kind: "subagent", summary: child });
 }
 
 export function orderMcpResources(
@@ -268,30 +284,62 @@ export function orderMcpResources(
 export function selectChatResourceGroups(
 	snapshot: SessionResources | null | undefined,
 	includeMcp = true,
+	older: readonly ResourceRecord[] = [],
 ) {
 	const commands: BackgroundCommandSummary[] = [];
 	const subagents: SubagentResourceSummary[] = [];
-	const finishedCommands: BackgroundCommandSummary[] = [];
-	const finishedSubagents: SubagentResourceSummary[] = [];
+	const recentCommands: BackgroundCommandSummary[] = [];
+	const recentSubagents: SubagentResourceSummary[] = [];
 	for (const command of snapshot?.commands ?? []) {
-		(isActiveBackgroundCommand(command) ? commands : finishedCommands).push(command);
+		(isActiveBackgroundCommand(command) ? commands : recentCommands).push(command);
 	}
 	for (const child of snapshot?.subagents ?? []) {
-		(isActiveSubagent(child) ? subagents : finishedSubagents).push(child);
+		(isActiveSubagent(child) ? subagents : recentSubagents).push(child);
 	}
+	const held = { snapshot: snapshot ?? null, older };
+	const finishedCommands = finishedChain(held, "command").flatMap((record) =>
+		record.kind === "command" ? [record.summary] : [],
+	);
+	const finishedSubagents = finishedChain(held, "subagent").flatMap((record) =>
+		record.kind === "subagent" ? [record.summary] : [],
+	);
 	const mcpServers =
 		includeMcp && snapshot?.mcpServers ? orderMcpResources(snapshot.mcpServers) : null;
+	const history: SessionResourceHistory = snapshot?.history ?? {
+		commands: tallyResources(recentCommands.map((summary) => ({ kind: "command", summary }))),
+		subagents: tallyResources(recentSubagents.map((summary) => ({ kind: "subagent", summary }))),
+	};
+	const left = (total: number, held: number) => (snapshot?.history ? Math.max(0, total - held) : 0);
 	return {
 		commands,
 		subagents,
 		finishedCommands,
 		finishedSubagents,
+		recentFinished: { finishedCommands: recentCommands, finishedSubagents: recentSubagents },
+		history,
+		finishedCount: resourceTallyTotal(history.commands) + resourceTallyTotal(history.subagents),
+		remaining: {
+			command: left(resourceTallyTotal(history.commands), finishedCommands.length),
+			subagent: left(resourceTallyTotal(history.subagents), finishedSubagents.length),
+		} satisfies Record<ResourceKind, number>,
 		activeCount: commands.length + subagents.length,
 		mcpServers,
 		mcpActiveCount: mcpServers?.filter((server) => isMcpActiveState(server.state)).length ?? 0,
 		mcpAttentionCount:
 			mcpServers?.filter((server) => isMcpAttentionState(server.state)).length ?? 0,
 	};
+}
+
+export function selectChatResourceOldest(
+	state: ChatResourceState,
+	scope: ChatResourceScope,
+	kind: ResourceKind,
+): ResourceRecord | undefined {
+	return finishedChain(selectChatResourceProjection(state, scope), kind).at(-1);
+}
+
+export function supportsResourceHistory(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= RESOURCE_HISTORY_PROTOCOL_VERSION;
 }
 
 export function selectHasNormalizedSessionState(state: ProtocolState): boolean {
@@ -492,12 +540,32 @@ export function selectCompletionMarkedUnread(
 	);
 }
 
+export type SessionAttention = "needs-input" | "error" | "unread" | "running";
+
+export function getSessionAttention(state: SessionState): SessionAttention | null {
+	if (state.needsInput !== null) return "needs-input";
+	if (state.completionUnread && state.completion?.outcome === "failed") return "error";
+	if (state.completionUnread) return "unread";
+	if (isSessionWorking(state)) return "running";
+	return null;
+}
+
 export function selectWorkspaceIsRunning(
 	state: SessionStateProjection,
 	workspaceId: string,
 ): boolean {
 	return Object.values(state.sessionStateByWorkspace[workspaceId] ?? {}).some((record) =>
 		isSessionWorking(record.state),
+	);
+}
+
+export function selectWorkspaceSettleBlocked(
+	state: SessionStateProjection,
+	workspaceId: string,
+): boolean {
+	return (
+		selectWorkspaceIsRunning(state, workspaceId) ||
+		selectWorkspaceNeedsAttention(state, workspaceId)
 	);
 }
 
@@ -983,6 +1051,35 @@ function* userTurnTexts(turns: SessionRuntime["turns"]): Generator<string> {
 	for (const turn of turns) if (turn.kind === "user") yield userText(turn.message.content);
 }
 
+export function selectKnownChatTitle(
+	state: {
+		sessionStateByWorkspace: Record<string, Record<string, SessionStateRecord>>;
+		layoutDocumentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
+		closedChatsByWorkspace: Record<string, ClosedChat[]>;
+	},
+	workspaceId: string,
+	sessionId: string,
+): string | null {
+	const reported = state.sessionStateByWorkspace[workspaceId]?.[sessionId]?.title;
+	if (reported !== undefined) return reported || null;
+	const document = state.layoutDocumentsByWorkspace[workspaceId];
+	if (document) {
+		const visit = (node: WorkspaceLayoutDocument["center"]): string | null => {
+			if (node.kind === "split") {
+				return visit(node.children[0]) ?? visit(node.children[1]);
+			}
+			for (const tab of node.tabs) {
+				if (tab.kind === "chat" && tab.sessionId === sessionId) return tab.name;
+			}
+			return null;
+		};
+		const fromLayout = visit(document.center);
+		if (fromLayout) return fromLayout;
+	}
+	const closed = state.closedChatsByWorkspace[workspaceId] ?? [];
+	return closed.find((chat) => chat.sessionId === sessionId)?.title ?? null;
+}
+
 export function selectChatFirstPrompt(
 	state: ChatFirstPromptState,
 	workspaceId: string,
@@ -995,6 +1092,17 @@ export function selectChatFirstPrompt(
 	if (reported) return reported;
 	const runtime = state.sessions[sessionId];
 	return runtime ? firstPromptOfTexts(userTurnTexts(runtime.turns)) : undefined;
+}
+
+export function selectRecordFirstPrompts(state: ChatFirstPromptState): Record<string, string> {
+	const prompts: Record<string, string> = {};
+	for (const [workspaceId, records] of Object.entries(state.sessionStateByWorkspace)) {
+		for (const sessionId of Object.keys(records)) {
+			const prompt = selectChatFirstPrompt(state, workspaceId, sessionId);
+			if (prompt) prompts[sessionId] = prompt;
+		}
+	}
+	return prompts;
 }
 
 export function selectUnnamedChatFirstPrompts(
@@ -1114,24 +1222,6 @@ export function selectWorkspaceTerminals(state: TerminalState): TerminalTab[] {
 export function selectActiveTerminalId(state: TerminalState): string | null {
 	if (!state.activeWorkspaceId) return null;
 	return state.activeTerminalByWorkspace[state.activeWorkspaceId] ?? null;
-}
-
-export function selectLastOpenChatSession(
-	state: {
-		tabsByWorkspace: Record<string, { kind: string; id: string; sessionId?: string }[]>;
-		activeTabByWorkspace: Record<string, string | null>;
-	},
-	workspaceId: string,
-): string | null {
-	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
-	const activeId = state.activeTabByWorkspace[workspaceId];
-	const active = tabs.find((t) => t.id === activeId);
-	if (active?.kind === "chat" && active.sessionId) return active.sessionId;
-	for (let i = tabs.length - 1; i >= 0; i--) {
-		const tab = tabs[i];
-		if (tab?.kind === "chat" && tab.sessionId) return tab.sessionId;
-	}
-	return null;
 }
 
 export function selectReviewDraftCount(

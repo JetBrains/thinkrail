@@ -2,21 +2,37 @@ import { describe, expect, test } from "bun:test";
 import {
 	ACCEPTED_IMAGE_TYPES,
 	base64EncodedLength,
+	CODE_FONT_SIZE,
 	clampToCodePoints,
+	compareResourceHistory,
 	DEFAULT_CONFIG,
 	FIRST_PROMPT_MAX_LENGTH,
 	firstPromptHead,
 	firstPromptOfTexts,
+	hasControlCharacter,
 	IMAGE_MAX_BASE64_BYTES,
+	interruptedResource,
+	isCodeFontSize,
 	isDelegationRunDetails,
+	isFontChoice,
+	isFontFamilyRef,
+	isFontWeightOffset,
 	isJbcentralConnected,
 	isJbcentralQuotaRefreshSeconds,
+	isLiveResource,
 	isLocalePreference,
 	isPlanReviewResult,
 	isRetriedAttempt,
 	JBCENTRAL_QUOTA_REFRESH_SECONDS,
+	normalizeFontSettings,
+	parsePiPackageInput,
 	REQUEST_IMAGE_BASE64_BUDGET,
+	type ResourceRecord,
+	resourceHistoryCursor,
+	resourceOutcome,
+	resourceTallyTotal,
 	TODO_NUDGE_PREFIX,
+	tallyResources,
 } from "./domain";
 
 describe("isRetriedAttempt", () => {
@@ -303,5 +319,280 @@ describe("firstPromptHead", () => {
 		).toBe("The real prompt");
 		expect(firstPromptOfTexts([])).toBeUndefined();
 		expect(firstPromptOfTexts(['<review scope="branch">'])).toBeUndefined();
+	});
+});
+
+describe("resource history vocabulary", () => {
+	const command = (patch: Partial<Extract<ResourceRecord, { kind: "command" }>["summary"]>) =>
+		({
+			kind: "command",
+			summary: {
+				id: "c",
+				sessionId: "s",
+				name: "tests",
+				command: "bun test",
+				status: "completed",
+				startedAt: 1_000,
+				finishedAt: 2_000,
+				exitCode: 0,
+				...patch,
+			},
+		}) satisfies ResourceRecord;
+	const subagent = (patch: Partial<Extract<ResourceRecord, { kind: "subagent" }>["summary"]>) =>
+		({
+			kind: "subagent",
+			summary: {
+				childSessionId: "child",
+				parentSessionId: "s",
+				task: "Explore",
+				status: "completed",
+				createdAt: new Date(5_000).toISOString(),
+				...patch,
+			},
+		}) satisfies ResourceRecord;
+
+	test("outcomes collapse owner statuses, and an interrupted run reads interrupted whatever it last reported", () => {
+		expect(resourceOutcome(command({}))).toBe("done");
+		expect(resourceOutcome(command({ exitCode: 1 }))).toBe("failed");
+		expect(resourceOutcome(command({ status: "error", exitCode: 2 }))).toBe("failed");
+		expect(resourceOutcome(command({ status: "stopped" }))).toBe("stopped");
+		expect(resourceOutcome(command({ status: "stopping", interrupted: true }))).toBe("interrupted");
+		expect(resourceOutcome(command({ status: "running" }))).toBeNull();
+		expect(resourceOutcome(subagent({}))).toBe("done");
+		expect(resourceOutcome(subagent({ status: "error" }))).toBe("failed");
+		expect(resourceOutcome(subagent({ status: "aborted" }))).toBe("stopped");
+		expect(resourceOutcome(subagent({ status: "running", interrupted: true }))).toBe("interrupted");
+		expect(resourceOutcome(subagent({ status: "queued" }))).toBeNull();
+	});
+
+	test("live means a run the owner still reports in flight, never an interrupted one", () => {
+		expect(isLiveResource(command({ status: "running" }))).toBe(true);
+		expect(isLiveResource(command({ status: "stopping" }))).toBe(true);
+		expect(isLiveResource(command({ status: "running", interrupted: true }))).toBe(false);
+		expect(isLiveResource(command({}))).toBe(false);
+		expect(isLiveResource(subagent({ status: "queued" }))).toBe(true);
+		expect(isLiveResource(subagent({ status: "running", interrupted: true }))).toBe(false);
+		expect(isLiveResource(subagent({ status: "aborted" }))).toBe(false);
+	});
+
+	test("an interrupted run goes on the wire with a terminal status an older client reads as stopped", () => {
+		expect(interruptedResource(command({ status: "stopping" })).summary).toMatchObject({
+			status: "stopped",
+			interrupted: true,
+		});
+		expect(interruptedResource(command({ status: "error", exitCode: 1 })).summary).toMatchObject({
+			status: "error",
+			interrupted: true,
+		});
+		expect(interruptedResource(subagent({ status: "queued" })).summary).toMatchObject({
+			status: "aborted",
+			interrupted: true,
+		});
+		expect(resourceOutcome(interruptedResource(subagent({ status: "running" })))).toBe(
+			"interrupted",
+		);
+	});
+
+	test("tallies count settled runs by outcome and skip live ones", () => {
+		const tally = tallyResources([
+			command({}),
+			command({ exitCode: 3 }),
+			command({ status: "running" }),
+			subagent({ status: "aborted" }),
+			subagent({ status: "running", interrupted: true }),
+		]);
+		expect(tally).toEqual({ done: 1, failed: 1, stopped: 1, interrupted: 1 });
+		expect(resourceTallyTotal(tally)).toBe(4);
+	});
+
+	test("history orders newest finish first, falls back to the start, and breaks ties by id", () => {
+		expect(resourceHistoryCursor(command({}))).toEqual({ at: 2_000, id: "c" });
+		expect(
+			resourceHistoryCursor({
+				kind: "command",
+				summary: {
+					id: "c",
+					sessionId: "s",
+					name: "dev",
+					command: "bun run dev",
+					status: "stopping",
+					startedAt: 1_000,
+					interrupted: true,
+				},
+			}),
+		).toEqual({ at: 1_000, id: "c" });
+		expect(resourceHistoryCursor(subagent({}))).toEqual({ at: 5_000, id: "child" });
+		expect(resourceHistoryCursor(subagent({ finishedAt: 9_000 }))).toEqual({
+			at: 9_000,
+			id: "child",
+		});
+		const sorted = [
+			{ at: 1, id: "a" },
+			{ at: 3, id: "a" },
+			{ at: 3, id: "b" },
+			{ at: 2, id: "z" },
+		].sort(compareResourceHistory);
+		expect(sorted).toEqual([
+			{ at: 3, id: "b" },
+			{ at: 3, id: "a" },
+			{ at: 2, id: "z" },
+			{ at: 1, id: "a" },
+		]);
+	});
+});
+
+describe("parsePiPackageInput", () => {
+	const source = (raw: string) => parsePiPackageInput(raw).source;
+
+	test("pasted pi install lines, gallery and npm URLs and bare names become npm sources", () => {
+		expect(parsePiPackageInput("pi install npm:@jals1212/pi-spaces")).toEqual({
+			source: "npm:@jals1212/pi-spaces",
+			local: false,
+		});
+		expect(parsePiPackageInput("`pi install -l npm:pi-plain@1.2.0`")).toEqual({
+			source: "npm:pi-plain@1.2.0",
+			local: true,
+		});
+		expect(parsePiPackageInput("pi install --local ./tools")).toEqual({
+			source: "./tools",
+			local: true,
+		});
+		expect(source("https://pi.dev/packages/@jals1212/pi-spaces")).toBe("npm:@jals1212/pi-spaces");
+		expect(source("https://pi.dev/packages/bigpowers/?utm=x#install")).toBe("npm:bigpowers");
+		expect(source("https://www.npmjs.com/package/@jals1212/pi-spaces")).toBe(
+			"npm:@jals1212/pi-spaces",
+		);
+		expect(source("https://npmjs.com/package/@jals1212/pi-spaces/v/0.4.0")).toBe(
+			"npm:@jals1212/pi-spaces@0.4.0",
+		);
+		expect(source("https://www.npmjs.com/package/%40jals1212%2Fpi-spaces")).toBe(
+			"npm:@jals1212/pi-spaces",
+		);
+		expect(parsePiPackageInput("@jals1212/pi-spaces")).toEqual({
+			source: "npm:@jals1212/pi-spaces",
+			local: false,
+			bareName: "@jals1212/pi-spaces",
+		});
+		expect(source("@jals1212/pi-spaces@0.4.0")).toBe("npm:@jals1212/pi-spaces@0.4.0");
+		expect(parsePiPackageInput("  pi-spaces ")).toEqual({
+			source: "npm:pi-spaces",
+			local: false,
+			bareName: "pi-spaces",
+		});
+	});
+
+	test("pi's own sources, git URLs and paths pass through untouched", () => {
+		for (const raw of [
+			"npm:@jals1212/pi-spaces",
+			"git:github.com/acme/pi-tools@v2",
+			"https://github.com/acme/pi-tools.git",
+			"ssh://git@github.com/acme/pi-tools",
+			"/abs/pi/tools",
+			"~/pi/tools",
+			"./tools",
+			"tools/sub",
+			"file:///tmp/tools",
+			"spaces.ts",
+			"builtin:mcp",
+		]) {
+			expect(parsePiPackageInput(raw)).toEqual({ source: raw, local: false });
+		}
+		expect(source("")).toBe("");
+		expect(source("pi install")).toBe("");
+	});
+
+	test("a pasted command keeps a quoted source whole and names nothing when it is ambiguous", () => {
+		expect(parsePiPackageInput('pi install "npm:foo"')).toEqual({
+			source: "npm:foo",
+			local: false,
+		});
+		expect(parsePiPackageInput("pi install -l './my tools'")).toEqual({
+			source: "./my tools",
+			local: true,
+		});
+		expect(parsePiPackageInput('"npm:foo"')).toEqual({ source: "npm:foo", local: false });
+		expect(parsePiPackageInput("pi install ./my\\ tools")).toEqual({
+			source: "./my tools",
+			local: false,
+		});
+		expect(source('pi install "./say \\"hi\\" tools"')).toBe('./say "hi" tools');
+		expect(source("pi install 'a\\b'")).toBe("a\\b");
+		expect(source("pi install a b")).toBe("");
+		expect(source("pi install --local")).toBe("");
+		expect(source('"unbalanced')).toBe('"unbalanced');
+	});
+
+	test("never throws on a half-typed or malformed URL", () => {
+		for (const raw of [
+			"https://pi.dev/packages/%",
+			"https://www.npmjs.com/package/%E0%A4%A",
+			"https://pi.dev/packages/%zz",
+			"https://",
+			"http://[::1",
+			"https://example.com/%",
+		]) {
+			expect(() => parsePiPackageInput(raw)).not.toThrow();
+			expect(source(raw)).toBe(raw);
+		}
+	});
+});
+
+describe("font settings", () => {
+	test("family refs are a bundled role or a safe family name", () => {
+		expect(isFontFamilyRef({ builtin: "code" })).toBe(true);
+		expect(isFontFamilyRef({ name: "Fira Code" })).toBe(true);
+		expect(isFontFamilyRef({ builtin: "brand" })).toBe(false);
+		expect(isFontFamilyRef({ name: " Fira Code" })).toBe(false);
+		expect(isFontFamilyRef({ name: 'Fira"; color: red' })).toBe(false);
+		expect(isFontFamilyRef({ name: "a".repeat(129) })).toBe(false);
+		expect(isFontFamilyRef({ name: "Fira Code", builtin: "code" })).toBe(false);
+	});
+
+	test("a choice holds an optional family and at most eight distinct fallbacks", () => {
+		expect(isFontChoice(DEFAULT_CONFIG.codeFont)).toBe(true);
+		expect(
+			isFontChoice({ family: { name: "Fira Code" }, fallbacks: [{ name: "MesloLGS NF" }] }),
+		).toBe(true);
+		expect(isFontChoice({ family: null, fallbacks: [{ name: "A" }, { name: "A" }] })).toBe(false);
+		expect(
+			isFontChoice({
+				family: null,
+				fallbacks: Array.from({ length: 9 }, (_, index) => ({ name: `F${index}` })),
+			}),
+		).toBe(false);
+		expect(isFontChoice({ family: "Fira Code", fallbacks: [] })).toBe(false);
+	});
+
+	test("font settings normalize field by field to their own defaults", () => {
+		const settings = {
+			interfaceFont: { family: { builtin: "code" as const }, fallbacks: [] },
+			codeFont: { family: { name: "Fira Code" }, fallbacks: [{ name: "MesloLGS NF" }] },
+			codeFontSize: 15,
+			codeLigatures: true,
+			fontWeightOffset: -30,
+		};
+		expect(normalizeFontSettings({ ...settings, theme: "dark" })).toEqual(settings);
+		expect(
+			normalizeFontSettings({
+				interfaceFont: { family: "Inter" },
+				codeFont: settings.codeFont,
+				codeFontSize: 99,
+				codeLigatures: "yes",
+				fontWeightOffset: 15,
+			}),
+		).toEqual({ ...normalizeFontSettings(DEFAULT_CONFIG), codeFont: settings.codeFont });
+		expect(normalizeFontSettings(null)).toEqual(normalizeFontSettings(DEFAULT_CONFIG));
+		expect(hasControlCharacter("Fira\u0007Code")).toBe(true);
+		expect(hasControlCharacter("Fira Code")).toBe(false);
+	});
+
+	test("code size and weight offset are bounded integers", () => {
+		expect(isCodeFontSize(CODE_FONT_SIZE.default)).toBe(true);
+		expect(isCodeFontSize(9)).toBe(false);
+		expect(isCodeFontSize(13.5)).toBe(false);
+		expect(isFontWeightOffset(-70)).toBe(true);
+		expect(isFontWeightOffset(130)).toBe(true);
+		expect(isFontWeightOffset(15)).toBe(false);
+		expect(isFontWeightOffset(140)).toBe(false);
 	});
 });

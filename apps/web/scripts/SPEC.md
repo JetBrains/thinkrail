@@ -20,7 +20,7 @@ they are *generators*: they use `node:fs` and `node:path`, which must never reac
 
 | File | Role |
 |---|---|
-| `typography.ts` | the library: load → validate → render CSS. The **only** place CSS custom-property names, semantic class names and prose root class names are derived. |
+| `typography.ts` | the library: load → validate → render CSS. The **only** place CSS custom-property names, semantic class names and prose root class names are derived — including the user-adjustable tokens the web `fonts` runtime overrides (`--tr-font-family-<id>` over its `-default`, `--tr-font-size-code` / `-dense`, `--tr-font-weight-offset`, `--tr-font-ligatures-<id>`). |
 | `generate-typography.ts` | CLI. Writes `src/styles/generated/typography.css` and `src/styles/generated/fonts.css` (the `@import`s for the self-hosted faces); `--check` fails instead of writing when a committed file is stale. |
 | `validate-typography.ts` | CLI. Validates `src/styles/typography.json` and prints a summary. The enforced gate. |
 | `colors.ts` | the library: load → validate → render. The **only** place a colour derivation (a palette alias or an alpha step) is written. |
@@ -98,8 +98,9 @@ in agreement about the same functions.
   in each source gives completion + inline errors); the toolchain has no JSON Schema validator. Every
   validator mirrors its schema's closed root and nested object shapes before enforcing policies Schema
   cannot express. Referential integrity, mono-is-code-only, `title.card` == `title.dialog`, matching
-  prose element sets, the document heading ladder, and spacing step-name/value identity all live in
-  `validate()`. Changing either contract means checking the other.
+  prose element sets, the document heading ladder, the user-adjustable tokens' reserved ids and
+  dense-below-code rule, and spacing step-name/value identity all live in `validate()`. Changing
+  either contract means checking the other.
 - **A generated file is never hand-edited.** The emitted CSS headers say so, and each pipeline's
   `*:check` command enforces it.
 

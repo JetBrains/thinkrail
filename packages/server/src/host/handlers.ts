@@ -30,8 +30,10 @@ import {
 	compactSession,
 	createSession,
 	deleteSession,
+	disableAnthropicExtraUsageWarning,
 	ensureSessionAttached,
 	followUpSession,
+	getResourceHistoryPage,
 	getSessionCommands,
 	getSessionMessages,
 	getSessionResources,
@@ -42,6 +44,7 @@ import {
 	isMcpLoginId,
 	isPiSessionId,
 	listAvailableModels,
+	listCustomEndpoints,
 	listModelContextSettings,
 	listProjectAliasSkillNames,
 	listSessionStates,
@@ -52,6 +55,7 @@ import {
 	markWorkspaceUnread,
 	notifyExtUi,
 	nudgeSession,
+	probeCustomEndpoint,
 	projectTrustSummary,
 	promptSession,
 	readBackgroundCommandOutput,
@@ -60,6 +64,7 @@ import {
 	refreshSubagentConcurrency,
 	refreshSubagentTools,
 	reloadSessionResources,
+	removeCustomEndpoint,
 	removeQueuedSession,
 	removeSession,
 	removeWorkspaceSessions,
@@ -67,6 +72,7 @@ import {
 	replyMcpProbe,
 	resolveExtUi,
 	respondToTool,
+	saveCustomEndpoint,
 	sendReviewFixToSession,
 	setModelContextWindow,
 	setSessionModel,
@@ -78,6 +84,8 @@ import {
 } from "../agent";
 import {
 	type AdditionalAnalyticsCapture,
+	captureSurveyResponse,
+	type ErrorReport,
 	reportClientError,
 	type SendMode,
 	track,
@@ -103,7 +111,19 @@ import { selectDirectory } from "../dialog";
 import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
 import { hostEnvironmentStatus, updateHostEnvironment } from "../environment";
 import { listExtensionCatalog } from "../extensions";
-import { recordAcceptedMessage, respondToInterview } from "../feedback";
+import {
+	completeSurvey,
+	confirmInAppSurvey,
+	currentInAppSurvey,
+	localizeSurvey,
+	parseSurveySubmission,
+	recordAcceptedMessage,
+	refreshInAppSurvey,
+	respondToInvitation,
+	surveyIsCompleted,
+	surveyResponse,
+} from "../feedback";
+import { fontsDir, listInstalledFonts, readUserFonts } from "../fonts";
 import { readDir, readFile } from "../fs";
 import {
 	commitsAheadOf,
@@ -117,7 +137,7 @@ import {
 	originUrls,
 	type PushTargetStatus,
 	prefetchBranch,
-	remoteRefOid,
+	remoteRefOidAsync,
 } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
 import { clampLimit, getHistoryIndex } from "../history";
@@ -203,12 +223,16 @@ import {
 import { forgetWorkspaceTurns, listTurns } from "../turns";
 import { ensureWatch, stopWatch } from "../watch";
 import {
+	awaitWorkspaceCreation,
+	type CreationHandoff,
 	createWorkspace,
+	dismissWorkspaceCreation,
 	ensureWorkspaceScratchDir,
 	forgetWorkspace,
 	getWorkspace,
 	listAllWorkspaceRecords,
 	listExistingWorktrees,
+	listWorkspaceCreations,
 	listWorkspaceRecords,
 	listWorkspaces,
 	openExistingWorktree,
@@ -216,12 +240,14 @@ import {
 	recordWorkspaceActivity,
 	refreshUserOwnedWorkspace,
 	renameWorkspace,
+	retryWorkspaceCreation,
 	settleWorkspace,
 	setWorkspaceDiffBase,
 	setWorkspaceReview,
 	setWorkspaceSkillOverride,
 	setWorkspaceSubagentMaxConcurrent,
 	setWorkspaceSubagentsOverride,
+	startWorkspaceCreation,
 	unsettleWorkspace,
 	workspaceDiffStats,
 } from "../workspaces";
@@ -249,6 +275,15 @@ import {
 	mcpUpdate,
 } from "./mcp";
 import { resolveNewChatModel } from "./newChatModel";
+import {
+	packagesCheckUpdates,
+	packagesInstall,
+	packagesList,
+	packagesRemove,
+	packagesReveal,
+	packagesSetResourceEnabled,
+	packagesUpdate,
+} from "./packages";
 import { planReviewRunning } from "./planReviewQueue";
 import {
 	additionalCapture,
@@ -297,7 +332,7 @@ async function archiveTeardown(ws: Workspace): Promise<void> {
 	try {
 		await removeWorkspaceSessions(ws.id, ws.worktreePath);
 		await settleChangeArtifacts(ws.id);
-		reclaimWorktree(ws);
+		await reclaimWorktree(ws);
 	} catch {
 		log.warn(`workspace archive teardown failed for ${ws.id}`);
 	}
@@ -321,6 +356,62 @@ async function sendUserMessage(
 		recordAcceptedMessage(clientKey);
 	}
 	return { ok: true };
+}
+
+async function startChat(
+	workspaceId: string,
+	choice: { model?: WireModel; thinkingLevel?: ThinkingLevel },
+): Promise<WsResult<"session.create">> {
+	const ws = getWorkspace(workspaceId);
+	ensureWorkspaceScratchDir(ws);
+	const defaults = await resolveNewChatModel(choice);
+	const created = await createSession({
+		cwd: ws.worktreePath,
+		workspaceId,
+		...(defaults.model ? { model: defaults.model } : {}),
+		thinkingLevel: defaults.thinkingLevel,
+	});
+	if (choice.model && created.model) noteRecentModel(created.model);
+	trackChatStarted({
+		sessionId: created.sessionId,
+		model: defaults.model ? created.model : null,
+	});
+	return created;
+}
+
+const creationClients = new Map<string, string>();
+
+export const workspaceCreationHandoff: CreationHandoff = async (workspace, kickoff) => {
+	const clientKey = creationClients.get(workspace.id) ?? "";
+	creationClients.delete(workspace.id);
+	provisionInitialTerminal(workspace);
+	if (!kickoff) return {};
+	await ensureWatch(workspace.id, { prewarm: false });
+	const { sessionId } = await startChat(workspace.id, {
+		...(kickoff.model ? { model: kickoff.model } : {}),
+		...(kickoff.thinkingLevel ? { thinkingLevel: kickoff.thinkingLevel } : {}),
+	});
+	if (!kickoff.text && !kickoff.images?.length) return { sessionId };
+	let preflighted: () => void = () => {};
+	const preflight = new Promise<void>((resolve) => {
+		preflighted = resolve;
+	});
+	const sent = sendUserMessage("prompt", sessionId, kickoff.text, clientKey, () =>
+		promptSession(sessionId, kickoff.text, kickoff.images, { onPreflight: preflighted }),
+	);
+	sent.catch(() => {});
+	try {
+		await Promise.race([preflight, sent]);
+		return { sessionId };
+	} catch (err) {
+		return { sessionId, kickoffError: err instanceof Error ? err.message : String(err) };
+	}
+};
+
+function revealDataFolder(dir: string) {
+	mkdirSync(dir, { recursive: true });
+	revealInFileManager(dir);
+	return { ok: true } as const;
 }
 
 function resolveTemplateReadDirs(params: TemplateReadLocation) {
@@ -486,6 +577,35 @@ function resourceParams<K extends string>(params: unknown, keys: K[]): Record<K,
 	return result;
 }
 
+function resourceHistoryParams(params: unknown): WsParams<"session.resourceHistory"> {
+	if (!params || typeof params !== "object" || Array.isArray(params))
+		throw new Error("Invalid resource history request");
+	const { kind, before, limit, ...scope } = params as Record<string, unknown>;
+	const { workspaceId, sessionId } = resourceParams(scope, ["workspaceId", "sessionId"]);
+	if (kind !== "command" && kind !== "subagent") throw new Error("Invalid resource history kind");
+	if (limit !== undefined && (typeof limit !== "number" || !Number.isInteger(limit) || limit < 1))
+		throw new Error("Invalid resource history limit");
+	const request: WsParams<"session.resourceHistory"> = {
+		workspaceId,
+		sessionId,
+		kind,
+		...(limit === undefined ? {} : { limit }),
+	};
+	if (before === undefined) return request;
+	if (!before || typeof before !== "object" || Array.isArray(before))
+		throw new Error("Invalid resource history cursor");
+	const { at, id, ...extra } = before as Record<string, unknown>;
+	if (
+		Object.keys(extra).length > 0 ||
+		typeof at !== "number" ||
+		!Number.isFinite(at) ||
+		typeof id !== "string" ||
+		!(kind === "subagent" ? isPiSessionId(id) : isHostResourceId(id))
+	)
+		throw new Error("Invalid resource history cursor");
+	return { ...request, before: { at, id } };
+}
+
 async function deliverToolResponse(
 	sessionId: string,
 	toolCallId: string,
@@ -495,6 +615,14 @@ async function deliverToolResponse(
 	if (response === undefined) throw new Error("A tool response must carry a value");
 	await ackSend(respondToTool(sessionId, toolCallId, response));
 	return { ok: true };
+}
+
+function invalidSurveyOnThrow<T>(build: () => T): T {
+	try {
+		return build();
+	} catch {
+		throw new CodedError("SURVEY_INVALID", "Invalid survey submission");
+	}
 }
 
 const handlers: WsHandlers = {
@@ -548,12 +676,30 @@ const handlers: WsHandlers = {
 		}
 		return updated;
 	},
-	"workspace.create": async (p) => {
-		return provisionInitialTerminal(
-			await observeSetupAction("worktree_create", () =>
-				createWorkspace(p.projectId, p.name, p.baseRef),
-			),
+	"workspace.create": (p) =>
+		observeSetupAction("worktree_create", () => createWorkspace(p.projectId, p.name, p.baseRef)),
+	"workspace.startCreate": (p, ctx) => {
+		const creation = startWorkspaceCreation(p.projectId, {
+			...(p.name ? { name: p.name } : {}),
+			...(p.baseRef ? { baseRef: p.baseRef } : {}),
+			...(p.kickoff ? { kickoff: p.kickoff } : {}),
+		});
+		creationClients.set(creation.id, ctx.clientKey);
+		void observeSetupAction("worktree_create", () => awaitWorkspaceCreation(creation.id)).catch(
+			() => {},
 		);
+		return creation;
+	},
+	"workspace.listCreations": () => listWorkspaceCreations(),
+	"workspace.retryCreation": (p, ctx) => {
+		const creation = retryWorkspaceCreation(p.id);
+		creationClients.set(creation.id, ctx.clientKey);
+		return creation;
+	},
+	"workspace.dismissCreation": async (p) => {
+		const dismissed = await dismissWorkspaceCreation(p.id);
+		creationClients.delete(p.id);
+		return dismissed;
 	},
 	"workspace.listExisting": (params) => listExistingWorktrees(params.projectId),
 	"workspace.openExisting": async (p) => {
@@ -616,7 +762,9 @@ const handlers: WsHandlers = {
 			pushesElsewhere: splitPushUrl !== null,
 			published:
 				measured?.published ??
-				(splitPushUrl ? null : remoteRefOid(ws.worktreePath, `origin/${ws.branch}`) !== null),
+				(splitPushUrl
+					? null
+					: (await remoteRefOidAsync(ws.worktreePath, `origin/${ws.branch}`)) !== null),
 			...(measured?.published && measured.ahead !== undefined && measured.behind !== undefined
 				? { ahead: measured.ahead, behind: measured.behind }
 				: {}),
@@ -917,20 +1065,20 @@ const handlers: WsHandlers = {
 		return listSkillCatalog(ws.worktreePath, admissionContextFor(project, ws.skillOverrides ?? {}));
 	},
 	"extension.list": () => listExtensionCatalog(new Set(getConfig().disabledExtensions)),
+	"packages.list": (p) => packagesList(p),
+	"packages.install": (p) => packagesInstall(p),
+	"packages.remove": (p) => packagesRemove(p),
+	"packages.update": (p) => packagesUpdate(p),
+	"packages.checkUpdates": (p) => packagesCheckUpdates(p),
+	"packages.setResourceEnabled": (p) => packagesSetResourceEnabled(p),
+	"packages.reveal": (p) => packagesReveal(p),
 	"locales.list": () => readLocalLocales(),
-	"locales.reveal": () => {
-		const dir = localesDir();
-		mkdirSync(dir, { recursive: true });
-		revealInFileManager(dir);
-		return { ok: true } as const;
-	},
+	"locales.reveal": () => revealDataFolder(localesDir()),
 	"themes.list": () => readUserThemes(),
-	"themes.reveal": () => {
-		const dir = themesDir();
-		mkdirSync(dir, { recursive: true });
-		revealInFileManager(dir);
-		return { ok: true } as const;
-	},
+	"themes.reveal": () => revealDataFolder(themesDir()),
+	"fonts.list": () => readUserFonts(),
+	"fonts.installed": () => listInstalledFonts(),
+	"fonts.reveal": () => revealDataFolder(fontsDir()),
 	"project.acknowledgeSkills": (p) => {
 		return acknowledgeProjectSkills(p.id, p.names);
 	},
@@ -981,23 +1129,7 @@ const handlers: WsHandlers = {
 		await reloadSessionResources(params.sessionId);
 		return { ok: true } as const;
 	},
-	"session.create": async (p) => {
-		const ws = getWorkspace(p.workspaceId);
-		ensureWorkspaceScratchDir(ws);
-		const defaults = await resolveNewChatModel(p);
-		const created = await createSession({
-			cwd: ws.worktreePath,
-			workspaceId: p.workspaceId,
-			...(defaults.model ? { model: defaults.model } : {}),
-			thinkingLevel: defaults.thinkingLevel,
-		});
-		if (p.model && created.model) noteRecentModel(created.model);
-		trackChatStarted({
-			sessionId: created.sessionId,
-			model: defaults.model ? created.model : null,
-		});
-		return created;
-	},
+	"session.create": (p) => startChat(p.workspaceId, p),
 	"session.prompt": (p, ctx) => {
 		return sendUserMessage("prompt", p.sessionId, p.text, ctx.clientKey, () =>
 			promptSession(p.sessionId, p.text, p.images),
@@ -1128,6 +1260,10 @@ const handlers: WsHandlers = {
 		const p = resourceParams(params, ["workspaceId", "sessionId"]);
 		return getSessionResources(p.workspaceId, p.sessionId, resourceCwd(p.workspaceId));
 	},
+	"session.resourceHistory": (params) => {
+		const { workspaceId, sessionId, ...request } = resourceHistoryParams(params);
+		return getResourceHistoryPage(workspaceId, sessionId, resourceCwd(workspaceId), request);
+	},
 	"backgroundCommand.output": (params) => {
 		const p = resourceParams(params, ["workspaceId", "sessionId", "commandId"]);
 		return readBackgroundCommandOutput(
@@ -1195,6 +1331,10 @@ const handlers: WsHandlers = {
 	"model.setContextWindow": (p) => {
 		return setModelContextWindow(p.target, p.contextWindow);
 	},
+	"customEndpoints.list": () => listCustomEndpoints(),
+	"customEndpoints.probe": (p) => probeCustomEndpoint(p),
+	"customEndpoints.save": (p) => saveCustomEndpoint(p),
+	"customEndpoints.remove": (p) => removeCustomEndpoint(p.id),
 	"model.default": () =>
 		observeSetupRead(
 			() => resolveNewChatModel({}),
@@ -1231,6 +1371,10 @@ const handlers: WsHandlers = {
 		await logoutProvider(params.providerId);
 		return { ok: true } as const;
 	},
+	"provider.disableWarning": async () => {
+		await disableAnthropicExtraUsageWarning();
+		return { ok: true } as const;
+	},
 	"provider.jbcentralConnect": () =>
 		observeSetupAction("provider_connect", connectJbcentral, centralConnectOutcome),
 	"provider.jbcentralDisconnect": () => disconnectJbcentral(),
@@ -1257,7 +1401,43 @@ const handlers: WsHandlers = {
 	"environment.get": () => hostEnvironmentStatus(),
 	"environment.update": (params) => updateHostEnvironment(params.environment),
 	"feedback.respond": (params) => {
-		respondToInterview(params.action);
+		respondToInvitation(params.action);
+		return { ok: true } as const;
+	},
+	"feedback.survey": async (params) => {
+		await refreshInAppSurvey();
+		const survey = currentInAppSurvey();
+		if (!survey || surveyIsCompleted(survey.id, survey.iteration)) return { survey: null };
+		const language =
+			typeof params?.language === "string" && params.language.length <= 35
+				? params.language
+				: undefined;
+		return { survey: localizeSurvey(survey, language) };
+	},
+	"feedback.survey.submit": async (params) => {
+		const submission = invalidSurveyOnThrow(() => parseSurveySubmission(params));
+		const survey = await confirmInAppSurvey().catch(() => {
+			throw new CodedError("SURVEY_NOT_SENT", "Survey could not be confirmed");
+		});
+		if (!survey || surveyIsCompleted(survey.id, survey.iteration)) {
+			throw new CodedError("SURVEY_UNAVAILABLE", "Survey is unavailable");
+		}
+		if (
+			survey.id !== submission.surveyId ||
+			survey.iteration !== submission.iteration ||
+			localizeSurvey(survey, submission.language).language !== submission.language
+		) {
+			throw new CodedError("SURVEY_CHANGED", "Survey changed");
+		}
+		const properties = invalidSurveyOnThrow(() => surveyResponse(survey, submission));
+		if (!captureSurveyResponse(properties)) {
+			throw new CodedError("SURVEY_NOT_SENT", "Survey answers were not sent");
+		}
+		try {
+			completeSurvey(survey.id, survey.iteration);
+		} catch (error) {
+			log.warn("survey completion was not persisted", error);
+		}
 		return { ok: true } as const;
 	},
 	"client.reportError": (params) => {
@@ -1383,6 +1563,14 @@ function dispatch<M extends WsMethodName>(method: M, params: WsParams<M>, ctx: R
 
 export function requestMethodDiagnostic(method: string): string {
 	return isWsMethod(method) ? method : "unknown method";
+}
+
+export function requestErrorReport(method: string): ErrorReport {
+	return {
+		source: "request",
+		handled: true,
+		...(isWsMethod(method) ? { requestMethod: method } : {}),
+	};
 }
 
 function supportsBranchStatus(protocolVersion: number | undefined): boolean {

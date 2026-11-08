@@ -9,27 +9,39 @@ import type {
 	SessionStateRecord,
 	TerminalTabsPush,
 	WorkspaceFsChangedPayload,
+	WsChannel,
 } from "@thinkrail/contracts";
 import {
-	FEEDBACK_INTERVIEW_PROTOCOL_VERSION,
+	FEEDBACK_SURVEY_PROTOCOL_VERSION,
+	FONTS_PROTOCOL_VERSION,
+	GITHUB_STAR_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
+	PI_PACKAGES_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
+	USER_FONTS_ROUTE,
 	USER_THEMES_PROTOCOL_VERSION,
+	WORKSPACE_CREATION_PROTOCOL_VERSION,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
 	admissionContextFor,
+	bumpPackageSwitchGeneration,
 	cancelAllMcpProbes,
 	cancelMcpProbesOwnedBy,
 	disposeAllSessions,
 	getSessionWorkspaceId,
+	handlePiSettingsFileChanged,
+	handleProjectPiSettingsChanged,
 	initializeSessionStates,
 	isProjectSkillPath,
 	liveSessionIdsOf,
 	mcpPolicyOf,
 	piTrustsProjectPath,
+	primeProjectPiSettings,
+	primeUserPiSettings,
+	publishPiPackagesChanged,
 	reconcileMcpSessions,
 	refreshAgentReviewTool,
 	refreshExtensionTools,
@@ -37,13 +49,17 @@ import {
 	refreshSubagentTools,
 	setAgentReviewEnabledResolver,
 	setDisabledExtensionsResolver,
+	setDisabledPackagesResolver,
+	setExtensionSettingsResolver,
 	setExtUiPublisher,
 	setMcpLoginPublisher,
 	setMcpPolicyResolver,
 	setMcpStatusPublisher,
 	setMcpToolGrantWriter,
-	setModelContextPublisher,
 	setModelListingPublisher,
+	setModelsFilePublisher,
+	setPiPackagesPublisher,
+	setRequestReviewHandler,
 	setReviewCommentHandler,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
@@ -64,6 +80,7 @@ import {
 	reportError,
 	shutdownAnalytics,
 	startAttributionClaim,
+	surveyEndpoint,
 	track,
 } from "../analytics";
 import {
@@ -76,7 +93,15 @@ import {
 	stopJbcentralRuntime,
 } from "../auth";
 import { forgetOpenBranchReview } from "../branch-review";
-import { redeliverInterview, releaseInterview, setFeedbackPublisher } from "../feedback";
+import {
+	configureSurveySource,
+	redeliverInvitation,
+	refreshInAppSurvey,
+	releaseInvitation,
+	setFeedbackPublisher,
+	setGithubStarPublisher,
+} from "../feedback";
+import { watchUserFonts } from "../fonts";
 import { watchLocalLocales } from "../locales";
 import { logger, observeLoggedErrors } from "../log";
 import { loadWorkspaces } from "../persistence";
@@ -88,6 +113,7 @@ import {
 	openProject,
 	refreshRecentProjectFolders,
 	setPiTrustSeed,
+	setProjectPathGuard,
 	setProjectPublisher,
 } from "../projects";
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
@@ -112,15 +138,28 @@ import {
 	stopAllWatches,
 } from "../watch";
 import {
+	creationOwnsPath,
 	getWorkspace,
+	interruptWorkspaceCreations,
+	listAllWorkspaceRecords,
 	recordWorkspaceHead,
 	refreshUserOwnedWorkspace,
+	replayPendingHandoffs,
 	seedWorkspaceHead,
+	setWorkspaceCreationHandoff,
+	setWorkspaceCreationPublisher,
 	setWorkspacePublisher,
+	stopWorkspaceCreations,
 } from "../workspaces";
 import { BLOB_PREFIX, FILES_PREFIX, serveBlob, serveWorktreeFile } from "./fileRoutes";
+import { serveUserFonts } from "./fontRoutes";
 import { setFsNudgePublisher } from "./fsNudge";
-import { handleRequest, requestMethodDiagnostic } from "./handlers";
+import {
+	handleRequest,
+	requestErrorReport,
+	requestMethodDiagnostic,
+	workspaceCreationHandoff,
+} from "./handlers";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { trackLoginOutcome } from "./loginAnalytics";
 import {
@@ -131,7 +170,14 @@ import {
 	observeCurrentSetup,
 	setupObservation,
 } from "./productAnalytics";
-import { RequestReplayCache } from "./requestReplayCache";
+import {
+	AbandonmentReportBudget,
+	heaviestReplayMethod,
+	type ReplayLoad,
+	RequestAbandonedError,
+	RequestReplayCache,
+	RequestReplayOverflowError,
+} from "./requestReplayCache";
 import {
 	installRequestReviewSeam,
 	maybeAutoReReview,
@@ -204,6 +250,24 @@ const log = logger("host");
 
 const isRequestId = (id: unknown): id is string => typeof id === "string";
 
+function formatReplayLoad(load: ReplayLoad): string {
+	const occupancy = ({ pending, settled, abandoned }: ReplayLoad[string]) =>
+		pending + settled + abandoned;
+	return Object.entries(load)
+		.sort(([, a], [, b]) => occupancy(b) - occupancy(a))
+		.map(
+			([method, { pending, settled, abandoned }]) =>
+				`${method} ${pending} pending/${settled} settled/${abandoned} abandoned`,
+		)
+		.join(", ");
+}
+
+function countMethods(methods: readonly string[]): string {
+	const counts = new Map<string, number>();
+	for (const method of methods) counts.set(method, (counts.get(method) ?? 0) + 1);
+	return [...counts].map(([method, count]) => `${method} ×${count}`).join(", ");
+}
+
 function clientProtocolVersion(value: string | null): number {
 	const parsed = Number(value);
 	return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
@@ -253,6 +317,15 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const sockets = new Map<string, Bun.ServerWebSocket<SocketData>>();
 	const reapTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	const requestReplays = new RequestReplayCache<string>();
+	const abandonmentReports = new AbandonmentReportBudget();
+	const reportAbandoned = (methods: readonly string[]): void => {
+		if (methods.length === 0) return;
+		log.warn(`requests abandoned before their handlers settled: ${countMethods(methods)}`);
+		for (const method of new Set(methods)) {
+			if (abandonmentReports.admit(method))
+				reportError(new RequestAbandonedError(), requestErrorReport(method));
+		}
+	};
 	const terminalBackpressured = new Set<string>();
 	let hostUpdateNotice: HostUpdateNotice | undefined;
 	let hostUpdateTimer: ReturnType<typeof setInterval> | undefined;
@@ -283,7 +356,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					return;
 				}
 				clearTerminalClient(clientKey);
-				releaseInterview(clientKey);
+				releaseInvitation(clientKey);
 				cancelMcpProbesOwnedBy(clientKey);
 			}, CLIENT_REPLAY_RETENTION_MS),
 		);
@@ -310,6 +383,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			}
 			if (url.pathname.startsWith(BLOB_PREFIX)) {
 				return serveBlob(url.pathname, req.signal);
+			}
+			if (url.pathname.startsWith(USER_FONTS_ROUTE)) {
+				return serveUserFonts(req, url.pathname);
 			}
 			if (staticDir) {
 				return serveStatic(url.pathname, staticDir);
@@ -341,6 +417,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.workspaceUpdated);
 				ws.subscribe(WS_CHANNELS.workspaceRemoved);
 				ws.subscribe(WS_CHANNELS.workspaceFsChanged);
+				if (ws.data.protocolVersion >= WORKSPACE_CREATION_PROTOCOL_VERSION) {
+					ws.subscribe(WS_CHANNELS.workspaceCreationChanged);
+					ws.subscribe(WS_CHANNELS.workspaceCreationRemoved);
+				}
 				ws.subscribe(WS_CHANNELS.settingsChanged);
 				if (hostUpdate) ws.subscribe(WS_CHANNELS.hostUpdateAvailable);
 				ws.subscribe(WS_CHANNELS.reviewChanged);
@@ -351,6 +431,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					ws.subscribe(WS_CHANNELS.localesChanged);
 				if (ws.data.protocolVersion >= USER_THEMES_PROTOCOL_VERSION)
 					ws.subscribe(WS_CHANNELS.themesChanged);
+				if (ws.data.protocolVersion >= PI_PACKAGES_PROTOCOL_VERSION)
+					ws.subscribe(WS_CHANNELS.packagesChanged);
+				if (ws.data.protocolVersion >= FONTS_PROTOCOL_VERSION)
+					ws.subscribe(WS_CHANNELS.fontsChanged);
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
 						? process.platform
@@ -380,7 +464,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					terminalBackpressured.add(ws.data.clientKey);
 				}
 				resumeClientTerminals(ws.data.clientKey);
-				redeliverInterview(ws.data.clientKey);
+				redeliverInvitation(ws.data.clientKey);
 			},
 			async message(ws, message) {
 				const raw = typeof message === "string" ? message : message.toString();
@@ -392,11 +476,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				}
 				if (typeof req !== "object" || req === null) return;
 				if ("ack" in req && Array.isArray(req.ack)) {
-					requestReplays.acknowledge(ws.data.clientKey, req.ack.filter(isRequestId));
+					reportAbandoned(
+						requestReplays.acknowledge(ws.data.clientKey, req.ack.filter(isRequestId)),
+					);
 					return;
 				}
 				if ("resume" in req && Array.isArray(req.resume)) {
-					requestReplays.retain(ws.data.clientKey, req.resume.filter(isRequestId));
+					reportAbandoned(requestReplays.retain(ws.data.clientKey, req.resume.filter(isRequestId)));
 					return;
 				}
 				if (
@@ -432,11 +518,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 							} catch (err) {
 								const error = err instanceof Error ? err.message : String(err);
 								log.debug(`ws ${methodDiagnostic} failed`);
-								reportError(err, {
-									source: "request",
-									handled: true,
-									...(methodDiagnostic === method ? { requestMethod: method } : {}),
-								});
+								reportError(err, requestErrorReport(method));
 								const code = errorCodeOf(err);
 								return JSON.stringify({
 									id: requestId,
@@ -446,11 +528,23 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 								});
 							}
 						},
+						methodDiagnostic,
 					);
 					if (ws.send(response) === 0) ws.close();
 				} catch (err) {
 					const error = err instanceof Error ? err.message : String(err);
-					if (ws.send(JSON.stringify({ id: requestId, ok: false, error })) === 0) ws.close();
+					if (err instanceof RequestReplayOverflowError && err.load) {
+						log.warn(`replay namespace full; held requests: ${formatReplayLoad(err.load)}`);
+						reportError(err, requestErrorReport(heaviestReplayMethod(err.load) ?? method));
+					}
+					const code = errorCodeOf(err);
+					const reply = JSON.stringify({
+						id: requestId,
+						ok: false,
+						error,
+						...(code ? { errorCode: code } : {}),
+					});
+					if (ws.send(reply) === 0) ws.close();
 				}
 			},
 			drain(ws) {
@@ -566,13 +660,33 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 
 	setFeedbackPublisher((clientKey) => {
 		const ws = sockets.get(clientKey);
-		if (!ws || ws.data.protocolVersion < FEEDBACK_INTERVIEW_PROTOCOL_VERSION) return false;
+		if (!ws || ws.data.protocolVersion < FEEDBACK_SURVEY_PROTOCOL_VERSION) return false;
 		try {
 			return ws.send(JSON.stringify({ channel: WS_CHANNELS.feedbackInterview, data: {} })) !== 0;
 		} catch {
 			ws.close();
 			return false;
 		}
+	});
+
+	const githubStarSocket = (clientKey: string) => {
+		const ws = sockets.get(clientKey);
+		return ws && ws.data.protocolVersion >= GITHUB_STAR_PROTOCOL_VERSION ? ws : undefined;
+	};
+	setGithubStarPublisher({
+		canAsk: (clientKey) => githubStarSocket(clientKey) !== undefined,
+		ask: (clientKey, ask) => {
+			const ws = githubStarSocket(clientKey);
+			if (!ws) return false;
+			try {
+				return (
+					ws.send(JSON.stringify({ channel: WS_CHANNELS.feedbackGithubStar, data: ask })) !== 0
+				);
+			} catch {
+				ws.close();
+				return false;
+			}
+		},
 	});
 
 	setSkillAdmissionResolver((workspaceId) => {
@@ -617,6 +731,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setAgentReviewEnabledResolver(() => getConfig().agentReviewEnabled !== false);
 
 	setDisabledExtensionsResolver(() => new Set(getConfig().disabledExtensions));
+	setExtensionSettingsResolver(() => getConfig().extensionSettings ?? {});
+	setDisabledPackagesResolver(() => new Set(getConfig().disabledPackages));
 
 	setProjectPublisher((project) => {
 		const capture = additionalCapture();
@@ -639,6 +755,22 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			WS_CHANNELS.terminalTabs,
 			JSON.stringify({ channel: WS_CHANNELS.terminalTabs, data }),
 		);
+	});
+
+	interruptWorkspaceCreations();
+	setProjectPathGuard((path) => {
+		if (creationOwnsPath(path))
+			throw new Error("This folder belongs to a workspace ThinkRail is still creating");
+	});
+	setWorkspaceCreationHandoff(workspaceCreationHandoff);
+	void replayPendingHandoffs().catch((err) => log.warn("replaying workspace handoffs failed", err));
+	setWorkspaceCreationPublisher((event) => {
+		const channel =
+			event.kind === "changed"
+				? WS_CHANNELS.workspaceCreationChanged
+				: WS_CHANNELS.workspaceCreationRemoved;
+		const data = event.kind === "changed" ? event.creation : event.removed;
+		server.publish(channel, JSON.stringify({ channel, data }));
 	});
 
 	setWorkspacePublisher((event) => {
@@ -665,22 +797,32 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		) {
 			void reconcileMcpSessions(liveSessionIdsOf(payload.workspaceId));
 		}
+		if (
+			payload.truncated ||
+			payload.paths.some((path) => path === ".pi" || path === ".pi/settings.json")
+		) {
+			const workspace = listAllWorkspaceRecords().find((ws) => ws.id === payload.workspaceId);
+			const trusted =
+				workspace &&
+				getProjects().find((project) => project.id === workspace.projectId)?.piResourceTrust ===
+					"granted";
+			if (workspace && trusted) handleProjectPiSettingsChanged(workspace.worktreePath);
+		}
 	};
-	const stopUserMcpWatch = watchUserMcpConfig();
-	const stopLocalesWatch = watchLocalLocales({
-		onChange: () =>
-			server.publish(
-				WS_CHANNELS.localesChanged,
-				JSON.stringify({ channel: WS_CHANNELS.localesChanged, data: {} }),
-			),
-	});
-	const stopThemesWatch = watchUserThemes({
-		onChange: () =>
-			server.publish(
-				WS_CHANNELS.themesChanged,
-				JSON.stringify({ channel: WS_CHANNELS.themesChanged, data: {} }),
-			),
-	});
+	primeUserPiSettings();
+	for (const workspace of listAllWorkspaceRecords()) primeProjectPiSettings(workspace.worktreePath);
+	setPiPackagesPublisher(() =>
+		server.publish(
+			WS_CHANNELS.packagesChanged,
+			JSON.stringify({ channel: WS_CHANNELS.packagesChanged, data: {} }),
+		),
+	);
+	const stopUserMcpWatch = watchUserMcpConfig({ onSettingsChanged: handlePiSettingsFileChanged });
+	const nudge = (channel: WsChannel) => () =>
+		server.publish(channel, JSON.stringify({ channel, data: {} }));
+	const stopLocalesWatch = watchLocalLocales({ onChange: nudge(WS_CHANNELS.localesChanged) });
+	const stopThemesWatch = watchUserThemes({ onChange: nudge(WS_CHANNELS.themesChanged) });
+	const stopFontsWatch = watchUserFonts({ onChange: nudge(WS_CHANNELS.fontsChanged) });
 	setWatchPublisher(publishFsChanged);
 	setSkillPathClassifier(isProjectSkillPath);
 	setFsNudgePublisher(publishFsChanged);
@@ -740,7 +882,15 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		if (appliedUpdate.subagentsEnabled !== undefined) refreshSubagentTools();
 		if (appliedUpdate.subagentMaxConcurrent !== undefined) refreshSubagentConcurrency();
 		if (appliedUpdate.agentReviewEnabled !== undefined) refreshAgentReviewTool();
-		if (appliedUpdate.disabledExtensions !== undefined) refreshExtensionTools();
+		if (appliedUpdate.disabledPackages !== undefined) bumpPackageSwitchGeneration();
+		if (
+			appliedUpdate.disabledExtensions !== undefined ||
+			appliedUpdate.extensionSettings !== undefined ||
+			appliedUpdate.disabledPackages !== undefined
+		) {
+			refreshExtensionTools();
+		}
+		if (appliedUpdate.disabledPackages !== undefined) publishPiPackagesChanged();
 	});
 
 	setSessionCreatedPublisher((payload: SessionCreatedPayload) => {
@@ -862,7 +1012,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 	setJbcentralChangedPublisher(publishProviderChanged);
 	setLogoutPublisher(publishProviderChanged);
-	setModelContextPublisher(publishProviderChanged);
+	setModelsFilePublisher(publishProviderChanged);
 	setModelListingPublisher(publishProviderChanged);
 
 	const initialConfig = getConfig();
@@ -871,6 +1021,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		...(analytics ?? {}),
 		additionalEnabled: initialAdditionalAnalyticsEnabled(initialConfig),
 	});
+	configureSurveySource(surveyEndpoint());
+	void refreshInAppSurvey();
 	observeLoggedErrors((scope, error) =>
 		reportError(error, { source: "host_logged", handled: true, scope }),
 	);
@@ -904,6 +1056,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		stopUserMcpWatch();
 		stopLocalesWatch();
 		stopThemesWatch();
+		stopFontsWatch();
 		disposeAllSessions();
 		for (const timer of reapTimers.values()) clearTimeout(timer);
 		reapTimers.clear();
@@ -913,19 +1066,17 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		requestReplays.clear();
 		persistTerminalSessions();
 		closeAllTerminals();
-		setFeedbackPublisher(null);
-		setSettingsPublisher(null);
-		setModelContextPublisher(null);
-		setModelListingPublisher(null);
-		setJbcentralAppliedPublisher(() => {});
-		setJbcentralChangedPublisher(() => {});
-		setLogoutPublisher(() => {});
+		restoreSeamDefaults();
 		server.stop(true);
 	};
 	const shutdown = (): Promise<void> => {
 		shutdownPromise ??= (async () => {
 			stopHostUpdateChecks();
-			await Promise.allSettled([settleSessionsForShutdown(), shutdownAnalytics()]);
+			await Promise.allSettled([
+				settleSessionsForShutdown(),
+				shutdownAnalytics(),
+				stopWorkspaceCreations(),
+			]);
 			await turnTracker.drain();
 			stop();
 		})();
@@ -950,6 +1101,57 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		stop,
 		shutdown,
 	};
+}
+
+function restoreSeamDefaults(): void {
+	setPiTrustSeed(null);
+	setSessionProjectResolver(() => null);
+	setTerminalPublisher(() => "unavailable");
+	setFeedbackPublisher(null);
+	setGithubStarPublisher(null);
+	configureSurveySource(null);
+	setSkillAdmissionResolver(null);
+	setMcpPolicyResolver(null);
+	setMcpToolGrantWriter(() => {});
+	setSubagentsEnabledResolver(null);
+	setSubagentConcurrencyResolver(null);
+	setAgentReviewEnabledResolver(null);
+	setDisabledExtensionsResolver(null);
+	setExtensionSettingsResolver(null);
+	setDisabledPackagesResolver(null);
+	setProjectPublisher(null);
+	setTerminalTabsPublisher(() => {});
+	setWorkspacePublisher(null);
+	setWorkspaceCreationPublisher(null);
+	setWorkspaceCreationHandoff(null);
+	setProjectPathGuard(null);
+	setPiPackagesPublisher(null);
+	setWatchPublisher(null);
+	setSkillPathClassifier(null);
+	setFsNudgePublisher(null);
+	setWatchStartedPublisher(null);
+	setRepoMetaPublisher(null);
+	setReviewPublisher(() => {});
+	setReviewFailedPublisher(() => {});
+	setReviewCommentHandler(null);
+	setRequestReviewHandler(null);
+	setTitleToolHost(null);
+	setSettingsPublisher(null);
+	setSessionCreatedPublisher(() => {});
+	setSessionStatePublisher(() => {});
+	setSessionDeletedPublisher(() => {});
+	setMcpLoginPublisher(() => {});
+	setMcpStatusPublisher(() => {});
+	setSessionResourcesPublisher(() => {});
+	setTurnPublisher(() => {});
+	setSessionPublisher(() => {});
+	setExtUiPublisher(() => {});
+	setLoginPublisher(() => {});
+	setJbcentralAppliedPublisher(() => {});
+	setJbcentralChangedPublisher(() => {});
+	setLogoutPublisher(() => {});
+	setModelsFilePublisher(null);
+	setModelListingPublisher(null);
 }
 
 async function serveStatic(pathname: string, staticDir: string): Promise<Response> {
