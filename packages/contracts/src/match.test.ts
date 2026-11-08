@@ -149,9 +149,13 @@ describe("matchFields tiers", () => {
 	test("folding a decomposed text grows linearly with its length", () => {
 		const nfd = (reps: number) => "Configuración déjà vu naïve café ".repeat(reps).normalize("NFD");
 		const time = (text: string) => {
-			const started = performance.now();
-			foldMatchText(text);
-			return performance.now() - started;
+			let best = Number.POSITIVE_INFINITY;
+			for (let run = 0; run < 3; run += 1) {
+				const started = performance.now();
+				foldMatchText(text);
+				best = Math.min(best, performance.now() - started);
+			}
+			return best;
 		};
 		expect(foldMatchText(nfd(2))).toBe(foldMatchText(nfd(2).normalize("NFC")));
 		const once = nfd(10_000);
