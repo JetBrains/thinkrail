@@ -108,3 +108,29 @@ describe("parseArgs", () => {
 		expect(parseArgs([], { THINKRAIL_PORT: "notanumber" }).port).toBe(DEFAULT_PORT);
 	});
 });
+
+describe("strict port and host validation", () => {
+	test("rejects empty and non-decimal --port values", () => {
+		for (const bad of ["", "0x10", "1e3", " 80", "+80", "-1", "80.5"]) {
+			expect(() => parseArgs([`--port=${bad}`], {})).toThrow("Invalid --port");
+		}
+	});
+
+	test("accepts plain decimal ports from 0 to 65535", () => {
+		expect(parseArgs(["--port=0"], {}).port).toBe(0);
+		expect(parseArgs(["--port=65535"], {}).port).toBe(65535);
+		expect(() => parseArgs(["--port=65536"], {})).toThrow("Invalid --port");
+	});
+
+	test("rejects an empty --host", () => {
+		expect(() => parseArgs(["--host="], {})).toThrow("Invalid --host");
+		expect(() => parseArgs(["--host", "  "], {})).toThrow("Invalid --host");
+	});
+
+	test("ignores empty or invalid env values and uses the defaults", () => {
+		for (const bad of ["", "0x10", "99999", "1e3"]) {
+			expect(parseArgs([], { THINKRAIL_PORT: bad }).port).toBe(DEFAULT_PORT);
+		}
+		expect(parseArgs([], { THINKRAIL_HOST: "" }).host).toBe(DEFAULT_HOST);
+	});
+});
