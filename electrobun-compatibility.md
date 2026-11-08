@@ -40,7 +40,7 @@ product contract (it then guards upstream's behavior instead).
 - **macOS title-bar double-click.** Owner [[module-desktop]], `titleBarDoubleClick.ts` plus preload
   listener and handler. **Removal gate:** the framework handles drag-region double-clicks
   ([electrobun#561](https://github.com/blackboardsh/electrobun/issues/561)); remove all three parts or
-  the window toggles twice. Verify `titleBarDoubleClick.test.ts` and the macOS title-bar probe.
+  the window toggles twice. Until then, re-check the mirrored app-region property name. Verify `titleBarDoubleClick.test.ts` and the macOS title-bar probe.
 - **Explicit navigation rules.** Owner [[module-desktop]], `externalNavigation.ts`. **Removal gate:**
   the documented `navigationRules` constructor option reaches native code. Verify
   `externalNavigation.test.ts` and the artifact navigation smoke.
