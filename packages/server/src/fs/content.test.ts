@@ -49,9 +49,38 @@ test("magic bytes name the media type before any filename is consulted", () => {
 	expect(classifyBytes(BYTES.encode("wOFF\u0000\u0000")).mime).toBe("font/woff");
 	expect(classifyBytes(BYTES.encode("wOF2\u0000\u0000")).mime).toBe("font/woff2");
 	expect(classifyBytes(new Uint8Array([0x00, 0x00, 0x01, 0x00, 0x01])).mime).toBe("image/x-icon");
-	expect(classifyBytes(new Uint8Array([0x42, 0x4d, 0x00, 0x01])).mime).toBe("image/bmp");
 	expect(classifyBytes(BYTES.encode("PK\u0003\u0004\u0000")).mime).toBe("application/zip");
 	expect(classifyBytes(BYTES.encode("PK\u0005\u0006\u0000")).mime).toBe("application/zip");
+});
+
+/** "BM" + zero reserved fields + a BITMAPINFOHEADER (size 40) at offset 14; 26 bytes total. */
+function minimalBmp(): Uint8Array {
+	const bytes = new Uint8Array(26);
+	bytes[0] = 0x42;
+	bytes[1] = 0x4d;
+	bytes.set([40, 0, 0, 0], 14);
+	return bytes;
+}
+
+test("BMP needs a structurally valid header; 'BM' prose stays text (#1224)", () => {
+	// Prose that happens to start with the two printable letters "BM" is text, not a broken image.
+	const prose = BYTES.encode("BM25 ranking notes\nplain text\n");
+	expect(classifyBytes(prose)).toEqual({ text: true });
+	expect(resourceMeta(prose, "notes.md")).toMatchObject({ text: true, mime: "text/markdown" });
+
+	// A minimal structurally valid header is still image/bmp.
+	expect(classifyBytes(minimalBmp())).toEqual({ text: false, mime: "image/bmp" });
+
+	// Two letters alone, a truncated header, a non-zero reserved field, or an unknown
+	// DIB header size do not prove a BMP.
+	expect(classifyBytes(new Uint8Array([0x42, 0x4d, 0x00, 0x01]))).toEqual({ text: false });
+	expect(classifyBytes(minimalBmp().subarray(0, 20))).toEqual({ text: false });
+	const reserved = minimalBmp();
+	reserved[6] = 0x42;
+	expect(classifyBytes(reserved).mime).toBeUndefined();
+	const os22x = minimalBmp();
+	os22x.set([64, 0, 0, 0], 14);
+	expect(classifyBytes(os22x).mime).toBeUndefined();
 });
 
 test("svg is sniffed as text with an image type, directly or behind an XML prolog", () => {

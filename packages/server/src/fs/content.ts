@@ -11,7 +11,6 @@ const MAGIC: ReadonlyArray<{ mime: string; bytes: readonly number[] }> = [
 	{ mime: "image/jpeg", bytes: [0xff, 0xd8, 0xff] },
 	{ mime: "image/gif", bytes: [0x47, 0x49, 0x46, 0x38, 0x37, 0x61] },
 	{ mime: "image/gif", bytes: [0x47, 0x49, 0x46, 0x38, 0x39, 0x61] },
-	{ mime: "image/bmp", bytes: [0x42, 0x4d] },
 	{ mime: "image/x-icon", bytes: [0x00, 0x00, 0x01, 0x00] },
 	{ mime: "application/pdf", bytes: [0x25, 0x50, 0x44, 0x46, 0x2d] },
 	{ mime: "application/zip", bytes: [0x50, 0x4b, 0x03, 0x04] },
@@ -68,6 +67,22 @@ function isAvif(bytes: Uint8Array): boolean {
 	return false;
 }
 
+/** DIB header sizes a real BMP carries at offset 14 (BITMAPCOREHEADER through BITMAPV5HEADER). */
+const BMP_DIB_HEADER_SIZES: ReadonlySet<number> = new Set([12, 40, 52, 56, 108, 124]);
+
+/**
+ * "BM" is two printable ASCII letters, so prose like "BM25 ranking notes" must not be claimed as
+ * an image: require the BITMAPFILEHEADER to be structurally valid — long enough to hold the
+ * 14-byte file header plus the smallest DIB header, reserved fields zero, and a known DIB header
+ * size (#1224). The mime is what the bytes prove, and two letters prove nothing.
+ */
+function isBmp(bytes: Uint8Array): boolean {
+	if (bytes.length < 26) return false;
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	if (view.getUint32(6) !== 0) return false; // reserved1 + reserved2
+	return BMP_DIB_HEADER_SIZES.has(view.getUint32(14, true));
+}
+
 function sniffMagic(bytes: Uint8Array): string | undefined {
 	if (
 		startsWith(bytes, [0x52, 0x49, 0x46, 0x46]) &&
@@ -76,6 +91,9 @@ function sniffMagic(bytes: Uint8Array): string | undefined {
 		return "image/webp";
 	}
 	if (isAvif(bytes)) return "image/avif";
+	if (startsWith(bytes, [0x42, 0x4d]) && isBmp(bytes)) {
+		return "image/bmp";
+	}
 	return MAGIC.find(({ bytes: magic }) => startsWith(bytes, magic))?.mime;
 }
 
