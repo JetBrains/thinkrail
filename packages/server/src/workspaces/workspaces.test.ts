@@ -748,6 +748,17 @@ test("creating after a rename skips the freed name whose worktree dir is still o
 	expect(existsSync(next.worktreePath)).toBe(true);
 });
 
+test("auto naming skips a long run of existing workspace-N branches in one pass", async () => {
+	for (let n = 1; n <= 60; n += 1) {
+		git(repo, "branch", `workspace-${n}`);
+	}
+
+	// One batched branch listing replaces one `show-ref` probe per candidate (#1229), so the
+	// allocation stays cheap no matter how many names are taken.
+	const ws = await createWorkspace("p1");
+	expect(ws.branch).toBe("workspace-61");
+});
+
 test("forgetWorkspace drops the record + returns it, but leaves the worktree for a separate reclaim", async () => {
 	const ws = await createWorkspace("p1");
 	expect(await worktrees()).toHaveLength(1);
