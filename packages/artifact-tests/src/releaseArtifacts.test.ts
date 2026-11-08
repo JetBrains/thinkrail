@@ -114,8 +114,37 @@ function writeSetupArtifact(path: string, sentinel: string) {
 	roots.push(stage);
 	// The Linux setup fixtures must be real tarballs: the collector repacks them.
 	writeFileSync(join(stage, "payload.txt"), sentinel);
-	const built = Bun.spawnSync(["tar", "-czf", path, "-C", stage, "payload.txt"]);
+	const built = Bun.spawnSync(
+		["tar", "-czf", path, "--owner=1001", "--group=1001", "--numeric-owner", "-C", stage, "."],
+		{ env: { ...process.env, COPYFILE_DISABLE: "1" } },
+	);
 	if (built.exitCode !== 0) throw new Error(`setup tarball fixture failed: ${built.stderr}`);
+}
+
+function readTarEntries(path: string) {
+	const archive = Bun.gunzipSync(readFileSync(path));
+	const decoder = new TextDecoder();
+	const entries: { name: string; uid: number; gid: number }[] = [];
+	for (let offset = 0; offset + 512 <= archive.length; ) {
+		const header = archive.subarray(offset, offset + 512);
+		if (header.every((byte) => byte === 0)) break;
+		const text = (start: number, end: number) =>
+			decoder.decode(header.subarray(start, end)).replace(/\0.*$/s, "");
+		const octal = (start: number, end: number) =>
+			Number.parseInt(text(start, end).trim() || "0", 8);
+		const size = octal(124, 136);
+		if (!"xgLK".includes(String.fromCharCode(header[156] ?? 0))) {
+			const prefix = text(345, 500);
+			const name = text(0, 100);
+			entries.push({
+				name: prefix ? `${prefix}/${name}` : name,
+				uid: octal(108, 116),
+				gid: octal(116, 124),
+			});
+		}
+		offset += 512 + Math.ceil(size / 512) * 512;
+	}
+	return entries;
 }
 
 function readSetupArtifact(path: string): string {
@@ -328,9 +357,15 @@ for (const target of targets) {
 			const root = fixture();
 			const result = collect(root, target.target, channel);
 			expect(result.exitCode).toBe(0);
-			expect(readSetupArtifact(join(root, "apps/desktop/dist", target.published))).toBe(
-				`${channel}:${target.target}`,
-			);
+			const publishedPath = join(root, "apps/desktop/dist", target.published);
+			expect(readSetupArtifact(publishedPath)).toBe(`${channel}:${target.target}`);
+			if (target.target.startsWith("bun-linux-")) {
+				const entries = readTarEntries(publishedPath);
+				expect(entries.map(({ name }) => name)).not.toContain(".");
+				expect(entries.map(({ name }) => name)).not.toContain("./");
+				expect(entries.length).toBeGreaterThan(0);
+				expect(entries.every(({ uid, gid }) => uid === 0 && gid === 0)).toBe(true);
+			}
 			const update = target.updates[channel];
 			const updateManifestPath = `apps/desktop/artifacts/${update.manifest}`;
 			const updateArchivePath = `apps/desktop/artifacts/${update.archive}`;
