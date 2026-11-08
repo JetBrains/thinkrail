@@ -22,7 +22,10 @@ bytes are** — the one byte-level classification every content read in the host
   listed node to a changed path (Windows' `relative()` would otherwise yield `src\auth`). (`.thinkrail/` is **not** hidden — it is shown like any
   other dir, so future host-managed content there stays visible; its ephemeral `context/` is kept out of
   git, not out of the tree.) `readFile` answers **`{ content, meta }`**: a file is read as bytes and
-  decoded only when it is text, so `content` is `""` for a byte-only resource and the client fetches
+  decoded only when it is text; with `{ maxBytes }` it opens the file once and reads it in 64 KiB chunks,
+  at most `maxBytes + 1` bytes in all, refusing a larger file with `CodedError("FILE_TOO_LARGE")` before
+  classifying — whatever the file grows to meanwhile, and without allocating the cap up front (`maxBytes`
+  must be a non-negative integer), so `content` is `""` for a byte-only resource and the client fetches
   those bytes over the host's `/files` route instead of receiving mojibake.
   **`resolveWorktreeFile(workspaceId, path)`** returns the
   contained absolute path for the host to stream a file's raw bytes over HTTP (the `/files/…` route
@@ -30,8 +33,12 @@ bytes are** — the one byte-level classification every content read in the host
   `changes` module's atomic writes. Lexical escapes, `.git`, and an existing symlink chain whose resolved
   target leaves the worktree are refused; missing leaf paths are allowed so a deleted file can be
   restored. `changes` passes `{ followLeaf: false }` so containment validates through the parent and its
-  own `lstat` can reject even an escaping leaf symlink without following it. This module owns the path
-  safety; its callers own the streaming and the writing. **`workspaceRelativePath(root, path)`** is the one
+  own `lstat` can reject even an escaping leaf symlink without following it. **`readableFileSize(root,
+  path)`** applies the same rule under a root without a workspace lookup: the byte size of the regular
+  file `readFile` would serve, `"missing"` for anything it would refuse or cannot read as a file (an
+  escape, `.git`, a directory, a gone, dangling or looping path), `null` when the stat failed otherwise
+  (a permission error) — `host` injects it into the search palette's file hits so none leads to a read
+  that fails. This module owns the path safety; its callers own the streaming and the writing. **`workspaceRelativePath(root, path)`** is the one
   conversion from a native or absolute path to the wire's worktree-relative POSIX form (architecture
   Decision 22): resolved against the root, `null` when outside (a name such as `..env` is inside), `""` for
   the root itself. `reviews` normalizes anchors through it. It keeps host
@@ -58,10 +65,10 @@ bytes are** — the one byte-level classification every content read in the host
   fallback and treating
   `null` bytes as absence (`hash`/`byteLength` null, `text: true` — nothing to decode, and the empty
   string it pairs with is valid text).
-- **Public surface (barrel):** `readDir`, `readFile`, `resolveWorktreeFile`, `workspaceRelativePath`, `classifyBytes`,
+- **Public surface (barrel):** `readDir`, `readFile`, `readableFileSize`, `resolveWorktreeFile`, `workspaceRelativePath`, `classifyBytes`,
   `CONTENT_SNIFF_BYTES`, `mimeFromPath`, `hashBytes`, `decodeText`, `resourceMeta`.
-- **Allowed deps:** `persistence` (workspace lookup); `contracts` (`FileNode`, `ResourceMeta`); Node
-  `fs`/`path`/`crypto`.
+- **Allowed deps:** `persistence` (workspace lookup); `contracts` (`FileNode`, `ResourceMeta`); `shared`
+  (`CodedError`); Node `fs`/`path`/`crypto`.
 - **Forbidden:** `host`; sibling features.
 
 ## Get right

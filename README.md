@@ -58,9 +58,10 @@ create the tools it needs based on how you actually work.
   [Nemotron](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b) speech model (32 languages,
   detected automatically); the one-time ~750 MB download happens only when you first ask for it.
   Settings → Voice input turns it off or deletes the download.
-- **Find chats and run commands from one box.** `⌘K` (or a double tap of Shift) opens a palette that finds
-  chats, workspaces and projects across every open project, runs the app's commands with their shortcuts
-  shown, and jumps to a Settings section. With nothing typed it lists the chats waiting for you.
+- **Find anything from one box.** `⌘K` (or a double tap of Shift) opens a palette that finds chats and the
+  messages inside them, workspaces and projects, files in the current workspace, specs and plans — with a
+  preview pane on `⌘I` — runs the app's commands with their shortcuts shown, and jumps to a Settings
+  section. With nothing typed it lists the chats waiting for you.
 - **Specs as ground truth.** A connected graph of `SPEC.md` files lives beside the code; the agent reads,
   searches, and maintains it through dedicated `spec_*` tools, so intent survives the session. The
   read-only Specs tool renders the graph as a tree in the workbench.

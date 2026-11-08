@@ -1,3 +1,5 @@
+import { MAX_SEARCH_PREVIEW_BYTES } from "@thinkrail/contracts";
+import { t } from "@thinkrail/locales/react";
 import {
 	type ResourceEnvironment,
 	ResourceEnvironmentProvider,
@@ -17,9 +19,9 @@ import { openFileComparisonInTab, openFileInTab } from "../panels/openTabs";
 import { resourceBytesUrl } from "../panels/resourcePane";
 import { SendReviewButton } from "../panels/SendReviewButton";
 import { useFileReview } from "../panels/useReviewCommenting";
-import { selectFileChangeSince, useAppStore } from "../store";
+import { selectFileChangeSince, selectHostSearchReady, useAppStore } from "../store";
 import { resolveThinkrailShikiTheme } from "../themes";
-import { getTransport } from "../transport";
+import { getTransport, wsErrorCode } from "../transport";
 
 registerBundledResourceRenderers();
 
@@ -53,6 +55,41 @@ const HOST: ResourceHost = {
 		}),
 	FileReview,
 	ReviewSend,
+};
+
+function cappedBytesUrl(workspaceId: string, path: string, oid?: string | null): string {
+	const url = resourceBytesUrl(workspaceId, path, oid);
+	return `${url}${url.includes("?") ? "&" : "?"}maxBytes=${MAX_SEARCH_PREVIEW_BYTES}`;
+}
+
+export const PALETTE_PREVIEW_HOST: ResourceHost = {
+	...HOST,
+	bytesUrl: cappedBytesUrl,
+	readFile: (workspaceId, path) => {
+		if (!selectHostSearchReady(useAppStore.getState())) {
+			return Promise.reject(new Error(t("search.palette.previewOffline")));
+		}
+		return getTransport()
+			.request("fs.readFile", { workspaceId, path, maxBytes: MAX_SEARCH_PREVIEW_BYTES })
+			.catch((error: unknown) => {
+				throw wsErrorCode(error) === "FILE_TOO_LARGE"
+					? new Error(t("search.palette.previewTooLarge"))
+					: error;
+			});
+	},
+	subscribeFileChanges: (workspaceId, onChange) =>
+		useAppStore.subscribe((state, previous) => {
+			if (!selectHostSearchReady(state)) return;
+			if (
+				!selectHostSearchReady(previous) ||
+				state.welcomeGeneration !== previous.welcomeGeneration
+			) {
+				onChange(null);
+				return;
+			}
+			const paths = selectFileChangeSince(state, previous, workspaceId);
+			if (paths !== undefined) onChange(paths);
+		}),
 };
 
 export function AppResourceHost({ children }: { children: ReactNode }) {

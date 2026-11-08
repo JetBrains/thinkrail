@@ -186,7 +186,7 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   offer per-extension setting switches only to a host that stores `extensionSettings`. `openSpeechSocket()`
   opens the dictation side socket (`/speech?protocol=`) on the same endpoint for [[submodule-web-speech]].
   It carries binary audio and never a request. `server.welcome`'s `speech` seed and every `speech.changed`
-  push install the store's `speech` status whole; `supportsSpeech` (v106) gates the same way.
+  push install the store's `speech` status whole; `supportsSpeech` (v107) gates the same way.
   `supportsPlanReview` is exported
   because a sibling panel (`PlanPane`) gates the plan-review UI on it — an older host serves no
   `todo.startReview`/`reviewAll`, so the client must not offer them; `supportsPlanSummaryGeneration` (v69) is

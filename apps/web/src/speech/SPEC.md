@@ -165,7 +165,7 @@ extension had to adopt and wire up. It was replaced so voice is a property of th
 
 `micState(status, availability, microphoneBlocked)` gives each field's mic one of these states:
 
-- `hidden`: a pre-v106 host (`speech === null`);
+- `hidden`: a pre-v107 host (`speech === null`);
 - `unavailable` with a reason: `unsupported-platform` (the host has no pinned runtime),
   `insecure-origin`, or `unsupported-browser`;
 - `installing` with bytes;

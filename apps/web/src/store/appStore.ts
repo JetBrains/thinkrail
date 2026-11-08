@@ -1000,6 +1000,7 @@ interface AppState {
 	connectionGeneration: number;
 	welcomeGeneration: number;
 	protocolVersion: number | null;
+	welcomeProtocolVersion: number | null;
 	hostPlatform: HostPlatform | null;
 	hostAppVersion: string | null;
 	hostUpdate: HostUpdateNotice | null;
@@ -1138,7 +1139,7 @@ interface AppState {
 	fontWeightOffset: number;
 	userFonts: UserFontsSnapshot | null;
 	installUserFonts: (snapshot: UserFontsSnapshot | null) => void;
-	/** Voice input as the host reports it; `null` before a v106 welcome or from an older host. */
+	/** Voice input as the host reports it; `null` before a v107 welcome or from an older host. */
 	speech: SpeechStatus | null;
 	installSpeechStatus: (status: SpeechStatus | null) => void;
 	onboardingDismissed: boolean;
@@ -2334,6 +2335,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	connectionGeneration: 0,
 	welcomeGeneration: 0,
 	protocolVersion: null,
+	welcomeProtocolVersion: null,
 	hostPlatform: null,
 	hostAppVersion: null,
 	hostUpdate: null,
@@ -2651,6 +2653,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const openProjects = sortProjects(projects.filter((project) => project.closed !== true));
 			return {
 				protocolVersion,
+				welcomeProtocolVersion: protocolVersion,
 				workspaceSettlingSupported: supportsWorkspaceSettling(protocolVersion),
 				resourceSnapshots: supportsChatResources(protocolVersion)
 					? staleChatResources(state.resourceSnapshots)
