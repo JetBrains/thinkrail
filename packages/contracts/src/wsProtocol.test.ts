@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
 	DEFAULT_CONFIG,
+	isSettledRemovalDays,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
 	RECENT_MODELS_LIMIT,
@@ -57,6 +58,7 @@ import {
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	SESSION_TITLE_MAX_LENGTH,
+	SETTLED_REMOVAL_PROTOCOL_VERSION,
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
@@ -287,10 +289,22 @@ test("client error reports are pinned to v90", () => {
 });
 
 test("host search and its previews are pinned to v106", () => {
-	expect(PROTOCOL_VERSION).toBe(106);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SEARCH_PROTOCOL_VERSION);
 	expect(SEARCH_PROTOCOL_VERSION).toBe(106);
 	expect(WS_METHODS.searchQuery).toBe("search.query");
 	expect(WS_METHODS.searchPreview).toBe("search.preview");
+});
+
+test("settled workspace removal is pinned to v107", () => {
+	expect(PROTOCOL_VERSION).toBe(107);
+	expect(SETTLED_REMOVAL_PROTOCOL_VERSION).toBe(107);
+	expect(WS_METHODS.workspaceRemovalCheck).toBe("workspace.removalCheck");
+	expect(WS_METHODS.workspaceRemoveSettled).toBe("workspace.removeSettled");
+	expect(DEFAULT_CONFIG.settledRemovalDays).toBeNull();
+	expect(isSettledRemovalDays(null)).toBe(true);
+	expect(isSettledRemovalDays(30)).toBe(true);
+	expect(isSettledRemovalDays(0)).toBe(false);
+	expect(isSettledRemovalDays(1.5)).toBe(false);
 });
 
 test("project rename is pinned to v85", () => {

@@ -18,6 +18,7 @@ export {
 } from "./creations";
 export {
 	backfillWorkspaceActivity,
+	checkWorkspaceRemoval,
 	completeInitialTerminalReservation,
 	ensureWorkspaceScratchDir,
 	forgetWorkspace,
@@ -31,8 +32,10 @@ export {
 	recordWorkspaceActivity,
 	recordWorkspaceHead,
 	refreshUserOwnedWorkspace,
+	removeCleanWorktree,
 	removeWorkspace,
 	renameWorkspace,
+	restoreCleanWorktree,
 	seedWorkspaceHead,
 	settleWorkspace,
 	setWorkspaceDiffBase,

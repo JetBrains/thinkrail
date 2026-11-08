@@ -446,7 +446,10 @@ re-opened transcripts provider-valid.
     returned result is not persisted ahead of attach-time repair. `disposeAllSessions` remains the synchronous
     emergency stop, but registers its best-effort child cascades
     in the same pending set; `getSessionWorkspaceId(sessionId)` (the live session→workspace
-    lookup the host's `set_title` handler keys on); `removeSession`/`disposeAllSessions`;
+    lookup the host's `set_title` handler keys on); **`hasBusySession(workspaceId)`** (true while a session
+    there is preparing, compacting, holding an admitted prompt's pre-flight or held reservation, working,
+    waiting for input, or holding queued messages — the host's
+    long-settled removal guard); `removeSession`/`disposeAllSessions`;
     **`removeWorkspaceSessions(workspaceId, cwd?)`** (the **archive teardown**: close session admission for
     the workspace before its first await, capture every registered parent, synchronously close its resource
     owners, and start parent abort/removal while concurrently draining preparations from the retired

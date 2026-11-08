@@ -1452,6 +1452,8 @@ export interface AppConfig extends ThemePreference {
 	terminalWindowsShell: TerminalWindowsShell;
 	/** Idle days after which a quiet workspace settles onto its project's shelf; `null` = never. */
 	settleIdleDays: number | null;
+	/** Days a workspace stays settled before the app suggests removing it; `null` = never suggest. */
+	settledRemovalDays: number | null;
 	disabledExtensions: string[];
 	/** Values of settings bundled extensions declare, by extension name then setting key. */
 	extensionSettings: ExtensionSettingValues;
@@ -1591,6 +1593,32 @@ export function isSettleIdleDays(value: unknown): value is number | null {
 			value <= SETTLE_IDLE_DAYS.max)
 	);
 }
+
+export const SETTLED_REMOVAL_DAYS = { min: 1, max: 365 } as const;
+
+export function isSettledRemovalDays(value: unknown): value is number | null {
+	return (
+		value === null ||
+		(typeof value === "number" &&
+			Number.isInteger(value) &&
+			value >= SETTLED_REMOVAL_DAYS.min &&
+			value <= SETTLED_REMOVAL_DAYS.max)
+	);
+}
+
+/** Uncommitted files and unpushed commits in a worktree; `null` = git could not answer (unsafe). */
+export interface WorkspaceRemovalCheck {
+	id: string;
+	dirty: number | null;
+	unpushed: number | null;
+}
+
+/** Why the host kept a settled workspace the user asked to remove. */
+export type SettledRemovalRefusal = "changed" | "running" | "unsafe";
+
+export type SettledRemovalResult =
+	| { removed: true }
+	| { removed: false; reason: SettledRemovalRefusal };
 
 export const SYSTEM_LOCALE_PREFERENCE = "system";
 
@@ -1800,6 +1828,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	jbcentralQuotaEnabled: true,
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
 	settleIdleDays: SETTLE_IDLE_DAYS.default,
+	settledRemovalDays: null,
 	disabledExtensions: [],
 	extensionSettings: {},
 	disabledPackages: [],

@@ -11,6 +11,7 @@ import {
 	type Project,
 	type SubagentOverride,
 	type Workspace,
+	type WorkspaceRemovalCheck,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
@@ -18,6 +19,7 @@ import {
 	assertSafeRef,
 	canonicalPath,
 	changedFileArgs,
+	countPushDivergence,
 	currentBranch,
 	git,
 	gitAsync,
@@ -716,6 +718,96 @@ export async function reclaimWorktree(ws: Workspace): Promise<void> {
 export async function removeWorkspace(id: string): Promise<void> {
 	const ws = forgetWorkspace(id);
 	if (ws) await reclaimWorktree(ws);
+}
+
+export async function removeCleanWorktree(ws: Workspace): Promise<boolean> {
+	if (ws.kind === "external") return true;
+	if (ws.kind === "default") return false;
+	const project = loadProjects().find((p) => p.id === ws.projectId);
+	if (!project || resolve(ws.worktreePath) === resolve(project.path)) return false;
+	const removed = await gitAsync(project.path, ["worktree", "remove", ws.worktreePath], {
+		timeoutMs: SLOW_GIT_TIMEOUT_MS,
+	});
+	return removed.ok;
+}
+
+export async function restoreCleanWorktree(ws: Workspace): Promise<boolean> {
+	if (ws.kind === "external") return true;
+	const project = loadProjects().find((p) => p.id === ws.projectId);
+	if (!project || ws.kind === "default") return false;
+	assertSafeRef(ws.branch);
+	const added = await gitAsync(project.path, ["worktree", "add", ws.worktreePath, ws.branch], {
+		timeoutMs: SLOW_GIT_TIMEOUT_MS,
+	});
+	if (!added.ok) return false;
+	try {
+		ensureWorkspaceScratchDir(ws);
+	} catch (error) {
+		log.warn(`scratch dir was not reseeded for ${ws.id}`, error as Error);
+	}
+	return true;
+}
+
+const REMOVAL_CHECK_CONCURRENCY = 4;
+
+function nulFieldCount(output: string): number {
+	return output.split("\0").filter((field) => field.length > 0).length;
+}
+
+async function uncommittedFiles(ws: Workspace): Promise<number | null> {
+	const [status, flags] = await Promise.all([
+		gitAsync(
+			ws.worktreePath,
+			["status", "--porcelain=v1", "-z", "--untracked-files=normal", "--no-renames"],
+			{ raw: true },
+		),
+		gitAsync(ws.worktreePath, ["ls-files", "-v", "-z"], { raw: true }),
+	]);
+	if (!status.ok || !flags.ok) return null;
+	const hidesEdits = flags.out.split("\0").some((entry) => /^[a-zS]/.test(entry));
+	return hidesEdits ? null : nulFieldCount(status.out);
+}
+
+async function unpushedCommits(ws: Workspace): Promise<number | null> {
+	const head = await gitAsync(ws.worktreePath, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
+	if (!head.ok || head.out.trim() !== ws.branch) return null;
+	const divergence = await countPushDivergence(ws.worktreePath, ws.branch);
+	if (divergence) return divergence.ahead;
+	const remotes = await gitAsync(ws.worktreePath, ["remote"]);
+	if (!remotes.ok) return null;
+	if (!remotes.out.trim()) return 0;
+	const counted = await gitAsync(ws.worktreePath, [
+		"rev-list",
+		"--count",
+		"HEAD",
+		"--not",
+		"--remotes",
+		"--",
+	]);
+	if (!counted.ok) return null;
+	const parsed = Number.parseInt(counted.out, 10);
+	return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+export async function checkWorkspaceRemoval(ids: string[]): Promise<WorkspaceRemovalCheck[]> {
+	const byId = new Map(loadWorkspaces().map((workspace) => [workspace.id, workspace]));
+	const results: WorkspaceRemovalCheck[] = new Array(ids.length);
+	const queue = ids.map((id, index) => ({ id, index }));
+	await Promise.all(
+		Array.from({ length: Math.min(REMOVAL_CHECK_CONCURRENCY, queue.length) }, async () => {
+			for (let next = queue.shift(); next !== undefined; next = queue.shift()) {
+				const ws = byId.get(next.id);
+				const [dirty, unpushed] = ws
+					? await Promise.all([
+							uncommittedFiles(ws).catch(() => null),
+							unpushedCommits(ws).catch(() => null),
+						])
+					: [null, null];
+				results[next.index] = { id: next.id, dirty, unpushed };
+			}
+		}),
+	);
+	return results;
 }
 
 export async function workspaceDiffStats(id: string): Promise<DiffStats> {

@@ -678,8 +678,23 @@ enabled/confirmed choice before entering analytics attribution.
   callback calls `recordWorkspaceHead`, with `watch`'s watch-started nudge wired to `seedWorkspaceHead` so
   first admission seeds and watcher recreation detects a HEAD move made while unwatched. Reading a result, selecting a workspace, or opening
   files never stamps — "looking is not working" is the user-visible rule. `workspace.settle` /
-  `workspace.unsettle` are thin handlers over the module; settling never touches disk, and
-  `workspace.remove` stays the only teardown. Starting `pr.open` itself stamps activity before its first
+  `workspace.unsettle` are thin handlers over the module; settling never touches disk.
+  **`workspace.removeSettled { id, lastActiveAt }`** is the guarded form of the same teardown, for the
+  long-settled review (#1264): under `withChangeLock(id)` it keeps the row (`{ removed: false, reason }`)
+  when the user pinned it or worked in it since the client looked (`changed`), a session there is busy
+  (`hasBusySession`, `running`), a fresh review lookup is unreliable or open, or `checkWorkspaceRemoval`
+  reports any uncommitted file, unpushed commit, or unknown count (`unsafe`); it re-reads the record
+  after the awaits, then deletes the worktree with **`removeCleanWorktree`** (plain `git worktree remove`,
+  never `--force`, no `rm` fallback) *before* dropping the record — the git check is a sample, and a file a
+  terminal writes after it makes git refuse, so the row is kept (`unsafe`) instead of the forced archive
+  deleting it. If the record was pinned or worked in, or a session turned busy, while git ran, it
+  re-adds the clean checkout on the kept branch (**`restoreCleanWorktree`**; ignored files such as
+  `node_modules` are not restored) and keeps the row (`changed` / `running`). Only then does it archive,
+  without a second reclaim. One row per request so a long review
+  never outlives the client's request timeout. Known limit: an external git process that detaches HEAD
+  and commits between the final check and git's removal of a clean worktree is not caught (closing it would
+  mean holding `HEAD.lock`, which a crash would leave behind). A stop between the two leaves a record without a worktree,
+  never a deleted record with work on disk. Starting `pr.open` itself stamps activity before its first
   await (opening a PR is work, so it reactivates a parked row) and persists any returned PR against the
   exact post-dirty-read branch reported by `openPr` (then strips that host-only context from the wire), so
   an external checkout switch during the mutation can neither drop nor misattach the created PR; accepting

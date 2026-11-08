@@ -59,6 +59,7 @@ import {
 	selectAutoSettledCounts,
 	selectProjectIsRunning,
 	selectProjectNeedsAttention,
+	selectSettledRemovalCandidates,
 	selectSupportsOnboarding,
 	selectWorkspaceIsRunning,
 	selectWorkspaceNeedsAttention,
@@ -78,6 +79,8 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { RemoveWorkspaceDialog } from "./RemoveWorkspaceDialog";
+import { SettledRemovalDialog } from "./SettledRemovalDialog";
+import { announceSettledRemovals, SETTLED_REMOVAL_NOTICE_QUIET_MS } from "./settledRemovalNotice";
 import {
 	announceSettledShelf,
 	SETTLED_NOTICE_QUIET_MS,
@@ -133,6 +136,7 @@ export function ProjectTree() {
 	const supportsSettling = useAppStore((s) => s.workspaceSettlingSupported);
 	const sessionStateByWorkspace = useAppStore((s) => s.sessionStateByWorkspace);
 	const settleIdleDays = useAppStore((s) => s.settleIdleDays);
+	const settledRemovalDays = useAppStore((s) => s.settledRemovalDays);
 	const settledShelfExpanded = useAppStore((s) => s.settledShelfExpanded);
 	const settledShelfShown = useAppStore((s) => s.settledShelfShown);
 	const now = useNow();
@@ -207,6 +211,17 @@ export function ProjectTree() {
 		const timer = setTimeout(announceSettledShelf, SETTLED_NOTICE_QUIET_MS);
 		return () => clearTimeout(timer);
 	}, [autoSettledKey]);
+
+	const removalCandidates = selectSettledRemovalCandidates(
+		{ ...partitionState, settledRemovalDays, protocolVersion },
+		now,
+	);
+	const removalKey = removalCandidates.map((row) => row.workspace.id).join(",");
+	useEffect(() => {
+		if (removalKey === "") return;
+		const timer = setTimeout(announceSettledRemovals, SETTLED_REMOVAL_NOTICE_QUIET_MS);
+		return () => clearTimeout(timer);
+	}, [removalKey]);
 
 	const loadWorkspaces = useCallback(async (projectId: string) => {
 		await loadProjectWorkspaces(projectId);
@@ -341,6 +356,9 @@ export function ProjectTree() {
 									partition={selectWorkspacePartition(partitionState, project.id, now)}
 									shelfExpanded={settledShelfExpanded[project.id] === true}
 									shelfShown={settledShelfShown[project.id] ?? SETTLED_SHELF_PAGE}
+									removableCount={
+										removalCandidates.filter((row) => row.workspace.projectId === project.id).length
+									}
 									renderRow={(ws, settled) =>
 										workspaceCreations[ws.id] ? null : (
 											<WorkspaceRow
@@ -420,6 +438,7 @@ export function ProjectTree() {
 			) : null}
 
 			{dialogs}
+			<SettledRemovalDialog />
 		</nav>
 	);
 }
@@ -430,6 +449,7 @@ function SettledPartition({
 	partition,
 	shelfExpanded,
 	shelfShown,
+	removableCount,
 	renderRow,
 }: {
 	enabled: boolean;
@@ -437,6 +457,7 @@ function SettledPartition({
 	partition: ReturnType<typeof selectWorkspacePartition>;
 	shelfExpanded: boolean;
 	shelfShown: number;
+	removableCount: number;
 	renderRow: (workspace: Workspace, settled: SettledReason | null) => ReactNode;
 }) {
 	const t = useT();
@@ -476,6 +497,16 @@ function SettledPartition({
 						{t("panels.projectTree.settledShelf", { total: settledCount })}
 					</span>
 				</button>
+				{removableCount > 0 ? (
+					<button
+						type="button"
+						data-testid="settled-shelf-review-removal"
+						onClick={() => useAppStore.getState().setSettledRemovalReview({ projectId })}
+						className="shrink-0 rounded-sm px-4 text-feedback-warning outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary"
+					>
+						{t("panels.settledRemoval.reviewShelf", { count: removableCount })}
+					</button>
+				) : null}
 			</div>
 			{shelfExpanded ? (
 				<ul className="flex flex-col gap-2" data-testid="settled-shelf-rows">

@@ -29,6 +29,7 @@ import {
 	recordWorkspaceActivity,
 	recordWorkspaceHead,
 	refreshUserOwnedWorkspace,
+	removeCleanWorktree,
 	removeWorkspace,
 	renameWorkspace,
 	seedWorkspaceHead,
@@ -761,6 +762,18 @@ test("forgetWorkspace drops the record + returns it, but leaves the worktree for
 	expect(registeredWorktrees(repo)).not.toContain(ws.worktreePath);
 
 	expect(forgetWorkspace(ws.id)).toBeNull();
+});
+
+test("removeCleanWorktree refuses a worktree with new work and removes a clean one, keeping the branch", async () => {
+	const ws = await createWorkspace("p1");
+	writeFileSync(join(ws.worktreePath, "draft.txt"), "draft\n");
+	expect(await removeCleanWorktree(ws)).toBe(false);
+	expect(existsSync(join(ws.worktreePath, "draft.txt"))).toBe(true);
+
+	rmSync(join(ws.worktreePath, "draft.txt"));
+	expect(await removeCleanWorktree(ws)).toBe(true);
+	expect(existsSync(ws.worktreePath)).toBe(false);
+	expect(gitOut(repo, "show-ref", "--verify", `refs/heads/${ws.branch}`)).not.toBe("");
 });
 
 test.skipIf(process.platform === "win32").each([false, true])(

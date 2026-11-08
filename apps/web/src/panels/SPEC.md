@@ -98,8 +98,15 @@ treatment.
   burst, not its first row), an info toast reads *Moved N quiet workspaces to Settled*, names the rules,
   and offers **Show**, which expands those projects and their shelves. Without it, the first launch after
   an upgrade empties most of a long rail at once with no explanation. Nothing about settling touches
-  disk: the shelf is a list state, and each row's own *Remove* stays the only teardown — there is no bulk
-  removal yet, because a safe one needs a non-blocking, crash-safe host teardown first (#688). Why this
+  disk: the shelf is a list state. **Long-settled removal is opt-in and always reviewed** (#1264): with
+  `settledRemovalDays` set, `selectSettledRemovalCandidates` names rows settled that long;
+  `settledRemovalNotice` raises a warning toast when a candidate it has never announced appears (host-qualified
+  localStorage keeps the union of announced ids, so rows hydrating in a different order never re-announce) with **Review**, and the shelf header shows *Review N to remove* while any remain.
+  `SettledRemovalDialog` snapshots the candidates, asks `workspace.removalCheck`, keeps every row with
+  uncommitted changes, unpushed commits, or an unknown answer (shown, not selectable), lets the user untick
+  the rest, and sends one `workspace.removeSettled` per row; the host rechecks each. Nothing is removed
+  without that confirmation, because removal deletes chats and untracked files. A free-form bulk *Remove
+  all settled* still waits on #688's crash-safe teardown. Why this
   shape (recorded once): an explicit-archive-only rail left
   the housekeeping to the user (48 rows on the author's machine), a pure recency fold had no way to say
   "done", and a hidden Archived tier made rows disappear without a visible home — the shelf keeps every
@@ -984,6 +991,8 @@ a project picker, the prompt hero, and the reused
   **`WorkspacesSettings`** (the **Workspaces** section, listed only at
   `protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION`) — one `SettingsRadioCards` group, **Settle idle
   workspaces after**: 1 / 3 / 7 (default) / 14 days / Never, written as `settings.update { settleIdleDays }`
+  — and, at `SETTLED_REMOVAL_PROTOCOL_VERSION`, **Suggest removing settled workspaces after**: Never
+  (default) / 14 / 30 / 90 days, written as `settings.update { settledRemovalDays }`
   (`null` for Never) and converging through `settings.changed`; a valid host-configured non-preset value
   leaves the preset cards unselected rather than falsely displaying the default. The default is a week, not
   a long weekend: merged/closed PRs already settle at once, so the idle rule only catches dormant work and

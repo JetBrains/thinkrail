@@ -48,6 +48,7 @@ import type {
 import {
 	canMarkCompletionUnread,
 	firstPromptOfTexts,
+	isSessionWorking,
 	isTranscriptMessageRole,
 	normalizeSessionTitle,
 	sameModel,
@@ -536,6 +537,18 @@ function stateFromDisk(sessionId: string, manager: SessionManager, legacy = fals
 
 export function getSessionState(sessionId: string): SessionState {
 	return stateFromEntry(mustGetEntry(sessionId));
+}
+
+export function hasBusySession(workspaceId: string): boolean {
+	if ((pendingSessionPreparations.get(workspaceId)?.size ?? 0) > 0) return true;
+	for (const [sessionId, entry] of sessions) {
+		if (entry.workspaceId !== workspaceId || isSessionDeleted(sessionId, workspaceId)) continue;
+		if (entry.manualCompactionInProgress || entry.piCompactionInProgress) return true;
+		if (entry.preflightReleases.size > 0 || entry.heldReservations.size > 0) return true;
+		const state = stateFromEntry(entry);
+		if (isSessionWorking(state) || state.needsInput !== null || state.queuedCount > 0) return true;
+	}
+	return false;
 }
 
 function stateRecordForEntry(entry: Entry): SessionStateRecord {

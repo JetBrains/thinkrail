@@ -133,7 +133,13 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   it); the active workspace while **`activeWorkspaceLiveLatch`** holds is live; a `review.state` of
   `merged`/`closed` with a valid `changedAt` and no newer `lastActiveAt` settles (an incomplete settled
   snapshot stays live and refreshable); an open review keeps live;
-  otherwise idle longer than **`settleIdleDays`** (mirrored from `AppConfig`, `null` = never) settles. The caller picks the **`order`** (`WorkspaceOrder`): `"created"` (the default) reverses the host's
+  otherwise idle longer than **`settleIdleDays`** (mirrored from `AppConfig`, `null` = never) settles.
+  `settledSince` dates a settled row (override `settledAt`, review `changedAt`, idle `lastActiveAt +
+  settleIdleDays`), and `selectSettledRemovalCandidates` returns rows settled at least
+  **`settledRemovalDays`** (mirrored, `null` = never) and only on a host at
+  `SETTLED_REMOVAL_PROTOCOL_VERSION` (`supportsSettledRemoval`; a rolled-back host can still carry the
+  persisted setting); `settledRemovalReview` (`{ projectId | null } |
+  null`) is which review dialog is open. The caller picks the **`order`** (`WorkspaceOrder`): `"created"` (the default) reverses the host's
   list — its registry insertion order, oldest created first — so both lists run newest created first: the
   rail's order, where a new workspace lands on top and a row never jumps while you work; `"recent"` sorts
   newest `lastActiveAt` first (newest created breaks ties) for the topbar's switcher; the Default row stays

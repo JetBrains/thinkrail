@@ -1,7 +1,15 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
@@ -1122,6 +1130,189 @@ test("a review send that names its chat lands every file's drafts there as one p
 		cleanup();
 	}
 });
+
+test("removeSettled removes a clean quiet workspace and keeps one with new work", async () => {
+	const clean = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Clean quiet" },
+		CTX,
+	)) as Workspace;
+	const dirty = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Dirty quiet" },
+		CTX,
+	)) as Workspace;
+	writeFileSync(join(dirty.worktreePath, "draft.txt"), "draft\n");
+
+	expect(
+		await handleRequest("workspace.removalCheck", { ids: [clean.id, dirty.id, "gone"] }, CTX),
+	).toEqual([
+		{ id: clean.id, dirty: 0, unpushed: 0 },
+		{ id: dirty.id, dirty: 1, unpushed: 0 },
+		{ id: "gone", dirty: null, unpushed: null },
+	]);
+
+	expect(
+		await handleRequest(
+			"workspace.removeSettled",
+			{ id: clean.id, lastActiveAt: (clean.lastActiveAt ?? 0) - 1 },
+			CTX,
+		),
+	).toEqual({ removed: false, reason: "changed" });
+	expect(
+		await handleRequest(
+			"workspace.removeSettled",
+			{ id: dirty.id, lastActiveAt: dirty.lastActiveAt },
+			CTX,
+		),
+	).toEqual({ removed: false, reason: "unsafe" });
+	expect(
+		await handleRequest(
+			"workspace.removeSettled",
+			{ id: clean.id, lastActiveAt: clean.lastActiveAt },
+			CTX,
+		),
+	).toEqual({ removed: true });
+
+	const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
+	expect(rows.map((row) => row.id)).not.toContain(clean.id);
+	expect(rows.map((row) => row.id)).toContain(dirty.id);
+	const def = rows.find((row) => row.kind === "default");
+	if (!def) throw new Error("expected the ensured Default workspace");
+	expect(
+		await handleRequest("workspace.removeSettled", { id: def.id, lastActiveAt: Date.now() }, CTX),
+	).toEqual({ removed: false, reason: "unsafe" });
+});
+
+test.each([
+	true,
+	false,
+])("removeSettled keeps a workspace with commits that exist only locally (remote fetched: %s)", async (fetched) => {
+	const remote = mkdtempSync(join(tmpdir(), "trpi-handlers-remote-"));
+	try {
+		git(remote, "init", "--bare", "-q");
+		git(repo, "remote", "add", "backup", remote);
+		if (fetched) {
+			git(repo, "push", "-q", "backup", "HEAD:refs/heads/main");
+			git(repo, "fetch", "-q", "backup");
+		}
+		const ws = (await handleRequest(
+			"workspace.create",
+			{ projectId: "p1", name: "Local commits" },
+			CTX,
+		)) as Workspace;
+		writeFileSync(join(ws.worktreePath, "local.txt"), "local\n");
+		git(ws.worktreePath, "add", "-A");
+		git(ws.worktreePath, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "local");
+
+		const [check] = (await handleRequest("workspace.removalCheck", { ids: [ws.id] }, CTX)) as {
+			unpushed: number | null;
+		}[];
+		expect(check?.unpushed ?? 0).toBeGreaterThan(0);
+		const current = (
+			(await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[]
+		).find((row) => row.id === ws.id);
+		expect(
+			await handleRequest(
+				"workspace.removeSettled",
+				{ id: ws.id, lastActiveAt: current?.lastActiveAt },
+				CTX,
+			),
+		).toEqual({ removed: false, reason: "unsafe" });
+		expect(existsSync(ws.worktreePath)).toBe(true);
+	} finally {
+		rmSync(remote, { recursive: true, force: true });
+	}
+});
+
+test("removeSettled keeps a worktree with edits hidden by index flags", async () => {
+	const ws = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Hidden edits" },
+		CTX,
+	)) as Workspace;
+	const tracked = gitText(ws.worktreePath, "ls-files").split("\n")[0];
+	if (!tracked) throw new Error("fixture repo has no tracked file");
+	git(ws.worktreePath, "update-index", "--assume-unchanged", tracked);
+	writeFileSync(join(ws.worktreePath, tracked), "hidden edit\n");
+
+	expect(await handleRequest("workspace.removalCheck", { ids: [ws.id] }, CTX)).toEqual([
+		{ id: ws.id, dirty: null, unpushed: 0 },
+	]);
+	expect(
+		await handleRequest("workspace.removeSettled", { id: ws.id, lastActiveAt: Date.now() }, CTX),
+	).toEqual({ removed: false, reason: "unsafe" });
+	expect(existsSync(join(ws.worktreePath, tracked))).toBe(true);
+});
+
+test("removeSettled keeps a worktree whose HEAD left its branch", async () => {
+	const ws = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Detached work" },
+		CTX,
+	)) as Workspace;
+	git(ws.worktreePath, "checkout", "-q", "--detach");
+	git(
+		ws.worktreePath,
+		"-c",
+		"user.name=t",
+		"-c",
+		"user.email=t@t",
+		"commit",
+		"-q",
+		"--allow-empty",
+		"-m",
+		"detached",
+	);
+
+	expect(await handleRequest("workspace.removalCheck", { ids: [ws.id] }, CTX)).toEqual([
+		{ id: ws.id, dirty: 0, unpushed: null },
+	]);
+	expect(
+		await handleRequest("workspace.removeSettled", { id: ws.id, lastActiveAt: Date.now() }, CTX),
+	).toEqual({ removed: false, reason: "unsafe" });
+	expect(existsSync(ws.worktreePath)).toBe(true);
+});
+
+test.skipIf(process.platform === "win32")(
+	"removeSettled restores the checkout when the workspace is pinned while git removes it",
+	async () => {
+		const ws = (await handleRequest(
+			"workspace.create",
+			{ projectId: "p1", name: "Pinned mid removal" },
+			CTX,
+		)) as Workspace;
+		const executable = Bun.which("git");
+		if (!executable) throw new Error("Git is required for this test");
+		const marker = join(dataDir, "remove-started");
+		const bin = join(dataDir, "bin");
+		mkdirSync(bin);
+		writeFileSync(
+			join(bin, "git"),
+			`#!/bin/sh\nif [ "$3" = worktree ] && [ "$4" = remove ]; then\n  touch "${marker}"\n  sleep 0.3\nfi\nexec "${executable}" "$@"\n`,
+		);
+		chmodSync(join(bin, "git"), 0o755);
+		const savedPath = process.env.PATH;
+		process.env.PATH = `${bin}${delimiter}${savedPath ?? ""}`;
+		try {
+			const removal = handleRequest(
+				"workspace.removeSettled",
+				{ id: ws.id, lastActiveAt: ws.lastActiveAt },
+				CTX,
+			);
+			while (!existsSync(marker)) await Bun.sleep(10);
+			await handleRequest("workspace.unsettle", { id: ws.id }, CTX);
+			expect(await removal).toEqual({ removed: false, reason: "changed" });
+		} finally {
+			if (savedPath === undefined) delete process.env.PATH;
+			else process.env.PATH = savedPath;
+		}
+		const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
+		expect(rows.map((row) => row.id)).toContain(ws.id);
+		expect(existsSync(ws.worktreePath)).toBe(true);
+		expect(gitText(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(ws.branch);
+	},
+);
 
 test("workspace mutation handlers reject the Default before any side effect", async () => {
 	const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
