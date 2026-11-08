@@ -219,6 +219,7 @@ test("a dialog's field gets the mic inside the dialog and Enter cannot create mi
 	const prompt = dialog.getByTestId("ws-prompt");
 	await prompt.fill("");
 	const dialogMic = dialog.getByTestId("speech-mic");
+	await expect(dialogMic).toHaveAttribute("tabindex", "-1");
 	await dialogMic.click();
 	await expect(dialogMic).toHaveAttribute("data-mic-state", "listening");
 	await prompt.press("Enter");

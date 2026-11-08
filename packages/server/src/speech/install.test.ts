@@ -9,7 +9,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import type { SpeechStatus } from "@thinkrail/contracts";
 import {
 	cancelSpeechInstall,
@@ -99,9 +99,12 @@ function writeManifest(overrides: { runtimes?: object; multilingualSha?: string 
 	process.env[SPEECH_MANIFEST_ENV] = manifestPath;
 }
 
+let pathDir = "";
+
 beforeEach(() => {
 	process.env.THINKRAIL_DATA_DIR = mkdtempSync(join(root, "data-"));
-	process.env.PATH = mkdtempSync(join(root, "path-"));
+	pathDir = mkdtempSync(join(root, "path-"));
+	process.env.PATH = [pathDir, "/usr/bin", "/bin"].join(delimiter);
 	files = new Map([
 		["/runtime.tar.gz", { body: runtimeArchive }],
 		["/multi.gguf", { body: multilingual }],
@@ -254,19 +257,19 @@ test.skipIf(!target)("removing deletes ThinkRail's speech files", async () => {
 test.skipIf(!target || !posix)(
 	"a compatible nemo-speech on PATH replaces the runtime download",
 	async () => {
-		writeFakeBinary(process.env.PATH ?? "", "0.3.4");
+		writeFakeBinary(pathDir, "0.3.4");
 		await initSpeech();
 		expect(speechStatus().runtime).toEqual({ source: "path", version: "0.3.4", backend: "metal" });
 		expect(speechStatus().downloadBytes.multilingual).toBe(multilingual.length);
 		installSpeech("multilingual");
 		await speechInstallSettled();
 		expect(server.requests.map((request) => request.path)).toEqual(["/multi.gguf"]);
-		expect(engineInputs()?.bin).toBe(join(process.env.PATH ?? "", "nemo-speech"));
+		expect(engineInputs()?.bin).toBe(join(pathDir, "nemo-speech"));
 	},
 );
 
 test.skipIf(!target || !posix)("an incompatible nemo-speech on PATH is ignored", async () => {
-	writeFakeBinary(process.env.PATH ?? "", "0.4.0");
+	writeFakeBinary(pathDir, "0.4.0");
 	await initSpeech();
 	expect(speechStatus().runtime).toBeNull();
 });

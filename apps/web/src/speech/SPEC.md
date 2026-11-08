@@ -131,7 +131,10 @@ extension had to adopt and wire up. It was replaced so voice is a property of th
     disables the button.
   - Listening shows a danger-toned mic with a 4-bar level meter. `blocked` and `unavailable` show the
     mic-off icon with the reason.
-  - Pressing the mic never moves focus (`onMouseDown` prevents default). Dictation failures are toasts.
+  - Pressing the mic never moves focus (`onMouseDown` prevents default), and the mic is never a Tab
+    stop (`tabIndex={-1}`); the chord is its keyboard path. As a Tab stop at the end of the dialog it
+    was portaled into, the focus trap wrapped Shift+Tab onto it, stealing the search palette's
+    Tab-cycled input focus. Dictation failures are toasts.
 - **Lifecycle** (`control.ts`).
   - `startDictation(field)` focuses the field, takes its writer, locks it, announces
     `thinkrail:dictation`, and starts the page's one dictation. Blur or a newer start ends it; the

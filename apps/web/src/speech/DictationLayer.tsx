@@ -316,6 +316,7 @@ function ActiveDictationLayer() {
 						}
 						data-testid="speech-mic"
 						data-mic-state={active ? "listening" : state.kind}
+						tabIndex={-1}
 						label={label}
 						tone={active ? "danger" : undefined}
 						selected={active}
