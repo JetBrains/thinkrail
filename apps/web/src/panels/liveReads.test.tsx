@@ -5,7 +5,7 @@ import { useAppStore } from "../store";
 import { useLiveTabContent } from "./useLiveTabContent";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 
-type ReactGlobals = { IS_REACT_ACT_ENVIRONMENT?: boolean; window?: unknown };
+type ReactGlobals = { IS_REACT_ACT_ENVIRONMENT?: boolean | undefined; window?: unknown };
 const globals = globalThis as ReactGlobals;
 const saved = { act: globals.IS_REACT_ACT_ENVIRONMENT, window: globals.window };
 
@@ -55,11 +55,9 @@ function scriptedReads<T>() {
 	return { pending, read, keys: () => pending.map((entry) => entry.key) };
 }
 
-const tick = (workspaceId: string, paths: string[]) =>
+const tick = (workspaceId: string, paths: string[], truncated = false) =>
 	act(async () => {
-		useAppStore
-			.getState()
-			.noteFsChanged({ workspaceId, paths, truncated: false, skillChange: "none" });
+		useAppStore.getState().noteFsChanged({ workspaceId, paths, truncated, skillChange: "none" });
 	});
 
 function WorkspaceRead(props: {

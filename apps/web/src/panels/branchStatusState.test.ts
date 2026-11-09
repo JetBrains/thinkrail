@@ -133,6 +133,16 @@ test("a non-superseding request lands unless something newer began, and never vo
 	expect(state.getSnapshot("w\0feature")?.review).toEqual(pullRequest(2));
 });
 
+test("a cached answer landing after a newer one is dropped", () => {
+	const state = createBranchStatusState();
+	const slow = state.beginRequest("w\0feature", { supersede: false });
+	const quick = state.beginRequest("w\0feature", { supersede: false });
+	const merged = { ...pullRequest(1), state: "merged" as const };
+	expect(state.resolveRequest("w\0feature", quick, answer(merged))).toBe(true);
+	expect(state.resolveRequest("w\0feature", slow, answer(pullRequest(1)))).toBe(false);
+	expect(state.getSnapshot("w\0feature")?.review).toEqual(merged);
+});
+
 test("a failed request clears the key only when nothing answered its generation", () => {
 	const state = createBranchStatusState();
 	const fresh = state.beginRequest("w\0feature");

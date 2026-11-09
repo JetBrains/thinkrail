@@ -50,14 +50,10 @@ export function startWorkspaceFileReads({
 	update,
 }: WorkspaceFileReads): () => void {
 	let alive = true;
-	let issued = 0;
-	let applied = 0;
 	let busy = false;
 	let again = false;
-	const settle = (ticket: number, next: (current: LoadedFile | null) => LoadedFile) => {
-		if (!alive || ticket < applied) return;
-		applied = ticket;
-		update(next);
+	const settle = (next: (current: LoadedFile | null) => LoadedFile) => {
+		if (alive) update(next);
 	};
 	const followUp = () => {
 		busy = false;
@@ -71,12 +67,10 @@ export function startWorkspaceFileReads({
 			return;
 		}
 		busy = true;
-		issued += 1;
-		const ticket = issued;
 		new Promise<Awaited<ReturnType<typeof read>>>((resolve) => resolve(read()))
 			.then(
 				({ content, meta }) =>
-					settle(ticket, (current) => {
+					settle((current) => {
 						const previous = ready(current);
 						if (previous && meta && meta.hash !== null && previous.meta.hash === meta.hash) {
 							return previous.stale === undefined
@@ -90,7 +84,7 @@ export function startWorkspaceFileReads({
 						};
 					}),
 				(error: unknown) =>
-					settle(ticket, (current) => {
+					settle((current) => {
 						const previous = ready(current);
 						const message = errorMessage(error);
 						if (previous)

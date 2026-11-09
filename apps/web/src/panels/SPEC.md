@@ -1536,7 +1536,7 @@ own section. The kebab menu (`plan-menu`, a
   page) and supersedes any read already in flight for the same key, so a pre-mutation answer cannot
   overwrite the mutation result. The keyed state and request generation are shared by every mounted
   hook consumer, keeping the plan and shell scope label on one mutation result. A stale mutation closure
-  cannot write through after that hook has moved to another branch. The focus-refetch overwrites state.
+  cannot write through after that hook has moved to another branch.
   Workspace activation explicitly opts into the host's 60-second settled-answer cache with
   `allowCached: true`, while omission on focus preserves the wire's original force-fresh behavior for
   older clients, so a PR closed/merged on GitHub drops out of the chip, label, and stepper on that
@@ -1554,7 +1554,9 @@ own section. The kebab menu (`plan-menu`, a
   fresh read voids any cached answer begun before it. Each read also carries a sequence number: a fresh
   answer landing after a cached one requested later keeps that cached answer's branch facts and ahead /
   behind counts, and adds only its review (the fresh PR state and checks). Otherwise a refresh measured
-  before a commit would overwrite the newer `aheadOfBase`. Since a cached and a fresh read can share a
+  before a commit would overwrite the newer `aheadOfBase`. A *cached* answer landing after a newer one is
+  dropped whole: the shell and the plan pane run separate cached lanes for one key, and a slow cached "open"
+  must not restore itself over a newer "merged". Since a cached and a fresh read can share a
   generation, a failed read clears the key (`failRequest`) only when no answer has landed at that
   generation, so a refresh that times out cannot wipe the cached answer that arrived while it ran. The
   URL is kept across refetches while the review number matches. A `compare` result opens the prefilled

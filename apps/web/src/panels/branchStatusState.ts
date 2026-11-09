@@ -13,7 +13,7 @@ export const CI_DISCOVERY_POLLS = 3;
 
 export type BranchAnswer = { review: OpenBranchReview | null; status: BranchFacts | null };
 
-export type BranchRequest = { generation: number; sequence: number };
+export type BranchRequest = { generation: number; sequence: number; fresh: boolean };
 
 type Entry = {
 	generation: number;
@@ -99,12 +99,17 @@ export function createBranchStatusState() {
 			const current = entry(key);
 			if (options.supersede) current.generation += 1;
 			current.sequence += 1;
-			return { generation: current.generation, sequence: current.sequence };
+			return {
+				generation: current.generation,
+				sequence: current.sequence,
+				fresh: options.supersede,
+			};
 		},
 		resolveRequest(key: string, request: BranchRequest, answer: BranchAnswer): boolean {
 			const current = entry(key);
 			if (current.generation !== request.generation) return false;
 			const older = request.sequence < current.landed;
+			if (older && !request.fresh) return false;
 			const review = older ? olderReview(answer.review, current.snapshot) : answer.review;
 			const status = older ? (current.snapshot?.status ?? null) : answer.status;
 			const carried =
