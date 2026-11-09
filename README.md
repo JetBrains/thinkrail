@@ -240,9 +240,10 @@ that run. With additional sharing on, a packaged build may open the ThinkRail bl
 link your installation to the website visit that brought you here — only where you accepted marketing cookies on the
 website or no consent is required — and that link expires after 30 days.
 
-Voice input never sends your audio or transcripts anywhere: both stay on the computer running ThinkRail. Its one
-download comes straight from NVIDIA's GitHub release and Hugging Face repository, and a voice failure is reported like
-any other error: its type, code and location, never its message.
+Voice input never sends your audio to a cloud service: speech is recognised on the computer running ThinkRail, and
+dictated text reaches the agent only when you send it. Its one download comes straight from NVIDIA's GitHub release and
+Hugging Face repository, and a voice failure is reported like any other error: its type, code and location, never its
+message.
 
 Feedback surveys are separate from usage analytics. ThinkRail may invite you to a short survey, and you can
 also open it from **Settings → Feedback**. Your answers, including anything you type, are sent to the
