@@ -1184,7 +1184,9 @@ a project picker, the prompt hero, and the reused
   `packages.list` for the active workspace (user scope alone without one) through **one** request path
   (`listPackages`, generation-guarded so a slow older response never overwrites a newer one), re-run on
   mount, on a workspace change and on the store's `packagesVersion` (the `packages.changed` push, which
-  the host also sends after a package switch so a re-enabled row regains its chips). The update check
+  the host also sends after a package switch so a re-enabled row regains its chips). The mount and
+  workspace-change reads pass `force`, so the host rebuilds its catalog: an extension file dropped into a
+  scanned folder by hand changes nothing the host watches, and a cached list would hide it for minutes. The update check
   is guarded the same way: a check started later (a workspace switch, a manual check, the re-check
   after an update) wins, and only the latest clears "Checking…" or re-flags rows. A **package row** (`PackageRow`) is name ·
   kind / scope tags (`npm` / `git` / `local`, Global / Repository) · an **Update available** tag when the
