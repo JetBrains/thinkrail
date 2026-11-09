@@ -12,6 +12,7 @@ const FILE_TYPE_OVERRIDES: Readonly<Record<string, string>> = {
 	m: "objective-c",
 	mbt: "moonbit",
 	msg: "rosmsg",
+	pl: "perl",
 	promql: "promql",
 	scad: "openscad",
 	tsrx: "tsrx",
@@ -63,4 +64,19 @@ export function editorLanguages(
 		.filter(([id]) => !catalogIds.has(id))
 		.map(([id, files]) => ({ id, aliases: [], ...files }));
 	return [...extended, ...others];
+}
+
+export function diffsFileTypes(languages: readonly ResourceCodeLanguage[]): Record<string, string> {
+	const known = new Set([
+		...Object.values(EXTENSION_TO_FILE_FORMAT),
+		...Object.values(FILE_TYPE_OVERRIDES),
+	]);
+	const types: Record<string, string> = {};
+	for (const { id, extensions, filenames = [] } of languages) {
+		if (!known.has(id)) continue;
+		for (const key of [...extensions.map((extension) => extension.slice(1)), ...filenames]) {
+			if (EXTENSION_TO_FILE_FORMAT[key] !== id) types[key] = id;
+		}
+	}
+	return types;
 }

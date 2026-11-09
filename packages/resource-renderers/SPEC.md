@@ -664,7 +664,10 @@ content's own height.
   Pierre color table chat uses, plus the complete editor/widget/menu/input colour map, to hex; Monaco defines
   its theme from that. Token scopes are Pierre's token names. A swap redefines Monaco and
   selects `EDITOR_THEME`, with no new tokenizing. `support/editorLanguages.ts` merges the curated catalog with
-  the `@pierre/diffs` extension table, so editor and diffs share one table and catalog files keep their language.
+  the `@pierre/diffs` extension table and a short override list (`.m` Objective-C, `.pl` Perl, file types the
+  table lacks), and catalog files keep their language. `diffsFileTypes` hands every editor choice the table
+  disagrees with to `replaceCustomExtensions` when the diffs worker pool starts (only ids the diffs table knows),
+  so a file gets the same language in the editor and in diffs; the pool ships the map to its workers.
   Monaco matches file names without case, so the table keys `BUCK`, `BUILD`, `PACKAGE` and `WORKSPACE` stay out: otherwise a file named `build` opens as Python. A real Bazel or Buck file is plain in the editor and Python in diffs.
   Missing Monaco language ids are registered with their file associations, then each id gets a
   `registerTokensProviderFactory` entry. A table language Pierre has no lexer for stays plain. The normal/high-contrast base comes from manifest

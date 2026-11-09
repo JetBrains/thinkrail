@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { EXTENSION_TO_FILE_FORMAT } from "@pierre/diffs";
 import { isSupportedLanguage } from "@pierre/highlights";
 import type { ResourceCodeLanguage } from "../host";
-import { editorLanguages } from "./editorLanguages";
+import { diffsFileTypes, editorLanguages } from "./editorLanguages";
 
 const CATALOG: readonly ResourceCodeLanguage[] = [
 	{ id: "typescript", extensions: [".ts"], aliases: ["ts"] },
@@ -81,6 +82,83 @@ describe("editorLanguages", () => {
 		);
 		expect(compound.length).toBeGreaterThan(0);
 		for (const { id } of compound) expect(isSupportedLanguage(id)).toBe(true);
+	});
+
+	test("the diffs table still names the languages the app catalog leaves to it", () => {
+		const expected: Record<string, string> = {
+			ts: "typescript",
+			mts: "typescript",
+			cts: "typescript",
+			tsx: "tsx",
+			js: "javascript",
+			mjs: "javascript",
+			cjs: "javascript",
+			jsx: "jsx",
+			json: "json",
+			jsonc: "jsonc",
+			py: "python",
+			pyi: "python",
+			css: "css",
+			scss: "scss",
+			html: "html",
+			htm: "html",
+			md: "markdown",
+			markdown: "markdown",
+			yaml: "yaml",
+			toml: "toml",
+			rs: "rust",
+			go: "go",
+			java: "java",
+			kt: "kotlin",
+			scala: "scala",
+			swift: "swift",
+			c: "c",
+			cpp: "cpp",
+			hpp: "cpp",
+			cs: "csharp",
+			sql: "sql",
+			xml: "xml",
+			ini: "ini",
+			diff: "diff",
+			patch: "diff",
+			graphql: "graphql",
+			gql: "graphql",
+			vue: "vue",
+			svelte: "svelte",
+			astro: "astro",
+			prisma: "prisma",
+			lua: "lua",
+			rb: "ruby",
+			gemspec: "ruby",
+			Gemfile: "ruby",
+			Rakefile: "ruby",
+			php: "php",
+		};
+		const actual = Object.fromEntries(
+			Object.keys(expected).map((key) => [key, EXTENSION_TO_FILE_FORMAT[key]]),
+		);
+		expect(actual).toEqual(expected);
+	});
+
+	test("diffs pick the language the editor picks wherever the diffs table disagrees", () => {
+		const types = diffsFileTypes(languages);
+		expect(types).toMatchObject({
+			h: "c",
+			m: "objective-c",
+			pl: "perl",
+			cu: "cu",
+			Justfile: "just",
+		});
+		expect(types.ts).toBeUndefined();
+		for (const [key, id] of Object.entries(types)) {
+			expect(EXTENSION_TO_FILE_FORMAT[key]).not.toBe(id);
+			expect(isSupportedLanguage(id)).toBe(true);
+		}
+	});
+
+	test("a .pl file opens as Perl, not Prolog", () => {
+		expect(languageOfExtension(languages, ".pl")).toEqual(["perl"]);
+		expect(languageOfExtension(languages, ".pro")).toEqual(["prolog"]);
 	});
 
 	test("an id with an extension in the table and in the catalog keeps both once", () => {

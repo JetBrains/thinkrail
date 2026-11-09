@@ -79,8 +79,9 @@ not this module; the theme-aware highlighter remains app-local.
   that lets a no-op attention write be dropped before it reaches the store. Optional terminal recall is workspace-local history, not a second
   selected-tab authority; the layout owner validates it against current membership. Also the shared
   code highlighting, **kept out of the barrel** so the eager `@/lib` import stays free of it:
-  `codeLanguages.ts` owns the curated id/alias/file-association catalog for the desktop Monaco
-  renderer, and chat borrows only its aliases. Chat code is highlighted
+  `codeLanguages.ts` owns the curated id/alias catalog for the desktop Monaco renderer, plus only the file
+  associations the `@pierre/diffs` extension table lacks or gets wrong for us; `resource-renderers` merges the
+  two. Chat borrows only its aliases. Chat code is highlighted
   off the main thread with `@pierre/highlights`, whose one WASM file holds all 152 languages:
   `highlightCode.ts` resolves the language alias (`mermaid`, empty and the plain-text names answer `null` with
   no worker) and posts to one lazy `highlighter.worker.ts` per page, which calls `chatHighlighter.ts`. The
