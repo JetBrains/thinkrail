@@ -31,7 +31,8 @@
 			"nursery": {
 				"noImpliedEval": "error",
 				"noPlaywrightMissingAwait": "error",
-				"noIdenticalTestTitle": "error"
+				"noIdenticalTestTitle": "error",
+				"noFloatingPromises": "error"
 			},
 			"style": {
 				"noNonNullAssertion": "error",
