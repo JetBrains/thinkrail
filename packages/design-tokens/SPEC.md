@@ -114,7 +114,7 @@ label/order, light-or-dark appearance, normal-or-high contrast metadata, a compl
 palette. Color values are canonical
 six/eight-digit hex; the two selected-text foreground overrides may explicitly be `null` to retain the
 consumer's native foreground. There is no inheritance or partial overlay. The engine owns appearance-level
-effects, TextMate/Monaco scope mapping, and CSS-token mapping, so those mechanics never leak into
+effects, Pierre token and Monaco mapping, and CSS-token mapping, so those mechanics never leak into
 manifests. Typography, spacing, radii, fonts, and motion remain product tokens, not theme values; the
 user's font choice is a separate host setting ([[submodule-web-fonts]]), so changing the theme never
 changes a font.

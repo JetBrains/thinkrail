@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { hostname } from "node:os";
 import { join, normalize } from "node:path";
 import type {
+	HostPlatform,
 	HostUpdateNotice,
 	ServerWelcome,
 	SessionCreatedPayload,

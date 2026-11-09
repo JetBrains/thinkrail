@@ -5,7 +5,7 @@ import { WebResultBody } from "./WebResultBody";
 
 function detailString(result: unknown, key: string): string {
 	if (typeof result !== "object" || result === null || !("details" in result)) return "";
-	const details = (result as { details: unknown }).details;
+	const details = result.details;
 	if (typeof details !== "object" || details === null) return "";
 	const value = (details as Record<string, unknown>)[key];
 	return typeof value === "string" ? value : "";

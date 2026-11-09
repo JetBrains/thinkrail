@@ -3,8 +3,9 @@ import {
 	isToolResponsePending,
 	type SessionState,
 } from "@thinkrail/contracts";
+import type { ToolStatus } from "@thinkrail/extension-api/web";
 import { createContext, useContext } from "react";
-import { isInteractiveTool } from "./toolRegistry";
+import { isDockedTool, isInteractiveTool } from "./toolRegistry";
 import type { ChatTurn, ToolResultState } from "./types";
 
 export interface InteractionState {
@@ -64,10 +65,56 @@ export function deriveInteractionStates(
 	return states;
 }
 
+export interface PendingInteraction {
+	toolCallId: string;
+	toolName: string;
+	args: Record<string, unknown>;
+	result: unknown;
+	status: ToolStatus;
+	streaming: boolean;
+}
+
+export function latestPendingInteraction(
+	turns: ChatTurn[],
+	toolResults: Record<string, ToolResultState>,
+	states: Record<string, InteractionState>,
+): PendingInteraction | undefined {
+	let found: PendingInteraction | undefined;
+	for (const turn of turns) {
+		if (turn.kind !== "assistant") continue;
+		for (const block of turn.message.content) {
+			if (block.type !== "toolCall" || !isInteractiveTool(block.name)) continue;
+			const state = states[block.id];
+			if (!state || state.response !== undefined || state.superseded || state.terminal) continue;
+			const tool = toolResults[block.id];
+			found = {
+				toolCallId: block.id,
+				toolName: block.name,
+				args: block.arguments ?? {},
+				result: tool?.raw,
+				status: tool?.status ?? "running",
+				streaming: turn.streaming,
+			};
+		}
+	}
+	return found;
+}
+
+export function dockedInteraction(
+	pending: PendingInteraction | undefined,
+	awaitingToolCallId: string | null | undefined,
+): PendingInteraction | undefined {
+	if (!pending || pending.streaming || !isDockedTool(pending.toolName)) return undefined;
+	return awaitingToolCallId === undefined || awaitingToolCallId === pending.toolCallId
+		? pending
+		: undefined;
+}
+
 export interface InteractionContextValue {
 	states: Record<string, InteractionState>;
 	focusScope: object;
 	awaitingToolCallId?: string | null | undefined;
+	dockedToolCallId?: string | undefined;
 }
 
 const LEGACY_QUESTION_PREFIX = "question:";
@@ -96,4 +143,8 @@ export function useInteractionState(toolCallId: string): InteractionState | unde
 
 export function useInteractionFocusScope(): object | null {
 	return useContext(InteractionStatesContext)?.focusScope ?? null;
+}
+
+export function useInteractionDocked(toolCallId: string): boolean {
+	return useContext(InteractionStatesContext)?.dockedToolCallId === toolCallId;
 }

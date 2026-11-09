@@ -2,16 +2,17 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { designSourceFiles, designSourceLabel } from "../../scripts/designSources";
-import { normalizeEol } from "../../scripts/generatedFiles";
+import { normalizeEol } from "@thinkrail/design-tokens/scripts/generatedFiles";
 import {
 	allStyles,
 	fontSizePx,
+	GENERATED_PATH,
 	loadTypography,
 	proseRootClassName,
 	resolveStyle,
 	styleClassName,
-} from "../../scripts/typography";
+} from "@thinkrail/design-tokens/scripts/typography";
+import { designSourceFiles, designSourceLabel } from "../../scripts/designSources";
 
 const typography = loadTypography();
 const SRC = fileURLToPath(new URL("..", import.meta.url));
@@ -82,7 +83,7 @@ describe("component usage", () => {
 	});
 
 	it("names only classes the generator actually emits", () => {
-		const generated = read(join(SRC, "styles/generated/typography.css"));
+		const generated = read(GENERATED_PATH);
 		const emitted = new Set([...generated.matchAll(/^\.(tr-[a-z0-9-]+)/gm)].map((m) => m[1]));
 		const offenders: string[] = [];
 		for (const path of FILES) {
@@ -157,7 +158,7 @@ describe("component usage", () => {
 });
 
 describe("markdown prose systems", () => {
-	const chat = code(join(SRC, "chat/Markdown.tsx"));
+	const chat = code(join(SRC, "../../../packages/chat-ui/src/Markdown.tsx"));
 	const preview = code(join(RENDERERS, "support/MarkdownPreview.tsx"));
 
 	it("gives each markdown surface exactly one generated prose system", () => {

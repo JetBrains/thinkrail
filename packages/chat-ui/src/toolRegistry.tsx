@@ -5,6 +5,7 @@ import {
 	type ToolRegistrationOptions,
 	type ToolRenderer,
 	type ToolRenderProps,
+	type ToolWidth,
 	toolValueText,
 } from "@thinkrail/extension-api/web";
 import type { Translator } from "@thinkrail/locales/react";
@@ -12,6 +13,7 @@ import type { ReactNode } from "react";
 
 interface ToolRegistration extends ToolRegistrationOptions {
 	renderer: ToolRenderer;
+	extension?: string | undefined;
 }
 
 const registry = new Map<string, ToolRegistration>();
@@ -21,8 +23,9 @@ export function registerToolRenderer(
 	toolName: string,
 	renderer: ToolRenderer,
 	options: ToolRegistrationOptions = {},
+	extension?: string,
 ): void {
-	registry.set(toolName, { renderer, ...options });
+	registry.set(toolName, { renderer, ...options, extension });
 }
 
 export function registerToolRendererPrefix(
@@ -59,8 +62,34 @@ export function isInteractiveTool(toolName: string): boolean {
 	return resolveRegistration(toolName)?.interactive === true;
 }
 
+export function isDockedTool(toolName: string): boolean {
+	const registration = resolveRegistration(toolName);
+	return registration?.interactive === true && registration.dock === true;
+}
+
+export function carriesComposerSuggestions(toolName: string): boolean {
+	return resolveRegistration(toolName)?.composerSuggestions !== undefined;
+}
+
+export function readComposerSuggestions(
+	toolName: string,
+	args: Record<string, unknown>,
+	result: unknown,
+	disabledExtensions: readonly string[] = [],
+): readonly string[] | null {
+	const registration = resolveRegistration(toolName);
+	const reader = registration?.composerSuggestions;
+	if (!reader) return null;
+	if (registration.extension && disabledExtensions.includes(registration.extension)) return null;
+	return reader(args, result);
+}
+
 export function getToolChrome(toolName: string): ToolChrome {
 	return resolveRegistration(toolName)?.chrome ?? "card";
+}
+
+export function getToolWidth(toolName: string): ToolWidth {
+	return resolveRegistration(toolName)?.width ?? "column";
 }
 
 export interface ResolvedProminence {

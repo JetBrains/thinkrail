@@ -1,4 +1,5 @@
-import { BRAND_MARK_PATH, PRODUCT_NAME } from "../constants/branding";
+import { BRAND_MARK_PATH } from "@thinkrail/ui/brand-mark";
+import { PRODUCT_NAME } from "../constants/branding";
 
 export function BrandLogo() {
 	return (

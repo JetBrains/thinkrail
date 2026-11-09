@@ -8,7 +8,10 @@ interface AppFontFamily {
 
 const CSS = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 const TYPOGRAPHY = JSON.parse(
-	readFileSync(new URL("../../web/src/styles/typography.json", import.meta.url), "utf8"),
+	readFileSync(
+		new URL("../../../packages/design-tokens/styles/typography.json", import.meta.url),
+		"utf8",
+	),
 ) as {
 	fontFamilies: Record<string, AppFontFamily | { $ref: string }>;
 };

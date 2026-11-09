@@ -15,7 +15,7 @@ test("shows the theme folder row with the steps, its two actions, and one notice
 	expect(markup).toContain('data-setting-id="theme-folder"');
 	expect(markup).toContain("Theme files folder");
 	expect(markup).toContain("/home/me/.thinkrail/themes");
-	expect(markup).toContain("/blob/v1.2.3/apps/web/src/themes/bundled/dark.theme.json");
+	expect(markup).toContain("/blob/v1.2.3/packages/design-tokens/themes/dark.theme.json");
 	expect(markup).toMatch(/<a[^>]*data-testid="custom-themes-example"[^>]*tabindex="0"/);
 	expect(markup).toMatch(/<button[^>]*tabindex="0"[^>]*>.*Copy path/);
 	expect(markup).toMatch(/<button[^>]*tabindex="0"[^>]*data-testid="custom-themes-open-folder"/);

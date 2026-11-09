@@ -1,6 +1,8 @@
 import { beforeAll, expect, test } from "bun:test";
+import type { InteractionState } from "@thinkrail/chat-ui/interactionState";
+import { registerToolRenderer } from "@thinkrail/chat-ui/toolRegistry";
+import type { ChatTurn } from "@thinkrail/chat-ui/types";
 import type { AssistantMessage, TodoGroupItem, TodoItem, UserMessage } from "@thinkrail/contracts";
-import type { InteractionState } from "./interactionState";
 import {
 	adoptedCommits,
 	flatItems,
@@ -24,8 +26,6 @@ import {
 	shouldNudgeOnAdd,
 	verificationStatus,
 } from "./planView";
-import { registerToolRenderer } from "./toolRegistry";
-import type { ChatTurn } from "./types";
 
 // Transcript-derived glances only see calls whose web renderer registered as interactive; stand in for
 // the real ask-user-question card with an inert one.

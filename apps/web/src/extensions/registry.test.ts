@@ -16,7 +16,7 @@ import {
 	isInteractiveTool,
 	readComposerSuggestions,
 	resolveProminence,
-} from "../chat/toolRegistry";
+} from "@thinkrail/chat-ui/toolRegistry";
 import { matchKeybinding, resolveKeybindings, SHORTCUT_CATALOG } from "../keybindings";
 import {
 	enabledWebExtensions,

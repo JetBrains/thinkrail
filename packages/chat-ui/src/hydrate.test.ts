@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import type { TranscriptMessage } from "@thinkrail/contracts";
-import { TOOL_RESPONSE_CUSTOM_TYPE } from "@thinkrail/contracts";
+import { opensChatRound, TODO_NUDGE_PREFIX, TOOL_RESPONSE_CUSTOM_TYPE } from "@thinkrail/contracts";
 import { messagesToRuntime } from "./hydrate";
-import { deriveRows } from "./rows";
+import { deriveRows, opensRound } from "./rows";
 import { readRunDetails } from "./tools/subagent/runDetails";
 
 type Message = TranscriptMessage;
@@ -303,6 +303,47 @@ test("a todo-review-fix custom message hydrates as its own reviewFix turn", () =
 	expect(turnIdByMessageIndex[1]).toBe(turns[1]?.id ?? null);
 });
 
+test("a continuation request and a handoff hydrate as their own cards, each with its details", () => {
+	const request = { operationId: "op1", projectId: "p1", projectName: "repo" };
+	const handoff = {
+		operationId: "op1",
+		sourceWorkspaceId: "chat-1",
+		sourceSessionId: "s-chat",
+		summary: "The brief.",
+	};
+	const { turns, turnIdByMessageIndex } = messagesToRuntime([
+		{ role: "user", content: "go", timestamp: 1 },
+		{
+			role: "custom",
+			customType: "continue-in-workspace-request",
+			content: "Write the summary.",
+			display: true,
+			details: request,
+			timestamp: 2,
+		},
+		{
+			role: "custom",
+			customType: "chat-handoff",
+			content: "<handoff>",
+			display: true,
+			details: handoff,
+			timestamp: 3,
+		},
+		{
+			role: "custom",
+			customType: "chat-handoff",
+			content: "malformed",
+			display: true,
+			details: { operationId: "op2" },
+			timestamp: 4,
+		},
+	] as unknown as Message[]);
+	expect(turns.map((turn) => turn.kind)).toEqual(["user", "continuationRequest", "handoff"]);
+	expect(turns[1]?.kind === "continuationRequest" && turns[1].details).toEqual(request);
+	expect(turns[2]?.kind === "handoff" && turns[2].details).toEqual(handoff);
+	expect(turnIdByMessageIndex[2]).toBe(turns[2]?.id ?? null);
+});
+
 test("a failed tool result maps to error status", () => {
 	const { toolResults } = messagesToRuntime([
 		{
@@ -379,7 +420,7 @@ test("a resolved toolResult keeps its structured `details` (a legacy blocking-er
 		},
 	] as unknown as Message[]);
 	expect(toolResults.ask2?.status).toBe("done");
-	expect((toolResults.ask2?.raw as { details: unknown }).details).toEqual(details);
+	expect((toolResults.ask2?.raw as { details: unknown } | undefined)?.details).toEqual(details);
 });
 
 test("a tool-response custom message indexes into toolResponses and never becomes a turn", () => {
@@ -492,4 +533,105 @@ test("a compaction summary becomes its own turn without claiming a jump anchor",
 		tokensBefore: 148_000,
 	});
 	expect(turnIdByMessageIndex).toEqual([turns[0]?.id ?? null, null, turns[2]?.id ?? null]);
+});
+
+test("the host's opensChatRound opens a round exactly where the chat's opensRound does", () => {
+	const completion = (delivery: string) => ({
+		role: "custom",
+		customType: "background-command-completion",
+		content: "done",
+		display: true,
+		timestamp: 2,
+		details: {
+			id: "bg-1",
+			sessionId: "s",
+			name: "build",
+			status: "completed",
+			startedAt: 1,
+			finishedAt: 2,
+			exitCode: 0,
+			output: { text: "", truncated: false },
+			delivery,
+		},
+	});
+	const subagent = (delivery: string) => ({
+		role: "custom",
+		customType: "subagent-completion",
+		content: "report",
+		display: true,
+		timestamp: 2,
+		details: {
+			childSessionId: "child-1",
+			roleName: "scout",
+			task: "map",
+			status: "completed",
+			usage: {
+				input: 1,
+				output: 1,
+				cacheRead: 0,
+				cacheWrite: 0,
+				cost: 0,
+				turns: 1,
+				contextTokens: 2,
+			},
+			durationMs: 1,
+			delivery,
+		},
+	});
+	const messages = {
+		prompt: { role: "user", content: "go", timestamp: 1 },
+		nudge: {
+			role: "user",
+			content: [{ type: "text", text: `${TODO_NUDGE_PREFIX}open items` }],
+			timestamp: 1,
+		},
+		reviewFix: {
+			role: "custom",
+			customType: "todo-review-fix",
+			content: "fix",
+			display: true,
+			details: { itemId: "t_1", itemTitle: "Fix", comments: [] },
+			timestamp: 2,
+		},
+		continuation: {
+			role: "custom",
+			customType: "continue-in-workspace-request",
+			content: "Write the summary.",
+			display: true,
+			details: { operationId: "op1", projectId: "p1", projectName: "repo" },
+			timestamp: 2,
+		},
+		handoff: {
+			role: "custom",
+			customType: "chat-handoff",
+			content: "<handoff>",
+			display: true,
+			details: { operationId: "op1", sourceWorkspaceId: "w", sourceSessionId: "s", summary: "b" },
+			timestamp: 2,
+		},
+		commandWakes: completion("wake"),
+		commandInRun: completion("run"),
+		subagentWakes: subagent("wake"),
+		subagentInRun: subagent("run"),
+		assistant: { role: "assistant", content: [{ type: "text", text: "hi" }], timestamp: 3 },
+	};
+	const opens = Object.fromEntries(
+		Object.entries(messages).map(([name, message]) => {
+			const [turn] = messagesToRuntime([message] as unknown as Message[]).turns;
+			expect(opensChatRound(message)).toBe(turn ? opensRound(turn) : false);
+			return [name, opensChatRound(message)];
+		}),
+	);
+	expect(opens).toEqual({
+		prompt: true,
+		nudge: false,
+		reviewFix: true,
+		continuation: true,
+		handoff: true,
+		commandWakes: true,
+		commandInRun: false,
+		subagentWakes: true,
+		subagentInRun: false,
+		assistant: false,
+	});
 });

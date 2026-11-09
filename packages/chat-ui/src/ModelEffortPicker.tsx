@@ -34,10 +34,19 @@ import {
 	CommandItem,
 	CommandList,
 } from "@thinkrail/ui/command";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
-import { type CSSProperties, forwardRef, useImperativeHandle, useMemo, useState } from "react";
+import {
+	type CSSProperties,
+	forwardRef,
+	type KeyboardEvent,
+	useImperativeHandle,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { ModelEffortPill, TONE_TEXT } from "./ModelEffortLabel";
 import {
 	CENTRAL_KIND_TAG,
@@ -73,6 +82,7 @@ import {
 
 export interface ModelEffortPickerHandle {
 	open: (query?: string) => void;
+	focus: () => void;
 }
 
 export interface DefaultPairOption {
@@ -98,7 +108,13 @@ export interface ModelEffortPickerProps {
 	defaultOption?: DefaultPairOption;
 	container?: HTMLElement | null;
 	className?: string;
+	canSetDefault?: boolean;
+	tabIndex?: number;
+	fitContainer?: boolean;
+	onTriggerKeyDown?: (event: KeyboardEvent<HTMLButtonElement>) => void;
 }
+
+const FIT_PADDING = 8;
 
 function rowKeywords(model: WireModel): string[] {
 	return [model.name, model.id, model.provider, ...model.thinkingLevels];
@@ -221,7 +237,7 @@ export function EffortSlider({
 				/>
 				<div
 					aria-hidden
-					className="pointer-events-none absolute top-2 left-[clamp(32px,var(--effort),calc(100%-32px))] flex h-24 min-w-64 -translate-x-1/2 items-center justify-center gap-4 rounded-full border border-control-border-active bg-container-elevated-bg px-8 text-text-default tr-text-label-pill capitalize shadow-[var(--shadow-sm)] transition-[left] duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] peer-focus-visible:ring-2 peer-focus-visible:ring-primary motion-reduce:transition-none"
+					className="pointer-events-none absolute top-2 left-[clamp(32px,var(--effort),calc(100%-32px))] flex h-24 min-w-64 -translate-x-1/2 items-center justify-center gap-4 rounded-full border border-control-border-active bg-container-elevated-bg px-8 text-text-default tr-text-label-pill capitalize shadow-[var(--shadow-sm)] transition-[left] duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] peer-focus-visible:focus-ring motion-reduce:transition-none"
 				>
 					<Glyph className={cn("size-12 shrink-0", TONE_TEXT[levelTone(level)])} />
 					{t(LEVEL_LABEL[level])}
@@ -249,7 +265,7 @@ export function EffortSlider({
 								aria-pressed={active}
 								onClick={() => onSelectLevel(candidate)}
 								className={cn(
-									"relative rounded-sm px-4 py-2 tr-text-metadata capitalize outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
+									"relative rounded-sm px-4 py-2 tr-text-metadata capitalize transition-colors focus-visible:focus-ring",
 									active ? "text-text-default" : "text-text-subtle hover:text-text-muted",
 								)}
 							>
@@ -318,10 +334,15 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 			defaultOption,
 			container,
 			className,
+			canSetDefault = true,
+			tabIndex,
+			fitContainer = false,
+			onTriggerKeyDown,
 		},
 		handleRef,
 	) {
 		const t = useT();
+		const triggerRef = useRef<HTMLButtonElement>(null);
 		const [open, setOpen] = useState(false);
 		const [query, setQuery] = useState("");
 		const [showAll, setShowAll] = useState(false);
@@ -336,7 +357,10 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 			onRefresh(false);
 		};
 
-		useImperativeHandle(handleRef, () => ({ open: (q = "") => openWith(q) }));
+		useImperativeHandle(handleRef, () => ({
+			open: (q = "") => openWith(q),
+			focus: () => triggerRef.current?.focus(),
+		}));
 
 		const close = () => {
 			setOpen(false);
@@ -404,6 +428,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 							icon={favorite ? StarFill : StarLine}
 							size="s"
 							data-testid="model-favorite-toggle"
+							data-hint-reveal
 							data-favorite={favorite}
 							label={
 								favorite
@@ -466,10 +491,15 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 		return (
 			<Popover open={open} onOpenChange={(next) => (next ? openWith("") : close())}>
 				<PopoverTrigger
+					ref={triggerRef}
 					data-testid="model-selector"
 					data-open={open}
+					tabIndex={tabIndex}
+					onKeyDown={(event) => {
+						if (!isImeComposing(event.nativeEvent)) onTriggerKeyDown?.(event);
+					}}
 					className={cn(
-						"flex h-32 min-w-0 items-center gap-8 rounded-sm px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected",
+						"flex h-32 min-w-0 items-center gap-8 rounded-sm px-8 tr-text-ui text-text-default transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring data-[open=true]:bg-control-bg-selected",
 						className,
 					)}
 				>
@@ -501,7 +531,13 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 				<PopoverContent
 					align="start"
 					container={container}
-					className="flex max-h-[var(--radix-popover-content-available-height)] w-[min(360px,calc(100vw-16px))] flex-col p-0"
+					{...(fitContainer && container
+						? { collisionBoundary: container, collisionPadding: FIT_PADDING }
+						: {})}
+					className={cn(
+						"flex max-h-[var(--radix-popover-content-available-height)] w-[min(360px,calc(100vw-16px))] flex-col p-0",
+						fitContainer && "max-w-[var(--radix-popover-content-available-width)]",
+					)}
 				>
 					<Command
 						className="min-h-0 flex-1 bg-transparent"
@@ -601,7 +637,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 						/>
 					) : null}
 					<div className="flex shrink-0 flex-wrap items-center gap-x-8 gap-y-4 border-border-default border-t px-8 py-4">
-						{preferences.supported && current ? (
+						{canSetDefault && preferences.supported && current ? (
 							<Button
 								variant="ghost"
 								size="s"

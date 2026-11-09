@@ -34,7 +34,7 @@ function countJsonNodes(value: unknown, limit: number): number {
 const pointerSegment = (key: string): string => key.replaceAll("~", "~0").replaceAll("/", "~1");
 
 const toggleClass =
-	"flex min-w-0 items-center gap-4 rounded-xs text-left outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary";
+	"flex min-w-0 items-center gap-4 rounded-xs text-left hover:text-text-default focus-visible:focus-ring";
 
 const Indent = () => <span aria-hidden className="size-16 shrink-0" />;
 

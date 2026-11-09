@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
+import { SYNTAX_VARIABLES } from "@thinkrail/design-tokens";
 import { cssColorToHex } from "@/lib";
 import { resolveThinkrailEditorTheme, THINKRAIL_MONACO_COLOR_VARIABLES } from "./editor";
-import { SYNTAX_VARIABLES } from "./runtime";
 
 const PALETTE = new Map(
 	[...Object.values(SYNTAX_VARIABLES), ...Object.values(THINKRAIL_MONACO_COLOR_VARIABLES)].map(

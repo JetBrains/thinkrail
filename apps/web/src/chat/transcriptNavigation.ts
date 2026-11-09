@@ -135,27 +135,6 @@ export function transcriptKeyAction(
 	}
 }
 
-export function composerTranscriptStep(
-	multiline: boolean,
-	caretAtStart: boolean,
-): "enter" | "caretToStart" {
-	return multiline && !caretAtStart ? "caretToStart" : "enter";
-}
-
-export function composerShiftTabOut(
-	event: Pick<KeyboardEvent, "key" | "shiftKey" | "altKey" | "ctrlKey" | "metaKey">,
-	busy: boolean,
-): boolean {
-	return (
-		event.key === "Tab" &&
-		event.shiftKey &&
-		!event.altKey &&
-		!event.ctrlKey &&
-		!event.metaKey &&
-		!busy
-	);
-}
-
 export function newestContentRowId(chronologicalRows: readonly ChatRow[]): string | null {
 	const last = chronologicalRows.at(-1);
 	if (last?.kind !== "divider") return last?.id ?? null;

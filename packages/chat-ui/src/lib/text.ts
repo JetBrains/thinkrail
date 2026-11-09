@@ -1,6 +1,6 @@
-import type { UserMessage } from "@thinkrail/contracts";
+import type { WireUserMessage } from "@thinkrail/contracts";
 
-export function userText(content: UserMessage["content"]): string {
+export function userText(content: WireUserMessage["content"]): string {
 	if (typeof content === "string") return content;
 	return content
 		.filter((c) => c.type === "text")

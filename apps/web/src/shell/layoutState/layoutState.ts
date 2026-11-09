@@ -10,7 +10,7 @@ import {
 	toast,
 	useAppStore,
 } from "../../store";
-import { errorText, getTransport } from "../../transport";
+import { errorText, getTransport, isHostResetting, onHostReset } from "../../transport";
 import {
 	adoptToolSelections,
 	applyProjectedLayoutDocument,
@@ -59,6 +59,7 @@ let stablePreferenceOverride: StablePreferenceAdapter | null | undefined;
 let persistenceKey: string | null = null;
 let activeStablePreferences: StablePreferenceAdapter | null = null;
 let stopPersistence: (() => void) | null = null;
+let stopHostReset: (() => void) | null = null;
 let releaseSurfaceLease: (() => void) | null = null;
 let initialization: Promise<void> | null = null;
 const workspaceInitializations = new Map<string, Promise<WorkspaceLayoutDocument>>();
@@ -520,7 +521,9 @@ function persistCurrentLayout(): void {
 
 function startPersistence(): void {
 	if (stopPersistence) return;
+	stopHostReset ??= onHostReset(rekeyLayoutForHost);
 	stopPersistence = useAppStore.subscribe((state, previous) => {
+		if (isHostResetting()) return;
 		if (
 			state.workbenchFrame === previous.workbenchFrame &&
 			state.workspaceViewsByWorkspace === previous.workspaceViewsByWorkspace &&
@@ -532,6 +535,19 @@ function startPersistence(): void {
 		}
 		persistCurrentLayout();
 	});
+}
+
+function rekeyLayoutForHost(): void {
+	workspaceInitializations.clear();
+	if (activeStablePreferences) return;
+	stopPersistence?.();
+	stopPersistence = null;
+	releaseSurfaceLease?.();
+	releaseSurfaceLease = null;
+	initialization = null;
+	persistenceKey = null;
+	useAppStore.setState({ layoutStateReady: false });
+	void initializeLocalLayoutState();
 }
 
 async function loadPersistedLayout(): Promise<LocalLayoutStatePayload | undefined> {
@@ -551,7 +567,7 @@ async function loadPersistedLayout(): Promise<LocalLayoutStatePayload | undefine
 	const storage = stores();
 	if (!storage) return undefined;
 	try {
-		const endpoint = endpointOverride ?? getTransport().httpBase();
+		const endpoint = endpointOverride ?? getTransport().backendKey();
 		const id = await resolveSurfaceId(storage, endpoint);
 		persistenceKey = localLayoutStorageKey(endpoint, id);
 		const raw = storage.local.getItem(persistenceKey);
@@ -913,6 +929,8 @@ export function resetLayoutStateForTests(): void {
 	workspaceInitializations.clear();
 	stopPersistence?.();
 	stopPersistence = null;
+	stopHostReset?.();
+	stopHostReset = null;
 	releaseSurfaceLease?.();
 	releaseSurfaceLease = null;
 	initialization = null;

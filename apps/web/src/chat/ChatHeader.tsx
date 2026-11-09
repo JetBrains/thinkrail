@@ -1,6 +1,6 @@
+import { SessionStatsBar } from "@thinkrail/chat-ui/SessionStatsBar";
 import type { SessionStats } from "@thinkrail/contracts";
 import type { ReactNode } from "react";
-import { SessionStatsBar } from "./SessionStatsBar";
 import { SkillsButton } from "./SkillsButton";
 
 export function ChatHeader({

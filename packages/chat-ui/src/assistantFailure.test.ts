@@ -4,6 +4,7 @@ import {
 	assistantFailure,
 	CLAUDE_USAGE_URL,
 	errorTurnText,
+	fallbacksRejected,
 	subscriptionLimit,
 } from "./assistantFailure";
 
@@ -18,8 +19,8 @@ test("a run's failure is recorded as a kind plus the provider's own message", ()
 	expect(assistantFailure({ stopReason: "stop" })).toBeNull();
 });
 
-test("notices translate at render; a provider message stays verbatim", () => {
-	applyLocale("de", {
+test("notices translate at render; a provider message stays verbatim", async () => {
+	await applyLocale("de", {
 		de: {
 			"chat.failure.error": "Der Lauf endete mit einem Fehler.",
 			"chat.failure.truncated": "Die Antwort wurde abgeschnitten.",
@@ -75,4 +76,32 @@ test("a subscription-limit error resolves to the provider's usage page and keeps
 		});
 	expect(subscriptionLimit({ text: "429 rate limited", failure: "error" })).toBeNull();
 	expect(subscriptionLimit({ text: chatgpt[1] ?? "" })).toBeNull();
+});
+
+test("a proxy or gateway rejecting the fallbacks field is recognized and explained", () => {
+	const t = currentTranslator();
+	for (const text of [
+		"400 Anthropic proxy does not support fallback field",
+		'400 {"type":"error","error":{"type":"invalid_request_error","message":"fallbacks: Extra inputs are not permitted"}}',
+		"400 Unrecognized request argument supplied: fallbacks",
+		"400 unknown field `fallbacks`",
+		'400 Invalid JSON payload received. Unknown name "fallbacks": Cannot find field.',
+		"500 create() got an unexpected keyword argument 'fallbacks'",
+	]) {
+		expect(fallbacksRejected({ text, failure: "error" })).toBe(true);
+		expect(errorTurnText(t, { text, failure: "error" })).toBe(
+			`${t("chat.failure.fallbacksRejected")}\n\n${text}`,
+		);
+	}
+	expect(fallbacksRejected({ text: "400 Anthropic proxy does not support fallback field" })).toBe(
+		false,
+	);
+	for (const text of [
+		"429 rate limited",
+		"Server-side fallback to claude-opus-5 was used",
+		"400 tools.0.fallback: invalid",
+		"500 unexpected error while computing fallbacks",
+		"Unsupported region; fallbacks are configured elsewhere",
+	])
+		expect(fallbacksRejected({ text, failure: "error" })).toBe(false);
 });

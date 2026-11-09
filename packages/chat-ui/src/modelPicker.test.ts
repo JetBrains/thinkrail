@@ -13,6 +13,7 @@ import {
 	levelPosition,
 	levelTone,
 	litBars,
+	newestFirst,
 	trailingLevel,
 } from "./modelPicker";
 
@@ -109,7 +110,7 @@ describe("describeAuth", () => {
 });
 
 describe("groupByProvider", () => {
-	test("keeps catalog order and lifts the first known auth per provider", () => {
+	test("keeps the providers' catalog order and lifts the first known auth per provider", () => {
 		const groups = groupByProvider(t, [
 			model({ id: "a", provider: "openai" }),
 			model({ id: "b", provider: "anthropic", auth: { kind: "oauth" } }),
@@ -119,6 +120,75 @@ describe("groupByProvider", () => {
 			["openai", ["a", "c"], "API key · OPENAI_API_KEY"],
 			["anthropic", ["b"], "subscription"],
 		]);
+	});
+});
+
+describe("newestFirst", () => {
+	test("orders by the name's version, newest first, ignoring dated suffixes", () => {
+		const names = [
+			"Claude Fable 5",
+			"Claude Haiku 4.5 (latest)",
+			"Claude Haiku 4.5",
+			"Claude Haiku 5.5",
+			"Claude Opus 4.10",
+			"Claude Opus 4.8",
+			"Claude Opus 5.5",
+			"GPT-4o (2024-08-06)",
+			"Deep Research Preview (Apr-21-2026)",
+			"Claude Sonnet 5.5",
+		];
+		const sorted = newestFirst(names.map((name) => model({ id: name, name })));
+		expect(sorted.map((m) => m.name)).toEqual([
+			"Claude Haiku 5.5",
+			"Claude Opus 5.5",
+			"Claude Sonnet 5.5",
+			"Claude Fable 5",
+			"Claude Opus 4.10",
+			"Claude Opus 4.8",
+			"Claude Haiku 4.5 (latest)",
+			"Claude Haiku 4.5",
+			"GPT-4o (2024-08-06)",
+			"Deep Research Preview (Apr-21-2026)",
+		]);
+	});
+
+	test("skips parameter sizes such as 120b when reading the version", () => {
+		const names = [
+			"gpt-oss-120b",
+			"Pixtral 12B",
+			"Ministral 14B 3.0",
+			"GPT-6.1 Sol",
+			"Ministral 8B (latest)",
+			"Mixtral 8x22B Instruct",
+		];
+		const sorted = newestFirst(names.map((name) => model({ id: name, name })));
+		expect(sorted.map((m) => m.name)).toEqual([
+			"GPT-6.1 Sol",
+			"Ministral 14B 3.0",
+			"gpt-oss-120b",
+			"Pixtral 12B",
+			"Ministral 8B (latest)",
+			"Mixtral 8x22B Instruct",
+		]);
+	});
+
+	test("equal versions and unversioned names keep catalog order, not alphabetical", () => {
+		const names = ["Zeta", "Claude Sonnet 5.5", "Alpha", "Claude Opus 5.5"];
+		const sorted = newestFirst(names.map((name) => model({ id: name, name })));
+		expect(sorted.map((m) => m.name)).toEqual([
+			"Claude Sonnet 5.5",
+			"Claude Opus 5.5",
+			"Zeta",
+			"Alpha",
+		]);
+	});
+
+	test("groupByProvider lists each group newest first", () => {
+		const [group] = groupByProvider(t, [
+			model({ id: "old", name: "Claude Opus 4.5" }),
+			model({ id: "new", name: "Claude Opus 5.5" }),
+		]);
+		expect(group?.models.map((m) => m.id)).toEqual(["new", "old"]);
 	});
 });
 

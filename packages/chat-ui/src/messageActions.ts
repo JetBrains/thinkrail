@@ -1,9 +1,18 @@
 import { completionDelivery } from "@thinkrail/contracts";
 import type { ChatRow } from "./rows";
+import { carriesComposerSuggestions } from "./toolRegistry";
 
 export interface MessageActionState {
 	agentRespondedByUserId: ReadonlyMap<string, boolean>;
 	finalAnswerRowIds: ReadonlySet<string>;
+}
+
+function suggestionsOnly(row: Extract<ChatRow, { kind: "tool" | "activity" }>): boolean {
+	if (row.kind === "tool") return carriesComposerSuggestions(row.toolName);
+	return (
+		row.steps.length > 0 &&
+		row.steps.every((step) => step.kind === "tool" && carriesComposerSuggestions(step.toolName))
+	);
 }
 
 export function deriveMessageActions(
@@ -34,7 +43,7 @@ export function deriveMessageActions(
 			case "tool":
 			case "activity":
 				sawRespondingRow = true;
-				roundHasLaterContent = true;
+				if (!suggestionsOnly(row)) roundHasLaterContent = true;
 				break;
 			case "divider":
 				sawRespondingRow = true;
@@ -44,6 +53,8 @@ export function deriveMessageActions(
 				if (completionDelivery(row.details) !== "run") roundHasLaterContent = false;
 				break;
 			case "reviewFix":
+			case "continuationRequest":
+			case "handoff":
 				roundHasLaterContent = false;
 				break;
 		}

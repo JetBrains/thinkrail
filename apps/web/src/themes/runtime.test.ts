@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { DEFAULT_CONFIG } from "@thinkrail/contracts";
 import {
 	buildThemeCatalog,
@@ -21,7 +22,7 @@ import {
 } from "./runtime";
 
 function bundledCandidates(): Record<string, unknown> {
-	const dir = join(import.meta.dir, "bundled");
+	const dir = fileURLToPath(new URL("../../../../packages/design-tokens/themes", import.meta.url));
 	return Object.fromEntries(
 		readdirSync(dir)
 			.filter((file) => file.endsWith(".theme.json"))

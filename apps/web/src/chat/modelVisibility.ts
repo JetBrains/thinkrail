@@ -73,7 +73,7 @@ function browserPreferenceTarget(): BrowserPreferenceTarget | null {
 	try {
 		return {
 			storage: window.localStorage,
-			key: hiddenModelsStorageKey(getTransport().httpBase()),
+			key: hiddenModelsStorageKey(getTransport().backendKey()),
 			events: window,
 		};
 	} catch {

@@ -1,5 +1,5 @@
+import { messagesToRuntime } from "@thinkrail/chat-ui/hydrate";
 import { t } from "@thinkrail/locales/react";
-import { messagesToRuntime } from "../chat/hydrate";
 import {
 	type CenterNavigationStamp,
 	type LayoutOpenOptions,

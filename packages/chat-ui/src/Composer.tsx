@@ -12,13 +12,16 @@ import type { ComposerGrowthLimit, ThinkingLevel, WireModel } from "@thinkrail/c
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
-import { isImeComposing } from "@thinkrail/ui/keyboard";
+import type { LocalKeyCommand } from "@thinkrail/ui/keyboard";
+import { hasPlatformModifier, isImeComposing, keyCap } from "@thinkrail/ui/keyboard";
+import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	forwardRef,
 	type KeyboardEvent,
+	type MouseEvent,
 	useCallback,
 	useEffect,
 	useImperativeHandle,
@@ -26,6 +29,8 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { withoutSentDraft, withRestoredDraft } from "./attachments";
+import { composerShiftTabOut, composerTranscriptStep } from "./composerKeys";
 import { FileChip } from "./FileChip";
 import {
 	ModelEffortPicker,
@@ -52,12 +57,25 @@ import {
 	usePendingSelection,
 	useSlashCommandCompletion,
 } from "./prompt";
-import { imagePasteDropHandlers, PromptImageChips, usePromptImages } from "./promptImages";
+import type { PromptFile } from "./promptImageState";
+import {
+	AttachFilesButton,
+	attachmentPasteDropHandlers,
+	type PromptChipsHandle,
+	PromptImageChips,
+	type PromptImagesOwner,
+	usePromptImages,
+} from "./promptImages";
 import type { ChatAttachment } from "./types";
 
 export type SubmitBehavior = "send" | "steer" | "followUp" | "interrupt";
 
 export type ComposerSubmitDisposition = { accepted: true } | { accepted: false; reason: string };
+
+export interface ComposerUpload {
+	signal: AbortSignal;
+	onCopied: (id: string, path: string) => void;
+}
 
 const COMPOSER_EDITOR_LIMIT_CLASS = {
 	compact: "max-h-[calc(6lh+var(--space-8)+var(--space-8))]",
@@ -70,7 +88,7 @@ const WIDE_ONLY = "@max-md:hidden";
 const COMPACT_ONLY = "@md:hidden";
 
 const SEGMENT =
-	"flex items-center gap-4 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none";
+	"flex items-center gap-4 transition-colors focus-visible:focus-ring disabled:pointer-events-none";
 
 const SEND_PILL = "flex h-28 shrink-0 items-stretch rounded-full transition-colors";
 const SEND_PILL_ARMED = "bg-control-primary-bg text-control-primary-text";
@@ -82,33 +100,48 @@ const SEND_MAIN = cn(
 const SEND_MORE = cn(SEGMENT, "rounded-r-full pr-8 pl-2");
 const KEYCAP = "flex h-16 min-w-16 items-center justify-center rounded-xs bg-on-primary-soft px-2";
 
+const COMPOSER_CONTROLS =
+	"a,button,input,label,select,textarea,[role='button'],[role='menuitem'],[role='option']";
+
+function isComposerDeadZone(
+	{ button, target }: MouseEvent<HTMLElement>,
+	shell: HTMLElement | null,
+) {
+	return (
+		button === 0 &&
+		target instanceof Element &&
+		shell?.contains(target) === true &&
+		!target.closest(COMPOSER_CONTROLS)
+	);
+}
+
 const STREAMING_SEND_MODES = [
 	{
 		behavior: "steer" as const,
 		name: "chat.composer.mode.steer",
 		meaning: "chat.composer.mode.steerMeaning",
-		keys: "Enter",
+		command: null,
 		testid: "send-mode-steer",
 	},
 	{
 		behavior: "followUp" as const,
 		name: "chat.composer.mode.queue",
 		meaning: "chat.composer.mode.queueMeaning",
-		keys: "Cmd/Ctrl+Enter",
+		command: "composer.followUp",
 		testid: "send-mode-queue",
 	},
 	{
 		behavior: "interrupt" as const,
 		name: "chat.composer.mode.interrupt",
 		meaning: "chat.composer.mode.interruptMeaning",
-		keys: "Cmd/Ctrl+Shift+Enter",
+		command: "composer.interrupt",
 		testid: "send-mode-interrupt",
 	},
 ] satisfies {
 	behavior: SubmitBehavior;
 	name: MessageKey;
 	meaning: MessageKey;
-	keys: string;
+	command: string | null;
 	testid: string;
 }[];
 
@@ -149,8 +182,14 @@ function highlightTint(state: SlotHighlightState): string {
 interface ComposerProps {
 	value: string;
 	onChange: (value: string) => void;
+	readDraft: () => string;
+	imageOwner?: PromptImagesOwner;
+	acceptsFiles: boolean;
+	onAttachmentNotice: (message: string) => void;
 	isStreaming: boolean;
+	awaitingResponse: boolean;
 	growthLimit: ComposerGrowthLimit;
+	divider?: boolean;
 	commands: SlashCommandItem[];
 	templatePending: boolean;
 	mentionCandidates: MentionCandidate[];
@@ -169,8 +208,15 @@ interface ComposerProps {
 		text: string,
 		attachments: ChatAttachment[],
 		behavior: SubmitBehavior,
-	) => ComposerSubmitDisposition;
+		files: PromptFile[],
+		upload: ComposerUpload,
+	) => ComposerSubmitDisposition | Promise<ComposerSubmitDisposition>;
 	onAbort: () => void;
+	onEnterTranscript?: () => void;
+	onShiftTabOut?: () => boolean;
+	/** The host's composer shortcuts (follow-up, interrupt, into the transcript); none by default. */
+	localKeyDefaults?: readonly LocalKeyCommand[];
+	onScrollTranscript?: (direction: -1 | 1) => void;
 	onHistoryOpen?: () => void;
 	onPickTemplate?: (name: string) => void;
 	onManageTemplates?: () => void;
@@ -181,23 +227,35 @@ interface ComposerProps {
 	 * opens this one instead.
 	 */
 	externalModelPicker?: ModelEffortPickerHandle;
+	dictationEvent?: string;
 }
 
 export interface ComposerHandle {
 	insertText: (text: string) => void;
+	insertAtCaret: (text: string) => void;
+	applyEdit: (kind: "replace" | "paste", text: string) => void;
 	insertAndSubmit: (text: string, behavior: SubmitBehavior) => void;
 	insertTemplate: (parsed: ParsedTemplate) => void;
 	restoreAttachments: (attachments: ChatAttachment[]) => void;
 	openHistory: () => void;
 	refocus: () => void;
+	ownsEscape: () => boolean;
 }
+
+const NO_LOCAL_KEYS: readonly LocalKeyCommand[] = [];
 
 export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
 	{
 		value,
 		onChange,
+		readDraft,
+		imageOwner,
+		acceptsFiles,
+		onAttachmentNotice,
 		isStreaming,
+		awaitingResponse,
 		growthLimit,
+		divider = true,
 		commands,
 		templatePending,
 		mentionCandidates,
@@ -214,25 +272,33 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		onSelectThinking,
 		onSubmit,
 		onAbort,
+		onEnterTranscript,
+		onShiftTabOut,
+		localKeyDefaults = NO_LOCAL_KEYS,
+		onScrollTranscript,
 		onHistoryOpen,
 		onPickTemplate,
 		onManageTemplates,
 		templatesEmpty,
 		externalModelPicker,
+		dictationEvent,
 	},
 	handleRef,
 ) {
 	const t = useT();
+	const keys = useLocalKeys("composer", localKeyDefaults);
 	const ref = useRef<HTMLTextAreaElement>(null);
 	const pickerRef = useRef<ModelEffortPickerHandle>(null);
+	const chipsRef = useRef<PromptChipsHandle>(null);
 	const [caret, setCaret] = useState(0);
-	const attachedImages = usePromptImages();
-	const { images } = attachedImages;
+	const attachedImages = usePromptImages(imageOwner, acceptsFiles);
+	const { images, files, errors: attachmentErrors, uploading } = attachedImages;
 	const [submitError, setSubmitError] = useState<string | null>(null);
 	const pendingImages = attachedImages.pending;
+	const attachmentCount = images.length + files.length;
 	useEffect(() => {
-		if (images.length === 0) setSubmitError(null);
-	}, [images.length]);
+		if (attachmentCount === 0) setSubmitError(null);
+	}, [attachmentCount]);
 	const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
 	const [mentionDismissed, setMentionDismissed] = useState(false);
 	const [sendMenuOpen, setSendMenuOpen] = useState(false);
@@ -242,6 +308,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const slotIdx = slotSession?.activeIndex ?? 0;
 	const backdropRef = useRef<HTMLDivElement | null>(null);
 	const editorSizerRef = useRef<HTMLDivElement | null>(null);
+	const shellRef = useRef<HTMLDivElement>(null);
 	const [draftNeedsExpansion, setDraftNeedsExpansion] = useState(false);
 	const expanded = isStreaming || draftNeedsExpansion;
 	const syncBackdropScroll = useCallback(() => {
@@ -293,23 +360,42 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		setMentionDismissed(false);
 	}, [mentionQuery]);
 
-	const mentionOpen = !mentionDismissed && mentionQuery !== null && mentionCandidates.length > 0;
+	const mentionOpen =
+		!uploading && !mentionDismissed && mentionQuery !== null && mentionCandidates.length > 0;
 
 	const focusSelection = usePendingSelection(ref, setCaret);
 
 	const replaceDraft = useCallback(
-		(text: string, caret?: number) => {
+		(text: string, caret?: number, focus = true) => {
+			const selection = caret ?? text.length;
 			recallIdxRef.current = null;
 			setSlotSession(null);
 			setSubmitError(null);
 			onChange(text);
-			focusSelection(caret ?? text.length);
+			if (focus) focusSelection(selection);
+			else setCaret(selection);
 		},
 		[onChange, focusSelection],
 	);
 
+	const [dictating, setDictating] = useState(false);
+	useEffect(() => {
+		const element = ref.current;
+		if (!element || !dictationEvent) return;
+		const onDictation = (event: Event) => {
+			if (event instanceof CustomEvent)
+				setDictating(Reflect.get(Object(event.detail), "listening") === true);
+		};
+		element.addEventListener(dictationEvent, onDictation);
+		return () => element.removeEventListener(dictationEvent, onDictation);
+	}, [dictationEvent]);
+
 	const canSubmit = (raw: string) =>
-		!templatePending && pendingImages === 0 && (!!raw.trim() || images.length > 0);
+		!dictating &&
+		!templatePending &&
+		pendingImages === 0 &&
+		!uploading &&
+		(!!raw.trim() || attachmentCount > 0);
 	const canSend = canSubmit(value);
 
 	const openModelPicker = (query: string) => {
@@ -326,21 +412,51 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			openModelPicker(modelQuery);
 			return;
 		}
-		const disposition = onSubmit(
-			text,
-			images.map(({ name, content }) => ({ name, content })),
-			behavior,
-		);
-		if (!disposition.accepted) {
-			setSubmitError(disposition.reason);
+		const sentDraft = value;
+		const sentChips = [...attachmentErrors, ...images, ...files].map((chip) => chip.id);
+		const upload = new AbortController();
+		const failed: ComposerSubmitDisposition = {
+			accepted: false,
+			reason: t("chat.composer.submitFailed"),
+		};
+		const settle = (disposition: ComposerSubmitDisposition) => {
+			if (!disposition.accepted) {
+				if (!upload.signal.aborted) setSubmitError(disposition.reason);
+				return;
+			}
+			setSubmitError(null);
+			onChange(withoutSentDraft(readDraft(), sentDraft));
+			attachedImages.clearSent(sentChips);
+			recallIdxRef.current = null;
+			setSlotSession(null);
+		};
+		let disposition: ComposerSubmitDisposition | Promise<ComposerSubmitDisposition>;
+		try {
+			disposition = onSubmit(
+				text,
+				images.map(({ name, content }) => ({ name, content })),
+				behavior,
+				files,
+				{ signal: upload.signal, onCopied: attachedImages.markCopied },
+			);
+		} catch {
+			disposition = failed;
+		}
+		if (!(disposition instanceof Promise)) {
+			settle(disposition);
 			return;
 		}
-		setSubmitError(null);
-		onChange("");
-		attachedImages.reset();
-		recallIdxRef.current = null;
-		setSlotSession(null);
+		const release = attachedImages.holdForUpload(upload);
+		void disposition
+			.catch(() => failed)
+			.then((settled) => {
+				release();
+				settle(settled);
+			})
+			.finally(release);
 	};
+
+	const holdText = (text: string) => onChange(withRestoredDraft(text, readDraft()));
 
 	const pickMention = (c: MentionCandidate) => {
 		const before = value.slice(0, start);
@@ -363,7 +479,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		},
 	});
 
-	const menuOpen = mentionOpen || slashCompletion.open;
+	const slashOpen = !uploading && slashCompletion.open;
+	const menuOpen = mentionOpen || slashOpen;
+	const slotsActive = slots !== null && !uploading;
 
 	const openHistory = () => {
 		setMentionDismissed(true);
@@ -372,11 +490,49 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	};
 
 	useImperativeHandle(handleRef, () => ({
-		insertText: (text: string) => replaceDraft(text),
+		insertText: (text: string) => (uploading ? holdText(text) : replaceDraft(text)),
+		insertAtCaret: (text: string) => {
+			if (uploading) {
+				holdText(text);
+				return;
+			}
+			const at = Math.min(caret, value.length);
+			const before = value.slice(0, at);
+			const after = value.slice(at);
+			const lead = before === "" || /\s$/.test(before) ? "" : " ";
+			const trail = after === "" || /^\s/.test(after) ? "" : " ";
+			replaceDraft(
+				`${before}${lead}${text}${trail}${after}`,
+				before.length + lead.length + text.length,
+			);
+		},
+		applyEdit: (kind: "replace" | "paste", text: string) => {
+			const textarea = ref.current;
+			const focused = textarea !== null && textarea === document.activeElement;
+			if (kind === "replace") {
+				replaceDraft(text, text.length, focused);
+				return;
+			}
+			const start = focused ? textarea.selectionStart : value.length;
+			const end = focused ? textarea.selectionEnd : value.length;
+			replaceDraft(
+				`${value.slice(0, start)}${text}${value.slice(end)}`,
+				start + text.length,
+				focused,
+			);
+		},
 		insertAndSubmit: (text: string, behavior: SubmitBehavior) =>
-			canSubmit(text) ? submitText(text, behavior) : replaceDraft(text),
+			uploading
+				? holdText(text)
+				: canSubmit(text)
+					? submitText(text, behavior)
+					: replaceDraft(text),
 		insertTemplate: (parsed: ParsedTemplate) => {
 			const transition = beginTemplateSlotSession(parsed);
+			if (uploading) {
+				holdText(transition.value);
+				return;
+			}
 			recallIdxRef.current = null;
 			setSubmitError(null);
 			onChange(transition.value);
@@ -395,6 +551,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			if (slot) focusSelection(slot.start, slot.end);
 			else focusSelection(caret);
 		},
+		ownsEscape: () =>
+			ref.current !== null &&
+			ref.current === document.activeElement &&
+			(menuOpen || slots !== null || uploading),
 	}));
 
 	const submit = (behavior: SubmitBehavior) => {
@@ -411,7 +571,27 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
 	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
 		if (isImeComposing(e.nativeEvent)) return;
-		if (slots && !menuOpen) {
+		if (uploading && e.key === "Escape" && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+			e.preventDefault();
+			attachedImages.cancelUpload();
+			return;
+		}
+		const local = keys.match(e.nativeEvent);
+		if (onEnterTranscript && local === "composer.enterTranscript") {
+			e.preventDefault();
+			const { selectionStart, selectionEnd } = e.currentTarget;
+			const atStart = selectionStart === 0 && selectionEnd === 0;
+			if (composerTranscriptStep(draftNeedsExpansion, atStart) === "enter") onEnterTranscript();
+			else focusSelection(0);
+			return;
+		}
+		if (local === "composer.interrupt" || local === "composer.followUp") {
+			e.preventDefault();
+			submit(isStreaming ? (local === "composer.interrupt" ? "interrupt" : "followUp") : "send");
+			return;
+		}
+		const fixed = local === null && !e.altKey && !e.ctrlKey && !e.metaKey;
+		if (fixed && slotsActive && !menuOpen) {
 			if (e.key === "Tab") {
 				e.preventDefault();
 				stepSlot(e.shiftKey ? -1 : 1);
@@ -423,14 +603,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				return;
 			}
 		}
-		if (mentionOpen) {
+		if (fixed && mentionOpen) {
 			const menuLen = mentionCandidates.length;
-			if (e.key === "ArrowDown") {
+			if (e.key === "ArrowDown" && !e.shiftKey) {
 				e.preventDefault();
 				setMentionActiveIndex((i) => (i + 1) % menuLen);
 				return;
 			}
-			if (e.key === "ArrowUp") {
+			if (e.key === "ArrowUp" && !e.shiftKey) {
 				e.preventDefault();
 				setMentionActiveIndex((i) => (i - 1 + menuLen) % menuLen);
 				return;
@@ -447,9 +627,31 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				return;
 			}
 		}
-		if (slashCompletion.handleKeyDown(e)) return;
+		if (fixed && slashOpen && slashCompletion.handleKeyDown(e)) return;
+		const shiftTabOut = composerShiftTabOut(e, menuOpen || slotsActive);
+		if (shiftTabOut && (onShiftTabOut?.() || chipsRef.current?.focus())) {
+			e.preventDefault();
+			return;
+		}
+		if (
+			onScrollTranscript &&
+			fixed &&
+			(e.key === "PageUp" || e.key === "PageDown") &&
+			!e.shiftKey
+		) {
+			e.preventDefault();
+			onScrollTranscript(e.key === "PageUp" ? -1 : 1);
+			return;
+		}
+		if (local !== null) return;
 		const recallAt = recallIdxRef.current;
-		if (e.key === "ArrowUp" && (value === "" || recallAt !== null) && recentPrompts.length > 0) {
+		const recallKey = fixed && !e.shiftKey && !uploading;
+		if (
+			recallKey &&
+			e.key === "ArrowUp" &&
+			(value === "" || recallAt !== null) &&
+			recentPrompts.length > 0
+		) {
 			e.preventDefault();
 			setSlotSession(null);
 			const next = recallAt === null ? 0 : Math.min(recallAt + 1, recentPrompts.length - 1);
@@ -459,7 +661,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			focusSelection(text.length);
 			return;
 		}
-		if (e.key === "ArrowDown" && recallAt !== null) {
+		if (recallKey && e.key === "ArrowDown" && recallAt !== null) {
 			e.preventDefault();
 			setSlotSession(null);
 			if (recallAt === 0) {
@@ -475,30 +677,36 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			}
 			return;
 		}
-		if (e.key === "Enter" && e.shiftKey && (e.metaKey || e.ctrlKey)) {
+		if (e.key === "Enter" && !e.shiftKey && !hasPlatformModifier(e.nativeEvent)) {
 			e.preventDefault();
-			submit(isStreaming ? "interrupt" : "send");
-			return;
-		}
-		if (e.key === "Enter" && !e.shiftKey) {
-			e.preventDefault();
-			const behavior: SubmitBehavior = isStreaming
-				? e.metaKey || e.ctrlKey
-					? "followUp"
-					: "steer"
-				: "send";
-			submit(behavior);
+			submit(isStreaming ? "steer" : "send");
 		}
 	};
 
-	const { onPaste, onDrop } = imagePasteDropHandlers(attachedImages);
+	const { onPaste, onDragOver, onDrop } = attachmentPasteDropHandlers(
+		attachedImages,
+		onAttachmentNotice,
+	);
+	const refocusField = () => focusSelection(caret);
 
 	return (
-		<div
+		<fieldset
 			data-testid="chat-composer"
 			data-expanded={expanded}
 			data-streaming={isStreaming}
-			className="relative flex shrink-0 flex-col border-border-muted border-t bg-container-workspace-bg"
+			aria-label={t("chat.composer.label")}
+			onDragOver={onDragOver}
+			onDrop={onDrop}
+			onMouseDown={(e) => {
+				if (isComposerDeadZone(e, shellRef.current)) {
+					e.preventDefault();
+					ref.current?.focus();
+				}
+			}}
+			className={cn(
+				"relative m-0 flex min-w-0 shrink-0 flex-col border-0 bg-container-workspace-bg p-0",
+				divider && "border-border-muted border-t",
+			)}
 		>
 			{mentionOpen ? (
 				<div
@@ -511,7 +719,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							type="button"
 							data-testid="mention-item"
 							onClick={() => pickMention(candidate)}
-							className={`flex w-full items-center gap-8 rounded-sm px-8 py-4 text-left tr-text-ui ${index === mentionActiveIndex ? "bg-control-bg-selected text-text-default" : "text-text-muted"}`}
+							className={`flex w-full items-center gap-8 rounded-sm px-8 py-4 text-left tr-text-ui focus-visible:focus-ring-inset ${index === mentionActiveIndex ? "bg-control-bg-selected text-text-default" : "text-text-muted"}`}
 						>
 							{candidate.kind === "dir" ? (
 								<FolderIcon className="size-14 shrink-0" />
@@ -522,7 +730,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						</button>
 					))}
 				</div>
-			) : slashCompletion.open ? (
+			) : slashOpen ? (
 				<SlashCommandMenu
 					commands={slashCompletion.matches}
 					activeIndex={slashCompletion.activeIndex}
@@ -537,7 +745,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 									replaceDraft("");
 									onManageTemplates();
 								}}
-								className="flex w-full items-center gap-8 rounded-sm border-border-default border-t px-8 py-4 text-left text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default"
+								className="flex w-full items-center gap-8 rounded-sm border-border-default border-t px-8 py-4 text-left text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default focus-visible:focus-ring"
 							>
 								<Sparkles className="size-12 shrink-0" />
 								<span className="truncate">{t("chat.composer.noTemplates")}</span>
@@ -547,7 +755,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				/>
 			) : null}
 
-			{slots && !menuOpen ? (
+			{slots && !uploading && !menuOpen ? (
 				<TemplateSlotHint
 					activeIndex={slotIdx}
 					count={slots.length}
@@ -558,6 +766,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
 			<PromptImageChips
 				controller={attachedImages}
+				handleRef={chipsRef}
+				onField={refocusField}
+				onTabOut={(backward) => (backward ? pickerRef.current?.focus() : refocusField())}
 				leading={
 					submitError ? (
 						<FileChip
@@ -573,9 +784,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
 			<div className="p-chat-gutter">
 				<div
+					ref={shellRef}
 					data-testid="chat-composer-shell"
 					className={cn(
-						"relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto] items-end gap-x-4 gap-y-4 overflow-hidden rounded-md border border-control-border-default bg-control-bg bg-clip-padding p-4 transition-colors focus-within:border-control-border-active",
+						"relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto] items-end gap-x-4 gap-y-4 overflow-hidden rounded-md border border-control-border-default bg-control-bg bg-clip-padding p-4 transition-colors focus-within:border-control-border-active has-[textarea:focus-visible]:focus-ring",
 						expanded && growthLimit === "half-chat" && "max-h-[50cqh]",
 					)}
 				>
@@ -583,6 +795,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						{externalModelPicker ? null : (
 							<ModelEffortPicker
 								ref={pickerRef}
+								onTriggerKeyDown={(e) => {
+									if (isImeComposing(e.nativeEvent) || e.key !== "Tab" || e.shiftKey) return;
+									if (e.altKey || e.ctrlKey || e.metaKey) return;
+									if (chipsRef.current?.focus()) e.preventDefault();
+								}}
 								models={models}
 								current={currentModel}
 								level={thinkingLevel}
@@ -633,6 +850,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						<textarea
 							ref={ref}
 							data-testid="chat-input"
+							data-dictation-fallback
+							data-focus-default
 							value={value}
 							onScroll={syncBackdropScroll}
 							onChange={(e) => {
@@ -653,14 +872,16 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							onClick={(e) => setCaret(e.currentTarget.selectionStart)}
 							onKeyDown={onKeyDown}
 							onPaste={onPaste}
-							onDrop={onDrop}
+							readOnly={uploading}
 							rows={1}
 							placeholder={
-								isStreaming
-									? t("chat.composer.placeholderStreaming")
-									: expanded
-										? t("chat.composer.placeholderExpanded")
-										: t("chat.composer.placeholder")
+								awaitingResponse
+									? t("chat.composer.placeholderQuestion")
+									: isStreaming
+										? t("chat.composer.placeholderStreaming")
+										: expanded
+											? t("chat.composer.placeholderExpanded")
+											: t("chat.composer.placeholder")
 							}
 							className={cn(
 								"absolute inset-0 size-full resize-none overflow-x-hidden overflow-y-auto rounded-sm bg-transparent px-12 py-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted",
@@ -669,6 +890,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						/>
 					</div>
 					<div className="col-start-3 row-start-2 flex shrink-0 items-center gap-4 self-end">
+						<AttachFilesButton
+							testId="composer-attach"
+							disabled={uploading}
+							onFiles={attachedImages.addFiles}
+							onPicked={refocusField}
+						/>
 						<IconButton
 							icon={History}
 							data-testid="history-open"
@@ -746,14 +973,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 														setSendMenuOpen(false);
 														submit(mode.behavior);
 													}}
-													className="group flex w-full flex-col gap-2 rounded-sm px-8 py-4 text-left hover:bg-control-bg-hovered disabled:pointer-events-none"
+													className="group flex w-full flex-col gap-2 rounded-sm px-8 py-4 text-left hover:bg-control-bg-hovered focus-visible:focus-ring-inset disabled:pointer-events-none"
 												>
 													<span className="flex w-full items-baseline justify-between gap-8">
 														<span className="text-text-default tr-text-ui group-disabled:text-control-disabled-text">
 															{t(mode.name)}
 														</span>
 														<span className="shrink-0 text-text-muted tr-text-metadata group-disabled:text-control-disabled-text">
-															{mode.keys}
+															{mode.command === null ? keyCap("Enter") : keys.label(mode.command)}
 														</span>
 													</span>
 													<span className="text-text-muted tr-text-metadata group-disabled:text-control-disabled-text">
@@ -769,6 +996,6 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					</div>
 				</div>
 			</div>
-		</div>
+		</fieldset>
 	);
 });

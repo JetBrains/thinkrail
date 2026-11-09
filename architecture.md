@@ -29,12 +29,15 @@ dials it over the network; a phone reaches the selected host over Tailscale.
 
 ```
 apps/cli        browser host launcher: boot server + open browser ── depends on ─▶ packages/server
-apps/web        UI client (mobile-first)                           ── depends on ─▶ packages/contracts, packages/locales, packages/ui, packages/extension-api/web, packages/resource-renderers, thinkrail-extensions/*/web
+apps/web        UI client (mobile-first)                           ── depends on ─▶ packages/chat-ui, packages/contracts, packages/design-tokens, packages/locales, packages/remote-client, packages/ui, packages/extension-api/web, packages/resource-renderers, thinkrail-extensions/*/web
+apps/mobile     Capacitor wrapper of apps/web's phone shell (dist-phone) ── depends on ─▶ packages/design-tokens
 apps/desktop    Electrobun local-host launcher                     ── depends on ─▶ packages/server, packages/contracts, packages/shared, packages/locales
 apps/website    public landing + blog + /vibecoding (Cloudflare Pages) ── depends on ─▶ packages/website-analytics
 packages/website-analytics  dependency-free browser analytics policy for the public website
 packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/locales, packages/shared, packages/pi-background-commands, packages/pi-delegation, packages/pi-subagents, packages/extension-api/server, thinkrail-extensions/*/server
 packages/contracts  the wire (types plus tiny pure runtime)
+packages/relay      standalone zero-knowledge signaling relay for remote access (hosted or self-hosted; GHCR
+                    image) ── depends on ─▶ packages/contracts
 packages/locales    UI string catalogs (bundled en.json) + pure catalog rules; ./react holds the one i18next
                     instance ── depends on ─▶ nothing in the workspace (i18next, react-i18next)
 packages/shared     shellEnv (server-side only)
@@ -57,9 +60,14 @@ thinkrail-extensions/*  ThinkRail extensions: a pi capability + ./server and ./w
                     registry file per side (Decision 21; visualize and ask-user-question shipped) ── depends on ─▶ pi-extensions/*,
                     packages/extension-api, packages/ui, packages/locales (web half)
 packages/extension-api  types + define* helpers for extension halves ── depends on ─▶ packages/contracts, packages/locales (types)
+packages/design-tokens  theme palettes + manifest contract, colour/spacing/typography sources, their generated
+                    CSS and applyPalette — the one visual language for every UI host ── may depend on ─▶ packages/contracts
 packages/ui         owned shadcn/Radix primitives + cn + onThemeSwap ── may depend on ─▶ packages/contracts, packages/locales
 packages/resource-renderers  file/diff renderers, registry + review surfaces behind a host seam ── may depend on ─▶
                     packages/contracts, packages/locales, packages/ui
+packages/chat-ui    the store-free chat: transcript model, turn + tool renderers, registry, Markdown, Composer,
+                    Resources dock, prompt behaviour — shared by web and mobile ── may depend on ─▶
+                    packages/contracts, packages/locales, packages/ui, packages/extension-api/web, ext-visualize/web
 ```
 
 Artifact verification is a separate source-only workspace, [[module-artifact-tests]]. It depends on
@@ -67,11 +75,27 @@ CLI build metadata, server test fixtures, and shared teardown; root tools and br
 No product package imports the test workspace, and it has no application build step or Electrobun SDK
 dependency. This keeps test process drivers outside both launchers and the server library.
 
+## Artifacts
+
+| Artifact | Built from | Gate | Ships as |
+|---|---|---|---|
+| Web client | `apps/web` (Vite) | `bun run e2e` | static assets, embedded in the CLI binary and desktop |
+| CLI | `apps/cli` (`bun --compile` per target) | `e2e:binary`, `smoke:binary` | single-file binary + `install.sh` / `install.ps1` |
+| Desktop | `apps/desktop` (Electrobun dev/canary/stable) | `e2e:desktop`, `smoke:desktop` | native installers (Decision 15) |
+| Mobile | `apps/web` phone shell (`build:phone` → `dist-phone/`) in the `apps/mobile` Capacitor wrapper | web unit tests + `e2e/phone-shell.spec.ts` | from source via Xcode / Android Studio; `ios/` and `android/` are generated per machine |
+| Relay | `packages/relay` (bundle + Dockerfile) | unit + loopback relay tests | GHCR image on `relay-v<semver>` tags (`.github/SPEC.md`) |
+| Website | `apps/website` (Astro) | its own build validation | Cloudflare Pages (Decision 14) |
+| Portable pi packages | `pi-extensions/*` | `check:pi-packages` | npm via changesets (Decision 20) |
+
+CLI and desktop share one runtime manifest (`@thinkrail/server/build-support`) and one web build; a new
+artifact consumes those rather than re-deriving them.
+
 ## Decisions
 
 1. **Client/host split.** Engine host owns `pi` and state; the UI is a portable client; the wire is the
-   only coupling. **Rule: `apps/web` depends on `contracts`, `locales`, `ui`, `extension-api/web`,
-   `resource-renderers`, and `thinkrail-extensions/*/web` only** — never on `server` or `shared`. All added edges are browser-safe
+   only coupling. **Rule: `apps/web` depends on `contracts`, `locales`, `ui`, `design-tokens`,
+   `chat-ui`, `remote-client`, `extension-api/web`, `resource-renderers`, and `thinkrail-extensions/*/web`
+   only** — never on `server` or `shared`. All added edges are browser-safe
    presentation packages; the UI remains shippable without the host.
 2. **Launchers are thin; the host is a library.** `apps/cli` and `apps/desktop` both embed the shared
    boot path in-process. CLI opens a browser; desktop opens a native system webview on a fresh one-origin
@@ -94,7 +118,11 @@ dependency. This keeps test process drivers outside both launchers and the serve
    protocol version so an independently-shipped UI can detect host-version drift.
 4. **Transport endpoint is a parameter.** Defaults to same-origin (`location.host`); a remote browser,
    desktop, or mobile client points it at the selected host's Tailscale MagicDNS name. Native resume state
-   is keyed by backend profile so ids from one host are never interpreted against another.
+   is keyed by backend profile so ids from one host are never interpreted against another. **The store holds
+   one host at a time:** installing a transport closes the previous one and resets every host-scoped slice,
+   and frontend-local storage is keyed by the transport's `backendKey()`. A client that spans several
+   computers — the phone shell — keeps its cross-computer overview in `remote-client` and mounts the store on
+   the computer whose chat is open, rather than adding a host dimension to the store.
 5. **UI = panels + shell.** Layout-agnostic, store-driven panels (project→workspace nav, file tree,
    the code renderer, changes/diff, workspace-local review, terminal, chat, composer) never know their
    arrangement. Each desktop frontend window owns one locally persisted, resource-free workbench frame: a
@@ -102,8 +130,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
    bottom region. The frame's topology, singleton-tool placement, visibility, folds, geometry, and alignment
    remain unchanged when that window switches workspace; workspace-scoped resources and attention project
    into it from separate local views. Terminals may occupy center or auxiliary groups, with new workspaces
-   defaulting one terminal to bottom. Another window never rearranges this one. A future mobile shell may
-   project the same panels differently; desktop docking does not define that projection. Detail:
+   defaulting one terminal to bottom. Another window never rearranges this one. The phone shell
+   ([[submodule-web-phone]]) is a second shell of the same client: its own entry and touch layout over the
+   same store, transport and chat hooks, never a second client; desktop docking does not define it. Detail:
    [[submodule-web-shell-layout]].
 6. **Workspaces are git worktrees.** project (git repo) → workspace (`git worktree` on its own
    branch/cwd, under `~/.thinkrail/worktrees`) → {chats, files, terminals}. **Two deliberate

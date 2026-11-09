@@ -100,12 +100,15 @@ export function ActivityBreadcrumbBar({
 				className={`${measureClassName} flex h-[34px] items-center overflow-hidden px-chat-gutter tr-text-metadata`}
 			>
 				{segments.map((segment, index) => (
-					<div key={segment.id} className="flex min-w-0 items-center">
+					<div key={segment.id} className="flex items-center">
 						{index > 0 ? (
 							<ChevronRight aria-hidden className="size-14 shrink-0 text-text-disabled" />
 						) : null}
 						{segment.kind === "ellipsis" ? (
-							<span data-testid="activity-breadcrumb-ellipsis" className="px-4 text-text-muted">
+							<span
+								data-testid="activity-breadcrumb-ellipsis"
+								className="shrink-0 px-4 text-text-muted"
+							>
 								…
 							</span>
 						) : (
@@ -122,7 +125,7 @@ export function ActivityBreadcrumbBar({
 											: t("chat.breadcrumbs.expand", { label: segment.label })
 									}
 									onClick={() => onToggle(segment.id)}
-									className="flex size-20 shrink-0 items-center justify-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
+									className="flex size-20 shrink-0 items-center justify-center rounded-sm focus-visible:focus-ring"
 								>
 									<ChevronRight
 										aria-hidden
@@ -134,12 +137,19 @@ export function ActivityBreadcrumbBar({
 									aria-label={t("chat.breadcrumbs.jump", { label: segment.label })}
 									title={segment.meta ? `${segment.label} · ${segment.meta}` : segment.label}
 									onClick={() => onJump(segment.id)}
-									className="flex min-w-0 items-center gap-4 rounded-sm py-2 pr-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
+									className="flex min-w-0 items-center gap-4 rounded-sm py-2 pr-4 text-left focus-visible:focus-ring"
 								>
 									<SegmentIcon kind={segment.kind} />
-									<span className="shrink-0 text-text-default">{segment.label}</span>
+									<span
+										data-testid="activity-breadcrumb-label"
+										className="shrink-0 whitespace-nowrap text-text-default"
+									>
+										{segment.label}
+									</span>
 									{segment.meta ? (
-										<span className="min-w-0 truncate text-text-muted">{segment.meta}</span>
+										<span className="min-w-0 line-clamp-1 break-all text-text-muted">
+											{segment.meta}
+										</span>
 									) : null}
 								</button>
 							</div>
