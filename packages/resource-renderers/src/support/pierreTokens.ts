@@ -9,8 +9,8 @@ export type TokenModel = Pick<
 	| "getLineCount"
 	| "getValue"
 	| "getValueLength"
+	| "getVersionId"
 	| "isDisposed"
-	| "onDidChangeContent"
 	| "onDidChangeLanguage"
 	| "onWillDispose"
 >;
@@ -110,16 +110,17 @@ export function createPierreTokens(
 				code: model.getValue(),
 			}),
 			languageId,
-			revision: 0,
+			revision: model.getVersionId(),
 			alive: true,
 		});
 	}
 
-	function refresh(model: TokenModel) {
-		const document = documents.get(model);
-		if (!document) return;
-		document.tokenizer.reset(model.getValue());
-		document.revision += 1;
+	function syncDocuments() {
+		for (const [model, document] of documents) {
+			if (document.revision === model.getVersionId()) continue;
+			document.tokenizer.reset(model.getValue());
+			document.revision = model.getVersionId();
+		}
 	}
 
 	function ensureLoaded() {
@@ -139,12 +140,9 @@ export function createPierreTokens(
 	function track(model: TokenModel) {
 		models.add(model);
 		if (highlights) attach(model);
-		const subscriptions = [
-			model.onDidChangeContent(() => refresh(model)),
-			model.onDidChangeLanguage(() => attach(model)),
-		];
+		const languageChange = model.onDidChangeLanguage(() => attach(model));
 		model.onWillDispose(() => {
-			for (const subscription of subscriptions) subscription.dispose();
+			languageChange.dispose();
 			models.delete(model);
 			detach(model);
 		});
@@ -153,12 +151,14 @@ export function createPierreTokens(
 	function documentFor(languageId: string, { document, line }: LineState, text: string) {
 		const current = document?.alive ? document : null;
 		if (current && holdsLine(current, line, text)) return current;
+		let holder: TokenDocument | null = null;
 		for (const candidate of documents.values()) {
 			if (candidate === current || candidate.languageId !== languageId) continue;
 			if (!holdsLine(candidate, line, text)) continue;
-			if (!current || samePrefix(current, candidate, line)) return candidate;
+			if (current && samePrefix(current, candidate, line)) return candidate;
+			holder ??= candidate;
 		}
-		return current;
+		return holder ?? current;
 	}
 
 	function provider(languageId: string): languages.TokensProvider {
@@ -169,6 +169,7 @@ export function createPierreTokens(
 			getInitialState: () => INITIAL_STATE,
 			tokenize(text, state) {
 				const previous = state instanceof LineState ? state : INITIAL_STATE;
+				syncDocuments();
 				const document = documentFor(languageId, previous, text);
 				const { line } = previous;
 				const endState = new LineState(document, line + 1, document?.revision ?? 0);

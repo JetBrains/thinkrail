@@ -75,11 +75,12 @@ async function coloredClass(page: Page, text: RegExp) {
 	return (await token.getAttribute("class")) ?? "";
 }
 
-test("two open files with the same first line keep their own colours", async ({ page }) => {
+test("two files side by side with the same first line keep their own colours", async ({ page }) => {
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
 	const shared = "export const shared = 1;";
-	writeFileSync(join(workspace.worktreePath, "one.ts"), `${shared}\n/* inside\nwords */\n`);
+	const one = join(workspace.worktreePath, "one.ts");
+	writeFileSync(one, `${shared}\n/* inside\nwords */\n`);
 	writeFileSync(join(workspace.worktreePath, "two.ts"), `${shared}\nconst after = 2;\n`);
 	await revealWorkbenchTool(page, "files");
 
@@ -88,9 +89,22 @@ test("two open files with the same first line keep their own colours", async ({ 
 	const keyword = await coloredClass(page, /export/);
 	expect(comment).not.toBe(keyword);
 	await openFile(page, "two.ts", "after");
-	await expect(visibleTokens(page).filter({ hasText: /^const\s$/ })).toHaveClass(keyword);
-	await openFile(page, "one.ts", "inside");
-	await expect(visibleTokens(page).filter({ hasText: /words/ })).toHaveClass(comment);
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await page.getByTestId("editor-tab").filter({ hasText: "two.ts" }).click({ button: "right" });
+	await page.getByRole("menuitem", { name: "Split right" }).click();
+	const groups = page.getByTestId("center-group");
+	await expect(groups).toHaveCount(2);
+	const tokensOf = (name: string) =>
+		groups
+			.filter({ has: page.getByTestId("editor-tab").filter({ hasText: name }) })
+			.locator(".view-line span span");
+
+	await expect(tokensOf("two.ts").filter({ hasText: /^const\s$/ })).toHaveClass(keyword);
+	await expect(tokensOf("one.ts").filter({ hasText: /words/ })).toHaveClass(comment);
+	writeFileSync(one, `// changed\n${shared}\n/* inside\nwords */\n`);
+	await expect(tokensOf("one.ts").filter({ hasText: /changed/ })).toHaveClass(comment);
+	await expect(tokensOf("one.ts").filter({ hasText: /words/ })).toHaveClass(comment);
+	await expect(tokensOf("two.ts").filter({ hasText: /^const\s$/ })).toHaveClass(keyword);
 });
 
 test("a file changed on disk recolours in the open editor", async ({ page }) => {

@@ -678,14 +678,19 @@ content's own height.
   first meets a model of a catalog language, never during a preload. On a 5,000-line TS file the first open's
   largest long task is 72 ms in Chromium, about the same as tokenizing with a grammar engine, and all lines are
   ready in 212 ms (Chromium) and 337 ms (WebKit). Each tokenizer holds its own WASM instance: about 0.5 MB for
-  1,000 lines. Only the visible file of an editor has a model, and a disposed model frees its tokenizer.
+  1,000 lines. Only the visible file of each editor group has a model (split groups show up to four), and a
+  disposed model frees its tokenizer.
   Pierre cannot save or restore lexer state, so a tokenizer owns a whole document and tokenizes it at once.
-  The Monaco line state only names that document, the line number and its revision. A text change calls
-  `reset`, which is not incremental: the models here change only through `setValue`, and a new revision makes
-  Monaco retokenize every line. Monaco's `tokenize` receives no model, so a state starts with no document and
-  picks one by line text. Two files can share lines: when a document no longer holds the current line, the
-  state moves to another document of that language that holds it and has the same earlier lines, whose
-  tokens so far are the same. Fences and inline HTML color inside Pierre's own lexers, with no per-language
+  The Monaco line state only names that document, the line number and its revision (the model's version id).
+  Every `tokenize` first resets each document whose model version moved, rather than waiting for
+  `onDidChangeContent`: Monaco recolors the visible lines inside the change, before public listeners run, and a
+  stale document there would leave them plain for good. The reset is not incremental: the models here change
+  only through `setValue`, and the new revision makes Monaco retokenize every line. Monaco's `tokenize`
+  receives no model, so a state starts with no document and picks one by line text. Two files can share
+  lines: when a document no longer holds the current line, the state moves to another document of that
+  language that holds it, preferring one with the same earlier lines, whose tokens so far are the same. When
+  none has them — the borrowed document changed or closed mid-pass — any holder takes over, so the file
+  recovers its own document by the next line instead of staying plain. Fences and inline HTML color inside Pierre's own lexers, with no per-language
   loading. Monaco asks a factory for a provider only once, so a failed load answers plain text and marks the
   language missing, and the next model of that language installs the provider with `setTokensProvider` if a
   retried load succeeds. `create()` never throws, and nothing suspends on the highlighter: a Suspense fallback

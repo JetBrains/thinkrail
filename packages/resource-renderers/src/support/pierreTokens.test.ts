@@ -7,10 +7,10 @@ function fakeModel(
 	languageId = "typescript",
 	size: { lines?: number; length?: number } = {},
 ) {
-	const contentListeners = new Set<() => void>();
 	const languageListeners = new Set<() => void>();
 	let disposeListener: () => void = () => {};
 	let value = text;
+	let version = 1;
 	let language = languageId;
 	let disposed = false;
 	function subscribe(listeners: Set<() => void>, listener: () => void) {
@@ -22,8 +22,8 @@ function fakeModel(
 		getLineCount: () => size.lines ?? value.split("\n").length,
 		getValue: () => value,
 		getValueLength: () => size.length ?? value.length,
+		getVersionId: () => version,
 		isDisposed: () => disposed,
-		onDidChangeContent: (listener: () => void) => subscribe(contentListeners, listener),
 		onDidChangeLanguage: (listener: () => void) => subscribe(languageListeners, listener),
 		onWillDispose: (listener: () => void) => {
 			disposeListener = listener;
@@ -34,7 +34,7 @@ function fakeModel(
 		model,
 		setValue(next: string) {
 			value = next;
-			for (const listener of contentListeners) listener();
+			version += 1;
 		},
 		setLanguage(next: string) {
 			language = next;
@@ -44,7 +44,7 @@ function fakeModel(
 			disposed = true;
 			disposeListener();
 		},
-		listeners: () => contentListeners.size + languageListeners.size,
+		listeners: () => languageListeners.size,
 	};
 }
 
@@ -135,6 +135,29 @@ describe("createPierreTokens", () => {
 		closed.dispose();
 		const second = provider.tokenize(lines[1] ?? "", first.endState);
 		expect(second.tokens[0]?.scopes).toMatch(/^keyword(\..+)?$/);
+	});
+
+	test("a file that borrowed another's lines keeps its colours when that file changes or closes", async () => {
+		const shared = ["// header", 'import a from "a";', ""];
+		const lender = [...shared, "export const x = 1;"];
+		const borrower = [...shared, "export const y = 2;"];
+		for (const leave of ["change", "close"] as const) {
+			const lent = fakeModel(lender.join("\n"));
+			const other = fakeModel(["let other = 0;", "let more = 1;", "", "/* open"].join("\n"));
+			const tokens = await trackedTokens(
+				lent.model,
+				other.model,
+				fakeModel(borrower.join("\n")).model,
+			);
+			const provider = tokens.provider("typescript");
+			let state = provider.getInitialState();
+			for (const line of borrower.slice(0, 2)) state = provider.tokenize(line, state).endState;
+			if (leave === "change") lent.setValue(["// changed", ...lender.slice(1)].join("\n"));
+			else lent.dispose();
+			for (const line of borrower.slice(2, 3)) state = provider.tokenize(line, state).endState;
+			const last = provider.tokenize(borrower[3] ?? "", state);
+			expect(last.tokens[0]?.scopes, leave).toMatch(/^keyword(\..+)?$/);
+		}
 	});
 
 	test("new text replaces the tokens and invalidates saved line states", async () => {
