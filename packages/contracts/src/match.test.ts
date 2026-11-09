@@ -158,10 +158,10 @@ describe("matchFields tiers", () => {
 			return best;
 		};
 		expect(foldMatchText(nfd(2))).toBe(foldMatchText(nfd(2).normalize("NFC")));
-		const once = nfd(10_000);
-		const twice = nfd(20_000);
-		time(once);
-		expect(time(twice)).toBeLessThan(3 * time(once) + 20);
+		const small = nfd(2_500);
+		const large = nfd(20_000);
+		time(small);
+		expect(time(large)).toBeLessThan(24 * time(small) + 20);
 	});
 
 	test("decomposed accents fold too, and a highlight spans the marks it covers", () => {
