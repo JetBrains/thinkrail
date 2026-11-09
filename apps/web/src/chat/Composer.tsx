@@ -86,11 +86,14 @@ const KEYCAP = "flex h-16 min-w-16 items-center justify-center rounded-xs bg-on-
 const COMPOSER_CONTROLS =
 	"a,button,input,label,select,textarea,[role='button'],[role='menuitem'],[role='option']";
 
-function isComposerDeadZone({ button, currentTarget, target }: MouseEvent<HTMLElement>) {
+function isComposerDeadZone(
+	{ button, target }: MouseEvent<HTMLElement>,
+	shell: HTMLElement | null,
+) {
 	return (
 		button === 0 &&
 		target instanceof Element &&
-		currentTarget.contains(target) &&
+		shell?.contains(target) === true &&
 		!target.closest(COMPOSER_CONTROLS)
 	);
 }
@@ -248,6 +251,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const slotIdx = slotSession?.activeIndex ?? 0;
 	const backdropRef = useRef<HTMLDivElement | null>(null);
 	const editorSizerRef = useRef<HTMLDivElement | null>(null);
+	const shellRef = useRef<HTMLDivElement>(null);
 	const [draftNeedsExpansion, setDraftNeedsExpansion] = useState(false);
 	const expanded = isStreaming || draftNeedsExpansion;
 	const syncBackdropScroll = useCallback(() => {
@@ -503,8 +507,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			data-testid="chat-composer"
 			data-expanded={expanded}
 			data-streaming={isStreaming}
+			aria-label={t("chat.composer.label")}
 			onMouseDown={(e) => {
-				if (isComposerDeadZone(e)) {
+				if (isComposerDeadZone(e, shellRef.current)) {
 					e.preventDefault();
 					ref.current?.focus();
 				}
@@ -584,6 +589,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
 			<div className="p-chat-gutter">
 				<div
+					ref={shellRef}
 					data-testid="chat-composer-shell"
 					className={cn(
 						"relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto] items-end gap-x-4 gap-y-4 overflow-hidden rounded-md border border-control-border-default bg-control-bg bg-clip-padding p-4 transition-colors focus-within:border-control-border-active",
