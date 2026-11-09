@@ -3,9 +3,12 @@ import { SPEECH_SAMPLE_RATE } from "@thinkrail/contracts";
 export type CaptureFailureReason = "denied" | "no-device" | "failed";
 
 export class CaptureFailure extends Error {
-	constructor(readonly reason: CaptureFailureReason) {
+	readonly reason: CaptureFailureReason;
+
+	constructor(reason: CaptureFailureReason) {
 		super(`microphone capture failed: ${reason}`);
 		this.name = "CaptureFailure";
+		this.reason = reason;
 	}
 }
 

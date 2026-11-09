@@ -61,7 +61,11 @@ interface ShikiTokensOptions extends Pick<ResourceCodeHost, "languageId"> {
 }
 
 class LineState implements languages.IState {
-	constructor(readonly ruleStack: StateStack) {}
+	readonly ruleStack: StateStack;
+
+	constructor(ruleStack: StateStack) {
+		this.ruleStack = ruleStack;
+	}
 
 	clone(): LineState {
 		return this;

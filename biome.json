@@ -37,7 +37,11 @@
 			"style": {
 				"noNonNullAssertion": "error",
 				"useThrowOnlyError": "error",
-				"useThrowNewError": "error"
+				"useThrowNewError": "error",
+				"noEnum": "error",
+				"noNamespace": "error",
+				"noParameterProperties": "error",
+				"useReadonlyClassProperties": "error"
 			},
 			"suspicious": {
 				"noExplicitAny": "error",

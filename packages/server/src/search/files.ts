@@ -150,11 +150,16 @@ export class FileListCache {
 	private readonly loading = new Map<string, Promise<void>>();
 	private readonly overtaken = new Set<string>();
 	private readonly failedAt = new Map<string, number>();
+	private readonly loader: (root: string) => Promise<FileList>;
+	private readonly now: () => number;
 
 	constructor(
-		private readonly loader: (root: string) => Promise<FileList> = listRootFiles,
-		private readonly now: () => number = Date.now,
-	) {}
+		loader: (root: string) => Promise<FileList> = listRootFiles,
+		now: () => number = Date.now,
+	) {
+		this.loader = loader;
+		this.now = now;
+	}
 
 	refresh(root: string): Promise<void> {
 		if (this.due(root)) return this.load(root);

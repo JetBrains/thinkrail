@@ -45,11 +45,13 @@ class Dictation {
 	private finished = false;
 	private commitTimer: ReturnType<typeof setTimeout> | null = null;
 	private readonly release = holdEngine();
+	private readonly socket: SpeechClientSocket;
+	private readonly onFinished: () => void;
 
-	constructor(
-		private readonly socket: SpeechClientSocket,
-		private readonly onFinished: () => void,
-	) {}
+	constructor(socket: SpeechClientSocket, onFinished: () => void) {
+		this.socket = socket;
+		this.onFinished = onFinished;
+	}
 
 	private send(message: SpeechServerMessage): void {
 		try {
