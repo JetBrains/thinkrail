@@ -29,7 +29,7 @@ export function MermaidView({
 			generation = generation + 1;
 			const current = generation;
 			const stale = () => cancelled || current !== generation;
-			fontsLoaded(resolveFont("tr-code-block"))
+			void fontsLoaded(resolveFont("tr-code-block"))
 				.then(() => (stale() ? null : renderMermaid(source)))
 				.then((res) => {
 					if (res === null || stale()) return;
