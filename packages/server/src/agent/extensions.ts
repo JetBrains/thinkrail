@@ -44,6 +44,7 @@ export { disabledPackages, setDisabledPackagesResolver };
 
 import { requestReviewExtension } from "./requestReviewTool";
 import { reviewToolExtension } from "./reviewTool";
+import { sandboxExtensions } from "./sandbox";
 import { decideSkill, type SkillAdmissionContext } from "./skillAdmission";
 import { skillCarryover } from "./skillCarryover";
 import {
@@ -361,7 +362,7 @@ function installedDeclarations(packageManager: DefaultPackageManager): Set<strin
 }
 
 export function childBaseExtensionFactories(): InlineExtension[] {
-	return [oversizedImageGuard, skillCarryover];
+	return [oversizedImageGuard, skillCarryover, ...sandboxExtensions()];
 }
 
 export function childExtensionFactories(): InlineExtension[] {

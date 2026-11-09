@@ -1,0 +1,39 @@
+{
+	"name": "pi-sandbox",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./index.ts",
+		"./index.ts": "./index.ts",
+		"./package.json": "./package.json"
+	},
+	"description": "OS-level sandboxing for Pi's shell and file tools: writes confined to the workspace, secrets unreadable, network allow-listed.",
+	"keywords": [
+		"pi-package",
+		"pi",
+		"pi-coding-agent",
+		"extension",
+		"sandbox"
+	],
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"test": "bun test"
+	},
+	"dependencies": {
+		"@anthropic-ai/sandbox-runtime": "0.0.79"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "*"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "catalog:",
+		"@types/bun": "catalog:",
+		"typescript": "catalog:"
+	},
+	"pi": {
+		"extensions": [
+			"./index.ts"
+		]
+	}
+}
