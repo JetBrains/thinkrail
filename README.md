@@ -23,7 +23,9 @@ We built a rich interface around the `pi` coding agent, isolated work into separ
   <source media="(prefers-color-scheme: dark)" srcset=".github/readme-assets/workbench-dark.png">
   <img src=".github/readme-assets/workbench-light.png" alt="ThinkRail workbench: the Projects pane beside the left tool rail listing worktree workspaces and their Settled shelf, a finished pi conversation with its tool steps in the center, the resulting diff beside it, and the Specs tree above the Changes list on the right with their tools on the edge rail" width="900">
 </picture>
-*From the left: An isolated workspace, a work session with an AI agent in that workspace, the code change made by the agent, and the the spec tree.*
+*From the left: An isolated workspace, a work session with an AI agent in that workspace, the code change made by the agent, and the spec tree.*
+
+<a id="install"></a>
 
 ## Installation
 
