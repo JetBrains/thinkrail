@@ -3,7 +3,7 @@ import { applyLocale } from "@thinkrail/locales/react";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
-import type { ChatRow } from "./rows";
+import type { ChatRow, TurnDividerData } from "./rows";
 import { ChatTurnView } from "./turns";
 
 function renderRow(row: ChatRow, isFinalAnswer: boolean): string {
@@ -40,17 +40,71 @@ describe("message copy layout", () => {
 	});
 });
 
+function footerHtml(data: Partial<TurnDividerData>): string {
+	const row: ChatRow = {
+		kind: "divider",
+		id: "s1:divider",
+		data: {
+			outcome: "done",
+			elapsedMs: null,
+			toolCount: 0,
+			specs: [],
+			changedFiles: [],
+			receipt: null,
+			...data,
+		},
+	};
+	return renderRow(row, false);
+}
+
+function footerText(data: Partial<TurnDividerData>): string {
+	const status = footerHtml(data).match(/data-testid="turn-divider-status"[^>]*>(.*?)<\/span>/);
+	return status?.[1]?.replace(/<[^>]+>/g, "") ?? "";
+}
+
+describe("round footer", () => {
+	test("puts the outcome and elapsed time first on the one footer line", () => {
+		expect(footerText({ outcome: "done", elapsedMs: 42_000, toolCount: 5 })).toBe("Done in 42s");
+		expect(footerHtml({ outcome: "done", elapsedMs: 42_000, toolCount: 5 })).toContain(
+			"5 tool calls",
+		);
+		expect(footerText({ outcome: "stopped", elapsedMs: 75_000 })).toBe("Stopped after 1m 15s");
+		expect(footerText({ outcome: "error", elapsedMs: 12_000 })).toBe("Error after 12s");
+	});
+
+	test("drops a time under one second", () => {
+		expect(footerText({ outcome: "done", elapsedMs: 400 })).toBe("Done");
+		expect(footerText({ outcome: "stopped", elapsedMs: null })).toBe("Stopped");
+	});
+
+	test("an immediate error with nothing else to report is just the thin line", () => {
+		const html = footerHtml({ outcome: "error", elapsedMs: 300 });
+		expect(html).not.toContain("turn-divider-status");
+		expect(html).not.toContain("data-chat-fold-root");
+	});
+
+	test("a round cut short by a steer keeps only its time and counts", () => {
+		const html = footerHtml({ outcome: null, elapsedMs: 8_000, toolCount: 2 });
+		expect(html).not.toContain("turn-divider-status");
+		expect(html).toContain("8s");
+		expect(html).toContain("2 tool calls");
+	});
+});
+
 describe("system and failure notices", () => {
-	test("an extension notice keeps its text; the round closer and failure notices follow the language", async () => {
+	test("an extension notice keeps its text; the round footer and failure notices follow the language", async () => {
 		expect(renderRow({ kind: "system", id: "n", text: "Just so you know" }, false)).toContain(
 			"Just so you know",
 		);
-		expect(renderRow({ kind: "system", id: "done" }, false)).toContain("✓ Done");
+		expect(footerText({ outcome: "done", elapsedMs: 3_000 })).toBe("Done in 3s");
 		await applyLocale("de", {
-			de: { "chat.turn.done": "✓ Fertig", "chat.failure.truncated": "Antwort abgeschnitten." },
+			de: {
+				"chat.divider.doneIn": "Fertig in {{elapsed}}",
+				"chat.failure.truncated": "Antwort abgeschnitten.",
+			},
 		});
 		try {
-			expect(renderRow({ kind: "system", id: "done" }, false)).toContain("✓ Fertig");
+			expect(footerText({ outcome: "done", elapsedMs: 3_000 })).toBe("Fertig in 3s");
 			expect(
 				renderRow({ kind: "error", id: "e", text: "", failure: "truncated" }, false),
 			).toContain("Antwort abgeschnitten.");
