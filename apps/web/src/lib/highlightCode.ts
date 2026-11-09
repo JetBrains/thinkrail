@@ -1,6 +1,12 @@
 import { useEffect, useId, useState, useSyncExternalStore } from "react";
 import { shikiLanguageId } from "./highlighter";
 import type { HighlightReply, HighlightRequest } from "./highlighter.worker";
+import {
+	assembleHighlight,
+	escapeHtml,
+	HIGHLIGHT_PRE_END,
+	type HighlightLines,
+} from "./highlightHtml";
 
 interface HighlightWorker {
 	postMessage(request: HighlightRequest): void;
@@ -54,6 +60,7 @@ export function createHighlightClient({ spawn }: HighlightClientDeps) {
 	let cacheChars = 0;
 	const slots = new Map<string, Slot>();
 	const inFlight = new Map<number, InFlight>();
+	const rendered = new Map<string, string[]>();
 	let nextId = 0;
 	let worker: HighlightWorker | null = null;
 	let workerFailed = false;
@@ -109,7 +116,7 @@ export function createHighlightClient({ spawn }: HighlightClientDeps) {
 			const spawned = spawn({
 				reply(message) {
 					if (worker !== spawned) return;
-					settle(message.id, message.html);
+					settle(message.id, replyHtml(message));
 				},
 				fail() {
 					if (worker === spawned) failWorker();
@@ -123,13 +130,31 @@ export function createHighlightClient({ spawn }: HighlightClientDeps) {
 		return worker;
 	}
 
+	function assemble(owner: string, { open, from, lines, tail }: HighlightLines) {
+		const shown = rendered.get(owner) ?? [];
+		if (from > shown.length) return null;
+		shown.length = from;
+		shown.push(...lines);
+		rendered.set(owner, shown);
+		return assembleHighlight(open, shown, tail);
+	}
+
+	function replyHtml({ id, result }: HighlightReply) {
+		if (!result) return null;
+		if ("html" in result) return result.html;
+		const request = inFlight.get(id);
+		if (!request || slots.get(request.owner)?.inFlight !== id) return null;
+		return assemble(request.owner, result.update);
+	}
+
 	function dispatch(key: string, slot: Slot, call: Call) {
 		const id = nextId++;
 		const request: InFlight = { ...call, owner: key };
 		slot.inFlight = id;
 		inFlight.set(id, request);
 		const target = activeWorker();
-		if (target) target.postMessage({ id, code: call.code, lang: call.lang });
+		if (target)
+			target.postMessage({ kind: "highlight", id, key, code: call.code, lang: call.lang });
 		else settle(id, null);
 	}
 
@@ -185,7 +210,14 @@ export function createHighlightClient({ spawn }: HighlightClientDeps) {
 		});
 	}
 
-	return { highlightCode, cachedHighlight };
+	function release(key: string) {
+		rendered.delete(key);
+		slots.get(key)?.waiting?.resolve(null);
+		slots.delete(key);
+		worker?.postMessage({ kind: "release", key });
+	}
+
+	return { highlightCode, cachedHighlight, release };
 }
 
 function spawnHighlighterWorker(events: HighlightWorkerEvents) {
@@ -211,7 +243,9 @@ export function cachedHighlight(code: string, lang: string) {
 	return client.cachedHighlight(code, lang);
 }
 
-const PRE_END = "</code></pre>";
+function releaseHighlight(key: string) {
+	client.release(key);
+}
 
 export interface ShownHighlight {
 	seq: number;
@@ -228,9 +262,8 @@ export function staleHighlight(code: string, lang: string, latest: ShownHighligh
 	if (!latest || latest.lang !== lang || !code.startsWith(latest.code)) return null;
 	const tail = code.slice(latest.code.length);
 	if (!tail) return latest.html;
-	if (!latest.html.endsWith(PRE_END)) return null;
-	const escaped = tail.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-	return latest.html.slice(0, -PRE_END.length) + escaped + PRE_END;
+	if (!latest.html.endsWith(HIGHLIGHT_PRE_END)) return null;
+	return latest.html.slice(0, -HIGHLIGHT_PRE_END.length) + escapeHtml(tail) + HIGHLIGHT_PRE_END;
 }
 
 let highlightSeq = 0;
@@ -258,6 +291,8 @@ export function useHighlightedCode(code: string, lang: string) {
 			if (html !== null) setLatest((shown) => newerHighlight(shown, { seq, code, lang, html }));
 		});
 	}, [code, lang, key]);
+
+	useEffect(() => () => releaseHighlight(key), [key]);
 
 	return cached ?? staleHighlight(code, lang, latest);
 }

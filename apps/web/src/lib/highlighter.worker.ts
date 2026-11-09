@@ -1,17 +1,19 @@
-import { renderChatHighlight } from "./chatHighlighter";
+import { type ChatHighlight, createChatStreams } from "./chatHighlighter";
 
-export interface HighlightRequest {
-	id: number;
-	code: string;
-	lang: string;
-}
+export type HighlightRequest =
+	| { kind: "highlight"; id: number; key: string; code: string; lang: string }
+	| { kind: "release"; key: string };
 
-export interface HighlightReply {
-	id: number;
-	html: string | null;
-}
+export type HighlightReply = { id: number; result: ChatHighlight };
+
+const streams = createChatStreams();
 
 self.onmessage = (event: MessageEvent<HighlightRequest>) => {
-	const { id, code, lang } = event.data;
-	self.postMessage({ id, html: renderChatHighlight(code, lang) } satisfies HighlightReply);
+	const request = event.data;
+	if (request.kind === "release") {
+		streams.release(request.key);
+		return;
+	}
+	const { id, key, code, lang } = request;
+	self.postMessage({ id, result: streams.highlight(key, code, lang) } satisfies HighlightReply);
 };

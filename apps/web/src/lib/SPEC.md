@@ -94,7 +94,16 @@ not this module; the theme-aware highlighter remains app-local.
   a key owns one entry, so a streaming fence does not fill it. `useHighlightedCode()` is the one component
   hook: it reads the cache on the client only (static renders, such as the rendered diff, stay plain), applies
   replies in request order, and shows the last highlight plus the newer streamed text as plain until the
-  worker catches up. These files stay out of the barrel and are imported per-file (`@/lib/highlighter`,
+  worker catches up. Streaming sends only new lines: the worker renders a key's first request whole, because
+  most blocks never change, and on a later request keeps a `LiveTokenizer` for that key. `ansi` always
+  renders whole: Pierre 0.4's `LiveTokenizer` reads it as plain text and would show the escape codes. It answers with the
+  lines finished since the last reply plus the unfinished line, and from line 0 when the text stops being an
+  append. Each tokenizer owns a WASM instance, so at most 8 live, oldest dropped first, and each is freed when
+  idle for 30 s or when its block unmounts (`releaseHighlight`); a dropped one rebuilds on the next request.
+  The release also drops the block's queued request and ignores line updates still on their way, so the worker keeps no state for a dead key.
+  `highlightHtml.ts` holds the Pierre-free helpers the client and the DOM share: `assembleHighlight` joins the
+  lines and marks the unfinished one, and `applyHighlightHtml` parses only the added part into the shown block: `stable` is the shown HTML that later updates keep, and `added` is the unfinished line plus the lines finished since. A block without its tail marker is replaced whole rather than patched.
+  It is the one place outside `highlightCode` that reads the markup. `chat/HighlightedHtml` mounts it. These files stay out of the barrel and are imported per-file (`@/lib/highlighter`,
   `@/lib/highlightCode`). `shell/AppResourceHost` hands the catalog to the resource renderers, while every
   grammar and the worker load on first use; theme
   identity/palettes never live in `lib`. Collision-safe browser identity composition lives here too:
