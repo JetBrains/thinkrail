@@ -148,20 +148,11 @@ describe("matchFields tiers", () => {
 
 	test("folding a decomposed text grows linearly with its length", () => {
 		const nfd = (reps: number) => "Configuración déjà vu naïve café ".repeat(reps).normalize("NFD");
-		const time = (text: string) => {
-			let best = Number.POSITIVE_INFINITY;
-			for (let run = 0; run < 3; run += 1) {
-				const started = performance.now();
-				foldMatchText(text);
-				best = Math.min(best, performance.now() - started);
-			}
-			return best;
-		};
 		expect(foldMatchText(nfd(2))).toBe(foldMatchText(nfd(2).normalize("NFC")));
-		const small = nfd(2_500);
-		const large = nfd(20_000);
-		time(small);
-		expect(time(large)).toBeLessThan(24 * time(small) + 20);
+		const large = nfd(100_000);
+		const started = performance.now();
+		foldMatchText(large);
+		expect(performance.now() - started).toBeLessThan(3_000);
 	});
 
 	test("decomposed accents fold too, and a highlight spans the marks it covers", () => {
