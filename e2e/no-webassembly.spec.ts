@@ -12,19 +12,21 @@ import {
 } from "./fixtures/app";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
+import { E2eWire } from "./fixtures/wire";
 
 test.use({ launchOptions: { args: ["--js-flags=--jitless"] } });
 
 const worktree = () => join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
 const SCRIPT = ["export const first = 1;", "export const second = 2;"];
 
-async function openWorkspaceWithScript(page: Page): Promise<void> {
+async function openWorkspaceWithScript(page: Page) {
 	await openFixtureProject(page);
-	await createWorkspaceViaDialog(page);
+	const workspace = await createWorkspaceViaDialog(page);
 	expect(await page.evaluate(() => typeof Reflect.get(globalThis, "WebAssembly"))).toBe(
 		"undefined",
 	);
 	writeFileSync(join(worktree(), "script.ts"), `${SCRIPT.join("\n")}\n`);
+	return workspace;
 }
 
 test("without WebAssembly a code diff shows its lines as plain text", async ({ page }) => {
@@ -74,4 +76,42 @@ test("without WebAssembly a chat code block shows its lines as plain text", asyn
 	await openPersistedChat(page, "Plain fence");
 	const code = page.locator("pre", { hasText: SCRIPT[0] ?? "" }).last();
 	for (const line of SCRIPT) await expect(code).toContainText(line);
+});
+
+test("without WebAssembly a line thread on a plain diff or phone file is listed as unplaced", async ({
+	page,
+}) => {
+	const workspace = await openWorkspaceWithScript(page);
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+	try {
+		await wire.request("review.commentAdd", {
+			workspaceId: workspace.id,
+			kind: "inline",
+			anchor: {
+				path: "script.ts",
+				side: "worktree",
+				selectors: [{ kind: "lineRange", startLine: 2, endLine: 2 }],
+			},
+			body: "A remark on a plain line.",
+		});
+	} finally {
+		wire.close();
+	}
+	const strip = page.getByTestId("review-unplaced-strip");
+
+	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).dblclick();
+	const diff = page.getByTestId("diff-view");
+	await expect(diff.getByText(SCRIPT[1] ?? "", { exact: true })).toBeVisible();
+	await expect(diff.getByTestId("review-thread-card")).toHaveCount(0);
+	await expect(strip).toBeVisible();
+
+	await revealWorkbenchTool(page, "files");
+	await page.getByTestId("file-node").filter({ hasText: "script.ts" }).dblclick();
+	await page.setViewportSize(PHONE_VIEWPORT);
+	await hideAuxiliaryWorkbench(page);
+	const fileView = page.getByTestId("file-view");
+	await expect(fileView.getByText(SCRIPT[1] ?? "", { exact: true })).toBeVisible();
+	await expect(fileView.getByTestId("review-thread-card")).toHaveCount(0);
+	await expect(strip).toBeVisible();
 });

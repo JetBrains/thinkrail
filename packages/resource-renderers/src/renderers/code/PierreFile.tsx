@@ -88,8 +88,8 @@ function PierreFileSurface({
 		[hash, resource.language, resource.path, text],
 	);
 	const placedThreadIds = useMemo(
-		() => filePlacedThreadIds(text, review?.threads ?? []),
-		[review?.threads, text],
+		() => (plain ? NO_PLACED_THREADS : filePlacedThreadIds(text, review?.threads ?? [])),
+		[plain, review?.threads, text],
 	);
 	useEffect(() => {
 		onPlacedThreadIds?.(placedThreadIds);

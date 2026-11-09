@@ -288,8 +288,8 @@ function PierreDiffSurface({
 		onHunkKeys?.([...contentKeyById.values()]);
 	}, [contentKeyById, onHunkKeys]);
 	const placedThreadIds = useMemo(
-		() => diffPlacedThreadIds(fileDiff, review),
-		[fileDiff, review?.base.threads, review?.worktree.threads],
+		() => (plain ? NO_PLACED_THREADS : diffPlacedThreadIds(fileDiff, review)),
+		[fileDiff, plain, review?.base.threads, review?.worktree.threads],
 	);
 	useEffect(() => {
 		onPlacedThreadIds?.(placedThreadIds);
