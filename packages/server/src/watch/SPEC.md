@@ -23,7 +23,8 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
 
 - **Owns:** the watcher registry + its lifecycle: `ensureWatch(workspaceId)` (idempotent and
   **self-healing**; returns the live watcher's shared readiness promise; started lazily by `host` when a
-  workspace read or `workspace.watchReady` preflight lands — the read is the "a client is looking" signal;
+  workspace read or a `workspace.watchReady` preflight lands — the read is the "a client is looking"
+  signal — and as a **prewarm** watch for the root a `search.query` resolved;
   readiness reports whether the watcher was already known ready), `stopWatch(workspaceId)` (called
   in `workspace.remove`'s fast path),
   `stopAllWatches()` (called in `server.stop()`); the ignore filter (any path segment `.git` or
@@ -50,7 +51,8 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   hang and torn-down watchers cannot publish. An invalidation nudge remains idempotent, so the fallback's
   possible duplicate is one cheap no-op refetch.
 - **Prewarm tier (globally bounded):** `ensureWatch(workspaceId, { prewarm: true })` — reached via
-  `workspace.watchReady`'s optional `prewarm` flag, the web's pre-selection warm-up — starts the same
+  `workspace.watchReady`'s optional `prewarm` flag, the web's pre-selection warm-up, and by the search
+  palette's root watch — starts the same
   watcher but marks its entry **prewarm-only**. Prewarm-only entries live in one global pool capped at
   **8**: creating one beyond the cap evicts the least-recently-prewarmed prewarm-only entry through
   `stopWatch` (its conservative readiness settle included), so clicking through many projects reuses one

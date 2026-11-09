@@ -81,7 +81,11 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   monotonic edges with different meanings: `setStatus("connected")` advances **`connectionGeneration`**
   for reconnect hydration, while **`welcomeGeneration`** advances only when one complete
   `server.welcome` snapshot lands. Every connection-status transition clears `protocolVersion`, so UI
-  capabilities remain unavailable between sockets and until the current socket's welcome is installed.
+  capabilities remain unavailable between sockets and until the current socket's welcome is installed;
+  **`welcomeProtocolVersion`** keeps the last installed welcome's protocol across a reconnect (in memory
+  only), for the one capability that must outlive a blip: **`selectHostSearchAvailable`** (the search
+  palette keeps its host scopes and rows) beside **`selectHostReachable`** (connected and this
+  connection's welcome — when a host search request may go out).
   **`installWelcomeSnapshot(protocolVersion, projects, recentProjects,
   config?, hostPlatform?, hostUpdate?)`** installs protocol + both sorted project views + optional config,
   host platform, optional host-update lifecycle snapshot + navigation repair and then advances that readiness
@@ -154,7 +158,19 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   navigation stamp still hold. The shell's chat-reconciliation module validates/hydrates that exact target
   before ordinary locally placed-chat hydration; successful authoritative absence consumes it, while failures
   retain it for reconnect.
-  The store owns no URL/history/storage access — `navigation` owns serialization and drivers. It also owns
+  The store owns no URL/history/storage access — `navigation` owns serialization and drivers. It owns the
+  **background-creation slice** (v104): `workspaceCreations` by id, folded from `workspace.creationChanged`
+  (`applyWorkspaceCreation`, which also raises one error toast when a running creation turns `failed`) and
+  replaced on hydration (`setWorkspaceCreations`), and **`activeCreationId`** — mutually exclusive with
+  `activeWorkspaceId`: `selectCreation` clears the workspace, and every workspace activation, `selectProject`,
+  `selectMain` and project reconciliation clears the creation. **`applyWorkspaceCreationRemoved` is the whole
+  removal reaction**: if that creation was selected it activates the new workspace (or lands on its project
+  after a dismiss) and queues `creationChatToOpen` (`sessionId`, `kickoffError`, and the prompt this window
+  sent) for the shell's handoff hook; if not, it never moves focus and only toasts a `kickoffError`. The window
+  that started a creation keeps its full prompt in `sentCreationPrompts` (freed on removal or when hydration no
+  longer lists the creation) so a rejected kickoff still shows the user's message above the error turn.
+  Hydration that finds the watched creation gone lands on its workspace when the re-listed project holds it,
+  else on the project. `workspaceRetryDraft` carries Edit & retry's prefill to the shell's dialog. It also owns
   the **workspace lifecycle reactions** every client runs
   identically on the `workspace.created`/`updated`/`removed` pushes (no per-client optimism — the backend
   is authoritative): **`addWorkspace(ws)`** upserts a
@@ -553,7 +569,8 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   **`analyticsEnabled: boolean`**, **`analyticsConsentConfirmed: boolean`**,
   **`notificationsEnabled: boolean`** (the attention-notification master toggle),
   **`subagentsEnabled: boolean`**, **`subagentMaxConcurrent: number`**, **`disabledExtensions: string[]`**
-  (defaulting to `[]` so a pre-v82 host reads as "all on"), **`jbcentralQuotaEnabled: boolean`**,
+  (defaulting to `[]` so a pre-v82 host reads as "all on"), **`extensionSettings: ExtensionSettingValues`**
+  (defaulting to `{}` so a pre-v105 host reads as "every declared default"), **`jbcentralQuotaEnabled: boolean`**,
   **`jbcentralQuotaRefreshSeconds: number`**, and **`onboardingDismissed: boolean`** (absent ⇒ `false`) ride the same `applyConfig` fold (host-owned, fieldwise
   defaulted/validated from the contracts helpers so an older or malformed host snapshot cannot poison
   the store). `terminalWindowsShell` narrows through `isTerminalWindowsShell` and otherwise uses

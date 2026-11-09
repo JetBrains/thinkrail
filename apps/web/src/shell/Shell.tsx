@@ -23,6 +23,7 @@ import { SurveyInvitationDialog } from "../panels/SurveyInvitationDialog";
 import { SurveyWindow } from "../panels/SurveyWindow";
 import { Toaster } from "../panels/Toaster";
 import { useBranchStatus } from "../panels/useBranchStatus";
+import { useCreationChatHandoff, WorkspaceCreationView } from "../panels/WorkspaceCreation";
 import { SearchSettings } from "../search";
 import {
 	SettingsSection,
@@ -102,6 +103,11 @@ export function Shell() {
 	const updates = useUpdates(supportsHostUpdateRun(protocolVersion) ? runHostUpdate : null);
 	const windowControls = useNativeWindowControls();
 	const [newWorkspaceProjectId, setNewWorkspaceProjectId] = useState<string | null>(null);
+	const activeCreation = useAppStore((s) =>
+		s.activeCreationId ? s.workspaceCreations[s.activeCreationId] : undefined,
+	);
+	const workspaceRetryDraft = useAppStore((s) => s.workspaceRetryDraft);
+	useCreationChatHandoff();
 
 	const homeProjects = useCollapsibleRegion<HTMLDivElement>(PROJECT_HOME_PROJECTS_REGION_ID);
 	const [searchShortcut] = useState(() => platformShortcutLabel("K"));
@@ -271,6 +277,15 @@ export function Shell() {
 							if (!isOpen) setNewWorkspaceProjectId(null);
 						}}
 					/>
+				) : workspaceRetryDraft !== null ? (
+					<NewWorkspaceDialog
+						open
+						projectId={workspaceRetryDraft.projectId}
+						retryDraft={workspaceRetryDraft}
+						onOpenChange={(isOpen) => {
+							if (!isOpen) useAppStore.getState().clearWorkspaceRetry();
+						}}
+					/>
 				) : null}
 			</header>
 			{hasActiveWorkspace && activeWorkspaceId ? (
@@ -278,7 +293,10 @@ export function Shell() {
 					<WorkspaceWorkbench workspaceId={activeWorkspaceId} />
 				</div>
 			) : (
-				<ProjectHome projects={homeProjects} />
+				<ProjectHome
+					projects={homeProjects}
+					{...(activeCreation ? { main: <WorkspaceCreationView creation={activeCreation} /> } : {})}
+				/>
 			)}
 			{onboardingActive ? null : analyticsConsentOpen ? (
 				<AnalyticsConsentDialog />

@@ -26,7 +26,8 @@ not this module; the theme-aware highlighter remains app-local.
   `ResourcePreview` because a package cannot import the app's `lib`; `panels/pathIdentity.test.ts` pins it to
   `projectRelativePath` for workspace-relative paths),
   **`viewport.ts`** → `isPhoneViewport()` plus the live `usePhoneViewport()` projection (coarse pointer
-  or a viewport below 768px is phone-class; both media queries are observed), and **`shallowEqualArrays()`** (element-wise `Object.is` — the "did this really change?" test behind the
+  or a viewport below 768px is phone-class; one combined media query is observed), built on the general
+  **`useMediaQuery(query)`** (false where `matchMedia` is missing), and **`shallowEqualArrays()`** (element-wise `Object.is` — the "did this really change?" test behind the
   store's snapshot-identity guard and `ErrorBoundary`'s reset keys), **`userText()`** (a user
   message's plain text — shared by `chat`'s transcript hydration/renderer and `store`'s live event
   fold, so "same message" means the same thing everywhere; it lives here because `store`'s edge to
@@ -39,8 +40,10 @@ not this module; the theme-aware highlighter remains app-local.
   here because `chat/` may not import from `panels/`, which is what let three private twins of it
   accumulate), **`platformShortcutLabel()`** +
   **`hasPlatformModifier()`** + **`platformFamily()`** (one Apple-vs-other definition for shortcut chrome and
-  global handlers, plus the `apple` / `windows` / `linux` / `other` family for per-OS shortcut tables; all
-  default to the browser-reported platform but accept an explicit platform string so non-browser callers and
+  global handlers — the definition itself lives in `@thinkrail/ui/keyboard` so extension cards share it, and
+  `hasPlatformModifier` is re-exported here to keep the app's shortcut helpers on one import; plus the
+  `apple` / `windows` / `linux` / `other` family for per-OS shortcut tables; all default to the
+  browser-reported platform but accept an explicit platform string so non-browser callers and
   tests never inherit a host runtime's synthetic `navigator` accidentally; the label optionally renders the
   Alt variant — `⌥⌘N` / `Ctrl+Alt+N` — so shortcut chrome never composes modifier glyphs itself), and
   **`copyText()`**
@@ -78,7 +81,7 @@ not this module; the theme-aware highlighter remains app-local.
   Shiki highlighter, **kept out of the barrel** so the eager `@/lib` import stays shiki-free:
   `highlighter.ts` owns the curated grammar/id/file-association catalog shared by chat and the desktop
   Monaco renderer (both load a grammar on its language's first use), plus
-  `createChatHighlighter(engine)`: `themes`' one generic CSS-variable registration and each chat grammar
+  `createChatHighlighter(engine)`: `themes`' one generic CSS-variable registration and each catalog grammar
   loaded on first use. Chat code is highlighted off the main thread:
   `highlightCode.ts` resolves the language alias (unknown and `mermaid` answer `null` with no worker),
   then posts to one lazy `highlighter.worker.ts` per page, which uses the Oniguruma WASM engine. Per
@@ -107,7 +110,7 @@ not this module; the theme-aware highlighter remains app-local.
   to a string index that skips the check, so such writes assign onto the returned copy instead. The
   `biome-plugins/nullProto.grit` lint rule rejects `Object.create(null)` anywhere else in `apps/web/src`.
 - **Public surface (barrel):** `cssColorToHex`, `isPhoneViewport`,
-  `usePhoneViewport`, `normalizePath`, `isAbsolutePath`, `fileName`, `projectRelativePath` (canonical worktree-relative POSIX identity;
+  `usePhoneViewport`, `useMediaQuery`, `normalizePath`, `isAbsolutePath`, `fileName`, `projectRelativePath` (canonical worktree-relative POSIX identity;
   collapses in-root `.`/`..` aliases but preserves an attempted leading escape for host rejection; Windows
   drive-rooted containment compares path/root case-insensitively while preserving the candidate's casing),
   `shallowEqualArrays`, `userText`, `firstNonBlankLine` (first trimmed non-empty line, `undefined` when

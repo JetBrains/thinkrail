@@ -125,7 +125,8 @@ re-opened transcripts provider-valid.
     and a failed re-read keeps the last listing. Failures log only a closed count, never provider ids or
     the provider's error text. Direct API keys and other subscriptions keep pi's catalog: no listing was verified to
     agree with pi's aliases there.
-  - `modelDefaults` — `preferredDefaultModel(available)`: pi's `defaultModelPerProvider` in pi's order,
+  - `modelDefaults` — `piDefaultModelRef()` reads pi's global `defaultProvider`/`defaultModel`, undefined when
+    either is unset or the file is unreadable. `preferredDefaultModel(available)`: pi's `defaultModelPerProvider` in pi's order,
     then any available model whose id is one of those defaults, else the first available model. Pi does
     not export that map, so the host mirrors it under a parity test against the installed dist; the first
     pass is what pi's own `findInitialModel` would pick. The same-id pass covers a provider whose own
@@ -320,6 +321,8 @@ re-opened transcripts provider-valid.
     New-session and pre-session entrypoints capture the current generation; operations on a live session use
     that session's retained runtime. `abort` remains available as the cancellation control path.
     `prompt`/`steer`/`followUp` (with images) /
+    — `promptSession`'s optional `onPreflight` fires with pi's `preflightResult` (model and auth validated,
+    the run started, queued or handled), which lets a caller stop waiting before the agent's turn ends
     — **both `promptSession` and `followUpSession` resolve the delivery mode against the session's
     LIVE `isStreaming`, never the caller's belief about it**: `prompt()` throws mid-turn (so it falls
     back to `steer`), and pi's `followUp()` only *enqueues* into a queue that a run already in flight
@@ -350,9 +353,10 @@ re-opened transcripts provider-valid.
     `listAvailableModels` / `listSettledModels` (the same snapshot without starting a refresh) / **`clampThinkingForModel`** (pi's `clampThinkingLevel` for a `{model, level}`
     pair — `model.clampThinking`; the host uses it so defaults and live-session effort changes follow Pi).
     Earlier, #394 showed ThinkRail's `available[0]` differed from Pi's pick and hit a proxy 400. ThinkRail
-    now resolves new-chat defaults host-side from `AppConfig`, falling back to `preferredDefaultModel`
-    (pi's provider default, then the first available model) when the saved default is unavailable,
-    without rewriting that setting. `available[0]` alone was catalog order — `openai/gpt-4`, an 8K-context
+    resolves new-chat defaults host-side from `AppConfig`, falling back to pi's global `settings.json`
+    default (`piDefaultModelRef`), then `preferredDefaultModel` (pi's provider default, then the first
+    available model), when an earlier choice is unset or unavailable, without rewriting either setting.
+    Project `.pi/settings.json` defaults do not apply to new chats. `available[0]` alone was catalog order — `openai/gpt-4`, an 8K-context
     model, for a fresh OpenAI connection. An explicitly requested unavailable model is rejected rather
     than silently substituted. The host passes the chosen model explicitly so the UI and session agree.
     Plan review uses this same `resolveNewChatModel({})` for unset reviewer overrides: AppConfig
@@ -748,13 +752,12 @@ re-opened transcripts provider-valid.
     readout; crash recovery still comes from child transcripts and reconciliation. This is
     delegated spend's only accounting channel: delegation tools must never return `AgentToolResult.usage`,
     which pi would sum a second time. The write is best-effort, like pi's cache warmer: a failed append is
-    logged and never fails the child run. `recordSessionUsage` reports only whether pi took the usage into
-    its session; persistence stays uncertain. pi moves the leaf to a new entry before persisting it, so a
-    failed append restores the previous leaf (later entries must never chain to an unpersisted id, or a
-    reopened chat loses its history before it) and truncates an existing transcript back to its pre-append
-    size (a torn partial line would swallow the next entry); pi's initial file creation is outside this
-    repair. A usage entry pi kept only in memory counts in this process and is restored on disk by
-    reconciliation after the chat is reopened. Closing
+    logged and never fails the child run. `recordSessionUsage` reports whether pi took the usage into its
+    session: since pi 1.5 a failed append leaves pi's memory and leaf as they were (later entries never
+    chain to an unpersisted id), so the host reports `false`, the recorder keeps its watermark and the
+    increment rides the next write or reconciliation. The host still truncates an existing transcript back
+    to its pre-append size (pi appends with one `appendFileSync`, so a failed write can leave a torn partial
+    line that would swallow the next entry); pi's initial file creation is outside this repair. Closing
     a chat keeps its entry writable until its teardown cascade settles, so runs that cascade stops are
     still recorded; attach is refused during teardown, so the transcript keeps one writer. A deletion
     tombstone suppresses the write, because pi's append would recreate the trashed file. Graceful host
@@ -851,10 +854,17 @@ re-opened transcripts provider-valid.
     install, remove, update or outside settings change, and a switch generation the host bumps on every
     `disabledPackages` write — so a loader that resolved while a package was flipped off and back on
     never compares equal to the restored set) joins the extension policy generation
-    above, and each session loader records the key it last resolved under; `isLoaderPackagePolicyStale`
-    is one more predicate of the reconciliation `applyExtensionTools` runs at registration, after every
-    reload and on `refreshExtensionTools`, so a session prepared under an older policy reloads when it
-    registers and a change mid-reload re-reloads — the fan-out alone would miss both.
+    above, and each session loader records the key it last resolved under — together with the
+    **extension setting values** (`AppConfig.extensionSettings`, reaching `agent` through a host-injected
+    resolver like the disabled set; a `settings.update` of them calls `refreshExtensionTools`). A reload
+    snapshots the setting values once, and its extension factories read that snapshot, never the live
+    values, so the recorded key always describes the tools actually loaded, even across a change and revert
+    during the reload.
+    `isLoaderPolicyStale` is one more predicate of the reconciliation `applyExtensionTools` runs at
+    registration, after every reload and on `refreshExtensionTools`, so a session prepared under an older
+    policy or older setting values reloads when it registers (or once its turn ends) and a change
+    mid-reload re-reloads — the fan-out alone would miss both. A pending question keeps the arguments it
+    was asked with.
     The **`set_title`** tool (`titleTool.ts`) is how chats and workspaces get named: the main agent calls it
     with `chat_title?` / `workspace_name?` / `branch?` (English kebab slug). It is always registered and
     active, and listed via `promptSnippet`; toggling it off after naming would rebuild the system prompt
@@ -1211,7 +1221,7 @@ context-budget limitations and their upgrade checks live in [[pi-compatibility]]
 
 Pi owns provider retry; the host never adds one. Pi retries only errors that match its retryable
 patterns: "Anthropic stream ended before message_stop" does, "Could not parse Anthropic SSE event" does
-not. `patches/@earendil-works%2Fpi-ai@1.4.0.patch` (root `patchedDependencies`, upstream
+not. `patches/@earendil-works%2Fpi-ai@1.5.0.patch` (root `patchedDependencies`, upstream
 earendil-works/pi#10390, #564) fixes two defects in pi-ai's `anthropic-messages` SSE parser that end a
 turn with that parse error. The two fixes have different outcomes:
 

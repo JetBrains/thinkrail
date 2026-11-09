@@ -46,11 +46,20 @@ bootstrap it into one so it can be opened.
   project folder. The workspace-side half of the same door is `openExistingWorktree`
   ([[submodule-server-workspaces]]); reading the workspace records for it stays within the `persistence`
   dep — this module still never imports its sibling. `setProjectPublisher` is the host-injected push seam; this module never imports `host`.
+  **`setProjectPathGuard(fn)`** is the host-injected veto on project folders: every door that adopts or writes
+  a folder — `openProject` and `initProject` on the resolved path (after `~` expansion), `createProject` on
+  the new folder and `inspectCloneDestination` on the clone target, each before anything is written — calls
+  it, so the host can refuse a folder `workspaces` is still creating without this module importing it.
   It also owns **`inspectProjectPath`** (classify a path — `repo` / `initable` / `missing` /
   `notDirectory` — so the UI picks between opening, an init offer, or an error) and **`initProject`**
   (bootstrap a plain directory: `git init` + `git add -A` + an **allow-empty** initial commit — committing
   the folder's contents, or an empty commit when it is empty, so the repo gets a HEAD and `git worktree
-  add` works; an already-a-repo path short-circuits to `openProject`; a missing / non-dir path throws).
+  add` works; an already-a-repo path short-circuits to `openProject`; a missing / non-dir path throws; a
+  timed-out top-level probe throws `GIT_TIMEOUT` rather than classifying a slow repo as `initable`; a
+  top-level probe git refuses with "dubious ownership" (e.g. a WSL share opened from Windows) throws with
+  git's stderr rather than offering `git init` inside what may be an existing repo; a
+  timed-out `user.name`/`user.email` probe throws rather than committing as ThinkRail; a failed
+  init/add/commit throws with git's stderr and removes `.git` only when this call created it).
   **`createProject(parentPath, name)`** is the start-from-nothing path: `name` must be one plain folder
   name (no separators, not `.`/`..`), the resolved parent is created when missing, the target folder is
   made — an existing **empty** folder is reused, a non-empty one or a file rejects — and then gets the same
@@ -115,7 +124,7 @@ and truncating first can separate a secret suffix from the URL prefix needed to 
 
 - **Public surface (barrel):** `cloneProject`, `inspectCloneDestination`, `startProjectClone`, `cancelProjectClone`, `openProject`, `listProjects`, `listRecentProjects`,
   `refreshRecentProjectFolders`, `closeProject`, `renameProject`,
-  `getProjects`, `setProjectPublisher`, `inspectProjectPath`, `initProject`, `createProject`, `setProjectTrust`,
+  `getProjects`, `setProjectPublisher`, `setProjectPathGuard`, `inspectProjectPath`, `initProject`, `createProject`, `setProjectTrust`,
   `setProjectSkillEnabled`, `setProjectGroupEnabled`, `acknowledgeProjectSkills`,
   `approveProjectMcpServer`, `setProjectMcpOverride`, `grantProjectMcpTool`, `revokeProjectMcpTool`,
   `setPiTrustSeed`.

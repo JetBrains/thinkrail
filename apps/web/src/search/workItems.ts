@@ -36,6 +36,7 @@ export interface WorkItemsInput {
 	state: WorkItemsState;
 	contextProjectId: string | null;
 	firstPrompts: Readonly<Record<string, string>>;
+	transcriptPreviews: boolean;
 	navigateToProject: (projectId: string) => void;
 	navigateToWorkspace: (workspace: Pick<Workspace, "id" | "projectId">, sessionId?: string) => void;
 }
@@ -147,6 +148,9 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 				running: recordAttention === "running",
 				...(recordAttention ? { attention: recordAttention } : {}),
 				contextBoost: contextBoost(record.projectId, workspaceId, input),
+				...(input.transcriptPreviews
+					? { previewTarget: { kind: "chat", sessionId: record.sessionId } }
+					: {}),
 				run: () =>
 					input.navigateToWorkspace(
 						{ id: workspaceId, projectId: record.projectId },
@@ -177,7 +181,10 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 			subtitle: isDefault
 				? t("search.item.projectFolder", { project: projectName })
 				: `${projectName} · ${workspace.branch}`,
-			keywords: reviewRef ? [reviewRef] : [],
+			keywords: [
+				...(reviewRef ? [reviewRef] : []),
+				...(isDefault && workspace.branch ? [workspace.branch] : []),
+			],
 			group: "workspaces",
 			scope: "work",
 			icon: isDefault ? RiHome4Line : RiGitBranchLine,

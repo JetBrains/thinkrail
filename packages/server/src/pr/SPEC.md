@@ -74,7 +74,9 @@ workspace can equally sit on its base — without this guard, Open PR would `git
 any PR could offer its review boundary. The client mirrors the ordinary local/`origin` same-branch case;
 the host remains authoritative for unsupported remote bases. **`refreshUserOwnedWorkspace(workspaceId)` resolves the LIVE branch for
 Default/external workspaces** (`workspaces`' same sync used by the fs-watcher tee) and persists it — a
-no-op for created workspaces, whose branch only ThinkRail ever moves. Open PR validates once before its
+no-op for created workspaces, whose branch only ThinkRail ever moves. `refreshedWorkspace` calls it with
+`{ strict: true }`: a branch read that times out aborts the action, never lets the checkout-moved guard
+pass on the stored branch. Open PR validates once before its
 async dirty-file read (preserving the safe base-branch fast failure), then refreshes, reloads, and
 revalidates immediately after that await. Without both, a branch switched in a terminal while the Git
 read is in flight or moments before pressing Open PR would push/open/compare against the STALE persisted

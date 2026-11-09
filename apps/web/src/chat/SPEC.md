@@ -75,7 +75,15 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   a failed turn can't look like nothing happened. A provider error that matches a known
   model-unavailable signature (`model_not_found`, Anthropic's `not_found_error` on `model:`, OpenRouter's
   `No endpoints found`, Bedrock's model access denial, …) leads with a localized "pick another model"
-  notice above the provider's verbatim text, since these are account/plan limits a retry cannot fix. Only the current settlement-derived failure carries the
+  notice above the provider's verbatim text, since these are account/plan limits a retry cannot fix. A
+  **subscription-limit** error (`subscriptionLimit`: Claude's "Third-party apps now draw from your extra
+  usage", ChatGPT's Subscription Sharing limits and Codex's "You have hit your ChatGPT usage limit") keeps
+  the provider's text unannotated — it already says what happened — and swaps **Try again** for that
+  provider's usage-page link plus **Open provider settings** (`openProviderSettings`, omitted without a
+  provider); a retry fails until the user adds usage, waits for a reset, or connects an API key or another
+  provider, after which any send continues the same chat (#1147). The signatures are a data table of pattern →
+  usage URL + link label; linkifying URLs inside the error text was rejected because Anthropic's carries no
+  scheme. Neither affordance goes stale, so historical matching turns keep them. Only the current settlement-derived failure carries the
   web-local `try-again` recovery action; its **Try again** button sends one visible ordinary `Try again.` user
   message through `ChatView`'s existing immediate-send path. Rejected sends, extension notifications, and
   generic app errors stay non-actionable because the missing prompt or repair may not be in Pi's context.
@@ -405,7 +413,8 @@ two routes:
 - for a rich inline card, rendering from its `toolCall` args and replying through the props-only
   **`ToolRenderProps.interaction`**. `ToolRendererBody` fills it through `useToolInteraction`
   (`toolInteraction.ts`), and the plan page does the same for its card. The adapter reads `ChatActions`,
-  `interactionState` and the fold-geometry context, and fills `interaction` for every tool whose renderer
+  `interactionState`, the fold-geometry context and the store's `protocolVersion` (passed as
+  `hostProtocol` so a renderer can withhold an affordance an older host cannot serve), and fills `interaction` for every tool whose renderer
   is registered `interactive` (`isInteractiveTool`) — it knows no tool by name. Its `state.accepting` is
   true only while the host's `needsInput` names this call (`awaitingToolCallIdOf`, carried in the
   interaction context; a pre-v93 host's `kind: "question"` / `question:<id>` is read the same way for one
@@ -495,10 +504,10 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   only while the card still holds focus. Plus `openSubagentTranscript(childSessionId)` — the subagent
   cards' transcript link (no provider → the cards hide the action) — and `markResultSeen(target)`, a
   background result row reporting that the user opened it.
-  The optional MCP actions — `readMcpOutput(toolCallId)` (`mcp.readOutput` for this chat),
-  `openMcpSettings()` (Settings › MCP servers) and `openProviderSettings()` (Settings › Providers for
-  provider-backed authentication) — are supplied by `ChatView` (through `ChatTranscript`'s provider)
-  only on an MCP-capable host;
+  `openProviderSettings()` (Settings › Providers) is supplied by `ChatView` on every host — the MCP
+  cards' provider-backed sign-in and the subscription-limit `ErrorTurn` use it. The optional MCP actions —
+  `readMcpOutput(toolCallId)` (`mcp.readOutput` for this chat) and `openMcpSettings()` (Settings › MCP
+  servers) — are supplied (through `ChatTranscript`'s provider) only on an MCP-capable host;
   without them (older host, the plan page's provider, or `null`) the MCP cards hide Full output and Sign in
   ([tools/mcp/SPEC.md](tools/mcp/SPEC.md)). Optional `findModel(ref)` resolves a run's `provider/id`
   against the full model catalog (`ChatView` over `useModelCatalog`, hidden models included — a run may use
@@ -1001,11 +1010,9 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   meaning + shortcut. The chevron stays enabled with an empty draft so the shortcuts remain discoverable;
   only the rows disable. Menu rows are **actions** (send the current draft with that mode), never a
   sticky mode switch — a persistent mode would make the next plain Enter silently obey hidden state.
-  `Composer` yields every keydown to an active IME before slot, menu, recall, or send handling. It uses
-  `KeyboardEvent.isComposing` plus the legacy `keyCode` 229 sentinel because `compositionend` may precede
-  the final keydown, making `isComposing` false while the IME still owns that event. The guard does not
-  cancel the event, so candidate-confirming Enter commits; only a later ordinary Enter invokes send
-  semantics.
+  `Composer` yields every keydown to an active IME before slot, menu, recall, or send handling
+  ([[module-web]]'s text-field rule). The guard does not cancel the event, so candidate-confirming
+  Enter commits; only a later ordinary Enter invokes send semantics.
   **Interrupt** (`SubmitBehavior: "interrupt"`, Cmd/Ctrl+Shift+Enter while streaming; plain send when
   idle; Shift+Enter alone stays newline) is the "take my message NOW" gesture pi lacks: `ChatView`
   awaits `session.abort` (the ack means idle) then performs an ordinary idle send — the partial reply

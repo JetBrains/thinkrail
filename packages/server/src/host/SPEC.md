@@ -21,7 +21,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   **`GET /files/<workspaceId>/<relpath>`** route streaming a worktree file's raw bytes from `Bun.file`
   after classifying only its bounded 8 KiB head (via `fs`'s `resolveWorktreeFile` — path-contained; bad
   id/escape/miss → 404; `Cache-Control: no-store`, because the worktree moves under the URL) so the
-  markdown viewer's relative `<img>`s resolve, the sibling
+  markdown viewer's relative `<img>`s resolve — an optional `?maxBytes=N` (the palette preview's cap)
+  answers 400 for a bad cap, 413 before any byte when the file is larger, and otherwise exactly the
+  `Content-Length` it announced, so a file growing meanwhile adds nothing — the sibling
   **`GET /blob/<workspaceId>/<oid>/<relpath>`** route serving that path's bytes **at one commit or tree**
   (`git.readBlobStreamAtAsync` behind a 40/64-hex `oid` — a diff range's `resolvedOriginalOid`, so the URL
   names immutable content and answers `Cache-Control: public, max-age=31536000, immutable`; the Git
@@ -195,7 +197,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   handler and publisher `createServer` installed is scoped to the server's lifetime and returns to its
   module default, so a later server in the same process (the unit suite boots many) never inherits a
   stopped one's policy or publish path; `shutdown()` memoizes one asynchronous graceful
-  path: bounded `settleSessionsForShutdown()` + awaited `shutdownAnalytics()` first, then
+  path: bounded `settleSessionsForShutdown()` + awaited `shutdownAnalytics()` + `stopWorkspaceCreations()`
+  (running checkouts are killed so the next start reports them `interrupted`) first, then
   `turnTracker.drain()` for the receipts those settlements started, then `stop()`). The
   bounded settle includes hidden delegation children even when their parent is
   idle, plus child cascades already started by a concurrent removal, so graceful quit does not let a
@@ -228,7 +231,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   only sanitizer) and always acks. Error tracking also rides two `server.ts` seams: every failed WS request
   is reported with its registered method (CodedErrors included), and `observeLoggedErrors` routes host
   `log.warn/error(msg, err)` calls as `host_logged` — so host diagnostics that carry an error go through
-  the logger, never `console.*`. The host's `resolveNewChatModel` composes AppConfig settings with the agent's settled available
+  the logger, never `console.*`. The host's `resolveNewChatModel` composes AppConfig settings with pi's global default model, the agent's settled available
   model list and Pi thinking clamp; `model.default`, `session.create`, and newly-created review chats share
   that resolver, and creation passes its model and effort explicitly. A `session.create` that **named** a
   model and every `session.setModel` also record the resolved model as recent through `settings`'
@@ -427,7 +430,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   publisher asks `refreshSubagentTools()` to reevaluate all live sessions after a global update that
   carries `subagentsEnabled` (likewise `refreshAgentReviewTool()` for `agentReviewEnabled`,
   `refreshSubagentConcurrency()` for `subagentMaxConcurrent`, and `refreshExtensionTools()` for
-  `disabledExtensions`) — not after
+  `disabledExtensions` or `extensionSettings`) — not after
   every publish, since `recentModels` now publishes on each model switch and a tool-set rebuild per idle
   session would be pure churn — and
   `workspace.setSubagentsOverride` persists through `workspaces` then refreshes only that workspace. The
@@ -436,7 +439,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   contracts default (`resolveSubagentMaxConcurrent`; an unknown workspace uses the global value — a limit
   has no fail-closed meaning), and `workspace.setSubagentMaxConcurrent` persists then resizes only that
   workspace's service. Extension on/off is global only: `setDisabledExtensionsResolver` returns
-  `AppConfig.disabledExtensions` as a set (unknown names are inert), and `extension.list` answers with the
+  `AppConfig.disabledExtensions` as a set (unknown names are inert), `setExtensionSettingsResolver` returns
+  `AppConfig.extensionSettings` the same way (cleared on shutdown), and `extension.list` answers with the
   `extensions` catalog joined with that same setting — the switch itself writes through `settings.update`,
   so there is no extension write method. **Installed pi packages** follow the same pattern one level up:
   `setDisabledPackagesResolver` returns `AppConfig.disabledPackages`, a change to either list calls
@@ -529,15 +533,15 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `reviews.resolveCommentFromAgent` (the worker tool seam) and `reanchorWorkspace` (the fs-watch tee):
   both re-read the snapshot from disk before writing, and neither removes a comment nor closes the
   review, so landing in a send's gap can't invalidate the package's ids.
-- **A review send lands in the conversation already on screen, else the key's chat.** Both send
+- **A review send lands in its explicit chat context, else the key's chat.** Both send
   handlers route through `sendToFileChat`: comments are grouped by `reviews.reviewSessionKey` (the
   anchor's path, or the review-level bucket for anchorless remarks — pinned like a file so a second
   overall remark continues one discussion), and each group lands, in order of preference, in the
-  client's **last open chat** (the optional `sessionId` the send carries — the conversation the user
-  is already in), else the key's pinned chat (`reviews.fileReviewSession`), else a NEW chat; whatever
+  client's explicit chat context (the optional `sessionId` the send carries from a chat card), else
+  the key's pinned chat (`reviews.fileReviewSession`), else a NEW chat; whatever
   received the package becomes the key's pin (`markCommentsSent`), so the sidebar's "open the
   discussion" always follows the comments. **A send that names its chat is one package**: when the client
-  passes `sessionId` (a chat card's own chat, or the last open chat) every comment goes into that chat in one
+  passes `sessionId` (a chat card's own chat) every comment goes into that chat in one
   structured message, because grouping exists to route each key to its own chat, and per-key packages into
   the same chat made the agent take one review — a before/after mockup's two files — in separate turns.
   **`review.sendBatch` answers with every session it touched**, in group
@@ -551,10 +555,30 @@ channel fan-out, and the process-boot wrapper both launchers share.
   recovery, when the transcript is genuinely gone from disk (there is no UI to close a review and
   start over, so wedging it would be worse); every other re-open failure throws rather than silently
   forking the conversation.
-- **Scratch-dir seeding on chat start:** the `session.create` handler calls `workspaces`'
-  `ensureWorkspaceScratchDir` before creating the session — the Default workspace's gitignored
-  `.thinkrail/context/` lands in the user's repo only when a chat actually starts there (and a
-  worktree's deleted scratch dir self-heals). Host-composed — no new module edges.
+- **Scratch-dir seeding on chat start:** every chat start (`session.create` and the creation handoff below)
+  goes through one `startChat` that calls `workspaces`' `ensureWorkspaceScratchDir` before creating the
+  session — the Default workspace's gitignored `.thinkrail/context/` lands in the user's repo only when a chat
+  actually starts there (and a worktree's deleted scratch dir self-heals). Host-composed — no new module edges.
+- **Background workspace creation (v104):** `workspace.startCreate` / `listCreations` / `retryCreation` /
+  `dismissCreation` front `workspaces`' creation job, and `createServer` marks leftover running creations
+  `interrupted` before it serves, installs the creation publisher (`workspace.creationChanged` /
+  `workspace.creationRemoved`, subscribed only by v104+ sockets) and the **handoff**
+  `workspaceCreationHandoff` (then replays any handoff a crash cut short): when a checkout finishes it provisions the initial terminal and, when the create
+  carried a kickoff, waits for the workspace watcher (`ensureWatch`, the readiness the browser's own chat start
+  awaits) and starts the chat through `startChat` (the kickoff's model/effort, else the saved defaults)
+  and sends its text/images through `sendUserMessage` under the `clientKey` that started (or last retried) the
+  creation, so the chat runs even with no window open. **The handoff waits only for pi's preflight, never the agent's turn:**
+  `promptSession`'s `onPreflight` resolves once pi has validated the model and auth and started (or queued /
+  handled) the run, so the creation is handed back — and its chat opened — within moments; a rejection
+  before that point (no model, no API key) comes back as `kickoffError` beside the `sessionId`, and failures
+  after it reach the chat through the session's own event stream. Waiting for the whole send ack (up to 10 s,
+  or the entire first turn) kept the finished workspace on "Creating…" for that long. An empty kickoff starts
+  the chat without a prompt, so the start surface always lands in a chat. The client key is remembered in memory only and dropped after the handoff or
+  a successful dismiss. The host installs `projects`' path guard with `workspaces`' `creationOwnsPath`, so
+  opening, initializing, creating or cloning a project at or inside a folder that is still being created is
+  refused — a half-made worktree can never be adopted while its cleanup may still remove it.
+  `workspace.create` stays a start-and-await over the same job (wire and e2e callers);
+  its setup observation, like `startCreate`'s, wraps the whole job.
 - **Project lifecycle fan-out:** `createServer` installs the `projects` module's publisher and maps every
   authoritative open/reopen/close snapshot to **`project.updated`**. The WS `open` handler subscribes to
   that channel and hydrates two views in `server.welcome`: `projects` (open records only) and
@@ -607,7 +631,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   delivery failure or final client reap after the reconnect grace releases the claim, while a transient
   reconnect retains and re-delivers it after `server.welcome`. A host restart has no claim to re-deliver, and
   the welcome clears the frontend's stale popup projection. Popup `feedback.respond` actions are ordinary
-  replay-safe requests and never alter the Settings link.
+  replay-safe requests and never alter the Settings link. A second injected publisher (`canAsk` + `ask`, both
+  true only for a v103+ socket) sends the one-time star ask (`GithubStarAsk`, the star count the feedback module
+  read) as addressed `feedback.githubStar` to the same client key.
 - **Survey submission:** after `initializeAnalytics` the host configures the feedback survey source from
   analytics' `surveyEndpoint()`, so unkeyed, CI and test runs never fetch and `THINKRAIL_POSTHOG_HOST`
   applies. A source dev host fetches only when `THINKRAIL_DEV_POSTHOG=1` and `THINKRAIL_POSTHOG_PROJECT_KEY`
@@ -623,6 +649,14 @@ channel fan-out, and the process-boot wrapper both launchers share.
   writes converge every client through the existing `pi.event`/`session_info_changed` channel and the
   titled `session.state` record (see Session-state composition), with `session.list` repair; no new push
   channel exists.
+
+- **Search composition (`search.ts`):** `search.query` / `search.preview` go to one lazily created
+  `SearchService` ([[submodule-server-search]]) fed with `listProjects`, `listAllWorkspaceRecords`, the
+  history index's `sessions()`, `specSnapshot` and `listStoredPlans`, plus `listWorkspaces` (without diff
+  stats) to provision a project's missing Default record and `ensureWatch(id, { prewarm: true })` to watch
+  the root a query resolved; a query carries no client state. The `workspace.fsChanged` publisher also
+  calls `invalidateRoot(worktreePath)` so a watched workspace's file list and spec snapshot refresh on the
+  next keystroke. `fs.readFile` forwards `maxBytes` to `fs`.
 
 `RunningServer.startAttributionClaim()` is the explicit launcher-readiness signal and rechecks the saved
 enabled/confirmed choice before entering analytics attribution.
@@ -693,12 +727,13 @@ enabled/confirmed choice before entering analytics attribution.
 - WS commands return values directly; only events + extension-UI + **`project.updated`** (published from
   the `projects` module's injected publisher) + the workspace lifecycle trio
   (`workspace.created`/`updated`/`removed`, published from the `workspaces` module's injected publisher) +
+  the creation pair (`workspace.creationChanged`/`creationRemoved`, from its creation publisher) +
   **`session.deleted`** (published from the agent module's injected publisher) + **`provider.changed`**
   (published from auth's Central/runtime invalidation seam and on a successful provider login) + **`host.updateAvailable`** (published for each
   retained CLI-update lifecycle replacement) use push channels. Every
   **broadcast** push channel a client should hear must be `ws.subscribe`d in the WS
-  `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Four channels are deliberately
-  **not** subscribed and not broadcast: `feedback.interview`, `terminal.data`, `terminal.exit`, and
+  `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Five channels are deliberately
+  **not** subscribed and not broadcast: `feedback.interview`, `feedback.githubStar`, `terminal.data`, `terminal.exit`, and
   `terminal.detached` are sent with `ws.send` to one addressed client. Adding an addressed channel means
   wiring a publisher, not a subscription.
 - **Terminal backpressure never trusts the `drain` event alone.** A backpressured `ws.send` latches the

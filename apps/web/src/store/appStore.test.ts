@@ -44,7 +44,6 @@ import {
 	selectCurrentRouteChatTarget,
 	selectDiffScope,
 	selectFilesTreeView,
-	selectLastOpenChatSession,
 	selectReadyCompletionAck,
 	selectSkillsStale,
 	selectWorkspaceNavTick,
@@ -253,16 +252,6 @@ test("connection transitions advance reconnect generations and invalidate old pr
 	});
 	store.installWelcomeSnapshot(54, [], []);
 	expect(useAppStore.getState().protocolVersion).toBe(54);
-});
-
-test("selectLastOpenChatSession: active chat tab first, then the most recent chat tab, else null", () => {
-	const store = useAppStore.getState();
-	expect(selectLastOpenChatSession(useAppStore.getState(), "ws1")).toBeNull();
-	store.openChatSession("ws1", "s1", null, "medium");
-	store.openChatSession("ws1", "s2", null, "medium");
-	expect(selectLastOpenChatSession(useAppStore.getState(), "ws1")).toBe("s2");
-	useAppStore.getState().openTab(fileTab("ws1", "a.ts"), "keep");
-	expect(selectLastOpenChatSession(useAppStore.getState(), "ws1")).toBe("s2");
 });
 
 test("pi events route to the right session runtime; chats stay independent", () => {

@@ -27,7 +27,7 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_ref }}
           OUTSIDE_APP: ^(apps/website/|packages/website-analytics/|\.github/workflows/site(-preview|-preview-cleanup)?\.yml$|\.github/(readme-assets/|pr-assets/|ISSUE_TEMPLATE/|PULL_REQUEST_TEMPLATE\.md$|CODEOWNERS$|SPEC\.md$)|(README|CONTRIBUTING|CODE_OF_CONDUCT)\.md$|LICENSE$)
-          ARTIFACT_PATHS: ^(apps/cli/|apps/desktop/|packages/artifact-tests/|packages/shared/(assets/|scripts/generate-icons\.ts$|src/(version|windowsIdentity)\.ts$)|packages/server/src/(buildSupport|agent/extensions)\.ts$|e2e/(run-binary|run-desktop|artifactPlaywright)\.ts$|playwright\.(binary|desktop)\.config\.ts$|\.github/(workflows|actions|scripts)/|patches/|(package\.json|bun\.lock|turbo\.json)$)
+          ARTIFACT_PATHS: ^(apps/cli/|apps/desktop/|packages/artifact-tests/|packages/shared/(assets/|scripts/generate-icons\.ts$|src/(version|windowsIdentity)\.ts$)|packages/server/src/(buildSupport|agent/extensions)\.ts$|e2e/(run-binary|run-desktop|artifactPlaywright|playwright\.(binary|desktop)\.config)\.ts$|\.github/(workflows|actions|scripts)/|patches/|(package\.json|bun\.lock|turbo\.json)$)
         run: |
           if git fetch --no-tags --depth=1 origin "$BASE" && files=$(git diff --name-only --no-renames FETCH_HEAD HEAD); then
             if grep -qvE "$OUTSIDE_APP" <<< "$files"; then app=true; else app=false; fi
@@ -138,11 +138,11 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
-      - name: Start Playwright Chromium download
-        run: .github/scripts/install-playwright.sh start
+      - name: Start Playwright Chromium and WebKit download
+        run: .github/scripts/install-playwright.sh start webkit
       - run: bun run build:web
-      - name: Install Playwright Chromium
-        timeout-minutes: 5
+      - name: Install Playwright Chromium and WebKit
+        timeout-minutes: 8
         run: .github/scripts/install-playwright.sh wait
       # `bun run e2e` boots the host on an isolated port + state dir, runs this job's slice of the
       # @agent-free suite headless, then tears it all down. It reuses the web build above.

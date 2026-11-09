@@ -28,13 +28,17 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   this is the Existing-Worktree dialog's populate call, so a slow/large registry must not freeze the host's
   event loop; each listed path is resolved, since git prints `C:/…` on Windows and the row's path becomes the
   stored `worktreePath` (architecture Decision 22); drop the project folder, prunable registrations, and every
-  path already represented in ThinkRail; branch-backed rows are `available`, detached-HEAD ones `detached`),
+  path already represented in ThinkRail — in-flight creation paths included; branch-backed rows are
+  `available`, detached-HEAD ones `detached`),
   `openExistingWorktree(projectId, path)`
   (**async** for the same worktree-list read; revalidate against
   the Git registry at the mutation door, comparing canonicalized paths; same-project retries are
-  idempotent, cross-project cwd reuse is rejected; persist + emit `created` with `kind: "external"`, a
+  idempotent, cross-project cwd reuse and a path still being created are rejected; persist + emit
+  `created` with `kind: "external"`, a
   directory-basename display name, `renamed: true`, and the repo default as its initial review target —
-  **no Git or checkout mutation**), `createWorkspace` (**async**; off `baseRef` when given — branched with `worktree add -b`, never a detached
+  **no Git or checkout mutation**), a **managed create** — `startWorkspaceCreation` (below) or its
+  start-and-await wrapper `createWorkspace` (**async**; off `baseRef` when given — branched with `worktree add
+  --no-checkout -b` and populated by a separate `checkout`, never a detached
   remote checkout, and **`--no-track`**: a remote-tracking base would otherwise become the new branch's
   upstream (git's `autoSetupMerge` default), aiming the workspace terminal's `git push`/`git pull` at the
   *base* branch — the workspace branch's upstream is the user's to set on first push, never ours;
@@ -52,10 +56,10 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `fatal: invalid reference` this bullet claims to have removed. **The probe names
   `refs/remotes/<base>` in full**, exactly as `git`'s `prefetchBranch` does — a shorthand such as
   `origin/<b>` can also resolve a local branch literally named `origin/main`; the two sides of this race
-  must ask about the same ref. **`worktree add` is handed that same full name**, not the shorthand: checking
-  one ref and checking out another leaves Git's disambiguation to choose or reject the wrong object.
-  `baseBranch` still records the user-visible `<remote>/<branch>`; only the revision handed to Git is
-  qualified. **The message splits on the same distinction**: a fetch that *failed* carries
+  must ask about the same ref. **That full name is resolved to one commit OID, and the OID is what
+  `worktree add` gets** — checking one ref and checking out another would leave Git's disambiguation to choose
+  or reject the wrong object, and the OID is also what failure cleanup compares the new branch against.
+  `baseBranch` still records the user-visible `<remote>/<branch>`. **The message splits on the same distinction**: a fetch that *failed* carries
   git's stderr, while a fetch that *succeeded* without landing the ref names the refspec instead — its
   stderr is a progress log (`* branch release -> FETCH_HEAD`), so pasting it after "Could not fetch"
   showed the user a successful fetch as the reason a fetch failed. It is the step that knows *why*
@@ -66,8 +70,9 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `Workspace.baseBranch` records **creation provenance** — the ref the worktree was cut from, which never
   moves afterwards (what the diff is measured *against* is the separate, re-pointable `diffBase`; see
   `setWorkspaceDiffBase`); **branch name made unique
-  against refs *and* worktree dirs** — archiving leaves the branch behind and renaming frees a branch
-  name whose worktree directory stays occupied, so candidate names skip both; path
+  against refs, worktree dirs *and* the project's in-flight creations** — archiving leaves the branch behind and renaming frees a
+  branch name whose worktree directory stays occupied, so candidate names skip both, and a creation holds its
+  name from the first instant; path
   `dataDir/worktrees/<project-slug>/<branch>`; **seeds the ephemeral per-workspace scratch dir**
   (`WORKSPACE_CONTEXT_DIR`, with a self-ignoring `*` `.gitignore` — zero git footprint) in the
   new worktree, the home for temp docs (task-specs / working files) that stay out of git yet remain
@@ -75,9 +80,70 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   [[submodule-workflow-skills]]'s artifacts rules); a **user-supplied name is the display name** (casing +
   punctuation preserved via `toDisplayName`; the branch is derived from it) and **sets `renamed: true`** at
   create — the user already chose, so automatic naming never touches it; auto-`workspace-N` leaves it unset,
-  where `name === branch`; **re-reads the registry after the awaited fallback fetch** before appending —
-  the pre-await snapshot is stale by then, and saving it would clobber a concurrent list's Default-ensure
-  (same discipline as `renameWorkspace`'s re-load after its git subprocess)),
+  where `name === branch`; **registration re-reads the registry after the checkout** and refuses a path a
+  workspace or project already owns (`WORKSPACE_PATH_TAKEN`) — the pre-await snapshot is stale by then, and
+  saving it would clobber a concurrent list's Default-ensure (same discipline as `renameWorkspace`'s re-load
+  after its git subprocess)),
+  **background creation** (`creations.ts` over the `creationRecords.ts` store; issue #874 — a sync
+  `worktree add` of a large monorepo froze the host's only event loop for the whole checkout and outlived the
+  client's 60s request): `startWorkspaceCreation(projectId, { name?, baseRef?, kickoff? })` plans the branch and
+  path synchronously, persists a record in `workspace-creations.json` (`state: running`, `phase: preparing`, the
+  full kickoff incl. images) and returns its `WorkspaceCreation` view before any git runs. The job then
+  (1) fetches a missing remote base, resolves the OID, and runs `worktree add --no-checkout` through `gitAsync`
+  (no file writes, so it is quick), (2) moves to `phase: checking-out` and runs `git checkout --progress
+  --no-recurse-submodules -f <branch> --` in the new worktree — the split exists because git reports checkout
+  progress only with `--progress` (plain `worktree add` stays silent without a TTY), and a killed `worktree add`
+  leaves its registration locked `initializing`. **The split must stay indistinguishable from plain
+  `worktree add`**, which internally runs `reset --hard --no-recurse-submodules` and then `post-checkout <null
+  oid> <new HEAD> 1`: the checkout therefore never recurses into submodules (with `submodule.recurse=true` a
+  recursing checkout dies on the new worktree's missing `modules/` dir) and runs with hooks suppressed
+  (`core.hooksPath` pointed at an empty dir under the data dir), after which `git`'s `gitRunHook` fires the
+  user's `post-checkout` once with `<null oid> <baseOid> 1`, the arguments that let it detect a new worktree; a
+  failing hook fails the create as it fails `worktree add`. The checkout runs under `LC_ALL=C`
+  (git translates its progress label) and with `checkout.workers=0` unless the user configured
+  `checkout.workers` (parallel checkout, ~2× on large trees). Progress (`Updating files` and `Filtering content:
+  N% (x/y)`) is pushed at most every 250 ms, with a push still waiting on that throttle sent as soon as the
+  checkout ends (so clients always see its last count, even for a checkout faster than one interval), and
+  persisted only per 10% (the record can carry kickoff images), best-effort: a failing write or push is
+  logged and never disturbs the checkout.
+  **No overall deadline: the checkout and the hook run as long as they keep writing output; 10 minutes of
+  silence (`idleTimeoutMs`) kills either as `WORKTREE_CHECKOUT_STALLED`.** Known limit: a single filter or
+  hook that stays silent for longer (a huge LFS object) hits the same window on every retry; a configurable
+  window is a follow-up. On success the
+  record becomes the `Workspace` (same id) through `registerManagedWorkspace`, the injected **handoff**
+  (`setWorkspaceCreationHandoff`) runs, and the record is deleted with a `removed` event carrying the workspace
+  plus the handoff's `sessionId` / `kickoffError`. **On failure** (`WORKTREE_ADD_FAILED`,
+  `WORKTREE_CHECKOUT_FAILED`, `WORKTREE_CHECKOUT_STALLED`, `WORKSPACE_PATH_TAKEN`; the message is git's
+  stderr minus progress lines, for display only) the job cleans up **only what it provably created**. The
+  ownership marker is the persisted `baseOid`, written only after the folder was confirmed absent, right
+  before `worktree add`: a folder that appears at the reserved path earlier (e.g. during the fallback fetch)
+  fails the create untouched, and a failed `worktree add` compare-and-deletes only the branch it may have
+  made and drops the marker. With the marker, cleanup runs `worktree remove --force --force` (it also clears a
+  missing or locked registration), removes a leftover directory (async, only once git no longer lists it and
+  only under `dataDir/worktrees`), then `update-ref -d refs/heads/<branch> <baseOid>`, which refuses a branch
+  that moved. It reports whether nothing of ours remains (`clean`) and whether it removed anything; the record
+  keeps `failed` with `cleanedUp: true` only when both hold, and keeps its marker — so Retry and Dismiss clean
+  up again — whenever anything is left.
+  **Cleanup never touches a folder ThinkRail has open** (`managedPathOwned`: a workspace at that path or a
+  project at or inside it), re-checked after every await before each destructive step, and the host's
+  project-open door refuses a folder a creation still owns (`creationOwnsPath`), so nothing can adopt it
+  mid-cleanup; a branch checked out in another worktree is left alone. **Host restart:** graceful shutdown
+  aborts running jobs (`stopWorkspaceCreations`) and `interruptWorkspaceCreations` marks every leftover
+  `running` record `interrupted` at start — never restarted on its own (the user decides). A record whose
+  workspace already exists died mid-handoff: it stays, and `replayPendingHandoffs` (run by the host once its
+  handoff is installed) hands it off again, so the held prompt is never silently lost — at worst, a crash
+  between pi accepting the prompt and the record's deletion sends it twice. A record whose project is gone is
+  dropped without git work. **Retry is cleanup plus a fresh run, never a resume in place**
+  (`retryWorkspaceCreation`, for `interrupted` and `failed` alike): a killed checkout never writes the index, so
+  re-running it in the half-written folder rewrites every file anyway (measured no faster than a fresh create),
+  and an in-place resume would have to prove that a crashed host's detached git had exited before touching its
+  `index.lock` — pid bookkeeping that cannot be made safe across reboots, pid reuse and Windows. A survivor
+  instead fails safely: `worktree remove --force --force` cannot empty a folder git is still writing, cleanup
+  reports not-done, and the record stays retryable. Retry refuses `WORKSPACE_PATH_TAKEN` (the folder is someone
+  else's now). `dismissWorkspaceCreation` cleans up whatever the record still holds, drops it, and returns its
+  full kickoff (Edit & retry prefills from it); an in-memory latch refuses a second dismiss or a retry while one
+  runs. Projects resolve through `getProjects()`, so closing a
+  project (a soft flag) never strands a creation.
   `renameWorkspace` (**sync**; sets the sanitized, casing- and script-preserving display `name` and always
   sets `renamed: true`, so automatic naming never touches it again. **`opts.branch`** is the agent's English
   slug from `set_title`: when present, the branch becomes the slug's ASCII kebab form, clamped to 60 (the display name
@@ -142,11 +208,12 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   and the **archive** primitives, split so the fast record-drop
   and the slow git reclaim are separable (the host archives off the request's critical path):
   `forgetWorkspace(id)` (drop the persistence record, return the removed record or `null` — gone from
-  `listWorkspaces` immediately), `reclaimWorktree(ws)` (the slow half — `git worktree remove --force`,
-  keeps the branch; hardened: rm + `prune` if git fails; **refuses both user-owned kinds and,
+  `listWorkspaces` immediately), `reclaimWorktree(ws)` (the async slow half — `git worktree remove --force`,
+  keeps the branch; asynchronous rm + `prune` if git fails, so reclamation never blocks the host's event
+  loop; **refuses both user-owned kinds and,
   defense-in-depth, any record whose `worktreePath` resolves to the project folder** — the rm-fallback must
   never see the user's repo or an attached checkout, however a corrupt/hand-edited record got there), and
-  `removeWorkspace(id)` (the synchronous composition of the two, kept for callers/tests that want the whole
+  `removeWorkspace(id)` (the awaited composition of the two, kept for callers/tests that want the whole
   archive in one call).
 - **Default workspace (`kind: "default"`):** exactly one per project. `listWorkspaces` **ensures** it
   — find-or-create by `projectId`+`kind` (id a plain `randomUUID`; the `kind` field is the marker,
@@ -167,7 +234,10 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   any workspace, degenerating to uncommitted work when the folder sits on the default branch itself.
   Drift is **not** only a list-time discovery: `refreshUserOwnedWorkspace(workspaceId)` is the same
   re-sync **without** the diff-stat listing (an external workspace re-syncs only its `branch`, and an
-  unreadable checkout is never persisted as a fake detached `HEAD`; unknown id / a managed workspace /
+  unreadable checkout is never persisted as a fake detached `HEAD`; nor is a git that timed out — a
+  timeout is no answer, so the stored fields stay and only a warning is logged — unless the caller passes
+  `{ strict: true }`, which rethrows instead (the `pr` push/PR/branch-action guards, which must not
+  validate against a stale stored branch) — and an existing Default is returned as stored for the same reason; unknown id / a managed workspace /
   no drift → no save, no emit), which the host wires to `watch`'s **repo-metadata nudge** (host-mediated,
   `watch` has no `workspaces` edge — see [[submodule-server-watch]]). So a `git switch` in the Default
   workspace's terminal converges the rail, the top bar and the empty receipt live, instead of leaving
@@ -247,7 +317,15 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `removed` carries `{ projectId, id }`) and the host maps `kind` → `workspace.*` channel. This makes the
   module the **single source of workspace lifecycle pushes** (the naming handler never pushes — rename
   self-publishes), so registry membership stays shared domain state across every client (architecture #9).
-- **Public surface (barrel):** `createWorkspace`, `listExistingWorktrees`, `openExistingWorktree`,
+  Creations publish the same way through `setWorkspaceCreationPublisher` (`WorkspaceCreationEvent`:
+  `changed` with the `WorkspaceCreation` view, `removed` with `WorkspaceCreationRemoved`); the host owns the
+  handoff that turns a finished creation into a terminal and a chat, so this module never reaches `agent`.
+- **Public surface (barrel):** `createWorkspace`, `startWorkspaceCreation`, `awaitWorkspaceCreation`,
+  `listWorkspaceCreations`, `retryWorkspaceCreation`, `dismissWorkspaceCreation`,
+  `interruptWorkspaceCreations`, `replayPendingHandoffs`, `stopWorkspaceCreations`,
+  `setWorkspaceCreationHandoff`, `CreationHandoff`,
+  `setWorkspaceCreationPublisher`, `WorkspaceCreationEvent`, `creationOwnsPath`, `listExistingWorktrees`,
+  `openExistingWorktree`,
   `listWorkspaces`, `listWorkspaceRecords`, `listAllWorkspaceRecords`, `forgetWorkspace`,
   `reclaimWorktree`, `removeWorkspace`,
   `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `refreshUserOwnedWorkspace`,
@@ -256,5 +334,5 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `setWorkspaceSubagentsOverride`, `setWorkspaceSubagentMaxConcurrent`, `recordWorkspaceActivity`, `backfillWorkspaceActivity`,
   `recordWorkspaceHead`, `seedWorkspaceHead`, `settleWorkspace`, `unsettleWorkspace`, `setWorkspaceReview`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`, `log`; `contracts`;
-  `@thinkrail/shared/paths` (the scratch-dir path convention); Node.
+  `@thinkrail/shared/paths` (the scratch-dir path convention), `@thinkrail/shared/codedError`; Node.
 - **Forbidden:** `host`; reaching into another feature's internals (use its barrel).

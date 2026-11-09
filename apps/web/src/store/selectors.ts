@@ -19,6 +19,7 @@ import {
 	type ResourceKind,
 	type ResourceRecord,
 	resourceTallyTotal,
+	SEARCH_PROTOCOL_VERSION,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	type SessionResourceHistory,
@@ -116,6 +117,32 @@ export function isConnectedGeneration(
 
 interface ProtocolState {
 	protocolVersion: number | null;
+}
+
+export function selectHostSearchAvailable(state: {
+	welcomeProtocolVersion: number | null;
+}): boolean {
+	return (
+		state.welcomeProtocolVersion !== null && state.welcomeProtocolVersion >= SEARCH_PROTOCOL_VERSION
+	);
+}
+
+export function selectHostReachable(
+	state: ProtocolState & { status: string; welcomeGeneration: number },
+): boolean {
+	return (
+		state.status === "connected" && state.welcomeGeneration > 0 && state.protocolVersion !== null
+	);
+}
+
+export function selectHostSearchReady(
+	state: ProtocolState & { status: string; welcomeGeneration: number },
+): boolean {
+	return (
+		selectHostReachable(state) &&
+		state.protocolVersion !== null &&
+		state.protocolVersion >= SEARCH_PROTOCOL_VERSION
+	);
 }
 
 export function selectCanRenameChat(state: ProtocolState): boolean {
@@ -1222,24 +1249,6 @@ export function selectWorkspaceTerminals(state: TerminalState): TerminalTab[] {
 export function selectActiveTerminalId(state: TerminalState): string | null {
 	if (!state.activeWorkspaceId) return null;
 	return state.activeTerminalByWorkspace[state.activeWorkspaceId] ?? null;
-}
-
-export function selectLastOpenChatSession(
-	state: {
-		tabsByWorkspace: Record<string, { kind: string; id: string; sessionId?: string }[]>;
-		activeTabByWorkspace: Record<string, string | null>;
-	},
-	workspaceId: string,
-): string | null {
-	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
-	const activeId = state.activeTabByWorkspace[workspaceId];
-	const active = tabs.find((t) => t.id === activeId);
-	if (active?.kind === "chat" && active.sessionId) return active.sessionId;
-	for (let i = tabs.length - 1; i >= 0; i--) {
-		const tab = tabs[i];
-		if (tab?.kind === "chat" && tab.sessionId) return tab.sessionId;
-	}
-	return null;
 }
 
 export function selectReviewDraftCount(

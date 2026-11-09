@@ -34,7 +34,7 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   response can, and the request it named is already gone from `pending`, so nothing would replay or re-ack it;
   `resume` repairs them all at once by restating the truth rather than confirming the confirmations —, channel
   `subscribe` with last-value replay for snapshots; append-only terminal data and the one-shot terminal
-  exit/detach + session-creation/deletion + `provider.changed` invalidation + addressed `feedback.interview`
+  exit/detach + session-creation/deletion + `provider.changed` invalidation + addressed `feedback.interview` and `feedback.githubStar`
   channels, plus scoped `session.resourcesChanged` invalidations and per-session `mcp.status` snapshots, are never cached or replayed to late
   subscribers. Resource metadata hydration belongs to the mounted chat integration, not replayed
   invalidation payloads. Reconnect/backoff;
@@ -46,21 +46,28 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   one atomic delivery at roughly 30 Hz, a 128-event forced-flush ceiling, and `flush`/`dispose` lifecycle);
   `wireTransport.ts` (`initTransport`/
   `getTransport` singleton; routes `server.welcome`, **`host.updateAvailable`**, **`project.updated`**, `pi.event`, `pi.extensionUi`,
-  **`session.created`**, **`session.deleted`**, **`provider.changed`**, addressed **`feedback.interview`**, **the
-  `workspace.created`/`updated`/`removed` lifecycle trio, and `workspace.fsChanged`** into the store — and
+  **`session.created`**, **`session.deleted`**, **`provider.changed`**, addressed **`feedback.interview`** and **`feedback.githubStar`**, **the
+  `workspace.created`/`updated`/`removed` lifecycle trio, the `workspace.creationChanged`/`creationRemoved`
+  pair, and `workspace.fsChanged`** into the store — and
   folds every connection transition through
   `setStatus`, whose connected generation gives active-workspace hydration a distinct trigger on every
   reconnect; the complete welcome (protocol + open/recent project views + optional config) via the atomic
   `installWelcomeSnapshot`, whose separate `welcomeGeneration` is the cold-navigation readiness edge; after
   every welcome it re-reads each project whose workspace list this surface already holds with
-  `includeDiffStats: false`, generation-fencing the result and folding only already-known rows through
-  `updateWorkspace`, so a pushed full workspace snapshot missed while disconnected (including a rename)
-  cannot stay stale without misrepresenting this metadata repair as membership reconciliation;
+  `includeDiffStats: false`, generation-fencing the result, folding already-known rows through
+  `updateWorkspace`, and retiring through `retireWorkspace` (the live `workspace.removed` path, including
+  its MCP login cancellation) each row it held when the read was sent that the reply no longer lists and
+  the store still holds, so a pushed full workspace snapshot or
+  removal missed while disconnected (including a rename) cannot stay stale; rows that arrived after the
+  read was sent are never retired by it, and it adds no rows (creation stays with the push and backfill);
+  on a v104+ host it also re-reads `workspace.listCreations` (older hosts install an empty set), first
+  re-listing the watched creation's project when the creation is gone, so a create that finished while
+  disconnected lands on its workspace instead of racing the list refresh;
   the full host-update lifecycle snapshot via `applyHostUpdate`, project snapshots via
   `applyProjectUpdated`, consecutive `pi.event` frames through the batcher into one
   `handlePiEvents(payloads)` store commit, `pi.extensionUi` via `applyExtUi(request)`,
   `workspace.created` via `addWorkspace(workspace)`, `workspace.updated` via `updateWorkspace(workspace)`,
-  `workspace.removed` via `applyWorkspaceRemoved(projectId, id)`, `session.created` via `noteClosedChats`
+  `workspace.removed` via `retireWorkspace(projectId, id)` (`applyWorkspaceRemoved` plus login cancellation), `session.created` via `noteClosedChats`
   (peer-created domain state enters history only, never local placement), `session.deleted` via the idempotent
   `deleteChat(workspaceId, sessionId)` tombstone fold (an online fast path; because this event channel is
   deliberately not replayed, workbench hydration repairs any deletion missed while disconnected from the next
@@ -72,7 +79,10 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   then `feedback.interview` via the idempotent `showSurveyInvitation()`, only from a v97+ host (an older host
   still sends the retired interview invitation on that channel) — the shell holds the invitation
   behind onboarding and the consent dialog, and additional analytics may be off (a surviving host claim
-  re-delivers the addressed event immediately after welcome). `loadInAppSurvey()` installs `feedback.survey` (asked in `currentLocale()`, so PostHog's
+  re-delivers the addressed event immediately after welcome). `feedback.githubStar` raises one info toast (`githubStar.ts`: 60 s,
+  a "View on GitHub" action opening `REPO_URL`, labelled `| ☆ 7.1k` with the host-read star count formatted like the
+  website, plain when the payload has none); the host decides when, reads the count and sends it once, so the client
+  keeps no count or gate of its own and never contacts GitHub. `loadInAppSurvey()` installs `feedback.survey` (asked in `currentLocale()`, so PostHog's
   translation for the UI language is shown when it has one; a language switch applies on the next load)
   into the store after welcome, when Settings opens, when the survey window opens, and after a
   `SURVEY_CHANGED` refusal; it never rejects, and a stale reply is dropped by generation, so
@@ -141,8 +151,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   the settled status, including a connected edge; the bounded browser poll remains a refresh helper, not
   the sole completion path. The streak budget resets once nothing is starting; disposal cancels the timer
   and suppresses late watcher callbacks. Independent watchers share reads only under the tail rule above.
-Workspace removal cancels its active MCP login through `provider.loginCancel` after retiring the local
-modal. Late login frames for tombstoned workspaces are cancelled instead of installed; the MCP start
+Workspace removal, live or reconciled on reconnect, cancels its active MCP login through
+`provider.loginCancel` after retiring the local modal. Late login frames for tombstoned workspaces are cancelled instead of installed; the MCP start
 response path does the same if removal preceded its acknowledgement. Cancellation is best-effort over
 the existing reconnect-safe request transport; the host's bounded probe lifetime remains the final cleanup.
 **Client error reports** (`errorReports.ts`): `installClientErrorReporting()` listens for window `error` /
@@ -160,7 +170,7 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   `watchMcpWorkspace`, `ConnectionStatus`,
   `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
   `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`,
-  `supportsUserThemes`, `supportsFonts`, `hostUrl`, `uploadUserFont`, `supportsToolResponses`, `respondToTool`,
+  `supportsUserThemes`, `supportsFonts`, `supportsExtensionSettings`, `hostUrl`, `uploadUserFont`, `supportsToolResponses`, `respondToTool`,
   `installClientErrorReporting`, `reportClientError`, `clientErrorReport`. `respondToTool(sessionId,
   toolCallId, response)` is the one place a tool response leaves the client (chat and plan page both use
   it): it sends `session.respondToTool` to a v93+ host and the retired `session.answerQuestion` below
@@ -171,7 +181,8 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   custom-font snapshot (`fonts.list`, refreshed on every welcome and `fonts.changed`), and `uploadUserFont`
   is the one binary upload — a `PUT` of the raw file to the host's `/fonts/` route with the upload guard
   header, answered by that file's `UserFontFile` entry — while `hostUrl` resolves a host-relative path
-  (custom face URLs) against the endpoint; `supportsPlanReview` is exported
+  (custom face URLs) against the endpoint; `supportsExtensionSettings` (v105) lets `ExtensionsSettings`
+  offer per-extension setting switches only to a host that stores `extensionSettings`; `supportsPlanReview` is exported
   because a sibling panel (`PlanPane`) gates the plan-review UI on it — an older host serves no
   `todo.startReview`/`reviewAll`, so the client must not offer them; `supportsPlanSummaryGeneration` (v69) is
   exported because `chat/useChatTodos` gates the auto-summary `todo.generateSummary` request on it — an older

@@ -49,18 +49,32 @@ function head(rest: string): { segment: string; remainder: string } | null {
 	return segment === null || remainder === "" ? null : { segment, remainder };
 }
 
-export async function serveWorktreeFile(pathname: string): Promise<Response> {
+function byteCap(param: string | null): number | null | "invalid" {
+	if (param === null) return null;
+	const cap = Number(param);
+	return /^\d+$/.test(param) && Number.isSafeInteger(cap) ? cap : "invalid";
+}
+
+export async function serveWorktreeFile(
+	pathname: string,
+	maxBytes: string | null = null,
+): Promise<Response> {
 	const parsed = head(pathname.slice(FILES_PREFIX.length));
 	const relPath = parsed === null ? null : decoded(parsed.remainder);
 	if (parsed === null || relPath === null) return notFound(NO_STORE);
+	const cap = byteCap(maxBytes);
+	if (cap === "invalid") return new Response("bad maxBytes", { status: 400, headers: NO_STORE });
 	try {
 		const abs = resolveWorktreeFile(parsed.segment, relPath);
 		const stat = statSync(abs);
 		if (!stat.isFile()) return notFound(NO_STORE);
+		if (cap !== null && stat.size > cap) {
+			return new Response("file too large", { status: 413, headers: NO_STORE });
+		}
 		const file = Bun.file(abs);
 		if (!(await file.exists())) return notFound(NO_STORE);
 		const bytes = new Uint8Array(await file.slice(0, CONTENT_SNIFF_BYTES).arrayBuffer());
-		return new Response(file, {
+		return new Response(cap === null ? file : file.slice(0, stat.size), {
 			headers: contentHeaders(bytes, relPath, "no-store", stat.size),
 		});
 	} catch {
