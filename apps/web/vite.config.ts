@@ -1,7 +1,6 @@
 import { fileURLToPath } from "node:url";
-import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
-import react, { reactCompilerPreset } from "@vitejs/plugin-react";
+import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { posthogSourceMapUpload, sourceMapRelease } from "./sourceMapUpload";
 
@@ -22,8 +21,7 @@ export default defineConfig(({ mode }) => {
 	const release = profile ? null : sourceMapRelease();
 	return {
 		plugins: [
-			react(),
-			babel({ presets: [reactCompilerPreset()] }),
+			react({ compiler: true }),
 			tailwindcss(),
 			...(release ? [posthogSourceMapUpload(release)] : []),
 		],
