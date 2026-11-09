@@ -1,0 +1,120 @@
+import { describe, expect, test } from "bun:test";
+import { deriveMessageActions } from "./messageActions";
+import type { ChatRow } from "./rows";
+
+function user(id: string): ChatRow {
+	return { kind: "user", id, message: { role: "user", content: id, timestamp: 0 } };
+}
+
+function markdown(id: string): ChatRow {
+	return { kind: "markdown", id, text: id };
+}
+
+describe("deriveMessageActions", () => {
+	test("classifies answered prompts and concluding answers across completed rounds", () => {
+		const rows: ChatRow[] = [
+			user("user-1"),
+			markdown("narration-1"),
+			{ kind: "activity", id: "activity-1", steps: [], live: false },
+			markdown("answer-1"),
+			{
+				kind: "divider",
+				id: "divider-1",
+				data: { elapsedMs: 1, toolCount: 0, specs: [], changedFiles: [], receipt: null },
+			},
+			user("user-2"),
+			markdown("answer-2"),
+			user("user-3"),
+		];
+
+		const state = deriveMessageActions(rows, false);
+
+		expect(Object.fromEntries(state.agentRespondedByUserId)).toEqual({
+			"user-1": true,
+			"user-2": true,
+			"user-3": false,
+		});
+		expect([...state.finalAnswerRowIds].sort()).toEqual(["answer-1", "answer-2"]);
+	});
+
+	test("an incoming result opens its own round, so the answer before it stays final", () => {
+		const rows: ChatRow[] = [
+			user("user-1"),
+			markdown("answer-1"),
+			{
+				kind: "divider",
+				id: "divider-1",
+				data: { elapsedMs: 1, toolCount: 0, specs: [], changedFiles: [], receipt: null },
+			},
+			{
+				kind: "backgroundCommandCompletion",
+				id: "result-1",
+				details: {
+					id: "bg-1",
+					sessionId: "s",
+					name: "e2e",
+					status: "completed",
+					startedAt: 0,
+					finishedAt: 1,
+					exitCode: 0,
+					output: { text: "", truncated: false },
+				},
+			},
+			markdown("reaction-1"),
+		];
+
+		const state = deriveMessageActions(rows, false);
+
+		expect([...state.finalAnswerRowIds].sort()).toEqual(["answer-1", "reaction-1"]);
+		expect(state.agentRespondedByUserId.get("user-1")).toBe(true);
+	});
+
+	test("marks only the trailing unanswered prompt as responded while streaming", () => {
+		const state = deriveMessageActions([user("user-1"), user("user-2")], true);
+
+		expect(state.agentRespondedByUserId.get("user-1")).toBe(false);
+		expect(state.agentRespondedByUserId.get("user-2")).toBe(true);
+	});
+
+	test("does not expose narration as final when later activity has no answer yet", () => {
+		const state = deriveMessageActions(
+			[
+				user("user-1"),
+				markdown("narration-1"),
+				{ kind: "activity", id: "activity-1", steps: [], live: true },
+			],
+			true,
+		);
+
+		expect(state.finalAnswerRowIds.size).toBe(0);
+	});
+	test("a result delivered mid-run does not make the narration before it a final answer", () => {
+		const details = {
+			childSessionId: "child-1",
+			task: "review",
+			status: "completed",
+			usage: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				cost: 0,
+				turns: 0,
+				contextTokens: 0,
+			},
+			durationMs: 0,
+		} as const;
+		const rows: ChatRow[] = [
+			user("user-1"),
+			markdown("narration"),
+			{
+				kind: "subagentCompletion",
+				id: "result",
+				details: { ...details, delivery: "run" },
+				text: "",
+			},
+			markdown("answer"),
+		];
+		expect([...deriveMessageActions(rows, false).finalAnswerRowIds]).toEqual(["answer"]);
+	});
+});
