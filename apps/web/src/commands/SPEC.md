@@ -46,6 +46,7 @@ not reproduce.
 | Command | Handler | Context / gate | Palette |
 | --- | --- | --- | --- |
 | `workspace.new` New workspace… (`Mod+N`; `Mod+Alt+N` shown in a browser) | shell `NewWorkspaceDialog` | context project | yes |
+| Start work from the typed text (the Start work row, `Mod+↵` from any row) | the same shell `NewWorkspaceDialog`, opened with the text as its prompt through `PaletteStart.openDialog` — nothing starts without the dialog | context project; a typed query in All or Work | yes |
 | `workspace.openDefault` Work in project folder | `panels/defaultWorkspace.enterDefaultWorkspace` | context project | yes |
 | `chat.new` New chat | `panels/openChat.startChatInTab` | active workspace, online | yes |
 | `project.open` Open project… | `panels/useOpenProject.pickAndOpen` (dialogs mounted by shell) | online | yes |
