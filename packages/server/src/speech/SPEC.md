@@ -176,7 +176,9 @@ default.
   field failure, an MDM or antivirus tool blocking NVIDIA's unsigned binary, was therefore invisible.
   - A failed start is reported by the engine, once per run, however many relays waited on it.
   - An unexpected exit is reported by the engine.
-  - A mid-dictation break (upstream error or close, or an engine `error` event) is reported by the relay.
+  - A mid-dictation break (upstream error or close, or an engine `error` event) is reported by the relay,
+    but only if that engine is still the live one a second later. A crash closes the upstream socket as
+    well, and its exit is the engine's to report.
   - The stderr tail stays in the message, which is never sent.
   - A deliberate stop reports nothing: a cancelled start, `stopEngine`, or an engine that is no longer
     the live one (`isLiveEngine`).
