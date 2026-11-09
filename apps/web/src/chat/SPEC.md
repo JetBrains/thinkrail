@@ -271,9 +271,17 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   transcripts) open one; `appended` (shown without waking — a stopped result, or one held when the
   user stopped the parent) is unanswered, so the round closer goes before it.
 - `divider` — the round-end summary (`TurnDivider` + pure `turnDivider` deriver), anchored the instant a
-  round ends: elapsed time, tool-call count, and the round's written files as **two chips split by owning
-  tool** — “N specs” and “N files changed”. The split is a **partition** (a path lands on exactly
-  one side, never counted twice) computed in the deriver from the injected `isSpec` predicate — the store's
+  round ends. It is **one footer line centered between two thin rules**, led by the outcome and time —
+  “Done in 42s”, “Stopped after 5s”, “Error after 12s” — then tool-call count and the round's chips. In a
+  narrow column the items wrap as whole units and the rules shrink away. The store's textless success
+  marker renders no row; it times the round and marks it done. The
+  outcome comes from the round's last reply first (a failed or `aborted` reply), then the closer, so a
+  reloaded chat, which has no success markers, reads the same as a live one. Only a closer error (one with a
+  `failure`) counts; a failed rename or an extension notice never relabels a round. A round cut short
+  by a steer (last reply `toolUse`) has no outcome and keeps the plain time. Times under 1s are dropped;
+  an instant error with nothing else to report is the bare rule. The written files show as **two chips
+  split by owning tool** — “N specs” and “N files changed”. The split is a **partition** (a path lands on
+  exactly one side, never counted twice) computed in the deriver from the injected `isSpec` predicate — the store's
   `specPathMatcher` over the workspace's spec graph, plus `spec_create`'s target, which is a spec by
   construction even before the graph snapshot catches up. Why it matters: a spec is often **gitignored**
   scratch (`.thinkrail/context/`), so counting it as a "changed file" deep-linked the user to a Changes view

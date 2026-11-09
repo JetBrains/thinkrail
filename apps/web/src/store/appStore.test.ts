@@ -965,7 +965,7 @@ test("auto-retry with no assistant message yet (error before message_start) drop
 	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(true);
 });
 
-test("a turn that ends in a provider error surfaces the error (not a false ✓ Done)", () => {
+test("a turn that ends in a provider error surfaces the error (not a false Done)", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
 
@@ -1025,7 +1025,7 @@ test("a run's closer lands before a mid-run result that woke nobody, as hydratio
 	}
 });
 
-test("a terminal length stop is a visible failure, never a false ✓ Done", () => {
+test("a terminal length stop is a visible failure, never a false Done", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
 

@@ -1,5 +1,6 @@
 import {
 	RiBookOpenLine as BookOpen,
+	RiCheckLine as Check,
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
 	RiArrowUpSLine as ChevronUp,
@@ -10,6 +11,7 @@ import {
 	RiContractUpDownLine as FoldVertical,
 	RiLoopRightLine as RotateCw,
 	RiStackLine as Stack,
+	RiStopCircleLine as StopCircle,
 	RiToolsLine as Wrench,
 } from "@remixicon/react";
 import type {
@@ -19,7 +21,7 @@ import type {
 	UserMessage,
 } from "@thinkrail/contracts";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
-import { useT } from "@thinkrail/locales/react";
+import { type Translator, useT } from "@thinkrail/locales/react";
 import { Button, withIconClass } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
 import { cn } from "@thinkrail/ui/utils";
@@ -532,15 +534,14 @@ function ToolRow({
 	);
 }
 
-function SystemTurn({ text }: { text?: string | undefined }) {
-	const t = useT();
+function SystemTurn({ text }: { text: string }) {
 	return (
 		<div
 			data-testid="chat-message"
 			data-role="system"
 			className="text-center text-text-muted tr-text-metadata"
 		>
-			{text ?? t("chat.turn.done")}
+			{text}
 		</div>
 	);
 }
@@ -759,6 +760,8 @@ interface ArtifactGroup {
 
 const WorkingStack = withIconClass(Stack, "motion-safe:animate-working");
 
+const FOOTER_ITEM = "flex shrink-0 items-center gap-4 whitespace-nowrap";
+
 function ArtifactChip({
 	group,
 	listId,
@@ -838,6 +841,37 @@ function ArtifactList({
 	);
 }
 
+const ROUND_STATUS = {
+	done: { icon: Check, label: "chat.divider.done", timedLabel: "chat.divider.doneIn" },
+	stopped: {
+		icon: StopCircle,
+		label: "chat.divider.stopped",
+		timedLabel: "chat.divider.stoppedAfter",
+	},
+	error: { icon: CircleAlert, label: null, timedLabel: "chat.divider.errorAfter" },
+} as const;
+
+function roundStatus(t: Translator, outcome: TurnDividerData["outcome"], elapsed: string | null) {
+	if (!outcome) return elapsed ? { outcome, icon: Clock, text: elapsed } : null;
+	const { icon, label, timedLabel } = ROUND_STATUS[outcome];
+	const text = elapsed ? t(timedLabel, { elapsed }) : label && t(label);
+	return text ? { outcome, icon, text } : null;
+}
+
+function RoundStatus({ status }: { status: NonNullable<ReturnType<typeof roundStatus>> }) {
+	const { outcome, icon: Icon, text } = status;
+	return (
+		<span
+			data-testid={outcome ? "turn-divider-status" : undefined}
+			data-outcome={outcome ?? undefined}
+			className={cn(FOOTER_ITEM, outcome === "error" && "text-feedback-error")}
+		>
+			<Icon className="size-12 shrink-0" aria-hidden />
+			{text}
+		</span>
+	);
+}
+
 export interface StillRunning {
 	count: number;
 	onOpen: () => void;
@@ -863,7 +897,7 @@ export function TurnDivider({
 	stillRunning?: StillRunning | undefined;
 }) {
 	const t = useT();
-	const { elapsedMs, toolCount, specs, changedFiles, receipt } = data;
+	const { outcome, elapsedMs, toolCount, specs, changedFiles, receipt } = data;
 	const [selected, select] = useSelection(`${id}:artifacts`);
 	const stats = receipt
 		? new Map(
@@ -916,12 +950,9 @@ export function TurnDivider({
 	const groups = allGroups.filter((group) => group.paths.length > 0);
 	const running = stillRunning && stillRunning.count > 0 ? stillRunning : null;
 
-	if (
-		toolCount === 0 &&
-		groups.length === 0 &&
-		!running &&
-		(elapsedMs == null || elapsedMs < 1000)
-	) {
+	const elapsed = elapsedMs != null && elapsedMs >= 1000 ? formatElapsed(t, elapsedMs) : null;
+	const status = roundStatus(t, outcome, elapsed);
+	if (!status && toolCount === 0 && groups.length === 0 && !running) {
 		return <div data-testid="turn-divider" className="my-4 h-px bg-border-muted" />;
 	}
 	return (
@@ -931,50 +962,47 @@ export function TurnDivider({
 			className="my-4 flex flex-col gap-4 text-text-muted tr-text-metadata"
 		>
 			<div className="flex items-center gap-8">
-				<span className="h-px flex-1 bg-border-muted" />
-				{toolCount > 0 ? (
-					<span className="flex items-center gap-4">
-						<Wrench className="size-12 shrink-0" />
-						{t("chat.divider.toolCalls", { count: toolCount })}
-					</span>
-				) : null}
-				{groups.map((group) => (
-					<ArtifactChip
-						key={group.id}
-						group={group}
-						listId={`${id}-${group.id}-list`}
-						onSelect={(event) => select(group.id, event)}
-					/>
-				))}
-				{receipt && onReviewTurn ? (
-					<Button
-						variant="soft-primary"
-						size="s"
-						iconLeft={Eye}
-						data-testid="turn-divider-review"
-						onClick={() => onReviewTurn(receipt.scope)}
-					>
-						{t("chat.divider.reviewTurn")}
-					</Button>
-				) : null}
-				{elapsedMs != null && elapsedMs >= 1000 ? (
-					<span className="flex items-center gap-4">
-						<Clock className="size-12 shrink-0" />
-						{formatElapsed(t, elapsedMs)}
-					</span>
-				) : null}
-				{running ? (
-					<Button
-						variant="soft-primary"
-						size="s"
-						iconLeft={WorkingStack}
-						data-testid="turn-divider-running"
-						onClick={running.onOpen}
-					>
-						{t("chat.divider.stillRunning", { count: running.count })}
-					</Button>
-				) : null}
-				<span className="h-px flex-1 bg-border-muted" />
+				<span className="h-px min-w-0 flex-1 bg-border-muted" />
+				<div className="flex min-w-0 flex-wrap items-center justify-center gap-x-8 gap-y-4">
+					{status ? <RoundStatus status={status} /> : null}
+					{toolCount > 0 ? (
+						<span className={FOOTER_ITEM}>
+							<Wrench className="size-12 shrink-0" />
+							{t("chat.divider.toolCalls", { count: toolCount })}
+						</span>
+					) : null}
+					{groups.map((group) => (
+						<ArtifactChip
+							key={group.id}
+							group={group}
+							listId={`${id}-${group.id}-list`}
+							onSelect={(event) => select(group.id, event)}
+						/>
+					))}
+					{receipt && onReviewTurn ? (
+						<Button
+							variant="soft-primary"
+							size="s"
+							iconLeft={Eye}
+							data-testid="turn-divider-review"
+							onClick={() => onReviewTurn(receipt.scope)}
+						>
+							{t("chat.divider.reviewTurn")}
+						</Button>
+					) : null}
+					{running ? (
+						<Button
+							variant="soft-primary"
+							size="s"
+							iconLeft={WorkingStack}
+							data-testid="turn-divider-running"
+							onClick={running.onOpen}
+						>
+							{t("chat.divider.stillRunning", { count: running.count })}
+						</Button>
+					) : null}
+				</div>
+				<span className="h-px min-w-0 flex-1 bg-border-muted" />
 			</div>
 			{groups
 				.filter((group) => group.paths.length > 1 && group.expanded)

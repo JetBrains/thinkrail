@@ -105,9 +105,7 @@ test("two dialog kick-offs in separate workspaces stream concurrently", {
 	test.setTimeout(120_000);
 	await openFixtureProject(page);
 
-	const doneNotice = page
-		.locator('[data-testid="chat-message"][data-role="system"]')
-		.filter({ hasText: "Done" });
+	const doneNotice = page.locator('[data-testid="turn-divider-status"][data-outcome="done"]');
 
 	await kickOff(page, "Reply with the single word: alpha");
 	await expect(worktreeRows(page)).toHaveCount(1);

@@ -11,7 +11,7 @@ import {
 } from "@thinkrail/contracts";
 import { strArg } from "@thinkrail/extension-api/web";
 import { projectRelativePath } from "../lib";
-import type { AssistantFailure } from "./assistantFailure";
+import { type AssistantFailure, assistantFailure } from "./assistantFailure";
 import type { ChatMessageOrder } from "./chatPreferences";
 import { pulledResult, resultKey } from "./pulledResults";
 import { resolveProminence } from "./toolRegistry";
@@ -43,7 +43,7 @@ export type ActivityStep = RoutineToolStep | ThinkingStep;
 
 export type ChatRow =
 	| { kind: "user"; id: string; message: UserMessage; attachmentNames?: string[] }
-	| { kind: "system"; id: string; text?: string }
+	| { kind: "system"; id: string; text: string }
 	| {
 			kind: "error";
 			id: string;
@@ -229,11 +229,7 @@ export function deriveRows(
 					});
 					break;
 				case "system":
-					rows.push({
-						kind: "system",
-						id: turn.id,
-						...(turn.text !== undefined ? { text: turn.text } : {}),
-					});
+					if (turn.text !== undefined) rows.push({ kind: "system", id: turn.id, text: turn.text });
 					break;
 				case "error":
 					rows.push({
@@ -291,6 +287,7 @@ export interface TurnReceipt {
 }
 
 export interface TurnDividerData {
+	outcome: "done" | "stopped" | "error" | null;
 	elapsedMs: number | null;
 	toolCount: number;
 	specs: string[];
@@ -386,7 +383,34 @@ export function turnDivider(
 			} else changedFiles.push(change.path);
 		}
 	}
-	return { elapsedMs, toolCount, specs, changedFiles, receipt };
+	return {
+		outcome: roundOutcome(turns, openerIdx, endIndex),
+		elapsedMs,
+		toolCount,
+		specs,
+		changedFiles,
+		receipt,
+	};
+}
+
+function roundOutcome(
+	turns: ChatTurn[],
+	openerIdx: number,
+	endIndex: number,
+): TurnDividerData["outcome"] {
+	let closer: "done" | "error" | null = null;
+	for (let i = endIndex; i > openerIdx; i--) {
+		const turn = turns[i];
+		if (turn?.kind === "assistant") {
+			const { message } = turn;
+			if (assistantFailure(message)) return "error";
+			if (message.stopReason === "aborted") return "stopped";
+			return closer ?? (message.stopReason === "stop" ? "done" : null);
+		}
+		if (turn?.kind === "system" && turn.text === undefined) closer = "done";
+		else if (turn?.kind === "error" && turn.failure && !closer) closer = "error";
+	}
+	return closer;
 }
 
 export function rowIndexForTurn(rows: ChatRow[], turnId: string): number {

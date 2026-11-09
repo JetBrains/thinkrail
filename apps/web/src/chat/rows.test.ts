@@ -62,7 +62,7 @@ function assistant(
 }
 
 function done(id: string, endedAt = 0): ChatTurn {
-	return { kind: "system", id, text: "✓ Done", endedAt } as ChatTurn;
+	return { kind: "system", id, endedAt } as ChatTurn;
 }
 
 const tc = (id: string, name = "bash"): Block => ({ type: "toolCall", id, name, arguments: {} });
@@ -142,7 +142,7 @@ describe("deriveRows grouping", () => {
 			done("s1"),
 		];
 		const rows = deriveRows(turns, {}, false);
-		expect(kinds(rows)).toEqual(["user", "activity", "markdown", "system", "divider"]);
+		expect(kinds(rows)).toEqual(["user", "activity", "markdown", "divider"]);
 		const activity = rows[1];
 		if (activity?.kind !== "activity") throw new Error("expected one activity row");
 		expect(activity).toMatchObject({ id: "activity:t0", live: false });
@@ -177,7 +177,7 @@ describe("deriveRows grouping", () => {
 			done("s1"),
 		];
 		const rows = deriveRows(turns, {}, false);
-		expect(kinds(rows)).toEqual(["user", "activity", "markdown", "activity", "system", "divider"]);
+		expect(kinds(rows)).toEqual(["user", "activity", "markdown", "activity", "divider"]);
 		const first = rows[1];
 		const second = rows[3];
 		if (first?.kind !== "activity" || second?.kind !== "activity") throw new Error("bad rows");
@@ -203,15 +203,7 @@ describe("deriveRows grouping", () => {
 			done("s1"),
 		];
 		const rows = deriveRows(turns, {}, false);
-		expect(kinds(rows)).toEqual([
-			"user",
-			"activity",
-			"tool",
-			"activity",
-			"tool",
-			"system",
-			"divider",
-		]);
+		expect(kinds(rows)).toEqual(["user", "activity", "tool", "activity", "tool", "divider"]);
 		const primary = rows[2];
 		if (primary?.kind !== "tool") throw new Error("expected tool row");
 		expect(primary.toolCallId).toBe("v1");
@@ -322,14 +314,7 @@ describe("deriveRows compaction notices", () => {
 			done("s1"),
 		];
 		const rows = deriveRows(turns, {}, false);
-		expect(kinds(rows)).toEqual([
-			"user",
-			"activity",
-			"compaction",
-			"activity",
-			"system",
-			"divider",
-		]);
+		expect(kinds(rows)).toEqual(["user", "activity", "compaction", "activity", "divider"]);
 		expect(rows[2]).toMatchObject({
 			kind: "compaction",
 			id: "c1",
@@ -397,9 +382,9 @@ describe("deriveRows live trailing run", () => {
 			assistant("a2", [tc("t2")], { streaming: true }),
 		];
 		const rows = deriveRows(turns, {}, true);
-		expect(kinds(rows)).toEqual(["user", "activity", "system", "divider", "user", "activity"]);
+		expect(kinds(rows)).toEqual(["user", "activity", "divider", "user", "activity"]);
 		expect(rows[1]?.kind === "activity" && rows[1].live).toBe(false);
-		expect(rows[5]?.kind === "activity" && rows[5].live).toBe(true);
+		expect(rows[4]?.kind === "activity" && rows[4].live).toBe(true);
 	});
 
 	test("row and step ids are stable across streaming snapshots (fold-state keys)", () => {
@@ -433,14 +418,64 @@ describe("deriveRows live trailing run", () => {
 });
 
 describe("deriveRows dividers", () => {
-	test("a divider row closes the round at its ✓ Done marker (not at the next user turn)", () => {
+	test("a divider row closes the round at its done marker, which folds into it as the outcome", () => {
 		const turns = [user("u1", 1_000), assistant("a1", [tc("t1", "write")]), done("s1", 3_000)];
 		const rows = deriveRows(turns, {}, false);
-		expect(kinds(rows)).toEqual(["user", "activity", "system", "divider"]);
-		const divider = rows[3];
+		expect(kinds(rows)).toEqual(["user", "activity", "divider"]);
+		const divider = rows[2];
 		if (divider?.kind !== "divider") throw new Error("expected divider row");
-		expect(divider.data.toolCount).toBe(1);
+		expect(divider.data).toMatchObject({ outcome: "done", toolCount: 1, elapsedMs: 2_000 });
 		expect(divider.id).toBe("s1:divider");
+	});
+
+	test("an extension notice with text keeps its own system row", () => {
+		const notice: ChatTurn = { kind: "system", id: "n1", text: "Heads up" };
+		const rows = deriveRows(
+			[user("u1"), notice, assistant("a1", [text("ok")]), done("s1")],
+			{},
+			false,
+		);
+		expect(kinds(rows)).toEqual(["user", "system", "markdown", "divider"]);
+	});
+
+	test("the divider outcome follows the round's last reply and closer", () => {
+		const outcomes = (turns: ChatTurn[], streaming = false) =>
+			deriveRows(turns, {}, streaming).flatMap((row) =>
+				row.kind === "divider" ? [row.data.outcome] : [],
+			);
+		const failed = assistant("a1", [text("hi")], { stopReason: "error" });
+		const closer: ChatTurn = {
+			kind: "error",
+			id: "e1",
+			text: "529",
+			failure: "error",
+			recovery: "try-again",
+		};
+		const notice: ChatTurn = { kind: "error", id: "e2", text: "rename failed" };
+		expect(outcomes([user("u1"), failed, closer])).toEqual(["error"]);
+		expect(outcomes([user("u1"), closer])).toEqual(["error"]);
+		expect(
+			outcomes([user("u1"), assistant("a1", [text("hi")], { stopReason: "aborted" }), done("s1")]),
+		).toEqual(["stopped"]);
+		expect(outcomes([user("u1"), assistant("a1", [text("hi")]), done("s1"), notice])).toEqual([
+			"done",
+		]);
+		expect(outcomes([user("u1"), assistant("a1", [text("hi")]), notice])).toEqual(["done"]);
+		expect(outcomes([user("u1"), failed, user("u2"), assistant("a2", [text("ok")])])).toEqual([
+			"error",
+			"done",
+		]);
+		expect(
+			outcomes(
+				[
+					user("u1"),
+					assistant("a1", [tc("t1")], { stopReason: "toolUse" }),
+					user("u2"),
+					assistant("a2", [text("on it")], { streaming: true }),
+				],
+				true,
+			),
+		).toEqual([null]);
 	});
 
 	test("a result after a settled round keeps that round's divider and opens its own round", () => {
@@ -585,7 +620,7 @@ test("turnDivider spans multiple assistant turns in the round and dedupes files"
 	expect(d?.elapsedMs).toBe(5_000);
 });
 
-test("turnDivider falls back to the last assistant timestamp when there is no ✓ Done marker (hydrated)", () => {
+test("turnDivider falls back to the last assistant timestamp when there is no done marker (hydrated)", () => {
 	const turns: ChatTurn[] = [
 		user("u1", 1_000),
 		assistantWithPaths("a1", [{ name: "write", path: "x.ts" }], 6_000),
