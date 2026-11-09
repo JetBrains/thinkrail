@@ -1,14 +1,21 @@
-import { canUseWASM, preloadHighlighter, registerCustomTheme } from "@pierre/diffs";
+import {
+	canUseWASM,
+	getCustomExtensionsVersion,
+	preloadHighlighter,
+	registerCustomTheme,
+	replaceCustomExtensions,
+} from "@pierre/diffs";
 import { WorkerPoolContext } from "@pierre/diffs/react";
 import { getOrCreateWorkerPoolSingleton, type WorkerPoolManager } from "@pierre/diffs/worker";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { type ResourceCodeHost, useResourceHost } from "../../host";
+import { diffsFileTypes, editorLanguages } from "../../support/editorLanguages";
 
 const POOL_SIZE = 4;
 const THEME = "thinkrail";
 const HIGHLIGHTER = "highlights";
 
-let themeRegistered = false;
+let registered = false;
 let highlighterFailed = false;
 
 const PlainContext = createContext(false);
@@ -17,10 +24,14 @@ export function usePierrePlain(): boolean {
 	return useContext(PlainContext);
 }
 
-function pierreWorkerPool(theme: ResourceCodeHost["pierreTheme"]): WorkerPoolManager {
-	if (!themeRegistered) {
-		registerCustomTheme(THEME, () => Promise.resolve(theme), "zed");
-		themeRegistered = true;
+function pierreWorkerPool({ pierreTheme, languages }: ResourceCodeHost): WorkerPoolManager {
+	if (!registered) {
+		registerCustomTheme(THEME, () => Promise.resolve(pierreTheme), "zed");
+		replaceCustomExtensions(
+			getCustomExtensionsVersion() + 1,
+			diffsFileTypes(editorLanguages(languages)),
+		);
+		registered = true;
 	}
 	return getOrCreateWorkerPoolSingleton({
 		poolOptions: {
@@ -39,9 +50,9 @@ function pierreWorkerPool(theme: ResourceCodeHost["pierreTheme"]): WorkerPoolMan
 }
 
 export default function PierreProvider({ children }: { children: ReactNode }) {
-	const { pierreTheme } = useResourceHost().code;
+	const { code } = useResourceHost();
 	const [plain, setPlain] = useState(() => highlighterFailed || !canUseWASM());
-	const [pool] = useState(() => (plain ? undefined : pierreWorkerPool(pierreTheme)));
+	const [pool] = useState(() => (plain ? undefined : pierreWorkerPool(code)));
 	useEffect(() => {
 		if (plain) return;
 		let mounted = true;

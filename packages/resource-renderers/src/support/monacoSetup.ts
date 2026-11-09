@@ -19,7 +19,8 @@ import { onThemeSwap } from "@thinkrail/ui/theme";
 import type { Environment, editor } from "monaco-editor/editor/editor.api.js";
 import * as monaco from "monaco-editor/editor/editor.api.js";
 import editorWorker from "monaco-editor/editor/editor.worker?worker";
-import type { ResourceCodeHost } from "../host";
+import type { ResourceCodeHost, ResourceCodeLanguage } from "../host";
+import { editorLanguages } from "./editorLanguages";
 import { editorWrappingOptions } from "./editorWrapping";
 import { createPierreTokens } from "./pierreTokens";
 
@@ -44,9 +45,9 @@ const BRACKETS: [string, string][] = [
 	["{", "}"],
 ];
 
-function registerCatalogLanguages(code: ResourceCodeHost): void {
+function registerLanguages(languages: readonly ResourceCodeLanguage[]): void {
 	const registered = new Set(monaco.languages.getLanguages().map((language) => language.id));
-	for (const language of code.languages) {
+	for (const language of languages) {
 		if (!registered.has(language.id)) {
 			monaco.languages.register({
 				id: language.id,
@@ -242,8 +243,9 @@ function watchModels(tokens: EditorTokens): void {
 export function ensureMonaco(code: ResourceCodeHost): void {
 	if (ready) return;
 	const tokens = createPierreTokens();
-	registerCatalogLanguages(code);
-	for (const { id } of code.languages) registerTokenProvider(id, tokens);
+	const languages = editorLanguages(code.languages);
+	registerLanguages(languages);
+	for (const { id } of languages) registerTokenProvider(id, tokens);
 	watchModels(tokens);
 	defineTheme(currentTheme(code));
 	ready = true;
