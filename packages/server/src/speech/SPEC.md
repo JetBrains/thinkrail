@@ -165,3 +165,12 @@ default.
   would delay the welcome seed.
 - The marker is written only after every file it names is verified. A crash before that leaves no marker
   for the new model, so the host reports what was installed before and the retry resumes the partials.
+- **Every engine failure reaches Error Tracking once, as a `CodedError` (`SPEECH_ENGINE_FAILED`).**
+  `log.warn` reports only when given an error, and the first version logged bare messages. The likeliest
+  field failure, an MDM or antivirus tool blocking NVIDIA's unsigned binary, was therefore invisible.
+  - A failed start is reported by the engine, once per run, however many relays waited on it.
+  - An unexpected exit is reported by the engine.
+  - A mid-dictation break (upstream error or close, or an engine `error` event) is reported by the relay.
+  - The stderr tail stays in the message, which is never sent.
+  - A deliberate stop reports nothing: a cancelled start, `stopEngine`, or an engine that is no longer
+    the live one (`isLiveEngine`).

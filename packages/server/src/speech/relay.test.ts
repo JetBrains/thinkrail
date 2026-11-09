@@ -3,6 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseSpeechServerMessage, type SpeechServerMessage } from "@thinkrail/contracts";
+import { observeLoggedErrors } from "../log";
 import { resetEngineForTests, stopEngine } from "./engine";
 import { initSpeech, resetSpeechInstallForTests } from "./install";
 import { markerPath, modelsDir } from "./layout";
@@ -152,6 +153,28 @@ test.skipIf(!posix)(
 		]);
 	},
 	30_000,
+);
+
+test.skipIf(!posix)(
+	"an engine stopped on purpose mid-dictation ends it without a report",
+	async () => {
+		installFixture();
+		await initSpeech();
+		const seen: unknown[] = [];
+		observeLoggedErrors((_scope, error) => seen.push(error));
+		try {
+			const client = clientSocket();
+			const relay = createSpeechRelay(client.socket);
+			relay.message(JSON.stringify({ type: "start" }));
+			await client.until("ready");
+			await stopEngine();
+			await client.until("ended");
+			expect(client.messages).toContainEqual({ type: "error", code: "SPEECH_ENGINE_FAILED" });
+			expect(seen).toEqual([]);
+		} finally {
+			observeLoggedErrors(null);
+		}
+	},
 );
 
 test.skipIf(!posix)("a second start while dictating is refused", async () => {

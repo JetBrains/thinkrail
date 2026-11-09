@@ -46,8 +46,7 @@ async function waitReady(
 		await Bun.sleep(READY_POLL_MS);
 	}
 	if (signal.aborted) throw engineFailed("the speech engine start was cancelled");
-	log.warn(`speech engine failed to start: ${child.stderrTail().slice(-500)}`);
-	throw engineFailed("the speech engine did not become ready");
+	throw engineFailed(`the speech engine did not become ready: ${child.stderrTail().slice(-500)}`);
 }
 
 class EngineRun {
@@ -103,7 +102,10 @@ class EngineRun {
 		void child.exited.then((code) => {
 			if (current !== this) return;
 			current = null;
-			log.warn(`speech engine exited unexpectedly (code ${code ?? "signal"})`);
+			log.warn(
+				"speech engine exited unexpectedly",
+				engineFailed(`the speech engine exited with ${code ?? "a signal"}`),
+			);
 			setEngineState("stopped");
 		});
 		return this.endpoint;
@@ -189,7 +191,13 @@ export async function ensureEngine(inputs: EngineInputs): Promise<EngineEndpoint
 				setEngineState("ready");
 				armIdle();
 			},
-			() => {
+			(err: unknown) => {
+				if (!run.controller.signal.aborted) {
+					log.warn(
+						"speech engine failed to start",
+						err instanceof CodedError ? err : engineFailed("the speech engine could not start"),
+					);
+				}
 				if (current !== run) return;
 				current = null;
 				setEngineState(run.controller.signal.aborted ? "stopped" : "failed");
@@ -199,6 +207,11 @@ export async function ensureEngine(inputs: EngineInputs): Promise<EngineEndpoint
 	return current.ready.catch((err: unknown) => {
 		throw err instanceof CodedError ? err : engineFailed("the speech engine could not start");
 	});
+}
+
+/** Whether `endpoint` belongs to the engine still running, i.e. it was not stopped on purpose. */
+export function isLiveEngine(endpoint: EngineEndpoint): boolean {
+	return current?.endpoint === endpoint;
 }
 
 export function holdEngine(): () => void {

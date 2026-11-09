@@ -5,9 +5,9 @@ import {
 	type SpeechErrorCode,
 	type SpeechServerMessage,
 } from "@thinkrail/contracts";
-import { errorCodeOf } from "@thinkrail/shared/codedError";
+import { CodedError, errorCodeOf } from "@thinkrail/shared/codedError";
 import { logger } from "../log";
-import { ensureEngine, holdEngine } from "./engine";
+import { type EngineEndpoint, ensureEngine, holdEngine, isLiveEngine } from "./engine";
 import { engineInputs } from "./install";
 
 const log = logger("speech");
@@ -40,6 +40,7 @@ class Dictation {
 	private pendingBytes = 0;
 	private partial = "";
 	private stopping = false;
+	private endpoint: EngineEndpoint | null = null;
 	private finished = false;
 	private commitTimer: ReturnType<typeof setTimeout> | null = null;
 	private readonly release = holdEngine();
@@ -61,7 +62,7 @@ class Dictation {
 			this.fail("SPEECH_NOT_INSTALLED");
 			return;
 		}
-		let endpoint: Awaited<ReturnType<typeof ensureEngine>>;
+		let endpoint: EngineEndpoint;
 		try {
 			endpoint = await ensureEngine(inputs);
 		} catch (err) {
@@ -69,6 +70,7 @@ class Dictation {
 			return;
 		}
 		if (this.finished) return;
+		this.endpoint = endpoint;
 		const url = new URL(endpoint.realtimeUrl);
 		url.searchParams.set("api_key", endpoint.apiKey);
 		const upstream = new WebSocket(url);
@@ -89,10 +91,8 @@ class Dictation {
 			if (this.stopping) this.commit();
 		};
 		upstream.onmessage = (event) => this.upstreamEvent(event.data);
-		upstream.onerror = () => this.fail("SPEECH_ENGINE_FAILED");
-		upstream.onclose = () => {
-			if (!this.finished) this.fail("SPEECH_ENGINE_FAILED");
-		};
+		upstream.onerror = () => this.engineBroke("the speech engine connection failed");
+		upstream.onclose = () => this.engineBroke("the speech engine closed the connection");
 	}
 
 	audio(raw: Uint8Array): void {
@@ -143,9 +143,19 @@ class Dictation {
 			if (this.stopping) this.finish();
 		} else if (type === "error") {
 			const code = Reflect.get(event, "code");
-			log.warn(`speech engine reported an error (${typeof code === "string" ? code : "unknown"})`);
-			this.fail("SPEECH_ENGINE_FAILED");
+			this.engineBroke(
+				`the speech engine reported an error (${typeof code === "string" ? code : "unknown"})`,
+			);
 		}
+	}
+
+	/** A dictation the engine broke mid-stream; start failures are reported once, by the engine. */
+	private engineBroke(reason: string): void {
+		if (this.finished) return;
+		if (this.endpoint && isLiveEngine(this.endpoint)) {
+			log.warn("speech dictation failed", new CodedError("SPEECH_ENGINE_FAILED", reason));
+		}
+		this.fail("SPEECH_ENGINE_FAILED");
 	}
 
 	private fail(code: SpeechErrorCode): void {

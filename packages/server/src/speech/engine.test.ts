@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { observeLoggedErrors } from "../log";
 import {
 	ensureEngine,
 	holdEngine,
@@ -27,7 +28,16 @@ beforeAll(() => {
 
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
+function reported(): Array<{ scope: string; code: unknown }> {
+	const seen: Array<{ scope: string; code: unknown }> = [];
+	observeLoggedErrors((scope, error) =>
+		seen.push({ scope, code: error instanceof Error ? Reflect.get(error, "code") : undefined }),
+	);
+	return seen;
+}
+
 afterEach(async () => {
+	observeLoggedErrors(null);
 	await stopEngine();
 	delete process.env.FAKE_SPEECH_FAIL_START;
 	delete process.env.FAKE_SPEECH_START_DELAY_MS;
@@ -86,6 +96,25 @@ test.skipIf(!posix)("an engine that exits during start-up fails with its code", 
 	delete process.env.FAKE_SPEECH_FAIL_START;
 	await ensureEngine(inputs());
 	expect(speechStatus().engine).toBe("ready");
+});
+
+test.skipIf(!posix)("a failed start reaches error tracking once, by its code", async () => {
+	const seen = reported();
+	process.env.FAKE_SPEECH_FAIL_START = "1";
+	await Promise.allSettled([ensureEngine(inputs()), ensureEngine(inputs())]);
+	expect(seen).toEqual([{ scope: "speech", code: "SPEECH_ENGINE_FAILED" }]);
+});
+
+test.skipIf(!posix)("stopping an engine on purpose reports nothing", async () => {
+	const seen = reported();
+	await ensureEngine(inputs());
+	await stopEngine();
+	process.env.FAKE_SPEECH_START_DELAY_MS = "30000";
+	const start = ensureEngine(inputs());
+	await Bun.sleep(300);
+	await stopEngine();
+	await start.catch(() => {});
+	expect(seen).toEqual([]);
 });
 
 test.skipIf(!posix)("stopping waits for the engine to exit", async () => {
