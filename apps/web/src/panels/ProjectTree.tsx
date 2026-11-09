@@ -501,6 +501,8 @@ function SettledPartition({
 					<button
 						type="button"
 						data-testid="settled-shelf-review-removal"
+						aria-label={t("panels.settledRemoval.reviewShelfLabel", { count: removableCount })}
+						title={t("panels.settledRemoval.reviewShelfLabel", { count: removableCount })}
 						onClick={() => useAppStore.getState().setSettledRemovalReview({ projectId })}
 						className="shrink-0 rounded-sm px-4 text-feedback-warning outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary"
 					>

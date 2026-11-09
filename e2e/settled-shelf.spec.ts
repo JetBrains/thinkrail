@@ -205,6 +205,6 @@ test("long-settled workspaces are suggested for removal, reviewed, and only clea
 	).toBeVisible();
 	const shelf = page.getByTestId("settled-shelf");
 	await expect(shelf).toHaveAttribute("data-count", "1");
-	await expect(page.getByTestId("settled-shelf-review-removal")).toHaveText("Review 1 to remove");
+	await expect(page.getByTestId("settled-shelf-review-removal")).toHaveText("Review 1");
 	await expect(worktreeRows(page)).toHaveCount(1);
 });
