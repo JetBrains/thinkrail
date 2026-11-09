@@ -48,7 +48,7 @@ import {
 	useHostSearch,
 } from "./hostSearch";
 import { recordPick } from "./learning";
-import type { PaletteFile, PaletteItem, PaletteRow, PaletteSection } from "./model";
+import type { PaletteFile, PaletteItem, PaletteRow, PaletteSection, PaletteStart } from "./model";
 import { readLearning, readPreviewOpen, writeLearning, writePreviewOpen } from "./preferences";
 import {
 	parseSearchQuery,
@@ -59,7 +59,7 @@ import {
 	withScopePrefix,
 } from "./query";
 import { scopeChordIndex } from "./scopeChord";
-import { flattenRows, groupSections, rankSections } from "./sections";
+import { flattenRows, groupSections, rankSections, startEligible, startPrompt } from "./sections";
 
 const WIDE_VIEWPORT = "(min-width: 48rem)";
 const SPINNER_DELAY_MS = 200;
@@ -105,6 +105,7 @@ export interface SearchPaletteProps {
 	readonly actions: readonly PaletteItem[];
 	readonly scopes: readonly SearchScope[];
 	readonly host?: PaletteHost;
+	readonly start?: PaletteStart;
 	readonly notice?: PaletteNotice;
 }
 
@@ -128,6 +129,7 @@ function PaletteContent({
 	actions: emptyActions,
 	scopes,
 	host,
+	start,
 	notice,
 }: SearchPaletteProps) {
 	const t = useT();
@@ -186,6 +188,11 @@ function PaletteContent({
 		[hostState.groups, hostState.stale],
 	);
 	const reasons = useMemo(() => hostSearchReasons(hostState), [hostState]);
+	const startText = startEligible(parsed) ? startPrompt(parsed.raw) : "";
+	const startInput = useMemo(
+		() => (start && startText ? { start, text: startText } : undefined),
+		[start, startText],
+	);
 	const ranked = useMemo(
 		() => rankSections({ parsed, rootItems: allItems, learning, nowMs }),
 		[parsed, allItems, learning, nowMs],
@@ -196,6 +203,7 @@ function PaletteContent({
 				t,
 				parsed,
 				hostOverflow: overflow,
+				...(startInput ? { start: startInput } : {}),
 				rootItems: allItems,
 				waiting,
 				actions: emptyActions,
@@ -209,6 +217,7 @@ function PaletteContent({
 			t,
 			parsed,
 			overflow,
+			startInput,
 			allItems,
 			waiting,
 			emptyActions,
@@ -262,6 +271,12 @@ function PaletteContent({
 		writeLearning(next);
 	};
 
+	const startFromText = () => {
+		if (!startInput) return;
+		pickedRef.current = startInput.start.openDialog(startInput.text);
+		onClose();
+	};
+
 	const activate = (row: PaletteRow | null) => {
 		if (!row) return;
 		const { item } = row;
@@ -274,6 +289,10 @@ function PaletteContent({
 		if (more?.kind === "expand") {
 			setExpanded((current) => new Set(current).add(more.group));
 			setSelectedId(more.nextId);
+			return;
+		}
+		if (item.kind === "start") {
+			startFromText();
 			return;
 		}
 		if (item.run) {
@@ -331,6 +350,11 @@ function PaletteContent({
 			cycleScope(event.shiftKey ? -1 : 1);
 			return;
 		}
+		if (mod && event.key === "Enter" && !event.altKey && !event.shiftKey) {
+			claim();
+			if (!event.repeat) startFromText();
+			return;
+		}
 		if (mod && event.code === "KeyI" && !event.shiftKey && !event.altKey) {
 			claim();
 			if (wide) togglePreview();
@@ -356,7 +380,7 @@ function PaletteContent({
 				return;
 			case "Enter":
 				claim();
-				activate(selected);
+				if (!event.repeat) activate(selected);
 				return;
 		}
 		if (fromFrame && !event.ctrlKey && !event.metaKey && !MODIFIER_KEYS.has(event.key)) {
@@ -491,6 +515,9 @@ function PaletteContent({
 						<Hint keys={["↑", "↓"]} label={t("search.hint.select")} />
 						<Hint keys={["↵"]} label={t(enterLabel(selected?.item))} />
 						<Hint keys={["Tab"]} label={t("search.hint.scope")} />
+						{startInput ? (
+							<Hint keys={shortcutKeys({ key: "↵", mod: true })} label={t("search.hint.start")} />
+						) : null}
 						<Hint keys={["esc"]} label={t(query ? "search.hint.clear" : "search.hint.close")} />
 					</div>
 					{wide ? (
@@ -513,7 +540,9 @@ function PaletteContent({
 					) : null}
 				</footer>
 				<p role="status" aria-live="polite" className="sr-only">
-					{t("search.palette.resultCount", { count: rows.length })}
+					{t("search.palette.resultCount", {
+						count: rows.filter((row) => row.item.kind !== "start").length,
+					})}
 					{hostState.pending ? ` ${t("search.palette.searching")}` : ""}
 					{reasons.map((reason) => ` ${reasonText(t, reason)}`).join("")}
 				</p>
@@ -617,6 +646,7 @@ function StatusMark({ t, reasons }: { t: Translator; reasons: readonly HostSearc
 function enterLabel(item: PaletteItem | undefined): MessageKey {
 	if (!item) return "search.hint.open";
 	if (item.kind === "command") return "search.hint.run";
+	if (item.kind === "start") return "search.hint.start";
 	return "search.hint.open";
 }
 
