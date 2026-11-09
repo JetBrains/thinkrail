@@ -1,15 +1,28 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { observeLoggedErrors } from "../log";
 import {
 	ensureEngine,
+	forgetEngineRecord,
 	holdEngine,
+	reapEngineRecords,
 	resetEngineForTests,
 	setEngineIdleMsForTests,
 	stopEngine,
+	writeEngineRecord,
 } from "./engine";
+import { engineRecordsDir } from "./layout";
 import { resetSpeechStatusForTests, speechStatus } from "./status";
 
 const posix = process.platform !== "win32";
@@ -139,4 +152,36 @@ test.skipIf(!posix)("stopping during start-up kills the loading engine at once",
 	expect(Date.now() - began).toBeLessThan(5_000);
 	await expect(start).rejects.toMatchObject({ code: "SPEECH_ENGINE_FAILED" });
 	expect(speechStatus().engine).toBe("stopped");
+});
+
+test("each host keeps its own engine record and reaps only those whose host is gone", async () => {
+	const saved = process.env.THINKRAIL_DATA_DIR;
+	process.env.THINKRAIL_DATA_DIR = mkdtempSync(join(dir, "records-"));
+	try {
+		const exited = Bun.spawn([process.execPath, "-e", ""]);
+		await exited.exited;
+		const records = engineRecordsDir();
+		mkdirSync(records, { recursive: true });
+		writeFileSync(join(records, `${exited.pid}.pid`), "111");
+		writeFileSync(join(records, `${process.ppid}.pid`), "222");
+		writeFileSync(join(records, "notes.txt"), "keep");
+
+		writeEngineRecord(333);
+		expect(readFileSync(join(records, `${process.pid}.pid`), "utf8")).toBe("333");
+
+		const stopped: number[] = [];
+		await reapEngineRecords(async (pid) => {
+			stopped.push(pid);
+		});
+		expect(stopped.sort()).toEqual([111, 333]);
+		expect(readdirSync(records).sort()).toEqual([`${process.ppid}.pid`, "notes.txt"].sort());
+
+		writeEngineRecord(444);
+		forgetEngineRecord();
+		expect(existsSync(join(records, `${process.pid}.pid`))).toBe(false);
+		expect(existsSync(join(records, `${process.ppid}.pid`))).toBe(true);
+	} finally {
+		if (saved === undefined) delete process.env.THINKRAIL_DATA_DIR;
+		else process.env.THINKRAIL_DATA_DIR = saved;
+	}
 });

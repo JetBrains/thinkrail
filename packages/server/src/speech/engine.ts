@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { findFreePort } from "@thinkrail/shared/freePort";
 import { logger } from "../log";
 import { runBounded, type Supervised, spawnSupervised } from "../subprocess";
 import type { EngineInputs } from "./install";
-import { enginePidPath } from "./layout";
+import { engineRecordsDir } from "./layout";
 import { setEngineState } from "./status";
 
 const log = logger("speech");
@@ -119,11 +120,20 @@ class EngineRun {
 	}
 }
 
-function recordWindowsEngine(pid: number): void {
-	if (process.platform !== "win32" || pid === 0) return;
+function ownRecord(): string {
+	return join(engineRecordsDir(), `${process.pid}.pid`);
+}
+
+/** Records this host's engine; exported for tests, which run the record logic on every platform. */
+export function writeEngineRecord(pid: number): void {
 	try {
-		writeFileSync(enginePidPath(), `${process.pid} ${pid}`);
+		mkdirSync(engineRecordsDir(), { recursive: true });
+		writeFileSync(ownRecord(), String(pid));
 	} catch {}
+}
+
+export function forgetEngineRecord(): void {
+	rmSync(ownRecord(), { force: true });
 }
 
 function processAlive(pid: number): boolean {
@@ -135,28 +145,47 @@ function processAlive(pid: number): boolean {
 	}
 }
 
-function forgetWindowsEngine(): void {
-	if (process.platform === "win32") rmSync(enginePidPath(), { force: true });
-}
-
-export async function reapOrphanEngine(): Promise<void> {
-	if (process.platform !== "win32") return;
-	let recorded: number[];
+/**
+ * Stops every recorded engine whose host is gone, removing its record; a live host's record is left
+ * alone. This host's own pid counts as gone: a record under it predates this run (pid reuse).
+ */
+export async function reapEngineRecords(stop: (pid: number) => Promise<void>): Promise<void> {
+	let names: string[];
 	try {
-		recorded = readFileSync(enginePidPath(), "utf8").trim().split(" ").map(Number);
+		names = readdirSync(engineRecordsDir());
 	} catch {
 		return;
 	}
-	const [owner = 0, pid = 0] = recorded;
-	if (!Number.isSafeInteger(owner) || !Number.isSafeInteger(pid) || pid <= 0) return;
-	if (owner !== process.pid && processAlive(owner)) return;
-	rmSync(enginePidPath(), { force: true });
+	for (const name of names) {
+		const owner = Number(name.replace(/\.pid$/, ""));
+		if (!name.endsWith(".pid") || !Number.isSafeInteger(owner) || owner <= 0) continue;
+		if (owner !== process.pid && processAlive(owner)) continue;
+		const file = join(engineRecordsDir(), name);
+		const pid = Number(readFileSync(file, "utf8").trim());
+		rmSync(file, { force: true });
+		if (Number.isSafeInteger(pid) && pid > 0) await stop(pid);
+	}
+}
+
+function recordWindowsEngine(pid: number): void {
+	if (process.platform === "win32" && pid !== 0) writeEngineRecord(pid);
+}
+
+function forgetWindowsEngine(): void {
+	if (process.platform === "win32") forgetEngineRecord();
+}
+
+async function stopWindowsEngine(pid: number): Promise<void> {
 	const listed = await runBounded(["tasklist", "/FI", `PID eq ${pid}`, "/FO", "CSV", "/NH"], {
 		timeoutMs: 5_000,
 	});
 	if (!listed.ok || !/nemo-speech\.exe/i.test(listed.out)) return;
 	await runBounded(["taskkill", "/PID", String(pid), "/T", "/F"], { timeoutMs: 5_000 });
 	log.info("stopped a speech engine left by a previous run");
+}
+
+export async function reapOrphanEngine(): Promise<void> {
+	if (process.platform === "win32") await reapEngineRecords(stopWindowsEngine);
 }
 
 let current: EngineRun | null = null;

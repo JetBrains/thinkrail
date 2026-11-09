@@ -26,6 +26,7 @@ export function markerPath(): string {
 	return join(speechDir(), "installed.json");
 }
 
-export function enginePidPath(): string {
-	return join(speechDir(), "engine.pid");
+/** One `<host pid>.pid` per host holding its engine's pid, so hosts sharing a data folder never collide. */
+export function engineRecordsDir(): string {
+	return join(speechDir(), "engines");
 }
