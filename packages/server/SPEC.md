@@ -211,6 +211,11 @@ and calls `refreshExtensionTools()` after an applied update that contains `disab
   promise, while abrupt death relies on operating-system process cleanup.
 - **WS commands return values directly**; only events + extension-UI use push channels.
 - Binds beyond localhost via `host` option (the Tailscale seam).
+- **Tests never see the developer's home** — `bunfig.toml` preloads `test/isolatedHome.ts`, which points
+  `HOME` at a fresh temp dir, removed after the run, and clears `CLAUDE_CONFIG_DIR` / `CODEX_HOME` /
+  `GEMINI_CLI_HOME` / `PI_CODING_AGENT_DIR` (turbo passes the last one through). Portable
+  skill aliases and pi's `~/.agents/skills` otherwise imported the machine's real libraries, so the skill
+  catalog budget and its hint made results depend on whoever ran the suite.
 
 ## Later
 
