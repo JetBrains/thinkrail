@@ -1,5 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	lstatSync,
+	mkdirSync,
+	readdirSync,
+	rmdirSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { rm } from "node:fs/promises";
 import { basename, isAbsolute, join, relative, resolve } from "node:path";
 import {
@@ -117,6 +125,8 @@ function openProjectById(projectId: string): Project {
 	return project;
 }
 
+const stagedRemovalPaths = new Set<string>();
+
 export async function listExistingWorktrees(
 	projectId: string,
 ): Promise<ExistingWorktreeCandidate[]> {
@@ -127,6 +137,7 @@ export async function listExistingWorktrees(
 		...loadProjects().map((knownProject) => canonicalPath(knownProject.path)),
 		...loadWorkspaces().map((workspace) => canonicalPath(workspace.worktreePath)),
 		...creationPaths(),
+		...stagedRemovalPaths,
 	]);
 	return entries.flatMap((entry): ExistingWorktreeCandidate[] => {
 		const path = canonicalPath(entry.path);
@@ -150,10 +161,16 @@ export async function openExistingWorktree(
 		if (creationPaths().has(wantedPath))
 			throw new Error("This worktree is still being created by ThinkRail");
 	};
+	const assertNotStaged = () => {
+		if (stagedRemovalPaths.has(wantedPath))
+			throw new Error("This worktree is being removed by ThinkRail");
+	};
+	assertNotStaged();
 	assertNotCreating();
 
 	const entries = await gitWorktreeEntries(project.path);
 	assertNotCreating();
+	assertNotStaged();
 	const entry = entries.find(
 		(candidate) => !candidate.prunable && canonicalPath(candidate.path) === wantedPath,
 	);
@@ -720,32 +737,63 @@ export async function removeWorkspace(id: string): Promise<void> {
 	if (ws) await reclaimWorktree(ws);
 }
 
-export async function removeCleanWorktree(ws: Workspace): Promise<boolean> {
-	if (ws.kind === "external") return true;
-	if (ws.kind === "default") return false;
-	const project = loadProjects().find((p) => p.id === ws.projectId);
-	if (!project || resolve(ws.worktreePath) === resolve(project.path)) return false;
-	const removed = await gitAsync(project.path, ["worktree", "remove", ws.worktreePath], {
-		timeoutMs: SLOW_GIT_TIMEOUT_MS,
-	});
-	return removed.ok;
+export interface StagedWorktreeRemoval {
+	restore(): Promise<boolean>;
+	discard(): Promise<boolean>;
 }
 
-export async function restoreCleanWorktree(ws: Workspace): Promise<boolean> {
-	if (ws.kind === "external") return true;
+export async function stageWorktreeRemoval(ws: Workspace): Promise<StagedWorktreeRemoval | null> {
+	if (ws.kind === "external") {
+		return { restore: async () => true, discard: async () => true };
+	}
+	if (ws.kind === "default") return null;
 	const project = loadProjects().find((p) => p.id === ws.projectId);
-	if (!project || ws.kind === "default") return false;
-	assertSafeRef(ws.branch);
-	const added = await gitAsync(project.path, ["worktree", "add", ws.worktreePath, ws.branch], {
+	if (!project || resolve(ws.worktreePath) === resolve(project.path)) return null;
+	const staged = `${ws.worktreePath}.removing-${randomUUID()}`;
+	const reserved = canonicalPath(staged);
+	stagedRemovalPaths.add(reserved);
+	const moved = await gitAsync(project.path, ["worktree", "move", ws.worktreePath, staged], {
 		timeoutMs: SLOW_GIT_TIMEOUT_MS,
 	});
-	if (!added.ok) return false;
-	try {
-		ensureWorkspaceScratchDir(ws);
-	} catch (error) {
-		log.warn(`scratch dir was not reseeded for ${ws.id}`, error as Error);
+	if (!moved.ok) {
+		stagedRemovalPaths.delete(reserved);
+		return null;
 	}
-	return true;
+	const physical = canonicalPath(staged);
+	stagedRemovalPaths.add(physical);
+	return {
+		restore: async () => {
+			try {
+				if (existsSync(ws.worktreePath)) {
+					if (readdirSync(ws.worktreePath).length > 0) {
+						log.warn(`worktree for ${ws.id} stays staged at ${staged}: destination was recreated`);
+						return false;
+					}
+					rmdirSync(ws.worktreePath);
+				}
+			} catch {
+				return false;
+			}
+			const back = await gitAsync(project.path, ["worktree", "move", staged, ws.worktreePath], {
+				timeoutMs: SLOW_GIT_TIMEOUT_MS,
+			});
+			if (back.ok) {
+				stagedRemovalPaths.delete(reserved);
+				stagedRemovalPaths.delete(physical);
+			}
+			return back.ok;
+		},
+		discard: async () => {
+			const removed = await gitAsync(project.path, ["worktree", "remove", staged], {
+				timeoutMs: SLOW_GIT_TIMEOUT_MS,
+			});
+			if (removed.ok) {
+				stagedRemovalPaths.delete(reserved);
+				stagedRemovalPaths.delete(physical);
+			}
+			return removed.ok;
+		},
+	};
 }
 
 const REMOVAL_CHECK_CONCURRENCY = 4;

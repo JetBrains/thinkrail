@@ -684,12 +684,12 @@ enabled/confirmed choice before entering analytics attribution.
   when the user pinned it or worked in it since the client looked (`changed`), a session there is busy
   (`hasBusySession`, `running`), a fresh review lookup is unreliable or open, or `checkWorkspaceRemoval`
   reports any uncommitted file, unpushed commit, or unknown count (`unsafe`); it re-reads the record
-  after the awaits, then deletes the worktree with **`removeCleanWorktree`** (plain `git worktree remove`,
-  never `--force`, no `rm` fallback) *before* dropping the record — the git check is a sample, and a file a
-  terminal writes after it makes git refuse, so the row is kept (`unsafe`) instead of the forced archive
-  deleting it. If the record was pinned or worked in, or a session turned busy, while git ran, it
-  re-adds the clean checkout on the kept branch (**`restoreCleanWorktree`**; ignored files such as
-  `node_modules` are not restored) and keeps the row (`changed` / `running`). Only then does it archive,
+  after the awaits, then moves the checkout aside intact with **`stageWorktreeRemoval`** (`git worktree move`,
+  atomic and reversible) and takes the final activity decision *before* deleting anything. If the record
+  was pinned or worked in, or a session turned busy, it moves the checkout back (nothing is rebuilt, so
+  edits made meanwhile survive) and keeps the row (`changed` / `running`). Otherwise it deletes the staged
+  checkout with plain `git worktree remove` (never `--force`, no `rm` fallback); if git refuses because a
+  file turned dirty, it moves the checkout back and keeps the row (`unsafe`). `workspace.unsettle` runs under the same `withChangeLock(id)`, so a pin arriving during the delete waits and then fails on the removed row instead of being silently dropped. Known limit: `session.prompt` / `session.steer` / `session.followUp` and `terminal.write` are not gated during the delete itself, so input accepted in that few-second window on a long-settled, Git-clean checkout is torn down by the archive; closing it would need a per-workspace admission fence on those entry points. Only then does it archive,
   without a second reclaim. One row per request so a long review
   never outlives the client's request timeout. Known limit: an external git process that detaches HEAD
   and commits between the final check and git's removal of a clean worktree is not caught (closing it would

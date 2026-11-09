@@ -52,6 +52,7 @@ import { todoReviewRecord } from "../todos";
 import { stopAllWatches } from "../watch";
 import {
 	awaitWorkspaceCreation,
+	recordWorkspaceActivity,
 	setWorkspaceCreationHandoff,
 	setWorkspaceCreationPublisher,
 } from "../workspaces";
@@ -1275,11 +1276,51 @@ test("removeSettled keeps a worktree whose HEAD left its branch", async () => {
 });
 
 test.skipIf(process.platform === "win32")(
-	"removeSettled restores the checkout when the workspace is pinned while git removes it",
+	"removeSettled restores the checkout when the workspace is pinned while git stages the removal",
 	async () => {
 		const ws = (await handleRequest(
 			"workspace.create",
 			{ projectId: "p1", name: "Pinned mid removal" },
+			CTX,
+		)) as Workspace;
+		const executable = Bun.which("git");
+		if (!executable) throw new Error("Git is required for this test");
+		const marker = join(dataDir, "remove-started");
+		const bin = join(dataDir, "bin");
+		mkdirSync(bin);
+		writeFileSync(
+			join(bin, "git"),
+			`#!/bin/sh\nif [ "$3" = worktree ] && [ "$4" = move ]; then\n  touch "${marker}"\n  sleep 0.3\nfi\nexec "${executable}" "$@"\n`,
+		);
+		chmodSync(join(bin, "git"), 0o755);
+		const savedPath = process.env.PATH;
+		process.env.PATH = `${bin}${delimiter}${savedPath ?? ""}`;
+		try {
+			const removal = handleRequest(
+				"workspace.removeSettled",
+				{ id: ws.id, lastActiveAt: ws.lastActiveAt },
+				CTX,
+			);
+			while (!existsSync(marker)) await Bun.sleep(10);
+			recordWorkspaceActivity(ws.id, Date.now() + 3_600_000);
+			expect(await removal).toEqual({ removed: false, reason: "changed" });
+		} finally {
+			if (savedPath === undefined) delete process.env.PATH;
+			else process.env.PATH = savedPath;
+		}
+		const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
+		expect(rows.map((row) => row.id)).toContain(ws.id);
+		expect(existsSync(ws.worktreePath)).toBe(true);
+		expect(gitText(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(ws.branch);
+	},
+);
+
+test.skipIf(process.platform === "win32")(
+	"removeSettled holds off a pin that arrives while git deletes the staged checkout",
+	async () => {
+		const ws = (await handleRequest(
+			"workspace.create",
+			{ projectId: "p1", name: "Pinned mid delete" },
 			CTX,
 		)) as Workspace;
 		const executable = Bun.which("git");
@@ -1301,16 +1342,14 @@ test.skipIf(process.platform === "win32")(
 				CTX,
 			);
 			while (!existsSync(marker)) await Bun.sleep(10);
-			await handleRequest("workspace.unsettle", { id: ws.id }, CTX);
-			expect(await removal).toEqual({ removed: false, reason: "changed" });
+			const pin = handleRequest("workspace.unsettle", { id: ws.id }, CTX);
+			pin.catch(() => {});
+			expect(await removal).toEqual({ removed: true });
+			await expect(pin).rejects.toThrow();
 		} finally {
 			if (savedPath === undefined) delete process.env.PATH;
 			else process.env.PATH = savedPath;
 		}
-		const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
-		expect(rows.map((row) => row.id)).toContain(ws.id);
-		expect(existsSync(ws.worktreePath)).toBe(true);
-		expect(gitText(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(ws.branch);
 	},
 );
 

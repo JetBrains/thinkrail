@@ -221,11 +221,11 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   and its reflog go) —
   `countPushDivergence`, else commits on no remote-tracking ref, `0` only when no remote is configured; any git
   failure or unknown id is `null`, which callers treat as unsafe, never clean), and
-  **`removeCleanWorktree(ws)`** (plain `git worktree remove` — git refuses a worktree with modified or
-  untracked files, so nothing is forced and there is no `rm` fallback; `true` for an external one, whose
-  checkout is never ours to delete, `false` for Default or a record pointing at the project folder), and
-  **`restoreCleanWorktree(ws)`** (`git worktree add <path> <branch>` plus the scratch-dir seed — undoes a
-  `removeCleanWorktree` whose removal was cancelled by activity during the git run).
+  **`stageWorktreeRemoval(ws)`** (`git worktree move` to a sibling path, returning `restore()` — move back,
+  checkout intact — and `discard()` — plain `git worktree remove`, so nothing is forced and there is no `rm`
+  fallback; `discard` is `false` when git refuses a dirty checkout. `null` for Default, a record pointing at
+  the project folder, or a failed move; an external workspace's checkout is never ours to delete, so its
+  stage is a no-op). Staged paths are reserved: `listExistingWorktrees` hides them and `openExistingWorktree` rejects them. `restore()` refuses (`false`, checkout left at the staged path and logged) when the original path was recreated non-empty, since `git worktree move` would otherwise nest the checkout inside it).
 - **Default workspace (`kind: "default"`):** exactly one per project. `listWorkspaces` **ensures** it
   — find-or-create by `projectId`+`kind` (id a plain `randomUUID`; the `kind` field is the marker,
   never an id convention), **collapsing duplicates** defensively if out-of-band state churn ever
@@ -338,8 +338,7 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `setWorkspaceCreationPublisher`, `WorkspaceCreationEvent`, `creationOwnsPath`, `listExistingWorktrees`,
   `openExistingWorktree`,
   `listWorkspaces`, `listWorkspaceRecords`, `listAllWorkspaceRecords`, `forgetWorkspace`,
-  `reclaimWorktree`, `removeWorkspace`, `checkWorkspaceRemoval`, `removeCleanWorktree`,
-  `restoreCleanWorktree`,
+  `reclaimWorktree`, `removeWorkspace`, `checkWorkspaceRemoval`, `stageWorktreeRemoval`,
   `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `refreshUserOwnedWorkspace`,
   `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,
   `WorkspaceLifecycleEvent`, `setWorkspaceDiffBase`, `setWorkspaceSkillOverride`,

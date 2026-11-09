@@ -879,7 +879,7 @@ export async function countPushDivergence(
 		"--left-right",
 		"--count",
 		"--end-of-options",
-		`origin/${branch}...HEAD`,
+		`${REMOTE_REF_PREFIX}origin/${branch}...HEAD`,
 		"--",
 	]);
 	if (counted.failure)

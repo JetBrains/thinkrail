@@ -242,9 +242,7 @@ import {
 	reclaimWorktree,
 	recordWorkspaceActivity,
 	refreshUserOwnedWorkspace,
-	removeCleanWorktree,
 	renameWorkspace,
-	restoreCleanWorktree,
 	retryWorkspaceCreation,
 	settleWorkspace,
 	setWorkspaceDiffBase,
@@ -252,6 +250,7 @@ import {
 	setWorkspaceSkillOverride,
 	setWorkspaceSubagentMaxConcurrent,
 	setWorkspaceSubagentsOverride,
+	stageWorktreeRemoval,
 	startWorkspaceCreation,
 	unsettleWorkspace,
 	workspaceDiffStats,
@@ -386,14 +385,21 @@ function removeSettledWorkspace(
 		if (latest.branch !== ws.branch || changed(latest))
 			return { removed: false, reason: "changed" };
 		if (hasBusySession(id)) return { removed: false, reason: "running" };
-		if (!(await removeCleanWorktree(latest))) return { removed: false, reason: "unsafe" };
+		const staged = await stageWorktreeRemoval(latest);
+		if (!staged) return { removed: false, reason: "unsafe" };
 		const after = current();
 		const busy = hasBusySession(id);
 		if (after && (busy || changed(after))) {
-			if (!(await restoreCleanWorktree(latest))) {
+			if (!(await staged.restore())) {
 				log.warn(`worktree was not restored after a cancelled removal of ${id}`);
 			}
 			return { removed: false, reason: busy ? "running" : "changed" };
+		}
+		if (!(await staged.discard())) {
+			if (!(await staged.restore())) {
+				log.warn(`worktree was not restored after a refused removal of ${id}`);
+			}
+			return { removed: false, reason: "unsafe" };
 		}
 		archiveWorkspace(id, false);
 		return { removed: true };
@@ -845,7 +851,8 @@ const handlers: WsHandlers = {
 		return { ok: true } as const;
 	},
 	"workspace.settle": (params) => settleWorkspace(params.id),
-	"workspace.unsettle": (params) => unsettleWorkspace(params.id),
+	"workspace.unsettle": (params) =>
+		withChangeLock(params.id, async () => unsettleWorkspace(params.id)),
 	"workspace.markUnread": async (params) => ({
 		record: await markWorkspaceUnread(sessionStateWorkspace(getWorkspace(params.id))),
 	}),

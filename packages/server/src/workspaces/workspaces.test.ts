@@ -29,7 +29,6 @@ import {
 	recordWorkspaceActivity,
 	recordWorkspaceHead,
 	refreshUserOwnedWorkspace,
-	removeCleanWorktree,
 	removeWorkspace,
 	renameWorkspace,
 	seedWorkspaceHead,
@@ -39,6 +38,7 @@ import {
 	setWorkspaceReview,
 	setWorkspaceSubagentMaxConcurrent,
 	setWorkspaceSubagentsOverride,
+	stageWorktreeRemoval,
 	unsettleWorkspace,
 	type WorkspaceLifecycleEvent,
 } from "./workspaces";
@@ -764,14 +764,28 @@ test("forgetWorkspace drops the record + returns it, but leaves the worktree for
 	expect(forgetWorkspace(ws.id)).toBeNull();
 });
 
-test("removeCleanWorktree refuses a worktree with new work and removes a clean one, keeping the branch", async () => {
+test("stageWorktreeRemoval moves the checkout aside intact; restore returns it, discard removes it keeping the branch", async () => {
 	const ws = await createWorkspace("p1");
 	writeFileSync(join(ws.worktreePath, "draft.txt"), "draft\n");
-	expect(await removeCleanWorktree(ws)).toBe(false);
-	expect(existsSync(join(ws.worktreePath, "draft.txt"))).toBe(true);
+	const staged = await stageWorktreeRemoval(ws);
+	if (!staged) throw new Error("expected a staged removal");
+	expect(existsSync(ws.worktreePath)).toBe(false);
+	expect(await staged.discard()).toBe(false);
+	expect(await staged.restore()).toBe(true);
+	expect(readFileSync(join(ws.worktreePath, "draft.txt"), "utf8")).toBe("draft\n");
+
+	const again = await stageWorktreeRemoval(ws);
+	if (!again) throw new Error("expected a staged removal");
+	mkdirSync(ws.worktreePath);
+	writeFileSync(join(ws.worktreePath, "recreated.txt"), "x\n");
+	expect(await again.restore()).toBe(false);
+	rmSync(ws.worktreePath, { recursive: true });
+	expect(await again.restore()).toBe(true);
 
 	rmSync(join(ws.worktreePath, "draft.txt"));
-	expect(await removeCleanWorktree(ws)).toBe(true);
+	const clean = await stageWorktreeRemoval(ws);
+	if (!clean) throw new Error("expected a staged removal");
+	expect(await clean.discard()).toBe(true);
 	expect(existsSync(ws.worktreePath)).toBe(false);
 	expect(gitOut(repo, "show-ref", "--verify", `refs/heads/${ws.branch}`)).not.toBe("");
 });
