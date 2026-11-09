@@ -410,6 +410,10 @@ export function loadConfig(): AppConfig {
 			typeof value.fileLineWidthBounded === "boolean"
 				? value.fileLineWidthBounded
 				: DEFAULT_CONFIG.fileLineWidthBounded,
+		voiceInputEnabled:
+			typeof value.voiceInputEnabled === "boolean"
+				? value.voiceInputEnabled
+				: DEFAULT_CONFIG.voiceInputEnabled,
 		reviewAutoFix:
 			typeof value.reviewAutoFix === "boolean" ? value.reviewAutoFix : DEFAULT_CONFIG.reviewAutoFix,
 		agentReviewEnabled:

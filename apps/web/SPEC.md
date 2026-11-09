@@ -54,6 +54,7 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | `fonts` | the host font settings + custom font files applied as the user-adjustable typography tokens | yes | [fonts/SPEC.md](src/fonts/SPEC.md) |
 | `i18n` | active language: synced preference + browser languages + bundled/local catalogs → the shared i18next instance, `<html lang>`, desktop menu labels | yes | [i18n/SPEC.md](src/i18n/SPEC.md) |
 | `lib` | shared path/array primitives + highlighting | yes | [lib/SPEC.md](src/lib/SPEC.md) |
+| `speech` | local voice dictation for every text field: one page-level layer, mic capture → `/speech` socket → the focused field | yes | [speech/SPEC.md](src/speech/SPEC.md) |
 
 Leaf utilities without their own spec: `constants/` (branding — the product name, storage/event prefixes, and the one
 `BRAND_MARK_SEGMENTS` monogram regions, joined into the `BRAND_MARK_PATH` the shell logo fills and clipped to by the components' working badge), `clientPreferences.ts` (feature-neutral
@@ -179,6 +180,7 @@ change. `dist/` therefore has no profiler timers (`actualStartTime` is absent fr
 - `fonts` → `contracts`, `constants` (the first-paint hint key), `clientPreferences` (native-stable hint storage and the desktop signal); `transport` hydrates the store's custom-font snapshot, `shell`'s fonts effect applies the settings and installs the faces, `main.tsx` applies the hint before React, and `panels` (the Appearance font groups) reads its bundled faces, probes and weight preview
 - `i18n` → `store`, `contracts` (types), `@thinkrail/locales`; `transport` hydrates the store's local-language snapshot, `main.tsx`'s `App` mounts `useLocaleSync` once and `panels` renders the Language page from its pure derivations
 - **Any module may → `@thinkrail/locales/react`** (`useT`, `<T>`, `currentLocale`) for its UI text — the one cross-cutting edge besides `lib`; user-facing text is never a literal ([[architecture]] Decision 23)
+- `speech` → `transport` (`openSpeechSocket`, `speech.*` requests), `store` (the host's `speech` status), `contracts`, `ui`, `lib` (platform chord, modal and text-entry checks), React, Remix Icon; `main.tsx` mounts its `DictationLayer` once, which serves every text field on the page; `chat`'s composer imports only `DICTATION_EVENT`, and `panels` (Settings → Voice input) its labels
 - leaves (`clientPreferences`, `constants`, `utils`, `styles`) → none internal
 
 Rules: a panel never imports another panel sideways; nothing imports `shell` (it's the composition root).
@@ -397,14 +399,15 @@ themselves.
   hides both; Playwright's macOS WebKit reproduces the Tab half only. A surface that must work from the keyboard gives every control an
   explicit tab stop — the questionnaire card does, pinned by a markup test and a WebKit e2e lane
   ([[module-ext-ask-user-question]]); the rest of the app has not been swept yet (known gap).
-- **Every host HTTP route the app composes is proxied by the Vite dev server.** The app reaches the host
-  over `/ws`, over the two byte routes `/files` and `/blob` (images, PDFs, notebooks, markdown-relative
+- **Every host route the app composes is proxied by the Vite dev server.** The app reaches the host
+  over the `/ws` and `/speech` sockets (the dictation stream, `transport/speech.ts`), over the two byte routes `/files` and `/blob` (images, PDFs, notebooks, markdown-relative
   images), always composed through one function (`panels/resourcePane.resourceBytesUrl`), and over
   `/fonts/` (custom font files and uploads, composed by `transport/fonts.ts`), all on the transport's HTTP
   origin. Under `bun run dev` that origin is Vite, and a route Vite does not proxy answers the SPA
   `index.html` with status 200 — an `<img>` shows nothing and a PDF fetch "succeeds" with HTML, while the
   host-served build and the e2e suite stay green. `vite.config.ts` therefore proxies `/files`, `/blob` and
-  `/fonts` beside `/ws`, and `devProxy.test.ts` pins the list to the composers' constants.
+  `/fonts` beside `/ws` and `/speech` (an unproxied socket upgrade is simply never answered, so dictation
+  hung on "starting"), and `devProxy.test.ts` pins the list to the composers' constants.
 - **`typecheck` runs two projects.** `tsconfig.json` checks the browser app with DOM types only;
   `tsconfig.test.json` checks tests, `scripts/`, and `vite.config.ts` with Bun types. Every
   test file is checked; the test project has no exclude list. A test never shares its base name with a

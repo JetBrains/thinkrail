@@ -87,9 +87,11 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   palette keeps its host scopes and rows) beside **`selectHostReachable`** (connected and this
   connection's welcome — when a host search request may go out).
   **`installWelcomeSnapshot(protocolVersion, projects, recentProjects,
-  config?, hostPlatform?, hostUpdate?)`** installs protocol + both sorted project views + optional config,
-  host platform, optional host-update lifecycle snapshot + navigation repair and then advances that readiness
+  config?, hostPlatform?, hostUpdate?, hostAppVersion?, speech?)`** installs protocol + both sorted project views + optional config,
+  host platform, optional host-update lifecycle snapshot, the voice-input **`speech`** status (`null` from a
+  pre-v107 host) + navigation repair and then advances that readiness
   edge in one Zustand write; route validation and capability reads never observe a partial welcome.
+  `installSpeechStatus` replaces `speech` whole on each `speech.changed` push.
   `installProjectSnapshot` remains the project-only primitive for focused
   callers. **`projects`** is the open rail, while **`recentProjects`** is the last-opened-ordered set of every
   known open + closed project; the server omits closed records whose folder no longer exists.
@@ -563,7 +565,8 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   keeps the last authoritative config while a later welcome can replace it. **`terminalReplayKb: number`**,
   **`terminalWindowsShell: TerminalWindowsShell`**, **`composerGrowthLimit: ComposerGrowthLimit`**,
   **`chatLineWidth` / `fileLineWidth`**, their independent **`chatLineWidthBounded` /
-  `fileLineWidthBounded`** switches, **`customLayoutPresets: LayoutPreset[]`**,
+  `fileLineWidthBounded`** switches, **`voiceInputEnabled`** (absent from an older host reads as on),
+  **`customLayoutPresets: LayoutPreset[]`**,
   optional **`defaultModel: WireModel` / `defaultEffort: ThinkingLevel`** for new chats, the picker's
   **`favoriteModels` / `recentModels: WireModel[]`** (defaulting to `[]` so a pre-v77 host reads as "none"),
   **`analyticsEnabled: boolean`**, **`analyticsConsentConfirmed: boolean`**,

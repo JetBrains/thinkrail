@@ -50,6 +50,14 @@ create the tools it needs based on how you actually work.
   its own model and live token and cost readout. Steer a running turn or queue a follow-up, delegate to
   subagents, and work a shared plan the agent updates and you edit — each completed step can be committed
   and reviewed on its own.
+- **Voice input, on your machine.** Every text field — the chat composer, dialogs, review comments, the
+  agent's questions and fields that extensions add — shows a mic in its corner while it has focus. Click it
+  or press `⌘⇧Space` (`Ctrl+Shift+Space` on Windows and Linux), tap to toggle, hold to talk; the text
+  streams in where your cursor is and is never sent until you press Enter. The code editor and the terminal
+  are left out on purpose. Recognition runs locally with NVIDIA's open
+  [Nemotron](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b) speech model (32 languages,
+  detected automatically); the one-time ~750 MB download happens only when you first ask for it.
+  Settings → Voice input turns it off or deletes the download.
 - **Find anything from one box.** `⌘K` (or a double tap of Shift) opens a palette that finds chats and the
   messages inside them, workspaces and projects, files in the current workspace, specs and plans — with a
   preview pane on `⌘I` — runs the app's commands with their shortcuts shown, and jumps to a Settings
@@ -231,6 +239,11 @@ the command line, `thinkrail --no-analytics` (or `THINKRAIL_NO_ANALYTICS=1`) tur
 that run. With additional sharing on, a packaged build may open the ThinkRail blog in your browser once to
 link your installation to the website visit that brought you here — only where you accepted marketing cookies on the
 website or no consent is required — and that link expires after 30 days.
+
+Voice input never sends your audio to a cloud service: speech is recognised on the computer running ThinkRail, and
+dictated text reaches the agent only when you send it. Its one download comes straight from NVIDIA's GitHub release and
+Hugging Face repository, and a voice failure is reported like any other error: its type, code and location, never its
+message.
 
 Feedback surveys are separate from usage analytics. ThinkRail may invite you to a short survey, and you can
 also open it from **Settings → Feedback**. Your answers, including anything you type, are sent to the

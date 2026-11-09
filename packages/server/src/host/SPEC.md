@@ -52,7 +52,13 @@ channel fan-out, and the process-boot wrapper both launchers share.
   (checked against `Content-Length` before reading and again while streaming), 409 `too-many`, 422
   `unsupported-collection`/`invalid-font`, or 500 `unreadable`; any other method is 405 with
   `Allow: GET, PUT`, the `fonts` poller's `fonts.changed` nudge reaching
-  only sockets whose `?protocol=` is at least `FONTS_PROTOCOL_VERSION`, static serving with
+  only sockets whose `?protocol=` is at least `FONTS_PROTOCOL_VERSION`; the **`/speech` socket**
+  (`SPEECH_SOCKET_ROUTE`, refused below `SPEECH_PROTOCOL_VERSION`), which shares the one `Bun.serve`
+  websocket handler but is tagged at upgrade. Its `open` / `message` / `close` go straight to that
+  socket's [[submodule-server-speech]] relay, so it never joins the `clientKey → socket` registry, the
+  replay cache or any channel: binary 20 ms audio frames would otherwise be hashed and retained
+  per request. `host` publishes
+  `speech.changed` whole to v107 sockets, which also get `ServerWelcome.speech`; static serving with
   `index.html` fallback, the `server.welcome` push, the **`?client=` page identity** read off the socket URL at
   upgrade (threaded to every handler as `RequestContext`; it addresses terminal output but no longer *owns*
   PTYs — see [[submodule-server-terminal]]) plus the `clientKey → socket` registry and the **replay-namespace

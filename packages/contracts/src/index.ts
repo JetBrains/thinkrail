@@ -108,4 +108,15 @@ export type { QuitConfirmationDependencies } from "./quitConfirmation";
 export { createQuitConfirmation, QUIT_CONFIRMATION } from "./quitConfirmation";
 export type { SearchFieldSource } from "./searchFields";
 export { searchHitFields } from "./searchFields";
+export type * from "./speech";
+export {
+	isSpeechErrorCode,
+	isSpeechModel,
+	parseSpeechClientMessage,
+	parseSpeechServerMessage,
+	SPEECH_ERROR_CODES,
+	SPEECH_MODELS,
+	SPEECH_SAMPLE_RATE,
+	SPEECH_SOCKET_ROUTE,
+} from "./speech";
 export * from "./wsProtocol";
