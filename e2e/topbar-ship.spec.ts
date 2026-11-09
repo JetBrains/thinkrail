@@ -9,6 +9,7 @@ import {
 	worktreeRow,
 } from "./fixtures/app";
 import { commitFile, gitAs } from "./fixtures/git";
+import { writeGhScenario } from "./fixtures/github";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 
 // The topbar's Remote and Pull request segments without a forge review (v87 `workspace.branchStatus`).
@@ -187,6 +188,7 @@ test("Open PR from the topbar composes from commits or the repository template",
 			"https://github.com/acme/sample.git",
 		);
 		gitAs(workspace.worktreePath, "config", "protocol.https.allow", "never");
+		writeGhScenario({ prs: [] });
 		await revalidate(page);
 
 		const openPr = page.getByTestId("scope-ship-review-primary");

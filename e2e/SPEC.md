@@ -405,7 +405,10 @@ Each scenario's app reset also removes the lane fixture repository's `origin` re
 Pull request segments read the shared repo config, so an origin a push scenario added must never reshape a
 later scenario's topbar. The host's 60-second review lookup cache (per worktree and branch, both of which lane
 workspaces reuse) outlives the reset, so a scenario asserting a new workspace's Pull request segment first
-revalidates with a window focus.
+revalidates with a window focus. The reset also leaves `gh` signed out (no fake-gh scenario), and a signed-out
+lookup is unreliable, so it never clears a review a new workspace record already took from that cache: a
+scenario that needs a definite "no PR" writes an empty scenario (`writeGhScenario({ prs: [] })`) before it
+revalidates.
 
 The app reset leaves host settings alone (theme, system theme pair, message order, extension switches), and
 the lane shares one host. A test that changes one restores it before it ends; otherwise later scenarios, or
