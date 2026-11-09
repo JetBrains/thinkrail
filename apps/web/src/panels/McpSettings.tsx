@@ -194,6 +194,12 @@ export async function approveMcpServer(
 	);
 }
 
+function cancelLoginQuietly(loginId: string): void {
+	void getTransport()
+		.request("provider.loginCancel", { loginId })
+		.catch(() => {});
+}
+
 function writeSetting(
 	workspaceId: string,
 	row: McpServerRow,
@@ -814,9 +820,7 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 					}
 					const { loginId } = await getTransport().request(method, { workspaceId, name });
 					if (useAppStore.getState().removedWorkspaceIds[workspaceId]) {
-						void getTransport()
-							.request("provider.loginCancel", { loginId })
-							.catch(() => {});
+						cancelLoginQuietly(loginId);
 						return null;
 					}
 					useAppStore

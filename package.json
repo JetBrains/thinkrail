@@ -68,7 +68,7 @@
 		"typecheck": "turbo run typecheck typecheck:root",
 		"typecheck:root": "tsc -p tsconfig.json && tsc -p e2e/tsconfig.json",
 		"test": "bun test ./scripts/ && turbo run test --continue",
-		"lint": "biome check .",
+		"lint": "biome check --error-on-warnings .",
 		"format": "biome check --write .",
 		"prepare": "husky",
 		"e2e": "bun --preload ./e2e/idleSleepPreload.ts e2e/run.ts",
