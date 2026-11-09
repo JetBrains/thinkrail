@@ -10,12 +10,15 @@ export class RequestReplayConflictError extends Error {
 export type ReplayLoad = Record<string, { pending: number; settled: number; abandoned: number }>;
 
 export class RequestReplayOverflowError extends CodedError {
-	constructor(readonly load: ReplayLoad | null) {
+	readonly load: ReplayLoad | null;
+
+	constructor(load: ReplayLoad | null) {
 		super(
 			"REQUEST_REPLAY_OVERFLOW",
 			"replay namespace is full: unacknowledged results must be read first",
 		);
 		this.name = "RequestReplayOverflowError";
+		this.load = load;
 	}
 }
 
@@ -30,8 +33,11 @@ export class RequestAbandonedError extends Error {
 
 export class AbandonmentReportBudget {
 	private readonly reported = new Set<string>();
+	private readonly allowance: number;
 
-	constructor(private readonly allowance = 10) {}
+	constructor(allowance = 10) {
+		this.allowance = allowance;
+	}
 
 	admit(method: string): boolean {
 		if (this.reported.has(method) || this.reported.size >= this.allowance) return false;
