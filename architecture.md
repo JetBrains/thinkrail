@@ -337,7 +337,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
     through their own renderers' diffs. Monaco renders files on
     desktop and never loads on a phone. Write-paths are host-derived and compare-and-swap guarded
     (`change.revert`/`change.undo`, [[submodule-server-changes]]); the client never sends bytes to
-    write. ThinkRail hosts no VS Code extensions: language intelligence (TextMate grammars, Shiki) is
+    write. ThinkRail hosts no VS Code extensions: language intelligence (Pierre lexers) is
     imported as libraries. Active content (HTML, SVG, notebook outputs) renders only inside sandboxed,
     network-denying frames. The renderers, registry and review surfaces are one package
     ([[module-resource-renderers]]) behind a host seam (markdown, code highlighting, byte URLs, link

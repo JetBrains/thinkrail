@@ -1,11 +1,11 @@
-export interface ShikiFileLanguage {
+export interface CodeLanguage {
 	id: string;
 	extensions: readonly string[];
 	aliases: readonly string[];
 	filenames?: readonly string[];
 }
 
-export const SHIKI_FILE_LANGUAGES: readonly ShikiFileLanguage[] = [
+export const CODE_LANGUAGES: readonly CodeLanguage[] = [
 	{
 		id: "typescript",
 		extensions: [".ts", ".cts", ".mts"],
@@ -190,11 +190,11 @@ export const SHIKI_FILE_LANGUAGES: readonly ShikiFileLanguage[] = [
 	},
 ];
 
-const SHIKI_LANGUAGE_BY_ALIAS = new Map(
-	SHIKI_FILE_LANGUAGES.flatMap((language) =>
+const CODE_LANGUAGE_BY_ALIAS = new Map(
+	CODE_LANGUAGES.flatMap((language) =>
 		[language.id, ...language.aliases].map((alias) => [alias.toLowerCase(), language.id] as const),
 	),
 );
-export function shikiLanguageId(value: string): string | null {
-	return SHIKI_LANGUAGE_BY_ALIAS.get(value.trim().toLowerCase()) ?? null;
+export function codeLanguageId(value: string): string | null {
+	return CODE_LANGUAGE_BY_ALIAS.get(value.trim().toLowerCase()) ?? null;
 }

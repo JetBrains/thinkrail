@@ -175,5 +175,5 @@ moved here from the app when the resource renderers became a package, because bo
   usable. There is no grip variant.
 - Primitives use only the host's token utilities, never shadcn's default oklch palette.
 
-Code highlighting is deliberately absent: `CodeBlock` and shiki depend on the app's theme registration
+Code highlighting is deliberately absent: `CodeBlock` and its highlighter depend on the app's theme registration
 and remain app-local until a second extension requires that seam.

@@ -30,7 +30,6 @@
 		"@fontsource-variable/orbitron": "catalog:",
 		"@remixicon/react": "catalog:",
 		"@pierre/highlights": "catalog:",
-		"@shikijs/langs": "4.5.0",
 		"@thinkrail/contracts": "workspace:*",
 		"@thinkrail/ext-ask-user-question": "workspace:*",
 		"@thinkrail/ext-visualize": "workspace:*",
@@ -49,7 +48,6 @@
 		"react-markdown": "catalog:",
 		"react-virtuoso": "catalog:",
 		"remark-gfm": "catalog:",
-		"shiki": "catalog:",
 		"zustand": "5.0.16"
 	},
 	"devDependencies": {
