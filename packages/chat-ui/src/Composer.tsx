@@ -1,0 +1,774 @@
+import {
+	RiArrowUpLine as ArrowUp,
+	RiArrowDownSLine as ChevronDown,
+	RiCornerDownLeftLine as EnterKey,
+	RiFileLine as FileIcon,
+	RiFolderLine as FolderIcon,
+	RiHistoryLine as History,
+	RiSparkling2Line as Sparkles,
+	RiStopFill as StopFill,
+} from "@remixicon/react";
+import type { ComposerGrowthLimit, ThinkingLevel, WireModel } from "@thinkrail/contracts";
+import type { MessageKey } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
+import { cn } from "@thinkrail/ui/utils";
+import {
+	forwardRef,
+	type KeyboardEvent,
+	useCallback,
+	useEffect,
+	useImperativeHandle,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from "react";
+import { FileChip } from "./FileChip";
+import {
+	ModelEffortPicker,
+	type ModelEffortPickerHandle,
+	type ModelSelection,
+} from "./ModelEffortPicker";
+import type { ModelPreferences } from "./modelPreferences";
+import { isModelCommand, parseModelCommand } from "./nativeCommands";
+import {
+	applyTemplateSlotEdit,
+	beginTemplateSlotSession,
+	finalizeTemplateSlotSession,
+	highlightSegments,
+	type ParsedTemplate,
+	type SlashCommandItem,
+	SlashCommandMenu,
+	type SlotHighlightState,
+	type SlotSegment,
+	selectedSlashCommandValue,
+	slashCommandQuery,
+	stepTemplateSlotSession,
+	TemplateSlotHint,
+	type TemplateSlotSessionState,
+	usePendingSelection,
+	useSlashCommandCompletion,
+} from "./prompt";
+import { imagePasteDropHandlers, PromptImageChips, usePromptImages } from "./promptImages";
+import type { ChatAttachment } from "./types";
+
+export type SubmitBehavior = "send" | "steer" | "followUp" | "interrupt";
+
+export type ComposerSubmitDisposition = { accepted: true } | { accepted: false; reason: string };
+
+const COMPOSER_EDITOR_LIMIT_CLASS = {
+	compact: "max-h-[calc(6lh+var(--space-8)+var(--space-8))]",
+	roomy: "max-h-[calc(10lh+var(--space-8)+var(--space-8))]",
+	"half-chat":
+		"max-h-[calc(50cqh-var(--space-16)-var(--space-16)-var(--space-4)-var(--space-4)-var(--space-4)-var(--space-4))]",
+} satisfies Record<ComposerGrowthLimit, string>;
+
+const WIDE_ONLY = "@max-md:hidden";
+const COMPACT_ONLY = "@md:hidden";
+
+const SEGMENT =
+	"flex items-center gap-4 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none";
+
+const SEND_PILL = "flex h-28 shrink-0 items-stretch rounded-full transition-colors";
+const SEND_PILL_ARMED = "bg-control-primary-bg text-control-primary-text";
+const SEND_PILL_INERT = "bg-control-bg-selected text-control-disabled-text";
+const SEND_MAIN = cn(
+	SEGMENT,
+	"rounded-full pl-12 @max-md:w-28 @max-md:justify-center @max-md:px-0",
+);
+const SEND_MORE = cn(SEGMENT, "rounded-r-full pr-8 pl-2");
+const KEYCAP = "flex h-16 min-w-16 items-center justify-center rounded-xs bg-on-primary-soft px-2";
+
+const STREAMING_SEND_MODES = [
+	{
+		behavior: "steer" as const,
+		name: "chat.composer.mode.steer",
+		meaning: "chat.composer.mode.steerMeaning",
+		keys: "Enter",
+		testid: "send-mode-steer",
+	},
+	{
+		behavior: "followUp" as const,
+		name: "chat.composer.mode.queue",
+		meaning: "chat.composer.mode.queueMeaning",
+		keys: "Cmd/Ctrl+Enter",
+		testid: "send-mode-queue",
+	},
+	{
+		behavior: "interrupt" as const,
+		name: "chat.composer.mode.interrupt",
+		meaning: "chat.composer.mode.interruptMeaning",
+		keys: "Cmd/Ctrl+Shift+Enter",
+		testid: "send-mode-interrupt",
+	},
+] satisfies {
+	behavior: SubmitBehavior;
+	name: MessageKey;
+	meaning: MessageKey;
+	keys: string;
+	testid: string;
+}[];
+
+export interface MentionCandidate {
+	path: string;
+	name: string;
+	kind: "file" | "dir";
+}
+
+function activeToken(value: string, caret: number): { token: string; start: number } {
+	const match = /(\S+)$/.exec(value.slice(0, caret));
+	if (!match) return { token: "", start: caret };
+	return { token: match[0], start: caret - match[0].length };
+}
+
+function withOffsets(segments: SlotSegment[]): (SlotSegment & { start: number })[] {
+	let offset = 0;
+	return segments.map((seg) => {
+		const start = offset;
+		offset += seg.text.length;
+		return { ...seg, start };
+	});
+}
+
+function highlightTint(state: SlotHighlightState): string {
+	switch (state) {
+		case "unfilled":
+			return "rounded-xs bg-primary-soft";
+		case "active":
+			return "rounded-xs bg-primary-muted";
+		case "filled":
+			return "rounded-xs bg-primary-subtle";
+		case "plain":
+			return "";
+	}
+}
+
+interface ComposerProps {
+	value: string;
+	onChange: (value: string) => void;
+	isStreaming: boolean;
+	growthLimit: ComposerGrowthLimit;
+	commands: SlashCommandItem[];
+	templatePending: boolean;
+	mentionCandidates: MentionCandidate[];
+	recentPrompts: string[];
+	models: WireModel[];
+	modelsRefreshing: boolean;
+	onRefreshModels: (force: boolean) => void;
+	currentModel: WireModel | null;
+	thinkingLevel: ThinkingLevel;
+	modelPreferences: ModelPreferences;
+	onMentionQuery: (query: string | null) => void;
+	onSlashActive: (active: boolean) => void;
+	onSelectModel: (selection: ModelSelection) => void;
+	onSelectThinking: (level: ThinkingLevel) => void;
+	onSubmit: (
+		text: string,
+		attachments: ChatAttachment[],
+		behavior: SubmitBehavior,
+	) => ComposerSubmitDisposition;
+	onAbort: () => void;
+	onHistoryOpen?: () => void;
+	onPickTemplate?: (name: string) => void;
+	onManageTemplates?: () => void;
+	templatesEmpty?: boolean;
+	/**
+	 * A model picker the host renders outside the input — a phone puts its own above the field, as a bottom
+	 * sheet without a focused search box. With it the composer draws no picker in the shell, and `/model`
+	 * opens this one instead.
+	 */
+	externalModelPicker?: ModelEffortPickerHandle;
+}
+
+export interface ComposerHandle {
+	insertText: (text: string) => void;
+	insertAndSubmit: (text: string, behavior: SubmitBehavior) => void;
+	insertTemplate: (parsed: ParsedTemplate) => void;
+	restoreAttachments: (attachments: ChatAttachment[]) => void;
+	openHistory: () => void;
+	refocus: () => void;
+}
+
+export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
+	{
+		value,
+		onChange,
+		isStreaming,
+		growthLimit,
+		commands,
+		templatePending,
+		mentionCandidates,
+		recentPrompts,
+		models,
+		modelsRefreshing,
+		onRefreshModels,
+		currentModel,
+		thinkingLevel,
+		modelPreferences,
+		onMentionQuery,
+		onSlashActive,
+		onSelectModel,
+		onSelectThinking,
+		onSubmit,
+		onAbort,
+		onHistoryOpen,
+		onPickTemplate,
+		onManageTemplates,
+		templatesEmpty,
+		externalModelPicker,
+	},
+	handleRef,
+) {
+	const t = useT();
+	const ref = useRef<HTMLTextAreaElement>(null);
+	const pickerRef = useRef<ModelEffortPickerHandle>(null);
+	const [caret, setCaret] = useState(0);
+	const attachedImages = usePromptImages();
+	const { images } = attachedImages;
+	const [submitError, setSubmitError] = useState<string | null>(null);
+	const pendingImages = attachedImages.pending;
+	useEffect(() => {
+		if (images.length === 0) setSubmitError(null);
+	}, [images.length]);
+	const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
+	const [mentionDismissed, setMentionDismissed] = useState(false);
+	const [sendMenuOpen, setSendMenuOpen] = useState(false);
+	const recallIdxRef = useRef<number | null>(null);
+	const [slotSession, setSlotSession] = useState<TemplateSlotSessionState | null>(null);
+	const slots = slotSession?.slots ?? null;
+	const slotIdx = slotSession?.activeIndex ?? 0;
+	const backdropRef = useRef<HTMLDivElement | null>(null);
+	const editorSizerRef = useRef<HTMLDivElement | null>(null);
+	const [draftNeedsExpansion, setDraftNeedsExpansion] = useState(false);
+	const expanded = isStreaming || draftNeedsExpansion;
+	const syncBackdropScroll = useCallback(() => {
+		const backdrop = backdropRef.current;
+		const textarea = ref.current;
+		if (!backdrop || !textarea) return;
+		backdrop.scrollLeft = textarea.scrollLeft;
+		backdrop.scrollTop = textarea.scrollTop;
+	}, []);
+	const attachBackdrop = useCallback(
+		(el: HTMLDivElement | null) => {
+			backdropRef.current = el;
+			syncBackdropScroll();
+		},
+		[syncBackdropScroll],
+	);
+	const measureDraftExpansion = useCallback(() => {
+		const sizer = editorSizerRef.current;
+		if (!sizer) return;
+		const styles = getComputedStyle(sizer);
+		const oneLineHeight =
+			Number.parseFloat(styles.lineHeight) +
+			Number.parseFloat(styles.paddingTop) +
+			Number.parseFloat(styles.paddingBottom);
+		setDraftNeedsExpansion(value.includes("\n") || sizer.scrollHeight > oneLineHeight + 1);
+	}, [value]);
+
+	useLayoutEffect(() => {
+		const sizer = editorSizerRef.current;
+		if (!sizer) return;
+		measureDraftExpansion();
+		const observer = new ResizeObserver(measureDraftExpansion);
+		observer.observe(sizer);
+		return () => observer.disconnect();
+	}, [measureDraftExpansion]);
+
+	useLayoutEffect(() => {
+		syncBackdropScroll();
+	});
+
+	const { token, start } = activeToken(value, caret);
+	const mentionQuery = token.startsWith("@") ? token.slice(1) : null;
+	const slashQuery = slashCommandQuery(value);
+
+	useEffect(() => onMentionQuery(mentionQuery), [mentionQuery, onMentionQuery]);
+	useEffect(() => onSlashActive(slashQuery !== null), [slashQuery, onSlashActive]);
+	useEffect(() => {
+		setMentionActiveIndex(0);
+		setMentionDismissed(false);
+	}, [mentionQuery]);
+
+	const mentionOpen = !mentionDismissed && mentionQuery !== null && mentionCandidates.length > 0;
+
+	const focusSelection = usePendingSelection(ref, setCaret);
+
+	const replaceDraft = useCallback(
+		(text: string, caret?: number) => {
+			recallIdxRef.current = null;
+			setSlotSession(null);
+			setSubmitError(null);
+			onChange(text);
+			focusSelection(caret ?? text.length);
+		},
+		[onChange, focusSelection],
+	);
+
+	const canSubmit = (raw: string) =>
+		!templatePending && pendingImages === 0 && (!!raw.trim() || images.length > 0);
+	const canSend = canSubmit(value);
+
+	const openModelPicker = (query: string) => {
+		replaceDraft("");
+		if (externalModelPicker) externalModelPicker.open(query);
+		else pickerRef.current?.open(query);
+	};
+
+	const submitText = (raw: string, behavior: SubmitBehavior) => {
+		if (!canSubmit(raw)) return;
+		const text = raw.trim();
+		const modelQuery = parseModelCommand(text);
+		if (modelQuery !== null) {
+			openModelPicker(modelQuery);
+			return;
+		}
+		const disposition = onSubmit(
+			text,
+			images.map(({ name, content }) => ({ name, content })),
+			behavior,
+		);
+		if (!disposition.accepted) {
+			setSubmitError(disposition.reason);
+			return;
+		}
+		setSubmitError(null);
+		onChange("");
+		attachedImages.reset();
+		recallIdxRef.current = null;
+		setSlotSession(null);
+	};
+
+	const pickMention = (c: MentionCandidate) => {
+		const before = value.slice(0, start);
+		const after = value.slice(caret);
+		const insert = c.kind === "dir" ? `@${c.path}/` : `@${c.path}`;
+		const suffix = c.kind === "dir" ? "" : " ";
+		replaceDraft(
+			`${before}${insert}${suffix}${after}`,
+			before.length + insert.length + suffix.length,
+		);
+	};
+
+	const slashCompletion = useSlashCommandCompletion({
+		value,
+		commands,
+		onSelect: (command) => {
+			if (isModelCommand(command)) openModelPicker("");
+			else if (command.source === "prompt" && onPickTemplate) onPickTemplate(command.name);
+			else replaceDraft(selectedSlashCommandValue(command));
+		},
+	});
+
+	const menuOpen = mentionOpen || slashCompletion.open;
+
+	const openHistory = () => {
+		setMentionDismissed(true);
+		slashCompletion.dismiss();
+		onHistoryOpen?.();
+	};
+
+	useImperativeHandle(handleRef, () => ({
+		insertText: (text: string) => replaceDraft(text),
+		insertAndSubmit: (text: string, behavior: SubmitBehavior) =>
+			canSubmit(text) ? submitText(text, behavior) : replaceDraft(text),
+		insertTemplate: (parsed: ParsedTemplate) => {
+			const transition = beginTemplateSlotSession(parsed);
+			recallIdxRef.current = null;
+			setSubmitError(null);
+			onChange(transition.value);
+			setSlotSession(transition.session);
+			focusSelection(transition.selection.start, transition.selection.end);
+		},
+		restoreAttachments: (attachments: ChatAttachment[]) => {
+			if (attachments.length === 0) return;
+			attachedImages.restore(attachments);
+			setSubmitError(null);
+			focusSelection(caret);
+		},
+		openHistory,
+		refocus: () => {
+			const slot = slots?.[slotIdx];
+			if (slot) focusSelection(slot.start, slot.end);
+			else focusSelection(caret);
+		},
+	}));
+
+	const submit = (behavior: SubmitBehavior) => {
+		submitText(finalizeTemplateSlotSession(value, slotSession), behavior);
+	};
+
+	const stepSlot = (direction: 1 | -1) => {
+		if (!slotSession) return;
+		const transition = stepTemplateSlotSession(value, slotSession, direction);
+		if (transition.value !== value) onChange(transition.value);
+		setSlotSession(transition.session);
+		focusSelection(transition.selection.start, transition.selection.end);
+	};
+
+	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+		if (isImeComposing(e.nativeEvent)) return;
+		if (slots && !menuOpen) {
+			if (e.key === "Tab") {
+				e.preventDefault();
+				stepSlot(e.shiftKey ? -1 : 1);
+				return;
+			}
+			if (e.key === "Escape") {
+				e.preventDefault();
+				setSlotSession(null);
+				return;
+			}
+		}
+		if (mentionOpen) {
+			const menuLen = mentionCandidates.length;
+			if (e.key === "ArrowDown") {
+				e.preventDefault();
+				setMentionActiveIndex((i) => (i + 1) % menuLen);
+				return;
+			}
+			if (e.key === "ArrowUp") {
+				e.preventDefault();
+				setMentionActiveIndex((i) => (i - 1 + menuLen) % menuLen);
+				return;
+			}
+			if (e.key === "Escape") {
+				e.preventDefault();
+				setMentionDismissed(true);
+				return;
+			}
+			if (e.key === "Enter" || e.key === "Tab") {
+				e.preventDefault();
+				const candidate = mentionCandidates[mentionActiveIndex];
+				if (candidate) pickMention(candidate);
+				return;
+			}
+		}
+		if (slashCompletion.handleKeyDown(e)) return;
+		const recallAt = recallIdxRef.current;
+		if (e.key === "ArrowUp" && (value === "" || recallAt !== null) && recentPrompts.length > 0) {
+			e.preventDefault();
+			setSlotSession(null);
+			const next = recallAt === null ? 0 : Math.min(recallAt + 1, recentPrompts.length - 1);
+			const text = recentPrompts[next] ?? "";
+			recallIdxRef.current = next;
+			onChange(text);
+			focusSelection(text.length);
+			return;
+		}
+		if (e.key === "ArrowDown" && recallAt !== null) {
+			e.preventDefault();
+			setSlotSession(null);
+			if (recallAt === 0) {
+				recallIdxRef.current = null;
+				onChange("");
+				focusSelection(0);
+			} else {
+				const next = recallAt - 1;
+				const text = recentPrompts[next] ?? "";
+				recallIdxRef.current = next;
+				onChange(text);
+				focusSelection(text.length);
+			}
+			return;
+		}
+		if (e.key === "Enter" && e.shiftKey && (e.metaKey || e.ctrlKey)) {
+			e.preventDefault();
+			submit(isStreaming ? "interrupt" : "send");
+			return;
+		}
+		if (e.key === "Enter" && !e.shiftKey) {
+			e.preventDefault();
+			const behavior: SubmitBehavior = isStreaming
+				? e.metaKey || e.ctrlKey
+					? "followUp"
+					: "steer"
+				: "send";
+			submit(behavior);
+		}
+	};
+
+	const { onPaste, onDrop } = imagePasteDropHandlers(attachedImages);
+
+	return (
+		<div
+			data-testid="chat-composer"
+			data-expanded={expanded}
+			data-streaming={isStreaming}
+			className="relative flex shrink-0 flex-col border-border-muted border-t bg-container-workspace-bg"
+		>
+			{mentionOpen ? (
+				<div
+					data-testid="mention-menu"
+					className="absolute bottom-full left-12 mb-4 max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-md border border-border-default bg-container-elevated-bg p-4 shadow-[var(--shadow-md)]"
+				>
+					{mentionCandidates.map((candidate, index) => (
+						<button
+							key={candidate.path}
+							type="button"
+							data-testid="mention-item"
+							onClick={() => pickMention(candidate)}
+							className={`flex w-full items-center gap-8 rounded-sm px-8 py-4 text-left tr-text-ui ${index === mentionActiveIndex ? "bg-control-bg-selected text-text-default" : "text-text-muted"}`}
+						>
+							{candidate.kind === "dir" ? (
+								<FolderIcon className="size-14 shrink-0" />
+							) : (
+								<FileIcon className="size-14 shrink-0" />
+							)}
+							<span className="truncate">{candidate.path}</span>
+						</button>
+					))}
+				</div>
+			) : slashCompletion.open ? (
+				<SlashCommandMenu
+					commands={slashCompletion.matches}
+					activeIndex={slashCompletion.activeIndex}
+					onSelect={slashCompletion.pick}
+					className="absolute bottom-full left-12 mb-4"
+					footer={
+						templatesEmpty && onManageTemplates ? (
+							<button
+								type="button"
+								data-testid="slash-templates-empty"
+								onClick={() => {
+									replaceDraft("");
+									onManageTemplates();
+								}}
+								className="flex w-full items-center gap-8 rounded-sm border-border-default border-t px-8 py-4 text-left text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default"
+							>
+								<Sparkles className="size-12 shrink-0" />
+								<span className="truncate">{t("chat.composer.noTemplates")}</span>
+							</button>
+						) : null
+					}
+				/>
+			) : null}
+
+			{slots && !menuOpen ? (
+				<TemplateSlotHint
+					activeIndex={slotIdx}
+					count={slots.length}
+					onNext={() => stepSlot(1)}
+					className="absolute bottom-full left-12 mb-4"
+				/>
+			) : null}
+
+			<PromptImageChips
+				controller={attachedImages}
+				leading={
+					submitError ? (
+						<FileChip
+							data-testid="composer-command-error"
+							tone="error"
+							icon={false}
+							title={submitError}
+							label={submitError}
+						/>
+					) : null
+				}
+			/>
+
+			<div className="p-chat-gutter">
+				<div
+					data-testid="chat-composer-shell"
+					className={cn(
+						"relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto] items-end gap-x-4 gap-y-4 overflow-hidden rounded-md border border-control-border-default bg-control-bg bg-clip-padding p-4 transition-colors focus-within:border-control-border-active",
+						expanded && growthLimit === "half-chat" && "max-h-[50cqh]",
+					)}
+				>
+					<div className="col-start-1 row-start-2 flex min-w-0 items-center self-end">
+						{externalModelPicker ? null : (
+							<ModelEffortPicker
+								ref={pickerRef}
+								models={models}
+								current={currentModel}
+								level={thinkingLevel}
+								refreshing={modelsRefreshing}
+								onRefresh={onRefreshModels}
+								onSelect={onSelectModel}
+								onSelectLevel={onSelectThinking}
+								preferences={modelPreferences}
+								className="max-w-[60vw] px-4 sm:max-w-[320px]"
+							/>
+						)}
+					</div>
+					<div
+						className={cn(
+							"relative col-span-3 col-start-1 row-start-1 min-h-0 overflow-hidden rounded-sm tr-text-ui",
+							COMPOSER_EDITOR_LIMIT_CLASS[growthLimit],
+						)}
+					>
+						<div
+							ref={editorSizerRef}
+							data-testid="chat-input-sizer"
+							aria-hidden
+							className="invisible w-full whitespace-pre-wrap break-words px-12 py-8 tr-text-ui"
+						>
+							{`${value}\u200b`}
+						</div>
+						{slots ? (
+							<div
+								ref={attachBackdrop}
+								data-testid="slot-backdrop"
+								aria-hidden
+								className="pointer-events-none absolute inset-0 overflow-hidden rounded-sm"
+							>
+								<div className="w-full whitespace-pre-wrap break-words px-12 py-8 tr-text-ui">
+									{withOffsets(highlightSegments(value, slots, slotIdx)).map((seg) => (
+										<span
+											key={seg.start}
+											data-testid={seg.state === "plain" ? undefined : "slot-highlight"}
+											data-slot-state={seg.state === "plain" ? undefined : seg.state}
+											className={`text-transparent ${highlightTint(seg.state)}`}
+										>
+											{seg.text}
+										</span>
+									))}
+								</div>
+							</div>
+						) : null}
+						<textarea
+							ref={ref}
+							data-testid="chat-input"
+							value={value}
+							onScroll={syncBackdropScroll}
+							onChange={(e) => {
+								const next = e.target.value;
+								const nextCaret = e.target.selectionStart;
+								setSubmitError(null);
+								const recalled = recallIdxRef.current;
+								if (recalled !== null && next !== recentPrompts[recalled]) {
+									recallIdxRef.current = null;
+								}
+								if (slotSession) {
+									setSlotSession(applyTemplateSlotEdit(value, next, nextCaret, slotSession));
+								}
+								onChange(next);
+								setCaret(nextCaret);
+							}}
+							onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
+							onClick={(e) => setCaret(e.currentTarget.selectionStart)}
+							onKeyDown={onKeyDown}
+							onPaste={onPaste}
+							onDrop={onDrop}
+							rows={1}
+							placeholder={
+								isStreaming
+									? t("chat.composer.placeholderStreaming")
+									: expanded
+										? t("chat.composer.placeholderExpanded")
+										: t("chat.composer.placeholder")
+							}
+							className={cn(
+								"absolute inset-0 size-full resize-none overflow-x-hidden overflow-y-auto rounded-sm bg-transparent px-12 py-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted",
+								expanded ? "whitespace-pre-wrap" : "whitespace-nowrap",
+							)}
+						/>
+					</div>
+					<div className="col-start-3 row-start-2 flex shrink-0 items-center gap-4 self-end">
+						<IconButton
+							icon={History}
+							data-testid="history-open"
+							data-history-trigger
+							label={t("chat.composer.searchHistory")}
+							onClick={openHistory}
+						/>
+						{isStreaming ? (
+							<Button
+								variant="ghost"
+								size="m"
+								iconLeft={StopFill}
+								data-testid="chat-abort"
+								aria-label={t("chat.composer.stop")}
+								tooltip={t("chat.composer.stop")}
+								onClick={onAbort}
+								className="shrink-0 @max-md:w-24 @max-md:px-0"
+							>
+								<span className={WIDE_ONLY}>{t("chat.composer.stop")}</span>
+							</Button>
+						) : null}
+						<div
+							data-testid="chat-send-pill"
+							data-armed={canSend}
+							className={cn(SEND_PILL, canSend ? SEND_PILL_ARMED : SEND_PILL_INERT)}
+						>
+							<button
+								type="button"
+								data-testid="chat-send"
+								aria-label={isStreaming ? t("chat.composer.steer") : t("chat.composer.send")}
+								onClick={() => submit(isStreaming ? "steer" : "send")}
+								disabled={!canSend}
+								className={cn(
+									SEND_MAIN,
+									"tr-text-action hover:bg-control-primary-bg-hovered",
+									isStreaming ? "rounded-r-none pr-4" : "pr-12",
+								)}
+							>
+								<ArrowUp className={cn("size-16", COMPACT_ONLY)} />
+								<span className={WIDE_ONLY}>
+									{isStreaming ? t("chat.composer.steer") : t("chat.composer.send")}
+								</span>
+								<kbd aria-hidden className={cn(KEYCAP, WIDE_ONLY)}>
+									<EnterKey className="size-12" />
+								</kbd>
+							</button>
+							{isStreaming ? (
+								<Popover open={sendMenuOpen} onOpenChange={setSendMenuOpen}>
+									<IconTooltip label={t("chat.composer.sendOptions")} wrapTrigger>
+										<PopoverTrigger asChild>
+											<button
+												type="button"
+												data-testid="send-menu"
+												aria-label={t("chat.composer.sendOptions")}
+												className={cn(
+													SEND_MORE,
+													canSend
+														? "hover:bg-control-primary-bg-hovered"
+														: "hover:text-text-default",
+												)}
+											>
+												<ChevronDown className="size-14" />
+											</button>
+										</PopoverTrigger>
+									</IconTooltip>
+									<PopoverContent side="top" align="end" className="w-[320px] p-4">
+										<div className="flex flex-col gap-2">
+											{STREAMING_SEND_MODES.map((mode) => (
+												<button
+													key={mode.behavior}
+													type="button"
+													data-testid={mode.testid}
+													disabled={!canSend}
+													onClick={() => {
+														setSendMenuOpen(false);
+														submit(mode.behavior);
+													}}
+													className="group flex w-full flex-col gap-2 rounded-sm px-8 py-4 text-left hover:bg-control-bg-hovered disabled:pointer-events-none"
+												>
+													<span className="flex w-full items-baseline justify-between gap-8">
+														<span className="text-text-default tr-text-ui group-disabled:text-control-disabled-text">
+															{t(mode.name)}
+														</span>
+														<span className="shrink-0 text-text-muted tr-text-metadata group-disabled:text-control-disabled-text">
+															{mode.keys}
+														</span>
+													</span>
+													<span className="text-text-muted tr-text-metadata group-disabled:text-control-disabled-text">
+														{t(mode.meaning)}
+													</span>
+												</button>
+											))}
+										</div>
+									</PopoverContent>
+								</Popover>
+							) : null}
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	);
+});
