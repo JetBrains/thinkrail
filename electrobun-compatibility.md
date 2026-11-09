@@ -102,7 +102,8 @@ product contract (it then guards upstream's behavior instead).
 
 - **Linux first-install tarball repack.** Owner [[module-ci-release]], `build-binary` `resolve-desktop`.
   Hutch's `createLinuxInstaller` runs `tar -czf … -C staging .`, so the archive has a runner-owned `./`
-  entry. **Removal gate:** Hutch archives the installer's members by name, owned `0:0`; verify with
+  entry ([hutch#7](https://github.com/blackboardsh/hutch/issues/7)). **Removal gate:** Hutch archives
+  the installer's members by name, owned `0:0`; verify with
   `tar --numeric-owner -tvzf` on the raw `apps/desktop/artifacts` tarball, then delete the repack. The
   `releaseArtifacts.test.ts` no-`./`/root-owner assertion stays as the contract.
 - **System32-first `PATH` on Windows packaging.** Owner [[module-ci-release]], `build-binary`.
