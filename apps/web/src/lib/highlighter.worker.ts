@@ -1,5 +1,4 @@
-import { createOnigurumaEngine } from "shiki/engine/oniguruma";
-import { createChatHighlighter } from "./highlighter";
+import { renderChatHighlight } from "./chatHighlighter";
 
 export interface HighlightRequest {
 	id: number;
@@ -10,15 +9,9 @@ export interface HighlightRequest {
 export interface HighlightReply {
 	id: number;
 	html: string | null;
-	failed?: boolean;
 }
-
-const highlight = createChatHighlighter(() => createOnigurumaEngine(import("shiki/wasm")));
 
 self.onmessage = (event: MessageEvent<HighlightRequest>) => {
 	const { id, code, lang } = event.data;
-	void highlight(code, lang).then(
-		(html) => self.postMessage({ id, html } satisfies HighlightReply),
-		() => self.postMessage({ id, html: null, failed: true } satisfies HighlightReply),
-	);
+	self.postMessage({ id, html: renderChatHighlight(code, lang) } satisfies HighlightReply);
 };
