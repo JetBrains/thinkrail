@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { isSupportedLanguage } from "@pierre/highlights";
 import { SHIKI_FILE_LANGUAGES, shikiLanguageId } from "./highlighter";
 
 test("the Monaco Shiki language registration list has no duplicate ids", () => {
@@ -12,12 +13,6 @@ test("Scala is recognized for chat fences and Scala files", () => {
 	expect(shikiLanguageId("Scala")).toBe("scala");
 });
 
-test("every Monaco language id is supplied by its Shiki grammar", async () => {
-	const modules = await Promise.all(SHIKI_FILE_LANGUAGES.map((language) => language.load()));
-	for (const [index, language] of SHIKI_FILE_LANGUAGES.entries()) {
-		expect(
-			modules[index]?.default.some((registration) => registration.name === language.id),
-			language.id,
-		).toBe(true);
-	}
+test("every Monaco language id has a Pierre lexer", () => {
+	for (const { id } of SHIKI_FILE_LANGUAGES) expect(isSupportedLanguage(id), id).toBe(true);
 });

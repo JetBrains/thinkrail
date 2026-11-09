@@ -3,7 +3,7 @@ import { onFontsChange } from "@thinkrail/ui/fonts";
 import type { editor } from "monaco-editor/editor/editor.api.js";
 import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { type ResourceHost, useResourceHost, useResourcePreferences } from "../host";
-import type { ResourceDescriptor, ResourceViewProps, SurfaceReview } from "../registry";
+import type { ResourceViewProps, SurfaceReview } from "../registry";
 import { MonacoReviewZones } from "./MonacoReviewZones";
 import { decorateEditorContextMenus } from "./monacoMenuIcons";
 import {
@@ -12,11 +12,9 @@ import {
 	editorFont,
 	ensureMonaco,
 	fileEditorOptions,
-	languageForPath,
 	remeasureEditorFonts,
 	revealLineNow,
 	syncFileModel,
-	warmLanguage,
 } from "./monacoSetup";
 import {
 	applyReviewDecorations,
@@ -36,9 +34,8 @@ function isEditorViewState(value: unknown): value is editor.ICodeEditorViewState
 	return Array.isArray(Reflect.get(value, "cursorState")) && Reflect.has(value, "viewState");
 }
 
-export function warm(host: ResourceHost, resource: ResourceDescriptor): void {
+export function warm(host: ResourceHost): void {
 	ensureMonaco(host.code);
-	setTimeout(() => warmLanguage(languageForPath(resource.path)), 0);
 }
 
 export default function MonacoEditor({

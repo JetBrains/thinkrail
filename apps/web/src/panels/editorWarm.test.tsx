@@ -13,7 +13,7 @@ const host: ResourceHost = {
 		languages: [],
 		languageId: () => null,
 		pierreTheme: { name: "test", appearance: "dark", style: {} },
-		theme: () => ({ name: "test", settings: [] }),
+		editorTheme: () => ({ rules: [], colors: {} }),
 	},
 	bytesUrl: () => "",
 	openFile: () => {},
