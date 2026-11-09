@@ -205,7 +205,7 @@ keeps it.
 
 - **Allowed deps:** `@thinkrail/contracts` (types), `@thinkrail/locales` (the `MessageKey` type and
   `./react` for its UI strings — `useT`, `<T>`, `localeOf`), `@thinkrail/ui` primitives, React, and the renderer
-  engines (`monaco-editor`, `@shikijs/monaco`, `shiki`, `@pierre/diffs`, `pdfjs-dist`,
+  engines (`monaco-editor`, `@shikijs/monaco`, `shiki`, `@pierre/diffs`, `@pierre/highlights`, `pdfjs-dist`,
   `react-markdown`, `rehype-raw`, `rehype-sanitize`, `diff`, `jsondiffpatch`, `react-virtuoso`,
   `node-htmldiff`).
 - **Forbidden:** the web app (store, transport, panels, chat, shell, lib, themes), extensions, the server, and
@@ -466,7 +466,7 @@ instead of reflowing the document at the pane width for a frame. The sanitizer a
 buttons and inputs with styled elements; spot (region) comments on HTML are not offered yet.
 
 Pierre parses the two complete text sides (`absent` → `null`) with the current ignore-whitespace value,
-uses the `thinkrail` CSS-variable Shiki theme, word-level inline changes, collapsed unchanged regions with
+uses the host's `pierreTheme` (registered as `thinkrail`, CSS variables only, highlighted by `@pierre/highlights`), word-level inline changes, collapsed unchanged regions with
 line-info hunk separators, and split/unified layout; phone-class viewports force unified and hide the
 Split/Inline segments, so no control promises a layout the viewport refuses. The collapse threshold
 (`COLLAPSED_CONTEXT_THRESHOLD`, 3 lines) is git's own default hunk context (`-U3`), so what Pierre
@@ -491,6 +491,17 @@ only when both sides carry one; `PierreDiff` keys a one-sided (added or deleted)
 present side's hash, so a remount — a Stacked/One-file switch, or a section scrolling back in — paints
 highlighted on its first frame instead of plain text followed by a colour pop. The phone code-file implementation is Pierre `File` with the same theme and
 review grammar; desktop files alone load Monaco.
+
+**Without WebAssembly the Pierre surfaces show plain text.** `@pierre/highlights` is WebAssembly only,
+and Pierre paints nothing — not even its own plain-text pass — until a main-thread highlighter loads; it
+has no highlighter-free mode, and Shiki stays out of the build. `PierreProvider` therefore reports
+`usePierrePlain()`: true from the first frame when `canUseWASM()` fails (the pool is then never built),
+or once `preloadHighlighter` for the `thinkrail` theme rejects, which latches for the page. `PierreDiff`,
+`PierreFile` and the notebook source diff then swap Pierre for `PlainCode`: uncolored runs from
+`plainRuns.ts` — the whole file, or each hunk's `@@` header, context and `-`/`+` lines — inside the
+same scroller. Review annotations, line selection and hunk toolbars need Pierre's rows and are absent in
+this mode. Each run of one kind is one text node rather than an element per line, so a 100k-line file
+stays a handful of nodes without a virtualizer, which the mirrored `PierreScroller` would have to feed.
 
 **Pierre surfaces are virtualized.** Unvirtualized Pierre puts every line in the DOM (≈400k nodes for a
 100k-line file), which WebKit — the desktop shell's engine — cannot style or lay out, hanging the app.

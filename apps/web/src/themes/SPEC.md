@@ -42,7 +42,7 @@ cannot express through the manifest keys is a product decision for all themes, n
   `resolveThemePreference`, `deriveSystemThemePair`, `readSystemAppearance`,
   `onSystemAppearanceChange`, `getThemes`, `readThemeHint` /
   `writeThemeHint`, and the manifest/descriptor/preference-result types plus the Shiki registration and its
-  `resolveThinkrailShikiTheme` strict-consumer adapter, and `THINKRAIL_PIERRE_THEME`.
+  `resolveThinkrailShikiTheme` strict-consumer adapter and `THINKRAIL_PIERRE_THEME`.
 - **Allowed external deps:** `@thinkrail/contracts` for the opaque ids, theme preference shapes and
   configured default; browser DOM/media/storage APIs and Vite's build-time glob; Shiki and Pierre types only, to type
   the generic registrations.
@@ -195,7 +195,7 @@ then the shell retains and observes the hint instead of overwriting it with stor
 the native shell's already-injected stable preference adapter when present and localStorage otherwise,
 which survives Electrobun's changing loopback origins without giving the launcher theme semantics.
 
-Chat uses `THINKRAIL_PIERRE_THEME`: a table from Pierre token names to the same semantic variables, so a
+Chat and Pierre diffs use `THINKRAIL_PIERRE_THEME`: a table from Pierre token names to the same semantic variables, so a
 theme swap needs no re-highlight. Pierre's theme sets a color per token kind it reports, so an exact match with
 Shiki is not possible. Every language uses this one table.
 

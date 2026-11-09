@@ -142,6 +142,13 @@ test("the Split/Inline and whitespace toggles appear when a code file is in the 
 	await expect(codeDiff.locator("[data-unified]")).toHaveCount(1);
 });
 
+test("a code diff colors tokens through the shared code variables", async ({ page }) => {
+	await seedThreeChanges(page);
+	await row(page, "script.ts").click();
+	const codeDiff = section(page, "script.ts").getByTestId("diff-view");
+	await expect(codeDiff.locator('span[style*="--code-keyword"]').first()).toBeVisible();
+});
+
 test("a double click opens the per-file tab and a section's Open as tab does the same", async ({
 	page,
 }) => {

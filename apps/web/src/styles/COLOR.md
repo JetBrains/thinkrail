@@ -93,8 +93,8 @@ the scale, never a new number in a class name.
 Monaco, Pierre, xterm, mermaid and Shiki cannot wear a class for their painted internals. Monaco, xterm,
 and mermaid read tokens through `getComputedStyle` and rebuild after the `[data-theme]` swap; Monaco now
 has only `EDITOR_THEME` and paints desktop files on `container-workspace-bg`. Pierre's open Shadow DOM
-inherits one `.pierre-code-surface` custom-property bridge: its CSS-variable Shiki theme maps
-`--diffs-token-*` to the existing `--code-*` syntax roles, while `--diffs-bg*`, number foregrounds, and
+inherits one `.pierre-code-surface` custom-property bridge: `THINKRAIL_PIERRE_THEME` maps Pierre's token
+kinds to the existing `--code-*` syntax roles, while `--diffs-bg*`, number foregrounds, and
 addition/deletion bases map to the workspace/content canvas, muted text, and feedback success/error roles.
 Those values remain live variable references, so Pierre needs neither a per-theme registration nor a
 re-highlight after a swap. Monaco and chat share the single `THINKRAIL_SHIKI_THEME` TextMate definition;

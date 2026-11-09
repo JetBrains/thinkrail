@@ -1,3 +1,4 @@
+import type { Theme } from "@pierre/highlights";
 import type { ResourceMeta } from "@thinkrail/contracts";
 import type { ComponentProps, ComponentType, ReactNode } from "react";
 import { createContext, useContext } from "react";
@@ -36,6 +37,7 @@ export interface ResourceCodeHost {
 		type: "light" | "dark";
 		readVariable: (name: string) => string;
 	}): ThemeRegistration;
+	pierreTheme: Theme;
 }
 
 export interface ResourceScope {

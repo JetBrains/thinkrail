@@ -15,7 +15,12 @@ import { preloadRendererView, RendererView, usePreloadResourceView } from "./ren
 
 const host: ResourceHost = {
 	markdown: () => null,
-	code: { languages: [], languageId: () => null, theme: () => ({ name: "test", settings: [] }) },
+	code: {
+		languages: [],
+		languageId: () => null,
+		pierreTheme: { name: "test", appearance: "dark", style: {} },
+		theme: () => ({ name: "test", settings: [] }),
+	},
 	bytesUrl: () => "",
 	openFile: () => {},
 	openComparison: () => {},

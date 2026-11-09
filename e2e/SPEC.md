@@ -521,6 +521,9 @@ lands in the sandbox and a new detection source is pinned everywhere at once.
   surface — Pierre file rendering, unified-only diffs, tap-to-comment and inline placement at
   `PHONE_VIEWPORT` — reached the way the desktop shell reaches a phone today: open at desktop width, then
   resize and hide the auxiliary stacks.
+  `e2e/no-webassembly.spec.ts` launches Chromium with `--js-flags=--jitless`, which removes
+  `WebAssembly` from the page and its workers alike, and pins that a diff, a phone-class code file, Monaco
+  and a chat fence still show their source as plain text.
 - **Consumes:** the built web artifact, the host's public boot/wire behavior, sanctioned server test-fixture
   exports, CLI binary, the locator, ready-document poller and `within` deadline from [[module-artifact-tests]], shared
   retrying teardown helper, git, Chromium, and Playwright. Standalone native/installer smoke and shared
