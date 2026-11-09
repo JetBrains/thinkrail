@@ -111,7 +111,10 @@ extension had to adopt and wire up. It was replaced so voice is a property of th
 - **The mic** is rendered through a portal and re-placed against the field's rect whenever the field,
   the page or its container resizes or anything scrolls (one `requestAnimationFrame` per burst; no idle
   frame loop, which kept the desktop renderer awake at 60 Hz): inside the right edge, at the bottom corner of a field 40 px or taller, centred vertically on a
-  single line. A field narrower than 96 px gets no mic, though the chord still works there.
+  single line. A field narrower than 96 px, or one that left the page, gets no mic, though the chord
+  still works on a narrow one. That decision is made where the mic is placed, not during render: a
+  render-time `isConnected` / width read is memoised by the React Compiler and went stale (the mic
+  stayed where a removed field had been, and a field that widened after focus never got one).
   - It portals into the field's nearest `[role="dialog"]` or Radix popper wrapper, absolutely
     positioned against it (including its scroll offset and border), so it sits inside that layer's focus trap and outside-click guard. Elsewhere
     it is fixed to the viewport.
@@ -137,8 +140,11 @@ extension had to adopt and wire up. It was replaced so voice is a property of th
     Tab-cycled input focus. Dictation failures are toasts.
 - **Lifecycle** (`control.ts`).
   - `startDictation(field)` focuses the field, takes its writer, locks it, announces
-    `thinkrail:dictation`, and starts the page's one dictation. Blur or a newer start ends it; the
-    chord or the mic stop it on purpose.
+    `thinkrail:dictation`, and starts the page's one dictation. Blur, the field leaving the page, or a
+    newer start ends it; the chord or the mic stop it on purpose. Removal is watched separately
+    (a `MutationObserver` while dictating), because only Chromium fires a blur when a focused element is
+    removed; in WebKit (the macOS app) and Firefox, closing a dialog mid-dictation left the microphone
+    live.
   - **Esc is not a dictation key** (user decision). It keeps whatever meaning the page gives it:
     Escape in a dialog closes the dialog, whose field blur then ends the dictation and drops its draft
     with it, exactly as for typed text. An earlier version stopped dictation on Esc. A dialog's
