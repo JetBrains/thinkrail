@@ -61,8 +61,12 @@ afterEach(() => {
 	for (const root of roots.splice(0)) removeTree(root);
 });
 
-test("the public barrel exposes only the desktop locator and ready-document poller", () => {
-	expect(Object.keys(artifactTests).sort()).toEqual(["locateDesktopLauncher", "waitForDocument"]);
+test("the public barrel exposes only the desktop locator, ready-document poller and deadline", () => {
+	expect(Object.keys(artifactTests).sort()).toEqual([
+		"locateDesktopLauncher",
+		"waitForDocument",
+		"within",
+	]);
 	expect(artifactTests.locateDesktopLauncher).toBe(locateDesktopLauncher);
 });
 

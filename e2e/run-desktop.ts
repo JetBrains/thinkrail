@@ -2,7 +2,7 @@
 
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { locateDesktopLauncher, waitForDocument } from "@thinkrail/artifact-tests";
+import { locateDesktopLauncher, waitForDocument, within } from "@thinkrail/artifact-tests";
 import { artifactHostEnvironment } from "./artifactPlaywright";
 import {
 	E2E_DESKTOP_CACHE,
@@ -17,15 +17,6 @@ import { holdE2eIdleSleep } from "./idleSleep";
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const desktopDir = fileURLToPath(new URL("../apps/desktop", import.meta.url));
 const launcher = locateDesktopLauncher(desktopDir, process.env.THINKRAIL_E2E_DESKTOP);
-
-function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
-	return Promise.race([
-		promise,
-		new Promise<never>((_, reject) =>
-			setTimeout(() => reject(new Error(`timed out after ${ms}ms: ${what}`)), ms),
-		),
-	]);
-}
 
 function hostOrigin(document: unknown): string | undefined {
 	if (typeof document !== "object" || document === null) return undefined;
