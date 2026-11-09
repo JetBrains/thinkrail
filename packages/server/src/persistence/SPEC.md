@@ -45,6 +45,11 @@ Analytics config preserves a saved boolean preference and a valid `analyticsCons
 independently; absent/malformed values default false. A preference-only write never implies completion.
 Settings owns initial preference priming and preference-plus-confirmation writes.
 
+An absent `otherAgentSkills` defaults by install age: `true` in a stored config that lacks it, since only a host
+from before the switch writes one (it loaded other agents' skills, #1210), and `false` with no readable config.
+Every config this host saves carries the field, so the default never flips later; an old install that never
+saved a config gets the new default.
+
 Config validation normalizes the closed theme mode plus complete opaque system pair, the closed
 composer-growth preference, the closed Windows terminal-shell preference (invalid/absent →
 `DEFAULT_CONFIG.terminalWindowsShell`), chat/file line widths plus their pane-bound switches, and the

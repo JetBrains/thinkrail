@@ -381,14 +381,22 @@ test("agentReviewEnabled defaults off; an old config loads the default; toggling
 	expect(() => updateConfig(invalid)).toThrow("agentReviewEnabled must be a boolean");
 });
 
-test("otherAgentSkills defaults off; an old config loads the default; opting in round-trips; non-boolean rejected", () => {
+test("otherAgentSkills is off for a new install, and every config it writes keeps it off", () => {
 	expect(DEFAULT_CONFIG.otherAgentSkills).toBe(false);
-	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
 	resetConfigCache();
 	expect(getConfig().otherAgentSkills).toBe(false);
-	expect(updateConfig({ otherAgentSkills: true }).otherAgentSkills).toBe(true);
+	updateConfig({ agentReviewEnabled: true });
+	resetConfigCache();
+	expect(getConfig().otherAgentSkills).toBe(false);
+});
+
+test("otherAgentSkills stays on for a config that predates it; opting out round-trips; non-boolean rejected", () => {
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
 	resetConfigCache();
 	expect(getConfig().otherAgentSkills).toBe(true);
+	expect(updateConfig({ otherAgentSkills: false }).otherAgentSkills).toBe(false);
+	resetConfigCache();
+	expect(getConfig().otherAgentSkills).toBe(false);
 	const invalid = { otherAgentSkills: 1 } as unknown as AppConfigUpdate;
 	expect(() => updateConfig(invalid)).toThrow("otherAgentSkills must be a boolean");
 });
@@ -820,6 +828,7 @@ test("loadConfig ignores the old layout settings object", () => {
 	expect(getConfig()).toEqual({
 		...DEFAULT_CONFIG,
 		theme: "acme.persisted",
+		otherAgentSkills: true,
 	});
 });
 

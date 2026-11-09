@@ -369,7 +369,7 @@ function storedExtensionSettings(value: unknown): ExtensionSettingValues {
 }
 
 export function loadConfig(): AppConfig {
-	const raw = readJson<unknown>("config.json", {});
+	const raw = readJson<unknown>("config.json", null);
 	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return structuredClone(DEFAULT_CONFIG);
 	const value = raw as Record<string, unknown>;
 	const extensions = { ...value };
@@ -447,7 +447,7 @@ export function loadConfig(): AppConfig {
 			: DEFAULT_CONFIG.settleIdleDays,
 		disabledExtensions: storedNameList(value.disabledExtensions),
 		extensionSettings: storedExtensionSettings(value.extensionSettings),
-		otherAgentSkills: value.otherAgentSkills === true,
+		otherAgentSkills: typeof value.otherAgentSkills === "boolean" ? value.otherAgentSkills : true,
 		disabledPackages: storedNameList(value.disabledPackages),
 		locale: isLocalePreference(value.locale) ? value.locale : DEFAULT_CONFIG.locale,
 		onboardingDismissed: value.onboardingDismissed === true,
