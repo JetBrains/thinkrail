@@ -957,6 +957,10 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   overflow then scrolls inside the textarea. Attachment chips, completion menus, slot hints, and QueueStrip
   keep their existing separate chrome. The slot-highlight backdrop must follow every dynamic textarea box
   change with the exact box-model and scroll-sync invariants under Template slots below.
+- **Composer click target** (`Composer`) — a primary-button press inside the input shell outside a control
+  focuses the textarea and keeps its caret, so padding and gaps have no dead zone. Presses on the chip row,
+  the completion menus, the gutter, or bubbling through React from portaled popovers do not count, so chip
+  text stays selectable.
 - **Composer trailing controls** (`Composer`) — the footer's right-hand cluster is **one solid object and
   ghosts**, no borders: History is `IconButton ghost m` (its `label` supplies the tooltip), Stop is
   `Button ghost m` (`■ Stop`, muted text lifting on a hover wash), and the send a single

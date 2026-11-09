@@ -153,6 +153,7 @@
 	"chat.compaction.running": "Compacting context…",
 	"chat.compaction.tokens": "{{tokens}} tokens",
 	"chat.compaction.tokensChange": "{{before}} → {{after}} tokens",
+	"chat.composer.label": "Message composer",
 	"chat.composer.mode.interrupt": "Interrupt",
 	"chat.composer.mode.interruptMeaning": "stops the current response and sends now",
 	"chat.composer.mode.queue": "Queue",
