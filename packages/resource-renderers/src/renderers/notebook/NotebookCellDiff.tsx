@@ -4,7 +4,7 @@ import { useT } from "@thinkrail/locales/react";
 import { useEffect, useMemo, useState } from "react";
 import { usePierrePlain } from "../code/PierreProvider";
 import { PlainCode } from "../code/PlainCode";
-import { plainDiffRows } from "../code/plainRows";
+import { plainDiffRuns } from "../code/plainRuns";
 import type { Size } from "../regionReview";
 import { svgIntrinsicSize } from "../svg/svgDocument";
 import { VisualDiff, type VisualDiffSide } from "../VisualDiff";
@@ -51,7 +51,7 @@ export function NotebookSourceDiff({
 	return (
 		<div className="overflow-auto bg-container-content-bg pierre-code-surface pierre-diff-surface">
 			{plain ? (
-				<PlainCode rows={plainDiffRows(fileDiff)} diff />
+				<PlainCode runs={plainDiffRuns(fileDiff)} diff />
 			) : (
 				<FileDiff fileDiff={fileDiff} options={options} />
 			)}

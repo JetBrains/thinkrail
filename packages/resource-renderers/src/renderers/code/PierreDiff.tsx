@@ -50,7 +50,7 @@ import {
 	usePierreFocus,
 } from "./pierreReview";
 import { usePierreVirtualizer } from "./pierreVirtualizer";
-import { plainDiffRows } from "./plainRows";
+import { plainDiffRuns } from "./plainRuns";
 
 type DiffAnnotationMetadata =
 	| { kind: "thread"; id: string }
@@ -443,7 +443,7 @@ function PierreDiffSurface({
 					</p>
 				) : null}
 				{plain ? (
-					<PlainCode rows={plainDiffRows(fileDiff)} diff />
+					<PlainCode runs={plainDiffRuns(fileDiff)} diff />
 				) : (
 					<FileDiff<DiffAnnotationMetadata>
 						fileDiff={fileDiff}

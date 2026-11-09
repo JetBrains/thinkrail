@@ -20,7 +20,7 @@ import {
 	usePierreFocus,
 } from "./pierreReview";
 import { usePierreVirtualizer } from "./pierreVirtualizer";
-import { plainFileRows } from "./plainRows";
+import { plainFileRuns } from "./plainRuns";
 
 const NO_PLACED_THREADS: ReadonlySet<string> = new Set();
 
@@ -160,7 +160,7 @@ function PierreFileSurface({
 			className="h-full overflow-auto bg-container-workspace-bg [overflow-anchor:none] pierre-code-surface pierre-file-surface"
 		>
 			{plain ? (
-				<PlainCode rows={plainFileRows(text)} />
+				<PlainCode runs={plainFileRuns(text)} />
 			) : (
 				<VirtualizerContext.Provider value={virtualizer}>
 					<File<FileAnnotationMetadata>

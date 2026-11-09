@@ -36,11 +36,25 @@ test("without WebAssembly a code diff shows its lines as plain text", async ({ p
 
 	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).dblclick();
 	const diff = page.getByTestId("diff-view");
-	for (const line of SCRIPT) await expect(diff.getByText(line, { exact: true })).toBeVisible();
+	const added = diff.getByTestId("plain-code").locator('[data-kind="addition"] > span:last-child');
+	await expect(added).toBeVisible();
+	await expect(added).toHaveText(SCRIPT.join("\n"));
 
 	await page.getByTestId("change-item").filter({ hasText: "notes.txt" }).dblclick();
 	await expect(diff.getByText("plain-text-fixture", { exact: true })).toBeVisible();
 	await expect(diff.getByText("a note edited by e2e", { exact: true })).toBeVisible();
+});
+
+test("without WebAssembly a 20k-line added file stays a handful of DOM nodes", async ({ page }) => {
+	await openWorkspaceWithScript(page);
+	const lines = Array.from({ length: 20_000 }, (_, line) => `export const v${line} = ${line};`);
+	writeFileSync(join(worktree(), "big.ts"), `${lines.join("\n")}\n`);
+	await revealWorkbenchTool(page, "changes");
+
+	await page.getByTestId("change-item").filter({ hasText: "big.ts" }).dblclick();
+	const plain = page.getByTestId("diff-view").getByTestId("plain-code");
+	await expect(plain).toContainText(lines.at(-1) ?? "");
+	expect(await plain.evaluate((pre) => pre.querySelectorAll("*").length)).toBeLessThan(10);
 });
 
 test("without WebAssembly a phone-class code file shows its lines as plain text, and Monaco still shows the file", async ({
@@ -55,7 +69,9 @@ test("without WebAssembly a phone-class code file shows its lines as plain text,
 	await page.setViewportSize(PHONE_VIEWPORT);
 	await hideAuxiliaryWorkbench(page);
 	const fileView = page.getByTestId("file-view");
-	for (const line of SCRIPT) await expect(fileView.getByText(line, { exact: true })).toBeVisible();
+	const plain = fileView.getByTestId("plain-code");
+	await expect(plain).toBeVisible();
+	await expect(plain).toHaveText(SCRIPT.join("\n"));
 });
 
 test("without WebAssembly a chat code block shows its lines as plain text", async ({ page }) => {
@@ -102,7 +118,7 @@ test("without WebAssembly a line thread on a plain diff or phone file is listed 
 	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).dblclick();
 	const diff = page.getByTestId("diff-view");
-	await expect(diff.getByText(SCRIPT[1] ?? "", { exact: true })).toBeVisible();
+	await expect(diff.getByTestId("plain-code")).toContainText(SCRIPT[1] ?? "");
 	await expect(diff.getByTestId("review-thread-card")).toHaveCount(0);
 	await expect(strip).toBeVisible();
 
@@ -111,7 +127,7 @@ test("without WebAssembly a line thread on a plain diff or phone file is listed 
 	await page.setViewportSize(PHONE_VIEWPORT);
 	await hideAuxiliaryWorkbench(page);
 	const fileView = page.getByTestId("file-view");
-	await expect(fileView.getByText(SCRIPT[1] ?? "", { exact: true })).toBeVisible();
+	await expect(fileView.getByTestId("plain-code")).toContainText(SCRIPT[1] ?? "");
 	await expect(fileView.getByTestId("review-thread-card")).toHaveCount(0);
 	await expect(strip).toBeVisible();
 });

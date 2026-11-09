@@ -497,10 +497,11 @@ and Pierre paints nothing — not even its own plain-text pass — until a main-
 has no highlighter-free mode, and Shiki stays out of the build. `PierreProvider` therefore reports
 `usePierrePlain()`: true from the first frame when `canUseWASM()` fails (the pool is then never built),
 or once `preloadHighlighter` for the `thinkrail` theme rejects, which latches for the page. `PierreDiff`,
-`PierreFile` and the notebook source diff then swap Pierre for `PlainCode`: uncolored rows from
-`plainRows.ts` — the file's lines, or each hunk's `@@` header, context and `-`/`+` lines — inside the
+`PierreFile` and the notebook source diff then swap Pierre for `PlainCode`: uncolored runs from
+`plainRuns.ts` — the whole file, or each hunk's `@@` header, context and `-`/`+` lines — inside the
 same scroller. Review annotations, line selection and hunk toolbars need Pierre's rows and are absent in
-this mode, and plain rows are not virtualized.
+this mode. Each run of one kind is one text node rather than an element per line, so a 100k-line file
+stays a handful of nodes without a virtualizer, which the mirrored `PierreScroller` would have to feed.
 
 **Pierre surfaces are virtualized.** Unvirtualized Pierre puts every line in the DOM (≈400k nodes for a
 100k-line file), which WebKit — the desktop shell's engine — cannot style or lay out, hanging the app.
