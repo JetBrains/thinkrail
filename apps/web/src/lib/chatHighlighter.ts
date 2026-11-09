@@ -21,6 +21,8 @@ interface LiveStream {
 	idle: ReturnType<typeof setTimeout>;
 }
 
+const isAnsi = (lang: string) => lang.toLowerCase() === "ansi";
+
 const renderHtml = (code: string, lang: Lang) =>
 	decoder
 		.decode(codeToHtml(code, { lang, theme: THINKRAIL_PIERRE_THEME }))
@@ -97,7 +99,7 @@ export function createChatStreams({ maxLive = 8, idleMs = 30_000 } = {}) {
 	function highlight(key: string, code: string, lang: string): ChatHighlight {
 		if (!isSupportedLanguage(lang)) return null;
 		try {
-			if (!seen.has(key)) {
+			if (!seen.has(key) || isAnsi(lang)) {
 				seen.add(key);
 				return { html: renderHtml(code, lang) };
 			}

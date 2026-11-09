@@ -40,19 +40,14 @@ export interface HighlightDom {
 
 export function applyHighlightHtml(host: HTMLElement, dom: HighlightDom, html: string) {
 	const patch = planHighlightPatch(dom.stable, html);
-	const code = patch.kind === "append" ? host.querySelector("code") : null;
-	if (patch.kind === "replace" || !code) {
+	const tail = patch.kind === "append" ? host.querySelector("code > [data-highlight-tail]") : null;
+	if (patch.kind === "replace" || !tail) {
 		host.innerHTML = html;
 		dom.stable = patch.stable;
 		return;
 	}
-	let node = code.lastChild;
-	while (node && !(node instanceof Element && node.hasAttribute("data-highlight-tail"))) {
-		const previous = node.previousSibling;
-		node.remove();
-		node = previous;
-	}
-	node?.remove();
-	code.insertAdjacentHTML("beforeend", patch.added);
+	while (tail.nextSibling) tail.nextSibling.remove();
+	tail.insertAdjacentHTML("afterend", patch.added);
+	tail.remove();
 	dom.stable = patch.stable;
 }

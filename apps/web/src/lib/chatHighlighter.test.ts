@@ -124,6 +124,21 @@ test("a stream sends only new lines and ends with the colors of a whole render",
 	expect(streams.liveCount()).toBe(0);
 });
 
+test("a streamed ansi block keeps the colors of a whole render", () => {
+	const streams = createChatStreams();
+	const lines = ["\x1b[31mred\x1b[0m plain", "\x1b[1;32mbold green\x1b[0m", "done"];
+	let code = "";
+	let html = "";
+	for (const line of lines) {
+		code += code ? `\n${line}` : line;
+		html = shownHtml([], streams.highlight("k", code, "ansi"));
+	}
+	expect(html).toBe(wholeRender(code, "ansi") ?? "");
+	expect(html).not.toContain("\x1b");
+	expect(tokenColors(html).size).toBeGreaterThan(1);
+	streams.release("k");
+});
+
 test("a streamed code block is a keyboard focus stop", () => {
 	const streams = createChatStreams();
 	streams.highlight("k", "x", "typescript");
