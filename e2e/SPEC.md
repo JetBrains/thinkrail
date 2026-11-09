@@ -39,9 +39,9 @@ block and left that shard minutes behind the rest. Dealing spreads every spec ac
 balance without recorded timings that would drift. A test list selects by file and title path, so listing
 rejects a title it could not select exactly once (a duplicate or prefix title path, a title with `›`, a line
 break or surrounding spaces) instead of risking a skipped or doubled test. Listing also forbids `test.only`:
-a dealt list would otherwise run every test a lane was given. Dealing splits a serial-mode group across
-lanes, so browser specs never use serial mode; a scenario whose steps depend on each other is one test,
-and `shard-runner.spec.ts` rejects `describe.serial` and `mode: "serial"`. The runner owns shard selection; an explicit
+a dealt list would otherwise run every test a lane was given. A spec in serial mode (`describe.serial` or
+`mode: "serial"`, found in its source) is one unit: all its tests go to the same lane in file order, since
+its steps share state (`voice-input.spec.ts` installs voice once for the tests after it). The runner owns shard selection; an explicit
 `--shard` argument is rejected whenever a job slice or more than one lane is in play.
 Every public browser E2E runner owns one process-lifetime idle-sleep assertion on macOS before setup or
 build work begins; source, agent, full, binary, and desktop modes all receive it. The assertion uses the

@@ -210,13 +210,40 @@ export function listedPlaywrightTests(output: string): ListedTest[] {
 	return tests;
 }
 
+export const SERIAL_SPEC_SOURCE = /describe\.serial|mode:\s*["']serial["']/;
+
 function dealt<T>(items: readonly T[], index: number, total: number): T[] {
 	return items.filter((_, position) => position % total === index - 1);
 }
 
-export function interleavedTestList(tests: readonly ListedTest[], shard: LaneShard): string {
-	const slice = shard.job ? dealt(tests, shard.job.index, shard.job.total) : tests;
+function dealUnits(tests: readonly ListedTest[], serialFiles: ReadonlySet<string>): ListedTest[][] {
+	const units: ListedTest[][] = [];
+	const serialUnits = new Map<string, ListedTest[]>();
+	for (const test of tests) {
+		if (!serialFiles.has(test.file)) {
+			units.push([test]);
+			continue;
+		}
+		const unit = serialUnits.get(test.file);
+		if (unit) unit.push(test);
+		else {
+			const created = [test];
+			serialUnits.set(test.file, created);
+			units.push(created);
+		}
+	}
+	return units;
+}
+
+export function interleavedTestList(
+	tests: readonly ListedTest[],
+	shard: LaneShard,
+	serialFiles: ReadonlySet<string> = new Set(),
+): string {
+	const units = dealUnits(tests, serialFiles);
+	const slice = shard.job ? dealt(units, shard.job.index, shard.job.total) : units;
 	return dealt(slice, shard.lane, shard.laneCount)
+		.flat()
 		.map((test) => `${[test.file, ...test.titles].join(` ${TEST_LIST_DELIMITER} `)}\n`)
 		.join("");
 }

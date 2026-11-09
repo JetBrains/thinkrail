@@ -5,8 +5,19 @@ import {
 	interleavedTestList,
 	isShardArg,
 	type LaneShard,
+	type ListedTest,
 	listedPlaywrightTests,
+	SERIAL_SPEC_SOURCE,
 } from "./shardPlan";
+
+function serialSpecFiles(output: string, tests: readonly ListedTest[]): Set<string> {
+	const rootDir = (JSON.parse(output) as { config?: { rootDir?: unknown } }).config?.rootDir;
+	if (typeof rootDir !== "string") throw new Error("Playwright shard listing reported no rootDir");
+	const files = new Set(tests.map((test) => test.file));
+	return new Set(
+		[...files].filter((file) => SERIAL_SPEC_SOURCE.test(readFileSync(join(rootDir, file), "utf8"))),
+	);
+}
 
 async function listAndDeal(
 	playwrightArgs: readonly string[],
@@ -39,10 +50,11 @@ async function listAndDeal(
 	if (listing.exitCode !== 0) {
 		throw new Error(`Playwright shard listing exited ${listing.exitCode}`);
 	}
+	const serialFiles = serialSpecFiles(output, tests);
 	return shards.map((shard) => {
 		if (!shard) return [];
 		const file = join(dir, `lane-${shard.lane}-of-${shard.laneCount}.txt`);
-		writeFileSync(file, interleavedTestList(tests, shard));
+		writeFileSync(file, interleavedTestList(tests, shard, serialFiles));
 		return ["--test-list", file];
 	});
 }

@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { resolveBunExecutable } from "./fixtures/executables";
@@ -16,6 +16,7 @@ import {
 	parseJobShard,
 	parseRunnerArgs,
 	resolveShardCount,
+	SERIAL_SPEC_SOURCE,
 } from "./shardPlan";
 import { shardTestListArgs } from "./shardTestLists";
 
@@ -300,16 +301,28 @@ test("Playwright selects exactly the tests each interleaved list names", async (
 	}
 });
 
-test("no browser spec runs in serial mode, which dealt shards would split", () => {
-	const specs = readdirSync(join(E2E_ROOT_DIR, "e2e"), {
-		recursive: true,
-		encoding: "utf8",
-	}).filter((file) => file.endsWith(".spec.ts") && !file.startsWith("workflows"));
-	expect(specs.length).toBeGreaterThan(0);
-	const serial = specs.filter((file) =>
-		/describe\.serial|mode:\s*["']serial["']/.test(
-			readFileSync(join(E2E_ROOT_DIR, "e2e", file), "utf8"),
-		),
+test("a serial-mode spec is dealt whole to one lane, in its own order", () => {
+	const tests: ListedTest[] = [
+		...Array.from({ length: 4 }, (_, index) => ({ file: "a.spec.ts", titles: [`a${index}`] })),
+		...Array.from({ length: 5 }, (_, index) => ({
+			file: "journey.spec.ts",
+			titles: [`j${index}`],
+		})),
+		...Array.from({ length: 4 }, (_, index) => ({ file: "z.spec.ts", titles: [`z${index}`] })),
+	];
+	const serial = new Set(["journey.spec.ts"]);
+	const lanes = [1, 2, 3].map((lane) =>
+		interleavedTestList(tests, { job: undefined, lane, laneCount: 3 }, serial)
+			.split("\n")
+			.filter(Boolean),
 	);
-	expect(serial).toEqual([]);
+	const journeyLanes = lanes.filter((lines) => lines.some((line) => line.startsWith("journey")));
+	expect(journeyLanes).toHaveLength(1);
+	expect(journeyLanes[0]?.filter((line) => line.startsWith("journey"))).toEqual(
+		[0, 1, 2, 3, 4].map((index) => `journey.spec.ts \u203A j${index}`),
+	);
+	expect(lanes.flat().toSorted()).toEqual(
+		tests.map((test) => [test.file, ...test.titles].join(" \u203A ")).toSorted(),
+	);
+	expect(SERIAL_SPEC_SOURCE.test('test.describe.configure({ mode: "serial" });')).toBe(true);
 });
