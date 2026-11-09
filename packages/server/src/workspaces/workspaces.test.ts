@@ -1036,6 +1036,8 @@ test("renameWorkspace never moves a branch the user just switched away from", as
 test("a managed folder that lost its .git never adopts an enclosing repo's branch", async () => {
 	const ws = await createWorkspace("p1");
 	git(dataDir, "init", "-b", "outer-branch");
+	git(dataDir, "config", "user.email", "t@thinkrail.test");
+	git(dataDir, "config", "user.name", "test");
 	git(dataDir, "commit", "--allow-empty", "-m", "outer");
 	rmSync(join(ws.worktreePath, ".git"), { force: true });
 
