@@ -20,7 +20,7 @@ It consumes finished artifacts; it does not build the application or supply appl
 - **Owns:** artifact locators, isolated environments, native/installer smoke entrypoints, shared host
   probes, their fixtures and helper unit tests, and the public build action's desktop packaging-invocation
   and artifact-collector contract tests.
-- **Public surface:** `locateDesktopLauncher`, `waitForDocument`
+- **Public surface:** `locateDesktopLauncher`, `waitForDocument`, `within`
 - **Allowed deps:** CLI's public artifact-name helper; server's sanctioned history-fixture export; shared
   release identity, its Windows file identity and icon, and retrying teardown; `resedit` to read Windows
   executable resources;
@@ -31,7 +31,7 @@ It consumes finished artifacts; it does not build the application or supply appl
   production packages importing this package, or real-user state mutation during tests.
 
 The root smoke commands execute the CLI, desktop and installer entrypoints directly. Browser E2E
-orchestration stays in [[module-browser-e2e]] and imports the pure locator and ready-document poller through this package's barrel.
+orchestration stays in [[module-browser-e2e]] and imports the pure locator, ready-document poller and timer-clearing `within` deadline through this package's barrel.
 Unit tests and strict typechecking use ordinary workspace Turbo tasks; there is no package build step,
 SDK preparation, declaration generation, or Playwright test discovery here. Product unit tests remain
 with their owning modules. The process-tree lifecycle test reads a fixture pid file only once it parses as
