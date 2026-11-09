@@ -52,6 +52,10 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
+      # The website typecheck runs Astro 7.4 and its content mapper under Node >= 22.23.4.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - run: bun install --frozen-lockfile
       - run: bun run check:deps
       - run: bun run check:boundaries
