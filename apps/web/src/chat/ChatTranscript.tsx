@@ -242,7 +242,6 @@ const ChatTranscript = forwardRef<
 	});
 	const chatLineWidthBounded = useAppStore((state) => state.chatLineWidthBounded);
 	const chatMessageOrder = useAppStore((state) => state.chatMessageOrder);
-	const streamingResponseMovement = useAppStore((state) => state.streamingResponseMovement);
 	const specNodes = useAppStore((s) => s.specsByWorkspace[workspaceId]);
 	const isSpec = useMemo(() => specPathMatcher(specNodes ?? []), [specNodes]);
 
@@ -343,7 +342,6 @@ const ChatTranscript = forwardRef<
 		latestRow,
 		firstItemIndex,
 		rowHeightEstimates,
-		streamingResponseMovement,
 	);
 
 	const readyCompletionId = useAppStore((state) =>
