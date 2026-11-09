@@ -381,6 +381,18 @@ test("agentReviewEnabled defaults off; an old config loads the default; toggling
 	expect(() => updateConfig(invalid)).toThrow("agentReviewEnabled must be a boolean");
 });
 
+test("otherAgentSkills defaults off; an old config loads the default; opting in round-trips; non-boolean rejected", () => {
+	expect(DEFAULT_CONFIG.otherAgentSkills).toBe(false);
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
+	resetConfigCache();
+	expect(getConfig().otherAgentSkills).toBe(false);
+	expect(updateConfig({ otherAgentSkills: true }).otherAgentSkills).toBe(true);
+	resetConfigCache();
+	expect(getConfig().otherAgentSkills).toBe(true);
+	const invalid = { otherAgentSkills: 1 } as unknown as AppConfigUpdate;
+	expect(() => updateConfig(invalid)).toThrow("otherAgentSkills must be a boolean");
+});
+
 test("onboardingDismissed defaults off; an old config loads the default; dismissing round-trips; non-boolean rejected", () => {
 	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
 	resetConfigCache();

@@ -4,7 +4,13 @@ import {
 	RiShieldCheckLine as ShieldCheck,
 	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
-import type { Project, SkillCatalogEntry, Workspace } from "@thinkrail/contracts";
+import {
+	isSkillGroupEnabled,
+	OTHER_AGENT_SKILL_GROUPS,
+	type Project,
+	type SkillCatalogEntry,
+	type Workspace,
+} from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { T, type Translator, t as translate, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
@@ -22,6 +28,7 @@ import {
 	trustGrantParams,
 	untrustedNoticeText,
 } from "./projectTrust";
+import { LARGE_SKILL_CATALOG_TOKENS, skillCatalogSize } from "./skillCatalogSize";
 import { useProjectTrustSummary } from "./useProjectTrustSummary";
 
 const TIER_META: Record<string, { label: MessageKey | null; hint: MessageKey; rank: number }> = {
@@ -88,6 +95,7 @@ export function SkillsDialog({
 }) {
 	const t = useT();
 	const project = useAppStore((s) => s.projects.find((p) => p.id === projectId));
+	const otherAgentSkills = useAppStore((s) => s.otherAgentSkills);
 	const [entries, setEntries] = useState<SkillCatalogEntry[] | null>(null);
 	const [busy, setBusy] = useState(false);
 	const workspaceId = workspace?.workspaceId;
@@ -156,8 +164,8 @@ export function SkillsDialog({
 			translate("chat.skills.skillUpdateFailed"),
 		);
 
-	const disabledGroups = new Set(project?.disabledGroups ?? []);
-	const pluginsDisabled = disabledGroups.has("@plugins");
+	const groupEnabled = (key: string) => isSkillGroupEnabled(project, key, otherAgentSkills);
+	const pluginsDisabled = !groupEnabled("@plugins");
 	const catalogAliases = (entries ?? [])
 		.filter((entry) => entry.decision === "untrusted")
 		.map((entry) => entry.name);
@@ -174,10 +182,18 @@ export function SkillsDialog({
 	const isLeadingKey = (key: string) => key === "bundled" || key === "pi";
 	const leadingGroups = groups.filter((g) => isLeadingKey(g.key));
 	const otherGroups = groups.filter((g) => !isLeadingKey(g.key));
+	const size = entries ? skillCatalogSize(entries) : null;
+	const otherAgentsOff =
+		!otherAgentSkills &&
+		groups.some(
+			(g) =>
+				(g.isPlugin || OTHER_AGENT_SKILL_GROUPS.includes(g.key)) &&
+				!groupEnabled(g.isPlugin ? "@plugins" : g.key),
+		);
 
 	const renderGroup = (group: Group) => {
 		const lockedByMaster = group.isPlugin && pluginsDisabled;
-		const groupOn = !lockedByMaster && !disabledGroups.has(group.key);
+		const groupOn = !lockedByMaster && groupEnabled(group.key);
 		return (
 			<div key={group.key} data-testid="skill-group" data-group={group.key} data-on={groupOn}>
 				<div
@@ -263,6 +279,31 @@ export function SkillsDialog({
 						</IconTooltip>
 					) : null}
 				</div>
+
+				{size ? (
+					<p
+						data-testid="skills-size"
+						data-large={size.tokens > LARGE_SKILL_CATALOG_TOKENS}
+						className={cn(
+							"tr-text-metadata",
+							size.tokens > LARGE_SKILL_CATALOG_TOKENS
+								? "text-feedback-warning"
+								: "text-text-muted",
+						)}
+					>
+						{t("chat.skills.size", { count: size.count, tokens: size.tokens.toLocaleString() })}
+						{size.tokens > LARGE_SKILL_CATALOG_TOKENS ? ` ${t("chat.skills.sizeLarge")}` : null}
+					</p>
+				) : null}
+
+				{otherAgentsOff ? (
+					<p
+						data-testid="skills-other-agents-off"
+						className="rounded-sm border border-border-default bg-container-elevated-bg px-12 py-8 text-text-muted tr-text-metadata"
+					>
+						{t("chat.skills.otherAgentsOff")}
+					</p>
+				) : null}
 
 				{workspace?.stale ? (
 					<div

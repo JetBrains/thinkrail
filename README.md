@@ -52,7 +52,7 @@ For latest version, see the [Releases page](https://github.com/JetBrains/thinkra
 
 - **Always up-to-date specifications.** A connected graph of `SPEC.md` files lives beside the code; the agent reads, searches, and maintains it through dedicated `spec_*` tools, so project intent persists across sessions. The read-only Specs tool renders the graph as a tree in its own view.
 
-- **Skills.** ThinkRail imports skills from `pi`, Claude, Codex, and other coding agents, as well as any already in your project. A large library is listed within a small prompt budget, and the agent finds the rest with a skill search.
+- **Skills.** ThinkRail loads your `pi` skills and any already in your project. It can also import skills from Claude, Codex, and other coding agents: switch them on in Settings → Extensions, or per project in the Skills dialog, which also shows the size of your skill catalog. A large library is listed within a small prompt budget, and the agent finds the rest with a skill search.
 
 - **Agent tools beyond the shell.** Thanks to the ThinkRail GUI, your AI agent can ask you structured multiple-choice questions in the chat instead of guessing, draw Mermaid diagrams, and show comparisons and file previews. When the agent proposes a UI change, it shows a before/after mockup you can comment on like a diff.
 

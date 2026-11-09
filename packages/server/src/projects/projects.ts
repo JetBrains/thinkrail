@@ -360,10 +360,17 @@ export function setProjectGroupEnabled(id: string, group: string, enabled: boole
 	const projects = getProjects();
 	const project = projects.find((p) => p.id === id);
 	if (!project) throw new Error(`Unknown project: ${id}`);
-	const groups = new Set(project.disabledGroups ?? []);
-	if (enabled) groups.delete(group);
-	else groups.add(group);
-	project.disabledGroups = [...groups];
+	const disabled = new Set(project.disabledGroups ?? []);
+	const on = new Set(project.enabledGroups ?? []);
+	if (enabled) {
+		disabled.delete(group);
+		on.add(group);
+	} else {
+		disabled.add(group);
+		on.delete(group);
+	}
+	project.disabledGroups = [...disabled];
+	project.enabledGroups = [...on];
 	saveProjects(projects);
 	return project;
 }

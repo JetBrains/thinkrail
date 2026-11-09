@@ -1163,7 +1163,7 @@ a project picker, the prompt hero, and the reused
 
   There is **no separate Review navigation section**; all review-related controls live in Models' REVIEW group.
   **`ExtensionsSettings`** (the **Extensions** section, nav `settings-nav-extensions`, listed only at
-  `protocolVersion >= EXTENSION_CATALOG_PROTOCOL_VERSION`) is one page in three groups. Its description
+  `protocolVersion >= EXTENSION_CATALOG_PROTOCOL_VERSION`) is one page in up to four groups. Its description
   carries the page's only statement about chats — "Changes apply to open chats when their current turn
   ends." — and a primary **Install package…** button; there is no dynamic notice about which chats are
   pending. **Built into ThinkRail** is the host-registry catalog as before: `extension.list` each time the
@@ -1176,7 +1176,10 @@ a project picker, the prompt hero, and the reused
   `MessageKey` map — a setting without copy is not shown), valued from **`store.extensionSettings`** else the
   declared default, disabled while the extension is off, and written one key at a time through
   `settings.update { extensionSettings: { name: { key: value } } }` (the host merges); they appear only
-  while `supportsExtensionSettings(protocolVersion)` holds. **Installed** and **pi built-in**
+  while `supportsExtensionSettings(protocolVersion)` holds. **Skills** (only at
+  `protocolVersion >= OTHER_AGENT_SKILLS_PROTOCOL_VERSION`) is one switch, `other-agent-skills-toggle`, over
+  `store.otherAgentSkills`, writing `settings.update { otherAgentSkills }`; per-project choices made in the
+  Skills dialog still win over it. **Installed** and **pi built-in**
   (`PiPackagesSettings.tsx`, props-driven; every `packages.*` request and the row state live in the
   **`usePiPackages`** hook, `usePiPackages.ts`, so the page component only composes) exist only while
   `supportsPiPackages(protocolVersion)` holds — against an older host the page is the bundled group

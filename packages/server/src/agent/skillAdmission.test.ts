@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { decideSkill, isSkillLoaded, type SkillAdmissionContext } from "./skillAdmission";
+import {
+	decideSkill,
+	isSkillLoaded,
+	type SkillAdmissionContext,
+	sourceMayLoad,
+} from "./skillAdmission";
 
 const EMPTY: SkillAdmissionContext = {
 	trusted: false,
@@ -7,6 +12,8 @@ const EMPTY: SkillAdmissionContext = {
 	acknowledged: [],
 	disabled: [],
 	disabledGroups: [],
+	enabledGroups: [],
+	otherAgentSkills: true,
 	overrides: {},
 };
 const alias = (name: string) => ({ name, isProjectAlias: true, group: "project", isPlugin: false });
@@ -85,6 +92,8 @@ describe("decideSkill — the trust gate is checked before the toggle layer (saf
 				acknowledged: ["deploy"],
 				disabled: [],
 				disabledGroups: [],
+				enabledGroups: [],
+				otherAgentSkills: true,
 				overrides: { deploy: "off" },
 			}),
 		).toBe("disabled");
@@ -113,6 +122,8 @@ describe("decideSkill — group / source disable (per-project baseline)", () => 
 			decideSkill(pluginSkill("x", "superpowers"), {
 				...EMPTY,
 				disabledGroups: ["superpowers"],
+				enabledGroups: [],
+				otherAgentSkills: true,
 				overrides: { x: "on" },
 			}),
 		).toBe("load");
@@ -127,5 +138,54 @@ describe("isSkillLoaded", () => {
 	it("is true only for a 'load' verdict", () => {
 		expect(isSkillLoaded(own("a"), EMPTY)).toBe(true);
 		expect(isSkillLoaded(alias("a"), EMPTY)).toBe(false);
+	});
+});
+
+describe("decideSkill — other agents' skills are opt-in", () => {
+	const OFF = { ...EMPTY, otherAgentSkills: false };
+
+	it("leaves other agents' personal skills and Claude plugins off by default", () => {
+		expect(decideSkill(own("x", "personal"), OFF)).toBe("disabled");
+		expect(decideSkill(pluginSkill("y", "superpowers"), OFF)).toBe("disabled");
+	});
+
+	it("keeps ThinkRail's, pi's and the project's own skills on", () => {
+		expect(decideSkill(own("a", "bundled"), OFF)).toBe("load");
+		expect(decideSkill(own("b", "pi"), OFF)).toBe("load");
+		expect(decideSkill(alias("c"), { ...OFF, trusted: true, acknowledged: ["c"] })).toBe("load");
+	});
+
+	it("a project can opt a group in, and a skill override still wins", () => {
+		expect(decideSkill(own("x", "personal"), { ...OFF, enabledGroups: ["personal"] })).toBe("load");
+		expect(
+			decideSkill(pluginSkill("y", "superpowers"), { ...OFF, enabledGroups: ["@plugins"] }),
+		).toBe("load");
+		expect(decideSkill(own("x", "personal"), { ...OFF, overrides: { x: "on" } })).toBe("load");
+	});
+
+	it("a project can still opt out when the global default is on", () => {
+		expect(decideSkill(own("x", "personal"), { ...EMPTY, disabledGroups: ["personal"] })).toBe(
+			"disabled",
+		);
+	});
+});
+
+describe("sourceMayLoad — a root admission can load nothing from stays out of pi's name resolution", () => {
+	const OFF = { ...EMPTY, otherAgentSkills: false };
+	it("drops personal and plugin roots while their groups are off", () => {
+		expect(sourceMayLoad({ group: "personal", isPlugin: false }, OFF)).toBe(false);
+		expect(sourceMayLoad({ group: "superpowers", isPlugin: true }, OFF)).toBe(false);
+		expect(sourceMayLoad({ group: "project", isPlugin: false }, OFF)).toBe(true);
+	});
+	it("keeps them once a project opts in, or while any per-skill override is on", () => {
+		expect(
+			sourceMayLoad(
+				{ group: "personal", isPlugin: false },
+				{ ...OFF, enabledGroups: ["personal"] },
+			),
+		).toBe(true);
+		expect(
+			sourceMayLoad({ group: "personal", isPlugin: false }, { ...OFF, overrides: { x: "on" } }),
+		).toBe(true);
 	});
 });

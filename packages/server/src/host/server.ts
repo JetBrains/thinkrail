@@ -47,6 +47,7 @@ import {
 	reconcileMcpSessions,
 	refreshAgentReviewTool,
 	refreshExtensionTools,
+	refreshSkillAdmission,
 	refreshSubagentConcurrency,
 	refreshSubagentTools,
 	setAgentReviewEnabledResolver,
@@ -734,9 +735,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		try {
 			const { projectId, skillOverrides } = getWorkspace(workspaceId);
 			const project = getProjects().find((p) => p.id === projectId);
-			return admissionContextFor(project, skillOverrides ?? {});
+			return admissionContextFor(project, skillOverrides ?? {}, getConfig().otherAgentSkills);
 		} catch {
-			return admissionContextFor(undefined);
+			return admissionContextFor(undefined, {}, getConfig().otherAgentSkills);
 		}
 	});
 
@@ -941,6 +942,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			refreshExtensionTools();
 		}
 		if (appliedUpdate.disabledPackages !== undefined) publishPiPackagesChanged();
+		if (appliedUpdate.otherAgentSkills !== undefined) void refreshSkillAdmission();
 	});
 
 	setSessionCreatedPublisher((payload: SessionCreatedPayload) => {

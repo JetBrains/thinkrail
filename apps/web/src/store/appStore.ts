@@ -1114,6 +1114,7 @@ interface AppState {
 	agentReviewEnabled: boolean;
 	disabledExtensions: string[];
 	extensionSettings: ExtensionSettingValues;
+	otherAgentSkills: boolean;
 	disabledPackages: string[];
 	locale: string;
 	localLocales: LocalLocalesSnapshot | null;
@@ -1538,6 +1539,7 @@ function configPatch(config: AppConfig) {
 			config.extensionSettings && typeof config.extensionSettings === "object"
 				? config.extensionSettings
 				: DEFAULT_CONFIG.extensionSettings,
+		otherAgentSkills: typeof config.otherAgentSkills === "boolean" ? config.otherAgentSkills : true,
 		disabledPackages: Array.isArray(config.disabledPackages)
 			? config.disabledPackages
 			: DEFAULT_CONFIG.disabledPackages,
@@ -2438,6 +2440,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	agentReviewEnabled: DEFAULT_CONFIG.agentReviewEnabled,
 	disabledExtensions: DEFAULT_CONFIG.disabledExtensions,
 	extensionSettings: DEFAULT_CONFIG.extensionSettings,
+	otherAgentSkills: DEFAULT_CONFIG.otherAgentSkills,
 	disabledPackages: DEFAULT_CONFIG.disabledPackages,
 	locale: DEFAULT_CONFIG.locale,
 	localLocales: null,

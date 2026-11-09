@@ -447,6 +447,7 @@ export function loadConfig(): AppConfig {
 			: DEFAULT_CONFIG.settleIdleDays,
 		disabledExtensions: storedNameList(value.disabledExtensions),
 		extensionSettings: storedExtensionSettings(value.extensionSettings),
+		otherAgentSkills: value.otherAgentSkills === true,
 		disabledPackages: storedNameList(value.disabledPackages),
 		locale: isLocalePreference(value.locale) ? value.locale : DEFAULT_CONFIG.locale,
 		onboardingDismissed: value.onboardingDismissed === true,
