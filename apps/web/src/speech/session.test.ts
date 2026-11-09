@@ -33,7 +33,11 @@ class FakeSocket implements SpeechSocketLike {
 	}
 }
 
-function harness(capture: (sink: CaptureSink) => Promise<Capture> = async () => ({ stop() {} })) {
+function harness(
+	capture: (sink: CaptureSink, signal: AbortSignal) => Promise<Capture> = async () => ({
+		stop() {},
+	}),
+) {
 	const sockets: FakeSocket[] = [];
 	const controller = createDictationController({
 		openSocket: () => {
@@ -175,4 +179,25 @@ test("a stop before a cold engine is ready waits for it instead of timing out", 
 	} finally {
 		globalThis.setTimeout = realSetTimeout;
 	}
+});
+
+test("stopping while the microphone is still opening cancels the capture at once, without an error", async () => {
+	const seen: AbortSignal[] = [];
+	let fail: (err: unknown) => void = () => {};
+	const { controller, sockets, target } = harness(
+		(_sink, abort) =>
+			new Promise<Capture>((_resolve, reject) => {
+				seen.push(abort);
+				fail = reject;
+			}),
+	);
+	controller.start(target());
+	sockets[0]?.open();
+	expect(seen.map((signal) => signal.aborted)).toEqual([false]);
+	controller.stop("composer");
+	expect(controller.snapshot().phase).toBe("stopping");
+	expect(seen.map((signal) => signal.aborted)).toEqual([true]);
+	fail(new CaptureFailure("failed"));
+	await tick();
+	expect(controller.snapshot()).toMatchObject({ phase: "stopping", error: null });
 });

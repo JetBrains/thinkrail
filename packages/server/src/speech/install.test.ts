@@ -282,6 +282,27 @@ test.skipIf(!target || !posix)(
 	},
 );
 
+test.skipIf(!target || !posix)(
+	"an install started while startup still probes PATH keeps its progress",
+	async () => {
+		const script = join(pathDir, "nemo-speech");
+		writeFileSync(script, '#!/bin/sh\nsleep 1\necho "nemo-speech 0.4.0"\n');
+		chmodSync(script, 0o755);
+		let open: () => void = () => {};
+		const gate = new Promise<void>((resolve) => {
+			open = resolve;
+		});
+		files.set("/multi.gguf", { body: multilingual, gate });
+		const init = initSpeech();
+		installSpeech("multilingual");
+		await init;
+		expect(speechStatus().install.status).toBe("installing");
+		open();
+		await speechInstallSettled();
+		expect(speechStatus().install).toEqual({ status: "ready", model: "multilingual" });
+	},
+);
+
 test.skipIf(!target || !posix)("an incompatible nemo-speech on PATH is ignored", async () => {
 	writeFakeBinary(pathDir, "0.4.0");
 	await initSpeech();

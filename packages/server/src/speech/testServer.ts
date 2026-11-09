@@ -4,6 +4,8 @@ export interface ServedFile {
 	body: Uint8Array;
 	ignoreRange?: boolean;
 	truncateAt?: number;
+	/** Holds the response until it resolves. */
+	gate?: Promise<void>;
 }
 
 export function sha256(body: Uint8Array): string {
@@ -15,12 +17,13 @@ export function serveFiles(files: Map<string, ServedFile>) {
 	const server = Bun.serve({
 		port: 0,
 		hostname: "127.0.0.1",
-		fetch(req) {
+		async fetch(req) {
 			const url = new URL(req.url);
 			const range = req.headers.get("range");
 			requests.push({ path: url.pathname, range });
 			const file = files.get(url.pathname);
 			if (!file) return new Response("missing", { status: 404 });
+			if (file.gate) await file.gate;
 			let start = 0;
 			const match = range ? /^bytes=(\d+)-$/.exec(range) : null;
 			if (match && !file.ignoreRange) {

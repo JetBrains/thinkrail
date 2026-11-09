@@ -40,7 +40,7 @@ export interface SpeechSocketLike {
 
 export interface DictationDeps {
 	openSocket: () => SpeechSocketLike;
-	startCapture: (sink: CaptureSink) => Promise<Capture>;
+	startCapture: (sink: CaptureSink, signal: AbortSignal) => Promise<Capture>;
 }
 
 const OPEN = 1;
@@ -70,6 +70,7 @@ export function createDictationController(deps: DictationDeps) {
 		let stopTimer: ReturnType<typeof setTimeout> | null = null;
 		let ready = false;
 		const early: ArrayBuffer[] = [];
+		const capturing = new AbortController();
 		const socket = deps.openSocket();
 		socket.binaryType = "arraybuffer";
 
@@ -83,6 +84,7 @@ export function createDictationController(deps: DictationDeps) {
 			if (ended) return;
 			ended = true;
 			if (stopTimer) clearTimeout(stopTimer);
+			capturing.abort();
 			capture?.stop();
 			capture = null;
 			socket.onmessage = null;
@@ -104,6 +106,7 @@ export function createDictationController(deps: DictationDeps) {
 		};
 		const stop = () => {
 			if (ended || snapshot.phase === "stopping") return;
+			capturing.abort();
 			capture?.stop();
 			capture = null;
 			publish({ phase: "stopping", level: 0 });
@@ -150,22 +153,28 @@ export function createDictationController(deps: DictationDeps) {
 		socket.onerror = () => end("SPEECH_ENGINE_FAILED");
 
 		void deps
-			.startCapture({
-				frame: (pcm) => {
-					if (ended || snapshot.phase === "stopping") return;
-					if (socket.readyState === OPEN) socket.send(pcm);
-					else if (early.length < MAX_EARLY_FRAMES) early.push(pcm);
+			.startCapture(
+				{
+					frame: (pcm) => {
+						if (ended || snapshot.phase === "stopping") return;
+						if (socket.readyState === OPEN) socket.send(pcm);
+						else if (early.length < MAX_EARLY_FRAMES) early.push(pcm);
+					},
+					level: (level) => {
+						if (!ended && snapshot.phase !== "stopping") publish({ level: Math.min(1, level * 4) });
+					},
 				},
-				level: (level) => {
-					if (!ended && snapshot.phase !== "stopping") publish({ level: Math.min(1, level * 4) });
-				},
-			})
+				capturing.signal,
+			)
 			.then(
 				(started) => {
 					if (ended || snapshot.phase === "stopping") started.stop();
 					else capture = started;
 				},
-				(err: unknown) => end(err instanceof CaptureFailure ? err.reason : "failed"),
+				(err: unknown) => {
+					if (capturing.signal.aborted) return;
+					end(err instanceof CaptureFailure ? err.reason : "failed");
+				},
 			);
 	}
 

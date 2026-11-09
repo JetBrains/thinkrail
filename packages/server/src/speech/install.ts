@@ -131,7 +131,10 @@ function downloadBytes(): Record<SpeechModel, number> {
 	return result;
 }
 
-async function refresh(install: SpeechInstallState = installedState()): Promise<void> {
+/** Publishes runtime and disk facts; a running install keeps its own status until it settles. */
+async function refresh(
+	install: SpeechInstallState = active ? speechStatus().install : installedState(),
+): Promise<void> {
 	updateSpeechStatus({
 		supported: runtimePin() !== null,
 		install,

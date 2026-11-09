@@ -48,7 +48,9 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
 
 - **`initSpeech()`**
   - Publishes what the disk already holds before its first await, so a welcome seed is never blank.
-  - Then probes PATH and publishes again with disk usage.
+  - Then probes PATH and publishes again with disk usage. That publish, like every refresh, keeps a
+    running install's own status: a Download pressed before the probe ended once read as not-installed
+    mid-transfer, hiding progress and Cancel.
 - **PATH probe**
   - `Bun.which("nemo-speech")`, then `--version` (10 s) and `doctor --json` (30 s: it initializes every
     compute device, and Metal took 13 s on an idle Mac).

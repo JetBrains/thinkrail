@@ -26,6 +26,8 @@ sends it.
       to 16 kHz, and posts 20 ms PCM16 frames with their RMS level. Its URL is imported dynamically at
       the first capture, so every module that reaches the barrel stays importable under `bun test`,
       which cannot resolve `?worker&url`.
+    - It takes the dictation's abort signal. Stopping releases the microphone at once, even while the
+      worklet is still loading; before, a stop during that wait left the track live until loading ended.
   - **`micAvailability()`**: `insecure-origin` outside a secure context (HTTPS or localhost), or
     `unsupported` without `getUserMedia` / `AudioWorkletNode`.
   - **The page's one dictation controller** (`session.ts`, the `dictation` singleton).

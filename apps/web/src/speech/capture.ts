@@ -38,7 +38,11 @@ function failureReason(err: unknown): CaptureFailureReason {
 	return "failed";
 }
 
-export async function startCapture(sink: CaptureSink): Promise<Capture> {
+/**
+ * Opens the microphone and streams 16 kHz PCM16 frames to `sink`. Aborting `signal` releases the
+ * microphone at once, even while the worklet is still loading, and rejects the start.
+ */
+export async function startCapture(sink: CaptureSink, signal: AbortSignal): Promise<Capture> {
 	let stream: MediaStream;
 	try {
 		stream = await navigator.mediaDevices.getUserMedia({
@@ -52,25 +56,35 @@ export async function startCapture(sink: CaptureSink): Promise<Capture> {
 	} catch (err) {
 		throw new CaptureFailure(failureReason(err));
 	}
-	const release = (context: AudioContext | null) => {
+	let context: AudioContext | null = null;
+	let released = false;
+	const release = () => {
+		if (released) return;
+		released = true;
+		signal.removeEventListener("abort", release);
 		for (const track of stream.getTracks()) track.stop();
 		void context?.close().catch(() => {});
 	};
-	let context: AudioContext | null = null;
+	const cancelled = () => {
+		release();
+		return new CaptureFailure("failed");
+	};
+	if (signal.aborted) throw cancelled();
+	signal.addEventListener("abort", release, { once: true });
 	let source: MediaStreamAudioSourceNode;
 	let node: AudioWorkletNode;
 	try {
 		context = new AudioContext();
 		const { default: workletUrl } = await import("./pcmWorklet.ts?worker&url");
 		await context.audioWorklet.addModule(workletUrl);
+		if (signal.aborted) throw cancelled();
 		source = context.createMediaStreamSource(stream);
 		node = new AudioWorkletNode(context, "thinkrail-pcm16", {
 			numberOfOutputs: 0,
 			processorOptions: { targetRate: SPEECH_SAMPLE_RATE, frameSamples: FRAME_SAMPLES },
 		});
 	} catch {
-		release(context);
-		throw new CaptureFailure("failed");
+		throw cancelled();
 	}
 	const audio = context;
 	node.port.onmessage = (event: MessageEvent<{ pcm: ArrayBuffer; level: number }>) => {
@@ -79,14 +93,17 @@ export async function startCapture(sink: CaptureSink): Promise<Capture> {
 	};
 	source.connect(node);
 	if (audio.state === "suspended") await audio.resume().catch(() => {});
-	let stopped = false;
+	if (signal.aborted) {
+		node.port.onmessage = null;
+		source.disconnect();
+		throw cancelled();
+	}
 	return {
 		stop: () => {
-			if (stopped) return;
-			stopped = true;
+			if (released) return;
 			node.port.onmessage = null;
 			source.disconnect();
-			release(audio);
+			release();
 		},
 	};
 }
