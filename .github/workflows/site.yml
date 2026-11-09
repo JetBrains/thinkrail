@@ -33,12 +33,6 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
-      - name: Cache bun install
-        uses: actions/cache@v5
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - name: Build with the production PostHog key
         env:

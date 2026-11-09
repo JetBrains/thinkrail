@@ -124,11 +124,15 @@ export function createShikiTokens({ languages: catalog, languageId, engine }: Sh
 		}
 	}
 
+	function selectThemeQuietly(hl: HighlighterCore, registration: ThemeRegistration) {
+		return selectTheme(hl, registration).catch(() => {});
+	}
+
 	function highlighterReady() {
 		creating ??= engine()
 			.then((regexEngine) => createHighlighterCore({ themes: [], langs: [], engine: regexEngine }))
 			.then(async (hl) => {
-				if (theme) await selectTheme(hl, theme).catch(() => {});
+				if (theme) await selectThemeQuietly(hl, theme);
 				highlighter = hl;
 				return hl;
 			})

@@ -581,7 +581,7 @@ test("supersede never reverses a response that was already accepted", async () =
 test("supersede leaves a stopped call stopped", async () => {
 	const waiters = createToolResponseWaiters();
 	waiters.expect("tc-stopped");
-	waiters.prepareAbort();
+	await waiters.prepareAbort();
 	expect(waiters.supersede()).toBe(false);
 	await expect(waiters.wait("tc-stopped", undefined)).rejects.toThrow(TOOL_RESPONSE_STOPPED_ERROR);
 	waiters.persistTurn([]);
