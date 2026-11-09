@@ -88,7 +88,8 @@ dependency. This keeps test process drivers outside both launchers and the serve
    reuse is enforced by boundaries and conformance rather than parallel implementations.
 3. **The wire is versioned.** `contracts` is types plus a small dependency-free runtime: wire constants,
    versions, the config default, and guards. Any other runtime is a named exception in its spec, today
-   only the quit-confirmation rule; adding one updates this decision. `server.welcome` carries a
+   the quit-confirmation rule and the search matcher (the palette's ranking, kept in `contracts` so host-side
+   search can rank with the same copy); adding one updates this decision. `server.welcome` carries a
    protocol version so an independently-shipped UI can detect host-version drift.
 4. **Transport endpoint is a parameter.** Defaults to same-origin (`location.host`); a remote browser,
    desktop, or mobile client points it at the selected host's Tailscale MagicDNS name. Native resume state
@@ -120,7 +121,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
    the verified plan, with a compare-URL fallback when `gh`/GitHub isn't available (see
    [[submodule-server-pr]]).
 7. **Auth is external.** Tailscale ACLs / device identity are the auth; the app carries an `owner` field,
-   not a login UI.
+   not a login UI. The host sends no CORS headers, and its one HTTP write route (`PUT /fonts/<file>`)
+   requires a non-simple request header, so a website the user visits cannot write through it
+   ([[submodule-server-host]]).
 8. **Hydrate-then-stream (every client reconstructs domain state from the host).** A client never relies on
    having *witnessed* events to know domain state—on connect it **reads** current state, then **subscribes**
    to live deltas. The host exposes `project.list` / `workspace.list` / **`session.list`** /
@@ -133,7 +136,8 @@ dependency. This keeps test process drivers outside both launchers and the serve
    explicit reopen. This one auto-open attempt fires once per surface-workspace connection, not on every
    catalog re-read, and a surface resolving an exact-chat route target defers it entirely to that target.
    `session.created` supplies that history-only live delta when another frontend starts a session; reconnect
-   repairs a missed delta through `session.list`. The client is a **stateless
+   repairs a missed delta through `session.list`, and the normalized state snapshot carries every chat's
+   name, so a chat this client never listed is named without a `session.list`. The client is a **stateless
    projection of domain state**, never a second domain source of truth; it separately owns frontend-local
    navigation and workbench view state. An automatic agent run
    remains active through retries, compaction, and queued continuations: pi's `agent_end` is only an
@@ -209,7 +213,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
     rejects any range, any catalog drift, and a lockfile graph that resolves `react` or `react-dom` outside
     its one catalog pin (the React pin rationale belongs to [[module-web]]). Every pi
     upgrade also follows [[pi-compatibility]], the architecture-owned registry of host adaptations and
-    their removal gates; detailed rationale stays in the owning module specs. Any other root `overrides`
+    their removal gates, and every Electrobun upgrade follows [[electrobun-compatibility]]; detailed rationale stays in the owning module specs. Any other root `overrides`
     entry is an exact security pin whose rationale and removal gate live with its owner. Exempt:
     `peerDependencies` (extension packages declare `"*"` on purpose — the host provides the dep) and local
     protocols (`workspace:` / `link:` / `file:`). An exact SemVer prerelease/build suffix is still an exact
@@ -317,7 +321,11 @@ dependency. This keeps test process drivers outside both launchers and the serve
     into the current-chat Resources view. Parent session entries own injected command services and
     retained subagent completion delivery across extension reload; scoped reads, controls, and
     invalidations are composed through the agent barrel. Detailed integration belongs to
-    [[submodule-server-agent]], and command lifetime/retention to [[module-pi-background-commands]].
+    [[submodule-server-agent]], and live command lifetime and runtime retention to
+    [[module-pi-background-commands]]. What Resources keeps past a host restart — every finished record and
+    command log tail of a chat, for the workspace's lifetime — is a host archive,
+    [[submodule-server-resource-history]], fed and read only by `agent`; the portable packages stay
+    in-memory, so an archived record never becomes control authority (user-settled, 2026-10).
 
 19. **The review surface is engine-neutral; renderers are registered, not hard-wired.** A resource (a
     file or one side-pair of a diff) is shown by the renderer the `@thinkrail/resource-renderers` registry selects by
@@ -371,8 +379,12 @@ dependency. This keeps test process drivers outside both launchers and the serve
     edge), which filters registry factories **and their skills** at every loader (re)load and withholds a
     disabled extension's tools from live sessions through pi's active-tool API — reloading an idle session
     only when that extension's skills are loaded in it — while web renderers stay registered so past
-    transcripts render. Install UX, marketplace, per-extension settings, a per-workspace on/off override
-    and runtime-loaded third-party extensions remain explicit deferrals. Rejected: runtime-loaded
+    transcripts render. Per-extension boolean settings have shipped the same way: declared on the
+    descriptor, stored in `AppConfig.extensionSettings`, read by an extension's session factories through
+    its own `setting(key)` view, applied by a reload once the turn ends. Host-owned file checks reach
+    extensions through the session seam (`workspaceFiles`), so the SDK stays types + `define*`. Install UX,
+    marketplace, other setting types, a per-workspace on/off override and runtime-loaded third-party
+    extensions remain explicit deferrals. Rejected: runtime-loaded
     bundles now (React singleton, versioned UI API, security story first), a logical extension inside
     the apps (three physical homes, no boundary), generated factory lists derived from descriptors
     (functions yield no import specifiers); keeping path-based dev loading beside the inline composition
@@ -445,11 +457,48 @@ dependency. This keeps test process drivers outside both launchers and the serve
     its standard format and tooling); catalogs in `contracts` (data and translation logic are not wire
     types). Deferred: RTL layout, an agent translation skill.
 
+24. **Voice input is host-local speech recognition behind a media side socket.** Dictation runs NVIDIA's
+    `nemo-speech` with a Nemotron streaming ASR model on the host ([[submodule-server-speech]]). Audio
+    never reaches a cloud service, and transcripts never reach the agent until the user sends the draft.
+    - **Distribution.** Nothing ships with ThinkRail. On the user's first explicit Download, the host
+      fetches a pinned runtime from NVIDIA's GitHub release and a pinned model from NVIDIA's Hugging Face
+      repo, each checked against its SHA-256, into `<dataDir>/speech/`. A compatible `nemo-speech` on PATH
+      is reused (the user's own tools).
+      - Why download over bundling: Electrobun updates are full-package downloads. Bundling the model
+        would cost every user ~750 MB per release, and bundling the runtime alone still adds 7–22 MB to
+        every update.
+      - Accepted cost: NVIDIA's binaries are not signed by ThinkRail (ad-hoc on macOS, unsigned on
+        Windows). MDM or Defender may block them, and that reads as an engine failure.
+    - **Engine.** It runs as a supervised loopback child: lazily started, stopped after 10 idle minutes,
+      on a random port with a per-launch API key.
+    - **Audio path.** Audio travels on `/speech`, a second WebSocket next to the JSON wire. The wire
+      hashes and retains every request for replay (Decision 8's reconnect model), which cannot absorb
+      50 audio frames a second.
+      - Rejected: base64 frames on the wire (that same retention); the browser talking to the engine's
+        port directly (breaks remote clients and exposes another local port).
+    - **Voice is a property of the page, not of fields.** One dictation layer in the web app follows
+      focus to any text input, textarea or contenteditable, and writes into it through native `input`
+      events.
+      - Every field gets voice with no API: the app's, resource renderers', and extension cards'.
+        Extensions need nothing from the Host UI SDK ([[module-thinkrail-extensions]]).
+      - The code editor and the terminal are excluded.
+      - Rejected: per-field mic components. Every surface and every extension would have to adopt and
+        wire one, and the first version did exactly that through `ResourceHost`.
+    - **Where the mic is.** The browser owns the microphone ([[submodule-web-speech]]), because a remote
+      client's microphone is at the client. So voice works only in a secure context (HTTPS or
+      localhost).
+    - **Deferred:** GPU backend downloads, a hosted NVIDIA API (a credential ThinkRail would have to
+      keep), text-to-speech, voice commands, and auto-send.
+
 ## Invariants
 
 - Never **value**-import `pi` in browser-bundled code; import types only, from the `pi-ai` /
   `pi-agent-core` package roots (type-only imports are erased at build, keeping the bundle provider-free).
   `@earendil-works/pi-coding-agent` is server-only — it never reaches `contracts`/`web`.
+- TypeScript stays type-strippable: `erasableSyntaxOnly` in `tsconfig.base.json` plus Biome
+  `noParameterProperties`/`noEnum`/`noNamespace` (which also cover files outside any tsconfig) ban enums,
+  namespaces, and constructor parameter properties, so sources contain only erasable TS syntax and
+  type-stripping tools (Node strip-types, Bun, oxc) need no TS emit.
 - One id model: the UI tab id vs `session.sessionId` (the `AgentSession` id). No separate pi UUID.
 - The agent runs in-process with **no crash isolation** — wrap session calls and forward errors; a fatal
   fault takes the whole host down (accepted tradeoff vs the subprocess RPC mode).

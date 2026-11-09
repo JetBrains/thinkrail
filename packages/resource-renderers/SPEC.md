@@ -48,7 +48,15 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   workspace files, with the registry's toggle, the unplaced strip, review commenting and Send review, and
   caller slots (`leading`, `actions`, controlled `rendererId` / `layout`, and an opaque `viewState` it tags
   with the renderer implementation that wrote it, so a renderer switch never restores another renderer's
-  state and a caller needs no reset);
+  state and a caller needs no reset). Its `compact` flag (carried to the lazy views as
+  `ResourceEnvironment.compact`, and reset by an explicit `compact={false}`) drops the renderer toggles,
+  Send review and the HTML notice with its viewport presets — the chrome a small embedded frame cannot
+  afford; the views themselves are unchanged;
+- **`FramedResourcePreview`** — `ResourcePreview` in a caller-sized frame with **Open in tab** (the file, or
+  the comparison for a diff) and **Full screen** (a dialog with the full chrome, sharing renderer and view
+  state), every action an explicit tab stop; nothing without a host and a workspace scope. It is the one
+  framed preview of visualize's file card and the questionnaire's previews ([[module-ext-visualize]],
+  [[module-ext-ask-user-question]]) — lifted from visualize when the second consumer arrived;
 - the pieces every surface composes a renderer from, so a file tab, a diff tab, a Changes section and
   `ResourcePreview` run one sequence:
   - `useRendererSelection(resource, intent, rendererId)` — candidates for the environment's phone class, the
@@ -113,9 +121,12 @@ sets `ResourceScopeProvider` (`{ workspaceId, sessionId? }`, read with `useResou
 its transcript list): `ResourcePreview` falls back to its workspace when no `workspaceId` prop is given and
 routes review sends to its session. The scope is its own context rather than a host field because a host
 spread per chat made every preview's reads and subscriptions restart whenever the chat's actions changed.
-`ResourcePreview` depends only on the host's stable `readFile` / `subscribeFileChanges` / `bytesUrl`; it
-applies reads in the order it issued them (a newer change event never discards the read in flight, so a
-burst of events cannot starve the first load), keeps the loaded file when a re-read returns the same hash —
+`ResourcePreview` depends only on the host's stable `readFile` / `subscribeFileChanges` / `bytesUrl`; its
+reads are **single-flight** per file: change events during a read fold into one follow-up read sent after
+it settles, like the web panels' live reads, because a stalled host otherwise collected one `fs.readFile`
+per event until the transport's replay cap refused every request. It applies reads in the order it issued
+them (a newer change event never discards the read in flight, so a burst of events cannot starve the first
+load), keeps the loaded file when a re-read returns the same hash —
 as the same state object, like a re-read that fails the same way, so React bails out instead of scheduling
 a render that would interrupt an unfinished mount below it, such as a large diff's — and keeps the last
 good content when a re-read fails, like a file tab, but marked stale: the failure is named above it
@@ -492,8 +503,10 @@ above the viewport and jumps to its end once the height lands. The scroller opts
 anchoring (`overflow-anchor: none`, as Pierre's own `CodeView` does) because Pierre corrects scroll
 itself. Annotation children stay in the light DOM but lay out only inside the render window, so the
 focus reveal first asks the virtualizer to center the thread's end line (`revealLine`, through the
-connected instance's `getLinePosition`) and then centers the card once it renders. A freshly opened
-diff composer gets the same treatment — Ask agent anchors it at the hunk's end line, which for a tall
+connected instance's `getLinePosition`) and then centers the card once it renders. `revealLine` reports
+success only when the line lands in the viewport: before the worker's first answer lays the rows out, the
+scroll is clamped short, and the reveal retries when the content grows instead of latching a miss. A
+freshly opened diff composer gets the same treatment — Ask agent anchors it at the hunk's end line, which for a tall
 hunk lies outside the window — and `ReviewComposer` defers its initial focus until its textarea has a
 box, since focusing an unrendered element is a silent no-op. Restored composers keep the restored
 scroll position instead.
@@ -527,8 +540,13 @@ scrolling drop from 12–34 to 2–3 dropped frames in WebKit, and the worst spl
 (~45 ms). Split scrolling over dense hunk toolbars still drops frames in WebKit; without the toolbars
 it is smooth, and `overflow: "wrap"` (which skips the pairing because both sides share grid rows) helps
 moderate scrolling but not flings. The virtualizer's `lineHeight` metric is the real row height:
-`.pierre-code-surface` rounds `--diffs-line-height` to whole pixels (`s11` × `default` = 14 px,
-matching Monaco's rounding), and `codeLineHeight()` derives the same number from the tokens. Against
+`.pierre-code-surface` sets `--diffs-line-height` from `--tr-code-row-height` (the dense code size ×
+`default`, a whole pixel — 14 px by default, matching Monaco's rounding), and `codeLineHeight()` reads the
+same token. A font settings change can move that row height, so `usePierreVirtualizer` re-reads it on
+`onFontsChange` and `PierreVirtualizer.setMetrics` hands the new metric to every connected Pierre instance
+(its public `setMetrics` resets the cached row heights) — Pierre's React components read `metrics` only
+when they create an instance, and remounting the surface instead would drop an open line composer and its
+unsaved text. Against
 Pierre's 20 px default estimate the scroll height of a 20k-line file started ~40% too tall and shrank
 while scrolling as rows were measured. Rejected after measurement: mirroring an invisible spacer onto
 the opposite split column (it cut paint area but not dropped frames in either engine) and a larger
@@ -592,9 +610,12 @@ content's own height.
   the selected column with horizontal scrolling in a narrower pane. Broadcast changes update a mounted
   desktop file editor. Pierre diffs and phone files own horizontal overflow and do not consume this Monaco
   preference. Rendered Markdown and rendered Markdown diffs retain their separate ~78ch reading measure.
-  The React Compiler memoizes `MonacoEditor`'s options on width, bounded and path, and the editor calls
-  `updateOptions` only when that object changes; the typography and spacing tokens the options read are
-  static generated CSS (themes set only colours).
+  The React Compiler memoizes `MonacoEditor`'s options on width, bounded, path and the resolved editor
+  font, and the editor calls `updateOptions` only when that object changes. The font is the generated
+  `.tr-code-editor` style resolved through `@thinkrail/ui/fonts` (family, dense code size, weight,
+  ligatures — a computed read, because the token is an unresolved `calc()`), cached per `data-fonts`
+  revision and re-read on `onFontsChange`; a change then waits for that face and calls
+  `remeasureFonts()`. Spacing tokens stay static generated CSS (themes set only colours).
 - **The desktop Monaco surface is a reader, not a language workstation.** Its file-only options keep the
   configured wrapping, generated code typography, minimap/overview-ruler removal and 6px shadowless scrollbar,
   and add read-only messaging, the path as its accessible label, an 8px top inset, three-character line-number

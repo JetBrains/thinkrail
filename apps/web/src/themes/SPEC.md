@@ -59,7 +59,9 @@ palette. Color values are canonical
 six/eight-digit hex; the two selected-text foreground overrides may explicitly be `null` to retain the
 consumer's native foreground. There is no inheritance or partial overlay. The engine owns appearance-level
 effects, TextMate/Monaco scope mapping, and CSS-token mapping, so those mechanics never leak into
-manifests. Typography, spacing, radii, fonts, and motion remain product tokens, not theme values.
+manifests. Typography, spacing, radii, fonts, and motion remain product tokens, not theme values; the
+user's font choice is a separate host setting ([[submodule-web-fonts]]), so changing the theme never
+changes a font.
 
 **The manifest is a user-kept file format, so its schema evolves compatibly.** The parser accepts every
 schema version released for user files (v2 is the first) and migrates older ones in code to the current

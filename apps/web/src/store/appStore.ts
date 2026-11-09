@@ -1,7 +1,9 @@
 import type {
 	AppConfig,
+	AppSurvey,
 	ComposerGrowthLimit,
 	ExtUiRequest,
+	FontChoice,
 	GitDiffScope,
 	HostPlatform,
 	HostUpdateNotice,
@@ -14,8 +16,11 @@ import type {
 	PiEvent,
 	Project,
 	ProviderStatusReport,
+	ProviderWarning,
 	RefreshedModels,
+	ResourceKind,
 	ResourceMeta,
+	ResourceRecord,
 	ReviewChangedPayload,
 	ReviewSnapshot,
 	SessionEventPayload,
@@ -27,6 +32,7 @@ import type {
 	SessionSummary,
 	SlashCommandInfo,
 	SpecGraphNode,
+	SpeechStatus,
 	SystemThemePair,
 	TerminalTabInfo,
 	TerminalWindowsShell,
@@ -34,16 +40,20 @@ import type {
 	ThemeMode,
 	ThinkingLevel,
 	TurnChangeSet,
-	UserMessage,
+	UserFontsSnapshot,
 	UserThemesSnapshot,
 	WireModel,
 	Workspace,
+	WorkspaceCreation,
+	WorkspaceCreationRemoved,
 	WorkspaceFsChangedPayload,
+	WorkspaceKickoff,
 } from "@thinkrail/contracts";
 import {
 	canMarkCompletionUnread,
 	customMessageText,
 	DEFAULT_CONFIG,
+	type ExtensionSettingValues,
 	isBackgroundCommandCompletionMessage,
 	isControlMessage,
 	isLineWidth,
@@ -53,6 +63,7 @@ import {
 	isSubagentMaxConcurrent,
 	isTerminalWindowsShell,
 	isTodoReviewFixMessage,
+	normalizeFontSettings,
 	normalizeThemePreference,
 	readToolResponseMessage,
 	sameModel,
@@ -79,6 +90,7 @@ import {
 	type LayoutAttention,
 	layoutResourceIdentity,
 	matchesSkillInvocationCommand,
+	nullProto,
 	parseSkillInvocation,
 	randomId,
 	readLayoutNavigationClock,
@@ -95,9 +107,11 @@ import type {
 } from "../shell/layout";
 import type { ConnectionStatus } from "../transport";
 import {
+	appendOlderResources,
 	type ChatResourceRead,
 	type ChatResourceScope,
 	type ChatResourceSnapshots,
+	carryOlderResources,
 	staleChatResources,
 } from "./chatResources";
 import {
@@ -110,6 +124,7 @@ import {
 } from "./mcp";
 import {
 	type HistoryTarget,
+	isChatResourceConnectionCurrent,
 	isChatResourceReadCurrent,
 	isChatResourceScopeAlive,
 	isConnectedGeneration,
@@ -130,16 +145,6 @@ import {
 	supportsChatResources,
 	supportsWorkspaceSettling,
 } from "./selectors";
-
-export interface StreamingResponseMovement {
-	settle: number;
-	trigger: number;
-}
-
-export const DEFAULT_STREAMING_RESPONSE_MOVEMENT: StreamingResponseMovement = {
-	settle: 75,
-	trigger: 100,
-};
 
 export interface FileTab {
 	kind: "file";
@@ -399,6 +404,7 @@ export const SettingsSection = {
 	LineWidth: "line-width",
 	Chat: "chat",
 	Layout: "layout",
+	Keyboard: "keyboard",
 	Updates: "updates",
 	Terminal: "terminal",
 	Workspaces: "workspaces",
@@ -409,8 +415,22 @@ export const SettingsSection = {
 	Feedback: "feedback",
 	Extensions: "extensions",
 	Environment: "environment",
+	Voice: "voice",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
+
+export interface CreationChatHandoff {
+	workspaceId: string;
+	sessionId?: string;
+	kickoffError?: string;
+	sentPrompt?: { text: string; attachments: ChatAttachment[] };
+}
+
+export interface WorkspaceRetryDraft {
+	projectId: string;
+	baseRef: string;
+	kickoff?: WorkspaceKickoff;
+}
 
 export interface Toast {
 	id: string;
@@ -480,6 +500,7 @@ export interface SessionRuntime {
 	extUiQueue: ExtUiDialogRequest[];
 	extUiStatus: Record<string, string>;
 	extUiWidget: Record<string, string[]>;
+	notice: ProviderWarning | null;
 	hostState: SessionState | null;
 }
 
@@ -511,6 +532,7 @@ function newRuntime(
 		extUiQueue: [],
 		extUiStatus: {},
 		extUiWidget: {},
+		notice: null,
 		hostState: null,
 	};
 }
@@ -672,7 +694,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 					turns: clearTurnStreaming(rt.turns),
 				};
 			if (event.message.role === "user") {
-				const message = event.message as UserMessage;
+				const message = event.message;
 				const text = userText(message.content);
 				if (isControlMessage(text)) return rt;
 				const last = rt.turns[rt.turns.length - 1];
@@ -913,6 +935,8 @@ function reduceExtUi(
 				return { ...rt, extUiWidget: omitKey(rt.extUiWidget, request.key) };
 			return { ...rt, extUiWidget: { ...rt.extUiWidget, [request.key]: request.content } };
 		}
+		case "notice":
+			return rt.notice === request.notice ? rt : { ...rt, notice: request.notice };
 		default:
 			return rt;
 	}
@@ -949,7 +973,13 @@ interface AppState {
 	resourceRevision: number;
 	invalidateChatResources: (scope: ChatResourceScope) => void;
 	installChatResources: (read: ChatResourceRead, snapshot: SessionResources) => void;
-	failChatResources: (read: ChatResourceRead, error: string) => void;
+	failChatResources: (read: ChatResourceRead, error: string, retrying: boolean) => void;
+	appendChatResourceHistory: (
+		read: ChatResourceScope & { connectionGeneration: number },
+		kind: ResourceKind,
+		after: string,
+		page: readonly ResourceRecord[],
+	) => void;
 	clearChatResources: (scope: ChatResourceScope) => void;
 	mcpByWorkspace: Record<string, McpWorkspaceProjection>;
 	mcpRevision: number;
@@ -959,6 +989,7 @@ interface AppState {
 	connectionGeneration: number;
 	welcomeGeneration: number;
 	protocolVersion: number | null;
+	welcomeProtocolVersion: number | null;
 	hostPlatform: HostPlatform | null;
 	hostAppVersion: string | null;
 	hostUpdate: HostUpdateNotice | null;
@@ -991,7 +1022,11 @@ interface AppState {
 	navTickByWorkspace: Record<string, number>;
 	closedChatsByWorkspace: Record<string, ClosedChat[]>;
 	chatStartsByWorkspace: Record<string, number>;
-	worktreeCreationsByProject: Record<string, number>;
+	workspaceCreations: Record<string, WorkspaceCreation>;
+	activeCreationId: string | null;
+	creationChatToOpen: CreationChatHandoff | null;
+	sentCreationPrompts: Record<string, { text: string; attachments: ChatAttachment[] }>;
+	workspaceRetryDraft: WorkspaceRetryDraft | null;
 	deletedSessionsByWorkspace: Record<string, Record<string, true>>;
 	terminalsByWorkspace: Record<string, TerminalTab[]>;
 	activeTerminalByWorkspace: Record<string, string | null>;
@@ -1010,6 +1045,8 @@ interface AppState {
 	providerStatusVersion: number;
 	providerStatus: ProviderStatusSnapshot;
 	templatesVersion: number;
+	/** Bumped on `packages.changed`; the Extensions page re-lists installed pi packages when it moves. */
+	packagesVersion: number;
 	modelsRefreshing: boolean;
 	modelsFresh: boolean;
 	changesRequest: {
@@ -1040,9 +1077,13 @@ interface AppState {
 	unheldLoginFrame: LoginPush | null;
 	settingsOpen: boolean;
 	settingsSection: SettingsSection;
-	interviewPromptOpen: boolean;
+	surveyInvitationOpen: boolean;
+	surveyWindowOpen: boolean;
+	inAppSurvey: AppSurvey | null;
 	notificationPromptOpen: boolean;
-	sessionSwitcherOpen: boolean;
+	searchOpen: boolean;
+	searchSession: number;
+	doubleShiftSearch: boolean;
 	theme: ThemeId;
 	themeMode: ThemeMode;
 	systemThemePair: SystemThemePair | undefined;
@@ -1061,8 +1102,8 @@ interface AppState {
 	fileLineWidth: number;
 	chatLineWidthBounded: boolean;
 	fileLineWidthBounded: boolean;
+	voiceInputEnabled: boolean;
 	chatMessageOrder: ChatMessageOrder;
-	streamingResponseMovement: StreamingResponseMovement;
 	defaultModel: WireModel | undefined;
 	defaultEffort: ThinkingLevel | undefined;
 	reviewModel: WireModel | undefined;
@@ -1072,11 +1113,23 @@ interface AppState {
 	reviewAutoFix: boolean;
 	agentReviewEnabled: boolean;
 	disabledExtensions: string[];
+	extensionSettings: ExtensionSettingValues;
+	disabledPackages: string[];
 	locale: string;
 	localLocales: LocalLocalesSnapshot | null;
 	installLocalLocales: (snapshot: LocalLocalesSnapshot | null) => void;
 	userThemes: UserThemesSnapshot | null;
 	installUserThemes: (snapshot: UserThemesSnapshot | null) => void;
+	interfaceFont: FontChoice;
+	codeFont: FontChoice;
+	codeFontSize: number;
+	codeLigatures: boolean;
+	fontWeightOffset: number;
+	userFonts: UserFontsSnapshot | null;
+	installUserFonts: (snapshot: UserFontsSnapshot | null) => void;
+	/** Voice input as the host reports it; `null` before a v107 welcome or from an older host. */
+	speech: SpeechStatus | null;
+	installSpeechStatus: (status: SpeechStatus | null) => void;
 	onboardingDismissed: boolean;
 	onboardingWizard: OnboardingWizardGate;
 	customLayoutPresets: LayoutPreset[];
@@ -1091,6 +1144,7 @@ interface AppState {
 		hostPlatform?: HostPlatform,
 		hostUpdate?: HostUpdateNotice,
 		hostAppVersion?: string,
+		speech?: SpeechStatus,
 	) => void;
 	applyHostUpdate: (hostUpdate: HostUpdateNotice) => void;
 	installProjectSnapshot: (projects: Project[], recentProjects: Project[]) => void;
@@ -1272,8 +1326,17 @@ interface AppState {
 	setActiveTerminalTab: (workspaceId: string, tabKey: string, syncLayout?: boolean) => void;
 	beginChatStart: (workspaceId: string) => void;
 	endChatStart: (workspaceId: string) => void;
-	beginWorktreeCreation: (projectId: string) => void;
-	endWorktreeCreation: (projectId: string) => void;
+	setWorkspaceCreations: (creations: WorkspaceCreation[]) => void;
+	applyWorkspaceCreation: (
+		creation: WorkspaceCreation,
+		sentPrompt?: { text: string; attachments: ChatAttachment[] },
+	) => void;
+	applyWorkspaceCreationRemoved: (removed: WorkspaceCreationRemoved) => void;
+	selectCreation: (id: string) => void;
+	landOnFinishedCreation: (projectId: string, id: string) => void;
+	consumeCreationChat: () => CreationChatHandoff | null;
+	openWorkspaceRetry: (draft: WorkspaceRetryDraft) => void;
+	clearWorkspaceRetry: () => void;
 	openChatSession: (
 		workspaceId: string,
 		sessionId: string,
@@ -1340,6 +1403,7 @@ interface AppState {
 	invalidateProviderStatus: () => void;
 	installProviderStatus: (version: number, report: ProviderStatusReport | null) => void;
 	bumpTemplatesVersion: () => void;
+	bumpPackagesVersion: () => void;
 	beginModelsRefresh: () => number;
 	finishModelsRefresh: (providerVersion: number, result: RefreshedModels | null) => void;
 	dropModelsFreshness: () => void;
@@ -1348,11 +1412,18 @@ interface AppState {
 	setStats: (sessionId: string, stats: SessionStats) => void;
 	setCommands: (sessionId: string, commands: SlashCommandInfo[]) => void;
 	setChatDraft: (sessionId: string, text: string) => void;
+	dismissSessionNotice: (sessionId: string) => void;
+	silenceNotice: (notice: ProviderWarning) => void;
 	clearPendingExtUi: (sessionId: string, id: string) => void;
 	applyExtUi: (request: ExtUiRequest) => void;
 	reserveLogin: () => boolean;
 	finishLoginStart: () => void;
-	beginLogin: (loginId: string, providerId: string, target?: LoginPush["target"]) => void;
+	beginLogin: (
+		loginId: string,
+		providerId: string,
+		target?: LoginPush["target"],
+		method?: LoginState["method"],
+	) => void;
 	applyLoginFrame: (push: LoginPush) => void;
 	clearLoginInput: () => void;
 	clearLogin: (loginId?: string) => void;
@@ -1360,16 +1431,17 @@ interface AppState {
 	openSettings: (section?: SettingsSection) => void;
 	closeSettings: () => void;
 	setSettingsSection: (section: SettingsSection) => void;
-	showInterviewPrompt: () => void;
-	hideInterviewPrompt: () => void;
+	showSurveyInvitation: () => void;
+	hideSurveyInvitation: () => void;
+	openSurveyWindow: () => void;
+	closeSurveyWindow: () => void;
+	setInAppSurvey: (survey: AppSurvey | null) => void;
 	openNotificationPrompt: () => void;
 	closeNotificationPrompt: () => void;
-	openSessionSwitcher: () => void;
-	closeSessionSwitcher: () => void;
-	toggleSessionSwitcher: () => void;
+	openSearch: () => void;
+	closeSearch: () => void;
+	setDoubleShiftSearch: (enabled: boolean) => void;
 	setChatMessageOrder: (order: ChatMessageOrder) => void;
-	setStreamingResponseMovement: (movement: StreamingResponseMovement) => void;
-	setChatPreferences: (order: ChatMessageOrder, movement: StreamingResponseMovement) => void;
 	applyConfig: (config: AppConfig) => void;
 	requestToolView: (workspaceId: string, tool: LayoutToolId) => void;
 	requestChangesView: (workspaceId: string, path: string | null, scope?: GitDiffScope) => void;
@@ -1446,6 +1518,10 @@ function configPatch(config: AppConfig) {
 			typeof config.fileLineWidthBounded === "boolean"
 				? config.fileLineWidthBounded
 				: DEFAULT_CONFIG.fileLineWidthBounded,
+		voiceInputEnabled:
+			typeof config.voiceInputEnabled === "boolean"
+				? config.voiceInputEnabled
+				: DEFAULT_CONFIG.voiceInputEnabled,
 		customLayoutPresets: config.customLayoutPresets ?? DEFAULT_CONFIG.customLayoutPresets,
 		defaultModel: config.defaultModel,
 		defaultEffort: config.defaultEffort,
@@ -1458,8 +1534,16 @@ function configPatch(config: AppConfig) {
 		disabledExtensions: Array.isArray(config.disabledExtensions)
 			? config.disabledExtensions
 			: DEFAULT_CONFIG.disabledExtensions,
+		extensionSettings:
+			config.extensionSettings && typeof config.extensionSettings === "object"
+				? config.extensionSettings
+				: DEFAULT_CONFIG.extensionSettings,
+		disabledPackages: Array.isArray(config.disabledPackages)
+			? config.disabledPackages
+			: DEFAULT_CONFIG.disabledPackages,
 		locale: isLocalePreference(config.locale) ? config.locale : DEFAULT_CONFIG.locale,
 		onboardingDismissed: config.onboardingDismissed === true,
+		...normalizeFontSettings(config),
 	};
 }
 
@@ -1500,6 +1584,7 @@ function workspaceActivationPatch(
 			AppState,
 			| "selectedProjectId"
 			| "activeWorkspaceId"
+			| "activeCreationId"
 			| "workspaceSelectionHistory"
 			| "activeWorkspaceLiveLatch"
 	  >
@@ -1518,6 +1603,7 @@ function workspaceActivationPatch(
 	return {
 		selectedProjectId: workspace.projectId,
 		activeWorkspaceId: workspace.id,
+		activeCreationId: null,
 		activeWorkspaceLiveLatch,
 		workspaceSelectionHistory: withWorkspaceSelected(state.workspaceSelectionHistory, workspace.id),
 	};
@@ -1558,12 +1644,15 @@ function pruneExpandedProjects(
 function reconcileProjectNavigation(
 	state: Pick<AppState, "selectedProjectId" | "activeWorkspaceId" | "workspaces">,
 	projects: Project[],
-): Pick<AppState, "selectedProjectId" | "activeWorkspaceId"> | Record<string, never> {
+):
+	| Pick<AppState, "selectedProjectId" | "activeWorkspaceId" | "activeCreationId">
+	| Record<string, never> {
 	const currentProjectId = selectActiveWorkspaceProjectId(state) ?? state.selectedProjectId;
 	if (!currentProjectId || projects.some((project) => project.id === currentProjectId)) return {};
 	return {
 		selectedProjectId: projects[0]?.id ?? null,
 		activeWorkspaceId: null,
+		activeCreationId: null,
 	};
 }
 
@@ -1612,7 +1701,7 @@ function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
 }
 
 function appendLayoutIntent(intents: LayoutIntent[], input: LayoutIntentInput): LayoutIntent[] {
-	return [...intents, { ...input, id: randomId("layout-intent") } as LayoutIntent];
+	return [...intents, { ...input, id: randomId("layout-intent") }];
 }
 
 function layoutOpenIntentFields(options: LayoutOpenOptions) {
@@ -1776,11 +1865,10 @@ function advanceCenterNavigation(
 				[workspaceId]: {
 					...attention,
 					lastFocusedCenterGroupId: groupId,
-					navigationClockByGroup: Object.assign(
-						Object.create(null),
+					navigationClockByGroup: nullProto<Record<string, number>>(
 						attention.navigationClockByGroup,
 						{ [groupId]: clock },
-					) as Record<string, number>,
+					),
 				},
 			},
 		},
@@ -1930,17 +2018,15 @@ function withoutChat(
 				}),
 		...(!alreadyDeleted
 			? {
-					deletedSessionsByWorkspace: Object.assign(
-						Object.create(null),
+					deletedSessionsByWorkspace: nullProto<Record<string, Record<string, true>>>(
 						s.deletedSessionsByWorkspace,
 						{
-							[workspaceId]: Object.assign(
-								Object.create(null),
+							[workspaceId]: nullProto<Record<string, true>>(
 								s.deletedSessionsByWorkspace[workspaceId],
-								{ [sessionId]: true as const },
-							) as Record<string, true>,
+								{ [sessionId]: true },
+							),
 						},
-					) as Record<string, Record<string, true>>,
+					),
 				}
 			: {}),
 		...(sessionTabs.length > 0
@@ -2021,6 +2107,7 @@ const REPLAYABLE_EXT_UI: ReadonlySet<ExtUiRequest["kind"]> = new Set([
 	"setStatus",
 	"setWidget",
 	"setTitle",
+	"notice",
 ]);
 
 function isDialogRequest(
@@ -2234,17 +2321,18 @@ export const useAppStore = create<AppState>((set, get) => ({
 	connectionGeneration: 0,
 	welcomeGeneration: 0,
 	protocolVersion: null,
+	welcomeProtocolVersion: null,
 	hostPlatform: null,
 	hostAppVersion: null,
 	hostUpdate: null,
 	projects: [],
 	recentProjects: [],
 	workspaces: {},
-	removedWorkspaceIds: Object.create(null) as Record<string, true>,
-	expandedProjectIds: Object.create(null) as Record<string, true>,
+	removedWorkspaceIds: nullProto<Record<string, true>>(),
+	expandedProjectIds: nullProto<Record<string, true>>(),
 	workspaceSettlingSupported: false,
-	settledShelfExpanded: Object.create(null) as Record<string, true>,
-	settledShelfShown: Object.create(null) as Record<string, number>,
+	settledShelfExpanded: nullProto<Record<string, true>>(),
+	settledShelfShown: nullProto<Record<string, number>>(),
 	selectedProjectId: null,
 	activeWorkspaceId: null,
 	activeWorkspaceLiveLatch: false,
@@ -2265,8 +2353,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 	navTickByWorkspace: {},
 	closedChatsByWorkspace: {},
 	chatStartsByWorkspace: {},
-	worktreeCreationsByProject: {},
-	deletedSessionsByWorkspace: Object.create(null) as Record<string, Record<string, true>>,
+	workspaceCreations: {},
+	activeCreationId: null,
+	creationChatToOpen: null,
+	sentCreationPrompts: {},
+	workspaceRetryDraft: null,
+	deletedSessionsByWorkspace: nullProto<Record<string, Record<string, true>>>(),
 	terminalsByWorkspace: {},
 	activeTerminalByWorkspace: {},
 	sessions: {},
@@ -2284,6 +2376,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	providerStatusVersion: 0,
 	providerStatus: { version: -1, report: null, failed: false },
 	templatesVersion: 0,
+	packagesVersion: 0,
 	modelsRefreshing: false,
 	modelsFresh: false,
 	changesRequest: null,
@@ -2307,9 +2400,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 	unheldLoginFrame: null,
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
-	interviewPromptOpen: false,
+	surveyInvitationOpen: false,
+	surveyWindowOpen: false,
+	inAppSurvey: null,
 	notificationPromptOpen: false,
-	sessionSwitcherOpen: false,
+	searchOpen: false,
+	searchSession: 0,
+	doubleShiftSearch: true,
 	theme: DEFAULT_CONFIG.theme,
 	themeMode: DEFAULT_CONFIG.themeMode,
 	systemThemePair: DEFAULT_CONFIG.systemThemePair,
@@ -2328,8 +2425,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	fileLineWidth: DEFAULT_CONFIG.fileLineWidth,
 	chatLineWidthBounded: DEFAULT_CONFIG.chatLineWidthBounded,
 	fileLineWidthBounded: DEFAULT_CONFIG.fileLineWidthBounded,
+	voiceInputEnabled: DEFAULT_CONFIG.voiceInputEnabled,
 	chatMessageOrder: "oldest-first",
-	streamingResponseMovement: { ...DEFAULT_STREAMING_RESPONSE_MOVEMENT },
 	customLayoutPresets: DEFAULT_CONFIG.customLayoutPresets,
 	defaultModel: DEFAULT_CONFIG.defaultModel,
 	defaultEffort: DEFAULT_CONFIG.defaultEffort,
@@ -2340,11 +2437,22 @@ export const useAppStore = create<AppState>((set, get) => ({
 	reviewAutoFix: DEFAULT_CONFIG.reviewAutoFix,
 	agentReviewEnabled: DEFAULT_CONFIG.agentReviewEnabled,
 	disabledExtensions: DEFAULT_CONFIG.disabledExtensions,
+	extensionSettings: DEFAULT_CONFIG.extensionSettings,
+	disabledPackages: DEFAULT_CONFIG.disabledPackages,
 	locale: DEFAULT_CONFIG.locale,
 	localLocales: null,
 	installLocalLocales: (snapshot) => set({ localLocales: snapshot }),
 	userThemes: null,
 	installUserThemes: (snapshot) => set({ userThemes: snapshot }),
+	interfaceFont: DEFAULT_CONFIG.interfaceFont,
+	codeFont: DEFAULT_CONFIG.codeFont,
+	codeFontSize: DEFAULT_CONFIG.codeFontSize,
+	codeLigatures: DEFAULT_CONFIG.codeLigatures,
+	fontWeightOffset: DEFAULT_CONFIG.fontWeightOffset,
+	userFonts: null,
+	installUserFonts: (snapshot) => set({ userFonts: snapshot }),
+	speech: null,
+	installSpeechStatus: (speech) => set({ speech }),
 	onboardingDismissed: DEFAULT_CONFIG.onboardingDismissed,
 	onboardingWizard: "pending",
 	toasts: [],
@@ -2421,6 +2529,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 						...state.resourceSnapshots[scope.workspaceId],
 						[scope.sessionId]: {
 							snapshot: previous?.snapshot ?? null,
+							...(previous?.older ? { older: previous.older } : {}),
 							connectionGeneration: previous?.connectionGeneration ?? null,
 							revision,
 							fresh: false,
@@ -2438,6 +2547,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 				snapshot.sessionId !== read.sessionId
 			)
 				return {};
+			const previous = state.resourceSnapshots[read.workspaceId]?.[read.sessionId];
+			const older =
+				previous?.connectionGeneration === read.connectionGeneration
+					? carryOlderResources(previous, snapshot)
+					: undefined;
 			return {
 				resourceSnapshots: {
 					...state.resourceSnapshots,
@@ -2445,6 +2559,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 						...state.resourceSnapshots[read.workspaceId],
 						[read.sessionId]: {
 							snapshot,
+							...(older ? { older } : {}),
 							connectionGeneration: read.connectionGeneration,
 							revision: read.revision,
 							fresh: true,
@@ -2454,7 +2569,28 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
-	failChatResources: (read, error) =>
+	appendChatResourceHistory: (read, kind, after, page) =>
+		set((state) => {
+			const projection = state.resourceSnapshots[read.workspaceId]?.[read.sessionId];
+			if (
+				!projection ||
+				projection.connectionGeneration !== read.connectionGeneration ||
+				!isChatResourceConnectionCurrent(state, read)
+			)
+				return {};
+			const older = appendOlderResources(projection, kind, after, page);
+			if (!older) return {};
+			return {
+				resourceSnapshots: {
+					...state.resourceSnapshots,
+					[read.workspaceId]: {
+						...state.resourceSnapshots[read.workspaceId],
+						[read.sessionId]: { ...projection, older },
+					},
+				},
+			};
+		}),
+	failChatResources: (read, error, retrying) =>
 		set((state) => {
 			const previous = state.resourceSnapshots[read.workspaceId]?.[read.sessionId];
 			if (!previous || !isChatResourceReadCurrent(state, read)) return {};
@@ -2463,7 +2599,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					...state.resourceSnapshots,
 					[read.workspaceId]: {
 						...state.resourceSnapshots[read.workspaceId],
-						[read.sessionId]: { ...previous, fresh: false, error },
+						[read.sessionId]: { ...previous, fresh: false, error, retrying },
 					},
 				},
 			};
@@ -2496,11 +2632,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 		hostPlatform,
 		hostUpdate,
 		hostAppVersion,
+		speech,
 	) =>
 		set((state) => {
 			const openProjects = sortProjects(projects.filter((project) => project.closed !== true));
 			return {
 				protocolVersion,
+				welcomeProtocolVersion: protocolVersion,
 				workspaceSettlingSupported: supportsWorkspaceSettling(protocolVersion),
 				resourceSnapshots: supportsChatResources(protocolVersion)
 					? staleChatResources(state.resourceSnapshots)
@@ -2511,6 +2649,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				hostPlatform: hostPlatform ?? null,
 				hostUpdate: hostUpdate ?? null,
 				hostAppVersion: hostAppVersion ?? null,
+				speech: speech ?? null,
 				...(config ? configPatch(config) : {}),
 				...reconcileProjectNavigation(state, openProjects),
 				...pruneExpandedProjects(state, openProjects),
@@ -2599,9 +2738,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((state) => {
 			const removedSessions = new Set(selectWorkspaceSessionIds(state, workspaceId));
 			return {
-				removedWorkspaceIds: Object.assign(Object.create(null), state.removedWorkspaceIds, {
+				removedWorkspaceIds: nullProto<Record<string, true>>(state.removedWorkspaceIds, {
 					[workspaceId]: true,
-				}) as Record<string, true>,
+				}),
 				workspaceSelectionHistory: state.workspaceSelectionHistory.filter(
 					(id) => id !== workspaceId,
 				),
@@ -2644,6 +2783,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((state) => ({
 			selectedProjectId,
 			activeWorkspaceId: null,
+			activeCreationId: null,
 			...(opts?.reveal
 				? { expandedProjectIds: withExpandedProject(state.expandedProjectIds, selectedProjectId) }
 				: {}),
@@ -2683,6 +2823,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set({
 			selectedProjectId: null,
 			activeWorkspaceId: null,
+			activeCreationId: null,
 			routeChatTarget: null,
 		}),
 	activateWorkspace: (workspace) => {
@@ -2820,7 +2961,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((state) =>
 			state.removedWorkspaceIds[intent.workspaceId]
 				? {}
-				: { layoutIntents: [...state.layoutIntents, { ...intent, id } as LayoutIntent] },
+				: { layoutIntents: [...state.layoutIntents, { ...intent, id }] },
 		);
 		return id;
 	},
@@ -3500,23 +3641,94 @@ export const useAppStore = create<AppState>((set, get) => ({
 						activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: tabKey },
 					},
 		),
-	beginWorktreeCreation: (projectId) =>
-		set((s) => ({
-			worktreeCreationsByProject: {
-				...s.worktreeCreationsByProject,
-				[projectId]: (s.worktreeCreationsByProject[projectId] ?? 0) + 1,
-			},
-		})),
-	endWorktreeCreation: (projectId) =>
-		set((s) => {
-			const remaining = (s.worktreeCreationsByProject[projectId] ?? 0) - 1;
+	setWorkspaceCreations: (creations) => {
+		const state = get();
+		const workspaceCreations = Object.fromEntries(creations.map((c) => [c.id, c]));
+		const lostActive =
+			state.activeCreationId !== null && !workspaceCreations[state.activeCreationId]
+				? state.workspaceCreations[state.activeCreationId]
+				: undefined;
+		set({
+			workspaceCreations,
+			sentCreationPrompts: Object.fromEntries(
+				Object.entries(state.sentCreationPrompts).filter(([id]) => workspaceCreations[id]),
+			),
+			activeCreationId: lostActive ? null : state.activeCreationId,
+		});
+		if (!lostActive) return;
+		const finished = state.workspaces[lostActive.projectId]?.find((w) => w.id === lostActive.id);
+		if (finished) get().activateWorkspace(finished);
+		else get().selectProject(lostActive.projectId);
+	},
+	applyWorkspaceCreation: (creation, sentPrompt) => {
+		const previous = get().workspaceCreations[creation.id];
+		set((state) => ({
+			workspaceCreations: { ...state.workspaceCreations, [creation.id]: creation },
+			...(sentPrompt
+				? { sentCreationPrompts: { ...state.sentCreationPrompts, [creation.id]: sentPrompt } }
+				: {}),
+		}));
+		if (previous?.state === "running" && creation.state === "failed")
+			toast.error(
+				creation.failure?.message ?? creation.name,
+				t("panels.newWorkspace.createFailed"),
+			);
+	},
+	applyWorkspaceCreationRemoved: (removed) => {
+		const state = get();
+		if (!state.workspaceCreations[removed.id] && state.activeCreationId !== removed.id) return;
+		const wasActive = state.activeCreationId === removed.id;
+		const sentPrompt = state.sentCreationPrompts[removed.id];
+		set({
+			workspaceCreations: omitKey(state.workspaceCreations, removed.id),
+			sentCreationPrompts: omitKey(state.sentCreationPrompts, removed.id),
+			activeCreationId: wasActive ? null : state.activeCreationId,
+		});
+		if (!wasActive) {
+			if (removed.kickoffError)
+				toast.error(removed.kickoffError, t("panels.newWorkspace.chatStartFailed"));
+			return;
+		}
+		if (!removed.workspace) {
+			get().selectProject(removed.projectId);
+			return;
+		}
+		get().activateWorkspace(removed.workspace);
+		if (removed.sessionId || removed.kickoffError)
+			set({
+				creationChatToOpen: {
+					workspaceId: removed.workspace.id,
+					...(removed.sessionId ? { sessionId: removed.sessionId } : {}),
+					...(removed.kickoffError ? { kickoffError: removed.kickoffError } : {}),
+					...(sentPrompt ? { sentPrompt } : {}),
+				},
+			});
+	},
+	landOnFinishedCreation: (projectId, id) => {
+		const state = get();
+		if (state.activeWorkspaceId !== null || state.activeCreationId !== null) return;
+		if (state.selectedProjectId !== projectId) return;
+		const finished = state.workspaces[projectId]?.find((w) => w.id === id);
+		if (finished) state.activateWorkspace(finished);
+	},
+	selectCreation: (id) =>
+		set((state) => {
+			const creation = state.workspaceCreations[id];
+			if (!creation) return {};
 			return {
-				worktreeCreationsByProject:
-					remaining > 0
-						? { ...s.worktreeCreationsByProject, [projectId]: remaining }
-						: omitKey(s.worktreeCreationsByProject, projectId),
+				selectedProjectId: creation.projectId,
+				activeWorkspaceId: null,
+				activeCreationId: id,
+				routeChatTarget: null,
 			};
 		}),
+	consumeCreationChat: () => {
+		const handoff = get().creationChatToOpen;
+		if (handoff) set({ creationChatToOpen: null });
+		return handoff;
+	},
+	openWorkspaceRetry: (draft) => set({ workspaceRetryDraft: draft }),
+	clearWorkspaceRetry: () => set({ workspaceRetryDraft: null }),
 	beginChatStart: (workspaceId) =>
 		set((s) => ({
 			chatStartsByWorkspace: {
@@ -4233,6 +4445,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				: s,
 		),
 	bumpTemplatesVersion: () => set((s) => ({ templatesVersion: s.templatesVersion + 1 })),
+	bumpPackagesVersion: () => set((s) => ({ packagesVersion: s.packagesVersion + 1 })),
 	beginModelsRefresh: () => {
 		const providerVersion = get().providerVersion;
 		set({ modelsRefreshing: true });
@@ -4258,6 +4471,21 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, commands }))),
 	setChatDraft: (sessionId, draft) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, draft }))),
+	dismissSessionNotice: (sessionId) =>
+		set((s) => withRuntime(s, sessionId, (rt) => (rt.notice ? { ...rt, notice: null } : rt))),
+	silenceNotice: (notice) =>
+		set((s) => {
+			const silenced = Object.entries(s.sessions).filter(([, rt]) => rt.notice === notice);
+			const orphans = s.extUiOrphans.filter(
+				(frame) => frame.kind !== "notice" || frame.notice !== notice,
+			);
+			const sessions = silenced.length > 0 ? { ...s.sessions } : s.sessions;
+			for (const [id, rt] of silenced) sessions[id] = { ...rt, notice: null };
+			return {
+				...(sessions !== s.sessions ? { sessions } : {}),
+				...(orphans.length !== s.extUiOrphans.length ? { extUiOrphans: orphans } : {}),
+			};
+		}),
 	clearPendingExtUi: (sessionId, id) =>
 		set((s) =>
 			withRuntime(s, sessionId, (rt) => {
@@ -4280,12 +4508,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 		return true;
 	},
 	finishLoginStart: () => set({ loginStarting: false }),
-	beginLogin: (loginId, providerId, target) =>
+	beginLogin: (loginId, providerId, target, method) =>
 		set((s) => {
 			if (target && s.removedWorkspaceIds[target.workspaceId]) return {};
-			if (s.activeLogin?.loginId === loginId || s.activeLogin?.status === "active") return {};
+			if (s.activeLogin?.loginId === loginId)
+				return method && !s.activeLogin.method ? { activeLogin: { ...s.activeLogin, method } } : {};
+			if (s.activeLogin?.status === "active") return {};
 			const early = s.unheldLoginFrame?.loginId === loginId ? s.unheldLoginFrame.frame : null;
-			const fresh = newLoginState(loginId, providerId, target);
+			const fresh = {
+				...newLoginState(loginId, providerId, target),
+				...(method ? { method } : {}),
+			};
 			return {
 				activeLogin: early ? foldLoginFrame(fresh, early) : fresh,
 				unheldLoginFrame: null,
@@ -4332,18 +4565,18 @@ export const useAppStore = create<AppState>((set, get) => ({
 	openNotificationPrompt: () =>
 		set((state) => (state.notificationPromptOpen ? state : { notificationPromptOpen: true })),
 	closeNotificationPrompt: () => set({ notificationPromptOpen: false }),
-	openSessionSwitcher: () =>
-		set((state) => (state.sessionSwitcherOpen ? state : { sessionSwitcherOpen: true })),
-	closeSessionSwitcher: () => set({ sessionSwitcherOpen: false }),
-	toggleSessionSwitcher: () =>
-		set((state) => ({ sessionSwitcherOpen: !state.sessionSwitcherOpen })),
-	showInterviewPrompt: () =>
-		set((state) => (state.interviewPromptOpen ? state : { interviewPromptOpen: true })),
-	hideInterviewPrompt: () => set({ interviewPromptOpen: false }),
+	openSearch: () => set((state) => ({ searchOpen: true, searchSession: state.searchSession + 1 })),
+	closeSearch: () => set((state) => (state.searchOpen ? { searchOpen: false } : state)),
+	setDoubleShiftSearch: (doubleShiftSearch) =>
+		set((state) => (state.doubleShiftSearch === doubleShiftSearch ? state : { doubleShiftSearch })),
+	showSurveyInvitation: () =>
+		set((state) => (state.surveyInvitationOpen ? state : { surveyInvitationOpen: true })),
+	hideSurveyInvitation: () => set({ surveyInvitationOpen: false }),
+	openSurveyWindow: () =>
+		set({ surveyWindowOpen: true, surveyInvitationOpen: false, settingsOpen: false }),
+	closeSurveyWindow: () => set({ surveyWindowOpen: false }),
+	setInAppSurvey: (survey) => set({ inAppSurvey: survey }),
 	setChatMessageOrder: (chatMessageOrder) => set({ chatMessageOrder }),
-	setStreamingResponseMovement: (streamingResponseMovement) => set({ streamingResponseMovement }),
-	setChatPreferences: (chatMessageOrder, streamingResponseMovement) =>
-		set({ chatMessageOrder, streamingResponseMovement }),
 	applyConfig: (config) => set(configPatch(config)),
 	requestToolView: (workspaceId, tool) =>
 		set((state) =>

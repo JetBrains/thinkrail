@@ -78,8 +78,30 @@ artifact configs alike), a test that passes on that retry is reported flaky and 
 no job is re-run automatically. They install Chromium without `--with-deps`: the runner image already
 carries its shared libraries, and the extra apt packages (CJK/Thai/X fonts) feed no assertion while their
 Ubuntu-mirror download was the slowest step of the job, often for minutes. A missing library fails
-Chromium's launch loudly. The browsers themselves are not cached: the Playwright CDN download takes seconds,
-no slower than an Actions-cache restore of the same bytes.
+Chromium's launch loudly. The one exception is the source no-agent E2E job, which also runs the
+questionnaire specs under WebKit. The image lacks WebKit's libraries, so that job installs the packages
+Playwright's `install-deps --dry-run webkit` reports missing, minus its font and X-server group
+(`fonts-*`, `xfonts-*`, `ttf-*`, `xvfb`), not `--with-deps`, which always adds that group. Those fonts
+feed no assertion, and the Azure mirror trickled one of them for minutes, past the wait deadline, in two of
+four shard runs; apt also gets a 20 s HTTP timeout with five retries for outright stalls. The browsers
+themselves are not cached: the Playwright CDN download takes seconds, no slower than an Actions-cache
+restore of the same bytes. Linux jobs, here and in the website workflows,
+install dependencies without the Actions cache for the same reason: a cold `bun install --frozen-lockfile` on a hosted runner takes 3–4 s,
+while restoring the ~600 MB Bun cache took 12–16 s before an install of 1–3 s, and every PR and merge-group
+ref saved its own copy, crowding the 10 GB quota the apt cache depends on. Jobs download only Chromium's headless shell,
+the one binary headless tests launch, and start it in the background right after `bun install`; a wait
+step joins it, failing with its status, just before the browser tests, so the download overlaps the build
+instead of preceding it.
+
+The Lint & Typecheck job and the website workflows (`site.yml`, `site-preview.yml`) set up Node 22 before
+installing: the website typecheck and build run Astro 7.4 and its TypeScript content mapper under Node, which
+need >= 22.23.4, and the runner image's preinstalled Node is not guaranteed to be that recent.
+
+Jobs that typecheck or build the desktop app first download Electrobun's Hutch toolchain (Hutch, Cottontail,
+the Electrobun core and its Bun toolchain, all GitHub release assets) through
+`.github/scripts/prepare-electrobun.sh`, which retries `electrobun prepare` a bounded number of times;
+`electrobun build` and the typecheck's own `prepare` then find it in `~/.hutch`. Before that step, a dropped
+release download (`ReleaseDownloadFailed`, a timed-out Hutch index) failed whole desktop jobs, 6 in two weeks.
 
 Native artifact smokes run only in shard 1: repeating an identical probe per shard adds no coverage and
 multiplies exposure to runner-environment faults.
@@ -136,8 +158,10 @@ Its stable public outputs are:
 - `desktop-update-manifest-path` / `desktop-update-archive-path` — Electrobun's updater metadata and
   full application archive, both non-empty on every desktop target.
 
-The recipe stamps the shared version, builds and smokes the CLI, invokes the normal Electrobun dev and
-channel builds, runs expanded-app and first-install smoke, then collects exact target/channel outputs.
+The recipe stamps the shared version, builds and smokes the CLI, downloads the Electrobun toolchain through
+`prepare-electrobun.sh` (above), invokes the normal Electrobun dev and channel builds, runs expanded-app and
+first-install smoke, then collects exact target/channel outputs. Before that step joined the recipe, a
+dropped Cottontail download failed the linux-arm64 build of the 0.3.1 stable release.
 Update outputs preserve Electrobun's generated basenames and compressed bytes. The manifest is the exact
 `<stable|canary>-<macos|win|linux>-<arm64|x64>-update.json`. Its `artifact.file` is the archive basename:
 `stable-<platform>-ThinkRail[.app].tar.zst` for stable or
@@ -171,9 +195,12 @@ validation on `macos-15-intel` for the same reason. Also watch Intel GPU hangs
 hosted x86_64 image, available until about August 2027; before then, choose between a self-hosted Intel
 runner and dropping the Intel builds. Re-check these issues whenever a macOS runner image changes.
 
-Linux aliases name untouched framework installers. The Windows ZIP contains its setup executable and
+Linux aliases name framework installers; updater archives keep their bytes untouched. The Windows ZIP contains its setup executable and
 adjacent payload; the private pipeline signs both and repacks the payload (see Signing). Linux's tarball
-contains the installer and README. For macOS, the private SRE flow replaces the unsigned framework DMG
+contains the installer and README, repacked by the collector as root-owned top-level members with no
+`./` entry: Hutch archives its staging root with the runner's UID/GID, and root extracting that `./`
+entry rewrites the target directory's owner, mode and mtime — `/root` owned by UID 1001 breaks SSH key
+login (#1002). Removal gate: [[electrobun-compatibility]]. For macOS, the private SRE flow replaces the unsigned framework DMG
 with a conventional DMG containing the signed expanded app, under the same published alias. The app
 archive is a private signing intermediate, never a public release asset.
 

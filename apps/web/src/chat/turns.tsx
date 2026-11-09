@@ -33,10 +33,12 @@ import {
 import { CustomIcon } from "@/components/CustomIcon";
 import { parseSkillInvocation, projectRelativePath, type SkillInvocation, userText } from "@/lib";
 import { ActivityGroup } from "./ActivityGroup";
-import { type AssistantFailure, errorTurnText } from "./assistantFailure";
+import { type AssistantFailure, errorTurnText, subscriptionLimit } from "./assistantFailure";
 import { AssistantMarkdown } from "./assistantLinks";
 import { BackgroundCommandResult, SubagentResult } from "./BackgroundResult";
+import { useChatActions } from "./ChatActions";
 import { CopyButton } from "./CopyButton";
+import { NoticeLink } from "./ExtraUsageNotice";
 import { ToolPromptSlot } from "./ExtUiPrompt";
 import { FileChip } from "./FileChip";
 import { useFold, useSelection } from "./foldState";
@@ -220,14 +222,11 @@ function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
 				label={label}
 			/>
 			<Dialog open={open} onOpenChange={setOpen}>
-				<DialogContent
-					data-testid="chat-attachment-dialog"
-					className="flex max-h-[90vh] w-auto max-w-[95vw] flex-col gap-8"
-				>
+				<DialogContent data-testid="chat-attachment-dialog" className="w-auto max-w-[95vw] gap-8">
 					<DialogHeader>
 						<DialogTitle>{label}</DialogTitle>
 					</DialogHeader>
-					<div className="min-h-0 flex-1 overflow-auto">
+					<div className="relative min-h-0 flex-1 overflow-auto">
 						<img
 							src={`data:${img.mimeType};base64,${img.data}`}
 							alt=""
@@ -604,6 +603,8 @@ function ErrorTurn({
 	onTryAgain?: (() => void) | undefined;
 }) {
 	const t = useT();
+	const openProviderSettings = useChatActions()?.openProviderSettings;
+	const limit = subscriptionLimit({ text, failure });
 	return (
 		<div
 			data-testid="chat-message"
@@ -616,7 +617,21 @@ function ErrorTurn({
 					{errorTurnText(t, { text, failure })}
 				</span>
 			</div>
-			{onTryAgain ? (
+			{limit ? (
+				<div className="flex flex-wrap items-center justify-end gap-x-16 gap-y-4">
+					<NoticeLink href={limit.url}>{t(limit.label)}</NoticeLink>
+					{openProviderSettings ? (
+						<Button
+							variant="outline"
+							size="m"
+							data-testid="agent-open-provider-settings"
+							onClick={openProviderSettings}
+						>
+							{t("chat.failure.openProviderSettings")}
+						</Button>
+					) : null}
+				</div>
+			) : onTryAgain ? (
 				<div className="flex justify-end">
 					<Button
 						variant="outline"

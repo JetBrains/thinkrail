@@ -10,6 +10,7 @@
 		"includes": [
 			"**",
 			"!designs",
+			"!design-audit/buttons.html",
 			"!**/.claude",
 			"!apps/web/src/styles/generated",
 			"!apps/web/src/chat/generated"
@@ -22,8 +23,33 @@
 	},
 	"linter": {
 		"enabled": true,
+		"domains": {
+			"test": "recommended"
+		},
 		"rules": {
-			"preset": "recommended"
+			"preset": "recommended",
+			"nursery": {
+				"noImpliedEval": "error",
+				"noPlaywrightMissingAwait": "error",
+				"noIdenticalTestTitle": "error",
+				"noFloatingPromises": "error"
+			},
+			"style": {
+				"noNonNullAssertion": "error",
+				"useThrowOnlyError": "error",
+				"useThrowNewError": "error",
+				"noEnum": "error",
+				"noNamespace": "error",
+				"noParameterProperties": "error",
+				"useReadonlyClassProperties": "error"
+			},
+			"suspicious": {
+				"noExplicitAny": "error",
+				"noNestedPromises": "error",
+				"noUnusedExpressions": "error",
+				"useGuardForIn": "error",
+				"noEvolvingTypes": "error"
+			}
 		}
 	},
 	"javascript": {
@@ -52,6 +78,26 @@
 					"correctness": {
 						"noUnusedVariables": "off",
 						"noUnusedImports": "off"
+					}
+				}
+			}
+		},
+		{
+			"includes": ["apps/web/src/**", "!apps/web/src/lib/nullProto.ts"],
+			"plugins": ["./biome-plugins/nullProto.grit"]
+		},
+		{
+			"includes": [
+				"apps/web/**",
+				"apps/website/**",
+				"packages/resource-renderers/**",
+				"packages/ui/**",
+				"thinkrail-extensions/*/web/**"
+			],
+			"linter": {
+				"rules": {
+					"correctness": {
+						"useHookAtTopLevel": "error"
 					}
 				}
 			}

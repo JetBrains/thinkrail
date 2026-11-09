@@ -1,6 +1,7 @@
 import type {
 	AppConfig,
 	AppConfigUpdate,
+	AppSurvey,
 	BackgroundCommandCompletionDetails,
 	BackgroundCommandOutputResult,
 	BranchList,
@@ -23,7 +24,7 @@ import type {
 	HostEnvironment,
 	HostEnvironmentStatus,
 	HostEnvironmentUpdateResult,
-	InterviewResponse,
+	InstalledFontsResult,
 	JbcentralActionResult,
 	JbcentralConnectResult,
 	JbcentralLoginResult,
@@ -41,12 +42,20 @@ import type {
 	MergePrResult,
 	OpenBranchReview,
 	OpenPrResult,
+	PiPackageResourceType,
+	PiPackageScope,
+	PiPackageSummary,
+	PiPackagesCatalog,
 	PrBodySource,
 	Project,
 	ProjectPathStatus,
 	ProjectTrustSummary,
 	ProviderStatusReport,
+	ProviderWarning,
 	PrPreview,
+	ResourceHistoryCursor,
+	ResourceHistoryPage,
+	ResourceKind,
 	ResourceMeta,
 	RevertTarget,
 	ReviewAnchor,
@@ -55,11 +64,18 @@ import type {
 	ReviewCommentStatus,
 	ReviewFixDetails,
 	ReviewSnapshot,
+	SearchContext,
+	SearchKind,
+	SearchPreviewResult,
+	SearchPreviewTarget,
+	SearchQueryResult,
 	SessionResources,
 	SessionStateRecord,
 	SpecGraphSnapshot,
 	SubagentCompletionDetails,
 	SubagentOverride,
+	SurveyInvitationResponse,
+	SurveySubmitParams,
 	Template,
 	TemplateInfo,
 	TemplateScope,
@@ -67,6 +83,7 @@ import type {
 	TodoPlan,
 	TodoStatus,
 	TurnChangeSet,
+	UserFontsSnapshot,
 	UserThemesSnapshot,
 	Workspace,
 } from "./domain";
@@ -89,6 +106,7 @@ import type {
 	WireCustomMessage,
 	WireModel,
 } from "./piProtocol";
+import type { SpeechErrorCode, SpeechModel, SpeechStatus } from "./speech";
 
 export interface TerminalDataPush {
 	id: string;
@@ -123,7 +141,19 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 95;
+export const PROTOCOL_VERSION = 107;
+export const SPEECH_PROTOCOL_VERSION = 107;
+export const SEARCH_PROTOCOL_VERSION = 106;
+export const WORKSPACE_CREATION_PROTOCOL_VERSION = 104;
+export const EXTENSION_SETTINGS_PROTOCOL_VERSION = 105;
+export const ASK_DISCUSS_PROTOCOL_VERSION = 105;
+export const GITHUB_STAR_PROTOCOL_VERSION = 103;
+export const FONTS_PROTOCOL_VERSION = 102;
+export const CUSTOM_ENDPOINTS_PROTOCOL_VERSION = 101;
+export const PI_PACKAGES_PROTOCOL_VERSION = 100;
+export const PROVIDER_WARNINGS_PROTOCOL_VERSION = 99;
+export const SURVEY_TRANSLATIONS_PROTOCOL_VERSION = 98;
+export const RESOURCE_HISTORY_PROTOCOL_VERSION = 96;
 export const PROJECT_CLONE_PROTOCOL_VERSION = 95;
 export const ONBOARDING_PROTOCOL_VERSION = 94;
 export const LAYOUT_PLAN_PRESET_PROTOCOL_VERSION = 94;
@@ -171,7 +201,7 @@ export const THEME_SYSTEM_PROTOCOL_VERSION = 58;
 export const SUBAGENT_SETTINGS_PROTOCOL_VERSION = 57;
 export const JBCENTRAL_QUOTA_PROTOCOL_VERSION = 59;
 export const WORKSPACE_RENAME_PROTOCOL_VERSION = 55;
-export const FEEDBACK_INTERVIEW_PROTOCOL_VERSION = 56;
+export const FEEDBACK_SURVEY_PROTOCOL_VERSION = 97;
 
 export type HostPlatform = "darwin" | "linux" | "win32";
 
@@ -192,11 +222,45 @@ export interface ServerWelcome {
 	projects: Project[];
 	recentProjects: Project[];
 	config: AppConfig;
+	/** Voice input state, from `SPEECH_PROTOCOL_VERSION`; later changes arrive on `speech.changed`. */
+	speech?: SpeechStatus;
 }
 
 export interface WorkspaceRemoved {
 	projectId: string;
 	id: string;
+}
+
+export type WorkspaceCreationState = "running" | "interrupted" | "failed";
+export type WorkspaceCreationPhase = "preparing" | "checking-out";
+
+export interface WorkspaceKickoff {
+	text: string;
+	images?: ImageContent[];
+	model?: WireModel;
+	thinkingLevel?: ThinkingLevel;
+}
+
+export interface WorkspaceCreation {
+	id: string;
+	projectId: string;
+	name: string;
+	branch: string;
+	baseBranch: string;
+	state: WorkspaceCreationState;
+	phase: WorkspaceCreationPhase;
+	progress?: { done: number; total: number };
+	failure?: { message: string; code?: string; cleanedUp?: true };
+	kickoff?: { text: string; imageCount: number };
+	startedAt: number;
+}
+
+export interface WorkspaceCreationRemoved {
+	id: string;
+	projectId: string;
+	workspace?: Workspace;
+	sessionId?: string;
+	kickoffError?: string;
 }
 
 export type SessionCreatedPayload = SessionSummary;
@@ -226,6 +290,10 @@ export const WS_METHODS = {
 	projectSetGroupEnabled: "project.setGroupEnabled",
 	projectSkills: "project.skills",
 	workspaceCreate: "workspace.create",
+	workspaceStartCreate: "workspace.startCreate",
+	workspaceListCreations: "workspace.listCreations",
+	workspaceRetryCreation: "workspace.retryCreation",
+	workspaceDismissCreation: "workspace.dismissCreation",
 	workspaceRename: "workspace.rename",
 	workspaceListExisting: "workspace.listExisting",
 	workspaceOpenExisting: "workspace.openExisting",
@@ -286,10 +354,23 @@ export const WS_METHODS = {
 	skillList: "skill.list",
 	skillsState: "skills.state",
 	extensionList: "extension.list",
+	packagesList: "packages.list",
+	packagesInstall: "packages.install",
+	packagesRemove: "packages.remove",
+	packagesUpdate: "packages.update",
+	packagesCheckUpdates: "packages.checkUpdates",
+	packagesSetResourceEnabled: "packages.setResourceEnabled",
+	packagesReveal: "packages.reveal",
 	localesList: "locales.list",
 	localesReveal: "locales.reveal",
 	themesList: "themes.list",
 	themesReveal: "themes.reveal",
+	fontsList: "fonts.list",
+	fontsInstalled: "fonts.installed",
+	fontsReveal: "fonts.reveal",
+	speechInstall: "speech.install",
+	speechCancelInstall: "speech.cancelInstall",
+	speechRemove: "speech.remove",
 	sessionCreate: "session.create",
 	sessionPrompt: "session.prompt",
 	sessionSteer: "session.steer",
@@ -317,6 +398,7 @@ export const WS_METHODS = {
 	sessionGetMessages: "session.getMessages",
 	subagentGetTranscript: "subagent.getTranscript",
 	sessionResources: "session.resources",
+	sessionResourceHistory: "session.resourceHistory",
 	backgroundCommandOutput: "backgroundCommand.output",
 	backgroundCommandStop: "backgroundCommand.stop",
 	subagentStop: "subagent.stop",
@@ -326,6 +408,10 @@ export const WS_METHODS = {
 	modelDefault: "model.default",
 	modelContextSettings: "model.contextSettings",
 	modelSetContextWindow: "model.setContextWindow",
+	customEndpointsList: "customEndpoints.list",
+	customEndpointsProbe: "customEndpoints.probe",
+	customEndpointsSave: "customEndpoints.save",
+	customEndpointsRemove: "customEndpoints.remove",
 	modelClampThinking: "model.clampThinking",
 	providerStatus: "provider.status",
 	providerDetect: "provider.detect",
@@ -333,6 +419,7 @@ export const WS_METHODS = {
 	providerLoginReply: "provider.loginReply",
 	providerLoginCancel: "provider.loginCancel",
 	providerLogout: "provider.logout",
+	providerDisableWarning: "provider.disableWarning",
 	providerJbcentralConnect: "provider.jbcentralConnect",
 	providerJbcentralDisconnect: "provider.jbcentralDisconnect",
 	providerJbcentralStartProxy: "provider.jbcentralStartProxy",
@@ -344,8 +431,12 @@ export const WS_METHODS = {
 	environmentGet: "environment.get",
 	environmentUpdate: "environment.update",
 	feedbackRespond: "feedback.respond",
+	feedbackSurvey: "feedback.survey",
+	feedbackSurveySubmit: "feedback.survey.submit",
 	clientReportError: "client.reportError",
 	historySearch: "history.search",
+	searchQuery: "search.query",
+	searchPreview: "search.preview",
 	reviewGet: "review.get",
 	reviewCommentAdd: "review.commentAdd",
 	reviewCommentUpdate: "review.commentUpdate",
@@ -394,15 +485,21 @@ export const WS_CHANNELS = {
 	workspaceUpdated: "workspace.updated",
 	workspaceRemoved: "workspace.removed",
 	workspaceFsChanged: "workspace.fsChanged",
+	workspaceCreationChanged: "workspace.creationChanged",
+	workspaceCreationRemoved: "workspace.creationRemoved",
 	settingsChanged: "settings.changed",
 	hostUpdateAvailable: "host.updateAvailable",
 	feedbackInterview: "feedback.interview",
+	feedbackGithubStar: "feedback.githubStar",
 	reviewChanged: "review.changed",
 	reviewFailed: "review.failed",
 	turnChanged: "turn.changed",
 	mcpStatus: "mcp.status",
 	localesChanged: "locales.changed",
 	themesChanged: "themes.changed",
+	packagesChanged: "packages.changed",
+	fontsChanged: "fonts.changed",
+	speechChanged: "speech.changed",
 } as const;
 
 type SameUnion<A extends B, B extends C, C = A> = A;
@@ -583,6 +680,62 @@ export interface ModelContextSetting
 	override: number | null;
 }
 
+/** Provider ids the custom-endpoint form owns in pi's `models.json`; every other provider is left alone. */
+export const CUSTOM_ENDPOINT_ID_PREFIX = "custom-";
+
+export function isCustomEndpointId(id: string): boolean {
+	return id.startsWith(CUSTOM_ENDPOINT_ID_PREFIX);
+}
+
+/** What the server reported about a model; `null` means it did not say, so pi's default applies. */
+export interface CustomEndpointModel {
+	id: string;
+	contextWindow: number | null;
+	maxTokens: number | null;
+	reasoning: boolean | null;
+	vision: boolean | null;
+	/** Whether the server says the model takes tool calls; never saved, so a listed endpoint reports null. */
+	tools: boolean | null;
+}
+
+/** An OpenAI-compatible `custom-*` provider in pi's `models.json`. The key itself never crosses the wire. */
+export interface CustomEndpoint {
+	id: string;
+	name: string;
+	baseUrl: string;
+	hasApiKey: boolean;
+	models: CustomEndpointModel[];
+}
+
+export interface CustomEndpointProbeRequest {
+	baseUrl: string;
+	/** Omitted together with `endpointId` to reuse that endpoint's saved key for its unchanged address. */
+	apiKey?: string;
+	endpointId?: string;
+}
+
+export type CustomEndpointProbeFailure =
+	| "invalid-url"
+	| "unauthorized"
+	| "timeout"
+	| "unreachable"
+	| "not-openai"
+	| "no-models";
+
+export type CustomEndpointProbe =
+	| { ok: true; baseUrl: string; models: CustomEndpointModel[] }
+	| { ok: false; reason: CustomEndpointProbeFailure; status?: number };
+
+export interface CustomEndpointDraft {
+	/** Present to replace an existing endpoint; absent to add a new one. */
+	id?: string;
+	name: string;
+	baseUrl: string;
+	/** Omitted to keep the saved key; an empty string removes it. */
+	apiKey?: string;
+	models: CustomEndpointModel[];
+}
+
 export function isSharedModelContextTarget(
 	setting: Pick<ModelContextSetting, "override">,
 ): boolean {
@@ -638,6 +791,16 @@ export interface WsMethodMap {
 	"workspace.create": {
 		params: { projectId: string; name?: string; baseRef?: string };
 		result: Workspace;
+	};
+	"workspace.startCreate": {
+		params: { projectId: string; name?: string; baseRef?: string; kickoff?: WorkspaceKickoff };
+		result: WorkspaceCreation;
+	};
+	"workspace.listCreations": { params: Record<string, never>; result: WorkspaceCreation[] };
+	"workspace.retryCreation": { params: { id: string }; result: WorkspaceCreation };
+	"workspace.dismissCreation": {
+		params: { id: string };
+		result: { kickoff?: WorkspaceKickoff };
 	};
 	"workspace.rename": { params: { id: string; name: string }; result: Workspace };
 	"workspace.listExisting": {
@@ -745,7 +908,7 @@ export interface WsMethodMap {
 	};
 	"fs.readDir": { params: { workspaceId: string; path: string }; result: FileNode[] };
 	"fs.readFile": {
-		params: { workspaceId: string; path: string };
+		params: { workspaceId: string; path: string; maxBytes?: number };
 		result: { content: string; meta: ResourceMeta };
 	};
 	"spec.graph": { params: { workspaceId: string }; result: SpecGraphSnapshot };
@@ -840,10 +1003,44 @@ export interface WsMethodMap {
 	"skill.list": { params: { projectId: string }; result: SlashCommandInfo[] };
 	"skills.state": { params: { workspaceId: string }; result: SkillCatalogEntry[] };
 	"extension.list": { params: Record<string, never>; result: ExtensionCatalogEntry[] };
+	"packages.list": { params: { workspaceId?: string }; result: PiPackagesCatalog };
+	"packages.install": {
+		params: { source: string; scope: PiPackageScope; workspaceId?: string };
+		result: PiPackageSummary;
+	};
+	"packages.remove": {
+		params: { source: string; scope: PiPackageScope; workspaceId?: string };
+		result: Ack;
+	};
+	"packages.update": {
+		params: { packages: { source: string; scope: PiPackageScope }[]; workspaceId?: string };
+		result: Ack;
+	};
+	"packages.checkUpdates": {
+		params: { workspaceId?: string; force?: boolean };
+		result: { source: string; scope: PiPackageScope }[];
+	};
+	"packages.setResourceEnabled": {
+		params: {
+			path: string;
+			type: PiPackageResourceType;
+			scope: PiPackageScope;
+			enabled: boolean;
+			workspaceId?: string;
+		};
+		result: Ack;
+	};
+	"packages.reveal": { params: { path: string; workspaceId?: string }; result: Ack };
 	"locales.list": { params: Record<string, never>; result: LocalLocalesSnapshot };
 	"locales.reveal": { params: Record<string, never>; result: Ack };
 	"themes.list": { params: Record<string, never>; result: UserThemesSnapshot };
 	"themes.reveal": { params: Record<string, never>; result: Ack };
+	"fonts.list": { params: Record<string, never>; result: UserFontsSnapshot };
+	"fonts.installed": { params: Record<string, never>; result: InstalledFontsResult };
+	"fonts.reveal": { params: Record<string, never>; result: Ack };
+	"speech.install": { params: { model: SpeechModel }; result: Ack };
+	"speech.cancelInstall": { params: Record<string, never>; result: Ack };
+	"speech.remove": { params: Record<string, never>; result: Ack };
 	"session.create": {
 		params: { workspaceId: string; model?: WireModel; thinkingLevel?: ThinkingLevel };
 		result: { sessionId: string; model: WireModel | null; thinkingLevel: ThinkingLevel };
@@ -912,6 +1109,16 @@ export interface WsMethodMap {
 		params: { workspaceId: string; sessionId: string };
 		result: SessionResources;
 	};
+	"session.resourceHistory": {
+		params: {
+			workspaceId: string;
+			sessionId: string;
+			kind: ResourceKind;
+			before?: ResourceHistoryCursor;
+			limit?: number;
+		};
+		result: ResourceHistoryPage;
+	};
 	"backgroundCommand.output": {
 		params: { workspaceId: string; sessionId: string; commandId: string };
 		result: BackgroundCommandOutputResult;
@@ -944,6 +1151,10 @@ export interface WsMethodMap {
 		params: { target: ModelContextTarget; contextWindow: number | null };
 		result: ModelContextSetting[];
 	};
+	"customEndpoints.list": { params: Record<string, never>; result: CustomEndpoint[] };
+	"customEndpoints.probe": { params: CustomEndpointProbeRequest; result: CustomEndpointProbe };
+	"customEndpoints.save": { params: CustomEndpointDraft; result: CustomEndpoint[] };
+	"customEndpoints.remove": { params: { id: string }; result: CustomEndpoint[] };
 	"provider.status": { params: Record<string, never>; result: ProviderStatusReport };
 	"provider.detect": { params: Record<string, never>; result: { accounts: DetectedAccount[] } };
 	"provider.loginStart": {
@@ -953,6 +1164,7 @@ export interface WsMethodMap {
 	"provider.loginReply": { params: LoginReply; result: Ack };
 	"provider.loginCancel": { params: { loginId: string }; result: Ack };
 	"provider.logout": { params: { providerId: string }; result: Ack };
+	"provider.disableWarning": { params: { warning: ProviderWarning }; result: Ack };
 	"provider.jbcentralConnect": { params: Record<string, never>; result: JbcentralConnectResult };
 	"provider.jbcentralDisconnect": { params: Record<string, never>; result: JbcentralActionResult };
 	"provider.jbcentralStartProxy": { params: Record<string, never>; result: JbcentralActionResult };
@@ -966,12 +1178,27 @@ export interface WsMethodMap {
 		params: { environment: HostEnvironment };
 		result: HostEnvironmentUpdateResult;
 	};
-	"feedback.respond": { params: { action: InterviewResponse }; result: Ack };
+	"feedback.respond": { params: { action: SurveyInvitationResponse }; result: Ack };
+	"feedback.survey": {
+		params: { language?: string };
+		result: { survey: AppSurvey | null };
+	};
+	"feedback.survey.submit": { params: SurveySubmitParams; result: Ack };
 	"client.reportError": { params: ClientErrorReport; result: Ack };
 	"history.search": {
 		params: { query: string; scope: HistoryScope; limit?: number };
 		result: HistorySearchResult;
 	};
+	"search.query": {
+		params: {
+			query: string;
+			kinds?: SearchKind[];
+			context: SearchContext;
+			limit?: number;
+		};
+		result: SearchQueryResult;
+	};
+	"search.preview": { params: SearchPreviewTarget; result: SearchPreviewResult };
 	"review.get": { params: { workspaceId: string }; result: ReviewSnapshot };
 	"review.commentAdd": {
 		params: {
@@ -1133,7 +1360,29 @@ export type WsErrorCode =
 	| "LOGIN_NOT_OWNER"
 	| "MCP_CONFIG_INVALID"
 	| "MCP_PATH_UNSAFE"
-	| "MCP_HANDLED_ELSEWHERE";
+	| "MCP_HANDLED_ELSEWHERE"
+	| "SURVEY_UNAVAILABLE"
+	| "SURVEY_CHANGED"
+	| "SURVEY_INVALID"
+	| "SURVEY_NOT_SENT"
+	| "PACKAGE_SOURCE_INVALID"
+	| "PACKAGE_OFFLINE"
+	| "PACKAGE_UNTRUSTED"
+	| "PACKAGE_UNKNOWN"
+	| "PACKAGE_INSTALL_FAILED"
+	| "PACKAGE_INSTALLED_UNLISTED"
+	| "PACKAGE_REMOVE_FAILED"
+	| "PACKAGE_UPDATE_FAILED"
+	| "PACKAGE_SETTINGS_WRITE_FAILED"
+	| "REQUEST_REPLAY_OVERFLOW"
+	| "INSTALLED_FONTS_UNAVAILABLE"
+	| "GIT_TIMEOUT"
+	| "WORKTREE_ADD_FAILED"
+	| "WORKTREE_CHECKOUT_FAILED"
+	| "WORKTREE_CHECKOUT_STALLED"
+	| "WORKSPACE_PATH_TAKEN"
+	| "FILE_TOO_LARGE"
+	| SpeechErrorCode;
 
 export interface WsResponse {
 	id: string;

@@ -15,6 +15,7 @@ import {
 	type TemplateReadLocation,
 	type ThinkingLevel,
 	type WireModel,
+	WORKSPACE_CREATION_PROTOCOL_VERSION,
 	type Workspace,
 } from "@thinkrail/contracts";
 import { i18n, T, useT } from "@thinkrail/locales/react";
@@ -34,6 +35,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { Textarea } from "@thinkrail/ui/textarea";
 import { cn } from "@thinkrail/ui/utils";
@@ -46,12 +48,7 @@ import {
 	trustGrantParams,
 	untrustedNoticeText,
 } from "@/chat/projectTrust";
-import {
-	imagePasteDropHandlers,
-	PROMPT_IMAGE_CHIPS_PADDING,
-	PromptImageChips,
-	usePromptImages,
-} from "@/chat/promptImages";
+import { imagePasteDropHandlers, PromptImageChips, usePromptImages } from "@/chat/promptImages";
 import { SkillsButton } from "@/chat/SkillsButton";
 import { SkillsDialog } from "@/chat/SkillsDialog";
 import { useModelCatalog } from "@/chat/useModelCatalog";
@@ -61,7 +58,6 @@ import {
 	applyTemplateSlotEdit,
 	beginTemplateSlotSession,
 	finalizeTemplateSlotSession,
-	isPromptKeyEventComposing,
 	type ParsedTemplate,
 	SlashCommandMenu,
 	selectedSlashCommandValue,
@@ -75,7 +71,13 @@ import {
 	useSlashCommandCompletion,
 	useTemplateCommandPicker,
 } from "@/prompt";
-import { selectCatalogModel, selectPickerModels, toast, useAppStore } from "@/store";
+import {
+	selectCatalogModel,
+	selectPickerModels,
+	toast,
+	useAppStore,
+	type WorkspaceRetryDraft,
+} from "@/store";
 import { createSessionWithSkillBaseline, errorText, getTransport } from "@/transport";
 import { BranchPicker } from "./BranchPicker";
 import { useBranchList } from "./branches";
@@ -107,12 +109,14 @@ export function NewWorkspaceDialog({
 	projectId,
 	initialPrompt,
 	promptNote,
+	retryDraft,
 	onOpenChange,
 }: {
 	open: boolean;
 	projectId: string;
 	initialPrompt?: string;
 	promptNote?: string;
+	retryDraft?: WorkspaceRetryDraft;
 	onOpenChange: (open: boolean) => void;
 }) {
 	const t = useT();
@@ -204,13 +208,28 @@ export function NewWorkspaceDialog({
 	useEffect(() => {
 		if (!open) return;
 		setSelectedProjectId(projectId);
-		updatePromptDraft(initialPrompt ?? "", null);
+		updatePromptDraft(retryDraft?.kickoff?.text ?? initialPrompt ?? "", null);
 		setTarget("worktree");
 		setCreating(false);
 		attachedImages.reset();
+		const retryImages = retryDraft?.kickoff?.images ?? [];
+		attachedImages.restore(
+			retryImages.map((content) => ({
+				name: i18n.t("chat.promptImages.fallbackName"),
+				content,
+			})),
+		);
 		hostDefaultAsked.current = false;
 		setExplicitPair(false);
-	}, [open, projectId, initialPrompt, updatePromptDraft, attachedImages.reset]);
+	}, [
+		open,
+		projectId,
+		initialPrompt,
+		retryDraft,
+		updatePromptDraft,
+		attachedImages.reset,
+		attachedImages.restore,
+	]);
 
 	useEffect(() => {
 		if (!open) return;
@@ -303,8 +322,15 @@ export function NewWorkspaceDialog({
 
 	useEffect(() => {
 		if (!open) return;
+		const retryModel = retryDraft?.kickoff?.model;
+		if (retryModel) {
+			setModel(retryModel);
+			setThinkingLevel(retryDraft?.kickoff?.thinkingLevel ?? "medium");
+			setExplicitPair(true);
+			return;
+		}
 		return applyHostDefault();
-	}, [open, applyHostDefault]);
+	}, [open, applyHostDefault, retryDraft]);
 
 	useEffect(() => {
 		if (!open || !model) return;
@@ -356,8 +382,9 @@ export function NewWorkspaceDialog({
 		refreshing,
 		refresh: refreshBranches,
 	} = useBranchList(open ? selectedProjectId : null, (list) => {
-		setBaseRef(list.defaultBranch);
-		prefetchBase(list.defaultBranch);
+		const initial = retryDraft?.baseRef ?? list.defaultBranch;
+		setBaseRef(initial);
+		prefetchBase(initial);
 	});
 	const submitEnabled = !creating && !templatePending && attachedImages.pending === 0;
 
@@ -374,20 +401,41 @@ export function NewWorkspaceDialog({
 				return;
 			}
 			workspace = def;
+		} else if (protocolVersion !== null && protocolVersion >= WORKSPACE_CREATION_PROTOCOL_VERSION) {
+			const kickoff = {
+				text,
+				...(attachments.length > 0 ? { images: attachments.map((a) => a.content) } : {}),
+				...(model && explicitPair ? { model, thinkingLevel } : {}),
+			};
+			const started = async () =>
+				getTransport().request("workspace.startCreate", {
+					projectId: selectedProjectId,
+					...(baseRef ? { baseRef } : {}),
+					kickoff,
+				});
+			const creation = await started().catch((err: unknown) => {
+				toast.error(errorText(err), t("panels.newWorkspace.createFailed"));
+				setCreating(false);
+				return null;
+			});
+			if (!creation) return;
+			const store = useAppStore.getState();
+			store.applyWorkspaceCreation(creation, { text, attachments });
+			void refreshProjectWorkspaces(creation.projectId).catch(() => {});
+			store.selectCreation(creation.id);
+			onOpenChange(false);
+			return;
 		} else {
-			useAppStore.getState().beginWorktreeCreation(selectedProjectId);
 			const createWorktree = async () =>
 				getTransport().request("workspace.create", {
 					projectId: selectedProjectId,
 					...(baseRef ? { baseRef } : {}),
 				});
-			const created = await createWorktree()
-				.catch((err: unknown) => {
-					toast.error(errorText(err), t("panels.newWorkspace.createFailed"));
-					setCreating(false);
-					return null;
-				})
-				.finally(() => useAppStore.getState().endWorktreeCreation(selectedProjectId));
+			const created = await createWorktree().catch((err: unknown) => {
+				toast.error(errorText(err), t("panels.newWorkspace.createFailed"));
+				setCreating(false);
+				return null;
+			});
 			if (!created) return;
 			workspace = created;
 		}
@@ -463,7 +511,7 @@ export function NewWorkspaceDialog({
 				ref={setDialogEl}
 				hideClose
 				data-testid="new-workspace-dialog"
-				className="max-w-[600px] gap-12 p-12"
+				className="max-w-[600px] gap-12 overflow-visible p-12"
 				onEscapeKeyDown={(event) => {
 					if (slashCompletion.open) {
 						event.preventDefault();
@@ -479,115 +527,116 @@ export function NewWorkspaceDialog({
 					promptRef.current?.focus();
 				}}
 			>
-				<DialogHeader>
-					<DialogTitle>
-						{isolated
-							? t("panels.newWorkspace.titleIsolated")
-							: t("panels.newWorkspace.titleDefault")}
-					</DialogTitle>
-					<DialogDescription>
-						{isolated
-							? t("panels.newWorkspace.descriptionIsolated")
-							: t("panels.newWorkspace.descriptionDefault")}
-					</DialogDescription>
-				</DialogHeader>
+				<div className="-mx-12 -mt-12 -mb-2 flex min-h-0 flex-1 flex-col gap-12 overflow-y-auto px-12 pt-12 pb-2">
+					<DialogHeader>
+						<DialogTitle>
+							{isolated
+								? t("panels.newWorkspace.titleIsolated")
+								: t("panels.newWorkspace.titleDefault")}
+						</DialogTitle>
+						<DialogDescription>
+							{isolated
+								? t("panels.newWorkspace.descriptionIsolated")
+								: t("panels.newWorkspace.descriptionDefault")}
+						</DialogDescription>
+					</DialogHeader>
 
-				<fieldset
-					data-testid="ws-target"
-					className="flex w-fit items-center gap-2 rounded-md border border-control-border-default bg-control-bg p-2"
-				>
-					<legend className="sr-only">{t("panels.newWorkspace.targetLegend")}</legend>
-					<TargetOption
-						icon={GitBranch}
-						label={t("panels.newWorkspace.targetIsolated")}
-						name={targetGroupName}
-						active={isolated}
-						testid="ws-target-worktree"
-						onSelect={() => setTarget("worktree")}
-					/>
-					<TargetOption
-						icon={House}
-						label={t("panels.newWorkspace.targetDefault")}
-						name={targetGroupName}
-						active={!isolated}
-						testid="ws-target-default"
-						onSelect={() => setTarget("default")}
-					/>
-				</fieldset>
-
-				<div className="flex flex-wrap items-center gap-8">
-					<ProjectPicker
-						projects={projects}
-						current={selectedProject?.name ?? t("panels.newWorkspace.projectFallback")}
-						container={dialogEl}
-						onSelect={setSelectedProjectId}
-					/>
-					{isolated ? (
-						<BranchPicker
-							branches={branches}
-							failed={branchesFailed}
-							selected={baseRef}
-							label={t("panels.newWorkspace.baseLabel")}
-							testid="ws-branch-picker"
-							triggerClassName={`${PILL} max-w-[220px]`}
-							refreshing={refreshing}
-							container={dialogEl}
-							onSelect={selectBaseRef}
-							onRefresh={refreshBranches}
-						/>
-					) : null}
-					<SkillsButton
-						onOpen={() => setManageSkills(true)}
-						testId="ws-manage-skills"
-						className="ml-auto"
-					/>
-				</div>
-
-				{trustNotice.kind === "untrusted" ? (
-					<div
-						data-testid="ws-trust-notice"
-						className="flex w-full flex-col gap-8 rounded-sm border border-feedback-warning-muted bg-container-elevated-bg px-12 py-8 text-left"
+					<fieldset
+						data-testid="ws-target"
+						className="flex w-fit items-center gap-2 rounded-md border border-control-border-default bg-control-bg p-2"
 					>
-						<div className="flex items-start gap-8">
-							<TriangleAlert className="mt-2 size-14 shrink-0 text-feedback-warning" aria-hidden />
-							<span className="flex min-w-0 flex-1 flex-col gap-2">
-								<span className="tr-text-ui text-text-default">
-									{untrustedNoticeText(t, trustNotice)} {t("panels.newWorkspace.trustUnaffected")}
-								</span>
-								{trustEnables ? (
-									<span className="text-text-muted tr-text-metadata">{trustEnables}</span>
-								) : null}
-							</span>
-						</div>
-						<div className="flex justify-end">
-							<Button
-								variant="outline"
-								size="m"
-								data-testid="ws-trust-project"
-								disabled={trusting}
-								onClick={() => void trustProject(trustNotice)}
-							>
-								{t("panels.newWorkspace.trustProject")}
-							</Button>
-						</div>
-					</div>
-				) : null}
+						<legend className="sr-only">{t("panels.newWorkspace.targetLegend")}</legend>
+						<TargetOption
+							icon={GitBranch}
+							label={t("panels.newWorkspace.targetIsolated")}
+							name={targetGroupName}
+							active={isolated}
+							testid="ws-target-worktree"
+							onSelect={() => setTarget("worktree")}
+						/>
+						<TargetOption
+							icon={House}
+							label={t("panels.newWorkspace.targetDefault")}
+							name={targetGroupName}
+							active={!isolated}
+							testid="ws-target-default"
+							onSelect={() => setTarget("default")}
+						/>
+					</fieldset>
 
-				<div className="relative">
+					<div className="flex flex-wrap items-center gap-8">
+						<ProjectPicker
+							projects={projects}
+							current={selectedProject?.name ?? t("panels.newWorkspace.projectFallback")}
+							container={dialogEl}
+							onSelect={setSelectedProjectId}
+						/>
+						{isolated ? (
+							<BranchPicker
+								branches={branches}
+								failed={branchesFailed}
+								selected={baseRef}
+								label={t("panels.newWorkspace.baseLabel")}
+								testid="ws-branch-picker"
+								triggerClassName={`${PILL} max-w-[220px]`}
+								refreshing={refreshing}
+								container={dialogEl}
+								onSelect={selectBaseRef}
+								onRefresh={refreshBranches}
+							/>
+						) : null}
+						<SkillsButton
+							onOpen={() => setManageSkills(true)}
+							testId="ws-manage-skills"
+							className="ml-auto"
+						/>
+					</div>
+
+					{trustNotice.kind === "untrusted" ? (
+						<div
+							data-testid="ws-trust-notice"
+							className="flex w-full flex-col gap-8 rounded-sm border border-feedback-warning-muted bg-container-elevated-bg px-12 py-8 text-left"
+						>
+							<div className="flex items-start gap-8">
+								<TriangleAlert
+									className="mt-2 size-14 shrink-0 text-feedback-warning"
+									aria-hidden
+								/>
+								<span className="flex min-w-0 flex-1 flex-col gap-2">
+									<span className="tr-text-ui text-text-default">
+										{untrustedNoticeText(t, trustNotice)} {t("panels.newWorkspace.trustUnaffected")}
+									</span>
+									{trustEnables ? (
+										<span className="text-text-muted tr-text-metadata">{trustEnables}</span>
+									) : null}
+								</span>
+							</div>
+							<div className="flex justify-end">
+								<Button
+									variant="outline"
+									size="m"
+									data-testid="ws-trust-project"
+									disabled={trusting}
+									onClick={() => void trustProject(trustNotice)}
+								>
+									{t("panels.newWorkspace.trustProject")}
+								</Button>
+							</div>
+						</div>
+					) : null}
 					{promptNote ? (
 						<p
 							data-testid="ws-prompt-note"
-							className="mb-4 flex items-start gap-8 rounded-sm border border-primary-muted bg-clip-padding bg-primary-subtle px-12 py-8 text-left text-text-muted tr-text-metadata leading-snug"
+							className="flex items-start gap-8 rounded-sm border border-primary-muted bg-clip-padding bg-primary-subtle px-12 py-8 text-left text-text-muted tr-text-metadata leading-snug"
 						>
 							<Sparkles className="mt-2 size-14 shrink-0 text-primary" />
-							<span>{promptNote}</span>
+							<span className="min-w-0 wrap-anywhere">{promptNote}</span>
 						</p>
 					) : null}
-					<PromptImageChips
-						controller={attachedImages}
-						testId="ws-prompt-images"
-						className={PROMPT_IMAGE_CHIPS_PADDING.dialog}
-					/>
+					<PromptImageChips controller={attachedImages} testId="ws-prompt-images" className="" />
+				</div>
+
+				<div className="relative shrink-0">
 					<Textarea
 						ref={promptRef}
 						data-testid="ws-prompt"
@@ -606,7 +655,7 @@ export function NewWorkspaceDialog({
 						rows={6}
 						className="min-h-[160px]"
 						onKeyDown={(e) => {
-							if (isPromptKeyEventComposing(e.nativeEvent)) return;
+							if (isImeComposing(e.nativeEvent)) return;
 							if (slotSession && !slashCompletion.open) {
 								if (e.key === "Tab") {
 									e.preventDefault();
@@ -633,14 +682,14 @@ export function NewWorkspaceDialog({
 							commands={slashCompletion.matches}
 							activeIndex={slashCompletion.activeIndex}
 							onSelect={slashCompletion.pick}
-							className="absolute top-full left-8 z-50 mt-4"
+							className="absolute bottom-full left-8 z-50 mb-4"
 						/>
 					) : slotSession ? (
 						<TemplateSlotHint
 							activeIndex={slotSession.activeIndex}
 							count={slotSession.slots.length}
 							onNext={() => stepPromptSlot(1)}
-							className="absolute top-full left-8 z-50 mt-4"
+							className="absolute bottom-full left-8 z-50 mb-4"
 						/>
 					) : prompt.trim() && isolated ? (
 						<p
@@ -659,7 +708,7 @@ export function NewWorkspaceDialog({
 					)}
 				</div>
 
-				<div className="flex flex-wrap items-center gap-8">
+				<div className="flex shrink-0 flex-wrap items-center gap-8">
 					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-8">
 						<ModelEffortPicker
 							models={models}

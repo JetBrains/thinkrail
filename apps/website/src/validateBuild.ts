@@ -30,6 +30,17 @@ function attributeValues(content: string, attributes: string[]): string[] {
 	return [...content.matchAll(expression)].map((match) => match[1] ?? "");
 }
 
+export function relativeLinkTargets(pagePath: string, html: string): string[] {
+	const page = `https://thinkrail.ai/${pagePath.replace(/index\.html$/, "")}`;
+	return [
+		...new Set(
+			attributeValues(html, ["src", "href"])
+				.filter((value) => !/^(?:[a-z][a-z\d+.-]*:|\/|#)/i.test(value))
+				.map((value) => new URL(value, page).pathname),
+		),
+	];
+}
+
 function stylesheetUrls(content: string): Set<string> {
 	return new Set(
 		[...content.matchAll(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"/g)].map(
@@ -225,6 +236,11 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		const picker = html.indexOf('data-install-picker="blog"');
 		if (picker < 0 || html.indexOf("Browser UI via command line", picker) < 0) {
 			failures.push(`${path}: blog install picker is missing`);
+		}
+		for (const url of relativeLinkTargets(path, html)) {
+			if (!(await outputPathExists(distDirectory, url))) {
+				failures.push(`${path}: missing local output for ${url}`);
+			}
 		}
 	}
 	if (!pages.landing.includes("Browser UI via command line")) {

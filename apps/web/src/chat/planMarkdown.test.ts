@@ -19,9 +19,15 @@ test("compiles groups + loose with a progress header and GFM checkboxes", () => 
 			{
 				id: "g1",
 				title: "Auth",
+				status: "active",
 				todos: [item("Scaffold module", "done"), item("Validate inputs")],
 			},
-			{ id: "g2", title: "Payments", todos: [item("Wire the route", "in_progress")] },
+			{
+				id: "g2",
+				title: "Payments",
+				status: "active",
+				todos: [item("Wire the route", "in_progress")],
+			},
 		],
 	};
 	expect(planToMarkdown(currentTranslator(), plan, "My chat")).toBe(

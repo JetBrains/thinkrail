@@ -26,7 +26,8 @@ not this module; the theme-aware highlighter remains app-local.
   `ResourcePreview` because a package cannot import the app's `lib`; `panels/pathIdentity.test.ts` pins it to
   `projectRelativePath` for workspace-relative paths),
   **`viewport.ts`** → `isPhoneViewport()` plus the live `usePhoneViewport()` projection (coarse pointer
-  or a viewport below 768px is phone-class; both media queries are observed), and **`shallowEqualArrays()`** (element-wise `Object.is` — the "did this really change?" test behind the
+  or a viewport below 768px is phone-class; one combined media query is observed), built on the general
+  **`useMediaQuery(query)`** (false where `matchMedia` is missing), and **`shallowEqualArrays()`** (element-wise `Object.is` — the "did this really change?" test behind the
   store's snapshot-identity guard and `ErrorBoundary`'s reset keys), **`userText()`** (a user
   message's plain text — shared by `chat`'s transcript hydration/renderer and `store`'s live event
   fold, so "same message" means the same thing everywhere; it lives here because `store`'s edge to
@@ -39,15 +40,19 @@ not this module; the theme-aware highlighter remains app-local.
   here because `chat/` may not import from `panels/`, which is what let three private twins of it
   accumulate), **`platformShortcutLabel()`** +
   **`hasPlatformModifier()`** + **`platformFamily()`** (one Apple-vs-other definition for shortcut chrome and
-  global handlers, plus the `apple` / `windows` / `linux` / `other` family for per-OS shortcut tables; all
-  default to the browser-reported platform but accept an explicit platform string so non-browser callers and
+  global handlers — the definition itself lives in `@thinkrail/ui/keyboard` so extension cards share it, and
+  `hasPlatformModifier` is re-exported here to keep the app's shortcut helpers on one import; plus the
+  `apple` / `windows` / `linux` / `other` family for per-OS shortcut tables; all default to the
+  browser-reported platform but accept an explicit platform string so non-browser callers and
   tests never inherit a host runtime's synthetic `navigator` accidentally; the label optionally renders the
   Alt variant — `⌥⌘N` / `Ctrl+Alt+N` — so shortcut chrome never composes modifier glyphs itself), and
   **`copyText()`**
   (clipboard write reporting whether it landed — one place for the *degradation*: an insecure context
   (plain-http remote access) or a denied permission has no clipboard, and every caller's answer is the same
   — do nothing loud, the text stays visible/selectable), **`randomId()`** (16 random bytes through
-  `getRandomValues`, which remains available to a plain-HTTP remote client),
+  `getRandomValues`, which remains available to a plain-HTTP remote client) and **`randomUuid()`** (the same
+  source shaped as an RFC 4122 v4 UUID, for wire ids the host validates as UUIDs; `crypto.randomUUID` is
+  missing on such a client),
   **`DOUBLE_CLICK_SETTLE_MS`** (the click→double-click window, used only where a single click would
   commit something a double click contradicts: a single click (or keyboard activation) on the active
   preview tab, so a double click is not read as two keeps, the Changes review-tab preview, and the Review
@@ -76,7 +81,7 @@ not this module; the theme-aware highlighter remains app-local.
   Shiki highlighter, **kept out of the barrel** so the eager `@/lib` import stays shiki-free:
   `highlighter.ts` owns the curated grammar/id/file-association catalog shared by chat and the desktop
   Monaco renderer (both load a grammar on its language's first use), plus
-  `createChatHighlighter(engine)`: `themes`' one generic CSS-variable registration and each chat grammar
+  `createChatHighlighter(engine)`: `themes`' one generic CSS-variable registration and each catalog grammar
   loaded on first use. Chat code is highlighted off the main thread:
   `highlightCode.ts` resolves the language alias (unknown and `mermaid` answer `null` with no worker),
   then posts to one lazy `highlighter.worker.ts` per page, which uses the Oniguruma WASM engine. Per
@@ -99,8 +104,13 @@ not this module; the theme-aware highlighter remains app-local.
   **`tupleKey()`** length-prefixes independent strings, **`parseTupleKey()`** reads only its requested
   namespace, and **`layoutResourceIdentity()`** gives every frontend-local placement/cache alias one
   semantic resource key, so delimiters and stable noncanonical placement ids cannot split or alias identities.
+  **`nullProto<T>(...sources)`** builds every prototype-free dictionary (id-keyed maps whose keys may be
+  `__proto__` or `constructor`): it merges sources onto `Object.create(null)` and type-checks each source
+  against `T`, so no call site casts an `any` result. TS widens a union-typed computed key (`{ [area]: v }`)
+  to a string index that skips the check, so such writes assign onto the returned copy instead. The
+  `biome-plugins/nullProto.grit` lint rule rejects `Object.create(null)` anywhere else in `apps/web/src`.
 - **Public surface (barrel):** `cssColorToHex`, `isPhoneViewport`,
-  `usePhoneViewport`, `normalizePath`, `isAbsolutePath`, `fileName`, `projectRelativePath` (canonical worktree-relative POSIX identity;
+  `usePhoneViewport`, `useMediaQuery`, `normalizePath`, `isAbsolutePath`, `fileName`, `projectRelativePath` (canonical worktree-relative POSIX identity;
   collapses in-root `.`/`..` aliases but preserves an attempted leading escape for host rejection; Windows
   drive-rooted containment compares path/root case-insensitively while preserving the candidate's casing),
   `shallowEqualArrays`, `userText`, `firstNonBlankLine` (first trimmed non-empty line, `undefined` when
@@ -115,11 +125,11 @@ not this module; the theme-aware highlighter remains app-local.
   boundary at 48 UTF-16 units with `…` — never inside a surrogate pair — as `source: "prompt"` with the full
   head as `tooltip`; else `chatName`'s generic label as `source: "default"`; every surface that shows a chat
   title renders one `chatLabel`, so trimming, the `data-title-source` marker and the tooltip agree and the
-  agent's or user's title replaces the label everywhere at once), `platformShortcutLabel`, `hasPlatformModifier`, `platformFamily`, `copyText`, `randomId`,
+  agent's or user's title replaces the label everywhere at once), `platformShortcutLabel`, `hasPlatformModifier`, `platformFamily`, `copyText`, `randomId`, `randomUuid`,
   `MCP_STATE_KEY`, `mcpStateLabel`, `mcpStateTone`, `mcpStatusLabel`, `mcpToolCountLabel`, `isMcpAttentionState`,
   `isMcpActiveState`, the `McpStateTone` type,
   `DOUBLE_CLICK_SETTLE_MS`, `firstClickOnly`, `doubleClickPendingMs`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,
-  `readLayoutSelection`, `readLayoutNavigationClock`, `sameLayoutAttention`, the `LayoutAttention`
+  `readLayoutSelection`, `readLayoutNavigationClock`, `sameLayoutAttention`, `nullProto`, the `LayoutAttention`
   type, and the keyboard gate shared by the shell's chords and the panels' plain-letter review
   shortcuts: `MODAL_LAYER_SELECTOR` + `hasLayer` (an open modal/dialog/alertdialog owns the keyboard)
   and `isTextEntryTarget` (inputs, textareas, selects and contenteditable keep their letters) —

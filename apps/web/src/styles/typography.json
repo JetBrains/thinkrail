@@ -1,7 +1,7 @@
 {
 	"$schema": "./typography.schema.json",
 	"metadata": {
-		"version": "3.1.0",
+		"version": "3.2.0",
 		"cssVarPrefix": "tr",
 		"classPrefix": "tr"
 	},
@@ -16,7 +16,8 @@
 				"sans-serif"
 			],
 			"kind": "proportional",
-			"selfHosted": ["@fontsource-variable/geist", "@fontsource-variable/geist/wght-italic.css"]
+			"selfHosted": ["@fontsource-variable/geist", "@fontsource-variable/geist/wght-italic.css"],
+			"userSelectable": true
 		},
 		"code": {
 			"stack": [
@@ -31,7 +32,9 @@
 			"selfHosted": [
 				"@fontsource-variable/jetbrains-mono",
 				"@fontsource-variable/jetbrains-mono/wght-italic.css"
-			]
+			],
+			"userSelectable": true,
+			"ligatures": "none"
 		},
 		"brand": {
 			"note": "Orbitron ships LATIN ONLY, and `brand.hero` renders a project's own name — so the next fallback is the interface face (Geist covers cyrillic/cyrillic-ext/latin-ext/vietnamese and is already bundled), not a system font. A non-Latin project name then falls back within our own type system instead of to whatever the OS supplies.",
@@ -56,6 +59,9 @@
 		"semibold": 600,
 		"brand": 400,
 		"button": 470
+	},
+	"fontWeightOffset": {
+		"exclude": ["brand"]
 	},
 	"fontSizes": {
 		"s10": 10,
@@ -87,6 +93,9 @@
 	},
 	"rootStyle": {
 		"$ref": "ui.default"
+	},
+	"codeSize": {
+		"fontSize": "s13"
 	},
 	"codeRow": {
 		"fontSize": "s11",
@@ -254,9 +263,27 @@
 				"textTransform": "none",
 				"fontStyle": "normal"
 			},
+			"block": {
+				"fontFamily": "code",
+				"fontSize": "code",
+				"fontWeight": "regular",
+				"lineHeight": "relaxed",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"editor": {
+				"fontFamily": "code",
+				"fontSize": "codeDense",
+				"fontWeight": "regular",
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
 			"document": {
 				"fontFamily": "code",
-				"fontSize": "s13",
+				"fontSize": "code",
 				"fontWeight": "regular",
 				"lineHeight": "code",
 				"letterSpacing": "normal",
@@ -322,7 +349,7 @@
 				"$ref": "code.text"
 			},
 			"codeBlock": {
-				"$ref": "code.text"
+				"$ref": "code.block"
 			},
 			"blockquote": {
 				"$ref": "body.reading"

@@ -11,7 +11,7 @@ async function main(): Promise<number> {
 			"playwright",
 			"test",
 			"-c",
-			"playwright.binary.config.ts",
+			"e2e/playwright.binary.config.ts",
 			...process.argv.slice(2),
 		],
 		{

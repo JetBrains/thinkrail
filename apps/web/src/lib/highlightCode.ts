@@ -1,6 +1,6 @@
 import { useEffect, useId, useState, useSyncExternalStore } from "react";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
-import { chatShikiLanguageId, createChatHighlighter } from "./highlighter";
+import { createChatHighlighter, shikiLanguageId } from "./highlighter";
 import type { HighlightReply, HighlightRequest } from "./highlighter.worker";
 
 interface HighlightWorker {
@@ -119,7 +119,7 @@ export function createHighlightClient({ spawn, inThread }: HighlightClientDeps) 
 	}
 
 	function runInThread(id: number, request: InFlight) {
-		inThread(request.code, request.lang)
+		void inThread(request.code, request.lang)
 			.catch(() => null)
 			.then((html) => settle(id, html));
 	}
@@ -159,12 +159,12 @@ export function createHighlightClient({ spawn, inThread }: HighlightClientDeps) 
 	}
 
 	function cachedHighlight(code: string, lang: string) {
-		const canonical = chatShikiLanguageId(lang);
+		const canonical = shikiLanguageId(lang);
 		return canonical ? readCache(cacheKey(code, canonical)) : null;
 	}
 
 	function highlightCode(code: string, lang: string, key: string) {
-		const canonical = chatShikiLanguageId(lang);
+		const canonical = shikiLanguageId(lang);
 		if (!canonical) return Promise.resolve(null);
 		const slot = slots.get(key);
 		const hit = readCache(cacheKey(code, canonical));

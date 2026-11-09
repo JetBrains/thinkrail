@@ -35,15 +35,17 @@ async function openThemeList(page: Page) {
 
 async function readThemeOptions(page: Page): Promise<ThemeOption[]> {
 	const dialog = await openThemeList(page);
-	const options = await dialog.locator('[data-testid^="theme-option-"]').evaluateAll((nodes) =>
-		nodes.map((node) => ({
-			id: node.getAttribute("data-theme-id") ?? "",
-			label: node.textContent?.trim() ?? "",
-			appearance: node.getAttribute("data-appearance") === "light" ? "light" : "dark",
-			contrast: node.getAttribute("data-contrast") === "high" ? "high" : "normal",
-			active: node.getAttribute("data-active") === "true",
-		})),
-	);
+	const options: ThemeOption[] = await dialog
+		.locator('[data-testid^="theme-option-"]')
+		.evaluateAll((nodes) =>
+			nodes.map((node) => ({
+				id: node.getAttribute("data-theme-id") ?? "",
+				label: node.textContent?.trim() ?? "",
+				appearance: node.getAttribute("data-appearance") === "light" ? "light" : "dark",
+				contrast: node.getAttribute("data-contrast") === "high" ? "high" : "normal",
+				active: node.getAttribute("data-active") === "true",
+			})),
+		);
 	await page.keyboard.press("Escape");
 	await expect(dialog).toBeHidden();
 	return options;

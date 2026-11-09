@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { expect, type Page, type TestInfo, test } from "@playwright/test";
 import type { Workspace } from "@thinkrail/contracts";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { expectDialogContained } from "./fixtures/dialogContainment";
 import { commitFile, gitAs } from "./fixtures/git";
 import {
 	type FakePr,
@@ -251,7 +252,7 @@ test("the Sync dialog hands a diverged branch to the agent to integrate", async 
 		const sync = page.getByTestId("scope-ship-remote-primary");
 		await expect(sync).toHaveAttribute("data-action", "sync");
 		await sync.click();
-		await expect(page.getByTestId("ship-sync-dialog")).toBeVisible();
+		await expectDialogContained(page.getByTestId("ship-sync-dialog"));
 		await page.getByTestId("ship-sync-agent").click();
 		await expect(page.getByTestId("ship-sync-dialog")).toHaveCount(0);
 		const message = lastUserMessage(page);

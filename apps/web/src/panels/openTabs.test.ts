@@ -64,7 +64,7 @@ afterAll(resetStore);
 
 const openedDiffTab = () => {
 	const tab = (useAppStore.getState().tabsByWorkspace.w1 ?? [])[0];
-	if (tab?.kind !== "diff") throw new Error("no diff tab opened");
+	if (tab?.kind !== "diff" || tab.before !== undefined) throw new Error("no git diff tab opened");
 	return tab;
 };
 

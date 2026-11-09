@@ -62,7 +62,18 @@ binary.
     (`scripts/build-blog.ts` + HTML string templates) is deleted.
   - *Lint caveat:* Biome parses only `.astro` frontmatter, so `noUnusedVariables`/`noUnusedImports`
     are disabled for `*.astro` in `biome.json` (template usage is invisible to it — every flag would
-    be a false positive). `astro check` covers the templates instead.
+    be a false positive). The typecheck covers the templates instead.
+  - *Typecheck:* TypeScript 7's `tsc --runExternalCode` checks `.astro` files through
+    `@astrojs/ts-content-mapper` (`contentMappers` in `tsconfig.json`; the mapper runs under `node`), since
+    `astro check` needs the TypeScript 6 programmatic API. `astro sync` runs first to generate
+    `.astro/types.d.ts`. `astro/client` pulls Astro's own `.astro` components into the program and
+    `skipLibCheck` does not skip them, so Astro must be >= 7.4.4, whose components pass under
+    `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess`. Astro 7.4.4 requires Node >= 22.23.4,
+    so the contributor Node floor in `CONTRIBUTING.md` and `README.md` is 22.23.4, above the 22.19 that
+    `pi` needs at runtime.
+  - *Test typecheck:* The `.astro` typecheck follows `tsconfig.json`, which excludes `*.test.ts`, so the
+    `typecheck` script also runs `tsconfig.test.json` over the site tests. `build` runs the whole
+    `typecheck`, so root CI and `site.yml` both check them.
 
 The parent owns the route-composition edges; the vibecoding leaf has no sibling dependency:
 
@@ -274,8 +285,8 @@ claim Functions. Pinned Wrangler `4.124.0` deploys from `apps/website` so its co
 and local Pages/D1 workflows; production applies committed attribution migrations before deploy. The
 build compiles the Functions, and a local Pages/D1 smoke starts Pages from the checked-in configuration,
 applies the actual migration, and exercises create, bind, and redeem. `.github/workflows/site.yml` runs
-`bun run --filter @thinkrail/website build` (`astro check`, the Functions typecheck and build, `astro
-build`, and artifact validation) on pushes that
+`bun run --filter @thinkrail/website build` (the full `typecheck` — `.astro`, Functions and tests — the
+Functions build, `astro build`, and artifact validation) on pushes that
 touch this module, [[module-website-analytics]], the root package manifest, or the lockfile (plus manual
 dispatch). It verifies the provider URL before succeeding. `thinkrail.ai` is the project's custom apex
 domain; provider URLs are deployment probes, not product identities.
@@ -339,6 +350,24 @@ current desktop-first hierarchy rather than freezing obsolete CLI-only instructi
   `src/youTubeEmbeds.ts` (Astro 7's native Markdown processor — the unified/rehype pipeline is a
   separate legacy package we don't carry) rewrites `youtube.com/embed` → `youtube-nocookie.com` and
   adds `title` + `loading="lazy"` when omitted. This keeps the no-consent-banner stance intact.
+- **Original post images are published as-is**: Astro rewrites only `img` sources to fingerprinted
+  WebP assets, so a Markdown link to `./images/<file>` would otherwise 404.
+  `src/pages/blog/[slug]/images/[file].ts` emits every image in a published post's `images/` folder
+  byte-for-byte at `/blog/<slug>/images/<file>`. It walks `publishedPosts()`, so draft images never ship.
+  The folder resolves from the Astro root (not the working directory); a post without `images/` has
+  none, but any other read failure fails the build, and `validateBuild` fails when a relative link on a
+  post has no built file — a silently empty route would otherwise ship 404 links.
+- **Table images are thumbnails**: a linked image's cell takes two thirds of its row and the image fills its
+  width at its own aspect ratio — no height cap, since a capped, letterboxed thumbnail left the cell's
+  width unused. The width stays definite so lazy images reserve their box before loading — a
+  `width: auto` box-fit was rejected because unloaded images collapse to 0×0, shift the layout and all
+  load at once. Below 520px of *content* width
+  (a container query: the blog pane's width does not follow the viewport) the cells stack. An all-empty
+  header row is hidden, so a post can lay rows out as header-less tables (e.g. alternating image sides).
+  Thumbnails are still Astro's full-resolution WebP, lazy-loaded; true downscaled thumbnails are deferred.
+  When the image is wrapped in a link, `src/imageZoom.ts` turns a plain primary click (or Enter on the
+  link) into a modal `<dialog>`, named by the image's alt, showing the link target; modified or
+  non-primary clicks and no-JS visits follow the link instead.
 - **Chrome: blog pages live inside the IDE shell**, not a separate page frame (decision, 2026-08 —
   the prior standalone blog header/footer is deleted). `BlogLayout.astro` renders through
   `IdeShell.astro`: the content sits in the same scrolling editor pane as the landing sections, in a

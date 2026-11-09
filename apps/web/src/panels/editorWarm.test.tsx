@@ -33,7 +33,8 @@ afterEach(() => {
 
 function stubIdle() {
 	const pending: (() => void)[] = [];
-	globalThis.requestIdleCallback = (run) => pending.push(run);
+	globalThis.requestIdleCallback = (run) =>
+		pending.push(() => run({ didTimeout: false, timeRemaining: () => 0 }));
 	globalThis.cancelIdleCallback = () => {};
 	return () => {
 		for (const run of pending.splice(0)) run();
