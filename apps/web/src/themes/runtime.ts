@@ -347,7 +347,7 @@ function colorSchemeMediaQuery(): ColorSchemeMediaQuery | null {
 		) {
 			return null;
 		}
-		return query;
+		return query as ColorSchemeMediaQuery;
 	} catch {
 		return null;
 	}

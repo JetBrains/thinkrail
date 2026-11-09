@@ -2794,7 +2794,7 @@ export async function refreshAvailableModels(force = false): Promise<RefreshedMo
 function readAvailableWireModels(generation: PiRuntimeGeneration): WireModel[] {
 	const authByProvider = new Map<string, WireModelAuth>();
 	return settledAvailableModels(generation.runtime).map((m) => {
-		const model = m as unknown as Model<string>;
+		const model: Model<string> = m;
 		let auth = authByProvider.get(model.provider);
 		if (!auth) {
 			auth = catalogProviderAuth(generation, model.provider);
