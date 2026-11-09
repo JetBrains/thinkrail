@@ -50,42 +50,51 @@ export function startWorkspaceFileReads({
 	update,
 }: WorkspaceFileReads): () => void {
 	let alive = true;
-	let issued = 0;
-	let applied = 0;
-	const settle = (ticket: number, next: (current: LoadedFile | null) => LoadedFile) => {
-		if (!alive || ticket < applied) return;
-		applied = ticket;
-		update(next);
+	let busy = false;
+	let again = false;
+	const settle = (next: (current: LoadedFile | null) => LoadedFile) => {
+		if (alive) update(next);
+	};
+	const followUp = () => {
+		busy = false;
+		if (!again || !alive) return;
+		again = false;
+		load();
 	};
 	const load = () => {
-		issued += 1;
-		const ticket = issued;
-		read().then(
-			({ content, meta }) =>
-				settle(ticket, (current) => {
-					const previous = ready(current);
-					if (previous && meta && meta.hash !== null && previous.meta.hash === meta.hash) {
-						return previous.stale === undefined
-							? previous
-							: { status: "ready", content: previous.content, meta: previous.meta };
-					}
-					return {
-						status: "ready",
-						content: resourceContent(content, meta, bytesUrl),
-						meta: meta ?? PENDING_TEXT_META,
-					};
-				}),
-			(error: unknown) =>
-				settle(ticket, (current) => {
-					const previous = ready(current);
-					const message = errorMessage(error);
-					if (previous)
-						return previous.stale === message ? previous : { ...previous, stale: message };
-					return current?.status === "error" && current.message === message
-						? current
-						: { status: "error", message };
-				}),
-		);
+		if (busy) {
+			again = true;
+			return;
+		}
+		busy = true;
+		new Promise<Awaited<ReturnType<typeof read>>>((resolve) => resolve(read()))
+			.then(
+				({ content, meta }) =>
+					settle((current) => {
+						const previous = ready(current);
+						if (previous && meta && meta.hash !== null && previous.meta.hash === meta.hash) {
+							return previous.stale === undefined
+								? previous
+								: { status: "ready", content: previous.content, meta: previous.meta };
+						}
+						return {
+							status: "ready",
+							content: resourceContent(content, meta, bytesUrl),
+							meta: meta ?? PENDING_TEXT_META,
+						};
+					}),
+				(error: unknown) =>
+					settle((current) => {
+						const previous = ready(current);
+						const message = errorMessage(error);
+						if (previous)
+							return previous.stale === message ? previous : { ...previous, stale: message };
+						return current?.status === "error" && current.message === message
+							? current
+							: { status: "error", message };
+					}),
+			)
+			.finally(followUp);
 	};
 	const unsubscribe = subscribe(load);
 	load();
