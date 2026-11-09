@@ -1944,6 +1944,7 @@
 	"settings.language.folder.label": "Language files folder",
 	"settings.language.folder.open": "Open folder",
 	"settings.language.folderCopied": "Folder path copied",
+	"settings.language.loadFailed": "Couldn't load the translation. English is shown until it loads.",
 	"settings.language.missingDescription": "{{tag}}.json is no longer in the folder. English is shown until it comes back.",
 	"settings.language.openFolderFailed": "Couldn't open the folder",
 	"settings.language.source.broken": "Can't be used",

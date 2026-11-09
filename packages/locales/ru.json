@@ -1946,6 +1946,7 @@
 	"settings.language.folder.label": "Папка с файлами языков",
 	"settings.language.folder.open": "Открыть папку",
 	"settings.language.folderCopied": "Путь к папке скопирован",
+	"settings.language.loadFailed": "Не удалось загрузить перевод. Пока он не загрузится, интерфейс на английском.",
 	"settings.language.missingDescription": "Файл {{tag}}.json больше не находится в папке. Пока он не появится снова, показывается английский текст.",
 	"settings.language.openFolderFailed": "Не удалось открыть папку",
 	"settings.language.source.broken": "Не удаётся использовать",

@@ -41,12 +41,12 @@ describe("message copy layout", () => {
 });
 
 describe("system and failure notices", () => {
-	test("an extension notice keeps its text; the round closer and failure notices follow the language", () => {
+	test("an extension notice keeps its text; the round closer and failure notices follow the language", async () => {
 		expect(renderRow({ kind: "system", id: "n", text: "Just so you know" }, false)).toContain(
 			"Just so you know",
 		);
 		expect(renderRow({ kind: "system", id: "done" }, false)).toContain("✓ Done");
-		applyLocale("de", {
+		await applyLocale("de", {
 			de: { "chat.turn.done": "✓ Fertig", "chat.failure.truncated": "Antwort abgeschnitten." },
 		});
 		try {
@@ -58,7 +58,7 @@ describe("system and failure notices", () => {
 				renderRow({ kind: "error", id: "e", text: "429 rate limited", failure: "error" }, false),
 			).toContain("429 rate limited");
 		} finally {
-			applyLocale("en", {});
+			await applyLocale("en", {});
 		}
 	});
 

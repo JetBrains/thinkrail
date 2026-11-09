@@ -149,15 +149,15 @@ describe("prefix registrations (one resolver for every registry read)", () => {
 });
 
 describe("summaries translate through the render translator", () => {
-	it("the summary receives the translator the caller renders with", () => {
+	it("the summary receives the translator the caller renders with", async () => {
 		registerToolRenderer("translated-summary-tool", () => null, {
 			summary: (_props, translate) => translate("desktop.menu.edit"),
 		});
-		applyLocale("de", { de: { "desktop.menu.edit": "Bearbeiten" } });
+		await applyLocale("de", { de: { "desktop.menu.edit": "Bearbeiten" } });
 		expect(getToolSummary(currentTranslator(), "translated-summary-tool", props({}))).toBe(
 			"Bearbeiten",
 		);
-		applyLocale("en", {});
+		await applyLocale("en", {});
 		expect(getToolSummary(currentTranslator(), "translated-summary-tool", props({}))).toBe("Edit");
 	});
 });
