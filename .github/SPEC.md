@@ -93,6 +93,10 @@ the one binary headless tests launch, and start it in the background right after
 step joins it, failing with its status, just before the browser tests, so the download overlaps the build
 instead of preceding it.
 
+The Lint & Typecheck job and the website workflows (`site.yml`, `site-preview.yml`) set up Node 22 before
+installing: the website typecheck and build run Astro 7.4 and its TypeScript content mapper under Node, which
+need >= 22.23.4, and the runner image's preinstalled Node is not guaranteed to be that recent.
+
 Jobs that typecheck or build the desktop app first download Electrobun's Hutch toolchain (Hutch, Cottontail,
 the Electrobun core and its Bun toolchain, all GitHub release assets) through
 `.github/scripts/prepare-electrobun.sh`, which retries `electrobun prepare` a bounded number of times;

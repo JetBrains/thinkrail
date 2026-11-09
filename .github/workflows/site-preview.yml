@@ -30,6 +30,9 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - run: bun install --frozen-lockfile
       - run: bun run --filter @thinkrail/website build
       - run: bun run --filter @thinkrail/website smoke:attribution

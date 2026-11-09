@@ -19,7 +19,8 @@ bug reports, include:
 ## Development setup
 
 **Prerequisites:** [Bun](https://bun.sh) 1.4.4 (the repository's pinned package manager and runtime),
-Node.js ≥ 22.19 (required by the in-process `pi` engine), and an authenticated `pi` provider for agent work.
+Node.js ≥ 22.23.4 (the in-process `pi` engine needs ≥ 22.19; the website build and typecheck need
+≥ 22.23.4 for Astro 7.4), and an authenticated `pi` provider for agent work.
 
 ```bash
 git clone <repo-url>
@@ -67,6 +68,10 @@ bun run lint        # biome
 bun run typecheck   # tsc across all packages
 bun run test        # unit tests (root tooling + each package)
 ```
+
+`typecheck` runs TypeScript 7's native `tsc`. TypeScript 7 ships no `tsserver`, so an editor set to "use the
+workspace TypeScript version" falls back to its bundled one; for the same checker as CI, use a TypeScript 7
+language-server integration (for VS Code, the TypeScript Native Preview extension).
 
 Every change that touches the app is verified by the end-to-end suite against the
 real UI. The no-agent gate builds once and automatically uses isolated parallel
