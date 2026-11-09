@@ -1,8 +1,8 @@
+import { useToolRegistry } from "@thinkrail/chat-ui/toolRegistry";
 import { useT } from "@thinkrail/locales/react";
 import { useEffect } from "react";
 import { hostSessionGlance, sessionGlance } from "../chat/planView";
 import { TodoAddRow, TodoRows } from "../chat/TodoList";
-import { useToolRegistry } from "../chat/toolRegistry";
 import { useChatTodos } from "../chat/useChatTodos";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";

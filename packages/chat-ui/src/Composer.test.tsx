@@ -15,13 +15,17 @@ const preferences: ModelPreferences = {
 	setDefault: () => {},
 };
 
-function render(externalModelPicker?: { open: (query: string) => void }): string {
+function render(
+	externalModelPicker?: { open: (query: string) => void },
+	divider?: boolean,
+): string {
 	return renderToStaticMarkup(
 		<TooltipProvider>
 			<Composer
 				value=""
 				onChange={() => {}}
 				isStreaming={false}
+				awaitingResponse={false}
 				growthLimit="half-chat"
 				commands={[]}
 				templatePending={false}
@@ -40,6 +44,7 @@ function render(externalModelPicker?: { open: (query: string) => void }): string
 				onSubmit={() => ({ accepted: true })}
 				onAbort={() => {}}
 				{...(externalModelPicker ? { externalModelPicker } : {})}
+				{...(divider === undefined ? {} : { divider })}
 			/>
 		</TooltipProvider>,
 	);
@@ -55,4 +60,11 @@ test("an external picker leaves the field free of model controls", () => {
 	const markup = render({ open: () => {} });
 	expect(markup).not.toContain('data-testid="model-selector"');
 	expect(markup).toContain('data-testid="chat-input"');
+});
+
+test("the composer draws its top divider unless the shell moves it elsewhere", () => {
+	const composerRoot = (markup: string) =>
+		markup.match(/<fieldset data-testid="chat-composer"[^>]*>/)?.[0] ?? "";
+	expect(composerRoot(render())).toContain("border-t");
+	expect(composerRoot(render(undefined, false))).not.toContain("border-t");
 });

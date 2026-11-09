@@ -45,16 +45,23 @@
 				"additionalProperties": false,
 				"required": ["from", "publish"],
 				"not": {
-					"required": ["alpha", "fallback"]
+					"anyOf": [
+						{ "required": ["alpha", "fallback"] },
+						{ "required": ["darkAlpha", "fallback"] }
+					]
 				},
 				"properties": {
 					"from": {
 						"type": "string",
-						"description": "A theme manifest key (THEME_COLOR_KEYS). The CSS variable it writes to is derived kebab-case, not tabulated: `borderStrong` -> `--border-strong`."
+						"description": "A theme manifest key (THEME_COLOR_KEYS), or a syntax or ANSI entry as `syntax.<key>` / `ansi.<key>`. The CSS variable it reads is derived kebab-case, not tabulated: `borderStrong` -> `--border-strong`, `syntax.type` -> `--code-type`, `ansi.brightBlack` -> `--ansi-bright-black`."
 					},
 					"alpha": {
 						"type": "string",
 						"description": "A step of `scale`. Omit for a solid colour."
+					},
+					"darkAlpha": {
+						"type": "string",
+						"description": "A step of `scale` that replaces `alpha` in a dark appearance (`:root[data-theme-appearance=\"dark\"]`). Omit to use `alpha` in both."
 					},
 					"fallback": {
 						"type": "string",

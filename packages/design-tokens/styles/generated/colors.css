@@ -1,5 +1,5 @@
 /*
- * GENERATED — do not edit. Source: `packages/design-tokens/styles/colors.json` (v1.1.0).
+ * GENERATED — do not edit. Source: `packages/design-tokens/styles/colors.json` (v1.3.0).
  * Regenerate with `bun run colors:generate`; `colors:check` fails when this file is stale.
  *
  * The semantic roles, then the Tailwind utility map. The palette they read is written to the
@@ -17,7 +17,7 @@
 	--container-sidebar-bg: var(--sidebar);
 	--container-terminal-bg: var(--sidebar);
 	--container-header-bg: var(--header);
-	--container-content-bg: var(--content); /* the recessed read-a-diff/read-code canvas, NOT the document canvas (that is workspace): Pierre source diffs, rendered diffs, Shiki code blocks, and the center-column backdrop behind them */
+	--container-content-bg: var(--content); /* the recessed read-a-diff/read-code canvas, NOT the document canvas (that is workspace): Pierre source diffs, rendered diffs, chat code blocks, and the center-column backdrop behind them */
 	--container-elevated-bg: var(--elevated); /* every raised surface: dialogs, popovers, menus, toasts, cards, code blocks */
 	--control-bg: var(--input);
 	--control-bg-hovered: var(--hover);
@@ -41,6 +41,7 @@
 	--border-default: var(--border-strong);
 	--border-muted: var(--border);
 	--primary: var(--accent);
+	--focus-ring: var(--accent); /* the keyboard focus indicator — the control ring and the active region's line and frame (COLOR.md, Active region); its own role so it can diverge from primary. Full accent is too loud on dark surfaces, so dark appearances take the `firm` (80%) step, which still clears APCA Lc 45 (themes/schema.test.ts) */
 	--primary-subtle: color-mix(in srgb, var(--accent) 10%, transparent);
 	--primary-soft: color-mix(in srgb, var(--accent) 20%, transparent);
 	--primary-muted: color-mix(in srgb, var(--accent) 40%, transparent);
@@ -68,6 +69,24 @@
 	--editor-find-match-bg: color-mix(in srgb, var(--warning) 40%, transparent); /* Monaco's active find match */
 	--widget-shadow: color-mix(in srgb, var(--text) 20%, transparent); /* Monaco widget, sticky-scroll, and scrollbar shadows */
 	--media-checker-tile: color-mix(in srgb, var(--text) 20%, transparent); /* the transparency checkerboard tile behind images and vector previews: the text colour at the soft (20%) step — the contrast of the conventional #ccc-on-white checkerboard — over the content canvas, so a dark logo on a transparent PNG stays visible on a dark theme and a light one on a light theme; index.css's `.media-backdrop` is the only consumer */
+	--series-1: var(--info); /* categorical palette (COLOR.md, Categorical series) — blue: the first categorical series (trace: search and discovery tools) */
+	--series-2: var(--code-type); /* categorical palette (COLOR.md, Categorical series) — orange in every bundled theme but High Contrast Dark (teal): writing tools */
+	--series-3: var(--code-annotation); /* categorical palette (COLOR.md, Categorical series) — violet (pale yellow in High Contrast Dark): model calls */
+	--series-4: var(--warning); /* categorical palette (COLOR.md, Categorical series) — amber: shell runs; meaning comes from the legend, not from the feedback role it shares a hue with */
+	--series-5: var(--ansi-cyan); /* categorical palette (COLOR.md, Categorical series) — cyan: reading tools */
+	--series-6: var(--ansi-magenta); /* categorical palette (COLOR.md, Categorical series) — magenta: subagents */
+	--series-7: var(--code-tag); /* categorical palette (COLOR.md, Categorical series) — green (blue in High Contrast Dark): planning tools (todo_*, spec_*) */
+	--series-8: var(--ansi-bright-black); /* categorical palette (COLOR.md, Categorical series) — neutral grey: the last series, for everything unclassified */
+	--ramp-1: color-mix(in srgb, var(--ansi-blue) 20%, transparent); /* sequential ramp (COLOR.md, Categorical series): one hue over the alpha scale, low to high; canvas consumers read it, and the action-sequence matrix colours its cells with the first four steps */
+	--ramp-2: color-mix(in srgb, var(--ansi-blue) 40%, transparent); /* sequential ramp (COLOR.md, Categorical series): one hue over the alpha scale, low to high; canvas consumers read it, and the action-sequence matrix colours its cells with the first four steps */
+	--ramp-3: color-mix(in srgb, var(--ansi-blue) 60%, transparent); /* sequential ramp (COLOR.md, Categorical series): one hue over the alpha scale, low to high; canvas consumers read it, and the action-sequence matrix colours its cells with the first four steps */
+	--ramp-4: color-mix(in srgb, var(--ansi-blue) 80%, transparent); /* sequential ramp (COLOR.md, Categorical series): one hue over the alpha scale, low to high; canvas consumers read it, and the action-sequence matrix colours its cells with the first four steps */
+	--ramp-5: var(--ansi-blue); /* sequential ramp (COLOR.md, Categorical series): one hue over the alpha scale, low to high; canvas consumers read it, and it is published when a DOM chart needs it */
+}
+
+/* Roles that take a different alpha step in a dark appearance (`darkAlpha`). */
+:root[data-theme-appearance="dark"] {
+	--focus-ring: color-mix(in srgb, var(--accent) 80%, transparent);
 }
 
 /* Appearance-level effects. The theme engine stamps `data-theme-appearance` before React mounts, so
@@ -122,6 +141,7 @@
 	--color-border-default: var(--border-default);
 	--color-border-muted: var(--border-muted);
 	--color-primary: var(--primary);
+	--color-focus-ring: var(--focus-ring);
 	--color-primary-subtle: var(--primary-subtle);
 	--color-primary-soft: var(--primary-soft);
 	--color-primary-muted: var(--primary-muted);
@@ -140,6 +160,18 @@
 	--color-feedback-warning-muted: var(--feedback-warning-muted);
 	--color-bubble-user-bg: var(--bubble-user-bg);
 	--color-bubble-user-border: var(--bubble-user-border);
+	--color-series-1: var(--series-1);
+	--color-series-2: var(--series-2);
+	--color-series-3: var(--series-3);
+	--color-series-4: var(--series-4);
+	--color-series-5: var(--series-5);
+	--color-series-6: var(--series-6);
+	--color-series-7: var(--series-7);
+	--color-series-8: var(--series-8);
+	--color-ramp-1: var(--ramp-1);
+	--color-ramp-2: var(--ramp-2);
+	--color-ramp-3: var(--ramp-3);
+	--color-ramp-4: var(--ramp-4);
 	--color-sunken: var(--sunken);
 	--color-overlay: var(--overlay);
 }

@@ -170,16 +170,20 @@ What a `./web` half may import:
   `registerWebExtensions()` feeds their `toolRenderers` into the chat tool registry, ignoring the switch,
   and tags each registration with its extension's `name` (the chat hides a switched-off extension's
   composer suggestions); the same list feeds their `panels` to the shell (the extension tab body, the
-  palette and the panels' chat and rail entry points). `Shell` mounts the `globalOverlay` of each extension not in `disabledExtensions`, and the
-  cheatsheet adds their `shortcuts` ([[submodule-web-extensions]]). App-local tool registrations retain
-  their side-effect imports; extension descriptors need none.
+  palette and the panels' chat and rail entry points). `Shell` mounts the `globalOverlay` of each extension not in `disabledExtensions`,
+  and the cheatsheet adds their `shortcuts` ([[submodule-web-extensions]]). App-local tool registrations
+  retain their side-effect imports; extension descriptors need none.
+- **Phone:** `apps/mobile/src/extensions.ts` is the phone's own web registry over the same `./web`
+  descriptors. It is a second list on purpose: a phone renders only the cards that work without the IDE's
+  workbench, so an extension joins it once its cards degrade there (visualize's file preview renders nothing
+  without a resource host and leaves the path).
 
 ## Boundary rules (enforced by `scripts/check-module-boundaries.ts`, with negative tests)
 
 - Discovery of `pi-extensions/*` and `thinkrail-extensions/*` as workspace roots.
 - **Source halves:** inside every extension, `web/**` and `server/**` never import each other, including
   by relative path.
-- **Public subpaths:** `apps/web` may import only `@thinkrail/ext-*/web`; `packages/server` only
+- **Public subpaths:** `apps/web` and `apps/mobile` may import only `@thinkrail/ext-*/web`; `packages/server` only
   `@thinkrail/ext-*/server`. `@thinkrail/extension-api/installed` is imported only by the two
   installed-extension runtimes (`apps/web/src/extensions`, `packages/server/src/extensions/installed`),
   never by an extension half.

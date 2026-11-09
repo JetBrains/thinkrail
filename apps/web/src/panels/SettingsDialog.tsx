@@ -40,6 +40,7 @@ import { LanguageSettings } from "./LanguageSettings";
 import { McpSettings } from "./McpSettings";
 import { ModelsSettings } from "./ModelsSettings";
 import { NotificationsSettings } from "./NotificationsSettings";
+import { PhoneAccessSettings } from "./PhoneAccessSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { ProvidersSettings } from "./ProvidersSettings";
 import { SettingsSearchField, SettingsSearchResults } from "./SettingsSearchView";
@@ -104,6 +105,8 @@ function sectionContent(section: SettingsSection, injected: SectionContent): Rea
 			return <TerminalSettings />;
 		case SettingsSection.Voice:
 			return <VoiceSettings />;
+		case SettingsSection.Phone:
+			return <PhoneAccessSettings />;
 		case SettingsSection.Workspaces:
 			return <WorkspacesSettings />;
 		case SettingsSection.Github:

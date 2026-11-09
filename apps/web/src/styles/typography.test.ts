@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CODE_FONT_SIZE, DEFAULT_CONFIG } from "@thinkrail/contracts";
-import { normalizeEol } from "../../scripts/generatedFiles";
-import type { Style, StyleRef, Typography } from "../../scripts/typography";
+import { normalizeEol } from "@thinkrail/design-tokens/scripts/generatedFiles";
+import type { Style, StyleRef, Typography } from "@thinkrail/design-tokens/scripts/typography";
 import {
 	allStyles,
 	codeDenseDelta,
@@ -23,7 +23,7 @@ import {
 	resolveStyle,
 	styleClassName,
 	validate,
-} from "../../scripts/typography";
+} from "@thinkrail/design-tokens/scripts/typography";
 
 const typography = loadTypography();
 const SRC = fileURLToPath(new URL("..", import.meta.url));
@@ -123,6 +123,18 @@ describe("typography source", () => {
 			expect(stack, family).toContain(family);
 		}
 		expect(stack.at(-1)).toBe("monospace");
+	});
+
+	it("names the range-limited CJK aliases before -apple-system, which on iOS 26 swallows CJK as boxes", () => {
+		for (const id of ["interface", "brand"]) {
+			const stack = resolveFamily(typography, id).stack;
+			const system = stack.indexOf("-apple-system");
+			for (const face of ["TR Kana", "TR Han", "TR Hangul"]) {
+				const at = stack.indexOf(face);
+				expect(at, `${id} names ${face}`).toBeGreaterThan(-1);
+				expect(at, `${id} names ${face} before -apple-system`).toBeLessThan(system);
+			}
+		}
 	});
 
 	it("names a semantic style for the document base instead of repeating one", () => {

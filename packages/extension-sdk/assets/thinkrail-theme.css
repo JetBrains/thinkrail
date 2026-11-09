@@ -1,4 +1,4 @@
-/* Generated from apps/web/src by @thinkrail/extension-sdk — do not edit. Reference-only: import it with theme(reference). */
+/* Generated from apps/web/src and packages/design-tokens by @thinkrail/extension-sdk — do not edit. Reference-only: import it with theme(reference). */
 
 @theme inline {
 	--color-*: initial;
@@ -94,6 +94,38 @@
 	--spacing-chat-gutter: var(--chat-gutter);
 	--spacing-window-chrome-inset-left: var(--window-chrome-inset-left, 0px);
 	--spacing-window-chrome-inset-right: var(--window-chrome-inset-right, 0px);
+	--animate-loading-in: loading-in 150ms ease-out 300ms both;
+	@keyframes loading-in {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
+	@keyframes toast-in {
+		from {
+			opacity: 0;
+			transform: translateY(12px);
+		}
+		to {
+			opacity: 1;
+			transform: none;
+		}
+	}
+	@keyframes toast-out {
+		from {
+			opacity: 1;
+			transform: none;
+		}
+		to {
+			opacity: 0;
+			transform: translateY(12px);
+		}
+	}
+}
+
+@theme inline {
 	--animate-reveal: reveal 150ms ease-out;
 	@keyframes reveal {
 		from {
@@ -103,15 +135,6 @@
 		to {
 			opacity: 1;
 			transform: none;
-		}
-	}
-	--animate-loading-in: loading-in 150ms ease-out 300ms both;
-	@keyframes loading-in {
-		from {
-			opacity: 0;
-		}
-		to {
-			opacity: 1;
 		}
 	}
 	--animate-loader-frame: loader-frame 3.263s infinite;
@@ -225,26 +248,6 @@
 		55.834%,
 		100% {
 			stroke-dashoffset: -1000;
-		}
-	}
-	@keyframes toast-in {
-		from {
-			opacity: 0;
-			transform: translateY(12px);
-		}
-		to {
-			opacity: 1;
-			transform: none;
-		}
-	}
-	@keyframes toast-out {
-		from {
-			opacity: 1;
-			transform: none;
-		}
-		to {
-			opacity: 0;
-			transform: translateY(12px);
 		}
 	}
 }

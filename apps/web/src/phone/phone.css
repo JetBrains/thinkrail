@@ -1,0 +1,51 @@
+@import "tailwindcss";
+@import "@thinkrail/design-tokens/styles.css";
+@import "@thinkrail/ui/custom-icon.css";
+
+@source "../../../../packages/ui";
+@source "../../../../packages/chat-ui/src";
+@source "../../../../thinkrail-extensions/*/web/**/*.{ts,tsx}";
+
+@custom-variant button-disabled (&:is([data-disabled="true"], :disabled:not([data-loading])));
+
+@theme inline {
+	--font-sans: var(--tr-font-family-interface);
+	--font-mono: var(--tr-font-family-code);
+	--spacing-touch: 44px;
+	--spacing-safe-top: env(safe-area-inset-top);
+	--spacing-safe-bottom: env(safe-area-inset-bottom);
+	--spacing-chat-gutter: var(--space-16);
+}
+
+:root {
+	--tr-font-size-s10: 12px;
+	--tr-font-size-s11: 13px;
+	--tr-font-size-s12: 15px;
+	--tr-font-size-s13: 16px;
+	--tr-font-size-s14: 17px;
+	--tr-font-size-s16: 19px;
+	--tr-font-size-s18: 20px;
+	--tr-font-size-s20: 24px;
+	--tr-font-size-s24: 28px;
+}
+
+html,
+body,
+#root {
+	height: 100%;
+	margin: 0;
+	overflow: hidden;
+}
+
+body {
+	background: var(--container-workspace-bg);
+	color: var(--text-default);
+	-webkit-font-smoothing: antialiased;
+	-webkit-tap-highlight-color: transparent;
+	overscroll-behavior: none;
+}
+
+/* A long path or URL in a chat list item would push its text below an inside marker on a phone-width column. */
+.tr-prose-chat :is(ul, ol) {
+	list-style-position: outside;
+}

@@ -531,7 +531,7 @@ the shared **`useProviderAuth`** hook, which `ProvidersSettings` uses too: the s
 (above), re-read once whenever one of them opens — Central's install state and similar host-local facts change
 without a push — `startLogin` / `logout`, and the store-driven
 `LoginDialog` node. For an `anthropic` login started as `oauth` (`LoginState.method`), the node carries the sign-in
-`chat/ExtraUsageNotice` while the report's `warnings.anthropicExtraUsage` is not `false`
+`@thinkrail/chat-ui/ExtraUsageNotice` while the report's `warnings.anthropicExtraUsage` is not `false`
 (`warnsExtraUsageOnSignIn`; an older host's report has no `warnings`, so the notice shows). Exactly one surface mounts that node: Settings → Providers while Settings is open, otherwise the
 connect surface (`ownsLoginDialog`), so a login never renders two stacked dialogs. **Post-connect handoff:**
 when a provider that was not configured when the surface opened becomes configured — an OAuth / API-key
@@ -759,8 +759,8 @@ a project picker, the prompt hero, and the reused
   2026-11-17). At `md`+ the tabs are a rail grouped **Agent** (Models, Providers, Subagents — the global
   settings, this workspace's override and the available agent roles —, Extensions & skills, MCP servers, Prompt templates, Environment) ·
   **Interface** (Appearance, Text & fonts — fonts, custom fonts and both line widths —, Chat, Layout,
-  Keyboard, Language, Voice input, Terminal) · **System** (Workspaces, Integrations, Notifications, Privacy,
-  Updates). Integrations keeps section id `github`: today it is the GitHub CLI page
+  Keyboard, Language, Voice input, Terminal) · **System** (Workspaces, Integrations, Notifications, Phone
+  access, Privacy, Updates). Integrations keeps section id `github`: today it is the GitHub CLI page
   and it is the home for further integrations. Below `md` the same list is a horizontal scrolling strip without group labels. The
   Feedback tab (`settings-nav-feedback`, “Share feedback”) belongs to that list at
   every width, pinned to the rail's bottom at `md`+. There is no Artifacts section (its one switch, Smart
@@ -1390,6 +1390,21 @@ a project picker, the prompt hero, and the reused
   channel — the visible, in-app acquisition path that does not depend on an
   out-of-focus event. The notification pipeline, suppression, and away-path permission preface live in
   [[submodule-web-notifications]].
+  **`PhoneAccessSettings`** (`phone`, from `REMOTE_ACCESS_PROTOCOL_VERSION`) is phone access over `remote.*`:
+  the switch applies at once (no draft — it starts or stops a listener), while on it shows a one-time
+  pairing code with its expiry and a Copy link action, polls `remote.status` while on so a phone that pairs
+  closes the code with a toast, and lists paired phones (`PhoneDeviceRow`: marked "Connected now" while live,
+  renamed in place with the pencil, **Read / Write** access applied at once, Revoke).
+  `PhoneAccessNetwork` is the network check below it — one row per route (same Wi‑Fi, Tailscale, Internet,
+  or the `--relay` URL alone) with the addresses found and what a missing or closed route needs — plus a
+  Wi‑Fi-only notice pointing at Tailscale. Both views read routes from the one `phoneReach` derivation. The QR is an `<img>` of the `qrcode` SVG, which
+  carries its own black-on-white: a scanner needs dark modules on a light field in every theme, so this image
+  is the one place UI colour is not a token. `PhoneAccessView` is the props-only half the unit test renders;
+  the requests live in `usePhoneAccess`, which the topbar's quick panel shares, and every transition in the
+  pure `phoneAccessState.ts` reducer (unit-tested): a phone pairing from the shown code replaces it with who
+  paired, a failed mint ends the wait, the quick panel's own code waits for the internet check so it carries a
+  public address found, and turning access off bumps a generation so a code minted before it —
+  dead once the relay restarts — is never shown.
   **`PrivacySettings`** manages the additional-data preference and
   confirmation together: one **Usage analytics** group with the **Share additional usage data** switch
   (Reset to `DEFAULT_CONFIG`'s off) over the report details as visible text; the event contract belongs to

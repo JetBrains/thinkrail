@@ -10,8 +10,10 @@ const MODEL_NAME = "model";
 export function compactSubmissionError(
 	hasDraftImages: boolean,
 	hasQueuedImages: boolean,
+	hasDraftFiles = false,
 ): string | null {
 	if (hasDraftImages) return translate("chat.commands.compactImageError");
+	if (hasDraftFiles) return translate("chat.commands.compactFileError");
 	return hasQueuedImages ? translate("chat.commands.compactQueuedImageError") : null;
 }
 
@@ -87,9 +89,14 @@ export function parseNativeChatCommand(
 	return text.startsWith("/name ") ? { kind: "name", title: text.slice(6) } : null;
 }
 
-export function prepareNameChatCommand(titleInput: string, hasImages: boolean): PreparedChatTitle {
-	return hasImages
-		? { reason: translate("chat.commands.nameImageError") }
+export function prepareNameChatCommand(
+	titleInput: string,
+	hasImages: boolean,
+	hasFiles = false,
+): PreparedChatTitle {
+	if (hasImages) return { reason: translate("chat.commands.nameImageError") };
+	return hasFiles
+		? { reason: translate("chat.commands.nameFileError") }
 		: prepareChatTitle(titleInput);
 }
 

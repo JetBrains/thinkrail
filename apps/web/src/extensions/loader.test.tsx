@@ -1,4 +1,15 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { type ChatActions, ChatActionsContext } from "@thinkrail/chat-ui/ChatActions";
+import { InteractionStatesContext } from "@thinkrail/chat-ui/interactionState";
+import { ToolRendererBody } from "@thinkrail/chat-ui/ToolRendererBody";
+import {
+	currentToolRegistry,
+	DefaultToolRenderer,
+	getToolRenderer,
+	getToolSummary,
+	isInteractiveTool,
+	resolveProminence,
+} from "@thinkrail/chat-ui/toolRegistry";
 import type { ToolRenderer, ToolRenderProps } from "@thinkrail/extension-api/web";
 import { currentTranslator } from "@thinkrail/locales/react";
 import {
@@ -11,17 +22,6 @@ import {
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { forwardRef, memo } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { type ChatActions, ChatActionsContext } from "../chat/ChatActions";
-import { InteractionStatesContext } from "../chat/interactionState";
-import { ToolRendererBody } from "../chat/ToolRendererBody";
-import {
-	currentToolRegistry,
-	DefaultToolRenderer,
-	getToolRenderer,
-	getToolSummary,
-	isInteractiveTool,
-	resolveProminence,
-} from "../chat/toolRegistry";
 import { followInstalledWebExtensions } from "./follow";
 import { installExtensionHost } from "./index";
 import {

@@ -7,16 +7,19 @@ import {
 	useState,
 	useSyncExternalStore,
 } from "react";
+import { escapeHtml, HIGHLIGHT_PRE_END } from "./highlightHtml";
 
 /** The host's syntax highlighter: a synchronous cache read and a keyed request; `null` means show plain text. */
 export interface CodeHighlighter {
 	cached(code: string, lang: string): string | null;
 	highlight(code: string, lang: string, key: string): Promise<string | null>;
+	release(key: string): void;
 }
 
 const NO_HIGHLIGHT: CodeHighlighter = {
 	cached: () => null,
 	highlight: () => Promise.resolve(null),
+	release: () => {},
 };
 
 const HighlighterContext = createContext<CodeHighlighter>(NO_HIGHLIGHT);
@@ -30,8 +33,6 @@ export function CodeHighlighterProvider({
 }) {
 	return <HighlighterContext.Provider value={highlighter}>{children}</HighlighterContext.Provider>;
 }
-
-const PRE_END = "</code></pre>";
 
 export interface ShownHighlight {
 	seq: number;
@@ -48,9 +49,8 @@ export function staleHighlight(code: string, lang: string, latest: ShownHighligh
 	if (!latest || latest.lang !== lang || !code.startsWith(latest.code)) return null;
 	const tail = code.slice(latest.code.length);
 	if (!tail) return latest.html;
-	if (!latest.html.endsWith(PRE_END)) return null;
-	const escaped = tail.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-	return latest.html.slice(0, -PRE_END.length) + escaped + PRE_END;
+	if (!latest.html.endsWith(HIGHLIGHT_PRE_END)) return null;
+	return latest.html.slice(0, -HIGHLIGHT_PRE_END.length) + escapeHtml(tail) + HIGHLIGHT_PRE_END;
 }
 
 let highlightSeq = 0;
@@ -79,6 +79,8 @@ export function useHighlightedCode(code: string, lang: string): string | null {
 			if (html !== null) setLatest((shown) => newerHighlight(shown, { seq, code, lang, html }));
 		});
 	}, [highlighter, code, lang, key]);
+
+	useEffect(() => () => highlighter.release(key), [highlighter, key]);
 
 	return cached ?? staleHighlight(code, lang, latest);
 }

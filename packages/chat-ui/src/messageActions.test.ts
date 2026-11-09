@@ -1,6 +1,22 @@
 import { describe, expect, test } from "bun:test";
 import { deriveMessageActions } from "./messageActions";
-import type { ChatRow } from "./rows";
+import type { ChatRow, RoutineToolStep } from "./rows";
+import { registerToolRenderer } from "./toolRegistry";
+
+registerToolRenderer("suggest-test", () => null, { composerSuggestions: () => ["Next"] });
+
+function toolStep(id: string, toolName: string): RoutineToolStep {
+	return {
+		kind: "tool",
+		id,
+		toolCallId: id,
+		toolName,
+		args: {},
+		tool: { status: "done", raw: {} },
+		dead: false,
+		streaming: false,
+	};
+}
 
 function user(id: string): ChatRow {
 	return { kind: "user", id, message: { role: "user", content: id, timestamp: 0 } };
@@ -20,7 +36,15 @@ describe("deriveMessageActions", () => {
 			{
 				kind: "divider",
 				id: "divider-1",
-				data: { elapsedMs: 1, toolCount: 0, specs: [], changedFiles: [], receipt: null },
+				data: {
+					outcome: "done",
+					elapsedMs: 1,
+					toolCount: 0,
+					specs: [],
+					changedFiles: [],
+					artifacts: [],
+					receipt: null,
+				},
 			},
 			user("user-2"),
 			markdown("answer-2"),
@@ -37,6 +61,26 @@ describe("deriveMessageActions", () => {
 		expect([...state.finalAnswerRowIds].sort()).toEqual(["answer-1", "answer-2"]);
 	});
 
+	test("a trailing suggestions call leaves the answer before it final; any other tool does not", () => {
+		const suggested: ChatRow[] = [
+			user("user-1"),
+			markdown("answer-1"),
+			{ kind: "activity", id: "activity-1", steps: [toolStep("s1", "suggest-test")], live: false },
+		];
+		expect([...deriveMessageActions(suggested, false).finalAnswerRowIds]).toEqual(["answer-1"]);
+		const mixed: ChatRow[] = [
+			user("user-1"),
+			markdown("narration-1"),
+			{
+				kind: "activity",
+				id: "activity-1",
+				steps: [toolStep("s1", "suggest-test"), toolStep("b1", "bash")],
+				live: false,
+			},
+		];
+		expect([...deriveMessageActions(mixed, false).finalAnswerRowIds]).toEqual([]);
+	});
+
 	test("an incoming result opens its own round, so the answer before it stays final", () => {
 		const rows: ChatRow[] = [
 			user("user-1"),
@@ -44,7 +88,15 @@ describe("deriveMessageActions", () => {
 			{
 				kind: "divider",
 				id: "divider-1",
-				data: { elapsedMs: 1, toolCount: 0, specs: [], changedFiles: [], receipt: null },
+				data: {
+					outcome: "done",
+					elapsedMs: 1,
+					toolCount: 0,
+					specs: [],
+					changedFiles: [],
+					artifacts: [],
+					receipt: null,
+				},
 			},
 			{
 				kind: "backgroundCommandCompletion",

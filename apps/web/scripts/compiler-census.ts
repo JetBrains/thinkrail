@@ -3,12 +3,16 @@ import { existsSync, readFileSync } from "node:fs";
 import { relative, resolve, sep } from "node:path";
 import { type NodePath, parseSync, transformFromAstSync, traverse, type types } from "@babel/core";
 import {
+	type GeneratedFile,
+	normalizeEol,
+	writeOrCheck,
+} from "@thinkrail/design-tokens/scripts/generatedFiles";
+import {
 	type LoggerEvent,
 	type PluginOptions,
 	parsePluginOptions,
 } from "babel-plugin-react-compiler";
 import { designSourceFiles } from "./designSources";
-import { type GeneratedFile, normalizeEol, writeOrCheck } from "./generatedFiles";
 
 // Must match `reactCompilerPreset()` in vite.config.ts.
 const COMPILER_OPTIONS: PluginOptions = {};

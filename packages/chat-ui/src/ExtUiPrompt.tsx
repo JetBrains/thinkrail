@@ -3,9 +3,17 @@ import { AttentionLine } from "@thinkrail/ui/attention-line";
 import { Button } from "@thinkrail/ui/button";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
-import { createContext, useContext, useEffect, useId, useRef, useState } from "react";
+import {
+	createContext,
+	type RefObject,
+	useContext,
+	useId,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from "react";
 import { ACTIVITY_BREADCRUMB_HEIGHT } from "./activityBreadcrumbs";
-import { useChatActions } from "./ChatActions";
+import { type ChatActions, useChatActions } from "./ChatActions";
 import { ToolArgList, toolArgEntries } from "./ToolArgList";
 import type { ExtUiDialogRequest } from "./types";
 
@@ -16,19 +24,55 @@ const OPTION_BUTTON = "max-w-full";
 const WRAPPING_OPTION =
 	"h-auto min-h-24 max-w-full justify-start whitespace-normal break-words py-2 text-left";
 
+export function useArrivalReveal(
+	rootRef: RefObject<HTMLElement | null>,
+	anchored: boolean,
+	revealOpen: (() => boolean) | undefined,
+	onRevealed: (() => void) | undefined,
+	actions: Pick<ChatActions, "cancelAutomaticReveal" | "revealChatElement"> | null,
+) {
+	useLayoutEffect(() => {
+		if (!anchored || !revealOpen?.()) return;
+		const yieldToUser = () => actions?.cancelAutomaticReveal();
+		const frame = requestAnimationFrame(() => {
+			const root = rootRef.current;
+			if (!root) return;
+			window.addEventListener("pointerdown", yieldToUser, { capture: true, once: true });
+			window.addEventListener("keydown", yieldToUser, { capture: true, once: true });
+			window.addEventListener("wheel", yieldToUser, { capture: true, once: true, passive: true });
+			actions?.revealChatElement(root, {
+				block: "nearest",
+				provenance: "automatic-attention",
+				runway: "release",
+				stability: "bounded",
+				topInset: ACTIVITY_BREADCRUMB_HEIGHT,
+			});
+			onRevealed?.();
+		});
+		return () => {
+			cancelAnimationFrame(frame);
+			window.removeEventListener("pointerdown", yieldToUser, { capture: true });
+			window.removeEventListener("keydown", yieldToUser, { capture: true });
+			window.removeEventListener("wheel", yieldToUser, { capture: true });
+		};
+	}, [actions, anchored, revealOpen, onRevealed, rootRef]);
+}
+
 export function ExtUiPrompt({
 	request,
 	onReply,
 	draft,
 	onDraftChange,
-	claimReveal,
+	revealOpen,
+	onRevealed,
 	className,
 }: {
 	request: ExtUiDialogRequest;
 	onReply: ExtUiReply;
 	draft?: string | undefined;
 	onDraftChange?: ((text: string) => void) | undefined;
-	claimReveal?: (() => boolean) | undefined;
+	revealOpen?: (() => boolean) | undefined;
+	onRevealed?: (() => void) | undefined;
 	className?: string;
 }) {
 	const t = useT();
@@ -48,30 +92,7 @@ export function ExtUiPrompt({
 	const anchored = request.toolCallId !== undefined;
 	const toolArgs = request.toolInput ? toolArgEntries(request.toolInput) : [];
 
-	useEffect(() => {
-		if (!anchored) return;
-		const yieldToUser = () => actions?.cancelAutomaticReveal();
-		const frame = requestAnimationFrame(() => {
-			const root = rootRef.current;
-			if (!root || !claimReveal?.()) return;
-			window.addEventListener("pointerdown", yieldToUser, { capture: true, once: true });
-			window.addEventListener("keydown", yieldToUser, { capture: true, once: true });
-			window.addEventListener("wheel", yieldToUser, { capture: true, once: true, passive: true });
-			actions?.revealChatElement(root, {
-				block: "nearest",
-				provenance: "automatic-attention",
-				runway: "release",
-				stability: "bounded",
-				topInset: ACTIVITY_BREADCRUMB_HEIGHT,
-			});
-		});
-		return () => {
-			cancelAnimationFrame(frame);
-			window.removeEventListener("pointerdown", yieldToUser, { capture: true });
-			window.removeEventListener("keydown", yieldToUser, { capture: true });
-			window.removeEventListener("wheel", yieldToUser, { capture: true });
-		};
-	}, [actions, anchored, claimReveal]);
+	useArrivalReveal(rootRef, anchored, revealOpen, onRevealed, actions);
 
 	const answer: ExtUiReply = (value) => {
 		const held = document.activeElement;
@@ -121,7 +142,7 @@ export function ExtUiPrompt({
 							aria-label={t("chat.extUi.arguments")}
 							tabIndex={0}
 							entries={toolArgs}
-							className="max-h-[40vh] shrink-0 overflow-y-auto rounded-sm bg-container-header-bg px-8 py-4 outline-none focus-visible:ring-2 focus-visible:ring-primary"
+							className="max-h-[40vh] shrink-0 overflow-y-auto rounded-sm bg-container-header-bg px-8 py-4 focus-visible:focus-ring"
 						/>
 					) : null}
 
@@ -139,7 +160,7 @@ export function ExtUiPrompt({
 									answer(text);
 								}
 							}}
-							className="rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:border-control-border-active"
+							className="rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default placeholder:text-text-muted focus-visible:focus-ring focus-visible:border-control-border-active"
 						/>
 					) : null}
 
@@ -150,7 +171,7 @@ export function ExtUiPrompt({
 							value={text}
 							rows={6}
 							onChange={(e) => setText(e.target.value)}
-							className="max-h-[40cqh] min-h-[6lh] resize-y rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default outline-none focus-visible:border-control-border-active"
+							className="max-h-[40cqh] min-h-[6lh] resize-y rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default focus-visible:focus-ring focus-visible:border-control-border-active"
 						/>
 					) : null}
 
@@ -210,7 +231,8 @@ export interface PendingExtUi {
 	reply: ExtUiReply;
 	draft: () => string | undefined;
 	rememberDraft: (text: string) => void;
-	claimReveal: () => boolean;
+	revealOpen: () => boolean;
+	closeReveal: () => void;
 }
 
 export function PendingExtUiPrompt({
@@ -227,7 +249,8 @@ export function PendingExtUiPrompt({
 			onReply={pending.reply}
 			draft={pending.draft()}
 			onDraftChange={pending.rememberDraft}
-			claimReveal={pending.claimReveal}
+			revealOpen={pending.revealOpen}
+			onRevealed={pending.closeReveal}
 			{...(className ? { className } : {})}
 		/>
 	);

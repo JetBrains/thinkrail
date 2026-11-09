@@ -3,8 +3,11 @@ import { openFirstRelay, type RelaySocket, RelayUnreachableError } from "./relay
 
 class FakeSocket implements RelaySocket {
 	closed = false;
-	private listeners = new Map<string, Set<() => void>>();
-	constructor(readonly url: string) {}
+	private readonly listeners = new Map<string, Set<() => void>>();
+	readonly url: string;
+	constructor(url: string) {
+		this.url = url;
+	}
 	addEventListener(type: string, listener: () => void): void {
 		if (!this.listeners.has(type)) this.listeners.set(type, new Set());
 		this.listeners.get(type)?.add(listener);

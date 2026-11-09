@@ -99,7 +99,7 @@ IDE shell.
   brand elements (wordmark + hero heading), falling back to `--font-sans`; section headings and the
   tagline are the interface face (`--font-sans`), matching the app.
 - **Brand values are copied, not imported.** Theme palettes are lifted at authoring time from
-  `apps/web/src/themes/bundled/*.theme.json` (dark = default, darcula, light, gruvbox) into the site's
+  `packages/design-tokens/themes/*.theme.json` (dark = default, darcula, light, gruvbox) into the site's
   own CSS custom properties under `[data-theme]`; the site never reaches into `apps/web` at build time
   (the app's tokens assume the theme engine's runtime swap).
 - **IDE-shell page chrome is single-sourced in components.** `src/components/BaseHead.astro` is the one
@@ -130,7 +130,7 @@ IDE shell.
 - **The primary button (and the hero's brand accents) are per-theme, not a brand constant** (decision
   reversed 2026-08 on review — the light theme kept the dark theme's bright green): the
   `--control-primary-*` tokens mirror the app's semantic mapping (`bg = accent`, `hovered =
-  accentHover`, `text = onAccent`, per `apps/web/src/styles/colors.json`), declared on `:root` via the
+  accentHover`, `text = onAccent`, per `packages/design-tokens/styles/colors.json`), declared on `:root` via the
   root-token mechanism above, with `--accent-hover` copied per theme from the app's palettes. The hero
   title follows the theme accent like every other accent-coloured element; `palette.test.ts` pins the
   hovered-fill label contrast.

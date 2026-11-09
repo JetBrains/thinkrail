@@ -2,7 +2,7 @@ import { getStablePreferenceAdapter, type StablePreferenceAdapter } from "../cli
 import { STORAGE_PREFIX } from "../constants/branding";
 import { isRecord } from "../lib";
 import { type FilesScrollView, type FilesTreeView, useAppStore } from "../store";
-import { getTransport } from "../transport";
+import { getTransport, isHostResetting, onHostReset } from "../transport";
 
 const DOCUMENT_VERSION = 1;
 const STABLE_KEY = "files-tree";
@@ -76,7 +76,7 @@ function stableStorage(adapter: StablePreferenceAdapter): FilesTreeStorage {
 function browserStorage(): FilesTreeStorage | null {
 	try {
 		const storage = window.localStorage;
-		const key = `${STORAGE_PREFIX}files-tree:${getTransport().httpBase()}`;
+		const key = `${STORAGE_PREFIX}files-tree:${getTransport().backendKey()}`;
 		return {
 			read: () => storage.getItem(key),
 			write: (value) => storage.setItem(key, value),
@@ -89,15 +89,18 @@ function browserStorage(): FilesTreeStorage | null {
 export function initFilesTreePersistence(
 	stablePreferences: StablePreferenceAdapter | null = getStablePreferenceAdapter(),
 ): () => void {
-	const storage = stablePreferences ? stableStorage(stablePreferences) : browserStorage();
+	let storage = stablePreferences ? stableStorage(stablePreferences) : browserStorage();
 	if (!storage) return () => {};
-	let initial: Record<string, FilesTreeView> = {};
-	try {
-		initial = parseFilesTreeDocument(storage.read());
-	} catch {}
-	useAppStore.getState().hydrateFilesTree(initial);
-
-	let written = useAppStore.getState().filesTreeByWorkspace;
+	let written: Record<string, FilesTreeView> = {};
+	const hydrate = (from: FilesTreeStorage) => {
+		let initial: Record<string, FilesTreeView> = {};
+		try {
+			initial = parseFilesTreeDocument(from.read());
+		} catch {}
+		useAppStore.getState().hydrateFilesTree(initial);
+		written = useAppStore.getState().filesTreeByWorkspace;
+	};
+	hydrate(storage);
 	let timer: ReturnType<typeof setTimeout> | null = null;
 	const flush = () => {
 		if (timer !== null) clearTimeout(timer);
@@ -106,17 +109,28 @@ export function initFilesTreePersistence(
 		if (current === written) return;
 		written = current;
 		try {
-			storage.write(serializeFilesTreeDocument(current));
+			storage?.write(serializeFilesTreeDocument(current));
 		} catch {}
 	};
 	const unsubscribe = useAppStore.subscribe((state) => {
+		if (isHostResetting()) {
+			written = state.filesTreeByWorkspace;
+			return;
+		}
 		if (state.filesTreeByWorkspace === written || timer !== null) return;
 		timer = setTimeout(flush, WRITE_DELAY_MS);
+	});
+	const stopHostReset = onHostReset(() => {
+		if (timer !== null) clearTimeout(timer);
+		timer = null;
+		if (!stablePreferences) storage = browserStorage();
+		if (storage) hydrate(storage);
 	});
 	const canListen = typeof window !== "undefined";
 	if (canListen) window.addEventListener("pagehide", flush);
 	return () => {
 		unsubscribe();
+		stopHostReset();
 		if (canListen) window.removeEventListener("pagehide", flush);
 		flush();
 	};

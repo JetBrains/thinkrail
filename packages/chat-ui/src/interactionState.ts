@@ -3,8 +3,14 @@ import {
 	isToolResponsePending,
 	type SessionState,
 } from "@thinkrail/contracts";
+import type { ToolStatus } from "@thinkrail/extension-api/web";
 import { createContext, useContext } from "react";
-import { isInteractiveTool } from "./toolRegistry";
+import {
+	currentToolRegistry,
+	isDockedTool,
+	isInteractiveTool,
+	type ToolRegistry,
+} from "./toolRegistry";
 import type { ChatTurn, ToolResultState } from "./types";
 
 export interface InteractionState {
@@ -21,6 +27,7 @@ export function deriveInteractionStates(
 	turns: ChatTurn[],
 	toolResponses: Record<string, unknown>,
 	toolResults: Record<string, ToolResultState> = {},
+	registry: ToolRegistry = currentToolRegistry(),
 ): Record<string, InteractionState> {
 	const calls: Record<string, { turnIndex: number; dead: boolean }> = {};
 	let lastUserIndex = -1;
@@ -31,7 +38,7 @@ export function deriveInteractionStates(
 			lastUserIndex = i;
 		} else if (turn.kind === "assistant") {
 			for (const block of turn.message.content) {
-				if (block.type === "toolCall" && isInteractiveTool(block.name)) {
+				if (block.type === "toolCall" && isInteractiveTool(block.name, registry)) {
 					calls[block.id] = {
 						turnIndex: i,
 						dead: !assistantToolCallsAreExecutable(turn.message.stopReason),
@@ -64,10 +71,58 @@ export function deriveInteractionStates(
 	return states;
 }
 
+export interface PendingInteraction {
+	toolCallId: string;
+	toolName: string;
+	args: Record<string, unknown>;
+	result: unknown;
+	status: ToolStatus;
+	streaming: boolean;
+}
+
+export function latestPendingInteraction(
+	turns: ChatTurn[],
+	toolResults: Record<string, ToolResultState>,
+	states: Record<string, InteractionState>,
+	registry: ToolRegistry = currentToolRegistry(),
+): PendingInteraction | undefined {
+	let found: PendingInteraction | undefined;
+	for (const turn of turns) {
+		if (turn.kind !== "assistant") continue;
+		for (const block of turn.message.content) {
+			if (block.type !== "toolCall" || !isInteractiveTool(block.name, registry)) continue;
+			const state = states[block.id];
+			if (!state || state.response !== undefined || state.superseded || state.terminal) continue;
+			const tool = toolResults[block.id];
+			found = {
+				toolCallId: block.id,
+				toolName: block.name,
+				args: block.arguments ?? {},
+				result: tool?.raw,
+				status: tool?.status ?? "running",
+				streaming: turn.streaming,
+			};
+		}
+	}
+	return found;
+}
+
+export function dockedInteraction(
+	pending: PendingInteraction | undefined,
+	awaitingToolCallId: string | null | undefined,
+	registry: ToolRegistry = currentToolRegistry(),
+): PendingInteraction | undefined {
+	if (!pending || pending.streaming || !isDockedTool(pending.toolName, registry)) return undefined;
+	return awaitingToolCallId === undefined || awaitingToolCallId === pending.toolCallId
+		? pending
+		: undefined;
+}
+
 export interface InteractionContextValue {
 	states: Record<string, InteractionState>;
 	focusScope: object;
 	awaitingToolCallId?: string | null | undefined;
+	dockedToolCallId?: string | undefined;
 }
 
 const LEGACY_QUESTION_PREFIX = "question:";
@@ -96,4 +151,8 @@ export function useInteractionState(toolCallId: string): InteractionState | unde
 
 export function useInteractionFocusScope(): object | null {
 	return useContext(InteractionStatesContext)?.focusScope ?? null;
+}
+
+export function useInteractionDocked(toolCallId: string): boolean {
+	return useContext(InteractionStatesContext)?.dockedToolCallId === toolCallId;
 }

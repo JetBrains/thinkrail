@@ -6,7 +6,7 @@ import { formatCost, formatElapsed, formatTokens } from "../../SessionStatsBar";
 
 export function readRunDetails(value: unknown): DelegationRunDetails | undefined {
 	if (!value || typeof value !== "object" || !("details" in value)) return undefined;
-	const details = (value as { details: unknown }).details;
+	const details = value.details;
 	return isDelegationRunDetails(details) ? details : undefined;
 }
 

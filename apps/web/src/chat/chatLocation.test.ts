@@ -1,11 +1,16 @@
 import { describe, expect, test } from "bun:test";
+import { messagesToRuntime } from "@thinkrail/chat-ui/hydrate";
+import {
+	type ChatRow,
+	deriveRows,
+	type RoutineToolStep,
+	rowIndexForToolCall,
+} from "@thinkrail/chat-ui/rows";
+import { registerToolRenderer } from "@thinkrail/chat-ui/toolRegistry";
+import type { ChatTurn, ToolResultState } from "@thinkrail/chat-ui/types";
 import type { TranscriptMessage } from "@thinkrail/contracts";
 import { EMPTY_RUNTIME, reduceSessionEvent, type SessionRuntime } from "@/store";
 import { locateChatRow, locateToolItem } from "./chatLocation";
-import { messagesToRuntime } from "./hydrate";
-import { type ChatRow, deriveRows, type RoutineToolStep, rowIndexForToolCall } from "./rows";
-import { registerToolRenderer } from "./toolRegistry";
-import type { ChatTurn, ToolResultState } from "./types";
 
 registerToolRenderer("location-primary", () => null, { prominence: "primary" });
 

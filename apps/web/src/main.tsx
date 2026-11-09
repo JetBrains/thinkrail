@@ -1,4 +1,6 @@
+import { setToolPresentationErrorReporter } from "@thinkrail/chat-ui/ToolRendererBoundary";
 import "./index.css";
+import { CodeHighlighterProvider } from "@thinkrail/chat-ui/highlight";
 import { useT } from "@thinkrail/locales/react";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { StrictMode } from "react";
@@ -6,7 +8,11 @@ import { createRoot } from "react-dom/client";
 import { initChatPreferencesPersistence } from "./chat/chatPreferences";
 import { initModelVisibilityPersistence } from "./chat/modelVisibility";
 import { getStablePreferenceAdapter } from "./clientPreferences";
-import { ErrorBoundary, setErrorBoundaryReporter } from "./components/ErrorBoundary";
+import {
+	ErrorBoundary,
+	reportBoundaryError,
+	setErrorBoundaryReporter,
+} from "./components/ErrorBoundary";
 import {
 	followInstalledWebExtensions,
 	installExtensionHost,
@@ -14,6 +20,7 @@ import {
 } from "./extensions";
 import { initializeFonts } from "./fonts";
 import { useLocaleSync } from "./i18n";
+import { webCodeHighlighter } from "./lib/highlightCode";
 import { initNavigation } from "./navigation";
 import { initFilesTreePersistence } from "./panels/filesTreeState";
 import { initProjectExpansionPersistence } from "./panels/projectExpansion";
@@ -42,6 +49,7 @@ installClientErrorReporting();
 setErrorBoundaryReporter((error, reportId) =>
 	reportClientError(clientErrorReport("render", error, reportId)),
 );
+setToolPresentationErrorReporter(reportBoundaryError);
 initChatPreferencesPersistence();
 initModelVisibilityPersistence();
 initProjectExpansionPersistence();
@@ -81,9 +89,11 @@ function App() {
 	return (
 		<ErrorBoundary label={t("app.errorBoundary.label")} reportId="app">
 			<TooltipProvider delayDuration={250} skipDelayDuration={400}>
-				<AppResourceHost>
-					<Shell />
-				</AppResourceHost>
+				<CodeHighlighterProvider highlighter={webCodeHighlighter}>
+					<AppResourceHost>
+						<Shell />
+					</AppResourceHost>
+				</CodeHighlighterProvider>
 				<DictationLayer />
 			</TooltipProvider>
 		</ErrorBoundary>

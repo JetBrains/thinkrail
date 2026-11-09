@@ -139,6 +139,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
 	return (
 		<BlockMarkdown
 			text={text}
+			wideBlocks
 			remarkPlugins={ASSISTANT_REMARK_PLUGINS}
 			urlTransform={assistantUrlTransform}
 			components={components}

@@ -10,15 +10,43 @@ export const THEME_SCHEMA_PATH = join(SRC_DIR, "schema.ts");
 export const paletteVar = (key: string) =>
 	`--${key.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase()}`;
 
-export function themeColorKeys(): string[] {
+function schemaKeys(name: string): string[] {
 	const schema = readFileSync(THEME_SCHEMA_PATH, "utf8");
-	const block = /export const THEME_COLOR_KEYS = \[([\s\S]*?)\] as const;/.exec(schema)?.[1] ?? "";
+	const block =
+		new RegExp(`export const ${name} = \\[([\\s\\S]*?)\\] as const;`).exec(schema)?.[1] ?? "";
 	return [...block.matchAll(/"([A-Za-z]+)"/g)].map((m) => m[1] as string);
+}
+
+export function themeColorKeys(): string[] {
+	return schemaKeys("THEME_COLOR_KEYS");
+}
+
+/** A role may also read a manifest's syntax or ANSI entry (`syntax.type` → `--code-type`, `ansi.cyan` → `--ansi-cyan`). */
+const SOURCE_FAMILIES = {
+	syntax: { prefix: "--code-", keys: () => schemaKeys("SYNTAX_COLOR_KEYS") },
+	ansi: { prefix: "--ansi-", keys: () => schemaKeys("ANSI_COLOR_KEYS") },
+} as const;
+
+function sourceFamily(from: string) {
+	const [family, key] = from.split(".");
+	if (key === undefined || (family !== "syntax" && family !== "ansi")) return null;
+	return { ...SOURCE_FAMILIES[family], key };
+}
+
+export function sourceVar(from: string): string {
+	const family = sourceFamily(from);
+	return family ? `${family.prefix}${paletteVar(family.key).slice(2)}` : paletteVar(from);
+}
+
+function isSource(from: string, themeKeys: readonly string[]): boolean {
+	const family = sourceFamily(from);
+	return family ? family.keys().includes(family.key) : themeKeys.includes(from);
 }
 
 export interface Role {
 	readonly from: string;
 	readonly alpha?: string;
+	readonly darkAlpha?: string;
 	readonly fallback?: string;
 	readonly publish: boolean;
 	readonly note?: string;
@@ -45,14 +73,14 @@ export function loadColors(path = SOURCE_PATH): Colors {
 export const roleVar = (name: string) => `--${name}`;
 export const themeVar = (name: string) => `--color-${name}`;
 
-export function derive(colors: Colors, role: Role): string {
-	const source = paletteVar(role.from);
-	if (!role.alpha) return `var(${source}${role.fallback ? `, ${role.fallback}` : ""})`;
-	return `color-mix(in srgb, var(${source}) ${colors.scale[role.alpha]}%, transparent)`;
+export function derive(colors: Colors, role: Role, alpha = role.alpha): string {
+	const source = sourceVar(role.from);
+	if (!alpha) return `var(${source}${role.fallback ? `, ${role.fallback}` : ""})`;
+	return `color-mix(in srgb, var(${source}) ${colors.scale[alpha]}%, transparent)`;
 }
 
 function aliasesPaletteVar(name: string, role: Role): boolean {
-	return paletteVar(role.from) === roleVar(name) && !role.alpha && !role.fallback;
+	return sourceVar(role.from) === roleVar(name) && !role.alpha && !role.darkAlpha && !role.fallback;
 }
 
 export function validate(colors: Colors): string[] {
@@ -67,7 +95,7 @@ export function validate(colors: Colors): string[] {
 	}
 	const keys = themeColorKeys();
 	for (const [name, role] of Object.entries(colors.roles)) {
-		if (!keys.includes(role.from)) {
+		if (!isSource(role.from, keys)) {
 			issues.push(`roles.${name}.from is not a theme manifest key: ${role.from}`);
 		}
 		if (role.alpha !== undefined && colors.scale[role.alpha] === undefined) {
@@ -75,7 +103,12 @@ export function validate(colors: Colors): string[] {
 				`roles.${name}.alpha must be a scale step (${Object.keys(colors.scale).join(", ")}), got ${role.alpha}`,
 			);
 		}
-		if (role.alpha !== undefined && role.fallback !== undefined) {
+		if (role.darkAlpha !== undefined && colors.scale[role.darkAlpha] === undefined) {
+			issues.push(
+				`roles.${name}.darkAlpha must be a scale step (${Object.keys(colors.scale).join(", ")}), got ${role.darkAlpha}`,
+			);
+		}
+		if ((role.alpha ?? role.darkAlpha) !== undefined && role.fallback !== undefined) {
 			issues.push(`roles.${name} cannot combine alpha with fallback`);
 		}
 		if (typeof role.publish !== "boolean") issues.push(`roles.${name}.publish must be a boolean`);
@@ -116,6 +149,10 @@ export function renderCss(colors: Colors): string {
 			return `\t${roleVar(name)}: ${derive(colors, role)};${note}`;
 		});
 
+	const darkOverrides = roles
+		.filter(([, role]) => role.darkAlpha)
+		.map(([name, role]) => `\t${roleVar(name)}: ${derive(colors, role, role.darkAlpha)};`);
+
 	const effectBlocks = ["dark", "light"].map((appearance) =>
 		[
 			`:root[data-theme-appearance="${appearance}"] {`,
@@ -142,6 +179,15 @@ export function renderCss(colors: Colors): string {
 		...rootLines,
 		"}",
 		"",
+		...(darkOverrides.length > 0
+			? [
+					"/* Roles that take a different alpha step in a dark appearance (`darkAlpha`). */",
+					':root[data-theme-appearance="dark"] {',
+					...darkOverrides,
+					"}",
+					"",
+				]
+			: []),
 		"/* Appearance-level effects. The theme engine stamps `data-theme-appearance` before React mounts, so",
 		" * these need no JavaScript — they are constants, not palette derivations. */",
 		...effectBlocks,

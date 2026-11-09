@@ -11,12 +11,14 @@ import { type Translator, useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import { useContext } from "react";
 import type { ActivityBreadcrumbKind } from "./activityBreadcrumbs";
+import { CONTENT_WIDTH_BREAKOUT } from "./contentWidth";
 import { PendingExtUiContext, ToolPromptSlot } from "./ExtUiPrompt";
 import { useFold } from "./foldState";
 import { firstNonBlankLine } from "./lib";
 import type { ActivityStep, RoutineToolStep, ThinkingStep } from "./rows";
 import { ToolRendererBody } from "./ToolRendererBody";
-import { getToolSummary } from "./toolRegistry";
+import { TranscriptItem } from "./TranscriptItem";
+import { getToolSummary, getToolWidth, type ToolRegistry, useToolRegistry } from "./toolRegistry";
 
 export function ActivityGroup({
 	id,
@@ -32,6 +34,7 @@ export function ActivityGroup({
 	onOpenFile?: ((path: string) => void) | undefined;
 }) {
 	const t = useT();
+	const registry = useToolRegistry();
 	const flatSteps = flattenActivitySteps(steps);
 	const single = flatSteps.length === 1 ? steps[0] : undefined;
 	if (single)
@@ -49,7 +52,7 @@ export function ActivityGroup({
 		);
 
 	const settledSummary = summarizeSteps(t, steps);
-	const summary = live ? liveActivityTicker(t, steps, workspaceRoot) : settledSummary;
+	const summary = live ? liveActivityTicker(t, steps, workspaceRoot, registry) : settledSummary;
 	const breadcrumb = splitSummary(settledSummary);
 	return (
 		<GroupDisclosure
@@ -71,28 +74,28 @@ export function ActivityGroup({
 				/>
 			}
 		>
-			{steps.map((step) =>
-				step.kind === "thinking" ? (
-					<ThinkingGroup
-						key={step.id}
-						id={step.id}
-						parentId={id}
-						thought={step}
-						tools={step.tools}
-						live={false}
-						workspaceRoot={workspaceRoot}
-						onOpenFile={onOpenFile}
-					/>
-				) : (
-					<RoutineToolRow
-						key={step.id}
-						step={step}
-						parentId={id}
-						workspaceRoot={workspaceRoot}
-						onOpenFile={onOpenFile}
-					/>
-				),
-			)}
+			{steps.map((step) => (
+				<TranscriptItem key={step.id} id={step.id} className="rounded-sm">
+					{step.kind === "thinking" ? (
+						<ThinkingGroup
+							id={step.id}
+							parentId={id}
+							thought={step}
+							tools={step.tools}
+							live={false}
+							workspaceRoot={workspaceRoot}
+							onOpenFile={onOpenFile}
+						/>
+					) : (
+						<RoutineToolRow
+							step={step}
+							parentId={id}
+							workspaceRoot={workspaceRoot}
+							onOpenFile={onOpenFile}
+						/>
+					)}
+				</TranscriptItem>
+			))}
 		</GroupDisclosure>
 	);
 }
@@ -115,10 +118,11 @@ export function ThinkingGroup({
 	onOpenFile?: ((path: string) => void) | undefined;
 }) {
 	const t = useT();
+	const registry = useToolRegistry();
 	const summary =
 		tools.length > 0
 			? live
-				? liveActivityTicker(t, tools, workspaceRoot)
+				? liveActivityTicker(t, tools, workspaceRoot, registry)
 				: summarizeSteps(t, tools)
 			: t("chat.activity.chars", { chars: formatChars(thought.text.length) });
 	return (
@@ -151,13 +155,14 @@ export function ThinkingGroup({
 				{thought.text}
 			</div>
 			{tools.map((step) => (
-				<RoutineToolRow
-					key={step.id}
-					step={step}
-					parentId={id}
-					workspaceRoot={workspaceRoot}
-					onOpenFile={onOpenFile}
-				/>
+				<TranscriptItem key={step.id} id={step.id} className="rounded-sm">
+					<RoutineToolRow
+						step={step}
+						parentId={id}
+						workspaceRoot={workspaceRoot}
+						onOpenFile={onOpenFile}
+					/>
+				</TranscriptItem>
 			))}
 		</GroupDisclosure>
 	);
@@ -216,7 +221,7 @@ function GroupDisclosure({
 				data-activity-node-toggle
 				aria-expanded={expanded}
 				onClick={toggle}
-				className="flex w-full cursor-pointer select-none items-center gap-4 rounded-sm px-4 py-2 text-left outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex w-full cursor-pointer select-none items-center gap-4 rounded-sm px-4 py-2 text-left hover:bg-control-bg-hovered focus-visible:focus-ring-inset"
 			>
 				<ChevronRight
 					className={`size-16 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
@@ -326,12 +331,18 @@ function liveActivityTicker(
 	t: Translator,
 	steps: ActivityStep[],
 	workspaceRoot: string | undefined,
+	registry: ToolRegistry,
 ): string {
 	const flatSteps = flattenActivitySteps(steps);
 	const current = flatSteps[flatSteps.length - 1];
 	if (!current) return t("chat.activity.working");
 	if (current.kind === "thinking") return t("chat.activity.thinkingLive");
-	const summary = getToolSummary(t, current.toolName, toolRenderProps(current, workspaceRoot));
+	const summary = getToolSummary(
+		t,
+		current.toolName,
+		toolRenderProps(current, workspaceRoot),
+		registry,
+	);
 	return summary ? `${current.toolName} · ${summary}` : `${current.toolName}…`;
 }
 
@@ -367,7 +378,8 @@ function RoutineToolRow({
 	const [expanded, toggle, toggleRef] = useFold(step.id);
 	const status: ToolStatus = step.tool?.status ?? (step.dead ? "error" : "running");
 	const renderProps = toolRenderProps(step, workspaceRoot, onOpenFile);
-	const summary = getToolSummary(t, step.toolName, renderProps);
+	const registry = useToolRegistry();
+	const summary = getToolSummary(t, step.toolName, renderProps, registry);
 	return (
 		<div
 			data-testid="activity-step"
@@ -400,7 +412,13 @@ function RoutineToolRow({
 				summary={summary}
 			/>
 			{expanded ? (
-				<div className={cn("px-8 pb-4 pl-16", status === "error" && "text-feedback-error")}>
+				<div
+					className={cn(
+						"px-8 pb-4 pl-16",
+						status === "error" && "text-feedback-error",
+						getToolWidth(step.toolName, registry) === "content" && CONTENT_WIDTH_BREAKOUT,
+					)}
+				>
 					<ToolRendererBody {...renderProps} imageLabel={summary} />
 				</div>
 			) : null}
@@ -432,7 +450,7 @@ function StepHeader({
 			data-activity-node-toggle
 			aria-expanded={expanded}
 			onClick={onToggle}
-			className="flex w-full cursor-pointer select-none items-center gap-4 rounded-sm px-4 py-2 text-left outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary sm:py-2"
+			className="flex w-full cursor-pointer select-none items-center gap-4 rounded-sm px-4 py-2 text-left hover:bg-control-bg-hovered focus-visible:focus-ring-inset sm:py-2"
 		>
 			{icon}
 			<span className="shrink-0 text-text-default">{name}</span>

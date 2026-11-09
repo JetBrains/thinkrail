@@ -15,6 +15,7 @@ interface FileChipProps {
 	onClick?: () => void;
 	tone?: keyof typeof CHIP_TONE;
 	icon?: boolean;
+	visual?: ReactNode;
 	title?: string;
 	"aria-label"?: string;
 	"data-testid"?: string;
@@ -30,12 +31,13 @@ export function FileChip({
 	onClick,
 	tone = "default",
 	icon = true,
+	visual,
 	...rest
 }: FileChipProps) {
 	const chip = `${CHIP_BASE} ${CHIP_TONE[tone]}`;
 	const content = (
 		<>
-			{icon ? <FileIcon className="size-12 shrink-0" /> : null}
+			{visual ?? (icon ? <FileIcon className="size-12 shrink-0" /> : null)}
 			<span className="min-w-0 truncate">{label}</span>
 			{meta ? <span className="shrink-0">{meta}</span> : null}
 			{trailing ? <span className="flex shrink-0 items-center">{trailing}</span> : null}
@@ -46,7 +48,7 @@ export function FileChip({
 			<button
 				type="button"
 				onClick={onClick}
-				className={`${chip} transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary`}
+				className={`${chip} transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring`}
 				{...rest}
 			>
 				{content}
