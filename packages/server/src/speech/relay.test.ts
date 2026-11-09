@@ -178,6 +178,33 @@ test.skipIf(!posix)(
 	},
 );
 
+test.skipIf(!posix)(
+	"an engine that rejects a stream while running is reported by the relay",
+	async () => {
+		installFixture();
+		await initSpeech();
+		process.env.FAKE_SPEECH_STREAM_ERROR = "invalid_audio";
+		const seen: Array<{ scope: string; code: unknown }> = [];
+		observeLoggedErrors((scope, error) =>
+			seen.push({ scope, code: error instanceof Error ? Reflect.get(error, "code") : undefined }),
+		);
+		try {
+			const client = clientSocket();
+			const relay = createSpeechRelay(client.socket);
+			relay.message(JSON.stringify({ type: "start" }));
+			await client.until("ready");
+			relay.message(word());
+			await client.until("ended");
+			expect(client.messages).toContainEqual({ type: "error", code: "SPEECH_ENGINE_FAILED" });
+			await Bun.sleep(1_200);
+			expect(seen).toEqual([{ scope: "speech", code: "SPEECH_ENGINE_FAILED" }]);
+		} finally {
+			observeLoggedErrors(null);
+			delete process.env.FAKE_SPEECH_STREAM_ERROR;
+		}
+	},
+);
+
 test.skipIf(!posix)("an engine that crashes mid-dictation is reported exactly once", async () => {
 	installFixture();
 	await initSpeech();

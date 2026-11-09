@@ -67,6 +67,10 @@ Bun.serve<Session, never>({
 		},
 		message(ws, message) {
 			if (typeof message !== "string") {
+				if (process.env.FAKE_SPEECH_STREAM_ERROR) {
+					ws.send(JSON.stringify({ type: "error", code: process.env.FAKE_SPEECH_STREAM_ERROR }));
+					return;
+				}
 				ws.data.received += message.byteLength;
 				while (
 					ws.data.emitted < words.length &&
