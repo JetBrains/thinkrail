@@ -177,7 +177,7 @@ describe("sourceMayLoad — a root admission can load nothing from stays out of 
 		expect(sourceMayLoad({ group: "superpowers", isPlugin: true }, OFF)).toBe(false);
 		expect(sourceMayLoad({ group: "project", isPlugin: false }, OFF)).toBe(true);
 	});
-	it("keeps them once a project opts in, or while any per-skill override is on", () => {
+	it("keeps them once a project opts in, but not for a per-skill override alone", () => {
 		expect(
 			sourceMayLoad(
 				{ group: "personal", isPlugin: false },
@@ -186,6 +186,6 @@ describe("sourceMayLoad — a root admission can load nothing from stays out of 
 		).toBe(true);
 		expect(
 			sourceMayLoad({ group: "personal", isPlugin: false }, { ...OFF, overrides: { x: "on" } }),
-		).toBe(true);
+		).toBe(false);
 	});
 });

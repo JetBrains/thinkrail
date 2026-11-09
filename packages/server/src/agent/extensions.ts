@@ -181,7 +181,9 @@ function admittedRoots(
 	roots: readonly CompatibilitySkillSource[],
 	ctx: SkillAdmissionContext,
 ): CompatibilitySkillSource[] {
-	return roots.filter((source) => sourceMayLoad(sourceGroup(source), ctx));
+	const loadable = roots.filter((source) => sourceMayLoad(sourceGroup(source), ctx));
+	if (!Object.values(ctx.overrides).includes("on")) return loadable;
+	return [...loadable, ...roots.filter((source) => !loadable.includes(source))];
 }
 
 function skillsGate(cwd: string, bundledPaths: string[], getCtx: () => SkillAdmissionContext) {
@@ -677,7 +679,7 @@ export async function listSkillCatalog(
 	const loadable = await load(admitted);
 	const listed = new Set(loadable.map((skill) => skill.filePath));
 	const switchedOff =
-		admitted.length === roots.length
+		admitted.length === roots.length && admitted.every((source, index) => source === roots[index])
 			? []
 			: (await load(roots)).filter((skill) => !listed.has(skill.filePath));
 	return [...loadable, ...switchedOff].map((skill) => {

@@ -307,6 +307,21 @@ describe("listSkillCommands", () => {
 				["personal", "disabled"],
 				["project", "load"],
 			]);
+			const overridden = { ...admission, overrides: { lint: "on" as const } };
+			expect(
+				(await listSkillCommands(project, overridden))
+					.filter((command) => command.name === "skill:deploy")
+					.map((c) => c.description),
+			).toEqual(["project deploy"]);
+			expect(
+				(await listSkillCatalog(project, overridden))
+					.filter((entry) => entry.name === "deploy")
+					.map((entry) => [entry.group, entry.decision])
+					.sort(),
+			).toEqual([
+				["personal", "disabled"],
+				["project", "load"],
+			]);
 			const optedIn = await listSkillCommands(project, { ...admission, otherAgentSkills: true });
 			expect(
 				optedIn.filter((command) => command.name === "skill:deploy").map((c) => c.description),
