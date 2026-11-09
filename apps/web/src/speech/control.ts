@@ -34,7 +34,7 @@ export function useDictatingElement(): HTMLElement | null {
 	return useSyncExternalStore(dictation.subscribe, dictatingElement);
 }
 
-/** Dictates into `element`: locks it, writes through its field writer, and stops on blur. */
+/** Dictates into `element`: locks it, writes through its field writer, and stops on blur or removal. */
 export function startDictation(element: HTMLElement): void {
 	const owner = ownerOf(element);
 	element.focus();
@@ -45,8 +45,13 @@ export function startDictation(element: HTMLElement): void {
 			if (!document.hasFocus() || !element.contains(document.activeElement)) dictation.stop(owner);
 		});
 	element.addEventListener("blur", onBlur);
+	const removal = new MutationObserver(() => {
+		if (!element.isConnected) dictation.stop(owner);
+	});
+	removal.observe(document.documentElement, { childList: true, subtree: true });
 	const release = () => {
 		unlock();
+		removal.disconnect();
 		element.removeEventListener("blur", onBlur);
 		announceDictation(element, false);
 	};

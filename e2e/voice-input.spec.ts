@@ -261,6 +261,48 @@ test("a review comment takes dictation and ⌘↩ cannot send it mid-dictation",
 	await expect(composer.getByTestId("review-composer-send")).toBeEnabled();
 });
 
+test("a field removed mid-dictation ends it even without a blur, and a field that widens gets the mic", async ({
+	page,
+}) => {
+	await openChat(page);
+	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready");
+	await page.evaluate(() => {
+		const host = document.createElement("div");
+		host.id = "vanish-host";
+		host.setAttribute("style", "position:fixed;top:120px;left:120px;z-index:40;padding:8px");
+		host.innerHTML =
+			'<input id="ext-narrow" type="text" style="width:80px"><input id="ext-vanish" type="text" style="width:240px">';
+		document.body.append(host);
+	});
+	const narrow = page.locator("#ext-narrow");
+	await narrow.focus();
+	await expect(mic(page)).toBeHidden();
+	await narrow.evaluate((field) => {
+		field.style.width = "240px";
+	});
+	await expect(mic(page)).toBeVisible();
+
+	await page.locator("#ext-vanish").focus();
+	await mic(page).click();
+	await expect(mic(page)).toHaveAttribute("data-mic-state", "listening");
+	await page.evaluate(() => {
+		// WebKit and Firefox fire no blur or focusout when a focused element is removed.
+		const swallow = (event: Event) => event.stopImmediatePropagation();
+		window.addEventListener("blur", swallow, true);
+		window.addEventListener("focusout", swallow, true);
+		document.getElementById("ext-vanish")?.remove();
+		setTimeout(() => {
+			window.removeEventListener("blur", swallow, true);
+			window.removeEventListener("focusout", swallow, true);
+		}, 500);
+	});
+	await expect(mic(page)).toBeHidden();
+	await page.waitForTimeout(600);
+	await page.getByTestId("chat-input").focus();
+	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
+	await page.evaluate(() => document.getElementById("vanish-host")?.remove());
+});
+
 test("any field a page adds gets voice, with no code in it; passwords never do", async ({
 	page,
 }) => {

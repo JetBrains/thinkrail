@@ -58,16 +58,25 @@ function layerContainer(field: HTMLElement): HTMLElement | null {
 	return field.closest<HTMLElement>('[role="dialog"], [data-radix-popper-content-wrapper]');
 }
 
-/** Keeps the mic inside the field's right edge, against `container` when given, else the viewport. */
+/**
+ * Keeps the mic inside the field's right edge, against `container` when given, else the viewport, and
+ * reports whether it fits: a field that left the page or is too narrow gets no mic.
+ */
 function followField(
 	mic: HTMLElement,
 	field: HTMLElement,
 	container: HTMLElement | null,
+	onFit: (fits: boolean) => void,
 ): () => void {
 	let frame = 0;
 	const place = () => {
 		frame = 0;
+		if (!field.isConnected) {
+			onFit(false);
+			return;
+		}
 		const rect = field.getBoundingClientRect();
+		onFit(rect.width >= MIN_FIELD_WIDTH);
 		const origin = container?.getBoundingClientRect();
 		const left =
 			container && origin ? origin.left + container.clientLeft - container.scrollLeft : 0;
@@ -85,18 +94,19 @@ function followField(
 	resized.observe(field);
 	resized.observe(document.documentElement);
 	if (container) resized.observe(container);
+	const removal = new MutationObserver(() => {
+		if (!field.isConnected) schedule();
+	});
+	removal.observe(document.documentElement, { childList: true, subtree: true });
 	window.addEventListener("resize", schedule);
 	document.addEventListener("scroll", schedule, true);
 	return () => {
 		cancelAnimationFrame(frame);
 		resized.disconnect();
+		removal.disconnect();
 		window.removeEventListener("resize", schedule);
 		document.removeEventListener("scroll", schedule, true);
 	};
-}
-
-function fitsMic(field: HTMLElement): boolean {
-	return field.getBoundingClientRect().width >= MIN_FIELD_WIDTH;
 }
 
 function LevelMeter({ level }: { level: number }) {
@@ -179,6 +189,7 @@ function ActiveDictationLayer() {
 	const [focused, setFocused] = useState<HTMLElement | null>(null);
 	const [offerOpen, setOfferOpen] = useState(false);
 	const [kept, setKept] = useState<HTMLElement | null>(null);
+	const [fits, setFits] = useState(true);
 	const lastFallback = useRef<HTMLElement | null>(null);
 	const dictating = useDictatingElement();
 	const state = micState(status, availability, blockedMicrophone(snapshot.error?.code));
@@ -250,13 +261,14 @@ function ActiveDictationLayer() {
 	const anchor = field ?? (kept?.isConnected ? kept : null);
 	const container = anchor ? layerContainer(anchor) : null;
 	const micRef = useRef<HTMLDivElement>(null);
-	const shown = state.kind !== "hidden" && field !== null && field.isConnected && fitsMic(field);
+	const following = state.kind !== "hidden" && field !== null;
+	const shown = following && fits;
 	if (!shown && offerOpen) setOfferOpen(false);
 	useLayoutEffect(() => {
 		const mic = micRef.current;
-		if (!mic || !field || !shown) return;
-		return followField(mic, field, container);
-	}, [field, container, shown]);
+		if (!mic || !field || !following) return;
+		return followField(mic, field, container, setFits);
+	}, [field, container, following]);
 
 	if (!anchor || state.kind === "hidden") return null;
 
