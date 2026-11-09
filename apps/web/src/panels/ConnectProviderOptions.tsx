@@ -278,7 +278,7 @@ function DetectedChoiceButton({
 				<span className="flex flex-wrap items-center gap-8">
 					<span className="tr-title-card text-text-default">{t(copy.title)}</span>
 					{account.plan ? (
-						<span className="rounded-full border border-border-default px-8 tr-text-label-pill text-text-muted">
+						<span className="max-w-full truncate rounded-full border border-border-default px-8 tr-text-label-pill text-text-muted">
 							{t("panels.connectProvider.detectedPlan", {
 								plan: account.plan.charAt(0).toUpperCase() + account.plan.slice(1),
 							})}

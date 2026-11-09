@@ -85,7 +85,10 @@ Playwright's `install-deps --dry-run webkit` reports missing, minus its font and
 feed no assertion, and the Azure mirror trickled one of them for minutes, past the wait deadline, in two of
 four shard runs; apt also gets a 20 s HTTP timeout with five retries for outright stalls. The browsers
 themselves are not cached: the Playwright CDN download takes seconds, no slower than an Actions-cache
-restore of the same bytes. Jobs download only Chromium's headless shell,
+restore of the same bytes. Linux jobs, here and in the website workflows,
+install dependencies without the Actions cache for the same reason: a cold `bun install --frozen-lockfile` on a hosted runner takes 3–4 s,
+while restoring the ~600 MB Bun cache took 12–16 s before an install of 1–3 s, and every PR and merge-group
+ref saved its own copy, crowding the 10 GB quota the apt cache depends on. Jobs download only Chromium's headless shell,
 the one binary headless tests launch, and start it in the background right after `bun install`; a wait
 step joins it, failing with its status, just before the browser tests, so the download overlaps the build
 instead of preceding it.
