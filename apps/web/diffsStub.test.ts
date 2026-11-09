@@ -16,6 +16,13 @@ test("Shiki imports from the diffs package resolve to the stub", () => {
 	}
 });
 
+test("a Windows install path of the diffs package resolves to the stub", () => {
+	const windows =
+		"C:\\repo\\node_modules\\.bun\\@pierre+diffs@1.6.4\\node_modules\\@pierre\\diffs\\dist\\worker\\worker.js";
+	expect(resolve("shiki/core", windows)).toBe("\0diffs-stub");
+	expect(resolve("@pierre/theming/themes", windows)).toBe("\0diffs-stub");
+});
+
 test("theme catalogs imported by the diffs package resolve to the stub", () => {
 	for (const source of [
 		"@pierre/highlights/themes",
@@ -44,5 +51,7 @@ test("the stub throws when something calls into it", async () => {
 	if (typeof load !== "function") throw new Error("expected a load function");
 	const source = String(Reflect.apply(load, {}, ["\0diffs-stub"]));
 	const module = await import(`data:text/javascript,${encodeURIComponent(source)}`);
-	expect(() => module.createHighlighterCore()).toThrow("Not part of this build");
+	for (const name of ["createHighlighterCore", "normalizeTheme", "createJavaScriptRegexEngine"]) {
+		expect(() => module[name]()).toThrow("Not part of this build");
+	}
 });

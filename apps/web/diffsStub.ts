@@ -5,10 +5,14 @@ const UNUSED_SPECIFIER =
 	/^shiki(\/|$)|^@pierre\/highlights\/themes(\/|$)|^@pierre\/theming\/themes$/;
 const DIFFS_IMPORTER = /[\\/]@pierre[\\/+]diffs/;
 const STUB_EXPORTS = [
+	"bundledLanguages",
 	"createCssVariablesTheme",
 	"createHighlighterCore",
+	"createJavaScriptRegexEngine",
+	"createOnigurumaEngine",
 	"EncodedTokenMetadata",
 	"INITIAL",
+	"normalizeTheme",
 	"themes",
 ];
 
