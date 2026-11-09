@@ -4,6 +4,8 @@ import { expect, type Page, test } from "@playwright/test";
 import { enterDefaultWorkspace, openFixtureProject, revealWorkbenchTool } from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
 
+const BUILT_IN_TRANSLATION = /\/assets\/[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*-[\w-]{8}\.json$/;
+
 const LOCALES_DIR = join(E2E_DATA_DIR, "locales");
 
 function writeLocale(name: string, content: string): void {
@@ -85,7 +87,7 @@ test("a built-in translation downloads only when picked and renders after a relo
 }) => {
 	const translationFiles: string[] = [];
 	page.on("request", (request) => {
-		if (/\/assets\/(?:es|ja|ru|zh-CN)-[\w-]+\.json$/.test(request.url())) {
+		if (BUILT_IN_TRANSLATION.test(request.url())) {
 			translationFiles.push(request.url());
 		}
 	});
@@ -111,7 +113,7 @@ test("a local file for a built-in language downloads its translation only when t
 	writeLocale("ja.json", JSON.stringify({ "settings.nav.language": "言語 (local)" }));
 	const translationFiles: string[] = [];
 	page.on("request", (request) => {
-		if (/\/assets\/(?:es|ja|ru|zh-CN)-[\w-]+\.json$/.test(request.url())) {
+		if (BUILT_IN_TRANSLATION.test(request.url())) {
 			translationFiles.push(request.url());
 		}
 	});
@@ -135,26 +137,28 @@ test("a local file for a built-in language downloads its translation only when t
 	expect(translationFiles[1]).toContain("/assets/ja-");
 });
 
-test("a translation that failed to download loads when its selected row is clicked again", async ({
-	page,
-}) => {
+test("a translation that failed to download offers a Retry that loads it", async ({ page }) => {
 	const translation = /\/assets\/es-[\w-]+\.json$/;
+	const attempts: string[] = [];
+	page.on("request", (request) => {
+		if (translation.test(request.url())) attempts.push(request.url());
+	});
 	await page.route(translation, (route) => route.abort());
 	await openFixtureProject(page);
 	const section = await openLanguageSettings(page);
-	const failed = page.waitForEvent("requestfailed", (request) => translation.test(request.url()));
 	await section.getByTestId("language-es").click();
-	await failed;
+	const failure = page.getByTestId("toast").filter({ hasText: "Couldn't load the translation" });
+	await expect(failure).toBeVisible();
 	await expect(section.getByTestId("language-es")).toHaveAttribute("data-active", "true");
 	await expect(page.locator("html")).toHaveAttribute("lang", "en");
 	await expect(page.getByTestId("settings-nav-language")).toContainText("Language");
+	expect(attempts).toHaveLength(1);
 
 	await page.unroute(translation);
-	await page.waitForTimeout(500);
-	await expect(page.locator("html")).toHaveAttribute("lang", "en");
-	await section.getByTestId("language-es").click();
+	await failure.getByTestId("toast-action").click();
 	await expect(page.locator("html")).toHaveAttribute("lang", "es");
 	await expect(page.getByTestId("settings-nav-language")).toContainText("Idioma");
+	expect(attempts).toHaveLength(2);
 });
 
 test("switching language re-renders cached labels, markup strings and a mounted editor's controls, including live catalog edits", async ({

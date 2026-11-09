@@ -6,4 +6,4 @@ export {
 	languageOptions,
 	localOverlays,
 } from "./languages";
-export { localeSignature, retryLocale, useLocaleSync, useSystemLanguages } from "./useLocaleSync";
+export { localeSignature, useLocaleSync, useSystemLanguages } from "./useLocaleSync";

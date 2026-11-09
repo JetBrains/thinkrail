@@ -9,7 +9,6 @@ import {
 	type LanguageOption,
 	type LanguageSource,
 	languageOptions,
-	retryLocale,
 	useSystemLanguages,
 } from "@/i18n";
 import { toast, useAppStore } from "@/store";
@@ -108,7 +107,6 @@ export function LanguageSettings() {
 			appVersion={appVersion}
 			systemLanguages={systemLanguages.split(",")}
 			onSelect={select}
-			onReselect={retryLocale}
 			{...folderActions}
 		/>
 	);
@@ -120,7 +118,6 @@ export interface LanguagePageProps extends FolderActions {
 	appVersion: string | null;
 	systemLanguages: readonly string[];
 	onSelect: (preference: string) => void;
-	onReselect: () => void;
 }
 
 export function LanguagePage({
@@ -129,7 +126,6 @@ export function LanguagePage({
 	appVersion,
 	systemLanguages,
 	onSelect,
-	onReselect,
 	onCopyFolder,
 	onRevealFolder,
 }: LanguagePageProps) {
@@ -197,7 +193,6 @@ export function LanguagePage({
 						choices={choices}
 						value={value}
 						onSelect={onSelect}
-						onReselect={onReselect}
 					/>
 				</div>
 			</SettingsGroup>

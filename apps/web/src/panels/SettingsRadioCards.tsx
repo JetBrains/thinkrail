@@ -17,7 +17,6 @@ export function SettingsRadioCards<T extends string>({
 	value,
 	disabled = false,
 	onSelect,
-	onReselect,
 }: {
 	name: string;
 	label: string;
@@ -25,7 +24,6 @@ export function SettingsRadioCards<T extends string>({
 	value: T;
 	disabled?: boolean;
 	onSelect: (value: T) => void;
-	onReselect?: (value: T) => void;
 }) {
 	return (
 		<div role="radiogroup" aria-label={label} className="flex flex-col gap-4">
@@ -52,7 +50,6 @@ export function SettingsRadioCards<T extends string>({
 							checked={active}
 							disabled={choiceDisabled}
 							onChange={() => onSelect(choice.id)}
-							onClick={active && onReselect ? () => onReselect(choice.id) : undefined}
 							className="sr-only"
 						/>
 						<span className="min-w-0 flex-1">

@@ -11,7 +11,6 @@ const render = (preference: string, snapshot: LocalLocalesSnapshot | null) =>
 			appVersion={null}
 			systemLanguages={["en-US"]}
 			onSelect={() => {}}
-			onReselect={() => {}}
 			onCopyFolder={() => {}}
 			onRevealFolder={() => {}}
 		/>,

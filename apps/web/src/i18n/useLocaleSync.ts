@@ -1,7 +1,7 @@
 import type { LocalLocalesSnapshot } from "@thinkrail/contracts";
 import { fallbackChain } from "@thinkrail/locales";
-import { applyLocale, currentLocale } from "@thinkrail/locales/react";
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { applyLocale, currentLocale, t } from "@thinkrail/locales/react";
+import { type RefObject, useEffect, useRef, useSyncExternalStore } from "react";
 import { useAppStore } from "../store";
 import { effectiveLocale, localOverlays } from "./languages";
 import { pushNativeMenuLabels } from "./nativeMenu";
@@ -26,10 +26,37 @@ export function localeSignature(tag: string, snapshot: LocalLocalesSnapshot | nu
 
 const INITIAL_SIGNATURE = localeSignature("en", null);
 
-const retryListeners = new Set<() => void>();
+function syncLocale(
+	applied: RefObject<string>,
+	preference: string,
+	snapshot: LocalLocalesSnapshot | null,
+	systemLanguages: string,
+): void {
+	const tag = effectiveLocale(preference, snapshot, systemLanguages.split(","));
+	const signature = localeSignature(tag, snapshot);
+	if (signature === applied.current) return;
+	applied.current = signature;
+	void applyLocale(tag, localOverlays(snapshot))
+		.catch((error: unknown) => {
+			if (applied.current === signature) {
+				applied.current = "";
+				useAppStore.getState().pushToast({
+					variant: "error",
+					message: t("settings.language.loadFailed"),
+					action: { label: t("common.retry"), onClick: () => retryLocale(applied) },
+				});
+			}
+			throw error;
+		})
+		.finally(() => {
+			document.documentElement.lang = currentLocale();
+			pushNativeMenuLabels();
+		});
+}
 
-export function retryLocale(): void {
-	for (const listener of retryListeners) listener();
+function retryLocale(applied: RefObject<string>): void {
+	const { locale, localLocales } = useAppStore.getState();
+	syncLocale(applied, locale, localLocales, readLanguages());
 }
 
 export function useLocaleSync(): void {
@@ -38,25 +65,6 @@ export function useLocaleSync(): void {
 	const systemLanguages = useSystemLanguages();
 	const applied = useRef(INITIAL_SIGNATURE);
 	useEffect(() => {
-		const tag = effectiveLocale(preference, snapshot, systemLanguages.split(","));
-		const signature = localeSignature(tag, snapshot);
-		const sync = () => {
-			if (signature === applied.current) return;
-			applied.current = signature;
-			void applyLocale(tag, localOverlays(snapshot))
-				.catch((error: unknown) => {
-					if (applied.current === signature) applied.current = "";
-					throw error;
-				})
-				.finally(() => {
-					document.documentElement.lang = currentLocale();
-					pushNativeMenuLabels();
-				});
-		};
-		sync();
-		retryListeners.add(sync);
-		return () => {
-			retryListeners.delete(sync);
-		};
+		syncLocale(applied, preference, snapshot, systemLanguages);
 	}, [preference, snapshot, systemLanguages]);
 }
