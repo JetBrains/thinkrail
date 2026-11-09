@@ -221,7 +221,7 @@ export function EffortSlider({
 				/>
 				<div
 					aria-hidden
-					className="pointer-events-none absolute top-2 left-[clamp(32px,var(--effort),calc(100%-32px))] flex h-24 min-w-64 -translate-x-1/2 items-center justify-center gap-4 rounded-full border border-control-border-active bg-container-elevated-bg px-8 text-text-default tr-text-label-pill capitalize shadow-[var(--shadow-sm)] transition-[left] duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] peer-focus-visible:ring-2 peer-focus-visible:ring-primary motion-reduce:transition-none"
+					className="pointer-events-none absolute top-2 left-[clamp(32px,var(--effort),calc(100%-32px))] flex h-24 min-w-64 -translate-x-1/2 items-center justify-center gap-4 rounded-full border border-control-border-active bg-container-elevated-bg px-8 text-text-default tr-text-label-pill capitalize shadow-[var(--shadow-sm)] transition-[left] duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] peer-focus-visible:focus-ring motion-reduce:transition-none"
 				>
 					<Glyph className={cn("size-12 shrink-0", TONE_TEXT[levelTone(level)])} />
 					{t(LEVEL_LABEL[level])}
@@ -249,7 +249,7 @@ export function EffortSlider({
 								aria-pressed={active}
 								onClick={() => onSelectLevel(candidate)}
 								className={cn(
-									"relative rounded-sm px-4 py-2 tr-text-metadata capitalize outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
+									"relative rounded-sm px-4 py-2 tr-text-metadata capitalize transition-colors focus-visible:focus-ring",
 									active ? "text-text-default" : "text-text-subtle hover:text-text-muted",
 								)}
 							>
@@ -469,7 +469,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 					data-testid="model-selector"
 					data-open={open}
 					className={cn(
-						"flex h-32 min-w-0 items-center gap-8 rounded-sm px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected",
+						"flex h-32 min-w-0 items-center gap-8 rounded-sm px-8 tr-text-ui text-text-default transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring data-[open=true]:bg-control-bg-selected",
 						className,
 					)}
 				>

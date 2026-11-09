@@ -9,8 +9,10 @@ export interface RelaySocket {
 /** No relay address answered: the phone and computer share no network, or `thinkrail --remote` is not running. */
 export class RelayUnreachableError extends Error {
 	readonly code = "relay_unreachable";
-	constructor(readonly urls: readonly string[]) {
+	readonly urls: readonly string[];
+	constructor(urls: readonly string[]) {
 		super(`couldn't reach the computer at ${urls.join(", ")}`);
+		this.urls = urls;
 		this.name = "RelayUnreachableError";
 	}
 }

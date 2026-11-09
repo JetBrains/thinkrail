@@ -1,5 +1,6 @@
 import {
 	RiBookOpenLine as BookOpen,
+	RiCheckLine as Check,
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
 	RiArrowUpSLine as ChevronUp,
@@ -10,16 +11,19 @@ import {
 	RiContractUpDownLine as FoldVertical,
 	RiLoopRightLine as RotateCw,
 	RiStackLine as Stack,
+	RiStopCircleLine as StopCircle,
 	RiToolsLine as Wrench,
 } from "@remixicon/react";
 import type {
+	ChatHandoffDetails,
+	ContinueInWorkspaceRequestDetails,
 	GitDiffScope,
-	ImageContent,
 	ReviewFixDetails,
-	UserMessage,
+	WireImage,
+	WireUserMessage,
 } from "@thinkrail/contracts";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
-import { useT } from "@thinkrail/locales/react";
+import { type Translator, useT } from "@thinkrail/locales/react";
 import { Button, withIconClass } from "@thinkrail/ui/button";
 import { CustomIcon } from "@thinkrail/ui/custom-icon";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
@@ -36,7 +40,9 @@ import { type AssistantFailure, errorTurnText, subscriptionLimit } from "./assis
 import { AssistantMarkdown } from "./assistantLinks";
 import { BackgroundCommandResult, SubagentResult } from "./BackgroundResult";
 import { useChatActions } from "./ChatActions";
+import { ChatImage } from "./ChatImage";
 import { CopyButton } from "./CopyButton";
+import { CONTENT_WIDTH_BREAKOUT } from "./contentWidth";
 import { NoticeLink } from "./ExtraUsageNotice";
 import { ToolPromptSlot } from "./ExtUiPrompt";
 import { FileChip } from "./FileChip";
@@ -49,7 +55,7 @@ import { type ChatRow, LARGE_USER_MESSAGE, type TurnDividerData } from "./rows";
 import { formatElapsed, formatTokens } from "./SessionStatsBar";
 import { ToolCard } from "./ToolCard";
 import { ToolRendererBody } from "./ToolRendererBody";
-import { getToolChrome, getToolSummary } from "./toolRegistry";
+import { getToolChrome, getToolSummary, getToolWidth } from "./toolRegistry";
 import type { CompactionState } from "./types";
 
 function ChatTurnViewImpl({
@@ -131,7 +137,7 @@ function ChatTurnViewImpl({
 						className={cn(
 							"tr-text-reading text-text-default",
 							isFinalAnswer &&
-								"w-full min-w-0 pl-24 [&>div>*:last-child]:mb-0 [&_ol]:list-inside [&_ul]:list-inside",
+								"w-full min-w-0 pl-24 [&>div>*:last-child]:mb-0 [&_ol]:list-inside [&_ul]:list-inside [&_li>p:first-child]:inline",
 						)}
 					>
 						<AssistantMarkdown
@@ -148,6 +154,10 @@ function ChatTurnViewImpl({
 			return <SubagentResult id={row.id} details={row.details} text={row.text} />;
 		case "reviewFix":
 			return <ReviewFixCard id={row.id} details={row.details} />;
+		case "continuationRequest":
+			return <ContinuationRequestCard details={row.details} />;
+		case "handoff":
+			return <HandoffCard details={row.details} />;
 		case "tool":
 			return <ToolRow row={row} workspaceRoot={workspaceRoot} onOpenFile={onOpenFile} />;
 		case "activity":
@@ -184,17 +194,11 @@ function ChatTurnViewImpl({
  */
 export const ChatTurnView = memo(ChatTurnViewImpl);
 
-function userAttachments(content: UserMessage["content"], names?: string[]) {
+function userAttachments(content: WireUserMessage["content"], names?: string[]) {
 	if (typeof content === "string") return [];
-	const seen = new Map<string, number>();
 	return content
 		.filter((c) => c.type === "image")
-		.map((img, i) => {
-			const tail = img.data.slice(-24);
-			const n = seen.get(tail) ?? 0;
-			seen.set(tail, n + 1);
-			return { key: `${tail}-${n}`, label: names?.[i] ?? img.mimeType, img };
-		});
+		.map((img, i) => ({ key: `attachment-${i}`, label: names?.[i] ?? img.mimeType, img }));
 }
 
 const USER_BUBBLE_BASE =
@@ -209,7 +213,7 @@ const USER_BUBBLE = cn("max-w-[85%]", USER_BUBBLE_BASE);
 const USER_SIDE_UNBOUNDED_CLAMP =
 	"[[data-line-width-bounded=false]_&]:max-w-[calc(100cqw-2*var(--chat-gutter))]";
 
-function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
+function AttachmentChip({ label, img }: { label: string; img: WireImage }) {
 	const t = useT();
 	const [open, setOpen] = useState(false);
 	return (
@@ -222,19 +226,12 @@ function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
 				label={label}
 			/>
 			<Dialog open={open} onOpenChange={setOpen}>
-				<DialogContent
-					data-testid="chat-attachment-dialog"
-					className="flex max-h-[90vh] w-auto max-w-[95vw] flex-col gap-8"
-				>
+				<DialogContent data-testid="chat-attachment-dialog" className="w-auto max-w-[95vw] gap-8">
 					<DialogHeader>
 						<DialogTitle>{label}</DialogTitle>
 					</DialogHeader>
-					<div className="min-h-0 flex-1 overflow-auto">
-						<img
-							src={`data:${img.mimeType};base64,${img.data}`}
-							alt=""
-							className="max-h-[80vh] max-w-full rounded-sm"
-						/>
+					<div className="relative min-h-0 flex-1 overflow-auto">
+						<ChatImage image={img} label={label} fit="screen" />
 					</div>
 				</DialogContent>
 			</Dialog>
@@ -282,7 +279,7 @@ function UserTurn({
 	agentResponded,
 }: {
 	id: string;
-	message: UserMessage;
+	message: WireUserMessage;
 	attachmentNames?: string[] | undefined;
 	agentResponded: boolean;
 }) {
@@ -428,7 +425,7 @@ function SkillInvocationCard({
 						: t("chat.turn.showSkillInstructions", { skill: invocation.name })
 				}
 				onClick={toggle}
-				className="flex w-full items-center gap-4 px-12 py-8 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex w-full items-center gap-4 px-12 py-8 text-left transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring-inset"
 			>
 				<BookOpen className="size-14 shrink-0 text-text-muted" aria-hidden="true" />
 				<span className="shrink-0 tr-text-ui text-text-muted">{t("chat.turn.skill")}</span>
@@ -490,6 +487,107 @@ function ReviewFixCard({ id, details }: { id: string; details: ReviewFixDetails 
 	);
 }
 
+const HOST_CARD_CLASS =
+	"max-w-[85%] overflow-hidden rounded-lg border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-12 py-8";
+
+function ContinuationRequestCard({ details }: { details: ContinueInWorkspaceRequestDetails }) {
+	const t = useT();
+	const actions = useChatActions();
+	const continuation = actions?.continuationOf?.(details.operationId);
+	const phase = continuation?.phase ?? "summarizing";
+	const status =
+		phase === "requested"
+			? t("chat.turn.continuation.requested")
+			: phase === "summarizing"
+				? t("chat.turn.continuation.summarizing")
+				: phase === "creating"
+					? t("chat.turn.continuation.creating")
+					: phase === "started"
+						? continuation?.firstMessage === "failed"
+							? t("chat.turn.continuation.startedNoMessage")
+							: t("chat.turn.continuation.started")
+						: phase === "lost"
+							? t("chat.turn.continuation.lost")
+							: t("chat.turn.continuation.failed", { reason: continuation?.reason ?? "" });
+	const opened =
+		phase === "started" && continuation?.workspaceId
+			? {
+					workspaceId: continuation.workspaceId,
+					projectId: continuation.projectId,
+					sessionId: continuation.sessionId,
+				}
+			: null;
+	return (
+		<div data-testid="continuation-card" data-phase={phase} className={HOST_CARD_CLASS}>
+			<span className="block tr-text-reading text-text-default">
+				{t("chat.turn.continuation.title", { project: details.projectName })}
+			</span>
+			<p
+				data-testid="continuation-status"
+				className={cn(
+					"mt-4 tr-text-metadata",
+					phase === "failed" || phase === "lost" ? "text-feedback-error" : "text-text-muted",
+				)}
+			>
+				{status}
+			</p>
+			{opened ? (
+				<Button
+					type="button"
+					variant="outline"
+					size="m"
+					data-testid="continuation-open"
+					className="mt-8"
+					onClick={() => actions?.openWorkspace?.(opened)}
+				>
+					{t("chat.turn.continuation.open")}
+				</Button>
+			) : phase === "failed" || phase === "lost" ? (
+				<Button
+					type="button"
+					variant="outline"
+					size="m"
+					data-testid="continuation-retry"
+					className="mt-8"
+					onClick={() => actions?.retryContinuation?.(details)}
+				>
+					{t("chat.turn.continuation.retry")}
+				</Button>
+			) : null}
+		</div>
+	);
+}
+
+function HandoffCard({ details }: { details: ChatHandoffDetails }) {
+	const t = useT();
+	const actions = useChatActions();
+	return (
+		<div data-testid="handoff-card" className={HOST_CARD_CLASS}>
+			<span className="block tr-text-reading text-text-default">
+				{details.sourceTitle
+					? t("chat.turn.handoff.titled", { title: details.sourceTitle })
+					: t("chat.turn.handoff.title")}
+			</span>
+			<div
+				data-testid="handoff-summary"
+				className="mt-4 tr-text-reading text-text-muted [&>div>*:last-child]:mb-0"
+			>
+				<Markdown text={details.summary} />
+			</div>
+			<Button
+				type="button"
+				variant="outline"
+				size="m"
+				data-testid="handoff-open-source"
+				className="mt-8"
+				onClick={() => actions?.openHandoffSource?.(details)}
+			>
+				{t("chat.turn.handoff.open")}
+			</Button>
+		</div>
+	);
+}
+
 function ToolRow({
 	row,
 	workspaceRoot,
@@ -512,7 +610,12 @@ function ToolRow({
 			streaming: row.streaming,
 		};
 		return (
-			<div className="tr-text-ui text-text-default">
+			<div
+				className={cn(
+					"tr-text-ui text-text-default",
+					getToolWidth(row.toolName) === "content" && CONTENT_WIDTH_BREAKOUT,
+				)}
+			>
 				<ToolRendererBody
 					{...renderProps}
 					imageLabel={getToolSummary(t, row.toolName, renderProps)}
@@ -535,15 +638,14 @@ function ToolRow({
 	);
 }
 
-function SystemTurn({ text }: { text?: string | undefined }) {
-	const t = useT();
+function SystemTurn({ text }: { text: string }) {
 	return (
 		<div
 			data-testid="chat-message"
 			data-role="system"
 			className="text-center text-text-muted tr-text-metadata"
 		>
-			{text ?? t("chat.turn.done")}
+			{text}
 		</div>
 	);
 }
@@ -762,6 +864,8 @@ interface ArtifactGroup {
 
 const WorkingStack = withIconClass(Stack, "motion-safe:animate-working");
 
+const FOOTER_ITEM = "flex shrink-0 items-center gap-4 whitespace-nowrap";
+
 function ArtifactChip({
 	group,
 	listId,
@@ -841,6 +945,37 @@ function ArtifactList({
 	);
 }
 
+const ROUND_STATUS = {
+	done: { icon: Check, label: "chat.divider.done", timedLabel: "chat.divider.doneIn" },
+	stopped: {
+		icon: StopCircle,
+		label: "chat.divider.stopped",
+		timedLabel: "chat.divider.stoppedAfter",
+	},
+	error: { icon: CircleAlert, label: null, timedLabel: "chat.divider.errorAfter" },
+} as const;
+
+function roundStatus(t: Translator, outcome: TurnDividerData["outcome"], elapsed: string | null) {
+	if (!outcome) return elapsed ? { outcome, icon: Clock, text: elapsed } : null;
+	const { icon, label, timedLabel } = ROUND_STATUS[outcome];
+	const text = elapsed ? t(timedLabel, { elapsed }) : label && t(label);
+	return text ? { outcome, icon, text } : null;
+}
+
+function RoundStatus({ status }: { status: NonNullable<ReturnType<typeof roundStatus>> }) {
+	const { outcome, icon: Icon, text } = status;
+	return (
+		<span
+			data-testid={outcome ? "turn-divider-status" : undefined}
+			data-outcome={outcome ?? undefined}
+			className={cn(FOOTER_ITEM, outcome === "error" && "text-feedback-error")}
+		>
+			<Icon className="size-12 shrink-0" aria-hidden />
+			{text}
+		</span>
+	);
+}
+
 export interface StillRunning {
 	count: number;
 	onOpen: () => void;
@@ -866,7 +1001,7 @@ export function TurnDivider({
 	stillRunning?: StillRunning | undefined;
 }) {
 	const t = useT();
-	const { elapsedMs, toolCount, specs, changedFiles, receipt } = data;
+	const { outcome, elapsedMs, toolCount, specs, changedFiles, receipt } = data;
 	const [selected, select] = useSelection(`${id}:artifacts`);
 	const stats = receipt
 		? new Map(
@@ -919,12 +1054,9 @@ export function TurnDivider({
 	const groups = allGroups.filter((group) => group.paths.length > 0);
 	const running = stillRunning && stillRunning.count > 0 ? stillRunning : null;
 
-	if (
-		toolCount === 0 &&
-		groups.length === 0 &&
-		!running &&
-		(elapsedMs == null || elapsedMs < 1000)
-	) {
+	const elapsed = elapsedMs != null && elapsedMs >= 1000 ? formatElapsed(t, elapsedMs) : null;
+	const status = roundStatus(t, outcome, elapsed);
+	if (!status && toolCount === 0 && groups.length === 0 && !running) {
 		return <div data-testid="turn-divider" className="my-4 h-px bg-border-muted" />;
 	}
 	return (
@@ -934,50 +1066,47 @@ export function TurnDivider({
 			className="my-4 flex flex-col gap-4 text-text-muted tr-text-metadata"
 		>
 			<div className="flex items-center gap-8">
-				<span className="h-px flex-1 bg-border-muted" />
-				{toolCount > 0 ? (
-					<span className="flex items-center gap-4">
-						<Wrench className="size-12 shrink-0" />
-						{t("chat.divider.toolCalls", { count: toolCount })}
-					</span>
-				) : null}
-				{groups.map((group) => (
-					<ArtifactChip
-						key={group.id}
-						group={group}
-						listId={`${id}-${group.id}-list`}
-						onSelect={(event) => select(group.id, event)}
-					/>
-				))}
-				{receipt && onReviewTurn ? (
-					<Button
-						variant="soft-primary"
-						size="s"
-						iconLeft={Eye}
-						data-testid="turn-divider-review"
-						onClick={() => onReviewTurn(receipt.scope)}
-					>
-						{t("chat.divider.reviewTurn")}
-					</Button>
-				) : null}
-				{elapsedMs != null && elapsedMs >= 1000 ? (
-					<span className="flex items-center gap-4">
-						<Clock className="size-12 shrink-0" />
-						{formatElapsed(t, elapsedMs)}
-					</span>
-				) : null}
-				{running ? (
-					<Button
-						variant="soft-primary"
-						size="s"
-						iconLeft={WorkingStack}
-						data-testid="turn-divider-running"
-						onClick={running.onOpen}
-					>
-						{t("chat.divider.stillRunning", { count: running.count })}
-					</Button>
-				) : null}
-				<span className="h-px flex-1 bg-border-muted" />
+				<span className="h-px min-w-0 flex-1 bg-border-muted" />
+				<div className="flex min-w-0 flex-wrap items-center justify-center gap-x-8 gap-y-4">
+					{status ? <RoundStatus status={status} /> : null}
+					{toolCount > 0 ? (
+						<span className={FOOTER_ITEM}>
+							<Wrench className="size-12 shrink-0" />
+							{t("chat.divider.toolCalls", { count: toolCount })}
+						</span>
+					) : null}
+					{groups.map((group) => (
+						<ArtifactChip
+							key={group.id}
+							group={group}
+							listId={`${id}-${group.id}-list`}
+							onSelect={(event) => select(group.id, event)}
+						/>
+					))}
+					{receipt && onReviewTurn ? (
+						<Button
+							variant="soft-primary"
+							size="s"
+							iconLeft={Eye}
+							data-testid="turn-divider-review"
+							onClick={() => onReviewTurn(receipt.scope)}
+						>
+							{t("chat.divider.reviewTurn")}
+						</Button>
+					) : null}
+					{running ? (
+						<Button
+							variant="soft-primary"
+							size="s"
+							iconLeft={WorkingStack}
+							data-testid="turn-divider-running"
+							onClick={running.onOpen}
+						>
+							{t("chat.divider.stillRunning", { count: running.count })}
+						</Button>
+					) : null}
+				</div>
+				<span className="h-px min-w-0 flex-1 bg-border-muted" />
 			</div>
 			{groups
 				.filter((group) => group.paths.length > 1 && group.expanded)

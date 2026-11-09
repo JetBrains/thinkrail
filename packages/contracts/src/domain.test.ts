@@ -672,6 +672,7 @@ describe("template names", () => {
 			expect(isValidTemplateName(name)).toBe(true);
 		});
 	}
+});
 
 test("an unnamed chat's title is its first prompt's head, cut at a word boundary; a real name always wins", () => {
 	expect(unnamedChatTitle("Fix the login redirect")).toBe("Fix the login redirect");

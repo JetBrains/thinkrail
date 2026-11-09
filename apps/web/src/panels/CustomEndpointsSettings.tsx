@@ -4,6 +4,7 @@ import {
 	RiSearchLine as Search,
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
+import { formatContext } from "@thinkrail/chat-ui/modelPicker";
 import {
 	CUSTOM_ENDPOINTS_PROTOCOL_VERSION,
 	CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION,
@@ -23,9 +24,9 @@ import {
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { SettingsGroup } from "@thinkrail/ui/settings";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
-import { formatContext } from "@/chat/modelPicker";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -51,7 +52,6 @@ import {
 	tokenRange,
 	useModelContextSettings,
 } from "./ModelContextSettings";
-import { SettingsGroup } from "./SettingsGroup";
 import { SettingsSwitch } from "./SettingsSwitch";
 import { keepSettingsDraftOnEscape, useSettingsDraft } from "./settingsDraft";
 

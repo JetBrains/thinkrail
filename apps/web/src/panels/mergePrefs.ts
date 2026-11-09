@@ -11,7 +11,7 @@ const FALLBACK_ORDER: MergeMethod[] = ["squash", "merge", "rebase"];
 const METHODS = new Set<string>(FALLBACK_ORDER);
 
 function storageKey(projectId: string): string {
-	return `${STORAGE_PREFIX}merge-pr:${getTransport().httpBase()}:${projectId}`;
+	return `${STORAGE_PREFIX}merge-pr:${getTransport().backendKey()}:${projectId}`;
 }
 
 export function loadMergePrefs(projectId: string): MergePrefs {

@@ -1,4 +1,4 @@
-import type { ChatTurn } from "./types";
+import type { ChatTurn } from "@thinkrail/chat-ui/types";
 
 /** The anchor text of a turn: the user prompt or the assistant's concatenated text blocks. */
 export function turnAnchorText(turn: ChatTurn): string {

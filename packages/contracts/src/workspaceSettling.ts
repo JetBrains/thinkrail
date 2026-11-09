@@ -35,7 +35,8 @@ export function workspaceSettledReason(
 	workspace: Workspace,
 	context: SettlingContext,
 ): SettledReason | null {
-	if (workspace.kind === "default" || context.busy(workspace)) return null;
+	if (workspace.kind === "default" || workspace.kind === "chat" || context.busy(workspace))
+		return null;
 	if (workspace.settledOverride === "settled") {
 		return workspace.settledAt === undefined
 			? { kind: "override" }

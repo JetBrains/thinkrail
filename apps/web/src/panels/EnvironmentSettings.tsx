@@ -8,6 +8,7 @@ import type { HostEnvironmentStatus } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
+import { SettingsGroup } from "@thinkrail/ui/settings";
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useState } from "react";
 import { randomId } from "@/lib";
@@ -22,7 +23,6 @@ import {
 	environmentFromDraft,
 	NO_ISSUES,
 } from "./environmentDraft";
-import { SettingsGroup } from "./SettingsGroup";
 import { SettingsNotice } from "./SettingsNotice";
 
 const INPUT_CLASS =

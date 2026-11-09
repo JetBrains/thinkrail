@@ -17,9 +17,11 @@ import {
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { localeOf, type Translator, useT } from "@thinkrail/locales/react";
+import { AttentionDot } from "@thinkrail/ui/attention-dot";
 import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { RunningIcon } from "@thinkrail/ui/running-icon";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import {
@@ -35,10 +37,8 @@ import {
 	useState,
 } from "react";
 import { shortcutKeys } from "../commands";
-import { AttentionDot } from "../components/AttentionDot";
 import { Keycaps, KeyHint } from "../components/Keycaps";
 import { highlightRanges } from "../components/MatchHighlight";
-import { RunningIcon } from "../components/RunningIcon";
 import { hasPlatformModifier, useMediaQuery } from "../lib";
 import { selectHostReachable, useAppStore } from "../store";
 import { hostItems, hostOverflow } from "./hostItems";

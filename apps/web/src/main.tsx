@@ -1,4 +1,5 @@
 import "./index.css";
+import { CodeHighlighterProvider } from "@thinkrail/chat-ui/highlight";
 import { useT } from "@thinkrail/locales/react";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { StrictMode } from "react";
@@ -9,6 +10,7 @@ import { ErrorBoundary, setErrorBoundaryReporter } from "./components/ErrorBound
 import { registerWebExtensions } from "./extensions";
 import { initializeFonts } from "./fonts";
 import { useLocaleSync } from "./i18n";
+import { webCodeHighlighter } from "./lib/highlightCode";
 import { initNavigation } from "./navigation";
 import { initFilesTreePersistence } from "./panels/filesTreeState";
 import { initProjectExpansionPersistence } from "./panels/projectExpansion";
@@ -52,9 +54,11 @@ function App() {
 	return (
 		<ErrorBoundary label={t("app.errorBoundary.label")} reportId="app">
 			<TooltipProvider delayDuration={250} skipDelayDuration={400}>
-				<AppResourceHost>
-					<Shell />
-				</AppResourceHost>
+				<CodeHighlighterProvider highlighter={webCodeHighlighter}>
+					<AppResourceHost>
+						<Shell />
+					</AppResourceHost>
+				</CodeHighlighterProvider>
 				<DictationLayer />
 			</TooltipProvider>
 		</ErrorBoundary>

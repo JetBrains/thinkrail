@@ -141,7 +141,7 @@ export function SegmentedControl<T extends string>({
 								selected
 									? "rounded-sm bg-control-bg-selected text-text-default"
 									: "text-text-muted hover:text-text-default",
-								"peer-focus-visible:ring-2 peer-focus-visible:ring-inset peer-focus-visible:ring-primary",
+								"peer-focus-visible:focus-ring-inset",
 								"peer-disabled:text-control-disabled-text peer-disabled:hover:text-control-disabled-text",
 							)}
 						>
@@ -189,7 +189,7 @@ export function SettingsRadioCards<T extends string>({
 						data-testid={choice.testId}
 						data-active={active}
 						className={cn(
-							"flex items-center gap-8 rounded-sm border px-12 py-8 text-left transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
+							"flex items-center gap-8 rounded-sm border px-12 py-8 text-left transition-colors has-[:focus-visible]:focus-ring",
 							choiceDisabled ? "cursor-default" : "cursor-pointer",
 							active
 								? "border-primary-muted bg-clip-padding bg-primary-subtle"

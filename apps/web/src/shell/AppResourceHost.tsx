@@ -1,3 +1,4 @@
+import { Markdown } from "@thinkrail/chat-ui/Markdown";
 import { MAX_SEARCH_PREVIEW_BYTES } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import {
@@ -12,7 +13,6 @@ import {
 	registerBundledResourceRenderers,
 } from "@thinkrail/resource-renderers";
 import { type ReactNode, useMemo } from "react";
-import { Markdown } from "../chat/Markdown";
 import { cssColorToHex, usePhoneViewport } from "../lib";
 import { CODE_LANGUAGES, codeLanguageId } from "../lib/codeLanguages";
 import { openFileComparisonInTab, openFileInTab } from "../panels/openTabs";

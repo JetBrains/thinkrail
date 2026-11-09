@@ -1,9 +1,9 @@
 import { STORAGE_PREFIX } from "../constants/branding";
 import { useAppStore } from "../store";
-import { getTransport } from "../transport";
+import { getTransport, isHostResetting, onHostReset } from "../transport";
 
 function storageKey(): string {
-	return `${STORAGE_PREFIX}expanded-projects:${getTransport().httpBase()}`;
+	return `${STORAGE_PREFIX}expanded-projects:${getTransport().backendKey()}`;
 }
 
 function readPersistedExpansion(): string[] {
@@ -30,6 +30,10 @@ export function initProjectExpansionPersistence(): void {
 	useAppStore.subscribe((state) => {
 		if (state.expandedProjectIds === previous) return;
 		previous = state.expandedProjectIds;
-		persistExpansion(previous);
+		if (!isHostResetting()) persistExpansion(previous);
+	});
+	onHostReset(() => {
+		useAppStore.getState().hydrateExpandedProjects(readPersistedExpansion());
+		previous = useAppStore.getState().expandedProjectIds;
 	});
 }

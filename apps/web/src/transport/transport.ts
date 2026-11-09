@@ -71,7 +71,23 @@ export interface RequestOptions {
 	timeoutMs?: number;
 }
 
-export class WsTransport {
+/**
+ * The surface the store and panels use, so the same wiring drives either a same-origin `WsTransport` or the
+ * remote `RemoteTransport` (a WebRTC DataChannel to another host).
+ */
+export interface Transport {
+	request<M extends WsMethodName>(
+		method: M,
+		params: WsParams<M>,
+		options?: RequestOptions,
+	): Promise<WsResult<M>>;
+	subscribe(channel: string, handler: (data: unknown) => void): () => void;
+	httpBase(): string;
+	backendKey(): string;
+	close(): void;
+}
+
+export class WsTransport implements Transport {
 	private ws: WebSocket | null = null;
 	private readonly url: string;
 	private readonly onStatus: ((status: ConnectionStatus) => void) | undefined;
@@ -91,6 +107,7 @@ export class WsTransport {
 	private ackQueue: string[] = [];
 	private ackScheduled = false;
 	private backoff = RECONNECT_INITIAL_MS;
+	private closed = false;
 
 	constructor(opts: TransportOptions = {}, dispatchHooks: TransportDispatchHooks = {}) {
 		this.url = opts.url ?? inferUrl();
@@ -104,7 +121,26 @@ export class WsTransport {
 		return u.origin;
 	}
 
+	backendKey(): string {
+		return this.httpBase();
+	}
+
+	close(): void {
+		this.closed = true;
+		this.subscribers.clear();
+		this.latest.clear();
+		for (const entry of this.pending.values()) {
+			clearTimeout(entry.timer);
+			entry.reject(new Error(t("app.transport.requestFailed")));
+		}
+		this.pending.clear();
+		const ws = this.ws;
+		this.ws = null;
+		ws?.close();
+	}
+
 	connect(): void {
+		if (this.closed) return;
 		this.onStatus?.("connecting");
 		const ws = new WebSocket(withClientId(this.url));
 		this.ws = ws;

@@ -226,7 +226,8 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   modifier + Enter** (`hasPlatformModifier`: Cmd on Apple, Ctrl elsewhere) **submits from anywhere in the
   card**, fields included; **←/→ switch questions** without wrapping outside text fields; Tab keeps moving
   focus (taking it for paging would trap keyboard users in the card — the terminal, which has no focus
-  order, pages with Tab too). A legend states all of it. Inside the Other field ←/→/Home/End stay caret
+  order, pages with Tab too). A legend states all of it (hidden on a coarse pointer, where there is no keyboard
+  to discover). Inside the Other field ←/→/Home/End stay caret
   keys and ↑/↓ lift out only where the browser could not move the caret, so a wrapped long answer is
   never left by accident. Reaching Other focuses its field — but **text, not focus, makes Other the
   answer** (`customTextPatch`): typing claims it (exclusively on single-select, additively on

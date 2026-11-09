@@ -1,12 +1,20 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { loadColors, paletteVar, renderCss, themeColorKeys, validate } from "../../scripts/colors";
+import {
+	GENERATED_CSS_PATH,
+	loadColors,
+	paletteVar,
+	renderCss,
+	SRC_DIR,
+	themeColorKeys,
+	validate,
+} from "@thinkrail/design-tokens/scripts/colors";
+import { normalizeEol } from "@thinkrail/design-tokens/scripts/generatedFiles";
+import { GENERATED_PATH as GENERATED_SPACING_CSS } from "@thinkrail/design-tokens/scripts/spacing";
+import { GENERATED_PATH as GENERATED_TYPE_CSS } from "@thinkrail/design-tokens/scripts/typography";
 import { designSourceFiles, designSourceLabel } from "../../scripts/designSources";
-import { normalizeEol } from "../../scripts/generatedFiles";
 
-const SRC = fileURLToPath(new URL("..", import.meta.url));
 const read = (path: string) => normalizeEol(readFileSync(path, "utf8"));
 const rel = designSourceLabel;
 const code = (path: string) =>
@@ -19,9 +27,7 @@ const FILES = designSourceFiles();
 const TS_FILES = FILES.filter((f) => /\.tsx?$/.test(f));
 const CSS_FILES = FILES.filter((f) => f.endsWith(".css"));
 
-const GENERATED_CSS = join(SRC, "styles/generated/colors.css");
-const GENERATED_TYPE_CSS = join(SRC, "styles/generated/typography.css");
-const GENERATED_SPACING_CSS = join(SRC, "styles/generated/spacing.css");
+const GENERATED_CSS = GENERATED_CSS_PATH;
 
 const THEME_ENTRY = /^\s*--color-([a-z0-9-]+)\s*:\s*var\((--[a-z0-9-]+)\)/gm;
 const PUBLISHED_TARGET = new Map(
@@ -38,7 +44,7 @@ const DECLARED_VARS = new Set(
 );
 const PALETTE_VARS = new Set([
 	...themeColorKeys().map(paletteVar),
-	...[...read(join(SRC, "themes/runtime.ts")).matchAll(/"(--[a-z0-9-]+)"/g)].map(
+	...[...read(join(SRC_DIR, "palette.ts")).matchAll(/"(--[a-z0-9-]+)"/g)].map(
 		(m) => m[1] as string,
 	),
 ]);

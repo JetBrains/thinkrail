@@ -1,3 +1,4 @@
+export type { ThemeManifest } from "@thinkrail/design-tokens";
 export { initializeThemes } from "./bundled";
 export { resolveThinkrailEditorTheme } from "./editor";
 export { THINKRAIL_PIERRE_THEME } from "./pierre";
@@ -21,4 +22,3 @@ export {
 	type UserThemeIssue,
 	writeThemeHint,
 } from "./runtime";
-export type { ThemeManifest } from "./schema";

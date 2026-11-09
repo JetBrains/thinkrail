@@ -5,8 +5,11 @@ import { dirname, join } from "node:path";
 export const GENERATED_GLYPHS_PATH = join(
 	import.meta.dir,
 	"..",
+	"..",
+	"..",
+	"packages",
+	"chat-ui",
 	"src",
-	"chat",
 	"generated",
 	"providerGlyphs.ts",
 );

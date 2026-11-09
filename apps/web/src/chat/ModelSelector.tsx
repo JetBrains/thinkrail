@@ -7,6 +7,23 @@ import {
 	RiStarFill as StarFill,
 	RiStarLine as StarLine,
 } from "@remixicon/react";
+import { formatContext } from "@thinkrail/chat-ui/modelPicker";
+import type { ModelPreferences } from "@thinkrail/chat-ui/modelPreferences";
+import { ProviderGlyph } from "@thinkrail/chat-ui/ProviderGlyph";
+import {
+	GROUPED_ROW,
+	type GroupExpansion,
+	groupRowValue,
+	initialGroupExpansion,
+	NO_MODELS_HINT,
+	type PickerGroup,
+	PROVIDER_GROUP,
+	pickerEmptyState,
+	pickerFilter,
+	pickerGroups,
+	rowValue,
+	toggleGroup,
+} from "@thinkrail/chat-ui/pickerGroups";
 import { sameModel, type WireModel } from "@thinkrail/contracts";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
@@ -21,23 +38,6 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
-import { formatContext } from "./modelPicker";
-import { ProviderGlyph } from "./ProviderGlyph";
-import {
-	GROUPED_ROW,
-	type GroupExpansion,
-	groupRowValue,
-	initialGroupExpansion,
-	NO_MODELS_HINT,
-	type PickerGroup,
-	PROVIDER_GROUP,
-	pickerEmptyState,
-	pickerFilter,
-	pickerGroups,
-	rowValue,
-	toggleGroup,
-} from "./pickerGroups";
-import type { ModelPreferences } from "./useModelPreferences";
 
 function subLine(t: Translator, model: WireModel): string {
 	const parts = [t("chat.modelPicker.context", { size: formatContext(model.contextWindow) })];

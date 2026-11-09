@@ -1,15 +1,13 @@
 import { expect, test } from "bun:test";
+import { newerHighlight, type ShownHighlight, staleHighlight } from "@thinkrail/chat-ui/highlight";
+import { assembleHighlight } from "@thinkrail/chat-ui/highlightHtml";
 import {
 	createHighlightClient,
 	HIGHLIGHT_CACHE_MAX_CHARS,
 	HIGHLIGHT_CACHE_MAX_ENTRIES,
 	type HighlightWorkerEvents,
-	newerHighlight,
-	type ShownHighlight,
-	staleHighlight,
 } from "./highlightCode";
 import type { HighlightReply, HighlightRequest } from "./highlighter.worker";
-import { assembleHighlight } from "./highlightHtml";
 
 function render(code: string, lang: string) {
 	return `<pre class="highlights ${lang}"><code>${code}</code></pre>`;

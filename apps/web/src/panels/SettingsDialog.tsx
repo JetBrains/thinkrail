@@ -22,6 +22,7 @@ import { LanguageSettings } from "./LanguageSettings";
 import { McpSettings } from "./McpSettings";
 import { ModelsSettings } from "./ModelsSettings";
 import { NotificationsSettings } from "./NotificationsSettings";
+import { PhoneAccessSettings } from "./PhoneAccessSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { ProvidersSettings } from "./ProvidersSettings";
 import { SettingsDialogContainer } from "./settingsDialogContainer";
@@ -159,6 +160,8 @@ export function SettingsDialog({
 								<GithubSettings />
 							) : selectedSection === SettingsSection.Notifications ? (
 								<NotificationsSettings />
+							) : selectedSection === SettingsSection.Phone ? (
+								<PhoneAccessSettings />
 							) : selectedSection === SettingsSection.Privacy ? (
 								<PrivacySettings />
 							) : selectedSection === SettingsSection.Updates && updateSettings !== undefined ? (

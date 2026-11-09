@@ -1,4 +1,41 @@
 import { RiArrowDownLine as ArrowDown, RiArrowUpLine as ArrowUp } from "@remixicon/react";
+import {
+	ACTIVITY_BREADCRUMB_HEIGHT,
+	ActivityBreadcrumbTrail,
+} from "@thinkrail/chat-ui/activityBreadcrumbs";
+import { type ChatActions, ChatActionsContext } from "@thinkrail/chat-ui/ChatActions";
+import type { ChatMessageOrder } from "@thinkrail/chat-ui/chatMessageOrder";
+import {
+	type PendingExtUi,
+	PendingExtUiContext,
+	PendingExtUiPrompt,
+} from "@thinkrail/chat-ui/ExtUiPrompt";
+import { FoldGeometryProvider } from "@thinkrail/chat-ui/foldState";
+import {
+	awaitingToolCallIdOf,
+	deriveInteractionStates,
+	dockedInteraction,
+	InteractionStatesContext,
+	latestPendingInteraction,
+	type PendingInteraction,
+} from "@thinkrail/chat-ui/interactionState";
+import { deriveMessageActions } from "@thinkrail/chat-ui/messageActions";
+import {
+	type ChatRow,
+	deriveRows,
+	projectRows,
+	rowIndexForTurn,
+	rowsHaveToolCall,
+	stabilizeRows,
+} from "@thinkrail/chat-ui/rows";
+import {
+	type StreamStatus,
+	StreamStatusSlot,
+	streamStatus,
+} from "@thinkrail/chat-ui/StreamIndicator";
+import { useToolInteraction } from "@thinkrail/chat-ui/toolInteraction";
+import { getToolRenderer } from "@thinkrail/chat-ui/toolRegistry";
+import { ChatTurnView } from "@thinkrail/chat-ui/turns";
 import type { ChatContinuation, GitDiffScope, TurnChangeSet } from "@thinkrail/contracts";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import type { MessageKey } from "@thinkrail/locales";
@@ -34,36 +71,10 @@ import {
 	useAppStore,
 } from "@/store";
 import { errorText, getTransport, respondToTool } from "@/transport";
-import { ACTIVITY_BREADCRUMB_HEIGHT, ActivityBreadcrumbTrail } from "./activityBreadcrumbs";
-import { type ChatActions, ChatActionsContext } from "./ChatActions";
-import type { ChatMessageOrder } from "./chatPreferences";
 import { refreshContinuation, requestContinuation } from "./continuations";
-import { type PendingExtUi, PendingExtUiContext, PendingExtUiPrompt } from "./ExtUiPrompt";
-import { FoldGeometryProvider } from "./foldState";
-import {
-	awaitingToolCallIdOf,
-	deriveInteractionStates,
-	dockedInteraction,
-	InteractionStatesContext,
-	latestPendingInteraction,
-	type PendingInteraction,
-} from "./interactionState";
-import { deriveMessageActions } from "./messageActions";
 import { openWorkspace } from "./openWorkspace";
 import { turnAnchorText } from "./recentPrompts";
 import { estimateChatRowHeights } from "./rowHeightEstimates";
-import {
-	type ChatRow,
-	deriveRows,
-	projectRows,
-	rowIndexForTurn,
-	rowsHaveToolCall,
-	stabilizeRows,
-} from "./rows";
-import { type StreamStatus, StreamStatusSlot, streamStatus } from "./StreamIndicator";
-import { useToolInteraction } from "./toolInteraction";
-import { getToolRenderer } from "./toolRegistry";
-import { ChatTurnView } from "./turns";
 import { type ChatReadingPosition, useChatScroll } from "./useChatScroll";
 import { useTranscriptSync } from "./useTranscriptSync";
 import { useWindowFocused } from "./useWindowFocused";
@@ -627,6 +638,7 @@ const ChatTranscript = forwardRef<
 		[continuations],
 	);
 	const welcomeGeneration = useAppStore((s) => s.welcomeGeneration);
+	const hostProtocol = useAppStore((s) => s.protocolVersion) ?? undefined;
 	const cardOperations = useMemo(
 		() =>
 			runtime.turns.flatMap((turn) =>
@@ -674,12 +686,14 @@ const ChatTranscript = forwardRef<
 			},
 			openWorkspace,
 			WorkspaceName: LiveWorkspaceName,
+			hostProtocol,
 		}),
 		[
 			cancelAutomaticReveal,
 			continuationOf,
 			findModel,
 			focusComposer,
+			hostProtocol,
 			openMcpSettings,
 			openProviderSettings,
 			openSubagentTranscript,

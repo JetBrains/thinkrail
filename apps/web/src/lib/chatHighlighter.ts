@@ -5,8 +5,12 @@ import {
 	LiveTokenizer,
 	type ThemedToken,
 } from "@pierre/highlights";
+import {
+	escapeHtml,
+	HIGHLIGHT_PRE_END,
+	type HighlightLines,
+} from "@thinkrail/chat-ui/highlightHtml";
 import { THINKRAIL_PIERRE_THEME } from "@/themes";
-import { escapeHtml, HIGHLIGHT_PRE_END, type HighlightLines } from "./highlightHtml";
 
 const decoder = new TextDecoder();
 

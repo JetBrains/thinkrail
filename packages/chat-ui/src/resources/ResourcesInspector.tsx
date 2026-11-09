@@ -24,7 +24,7 @@ import { Button, IconButton } from "@thinkrail/ui/button";
 import { Dialog, DialogPanel, DialogTitle } from "@thinkrail/ui/dialog";
 import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, type ReactNode, useEffect, useRef } from "react";
-import { McpServerSection } from "./mcpRow";
+import { McpDetailHeader, McpServerSection, mcpResourceId } from "./mcpRow";
 import {
 	actionKey,
 	ExitBadge,
@@ -56,7 +56,6 @@ export interface ResourcesInspectorProps {
 	finishedSubagents: SubagentResourceSummary[];
 	history: SessionResourceHistory;
 	remaining?: Partial<Record<ResourceKind, number>>;
-	newIds?: ReadonlySet<string>;
 	expanded: Partial<Record<ResourceKind, boolean>>;
 	onExpandedChange: (kind: ResourceKind, expanded: boolean) => void;
 	onLoadMore?: (kind: ResourceKind) => void;
@@ -73,7 +72,7 @@ export interface ResourcesInspectorProps {
 	onStopCommand: (commandId: string) => void;
 	onStopSubagent: (childSessionId: string) => void;
 	onStopAll: () => void;
-	/** The selected row's body: bounded command output or the read-only subagent transcript. */
+	/** The selected row's body: command output, the read-only subagent transcript, or an MCP server's calls. */
 	detail: ReactNode;
 	renderSubagentModel?: (summary: SubagentResourceSummary) => ReactNode;
 	mcpServers?: McpServerResourceSummary[] | null;
@@ -84,7 +83,6 @@ export interface ResourcesInspectorProps {
 
 const ESCAPE_KEY = "Esc";
 const FINISHED_ABOVE_FOLD = 5;
-const NONE: ReadonlySet<string> = new Set();
 
 function formatAgo(t: Translator, ms: number): string {
 	const minutes = Math.floor(ms / 60_000);
@@ -118,13 +116,13 @@ function category(
 	live: Resource[],
 	finished: Resource[],
 	historyTally: ResourceTally,
-	pinned: ReadonlySet<string>,
+	pinnedId: string | null,
 	expanded: boolean,
 ): Category {
 	const sorted = sortSettled(finished);
 	const above = sorted.filter(
 		(resource, index) =>
-			index < FINISHED_ABOVE_FOLD || (!expanded && pinned.has(resourceId(resource))),
+			index < FINISHED_ABOVE_FOLD || (!expanded && resourceId(resource) === pinnedId),
 	);
 	const shown = new Set(above.map(resourceId));
 	const total = Math.max(resourceTallyTotal(historyTally), sorted.length);
@@ -290,7 +288,7 @@ function FoldRow({ group, onToggle }: { group: Category; onToggle: () => void })
 				stopped,
 			})}
 			onClick={onToggle}
-			className="flex min-h-28 items-center gap-8 rounded-sm border border-border-muted px-8 text-left text-text-muted tr-text-metadata outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+			className="flex min-h-28 items-center gap-8 rounded-sm border border-border-muted px-8 text-left text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default focus-visible:focus-ring"
 		>
 			<Chevron className="size-14 shrink-0" />
 			<span className="min-w-0 truncate">
@@ -322,15 +320,13 @@ function FoldRow({ group, onToggle }: { group: Category; onToggle: () => void })
 
 export function ResourcesInspector(props: ResourcesInspectorProps) {
 	const t = useT();
-	const fresh = props.newIds ?? NONE;
-	const pinned = props.selectedId ? new Set([...fresh, props.selectedId]) : fresh;
 	const groups = [
 		category(
 			"command",
 			toResources(props.commands, []),
 			toResources(props.finishedCommands, []),
 			props.history.commands,
-			pinned,
+			props.selectedId,
 			!!props.expanded.command,
 		),
 		category(
@@ -338,18 +334,25 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 			toResources([], props.subagents),
 			toResources([], props.finishedSubagents),
 			props.history.subagents,
-			pinned,
+			props.selectedId,
 			!!props.expanded.subagent,
 		),
 	];
 	const live = groups.flatMap((group) => group.live);
 	const all = groups.flatMap(visibleRows);
-	const selected = all.find((resource) => resourceId(resource) === props.selectedId) ?? all[0];
+	const servers = props.mcpServers ?? [];
+	const order = [...all.map(resourceId), ...servers.map((server) => mcpResourceId(server.name))];
+	const selectedId =
+		props.selectedId !== null && order.includes(props.selectedId)
+			? props.selectedId
+			: (order[0] ?? null);
+	const selected = all.find((resource) => resourceId(resource) === selectedId);
+	const selectedServer = servers.find((server) => mcpResourceId(server.name) === selectedId);
 	const listRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
-		if (!props.open || !selected || props.selectedId === resourceId(selected)) return;
-		props.onSelect(resourceId(selected));
+		if (!props.open || selectedId === null || props.selectedId === selectedId) return;
+		props.onSelect(selectedId);
 	});
 
 	const stopFor = (resource: Resource) =>
@@ -359,12 +362,11 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 
 	const onListKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
 		if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-		if (!selected) return;
-		const index = all.findIndex((resource) => resourceId(resource) === resourceId(selected));
-		const next = all[event.key === "ArrowDown" ? index + 1 : index - 1];
-		if (!next) return;
+		if (selectedId === null) return;
+		const index = order.indexOf(selectedId);
+		const nextId = order[event.key === "ArrowDown" ? index + 1 : index - 1];
+		if (!nextId) return;
 		event.preventDefault();
-		const nextId = resourceId(next);
 		props.onSelect(nextId);
 		listRef.current
 			?.querySelector<HTMLElement>(`[data-resource-id="${CSS.escape(nextId)}"] [role="option"]`)
@@ -380,8 +382,7 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 			action={props.actions[actionKey(resource)]}
 			stopAllPending={!!props.actions.all?.pending}
 			role="option"
-			selected={!!selected && resourceId(resource) === resourceId(selected)}
-			fresh={fresh.has(resourceId(resource))}
+			selected={resourceId(resource) === selectedId}
 			onSelect={() => props.onSelect(resourceId(resource))}
 			onStop={() => stopFor(resource)}
 		/>
@@ -620,10 +621,8 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 					{props.mcpServers ? (
 						<McpServerSection
 							servers={props.mcpServers}
-							authoritative={props.authoritative}
-							actions={props.actions}
-							onSetEnabled={(name, enabled) => props.onMcpSetEnabled?.(name, enabled)}
-							onReconnect={(name) => props.onMcpReconnect?.(name)}
+							selectedId={selectedId}
+							onSelect={props.onSelect}
 							onOpenSettings={() => props.onOpenMcpSettings?.()}
 						/>
 					) : null}
@@ -647,6 +646,18 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 							/>
 							<div className="flex min-h-0 flex-1 flex-col gap-8 p-12">{props.detail}</div>
 						</>
+					) : selectedServer ? (
+						<>
+							<McpDetailHeader
+								server={selectedServer}
+								authoritative={props.authoritative}
+								actions={props.actions}
+								onSetEnabled={(name, enabled) => props.onMcpSetEnabled?.(name, enabled)}
+								onReconnect={(name) => props.onMcpReconnect?.(name)}
+								onOpenSettings={() => props.onOpenMcpSettings?.()}
+							/>
+							<div className="flex min-h-0 flex-1 flex-col gap-8 p-12">{props.detail}</div>
+						</>
 					) : (
 						<p className="flex-1 p-12 text-text-subtle tr-text-metadata">
 							{t("resources.inspector.nothingSelected")}
@@ -656,9 +667,11 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 						<span className="flex-1">
 							{selected?.kind === "subagent"
 								? t("resources.inspector.subagentFooter")
-								: props.retained
-									? t("resources.inspector.commandFooterRetained")
-									: t("resources.inspector.commandFooter")}
+								: selectedServer
+									? t("resources.inspector.mcpFooter")
+									: props.retained
+										? t("resources.inspector.commandFooterRetained")
+										: t("resources.inspector.commandFooter")}
 						</span>
 						<kbd className="rounded-xs border border-border-default px-4">↑</kbd>
 						<kbd className="rounded-xs border border-border-default px-4">↓</kbd>

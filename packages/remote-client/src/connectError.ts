@@ -31,11 +31,10 @@ export type RemoteConnectCode =
 	| "failed";
 
 export class RemoteConnectError extends Error {
-	constructor(
-		readonly code: RemoteConnectCode,
-		message: string,
-	) {
+	readonly code: RemoteConnectCode;
+	constructor(code: RemoteConnectCode, message: string) {
 		super(message);
+		this.code = code;
 		this.name = "RemoteConnectError";
 	}
 }

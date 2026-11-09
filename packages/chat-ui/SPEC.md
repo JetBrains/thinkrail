@@ -34,9 +34,16 @@ effect each host runs once).
 Host seams, each a context or a prop the host fills:
 
 - `highlight` — `CodeHighlighterProvider` + `CodeHighlighter` (`cached(code, lang)` /
-  `highlight(code, lang, key)`); the package owns `useHighlightedCode` (cache read, streaming tail shown plain
-  until the newer highlight lands). Without a provider code renders unhighlighted. The web app provides its
-  shiki worker client (`apps/web/src/lib/highlightCode`); the worker and the theme mapping stay in the app.
+  `highlight(code, lang, key)` / `release(key)` when a block unmounts); the package owns `useHighlightedCode`
+  (cache read, streaming tail shown plain until the newer highlight lands) and `HighlightedHtml`, which
+  appends a streamed highlight to the DOM instead of replacing it. `highlightHtml` is the markup protocol
+  both sides share — the open-tail marker the host's worker emits and `HighlightedHtml` patches. Without a
+  provider code renders unhighlighted. The web app provides its worker client
+  (`apps/web/src/lib/highlightCode`); the worker, the highlighter engine and the theme mapping stay in the app.
+- `Composer`'s `dictationEvent` — the DOM event name a host's dictation dispatches on the input while it
+  listens (sending is held until it ends); without it the composer never waits for dictation.
+- `ChatImage`'s `ChatMediaContext` — `resolveUrl` for a host image reference plus a `retryEpoch` the host
+  advances after a reconnect; without it a referenced image renders as unavailable (inline data still shows).
 - `ChatActions` / `InteractionStatesContext` / `PendingExtUiContext` — the calls a host makes on the user's
   behalf (respond to a tool, open a file, reply to an extension dialog) and the derived states they need.
 - `modelPreferences` — the `ModelPreferences` shape the composer's picker reads; the host builds it.
@@ -44,7 +51,8 @@ Host seams, each a context or a prop the host fills:
   and hints, shared by the IDE dialog and the phone's Skills page.
 - `chatMessageOrder` — the `ChatMessageOrder` vocabulary rows are derived under; persistence is the host's.
 - `lib` — the pure helpers the renderers share with the host: workspace paths (`projectRelativePath`,
-  `isAbsolutePath`, `normalizePath`, `fileName`), `userText`, `firstNonBlankLine`, `copyText`,
+  `pathWithinRoot`, `joinWorkspacePath`, `isAbsolutePath`, `normalizePath`, `fileName`), `userText`,
+  `firstNonBlankLine`, `copyText`, `randomId` / `randomUuid`,
   `parseSkillInvocation`, and the MCP status vocabulary. `apps/web`'s `lib` barrel re-exports it, so app
   code keeps one `@/lib` import.
 
@@ -54,7 +62,7 @@ Host seams, each a context or a prop the host fills:
   `@thinkrail/ext-visualize/web` (`Markdown` renders mermaid through `MermaidView`; mermaid stays lazy inside
   the extension), React, `react-markdown`, `remark-gfm`, `marked` (block splitting only), Remix Icon.
 - **Forbidden:** any app (`apps/*`), a store or transport, `localStorage`/routing/window globals beyond the
-  clipboard write in `copyText`, shiki or any highlighter engine, and value-importing `pi`.
+  clipboard write in `copyText`, any highlighter engine, and value-importing `pi`.
 - **Stays in the host:** the transcript subscription and reconciliation (`apps/web/src/chat/ChatView.tsx`,
   `ChatTranscript.tsx` and their hooks), the live pi-event reducer (`apps/web` `store`), virtualization and
   scroll control, preferences persistence, and extension registration of non-built-in tool renderers.

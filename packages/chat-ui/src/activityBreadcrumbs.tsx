@@ -122,7 +122,7 @@ export function ActivityBreadcrumbBar({
 											: t("chat.breadcrumbs.expand", { label: segment.label })
 									}
 									onClick={() => onToggle(segment.id)}
-									className="flex size-20 shrink-0 items-center justify-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
+									className="flex size-20 shrink-0 items-center justify-center rounded-sm focus-visible:focus-ring"
 								>
 									<ChevronRight
 										aria-hidden
@@ -134,7 +134,7 @@ export function ActivityBreadcrumbBar({
 									aria-label={t("chat.breadcrumbs.jump", { label: segment.label })}
 									title={segment.meta ? `${segment.label} · ${segment.meta}` : segment.label}
 									onClick={() => onJump(segment.id)}
-									className="flex min-w-0 items-center gap-4 rounded-sm py-2 pr-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
+									className="flex min-w-0 items-center gap-4 rounded-sm py-2 pr-4 text-left focus-visible:focus-ring"
 								>
 									<SegmentIcon kind={segment.kind} />
 									<span className="shrink-0 text-text-default">{segment.label}</span>

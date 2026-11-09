@@ -129,6 +129,7 @@ export type { QuitConfirmationDependencies } from "./quitConfirmation";
 export { createQuitConfirmation, QUIT_CONFIRMATION } from "./quitConfirmation";
 export type { SearchFieldSource } from "./searchFields";
 export { searchHitFields } from "./searchFields";
+export * from "./signalingProtocol";
 export type * from "./speech";
 export {
 	isSpeechErrorCode,
@@ -140,6 +141,5 @@ export {
 	SPEECH_SAMPLE_RATE,
 	SPEECH_SOCKET_ROUTE,
 } from "./speech";
-export * from "./signalingProtocol";
 export * from "./workspaceSettling";
 export * from "./wsProtocol";

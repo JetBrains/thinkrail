@@ -1,3 +1,4 @@
+import type { ChatAttachment } from "@thinkrail/chat-ui/types";
 import {
 	CONTINUATION_PROTOCOL_VERSION,
 	type ThinkingLevel,
@@ -6,7 +7,6 @@ import {
 } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { requestContinuation } from "../chat/continuations";
-import type { ChatAttachment } from "../chat/types";
 import { selectWorkspaceTick, supportsProjectlessChats, toast, useAppStore } from "../store";
 import { errorText, getTransport, prewarmWorkspaceSkillLoad } from "../transport";
 import { loadProjectWorkspaces } from "./workspaceActions";

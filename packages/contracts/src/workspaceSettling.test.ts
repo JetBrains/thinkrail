@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { Workspace } from "./domain";
-import { partitionWorkspaces } from "./workspaceSettling";
+import { partitionWorkspaces, workspaceSettledReason } from "./workspaceSettling";
 
 const DAY = 24 * 60 * 60_000;
 const NOW = 100 * DAY;
@@ -32,4 +32,17 @@ test("Default stays first, idle and parked rows settle, a busy row never does", 
 		["parked", "override"],
 		["idle", "idle"],
 	]);
+});
+
+test("a chat never settles, idle or parked", () => {
+	const context = { now: NOW, settleIdleDays: 7, busy: () => false };
+	expect(workspaceSettledReason(row("idle-chat", { kind: "chat", lastActiveAt: 0 }), context)).toBe(
+		null,
+	);
+	expect(
+		workspaceSettledReason(
+			row("parked-chat", { kind: "chat", settledOverride: "settled" }),
+			context,
+		),
+	).toBe(null);
 });

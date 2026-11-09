@@ -114,13 +114,17 @@ What a `./web` half may import:
 - **Web:** `apps/web/src/extensions/registry.ts` exports the ordered web extensions;
   `registerWebExtensions()` feeds their `toolRenderers` into the chat tool registry. App-local tool
   registrations retain their side-effect imports; extension descriptors need none.
+- **Phone:** `apps/mobile/src/extensions.ts` is the phone's own web registry over the same `./web`
+  descriptors. It is a second list on purpose: a phone renders only the cards that work without the IDE's
+  workbench, so an extension joins it once its cards degrade there (visualize's file preview renders nothing
+  without a resource host and leaves the path).
 
 ## Boundary rules (enforced by `scripts/check-module-boundaries.ts`, with negative tests)
 
 - Discovery of `pi-extensions/*` and `thinkrail-extensions/*` as workspace roots.
 - **Source halves:** inside every extension, `web/**` and `server/**` never import each other, including
   by relative path.
-- **Public subpaths:** `apps/web` may import only `@thinkrail/ext-*/web`; `packages/server` only
+- **Public subpaths:** `apps/web` and `apps/mobile` may import only `@thinkrail/ext-*/web`; `packages/server` only
   `@thinkrail/ext-*/server`.
 - Edges: `extension-api → contracts`; `ui → contracts`; `resource-renderers → contracts, ui`;
   `ext-*/web → ui, extension-api, resource-renderers, contracts` plus **type-only** imports of its own pi

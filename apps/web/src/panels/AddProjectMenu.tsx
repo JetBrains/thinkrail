@@ -2,6 +2,7 @@ import {
 	RiEditLine as Edit,
 	RiFolderLine as Folder,
 	RiGlobalLine as Globe,
+	RiLinkM as Link,
 	RiSparkling2Line as Sparkles,
 } from "@remixicon/react";
 import type { Project } from "@thinkrail/contracts";
@@ -24,12 +25,14 @@ export function AddProjectMenu({
 	onOpenRecent,
 	onStartNew,
 	onClone,
+	onConnectByLink,
 	align = "end",
 	children,
 }: {
 	recentProjects: Project[];
 	onStartNew?: () => void;
 	onClone?: (() => void) | undefined;
+	onConnectByLink?: (() => void) | undefined;
 	onOpen: () => void;
 	onEnterHostPath: () => void;
 	onOpenRecent: (path: string) => void;
@@ -62,6 +65,12 @@ export function AddProjectMenu({
 					<DropdownMenuItem data-testid="menu-clone-project" onSelect={onClone}>
 						<Globe />
 						<span>{t("panels.addProject.clone")}</span>
+					</DropdownMenuItem>
+				) : null}
+				{onConnectByLink ? (
+					<DropdownMenuItem data-testid="menu-connect-by-link" onSelect={onConnectByLink}>
+						<Link />
+						<span>{t("panels.addProject.connectByLink")}</span>
 					</DropdownMenuItem>
 				) : null}
 				{recentProjects.length > 0 && (

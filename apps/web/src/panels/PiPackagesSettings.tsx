@@ -21,11 +21,11 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
+import { SETTINGS_TAG } from "@thinkrail/ui/settings";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
 import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
-import { SETTINGS_TAG } from "./SettingsGroup";
 import { SettingsNotice } from "./SettingsNotice";
 
 /** `rowKey` is the row the action came from — what the page marks busy or shows an error on. */

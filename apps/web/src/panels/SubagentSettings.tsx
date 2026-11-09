@@ -9,10 +9,9 @@ import {
 } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { SettingsGroup, SettingsRow, SettingsSubheading } from "@thinkrail/ui/settings";
 import { cn } from "@thinkrail/ui/utils";
 import { workspaceName } from "../store";
-import { SettingsGroup, SettingsSubheading } from "./SettingsGroup";
-import { SettingsRow } from "./SettingsRow";
 import { SettingsSwitch } from "./SettingsSwitch";
 import { SETTINGS_INPUT, useSettingsDraft } from "./settingsDraft";
 

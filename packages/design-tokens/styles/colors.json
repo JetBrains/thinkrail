@@ -1,7 +1,7 @@
 {
 	"$schema": "./colors.schema.json",
 	"metadata": {
-		"version": "1.1.0",
+		"version": "1.2.0",
 		"note": "The semantic colour layer. Palettes live in packages/design-tokens/themes/*.theme.json; this file says what each palette entry is FOR, and is the only place a derivation is written. A role's `from` names a theme manifest key; the CSS variable that key writes to is derived (kebab-case), not tabulated. See COLOR.md."
 	},
 	"scale": {
@@ -9,7 +9,8 @@
 		"wash": 12,
 		"soft": 20,
 		"muted": 40,
-		"strong": 60
+		"strong": 60,
+		"firm": 80
 	},
 	"roles": {
 		"text-default": {
@@ -59,7 +60,7 @@
 		"container-content-bg": {
 			"from": "content",
 			"publish": true,
-			"note": "the recessed read-a-diff/read-code canvas, NOT the document canvas (that is workspace): Pierre source diffs, rendered diffs, Shiki code blocks, and the center-column backdrop behind them"
+			"note": "the recessed read-a-diff/read-code canvas, NOT the document canvas (that is workspace): Pierre source diffs, rendered diffs, chat code blocks, and the center-column backdrop behind them"
 		},
 		"container-elevated-bg": {
 			"from": "elevated",
@@ -174,6 +175,12 @@
 		"primary": {
 			"from": "accent",
 			"publish": true
+		},
+		"focus-ring": {
+			"from": "accent",
+			"darkAlpha": "firm",
+			"publish": true,
+			"note": "the keyboard focus indicator; its own role so it can diverge from primary. Full accent is too loud on dark surfaces, so dark appearances take the `firm` (80%) step, which still clears APCA Lc 45 (themes/schema.test.ts)"
 		},
 		"primary-subtle": {
 			"from": "accent",
@@ -310,6 +317,13 @@
 			"alpha": "soft",
 			"publish": false,
 			"note": "the transparency checkerboard tile behind images and vector previews: the text colour at the soft (20%) step — the contrast of the conventional #ccc-on-white checkerboard — over the content canvas, so a dark logo on a transparent PNG stays visible on a dark theme and a light one on a light theme; index.css's `.media-backdrop` is the only consumer"
+		},
+		"region-inactive-scrim": {
+			"from": "background",
+			"alpha": "muted",
+			"darkAlpha": "strong",
+			"publish": false,
+			"note": "the pointer-transparent veil over every region except the one holding focus: the workspace canvas pulls each colour toward the background, so contrast drops while hues stay (a selected tab's accent underline is still accent). Light-on-dark text reads as dimmer only at a higher step, so dark appearances take `strong` and light ones `muted` (user-chosen strength, 2026-11-13); index.css's `[data-region]::after` is the only consumer"
 		}
 	},
 	"effects": {

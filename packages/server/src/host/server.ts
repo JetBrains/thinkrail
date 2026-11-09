@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { hostname } from "node:os";
 import { join, normalize } from "node:path";
 import type {
+	HostPlatform,
 	HostUpdateNotice,
 	PiEvent,
 	ServerWelcome,
@@ -199,9 +200,9 @@ import {
 	syncWorkspaceBranch,
 	type WorkspaceLifecycleEvent,
 } from "../workspaces";
+import { guardAccess } from "./accessToken";
 import { seesChats } from "./chats";
 import { continueToolHost, observeContinuation, setContinuationPublisher } from "./continuations";
-import { guardAccess } from "./accessToken";
 import { BLOB_PREFIX, FILES_PREFIX, serveBlob, serveWorktreeFile } from "./fileRoutes";
 import { serveUserFonts } from "./fontRoutes";
 import { setFsNudgePublisher } from "./fsNudge";

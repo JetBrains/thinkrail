@@ -7,7 +7,7 @@ export const SETTLED_NOTICE_QUIET_MS = 2_000;
 const NOTICE_DURATION_MS = 15_000;
 
 function storageKey(): string {
-	return `${STORAGE_PREFIX}settled-shelf-noticed:${getTransport().httpBase()}`;
+	return `${STORAGE_PREFIX}settled-shelf-noticed:${getTransport().backendKey()}`;
 }
 
 export function settledShelfNoticed(): boolean {

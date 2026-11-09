@@ -18,11 +18,11 @@ import {
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { SegmentedControl } from "@thinkrail/ui/settings";
 import { cn } from "@thinkrail/ui/utils";
 import { Fragment, useId, useState } from "react";
 import { errorText, RequestTimeoutError, wsErrorCode } from "@/transport";
 import { CHIP_CLASS, GalleryLink, packageChips } from "./PiPackagesSettings";
-import { SegmentedControl } from "./SegmentedControl";
 import { SettingsNotice } from "./SettingsNotice";
 
 const INPUT_CLASS =

@@ -1,3 +1,4 @@
+import { messagesToRuntime } from "@thinkrail/chat-ui/hydrate";
 import type {
 	PiEvent,
 	ReviewChangedPayload,
@@ -22,7 +23,6 @@ import {
 	getTransport,
 	supportsPlanSummaryGeneration,
 } from "../transport";
-import { messagesToRuntime } from "./hydrate";
 import { sessionGlance, shouldNudgeOnAdd } from "./planView";
 
 export function shouldRefreshTodos(event: PiEvent): boolean {
