@@ -210,6 +210,43 @@ test("rejects manifest, type-only, dynamic, CommonJS, and relative cross-boundar
 	]);
 });
 
+test("scans JSX in plain JavaScript sources", () => {
+	const root = fixture();
+	write(
+		root,
+		"apps/web/src/component.js",
+		'const server = require("@thinkrail/server");\nexport const view = <div />;',
+	);
+
+	expect(moduleBoundaryViolations(root)).toEqual([
+		'apps/web/src/component.js: import "@thinkrail/server" creates forbidden apps/web -> packages/server edge',
+	]);
+});
+
+test("parses .cjs sources as CommonJS", () => {
+	const root = fixture();
+	write(
+		root,
+		"apps/web/src/config.cjs",
+		'const server = require("@thinkrail/server");\nif (!server) return;\nmodule.exports = server;',
+	);
+
+	expect(moduleBoundaryViolations(root)).toEqual([
+		'apps/web/src/config.cjs: import "@thinkrail/server" creates forbidden apps/web -> packages/server edge',
+	]);
+});
+
+test("fails on a source file it cannot parse", () => {
+	const root = fixture();
+	write(
+		root,
+		"apps/web/src/broken.ts",
+		'import { x } from "@thinkrail/server";\nexport const y = x +;',
+	);
+
+	expect(() => moduleBoundaryViolations(root)).toThrow(/cannot parse apps\/web\/src\/broken\.ts: /);
+});
+
 function sdkFixture(): string {
 	const root = fixture();
 	for (const [moduleRoot, name] of Object.entries({

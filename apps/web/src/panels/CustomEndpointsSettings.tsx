@@ -163,10 +163,7 @@ function EndpointDialog({
 
 	return (
 		<Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
-			<DialogContent
-				data-testid="custom-endpoints-dialog"
-				className="flex max-h-[85vh] max-w-[36rem] flex-col"
-			>
+			<DialogContent data-testid="custom-endpoints-dialog" className="max-w-[36rem]">
 				<DialogHeader>
 					<DialogTitle>
 						{draft.id
@@ -175,7 +172,7 @@ function EndpointDialog({
 					</DialogTitle>
 					<DialogDescription>{t("settings.customEndpoints.dialogDescription")}</DialogDescription>
 				</DialogHeader>
-				<div className="-mx-16 flex min-h-0 flex-1 flex-col gap-12 overflow-y-auto px-16">
+				<div className="-mx-16 relative flex min-h-0 flex-1 flex-col gap-12 overflow-y-auto px-16">
 					<Field label={t("settings.customEndpoints.name")} htmlFor={`${id}-name`}>
 						<input
 							id={`${id}-name`}

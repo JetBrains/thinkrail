@@ -146,7 +146,7 @@ export function PrSetupDialog({
 						</DialogHeader>
 						<pre
 							data-testid="open-pr-setup-detail"
-							className="max-h-128 overflow-auto whitespace-pre-wrap rounded-sm border border-border-default bg-control-bg px-12 py-8 tr-code-text text-feedback-error"
+							className="max-h-128 shrink-0 overflow-auto whitespace-pre-wrap rounded-sm border border-border-default bg-control-bg px-12 py-8 tr-code-text text-feedback-error"
 						>
 							{state.detail}
 						</pre>

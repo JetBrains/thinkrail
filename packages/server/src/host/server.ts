@@ -19,6 +19,8 @@ import {
 	MCP_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
+	SPEECH_PROTOCOL_VERSION,
+	SPEECH_SOCKET_ROUTE,
 	USER_FONTS_ROUTE,
 	USER_THEMES_PROTOCOL_VERSION,
 	WORKSPACE_CREATION_PROTOCOL_VERSION,
@@ -119,6 +121,15 @@ import {
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
 import { getConfig, setSettingsPublisher } from "../settings";
 import {
+	createSpeechRelay,
+	initSpeech,
+	type SpeechRelay,
+	setSpeechPublisher,
+	speechStatus,
+	stopEngine,
+	stopSpeechInstall,
+} from "../speech";
+import {
 	clearTerminalClient,
 	closeAllTerminals,
 	persistTerminalSessions,
@@ -143,13 +154,13 @@ import {
 	interruptWorkspaceCreations,
 	listAllWorkspaceRecords,
 	recordWorkspaceHead,
-	refreshUserOwnedWorkspace,
 	replayPendingHandoffs,
 	seedWorkspaceHead,
 	setWorkspaceCreationHandoff,
 	setWorkspaceCreationPublisher,
 	setWorkspacePublisher,
 	stopWorkspaceCreations,
+	syncWorkspaceBranch,
 } from "../workspaces";
 import { BLOB_PREFIX, FILES_PREFIX, serveBlob, serveWorktreeFile } from "./fileRoutes";
 import { serveUserFonts } from "./fontRoutes";
@@ -184,6 +195,7 @@ import {
 	setReviewFailedPublisher,
 } from "./requestReview";
 import { runObservation } from "./runAnalytics";
+import { hostSearch } from "./search";
 import {
 	REVIEW_REFRESH_INTERVAL_MS,
 	refreshOpenProjectReviews,
@@ -241,6 +253,9 @@ export interface RunningServer {
 interface SocketData {
 	clientKey: string;
 	protocolVersion: number;
+	/** Present only on a `/speech` socket, which bypasses the JSON request wire entirely. */
+	speech?: SpeechRelay;
+	speechSocket?: true;
 }
 
 const CLIENT_REPLAY_RETENTION_MS = 60_000;
@@ -375,11 +390,21 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					? undefined
 					: new Response("ws upgrade failed", { status: 400 });
 			}
+			if (url.pathname === SPEECH_SOCKET_ROUTE) {
+				const protocolVersion = clientProtocolVersion(url.searchParams.get("protocol"));
+				if (protocolVersion < SPEECH_PROTOCOL_VERSION) {
+					return new Response("speech needs a newer client", { status: 400 });
+				}
+				const clientKey = url.searchParams.get("client") ?? `anon-${randomUUID()}`;
+				return srv.upgrade(req, { data: { clientKey, protocolVersion, speechSocket: true } })
+					? undefined
+					: new Response("ws upgrade failed", { status: 400 });
+			}
 			if (url.pathname === "/health") {
 				return new Response("ok");
 			}
 			if (url.pathname.startsWith(FILES_PREFIX)) {
-				return serveWorktreeFile(url.pathname);
+				return serveWorktreeFile(url.pathname, url.searchParams.get("maxBytes"));
 			}
 			if (url.pathname.startsWith(BLOB_PREFIX)) {
 				return serveBlob(url.pathname, req.signal);
@@ -394,6 +419,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		},
 		websocket: {
 			open(ws) {
+				if (ws.data.speechSocket) {
+					ws.data.speech = createSpeechRelay(ws);
+					return;
+				}
 				const replaced = sockets.get(ws.data.clientKey);
 				sockets.set(ws.data.clientKey, ws);
 				if (replaced && replaced !== ws) replaced.close();
@@ -435,6 +464,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					ws.subscribe(WS_CHANNELS.packagesChanged);
 				if (ws.data.protocolVersion >= FONTS_PROTOCOL_VERSION)
 					ws.subscribe(WS_CHANNELS.fontsChanged);
+				const speech = ws.data.protocolVersion >= SPEECH_PROTOCOL_VERSION;
+				if (speech) ws.subscribe(WS_CHANNELS.speechChanged);
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
 						? process.platform
@@ -446,6 +477,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					projects: listProjects(),
 					recentProjects: listRecentProjects(),
 					config: getConfig(),
+					...(speech ? { speech: speechStatus() } : {}),
 					...(appVersion ? { appVersion } : {}),
 					...(hostUpdateNotice ? { hostUpdate: hostUpdateNotice } : {}),
 				};
@@ -467,6 +499,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				redeliverInvitation(ws.data.clientKey);
 			},
 			async message(ws, message) {
+				if (ws.data.speechSocket) {
+					ws.data.speech?.message(message);
+					return;
+				}
 				const raw = typeof message === "string" ? message : message.toString();
 				let req: unknown;
 				try {
@@ -548,11 +584,16 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				}
 			},
 			drain(ws) {
+				if (ws.data.speechSocket) return;
 				if (sockets.get(ws.data.clientKey) !== ws) return;
 				terminalBackpressured.delete(ws.data.clientKey);
 				resumeClientTerminals(ws.data.clientKey);
 			},
 			close(ws) {
+				if (ws.data.speechSocket) {
+					ws.data.speech?.close();
+					return;
+				}
 				const { clientKey } = ws.data;
 				if (stopping) return;
 				if (sockets.get(clientKey) === ws) {
@@ -791,6 +832,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			JSON.stringify({ channel: WS_CHANNELS.workspaceFsChanged, data: payload }),
 		);
 		reanchorWorkspace(payload.workspaceId);
+		const changedRoot = loadWorkspaces().find((w) => w.id === payload.workspaceId)?.worktreePath;
+		if (changedRoot) hostSearch().invalidateRoot(changedRoot);
 		if (
 			payload.truncated ||
 			payload.paths.some((path) => path === ".pi" || path.startsWith(".pi/"))
@@ -823,6 +866,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const stopLocalesWatch = watchLocalLocales({ onChange: nudge(WS_CHANNELS.localesChanged) });
 	const stopThemesWatch = watchUserThemes({ onChange: nudge(WS_CHANNELS.themesChanged) });
 	const stopFontsWatch = watchUserFonts({ onChange: nudge(WS_CHANNELS.fontsChanged) });
+	setSpeechPublisher((status) =>
+		server.publish(
+			WS_CHANNELS.speechChanged,
+			JSON.stringify({ channel: WS_CHANNELS.speechChanged, data: status }),
+		),
+	);
+	void initSpeech().catch((err) => log.warn("voice input state could not be read", err));
 	setWatchPublisher(publishFsChanged);
 	setSkillPathClassifier(isProjectSkillPath);
 	setFsNudgePublisher(publishFsChanged);
@@ -830,7 +880,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setWatchStartedPublisher(seedWorkspaceHead);
 	setRepoMetaPublisher((workspaceId) => {
 		recordWorkspaceHead(workspaceId);
-		refreshUserOwnedWorkspace(workspaceId);
+		syncWorkspaceBranch(workspaceId);
 		const workspace = loadWorkspaces().find((w) => w.id === workspaceId);
 		if (workspace) forgetOpenBranchReview(workspace.worktreePath);
 		publishFsChanged({ workspaceId, paths: [], truncated: false, skillChange: "none" });
@@ -971,7 +1021,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			if (workspaceId)
 				void maybeAttachChangeArtifacts(workspaceId, payload.sessionId).then(async () => {
 					await observeCompletion();
-					maybeAutoReReview(workspaceId, payload.sessionId);
+					await maybeAutoReReview(workspaceId, payload.sessionId);
 				});
 		}
 	});
@@ -1057,6 +1107,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		stopLocalesWatch();
 		stopThemesWatch();
 		stopFontsWatch();
+		stopSpeechInstall();
+		void stopEngine();
 		disposeAllSessions();
 		for (const timer of reapTimers.values()) clearTimeout(timer);
 		reapTimers.clear();
@@ -1126,6 +1178,7 @@ function restoreSeamDefaults(): void {
 	setWorkspaceCreationHandoff(null);
 	setProjectPathGuard(null);
 	setPiPackagesPublisher(null);
+	setSpeechPublisher(null);
 	setWatchPublisher(null);
 	setSkillPathClassifier(null);
 	setFsNudgePublisher(null);

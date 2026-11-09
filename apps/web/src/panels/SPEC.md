@@ -942,14 +942,10 @@ a project picker, the prompt hero, and the reused
   toast without changing geometry); **`ChatSettings`** (one **Appearance and behavior** group of rows —
   **Message order** segmented over `store.chatMessageOrder` (Oldest first, the compatibility default /
   Newest first, the opt-in), **Composer size** segmented over the composer-growth limit (Compact / Roomy /
-  Half chat), the chat `LineWidthControl`, and the **Streaming response movement** row, a two-handle range
-  over `store.streamingResponseMovement`. The movement row's
-  copy is “When the chat moves while an answer grows, and where its newest edge lands”; one axis runs
-  Top → Message box, Settle is 25–90, Trigger is 35–100, both step by 5 with a 10-point minimum gap, and
-  the displayed default is 75%→100%. It exposes no runway/tail/lifecycle controls. Message order and
-  movement both apply immediately and persist only in this client through the chat preference seam:
-  browsers use current-host-qualified keys, while a native shell may inject its stable
-  backend-profile/window adapter. Another browser, native window, or host is unaffected. Composer growth
+  Half chat), and the chat `LineWidthControl`. It exposes no scroll-follow controls: streaming follow is
+  fixed (see `apps/web/src/chat/SPEC.md`). Message order applies immediately and persists only in this
+  client through the chat preference seam: browsers use current-host-qualified keys, while a native shell
+  may inject its stable backend-profile/window adapter. Another browser, native window, or host is unaffected. Composer growth
   remains a top-level `AppConfig` field and converges on `settings.changed`, with a toast on rejection.
   Explanatory copy says “message box” rather than the internal “composer” name for where the user types.
   The final **Subagents** group (`SubagentSettings.tsx`) is rows, not a table: global **Allow subagents**
@@ -991,6 +987,24 @@ a project picker, the prompt hero, and the reused
   tidying). The copy names the three things
   that count as activity and the three things that never settle, because the setting is only legible
   together with those rules;
+  **`VoiceSettings`** (from `SPEECH_PROTOCOL_VERSION`, in the Interface group after Keyboard) shows the
+  store's `speech` status ([[submodule-web-speech]]). An unsupported platform gets a warning notice and
+  nothing else. Otherwise its rows say what the user can do, never how voice is built: no engine,
+  version, backend or PATH text, which an earlier version showed and users found unreadable (the
+  speech SPECs carry those details).
+  - **Voice input:** a switch for `AppConfig.voiceInputEnabled` (`settings.update`). While it is off,
+    only this row and Delete voice files remain, plus Status while a download is still running, so its
+    progress and Cancel never disappear.
+  - **Status:** not set up (with the download size), downloading with a percentage, ready, or the
+    failure in error colour. Its action is Download, Try again, or Cancel download.
+  - **Language:** an All languages / English only segmented control. Selecting the other one sends
+    `speech.install {model}`, which downloads that model and deletes the current one. Disabled while
+    installing.
+  - **Shortcut:** the platform chord.
+  - **Delete voice files:** shown only while ThinkRail's speech files use disk. It states the space it
+    frees and sends `speech.remove`, which never touches a `nemo-speech` on PATH.
+  The mic itself is not here: the page-level dictation layer ([[submodule-web-speech]]) shows it on
+  whichever text field has focus;
   **`TerminalSettings`** — a **Scrollback** segmented control (`store.terminalReplayKb`, five presets from
   Off to 1 MB; a valid non-preset host value selects none rather than a wrong preset;
   `settings.update { terminalReplayKb }`, applies to terminals opened from now on) and, on
@@ -1536,7 +1550,7 @@ own section. The kebab menu (`plan-menu`, a
   page) and supersedes any read already in flight for the same key, so a pre-mutation answer cannot
   overwrite the mutation result. The keyed state and request generation are shared by every mounted
   hook consumer, keeping the plan and shell scope label on one mutation result. A stale mutation closure
-  cannot write through after that hook has moved to another branch. The focus-refetch overwrites state.
+  cannot write through after that hook has moved to another branch.
   Workspace activation explicitly opts into the host's 60-second settled-answer cache with
   `allowCached: true`, while omission on focus preserves the wire's original force-fresh behavior for
   older clients, so a PR closed/merged on GitHub drops out of the chip, label, and stepper on that
@@ -1544,7 +1558,21 @@ own section. The kebab menu (`plan-menu`, a
   intent and spends it on reconnect rather than falling back to a cache-eligible activation read. The
   workspace's `fsChanged` tick re-reads with `allowCached: true` (`reload`): the host drops its cached
   answer on a `.git` meta nudge, so a PR opened or pushed from a terminal still surfaces, while a fresh
-  read would `git fetch`, write `.git`, nudge again, and loop. The
+  read would `git fetch`, write `.git`, nudge again, and loop. Cache-eligible reads (activation,
+  reconnect, fs tick) are **single-flight** per mount: ticks during one fold into one follow-up, sent only
+  while still connected. A stalled host otherwise collected one read per tick until the transport's replay
+  cap refused every request. Fresh reads (focus, explicit refresh, CI poll) skip that lane, so a cached
+  reload never waits behind a 55s `git fetch` and a refresh is never queued behind an older cached
+  answer. Only a fresh read or `noteOpenReview` bumps the generation (`beginRequest(key, { supersede })`):
+  a cached read joins the current one, so it cannot void a refresh or poll already in flight, while a
+  fresh read voids any cached answer begun before it. Each read also carries a sequence number: a fresh
+  answer landing after a cached one requested later keeps that cached answer's branch facts and ahead /
+  behind counts, and adds only its review (the fresh PR state and checks). Otherwise a refresh measured
+  before a commit would overwrite the newer `aheadOfBase`. A *cached* answer landing after a newer one is
+  dropped whole: the shell and the plan pane run separate cached lanes for one key, and a slow cached "open"
+  must not restore itself over a newer "merged". Since a cached and a fresh read can share a
+  generation, a failed read clears the key (`failRequest`) only when no answer has landed at that
+  generation, so a refresh that times out cannot wipe the cached answer that arrived while it ran. The
   URL is kept across refetches while the review number matches. A `compare` result opens the prefilled
   GitHub
   compare page (`window.open`); every outcome toasts, uncommitted files get a separate info toast.
@@ -1960,6 +1988,10 @@ own section. The kebab menu (`plan-menu`, a
   *paused* read. A visible `FileTree` directory probes while collapsed only as far as needed to identify
   its compact single-directory run; descendants below the run's deepest directory mount and read only
   when that compact row is expanded. No tick has to be threaded down as a prop.
+  The wiring of this hook and `useLiveTabContent` (ticks during a slow read, a workspace or file switch
+  mid-read) is tested in `liveReads.test.tsx` by mounting real hooks through
+  `react-dom/client` on a headless container: a tree that renders no host elements needs only a stub
+  `window`, so the web package needs no DOM library or testing dependency.
   Its users — `FileTree` (root + each visible directory chain), `FilesPanel` (`git.status`, via
   `useGitStatus`, feeding both modes),
   `useWorkspaceSpecs` (`spec.graph`) — plus `FilePane`/`DiffPane`, which follow the same tick contract per

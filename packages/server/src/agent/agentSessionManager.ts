@@ -2961,7 +2961,7 @@ export function removeSession(sessionId: string): Promise<void> {
 	if (pending) return pending;
 	const entry = sessions.get(sessionId);
 	if (!entry) return Promise.resolve();
-	closeSessionResources(entry);
+	void closeSessionResources(entry);
 	if (entry.session.isStreaming)
 		return abortEntry(entry, true)
 			.catch(() => {})

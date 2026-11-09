@@ -189,7 +189,7 @@ export function SkillsDialog({
 					{group.isPlugin ? (
 						<Puzzle className="size-14 shrink-0 text-text-muted" aria-hidden />
 					) : null}
-					<span className="tr-text-eyebrow text-text-default">{group.label}</span>
+					<span className="truncate tr-text-eyebrow text-text-default">{group.label}</span>
 					<span className="min-w-0 flex-1 truncate text-text-muted tr-text-metadata">
 						{group.hint}
 					</span>
@@ -314,7 +314,7 @@ export function SkillsDialog({
 					</div>
 				) : null}
 
-				<div className="max-h-[50vh] overflow-y-auto">
+				<div className="relative max-h-[50vh] overflow-y-auto">
 					{entries === null ? (
 						<LoadingRegion rows={4} className="px-8 py-12" />
 					) : entries.length === 0 ? (

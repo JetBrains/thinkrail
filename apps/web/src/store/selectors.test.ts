@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
 	MODEL_PICKER_PROTOCOL_VERSION,
 	type Project,
+	SEARCH_PROTOCOL_VERSION,
 	type SessionState,
 	type SessionStateRecord,
 	type WireModel,
@@ -33,6 +34,9 @@ import {
 	selectContextProject,
 	selectFileChangeSince,
 	selectHistoryTarget,
+	selectHostReachable,
+	selectHostSearchAvailable,
+	selectHostSearchReady,
 	selectKnownChatLocation,
 	selectKnownChatTitle,
 	selectLayoutResourcePlacement,
@@ -68,6 +72,26 @@ test("connection generations reject stale or disconnected read settlements", () 
 	expect(isConnectedGeneration({ status: "connected", connectionGeneration: 4 }, 4)).toBe(true);
 	expect(isConnectedGeneration({ status: "connected", connectionGeneration: 5 }, 4)).toBe(false);
 	expect(isConnectedGeneration({ status: "disconnected", connectionGeneration: 4 }, 4)).toBe(false);
+});
+
+test("host search stays available across a reconnect, but asks only a reachable host that serves it", () => {
+	const state = (
+		status: string,
+		protocolVersion: number | null,
+		welcomeProtocolVersion: number | null,
+	) => ({
+		status,
+		protocolVersion,
+		welcomeProtocolVersion,
+		welcomeGeneration: welcomeProtocolVersion === null ? 0 : 1,
+	});
+	const current = state("connected", SEARCH_PROTOCOL_VERSION, SEARCH_PROTOCOL_VERSION);
+	const blip = state("connecting", null, SEARCH_PROTOCOL_VERSION);
+	const older = state("connected", SEARCH_PROTOCOL_VERSION - 1, SEARCH_PROTOCOL_VERSION - 1);
+	expect([current, blip, older].map(selectHostSearchAvailable)).toEqual([true, true, false]);
+	expect([current, blip, older].map(selectHostReachable)).toEqual([true, false, true]);
+	expect([current, blip, older].map(selectHostSearchReady)).toEqual([true, false, false]);
+	expect(selectHostReachable(state("connected", null, null))).toBe(false);
 });
 
 test("chat rename capability follows the host protocol snapshot", () => {

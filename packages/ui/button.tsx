@@ -171,7 +171,11 @@ function withTooltip(
 }
 
 function stateProps(
-	props: { disabled?: boolean | undefined; "data-state"?: unknown },
+	props: {
+		disabled?: boolean | undefined;
+		"data-state"?: unknown;
+		"aria-busy"?: React.AriaAttributes["aria-busy"];
+	},
 	selected: boolean | undefined,
 	loading: boolean | undefined,
 ) {
@@ -181,7 +185,7 @@ function stateProps(
 		"data-disabled": props.disabled && !loading ? true : undefined,
 		"data-loading": loading ? true : undefined,
 		"data-selected": selected || open ? true : undefined,
-		"aria-busy": loading ? true : undefined,
+		"aria-busy": loading ? true : props["aria-busy"],
 	};
 }
 

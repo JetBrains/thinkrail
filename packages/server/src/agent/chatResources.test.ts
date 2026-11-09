@@ -873,7 +873,7 @@ test("stop-all acknowledges after signalling every sibling without awaiting sett
 		}),
 	);
 	const children: ChildHandle[] = [];
-	const runs = [];
+	const runs: ReturnType<ChildHandle["runQueued"]>[] = [];
 	let stopped: Promise<number> | undefined;
 	let acknowledged: number | undefined;
 	try {
@@ -1220,7 +1220,7 @@ test("shutdown and disposal signal commands and every child before waiting for a
 		}),
 	);
 	const children: ChildHandle[] = [];
-	const runs = [];
+	const runs: ReturnType<ChildHandle["runQueued"]>[] = [];
 	let runningParent: Promise<void> | undefined;
 	try {
 		for (let i = 0; i < 5; i++) {

@@ -48,12 +48,7 @@ import {
 	trustGrantParams,
 	untrustedNoticeText,
 } from "@/chat/projectTrust";
-import {
-	imagePasteDropHandlers,
-	PROMPT_IMAGE_CHIPS_PADDING,
-	PromptImageChips,
-	usePromptImages,
-} from "@/chat/promptImages";
+import { imagePasteDropHandlers, PromptImageChips, usePromptImages } from "@/chat/promptImages";
 import { SkillsButton } from "@/chat/SkillsButton";
 import { SkillsDialog } from "@/chat/SkillsDialog";
 import { useModelCatalog } from "@/chat/useModelCatalog";
@@ -516,7 +511,7 @@ export function NewWorkspaceDialog({
 				ref={setDialogEl}
 				hideClose
 				data-testid="new-workspace-dialog"
-				className="max-w-[600px] gap-12 p-12"
+				className="max-w-[600px] gap-12 overflow-visible p-12"
 				onEscapeKeyDown={(event) => {
 					if (slashCompletion.open) {
 						event.preventDefault();
@@ -532,115 +527,116 @@ export function NewWorkspaceDialog({
 					promptRef.current?.focus();
 				}}
 			>
-				<DialogHeader>
-					<DialogTitle>
-						{isolated
-							? t("panels.newWorkspace.titleIsolated")
-							: t("panels.newWorkspace.titleDefault")}
-					</DialogTitle>
-					<DialogDescription>
-						{isolated
-							? t("panels.newWorkspace.descriptionIsolated")
-							: t("panels.newWorkspace.descriptionDefault")}
-					</DialogDescription>
-				</DialogHeader>
+				<div className="-mx-12 -mt-12 -mb-2 flex min-h-0 flex-1 flex-col gap-12 overflow-y-auto px-12 pt-12 pb-2">
+					<DialogHeader>
+						<DialogTitle>
+							{isolated
+								? t("panels.newWorkspace.titleIsolated")
+								: t("panels.newWorkspace.titleDefault")}
+						</DialogTitle>
+						<DialogDescription>
+							{isolated
+								? t("panels.newWorkspace.descriptionIsolated")
+								: t("panels.newWorkspace.descriptionDefault")}
+						</DialogDescription>
+					</DialogHeader>
 
-				<fieldset
-					data-testid="ws-target"
-					className="flex w-fit items-center gap-2 rounded-md border border-control-border-default bg-control-bg p-2"
-				>
-					<legend className="sr-only">{t("panels.newWorkspace.targetLegend")}</legend>
-					<TargetOption
-						icon={GitBranch}
-						label={t("panels.newWorkspace.targetIsolated")}
-						name={targetGroupName}
-						active={isolated}
-						testid="ws-target-worktree"
-						onSelect={() => setTarget("worktree")}
-					/>
-					<TargetOption
-						icon={House}
-						label={t("panels.newWorkspace.targetDefault")}
-						name={targetGroupName}
-						active={!isolated}
-						testid="ws-target-default"
-						onSelect={() => setTarget("default")}
-					/>
-				</fieldset>
-
-				<div className="flex flex-wrap items-center gap-8">
-					<ProjectPicker
-						projects={projects}
-						current={selectedProject?.name ?? t("panels.newWorkspace.projectFallback")}
-						container={dialogEl}
-						onSelect={setSelectedProjectId}
-					/>
-					{isolated ? (
-						<BranchPicker
-							branches={branches}
-							failed={branchesFailed}
-							selected={baseRef}
-							label={t("panels.newWorkspace.baseLabel")}
-							testid="ws-branch-picker"
-							triggerClassName={`${PILL} max-w-[220px]`}
-							refreshing={refreshing}
-							container={dialogEl}
-							onSelect={selectBaseRef}
-							onRefresh={refreshBranches}
-						/>
-					) : null}
-					<SkillsButton
-						onOpen={() => setManageSkills(true)}
-						testId="ws-manage-skills"
-						className="ml-auto"
-					/>
-				</div>
-
-				{trustNotice.kind === "untrusted" ? (
-					<div
-						data-testid="ws-trust-notice"
-						className="flex w-full flex-col gap-8 rounded-sm border border-feedback-warning-muted bg-container-elevated-bg px-12 py-8 text-left"
+					<fieldset
+						data-testid="ws-target"
+						className="flex w-fit items-center gap-2 rounded-md border border-control-border-default bg-control-bg p-2"
 					>
-						<div className="flex items-start gap-8">
-							<TriangleAlert className="mt-2 size-14 shrink-0 text-feedback-warning" aria-hidden />
-							<span className="flex min-w-0 flex-1 flex-col gap-2">
-								<span className="tr-text-ui text-text-default">
-									{untrustedNoticeText(t, trustNotice)} {t("panels.newWorkspace.trustUnaffected")}
-								</span>
-								{trustEnables ? (
-									<span className="text-text-muted tr-text-metadata">{trustEnables}</span>
-								) : null}
-							</span>
-						</div>
-						<div className="flex justify-end">
-							<Button
-								variant="outline"
-								size="m"
-								data-testid="ws-trust-project"
-								disabled={trusting}
-								onClick={() => void trustProject(trustNotice)}
-							>
-								{t("panels.newWorkspace.trustProject")}
-							</Button>
-						</div>
-					</div>
-				) : null}
+						<legend className="sr-only">{t("panels.newWorkspace.targetLegend")}</legend>
+						<TargetOption
+							icon={GitBranch}
+							label={t("panels.newWorkspace.targetIsolated")}
+							name={targetGroupName}
+							active={isolated}
+							testid="ws-target-worktree"
+							onSelect={() => setTarget("worktree")}
+						/>
+						<TargetOption
+							icon={House}
+							label={t("panels.newWorkspace.targetDefault")}
+							name={targetGroupName}
+							active={!isolated}
+							testid="ws-target-default"
+							onSelect={() => setTarget("default")}
+						/>
+					</fieldset>
 
-				<div className="relative">
+					<div className="flex flex-wrap items-center gap-8">
+						<ProjectPicker
+							projects={projects}
+							current={selectedProject?.name ?? t("panels.newWorkspace.projectFallback")}
+							container={dialogEl}
+							onSelect={setSelectedProjectId}
+						/>
+						{isolated ? (
+							<BranchPicker
+								branches={branches}
+								failed={branchesFailed}
+								selected={baseRef}
+								label={t("panels.newWorkspace.baseLabel")}
+								testid="ws-branch-picker"
+								triggerClassName={`${PILL} max-w-[220px]`}
+								refreshing={refreshing}
+								container={dialogEl}
+								onSelect={selectBaseRef}
+								onRefresh={refreshBranches}
+							/>
+						) : null}
+						<SkillsButton
+							onOpen={() => setManageSkills(true)}
+							testId="ws-manage-skills"
+							className="ml-auto"
+						/>
+					</div>
+
+					{trustNotice.kind === "untrusted" ? (
+						<div
+							data-testid="ws-trust-notice"
+							className="flex w-full flex-col gap-8 rounded-sm border border-feedback-warning-muted bg-container-elevated-bg px-12 py-8 text-left"
+						>
+							<div className="flex items-start gap-8">
+								<TriangleAlert
+									className="mt-2 size-14 shrink-0 text-feedback-warning"
+									aria-hidden
+								/>
+								<span className="flex min-w-0 flex-1 flex-col gap-2">
+									<span className="tr-text-ui text-text-default">
+										{untrustedNoticeText(t, trustNotice)} {t("panels.newWorkspace.trustUnaffected")}
+									</span>
+									{trustEnables ? (
+										<span className="text-text-muted tr-text-metadata">{trustEnables}</span>
+									) : null}
+								</span>
+							</div>
+							<div className="flex justify-end">
+								<Button
+									variant="outline"
+									size="m"
+									data-testid="ws-trust-project"
+									disabled={trusting}
+									onClick={() => void trustProject(trustNotice)}
+								>
+									{t("panels.newWorkspace.trustProject")}
+								</Button>
+							</div>
+						</div>
+					) : null}
 					{promptNote ? (
 						<p
 							data-testid="ws-prompt-note"
-							className="mb-4 flex items-start gap-8 rounded-sm border border-primary-muted bg-clip-padding bg-primary-subtle px-12 py-8 text-left text-text-muted tr-text-metadata leading-snug"
+							className="flex items-start gap-8 rounded-sm border border-primary-muted bg-clip-padding bg-primary-subtle px-12 py-8 text-left text-text-muted tr-text-metadata leading-snug"
 						>
 							<Sparkles className="mt-2 size-14 shrink-0 text-primary" />
-							<span>{promptNote}</span>
+							<span className="min-w-0 wrap-anywhere">{promptNote}</span>
 						</p>
 					) : null}
-					<PromptImageChips
-						controller={attachedImages}
-						testId="ws-prompt-images"
-						className={PROMPT_IMAGE_CHIPS_PADDING.dialog}
-					/>
+					<PromptImageChips controller={attachedImages} testId="ws-prompt-images" className="" />
+				</div>
+
+				<div className="relative shrink-0">
 					<Textarea
 						ref={promptRef}
 						data-testid="ws-prompt"
@@ -686,14 +682,14 @@ export function NewWorkspaceDialog({
 							commands={slashCompletion.matches}
 							activeIndex={slashCompletion.activeIndex}
 							onSelect={slashCompletion.pick}
-							className="absolute top-full left-8 z-50 mt-4"
+							className="absolute bottom-full left-8 z-50 mb-4"
 						/>
 					) : slotSession ? (
 						<TemplateSlotHint
 							activeIndex={slotSession.activeIndex}
 							count={slotSession.slots.length}
 							onNext={() => stepPromptSlot(1)}
-							className="absolute top-full left-8 z-50 mt-4"
+							className="absolute bottom-full left-8 z-50 mb-4"
 						/>
 					) : prompt.trim() && isolated ? (
 						<p
@@ -712,7 +708,7 @@ export function NewWorkspaceDialog({
 					)}
 				</div>
 
-				<div className="flex flex-wrap items-center gap-8">
+				<div className="flex shrink-0 flex-wrap items-center gap-8">
 					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-8">
 						<ModelEffortPicker
 							models={models}
