@@ -1,6 +1,7 @@
 import { realpathSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
 import { enterDefaultWorkspace, openFixtureProject, openPersistedChat } from "./fixtures/app";
+import { moveMouseToChatViewport } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 import {
@@ -105,4 +106,84 @@ test("a following reader's streaming edge stays on the pin line after every layo
 			index > 0 && sample.scrollTop < (pinned[index - 1]?.scrollTop ?? 0) - BACKWARD_TOLERANCE_PX,
 	);
 	expect(backward, "samples where scrollTop moved backward").toEqual([]);
+});
+
+test("a reader who wheels up while the edge is pinned detaches and the text under them stays put", async ({
+	page,
+}) => {
+	const wire = await interceptAppWire(page);
+	await openFixtureProject(page);
+	const title = "stream detach";
+	const seeded = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name: title,
+		messages: history(2),
+	});
+	await enterDefaultWorkspace(page);
+	await openPersistedChat(page, title);
+	const chat = page.getByTestId("chat-scroll").filter({ visible: true });
+	await expect(chat).toBeVisible();
+
+	const replay = textStreamReplay(
+		seeded.id,
+		streamedMarkdown(title, STREAM_CHARS),
+		BASE_TS + 100_000,
+	);
+	const streaming = playStreamReplay(wire(), replay, FRAME_GAP_MS);
+	await expect
+		.poll(() =>
+			chat.evaluate((root) => {
+				const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
+				return scroller !== null && scroller.scrollHeight > scroller.clientHeight + 300;
+			}),
+		)
+		.toBe(true);
+	await expect(chat).toHaveAttribute("data-follow-state", "following");
+
+	await moveMouseToChatViewport(page, chat);
+	for (let notch = 0; notch < 4; notch += 1) await page.mouse.wheel(0, -150);
+	await expect(chat).toHaveAttribute("data-follow-state", "detached");
+	await expect(chat).toHaveAttribute("data-streaming", "true");
+	await chat.evaluate(
+		(root) =>
+			new Promise<void>((resolve) => {
+				const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
+				if (!scroller) throw new Error("missing Virtuoso scroller");
+				let last = scroller.scrollTop;
+				let still = 0;
+				const frame = () => {
+					still = scroller.scrollTop === last ? still + 1 : 0;
+					last = scroller.scrollTop;
+					if (still >= 3) resolve();
+					else requestAnimationFrame(frame);
+				};
+				requestAnimationFrame(frame);
+			}),
+	);
+	const anchor = await chat.evaluate((root) => {
+		const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
+		if (!scroller) throw new Error("missing Virtuoso scroller");
+		const viewport = scroller.getBoundingClientRect();
+		const middle = viewport.top + viewport.height / 2;
+		const row = [...root.querySelectorAll<HTMLElement>("[data-chat-row-id]")].find((candidate) => {
+			const rect = candidate.getBoundingClientRect();
+			return rect.top <= middle && rect.bottom >= middle;
+		});
+		const id = row?.getAttribute("data-chat-row-id");
+		if (!row || !id) throw new Error("no chat row intersects the viewport middle");
+		return { id, top: row.getBoundingClientRect().top - viewport.top };
+	});
+
+	await streaming;
+	await expect(chat).toContainText(replay.finalTail);
+	await expect(chat).toHaveAttribute("data-streaming", "false");
+	await expect(chat).toHaveAttribute("data-follow-state", "detached");
+	const settledTop = await chat.evaluate((root, rowId) => {
+		const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
+		const row = [...root.querySelectorAll<HTMLElement>("[data-chat-row-id]")].find(
+			(candidate) => candidate.getAttribute("data-chat-row-id") === rowId,
+		);
+		if (!scroller || !row) throw new Error(`chat row ${rowId} left the rendered transcript`);
+		return row.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+	}, anchor.id);
+	expect(Math.abs(settledTop - anchor.top)).toBeLessThanOrEqual(PIN_TOLERANCE_PX);
 });
