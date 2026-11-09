@@ -93,7 +93,7 @@ export function MermaidView({
 			<Dialog open={open} onOpenChange={setOpen}>
 				<DialogContent
 					data-testid="mermaid-fullscreen-dialog"
-					className="flex h-[90vh] w-[95vw] max-w-[95vw] flex-col gap-8"
+					className="h-[90vh] w-[95vw] max-w-[95vw] gap-8"
 				>
 					<DialogHeader>
 						<DialogTitle>{title || t("visualize.mermaid.dialogTitle")}</DialogTitle>

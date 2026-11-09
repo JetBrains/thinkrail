@@ -222,14 +222,11 @@ function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
 				label={label}
 			/>
 			<Dialog open={open} onOpenChange={setOpen}>
-				<DialogContent
-					data-testid="chat-attachment-dialog"
-					className="flex max-h-[90vh] w-auto max-w-[95vw] flex-col gap-8"
-				>
+				<DialogContent data-testid="chat-attachment-dialog" className="w-auto max-w-[95vw] gap-8">
 					<DialogHeader>
 						<DialogTitle>{label}</DialogTitle>
 					</DialogHeader>
-					<div className="min-h-0 flex-1 overflow-auto">
+					<div className="relative min-h-0 flex-1 overflow-auto">
 						<img
 							src={`data:${img.mimeType};base64,${img.data}`}
 							alt=""

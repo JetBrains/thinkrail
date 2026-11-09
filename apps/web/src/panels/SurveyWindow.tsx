@@ -17,11 +17,14 @@ export function SurveyWindow() {
 				if (!next) useAppStore.getState().closeSurveyWindow();
 			}}
 		>
-			<DialogContent data-testid="survey-window" className="max-h-[85vh]">
-				<DialogHeader className="pr-24">
+			<DialogContent data-testid="survey-window">
+				<DialogHeader>
 					<DialogTitle>{t("panels.survey.title")}</DialogTitle>
 				</DialogHeader>
-				<div data-testid="survey-window-body" className="-mx-16 min-h-0 overflow-y-auto px-16">
+				<div
+					data-testid="survey-window-body"
+					className="relative -mx-16 min-h-0 overflow-y-auto px-16"
+				>
 					<SurveyWindowBody />
 				</div>
 			</DialogContent>

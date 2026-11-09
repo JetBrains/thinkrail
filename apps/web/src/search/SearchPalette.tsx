@@ -20,7 +20,7 @@ import { localeOf, type Translator, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@thinkrail/ui/tooltip";
+import { IconTooltip, Tooltip, TooltipContent, TooltipTrigger } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	type KeyboardEvent as ReactKeyboardEvent,
@@ -444,7 +444,7 @@ function PaletteContent({
 						data-testid="search-notice"
 						data-kind={notice.kind}
 						className={cn(
-							"flex shrink-0 items-center gap-8 border-border-muted border-b px-16 py-8 tr-text-metadata",
+							"flex shrink-0 items-center gap-8 wrap-anywhere border-border-muted border-b px-16 py-8 tr-text-metadata",
 							notice.kind === "offline" ? "text-feedback-warning" : "text-text-muted",
 						)}
 					>
@@ -486,12 +486,13 @@ function PaletteContent({
 						<Preview t={t} item={previewItem} previews={previews} host={host} />
 					) : null}
 				</div>
-				<footer className="flex h-32 shrink-0 items-center gap-12 overflow-hidden border-border-muted border-t px-12 tr-text-metadata text-text-subtle">
-					<Hint keys={["↑", "↓"]} label={t("search.hint.select")} />
-					<Hint keys={["↵"]} label={t(enterLabel(selected?.item))} />
-					<Hint keys={["Tab"]} label={t("search.hint.scope")} />
-					<Hint keys={["esc"]} label={t(query ? "search.hint.clear" : "search.hint.close")} />
-					<span className="flex-1" />
+				<footer className="flex h-32 shrink-0 items-center gap-12 border-border-muted border-t px-12 tr-text-metadata text-text-subtle">
+					<div className="@container flex h-16 min-w-0 flex-1 flex-wrap gap-x-12 overflow-hidden">
+						<Hint keys={["↑", "↓"]} label={t("search.hint.select")} />
+						<Hint keys={["↵"]} label={t(enterLabel(selected?.item))} />
+						<Hint keys={["Tab"]} label={t("search.hint.scope")} />
+						<Hint keys={["esc"]} label={t(query ? "search.hint.clear" : "search.hint.close")} />
+					</div>
 					{wide ? (
 						<Button
 							variant="ghost"
@@ -500,6 +501,7 @@ function PaletteContent({
 							selected={previewOpen}
 							aria-pressed={previewOpen}
 							tabIndex={-1}
+							className="shrink-0"
 							data-testid="search-preview-toggle"
 							data-active={previewOpen}
 							onMouseDown={keepInputFocus}
@@ -635,10 +637,12 @@ function Keycaps({ keys }: { keys: readonly string[] }) {
 
 function Hint({ keys, label }: { keys: readonly string[]; label: string }) {
 	return (
-		<span className="flex shrink-0 items-center gap-4">
-			<Keycaps keys={keys} />
-			{label}
-		</span>
+		<IconTooltip label={label} side="top">
+			<span className="flex shrink-0 items-center gap-4">
+				<Keycaps keys={keys} />
+				<span className="hidden @[296px]:inline">{label}</span>
+			</span>
+		</IconTooltip>
 	);
 }
 
@@ -654,7 +658,7 @@ function ScopeChips({
 	onSelect: (scope: SearchScope) => void;
 }) {
 	return (
-		<div className="flex shrink-0 items-center gap-8 border-border-muted border-b px-12 py-8">
+		<div className="flex shrink-0 flex-wrap items-center gap-8 border-border-muted border-b px-12 py-8">
 			{scopes.map((scope) => (
 				<Button
 					key={scope}
@@ -708,8 +712,10 @@ function Sections({
 				role="presentation"
 				className="flex items-center gap-8 px-8 pt-12 pb-4 tr-text-eyebrow text-text-subtle"
 			>
-				<span className="flex-1">{section.title}</span>
-				{section.meta ? <span className="tr-text-metadata normal-case">{section.meta}</span> : null}
+				<span className="min-w-0 flex-1 truncate">{section.title}</span>
+				{section.meta ? (
+					<span className="min-w-0 truncate tr-text-metadata normal-case">{section.meta}</span>
+				) : null}
 			</div>
 			{section.items.map((row) => {
 				const index = indexOf.get(row) ?? 0;
@@ -826,10 +832,10 @@ function Row({
 					</span>
 				) : null}
 			</span>
-			<span className="flex shrink-0 items-center gap-8 tr-text-metadata text-text-subtle">
-				{item.disabledReason ? <span>{item.disabledReason}</span> : null}
+			<span className="flex min-w-0 max-w-[50%] items-center gap-8 tr-text-metadata text-text-subtle">
+				{item.disabledReason ? <span className="truncate">{item.disabledReason}</span> : null}
 				{item.badge ? (
-					<span className="rounded-xs border border-border-muted px-4">{item.badge}</span>
+					<span className="truncate rounded-xs border border-border-muted px-4">{item.badge}</span>
 				) : null}
 				{item.attention && item.attention !== "running" ? <AttentionDot /> : null}
 				{item.shortcut ? <Keycaps keys={shortcutKeys(item.shortcut)} /> : null}
@@ -884,10 +890,10 @@ function PreviewCard({ t, item }: { t: Translator; item: PaletteItem }) {
 				<p className="mt-4 truncate tr-text-metadata text-text-subtle">{preview.subtitle}</p>
 			) : null}
 			{preview.fields.length > 0 ? (
-				<dl className="mt-12 grid grid-cols-[auto_1fr] gap-x-12 gap-y-4 tr-text-ui">
+				<dl className="mt-12 grid grid-cols-[auto_minmax(0,1fr)] gap-x-12 gap-y-4 tr-text-ui">
 					{preview.fields.map(([label, value]) => (
 						<div key={label} className="contents">
-							<dt className="text-text-subtle">{label}</dt>
+							<dt className="wrap-anywhere text-text-subtle">{label}</dt>
 							<dd className="min-w-0 truncate text-text-default">{value}</dd>
 						</div>
 					))}
