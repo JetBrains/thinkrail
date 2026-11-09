@@ -19,6 +19,7 @@ import {
 	removeSpeech,
 	resetSpeechInstallForTests,
 	speechInstallSettled,
+	stopSpeechInstall,
 } from "./install";
 import { markerPath, modelsDir, speechDir } from "./layout";
 import { hostTarget, SPEECH_MANIFEST_ENV } from "./manifest";
@@ -243,6 +244,19 @@ test.skipIf(!target)("cancelling returns to the previous state and discards part
 	expect(existsSync(join(modelsDir(), "multi.gguf.partial"))).toBe(false);
 	expect(existsSync(join(speechDir(), ".staging"))).toBe(false);
 });
+
+test.skipIf(!target)(
+	"a host shutdown mid-install keeps the partials for the next launch",
+	async () => {
+		await initSpeech();
+		mkdirSync(modelsDir(), { recursive: true });
+		writeFileSync(join(modelsDir(), "multi.gguf.partial"), multilingual.slice(0, 100));
+		installSpeech("multilingual");
+		stopSpeechInstall();
+		await speechInstallSettled();
+		expect(existsSync(join(modelsDir(), "multi.gguf.partial"))).toBe(true);
+	},
+);
 
 test.skipIf(!target)("removing deletes ThinkRail's speech files", async () => {
 	await initSpeech();

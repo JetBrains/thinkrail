@@ -33,7 +33,7 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
     `.staging/`, and the `installed.json` marker, written last.
   - The install state machine.
   - The status store and its publisher.
-- **Public surface (barrel):** `initSpeech`, `installSpeech`, `cancelSpeechInstall`, `removeSpeech`,
+- **Public surface (barrel):** `initSpeech`, `installSpeech`, `cancelSpeechInstall`, `stopSpeechInstall`, `removeSpeech`,
   `speechStatus`, `setSpeechPublisher`, `stopEngine`, `createSpeechRelay`, `SpeechRelay`,
   `SpeechClientSocket`.
 - **Allowed deps:** `persistence` (`dataDir`), `subprocess` (the PATH probe and archive unpacking run
@@ -78,7 +78,9 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
   - A network failure keeps the partial for the next attempt (`SPEECH_DOWNLOAD_FAILED`). A mismatch, or a
     body longer than pinned, deletes it (`SPEECH_CHECKSUM_MISMATCH`).
 - **Outcomes.**
-  - Cancelling discards staging and partials and returns to what the disk holds.
+  - Cancelling (`speech.cancelInstall`) discards staging and partials and returns to what the disk
+    holds. A host shutdown (`stopSpeechInstall`) aborts with its own reason and keeps them, so the next
+    launch resumes like it would after a crash. Quitting mid-download used to restart the ~750 MB download.
   - A failure becomes `install: failed {model, code, usable}`; any uncoded error reads as
     `SPEECH_DOWNLOAD_FAILED`. `usable` names a previously installed model that still works, so a failed
     switch never disables dictation. The engine's inputs are read from the disk, not the status. A

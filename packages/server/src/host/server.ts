@@ -121,13 +121,13 @@ import {
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
 import { getConfig, setSettingsPublisher } from "../settings";
 import {
-	cancelSpeechInstall,
 	createSpeechRelay,
 	initSpeech,
 	type SpeechRelay,
 	setSpeechPublisher,
 	speechStatus,
 	stopEngine,
+	stopSpeechInstall,
 } from "../speech";
 import {
 	clearTerminalClient,
@@ -1107,7 +1107,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		stopLocalesWatch();
 		stopThemesWatch();
 		stopFontsWatch();
-		cancelSpeechInstall();
+		stopSpeechInstall();
 		void stopEngine();
 		disposeAllSessions();
 		for (const timer of reapTimers.values()) clearTimeout(timer);

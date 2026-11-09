@@ -288,7 +288,7 @@ export function installSpeech(model: SpeechModel): void {
 			await runInstall(model, controller.signal);
 		} catch (err) {
 			if (controller.signal.aborted) {
-				await discardPartials().catch(() => {});
+				if (controller.signal.reason !== HOST_SHUTDOWN) await discardPartials().catch(() => {});
 			} else {
 				const raw = errorCodeOf(err);
 				const code: SpeechErrorCode = isSpeechErrorCode(raw) ? raw : "SPEECH_DOWNLOAD_FAILED";
@@ -311,6 +311,13 @@ export function installSpeech(model: SpeechModel): void {
 
 export function cancelSpeechInstall(): void {
 	active?.abort();
+}
+
+const HOST_SHUTDOWN = Symbol("host shutdown");
+
+/** Stops a running install for a host shutdown, keeping its partials so the next launch resumes. */
+export function stopSpeechInstall(): void {
+	active?.abort(HOST_SHUTDOWN);
 }
 
 export async function speechInstallSettled(): Promise<void> {
