@@ -109,7 +109,7 @@ export async function addMcpServersWithProjectOptIn(
 
 function DialogBody({ children }: { children: ReactNode }) {
 	return (
-		<div className="-mx-16 flex min-h-0 flex-1 flex-col gap-12 overflow-y-auto px-16">
+		<div className="-mx-16 relative flex min-h-0 flex-1 flex-col gap-12 overflow-y-auto px-16">
 			{children}
 		</div>
 	);

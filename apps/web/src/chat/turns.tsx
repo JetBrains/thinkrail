@@ -226,7 +226,7 @@ function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
 					<DialogHeader>
 						<DialogTitle>{label}</DialogTitle>
 					</DialogHeader>
-					<div className="min-h-0 flex-1 overflow-auto">
+					<div className="relative min-h-0 flex-1 overflow-auto">
 						<img
 							src={`data:${img.mimeType};base64,${img.data}`}
 							alt=""

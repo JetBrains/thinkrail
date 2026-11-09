@@ -314,7 +314,7 @@ export function SkillsDialog({
 					</div>
 				) : null}
 
-				<div className="max-h-[50vh] overflow-y-auto">
+				<div className="relative max-h-[50vh] overflow-y-auto">
 					{entries === null ? (
 						<LoadingRegion rows={4} className="px-8 py-12" />
 					) : entries.length === 0 ? (
