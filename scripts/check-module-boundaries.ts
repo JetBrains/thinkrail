@@ -178,6 +178,7 @@ function parseLang(path: string) {
 function importSpecifiers(path: string, file: string): SourceImport[] {
 	const { program, errors } = parseSync(path, readFileSync(path, "utf8"), {
 		lang: parseLang(path),
+		...(/\.c[jt]s$/.test(path) ? { sourceType: "commonjs" as const } : {}),
 	});
 	if (errors.length > 0) {
 		throw new Error(`cannot parse ${file}: ${errors.map((error) => error.message).join("; ")}`);

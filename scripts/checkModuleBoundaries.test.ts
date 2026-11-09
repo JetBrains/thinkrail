@@ -223,6 +223,19 @@ test("scans JSX in plain JavaScript sources", () => {
 	]);
 });
 
+test("parses .cjs sources as CommonJS", () => {
+	const root = fixture();
+	write(
+		root,
+		"apps/web/src/config.cjs",
+		'const server = require("@thinkrail/server");\nif (!server) return;\nmodule.exports = server;',
+	);
+
+	expect(moduleBoundaryViolations(root)).toEqual([
+		'apps/web/src/config.cjs: import "@thinkrail/server" creates forbidden apps/web -> packages/server edge',
+	]);
+});
+
 test("fails on a source file it cannot parse", () => {
 	const root = fixture();
 	write(
