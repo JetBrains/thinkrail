@@ -469,6 +469,7 @@ test("a coarse pointer reveals a returning page's text target without focusing i
 		viewport: { width: 1280, height: 640 },
 	});
 	const page = await context.newPage();
+	await page.bringToFront();
 	await openFixtureProject(page);
 	const session = seedPanedQuestionnaire("touch questionnaire", "ask-touch-pages");
 
