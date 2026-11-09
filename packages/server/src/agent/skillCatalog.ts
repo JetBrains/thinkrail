@@ -2,6 +2,8 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import {
 	type ExtensionAPI,
 	formatSkillsForPrompt,
+	parseSkillBlock,
+	type SessionEntry,
 	type Skill,
 	type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
@@ -53,15 +55,6 @@ export function rankSkills(skills: readonly Skill[]): Skill[] {
 		.map(({ skill }) => skill);
 }
 
-function escapeXml(text: string): string {
-	return text
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/"/g, "&quot;")
-		.replace(/'/g, "&apos;");
-}
-
 function shorten(text: string, max: number): string {
 	const flat = text.replace(/\s+/g, " ").trim();
 	if (flat.length <= max) return flat;
@@ -70,14 +63,8 @@ function shorten(text: string, max: number): string {
 	return `${space > max / 2 ? cut.slice(0, space) : cut}…`;
 }
 
-function entry(skill: Skill): string {
-	return [
-		"  <skill>",
-		`    <name>${escapeXml(skill.name)}</name>`,
-		`    <description>${escapeXml(shorten(skill.description, DESCRIPTION_CHARS))}</description>`,
-		`    <location>${escapeXml(skill.filePath)}</location>`,
-		"  </skill>",
-	].join("\n");
+function skillLine(skill: Skill): string {
+	return `- ${skill.name}: ${shorten(skill.description, DESCRIPTION_CHARS)}\n  location: ${skill.filePath}`;
 }
 
 function sourceLabel(skill: Skill): string {
@@ -105,30 +92,30 @@ export function budgetedSkillsSection(
 	skills: readonly Skill[],
 	budgetChars: number,
 ): BudgetedSection | undefined {
-	const full = formatSkillsForPrompt([...skills]).trim();
-	if (full.length <= budgetChars) return undefined;
+	if (formatSkillsForPrompt([...skills]).trim().length <= budgetChars) return undefined;
 	const ranked = rankSkills(skills);
-	const head = (unlisted: number) =>
-		[
-			"The following skills provide specialized instructions for specific tasks.",
-			"Use the read tool to load a skill's file when the task matches its description.",
-			"Resolve relative paths against the skill's directory (parent of SKILL.md). Use absolute paths in tool calls.",
-			`Only ${ranked.length - unlisted} of ${ranked.length} skills are listed here. Before starting a task that a specialized skill could cover, call ${SKILL_SEARCH_TOOL} with a few keywords to find unlisted skills, then read the matching file.`,
-		].join("\n");
-	const tail = (unlisted: readonly Skill[]) =>
-		unlisted.length > 0 ? `\nUnlisted skills by source: ${unlistedSummary(unlisted)}.` : "";
-	const listed: string[] = [];
-	let used = head(ranked.length).length + "\n\n<available_skills>\n</available_skills>".length;
-	for (const skill of ranked) {
-		const block = entry(skill);
-		const reserve = tail(ranked.slice(listed.length)).length;
-		if (used + block.length + 1 + reserve > budgetChars) break;
-		listed.push(block);
-		used += block.length + 1;
+	const shortened = ranked.map((skill) => ({
+		...skill,
+		description: shorten(skill.description, DESCRIPTION_CHARS),
+	}));
+	const section = (listed: number) => {
+		const unlisted = ranked.slice(listed);
+		return [
+			formatSkillsForPrompt(shortened.slice(0, listed)).trim(),
+			`Only ${listed} of ${ranked.length} skills are listed here. Before starting a task that a specialized skill could cover, call ${SKILL_SEARCH_TOOL} with a few keywords to find unlisted skills, then read the matching file.`,
+			...(unlisted.length > 0 ? [`Unlisted skills by source: ${unlistedSummary(unlisted)}.`] : []),
+		]
+			.filter(Boolean)
+			.join("\n");
+	};
+	let low = 0;
+	let high = ranked.length;
+	while (low < high) {
+		const mid = Math.ceil((low + high) / 2);
+		if (section(mid).length <= budgetChars) low = mid;
+		else high = mid - 1;
 	}
-	const unlisted = ranked.slice(listed.length);
-	const text = `${head(unlisted.length)}\n\n<available_skills>\n${listed.join("\n")}${listed.length > 0 ? "\n" : ""}</available_skills>${tail(unlisted)}`;
-	return { text, unlisted };
+	return { text: section(low), unlisted: ranked.slice(low) };
 }
 
 function tokens(text: string): string[] {
@@ -197,10 +184,7 @@ export function formatSkillMatches(query: string, matches: readonly SkillMatch[]
 	return [
 		`Skills matching "${query}", best first. Read a skill's file with the read tool before following it.`,
 		"",
-		...matches.map(
-			({ skill }) =>
-				`- ${skill.name}: ${shorten(skill.description, DESCRIPTION_CHARS)}\n  location: ${skill.filePath}`,
-		),
+		...matches.map(({ skill }) => skillLine(skill)),
 	].join("\n");
 }
 
@@ -225,11 +209,20 @@ export function suggestSkills(
 export function formatSkillHint(skills: readonly Skill[]): string {
 	return [
 		"Skills not listed in the system prompt that may fit this request. If one matches the task, read its file before starting and follow it:",
-		...skills.map(
-			(skill) =>
-				`- ${skill.name}: ${shorten(skill.description, DESCRIPTION_CHARS)}\n  location: ${skill.filePath}`,
-		),
+		...skills.map(skillLine),
 	].join("\n");
+}
+
+export function hintedSkills(entries: readonly SessionEntry[]): Set<string> {
+	const names = new Set<string>();
+	for (const entry of entries) {
+		if (entry.type !== "custom_message" || entry.customType !== SKILL_HINT_CUSTOM_TYPE) continue;
+		const details = entry.details;
+		if (!details || typeof details !== "object" || !("skills" in details)) continue;
+		if (!Array.isArray(details.skills)) continue;
+		for (const name of details.skills) if (typeof name === "string") names.add(name);
+	}
+	return names;
 }
 
 const searchParams = Type.Object({
@@ -262,35 +255,33 @@ function createSkillSearchTool(
 
 export function skillCatalog(pi: ExtensionAPI): void {
 	let skills: readonly Skill[] = [];
-	let memo: { key: string; section: BudgetedSection | undefined; hinted: Set<string> } | undefined;
+	let memo: { key: string; section: BudgetedSection | undefined } | undefined;
 	pi.registerTool(createSkillSearchTool(() => skills));
 	pi.on("before_agent_start", (event, ctx) => {
 		const options = event.systemPromptOptions;
 		skills = options.skills;
 		const callable = (tool: string) =>
 			options.selectedTools.includes(tool) && !options.hiddenTools.includes(tool);
-		if (!callable("read") || !callable(SKILL_SEARCH_TOOL)) {
-			delete options.sections.skills;
-			return;
-		}
+		if (!callable("read") || !callable(SKILL_SEARCH_TOOL)) return;
 		const budget = catalogBudgetChars(ctx.model);
 		const key = `${budget}\n${skills.map((skill) => `${skill.filePath}\0${skill.description}`).join("\n")}`;
-		if (memo?.key !== key)
-			memo = { key, section: budgetedSkillsSection(skills, budget), hinted: new Set() };
+		if (memo?.key !== key) memo = { key, section: budgetedSkillsSection(skills, budget) };
 		const section = memo.section;
-		if (!section) {
-			delete options.sections.skills;
-			return;
-		}
+		if (!section) return;
 		options.sections.skills = section.text;
-		if (event.messageType !== "user" || !event.prompt) return;
-		const hint = suggestSkills(skills, section.unlisted, event.prompt, memo.hinted);
+		if (event.messageType !== "user") return;
+		const invoked = parseSkillBlock(event.prompt);
+		const request = invoked ? invoked.userMessage : event.prompt;
+		if (!request) return;
+		const exclude = hintedSkills(ctx.sessionManager.buildContextEntries());
+		if (invoked) exclude.add(invoked.name);
+		const hint = suggestSkills(skills, section.unlisted, request, exclude);
 		if (hint.length === 0) return;
-		for (const skill of hint) memo.hinted.add(skill.name);
 		return {
 			message: {
 				customType: SKILL_HINT_CUSTOM_TYPE,
 				content: formatSkillHint(hint),
+				details: { skills: hint.map((skill) => skill.name) },
 				display: false,
 			},
 		};

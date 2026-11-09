@@ -703,8 +703,9 @@ re-opened transcripts provider-valid.
     its own) to a listing within that budget: skills ranked project, then host-supplied (bundled and
     extension skills, `temporary` scope), then pi-native user skills, then other agents' aliases
     (`claude` / `codex` / `github-copilot` / `gemini` sources), pi order within a tier; descriptions
-    shortened to 240 characters; a header that says how many are listed and to call `skill_search`;
-    and a per-source count of the unlisted rest, so the omission is never silent. A catalog that fits
+    shortened to 240 characters and rendered by pi's own `formatSkillsForPrompt`, so the entry format
+    follows pi; then a line that says how many are listed and to call `skill_search`, and a per-source
+    count of the unlisted rest, so the omission is never silent. A catalog that fits
     keeps pi's section untouched. `skill_search(query, limit?)` runs BM25 over name (weighted) and
     description across every model-invocable admitted skill and returns names, descriptions and
     `SKILL.md` locations, folding a trailing plural `s`; the model still loads a skill with `read`, so
@@ -714,8 +715,15 @@ re-opened transcripts provider-valid.
     catalog and up to 3 **unlisted** skills matched distinctively — a matched term in at most 5% of the
     catalog that is in the skill's name, or two such terms — come back as `before_agent_start`'s
     `message`, a persisted `thinkrail/skill-hint` custom message (`display: false`; the web ignores
-    unknown custom types). It lands in the history tail after the user turn, so the cached prefix is
-    untouched, and each skill is hinted once per catalog. The
+    unknown custom types) whose `details.skills` names them. It lands in the history tail after the
+    user turn, so the cached prefix is untouched. A skill is not hinted again while an earlier hint
+    naming it is still in pi's compaction-aware context (`buildContextEntries`), so the rule survives a
+    reload or restart and lapses only once compaction summarizes that hint away. A `/skill:` prompt
+    reaches the handler expanded into the skill's whole body, so only the request typed after it
+    (`parseSkillBlock`'s `userMessage`) is matched, and the invoked skill is never hinted. A session
+    that already sent pi's full section keeps it until its next compaction, because the budgeted one
+    arrives as a mid-conversation patch where the provider allows one; the saving is immediate only
+    for new sessions. The
     section is memoized on the budget and the skill set, so it changes only on reload or a model with a
     different window: per-turn relevance filtering was rejected because every change re-sends the
     whole section (a mid-conversation patch, or a full cache miss where the model has none). A session

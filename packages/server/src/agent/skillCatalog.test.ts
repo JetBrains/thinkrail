@@ -20,6 +20,7 @@ import {
 import {
 	budgetedSkillsSection,
 	catalogBudgetChars,
+	hintedSkills,
 	rankSkills,
 	SKILL_HINT_CUSTOM_TYPE,
 	SKILL_SEARCH_TOOL,
@@ -245,6 +246,7 @@ test("a pi session with an oversized catalog gets the budgeted section and finds
 			if (hint) hints.push(hint);
 			return fauxAssistantMessage("settled");
 		},
+		() => fauxAssistantMessage("reloaded"),
 	]);
 	const { session } = await createSession();
 	try {
@@ -270,6 +272,25 @@ test("a pi session with an oversized catalog gets the budgeted section and finds
 		await session.prompt("Settle the quokka payments.");
 		expect(hintEntries(session.sessionManager.getBranch())).toHaveLength(2);
 		expect(hints.at(-1)).toContain("- aa-quokka-payments: Settle quokka payments with the bank.");
+		await session.reload();
+		await session.prompt("Settle the quokka payments once more.");
+		expect(hintEntries(session.sessionManager.getBranch())).toHaveLength(2);
+	} finally {
+		session.dispose();
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("a /skill: invocation never hints at itself and matches only the request typed after it", async () => {
+	const { cwd, faux, createSession } = await catalogFixture();
+	faux.setResponses([() => fauxAssistantMessage("one"), () => fauxAssistantMessage("two")]);
+	const { session } = await createSession();
+	const hinted = () => [...hintedSkills(session.sessionManager.getBranch())].sort();
+	try {
+		await session.prompt("/skill:aa-quokka-payments Do it today.");
+		expect(hinted()).toEqual([]);
+		await session.prompt("/skill:aa-quokka-payments Reconcile the invoices against the ledger.");
+		expect(hinted()).toEqual(["aa-invoice-ledger"]);
 	} finally {
 		session.dispose();
 		rmSync(cwd, { recursive: true, force: true });

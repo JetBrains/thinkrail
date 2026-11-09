@@ -2,7 +2,7 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { openWorkspaceChat } from "./fixtures/app";
-import { E2E_PI_AGENT_DIR } from "./fixtures/paths";
+import { E2E_HOME_DIR, E2E_PI_AGENT_DIR } from "./fixtures/paths";
 import {
 	ask,
 	assistantText,
@@ -11,10 +11,11 @@ import {
 	toolCalls,
 } from "./fixtures/skillCompaction";
 
-const SKILL = "zz-quokka-invoices";
+const SKILL = "quokka-invoices";
 const FILLERS = 250;
 const MARKER = "quokka-reconciled";
-const skillsRoot = join(E2E_PI_AGENT_DIR, "skills");
+const fillerRoot = join(E2E_PI_AGENT_DIR, "skills");
+const skillRoot = join(E2E_HOME_DIR, ".agents", "skills");
 
 const filler = (i: number) => `---
 name: chore-${i}
@@ -40,12 +41,15 @@ test("the agent finds and follows a skill the budgeted catalog left unlisted", {
 }, async ({ page }) => {
 	test.setTimeout(400_000);
 	const dirs = [
-		...Array.from({ length: FILLERS }, (_, i) => [`chore-${i}`, filler(i)] as const),
-		[SKILL, SKILL_BODY] as const,
+		...Array.from(
+			{ length: FILLERS },
+			(_, i) => [join(fillerRoot, `chore-${i}`), filler(i)] as const,
+		),
+		[join(skillRoot, SKILL), SKILL_BODY] as const,
 	];
-	for (const [name, body] of dirs) {
-		mkdirSync(join(skillsRoot, name), { recursive: true });
-		writeFileSync(join(skillsRoot, name, "SKILL.md"), body);
+	for (const [dir, body] of dirs) {
+		mkdirSync(dir, { recursive: true });
+		writeFileSync(join(dir, "SKILL.md"), body);
 	}
 	try {
 		const workspace = await openWorkspaceChat(page);
@@ -86,6 +90,6 @@ test("the agent finds and follows a skill the budgeted catalog left unlisted", {
 		).toBe(true);
 		expect(reply.trim()).toMatch(new RegExp(`${MARKER}: 3$`));
 	} finally {
-		for (const [name] of dirs) rmSync(join(skillsRoot, name), { recursive: true, force: true });
+		for (const [dir] of dirs) rmSync(dir, { recursive: true, force: true });
 	}
 });
