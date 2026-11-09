@@ -8,6 +8,7 @@ import {
 	isSkillGroupEnabled,
 	OTHER_AGENT_SKILL_GROUPS,
 	type Project,
+	SKILL_LISTING_MAX_TOKENS,
 	type SkillCatalogEntry,
 	type Workspace,
 } from "@thinkrail/contracts";
@@ -28,7 +29,7 @@ import {
 	trustGrantParams,
 	untrustedNoticeText,
 } from "./projectTrust";
-import { LARGE_SKILL_CATALOG_TOKENS, skillCatalogSize } from "./skillCatalogSize";
+import { skillCatalogSize } from "./skillCatalogSize";
 import { useProjectTrustSummary } from "./useProjectTrustSummary";
 
 const TIER_META: Record<string, { label: MessageKey | null; hint: MessageKey; rank: number }> = {
@@ -283,16 +284,20 @@ export function SkillsDialog({
 				{size ? (
 					<p
 						data-testid="skills-size"
-						data-large={size.tokens > LARGE_SKILL_CATALOG_TOKENS}
+						data-large={size.large}
 						className={cn(
 							"tr-text-metadata",
-							size.tokens > LARGE_SKILL_CATALOG_TOKENS
-								? "text-feedback-warning"
-								: "text-text-muted",
+							size.large ? "text-feedback-warning" : "text-text-muted",
 						)}
 					>
-						{t("chat.skills.size", { count: size.count, tokens: size.tokens.toLocaleString() })}
-						{size.tokens > LARGE_SKILL_CATALOG_TOKENS ? ` ${t("chat.skills.sizeLarge")}` : null}
+						{size.budgeted
+							? t("chat.skills.sizeBudgeted", {
+									count: size.count,
+									tokens: size.tokens.toLocaleString(),
+									limit: SKILL_LISTING_MAX_TOKENS.toLocaleString(),
+								})
+							: t("chat.skills.size", { count: size.count, tokens: size.tokens.toLocaleString() })}
+						{size.large ? ` ${t("chat.skills.sizeLarge")}` : null}
 					</p>
 				) : null}
 

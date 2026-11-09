@@ -1,12 +1,17 @@
-import type { SkillCatalogEntry } from "@thinkrail/contracts";
+import {
+	SKILL_LISTING_MAX_TOKENS,
+	SKILL_LISTING_MIN_TOKENS,
+	type SkillCatalogEntry,
+} from "@thinkrail/contracts";
 
 const ENTRY_MARKUP_CHARS = 100;
 const CHARS_PER_TOKEN = 4;
-export const LARGE_SKILL_CATALOG_TOKENS = 10_000;
 
 export function skillCatalogSize(entries: readonly SkillCatalogEntry[]): {
 	count: number;
 	tokens: number;
+	budgeted: boolean;
+	large: boolean;
 } {
 	const loaded = entries.filter((entry) => entry.decision === "load");
 	const chars = loaded
@@ -20,5 +25,11 @@ export function skillCatalogSize(entries: readonly SkillCatalogEntry[]): {
 				entry.sourceInfo.path.length,
 			0,
 		);
-	return { count: loaded.length, tokens: Math.round(chars / CHARS_PER_TOKEN) };
+	const tokens = Math.round(chars / CHARS_PER_TOKEN);
+	return {
+		count: loaded.length,
+		tokens,
+		budgeted: tokens > SKILL_LISTING_MIN_TOKENS,
+		large: tokens > SKILL_LISTING_MAX_TOKENS,
+	};
 }

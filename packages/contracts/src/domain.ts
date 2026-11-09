@@ -1504,6 +1504,10 @@ export const RECENT_MODELS_LIMIT = 5;
 
 export const OTHER_AGENT_SKILL_GROUPS: readonly string[] = ["personal", "@plugins"];
 
+/** Bounds of the host's per-request skill listing budget; a larger catalog is listed in part. */
+export const SKILL_LISTING_MIN_TOKENS = 4_000;
+export const SKILL_LISTING_MAX_TOKENS = 8_000;
+
 export function isSkillGroupEnabled(
 	project: { disabledGroups?: readonly string[]; enabledGroups?: readonly string[] } | undefined,
 	group: string,

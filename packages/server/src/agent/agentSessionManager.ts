@@ -878,6 +878,10 @@ export async function refreshSkillAdmission(): Promise<void> {
 			if (entry.disposed || entry.resourcesClosing) return;
 			const { session } = entry;
 			try {
+				if (entry.reloadRunning) {
+					await requestSessionReload(session.sessionId);
+					return;
+				}
 				const catalog = await listSkillCatalog(
 					session.sessionManager.getCwd(),
 					skillAdmissionResolver(entry.workspaceId),

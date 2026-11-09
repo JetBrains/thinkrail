@@ -698,7 +698,8 @@ re-opened transcripts provider-valid.
     import other agents' whole libraries, so one machine sent 1,395 skills (~165K tokens) on every
     request, which compaction can never shrink. Modeled on Claude Code's listing budget and Codex's
     2% budget, plus Anthropic's tool search: when pi's own section would exceed **2% of the context
-    window, clamped to 4K–8K tokens and never above 10% of the window** (4K for a virtual or unknown
+    window, clamped to 4K–8K tokens and never above 10% of the window** (the contracts'
+    `SKILL_LISTING_MIN_TOKENS` / `SKILL_LISTING_MAX_TOKENS`, which the Skills dialog quotes; 4K for a virtual or unknown
     window), the `before_agent_start` handler sets `sections.skills` (pi lets a custom section replace
     its own) to a listing within that budget: skills ranked project, then host-supplied (bundled and
     extension skills, `temporary` scope), then pi-native user skills, then other agents' aliases

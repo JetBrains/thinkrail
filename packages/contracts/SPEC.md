@@ -310,7 +310,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   plugin, a source tier, or the special `@plugins`) plus **`enabledGroups`** (per-group on against the host
   default), which gate what its skills contribute. **`isSkillGroupEnabled`** is the one group rule shared by
   the host gate and the Skills dialog: a project's explicit choice (on wins over off) beats
-  `AppConfig.otherAgentSkills`, which governs only **`OTHER_AGENT_SKILL_GROUPS`** (`personal`, `@plugins`); a workspace layers
+  `AppConfig.otherAgentSkills`, which governs only **`OTHER_AGENT_SKILL_GROUPS`** (`personal`, `@plugins`).
+  **`SKILL_LISTING_MIN_TOKENS`** / **`SKILL_LISTING_MAX_TOKENS`** (4K / 8K) bound the host's per-request skill
+  listing budget, so the Skills dialog's size line names the same limits; a workspace layers
   **`Workspace.skillOverrides`** (per-skill on/off) over that baseline;
   **`SubagentOverride`** (`"on" | "off"`) + optional **`Workspace.subagentsOverride`** let a workspace
   force subagents on/off, while absence inherits the host's `AppConfig.subagentsEnabled` default;
