@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseSpeechServerMessage, type SpeechServerMessage } from "@thinkrail/contracts";
 import { observeLoggedErrors } from "../log";
-import { resetEngineForTests, stopEngine } from "./engine";
+import { enginePidForTests, resetEngineForTests, stopEngine } from "./engine";
 import { initSpeech, resetSpeechInstallForTests } from "./install";
 import { markerPath, modelsDir } from "./layout";
 import { hostTarget, SPEECH_MANIFEST_ENV } from "./manifest";
@@ -170,12 +170,36 @@ test.skipIf(!posix)(
 			await stopEngine();
 			await client.until("ended");
 			expect(client.messages).toContainEqual({ type: "error", code: "SPEECH_ENGINE_FAILED" });
+			await Bun.sleep(1_200);
 			expect(seen).toEqual([]);
 		} finally {
 			observeLoggedErrors(null);
 		}
 	},
 );
+
+test.skipIf(!posix)("an engine that crashes mid-dictation is reported exactly once", async () => {
+	installFixture();
+	await initSpeech();
+	const seen: Array<{ scope: string; code: unknown }> = [];
+	observeLoggedErrors((scope, error) =>
+		seen.push({ scope, code: error instanceof Error ? Reflect.get(error, "code") : undefined }),
+	);
+	try {
+		const client = clientSocket();
+		const relay = createSpeechRelay(client.socket);
+		relay.message(JSON.stringify({ type: "start" }));
+		await client.until("ready");
+		const pid = enginePidForTests();
+		expect(pid).not.toBeNull();
+		process.kill(-(pid ?? 0), "SIGKILL");
+		await client.until("ended");
+		await Bun.sleep(1_500);
+		expect(seen).toEqual([{ scope: "speech", code: "SPEECH_ENGINE_FAILED" }]);
+	} finally {
+		observeLoggedErrors(null);
+	}
+});
 
 test.skipIf(!posix)("a second start while dictating is refused", async () => {
 	installFixture();

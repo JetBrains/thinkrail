@@ -156,15 +156,22 @@ export async function reapEngineRecords(stop: (pid: number) => Promise<void>): P
 	} catch {
 		return;
 	}
+	const orphans: number[] = [];
 	for (const name of names) {
 		const owner = Number(name.replace(/\.pid$/, ""));
 		if (!name.endsWith(".pid") || !Number.isSafeInteger(owner) || owner <= 0) continue;
 		if (owner !== process.pid && processAlive(owner)) continue;
 		const file = join(engineRecordsDir(), name);
-		const pid = Number(readFileSync(file, "utf8").trim());
-		rmSync(file, { force: true });
-		if (Number.isSafeInteger(pid) && pid > 0) await stop(pid);
+		let pid: number;
+		try {
+			pid = Number(readFileSync(file, "utf8").trim());
+			rmSync(file, { force: true });
+		} catch {
+			continue;
+		}
+		if (Number.isSafeInteger(pid) && pid > 0) orphans.push(pid);
 	}
+	for (const pid of orphans) await stop(pid);
 }
 
 function recordWindowsEngine(pid: number): void {
@@ -268,6 +275,10 @@ export async function stopEngine(): Promise<void> {
 
 export function setEngineIdleMsForTests(ms: number): void {
 	idleMs = ms;
+}
+
+export function enginePidForTests(): number | null {
+	return current?.child?.pid ?? null;
 }
 
 export function resetEngineForTests(): void {

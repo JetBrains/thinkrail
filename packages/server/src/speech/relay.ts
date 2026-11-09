@@ -16,6 +16,7 @@ const MAX_PENDING_BYTES = SPEECH_SAMPLE_RATE * 2 * 30;
 const MAX_FRAME_BYTES = 64 * 1024;
 const MAX_UPSTREAM_BUFFER_BYTES = 4 * 1024 * 1024;
 const COMMIT_TIMEOUT_MS = 8_000;
+const CRASH_SETTLE_MS = 1_000;
 const LANGUAGE_TAG = /\s*<[a-z]{2,3}-[A-Z]{2}>\s*$/;
 
 export interface SpeechClientSocket {
@@ -149,13 +150,20 @@ class Dictation {
 		}
 	}
 
-	/** A dictation the engine broke mid-stream; start failures are reported once, by the engine. */
+	/**
+	 * A dictation the engine broke mid-stream. It is reported only if the engine is still the live one a
+	 * moment later: a crash is reported by the engine's own exit, and a start failure by its start.
+	 */
 	private engineBroke(reason: string): void {
 		if (this.finished) return;
-		if (this.endpoint && isLiveEngine(this.endpoint)) {
-			log.warn("speech dictation failed", new CodedError("SPEECH_ENGINE_FAILED", reason));
-		}
+		const endpoint = this.endpoint;
 		this.fail("SPEECH_ENGINE_FAILED");
+		if (!endpoint) return;
+		setTimeout(() => {
+			if (isLiveEngine(endpoint)) {
+				log.warn("speech dictation failed", new CodedError("SPEECH_ENGINE_FAILED", reason));
+			}
+		}, CRASH_SETTLE_MS).unref();
 	}
 
 	private fail(code: SpeechErrorCode): void {
