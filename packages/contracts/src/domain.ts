@@ -58,6 +58,48 @@ export function firstPromptOfTexts(texts: Iterable<string>): string | undefined 
 	return undefined;
 }
 
+const UNNAMED_CHAT_TITLE_LENGTH = 48;
+
+export function unnamedChatTitle(firstPrompt: string | null | undefined): string | undefined {
+	if (!firstPrompt) return undefined;
+	if (firstPrompt.length <= UNNAMED_CHAT_TITLE_LENGTH) return firstPrompt;
+	const boundary = firstPrompt.slice(0, UNNAMED_CHAT_TITLE_LENGTH + 1).lastIndexOf(" ");
+	const cut =
+		boundary > UNNAMED_CHAT_TITLE_LENGTH / 2
+			? firstPrompt.slice(0, boundary)
+			: clampToCodePoints(firstPrompt, UNNAMED_CHAT_TITLE_LENGTH);
+	return `${cut.trimEnd()}…`;
+}
+
+export interface ChatTitle {
+	text: string;
+	source: "name" | "prompt";
+	tooltip?: string;
+}
+
+export function chatTitle(
+	name: string | null | undefined,
+	firstPrompt: string | null | undefined,
+): ChatTitle | null {
+	const named = name?.trim();
+	if (named) return { text: named, source: "name" };
+	const unnamed = unnamedChatTitle(firstPrompt);
+	return unnamed && firstPrompt ? { text: unnamed, source: "prompt", tooltip: firstPrompt } : null;
+}
+
+export type CompactAgeUnit = "underHour" | "hours" | "days" | "weeks" | "months";
+
+export function compactAgeOf(ms: number, now: number): { unit: CompactAgeUnit; count: number } {
+	const hours = Math.max(0, Math.floor((now - ms) / 3_600_000));
+	if (hours < 1) return { unit: "underHour", count: 0 };
+	if (hours < 24) return { unit: "hours", count: hours };
+	const days = Math.floor(hours / 24);
+	if (days < 14) return { unit: "days", count: days };
+	const weeks = Math.floor(days / 7);
+	if (weeks < 10) return { unit: "weeks", count: weeks };
+	return { unit: "months", count: Math.floor(days / 30) };
+}
+
 export interface Project {
 	id: string;
 	name: string;
@@ -1272,6 +1314,56 @@ export interface GithubAuthStatus {
 	connected: boolean;
 	login?: string;
 	scopes?: string[];
+}
+
+/** How a phone reaches this host: its Wi‑Fi/LAN, Tailscale or public address, or a configured relay. */
+export type RemoteRoute = "lan" | "tailscale" | "public" | "relay";
+
+export interface RemoteAddress {
+	url: string;
+	route: RemoteRoute;
+}
+
+/** What a paired device may do: `read` views projects and chats but changes nothing; `write` works as the IDE does. */
+export type RemoteDeviceAccess = "read" | "write";
+
+export interface RemotePairedDevice {
+	id: string;
+	label: string;
+	pairedAt: number;
+	access: RemoteDeviceAccess;
+	/** The device has a live connection to this host right now. */
+	connected: boolean;
+}
+
+/**
+ * Whether the internet reaches the host's own relay. `interface`: a public IP sits on this machine (not
+ * verifiable from inside, so the firewall is the user's to check); `reachable` / `closed`: the public address
+ * STUN reported, and whether the relay answered there; `offline`: STUN could not be reached.
+ */
+export type RemotePublicCheck =
+	| { state: "checking" }
+	| { state: "interface" | "reachable" | "closed"; ip: string }
+	| { state: "offline" };
+
+/** The relay phones dial: the host's own on `port`, or one configured with `--relay`. */
+export type RemoteRelay =
+	| { kind: "builtIn"; port: number; publicCheck: RemotePublicCheck }
+	| { kind: "external"; url: string };
+
+/** Phone access as Settings shows it; `addresses` is empty while off or when no network is up. */
+export interface RemoteAccessStatus {
+	enabled: boolean;
+	addresses: RemoteAddress[];
+	devices: RemotePairedDevice[];
+	/** Absent while access is off. */
+	relay?: RemoteRelay;
+}
+
+/** A one-time `thinkrail://pair` link for the QR, valid until `expiresAt` (epoch ms). */
+export interface RemotePairingLink {
+	link: string;
+	expiresAt: number;
 }
 
 export interface HostEnvironmentVar {

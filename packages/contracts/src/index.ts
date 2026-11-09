@@ -1,10 +1,14 @@
+export * from "./brokerProtocol";
+export * from "./channelFraming";
 export type * from "./domain";
 export {
 	ACCEPTED_IMAGE_TYPES,
 	base64EncodedLength,
 	CODE_FONT_SIZE,
 	COMPOSER_GROWTH_LIMITS,
+	chatTitle,
 	clampToCodePoints,
+	compactAgeOf,
 	compareProjectRank,
 	compareResourceHistory,
 	DEFAULT_CONFIG,
@@ -86,7 +90,9 @@ export {
 	USER_FONT_EXTENSIONS,
 	USER_FONT_UPLOAD_HEADER,
 	USER_FONTS_ROUTE,
+	unnamedChatTitle,
 } from "./domain";
+export * from "./iceServers";
 export type {
 	ContentMatch,
 	FieldMatch,
@@ -107,6 +113,8 @@ export {
 	prepareContent,
 } from "./match";
 export type * from "./nativeClient";
+export * from "./pairingAuth";
+export * from "./pairingUri";
 export type * from "./piProtocol";
 export {
 	assistantToolCallsAreExecutable,
@@ -115,6 +123,7 @@ export {
 	isSessionWorking,
 	isTranscriptMessageRole,
 	sameModel,
+	sessionAttention,
 } from "./piProtocol";
 export type { QuitConfirmationDependencies } from "./quitConfirmation";
 export { createQuitConfirmation, QUIT_CONFIRMATION } from "./quitConfirmation";
@@ -131,4 +140,6 @@ export {
 	SPEECH_SAMPLE_RATE,
 	SPEECH_SOCKET_ROUTE,
 } from "./speech";
+export * from "./signalingProtocol";
+export * from "./workspaceSettling";
 export * from "./wsProtocol";

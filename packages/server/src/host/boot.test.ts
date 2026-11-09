@@ -489,6 +489,18 @@ test("serves the SPA from staticDir with index.html fallback", async () => {
 	expect(await deep.text()).toContain("<title>spa</title>");
 });
 
+test("boot keeps the remote access handle so the launcher can mint a pairing link", async () => {
+	const relayUrl = `ws://127.0.0.1:${grabFreePort()}`;
+	const b = await boot({
+		port: grabFreePort(),
+		host: "localhost",
+		portMode: "exact",
+		remote: { relayUrl },
+	});
+
+	expect(b.server.remote.issueLink("default").link).toStartWith("thinkrail://pair?");
+});
+
 test("stop() releases the port", async () => {
 	const b = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
 	expect(await isPortFree(b.port)).toBe(false);

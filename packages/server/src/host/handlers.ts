@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import type {
 	Ack,
 	OpenBranchReview,
+	RemoteAccessStatus,
 	ReviewComment,
 	ReviewFixDetails,
 	ReviewSendResult,
@@ -188,6 +189,7 @@ import {
 	setProjectTrust,
 	startProjectClone,
 } from "../projects";
+import type { RemoteAccessControl, RemoteAccessState } from "../remote-transport";
 import {
 	addComment,
 	buildReviewFixDetails,
@@ -357,6 +359,30 @@ export interface RequestContext {
 	/** The socket's advertised protocol; absent for in-process callers, who speak the current one. */
 	protocolVersion?: number;
 	runHostUpdate?: () => void;
+	/** Phone access control, handed to this computer's own clients only — never to a paired device. */
+	remoteAccess?: RemoteAccessControl;
+}
+
+function localRemoteAccess(ctx: RequestContext): RemoteAccessControl {
+	if (!ctx.remoteAccess) {
+		throw new CodedError("REMOTE_ACCESS_LOCAL_ONLY", "Phone access is managed on this computer.");
+	}
+	return ctx.remoteAccess;
+}
+
+function remoteAccessStatus(state: RemoteAccessState): RemoteAccessStatus {
+	return {
+		enabled: state.enabled,
+		addresses: state.addresses.map(({ url, route }) => ({ url, route })),
+		devices: state.devices.map(({ id, label, pairedAt, access, connected }) => ({
+			id,
+			label,
+			pairedAt,
+			access,
+			connected,
+		})),
+		...(state.relay ? { relay: state.relay } : {}),
+	};
 }
 
 type WsHandler<M extends WsMethodName> = (
@@ -892,6 +918,28 @@ const handlers: WsHandlers = {
 	},
 	"github.authStatus": () => githubAuthStatus(),
 	"github.refresh": () => githubRefresh(),
+	"remote.status": (_params, ctx) => remoteAccessStatus(localRemoteAccess(ctx).state()),
+	"remote.setEnabled": (params, ctx) =>
+		remoteAccessStatus(localRemoteAccess(ctx).setEnabled(params.enabled === true)),
+	"remote.issueLink": (_params, ctx) => {
+		const control = localRemoteAccess(ctx);
+		if (!control.state().enabled) throw new CodedError("REMOTE_ACCESS_OFF", "Phone access is off.");
+		return control.issueLink("default");
+	},
+	"remote.revokeDevice": (params, ctx) =>
+		remoteAccessStatus(localRemoteAccess(ctx).revokeDevice(params.id)),
+	"remote.renameDevice": (params, ctx) => {
+		const control = localRemoteAccess(ctx);
+		const label = typeof params.label === "string" ? params.label.trim().slice(0, 64) : "";
+		if (!label) throw new CodedError("REMOTE_DEVICE_LABEL_EMPTY", "A device needs a name.");
+		return remoteAccessStatus(control.renameDevice(params.id, label));
+	},
+	"remote.setDeviceAccess": (params, ctx) => {
+		const control = localRemoteAccess(ctx);
+		if (params.access !== "read" && params.access !== "write")
+			throw new CodedError("REMOTE_DEVICE_ACCESS_INVALID", "Unknown device access.");
+		return remoteAccessStatus(control.setDeviceAccess(params.id, params.access));
+	},
 	"pr.preview": (params, ctx) =>
 		previewPr(
 			params.sessionId && !params.source && !supportsBranchStatus(ctx.protocolVersion)

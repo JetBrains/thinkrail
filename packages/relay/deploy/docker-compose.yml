@@ -1,0 +1,42 @@
+# Self-hosted ThinkRail relay: the signaling relay behind TLS (Caddy) plus a TURN server (coturn) for
+# networks peer-to-peer cannot cross. Copy .env.example to .env, fill it in, then `docker compose up -d`.
+# Point hosts at it with `thinkrail --remote --relay wss://$RELAY_DOMAIN`.
+services:
+  relay:
+    image: ${RELAY_IMAGE:?set RELAY_IMAGE in .env}
+    restart: unless-stopped
+    environment:
+      TRUST_PROXY: "1"
+      TURN_URLS: turn:${TURN_DOMAIN}:3478?transport=udp,turn:${TURN_DOMAIN}:3478?transport=tcp
+      TURN_SECRET: ${TURN_SECRET:?set TURN_SECRET in .env}
+    expose:
+      - "24243"
+
+  caddy:
+    image: caddy:2.8.4
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      RELAY_DOMAIN: ${RELAY_DOMAIN:?set RELAY_DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+
+  coturn:
+    image: coturn/coturn:4.6.3
+    restart: unless-stopped
+    # TURN allocates a UDP port per relayed connection, which bridge networking cannot forward efficiently.
+    network_mode: host
+    command:
+      - -c
+      - /etc/coturn/turnserver.conf
+      - --static-auth-secret=${TURN_SECRET}
+      - --realm=${TURN_DOMAIN}
+      - --external-ip=${PUBLIC_IP:?set PUBLIC_IP in .env}
+    volumes:
+      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
+
+volumes:
+  caddy-data:

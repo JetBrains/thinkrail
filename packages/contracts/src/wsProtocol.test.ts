@@ -66,6 +66,7 @@ import {
 	PROTOCOL_VERSION,
 	PROVIDER_WARNINGS_PROTOCOL_VERSION,
 	QUESTION_PANEL_PROTOCOL_VERSION,
+	REMOTE_ACCESS_PROTOCOL_VERSION,
 	RESOURCE_HISTORY_PROTOCOL_VERSION,
 	RESOURCE_META_PROTOCOL_VERSION,
 	REVIEW_ACTIONS_PROTOCOL_VERSION,
@@ -735,4 +736,13 @@ test("ask_user_question discuss answers are pinned to v105, after background wor
 	expect(ASK_DISCUSS_PROTOCOL_VERSION).toBe(105);
 	expect(ASK_DISCUSS_PROTOCOL_VERSION).toBeGreaterThan(WORKSPACE_CREATION_PROTOCOL_VERSION);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ASK_DISCUSS_PROTOCOL_VERSION);
+});
+
+test("phone access is switched from Settings from v122", () => {
+	expect(REMOTE_ACCESS_PROTOCOL_VERSION).toBe(122);
+	expect(PROTOCOL_VERSION).toBe(122);
+	expect(WS_METHODS.remoteStatus).toBe("remote.status");
+	expect(WS_METHODS.remoteSetEnabled).toBe("remote.setEnabled");
+	expect(WS_METHODS.remoteIssueLink).toBe("remote.issueLink");
+	expect(WS_METHODS.remoteRevokeDevice).toBe("remote.revokeDevice");
 });

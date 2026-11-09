@@ -18,10 +18,12 @@
 	},
 	"dependencies": {
 		"@thinkrail/server": "workspace:*",
-		"@thinkrail/shared": "workspace:*"
+		"@thinkrail/shared": "workspace:*",
+		"qrcode": "catalog:"
 	},
 	"devDependencies": {
 		"@types/bun": "catalog:",
+		"@types/qrcode": "catalog:",
 		"typescript": "catalog:"
 	}
 }
