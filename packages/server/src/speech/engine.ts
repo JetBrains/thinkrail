@@ -55,12 +55,10 @@ class EngineRun {
 	child: Supervised | null = null;
 	endpoint: EngineEndpoint | null = null;
 	readonly ready: Promise<EngineEndpoint>;
+	readonly key: string;
 
-	constructor(
-		readonly key: string,
-		inputs: EngineInputs,
-		previous: EngineRun | null,
-	) {
+	constructor(key: string, inputs: EngineInputs, previous: EngineRun | null) {
+		this.key = key;
 		this.ready = this.start(inputs, previous);
 	}
 
