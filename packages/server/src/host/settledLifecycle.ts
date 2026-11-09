@@ -4,6 +4,7 @@ import type { SessionStateRecord, Workspace } from "@thinkrail/contracts";
 import { listSessions } from "../agent";
 import { findBranchReviewOutcome } from "../branch-review";
 import { logger } from "../log";
+import { onBaseBranch } from "../pr";
 import { listProjects } from "../projects";
 import { getConfig } from "../settings";
 import {
@@ -92,9 +93,17 @@ async function backfillActivity(row: Workspace): Promise<void> {
 	}
 }
 
+export async function findWorkspaceReviewOutcome(
+	workspace: Pick<Workspace, "worktreePath" | "branch" | "baseBranch">,
+	opts: { fresh: boolean },
+) {
+	if (onBaseBranch(workspace)) return { reliable: true, value: null };
+	return findBranchReviewOutcome(workspace.worktreePath, workspace.branch, opts);
+}
+
 async function refreshReview(row: Workspace, fresh: boolean): Promise<void> {
 	try {
-		const outcome = await findBranchReviewOutcome(row.worktreePath, row.branch, { fresh });
+		const outcome = await findWorkspaceReviewOutcome(row, { fresh });
 		if (outcome.reliable) {
 			reviewRefreshedAt.set(row.id, { branch: row.branch, at: Date.now() });
 			setWorkspaceReview(row.id, outcome.value, row.branch);
