@@ -191,9 +191,12 @@ validation on `macos-15-intel` for the same reason. Also watch Intel GPU hangs
 hosted x86_64 image, available until about August 2027; before then, choose between a self-hosted Intel
 runner and dropping the Intel builds. Re-check these issues whenever a macOS runner image changes.
 
-Linux aliases name untouched framework installers. The Windows ZIP contains its setup executable and
+Linux aliases name framework installers; updater archives keep their bytes untouched. The Windows ZIP contains its setup executable and
 adjacent payload; the private pipeline signs both and repacks the payload (see Signing). Linux's tarball
-contains the installer and README. For macOS, the private SRE flow replaces the unsigned framework DMG
+contains the installer and README, repacked by the collector as root-owned top-level members with no
+`./` entry: Hutch archives its staging root with the runner's UID/GID, and root extracting that `./`
+entry rewrites the target directory's owner, mode and mtime — `/root` owned by UID 1001 breaks SSH key
+login (#1002). Removal gate: [[electrobun-compatibility]]. For macOS, the private SRE flow replaces the unsigned framework DMG
 with a conventional DMG containing the signed expanded app, under the same published alias. The app
 archive is a private signing intermediate, never a public release asset.
 

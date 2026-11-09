@@ -322,10 +322,8 @@ miniaturizes; `None` and unknown values do nothing. `Fill` uses zoom because App
 private and unreachable through Electrobun; this window's standard zoom frame is the screen's visible
 frame, so only tiling margins differ. A double-click arriving while the previous one is still resolving is
 dropped. This workaround exists only because Electrobun lacks the behavior, tracked upstream in
-[electrobun#561](https://github.com/blackboardsh/electrobun/issues/561). An Electrobun upgrade must
-re-check the mirror property name and that issue: once the framework handles drag-region double-clicks
-itself, remove the preload listener, `titleBarDoubleClick` message, and handler, or the window toggles
-twice.
+[electrobun#561](https://github.com/blackboardsh/electrobun/issues/561); its removal gate lives in
+[[electrobun-compatibility]].
 
 ## Navigation and window security
 
@@ -347,10 +345,8 @@ WebView2 report nothing for `_blank` or `window.open`, because Electrobun handle
 `NEW_WINDOW_ACTION` nor `NewWindowRequested` (the WebView2 half is
 [electrobun#569](https://github.com/blackboardsh/electrobun/issues/569)). Cmd/Ctrl-click keeps
 Electrobun's own preload path, which emits `new-window-open`. Clicks the page already handled, `download`
-links, same-origin URLs, and schemes outside the allowlist below stay with the page. An Electrobun
-upgrade must re-check both gaps. Once the constructor option reaches native code, the explicit call
-becomes redundant. Once every renderer reports and cancels new-window requests, the preload routing can
-go. On Windows a cancelled navigation may still send its GET request (WebView2's documented behaviour); the
+links, same-origin URLs, and schemes outside the allowlist below stay with the page. Both gaps' removal
+gates live in [[electrobun-compatibility]]. On Windows a cancelled navigation may still send its GET request (WebView2's documented behaviour); the
 window stays on its page and never commits the URL. Post-mortem: before the rules were applied explicitly,
 every navigation was allowed. A non-`_blank`
 external navigation replaced the app with the external page, which then also received the desktop
@@ -446,7 +442,7 @@ drivers and assertions live in the test package, which product code never import
 
 The package pins the Electrobun `2.0.5` npm bootstrap as a build-only dependency. That exact pin selects
 its paired Hutch `0.28.2` toolchain and SDK; direct global Hutch invocation and floating version overrides
-are not part of the build path. The pin is the lowest release that publishes a macOS x64 core, so Intel
+are not part of the build path. Every bump re-checks the removal gates in [[electrobun-compatibility]]. The pin is the lowest release that publishes a macOS x64 core, so Intel
 Macs build from the same unmodified `electrobun build` path as every other target; both macOS
 architectures target macOS 14 or later and build only on a native runner. The application explicitly
 selects the Bun main process (`build.mainProcess: "bun"`, Electrobun's default since 2.0.4). The packaged
@@ -501,8 +497,7 @@ three gaps, closed by the project:
   ICO) through `user32` and sends it to the splash and the main window, sized for the window's DPI. A
   failure is reported and non-fatal.
 
-Removal gates: Hutch writing the executable identity and replacing the main process's icon groups;
-Electrobun setting a window icon on Windows.
+Removal gates for both live in [[electrobun-compatibility]].
 
 **Taskbar identity.** A pinned shortcut targets the launcher while the window belongs to `bun.exe`, and
 Electrobun sets no AppUserModelID. Without one, Windows derives each side's identity from its own exe
@@ -537,7 +532,7 @@ itself:
   window before this change, which point at `bun.exe` and stay separate. Failures are reported and
   non-fatal. An unreadable manifest is reported too, and the pins are still stamped.
 
-Removal gate: Electrobun giving its process and shortcuts a shared AppUserModelID.
+Removal gate: [[electrobun-compatibility]].
 
 Electrobun's `build.views` owns the browser preload bundle; `build.copy` owns physical resource inclusion.
 There is no custom SDK resolver, SDK metadata validator, or Electrobun command runner. App-local Hutch
@@ -556,8 +551,9 @@ approved, desktop alone sets `exactOptionalPropertyTypes: false` to match Electr
 while retaining `strict: true` and `noUncheckedIndexedAccess: true`. Also explicitly approved, and
 temporary, desktop sets `noImplicitReturns: false` because Electrobun's browser and native SDK sources
 fail it; the other base lint-style flags stay on. The flag cannot be scoped to the SDK files, so it also
-stops checking desktop's own source, which passes it today. Remove the override once an Electrobun
-release ships [blackboardsh/electrobun#590](https://github.com/blackboardsh/electrobun/pull/590). These
+stops checking desktop's own source, which passes it today. Its removal gate
+([blackboardsh/electrobun#590](https://github.com/blackboardsh/electrobun/pull/590)) lives in
+[[electrobun-compatibility]]. These
 settings apply to the desktop compilation, including imported workspace source; every other package
 retains its separate unchanged strict check. The optional-property incompatibility is tracked in
 Electrobun issue #516; `skipLibCheck` cannot exclude imported implementation `.ts`. The direct-source
@@ -628,9 +624,7 @@ the JetBrains Central proxy daemon started from a pi `session_start`, editors, M
 made the helper's `app → app.previous` rename fail with `AccessDenied` for its whole retry window, roll
 back, and relaunch the old build. POSIX renames are unaffected. Children started by a build without this
 rule keep the old cwd, so the first update from such a build may still need them ended once. The step is an
-Electrobun 2.0.5 workaround with two removal gates. The read-before-`chdir` ordering goes once Electrobun
-resolves resources from the executable path. The `chdir` itself goes once its launcher starts the main
-process outside the replaceable bundle.
+Electrobun 2.0.5 workaround; its two removal gates live in [[electrobun-compatibility]].
 
 Reference: [pinned updater handoff](https://github.com/blackboardsh/electrobun/blob/v2.0.5/package/src/sdks/main/core/Updater.ts#L2251-L2364).
 
@@ -644,6 +638,6 @@ release checks described in [[module-ci-release]].
 
 ## Deferred
 
-Shared/remote backend profiles, profile selection, multi-window/deep-link routing, CEF, and removing the
-`user32` style-bit shim once blackboardsh/electrobun#558 ships. The update feed publication described above
+Shared/remote backend profiles, profile selection, multi-window/deep-link routing, and CEF. Removing
+Electrobun workarounds follows [[electrobun-compatibility]]. The update feed publication described above
 remains release-owned.
