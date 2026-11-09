@@ -970,6 +970,12 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   overflow then scrolls inside the textarea. Attachment chips, completion menus, slot hints, and QueueStrip
   keep their existing separate chrome. The slot-highlight backdrop must follow every dynamic textarea box
   change with the exact box-model and scroll-sync invariants under Template slots below.
+- **Composer voice input** (`Composer`) has no mic of its own: [[submodule-web-speech]]'s page-level layer
+  serves it like any field. The composer adds two things.
+  - Its textarea carries `data-dictation-fallback`, so ⌘⇧Space reaches it when nothing else owns the
+    keyboard.
+  - It listens for the field's `thinkrail:dictation` event and holds `canSubmit` while listening, so the
+    send pill is inert as well as Enter.
 - **Composer click target** (`Composer`) — a primary-button press inside the input shell outside a control
   focuses the textarea and keeps its caret, so padding and gaps have no dead zone. Presses on the chip row,
   the completion menus, the gutter, or bubbling through React from portaled popovers do not count, so chip

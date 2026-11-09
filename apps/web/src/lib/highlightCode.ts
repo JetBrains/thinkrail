@@ -119,7 +119,7 @@ export function createHighlightClient({ spawn, inThread }: HighlightClientDeps) 
 	}
 
 	function runInThread(id: number, request: InFlight) {
-		inThread(request.code, request.lang)
+		void inThread(request.code, request.lang)
 			.catch(() => null)
 			.then((html) => settle(id, html));
 	}

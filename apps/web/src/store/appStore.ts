@@ -32,6 +32,7 @@ import type {
 	SessionSummary,
 	SlashCommandInfo,
 	SpecGraphNode,
+	SpeechStatus,
 	SystemThemePair,
 	TerminalTabInfo,
 	TerminalWindowsShell,
@@ -415,6 +416,7 @@ export const SettingsSection = {
 	Feedback: "feedback",
 	Extensions: "extensions",
 	Environment: "environment",
+	Voice: "voice",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
 
@@ -1101,6 +1103,7 @@ interface AppState {
 	fileLineWidth: number;
 	chatLineWidthBounded: boolean;
 	fileLineWidthBounded: boolean;
+	voiceInputEnabled: boolean;
 	chatMessageOrder: ChatMessageOrder;
 	defaultModel: WireModel | undefined;
 	defaultEffort: ThinkingLevel | undefined;
@@ -1125,6 +1128,9 @@ interface AppState {
 	fontWeightOffset: number;
 	userFonts: UserFontsSnapshot | null;
 	installUserFonts: (snapshot: UserFontsSnapshot | null) => void;
+	/** Voice input as the host reports it; `null` before a v107 welcome or from an older host. */
+	speech: SpeechStatus | null;
+	installSpeechStatus: (status: SpeechStatus | null) => void;
 	onboardingDismissed: boolean;
 	onboardingWizard: OnboardingWizardGate;
 	customLayoutPresets: LayoutPreset[];
@@ -1139,6 +1145,7 @@ interface AppState {
 		hostPlatform?: HostPlatform,
 		hostUpdate?: HostUpdateNotice,
 		hostAppVersion?: string,
+		speech?: SpeechStatus,
 	) => void;
 	applyHostUpdate: (hostUpdate: HostUpdateNotice) => void;
 	installProjectSnapshot: (projects: Project[], recentProjects: Project[]) => void;
@@ -1512,6 +1519,10 @@ function configPatch(config: AppConfig) {
 			typeof config.fileLineWidthBounded === "boolean"
 				? config.fileLineWidthBounded
 				: DEFAULT_CONFIG.fileLineWidthBounded,
+		voiceInputEnabled:
+			typeof config.voiceInputEnabled === "boolean"
+				? config.voiceInputEnabled
+				: DEFAULT_CONFIG.voiceInputEnabled,
 		customLayoutPresets: config.customLayoutPresets ?? DEFAULT_CONFIG.customLayoutPresets,
 		defaultModel: config.defaultModel,
 		defaultEffort: config.defaultEffort,
@@ -2415,6 +2426,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	fileLineWidth: DEFAULT_CONFIG.fileLineWidth,
 	chatLineWidthBounded: DEFAULT_CONFIG.chatLineWidthBounded,
 	fileLineWidthBounded: DEFAULT_CONFIG.fileLineWidthBounded,
+	voiceInputEnabled: DEFAULT_CONFIG.voiceInputEnabled,
 	chatMessageOrder: "oldest-first",
 	customLayoutPresets: DEFAULT_CONFIG.customLayoutPresets,
 	defaultModel: DEFAULT_CONFIG.defaultModel,
@@ -2440,6 +2452,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	fontWeightOffset: DEFAULT_CONFIG.fontWeightOffset,
 	userFonts: null,
 	installUserFonts: (snapshot) => set({ userFonts: snapshot }),
+	speech: null,
+	installSpeechStatus: (speech) => set({ speech }),
 	onboardingDismissed: DEFAULT_CONFIG.onboardingDismissed,
 	onboardingWizard: "pending",
 	toasts: [],
@@ -2619,6 +2633,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		hostPlatform,
 		hostUpdate,
 		hostAppVersion,
+		speech,
 	) =>
 		set((state) => {
 			const openProjects = sortProjects(projects.filter((project) => project.closed !== true));
@@ -2635,6 +2650,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				hostPlatform: hostPlatform ?? null,
 				hostUpdate: hostUpdate ?? null,
 				hostAppVersion: hostAppVersion ?? null,
+				speech: speech ?? null,
 				...(config ? configPatch(config) : {}),
 				...reconcileProjectNavigation(state, openProjects),
 				...pruneExpandedProjects(state, openProjects),

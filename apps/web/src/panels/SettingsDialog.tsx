@@ -28,6 +28,7 @@ import { SettingsDialogContainer } from "./settingsDialogContainer";
 import { resolveSettingsSection, settingsNavGroups } from "./settingsNav";
 import { TemplatesSettings } from "./TemplatesSettings";
 import { TerminalSettings } from "./TerminalSettings";
+import { VoiceSettings } from "./VoiceSettings";
 import { WorkspacesSettings } from "./WorkspacesSettings";
 
 export function SettingsDialog({
@@ -156,6 +157,8 @@ export function SettingsDialog({
 								keyboardSettings
 							) : selectedSection === SettingsSection.Terminal ? (
 								<TerminalSettings />
+							) : selectedSection === SettingsSection.Voice ? (
+								<VoiceSettings />
 							) : selectedSection === SettingsSection.Workspaces ? (
 								<WorkspacesSettings />
 							) : selectedSection === SettingsSection.Github ? (

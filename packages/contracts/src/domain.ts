@@ -133,6 +133,8 @@ export interface Workspace {
 	baseBranch: string;
 	diffBase?: string;
 	renamed?: boolean;
+	/** Session id of the chat whose `set_title` named the workspace but kept its branch; only that chat may still move it. */
+	branchNamePending?: string;
 	initialTerminalPending?: true;
 	diffStats?: DiffStats;
 	skillOverrides?: Record<string, "on" | "off">;
@@ -1426,6 +1428,8 @@ export interface AppConfig extends ThemePreference {
 	fileLineWidth: number;
 	chatLineWidthBounded: boolean;
 	fileLineWidthBounded: boolean;
+	/** When false, no text field shows the dictation mic and the chord does nothing. */
+	voiceInputEnabled: boolean;
 	customLayoutPresets: LayoutPreset[];
 	/** The model new chats start with; unset uses the first available model. */
 	defaultModel?: WireModel;
@@ -1790,6 +1794,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	fileLineWidth: LINE_WIDTH_COLUMNS.default,
 	chatLineWidthBounded: true,
 	fileLineWidthBounded: true,
+	voiceInputEnabled: true,
 	customLayoutPresets: [],
 	favoriteModels: [],
 	recentModels: [],

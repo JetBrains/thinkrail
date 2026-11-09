@@ -45,6 +45,7 @@ import {
 	usePendingSelection,
 	useSlashCommandCompletion,
 } from "@/prompt";
+import { DICTATION_EVENT } from "@/speech";
 import { FileChip } from "./FileChip";
 import {
 	ModelEffortPicker,
@@ -318,8 +319,20 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		[onChange, focusSelection],
 	);
 
+	const [dictating, setDictating] = useState(false);
+	useEffect(() => {
+		const element = ref.current;
+		if (!element) return;
+		const onDictation = (event: Event) => {
+			if (event instanceof CustomEvent)
+				setDictating(Reflect.get(Object(event.detail), "listening") === true);
+		};
+		element.addEventListener(DICTATION_EVENT, onDictation);
+		return () => element.removeEventListener(DICTATION_EVENT, onDictation);
+	}, []);
+
 	const canSubmit = (raw: string) =>
-		!templatePending && pendingImages === 0 && (!!raw.trim() || images.length > 0);
+		!dictating && !templatePending && pendingImages === 0 && (!!raw.trim() || images.length > 0);
 	const canSend = canSubmit(value);
 
 	const openModelPicker = (query: string) => {
@@ -648,6 +661,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						<textarea
 							ref={ref}
 							data-testid="chat-input"
+							data-dictation-fallback
 							value={value}
 							onScroll={syncBackdropScroll}
 							onChange={(e) => {

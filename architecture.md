@@ -457,6 +457,39 @@ dependency. This keeps test process drivers outside both launchers and the serve
     its standard format and tooling); catalogs in `contracts` (data and translation logic are not wire
     types). Deferred: RTL layout, an agent translation skill.
 
+24. **Voice input is host-local speech recognition behind a media side socket.** Dictation runs NVIDIA's
+    `nemo-speech` with a Nemotron streaming ASR model on the host ([[submodule-server-speech]]). Audio
+    never reaches a cloud service, and transcripts never reach the agent until the user sends the draft.
+    - **Distribution.** Nothing ships with ThinkRail. On the user's first explicit Download, the host
+      fetches a pinned runtime from NVIDIA's GitHub release and a pinned model from NVIDIA's Hugging Face
+      repo, each checked against its SHA-256, into `<dataDir>/speech/`. A compatible `nemo-speech` on PATH
+      is reused (the user's own tools).
+      - Why download over bundling: Electrobun updates are full-package downloads. Bundling the model
+        would cost every user ~750 MB per release, and bundling the runtime alone still adds 7–22 MB to
+        every update.
+      - Accepted cost: NVIDIA's binaries are not signed by ThinkRail (ad-hoc on macOS, unsigned on
+        Windows). MDM or Defender may block them, and that reads as an engine failure.
+    - **Engine.** It runs as a supervised loopback child: lazily started, stopped after 10 idle minutes,
+      on a random port with a per-launch API key.
+    - **Audio path.** Audio travels on `/speech`, a second WebSocket next to the JSON wire. The wire
+      hashes and retains every request for replay (Decision 8's reconnect model), which cannot absorb
+      50 audio frames a second.
+      - Rejected: base64 frames on the wire (that same retention); the browser talking to the engine's
+        port directly (breaks remote clients and exposes another local port).
+    - **Voice is a property of the page, not of fields.** One dictation layer in the web app follows
+      focus to any text input, textarea or contenteditable, and writes into it through native `input`
+      events.
+      - Every field gets voice with no API: the app's, resource renderers', and extension cards'.
+        Extensions need nothing from the Host UI SDK ([[module-thinkrail-extensions]]).
+      - The code editor and the terminal are excluded.
+      - Rejected: per-field mic components. Every surface and every extension would have to adopt and
+        wire one, and the first version did exactly that through `ResourceHost`.
+    - **Where the mic is.** The browser owns the microphone ([[submodule-web-speech]]), because a remote
+      client's microphone is at the client. So voice works only in a secure context (HTTPS or
+      localhost).
+    - **Deferred:** GPU backend downloads, a hosted NVIDIA API (a credential ThinkRail would have to
+      keep), text-to-speech, voice commands, and auto-send.
+
 ## Invariants
 
 - Never **value**-import `pi` in browser-bundled code; import types only, from the `pi-ai` /

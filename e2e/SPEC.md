@@ -411,6 +411,38 @@ keeps the gh-less behaviour; `THINKRAIL_GH_OFFLINE` still keeps `pr.open` on the
 deletes the scenario and log and unsets the ssh config. The host caches repository merge settings per origin
 URL for the whole run, so a spec that sets its own repository settings names its own repository.
 
+**Voice input** (`voice-input.spec.ts`) never reaches NVIDIA's servers or a microphone.
+- Every host gets `THINKRAIL_SPEECH_MANIFEST` pointing at the lane's `speech-fixture/manifest.json`, which
+  global setup writes (`fixtures/speech.ts`):
+  - The runtime archive is a `file://` tar.gz holding a `nemo-speech` shell wrapper that runs the repo's
+    `packages/server/src/speech/fakeNemoSpeech.ts` under the runner's bun. Every 160 ms of audio becomes
+    the next word of a scripted sentence.
+  - The multilingual model is a few-KB `file://` blob.
+  - The English model is served over HTTP from the spec itself on the lane's `E2E_SPEECH_PORT`
+    (base + 6), a few bytes at a time, so an install can be caught and cancelled.
+- Chromium runs with `--use-fake-ui-for-media-stream --use-fake-device-for-media-stream`, so the fake
+  device's tone streams real PCM frames.
+- The host boots before the manifest exists (see below) and logs one unreadable-manifest warning. The
+  spec's `beforeAll` runs `speech.remove`, which re-reads it.
+- The spec is serial and skipped on Windows, where the wrapper is a POSIX shell script.
+- `voice-field-writers.spec.ts` bundles `apps/web/src/speech/field.ts` through
+  `fixtures/speechFieldsEntry.ts` (with `bun build --format=iife`) into a bare page, and drives the
+  writers directly in Chromium.
+  - It pins contenteditable spacing after a typed trailing space, at a new line and between words.
+  - It pins the textarea's input event and Enter hold, and the eligibility exclusions.
+- `voice-input-blocked.spec.ts` stubs `getUserMedia` with a `NotAllowedError` in an init script. It
+  pins the blocked state (enabled, tooltip naming where to allow access) and a retry once access
+  returns. Headless Chromium without the fake-UI flag does not deny reliably.
+- **Opt-in real engine.** `voice-input.real.spec.ts` runs only with `THINKRAIL_E2E_REAL_SPEECH=1`, which
+  also keeps the fixture manifest off the host: `THINKRAIL_E2E_REAL_SPEECH=1 bun run e2e
+  e2e/voice-input.real.spec.ts`.
+  - It downloads NVIDIA's pinned runtime and the 742 MB model, checked against their SHA-256.
+  - Chromium loops `fixtures/speech-audio/dictation.wav` (a 5 s, 16 kHz synthesized sentence) as the
+    microphone, and the test asserts that the real transcript reaches the draft.
+  - It is never part of `e2e` or `e2e:full`: a run spends a 750 MB download and about 5 minutes.
+    `e2e:full`'s no-agent phase clears the variable. With it set, the fake-engine `voice-input.spec.ts`
+    skips itself, because its host would have no fixture manifest.
+
 Playwright starts the host (`webServer`) before `globalSetup`, so global setup clears the lane's data dir
 while a live host writes its logs there; it removes the dir with `removeTree`, which retries the resulting
 `ENOTEMPTY` instead of failing the lane.

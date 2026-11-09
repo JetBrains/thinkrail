@@ -640,6 +640,7 @@ test("line-width fields default independently when an older or malformed config 
 			fileLineWidth: 180,
 			chatLineWidthBounded: "yes",
 			fileLineWidthBounded: false,
+			voiceInputEnabled: "no",
 		}),
 	);
 	resetConfigCache();
@@ -649,6 +650,7 @@ test("line-width fields default independently when an older or malformed config 
 		fileLineWidth: 180,
 		chatLineWidthBounded: true,
 		fileLineWidthBounded: false,
+		voiceInputEnabled: true,
 	});
 });
 
@@ -660,6 +662,7 @@ test("invalid line-width updates are rejected before persistence or broadcast", 
 		{ fileLineWidth: Number.POSITIVE_INFINITY },
 		{ chatLineWidthBounded: "true" },
 		{ fileLineWidthBounded: 1 },
+		{ voiceInputEnabled: "off" },
 	];
 
 	for (const update of invalidUpdates) {
