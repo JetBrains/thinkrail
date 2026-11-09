@@ -2,6 +2,9 @@ import { parseDiffFromFile } from "@pierre/diffs";
 import { FileDiff } from "@pierre/diffs/react";
 import { useT } from "@thinkrail/locales/react";
 import { useEffect, useMemo, useState } from "react";
+import { usePierrePlain } from "../code/PierreProvider";
+import { PlainCode } from "../code/PlainCode";
+import { plainDiffRows } from "../code/plainRows";
 import type { Size } from "../regionReview";
 import { svgIntrinsicSize } from "../svg/svgDocument";
 import { VisualDiff, type VisualDiffSide } from "../VisualDiff";
@@ -22,6 +25,7 @@ export function NotebookSourceDiff({
 	ignoreWhitespace: boolean;
 	name: string;
 }) {
+	const plain = usePierrePlain();
 	const fileDiff = useMemo(
 		() =>
 			parseDiffFromFile(
@@ -46,7 +50,11 @@ export function NotebookSourceDiff({
 	);
 	return (
 		<div className="overflow-auto bg-container-content-bg pierre-code-surface pierre-diff-surface">
-			<FileDiff fileDiff={fileDiff} options={options} />
+			{plain ? (
+				<PlainCode rows={plainDiffRows(fileDiff)} diff />
+			) : (
+				<FileDiff fileDiff={fileDiff} options={options} />
+			)}
 		</div>
 	);
 }

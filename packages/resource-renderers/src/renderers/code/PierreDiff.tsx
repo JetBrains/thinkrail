@@ -36,8 +36,9 @@ import {
 	computeActionBlocks,
 } from "./changeBlocks";
 import { createDiffCache } from "./diffCache";
-import PierreProvider from "./PierreProvider";
+import PierreProvider, { usePierrePlain } from "./PierreProvider";
 import { PierreScroller } from "./PierreScroller";
+import { PlainCode } from "./PlainCode";
 import {
 	type BlockedSelection,
 	COLLAPSED_CONTEXT_THRESHOLD,
@@ -49,6 +50,7 @@ import {
 	usePierreFocus,
 } from "./pierreReview";
 import { usePierreVirtualizer } from "./pierreVirtualizer";
+import { plainDiffRows } from "./plainRows";
 
 type DiffAnnotationMetadata =
 	| { kind: "thread"; id: string }
@@ -208,6 +210,7 @@ function PierreDiffSurface({
 	virtualize = false,
 }: ResourceDiffProps) {
 	const t = useT();
+	const plain = usePierrePlain();
 	const originalText = textSide(original);
 	const modifiedText = textSide(modified);
 	const originalHash = contentHash(original);
@@ -439,87 +442,91 @@ function PierreDiffSurface({
 						{t("viewer.code.noDifferences")}
 					</p>
 				) : null}
-				<FileDiff<DiffAnnotationMetadata>
-					fileDiff={fileDiff}
-					options={options}
-					metrics={metrics}
-					lineAnnotations={annotations}
-					selectedLines={selectedLines}
-					className="flex-1"
-					renderGutterUtility={(getHoveredLine) => (
-						<IconButton
-							icon={MessageSquarePlus}
-							label={t("viewer.code.commentOnLine")}
-							variant="primary"
-							data-testid="review-add-icon"
-							onPointerDown={(event) => {
-								event.preventDefault();
-								event.stopPropagation();
-							}}
-							onClick={() => openGutterComposer(getHoveredLine())}
-						/>
-					)}
-					renderAnnotation={(annotation) => {
-						const metadata = annotation.metadata;
-						if (metadata.kind === "thread") {
-							const entry = threadById.get(metadata.id);
-							return entry && placedThreadIds.has(metadata.id) ? (
-								<ReviewThreadCard
-									key={entry.thread.id}
-									thread={entry.thread}
-									actions={entry.actions}
-								/>
-							) : null;
-						}
-						if (metadata.kind === "hunk") {
-							const block = blockById.get(metadata.id);
-							return block && hunkActions ? (
-								<HunkToolbar
-									key={metadata.id}
-									block={block}
-									contentKey={contentKeyById.get(metadata.id) ?? metadata.id}
-									actions={hunkActions}
-									onAskAgent={openAskAgent}
-								/>
-							) : null;
-						}
-						if (!composer || composer.id !== metadata.id || !review) return null;
-						if (composer.kind === "blocked") {
-							return (
-								<div
-									key={composer.id}
-									data-testid="review-selection-blocked"
-									className="review-composer review-composer-flow flex items-center gap-8"
-								>
-									<span className="tr-text-metadata text-text-muted">{t(composer.message)}</span>
-									<button
-										type="button"
-										data-testid="review-selection-blocked-close"
-										className="tr-text-metadata text-text-default underline-offset-2 hover:underline"
-										onClick={closeComposer}
-									>
-										{t("common.dismiss")}
-									</button>
-								</div>
-							);
-						}
-						return (
-							<ReviewComposer
-								key={pending.key ?? composer.id}
-								input={pending.input}
-								draft={composer.draft}
-								label={composer.label}
-								commenting={surfaceForSide(review, composer.side).commenting}
-								{...(composer.initialText !== undefined
-									? { initialText: composer.initialText }
-									: {})}
-								{...(composer.notice !== undefined ? { notice: composer.notice } : {})}
-								onClose={closeComposer}
-								className="review-composer-flow"
+				{plain ? (
+					<PlainCode rows={plainDiffRows(fileDiff)} diff />
+				) : (
+					<FileDiff<DiffAnnotationMetadata>
+						fileDiff={fileDiff}
+						options={options}
+						metrics={metrics}
+						lineAnnotations={annotations}
+						selectedLines={selectedLines}
+						className="flex-1"
+						renderGutterUtility={(getHoveredLine) => (
+							<IconButton
+								icon={MessageSquarePlus}
+								label={t("viewer.code.commentOnLine")}
+								variant="primary"
+								data-testid="review-add-icon"
+								onPointerDown={(event) => {
+									event.preventDefault();
+									event.stopPropagation();
+								}}
+								onClick={() => openGutterComposer(getHoveredLine())}
 							/>
-						);
-					}}
-				/>
+						)}
+						renderAnnotation={(annotation) => {
+							const metadata = annotation.metadata;
+							if (metadata.kind === "thread") {
+								const entry = threadById.get(metadata.id);
+								return entry && placedThreadIds.has(metadata.id) ? (
+									<ReviewThreadCard
+										key={entry.thread.id}
+										thread={entry.thread}
+										actions={entry.actions}
+									/>
+								) : null;
+							}
+							if (metadata.kind === "hunk") {
+								const block = blockById.get(metadata.id);
+								return block && hunkActions ? (
+									<HunkToolbar
+										key={metadata.id}
+										block={block}
+										contentKey={contentKeyById.get(metadata.id) ?? metadata.id}
+										actions={hunkActions}
+										onAskAgent={openAskAgent}
+									/>
+								) : null;
+							}
+							if (!composer || composer.id !== metadata.id || !review) return null;
+							if (composer.kind === "blocked") {
+								return (
+									<div
+										key={composer.id}
+										data-testid="review-selection-blocked"
+										className="review-composer review-composer-flow flex items-center gap-8"
+									>
+										<span className="tr-text-metadata text-text-muted">{t(composer.message)}</span>
+										<button
+											type="button"
+											data-testid="review-selection-blocked-close"
+											className="tr-text-metadata text-text-default underline-offset-2 hover:underline"
+											onClick={closeComposer}
+										>
+											{t("common.dismiss")}
+										</button>
+									</div>
+								);
+							}
+							return (
+								<ReviewComposer
+									key={pending.key ?? composer.id}
+									input={pending.input}
+									draft={composer.draft}
+									label={composer.label}
+									commenting={surfaceForSide(review, composer.side).commenting}
+									{...(composer.initialText !== undefined
+										? { initialText: composer.initialText }
+										: {})}
+									{...(composer.notice !== undefined ? { notice: composer.notice } : {})}
+									onClose={closeComposer}
+									className="review-composer-flow"
+								/>
+							);
+						}}
+					/>
+				)}
 			</VirtualizerContext.Provider>
 		</PierreScroller>
 	);

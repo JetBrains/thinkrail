@@ -492,6 +492,16 @@ present side's hash, so a remount — a Stacked/One-file switch, or a section sc
 highlighted on its first frame instead of plain text followed by a colour pop. The phone code-file implementation is Pierre `File` with the same theme and
 review grammar; desktop files alone load Monaco.
 
+**Without WebAssembly the Pierre surfaces show plain text.** `@pierre/highlights` is WebAssembly only,
+and Pierre paints nothing — not even its own plain-text pass — until a main-thread highlighter loads; it
+has no highlighter-free mode, and Shiki stays out of the build. `PierreProvider` therefore reports
+`usePierrePlain()`: true from the first frame when `canUseWASM()` fails (the pool is then never built),
+or once `preloadHighlighter` for the `thinkrail` theme rejects, which latches for the page. `PierreDiff`,
+`PierreFile` and the notebook source diff then swap Pierre for `PlainCode`: uncolored rows from
+`plainRows.ts` — the file's lines, or each hunk's `@@` header, context and `-`/`+` lines — inside the
+same scroller. Review annotations, line selection and hunk toolbars need Pierre's rows and are absent in
+this mode, and plain rows are not virtualized.
+
 **Pierre surfaces are virtualized.** Unvirtualized Pierre puts every line in the DOM (≈400k nodes for a
 100k-line file), which WebKit — the desktop shell's engine — cannot style or lay out, hanging the app.
 `pierreVirtualizer.ts` owns one `PierreVirtualizer` (a core `Virtualizer` subclass) per surface,

@@ -1,16 +1,25 @@
-import { registerCustomTheme } from "@pierre/diffs";
+import { canUseWASM, preloadHighlighter, registerCustomTheme } from "@pierre/diffs";
 import { WorkerPoolContext } from "@pierre/diffs/react";
 import { getOrCreateWorkerPoolSingleton, type WorkerPoolManager } from "@pierre/diffs/worker";
-import { type ReactNode, useState } from "react";
+import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { type ResourceCodeHost, useResourceHost } from "../../host";
 
 const POOL_SIZE = 4;
+const THEME = "thinkrail";
+const HIGHLIGHTER = "highlights";
 
 let themeRegistered = false;
+let highlighterFailed = false;
+
+const PlainContext = createContext(false);
+
+export function usePierrePlain(): boolean {
+	return useContext(PlainContext);
+}
 
 function pierreWorkerPool(theme: ResourceCodeHost["pierreTheme"]): WorkerPoolManager {
 	if (!themeRegistered) {
-		registerCustomTheme("thinkrail", () => Promise.resolve(theme), "zed");
+		registerCustomTheme(THEME, () => Promise.resolve(theme), "zed");
 		themeRegistered = true;
 	}
 	return getOrCreateWorkerPoolSingleton({
@@ -22,15 +31,35 @@ function pierreWorkerPool(theme: ResourceCodeHost["pierreTheme"]): WorkerPoolMan
 				}),
 		},
 		highlighterOptions: {
-			theme: "thinkrail",
+			theme: THEME,
 			lineDiffType: "word",
-			preferredHighlighter: "highlights",
+			preferredHighlighter: HIGHLIGHTER,
 		},
 	});
 }
 
 export default function PierreProvider({ children }: { children: ReactNode }) {
 	const { pierreTheme } = useResourceHost().code;
-	const [pool] = useState(() => pierreWorkerPool(pierreTheme));
-	return <WorkerPoolContext.Provider value={pool}>{children}</WorkerPoolContext.Provider>;
+	const [plain, setPlain] = useState(() => highlighterFailed || !canUseWASM());
+	const [pool] = useState(() => (plain ? undefined : pierreWorkerPool(pierreTheme)));
+	useEffect(() => {
+		if (plain) return;
+		let mounted = true;
+		preloadHighlighter({
+			themes: [THEME],
+			langs: ["text"],
+			preferredHighlighter: HIGHLIGHTER,
+		}).catch(() => {
+			highlighterFailed = true;
+			if (mounted) setPlain(true);
+		});
+		return () => {
+			mounted = false;
+		};
+	}, [plain]);
+	return (
+		<PlainContext.Provider value={plain}>
+			<WorkerPoolContext.Provider value={pool}>{children}</WorkerPoolContext.Provider>
+		</PlainContext.Provider>
+	);
 }
