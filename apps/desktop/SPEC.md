@@ -407,8 +407,12 @@ webview, so granting the microphone to the webview grants it only to ThinkRail's
 - **Windows.** `build.win.autoGrantPermissions: ["microphone"]` answers WebView2's permission request
   without a dialog. Auto-grant applies to every origin the webview loads, which here is only ours.
 - **Linux.** Unconfigured. Whether WebKitGTK prompts or grants by default is unverified.
-- **Unverified.** The private release pipeline's entitlement verification accepting the new entitlement,
-  and the Linux behavior, are checked on release builds, not in CI.
+- **Release signing.** The private pipeline re-signs every Mach-O with its own entitlement plist, so
+  `build.mac.entitlements` does not reach release builds; that plist and its verification must carry
+  `com.apple.security.device.audio-input` too. 0.4.0-nightly.8 shipped without it: TCC refused to prompt
+  (`tccd`: "requires entitlement … but it is missing") and every dictation showed the blocked state.
+  Check a release with `codesign -d --entitlements - ThinkRail.app`.
+- **Unverified.** The Linux behavior is checked on release builds, not in CI.
 
 ## Lifecycle
 
