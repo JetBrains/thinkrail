@@ -407,8 +407,9 @@ function roundOutcome(
 			if (message.stopReason === "aborted") return "stopped";
 			return closer ?? (message.stopReason === "stop" ? "done" : null);
 		}
+		if (closer) continue;
 		if (turn?.kind === "system" && turn.text === undefined) closer = "done";
-		else if (turn?.kind === "error" && turn.failure && !closer) closer = "error";
+		else if (turn?.kind === "error" && turn.failure) closer = "error";
 	}
 	return closer;
 }

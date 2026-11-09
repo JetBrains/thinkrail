@@ -455,6 +455,16 @@ describe("deriveRows dividers", () => {
 		expect(outcomes([user("u1"), failed, closer])).toEqual(["error"]);
 		expect(outcomes([user("u1"), closer])).toEqual(["error"]);
 		expect(
+			outcomes([user("u1"), assistant("a1", [text("hi")], { stopReason: "length" }), done("s1")]),
+		).toEqual(["error"]);
+		expect(outcomes([user("u1"), assistant("a1", [text("hi")]), closer])).toEqual(["error"]);
+		expect(outcomes([user("u1"), assistant("a1", [text("hi")]), done("s1"), closer])).toEqual([
+			"error",
+		]);
+		expect(outcomes([user("u1"), assistant("a1", [text("hi")]), closer, done("s1")])).toEqual([
+			"done",
+		]);
+		expect(
 			outcomes([user("u1"), assistant("a1", [text("hi")], { stopReason: "aborted" }), done("s1")]),
 		).toEqual(["stopped"]);
 		expect(outcomes([user("u1"), assistant("a1", [text("hi")]), done("s1"), notice])).toEqual([
