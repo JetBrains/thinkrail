@@ -41,6 +41,10 @@ export default defineConfig(({ mode }) => {
 					target: `ws://localhost:${hostPort}`,
 					ws: true,
 				},
+				"/speech": {
+					target: `ws://localhost:${hostPort}`,
+					ws: true,
+				},
 				"/files": { target: `http://localhost:${hostPort}` },
 				"/blob": { target: `http://localhost:${hostPort}` },
 				"/fonts": { target: `http://localhost:${hostPort}` },
