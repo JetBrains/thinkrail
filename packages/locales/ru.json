@@ -169,6 +169,7 @@
 	"chat.compaction.running": "Сокращаем контекст…",
 	"chat.compaction.tokens": "{{tokens}} токенов",
 	"chat.compaction.tokensChange": "{{before}} → {{after}} токенов",
+	"chat.composer.label": "Поле сообщения",
 	"chat.composer.mode.interrupt": "Прервать",
 	"chat.composer.mode.interruptMeaning": "остановить текущий ответ и отправить сообщение сейчас",
 	"chat.composer.mode.queue": "В очередь",
