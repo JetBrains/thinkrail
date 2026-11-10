@@ -19,6 +19,7 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 	return {
 		t: currentTranslator(),
 		contextProjectId: "p1",
+		canStartChat: false,
 		activeWorkspace: workspace,
 		editors: [],
 		historyAvailable: false,
@@ -31,6 +32,7 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 		settingsGroups: [],
 		actions: {
 			newWorkspace: noop,
+			newProjectlessChat: noop,
 			openDefaultWorkspace: noop,
 			openProject: noop,
 			openProjectPath: noop,
@@ -74,6 +76,15 @@ describe("palette project and Settings commands", () => {
 			key: ",",
 			mod: true,
 		});
+	});
+
+	test("a chat without a project is offered only where one can start, and repository commands only with a repository", () => {
+		expect(row("chat.newProjectless", deps())).toBeUndefined();
+		expect(row("chat.newProjectless", deps({ canStartChat: true }))?.title).toBe(
+			"New chat without a project",
+		);
+		expect(row("workspace.new", deps({ contextProjectId: null }))).toBeUndefined();
+		expect(row("workspace.openDefault", deps({ contextProjectId: null }))).toBeUndefined();
 	});
 
 	test("New workspace shows the chord the browser lets through, Mod+N only on desktop", () => {

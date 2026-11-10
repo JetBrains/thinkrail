@@ -149,6 +149,23 @@ describe("the reconnect workspace list refresh", () => {
 		expect(state.removedWorkspaceIds["w-pushed"]).toBeUndefined();
 	});
 
+	test("adds the chats the Chats container lists that this surface does not hold, never one it saw removed", () => {
+		const chat = (id: string): Workspace => ({ ...workspace(id), kind: "chat", branch: "" });
+		useAppStore.setState({
+			projects: [{ ...project("p1"), kind: "chats" }],
+			workspaces: { p1: [chat("c-held"), chat("c-gone")] },
+		});
+		useAppStore.getState().applyWorkspaceRemoved("p1", "c-deleted-here");
+		applyWorkspaceListRefresh(
+			"p1",
+			["c-held", "c-gone"],
+			[chat("c-held"), chat("c-elsewhere"), chat("c-deleted-here")],
+		);
+		const state = useAppStore.getState();
+		expect(state.workspaces.p1?.map((row) => row.id)).toEqual(["c-held", "c-elsewhere"]);
+		expect(state.removedWorkspaceIds["c-gone"]).toBe(true);
+	});
+
 	test("ignores a reply for a project that closed meanwhile", () => {
 		useAppStore.setState({ projects: [], workspaces: { p1: [workspace("w1")] } });
 		applyWorkspaceListRefresh("p1", ["w1"], []);

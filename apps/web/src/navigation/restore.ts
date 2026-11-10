@@ -178,7 +178,7 @@ export function startNavigation({ driver, listWorkspaces }: NavigationDeps): () 
 			return;
 		}
 		applyRoute(() => now.setWorkspaces(location.projectId, rows));
-		const workspace = rows.find((w) => w.id === location.workspaceId);
+		const workspace = rows.find((w) => w.id === location.workspaceId && w.deletionPending !== true);
 		if (!workspace) {
 			applyRoute(() => useAppStore.getState().selectProject(location.projectId));
 			resolvePending(gen);

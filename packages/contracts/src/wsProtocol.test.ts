@@ -15,6 +15,7 @@ import {
 	BRANCH_STATUS_PROTOCOL_VERSION,
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
+	CHATS_PROTOCOL_VERSION,
 	CLIENT_ERROR_REPORT_PROTOCOL_VERSION,
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
 	CUSTOM_ENDPOINT_ID_PREFIX,
@@ -304,6 +305,14 @@ test("host search and its previews are pinned to v106", () => {
 	expect(WS_METHODS.searchPreview).toBe("search.preview");
 });
 
+test("chats without a project are pinned to v109", () => {
+	expect(PROTOCOL_VERSION).toBe(109);
+	expect(CHATS_PROTOCOL_VERSION).toBe(109);
+	expect(WS_METHODS.chatCreate).toBe("chat.create");
+	expect(WS_METHODS.chatDelete).toBe("chat.delete");
+	expect(WS_METHODS.chatInspect).toBe("chat.inspect");
+});
+
 test("project rename is pinned to v85", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PROJECT_RENAME_PROTOCOL_VERSION);
 	expect(PROJECT_RENAME_PROTOCOL_VERSION).toBe(85);
@@ -358,7 +367,7 @@ test("the GitHub star ask is pinned to v103", () => {
 
 test("the other agents' skills opt-in is pinned to v108", () => {
 	expect(OTHER_AGENT_SKILLS_PROTOCOL_VERSION).toBe(108);
-	expect(PROTOCOL_VERSION).toBe(108);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(OTHER_AGENT_SKILLS_PROTOCOL_VERSION);
 	expect(DEFAULT_CONFIG.otherAgentSkills).toBe(false);
 });
 

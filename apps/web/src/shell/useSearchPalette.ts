@@ -1,7 +1,8 @@
 import { t as globalT, useT } from "@thinkrail/locales/react";
 import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { copyText } from "../lib";
+import { chatDisplayName, copyText } from "../lib";
+import { canStartProjectlessChat, startProjectlessChat } from "../panels/chatActions";
 import { enterDefaultWorkspace } from "../panels/defaultWorkspace";
 import { startChatInTab } from "../panels/openChat";
 import { openFileInTab } from "../panels/openTabs";
@@ -28,14 +29,20 @@ import {
 	waitingItems,
 } from "../search";
 import {
+	isChatsContainer,
+	isChatWorkspace,
 	type SettingsSection,
 	selectActiveWorkspace,
+	selectChatWorkspaceFirstPrompt,
+	selectChatWorkspaceTitle,
 	selectContextProject,
+	selectContextRepoProject,
 	selectHistoryTarget,
 	selectHostReachable,
 	selectHostSearchAvailable,
 	selectRecordFirstPrompts,
 	selectSupportsOnboarding,
+	selectWorkspaceById,
 	selectWorkspaceReadAction,
 	selectWorkspaceSettleBlocked,
 	selectWorkspaceSettledReason,
@@ -64,6 +71,7 @@ import { readSettingsShortcutLabel } from "./useAppShortcuts";
 
 const LOCAL_SCOPES: readonly SearchScope[] = ["all", "work", "commands"];
 const HOST_SCOPES: readonly SearchScope[] = ["all", "work", "files", "specs", "commands"];
+const CHAT_SCOPES: readonly SearchScope[] = ["all", "work", "files", "commands"];
 const BACKFILL_CONCURRENCY = 4;
 
 const paletteBackfill = createPaletteBackfill({
@@ -93,7 +101,7 @@ const hostHitTargets: HostHitTargets = {
 };
 
 export interface SearchPaletteOptions {
-	readonly openNewWorkspace: (projectId: string, initialPrompt?: string) => boolean;
+	readonly openNewWorkspace: (projectId: string | null, initialPrompt?: string) => boolean;
 	readonly toggleProjectsHome: () => void;
 	readonly pickAndOpenProject: () => Promise<void>;
 	readonly enterHostPath: () => void;
@@ -114,6 +122,8 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
 	const contextProject = useAppStore(selectContextProject);
+	const contextRepoProject = useAppStore(selectContextRepoProject);
+	const canStartChat = useAppStore(canStartProjectlessChat);
 	const historySessionId = useAppStore((s) => selectHistoryTarget(s)?.sessionId ?? null);
 	const readAction = useAppStore((s) =>
 		activeWorkspaceId && supportsWorkspaceReadState(s.protocolVersion)
@@ -141,11 +151,29 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 	const hostSearch = useAppStore(selectHostSearchAvailable);
 	const host = useMemo<PaletteHost | undefined>(() => {
 		if (!hostSearch) return undefined;
-		const names = new Map(projects.map((project) => [project.id, project.name]));
+		const names = new Map(
+			projects.map((project) => [
+				project.id,
+				isChatsContainer(project) ? t("panels.chats.title") : project.name,
+			]),
+		);
 		const workspaceNames = new Map<string, string>();
 		for (const list of Object.values(workspaces)) {
-			for (const workspace of list) workspaceNames.set(workspace.id, workspaceName(t, workspace));
+			for (const workspace of list) {
+				if (!isChatWorkspace(workspace))
+					workspaceNames.set(workspace.id, workspaceName(t, workspace));
+			}
 		}
+		const chatName = (workspaceId: string) => {
+			const state = useAppStore.getState();
+			const workspace = selectWorkspaceById(state, workspaceId);
+			if (!workspace || !isChatWorkspace(workspace)) return undefined;
+			return chatDisplayName(
+				t,
+				selectChatWorkspaceTitle(state, workspaceId),
+				selectChatWorkspaceFirstPrompt(state, workspaceId),
+			);
+		};
 		return {
 			context: {
 				...(contextProject ? { projectId: contextProject.id } : {}),
@@ -157,7 +185,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				);
 			},
 			projectName: (projectId) => names.get(projectId),
-			workspaceName: (workspaceId) => workspaceNames.get(workspaceId),
+			workspaceName: (workspaceId) => workspaceNames.get(workspaceId) ?? chatName(workspaceId),
 			renderFilePreview: options.renderFilePreview,
 		};
 	}, [
@@ -173,17 +201,18 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 	const openNewWorkspace = options.openNewWorkspace;
 	const start = useMemo<PaletteStart | undefined>(
 		() =>
-			contextProject
-				? { openDialog: (text) => openNewWorkspace(contextProject.id, text) }
+			contextRepoProject || canStartChat
+				? { openDialog: (text) => openNewWorkspace(contextRepoProject?.id ?? null, text) }
 				: undefined,
-		[contextProject, openNewWorkspace],
+		[contextRepoProject, canStartChat, openNewWorkspace],
 	);
 
 	const binding = useMemo(() => {
 		const store = () => useAppStore.getState();
 		const deps: PaletteCatalogDeps = {
 			t,
-			contextProjectId: contextProject?.id ?? null,
+			contextProjectId: contextRepoProject?.id ?? null,
+			canStartChat,
 			activeWorkspace,
 			editors,
 			historyAvailable: historySessionId !== null,
@@ -196,6 +225,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			settingsGroups,
 			actions: {
 				newWorkspace: options.openNewWorkspace,
+				newProjectlessChat: () => void startProjectlessChat(),
 				openDefaultWorkspace: (projectId) =>
 					void enterDefaultWorkspace(projectId, paletteNavigator.beginPick()),
 				openProject: () => void options.pickAndOpenProject(),
@@ -264,6 +294,8 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		nativeShortcuts,
 		options,
 		contextProject,
+		contextRepoProject,
+		canStartChat,
 		editors,
 		projects,
 		workspaces,
@@ -277,7 +309,12 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 
 	return {
 		onClose: () => useAppStore.getState().closeSearch(),
-		scopes: hostSearch && contextProject ? HOST_SCOPES : LOCAL_SCOPES,
+		scopes:
+			hostSearch && contextProject
+				? isChatsContainer(contextProject)
+					? CHAT_SCOPES
+					: HOST_SCOPES
+				: LOCAL_SCOPES,
 		...(host ? { host } : {}),
 		...(start ? { start } : {}),
 		...(online

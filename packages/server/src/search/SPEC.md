@@ -48,7 +48,13 @@ open projects' folders and sibling worktrees are never searched (the field walke
 multi-root file search: one root is faster and predictable). Transcripts come from sessions
 whose `cwd` is a persisted worktree of an open project (pi-CLI sessions and closed projects are
 dropped, like `history.search`'s labels); plans from every open project's workspace records, skipping
-plan files whose session has no transcript on disk (orphans).
+plan files whose session has no transcript on disk (orphans). **Audience:** `query` and `preview` take
+what the asking client may learn of (`{ chats }`, from the host's one visibility policy; in-process callers
+see everything). A client older than chats without a project gets the projects without the Chats
+container, so every corpus — the root, files, plans, transcripts and previews — is built without its
+chats before any provider ranks or pages, and totals never count them.
+A chat whose deletion did not finish (`deletionPending`) is out of every corpus for every audience: its
+transcript may still be on disk, but nothing may reopen it.
 
 ## Query
 
@@ -74,8 +80,8 @@ plan files whose session has no transcript on disk (orphans).
   NUL parser (`FILE_LIST_LIMITS`: 128k names / 16 MiB of names; a list is capped only when an entry beyond
   a limit was seen, so a root of exactly 128k files is complete); the parser drops a repeated path (git
   lists a conflicted path once per stage) and paths under `node_modules` and VCS directories before the
-  cap counts them. Every search root is a git working tree (`openProject` refuses a
-  non-repository), so a git failure — a timeout, descriptor or memory pressure, not a repository — rejects
+  cap counts them. Every repository root is a git working tree (`openProject` refuses a
+  non-repository; a chat's root is walked instead, below), so a git failure — a timeout, descriptor or memory pressure, not a repository — rejects
   the load (`FileListUnavailable`); it is logged once per root until a load succeeds and retried no sooner
   than `retryMs` (5 s) later — the failure is kept apart from the cached lists, so evicting a root's list
   never cuts its retry interval short — so a broken repository never spawns git per keystroke. Lists are cached per
@@ -118,6 +124,13 @@ plan files whose session has no transcript on disk (orphans).
   per-file memo). While the history index is cold or refreshing, a plan whose session it has not reached
   yet is skipped and the group answers `indexing` or `refreshing`, so the client asks again once the
   session is known; a ready index skips it as an orphan.
+- **A chat's root** (`SearchRoot.git: false`) is never a repository: its file list is walked, never asked
+  of git (`walkFileList`: breadth-first, skipping the VCS folders and `node_modules`, at most
+  `walkMaxFiles` files, capped only when one beyond the cap was seen) — the root's mode travels with every
+  load, refresh and invalidation reload. A folder that vanished or cannot be read is skipped; the root's
+  own failure, or any other, fails the load like a git failure. It answers no specs (an empty `spec`
+  group; no snapshot is built for it), while its files, transcripts and plans stay searchable. The Chats
+  container itself is never a root: a query in its context provisions nothing and answers no files.
 
 ## Preview
 

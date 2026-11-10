@@ -136,6 +136,7 @@ import {
 	selectFilesTreeView,
 	selectLayoutIdentityPlacement,
 	selectLayoutResourcePlacement,
+	selectRepoProjects,
 	selectSupportsMcp,
 	selectWorkspaceById,
 	selectWorkspaceNavTick,
@@ -1577,6 +1578,18 @@ function withWorkspaceSelected(history: string[], workspaceId: string): string[]
 		: [workspaceId, ...history.filter((id) => id !== workspaceId)];
 }
 
+/** No route enters a removed workspace or a chat whose deletion did not finish; the open one stays open. */
+function refusesEntry(
+	state: Pick<AppState, "workspaces" | "activeWorkspaceId" | "removedWorkspaceIds">,
+	workspaceId: string,
+): boolean {
+	if (state.removedWorkspaceIds[workspaceId]) return true;
+	return (
+		state.activeWorkspaceId !== workspaceId &&
+		selectWorkspaceById(state, workspaceId)?.deletionPending === true
+	);
+}
+
 function workspaceActivationPatch(
 	state: Pick<
 		AppState,
@@ -1600,7 +1613,7 @@ function workspaceActivationPatch(
 			| "activeWorkspaceLiveLatch"
 	  >
 	| Record<string, never> {
-	if (state.removedWorkspaceIds[workspace.id]) return {};
+	if (refusesEntry(state, workspace.id)) return {};
 	const record = state.workspaces[workspace.projectId]?.find((w) => w.id === workspace.id);
 	const activeWorkspaceLiveLatch =
 		state.activeWorkspaceId === workspace.id
@@ -1635,7 +1648,9 @@ function recentWorkspaceFallback(
 	for (const workspaceId of state.workspaceSelectionHistory) {
 		if (workspaceId === excludedWorkspaceId || state.removedWorkspaceIds[workspaceId]) continue;
 		const workspace = selectWorkspaceById(state, workspaceId);
-		if (workspace && openProjectIds.has(workspace.projectId)) return workspace;
+		if (workspace && openProjectIds.has(workspace.projectId) && !workspace.deletionPending) {
+			return workspace;
+		}
 	}
 	return null;
 }
@@ -1661,7 +1676,7 @@ function reconcileProjectNavigation(
 	const currentProjectId = selectActiveWorkspaceProjectId(state) ?? state.selectedProjectId;
 	if (!currentProjectId || projects.some((project) => project.id === currentProjectId)) return {};
 	return {
-		selectedProjectId: projects[0]?.id ?? null,
+		selectedProjectId: selectRepoProjects({ projects })[0]?.id ?? null,
 		activeWorkspaceId: null,
 		activeCreationId: null,
 	};
@@ -2844,12 +2859,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 			routeChatTarget: null,
 		}),
 	activateWorkspace: (workspace) => {
-		if (get().removedWorkspaceIds[workspace.id]) return;
+		if (refusesEntry(get(), workspace.id)) return;
 		set((state) => workspaceActivationPatch(state, workspace));
 	},
 	activateWorkspaceFromRoute: (workspace, sessionId) =>
 		set((state) => {
-			if (state.removedWorkspaceIds[workspace.id]) return {};
+			if (refusesEntry(state, workspace.id)) return {};
 			const advanced = advanceCenterNavigation(state, workspace.id);
 			return {
 				...advanced.patch,
@@ -4641,7 +4656,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	requestChatLocation: (req) =>
 		set((state) => {
 			if (
-				state.removedWorkspaceIds[req.workspaceId] ||
+				refusesEntry(state, req.workspaceId) ||
 				isSessionDeleted(state, req.workspaceId, req.sessionId)
 			) {
 				return {};
@@ -4661,7 +4676,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	requestHistoryOpen: (target) =>
 		set((s) => {
 			if (
-				s.removedWorkspaceIds[target.workspaceId] ||
+				refusesEntry(s, target.workspaceId) ||
 				isSessionDeleted(s, target.workspaceId, target.sessionId)
 			) {
 				return {};

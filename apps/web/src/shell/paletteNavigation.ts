@@ -6,6 +6,12 @@ import { errorText } from "../transport";
 
 type WorkspaceTarget = Pick<Workspace, "id" | "projectId">;
 
+function openable(workspace: Workspace): boolean {
+	if (workspace.deletionPending !== true) return true;
+	toast.error(t("search.item.unavailable"));
+	return false;
+}
+
 export function createPaletteNavigator(
 	loadProjectWorkspaces: (projectId: string) => Promise<unknown>,
 ) {
@@ -33,13 +39,15 @@ export function createPaletteNavigator(
 
 	const loadWorkspaceRow = async (workspace: WorkspaceTarget): Promise<boolean> => {
 		const stillWanted = beginPick();
-		if (selectWorkspaceById(useAppStore.getState(), workspace.id)) return true;
+		const known = selectWorkspaceById(useAppStore.getState(), workspace.id);
+		if (known) return openable(known);
 		let failure: unknown = null;
 		await loadProjectWorkspaces(workspace.projectId).catch((error: unknown) => {
 			failure = error;
 		});
 		if (!stillWanted()) return false;
-		if (selectWorkspaceById(useAppStore.getState(), workspace.id)) return true;
+		const loaded = selectWorkspaceById(useAppStore.getState(), workspace.id);
+		if (loaded) return openable(loaded);
 		toast.error(
 			failure === null
 				? t("search.item.unavailable")

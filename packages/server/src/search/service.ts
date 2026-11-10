@@ -54,9 +54,16 @@ export interface SearchReaders {
 	readonly wallClock?: () => number;
 }
 
+/** What the asking client may learn of; one older than chats without a project never sees the Chats container, its chats or their sessions. */
+export interface SearchAudience {
+	readonly chats: boolean;
+}
+
+const EVERY_CLIENT: SearchAudience = { chats: true };
+
 export interface SearchService {
-	query(params: WsParams<"search.query">): Promise<SearchQueryResult>;
-	preview(target: SearchPreviewTarget): Promise<SearchPreviewResult>;
+	query(params: WsParams<"search.query">, audience?: SearchAudience): Promise<SearchQueryResult>;
+	preview(target: SearchPreviewTarget, audience?: SearchAudience): Promise<SearchPreviewResult>;
 	invalidateRoot(root: string): void;
 }
 
@@ -87,7 +94,12 @@ export function resolveSearchRoot(
 		? workspaces.find((workspace) => workspace.id === context.workspaceId)
 		: undefined;
 	if (current && openIds.has(current.projectId)) {
-		return { root: current.worktreePath, projectId: current.projectId, workspaceId: current.id };
+		return {
+			root: current.worktreePath,
+			projectId: current.projectId,
+			workspaceId: current.id,
+			git: current.kind !== "chat",
+		};
 	}
 	const project = projects.find((candidate) => candidate.id === context.projectId);
 	if (!project) return null;
@@ -95,7 +107,7 @@ export function resolveSearchRoot(
 		(workspace) => workspace.projectId === project.id && workspace.kind === "default",
 	);
 	if (!defaultRecord) return null;
-	return { root: project.path, projectId: project.id, workspaceId: defaultRecord.id };
+	return { root: project.path, projectId: project.id, workspaceId: defaultRecord.id, git: true };
 }
 
 function settledWithin(waits: readonly (Promise<unknown> | null)[], ms: number): Promise<void> {
@@ -110,9 +122,14 @@ export function createSearchService(readers: SearchReaders): SearchService {
 	const wallClock = readers.wallClock ?? Date.now;
 	const ensuring = new Map<string, Promise<unknown>>();
 
+	const visibleProjects = (audience: SearchAudience): Project[] =>
+		readers.projects().filter((project) => audience.chats || project.kind !== "chats");
+
 	const openWorkspaces = (projects: readonly Project[]) => {
 		const open = new Set(projects.map((project) => project.id));
-		return readers.workspaces().filter((workspace) => open.has(workspace.projectId));
+		return readers
+			.workspaces()
+			.filter((workspace) => open.has(workspace.projectId) && workspace.deletionPending !== true);
 	};
 
 	const chatLabeler = (workspaces: readonly Workspace[]) => {
@@ -156,19 +173,23 @@ export function createSearchService(readers: SearchReaders): SearchService {
 		return pending;
 	};
 
-	const rootFor = async (context: WsParams<"search.query">["context"]) => {
-		const projects = readers.projects();
+	const rootFor = async (
+		context: WsParams<"search.query">["context"],
+		audience: SearchAudience,
+	) => {
+		const projects = visibleProjects(audience);
 		const found = resolveSearchRoot(projects, openWorkspaces(projects), context);
 		const projectId = context.projectId;
-		if (found || !projectId || !projects.some((project) => project.id === projectId)) {
-			return { root: found, failed: false };
-		}
+		const provisionable = projects.some(
+			(project) => project.id === projectId && project.kind !== "chats",
+		);
+		if (found || !projectId || !provisionable) return { root: found, failed: false };
 		try {
 			await ensureDefault(projectId);
 		} catch {
 			return { root: null, failed: true };
 		}
-		const again = readers.projects();
+		const again = visibleProjects(audience);
 		const root = resolveSearchRoot(again, openWorkspaces(again), context);
 		return { root, failed: root === null };
 	};
@@ -188,21 +209,21 @@ export function createSearchService(readers: SearchReaders): SearchService {
 		});
 
 	return {
-		async query(params) {
+		async query(params, audience = EVERY_CLIENT) {
 			const terms = parseMatchTerms(params.query.slice(0, MAX_SEARCH_QUERY_LENGTH));
 			const kinds = new Set<SearchKind>(params.kinds ?? SEARCH_KINDS);
 			if (terms.length === 0) return { groups: [...kinds].map((kind) => emptyGroup(kind)) };
 
 			const rooted = kinds.has("file") || kinds.has("spec");
 			const { root, failed: rootFailed } = rooted
-				? await rootFor(params.context)
+				? await rootFor(params.context, audience)
 				: { root: null, failed: false };
 			if (root) readers.watchRoot(root.workspaceId);
 			const history = kinds.has("transcript") || kinds.has("plan") ? readHistory() : null;
 			await settledWithin(
 				[
-					root && kinds.has("file") ? files.refresh(root.root) : null,
-					root && kinds.has("spec") ? specRebuild(root.root) : null,
+					root && kinds.has("file") ? files.refresh(root.root, root.git) : null,
+					root?.git && kinds.has("spec") ? specRebuild(root.root) : null,
 					history,
 				],
 				SEARCH_BUDGET.reloadWaitMs,
@@ -233,10 +254,16 @@ export function createSearchService(readers: SearchReaders): SearchService {
 			push("file", () =>
 				root ? searchFiles(root, files, input(), readers.stat) : rootless("file"),
 			);
-			push("spec", () => (root ? searchSpecs(root, readers.specs, input()) : rootless("spec")));
+			push("spec", () =>
+				root
+					? root.git
+						? searchSpecs(root, readers.specs, input())
+						: emptyGroup("spec")
+					: rootless("spec"),
+			);
 
 			const read = history ? await history : null;
-			const workspaces = openWorkspaces(readers.projects());
+			const workspaces = openWorkspaces(visibleProjects(audience));
 			push("transcript", () =>
 				read
 					? searchTranscripts(read.sessions, read.state, chatLabeler(workspaces), input())
@@ -256,12 +283,12 @@ export function createSearchService(readers: SearchReaders): SearchService {
 			return { groups };
 		},
 
-		async preview(target) {
+		async preview(target, audience = EVERY_CLIENT) {
 			for (let round = 0; ; round += 1) {
 				const { sessions, state } = await readers.sessions();
 				if (state === "ready" || round >= SEARCH_BUDGET.previewIndexRounds) {
 					const session = sessions.find((candidate) => candidate.sessionId === target.sessionId);
-					const workspaces = openWorkspaces(readers.projects());
+					const workspaces = openWorkspaces(visibleProjects(audience));
 					if (!session || !chatLabeler(workspaces)(session.cwd)) return { kind: "unavailable" };
 					return transcriptPreview(session, target.messageIndex, target.anchorText?.slice(0, 120));
 				}

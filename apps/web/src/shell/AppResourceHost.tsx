@@ -19,14 +19,23 @@ import { openFileComparisonInTab, openFileInTab } from "../panels/openTabs";
 import { resourceBytesUrl } from "../panels/resourcePane";
 import { SendReviewButton } from "../panels/SendReviewButton";
 import { useFileReview } from "../panels/useReviewCommenting";
-import { selectFileChangeSince, selectHostSearchReady, useAppStore } from "../store";
+import {
+	selectFileChangeSince,
+	selectHostSearchReady,
+	selectWorkspaceById,
+	useAppStore,
+} from "../store";
 import { resolveThinkrailEditorTheme, THINKRAIL_PIERRE_THEME } from "../themes";
 import { getTransport, wsErrorCode } from "../transport";
 
 registerBundledResourceRenderers();
 
 function FileReview({ workspaceId, path, kind, sessionId, children }: ResourceFileReviewProps) {
-	return children(useFileReview(workspaceId, path, kind, undefined, sessionId).worktree);
+	const review = useFileReview(workspaceId, path, kind, undefined, sessionId).worktree;
+	const reviewable = useAppStore(
+		(state) => selectWorkspaceById(state, workspaceId)?.kind !== "chat",
+	);
+	return children(reviewable ? review : undefined);
 }
 
 function ReviewSend({ workspaceId, paths, sessionId }: ResourceReviewSendProps) {

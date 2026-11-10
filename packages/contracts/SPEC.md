@@ -26,6 +26,13 @@ the palette ranks with — kept here so host-side search can rank with the same 
   folder already owned by a workspace),
   `PROJECT_CLONE_INVALID`, `PROJECT_CLONE_FAILED`, and `PROJECT_CLONE_CLEANUP_FAILED` (input
   correction, Git failure, and incomplete cleanup requiring filesystem intervention),
+  `CHATS_CONTAINER` / `CHAT_WORKSPACE` / `NOT_A_CHAT` /
+  `CHATS_STORE_UNAVAILABLE` (a repository door asked of the Chats container or a chat without a project,
+  a chat method asked of something else, and the chats store unavailable — names the retry), and the three
+  ways a chat refuses to start something, which a client must not confuse: **`CHAT_HAS_SESSION`** (a second
+  conversation asked of a chat — the client starts a new chat instead), **`CHAT_DELETING`** (a delete of
+  this chat is running — wait for its `workspace.removed`, never start a sibling) and
+  **`CHAT_DELETION_PENDING`** (a delete did not finish — offer Retry, nothing else),
   `RESOURCE_UNAVAILABLE`, and `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is
   `subagent.getTranscript`'s **permanent** miss, the
   signal that stops the transcript dialog's polling. A known child whose first transcript file is not
@@ -328,7 +335,11 @@ the palette ranks with — kept here so host-side search can rank with the same 
   one later call from that chat may still move the branch; its optional **`kind: "default"`** marks the built-in per-project **Default workspace** — the
   project folder itself as a workspace, exactly one per project, pinned first in `workspace.list`,
   non-removable and non-renamable server-side; **`kind: "external"`** marks an explicitly attached,
-  user-owned worktree ThinkRail may forget but must never rename or reclaim; absent = a ThinkRail-managed
+  user-owned worktree ThinkRail may forget but must never rename or reclaim; **`kind: "chat"`** (from
+  `CHATS_PROTOCOL_VERSION`, v109) marks a **chat without a project** — its own folder in the built-in Chats
+  container (**`Project.kind: "chats"`**, the one project that is not a repository), never a git checkout,
+  `branch` / `baseBranch` pinned to `""`, with the optional **`deletionPending: true`** while a delete that
+  did not finish waits for Retry; absent = a ThinkRail-managed
   worktree workspace; optional literal **`initialTerminalPending: true`** is the host-owned provisioning
   marker carried only while a workspace still needs host reservation: the host reserves the deterministic
   terminal then clears it; absence means no provisioning work remains—explicit wire fields, never id
@@ -883,7 +894,13 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`client.reportError`** (`ClientErrorReport { kind: render | window | rejection, type, stack?,
   boundary?, chunkIds? }` → ack; `chunkIds` maps stack URLs to PostHog source-map chunk ids; a fire-and-forget UI error for host error tracking — the payload is raw and untrusted,
   the host is the only sanitizer; `CLIENT_ERROR_REPORT_PROTOCOL_VERSION` pins its v90 introduction so a
-  newer client never sends it to an older host) / **`search.query`** + **`search.preview`** (the palette's host
+  newer client never sends it to an older host) / the **`chat.*` set** from `CHATS_PROTOCOL_VERSION` (v109) —
+  **`create`** (`{ model?, thinkingLevel? }` → `ChatCreateResult`: the `kind: "chat"` workspace plus the
+  one session it owns, created by the host in one call), **`delete`** (`{ workspaceId }` → ack; the only
+  teardown door — transcripts and folder to the Trash, `session.delete` refuses a chat) and **`inspect`**
+  (`{ workspaceId }` → `ChatInspection { files, truncated }`, the confirmation's file count — `truncated`
+  when the host's walk stopped at its entry or time budget, so the folder may hold more) /
+  **`search.query`** + **`search.preview`** (the palette's host
   providers from `SEARCH_PROTOCOL_VERSION`, v106: `{ query, kinds?, context, limit? }` → per-kind
   groups with the shared matcher's tiers; a preview is a bounded
   transcript read that never attaches a session) / **`history.search`** (the prompt-recall + conversation-search read; results capped,

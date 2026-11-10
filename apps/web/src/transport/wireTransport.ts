@@ -42,7 +42,7 @@ import {
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
 import { currentLocale } from "@thinkrail/locales/react";
-import { isConnectedGeneration, useAppStore } from "../store";
+import { isChatsContainer, isConnectedGeneration, useAppStore } from "../store";
 import { githubStarToast } from "./githubStar";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 import { WsTransport } from "./transport";
@@ -263,8 +263,13 @@ export function applyWorkspaceListRefresh(
 	workspaces: readonly Workspace[],
 ): void {
 	const store = useAppStore.getState();
-	if (!store.projects.some((project) => project.id === projectId)) return;
-	for (const workspace of workspaces) store.updateWorkspace(workspace);
+	const project = store.projects.find((candidate) => candidate.id === projectId);
+	if (!project) return;
+	const held = new Set(store.workspaces[projectId]?.map((workspace) => workspace.id));
+	for (const workspace of workspaces) {
+		if (held.has(workspace.id)) store.updateWorkspace(workspace);
+		else if (isChatsContainer(project)) store.addWorkspace(workspace);
+	}
 	const listed = new Set(workspaces.map((workspace) => workspace.id));
 	for (const workspaceId of heldAtRequest) {
 		if (listed.has(workspaceId)) continue;
