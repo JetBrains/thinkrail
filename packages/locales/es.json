@@ -331,6 +331,7 @@
 	"chat.schedule.date": "Fecha",
 	"chat.schedule.delay": "Retraso",
 	"chat.schedule.failed": "No se pudo programar el prompt.",
+	"chat.schedule.imageOnly": "Imagen adjunta",
 	"chat.schedule.hours": "Horas",
 	"chat.schedule.minutes": "Minutos",
 	"chat.schedule.open": "Programar prompt",

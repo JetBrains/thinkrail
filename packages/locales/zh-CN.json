@@ -312,6 +312,7 @@
 	"chat.schedule.date": "日期",
 	"chat.schedule.delay": "延迟",
 	"chat.schedule.failed": "无法安排提示。",
+	"chat.schedule.imageOnly": "图片附件",
 	"chat.schedule.hours": "小时",
 	"chat.schedule.minutes": "分钟",
 	"chat.schedule.open": "安排提示",

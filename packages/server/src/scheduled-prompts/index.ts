@@ -30,6 +30,10 @@ export function isValidScheduledDueAt(dueAt: number, now = Date.now()): boolean 
 	return Number.isSafeInteger(dueAt) && dueAt % 60_000 === 0 && dueAt > now;
 }
 
+function hasPromptContent(text: string, images: ImageContent[] | undefined): boolean {
+	return text.trim().length > 0 || (images?.length ?? 0) > 0;
+}
+
 function persist(): void {
 	mkdirSync(dataDir(), { recursive: true });
 	const target = path();
@@ -69,8 +73,8 @@ function hasSavedOrder(value: number | undefined): value is number {
 export function createScheduledPrompt(
 	input: Omit<ScheduledPrompt, "id" | "createdAt" | "savedOrder" | "status"> & { id: string },
 ): ScheduledPrompt {
-	if (!input.text.trim() || !isValidScheduledDueAt(input.dueAt)) {
-		throw new Error("A prompt and a future whole-minute time are required.");
+	if (!hasPromptContent(input.text, input.images) || !isValidScheduledDueAt(input.dueAt)) {
+		throw new Error("Prompt text or an image and a future whole-minute time are required.");
 	}
 	if (records.some((record) => record.id === input.id)) {
 		const existing = records.find((record) => record.id === input.id);
@@ -110,8 +114,8 @@ export function updateScheduledPrompt(
 ): ScheduledPrompt {
 	const record = records.find((item) => item.id === id && item.workspaceId === workspaceId);
 	if (!record) throw new Error("Scheduled prompt is unavailable.");
-	if (!text.trim() || !isValidScheduledDueAt(dueAt))
-		throw new Error("A prompt and future time are required.");
+	if (!hasPromptContent(text, images) || !isValidScheduledDueAt(dueAt))
+		throw new Error("Prompt text or an image and a future time are required.");
 	if (modelSelection) validatePromptModelSelection(record.sessionId, modelSelection);
 	if (modelSelection) record.modelSelection = modelSelection;
 	record.dueAt = dueAt;

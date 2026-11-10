@@ -330,8 +330,10 @@ re-opened transcripts provider-valid.
     `review.sendBatch` into a re-attached review chat marked its comments sent to an agent that never
     saw them). A pinned `promptSession` observed during a live turn uses the follow-up lane instead of steer,
     preserving the selected pair until that separate prompt starts; when idle, it applies the pair before
-    `prompt()`. Pinned follow-ups are consumed one at a time, applying their pair at the provider request
-    boundary. / **`clearQueueSession`** (Pi's `clearQueue()`: drains both queues but returns only text,
+    `prompt()`. Follow-up admissions are serialized per session until Pi accepts each input so concurrent
+    queue updates cannot drop a newly tracked model pin; this lock does not wait for the agent turn to finish.
+    Pinned follow-ups are consumed one at a time, applying their pair at the provider request boundary.
+    / **`clearQueueSession`** (Pi's `clearQueue()`: drains both queues but returns only text,
     while the host snapshots its reconciled transient mirror first and returns complete per-message text +
     images + any pinned model selection. Pi emits the emptying `queue_update`). Its optional text-only precondition rejects before
     touching Pi whenever either tracked lane has queued images; manual compaction uses that guard, while

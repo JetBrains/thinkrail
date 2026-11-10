@@ -317,6 +317,7 @@
 	"chat.schedule.date": "Date",
 	"chat.schedule.delay": "Delay",
 	"chat.schedule.failed": "Could not schedule prompt.",
+	"chat.schedule.imageOnly": "Image attachment",
 	"chat.schedule.hours": "Hours",
 	"chat.schedule.minutes": "Minutes",
 	"chat.schedule.open": "Schedule prompt",

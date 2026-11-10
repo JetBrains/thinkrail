@@ -2283,6 +2283,27 @@ test("reconcileSession replaces stale host state while preserving browser-local 
 	expect(after.statsRefreshTick).toBe(before.statsRefreshTick);
 });
 
+test("chat draft content keeps its model pin across updates and clears it with the draft", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "draft-pin", null, "medium");
+	const selection = {
+		model: { provider: "openai", id: "gpt-5" },
+		thinkingLevel: "high" as const,
+	};
+	store.setChatDraftContent("draft-pin", "queued prompt", selection);
+	store.setChatDraft("draft-pin", "edited prompt");
+	expect(useAppStore.getState().sessions["draft-pin"]).toMatchObject({
+		draft: "edited prompt",
+		draftModelSelection: selection,
+	});
+
+	store.setChatDraft("draft-pin", "");
+	expect(useAppStore.getState().sessions["draft-pin"]).toMatchObject({
+		draft: "",
+		draftModelSelection: undefined,
+	});
+});
+
 test("reconcileSession rejects a transcript read crossed by even a UI-ignored Pi event", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "sync-race", null, "medium");

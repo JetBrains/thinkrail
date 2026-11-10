@@ -292,7 +292,10 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   `silenceNotice(notice)` clears every chat once "Don't warn again" lands, and also drops
   buffered orphan `notice` frames, so a chat opened later does not replay one. `openChatSession` creates a runtime; `closeChatRuntime` /
   `clearWorkspaceState` drop it; per-session mutators (`appendUserMessage` / **`appendErrorTurn`** / `setStats` / `setCommands` /
-  `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `clearPendingExtUi`) take a `sessionId`.
+  `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `setChatDraftModelSelection` /
+  `setChatDraftContent` / `clearPendingExtUi`) take a `sessionId`.
+  `draftModelSelection` lives beside `draft` in this runtime, so queued-content restoration updates both
+  atomically and a chat-tab remount keeps the selected prompt pair. Clearing the draft clears that pair.
   **`appendErrorTurn(sessionId, text)`** appends an `error` turn for a **rejected** turn-driving wire call
   (`session.prompt`/`steer`/`followUp`/`create`) — e.g. `prompt()` throwing "no API key" / a bad model —
   so a failed send lands in the chat instead of being swallowed; it carries no recovery action because Pi

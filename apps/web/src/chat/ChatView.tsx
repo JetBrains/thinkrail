@@ -120,6 +120,7 @@ export default function ChatView({
 	const commands = useAppStore((s) => s.sessions[sessionId]?.commands ?? EMPTY_RUNTIME.commands);
 	const stats = useAppStore((s) => s.sessions[sessionId]?.stats ?? null);
 	const statsRefreshTick = useAppStore((s) => s.sessions[sessionId]?.statsRefreshTick ?? 0);
+	const draftModelSelection = useAppStore((s) => s.sessions[sessionId]?.draftModelSelection);
 	const syncedConnectionGeneration = useAppStore(
 		(s) => s.sessions[sessionId]?.syncedConnectionGeneration ?? 0,
 	);
@@ -131,9 +132,6 @@ export default function ChatView({
 	const connectionGeneration = useAppStore((s) => s.connectionGeneration);
 	const supportsScheduledPrompts = useAppStore(selectSupportsScheduledPrompts);
 	const [scheduledPrompts, setScheduledPrompts] = useState<ScheduledPromptRecord[]>([]);
-	const [draftModelSelection, setDraftModelSelection] = useState<
-		PromptModelSelection | undefined
-	>();
 	useEffect(() => {
 		if (!supportsScheduledPrompts) {
 			setScheduledPrompts([]);
@@ -567,18 +565,28 @@ export default function ChatView({
 			.then(() => refreshStats());
 	};
 
-	const restoreTextToDraft = (text: string) => {
+	const restoreTextToDraft = (text: string, modelSelection?: PromptModelSelection) => {
 		if (!text.trim()) return;
 		const current = useAppStore.getState().sessions[sessionId]?.draft ?? "";
 		const combined = [text, current].filter((t) => t.trim()).join("\n\n");
-		useAppStore.getState().setChatDraft(sessionId, combined);
+		useAppStore.getState().setChatDraftContent(sessionId, combined, modelSelection);
 		composerRef.current?.refocus();
 	};
 
 	const restoreQueueContentToDraft = (content: SessionQueueContent): void => {
 		const messages = [...content.steering, ...content.followUp];
-		setDraftModelSelection(messages.length === 1 ? messages[0]?.modelSelection : undefined);
-		restoreTextToDraft(messages.map((message) => message.text).join("\n\n"));
+		const current = useAppStore.getState().sessions[sessionId]?.draft ?? "";
+		const text = [messages.map((message) => message.text).join("\n\n"), current]
+			.filter((value) => value.trim())
+			.join("\n\n");
+		useAppStore
+			.getState()
+			.setChatDraftContent(
+				sessionId,
+				text,
+				messages.length === 1 ? messages[0]?.modelSelection : undefined,
+			);
+		composerRef.current?.refocus();
 		const images = messages.flatMap((message) => message.images ?? []);
 		composerRef.current?.restoreAttachments(
 			images.map((image, index) => ({
@@ -649,8 +657,7 @@ export default function ChatView({
 			.catch((err) => {
 				useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
 				if (queued) {
-					restoreTextToDraft(text);
-					setDraftModelSelection(modelSelection);
+					restoreTextToDraft(text, modelSelection);
 				} else {
 					const streaming = useAppStore.getState().sessions[sessionId]?.isStreaming ?? false;
 					transcriptRef.current?.cancelImmediateTurn(streaming);
@@ -689,8 +696,7 @@ export default function ChatView({
 			.then(() => performSend(text, attachments, "send", modelSelection))
 			.catch((err) => {
 				useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
-				restoreTextToDraft(text);
-				setDraftModelSelection(modelSelection);
+				restoreTextToDraft(text, modelSelection);
 			});
 		return { accepted: true };
 	};
@@ -979,7 +985,6 @@ export default function ChatView({
 					value={draft}
 					onChange={(v) => {
 						useAppStore.getState().setChatDraft(sessionId, v);
-						if (v === "") setDraftModelSelection(undefined);
 					}}
 					isStreaming={isStreaming}
 					growthLimit={composerGrowthLimit}
@@ -997,11 +1002,23 @@ export default function ChatView({
 					onMentionQuery={onMentionQuery}
 					onSlashActive={setSlashActive}
 					onSelectModel={(selection) => {
-						setDraftModelSelection(undefined);
+						if (draftModelSelection) {
+							useAppStore.getState().setChatDraftModelSelection(sessionId, {
+								model: { provider: selection.model.provider, id: selection.model.id },
+								thinkingLevel: selection.level ?? draftModelSelection.thinkingLevel,
+							});
+							return;
+						}
 						onSelectModel(selection);
 					}}
 					onSelectThinking={(level) => {
-						setDraftModelSelection(undefined);
+						if (draftModelSelection) {
+							useAppStore.getState().setChatDraftModelSelection(sessionId, {
+								...draftModelSelection,
+								thinkingLevel: level,
+							});
+							return;
+						}
 						onSelectThinking(level);
 					}}
 					onSubmit={onSubmit}

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import { SCHEDULED_PROMPTS_PROTOCOL_VERSION } from "@thinkrail/contracts";
-import { expandModelGroup, openWorkspaceChat } from "./fixtures/app";
+import { expandModelGroup, hideAuxiliaryWorkbench, openWorkspaceChat } from "./fixtures/app";
 import { connectCentral, openProviders, waitForCentralState } from "./fixtures/jbcentral";
 import { E2eWire } from "./fixtures/wire";
 
@@ -60,6 +60,140 @@ async function setAppTime(page: Page, time: string) {
 	await page.clock.setFixedTime(new Date(time));
 	await page.waitForTimeout(1_100);
 }
+
+test("editing a queued model-pinned prompt keeps its model when reasoning changes", async ({
+	page,
+}) => {
+	let sendToPage: ((frame: unknown) => void) | undefined;
+	let pinnedSelection:
+		| { model: { provider: string; id: string }; thinkingLevel: string }
+		| undefined;
+	let pinnedModelName = "";
+	let changedLevel = "";
+	let submitted: { method: string; params: Record<string, unknown> } | undefined;
+	const sessionLevelRequests: string[] = [];
+	const sessionModelRequests: string[] = [];
+	await page.routeWebSocket(/\/ws(\?|$)/, (browser) => {
+		const server = browser.connectToServer();
+		sendToPage = (frame) => browser.send(JSON.stringify(frame));
+		browser.onMessage((message) => {
+			const frame = JSON.parse(String(message)) as {
+				id?: string;
+				method?: string;
+				params?: Record<string, unknown>;
+			};
+			if (!frame.id) {
+				server.send(message);
+				return;
+			}
+			if (frame.method === "session.removeQueued") {
+				browser.send(
+					JSON.stringify({
+						id: frame.id,
+						ok: true,
+						result: {
+							removed: {
+								text: "pinned queued prompt",
+								modelSelection: pinnedSelection,
+							},
+							queue: { steering: [], followUp: [] },
+						},
+					}),
+				);
+				return;
+			}
+			if (frame.method === "session.setThinkingLevel") sessionLevelRequests.push(frame.method);
+			if (frame.method === "session.setModel") sessionModelRequests.push(frame.method);
+			if (["session.followUp", "session.steer"].includes(frame.method ?? "")) {
+				submitted = { method: frame.method ?? "", params: frame.params ?? {} };
+				browser.send(JSON.stringify({ id: frame.id, ok: true, result: { ok: true } }));
+				return;
+			}
+			if (frame.method === "session.setThinkingLevel" || frame.method === "session.setModel") {
+				browser.send(JSON.stringify({ id: frame.id, ok: true, result: { ok: true } }));
+				return;
+			}
+			server.send(message);
+		});
+		server.onMessage((message) => browser.send(message));
+	});
+
+	const workspace = await openScheduledChat(page);
+	await page.keyboard.press("Escape");
+	await hideAuxiliaryWorkbench(page);
+	const sessionId = await page
+		.locator('[data-testid="editor-tab"][data-kind="chat"][data-active="true"]')
+		.getAttribute("data-session-id");
+	if (!sessionId) throw new Error("Pinned queue test chat is missing its session id");
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+	try {
+		const [models, sessions] = await Promise.all([
+			wire.request("model.list", {}),
+			wire.request("session.list", { workspaceId: workspace.id }),
+		]);
+		const session = sessions.find((candidate) => candidate.sessionId === sessionId);
+		const pinnedModel =
+			models.find(
+				(model) =>
+					model.thinkingLevels.length > 1 &&
+					!(model.provider === session?.model?.provider && model.id === session.model.id),
+			) ?? models.find((model) => model.thinkingLevels.length > 1);
+		if (!pinnedModel) throw new Error("Pinned queue test needs a model with reasoning choices");
+		const initialLevel = pinnedModel.thinkingLevels.at(-1);
+		const nextLevel = pinnedModel.thinkingLevels.find((level) => level !== initialLevel);
+		if (!initialLevel || !nextLevel)
+			throw new Error("Pinned queue model has no alternate reasoning level");
+		pinnedSelection = {
+			model: { provider: pinnedModel.provider, id: pinnedModel.id },
+			thinkingLevel: initialLevel,
+		};
+		pinnedModelName = pinnedModel.name;
+		changedLevel = nextLevel;
+	} finally {
+		wire.close();
+	}
+	sessionLevelRequests.length = 0;
+	sessionModelRequests.length = 0;
+	if (!sendToPage) throw new Error("Pinned queue test WebSocket is not connected");
+	sendToPage({ channel: "pi.event", data: { sessionId, event: { type: "agent_start" } } });
+	sendToPage({
+		channel: "pi.event",
+		data: {
+			sessionId,
+			event: { type: "queue_update", steering: [], followUp: ["pinned queued prompt"] },
+		},
+	});
+	await expect(page.getByTestId("queue-item")).toContainText("pinned queued prompt");
+	await page.getByTestId("queue-item-edit").click();
+	await expect(page.getByTestId("chat-input")).toHaveValue("pinned queued prompt");
+	await page.getByTestId("thinking-selector").last().click();
+	await page.locator(`[data-testid="thinking-option"][data-level="${changedLevel}"]`).click();
+	await expect(page.getByTestId("thinking-selector").last()).toContainText(changedLevel);
+	const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+	const activeChatTab = chatTabs.last();
+	await chatTabs.first().click();
+	await expect(chatTabs.first()).toHaveAttribute("data-active", "true");
+	await activeChatTab.click();
+	await expect(activeChatTab).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("chat-input")).toHaveValue("pinned queued prompt");
+	await expect(page.getByTestId("model-selector").last()).toContainText(pinnedModelName);
+	await expect(page.getByTestId("thinking-selector").last()).toContainText(changedLevel);
+	await page.keyboard.press("Escape");
+	mkdirSync(evidenceDir, { recursive: true });
+	await page.screenshot({ path: join(evidenceDir, "queue-model-edit.png"), fullPage: true });
+	await page.getByTestId("chat-send").click();
+	await expect.poll(() => submitted).toBeDefined();
+	expect(sessionLevelRequests).toEqual([]);
+	expect(sessionModelRequests).toEqual([]);
+	expect(submitted).toEqual({
+		method: "session.followUp",
+		params: {
+			sessionId,
+			text: "pinned queued prompt",
+			modelSelection: { ...pinnedSelection, thinkingLevel: changedLevel },
+		},
+	});
+});
 
 test("scheduling finalizes template slots and preserves a draft edited during the save", async ({
 	page,
@@ -188,6 +322,22 @@ test("scheduling finalizes template slots and preserves a draft edited during th
 				workspaceId: workspace.id,
 				sessionId,
 				text: "Review for issues, focusing on src/.",
+			});
+			await wire.request("scheduledPrompts.create", {
+				requestId: "image-only-row",
+				id: "image-only-row",
+				workspaceId: workspace.id,
+				sessionId,
+				text: "",
+				images: [{ type: "image", data: "AA==", mimeType: "image/png" }],
+				dueAt: Date.UTC(2027, 0, 1, 12),
+				createdAt: Date.now(),
+				status: "scheduled",
+			});
+			await expect(page.getByText("Image attachment", { exact: true })).toBeVisible();
+			await page.screenshot({
+				path: join(evidenceDir, "schedule-image-only-row.png"),
+				fullPage: true,
 			});
 		} finally {
 			wire.close();

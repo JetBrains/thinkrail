@@ -348,7 +348,9 @@ export function ScheduledPrompts({
 											/>
 										</div>
 										<div className="min-w-0 flex-1">
-											<div className="truncate tr-text-ui">{item.text}</div>
+											<div className="truncate tr-text-ui">
+												{item.text || (item.images?.length ? t("chat.schedule.imageOnly") : "")}
+											</div>
 											<div className="tr-text-metadata text-text-muted">
 												{parts(item.dueAt).date} {parts(item.dueAt).time} ·{" "}
 												{item.status === "failed" ? item.error : remainingTime(item.dueAt, now)}

@@ -292,6 +292,7 @@
 	"chat.schedule.date": "日付",
 	"chat.schedule.delay": "遅延",
 	"chat.schedule.failed": "プロンプトを予約できませんでした。",
+	"chat.schedule.imageOnly": "画像の添付ファイル",
 	"chat.schedule.hours": "時間",
 	"chat.schedule.minutes": "分",
 	"chat.schedule.open": "プロンプトを予約",

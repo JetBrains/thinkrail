@@ -141,6 +141,22 @@ test("orders equal due times by the most recent save and preserves that order af
 	expect(listScheduledPrompts("workspace")).toHaveLength(0);
 });
 
+test("accepts image-only scheduled prompts on create and edit", () => {
+	const images = [{ type: "image" as const, data: "AA==", mimeType: "image/png" }];
+	const created = createScheduledPrompt({
+		id: "image-only",
+		workspaceId: "workspace",
+		sessionId: "chat-a",
+		text: "",
+		images,
+		dueAt,
+	});
+	expect(created).toMatchObject({ text: "", images, status: "scheduled" });
+
+	const updated = updateScheduledPrompt("image-only", "workspace", dueAt, "", images);
+	expect(updated).toMatchObject({ text: "", images, status: "scheduled" });
+});
+
 test("rechecks an edited or cancelled record before its serialized handoff", async () => {
 	holdNextAttach = true;
 	for (const [id, text] of [

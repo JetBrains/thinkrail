@@ -1768,5 +1768,7 @@ the server accepts a save, the composer clears only if its text and attachments 
 was opened for scheduling.
 
 Editing a queued message restores its pinned model and reasoning with the draft. Resubmitting that draft
-keeps the pin; while a run is active it enters the follow-up lane so the model switch happens after the
-current turn rather than changing the model mid-turn.
+keeps the pin; model and reasoning changes update that draft pair instead of changing the active session.
+While a run is active it enters the follow-up lane so the model switch happens after the current turn rather
+than changing the model mid-turn. The draft and its optional pair live in the per-session store so switching
+tabs preserves both. Image-only scheduled rows show a localized attachment label.

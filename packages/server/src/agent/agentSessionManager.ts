@@ -188,6 +188,7 @@ interface Entry {
 	workspaceId: string;
 	lastSettlement: AgentSettlement | null | undefined;
 	queuedMessages: Record<QueueLane, TrackedQueuedMessage[]>;
+	followUpAdmission: Promise<void>;
 	stuckEmptyDeliveries: Record<QueueLane, number>;
 	nextQueuedMessageId: number;
 	manualCompactionInProgress: boolean;
@@ -598,8 +599,10 @@ export function nudgeSession(
 		return {
 			disposition: "queued",
 			send: async () => {
-				await queueSessionMessage(entry, "followUp", text, images, () =>
-					entry.session.followUp(text, images),
+				await withFollowUpAdmission(entry, () =>
+					queueSessionMessage(entry, "followUp", text, images, () =>
+						entry.session.followUp(text, images),
+					),
 				);
 			},
 		};
@@ -1221,6 +1224,7 @@ async function prepareSessionEntry(
 		workspaceId,
 		lastSettlement,
 		queuedMessages: { steering: [], followUp: [] },
+		followUpAdmission: Promise.resolve(),
 		stuckEmptyDeliveries: { steering: 0, followUp: 0 },
 		nextQueuedMessageId: 1,
 		manualCompactionInProgress: false,
@@ -2384,6 +2388,18 @@ async function queueSessionMessage<T>(
 	}
 }
 
+async function withFollowUpAdmission<T>(entry: Entry, operation: () => Promise<T>): Promise<T> {
+	const previous = entry.followUpAdmission;
+	let release!: () => void;
+	entry.followUpAdmission = new Promise<void>((resolve) => (release = resolve));
+	await previous;
+	try {
+		return await operation();
+	} finally {
+		release();
+	}
+}
+
 async function steerEntry(
 	entry: Entry,
 	text: string,
@@ -2499,20 +2515,22 @@ export async function acceptScheduledFollowUpSession(
 	const entry = mustGetEntry(sessionId);
 	admitRun(entry);
 	if (entry.session.isStreaming) {
-		if (!isCurrent()) return false;
-		if (modelSelection && entry.priorFollowUpMode === undefined) {
-			entry.priorFollowUpMode = entry.session.agent.followUpMode;
-			entry.session.agent.followUpMode = "one-at-a-time";
-		}
-		await queueSessionMessage(
-			entry,
-			"followUp",
-			text,
-			images,
-			() => entry.session.followUp(text, images),
-			modelSelection,
-		);
-		return true;
+		return withFollowUpAdmission(entry, async () => {
+			if (!isCurrent()) return false;
+			if (modelSelection && entry.priorFollowUpMode === undefined) {
+				entry.priorFollowUpMode = entry.session.agent.followUpMode;
+				entry.session.agent.followUpMode = "one-at-a-time";
+			}
+			await queueSessionMessage(
+				entry,
+				"followUp",
+				text,
+				images,
+				() => entry.session.followUp(text, images),
+				modelSelection,
+			);
+			return true;
+		});
 	}
 	const release = admitPreflight(entry);
 	try {
@@ -2566,18 +2584,20 @@ async function followUpEntry(
 ): Promise<void> {
 	admitRun(entry);
 	if (entry.session.isStreaming) {
-		if (modelSelection && entry.priorFollowUpMode === undefined) {
-			entry.priorFollowUpMode = entry.session.agent.followUpMode;
-			entry.session.agent.followUpMode = "one-at-a-time";
-		}
-		const disposition = await queueSessionMessage(
-			entry,
-			"followUp",
-			text,
-			images,
-			() => entry.session.followUp(text, images),
-			modelSelection,
-		);
+		const disposition = await withFollowUpAdmission(entry, async () => {
+			if (modelSelection && entry.priorFollowUpMode === undefined) {
+				entry.priorFollowUpMode = entry.session.agent.followUpMode;
+				entry.session.agent.followUpMode = "one-at-a-time";
+			}
+			return queueSessionMessage(
+				entry,
+				"followUp",
+				text,
+				images,
+				() => entry.session.followUp(text, images),
+				modelSelection,
+			);
+		});
 		if (answersDialogs && disposition === "queued") cancelExtUiForSession(entry.session.sessionId);
 		return;
 	}

@@ -32,6 +32,9 @@ Delivery checks current status, due time, and list membership immediately before
 records are deduplicated while per-session handoffs are serialized. The next global timer is armed
 without waiting for accepted agent runs to finish.
 
+Schedules require nonblank text or at least one image. The list represents image-only prompts with a
+localized attachment label.
+
 Schedules may pin a provider/model reference and thinking level. New UI schedules snapshot the
 composer pair; legacy records without a pair retain their old session-default behavior. Validate
 the pair against the session runtime when saving and again at delivery. The pair accompanies

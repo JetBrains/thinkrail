@@ -15,6 +15,7 @@ import type {
 	McpStatusSnapshot,
 	PiEvent,
 	Project,
+	PromptModelSelection,
 	ProviderStatusReport,
 	ProviderWarning,
 	RefreshedModels,
@@ -502,6 +503,7 @@ export interface SessionRuntime {
 	stats: SessionStats | null;
 	commands: SlashCommandInfo[];
 	draft: string;
+	draftModelSelection: PromptModelSelection | undefined;
 	pendingExtUi: ExtUiDialogRequest | null;
 	extUiQueue: ExtUiDialogRequest[];
 	extUiStatus: Record<string, string>;
@@ -534,6 +536,7 @@ function newRuntime(
 		stats: null,
 		commands: [],
 		draft: "",
+		draftModelSelection: undefined,
 		pendingExtUi: null,
 		extUiQueue: [],
 		extUiStatus: {},
@@ -1422,6 +1425,15 @@ interface AppState {
 	setStats: (sessionId: string, stats: SessionStats) => void;
 	setCommands: (sessionId: string, commands: SlashCommandInfo[]) => void;
 	setChatDraft: (sessionId: string, text: string) => void;
+	setChatDraftModelSelection: (
+		sessionId: string,
+		selection: PromptModelSelection | undefined,
+	) => void;
+	setChatDraftContent: (
+		sessionId: string,
+		text: string,
+		selection: PromptModelSelection | undefined,
+	) => void;
 	dismissSessionNotice: (sessionId: string) => void;
 	silenceNotice: (notice: ProviderWarning) => void;
 	clearPendingExtUi: (sessionId: string, id: string) => void;
@@ -4497,7 +4509,23 @@ export const useAppStore = create<AppState>((set, get) => ({
 	setCommands: (sessionId, commands) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, commands }))),
 	setChatDraft: (sessionId, draft) =>
-		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, draft }))),
+		set((s) =>
+			withRuntime(s, sessionId, (rt) => ({
+				...rt,
+				draft,
+				draftModelSelection: draft === "" ? undefined : rt.draftModelSelection,
+			})),
+		),
+	setChatDraftModelSelection: (sessionId, selection) =>
+		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, draftModelSelection: selection }))),
+	setChatDraftContent: (sessionId, draft, selection) =>
+		set((s) =>
+			withRuntime(s, sessionId, (rt) => ({
+				...rt,
+				draft,
+				draftModelSelection: selection,
+			})),
+		),
 	dismissSessionNotice: (sessionId) =>
 		set((s) => withRuntime(s, sessionId, (rt) => (rt.notice ? { ...rt, notice: null } : rt))),
 	silenceNotice: (notice) =>
