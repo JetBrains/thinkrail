@@ -323,17 +323,35 @@ test("scheduling finalizes template slots and preserves a draft edited during th
 				sessionId,
 				text: "Review for issues, focusing on src/.",
 			});
-			await wire.request("scheduledPrompts.create", {
-				requestId: "image-only-row",
-				id: "image-only-row",
-				workspaceId: workspace.id,
-				sessionId,
-				text: "",
-				images: [{ type: "image", data: "AA==", mimeType: "image/png" }],
-				dueAt: Date.UTC(2027, 0, 1, 12),
-				createdAt: Date.now(),
-				status: "scheduled",
+			await page.getByTestId("chat-input").fill("");
+			await page.evaluate(() => {
+				Object.defineProperty(window, "createImageBitmap", {
+					configurable: true,
+					value: async () => ({ width: 1, height: 1, close: () => {} }),
+				});
 			});
+			await page.getByTestId("chat-input").evaluate((element) => {
+				const transfer = new DataTransfer();
+				transfer.items.add(new File(["fixture"], "fixture.png", { type: "image/png" }));
+				element.dispatchEvent(
+					new ClipboardEvent("paste", { bubbles: true, clipboardData: transfer }),
+				);
+			});
+			await expect(page.getByTestId("composer-image")).toBeVisible();
+			await page.getByTestId("schedule-open").click();
+			await expect(page.getByTestId("schedule-confirm")).toBeEnabled();
+			await page.getByTestId("schedule-confirm").click();
+			const imageSchedule = await wire.request("scheduledPrompts.list", {
+				workspaceId: workspace.id,
+			});
+			expect(imageSchedule).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						text: "",
+						images: [expect.objectContaining({ type: "image", mimeType: "image/png" })],
+					}),
+				]),
+			);
 			await expect(page.getByText("Image attachment", { exact: true })).toBeVisible();
 			await page.screenshot({
 				path: join(evidenceDir, "schedule-image-only-row.png"),

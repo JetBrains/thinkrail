@@ -17,7 +17,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { randomUuid } from "@/lib";
 import { ModelEffortPicker, type ModelSelection } from "./ModelEffortPicker";
-import { LEVEL_LABEL } from "./modelPicker";
+import { LEVEL_LABEL, resolveThinkingLevel } from "./modelPicker";
 import type { ModelPreferences } from "./useModelPreferences";
 
 export interface ScheduledPromptDraftSnapshot {
@@ -191,7 +191,7 @@ export function ScheduledPrompts({
 	};
 	const dueAt = makeTime(date, time, now);
 	const valid =
-		!!prompt.trim() &&
+		(!!prompt.trim() || scheduledImages.length > 0) &&
 		!!modelSelection &&
 		dueAt !== null &&
 		dueAt > now &&
@@ -278,11 +278,7 @@ export function ScheduledPrompts({
 	};
 	const asPair = (selection: ModelSelection, previous?: ThinkingLevel): PromptModelSelection => ({
 		model: { provider: selection.model.provider, id: selection.model.id },
-		thinkingLevel:
-			selection.level ??
-			(previous && selection.model.thinkingLevels.includes(previous)
-				? previous
-				: (selection.model.thinkingLevels[0] ?? "off")),
+		thinkingLevel: resolveThinkingLevel(selection.model, selection.level, previous),
 	});
 	const pickRowModel = async (item: ScheduledPromptRecord, selection: PromptModelSelection) => {
 		setError("");

@@ -1799,6 +1799,8 @@ was opened for scheduling.
 
 Editing a queued message restores its pinned model and reasoning with the draft. Resubmitting that draft
 keeps the pin; model and reasoning changes update that draft pair instead of changing the active session.
+When changing models, retain the previous reasoning level only if the new model supports it; otherwise use
+the new model's first supported level.
 While a run is active it enters the follow-up lane so the model switch happens after the current turn rather
 than changing the model mid-turn. The draft and its optional pair live in the per-session store so switching
 tabs preserves both. Image-only scheduled rows show a localized attachment label.

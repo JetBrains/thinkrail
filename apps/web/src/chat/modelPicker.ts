@@ -140,6 +140,16 @@ export function trailingLevel(query: string, model: WireModel | null): ThinkingL
 	return model.thinkingLevels.find((level) => level === last) ?? null;
 }
 
+export function resolveThinkingLevel(
+	model: Pick<WireModel, "thinkingLevels">,
+	requested?: ThinkingLevel,
+	previous?: ThinkingLevel,
+): ThinkingLevel {
+	if (requested && model.thinkingLevels.includes(requested)) return requested;
+	if (previous && model.thinkingLevels.includes(previous)) return previous;
+	return model.thinkingLevels[0] ?? "off";
+}
+
 export function modelKey(model: Pick<WireModel, "provider" | "id">): string {
 	return `${model.provider}:${model.id}`;
 }

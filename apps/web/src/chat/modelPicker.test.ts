@@ -13,6 +13,7 @@ import {
 	levelPosition,
 	levelTone,
 	litBars,
+	resolveThinkingLevel,
 	trailingLevel,
 } from "./modelPicker";
 
@@ -66,6 +67,15 @@ describe("costLabel / kindLabel", () => {
 		expect(kindLabel(t, model({ id: "m", auth: { kind: "api-key" } }))).toBe("API key");
 		expect(kindLabel(t, model({ id: "m", auth: { kind: "other" } }))).toBeNull();
 		expect(kindLabel(t, model({ id: "m" }))).toBeNull();
+	});
+});
+
+describe("resolveThinkingLevel", () => {
+	test("keeps a requested or previous level only when the selected model supports it", () => {
+		const selected = model({ id: "selected", thinkingLevels: ["off", "low"] });
+		expect(resolveThinkingLevel(selected, "low", "high")).toBe("low");
+		expect(resolveThinkingLevel(selected, undefined, "high")).toBe("off");
+		expect(resolveThinkingLevel(selected, undefined, "low")).toBe("low");
 	});
 });
 

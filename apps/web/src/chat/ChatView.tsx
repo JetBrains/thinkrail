@@ -56,6 +56,7 @@ import { mentionLookup } from "./fileTargets";
 import { HistoryOverlay } from "./HistoryOverlay";
 import { parseModelRef, RunModelLabel } from "./ModelEffortLabel";
 import type { ModelSelection } from "./ModelEffortPicker";
+import { resolveThinkingLevel } from "./modelPicker";
 import {
 	compactSubmissionError,
 	mergeNativeChatCommands,
@@ -149,7 +150,9 @@ export default function ChatView({
 		void getTransport()
 			.request("scheduledPrompts.list", { workspaceId })
 			.then(install)
-			.catch(() => {});
+			.catch((error: unknown) => {
+				if (active) toast.error(errorText(error), translate("chat.schedule.failed"));
+			});
 		return () => {
 			active = false;
 			unsubscribe();
@@ -1008,7 +1011,11 @@ export default function ChatView({
 						if (draftModelSelection) {
 							useAppStore.getState().setChatDraftModelSelection(sessionId, {
 								model: { provider: selection.model.provider, id: selection.model.id },
-								thinkingLevel: selection.level ?? draftModelSelection.thinkingLevel,
+								thinkingLevel: resolveThinkingLevel(
+									selection.model,
+									selection.level,
+									draftModelSelection.thinkingLevel,
+								),
 							});
 							return;
 						}

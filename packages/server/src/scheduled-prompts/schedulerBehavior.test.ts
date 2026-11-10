@@ -36,6 +36,7 @@ mock.module("../agent", () => ({
 	validatePromptModelSelection: () => {},
 }));
 mock.module("../persistence", () => ({ dataDir: () => dataPath }));
+mock.module("../log", () => ({ logger: () => ({ error: () => {} }) }));
 mock.module("../workspaces", () => ({ getWorkspace: () => ({ worktreePath: dataPath }) }));
 
 const {
@@ -264,4 +265,26 @@ test("marks uncertain in-flight records failed after restart without redelivery"
 		},
 	]);
 	expect(delivered).toEqual([]);
+});
+
+test("preserves unreadable storage and disables schedule operations", () => {
+	const file = join(dataPath, "scheduled-prompts.json");
+	const invalidJson = "[{";
+	writeFileSync(file, invalidJson);
+	stopScheduledPrompts();
+	startScheduledPrompts(() => {});
+
+	expect(() => listScheduledPrompts("workspace")).toThrow(
+		expect.objectContaining({ code: "SCHEDULED_PROMPTS_STORAGE_UNAVAILABLE" }),
+	);
+	expect(() =>
+		createScheduledPrompt({
+			id: "must-not-overwrite",
+			workspaceId: "workspace",
+			sessionId: "chat-a",
+			text: "new schedule",
+			dueAt,
+		}),
+	).toThrow(expect.objectContaining({ code: "SCHEDULED_PROMPTS_STORAGE_UNAVAILABLE" }));
+	expect(readFileSync(file, "utf8")).toBe(invalidJson);
 });

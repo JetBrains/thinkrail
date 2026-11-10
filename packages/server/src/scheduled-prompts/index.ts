@@ -6,25 +6,46 @@ import type {
 	PromptModelSelection,
 	ScheduledPromptRecord,
 } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 import {
 	acceptScheduledFollowUpSession,
 	ensureSessionAttached,
 	getSessionWorkspaceId,
 	validatePromptModelSelection,
 } from "../agent";
+import { logger } from "../log";
 import { dataDir } from "../persistence";
 import { getWorkspace } from "../workspaces";
 
 export type ScheduledPrompt = ScheduledPromptRecord;
 
 const path = () => join(dataDir(), "scheduled-prompts.json");
+const log = logger("scheduled-prompts");
 let records: ScheduledPrompt[] = [];
+let storageError: CodedError | undefined;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let publish: ((workspaceId: string, records: ScheduledPrompt[]) => void) | undefined;
 let stopped = true;
 const deliveries = new Map<string, Promise<void>>();
 const inFlight = new Set<ScheduledPrompt>();
 let nextSavedOrder = 1;
+
+function assertStorageAvailable(): void {
+	if (storageError) throw storageError;
+}
+
+function missingStorageFile(error: unknown): boolean {
+	return error instanceof Error && "code" in error && error.code === "ENOENT";
+}
+
+function disableForStorageError(): void {
+	records = [];
+	storageError = new CodedError(
+		"SCHEDULED_PROMPTS_STORAGE_UNAVAILABLE",
+		"Scheduled prompt storage could not be read. Repair the stored file before scheduling.",
+	);
+	log.error("Scheduled prompt storage could not be read; scheduling is disabled.");
+}
 
 export function isValidScheduledDueAt(dueAt: number, now = Date.now()): boolean {
 	return Number.isSafeInteger(dueAt) && dueAt % 60_000 === 0 && dueAt > now;
@@ -52,6 +73,7 @@ function notify(workspaceId: string): void {
 }
 
 export function listScheduledPrompts(workspaceId: string): ScheduledPrompt[] {
+	assertStorageAvailable();
 	return records
 		.filter((record) => record.workspaceId === workspaceId)
 		.sort(compareScheduledPrompts);
@@ -73,6 +95,7 @@ function hasSavedOrder(value: number | undefined): value is number {
 export function createScheduledPrompt(
 	input: Omit<ScheduledPrompt, "id" | "createdAt" | "savedOrder" | "status"> & { id: string },
 ): ScheduledPrompt {
+	assertStorageAvailable();
 	if (!hasPromptContent(input.text, input.images) || !isValidScheduledDueAt(input.dueAt)) {
 		throw new Error("Prompt text or an image and a future whole-minute time are required.");
 	}
@@ -112,6 +135,7 @@ export function updateScheduledPrompt(
 	images?: ImageContent[],
 	modelSelection?: PromptModelSelection,
 ): ScheduledPrompt {
+	assertStorageAvailable();
 	const record = records.find((item) => item.id === id && item.workspaceId === workspaceId);
 	if (!record) throw new Error("Scheduled prompt is unavailable.");
 	if (!hasPromptContent(text, images) || !isValidScheduledDueAt(dueAt))
@@ -131,6 +155,7 @@ export function updateScheduledPrompt(
 }
 
 export function cancelScheduledPrompt(id: string, workspaceId: string): boolean {
+	assertStorageAvailable();
 	const before = records.length;
 	records = records.filter((item) => !(item.id === id && item.workspaceId === workspaceId));
 	if (before === records.length) return false;
@@ -143,6 +168,7 @@ export async function sendScheduledPromptNow(
 	id: string,
 	workspaceId: string,
 ): Promise<{ accepted: boolean }> {
+	assertStorageAvailable();
 	const record = records.find((item) => item.id === id && item.workspaceId === workspaceId);
 	if (record?.status !== "scheduled") throw new Error("Scheduled prompt is unavailable.");
 	record.dueAt = Date.now();
@@ -234,10 +260,21 @@ function arm(): void {
 export function startScheduledPrompts(publisher: typeof publish): void {
 	publish = publisher;
 	stopped = false;
+	records = [];
+	storageError = undefined;
 	try {
-		records = JSON.parse(readFileSync(path(), "utf8")) as ScheduledPrompt[];
-	} catch {
-		records = [];
+		const stored: unknown = JSON.parse(readFileSync(path(), "utf8"));
+		if (!Array.isArray(stored)) {
+			disableForStorageError();
+			return;
+		}
+		records = stored as ScheduledPrompt[];
+	} catch (error) {
+		if (missingStorageFile(error)) records = [];
+		else {
+			disableForStorageError();
+			return;
+		}
 	}
 	if (records.some((record) => !hasSavedOrder(record.savedOrder))) {
 		let order = Math.max(
