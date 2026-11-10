@@ -19,6 +19,7 @@ import {
 	MCP_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
+	SCHEDULED_PROMPTS_PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
 	SPEECH_SOCKET_ROUTE,
 	USER_FONTS_ROUTE,
@@ -332,20 +333,6 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	);
 
 	const sockets = new Map<string, Bun.ServerWebSocket<SocketData>>();
-	startScheduledPrompts((workspaceId, records) => {
-		for (const ws of sockets.values()) {
-			try {
-				ws.send(
-					JSON.stringify({
-						channel: WS_CHANNELS.scheduledPromptsChanged,
-						data: { workspaceId, records },
-					}),
-				);
-			} catch {
-				ws.close();
-			}
-		}
-	});
 	const reapTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	const requestReplays = new RequestReplayCache<string>();
 	const abandonmentReports = new AbandonmentReportBudget();
@@ -462,6 +449,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.workspaceUpdated);
 				ws.subscribe(WS_CHANNELS.workspaceRemoved);
 				ws.subscribe(WS_CHANNELS.workspaceFsChanged);
+				if (ws.data.protocolVersion >= SCHEDULED_PROMPTS_PROTOCOL_VERSION)
+					ws.subscribe(WS_CHANNELS.scheduledPromptsChanged);
 				if (ws.data.protocolVersion >= WORKSPACE_CREATION_PROTOCOL_VERSION) {
 					ws.subscribe(WS_CHANNELS.workspaceCreationChanged);
 					ws.subscribe(WS_CHANNELS.workspaceCreationRemoved);
@@ -620,6 +609,15 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				armClientReap(clientKey);
 			},
 		},
+	});
+	startScheduledPrompts((workspaceId, records) => {
+		server.publish(
+			WS_CHANNELS.scheduledPromptsChanged,
+			JSON.stringify({
+				channel: WS_CHANNELS.scheduledPromptsChanged,
+				data: { workspaceId, records },
+			}),
+		);
 	});
 
 	const backpressureReconciler = setInterval(() => {

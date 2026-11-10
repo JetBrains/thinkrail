@@ -744,7 +744,9 @@ enabled/confirmed choice before entering analytics attribution.
   the creation pair (`workspace.creationChanged`/`creationRemoved`, from its creation publisher) +
   **`session.deleted`** (published from the agent module's injected publisher) + **`provider.changed`**
   (published from auth's Central/runtime invalidation seam and on a successful provider login) + **`host.updateAvailable`** (published for each
-  retained CLI-update lifecycle replacement) use push channels. Every
+  retained CLI-update lifecycle replacement), and **`scheduledPrompts.changed`** (published by the
+  scheduler and subscribed only by sockets at `SCHEDULED_PROMPTS_PROTOCOL_VERSION` or later) use push
+  channels. Every
   **broadcast** push channel a client should hear must be `ws.subscribe`d in the WS
   `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Five channels are deliberately
   **not** subscribed and not broadcast: `feedback.interview`, `feedback.githubStar`, `terminal.data`, `terminal.exit`, and
