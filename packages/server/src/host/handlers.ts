@@ -110,7 +110,7 @@ import {
 	startProxyJbcentral,
 	updateJbcentral,
 } from "../auth";
-import { findBranchReviewOutcome, providerFromRemoteUrl } from "../branch-review";
+import { providerFromRemoteUrl } from "../branch-review";
 import { forgetWorkspaceChanges, revertChange, undoChange } from "../changes";
 import { selectDirectory } from "../dialog";
 import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
@@ -389,7 +389,7 @@ function removeSettledWorkspace(
 			record.settledOverride === "active" || (record.lastActiveAt ?? 0) > (seenActiveAt ?? 0);
 		if (changed(ws)) return { removed: false, reason: "changed" };
 		if (hasBusySession(id)) return { removed: false, reason: "running" };
-		const review = await findBranchReviewOutcome(ws.worktreePath, ws.branch, { fresh: true });
+		const review = await findWorkspaceReviewOutcome(ws, { fresh: true });
 		if (!review.reliable) return { removed: false, reason: "unsafe" };
 		setWorkspaceReview(id, review.value, ws.branch);
 		if (review.value && (review.value.state ?? "open") === "open") {
