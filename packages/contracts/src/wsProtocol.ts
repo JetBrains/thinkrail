@@ -141,7 +141,9 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 109;
+export const PROTOCOL_VERSION = 110;
+export const CONTINUATION_PROTOCOL_VERSION = 110;
+export const CHATS_PROTOCOL_VERSION = 109;
 export const SCHEDULED_PROMPTS_PROTOCOL_VERSION = 109;
 export const OTHER_AGENT_SKILLS_PROTOCOL_VERSION = 108;
 export const SPEECH_PROTOCOL_VERSION = 107;
@@ -228,6 +230,109 @@ export interface ServerWelcome {
 	speech?: SpeechStatus;
 }
 
+/** A projectless chat: its `kind: "chat"` workspace in the Chats container plus the one session it owns. */
+export interface ChatCreateResult {
+	workspace: Workspace;
+	sessionId: string;
+	model: WireModel | null;
+	thinkingLevel: ThinkingLevel;
+}
+
+/** What deleting a chat would trash besides its transcripts: the files its folder holds (bounded count). */
+export interface ChatInspection {
+	files: number;
+	/** The walk stopped at its entry or time budget; the folder may hold more. */
+	truncated: boolean;
+}
+
+export type ChatContinuationPhase =
+	| "requested"
+	| "summarizing"
+	| "creating"
+	| "started"
+	| "failed"
+	| "lost";
+
+/**
+ * Continue in workspace: one in-memory operation per user gesture. The source chat's agent writes the
+ * summary and calls `continue_in_workspace`; the host creates the workspace, its chat and the handoff.
+ */
+export interface ChatContinuation {
+	operationId: string;
+	sourceWorkspaceId: string;
+	sourceSessionId: string;
+	projectId: string;
+	phase: ChatContinuationPhase;
+	workspaceId?: string;
+	sessionId?: string;
+	/** Reported apart from the phase: the handoff reached the new chat, or it did not. */
+	firstMessage?: "sent" | "failed";
+	reason?: string;
+}
+
+export const CONTINUE_IN_WORKSPACE_REQUEST_CUSTOM_TYPE = "continue-in-workspace-request";
+
+export interface ContinueInWorkspaceRequestDetails {
+	operationId: string;
+	projectId: string;
+	projectName: string;
+}
+
+/** The host's request to the source chat's agent: write the summary and hand over — a card, never a user turn. */
+export interface ContinueInWorkspaceRequestMessage
+	extends WireCustomMessage<ContinueInWorkspaceRequestDetails> {
+	customType: typeof CONTINUE_IN_WORKSPACE_REQUEST_CUSTOM_TYPE;
+	display: true;
+	details: ContinueInWorkspaceRequestDetails;
+}
+
+export function isContinueInWorkspaceRequestMessage(
+	message: unknown,
+): message is ContinueInWorkspaceRequestMessage {
+	if (!message || typeof message !== "object") return false;
+	const m = message as { role?: unknown; customType?: unknown; details?: unknown };
+	if (m.role !== "custom" || m.customType !== CONTINUE_IN_WORKSPACE_REQUEST_CUSTOM_TYPE)
+		return false;
+	const d = m.details as Partial<ContinueInWorkspaceRequestDetails> | undefined;
+	return (
+		typeof d?.operationId === "string" &&
+		typeof d.projectId === "string" &&
+		typeof d.projectName === "string"
+	);
+}
+
+export const CHAT_HANDOFF_CUSTOM_TYPE = "chat-handoff";
+
+export interface ChatHandoffDetails {
+	operationId: string;
+	sourceWorkspaceId: string;
+	sourceSessionId: string;
+	sourceTitle?: string;
+	summary: string;
+}
+
+/** The new workspace chat's first message: the summary plus a link back to the chat it continues. */
+export interface ChatHandoffMessage extends WireCustomMessage<ChatHandoffDetails> {
+	customType: typeof CHAT_HANDOFF_CUSTOM_TYPE;
+	display: true;
+	details: ChatHandoffDetails;
+}
+
+export function isChatHandoffMessage(message: unknown): message is ChatHandoffMessage {
+	if (!message || typeof message !== "object") return false;
+	const m = message as { role?: unknown; customType?: unknown; details?: unknown };
+	if (m.role !== "custom" || m.customType !== CHAT_HANDOFF_CUSTOM_TYPE) return false;
+	const d = m.details as Partial<ChatHandoffDetails> | undefined;
+	return (
+		typeof d?.operationId === "string" &&
+		typeof d.sourceWorkspaceId === "string" &&
+		typeof d.sourceSessionId === "string" &&
+		typeof d.summary === "string"
+	);
+}
+
+export const CHAT_HANDOFF_SUMMARY_MAX_LENGTH = 4000;
+
 export interface WorkspaceRemoved {
 	projectId: string;
 	id: string;
@@ -310,6 +415,11 @@ export const WS_METHODS = {
 	workspaceSetSubagentsOverride: "workspace.setSubagentsOverride",
 	workspaceSetSubagentMaxConcurrent: "workspace.setSubagentMaxConcurrent",
 	workspaceSetDiffBase: "workspace.setDiffBase",
+	chatCreate: "chat.create",
+	chatDelete: "chat.delete",
+	chatInspect: "chat.inspect",
+	chatContinue: "chat.continue",
+	chatContinuationStatus: "chat.continuationStatus",
 	workspaceSettle: "workspace.settle",
 	workspaceUnsettle: "workspace.unsettle",
 	workspaceMarkUnread: "workspace.markUnread",
@@ -495,6 +605,7 @@ export const WS_CHANNELS = {
 	workspaceFsChanged: "workspace.fsChanged",
 	workspaceCreationChanged: "workspace.creationChanged",
 	workspaceCreationRemoved: "workspace.creationRemoved",
+	chatContinuation: "chat.continuation",
 	settingsChanged: "settings.changed",
 	hostUpdateAvailable: "host.updateAvailable",
 	feedbackInterview: "feedback.interview",
@@ -854,6 +965,17 @@ export interface WsMethodMap {
 		result: Ack;
 	};
 	"workspace.remove": { params: { id: string }; result: Ack };
+	"chat.create": {
+		params: { model?: WireModel; thinkingLevel?: ThinkingLevel };
+		result: ChatCreateResult;
+	};
+	"chat.delete": { params: { workspaceId: string }; result: Ack };
+	"chat.inspect": { params: { workspaceId: string }; result: ChatInspection };
+	"chat.continue": {
+		params: { workspaceId: string; projectId: string };
+		result: { operationId: string };
+	};
+	"chat.continuationStatus": { params: { operationId: string }; result: ChatContinuation };
 	"workspace.diffStats": { params: { id: string }; result: DiffStats };
 	"workspace.setSkillOverride": {
 		params: { id: string; name: string; override: "on" | "off" | null };
@@ -1438,6 +1560,15 @@ export type WsErrorCode =
 	| "WORKTREE_CHECKOUT_STALLED"
 	| "WORKSPACE_PATH_TAKEN"
 	| "FILE_TOO_LARGE"
+	| "CHATS_CONTAINER"
+	| "CHAT_WORKSPACE"
+	| "CHATS_STORE_UNAVAILABLE"
+	| "NOT_A_CHAT"
+	| "CHAT_HAS_SESSION"
+	| "CHAT_DELETING"
+	| "CHAT_DELETION_PENDING"
+	| "CONTINUATION_UNKNOWN"
+	| "CONTINUATION_IN_FLIGHT"
 	| SpeechErrorCode;
 
 export interface WsResponse {

@@ -64,6 +64,8 @@ export interface Project {
 	path: string;
 	slug: string;
 	lastOpened: number;
+	/** The one built-in container of chats without a project: not a repository, never git, never closed. */
+	kind?: "chats";
 	closed?: true;
 	trusted?: boolean;
 	acknowledgedSkills?: string[];
@@ -128,7 +130,8 @@ export const DEFAULT_WORKSPACE_NAME = "Default";
 export interface Workspace {
 	id: string;
 	projectId: string;
-	kind?: "default" | "external";
+	/** `chat`: a projectless chat's own folder in the Chats container — never a git checkout, `branch`/`baseBranch` are "". */
+	kind?: "default" | "external" | "chat";
 	name: string;
 	branch: string;
 	worktreePath: string;
@@ -149,6 +152,18 @@ export interface Workspace {
 	settledAt?: number;
 	/** The host's last-known review for the branch; refreshed host-side so every client sees one state. */
 	review?: OpenBranchReview;
+	/** A chat whose deletion started but did not finish; the UI offers Retry and nothing else. */
+	deletionPending?: true;
+	/** Where a chat without a project was continued: the workspaces (and their first chats) its summary went to. */
+	continuedTo?: ChatContinuationLink[];
+}
+
+export interface ChatContinuationLink {
+	/** The gesture that made the link: a continuation card finds its outcome here after a host restart. */
+	operationId: string;
+	projectId: string;
+	workspaceId: string;
+	sessionId: string;
 }
 
 export type BranchReviewState = "open" | "merged" | "closed";

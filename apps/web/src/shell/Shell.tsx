@@ -8,6 +8,7 @@ import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
 import { useEffect, useState } from "react";
+import { useContinuations } from "../chat/continuations";
 import {
 	applyFontPreference,
 	DEFAULT_FONT_PREFERENCE,
@@ -17,6 +18,7 @@ import {
 import { platformShortcutLabel } from "../lib";
 import { NotificationPermissionPrompt, useAttentionNotifications } from "../notifications";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
+import { canStartProjectlessChat } from "../panels/chatActions";
 import { NewWorkspaceDialog } from "../panels/NewWorkspaceDialog";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { SurveyInvitationDialog } from "../panels/SurveyInvitationDialog";
@@ -26,10 +28,12 @@ import { useBranchStatus } from "../panels/useBranchStatus";
 import { useCreationChatHandoff, WorkspaceCreationView } from "../panels/WorkspaceCreation";
 import { SearchSettings } from "../search";
 import {
+	isChatWorkspace,
 	SettingsSection,
 	selectActiveWorkspace,
 	selectAnalyticsConsentPromptOpen,
 	selectContextProject,
+	selectContextRepoProject,
 	selectOnboardingActive,
 	useAppStore,
 } from "../store";
@@ -82,6 +86,7 @@ export function Shell() {
 	const t = useT();
 	useLocalLayoutState();
 	useAttentionNotifications();
+	useContinuations();
 	const status = useAppStore((s) => s.status);
 	const analyticsConsentOpen = useAppStore(selectAnalyticsConsentPromptOpen);
 	const onboardingActive = useAppStore(selectOnboardingActive);
@@ -89,13 +94,15 @@ export function Shell() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
 	const contextProject = useAppStore(selectContextProject);
+	const contextRepoProject = useAppStore(selectContextRepoProject);
+	const activeChat = activeWorkspace !== null && isChatWorkspace(activeWorkspace);
 	const {
 		review: openReview,
 		url: openReviewUrl,
 		status: branchStatus,
 		noteOpenReview,
 		refreshBranchStatus,
-	} = useBranchStatus(activeWorkspace, status, { pollChecks: true });
+	} = useBranchStatus(activeChat ? null : activeWorkspace, status, { pollChecks: true });
 	const locationReview =
 		openReview && openReviewUrl ? { ...openReview, url: openReviewUrl } : openReview;
 	const hasActiveWorkspace = activeWorkspaceId != null;
@@ -103,7 +110,7 @@ export function Shell() {
 	const updates = useUpdates(supportsHostUpdateRun(protocolVersion) ? runHostUpdate : null);
 	const windowControls = useNativeWindowControls();
 	const [newWorkspace, setNewWorkspace] = useState<{
-		projectId: string;
+		projectId: string | null;
 		initialPrompt?: string;
 	} | null>(null);
 	const activeCreation = useAppStore((s) =>
@@ -111,6 +118,16 @@ export function Shell() {
 	);
 	const workspaceRetryDraft = useAppStore((s) => s.workspaceRetryDraft);
 	useCreationChatHandoff();
+	const canStartChat = useAppStore(canStartProjectlessChat);
+	const openNewWork = (initialPrompt?: string): boolean => {
+		if (!contextRepoProject && !canStartChat) return false;
+		if (newWorkspace !== null || workspaceRetryDraft !== null) return false;
+		setNewWorkspace({
+			projectId: contextRepoProject?.id ?? null,
+			...(initialPrompt === undefined ? {} : { initialPrompt }),
+		});
+		return true;
+	};
 
 	const homeProjects = useCollapsibleRegion<HTMLDivElement>(PROJECT_HOME_PROJECTS_REGION_ID);
 	const [searchShortcut] = useState(() => platformShortcutLabel("K"));
@@ -175,9 +192,7 @@ export function Shell() {
 	useGlobalHotkeys({
 		onProjects: () => toggleLeftSide(homeProjects.toggle),
 		...(hasActiveWorkspace ? { onWorkspace: toggleRightSide, onBottom: toggleBottomPanel } : {}),
-		...(contextProject
-			? { onNewWorkspace: () => setNewWorkspace({ projectId: contextProject.id }) }
-			: {}),
+		...(contextRepoProject || canStartChat ? { onNewWorkspace: () => void openNewWork() } : {}),
 		onSearch: () => useAppStore.getState().openSearch(),
 	});
 	return (
@@ -201,7 +216,7 @@ export function Shell() {
 							branchStatus={branchStatus}
 							noteOpenReview={noteOpenReview}
 							refreshBranchStatus={refreshBranchStatus}
-							onNewWorkspace={() => setNewWorkspace({ projectId: contextProject.id })}
+							onNewWorkspace={() => openNewWork()}
 						/>
 					) : null}
 				</div>
@@ -311,13 +326,7 @@ export function Shell() {
 			)}
 			<SurveyWindow />
 			<SearchPaletteHost
-				onNewWorkspace={(projectId, initialPrompt) => {
-					if (newWorkspace !== null || workspaceRetryDraft !== null) return false;
-					setNewWorkspace(
-						initialPrompt === undefined ? { projectId } : { projectId, initialPrompt },
-					);
-					return true;
-				}}
+				onNewWorkspace={(_projectId, initialPrompt) => openNewWork(initialPrompt)}
 				onToggleProjectsHome={homeProjects.toggle}
 				hasUpdateSettings={updates !== null}
 			/>

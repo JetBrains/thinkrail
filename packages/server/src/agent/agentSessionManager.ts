@@ -106,7 +106,10 @@ import {
 	loadsDisabledExtensionSkills,
 	packagePolicyKey,
 	providerExtensionPaths,
+	SPEC_TOOL_PREFIX,
+	specsEnabledFor,
 	toSkillCommands,
+	withoutSpecRule,
 } from "./extensions";
 import {
 	createMcpSessionHost,
@@ -170,6 +173,15 @@ interface TrackedQueuedMessage {
 	images?: ImageContent[];
 }
 
+interface PendingHostMessage {
+	id: number;
+	readonly customType: string;
+	readonly content: string;
+	readonly details: unknown;
+	readonly onDropped: (() => void) | undefined;
+	queued: boolean;
+}
+
 interface Entry {
 	dequeuedFollowUps: TrackedQueuedMessage[];
 	pendingModelSelection?: PromptModelSelection | undefined;
@@ -191,6 +203,7 @@ interface Entry {
 	followUpAdmission: Promise<void>;
 	stuckEmptyDeliveries: Record<QueueLane, number>;
 	nextQueuedMessageId: number;
+	hostMessages: PendingHostMessage[];
 	manualCompactionInProgress: boolean;
 	piCompactionInProgress: boolean;
 	reloadPending: boolean;
@@ -218,6 +231,7 @@ let sessionLifecycleGeneration = 0;
 const workspaceLifecycleGenerations = new Map<string, number>();
 const closingWorkspaces = new Map<string, number>();
 const pendingSessionPreparations = new Map<string, Set<Promise<unknown>>>();
+const preparingEntries = new Map<string, Entry>();
 const sessionTeardowns = new Map<string, Promise<void>>();
 const tearingDownEntries = new Map<string, Entry>();
 
@@ -363,8 +377,11 @@ function sessionCanAttach(sessionId: string, workspaceId: string): boolean {
 
 export type { SessionEventPayload };
 
-let publish: (payload: SessionEventPayload) => void = () => {};
-export function setSessionPublisher(fn: (payload: SessionEventPayload) => void): void {
+type SessionEventPublisher = (payload: SessionEventPayload, workspaceId: string) => void;
+
+let publish: SessionEventPublisher = () => {};
+/** Every event carries its workspace, so a detached session's publication can be scoped as well as a live one's. */
+export function setSessionPublisher(fn: SessionEventPublisher): void {
 	publish = fn;
 }
 
@@ -793,6 +810,13 @@ export function refreshAgentReviewTool(workspaceId?: string): void {
 	}
 }
 
+function applySpecTools(entry: Entry): void {
+	if (specsEnabledFor(entry.workspaceId)) return;
+	const active = entry.session.getActiveToolNames();
+	const kept = active.filter((name) => !name.startsWith(SPEC_TOOL_PREFIX));
+	if (kept.length !== active.length) entry.session.setActiveToolsByName(kept);
+}
+
 function applyExtensionTools(entry: Entry, { allowReload = true } = {}): void {
 	entry.extensionToolsRefreshPending = false;
 	const { session } = entry;
@@ -936,6 +960,10 @@ export function getSessionWorkspaceId(sessionId: string): string | undefined {
 	return sessions.get(sessionId)?.workspaceId;
 }
 
+export function getSessionAttribution(sessionId: string): string | undefined {
+	return sessions.get(sessionId)?.workspaceId ?? preparingEntries.get(sessionId)?.workspaceId;
+}
+
 export function getSessionRuntimeGeneration(sessionId: string): PiRuntimeGeneration | undefined {
 	return hasSession(sessionId) ? sessions.get(sessionId)?.generation : undefined;
 }
@@ -1043,6 +1071,7 @@ function runGatedReload(entry: Entry): Promise<void> {
 				entry.reloadRunning = null;
 				applySubagentTools(entry);
 				applyReviewTool(entry);
+				applySpecTools(entry);
 				applyExtensionTools(entry, {
 					allowReload: entry.reloadPolicyGeneration !== extensionPolicy.generation,
 				});
@@ -1227,6 +1256,7 @@ async function prepareSessionEntry(
 		followUpAdmission: Promise.resolve(),
 		stuckEmptyDeliveries: { steering: 0, followUp: 0 },
 		nextQueuedMessageId: 1,
+		hostMessages: [],
 		manualCompactionInProgress: false,
 		piCompactionInProgress: false,
 		reloadPending: false,
@@ -1254,6 +1284,7 @@ async function prepareSessionEntry(
 		commands,
 		() => entry.resourcesClosing,
 	);
+	preparingEntries.set(sessionId, entry);
 	entry.unsubscribeCommands = commands.onChange(() => {
 		if (canUseSessionResources(sessionId, workspaceId))
 			publishSessionResourcesChanged(workspaceId, sessionId);
@@ -1265,13 +1296,17 @@ async function prepareSessionEntry(
 			entry.commands.flushCompletions({ atTurnEnd: true });
 			entry.subagents.flushCompletions({ atTurnEnd: true });
 		}
+		if (event.type === "message_start" && event.message.role === "custom") {
+			const { details } = event.message;
+			entry.hostMessages = entry.hostMessages.filter((message) => message.details !== details);
+		}
 		if (event.type === "message_start" && event.message.role === "user") {
 			const lane = deliveredStuckEmptyLane(entry, event.message.content);
 			if (lane) {
 				entry.stuckEmptyDeliveries[lane]++;
 				synchronizeQueueFromSession(entry);
 				if (sessions.get(sessionId) === entry) {
-					publish({ sessionId, event: queueUpdateEventOf(entry) });
+					publish({ sessionId, event: queueUpdateEventOf(entry) }, workspaceId);
 					publishEntryState(entry);
 				}
 			}
@@ -1341,7 +1376,7 @@ async function prepareSessionEntry(
 			void reconcileMcpSessions([sessionId]);
 		}
 		if (sessions.get(sessionId) === entry) {
-			publish({ sessionId, event: projected });
+			publish({ sessionId, event: projected }, workspaceId);
 			publishEntryState(entry);
 		}
 		if (event.type === "agent_settled") terminal = null;
@@ -1420,6 +1455,7 @@ function soleRunningToolCall(session: AgentSession): string | undefined {
 
 function abandonPreparedEntry(entry: Entry): void {
 	const { sessionId } = entry.session;
+	if (preparingEntries.get(sessionId) === entry) preparingEntries.delete(sessionId);
 	cancelExtUiForSession(sessionId);
 	forgetMcpStatus(sessionId);
 	entry.toolResponseWaiters.abandon();
@@ -1460,8 +1496,11 @@ async function registerSession(
 	}
 	prepared.entry.registered = true;
 	sessions.set(session.sessionId, prepared.entry);
+	if (preparingEntries.get(session.sessionId) === prepared.entry)
+		preparingEntries.delete(session.sessionId);
 	applySubagentTools(prepared.entry);
 	applyReviewTool(prepared.entry);
+	applySpecTools(prepared.entry);
 	activateRegistryTools(prepared.entry);
 	applyExtensionTools(prepared.entry);
 	restartMcpStatus(session.sessionId);
@@ -1600,6 +1639,7 @@ async function createParentSessionInternal(
 					createBackgroundCommandsExtension({ service: commands }),
 					...mcpHost.extensions,
 					extraUsageModelSelectExtension(sessionId),
+					withoutSpecRule(workspaceId),
 				],
 				{ ...toolResponseSessionServices(toolResponseWaiters), workspaceFiles },
 			),
@@ -2068,7 +2108,7 @@ export function renameSession(
 		const current = manager.getSessionName();
 		if ((options.onlyIfUnnamed && current !== undefined) || current === normalized) return false;
 		manager.appendSessionInfo(normalized);
-		publish({ sessionId, event: { type: "session_info_changed", name: normalized } });
+		publish({ sessionId, event: { type: "session_info_changed", name: normalized } }, workspaceId);
 		const projectId = resolveProjectId(workspaceId);
 		if (projectId)
 			publishState(diskStateRecord(sessionId, { id: workspaceId, projectId }, manager));
@@ -2619,16 +2659,65 @@ export async function sendReviewFixToSession(
 	content: string,
 	details: ReviewFixDetails,
 ): Promise<void> {
+	await sendHostMessageToSession(sessionId, TODO_REVIEW_FIX_CUSTOM_TYPE, content, details);
+}
+
+/** A host-authored custom message the agent answers: a card in the transcript, queued behind a running turn, never a steer. */
+export async function sendHostMessageToSession(
+	sessionId: string,
+	customType: string,
+	content: string,
+	details: unknown,
+	options: { onDropped?: () => void } = {},
+): Promise<void> {
 	const entry = mustGetEntry(sessionId);
 	const release = admitPreflight(entry);
+	const message: PendingHostMessage = {
+		id: entry.nextQueuedMessageId++,
+		customType,
+		content,
+		details,
+		onDropped: options.onDropped,
+		queued: false,
+	};
+	entry.hostMessages.push(message);
 	try {
-		await entry.session.sendCustomMessage(
-			{ customType: TODO_REVIEW_FIX_CUSTOM_TYPE, content, display: true, details },
-			{ deliverAs: "followUp", triggerTurn: true },
-		);
+		await deliverHostMessage(entry, message);
+	} catch (error) {
+		forgetHostMessage(entry, message);
+		throw error;
 	} finally {
 		release();
 	}
+}
+
+/** `true` while a message `sendHostMessageToSession` sent with these `details` has not reached the agent yet. */
+export function isHostMessagePending(sessionId: string, details: unknown): boolean {
+	return (
+		sessions.get(sessionId)?.hostMessages.some((message) => message.details === details) ?? false
+	);
+}
+
+function deliverHostMessage(entry: Entry, message: PendingHostMessage): Promise<void> {
+	message.queued = entry.session.isStreaming;
+	return entry.session.sendCustomMessage(
+		{
+			customType: message.customType,
+			content: message.content,
+			display: true,
+			details: message.details,
+		},
+		{ deliverAs: "followUp", triggerTurn: true },
+	);
+}
+
+function forgetHostMessage(entry: Entry, message: PendingHostMessage): void {
+	entry.hostMessages = entry.hostMessages.filter((candidate) => candidate !== message);
+}
+
+function dropHostMessage(entry: Entry, message: PendingHostMessage): void {
+	forgetHostMessage(entry, message);
+	message.onDropped?.();
 }
 
 export async function compactSession(sessionId: string, instructions?: string): Promise<void> {
@@ -2656,11 +2745,27 @@ function queueStateOf(entry: Entry): SessionQueueState {
 }
 
 export function clearQueueSession(sessionId: string, requireTextOnly = false): SessionQueueContent {
-	return clearEntryQueue(mustGetEntry(sessionId), requireTextOnly);
+	const entry = mustGetEntry(sessionId);
+	const drained = drainEntryQueue(entry, requireTextOnly);
+	for (const message of drained.hostMessages) requeueHostMessage(entry, message);
+	return drained.content;
 }
 
 function clearEntryQueue(entry: Entry, requireTextOnly = false): SessionQueueContent {
+	const drained = drainEntryQueue(entry, requireTextOnly);
+	for (const message of drained.hostMessages) dropHostMessage(entry, message);
+	return drained.content;
+}
+
+interface DrainedQueue {
+	content: SessionQueueContent;
+	followUpIds: number[];
+	hostMessages: PendingHostMessage[];
+}
+
+function drainEntryQueue(entry: Entry, requireTextOnly: boolean): DrainedQueue {
 	const content = queueContentOf(entry);
+	const followUpIds = entry.queuedMessages.followUp.map((message) => message.id);
 	if (requireTextOnly && hasQueuedImages(entry)) {
 		throw new Error("Cannot restore queued image messages as text");
 	}
@@ -2673,7 +2778,22 @@ function clearEntryQueue(entry: Entry, requireTextOnly = false): SessionQueueCon
 		entry.pendingModelSelection = undefined;
 	}
 	entry.stuckEmptyDeliveries = { steering: 0, followUp: 0 };
-	return content;
+	const hostMessages = entry.hostMessages
+		.filter((message) => message.queued)
+		.sort((a, b) => a.id - b.id);
+	return { content, followUpIds, hostMessages };
+}
+
+function requeueHostMessage(entry: Entry, message: PendingHostMessage): void {
+	if (!entry.session.isStreaming) {
+		dropHostMessage(entry, message);
+		return;
+	}
+	message.id = entry.nextQueuedMessageId++;
+	void deliverHostMessage(entry, message).catch((error: unknown) => {
+		log.warn(`a queued host message was not queued again for ${entry.session.sessionId}`, error);
+		dropHostMessage(entry, message);
+	});
 }
 
 export async function removeQueuedSession(
@@ -2685,23 +2805,38 @@ export async function removeQueuedSession(
 	const release = admitPreflight(entry, true);
 	try {
 		const { session } = entry;
-		const drained = clearQueueSession(sessionId);
-		const lane = [...drained[kind]];
+		const drained = drainEntryQueue(entry, false);
+		const lane = [...drained.content[kind]];
 		const removed = index >= 0 && index < lane.length ? (lane.splice(index, 1)[0] ?? null) : null;
-		const keep = { ...drained, [kind]: lane };
+		const keep = { ...drained.content, [kind]: lane };
+		const followUpIds =
+			kind === "followUp" && removed !== null
+				? drained.followUpIds.filter((_, position) => position !== index)
+				: drained.followUpIds;
 		for (const message of keep.steering) {
 			const images = message.images ? [...message.images] : undefined;
 			await queueSessionMessage(entry, "steering", message.text, images, () =>
 				session.steer(message.text, images),
 			);
 		}
-		for (const message of keep.followUp) {
+		const followUps = [
+			...keep.followUp.map((message, position) => ({
+				id: followUpIds[position] ?? Number.MAX_SAFE_INTEGER,
+				message,
+			})),
+			...drained.hostMessages.map((host) => ({ id: host.id, host })),
+		].sort((a, b) => a.id - b.id);
+		for (const item of followUps) {
+			if ("host" in item) {
+				requeueHostMessage(entry, item.host);
+				continue;
+			}
 			await followUpEntry(
 				entry,
-				message.text,
-				message.images ? [...message.images] : undefined,
+				item.message.text,
+				item.message.images ? [...item.message.images] : undefined,
 				false,
-				message.modelSelection,
+				item.message.modelSelection,
 			);
 		}
 		if (!session.isStreaming && session.pendingMessageCount > 0) {
@@ -2889,7 +3024,10 @@ export function recordSessionUsage(
 		return false;
 	}
 	try {
-		publish({ sessionId, event: { type: "entry_appended", entryType: "usage" } });
+		publish(
+			{ sessionId, event: { type: "entry_appended", entryType: "usage" } },
+			entry.workspaceId,
+		);
 	} catch (error) {
 		log.warn(`usage invalidation was not published for ${sessionId}`, error);
 	}
@@ -3256,7 +3394,14 @@ export async function settleSessionsForShutdown(
 	}
 }
 
-async function removeWorkspaceSessionsInternal(workspaceId: string, cwd?: string): Promise<void> {
+/**
+ * Closes the workspace's session admission, drains in-flight preparations, stops and disposes its live
+ * sessions and awaits their child cascades, then runs `teardown` before admission reopens.
+ */
+export async function closeWorkspaceSessions<T>(
+	workspaceId: string,
+	teardown: () => Promise<T>,
+): Promise<T> {
 	workspaceLifecycleGenerations.set(
 		workspaceId,
 		(workspaceLifecycleGenerations.get(workspaceId) ?? 0) + 1,
@@ -3274,9 +3419,7 @@ async function removeWorkspaceSessionsInternal(workspaceId: string, cwd?: string
 			Promise.all(removals),
 		]);
 		await Promise.all([...(pendingCascades.get(workspaceId) ?? [])]);
-		removeWorkspaceDelegation(workspaceId);
-		removeWorkspaceResourceHistory(workspaceId);
-		if (cwd) await purgeDiskSessions(cwd);
+		return await teardown();
 	} finally {
 		const remainingClosures = (closingWorkspaces.get(workspaceId) ?? 1) - 1;
 		if (remainingClosures === 0) closingWorkspaces.delete(workspaceId);
@@ -3285,7 +3428,11 @@ async function removeWorkspaceSessionsInternal(workspaceId: string, cwd?: string
 }
 
 export function removeWorkspaceSessions(workspaceId: string, cwd?: string): Promise<void> {
-	return removeWorkspaceSessionsInternal(workspaceId, cwd);
+	return closeWorkspaceSessions(workspaceId, async () => {
+		removeWorkspaceDelegation(workspaceId);
+		removeWorkspaceResourceHistory(workspaceId);
+		if (cwd) await purgeDiskSessions(cwd);
+	});
 }
 
 async function purgeDiskSessions(cwd: string): Promise<void> {

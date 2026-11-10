@@ -1,6 +1,7 @@
 import {
 	type RemixiconComponentType,
 	RiAddLine,
+	RiChat3Line,
 	RiChatNewLine,
 	RiCheckDoubleLine,
 	RiEdit2Line,
@@ -53,6 +54,7 @@ const TOOL_ICONS: Record<PaletteTool, RemixiconComponentType> = {
 export interface PaletteCatalogDeps {
 	readonly t: Translator;
 	readonly contextProjectId: string | null;
+	readonly canStartChat: boolean;
 	readonly activeWorkspace: Workspace | null;
 	readonly editors: readonly EditorInfo[];
 	readonly historyAvailable: boolean;
@@ -68,6 +70,7 @@ export interface PaletteCatalogDeps {
 
 export interface PaletteCatalogActions {
 	readonly newWorkspace: (projectId: string) => void;
+	readonly newProjectlessChat: () => void;
 	readonly openDefaultWorkspace: (projectId: string) => void;
 	readonly openProject: () => void;
 	readonly openProjectPath: () => void;
@@ -112,6 +115,17 @@ function workCommands(deps: PaletteCatalogDeps): Command[] {
 			keywords: ["session", "agent"],
 			mutates: true,
 			run: () => actions.newChat(activeWorkspace.id),
+		});
+	}
+	if (deps.canStartChat) {
+		commands.push({
+			id: "chat.newProjectless",
+			title: t("commands.chat.newProjectless"),
+			group: "work",
+			icon: RiChat3Line,
+			keywords: ["chat", "no project", "scratch", "quick"],
+			mutates: true,
+			run: actions.newProjectlessChat,
 		});
 	}
 	commands.push(

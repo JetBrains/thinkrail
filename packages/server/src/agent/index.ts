@@ -10,6 +10,12 @@ export {
 	stopSubagent,
 } from "./chatResources";
 export {
+	CONTINUE_IN_WORKSPACE_TOOL_NAME,
+	type ContinueToolHost,
+	clampHandoffSummary,
+	setContinueToolHost,
+} from "./continueTool";
+export {
 	listCustomEndpoints,
 	probeCustomEndpoint,
 	removeCustomEndpoint,
@@ -21,6 +27,7 @@ export {
 	refreshSubagentConcurrency,
 	runReviewSubagent,
 	setSubagentConcurrencyResolver,
+	trashWorkspaceDelegation,
 } from "./delegation";
 export {
 	type BundledExtensionFactory,
@@ -33,6 +40,7 @@ export {
 	setDisabledExtensionsResolver,
 	setDisabledPackagesResolver,
 	setExtensionSettingsResolver,
+	setSpecsEnabledResolver,
 } from "./extensions";
 export {
 	effectiveMcpServerConfig,

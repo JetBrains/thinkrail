@@ -20,7 +20,7 @@ import type {
 	SkillCatalogEntry,
 	SlashCommandInfo,
 } from "@thinkrail/contracts";
-import specGraphExtension from "pi-spec-graph";
+import specGraphExtension, { SPEC_SECTION } from "pi-spec-graph";
 import {
 	extensionSkillRoots,
 	type HostSessionServices,
@@ -31,6 +31,7 @@ import {
 	serverExtensions,
 } from "../extensions";
 import { type BundledTrashHelpers, setBundledTrashHelpers } from "../trash";
+import { continueInWorkspaceExtension } from "./continueTool";
 import { headlessSearchPolicy } from "./headlessSearch";
 import { oversizedImageGuard } from "./imageGuard";
 import {
@@ -377,14 +378,39 @@ function installedDeclarations(packageManager: DefaultPackageManager): Set<strin
 	);
 }
 
+// Injected by the host, default on: a workspace without specs (a chat without a project) gets neither the
+// spec tools nor the spec rule, in its sessions or their children.
+let specsEnabledResolver: (workspaceId: string) => boolean = () => true;
+export function setSpecsEnabledResolver(resolver: (workspaceId: string) => boolean): void {
+	specsEnabledResolver = resolver;
+}
+
+export function specsEnabledFor(workspaceId: string): boolean {
+	try {
+		return specsEnabledResolver(workspaceId);
+	} catch {
+		return true;
+	}
+}
+
+export const SPEC_TOOL_PREFIX = "spec_";
+
+export function withoutSpecRule(workspaceId: string): InlineExtension {
+	return (pi) => {
+		pi.on("before_agent_start", (event) => {
+			if (!specsEnabledFor(workspaceId)) delete event.systemPromptOptions.sections[SPEC_SECTION];
+		});
+	};
+}
+
 export function childBaseExtensionFactories(): InlineExtension[] {
 	return [oversizedImageGuard, skillCarryover];
 }
 
-export function childExtensionFactories(): InlineExtension[] {
+export function childExtensionFactories(workspaceId: string): InlineExtension[] {
 	return [
 		headlessSearchPolicy,
-		specGraphExtension,
+		...(specsEnabledFor(workspaceId) ? [specGraphExtension] : []),
 		skillCatalog,
 		...registryInlineExtensions("childExtensions", isExtensionDisabled),
 	];
@@ -415,6 +441,7 @@ export async function buildResourceLoader(
 		reviewToolExtension,
 		requestReviewExtension,
 		setTitleExtension,
+		continueInWorkspaceExtension,
 		oversizedImageGuard,
 		skillCatalog,
 		skillCarryover,

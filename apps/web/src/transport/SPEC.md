@@ -59,7 +59,10 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   its MCP login cancellation) each row it held when the read was sent that the reply no longer lists and
   the store still holds, so a pushed full workspace snapshot or
   removal missed while disconnected (including a rename) cannot stay stale; rows that arrived after the
-  read was sent are never retired by it, and it adds no rows (creation stays with the push and backfill);
+  read was sent are never retired by it, and it adds no rows (creation stays with the push and backfill) — except to the Chats
+  container, whose list is its membership: a chat it lists that this surface does not hold is added
+  through `addWorkspace`, the `workspace.created` path (which refuses an id this surface saw removed), so
+  a chat another window started while this one was away appears;
   on a v104+ host it also re-reads `workspace.listCreations` (older hosts install an empty set), first
   re-listing the watched creation's project when the creation is gone, so a create that finished while
   disconnected lands on its workspace instead of racing the list refresh;
