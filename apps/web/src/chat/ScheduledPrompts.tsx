@@ -11,7 +11,7 @@ import type {
 	ThinkingLevel,
 	WireModel,
 } from "@thinkrail/contracts";
-import { useT } from "@thinkrail/locales/react";
+import { type Translator, useT } from "@thinkrail/locales/react";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -44,14 +44,20 @@ function sameDraft(a: ScheduledPromptDraftSnapshot, b: ScheduledPromptDraftSnaps
 }
 
 const minute = 60_000;
-const remainingTime = (dueAt: number, now: number) => {
+const remainingTime = (t: Translator, dueAt: number, now: number) => {
 	const remaining = Math.max(0, dueAt - now);
 	if (remaining < 60 * minute) {
 		const seconds = Math.ceil(remaining / 1000);
-		return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+		return t("chat.schedule.remainingMinutesSeconds", {
+			minutes: Math.floor(seconds / 60),
+			seconds: seconds % 60,
+		});
 	}
 	const minutes = Math.ceil(remaining / minute);
-	return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+	return t("chat.schedule.remainingHoursMinutes", {
+		hours: Math.floor(minutes / 60),
+		minutes: minutes % 60,
+	});
 };
 const futureFourHours = () => Math.ceil((Date.now() + 4 * 60 * minute) / minute) * minute;
 const parts = (at: number) => {
@@ -61,9 +67,6 @@ const parts = (at: number) => {
 		time: `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`,
 	};
 };
-const makeTime = (date: string, time: string, now = Date.now()) =>
-	scheduledLocalTime(date, time, now);
-
 function scheduledLocalTime(date: string, time: string, now = Date.now()) {
 	if (!/^\d{4}-\d\d-\d\d$/.test(date) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return null;
 	const [y, m, d] = date.split("-").map(Number),
@@ -189,7 +192,7 @@ export function ScheduledPrompts({
 			setTime(p.time);
 		}
 	};
-	const dueAt = makeTime(date, time, now);
+	const dueAt = scheduledLocalTime(date, time, now);
 	const valid =
 		(!!prompt.trim() || scheduledImages.length > 0) &&
 		(!!modelSelection || editing !== null) &&
@@ -247,8 +250,8 @@ export function ScheduledPrompts({
 				lastUsed.current = Date.now();
 				setOpen(false);
 			})
-			.catch((e: unknown) => {
-				setError(e instanceof Error ? e.message : t("chat.schedule.failed"));
+			.catch(() => {
+				setError(t("chat.schedule.failed"));
 			})
 			.finally(() => setSaving(false));
 	};
@@ -265,7 +268,7 @@ export function ScheduledPrompts({
 		if (sendingId) return;
 		setSendingId(id);
 		await onSendNow(id)
-			.catch((e: unknown) => setError(e instanceof Error ? e.message : t("chat.schedule.failed")))
+			.catch(() => setError(t("chat.schedule.failed")))
 			.finally(() => setSendingId(null));
 	};
 	const cancel = async (id: string) => {
@@ -283,7 +286,7 @@ export function ScheduledPrompts({
 			text: item.text,
 			images: item.images ?? [],
 			modelSelection: selection,
-		}).catch((e: unknown) => setError(e instanceof Error ? e.message : t("chat.schedule.failed")));
+		}).catch(() => setError(t("chat.schedule.failed")));
 	};
 	const pickerModel = (selection?: PromptModelSelection) =>
 		models.find(
@@ -344,7 +347,9 @@ export function ScheduledPrompts({
 											</div>
 											<div className="tr-text-metadata text-text-muted">
 												{parts(item.dueAt).date} {parts(item.dueAt).time} ·{" "}
-												{item.status === "failed" ? item.error : remainingTime(item.dueAt, now)}
+												{item.status === "failed"
+													? t("chat.schedule.deliveryNeedsReview")
+													: remainingTime(t, item.dueAt, now)}
 												{item.modelSelection ? (
 													<span
 														title={
@@ -479,7 +484,7 @@ export function ScheduledPrompts({
 									value={date}
 									onChange={(e) => {
 										setDate(e.target.value);
-										const at = makeTime(e.target.value, time, now);
+										const at = scheduledLocalTime(e.target.value, time, now);
 										if (at !== null) setAbsolute(at);
 									}}
 									className="pointer-events-none absolute inset-0 size-full opacity-0"
@@ -497,14 +502,14 @@ export function ScheduledPrompts({
 									const value = e.target.value;
 									if (!/^[0-9:]{0,5}$/.test(value)) return;
 									setTime(value);
-									const at = makeTime(date, value, now);
+									const at = scheduledLocalTime(date, value, now);
 									if (at !== null) setAbsolute(at);
 								}}
 								onBlur={() => {
 									const match = /^(\d{1,2}):?(\d{2})$/.exec(time);
 									if (!match?.[1] || !match[2]) return;
 									const value = `${match[1].padStart(2, "0")}:${match[2]}`;
-									const at = makeTime(date, value, now);
+									const at = scheduledLocalTime(date, value, now);
 									if (at !== null) setAbsolute(at);
 								}}
 								className="w-64 border-l border-control-border-default bg-control-bg pl-8 text-center text-text-default outline-none tr-text-ui"
@@ -526,7 +531,7 @@ export function ScheduledPrompts({
 									onChange={(e) => setDelay(e.target.value, minutes)}
 									className="w-64 rounded-sm border border-control-border-default bg-control-bg px-6 py-4 tr-text-ui"
 								/>
-								h
+								{t("chat.schedule.hoursUnit")}
 								<input
 									aria-label={t("chat.schedule.minutes")}
 									onFocus={(e) => e.currentTarget.select()}
@@ -539,7 +544,7 @@ export function ScheduledPrompts({
 									onChange={(e) => setDelay(hours, e.target.value)}
 									className="w-56 rounded-sm border border-control-border-default bg-control-bg px-6 py-4 tr-text-ui"
 								/>
-								m
+								{t("chat.schedule.minutesUnit")}
 							</div>
 						</div>
 						<div className="flex gap-4">
@@ -550,7 +555,9 @@ export function ScheduledPrompts({
 									onClick={() => setDelay(String(Math.floor(delay / 60)), String(delay % 60))}
 									className="flex-1 rounded-sm border border-control-border-default px-6 py-4 text-text-default hover:bg-control-bg-hovered tr-text-ui"
 								>
-									{delay < 60 ? `${delay}m` : `${delay / 60}h`}
+									{delay < 60
+										? `${delay}${t("chat.schedule.minutesUnit")}`
+										: `${delay / 60}${t("chat.schedule.hoursUnit")}`}
 								</button>
 							))}
 						</div>

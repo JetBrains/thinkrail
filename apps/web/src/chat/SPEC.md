@@ -1780,7 +1780,8 @@ then a new opening defaults to four hours ahead, rounded up to a whole minute.
 Quick delays are 10 minutes, 1 hour, 12 hours and 24 hours. Scheduled rows live in a
 scrollable full-width composer slot. Remaining time refreshes every second: hours/minutes at one hour or more,
 minutes/seconds below one hour. It rounds up to the displayed unit so zero is never
-displayed before the due instant. Server delivery remains authoritative.
+displayed before the due instant. Duration units and failure labels use locale keys; raw server error
+messages are not shown in scheduled rows. Server delivery remains authoritative.
 
 Each scheduled row exposes a compact Send now action before edit/delete. It requests the
 server scheduler to deliver through the usual follow-up lane and disables repeated clicks

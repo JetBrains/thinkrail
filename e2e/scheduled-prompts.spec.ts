@@ -262,7 +262,9 @@ test("scheduling finalizes template slots and preserves a draft edited during th
 
 		await input.fill("a newer draft typed while the schedule request is pending");
 		releaseCreate();
-		await expect(page.getByRole("alert")).toContainText("simulated response loss");
+		await expect(page.getByRole("alert")).toHaveText(
+			"Could not complete this scheduled prompt action. Try again.",
+		);
 		await page.getByTestId("schedule-confirm").click();
 		await expect.poll(() => createIds.length).toBe(2);
 		expect(createIds[1]).toBe(createIds[0]);
