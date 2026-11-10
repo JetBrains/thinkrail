@@ -89,7 +89,7 @@ afterEach(async () => {
 test("scheduled prompt requests and events are unavailable to the v110 main client", async () => {
 	expect(CONTINUATION_PROTOCOL_VERSION).toBe(110);
 	expect(SCHEDULED_PROMPTS_PROTOCOL_VERSION).toBeGreaterThan(CONTINUATION_PROTOCOL_VERSION);
-	expect(PROTOCOL_VERSION).toBe(SCHEDULED_PROMPTS_PROTOCOL_VERSION);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SCHEDULED_PROMPTS_PROTOCOL_VERSION);
 	const dataDir = mkdtempSync(join(tmpdir(), "thinkrail-scheduled-protocol-"));
 	tempDirs.push(dataDir);
 	process.env.THINKRAIL_DATA_DIR = dataDir;

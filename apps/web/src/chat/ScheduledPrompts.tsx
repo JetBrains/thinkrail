@@ -31,7 +31,7 @@ export interface ScheduledPromptInput {
 	dueAt: number;
 	text: string;
 	images: ImageContent[];
-	modelSelection: PromptModelSelection;
+	modelSelection?: PromptModelSelection;
 }
 
 function sameDraft(a: ScheduledPromptDraftSnapshot, b: ScheduledPromptDraftSnapshot): boolean {
@@ -192,7 +192,7 @@ export function ScheduledPrompts({
 	const dueAt = makeTime(date, time, now);
 	const valid =
 		(!!prompt.trim() || scheduledImages.length > 0) &&
-		!!modelSelection &&
+		(!!modelSelection || editing !== null) &&
 		dueAt !== null &&
 		dueAt > now &&
 		/^\d+$/.test(hours) &&
@@ -222,7 +222,7 @@ export function ScheduledPrompts({
 		setOpen(true);
 	};
 	const save = async () => {
-		if (!valid || dueAt === null || !modelSelection || (!editing && !canSchedule)) return;
+		if (!valid || dueAt === null || (!editing && (!modelSelection || !canSchedule))) return;
 		setSaving(true);
 		setError("");
 		const snapshot = draftSnapshot.current;
@@ -233,7 +233,7 @@ export function ScheduledPrompts({
 			dueAt,
 			text: prompt.trim(),
 			images: scheduledImages,
-			modelSelection,
+			...(modelSelection ? { modelSelection } : {}),
 		};
 		const pending = editing ? onUpdate(scheduled) : onSchedule(scheduled);
 		await pending
@@ -254,12 +254,7 @@ export function ScheduledPrompts({
 	};
 	const edit = (item: ScheduledPromptRecord) => {
 		setEditing(item.id);
-		setModelSelection(
-			item.modelSelection ??
-				(currentModel
-					? { model: { provider: currentModel.provider, id: currentModel.id }, thinkingLevel }
-					: undefined),
-		);
+		setModelSelection(item.modelSelection);
 		setPrompt(item.text);
 		setScheduledImages(item.images ?? []);
 		setError("");

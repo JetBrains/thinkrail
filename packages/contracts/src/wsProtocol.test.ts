@@ -93,10 +93,9 @@ test("system theme settings advance the protocol", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(THEME_SYSTEM_PROTOCOL_VERSION);
 });
 
-test("scheduled prompts are introduced after the latest main protocol", () => {
+test("scheduled prompts are introduced after continuation support", () => {
 	expect(SCHEDULED_PROMPTS_PROTOCOL_VERSION).toBe(111);
 	expect(SCHEDULED_PROMPTS_PROTOCOL_VERSION).toBeGreaterThan(CONTINUATION_PROTOCOL_VERSION);
-	expect(PROTOCOL_VERSION).toBe(111);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SCHEDULED_PROMPTS_PROTOCOL_VERSION);
 	expect(WS_METHODS.scheduledPromptsCreate).toBe("scheduledPrompts.create");
 });

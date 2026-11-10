@@ -365,6 +365,91 @@ test("scheduling finalizes template slots and preserves a draft edited during th
 	}
 });
 
+test("accepted create retries do not reappear in the scheduled list", async ({ page }) => {
+	mkdirSync(evidenceDir, { recursive: true });
+	await page.routeWebSocket(/\/ws(\?|$)/, (browser) => {
+		const server = browser.connectToServer();
+		browser.onMessage((message) => {
+			const frame = JSON.parse(String(message)) as {
+				id?: string;
+				method?: string;
+				params?: Record<string, unknown>;
+			};
+			if (frame.method === "scheduledPrompts.create" && frame.id && frame.params) {
+				browser.send(
+					JSON.stringify({
+						id: frame.id,
+						ok: true,
+						result: {
+							...frame.params,
+							id: frame.params.requestId ?? frame.params.id,
+							createdAt: Date.now(),
+							status: "accepted",
+						},
+					}),
+				);
+				return;
+			}
+			server.send(message);
+		});
+		server.onMessage((message) => browser.send(message));
+	});
+
+	await openWorkspaceChat(page);
+	await page.getByTestId("chat-input").fill("already accepted prompt");
+	await page.getByTestId("schedule-open").click();
+	await page.getByTestId("schedule-confirm").click();
+	await expect(page.getByTestId("chat-input")).toHaveValue("");
+	await expect(page.getByText("already accepted prompt", { exact: true })).toHaveCount(0);
+	await page.screenshot({
+		path: join(evidenceDir, "schedule-accepted-retry-hidden.png"),
+		fullPage: true,
+	});
+});
+
+test("editing a legacy schedule keeps its session-default model", async ({ page }) => {
+	mkdirSync(evidenceDir, { recursive: true });
+	const workspace = await openWorkspaceChat(page);
+	const sessionId = await page
+		.locator('[data-testid="editor-tab"][data-kind="chat"][data-active="true"]')
+		.getAttribute("data-session-id");
+	if (!sessionId) throw new Error("Scheduled prompt test chat is missing its session id");
+	const id = crypto.randomUUID();
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+	try {
+		await wire.request("scheduledPrompts.create", {
+			id,
+			requestId: id,
+			workspaceId: workspace.id,
+			sessionId,
+			text: "legacy scheduled prompt",
+			dueAt: Math.ceil((Date.now() + 30 * 60_000) / 60_000) * 60_000,
+			createdAt: Date.now(),
+			status: "scheduled",
+		});
+		const row = page.getByText("legacy scheduled prompt", { exact: true }).locator("xpath=../..");
+		await expect(row).toBeVisible();
+		await row.getByRole("button", { name: "Edit" }).click();
+		await expect(page.getByTestId("schedule-confirm")).toBeEnabled();
+		await page.screenshot({
+			path: join(evidenceDir, "schedule-legacy-edit.png"),
+			fullPage: true,
+		});
+		await page.getByTestId("schedule-confirm").click();
+		const records = await wire.request("scheduledPrompts.list", { workspaceId: workspace.id });
+		const updated = records.find((record) => record.id === id);
+		expect(updated).toBeDefined();
+		expect(updated).not.toHaveProperty("modelSelection");
+		await page.screenshot({
+			path: join(evidenceDir, "schedule-legacy-edit-saved.png"),
+			fullPage: true,
+		});
+	} finally {
+		await wire.request("scheduledPrompts.cancel", { id, workspaceId: workspace.id });
+		wire.close();
+	}
+});
+
 test("schedule waits until an image attachment finishes decoding", async ({ page }) => {
 	await openWorkspaceChat(page);
 	const input = page.getByTestId("chat-input");

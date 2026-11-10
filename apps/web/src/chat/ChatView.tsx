@@ -1038,7 +1038,7 @@ export default function ChatView({
 					onSchedule={(scheduled) =>
 						getTransport()
 							.request("scheduledPrompts.create", {
-								modelSelection: scheduled.modelSelection,
+								...(scheduled.modelSelection ? { modelSelection: scheduled.modelSelection } : {}),
 								requestId: scheduled.id,
 								id: scheduled.id,
 								workspaceId,
@@ -1050,10 +1050,10 @@ export default function ChatView({
 								...(scheduled.images.length ? { images: scheduled.images } : {}),
 							})
 							.then((created) => {
-								setScheduledPrompts((records) => [
-									...records.filter((record) => record.id !== created.id),
-									created,
-								]);
+								setScheduledPrompts((records) => {
+									const remaining = records.filter((record) => record.id !== created.id);
+									return created.status === "accepted" ? remaining : [...remaining, created];
+								});
 								return created;
 							})
 					}
@@ -1065,7 +1065,7 @@ export default function ChatView({
 								dueAt: scheduled.dueAt,
 								text: scheduled.text,
 								images: scheduled.images,
-								modelSelection: scheduled.modelSelection,
+								...(scheduled.modelSelection ? { modelSelection: scheduled.modelSelection } : {}),
 							})
 							.then((updated) => {
 								setScheduledPrompts((records) =>
