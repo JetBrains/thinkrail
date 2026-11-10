@@ -17,42 +17,47 @@ The installed version comes only from the root dependency catalog, not a second 
 
 ## Last re-check
 
-Pi 1.5.0 (pi-schema cut-over, [upstream #11460](https://github.com/earendil-works/pi/issues/11460),
-[#11520](https://github.com/earendil-works/pi/issues/11520)) was checked against the installed dist.
-**One gate is met**: pi now undoes a failed `_appendEntry` in memory, so the usage-append leaf restore is
-removed (entry below). Every other adaptation stays, with this evidence:
+Pi 1.5.1 was checked against the installed dist (1.5.0 → 1.5.1; every private symbol re-grepped,
+`agent-session.js`, `sdk.js`, `settings-defaults.js`, the extension loader/runner, `mcp-servers.js`, the
+MCP extension, `package-manager.js`, `model-resolver.js` and pi-ai's providers diffed). **One gate is
+met**: pi now clears a delivered image-only queued message itself (#8612), so the host's
+`stuckEmptyDeliveries` override is gone (its entry below is deleted). **Two adaptations were added**: the
+cache-warming default and the shutdown wait for credential writes (both below). Everything else stays,
+with this evidence:
 
-- The Anthropic SSE framing defect is unchanged upstream: the unpatched 1.5.0 dist fails all three
-  "defects the patch fixes" cases. The patch body is identical; only its hunk offsets moved, and Bun
-  does not fuzz offsets, so the patch file was regenerated rather than renamed.
-- MCP loader/validator/writers remain private; the host port gains pi's `oauth.clientRegistration:
-  "auto"` and its new error wording, pinned by the loader parity fixture. `/mcp` status and sign-in
-  wording did not change; `openUrl` remains the sign-in URL seam. `AgentSession.dispose()` still emits no
-  shutdown; codemode is still unpackaged; raw `structuredContent` is still ephemeral.
+- The Anthropic SSE framing defect is unchanged upstream (`consumeLine` is byte-identical; #10390 still
+  open): the unpatched 1.5.1 dist fails all three "defects the patch fixes" cases. The message-threads
+  code moved the hunks by ~175 lines, so the patch was regenerated from a clean dist, not renamed.
+- MCP: pi moved the *entry* validator into `@earendil-works/pi-mcp` as public `validateMcpServerConfig`
+  (with `isMcpServerOverride`, `mcpNamespace`, `createMcpToolName`, `limitMcpContent`,
+  `normalizeMcpInputSchema`), but pi's own fields (`exposure`, `toolExposure`, `auth`), the file loader
+  and the writers remain private in `core/mcp-servers.js` / `extensions/mcp/config.js`; the loader parity
+  fixture passes unchanged. `/mcp` status and sign-in wording did not change; sign-in moved onto pi-mcp's
+  `startMcpSignIn` / `completeMcpSignIn` behind the same `openUrl` seam. `AgentSession.dispose()` still
+  emits no shutdown; `AgentSession.reload()` now throws while streaming or compacting, which the host's
+  reload gate already refuses earlier. Codemode is still unpackaged; raw `structuredContent` is still
+  ephemeral.
 - `_isActivatedOnRegistration`, the provider-registration queues with `extensionPath`,
-  `getAllRegisteredTools`, the `sk-ant-oat` predicate, `getPackageIdentity`, `isOfflineModeEnabled`,
-  `clearExtensionCache`, `defaultModelPerProvider` and `"pi-virtual"` are all still private and
-  unchanged in shape. `defaultModelPerProvider` moved `openai` to `gpt-6.1-sol`; the mirror follows.
-  Pi's `_applyToolLoadout` now keeps the order of surviving tools (#11495); the host already composes
-  `[...kept, ...new]`, so reconciles rebuild the prompt less often.
-- `pi.exec()` gained `maxBuffer`/`truncated`; `Usage.cost.totalFromProvider` marks billed totals; the
-  extension view that pi maps `@earendil-works/pi-ai` to for extensions re-adds TypeBox's `Type`. The
-  host relies on pi's own virtual-module map, so bundled artifacts need no change. pi-ai's root no longer
-  exports TypeBox; ThinkRail extensions import `typebox` directly and build string enums themselves.
-- `DefaultPackageManager.resolve()` no longer throws when a declared package fails to install: it skips
-  the package and reports `installFailures`, which the loader turns into startup warnings. The host's
-  catalog still resolves with `onMissing → skip` and installs through `install()`, which still throws. A
-  `pi` manifest that lists no resource type now counts as metadata-only and auto-discovers.
-- Queue removal, `clearQueue()`, compaction cut-point and summary budgeting, the headless theme, trust
-  discovery, session/prompt-template discovery and the faux-provider-based usage mirror are unchanged;
-  the faux provider now reports cached prompt tokens as cache writes rather than input, which only moved
-  test assertions.
-- The bundled chat catalogue changes from 1,599 to 1,592 provider/model pairs: 57 removed (realtime and
-  image-only models, older OpenRouter and Vercel OpenAI aliases such as `openrouter/openai/o3-mini`,
-  `radius/gpt-5.3-codex`) and 50 added (GPT-6.1 Terra across OpenAI, Codex, Azure, Bedrock, Copilot,
-  OpenRouter and Vercel; `openai/gpt-5.6-cyber`). The default `openai` model is now `gpt-6.1-sol`, also
-  after ChatGPT sign-in. Release notes must say both and advise users to check their default and
-  restored-chat model; unavailable models follow the existing selection rules in
+  `getAllRegisteredTools`, the `sk-ant-oat` predicate, `getPackageIdentity`, `clearExtensionCache`,
+  `defaultModelPerProvider`, `"pi-virtual"`, `formatSkillsForPrompt`, `findCutPoint` / `generateSummary`
+  and the single-`appendFileSync` session append are all still private and unchanged in shape.
+  `isOfflineModeEnabled` is now exported from `core/package-manager.js` but not from the package root, so
+  the port stays. `defaultModelPerProvider` moved 17 providers (Anthropic/Bedrock → Claude Opus 5.5,
+  Azure → GPT-6.1 Sol, Google/Vertex → Gemini 4 Argon, …) and added `qwen-token-plan-individual-cn`; the
+  mirror follows. The Jiti loader now imports extensions by `realpath`; the bundled seams are unaffected,
+  only `check:seams`' allowlist text changed with pi's rewritten opaque imports.
+- `PackageManager` progress gains a `result` event the host does not consume; `GrepOperations.readFile`
+  is deprecated and `ReadOperations.createReadStream` added — the host has no custom operations.
+  OpenAI-compatible requests omit `tools: []` (vLLM/LiteLLM 400s); `compat.requiresToolsWithToolHistory`
+  is the opt-back-in for old LiteLLM→Anthropic proxies. Anthropic message threads are on by default for
+  `anthropic` on api.anthropic.com, keyed by pi's session id and cleaned in `dispose()`; host `context` /
+  `before_agent_start` handlers only cause pi's full-request fallback.
+- The bundled chat catalogue changes from 1,592 to 1,639 provider/model pairs: 66 added (Claude Fable 5.2
+  on Anthropic, Bedrock, OpenRouter, Vercel and OpenCode; Kimi K3.1 Pro; Gemini 4 Argon, GPT-6.1 Terra and
+  Mistral Large 4 on Radius; the `qwen-token-plan-individual-cn` provider) and 19 removed (older
+  OpenRouter MiniMax/Mercury/Llama aliases, Fireworks `gpt-oss-120b`, Vercel Gemini batch aliases). The
+  default `anthropic` model is now `claude-opus-5-5`. Release notes must say both and advise users to
+  check their default and restored-chat model; unavailable models follow the existing selection rules in
   [[submodule-server-agent]], and the host still does not surface Pi's `modelFallbackMessage`.
 
 ## Upgrade contract
@@ -72,10 +77,13 @@ private dist path in production is not a replacement; such imports remain confin
 ### Configuration loader and writers
 
 **Owner:** [[submodule-server-agent-mcp]], `agent/mcp/config.ts` and `writers.ts`.
-Pi's public `loadConfig` hook replaces its loader wholesale; its loader, validator and writers are
-not public exports. The host ports their file semantics to apply project policy and perform safe
-multi-client writes. **Removal gate:** a public loader/validator/writer surface preserving entry
-provenance and allowing admission before project overrides merge. Verify the port against the
+Pi's public `loadConfig` hook replaces its loader wholesale; its loader and writers are not public
+exports, and since pi 1.5.1 only the shared *entry* validator is (`@earendil-works/pi-mcp`'s
+`validateMcpServerConfig`, which leaves pi's `exposure` / `toolExposure` / `auth` checks private). The
+host ports their file semantics to apply project policy and perform safe multi-client writes.
+**Removal gate:** a public loader/validator/writer surface preserving entry provenance and allowing
+admission before project overrides merge; adopting pi-mcp's partial validator alone would add a direct
+dependency for half the rules and is deferred until the loader follows. Verify the port against the
 installed `core/mcp-servers` and `extensions/mcp/config`; run `agent/mcp/config.test.ts` and
 `host/mcp.test.ts`. The parity fixture lists one entry per validation rule pi has, so a new config
 field (pi 1.5 added `oauth.clientRegistration: "auto"`) shows up as a parity failure before it reaches
@@ -228,11 +236,6 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   queues still carry `extensionPath` and are filled before `extensionsOverride` runs; run the provider-owner
   regressions in `agent/extensions.test.ts`, `agent/delegation.test.ts` and `pi-delegation`'s
   `service.test.ts` on every upgrade.
-- **Image-only queued input** — [[submodule-server-agent]], queue projection. The host compensates for
-  pi's text-only delivered-message removal ([upstream #8612](https://github.com/earendil-works/pi/issues/8612))
-  and retains image content lost by the destructive queue API. Remove the corresponding workaround
-  when the installed implementation handles that case natively; verify the queue/image regressions,
-  not just the issue state.
 - **Bundled extension loading and image handling** — [[submodule-server-agent]], [[module-cli]],
   [[module-desktop]]. Forced Jiti transformation, virtual-module identity, static provider registration,
   and the image-resize override bridge resources a single-file artifact cannot discover or load.
@@ -318,6 +321,14 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   On upgrades re-check that `sdk.js` still obtains the mode through `settingsManager.getCacheWarmingMode()`
   and that `CacheWarmer` consults it at every decision; run `cacheWarming.test.ts` (it asserts pi's own
   default is `idle` so a change upstream shows up) and the manager's cache-warming tests.
+
+- **Credential writes at host exit** — [[submodule-server-agent]], `settleCredentialWritesForShutdown`.
+  Pi 1.5.1 waits for an in-flight OAuth refresh in `AgentSessionRuntime.dispose()` (#11692: the refresh
+  spends its single-use token before the rotated one is saved); the host does not use that runtime, so its
+  graceful shutdown calls the public `ModelRuntime.settleCredentialWrites()` itself, on the active
+  generation and on every runtime a live chat still holds. Not a workaround but a pi fact the host must
+  mirror: re-check on upgrades that credential writes are still tracked per `ModelRuntime` (a process-wide
+  settle would let the host call it once) and run the manager's shutdown-settle test.
 
 ## Context-budget limitations
 

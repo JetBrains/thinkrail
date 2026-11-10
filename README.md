@@ -65,7 +65,7 @@ For latest version, see the [Releases page](https://github.com/JetBrains/thinkra
 
 - **Your providers, your credentials.** Sign in with [JetBrains AI](https://www.jetbrains.com/ai/) or connect any provider through `pi`'s own auth. ThinkRail has no accounts of its own.
 
-- **Your `pi` setup.** ThinkRail reads your existing `pi` configuration (`~/.pi/agent`). To use another one (for example, a personal `~/.pi/agent-personal`), or to pass extra environment variables to the agent, terminals and MCP servers, set them in Settings → Environment. The configuration becomes active on the next start.
+- **Your `pi` setup.** ThinkRail reads your existing `pi` configuration (`~/.pi/agent`). To use another one (for example, a personal `~/.pi/agent-personal`), or to pass extra environment variables to the agent, terminals and MCP servers, set them in Settings → Environment. The configuration becomes active on the next start. Settings → Models also holds `pi`'s prompt-cache warming (off, only while a run is active, or also between runs); ThinkRail keeps it to active runs unless you choose otherwise, so idle chats don't spend in the background.
 
 - **Your own model servers.** Go to Settings → Providers → Custom servers and connect a company LLM gateway or a model running on your own machine. Any OpenAI-compatible server fits: LiteLLM, sglang, vLLM, Ollama, LM Studio, or llama.cpp.
 
