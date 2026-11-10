@@ -39,7 +39,8 @@ the injected `PaletteStart`).
 A leading prefix selects a scope and its chip, and a chip writes the prefix back: `@` work (projects,
 workspaces, chats, transcripts, plans), `>` commands and settings, `/` files, `#` specs — the last two
 exist only when the last welcome's host serves `search.query` (`selectHostSearchAvailable`) and a
-context project gives them a root; otherwise a prefix whose scope is not offered searches the rest of the query in All (an older host
+context project gives them a root — `#` only a repository's (a chat without a project has files but no
+specs, so its palette offers no Specs scope); otherwise a prefix whose scope is not offered searches the rest of the query in All (an older host
 also shows a notice), so a doubled prefix (`##`, `//src`) never lands in an empty scope. `#<digits>` is a
 pull-request number, never the specs scope — it matches the `#N` keyword of the workspace that carries
 that review. Quoted text is one contiguous literal term — never matched as an acronym or a subsequence —

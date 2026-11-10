@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DefaultPackageManager, SettingsManager } from "@earendil-works/pi-coding-agent";
+import { SPEC_SECTION } from "pi-spec-graph";
 import { type HostSessionServices, registryInlineExtensions, workspaceFiles } from "../extensions";
 import {
 	buildResourceLoader,
@@ -21,6 +22,8 @@ import {
 	setDisabledPackagesResolver,
 	setExtensionSettingsResolver,
 	setInstalledPackagesListener,
+	setSpecsEnabledResolver,
+	withoutSpecRule,
 } from "./extensions";
 import { headlessSearchPolicy } from "./headlessSearch";
 import { oversizedImageGuard } from "./imageGuard";
@@ -728,7 +731,7 @@ describe("registry extensions", () => {
 	});
 
 	it("keeps the curated child set and appends registry children", () => {
-		const children = childExtensionFactories();
+		const children = childExtensionFactories("w1");
 		expect(children).toHaveLength(3 + registryInlineExtensions("childExtensions").length);
 		expect(children[0]).toBe(headlessSearchPolicy);
 		expect(typeof children[1]).toBe("function");
@@ -871,11 +874,42 @@ describe("registry extensions", () => {
 		}
 	});
 
+	it("a workspace without specs gets no spec-graph child and no spec rule, the rest unchanged", async () => {
+		setSpecsEnabledResolver((workspaceId) => workspaceId !== "chat-1");
+		try {
+			const withSpecs = childExtensionFactories("w1");
+			const withoutSpecs = childExtensionFactories("chat-1");
+			const specGraph = withSpecs[1];
+			if (!specGraph) throw new Error("the spec-graph child is missing");
+			expect(withoutSpecs).toHaveLength(withSpecs.length - 1);
+			expect(withoutSpecs[0]).toBe(headlessSearchPolicy);
+			expect(childExtensionFactories("w1")).toContain(specGraph);
+			expect(withoutSpecs).not.toContain(specGraph);
+			const sections = (workspaceId: string) => {
+				const handlers: ((event: unknown) => void)[] = [];
+				const pi = {
+					on: (_name: string, handler: (event: unknown) => void) => handlers.push(handler),
+				};
+				const factory = withoutSpecRule(workspaceId);
+				if (typeof factory !== "function") throw new Error("an inline factory expected");
+				void factory(pi as never);
+				const sections: Record<string, string> = { [SPEC_SECTION]: "rule", other: "kept" };
+				const event = { systemPromptOptions: { sections } };
+				for (const handler of handlers) handler(event);
+				return event.systemPromptOptions.sections;
+			};
+			expect(sections("w1")).toEqual({ [SPEC_SECTION]: "rule", other: "kept" });
+			expect(sections("chat-1")).toEqual({ other: "kept" });
+		} finally {
+			setSpecsEnabledResolver(() => true);
+		}
+	});
+
 	it("guards every child's images and compacted skills from the tool-free base set, and offers the skill catalog only to opted-in children", () => {
 		expect(childBaseExtensionFactories()).toEqual([oversizedImageGuard, skillCarryover]);
-		expect(childExtensionFactories()).not.toContain(oversizedImageGuard);
-		expect(childExtensionFactories()).not.toContain(skillCarryover);
-		expect(childExtensionFactories()).toContain(skillCatalog);
+		expect(childExtensionFactories("w1")).not.toContain(oversizedImageGuard);
+		expect(childExtensionFactories("w1")).not.toContain(skillCarryover);
+		expect(childExtensionFactories("w1")).toContain(skillCatalog);
 	});
 });
 

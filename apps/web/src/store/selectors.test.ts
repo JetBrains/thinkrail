@@ -19,6 +19,7 @@ import {
 	isUserOwnedWorkspace,
 	matchesWorktreePath,
 	selectActiveEditorTab,
+	selectActiveRepoWorkspaceId,
 	selectActiveWorkspace,
 	selectActiveWorkspaceProjectId,
 	selectAgentReviewCommentCount,
@@ -30,8 +31,10 @@ import {
 	selectChatAttended,
 	selectChatFirstPrompt,
 	selectChatTitle,
+	selectChatWorkspaceFirstPrompt,
 	selectCompletionMarkedUnread,
 	selectContextProject,
+	selectContextRepoProject,
 	selectFileChangeSince,
 	selectHistoryTarget,
 	selectHostReachable,
@@ -559,6 +562,15 @@ test("active workspace selectors resolve the workspace and its owning project", 
 	expect(selectActiveWorkspaceProjectId(state)).toBe("p2");
 });
 
+test("a chat without a project is no repository workspace to scope to", () => {
+	expect(selectActiveRepoWorkspaceId({ activeWorkspaceId: "w2", workspaces })).toBe("w2");
+	const chats = { c: [{ ...workspace, id: "chat-1", projectId: "c", kind: "chat" as const }] };
+	expect(
+		selectActiveRepoWorkspaceId({ activeWorkspaceId: "chat-1", workspaces: chats }),
+	).toBeUndefined();
+	expect(selectActiveRepoWorkspaceId({ activeWorkspaceId: null, workspaces })).toBeUndefined();
+});
+
 test("active workspace selectors return null when the workspace is absent", () => {
 	const state = { activeWorkspaceId: "missing", workspaces };
 
@@ -575,6 +587,21 @@ test("context project prefers the active workspace owner", () => {
 			workspaces,
 		}),
 	).toBe(projectTwo);
+});
+
+test("new work goes to the context repository, never the Chats container", () => {
+	const chats: Project = { ...projectOne, id: "c", name: "Chats", kind: "chats" };
+	const chat: Workspace = { ...workspace, id: "chat-1", projectId: "c", kind: "chat" };
+	const state = (selectedProjectId: string | null) => ({
+		activeWorkspaceId: "chat-1",
+		selectedProjectId,
+		projects: [chats, projectOne, projectTwo],
+		workspaces: { c: [chat], p1: [], p2: [workspace] },
+	});
+	expect(selectContextRepoProject(state("p2"))).toBe(projectTwo);
+	expect(selectContextRepoProject(state("c"))).toBe(projectOne);
+	expect(selectContextRepoProject({ ...state(null), activeWorkspaceId: "w2" })).toBe(projectTwo);
+	expect(selectContextRepoProject({ ...state(null), projects: [chats] })).toBeNull();
 });
 
 test("context project falls back to the selected Project Home", () => {
@@ -971,6 +998,21 @@ describe("the first prompt of an unnamed chat", () => {
 		expect(selectChatFirstPrompt(state, "w1", "s5")).toBe("A later real prompt");
 		expect(selectChatFirstPrompt(state, "w1", "s6")).toBe("Pushed after a peer created it");
 		expect(selectChatFirstPrompt(state, "w1", "unknown")).toBeUndefined();
+	});
+
+	test("a chat workspace reads its conversation's first prompt", () => {
+		const state = {
+			sessions: {},
+			sessionStateByWorkspace: { chat1: { s1: { ...record("s1"), workspaceId: "chat1" } } },
+			closedChatsByWorkspace: {},
+		};
+		expect(selectChatWorkspaceFirstPrompt(state, "chat1")).toBeUndefined();
+		state.sessionStateByWorkspace.chat1.s1 = {
+			...record("s1", "Plan the trip"),
+			workspaceId: "chat1",
+		};
+		expect(selectChatWorkspaceFirstPrompt(state, "chat1")).toBe("Plan the trip");
+		expect(selectChatWorkspaceFirstPrompt(state, "missing")).toBeUndefined();
 	});
 
 	test("titles and tab labels fall back to the prompt only while the chat has no name", () => {

@@ -105,7 +105,10 @@ import {
 	loadsDisabledExtensionSkills,
 	packagePolicyKey,
 	providerExtensionPaths,
+	SPEC_TOOL_PREFIX,
+	specsEnabledFor,
 	toSkillCommands,
+	withoutSpecRule,
 } from "./extensions";
 import {
 	createMcpSessionHost,
@@ -211,6 +214,7 @@ let sessionLifecycleGeneration = 0;
 const workspaceLifecycleGenerations = new Map<string, number>();
 const closingWorkspaces = new Map<string, number>();
 const pendingSessionPreparations = new Map<string, Set<Promise<unknown>>>();
+const preparingEntries = new Map<string, Entry>();
 const sessionTeardowns = new Map<string, Promise<void>>();
 const tearingDownEntries = new Map<string, Entry>();
 
@@ -356,8 +360,11 @@ function sessionCanAttach(sessionId: string, workspaceId: string): boolean {
 
 export type { SessionEventPayload };
 
-let publish: (payload: SessionEventPayload) => void = () => {};
-export function setSessionPublisher(fn: (payload: SessionEventPayload) => void): void {
+type SessionEventPublisher = (payload: SessionEventPayload, workspaceId: string) => void;
+
+let publish: SessionEventPublisher = () => {};
+/** Every event carries its workspace, so a detached session's publication can be scoped as well as a live one's. */
+export function setSessionPublisher(fn: SessionEventPublisher): void {
 	publish = fn;
 }
 
@@ -784,6 +791,13 @@ export function refreshAgentReviewTool(workspaceId?: string): void {
 	}
 }
 
+function applySpecTools(entry: Entry): void {
+	if (specsEnabledFor(entry.workspaceId)) return;
+	const active = entry.session.getActiveToolNames();
+	const kept = active.filter((name) => !name.startsWith(SPEC_TOOL_PREFIX));
+	if (kept.length !== active.length) entry.session.setActiveToolsByName(kept);
+}
+
 function applyExtensionTools(entry: Entry, { allowReload = true } = {}): void {
 	entry.extensionToolsRefreshPending = false;
 	const { session } = entry;
@@ -927,6 +941,10 @@ export function getSessionWorkspaceId(sessionId: string): string | undefined {
 	return sessions.get(sessionId)?.workspaceId;
 }
 
+export function getSessionAttribution(sessionId: string): string | undefined {
+	return sessions.get(sessionId)?.workspaceId ?? preparingEntries.get(sessionId)?.workspaceId;
+}
+
 export function getSessionRuntimeGeneration(sessionId: string): PiRuntimeGeneration | undefined {
 	return hasSession(sessionId) ? sessions.get(sessionId)?.generation : undefined;
 }
@@ -1034,6 +1052,7 @@ function runGatedReload(entry: Entry): Promise<void> {
 				entry.reloadRunning = null;
 				applySubagentTools(entry);
 				applyReviewTool(entry);
+				applySpecTools(entry);
 				applyExtensionTools(entry, {
 					allowReload: entry.reloadPolicyGeneration !== extensionPolicy.generation,
 				});
@@ -1242,6 +1261,7 @@ async function prepareSessionEntry(
 		commands,
 		() => entry.resourcesClosing,
 	);
+	preparingEntries.set(sessionId, entry);
 	entry.unsubscribeCommands = commands.onChange(() => {
 		if (canUseSessionResources(sessionId, workspaceId))
 			publishSessionResourcesChanged(workspaceId, sessionId);
@@ -1259,7 +1279,7 @@ async function prepareSessionEntry(
 				entry.stuckEmptyDeliveries[lane]++;
 				synchronizeQueueFromSession(entry);
 				if (sessions.get(sessionId) === entry) {
-					publish({ sessionId, event: queueUpdateEventOf(entry) });
+					publish({ sessionId, event: queueUpdateEventOf(entry) }, workspaceId);
 					publishEntryState(entry);
 				}
 			}
@@ -1317,7 +1337,7 @@ async function prepareSessionEntry(
 			void reconcileMcpSessions([sessionId]);
 		}
 		if (sessions.get(sessionId) === entry) {
-			publish({ sessionId, event: projected });
+			publish({ sessionId, event: projected }, workspaceId);
 			publishEntryState(entry);
 		}
 		if (event.type === "agent_settled") terminal = null;
@@ -1372,6 +1392,7 @@ function soleRunningToolCall(session: AgentSession): string | undefined {
 
 function abandonPreparedEntry(entry: Entry): void {
 	const { sessionId } = entry.session;
+	if (preparingEntries.get(sessionId) === entry) preparingEntries.delete(sessionId);
 	cancelExtUiForSession(sessionId);
 	forgetMcpStatus(sessionId);
 	entry.toolResponseWaiters.abandon();
@@ -1412,8 +1433,11 @@ async function registerSession(
 	}
 	prepared.entry.registered = true;
 	sessions.set(session.sessionId, prepared.entry);
+	if (preparingEntries.get(session.sessionId) === prepared.entry)
+		preparingEntries.delete(session.sessionId);
 	applySubagentTools(prepared.entry);
 	applyReviewTool(prepared.entry);
+	applySpecTools(prepared.entry);
 	activateRegistryTools(prepared.entry);
 	applyExtensionTools(prepared.entry);
 	restartMcpStatus(session.sessionId);
@@ -1552,6 +1576,7 @@ async function createParentSessionInternal(
 					createBackgroundCommandsExtension({ service: commands }),
 					...mcpHost.extensions,
 					extraUsageModelSelectExtension(sessionId),
+					withoutSpecRule(workspaceId),
 				],
 				{ ...toolResponseSessionServices(toolResponseWaiters), workspaceFiles },
 			),
@@ -2020,7 +2045,7 @@ export function renameSession(
 		const current = manager.getSessionName();
 		if ((options.onlyIfUnnamed && current !== undefined) || current === normalized) return false;
 		manager.appendSessionInfo(normalized);
-		publish({ sessionId, event: { type: "session_info_changed", name: normalized } });
+		publish({ sessionId, event: { type: "session_info_changed", name: normalized } }, workspaceId);
 		const projectId = resolveProjectId(workspaceId);
 		if (projectId)
 			publishState(diskStateRecord(sessionId, { id: workspaceId, projectId }, manager));
@@ -2694,7 +2719,10 @@ export function recordSessionUsage(
 		return false;
 	}
 	try {
-		publish({ sessionId, event: { type: "entry_appended", entryType: "usage" } });
+		publish(
+			{ sessionId, event: { type: "entry_appended", entryType: "usage" } },
+			entry.workspaceId,
+		);
 	} catch (error) {
 		log.warn(`usage invalidation was not published for ${sessionId}`, error);
 	}
@@ -3061,7 +3089,14 @@ export async function settleSessionsForShutdown(
 	}
 }
 
-async function removeWorkspaceSessionsInternal(workspaceId: string, cwd?: string): Promise<void> {
+/**
+ * Closes the workspace's session admission, drains in-flight preparations, stops and disposes its live
+ * sessions and awaits their child cascades, then runs `teardown` before admission reopens.
+ */
+export async function closeWorkspaceSessions<T>(
+	workspaceId: string,
+	teardown: () => Promise<T>,
+): Promise<T> {
 	workspaceLifecycleGenerations.set(
 		workspaceId,
 		(workspaceLifecycleGenerations.get(workspaceId) ?? 0) + 1,
@@ -3079,9 +3114,7 @@ async function removeWorkspaceSessionsInternal(workspaceId: string, cwd?: string
 			Promise.all(removals),
 		]);
 		await Promise.all([...(pendingCascades.get(workspaceId) ?? [])]);
-		removeWorkspaceDelegation(workspaceId);
-		removeWorkspaceResourceHistory(workspaceId);
-		if (cwd) await purgeDiskSessions(cwd);
+		return await teardown();
 	} finally {
 		const remainingClosures = (closingWorkspaces.get(workspaceId) ?? 1) - 1;
 		if (remainingClosures === 0) closingWorkspaces.delete(workspaceId);
@@ -3090,7 +3123,11 @@ async function removeWorkspaceSessionsInternal(workspaceId: string, cwd?: string
 }
 
 export function removeWorkspaceSessions(workspaceId: string, cwd?: string): Promise<void> {
-	return removeWorkspaceSessionsInternal(workspaceId, cwd);
+	return closeWorkspaceSessions(workspaceId, async () => {
+		removeWorkspaceDelegation(workspaceId);
+		removeWorkspaceResourceHistory(workspaceId);
+		if (cwd) await purgeDiskSessions(cwd);
+	});
 }
 
 async function purgeDiskSessions(cwd: string): Promise<void> {

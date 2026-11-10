@@ -1,4 +1,22 @@
 export {
+	assertNotChatsContainer,
+	assertNotChatWorkspace,
+	chatsRoot,
+	chatWorkspaces,
+	createChatRecord,
+	dropChatRecord,
+	ensureChatsContainer,
+	getChatWorkspace,
+	isChatsContainer,
+	isChatsContainerId,
+	isChatWorkspace,
+	isChatWorkspaceId,
+	isUnderChatsRoot,
+	markChatDeletionPending,
+	resetChatIdCache,
+	setChatPublishers,
+} from "./chats";
+export {
 	creationOwnsPath,
 	setWorkspaceCreationPublisher,
 	type WorkspaceCreationEvent,

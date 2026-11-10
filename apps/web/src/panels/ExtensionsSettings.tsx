@@ -10,7 +10,7 @@ import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
 import { useEffect, useState } from "react";
-import { selectActiveWorkspace, toast, useAppStore } from "@/store";
+import { selectActiveRepoWorkspaceId, toast, useAppStore } from "@/store";
 import { getTransport, supportsExtensionSettings, supportsPiPackages } from "@/transport";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { InstallPackageDialog } from "./InstallPackageDialog";
@@ -174,7 +174,7 @@ export function ExtensionsSettings() {
 	const otherAgentSkills = useAppStore((state) => state.otherAgentSkills);
 	const packagesVersion = useAppStore((state) => state.packagesVersion);
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
-	const workspaceId = useAppStore((state) => selectActiveWorkspace(state)?.id);
+	const workspaceId = useAppStore(selectActiveRepoWorkspaceId);
 	const packagesSupported = supportsPiPackages(protocolVersion);
 	const settingsSupported = supportsExtensionSettings(protocolVersion);
 	const [entries, setEntries] = useState<ExtensionCatalogEntry[] | "loading" | "failed">("loading");
