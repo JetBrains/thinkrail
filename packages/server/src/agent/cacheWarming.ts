@@ -7,8 +7,8 @@ import {
 import { CodedError } from "@thinkrail/shared/codedError";
 import { createPiSettings } from "./packages";
 
-/** Pi 1.5.1 defaults to `idle`; ThinkRail keeps pi 1.5.0's behavior until the user opts in. */
-export const THINKRAIL_DEFAULT_CACHE_WARMING: CacheWarmingMode = "streaming";
+/** Pi defaults to `idle` since 1.5.1; idle warming spends in the background, so it stays opt-in here. */
+const THINKRAIL_DEFAULT_CACHE_WARMING: CacheWarmingMode = "streaming";
 
 function userCacheWarmingMode(settings: SettingsManager): CacheWarmingMode | undefined {
 	const mode: unknown = settings.getGlobalSettings().cacheWarming;
