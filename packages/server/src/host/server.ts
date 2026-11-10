@@ -12,6 +12,7 @@ import type {
 	WsChannel,
 } from "@thinkrail/contracts";
 import {
+	CONTINUATION_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
 	GITHUB_STAR_PROTOCOL_VERSION,
@@ -52,6 +53,7 @@ import {
 	refreshSubagentConcurrency,
 	refreshSubagentTools,
 	setAgentReviewEnabledResolver,
+	setContinueToolHost,
 	setDisabledExtensionsResolver,
 	setDisabledPackagesResolver,
 	setExtensionSettingsResolver,
@@ -172,6 +174,7 @@ import {
 	type WorkspaceLifecycleEvent,
 } from "../workspaces";
 import { seesChats } from "./chats";
+import { continueToolHost, observeContinuation, setContinuationPublisher } from "./continuations";
 import { BLOB_PREFIX, FILES_PREFIX, serveBlob, serveWorktreeFile } from "./fileRoutes";
 import { serveUserFonts } from "./fontRoutes";
 import { setFsNudgePublisher } from "./fsNudge";
@@ -467,6 +470,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					ws.subscribe(WS_CHANNELS.workspaceCreationChanged);
 					ws.subscribe(WS_CHANNELS.workspaceCreationRemoved);
 				}
+				if (ws.data.protocolVersion >= CONTINUATION_PROTOCOL_VERSION)
+					ws.subscribe(WS_CHANNELS.chatContinuation);
 				ws.subscribe(WS_CHANNELS.settingsChanged);
 				if (hostUpdate) ws.subscribe(WS_CHANNELS.hostUpdateAvailable);
 				ws.subscribe(WS_CHANNELS.reviewChanged);
@@ -805,18 +810,20 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const publishScoped = (
 		channel: string,
 		data: unknown,
-		scope: { workspaceId?: string; projectId?: string },
+		scope: { workspaceId?: string; projectId?: string; belowProtocol?: number },
 	) => {
 		const frame = JSON.stringify({ channel, data });
 		const aboutChats =
 			(scope.workspaceId !== undefined && isChatWorkspaceId(scope.workspaceId)) ||
 			(scope.projectId !== undefined && isChatsContainerId(scope.projectId));
-		if (!aboutChats) {
+		const floor = scope.belowProtocol ?? 0;
+		if (floor === 0 && !aboutChats) {
 			server.publish(channel, frame);
 			return;
 		}
 		for (const socket of sockets.values()) {
-			if (!seesChats(socket.data.protocolVersion)) continue;
+			if (socket.data.protocolVersion < floor) continue;
+			if (aboutChats && !seesChats(socket.data.protocolVersion)) continue;
 			try {
 				socket.send(frame);
 			} catch {}
@@ -960,6 +967,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 	installRequestReviewSeam();
 	setTitleToolHost(titleToolHost);
+	setContinueToolHost(continueToolHost);
+	setContinuationPublisher((continuation) =>
+		publishScoped(WS_CHANNELS.chatContinuation, continuation, {
+			workspaceId: continuation.sourceWorkspaceId,
+			belowProtocol: CONTINUATION_PROTOCOL_VERSION,
+		}),
+	);
 	reconcilePendingReviewsOnBoot();
 
 	setSettingsPublisher((config, appliedUpdate) => {
@@ -1042,6 +1056,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 	setSessionPublisher((payload, workspaceId) => {
 		runObservation.observe(payload.sessionId, payload.event);
+		observeContinuation(payload.sessionId, payload.event);
 		void turnTracker.observe(payload.sessionId, payload.event);
 		if (payload.event.type === "tool_execution_start") {
 			taskObservation.toolStarted(workspaceId, payload.sessionId, payload.event);

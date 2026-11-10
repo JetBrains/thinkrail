@@ -1,7 +1,7 @@
 import type { Workspace } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { createLatestOperation } from "../panels/latestOperation";
-import { selectWorkspaceById, toast, useAppStore } from "../store";
+import { isNavigationChange, selectWorkspaceById, toast, useAppStore } from "../store";
 import { errorText } from "../transport";
 
 type WorkspaceTarget = Pick<Workspace, "id" | "projectId">;
@@ -23,13 +23,7 @@ export function createPaletteNavigator(
 		const isLatest = picks.begin();
 		let overtaken = false;
 		const unsubscribe = useAppStore.subscribe((state, previous) => {
-			if (
-				state.activeWorkspaceId === previous.activeWorkspaceId &&
-				state.selectedProjectId === previous.selectedProjectId &&
-				state.navTickByWorkspace === previous.navTickByWorkspace
-			) {
-				return;
-			}
+			if (!isNavigationChange(state, previous)) return;
 			overtaken = true;
 			unsubscribe();
 		});

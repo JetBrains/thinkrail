@@ -303,6 +303,47 @@ test("a todo-review-fix custom message hydrates as its own reviewFix turn", () =
 	expect(turnIdByMessageIndex[1]).toBe(turns[1]?.id ?? null);
 });
 
+test("a continuation request and a handoff hydrate as their own cards, each with its details", () => {
+	const request = { operationId: "op1", projectId: "p1", projectName: "repo" };
+	const handoff = {
+		operationId: "op1",
+		sourceWorkspaceId: "chat-1",
+		sourceSessionId: "s-chat",
+		summary: "The brief.",
+	};
+	const { turns, turnIdByMessageIndex } = messagesToRuntime([
+		{ role: "user", content: "go", timestamp: 1 },
+		{
+			role: "custom",
+			customType: "continue-in-workspace-request",
+			content: "Write the summary.",
+			display: true,
+			details: request,
+			timestamp: 2,
+		},
+		{
+			role: "custom",
+			customType: "chat-handoff",
+			content: "<handoff>",
+			display: true,
+			details: handoff,
+			timestamp: 3,
+		},
+		{
+			role: "custom",
+			customType: "chat-handoff",
+			content: "malformed",
+			display: true,
+			details: { operationId: "op2" },
+			timestamp: 4,
+		},
+	] as unknown as Message[]);
+	expect(turns.map((turn) => turn.kind)).toEqual(["user", "continuationRequest", "handoff"]);
+	expect(turns[1]?.kind === "continuationRequest" && turns[1].details).toEqual(request);
+	expect(turns[2]?.kind === "handoff" && turns[2].details).toEqual(handoff);
+	expect(turnIdByMessageIndex[2]).toBe(turns[2]?.id ?? null);
+});
+
 test("a failed tool result maps to error status", () => {
 	const { toolResults } = messagesToRuntime([
 		{

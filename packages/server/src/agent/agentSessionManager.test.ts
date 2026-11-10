@@ -53,6 +53,7 @@ import {
 	getSessionStats,
 	hasSession,
 	initializeSessionStates,
+	isHostMessagePending,
 	listAvailableModels,
 	listSessionStates,
 	listSessions,
@@ -72,6 +73,7 @@ import {
 	renameSession,
 	requestSessionReload,
 	respondToTool,
+	sendHostMessageToSession,
 	setAgentReviewEnabledResolver,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
@@ -2753,6 +2755,67 @@ test("removing a queued message while a question is live re-queues the rest with
 		expect(transcript).toContain("FOLLOW_UP_TWO");
 	} finally {
 		await prompting.catch(() => {});
+		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
+	}
+});
+
+test("a queued host message survives an edit of the user's queue in its place and reaches the agent; Stop drops it and tells its sender", async () => {
+	const cwd = tmpCwd("trpi-host-message-queue-");
+	const workspaceId = "ws-host-message-queue";
+	const session = await createSession({ cwd, workspaceId, model: toWireModel(fauxA.getModel()) });
+	const kept = { marker: "kept" };
+	const stopped = { marker: "stopped" };
+	const dropped: string[] = [];
+	const release = Promise.withResolvers<void>();
+	let pendingAfterEdit = false;
+	fauxA.setResponses([
+		async () => {
+			await followUpSession(session.sessionId, "USER_BEFORE_HOST");
+			await sendHostMessageToSession(session.sessionId, "test-host", "HOST_KEPT", kept, {
+				onDropped: () => dropped.push("kept"),
+			});
+			await followUpSession(session.sessionId, "USER_REMOVED");
+			await removeQueuedSession(session.sessionId, "followUp", 1);
+			pendingAfterEdit = isHostMessagePending(session.sessionId, kept);
+			return fauxAssistantMessage("FIRST");
+		},
+		fauxAssistantMessage("USER_HANDLED"),
+		fauxAssistantMessage("HOST_HANDLED"),
+		async () => {
+			await sendHostMessageToSession(session.sessionId, "test-host", "HOST_STOPPED", stopped, {
+				onDropped: () => dropped.push("stopped"),
+			});
+			await release.promise;
+			return fauxAssistantMessage("STOPPED_TURN");
+		},
+	]);
+	try {
+		await promptSession(session.sessionId, "start");
+		expect(pendingAfterEdit).toBe(true);
+		expect(isHostMessagePending(session.sessionId, kept)).toBe(false);
+		const transcript = JSON.stringify(
+			(await getSessionMessages(session.sessionId, workspaceId, cwd)).messages,
+		);
+		expect(transcript).toContain("HOST_HANDLED");
+		expect(transcript).not.toContain("USER_REMOVED");
+		expect(transcript.indexOf("USER_BEFORE_HOST")).toBeGreaterThan(-1);
+		expect(transcript.indexOf("USER_BEFORE_HOST")).toBeLessThan(transcript.indexOf("HOST_KEPT"));
+
+		const running = promptSession(session.sessionId, "again");
+		for (let attempt = 0; attempt < 200; attempt++) {
+			if (isHostMessagePending(session.sessionId, stopped)) break;
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		expect(isHostMessagePending(session.sessionId, stopped)).toBe(true);
+		const stopping = abortSession(session.sessionId, true);
+		expect(dropped).toEqual(["stopped"]);
+		expect(isHostMessagePending(session.sessionId, stopped)).toBe(false);
+		release.resolve();
+		await stopping;
+		await running.catch(() => {});
+		expect(dropped).toEqual(["stopped"]);
+	} finally {
+		release.resolve();
 		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
 	}
 });

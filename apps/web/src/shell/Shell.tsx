@@ -8,6 +8,7 @@ import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
 import { useEffect, useState } from "react";
+import { useContinuations } from "../chat/continuations";
 import {
 	applyFontPreference,
 	DEFAULT_FONT_PREFERENCE,
@@ -85,6 +86,7 @@ export function Shell() {
 	const t = useT();
 	useLocalLayoutState();
 	useAttentionNotifications();
+	useContinuations();
 	const status = useAppStore((s) => s.status);
 	const analyticsConsentOpen = useAppStore(selectAnalyticsConsentPromptOpen);
 	const onboardingActive = useAppStore(selectOnboardingActive);

@@ -1,5 +1,6 @@
 import type { Workspace } from "@thinkrail/contracts";
 import {
+	isNavigationChange,
 	selectAttentionCenterTab,
 	selectCurrentRouteChatTarget,
 	selectWorkspaceById,
@@ -219,13 +220,7 @@ export function startNavigation({ driver, listWorkspaces }: NavigationDeps): () 
 		) {
 			armedPush = true;
 		}
-		if (
-			!applyingRoute &&
-			pending &&
-			(state.selectedProjectId !== previous.selectedProjectId ||
-				state.activeWorkspaceId !== previous.activeWorkspaceId ||
-				state.navTickByWorkspace !== previous.navTickByWorkspace)
-		) {
+		if (!applyingRoute && pending && isNavigationChange(state, previous)) {
 			pending = null;
 		}
 		if (state.welcomeGeneration !== previous.welcomeGeneration && pending) {

@@ -31,6 +31,7 @@ import {
 	serverExtensions,
 } from "../extensions";
 import { type BundledTrashHelpers, setBundledTrashHelpers } from "../trash";
+import { continueInWorkspaceExtension } from "./continueTool";
 import { headlessSearchPolicy } from "./headlessSearch";
 import { oversizedImageGuard } from "./imageGuard";
 import {
@@ -440,6 +441,7 @@ export async function buildResourceLoader(
 		reviewToolExtension,
 		requestReviewExtension,
 		setTitleExtension,
+		continueInWorkspaceExtension,
 		oversizedImageGuard,
 		skillCatalog,
 		skillCarryover,
