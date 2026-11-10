@@ -206,18 +206,21 @@ describe("bundled catalogs load on demand", () => {
 		["an HTTP error", new Response("", { status: 503 })],
 		["an HTML fallback page", new Response("<!doctype html>")],
 		["JSON that is not a catalog", new Response('"oops"')],
-	])("%s rejects as TranslationLoadError, caches nothing, and a later load retries", async (_, failure) => {
-		const fetches = spyOn(globalThis, "fetch");
-		if (failure instanceof Response) fetches.mockResolvedValueOnce(failure);
-		else fetches.mockRejectedValueOnce(failure);
-		const locales = await freshLocales();
-		await expect(locales.loadBundledCatalog("ru")).rejects.toMatchObject({
-			name: "TranslationLoadError",
-		});
-		expect(locales.bundledCatalog("ru")).toBeUndefined();
-		expect(await locales.loadBundledCatalog("ru")).toBeDefined();
-		expect(fetches).toHaveBeenCalledTimes(2);
-	});
+	])(
+		"%s rejects as TranslationLoadError, caches nothing, and a later load retries",
+		async (_, failure) => {
+			const fetches = spyOn(globalThis, "fetch");
+			if (failure instanceof Response) fetches.mockResolvedValueOnce(failure);
+			else fetches.mockRejectedValueOnce(failure);
+			const locales = await freshLocales();
+			await expect(locales.loadBundledCatalog("ru")).rejects.toMatchObject({
+				name: "TranslationLoadError",
+			});
+			expect(locales.bundledCatalog("ru")).toBeUndefined();
+			expect(await locales.loadBundledCatalog("ru")).toBeDefined();
+			expect(fetches).toHaveBeenCalledTimes(2);
+		},
+	);
 });
 
 describe("bundled non-English catalogs follow en.json", () => {

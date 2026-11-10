@@ -73,8 +73,7 @@ test("contenteditable dictation at the start of a new line adds no leading space
 	await p.keyboard.type("abc");
 	await p.keyboard.press("Enter");
 	await dictate(p, "#e", ["fix", "fix def"]);
-	const text = await p.locator("#e").evaluate((element) => (element as HTMLElement).innerText);
-	expect(text.split("\n").at(-1)).toBe("fix def");
+	expect(await p.locator("#e > div").last().textContent()).toBe("fix def");
 });
 
 test("contenteditable dictation between words spaces both sides", async ({ page: p }) => {

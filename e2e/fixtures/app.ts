@@ -135,7 +135,7 @@ async function disposeLiveSessions(page: Page): Promise<void> {
 	if (workspaces.length === 0) return;
 	const health = await page.request.get("/health");
 	const hostUrl = new URL(health.url());
-	health.dispose();
+	await health.dispose();
 	const port = Number(hostUrl.port) || (hostUrl.protocol === "https:" ? 443 : 80);
 	const wire = await E2eWire.connect(port);
 	try {

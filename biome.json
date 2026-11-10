@@ -1,5 +1,5 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.5.0/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.6.3/schema.json",
 	"vcs": {
 		"enabled": true,
 		"clientKind": "git",
@@ -30,8 +30,6 @@
 			"preset": "recommended",
 			"nursery": {
 				"noImpliedEval": "error",
-				"noPlaywrightMissingAwait": "error",
-				"noIdenticalTestTitle": "error",
 				"noFloatingPromises": "error"
 			},
 			"style": {
@@ -48,7 +46,11 @@
 				"noNestedPromises": "error",
 				"noUnusedExpressions": "error",
 				"useGuardForIn": "error",
-				"noEvolvingTypes": "error"
+				"noEvolvingTypes": "error",
+				"noIdenticalTestTitle": "error"
+			},
+			"correctness": {
+				"noPlaywrightMissingAwait": "error"
 			}
 		}
 	},
@@ -56,6 +58,14 @@
 		"formatter": {
 			"quoteStyle": "double",
 			"semicolons": "always"
+		}
+	},
+	"markdown": {
+		"formatter": {
+			"enabled": false
+		},
+		"linter": {
+			"enabled": false
 		}
 	},
 	"css": {
