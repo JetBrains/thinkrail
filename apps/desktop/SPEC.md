@@ -602,8 +602,10 @@ only the private pipeline's verified final DMG is a signed release. The handoff 
 belong to [[module-ci-release]].
 
 Linux uses native WebKitGTK without CEF and declares Ubuntu 24.04+/glibc 2.38 plus `libgtk-3-0`,
-`libwebkit2gtk-4.1-0`, `libayatana-appindicator3-1`, and `librsvg2-2`. Xvfb software-rendering flags are
-CI-only and are never shipped as user configuration.
+`libwebkit2gtk-4.1-0`, `libayatana-appindicator3-1`, and `librsvg2-2`. Desktop notifications also need
+`libnotify-bin`: Electrobun shows them by running the `notify-send` it provides, and without it they are
+dropped.
+Xvfb software-rendering flags are CI-only and are never shipped as user configuration.
 
 ## Auto-update policy
 
