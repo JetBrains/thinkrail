@@ -1,12 +1,15 @@
 import {
 	type PromptHit,
+	type PromptModelSelection,
 	type QueueLane,
 	type ResourceKind,
+	type ScheduledPromptRecord,
 	type SessionQueueContent,
 	type SubagentResourceSummary,
 	sameModel,
 	type TemplateInfo,
 	type ThinkingLevel,
+	WS_CHANNELS,
 } from "@thinkrail/contracts";
 import { t as translate, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
@@ -124,6 +127,29 @@ export default function ChatView({
 
 	const status = useAppStore((s) => s.status);
 	const connectionGeneration = useAppStore((s) => s.connectionGeneration);
+	const [scheduledPrompts, setScheduledPrompts] = useState<ScheduledPromptRecord[]>([]);
+	const [draftModelSelection, setDraftModelSelection] = useState<
+		PromptModelSelection | undefined
+	>();
+	useEffect(() => {
+		let active = true;
+		setScheduledPrompts([]);
+		const install = (records: ScheduledPromptRecord[]) => {
+			if (active) setScheduledPrompts(records.filter((record) => record.sessionId === sessionId));
+		};
+		const unsubscribe = getTransport().subscribe(WS_CHANNELS.scheduledPromptsChanged, (data) => {
+			const push = data as { workspaceId?: string; records?: ScheduledPromptRecord[] };
+			if (push.workspaceId === workspaceId && push.records) install(push.records);
+		});
+		void getTransport()
+			.request("scheduledPrompts.list", { workspaceId })
+			.then(install)
+			.catch(() => {});
+		return () => {
+			active = false;
+			unsubscribe();
+		};
+	}, [workspaceId, sessionId, connectionGeneration]);
 	const canRenameChat = useAppStore(selectCanRenameChat);
 	const supportsMcp = useAppStore(selectSupportsMcp);
 	const composerGrowthLimit = useAppStore((state) => state.composerGrowthLimit);
@@ -166,6 +192,13 @@ export default function ChatView({
 	}, [t, workspaces]);
 
 	const currentModel = selectCatalogModel(models, sessionModel) ?? sessionModel;
+	const composerModel = draftModelSelection
+		? (models.find(
+				(model) =>
+					model.provider === draftModelSelection.model.provider &&
+					model.id === draftModelSelection.model.id,
+			) ?? currentModel)
+		: currentModel;
 	const refreshStats = useSessionStats({
 		sessionId,
 		statsRefreshTick,
@@ -537,6 +570,7 @@ export default function ChatView({
 
 	const restoreQueueContentToDraft = (content: SessionQueueContent): void => {
 		const messages = [...content.steering, ...content.followUp];
+		setDraftModelSelection(messages.length === 1 ? messages[0]?.modelSelection : undefined);
 		restoreTextToDraft(messages.map((message) => message.text).join("\n\n"));
 		const images = messages.flatMap((message) => message.images ?? []);
 		composerRef.current?.restoreAttachments(
@@ -581,27 +615,36 @@ export default function ChatView({
 		text: string,
 		attachments: ChatAttachment[],
 		behavior: Exclude<SubmitBehavior, "interrupt">,
+		modelSelection?: PromptModelSelection,
 	) => {
-		const queued = behavior !== "send";
+		const effectiveBehavior = modelSelection && behavior === "steer" ? "followUp" : behavior;
+		const queued = effectiveBehavior !== "send";
 		freshResults.markAllSeen();
 		if (!queued && (text || attachments.length > 0)) {
 			transcriptRef.current?.armImmediateTurn();
 			useAppStore.getState().appendUserMessage(sessionId, text, attachments);
 		}
 		const images = attachments.map((a) => a.content);
-		const params = { sessionId, text, ...(images.length > 0 ? { images } : {}) };
+		const params = {
+			sessionId,
+			text,
+			...(images.length > 0 ? { images } : {}),
+			...(modelSelection ? { modelSelection } : {}),
+		};
 		const method =
-			behavior === "steer"
+			effectiveBehavior === "steer"
 				? "session.steer"
-				: behavior === "followUp"
+				: effectiveBehavior === "followUp"
 					? "session.followUp"
 					: "session.prompt";
 		getTransport()
 			.request(method, params)
 			.catch((err) => {
 				useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
-				if (queued) restoreTextToDraft(text);
-				else {
+				if (queued) {
+					restoreTextToDraft(text);
+					setDraftModelSelection(modelSelection);
+				} else {
 					const streaming = useAppStore.getState().sessions[sessionId]?.isStreaming ?? false;
 					transcriptRef.current?.cancelImmediateTurn(streaming);
 				}
@@ -612,6 +655,7 @@ export default function ChatView({
 		text: string,
 		attachments: ChatAttachment[],
 		behavior: SubmitBehavior,
+		modelSelection?: PromptModelSelection,
 	): ComposerSubmitDisposition => {
 		const nativeCommand = parseNativeChatCommand(text, canRenameChat);
 		if (nativeCommand?.kind === "compact") {
@@ -630,15 +674,16 @@ export default function ChatView({
 			return { accepted: true };
 		}
 		if (behavior !== "interrupt") {
-			performSend(text, attachments, behavior);
+			performSend(text, attachments, behavior, modelSelection);
 			return { accepted: true };
 		}
 		getTransport()
 			.request("session.abort", { sessionId })
-			.then(() => performSend(text, attachments, "send"))
+			.then(() => performSend(text, attachments, "send", modelSelection))
 			.catch((err) => {
 				useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
 				restoreTextToDraft(text);
+				setDraftModelSelection(modelSelection);
 			});
 		return { accepted: true };
 	};
@@ -916,7 +961,10 @@ export default function ChatView({
 				<Composer
 					ref={composerRef}
 					value={draft}
-					onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
+					onChange={(v) => {
+						useAppStore.getState().setChatDraft(sessionId, v);
+						if (v === "") setDraftModelSelection(undefined);
+					}}
 					isStreaming={isStreaming}
 					growthLimit={composerGrowthLimit}
 					commands={mergedCommands}
@@ -926,14 +974,80 @@ export default function ChatView({
 					models={models}
 					modelsRefreshing={modelsRefreshing}
 					onRefreshModels={onRefreshModels}
-					currentModel={currentModel}
-					thinkingLevel={thinkingLevel}
+					currentModel={composerModel}
+					thinkingLevel={draftModelSelection?.thinkingLevel ?? thinkingLevel}
+					draftModelSelection={draftModelSelection}
 					modelPreferences={modelPreferences}
 					onMentionQuery={onMentionQuery}
 					onSlashActive={setSlashActive}
-					onSelectModel={onSelectModel}
-					onSelectThinking={onSelectThinking}
+					onSelectModel={(selection) => {
+						setDraftModelSelection(undefined);
+						onSelectModel(selection);
+					}}
+					onSelectThinking={(level) => {
+						setDraftModelSelection(undefined);
+						onSelectThinking(level);
+					}}
 					onSubmit={onSubmit}
+					sessionId={sessionId}
+					scheduledPrompts={scheduledPrompts}
+					onSchedule={(requestId, dueAt, text, images, modelSelection) =>
+						getTransport()
+							.request("scheduledPrompts.create", {
+								modelSelection,
+								requestId,
+								id: requestId,
+								workspaceId,
+								sessionId,
+								text,
+								dueAt,
+								createdAt: Date.now(),
+								status: "scheduled",
+								...(images.length ? { images } : {}),
+							})
+							.then((created) => {
+								setScheduledPrompts((records) => [
+									...records.filter((record) => record.id !== created.id),
+									created,
+								]);
+								return created;
+							})
+					}
+					onUpdateScheduledPrompt={(id, dueAt, text, images, modelSelection) =>
+						getTransport()
+							.request("scheduledPrompts.update", {
+								id,
+								workspaceId,
+								dueAt,
+								text,
+								images,
+								modelSelection,
+							})
+							.then((updated) => {
+								setScheduledPrompts((records) =>
+									records.map((record) => (record.id === updated.id ? updated : record)),
+								);
+								return updated;
+							})
+					}
+					onCancelScheduledPrompt={(id) =>
+						getTransport()
+							.request("scheduledPrompts.cancel", { id, workspaceId })
+							.then((result) => {
+								if (result.cancelled)
+									setScheduledPrompts((records) => records.filter((record) => record.id !== id));
+								return result;
+							})
+					}
+					onSendScheduledPromptNow={(id) =>
+						getTransport()
+							.request("scheduledPrompts.sendNow", { id, workspaceId })
+							.then((result) => {
+								if (result.accepted)
+									setScheduledPrompts((records) => records.filter((record) => record.id !== id));
+								return result;
+							})
+					}
 					onAbort={onAbort}
 					onHistoryOpen={onHistoryOpen}
 					onPickTemplate={onPickTemplate}

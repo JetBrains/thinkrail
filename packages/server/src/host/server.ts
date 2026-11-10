@@ -120,6 +120,7 @@ import {
 	setProjectPublisher,
 } from "../projects";
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
+import { startScheduledPrompts, stopScheduledPrompts } from "../scheduled-prompts";
 import { getConfig, setSettingsPublisher } from "../settings";
 import {
 	createSpeechRelay,
@@ -331,6 +332,20 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	);
 
 	const sockets = new Map<string, Bun.ServerWebSocket<SocketData>>();
+	startScheduledPrompts((workspaceId, records) => {
+		for (const ws of sockets.values()) {
+			try {
+				ws.send(
+					JSON.stringify({
+						channel: WS_CHANNELS.scheduledPromptsChanged,
+						data: { workspaceId, records },
+					}),
+				);
+			} catch {
+				ws.close();
+			}
+		}
+	});
 	const reapTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	const requestReplays = new RequestReplayCache<string>();
 	const abandonmentReports = new AbandonmentReportBudget();
@@ -1092,6 +1107,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	void observeCurrentSetup();
 
 	const stop = (): void => {
+		stopScheduledPrompts();
 		if (stopping) return;
 		stopping = true;
 		clearInterval(reviewRefreshTimer);

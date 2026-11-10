@@ -8,7 +8,14 @@ import {
 	RiSparkling2Line as Sparkles,
 	RiStopFill as StopFill,
 } from "@remixicon/react";
-import type { ComposerGrowthLimit, ThinkingLevel, WireModel } from "@thinkrail/contracts";
+import type {
+	ComposerGrowthLimit,
+	ImageContent,
+	PromptModelSelection,
+	ScheduledPromptRecord,
+	ThinkingLevel,
+	WireModel,
+} from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
@@ -54,6 +61,7 @@ import {
 } from "./ModelEffortPicker";
 import { isModelCommand, parseModelCommand } from "./nativeCommands";
 import { imagePasteDropHandlers, PromptImageChips, usePromptImages } from "./promptImages";
+import { type ScheduledPromptDraftSnapshot, ScheduledPrompts } from "./ScheduledPrompts";
 import type { ChatAttachment } from "./types";
 import type { ModelPreferences } from "./useModelPreferences";
 
@@ -182,10 +190,30 @@ interface ComposerProps {
 	onSlashActive: (active: boolean) => void;
 	onSelectModel: (selection: ModelSelection) => void;
 	onSelectThinking: (level: ThinkingLevel) => void;
+	sessionId: string;
+	scheduledPrompts: ScheduledPromptRecord[];
+	draftModelSelection: PromptModelSelection | undefined;
+	onSchedule: (
+		requestId: string,
+		dueAt: number,
+		text: string,
+		images: ImageContent[],
+		modelSelection: PromptModelSelection,
+	) => Promise<unknown>;
+	onUpdateScheduledPrompt: (
+		id: string,
+		dueAt: number,
+		text: string,
+		images: ImageContent[],
+		modelSelection: PromptModelSelection,
+	) => Promise<unknown>;
+	onCancelScheduledPrompt: (id: string) => Promise<unknown>;
+	onSendScheduledPromptNow: (id: string) => Promise<unknown>;
 	onSubmit: (
 		text: string,
 		attachments: ChatAttachment[],
 		behavior: SubmitBehavior,
+		modelSelection?: PromptModelSelection,
 	) => ComposerSubmitDisposition;
 	onAbort: () => void;
 	onHistoryOpen?: () => void;
@@ -224,6 +252,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		onSelectModel,
 		onSelectThinking,
 		onSubmit,
+		sessionId,
+		scheduledPrompts,
+		draftModelSelection,
+		onSchedule,
+		onUpdateScheduledPrompt,
+		onCancelScheduledPrompt,
+		onSendScheduledPromptNow,
 		onAbort,
 		onHistoryOpen,
 		onPickTemplate,
@@ -233,13 +268,39 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	handleRef,
 ) {
 	const t = useT();
+	const [scheduledListTarget, setScheduledListTarget] = useState<HTMLDivElement | null>(null);
 	const ref = useRef<HTMLTextAreaElement>(null);
 	const pickerRef = useRef<ModelEffortPickerHandle>(null);
 	const [caret, setCaret] = useState(0);
 	const attachedImages = usePromptImages();
 	const { images } = attachedImages;
 	const [submitError, setSubmitError] = useState<string | null>(null);
+	const [slotSession, setSlotSession] = useState<TemplateSlotSessionState | null>(null);
 	const pendingImages = attachedImages.pending;
+	const imageIds = images.map((image) => image.id);
+	const latestScheduledDraft = useRef({ sessionId, text: value, imageIds, pendingImages });
+	useLayoutEffect(() => {
+		latestScheduledDraft.current = {
+			sessionId,
+			text: value,
+			imageIds: images.map((image) => image.id),
+			pendingImages,
+		};
+	}, [sessionId, value, images, pendingImages]);
+	const onScheduled = (snapshot: ScheduledPromptDraftSnapshot) => {
+		const current = latestScheduledDraft.current;
+		if (
+			current.sessionId !== snapshot.sessionId ||
+			current.text !== snapshot.text ||
+			current.pendingImages > 0 ||
+			current.imageIds.length !== snapshot.imageIds.length ||
+			current.imageIds.some((id, index) => id !== snapshot.imageIds[index])
+		)
+			return;
+		onChange("");
+		attachedImages.reset();
+		setSlotSession(null);
+	};
 	useEffect(() => {
 		if (images.length === 0) setSubmitError(null);
 	}, [images.length]);
@@ -247,7 +308,6 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const [mentionDismissed, setMentionDismissed] = useState(false);
 	const [sendMenuOpen, setSendMenuOpen] = useState(false);
 	const recallIdxRef = useRef<number | null>(null);
-	const [slotSession, setSlotSession] = useState<TemplateSlotSessionState | null>(null);
 	const slots = slotSession?.slots ?? null;
 	const slotIdx = slotSession?.activeIndex ?? 0;
 	const backdropRef = useRef<HTMLDivElement | null>(null);
@@ -334,6 +394,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const canSubmit = (raw: string) =>
 		!dictating && !templatePending && pendingImages === 0 && (!!raw.trim() || images.length > 0);
 	const canSend = canSubmit(value);
+	const scheduledText = finalizeTemplateSlotSession(value, slotSession);
+	const canSchedule =
+		!templatePending && pendingImages === 0 && (!!scheduledText.trim() || images.length > 0);
 
 	const openModelPicker = (query: string) => {
 		replaceDraft("");
@@ -352,6 +415,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			text,
 			images.map(({ name, content }) => ({ name, content })),
 			behavior,
+			draftModelSelection,
 		);
 		if (!disposition.accepted) {
 			setSubmitError(disposition.reason);
@@ -422,6 +486,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const submit = (behavior: SubmitBehavior) => {
 		submitText(finalizeTemplateSlotSession(value, slotSession), behavior);
 	};
+	const primaryBehavior: SubmitBehavior = isStreaming
+		? draftModelSelection
+			? "followUp"
+			: "steer"
+		: "send";
 
 	const stepSlot = (direction: 1 | -1) => {
 		if (!slotSession) return;
@@ -507,7 +576,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			const behavior: SubmitBehavior = isStreaming
 				? e.metaKey || e.ctrlKey
 					? "followUp"
-					: "steer"
+					: draftModelSelection
+						? "followUp"
+						: "steer"
 				: "send";
 			submit(behavior);
 		}
@@ -601,6 +672,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			/>
 
 			<div className="p-chat-gutter">
+				<div ref={setScheduledListTarget} />
 				<div
 					ref={shellRef}
 					data-testid="chat-composer-shell"
@@ -727,8 +799,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							<button
 								type="button"
 								data-testid="chat-send"
-								aria-label={isStreaming ? t("chat.composer.steer") : t("chat.composer.send")}
-								onClick={() => submit(isStreaming ? "steer" : "send")}
+								aria-label={
+									isStreaming
+										? draftModelSelection
+											? t("chat.composer.mode.queue")
+											: t("chat.composer.steer")
+										: t("chat.composer.send")
+								}
+								onClick={() => submit(primaryBehavior)}
 								disabled={!canSend}
 								className={cn(
 									SEND_MAIN,
@@ -738,7 +816,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							>
 								<ArrowUp className={cn("size-16", COMPACT_ONLY)} />
 								<span className={WIDE_ONLY}>
-									{isStreaming ? t("chat.composer.steer") : t("chat.composer.send")}
+									{isStreaming
+										? draftModelSelection
+											? t("chat.composer.mode.queue")
+											: t("chat.composer.steer")
+										: t("chat.composer.send")}
 								</span>
 								<kbd aria-hidden className={cn(KEYCAP, WIDE_ONLY)}>
 									<EnterKey className="size-12" />
@@ -770,7 +852,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 													key={mode.behavior}
 													type="button"
 													data-testid={mode.testid}
-													disabled={!canSend}
+													disabled={
+														!canSend || (!!draftModelSelection && mode.behavior === "steer")
+													}
 													onClick={() => {
 														setSendMenuOpen(false);
 														submit(mode.behavior);
@@ -795,6 +879,27 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								</Popover>
 							) : null}
 						</div>
+						<ScheduledPrompts
+							items={scheduledPrompts}
+							sessionId={sessionId}
+							models={models}
+							currentModel={currentModel}
+							thinkingLevel={thinkingLevel}
+							modelPreferences={modelPreferences}
+							modelsRefreshing={modelsRefreshing}
+							onRefreshModels={onRefreshModels}
+							listTarget={scheduledListTarget}
+							text={scheduledText}
+							draftText={value}
+							images={images.map((image) => image.content)}
+							imageIds={imageIds}
+							canSchedule={canSchedule}
+							onSchedule={onSchedule}
+							onUpdate={onUpdateScheduledPrompt}
+							onCancel={onCancelScheduledPrompt}
+							onSendNow={onSendScheduledPromptNow}
+							onScheduled={onScheduled}
+						/>
 					</div>
 				</div>
 			</div>

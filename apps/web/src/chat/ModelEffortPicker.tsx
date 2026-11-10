@@ -87,6 +87,7 @@ export interface ModelSelection {
 }
 
 export interface ModelEffortPickerProps {
+	iconOnly?: boolean;
 	models: WireModel[];
 	current: WireModel | null;
 	level: ThinkingLevel;
@@ -307,6 +308,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 	function ModelEffortPicker(
 		{
 			models,
+			iconOnly = false,
 			current,
 			level,
 			onSelect,
@@ -461,41 +463,59 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 		const following = defaultOption?.active ? defaultOption.resolved : null;
 		const pillModel = defaultOption?.active ? (following?.model ?? null) : current;
 		const pillLevel = following?.thinkingLevel ?? level;
+		const selectionDescription = pillModel
+			? `${pillModel.provider}/${pillModel.name} · ${t(LEVEL_LABEL[pillLevel])}`
+			: t("common.default");
 
 		return (
 			<Popover open={open} onOpenChange={(next) => (next ? openWith("") : close())}>
 				<PopoverTrigger
 					data-testid="model-selector"
+					title={iconOnly ? selectionDescription : undefined}
+					aria-label={
+						iconOnly ? `${t("chat.modelPicker.selectModel")}: ${selectionDescription}` : undefined
+					}
 					data-open={open}
 					className={cn(
 						"flex h-32 min-w-0 items-center gap-8 rounded-sm px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected",
 						className,
 					)}
 				>
-					<ModelEffortPill
-						icon={
-							defaultOption?.active ? (
-								<Sparkles className="size-14 shrink-0 text-text-muted" />
-							) : pillModel ? (
-								<ProviderGlyph provider={pillModel.provider} className="size-14 text-text-muted" />
-							) : null
-						}
-						name={
-							defaultOption?.active
-								? t("common.default")
-								: (pillModel?.name ?? t("chat.modelPicker.selectModel"))
-						}
-						detail={defaultOption?.active ? pillModel?.name : undefined}
-						level={pillModel ? pillLevel : undefined}
-						levels={pillModel?.thinkingLevels ?? []}
-						levelTestId="thinking-selector"
-					/>
-					{pillModel && hasKindGlyph(pillModel) ? (
+					{iconOnly ? (
+						pillModel ? (
+							<ProviderGlyph provider={pillModel.provider} className="size-14 text-text-muted" />
+						) : (
+							<Sparkles className="size-14 text-text-muted" />
+						)
+					) : (
+						<ModelEffortPill
+							icon={
+								defaultOption?.active ? (
+									<Sparkles className="size-14 shrink-0 text-text-muted" />
+								) : pillModel ? (
+									<ProviderGlyph
+										provider={pillModel.provider}
+										className="size-14 text-text-muted"
+									/>
+								) : null
+							}
+							name={
+								defaultOption?.active
+									? t("common.default")
+									: (pillModel?.name ?? t("chat.modelPicker.selectModel"))
+							}
+							detail={defaultOption?.active ? pillModel?.name : undefined}
+							level={pillModel ? pillLevel : undefined}
+							levels={pillModel?.thinkingLevels ?? []}
+							levelTestId="thinking-selector"
+						/>
+					)}
+					{!iconOnly && pillModel && hasKindGlyph(pillModel) ? (
 						<IconTooltip label={describeAuth(t, pillModel)} wrapTrigger>
 							<KindGlyph model={pillModel} className="text-text-muted" />
 						</IconTooltip>
 					) : null}
-					<ChevronDown className="size-14 shrink-0 text-text-muted" />
+					{!iconOnly ? <ChevronDown className="size-14 shrink-0 text-text-muted" /> : null}
 				</PopoverTrigger>
 				<PopoverContent
 					align="start"

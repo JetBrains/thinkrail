@@ -320,7 +320,7 @@ re-opened transcripts provider-valid.
 
     New-session and pre-session entrypoints capture the current generation; operations on a live session use
     that session's retained runtime. `abort` remains available as the cancellation control path.
-    `prompt`/`steer`/`followUp` (with images) /
+    `prompt`/`steer`/`followUp` (with images; `prompt` and `followUp` may carry a pinned model/reasoning pair).
     — `promptSession`'s optional `onPreflight` fires with pi's `preflightResult` (model and auth validated,
     the run started, queued or handled), which lets a caller stop waiting before the agent's turn ends
     — **both `promptSession` and `followUpSession` resolve the delivery mode against the session's
@@ -328,9 +328,12 @@ re-opened transcripts provider-valid.
     back to `steer`), and pi's `followUp()` only *enqueues* into a queue that a run already in flight
     drains (so on an idle session it falls back to `prompt`, else the message parks forever — the way a
     `review.sendBatch` into a re-attached review chat marked its comments sent to an agent that never
-    saw them) / **`clearQueueSession`** (Pi's `clearQueue()`: drains both queues but returns only text,
+    saw them). A pinned `promptSession` observed during a live turn uses the follow-up lane instead of steer,
+    preserving the selected pair until that separate prompt starts; when idle, it applies the pair before
+    `prompt()`. Pinned follow-ups are consumed one at a time, applying their pair at the provider request
+    boundary. / **`clearQueueSession`** (Pi's `clearQueue()`: drains both queues but returns only text,
     while the host snapshots its reconciled transient mirror first and returns complete per-message text +
-    images. Pi emits the emptying `queue_update`). Its optional text-only precondition rejects before
+    images + any pinned model selection. Pi emits the emptying `queue_update`). Its optional text-only precondition rejects before
     touching Pi whenever either tracked lane has queued images; manual compaction uses that guard, while
     **`abortSession(..., true)`** synchronously claims the Stop and drains the queue in one manager operation.
     If an accepted question result is still persisting, Stop grants it a bounded grace period before signalling
@@ -1739,3 +1742,18 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   session's **create-time template snapshot** — a template saved mid-session is **NOT** seen by an
   already-open session's typed-through path (pi passes unknown `/name` text through verbatim). The
   composer's `/` menu path is always fresh via `template.list` (see `templates/SPEC.md` freshness rule).
+
+### Model-pinned follow-ups
+
+Queued content can retain a provider/model and thinking level. The normal session queue remains
+authoritative. Capture consumed host metadata on queue updates, confirm it against the actual
+user message on the public awaited Agent subscription, and apply through SDK setModel /
+setThinkingLevel immediately before the public prepareRequest hook. Queue edits preserve this
+metadata; explicit clears discard pending selection. Pinned follow-ups drain one at a time using
+the public Agent queue-mode property, restoring its prior mode when no pinned item remains.
+Selection is session-local, not a change to global defaults.
+
+Scheduled delivery has a separate acceptance call: an already streaming session accepts when Pi has
+queued the follow-up; an idle session accepts at `agent_start`, not when its model run finishes.
+This lets the scheduler continue servicing other chats while each chat's existing follow-up lane
+remains authoritative.

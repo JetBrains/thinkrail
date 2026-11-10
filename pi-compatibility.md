@@ -326,3 +326,12 @@ wire capability checks and React presentation are deliberate ThinkRail behavior.
 [[submodule-server-agent-mcp]] and [[submodule-server-agent]]. A pi upgrade does not silently remove
 or weaken them. Reusing an upstream policy is a separate compatibility/product decision, not an
 assumption that similarly named APIs have identical semantics.
+
+## Per-message model selections
+
+Pi 1.4 prompt/followUp options carry images/source but no per-message model or reasoning.
+Host queued-content metadata therefore retains the pair through the existing text-only queue
+projection. Public Agent subscriptions and prepareRequest apply SDK model/thinking mutations
+only for the consumed follow-up. Recheck this seam on upgrades; remove it when native queued
+message options carry model/thinking and preserve identity through remove/restore. No private
+SDK import or additional delivery queue is introduced.

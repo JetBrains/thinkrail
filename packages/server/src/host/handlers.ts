@@ -188,6 +188,13 @@ import {
 	sendableComments,
 	updateComment,
 } from "../reviews";
+import {
+	cancelScheduledPrompt,
+	createScheduledPrompt,
+	listScheduledPrompts,
+	sendScheduledPromptNow,
+	updateScheduledPrompt,
+} from "../scheduled-prompts";
 import { getConfig, noteRecentModel, updateConfig } from "../settings";
 import { evictSpecIndex, evictSpecRoot, projectHasSpecs, specGraph } from "../spec";
 import { cancelSpeechInstall, installSpeech, removeSpeech } from "../speech";
@@ -1160,7 +1167,9 @@ const handlers: WsHandlers = {
 	"session.create": (p) => startChat(p.workspaceId, p),
 	"session.prompt": (p, ctx) => {
 		return sendUserMessage("prompt", p.sessionId, p.text, ctx.clientKey, () =>
-			promptSession(p.sessionId, p.text, p.images),
+			promptSession(p.sessionId, p.text, p.images, {
+				...(p.modelSelection ? { modelSelection: p.modelSelection } : {}),
+			}),
 		);
 	},
 	"session.steer": (p, ctx) => {
@@ -1170,7 +1179,7 @@ const handlers: WsHandlers = {
 	},
 	"session.followUp": (p, ctx) => {
 		return sendUserMessage("follow_up", p.sessionId, p.text, ctx.clientKey, () =>
-			followUpSession(p.sessionId, p.text, p.images),
+			followUpSession(p.sessionId, p.text, p.images, p.modelSelection),
 		);
 	},
 	"session.clearQueue": (p) => {
@@ -1243,6 +1252,22 @@ const handlers: WsHandlers = {
 			}
 		});
 	},
+	"scheduledPrompts.list": (params) => listScheduledPrompts(params.workspaceId),
+	"scheduledPrompts.create": ({ requestId, ...params }) =>
+		createScheduledPrompt({ ...params, id: requestId }),
+	"scheduledPrompts.update": (params) =>
+		updateScheduledPrompt(
+			params.id,
+			params.workspaceId,
+			params.dueAt,
+			params.text,
+			params.images,
+			params.modelSelection,
+		),
+	"scheduledPrompts.sendNow": (params) => sendScheduledPromptNow(params.id, params.workspaceId),
+	"scheduledPrompts.cancel": (params) => ({
+		cancelled: cancelScheduledPrompt(params.id, params.workspaceId),
+	}),
 	"session.stateList": () =>
 		listSessionStates(listAllWorkspaceRecords().map(sessionStateWorkspace)),
 	"session.acknowledgeCompletion": (p) => {

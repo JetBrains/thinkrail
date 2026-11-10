@@ -222,8 +222,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
     `SessionState` installed by the all-workspace snapshot/push, letting transcript hydration prove which
     completion it rendered without an attention-specific epoch. Destructive operations use the separate
     **`SessionQueueContent`** /
-    **`QueuedMessageContent`** shapes, which return each drained message's text and optional images exactly
-    once so the composer can restore complete content without making ordinary queue broadcasts heavy.
+    **`QueuedMessageContent`** shapes, which return each drained message's text, optional images and
+    optional per-prompt model selection exactly once so the composer can restore complete content without
+    making ordinary queue broadcasts heavy.
     `session.getMessages` returns `{ summary, messages }` (the transcript is
     **`TranscriptMessage[]`** — the pi-canonical `Message` union widened with **`WireCustomMessage`**, a
     type-only mirror of pi-coding-agent's Node-only `CustomMessage`, so extension-injected messages like
@@ -847,7 +848,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `session.*` — `create`/`prompt`/`steer`/`followUp`/**`clearQueue`** (drain Pi's steering+followUp
   queues, returning complete `SessionQueueContent`; Pi itself emits the emptying `queue_update`; optional
   `requireTextOnly` rejects without draining when the host has observed queued images, which is the manual
-  compaction precondition)/**`removeQueued`** (`{ kind, index }` → `RemovedQueuedMessage`: drop or extract ONE
+  compaction precondition). `prompt` and `followUp` accept optional per-prompt `modelSelection`; the host
+  applies it before an idle prompt or retains it on the follow-up queue entry. `steer` has no such option
+  because switching models mid-turn would change the active turn. / **`removeQueued`** (`{ kind, index }` → `RemovedQueuedMessage`: drop or extract ONE
   queued message with its complete content — the strip rows' edit/remove; position-addressed because Pi's
   queue entries are bare strings with no id, and the host emulates per-item removal over Pi's all-or-nothing
   `clearQueue`, see the server agent SPEC)/**`abort`** (ordinary abort preserves queued lanes for Interrupt;
@@ -1341,3 +1344,8 @@ so an already-loaded old client clears retired markers after reconnect. No activ
 
 `web` (types + the runtime exports listed above) and `server` (same, + mapping `session.*` to `AgentSession` methods). The
 shell panels need `domain` + `wsProtocol`; the `pi` types + `PiEvent` are the wire for the agent session.
+
+ScheduledPromptRecord and QueuedMessageContent may carry PromptModelSelection: a stable
+provider/model reference plus ThinkingLevel, retained by scheduled create/update/list/events.
+Scheduled records also carry an optional durable `savedOrder`; hosts assign it on create and update,
+and order pre-existing records by creation time during migration.

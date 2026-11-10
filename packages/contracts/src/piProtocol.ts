@@ -185,7 +185,13 @@ export interface SessionQueueState {
 	hasImages?: true;
 }
 
+export interface PromptModelSelection {
+	model: Pick<WireModel, "provider" | "id">;
+	thinkingLevel: ThinkingLevel;
+}
+
 export interface QueuedMessageContent {
+	modelSelection?: PromptModelSelection;
 	text: string;
 	images?: readonly ImageContent[];
 }

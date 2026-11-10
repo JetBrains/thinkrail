@@ -11,7 +11,7 @@ tags: [host, public-surface-checked]
 ## Responsibility
 
 The wire and composition root: `Bun.serve` HTTP+WS, static SPA serving, the WS method→handler registry,
-channel fan-out, and the process-boot wrapper both launchers share.
+channel fan-out, scheduled-prompt timer lifecycle, and the process-boot wrapper both launchers share.
 
 ## Boundary
 

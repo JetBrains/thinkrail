@@ -37,6 +37,7 @@ import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtur
 import { setTrashImplementationForTests } from "../trash";
 import {
 	abortSession,
+	acceptScheduledFollowUpSession,
 	acknowledgeCompletion,
 	buildSessionSettings,
 	clampThinkingForModel,
@@ -72,6 +73,7 @@ import {
 	renameSession,
 	requestSessionReload,
 	respondToTool,
+	scheduleFollowUpSession,
 	setAgentReviewEnabledResolver,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
@@ -4299,6 +4301,219 @@ test("an extension failing in session_start reaches the client, named, before th
 	}
 });
 
+test("scheduled follow-ups keep per-prompt provider/model/reasoning behind existing queue entries", async () => {
+	const a = createFauxCore({
+		provider: "scheduled-a",
+		api: "scheduled-a",
+		models: [{ ...modelDef("model-a"), reasoning: true }],
+		tokensPerSecond: 100,
+	});
+	const b = createFauxCore({
+		provider: "scheduled-b",
+		api: "scheduled-b",
+		models: [{ ...modelDef("model-b"), reasoning: true }],
+		tokensPerSecond: 2000,
+	});
+	const requests: { provider: string; model: string; reasoning: unknown }[] = [];
+	const configA = {
+		...cfg(a, "model-a"),
+		models: [{ ...modelDef("model-a"), reasoning: true, api: a.api }],
+		streamSimple: (...args: Parameters<typeof a.streamSimple>) => {
+			requests.push({
+				provider: args[0].provider,
+				model: args[0].id,
+				reasoning: args[2]?.reasoning,
+			});
+			return a.streamSimple(...args);
+		},
+	};
+	const configB = {
+		...cfg(b, "model-b"),
+		models: [{ ...modelDef("model-b"), reasoning: true, api: b.api }],
+		streamSimple: (...args: Parameters<typeof b.streamSimple>) => {
+			requests.push({
+				provider: args[0].provider,
+				model: args[0].id,
+				reasoning: args[2]?.reasoning,
+			});
+			return b.streamSimple(...args);
+		},
+	};
+	runtime.registerProvider("scheduled-a", configA);
+	runtime.registerProvider("scheduled-b", configB);
+	a.setResponses([
+		fauxAssistantMessage(`FIRST ${"word ".repeat(100)}`),
+		fauxAssistantMessage("NORMAL"),
+		fauxAssistantMessage("PIN_A"),
+	]);
+	b.setResponses([fauxAssistantMessage("PIN_B")]);
+	const session = await createSession({
+		cwd: tmpCwd("trpi-model-pinned-"),
+		workspaceId: "ws-model-pinned",
+		model: toWireModel(a.getModel()),
+		thinkingLevel: "off",
+	});
+	try {
+		const running = promptSession(session.sessionId, "first");
+		const deadline = Date.now() + 5000;
+		while (requests.length < 1) {
+			if (Date.now() > deadline) throw new Error("No initial request");
+			await new Promise((r) => setTimeout(r, 10));
+		}
+		await followUpSession(session.sessionId, "ordinary already queued");
+		await acceptScheduledFollowUpSession(session.sessionId, "scheduled B", undefined, {
+			model: { provider: "scheduled-b", id: "model-b" },
+			thinkingLevel: "high",
+		});
+		await acceptScheduledFollowUpSession(session.sessionId, "scheduled A", undefined, {
+			model: { provider: "scheduled-a", id: "model-a" },
+			thinkingLevel: "low",
+		});
+		expect(requests).toEqual([{ provider: "scheduled-a", model: "model-a", reasoning: undefined }]);
+		await running;
+		expect(requests).toEqual([
+			{ provider: "scheduled-a", model: "model-a", reasoning: undefined },
+			{ provider: "scheduled-a", model: "model-a", reasoning: undefined },
+			{ provider: "scheduled-b", model: "model-b", reasoning: "high" },
+			{ provider: "scheduled-a", model: "model-a", reasoning: "low" },
+		]);
+		expect(seen(session.sessionId)).toContain("PIN_B");
+		expect(seen(session.sessionId)).toContain("PIN_A");
+		b.appendResponses([fauxAssistantMessage("PIN_B_IDLE")]);
+		await scheduleFollowUpSession(session.sessionId, "idle scheduled B", undefined, {
+			model: { provider: "scheduled-b", id: "model-b" },
+			thinkingLevel: "low",
+		});
+		expect(requests.at(-1)).toEqual({
+			provider: "scheduled-b",
+			model: "model-b",
+			reasoning: "low",
+		});
+		b.appendResponses([fauxAssistantMessage(`HOLD ${"word ".repeat(1000)}`)]);
+		a.appendResponses([fauxAssistantMessage("RESTORED_A")]);
+		const beforeEdit = requests.length;
+		const secondTurn = promptSession(session.sessionId, "hold while editing queued content");
+		const secondDeadline = Date.now() + 5000;
+		while (requests.length === beforeEdit) {
+			if (Date.now() > secondDeadline) throw new Error("No edit-test request");
+			await new Promise((r) => setTimeout(r, 10));
+		}
+		const pairA = {
+			model: { provider: "scheduled-a", id: "model-a" },
+			thinkingLevel: "low" as const,
+		};
+		const pairB = {
+			model: { provider: "scheduled-b", id: "model-b" },
+			thinkingLevel: "high" as const,
+		};
+		await scheduleFollowUpSession(session.sessionId, "keep me", undefined, pairA);
+		await scheduleFollowUpSession(session.sessionId, "remove me", undefined, pairB);
+		const removed = await removeQueuedSession(session.sessionId, "followUp", 1);
+		expect(removed.removed?.modelSelection).toEqual(pairB);
+		if (!removed.removed) throw new Error("The pinned follow-up was not removed");
+		await followUpSession(
+			session.sessionId,
+			removed.removed.text,
+			removed.removed.images ? [...removed.removed.images] : undefined,
+			removed.removed.modelSelection,
+		);
+		const restored = clearQueueSession(session.sessionId);
+		expect(restored.followUp.map((item) => item.modelSelection)).toEqual([pairA, pairB]);
+		for (const item of restored.followUp)
+			await followUpSession(session.sessionId, item.text, undefined, item.modelSelection);
+		await secondTurn;
+		expect(requests.slice(beforeEdit)).toEqual([
+			{ provider: "scheduled-b", model: "model-b", reasoning: "low" },
+			{ provider: "scheduled-a", model: "model-a", reasoning: "low" },
+			{ provider: "scheduled-b", model: "model-b", reasoning: "high" },
+		]);
+		a.appendResponses([fauxAssistantMessage("PIN_A_IDLE")]);
+		await promptSession(session.sessionId, "edited while idle", undefined, {
+			modelSelection: pairA,
+		});
+		expect(requests.at(-1)).toEqual({
+			provider: "scheduled-a",
+			model: "model-a",
+			reasoning: "low",
+		});
+
+		await expect(
+			scheduleFollowUpSession(session.sessionId, "bad reasoning", undefined, {
+				model: { provider: "fauxa", id: "fauxa" },
+				thinkingLevel: "high",
+			}),
+		).rejects.toThrow("Unsupported reasoning");
+
+		await expect(
+			scheduleFollowUpSession(session.sessionId, "invalid", undefined, {
+				model: { provider: "missing", id: "missing" },
+				thinkingLevel: "high",
+			}),
+		).rejects.toThrow();
+	} finally {
+		await removeSession(session.sessionId);
+	}
+}, 30000);
+
+test("scheduled handoff is accepted at agent start while another chat can start", async () => {
+	const core = createFauxCore({
+		provider: "scheduled-handoff",
+		api: "scheduled-handoff",
+		models: [modelDef("scheduled-handoff")],
+		tokensPerSecond: 100,
+	});
+	runtime.registerProvider("scheduled-handoff", cfg(core, "scheduled-handoff"));
+	let release!: () => void;
+	const gate = new Promise<void>((resolve) => (release = resolve));
+	let requestStarted!: () => void;
+	const firstRequest = new Promise<void>((resolve) => (requestStarted = resolve));
+	core.setResponses([
+		async () => {
+			requestStarted();
+			await gate;
+			return fauxAssistantMessage("A_DONE");
+		},
+		fauxAssistantMessage("B_DONE"),
+	]);
+	let sessionA: Awaited<ReturnType<typeof createSession>> | undefined;
+	let sessionB: Awaited<ReturnType<typeof createSession>> | undefined;
+	try {
+		sessionA = await createSession({
+			cwd: tmpCwd("trpi-scheduled-handoff-a-"),
+			workspaceId: "ws-scheduled-handoff-a",
+			model: toWireModel(core.getModel()),
+		});
+		sessionB = await createSession({
+			cwd: tmpCwd("trpi-scheduled-handoff-b-"),
+			workspaceId: "ws-scheduled-handoff-b",
+			model: toWireModel(core.getModel()),
+		});
+
+		const acceptedA = acceptScheduledFollowUpSession(sessionA.sessionId, "A");
+		await firstRequest;
+		await acceptedA;
+		expect(getSessionState(sessionA.sessionId).execution).toBe("running");
+
+		await acceptScheduledFollowUpSession(sessionB.sessionId, "B");
+		expect(getSessionState(sessionB.sessionId).execution).toBe("running");
+		expect(getSessionState(sessionA.sessionId).execution).toBe("running");
+
+		release();
+		const deadline = Date.now() + 5000;
+		while (
+			getSessionState(sessionA.sessionId).execution === "running" ||
+			getSessionState(sessionB.sessionId).execution === "running"
+		) {
+			if (Date.now() > deadline) throw new Error("The held response did not finish");
+			await new Promise((resolve) => setTimeout(resolve, 10));
+		}
+	} finally {
+		release();
+		if (sessionA) await removeSession(sessionA.sessionId);
+		if (sessionB) await removeSession(sessionB.sessionId);
+		runtime.unregisterProvider("scheduled-handoff");
+	}
+}, 30000);
 test("switching other agents' skills host-wide reloads an open chat's skill set", async () => {
 	const claudeDir = tmpCwd("trpi-other-agent-claude-");
 	const skillDir = join(claudeDir, "skills", "tr-other-agent-probe");
