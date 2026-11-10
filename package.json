@@ -109,7 +109,7 @@
 	"devDependencies": {
 		"@changesets/changelog-github": "catalog:",
 		"@changesets/cli": "catalog:",
-		"@biomejs/biome": "2.5.0",
+		"@biomejs/biome": "2.6.3",
 		"@earendil-works/pi-coding-agent": "catalog:",
 		"@thinkrail/artifact-tests": "workspace:*",
 		"@thinkrail/contracts": "workspace:*",
