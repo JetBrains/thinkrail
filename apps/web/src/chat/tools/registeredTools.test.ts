@@ -19,6 +19,7 @@ const INTENTIONAL_TOOLS = [
 	"fetch_content",
 	"get_search_content",
 	"visualize",
+	"spec_search",
 	"spec_grep",
 	"spec_get",
 	"spec_graph",
@@ -62,6 +63,12 @@ function renderTool(toolName: string, args: Record<string, unknown>, result: unk
 describe("intentional bundled tool renderers", () => {
 	it("extracts paths only from each spec tool's known structured result fields", () => {
 		const cases: Array<[string, Record<string, unknown>, unknown, string[]]> = [
+			[
+				"spec_search",
+				{ query: "titles" },
+				{ details: { hits: [{ path: "search/SPEC.md" }, { path: "search/SPEC.md" }, {}] } },
+				["search/SPEC.md"],
+			],
 			[
 				"spec_grep",
 				{},
@@ -200,6 +207,13 @@ describe("intentional bundled tool renderers", () => {
 
 		expect(html).toContain("removed/SPEC.md");
 		expect(html).not.toContain('data-testid="tool-file-link"');
+	});
+
+	it("summarizes a spec search by its first phrasing", () => {
+		const summary = (query: unknown) =>
+			getToolSummary(currentTranslator(), "spec_search", props("spec_search", { query }, null));
+		expect(summary("rename chat title")).toBe("rename chat title");
+		expect(summary(["crash isolation", "fatal fault"])).toBe("crash isolation");
 	});
 
 	it("summarizes the first query, URL, or selected stored-content target", () => {

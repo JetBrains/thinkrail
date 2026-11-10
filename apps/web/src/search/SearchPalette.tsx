@@ -50,7 +50,14 @@ import {
 	useHostSearch,
 } from "./hostSearch";
 import { recordPick } from "./learning";
-import type { PaletteFile, PaletteItem, PaletteRow, PaletteSection, PaletteStart } from "./model";
+import type {
+	PaletteAsk,
+	PaletteFile,
+	PaletteItem,
+	PaletteRow,
+	PaletteSection,
+	PaletteStart,
+} from "./model";
 import { readLearning, readPreviewOpen, writeLearning, writePreviewOpen } from "./preferences";
 import {
 	parseSearchQuery,
@@ -61,7 +68,14 @@ import {
 	withScopePrefix,
 } from "./query";
 import { scopeChordIndex } from "./scopeChord";
-import { flattenRows, groupSections, rankSections, startEligible, startPrompt } from "./sections";
+import {
+	askEligible,
+	flattenRows,
+	groupSections,
+	rankSections,
+	startEligible,
+	startPrompt,
+} from "./sections";
 
 const WIDE_VIEWPORT = "(min-width: 48rem)";
 const SPINNER_DELAY_MS = 200;
@@ -108,6 +122,7 @@ export interface SearchPaletteProps {
 	readonly scopes: readonly SearchScope[];
 	readonly host?: PaletteHost;
 	readonly start?: PaletteStart;
+	readonly ask?: PaletteAsk;
 	readonly notice?: PaletteNotice;
 }
 
@@ -132,6 +147,7 @@ function PaletteContent({
 	scopes,
 	host,
 	start,
+	ask,
 	notice,
 }: SearchPaletteProps) {
 	const t = useT();
@@ -195,6 +211,14 @@ function PaletteContent({
 		() => (start && startText ? { start, text: startText } : undefined),
 		[start, startText],
 	);
+	const askText = askEligible(parsed) ? startPrompt(parsed.raw) : "";
+	const askInput = useMemo(
+		() =>
+			ask && askText
+				? { ask, text: askText, ...(offlineReason ? { disabledReason: offlineReason } : {}) }
+				: undefined,
+		[ask, askText, offlineReason],
+	);
 	const ranked = useMemo(
 		() => rankSections({ parsed, rootItems: allItems, learning, nowMs }),
 		[parsed, allItems, learning, nowMs],
@@ -206,6 +230,7 @@ function PaletteContent({
 				parsed,
 				hostOverflow: overflow,
 				...(startInput ? { start: startInput } : {}),
+				...(askInput ? { ask: askInput } : {}),
 				rootItems: allItems,
 				waiting,
 				actions: emptyActions,
@@ -220,6 +245,7 @@ function PaletteContent({
 			parsed,
 			overflow,
 			startInput,
+			askInput,
 			allItems,
 			waiting,
 			emptyActions,
@@ -279,6 +305,13 @@ function PaletteContent({
 		onClose();
 	};
 
+	const askFromText = () => {
+		if (!askInput || askInput.disabledReason) return;
+		pickedRef.current = true;
+		onClose();
+		askInput.ask.ask(askInput.text);
+	};
+
 	const activate = (row: PaletteRow | null) => {
 		if (!row) return;
 		const { item } = row;
@@ -295,6 +328,10 @@ function PaletteContent({
 		}
 		if (item.kind === "start") {
 			startFromText();
+			return;
+		}
+		if (item.kind === "ask") {
+			askFromText();
 			return;
 		}
 		if (item.run) {
@@ -355,6 +392,11 @@ function PaletteContent({
 		if (mod && event.key === "Enter" && !event.altKey && !event.shiftKey) {
 			claim();
 			if (!event.repeat) startFromText();
+			return;
+		}
+		if (askInput && event.altKey && event.key === "Enter" && !mod && !event.shiftKey) {
+			claim();
+			if (!event.repeat) askFromText();
 			return;
 		}
 		if (mod && event.code === "KeyI" && !event.shiftKey && !event.altKey) {
@@ -523,6 +565,9 @@ function PaletteContent({
 								label={t("search.hint.start")}
 							/>
 						) : null}
+						{askInput && !askInput.disabledReason && selected?.item.kind !== "ask" ? (
+							<KeyHint keys={shortcutKeys({ key: "↵", alt: true })} label={t("search.hint.ask")} />
+						) : null}
 						<KeyHint keys={["esc"]} label={t(query ? "search.hint.clear" : "search.hint.close")} />
 					</div>
 					{wide ? (
@@ -652,6 +697,7 @@ function enterLabel(item: PaletteItem | undefined): MessageKey {
 	if (!item) return "search.hint.open";
 	if (item.kind === "command") return "search.hint.run";
 	if (item.kind === "start") return "search.hint.start";
+	if (item.kind === "ask") return "search.hint.ask";
 	return "search.hint.open";
 }
 
@@ -813,7 +859,7 @@ function Row({
 						item.disabledReason ? "text-text-disabled" : "text-text-default",
 					)}
 				>
-					{highlightRanges(item.title, row.ranges.title)}
+					<RowTitle title={item.title} lead={item.titleLead ?? 0} ranges={row.ranges.title} />
 				</span>
 				{item.subtitle ? (
 					<span className="truncate tr-text-metadata text-text-subtle">
@@ -833,6 +879,30 @@ function Row({
 				) : null}
 			</span>
 		</div>
+	);
+}
+
+function RowTitle({
+	title,
+	lead,
+	ranges = [],
+}: {
+	title: string;
+	lead: number;
+	ranges: readonly (readonly [number, number])[] | undefined;
+}): ReactNode {
+	if (lead <= 0) return highlightRanges(title, ranges);
+	const before = ranges
+		.filter(([start]) => start < lead)
+		.map(([start, end]): [number, number] => [start, Math.min(end, lead)]);
+	const after = ranges
+		.filter(([, end]) => end > lead)
+		.map(([start, end]): [number, number] => [Math.max(start, lead) - lead, end - lead]);
+	return (
+		<>
+			<span className="text-text-muted">{highlightRanges(title.slice(0, lead), before)}</span>
+			{highlightRanges(title.slice(lead), after)}
+		</>
 	);
 }
 

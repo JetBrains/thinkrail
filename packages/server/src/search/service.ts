@@ -21,7 +21,7 @@ import {
 } from "@thinkrail/contracts";
 import type { HistorySession, HistoryState } from "../history";
 import { logger } from "../log";
-import type { SpecSnapshot } from "../spec";
+import type { SpecSections, SpecSnapshot } from "../spec";
 import type { StoredPlanFile } from "../todos";
 import { type FileList, FileListCache } from "./files";
 import { deadlineAt, emptyGroup } from "./hits";
@@ -32,6 +32,7 @@ import {
 	type SearchRoot,
 	searchFiles,
 	searchPlans,
+	searchSections,
 	searchSpecs,
 	searchTranscripts,
 } from "./providers";
@@ -49,6 +50,7 @@ export interface SearchReaders {
 	readonly workspaces: () => Workspace[];
 	readonly sessions: () => Promise<HistoryRead>;
 	readonly specs: (root: string) => SpecSnapshot;
+	readonly sections: (root: string) => SpecSections;
 	readonly plans: (root: string) => StoredPlanFile[];
 	readonly invalidateSpecs: (root: string) => void;
 	readonly ensureDefault: (projectId: string) => Promise<unknown>;
@@ -223,6 +225,14 @@ export function createSearchService(readers: SearchReaders): SearchService {
 		}
 	};
 
+	const sectionRebuild = (root: string): Promise<void> | null => {
+		try {
+			return readers.sections(root).rebuilding;
+		} catch {
+			return null;
+		}
+	};
+
 	const readHistory = (): Promise<HistoryRead | null> =>
 		readers.sessions().catch((error: unknown) => {
 			log.warn("search could not read the chat history", error);
@@ -231,11 +241,12 @@ export function createSearchService(readers: SearchReaders): SearchService {
 
 	return {
 		async query(params, audience = EVERY_CLIENT) {
-			const terms = parseMatchTerms(params.query.slice(0, MAX_SEARCH_QUERY_LENGTH));
+			const text = params.query.slice(0, MAX_SEARCH_QUERY_LENGTH);
+			const terms = parseMatchTerms(text);
 			const kinds = new Set<SearchKind>(params.kinds ?? SEARCH_KINDS);
 			if (terms.length === 0) return { groups: [...kinds].map((kind) => emptyGroup(kind)) };
 
-			const rooted = kinds.has("file") || kinds.has("spec");
+			const rooted = kinds.has("file") || kinds.has("spec") || kinds.has("section");
 			const { root, failed: rootFailed } = rooted
 				? await rootFor(params.context, audience)
 				: { root: null, failed: false };
@@ -245,6 +256,7 @@ export function createSearchService(readers: SearchReaders): SearchService {
 				[
 					root && kinds.has("file") ? files.refresh(root.root, root.git) : null,
 					root?.git && kinds.has("spec") ? specRebuild(root.root) : null,
+					root?.git && kinds.has("section") ? sectionRebuild(root.root) : null,
 					history,
 				],
 				SEARCH_BUDGET.reloadWaitMs,
@@ -253,6 +265,7 @@ export function createSearchService(readers: SearchReaders): SearchService {
 			const limit = clampLimit(params.limit);
 			const started = now();
 			const input = (): ProviderInput => ({
+				text,
 				terms,
 				limit,
 				deadline: deadlineAt(
@@ -281,6 +294,13 @@ export function createSearchService(readers: SearchReaders): SearchService {
 						? searchSpecs(root, readers.specs, input())
 						: emptyGroup("spec")
 					: rootless("spec"),
+			);
+			push("section", () =>
+				root
+					? root.git
+						? searchSections(root, readers.sections, input())
+						: emptyGroup("section")
+					: rootless("section"),
 			);
 
 			const read = history ? await history : null;

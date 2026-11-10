@@ -41,7 +41,7 @@ export function formatGrepMatch(match: GrepMatch): string {
 
 export const DEFAULT_GREP_LIMIT = 200;
 
-function matchesFilters(fm: Frontmatter, filters: SpecFilters): boolean {
+export function matchesFilters(fm: Frontmatter, filters: SpecFilters): boolean {
 	if (filters.type !== undefined && scalar(fm, FIELDS.type) !== filters.type) return false;
 	if (filters.parent !== undefined && scalar(fm, FIELDS.parent) !== filters.parent) return false;
 	if (filters.tag !== undefined && !list(fm, FIELDS.tags).includes(filters.tag)) return false;
