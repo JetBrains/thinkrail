@@ -37,6 +37,7 @@ import {
 	awaitingToolCallIdOf,
 	deriveInteractionStates,
 	InteractionStatesContext,
+	type PendingInteraction,
 } from "../chat/interactionState";
 import { Markdown } from "../chat/Markdown";
 import { SectionLabel, VerificationBadge, VerificationGlyph } from "../chat/planKit";
@@ -52,7 +53,6 @@ import {
 	itemOpenFindings,
 	itemRevisions,
 	lastAgentText,
-	type PendingInteraction,
 	type PlanGlance,
 	pendingInteraction,
 	planCompletionSummary,

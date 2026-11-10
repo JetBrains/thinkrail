@@ -18,6 +18,8 @@ export interface ToolRevealOptions {
 	topInset?: number;
 }
 
+export type ToolPlacement = "dock" | "stub";
+
 export interface ToolInteractionState<R = unknown> {
 	response?: R | undefined;
 	superseded: boolean;
@@ -37,6 +39,7 @@ export interface ToolInteraction<R = unknown> {
 	cancelAutomaticReveal: () => void;
 	focusComposer: () => void;
 	hostProtocol?: number | undefined;
+	placement?: ToolPlacement | undefined;
 }
 
 export interface ToolRenderProps {
@@ -65,6 +68,7 @@ export interface ToolRegistrationOptions {
 	prominence?: ToolProminence;
 	defaultExpanded?: boolean;
 	interactive?: boolean;
+	dock?: boolean;
 }
 
 export interface WebExtension {
