@@ -99,10 +99,10 @@ Download the `thinkrail-desktop-*` asset for your platform:
 
 - **macOS 14+ (Apple Silicon or Intel)**: open the DMG for your architecture: `thinkrail-desktop-darwin-arm64.dmg` or `thinkrail-desktop-darwin-x64.dmg`.
 - **Windows x64**: extract the complete setup ZIP, then run the executable.
-- **Linux x64 / ARM64**: extract the setup tarball and run `installer`. Desktop builds need glibc 2.38+ with GTK 3, WebKitGTK 4.1, Ayatana AppIndicator 3, librsvg 2, and Ubuntu 24.04 or newer:
+- **Linux x64 / ARM64**: extract the setup tarball and run `installer`. Desktop builds need glibc 2.38+ with GTK 3, WebKitGTK 4.1, Ayatana AppIndicator 3, librsvg 2, and Ubuntu 24.04 or newer, plus `libnotify-bin` for desktop notifications:
   
   ```bash
-  sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-2
+  sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-2 libnotify-bin
   ```
 
 There are two update channels: stable and nightly. If the ThinkRail desktop app, you can check them in **Settings → Updates**: **Download** → **Preparing update** → **Install & Restart**.
