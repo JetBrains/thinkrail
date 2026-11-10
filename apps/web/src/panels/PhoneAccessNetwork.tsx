@@ -58,6 +58,22 @@ function RouteRow({
 /** Settings → Phone access's network check: which routes a phone has to this computer and what each needs. */
 export function PhoneAccessNetwork({ reach }: { reach: PhoneReach }) {
 	const t = useT();
+	const nostrRow = reach.nostr ? (
+		<RouteRow
+			id="nostr"
+			tone={reach.nostr.connected > 0 ? "ok" : "warn"}
+			label={t("settings.phone.route.nostr")}
+			addresses={reach.nostr.hosts}
+			detail={
+				reach.nostr.connected > 0
+					? t("settings.phone.route.nostrFound", {
+							connected: reach.nostr.connected,
+							total: reach.nostr.hosts.length,
+						})
+					: t("settings.phone.route.nostrMissing")
+			}
+		/>
+	) : null;
 	if (reach.external !== null) {
 		return (
 			<SettingsGroup title={t("settings.phone.network")} testId="phone-access-network">
@@ -68,6 +84,7 @@ export function PhoneAccessNetwork({ reach }: { reach: PhoneReach }) {
 					addresses={[reach.external]}
 					detail={t("settings.phone.route.relayDetail")}
 				/>
+				{nostrRow}
 			</SettingsGroup>
 		);
 	}
@@ -133,6 +150,7 @@ export function PhoneAccessNetwork({ reach }: { reach: PhoneReach }) {
 				}
 			/>
 			<RouteRow id="public" label={t("settings.phone.route.public")} {...publicRow} />
+			{nostrRow}
 			{reach.anywhere || check?.state === "checking" ? null : (
 				<div className="py-12">
 					<SettingsNotice variant="info" testId="phone-access-lan-only">

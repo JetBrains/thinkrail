@@ -6,6 +6,7 @@ import {
 	type PhoneAccessEvent,
 	type PhoneAccessState,
 	phoneAccessReducer,
+	phoneHasNoRoute,
 	phoneReach,
 	type ShownPairing,
 	shouldAutoIssue,
@@ -189,6 +190,23 @@ test("phoneReach names each route a phone has and whether it works from other ne
 		routes: ["relay"],
 		anywhere: true,
 	});
+});
+
+test("a live Nostr relay reaches phones on any network; none live leaves the route listed but down", () => {
+	const nostr = { relays: ["wss://relay.one", "wss://relay.two/v1"], connected: 1 };
+	expect(phoneReach({ ...on, nostr })).toMatchObject({
+		nostr: { hosts: ["relay.one", "relay.two"], connected: 1 },
+		routes: ["lan", "nostr"],
+		anywhere: true,
+	});
+	expect(phoneReach({ ...on, nostr: { ...nostr, connected: 0 } })).toMatchObject({
+		routes: ["lan"],
+		anywhere: false,
+	});
+
+	expect(phoneHasNoRoute({ ...on, addresses: [] })).toBe(true);
+	expect(phoneHasNoRoute({ ...on, addresses: [], nostr })).toBe(false);
+	expect(phoneHasNoRoute(off)).toBe(false);
 });
 
 test("a status read that stays off does not count as another off", () => {

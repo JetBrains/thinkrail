@@ -5,7 +5,7 @@ import { Button } from "@thinkrail/ui/button";
 import { SettingsGroup, SettingsPageContainer, SettingsRow } from "@thinkrail/ui/settings";
 import { PhoneAccessNetwork } from "./PhoneAccessNetwork";
 import { PhoneDeviceRow } from "./PhoneDeviceRow";
-import { phoneReach } from "./phoneAccessState";
+import { phoneHasNoRoute, phoneReach } from "./phoneAccessState";
 import { SettingsNotice } from "./SettingsNotice";
 import { SettingsSwitch } from "./SettingsSwitch";
 import { type ShownPairing, usePhoneAccess } from "./usePhoneAccess";
@@ -65,7 +65,7 @@ export function PhoneAccessView({
 						/>
 					}
 				/>
-				{enabled && status?.addresses.length === 0 ? (
+				{enabled && phoneHasNoRoute(status) ? (
 					<div className="border-border-muted border-b py-12">
 						<SettingsNotice variant="warning" testId="phone-access-no-network">
 							{t("settings.phone.noNetwork")}

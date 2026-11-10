@@ -5,6 +5,7 @@ import {
 	sign as edSign,
 	verify as edVerify,
 	generateKeyPairSync,
+	hkdfSync,
 	type KeyObject,
 } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -27,6 +28,15 @@ export interface HostIdentity {
 	/** Short, human-comparable fingerprint of the public key. */
 	fingerprint: string;
 	sign(data: Uint8Array): Uint8Array;
+	/** 32-byte secp256k1 secret for Nostr signaling, derived from the identity so it survives restarts with it. */
+	nostrSecret: Uint8Array;
+}
+
+const NOSTR_SECRET_INFO = "thinkrail/nostr-signaling/v1";
+
+function deriveNostrSecret(privateKey: KeyObject): Uint8Array {
+	const der = privateKey.export({ type: "pkcs8", format: "der" });
+	return new Uint8Array(hkdfSync("sha256", der, new Uint8Array(0), NOSTR_SECRET_INFO, 32));
 }
 
 function rawPublicKey(key: KeyObject): string {
@@ -89,5 +99,6 @@ export function loadOrCreateIdentity(dir: string = dataDir()): HostIdentity {
 		publicKey: publicKeyRaw,
 		fingerprint: fingerprintOf(publicKeyRaw),
 		sign: (data) => edSign(null, data, privateKey),
+		nostrSecret: deriveNostrSecret(privateKey),
 	};
 }

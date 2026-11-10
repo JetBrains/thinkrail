@@ -69,6 +69,9 @@ See [[submodule-server-remote-transport]] (the host side of the same handshake) 
 - **Relay data path stays WebRTC.** The relay brokers signaling and TURN; it does not carry session bytes
   over its WebSocket. Tunnelling the wire through the relay would need its own end-to-end encryption layer
   in place of DTLS, which the remote modules forbid hand-rolling.
+- **Not required for the internet route.** A phone off the host's network signals through public Nostr
+  relays ([[module-nostr-signaling]]), so this relay is the host's own for Wi‑Fi/Tailscale and the hosted
+  or self-hosted option for operators who want their own rendezvous and TURN.
 - **One image, many operators.** The public repository owns the relay code, its image and the self-host
   recipe; a hosted deployment's infrastructure and secrets live outside it and pull a pinned image version.
 

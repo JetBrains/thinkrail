@@ -121,13 +121,15 @@ export interface PhoneReach {
 	lan: string[];
 	tailscale: string[];
 	publicCheck: RemotePublicCheck | null;
+	/** The public Nostr relays phones on any network signal through: their hosts and how many are live. */
+	nostr: { hosts: string[]; connected: number } | null;
 	/** The routes a phone has right now, in the order the panel names them. */
 	routes: PhoneRoute[];
 	/** A phone on another network can connect. */
 	anywhere: boolean;
 }
 
-export type PhoneRoute = "lan" | "tailscale" | "public" | "relay";
+export type PhoneRoute = "lan" | "tailscale" | "public" | "relay" | "nostr";
 
 const hostOf = (url: string): string => {
 	try {
@@ -137,9 +139,20 @@ const hostOf = (url: string): string => {
 	}
 };
 
+/** Access is on but a phone has no way in: no network address and no live Nostr relay. */
+export function phoneHasNoRoute(status: RemoteAccessStatus | null): boolean {
+	return (
+		status?.enabled === true && status.addresses.length === 0 && !(status.nostr?.connected ?? 0)
+	);
+}
+
 export function phoneReach(status: RemoteAccessStatus | null): PhoneReach | null {
 	if (!status?.enabled || !status.relay) return null;
 	const { relay } = status;
+	const nostr = status.nostr
+		? { hosts: status.nostr.relays.map(hostOf), connected: status.nostr.connected }
+		: null;
+	const viaNostr: PhoneRoute[] = nostr && nostr.connected > 0 ? ["nostr"] : [];
 	if (relay.kind === "external") {
 		return {
 			external: relay.url,
@@ -147,7 +160,8 @@ export function phoneReach(status: RemoteAccessStatus | null): PhoneReach | null
 			lan: [],
 			tailscale: [],
 			publicCheck: null,
-			routes: ["relay"],
+			nostr,
+			routes: ["relay", ...viaNostr],
 			anywhere: true,
 		};
 	}
@@ -163,6 +177,7 @@ export function phoneReach(status: RemoteAccessStatus | null): PhoneReach | null
 		...(lan.length > 0 ? (["lan"] as const) : []),
 		...(tailscale.length > 0 ? (["tailscale"] as const) : []),
 		...(isPublic ? (["public"] as const) : []),
+		...viaNostr,
 	];
 	return {
 		external: null,
@@ -170,7 +185,8 @@ export function phoneReach(status: RemoteAccessStatus | null): PhoneReach | null
 		lan,
 		tailscale,
 		publicCheck,
+		nostr,
 		routes,
-		anywhere: tailscale.length > 0 || isPublic,
+		anywhere: tailscale.length > 0 || isPublic || viaNostr.length > 0,
 	};
 }
