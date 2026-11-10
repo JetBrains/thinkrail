@@ -82,9 +82,17 @@ function toDisplayName(raw: string): string | null {
  * the first instant even when two creates race.
  */
 function existingHeads(project: Project): Set<string> {
-	const result = git(project.path, ["for-each-ref", "--format=%(refname:short)", "refs/heads/"], {
-		action: "list the project's branches",
-	});
+	// lstrip=2 drops exactly "refs/heads/", unlike refname:lstrip=2 which git may
+	// disambiguate as "heads/<name>" when a tag shares the branch's name — such a
+	// branch would then be missing from the occupied set and both allocators
+	// could hand out a taken name.
+	const result = git(
+		project.path,
+		["for-each-ref", "--format=%(refname:lstrip=2)", "refs/heads/"],
+		{
+			action: "list the project's branches",
+		},
+	);
 	const heads = new Set<string>();
 	if (result.ok) {
 		for (const name of result.out.split("\n")) {

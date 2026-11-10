@@ -759,6 +759,17 @@ test("auto naming skips a long run of existing workspace-N branches in one pass"
 	expect(ws.branch).toBe("workspace-61");
 });
 
+test("auto naming still skips a branch whose name is also used by a tag", async () => {
+	// A tag that shares the branch's name makes `%(refname:short)` emit "heads/<name>"
+	// for that branch, so the listing strips "refs/heads/" itself and must not rely on
+	// git's disambiguated short names to decide which names are taken.
+	git(repo, "branch", "workspace-1");
+	git(repo, "tag", "workspace-1");
+
+	const ws = await createWorkspace("p1");
+	expect(ws.branch).toBe("workspace-2");
+});
+
 test("forgetWorkspace drops the record + returns it, but leaves the worktree for a separate reclaim", async () => {
 	const ws = await createWorkspace("p1");
 	expect(await worktrees()).toHaveLength(1);
