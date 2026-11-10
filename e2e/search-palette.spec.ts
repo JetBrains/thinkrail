@@ -251,7 +251,7 @@ test("a chat in a workspace this window never opened is found by its title, rena
 	}
 });
 
-test("picking a chat or a workspace puts the cursor in the chat input, unless the workspace shows a non-chat tab", async ({
+test("picking a chat or a workspace puts the cursor in the chat input, unless the workspace shows a non-chat tab, and never later", async ({
 	page,
 }) => {
 	const repo = realpathSync(E2E_FIXTURE_REPO);
@@ -308,6 +308,26 @@ test("picking a chat or a workspace puts the cursor in the chat input, unless th
 		await expect(palette(page)).toBeHidden();
 		await nextFrame(page);
 		await expect(fileTab).toHaveAttribute("data-active", "true");
+		await expect(focusedChat).toHaveCount(0);
+
+		await page.setViewportSize({ width: 1440, height: 900 });
+		await fileTab.click({ button: "right" });
+		await page.getByRole("menuitem", { name: "Split right" }).click();
+		await expect(page.getByTestId("center-group")).toHaveCount(2);
+		await openPalette(page);
+		await page.getByTestId("search-input").fill("@");
+		await workspaceRow.first().click();
+		await expect(palette(page)).toBeHidden();
+		await nextFrame(page);
+		await expect(focusedChat).toHaveCount(0);
+		const skills = page
+			.getByTestId("center-group")
+			.filter({ has: page.getByTestId("chat-view") })
+			.getByTestId("open-skills");
+		await skills.focus();
+		await nextFrame(page);
+		await nextFrame(page);
+		await expect(skills).toBeFocused();
 		await expect(focusedChat).toHaveCount(0);
 	} finally {
 		rmSync(seeded.path, { force: true });

@@ -802,7 +802,12 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   **`selectComposerFocusRequested`** holds only while that workspace is active, its tick is unchanged (a counted tab
   switch or another navigation expires it), the session matches when one is named, and the chat is attended
   (`selectChatAttended`). A chat that mounts late (hydration, a route target opening its tab) still takes it.
-  A destination showing a non-chat tab leaves the request unconsumed until it expires. The `EditorTab` (`FileTab`
+  **`selectComposerFocusRequestStale`** marks a request that can no longer be consumed: its workspace is no
+  longer active, its tick moved, or the destination's layout is loaded and its attended center tab is
+  something other than the requested chat. It waits while the layout or the attended tab is still missing,
+  and while a chat row's route target for that session is pending. A request left waiting for a chat that
+  appears later through an unrelated path (another group taking focus, a closed tab) would steal focus from
+  whatever the user was doing, so the shell drops a stale request as soon as the destination settles. The `EditorTab` (`FileTab`
   | `ChatTab` | `DocTab` | `DiffTab` | `ChangesTab` | `PlanTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types.
   (Chat *render* types + renderers live in the `chat` module.) The pure context
   selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context

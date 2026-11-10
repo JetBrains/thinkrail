@@ -805,7 +805,10 @@ export function selectComposerFocusRequestStale(
 	if (!request || request.workspaceId !== workspaceId) return false;
 	if (state.activeWorkspaceId !== workspaceId) return true;
 	if (selectWorkspaceNavTick(state, workspaceId) !== request.navTick) return true;
-	if (!state.layoutDocumentsByWorkspace[workspaceId] || !state.layoutAttentionByWorkspace[workspaceId]) {
+	if (
+		!state.layoutDocumentsByWorkspace[workspaceId] ||
+		!state.layoutAttentionByWorkspace[workspaceId]
+	) {
 		return false;
 	}
 	if (request.sessionId && selectCurrentRouteChatTarget(state)?.sessionId === request.sessionId) {
