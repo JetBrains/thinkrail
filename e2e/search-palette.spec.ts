@@ -251,6 +251,69 @@ test("a chat in a workspace this window never opened is found by its title, rena
 	}
 });
 
+test("picking a chat or a workspace puts the cursor in the chat input, unless the workspace shows a non-chat tab", async ({
+	page,
+}) => {
+	const repo = realpathSync(E2E_FIXTURE_REPO);
+	await openFixtureProject(page);
+	const seeded = seedWorkspaceSession(repo, {
+		name: "Zebra migration plan",
+		messages: [
+			{ role: "user", text: "move the tables", timestamp: BASE_TS + 20 },
+			{ role: "assistant", text: "moved", timestamp: BASE_TS + 21 },
+		],
+	});
+	const focusedChat = page.locator(
+		'[data-testid="chat-view"]:has([data-testid="chat-input"]:focus)',
+	);
+	const workspaceRow = palette(page).locator('[data-testid="search-row"][data-kind="workspace"]');
+	try {
+		await page.reload();
+		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await expect(page.getByTestId("welcome")).toBeVisible();
+
+		await openPalette(page);
+		await page.getByTestId("search-input").fill("zebra");
+		await expect(
+			palette(page).locator(`[data-testid="search-row"][data-item-id="chat:${seeded.id}"]`),
+		).toHaveAttribute("aria-selected", "true");
+		await page.keyboard.press("Enter");
+		await expect(palette(page)).toBeHidden();
+		await expect(focusedChat).toContainText("move the tables");
+
+		await page.getByTestId("open-search").focus();
+		await openPalette(page);
+		await page.getByTestId("search-input").fill("@");
+		await workspaceRow.first().click();
+		await expect(palette(page)).toBeHidden();
+		await expect(focusedChat).toContainText("move the tables");
+
+		await openPalette(page);
+		await page.getByTestId("search-input").fill("/notes");
+		const file = palette(page).locator('[data-testid="search-row"][data-kind="file"]', {
+			hasText: "notes.txt",
+		});
+		await expect(file).toBeVisible({ timeout: 15_000 });
+		await file.click();
+		await expect(palette(page)).toBeHidden();
+		const fileTab = page.locator('[data-testid="editor-tab"][data-kind="file"]', {
+			hasText: "notes.txt",
+		});
+		await expect(fileTab).toHaveAttribute("data-active", "true");
+		await expect(focusedChat).toHaveCount(0);
+
+		await openPalette(page);
+		await page.getByTestId("search-input").fill("@");
+		await workspaceRow.first().click();
+		await expect(palette(page)).toBeHidden();
+		await nextFrame(page);
+		await expect(fileTab).toHaveAttribute("data-active", "true");
+		await expect(focusedChat).toHaveCount(0);
+	} finally {
+		rmSync(seeded.path, { force: true });
+	}
+});
+
 test("commands run from the palette and show their shortcut", async ({ page }) => {
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);

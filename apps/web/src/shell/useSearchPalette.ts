@@ -236,7 +236,9 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				goToProjectHome(projectId);
 			},
 			navigateToWorkspace: (workspace, sessionId) =>
-				void paletteNavigator.navigateToWorkspace(workspace, sessionId),
+				void paletteNavigator.navigateToWorkspace(workspace, sessionId).then((opened) => {
+					if (opened) store().requestComposerFocus(workspace.id, sessionId);
+				}),
 		});
 		const rootItems: PaletteItem[] = [
 			...commandItems(t, buildCommands(deps), online),
