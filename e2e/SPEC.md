@@ -609,7 +609,11 @@ under its preview, and the picked file's path in the persisted answer; `plan-ask
 preview on the plan page. These three specs also run in a **`webkit` Playwright project**: the macOS desktop
 is the system WKWebView, whose Tab skips buttons without an explicit `tabindex` (the regression this lane
 exists for). CI installs WebKit with its system deps; Linux WebKitGTK may not reproduce the macOS Tab rule,
-so the card's markup guard (every control an explicit tab stop) is the platform-independent net. All of this
+so the card's markup guard (every control an explicit tab stop) is the platform-independent net. Single
+tests elsewhere opt into a second WebKit project, **`webkit-tagged`**, with the `@webkit` tag (Playwright
+`grep`), so a feature that depends on engine behaviour (editing keys, drag and drop, modifier clicks) is
+checked on WebKit without moving its whole spec file into the `webkit` project. Playwright WebKit is the same
+engine family as WKWebView, not the app's web view itself. All of this
 runs without provider variability; desktop package tests separately pin the stable
 backend-profile/window adapter required across dynamic-port restarts. Streaming-band coverage remains
 `@agent` because only Pi's real row growth exercises that lifecycle. Stream-mount coverage injects

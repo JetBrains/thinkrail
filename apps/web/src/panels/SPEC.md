@@ -247,7 +247,12 @@ treatment.
   active file or diff tab (`selectActiveFilePath`) gets the selected row look, and when it changes while All
   is showing its folders expand (and stay expanded) and it scrolls `nearest` into view; on return All
   reveals only if the active file differs from the persisted `seenActivePath`, and then skips the scroll
-  restore so the two cannot fight. Auto-reveal never switches the side tab or the mode. Clicks still open
+  restore so the two cannot fight. Auto-reveal never switches the side tab or the mode. A **folder reveal**
+  is the explicit exception: `store.revealFolderInFiles` (a terminal folder link) switches to All, expands
+  the folder and its ancestors, reveals the Files tool and leaves a one-shot `filesRevealRequest`, which All
+  consumes into the same `revealTarget` (a directory row matches it through any path its compact chain
+  represents) and which also skips the scroll restore when it is pending at mount. It never touches
+  `seenActivePath`, so the active file's own reveal logic is unaffected. Clicks still open
   the editor. A failed first status read shows no marks; a failed refresh keeps the last ones, like the
   Changed list. The tree's look is remembered per workspace across reloads (`store.filesTreeByWorkspace`:
   All expanded folders, Changed-tree collapsed folders shared by every scope, scroll per view through
@@ -2440,7 +2445,8 @@ own section. The kebab menu (`plan-menu`, a
   Decision #11: the DOM renderer is a prerequisite for touch, and `WebglAddon.dispose()` leaks its WebGL2
   context, which our per-worktree terminal churn would hit). Addons are exactly `fit`, `clipboard`,
   `unicode11` and `web-fonts`; anything else pinned but unimported is dead weight and a trap for the next
-  reader. `web-fonts` is load-bearing rather than cosmetic: our code font ships as per-alphabet woff2 subsets,
+  reader. Terminal links are not an addon (`addon-web-links` only knows URLs): they use xterm's core
+  `registerLinkProvider` (see **Terminal links** below). `web-fonts` is load-bearing rather than cosmetic: our code font ships as per-alphabet woff2 subsets,
   so the Cyrillic/CJK file lands *after* xterm has measured the character cell (which it does at
   construction and again only when a font option changes — unlike Monaco, which re-measures an untrusted
   early reading). Without the
@@ -2503,6 +2509,28 @@ own section. The kebab menu (`plan-menu`, a
   key handler intercepts keydown at `keyCode === 229` and derives the control bytes from `event.code`
   (which stays accurate under an IME) via `imeControlBytes`, writing them to the PTY itself; anything
   that isn't a rescued chord is left to normal text input.
+- **Terminal links.** `TerminalInstance` registers one core link provider built by
+  `terminalLinks/` ([[submodule-web-panels-terminal-links]]): printed URLs and paths — `src/a.ts:12:5`,
+  `launcher.py:123`, a Python traceback frame, a folder — are underlined on hover only when they are URLs or
+  the host's `terminal.resolvePaths` names an existing worktree entry for them, resolved from the directory
+  of the program that printed them (host-side, [[submodule-server-terminal]]). The hover sets the xterm
+  element's native `title` to "Cmd+click to open" / "Ctrl+click to open" (`isApplePlatform`), and
+  activation requires the platform modifier (`hasPlatformModifier`; plain clicks keep selecting text, and on
+  macOS Ctrl+click stays the context click). A file opens through `openFileInTab` at the `keep` intent — a
+  deliberate gesture, like a double click — with the position when one was printed; a folder runs
+  `store.revealFolderInFiles`; a URL goes to `window.open(url, "_blank", "noopener,noreferrer")`, which the
+  desktop shell routes to the system browser. Path links need a host at `TERMINAL_LINKS_PROTOCOL_VERSION`
+  and a live PTY id; otherwise only URLs link. The links are workspace-scoped by construction: the host
+  confirms nothing outside the terminal's worktree, because a tab can only show a workspace file.
+- **Opening a file at a position.** `openFileInTab(workspaceId, path, intent, navigation, { line, col })`
+  stamps the `FileTab` with a one-shot `reveal` (`{ line, col?, tick }`, the tick bumped on every request so
+  the same line asked twice still moves) and selects the Source renderer (`thinkrail/code`, dropping the
+  previous renderer's opaque view state) — a line is a source coordinate, so a Markdown, CSV or HTML file
+  opens as text where the line is visible. It works the same for an already-open tab (the cached tab is
+  re-opened with the new reveal, no host read) and for a request that joins an in-flight read of the same
+  file. `FilePane` hands the reveal to the renderer and consumes it (`consumeFileTabReveal`, tick-matched)
+  when the renderer reports it handled, so a later remount restores the user's own scroll instead of
+  jumping back.
 - Heavy deps (Monaco / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
   A lazy chunk that fails to load (or a render throw) is contained by the `components/ErrorBoundary` the
   **shell** wraps each region in (see `shell/SPEC.md`), so a single panel degrades instead of blanking the

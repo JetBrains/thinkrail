@@ -19,16 +19,21 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   workbench placement) and the PTY behind each tab, keyed by
   `(workspaceId, tabKey)`; batched output on `terminal.data` plus `terminal.exit` / `terminal.detached`
   (addressed) and `terminal.tabs` (broadcast), via injected publishers; the bounded per-terminal output
-  recorder replayed on attach.
+  recorder replayed on attach; the working-directory lookup behind terminal links (`processCwd.ts`).
 - **Public surface (barrel):** `reserveTerminal`, `attachTerminal`, `listTerminals`, `writeTerminal`,
   `resizeTerminal`, `closeTerminalTab`, `resumeClientTerminals`, `closeWorkspaceTerminals`,
   `persistTerminalSessions`, `reviveTerminalSessions`, `closeAllTerminals`, `clearTerminalClient`,
   `resetTerminalState` (test seam), `setTerminalPublisher`,
   `setTerminalTabsPublisher`; an accepted `writeTerminal` returns its owning workspace id (a displaced
   caller returns `null`), so the host counts only input that actually reached a PTY as workspace activity;
-  the `TerminalDeliveryResult` type shared with the host publisher adapter.
+  **`terminalCwds(id)`** — the PTY's workspace plus a lazy `cwds()` promise of the absolute directories a path
+  it printed is most likely relative to (foreground program first, then the shell), or `null` for an unknown
+  id; the
+  `TerminalDeliveryResult` type shared with the host publisher adapter.
 - **Allowed deps:** `persistence`, `contracts` (`WS_CHANNELS`, `TerminalWindowsShell`), `bun-pty`,
-  `Bun.which`, `Bun.spawnSync` (`id -un`), `process.env`.
+  `Bun.which`, `Bun.spawnSync` (`id -un`), `Bun.spawn` (`ps`, `lsof`), `@thinkrail/shared/spawn` (`pgrep`, the
+  Windows CIM probe) — argv only, never a shell command line — Node `fs` and `fs/promises` (`/proc`),
+  `process.env`.
 - **Forbidden:** `host`; sibling features. No WebSocket type crosses this boundary — clients are opaque keys.
 
 ## Decisions
@@ -178,6 +183,36 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   picture. A failed spawn does not consume the pending recording, so correcting the shell and retrying the
   same tab still restores it. Recordings are best-effort, so an unclean exit gives back the right tabs with
   blank screens.
+- **Terminal links resolve against the program that printed them** (`processCwd.ts`). A relative path in
+  output is relative to whatever program wrote it — `cd sub && pytest` prints `tests/x.py` relative to `sub`,
+  not to the worktree. There is no shell integration (no injected rc file or OSC 7), so the host asks the OS:
+  the *foreground* process is the deepest descendant of the PTY's `pid`, following the newest (highest-pid)
+  child at each level, bounded to 16 levels and to pids not yet visited. `terminalCwds(id).cwds()` answers
+  `[foreground cwd, shell cwd]`, deduplicated, absent entries dropped; the worktree root is the caller's last
+  resort. The cwd is sampled at hover time, not when the line was printed, so output of a program that has
+  since exited resolves from the shell's directory.
+- **The link probe never blocks the event loop.** It runs on every hover over a new row (no modifier needed)
+  and the host loop also streams every agent session, so — unlike busy-close below — it is asynchronous and
+  shares only the parsing helpers and the fixed tool `PATH` with `shellBusy.ts`, never its synchronous walk.
+  Each miss costs at most two child processes whatever the tree's depth: on Linux the walk reads
+  `/proc/<pid>/task/<pid>/children` and `readlink /proc/<pid>/cwd` asynchronously (one `ps` snapshot if the
+  children file is missing); on macOS one `ps -A -o pid=,ppid=` snapshot builds the whole tree and one
+  `lsof -b -w -a -d cwd -Fpn -p <fg>,<shell>` names both directories (`-b` avoids blocking kernel calls on a
+  stale mount). Every tool is resolved once from a fixed system `PATH`
+  (`/usr/bin:/bin:/usr/sbin:/sbin:/run/current-system/sw/bin`), spawned with only that `PATH`, and killed after
+  1 s; a timed-out, missing or failed tool answers nothing, which leaves the worktree root. Measured on a
+  macOS host before this rule: 70–80 ms of synchronous stall per miss for an idle shell, ~270 ms four levels
+  deep, ~390 ms six deep. Windows answers no directories (no cheap, argv-only cwd query for another
+  process), so links there resolve from the worktree root only.
+- **One probe per shell at a time, answers kept ~1 s after it settles.** The cache holds the in-flight
+  promise per shell pid, so concurrent hovers share one probe; the window starts when the probe settles,
+  so a slow probe is never duplicated, and a failed one answers no directories. A stale second at worst
+  resolves a path from the directory the program just left. This module only *names* directories —
+  containment, existence, and the decision that no directory is needed because every printed path is
+  absolute or `~/`-anchored belong to `fs` (`locateWorktreeEntries`, which calls `cwds()` only when needed),
+  composed by `host` for `terminal.resolvePaths`. The deepest descendant is a heuristic for the foreground
+  job: a newer background job can win over the program in front; reading the terminal's foreground process
+  group (`tpgid`) is the refinement if that ever matters.
 - **Not tmux.** Would buy restart survival at the cost of a dep we can't assume on Windows, a competing tab
   model, env-propagation breakage, and `capture-pane` polling. We already accept no crash isolation.
 
@@ -186,7 +221,8 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
 - **`attachTerminal` and its handler must stay synchronous.** Lookup and insert in one tick is what makes
   attach atomic on Bun's single event loop; an `await` between them reintroduces double-spawn.
 - **`closeTerminalTab` checks `busy` and kills in the same synchronous pass.** A separately-asked question
-  lets a process started in between die unannounced.
+  lets a process started in between die unannounced. Its `pgrep` fallback (no `/proc`) runs under the fixed
+  tool `PATH` and the same 1 s timeout as the link probe; a timeout reads as not busy.
 - Recorder rules: raw bytes (not a serialized grid); never replay resize events; re-emit observed private
   modes **except mouse tracking (1000/1002/1003/1006)** — those belong to a live foreground program, and a TUI
   that exits without its own `DECRST` leaves the last observed value stuck at `on`, so re-emitting it into a
@@ -208,6 +244,13 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   keeping mode sequences out of the body (incl. a recording persisted by a host that still replayed them).
 - `outputBatcher.test.ts` — batching, backpressure, Unicode-safe truncation, `reset`.
 - `shellBusy.test.ts` — child detection, including that an unanswerable platform reports *not* busy.
+- `processCwd.test.ts` — multi-pid `lsof -Fpn` and `ps` table parsing; the deepest-newest walk, its depth
+  bound and a cycle; `[foreground, shell]` ordering with duplicates and unanswerable lookups dropped; an
+  injected tool runner showing a six-level tree costs one `ps` and one `lsof`, a failed snapshot still names
+  the shell's cwd, a timed-out probe names nothing, and Windows runs nothing; the cache sharing one in-flight
+  probe between concurrent asks, not expiring a running probe, expiring on an injected clock after it
+  settles, and answering nothing for a failed probe; a real tool killed at its timeout; and a real `sh` whose
+  child runs in a subdirectory resolving to it.
 - `shellArgs.test.ts` — shell executable precedence across Unix and Windows plus platform-specific
   arguments; `auto`'s pwsh-then-powershell resolution via an injected `WhichFn`; every explicit preference
   is a literal pin regardless of what `which` reports; `ComSpec`/`COMSPEC` no longer influence the result.
@@ -222,7 +265,7 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
 - `terminalManager.test.ts` — transactional durable reservation without spawn, catalog bounds, rejection
   of malformed write data and out-of-range or non-integer grid sizes on resize and attach, attach
   idempotency (incl. concurrent), takeover, displaced-client rejection, tab-list broadcast, close/busy,
-  revive, and a real shell whose `USER`/`LOGNAME` map back to the host uid despite a leaked `LOGNAME=root` and
+  `terminalCwds` naming the directory a real shell `cd`'d into (and `null` for an unknown id), revive, and a real shell whose `USER`/`LOGNAME` map back to the host uid despite a leaked `LOGNAME=root` and
   which still sees the host's `PI_CODING_AGENT_DIR`.
   Replay-persistence and natural-exit cases use bounded publisher-observed data/exit conditions as
   readiness edges, never elapsed time; their expected output marker never appears contiguously in the command
@@ -236,5 +279,8 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   macOS's `/etc/zshrc` rebuilds `HISTFILE` from `ZDOTDIR`, so a temp `HISTFILE` alone still appended to the
   developer's real history.
 - `e2e/terminals.spec.ts` — the rapid re-entry regression, reload survival, second-client takeover,
-  cross-client tab convergence, addressed-output isolation. Its output markers likewise never appear
+  cross-client tab convergence, addressed-output isolation, and terminal links: a printed location opens
+  its file at the line (again for an open tab, and Markdown in the Source view), a missing path and a plain
+  click do nothing, a relative path resolves from the shell's `cd`, a folder reveals in Files, a URL opens a
+  window. Its output markers likewise never appear
   contiguously in the typed command: keystroke echo reaches the screen first, split across output batches.

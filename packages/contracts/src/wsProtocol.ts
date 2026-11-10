@@ -136,12 +136,20 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
+export const MAX_TERMINAL_PATH_CANDIDATES = 64;
+export const MAX_TERMINAL_PATH_LENGTH = 4096;
+
+export type TerminalPathTarget =
+	| { kind: "file" | "dir"; relPath: string }
+	| { kind: null; relPath: null };
+
 export type TemplateReadLocation =
 	| { workspaceId: string; projectId?: never }
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 107;
+export const PROTOCOL_VERSION = 109;
+export const TERMINAL_LINKS_PROTOCOL_VERSION = 109;
 export const SPEECH_PROTOCOL_VERSION = 107;
 export const SEARCH_PROTOCOL_VERSION = 106;
 export const WORKSPACE_CREATION_PROTOCOL_VERSION = 104;
@@ -350,6 +358,7 @@ export const WS_METHODS = {
 	terminalWrite: "terminal.write",
 	terminalResize: "terminal.resize",
 	terminalClose: "terminal.close",
+	terminalResolvePaths: "terminal.resolvePaths",
 	dialogSelectDirectory: "dialog.selectDirectory",
 	skillList: "skill.list",
 	skillsState: "skills.state",
@@ -998,6 +1007,10 @@ export interface WsMethodMap {
 	"terminal.close": {
 		params: { workspaceId: string; tabKey: string; force?: boolean };
 		result: { closed: boolean; busy: boolean };
+	};
+	"terminal.resolvePaths": {
+		params: { id: string; candidates: string[] };
+		result: { targets: TerminalPathTarget[] };
 	};
 	"dialog.selectDirectory": { params: Record<string, never>; result: { path: string | null } };
 	"skill.list": { params: { projectId: string }; result: SlashCommandInfo[] };

@@ -170,7 +170,8 @@ host module, persistence, method, or publisher.
 group limits, frame, workspace resource placement, selection, and geometry never reach the host. The
 workspace-create and boot-recovery paths compose `workspaces` with `terminal`: reserve the deterministic
 process-free default terminal, then clear the workspace's pending marker only after durable catalog success. No sibling imports
-another for that handshake.
+another for that handshake. Terminal links compose `terminal` with `fs` the same way: `terminal` names the
+directories a printed path is relative to, `fs` decides what inside the worktree it names.
 `history` stays registry-free (never imports `projects`/`workspaces`); `host` injects the scope filter
 + labels from the registries at the handler layer (`history.search` handler). `templates` stays
 registry-free too — it takes a plain `cwd`, never a `workspaceId`; the `template.*` handler resolves

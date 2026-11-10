@@ -73,6 +73,11 @@ export default defineConfig({
 			use: { ...devices["Desktop Safari"] },
 			testMatch: /(?:^|[\\/])(?:ask-user-question|ask-previews|plan-ask)\.spec\.ts$/,
 		},
+		// Single tests that must also hold on WebKit, the engine of the macOS app (WKWebView), opt in with
+		// the `@webkit` tag instead of moving a whole spec file into the project above.
+		...(centralMode
+			? []
+			: [{ name: "webkit-tagged", use: { ...devices["Desktop Safari"] }, grep: /@webkit/ }]),
 	],
 	// Self-contained: build the web app, boot the host on an isolated port + state dir, and tear it all
 	// down after. `bun run e2e` needs nothing else running.

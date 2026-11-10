@@ -132,7 +132,8 @@ function FileNodeRow({
 	const dirChanged = isDir && marks.dirs.has(directory?.path ?? node.path);
 	const ignored = (directory?.deepest ?? node).gitignored === true;
 	const revealRow =
-		!isDir && focus.revealTarget === node.path
+		focus.revealTarget !== null &&
+		(isDir ? representedPaths.includes(focus.revealTarget) : focus.revealTarget === node.path)
 			? (row: HTMLButtonElement | null) => {
 					if (!row) return;
 					row.scrollIntoView({ block: "nearest" });

@@ -182,6 +182,18 @@ export function revealLineNow(codeEditor: editor.IStandaloneCodeEditor, line: nu
 	codeEditor.revealLineInCenter(line, monaco.editor.ScrollType.Immediate);
 }
 
+export function revealPositionNow(
+	codeEditor: editor.IStandaloneCodeEditor,
+	line: number,
+	col = 1,
+): void {
+	const position = codeEditor.getModel()?.validatePosition({ lineNumber: line, column: col });
+	if (!position) return;
+	codeEditor.setPosition(position);
+	codeEditor.revealPositionInCenter(position, monaco.editor.ScrollType.Immediate);
+	codeEditor.focus();
+}
+
 export function disposeFileEditor(codeEditor: editor.IStandaloneCodeEditor): void {
 	const model = codeEditor.getModel();
 	codeEditor.dispose();

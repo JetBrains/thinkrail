@@ -85,6 +85,10 @@ function AllFiles({ workspaceId, marks }: { workspaceId: string; marks: ChangeMa
 			activePath !== null &&
 			activePath !== selectFilesTreeView(useAppStore.getState(), workspaceId).seenActivePath,
 	);
+	const folderReveal = useAppStore((s) =>
+		s.filesRevealRequest?.workspaceId === workspaceId ? s.filesRevealRequest : null,
+	);
+	const [restoreScroll] = useState(() => !revealOnMount && folderReveal === null);
 	const [revealTarget, setRevealTarget] = useState<string | null>(null);
 	const previousActive = useRef<string | null | undefined>(revealOnMount ? undefined : activePath);
 
@@ -96,11 +100,17 @@ function AllFiles({ workspaceId, marks }: { workspaceId: string; marks: ChangeMa
 		setRevealTarget(activePath);
 	}, [activePath, workspaceId]);
 
+	useEffect(() => {
+		if (!folderReveal) return;
+		setRevealTarget(folderReveal.path);
+		useAppStore.getState().clearFilesRevealRequest();
+	}, [folderReveal]);
+
 	return (
 		<RememberedScrollArea
 			workspaceId={workspaceId}
 			view="all"
-			restore={!revealOnMount}
+			restore={restoreScroll}
 			className="min-h-0 flex-1"
 			viewportClassName="p-panel-inset"
 		>

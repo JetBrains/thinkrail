@@ -157,6 +157,12 @@ export interface FileTab {
 	rendererId?: string;
 	viewState?: unknown;
 	loadedTick?: number;
+	reveal?: FileTabReveal;
+}
+export interface FileTabReveal {
+	line: number;
+	col?: number;
+	tick: number;
 }
 export interface ChatTab {
 	kind: "chat";
@@ -1062,6 +1068,7 @@ interface AppState {
 		path: string;
 		navigation: CenterNavigationStamp | null;
 	} | null;
+	filesRevealRequest: { workspaceId: string; path: string } | null;
 	specsByWorkspace: Record<string, SpecGraphNode[]>;
 	reviewsByWorkspace: Record<string, ReviewSnapshot>;
 	reviewFocusRequest: {
@@ -1199,6 +1206,7 @@ interface AppState {
 	noteNavigation: (workspaceId: string) => void;
 	setTabRenderer: (workspaceId: string, id: string, rendererId: string) => void;
 	setTabViewState: (workspaceId: string, id: string, viewState: unknown) => void;
+	consumeFileTabReveal: (workspaceId: string, id: string, tick: number) => void;
 	setDiffTabView: (id: string, view: DiffTabView) => void;
 	setDiffTabIgnoreWhitespace: (id: string, ignoreWhitespace: boolean) => void;
 	setChangesTabView: (workspaceId: string, id: string, view: DiffTabView) => void;
@@ -1266,6 +1274,8 @@ interface AppState {
 	setFilesTreeExpanded: (workspaceId: string, paths: readonly string[], expanded: boolean) => void;
 	collapseAllFiles: (workspaceId: string) => void;
 	revealInFiles: (workspaceId: string, path: string) => void;
+	revealFolderInFiles: (workspaceId: string, path: string) => void;
+	clearFilesRevealRequest: () => void;
 	setChangedTreeCollapsed: (
 		workspaceId: string,
 		paths: readonly string[],
@@ -2381,6 +2391,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	modelsFresh: false,
 	changesRequest: null,
 	specRequest: null,
+	filesRevealRequest: null,
 	specsByWorkspace: {},
 	reviewsByWorkspace: {},
 	reviewFocusRequest: null,
@@ -2759,6 +2770,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 				changesRequest:
 					state.changesRequest?.workspaceId === workspaceId ? null : state.changesRequest,
 				specRequest: state.specRequest?.workspaceId === workspaceId ? null : state.specRequest,
+				filesRevealRequest:
+					state.filesRevealRequest?.workspaceId === workspaceId ? null : state.filesRevealRequest,
 				chatLocationRequest:
 					state.chatLocationRequest?.workspaceId === workspaceId ? null : state.chatLocationRequest,
 				routeChatTarget:
@@ -3155,6 +3168,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 				return next;
 			}),
 		),
+	consumeFileTabReveal: (workspaceId, id, tick) =>
+		set((s) =>
+			patchResourceTab(s, workspaceId, id, (tab) => {
+				if (tab.kind !== "file" || tab.reveal?.tick !== tick) return tab;
+				const next = { ...tab };
+				delete next.reveal;
+				return next;
+			}),
+		),
 	setDiffTabView: (id, view) => set((s) => patchDiffTab(s, id, (tab) => ({ ...tab, view }))),
 	setDiffTabIgnoreWhitespace: (id, ignoreWhitespace) =>
 		set((s) =>
@@ -3307,6 +3329,24 @@ export const useAppStore = create<AppState>((set, get) => ({
 					: { ...view, expanded, seenActivePath: path };
 			}),
 		),
+	revealFolderInFiles: (workspaceId, path) =>
+		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return {};
+			return {
+				...patchFilesTreeView(s, workspaceId, (view) => {
+					const expanded = withPathMembership(view.expanded, [...ancestorPaths(path), path], true);
+					return expanded === view.expanded ? view : { ...view, expanded };
+				}),
+				filesMode: "all",
+				filesRevealRequest: { workspaceId, path },
+				layoutIntents: appendLayoutIntent(s.layoutIntents, {
+					kind: "reveal-tool",
+					workspaceId,
+					tool: "files",
+				}),
+			};
+		}),
+	clearFilesRevealRequest: () => set({ filesRevealRequest: null }),
 	collapseAllFiles: (workspaceId) =>
 		set((s) =>
 			patchFilesTreeView(s, workspaceId, (view) =>

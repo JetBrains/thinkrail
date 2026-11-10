@@ -635,6 +635,12 @@ content's own height.
   A review focus that arrives with the mount jumps to its line (`revealLineNow`, an immediate scroll): a
   smooth scroll started before the editor's first layout can stop short, and the handled focus is not
   retried, so the card stayed off screen. A focus on a mounted editor still scrolls smoothly.
+  A host-supplied **`ResourceViewProps.reveal`** (`{ line, col?, tick }`, a one-shot "put the cursor
+  here", e.g. a terminal link) is applied after any restored view state: the position is clamped to the
+  model, the cursor set, the line centred immediately for the same first-layout reason, and the editor
+  focused; then `onRevealHandled(tick)` lets the host consume it so a remount does not jump again. A new
+  reveal object is applied once even if the callback identity changes. The phone `PierreFile` view and the
+  preview renderers ignore it; hosts that need the line force the Source renderer.
   Monaco is imported from `editor.api` with only the reading contributions (find, folding, bracket matching,
   context menu/copy, links, hover, word highlighting, sticky scroll, go-to-line/command palette, read-only
   messaging and Unicode highlighting); keeping word highlighting preserves F7. Each contribution loads through
