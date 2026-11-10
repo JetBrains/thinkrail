@@ -19,7 +19,7 @@ import {
 } from "./mcpResult";
 
 const ACTION_CLASS =
-	"flex items-center gap-4 rounded-xs text-primary tr-text-metadata outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary";
+	"flex items-center gap-4 rounded-xs text-primary tr-text-metadata hover:underline focus-visible:focus-ring";
 
 function actionHandler(actions: ChatActions | null, action: McpCliAction | null) {
 	return action === "provider-sign-in"

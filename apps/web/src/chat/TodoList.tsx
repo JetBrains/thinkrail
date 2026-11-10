@@ -130,7 +130,7 @@ export function TodoAddRow({
 					if (e.key === "Enter") void submit();
 				}}
 				placeholder={t("chat.todo.addPlaceholder")}
-				className="min-w-0 flex-1 bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
+				className="min-w-0 flex-1 bg-transparent tr-text-ui text-text-default focus-visible:focus-ring placeholder:text-text-muted"
 			/>
 			{onOpenPlan ? (
 				<IconButton

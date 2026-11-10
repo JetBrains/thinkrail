@@ -361,14 +361,14 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 							type="button"
 							data-testid="changes-section-expand"
 							onClick={toggleCollapsed}
-							className="text-text-muted underline-offset-2 hover:text-text-default hover:underline"
+							className="text-text-muted underline-offset-2 hover:text-text-default hover:underline focus-visible:focus-ring"
 						>
 							{t("changes.section.expand")}
 						</button>
 						<button
 							type="button"
 							onClick={openAsTab}
-							className="text-text-muted underline-offset-2 hover:text-text-default hover:underline"
+							className="text-text-muted underline-offset-2 hover:text-text-default hover:underline focus-visible:focus-ring"
 						>
 							{t("changes.section.openAsTab")}
 						</button>
@@ -384,7 +384,7 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 						type="button"
 						data-testid="changes-section-retry"
 						onClick={() => setError(null)}
-						className="text-text-muted underline-offset-2 hover:text-text-default hover:underline"
+						className="text-text-muted underline-offset-2 hover:text-text-default hover:underline focus-visible:focus-ring"
 					>
 						{t("common.retry")}
 					</button>

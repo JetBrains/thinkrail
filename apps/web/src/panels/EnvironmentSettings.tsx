@@ -26,7 +26,7 @@ import { SettingsGroup } from "./SettingsGroup";
 import { SettingsNotice } from "./SettingsNotice";
 
 const INPUT_CLASS =
-	"w-full min-w-0 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default outline-none placeholder:text-text-muted focus-visible:border-control-border-active";
+	"w-full min-w-0 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default placeholder:text-text-muted focus-visible:border-control-border-active focus-visible:focus-ring";
 
 const AGENT_DIR_PLACEHOLDER = "~/.pi/agent";
 const NAME_PLACEHOLDER = "NAME";

@@ -169,7 +169,7 @@ export function ResultRow({
 						onClick={onToggle}
 						className={cn(
 							headerClass,
-							"cursor-pointer select-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary",
+							"cursor-pointer select-none hover:bg-control-bg-hovered focus-visible:focus-ring-inset",
 						)}
 					>
 						{header}

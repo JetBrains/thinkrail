@@ -175,6 +175,11 @@
 			"from": "accent",
 			"publish": true
 		},
+		"focus-ring": {
+			"from": "accent",
+			"publish": true,
+			"note": "the keyboard focus indicator; its own role so it can diverge from primary"
+		},
 		"primary-subtle": {
 			"from": "accent",
 			"alpha": "subtle",

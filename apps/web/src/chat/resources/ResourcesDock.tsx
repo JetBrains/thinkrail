@@ -85,7 +85,7 @@ export function ResourcesDock({
 	const lineClass =
 		"flex min-h-28 min-w-0 items-center gap-8 rounded-sm px-8 text-text-muted tr-text-metadata";
 	const controlClass =
-		"outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary";
+		"hover:bg-control-bg-hovered hover:text-text-default focus-visible:focus-ring";
 	return (
 		<div
 			data-testid="resources-dock"

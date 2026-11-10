@@ -203,7 +203,7 @@ export function RegionReviewSurface({
 									type="button"
 									aria-label={t("viewer.region.showComment", { number: index + 1 })}
 									data-testid="region-comment-marker"
-									className="pointer-events-auto absolute -top-12 -right-12 flex size-24 items-center justify-center rounded-full bg-primary tr-text-action text-text-on-primary outline-none focus-visible:ring-2 focus-visible:ring-primary"
+									className="pointer-events-auto absolute -top-12 -right-12 flex size-24 items-center justify-center rounded-full bg-primary tr-text-action text-text-on-primary focus-visible:focus-ring"
 									onPointerDown={(event) => event.stopPropagation()}
 									onClick={() => scrollToCard(thread.id)}
 								>

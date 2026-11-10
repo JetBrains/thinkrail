@@ -242,7 +242,7 @@ export default function CsvDiff({
 																aria-label={t("viewer.region.showComment", {
 																	number: entry.number,
 																})}
-																className="flex size-20 items-center justify-center rounded-full bg-primary tr-text-metadata text-text-on-primary outline-none focus-visible:ring-2 focus-visible:ring-primary"
+																className="flex size-20 items-center justify-center rounded-full bg-primary tr-text-metadata text-text-on-primary focus-visible:focus-ring"
 																onClick={() => scrollToCard(entry.thread.id)}
 															>
 																{entry.number}

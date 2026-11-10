@@ -41,6 +41,7 @@
 	--border-default: var(--border-strong);
 	--border-muted: var(--border);
 	--primary: var(--accent);
+	--focus-ring: var(--accent); /* the keyboard focus indicator; its own role so it can diverge from primary */
 	--primary-subtle: color-mix(in srgb, var(--accent) 10%, transparent);
 	--primary-soft: color-mix(in srgb, var(--accent) 20%, transparent);
 	--primary-muted: color-mix(in srgb, var(--accent) 40%, transparent);
@@ -122,6 +123,7 @@
 	--color-border-default: var(--border-default);
 	--color-border-muted: var(--border-muted);
 	--color-primary: var(--primary);
+	--color-focus-ring: var(--focus-ring);
 	--color-primary-subtle: var(--primary-subtle);
 	--color-primary-soft: var(--primary-soft);
 	--color-primary-muted: var(--primary-muted);

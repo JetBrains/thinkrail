@@ -122,7 +122,7 @@ function ChangeSetBlock({
 						data-testid="plan-change-set-toggle"
 						aria-expanded={expanded}
 						onClick={() => setExpanded((v) => !v)}
-						className="flex min-h-32 min-w-0 items-center gap-4 rounded-sm px-4 py-2 text-left hover:bg-control-bg-hovered"
+						className="flex min-h-32 min-w-0 items-center gap-4 rounded-sm px-4 py-2 text-left hover:bg-control-bg-hovered focus-visible:focus-ring"
 					>
 						<Chevron className="size-16 shrink-0 text-text-muted" />
 						<span className="shrink-0 tr-text-metadata text-text-subtle">
@@ -137,7 +137,7 @@ function ChangeSetBlock({
 								type="button"
 								data-testid="plan-commit-chip"
 								onClick={() => onOpenCommit(set.sha)}
-								className="flex min-h-32 shrink-0 items-center gap-4 rounded-sm px-4 py-2 tr-code-text text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
+								className="flex min-h-32 shrink-0 items-center gap-4 rounded-sm px-4 py-2 tr-code-text text-text-subtle hover:bg-control-bg-hovered hover:text-text-default focus-visible:focus-ring"
 							>
 								<GitCommitHorizontal className="size-14" />
 								{set.sha.slice(0, 7)}
@@ -235,7 +235,7 @@ function RevisionsBlock({
 								type="button"
 								onClick={() => onOpenCommit(rev.sha)}
 								title={t("plan.revisions.openCommit")}
-								className="flex min-h-8 shrink-0 items-center gap-4 rounded-sm px-4 py-2 tr-code-text text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
+								className="flex min-h-8 shrink-0 items-center gap-4 rounded-sm px-4 py-2 tr-code-text text-text-subtle hover:bg-control-bg-hovered hover:text-text-default focus-visible:focus-ring"
 							>
 								<GitCommitHorizontal className="size-14" />
 								{rev.sha.slice(0, 7)}
@@ -349,7 +349,7 @@ function ItemBlock({
 								aria-expanded={expanded}
 								onClick={() => setExpanded((v) => !v)}
 								title={expanded ? t("plan.item.hideDetails") : t("plan.item.showDetails")}
-								className="flex min-w-0 flex-1 items-center gap-8 rounded-sm text-left"
+								className="flex min-w-0 flex-1 items-center gap-8 rounded-sm text-left focus-visible:focus-ring-inset"
 							>
 								<ChevronRight className="size-14 shrink-0 text-text-muted transition-transform group-data-[expanded=true]:rotate-90" />
 								<span className="min-w-0 flex-1 break-words tr-title-section text-text-default">
@@ -378,7 +378,7 @@ function ItemBlock({
 								data-testid="plan-item-changes-requested"
 								title={t("plan.item.changesRequestedTitle")}
 								onClick={onOpenReview}
-								className="flex min-h-8 shrink-0 items-center gap-2 tr-text-metadata text-feedback-warning underline-offset-2 hover:underline"
+								className="flex min-h-8 shrink-0 items-center gap-2 tr-text-metadata text-feedback-warning underline-offset-2 hover:underline focus-visible:focus-ring"
 							>
 								<CircleAlert className="size-14" />
 								{findings > 0
@@ -619,7 +619,7 @@ function PlanComposer({
 			});
 	};
 	return (
-		<div className="mt-8 flex items-start gap-8 rounded-sm border border-control-border-default bg-control-bg px-12 py-8 transition-colors focus-within:border-control-border-active">
+		<div className="mt-8 flex items-start gap-8 rounded-sm border border-control-border-default bg-control-bg px-12 py-8 transition-colors focus-within:border-control-border-active has-[:focus-visible]:focus-ring">
 			<Icon className="mt-2 size-14 shrink-0 text-text-muted" />
 			<textarea
 				ref={inputRef}
@@ -800,7 +800,7 @@ function SessionBlock({
 						data-glance="working"
 						onClick={onOpenChat}
 						title={t("plan.session.openChat")}
-						className="flex min-w-0 items-center gap-4 tr-text-metadata text-text-subtle underline-offset-2 hover:text-text-default hover:underline"
+						className="flex min-w-0 items-center gap-4 tr-text-metadata text-text-subtle underline-offset-2 hover:text-text-default hover:underline focus-visible:focus-ring"
 					>
 						<Loader2 className="size-14 shrink-0 animate-spin text-primary" />
 						{t("plan.session.working")}
@@ -812,7 +812,7 @@ function SessionBlock({
 						data-glance="waiting_question"
 						onClick={onOpenChat}
 						title={t("plan.session.openChat")}
-						className="flex min-w-0 items-center gap-4 tr-text-metadata text-primary underline-offset-2 hover:underline"
+						className="flex min-w-0 items-center gap-4 tr-text-metadata text-primary underline-offset-2 hover:underline focus-visible:focus-ring"
 					>
 						<MessageCircleQuestion className="size-14 shrink-0" />
 						{t("plan.session.question")}
@@ -855,7 +855,7 @@ function SessionBlock({
 					data-glance="waiting"
 					onClick={() => setAdding(true)}
 					title={t("plan.session.addTask")}
-					className="group flex w-full items-center gap-8 rounded-sm px-4 py-2 text-left tr-text-ui text-text-subtle transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+					className="group flex w-full items-center gap-8 rounded-sm px-4 py-2 text-left tr-text-ui text-text-subtle transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:focus-ring-inset"
 				>
 					<span className="min-w-0 flex-1">{t("plan.session.empty")}</span>
 					<span className="flex shrink-0 items-center gap-4 text-text-muted opacity-0 transition-opacity group-hover:opacity-100">

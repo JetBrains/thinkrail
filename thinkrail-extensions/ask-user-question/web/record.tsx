@@ -224,7 +224,7 @@ export function AnsweredReceipt({
 				data-testid="ask-receipt-toggle"
 				aria-expanded={expanded}
 				onClick={(event) => toggle(event.currentTarget)}
-				className="flex min-w-0 items-center gap-4 self-start rounded-sm text-left text-text-muted tr-text-metadata outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex min-w-0 items-center gap-4 self-start rounded-sm text-left text-text-muted tr-text-metadata hover:text-text-default focus-visible:focus-ring"
 			>
 				{expanded ? (
 					<ChevronDown aria-hidden="true" className="size-14 shrink-0" />
@@ -365,7 +365,7 @@ function ReceiptPair({
 					aria-expanded={optionsOpen}
 					aria-label={t("tools.ask.receiptOptionsLabel", { question: question.question })}
 					onClick={(event) => toggleOptions(event.currentTarget)}
-					className="inline-flex shrink-0 items-center gap-2 rounded-sm px-4 text-text-muted tr-text-metadata outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+					className="inline-flex shrink-0 items-center gap-2 rounded-sm px-4 text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default focus-visible:focus-ring"
 				>
 					{t("tools.ask.receiptOptions")}
 					{optionsOpen ? (

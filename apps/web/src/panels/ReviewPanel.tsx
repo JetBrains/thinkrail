@@ -148,7 +148,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 									type="button"
 									data-testid="review-clear"
 									aria-label={t("review.panel.clearLabel")}
-									className="flex shrink-0 items-center gap-4 px-4 tr-text-metadata text-text-subtle hover:text-feedback-error"
+									className="flex shrink-0 items-center gap-4 px-4 tr-text-metadata text-text-subtle hover:text-feedback-error focus-visible:focus-ring"
 								>
 									<Trash2 className="size-14" />
 									{t("review.panel.clear")}
@@ -179,7 +179,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 										<button
 											type="button"
 											data-testid="review-file-row"
-											className="flex min-w-0 flex-1 items-center gap-8 px-4 py-4 text-left tr-text-ui"
+											className="flex min-w-0 flex-1 items-center gap-8 px-4 py-4 text-left tr-text-ui focus-visible:focus-ring-inset"
 											onClick={() => toggleFile(file)}
 										>
 											{isOpen ? (
@@ -208,7 +208,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 													data-testid="review-file-done"
 													aria-label={t("review.panel.finishFile")}
 													onClick={() => void finishFile(file.path)}
-													className="flex shrink-0 items-center py-4 pr-4 pl-4 text-text-subtle hover:text-feedback-success"
+													className="flex shrink-0 items-center py-4 pr-4 pl-4 text-text-subtle hover:text-feedback-success focus-visible:focus-ring"
 												>
 													<CheckCircle2 className="size-14" />
 												</button>
@@ -393,7 +393,7 @@ function CommentRow({
 				data-testid="review-comment-open"
 				onClick={() => (comment.sessionId ? onOpenChat(comment.sessionId) : onNavigate())}
 				title={comment.sessionId ? t("review.panel.openDiscussion") : t("review.panel.showInFile")}
-				className="flex w-full items-start gap-8 rounded-sm px-4 py-4 text-left hover:bg-control-bg-hovered"
+				className="flex w-full items-start gap-8 rounded-sm px-4 py-4 text-left hover:bg-control-bg-hovered focus-visible:focus-ring-inset"
 			>
 				{ordinal !== undefined ? (
 					<span className="w-16 shrink-0 text-center tr-code-text text-text-subtle">
@@ -467,7 +467,7 @@ function CommentRow({
 										type="button"
 										data-testid="review-comment-delete"
 										aria-label={t("review.comment.deleteDraft")}
-										className="text-text-subtle hover:text-feedback-error"
+										className="text-text-subtle hover:text-feedback-error focus-visible:focus-ring"
 									>
 										<Trash2 className="size-14" />
 									</button>
@@ -493,7 +493,7 @@ function CommentRow({
 							data-testid="review-comment-resolve"
 							aria-label={t("review.panel.markResolved")}
 							onClick={() => void update({ status: "resolved" })}
-							className="text-text-subtle hover:text-feedback-success"
+							className="text-text-subtle hover:text-feedback-success focus-visible:focus-ring"
 						>
 							<CheckCircle2 className="size-14" />
 						</button>

@@ -187,7 +187,7 @@ function ChatRow({
 					type="button"
 					disabled={pending}
 					onClick={() => useAppStore.getState().activateWorkspace(workspace)}
-					className="flex min-w-0 flex-1 items-center gap-4 text-left"
+					className="flex min-w-0 flex-1 items-center gap-4 text-left focus-visible:focus-ring-inset"
 				>
 					{isRunning ? (
 						<RunningIcon className={cn("size-14", isActive ? "text-primary" : "text-text-muted")} />

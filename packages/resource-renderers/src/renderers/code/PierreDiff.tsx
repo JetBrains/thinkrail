@@ -501,7 +501,7 @@ function PierreDiffSurface({
 										<button
 											type="button"
 											data-testid="review-selection-blocked-close"
-											className="tr-text-metadata text-text-default underline-offset-2 hover:underline"
+											className="rounded-sm tr-text-metadata text-text-default underline-offset-2 hover:underline focus-visible:focus-ring"
 											onClick={closeComposer}
 										>
 											{t("common.dismiss")}

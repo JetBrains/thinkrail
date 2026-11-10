@@ -223,7 +223,7 @@ export function WorkspaceCreationRow({
 				<button
 					type="button"
 					onClick={onSelect}
-					className="flex min-w-0 flex-1 items-start gap-4 text-left"
+					className="flex min-w-0 flex-1 items-start gap-4 text-left focus-visible:focus-ring-inset"
 				>
 					<StateIcon
 						creation={creation}

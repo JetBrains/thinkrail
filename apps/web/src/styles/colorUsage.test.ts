@@ -80,6 +80,7 @@ const NON_COLOR = new Set([
 	"inset",
 	"solid",
 	"dashed",
+	"style",
 	"offset-0",
 	"offset-2",
 ]);
@@ -116,7 +117,12 @@ describe("the published token set", () => {
 	});
 
 	it("declares nothing it does not use", () => {
-		const used = new Set(USES.map((u) => u.name));
+		const used = new Set([
+			...USES.map((u) => u.name),
+			...CSS_FILES.flatMap((f) =>
+				[...code(f).matchAll(/var\(--color-([a-z0-9-]+)\)/g)].map((m) => m[1]),
+			),
+		]);
 		expect([...PUBLISHED].filter((n) => !used.has(n)).sort()).toEqual([]);
 	});
 

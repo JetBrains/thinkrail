@@ -432,7 +432,7 @@ function TemplateRow({
 								type="button"
 								data-testid="template-delete"
 								aria-label={t("common.delete")}
-								className="flex size-24 items-center justify-center rounded-sm text-text-muted transition hover:bg-control-bg-hovered hover:text-feedback-error"
+								className="flex size-24 items-center justify-center rounded-sm text-text-muted transition hover:bg-control-bg-hovered hover:text-feedback-error focus-visible:focus-ring"
 							>
 								<Trash2 className="size-14" />
 							</button>

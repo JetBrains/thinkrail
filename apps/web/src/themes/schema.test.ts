@@ -222,3 +222,21 @@ test("hovered text never drops below the visibility floor", () => {
 		}
 	}
 });
+
+test("the focus ring stays visible on the input and hover surfaces", () => {
+	const source = (
+		JSON.parse(readFileSync(join(import.meta.dir, "../styles/colors.json"), "utf8")) as {
+			roles: Record<string, { from: string }>;
+		}
+	).roles["focus-ring"]?.from as keyof ThemeManifest["colors"];
+	for (const theme of bundledThemes()) {
+		const ring = theme.colors[source];
+		if (!ring) throw new Error(`${theme.id}: focus-ring source ${source} is unset`);
+		for (const surface of ["input", "hover"] as const) {
+			expect(
+				contrast(ring, theme.colors[surface]),
+				`${theme.id}: focus-ring on ${surface}`,
+			).toBeGreaterThanOrEqual(3);
+		}
+	}
+});

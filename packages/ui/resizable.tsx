@@ -34,7 +34,7 @@ export function ResizableHandle({
 			aria-orientation={isVertical ? "horizontal" : "vertical"}
 			hitAreaMargins={hitAreaMargins}
 			className={cn(
-				"relative z-10 shrink-0 before:absolute before:bg-border-default before:transition-colors before:content-['']",
+				"relative z-10 shrink-0 focus-visible:focus-ring before:absolute before:bg-border-default before:transition-colors before:content-['']",
 				"data-[resize-handle-state=hover]:before:bg-primary data-[resize-handle-state=drag]:before:bg-primary",
 				isVertical
 					? "-mb-8 h-9 w-full cursor-row-resize before:inset-x-0 before:top-0 before:h-px"

@@ -174,7 +174,7 @@ function ContextLimitControl({
 									selected === preset.id
 										? "rounded-sm bg-control-bg-selected text-text-default"
 										: "text-text-muted hover:text-text-default",
-									"peer-focus-visible:ring-2 peer-focus-visible:ring-inset peer-focus-visible:ring-primary",
+									"peer-focus-visible:focus-ring-inset",
 									"peer-disabled:text-control-disabled-text peer-disabled:hover:text-control-disabled-text",
 								)}
 							>
@@ -216,7 +216,7 @@ function ContextLimitControl({
 									isCustomActive
 										? "pl-12 text-text-default"
 										: "px-12 text-text-muted hover:text-text-default",
-									"peer-focus-visible:ring-2 peer-focus-visible:ring-inset peer-focus-visible:ring-primary",
+									"peer-focus-visible:focus-ring-inset",
 									"peer-disabled:text-control-disabled-text peer-disabled:hover:text-control-disabled-text",
 								)}
 							>
@@ -257,7 +257,7 @@ function ContextLimitControl({
 										setDraft(initialDraft);
 									}
 								}}
-								className="h-32 w-100 bg-transparent pr-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted disabled:text-control-disabled-text"
+								className="h-32 w-100 bg-transparent pr-8 tr-text-ui text-text-default placeholder:text-text-muted focus-visible:focus-ring-inset disabled:text-control-disabled-text"
 							/>
 						) : null}
 					</div>
@@ -403,7 +403,7 @@ export function ModelContextControls({
 							aria-expanded={expanded}
 							aria-controls={rowsId}
 							data-testid="model-context-customize"
-							className="flex w-full items-start gap-8 py-12 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary"
+							className="flex w-full items-start gap-8 py-12 text-left transition-colors focus-visible:focus-ring-inset"
 						>
 							<span className="flex-1 tr-text-ui text-text-default">
 								{t("settings.modelContext.byModel")}

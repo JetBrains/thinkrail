@@ -37,7 +37,7 @@ function InlineLink({ href, children }: { href: string; children?: ReactNode }) 
 			href={href}
 			target="_blank"
 			rel="noopener noreferrer"
-			className="text-primary underline underline-offset-2 hover:opacity-80"
+			className="text-primary underline underline-offset-2 hover:opacity-80 focus-visible:focus-ring"
 		>
 			{children}
 		</a>
@@ -222,7 +222,7 @@ export function LanguagePage({
 							href={CONTRIBUTE_TRANSLATIONS_URL}
 							target="_blank"
 							rel="noopener noreferrer"
-							className="inline-flex items-center gap-4 tr-text-ui text-primary underline-offset-2 hover:underline"
+							className="inline-flex items-center gap-4 tr-text-ui text-primary underline-offset-2 hover:underline focus-visible:focus-ring"
 						>
 							<ExternalLink className="size-14" />
 							{t("settings.language.contribute.link")}

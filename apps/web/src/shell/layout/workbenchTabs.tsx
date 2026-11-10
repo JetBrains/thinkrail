@@ -640,7 +640,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 				rail
 					? RAIL_ENTRY_BUTTON_CLASS
 					: cn(
-							"relative flex min-w-0 flex-1 items-center gap-4 self-stretch pl-8 text-left outline-none",
+							"relative flex min-w-0 flex-1 items-center gap-4 self-stretch pl-8 text-left focus-visible:focus-ring-inset",
 							tab.kind === "tool" && "pr-8",
 						)
 			}
@@ -684,7 +684,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 						"group data-[dragging]:opacity-40",
 						rail
 							? railEntryFrameClass(location.area)
-							: "relative flex min-w-96 max-w-192 shrink-0 items-center border-border-default border-r text-text-muted after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-10 after:h-[2px] after:rounded-full after:content-[''] has-[[role=tab]:focus-visible]:ring-2 has-[[role=tab]:focus-visible]:ring-inset has-[[role=tab]:focus-visible]:ring-primary data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary",
+							: "relative flex min-w-96 max-w-192 shrink-0 items-center border-border-default border-r text-text-muted after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-10 after:h-[2px] after:rounded-full after:content-[''] data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary",
 					)}
 				>
 					<div
@@ -723,7 +723,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 								defaultValue={tab.name}
 								onKeyDown={onNameKeyDown}
 								onBlur={commitRename}
-								className="min-w-0 flex-1 border-0 bg-transparent p-0 tr-text-ui text-text-default outline-none"
+								className="min-w-0 flex-1 border-0 bg-transparent p-0 tr-text-ui text-text-default focus-visible:focus-ring-inset"
 							/>
 						</div>
 					) : rail ? (

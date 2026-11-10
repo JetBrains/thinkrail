@@ -581,13 +581,13 @@ function HistoryPicker({
 					onChange={(e) => onQueryChange(e.target.value)}
 					onKeyDown={onKeyDown}
 					placeholder={t("chat.history.placeholder")}
-					className="min-w-0 flex-1 bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
+					className="min-w-0 flex-1 bg-transparent tr-text-ui text-text-default focus-visible:focus-ring placeholder:text-text-muted"
 				/>
 				<DropdownMenu open={scopeMenuOpen} onOpenChange={setScopeMenuOpen}>
 					<DropdownMenuTrigger
 						data-testid="history-scope"
 						data-scope={scope.kind}
-						className="flex shrink-0 items-center gap-4 rounded-full border border-border-default bg-container-workspace-bg px-8 py-2 text-text-muted tr-text-metadata outline-none hover:bg-control-bg-hovered"
+						className="flex shrink-0 items-center gap-4 rounded-full border border-border-default bg-container-workspace-bg px-8 py-2 text-text-muted tr-text-metadata hover:bg-control-bg-hovered focus-visible:focus-ring"
 					>
 						<span>{t(SCOPE_LABELS[scope.kind])}</span>
 						<span className="text-text-muted">⌃R</span>
