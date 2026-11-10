@@ -1,0 +1,14 @@
+{
+	"$schema": "https://turbo.build/schema.json",
+	"extends": ["//"],
+	"tasks": {
+		"test": {
+			"inputs": [
+				"$TURBO_DEFAULT$",
+				"$TURBO_ROOT$/apps/web/src/**",
+				"$TURBO_ROOT$/packages/resource-renderers/src/**",
+				"$TURBO_ROOT$/thinkrail-extensions/*/web/**"
+			]
+		}
+	}
+}

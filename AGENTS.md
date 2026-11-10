@@ -104,6 +104,9 @@ caused by the requested change, and rerun them without asking for approval at ea
   spec/barrel public surfaces; `bun run check:compiler` fails when a web function newly bails out of the
   React Compiler (or starts compiling) against the committed census baseline.
 - `bun run test:workflows` is on-demand: it uses real provider tokens and is not a commit/CI gate.
+- Turbo caches package `typecheck` and `test` results. A test or tsconfig that reads files outside its
+  package must list them as `$TURBO_ROOT$/...` `inputs` in that package's `turbo.json`, or a stale hit hides
+  a failure. Pass `--force` to bypass the cache.
 - Binary and desktop artifact modes have separate gates; use them when changing those artifacts.
 
 All runner modes, isolation guarantees, credential handling, cancellation behavior, and debugging
