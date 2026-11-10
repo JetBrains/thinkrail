@@ -3,7 +3,7 @@ import { classifyBytes, readableFileSize } from "../fs";
 import { getHistoryIndex } from "../history";
 import { listProjects } from "../projects";
 import { createSearchService, type SearchService } from "../search";
-import { invalidateSpecSnapshot, specSnapshot } from "../spec";
+import { invalidateSpecSnapshot, specSections, specSnapshot } from "../spec";
 import { listStoredPlans } from "../todos";
 import { ensureWatch } from "../watch";
 import { listAllWorkspaceRecords, listWorkspaces } from "../workspaces";
@@ -17,6 +17,7 @@ export function hostSearch(): SearchService {
 			workspaces: listAllWorkspaceRecords,
 			sessions: () => getHistoryIndex().sessions(),
 			specs: specSnapshot,
+			sections: (root) => specSections(root),
 			plans: listStoredPlans,
 			invalidateSpecs: invalidateSpecSnapshot,
 			ensureDefault: (projectId) => listWorkspaces(projectId, { includeDiffStats: false }),

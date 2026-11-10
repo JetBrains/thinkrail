@@ -1964,7 +1964,7 @@ export interface HistorySearchResult {
 	indexing: boolean;
 }
 
-export const SEARCH_KINDS = ["transcript", "file", "spec", "plan"] as const;
+export const SEARCH_KINDS = ["transcript", "file", "spec", "section", "plan"] as const;
 
 export type SearchKind = (typeof SEARCH_KINDS)[number];
 
@@ -1993,11 +1993,28 @@ export interface SearchHitBase {
 	workspaceId: string;
 }
 
+/** Where a `section` hit sits in its spec, and how many of the query's words it holds. */
+export interface SearchHitSection {
+	/** The heading trail joined by ` › `; empty for the text before the first heading. */
+	heading: string;
+	/** 1-based line of the heading in the file. */
+	line: number;
+	matched: number;
+	terms: number;
+}
+
 export type SearchHit =
 	/** A root-relative POSIX `path`; `size` is the bytes on disk when the host could read them. */
 	| (SearchHitBase & { kind: "file"; path: string; size?: number })
-	/** `snippet` is the body line a `content`-tier hit matched. */
-	| (SearchHitBase & { kind: "spec"; path: string; specId: string; size: number; snippet?: string })
+	| (SearchHitBase & { kind: "spec"; path: string; specId: string; size: number })
+	/** A spec section ranked by the query's words; `snippet` is its best-matching text. */
+	| (SearchHitBase & {
+			kind: "section";
+			path: string;
+			specId: string;
+			snippet: string;
+			section: SearchHitSection;
+	  })
 	| (SearchHitBase & { kind: "plan"; sessionId: string })
 	/** `anchorText` re-finds the message when compaction moved `messageIndex`. */
 	| (SearchHitBase & {
