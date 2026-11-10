@@ -17,7 +17,7 @@ The installed version comes only from the root dependency catalog, not a second 
 
 ## Last re-check
 
-Pi 1.5.1 was checked against the installed dist (1.5.0 → 1.5.1; every private symbol re-grepped,
+Pi 1.5.2 was checked against the installed dist (1.5.0 → 1.5.1 → 1.5.2; every private symbol re-grepped,
 `agent-session.js`, `sdk.js`, `settings-defaults.js`, the extension loader/runner, `mcp-servers.js`, the
 MCP extension, `package-manager.js`, `model-resolver.js` and pi-ai's providers diffed). **One gate is
 met**: pi now clears a delivered image-only queued message itself (#8612), so the host's
@@ -53,7 +53,12 @@ with this evidence:
   is the opt-back-in for old LiteLLM→Anthropic proxies. Anthropic message threads are on by default for
   `anthropic` on api.anthropic.com, keyed by pi's session id and cleaned in `dispose()`; host `context` /
   `before_agent_start` handlers only cause pi's full-request fallback.
-- The bundled chat catalogue changes from 1,592 to 1,639 provider/model pairs: 66 added (Claude Fable 5.2
+- 1.5.2 on top of 1.5.1 touches no SDK surface the host uses: pi-ai bumps the Claude Code version it
+  reports for Anthropic OAuth, the interactive mode offers Continue / Fork / Cancel for a session whose cwd
+  is gone, and `/import` of such a session no longer leaves a stray copy. The SSE patch applies at the same
+  offsets. 1.5.2 adds four catalogue entries (`radius/claude-fable-5-2`, `meta/muse-ember-1.0`,
+  `opencode/minimax-m3.1-flash-free`, `openrouter/nex-agi/nex-n2.6`) on top of the 1.5.1 delta below.
+- The bundled chat catalogue changes from 1,592 to 1,639 provider/model pairs in 1.5.1: 66 added (Claude Fable 5.2
   on Anthropic, Bedrock, OpenRouter, Vercel and OpenCode; Kimi K3.1 Pro; Gemini 4 Argon, GPT-6.1 Terra and
   Mistral Large 4 on Radius; the `qwen-token-plan-individual-cn` provider) and 19 removed (older
   OpenRouter MiniMax/Mercury/Llama aliases, Fireworks `gpt-oss-120b`, Vercel Gemini batch aliases). The
