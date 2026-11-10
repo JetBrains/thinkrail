@@ -55,6 +55,7 @@ import {
 	PROJECT_TRUST_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	PROVIDER_WARNINGS_PROTOCOL_VERSION,
+	QUESTION_PANEL_PROTOCOL_VERSION,
 	RESOURCE_HISTORY_PROTOCOL_VERSION,
 	RESOURCE_META_PROTOCOL_VERSION,
 	REVIEW_ACTIONS_PROTOCOL_VERSION,
@@ -323,7 +324,7 @@ test("host search and its previews are pinned to v106", () => {
 });
 
 test("spec sections in search are pinned to v113", () => {
-	expect(PROTOCOL_VERSION).toBe(113);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SPEC_SECTIONS_PROTOCOL_VERSION);
 	expect(SPEC_SECTIONS_PROTOCOL_VERSION).toBe(113);
 	expect(SEARCH_KINDS).toContain("section");
 });
@@ -333,6 +334,12 @@ test("find in files is pinned to v112", () => {
 	expect(TEXT_SEARCH_PROTOCOL_VERSION).toBe(112);
 	expect(WS_METHODS.searchText).toBe("search.text");
 	expect(WS_CHANNELS.searchTextResults).toBe("search.textResults");
+});
+
+test("the question panel height setting is pinned to v114", () => {
+	expect(PROTOCOL_VERSION).toBe(114);
+	expect(QUESTION_PANEL_PROTOCOL_VERSION).toBe(114);
+	expect(DEFAULT_CONFIG.questionPanelHeight).toBe(60);
 });
 
 test("continue in workspace is pinned to v110", () => {
