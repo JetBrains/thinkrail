@@ -306,6 +306,19 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   handler sees only the selection, not the routed model; replace that check when pi exposes the
   dispatched model (or `isVirtualModel`) to `context` handlers.
 
+- **Cache-warming default** — [[submodule-server-agent]], `cacheWarming.ts` (`applyCacheWarmingDefault`).
+  Pi 1.5.1 defaults `cacheWarming` to `idle`, which spends tokens in every idle chat, and reads the mode
+  from its raw `globalSettings` (`SettingsManager.getCacheWarmingMode`), so the in-memory
+  `applyOverrides` path the host uses for `images.autoResize` cannot carry a different default. The host
+  therefore wraps that getter on every session's `SettingsManager` to answer `streaming` while pi's
+  `settings.json` names no valid mode; an explicit value in the file always wins, and the Settings control
+  writes that file through pi's own `setCacheWarmingMode`. **Removal gate:** a public way to give the SDK a
+  cache-warming default without touching the user's file (a `createAgentSession` / `SettingsManager`
+  option, or pi reading the merged settings), or pi returning to a default that costs nothing while idle.
+  On upgrades re-check that `sdk.js` still obtains the mode through `settingsManager.getCacheWarmingMode()`
+  and that `CacheWarmer` consults it at every decision; run `cacheWarming.test.ts` (it asserts pi's own
+  default is `idle` so a change upstream shows up) and the manager's cache-warming tests.
+
 ## Context-budget limitations
 
 **Owner:** [[submodule-server-agent]]. These are upstream limitations, not host adaptations. In the

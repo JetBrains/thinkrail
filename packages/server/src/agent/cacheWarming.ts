@@ -1,11 +1,11 @@
 import type { SettingsManager } from "@earendil-works/pi-coding-agent";
-import { SettingsManager as PiSettingsManager } from "@earendil-works/pi-coding-agent";
 import {
 	type CacheWarmingMode,
 	type CacheWarmingSetting,
 	isCacheWarmingMode,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { createPiSettings } from "./packages";
 
 /** Pi 1.5.1 defaults to `idle`; ThinkRail keeps pi 1.5.0's behavior until the user opts in. */
 export const THINKRAIL_DEFAULT_CACHE_WARMING: CacheWarmingMode = "streaming";
@@ -26,7 +26,7 @@ export function applyCacheWarmingDefault(settings: SettingsManager): void {
 }
 
 function hostSettings(): SettingsManager {
-	return PiSettingsManager.create(process.cwd(), undefined, { projectTrusted: false });
+	return createPiSettings(process.cwd(), undefined, { projectTrusted: false, packages: "all" });
 }
 
 export function readCacheWarmingSetting(): CacheWarmingSetting {
