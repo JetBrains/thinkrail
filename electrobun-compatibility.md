@@ -126,3 +126,15 @@ product contract (it then guards upstream's behavior instead).
 No custom SDK resolver, metadata validator or command runner; the web-owned title bar; Linux without an
 application menu; and unsupported DevTools focus and notification-click callbacks are deliberate
 choices or accepted gaps in [[module-desktop]]. An Electrobun upgrade does not remove them silently.
+
+These native identity gaps, present in Electrobun 2.0.5 / Hutch 0.28.2, are accepted rather than
+worked around; an upgrade that closes one drops it from this list:
+
+- **Linux window icon.** Electrobun resolves its automatic window icon, `Resources/appIcon.png`,
+  against the process cwd, which is never the bundle root, so windows carry a generic icon.
+- **Linux notification sender.** Electrobun runs `notify-send` without an app name, icon or
+  desktop-entry hint, so notifications come from "notify-send" with a generic icon.
+- **Linux menu category.** Hutch's `.desktop` template hardcodes `Categories=Utility;`.
+- **Windows Installed-apps publisher.** Electrobun's `Uninstall` registry entry has no `Publisher`.
+- **Windows setup file properties.** Hutch writes no VERSIONINFO and builds the setup executable in
+  its release step, after `postBuild` has branded the other executables.
