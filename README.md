@@ -25,6 +25,12 @@ We built a rich interface around the `pi` coding agent, isolated work into separ
 </picture>
 *From the left: An isolated workspace, a work session with an AI agent in that workspace, the code change made by the agent, and the spec tree.*
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/readme-assets/scheduled-prompts-dark.png">
+  <img src=".github/readme-assets/scheduled-prompts-light.png" alt="A scheduled prompt shown above the chat composer while a separate draft remains ready to send" width="900">
+</picture>
+*Schedule a prompt for later while continuing to compose and send other messages.*
+
 <a id="install"></a>
 
 ## Installation
@@ -46,7 +52,7 @@ For latest version, see the [Releases page](https://github.com/JetBrains/thinkra
 
 - **An IDE around the agent.** ThinkRail comes with Monaco editor tabs, a file tree integrated with git to show code changes as they happen, terminals, and document support.
 
-- **Powerful chat features.** You can open several concurrent work sessions per workspace, each with its own model. Send a prompt, or queue it as a follow-up, delegate to subagents, and work together on a shared plan: the agent updates it, and you review and edit.
+- **Powerful chat features.** You can open several concurrent work sessions per workspace, each with its own model. Send a prompt, schedule it for later, or queue it as a follow-up; delegate to subagents and work together on a shared plan that the agent updates for you to review and edit.
 
 - **Find anything from one box.** `⌘K` (or a double tap of Shift) opens a palette that finds chats and the messages inside them, workspaces and projects, files in the current workspace, specs, and plans, with a preview pane. It also runs the app's commands and opens Settings sections, and with nothing typed it lists the chats waiting for you. Type a task and press `⌘↵` to open Create workspace with it as the prompt.
 
