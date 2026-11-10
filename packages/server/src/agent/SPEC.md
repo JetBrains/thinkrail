@@ -698,7 +698,8 @@ re-opened transcripts provider-valid.
     import other agents' whole libraries, so one machine sent 1,395 skills (~165K tokens) on every
     request, which compaction can never shrink. Modeled on Claude Code's listing budget and Codex's
     2% budget, plus Anthropic's tool search: when pi's own section would exceed **2% of the context
-    window, clamped to 4K–8K tokens and never above 10% of the window** (4K for a virtual or unknown
+    window, clamped to 4K–8K tokens and never above 10% of the window** (the contracts'
+    `SKILL_LISTING_MIN_TOKENS` / `SKILL_LISTING_MAX_TOKENS`, which the Skills dialog quotes; 4K for a virtual or unknown
     window), the `before_agent_start` handler sets `sections.skills` (pi lets a custom section replace
     its own) to a listing within that budget: skills ranked project, then host-supplied (bundled and
     extension skills, `temporary` scope), then pi-native user skills, then other agents' aliases
@@ -1048,7 +1049,17 @@ re-opened transcripts provider-valid.
     (granting trust acknowledges only what's present, so a later pull/branch skill is `pending-ack` until
     confirmed) + `disabledSkills` / **`disabledGroups`** baselines (a group key = a plugin name, a source tier
     `project`/`personal`/`bundled`/`pi`, or the special `@plugins` — assigned per skill by `skillGroup`, matching
-    `SkillCatalogEntry.group`), layered with the workspace's per-skill `skillOverrides` (the trust gate is
+    `SkillCatalogEntry.group`) + **`enabledGroups`**, resolved through the contracts' `isSkillGroupEnabled`
+    against the host's `AppConfig.otherAgentSkills` (off by default, so `personal` and Claude plugins load
+    only after a host-wide or per-project opt-in; `project`/`bundled`/`pi` — including pi's own
+    `~/.agents/skills` — stay on. A compatibility root whose group is off (`sourceMayLoad`) is left out of
+    `additionalSkillPaths` at every reload, never filtered afterwards: pi resolves same-name skills
+    first-wins before any override runs, so a switched-off personal `deploy` would otherwise shadow a
+    trusted project `deploy` and lose both. While any per-skill `on` override exists, such roots are
+    appended after every root whose group is on, so the override can reach its skill without one of them
+    shadowing a loadable one. `listSkillCatalog` lists the admitted load plus the skills those roots hold
+    (as off), so the Skills dialog can still switch them on; `refreshSkillAdmission()` reloads, through the gated `requestSessionReload`,
+    only live sessions whose loaded Personal/plugin skill files differ from the new decision), layered with the workspace's per-skill `skillOverrides` (the trust gate is
     checked before the toggle layer, so an "on" override can never un-gate an untrusted alias, and a per-skill
     `on` beats a group disable). `skillsGate` filters + relabels in one `skillsOverride`; only `load` skills
     reach the system prompt / `/skill:` list. A **disabled registry extension's** skill roots

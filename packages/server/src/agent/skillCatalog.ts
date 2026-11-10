@@ -7,14 +7,13 @@ import {
 	type Skill,
 	type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
+import { SKILL_LISTING_MAX_TOKENS, SKILL_LISTING_MIN_TOKENS } from "@thinkrail/contracts";
 import { Type } from "typebox";
 import type { CompatibilitySkillProvider } from "./skillSources";
 
 export const SKILL_SEARCH_TOOL = "skill_search";
 const CATALOG_WINDOW_SHARE = 0.02;
 const CATALOG_WINDOW_CEILING = 0.1;
-const CATALOG_MIN_TOKENS = 4_000;
-const CATALOG_MAX_TOKENS = 8_000;
 const CHARS_PER_TOKEN = 4;
 const DESCRIPTION_CHARS = 240;
 const SEARCH_DEFAULT_LIMIT = 8;
@@ -32,10 +31,10 @@ const FOREIGN_SOURCES: ReadonlySet<string> = new Set<CompatibilitySkillProvider>
 
 export function catalogBudgetChars(model: Model<Api> | undefined): number {
 	const known = model && model.api !== PI_VIRTUAL_MODEL_API && model.contextWindow > 0;
-	if (!known) return CATALOG_MIN_TOKENS * CHARS_PER_TOKEN;
-	const share = Math.max(CATALOG_MIN_TOKENS, model.contextWindow * CATALOG_WINDOW_SHARE);
+	if (!known) return SKILL_LISTING_MIN_TOKENS * CHARS_PER_TOKEN;
+	const share = Math.max(SKILL_LISTING_MIN_TOKENS, model.contextWindow * CATALOG_WINDOW_SHARE);
 	const tokens = Math.floor(
-		Math.min(CATALOG_MAX_TOKENS, share, model.contextWindow * CATALOG_WINDOW_CEILING),
+		Math.min(SKILL_LISTING_MAX_TOKENS, share, model.contextWindow * CATALOG_WINDOW_CEILING),
 	);
 	return tokens * CHARS_PER_TOKEN;
 }

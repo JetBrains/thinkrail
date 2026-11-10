@@ -1,7 +1,8 @@
-import type {
-	ExtensionCatalogEntry,
-	ExtensionSettingDescriptor,
-	ExtensionSettingValues,
+import {
+	type ExtensionCatalogEntry,
+	type ExtensionSettingDescriptor,
+	type ExtensionSettingValues,
+	OTHER_AGENT_SKILLS_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, useT } from "@thinkrail/locales/react";
@@ -14,6 +15,7 @@ import { getTransport, supportsExtensionSettings, supportsPiPackages } from "@/t
 import { ConfirmDialog } from "./ConfirmDialog";
 import { InstallPackageDialog } from "./InstallPackageDialog";
 import { PiBuiltinsGroup, PiPackagesGroup } from "./PiPackagesSettings";
+import { saveSettings } from "./saveSettings";
 import { UPDATE_CHECK_KEY, usePiPackages } from "./usePiPackages";
 
 const BUNDLED_DESCRIPTIONS: Readonly<Record<string, MessageKey>> = {
@@ -169,6 +171,7 @@ export function ExtensionsSettings() {
 	const disabled = useAppStore((state) => state.disabledExtensions);
 	const extensionSettings = useAppStore((state) => state.extensionSettings);
 	const disabledPackages = useAppStore((state) => state.disabledPackages);
+	const otherAgentSkills = useAppStore((state) => state.otherAgentSkills);
 	const packagesVersion = useAppStore((state) => state.packagesVersion);
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
 	const workspaceId = useAppStore((state) => selectActiveWorkspace(state)?.id);
@@ -254,6 +257,34 @@ export function ExtensionsSettings() {
 					onSetting={settingsSupported ? changeSetting : undefined}
 				/>
 			</section>
+			{protocolVersion !== null && protocolVersion >= OTHER_AGENT_SKILLS_PROTOCOL_VERSION ? (
+				<section data-testid="settings-other-agent-skills" className="flex flex-col">
+					<h4 className="pb-8 tr-text-label-pill text-text-subtle">
+						{t("settings.extensions.group.skills")}
+					</h4>
+					<div className="flex items-start justify-between gap-12 rounded-sm border border-border-default bg-control-bg px-12 py-8">
+						<div className="flex min-w-0 flex-col gap-4">
+							<span className="tr-title-compact text-text-default">
+								{t("settings.extensions.otherAgentSkills")}
+							</span>
+							<span className="text-text-muted tr-text-metadata">
+								{t("settings.extensions.otherAgentSkillsDescription")}
+							</span>
+						</div>
+						<Switch
+							checked={otherAgentSkills}
+							label={t("settings.extensions.otherAgentSkills")}
+							testId="other-agent-skills-toggle"
+							onCheckedChange={(enabled) =>
+								void saveSettings(
+									{ otherAgentSkills: enabled },
+									t("settings.extensions.otherAgentSkillsFailed"),
+								)
+							}
+						/>
+					</div>
+				</section>
+			) : null}
 			{packagesSupported ? (
 				<>
 					<PiPackagesGroup

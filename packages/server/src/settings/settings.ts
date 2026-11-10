@@ -62,6 +62,7 @@ const ACCEPTED_UPDATE_KEYS = {
 	settleIdleDays: true,
 	disabledExtensions: true,
 	extensionSettings: true,
+	otherAgentSkills: true,
 	disabledPackages: true,
 	locale: true,
 	onboardingDismissed: true,
@@ -190,6 +191,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		["agentReviewEnabled", runtimeUpdate.agentReviewEnabled],
 		["onboardingDismissed", runtimeUpdate.onboardingDismissed],
 		["codeLigatures", runtimeUpdate.codeLigatures],
+		["otherAgentSkills", runtimeUpdate.otherAgentSkills],
 	] as const) {
 		if (value !== undefined && typeof value !== "boolean") {
 			throw new Error(`${name} must be a boolean`);
