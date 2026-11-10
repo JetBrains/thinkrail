@@ -3,7 +3,7 @@ id: module-remote-client
 type: module-design
 status: active
 parent: architecture
-depends-on: [module-contracts]
+depends-on: [module-contracts, module-nostr-signaling]
 title: Remote client (device-side remote access)
 ---
 
@@ -28,10 +28,13 @@ uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `loc
     untrusted: `hello` sends only the token's SHA-256 id, the proof adds the token HMAC, the offer is applied
     only when the host key from the link signed it (bound to this attempt's nonce and challenge), and the
     answer is signed with the device key. TURN servers in the relay's `ready` join the public STUN set. Every
-    attempt, reconnects included, races the host's relay addresses (`relayPicker.ts`'s `openFirstRelay`: the
-    first socket to open wins, the rest close; none within 6s is a `RelayUnreachableError`, code
-    `relay_unreachable`), so a phone moving between the host's Wi‑Fi and Tailscale takes whichever route
-    works. The peer gathers through contracts' `PUBLIC_STUN_URLS`. A failed attempt rejects with a
+    attempt, reconnects included, opens its signaling through `signalingRoute.ts`: the host's relay addresses
+    race (`relayPicker.ts`'s `openFirstRelay`: the first socket to open wins, the rest close) alongside the
+    host's Nostr route from the link (`createNostrPipe`, a fresh Nostr key per attempt), and
+    `pickSignalingPipe` keeps a relay that is ready within `LOCAL_ROUTE_GRACE_MS` (it is the host itself on a
+    shared network), else the ready Nostr route; both failing is the relay's own refusal when it gave one,
+    else a `RelayUnreachableError` (code `relay_unreachable`) naming every address. A phone moving between the
+    host's Wi‑Fi, Tailscale and any other network takes whichever route works. The peer gathers through contracts' `PUBLIC_STUN_URLS`. A failed attempt rejects with a
     `RemoteConnectError` (`connectError.ts`) whose code names the cause — the relay's `no host available` /
     `host busy`, the host's coded `rejected` (read by reason from a host too old to send a code), a host key
     mismatch, a dropped relay — and an attempt with no open data channel after `CONNECT_TIMEOUT_MS` (20s) fails
@@ -40,15 +43,19 @@ uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `loc
     and a reconnect refused for good (`unknown_device`, `identity_mismatch`, `app_outdated`) stops retrying,
     closes the connection and fires `onLost`; `remoteSessions` then drops that host and tells its `onLost`
     listeners.
+  - `signalingRoute.ts` — `SignalingPipe` (one route's frame exchange: `ready` with any TURN servers,
+    `listen`, `send`, `close`), `createBrokerPipe`, `createNostrPipe`, `pickSignalingPipe` and
+    `openSignaling`, the route choice above.
   - `hostRegistry.ts` — the locally-stored set of paired hosts over an injected `KeyValueStore`; a host keeps
-    every advertised `relayUrls` (older entries only the one `relayUrl`).
+    every advertised `relayUrls` (older entries only the one `relayUrl`) and its Nostr route.
   - `remoteSessions.ts` — one wire client per host, aggregating live sessions into one list, plus each host's
     welcome (`welcomeFor`: protocol version and config) and what it lets this phone do (`accessFor`, `write` until a
     `remote.deviceAccess` push says `read`); `disconnect` closes and drops one host.
 - **Public surface:** the `index.ts` barrel.
-- **Allowed deps:** `contracts` (broker + signaling + pairing + session types), platform browser APIs. Never
-  `server`, `pi`, `web`, or any UI package.
-- **Forbidden:** value-importing `pi`/`server`; a WebRTC or crypto library (use the platform); any UI.
+- **Allowed deps:** `contracts` (broker + signaling + pairing + session types), `nostr-signaling` (the
+  internet route), platform browser APIs. Never `server`, `pi`, `web`, or any UI package.
+- **Forbidden:** value-importing `pi`/`server`; a WebRTC or crypto library of its own (use the platform; the
+  secp256k1/ChaCha20 that NIP-44 needs stays inside `nostr-signaling`); any UI.
 
 ## Invariants
 

@@ -1,28 +1,29 @@
 import {
 	answerTranscript,
 	type DeviceMessage,
-	encodeBrokerFrame,
 	encodeDeviceMessage,
 	type HostMessage,
 	offerTranscript,
+	type PairingNostrRoute,
 	pairingMacInput,
-	parseBrokerMessage,
 	parseHostMessage,
 	parsePairingUri,
 	withPublicStun,
 } from "@thinkrail/contracts";
-import { brokerFailure, hostRejection, RemoteConnectError } from "./connectError";
+import { hostRejection, RemoteConnectError } from "./connectError";
 import { toDeviceChannel } from "./deviceChannel";
 import { createDeviceWireClient, type DeviceWireClient } from "./deviceWireClient";
-import { openFirstRelay } from "./relayPicker";
+import { openSignaling, type SignalingPipe } from "./signalingRoute";
 
 export interface RemoteConnection {
 	client: DeviceWireClient;
 	hostKey: string;
-	/** The relay address that answered first. */
+	/** The relay address that answered first; empty when the host was reached over Nostr. */
 	relayUrl: string;
 	/** Every address the host advertised, kept so a later reconnect can take whichever route works then. */
 	relayUrls: readonly string[];
+	/** The host's Nostr route from the pairing link, for a reconnect from any network. */
+	nostr?: PairingNostrRoute;
 	/** The computer's name from the pairing link, when it sent one. */
 	hostName?: string;
 	projectRef: string;
@@ -163,6 +164,7 @@ async function loadOrCreateDeviceKey(): Promise<DeviceKey> {
 
 interface OpenParams {
 	relayUrls: readonly string[];
+	nostr?: PairingNostrRoute | undefined;
 	hostKey: string;
 	projectRef: string;
 	/** The one-time pairing token for a first pairing; omitted when resuming an already-paired host. */
@@ -183,12 +185,12 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 
 	let closed = false;
 	let backoff = 500;
-	let active: { ws: WebSocket; pc: RTCPeerConnection } | null = null;
+	let active: { pipe: SignalingPipe; pc: RTCPeerConnection } | null = null;
 
 	const teardownActive = (): void => {
 		if (!active) return;
 		try {
-			active.ws.close();
+			active.pipe.close();
 		} catch {}
 		try {
 			active.pc.close();
@@ -211,16 +213,15 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 			pairing && tokenId !== undefined
 				? { kind: "hello", tokenId, devicePublicKey: key.publicKeyRaw, label: params.label, nonce }
 				: { kind: "resume", devicePublicKey: key.publicKeyRaw, nonce };
-		const picked = await openFirstRelay(params.relayUrls, (url) => new WebSocket(url));
+		const { pipe, ice } = await openSignaling(params.relayUrls, params.hostKey, params.nostr);
 		if (closed) {
-			picked.socket.close();
+			pipe.close();
 			throw new Error("connection closed");
 		}
-		relayUrl = picked.url;
-		const ws = picked.socket;
+		relayUrl = pipe.route === "relay" ? pipe.url : "";
 		return new Promise<void>((resolve, reject) => {
-			const pc = new RTCPeerConnection({ iceServers: withPublicStun() });
-			active = { ws, pc };
+			const pc = new RTCPeerConnection({ iceServers: withPublicStun(ice ? [...ice] : undefined) });
+			active = { pipe, pc };
 			let settled = false;
 			let over = false;
 			let heardHost = false;
@@ -249,8 +250,7 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 					),
 				CONNECT_TIMEOUT_MS,
 			);
-			const send = (message: DeviceMessage): void =>
-				ws.send(encodeBrokerFrame({ t: "frame", data: encodeDeviceMessage(message) }));
+			const send = (message: DeviceMessage): void => pipe.send(encodeDeviceMessage(message));
 
 			pc.addEventListener("icecandidate", (event) => {
 				if (event.candidate)
@@ -316,38 +316,21 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 				}
 			};
 
-			ws.addEventListener("error", () =>
-				dropped(new RemoteConnectError("relay_lost", "relay connection failed")),
-			);
-			ws.addEventListener("close", () =>
-				dropped(new RemoteConnectError("relay_lost", "relay connection closed")),
-			);
-			ws.addEventListener("message", (event: MessageEvent) => {
-				if (typeof event.data !== "string") return;
-				const frame = parseBrokerMessage(event.data);
-				if (!frame) return;
-				if (frame.t === "error") return dropped(brokerFailure(frame.reason));
-				if (frame.t === "ready") {
-					if (frame.ice) pc.setConfiguration({ iceServers: withPublicStun(frame.ice) });
-					return send(initiate);
-				}
-				if (frame.t === "frame") {
-					const host = parseHostMessage(frame.data);
-					if (host) {
-						signals = signals
-							.then(() => onHost(host))
-							.catch((error: unknown) =>
-								dropped(
-									new RemoteConnectError(
-										"failed",
-										error instanceof Error ? error.message : String(error),
-									),
-								),
-							);
-					}
-				}
-			});
-			ws.send(encodeBrokerFrame({ t: "connect", hostKey: params.hostKey }));
+			pipe.listen((data) => {
+				const host = parseHostMessage(data);
+				if (!host) return;
+				signals = signals
+					.then(() => onHost(host))
+					.catch((error: unknown) =>
+						dropped(
+							new RemoteConnectError(
+								"failed",
+								error instanceof Error ? error.message : String(error),
+							),
+						),
+					);
+			}, dropped);
+			send(initiate);
 		});
 	};
 
@@ -380,6 +363,7 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 		hostKey: params.hostKey,
 		relayUrl,
 		relayUrls: params.relayUrls,
+		...(params.nostr ? { nostr: params.nostr } : {}),
 		projectRef: params.projectRef,
 		onLost: (handler) => {
 			lostHandler = handler;
@@ -401,6 +385,7 @@ export async function connectRemoteProject(
 	if (!pairing) throw new RemoteConnectError("invalid_link", "Invalid pairing link");
 	const connection = await openRemote({
 		relayUrls: pairing.signalingUrls,
+		nostr: pairing.nostr,
 		hostKey: pairing.hostPublicKey,
 		projectRef: pairing.projectRef,
 		token: pairing.token,
@@ -413,11 +398,19 @@ export async function connectRemoteProject(
 export function connectSavedHost(host: {
 	relayUrl: string;
 	relayUrls?: readonly string[] | undefined;
+	nostr?: PairingNostrRoute | undefined;
 	hostKey: string;
 	label: string;
 }): Promise<RemoteConnection> {
+	const relayUrls =
+		host.relayUrls && host.relayUrls.length > 0
+			? host.relayUrls
+			: host.relayUrl
+				? [host.relayUrl]
+				: [];
 	return openRemote({
-		relayUrls: host.relayUrls && host.relayUrls.length > 0 ? host.relayUrls : [host.relayUrl],
+		relayUrls,
+		nostr: host.nostr,
 		hostKey: host.hostKey,
 		projectRef: "",
 		label: host.label,

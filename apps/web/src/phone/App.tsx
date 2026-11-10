@@ -120,7 +120,8 @@ export function App() {
 					hostKey: connection.hostKey,
 					relayUrl: connection.relayUrl,
 					relayUrls: connection.relayUrls,
-					label: connection.hostName ?? new URL(connection.relayUrl).host,
+					...(connection.nostr ? { nostr: connection.nostr } : {}),
+					label: connection.hostName ?? hostLabelOf(connection),
 					pairedAt: Date.now(),
 				};
 				connection.close();
@@ -432,3 +433,17 @@ function screenKey(route: Route): string {
 
 const hostItems = (items: RemoteSessionItem[], hostKey: string) =>
 	items.filter((item) => item.hostKey === hostKey);
+
+/** A host name for a computer whose link sent none: the relay's address, else the Nostr relay it answered on. */
+function hostLabelOf(connection: {
+	relayUrl: string;
+	relayUrls: readonly string[];
+	nostr?: { relays: readonly string[] };
+}): string {
+	const url = connection.relayUrl || connection.relayUrls[0] || connection.nostr?.relays[0] || "";
+	try {
+		return new URL(url).host;
+	} catch {
+		return url;
+	}
+}

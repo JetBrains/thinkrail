@@ -38,6 +38,8 @@ packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-pro
 packages/contracts  the wire (types plus tiny pure runtime)
 packages/relay      standalone zero-knowledge signaling relay for remote access (hosted or self-hosted; GHCR
                     image) ── depends on ─▶ packages/contracts
+packages/nostr-signaling  remote-access signaling over public Nostr relays, shared by host and device ── depends on ─▶
+                    nothing in the workspace (nostr-tools)
 packages/locales    UI string catalogs (bundled en.json) + pure catalog rules; ./react holds the one i18next
                     instance ── depends on ─▶ nothing in the workspace (i18next, react-i18next)
 packages/shared     shellEnv (server-side only)

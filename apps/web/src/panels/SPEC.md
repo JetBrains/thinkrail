@@ -1194,8 +1194,9 @@ a project picker, the prompt hero, and the reused
   closes the code with a toast, and lists paired phones (`PhoneDeviceRow`: marked "Connected now" while live,
   renamed in place with the pencil, **Read / Write** access applied at once, Revoke).
   `PhoneAccessNetwork` is the network check below it — one row per route (same Wi‑Fi, Tailscale, Internet,
-  or the `--relay` URL alone) with the addresses found and what a missing or closed route needs — plus a
-  Wi‑Fi-only notice pointing at Tailscale. Both views read routes from the one `phoneReach` derivation. The QR is an `<img>` of the `qrcode` SVG, which
+  or the `--relay` URL alone, then Nostr relays with how many are live) with the addresses found and what a
+  missing or closed route needs — plus a Wi‑Fi-only notice pointing at Tailscale when no route reaches other
+  networks. `phoneHasNoRoute` (no address and no live Nostr relay) gates the no-network warning. Both views read routes from the one `phoneReach` derivation. The QR is an `<img>` of the `qrcode` SVG, which
   carries its own black-on-white: a scanner needs dark modules on a light field in every theme, so this image
   is the one place UI colour is not a token. `PhoneAccessView` is the props-only half the unit test renders;
   the requests live in `usePhoneAccess`, which the topbar's quick panel shares, and every transition in the

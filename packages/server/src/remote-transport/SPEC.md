@@ -17,7 +17,9 @@ registry); this module owns *how the connection is brokered and secured in trans
 
 Transport decision (fixed): **WebRTC DataChannels + self-hosted coturn**. The channel is E2E (DTLS) and NAT
 traversal is ICE/STUN with coturn as the ciphertext-only relay fallback, so the crypto for the data path is
-the protocol's, not hand-rolled. Host-side WebRTC is expected to use a **pure-TS** implementation
+the protocol's, not hand-rolled. Signaling has two interchangeable carriers for the same frames: a relay
+broker (the host's own for Wi‑Fi/Tailscale, or a hosted one) and public Nostr relays
+([[module-nostr-signaling]]) for a phone on any other network with no ThinkRail server. Host-side WebRTC is expected to use a **pure-TS** implementation
 (`werift`) to stay Bun- and compiled-binary-safe; native bindings would need binary-seam handling.
 
 ## Boundary
@@ -73,12 +75,22 @@ the protocol's, not hand-rolled. Host-side WebRTC is expected to use a **pure-TS
     the relay service. `connectHostBroker` reconnects with capped exponential backoff and re-registers when
     the relay restarts or the network drops; a dropped connection closes the sessions it brokered (their
     devices re-dial). A test runs it against a real relay over loopback.
-  - `remoteAccess.ts` — `startRemoteAccess`, the composition root: loads identity, connects to the broker,
-    runs each device's handshake + WebRTC, and mints one-time pairing links (`issueLink`) carrying every
-    `advertised` relay address (default: the connect URL) and the computer's name, with their expiry.
+  - `nostrHostSignaling.ts` — `connectNostrHost`, the host on its Nostr key (the identity's `nostrSecret`)
+    across the given relays, and `createNostrHostRouter`, its pure core: with no broker to open sessions, a
+    device's per-attempt Nostr key names its `HostSession` (fed the same parsed frames, the unparseable ones
+    to `receiveUnreadable`). Each session is dropped after a 60s signaling window — closed if its channel never
+    opened (`HostSession.opened`), only forgotten if it did — and bounded: 32 live sessions (an unknown sender
+    past it is ignored and times out) and 64 frames each (past it the sender stays blocked until its window
+    ends).
+  - `remoteAccess.ts` — `startRemoteAccess`, the composition root: loads identity, connects to the broker
+    and, given `nostrRelays`, to Nostr, both feeding one session factory; runs each device's handshake +
+    WebRTC, and mints one-time pairing links (`issueLink`) carrying every `advertised` relay address
+    (default: the connect URL), the Nostr route (key + relays) and the computer's name, with their expiry.
+    `nostr` reports the route and how many of its relays are live.
   - `remoteAccessControl.ts` — `createRemoteAccessControl`, the runtime switch the host owns: `setEnabled`
     starts the relay (the host's own via `startLocalRelay` unless a `relayUrl` is configured) plus
-    `startRemoteAccess`, and stopping tears both down, which closes every live device channel; the choice
+    `startRemoteAccess` with the Nostr route on (`DEFAULT_NOSTR_RELAYS` unless `nostrRelays` is given; `[]`
+    turns it off), and stopping tears both down, which closes every live device channel; the choice
     persists through the `remote` module's setting (`restore` brings it back at startup) unless the caller
     passes `persist: false` for a one-run `--remote`. `issueLink` refuses while off. It owns the live device
     channels, so `state()` marks each paired device `connected` and `revokeDevice` drops the registry entry and
@@ -94,7 +106,8 @@ the protocol's, not hand-rolled. Host-side WebRTC is expected to use a **pure-TS
     omitted (the DataChannel has no mid-stream reconnect to replay).
 - **Public surface:** the `index.ts` barrel.
 - **Allowed deps:** `remote` (types + the injected pairing primitives), `contracts` (the shared broker-frame
-  protocol and public STUN servers), `@thinkrail/relay` (only `startBroker`, for the local relay), `werift` (host-side WebRTC),
+  protocol and public STUN servers), `@thinkrail/relay` (only `startBroker`, for the local relay),
+  `@thinkrail/nostr-signaling` (the Nostr carrier and its default relays), `werift` (host-side WebRTC),
   `node:crypto`, `node:os`; later the `host` wire protocol behind
   `RemoteChannel`. Never the browser.
 - **Forbidden:** importing `host` today, browser bundling, hand-rolled transport crypto.

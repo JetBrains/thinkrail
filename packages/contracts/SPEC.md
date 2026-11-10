@@ -86,9 +86,15 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `remote.setDeviceAccess { id, access }` return `RemoteAccessStatus` (`enabled`, reachable `RemoteAddress`es,
   `RemotePairedDevice`s without their keys, each with its `RemoteDeviceAccess` — `read` or `write`); the
   `remote.deviceAccess` channel carries `{ access }` to that one device; a read-only device's writes fail with
-  `REMOTE_DEVICE_READ_ONLY`, an unpaired one's with `REMOTE_DEVICE_REVOKED`; `remote.issueLink` returns a
+  `REMOTE_DEVICE_READ_ONLY`, an unpaired one's with `REMOTE_DEVICE_REVOKED`; the optional `nostr`
+  (`RemoteNostrRoute`: relays and how many are live) is the internet route, absent from an older host;
+  `remote.issueLink` returns a
   `RemotePairingLink` (`link`, `expiresAt`). Only the computer's own clients may call them
   (`REMOTE_ACCESS_LOCAL_ONLY` for a paired device); `REMOTE_ACCESS_OFF` when a code is asked for while off.
+- **Pairing link (`pairingUri.ts`):** `buildPairingUri` / `parsePairingUri` for the QR's
+  `thinkrail://pair?v=1` link — relay addresses (`s`), token, host key, project, name, and the optional Nostr
+  route (`PairingNostrRoute`: hex key `o`, relays `r`). A link needs at least one route; a malformed Nostr
+  route is dropped, and an older app ignores it and keeps the relay addresses.
 - **Remote auth transcripts (`pairingAuth.ts`):** `registerTranscript`, `offerTranscript`,
   `answerTranscript`, `pairingMacInput` — the domain-separated (`thinkrail/<purpose>/v1`) byte strings the
   host, device and relay sign or MAC, shared so every party builds them identically; the crypto stays per

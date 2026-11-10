@@ -1351,6 +1351,12 @@ export type RemoteRelay =
 	| { kind: "builtIn"; port: number; publicCheck: RemotePublicCheck }
 	| { kind: "external"; url: string };
 
+/** Public Nostr relays a phone on any network signals through, and how many hold a live connection now. */
+export interface RemoteNostrRoute {
+	relays: string[];
+	connected: number;
+}
+
 /** Phone access as Settings shows it; `addresses` is empty while off or when no network is up. */
 export interface RemoteAccessStatus {
 	enabled: boolean;
@@ -1358,6 +1364,8 @@ export interface RemoteAccessStatus {
 	devices: RemotePairedDevice[];
 	/** Absent while access is off. */
 	relay?: RemoteRelay;
+	/** Absent while access is off, when the host turned the route off, or from a host older than it. */
+	nostr?: RemoteNostrRoute;
 }
 
 /** A one-time `thinkrail://pair` link for the QR, valid until `expiresAt` (epoch ms). */

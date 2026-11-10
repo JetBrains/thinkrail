@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DEFAULT_NOSTR_RELAYS } from "@thinkrail/nostr-signaling";
 import type { PairedDevice } from "../remote";
 import { addDevice, loadRemoteAccessEnabled, saveRemoteAccessEnabled } from "../remote";
 import type { RemoteChannel } from "./channel";
@@ -28,8 +29,14 @@ function fixture(over: Partial<RemoteAccessControlOptions> = {}) {
 		started.push(options);
 		events.push("access:start");
 		return {
-			identity: { publicKey: "K", fingerprint: "f", sign: () => new Uint8Array() },
+			identity: {
+				publicKey: "K",
+				fingerprint: "f",
+				sign: () => new Uint8Array(),
+				nostrSecret: new Uint8Array(32),
+			},
 			addresses: options.advertised?.() ?? [{ url: options.relayUrl, route: "relay" }],
+			nostr: options.nostrRelays?.length ? { relays: options.nostrRelays, connected: 2 } : null,
 			issueLink: () => ({ link: "thinkrail://pair?v=1", expiresAt: 5 }),
 			stop: () => events.push("access:stop"),
 		};
@@ -183,5 +190,21 @@ test("a device made read-only may only read from then on, its channels hear of i
 		expect(f.control.mayRequest("d1", "session.getMessages")).toBe("revoked");
 	} finally {
 		f.cleanup();
+	}
+});
+
+test("the Nostr route is on by default with the public relays, and an empty list turns it off", () => {
+	const on = fixture();
+	const off = fixture({ nostrRelays: [] });
+	try {
+		const state = on.control.setEnabled(true, { persist: false });
+		expect(on.started[0]?.nostrRelays).toEqual(DEFAULT_NOSTR_RELAYS);
+		expect(state.nostr).toEqual({ relays: [...DEFAULT_NOSTR_RELAYS], connected: 2 });
+		expect(off.control.setEnabled(true, { persist: false }).nostr).toBeUndefined();
+	} finally {
+		on.control.stop();
+		off.control.stop();
+		on.cleanup();
+		off.cleanup();
 	}
 });

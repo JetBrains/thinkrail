@@ -2,9 +2,18 @@ const SCHEME = "thinkrail:";
 const HOST = "pair";
 const VERSION = "1";
 
+/** The host's internet route: its Nostr signaling key and the public relays it listens on. */
+export interface PairingNostrRoute {
+	/** Hex secp256k1 public key the host's Nostr signaling is addressed by. */
+	publicKey: string;
+	relays: readonly string[];
+}
+
 export interface PairingUriParams {
 	/** Every relay address the host is reachable at (e.g. its Wi‑Fi and Tailscale addresses); the device uses the first that answers. */
 	signalingUrls: readonly string[];
+	/** Reaches the host from any network through public Nostr relays; absent when the host turned it off. */
+	nostr?: PairingNostrRoute;
 	token: string;
 	/** base64url raw Ed25519 host public key, so the device can verify who it paired with. */
 	hostPublicKey: string;
@@ -21,6 +30,10 @@ export function buildPairingUri(params: PairingUriParams): string {
 	query.set("k", params.hostPublicKey);
 	query.set("p", params.projectRef);
 	if (params.hostName) query.set("n", params.hostName);
+	if (params.nostr) {
+		query.set("o", params.nostr.publicKey);
+		for (const relay of params.nostr.relays) query.append("r", relay);
+	}
 	return `${SCHEME}//${HOST}?${query.toString()}`;
 }
 
@@ -40,6 +53,20 @@ export function parsePairingUri(uri: string): PairingUriParams | null {
 	const hostPublicKey = url.searchParams.get("k");
 	const projectRef = url.searchParams.get("p");
 	const hostName = url.searchParams.get("n");
-	if (signalingUrls.length === 0 || !token || !hostPublicKey || !projectRef) return null;
-	return { signalingUrls, token, hostPublicKey, projectRef, ...(hostName ? { hostName } : {}) };
+	const nostrKey = url.searchParams.get("o");
+	const nostrRelays = url.searchParams.getAll("r").filter((value) => value.length > 0);
+	const nostr =
+		nostrKey && /^[0-9a-f]{64}$/.test(nostrKey) && nostrRelays.length > 0
+			? { publicKey: nostrKey, relays: nostrRelays }
+			: undefined;
+	if ((signalingUrls.length === 0 && !nostr) || !token || !hostPublicKey || !projectRef)
+		return null;
+	return {
+		signalingUrls,
+		token,
+		hostPublicKey,
+		projectRef,
+		...(hostName ? { hostName } : {}),
+		...(nostr ? { nostr } : {}),
+	};
 }

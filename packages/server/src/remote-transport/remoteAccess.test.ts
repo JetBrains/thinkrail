@@ -8,6 +8,7 @@ const identity = {
 	publicKey: "HOSTPUBKEY",
 	fingerprint: "fp",
 	sign: () => new Uint8Array(),
+	nostrSecret: new Uint8Array(32).fill(1),
 };
 
 function fakeConnect() {

@@ -23,7 +23,9 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for the produc
   - `identity.ts` — the host's long-term **Ed25519** keypair (`node:crypto`), loaded or created and
     persisted `0600` under the data dir as `remote-identity.json`; exposes the base64url raw public key
     (what the QR carries), a short fingerprint, `sign`, and `verifySignature` / `publicKeyFromRaw` for
-    checking a device's key.
+    checking a device's key. `nostrSecret` is the host's secp256k1 key for Nostr signaling, HKDF-derived from
+    the Ed25519 private key (`thinkrail/nostr-signaling/v1`), so it needs no file of its own and lives and
+    dies with the identity; it only addresses the host on relays, while the Ed25519 key still proves it.
   - `pairingToken.ts` — an **in-memory**, single-use, short-TTL store of pending QR pairings
     (`createPairingTokens`), keyed by `pairingTokenId` (base64url SHA-256 of the token), because the relay
     carries `hello` and must never see the token itself. A leaked QR cannot be replayed and nothing survives a

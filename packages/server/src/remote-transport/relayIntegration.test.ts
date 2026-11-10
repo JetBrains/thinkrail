@@ -41,6 +41,7 @@ test("over a real relay the host proves its key, registers, and receives a devic
 				receive: () => {},
 				receiveUnreadable: () => {},
 				onChannel: () => {},
+				opened: false,
 				close: () => {},
 			};
 		},

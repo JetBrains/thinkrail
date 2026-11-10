@@ -11,6 +11,7 @@ const modules = {
 	"packages/contracts": "@thinkrail/contracts",
 	"packages/chat-ui": "@thinkrail/chat-ui",
 	"packages/design-tokens": "@thinkrail/design-tokens",
+	"packages/nostr-signaling": "@thinkrail/nostr-signaling",
 	"packages/relay": "@thinkrail/relay",
 	"packages/remote-client": "@thinkrail/remote-client",
 	"packages/shared": "@thinkrail/shared",

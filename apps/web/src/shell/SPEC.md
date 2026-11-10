@@ -84,7 +84,7 @@ at `REMOTE_ACCESS_PROTOCOL_VERSION`): a QR icon, tinted primary while access is 
 mounts `usePhoneAccess({ autoCode: true })` from panels only while open — the relay switch (so a user never
 needs `--remote`), a one-time pairing QR minted as soon as access is on with its expiry, New code and Copy
 link — or, once a phone pairs from it, "<phone> is paired." with **Pair another phone** — a one-line summary of
-the routes a phone has ("Connects over Wi‑Fi · Tailscale", or Wi‑Fi only), the paired phones each with
+the routes a phone has ("Connects over Wi‑Fi · Nostr relays", or Wi‑Fi only), the paired phones each with
 **Disconnect** (`remote.revokeDevice`), an eye for a read-only one and a Connected mark while live, and **All phone settings**, which
 opens Settings → Phone access. `PhoneAccessPanel` is its props-only half the unit test renders.
 

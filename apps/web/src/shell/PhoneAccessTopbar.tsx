@@ -11,7 +11,7 @@ import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { useCallback, useEffect, useId, useState } from "react";
-import { type PhoneRoute, phoneReach } from "../panels/phoneAccessState";
+import { type PhoneRoute, phoneHasNoRoute, phoneReach } from "../panels/phoneAccessState";
 import { SettingsSwitch } from "../panels/SettingsSwitch";
 import { type ShownPairing, usePhoneAccess } from "../panels/usePhoneAccess";
 import { SettingsSection, useAppStore } from "../store";
@@ -22,6 +22,7 @@ const ROUTE_NAME = {
 	tailscale: "shell.phone.routeTailscale",
 	public: "shell.phone.routePublic",
 	relay: "shell.phone.routeRelay",
+	nostr: "shell.phone.routeNostr",
 } as const satisfies Record<PhoneRoute, string>;
 
 function clockTime(epochMs: number): string {
@@ -86,7 +87,7 @@ export function PhoneAccessPanel({
 				<p className="m-0 px-12 py-12 tr-text-metadata text-text-muted">
 					{t("shell.phone.offHint")}
 				</p>
-			) : status?.addresses.length === 0 ? (
+			) : phoneHasNoRoute(status) ? (
 				<p
 					data-testid="phone-quick-no-network"
 					className="m-0 px-12 py-12 tr-text-metadata text-feedback-warning"

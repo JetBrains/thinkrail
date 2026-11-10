@@ -1,9 +1,13 @@
+import type { PairingNostrRoute } from "@thinkrail/contracts";
+
 export interface SavedHost {
 	hostKey: string;
 	/** The address that last answered; kept for hosts paired before links carried several. */
 	relayUrl: string;
 	/** Every relay address from the pairing link (Wi‑Fi/LAN, Tailscale); a reconnect races them. */
 	relayUrls?: readonly string[];
+	/** The host's Nostr route from the pairing link, so a reconnect works from any network. */
+	nostr?: PairingNostrRoute;
 	label: string;
 	pairedAt: number;
 }

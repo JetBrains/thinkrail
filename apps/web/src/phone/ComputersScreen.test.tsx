@@ -46,7 +46,7 @@ test("the Devices tab opens each computer in place — its projects, or why it i
 	);
 	expect(html).toContain("Studio Mac");
 	expect(html).toContain("Connected · Read only");
-	expect(html).toContain("Not reachable from this network");
+	expect(html).toContain("Couldn&#x27;t reach the computer");
 	expect(html.indexOf('data-testid="devices-add"')).toBeLessThan(html.indexOf("Studio Mac"));
 	expect(html).not.toContain("Scan QR code");
 	expect(html.match(/aria-expanded="true"/g)?.length).toBe(2);

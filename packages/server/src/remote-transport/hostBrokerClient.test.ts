@@ -38,6 +38,7 @@ function fixture() {
 					record.unreadable += 1;
 				},
 				onChannel: () => {},
+				opened: false,
 				close: () => {
 					record.closed = true;
 				},
