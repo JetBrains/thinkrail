@@ -728,6 +728,7 @@ function readers(overrides: Partial<SearchReaders> = {}): SearchReaders {
 		ensureDefault: async () => [],
 		watchRoot: () => {},
 		stat: () => 1,
+		isText: () => true,
 		...overrides,
 	};
 }

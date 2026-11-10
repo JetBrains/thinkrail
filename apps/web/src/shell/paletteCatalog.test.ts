@@ -23,6 +23,7 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 		activeWorkspace: workspace,
 		editors: [],
 		historyAvailable: false,
+		findInFilesAvailable: false,
 		canCreateProject: true,
 		nativeShortcuts: false,
 		readAction: null,
@@ -44,6 +45,7 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 			toggleBottom: noop,
 			showTool: noop,
 			openHistory: noop,
+			findInFiles: noop,
 			markRead: noop,
 			markUnread: noop,
 			settle: noop,
@@ -85,6 +87,15 @@ describe("palette project and Settings commands", () => {
 		);
 		expect(row("workspace.new", deps({ contextProjectId: null }))).toBeUndefined();
 		expect(row("workspace.openDefault", deps({ contextProjectId: null }))).toBeUndefined();
+	});
+
+	test("Find in files is offered only where it has a scope, with the chord it shares with the shell", () => {
+		expect(row("files.findInFiles", deps())).toBeUndefined();
+		expect(row("files.findInFiles", deps({ findInFilesAvailable: true }))?.shortcut).toEqual({
+			key: "F",
+			mod: true,
+			shift: true,
+		});
 	});
 
 	test("New workspace shows the chord the browser lets through, Mod+N only on desktop", () => {

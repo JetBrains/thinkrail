@@ -9,6 +9,7 @@ import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
 import { useEffect, useState } from "react";
 import { useContinuations } from "../chat/continuations";
+import { openFindInFiles } from "../findInFiles";
 import {
 	applyFontPreference,
 	DEFAULT_FONT_PREFERENCE,
@@ -57,6 +58,7 @@ import { UpdateInstallSurfaces, UpdateReadyButton, UpdateSettings, useUpdates } 
 import { AppShortcuts } from "./AppShortcuts";
 import { BrandLogo } from "./BrandLogo";
 import { toggleBottomPanel, toggleLeftSide, toggleRightSide } from "./chordActions";
+import { FindInFilesHost } from "./FindInFilesHost";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
 import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
@@ -194,6 +196,7 @@ export function Shell() {
 		...(hasActiveWorkspace ? { onWorkspace: toggleRightSide, onBottom: toggleBottomPanel } : {}),
 		...(contextRepoProject || canStartChat ? { onNewWorkspace: () => void openNewWork() } : {}),
 		onSearch: () => useAppStore.getState().openSearch(),
+		onFindInFiles: openFindInFiles,
 	});
 	return (
 		<div data-testid="shell" className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr]">
@@ -330,6 +333,7 @@ export function Shell() {
 				onToggleProjectsHome={homeProjects.toggle}
 				hasUpdateSettings={updates !== null}
 			/>
+			<FindInFilesHost />
 			<NotificationPermissionPrompt />
 			<Toaster />
 			<UpdateInstallSurfaces updates={updates} />

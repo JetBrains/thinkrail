@@ -2,7 +2,8 @@ import type { Workspace } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { createLatestOperation } from "../panels/latestOperation";
 import { isNavigationChange, selectWorkspaceById, toast, useAppStore } from "../store";
-import { errorText } from "../transport";
+import { errorText, getTransport } from "../transport";
+import { mergeProjectWorkspaces } from "./paletteBackfill";
 
 type WorkspaceTarget = Pick<Workspace, "id" | "projectId">;
 
@@ -60,3 +61,11 @@ export function createPaletteNavigator(
 		},
 	};
 }
+
+/** The one navigator every pick shares — palette rows, host hits and Find in Files — so a newer pick or any navigation overtakes an older one. */
+export const paletteNavigator = createPaletteNavigator(async (projectId) =>
+	mergeProjectWorkspaces(
+		projectId,
+		await getTransport().request("workspace.list", { projectId, includeDiffStats: false }),
+	),
+);

@@ -34,8 +34,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   response can, and the request it named is already gone from `pending`, so nothing would replay or re-ack it;
   `resume` repairs them all at once by restating the truth rather than confirming the confirmations —, channel
   `subscribe` with last-value replay for snapshots; append-only terminal data and the one-shot terminal
-  exit/detach + session-creation/deletion + `provider.changed` invalidation + addressed `feedback.interview` and `feedback.githubStar`
-  channels, plus scoped `session.resourcesChanged` invalidations and per-session `mcp.status` snapshots, are never cached or replayed to late
+  exit/detach + session-creation/deletion + `provider.changed` invalidation + addressed `feedback.interview`, `feedback.githubStar`
+  and `search.textResults` channels, plus scoped `session.resourcesChanged` invalidations and per-session `mcp.status` snapshots, are never cached or replayed to late
   subscribers. Resource metadata hydration belongs to the mounted chat integration, not replayed
   invalidation payloads. Reconnect/backoff;
   `inferUrl` defaults to
@@ -175,6 +175,9 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`,
   `supportsUserThemes`, `supportsFonts`, `supportsExtensionSettings`, `supportsSpeech`, `openSpeechSocket`,
   `hostUrl`, `uploadUserFont`, `supportsToolResponses`, `respondToTool`,
+  `supportsTextSearch` (v112 — Find in Files asks `search.text` and listens on `search.textResults` only of a
+  host that serves them; against an older host the palette hides the command and the window opened by the
+  chord says the host needs an update),
   `installClientErrorReporting`, `reportClientError`, `clientErrorReport`. `respondToTool(sessionId,
   toolCallId, response)` is the one place a tool response leaves the client (chat and plan page both use
   it): it sends `session.respondToTool` to a v93+ host and the retired `session.answerQuestion` below

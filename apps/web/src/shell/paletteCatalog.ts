@@ -8,6 +8,7 @@ import {
 	RiExternalLinkLine,
 	RiFileCopyLine,
 	RiFileList3Line,
+	RiFileSearchLine,
 	RiFolderLine,
 	RiFolderOpenLine,
 	RiHistoryLine,
@@ -60,6 +61,7 @@ export interface PaletteCatalogDeps {
 	readonly historyAvailable: boolean;
 	readonly canCreateProject: boolean;
 	readonly nativeShortcuts: boolean;
+	readonly findInFilesAvailable: boolean;
 	readonly readAction: "markRead" | "markUnread" | null;
 	readonly canSettle: boolean;
 	readonly settled: boolean;
@@ -82,6 +84,7 @@ export interface PaletteCatalogActions {
 	readonly toggleBottom: () => void;
 	readonly showTool: (workspaceId: string, tool: PaletteTool) => void;
 	readonly openHistory: () => void;
+	readonly findInFiles: () => void;
 	readonly markRead: (workspaceId: string) => void;
 	readonly markUnread: (workspaceId: string) => void;
 	readonly settle: (workspaceId: string) => void;
@@ -187,6 +190,17 @@ function workCommands(deps: PaletteCatalogDeps): Command[] {
 function viewCommands(deps: PaletteCatalogDeps): Command[] {
 	const { t, actions, activeWorkspace } = deps;
 	const commands: Command[] = [];
+	if (deps.findInFilesAvailable) {
+		commands.push({
+			id: "files.findInFiles",
+			title: t("commands.files.findInFiles"),
+			group: "navigation",
+			icon: RiFileSearchLine,
+			keywords: ["grep", "text", "content", "occurrences"],
+			shortcut: { key: "F", mod: true, shift: true },
+			run: actions.findInFiles,
+		});
+	}
 	if (deps.historyAvailable) {
 		commands.push({
 			id: "chat.history",

@@ -31,6 +31,7 @@ export {
 	supportsPlanSummaryGeneration,
 	supportsRichAnchors,
 	supportsSpeech,
+	supportsTextSearch,
 	supportsToolResponses,
 	supportsTurnChanges,
 	supportsUserThemes,

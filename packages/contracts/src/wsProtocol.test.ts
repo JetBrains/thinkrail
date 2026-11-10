@@ -67,6 +67,7 @@ import {
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
+	TEXT_SEARCH_PROTOCOL_VERSION,
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 	TOOL_RESPONSE_CUSTOM_TYPE,
@@ -254,7 +255,7 @@ test("tool responses replace the ask-only answer method at v93", () => {
 
 test("the cache-warming setting names its two methods at v111", () => {
 	expect(CACHE_WARMING_SETTINGS_PROTOCOL_VERSION).toBe(111);
-	expect(PROTOCOL_VERSION).toBe(111);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CACHE_WARMING_SETTINGS_PROTOCOL_VERSION);
 	expect(WS_METHODS.cacheWarmingGet).toBe("cacheWarming.get");
 	expect(WS_METHODS.cacheWarmingSet).toBe("cacheWarming.set");
 	expect(CACHE_WARMING_MODES).toEqual(["off", "streaming", "idle"]);
@@ -317,6 +318,13 @@ test("host search and its previews are pinned to v106", () => {
 	expect(SEARCH_PROTOCOL_VERSION).toBe(106);
 	expect(WS_METHODS.searchQuery).toBe("search.query");
 	expect(WS_METHODS.searchPreview).toBe("search.preview");
+});
+
+test("find in files is pinned to v112", () => {
+	expect(PROTOCOL_VERSION).toBe(112);
+	expect(TEXT_SEARCH_PROTOCOL_VERSION).toBe(112);
+	expect(WS_METHODS.searchText).toBe("search.text");
+	expect(WS_CHANNELS.searchTextResults).toBe("search.textResults");
 });
 
 test("continue in workspace is pinned to v110", () => {
