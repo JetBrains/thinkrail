@@ -484,8 +484,9 @@ fixture answers the probe (recognized by shared's `LOGIN_ENV_MARKER`) with that 
 PATH the host was given, and otherwise execs the runner's real shell, keeping terminal specs on a genuine
 shell. Without it the probe would merge developer-machine directories into the hermetic PATH (and import the
 developer's login environment) and a spec could reach a real `central`, `pi`, or editor. (The `.bun/bin` directory name is historical: it once marked the PATH as complete to a short-circuit
-that no longer exists.) On Windows, the lane's `git.cmd` delegates to the resolved `git.exe` without adding
-its parent directory to the host PATH. Folder selection comes from one picker control file across the source,
+that no longer exists.) On Windows, the fixture PATH adds only Git's `cmd` directory beyond its fake
+commands, so the host can operate on disposable fixture repositories without inheriting the developer PATH.
+Folder selection comes from one picker control file across the source,
 binary, and desktop hosts: plain content returns a path and an `error:<message>` directive forces a
 platform-independent failure. The source host also receives empty `DISPLAY` and `WAYLAND_DISPLAY`, so a
 broken control cannot reach a developer's Linux display; native Linux preflight stays unit-covered. Port

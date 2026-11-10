@@ -28,12 +28,6 @@ export function writeFakeCentral(fakeBinDir: string): void {
 	chmodSync(target, 0o755);
 }
 
-export function writeFakeGit(fakeBinDir: string): void {
-	if (process.platform !== "win32") return;
-	const git = resolveWindowsGitExecutable();
-	writeFileSync(join(fakeBinDir, "git.cmd"), `@echo off\r\n"${git}" %*\r\n`);
-}
-
 export function runFakeCentral(fakeBinDir: string, argv: string[], env: NodeJS.ProcessEnv): void {
 	const windows = process.platform === "win32";
 	const command = windows ? resolveGitBashExecutable() : join(fakeBinDir, "central");
@@ -71,7 +65,9 @@ function resolveWindowsGitExecutable(): string {
 }
 
 export function hermeticE2ePath(fakeBinDir: string): string {
-	return [fakeBinDir, "/usr/bin", "/bin", "/usr/sbin", "/sbin"].join(delimiter);
+	const paths = [fakeBinDir];
+	if (process.platform === "win32") paths.push(dirname(resolveWindowsGitExecutable()));
+	return [...paths, "/usr/bin", "/bin", "/usr/sbin", "/sbin"].join(delimiter);
 }
 
 export function hermeticE2eShell(fakeBinDir: string): string {
