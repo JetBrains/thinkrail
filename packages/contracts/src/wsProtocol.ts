@@ -141,7 +141,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 108;
+export const PROTOCOL_VERSION = 109;
+export const SCHEDULED_PROMPTS_PROTOCOL_VERSION = 109;
 export const OTHER_AGENT_SKILLS_PROTOCOL_VERSION = 108;
 export const SPEECH_PROTOCOL_VERSION = 107;
 export const SEARCH_PROTOCOL_VERSION = 106;
@@ -662,7 +663,6 @@ export interface ScheduledPromptRecord {
 	images?: ImageContent[];
 	dueAt: number;
 	createdAt: number;
-	/** Durable order of the latest save; optional when reading records from before this field existed. */
 	savedOrder?: number;
 	status: "scheduled" | "delivering" | "failed";
 	error?: string;

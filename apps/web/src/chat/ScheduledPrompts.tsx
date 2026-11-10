@@ -26,6 +26,14 @@ export interface ScheduledPromptDraftSnapshot {
 	imageIds: readonly string[];
 }
 
+export interface ScheduledPromptInput {
+	id: string;
+	dueAt: number;
+	text: string;
+	images: ImageContent[];
+	modelSelection: PromptModelSelection;
+}
+
 function sameDraft(a: ScheduledPromptDraftSnapshot, b: ScheduledPromptDraftSnapshot): boolean {
 	return (
 		a.sessionId === b.sessionId &&
@@ -122,20 +130,8 @@ export function ScheduledPrompts({
 	images: ImageContent[];
 	imageIds: readonly string[];
 	canSchedule: boolean;
-	onSchedule: (
-		id: string,
-		dueAt: number,
-		text: string,
-		images: ImageContent[],
-		modelSelection: PromptModelSelection,
-	) => Promise<unknown>;
-	onUpdate: (
-		id: string,
-		dueAt: number,
-		text: string,
-		images: ImageContent[],
-		modelSelection: PromptModelSelection,
-	) => Promise<unknown>;
+	onSchedule: (scheduled: ScheduledPromptInput) => Promise<unknown>;
+	onUpdate: (scheduled: ScheduledPromptInput) => Promise<unknown>;
 	onCancel: (id: string) => Promise<unknown>;
 	onSendNow: (id: string) => Promise<unknown>;
 	models: WireModel[];
@@ -232,15 +228,14 @@ export function ScheduledPrompts({
 		const snapshot = draftSnapshot.current;
 		if (!scheduleRequest.current || !sameDraft(scheduleRequest.current.snapshot, snapshot))
 			scheduleRequest.current = { id: randomUuid(), snapshot };
-		const pending = editing
-			? onUpdate(editing, dueAt, prompt.trim(), scheduledImages, modelSelection)
-			: onSchedule(
-					scheduleRequest.current.id,
-					dueAt,
-					prompt.trim(),
-					scheduledImages,
-					modelSelection,
-				);
+		const scheduled = {
+			id: editing ?? scheduleRequest.current.id,
+			dueAt,
+			text: prompt.trim(),
+			images: scheduledImages,
+			modelSelection,
+		};
+		const pending = editing ? onUpdate(scheduled) : onSchedule(scheduled);
 		await pending
 			.then(() => {
 				if (!editing) {
@@ -291,9 +286,13 @@ export function ScheduledPrompts({
 	});
 	const pickRowModel = async (item: ScheduledPromptRecord, selection: PromptModelSelection) => {
 		setError("");
-		await onUpdate(item.id, item.dueAt, item.text, item.images ?? [], selection).catch(
-			(e: unknown) => setError(e instanceof Error ? e.message : t("chat.schedule.failed")),
-		);
+		await onUpdate({
+			id: item.id,
+			dueAt: item.dueAt,
+			text: item.text,
+			images: item.images ?? [],
+			modelSelection: selection,
+		}).catch((e: unknown) => setError(e instanceof Error ? e.message : t("chat.schedule.failed")));
 	};
 	const pickerModel = (selection?: PromptModelSelection) =>
 		models.find(

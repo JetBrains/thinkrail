@@ -33,6 +33,7 @@ import {
 	selectPickerModels,
 	selectSkillsStale,
 	selectSupportsMcp,
+	selectSupportsScheduledPrompts,
 	selectWorkspaceById,
 	toast,
 	useAppStore,
@@ -127,11 +128,16 @@ export default function ChatView({
 
 	const status = useAppStore((s) => s.status);
 	const connectionGeneration = useAppStore((s) => s.connectionGeneration);
+	const supportsScheduledPrompts = useAppStore(selectSupportsScheduledPrompts);
 	const [scheduledPrompts, setScheduledPrompts] = useState<ScheduledPromptRecord[]>([]);
 	const [draftModelSelection, setDraftModelSelection] = useState<
 		PromptModelSelection | undefined
 	>();
 	useEffect(() => {
+		if (!supportsScheduledPrompts) {
+			setScheduledPrompts([]);
+			return;
+		}
 		let active = true;
 		setScheduledPrompts([]);
 		const install = (records: ScheduledPromptRecord[]) => {
@@ -149,7 +155,7 @@ export default function ChatView({
 			active = false;
 			unsubscribe();
 		};
-	}, [workspaceId, sessionId, connectionGeneration]);
+	}, [workspaceId, sessionId, connectionGeneration, supportsScheduledPrompts]);
 	const canRenameChat = useAppStore(selectCanRenameChat);
 	const supportsMcp = useAppStore(selectSupportsMcp);
 	const composerGrowthLimit = useAppStore((state) => state.composerGrowthLimit);
@@ -990,20 +996,21 @@ export default function ChatView({
 					}}
 					onSubmit={onSubmit}
 					sessionId={sessionId}
+					showScheduledPrompts={supportsScheduledPrompts}
 					scheduledPrompts={scheduledPrompts}
-					onSchedule={(requestId, dueAt, text, images, modelSelection) =>
+					onSchedule={(scheduled) =>
 						getTransport()
 							.request("scheduledPrompts.create", {
-								modelSelection,
-								requestId,
-								id: requestId,
+								modelSelection: scheduled.modelSelection,
+								requestId: scheduled.id,
+								id: scheduled.id,
 								workspaceId,
 								sessionId,
-								text,
-								dueAt,
+								text: scheduled.text,
+								dueAt: scheduled.dueAt,
 								createdAt: Date.now(),
 								status: "scheduled",
-								...(images.length ? { images } : {}),
+								...(scheduled.images.length ? { images: scheduled.images } : {}),
 							})
 							.then((created) => {
 								setScheduledPrompts((records) => [
@@ -1013,15 +1020,15 @@ export default function ChatView({
 								return created;
 							})
 					}
-					onUpdateScheduledPrompt={(id, dueAt, text, images, modelSelection) =>
+					onUpdateScheduledPrompt={(scheduled) =>
 						getTransport()
 							.request("scheduledPrompts.update", {
-								id,
+								id: scheduled.id,
 								workspaceId,
-								dueAt,
-								text,
-								images,
-								modelSelection,
+								dueAt: scheduled.dueAt,
+								text: scheduled.text,
+								images: scheduled.images,
+								modelSelection: scheduled.modelSelection,
 							})
 							.then((updated) => {
 								setScheduledPrompts((records) =>

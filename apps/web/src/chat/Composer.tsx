@@ -10,7 +10,6 @@ import {
 } from "@remixicon/react";
 import type {
 	ComposerGrowthLimit,
-	ImageContent,
 	PromptModelSelection,
 	ScheduledPromptRecord,
 	ThinkingLevel,
@@ -61,7 +60,11 @@ import {
 } from "./ModelEffortPicker";
 import { isModelCommand, parseModelCommand } from "./nativeCommands";
 import { imagePasteDropHandlers, PromptImageChips, usePromptImages } from "./promptImages";
-import { type ScheduledPromptDraftSnapshot, ScheduledPrompts } from "./ScheduledPrompts";
+import {
+	type ScheduledPromptDraftSnapshot,
+	type ScheduledPromptInput,
+	ScheduledPrompts,
+} from "./ScheduledPrompts";
 import type { ChatAttachment } from "./types";
 import type { ModelPreferences } from "./useModelPreferences";
 
@@ -191,22 +194,11 @@ interface ComposerProps {
 	onSelectModel: (selection: ModelSelection) => void;
 	onSelectThinking: (level: ThinkingLevel) => void;
 	sessionId: string;
+	showScheduledPrompts: boolean;
 	scheduledPrompts: ScheduledPromptRecord[];
 	draftModelSelection: PromptModelSelection | undefined;
-	onSchedule: (
-		requestId: string,
-		dueAt: number,
-		text: string,
-		images: ImageContent[],
-		modelSelection: PromptModelSelection,
-	) => Promise<unknown>;
-	onUpdateScheduledPrompt: (
-		id: string,
-		dueAt: number,
-		text: string,
-		images: ImageContent[],
-		modelSelection: PromptModelSelection,
-	) => Promise<unknown>;
+	onSchedule: (scheduled: ScheduledPromptInput) => Promise<unknown>;
+	onUpdateScheduledPrompt: (scheduled: ScheduledPromptInput) => Promise<unknown>;
 	onCancelScheduledPrompt: (id: string) => Promise<unknown>;
 	onSendScheduledPromptNow: (id: string) => Promise<unknown>;
 	onSubmit: (
@@ -253,6 +245,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		onSelectThinking,
 		onSubmit,
 		sessionId,
+		showScheduledPrompts,
 		scheduledPrompts,
 		draftModelSelection,
 		onSchedule,
@@ -879,27 +872,29 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								</Popover>
 							) : null}
 						</div>
-						<ScheduledPrompts
-							items={scheduledPrompts}
-							sessionId={sessionId}
-							models={models}
-							currentModel={currentModel}
-							thinkingLevel={thinkingLevel}
-							modelPreferences={modelPreferences}
-							modelsRefreshing={modelsRefreshing}
-							onRefreshModels={onRefreshModels}
-							listTarget={scheduledListTarget}
-							text={scheduledText}
-							draftText={value}
-							images={images.map((image) => image.content)}
-							imageIds={imageIds}
-							canSchedule={canSchedule}
-							onSchedule={onSchedule}
-							onUpdate={onUpdateScheduledPrompt}
-							onCancel={onCancelScheduledPrompt}
-							onSendNow={onSendScheduledPromptNow}
-							onScheduled={onScheduled}
-						/>
+						{showScheduledPrompts ? (
+							<ScheduledPrompts
+								items={scheduledPrompts}
+								sessionId={sessionId}
+								models={models}
+								currentModel={currentModel}
+								thinkingLevel={thinkingLevel}
+								modelPreferences={modelPreferences}
+								modelsRefreshing={modelsRefreshing}
+								onRefreshModels={onRefreshModels}
+								listTarget={scheduledListTarget}
+								text={scheduledText}
+								draftText={value}
+								images={images.map((image) => image.content)}
+								imageIds={imageIds}
+								canSchedule={canSchedule}
+								onSchedule={onSchedule}
+								onUpdate={onUpdateScheduledPrompt}
+								onCancel={onCancelScheduledPrompt}
+								onSendNow={onSendScheduledPromptNow}
+								onScheduled={onScheduled}
+							/>
+						) : null}
 					</div>
 				</div>
 			</div>

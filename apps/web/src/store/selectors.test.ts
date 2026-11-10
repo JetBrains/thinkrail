@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
 	MODEL_PICKER_PROTOCOL_VERSION,
 	type Project,
+	SCHEDULED_PROMPTS_PROTOCOL_VERSION,
 	SEARCH_PROTOCOL_VERSION,
 	type SessionState,
 	type SessionStateRecord,
@@ -47,6 +48,7 @@ import {
 	selectReadyCompletionAck,
 	selectSkillsStale,
 	selectSupportsModelPicker,
+	selectSupportsScheduledPrompts,
 	selectUnnamedChatFirstPrompts,
 	selectWorkspaceIsRunning,
 	selectWorkspaceNeedsAttention,
@@ -98,6 +100,16 @@ test("chat rename capability follows the host protocol snapshot", () => {
 	expect(selectCanRenameChat({ protocolVersion: 66 })).toBe(true);
 	expect(selectCanRenameChat({ protocolVersion: 65 })).toBe(false);
 	expect(selectCanRenameChat({ protocolVersion: null })).toBe(false);
+});
+
+test("scheduled prompts are available only when the connected host exposes their protocol", () => {
+	expect(selectSupportsScheduledPrompts({ protocolVersion: null })).toBe(false);
+	expect(
+		selectSupportsScheduledPrompts({ protocolVersion: SCHEDULED_PROMPTS_PROTOCOL_VERSION - 1 }),
+	).toBe(false);
+	expect(
+		selectSupportsScheduledPrompts({ protocolVersion: SCHEDULED_PROMPTS_PROTOCOL_VERSION }),
+	).toBe(true);
 });
 
 test("normalized rail flags keep attention binary and working orthogonal", () => {

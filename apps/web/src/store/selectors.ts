@@ -19,6 +19,7 @@ import {
 	type ResourceKind,
 	type ResourceRecord,
 	resourceTallyTotal,
+	SCHEDULED_PROMPTS_PROTOCOL_VERSION,
 	SEARCH_PROTOCOL_VERSION,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
@@ -185,6 +186,12 @@ export function selectOnboardingActive(
 
 export function selectSupportsMcp(state: ProtocolState): boolean {
 	return state.protocolVersion !== null && state.protocolVersion >= MCP_PROTOCOL_VERSION;
+}
+
+export function selectSupportsScheduledPrompts(state: ProtocolState): boolean {
+	return (
+		state.protocolVersion !== null && state.protocolVersion >= SCHEDULED_PROMPTS_PROTOCOL_VERSION
+	);
 }
 
 export function supportsChatResources(protocolVersion: number | null): boolean {

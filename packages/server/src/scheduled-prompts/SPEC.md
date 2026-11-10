@@ -15,8 +15,8 @@ This module may use persistence paths and the public agent session API, but neve
 ## Boundary
 
 The index.ts barrel exposes schedule create, list, update, cancel and send-now operations,
-due-time validation, and host start/stop hooks. Allowed dependencies are contracts and the
-agent, persistence and workspaces sibling barrels. No browser or alternate agent runtime is owned here.
+due-time validation, and host start/stop hooks. The host supplies the persistence path and public
+agent/workspace APIs. No browser or alternate agent runtime is owned here.
 
 Times are absolute instants. Due prompts are serialized per session only until Pi accepts the
 follow-up handoff; an idle session is accepted at `agent_start`, so a long run never holds the global

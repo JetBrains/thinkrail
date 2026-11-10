@@ -54,6 +54,7 @@ import {
 	REVIEW_ACTIONS_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	readToolResponseMessage,
+	SCHEDULED_PROMPTS_PROTOCOL_VERSION,
 	SEARCH_PROTOCOL_VERSION,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
@@ -84,6 +85,12 @@ test("retired workspace activity keeps only its empty snapshot compatibility met
 test("system theme settings advance the protocol", () => {
 	expect(THEME_SYSTEM_PROTOCOL_VERSION).toBe(58);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(THEME_SYSTEM_PROTOCOL_VERSION);
+});
+
+test("scheduled prompts are introduced at protocol v109", () => {
+	expect(SCHEDULED_PROMPTS_PROTOCOL_VERSION).toBe(109);
+	expect(PROTOCOL_VERSION).toBe(109);
+	expect(WS_METHODS.scheduledPromptsCreate).toBe("scheduledPrompts.create");
 });
 
 test("subagent settings advance the protocol and name the workspace override mutation", () => {
@@ -358,7 +365,7 @@ test("the GitHub star ask is pinned to v103", () => {
 
 test("the other agents' skills opt-in is pinned to v108", () => {
 	expect(OTHER_AGENT_SKILLS_PROTOCOL_VERSION).toBe(108);
-	expect(PROTOCOL_VERSION).toBe(108);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(OTHER_AGENT_SKILLS_PROTOCOL_VERSION);
 	expect(DEFAULT_CONFIG.otherAgentSkills).toBe(false);
 });
 

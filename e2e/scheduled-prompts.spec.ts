@@ -2,12 +2,39 @@ import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
+import { SCHEDULED_PROMPTS_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { expandModelGroup, openWorkspaceChat } from "./fixtures/app";
 import { connectCentral, openProviders, waitForCentralState } from "./fixtures/jbcentral";
 import { E2eWire } from "./fixtures/wire";
 
 const evidenceDir = join(tmpdir(), "thinkrail-scheduled-prompt-review");
 test.use({ timezoneId: "Europe/Stockholm" });
+
+test("older hosts keep scheduling controls unavailable", async ({ page }) => {
+	let scheduleRequests = 0;
+	await page.routeWebSocket(/\/ws(\?|$)/, (browser) => {
+		const server = browser.connectToServer();
+		browser.onMessage((message) => {
+			const frame = JSON.parse(String(message)) as { method?: string };
+			if (frame.method?.startsWith("scheduledPrompts.")) scheduleRequests++;
+			server.send(message);
+		});
+		server.onMessage((message) => {
+			const frame = JSON.parse(String(message)) as {
+				channel?: string;
+				data?: { protocolVersion?: number };
+			};
+			if (frame.channel === "server.welcome" && frame.data) {
+				frame.data.protocolVersion = SCHEDULED_PROMPTS_PROTOCOL_VERSION - 1;
+			}
+			browser.send(JSON.stringify(frame));
+		});
+	});
+
+	await openWorkspaceChat(page);
+	await expect(page.getByTestId("schedule-open")).toHaveCount(0);
+	expect(scheduleRequests).toBe(0);
+});
 
 async function openScheduledChat(page: Page) {
 	const workspace = await openWorkspaceChat(page);
