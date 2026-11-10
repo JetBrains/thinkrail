@@ -18,6 +18,7 @@ import { setSyncGitTimeoutForTests } from "../git";
 import { createWorkspace } from "./creations";
 import {
 	backfillWorkspaceActivity,
+	checkWorkspaceRemoval,
 	completeInitialTerminalReservation,
 	ensureWorkspaceScratchDir,
 	forgetWorkspace,
@@ -788,6 +789,22 @@ test("stageWorktreeRemoval moves the checkout aside intact; restore returns it, 
 	expect(await clean.discard()).toBe(true);
 	expect(existsSync(ws.worktreePath)).toBe(false);
 	expect(gitOut(repo, "show-ref", "--verify", `refs/heads/${ws.branch}`)).not.toBe("");
+});
+
+test("removal counts commits the split push target lacks even when the fetch remote has them", async () => {
+	const ws = await createWorkspace("p1");
+	writeFileSync(join(ws.worktreePath, "work.txt"), "work\n");
+	git(ws.worktreePath, "add", "-A");
+	git(ws.worktreePath, "commit", "-m", "work");
+	const fetchRemote = join(dataDir, "fetch.git");
+	const pushRemote = join(dataDir, "push.git");
+	git(dataDir, "init", "--bare", fetchRemote);
+	git(dataDir, "init", "--bare", pushRemote);
+	git(repo, "remote", "add", "origin", fetchRemote);
+	git(ws.worktreePath, "push", "origin", ws.branch);
+	git(repo, "config", "remote.origin.pushurl", pushRemote);
+	const [check] = await checkWorkspaceRemoval([ws.id]);
+	expect(check?.unpushed).toBe(1);
 });
 
 test.skipIf(process.platform === "win32").each([false, true])(

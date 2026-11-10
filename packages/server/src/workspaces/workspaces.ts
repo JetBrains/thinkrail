@@ -27,12 +27,15 @@ import {
 	assertSafeRef,
 	canonicalPath,
 	changedFileArgs,
+	commitsAheadOf,
 	countPushDivergence,
+	countPushTargetDivergence,
 	currentBranch,
 	git,
 	gitAsync,
 	headBranchAt,
 	headShaAt,
+	originUrls,
 	resolveDefaultBranch,
 	resolveDiffRange,
 	SLOW_GIT_TIMEOUT_MS,
@@ -893,6 +896,15 @@ async function uncommittedFiles(ws: Workspace): Promise<number | null> {
 async function unpushedCommits(ws: Workspace): Promise<number | null> {
 	const head = await gitAsync(ws.worktreePath, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
 	if (!head.ok || head.out.trim() !== ws.branch) return null;
+	const origin = await originUrls(ws.worktreePath);
+	if (origin.push !== null && origin.push !== origin.fetch) {
+		const target = await countPushTargetDivergence(ws.worktreePath, ws.branch, origin.push).catch(
+			() => null,
+		);
+		if (!target) return null;
+		if (!target.published) return commitsAheadOf(ws.worktreePath, ws.baseBranch);
+		return target.ahead ?? null;
+	}
 	const divergence = await countPushDivergence(ws.worktreePath, ws.branch);
 	if (divergence) return divergence.ahead;
 	const remotes = await gitAsync(ws.worktreePath, ["remote"]);
