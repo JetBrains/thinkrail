@@ -41,6 +41,12 @@ renderers are registered by the host's `extensions/registry.ts`. Unregistered to
 - **Ask user question** is owned by [[module-ext-ask-user-question]], outside this module. Its card
   registers bare and `interactive` through the public web entrypoint; the plan page renders it through the
   registry.
+- **`StartWorkspaceCard`** — the card for the host-owned `start_workspace` tool (capability: the server
+  `agent` workspace tools + the `host` workspace-tools seam). It reads the started ids from `details`
+  defensively and shows the prompt (folded when long), the branch/base/model meta, and the workspace's
+  **live** name through `ChatActions.WorkspaceName`: the child renames its workspace from `workspace-N` on
+  its first turn. **Open workspace** goes through `ChatActions.openWorkspace`. Registered `primary` +
+  `defaultExpanded`. `workspace_status` keeps the default renderer — its text report is the product.
 - **Visualize** is owned by [[module-ext-visualize]], outside this module. Its primary/default-expanded
   registration and named `MermaidView` reach chat through the public web entrypoint.
 - **Spec-graph tools** — one defensive `SpecToolCard` registered for all seven `spec_*` names. Each keeps

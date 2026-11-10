@@ -110,9 +110,10 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   after its git subprocess)),
   **background creation** (`creations.ts` over the `creationRecords.ts` store; issue #874 — a sync
   `worktree add` of a large monorepo froze the host's only event loop for the whole checkout and outlived the
-  client's 60s request): `startWorkspaceCreation(projectId, { name?, baseRef?, kickoff? })` plans the branch and
-  path synchronously, persists a record in `workspace-creations.json` (`state: running`, `phase: preparing`, the
-  full kickoff incl. images) and returns its `WorkspaceCreation` view before any git runs. The job then
+  client's 60s request): `startWorkspaceCreation(projectId, { name?, baseRef?, kickoff?, origin? })` plans the
+  branch and path synchronously, persists a record in `workspace-creations.json` (`state: running`, `phase:
+  preparing`, the full kickoff incl. images, and a host-only `origin: "agent"` for an agent's `start_workspace`,
+  which never reaches the wire view) and returns its `WorkspaceCreation` view before any git runs. The job then
   (1) fetches a missing remote base, resolves the OID, and runs `worktree add --no-checkout` through `gitAsync`
   (no file writes, so it is quick), (2) moves to `phase: checking-out` and runs `git checkout --progress
   --no-recurse-submodules -f <branch> --` in the new worktree — the split exists because git reports checkout
@@ -135,8 +136,9 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   hook that stays silent for longer (a huge LFS object) hits the same window on every retry; a configurable
   window is a follow-up. On success the
   record becomes the `Workspace` (same id) through `registerManagedWorkspace`, the injected **handoff**
-  (`setWorkspaceCreationHandoff`) runs, and the record is deleted with a `removed` event carrying the workspace
-  plus the handoff's `sessionId` / `kickoffError`. **On failure** (`WORKTREE_ADD_FAILED`,
+  (`setWorkspaceCreationHandoff`, given the kickoff and the origin) runs, and the record is deleted with a
+  `removed` event carrying the workspace plus the handoff's `sessionId` / `kickoffError`; the chat's model and
+  effort the handoff also reports go only to the job's in-process caller. **On failure** (`WORKTREE_ADD_FAILED`,
   `WORKTREE_CHECKOUT_FAILED`, `WORKTREE_CHECKOUT_STALLED`, `WORKSPACE_PATH_TAKEN`; the message is git's
   stderr minus progress lines, for display only) the job cleans up **only what it provably created**. The
   ownership marker is the persisted `baseOid`, written only after the folder was confirmed absent, right
@@ -168,6 +170,11 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   full kickoff (Edit & retry prefills from it); an in-memory latch refuses a second dismiss or a retry while one
   runs. Projects resolve through `getProjects()`, so closing a
   project (a soft flag) never strands a creation.
+  `createWorkspace` and **`createWorkspaceWithChat(projectId, opts, signal?)`** start a job and await it in
+  process: a job that fails is discarded (the caller has the error), and the second returns the handoff's
+  outcome. Its `signal` (Stop on `start_workspace`) aborts the job's git work and discards the record and
+  anything the job cut, failing with `WorkspaceCreationStopped`; once the handoff runs the workspace is
+  registered and the call completes regardless.
   `renameWorkspace` (**sync**; throws for Default/external before any Git read, then adopts the live managed
   branch like `syncWorkspaceBranch`, so it never acts on a stale stored branch;
   sets the sanitized, casing- and script-preserving display `name` and always
@@ -369,7 +376,8 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   Creations publish the same way through `setWorkspaceCreationPublisher` (`WorkspaceCreationEvent`:
   `changed` with the `WorkspaceCreation` view, `removed` with `WorkspaceCreationRemoved`); the host owns the
   handoff that turns a finished creation into a terminal and a chat, so this module never reaches `agent`.
-- **Public surface (barrel):** `createWorkspace`, `startWorkspaceCreation`, `awaitWorkspaceCreation`,
+- **Public surface (barrel):** `createWorkspace`, `createWorkspaceWithChat`, `HandedOff`,
+  `WorkspaceCreationStopped`, `startWorkspaceCreation`, `awaitWorkspaceCreation`,
   `listWorkspaceCreations`, `retryWorkspaceCreation`, `dismissWorkspaceCreation`,
   `interruptWorkspaceCreations`, `replayPendingHandoffs`, `stopWorkspaceCreations`,
   `setWorkspaceCreationHandoff`, `CreationHandoff`,
