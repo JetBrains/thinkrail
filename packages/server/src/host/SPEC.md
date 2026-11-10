@@ -527,7 +527,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
     - Project, model and attachments are validated **before** any worktree exists. If the chat fails to
       start, or does not take its prompt, after the worktree is created, the workspace is **kept** and the
       error names it (and its chat, once it exists). A creation that fails is discarded, not left as a
-      failed row to retry: the agent got the error and decides.
+      failed row to retry: the agent got the error and decides. Like any creation it still fails
+      visibly first — every client toasts the failure (and a hand-off's `kickoffError`), as it does for
+      Continue in workspace's creation — because a workspace starting, or not, in the user's project is
+      theirs to see even when an agent asked for it.
     - Stop cancels a start in progress: one stopped before the creation starts creates nothing; the
       creation's abort kills its git work and discards the record and anything it cut, and the tool says
       no workspace was created. Once the hand-off runs, the workspace is registered and its chat starts
@@ -611,8 +614,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   recovery, when the transcript is genuinely gone from disk (there is no UI to close a review and
   start over, so wedging it would be worse); every other re-open failure throws rather than silently
   forking the conversation.
-- **Scratch-dir seeding on chat start:** every chat start (`session.create` and the creation handoff below)
-  goes through one `startChat` that calls `workspaces`' `ensureWorkspaceScratchDir` before creating the
+- **Scratch-dir seeding on chat start:** every chat start goes through `chatSession.ts#startChatSession`
+  (above), which calls `workspaces`' `ensureWorkspaceScratchDir` before creating the
   session — the Default workspace's gitignored `.thinkrail/context/` lands in the user's repo only when a chat
   actually starts there (and a worktree's deleted scratch dir self-heals). Host-composed — no new module edges.
 - **Background workspace creation (v104):** `workspace.startCreate` / `listCreations` / `retryCreation` /
