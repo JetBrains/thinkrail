@@ -1,5 +1,6 @@
 export * from "./agentSessionManager";
 export { disableAnthropicExtraUsageWarning, globalProviderWarnings } from "./anthropicExtraUsage";
+export { readCacheWarmingSetting } from "./cacheWarming";
 export {
 	getResourceHistoryPage,
 	getSessionResources,

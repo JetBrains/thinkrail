@@ -60,6 +60,7 @@ import {
 	projectTrustSummary,
 	promptSession,
 	readBackgroundCommandOutput,
+	readCacheWarmingSetting,
 	readChildTranscript,
 	refreshAvailableModels,
 	refreshSubagentConcurrency,
@@ -75,6 +76,7 @@ import {
 	respondToTool,
 	saveCustomEndpoint,
 	sendReviewFixToSession,
+	setCacheWarmingMode,
 	setModelContextWindow,
 	setSessionModel,
 	setSessionThinkingLevel,
@@ -1432,6 +1434,8 @@ const handlers: WsHandlers = {
 	"model.setContextWindow": (p) => {
 		return setModelContextWindow(p.target, p.contextWindow);
 	},
+	"cacheWarming.get": () => readCacheWarmingSetting(),
+	"cacheWarming.set": (p) => setCacheWarmingMode(p.mode),
 	"customEndpoints.list": () => listCustomEndpoints(),
 	"customEndpoints.probe": (p) => probeCustomEndpoint(p),
 	"customEndpoints.save": (p) => saveCustomEndpoint(p),

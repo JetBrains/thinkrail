@@ -1175,7 +1175,15 @@ a project picker, the prompt hero, and the reused
   no optimistic value or AppConfig field; reads follow catalog/provider invalidation, fence stale
   replies, disable controls while pending, and replace controls with Retry on failure. The props-driven
   `ModelContextControls` owns presentation; older hosts get neither the block nor its requests.
-  `ModelsSettings` organizes its controls into three visual groups:
+  At v111, **`CacheWarmingSettings`** adds a **Prompt cache** group: three `SettingsRadioCards` (Off /
+  While a run is active / Also between runs) over pi's `cacheWarming` setting, read through
+  `cacheWarming.get` and written through `cacheWarming.set` — pi's `settings.json` is the only state, there
+  is no AppConfig field. The reply's `source` drives the **ThinkRail default** hint on the streaming card
+  (shown only while pi's file names no mode, since ThinkRail's default differs from pi's `idle`), and the
+  `data-cache-warming-source` attribute on `cache-warming`. Reads fence stale replies, disable the cards
+  while pending, and replace them with Retry on failure; a failed write toasts. The props-driven
+  `CacheWarmingControls` owns presentation; older hosts get neither the group nor its requests.
+  `ModelsSettings` organizes its controls into four visual groups:
 
   **DEFAULT MODEL** — a **Chat model** row (`defaultModel`, `defaultEffort`) and the **Visible models**
   disclosure. **REVIEW** (`models-review-group`) — everything that configures review in one place, because
@@ -1208,6 +1216,8 @@ a project picker, the prompt hero, and the reused
   see `submodule-server-todos`).
 
   **GPT CONTEXT WINDOW** — the `ModelContextSettings` block described above.
+
+  **PROMPT CACHE** (`cache-warming-group`) — the `CacheWarmingSettings` block described above.
 
   There is **no separate Review navigation section**; all review-related controls live in Models' REVIEW group.
   **`ExtensionsSettings`** (the **Extensions** section, nav `settings-nav-extensions`, listed only at

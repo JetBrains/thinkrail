@@ -23,7 +23,12 @@ import {
 	fauxAssistantMessage,
 	fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
-import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import {
+	AgentSession,
+	ModelRuntime,
+	SessionManager,
+	SettingsManager,
+} from "@earendil-works/pi-coding-agent";
 import type {
 	AgentSettlement,
 	ExtUiRequest,
@@ -57,6 +62,7 @@ import {
 	listAvailableModels,
 	listSessionStates,
 	listSessions,
+	liveSessionIdsOf,
 	markWorkspaceRead,
 	markWorkspaceUnread,
 	nudgeSession,
@@ -75,6 +81,7 @@ import {
 	respondToTool,
 	sendHostMessageToSession,
 	setAgentReviewEnabledResolver,
+	setCacheWarmingMode,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
 	setSessionManagerFactory,
@@ -1510,6 +1517,43 @@ test("buildSessionSettings disables image autoResize, and the override survives 
 	settings.setProjectTrusted(true);
 	expect(settings.isProjectTrusted()).toBe(true);
 	expect(settings.getImageAutoResize()).toBe(false);
+});
+
+test("buildSessionSettings keeps cache warming at streaming until pi's settings.json names a mode", async () => {
+	const settings = buildSessionSettings(tmpCwd("trpi-cache-warming-"), false);
+	expect(settings.getCacheWarmingMode()).toBe("streaming");
+	await settings.reload();
+	expect(settings.getCacheWarmingMode()).toBe("streaming");
+	settings.setCacheWarmingMode("idle");
+	expect(settings.getCacheWarmingMode()).toBe("idle");
+	settings.setCacheWarmingMode("off");
+	expect(settings.getCacheWarmingMode()).toBe("off");
+});
+
+test("setCacheWarmingMode persists pi's setting and applies it to every live chat at once", async () => {
+	const s = await createSession({
+		cwd: tmpCwd("trpi-cache-warming-live-"),
+		workspaceId: "ws-cache-warming",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const applied = jest.spyOn(SettingsManager.prototype, "setCacheWarmingMode");
+	try {
+		expect(await setCacheWarmingMode("off")).toEqual({ mode: "off", source: "user" });
+		// Once for the host's own write, once per live chat so its warmer reacts now.
+		const liveChats = liveSessionIdsOf().length;
+		expect(liveChats).toBeGreaterThanOrEqual(1);
+		expect(applied.mock.calls.map(([mode]) => mode)).toEqual(Array(1 + liveChats).fill("off"));
+		const written = JSON.parse(
+			readFileSync(join(process.env.PI_CODING_AGENT_DIR ?? "", "settings.json"), "utf8"),
+		) as { cacheWarming?: string };
+		expect(written.cacheWarming).toBe("off");
+		const fresh = buildSessionSettings(tmpCwd("trpi-cache-warming-fresh-"), false);
+		expect(fresh.getCacheWarmingMode()).toBe("off");
+	} finally {
+		applied.mockRestore();
+		await setCacheWarmingMode("streaming");
+		await removeSession(s.sessionId);
+	}
 });
 
 test("a prompt image reaches the transcript raw — the autoResize override survives pi's loader reload", async () => {

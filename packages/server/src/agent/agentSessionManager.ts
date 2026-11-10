@@ -22,6 +22,8 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type {
 	AgentSettlement,
+	CacheWarmingMode,
+	CacheWarmingSetting,
 	ImageContent,
 	Model,
 	QueuedMessageContent,
@@ -86,6 +88,7 @@ import {
 	type ExtraUsageSubject,
 	shouldWarnAnthropicExtraUsage,
 } from "./anthropicExtraUsage";
+import { applyCacheWarmingDefault, writeCacheWarmingMode } from "./cacheWarming";
 import { archiveCommandHistory, publishSessionResourcesChanged } from "./chatResources";
 import {
 	disposeSessionChildren,
@@ -1112,7 +1115,18 @@ export function buildSessionSettings(cwd: string, projectTrusted: boolean): Sett
 		settings.applyOverrides(SESSION_SETTINGS_OVERRIDES);
 	};
 	settings.applyOverrides(SESSION_SETTINGS_OVERRIDES);
+	applyCacheWarmingDefault(settings);
 	return settings;
+}
+
+/** Persist pi's cache-warming mode, then apply it to every live chat so an active warm stops or starts now. */
+export async function setCacheWarmingMode(mode: CacheWarmingMode): Promise<CacheWarmingSetting> {
+	const setting = await writeCacheWarmingMode(mode);
+	for (const entry of sessions.values()) {
+		if (entry.disposed) continue;
+		entry.session.setCacheWarmingMode(mode);
+	}
+	return setting;
 }
 
 export type TrustReloadDisposition = SessionReloadDisposition | "failed";
