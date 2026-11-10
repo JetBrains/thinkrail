@@ -853,7 +853,9 @@ enabled/confirmed choice before entering analytics attribution.
   (published from auth's Central/runtime invalidation seam and on a successful provider login) + **`host.updateAvailable`** (published for each
   retained CLI-update lifecycle replacement), and **`scheduledPrompts.changed`** (published by the
   scheduler and subscribed only by sockets at `SCHEDULED_PROMPTS_PROTOCOL_VERSION` or later) use push
-  channels. Every
+  channels. The `scheduledPrompts.*` request methods are gated by that same minimum protocol version;
+  hiding their event channel alone is not sufficient because older clients can still send WS requests.
+  Every
   **broadcast** push channel a client should hear must be `ws.subscribe`d in the WS
   `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Five channels are deliberately
   **not** subscribed and not broadcast: `feedback.interview`, `feedback.githubStar`, `terminal.data`, `terminal.exit`, and

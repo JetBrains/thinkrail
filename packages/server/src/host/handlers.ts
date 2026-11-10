@@ -17,6 +17,7 @@ import {
 	BRANCH_STATUS_PROTOCOL_VERSION,
 	isControlMessage,
 	isSpeechModel,
+	SCHEDULED_PROMPTS_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
@@ -1798,6 +1799,15 @@ export async function handleRequest(
 	ctx: RequestContext,
 ): Promise<unknown> {
 	if (!isWsMethod(method)) throw new Error(`Unknown method: ${method}`);
+	if (
+		method.startsWith("scheduledPrompts.") &&
+		ctx.protocolVersion !== undefined &&
+		ctx.protocolVersion < SCHEDULED_PROMPTS_PROTOCOL_VERSION
+	) {
+		throw new Error(
+			`scheduled prompts require protocol version ${SCHEDULED_PROMPTS_PROTOCOL_VERSION} or later`,
+		);
+	}
 	refuseRepositoryOnlyForChats(method, params);
 	if (CHAT_RESOURCE_DOORS.has(method)) {
 		const workspaceId = paramWorkspaceId(params, false);

@@ -17,6 +17,7 @@ import { createServer, type RunningServer } from "./server";
 interface Frame {
 	channel?: string;
 	data?: unknown;
+	error?: string;
 	id?: string;
 	ok?: boolean;
 }
@@ -84,7 +85,7 @@ afterEach(async () => {
 	else process.env.THINKRAIL_DATA_DIR = originalDataDir;
 });
 
-test("scheduled prompt events are hidden from the v110 main client", async () => {
+test("scheduled prompt requests and events are unavailable to the v110 main client", async () => {
 	expect(CONTINUATION_PROTOCOL_VERSION).toBe(110);
 	expect(SCHEDULED_PROMPTS_PROTOCOL_VERSION).toBeGreaterThan(CONTINUATION_PROTOCOL_VERSION);
 	expect(PROTOCOL_VERSION).toBe(SCHEDULED_PROMPTS_PROTOCOL_VERSION);
@@ -116,6 +117,51 @@ test("scheduled prompt events are hidden from the v110 main client", async () =>
 		connect(server.port, "scheduled-protocol-main", CONTINUATION_PROTOCOL_VERSION),
 	]);
 	sockets.push(current.socket, main.socket);
+	const dueAt = Date.now() + 3_600_000;
+	const legacyRequests = [
+		["scheduledPrompts.list", { workspaceId: "missing-workspace" }],
+		[
+			"scheduledPrompts.create",
+			{
+				requestId: "legacy-create",
+				workspaceId: "missing-workspace",
+				sessionId: "missing-session",
+				text: "must not be saved",
+				dueAt,
+				createdAt: Date.now(),
+				status: "scheduled",
+			},
+		],
+		[
+			"scheduledPrompts.update",
+			{
+				id: "scheduled-protocol-check",
+				workspaceId: "missing-workspace",
+				text: "must not be updated",
+				dueAt,
+			},
+		],
+		[
+			"scheduledPrompts.sendNow",
+			{ id: "scheduled-protocol-check", workspaceId: "missing-workspace" },
+		],
+		[
+			"scheduledPrompts.cancel",
+			{ id: "scheduled-protocol-check", workspaceId: "missing-workspace" },
+		],
+	] as const;
+	for (const [index, [method, params]] of legacyRequests.entries()) {
+		const id = `legacy-scheduled-${index}`;
+		main.socket.send(JSON.stringify({ id, method, params }));
+		const response = await main.waitFor((frame) => frame.id === id);
+		expect(response.ok).toBe(false);
+		expect(response.error).toBe(
+			`scheduled prompts require protocol version ${SCHEDULED_PROMPTS_PROTOCOL_VERSION} or later`,
+		);
+	}
+	expect(main.frames.some((frame) => frame.channel === WS_CHANNELS.scheduledPromptsChanged)).toBe(
+		false,
+	);
 	current.socket.send(
 		JSON.stringify({
 			id: "send-scheduled-now",
