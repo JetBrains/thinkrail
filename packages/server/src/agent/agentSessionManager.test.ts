@@ -3984,7 +3984,7 @@ test("removing one queued image message returns its complete content", async () 
 	await removeSession(s.sessionId);
 });
 
-test("a delivered image-only steer clears its queue chip despite pi's empty-text defect", async () => {
+test("a delivered image-only steer clears its queue chip (pi #8612)", async () => {
 	const slow = createFauxCore({
 		provider: "faux-steer-image",
 		api: "faux-steer-image",
@@ -4056,7 +4056,7 @@ test("a delivered image-only steer clears its queue chip despite pi's empty-text
 	}
 }, 20000);
 
-test("a delivered image-only follow-up clears its queue chip despite pi's empty-text defect", async () => {
+test("a delivered image-only follow-up clears its queue chip (pi #8612)", async () => {
 	const slow = createFauxCore({
 		provider: "faux-followup-image",
 		api: "faux-followup-image",
@@ -4127,7 +4127,7 @@ test("a delivered image-only follow-up clears its queue chip despite pi's empty-
 	}
 }, 20000);
 
-test("an idle image-only prompt never inflates the stuck-delivery counters", async () => {
+test("an idle image-only prompt leaves a later image-only steer's queue chip intact until delivery", async () => {
 	const slow = createFauxCore({
 		provider: "faux-prompt-image",
 		api: "faux-prompt-image",

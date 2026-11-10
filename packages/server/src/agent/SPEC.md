@@ -247,24 +247,9 @@ re-opened transcripts provider-valid.
     membership/order. The host projects only a conservative `hasImages` aggregate into summaries/events, so
     image bytes do not ride the ordinary read stream.
 
-    **One membership override compensates for a Pi defect: a delivered image-only (empty-text) queued
-    message is never cleared.** Pi keys its on-delivery queue removal on the delivered user message's text
-    (`contentText`), so a message queued with images but no text stays in Pi's `_steeringMessages` /
-    `_followUpMessages` forever and its "Steering"/"Follow-up" chip never disappears. The manager therefore
-    counts such deliveries per lane (`stuckEmptyDeliveries`): on a user `message_start` whose text is empty,
-    whose content carries an image, and for which Pi still reports more empty-text entries in a lane than
-    already counted, it increments that lane's counter and **synthesizes the emptying `queue_update`** Pi
-    withheld. Every place that reads a lane for display — the projected `queue_update`, the transient-mirror
-    sync, and `queueStateOf` — first drops that many empty-text entries from Pi's list, so a later genuine
-    `queue_update` cannot resurrect the phantom. The counter is per live entry only (Pi's ephemeral queues
-    never survive a process restart) and resets whenever `clearQueue()` empties both lanes.
-
-    **Remove this whole override on the pi bump that ships the upstream fix** (earendil-works/pi#8612,
-    still open when last checked). Once Pi clears empty-text image deliveries natively, drop
-    `stuckEmptyDeliveries`, `displayedLane`, the synthesized `queue_update`, and the `effectivePendingCount`
-    adjustment. The removal gate is the installed code, not the PR state: on every pi bump grep the installed
-    `agent-session.js` for the `if (messageText)` guard around `this._steeringMessages.indexOf` — while that
-    guard is present the workaround is still required; when it is gone the fix has shipped.
+    Pi ≥ 1.5.1 clears a delivered image-only (empty-text) queued message itself (upstream #8612); the host
+    override that counted such deliveries and synthesized the emptying `queue_update` is gone, and the
+    manager's image-only steer/follow-up regressions now pin pi's native behavior.
 
   - **Normalized session state** is one host projection over orthogonal facts, never a second agent runtime.
     Live derivation reads Pi execution/queue state, the question phase registry's exact expected/waiting id,
