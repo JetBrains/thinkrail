@@ -247,7 +247,8 @@ export function updateScheduledPrompt(
 	if (!record) throw new Error("Scheduled prompt is unavailable.");
 	if (!hasPromptContent(text, images) || !isValidScheduledDueAt(dueAt))
 		throw new Error("Prompt text or an image and a future time are required.");
-	if (modelSelection) validatePromptModelSelection(record.sessionId, modelSelection);
+	const selectionToValidate = modelSelection ?? record.modelSelection;
+	if (selectionToValidate) validatePromptModelSelection(record.sessionId, selectionToValidate);
 	if (modelSelection) record.modelSelection = modelSelection;
 	record.dueAt = dueAt;
 	record.text = text;

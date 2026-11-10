@@ -11,6 +11,7 @@ let firstGate: Promise<void> | undefined;
 let holdNextAttach = false;
 let releaseAttach: (() => void) | undefined;
 let attachGate: Promise<void> | undefined;
+let rejectModelSelection = false;
 process.env.THINKRAIL_DATA_DIR = dataPath;
 
 mock.module("../agent", () => ({
@@ -33,7 +34,9 @@ mock.module("../agent", () => ({
 		}
 		return true;
 	},
-	validatePromptModelSelection: () => {},
+	validatePromptModelSelection: (_sessionId: string, _selection: unknown) => {
+		if (rejectModelSelection) throw new Error("Unsupported reasoning level for scheduled model.");
+	},
 }));
 mock.module("../persistence", () => ({ dataDir: () => dataPath }));
 mock.module("../log", () => ({ logger: () => ({ error: () => {} }) }));
@@ -60,6 +63,7 @@ beforeEach(() => {
 	firstGate = new Promise<void>((resolve) => (release = resolve));
 	releaseFirst = release;
 	holdNextAttach = false;
+	rejectModelSelection = false;
 	let releaseHeldAttach!: () => void;
 	attachGate = new Promise<void>((resolve) => (releaseHeldAttach = resolve));
 	releaseAttach = releaseHeldAttach;
@@ -167,6 +171,29 @@ test("orders equal due times by the most recent save and preserves that order af
 	await flushMicrotasks();
 	expect(delivered).toEqual(["chat-a:B", "chat-a:A edited"]);
 	expect(listScheduledPrompts("workspace")).toHaveLength(0);
+});
+
+test("revalidates a preserved model selection when an update omits it", () => {
+	const modelSelection = {
+		model: { provider: "openai", id: "gpt-4.1" },
+		thinkingLevel: "low" as const,
+	};
+	createScheduledPrompt({
+		id: "pinned",
+		workspaceId: "workspace",
+		sessionId: "chat-a",
+		text: "pinned schedule",
+		dueAt,
+		modelSelection,
+	});
+	rejectModelSelection = true;
+
+	expect(() => updateScheduledPrompt("pinned", "workspace", dueAt, "edited schedule")).toThrow(
+		"Unsupported reasoning level for scheduled model.",
+	);
+	expect(listScheduledPrompts("workspace")).toMatchObject([
+		{ text: "pinned schedule", modelSelection },
+	]);
 });
 
 test("accepts image-only scheduled prompts on create and edit", () => {
