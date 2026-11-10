@@ -182,8 +182,8 @@ function startDeps(overrides: Partial<StartWorkspaceDeps> = {}) {
 		callerWorkspace: () => caller,
 		openProjects: () => [project("p1", "ThinkRail"), project("p2", "Backend")],
 		settledModels: async () => [model],
-		defaultBaseBranch: async (projectId) => {
-			calls.push(`defaultBase ${projectId}`);
+		defaultBaseBranch: async (projectId, signal) => {
+			calls.push(`defaultBase ${projectId}${signal ? " signal" : ""}`);
 			return "origin/main";
 		},
 		create: async (projectId, baseRef, kickoff, signal) => {
@@ -212,7 +212,7 @@ test("startWorkspace creates in the named project from its default base and hand
 		deps,
 		new AbortController().signal,
 	);
-	expect(calls).toEqual(["defaultBase p2", "create p2 origin/main signal"]);
+	expect(calls).toEqual(["defaultBase p2 signal", "create p2 origin/main signal"]);
 	expect(kickoffs).toEqual([
 		{
 			text: `Do X\n\nAttached files:\n- ${join(dir, "spec.md")}`,

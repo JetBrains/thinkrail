@@ -150,10 +150,10 @@ export function composePrompt(prompt: string, files: readonly string[]): string 
 	return `${prompt}\n\nAttached files:\n${files.map((file) => `- ${file}`).join("\n")}`;
 }
 
-async function defaultBaseBranch(projectId: string): Promise<string> {
+async function defaultBaseBranch(projectId: string, signal?: AbortSignal): Promise<string> {
 	const { defaultBranch } = await listBranches(projectId);
 	try {
-		const { moved } = await prefetchBranch(projectId, defaultBranch);
+		const { moved } = await prefetchBranch(projectId, defaultBranch, signal);
 		if (moved) nudgeBaseRefWorkspaces(projectId, defaultBranch);
 	} catch {
 		log.warn(`start_workspace prefetch of ${defaultBranch} failed for project ${projectId}`);
@@ -165,7 +165,7 @@ export interface StartWorkspaceDeps {
 	callerWorkspace: (sessionId: string) => Workspace;
 	openProjects: () => Project[];
 	settledModels: () => Promise<WireModel[]>;
-	defaultBaseBranch: (projectId: string) => Promise<string>;
+	defaultBaseBranch: (projectId: string, signal?: AbortSignal) => Promise<string>;
 	create: (
 		projectId: string,
 		baseRef: string,
@@ -199,7 +199,7 @@ export async function startWorkspace(
 		? resolveModel(params.model, await deps.settledModels())
 		: undefined;
 	const { images, files } = prepareAttachments(params.attachments ?? [], caller.worktreePath);
-	const baseRef = params.base_branch?.trim() || (await deps.defaultBaseBranch(project.id));
+	const baseRef = params.base_branch?.trim() || (await deps.defaultBaseBranch(project.id, signal));
 	if (signal?.aborted) throw new Error(NOTHING_CREATED);
 	const kickoff: WorkspaceKickoff = {
 		text: composePrompt(prompt, files),

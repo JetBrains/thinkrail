@@ -949,8 +949,8 @@ re-opened transcripts provider-valid.
       ordinary new workspace with a first chat. It returns the new ids once the child's first prompt is
       accepted (pi's preflight in the host's creation hand-off), and never waits for the child's turn to
       finish. It hands pi's abort signal to the host's `start`, because pi awaits a running tool and reports
-      Stop only through that signal: without it, Stop would wait out the checkout and still spawn the
-      workspace.
+      Stop only through that signal: without it, Stop would wait out the base fetch and the checkout and
+      still spawn the workspace.
     - **`workspace_status { project?, workspaces? }`** reports chat states, PR state, diff stats and
       (for named workspaces) each chat's final message. The report is bounded like pi's own tools
       (`truncateHead` at pi's default line and byte limits) with a footer saying the later workspaces and
