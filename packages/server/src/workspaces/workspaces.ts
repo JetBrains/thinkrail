@@ -27,7 +27,6 @@ import {
 	assertSafeRef,
 	canonicalPath,
 	changedFileArgs,
-	commitsAheadOf,
 	countPushDivergence,
 	countPushTargetDivergence,
 	currentBranch,
@@ -35,6 +34,7 @@ import {
 	gitAsync,
 	headBranchAt,
 	headShaAt,
+	isSafeRef,
 	originUrls,
 	resolveDefaultBranch,
 	resolveDiffRange,
@@ -902,7 +902,19 @@ async function unpushedCommits(ws: Workspace): Promise<number | null> {
 			() => null,
 		);
 		if (!target) return null;
-		if (!target.published) return commitsAheadOf(ws.worktreePath, ws.baseBranch);
+		if (!target.published) {
+			if (!isSafeRef(ws.baseBranch)) return null;
+			const counted = await gitAsync(ws.worktreePath, [
+				"rev-list",
+				"--count",
+				"--end-of-options",
+				`${ws.baseBranch}..HEAD`,
+				"--",
+			]);
+			if (!counted.ok) return null;
+			const parsed = Number.parseInt(counted.out, 10);
+			return Number.isSafeInteger(parsed) ? parsed : null;
+		}
 		return target.ahead ?? null;
 	}
 	const divergence = await countPushDivergence(ws.worktreePath, ws.branch);

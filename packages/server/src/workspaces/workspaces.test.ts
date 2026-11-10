@@ -807,6 +807,24 @@ test("removal counts commits the split push target lacks even when the fetch rem
 	expect(check?.unpushed).toBe(1);
 });
 
+test("removal fails closed when a split push target lacks the branch and the base no longer resolves", async () => {
+	git(repo, "branch", "feature/base");
+	const ws = await createWorkspace("p1", undefined, "feature/base");
+	writeFileSync(join(ws.worktreePath, "work.txt"), "work\n");
+	git(ws.worktreePath, "add", "-A");
+	git(ws.worktreePath, "commit", "-m", "work");
+	const fetchRemote = join(dataDir, "fetch.git");
+	const pushRemote = join(dataDir, "push.git");
+	git(dataDir, "init", "--bare", fetchRemote);
+	git(dataDir, "init", "--bare", pushRemote);
+	git(repo, "remote", "add", "origin", fetchRemote);
+	git(ws.worktreePath, "push", "origin", ws.branch);
+	git(repo, "config", "remote.origin.pushurl", pushRemote);
+	git(repo, "branch", "-D", "feature/base");
+	const [check] = await checkWorkspaceRemoval([ws.id]);
+	expect(check?.unpushed).toBeNull();
+});
+
 test.skipIf(process.platform === "win32").each([false, true])(
 	"worktree reclamation keeps the event loop responsive (filesystem fallback: %s)",
 	async (fallback) => {
