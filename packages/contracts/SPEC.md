@@ -1380,4 +1380,5 @@ provider/model reference plus ThinkingLevel, retained by scheduled create/update
 Scheduled records also carry an optional durable `savedOrder`; hosts assign it on create and update,
 and order pre-existing records by creation time during migration.
 The scheduled-prompt methods and change event begin at `SCHEDULED_PROMPTS_PROTOCOL_VERSION` (v111),
-after continuation support at v110; older clients do not subscribe to scheduling events.
+after continuation support at v110; older clients do not subscribe to scheduling events, and a request
+from one is refused with `SCHEDULED_PROMPTS_PROTOCOL_UNSUPPORTED`.

@@ -1804,7 +1804,8 @@ export async function handleRequest(
 		ctx.protocolVersion !== undefined &&
 		ctx.protocolVersion < SCHEDULED_PROMPTS_PROTOCOL_VERSION
 	) {
-		throw new Error(
+		throw new CodedError(
+			"SCHEDULED_PROMPTS_PROTOCOL_UNSUPPORTED",
 			`scheduled prompts require protocol version ${SCHEDULED_PROMPTS_PROTOCOL_VERSION} or later`,
 		);
 	}

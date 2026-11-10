@@ -18,6 +18,7 @@ interface Frame {
 	channel?: string;
 	data?: unknown;
 	error?: string;
+	errorCode?: string;
 	id?: string;
 	ok?: boolean;
 }
@@ -158,6 +159,7 @@ test("scheduled prompt requests and events are unavailable to the v110 main clie
 		expect(response.error).toBe(
 			`scheduled prompts require protocol version ${SCHEDULED_PROMPTS_PROTOCOL_VERSION} or later`,
 		);
+		expect(response.errorCode).toBe("SCHEDULED_PROMPTS_PROTOCOL_UNSUPPORTED");
 	}
 	expect(main.frames.some((frame) => frame.channel === WS_CHANNELS.scheduledPromptsChanged)).toBe(
 		false,
