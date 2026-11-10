@@ -172,7 +172,11 @@ re-opened transcripts provider-valid.
     `writeCacheWarmingMode` writes through a host `SettingsManager` (`setCacheWarmingMode → flush →
     drainErrors`, refusing with `CACHE_WARMING_WRITE_FAILED` when pi's `save()` would silently skip an
     unparsable file). Pi stays the owner: the pi CLI reads the same key, and a user who sets it there sees
-    it as their choice here.
+    it as their choice here. Accepted gaps while `idle` is opted into: a delegated child's warms after its
+    run settles land as `cache_warm` entries in the child's transcript, which `subagentUsage` totals into
+    the parent only when the child runs again or is reconciled, so the parent's live total lags that
+    spend; and a second client with Settings → Models open learns of another client's change on its next
+    mount, since the setting has no push channel (unlike `provider.changed` for `models.json`).
   - `customEndpoints` — the settings adapter for the user's own OpenAI-compatible servers (a company
     gateway or a local llama.cpp / vLLM / sglang / Ollama / LM Studio server), again a `models.json` editor
     and not a registry: each is a `custom-*` provider with `api: "openai-completions"`, served by pi like any
