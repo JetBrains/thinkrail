@@ -565,9 +565,24 @@ export async function createWorkspaceWithChat(
 		return await job.done;
 	} catch (err) {
 		const record = findCreation(creation.id);
-		const stopped = signal?.aborted === true;
-		if (record && (stopped || record.state === "failed")) await discard(record).catch(() => {});
-		throw stopped ? new WorkspaceCreationStopped("The workspace creation was stopped") : err;
+		if (signal?.aborted !== true) {
+			if (record?.state === "failed") await discard(record).catch(() => {});
+			throw err;
+		}
+		if (!record) throw new WorkspaceCreationStopped("The workspace creation was stopped");
+		try {
+			await discard(record);
+		} catch (cleanupErr) {
+			updateCreation(record.id, (r) => {
+				r.state = "interrupted";
+				delete r.progress;
+			});
+			const reason = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr);
+			throw new Error(
+				`Stopped, but the partial workspace could not be removed (${reason}); it is listed as interrupted, to retry or dismiss.`,
+			);
+		}
+		throw new WorkspaceCreationStopped("The workspace creation was stopped");
 	} finally {
 		signal?.removeEventListener("abort", stop);
 	}

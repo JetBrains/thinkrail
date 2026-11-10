@@ -173,8 +173,10 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   `createWorkspace` and **`createWorkspaceWithChat(projectId, opts, signal?)`** start a job and await it in
   process: a job that fails is discarded (the caller has the error), and the second returns the handoff's
   outcome. Its `signal` (Stop on `start_workspace`) aborts the job's git work and discards the record and
-  anything the job cut, failing with `WorkspaceCreationStopped`; once the handoff runs the workspace is
-  registered and the call completes regardless.
+  anything the job cut, failing with `WorkspaceCreationStopped`; a cleanup that cannot finish (a folder
+  git cannot remove) keeps the record, marked `interrupted` with its marker, so Retry and Dismiss clean up
+  again, and the call fails saying what was left. Once the handoff runs the workspace is registered and
+  the call completes regardless.
   `renameWorkspace` (**sync**; throws for Default/external before any Git read, then adopts the live managed
   branch like `syncWorkspaceBranch`, so it never acts on a stale stored branch;
   sets the sanitized, casing- and script-preserving display `name` and always

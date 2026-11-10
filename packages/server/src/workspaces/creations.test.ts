@@ -7,6 +7,7 @@ import {
 	readFileSync,
 	realpathSync,
 	rmSync,
+	statSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -576,6 +577,38 @@ posix(
 		const kept = await createWorkspaceWithChat("p1", { kickoff: { text: "y" } }, late.signal);
 		expect(kept.sessionId).toBe("s-kept");
 		expect(registered()).toContain(resolve(kept.workspace.worktreePath));
+	},
+);
+
+posix(
+	"a stopped creation whose cleanup cannot finish stays as an interrupted row to retry or dismiss",
+	async () => {
+		const path = join(dataDir, "worktrees", "repo", "workspace-1");
+		hook("mkdir -p locked && touch locked/f && chmod 555 locked && sleep 5");
+		const stop = new AbortController();
+		try {
+			const running = createWorkspaceWithChat("p1", { kickoff: { text: "x" } }, stop.signal);
+			await until(
+				() =>
+					existsSync(join(path, "locked", "f")) &&
+					(statSync(join(path, "locked")).mode & 0o200) === 0,
+			);
+			stop.abort();
+			await expect(running).rejects.toThrow(
+				"Stopped, but the partial workspace could not be removed",
+			);
+			const [record] = listWorkspaceCreations();
+			expect(record?.state).toBe("interrupted");
+			expect(changed().at(-1)).toMatchObject({ id: record?.id, state: "interrupted" });
+			expect(existsSync(path)).toBe(true);
+
+			chmodSync(join(path, "locked"), 0o755);
+			await dismissWorkspaceCreation(record?.id ?? "");
+			expect(existsSync(path)).toBe(false);
+			expect(listWorkspaceCreations()).toEqual([]);
+		} finally {
+			if (existsSync(join(path, "locked"))) chmodSync(join(path, "locked"), 0o755);
+		}
 	},
 );
 

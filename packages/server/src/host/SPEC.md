@@ -533,7 +533,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
       theirs to see even when an agent asked for it.
     - Stop cancels a start in progress: the signal kills the default-base prefetch, and a start stopped
       before the creation starts creates nothing; the creation's abort kills its git work and discards
-      the record and anything it cut, and the tool says no workspace was created. Once the hand-off runs, the workspace is registered and its chat starts
+      the record and anything it cut, and the tool says no workspace was created — or, when that
+      cleanup cannot finish, that the partial workspace stays as an interrupted row to retry or dismiss. Once the hand-off runs, the workspace is registered and its chat starts
       regardless: the start completes and reports it.
     - An agent's spawn is not the user's explicit setup operation, so it records no `worktree_create`
       setup action ([[submodule-server-analytics]]); its chat still reports `chat_started`.
