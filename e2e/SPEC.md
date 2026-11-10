@@ -608,7 +608,8 @@ before/after, mermaid, none) at one card height, full-screen keys that never pag
 under its preview, and the picked file's path in the persisted answer; `plan-ask.spec.ts` adds the same file
 preview on the plan page. These three specs also run in a **`webkit` Playwright project**: the macOS desktop
 is the system WKWebView, whose Tab skips buttons without an explicit `tabindex` (the regression this lane
-exists for). CI installs WebKit with its system deps; Linux WebKitGTK may not reproduce the macOS Tab rule,
+exists for). CI installs WebKit with the system libraries it links, not its media plugins (`.github/SPEC.md`);
+Linux WebKit may not reproduce the macOS Tab rule,
 so the card's markup guard (every control an explicit tab stop) is the platform-independent net. All of this
 runs without provider variability; desktop package tests separately pin the stable
 backend-profile/window adapter required across dynamic-port restarts. Streaming-band coverage remains
