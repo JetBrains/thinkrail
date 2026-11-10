@@ -14,6 +14,7 @@ export interface StartInput {
 export interface AskInput {
 	readonly ask: PaletteAsk;
 	readonly text: string;
+	readonly disabledReason?: string;
 }
 
 export interface SectionsInput {
@@ -258,24 +259,27 @@ function onlyLate(section: PaletteSection): boolean {
 	return section.items.every((row) => row.item.kind === "more" || (row.item.late ?? 0) > 0);
 }
 
-function withStart(sections: PaletteSection[], input: SectionsInput): PaletteSection[] {
-	const { start, parsed, t } = input;
-	if (!start || !startEligible(parsed)) return sections;
-	const row = {
-		id: "start",
-		title: groupLabel(t, "start"),
-		items: [plainRow(startRow(t, start))],
-	};
+function beforeLate(sections: PaletteSection[], row: PaletteSection): PaletteSection[] {
 	const late = sections.findIndex(onlyLate);
 	return late === -1
 		? [...sections, row]
 		: [...sections.slice(0, late), row, ...sections.slice(late)];
 }
 
+function withStart(sections: PaletteSection[], input: SectionsInput): PaletteSection[] {
+	const { start, parsed, t } = input;
+	if (!start || !startEligible(parsed)) return sections;
+	return beforeLate(sections, {
+		id: "start",
+		title: groupLabel(t, "start"),
+		items: [plainRow(startRow(t, start))],
+	});
+}
+
 export const ASK_ROW_ID = "ask";
 
 export function askRow(t: Translator, input: AskInput): PaletteItem {
-	const { ask, text } = input;
+	const { ask, text, disabledReason } = input;
 	return {
 		id: ASK_ROW_ID,
 		kind: "ask",
@@ -287,6 +291,7 @@ export function askRow(t: Translator, input: AskInput): PaletteItem {
 		scope: "specs",
 		icon: RiChatAiLine,
 		shortcut: { key: "↵", alt: true },
+		...(disabledReason ? { disabledReason } : {}),
 		run: () => ask.ask(text),
 	};
 }
@@ -298,10 +303,11 @@ export function askEligible(parsed: ParsedQuery): boolean {
 function withAsk(sections: PaletteSection[], input: SectionsInput): PaletteSection[] {
 	const { ask, parsed, t } = input;
 	if (!ask || !askEligible(parsed)) return sections;
-	return [
-		...sections,
-		{ id: "ask", title: groupLabel(t, "ask"), items: [plainRow(askRow(t, ask))] },
-	];
+	return beforeLate(sections, {
+		id: "ask",
+		title: groupLabel(t, "ask"),
+		items: [plainRow(askRow(t, ask))],
+	});
 }
 
 export interface RankedSections {

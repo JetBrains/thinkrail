@@ -213,8 +213,11 @@ function PaletteContent({
 	);
 	const askText = askEligible(parsed) ? startPrompt(parsed.raw) : "";
 	const askInput = useMemo(
-		() => (ask && askText ? { ask, text: askText } : undefined),
-		[ask, askText],
+		() =>
+			ask && askText
+				? { ask, text: askText, ...(offlineReason ? { disabledReason: offlineReason } : {}) }
+				: undefined,
+		[ask, askText, offlineReason],
 	);
 	const ranked = useMemo(
 		() => rankSections({ parsed, rootItems: allItems, learning, nowMs }),
@@ -303,7 +306,7 @@ function PaletteContent({
 	};
 
 	const askFromText = () => {
-		if (!askInput) return;
+		if (!askInput || askInput.disabledReason) return;
 		pickedRef.current = true;
 		onClose();
 		askInput.ask.ask(askInput.text);
@@ -562,7 +565,7 @@ function PaletteContent({
 								label={t("search.hint.start")}
 							/>
 						) : null}
-						{askInput && selected?.item.kind !== "ask" ? (
+						{askInput && !askInput.disabledReason && selected?.item.kind !== "ask" ? (
 							<KeyHint keys={shortcutKeys({ key: "↵", alt: true })} label={t("search.hint.ask")} />
 						) : null}
 						<KeyHint keys={["esc"]} label={t(query ? "search.hint.clear" : "search.hint.close")} />

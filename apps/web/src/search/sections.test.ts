@@ -264,6 +264,39 @@ describe("buildSections", () => {
 		expect(untargeted.at(-1)?.items[0]?.item.subtitle).toBe(
 			"New chat · the agent finds the sections and cites them",
 		);
+		const offline = scoped("#goal", []).at(-1)?.items[0]?.item;
+		expect(offline?.disabledReason).toBeUndefined();
+		const unreachable = sections("#goal", {
+			ask: { ask, text: "goal", disabledReason: "Reconnecting" },
+		});
+		expect(unreachable.at(-1)?.items[0]?.item.disabledReason).toBe("Reconnecting");
+	});
+
+	test("rows that land while a selection is held go after the Ask row, so neither it nor a row above it moves", () => {
+		const ask = { ask: { ask: () => {} }, text: "goal" };
+		const onScreen: PaletteItem = {
+			id: "spec:w1:SPEC.md",
+			kind: "spec",
+			title: "Goal keeper",
+			group: "specs",
+			scope: "specs",
+			icon: RiHeading,
+			match: { tier: 1, score: 1, ranges: {} },
+		};
+		const late: PaletteItem = {
+			...onScreen,
+			id: "section:w1:SPEC.md:Goal#1",
+			kind: "section",
+			title: "Sample › Goal",
+			group: "sections",
+			match: { tier: 5, score: 3, ranges: {} },
+			late: 1,
+		};
+		const rows = (rootItems: PaletteItem[]) =>
+			flattenRows(sections("#goal", { rootItems, ask })).map((row) => row.item.id);
+		expect(rows([onScreen, late])).toEqual(["spec:w1:SPEC.md", "ask", late.id]);
+		expect(rows([late])).toEqual(["ask", late.id]);
+		expect(rows([onScreen])).toEqual(["spec:w1:SPEC.md", "ask"]);
 	});
 
 	test("the prompt is the text as typed: the scope prefix goes, inner whitespace and quotes stay", () => {

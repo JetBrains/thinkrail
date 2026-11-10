@@ -147,14 +147,16 @@ words highlighted, and an `n/m words` badge. Its group, **Sections**, follows th
 
 Word search cannot meet a question that shares no words with the spec (a paraphrase, another language),
 so whenever `#` has text its **last** row is «Ask the agent: “<text>”», naming the workspace it opens
-in. `↵` on it, or `Alt+↵` from any row (`askEligible`, the one rule the row, the shortcut and its footer
+in — last before rows that landed while a selection was held, which go after it as they go after Start
+work, so a late Sections reply never moves a selected Ask row. `↵` on it, or `Alt+↵` from any row (`askEligible`, the one rule the row, the shortcut and its footer
 hint share), closes the palette and calls the injected `PaletteAsk.ask(text)`: shell starts a **new**
 chat in the context workspace — the active one, on Project Home the project's Default — with the text
 as typed and the visible note «Find the answer in this project's specs and cite the sections.», so the
 agent searches with its own model's words and the current chat is not interrupted. The row is always
 there rather than only when results look weak: a fixed place keeps muscle memory, where a "weak results"
-heuristic misfires both ways. It needs no offline state — `#` itself exists only while the host serves
-search — and like Start work it is never remembered by the learning store.
+heuristic misfires both ways. While the host is unreachable the row is disabled with the host rows'
+offline reason and `Alt+↵` does nothing (the chat start could only wait out the reconnect and drop the
+question), and like Start work it is never remembered by the learning store.
 
 ## Preview pane
 
