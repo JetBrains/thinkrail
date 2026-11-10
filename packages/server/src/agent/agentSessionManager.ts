@@ -24,7 +24,6 @@ import type {
 	AgentSettlement,
 	ImageContent,
 	Model,
-	PiEvent,
 	QueuedMessageContent,
 	QueueLane,
 	RefreshedModels,
@@ -87,6 +86,7 @@ import {
 	type ExtraUsageSubject,
 	shouldWarnAnthropicExtraUsage,
 } from "./anthropicExtraUsage";
+import { applyCacheWarmingDefault } from "./cacheWarming";
 import { archiveCommandHistory, publishSessionResourcesChanged } from "./chatResources";
 import {
 	disposeSessionChildren,
@@ -135,6 +135,7 @@ import {
 	type PiRuntimeGeneration,
 	refreshCatalogs,
 	settledAvailableModels,
+	settlePiCredentialWrites,
 } from "./piRuntime";
 import { catalogProviderAuth } from "./providerAuth";
 import { REQUEST_REVIEW_TOOL_NAME } from "./requestReviewTool";
@@ -194,7 +195,6 @@ interface Entry {
 	workspaceId: string;
 	lastSettlement: AgentSettlement | null | undefined;
 	queuedMessages: Record<QueueLane, TrackedQueuedMessage[]>;
-	stuckEmptyDeliveries: Record<QueueLane, number>;
 	nextQueuedMessageId: number;
 	hostMessages: PendingHostMessage[];
 	manualCompactionInProgress: boolean;
@@ -402,11 +402,6 @@ export function setSessionProjectResolver(fn: (workspaceId: string) => string | 
 	resolveProjectId = fn;
 }
 
-function effectivePendingCount(entry: Entry): number {
-	const stuck = entry.stuckEmptyDeliveries.steering + entry.stuckEmptyDeliveries.followUp;
-	return Math.max(0, entry.session.pendingMessageCount - stuck);
-}
-
 function persistedCompletion(sessionId: string) {
 	const stateReceipts = receipts();
 	return stateReceipts?.baselineComplete
@@ -428,7 +423,7 @@ function stateFromEntry(entry: Entry): SessionState {
 	return deriveSessionState({
 		entries: entry.session.sessionManager.getBranch(),
 		isStreaming: entry.session.isStreaming,
-		pendingMessageCount: effectivePendingCount(entry),
+		pendingMessageCount: entry.session.pendingMessageCount,
 		backgroundWorkActive: backgroundWorkActive(entry),
 		lastSettlement: entry.lastSettlement,
 		lifecycleCompletion:
@@ -633,7 +628,7 @@ function recordSettlement(entry: Entry, terminal: AgentSettlement | null): void 
 	const observed = deriveSessionState({
 		entries: entry.session.sessionManager.getBranch(),
 		isStreaming: false,
-		pendingMessageCount: effectivePendingCount(entry),
+		pendingMessageCount: entry.session.pendingMessageCount,
 		backgroundWorkActive: false,
 		lastSettlement: terminal,
 		lifecycleCompletion: undefined,
@@ -1103,21 +1098,10 @@ function releasePreflights(entry: Entry): void {
 	for (const release of [...entry.preflightReleases]) release();
 }
 
-const SESSION_SETTINGS_OVERRIDES = { images: { autoResize: false } };
-
 export function buildSessionSettings(cwd: string, projectTrusted: boolean): SettingsManager {
 	const settings = createPiSettings(cwd, undefined, { projectTrusted, packages: "enabled" });
-	const reload = settings.reload.bind(settings);
-	settings.reload = async () => {
-		await reload();
-		settings.applyOverrides(SESSION_SETTINGS_OVERRIDES);
-	};
-	const setProjectTrusted = settings.setProjectTrusted.bind(settings);
-	settings.setProjectTrusted = (trusted) => {
-		setProjectTrusted(trusted);
-		settings.applyOverrides(SESSION_SETTINGS_OVERRIDES);
-	};
-	settings.applyOverrides(SESSION_SETTINGS_OVERRIDES);
+	settings.getImageAutoResize = () => false;
+	applyCacheWarmingDefault(settings);
 	return settings;
 }
 
@@ -1242,7 +1226,6 @@ async function prepareSessionEntry(
 		workspaceId,
 		lastSettlement,
 		queuedMessages: { steering: [], followUp: [] },
-		stuckEmptyDeliveries: { steering: 0, followUp: 0 },
 		nextQueuedMessageId: 1,
 		hostMessages: [],
 		manualCompactionInProgress: false,
@@ -1288,20 +1271,9 @@ async function prepareSessionEntry(
 			const { details } = event.message;
 			entry.hostMessages = entry.hostMessages.filter((message) => message.details !== details);
 		}
-		if (event.type === "message_start" && event.message.role === "user") {
-			const lane = deliveredStuckEmptyLane(entry, event.message.content);
-			if (lane) {
-				entry.stuckEmptyDeliveries[lane]++;
-				synchronizeQueueFromSession(entry);
-				if (sessions.get(sessionId) === entry) {
-					publish({ sessionId, event: queueUpdateEventOf(entry) }, workspaceId);
-					publishEntryState(entry);
-				}
-			}
-		}
 		if (event.type === "queue_update") {
-			synchronizeQueuedLane(entry, "steering", displayedLane(entry, "steering", event.steering));
-			synchronizeQueuedLane(entry, "followUp", displayedLane(entry, "followUp", event.followUp));
+			synchronizeQueuedLane(entry, "steering", event.steering);
+			synchronizeQueuedLane(entry, "followUp", event.followUp);
 		}
 		if (event.type === "compaction_start") entry.piCompactionInProgress = true;
 		if (event.type === "compaction_end") {
@@ -1329,13 +1301,8 @@ async function prepareSessionEntry(
 		}
 		const baseEvent = projectSessionEvent(event, terminal);
 		const projected =
-			baseEvent.type === "queue_update"
-				? {
-						type: "queue_update" as const,
-						steering: displayedLane(entry, "steering", baseEvent.steering),
-						followUp: displayedLane(entry, "followUp", baseEvent.followUp),
-						...(hasQueuedImages(entry) ? { hasImages: true as const } : {}),
-					}
+			baseEvent.type === "queue_update" && hasQueuedImages(entry)
+				? { ...baseEvent, hasImages: true as const }
 				: baseEvent;
 		if (event.type === "agent_settled") {
 			entry.lastSettlement = terminal;
@@ -1675,7 +1642,7 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 		live: true,
 		state: stateFromEntry(entry),
 		...(entry.lastSettlement !== undefined ? { lastSettlement: entry.lastSettlement } : {}),
-		...(effectivePendingCount(entry) > 0 ? { queue: queueStateOf(entry) } : {}),
+		...(entry.session.pendingMessageCount > 0 ? { queue: queueStateOf(entry) } : {}),
 	};
 }
 
@@ -2267,62 +2234,14 @@ function synchronizeQueuedLane(entry: Entry, kind: QueueLane, texts: readonly st
 }
 
 function synchronizeQueueFromSession(entry: Entry): void {
-	synchronizeQueuedLane(entry, "steering", displayedLane(entry, "steering"));
-	synchronizeQueuedLane(entry, "followUp", displayedLane(entry, "followUp"));
+	synchronizeQueuedLane(entry, "steering", laneMessages(entry, "steering"));
+	synchronizeQueuedLane(entry, "followUp", laneMessages(entry, "followUp"));
 }
 
 function laneMessages(entry: Entry, kind: QueueLane): readonly string[] {
 	return kind === "steering"
 		? entry.session.getSteeringMessages()
 		: entry.session.getFollowUpMessages();
-}
-
-function displayedLane(entry: Entry, kind: QueueLane, texts?: readonly string[]): string[] {
-	let toDrop = entry.stuckEmptyDeliveries[kind];
-	const result: string[] = [];
-	for (const text of texts ?? laneMessages(entry, kind)) {
-		if (text === "" && toDrop > 0) {
-			toDrop--;
-			continue;
-		}
-		result.push(text);
-	}
-	return result;
-}
-
-function queueUpdateEventOf(entry: Entry): PiEvent {
-	return {
-		type: "queue_update",
-		steering: displayedLane(entry, "steering"),
-		followUp: displayedLane(entry, "followUp"),
-		...(hasQueuedImages(entry) ? { hasImages: true as const } : {}),
-	};
-}
-
-function deliveredStuckEmptyLane(entry: Entry, content: unknown): QueueLane | null {
-	if (userContentText(content).trim() !== "") return null;
-	if (!userContentHasImage(content)) return null;
-	for (const kind of ["steering", "followUp"] as const) {
-		const pendingEmpties = laneMessages(entry, kind).filter((text) => text === "").length;
-		if (pendingEmpties > entry.stuckEmptyDeliveries[kind]) return kind;
-	}
-	return null;
-}
-
-function userContentBlocks(content: unknown): { type: string; text?: string }[] {
-	return Array.isArray(content) ? (content as { type: string; text?: string }[]) : [];
-}
-
-function userContentText(content: unknown): string {
-	if (typeof content === "string") return content;
-	return userContentBlocks(content)
-		.filter((block) => block.type === "text")
-		.map((block) => block.text ?? "")
-		.join("");
-}
-
-function userContentHasImage(content: unknown): boolean {
-	return userContentBlocks(content).some((block) => block.type === "image");
 }
 
 function hasQueuedImages(entry: Entry): boolean {
@@ -2552,8 +2471,8 @@ export async function compactSession(sessionId: string, instructions?: string): 
 function queueStateOf(entry: Entry): SessionQueueState {
 	synchronizeQueueFromSession(entry);
 	return {
-		steering: displayedLane(entry, "steering"),
-		followUp: displayedLane(entry, "followUp"),
+		steering: [...laneMessages(entry, "steering")],
+		followUp: [...laneMessages(entry, "followUp")],
 		...(hasQueuedImages(entry) ? { hasImages: true as const } : {}),
 	};
 }
@@ -2584,7 +2503,6 @@ function drainEntryQueue(entry: Entry, requireTextOnly: boolean): DrainedQueue {
 		throw new Error("Cannot restore queued image messages as text");
 	}
 	entry.session.clearQueue();
-	entry.stuckEmptyDeliveries = { steering: 0, followUp: 0 };
 	const hostMessages = entry.hostMessages
 		.filter((message) => message.queued)
 		.sort((a, b) => a.id - b.id);
@@ -3156,6 +3074,11 @@ export function disposeAllSessions(): void {
 	sessions.clear();
 	tearingDownEntries.clear();
 	deletedSessions.clear();
+}
+
+/** Settle pending credential writes on every runtime a live chat still uses, plus the active one. */
+export async function settleCredentialWritesForShutdown(): Promise<void> {
+	await settlePiCredentialWrites([...sessions.values()].map((entry) => entry.generation.runtime));
 }
 
 export async function settleSessionsForShutdown(

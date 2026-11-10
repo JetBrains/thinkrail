@@ -7,11 +7,11 @@ import { parseSync, Visitor } from "oxc-parser";
 const ALLOWLIST: Record<string, { reason: string; imports: string[] }> = {
 	"pi-ai/dist/auth/oauth/load.js": {
 		reason: "handled — registerBunOAuthFlows() registered in registerBundledRuntime",
-		imports: ["__rewriteRelativeImportExtension(runtimeSpecifier)"],
+		imports: ["__rewriteRelativeImportExtension(new URL(runtimeSpecifier, import.meta.url).href)"],
 	},
 	"pi-ai/dist/api/bedrock-converse-stream.lazy.js": {
 		reason: "handled — setBedrockProviderModule() registered in registerBundledRuntime",
-		imports: ["__rewriteRelativeImportExtension(runtimeSpecifier)"],
+		imports: ["__rewriteRelativeImportExtension(new URL(runtimeSpecifier, import.meta.url).href)"],
 	},
 	"pi-ai/dist/auth/context.js": {
 		reason:

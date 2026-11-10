@@ -156,6 +156,27 @@ re-opened transcripts provider-valid.
     appear. Live sessions keep the model they were created with; new chats resolve the updated metadata.
     pi owns schema validation and the effective value. Accepted gap: a Central rebuild whose runtime loaded the file before a save and activated
     after its refresh serves the old budget until the next read refreshes it.
+  - `cacheWarming` — pi's `cacheWarming` setting (`off` / `streaming` / `idle`) in pi's global
+    `settings.json`, the only state. Pi 1.5.1 made `idle` its default — every idle chat re-sends its
+    prompt with a one-token reply for up to 30 minutes after a run whenever pi's economics predict a
+    saving — and ThinkRail must not turn that spend on for existing users silently, so the host default is
+    `streaming` (pi 1.5.0's behavior) whenever the file names no valid mode. `buildSessionSettings` puts a
+    file-backed getter in front of `getCacheWarmingMode` (`applyCacheWarmingDefault`): pi's only caller is
+    the cache warmer, which asks at each decision (`validateRun` before every warm, and when a run
+    settles), and the getter answers from pi's file — re-parsed only when the file's mtime/size changed —
+    rather than from the snapshot the session's `SettingsManager` loaded. One write therefore reaches every
+    session at once without a fan-out: open chats, delegated children (whose `SettingsManager` the same
+    `buildSessionSettings` builds, see `delegation`), sessions still being created, and even a mode the pi
+    CLI edits while ThinkRail runs; an idle run already scheduled stops at its next tick instead of
+    spending. `readCacheWarmingSetting` reports the effective mode with its `source`;
+    `writeCacheWarmingMode` writes through a host `SettingsManager` (`setCacheWarmingMode → flush →
+    drainErrors`, refusing with `CACHE_WARMING_WRITE_FAILED` when pi's `save()` would silently skip an
+    unparsable file). Pi stays the owner: the pi CLI reads the same key, and a user who sets it there sees
+    it as their choice here. Accepted gaps while `idle` is opted into: a delegated child's warms after its
+    run settles land as `cache_warm` entries in the child's transcript, which `subagentUsage` totals into
+    the parent only when the child runs again or is reconciled, so the parent's live total lags that
+    spend; and a second client with Settings → Models open learns of another client's change on its next
+    mount, since the setting has no push channel (unlike `provider.changed` for `models.json`).
   - `customEndpoints` — the settings adapter for the user's own OpenAI-compatible servers (a company
     gateway or a local llama.cpp / vLLM / sglang / Ollama / LM Studio server), again a `models.json` editor
     and not a registry: each is a `custom-*` provider with `api: "openai-completions"`, served by pi like any
@@ -212,15 +233,17 @@ re-opened transcripts provider-valid.
   - `agentSessionManager` — sessions keyed by `session.sessionId` (each `Entry` also tracks its
     `workspaceId`), `createSession({ cwd, workspaceId, model?, thinkingLevel? })` → `createAgentSession(...)`
     with a per-session `SessionManager` **and `buildSessionSettings(cwd, projectTrusted)`** (the user's
-    real settings + an in-memory `images.autoResize:false` override — never persisted — so the `read` tool
-    sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary can't bundle;
-    the web UI downsizes user-attached images itself at attach time — `apps/web`'s `chat/imageAttachment`
-    caps the long edge at 1568px — and the `imageGuard` extension below is the in-context second line of
-    defense). The override is **re-applied after every `settings.reload()`**: pi's `SettingsManager.reload()`
-    rebuilds settings from disk and drops `applyOverrides`, and the resource loader reloads settings on every
-    `reload()` — including inside `createAgentSession` — so a one-shot override never reached a prompt. Since
-    pi 0.87 the same setting also governs prompt-attached and tool-result images, so the override is what keeps
-    pi from rewriting user text with `[Image omitted…]` hints (which would defeat the client's optimistic-echo
+    real settings with `getImageAutoResize()` answering `false` on that instance — never persisted — so the
+    `read` tool sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary
+    can't bundle; the web UI downsizes user-attached images itself at attach time — `apps/web`'s
+    `chat/imageAttachment` caps the long edge at 1568px — and the `imageGuard` extension below is the
+    in-context second line of defense). The override sits on the getter, not in the merged settings: pi
+    rebuilds `settings` from disk on every `reload()` (the resource loader reloads inside
+    `createAgentSession`), on a trust change and on every persisting setter's `save()` — an in-memory
+    `applyOverrides` would be dropped by pi's own persisting setters — while every pi consumer of the flag
+    (prompt, queued and tool-result images) asks `getImageAutoResize()`. Since pi 0.87 the same setting also
+    governs prompt-attached and tool-result images, so the override is what keeps pi from rewriting user
+    text with `[Image omitted…]` hints (which would defeat the client's optimistic-echo
     dedup). Delegated children run on the same settings: `delegation` binds `buildSessionSettings` as the
     core's `buildChildSettings`, which receives the trust the parent context's `isProjectTrusted`
     answers (`liveParentContext`; pi-delegation decision #31, issue #604). A shared `registerSession`
@@ -247,24 +270,9 @@ re-opened transcripts provider-valid.
     membership/order. The host projects only a conservative `hasImages` aggregate into summaries/events, so
     image bytes do not ride the ordinary read stream.
 
-    **One membership override compensates for a Pi defect: a delivered image-only (empty-text) queued
-    message is never cleared.** Pi keys its on-delivery queue removal on the delivered user message's text
-    (`contentText`), so a message queued with images but no text stays in Pi's `_steeringMessages` /
-    `_followUpMessages` forever and its "Steering"/"Follow-up" chip never disappears. The manager therefore
-    counts such deliveries per lane (`stuckEmptyDeliveries`): on a user `message_start` whose text is empty,
-    whose content carries an image, and for which Pi still reports more empty-text entries in a lane than
-    already counted, it increments that lane's counter and **synthesizes the emptying `queue_update`** Pi
-    withheld. Every place that reads a lane for display — the projected `queue_update`, the transient-mirror
-    sync, and `queueStateOf` — first drops that many empty-text entries from Pi's list, so a later genuine
-    `queue_update` cannot resurrect the phantom. The counter is per live entry only (Pi's ephemeral queues
-    never survive a process restart) and resets whenever `clearQueue()` empties both lanes.
-
-    **Remove this whole override on the pi bump that ships the upstream fix** (earendil-works/pi#8612,
-    still open when last checked). Once Pi clears empty-text image deliveries natively, drop
-    `stuckEmptyDeliveries`, `displayedLane`, the synthesized `queue_update`, and the `effectivePendingCount`
-    adjustment. The removal gate is the installed code, not the PR state: on every pi bump grep the installed
-    `agent-session.js` for the `if (messageText)` guard around `this._steeringMessages.indexOf` — while that
-    guard is present the workaround is still required; when it is gone the fix has shipped.
+    Pi ≥ 1.5.1 clears a delivered image-only (empty-text) queued message itself (upstream #8612); the host
+    override that counted such deliveries and synthesized the emptying `queue_update` is gone, and the
+    manager's image-only steer/follow-up regressions now pin pi's native behavior.
 
   - **Normalized session state** is one host projection over orthogonal facts, never a second agent runtime.
     Live derivation reads Pi execution/queue state, the question phase registry's exact expected/waiting id,
@@ -1184,7 +1192,8 @@ re-opened transcripts provider-valid.
   the runtime-generation facade (`usePiRuntime`, candidate prepare/activate, current generation id, and the
   closed `load-failed` outcome—no manager internals) plus `configurePiRuntime`/factory test seams and the
   pre-bootstrap `configurePiRuntimeGenerationInitializer` composition seam; `listModelContextSettings` /
-  `setModelContextWindow` (the `modelContext` adapter); `listCustomEndpoints` / `probeCustomEndpoint` /
+  `setModelContextWindow` (the `modelContext` adapter); `readCacheWarmingSetting` / `writeCacheWarmingMode`
+  (the `cacheWarming` adapter); `listCustomEndpoints` / `probeCustomEndpoint` /
   `saveCustomEndpoint` / `removeCustomEndpoint` (the `customEndpoints` adapter); `setModelsFilePublisher`
   (their shared `provider.changed` seam); `piLoginOptions` (pi login options
   carrying the lazily created installation device id, for `auth`);
@@ -1283,7 +1292,7 @@ context-budget limitations and their upgrade checks live in [[pi-compatibility]]
 
 Pi owns provider retry; the host never adds one. Pi retries only errors that match its retryable
 patterns: "Anthropic stream ended before message_stop" does, "Could not parse Anthropic SSE event" does
-not. `patches/@earendil-works%2Fpi-ai@1.5.0.patch` (root `patchedDependencies`, upstream
+not. `patches/@earendil-works%2Fpi-ai@1.5.2.patch` (root `patchedDependencies`, upstream
 earendil-works/pi#10390, #564) fixes two defects in pi-ai's `anthropic-messages` SSE parser that end a
 turn with that parse error. The two fixes have different outcomes:
 
