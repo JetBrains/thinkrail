@@ -22,6 +22,25 @@ test("a link with one relay and no host name still parses", () => {
 	});
 });
 
+const NOSTR_KEY = "a".repeat(64);
+
+test("a Nostr route round-trips and is enough on its own", () => {
+	const nostr = { publicKey: NOSTR_KEY, relays: ["wss://r1.example", "wss://r2.example"] };
+	expect(parsePairingUri(buildPairingUri({ ...params, nostr }))).toEqual({ ...params, nostr });
+	expect(parsePairingUri(buildPairingUri({ ...params, signalingUrls: [], nostr }))).toEqual({
+		...params,
+		signalingUrls: [],
+		nostr,
+	});
+});
+
+test("a malformed Nostr route is dropped, and with no relay address the link is invalid", () => {
+	const base = "thinkrail://pair?v=1&t=b&k=c&p=d";
+	expect(parsePairingUri(`${base}&o=xyz&r=wss%3A%2F%2Fr`)).toBeNull();
+	expect(parsePairingUri(`${base}&o=${NOSTR_KEY}`)).toBeNull();
+	expect(parsePairingUri(`${base}&s=ws%3A%2F%2Fa&o=xyz&r=wss%3A%2F%2Fr`)?.nostr).toBeUndefined();
+});
+
 test("rejects a wrong scheme, host, version, or missing field", () => {
 	expect(parsePairingUri("https://pair?v=1&s=a&t=b&k=c&p=d")).toBeNull();
 	expect(parsePairingUri("thinkrail://other?v=1&s=a&t=b&k=c&p=d")).toBeNull();

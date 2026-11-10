@@ -22,11 +22,12 @@ queue, dialogs, notices, model and stats from the store's event reducer, exactly
 `thinkrail://pair` link and remembers it locally.
 
 **Reaching a computer (no server deployed).** `thinkrail --remote` runs its own relay and its link lists the
-computer's Wi‑Fi/LAN and Tailscale addresses plus its name, so the phone connects on the same Wi‑Fi, or from
-anywhere when Tailscale is on for both; the connector races the addresses on every (re)connect. Pairing stays
+computer's Wi‑Fi/LAN and Tailscale addresses, its Nostr route and its name, so the phone connects directly on
+the same Wi‑Fi or tailnet, and from any other network through public Nostr relays; the connector races the
+routes on every (re)connect, and the saved host keeps the Nostr route. Pairing stays
 host-authorized: the QR's one-time token, then the device key. `hostStatus.ts` turns a failed connect into
-`network` (no address answered — `RelayUnreachableError` — shown as "use the same Wi‑Fi or turn on
-Tailscale"), a `RemoteConnectError` code with its own what-to-do line (expired QR, phone access off, app
+`network` (no route answered — `RelayUnreachableError` — shown as "check the phone's internet and that
+phone access is on"), a `RemoteConnectError` code with its own what-to-do line (expired QR, phone access off, app
 older than the computer, no direct route, …), or the raw message of anything unexpected. A computer lost for
 good (`onLost` — it revoked this phone) leaves any of its screens for the Devices tab, where its row shows
 why. Open, its row shows `HostBanner` in place of its projects, with the one action that fixes the failure

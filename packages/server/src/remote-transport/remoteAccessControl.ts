@@ -1,4 +1,5 @@
-import type { RemoteDeviceAccess, RemoteRelay } from "@thinkrail/contracts";
+import type { RemoteDeviceAccess, RemoteNostrRoute, RemoteRelay } from "@thinkrail/contracts";
+import { DEFAULT_NOSTR_RELAYS } from "@thinkrail/nostr-signaling";
 import {
 	accessOf,
 	deviceMayRequest,
@@ -25,11 +26,15 @@ export interface RemoteAccessState {
 	devices: readonly (PairedDevice & { connected: boolean; access: RemoteDeviceAccess })[];
 	/** Absent while access is off. */
 	relay?: RemoteRelay;
+	/** The Nostr route; absent while access is off or the route is turned off. */
+	nostr?: RemoteNostrRoute;
 }
 
 export interface RemoteAccessControlOptions {
 	/** A configured relay (`--relay`); without one the host runs its own on this machine. */
 	relayUrl?: string;
+	/** Public Nostr relays a phone on any network signals through; the public defaults unless given, `[]` turns it off. */
+	nostrRelays?: readonly string[];
 	hostName?: string;
 	onPaired: (device: PairedDevice, channel: RemoteChannel) => void;
 	/** A paired device's access changed on this computer; its live channels should hear of it. */
@@ -93,6 +98,7 @@ export function createRemoteAccessControl(
 				relayUrl: relay ? relay.connectUrl : (options.relayUrl ?? ""),
 				...(relay ? { advertised: () => relay.addresses } : {}),
 				...(options.hostName ? { hostName: options.hostName } : {}),
+				nostrRelays: options.nostrRelays ?? DEFAULT_NOSTR_RELAYS,
 				onPaired: track,
 			});
 			running = { access, relay };
@@ -123,6 +129,14 @@ export function createRemoteAccessControl(
 			connected: channels.has(device.id),
 		})),
 		...(running ? { relay: relayOf(running) } : {}),
+		...(running?.access.nostr
+			? {
+					nostr: {
+						relays: [...running.access.nostr.relays],
+						connected: running.access.nostr.connected,
+					},
+				}
+			: {}),
 	});
 
 	return {

@@ -25,6 +25,8 @@ export interface HostSession {
 	 */
 	receiveUnreadable(): void;
 	onChannel(handler: (channel: RemoteChannel, device: PairedDevice) => void): void;
+	/** True once the data channel is open: signaling is done and the session must outlive its broker entry. */
+	readonly opened: boolean;
 	close(): void;
 }
 
@@ -41,6 +43,7 @@ export const OUTDATED_APP_REASON =
 export function createHostSession(deps: HostSessionDeps): HostSession {
 	let authorized: AuthorizedDevice | null = null;
 	let closed = false;
+	let opened = false;
 	let emitChannel: (channel: RemoteChannel, device: PairedDevice) => void = () => {};
 
 	const close = (): void => {
@@ -59,7 +62,9 @@ export function createHostSession(deps: HostSessionDeps): HostSession {
 		}
 	});
 	deps.peer.onChannel((channel) => {
-		if (authorized && !closed) emitChannel(channel, authorized.device);
+		if (!authorized || closed) return;
+		opened = true;
+		emitChannel(channel, authorized.device);
 	});
 
 	return {
@@ -97,6 +102,9 @@ export function createHostSession(deps: HostSessionDeps): HostSession {
 		},
 		onChannel(handler) {
 			emitChannel = handler;
+		},
+		get opened() {
+			return opened;
 		},
 		close,
 	};

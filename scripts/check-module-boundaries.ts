@@ -23,8 +23,9 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		allowed: ["apps/cli", "packages/server", "packages/shared"],
 	},
 	{ root: "packages/contracts", allowed: [] },
+	{ root: "packages/nostr-signaling", allowed: [] },
 	{ root: "packages/relay", allowed: ["packages/contracts"] },
-	{ root: "packages/remote-client", allowed: ["packages/contracts"] },
+	{ root: "packages/remote-client", allowed: ["packages/contracts", "packages/nostr-signaling"] },
 	{ root: "packages/shared", allowed: ["packages/contracts"] },
 	{ root: "packages/pi-delegation", allowed: [] },
 	{ root: "packages/pi-background-commands", allowed: [] },
@@ -35,6 +36,7 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		allowed: [
 			"packages/contracts",
 			"packages/locales",
+			"packages/nostr-signaling",
 			"packages/relay",
 			"packages/shared",
 			"packages/spec-graph",
