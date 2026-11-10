@@ -320,9 +320,10 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
 
 - **Cache-warming default** — [[submodule-server-agent]], `cacheWarming.ts` (`applyCacheWarmingDefault`).
   Pi 1.5.1 defaults `cacheWarming` to `idle`, which spends tokens in every idle chat, and reads the mode
-  from its raw `globalSettings` (`SettingsManager.getCacheWarmingMode`), so the in-memory
-  `applyOverrides` path the host uses for `images.autoResize` cannot carry a different default. The host
-  therefore wraps that getter on every session's `SettingsManager` to answer `streaming` while pi's
+  from its raw `globalSettings` (`SettingsManager.getCacheWarmingMode`), and every persisting setter's
+  `save()` rebuilds the merged settings, so an in-memory `applyOverrides` can carry neither this default
+  nor the `images.autoResize` override (both now sit on the instance getters). The host wraps
+  `getCacheWarmingMode` on every session's `SettingsManager` to answer `streaming` while pi's
   `settings.json` names no valid mode; an explicit value in the file always wins, and the Settings control
   writes that file through pi's own `setCacheWarmingMode`. **Removal gate:** a public way to give the SDK a
   cache-warming default without touching the user's file (a `createAgentSession` / `SettingsManager`

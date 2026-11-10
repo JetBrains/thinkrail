@@ -88,7 +88,11 @@ import {
 	type ExtraUsageSubject,
 	shouldWarnAnthropicExtraUsage,
 } from "./anthropicExtraUsage";
-import { applyCacheWarmingDefault, writeCacheWarmingMode } from "./cacheWarming";
+import {
+	applyCacheWarmingDefault,
+	readCacheWarmingSetting,
+	writeCacheWarmingMode,
+} from "./cacheWarming";
 import { archiveCommandHistory, publishSessionResourcesChanged } from "./chatResources";
 import {
 	disposeSessionChildren,
@@ -1100,23 +1104,19 @@ function releasePreflights(entry: Entry): void {
 	for (const release of [...entry.preflightReleases]) release();
 }
 
-const SESSION_SETTINGS_OVERRIDES = { images: { autoResize: false } };
-
 export function buildSessionSettings(cwd: string, projectTrusted: boolean): SettingsManager {
 	const settings = createPiSettings(cwd, undefined, { projectTrusted, packages: "enabled" });
-	const reload = settings.reload.bind(settings);
-	settings.reload = async () => {
-		await reload();
-		settings.applyOverrides(SESSION_SETTINGS_OVERRIDES);
-	};
-	const setProjectTrusted = settings.setProjectTrusted.bind(settings);
-	settings.setProjectTrusted = (trusted) => {
-		setProjectTrusted(trusted);
-		settings.applyOverrides(SESSION_SETTINGS_OVERRIDES);
-	};
-	settings.applyOverrides(SESSION_SETTINGS_OVERRIDES);
+	settings.getImageAutoResize = () => false;
 	applyCacheWarmingDefault(settings);
 	return settings;
+}
+
+/** A chat whose settings loaded before a cache-warming write landed follows the file at registration. */
+function reconcileCacheWarming(entry: Entry): void {
+	const { mode } = readCacheWarmingSetting();
+	if (entry.session.settingsManager.getCacheWarmingMode() !== mode) {
+		entry.session.setCacheWarmingMode(mode);
+	}
 }
 
 /** Persist pi's cache-warming mode, then apply it to every live chat so an active warm stops or starts now. */
@@ -1441,6 +1441,7 @@ async function registerSession(
 	sessions.set(session.sessionId, prepared.entry);
 	if (preparingEntries.get(session.sessionId) === prepared.entry)
 		preparingEntries.delete(session.sessionId);
+	reconcileCacheWarming(prepared.entry);
 	applySubagentTools(prepared.entry);
 	applyReviewTool(prepared.entry);
 	applySpecTools(prepared.entry);

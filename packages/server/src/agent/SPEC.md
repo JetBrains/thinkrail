@@ -161,14 +161,16 @@ re-opened transcripts provider-valid.
     prompt with a one-token reply for up to 30 minutes after a run whenever pi's economics predict a
     saving — and ThinkRail must not turn that spend on for existing users silently, so the host default is
     `streaming` (pi 1.5.0's behavior) whenever the file names no valid mode. Pi reads the mode from its raw
-    `globalSettings`, not the merged view `applyOverrides` feeds, so `buildSessionSettings` puts the
-    default in front of `getCacheWarmingMode` (`applyCacheWarmingDefault`) rather than in
-    `SESSION_SETTINGS_OVERRIDES`. `readCacheWarmingSetting` reports the effective mode with its `source`;
+    `globalSettings`, not the merged view, so `buildSessionSettings` puts the default in front of
+    `getCacheWarmingMode` (`applyCacheWarmingDefault`), the same instance-getter pattern as the image
+    override. `readCacheWarmingSetting` reports the effective mode with its `source`;
     `setCacheWarmingMode` writes through a host `SettingsManager` (`setCacheWarmingMode → flush →
     drainErrors`, refusing with `CACHE_WARMING_WRITE_FAILED` when pi's `save()` would silently skip an
     unparsable file), then calls every live session's `setCacheWarmingMode` so an active warm stops or
-    starts at once (each session's own redundant write merges the same field under pi's lock). Pi stays
-    the owner: the pi CLI reads the same key, and a user who sets it there sees it as their choice here.
+    starts at once (each session's own redundant write merges the same field under pi's lock). A chat
+    still being created when the write lands is not in `sessions` yet, and pi's loader reloaded its settings
+    before `bindExtensions`, so registration reconciles: it reads the file and applies a differing mode
+    through the same session setter. Pi stays the owner: the pi CLI reads the same key, and a user who sets it there sees it as their choice here.
   - `customEndpoints` — the settings adapter for the user's own OpenAI-compatible servers (a company
     gateway or a local llama.cpp / vLLM / sglang / Ollama / LM Studio server), again a `models.json` editor
     and not a registry: each is a `custom-*` provider with `api: "openai-completions"`, served by pi like any
@@ -225,15 +227,17 @@ re-opened transcripts provider-valid.
   - `agentSessionManager` — sessions keyed by `session.sessionId` (each `Entry` also tracks its
     `workspaceId`), `createSession({ cwd, workspaceId, model?, thinkingLevel? })` → `createAgentSession(...)`
     with a per-session `SessionManager` **and `buildSessionSettings(cwd, projectTrusted)`** (the user's
-    real settings + an in-memory `images.autoResize:false` override — never persisted — so the `read` tool
-    sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary can't bundle;
-    the web UI downsizes user-attached images itself at attach time — `apps/web`'s `chat/imageAttachment`
-    caps the long edge at 1568px — and the `imageGuard` extension below is the in-context second line of
-    defense). The override is **re-applied after every `settings.reload()`**: pi's `SettingsManager.reload()`
-    rebuilds settings from disk and drops `applyOverrides`, and the resource loader reloads settings on every
-    `reload()` — including inside `createAgentSession` — so a one-shot override never reached a prompt. Since
-    pi 0.87 the same setting also governs prompt-attached and tool-result images, so the override is what keeps
-    pi from rewriting user text with `[Image omitted…]` hints (which would defeat the client's optimistic-echo
+    real settings with `getImageAutoResize()` answering `false` on that instance — never persisted — so the
+    `read` tool sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary
+    can't bundle; the web UI downsizes user-attached images itself at attach time — `apps/web`'s
+    `chat/imageAttachment` caps the long edge at 1568px — and the `imageGuard` extension below is the
+    in-context second line of defense). The override sits on the getter, not in the merged settings: pi
+    rebuilds `settings` from disk on every `reload()` (the resource loader reloads inside
+    `createAgentSession`), on a trust change and on every persisting setter's `save()` — an in-memory
+    `applyOverrides` was dropped by pi's own `setCacheWarmingMode` — while every pi consumer of the flag
+    (prompt, queued and tool-result images) asks `getImageAutoResize()`. Since pi 0.87 the same setting also
+    governs prompt-attached and tool-result images, so the override is what keeps pi from rewriting user
+    text with `[Image omitted…]` hints (which would defeat the client's optimistic-echo
     dedup). Delegated children run on the same settings: `delegation` binds `buildSessionSettings` as the
     core's `buildChildSettings`, which receives the trust the parent context's `isProjectTrusted`
     answers (`liveParentContext`; pi-delegation decision #31, issue #604). A shared `registerSession`

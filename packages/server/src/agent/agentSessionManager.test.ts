@@ -1508,7 +1508,7 @@ test("disabling an idle parent lets its running background child finish and deli
 	}
 });
 
-test("buildSessionSettings disables image autoResize, and the override survives a settings.reload() and a trust change", async () => {
+test("buildSessionSettings disables image autoResize, and the override survives a settings.reload(), a trust change and a persisted setting", async () => {
 	const settings = buildSessionSettings(tmpCwd("trpi-settings-"), false);
 	expect(settings.getImageAutoResize()).toBe(false);
 	expect(settings.isProjectTrusted()).toBe(false);
@@ -1517,6 +1517,11 @@ test("buildSessionSettings disables image autoResize, and the override survives 
 	settings.setProjectTrusted(true);
 	expect(settings.isProjectTrusted()).toBe(true);
 	expect(settings.getImageAutoResize()).toBe(false);
+	settings.setCacheWarmingMode("off");
+	expect(settings.getImageAutoResize()).toBe(false);
+	await settings.flush();
+	settings.setCacheWarmingMode("streaming");
+	await settings.flush();
 });
 
 test("buildSessionSettings keeps cache warming at streaming until pi's settings.json names a mode", async () => {
@@ -1553,6 +1558,35 @@ test("setCacheWarmingMode persists pi's setting and applies it to every live cha
 		applied.mockRestore();
 		await setCacheWarmingMode("streaming");
 		await removeSession(s.sessionId);
+	}
+});
+
+test("a chat whose settings loaded before a cache-warming write follows the file when it registers", async () => {
+	const settingsPath = join(process.env.PI_CODING_AGENT_DIR ?? "", "settings.json");
+	const applied = jest.spyOn(SettingsManager.prototype, "setCacheWarmingMode");
+	// pi's loader reloads the session's settings while the session is created; a write that lands after
+	// that reload but before registration is the window the fan-out cannot see.
+	const originalReload = SettingsManager.prototype.reload;
+	const reload = jest.spyOn(SettingsManager.prototype, "reload").mockImplementation(async function (
+		this: SettingsManager,
+	) {
+		await originalReload.call(this);
+		writeFileSync(settingsPath, JSON.stringify({ cacheWarming: "idle" }));
+	});
+	let sessionId: string | undefined;
+	try {
+		const s = await createSession({
+			cwd: tmpCwd("trpi-cache-warming-race-"),
+			workspaceId: "ws-cache-warming-race",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = s.sessionId;
+		expect(applied.mock.calls.map(([mode]) => mode)).toEqual(["idle"]);
+	} finally {
+		applied.mockRestore();
+		reload.mockRestore();
+		rmSync(settingsPath, { force: true });
+		if (sessionId) await removeSession(sessionId);
 	}
 });
 

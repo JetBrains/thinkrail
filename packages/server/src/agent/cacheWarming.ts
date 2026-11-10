@@ -15,10 +15,6 @@ function userCacheWarmingMode(settings: SettingsManager): CacheWarmingMode | und
 	return isCacheWarmingMode(mode) ? mode : undefined;
 }
 
-/**
- * Pi reads the mode from its raw global settings, not the merged view `applyOverrides` feeds, so the
- * host default has to sit in front of the getter the cache warmer calls.
- */
 export function applyCacheWarmingDefault(settings: SettingsManager): void {
 	const getMode = settings.getCacheWarmingMode.bind(settings);
 	settings.getCacheWarmingMode = () =>
