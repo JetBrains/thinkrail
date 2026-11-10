@@ -128,7 +128,6 @@ import {
 	watchMcpStatus,
 } from "./mcpSessions";
 import { refreshModelListings } from "./modelAvailability";
-import { preferredDefaultModel } from "./modelDefaults";
 import { createPiSettings } from "./packages";
 import {
 	getPiRuntimeGeneration,
@@ -217,7 +216,10 @@ interface Entry {
 	toolResponseWaiters: ToolResponseWaiters;
 	mcpHost: McpSessionHost;
 	extraUsageWarned: boolean;
+	unavailableSavedModel: SavedModelRef | undefined;
 }
+
+type SavedModelRef = Pick<WireModel, "provider" | "id">;
 
 const sessions = new Map<string, Entry>();
 let sessionLifecycleGeneration = 0;
@@ -1078,6 +1080,12 @@ function admitRun(entry: Entry): void {
 	if (entry.reloadRunning) {
 		throw new Error("The chat is reloading its resources — try again in a moment.");
 	}
+	const saved = entry.unavailableSavedModel;
+	if (saved) {
+		throw new Error(
+			`The chat's saved model ${saved.provider}/${saved.id} is unavailable. Choose a model to continue.`,
+		);
+	}
 }
 
 function admitPreflight(entry: Entry, held = false): () => void {
@@ -1248,6 +1256,7 @@ async function prepareSessionEntry(
 		toolResponseWaiters,
 		mcpHost,
 		extraUsageWarned: false,
+		unavailableSavedModel: undefined,
 	};
 	entry.commandHistory = archiveCommandHistory(
 		workspaceId,
@@ -1396,6 +1405,7 @@ async function registerSession(
 	mcpHost: McpSessionHost,
 	lifecycleToken: WorkspaceLifecycleToken,
 	announceCreation = false,
+	unavailableSavedModel?: SavedModelRef,
 ): Promise<CreateSessionResult> {
 	const prepared = await prepareSessionEntry(
 		session,
@@ -1413,6 +1423,7 @@ async function registerSession(
 		abandonPreparedEntry(prepared.entry);
 		throw new Error(`Workspace is unavailable: ${workspaceId}`);
 	}
+	prepared.entry.unavailableSavedModel = unavailableSavedModel;
 	prepared.entry.registered = true;
 	sessions.set(session.sessionId, prepared.entry);
 	if (preparingEntries.get(session.sessionId) === prepared.entry)
@@ -1471,6 +1482,7 @@ type ParentSessionOptions = CreateAgentSessionOptions & {
 	cwd: string;
 	sessionManager: SessionManager;
 	settingsManager: SettingsManager;
+	unavailableSavedModel?: SavedModelRef;
 };
 
 function createParentSession(
@@ -1495,7 +1507,8 @@ async function createParentSessionInternal(
 	lifecycleToken: WorkspaceLifecycleToken,
 	announceCreation = false,
 ): Promise<CreateSessionResult> {
-	const { sessionManager, settingsManager, cwd } = options;
+	const { unavailableSavedModel, ...agentOptions } = options;
+	const { sessionManager, settingsManager, cwd } = agentOptions;
 	const sessionId = sessionManager.getSessionId();
 	const toolResponseWaiters = createToolResponseWaiters();
 	const mcpHost = createMcpSessionHost({
@@ -1546,7 +1559,7 @@ async function createParentSessionInternal(
 	});
 	try {
 		const result = await createAgentSession({
-			...options,
+			...agentOptions,
 			modelRuntime: generation.runtime,
 			resourceLoader: await buildResourceLoader(
 				cwd,
@@ -1574,6 +1587,7 @@ async function createParentSessionInternal(
 			mcpHost,
 			lifecycleToken,
 			announceCreation,
+			unavailableSavedModel,
 		);
 	} catch (error) {
 		if (sessions.get(sessionId)?.commands === commands) {
@@ -1634,7 +1648,10 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 		workspaceId: entry.workspaceId,
 		title: session.sessionName ?? "",
 		...entryFirstPrompt(entry),
-		model: session.model ? sessionWireModel(session.model, entry.generation) : null,
+		model:
+			session.model && !entry.unavailableSavedModel
+				? sessionWireModel(session.model, entry.generation)
+				: null,
 		thinkingLevel: session.thinkingLevel,
 		isStreaming: session.isStreaming,
 		messageCount: session.messages.length,
@@ -2094,13 +2111,15 @@ async function openDiskSession(
 	const sessionManager = SessionManager.open(info.path);
 	const persistedModel = persistedSessionModelRef(sessionManager.buildSessionContext().model);
 	let exactModel: Model<string> | undefined;
+	let unavailableSavedModel: SavedModelRef | undefined;
 	if (persistedModel) {
 		try {
 			exactModel = resolvePersistedModel(generation.runtime, persistedModel);
 		} catch {
-			const pi = generation.runtime.getAvailableSnapshot();
-			if (pi.some((model) => sameModel(model, persistedModel)))
-				exactModel = preferredDefaultModel(settledAvailableModels(generation.runtime));
+			unavailableSavedModel = persistedModel;
+			log.warn(
+				`session ${sessionId}: saved model ${persistedModel.provider}/${persistedModel.id} is unavailable; waiting for an explicit model choice`,
+			);
 		}
 	}
 	repairDanglingToolCalls(sessionManager, enabledInteractiveTools());
@@ -2110,6 +2129,7 @@ async function openDiskSession(
 			sessionManager,
 			settingsManager,
 			...(exactModel ? { model: exactModel } : {}),
+			...(unavailableSavedModel ? { unavailableSavedModel } : {}),
 		},
 		workspaceId,
 		generation,
@@ -2626,6 +2646,7 @@ export async function setSessionModel(sessionId: string, model: WireModel): Prom
 	const entry = mustGetEntry(sessionId);
 	const resolved = resolveWireModel(entry.generation.runtime, model);
 	await entry.session.setModel(resolved);
+	entry.unavailableSavedModel = undefined;
 	return sessionWireModel(resolved, entry.generation);
 }
 

@@ -202,7 +202,7 @@ describe("PI runtime generations", () => {
 		await turn;
 	});
 
-	test("a disk reattach uses the current provider and persists its model after a message", async () => {
+	test("a disk reattach never sends on a model the user did not choose", async () => {
 		setSessionManagerFactory((sessionCwd) => SessionManager.create(sessionCwd));
 		const session = await liveSession();
 		disposeAllSessions();
@@ -214,24 +214,51 @@ describe("PI runtime generations", () => {
 
 		const reopened = await getSessionMessages(session.sessionId, "workspace-generation", cwd);
 		expect(JSON.stringify(reopened.messages)).toContain("BEFORE_GENERATION_SWAP");
-		expect(reopened.summary.model).toMatchObject({
-			provider: "replacement-faux",
-			id: "replacement-model",
-		});
-		replacementFaux.setResponses([fauxAssistantMessage("AFTER_PROVIDER_SWAP")]);
-		await promptSession(session.sessionId, "continue on the new provider");
-		expect(
-			JSON.stringify(
-				(await getSessionMessages(session.sessionId, "workspace-generation", cwd)).messages,
-			),
-		).toContain("AFTER_PROVIDER_SWAP");
+		expect(reopened.summary.model).toBeNull();
+		replacementFaux.setResponses([fauxAssistantMessage("SILENT_FALLBACK")]);
+		const callsBefore = replacementFaux.state.callCount;
+		await expect(promptSession(session.sessionId, "continue")).rejects.toThrow(
+			"The chat's saved model generation-faux/generation-model is unavailable",
+		);
+		expect(replacementFaux.state.callCount).toBe(callsBefore);
+	});
+
+	test("choosing a model for a chat whose saved model is unavailable records the switch", async () => {
+		setSessionManagerFactory((sessionCwd) => SessionManager.create(sessionCwd));
+		const session = await liveSession();
 		disposeAllSessions();
-		expect(
-			(await reopenAfterTeardown(session.sessionId, "workspace-generation", cwd)).summary.model,
-		).toMatchObject({
+		configurePiRuntime(await runtimeWithReplacement());
+		await getSessionMessages(session.sessionId, "workspace-generation", cwd);
+
+		const chosen = replacementFaux.getModel("replacement-model");
+		if (!chosen) throw new Error("replacement model is missing");
+		await setSessionModel(session.sessionId, toWireModel(chosen));
+		replacementFaux.setResponses([fauxAssistantMessage("AFTER_EXPLICIT_CHOICE")]);
+		await promptSession(session.sessionId, "continue on the chosen model");
+		const hydrated = await getSessionMessages(session.sessionId, "workspace-generation", cwd);
+		expect(JSON.stringify(hydrated.messages)).toContain("AFTER_EXPLICIT_CHOICE");
+		expect(hydrated.summary.model).toMatchObject({
 			provider: "replacement-faux",
 			id: "replacement-model",
 		});
+		disposeAllSessions();
+		const info = (await SessionManager.list(cwd)).find((item) => item.id === session.sessionId);
+		if (!info) throw new Error("session was not persisted");
+		const reopened = SessionManager.open(info.path);
+		expect(reopened.buildSessionContext().model).toEqual({
+			provider: "replacement-faux",
+			modelId: "replacement-model",
+		});
+		expect(
+			reopened
+				.getBranch()
+				.some(
+					(entry) =>
+						entry.type === "model_change" &&
+						entry.provider === "replacement-faux" &&
+						entry.modelId === "replacement-model",
+				),
+		).toBe(true);
 	});
 
 	test("opening a chat without sending preserves its model when the original provider returns", async () => {
@@ -240,7 +267,7 @@ describe("PI runtime generations", () => {
 		disposeAllSessions();
 		configurePiRuntime(await runtimeWithReplacement());
 		const reopened = await getSessionMessages(session.sessionId, "workspace-generation", cwd);
-		expect(reopened.summary.model?.provider).toBe("replacement-faux");
+		expect(reopened.summary.model).toBeNull();
 		disposeAllSessions();
 		configurePiRuntime(await runtimeWithReplacement(true));
 		expect(
@@ -251,7 +278,7 @@ describe("PI runtime generations", () => {
 		});
 	});
 
-	test("a disk reattach replaces a persisted model the account no longer serves", async () => {
+	test("a disk reattach does not swap a persisted model the account no longer serves", async () => {
 		const listed = createFauxCore({
 			provider: "listed-faux",
 			api: "openai-responses",
@@ -288,7 +315,10 @@ describe("PI runtime generations", () => {
 			expect(await refreshModelListings(runtime, new Set(["listed-faux"]))).toBe(true);
 
 			const reopened = await reopenAfterTeardown(session.sessionId, "workspace-generation", cwd);
-			expect(reopened.summary.model).toMatchObject({ provider: "listed-faux", id: "kept-model" });
+			expect(reopened.summary.model).toBeNull();
+			await expect(promptSession(session.sessionId, "continue")).rejects.toThrow(
+				"The chat's saved model listed-faux/dropped-model is unavailable",
+			);
 		} finally {
 			proxy.stop(true);
 		}
