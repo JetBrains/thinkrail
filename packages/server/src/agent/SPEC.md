@@ -291,8 +291,10 @@ re-opened transcripts provider-valid.
     `backgroundWork`, so clients show the idle chat as working (contracts' `isSessionWorking`) instead of
     quietly finished.
 
-    State ids come from Pi's active session-entry chain: run/interruption from the latest user entry,
-    completion from the decisive assistant entry, questions/dialogs from their interaction ids. A question
+    State ids come from Pi's active session-entry chain: run/interruption from the latest run-opening
+    entry — a user entry, or a `chat-handoff` custom message (a continued chat's first turn has no user
+    entry; other custom messages such as tool responses never open a run) — completion from the decisive
+    assistant entry, questions/dialogs from their interaction ids. A question
     needs input from the live mailbox; without a live phase, an attached session reads it from the
     transcript only as an acknowledged call (repair ack), while disk state still reads an unanswered
     dangling call, which attach-time repair will ack. Disk state
@@ -1335,6 +1337,26 @@ shared with the pi CLI. There is no ThinkRail copy of the setting.
   host's cwd would surface through `drainErrors()` and fail a global write that actually succeeded.
 
 The parity entry and its removal gate live in [[pi-compatibility]].
+
+## Continue in workspace
+
+`continueTool.ts` registers `continue_in_workspace({ summary })` the way `titleTool.ts` registers
+`set_title`: a global inline extension whose behaviour is a host-injected `ContinueToolHost`
+(`setContinueToolHost`), so `agent` never imports `host`. The tool's description tells the agent it only
+works after ThinkRail asked (the request card); the host side refuses every call without a pending
+binding, which also keeps delegation children out. `clampHandoffSummary` bounds the summary to
+`CHAT_HANDOFF_SUMMARY_MAX_LENGTH`. `sendHostMessageToSession(sessionId, customType, content, details)` is
+the one way the host authors a message the agent answers: a `display: true` custom message delivered as a
+follow-up with `triggerTurn`, queued behind a running turn and never a steer — the review-fix request
+rides it too. Until pi delivers it (its `message_start`, matched by the `details` object pi carries through)
+the entry keeps it as pending, and `isHostMessagePending(sessionId, details)` says so. Pi's `clearQueue()`
+also drops a queued custom message, which no text lane shows, so a queue edit (`removeQueuedSession`) or
+a drain into the composer (`clearQueueSession`) queues every pending one again while the run lasts — a
+host message draws its position from the counter the text messages use, so an edit re-queues it in its
+place among the kept follow-ups — and any other clear (Stop, disposal, shutdown), or one the run did not
+outlast, drops it and calls the sender's `onDropped`. Like a text keeper, a host message pi already took
+for a turn still preparing (a pre-turn compaction) is queued once more by an edit in that window; a
+second continuation call joins the first, so the repeat costs one turn, nothing else.
 
 ## Session titles
 

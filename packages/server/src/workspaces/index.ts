@@ -13,6 +13,7 @@ export {
 	isChatWorkspaceId,
 	isUnderChatsRoot,
 	markChatDeletionPending,
+	recordChatContinuation,
 	resetChatIdCache,
 	setChatPublishers,
 } from "./chats";

@@ -270,6 +270,7 @@ import {
 	recoverChatSession,
 	seesChats,
 } from "./chats";
+import { continuationStatus, startContinuation } from "./continuations";
 import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
 import { provisionInitialTerminal } from "./initialTerminal";
@@ -854,6 +855,8 @@ const handlers: WsHandlers = {
 		return { ok: true } as const;
 	},
 	"chat.inspect": (params) => inspectChat(params.workspaceId),
+	"chat.continue": (params) => startContinuation(params.workspaceId, params.projectId),
+	"chat.continuationStatus": (params) => continuationStatus(params.operationId),
 	"workspace.openIn": (p) => {
 		openEditor(p.editor, getWorkspace(p.id).worktreePath);
 		return { ok: true } as const;
@@ -1731,6 +1734,7 @@ const REPOSITORY_ONLY_METHODS: ReadonlySet<WsMethodName> = new Set<WsMethodName>
 
 /** Doors that start or attach a session or a terminal: a chat being deleted, or whose deletion is pending, refuses them. */
 const CHAT_RESOURCE_DOORS: ReadonlySet<WsMethodName> = new Set<WsMethodName>([
+	"chat.continue",
 	"session.create",
 	"session.getMessages",
 	"session.nudge",

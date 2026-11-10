@@ -1339,6 +1339,21 @@ export function selectCurrentRouteChatTarget(state: {
 	return selectWorkspaceNavTick(state, target.workspaceId) === target.navTick ? target : null;
 }
 
+interface NavigationState {
+	activeWorkspaceId: string | null;
+	selectedProjectId: string | null;
+	navTickByWorkspace: Record<string, number>;
+}
+
+/** A change of the active workspace, the selected project or a counted tab switch: it overtakes a pending navigation. */
+export function isNavigationChange(state: NavigationState, previous: NavigationState): boolean {
+	return (
+		state.activeWorkspaceId !== previous.activeWorkspaceId ||
+		state.selectedProjectId !== previous.selectedProjectId ||
+		state.navTickByWorkspace !== previous.navTickByWorkspace
+	);
+}
+
 export function selectWorkspaceNavTick(
 	state: { navTickByWorkspace: Record<string, number> },
 	workspaceId: string,
