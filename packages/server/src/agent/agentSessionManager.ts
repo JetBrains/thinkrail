@@ -185,7 +185,8 @@ interface PendingHostMessage {
 
 interface Entry {
 	dequeuedFollowUps: TrackedQueuedMessage[];
-	pendingModelSelection?: PromptModelSelection | undefined;
+	activePromptModelSelection?: PromptModelSelection | undefined;
+	nextPromptModelSelection?: PromptModelSelection | undefined;
 	clearingQueue: boolean;
 	priorFollowUpMode?: "all" | "one-at-a-time" | undefined;
 	subagents: Subagents;
@@ -1351,18 +1352,21 @@ async function prepareSessionEntry(
 
 	const previousPrepareRequest = session.agent.prepareRequest;
 	session.agent.prepareRequest = async (request, signal) => {
-		const selection = entry.pendingModelSelection;
-		if (selection) {
-			entry.pendingModelSelection = undefined;
-			await applyPromptModelSelection(entry, selection);
-		}
-		return (await previousPrepareRequest?.(request, signal)) ?? undefined;
+		const prepared = (await previousPrepareRequest?.(request, signal)) ?? undefined;
+		const selection = entry.activePromptModelSelection;
+		if (!selection) return prepared;
+		return {
+			...prepared,
+			model: resolveWireModel(entry.generation.runtime, selection.model),
+			thinkingLevel: selection.thinkingLevel,
+		};
 	};
 	const unsubscribeQueueSelection = session.agent.subscribe((event) => {
 		if (event.type === "message_start" && event.message.role === "user") {
 			const text = userContentText(event.message.content);
 			const consumed = entry.dequeuedFollowUps.find((item) => item.text === text);
-			entry.pendingModelSelection = consumed?.modelSelection;
+			entry.activePromptModelSelection = entry.nextPromptModelSelection ?? consumed?.modelSelection;
+			entry.nextPromptModelSelection = undefined;
 			entry.dequeuedFollowUps = [];
 		}
 		if (event.type === "agent_end") entry.dequeuedFollowUps = [];
@@ -2400,9 +2404,12 @@ export async function promptSession(
 		return;
 	}
 	const release = admitPreflight(entry);
+	const clearStagedSelection = stagePromptModelSelection(entry, modelSelection);
 	try {
-		if (modelSelection) await applyPromptModelSelection(entry, modelSelection);
 		await entry.session.prompt(text, answeringDialogs(entry, images, opts.onPreflight));
+	} catch (error) {
+		clearStagedSelection();
+		throw error;
 	} finally {
 		release();
 	}
@@ -2452,14 +2459,15 @@ export function validatePromptModelSelection(
 		throw new Error("Unsupported reasoning level for scheduled model.");
 }
 
-async function applyPromptModelSelection(
+function stagePromptModelSelection(
 	entry: Entry,
-	selection: PromptModelSelection,
-): Promise<void> {
-	validatePromptModelSelection(entry.session.sessionId, selection);
-	const model = resolveWireModel(entry.generation.runtime, selection.model);
-	await entry.session.setModel(model);
-	entry.session.setThinkingLevel(selection.thinkingLevel);
+	selection: PromptModelSelection | undefined,
+): () => void {
+	if (!selection) return () => {};
+	entry.nextPromptModelSelection = selection;
+	return () => {
+		if (entry.nextPromptModelSelection === selection) entry.nextPromptModelSelection = undefined;
+	};
 }
 
 export async function scheduleFollowUpSession(
@@ -2502,8 +2510,8 @@ export async function acceptScheduledFollowUpSession(
 	}
 	const release = admitPreflight(entry);
 	try {
-		if (modelSelection) await applyPromptModelSelection(entry, modelSelection);
 		if (!isCurrent()) return false;
+		const clearStagedSelection = stagePromptModelSelection(entry, modelSelection);
 		await new Promise<void>((resolve, reject) => {
 			let started = false;
 			let subscribed = true;
@@ -2524,16 +2532,21 @@ export async function acceptScheduledFollowUpSession(
 					() => {
 						if (!started) {
 							cleanup();
+							clearStagedSelection();
 							reject(new Error("Scheduled prompt was not accepted by the session."));
 						}
 					},
 					(error: unknown) => {
 						cleanup();
-						if (!started) reject(error);
+						if (!started) {
+							clearStagedSelection();
+							reject(error);
+						}
 					},
 				);
 			} catch (error) {
 				cleanup();
+				clearStagedSelection();
 				reject(error);
 			}
 		});
@@ -2570,12 +2583,15 @@ async function followUpEntry(
 		return;
 	}
 	const release = admitPreflight(entry);
+	const clearStagedSelection = stagePromptModelSelection(entry, modelSelection);
 	try {
-		if (modelSelection) await applyPromptModelSelection(entry, modelSelection);
 		await entry.session.prompt(
 			text,
 			answersDialogs ? answeringDialogs(entry, images) : images ? { images } : undefined,
 		);
+	} catch (error) {
+		clearStagedSelection();
+		throw error;
 	} finally {
 		release();
 	}
@@ -2703,7 +2719,7 @@ function drainEntryQueue(entry: Entry, requireTextOnly: boolean): DrainedQueue {
 	} finally {
 		entry.clearingQueue = false;
 		entry.dequeuedFollowUps = [];
-		entry.pendingModelSelection = undefined;
+		entry.nextPromptModelSelection = undefined;
 	}
 	const hostMessages = entry.hostMessages
 		.filter((message) => message.queued)

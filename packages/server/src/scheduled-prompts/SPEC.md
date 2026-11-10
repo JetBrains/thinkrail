@@ -22,9 +22,11 @@ browser or alternate agent runtime is owned here.
 Times are absolute instants. Due prompts are serialized per session only until Pi accepts the
 follow-up handoff; an idle session is accepted at `agent_start`, so a long run never holds the global
 timer or another session's deliveries. Due prompts enter Pi's existing follow-up lane in due-time,
-then latest-save order (old records use creation time and id). Edits assign a new durable save order.
-A delivery whose result is uncertain is retained as failed for manual resolution and is never retried
-automatically.
+then save order, oldest first (old records use creation time and id). Edits assign a new durable save
+order. Creation IDs remain reserved after acceptance by a persisted content fingerprint, so request
+retries acknowledge the original handoff without creating a duplicate; a conflicting reuse is rejected.
+Accepted IDs are hidden from the scheduled list. A delivery whose result is uncertain is retained as
+failed for manual resolution and is never retried automatically.
 
 The explicit sendNow operation moves a scheduled item to due immediately and awaits the same
 serialized follow-up delivery path, including older due items. It never steers or interrupts.
@@ -38,8 +40,10 @@ localized attachment label.
 Schedules may pin a provider/model reference and thinking level. New UI schedules snapshot the
 composer pair; legacy records without a pair retain their old session-default behavior. Validate
 the pair against the session runtime when saving and again at delivery. The pair accompanies
-queued content and applies only when that follow-up is consumed, never to the active turn.
+queued content and overrides only the requests for that user prompt, never changing the session's
+selected model or reasoning level.
 
-An absent store file starts an empty schedule list. If the stored JSON cannot be read, parsed, or
-validated as schedule records, keep the file intact, disable scheduling operations, and return a coded
-error so a later save cannot replace the unreadable data silently.
+An absent store file starts an empty schedule list. The current store keeps active records and compact
+accepted-ID fingerprints in one atomic file, and migrates the earlier record-array format on startup.
+If the stored JSON cannot be read, parsed, or validated, keep the file intact, disable scheduling
+operations, and return a coded error so a later save cannot replace unreadable data silently.

@@ -1385,6 +1385,8 @@ ScheduledPromptRecord and QueuedMessageContent may carry PromptModelSelection: a
 provider/model reference plus ThinkingLevel, retained by scheduled create/update/list/events.
 Scheduled records also carry an optional durable `savedOrder`; hosts assign it on create and update,
 and order pre-existing records by creation time during migration.
+Create retries use the request ID as an idempotency key; an already accepted duplicate returns status
+`accepted` and is not added to the visible schedule list.
 The scheduled-prompt methods and change event begin at `SCHEDULED_PROMPTS_PROTOCOL_VERSION` (v111),
 after continuation support at v110; older clients do not subscribe to scheduling events, and a request
 from one is refused with `SCHEDULED_PROMPTS_PROTOCOL_UNSUPPORTED`.

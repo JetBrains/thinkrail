@@ -113,6 +113,33 @@ test("keeps delivering other chats while an accepted run is still working", asyn
 	expect(listScheduledPrompts("workspace")).toHaveLength(0);
 });
 
+test("a retried create stays idempotent after delivery and restart", async () => {
+	const input = {
+		id: "already-delivered",
+		workspaceId: "workspace",
+		sessionId: "chat-a",
+		text: "once",
+		dueAt,
+	};
+	createScheduledPrompt(input);
+
+	jest.advanceTimersByTime(60_000);
+	await flushMicrotasks();
+	expect(delivered).toEqual(["chat-a:once"]);
+
+	stopScheduledPrompts();
+	startScheduledPrompts(() => {});
+	const retry = createScheduledPrompt(input);
+	expect(retry.status).toBe("accepted");
+	expect(listScheduledPrompts("workspace")).toHaveLength(0);
+	expect(() => createScheduledPrompt({ ...input, text: "different content" })).toThrow(
+		"Scheduled prompt id already exists.",
+	);
+	jest.advanceTimersByTime(60_000);
+	await flushMicrotasks();
+	expect(delivered).toEqual(["chat-a:once"]);
+});
+
 test("orders equal due times by the most recent save and preserves that order after restart", async () => {
 	createScheduledPrompt({
 		id: "a",
@@ -209,7 +236,7 @@ test("migrates legacy records in creation order", async () => {
 	startScheduledPrompts(() => {});
 	expect(listScheduledPrompts("workspace").map(({ id }) => id)).toEqual(["older", "newer"]);
 	expect(
-		JSON.parse(readFileSync(file, "utf8")).map(
+		JSON.parse(readFileSync(file, "utf8")).records.map(
 			({ savedOrder }: { savedOrder: number }) => savedOrder,
 		),
 	).toEqual([1, 2]);

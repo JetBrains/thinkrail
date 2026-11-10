@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type {
@@ -29,6 +29,10 @@ let stopped = true;
 const deliveries = new Map<string, Promise<void>>();
 const inFlight = new Set<ScheduledPrompt>();
 let nextSavedOrder = 1;
+const acceptedCreates = new Map<
+	string,
+	{ fingerprint: string; createdAt: number; savedOrder: number }
+>();
 
 function assertStorageAvailable(): void {
 	if (storageError) throw storageError;
@@ -60,7 +64,17 @@ function persist(): void {
 	const target = path();
 	const temporary = `${target}.${randomUUID()}.tmp`;
 	try {
-		writeFileSync(temporary, `${JSON.stringify(records, null, "\t")}\n`);
+		writeFileSync(
+			temporary,
+			`${JSON.stringify(
+				{
+					records,
+					accepted: [...acceptedCreates].map(([id, accepted]) => ({ id, ...accepted })),
+				},
+				null,
+				"\t",
+			)}\n`,
+		);
 		renameSync(temporary, target);
 	} finally {
 		rmSync(temporary, { force: true });
@@ -90,6 +104,26 @@ function compareScheduledPrompts(a: ScheduledPrompt, b: ScheduledPrompt): number
 
 function hasSavedOrder(value: number | undefined): value is number {
 	return value !== undefined && Number.isSafeInteger(value) && value > 0;
+}
+
+function fingerprint(
+	input: Pick<
+		ScheduledPrompt,
+		"workspaceId" | "sessionId" | "text" | "images" | "dueAt" | "modelSelection"
+	>,
+): string {
+	return createHash("sha256")
+		.update(
+			JSON.stringify({
+				workspaceId: input.workspaceId,
+				sessionId: input.sessionId,
+				text: input.text,
+				images: input.images ?? [],
+				dueAt: input.dueAt,
+				modelSelection: input.modelSelection ?? null,
+			}),
+		)
+		.digest("hex");
 }
 
 function isStoredImage(value: unknown): value is ImageContent {
@@ -141,25 +175,49 @@ function isStoredScheduledPrompt(value: unknown): value is ScheduledPrompt {
 	);
 }
 
+interface AcceptedCreate {
+	id: string;
+	fingerprint: string;
+	createdAt: number;
+	savedOrder: number;
+}
+
+function isStoredAcceptedCreate(value: unknown): value is AcceptedCreate {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+	const accepted = value as Record<string, unknown>;
+	return (
+		typeof accepted.id === "string" &&
+		typeof accepted.fingerprint === "string" &&
+		/^[0-9a-f]{64}$/.test(accepted.fingerprint) &&
+		typeof accepted.createdAt === "number" &&
+		Number.isSafeInteger(accepted.createdAt) &&
+		typeof accepted.savedOrder === "number" &&
+		hasSavedOrder(accepted.savedOrder)
+	);
+}
+
 export function createScheduledPrompt(
 	input: Omit<ScheduledPrompt, "id" | "createdAt" | "savedOrder" | "status"> & { id: string },
 ): ScheduledPrompt {
 	assertStorageAvailable();
+	const existing = records.find((record) => record.id === input.id);
+	if (existing) {
+		if (fingerprint(existing) === fingerprint(input)) return existing;
+		throw new Error("Scheduled prompt id already exists.");
+	}
+	const accepted = acceptedCreates.get(input.id);
+	if (accepted) {
+		if (accepted.fingerprint === fingerprint(input))
+			return {
+				...input,
+				createdAt: accepted.createdAt,
+				savedOrder: accepted.savedOrder,
+				status: "accepted",
+			};
+		throw new Error("Scheduled prompt id already exists.");
+	}
 	if (!hasPromptContent(input.text, input.images) || !isValidScheduledDueAt(input.dueAt)) {
 		throw new Error("Prompt text or an image and a future whole-minute time are required.");
-	}
-	if (records.some((record) => record.id === input.id)) {
-		const existing = records.find((record) => record.id === input.id);
-		if (
-			existing?.workspaceId === input.workspaceId &&
-			existing.sessionId === input.sessionId &&
-			existing.text === input.text &&
-			existing.dueAt === input.dueAt &&
-			JSON.stringify(existing.images ?? []) === JSON.stringify(input.images ?? []) &&
-			JSON.stringify(existing.modelSelection) === JSON.stringify(input.modelSelection)
-		)
-			return existing;
-		throw new Error("Scheduled prompt id already exists.");
 	}
 	if (getSessionWorkspaceId(input.sessionId) !== input.workspaceId)
 		throw new Error("Session not found in workspace.");
@@ -271,6 +329,11 @@ async function deliverDue(now = Date.now()): Promise<void> {
 					}
 					return;
 				}
+				acceptedCreates.set(record.id, {
+					fingerprint: fingerprint(record),
+					createdAt: record.createdAt,
+					savedOrder: record.savedOrder ?? record.createdAt,
+				});
 				records = records.filter((item) => item !== record);
 				notify(record.workspaceId);
 			} catch (error) {
@@ -310,14 +373,36 @@ export function startScheduledPrompts(publisher: typeof publish): void {
 	publish = publisher;
 	stopped = false;
 	records = [];
+	acceptedCreates.clear();
 	storageError = undefined;
 	try {
 		const stored: unknown = JSON.parse(readFileSync(path(), "utf8"));
-		if (!Array.isArray(stored) || !stored.every(isStoredScheduledPrompt)) {
+		const storedRecords = Array.isArray(stored)
+			? stored
+			: typeof stored === "object" && stored !== null && "records" in stored
+				? (stored as { records: unknown }).records
+				: undefined;
+		const storedAccepted = Array.isArray(stored)
+			? []
+			: typeof stored === "object" && stored !== null && "accepted" in stored
+				? (stored as { accepted: unknown }).accepted
+				: undefined;
+		if (
+			!Array.isArray(storedRecords) ||
+			!storedRecords.every(isStoredScheduledPrompt) ||
+			!Array.isArray(storedAccepted) ||
+			!storedAccepted.every(isStoredAcceptedCreate)
+		) {
 			disableForStorageError();
 			return;
 		}
-		records = stored;
+		records = storedRecords;
+		for (const accepted of storedAccepted)
+			acceptedCreates.set(accepted.id, {
+				fingerprint: accepted.fingerprint,
+				createdAt: accepted.createdAt,
+				savedOrder: accepted.savedOrder,
+			});
 	} catch (error) {
 		if (missingStorageFile(error)) records = [];
 		else {
@@ -329,6 +414,7 @@ export function startScheduledPrompts(publisher: typeof publish): void {
 		let order = Math.max(
 			0,
 			...records.map((record) => (hasSavedOrder(record.savedOrder) ? record.savedOrder : 0)),
+			...[...acceptedCreates.values()].map((accepted) => accepted.savedOrder),
 		);
 		for (const record of [...records].sort(
 			(a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id),
@@ -340,6 +426,7 @@ export function startScheduledPrompts(publisher: typeof publish): void {
 		Math.max(
 			0,
 			...records.map((record) => (hasSavedOrder(record.savedOrder) ? record.savedOrder : 0)),
+			...[...acceptedCreates.values()].map((accepted) => accepted.savedOrder),
 		) + 1;
 	for (const record of records)
 		if (record.status === "delivering") {

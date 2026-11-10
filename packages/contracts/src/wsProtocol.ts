@@ -778,7 +778,7 @@ export interface ScheduledPromptRecord {
 	dueAt: number;
 	createdAt: number;
 	savedOrder?: number;
-	status: "scheduled" | "delivering" | "failed";
+	status: "scheduled" | "delivering" | "failed" | "accepted";
 	error?: string;
 }
 

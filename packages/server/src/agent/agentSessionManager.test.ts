@@ -4532,6 +4532,8 @@ test("scheduled follow-ups keep per-prompt provider/model/reasoning behind exist
 		fauxAssistantMessage(`FIRST ${"word ".repeat(100)}`),
 		fauxAssistantMessage("NORMAL"),
 		fauxAssistantMessage("PIN_A"),
+		fauxAssistantMessage("AFTER_PIN"),
+		fauxAssistantMessage("AFTER_IDLE_PIN"),
 	]);
 	b.setResponses([fauxAssistantMessage("PIN_B")]);
 	const session = await createSession({
@@ -4548,21 +4550,23 @@ test("scheduled follow-ups keep per-prompt provider/model/reasoning behind exist
 			await new Promise((r) => setTimeout(r, 10));
 		}
 		await followUpSession(session.sessionId, "ordinary already queued");
-		await acceptScheduledFollowUpSession(session.sessionId, "scheduled B", undefined, {
-			model: { provider: "scheduled-b", id: "model-b" },
-			thinkingLevel: "high",
-		});
 		await acceptScheduledFollowUpSession(session.sessionId, "scheduled A", undefined, {
 			model: { provider: "scheduled-a", id: "model-a" },
 			thinkingLevel: "low",
 		});
+		await acceptScheduledFollowUpSession(session.sessionId, "scheduled B", undefined, {
+			model: { provider: "scheduled-b", id: "model-b" },
+			thinkingLevel: "high",
+		});
+		await followUpSession(session.sessionId, "ordinary after pinned prompts");
 		expect(requests).toEqual([{ provider: "scheduled-a", model: "model-a", reasoning: undefined }]);
 		await running;
 		expect(requests).toEqual([
 			{ provider: "scheduled-a", model: "model-a", reasoning: undefined },
 			{ provider: "scheduled-a", model: "model-a", reasoning: undefined },
-			{ provider: "scheduled-b", model: "model-b", reasoning: "high" },
 			{ provider: "scheduled-a", model: "model-a", reasoning: "low" },
+			{ provider: "scheduled-b", model: "model-b", reasoning: "high" },
+			{ provider: "scheduled-a", model: "model-a", reasoning: undefined },
 		]);
 		expect(seen(session.sessionId)).toContain("PIN_B");
 		expect(seen(session.sessionId)).toContain("PIN_A");
@@ -4576,8 +4580,16 @@ test("scheduled follow-ups keep per-prompt provider/model/reasoning behind exist
 			model: "model-b",
 			reasoning: "low",
 		});
-		b.appendResponses([fauxAssistantMessage(`HOLD ${"word ".repeat(1000)}`)]);
-		a.appendResponses([fauxAssistantMessage("RESTORED_A")]);
+		await promptSession(session.sessionId, "ordinary after idle pin");
+		expect(requests.at(-1)).toEqual({
+			provider: "scheduled-a",
+			model: "model-a",
+			reasoning: undefined,
+		});
+		a.appendResponses([
+			fauxAssistantMessage(`HOLD ${"word ".repeat(1000)}`),
+			fauxAssistantMessage("RESTORED_A"),
+		]);
 		const beforeEdit = requests.length;
 		const secondTurn = promptSession(session.sessionId, "hold while editing queued content");
 		const secondDeadline = Date.now() + 5000;
@@ -4610,7 +4622,7 @@ test("scheduled follow-ups keep per-prompt provider/model/reasoning behind exist
 			await followUpSession(session.sessionId, item.text, undefined, item.modelSelection);
 		await secondTurn;
 		expect(requests.slice(beforeEdit)).toEqual([
-			{ provider: "scheduled-b", model: "model-b", reasoning: "low" },
+			{ provider: "scheduled-a", model: "model-a", reasoning: undefined },
 			{ provider: "scheduled-a", model: "model-a", reasoning: "low" },
 			{ provider: "scheduled-b", model: "model-b", reasoning: "high" },
 		]);
@@ -4719,7 +4731,7 @@ test("a pending scheduled follow-up keeps its model pin when a manual follow-up 
 		await Promise.all([scheduled, manual]);
 		releaseRun();
 		await run;
-		expect(requests).toEqual(["admission-a", "admission-b", "admission-b"]);
+		expect(requests).toEqual(["admission-a", "admission-b", "admission-a"]);
 	} finally {
 		hook.release();
 		releaseRun();
