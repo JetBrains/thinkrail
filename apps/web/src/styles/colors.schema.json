@@ -45,7 +45,10 @@
 				"additionalProperties": false,
 				"required": ["from", "publish"],
 				"not": {
-					"required": ["alpha", "fallback"]
+					"anyOf": [
+						{ "required": ["alpha", "fallback"] },
+						{ "required": ["darkAlpha", "fallback"] }
+					]
 				},
 				"properties": {
 					"from": {
@@ -55,6 +58,10 @@
 					"alpha": {
 						"type": "string",
 						"description": "A step of `scale`. Omit for a solid colour."
+					},
+					"darkAlpha": {
+						"type": "string",
+						"description": "A step of `scale` that replaces `alpha` in a dark appearance (`:root[data-theme-appearance=\"dark\"]`). Omit to use `alpha` in both."
 					},
 					"fallback": {
 						"type": "string",

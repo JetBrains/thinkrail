@@ -1,7 +1,7 @@
 {
 	"$schema": "./colors.schema.json",
 	"metadata": {
-		"version": "1.1.0",
+		"version": "1.2.0",
 		"note": "The semantic colour layer. Palettes live in themes/bundled/*.theme.json; this file says what each palette entry is FOR, and is the only place a derivation is written. A role's `from` names a theme manifest key; the CSS variable that key writes to is derived (kebab-case), not tabulated. See COLOR.md."
 	},
 	"scale": {
@@ -177,8 +177,9 @@
 		},
 		"focus-ring": {
 			"from": "accent",
+			"darkAlpha": "strong",
 			"publish": true,
-			"note": "the keyboard focus indicator; its own role so it can diverge from primary"
+			"note": "the keyboard focus indicator; its own role so it can diverge from primary. Full accent is too loud on dark surfaces, so dark appearances take the `strong` (60%) step, which still clears 3:1 (themes/schema.test.ts)"
 		},
 		"primary-subtle": {
 			"from": "accent",

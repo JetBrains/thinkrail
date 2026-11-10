@@ -223,18 +223,36 @@ test("hovered text never drops below the visibility floor", () => {
 	}
 });
 
-test("the focus ring stays visible on the input and hover surfaces", () => {
-	const source = (
-		JSON.parse(readFileSync(join(import.meta.dir, "../styles/colors.json"), "utf8")) as {
-			roles: Record<string, { from: string }>;
-		}
-	).roles["focus-ring"]?.from as keyof ThemeManifest["colors"];
+function blend(top: string, bottom: string, alpha: number): string {
+	const channel = (hex: string, start: number) => Number.parseInt(hex.slice(start, start + 2), 16);
+	return `#${[1, 3, 5]
+		.map((start) =>
+			Math.round(channel(top, start) * alpha + channel(bottom, start) * (1 - alpha))
+				.toString(16)
+				.padStart(2, "0"),
+		)
+		.join("")}`;
+}
+
+test("the focus ring, blended at its appearance's alpha, stays visible on every surface", () => {
+	const colors = JSON.parse(
+		readFileSync(join(import.meta.dir, "../styles/colors.json"), "utf8"),
+	) as {
+		scale: Record<string, number>;
+		roles: Record<string, { from: string; alpha?: string; darkAlpha?: string }>;
+	};
+	const role = colors.roles["focus-ring"];
+	if (!role) throw new Error("colors.json has no focus-ring role");
+	const source = role.from as keyof ThemeManifest["colors"];
 	for (const theme of bundledThemes()) {
 		const ring = theme.colors[source];
 		if (!ring) throw new Error(`${theme.id}: focus-ring source ${source} is unset`);
-		for (const surface of ["input", "hover"] as const) {
+		const step = theme.appearance === "dark" ? (role.darkAlpha ?? role.alpha) : role.alpha;
+		const alpha = step ? (colors.scale[step] ?? 100) / 100 : 1;
+		for (const surface of [...RESTING, "hover"] as const) {
+			const behind = theme.colors[surface];
 			expect(
-				contrast(ring, theme.colors[surface]),
+				contrast(blend(ring, behind, alpha), behind),
 				`${theme.id}: focus-ring on ${surface}`,
 			).toBeGreaterThanOrEqual(3);
 		}

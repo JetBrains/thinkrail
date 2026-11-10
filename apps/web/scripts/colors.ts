@@ -19,6 +19,7 @@ export function themeColorKeys(): string[] {
 export interface Role {
 	readonly from: string;
 	readonly alpha?: string;
+	readonly darkAlpha?: string;
 	readonly fallback?: string;
 	readonly publish: boolean;
 	readonly note?: string;
@@ -45,14 +46,16 @@ export function loadColors(path = SOURCE_PATH): Colors {
 export const roleVar = (name: string) => `--${name}`;
 export const themeVar = (name: string) => `--color-${name}`;
 
-export function derive(colors: Colors, role: Role): string {
+export function derive(colors: Colors, role: Role, alpha = role.alpha): string {
 	const source = paletteVar(role.from);
-	if (!role.alpha) return `var(${source}${role.fallback ? `, ${role.fallback}` : ""})`;
-	return `color-mix(in srgb, var(${source}) ${colors.scale[role.alpha]}%, transparent)`;
+	if (!alpha) return `var(${source}${role.fallback ? `, ${role.fallback}` : ""})`;
+	return `color-mix(in srgb, var(${source}) ${colors.scale[alpha]}%, transparent)`;
 }
 
 function aliasesPaletteVar(name: string, role: Role): boolean {
-	return paletteVar(role.from) === roleVar(name) && !role.alpha && !role.fallback;
+	return (
+		paletteVar(role.from) === roleVar(name) && !role.alpha && !role.darkAlpha && !role.fallback
+	);
 }
 
 export function validate(colors: Colors): string[] {
@@ -75,7 +78,12 @@ export function validate(colors: Colors): string[] {
 				`roles.${name}.alpha must be a scale step (${Object.keys(colors.scale).join(", ")}), got ${role.alpha}`,
 			);
 		}
-		if (role.alpha !== undefined && role.fallback !== undefined) {
+		if (role.darkAlpha !== undefined && colors.scale[role.darkAlpha] === undefined) {
+			issues.push(
+				`roles.${name}.darkAlpha must be a scale step (${Object.keys(colors.scale).join(", ")}), got ${role.darkAlpha}`,
+			);
+		}
+		if ((role.alpha ?? role.darkAlpha) !== undefined && role.fallback !== undefined) {
 			issues.push(`roles.${name} cannot combine alpha with fallback`);
 		}
 		if (typeof role.publish !== "boolean") issues.push(`roles.${name}.publish must be a boolean`);
@@ -116,6 +124,10 @@ export function renderCss(colors: Colors): string {
 			return `\t${roleVar(name)}: ${derive(colors, role)};${note}`;
 		});
 
+	const darkOverrides = roles
+		.filter(([, role]) => role.darkAlpha)
+		.map(([name, role]) => `\t${roleVar(name)}: ${derive(colors, role, role.darkAlpha)};`);
+
 	const effectBlocks = ["dark", "light"].map((appearance) =>
 		[
 			`:root[data-theme-appearance="${appearance}"] {`,
@@ -142,6 +154,15 @@ export function renderCss(colors: Colors): string {
 		...rootLines,
 		"}",
 		"",
+		...(darkOverrides.length > 0
+			? [
+					"/* Roles that take a different alpha step in a dark appearance (`darkAlpha`). */",
+					':root[data-theme-appearance="dark"] {',
+					...darkOverrides,
+					"}",
+					"",
+				]
+			: []),
 		"/* Appearance-level effects. The theme engine stamps `data-theme-appearance` before React mounts, so",
 		" * these need no JavaScript — they are constants, not palette derivations. */",
 		...effectBlocks,

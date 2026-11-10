@@ -144,6 +144,33 @@ describe("the published token set", () => {
 		expect(validate(COLORS)).toEqual([]);
 		expect(read(GENERATED_CSS)).toBe(renderCss(COLORS));
 	});
+
+	it("overrides a `darkAlpha` role only under a dark appearance", () => {
+		const roles = { ring: { from: "accent", darkAlpha: "strong", publish: true } };
+		const css = renderCss({ ...COLORS, roles });
+		const pct = COLORS.scale.strong;
+		expect(css).toContain(":root {\n\t--ring: var(--accent);\n}");
+		expect(css).toContain(
+			`:root[data-theme-appearance="dark"] {\n\t--ring: color-mix(in srgb, var(--accent) ${pct}%, transparent);\n}`,
+		);
+		expect(
+			renderCss({ ...COLORS, roles: { ring: { from: "accent", publish: true } } }),
+		).not.toContain("--ring: color-mix");
+	});
+
+	it("rejects a `darkAlpha` that is not a scale step or sits beside a fallback", () => {
+		const check = (role: Record<string, unknown>) =>
+			validate({
+				...COLORS,
+				roles: { ...COLORS.roles, ring: { from: "accent", publish: true, ...role } },
+			});
+		expect(check({ darkAlpha: "nope" })).toContain(
+			`roles.ring.darkAlpha must be a scale step (${Object.keys(COLORS.scale).join(", ")}), got nope`,
+		);
+		expect(check({ darkAlpha: "strong", fallback: "red" })).toContain(
+			"roles.ring cannot combine alpha with fallback",
+		);
+	});
 });
 
 describe("colour at a call site", () => {

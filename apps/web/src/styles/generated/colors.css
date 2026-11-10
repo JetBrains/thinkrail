@@ -1,5 +1,5 @@
 /*
- * GENERATED — do not edit. Source: `src/styles/colors.json` (v1.1.0).
+ * GENERATED — do not edit. Source: `src/styles/colors.json` (v1.2.0).
  * Regenerate with `bun run colors:generate`; `colors:check` fails when this file is stale.
  *
  * The semantic roles, then the Tailwind utility map. The palette they read is written to the
@@ -41,7 +41,7 @@
 	--border-default: var(--border-strong);
 	--border-muted: var(--border);
 	--primary: var(--accent);
-	--focus-ring: var(--accent); /* the keyboard focus indicator; its own role so it can diverge from primary */
+	--focus-ring: var(--accent); /* the keyboard focus indicator; its own role so it can diverge from primary. Full accent is too loud on dark surfaces, so dark appearances take the `strong` (60%) step, which still clears 3:1 (themes/schema.test.ts) */
 	--primary-subtle: color-mix(in srgb, var(--accent) 10%, transparent);
 	--primary-soft: color-mix(in srgb, var(--accent) 20%, transparent);
 	--primary-muted: color-mix(in srgb, var(--accent) 40%, transparent);
@@ -69,6 +69,11 @@
 	--editor-find-match-bg: color-mix(in srgb, var(--warning) 40%, transparent); /* Monaco's active find match */
 	--widget-shadow: color-mix(in srgb, var(--text) 20%, transparent); /* Monaco widget, sticky-scroll, and scrollbar shadows */
 	--media-checker-tile: color-mix(in srgb, var(--text) 20%, transparent); /* the transparency checkerboard tile behind images and vector previews: the text colour at the soft (20%) step — the contrast of the conventional #ccc-on-white checkerboard — over the content canvas, so a dark logo on a transparent PNG stays visible on a dark theme and a light one on a light theme; index.css's `.media-backdrop` is the only consumer */
+}
+
+/* Roles that take a different alpha step in a dark appearance (`darkAlpha`). */
+:root[data-theme-appearance="dark"] {
+	--focus-ring: color-mix(in srgb, var(--accent) 60%, transparent);
 }
 
 /* Appearance-level effects. The theme engine stamps `data-theme-appearance` before React mounts, so
