@@ -719,7 +719,16 @@ target's diff under the new target's label; the cached value is what the mount c
 and `DiffTab` share `rendererId` plus opaque `viewState`, written by workspace-explicit `setTabRenderer`
 and `setTabViewState` so an unmount callback settling after a workspace switch still updates its owning tab.
 The registry owns view-state interpretation; changing renderer or phone/desktop implementation drops the
-prior opaque state, and each implementation rejects state it cannot interpret. Diff-only presentation keeps
+prior opaque state, and each implementation rejects state it cannot interpret. A `FileTab` may also carry
+a **`reveal`** (`FileReveal`: `line`, optional `column` / `length`, and a `tick`) written by
+`revealFileTab(workspaceId, path, at, rendererId?)` — the open-at-a-line request Find in Files makes
+after `openFileInTab`: it finds the workspace's file tab by path, bumps `tick` so the same line reveals
+again, and when a renderer id is named switches the tab to it (dropping the opaque `viewState`, as
+`setTabRenderer` does) so a Markdown or HTML file opens at its source line. The pane forwards it to the
+renderer, which reports the `tick` it applied; **`clearFileTabReveal(workspaceId, id, tick)`** then drops
+the reveal (only while it still carries that tick, so a newer reveal survives), so a remount restores the
+tab's saved `viewState` instead of jumping back to the hit. Like `rendererId` and `viewState`, the reveal
+lives only in this client's tab cache, never in the persisted layout document. Diff-only presentation keeps
 `view` split|inline via
 `setDiffTabView` (split by default) and `ignoreWhitespace` via `setDiffTabIgnoreWhitespace`. Legacy persisted
 `view` on file documents and `rendered` on diff documents are outside the accepted cache shape and are
@@ -834,7 +843,8 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   activity first), `selectChatWorkspaceTitle` (the host's `SessionStateRecord.title`, also the first
   answer of `selectKnownChatTitle`), `selectChatWorkspaceFirstPrompt` (the conversation's
   `selectChatFirstPrompt`, for the unnamed chat's label), `selectActiveRepoWorkspaceId` (the active
-  workspace unless it is a chat, for repository-scoped settings such as pi packages), `supportsProjectlessChats`; the `chatContinuations` slice
+  workspace unless it is a chat, for repository-scoped settings such as pi packages), `selectHasTextSearchScope` (Find in Files has a
+  root: the active workspace, else a context project that is not the Chats container), `supportsProjectlessChats`; the `chatContinuations` slice
   (`applyChatContinuation` from the `chat.continuation` push or a status read — host-owned phases by
   operation id, read by the transcript's continuation card and by `chat/continuations`' follow and
   reconnect reads) and

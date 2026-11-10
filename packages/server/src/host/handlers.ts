@@ -329,7 +329,7 @@ import {
 import { startPlanReview } from "./requestReview";
 import { withChangeLock, withReviewLock } from "./reviewLock";
 import { runObservation } from "./runAnalytics";
-import { hostSearch } from "./search";
+import { hostSearch, publishSearchText } from "./search";
 import { findWorkspaceReviewOutcome, scheduleLifecyclePass } from "./settledLifecycle";
 import { taskObservation } from "./taskAnalytics";
 import {
@@ -1591,6 +1591,8 @@ const handlers: WsHandlers = {
 	},
 
 	"search.query": (p, ctx) => hostSearch().query(p, { chats: seesChats(ctx.protocolVersion) }),
+	"search.text": (p, ctx) =>
+		hostSearch().text(ctx.clientKey, p, (batch) => publishSearchText(ctx.clientKey, batch)),
 	"search.preview": (p, ctx) => hostSearch().preview(p, { chats: seesChats(ctx.protocolVersion) }),
 
 	"review.get": async (p) => {

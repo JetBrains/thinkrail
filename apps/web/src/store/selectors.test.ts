@@ -37,6 +37,7 @@ import {
 	selectContextProject,
 	selectContextRepoProject,
 	selectFileChangeSince,
+	selectHasTextSearchScope,
 	selectHistoryTarget,
 	selectHostReachable,
 	selectHostSearchAvailable,
@@ -614,6 +615,21 @@ test("new work goes to the context repository, never the Chats container", () =>
 	expect(selectContextRepoProject(state("c"))).toBe(projectOne);
 	expect(selectContextRepoProject({ ...state(null), activeWorkspaceId: "w2" })).toBe(projectTwo);
 	expect(selectContextRepoProject({ ...state(null), projects: [chats] })).toBeNull();
+});
+
+test("Find in Files has a root in a workspace or a repository's Home, never the Chats container's", () => {
+	const chats: Project = { ...projectOne, id: "c", name: "Chats", kind: "chats" };
+	const chat: Workspace = { ...workspace, id: "chat-1", projectId: "c", kind: "chat" };
+	const state = (activeWorkspaceId: string | null, selectedProjectId: string | null) => ({
+		activeWorkspaceId,
+		selectedProjectId,
+		projects: [chats, projectOne],
+		workspaces: { c: [chat], p1: [] },
+	});
+	expect(selectHasTextSearchScope(state("chat-1", "c"))).toBe(true);
+	expect(selectHasTextSearchScope(state(null, "p1"))).toBe(true);
+	expect(selectHasTextSearchScope(state(null, "c"))).toBe(false);
+	expect(selectHasTextSearchScope(state(null, null))).toBe(false);
 });
 
 test("context project falls back to the selected Project Home", () => {

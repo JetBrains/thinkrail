@@ -961,6 +961,13 @@ export function selectContextProject(state: ProjectContextState): Project | null
 	return state.projects.find((project) => project.id === projectId) ?? null;
 }
 
+/** Find in Files has a root: the active workspace, else a context project that is not the Chats container. */
+export function selectHasTextSearchScope(state: ProjectContextState): boolean {
+	if (selectActiveWorkspace(state)) return true;
+	const project = selectContextProject(state);
+	return project !== null && !isChatsContainer(project);
+}
+
 /** The repository new work is created in: the context project unless it is the Chats container, else the first repository. */
 export function selectContextRepoProject(state: ProjectContextState): Project | null {
 	const context = selectContextProject(state);

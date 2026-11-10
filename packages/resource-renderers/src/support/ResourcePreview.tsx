@@ -13,6 +13,7 @@ import {
 	describeResource,
 	diffResourceMeta,
 	type ResourceRenderer,
+	type ResourceReveal,
 	type SurfaceReview,
 } from "../registry";
 import { GuardedRendererDiff } from "./GuardedRendererDiff";
@@ -40,6 +41,7 @@ export interface ResourcePreviewProps {
 	onLayout?: ((layout: ResourcePreviewLayout) => void) | undefined;
 	viewState?: unknown;
 	onViewState?: ((viewState: unknown) => void) | undefined;
+	reveal?: ResourceReveal | undefined;
 	leading?: ReactNode;
 	actions?: ReactNode;
 	className?: string | undefined;
@@ -301,6 +303,7 @@ function ReviewedPreviewView(
 				{...(review ? { review } : {})}
 				onPlacedThreadIds={onPlacedThreadIds}
 				{...implementationViewState(props, implementationKey)}
+				{...(props.reveal ? { reveal: props.reveal } : {})}
 			/>
 		</PreviewFrame>
 	);

@@ -770,12 +770,18 @@ channel fan-out, scheduled-prompt timer lifecycle, and the process-boot wrapper 
   scoped `chat.continuation` push (sockets ≥ `CONTINUATION_PROTOCOL_VERSION`, and only those that see
   chats); `chat.continuationStatus` answers a client that missed the pushes (a reload, a reconnect). Only
   the initiating client navigates — a web-side rule.
-- **Search composition (`search.ts`):** `search.query` / `search.preview` go to one lazily created
-  `SearchService` ([[submodule-server-search]]) fed with `listProjects`, `listAllWorkspaceRecords`, the
+- **Search composition (`search.ts`):** `search.query` / `search.preview` / `search.text` go to one lazily
+  created `SearchService` ([[submodule-server-search]]) fed with `listProjects`, `listAllWorkspaceRecords`, the
   history index's `sessions()`, `specSnapshot` and `listStoredPlans`, plus `listWorkspaces` (without diff
   stats) to provision a project's missing Default record and `ensureWatch(id, { prewarm: true })` to watch
-  the root a query resolved; a query carries no client state — the handler passes only the connection's
-  audience (`{ chats: seesChats(protocolVersion) }`). The `workspace.fsChanged` publisher also
+  the root a query resolved, and `fs`'s `classifyBytes` as Find in Files' text check; a query carries no client state — the handler passes only the connection's
+  audience (`{ chats: seesChats(protocolVersion) }`). `search.text` is the one stateful request: the
+  handler passes the socket's `clientKey`, so the service supersedes an older `seq` and aborts the client's
+  previous run; a closed socket cancels its run and a reaped client is forgotten. Find in Files' batches
+  ride the **addressed** `search.textResults` push: `createServer` installs `setSearchTextPublisher`, which
+  `ws.send`s each batch to the requesting `clientKey`'s socket only (sockets ≥
+  `TEXT_SEARCH_PROTOCOL_VERSION`; a gone socket drops the batch, the terminal / MCP-login pattern). The
+  `workspace.fsChanged` publisher also
   calls `invalidateRoot(worktreePath)` so a watched workspace's file list and spec snapshot refresh on the
   next keystroke. `fs.readFile` forwards `maxBytes` to `fs`.
 
@@ -860,9 +866,9 @@ enabled/confirmed choice before entering analytics attribution.
   hiding their event channel alone is not sufficient because older clients can still send WS requests.
   Every
   **broadcast** push channel a client should hear must be `ws.subscribe`d in the WS
-  `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Five channels are deliberately
-  **not** subscribed and not broadcast: `feedback.interview`, `feedback.githubStar`, `terminal.data`, `terminal.exit`, and
-  `terminal.detached` are sent with `ws.send` to one addressed client. Adding an addressed channel means
+  `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Six channels are deliberately
+  **not** subscribed and not broadcast: `feedback.interview`, `feedback.githubStar`, `terminal.data`, `terminal.exit`,
+  `terminal.detached` and `search.textResults` are sent with `ws.send` to one addressed client. Adding an addressed channel means
   wiring a publisher, not a subscription.
 - **Terminal backpressure never trusts the `drain` event alone.** A backpressured `ws.send` latches the
   client in `terminalBackpressured` and blocks its batchers, and the batcher deliberately retries only on

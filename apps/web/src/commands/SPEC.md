@@ -63,6 +63,7 @@ not reproduce.
 | `workspace.settle` / `unsettle` | `panels/workspaceActions` | `canSettleWorkspace`; Settle disabled while an agent works or a chat needs you (`selectWorkspaceSettleBlocked`), as in the tree | yes |
 | `workspace.reveal`, `workspace.copyPath`, `workspace.openIn.<editor>` | `panels/workspaceActions`, `lib.copyText` | active workspace | yes |
 | `terminal.new` New terminal | `store.addTerminal` | active workspace, online (placement reserves on the host) | yes |
+| `files.findInFiles` Find in files… (`Mod+Shift+F`) | `findInFiles.openFindInFiles` (the shell binds the chord, `FindInFilesHost` composes the window) | `supportsTextSearch` + an active workspace, or a context project that is not the Chats container | yes |
 | Remove workspace, close project, stop trusting, layout apply/reset, clear review, MCP approve/remove, stop all subagents, delete template | their confirm dialogs | confirmation | Row UI |
 | Publish / push / open, mark ready, merge, reopen a pull request, delete the remote branch, hand checks or a diverged branch to the agent | `shell/locationBar` topbar review card | branch status + GitHub facts | Row UI |
 | Rename workspace/project/chat | inline editors | an inline editor | Row UI |
