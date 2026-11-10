@@ -40,6 +40,6 @@ composer pair; legacy records without a pair retain their old session-default be
 the pair against the session runtime when saving and again at delivery. The pair accompanies
 queued content and applies only when that follow-up is consumed, never to the active turn.
 
-An absent store file starts an empty schedule list. If the stored JSON cannot be read or parsed, keep
-the file intact, disable scheduling operations, and return a coded error so a later save cannot replace
-the unreadable data silently.
+An absent store file starts an empty schedule list. If the stored JSON cannot be read, parsed, or
+validated as schedule records, keep the file intact, disable scheduling operations, and return a coded
+error so a later save cannot replace the unreadable data silently.

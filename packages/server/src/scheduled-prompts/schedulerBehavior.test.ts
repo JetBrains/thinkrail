@@ -288,3 +288,25 @@ test("preserves unreadable storage and disables schedule operations", () => {
 	).toThrow(expect.objectContaining({ code: "SCHEDULED_PROMPTS_STORAGE_UNAVAILABLE" }));
 	expect(readFileSync(file, "utf8")).toBe(invalidJson);
 });
+
+test("preserves parseable storage with malformed records and disables schedule operations", () => {
+	const file = join(dataPath, "scheduled-prompts.json");
+	const malformedRecords = '[null,{"id":"missing-fields"}]';
+	writeFileSync(file, malformedRecords);
+	stopScheduledPrompts();
+	startScheduledPrompts(() => {});
+
+	expect(() => listScheduledPrompts("workspace")).toThrow(
+		expect.objectContaining({ code: "SCHEDULED_PROMPTS_STORAGE_UNAVAILABLE" }),
+	);
+	expect(() =>
+		createScheduledPrompt({
+			id: "must-not-overwrite",
+			workspaceId: "workspace",
+			sessionId: "chat-a",
+			text: "new schedule",
+			dueAt,
+		}),
+	).toThrow(expect.objectContaining({ code: "SCHEDULED_PROMPTS_STORAGE_UNAVAILABLE" }));
+	expect(readFileSync(file, "utf8")).toBe(malformedRecords);
+});

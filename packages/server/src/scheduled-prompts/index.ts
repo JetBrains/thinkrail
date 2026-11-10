@@ -92,6 +92,55 @@ function hasSavedOrder(value: number | undefined): value is number {
 	return value !== undefined && Number.isSafeInteger(value) && value > 0;
 }
 
+function isStoredImage(value: unknown): value is ImageContent {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+	const image = value as Record<string, unknown>;
+	return (
+		image.type === "image" && typeof image.data === "string" && typeof image.mimeType === "string"
+	);
+}
+
+function isStoredModelSelection(value: unknown): value is PromptModelSelection {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+	const selection = value as Record<string, unknown>;
+	if (
+		typeof selection.model !== "object" ||
+		selection.model === null ||
+		Array.isArray(selection.model)
+	)
+		return false;
+	const model = selection.model as Record<string, unknown>;
+	return (
+		typeof model.provider === "string" &&
+		typeof model.id === "string" &&
+		typeof selection.thinkingLevel === "string"
+	);
+}
+
+function isStoredScheduledPrompt(value: unknown): value is ScheduledPrompt {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+	const record = value as Record<string, unknown>;
+	return (
+		typeof record.id === "string" &&
+		typeof record.workspaceId === "string" &&
+		typeof record.sessionId === "string" &&
+		typeof record.text === "string" &&
+		typeof record.dueAt === "number" &&
+		Number.isSafeInteger(record.dueAt) &&
+		typeof record.createdAt === "number" &&
+		Number.isSafeInteger(record.createdAt) &&
+		(record.savedOrder === undefined ||
+			(typeof record.savedOrder === "number" && hasSavedOrder(record.savedOrder))) &&
+		(record.status === "scheduled" ||
+			record.status === "delivering" ||
+			record.status === "failed") &&
+		(record.error === undefined || typeof record.error === "string") &&
+		(record.images === undefined ||
+			(Array.isArray(record.images) && record.images.every(isStoredImage))) &&
+		(record.modelSelection === undefined || isStoredModelSelection(record.modelSelection))
+	);
+}
+
 export function createScheduledPrompt(
 	input: Omit<ScheduledPrompt, "id" | "createdAt" | "savedOrder" | "status"> & { id: string },
 ): ScheduledPrompt {
@@ -264,11 +313,11 @@ export function startScheduledPrompts(publisher: typeof publish): void {
 	storageError = undefined;
 	try {
 		const stored: unknown = JSON.parse(readFileSync(path(), "utf8"));
-		if (!Array.isArray(stored)) {
+		if (!Array.isArray(stored) || !stored.every(isStoredScheduledPrompt)) {
 			disableForStorageError();
 			return;
 		}
-		records = stored as ScheduledPrompt[];
+		records = stored;
 	} catch (error) {
 		if (missingStorageFile(error)) records = [];
 		else {

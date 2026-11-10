@@ -141,10 +141,10 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 110;
+export const PROTOCOL_VERSION = 111;
 export const CONTINUATION_PROTOCOL_VERSION = 110;
 export const CHATS_PROTOCOL_VERSION = 109;
-export const SCHEDULED_PROMPTS_PROTOCOL_VERSION = 109;
+export const SCHEDULED_PROMPTS_PROTOCOL_VERSION = 111;
 export const OTHER_AGENT_SKILLS_PROTOCOL_VERSION = 108;
 export const SPEECH_PROTOCOL_VERSION = 107;
 export const SEARCH_PROTOCOL_VERSION = 106;

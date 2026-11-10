@@ -2,7 +2,12 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SCHEDULED_PROMPTS_PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import {
+	CONTINUATION_PROTOCOL_VERSION,
+	PROTOCOL_VERSION,
+	SCHEDULED_PROMPTS_PROTOCOL_VERSION,
+	WS_CHANNELS,
+} from "@thinkrail/contracts";
 import { configurePiRuntime, configurePiRuntimeFactory } from "../agent";
 import { resetAnalyticsForTests } from "../analytics";
 import { resetJbcentralStateForTests } from "../auth";
@@ -79,7 +84,10 @@ afterEach(async () => {
 	else process.env.THINKRAIL_DATA_DIR = originalDataDir;
 });
 
-test("scheduled prompt change events reach only clients with the scheduling protocol", async () => {
+test("scheduled prompt events are hidden from the v110 main client", async () => {
+	expect(CONTINUATION_PROTOCOL_VERSION).toBe(110);
+	expect(SCHEDULED_PROMPTS_PROTOCOL_VERSION).toBeGreaterThan(CONTINUATION_PROTOCOL_VERSION);
+	expect(PROTOCOL_VERSION).toBe(SCHEDULED_PROMPTS_PROTOCOL_VERSION);
 	const dataDir = mkdtempSync(join(tmpdir(), "thinkrail-scheduled-protocol-"));
 	tempDirs.push(dataDir);
 	process.env.THINKRAIL_DATA_DIR = dataDir;
@@ -103,11 +111,11 @@ test("scheduled prompt change events reach only clients with the scheduling prot
 	configurePiRuntime(null);
 	configurePiRuntimeFactory();
 	server = await createServer({ port: 0, host: "127.0.0.1", analytics: { mute: true } });
-	const [current, older] = await Promise.all([
+	const [current, main] = await Promise.all([
 		connect(server.port, "scheduled-protocol-current", SCHEDULED_PROMPTS_PROTOCOL_VERSION),
-		connect(server.port, "scheduled-protocol-older", SCHEDULED_PROMPTS_PROTOCOL_VERSION - 1),
+		connect(server.port, "scheduled-protocol-main", CONTINUATION_PROTOCOL_VERSION),
 	]);
-	sockets.push(current.socket, older.socket);
+	sockets.push(current.socket, main.socket);
 	current.socket.send(
 		JSON.stringify({
 			id: "send-scheduled-now",
@@ -122,7 +130,7 @@ test("scheduled prompt change events reach only clients with the scheduling prot
 	await Bun.sleep(50);
 	expect(changed.channel).toBe(WS_CHANNELS.scheduledPromptsChanged);
 	expect(response.ok).toBe(true);
-	expect(older.frames.some((frame) => frame.channel === WS_CHANNELS.scheduledPromptsChanged)).toBe(
+	expect(main.frames.some((frame) => frame.channel === WS_CHANNELS.scheduledPromptsChanged)).toBe(
 		false,
 	);
 });

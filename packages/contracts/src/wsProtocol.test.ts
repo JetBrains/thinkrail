@@ -89,9 +89,11 @@ test("system theme settings advance the protocol", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(THEME_SYSTEM_PROTOCOL_VERSION);
 });
 
-test("scheduled prompts are introduced at protocol v109", () => {
-	expect(SCHEDULED_PROMPTS_PROTOCOL_VERSION).toBe(109);
-	expect(PROTOCOL_VERSION).toBe(109);
+test("scheduled prompts are introduced after the latest main protocol", () => {
+	expect(SCHEDULED_PROMPTS_PROTOCOL_VERSION).toBe(111);
+	expect(SCHEDULED_PROMPTS_PROTOCOL_VERSION).toBeGreaterThan(CONTINUATION_PROTOCOL_VERSION);
+	expect(PROTOCOL_VERSION).toBe(111);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SCHEDULED_PROMPTS_PROTOCOL_VERSION);
 	expect(WS_METHODS.scheduledPromptsCreate).toBe("scheduledPrompts.create");
 });
 
@@ -314,7 +316,7 @@ test("host search and its previews are pinned to v106", () => {
 });
 
 test("continue in workspace is pinned to v110", () => {
-	expect(PROTOCOL_VERSION).toBe(110);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CONTINUATION_PROTOCOL_VERSION);
 	expect(CONTINUATION_PROTOCOL_VERSION).toBe(110);
 	expect(WS_METHODS.chatContinue).toBe("chat.continue");
 	expect(WS_METHODS.chatContinuationStatus).toBe("chat.continuationStatus");
