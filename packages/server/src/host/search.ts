@@ -1,4 +1,5 @@
-import { readableFileSize } from "../fs";
+import type { TextSearchBatch } from "@thinkrail/contracts";
+import { classifyBytes, readableFileSize } from "../fs";
 import { getHistoryIndex } from "../history";
 import { listProjects } from "../projects";
 import { createSearchService, type SearchService } from "../search";
@@ -21,7 +22,20 @@ export function hostSearch(): SearchService {
 			ensureDefault: (projectId) => listWorkspaces(projectId, { includeDiffStats: false }),
 			watchRoot: (workspaceId) => void ensureWatch(workspaceId, { prewarm: true }),
 			stat: readableFileSize,
+			isText: (bytes) => classifyBytes(bytes).text,
 		});
 	}
 	return service;
+}
+
+type TextSearchPublisher = (clientKey: string, batch: TextSearchBatch) => void;
+
+let textPublisher: TextSearchPublisher | null = null;
+
+export function setSearchTextPublisher(publisher: TextSearchPublisher | null): void {
+	textPublisher = publisher;
+}
+
+export function publishSearchText(clientKey: string, batch: TextSearchBatch): void {
+	textPublisher?.(clientKey, batch);
 }

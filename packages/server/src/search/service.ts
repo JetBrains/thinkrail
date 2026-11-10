@@ -6,20 +6,24 @@ import type {
 	SearchPreviewResult,
 	SearchPreviewTarget,
 	SearchQueryResult,
+	TextSearchBatch,
+	TextSearchEnd,
 	Workspace,
 	WsParams,
+	WsResult,
 } from "@thinkrail/contracts";
 import {
 	MAX_SEARCH_GROUP_LIMIT,
 	MAX_SEARCH_QUERY_LENGTH,
 	parseMatchTerms,
 	SEARCH_KINDS,
+	TEXT_SEARCH_LIMITS,
 } from "@thinkrail/contracts";
 import type { HistorySession, HistoryState } from "../history";
 import { logger } from "../log";
 import type { SpecSnapshot } from "../spec";
 import type { StoredPlanFile } from "../todos";
-import { FileListCache } from "./files";
+import { type FileList, FileListCache } from "./files";
 import { deadlineAt, emptyGroup } from "./hits";
 import {
 	type ChatLabel,
@@ -31,6 +35,7 @@ import {
 	searchSpecs,
 	searchTranscripts,
 } from "./providers";
+import { searchText, type TextClassifier } from "./text";
 
 const log = logger("search");
 
@@ -50,6 +55,7 @@ export interface SearchReaders {
 	readonly watchRoot: (workspaceId: string) => void;
 	readonly files?: FileListCache;
 	readonly stat: FileStat;
+	readonly isText: TextClassifier;
 	readonly now?: () => number;
 	readonly wallClock?: () => number;
 }
@@ -64,7 +70,14 @@ const EVERY_CLIENT: SearchAudience = { chats: true };
 export interface SearchService {
 	query(params: WsParams<"search.query">, audience?: SearchAudience): Promise<SearchQueryResult>;
 	preview(target: SearchPreviewTarget, audience?: SearchAudience): Promise<SearchPreviewResult>;
+	text(
+		clientKey: string,
+		params: WsParams<"search.text">,
+		emit: (batch: TextSearchBatch) => void,
+	): WsResult<"search.text">;
+	cancelText(clientKey: string): void;
 	invalidateRoot(root: string): void;
+	forgetClient(clientKey: string): void;
 }
 
 const DEFAULT_SEARCH_GROUP_LIMIT = 20;
@@ -121,6 +134,14 @@ export function createSearchService(readers: SearchReaders): SearchService {
 	const now = readers.now ?? (() => performance.now());
 	const wallClock = readers.wallClock ?? Date.now;
 	const ensuring = new Map<string, Promise<unknown>>();
+	const latestTextSeq = new Map<string, number>();
+	const textRuns = new Map<string, AbortController>();
+	const walkedFiles = async (root: string): Promise<FileList> => {
+		await files.load(root, false);
+		const view = files.peek(root, false);
+		if (!view || view.state === "failed") throw new Error("the walked file list is unavailable");
+		return view.list;
+	};
 
 	const visibleProjects = (audience: SearchAudience): Project[] =>
 		readers.projects().filter((project) => audience.chats || project.kind !== "chats");
@@ -295,9 +316,67 @@ export function createSearchService(readers: SearchReaders): SearchService {
 			}
 		},
 
+		text(clientKey, params, emit) {
+			const seq = params.seq;
+			if (seq < (latestTextSeq.get(clientKey) ?? Number.NEGATIVE_INFINITY)) {
+				return { seq, superseded: true };
+			}
+			latestTextSeq.set(clientKey, seq);
+			textRuns.get(clientKey)?.abort();
+			const controller = new AbortController();
+			textRuns.set(clientKey, controller);
+			const send = (batch: Omit<TextSearchBatch, "seq">) => {
+				if (!controller.signal.aborted) emit({ seq, ...batch });
+			};
+			const settle = () => {
+				if (textRuns.get(clientKey) === controller) textRuns.delete(clientKey);
+			};
+			const finish = (reason: TextSearchEnd) =>
+				send({ files: [], done: { reason, files: 0, lines: 0 } });
+			const query = params.query.slice(0, TEXT_SEARCH_LIMITS.maxQuery);
+			if (query.trim().length < TEXT_SEARCH_LIMITS.minQuery) {
+				finish("complete");
+				settle();
+				return { seq };
+			}
+			void (async () => {
+				const { root, failed } = await rootFor(params.context, EVERY_CLIENT);
+				if (!root) {
+					finish(failed ? "failed" : "complete");
+					return;
+				}
+				readers.watchRoot(root.workspaceId);
+				const scope = { projectId: root.projectId, workspaceId: root.workspaceId };
+				await searchText(
+					root,
+					{ query, caseSensitive: params.caseSensitive, wholeWord: params.wholeWord },
+					(batch) => send({ root: scope, ...batch }),
+					controller.signal,
+					{ files: walkedFiles, isText: readers.isText },
+				);
+			})()
+				.catch((error: unknown) => {
+					log.warn("text search failed", error);
+					finish("failed");
+				})
+				.finally(settle);
+			return { seq };
+		},
+
+		cancelText(clientKey) {
+			textRuns.get(clientKey)?.abort();
+			textRuns.delete(clientKey);
+		},
+
 		invalidateRoot(root) {
 			files.invalidate(root);
 			readers.invalidateSpecs(root);
+		},
+
+		forgetClient(clientKey) {
+			textRuns.get(clientKey)?.abort();
+			textRuns.delete(clientKey);
+			latestTextSeq.delete(clientKey);
 		},
 	};
 }

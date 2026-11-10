@@ -46,9 +46,9 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   host's fs events, the review store and an opened tab use;
 - **`ResourcePreview`** — a self-loading file view, or with `before` (another file) a before/after diff of two
   workspace files, with the registry's toggle, the unplaced strip, review commenting and Send review, and
-  caller slots (`leading`, `actions`, controlled `rendererId` / `layout`, and an opaque `viewState` it tags
+  caller slots (`leading`, `actions`, controlled `rendererId` / `layout`, an opaque `viewState` it tags
   with the renderer implementation that wrote it, so a renderer switch never restores another renderer's
-  state and a caller needs no reset). Its `compact` flag (carried to the lazy views as
+  state and a caller needs no reset, and a `reveal` it forwards to the view renderer). Its `compact` flag (carried to the lazy views as
   `ResourceEnvironment.compact`, and reset by an explicit `compact={false}`) drops the renderer toggles,
   Send review and the HTML notice with its viewport presets — the chrome a small embedded frame cannot
   afford; the views themselves are unchanged;
@@ -57,6 +57,17 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   state), every action an explicit tab stop; nothing without a host and a workspace scope. It is the one
   framed preview of visualize's file card and the questionnaire's previews ([[module-ext-visualize]],
   [[module-ext-ask-user-question]]) — lifted from visualize when the second consumer arrived;
+- **`ResourceReveal`** and **`SOURCE_RENDERER_ID`** (`thinkrail/code`) — the open-at-a-line contract: a
+  text view that receives `ResourceViewProps.reveal` (`{ line, column?, length?, tick }`) scrolls that line
+  into view and marks it (the Pierre file view through its virtualizer's `revealLine`, retried over a few
+  frames until the line is laid out, then `selectedLines`; the desktop Monaco view through
+  `revealLineNow`, an immediate scroll on a fresh mount and later alike — a smooth scroll to a far line is
+  cut short by the next layout — selecting `column`..`column + length`) and then reports the applied `tick`
+  through `ResourceViewProps.onRevealHandled`, so a caller that keeps the reveal (a tab) can drop it and a
+  remount restores the saved view state rather than the old hit; a caller repeats a reveal of the same line
+  by bumping `tick`, and names the source renderer by id so a Markdown or HTML file opens at a line rather
+  than as its rendered document. Only the code renderer's views honour `reveal`; the others ignore it, so
+  a reveal through a rich renderer is a plain open;
 - the pieces every surface composes a renderer from, so a file tab, a diff tab, a Changes section and
   `ResourcePreview` run one sequence:
   - `useRendererSelection(resource, intent, rendererId)` — candidates for the environment's phone class, the
