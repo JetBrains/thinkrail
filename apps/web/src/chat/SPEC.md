@@ -588,6 +588,9 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   row is transcript-positioned, so it maps its message index too); `todo-review-fix` **becomes its own
   `reviewFix` turn** (same positioning); unknown customTypes are ignored. No
   store/transport/highlighter.
+- **Composer focus on arrival** (`composerFocusRequest`, see `store/SPEC.md`): `ChatView` subscribes to
+  `selectComposerFocusRequested` for its own chat. When it holds, the view clears the request and refocuses
+  its composer, so typing goes straight to the chat a palette pick opened.
 - **Jump-to-message** (`chatLocationRequest` — set by `useHistorySearch.ts`'s `openMessage` on Enter over
   a mapped message hit; see `store/SPEC.md` for the store-level request/clear contract and
   the workbench shell integration's open/reopen/hydrate half) — `ChatTranscript` is the sole consumer. Once
