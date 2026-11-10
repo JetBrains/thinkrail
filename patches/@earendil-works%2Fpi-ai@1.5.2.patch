@@ -1,7 +1,7 @@
 diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
 --- a/dist/api/anthropic-messages.js
 +++ b/dist/api/anthropic-messages.js
-@@ -279,11 +279,14 @@
+@@ -454,11 +454,14 @@
      }
      return Math.min(carriageReturnIndex, newlineIndex);
  }
@@ -17,7 +17,7 @@ diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
      let nextIndex = lineBreakIndex + 1;
      if (text[lineBreakIndex] === "\r" && text[nextIndex] === "\n") {
          nextIndex += 1;
-@@ -308,25 +311,25 @@
+@@ -483,25 +486,25 @@
                  break;
              }
              buffer += decoder.decode(value, { stream: true });
@@ -47,7 +47,7 @@ diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
          }
          if (buffer.length > 0) {
              const event = decodeSseLine(buffer, state);
-@@ -336,7 +339,7 @@
+@@ -511,7 +514,7 @@
          }
          const trailingEvent = flushSseEvent(state);
          if (trailingEvent) {
@@ -56,7 +56,7 @@ diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
          }
      }
      finally {
-@@ -356,8 +359,20 @@
+@@ -531,8 +534,20 @@
          if (!ANTHROPIC_MESSAGE_EVENTS.has(sse.event ?? "")) {
              continue;
          }

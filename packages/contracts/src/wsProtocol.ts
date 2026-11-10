@@ -142,6 +142,7 @@ export type TemplateReadLocation =
 	| { workspaceId?: never; projectId?: never };
 
 export const PROTOCOL_VERSION = 111;
+export const CACHE_WARMING_SETTINGS_PROTOCOL_VERSION = 111;
 export const CONTINUATION_PROTOCOL_VERSION = 110;
 export const CHATS_PROTOCOL_VERSION = 109;
 export const SCHEDULED_PROMPTS_PROTOCOL_VERSION = 111;
@@ -525,6 +526,8 @@ export const WS_METHODS = {
 	modelDefault: "model.default",
 	modelContextSettings: "model.contextSettings",
 	modelSetContextWindow: "model.setContextWindow",
+	cacheWarmingGet: "cacheWarming.get",
+	cacheWarmingSet: "cacheWarming.set",
 	customEndpointsList: "customEndpoints.list",
 	customEndpointsProbe: "customEndpoints.probe",
 	customEndpointsSave: "customEndpoints.save",
@@ -811,6 +814,20 @@ export type ModelContextTarget = "available" | Pick<WireModel, "provider" | "id"
 export interface ModelContextSetting
 	extends Pick<WireModel, "provider" | "id" | "name" | "contextWindow"> {
 	override: number | null;
+}
+
+/** Pi's `cacheWarming` setting: `off`, `streaming` (only while a run is active) or `idle` (also between runs). */
+export const CACHE_WARMING_MODES = ["off", "streaming", "idle"] as const;
+export type CacheWarmingMode = (typeof CACHE_WARMING_MODES)[number];
+
+export function isCacheWarmingMode(value: unknown): value is CacheWarmingMode {
+	return typeof value === "string" && (CACHE_WARMING_MODES as readonly string[]).includes(value);
+}
+
+/** The effective mode and whether pi's `settings.json` names it (`user`) or ThinkRail's default applies. */
+export interface CacheWarmingSetting {
+	mode: CacheWarmingMode;
+	source: "user" | "default";
 }
 
 /** Provider ids the custom-endpoint form owns in pi's `models.json`; every other provider is left alone. */
@@ -1329,6 +1346,8 @@ export interface WsMethodMap {
 		params: { target: ModelContextTarget; contextWindow: number | null };
 		result: ModelContextSetting[];
 	};
+	"cacheWarming.get": { params: Record<string, never>; result: CacheWarmingSetting };
+	"cacheWarming.set": { params: { mode: CacheWarmingMode }; result: CacheWarmingSetting };
 	"customEndpoints.list": { params: Record<string, never>; result: CustomEndpoint[] };
 	"customEndpoints.probe": { params: CustomEndpointProbeRequest; result: CustomEndpointProbe };
 	"customEndpoints.save": { params: CustomEndpointDraft; result: CustomEndpoint[] };
@@ -1554,6 +1573,7 @@ export type WsErrorCode =
 	| "PACKAGE_REMOVE_FAILED"
 	| "PACKAGE_UPDATE_FAILED"
 	| "PACKAGE_SETTINGS_WRITE_FAILED"
+	| "CACHE_WARMING_WRITE_FAILED"
 	| "REQUEST_REPLAY_OVERFLOW"
 	| "INSTALLED_FONTS_UNAVAILABLE"
 	| "GIT_TIMEOUT"

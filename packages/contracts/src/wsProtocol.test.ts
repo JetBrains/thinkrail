@@ -13,6 +13,8 @@ import {
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
 	ASK_DISCUSS_PROTOCOL_VERSION,
 	BRANCH_STATUS_PROTOCOL_VERSION,
+	CACHE_WARMING_MODES,
+	CACHE_WARMING_SETTINGS_PROTOCOL_VERSION,
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	CHATS_PROTOCOL_VERSION,
@@ -32,6 +34,7 @@ import {
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
+	isCacheWarmingMode,
 	isCustomEndpointId,
 	isTodoReviewFixMessage,
 	isToolResponsePending,
@@ -256,6 +259,16 @@ test("tool responses replace the ask-only answer method at v93", () => {
 	expect(TOOL_RESPONSE_PROTOCOL_VERSION).toBe(93);
 	expect(WS_METHODS.sessionRespondToTool).toBe("session.respondToTool");
 	expect(WS_METHODS.sessionAnswerQuestion).toBe("session.answerQuestion");
+});
+
+test("the cache-warming setting names its two methods at v111", () => {
+	expect(CACHE_WARMING_SETTINGS_PROTOCOL_VERSION).toBe(111);
+	expect(PROTOCOL_VERSION).toBe(111);
+	expect(WS_METHODS.cacheWarmingGet).toBe("cacheWarming.get");
+	expect(WS_METHODS.cacheWarmingSet).toBe("cacheWarming.set");
+	expect(CACHE_WARMING_MODES).toEqual(["off", "streaming", "idle"]);
+	expect(isCacheWarmingMode("idle")).toBe(true);
+	expect(isCacheWarmingMode("always")).toBe(false);
 });
 
 test("voice input is pinned to v107", () => {

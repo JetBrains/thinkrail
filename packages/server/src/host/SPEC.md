@@ -206,7 +206,10 @@ channel fan-out, scheduled-prompt timer lifecycle, and the process-boot wrapper 
   stopped one's policy or publish path; `shutdown()` memoizes one asynchronous graceful
   path: bounded `settleSessionsForShutdown()` + awaited `shutdownAnalytics()` + `stopWorkspaceCreations()`
   (running checkouts are killed so the next start reports them `interrupted`) first, then
-  `turnTracker.drain()` for the receipts those settlements started, then `stop()`). The
+  `turnTracker.drain()` for the receipts those settlements started, then
+  `settleCredentialWritesForShutdown()` — pi's `ModelRuntime.settleCredentialWrites()` on the active
+  generation and on every runtime a live chat still holds, because an OAuth refresh spends its single-use
+  token before the rotated one is saved (pi #11692) — then `stop()`). The
   bounded settle includes hidden delegation children even when their parent is
   idle, plus child cascades already started by a concurrent removal, so graceful quit does not let a
   background child lose its terminal abort/tool result; `crashLog.ts` (`installCrashLog` — the `uncaughtException`/`unhandledRejection` report

@@ -23,7 +23,12 @@ import {
 	fauxAssistantMessage,
 	fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
-import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import {
+	AgentSession,
+	ModelRuntime,
+	SessionManager,
+	SettingsManager,
+} from "@earendil-works/pi-coding-agent";
 import type {
 	AgentSettlement,
 	ExtUiRequest,
@@ -85,10 +90,12 @@ import {
 	setSessionStatePublisher,
 	setSkillAdmissionResolver,
 	setSubagentsEnabledResolver,
+	settleCredentialWritesForShutdown,
 	settleSessionsForShutdown,
 	steerSession,
 	toWireModel,
 } from "./agentSessionManager";
+import { writeCacheWarmingMode } from "./cacheWarming";
 import { setDisabledExtensionsResolver } from "./extensions";
 import { configurePiRuntime } from "./piRuntime";
 import { admissionContextFor } from "./skillAdmission";
@@ -370,6 +377,32 @@ afterAll(() => {
 	else process.env.THINKRAIL_DATA_DIR = priorDataDir;
 	if (priorOffline === undefined) delete process.env.PI_OFFLINE;
 	else process.env.PI_OFFLINE = priorOffline;
+});
+
+test("host shutdown settles credential writes on a live chat's retained runtime, not only the active one", async () => {
+	const s = await createSession({
+		cwd: tmpCwd("trpi-settle-creds-"),
+		workspaceId: "ws-settle-creds",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const retained = await ModelRuntime.create({
+		credentials: new InMemoryCredentialStore(),
+		modelsPath: null,
+		allowModelNetwork: false,
+	});
+	const liveSettle = jest.spyOn(runtime, "settleCredentialWrites");
+	const activeSettle = jest.spyOn(retained, "settleCredentialWrites");
+	configurePiRuntime(retained);
+	try {
+		await settleCredentialWritesForShutdown();
+		expect(liveSettle).toHaveBeenCalledTimes(1);
+		expect(activeSettle).toHaveBeenCalledTimes(1);
+	} finally {
+		configurePiRuntime(runtime);
+		liveSettle.mockRestore();
+		activeSettle.mockRestore();
+		await removeSession(s.sessionId);
+	}
 });
 
 test("session creation publishes a domain summary for other frontends", async () => {
@@ -1507,7 +1540,7 @@ test("disabling an idle parent lets its running background child finish and deli
 	}
 });
 
-test("buildSessionSettings disables image autoResize, and the override survives a settings.reload() and a trust change", async () => {
+test("buildSessionSettings disables image autoResize, and the override survives a settings.reload(), a trust change and a persisted setting", async () => {
 	const settings = buildSessionSettings(tmpCwd("trpi-settings-"), false);
 	expect(settings.getImageAutoResize()).toBe(false);
 	expect(settings.isProjectTrusted()).toBe(false);
@@ -1516,6 +1549,66 @@ test("buildSessionSettings disables image autoResize, and the override survives 
 	settings.setProjectTrusted(true);
 	expect(settings.isProjectTrusted()).toBe(true);
 	expect(settings.getImageAutoResize()).toBe(false);
+	settings.setCacheWarmingMode("off");
+	expect(settings.getImageAutoResize()).toBe(false);
+	await settings.flush();
+	settings.setCacheWarmingMode("streaming");
+	await settings.flush();
+});
+
+test("every session's cache-warming getter follows pi's settings.json: chats, delegated children and sessions created mid-write", async () => {
+	const settingsPath = join(process.env.PI_CODING_AGENT_DIR ?? "", "settings.json");
+	const chat = buildSessionSettings(tmpCwd("trpi-cache-warming-"), false);
+	const child = buildSessionSettings(tmpCwd("trpi-cache-warming-child-"), true);
+	try {
+		expect(chat.getCacheWarmingMode()).toBe("streaming");
+		expect(child.getCacheWarmingMode()).toBe("streaming");
+		await chat.reload();
+		expect(chat.getCacheWarmingMode()).toBe("streaming");
+
+		expect(await writeCacheWarmingMode("idle")).toEqual({ mode: "idle", source: "user" });
+		expect(chat.getCacheWarmingMode()).toBe("idle");
+		expect(child.getCacheWarmingMode()).toBe("idle");
+		const late = buildSessionSettings(tmpCwd("trpi-cache-warming-late-"), false);
+		expect(late.getCacheWarmingMode()).toBe("idle");
+
+		// Only the file matters: a session's own stale snapshot cannot keep a child warming.
+		await writeCacheWarmingMode("off");
+		for (const settings of [chat, child, late]) expect(settings.getCacheWarmingMode()).toBe("off");
+		expect(
+			(JSON.parse(readFileSync(settingsPath, "utf8")) as { cacheWarming?: string }).cacheWarming,
+		).toBe("off");
+
+		// An edit from the pi CLI is seen as well, without a reload.
+		writeFileSync(settingsPath, JSON.stringify({ cacheWarming: "streaming" }));
+		expect(chat.getCacheWarmingMode()).toBe("streaming");
+		rmSync(settingsPath, { force: true });
+		expect(child.getCacheWarmingMode()).toBe("streaming");
+	} finally {
+		rmSync(settingsPath, { force: true });
+	}
+});
+
+test("a live chat's warmer reads the mode through the file-backed getter", async () => {
+	const settingsPath = join(process.env.PI_CODING_AGENT_DIR ?? "", "settings.json");
+	const s = await createSession({
+		cwd: tmpCwd("trpi-cache-warming-live-"),
+		workspaceId: "ws-cache-warming",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const applied = jest.spyOn(SettingsManager.prototype, "setCacheWarmingMode");
+	try {
+		await writeCacheWarmingMode("off");
+		// The host writes once; no per-session setter runs, yet every live getter already answers "off".
+		expect(applied.mock.calls.map(([mode]) => mode)).toEqual(["off"]);
+		expect(
+			buildSessionSettings(tmpCwd("trpi-cache-warming-probe-"), false).getCacheWarmingMode(),
+		).toBe("off");
+	} finally {
+		applied.mockRestore();
+		rmSync(settingsPath, { force: true });
+		await removeSession(s.sessionId);
+	}
 });
 
 test("a prompt image reaches the transcript raw — the autoResize override survives pi's loader reload", async () => {
@@ -4017,7 +4110,7 @@ test("removing one queued image message returns its complete content", async () 
 	await removeSession(s.sessionId);
 });
 
-test("a delivered image-only steer clears its queue chip despite pi's empty-text defect", async () => {
+test("a delivered image-only steer clears its queue chip (pi #8612)", async () => {
 	const slow = createFauxCore({
 		provider: "faux-steer-image",
 		api: "faux-steer-image",
@@ -4089,7 +4182,7 @@ test("a delivered image-only steer clears its queue chip despite pi's empty-text
 	}
 }, 20000);
 
-test("a delivered image-only follow-up clears its queue chip despite pi's empty-text defect", async () => {
+test("a delivered image-only follow-up clears its queue chip (pi #8612)", async () => {
 	const slow = createFauxCore({
 		provider: "faux-followup-image",
 		api: "faux-followup-image",
@@ -4160,7 +4253,7 @@ test("a delivered image-only follow-up clears its queue chip despite pi's empty-
 	}
 }, 20000);
 
-test("an idle image-only prompt never inflates the stuck-delivery counters", async () => {
+test("an idle image-only prompt leaves a later image-only steer's queue chip intact until delivery", async () => {
 	const slow = createFauxCore({
 		provider: "faux-prompt-image",
 		api: "faux-prompt-image",

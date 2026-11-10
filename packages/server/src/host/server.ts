@@ -79,6 +79,7 @@ import {
 	setSubagentConcurrencyResolver,
 	setSubagentsEnabledResolver,
 	setTitleToolHost,
+	settleCredentialWritesForShutdown,
 	settleSessionsForShutdown,
 	watchUserMcpConfig,
 } from "../agent";
@@ -1194,6 +1195,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				stopWorkspaceCreations(),
 			]);
 			await turnTracker.drain();
+			await settleCredentialWritesForShutdown();
 			stop();
 		})();
 		return shutdownPromise;

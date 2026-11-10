@@ -61,6 +61,7 @@ import {
 	projectTrustSummary,
 	promptSession,
 	readBackgroundCommandOutput,
+	readCacheWarmingSetting,
 	readChildTranscript,
 	refreshAvailableModels,
 	refreshSubagentConcurrency,
@@ -83,6 +84,7 @@ import {
 	stopAllSubagents,
 	stopBackgroundCommand,
 	stopSubagent,
+	writeCacheWarmingMode,
 } from "../agent";
 import {
 	type AdditionalAnalyticsCapture,
@@ -1458,6 +1460,8 @@ const handlers: WsHandlers = {
 	"model.setContextWindow": (p) => {
 		return setModelContextWindow(p.target, p.contextWindow);
 	},
+	"cacheWarming.get": () => readCacheWarmingSetting(),
+	"cacheWarming.set": (p) => writeCacheWarmingMode(p.mode),
 	"customEndpoints.list": () => listCustomEndpoints(),
 	"customEndpoints.probe": (p) => probeCustomEndpoint(p),
 	"customEndpoints.save": (p) => saveCustomEndpoint(p),
