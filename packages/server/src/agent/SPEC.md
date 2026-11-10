@@ -160,17 +160,19 @@ re-opened transcripts provider-valid.
     `settings.json`, the only state. Pi 1.5.1 made `idle` its default — every idle chat re-sends its
     prompt with a one-token reply for up to 30 minutes after a run whenever pi's economics predict a
     saving — and ThinkRail must not turn that spend on for existing users silently, so the host default is
-    `streaming` (pi 1.5.0's behavior) whenever the file names no valid mode. Pi reads the mode from its raw
-    `globalSettings`, not the merged view, so `buildSessionSettings` puts the default in front of
-    `getCacheWarmingMode` (`applyCacheWarmingDefault`), the same instance-getter pattern as the image
-    override. `readCacheWarmingSetting` reports the effective mode with its `source`;
-    `setCacheWarmingMode` writes through a host `SettingsManager` (`setCacheWarmingMode → flush →
+    `streaming` (pi 1.5.0's behavior) whenever the file names no valid mode. `buildSessionSettings` puts a
+    file-backed getter in front of `getCacheWarmingMode` (`applyCacheWarmingDefault`): pi's only caller is
+    the cache warmer, which asks at each decision (`validateRun` before every warm, and when a run
+    settles), and the getter answers from pi's file — re-parsed only when the file's mtime/size changed —
+    rather than from the snapshot the session's `SettingsManager` loaded. One write therefore reaches every
+    session at once without a fan-out: open chats, delegated children (whose `SettingsManager` the same
+    `buildSessionSettings` builds, see `delegation`), sessions still being created, and even a mode the pi
+    CLI edits while ThinkRail runs; an idle run already scheduled stops at its next tick instead of
+    spending. `readCacheWarmingSetting` reports the effective mode with its `source`;
+    `writeCacheWarmingMode` writes through a host `SettingsManager` (`setCacheWarmingMode → flush →
     drainErrors`, refusing with `CACHE_WARMING_WRITE_FAILED` when pi's `save()` would silently skip an
-    unparsable file), then calls every live session's `setCacheWarmingMode` so an active warm stops or
-    starts at once (each session's own redundant write merges the same field under pi's lock). A chat
-    still being created when the write lands is not in `sessions` yet, and pi's loader reloaded its settings
-    before `bindExtensions`, so registration reconciles: it reads the file and applies a differing mode
-    through the same session setter. Pi stays the owner: the pi CLI reads the same key, and a user who sets it there sees it as their choice here.
+    unparsable file). Pi stays the owner: the pi CLI reads the same key, and a user who sets it there sees
+    it as their choice here.
   - `customEndpoints` — the settings adapter for the user's own OpenAI-compatible servers (a company
     gateway or a local llama.cpp / vLLM / sglang / Ollama / LM Studio server), again a `models.json` editor
     and not a registry: each is a `custom-*` provider with `api: "openai-completions"`, served by pi like any
@@ -234,7 +236,7 @@ re-opened transcripts provider-valid.
     in-context second line of defense). The override sits on the getter, not in the merged settings: pi
     rebuilds `settings` from disk on every `reload()` (the resource loader reloads inside
     `createAgentSession`), on a trust change and on every persisting setter's `save()` — an in-memory
-    `applyOverrides` was dropped by pi's own `setCacheWarmingMode` — while every pi consumer of the flag
+    `applyOverrides` would be dropped by pi's own persisting setters — while every pi consumer of the flag
     (prompt, queued and tool-result images) asks `getImageAutoResize()`. Since pi 0.87 the same setting also
     governs prompt-attached and tool-result images, so the override is what keeps pi from rewriting user
     text with `[Image omitted…]` hints (which would defeat the client's optimistic-echo
@@ -1186,7 +1188,7 @@ re-opened transcripts provider-valid.
   the runtime-generation facade (`usePiRuntime`, candidate prepare/activate, current generation id, and the
   closed `load-failed` outcome—no manager internals) plus `configurePiRuntime`/factory test seams and the
   pre-bootstrap `configurePiRuntimeGenerationInitializer` composition seam; `listModelContextSettings` /
-  `setModelContextWindow` (the `modelContext` adapter); `readCacheWarmingSetting` / `setCacheWarmingMode`
+  `setModelContextWindow` (the `modelContext` adapter); `readCacheWarmingSetting` / `writeCacheWarmingMode`
   (the `cacheWarming` adapter); `listCustomEndpoints` / `probeCustomEndpoint` /
   `saveCustomEndpoint` / `removeCustomEndpoint` (the `customEndpoints` adapter); `setModelsFilePublisher`
   (their shared `provider.changed` seam); `piLoginOptions` (pi login options
@@ -1286,7 +1288,7 @@ context-budget limitations and their upgrade checks live in [[pi-compatibility]]
 
 Pi owns provider retry; the host never adds one. Pi retries only errors that match its retryable
 patterns: "Anthropic stream ended before message_stop" does, "Could not parse Anthropic SSE event" does
-not. `patches/@earendil-works%2Fpi-ai@1.5.0.patch` (root `patchedDependencies`, upstream
+not. `patches/@earendil-works%2Fpi-ai@1.5.2.patch` (root `patchedDependencies`, upstream
 earendil-works/pi#10390, #564) fixes two defects in pi-ai's `anthropic-messages` SSE parser that end a
 turn with that parse error. The two fixes have different outcomes:
 

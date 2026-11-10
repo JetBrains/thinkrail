@@ -62,7 +62,6 @@ import {
 	listAvailableModels,
 	listSessionStates,
 	listSessions,
-	liveSessionIdsOf,
 	markWorkspaceRead,
 	markWorkspaceUnread,
 	nudgeSession,
@@ -81,7 +80,6 @@ import {
 	respondToTool,
 	sendHostMessageToSession,
 	setAgentReviewEnabledResolver,
-	setCacheWarmingMode,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
 	setSessionManagerFactory,
@@ -95,6 +93,7 @@ import {
 	steerSession,
 	toWireModel,
 } from "./agentSessionManager";
+import { writeCacheWarmingMode } from "./cacheWarming";
 import { setDisabledExtensionsResolver } from "./extensions";
 import { configurePiRuntime } from "./piRuntime";
 import { admissionContextFor } from "./skillAdmission";
@@ -1524,18 +1523,41 @@ test("buildSessionSettings disables image autoResize, and the override survives 
 	await settings.flush();
 });
 
-test("buildSessionSettings keeps cache warming at streaming until pi's settings.json names a mode", async () => {
-	const settings = buildSessionSettings(tmpCwd("trpi-cache-warming-"), false);
-	expect(settings.getCacheWarmingMode()).toBe("streaming");
-	await settings.reload();
-	expect(settings.getCacheWarmingMode()).toBe("streaming");
-	settings.setCacheWarmingMode("idle");
-	expect(settings.getCacheWarmingMode()).toBe("idle");
-	settings.setCacheWarmingMode("off");
-	expect(settings.getCacheWarmingMode()).toBe("off");
+test("every session's cache-warming getter follows pi's settings.json: chats, delegated children and sessions created mid-write", async () => {
+	const settingsPath = join(process.env.PI_CODING_AGENT_DIR ?? "", "settings.json");
+	const chat = buildSessionSettings(tmpCwd("trpi-cache-warming-"), false);
+	const child = buildSessionSettings(tmpCwd("trpi-cache-warming-child-"), true);
+	try {
+		expect(chat.getCacheWarmingMode()).toBe("streaming");
+		expect(child.getCacheWarmingMode()).toBe("streaming");
+		await chat.reload();
+		expect(chat.getCacheWarmingMode()).toBe("streaming");
+
+		expect(await writeCacheWarmingMode("idle")).toEqual({ mode: "idle", source: "user" });
+		expect(chat.getCacheWarmingMode()).toBe("idle");
+		expect(child.getCacheWarmingMode()).toBe("idle");
+		const late = buildSessionSettings(tmpCwd("trpi-cache-warming-late-"), false);
+		expect(late.getCacheWarmingMode()).toBe("idle");
+
+		// Only the file matters: a session's own stale snapshot cannot keep a child warming.
+		await writeCacheWarmingMode("off");
+		for (const settings of [chat, child, late]) expect(settings.getCacheWarmingMode()).toBe("off");
+		expect(
+			(JSON.parse(readFileSync(settingsPath, "utf8")) as { cacheWarming?: string }).cacheWarming,
+		).toBe("off");
+
+		// An edit from the pi CLI is seen as well, without a reload.
+		writeFileSync(settingsPath, JSON.stringify({ cacheWarming: "streaming" }));
+		expect(chat.getCacheWarmingMode()).toBe("streaming");
+		rmSync(settingsPath, { force: true });
+		expect(child.getCacheWarmingMode()).toBe("streaming");
+	} finally {
+		rmSync(settingsPath, { force: true });
+	}
 });
 
-test("setCacheWarmingMode persists pi's setting and applies it to every live chat at once", async () => {
+test("a live chat's warmer reads the mode through the file-backed getter", async () => {
+	const settingsPath = join(process.env.PI_CODING_AGENT_DIR ?? "", "settings.json");
 	const s = await createSession({
 		cwd: tmpCwd("trpi-cache-warming-live-"),
 		workspaceId: "ws-cache-warming",
@@ -1543,50 +1565,16 @@ test("setCacheWarmingMode persists pi's setting and applies it to every live cha
 	});
 	const applied = jest.spyOn(SettingsManager.prototype, "setCacheWarmingMode");
 	try {
-		expect(await setCacheWarmingMode("off")).toEqual({ mode: "off", source: "user" });
-		// Once for the host's own write, once per live chat so its warmer reacts now.
-		const liveChats = liveSessionIdsOf().length;
-		expect(liveChats).toBeGreaterThanOrEqual(1);
-		expect(applied.mock.calls.map(([mode]) => mode)).toEqual(Array(1 + liveChats).fill("off"));
-		const written = JSON.parse(
-			readFileSync(join(process.env.PI_CODING_AGENT_DIR ?? "", "settings.json"), "utf8"),
-		) as { cacheWarming?: string };
-		expect(written.cacheWarming).toBe("off");
-		const fresh = buildSessionSettings(tmpCwd("trpi-cache-warming-fresh-"), false);
-		expect(fresh.getCacheWarmingMode()).toBe("off");
+		await writeCacheWarmingMode("off");
+		// The host writes once; no per-session setter runs, yet every live getter already answers "off".
+		expect(applied.mock.calls.map(([mode]) => mode)).toEqual(["off"]);
+		expect(
+			buildSessionSettings(tmpCwd("trpi-cache-warming-probe-"), false).getCacheWarmingMode(),
+		).toBe("off");
 	} finally {
 		applied.mockRestore();
-		await setCacheWarmingMode("streaming");
-		await removeSession(s.sessionId);
-	}
-});
-
-test("a chat whose settings loaded before a cache-warming write follows the file when it registers", async () => {
-	const settingsPath = join(process.env.PI_CODING_AGENT_DIR ?? "", "settings.json");
-	const applied = jest.spyOn(SettingsManager.prototype, "setCacheWarmingMode");
-	// pi's loader reloads the session's settings while the session is created; a write that lands after
-	// that reload but before registration is the window the fan-out cannot see.
-	const originalReload = SettingsManager.prototype.reload;
-	const reload = jest.spyOn(SettingsManager.prototype, "reload").mockImplementation(async function (
-		this: SettingsManager,
-	) {
-		await originalReload.call(this);
-		writeFileSync(settingsPath, JSON.stringify({ cacheWarming: "idle" }));
-	});
-	let sessionId: string | undefined;
-	try {
-		const s = await createSession({
-			cwd: tmpCwd("trpi-cache-warming-race-"),
-			workspaceId: "ws-cache-warming-race",
-			model: toWireModel(fauxA.getModel()),
-		});
-		sessionId = s.sessionId;
-		expect(applied.mock.calls.map(([mode]) => mode)).toEqual(["idle"]);
-	} finally {
-		applied.mockRestore();
-		reload.mockRestore();
 		rmSync(settingsPath, { force: true });
-		if (sessionId) await removeSession(sessionId);
+		await removeSession(s.sessionId);
 	}
 });
 

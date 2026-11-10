@@ -22,8 +22,6 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type {
 	AgentSettlement,
-	CacheWarmingMode,
-	CacheWarmingSetting,
 	ImageContent,
 	Model,
 	QueuedMessageContent,
@@ -88,11 +86,7 @@ import {
 	type ExtraUsageSubject,
 	shouldWarnAnthropicExtraUsage,
 } from "./anthropicExtraUsage";
-import {
-	applyCacheWarmingDefault,
-	readCacheWarmingSetting,
-	writeCacheWarmingMode,
-} from "./cacheWarming";
+import { applyCacheWarmingDefault } from "./cacheWarming";
 import { archiveCommandHistory, publishSessionResourcesChanged } from "./chatResources";
 import {
 	disposeSessionChildren,
@@ -1111,24 +1105,6 @@ export function buildSessionSettings(cwd: string, projectTrusted: boolean): Sett
 	return settings;
 }
 
-/** A chat whose settings loaded before a cache-warming write landed follows the file at registration. */
-function reconcileCacheWarming(entry: Entry): void {
-	const { mode } = readCacheWarmingSetting();
-	if (entry.session.settingsManager.getCacheWarmingMode() !== mode) {
-		entry.session.setCacheWarmingMode(mode);
-	}
-}
-
-/** Persist pi's cache-warming mode, then apply it to every live chat so an active warm stops or starts now. */
-export async function setCacheWarmingMode(mode: CacheWarmingMode): Promise<CacheWarmingSetting> {
-	const setting = await writeCacheWarmingMode(mode);
-	for (const entry of sessions.values()) {
-		if (entry.disposed) continue;
-		entry.session.setCacheWarmingMode(mode);
-	}
-	return setting;
-}
-
 export type TrustReloadDisposition = SessionReloadDisposition | "failed";
 
 export async function applyPiResourceTrust(
@@ -1441,7 +1417,6 @@ async function registerSession(
 	sessions.set(session.sessionId, prepared.entry);
 	if (preparingEntries.get(session.sessionId) === prepared.entry)
 		preparingEntries.delete(session.sessionId);
-	reconcileCacheWarming(prepared.entry);
 	applySubagentTools(prepared.entry);
 	applyReviewTool(prepared.entry);
 	applySpecTools(prepared.entry);

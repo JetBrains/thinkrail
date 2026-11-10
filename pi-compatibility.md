@@ -204,7 +204,7 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   carries no target version; pi skips pinned npm versions in update checks; pi classifies `git@host:…`
   and `github:…` sources as local paths.
 - **Anthropic SSE framing patch** — [[submodule-server-agent]] (Provider stream framing),
-  `patches/@earendil-works%2Fpi-ai@1.5.0.patch` on `dist/api/anthropic-messages.js`. Unpatched, two
+  `patches/@earendil-works%2Fpi-ai@1.5.2.patch` on `dist/api/anthropic-messages.js`. Unpatched, two
   streams fail with the non-retryable "Could not parse Anthropic SSE event": a valid CRLF stream whose
   `\r\n` is split across network chunks, and a stream cut off mid-event. Patched, the first succeeds and
   the second ends with a retryable truncation error such as "stream ended before message_stop".
@@ -325,18 +325,18 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
 
 - **Cache-warming default** — [[submodule-server-agent]], `cacheWarming.ts` (`applyCacheWarmingDefault`).
   Pi 1.5.1 defaults `cacheWarming` to `idle`, which spends tokens in every idle chat, and reads the mode
-  from its raw `globalSettings` (`SettingsManager.getCacheWarmingMode`), and every persisting setter's
-  `save()` rebuilds the merged settings, so an in-memory `applyOverrides` can carry neither this default
-  nor the `images.autoResize` override (both now sit on the instance getters). The host wraps
-  `getCacheWarmingMode` on every session's `SettingsManager` to answer `streaming` while pi's
-  `settings.json` names no valid mode; an explicit value in the file always wins, and the Settings control
-  writes that file through pi's own `setCacheWarmingMode`. **Removal gate:** a public way to give the SDK a
-  cache-warming default without touching the user's file (a `createAgentSession` / `SettingsManager`
-  option, or pi reading the merged settings), or pi returning to a default that costs nothing while idle.
-  On upgrades re-check that `sdk.js` still obtains the mode through `settingsManager.getCacheWarmingMode()`
-  and that `CacheWarmer` consults it at every decision; run `cacheWarming.test.ts` (it asserts pi's own
-  default is `idle` so a change upstream shows up) and the manager's cache-warming tests.
-
+  from the snapshot its `SettingsManager` loaded (`globalSettings`, rebuilt by every persisting setter's
+  `save()`), so neither an in-memory `applyOverrides` nor a one-time default survives pi's own writes.
+  The host therefore replaces `getCacheWarmingMode` on every session's `SettingsManager` — chats and
+  delegated children alike — with a getter that answers from pi's `settings.json` (mtime-cached) and falls
+  back to `streaming` while the file names no valid mode; the Settings control writes that file through
+  pi's own `setCacheWarmingMode`, and no per-session fan-out exists. **Removal gate:** a public way to give
+  the SDK a cache-warming default without touching the user's file (a `createAgentSession` /
+  `SettingsManager` option, or pi re-reading the file at each decision), or pi returning to a default that
+  costs nothing while idle. On upgrades re-check that `sdk.js` still obtains the mode through
+  `settingsManager.getCacheWarmingMode()` and that `CacheWarmer` consults it before every warm
+  (`validateRun`); run `cacheWarming.test.ts` (it asserts pi's own default is `idle` so a change upstream
+  shows up) and the manager's cache-warming tests.
 - **Credential writes at host exit** — [[submodule-server-agent]], `settleCredentialWritesForShutdown`.
   Pi 1.5.1 waits for an in-flight OAuth refresh in `AgentSessionRuntime.dispose()` (#11692: the refresh
   spends its single-use token before the rotated one is saved); the host does not use that runtime, so its
