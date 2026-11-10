@@ -793,6 +793,32 @@ export function selectComposerFocusRequested(
 	);
 }
 
+export function selectComposerFocusRequestStale(
+	state: ChatAttentionState & {
+		composerFocusRequest: ComposerFocusRequest | null;
+		navTickByWorkspace: Record<string, number>;
+		routeChatTarget: RouteChatTarget | null;
+	},
+	workspaceId: string,
+): boolean {
+	const request = state.composerFocusRequest;
+	if (!request || request.workspaceId !== workspaceId) return false;
+	if (state.activeWorkspaceId !== workspaceId) return true;
+	if (selectWorkspaceNavTick(state, workspaceId) !== request.navTick) return true;
+	if (!state.layoutDocumentsByWorkspace[workspaceId] || !state.layoutAttentionByWorkspace[workspaceId]) {
+		return false;
+	}
+	if (request.sessionId && selectCurrentRouteChatTarget(state)?.sessionId === request.sessionId) {
+		return false;
+	}
+	const tab = selectAttentionCenterTab(state, workspaceId);
+	if (!tab) return false;
+	return !(
+		tab.kind === "chat" &&
+		(request.sessionId === null || tab.sessionId === request.sessionId)
+	);
+}
+
 export function selectAttentionCenterResourceCacheKey(
 	state: CenterResourceCacheState,
 	workspaceId: string,
