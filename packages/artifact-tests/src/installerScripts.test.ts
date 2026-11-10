@@ -271,6 +271,20 @@ describe("install.sh validation", () => {
 		expect(curlRequests(fixture)[0]).toContain("api.github.com");
 	});
 
+	test("downloads the binary and its checksums only from the official repository", () => {
+		const fixture = makeFixture();
+		const result = runInstaller(fixture, ["--version", "1.2.3", "--no-modify-path"], {
+			THINKRAIL_REPO: "attacker/thinkrail",
+		});
+		expect(result.exitCode).toBe(0);
+		const requests = curlRequests(fixture);
+		expect(requests.length).toBeGreaterThan(0);
+		for (const url of requests) {
+			expect(url).toContain("/JetBrains/thinkrail/");
+			expect(url).not.toContain("attacker");
+		}
+	});
+
 	test("requires an absolute prefix and expands current-user tilde", () => {
 		const relative = makeFixture();
 		const refused = runInstaller(relative, ["--version", "1.2.3", "--prefix", "tools"]);

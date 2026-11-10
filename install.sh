@@ -16,7 +16,7 @@
 
 set -euo pipefail
 
-REPO="${THINKRAIL_REPO:-JetBrains/thinkrail}"
+REPO="JetBrains/thinkrail"
 CHANNEL="stable"
 VERSION="latest"
 if [ -z "${HOME:-}" ]; then
