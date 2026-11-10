@@ -21,7 +21,8 @@ Pi 1.5.1 was checked against the installed dist (1.5.0 → 1.5.1; every private 
 `agent-session.js`, `sdk.js`, `settings-defaults.js`, the extension loader/runner, `mcp-servers.js`, the
 MCP extension, `package-manager.js`, `model-resolver.js` and pi-ai's providers diffed). **One gate is
 met**: pi now clears a delivered image-only queued message itself (#8612), so the host's
-`stuckEmptyDeliveries` override is gone (its entry below is deleted). **Two adaptations were added**: the
+`stuckEmptyDeliveries` override is gone; the text-only queue API still needs the queued-image copy, whose
+entry below now stands alone. **Two adaptations were added**: the
 cache-warming default and the shutdown wait for credential writes (both below). Everything else stays,
 with this evidence:
 
@@ -236,6 +237,14 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   queues still carry `extensionPath` and are filled before `extensionsOverride` runs; run the provider-owner
   regressions in `agent/extensions.test.ts`, `agent/delegation.test.ts` and `pi-delegation`'s
   `service.test.ts` on every upgrade.
+- **Queued-message images** — [[submodule-server-agent]], queue projection. Pi's queue API is text-only:
+  `getSteeringMessages()` / `getFollowUpMessages()` / `clearQueue()` return strings and drop image blocks,
+  so the host keeps a transient per-lane copy of browser-queued message content (images included) while
+  pi reports the matching text pending, and projects only a `hasImages` aggregate. Pi 1.5.1 fixed the
+  related delivery defect (#8612: an image-only delivery now leaves the queue), so the host's
+  `stuckEmptyDeliveries` override is gone; the copy stays. **Removal gate:** pi's queue API returning the
+  full queued message content (or a per-message handle), so a restore can rebuild images from pi. Run the
+  manager's queue/image regressions (image-only steer, follow-up and prompt; `clearQueue` content).
 - **Bundled extension loading and image handling** — [[submodule-server-agent]], [[module-cli]],
   [[module-desktop]]. Forced Jiti transformation, virtual-module identity, static provider registration,
   and the image-resize override bridge resources a single-file artifact cannot discover or load.
