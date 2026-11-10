@@ -59,6 +59,7 @@ import type {
 import type {
 	ChangesTabSection,
 	ClosedChat,
+	ComposerFocusRequest,
 	EditorTab,
 	FilesTreeView,
 	MarkedUnread,
@@ -772,6 +773,24 @@ export function selectChatAttended(
 		return false;
 	const tab = selectAttentionCenterTab(state, workspaceId);
 	return tab?.kind === "chat" && tab.sessionId === sessionId;
+}
+
+export function selectComposerFocusRequested(
+	state: ChatAttentionState & {
+		composerFocusRequest: ComposerFocusRequest | null;
+		navTickByWorkspace: Record<string, number>;
+	},
+	workspaceId: string,
+	sessionId: string,
+): boolean {
+	const request = state.composerFocusRequest;
+	return (
+		request !== null &&
+		request.workspaceId === workspaceId &&
+		(request.sessionId === null || request.sessionId === sessionId) &&
+		selectWorkspaceNavTick(state, workspaceId) === request.navTick &&
+		selectChatAttended(state, workspaceId, sessionId)
+	);
 }
 
 export function selectAttentionCenterResourceCacheKey(

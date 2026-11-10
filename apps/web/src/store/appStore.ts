@@ -335,6 +335,12 @@ export interface RouteChatTarget {
 	validated: boolean;
 }
 
+export interface ComposerFocusRequest {
+	workspaceId: string;
+	sessionId: string | null;
+	navTick: number;
+}
+
 export interface LayoutOpenOptions {
 	targetGroupId?: string;
 	activate?: boolean;
@@ -1008,6 +1014,7 @@ interface AppState {
 	workspaceSelectionHistory: string[];
 	routeChatTarget: RouteChatTarget | null;
 	routeChatTargetGeneration: number;
+	composerFocusRequest: ComposerFocusRequest | null;
 	workbenchFrame: WorkbenchFrame | null;
 	workspaceViewsByWorkspace: Record<string, WorkspaceViewState>;
 	layoutStateReady: boolean;
@@ -1169,6 +1176,8 @@ interface AppState {
 	) => void;
 	validateRouteChatTarget: (sessionId: string) => void;
 	clearRouteChatTarget: () => void;
+	requestComposerFocus: (workspaceId: string, sessionId?: string) => void;
+	clearComposerFocusRequest: () => void;
 	hydrateLocalLayoutState: (payload: LocalLayoutStatePayload) => void;
 	applyLocalLayoutState: (payload: LocalLayoutStatePayload, invalidateProjection?: boolean) => void;
 	setLocalLayoutPreferences: (preferences: LocalLayoutPreferences) => void;
@@ -2341,6 +2350,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	workspaceSelectionHistory: [],
 	routeChatTarget: null,
 	routeChatTargetGeneration: 0,
+	composerFocusRequest: null,
 	workbenchFrame: null,
 	workspaceViewsByWorkspace: {},
 	layoutStateReady: false,
@@ -2766,6 +2776,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 					state.chatLocationRequest?.workspaceId === workspaceId ? null : state.chatLocationRequest,
 				routeChatTarget:
 					state.routeChatTarget?.workspaceId === workspaceId ? null : state.routeChatTarget,
+				composerFocusRequest:
+					state.composerFocusRequest?.workspaceId === workspaceId
+						? null
+						: state.composerFocusRequest,
 				historyOpenRequest:
 					state.historyOpenRequest && removedSessions.has(state.historyOpenRequest.sessionId)
 						? null
@@ -2862,6 +2876,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	clearRouteChatTarget: () =>
 		set((state) => (state.routeChatTarget ? { routeChatTarget: null } : state)),
+	requestComposerFocus: (workspaceId, sessionId) =>
+		set((state) => ({
+			composerFocusRequest: {
+				workspaceId,
+				sessionId: sessionId ?? null,
+				navTick: selectWorkspaceNavTick(state, workspaceId),
+			},
+		})),
+	clearComposerFocusRequest: () =>
+		set((state) => (state.composerFocusRequest ? { composerFocusRequest: null } : state)),
 	hydrateLocalLayoutState: (payload) => {
 		set((state) =>
 			state.layoutStateReady

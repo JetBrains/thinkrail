@@ -41,6 +41,7 @@ import {
 	selectActiveFilePath,
 	selectChatAttended,
 	selectCompactionTurnIds,
+	selectComposerFocusRequested,
 	selectCurrentRouteChatTarget,
 	selectDiffScope,
 	selectFilesTreeView,
@@ -3003,6 +3004,44 @@ test("activateWorkspaceFromRoute atomically stamps exact-chat intent", () => {
 	const before = useAppStore.getState();
 	useAppStore.getState().clearRouteChatTarget();
 	expect(useAppStore.getState()).toBe(before);
+});
+
+test("a composer focus request targets the attended chat until navigation overtakes it", () => {
+	const workspace = pushedWorkspace();
+	useAppStore.setState({
+		workspaces: { p1: [workspace] },
+		layoutDocumentsByWorkspace: { w1: selectedChatLayout("s1") },
+		layoutAttentionByWorkspace: {
+			w1: {
+				selectedByGroup: { center: "chat:s1" },
+				lastFocusedCenterGroupId: "center",
+				lastFocusedSideGroupId: {},
+				navigationClockByGroup: { center: 0 },
+			},
+		},
+	});
+	const requested = (sessionId = "s1") =>
+		selectComposerFocusRequested(useAppStore.getState(), "w1", sessionId);
+	const store = useAppStore.getState();
+
+	store.activateWorkspaceFromRoute(workspace);
+	expect(requested()).toBe(false);
+	store.requestComposerFocus("w1");
+	expect(requested()).toBe(true);
+	store.clearComposerFocusRequest();
+	expect(requested()).toBe(false);
+
+	store.requestComposerFocus("w1", "s2");
+	expect(requested()).toBe(false);
+	store.requestComposerFocus("w1", "s1");
+	expect(requested()).toBe(true);
+
+	store.noteNavigation("w1");
+	expect(requested()).toBe(false);
+
+	store.requestComposerFocus("w1");
+	store.selectProject("p1");
+	expect(requested()).toBe(false);
 });
 
 test("closeChatToHistory keeps a route target for the closed session", () => {
