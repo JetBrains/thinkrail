@@ -130,7 +130,7 @@ export interface ResourceRenderer {
 
 export interface ResourceViewModule {
 	default: ComponentType<ResourceViewProps>;
-	warm?(host: ResourceHost, resource: ResourceDescriptor): void;
+	warm?(host: ResourceHost): void;
 }
 
 export type ResourceIntent = "view" | "diff";

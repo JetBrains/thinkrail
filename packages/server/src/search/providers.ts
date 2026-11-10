@@ -29,6 +29,8 @@ export interface SearchRoot {
 	readonly root: string;
 	readonly projectId: string;
 	readonly workspaceId: string;
+	/** A chat without a project is never a repository: its files are walked, never asked of git. */
+	readonly git: boolean;
 }
 
 export interface ProviderInput {
@@ -88,7 +90,7 @@ export function searchFiles(
 	input: ProviderInput,
 	stat: FileStat,
 ): SearchGroup {
-	const view = lists.peek(root.root);
+	const view = lists.peek(root.root, root.git);
 	if (!view) return emptyGroup("file", "indexing");
 	const { list, state } = view;
 	const hits: FileHit[] = [];

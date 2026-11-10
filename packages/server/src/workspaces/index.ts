@@ -1,4 +1,23 @@
 export {
+	assertNotChatsContainer,
+	assertNotChatWorkspace,
+	chatsRoot,
+	chatWorkspaces,
+	createChatRecord,
+	dropChatRecord,
+	ensureChatsContainer,
+	getChatWorkspace,
+	isChatsContainer,
+	isChatsContainerId,
+	isChatWorkspace,
+	isChatWorkspaceId,
+	isUnderChatsRoot,
+	markChatDeletionPending,
+	recordChatContinuation,
+	resetChatIdCache,
+	setChatPublishers,
+} from "./chats";
+export {
 	creationOwnsPath,
 	setWorkspaceCreationPublisher,
 	type WorkspaceCreationEvent,
@@ -18,6 +37,7 @@ export {
 } from "./creations";
 export {
 	backfillWorkspaceActivity,
+	branchMoveOwed,
 	checkWorkspaceRemoval,
 	completeInitialTerminalReservation,
 	ensureWorkspaceScratchDir,
@@ -31,7 +51,6 @@ export {
 	reclaimWorktree,
 	recordWorkspaceActivity,
 	recordWorkspaceHead,
-	refreshUserOwnedWorkspace,
 	removeWorkspace,
 	renameWorkspace,
 	seedWorkspaceHead,
@@ -43,6 +62,7 @@ export {
 	setWorkspaceSubagentMaxConcurrent,
 	setWorkspaceSubagentsOverride,
 	stageWorktreeRemoval,
+	syncWorkspaceBranch,
 	unsettleWorkspace,
 	type WorkspaceLifecycleEvent,
 	workspaceDiffKey,

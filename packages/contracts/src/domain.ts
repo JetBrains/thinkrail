@@ -64,11 +64,15 @@ export interface Project {
 	path: string;
 	slug: string;
 	lastOpened: number;
+	/** The one built-in container of chats without a project: not a repository, never git, never closed. */
+	kind?: "chats";
 	closed?: true;
 	trusted?: boolean;
 	acknowledgedSkills?: string[];
 	disabledSkills?: string[];
 	disabledGroups?: string[];
+	/** Skill groups switched on for this project although `AppConfig.otherAgentSkills` leaves them off. */
+	enabledGroups?: string[];
 	/**
 	 * pi-level trust for the project's native `.pi/` resources, separate from the alias-skill `trusted`
 	 * grant; absent (a record that predates pi-level trust) reads as untrusted. Never enables MCP servers by itself.
@@ -126,13 +130,16 @@ export const DEFAULT_WORKSPACE_NAME = "Default";
 export interface Workspace {
 	id: string;
 	projectId: string;
-	kind?: "default" | "external";
+	/** `chat`: a projectless chat's own folder in the Chats container — never a git checkout, `branch`/`baseBranch` are "". */
+	kind?: "default" | "external" | "chat";
 	name: string;
 	branch: string;
 	worktreePath: string;
 	baseBranch: string;
 	diffBase?: string;
 	renamed?: boolean;
+	/** Session id of the chat whose `set_title` named the workspace but kept its branch; only that chat may still move it. */
+	branchNamePending?: string;
 	initialTerminalPending?: true;
 	diffStats?: DiffStats;
 	skillOverrides?: Record<string, "on" | "off">;
@@ -145,6 +152,18 @@ export interface Workspace {
 	settledAt?: number;
 	/** The host's last-known review for the branch; refreshed host-side so every client sees one state. */
 	review?: OpenBranchReview;
+	/** A chat whose deletion started but did not finish; the UI offers Retry and nothing else. */
+	deletionPending?: true;
+	/** Where a chat without a project was continued: the workspaces (and their first chats) its summary went to. */
+	continuedTo?: ChatContinuationLink[];
+}
+
+export interface ChatContinuationLink {
+	/** The gesture that made the link: a continuation card finds its outcome here after a host restart. */
+	operationId: string;
+	projectId: string;
+	workspaceId: string;
+	sessionId: string;
 }
 
 export type BranchReviewState = "open" | "merged" | "closed";
@@ -1426,6 +1445,8 @@ export interface AppConfig extends ThemePreference {
 	fileLineWidth: number;
 	chatLineWidthBounded: boolean;
 	fileLineWidthBounded: boolean;
+	/** When false, no text field shows the dictation mic and the chord does nothing. */
+	voiceInputEnabled: boolean;
 	customLayoutPresets: LayoutPreset[];
 	/** The model new chats start with; unset uses the first available model. */
 	defaultModel?: WireModel;
@@ -1457,6 +1478,8 @@ export interface AppConfig extends ThemePreference {
 	disabledExtensions: string[];
 	/** Values of settings bundled extensions declare, by extension name then setting key. */
 	extensionSettings: ExtensionSettingValues;
+	/** Load skills from other agents' user directories and Claude plugins in projects that do not decide for themselves. */
+	otherAgentSkills: boolean;
 	/** pi package identities (`PiPackageSummary.identity`) switched off host-wide; pi has no such setting. */
 	disabledPackages: string[];
 	/** UI language: `"system"` (follow the browser) or a BCP-47 tag; an unavailable tag renders English. */
@@ -1495,6 +1518,22 @@ export interface ExtensionCatalogEntry {
 
 /** How many recently chosen models the host remembers. */
 export const RECENT_MODELS_LIMIT = 5;
+
+export const OTHER_AGENT_SKILL_GROUPS: readonly string[] = ["personal", "@plugins"];
+
+/** Bounds of the host's per-request skill listing budget; a larger catalog is listed in part. */
+export const SKILL_LISTING_MIN_TOKENS = 4_000;
+export const SKILL_LISTING_MAX_TOKENS = 8_000;
+
+export function isSkillGroupEnabled(
+	project: { disabledGroups?: readonly string[]; enabledGroups?: readonly string[] } | undefined,
+	group: string,
+	otherAgentSkills: boolean,
+): boolean {
+	if (project?.enabledGroups?.includes(group)) return true;
+	if (project?.disabledGroups?.includes(group)) return false;
+	return otherAgentSkills || !OTHER_AGENT_SKILL_GROUPS.includes(group);
+}
 
 /** The `settings.update` payload: `null` clears an optional override back to unset (⇒ the default). */
 export type AppConfigUpdate = Partial<
@@ -1818,6 +1857,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	fileLineWidth: LINE_WIDTH_COLUMNS.default,
 	chatLineWidthBounded: true,
 	fileLineWidthBounded: true,
+	voiceInputEnabled: true,
 	customLayoutPresets: [],
 	favoriteModels: [],
 	recentModels: [],
@@ -1831,6 +1871,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	settledRemovalDays: null,
 	disabledExtensions: [],
 	extensionSettings: {},
+	otherAgentSkills: false,
 	disabledPackages: [],
 	locale: SYSTEM_LOCALE_PREFERENCE,
 	onboardingDismissed: false,

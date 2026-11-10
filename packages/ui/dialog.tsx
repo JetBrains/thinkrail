@@ -5,6 +5,7 @@ import type * as React from "react";
 import { useSyncExternalStore } from "react";
 import { IconButton } from "./button";
 import { yieldEscapeToIme } from "./keyboard";
+import { isToastPress } from "./toast";
 import { cn } from "./utils";
 
 const OPEN_MODAL_LAYER = '[data-modal-layer][data-state="open"]';
@@ -46,11 +47,26 @@ function DialogOverlay({
 	);
 }
 
+function keepOpenOnToast<E extends Event>(handler: ((event: E) => void) | undefined) {
+	return (event: E) => {
+		handler?.(event);
+		const original = event instanceof CustomEvent ? event.detail?.originalEvent : undefined;
+		const target = event.target;
+		if (
+			(original instanceof Event && isToastPress(original)) ||
+			(target instanceof Element && target.closest("[data-toast-viewport]") !== null)
+		) {
+			event.preventDefault();
+		}
+	};
+}
+
 function DialogContent({
 	className,
 	children,
 	hideClose = false,
 	onEscapeKeyDown,
+	onInteractOutside,
 	...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & { hideClose?: boolean }) {
 	const t = useT();
@@ -59,10 +75,11 @@ function DialogContent({
 			<DialogOverlay />
 			<DialogPrimitive.Content
 				className={cn(
-					"-translate-x-1/2 -translate-y-1/2 fixed top-1/2 left-1/2 z-50 flex w-full max-w-[28rem] flex-col gap-16 rounded-lg border border-border-default bg-container-elevated-bg p-16 text-text-default shadow-[var(--shadow-lg)]",
+					"-translate-x-1/2 -translate-y-1/2 fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-var(--space-32))] w-[calc(100%-var(--space-32))] max-w-[28rem] flex-col gap-16 overflow-y-auto wrap-break-word rounded-lg border border-border-default bg-container-elevated-bg p-16 text-text-default shadow-[var(--shadow-lg)]",
 					className,
 				)}
 				onEscapeKeyDown={yieldEscapeToIme(onEscapeKeyDown)}
+				onInteractOutside={keepOpenOnToast(onInteractOutside)}
 				{...props}
 			>
 				{children}
@@ -79,6 +96,7 @@ function DialogContent({
 function DialogPanel({
 	className,
 	onEscapeKeyDown,
+	onInteractOutside,
 	...props
 }: React.ComponentProps<typeof DialogPrimitive.Content>) {
 	return (
@@ -88,6 +106,7 @@ function DialogPanel({
 				className,
 			)}
 			onEscapeKeyDown={yieldEscapeToIme(onEscapeKeyDown)}
+			onInteractOutside={keepOpenOnToast(onInteractOutside)}
 			{...props}
 		/>
 	);
@@ -100,7 +119,10 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
 function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
 	return (
 		<div
-			className={cn("flex flex-col-reverse gap-8 sm:flex-row sm:justify-end", className)}
+			className={cn(
+				"flex flex-col-reverse gap-8 *:min-w-0 *:max-w-full sm:flex-row sm:flex-wrap sm:justify-end [&_[data-slot=button]]:min-h-fit [&_[data-slot=button]]:wrap-anywhere [&_[data-slot=button]]:whitespace-normal",
+				className,
+			)}
 			{...props}
 		/>
 	);
@@ -109,7 +131,7 @@ function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
 function DialogTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {
 	return (
 		<DialogPrimitive.Title
-			className={cn("tr-title-dialog text-text-default", className)}
+			className={cn("wrap-anywhere pr-24 tr-title-dialog text-text-default", className)}
 			{...props}
 		/>
 	);
@@ -121,7 +143,7 @@ function DialogDescription({
 }: React.ComponentProps<typeof DialogPrimitive.Description>) {
 	return (
 		<DialogPrimitive.Description
-			className={cn("tr-text-ui text-text-muted", className)}
+			className={cn("wrap-anywhere tr-text-ui text-text-muted", className)}
 			{...props}
 		/>
 	);

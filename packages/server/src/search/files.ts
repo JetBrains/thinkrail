@@ -1,3 +1,6 @@
+import type { Dirent } from "node:fs";
+import { readdir } from "node:fs/promises";
+import { join } from "node:path";
 import { foldMatchText } from "@thinkrail/contracts";
 import { gitAsyncStream, nonInteractiveGitEnv } from "../git";
 import { logger } from "../log";
@@ -22,6 +25,7 @@ const EMPTY_LIST: IndexedFileList = { paths: [], folded: [], truncated: false };
 export const FILE_LIST_LIMITS = {
 	maxFiles: 128_000,
 	maxBytes: 16 * 1024 * 1024,
+	walkMaxFiles: 20_000,
 	ttlMs: 60_000,
 	retryMs: 5_000,
 	gitTimeoutMs: 15_000,
@@ -129,8 +133,43 @@ async function gitFileList(root: string): Promise<FileList> {
 	throw new FileListUnavailable(exit.timedOut ? "git ls-files timed out" : "git ls-files failed");
 }
 
-export function listRootFiles(root: string): Promise<FileList> {
-	return gitFileList(root);
+type DirEntry = Pick<Dirent, "name" | "isDirectory" | "isFile">;
+type ReadDir = (path: string) => Promise<DirEntry[]>;
+
+const readDirEntries: ReadDir = (path) => readdir(path, { withFileTypes: true });
+const SKIPPED_DIRECTORY_CODES = new Set(["ENOENT", "ENOTDIR", "EACCES", "EPERM"]);
+
+export async function walkFileList(
+	root: string,
+	read: ReadDir = readDirEntries,
+): Promise<FileList> {
+	const paths: string[] = [];
+	const queue = [""];
+	for (let next = 0; next < queue.length; next += 1) {
+		const rel = queue[next] ?? "";
+		let entries: DirEntry[];
+		try {
+			entries = await read(join(root, rel));
+		} catch (error) {
+			const code = (error as NodeJS.ErrnoException).code ?? "";
+			if (rel !== "" && SKIPPED_DIRECTORY_CODES.has(code)) continue;
+			throw new FileListUnavailable(`the folder could not be walked (${code || "unknown"})`);
+		}
+		for (const entry of entries) {
+			if (HIDDEN_DIRECTORIES.has(entry.name)) continue;
+			const path = rel ? `${rel}/${entry.name}` : entry.name;
+			if (entry.isDirectory()) queue.push(path);
+			else if (entry.isFile()) {
+				if (paths.length >= FILE_LIST_LIMITS.walkMaxFiles) return { paths, truncated: true };
+				paths.push(path);
+			}
+		}
+	}
+	return { paths, truncated: false };
+}
+
+export function listRootFiles(root: string, git: boolean): Promise<FileList> {
+	return git ? gitFileList(root) : walkFileList(root);
 }
 
 export type FileListState = "ready" | "refreshing" | "failed";
@@ -150,19 +189,24 @@ export class FileListCache {
 	private readonly loading = new Map<string, Promise<void>>();
 	private readonly overtaken = new Set<string>();
 	private readonly failedAt = new Map<string, number>();
+	private readonly loader: (root: string, git: boolean) => Promise<FileList>;
+	private readonly now: () => number;
 
 	constructor(
-		private readonly loader: (root: string) => Promise<FileList> = listRootFiles,
-		private readonly now: () => number = Date.now,
-	) {}
+		loader: (root: string, git: boolean) => Promise<FileList> = listRootFiles,
+		now: () => number = Date.now,
+	) {
+		this.loader = loader;
+		this.now = now;
+	}
 
-	refresh(root: string): Promise<void> {
-		if (this.due(root)) return this.load(root);
+	refresh(root: string, git: boolean): Promise<void> {
+		if (this.due(root)) return this.load(root, git);
 		return this.loading.get(root) ?? Promise.resolve();
 	}
 
-	peek(root: string): FileListView | null {
-		void this.refresh(root);
+	peek(root: string, git: boolean): FileListView | null {
+		void this.refresh(root, git);
 		const cached = this.lists.get(root);
 		const failed = this.failedAt.has(root);
 		if (!cached) return failed ? { list: EMPTY_LIST, state: "failed" } : null;
@@ -172,10 +216,10 @@ export class FileListCache {
 		return { list: cached.list, state };
 	}
 
-	load(root: string): Promise<void> {
+	load(root: string, git: boolean): Promise<void> {
 		const inFlight = this.loading.get(root);
 		if (inFlight) return inFlight;
-		const promise = this.loader(root)
+		const promise = this.loader(root, git)
 			.then(
 				(list) => this.install(root, indexFileList(list)),
 				(error: unknown) => this.fail(root, error),

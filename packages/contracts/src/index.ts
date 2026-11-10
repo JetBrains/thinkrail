@@ -37,6 +37,7 @@ export {
 	isRetriedAttempt,
 	isSettledRemovalDays,
 	isSettleIdleDays,
+	isSkillGroupEnabled,
 	isSubagentMaxConcurrent,
 	isSystemThemePair,
 	isTerminalWindowsShell,
@@ -51,6 +52,7 @@ export {
 	MAX_SEARCH_QUERY_LENGTH,
 	normalizeFontSettings,
 	normalizeThemePreference,
+	OTHER_AGENT_SKILL_GROUPS,
 	PLAN_REVIEW_VERDICTS,
 	parsePiPackageInput,
 	RECENT_MODELS_LIMIT,
@@ -65,6 +67,8 @@ export {
 	SEARCH_KINDS,
 	SETTLE_IDLE_DAYS,
 	SETTLED_REMOVAL_DAYS,
+	SKILL_LISTING_MAX_TOKENS,
+	SKILL_LISTING_MIN_TOKENS,
 	SUBAGENT_MAX_CONCURRENT,
 	SURVEY_OPEN_TEXT_LIMIT,
 	SYSTEM_LOCALE_PREFERENCE,
@@ -110,4 +114,15 @@ export type { QuitConfirmationDependencies } from "./quitConfirmation";
 export { createQuitConfirmation, QUIT_CONFIRMATION } from "./quitConfirmation";
 export type { SearchFieldSource } from "./searchFields";
 export { searchHitFields } from "./searchFields";
+export type * from "./speech";
+export {
+	isSpeechErrorCode,
+	isSpeechModel,
+	parseSpeechClientMessage,
+	parseSpeechServerMessage,
+	SPEECH_ERROR_CODES,
+	SPEECH_MODELS,
+	SPEECH_SAMPLE_RATE,
+	SPEECH_SOCKET_ROUTE,
+} from "./speech";
 export * from "./wsProtocol";

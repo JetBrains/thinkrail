@@ -17,13 +17,14 @@ topbar search button. It owns the presentation, the query grammar, ranking and l
 store-derived work items, and the host-search controller (`search.query` / `search.preview`); the
 command catalog and its handlers, the way a host hit opens and the file preview renderer are composed
 and injected by `shell`. It finds and jumps — it never mutates a setting in place (every setting row
-opens its Settings section), and every verb runs through the command it was listed as.
+opens its Settings section), and every verb runs through the command it was listed as (Start work through
+the injected `PaletteStart`).
 
 ## Boundary
 
-- **Public surface:** `SearchPalette`, `SearchPaletteProps`, `PaletteHost`, `SearchSettings`,
-  `initSearchPreferences`, `createDoubleShiftDetector`, `buildWorkItems`, `waitingItems`, `commandItems`,
-  `SearchScope`, `PaletteItem`, `PaletteFile`.
+- **Public surface:** `SearchPalette`, `SearchPaletteProps`, `PaletteHost`, `PaletteStart`,
+  `SearchSettings`, `initSearchPreferences`, `createDoubleShiftDetector`, `buildWorkItems`,
+  `waitingItems`, `commandItems`, `SearchScope`, `PaletteItem`, `PaletteFile`.
 - **Allowed deps:** `contracts` (the shared matcher and the search DTOs), `commands`, `store`
   (`selectHostSearchAvailable` / `selectHostReachable`, the welcome generation), `transport`
   (`search.query` / `search.preview`, and the backend endpoint for browser preference keys), `clientPreferences`, `constants`, `components`, `lib`,
@@ -38,7 +39,8 @@ opens its Settings section), and every verb runs through the command it was list
 A leading prefix selects a scope and its chip, and a chip writes the prefix back: `@` work (projects,
 workspaces, chats, transcripts, plans), `>` commands and settings, `/` files, `#` specs — the last two
 exist only when the last welcome's host serves `search.query` (`selectHostSearchAvailable`) and a
-context project gives them a root; otherwise a prefix whose scope is not offered searches the rest of the query in All (an older host
+context project gives them a root — `#` only a repository's (a chat without a project has files but no
+specs, so its palette offers no Specs scope); otherwise a prefix whose scope is not offered searches the rest of the query in All (an older host
 also shows a notice), so a doubled prefix (`##`, `//src`) never lands in an empty scope. `#<digits>` is a
 pull-request number, never the specs scope — it matches the `#N` keyword of the workspace that carries
 that review. Quoted text is one contiguous literal term — never matched as an acronym or a subsequence —
@@ -153,6 +155,29 @@ unreachable a loaded preview stays, a new one asks nothing and says to reconnect
 refreshes it once. The pane has a definite height while shown, so a code view fills it. A plan row and a
 command have no preview.
 
+## Start from the typed text
+
+Whenever the query has a term in the All or Work scope and shell injects a `PaletteStart` (a context
+project gives the dialog its project) — `startEligible`, the one rule the row, the shortcut and its
+footer hint share — the last section before rows that land late is **Start work**: one row «Start work with “<text>”…» showing its
+`Mod+↵` chord. `↵` on it, or `Mod+↵` from any row, closes the palette and calls the injected
+`PaletteStart.openDialog(text)` — shell opens its Create-workspace dialog with the text as the prompt,
+so the target, base branch and model are chosen where they always are, and a Create dialog already open
+is kept as it is, its draft untouched (`openDialog` then returns `false`, and the palette hands focus back
+to that dialog instead of leaving it nowhere). The prompt is the text as typed (`startPrompt`: only a scope prefix
+stripped, one the palette does not offer included, as the parser drops it — inner whitespace, quotes
+and tokens untouched), never the matcher's normalized terms. Nothing starts without the dialog: a held
+`↵` / `Mod+↵` acts once in the palette, and the dialog ignores the key's repeats, so the same press never
+submits it (the field keeps creation out of the finder: Warp walked its "search and run" box back,
+Claude bound creation to an explicit `n:` mode). Like New workspace, the row is offered offline too (the
+dialog itself needs the host to create). It is never remembered by the learning store and never counted
+as a result in the live region. Rows a host reply brings while a selection is held land after every row
+on screen, the Start row included, and never become the top hit, so a selected Start row does not move.
+An implicit selection follows the ranking as host rows land, a lone Start row's too — like any first row
+it may be overtaken while results stream in, and `Mod+↵` is the start that never depends on rows.
+Holding a lone Start row as a selection was rejected: every host-only match would then land below it,
+and plain search would open the Create dialog on `↵`.
+
 ## Interaction
 
 DOM focus stays in the input (WAI-ARIA combobox + listbox with `aria-activedescendant`, one named group
@@ -165,7 +190,7 @@ and so does `Alt+1…n` on Windows and Linux when Alt types no character there �
 with AltGr or Option on a digit key (`#`, `@`, `|`) stays the input's, and macOS has no digit chord at all,
 since Option always types one (a chip writes its prefix into the query, so the prefix is the one source
 of scope). `Mod+I` toggles the preview pane where it is shown, `Mod+K` closes the palette (the chord that
-opened it).
+opened it), and `Mod+↵` starts work from the typed text (above).
 Escape clears the query, then closes; an untrusted (synthetic) Escape — the desktop close-item command —
 closes outright. Closing without a pick returns focus to the element that held it when the palette
 opened (the composer an accidental double Shift interrupted, the topbar button); a pick leaves focus to

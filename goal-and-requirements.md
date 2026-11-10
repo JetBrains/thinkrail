@@ -76,6 +76,15 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   Default workspace (the project folder itself) and existing worktrees attached in place
   ([[submodule-server-workspaces]]). A Git repository URL can be cloned into a chosen new host folder and
   opened as a project, with optional shallow history and cancellation ([[submodule-server-projects]]).
+- **Voice input** — local dictation into every text field, extensions' included and with no work on
+  their part (the code editor and the terminal excepted), through a mic on the focused field or ⌘⇧Space /
+  Ctrl+Shift+Space. Text lands at the cursor and is never auto-sent. NVIDIA's Nemotron streaming model runs on the host after
+  a one-time, user-started download ([[submodule-server-speech]], [[submodule-web-speech]]).
+- **Chats without a project** — a chat that belongs to no repository works in its own scratch folder
+  under the built-in Chats container: files, terminal and plan, no git, review or pull request;
+  started from the Welcome screen, the Create dialog, the palette or the Chats section, deleted to the
+  Trash as a whole, and continued in a real workspace when it turns into work — the agent's summary
+  becomes the new chat's first message ([[submodule-server-workspaces]]).
 - **Workbench** — a splittable layout of files, diffs, documents, chats, and terminals with movable side
   and bottom tool panels, kept local to each window ([[submodule-web-shell-layout]]).
 - **Chats** — concurrent `pi` sessions per workspace, each with its own model, pi-reported token/cost,

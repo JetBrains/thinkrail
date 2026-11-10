@@ -62,10 +62,18 @@ binary.
     (`scripts/build-blog.ts` + HTML string templates) is deleted.
   - *Lint caveat:* Biome parses only `.astro` frontmatter, so `noUnusedVariables`/`noUnusedImports`
     are disabled for `*.astro` in `biome.json` (template usage is invisible to it — every flag would
-    be a false positive). `astro check` covers the templates instead.
-  - *Test typecheck:* `astro check` follows `tsconfig.json`, which excludes `*.test.ts`. The
-    `typecheck` script, not `build`, also runs `tsconfig.test.json` over the site tests, so root CI
-    checks them and `site.yml` does not.
+    be a false positive). The typecheck covers the templates instead.
+  - *Typecheck:* TypeScript 7's `tsc --runExternalCode` checks `.astro` files through
+    `@astrojs/ts-content-mapper` (`contentMappers` in `tsconfig.json`; the mapper runs under `node`), since
+    `astro check` needs the TypeScript 6 programmatic API. `astro sync` runs first to generate
+    `.astro/types.d.ts`. `astro/client` pulls Astro's own `.astro` components into the program and
+    `skipLibCheck` does not skip them, so Astro must be >= 7.4.4, whose components pass under
+    `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess`. Astro 7.4.4 requires Node >= 22.23.4,
+    so the contributor Node floor in `CONTRIBUTING.md` and `README.md` is 22.23.4, above the 22.19 that
+    `pi` needs at runtime.
+  - *Test typecheck:* The `.astro` typecheck follows `tsconfig.json`, which excludes `*.test.ts`, so the
+    `typecheck` script also runs `tsconfig.test.json` over the site tests. `build` runs the whole
+    `typecheck`, so root CI and `site.yml` both check them.
 
 The parent owns the route-composition edges; the vibecoding leaf has no sibling dependency:
 
@@ -277,8 +285,8 @@ claim Functions. Pinned Wrangler `4.124.0` deploys from `apps/website` so its co
 and local Pages/D1 workflows; production applies committed attribution migrations before deploy. The
 build compiles the Functions, and a local Pages/D1 smoke starts Pages from the checked-in configuration,
 applies the actual migration, and exercises create, bind, and redeem. `.github/workflows/site.yml` runs
-`bun run --filter @thinkrail/website build` (`astro check`, the Functions typecheck and build, `astro
-build`, and artifact validation) on pushes that
+`bun run --filter @thinkrail/website build` (the full `typecheck` — `.astro`, Functions and tests — the
+Functions build, `astro build`, and artifact validation) on pushes that
 touch this module, [[module-website-analytics]], the root package manifest, or the lockfile (plus manual
 dispatch). It verifies the provider URL before succeeding. `thinkrail.ai` is the project's custom apex
 domain; provider URLs are deployment probes, not product identities.
@@ -371,6 +379,10 @@ current desktop-first hierarchy rather than freezing obsolete CLI-only instructi
   active); the terminal keeps its static install transcript — `main.ts` guards make every
   landing-only enhancement inert (no sections → no scroll-spy; only the landing command tabs drive the
   terminal replay).
+- **A post may have hand-authored sub-pages** at `src/pages/blog/<slug>/<page>.astro` (e.g.
+  `/blog/the-chat/languages/`, the list of highlighted languages linked from that post). They render
+  through `BlogLayout` but are not posts: no collection entry, no index/RSS/Files-list row, no install
+  picker. Their data is copied, not imported — the site never depends on `apps/web`.
 - **Every article ends with the install picker.** `src/components/InstallPicker.astro` is the
   blog picker markup (OS tabs, desktop downloads, **Browser UI via command line** disclosure with Windows
   shell tabs). `src/pages/blog/[slug].astro` renders it in a `.blog-post-install`

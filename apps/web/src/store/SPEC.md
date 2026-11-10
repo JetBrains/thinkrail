@@ -87,9 +87,11 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   palette keeps its host scopes and rows) beside **`selectHostReachable`** (connected and this
   connection's welcome — when a host search request may go out).
   **`installWelcomeSnapshot(protocolVersion, projects, recentProjects,
-  config?, hostPlatform?, hostUpdate?)`** installs protocol + both sorted project views + optional config,
-  host platform, optional host-update lifecycle snapshot + navigation repair and then advances that readiness
+  config?, hostPlatform?, hostUpdate?, hostAppVersion?, speech?)`** installs protocol + both sorted project views + optional config,
+  host platform, optional host-update lifecycle snapshot, the voice-input **`speech`** status (`null` from a
+  pre-v107 host) + navigation repair and then advances that readiness
   edge in one Zustand write; route validation and capability reads never observe a partial welcome.
+  `installSpeechStatus` replaces `speech` whole on each `speech.changed` push.
   `installProjectSnapshot` remains the project-only primitive for focused
   callers. **`projects`** is the open rail, while **`recentProjects`** is the last-opened-ordered set of every
   known open + closed project; the server omits closed records whose folder no longer exists.
@@ -220,7 +222,10 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   that document once; a missing or invalid document is represented by a Balanced frame with no workspace views. `clearWorkspaceTabs` removes the
   workspace view, attention, and associated local state when the workspace disappears. A page-lifetime
   `removedWorkspaceIds` tombstone rejects stale catalog/session/cache/workspace arrivals so an in-flight read
-  cannot recreate it.
+  cannot recreate it. No route enters a tombstoned workspace or a chat whose deletion did not finish
+  (`deletionPending`): `activateWorkspace`, `activateWorkspaceFromRoute`, `requestChatLocation`,
+  `requestHistoryOpen` and the removal fallback refuse them (`refusesEntry`), while a pending chat that is
+  already active stays active, its rows offering Retry.
 
   **Browser-local resource render state** is keyed by workspace + canonical resource id, never embedded in
   the frame. Loaded file/diff content and metadata, renderer choice, opaque renderer view state, diff layout,
@@ -304,7 +309,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   steer/follow-up cannot settle work the host is still running. A *streaming* fault instead ends the run through
   **`reduceSessionEvent`** at `agent_settled`, using the host-projected final terminal metadata:
   `stopReason: "error"` carries Pi's `errorMessage`, and `stopReason: "length"` becomes an actionable
-  truncation error — neither may become "✓ Done". The closer is placed by `chat`'s `insertRoundCloser`
+  truncation error — neither may end in a "Done" footer. The closer is placed by `chat`'s `insertRoundCloser`
   (ahead of trailing results that woke nobody, the same rule hydration uses). That settlement-created error turn alone carries the
   web-local `recovery: "try-again"` marker; hydration gives the same marker only to its synthesized current
   final failure. `appendUserMessage` consumes every prior marker in the same optimistic write that adds the
@@ -569,7 +574,8 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   keeps the last authoritative config while a later welcome can replace it. **`terminalReplayKb: number`**,
   **`terminalWindowsShell: TerminalWindowsShell`**, **`composerGrowthLimit: ComposerGrowthLimit`**,
   **`chatLineWidth` / `fileLineWidth`**, their independent **`chatLineWidthBounded` /
-  `fileLineWidthBounded`** switches, **`customLayoutPresets: LayoutPreset[]`**,
+  `fileLineWidthBounded`** switches, **`voiceInputEnabled`** (absent from an older host reads as on),
+  **`customLayoutPresets: LayoutPreset[]`**,
   optional **`defaultModel: WireModel` / `defaultEffort: ThinkingLevel`** for new chats, the picker's
   **`favoriteModels` / `recentModels: WireModel[]`** (defaulting to `[]` so a pre-v77 host reads as "none"),
   **`analyticsEnabled: boolean`**, **`analyticsConsentConfirmed: boolean`**,
@@ -591,14 +597,11 @@ screen, after `onboardingDismissed` is already persisted, until a project opens 
 cold-start-shaped store (capable host, not dismissed, no open or recent projects). Project Home reads the same
 selector to hide its Projects rail and pane, so onboarding has the whole window. Persisted preference priming
   and final choice updates converge through `applyConfig`; the dialog's visual draft remains component-local.
-  **`chatMessageOrder: ChatMessageOrder`** and **`streamingResponseMovement:
-  StreamingResponseMovement`** are instead client-local presentation preferences, hydrated together by
+  **`chatMessageOrder: ChatMessageOrder`** is instead a client-local presentation preference, hydrated by
   the chat preference seam from host-qualified browser localStorage or the native shell's injected
-  backend-profile/window-scoped adapter. Message order defaults oldest-first; movement defaults to
-  `{ settle: 75, trigger: 100 }`. `setChatMessageOrder` / `setStreamingResponseMovement` change them
-  without a server round trip, and `applyConfig` can never overwrite either. `ChatView` projects each
-  runtime from order without rewriting canonical turns and passes the movement window into its sole scroll
-  controller. **`hiddenModels: ModelRef[]`** (`{ provider, id }` pairs) is a client-local model visibility
+  backend-profile/window-scoped adapter. It defaults oldest-first. `setChatMessageOrder` changes it
+  without a server round trip, and `applyConfig` can never overwrite it. `ChatView` projects each
+  runtime from order without rewriting canonical turns. **`hiddenModels: ModelRef[]`** (`{ provider, id }` pairs) is a client-local model visibility
   preference with pure **`hydrateHiddenModels(list)`** / **`setModelVisibility(model, visible)`** /
   **`toggleModelVisibility(model)`** actions; the store touches no storage — `chat/modelVisibility`
   hydrates and persists it, and `applyConfig` can never overwrite it. **`selectPickerModels(models,
@@ -800,7 +803,20 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   and the intent carries the chat resource so a cache/placement id alias (including an id collision resolved
   by placement-only minting) still selects semantically. That selection deliberately does not focus the tab,
   because the mounted history query owns focus. The shell updates the group's local attention so the target
-  body mounts and consumes the request without publishing a structural snapshot. The `EditorTab` (`FileTab`
+  body mounts and consumes the request without publishing a structural snapshot. The third sibling,
+  **`composerFocusRequest { workspaceId, sessionId | null, navTick }`** — set by
+  **`requestComposerFocus(workspaceId, sessionId?)`**, cleared by **`clearComposerFocusRequest()`** —
+  carries a palette pick's "type next" intent to the destination chat. It is stamped with the workspace's
+  navigation tick instead of queuing a selection, so it never changes which tab shows:
+  **`selectComposerFocusRequested`** holds only while that workspace is active, its tick is unchanged (a counted tab
+  switch or another navigation expires it), the session matches when one is named, and the chat is attended
+  (`selectChatAttended`). A chat that mounts late (hydration, a route target opening its tab) still takes it.
+  **`selectComposerFocusRequestStale`** marks a request that can no longer be consumed: its workspace is no
+  longer active, its tick moved, or the destination's layout is loaded and its attended center tab is
+  something other than the requested chat. It waits while the layout or the attended tab is still missing,
+  and while a chat row's route target for that session is pending. A request left waiting for a chat that
+  appears later through an unrelated path (another group taking focus, a closed tab) would steal focus from
+  whatever the user was doing, so the shell drops a stale request as soon as the destination settles. The `EditorTab` (`FileTab`
   | `ChatTab` | `DocTab` | `DiffTab` | `ChangesTab` | `PlanTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types.
   (Chat *render* types + renderers live in the `chat` module.) The pure context
   selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context
@@ -813,8 +829,23 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   identities from its supplied document + local attention, while host attachment remains exclusive per terminal),
   `selectActiveWorkspaceProjectId`, `selectHistoryTarget` + `HistoryTarget` (the shell's `Ctrl+R` routing
   target: the locally selected chat resource, or the workspace's newest chat otherwise),
-  `selectContextProject`, the layout placement selectors (recursive center plus left/right/bottom auxiliary
+  `selectContextProject`, **`selectContextRepoProject`** (the repository new work is created in — the
+  context project unless it is the Chats container, else the selected or first repository; the dialog,
+  `Mod+N` and the palette read this one), the **chats without a project** selectors — `isChatWorkspace`,
+  `isChatsContainer`, `selectRepoProjects` (every repository listing and fallback, incl.
+  `reconcileProjectNavigation`'s project loss), `selectChatsContainer`, `selectChatWorkspaces` (newest
+  activity first), `selectChatWorkspaceTitle` (the host's `SessionStateRecord.title`, also the first
+  answer of `selectKnownChatTitle`), `selectChatWorkspaceFirstPrompt` (the conversation's
+  `selectChatFirstPrompt`, for the unnamed chat's label), `selectActiveRepoWorkspaceId` (the active
+  workspace unless it is a chat, for repository-scoped settings such as pi packages), `supportsProjectlessChats`; the `chatContinuations` slice
+  (`applyChatContinuation` from the `chat.continuation` push or a status read — host-owned phases by
+  operation id, read by the transcript's continuation card and by `chat/continuations`' follow and
+  reconnect reads) and
+  `initiatedContinuations` (`noteInitiatedContinuation` / `forgetInitiatedContinuation`: the gestures
+  this client made, the only ones it follows) — the layout placement selectors (recursive center plus left/right/bottom auxiliary
   groups), `selectAttentionCenterTab` (the selected resource in local last center focus),
+  `isNavigationChange(state, previous)` (a change of the active workspace, the selected project or a counted
+  tab switch — what overtakes a pending palette pick, route restore or continuation open),
   `selectCurrentRouteChatTarget` (exact-chat intent only while its workspace and stamped navigation remain
   current), `selectSkillsStale`, **`selectDiffScope` + `BRANCH_SCOPE`** (what a workspace's
   Changes panel is diffing, defaulting to the shared branch-scope constant), **`selectDiffBaseRef`** (the ref

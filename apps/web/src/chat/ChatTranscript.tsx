@@ -1,5 +1,5 @@
 import { RiArrowDownLine as ArrowDown, RiArrowUpLine as ArrowUp } from "@remixicon/react";
-import type { GitDiffScope, TurnChangeSet } from "@thinkrail/contracts";
+import type { ChatContinuation, GitDiffScope, TurnChangeSet } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { t as translate, useT } from "@thinkrail/locales/react";
 import { ResourceScopeProvider } from "@thinkrail/resource-renderers";
@@ -23,15 +23,17 @@ import { useShallow } from "zustand/react/shallow";
 import {
 	EMPTY_RUNTIME,
 	selectChatAttended,
+	selectChatsContainer,
 	selectReadyCompletionAck,
 	specPathMatcher,
 	toast,
 	useAppStore,
 } from "@/store";
-import { getTransport, respondToTool } from "@/transport";
+import { errorText, getTransport, respondToTool } from "@/transport";
 import { ACTIVITY_BREADCRUMB_HEIGHT, ActivityBreadcrumbTrail } from "./activityBreadcrumbs";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
 import type { ChatMessageOrder } from "./chatPreferences";
+import { openContinuationTarget, refreshContinuation, requestContinuation } from "./continuations";
 import { type PendingExtUi, PendingExtUiContext, PendingExtUiPrompt } from "./ExtUiPrompt";
 import { FoldGeometryProvider } from "./foldState";
 import {
@@ -242,7 +244,6 @@ const ChatTranscript = forwardRef<
 	});
 	const chatLineWidthBounded = useAppStore((state) => state.chatLineWidthBounded);
 	const chatMessageOrder = useAppStore((state) => state.chatMessageOrder);
-	const streamingResponseMovement = useAppStore((state) => state.streamingResponseMovement);
 	const specNodes = useAppStore((s) => s.specsByWorkspace[workspaceId]);
 	const isSpec = useMemo(() => specPathMatcher(specNodes ?? []), [specNodes]);
 
@@ -343,7 +344,6 @@ const ChatTranscript = forwardRef<
 		latestRow,
 		firstItemIndex,
 		rowHeightEstimates,
-		streamingResponseMovement,
 	);
 
 	const readyCompletionId = useAppStore((state) =>
@@ -574,6 +574,26 @@ const ChatTranscript = forwardRef<
 		[interactionStates, interactionFocusScope, awaitingToolCallId],
 	);
 
+	const continuations = useAppStore((s) => s.chatContinuations);
+	const continuationOf = useCallback(
+		(operationId: string): ChatContinuation | undefined => continuations[operationId],
+		[continuations],
+	);
+	const welcomeGeneration = useAppStore((s) => s.welcomeGeneration);
+	const cardOperations = useMemo(
+		() =>
+			runtime.turns.flatMap((turn) =>
+				turn.kind === "continuationRequest" ? [turn.details.operationId] : [],
+			),
+		[runtime.turns],
+	);
+	useEffect(() => {
+		if (welcomeGeneration === 0) return;
+		const known = useAppStore.getState().chatContinuations;
+		for (const operationId of cardOperations) {
+			if (!known[operationId]) refreshContinuation(operationId, { workspaceId, sessionId });
+		}
+	}, [cardOperations, welcomeGeneration, workspaceId, sessionId]);
 	const chatActions = useMemo<ChatActions>(
 		() => ({
 			cancelAutomaticReveal,
@@ -588,9 +608,39 @@ const ChatTranscript = forwardRef<
 			openMcpSettings,
 			openProviderSettings,
 			findModel,
+			continuationOf,
+			openContinuation: (continuation) => {
+				if (!continuation.workspaceId) return;
+				void openContinuationTarget(
+					{
+						projectId: continuation.projectId,
+						workspaceId: continuation.workspaceId,
+						...(continuation.sessionId ? { sessionId: continuation.sessionId } : {}),
+					},
+					t("chat.turn.continuation.gone"),
+				);
+			},
+			retryContinuation: (details) => {
+				void requestContinuation(workspaceId, details.projectId).catch((err: unknown) =>
+					toast.error(errorText(err), t("chat.turn.continuation.retryFailed")),
+				);
+			},
+			openHandoffSource: (details) => {
+				const container = selectChatsContainer(useAppStore.getState());
+				if (!container) return;
+				void openContinuationTarget(
+					{
+						projectId: container.id,
+						workspaceId: details.sourceWorkspaceId,
+						sessionId: details.sourceSessionId,
+					},
+					t("chat.turn.handoff.sourceGone"),
+				);
+			},
 		}),
 		[
 			cancelAutomaticReveal,
+			continuationOf,
 			findModel,
 			focusComposer,
 			markResultSeen,
@@ -601,6 +651,8 @@ const ChatTranscript = forwardRef<
 			resultOpener,
 			revealElement,
 			sessionId,
+			t,
+			workspaceId,
 		],
 	);
 	const resourceScope = useMemo(() => ({ workspaceId, sessionId }), [workspaceId, sessionId]);

@@ -1,6 +1,7 @@
 import type {
 	AppConfig,
 	AppSurvey,
+	ChatContinuation,
 	ComposerGrowthLimit,
 	ExtUiRequest,
 	FontChoice,
@@ -32,6 +33,7 @@ import type {
 	SessionSummary,
 	SlashCommandInfo,
 	SpecGraphNode,
+	SpeechStatus,
 	SystemThemePair,
 	TerminalTabInfo,
 	TerminalWindowsShell,
@@ -40,7 +42,6 @@ import type {
 	ThinkingLevel,
 	TurnChangeSet,
 	UserFontsSnapshot,
-	UserMessage,
 	UserThemesSnapshot,
 	WireModel,
 	Workspace,
@@ -55,6 +56,8 @@ import {
 	DEFAULT_CONFIG,
 	type ExtensionSettingValues,
 	isBackgroundCommandCompletionMessage,
+	isChatHandoffMessage,
+	isContinueInWorkspaceRequestMessage,
 	isControlMessage,
 	isLineWidth,
 	isLocalePreference,
@@ -137,6 +140,7 @@ import {
 	selectFilesTreeView,
 	selectLayoutIdentityPlacement,
 	selectLayoutResourcePlacement,
+	selectRepoProjects,
 	selectSupportsMcp,
 	selectWorkspaceById,
 	selectWorkspaceNavTick,
@@ -146,16 +150,6 @@ import {
 	supportsChatResources,
 	supportsWorkspaceSettling,
 } from "./selectors";
-
-export interface StreamingResponseMovement {
-	settle: number;
-	trigger: number;
-}
-
-export const DEFAULT_STREAMING_RESPONSE_MOVEMENT: StreamingResponseMovement = {
-	settle: 75,
-	trigger: 100,
-};
 
 export interface FileTab {
 	kind: "file";
@@ -346,6 +340,12 @@ export interface RouteChatTarget {
 	validated: boolean;
 }
 
+export interface ComposerFocusRequest {
+	workspaceId: string;
+	sessionId: string | null;
+	navTick: number;
+}
+
 export interface LayoutOpenOptions {
 	targetGroupId?: string;
 	activate?: boolean;
@@ -426,6 +426,7 @@ export const SettingsSection = {
 	Feedback: "feedback",
 	Extensions: "extensions",
 	Environment: "environment",
+	Voice: "voice",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
 
@@ -704,7 +705,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 					turns: clearTurnStreaming(rt.turns),
 				};
 			if (event.message.role === "user") {
-				const message = event.message as UserMessage;
+				const message = event.message;
 				const text = userText(message.content);
 				if (isControlMessage(text)) return rt;
 				const last = rt.turns[rt.turns.length - 1];
@@ -796,6 +797,34 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 							id: crypto.randomUUID(),
 							details: event.message.details,
 							text: customMessageText(event.message.content),
+							timestamp: event.message.timestamp,
+						},
+					],
+				};
+			}
+			if (isContinueInWorkspaceRequestMessage(event.message)) {
+				return {
+					...rt,
+					turns: [
+						...rt.turns,
+						{
+							kind: "continuationRequest",
+							id: crypto.randomUUID(),
+							details: event.message.details,
+							timestamp: event.message.timestamp,
+						},
+					],
+				};
+			}
+			if (isChatHandoffMessage(event.message)) {
+				return {
+					...rt,
+					turns: [
+						...rt.turns,
+						{
+							kind: "handoff",
+							id: crypto.randomUUID(),
+							details: event.message.details,
 							timestamp: event.message.timestamp,
 						},
 					],
@@ -1007,6 +1036,10 @@ interface AppState {
 	recentProjects: Project[];
 	workspaces: Record<string, Workspace[]>;
 	removedWorkspaceIds: Record<string, true>;
+	/** Continue-in-workspace operations this client heard about, by operation id (host-owned phases). */
+	chatContinuations: Record<string, ChatContinuation>;
+	/** The operations this client started: the one that follows the new chat when the host reports `started`. */
+	initiatedContinuations: Record<string, true>;
 	expandedProjectIds: Record<string, true>;
 	workspaceSettlingSupported: boolean;
 	settledShelfExpanded: Record<string, true>;
@@ -1020,6 +1053,7 @@ interface AppState {
 	workspaceSelectionHistory: string[];
 	routeChatTarget: RouteChatTarget | null;
 	routeChatTargetGeneration: number;
+	composerFocusRequest: ComposerFocusRequest | null;
 	workbenchFrame: WorkbenchFrame | null;
 	workspaceViewsByWorkspace: Record<string, WorkspaceViewState>;
 	layoutStateReady: boolean;
@@ -1115,8 +1149,8 @@ interface AppState {
 	fileLineWidth: number;
 	chatLineWidthBounded: boolean;
 	fileLineWidthBounded: boolean;
+	voiceInputEnabled: boolean;
 	chatMessageOrder: ChatMessageOrder;
-	streamingResponseMovement: StreamingResponseMovement;
 	defaultModel: WireModel | undefined;
 	defaultEffort: ThinkingLevel | undefined;
 	reviewModel: WireModel | undefined;
@@ -1127,6 +1161,7 @@ interface AppState {
 	agentReviewEnabled: boolean;
 	disabledExtensions: string[];
 	extensionSettings: ExtensionSettingValues;
+	otherAgentSkills: boolean;
 	disabledPackages: string[];
 	locale: string;
 	localLocales: LocalLocalesSnapshot | null;
@@ -1140,6 +1175,9 @@ interface AppState {
 	fontWeightOffset: number;
 	userFonts: UserFontsSnapshot | null;
 	installUserFonts: (snapshot: UserFontsSnapshot | null) => void;
+	/** Voice input as the host reports it; `null` before a v107 welcome or from an older host. */
+	speech: SpeechStatus | null;
+	installSpeechStatus: (status: SpeechStatus | null) => void;
 	onboardingDismissed: boolean;
 	onboardingWizard: OnboardingWizardGate;
 	customLayoutPresets: LayoutPreset[];
@@ -1154,6 +1192,7 @@ interface AppState {
 		hostPlatform?: HostPlatform,
 		hostUpdate?: HostUpdateNotice,
 		hostAppVersion?: string,
+		speech?: SpeechStatus,
 	) => void;
 	applyHostUpdate: (hostUpdate: HostUpdateNotice) => void;
 	installProjectSnapshot: (projects: Project[], recentProjects: Project[]) => void;
@@ -1163,6 +1202,9 @@ interface AppState {
 	updateWorkspace: (workspace: Workspace) => void;
 	removeWorkspace: (projectId: string, workspaceId: string) => void;
 	applyWorkspaceRemoved: (projectId: string, workspaceId: string) => void;
+	applyChatContinuation: (continuation: ChatContinuation) => void;
+	noteInitiatedContinuation: (operationId: string) => void;
+	forgetInitiatedContinuation: (operationId: string) => void;
 	selectProject: (projectId: string, opts?: { reveal?: boolean }) => void;
 	toggleProjectExpanded: (projectId: string) => void;
 	toggleSettledShelf: (projectId: string, expanded?: boolean) => void;
@@ -1178,6 +1220,8 @@ interface AppState {
 	) => void;
 	validateRouteChatTarget: (sessionId: string) => void;
 	clearRouteChatTarget: () => void;
+	requestComposerFocus: (workspaceId: string, sessionId?: string) => void;
+	clearComposerFocusRequest: () => void;
 	hydrateLocalLayoutState: (payload: LocalLayoutStatePayload) => void;
 	applyLocalLayoutState: (payload: LocalLayoutStatePayload, invalidateProjection?: boolean) => void;
 	setLocalLayoutPreferences: (preferences: LocalLayoutPreferences) => void;
@@ -1452,8 +1496,6 @@ interface AppState {
 	closeSearch: () => void;
 	setDoubleShiftSearch: (enabled: boolean) => void;
 	setChatMessageOrder: (order: ChatMessageOrder) => void;
-	setStreamingResponseMovement: (movement: StreamingResponseMovement) => void;
-	setChatPreferences: (order: ChatMessageOrder, movement: StreamingResponseMovement) => void;
 	applyConfig: (config: AppConfig) => void;
 	requestToolView: (workspaceId: string, tool: LayoutToolId) => void;
 	requestChangesView: (workspaceId: string, path: string | null, scope?: GitDiffScope) => void;
@@ -1533,6 +1575,10 @@ function configPatch(config: AppConfig) {
 			typeof config.fileLineWidthBounded === "boolean"
 				? config.fileLineWidthBounded
 				: DEFAULT_CONFIG.fileLineWidthBounded,
+		voiceInputEnabled:
+			typeof config.voiceInputEnabled === "boolean"
+				? config.voiceInputEnabled
+				: DEFAULT_CONFIG.voiceInputEnabled,
 		customLayoutPresets: config.customLayoutPresets ?? DEFAULT_CONFIG.customLayoutPresets,
 		defaultModel: config.defaultModel,
 		defaultEffort: config.defaultEffort,
@@ -1549,6 +1595,7 @@ function configPatch(config: AppConfig) {
 			config.extensionSettings && typeof config.extensionSettings === "object"
 				? config.extensionSettings
 				: DEFAULT_CONFIG.extensionSettings,
+		otherAgentSkills: typeof config.otherAgentSkills === "boolean" ? config.otherAgentSkills : true,
 		disabledPackages: Array.isArray(config.disabledPackages)
 			? config.disabledPackages
 			: DEFAULT_CONFIG.disabledPackages,
@@ -1577,6 +1624,18 @@ function withWorkspaceSelected(history: string[], workspaceId: string): string[]
 		: [workspaceId, ...history.filter((id) => id !== workspaceId)];
 }
 
+/** No route enters a removed workspace or a chat whose deletion did not finish; the open one stays open. */
+function refusesEntry(
+	state: Pick<AppState, "workspaces" | "activeWorkspaceId" | "removedWorkspaceIds">,
+	workspaceId: string,
+): boolean {
+	if (state.removedWorkspaceIds[workspaceId]) return true;
+	return (
+		state.activeWorkspaceId !== workspaceId &&
+		selectWorkspaceById(state, workspaceId)?.deletionPending === true
+	);
+}
+
 function workspaceActivationPatch(
 	state: Pick<
 		AppState,
@@ -1600,7 +1659,7 @@ function workspaceActivationPatch(
 			| "activeWorkspaceLiveLatch"
 	  >
 	| Record<string, never> {
-	if (state.removedWorkspaceIds[workspace.id]) return {};
+	if (refusesEntry(state, workspace.id)) return {};
 	const record = state.workspaces[workspace.projectId]?.find((w) => w.id === workspace.id);
 	const activeWorkspaceLiveLatch =
 		state.activeWorkspaceId === workspace.id
@@ -1635,7 +1694,9 @@ function recentWorkspaceFallback(
 	for (const workspaceId of state.workspaceSelectionHistory) {
 		if (workspaceId === excludedWorkspaceId || state.removedWorkspaceIds[workspaceId]) continue;
 		const workspace = selectWorkspaceById(state, workspaceId);
-		if (workspace && openProjectIds.has(workspace.projectId)) return workspace;
+		if (workspace && openProjectIds.has(workspace.projectId) && !workspace.deletionPending) {
+			return workspace;
+		}
 	}
 	return null;
 }
@@ -1661,7 +1722,7 @@ function reconcileProjectNavigation(
 	const currentProjectId = selectActiveWorkspaceProjectId(state) ?? state.selectedProjectId;
 	if (!currentProjectId || projects.some((project) => project.id === currentProjectId)) return {};
 	return {
-		selectedProjectId: projects[0]?.id ?? null,
+		selectedProjectId: selectRepoProjects({ projects })[0]?.id ?? null,
 		activeWorkspaceId: null,
 		activeCreationId: null,
 	};
@@ -1712,7 +1773,7 @@ function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
 }
 
 function appendLayoutIntent(intents: LayoutIntent[], input: LayoutIntentInput): LayoutIntent[] {
-	return [...intents, { ...input, id: randomId("layout-intent") } as LayoutIntent];
+	return [...intents, { ...input, id: randomId("layout-intent") }];
 }
 
 function layoutOpenIntentFields(options: LayoutOpenOptions) {
@@ -2340,6 +2401,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	recentProjects: [],
 	workspaces: {},
 	removedWorkspaceIds: nullProto<Record<string, true>>(),
+	chatContinuations: {},
+	initiatedContinuations: {},
 	expandedProjectIds: nullProto<Record<string, true>>(),
 	workspaceSettlingSupported: false,
 	settledShelfExpanded: nullProto<Record<string, true>>(),
@@ -2351,6 +2414,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	workspaceSelectionHistory: [],
 	routeChatTarget: null,
 	routeChatTargetGeneration: 0,
+	composerFocusRequest: null,
 	workbenchFrame: null,
 	workspaceViewsByWorkspace: {},
 	layoutStateReady: false,
@@ -2438,8 +2502,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	fileLineWidth: DEFAULT_CONFIG.fileLineWidth,
 	chatLineWidthBounded: DEFAULT_CONFIG.chatLineWidthBounded,
 	fileLineWidthBounded: DEFAULT_CONFIG.fileLineWidthBounded,
+	voiceInputEnabled: DEFAULT_CONFIG.voiceInputEnabled,
 	chatMessageOrder: "oldest-first",
-	streamingResponseMovement: { ...DEFAULT_STREAMING_RESPONSE_MOVEMENT },
 	customLayoutPresets: DEFAULT_CONFIG.customLayoutPresets,
 	defaultModel: DEFAULT_CONFIG.defaultModel,
 	defaultEffort: DEFAULT_CONFIG.defaultEffort,
@@ -2451,6 +2515,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	agentReviewEnabled: DEFAULT_CONFIG.agentReviewEnabled,
 	disabledExtensions: DEFAULT_CONFIG.disabledExtensions,
 	extensionSettings: DEFAULT_CONFIG.extensionSettings,
+	otherAgentSkills: DEFAULT_CONFIG.otherAgentSkills,
 	disabledPackages: DEFAULT_CONFIG.disabledPackages,
 	locale: DEFAULT_CONFIG.locale,
 	localLocales: null,
@@ -2464,6 +2529,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	fontWeightOffset: DEFAULT_CONFIG.fontWeightOffset,
 	userFonts: null,
 	installUserFonts: (snapshot) => set({ userFonts: snapshot }),
+	speech: null,
+	installSpeechStatus: (speech) => set({ speech }),
 	onboardingDismissed: DEFAULT_CONFIG.onboardingDismissed,
 	onboardingWizard: "pending",
 	toasts: [],
@@ -2643,6 +2710,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		hostPlatform,
 		hostUpdate,
 		hostAppVersion,
+		speech,
 	) =>
 		set((state) => {
 			const openProjects = sortProjects(projects.filter((project) => project.closed !== true));
@@ -2659,6 +2727,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				hostPlatform: hostPlatform ?? null,
 				hostUpdate: hostUpdate ?? null,
 				hostAppVersion: hostAppVersion ?? null,
+				speech: speech ?? null,
 				...(config ? configPatch(config) : {}),
 				...reconcileProjectNavigation(state, openProjects),
 				...pruneExpandedProjects(state, openProjects),
@@ -2739,6 +2808,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 				workspaces: { ...s.workspaces, [projectId]: list.filter((w) => w.id !== workspaceId) },
 			};
 		}),
+	applyChatContinuation: (continuation) =>
+		set((s) => ({
+			chatContinuations: { ...s.chatContinuations, [continuation.operationId]: continuation },
+		})),
+	noteInitiatedContinuation: (operationId) =>
+		set((s) => ({ initiatedContinuations: { ...s.initiatedContinuations, [operationId]: true } })),
+	forgetInitiatedContinuation: (operationId) =>
+		set((s) => ({ initiatedContinuations: omitKey(s.initiatedContinuations, operationId) })),
 	applyWorkspaceRemoved: (projectId, workspaceId) => {
 		const s = get();
 		const wasActive = s.activeWorkspaceId === workspaceId;
@@ -2772,6 +2849,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 					state.chatLocationRequest?.workspaceId === workspaceId ? null : state.chatLocationRequest,
 				routeChatTarget:
 					state.routeChatTarget?.workspaceId === workspaceId ? null : state.routeChatTarget,
+				composerFocusRequest:
+					state.composerFocusRequest?.workspaceId === workspaceId
+						? null
+						: state.composerFocusRequest,
 				historyOpenRequest:
 					state.historyOpenRequest && removedSessions.has(state.historyOpenRequest.sessionId)
 						? null
@@ -2837,12 +2918,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 			routeChatTarget: null,
 		}),
 	activateWorkspace: (workspace) => {
-		if (get().removedWorkspaceIds[workspace.id]) return;
+		if (refusesEntry(get(), workspace.id)) return;
 		set((state) => workspaceActivationPatch(state, workspace));
 	},
 	activateWorkspaceFromRoute: (workspace, sessionId) =>
 		set((state) => {
-			if (state.removedWorkspaceIds[workspace.id]) return {};
+			if (refusesEntry(state, workspace.id)) return {};
 			const advanced = advanceCenterNavigation(state, workspace.id);
 			return {
 				...advanced.patch,
@@ -2869,6 +2950,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	clearRouteChatTarget: () =>
 		set((state) => (state.routeChatTarget ? { routeChatTarget: null } : state)),
+	requestComposerFocus: (workspaceId, sessionId) =>
+		set((state) => ({
+			composerFocusRequest: {
+				workspaceId,
+				sessionId: sessionId ?? null,
+				navTick: selectWorkspaceNavTick(state, workspaceId),
+			},
+		})),
+	clearComposerFocusRequest: () =>
+		set((state) => (state.composerFocusRequest ? { composerFocusRequest: null } : state)),
 	hydrateLocalLayoutState: (payload) => {
 		set((state) =>
 			state.layoutStateReady
@@ -2971,7 +3062,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((state) =>
 			state.removedWorkspaceIds[intent.workspaceId]
 				? {}
-				: { layoutIntents: [...state.layoutIntents, { ...intent, id } as LayoutIntent] },
+				: { layoutIntents: [...state.layoutIntents, { ...intent, id }] },
 		);
 		return id;
 	},
@@ -4587,9 +4678,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closeSurveyWindow: () => set({ surveyWindowOpen: false }),
 	setInAppSurvey: (survey) => set({ inAppSurvey: survey }),
 	setChatMessageOrder: (chatMessageOrder) => set({ chatMessageOrder }),
-	setStreamingResponseMovement: (streamingResponseMovement) => set({ streamingResponseMovement }),
-	setChatPreferences: (chatMessageOrder, streamingResponseMovement) =>
-		set({ chatMessageOrder, streamingResponseMovement }),
 	applyConfig: (config) => set(configPatch(config)),
 	requestToolView: (workspaceId, tool) =>
 		set((state) =>
@@ -4627,7 +4715,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	requestChatLocation: (req) =>
 		set((state) => {
 			if (
-				state.removedWorkspaceIds[req.workspaceId] ||
+				refusesEntry(state, req.workspaceId) ||
 				isSessionDeleted(state, req.workspaceId, req.sessionId)
 			) {
 				return {};
@@ -4647,7 +4735,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	requestHistoryOpen: (target) =>
 		set((s) => {
 			if (
-				s.removedWorkspaceIds[target.workspaceId] ||
+				refusesEntry(s, target.workspaceId) ||
 				isSessionDeleted(s, target.workspaceId, target.sessionId)
 			) {
 				return {};

@@ -60,8 +60,7 @@ function describeRun(sessionId: string): Omit<RunProperties, "origin"> | null {
 	const workspace = getWorkspace(workspaceId);
 	const bucket = sessionProviderAnalytics(sessionId);
 	return {
-		workspace_kind:
-			workspace.kind === "default" || workspace.kind === "external" ? workspace.kind : "managed",
+		workspace_kind: workspace.kind ?? "managed",
 		provider: bucket.provider,
 		model: bucket.model,
 	};
@@ -72,12 +71,15 @@ export class RunObservation {
 	private readonly runs = new Map<string, ObservedRun>();
 	private readonly activeSessions = new Set<string>();
 	private readonly intents = new Map<string, Set<SendIntent>>();
+	private readonly getCapture: typeof additionalCapture;
+	private readonly describe: typeof describeRun;
+	private readonly now: typeof Date.now;
 
-	constructor(
-		private readonly getCapture = additionalCapture,
-		private readonly describe = describeRun,
-		private readonly now = Date.now,
-	) {}
+	constructor(getCapture = additionalCapture, describe = describeRun, now = Date.now) {
+		this.getCapture = getCapture;
+		this.describe = describe;
+		this.now = now;
+	}
 
 	clear(): void {
 		this.runs.clear();

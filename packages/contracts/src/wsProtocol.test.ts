@@ -14,10 +14,14 @@ import {
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
 	ASK_DISCUSS_PROTOCOL_VERSION,
 	BRANCH_STATUS_PROTOCOL_VERSION,
+	CACHE_WARMING_MODES,
+	CACHE_WARMING_SETTINGS_PROTOCOL_VERSION,
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
+	CHATS_PROTOCOL_VERSION,
 	CLIENT_ERROR_REPORT_PROTOCOL_VERSION,
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
+	CONTINUATION_PROTOCOL_VERSION,
 	CUSTOM_ENDPOINT_ID_PREFIX,
 	CUSTOM_ENDPOINTS_PROTOCOL_VERSION,
 	completionDelivery,
@@ -31,6 +35,7 @@ import {
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
+	isCacheWarmingMode,
 	isCustomEndpointId,
 	isTodoReviewFixMessage,
 	isToolResponsePending,
@@ -41,6 +46,7 @@ import {
 	MODEL_PICKER_PROTOCOL_VERSION,
 	normalizeSessionTitle,
 	ONBOARDING_PROTOCOL_VERSION,
+	OTHER_AGENT_SKILLS_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
@@ -59,6 +65,7 @@ import {
 	SESSION_STATE_PROTOCOL_VERSION,
 	SESSION_TITLE_MAX_LENGTH,
 	SETTLED_REMOVAL_PROTOCOL_VERSION,
+	SPEECH_PROTOCOL_VERSION,
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
@@ -247,6 +254,25 @@ test("tool responses replace the ask-only answer method at v93", () => {
 	expect(WS_METHODS.sessionAnswerQuestion).toBe("session.answerQuestion");
 });
 
+test("the cache-warming setting names its two methods at v111", () => {
+	expect(CACHE_WARMING_SETTINGS_PROTOCOL_VERSION).toBe(111);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CACHE_WARMING_SETTINGS_PROTOCOL_VERSION);
+	expect(WS_METHODS.cacheWarmingGet).toBe("cacheWarming.get");
+	expect(WS_METHODS.cacheWarmingSet).toBe("cacheWarming.set");
+	expect(CACHE_WARMING_MODES).toEqual(["off", "streaming", "idle"]);
+	expect(isCacheWarmingMode("idle")).toBe(true);
+	expect(isCacheWarmingMode("always")).toBe(false);
+});
+
+test("voice input is pinned to v107", () => {
+	expect(SPEECH_PROTOCOL_VERSION).toBe(107);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SPEECH_PROTOCOL_VERSION);
+	expect(WS_METHODS.speechInstall).toBe("speech.install");
+	expect(WS_METHODS.speechCancelInstall).toBe("speech.cancelInstall");
+	expect(WS_METHODS.speechRemove).toBe("speech.remove");
+	expect(WS_CHANNELS.speechChanged).toBe("speech.changed");
+});
+
 test("user-selectable fonts are pinned to v102", () => {
 	expect(FONTS_PROTOCOL_VERSION).toBe(102);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(FONTS_PROTOCOL_VERSION);
@@ -295,9 +321,9 @@ test("host search and its previews are pinned to v106", () => {
 	expect(WS_METHODS.searchPreview).toBe("search.preview");
 });
 
-test("settled workspace removal is pinned to v107", () => {
-	expect(PROTOCOL_VERSION).toBe(107);
-	expect(SETTLED_REMOVAL_PROTOCOL_VERSION).toBe(107);
+test("settled workspace removal is pinned to v112", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SETTLED_REMOVAL_PROTOCOL_VERSION);
+	expect(SETTLED_REMOVAL_PROTOCOL_VERSION).toBe(112);
 	expect(WS_METHODS.workspaceRemovalCheck).toBe("workspace.removalCheck");
 	expect(WS_METHODS.workspaceRemoveSettled).toBe("workspace.removeSettled");
 	expect(DEFAULT_CONFIG.settledRemovalDays).toBeNull();
@@ -305,6 +331,22 @@ test("settled workspace removal is pinned to v107", () => {
 	expect(isSettledRemovalDays(30)).toBe(true);
 	expect(isSettledRemovalDays(0)).toBe(false);
 	expect(isSettledRemovalDays(1.5)).toBe(false);
+});
+
+test("continue in workspace is pinned to v110", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CONTINUATION_PROTOCOL_VERSION);
+	expect(CONTINUATION_PROTOCOL_VERSION).toBe(110);
+	expect(WS_METHODS.chatContinue).toBe("chat.continue");
+	expect(WS_METHODS.chatContinuationStatus).toBe("chat.continuationStatus");
+	expect(WS_CHANNELS.chatContinuation).toBe("chat.continuation");
+});
+
+test("chats without a project are pinned to v109", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CHATS_PROTOCOL_VERSION);
+	expect(CHATS_PROTOCOL_VERSION).toBe(109);
+	expect(WS_METHODS.chatCreate).toBe("chat.create");
+	expect(WS_METHODS.chatDelete).toBe("chat.delete");
+	expect(WS_METHODS.chatInspect).toBe("chat.inspect");
 });
 
 test("project rename is pinned to v85", () => {
@@ -357,6 +399,12 @@ test("the GitHub star ask is pinned to v103", () => {
 	expect(GITHUB_STAR_PROTOCOL_VERSION).toBe(103);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(GITHUB_STAR_PROTOCOL_VERSION);
 	expect(WS_CHANNELS.feedbackGithubStar).toBe("feedback.githubStar");
+});
+
+test("the other agents' skills opt-in is pinned to v108", () => {
+	expect(OTHER_AGENT_SKILLS_PROTOCOL_VERSION).toBe(108);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(OTHER_AGENT_SKILLS_PROTOCOL_VERSION);
+	expect(DEFAULT_CONFIG.otherAgentSkills).toBe(false);
 });
 
 test("in-app surveys are pinned to v97", () => {

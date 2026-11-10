@@ -464,12 +464,11 @@ async function handOff(workspace: Workspace, kickoff: WorkspaceKickoff | undefin
 	return latest;
 }
 
-function run(id: string): Promise<Workspace> {
+function run(id: string): void {
 	const abort = new AbortController();
 	const done = execute(id, abort.signal).finally(() => running.delete(id));
 	done.catch(() => {});
 	running.set(id, { abort, done });
-	return done;
 }
 
 export function startWorkspaceCreation(

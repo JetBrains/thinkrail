@@ -26,7 +26,17 @@ the palette ranks with — kept here so host-side search can rank with the same 
   folder already owned by a workspace),
   `PROJECT_CLONE_INVALID`, `PROJECT_CLONE_FAILED`, and `PROJECT_CLONE_CLEANUP_FAILED` (input
   correction, Git failure, and incomplete cleanup requiring filesystem intervention),
-  `RESOURCE_UNAVAILABLE`, and `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is
+  `CHATS_CONTAINER` / `CHAT_WORKSPACE` / `NOT_A_CHAT` /
+  `CHATS_STORE_UNAVAILABLE` (a repository door asked of the Chats container or a chat without a project,
+  a chat method asked of something else, and the chats store unavailable — names the retry), and the three
+  ways a chat refuses to start something, which a client must not confuse: **`CHAT_HAS_SESSION`** (a second
+  conversation asked of a chat — the client starts a new chat instead), **`CHAT_DELETING`** (a delete of
+  this chat is running — wait for its `workspace.removed`, never start a sibling) and
+  **`CHAT_DELETION_PENDING`** (a delete did not finish — offer Retry, nothing else),
+  `CONTINUATION_UNKNOWN` (`chat.continuationStatus` for an operation the host neither holds nor linked —
+  a restart lost it mid-flight; the card offers Retry), `CONTINUATION_IN_FLIGHT` (`chat.continue` for
+  another project while the chat is already being continued — the first gesture is never silently
+  joined by a different choice), `RESOURCE_UNAVAILABLE`, and `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is
   `subagent.getTranscript`'s **permanent** miss, the
   signal that stops the transcript dialog's polling. A known child whose first transcript file is not
   written yet instead returns empty messages with its current status, so a live run remains pollable;
@@ -41,7 +51,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   the four `feedback.survey.submit` refusals `SURVEY_INVALID`, `SURVEY_UNAVAILABLE`, `SURVEY_CHANGED` and
   `SURVEY_NOT_SENT`, and `fonts.installed`'s `INSTALLED_FONTS_UNAVAILABLE`: the host's OS font service could
   not be read, a failure analytics tells apart from a lost connection while the font picker offers Retry for
-  either), so a client can react to one specific failure
+  either; and the closed `SPEECH_ERROR_CODES` (§ Voice input), each naming a voice state the UI words
+  differently), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
   for it or Error Tracking must tell it apart (it never sees `message`). Two codes exist for the latter:
   **`REQUEST_REPLAY_OVERFLOW`** — the host's replay namespace for this page is full
@@ -195,7 +206,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
     (tokens/cost/context bar — display only) and **`SlashCommandInfo`** + **`SlashCommandSourceInfo`** (the
     command autocomplete rows, returned by live `session.getCommands`, skill-only pre-session `skill.list`,
     and mapped prompt-template listings), and **`SkillCatalogEntry`** + **`SkillDecision`** (`load`/`untrusted`/`pending-ack`/
-    `disabled`) — the workspace Skills manager's `skills.state` rows.
+    `disabled`) — the workspace Skills manager's `skills.state` rows; the additive optional `manualOnly`
+    marks pi's `disable-model-invocation` skills, which pi never lists in the prompt (an older host omits it).
   - **`ExtensionCatalogEntry`** (`{ name, title, description?, enabled, tools, hasChildExtensions, settings? }`) — one
     host-registry ThinkRail extension as `extension.list` reports it; `name` is the identity the
     `AppConfig.disabledExtensions` list keys on, `tools` the names its parent factories register, and
@@ -305,7 +317,12 @@ the palette ranks with — kept here so host-side search can rank with the same 
   changes the project's id or deletes its workspace associations — plus the skill-trust fields **`trusted`**
   (the per-project grant), **`acknowledgedSkills`** (re-confirm-new — which committed aliases are OK'd) and
   **`disabledSkills`** / **`disabledGroups`** (project-baseline per-skill and per-group off — a group is a
-  plugin, a source tier, or the special `@plugins`), which gate what its skills contribute; a workspace layers
+  plugin, a source tier, or the special `@plugins`) plus **`enabledGroups`** (per-group on against the host
+  default), which gate what its skills contribute. **`isSkillGroupEnabled`** is the one group rule shared by
+  the host gate and the Skills dialog: a project's explicit choice (on wins over off) beats
+  `AppConfig.otherAgentSkills`, which governs only **`OTHER_AGENT_SKILL_GROUPS`** (`personal`, `@plugins`).
+  **`SKILL_LISTING_MIN_TOKENS`** / **`SKILL_LISTING_MAX_TOKENS`** (4K / 8K) bound the host's per-request skill
+  listing budget, so the Skills dialog's size line names the same limits; a workspace layers
   **`Workspace.skillOverrides`** (per-skill on/off) over that baseline;
   **`SubagentOverride`** (`"on" | "off"`) + optional **`Workspace.subagentsOverride`** let a workspace
   force subagents on/off, while absence inherits the host's `AppConfig.subagentsEnabled` default;
@@ -316,10 +333,16 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `git init`, or shows an error), `Workspace` (git worktree; its
   optional **`renamed`** flag is the naming lifecycle — absent = **not yet named** (a fresh `workspace-N`, or a
   record an older host's provisional pass left unlocked), so the agent's `set_title` may still name it; `true` = named (automatically or by the user), never auto-touched
-  again; its optional **`kind: "default"`** marks the built-in per-project **Default workspace** — the
+  again, except that optional **`branchNamePending`** (the naming chat's session id) marks a `set_title` that
+  set the name but had to keep the branch (detached `HEAD`, or a branch checked out outside ThinkRail), so
+  one later call from that chat may still move the branch; its optional **`kind: "default"`** marks the built-in per-project **Default workspace** — the
   project folder itself as a workspace, exactly one per project, pinned first in `workspace.list`,
   non-removable and non-renamable server-side; **`kind: "external"`** marks an explicitly attached,
-  user-owned worktree ThinkRail may forget but must never rename or reclaim; absent = a ThinkRail-managed
+  user-owned worktree ThinkRail may forget but must never rename or reclaim; **`kind: "chat"`** (from
+  `CHATS_PROTOCOL_VERSION`, v109) marks a **chat without a project** — its own folder in the built-in Chats
+  container (**`Project.kind: "chats"`**, the one project that is not a repository), never a git checkout,
+  `branch` / `baseBranch` pinned to `""`, with the optional **`deletionPending: true`** while a delete that
+  did not finish waits for Retry; absent = a ThinkRail-managed
   worktree workspace; optional literal **`initialTerminalPending: true`** is the host-owned provisioning
   marker carried only while a workspace still needs host reservation: the host reserves the deterministic
   terminal then clears it; absence means no provisioning work remains—explicit wire fields, never id
@@ -334,7 +357,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   together with **`workspace.settle`** / **`workspace.unsettle`** (`{ id }` — Default rejected server-side;
   the response is the updated record and the `workspace.updated` push converges every client). Settling
   never touches disk; `workspace.remove` stays the unguarded teardown. **`SETTLED_REMOVAL_PROTOCOL_VERSION`**
-  (v107) adds **`workspace.removalCheck { ids }`** → `WorkspaceRemovalCheck[]` (uncommitted files and
+  (v112) adds **`workspace.removalCheck { ids }`** → `WorkspaceRemovalCheck[]` (uncommitted files and
   unpushed commits per row, `null` when git could not answer) and **`workspace.removeSettled { id,
   lastActiveAt? }`** → `SettledRemovalResult` (`{ removed: true }` or `{ removed: false, reason:
   "changed" | "running" | "unsafe" }`), the host-rechecked removal behind the long-settled review),
@@ -457,13 +480,18 @@ the palette ranks with — kept here so host-side search can rank with the same 
   is what lets a client tell "this host has no reviewer chat" from "this host is older" rather than inferring it;
   **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, analyticsConsentConfirmed, terminalReplayKb,
   terminalWindowsShell, composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded,
-  fileLineWidthBounded, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
+  fileLineWidthBounded, voiceInputEnabled, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
   favoriteModels, recentModels, reviewAutoFix, agentReviewEnabled, subagentsEnabled, subagentMaxConcurrent,
-  jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, disabledExtensions, extensionSettings, onboardingDismissed, interfaceFont,
-  codeFont, codeFontSize, codeLigatures, fontWeightOffset }` — an extensible bag; the five font fields join at
-  v102 and normalize together through `normalizeFontSettings` (host load, web store, fonts runtime); the line-width fields join
-  the wire at protocol v61 and `terminalWindowsShell` at v62. `onboardingDismissed` (v94, default `false`)
-  records that the user finished or skipped the cold-start onboarding wizard, so it never returns. **`DEFAULT_MODEL_PROTOCOL_VERSION`** pins
+  jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, disabledExtensions, extensionSettings, otherAgentSkills,
+  onboardingDismissed, interfaceFont, codeFont, codeFontSize, codeLigatures, fontWeightOffset }` — an extensible
+  bag; the five font fields join at v102 and normalize together through `normalizeFontSettings` (host load, web
+  store, fonts runtime); the line-width fields join the wire at protocol v61, `terminalWindowsShell` at v62, and
+  `voiceInputEnabled` (default `true`) with voice input at v107. `onboardingDismissed` (v94, default `false`)
+  records that the user finished or skipped the cold-start onboarding wizard, so it never returns.
+  `otherAgentSkills` (**`OTHER_AGENT_SKILLS_PROTOCOL_VERSION`** = v108, default `false`) is the host-wide
+  opt-in for other agents' user skill directories and Claude plugins: every listed skill is resent in every
+  request, so a machine with several agents installed must not pay for their catalogs by default (#1210). A
+  client of an older host reads the absent field as `true`, which is what that host does. **`DEFAULT_MODEL_PROTOCOL_VERSION`** pins
   v72's AppConfig `defaultModel`/`defaultEffort` and host-side default resolution; the Settings controls are
   hidden against older hosts. `defaultModel` is a full allowlisted `WireModel`, `defaultEffort` is an optional
   `ThinkingLevel`, and `settings.update` accepts `null` to clear either optional value.
@@ -489,7 +517,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   spawns queue — overridden only by `Workspace.subagentMaxConcurrentOverride`; **`settleIdleDays`** (default `7`, `null` = never; on the wire
   from `WORKSPACE_SETTLE_PROTOCOL_VERSION` = v78) is the idle window after which a quiet workspace settles
   into its project's shelf — a host-wide number because "how long is quiet" is a habit, not a project fact;
-  **`settledRemovalDays`** (default `null` = never, 1–365, `isSettledRemovalDays`; v107) is how long a row
+  **`settledRemovalDays`** (default `null` = never, 1–365, `isSettledRemovalDays`; v112) is how long a row
   stays settled before the client suggests reviewing it for removal — opt-in because removal deletes chats; `agentReviewEnabled` (default `false`, on the
   wire from `AGENT_REVIEW_SETTING_PROTOCOL_VERSION` = v68) gates the worker's in-session `request_review`
   tool and applies live to open sessions — the Review button is independent (see [[submodule-server-host-plan-review]]); `disabledExtensions` (default `[]`, on the wire
@@ -716,6 +744,12 @@ the palette ranks with — kept here so host-side search can rank with the same 
   only settings **`isSharedModelContextTarget`** accepts (no override, or one inside the range): an
   override the app could not have written is changed only by naming its `{provider,id}`. Saves emit the
   existing `provider.changed` invalidation; no AppConfig state or raw configuration crosses the wire) /
+  **`cacheWarming.get`** / **`cacheWarming.set`** (v111, `CACHE_WARMING_SETTINGS_PROTOCOL_VERSION`; both
+  return a **`CacheWarmingSetting`** — pi's `cacheWarming` mode, one of **`CACHE_WARMING_MODES`** `off` /
+  `streaming` / `idle` tested by `isCacheWarmingMode`, and `source`: `user` when pi's global `settings.json`
+  names it, `default` when the host's own default applies. The mutation takes `{mode}`; a write pi's
+  settings loader would silently skip fails with **`CACHE_WARMING_WRITE_FAILED`**. The value lives only in
+  pi's file; no AppConfig field mirrors it) /
   **`customEndpoints.list`** / **`customEndpoints.probe`** / **`customEndpoints.save`** /
   **`customEndpoints.remove`** (v101, `CUSTOM_ENDPOINTS_PROTOCOL_VERSION`; the user's OpenAI-compatible
   servers stored as pi `models.json` providers whose ids carry **`CUSTOM_ENDPOINT_ID_PREFIX`** (`custom-`,
@@ -875,7 +909,23 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`client.reportError`** (`ClientErrorReport { kind: render | window | rejection, type, stack?,
   boundary?, chunkIds? }` → ack; `chunkIds` maps stack URLs to PostHog source-map chunk ids; a fire-and-forget UI error for host error tracking — the payload is raw and untrusted,
   the host is the only sanitizer; `CLIENT_ERROR_REPORT_PROTOCOL_VERSION` pins its v90 introduction so a
-  newer client never sends it to an older host) / **`search.query`** + **`search.preview`** (the palette's host
+  newer client never sends it to an older host) / the **`chat.*` set** from `CHATS_PROTOCOL_VERSION` (v109) —
+  **`create`** (`{ model?, thinkingLevel? }` → `ChatCreateResult`: the `kind: "chat"` workspace plus the
+  one session it owns, created by the host in one call), **`delete`** (`{ workspaceId }` → ack; the only
+  teardown door — transcripts and folder to the Trash, `session.delete` refuses a chat) and **`inspect`**
+  (`{ workspaceId }` → `ChatInspection { files, truncated }`, the confirmation's file count — `truncated`
+  when the host's walk stopped at its entry or time budget, so the folder may hold more),
+  and from `CONTINUATION_PROTOCOL_VERSION` (v110) **`continue`** (`{ workspaceId, projectId }` →
+  `{ operationId }`: bind one in-memory continuation and ask the chat's agent for a summary) and
+  **`continuationStatus`** (`{ operationId }` → `ChatContinuation` — the host-owned phases `requested →
+  summarizing → creating → started | failed | lost` with the created `workspaceId` / `sessionId` and
+  `firstMessage: sent | failed` reported apart; after a restart a linked operation answers `started`
+  from its `continuedTo` link, any other `CONTINUATION_UNKNOWN`; the same shape rides the scoped
+  `chat.continuation` push); the custom messages **`continue-in-workspace-request`** (`ContinueInWorkspaceRequestDetails`,
+  the host's card in the source chat) and **`chat-handoff`** (`ChatHandoffDetails`: the clamped summary
+  — `CHAT_HANDOFF_SUMMARY_MAX_LENGTH` — plus the source chat, the new chat's first message); and
+  `Workspace.continuedTo: ChatContinuationLink[]` on a chat record (each link names its `operationId`) /
+  **`search.query`** + **`search.preview`** (the palette's host
   providers from `SEARCH_PROTOCOL_VERSION`, v106: `{ query, kinds?, context, limit? }` → per-kind
   groups with the shared matcher's tiers; a preview is a bounded
   transcript read that never attaches a session) / **`history.search`** (the prompt-recall + conversation-search read; results capped,
@@ -1244,6 +1294,35 @@ and what it loaded, never pi's own types.
   the host could not produce the row; of the install codes only `PACKAGE_SOURCE_INVALID`,
   `PACKAGE_OFFLINE`, `PACKAGE_UNTRUSTED`, `PACKAGE_INSTALL_FAILED` and `PACKAGE_SETTINGS_WRITE_FAILED`
   are raised before anything is written, and a client may claim "nothing was added" only for those.
+
+## Voice input
+
+`speech.ts` (re-exported from `index.ts`) is the wire for local dictation, from **`SPEECH_PROTOCOL_VERSION`**, v107:
+
+- **Control on the main wire.** `ServerWelcome.speech` seeds a **`SpeechStatus`** (a v107 host always
+  sends it):
+  - `supported` — whether the host platform has a pinned runtime;
+  - `install` — `not-installed` | `installing` with phase, byte progress and model | `ready` | `failed`
+    with a `SpeechErrorCode` and the still-`usable` model after a failed switch;
+  - `runtime` — `managed` or a user's own `path` install, with version and backend;
+  - `engine` — `stopped` | `starting` | `ready` | `failed`;
+  - `diskBytes`, and per-model `downloadBytes`.
+
+  Every change is pushed whole on `speech.changed`, so there is no status read method. `speech.install {model}` starts or switches a model
+  (progress arrives on the channel, and the result acks the start). `speech.cancelInstall` and
+  `speech.remove` delete only ThinkRail's own files. The model choice is install state, not an
+  `AppConfig` key.
+- **Audio on a side socket.** **`SPEECH_SOCKET_ROUTE`** (`/speech?client=&protocol=`) carries one
+  dictation at a time, outside the JSON request wire. Its replay cache hashes and retains every
+  request, which cannot absorb 20 ms audio frames.
+  - Client to host: `SpeechClientMessage` JSON (`start`, then `stop` to commit), with mono
+    little-endian PCM16 binary frames at
+    **`SPEECH_SAMPLE_RATE`** (16 kHz) in between.
+  - Host to client: `SpeechServerMessage` JSON (`ready`, `partial` replacing the previous partial,
+    `final` committing it, `error {code}`, `ended`).
+  - `parseSpeechClientMessage` / `parseSpeechServerMessage` are the only readers. Both reject anything
+    outside these closed shapes.
+- Transcripts never enter the main wire, persistence, or error reports.
 
 ## Normalized session state
 

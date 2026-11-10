@@ -18,10 +18,17 @@ explicit, authenticated, on-demand runs.
 
 ## Execution model
 
+Per-test isolation is `resetState()` in `fixtures/app.ts`: it clears the host's `projects.json`,
+`workspaces.json`, every chat in `chats.json` and the `chats/` folders, turns, reviews, worktrees and pi
+sessions, and resets the fixture repository, so a chat without a project created by one test never
+reaches the next. The Chats container the host ensured at boot is kept (an empty `chats/` root and the
+record), because a fresh install always has it: a cold start in a test is the cold start a user gets.
+
 `bun run e2e` is the complete no-agent gate. It builds the web bundle once and runs machine-adaptive,
 process-level Playwright shards. A shard owns one host and one Playwright worker; serial execution inside
 that lane preserves the suite's destructive reset semantics, while lane-qualified state and ports make
-lanes independent. Playwright splits individual tests across lanes and the parent runner merges their blob
+lanes independent. The runner lists the selection once, in parallel with the web build, and deals the listed
+tests round-robin to the lanes through Playwright's `--test-list`; the parent runner merges their blob
 reports into one normal result. It also merges shard failure ids into Playwright's root last-run file,
 so `--last-failed` remains a valid serial repair loop. No-agent coverage is identical whether the count
 is one or many.
@@ -30,9 +37,18 @@ The automatic count is half the available CPU parallelism, clamped to 1–8. Dev
 select 1–16 lanes; `e2e:serial` is the stable debugging fallback. A focused invocation carrying Playwright
 arguments defaults to one lane unless its shard count is explicit, so an iteration on one spec stays cheap.
 CI splits the suite across machines with `THINKRAIL_E2E_JOB_SHARD=k/N`: the invocation runs slice `k` of
-`N`, and its local lanes subdivide that slice into global Playwright shards `(k-1)·L+i` of `N·L`, so the
-union of all jobs is exactly the suite. The runner owns `--shard`; combining the variable with an explicit
-`--shard` argument is rejected.
+`N`, and its local lanes subdivide that slice, so the union of all jobs is exactly the suite whatever
+lane count each job picks. Shards are dealt, not cut: a job takes every `N`th listed test from
+position `k`, and each of its `L` lanes takes every `L`th test of that slice. Playwright's own `--shard` splits the
+alphabetical list into contiguous equal-count blocks, which put the heaviest specs together in the first
+block and left that shard minutes behind the rest. Dealing spreads every spec across all shards, so lanes
+balance without recorded timings that would drift. A test list selects by file and title path, so listing
+rejects a title it could not select exactly once (a duplicate or prefix title path, a title with `›`, a line
+break or surrounding spaces) instead of risking a skipped or doubled test. Listing also forbids `test.only`:
+a dealt list would otherwise run every test a lane was given. A spec in serial mode (`describe.serial` or
+`mode: "serial"`, found in its source) is one unit: all its tests go to the same lane in file order, since
+its steps share state (`voice-input.spec.ts` installs voice once for the tests after it). The runner owns shard selection; an explicit
+`--shard` argument is rejected whenever a job slice or more than one lane is in play.
 Every public browser E2E runner owns one process-lifetime idle-sleep assertion on macOS before setup or
 build work begins; source, agent, full, binary, and desktop modes all receive it. The assertion uses the
 system `caffeinate` executable with idle-system-sleep scope and the owning runner pid, so display sleep stays
@@ -80,8 +96,9 @@ defensive cloud-source extras remain even when that distribution does not curren
 discover a real `central`, `pi`, or editor executable. The compiled-binary and
 packaged-desktop suites remain distinct artifact gates. Each has one lane-free, non-overlapping namespace
 per machine; any artifact run and `e2e:serial` still run sequentially in the same worktree. Artifact
-configs distribute individual tests, so a passed-through Playwright `--shard=k/N` splits them evenly
-across CI machines, each booting its own artifact host. A future launcher or
+runners take the same `THINKRAIL_E2E_JOB_SHARD=k/N` and deal their slice the same way across CI machines,
+each booting its own artifact host; the desktop runner lists while its host starts. A passed-through
+Playwright `--shard` still works for local use. A future launcher or
 deployment adds another host adapter for this same suite, never copied feature specs; shared behavior is
 therefore proven through every composition root.
 
@@ -325,8 +342,8 @@ reduced motion) and coexistence with
 remains a focused handler test.
 
 **Topbar chrome** (`topbar-chrome.spec.ts`) proves the web side of the desktop title-bar contract without a
-desktop: it injects the three host-published CSS properties (`--window-chrome-inset-left|right`,
-`--window-chrome-drag-region`) from the test and asserts spacer widths, logo/action-cluster offsets, an
+desktop: it injects the host-published inset properties (`--window-chrome-inset-left|right`) and the
+`data-window-chrome-drag-region` attribute from the test and asserts spacer widths, logo/action-cluster offsets, an
 unchanged 40px workbench origin, the header's resolved `-webkit-app-region`, and that Update, quota Retry
 and Settings all live inside the `no-drag` action cluster. In a plain browser the properties are unset, so
 the first scenario pins the zero-inset, `no-drag` baseline and the theme-token header colour.
@@ -392,11 +409,18 @@ cross-client convergence, prompt priority, and pre-v65 fallback.
 
 Each scenario's app reset also removes the lane fixture repository's `origin` remote: the topbar's Remote /
 Pull request segments read the shared repo config, so an origin a push scenario added must never reshape a
-later scenario's topbar.
+later scenario's topbar. The host's 60-second review lookup cache (per worktree and branch, both of which lane
+workspaces reuse) outlives the reset, so a scenario asserting a new workspace's Pull request segment first
+revalidates with a window focus. The reset also leaves `gh` signed out (no fake-gh scenario), and a signed-out
+lookup is unreliable, so it never clears a review a new workspace record already took from that cache: a
+scenario that needs a definite "no PR" writes an empty scenario (`writeGhScenario({ prs: [] })`) before it
+revalidates.
 
 The app reset leaves host settings alone (theme, system theme pair, message order, extension switches), and
 the lane shares one host. A test that changes one restores it before it ends; otherwise later scenarios, or
-the same test under `--repeat-each`, inherit it.
+the same test under `--repeat-each`, inherit it. Host-owned `recentModels` are the exception: every explicit
+model pick appends to them and no wire call restores them, so a model-picker scenario never assumes an empty
+shortlist — it reveals the provider groups (`revealModelGroups`) and asserts only the head of the recents.
 
 **GitHub review states** (`topbar-review.spec.ts`) need a real-looking PR without a network. Origin is
 `git@github.com:<repo>.git` — what both the host's configured-URL read and `git remote get-url` see — with
@@ -410,6 +434,38 @@ asserts the exact mutations. Without a scenario it fails like an unauthenticated
 keeps the gh-less behaviour; `THINKRAIL_GH_OFFLINE` still keeps `pr.open` on the compare hand-off. The reset
 deletes the scenario and log and unsets the ssh config. The host caches repository merge settings per origin
 URL for the whole run, so a spec that sets its own repository settings names its own repository.
+
+**Voice input** (`voice-input.spec.ts`) never reaches NVIDIA's servers or a microphone.
+- Every host gets `THINKRAIL_SPEECH_MANIFEST` pointing at the lane's `speech-fixture/manifest.json`, which
+  global setup writes (`fixtures/speech.ts`):
+  - The runtime archive is a `file://` tar.gz holding a `nemo-speech` shell wrapper that runs the repo's
+    `packages/server/src/speech/fakeNemoSpeech.ts` under the runner's bun. Every 160 ms of audio becomes
+    the next word of a scripted sentence.
+  - The multilingual model is a few-KB `file://` blob.
+  - The English model is served over HTTP from the spec itself on the lane's `E2E_SPEECH_PORT`
+    (base + 6), a few bytes at a time, so an install can be caught and cancelled.
+- Chromium runs with `--use-fake-ui-for-media-stream --use-fake-device-for-media-stream`, so the fake
+  device's tone streams real PCM frames.
+- The host boots before the manifest exists (see below) and logs one unreadable-manifest warning. The
+  spec's `beforeAll` runs `speech.remove`, which re-reads it.
+- The spec is serial and skipped on Windows, where the wrapper is a POSIX shell script.
+- `voice-field-writers.spec.ts` bundles `apps/web/src/speech/field.ts` through
+  `fixtures/speechFieldsEntry.ts` (with `bun build --format=iife`) into a bare page, and drives the
+  writers directly in Chromium.
+  - It pins contenteditable spacing after a typed trailing space, at a new line and between words.
+  - It pins the textarea's input event and Enter hold, and the eligibility exclusions.
+- `voice-input-blocked.spec.ts` stubs `getUserMedia` with a `NotAllowedError` in an init script. It
+  pins the blocked state (enabled, tooltip naming where to allow access) and a retry once access
+  returns. Headless Chromium without the fake-UI flag does not deny reliably.
+- **Opt-in real engine.** `voice-input.real.spec.ts` runs only with `THINKRAIL_E2E_REAL_SPEECH=1`, which
+  also keeps the fixture manifest off the host: `THINKRAIL_E2E_REAL_SPEECH=1 bun run e2e
+  e2e/voice-input.real.spec.ts`.
+  - It downloads NVIDIA's pinned runtime and the 742 MB model, checked against their SHA-256.
+  - Chromium loops `fixtures/speech-audio/dictation.wav` (a 5 s, 16 kHz synthesized sentence) as the
+    microphone, and the test asserts that the real transcript reaches the draft.
+  - It is never part of `e2e` or `e2e:full`: a run spends a 750 MB download and about 5 minutes.
+    `e2e:full`'s no-agent phase clears the variable. With it set, the fake-engine `voice-input.spec.ts`
+    skips itself, because its host would have no fixture manifest.
 
 Playwright starts the host (`webServer`) before `globalSetup`, so global setup clears the lane's data dir
 while a live host writes its logs there; it removes the dir with `removeTree`, which retries the resulting
@@ -471,8 +527,11 @@ lands in the sandbox and a new detection source is pinned everywhere at once.
   surface — Pierre file rendering, unified-only diffs, tap-to-comment and inline placement at
   `PHONE_VIEWPORT` — reached the way the desktop shell reaches a phone today: open at desktop width, then
   resize and hide the auxiliary stacks.
+  `e2e/no-webassembly.spec.ts` launches Chromium with `--js-flags=--jitless`, which removes
+  `WebAssembly` from the page and its workers alike, and pins that a diff, a phone-class code file, Monaco
+  and a chat fence still show their source as plain text.
 - **Consumes:** the built web artifact, the host's public boot/wire behavior, sanctioned server test-fixture
-  exports, CLI binary, the locator and ready-document poller from [[module-artifact-tests]], shared
+  exports, CLI binary, the locator, ready-document poller and `within` deadline from [[module-artifact-tests]], shared
   retrying teardown helper, git, Chromium, and Playwright. Standalone native/installer smoke and shared
   artifact probes are owned by that test workspace, outside Playwright discovery.
 - **Forbidden:** fake application backends, provider fakes in production boot paths, browser imports into
@@ -555,19 +614,24 @@ before/after, mermaid, none) at one card height, full-screen keys that never pag
 under its preview, and the picked file's path in the persisted answer; `plan-ask.spec.ts` adds the same file
 preview on the plan page. These three specs also run in a **`webkit` Playwright project**: the macOS desktop
 is the system WKWebView, whose Tab skips buttons without an explicit `tabindex` (the regression this lane
-exists for). CI installs WebKit with its system deps; Linux WebKitGTK may not reproduce the macOS Tab rule,
+exists for). CI installs WebKit with the system libraries it links, not its media plugins (`.github/SPEC.md`);
+Linux WebKit may not reproduce the macOS Tab rule,
 so the card's markup guard (every control an explicit tab stop) is the platform-independent net. All of this
 runs without provider variability; desktop package tests separately pin the stable
 backend-profile/window adapter required across dynamic-port restarts. Streaming-band coverage remains
 `@agent` because only Pi's real row growth exercises that lifecycle. Stream-mount coverage injects
 synthetic `pi.event` frames into the page wire (`fixtures/streamReplay.ts`) under CPU throttling to prove
-a working chat stays shown when it mounts; it is not evidence of provider behavior. Before handoff, every
-app-affecting change runs the complete `bun run e2e` no-agent gate. Artifact-only regressions remain covered by
-`e2e:binary`, `e2e:desktop`, and their shared host probe: a synthetic opaque external extension loads with
-no `pi` executable on `PATH` for default and custom `PI_CODING_AGENT_DIR`; desktop additionally proves its
-staged `.ts` PI runtime and physical resources. Real Central acceptance remains explicitly authorized and
-isolated: the dedicated `@agent` suite stages the opaque artifact, validates the exact model, and proves a
-real turn rather than accepting another provider or a fake agent.
+a working chat stays shown when it mounts; it is not evidence of provider behavior. Stream-pin coverage
+replays a long markdown answer the same way and samples geometry in a `ResizeObserver` registered after the
+app's, so it reads what paints: once the edge reaches the pin line at the viewport bottom, every sample keeps it within 2 px and
+`scrollTop` never moves back by more than 1 px (a sub-pixel content shrink can clamp it by one).
+Before handoff, every app-affecting change runs the complete `bun run e2e` no-agent gate. Artifact-only
+regressions remain covered by `e2e:binary`, `e2e:desktop`, and their shared host probe: a synthetic
+opaque external extension loads with no `pi` executable on `PATH` for default and custom
+`PI_CODING_AGENT_DIR`; desktop additionally proves its staged `.ts` PI runtime and physical resources.
+Real Central acceptance remains explicitly authorized and isolated: the dedicated `@agent` suite stages
+the opaque artifact, validates the exact model, and proves a real turn rather than accepting another
+provider or a fake agent.
 
 A file the host rewrites in place (pi's `settings.json`) is read once, after the UI state that the host's
 reply settles: a read overlapping the rewrite returns the old bytes followed by the new file's tail, and

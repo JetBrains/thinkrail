@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, onTestFinished, test } from "bun:test";
 import {
 	chmodSync,
 	existsSync,
@@ -52,9 +52,11 @@ import { todoReviewRecord } from "../todos";
 import { stopAllWatches } from "../watch";
 import {
 	awaitWorkspaceCreation,
+	getWorkspace,
 	recordWorkspaceActivity,
 	setWorkspaceCreationHandoff,
 	setWorkspaceCreationPublisher,
+	setWorkspaceReview,
 } from "../workspaces";
 import {
 	handleRequest,
@@ -263,6 +265,84 @@ test("branch status reports a review-free branch, and workspace.push publishes i
 		aheadOfBase: 1,
 		review: null,
 	});
+});
+
+test("branch status measures the branch a managed workspace's terminal switched to", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Switched" },
+		CTX,
+	)) as Workspace;
+	const remote = join(dataDir, "switched.git");
+	mkdirSync(remote);
+	git(remote, "init", "--bare");
+	git(repo, "remote", "add", "origin", remote);
+	await handleRequest(
+		"workspace.push",
+		{ workspaceId: workspace.id, branch: workspace.branch },
+		CTX,
+	);
+	git(workspace.worktreePath, "switch", "-c", "feature/terminal");
+
+	const rows = (await handleRequest(
+		"workspace.list",
+		{ projectId: "p1", includeDiffStats: false },
+		CTX,
+	)) as Workspace[];
+	expect(rows.find((row) => row.id === workspace.id)).toMatchObject({
+		branch: "feature/terminal",
+	});
+	expect(
+		await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX),
+	).toMatchObject({ published: false, review: null });
+});
+
+test("a workspace on its base branch gets no review lookup and drops a stored foreign review", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "On base" },
+		CTX,
+	)) as Workspace;
+	git(repo, "remote", "add", "origin", "https://github.com/fake-owner/fake-repo.git");
+	const bin = join(dataDir, "bin");
+	const ghCalls = join(dataDir, "gh-calls");
+	mkdirSync(bin);
+	writeFileSync(join(bin, "gh"), `#!/bin/sh\necho "$@" >> ${JSON.stringify(ghCalls)}\necho "[]"\n`);
+	chmodSync(join(bin, "gh"), 0o755);
+	const savedPath = process.env.PATH;
+	process.env.PATH = `${bin}${delimiter}${savedPath ?? ""}`;
+	onTestFinished(() => {
+		process.env.PATH = savedPath;
+	});
+	git(repo, "switch", "-c", "elsewhere");
+	git(workspace.worktreePath, "switch", "main");
+	await handleRequest("workspace.list", { projectId: "p1", includeDiffStats: false }, CTX);
+	setWorkspaceReview(
+		workspace.id,
+		{ kind: "pull-request", number: 501, state: "merged", url: "https://example.test/501" },
+		"main",
+	);
+
+	expect(
+		await handleRequest(
+			"workspace.branchStatus",
+			{ workspaceId: workspace.id, skipFetch: true },
+			CTX,
+		),
+	).toMatchObject({ onBase: true, review: null });
+	expect(getWorkspace(workspace.id)).toMatchObject({ branch: "main" });
+	expect(getWorkspace(workspace.id).review).toBeUndefined();
+
+	setWorkspaceReview(workspace.id, { kind: "pull-request", number: 501, state: "open" }, "main");
+	expect(
+		await handleRequest(
+			"workspace.openReview",
+			{ workspaceId: workspace.id, allowCached: true },
+			CTX,
+		),
+	).toBeNull();
+	expect(getWorkspace(workspace.id).review).toBeUndefined();
+	expect(existsSync(ghCalls)).toBe(false);
 });
 
 test("a CI poll re-reads the review without fetching origin; a focus read still fetches", async () => {
@@ -1185,46 +1265,46 @@ test("removeSettled removes a clean quiet workspace and keeps one with new work"
 	).toEqual({ removed: false, reason: "unsafe" });
 });
 
-test.each([
-	true,
-	false,
-])("removeSettled keeps a workspace with commits that exist only locally (remote fetched: %s)", async (fetched) => {
-	const remote = mkdtempSync(join(tmpdir(), "trpi-handlers-remote-"));
-	try {
-		git(remote, "init", "--bare", "-q");
-		git(repo, "remote", "add", "backup", remote);
-		if (fetched) {
-			git(repo, "push", "-q", "backup", "HEAD:refs/heads/main");
-			git(repo, "fetch", "-q", "backup");
-		}
-		const ws = (await handleRequest(
-			"workspace.create",
-			{ projectId: "p1", name: "Local commits" },
-			CTX,
-		)) as Workspace;
-		writeFileSync(join(ws.worktreePath, "local.txt"), "local\n");
-		git(ws.worktreePath, "add", "-A");
-		git(ws.worktreePath, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "local");
-
-		const [check] = (await handleRequest("workspace.removalCheck", { ids: [ws.id] }, CTX)) as {
-			unpushed: number | null;
-		}[];
-		expect(check?.unpushed ?? 0).toBeGreaterThan(0);
-		const current = (
-			(await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[]
-		).find((row) => row.id === ws.id);
-		expect(
-			await handleRequest(
-				"workspace.removeSettled",
-				{ id: ws.id, lastActiveAt: current?.lastActiveAt },
+test.each([true, false])(
+	"removeSettled keeps a workspace with commits that exist only locally (remote fetched: %s)",
+	async (fetched) => {
+		const remote = mkdtempSync(join(tmpdir(), "trpi-handlers-remote-"));
+		try {
+			git(remote, "init", "--bare", "-q");
+			git(repo, "remote", "add", "backup", remote);
+			if (fetched) {
+				git(repo, "push", "-q", "backup", "HEAD:refs/heads/main");
+				git(repo, "fetch", "-q", "backup");
+			}
+			const ws = (await handleRequest(
+				"workspace.create",
+				{ projectId: "p1", name: "Local commits" },
 				CTX,
-			),
-		).toEqual({ removed: false, reason: "unsafe" });
-		expect(existsSync(ws.worktreePath)).toBe(true);
-	} finally {
-		rmSync(remote, { recursive: true, force: true });
-	}
-});
+			)) as Workspace;
+			writeFileSync(join(ws.worktreePath, "local.txt"), "local\n");
+			git(ws.worktreePath, "add", "-A");
+			git(ws.worktreePath, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "local");
+
+			const [check] = (await handleRequest("workspace.removalCheck", { ids: [ws.id] }, CTX)) as {
+				unpushed: number | null;
+			}[];
+			expect(check?.unpushed ?? 0).toBeGreaterThan(0);
+			const current = (
+				(await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[]
+			).find((row) => row.id === ws.id);
+			expect(
+				await handleRequest(
+					"workspace.removeSettled",
+					{ id: ws.id, lastActiveAt: current?.lastActiveAt },
+					CTX,
+				),
+			).toEqual({ removed: false, reason: "unsafe" });
+			expect(existsSync(ws.worktreePath)).toBe(true);
+		} finally {
+			rmSync(remote, { recursive: true, force: true });
+		}
+	},
+);
 
 test("removeSettled keeps a worktree with edits hidden by index flags", async () => {
 	const ws = (await handleRequest(

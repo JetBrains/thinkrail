@@ -339,7 +339,7 @@ export function pendingInteraction(rt: {
 			found = {
 				toolCallId: block.id,
 				toolName: block.name,
-				args: (block.arguments ?? {}) as Record<string, unknown>,
+				args: block.arguments ?? {},
 				result: tool?.raw,
 				status: tool?.status ?? "running",
 				streaming: turn.streaming,

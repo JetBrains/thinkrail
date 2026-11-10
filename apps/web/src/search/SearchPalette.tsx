@@ -20,7 +20,7 @@ import { localeOf, type Translator, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@thinkrail/ui/tooltip";
+import { IconTooltip, Tooltip, TooltipContent, TooltipTrigger } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	type KeyboardEvent as ReactKeyboardEvent,
@@ -48,7 +48,7 @@ import {
 	useHostSearch,
 } from "./hostSearch";
 import { recordPick } from "./learning";
-import type { PaletteFile, PaletteItem, PaletteRow, PaletteSection } from "./model";
+import type { PaletteFile, PaletteItem, PaletteRow, PaletteSection, PaletteStart } from "./model";
 import { readLearning, readPreviewOpen, writeLearning, writePreviewOpen } from "./preferences";
 import {
 	parseSearchQuery,
@@ -59,7 +59,7 @@ import {
 	withScopePrefix,
 } from "./query";
 import { scopeChordIndex } from "./scopeChord";
-import { flattenRows, groupSections, rankSections } from "./sections";
+import { flattenRows, groupSections, rankSections, startEligible, startPrompt } from "./sections";
 
 const WIDE_VIEWPORT = "(min-width: 48rem)";
 const SPINNER_DELAY_MS = 200;
@@ -105,6 +105,7 @@ export interface SearchPaletteProps {
 	readonly actions: readonly PaletteItem[];
 	readonly scopes: readonly SearchScope[];
 	readonly host?: PaletteHost;
+	readonly start?: PaletteStart;
 	readonly notice?: PaletteNotice;
 }
 
@@ -128,6 +129,7 @@ function PaletteContent({
 	actions: emptyActions,
 	scopes,
 	host,
+	start,
 	notice,
 }: SearchPaletteProps) {
 	const t = useT();
@@ -186,6 +188,11 @@ function PaletteContent({
 		[hostState.groups, hostState.stale],
 	);
 	const reasons = useMemo(() => hostSearchReasons(hostState), [hostState]);
+	const startText = startEligible(parsed) ? startPrompt(parsed.raw) : "";
+	const startInput = useMemo(
+		() => (start && startText ? { start, text: startText } : undefined),
+		[start, startText],
+	);
 	const ranked = useMemo(
 		() => rankSections({ parsed, rootItems: allItems, learning, nowMs }),
 		[parsed, allItems, learning, nowMs],
@@ -196,6 +203,7 @@ function PaletteContent({
 				t,
 				parsed,
 				hostOverflow: overflow,
+				...(startInput ? { start: startInput } : {}),
 				rootItems: allItems,
 				waiting,
 				actions: emptyActions,
@@ -209,6 +217,7 @@ function PaletteContent({
 			t,
 			parsed,
 			overflow,
+			startInput,
 			allItems,
 			waiting,
 			emptyActions,
@@ -262,6 +271,12 @@ function PaletteContent({
 		writeLearning(next);
 	};
 
+	const startFromText = () => {
+		if (!startInput) return;
+		pickedRef.current = startInput.start.openDialog(startInput.text);
+		onClose();
+	};
+
 	const activate = (row: PaletteRow | null) => {
 		if (!row) return;
 		const { item } = row;
@@ -274,6 +289,10 @@ function PaletteContent({
 		if (more?.kind === "expand") {
 			setExpanded((current) => new Set(current).add(more.group));
 			setSelectedId(more.nextId);
+			return;
+		}
+		if (item.kind === "start") {
+			startFromText();
 			return;
 		}
 		if (item.run) {
@@ -331,6 +350,11 @@ function PaletteContent({
 			cycleScope(event.shiftKey ? -1 : 1);
 			return;
 		}
+		if (mod && event.key === "Enter" && !event.altKey && !event.shiftKey) {
+			claim();
+			if (!event.repeat) startFromText();
+			return;
+		}
 		if (mod && event.code === "KeyI" && !event.shiftKey && !event.altKey) {
 			claim();
 			if (wide) togglePreview();
@@ -356,7 +380,7 @@ function PaletteContent({
 				return;
 			case "Enter":
 				claim();
-				activate(selected);
+				if (!event.repeat) activate(selected);
 				return;
 		}
 		if (fromFrame && !event.ctrlKey && !event.metaKey && !MODIFIER_KEYS.has(event.key)) {
@@ -444,7 +468,7 @@ function PaletteContent({
 						data-testid="search-notice"
 						data-kind={notice.kind}
 						className={cn(
-							"flex shrink-0 items-center gap-8 border-border-muted border-b px-16 py-8 tr-text-metadata",
+							"flex shrink-0 items-center gap-8 wrap-anywhere border-border-muted border-b px-16 py-8 tr-text-metadata",
 							notice.kind === "offline" ? "text-feedback-warning" : "text-text-muted",
 						)}
 					>
@@ -486,12 +510,16 @@ function PaletteContent({
 						<Preview t={t} item={previewItem} previews={previews} host={host} />
 					) : null}
 				</div>
-				<footer className="flex h-32 shrink-0 items-center gap-12 overflow-hidden border-border-muted border-t px-12 tr-text-metadata text-text-subtle">
-					<Hint keys={["↑", "↓"]} label={t("search.hint.select")} />
-					<Hint keys={["↵"]} label={t(enterLabel(selected?.item))} />
-					<Hint keys={["Tab"]} label={t("search.hint.scope")} />
-					<Hint keys={["esc"]} label={t(query ? "search.hint.clear" : "search.hint.close")} />
-					<span className="flex-1" />
+				<footer className="flex h-32 shrink-0 items-center gap-12 border-border-muted border-t px-12 tr-text-metadata text-text-subtle">
+					<div className="@container flex h-16 min-w-0 flex-1 flex-wrap gap-x-12 overflow-hidden">
+						<Hint keys={["↑", "↓"]} label={t("search.hint.select")} />
+						<Hint keys={["↵"]} label={t(enterLabel(selected?.item))} />
+						<Hint keys={["Tab"]} label={t("search.hint.scope")} />
+						{startInput ? (
+							<Hint keys={shortcutKeys({ key: "↵", mod: true })} label={t("search.hint.start")} />
+						) : null}
+						<Hint keys={["esc"]} label={t(query ? "search.hint.clear" : "search.hint.close")} />
+					</div>
 					{wide ? (
 						<Button
 							variant="ghost"
@@ -500,6 +528,7 @@ function PaletteContent({
 							selected={previewOpen}
 							aria-pressed={previewOpen}
 							tabIndex={-1}
+							className="shrink-0"
 							data-testid="search-preview-toggle"
 							data-active={previewOpen}
 							onMouseDown={keepInputFocus}
@@ -511,7 +540,9 @@ function PaletteContent({
 					) : null}
 				</footer>
 				<p role="status" aria-live="polite" className="sr-only">
-					{t("search.palette.resultCount", { count: rows.length })}
+					{t("search.palette.resultCount", {
+						count: rows.filter((row) => row.item.kind !== "start").length,
+					})}
 					{hostState.pending ? ` ${t("search.palette.searching")}` : ""}
 					{reasons.map((reason) => ` ${reasonText(t, reason)}`).join("")}
 				</p>
@@ -615,6 +646,7 @@ function StatusMark({ t, reasons }: { t: Translator; reasons: readonly HostSearc
 function enterLabel(item: PaletteItem | undefined): MessageKey {
 	if (!item) return "search.hint.open";
 	if (item.kind === "command") return "search.hint.run";
+	if (item.kind === "start") return "search.hint.start";
 	return "search.hint.open";
 }
 
@@ -635,10 +667,12 @@ function Keycaps({ keys }: { keys: readonly string[] }) {
 
 function Hint({ keys, label }: { keys: readonly string[]; label: string }) {
 	return (
-		<span className="flex shrink-0 items-center gap-4">
-			<Keycaps keys={keys} />
-			{label}
-		</span>
+		<IconTooltip label={label} side="top">
+			<span className="flex shrink-0 items-center gap-4">
+				<Keycaps keys={keys} />
+				<span className="hidden @[296px]:inline">{label}</span>
+			</span>
+		</IconTooltip>
 	);
 }
 
@@ -654,7 +688,7 @@ function ScopeChips({
 	onSelect: (scope: SearchScope) => void;
 }) {
 	return (
-		<div className="flex shrink-0 items-center gap-8 border-border-muted border-b px-12 py-8">
+		<div className="flex shrink-0 flex-wrap items-center gap-8 border-border-muted border-b px-12 py-8">
 			{scopes.map((scope) => (
 				<Button
 					key={scope}
@@ -708,8 +742,10 @@ function Sections({
 				role="presentation"
 				className="flex items-center gap-8 px-8 pt-12 pb-4 tr-text-eyebrow text-text-subtle"
 			>
-				<span className="flex-1">{section.title}</span>
-				{section.meta ? <span className="tr-text-metadata normal-case">{section.meta}</span> : null}
+				<span className="min-w-0 flex-1 truncate">{section.title}</span>
+				{section.meta ? (
+					<span className="min-w-0 truncate tr-text-metadata normal-case">{section.meta}</span>
+				) : null}
 			</div>
 			{section.items.map((row) => {
 				const index = indexOf.get(row) ?? 0;
@@ -826,10 +862,10 @@ function Row({
 					</span>
 				) : null}
 			</span>
-			<span className="flex shrink-0 items-center gap-8 tr-text-metadata text-text-subtle">
-				{item.disabledReason ? <span>{item.disabledReason}</span> : null}
+			<span className="flex min-w-0 max-w-[50%] items-center gap-8 tr-text-metadata text-text-subtle">
+				{item.disabledReason ? <span className="truncate">{item.disabledReason}</span> : null}
 				{item.badge ? (
-					<span className="rounded-xs border border-border-muted px-4">{item.badge}</span>
+					<span className="truncate rounded-xs border border-border-muted px-4">{item.badge}</span>
 				) : null}
 				{item.attention && item.attention !== "running" ? <AttentionDot /> : null}
 				{item.shortcut ? <Keycaps keys={shortcutKeys(item.shortcut)} /> : null}
@@ -884,10 +920,10 @@ function PreviewCard({ t, item }: { t: Translator; item: PaletteItem }) {
 				<p className="mt-4 truncate tr-text-metadata text-text-subtle">{preview.subtitle}</p>
 			) : null}
 			{preview.fields.length > 0 ? (
-				<dl className="mt-12 grid grid-cols-[auto_1fr] gap-x-12 gap-y-4 tr-text-ui">
+				<dl className="mt-12 grid grid-cols-[auto_minmax(0,1fr)] gap-x-12 gap-y-4 tr-text-ui">
 					{preview.fields.map(([label, value]) => (
 						<div key={label} className="contents">
-							<dt className="text-text-subtle">{label}</dt>
+							<dt className="wrap-anywhere text-text-subtle">{label}</dt>
 							<dd className="min-w-0 truncate text-text-default">{value}</dd>
 						</div>
 					))}

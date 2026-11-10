@@ -76,6 +76,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `locales` | the user's local language files in `<dataDir>/locales/`: validate, watch, `locales.list`/`changed` | [locales/SPEC.md](src/locales/SPEC.md) |
 | `themes` | the user's theme files in `<dataDir>/themes/`: read, watch, `themes.list`/`changed` (the client validates) | [themes/SPEC.md](src/themes/SPEC.md) |
 | `fonts` | the user's font files in `<dataDir>/fonts/` (in-house sfnt reader, uploads, watch) and the OS's installed families: `fonts.list`/`installed`/`changed` | [fonts/SPEC.md](src/fonts/SPEC.md) |
+| `speech` | on-demand local voice input: pinned `nemo-speech` + Nemotron download, PATH reuse, `speech.*` state | [speech/SPEC.md](src/speech/SPEC.md) |
 | `projects` | stable known-repo registry: open/recent views + lossless close/reopen (validate, dedupe, slug) | [projects/SPEC.md](src/projects/SPEC.md) |
 | `workspaces` | workspaces = `git worktree`s on their own branch | [workspaces/SPEC.md](src/workspaces/SPEC.md) |
 | `git` | the `git(cwd, args)` runner + worktree status/diff vs base + branch list | [git/SPEC.md](src/git/SPEC.md) |
@@ -113,7 +114,7 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `fonts`, `history`, `search`, `templates`, `analytics`, `feedback`, `log`, `persistence` (`dataDir`, for the crash report)
+- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `fonts`, `speech`, `history`, `search`, `templates`, `analytics`, `feedback`, `trash` (a chat's folder), `log`, `persistence` (`dataDir`, for the crash report)
 - `search` → `contracts`, `git` (`gitAsyncStream` for `ls-files`), `log`; `history`, `spec` and `todos` for types only — `host/search.ts` injects every reader (projects, workspace records, the history index's `sessions()`, spec snapshots, stored plans, the file check `fs.readableFileSize`), the Default provisioning (`workspaces.listWorkspaces`) and the root watch (`watch.ensureWatch`, prewarm); it opens no file itself (files and specs preview client-side over `fs.readFile`)
 - `workspaces` → `projects`, `git`, `persistence`
 - `branch-review` → `git`, `subprocess`
@@ -124,10 +125,11 @@ the host from env via `bootHost` for dev/e2e.
 - `turns` → `git` (`snapshotWorktree` + the `turn` scope's `gitStatus`), `persistence` (`turns.json`), `log`; it never imports `agent` — `host` feeds it the session event stream and resolves a session to its workspace, the same composition the run analytics observer uses
 - `github` → `subprocess` (both `gh auth status` probes run under the same bounded runner as `git`/`branch-review`)
 - `fonts` → `subprocess` (the installed-font query runs under the same bounded runner)
+- `speech` → `subprocess` (PATH probe, archive unpack), `persistence` (`dataDir`), `log`
 - `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `locales`, `themes`, `fonts`, `analytics`, `feedback` → `persistence` (`locales` also → `@thinkrail/locales` root, external-style: catalog validation and file naming) (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external—the identity-bucketing vocabulary and delivery SDK)
 - `log` → `persistence` (`dataDir`) — and **any feature module (+ `host`) may → `log`**: it is the one
   cross-cutting edge, like `persistence`, exempt from the never-each-other rule (today: `host`,
-  `agent`, `workspaces`, `watch`, `git`, `todos`, `reviews`, `analytics`, `resourceHistory`, `fonts`, `search`). `persistence` never imports
+  `agent`, `workspaces`, `watch`, `git`, `todos`, `reviews`, `analytics`, `resourceHistory`, `fonts`, `speech`, `search`). `persistence` never imports
   `log` (would cycle); `initLogging` is called only from `host`'s `bootHost`
 - `todos` → `workspaces` (worktree path lookup) + `pi-todos/core` (external, value-imported, pi-free)
 - `reviews` → `workspaces` (worktree path lookup), `persistence` (data dir), `git` (the review's baseSha
@@ -209,6 +211,11 @@ and calls `refreshExtensionTools()` after an applied update that contains `disab
   promise, while abrupt death relies on operating-system process cleanup.
 - **WS commands return values directly**; only events + extension-UI use push channels.
 - Binds beyond localhost via `host` option (the Tailscale seam).
+- **Tests never see the developer's home** — `bunfig.toml` preloads `test/isolatedHome.ts`, which points
+  `HOME` at a fresh temp dir, removed after the run, and clears `CLAUDE_CONFIG_DIR` / `CODEX_HOME` /
+  `GEMINI_CLI_HOME` / `PI_CODING_AGENT_DIR` (turbo passes the last one through). Portable
+  skill aliases and pi's `~/.agents/skills` otherwise imported the machine's real libraries, so the skill
+  catalog budget and its hint made results depend on whoever ran the suite.
 
 ## Later
 

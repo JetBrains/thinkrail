@@ -251,6 +251,89 @@ test("a chat in a workspace this window never opened is found by its title, rena
 	}
 });
 
+test("picking a chat or a workspace puts the cursor in the chat input, unless the workspace shows a non-chat tab, and never later", async ({
+	page,
+}) => {
+	const repo = realpathSync(E2E_FIXTURE_REPO);
+	await openFixtureProject(page);
+	const seeded = seedWorkspaceSession(repo, {
+		name: "Zebra migration plan",
+		messages: [
+			{ role: "user", text: "move the tables", timestamp: BASE_TS + 20 },
+			{ role: "assistant", text: "moved", timestamp: BASE_TS + 21 },
+		],
+	});
+	const focusedChat = page.locator(
+		'[data-testid="chat-view"]:has([data-testid="chat-input"]:focus)',
+	);
+	const workspaceRow = palette(page).locator('[data-testid="search-row"][data-kind="workspace"]');
+	try {
+		await page.reload();
+		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await expect(page.getByTestId("welcome")).toBeVisible();
+
+		await openPalette(page);
+		await page.getByTestId("search-input").fill("zebra");
+		await expect(
+			palette(page).locator(`[data-testid="search-row"][data-item-id="chat:${seeded.id}"]`),
+		).toHaveAttribute("aria-selected", "true");
+		await page.keyboard.press("Enter");
+		await expect(palette(page)).toBeHidden();
+		await expect(focusedChat).toContainText("move the tables");
+
+		await page.getByTestId("open-search").focus();
+		await openPalette(page);
+		await page.getByTestId("search-input").fill("@");
+		await workspaceRow.first().click();
+		await expect(palette(page)).toBeHidden();
+		await expect(focusedChat).toContainText("move the tables");
+
+		await openPalette(page);
+		await page.getByTestId("search-input").fill("/notes");
+		const file = palette(page).locator('[data-testid="search-row"][data-kind="file"]', {
+			hasText: "notes.txt",
+		});
+		await expect(file).toBeVisible({ timeout: 15_000 });
+		await file.click();
+		await expect(palette(page)).toBeHidden();
+		const fileTab = page.locator('[data-testid="editor-tab"][data-kind="file"]', {
+			hasText: "notes.txt",
+		});
+		await expect(fileTab).toHaveAttribute("data-active", "true");
+		await expect(focusedChat).toHaveCount(0);
+
+		await openPalette(page);
+		await page.getByTestId("search-input").fill("@");
+		await workspaceRow.first().click();
+		await expect(palette(page)).toBeHidden();
+		await nextFrame(page);
+		await expect(fileTab).toHaveAttribute("data-active", "true");
+		await expect(focusedChat).toHaveCount(0);
+
+		await page.setViewportSize({ width: 1440, height: 900 });
+		await fileTab.click({ button: "right" });
+		await page.getByRole("menuitem", { name: "Split right" }).click();
+		await expect(page.getByTestId("center-group")).toHaveCount(2);
+		await openPalette(page);
+		await page.getByTestId("search-input").fill("@");
+		await workspaceRow.first().click();
+		await expect(palette(page)).toBeHidden();
+		await nextFrame(page);
+		await expect(focusedChat).toHaveCount(0);
+		const skills = page
+			.getByTestId("center-group")
+			.filter({ has: page.getByTestId("chat-view") })
+			.getByTestId("open-skills");
+		await skills.focus();
+		await nextFrame(page);
+		await nextFrame(page);
+		await expect(skills).toBeFocused();
+		await expect(focusedChat).toHaveCount(0);
+	} finally {
+		rmSync(seeded.path, { force: true });
+	}
+});
+
 test("commands run from the palette and show their shortcut", async ({ page }) => {
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
@@ -290,7 +373,7 @@ test("a Settings section row opens that section, and Mod+K inside the palette cl
 	await expect(page.getByTestId("settings-nav-appearance")).toHaveAttribute("data-active", "true");
 });
 
-test("double Shift toggles the palette and can be turned off in Settings › Keyboard", async ({
+test("double Shift toggles the palette and can be turned off in the Keyboard settings", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -325,7 +408,7 @@ test("double Shift toggles the palette and can be turned off in Settings › Key
 	await openPalette(page);
 });
 
-test("the double-Shift row opens Settings › Keyboard, and Ctrl+R stays inert under the palette", async ({
+test("the double-Shift row opens the Keyboard settings, and Ctrl+R stays inert under the palette", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -703,6 +786,159 @@ test("the preview pane reads a file only under its cap, and a refresh after it g
 	} finally {
 		writeFileSync(notes, original);
 	}
+});
+
+test("start from the typed text: the Start work row and Mod+Enter open the Create-workspace dialog prefilled", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await openPalette(page);
+	await page.getByTestId("search-input").fill("Refactor the auth module");
+	const startRow = page.locator('[data-testid="search-row"][data-item-id="start"]');
+	await expect(startRow).toContainText("Start work with “Refactor the auth module”");
+	await startRow.click();
+	await expect(palette(page)).toBeHidden();
+	const dialog = page.getByTestId("new-workspace-dialog");
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByTestId("ws-prompt")).toHaveValue("Refactor the auth module");
+	await page.keyboard.press("Escape");
+	await expect(dialog).toBeHidden();
+
+	await openPalette(page);
+	await page.getByTestId("search-input").fill(">Write release notes");
+	await expect(startRow).toHaveCount(0);
+	await page.getByTestId("search-input").fill("Write release notes");
+	await pressPlatformShortcut(page, "Enter");
+	await expect(palette(page)).toBeHidden();
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByTestId("ws-prompt")).toHaveValue("Write release notes");
+	await page.keyboard.press("Escape");
+	await expect(dialog).toBeHidden();
+});
+
+test("a held Enter or Mod+Enter opens the Create-workspace dialog once and never submits it", async ({
+	page,
+}) => {
+	const creates: string[] = [];
+	page.on("websocket", (socket) =>
+		socket.on("framesent", ({ payload }) => {
+			const frame = JSON.parse(String(payload)) as { method?: string; id?: string };
+			if (frame.method === "workspace.create") creates.push(frame.id ?? "");
+		}),
+	);
+	const repeat = (key: string, mod = false) =>
+		page.evaluate(
+			({ key: name, mod: withMod }) => {
+				const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+				document.activeElement?.dispatchEvent(
+					new KeyboardEvent("keydown", {
+						key: name,
+						repeat: true,
+						bubbles: true,
+						cancelable: true,
+						metaKey: withMod && mac,
+						ctrlKey: withMod && !mac,
+					}),
+				);
+			},
+			{ key, mod },
+		);
+	await openFixtureProject(page);
+	await openPalette(page);
+	await page.getByTestId("search-input").fill("Refactor the auth module");
+	await expect(page.locator('[data-testid="search-row"][data-item-id="start"]')).toBeVisible();
+	await repeat("Enter", true);
+	await repeat("Enter");
+	await expect(palette(page)).toBeVisible();
+	await pressPlatformShortcut(page, "Enter");
+	const dialog = page.getByTestId("new-workspace-dialog");
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByTestId("ws-prompt")).toBeFocused();
+	await repeat("Enter");
+	await repeat("Enter");
+	await expect(dialog).toBeVisible();
+	await expect(page.getByTestId("create-workspace")).toBeEnabled();
+	expect(creates).toEqual([]);
+	await page.keyboard.press("Escape");
+	await expect(dialog).toBeHidden();
+});
+
+test("a Start row the user selected keeps its place and its Enter when host rows land after it", async ({
+	page,
+}) => {
+	const name = "zz-startprobe.ts";
+	let release = () => {};
+	const released = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
+		const server = socket.connectToServer();
+		socket.onMessage((message) => {
+			const frame = JSON.parse(String(message)) as WsClientMessage;
+			if (
+				!("method" in frame) ||
+				frame.method !== "search.query" ||
+				(frame.params as WsParams<"search.query">).query !== "startprobe"
+			) {
+				server.send(message);
+				return;
+			}
+			const query = frame.params as WsParams<"search.query">;
+			void released.then(() =>
+				socket.send(
+					JSON.stringify({
+						id: frame.id,
+						ok: true,
+						result: {
+							groups: (query.kinds ?? []).map((kind) =>
+								kind === "file"
+									? {
+											kind,
+											state: "ready",
+											total: 1,
+											hits: [
+												{
+													id: `file:${query.context.workspaceId}:${name}`,
+													kind,
+													title: name,
+													tier: MATCH_TIER.prefix,
+													score: 1,
+													projectId: query.context.projectId,
+													workspaceId: query.context.workspaceId,
+													path: name,
+												},
+											],
+										}
+									: { kind, state: "ready", total: 0, hits: [] },
+							),
+						},
+					}),
+				),
+			);
+		});
+		server.onMessage((message) => socket.send(message));
+	});
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await openPalette(page);
+	await page.getByTestId("search-input").fill("startprobe");
+	const rows = page.getByTestId("search-row");
+	const start = page.locator('[data-testid="search-row"][data-item-id="start"]');
+	await expect(rows).toHaveCount(1);
+	await expect(page.getByTestId("search-host-pending")).toHaveCount(1);
+	await page.keyboard.press("ArrowDown");
+	await expect(start).toHaveAttribute("aria-selected", "true");
+	release();
+	await expect(page.locator('[data-testid="search-row"][data-kind="file"]')).toContainText(name);
+	await expect(page.getByTestId("search-host-pending")).toHaveCount(0);
+	await expect(rows.first()).toHaveAttribute("data-item-id", "start");
+	await expect(start).toHaveAttribute("aria-selected", "true");
+	await page.keyboard.press("Enter");
+	const dialog = page.getByTestId("new-workspace-dialog");
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByTestId("ws-prompt")).toHaveValue("startprobe");
+	await page.keyboard.press("Escape");
+	await expect(dialog).toBeHidden();
 });
 
 test("an older host gets the local scopes only, with a notice, and never a search.query", async ({
