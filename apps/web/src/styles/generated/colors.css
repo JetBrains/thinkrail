@@ -41,7 +41,7 @@
 	--border-default: var(--border-strong);
 	--border-muted: var(--border);
 	--primary: var(--accent);
-	--focus-ring: var(--accent); /* the keyboard focus indicator; its own role so it can diverge from primary. Full accent is too loud on dark surfaces, so dark appearances take the `strong` (60%) step, which still clears 3:1 (themes/schema.test.ts) */
+	--focus-ring: var(--accent); /* the keyboard focus indicator; its own role so it can diverge from primary. Full accent is too loud on dark surfaces, so dark appearances take the `firm` (80%) step, which still clears APCA Lc 45 (themes/schema.test.ts) */
 	--primary-subtle: color-mix(in srgb, var(--accent) 10%, transparent);
 	--primary-soft: color-mix(in srgb, var(--accent) 20%, transparent);
 	--primary-muted: color-mix(in srgb, var(--accent) 40%, transparent);
@@ -73,7 +73,7 @@
 
 /* Roles that take a different alpha step in a dark appearance (`darkAlpha`). */
 :root[data-theme-appearance="dark"] {
-	--focus-ring: color-mix(in srgb, var(--accent) 60%, transparent);
+	--focus-ring: color-mix(in srgb, var(--accent) 80%, transparent);
 }
 
 /* Appearance-level effects. The theme engine stamps `data-theme-appearance` before React mounts, so

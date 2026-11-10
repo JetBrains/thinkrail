@@ -9,7 +9,8 @@
 		"wash": 12,
 		"soft": 20,
 		"muted": 40,
-		"strong": 60
+		"strong": 60,
+		"firm": 80
 	},
 	"roles": {
 		"text-default": {
@@ -177,9 +178,9 @@
 		},
 		"focus-ring": {
 			"from": "accent",
-			"darkAlpha": "strong",
+			"darkAlpha": "firm",
 			"publish": true,
-			"note": "the keyboard focus indicator; its own role so it can diverge from primary. Full accent is too loud on dark surfaces, so dark appearances take the `strong` (60%) step, which still clears 3:1 (themes/schema.test.ts)"
+			"note": "the keyboard focus indicator; its own role so it can diverge from primary. Full accent is too loud on dark surfaces, so dark appearances take the `firm` (80%) step, which still clears APCA Lc 45 (themes/schema.test.ts)"
 		},
 		"primary-subtle": {
 			"from": "accent",
