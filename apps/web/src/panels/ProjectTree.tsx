@@ -609,7 +609,7 @@ function SettledPartition({
 					data-testid="settled-shelf-toggle"
 					aria-expanded={shelfExpanded}
 					onClick={() => useAppStore.getState().toggleSettledShelf(projectId)}
-					className="flex min-w-0 flex-1 items-center gap-4 text-left focus-visible:focus-ring-inset"
+					className="-mx-4 -my-2 flex min-w-0 flex-1 items-center gap-4 rounded-sm px-4 py-2 text-left focus-visible:focus-ring-inset"
 				>
 					{shelfExpanded ? (
 						<ChevronDown className="size-14 shrink-0" />
@@ -793,7 +793,7 @@ function ProjectRow({
 						(event.key === "ArrowUp" ? onMoveUp : onMoveDown)?.();
 					}}
 					onClick={onSelect}
-					className="flex min-w-0 flex-1 items-center gap-4 text-left focus-visible:focus-ring-inset"
+					className="-mx-4 -my-2 flex min-w-0 flex-1 items-center gap-4 rounded-sm px-4 py-2 text-left focus-visible:focus-ring-inset"
 				>
 					{folderIcon}
 					<span className={nameClass}>{project.name}</span>
@@ -996,7 +996,7 @@ function WorkspaceRow({
 		onRename: (_target, name) => onRename(name),
 	});
 
-	const identityClass = `flex min-w-0 flex-1 gap-4 text-left focus-visible:focus-ring-inset ${isTwoLine ? "items-start" : "items-center"}`;
+	const identityClass = `-mx-4 -my-2 flex min-w-0 flex-1 gap-4 rounded-sm px-4 py-2 text-left focus-visible:focus-ring-inset ${isTwoLine ? "items-start" : "items-center"}`;
 	const identityIcon = isRunning ? (
 		<RunningIcon
 			className={cn("size-14", isTwoLine && "mt-2", isActive ? "text-primary" : "text-text-muted")}
