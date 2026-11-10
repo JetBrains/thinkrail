@@ -794,7 +794,15 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   and the intent carries the chat resource so a cache/placement id alias (including an id collision resolved
   by placement-only minting) still selects semantically. That selection deliberately does not focus the tab,
   because the mounted history query owns focus. The shell updates the group's local attention so the target
-  body mounts and consumes the request without publishing a structural snapshot. The `EditorTab` (`FileTab`
+  body mounts and consumes the request without publishing a structural snapshot. The third sibling,
+  **`composerFocusRequest { workspaceId, sessionId | null, navTick }`** — set by
+  **`requestComposerFocus(workspaceId, sessionId?)`**, cleared by **`clearComposerFocusRequest()`** —
+  carries a palette pick's "type next" intent to the destination chat. It is stamped with the workspace's
+  navigation tick instead of queuing a selection, so it never changes which tab shows:
+  **`selectComposerFocusRequested`** holds only while that workspace is active, its tick is unchanged (a counted tab
+  switch or another navigation expires it), the session matches when one is named, and the chat is attended
+  (`selectChatAttended`). A chat that mounts late (hydration, a route target opening its tab) still takes it.
+  A destination showing a non-chat tab leaves the request unconsumed until it expires. The `EditorTab` (`FileTab`
   | `ChatTab` | `DocTab` | `DiffTab` | `ChangesTab` | `PlanTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types.
   (Chat *render* types + renderers live in the `chat` module.) The pure context
   selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context
