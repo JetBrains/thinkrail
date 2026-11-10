@@ -217,16 +217,18 @@ export async function getPiRuntime(): Promise<ModelRuntime> {
 	return (await getPiRuntimeGeneration()).runtime;
 }
 
-/** Wait for credential writes already in progress (an OAuth refresh spends its single-use token before the new one is saved). */
-export async function settlePiCredentialWrites(): Promise<void> {
-	if (!activeGeneration) return;
-	let runtime: ModelRuntime;
-	try {
-		runtime = (await activeGeneration).runtime;
-	} catch {
-		return;
+/**
+ * Wait for credential writes already in progress on the active generation and on `others` (an OAuth
+ * refresh spends its single-use token before the new one is saved). Never creates a generation.
+ */
+export async function settlePiCredentialWrites(others: Iterable<ModelRuntime> = []): Promise<void> {
+	const runtimes = new Set(others);
+	if (activeGeneration) {
+		try {
+			runtimes.add((await activeGeneration).runtime);
+		} catch {}
 	}
-	await runtime.settleCredentialWrites();
+	await Promise.allSettled([...runtimes].map((runtime) => runtime.settleCredentialWrites()));
 }
 
 export async function preparePiRuntimeGeneration(

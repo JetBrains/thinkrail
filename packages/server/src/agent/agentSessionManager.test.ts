@@ -83,6 +83,7 @@ import {
 	setSessionStatePublisher,
 	setSkillAdmissionResolver,
 	setSubagentsEnabledResolver,
+	settleCredentialWritesForShutdown,
 	settleSessionsForShutdown,
 	steerSession,
 	toWireModel,
@@ -337,6 +338,32 @@ afterAll(() => {
 	else process.env.THINKRAIL_DATA_DIR = priorDataDir;
 	if (priorOffline === undefined) delete process.env.PI_OFFLINE;
 	else process.env.PI_OFFLINE = priorOffline;
+});
+
+test("host shutdown settles credential writes on a live chat's retained runtime, not only the active one", async () => {
+	const s = await createSession({
+		cwd: tmpCwd("trpi-settle-creds-"),
+		workspaceId: "ws-settle-creds",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const retained = await ModelRuntime.create({
+		credentials: new InMemoryCredentialStore(),
+		modelsPath: null,
+		allowModelNetwork: false,
+	});
+	const liveSettle = jest.spyOn(runtime, "settleCredentialWrites");
+	const activeSettle = jest.spyOn(retained, "settleCredentialWrites");
+	configurePiRuntime(retained);
+	try {
+		await settleCredentialWritesForShutdown();
+		expect(liveSettle).toHaveBeenCalledTimes(1);
+		expect(activeSettle).toHaveBeenCalledTimes(1);
+	} finally {
+		configurePiRuntime(runtime);
+		liveSettle.mockRestore();
+		activeSettle.mockRestore();
+		await removeSession(s.sessionId);
+	}
 });
 
 test("session creation publishes a domain summary for other frontends", async () => {

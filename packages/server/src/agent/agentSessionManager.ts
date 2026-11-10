@@ -134,6 +134,7 @@ import {
 	type PiRuntimeGeneration,
 	refreshCatalogs,
 	settledAvailableModels,
+	settlePiCredentialWrites,
 } from "./piRuntime";
 import { catalogProviderAuth } from "./providerAuth";
 import { REQUEST_REVIEW_TOOL_NAME } from "./requestReviewTool";
@@ -3083,6 +3084,11 @@ export function disposeAllSessions(): void {
 	sessions.clear();
 	tearingDownEntries.clear();
 	deletedSessions.clear();
+}
+
+/** Settle pending credential writes on every runtime a live chat still uses, plus the active one. */
+export async function settleCredentialWritesForShutdown(): Promise<void> {
+	await settlePiCredentialWrites([...sessions.values()].map((entry) => entry.generation.runtime));
 }
 
 export async function settleSessionsForShutdown(

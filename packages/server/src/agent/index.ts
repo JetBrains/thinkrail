@@ -109,7 +109,6 @@ export {
 	piLoginOptions,
 	preparePiRuntimeGeneration,
 	settledAvailableModels,
-	settlePiCredentialWrites,
 } from "./piRuntime";
 export { piTrustsProjectPath, projectTrustSummary } from "./projectTrust";
 export { describeProviderAuth, type ProviderAuthFacts } from "./providerAuth";
