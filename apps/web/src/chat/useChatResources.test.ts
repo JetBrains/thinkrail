@@ -78,12 +78,36 @@ beforeEach(() => {
 	});
 });
 
-function syncFixture() {
+function manualScheduler() {
+	const timers = new Map<number, { run: () => void; delayMs: number }>();
+	let next = 0;
+	const scheduler: DetailPollScheduler = {
+		set: (run, delayMs) => {
+			timers.set(++next, { run, delayMs });
+			return next;
+		},
+		clear: (timer) => {
+			timers.delete(timer as number);
+		},
+	};
+	return {
+		scheduler,
+		delays: () => [...timers.values()].map((timer) => timer.delayMs),
+		fire: () => {
+			const pending = [...timers];
+			timers.clear();
+			for (const [, timer] of pending) timer.run();
+		},
+	};
+}
+
+function syncFixture(timers = manualScheduler()) {
 	const reads: ReturnType<typeof deferred<SessionResources>>[] = [];
 	let invalidate: (scope: ChatResourceScope) => void = () => {};
 	let unsubscribed = false;
 	const sync = startChatResourceSync(scope, {
 		state,
+		scheduler: timers.scheduler,
 		read: () => {
 			const read = deferred<SessionResources>();
 			reads.push(read);
@@ -99,6 +123,7 @@ function syncFixture() {
 	return {
 		reads,
 		sync,
+		timers,
 		invalidate: (changed = scope) => invalidate(changed),
 		unsubscribed: () => unsubscribed,
 	};
@@ -146,6 +171,62 @@ test("dirty invalidations survive a rejected in-flight read and failed refreshes
 	f.reads[3]?.resolve(snapshot);
 	await flush();
 	expect(projection()).toMatchObject({ fresh: true, error: null });
+	f.sync.dispose();
+});
+
+test("a failed read keeps its error visible and retries on capped backoff until a read succeeds", async () => {
+	const f = syncFixture();
+	f.reads[0]?.resolve(snapshot);
+	await flush();
+	f.invalidate();
+	for (const [attempt, delay] of [500, 1_500, 5_000, 5_000].entries()) {
+		f.reads[attempt + 1]?.reject(new Error("replay namespace is full"));
+		await flush();
+		expect(projection()).toMatchObject({
+			snapshot,
+			fresh: false,
+			error: "replay namespace is full",
+			retrying: true,
+		});
+		expect(f.timers.delays()).toEqual([delay]);
+		f.timers.fire();
+	}
+	f.reads[5]?.resolve({ ...snapshot, commands: [] });
+	await flush();
+	expect(projection()).toMatchObject({ fresh: true, error: null });
+	expect(f.timers.delays()).toEqual([]);
+
+	f.invalidate();
+	f.reads[6]?.reject(new Error("again"));
+	await flush();
+	expect(f.timers.delays()).toEqual([500]);
+	f.sync.refresh();
+	expect(f.timers.delays()).toEqual([]);
+	f.reads[7]?.reject(new Error("again"));
+	await flush();
+	expect(f.timers.delays()).toEqual([500]);
+	f.sync.dispose();
+	expect(f.timers.delays()).toEqual([]);
+	expect(f.reads).toHaveLength(8);
+});
+
+test("a permanent read failure stays visible without scheduling a retry", async () => {
+	const f = syncFixture();
+	f.reads[0]?.reject(new RequestError("RESOURCE_UNAVAILABLE", "worktree gone"));
+	await flush();
+	expect(projection()).toMatchObject({ fresh: false, error: "worktree gone", retrying: false });
+	expect(f.timers.delays()).toEqual([]);
+
+	f.invalidate();
+	f.reads[1]?.resolve({ ...snapshot, sessionId: "foreign" });
+	await flush();
+	expect(projection()).toMatchObject({
+		fresh: false,
+		error: "Resource snapshot belongs to another chat.",
+		retrying: false,
+	});
+	expect(f.timers.delays()).toEqual([]);
+	expect(f.reads).toHaveLength(2);
 	f.sync.dispose();
 });
 

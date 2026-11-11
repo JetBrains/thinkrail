@@ -31,7 +31,6 @@ test("an idle-preloaded editor opens the first clicked file without a loading fa
 	await expect(row).toBeVisible();
 
 	await expect.poll(() => loadedResources(page, /MonacoEditor[^/]*\.js/)).toBeGreaterThan(0);
-	await expect.poll(() => loadedResources(page, /\.wasm(\?|$)/)).toBeGreaterThan(0);
 
 	await page.evaluate(() => {
 		const seen = { fallback: false };
@@ -44,9 +43,9 @@ test("an idle-preloaded editor opens the first clicked file without a loading fa
 
 	const pane = page.locator('[data-testid="editor-pane"]:visible');
 	await expect(pane).toContainText("firstOpen");
-	await expect(
-		pane.locator(".view-line span span").filter({ hasText: /^export$/ }),
-	).not.toHaveClass(/\bmtk1\b/);
+	await expect(pane.locator(".view-line span span").filter({ hasText: /export/ })).not.toHaveClass(
+		/\bmtk1\b/,
+	);
 	expect(
 		await page.evaluate(() => Reflect.get(Reflect.get(window, "__paneFallback"), "fallback")),
 	).toBe(false);

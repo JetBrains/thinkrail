@@ -7,6 +7,8 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import type { ExtensionSessionServices } from "@thinkrail/extension-api/server";
 import {
+	extensionSessionServices,
+	type HostSessionServices,
 	omitDisabledRegistryExtensions,
 	preferRegistryTools,
 	registryExtensionName,
@@ -68,13 +70,14 @@ describe("registryInlineExtensions", () => {
 });
 
 describe("registryInlineExtensions with per-session factories", () => {
-	const labels = new WeakMap<ExtensionSessionServices, string>();
-	const session = (label: string): ExtensionSessionServices => {
-		const services: ExtensionSessionServices = {
+	const labels = new WeakMap<ExtensionSessionServices["expectToolResponse"], string>();
+	const session = (label: string): HostSessionServices => {
+		const services: HostSessionServices = {
 			expectToolResponse: () => {},
 			awaitToolResponse: async () => ({ kind: "deferred" }),
+			workspaceFiles: { check: async () => {}, scratchDir: "" },
 		};
-		labels.set(services, label);
+		labels.set(services.expectToolResponse, label);
 		return services;
 	};
 	const sessionEntry = (name: string, parents: number, seen: string[]): ServerExtensionEntry => ({
@@ -83,7 +86,7 @@ describe("registryInlineExtensions with per-session factories", () => {
 			name,
 			extensions: entry(name, parents).extension.extensions,
 			sessionExtensions: (services) => {
-				const label = labels.get(services) ?? "unknown";
+				const label = labels.get(services.expectToolResponse) ?? "unknown";
 				seen.push(label);
 				return [
 					(pi: ExtensionAPI) => {
@@ -234,5 +237,33 @@ describe("preferRegistryTools", () => {
 	it("returns the result untouched when no tool names collide", () => {
 		const calm = result(loaded("/user/other.ts", ["x"]), loaded("<inline:solo>", ["y"]));
 		expect(preferRegistryTools(calm, entries)).toBe(calm);
+	});
+});
+
+describe("extensionSessionServices", () => {
+	const host: HostSessionServices = {
+		expectToolResponse: () => {},
+		awaitToolResponse: async () => ({ kind: "deferred" }),
+		workspaceFiles: { check: async () => {}, scratchDir: "" },
+	};
+	const extension = {
+		name: "demo",
+		extensions: [],
+		settings: { rich: { type: "boolean" as const, default: true } },
+	};
+
+	it("reads a declared setting's stored value for its own extension, else the default", () => {
+		const values: Record<string, Record<string, boolean>> = { other: { rich: false } };
+		const services = extensionSessionServices(extension, host, (name, key) => values[name]?.[key]);
+		expect(services.setting("rich")).toBe(true);
+		values.demo = { rich: false };
+		expect(services.setting("rich")).toBe(false);
+		expect(services.workspaceFiles).toBe(host.workspaceFiles);
+	});
+
+	it("refuses a setting the extension did not declare", () => {
+		expect(() => extensionSessionServices(extension, host).setting("missing")).toThrow(
+			'extension demo has no setting "missing"',
+		);
 	});
 });

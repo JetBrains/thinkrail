@@ -25,7 +25,7 @@ export function parseToolResultContent(result: unknown): ParsedToolResultContent
 		return { text: toolValueText(result), images: [] };
 	}
 
-	const content = (result as { content: unknown }).content;
+	const content = result.content;
 	if (!Array.isArray(content)) {
 		return { text: toolValueText(result), images: [] };
 	}

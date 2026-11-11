@@ -7,7 +7,7 @@
 		"dev": "vite",
 		"build": "bun run typography:check && bun run colors:check && bun run spacing:check && bun run provider-glyphs:check && tsc --noEmit && vite build",
 		"build:profile": "vite build --mode profile",
-		"typecheck": "tsc --noEmit",
+		"typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
 		"test": "bun test",
 		"preview": "vite preview",
 		"typography:generate": "bun scripts/generate-typography.ts",
@@ -19,6 +19,7 @@
 		"spacing:check": "bun scripts/generate-spacing.ts --check && bun test src/styles/spacingUsage.test.ts",
 		"provider-glyphs:generate": "bun scripts/generate-provider-glyphs.ts",
 		"provider-glyphs:check": "bun scripts/generate-provider-glyphs.ts --check",
+		"favicons:generate": "bun scripts/generate-favicons.ts",
 		"compiler:census": "bun scripts/compiler-census.ts",
 		"compiler:census:generate": "bun scripts/compiler-census.ts --write",
 		"compiler:census:check": "bun scripts/compiler-census.ts --check"
@@ -29,7 +30,7 @@
 		"@fontsource-variable/jetbrains-mono": "catalog:",
 		"@fontsource-variable/orbitron": "catalog:",
 		"@remixicon/react": "catalog:",
-		"@shikijs/langs": "4.5.0",
+		"@pierre/highlights": "catalog:",
 		"@thinkrail/contracts": "workspace:*",
 		"@thinkrail/ext-ask-user-question": "workspace:*",
 		"@thinkrail/ext-visualize": "workspace:*",
@@ -48,13 +49,13 @@
 		"react-markdown": "catalog:",
 		"react-virtuoso": "catalog:",
 		"remark-gfm": "catalog:",
-		"shiki": "catalog:",
 		"zustand": "5.0.16"
 	},
 	"devDependencies": {
 		"@babel/core": "7.29.7",
-		"@lobehub/icons-static-svg": "1.95.1",
+		"@lobehub/icons-static-svg": "1.101.0",
 		"@posthog/cli": "catalog:",
+		"@resvg/resvg-js": "catalog:",
 		"@rolldown/plugin-babel": "0.2.4",
 		"@tailwindcss/vite": "catalog:",
 		"@types/babel__core": "7.20.5",
@@ -63,8 +64,9 @@
 		"@types/react-dom": "catalog:",
 		"@vitejs/plugin-react": "6.1.2",
 		"babel-plugin-react-compiler": "1.0.0",
+		"resedit": "catalog:",
 		"tailwindcss": "catalog:",
 		"typescript": "catalog:",
-		"vite": "8.1.6"
+		"vite": "8.3.5"
 	}
 }
