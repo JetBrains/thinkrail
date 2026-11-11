@@ -21,8 +21,8 @@ uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `loc
   - `deviceChannel.ts` — `DeviceChannel` + `toDeviceChannel` (native `RTCDataChannel` adapter; contracts'
     channel framing both ways, binary frames read as `ArrayBuffer` so chunks keep their order).
   - `deviceWireClient.ts` — the reconnect-safe wire client (request/response + pushes, replay on `attach`;
-    the snapshot push `server.welcome` is kept and replayed to a later subscriber, because the host sends it
-    once as the channel opens — before any screen subscribes).
+    the snapshot pushes `server.welcome` and `remote.hostRoutes` are kept and replayed to a later subscriber,
+    because the host sends them once as the channel opens — before any screen subscribes).
   - `deviceConnector.ts` — `connectRemoteProject` (first pairing, link + token) and `connectSavedHost`
     (token-less `resume`), sharing one WebRTC + auto-reconnect machinery; persistent device key. The relay is
     untrusted: `hello` sends only the token's SHA-256 id, the proof adds the token HMAC, the offer is applied
@@ -42,15 +42,25 @@ uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `loc
     A closed data channel counts as a drop like a failed peer, so a phone the computer revoked reconnects,
     and a reconnect refused for good (`unknown_device`, `identity_mismatch`, `app_outdated`) stops retrying,
     closes the connection and fires `onLost`; `remoteSessions` then drops that host and tells its `onLost`
-    listeners.
+    listeners. The retry schedule is `reconnectLoop.ts`; `onOpenChange` reports the channel going down and
+    back, `reconnectNow` skips the wait. The host's `remote.hostRoutes` push replaces the routes later attempts
+    dial and reaches `onRoutes`, so a phone paired before a route existed (Nostr) or before the computer's
+    address changed follows the computer without a new QR.
+  - `reconnectLoop.ts` — `createReconnectLoop`: one attempt at a time, doubling capped backoff reset on
+    success, `now()` to retry at once, a terminal failure ending it (`isTerminalConnectError`).
   - `signalingRoute.ts` — `SignalingPipe` (one route's frame exchange: `ready` with any TURN servers,
     `listen`, `send`, `close`), `createBrokerPipe`, `createNostrPipe`, `pickSignalingPipe` and
     `openSignaling`, the route choice above.
   - `hostRegistry.ts` — the locally-stored set of paired hosts over an injected `KeyValueStore`; a host keeps
-    every advertised `relayUrls` (older entries only the one `relayUrl`) and its Nostr route.
+    every advertised `relayUrls` (older entries only the one `relayUrl`) and its Nostr route; `update`
+    replaces one in place (never re-adding a forgotten host), `withRoutes` merges the routes a host sent.
   - `remoteSessions.ts` — one wire client per host, aggregating live sessions into one list, plus each host's
     welcome (`welcomeFor`: protocol version and config) and what it lets this phone do (`accessFor`, `write` until a
-    `remote.deviceAccess` push says `read`); `disconnect` closes and drops one host.
+    `remote.deviceAccess` push says `read`); `disconnect` closes and drops one host. A host whose first
+    connect failed for a reason a retry can fix keeps being retried in the background (2s doubling to 30s;
+    `onRetryFailed` hears each miss) until it connects or is disconnected; `isReconnecting` marks a live host
+    whose channel dropped; `onRoutes` hands back the saved host merged with the routes it sent, and later
+    retries dial them; `reconnectNow` retries every host that is down at once.
 - **Public surface:** the `index.ts` barrel.
 - **Allowed deps:** `contracts` (broker + signaling + pairing + session types), `nostr-signaling` (the
   internet route), platform browser APIs. Never `server`, `pi`, `web`, or any UI package.
@@ -63,4 +73,6 @@ uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `loc
 - Reconnect-safe: a dropped channel does not fail in-flight requests; `attach` replays them. The device key
   persists so a reconnect re-authorizes the same registered device via `resume`.
 - No offer is applied before its host signature verifies against the key the device paired with.
-- The pure logic (registry, session aggregation) is unit-tested against injected storage/connectors.
+- The pure logic (registry, session aggregation, retry schedule) is unit-tested against injected
+  storage/connectors/timers.
+- A host never stays down for want of a tap: every failure but a terminal refusal is retried on its own.

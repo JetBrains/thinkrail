@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import { type SessionState, type SessionStateRecord, WS_CHANNELS } from "@thinkrail/contracts";
+import {
+	type RemoteHostRoutes,
+	type SessionState,
+	type SessionStateRecord,
+	WS_CHANNELS,
+} from "@thinkrail/contracts";
 import { RemoteConnectError } from "./connectError";
 import type { RemoteConnection } from "./deviceConnector";
 import type { DeviceWireClient } from "./deviceWireClient";
@@ -27,6 +32,9 @@ function fakeConnection(host: SavedHost, seed: SessionStateRecord[]) {
 	let onAccess: (data: unknown) => void = () => {};
 	let closed = false;
 	let lost: (error: RemoteConnectError) => void = () => {};
+	let openChange: (open: boolean) => void = () => {};
+	let routes: (next: RemoteHostRoutes) => void = () => {};
+	let reconnects = 0;
 	const client: DeviceWireClient = {
 		attach: () => {},
 		request<T>(method: string): Promise<T> {
@@ -50,12 +58,24 @@ function fakeConnection(host: SavedHost, seed: SessionStateRecord[]) {
 		onLost: (handler) => {
 			lost = handler;
 		},
+		onOpenChange: (handler) => {
+			openChange = handler;
+		},
+		onRoutes: (handler) => {
+			routes = handler;
+		},
+		reconnectNow: () => {
+			reconnects++;
+		},
 		close: () => {
 			closed = true;
 		},
 	};
 	return {
 		connection,
+		setOpen: (open: boolean) => openChange(open),
+		pushRoutes: (next: RemoteHostRoutes) => routes(next),
+		reconnects: () => reconnects,
 		lose: (error: RemoteConnectError) => lost(error),
 		pushState: (record: SessionStateRecord) => onState(record),
 		pushAccess: (access: string) => onAccess({ access }),
@@ -174,4 +194,114 @@ test("a host's access is write until it says read, and follows later changes", a
 	expect(controller.accessFor("K1")).toBe("read");
 	fake.pushAccess("write");
 	expect(controller.accessFor("K1")).toBe("write");
+});
+
+const until = async (check: () => boolean): Promise<void> => {
+	const deadline = Date.now() + 2_000;
+	while (!check() && Date.now() < deadline) await Bun.sleep(5);
+};
+
+test("a host that could not be reached is retried in the background until it connects", async () => {
+	const fake = fakeConnection(laptop, [rec("s1")]);
+	let calls = 0;
+	const controller = createRemoteSessions(
+		async () => {
+			calls++;
+			if (calls < 3) throw new RemoteConnectError("host_silent", "no answer");
+			return fake.connection;
+		},
+		{ initialBackoffMs: 5, maxBackoffMs: 10 },
+	);
+	const misses: string[] = [];
+	controller.onRetryFailed((hostKey) => misses.push(hostKey));
+	await expect(controller.connect(laptop)).rejects.toBeInstanceOf(RemoteConnectError);
+	await until(() => controller.clientFor("K1") !== null);
+	expect(calls).toBe(3);
+	expect(misses).toEqual(["K1"]);
+	expect(controller.items().map((item) => item.record.sessionId)).toEqual(["s1"]);
+	controller.stop();
+});
+
+test("a refusal no retry fixes is not retried", async () => {
+	let calls = 0;
+	const controller = createRemoteSessions(
+		async () => {
+			calls++;
+			throw new RemoteConnectError("unknown_device", "revoked");
+		},
+		{ initialBackoffMs: 1, maxBackoffMs: 1 },
+	);
+	await expect(controller.connect(laptop)).rejects.toBeInstanceOf(RemoteConnectError);
+	await Bun.sleep(30);
+	expect(calls).toBe(1);
+});
+
+test("forgetting a host stops its background retry", async () => {
+	let calls = 0;
+	const controller = createRemoteSessions(
+		async () => {
+			calls++;
+			throw new Error("offline");
+		},
+		{ initialBackoffMs: 5, maxBackoffMs: 5 },
+	);
+	await expect(controller.connect(laptop)).rejects.toThrow("offline");
+	controller.disconnect("K1");
+	await Bun.sleep(40);
+	expect(calls).toBe(1);
+});
+
+test("reconnectNow skips the wait for a host that is down and pokes live connections", async () => {
+	const live = fakeConnection(server, []);
+	let laptopCalls = 0;
+	const controller = createRemoteSessions(
+		async (host) => {
+			if (host.hostKey === server.hostKey) return live.connection;
+			laptopCalls++;
+			throw new Error("offline");
+		},
+		{ initialBackoffMs: 60_000, maxBackoffMs: 60_000 },
+	);
+	await controller.connect(server);
+	await expect(controller.connect(laptop)).rejects.toThrow("offline");
+	controller.reconnectNow();
+	await until(() => laptopCalls === 2);
+	expect(laptopCalls).toBe(2);
+	expect(live.reconnects()).toBe(1);
+	controller.stop();
+});
+
+test("a dropped channel shows as reconnecting until it is back", async () => {
+	const fake = fakeConnection(laptop, []);
+	const controller = createRemoteSessions(async () => fake.connection);
+	await controller.connect(laptop);
+	expect(controller.isReconnecting("K1")).toBe(false);
+	fake.setOpen(false);
+	expect(controller.isReconnecting("K1")).toBe(true);
+	expect(controller.clientFor("K1")).not.toBeNull();
+	fake.setOpen(true);
+	expect(controller.isReconnecting("K1")).toBe(false);
+});
+
+test("routes the host sends are merged into the saved host, and later connects use them", async () => {
+	const fake = fakeConnection(laptop, []);
+	const dialed: SavedHost[] = [];
+	const controller = createRemoteSessions(async (host) => {
+		dialed.push(host);
+		return fake.connection;
+	});
+	const saved: SavedHost[] = [];
+	controller.onRoutes((host) => saved.push(host));
+	await controller.connect({
+		...laptop,
+		nostr: { publicKey: "a".repeat(64), relays: ["wss://old"] },
+	});
+	const nostr = { publicKey: "b".repeat(64), relays: ["wss://relay.one"] };
+	fake.pushRoutes({ signalingUrls: ["ws://10.0.0.9:1"], nostr });
+	expect(saved).toEqual([
+		{ ...laptop, relayUrl: "ws://10.0.0.9:1", relayUrls: ["ws://10.0.0.9:1"], nostr },
+	]);
+
+	fake.pushRoutes({ signalingUrls: ["ws://10.0.0.9:1"] });
+	expect(saved[1]?.nostr).toBeUndefined();
 });

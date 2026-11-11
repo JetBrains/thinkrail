@@ -796,6 +796,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			bridge.push(WS_CHANNELS.remoteDeviceAccess, {
 				access: remoteAccess.state().devices.find((d) => d.id === device.id)?.access ?? "read",
 			});
+			const routes = remoteAccess.routes();
+			if (routes) bridge.push(WS_CHANNELS.remoteHostRoutes, routes);
 		},
 		onAccessChanged: (deviceId, access) => {
 			for (const bridge of deviceBridges.get(deviceId) ?? []) {

@@ -47,3 +47,17 @@ test("corrupt storage reads as empty", () => {
 	store.write("thinkrail.remote.hosts", "not json");
 	expect(createHostRegistry(store).list()).toEqual([]);
 });
+
+test("update replaces a host in place and never brings back a forgotten one", () => {
+	const registry = createHostRegistry(memoryStore());
+	registry.add(host());
+	registry.add(host({ hostKey: "K2", label: "Server" }));
+	registry.update(host({ relayUrl: "ws://new:1", relayUrls: ["ws://new:1"] }));
+	expect(registry.list().map((h) => [h.hostKey, h.relayUrl])).toEqual([
+		["K1", "ws://new:1"],
+		["K2", "ws://relay:1"],
+	]);
+	registry.remove("K1");
+	registry.update(host());
+	expect(registry.list().map((h) => h.hostKey)).toEqual(["K2"]);
+});

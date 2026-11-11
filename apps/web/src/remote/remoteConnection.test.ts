@@ -17,6 +17,9 @@ function connection(): RemoteConnection {
 		relayUrls: ["ws://relay:1"],
 		projectRef: "proj",
 		onLost: () => {},
+		onOpenChange: () => {},
+		onRoutes: () => {},
+		reconnectNow: () => {},
 		close: () => {},
 	};
 }

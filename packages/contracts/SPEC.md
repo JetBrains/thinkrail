@@ -85,7 +85,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `remote.setEnabled { enabled }` / `remote.revokeDevice { id }` / `remote.renameDevice { id, label }` /
   `remote.setDeviceAccess { id, access }` return `RemoteAccessStatus` (`enabled`, reachable `RemoteAddress`es,
   `RemotePairedDevice`s without their keys, each with its `RemoteDeviceAccess` — `read` or `write`); the
-  `remote.deviceAccess` channel carries `{ access }` to that one device; a read-only device's writes fail with
+  `remote.deviceAccess` channel carries `{ access }` to that one device and `remote.hostRoutes` its
+  current `RemoteHostRoutes` (relay addresses + Nostr route, read with `parseRemoteHostRoutes`), so a saved
+  host follows the computer; a read-only device's writes fail with
   `REMOTE_DEVICE_READ_ONLY`, an unpaired one's with `REMOTE_DEVICE_REVOKED`; the optional `nostr`
   (`RemoteNostrRoute`: relays and how many are live) is the internet route, absent from an older host;
   `remote.issueLink` returns a

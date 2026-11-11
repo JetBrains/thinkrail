@@ -80,3 +80,28 @@ test("stop tears down the broker client", () => {
 	startRemoteAccess({ relayUrl: "ws://relay:1", identity, connect }).stop();
 	expect(isStopped()).toBe(true);
 });
+
+test("routes follow the advertised addresses and carry the Nostr route the link does", () => {
+	const { connect } = fakeConnect();
+	const advertised: RelayAddress[] = [{ url: "ws://192.168.0.20:24243", route: "lan" }];
+	const nostrKey = "b".repeat(64);
+	const access = startRemoteAccess({
+		relayUrl: "ws://127.0.0.1:24243",
+		advertised: () => advertised,
+		identity,
+		connect,
+		nostrRelays: ["wss://relay.one"],
+		connectNostr: () => ({
+			publicKey: nostrKey,
+			relays: ["wss://relay.one"],
+			connectedRelays: () => 1,
+			stop: () => {},
+		}),
+	});
+	const nostr = { publicKey: nostrKey, relays: ["wss://relay.one"] };
+	expect(access.routes()).toEqual({ signalingUrls: ["ws://192.168.0.20:24243"], nostr });
+	expect(parsePairingUri(access.issueLink("p").link)?.nostr).toEqual(nostr);
+
+	advertised[0] = { url: "ws://10.0.0.9:24243", route: "lan" };
+	expect(access.routes().signalingUrls).toEqual(["ws://10.0.0.9:24243"]);
+});

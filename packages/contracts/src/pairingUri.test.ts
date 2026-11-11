@@ -1,5 +1,10 @@
-import { expect, test } from "bun:test";
-import { buildPairingUri, type PairingUriParams, parsePairingUri } from "./pairingUri";
+import { describe, expect, test } from "bun:test";
+import {
+	buildPairingUri,
+	type PairingUriParams,
+	parsePairingUri,
+	parseRemoteHostRoutes,
+} from "./pairingUri";
 
 const params: PairingUriParams = {
 	signalingUrls: ["ws://192.168.0.20:24243", "ws://100.101.102.103:24243"],
@@ -48,4 +53,35 @@ test("rejects a wrong scheme, host, version, or missing field", () => {
 	expect(parsePairingUri("thinkrail://pair?v=1&s=a&t=b&k=c")).toBeNull();
 	expect(parsePairingUri("thinkrail://pair?v=1&t=b&k=c&p=d")).toBeNull();
 	expect(parsePairingUri("not a uri at all")).toBeNull();
+});
+
+describe("parseRemoteHostRoutes", () => {
+	const key = "a".repeat(64);
+
+	test("keeps relay addresses and a well-formed Nostr route", () => {
+		expect(
+			parseRemoteHostRoutes({
+				signalingUrls: ["ws://192.168.1.5:7000", "wss://host.ts.net"],
+				nostr: { publicKey: key, relays: ["wss://relay.one"] },
+			}),
+		).toEqual({
+			signalingUrls: ["ws://192.168.1.5:7000", "wss://host.ts.net"],
+			nostr: { publicKey: key, relays: ["wss://relay.one"] },
+		});
+	});
+
+	test("drops non-socket addresses and a malformed Nostr route", () => {
+		expect(
+			parseRemoteHostRoutes({
+				signalingUrls: ["http://x", 3, "ws://ok"],
+				nostr: { publicKey: "nothex", relays: ["wss://relay.one"] },
+			}),
+		).toEqual({ signalingUrls: ["ws://ok"] });
+	});
+
+	test("a push with no usable route is null", () => {
+		expect(parseRemoteHostRoutes(null)).toBeNull();
+		expect(parseRemoteHostRoutes({ signalingUrls: [] })).toBeNull();
+		expect(parseRemoteHostRoutes({ nostr: { publicKey: key, relays: [] } })).toBeNull();
+	});
 });

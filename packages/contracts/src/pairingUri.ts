@@ -9,6 +9,49 @@ export interface PairingNostrRoute {
 	relays: readonly string[];
 }
 
+/**
+ * Every route a paired device reaches its host by. The host pushes it over the session (`remote.hostRoutes`)
+ * whenever a device connects, so a saved host follows a new Wi‑Fi address or a Nostr route added after pairing.
+ */
+export interface RemoteHostRoutes {
+	signalingUrls: readonly string[];
+	nostr?: PairingNostrRoute;
+}
+
+const NOSTR_KEY = /^[0-9a-f]{64}$/;
+const MAX_ROUTES = 16;
+
+const nostrRouteOf = (key: unknown, relays: readonly unknown[]): PairingNostrRoute | undefined => {
+	const urls = relays.filter(
+		(relay): relay is string => typeof relay === "string" && relay.length > 0,
+	);
+	return typeof key === "string" && NOSTR_KEY.test(key) && urls.length > 0
+		? { publicKey: key, relays: urls.slice(0, MAX_ROUTES) }
+		: undefined;
+};
+
+/** Reads a `remote.hostRoutes` push; null when it carries no usable route. */
+export function parseRemoteHostRoutes(data: unknown): RemoteHostRoutes | null {
+	if (typeof data !== "object" || data === null) return null;
+	const { signalingUrls, nostr } = data as { signalingUrls?: unknown; nostr?: unknown };
+	const urls = Array.isArray(signalingUrls)
+		? signalingUrls
+				.filter((url): url is string => typeof url === "string" && /^wss?:\/\//.test(url))
+				.slice(0, MAX_ROUTES)
+		: [];
+	const route =
+		typeof nostr === "object" && nostr !== null
+			? nostrRouteOf(
+					(nostr as { publicKey?: unknown }).publicKey,
+					Array.isArray((nostr as { relays?: unknown }).relays)
+						? (nostr as { relays: unknown[] }).relays
+						: [],
+				)
+			: undefined;
+	if (urls.length === 0 && !route) return null;
+	return { signalingUrls: urls, ...(route ? { nostr: route } : {}) };
+}
+
 export interface PairingUriParams {
 	/** Every relay address the host is reachable at (e.g. its Wi‑Fi and Tailscale addresses); the device uses the first that answers. */
 	signalingUrls: readonly string[];
@@ -55,10 +98,7 @@ export function parsePairingUri(uri: string): PairingUriParams | null {
 	const hostName = url.searchParams.get("n");
 	const nostrKey = url.searchParams.get("o");
 	const nostrRelays = url.searchParams.getAll("r").filter((value) => value.length > 0);
-	const nostr =
-		nostrKey && /^[0-9a-f]{64}$/.test(nostrKey) && nostrRelays.length > 0
-			? { publicKey: nostrKey, relays: nostrRelays }
-			: undefined;
+	const nostr = nostrRouteOf(nostrKey, nostrRelays);
 	if ((signalingUrls.length === 0 && !nostr) || !token || !hostPublicKey || !projectRef)
 		return null;
 	return {
