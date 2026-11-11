@@ -4,7 +4,7 @@ import { AttentionDot } from "@thinkrail/ui/attention-dot";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import { RunningIcon } from "@thinkrail/ui/running-icon";
 import { cn } from "@thinkrail/ui/utils";
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType, ReactNode, Ref } from "react";
 import type { ScopeStatus } from "./status";
 import type { Loaded } from "./useHostRequest";
 
@@ -19,6 +19,7 @@ export function Screen({
 	below,
 	footer,
 	surface = "workspace",
+	scrollRef,
 	children,
 }: {
 	title: string;
@@ -30,6 +31,8 @@ export function Screen({
 	back?: { label: string; onBack: () => void };
 	action?: ReactNode;
 	footer?: ReactNode;
+	/** The screen's scrolling body. */
+	scrollRef?: Ref<HTMLDivElement> | undefined;
 	children: ReactNode;
 }) {
 	return (
@@ -41,7 +44,10 @@ export function Screen({
 		>
 			<ScreenHeader title={title} titleAlign={titleAlign} back={back} action={action} />
 			{below}
-			<div className={footer ? "flex-1 overflow-y-auto" : "flex-1 overflow-y-auto pb-safe-bottom"}>
+			<div
+				ref={scrollRef}
+				className={footer ? "flex-1 overflow-y-auto" : "flex-1 overflow-y-auto pb-safe-bottom"}
+			>
 				{children}
 			</div>
 			{footer}

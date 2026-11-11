@@ -198,11 +198,20 @@ least a touch target. The IDE's desktop density
 stays as is.
 
 The native shell's background is the Dark palette's `background`, read from the manifest by
-`capacitor.config.ts`, so first paint matches. The keyboard resizes the native web view (`Keyboard.resize: native`)
-rather than letting iOS scroll the page under it, which left the screen shifted up with the header off-screen once
-the keyboard closed. A tab under another screen stays mounted (its scroll kept) but transparent, inert and
-untouchable — not `visibility: hidden`, which iOS WebKit repaints blank but for its buttons on every later return to
-that tab. The page itself never scrolls (`ios.scrollEnabled: false`, `html`/`body` with no overflow):
+`capacitor.config.ts`, so first paint matches. The keyboard overlays the web view (`Keyboard.resize: none`):
+`keyboardInset.ts` mirrors the plugin's `keyboardWillShow`/`keyboardWillHide` into `--keyboard-height`, and
+`phone.css` gives up `#root`'s height by it (less the footers' own safe-area padding) with a transition, so the
+composer rises with the keyboard. `native` resized the web view only after the keyboard's animation plus 0.2s
+(the plugin's own delay), so the keyboard covered the composer and the screen jumped half a second later; letting
+iOS scroll the page instead left the header off-screen once the keyboard closed. The chat keeps its last line in
+view while its scroller is resized (`stickToBottom.ts`), unless the reader scrolled up.
+
+**Screen motion.** A pushed screen slides in from the right and a popped one slides out (`stackMotion` in
+`navigation.ts` names them; a popped screen stays mounted for the slide), as iOS does; a swap of the top (an
+opener resolving into its chat) does not move. Reduced motion turns both off. The screen right under the top one
+stays painted so a slide shows it; every other covered layer — a tab under another tab or deeper screens — stays
+mounted (its scroll kept) but transparent, inert and untouchable — not `visibility: hidden`, which iOS WebKit
+repaints blank but for its buttons on every later return to that tab. The page itself never scrolls (`ios.scrollEnabled: false`, `html`/`body` with no overflow):
 only a screen's own list does, so the header and tab bar cannot be dragged off with it. The composer grows to its
 `compact` limit, and chat lists hang their markers outside so a long path starts on the marker's line.
 

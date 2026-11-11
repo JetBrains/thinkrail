@@ -132,6 +132,18 @@ test("a phone pairs by link, finds the project on the computer and reads its cha
 			"summarize the phone shell move",
 		);
 		await expect(phone.getByTestId("model-selector")).toBeVisible();
+
+		const composer = phone.getByTestId("chat-composer");
+		const restingBottom = (await composer.boundingBox())?.y ?? 0;
+		await phone.evaluate(() =>
+			window.dispatchEvent(Object.assign(new Event("keyboardWillShow"), { keyboardHeight: 300 })),
+		);
+		await expect
+			.poll(async () => restingBottom - ((await composer.boundingBox())?.y ?? 0))
+			.toBeGreaterThan(250);
+		await expect(phone.getByText("The phone now runs on the same store as the IDE.")).toBeInViewport();
+		await phone.evaluate(() => window.dispatchEvent(new Event("keyboardWillHide")));
+		await expect.poll(async () => (await composer.boundingBox())?.y ?? 0).toBe(restingBottom);
 	});
 });
 

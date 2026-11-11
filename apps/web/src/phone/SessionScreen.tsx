@@ -52,6 +52,7 @@ import { Loader, Notice, Screen } from "./layout";
 import { ModelSheet } from "./ModelSheet";
 import { draftWith, queuedDraft } from "./queuedDraft";
 import { UsageBar } from "./SessionUsage";
+import { useStickToBottom } from "./stickToBottom";
 import { useStoreHost } from "./storeHost";
 import { type OpenChat, useStartChat, useWorkspaceChats } from "./WorkspaceScreen";
 
@@ -143,6 +144,8 @@ export function SessionScreen({
 	const [queueFlight] = useState(() => singleFlight());
 	const [abortFlight] = useState(() => singleFlight());
 	const bottom = useRef<HTMLDivElement>(null);
+	const scroller = useRef<HTMLDivElement>(null);
+	useStickToBottom(scroller);
 	const composerRef = useRef<ComposerHandle>(null);
 	const isStreaming = runtime?.isStreaming ?? false;
 	const model = runtime?.model ?? session.model;
@@ -410,6 +413,7 @@ export function SessionScreen({
 			<PendingExtUiContext.Provider value={pendingExtUi}>
 				<InteractionStatesContext.Provider value={interactionContext}>
 					<Screen
+						scrollRef={scroller}
 						title={session.title}
 						below={
 							<UsageBar

@@ -47,3 +47,18 @@ export function leaveHost(stack: Stack, hostKey: string): Stack {
 	const first = stack.findIndex((route) => "hostKey" in route && route.hostKey === hostKey);
 	return first === -1 ? stack : stack.slice(0, first);
 }
+
+/** How the stack moved: the screen that slid in on a push, and the screens that slide out on a back. */
+export interface StackMotion {
+	entering: Route | null;
+	leaving: Route[];
+}
+
+export function stackMotion(previous: Stack, next: Stack): StackMotion {
+	const top = next.at(-1);
+	if (next.length > previous.length && top && !previous.includes(top))
+		return { entering: top, leaving: [] };
+	if (next.length < previous.length)
+		return { entering: null, leaving: previous.filter((route) => !next.includes(route)) };
+	return { entering: null, leaving: [] };
+}

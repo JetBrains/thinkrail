@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import type { Project } from "@thinkrail/contracts";
 import type { RemoteSessionItem } from "@thinkrail/remote-client";
 import { chatSections, needsYouCount, settleDone } from "./chats";
-import { leaveHost, pop, popIf, push, type Route, replaceTop } from "./navigation";
+import { leaveHost, pop, popIf, push, type Route, replaceTop, stackMotion } from "./navigation";
 
 const host = (hostKey: string): Route => ({
 	kind: "newWorktree",
@@ -89,4 +89,15 @@ test("a session the phone saw running stays under Done once it finishes, until i
 	).toEqual([["done", ["a"]]]);
 	const again = settleDone(second.seen, second.done, running);
 	expect(again.done).toEqual([]);
+});
+
+test("a push slides its screen in, a back slides the popped screens out, a swap of the top moves nothing", () => {
+	const a = host("a");
+	const b = host("b");
+	const c = host("c");
+	expect(stackMotion([a], [a, b])).toEqual({ entering: b, leaving: [] });
+	expect(stackMotion([a, b], [a])).toEqual({ entering: null, leaving: [b] });
+	expect(stackMotion([a, b, c], [a])).toEqual({ entering: null, leaving: [b, c] });
+	expect(stackMotion([a, b], [a, c])).toEqual({ entering: null, leaving: [] });
+	expect(stackMotion([a, b], [c])).toEqual({ entering: null, leaving: [a, b] });
 });
