@@ -545,7 +545,7 @@
 	"desktop.splash.starting": "正在启动 ThinkRail…",
 	"findInFiles.caseSensitive": "区分大小写",
 	"findInFiles.caseToggle": "Aa",
-	"findInFiles.counts": "{{files}} 个文件中共 {{matches}} 处",
+	"findInFiles.counts": "{{files}}中共 {{matches}}",
 	"findInFiles.failed": "搜索失败 —— 请重试。",
 	"findInFiles.files_other": "{{count}} 个文件",
 	"findInFiles.hint.keep": "打开并保留",
