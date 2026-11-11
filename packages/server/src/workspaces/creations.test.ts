@@ -663,8 +663,10 @@ posix("every project door refuses a creation's folder, including a ~ path", asyn
 		const creation = startWorkspaceCreation("p1");
 		await until(() => listWorkspaceCreations()[0]?.phase === "checking-out");
 		expect(() => openProject("~/worktrees/repo/workspace-1")).toThrow("still creating");
-		expect(() => initProject("~/worktrees/repo/workspace-1")).toThrow("still creating");
-		expect(() => createProject("~/worktrees/repo/workspace-1", "nested")).toThrow("still creating");
+		await expect(initProject("~/worktrees/repo/workspace-1")).rejects.toThrow("still creating");
+		await expect(createProject("~/worktrees/repo/workspace-1", "nested")).rejects.toThrow(
+			"still creating",
+		);
 		expect(() =>
 			inspectCloneDestination(join(dataDir, "worktrees", "repo", "workspace-1"), "c"),
 		).toThrow("still creating");

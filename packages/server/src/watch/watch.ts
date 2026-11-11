@@ -56,6 +56,18 @@ function isRepoMetaPath(relPath: string): boolean {
 	return relPath.split(/[\\/]/)[0] === ".git";
 }
 
+function isDirectory(path: string): boolean {
+	try {
+		return statSync(path).isDirectory();
+	} catch {
+		return false;
+	}
+}
+
+function isGitMetaChange(dir: string, relPath: string): boolean {
+	return !relPath.toLowerCase().endsWith(".lock") && !isDirectory(resolve(dir, relPath));
+}
+
 function resolveExternalGitDir(worktreePath: string): string | null {
 	const dotGit = resolve(worktreePath, ".git");
 	try {
@@ -71,20 +83,17 @@ function resolveExternalGitDir(worktreePath: string): string | null {
 	}
 }
 
-function watchGitDir(
-	workspaceId: string,
-	gitDir: string,
-	rootWatcher: FSWatcher,
-): FSWatcher | null {
+function watchGitDir(workspaceId: string, dir: string, rootWatcher: FSWatcher): FSWatcher | null {
 	try {
-		const watcher = watch(gitDir, { recursive: false }, () => {
-			scheduleRepoMeta(workspaceId, rootWatcher);
+		const watcher = watch(dir, { recursive: false }, (_event, filename) => {
+			if (typeof filename !== "string" || isGitMetaChange(dir, filename))
+				scheduleRepoMeta(workspaceId, rootWatcher);
 		});
 		watcher.on("error", () => {
 			log.warn(`git metadata watcher failed for workspace ${workspaceId}`);
 			watcher.close();
 			const entry = entries.get(workspaceId);
-			if (entry?.metaWatcher === watcher) entry.metaWatcher = null;
+			if (entry) entry.metaWatchers = entry.metaWatchers.filter((w) => w !== watcher);
 		});
 		return watcher;
 	} catch {
@@ -237,7 +246,7 @@ interface WatchEntry {
 	prewarmOnly: boolean;
 	remoteRefs: RemoteRefWatch | null;
 	metaTimer: ReturnType<typeof setTimeout> | null;
-	metaWatcher: FSWatcher | null;
+	metaWatchers: FSWatcher[];
 }
 
 const entries = new Map<string, WatchEntry>();
@@ -299,7 +308,8 @@ export function ensureWatch(
 	try {
 		const watcher = watch(ws.worktreePath, { recursive: true }, (_event, filename) => {
 			const rel = typeof filename === "string" ? filename.replaceAll("\\", "/") : null;
-			if (rel === null || isRepoMetaPath(rel)) scheduleRepoMeta(workspaceId, watcher);
+			if (rel === null || (isRepoMetaPath(rel) && isGitMetaChange(ws.worktreePath, rel)))
+				scheduleRepoMeta(workspaceId, watcher);
 			if (rel !== null && isIgnoredPath(rel)) return;
 			const skillChange: WorkspaceSkillChange =
 				rel === null
@@ -330,7 +340,7 @@ export function ensureWatch(
 			prewarmOnly: prewarm && !replacesRealWatch,
 			remoteRefs: null,
 			metaTimer: null,
-			metaWatcher: null,
+			metaWatchers: [],
 		};
 		entries.set(workspaceId, entry);
 		publishWatchStarted?.(workspaceId);
@@ -344,7 +354,10 @@ export function ensureWatch(
 			settleReady(entry);
 		}, STARTUP_NUDGE_MS);
 		const gitDir = resolveExternalGitDir(ws.worktreePath);
-		if (gitDir) entry.metaWatcher = watchGitDir(workspaceId, gitDir, watcher);
+		if (gitDir)
+			entry.metaWatchers = [gitDir, join(gitDir, "logs")]
+				.filter(isDirectory)
+				.flatMap((dir) => watchGitDir(workspaceId, dir, watcher) ?? []);
 		const commonDir = gitDir ? resolveCommonGitDir(gitDir) : null;
 		if (gitDir && commonDir) {
 			entry.remoteRefs = { gitDir, commonDir, key: "", watchers: [] };
@@ -366,7 +379,7 @@ export function stopWatch(workspaceId: string): void {
 	if (entry.nudgeTimer) clearTimeout(entry.nudgeTimer);
 	settleReady(entry);
 	if (entry.metaTimer) clearTimeout(entry.metaTimer);
-	entry.metaWatcher?.close();
+	for (const metaWatcher of entry.metaWatchers) metaWatcher.close();
 	entry.coalescer.dispose();
 	for (const watcher of entry.remoteRefs?.watchers ?? []) watcher.close();
 	entry.watcher.close();

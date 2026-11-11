@@ -11,7 +11,6 @@ const MAGIC: ReadonlyArray<{ mime: string; bytes: readonly number[] }> = [
 	{ mime: "image/jpeg", bytes: [0xff, 0xd8, 0xff] },
 	{ mime: "image/gif", bytes: [0x47, 0x49, 0x46, 0x38, 0x37, 0x61] },
 	{ mime: "image/gif", bytes: [0x47, 0x49, 0x46, 0x38, 0x39, 0x61] },
-	{ mime: "image/bmp", bytes: [0x42, 0x4d] },
 	{ mime: "image/x-icon", bytes: [0x00, 0x00, 0x01, 0x00] },
 	{ mime: "application/pdf", bytes: [0x25, 0x50, 0x44, 0x46, 0x2d] },
 	{ mime: "application/zip", bytes: [0x50, 0x4b, 0x03, 0x04] },
@@ -68,6 +67,16 @@ function isAvif(bytes: Uint8Array): boolean {
 	return false;
 }
 
+const BMP_SIGNATURE = [0x42, 0x4d];
+const BMP_DIB_HEADER_OFFSET = 14;
+const BMP_DIB_HEADER_SIZES: ReadonlySet<number> = new Set([12, 40, 52, 56, 64, 108, 124]);
+
+function isBmp(bytes: Uint8Array): boolean {
+	if (bytes.length < BMP_DIB_HEADER_OFFSET + 4 || !startsWith(bytes, BMP_SIGNATURE)) return false;
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	return BMP_DIB_HEADER_SIZES.has(view.getUint32(BMP_DIB_HEADER_OFFSET, true));
+}
+
 function sniffMagic(bytes: Uint8Array): string | undefined {
 	if (
 		startsWith(bytes, [0x52, 0x49, 0x46, 0x46]) &&
@@ -76,6 +85,7 @@ function sniffMagic(bytes: Uint8Array): string | undefined {
 		return "image/webp";
 	}
 	if (isAvif(bytes)) return "image/avif";
+	if (isBmp(bytes)) return "image/bmp";
 	return MAGIC.find(({ bytes: magic }) => startsWith(bytes, magic))?.mime;
 }
 

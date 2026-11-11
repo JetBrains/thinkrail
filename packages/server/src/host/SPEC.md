@@ -251,7 +251,13 @@ channel fan-out, and the process-boot wrapper both launchers share.
   pick + `chat_started`): only a user's pick (`pick` — `session.create`, `chat.create` and a dialog's
   kickoff that **named** a model) is recorded as recent through `settings`' `noteRecentModel`, as is every
   `session.setModel`; a default-resolved creation, the review chat, Continue's destination and an agent's
-  `start_workspace` are the host's or the agent's choice, not the user's, and are not recorded. `model.contextSettings` and `model.setContextWindow` delegate to agent's `modelContext`
+  `start_workspace` are the host's or the agent's choice, not the user's, and are not recorded. Without an
+  explicit model, an available saved model or an available pi global default, the resolver first applies
+  pi's model preference to connections whose wire auth kind is not `env`, then to the whole available
+  catalog. An ambient API key must not preempt a configured subscription; explicit selections, available
+  saved defaults and pi's global default still take precedence, including environment-backed ones. This
+  changes only new-chat resolution, never an existing session's model or a failed request's connection.
+  `model.contextSettings` and `model.setContextWindow` delegate to agent's `modelContext`
   adapter and return its `ModelContextSetting[]`; the mutation names a provider/model target or all
   eligible pairs, never arbitrary model metadata, and successful saves reuse `provider.changed` to
   invalidate catalogs across clients. The four `customEndpoints.*` methods delegate to agent's
@@ -920,6 +926,14 @@ enabled/confirmed choice before entering analytics attribution.
   `terminalSend.ts`), so the host lifts the latch and resumes that client's terminals. A socket with
   buffered bytes stays latched, and a latch whose socket is already gone is left to `close`/`open`.
   Reloading the client always recovered (open clears the flag and resumes), which is why this hid so long.
+- **The composer's image budget stays under the inbound frame cap, never the other way round.** Bun
+  closes a socket on a frame over `maxPayloadLength` before any handler sees it, taking every open
+  request with it, and the client replayed that frame on every reconnect (#671). `maxPayloadLength` is
+  `WS_MAX_FRAME_BYTES` (16 MiB, [[module-contracts]]); the 12 MiB `REQUEST_IMAGE_BASE64_BUDGET` leaves
+  room under it for the prompt text, and `WsTransport.request` refuses a larger frame before it is sent
+  ([[submodule-web-transport]]). Raising the cap instead was tried and rejected: pi echoes a prompt's
+  images back through `pi.event` several times, and past Bun's outbound backpressure limit those frames
+  are dropped (#1179, #1180); providers also reject a whole request near 20 MB.
 - The host is the single place features are wired together — features never reach back into it.
 - **A font upload must carry `X-ThinkRail-Request: font-upload`** (`USER_FONT_UPLOAD_HEADER`), else 403.
   The host has no auth, no Origin check and no CORS ([[architecture]] Decision 7). A cross-origin upload
@@ -927,7 +941,7 @@ enabled/confirmed choice before entering analytics attribution.
   the route answers 405 with no `Access-Control-*` headers, so another website's write never leaves the
   browser; the same-origin client needs no preflight. Never add CORS headers to `/fonts/`, and keep the
   header check should the route ever accept a simple method such as `POST`. It is the host's only HTTP
-  write because the alternatives fail the feature: base64 over the WebSocket hits Bun's 16 MB frame cap
+  write because the alternatives fail the feature: base64 over the WebSocket hits the 16 MiB frame cap
   (CJK fonts run past 20 MB) and a pending frame is replayed on every reconnect, and the host's native
   file dialog cannot take a drag-and-drop and opens on the host's screen, not a remote browser's.
 - **Login-shell environment import is opt-in at boot** (`resolveShellEnv: true`, passed by the dev,

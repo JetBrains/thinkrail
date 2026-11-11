@@ -108,8 +108,9 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   raises the refresh error, and a new generation/compaction key gets a fresh budget. Store reconciliation
   replaces only host-derived conversation state and preserves browser-local state. The persisted
   `compactionSummary` then becomes the same row in place (the live id,
-  estimated-after count, and live `resuming` flag survive when they still apply), and the messages Pi
-  summarized disappear immediately rather than only after reload. Its `summary` opens on click
+  estimated-after count, and live `resuming` flag survive when they still apply). The host's display
+  transcript keeps the turns Pi summarized **above** that marker so the same session can still scroll
+  back through them; only the model's context is the summary-plus-kept-tail. Its `summary` opens on click
   (`data-testid="chat-compaction"`). Hydration/reopen starts directly from that same durable form. Both forms
   share the **"Context compacted"** title; only facts unavailable after reload disappear.
 - `markdown` — a non-empty assistant text block (react-markdown + remark-gfm + code highlighting). Safe
@@ -190,7 +191,9 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   The message content reserves one horizontal `size-24` band on the action's side (`pl-24` for the final
   assistant Markdown wrapper, `pr-24` for the user bubble) instead of a vertical band, so text and the
   large-message toggle cannot sit beneath the hit target. Final-answer list markers stay inside their
-  content box rather than painting back into the assistant's action band. The assistant wrapper removes
+  content box rather than painting back into the assistant's action band. A list item's first paragraph
+  is inline so loose-list text shares the marker's first line (#506); later paragraphs and nested lists
+  remain blocks. The assistant wrapper removes
   only its final Markdown block's trailing margin to align the action with the actual final line;
   inter-block and leading margins stay unchanged. `MessageWithCopy` also carries the
   `data-testid="chat-message"`/`data-role` hooks the jump/flash + tests rely on. `CopyButton` is a
@@ -704,6 +707,24 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   item overscan lets nearby outliers replace estimates before coarse input exhausts a false range. Native
   wheel physics remain untouched. `chat-history.spec.ts` pins the default latest edge and tall-history
   geometry; `chat-order.spec.ts` pins both projections.
+- **A detached reader keeps their place across remounts** — only the selected tab's body is mounted, so
+  switching chat tabs unmounts the transcript (#971). On unmount the transcript writes the session
+  runtime's `readingAnchor`: the topmost visible row id and its offset from the viewport top while
+  detached, or `null` while following. It is a row anchor rather than a pixel `scrollTop` because the
+  remounted list re-measures its virtual rows, so a pixel offset drifts. A mount that finds an anchor
+  detaches instead of placing, materializes the row through the same cancellable measured-size
+  materialization as row reveal (never Virtuoso's retrying `scrollToIndex`), writes the exact offset at
+  once, and holds it with the anchor-stabilization motion through measurement frames. The reader stays
+  detached, so the streaming pin and the on-screen guard stay idle: a working chat returns showing
+  **Follow response**, and settlement leaves the restored content where it is. A settlement that lands
+  before the row materializes skips its row-reveal cancellation while the restore's reveal generation is
+  still current, so the restore survives it; reader input, a reveal, or teardown still ends the restore.
+  Reader input during that wait wins; a row that never materializes within the bounded wait (for example
+  after compaction) returns to the latest edge, or to the pin line while working. A following reader saves
+  `null` and gets the ordinary mount placement above, so a streaming chat keeps following on return. Neither a pending
+  placement nor a pending restore writes an anchor, so a StrictMode re-mount or a quick switch away cannot
+  overwrite the reader's place with a transient position. `chat-scroll.spec.ts` pins both orders, idle,
+  working, and settling before the row materializes.
 - **Alignment is explicit, not inferred from proximity** — `useChatScroll` owns two orthogonal facts:
   actual work (`agent_start` through `agent_settled`) and alignment (`following` or manually `detached`).
   Following while working means the configured response window; following while idle means the physical
@@ -901,10 +922,11 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   provider-accepted** (`ACCEPTED_IMAGE_TYPES`, shared via `contracts`); undecodable + unsupported
   (HEIC…) is **refused** (`fileToAttachedImage` → `null`) — raw pass-through would 400 every later
   turn — and surfaced as a dismissible error chip (`composer-image-error` testid) in the attachment
-  strip, cleared on send. One message's batch is also bounded by the request-wide
-  **`REQUEST_IMAGE_BASE64_BUDGET`** (24MB of base64, headroom under Anthropic's 32MB per-request cap):
-  files that would push the batch over it are refused with the same error-chip surface. The server's
-  `imageGuard` extension is the second line of defense for history. While files are still decoding, a placeholder chip renders
+  strip, cleared on send. One message's batch is also bounded by
+  **`REQUEST_IMAGE_BASE64_BUDGET`** (12MB of base64 — under the 16MB `WS_MAX_FRAME_BYTES` with room for
+  the text, since a bigger frame would close the socket; the server's `imageGuard` keeps its own 24MB
+  budget for the whole context): files that would push the batch over it are refused with the same
+  error-chip surface. The server's `imageGuard` extension is the second line of defense for history. While files are still decoding, a placeholder chip renders
   (`composer-image-pending` testid) and sends are held (`canSubmit` is the one reading — `submitText`
   refuses, the send button disables) — a send mid-decode would otherwise go without the image and strand
   it on the next message. A held send keeps its text: the composer's own gestures leave the draft in
@@ -1761,7 +1783,8 @@ Unknown custom messages retain their existing behavior.
   **`useTranscriptSync.ts`** authoritative read that converges an existing runtime. A
   **rejected** send (`prompt`/`steer`/`followUp`) lands in the chat via the store's `appendErrorTurn` —
   never swallowed and never given the settlement-only Try again affordance; *streaming* faults arrive as pi
-  events instead.
+  events instead. A send the transport refused as **`FRAME_TOO_LARGE`** never left the page, so its text
+  and images also go back to the composer to be trimmed and resent.
 
 ## Streaming model
 

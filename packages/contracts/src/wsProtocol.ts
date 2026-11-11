@@ -1499,11 +1499,14 @@ export interface WsResume {
 
 export type WsClientMessage = WsRequest | WsAck | WsResume;
 
+export const WS_MAX_FRAME_BYTES = 16 * 1024 * 1024;
+
 export type WsErrorCode =
 	| "UNKNOWN_COMMIT"
 	| "PUSH_AUTH_FAILED"
 	| "NOT_GIT"
 	| "ALREADY_OPEN"
+	| "PROJECT_BOOTSTRAPPING"
 	| "PROJECT_CLONE_INVALID"
 	| "PROJECT_CLONE_FAILED"
 	| "PROJECT_CLONE_CLEANUP_FAILED"
@@ -1551,6 +1554,7 @@ export type WsErrorCode =
 	| "CONTINUATION_IN_FLIGHT"
 	| "TEXT_SEARCH_TIMEOUT"
 	| "TEXT_SEARCH_FAILED"
+	| "FRAME_TOO_LARGE"
 	| SpeechErrorCode;
 
 export interface WsResponse {

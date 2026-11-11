@@ -392,6 +392,24 @@ test("a per-call model runs an unpinned agent on a different model than the pare
 	await service.disposeChildrenOf(parent.sessionId);
 });
 
+test("a call that sets model to inherit runs the unpinned agent on the parent's model", async () => {
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall("Agent", { subagent_type: "worker", task: "Use my model.", model: "inherit" }),
+		),
+		fauxAssistantMessage("INHERIT_CHILD_OK"),
+		fauxAssistantMessage("PARENT_AFTER_INHERIT"),
+	]);
+
+	await parent.prompt("Delegate on the parent's model.");
+
+	expect(transcript()).toContain("INHERIT_CHILD_OK");
+	expect(transcript()).toContain("PARENT_AFTER_INHERIT");
+	const child = service.childrenOf(parent.sessionId)[0];
+	expect(child?.snapshot?.details.model).toBe("fauxa/fauxa");
+	await service.disposeChildrenOf(parent.sessionId);
+});
+
 test.each([
 	["fauxreasoner", "xhigh", false],
 	["fauxreasoner", "xhigh", true],
@@ -652,7 +670,7 @@ test("an unknown subagent_type surfaces as a tool error listing the available ty
 	const text = lastToolResultText();
 	expect(text).toContain('Unknown subagent type "nope"');
 	expect(text).toContain('"scout" (builtin)');
-	expect(text).toContain("model: call or parent");
+	expect(text).toContain("model: parent unless set");
 	expect(text).toContain("model: pinned fauxb");
 	expect(service.childrenOf(parent.sessionId)).toEqual([]);
 });
