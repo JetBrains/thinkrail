@@ -1,7 +1,15 @@
+import { RiCloseLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
+import { IconButton } from "@thinkrail/ui/button";
+import {
+	Dialog,
+	DialogClose,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+} from "@thinkrail/ui/dialog";
 import { cn } from "@thinkrail/ui/utils";
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { SettingsSection, useAppStore } from "@/store";
 import { loadInAppSurvey } from "@/transport";
 import { AppearanceSettings } from "./AppearanceSettings";
@@ -16,16 +24,20 @@ import { ModelsSettings } from "./ModelsSettings";
 import { NotificationsSettings } from "./NotificationsSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { ProvidersSettings } from "./ProvidersSettings";
+import { SettingsDialogContainer } from "./settingsDialogContainer";
 import { resolveSettingsSection, settingsNavGroups } from "./settingsNav";
 import { TemplatesSettings } from "./TemplatesSettings";
 import { TerminalSettings } from "./TerminalSettings";
+import { VoiceSettings } from "./VoiceSettings";
 import { WorkspacesSettings } from "./WorkspacesSettings";
 
 export function SettingsDialog({
 	layoutSettings,
+	keyboardSettings,
 	updateSettings,
 }: {
 	layoutSettings: ReactNode;
+	keyboardSettings: ReactNode;
 	updateSettings?: ReactNode;
 }) {
 	const t = useT();
@@ -35,6 +47,7 @@ export function SettingsDialog({
 	const filteredGroups = settingsNavGroups(protocolVersion, updateSettings !== undefined);
 	const selectedSection = resolveSettingsSection(section, filteredGroups);
 	const feedbackActive = selectedSection === SettingsSection.Feedback;
+	const [contentEl, setContentEl] = useState<HTMLElement | null>(null);
 
 	useEffect(() => {
 		if (open) void loadInAppSurvey();
@@ -48,7 +61,9 @@ export function SettingsDialog({
 			}}
 		>
 			<DialogContent
+				ref={setContentEl}
 				data-testid="settings-dialog"
+				hideClose
 				onEscapeKeyDown={(event) => {
 					if (
 						document.activeElement instanceof HTMLElement &&
@@ -57,16 +72,19 @@ export function SettingsDialog({
 						event.preventDefault();
 					}
 				}}
-				className="flex h-[80vh] max-h-[85vh] w-full max-w-[52rem] flex-col gap-0 overflow-hidden p-0"
+				className="h-[80vh] max-w-[52rem] gap-0 overflow-hidden p-0"
 			>
-				<DialogHeader className="border-border-default border-b px-16 py-12">
+				<DialogHeader className="flex-row items-center justify-between border-border-default border-b px-16 py-8">
 					<DialogTitle>{t("settings.dialog.title")}</DialogTitle>
+					<DialogClose asChild>
+						<IconButton icon={RiCloseLine} label={t("common.close")} />
+					</DialogClose>
 				</DialogHeader>
 
 				<div className="flex min-h-0 flex-1 flex-col md:flex-row">
 					<nav
 						aria-label={t("settings.dialog.sectionsLabel")}
-						className="flex shrink-0 gap-4 overflow-x-auto border-border-default border-b p-8 md:w-192 md:flex-col md:gap-12 md:overflow-x-visible md:overflow-y-auto md:border-r md:border-b-0 md:bg-container-elevated-bg md:p-12"
+						className="flex shrink-0 gap-4 overflow-x-auto border-border-default border-b p-8 md:w-216 md:flex-col md:gap-12 md:overflow-x-visible md:overflow-y-auto md:border-r md:border-b-0 md:bg-container-elevated-bg md:p-12"
 					>
 						{filteredGroups.map((group) => (
 							<div key={group.label} className="flex shrink-0 md:flex-col">
@@ -84,14 +102,14 @@ export function SettingsDialog({
 												data-active={active}
 												onClick={() => useAppStore.getState().setSettingsSection(id)}
 												className={cn(
-													"flex shrink-0 items-center gap-4 rounded-sm px-4 py-4 text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary md:h-28 md:w-full md:px-8 md:py-0",
+													"flex shrink-0 items-center gap-4 rounded-sm px-4 py-4 text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary md:min-h-28 md:w-full md:px-8 md:py-0",
 													active
 														? "bg-primary-subtle text-primary"
 														: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
 												)}
 											>
 												<Icon className="size-14 shrink-0" />
-												{t(label)}
+												<span className="min-w-0 wrap-anywhere">{t(label)}</span>
 											</button>
 										);
 									})}
@@ -114,43 +132,49 @@ export function SettingsDialog({
 					</nav>
 
 					<div className="min-h-0 flex-1 overflow-y-auto p-16">
-						{selectedSection === SettingsSection.Models ? (
-							<ModelsSettings />
-						) : selectedSection === SettingsSection.Providers ? (
-							<ProvidersSettings />
-						) : selectedSection === SettingsSection.Mcp ? (
-							<McpSettings />
-						) : selectedSection === SettingsSection.Templates ? (
-							<TemplatesSettings />
-						) : selectedSection === SettingsSection.Environment ? (
-							<EnvironmentSettings />
-						) : selectedSection === SettingsSection.Extensions ? (
-							<ExtensionsSettings />
-						) : selectedSection === SettingsSection.Chat ? (
-							<ChatSettings />
-						) : selectedSection === SettingsSection.Appearance ? (
-							<AppearanceSettings />
-						) : selectedSection === SettingsSection.Language ? (
-							<LanguageSettings />
-						) : selectedSection === SettingsSection.Layout ? (
-							layoutSettings
-						) : selectedSection === SettingsSection.Terminal ? (
-							<TerminalSettings />
-						) : selectedSection === SettingsSection.Workspaces ? (
-							<WorkspacesSettings />
-						) : selectedSection === SettingsSection.Github ? (
-							<GithubSettings />
-						) : selectedSection === SettingsSection.Notifications ? (
-							<NotificationsSettings />
-						) : selectedSection === SettingsSection.Privacy ? (
-							<PrivacySettings />
-						) : selectedSection === SettingsSection.Updates && updateSettings !== undefined ? (
-							updateSettings
-						) : selectedSection === SettingsSection.Feedback ? (
-							<FeedbackSettings />
-						) : (
-							<AppearanceSettings />
-						)}
+						<SettingsDialogContainer value={contentEl}>
+							{selectedSection === SettingsSection.Models ? (
+								<ModelsSettings />
+							) : selectedSection === SettingsSection.Providers ? (
+								<ProvidersSettings />
+							) : selectedSection === SettingsSection.Mcp ? (
+								<McpSettings />
+							) : selectedSection === SettingsSection.Templates ? (
+								<TemplatesSettings />
+							) : selectedSection === SettingsSection.Environment ? (
+								<EnvironmentSettings />
+							) : selectedSection === SettingsSection.Extensions ? (
+								<ExtensionsSettings />
+							) : selectedSection === SettingsSection.Chat ? (
+								<ChatSettings />
+							) : selectedSection === SettingsSection.Appearance ? (
+								<AppearanceSettings />
+							) : selectedSection === SettingsSection.Language ? (
+								<LanguageSettings />
+							) : selectedSection === SettingsSection.Layout ? (
+								layoutSettings
+							) : selectedSection === SettingsSection.Keyboard ? (
+								keyboardSettings
+							) : selectedSection === SettingsSection.Terminal ? (
+								<TerminalSettings />
+							) : selectedSection === SettingsSection.Voice ? (
+								<VoiceSettings />
+							) : selectedSection === SettingsSection.Workspaces ? (
+								<WorkspacesSettings />
+							) : selectedSection === SettingsSection.Github ? (
+								<GithubSettings />
+							) : selectedSection === SettingsSection.Notifications ? (
+								<NotificationsSettings />
+							) : selectedSection === SettingsSection.Privacy ? (
+								<PrivacySettings />
+							) : selectedSection === SettingsSection.Updates && updateSettings !== undefined ? (
+								updateSettings
+							) : selectedSection === SettingsSection.Feedback ? (
+								<FeedbackSettings />
+							) : (
+								<AppearanceSettings />
+							)}
+						</SettingsDialogContainer>
 					</div>
 				</div>
 			</DialogContent>

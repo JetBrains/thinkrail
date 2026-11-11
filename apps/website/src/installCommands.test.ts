@@ -4,6 +4,8 @@ import { desktopInstallerPlatforms, installCommands, windowsShellLabels } from "
 const INSTALL_PS1_URL = "https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1";
 const RELEASE_DOWNLOAD_URL = "https://github.com/JetBrains/thinkrail/releases/latest/download";
 
+type DesktopDownload = (typeof desktopInstallerPlatforms)[number]["downloads"][number];
+
 describe("desktop installers", () => {
 	it("publishes the stable desktop aliases in platform order", () => {
 		expect(desktopInstallerPlatforms.map((platform) => platform.label)).toEqual([
@@ -16,7 +18,9 @@ describe("desktop installers", () => {
 			"Windows x64",
 			"Ubuntu 24.04+",
 		]);
-		expect(desktopInstallerPlatforms.flatMap((platform) => platform.downloads)).toEqual([
+		expect(
+			desktopInstallerPlatforms.flatMap<DesktopDownload>((platform) => platform.downloads),
+		).toEqual([
 			{
 				label: "Download .dmg",
 				href: `${RELEASE_DOWNLOAD_URL}/thinkrail-desktop-darwin-arm64.dmg`,

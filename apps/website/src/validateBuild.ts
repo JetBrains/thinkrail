@@ -30,6 +30,17 @@ function attributeValues(content: string, attributes: string[]): string[] {
 	return [...content.matchAll(expression)].map((match) => match[1] ?? "");
 }
 
+export function relativeLinkTargets(pagePath: string, html: string): string[] {
+	const page = `https://thinkrail.ai/${pagePath.replace(/index\.html$/, "")}`;
+	return [
+		...new Set(
+			attributeValues(html, ["src", "href"])
+				.filter((value) => !/^(?:[a-z][a-z\d+.-]*:|\/|#)/i.test(value))
+				.map((value) => new URL(value, page).pathname),
+		),
+	];
+}
+
 function stylesheetUrls(content: string): Set<string> {
 	return new Set(
 		[...content.matchAll(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"/g)].map(
@@ -226,6 +237,11 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		if (picker < 0 || html.indexOf("Browser UI via command line", picker) < 0) {
 			failures.push(`${path}: blog install picker is missing`);
 		}
+		for (const url of relativeLinkTargets(path, html)) {
+			if (!(await outputPathExists(distDirectory, url))) {
+				failures.push(`${path}: missing local output for ${url}`);
+			}
+		}
 	}
 	if (!pages.landing.includes("Browser UI via command line")) {
 		failures.push("landing: browser UI command-line option is missing");
@@ -296,6 +312,18 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		const ids = [...pages[name].matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
 		const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index);
 		for (const id of new Set(duplicateIds)) failures.push(`${name} duplicate id: ${id}`);
+	}
+
+	for (const icon of ["favicon.ico", "apple-touch-icon.png"]) {
+		if (!(await Bun.file(`${distDirectory}/${icon}`).exists())) failures.push(`missing ${icon}`);
+	}
+	for (const name of ["landing", "blog"] as const) {
+		for (const required of [
+			'<link rel="icon" href="/favicon.ico" sizes="32x32">',
+			'<link rel="apple-touch-icon" href="/apple-touch-icon.png">',
+		]) {
+			if (!pages[name].includes(required)) failures.push(`${name}: missing ${required}`);
+		}
 	}
 
 	const robots = await Bun.file(`${distDirectory}/robots.txt`).text();

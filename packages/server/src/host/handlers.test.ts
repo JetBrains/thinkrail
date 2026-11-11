@@ -1,17 +1,28 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { afterEach, beforeEach, expect, onTestFinished, test } from "bun:test";
+import {
+	chmodSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
-import { createFauxCore } from "@earendil-works/pi-ai/providers/faux";
+import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type {
+	AppConfig,
 	Project,
 	Template,
 	TemplateInfo,
 	WireModel,
 	Workspace,
+	WorkspaceCreation,
+	WorkspaceCreationRemoved,
 	WorkspaceWatchReadyResult,
 } from "@thinkrail/contracts";
 import {
@@ -40,10 +51,18 @@ import { resetConfigCache } from "../settings";
 import { todoReviewRecord } from "../todos";
 import { stopAllWatches } from "../watch";
 import {
+	awaitWorkspaceCreation,
+	getWorkspace,
+	setWorkspaceCreationHandoff,
+	setWorkspaceCreationPublisher,
+	setWorkspaceReview,
+} from "../workspaces";
+import {
 	handleRequest,
 	openReviewForClient,
 	requestMethodDiagnostic,
 	shouldRefreshOpenReview,
+	workspaceCreationHandoff,
 } from "./handlers";
 
 const CTX = { clientKey: "test-client" };
@@ -51,6 +70,9 @@ const CTX = { clientKey: "test-client" };
 let dataDir: string;
 let repo: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
+const savedTestAgentDir = process.env.PI_CODING_AGENT_DIR;
+
+let handlerFaux: ReturnType<typeof createFauxCore> | null = null;
 
 async function setupDefaultModelRuntime(): Promise<() => void> {
 	const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
@@ -73,6 +95,7 @@ async function setupDefaultModelRuntime(): Promise<() => void> {
 		maxTokens: 4_096,
 	};
 	const faux = createFauxCore({ provider: "handler", api: "faux", models: [model] });
+	handlerFaux = faux;
 	runtime.registerProvider("handler", {
 		api: "faux",
 		baseUrl: "http://faux.local",
@@ -102,6 +125,7 @@ function gitText(cwd: string, ...args: string[]): string {
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "trpi-handlers-test-"));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
+	process.env.PI_CODING_AGENT_DIR = join(dataDir, "pi");
 	resetConfigCache();
 	resetFeedbackForTests();
 	resetSurveyForTests();
@@ -129,6 +153,8 @@ afterEach(() => {
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
+	if (savedTestAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+	else process.env.PI_CODING_AGENT_DIR = savedTestAgentDir;
 });
 
 test("every contract method has a registered handler", () => {
@@ -238,6 +264,84 @@ test("branch status reports a review-free branch, and workspace.push publishes i
 		aheadOfBase: 1,
 		review: null,
 	});
+});
+
+test("branch status measures the branch a managed workspace's terminal switched to", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Switched" },
+		CTX,
+	)) as Workspace;
+	const remote = join(dataDir, "switched.git");
+	mkdirSync(remote);
+	git(remote, "init", "--bare");
+	git(repo, "remote", "add", "origin", remote);
+	await handleRequest(
+		"workspace.push",
+		{ workspaceId: workspace.id, branch: workspace.branch },
+		CTX,
+	);
+	git(workspace.worktreePath, "switch", "-c", "feature/terminal");
+
+	const rows = (await handleRequest(
+		"workspace.list",
+		{ projectId: "p1", includeDiffStats: false },
+		CTX,
+	)) as Workspace[];
+	expect(rows.find((row) => row.id === workspace.id)).toMatchObject({
+		branch: "feature/terminal",
+	});
+	expect(
+		await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX),
+	).toMatchObject({ published: false, review: null });
+});
+
+test("a workspace on its base branch gets no review lookup and drops a stored foreign review", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "On base" },
+		CTX,
+	)) as Workspace;
+	git(repo, "remote", "add", "origin", "https://github.com/fake-owner/fake-repo.git");
+	const bin = join(dataDir, "bin");
+	const ghCalls = join(dataDir, "gh-calls");
+	mkdirSync(bin);
+	writeFileSync(join(bin, "gh"), `#!/bin/sh\necho "$@" >> ${JSON.stringify(ghCalls)}\necho "[]"\n`);
+	chmodSync(join(bin, "gh"), 0o755);
+	const savedPath = process.env.PATH;
+	process.env.PATH = `${bin}${delimiter}${savedPath ?? ""}`;
+	onTestFinished(() => {
+		process.env.PATH = savedPath;
+	});
+	git(repo, "switch", "-c", "elsewhere");
+	git(workspace.worktreePath, "switch", "main");
+	await handleRequest("workspace.list", { projectId: "p1", includeDiffStats: false }, CTX);
+	setWorkspaceReview(
+		workspace.id,
+		{ kind: "pull-request", number: 501, state: "merged", url: "https://example.test/501" },
+		"main",
+	);
+
+	expect(
+		await handleRequest(
+			"workspace.branchStatus",
+			{ workspaceId: workspace.id, skipFetch: true },
+			CTX,
+		),
+	).toMatchObject({ onBase: true, review: null });
+	expect(getWorkspace(workspace.id)).toMatchObject({ branch: "main" });
+	expect(getWorkspace(workspace.id).review).toBeUndefined();
+
+	setWorkspaceReview(workspace.id, { kind: "pull-request", number: 501, state: "open" }, "main");
+	expect(
+		await handleRequest(
+			"workspace.openReview",
+			{ workspaceId: workspace.id, allowCached: true },
+			CTX,
+		),
+	).toBeNull();
+	expect(getWorkspace(workspace.id).review).toBeUndefined();
+	expect(existsSync(ghCalls)).toBe(false);
 });
 
 test("a CI poll re-reads the review without fetching origin; a focus read still fetches", async () => {
@@ -457,6 +561,49 @@ test("template reads resolve a project's current checkout and reject ambiguous l
 	}
 });
 
+test("a background create hands the finished workspace a terminal and the held chat", async () => {
+	const cleanup = await setupDefaultModelRuntime();
+	setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd, { id: "kickoff-chat" }));
+	const removed: WorkspaceCreationRemoved[] = [];
+	setWorkspaceCreationPublisher((event) => {
+		if (event.kind === "removed") removed.push(event.removed);
+	});
+	setWorkspaceCreationHandoff(workspaceCreationHandoff);
+	try {
+		const models = (await handleRequest("model.list", {}, CTX)) as WireModel[];
+		const selected = models.find((model) => model.provider === "handler");
+		if (!selected) throw new Error("handler test model was not available");
+		handlerFaux?.setResponses([
+			async () => {
+				await Bun.sleep(4_000);
+				return fauxAssistantMessage("done");
+			},
+		]);
+		const started = Date.now();
+		const creation = (await handleRequest(
+			"workspace.startCreate",
+			{ projectId: "p1", kickoff: { text: "Start here", model: selected } },
+			CTX,
+		)) as WorkspaceCreation;
+		expect(creation).toMatchObject({ state: "running", kickoff: { text: "Start here" } });
+		const workspace = await awaitWorkspaceCreation(creation.id);
+		expect(Date.now() - started).toBeLessThan(3_000);
+
+		expect(workspace.initialTerminalPending).toBeUndefined();
+		expect(removed).toHaveLength(1);
+		expect(removed[0]).toMatchObject({ id: creation.id, workspace: { id: creation.id } });
+		expect(removed[0]?.sessionId).toEqual(expect.any(String));
+		expect(await handleRequest("workspace.listCreations", {}, CTX)).toEqual([]);
+	} finally {
+		setWorkspaceCreationHandoff(null);
+		setWorkspaceCreationPublisher(null);
+		disposeAllSessions();
+		configurePiRuntime(null);
+		setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+		cleanup();
+	}
+});
+
 test("model.default and new session creation share the AppConfig default resolution", async () => {
 	const cleanup = await setupDefaultModelRuntime();
 	setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd, { id: "default-resolution" }));
@@ -494,6 +641,30 @@ test("model.default and new session creation share the AppConfig default resolut
 	}
 });
 
+test("settings.update merges extension settings per key and rejects a malformed value", async () => {
+	await handleRequest(
+		"settings.update",
+		{ config: { extensionSettings: { "ask-user-question": { richPreviews: false } } } },
+		CTX,
+	);
+	const config = (await handleRequest(
+		"settings.update",
+		{ config: { extensionSettings: { "ask-user-question": { other: true } } } },
+		CTX,
+	)) as AppConfig;
+	expect(config.extensionSettings["ask-user-question"]).toEqual({
+		richPreviews: false,
+		other: true,
+	});
+	await expect(
+		handleRequest(
+			"settings.update",
+			{ config: { extensionSettings: { "ask-user-question": { richPreviews: "no" } } } } as never,
+			CTX,
+		),
+	).rejects.toThrow("extensionSettings must map extension names to boolean settings");
+});
+
 test("extension.list reflects disabledExtensions written through settings.update", async () => {
 	expect(await handleRequest("extension.list", {}, CTX)).toEqual([
 		{
@@ -511,6 +682,7 @@ test("extension.list reflects disabledExtensions written through settings.update
 			enabled: true,
 			tools: ["ask_user_question"],
 			hasChildExtensions: false,
+			settings: [{ key: "richPreviews", default: true }],
 		},
 		{
 			name: "web-access",
@@ -560,6 +732,7 @@ test("feedback.respond persists a popup action through the handler", async () =>
 		submittedSurveyId: null,
 		submittedIteration: null,
 		lastInvitedAt: null,
+		githubStarAsked: false,
 	});
 });
 

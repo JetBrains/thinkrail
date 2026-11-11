@@ -19,9 +19,15 @@ test("compiles groups + loose with a progress header and GFM checkboxes", () => 
 			{
 				id: "g1",
 				title: "Auth",
+				status: "active",
 				todos: [item("Scaffold module", "done"), item("Validate inputs")],
 			},
-			{ id: "g2", title: "Payments", todos: [item("Wire the route", "in_progress")] },
+			{
+				id: "g2",
+				title: "Payments",
+				status: "active",
+				todos: [item("Wire the route", "in_progress")],
+			},
 		],
 	};
 	expect(planToMarkdown(currentTranslator(), plan, "My chat")).toBe(
@@ -223,8 +229,8 @@ test("unattributed changes compile as their own section, after the items", () =>
 	);
 });
 
-test("the export follows the interface language, plural forms included", () => {
-	applyLocale("ru", {
+test("the export follows the interface language, plural forms included", async () => {
+	await applyLocale("ru", {
 		ru: {
 			"chat.planExport.title": "План — {{title}}",
 			"chat.planExport.progress": "Готово: {{done}} из {{total}}",
@@ -246,6 +252,6 @@ test("the export follows the interface language, plural forms included", () => {
 		expect(markdown).toContain("## Итог");
 		expect(markdown).toContain("2 шага готово");
 	} finally {
-		applyLocale("en", {});
+		await applyLocale("en", {});
 	}
 });

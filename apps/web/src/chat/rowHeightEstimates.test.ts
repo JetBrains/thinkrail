@@ -82,7 +82,7 @@ describe("chat row height estimates", () => {
 		const canonical: ChatRow[] = [
 			userRow("u1", "first question"),
 			markdownRow("a1:text:0", "Short answer."),
-			{ kind: "system", id: "s1", text: "✓ Done" },
+			{ kind: "system", id: "s1", text: "Heads up" },
 			userRow("u2", "second question"),
 			markdownRow("a2:text:0", paragraph.repeat(30)),
 		];

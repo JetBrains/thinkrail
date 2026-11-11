@@ -13,15 +13,16 @@ const model = (id: string, provider = "p", name = id): WireModel => ({
 
 describe("resolveAgainstCatalog", () => {
 	test("re-points stored snapshots to the live catalog objects, keeping the stored order", () => {
-		const live = [model("b", "p", "B live"), model("a", "p", "A live")];
+		const liveA = model("a", "p", "A live");
+		const liveB = model("b", "p", "B live");
 		const stored = [model("a", "p", "A stale"), model("b", "p", "B stale")];
-		expect(resolveAgainstCatalog(live, stored)).toEqual([live[1], live[0]]);
+		expect(resolveAgainstCatalog([liveB, liveA], stored)).toEqual([liveA, liveB]);
 	});
 
 	test("drops snapshots whose provider/id left the catalog", () => {
-		const live = [model("a")];
-		expect(resolveAgainstCatalog(live, [model("a", "other"), model("gone"), model("a")])).toEqual([
-			live[0],
-		]);
+		const liveA = model("a");
+		expect(
+			resolveAgainstCatalog([liveA], [model("a", "other"), model("gone"), model("a")]),
+		).toEqual([liveA]);
 	});
 });
