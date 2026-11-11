@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
 import { assertInstallerSmokeEnvironment } from "./installerEnvironment";
 
-test.each<NodeJS.Platform>([
-	"darwin",
-	"linux",
-])("permits the isolated installer probe on %s", (platform) => {
-	expect(() => assertInstallerSmokeEnvironment(platform, {})).not.toThrow();
-});
+test.each<NodeJS.Platform>(["darwin", "linux"])(
+	"permits the isolated installer probe on %s",
+	(platform) => {
+		expect(() => assertInstallerSmokeEnvironment(platform, {})).not.toThrow();
+	},
+);
 
 test("permits Windows installers only on disposable GitHub-hosted runners", () => {
 	expect(() =>

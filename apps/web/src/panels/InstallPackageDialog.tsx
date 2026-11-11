@@ -17,6 +17,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import { Fragment, useId, useState } from "react";
 import { errorText, RequestTimeoutError, wsErrorCode } from "@/transport";
@@ -215,6 +216,7 @@ export function InstallPackageBody({
 								autoComplete="off"
 								onChange={(event) => onSourceChange(event.currentTarget.value)}
 								onKeyDown={(event) => {
+									if (isImeComposing(event.nativeEvent)) return;
 									if (event.key === "Enter" && trimmed) onSubmit();
 								}}
 							/>

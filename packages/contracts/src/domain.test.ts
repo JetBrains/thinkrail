@@ -22,10 +22,12 @@ import {
 	isLiveResource,
 	isLocalePreference,
 	isPlanReviewResult,
+	isQuestionPanelHeight,
 	isRetriedAttempt,
 	JBCENTRAL_QUOTA_REFRESH_SECONDS,
 	normalizeFontSettings,
 	parsePiPackageInput,
+	QUESTION_PANEL_HEIGHT_PERCENT,
 	REQUEST_IMAGE_BASE64_BUDGET,
 	type ResourceRecord,
 	resourceHistoryCursor,
@@ -142,6 +144,19 @@ describe("config defaults", () => {
 			chatLineWidthBounded: true,
 			fileLineWidthBounded: true,
 		});
+	});
+
+	test("the question panel caps at 60% of the chat by default, in whole percents from 40 to 100", () => {
+		expect(DEFAULT_CONFIG.questionPanelHeight).toBe(QUESTION_PANEL_HEIGHT_PERCENT.default);
+		expect(QUESTION_PANEL_HEIGHT_PERCENT).toEqual({ min: 40, max: 100, default: 60 });
+		for (const valid of [40, 60, 100]) expect(isQuestionPanelHeight(valid)).toBe(true);
+		for (const invalid of [39, 101, 60.5, "60", null]) {
+			expect(isQuestionPanelHeight(invalid)).toBe(false);
+		}
+	});
+
+	test("voice input is on by default", () => {
+		expect(DEFAULT_CONFIG.voiceInputEnabled).toBe(true);
 	});
 });
 

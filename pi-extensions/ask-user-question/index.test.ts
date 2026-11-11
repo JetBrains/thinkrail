@@ -9,6 +9,7 @@ import defaultFactory, {
 	createAskUserQuestionExtension,
 	DEFAULT_DESCRIPTION,
 	DEFAULT_PROMPT_GUIDELINES,
+	defaultDescription,
 } from "./index.ts";
 
 type ExecResult = {
@@ -20,6 +21,7 @@ type ExecResult = {
 interface CapturedTool {
 	name: string;
 	description: string;
+	parameters: unknown;
 	promptSnippet?: string;
 	promptGuidelines?: string[];
 	executionMode?: string;
@@ -200,5 +202,90 @@ describe("ask_user_question extension", () => {
 			ui,
 		});
 		expect(text(result)).toContain('"Which library?"="luxon"');
+	});
+
+	test("file previews exist for the model only when the host offers them", () => {
+		const fields = (tool: CapturedTool) => {
+			const question = (
+				tool.parameters as {
+					properties: {
+						questions: {
+							items: {
+								properties: Record<string, { items?: { properties: Record<string, unknown> } }>;
+							};
+						};
+					};
+				}
+			).properties.questions.items.properties;
+			return {
+				question: Object.keys(question),
+				option: Object.keys(question.options?.items?.properties ?? {}),
+			};
+		};
+		const plain = fields(load().tool);
+		expect(plain.question).toContain("preview");
+		expect(plain.question).not.toContain("previewFile");
+		expect(plain.option).not.toContain("previewFile");
+		const rich = load({ filePreviews: true });
+		expect(fields(rich.tool).question).toContain("previewFile");
+		expect(fields(rich.tool).option).toContain("previewBefore");
+		expect(rich.tool.description).toBe(defaultDescription(true));
+		expect(rich.tool.description).toContain("previewFile");
+		expect(DEFAULT_DESCRIPTION).not.toContain("previewFile");
+	});
+
+	test("every distinct preview file is checked once before anyone is asked", async () => {
+		const checked: string[] = [];
+		let asked = false;
+		const { tool } = load({
+			filePreviews: true,
+			checkFile: async (path, cwd) => {
+				checked.push(`${cwd}:${path}`);
+				if (path === "mockups/missing.html") throw new Error("no such file");
+			},
+			ask: async () => {
+				asked = true;
+				return { kind: "deferred" };
+			},
+		});
+		const withFiles = (missing: boolean): AskUserQuestionArgs => ({
+			questions: [
+				{
+					question: "Which layout?",
+					header: "Layout",
+					previewFile: "mockups/today.html",
+					options: [
+						{
+							label: "Split",
+							description: "two columns",
+							previewFile: missing ? "mockups/missing.html" : "mockups/split.html",
+							previewBefore: "mockups/today.html",
+						},
+						{ label: "Keep", description: "no change" },
+					],
+				},
+			],
+		});
+		const failed = await tool.execute("tc", withFiles(true), undefined, undefined, { cwd: "/ws" });
+		expect(text(failed)).toContain(
+			"cannot show questions[0].options[0].previewFile (mockups/missing.html): no such file",
+		);
+		expect(asked).toBe(false);
+		checked.length = 0;
+		await tool.execute("tc", withFiles(false), undefined, undefined, { cwd: "/ws" });
+		expect(checked).toEqual(["/ws:mockups/today.html", "/ws:mockups/split.html"]);
+		expect(asked).toBe(true);
+	});
+
+	test("without file previews a file preview is rejected", async () => {
+		const { tool } = load({ ask: async () => ({ kind: "deferred" }) });
+		const result = await tool.execute(
+			"tc",
+			{ questions: [{ ...args.questions[0], previewFile: "a.html" }] },
+			undefined,
+			undefined,
+			{},
+		);
+		expect(text(result)).toContain("file previews are not available");
 	});
 });

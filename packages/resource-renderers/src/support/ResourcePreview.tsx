@@ -2,12 +2,18 @@ import { useT } from "@thinkrail/locales/react";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
-import { useResourceHost, useResourceScope } from "../host";
+import {
+	ResourceEnvironmentProvider,
+	useResourceEnvironment,
+	useResourceHost,
+	useResourceScope,
+} from "../host";
 import {
 	canonicalWorkspacePath,
 	describeResource,
 	diffResourceMeta,
 	type ResourceRenderer,
+	type ResourceReveal,
 	type SurfaceReview,
 } from "../registry";
 import { GuardedRendererDiff } from "./GuardedRendererDiff";
@@ -35,9 +41,11 @@ export interface ResourcePreviewProps {
 	onLayout?: ((layout: ResourcePreviewLayout) => void) | undefined;
 	viewState?: unknown;
 	onViewState?: ((viewState: unknown) => void) | undefined;
+	reveal?: ResourceReveal | undefined;
 	leading?: ReactNode;
 	actions?: ReactNode;
 	className?: string | undefined;
+	compact?: boolean | undefined;
 }
 
 interface ResolvedProps extends ResourcePreviewProps {
@@ -91,11 +99,21 @@ function useWorkspaceFile(workspaceId: string, path: string | undefined): Loaded
 
 export function ResourcePreview(props: ResourcePreviewProps) {
 	const scope = useResourceScope();
+	const environment = useResourceEnvironment();
 	const workspaceId = props.workspaceId ?? scope?.workspaceId;
 	if (!workspaceId)
 		throw new Error("ResourcePreview needs a workspace: pass workspaceId or a scope");
 	const sessionId = scope?.workspaceId === workspaceId ? scope.sessionId : undefined;
-	return <ScopedResourcePreview {...props} workspaceId={workspaceId} sessionId={sessionId} />;
+	const preview = (
+		<ScopedResourcePreview {...props} workspaceId={workspaceId} sessionId={sessionId} />
+	);
+	const compact = props.compact ?? environment.compact ?? false;
+	if (compact === (environment.compact ?? false)) return preview;
+	return (
+		<ResourceEnvironmentProvider value={{ ...environment, compact }}>
+			{preview}
+		</ResourceEnvironmentProvider>
+	);
 }
 
 function ScopedResourcePreview(
@@ -205,6 +223,7 @@ function PreviewToolbar({
 }) {
 	const t = useT();
 	const { ReviewSend } = useResourceHost();
+	const { compact } = useResourceEnvironment();
 	return (
 		<div
 			data-testid="resource-view-toggle"
@@ -213,13 +232,17 @@ function PreviewToolbar({
 			className="flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-12"
 		>
 			<div className="mr-auto flex min-w-0 items-center">{props.leading}</div>
-			<ReviewSend workspaceId={props.workspaceId} paths={paths} sessionId={props.sessionId} />
-			<RendererToggles
-				candidates={candidates}
-				renderer={renderer}
-				onRendererId={props.onRendererId}
-				layout={layout}
-			/>
+			{compact ? null : (
+				<>
+					<ReviewSend workspaceId={props.workspaceId} paths={paths} sessionId={props.sessionId} />
+					<RendererToggles
+						candidates={candidates}
+						renderer={renderer}
+						onRendererId={props.onRendererId}
+						layout={layout}
+					/>
+				</>
+			)}
 			{props.actions}
 		</div>
 	);
@@ -239,7 +262,9 @@ function PreviewView(props: ResolvedProps & { file: ReadyFile }) {
 	);
 }
 
-function ReviewedPreviewView(props: ResolvedProps & { file: ReadyFile; review: SurfaceReview }) {
+function ReviewedPreviewView(
+	props: ResolvedProps & { file: ReadyFile; review: SurfaceReview | undefined },
+) {
 	const { workspaceId, path, file, rendererId, onRendererId, review } = props;
 	const resource = useMemo(
 		() => describeResource(workspaceId, path, file.meta),
@@ -248,7 +273,7 @@ function ReviewedPreviewView(props: ResolvedProps & { file: ReadyFile; review: S
 	const { mobile, candidates, renderer, implementationKey, placedThreadIds, onPlacedThreadIds } =
 		useRendererSelection(resource, "view", rendererId);
 	const paths = useMemo(() => [path], [path]);
-	const reviews = useMemo(() => [review], [review]);
+	const reviews = useMemo(() => (review ? [review] : []), [review]);
 
 	return (
 		<PreviewFrame
@@ -275,9 +300,10 @@ function ReviewedPreviewView(props: ResolvedProps & { file: ReadyFile; review: S
 				mobile={mobile}
 				resource={resource}
 				content={file.content}
-				review={review}
+				{...(review ? { review } : {})}
 				onPlacedThreadIds={onPlacedThreadIds}
 				{...implementationViewState(props, implementationKey)}
+				{...(props.reveal ? { reveal: props.reveal } : {})}
 			/>
 		</PreviewFrame>
 	);
@@ -300,11 +326,15 @@ function PreviewDiff(props: ResolvedProps & DiffSides) {
 }
 
 function ReviewedPreviewDiff(
-	props: ResolvedProps & DiffSides & { after: SurfaceReview; prior: SurfaceReview },
+	props: ResolvedProps &
+		DiffSides & { after: SurfaceReview | undefined; prior: SurfaceReview | undefined },
 ) {
 	const { workspaceId, path, before, original, modified, rendererId, onRendererId, after, prior } =
 		props;
-	const review = useMemo(() => ({ worktree: after, base: prior }), [after, prior]);
+	const review = useMemo(
+		() => (after && prior ? { worktree: after, base: prior } : undefined),
+		[after, prior],
+	);
 	const descriptorMeta = useMemo(
 		() => diffResourceMeta(original.meta, modified.meta),
 		[original.meta, modified.meta],
@@ -320,7 +350,7 @@ function ReviewedPreviewDiff(
 	const { mobile, candidates, renderer, implementationKey, placedThreadIds, onPlacedThreadIds } =
 		useRendererSelection(resource, "diff", rendererId);
 	const paths = useMemo(() => [path, before], [path, before]);
-	const reviews = useMemo(() => [after, prior], [after, prior]);
+	const reviews = useMemo(() => (after && prior ? [after, prior] : []), [after, prior]);
 	const layout = mobile ? "unified" : (props.layout ?? "unified");
 	const { onLayout } = props;
 	const lineCount = useMemo(
@@ -373,7 +403,7 @@ function ReviewedPreviewDiff(
 				modified={modified.content}
 				layout={layout}
 				ignoreWhitespace={false}
-				review={review}
+				{...(review ? { review } : {})}
 				onPlacedThreadIds={onPlacedThreadIds}
 				lineCount={lineCount}
 				{...implementationViewState(props, implementationKey)}

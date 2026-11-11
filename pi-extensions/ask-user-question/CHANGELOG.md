@@ -1,5 +1,18 @@
 # @thinkrail/pi-ask-user-question
 
+## 0.2.0
+
+### Minor Changes
+
+- [#1149](https://github.com/JetBrains/thinkrail/pull/1149) [`4ea8a9f`](https://github.com/JetBrains/thinkrail/commit/4ea8a9f97e011041e6e61ff2e254640ece2a2aa6) Thanks [@rsolmano](https://github.com/rsolmano)! - The terminal questionnaire no longer ends on a **Review & submit** page: confirming the last question
+  submits, and a **Submit answers** row on the last page sends whatever is answered. Questions left
+  unanswered are still reported to the model as not answered.
+
+### Patch Changes
+
+- [#1162](https://github.com/JetBrains/thinkrail/pull/1162) [`c469b72`](https://github.com/JetBrains/thinkrail/commit/c469b724025b4e3f0719a701ffa74b4d2fe60812) Thanks [@rsolmano](https://github.com/rsolmano)! - The pi.dev gallery now shows a short terminal demo of each package, and the package description names
+  ThinkRail as an example host.
+
 ## 0.1.0
 
 ### Minor Changes

@@ -6,7 +6,7 @@ import { ToastProvider, ToastViewport } from "./toast";
 
 afterEach(() => applyLocale("en", {}));
 
-test("library defaults for the suggestion list and toast region follow the interface language", () => {
+test("library defaults for the suggestion list and toast region follow the interface language", async () => {
 	const render = () =>
 		renderToStaticMarkup(
 			<>
@@ -20,7 +20,7 @@ test("library defaults for the suggestion list and toast region follow the inter
 		);
 	expect(render()).toContain('aria-label="Suggestions"');
 	expect(render()).toContain('aria-label="Notifications (F8)"');
-	applyLocale("de", {
+	await applyLocale("de", {
 		de: {
 			"common.suggestions": "Vorschläge",
 			"common.notificationsRegion": "Benachrichtigungen ({{hotkey}})",

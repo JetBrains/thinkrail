@@ -1,22 +1,23 @@
-import type { ComposerGrowthLimit, SubagentOverride } from "@thinkrail/contracts";
-import type { MessageKey } from "@thinkrail/locales";
-import { T, useT } from "@thinkrail/locales/react";
-import { cn } from "@thinkrail/ui/utils";
 import {
-	type ChatMessageOrder,
-	moveStreamingResponseHandle,
-	STREAMING_RESPONSE_MOVEMENT_LIMITS,
-	type StreamingResponseMovement,
-} from "@/chat/chatPreferences";
+	type ComposerGrowthLimit,
+	isQuestionPanelHeight,
+	QUESTION_PANEL_HEIGHT_PERCENT,
+	QUESTION_PANEL_PROTOCOL_VERSION,
+	type SubagentOverride,
+} from "@thinkrail/contracts";
+import type { MessageKey } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
+import { cn } from "@thinkrail/ui/utils";
+import type { ChatMessageOrder } from "@/chat/chatPreferences";
 import { selectActiveWorkspace, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { LineWidthControl } from "./LineWidthSettings";
 import { SegmentedControl, type SegmentedControlOption } from "./SegmentedControl";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
-import { SETTINGS_RANGE_INPUT, SETTINGS_RANGE_STACKED, SettingsRangeTrack } from "./SettingsRange";
 import { SettingsRow } from "./SettingsRow";
 import { SubagentSettings } from "./SubagentSettings";
 import { saveSettings } from "./saveSettings";
+import { SETTINGS_INPUT, useSettingsDraft } from "./settingsDraft";
 
 type OptionSpec<T extends string> = SegmentedControlOption<T> & { label: MessageKey };
 
@@ -39,93 +40,73 @@ const GROWTH_OPTIONS: OptionSpec<ComposerGrowthLimit>[] = [
 	{ id: "half-chat", label: "settings.chat.growth.halfChat", testId: "composer-growth-half-chat" },
 ];
 
-const MOVEMENT_TRACK_SEGMENTS = Array.from({ length: 20 }, (_, index) => index * 5);
+function parsedPanelHeight(draft: string): number | null {
+	if (!/^\d+$/.test(draft)) return null;
+	const value = Number(draft);
+	return isQuestionPanelHeight(value) ? value : null;
+}
 
-const MOVEMENT_THUMB = cn(SETTINGS_RANGE_STACKED, SETTINGS_RANGE_INPUT);
-
-function StreamingResponseMovementControl({
+export function QuestionPanelHeightControl({
+	protocolVersion,
 	value,
-	onChange,
 }: {
-	value: StreamingResponseMovement;
-	onChange: (value: StreamingResponseMovement) => void;
+	protocolVersion: number | null;
+	value: number;
 }) {
 	const t = useT();
-	const update = (handle: "settle" | "trigger", rawValue: string) => {
-		onChange(moveStreamingResponseHandle(value, handle, Number(rawValue)));
-	};
+	const { invalid, inputProps } = useSettingsDraft({
+		saved: String(value),
+		isValid: (draft) => parsedPanelHeight(draft) !== null,
+		commit: (draft) => {
+			const parsed = parsedPanelHeight(draft);
+			if (parsed === null || parsed === value) return undefined;
+			return saveSettings(
+				{ questionPanelHeight: parsed },
+				t("settings.chat.questionPanelHeightFailed"),
+			);
+		},
+	});
+	const errorId = "question-panel-height-error";
+	if (protocolVersion === null || protocolVersion < QUESTION_PANEL_PROTOCOL_VERSION) return null;
 
 	return (
-		<div
-			data-testid="streaming-response-movement"
-			className="flex flex-col gap-8 border-border-muted border-b py-12"
-		>
-			<div className="flex flex-col gap-2">
-				<span className="tr-text-ui text-text-default">{t("settings.chat.movement.title")}</span>
-				<span className="tr-text-metadata text-text-muted">
-					{t("settings.chat.movement.description")}
-				</span>
-			</div>
-			<div className="flex items-center justify-between text-text-muted tr-text-metadata">
-				<span>{t("settings.chat.movement.top")}</span>
-				<span>{t("settings.chat.movement.messageBox")}</span>
-			</div>
-			<SettingsRangeTrack
-				steps={MOVEMENT_TRACK_SEGMENTS}
-				filled={(start) => start >= value.settle && start < value.trigger}
-			>
-				<input
-					type="range"
-					data-testid="streaming-movement-settle"
-					aria-label={t("settings.chat.movement.settlePosition")}
-					aria-valuemin={STREAMING_RESPONSE_MOVEMENT_LIMITS.settleMin}
-					aria-valuemax={Math.min(
-						STREAMING_RESPONSE_MOVEMENT_LIMITS.settleMax,
-						value.trigger - STREAMING_RESPONSE_MOVEMENT_LIMITS.minimumGap,
-					)}
-					aria-valuetext={t("settings.chat.movement.fromTop", { value: value.settle })}
-					min={0}
-					max={100}
-					step={STREAMING_RESPONSE_MOVEMENT_LIMITS.step}
-					value={value.settle}
-					onChange={(event) => update("settle", event.currentTarget.value)}
-					className={MOVEMENT_THUMB}
-				/>
-				<input
-					type="range"
-					data-testid="streaming-movement-trigger"
-					aria-label={t("settings.chat.movement.triggerPosition")}
-					aria-valuemin={Math.max(
-						STREAMING_RESPONSE_MOVEMENT_LIMITS.triggerMin,
-						value.settle + STREAMING_RESPONSE_MOVEMENT_LIMITS.minimumGap,
-					)}
-					aria-valuemax={STREAMING_RESPONSE_MOVEMENT_LIMITS.triggerMax}
-					aria-valuetext={t("settings.chat.movement.fromTop", { value: value.trigger })}
-					min={0}
-					max={100}
-					step={STREAMING_RESPONSE_MOVEMENT_LIMITS.step}
-					value={value.trigger}
-					onChange={(event) => update("trigger", event.currentTarget.value)}
-					className={MOVEMENT_THUMB}
-				/>
-			</SettingsRangeTrack>
-			<div className="flex items-center justify-between gap-8 text-text-muted tr-text-metadata">
-				<span>
-					<T
-						i18nKey="settings.chat.movement.settleValue"
-						values={{ value: value.settle }}
-						components={[<span key="value" className="text-text-default" />]}
+		<SettingsRow
+			label={t("settings.chat.questionPanelHeight")}
+			description={
+				<>
+					{t("settings.chat.questionPanelHeightDescription")}
+					{invalid ? (
+						<span
+							id={errorId}
+							data-testid={errorId}
+							className="block text-feedback-error tr-text-metadata"
+						>
+							{t("settings.chat.questionPanelHeightInvalid", {
+								min: QUESTION_PANEL_HEIGHT_PERCENT.min,
+								max: QUESTION_PANEL_HEIGHT_PERCENT.max,
+							})}
+						</span>
+					) : null}
+				</>
+			}
+			control={
+				<span className="flex items-center gap-4 text-text-muted tr-text-ui">
+					<input
+						type="number"
+						min={QUESTION_PANEL_HEIGHT_PERCENT.min}
+						max={QUESTION_PANEL_HEIGHT_PERCENT.max}
+						step={1}
+						inputMode="numeric"
+						{...inputProps}
+						aria-label={t("settings.chat.questionPanelHeightInput")}
+						aria-describedby={invalid ? errorId : undefined}
+						data-testid="question-panel-height-input"
+						className={cn(SETTINGS_INPUT, "w-64")}
 					/>
+					{t("settings.chat.questionPanelHeightUnit")}
 				</span>
-				<span>
-					<T
-						i18nKey="settings.chat.movement.triggerValue"
-						values={{ value: value.trigger }}
-						components={[<span key="value" className="text-text-default" />]}
-					/>
-				</span>
-			</div>
-		</div>
+			}
+		/>
 	);
 }
 
@@ -133,13 +114,12 @@ export function ChatSettings() {
 	const t = useT();
 	const messageOrder = useAppStore((state) => state.chatMessageOrder);
 	const growthLimit = useAppStore((state) => state.composerGrowthLimit);
-	const streamingResponseMovement = useAppStore((state) => state.streamingResponseMovement);
+	const panelHeight = useAppStore((state) => state.questionPanelHeight);
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
 	const subagentsEnabled = useAppStore((state) => state.subagentsEnabled);
 	const subagentMaxConcurrent = useAppStore((state) => state.subagentMaxConcurrent);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
 	const setChatMessageOrder = useAppStore((state) => state.setChatMessageOrder);
-	const setStreamingResponseMovement = useAppStore((state) => state.setStreamingResponseMovement);
 
 	const selectMessageOrder = (chatMessageOrder: ChatMessageOrder) => {
 		if (chatMessageOrder === messageOrder) return;
@@ -203,11 +183,8 @@ export function ChatSettings() {
 						/>
 					}
 				/>
+				<QuestionPanelHeightControl protocolVersion={protocolVersion} value={panelHeight} />
 				<LineWidthControl kind="chat" />
-				<StreamingResponseMovementControl
-					value={streamingResponseMovement}
-					onChange={setStreamingResponseMovement}
-				/>
 			</SettingsGroup>
 
 			<SubagentSettings

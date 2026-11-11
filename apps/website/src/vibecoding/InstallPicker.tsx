@@ -73,7 +73,7 @@ function moveTab<T extends string>(
 	if (!next) return;
 	select(next.id);
 	const tabs = event.currentTarget.closest('[role="tablist"]')?.querySelectorAll("button");
-	(tabs?.[nextIndex] as HTMLButtonElement | undefined)?.focus();
+	tabs?.[nextIndex]?.focus();
 }
 
 export function CompactDownloadAction({
