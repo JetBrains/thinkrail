@@ -60,7 +60,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`REQUEST_REPLAY_OVERFLOW`** — the host's replay namespace for this page is full
   ([[submodule-server-host]]), and the page treats it as an ordinary retryable failure — and **`GIT_TIMEOUT`**
   — a sync git killed at its deadline ([[submodule-server-git]]); an older client wraps it like any unknown
-  code, so it needs no protocol bump.
+  code, so it needs no protocol bump. One code is named by the client and never sent by the host:
+  **`FRAME_TOO_LARGE`**, a request refused before sending because its frame exceeds `WS_MAX_FRAME_BYTES`
+  (below) — the composer hands that prompt back to its draft instead of losing it.
   Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
@@ -135,7 +137,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   badge and glance uses) from `piProtocol` (`isTranscriptMessageRole` is the one definition of which roles a transcript carries: the host filters
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
   would silently shift every later jump anchor); `export *` (value) of `wsProtocol`
-  (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions).
+  (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, `WS_MAX_FRAME_BYTES`, and
+  feature-introduction versions).
 - **Allowed deps:** none at runtime. **Type-only** devDeps on `@earendil-works/pi-ai` +
   `@earendil-works/pi-agent-core`, imported **from their package roots** (type-only → erased at build).
 - **Deployment obligation:** wire contracts describe host behavior and compatibility, never the launcher
@@ -1039,7 +1042,11 @@ the palette ranks with — kept here so host-side search can rank with the same 
   still considers unresolved, so the host can release everything else. `resume` exists because a receipt is only
   as reliable as the socket carrying it and nothing would ever re-send a lost one: restating the live set beats
   confirming the confirmations. This behavior is protocol-versioned — a replaying UI must never run against a
-  pre-dedup host.
+  pre-dedup host. **`WS_MAX_FRAME_BYTES`** (16 MiB, UTF-8 bytes) is the largest client→host frame: the
+  host's `maxPayloadLength` and the size above which `WsTransport.request` refuses to send. A frame over it
+  would close the socket and be replayed on every reconnect, so a message's `REQUEST_IMAGE_BASE64_BUDGET`
+  (12 MiB) stays under it with room for the text. It equals Bun's default, which every earlier host
+  already enforced, so it needs no protocol bump.
 
 ## Chat Resources
 

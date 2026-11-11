@@ -1930,7 +1930,7 @@ export const ACCEPTED_IMAGE_TYPES: readonly string[] = [
 	"image/webp",
 ];
 
-export const REQUEST_IMAGE_BASE64_BUDGET = 24 * 1024 * 1024;
+export const REQUEST_IMAGE_BASE64_BUDGET = 12 * 1024 * 1024;
 
 export function isRetriedAttempt(
 	messages: readonly { role: string; stopReason?: string }[],
