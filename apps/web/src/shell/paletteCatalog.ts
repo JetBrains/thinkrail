@@ -1,12 +1,14 @@
 import {
 	type RemixiconComponentType,
 	RiAddLine,
+	RiChat3Line,
 	RiChatNewLine,
 	RiCheckDoubleLine,
 	RiEdit2Line,
 	RiExternalLinkLine,
 	RiFileCopyLine,
 	RiFileList3Line,
+	RiFileSearchLine,
 	RiFolderLine,
 	RiFolderOpenLine,
 	RiHistoryLine,
@@ -53,11 +55,13 @@ const TOOL_ICONS: Record<PaletteTool, RemixiconComponentType> = {
 export interface PaletteCatalogDeps {
 	readonly t: Translator;
 	readonly contextProjectId: string | null;
+	readonly canStartChat: boolean;
 	readonly activeWorkspace: Workspace | null;
 	readonly editors: readonly EditorInfo[];
 	readonly historyAvailable: boolean;
 	readonly canCreateProject: boolean;
 	readonly nativeShortcuts: boolean;
+	readonly findInFilesAvailable: boolean;
 	readonly readAction: "markRead" | "markUnread" | null;
 	readonly canSettle: boolean;
 	readonly settled: boolean;
@@ -68,6 +72,7 @@ export interface PaletteCatalogDeps {
 
 export interface PaletteCatalogActions {
 	readonly newWorkspace: (projectId: string) => void;
+	readonly newProjectlessChat: () => void;
 	readonly openDefaultWorkspace: (projectId: string) => void;
 	readonly openProject: () => void;
 	readonly openProjectPath: () => void;
@@ -79,6 +84,7 @@ export interface PaletteCatalogActions {
 	readonly toggleBottom: () => void;
 	readonly showTool: (workspaceId: string, tool: PaletteTool) => void;
 	readonly openHistory: () => void;
+	readonly findInFiles: () => void;
 	readonly markRead: (workspaceId: string) => void;
 	readonly markUnread: (workspaceId: string) => void;
 	readonly settle: (workspaceId: string) => void;
@@ -112,6 +118,17 @@ function workCommands(deps: PaletteCatalogDeps): Command[] {
 			keywords: ["session", "agent"],
 			mutates: true,
 			run: () => actions.newChat(activeWorkspace.id),
+		});
+	}
+	if (deps.canStartChat) {
+		commands.push({
+			id: "chat.newProjectless",
+			title: t("commands.chat.newProjectless"),
+			group: "work",
+			icon: RiChat3Line,
+			keywords: ["chat", "no project", "scratch", "quick"],
+			mutates: true,
+			run: actions.newProjectlessChat,
 		});
 	}
 	commands.push(
@@ -173,6 +190,17 @@ function workCommands(deps: PaletteCatalogDeps): Command[] {
 function viewCommands(deps: PaletteCatalogDeps): Command[] {
 	const { t, actions, activeWorkspace } = deps;
 	const commands: Command[] = [];
+	if (deps.findInFilesAvailable) {
+		commands.push({
+			id: "files.findInFiles",
+			title: t("commands.files.findInFiles"),
+			group: "navigation",
+			icon: RiFileSearchLine,
+			keywords: ["grep", "text", "content", "occurrences"],
+			shortcut: { key: "F", mod: true, shift: true },
+			run: actions.findInFiles,
+		});
+	}
 	if (deps.historyAvailable) {
 		commands.push({
 			id: "chat.history",

@@ -1,5 +1,6 @@
 import { useT } from "@thinkrail/locales/react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
+import type { ReactNode } from "react";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { ProjectTree } from "../panels/ProjectTree";
 import { WelcomePanel } from "../panels/WelcomePanel";
@@ -24,7 +25,13 @@ const PROJECTS_PANE_DEFAULT_PERCENT =
 const PROJECTS_PANE_MIN_PERCENT = 12;
 const WELCOME_MIN_PERCENT = 40;
 
-export function ProjectHome({ projects }: { projects: CollapsibleRegion<HTMLDivElement> }) {
+export function ProjectHome({
+	projects,
+	main,
+}: {
+	projects: CollapsibleRegion<HTMLDivElement>;
+	main?: ReactNode;
+}) {
 	const {
 		collapsed,
 		contentRef,
@@ -137,9 +144,7 @@ export function ProjectHome({ projects }: { projects: CollapsibleRegion<HTMLDivE
 					defaultSize={100 - PROJECTS_PANE_DEFAULT_PERCENT}
 					minSize={WELCOME_MIN_PERCENT}
 				>
-					<div className="h-full min-h-0 bg-container-content-bg">
-						<WelcomePanel />
-					</div>
+					<div className="h-full min-h-0 bg-container-content-bg">{main ?? <WelcomePanel />}</div>
 				</ResizablePanel>
 			</ResizablePanelGroup>
 		</div>

@@ -166,9 +166,15 @@ test("a hand-dropped extension file is listed as a local file with its tools and
 }) => {
 	const loose = join(E2E_PI_AGENT_DIR, "extensions", "loose-e2e.ts");
 	mkdirSync(join(E2E_PI_AGENT_DIR, "extensions"), { recursive: true });
-	writeFileSync(loose, piExtensionSource("loose_tool"));
 	try {
 		await openFixtureProject(page);
+		await expect(
+			(await openExtensionsSettings(page)).getByTestId("loose-extension-row").filter({
+				hasText: "loose-e2e.ts",
+			}),
+		).toHaveCount(0);
+		await closeSettings(page);
+		writeFileSync(loose, piExtensionSource("loose_tool"));
 		const section = await openExtensionsSettings(page);
 		const row = section.getByTestId("loose-extension-row").filter({ hasText: "loose-e2e.ts" });
 		await expect(row).toHaveCount(1);

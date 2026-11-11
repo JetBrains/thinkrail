@@ -36,7 +36,7 @@ const WOFF2_KNOWN = new Map([
 ]);
 
 class Writer {
-	private bytes: number[] = [];
+	private readonly bytes: number[] = [];
 
 	u8(value: number): this {
 		this.bytes.push(value & 0xff);

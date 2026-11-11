@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { RiChat2Line } from "@remixicon/react";
-import { parseMatchTerms } from "@thinkrail/contracts";
+import { MAX_SEARCH_QUERY_LENGTH, parseMatchTerms } from "@thinkrail/contracts";
 import { createDoubleShiftDetector, DOUBLE_SHIFT } from "./doubleShift";
 import {
 	adaptiveCounts,
@@ -12,7 +12,7 @@ import {
 	serializeLearning,
 } from "./learning";
 import type { PaletteItem } from "./model";
-import { parseSearchQuery, stripScopePrefix, withScopePrefix } from "./query";
+import { parseSearchQuery, scopeKinds, stripScopePrefix, withScopePrefix } from "./query";
 import { pickTopHit, rankItems } from "./rank";
 
 const DAY = 86_400_000;
@@ -62,6 +62,20 @@ describe("parseSearchQuery", () => {
 		});
 		expect(parseSearchQuery("//src", offered)).toMatchObject({ scope: "all", text: "/src" });
 		expect(parseSearchQuery(">theme", offered)).toMatchObject({ scope: "commands", text: "theme" });
+	});
+
+	test("the text is cut to the host's query length, so local and host terms come from the same characters", () => {
+		const long = `${"word ".repeat(MAX_SEARCH_QUERY_LENGTH / 5)}distinguishing`;
+		const parsed = parseSearchQuery(`@ ${long}`);
+		expect(parsed.text).toBe(long.slice(0, MAX_SEARCH_QUERY_LENGTH));
+		expect(parsed.terms).toEqual(parseMatchTerms(parsed.text.slice(0, MAX_SEARCH_QUERY_LENGTH)));
+		expect(parsed.terms.map((term) => term.text)).not.toContain("distinguishing");
+	});
+
+	test("spec sections are asked for only in the specs scope, never in All", () => {
+		expect(scopeKinds("specs")).toEqual(["spec", "section"]);
+		expect(scopeKinds("all")).not.toContain("section");
+		expect(scopeKinds("all")).toContain("spec");
 	});
 
 	test("scope prefixes round-trip, so a chip can write its prefix back", () => {

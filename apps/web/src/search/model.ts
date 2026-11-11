@@ -1,10 +1,24 @@
 import type { RemixiconComponentType } from "@remixicon/react";
+import type { MatchRange, SearchPreviewTarget } from "@thinkrail/contracts";
 import type { CommandShortcut } from "../commands";
 import type { ChatTitleSource } from "../lib";
 import type { SessionAttention } from "../store";
 import type { SearchScope } from "./query";
 
-export type PaletteItemKind = "command" | "setting" | "project" | "workspace" | "chat" | "more";
+export type PaletteItemKind =
+	| "command"
+	| "setting"
+	| "project"
+	| "workspace"
+	| "chat"
+	| "file"
+	| "spec"
+	| "section"
+	| "plan"
+	| "transcript"
+	| "start"
+	| "ask"
+	| "more";
 
 export type PaletteMore =
 	| { readonly kind: "scope"; readonly scope: SearchScope }
@@ -16,6 +30,19 @@ export interface PalettePreview {
 	readonly fields: readonly (readonly [label: string, value: string])[];
 }
 
+export interface PaletteFile {
+	readonly workspaceId: string;
+	readonly path: string;
+	readonly size?: number;
+	readonly line?: number;
+}
+
+export interface PaletteMatch {
+	readonly tier: number;
+	readonly score: number;
+	readonly ranges: Readonly<Record<string, readonly MatchRange[]>>;
+}
+
 export interface PaletteItem {
 	readonly id: string;
 	readonly kind: PaletteItemKind;
@@ -23,6 +50,8 @@ export interface PaletteItem {
 	readonly group: string;
 	readonly scope: SearchScope;
 	readonly icon: RemixiconComponentType;
+	/** How many leading characters of `title` are context (a section's spec name) and render muted. */
+	readonly titleLead?: number;
 	readonly subtitle?: string;
 	readonly titleSource?: ChatTitleSource;
 	readonly titleTooltip?: string;
@@ -32,10 +61,29 @@ export interface PaletteItem {
 	readonly badge?: string;
 	readonly shortcut?: CommandShortcut;
 	readonly contextBoost?: number;
+	readonly match?: PaletteMatch;
+	readonly late?: number;
+	readonly previewTarget?: SearchPreviewTarget;
+	readonly file?: PaletteFile;
 	readonly disabledReason?: string;
 	readonly more?: PaletteMore;
 	readonly run?: () => void;
 	readonly preview?: () => PalettePreview | null;
+}
+
+/**
+ * Start work from the typed text: the shell opens its Create-workspace dialog with the text as the prompt,
+ * and returns `false` when a Create dialog already open is kept instead.
+ */
+export interface PaletteStart {
+	readonly openDialog: (text: string) => boolean;
+}
+
+/** Ask the agent from the typed text: the shell starts a new chat in the context workspace with the question. */
+export interface PaletteAsk {
+	readonly ask: (text: string) => void;
+	/** The workspace the new chat opens in, named on the row. */
+	readonly target?: string;
 }
 
 export interface PaletteSection {
