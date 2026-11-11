@@ -19,6 +19,8 @@ export interface GrepOptions extends SpecFilters {
 	regex?: boolean;
 	ignoreCase?: boolean;
 	limit?: number;
+	offset?: number;
+	maxBytes?: number;
 }
 
 export interface GrepMatch {
@@ -30,11 +32,16 @@ export interface GrepMatch {
 export interface GrepResult {
 	matches: GrepMatch[];
 	truncated: boolean;
+	nextOffset?: number;
+}
+
+export function formatGrepMatch(match: GrepMatch): string {
+	return `${match.path}:${match.line}: ${match.snippet}`;
 }
 
 export const DEFAULT_GREP_LIMIT = 200;
 
-function matchesFilters(fm: Frontmatter, filters: SpecFilters): boolean {
+export function matchesFilters(fm: Frontmatter, filters: SpecFilters): boolean {
 	if (filters.type !== undefined && scalar(fm, FIELDS.type) !== filters.type) return false;
 	if (filters.parent !== undefined && scalar(fm, FIELDS.parent) !== filters.parent) return false;
 	if (filters.tag !== undefined && !list(fm, FIELDS.tags).includes(filters.tag)) return false;
@@ -60,17 +67,33 @@ function buildMatcher(opts: GrepOptions): (line: string) => boolean {
 export function grepSpecs(entries: SpecContentEntry[], opts: GrepOptions): GrepResult {
 	const requested = Math.trunc(opts.limit ?? DEFAULT_GREP_LIMIT);
 	const limit = requested > 0 ? requested : DEFAULT_GREP_LIMIT;
+	const offset = opts.offset ?? 0;
+	if (!Number.isSafeInteger(offset) || offset < 0) throw new Error("Invalid match offset.");
 	const matcher = buildMatcher(opts);
 	const matches: GrepMatch[] = [];
+	let skipped = 0;
+	let bytes = 0;
 	for (const entry of entries) {
 		if (!matchesFilters(entry.frontmatter, opts)) continue;
 		const lines = entry.content.split("\n");
 		for (let i = 0; i < lines.length; i++) {
-			const raw = (i === 0 ? (lines[0]?.replace(/^\ufeff/, "") ?? "") : (lines[i] ?? "")) as string;
+			const raw = i === 0 ? (lines[0]?.replace(/^\ufeff/, "") ?? "") : (lines[i] ?? "");
 			const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
 			if (matcher(line)) {
-				if (matches.length >= limit) return { matches, truncated: true };
-				matches.push({ path: entry.path, line: i + 1, snippet: line.trim() });
+				if (skipped < offset) {
+					skipped++;
+					continue;
+				}
+				const match = { path: entry.path, line: i + 1, snippet: line.trim() };
+				const size = Buffer.byteLength(formatGrepMatch(match)) + 1;
+				if (
+					matches.length >= limit ||
+					(matches.length > 0 && bytes + size > (opts.maxBytes ?? Infinity))
+				) {
+					return { matches, truncated: true, nextOffset: offset + matches.length };
+				}
+				matches.push(match);
+				bytes += size;
 			}
 		}
 	}
@@ -145,11 +168,11 @@ export function graphSlice(graph: SpecGraph, opts: SliceOptions): GraphSlice {
 		walk((id) => {
 			const out = (graph.forward[edge].get(id) ?? []).map((to) => ({
 				to,
-				edge: { from: id, to, kind: edge } as SpecEdge,
+				edge: { from: id, to, kind: edge },
 			}));
 			const inc = (graph.reverse[edge].get(id) ?? []).map((from) => ({
 				to: from,
-				edge: { from, to: id, kind: edge } as SpecEdge,
+				edge: { from, to: id, kind: edge },
 			}));
 			return [...out, ...inc];
 		});

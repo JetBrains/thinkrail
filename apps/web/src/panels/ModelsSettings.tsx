@@ -13,6 +13,7 @@ import { useModelCatalog } from "@/chat/useModelCatalog";
 import { useModelPreferences } from "@/chat/useModelPreferences";
 import { selectCatalogModel, selectPickerModels, toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
+import { CacheWarmingSettings } from "./CacheWarmingSettings";
 import { ModelContextSettings } from "./ModelContextSettings";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
 import { SettingsRow } from "./SettingsRow";
@@ -118,7 +119,7 @@ export function ModelsSettings() {
 				{loadFailed ? (
 					<div className="flex items-center gap-8 border-border-muted border-b py-12">
 						<p className="text-text-muted tr-text-ui">{t("settings.models.loadFailed")}</p>
-						<Button variant="ghost" size="sm" onClick={() => void readDefault()}>
+						<Button variant="ghost" size="m" onClick={() => void readDefault()}>
 							{t("common.retry")}
 						</Button>
 					</div>
@@ -211,6 +212,8 @@ export function ModelsSettings() {
 			</SettingsGroup>
 
 			<ModelContextSettings />
+
+			<CacheWarmingSettings />
 		</SettingsPageContainer>
 	);
 }

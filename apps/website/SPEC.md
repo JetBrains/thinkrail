@@ -62,7 +62,18 @@ binary.
     (`scripts/build-blog.ts` + HTML string templates) is deleted.
   - *Lint caveat:* Biome parses only `.astro` frontmatter, so `noUnusedVariables`/`noUnusedImports`
     are disabled for `*.astro` in `biome.json` (template usage is invisible to it — every flag would
-    be a false positive). `astro check` covers the templates instead.
+    be a false positive). The typecheck covers the templates instead.
+  - *Typecheck:* TypeScript 7's `tsc --runExternalCode` checks `.astro` files through
+    `@astrojs/ts-content-mapper` (`contentMappers` in `tsconfig.json`; the mapper runs under `node`), since
+    `astro check` needs the TypeScript 6 programmatic API. `astro sync` runs first to generate
+    `.astro/types.d.ts`. `astro/client` pulls Astro's own `.astro` components into the program and
+    `skipLibCheck` does not skip them, so Astro must be >= 7.4.4, whose components pass under
+    `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess`. Astro 7.4.4 requires Node >= 22.23.4,
+    so the contributor Node floor in `CONTRIBUTING.md` and `README.md` is 22.23.4, above the 22.19 that
+    `pi` needs at runtime.
+  - *Test typecheck:* The `.astro` typecheck follows `tsconfig.json`, which excludes `*.test.ts`, so the
+    `typecheck` script also runs `tsconfig.test.json` over the site tests. `build` runs the whole
+    `typecheck`, so root CI and `site.yml` both check them.
 
 The parent owns the route-composition edges; the vibecoding leaf has no sibling dependency:
 
@@ -93,8 +104,9 @@ imports nothing, so the vibecoding island can reuse it without reaching the IDE 
   included once by every route family. `src/components/IdeShell.astro` is the one IDE shell the landing
   and blog render through — icon sprite, skip link, title bar (workspace name
   parameterized: `website` on the landing, `blog` on blog pages, each with the matching
-  `workspace/<name> · from main` branch label), the left project rail, the right files rail +
-  terminal, the status bar, and the `main.ts` script import; the center column is its default slot
+  `workspace/<name> · from main` branch label, and GitHub + Discord icon links), the left project rail, the right files rail +
+  terminal, the status bar, the post-download thank-you dialog (`DownloadThanks.astro`), and the
+  `main.ts` script import; the center column is its default slot
   and the right rail's Files rows its `filetree` slot. The left rail carries the site's real
   navigation as child rows of the `website` workspace — **Landing** (`/`) and **Blog** (`/blog/`,
   selected on the index and on every article) as links, **Docs** disabled with a `Coming soon` chip
@@ -123,10 +135,10 @@ imports nothing, so the vibecoding island can reuse it without reaching the IDE 
   editor tabs are a JS-built navigation affordance over content that is already reachable by scrolling
   and via the file tree), and animations are skipped under `prefers-reduced-motion`.
 - **Enhancement behaviors owned by `main.ts`** (the code carries no rationale — this is it):
-  - *Terminal replay*: the hero install picker keeps the selected OS/shell's primary desktop action and
-    **Browser UI via command line** disclosure together; the launcher command inside static markup is the single source of truth for the terminal,
+  - *Terminal replay*: the Install section's command tabs keep the launcher command in static markup;
+    that command is the single source of truth for the terminal,
     which subscribes and types it before the short install transcript. A generation counter invalidates an
-    in-flight sequence on OS change; clicking the
+    in-flight sequence when the selected command changes; clicking the
     *finished* terminal (or its keyboard-reachable `Replay logo` button, revealed only then) replays
     the ASCII logo + a GitHub CTA — never the install. The logo banner's characters are never
     altered; only its font size is fitted to the rail width (re-fitted on resize).
@@ -140,25 +152,27 @@ imports nothing, so the vibecoding island can reuse it without reaching the IDE 
     (from `data-mock-label`), `aria-expanded` + `aria-describedby` on open — no `aria-haspopup`
     (a `tooltip` is not an allowed popup value). The `.rail-tabs` callout anchors to the panel's
     live edge; others place beside the trigger, clamped to the viewport and repositioned on resize.
-- The hero's install experience has compact **macOS / Windows / Linux** tabs and makes the stable
-  desktop application the only expanded action in each panel: macOS Apple Silicon DMG, Windows x64
-  setup ZIP, and distinct Linux x64 / ARM64 setup archives. Each panel carries one compatibility line;
-  it does not repeat product name, desktop/stability prose, or format outside the action label. A native
-  **Browser UI via command line** disclosure retains the local launcher and explains that `thinkrail` opens
-  the browser UI, without presenting a second terminal-only interface. Windows
-  adds **PowerShell / Command Prompt (cmd) / WSL** tabs only inside that disclosure: PowerShell runs
+- The hero install control is three actions in a row: **Download**, **View on GitHub** (the existing
+  star count fills in beside the label), and **Join our Discord**. Download starts the file for
+  the detected desktop: the Apple Silicon DMG on macOS, the Windows x64 ZIP on Windows, and a Linux
+  archive. Linux uses the ARM64 archive only when a browser hint explicitly says ARM; otherwise the
+  button downloads the x64 archive. When the desktop is unknown, including with JavaScript off,
+  Download scrolls to `#install` instead of choosing a file. **Other platforms & CLI** sits under that button
+  and also scrolls to `#install`. It does not open a menu. JS sets the label and file URL when a
+  desktop is detected, and marks that row in the Install section. Versionless GitHub
+  `releases/latest/download` URLs name the public aliases owned by [[module-ci-release]]; the website
+  carries no release version, updater payload name, or private artifact knowledge. Browser hints
+  choose that file and the initial command tab; they never hide alternatives, treat `MacIntel` as an
+  Intel build, or claim to detect an ambiguous mobile platform.
+- The `INSTALL.md` section is the download surface: one compact platform-row matrix (macOS Apple
+  Silicon DMG, Windows x64 ZIP, Linux x64 and ARM64 archives), then **Browser UI via command line**
+  always visible. Those commands use the same tab chrome as the blog picker, with three tabs —
+  **macOS / Linux / WSL**, **Windows CMD**, **Windows PowerShell**. PowerShell runs
   `irm …/install.ps1 | iex`, Command Prompt launches `powershell -c "irm …/install.ps1 | iex"`, and
-  WSL uses `install.sh`. The closed picker stays under 150px on desktop and 190px on mobile. Versionless
-  GitHub `releases/latest/download` URLs name the public aliases owned by [[module-ci-release]]; the
-  website carries no release version, updater payload name, or private artifact knowledge. Browser hints
-  choose only the initial supported desktop OS; they never hide alternatives, infer Linux CPU architecture,
-  or claim to detect an ambiguous mobile platform. Every panel remains in the static DOM; JS turns the
-  complete fallback into tabs, while `<details>` owns keyboard/no-JS disclosure semantics. The detailed
-  `INSTALL.md` section is one compact platform-row matrix plus one browser-UI-via-command-line disclosure;
-  nightly/version examples
-  live in release documentation rather than the marketing page.
-- **Phone visitors get a "Send link to my computer" action** above the hero picker. It is in the static DOM
-  but `hidden`, and `main.ts` reveals it only on a detected phone or tablet (the desktop picker stays visible
+  macOS, Linux, and WSL share `install.sh`. Every command stays in the static DOM; JS turns that
+  fallback into tabs. Nightly/version examples live in release documentation rather than the marketing page.
+- **Phone visitors get a "Send link to my computer" action** above the hero actions. It is in the static DOM
+  but `hidden`, and `main.ts` reveals it only on a detected phone or tablet (the download link stays visible
   below it; no platform is hidden). Activation opens the native share sheet with the current page URL, its
   query replaced by `utm_source=send_to_computer&utm_medium=share` and its fragment by the hero anchor, so
   the later desktop visit records a tagged first touch. Without Web Share, or when sharing fails for any
@@ -200,14 +214,38 @@ so PostHog joins those events to the app's `acquisition_linked.journey_id` for l
 Document-level `click`, middle-button `auxclick`, and disclosure `toggle`
 delegation instruments the static install controls without changing their navigation or no-JS behavior.
 Before each post-initialization install CTA, download, or CLI event, the current navigation touch is
-attempted so consent granted on the page can affect only a subsequent action. Only the four exact stable
+attempted so consent granted on the page can affect only a subsequent action; a page records that touch
+at most once per consented journey, so later actions on it never drop a bridge its download created
+(see [[submodule-website-attribution]]). Only the four exact stable
 GitHub desktop aliases are downloads. Their CTA location comes from the containing hero, install
 section, quick start, final CTA, or blog post; one recognized activation emits `install_cta_clicked`
 (`desktop`) followed by `download_started`. When a consented journey context is available, the activation
 creates and stores a canonical per-download bridge ID before `download_started`, and that event carries
 the same ID. A later desktop download replaces only the stored latest bridge ID; a download without
-consent remains bridge-less. Opening a command-line disclosure (the hero or blog-post picker's, or the install section's) emits only
-`install_cta_clicked` (`cli`); closing it does not. That open is browsing, not install intent: a
+consent remains bridge-less. A primary click on one of those four downloads also opens the
+thank-you dialog and does not cancel the file. The dialog records the PostHog survey
+`Thanks for downloading ThinkRail`: `survey shown` when it opens, `survey dismissed` if it
+closes before an answer, and `survey sent` on each Continue or Finish. One
+`$survey_submission_id` ties those sends together, each send repeats the answers collected so
+far, and `$survey_completed` is true only on Finish, so the furthest event is how far that
+response went. A choice is sent as its label and a custom answer as its typed text; multiple-choice
+answers are arrays. The welcome screen says continuing accepts the privacy policy and links it. The
+dialog initializes only on pages with a valid content key, so its events always carry one. Survey events attempt no attribution touch: they are feedback, not acquisition
+actions, and the download that opened the dialog already recorded the page's touch and bridge.
+Closing the dialog resets it to the welcome screen. The next open is a new
+showing, with a new submission id and a new choice order; answers already sent stay on the
+submission that recorded them. Finishing the survey is remembered in `localStorage` under
+`thinkrail_download_survey_completed`, which holds the survey id and nothing else; it is the dialog's
+UX state, not analytics state, so consent does not gate it. Later downloads still open the dialog,
+but the survey card says the visitor has already answered and offers **Answer again**: `survey shown`
+is sent only when they take it, so closing such a dialog sends nothing, and a new survey id offers
+the survey again. Choice order is shuffled for each response, except a custom answer, which stays
+last. Required steps leave Continue disabled until the answer is valid. The first-try note and
+the email are optional. A filled-in email has to satisfy the browser's email field before
+Finish enables; a blank email does not. While Finish is disabled, a muted note on the same line as the
+button reads “— please enter a valid email or leave it blank”. Opening the blog-post picker's command-line disclosure emits only
+`install_cta_clicked` (`cli`); closing it does not, and the landing's always-visible command tabs emit
+nothing. That open is browsing, not install intent: a
 primary-button click on a `[data-copy]` control whose value is a known install command emits
 `install_command_copied` with its `sh`/`powershell`/`cmd` shell and hero, install-section, or blog-post location
 (other copy values emit nothing; selecting and copying the text manually is not observed). Any other
@@ -221,7 +259,9 @@ installing. A primary-button click on a `[data-share-install-link]` control in t
 emits `install_link_share_clicked`; it records the activation, not whether the share sheet completed.
 Each of these events attempts the live navigation touch first, like the existing actions. No page or
 child module carries analytics imports, vendor configuration, or another loader; controls expose only
-the `data-copy` / `data-share-install-link` markers the delegation reads.
+the `data-copy` / `data-share-install-link` markers the delegation reads. The one exception is
+`src/downloadThanks.ts`: it owns the survey's step state, so it captures the three survey events itself
+through the site facade `src/analytics.ts`, and adds no vendor configuration or loader.
 
 The existing GTM container remains Cookiebot's control plane; route-specific downstream tags use a
 `thinkrail.ai` hostname condition plus Page Path, never another GTM container. Sharing the exact apex
@@ -245,8 +285,8 @@ claim Functions. Pinned Wrangler `4.124.0` deploys from `apps/website` so its co
 and local Pages/D1 workflows; production applies committed attribution migrations before deploy. The
 build compiles the Functions, and a local Pages/D1 smoke starts Pages from the checked-in configuration,
 applies the actual migration, and exercises create, bind, and redeem. `.github/workflows/site.yml` runs
-`bun run --filter @thinkrail/website build` (`astro check`, the Functions typecheck and build, `astro
-build`, and artifact validation) on pushes that
+`bun run --filter @thinkrail/website build` (the full `typecheck` — `.astro`, Functions and tests — the
+Functions build, `astro build`, and artifact validation) on pushes that
 touch this module, [[module-website-analytics]], the root package manifest, or the lockfile (plus manual
 dispatch). It verifies the provider URL before succeeding. `thinkrail.ai` is the project's custom apex
 domain; provider URLs are deployment probes, not product identities.
@@ -310,6 +350,24 @@ current desktop-first hierarchy rather than freezing obsolete CLI-only instructi
   `src/youTubeEmbeds.ts` (Astro 7's native Markdown processor — the unified/rehype pipeline is a
   separate legacy package we don't carry) rewrites `youtube.com/embed` → `youtube-nocookie.com` and
   adds `title` + `loading="lazy"` when omitted. This keeps the no-consent-banner stance intact.
+- **Original post images are published as-is**: Astro rewrites only `img` sources to fingerprinted
+  WebP assets, so a Markdown link to `./images/<file>` would otherwise 404.
+  `src/pages/blog/[slug]/images/[file].ts` emits every image in a published post's `images/` folder
+  byte-for-byte at `/blog/<slug>/images/<file>`. It walks `publishedPosts()`, so draft images never ship.
+  The folder resolves from the Astro root (not the working directory); a post without `images/` has
+  none, but any other read failure fails the build, and `validateBuild` fails when a relative link on a
+  post has no built file — a silently empty route would otherwise ship 404 links.
+- **Table images are thumbnails**: a linked image's cell takes two thirds of its row and the image fills its
+  width at its own aspect ratio — no height cap, since a capped, letterboxed thumbnail left the cell's
+  width unused. The width stays definite so lazy images reserve their box before loading — a
+  `width: auto` box-fit was rejected because unloaded images collapse to 0×0, shift the layout and all
+  load at once. Below 520px of *content* width
+  (a container query: the blog pane's width does not follow the viewport) the cells stack. An all-empty
+  header row is hidden, so a post can lay rows out as header-less tables (e.g. alternating image sides).
+  Thumbnails are still Astro's full-resolution WebP, lazy-loaded; true downscaled thumbnails are deferred.
+  When the image is wrapped in a link, `src/imageZoom.ts` turns a plain primary click (or Enter on the
+  link) into a modal `<dialog>`, named by the image's alt, showing the link target; modified or
+  non-primary clicks and no-JS visits follow the link instead.
 - **Chrome: blog pages live inside the IDE shell**, not a separate page frame (decision, 2026-08 —
   the prior standalone blog header/footer is deleted). `BlogLayout.astro` renders through
   `IdeShell.astro`: the content sits in the same scrolling editor pane as the landing sections, in a
@@ -319,14 +377,18 @@ current desktop-first hierarchy rather than freezing obsolete CLI-only instructi
   blog pages** (the landing keeps its section tabs; page-level Landing/Blog tabs were explicitly
   rejected for now). The right rail's Files list shows the published articles (current one
   active); the terminal keeps its static install transcript — `main.ts` guards make every
-  landing-only enhancement inert (no sections → no scroll-spy; only the `hero` picker drives the
+  landing-only enhancement inert (no sections → no scroll-spy; only the landing command tabs drive the
   terminal replay).
-- **Every article ends with the landing's install picker.** `src/components/InstallPicker.astro` is the
-  one picker markup (OS tabs, desktop downloads, **Browser UI via command line** disclosure with Windows
-  shell tabs); the hero renders it with `idPrefix="hero"` and `src/pages/blog/[slug].astro` with
-  `idPrefix="blog"` in a `.blog-post-install` section after the post body. It sits inside `.blog-post`,
+- **A post may have hand-authored sub-pages** at `src/pages/blog/<slug>/<page>.astro` (e.g.
+  `/blog/the-chat/languages/`, the list of highlighted languages linked from that post). They render
+  through `BlogLayout` but are not posts: no collection entry, no index/RSS/Files-list row, no install
+  picker. Their data is copied, not imported — the site never depends on `apps/web`.
+- **Every article ends with the install picker.** `src/components/InstallPicker.astro` is the
+  blog picker markup (OS tabs, desktop downloads, **Browser UI via command line** disclosure with Windows
+  shell tabs). `src/pages/blog/[slug].astro` renders it in a `.blog-post-install`
+  section after the post body. It sits inside `.blog-post`,
   so its downloads, copies, and disclosure opens report `blog_post`, and outside `.blog-post-content`, so
-  the prose cascade never restyles it. `main.ts` drives whichever picker the page has; posts keep their
+  the prose cascade never restyles it. `main.ts` drives that picker; posts keep their
   own prose install guidance, and `validateBuild.ts` requires the picker on every article.
   Post cards are whole-card links that signal hover on the border alone (no underline, no movement)
   and share the landing feature cards' surface, which keeps the `--elevated` tag chips visible on
@@ -363,10 +425,22 @@ posts, and `/vibecoding/`; `/agentic-development/` and `/agentic-ide/` are filte
 sitemap because they canonicalize to `/vibecoding/` (see [[submodule-website-vibecoding]]). Previews keep production
 canonical URLs and do not become a second search identity.
 
+`public/_redirects` maps `/discord` to the community server invite, so `thinkrail.ai/discord` is the one
+Discord link the site, blog posts, README, and app use — a rotated invite is a one-line site deploy, never
+an app release. `validateBuild` fails a build that drops it. Discord clicks emit no analytics event yet.
+
 `public/favicon.svg` is the IDE-shell landing/blog tab icon: a rounded tile in the brand primary green carrying the
 **header wordmark's TR mark** (same `viewBox` + paths, not redrawn) in black, centred with balanced
-padding for legibility at tab sizes. It is wired via `<link rel="icon" type="image/svg+xml">` in
-`index.html`; there is no `.ico` fallback.
+padding for legibility at tab sizes. `BaseHead` wires it via `<link rel="icon" type="image/svg+xml">`,
+next to two raster fallbacks for clients that skip SVG icons (Safari 18 and earlier, tools and feed
+readers that only fetch `/favicon.ico`):
+- `favicon.ico` (48/32/16);
+- a 180 px `apple-touch-icon.png` filled with the tile green, because iOS masks its own corners.
+
+`scripts/generate-favicons.ts` (`favicons:generate`) renders both from `favicon.svg`. They are committed
+rather than built, since rasterizer output is not byte-stable across platforms. The RSS channel names
+the touch icon as its `<image>`. The build check fails when either file or the landing/blog links go
+missing.
 
 `public/og.png` is a capture of the site's own hero inside the IDE shell (dark theme, Landing
 selected, terminal install transcript finished, worktree note visible). The transcript in the

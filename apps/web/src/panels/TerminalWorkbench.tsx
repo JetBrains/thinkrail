@@ -2,7 +2,7 @@ import { RiAddLine as Plus } from "@remixicon/react";
 import type { TerminalTabsPush } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 import { i18n, useT } from "@thinkrail/locales/react";
-import { IconTooltip } from "@thinkrail/ui/tooltip";
+import { IconButton } from "@thinkrail/ui/button";
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { terminalName } from "../lib";
 import type { TerminalTab } from "../store";
@@ -65,17 +65,15 @@ export function TerminalWorkbenchBody({ tab, onAdd }: { tab: TerminalTab; onAdd:
 	const t = useT();
 	return (
 		<div data-testid="terminal-panel" className="relative h-full min-h-0 bg-container-terminal-bg">
-			<IconTooltip label={t("panels.terminalWorkbench.newTerminal")}>
-				<button
-					type="button"
-					data-testid="terminal-add"
-					aria-label={t("panels.terminalWorkbench.newTerminal")}
-					onClick={onAdd}
-					className="absolute top-4 right-4 z-10 flex size-20 items-center justify-center rounded-sm bg-container-elevated-bg text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-				>
-					<Plus className="size-14" />
-				</button>
-			</IconTooltip>
+			<IconButton
+				variant="outline"
+				size="s"
+				icon={Plus}
+				label={t("panels.terminalWorkbench.newTerminal")}
+				data-testid="terminal-add"
+				onClick={onAdd}
+				className="absolute top-4 right-4 z-10"
+			/>
 			<Suspense fallback={null}>
 				<TerminalInstance
 					tabKey={tab.tabKey}

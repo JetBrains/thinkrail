@@ -3,6 +3,7 @@ type BoundedRunBase = {
 	err: string;
 	timedOut: boolean;
 	launchFailed: boolean;
+	aborted?: true;
 	waitedMs: number;
 };
 
@@ -14,13 +15,19 @@ export type BoundedRunOptions = {
 	cwd?: string;
 	env?: Record<string, string | undefined>;
 	stdout?: "text";
+	signal?: AbortSignal;
+	idleTimeoutMs?: number;
+	onStderr?: (text: string) => void;
 };
 
 export type BoundedBytesRunOptions = Omit<BoundedRunOptions, "stdout"> & {
 	stdout: "bytes";
 };
 
-export type BoundedStreamOptions = Omit<BoundedRunOptions, "stdout">;
+export type BoundedStreamOptions = Omit<
+	BoundedRunOptions,
+	"stdout" | "signal" | "idleTimeoutMs" | "onStderr"
+>;
 export type BoundedStream = {
 	stdout: ReadableStream<Uint8Array>;
 	exited: Promise<BoundedRunBase>;
@@ -56,19 +63,21 @@ function drain(stream: ReadableStream<Uint8Array>, chunk: (value: Uint8Array) =>
 	};
 }
 
-function textSink(stream: ReadableStream<Uint8Array>): TextSink {
+function textSink(stream: ReadableStream<Uint8Array>, onText?: (text: string) => void): TextSink {
 	const decoder = new TextDecoder();
 	let text = "";
 	return {
 		kind: "text",
 		value: () => text,
 		...drain(stream, (chunk) => {
-			text += decoder.decode(chunk, { stream: true });
+			const decoded = decoder.decode(chunk, { stream: true });
+			text += decoded;
+			onText?.(decoded);
 		}),
 	};
 }
 
-function bytesSink(stream: ReadableStream<Uint8Array>): BytesSink {
+function bytesSink(stream: ReadableStream<Uint8Array>, onChunk?: () => void): BytesSink {
 	const chunks: Uint8Array[] = [];
 	let length = 0;
 	return {
@@ -85,6 +94,7 @@ function bytesSink(stream: ReadableStream<Uint8Array>): BytesSink {
 		...drain(stream, (chunk) => {
 			chunks.push(chunk.slice());
 			length += chunk.byteLength;
+			onChunk?.();
 		}),
 	};
 }
@@ -98,7 +108,28 @@ function delay(ms: number): { promise: Promise<void>; cancel: () => void } {
 	return { promise, cancel: () => clearTimeout(timer) };
 }
 
-function killTree(proc: Bun.Subprocess): void {
+function idleDeadline(ms: number | undefined): {
+	promise: Promise<void>;
+	touch: () => void;
+	cancel: () => void;
+} {
+	if (ms === undefined)
+		return { promise: new Promise(() => {}), touch: () => {}, cancel: () => {} };
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	let fire: () => void = () => {};
+	const promise = new Promise<void>((resolve) => {
+		fire = resolve;
+	});
+	const touch = () => {
+		clearTimeout(timer);
+		timer = setTimeout(fire, boundedTimeout(ms));
+		timer.unref();
+	};
+	touch();
+	return { promise, touch, cancel: () => clearTimeout(timer) };
+}
+
+export async function killTree(proc: Bun.Subprocess): Promise<void> {
 	if (process.platform !== "win32") {
 		try {
 			process.kill(-proc.pid, "SIGKILL");
@@ -108,10 +139,20 @@ function killTree(proc: Bun.Subprocess): void {
 			return;
 		}
 	}
+	try {
+		const killer = Bun.spawn(["taskkill", "/PID", String(proc.pid), "/T", "/F"], {
+			timeout: 5_000,
+			stdin: "ignore",
+			stdout: "ignore",
+			stderr: "ignore",
+			windowsHide: true,
+		});
+		if ((await killer.exited) === 0) return;
+	} catch {}
 	proc.kill("SIGKILL");
 }
 
-function spawnOptions(opts: { cwd?: string; env?: Record<string, string | undefined> }) {
+export function spawnOptions(opts: { cwd?: string; env?: Record<string, string | undefined> }) {
 	return {
 		cwd: opts.cwd ?? process.cwd(),
 		env: opts.env ?? process.env,
@@ -164,7 +205,7 @@ export function streamBounded(argv: string[], opts: BoundedStreamOptions): Bound
 			deadline.promise.then(() => "timed-out" as const),
 		]);
 		deadline.cancel();
-		if (outcome === "timed-out") killTree(proc);
+		if (outcome === "timed-out") await killTree(proc);
 		const grace = delay(DRAIN_GRACE_MS);
 		await Promise.race([err.done, grace.promise]);
 		grace.cancel();
@@ -222,7 +263,7 @@ export function streamBounded(argv: string[], opts: BoundedStreamOptions): Bound
 		},
 		cancel() {
 			void reader.cancel().catch(() => {});
-			killTree(proc);
+			return killTree(proc);
 		},
 	});
 	return { stdout, exited };
@@ -237,6 +278,20 @@ export async function runBounded(
 	const startedAt = performance.now();
 	const waitedMs = () => performance.now() - startedAt;
 
+	if (opts.signal?.aborted) {
+		const aborted: BoundedRunBase = {
+			ok: false,
+			err: "",
+			timedOut: false,
+			launchFailed: false,
+			aborted: true,
+			waitedMs: waitedMs(),
+		};
+		return opts.stdout === "bytes"
+			? { ...aborted, out: new Uint8Array() }
+			: { ...aborted, out: "" };
+	}
+
 	let proc: Bun.Subprocess<"ignore", "pipe", "pipe">;
 	try {
 		proc = Bun.spawn(argv, spawnOptions(opts));
@@ -245,17 +300,39 @@ export async function runBounded(
 		return opts.stdout === "bytes" ? { ...failed, out: new Uint8Array() } : { ...failed, out: "" };
 	}
 
-	const out = opts.stdout === "bytes" ? bytesSink(proc.stdout) : textSink(proc.stdout);
-	const err = textSink(proc.stderr);
+	const idle = idleDeadline(opts.idleTimeoutMs);
+	const out =
+		opts.stdout === "bytes"
+			? bytesSink(proc.stdout, idle.touch)
+			: textSink(proc.stdout, idle.touch);
+	const err = textSink(proc.stderr, (text) => {
+		idle.touch();
+		try {
+			opts.onStderr?.(text);
+		} catch {}
+	});
 	const drained = Promise.all([out.done, err.done]);
 	const deadline = delay(boundedTimeout(opts.timeoutMs));
 
+	let onAbort: (() => void) | undefined;
+	const aborted = new Promise<"aborted">((resolve) => {
+		onAbort = () => resolve("aborted");
+		opts.signal?.addEventListener("abort", onAbort, { once: true });
+		if (opts.signal?.aborted) onAbort();
+	});
 	const outcome = await Promise.race([
 		proc.exited.then(() => "exited" as const),
 		deadline.promise.then(() => "timed-out" as const),
+		idle.promise.then(() => "timed-out" as const),
+		aborted,
 	]);
 	deadline.cancel();
-	if (outcome === "timed-out") killTree(proc);
+	idle.cancel();
+	if (onAbort) opts.signal?.removeEventListener("abort", onAbort);
+	if (outcome !== "exited") {
+		await killTree(proc);
+		await proc.exited;
+	}
 	const grace = delay(DRAIN_GRACE_MS);
 	await Promise.race([drained, grace.promise]);
 	grace.cancel();
@@ -267,6 +344,7 @@ export async function runBounded(
 		err: err.value(),
 		timedOut: outcome === "timed-out",
 		launchFailed: false,
+		...(outcome === "aborted" && { aborted: true as const }),
 		waitedMs: waitedMs(),
 	};
 	return out.kind === "bytes" ? { ...result, out: out.value() } : { ...result, out: out.value() };

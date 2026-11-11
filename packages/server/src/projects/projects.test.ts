@@ -11,11 +11,13 @@ import {
 } from "node:fs";
 import * as fsPromises from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join, resolve } from "node:path";
 import type { Project } from "@thinkrail/contracts";
+import { setSyncGitTimeoutForTests } from "../git";
 import {
 	approveProjectMcpServer,
 	closeProject,
+	createProject,
 	getProjects,
 	grantProjectMcpTool,
 	initProject,
@@ -28,6 +30,7 @@ import {
 	renameProject,
 	revokeProjectMcpTool,
 	setPiTrustSeed,
+	setProjectGroupEnabled,
 	setProjectMcpOverride,
 	setProjectPublisher,
 	setProjectTrust,
@@ -247,6 +250,99 @@ test("initProject: an empty folder gets an empty initial commit (a HEAD), so wor
 	expect(existsSync(wt)).toBe(true);
 });
 
+test("createProject: makes the folder and missing parents, bootstraps a repo, and opens it", () => {
+	const parent = join(dataDir, "nested", "parent");
+
+	const project = withoutUserGitConfig(() => createProject(parent, " my-app ", " My  App "));
+	const path = join(parent, "my-app");
+	expect(project.path).toBe(realpathSync(path));
+	expect(project.name).toBe("My App");
+	expect(gitOut(path, "rev-parse", "HEAD")).not.toBe("");
+	expect(listProjects().map((p) => p.id)).toEqual([project.id]);
+});
+
+test("createProject: preserves Unicode parent and project names on disk and in saved records", () => {
+	const parent = join(dataDir, "中文测试");
+	const path = join(parent, "项目-🚀");
+	const project = withoutUserGitConfig(() => createProject(parent, "项目-🚀"));
+
+	expect(project.path).toBe(realpathSync(path));
+	expect(project.name).toBe("项目-🚀");
+	expect(resolve(gitOut(path, "rev-parse", "--show-toplevel"))).toBe(project.path);
+	expect(gitOut(path, "rev-parse", "HEAD")).not.toBe("");
+	expect(getProjects().map((p) => p.path)).toEqual([project.path]);
+});
+
+test("createProject: reuses an empty folder but rejects a non-empty one or a file", () => {
+	mkdirSync(join(dataDir, "empty"));
+	expect(withoutUserGitConfig(() => createProject(dataDir, "empty")).path).toBe(
+		realpathSync(join(dataDir, "empty")),
+	);
+
+	mkdirSync(join(dataDir, "full"));
+	writeFileSync(join(dataDir, "full", "a.txt"), "a\n");
+	expect(() => createProject(dataDir, "full")).toThrow("already exists and isn't empty");
+	expect(existsSync(join(dataDir, "full", ".git"))).toBe(false);
+
+	writeFileSync(join(dataDir, "file"), "x\n");
+	expect(() => createProject(dataDir, "file")).toThrow("Not a folder");
+});
+
+test("createProject: a folder inside an enclosing repo becomes its own project", () => {
+	const outer = join(dataDir, "outer");
+	makeRepo(outer);
+
+	const project = withoutUserGitConfig(() => createProject(outer, "inner"));
+	expect(project.path).toBe(realpathSync(join(outer, "inner")));
+	expect(resolve(gitOut(join(outer, "inner"), "rev-parse", "--show-toplevel"))).toBe(
+		realpathSync(join(outer, "inner")),
+	);
+});
+
+function withFailingCommitHook<T>(hookBody: string, run: () => T): T {
+	const hooks = join(dataDir, "hooks");
+	mkdirSync(hooks, { recursive: true });
+	writeFileSync(join(hooks, "pre-commit"), `#!/bin/sh\n${hookBody}\nexit 1\n`, { mode: 0o755 });
+	const config = join(dataDir, "gitconfig");
+	writeFileSync(config, `[core]\n\thooksPath = "${hooks.replaceAll("\\", "/")}"\n`);
+	const keys = ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS"] as const;
+	const saved = keys.map((key) => process.env[key]);
+	process.env.GIT_CONFIG_GLOBAL = config;
+	delete process.env.GIT_CONFIG_COUNT;
+	delete process.env.GIT_CONFIG_PARAMETERS;
+	try {
+		return run();
+	} finally {
+		keys.forEach((key, index) => {
+			const value = saved[index];
+			if (value === undefined) delete process.env[key];
+			else process.env[key] = value;
+		});
+	}
+}
+
+test("createProject: a failed bootstrap removes the folder it made, but nothing written into it meanwhile", () => {
+	const parent = join(dataDir, "parent");
+	expect(() => withFailingCommitHook(":", () => createProject(parent, "clean"))).toThrow(
+		"git commit failed",
+	);
+	expect(existsSync(join(parent, "clean"))).toBe(false);
+
+	expect(() =>
+		withFailingCommitHook("echo kept > hook-output.txt", () => createProject(parent, "busy")),
+	).toThrow("git commit failed");
+	expect(existsSync(join(parent, "busy", ".git"))).toBe(false);
+	expect(readFileSync(join(parent, "busy", "hook-output.txt"), "utf8")).toBe("kept\n");
+	expect(listProjects()).toEqual([]);
+});
+
+test("createProject: rejects names that are not one plain folder name", () => {
+	for (const name of ["", "  ", ".", "..", "a/b", "a\\b"]) {
+		expect(() => createProject(dataDir, name)).toThrow("Invalid project folder name");
+	}
+	expect(() => createProject("relative", "app")).toThrow("must be absolute or start with ~/");
+});
+
 test("initProject: commits even with no configured git identity (the -c fallback)", () => {
 	const dir = join(dataDir, "noid");
 	mkdirSync(dir);
@@ -268,6 +364,135 @@ test("initProject: an existing repo is opened, not re-initialised (dedupe, histo
 	expect(listProjects()).toHaveLength(1);
 	expect(gitOut(repo, "rev-parse", "HEAD")).toBe(originalHead);
 });
+
+const posix = test.skipIf(process.platform === "win32");
+
+function withGitWrapper<T>(caseBody: string, run: () => T): T {
+	const executable = Bun.which("git");
+	if (!executable) throw new Error("git not found");
+	const bin = join(dataDir, "bin");
+	mkdirSync(bin, { recursive: true });
+	writeFileSync(
+		join(bin, "git"),
+		`#!/bin/sh\ncase " $* " in ${caseBody} esac\nexec ${JSON.stringify(executable)} "$@"\n`,
+	);
+	chmodSync(join(bin, "git"), 0o755);
+	const path = process.env.PATH;
+	process.env.PATH = `${bin}${delimiter}${path ?? ""}`;
+	try {
+		return run();
+	} finally {
+		if (path === undefined) delete process.env.PATH;
+		else process.env.PATH = path;
+	}
+}
+
+posix("a timed-out top-level probe is an error, never an init offer for a real repo", () => {
+	const repo = join(dataDir, "slow-repo");
+	makeRepo(repo);
+	writeFileSync(join(repo, "untracked.txt"), "keep me untracked\n");
+	const head = gitOut(repo, "rev-parse", "HEAD");
+
+	setSyncGitTimeoutForTests(300);
+	try {
+		withGitWrapper('*" --show-toplevel "*) sleep 30;;', () => {
+			expect(() => inspectProjectPath(repo)).toThrow(
+				expect.objectContaining({ code: "GIT_TIMEOUT" }),
+			);
+			expect(() => initProject(repo)).toThrow(expect.objectContaining({ code: "GIT_TIMEOUT" }));
+			expect(() => openProject(repo)).toThrow(expect.objectContaining({ code: "GIT_TIMEOUT" }));
+		});
+	} finally {
+		setSyncGitTimeoutForTests(undefined);
+	}
+
+	expect(gitOut(repo, "rev-parse", "HEAD")).toBe(head);
+	expect(gitOut(repo, "status", "--porcelain")).toBe("?? untracked.txt");
+	expect(listProjects()).toHaveLength(0);
+});
+
+posix("initProject keeps a .git it did not create when the initial commit fails", () => {
+	const dir = join(dataDir, "has-git-dir");
+	mkdirSync(join(dir, ".git"), { recursive: true });
+	writeFileSync(join(dir, ".git", "sentinel"), "user data\n");
+	writeFileSync(join(dir, "file.txt"), "x\n");
+
+	withGitWrapper('*" add "*) exit 1;;', () => {
+		expect(() => withoutUserGitConfig(() => initProject(dir))).toThrow(/git add failed/);
+	});
+
+	expect(readFileSync(join(dir, ".git", "sentinel"), "utf8")).toBe("user data\n");
+});
+
+posix("initProject shows git's own error when the initial commit fails", () => {
+	const dir = join(dataDir, "add-stderr");
+	mkdirSync(dir);
+	writeFileSync(join(dir, "file.txt"), "x\n");
+
+	withGitWrapper(
+		'*" add "*) echo "fatal: detected dubious ownership in repository" >&2; exit 128;;',
+		() => {
+			expect(() => withoutUserGitConfig(() => initProject(dir))).toThrow(
+				/git add failed: .*\nfatal: detected dubious ownership in repository/,
+			);
+		},
+	);
+});
+
+posix("a repository git refuses to trust is an error, never an init offer", () => {
+	const repo = join(dataDir, "untrusted-repo");
+	makeRepo(repo);
+	const head = gitOut(repo, "rev-parse", "HEAD");
+
+	withGitWrapper(
+		'*" --show-toplevel "*) echo "fatal: detected dubious ownership in repository" >&2; exit 128;;',
+		() => {
+			expect(() => inspectProjectPath(repo)).toThrow(/dubious ownership/);
+			expect(() => initProject(repo)).toThrow(/dubious ownership/);
+		},
+	);
+
+	expect(gitOut(repo, "rev-parse", "HEAD")).toBe(head);
+	expect(listProjects()).toHaveLength(0);
+});
+
+posix("initProject removes the .git it created when the initial commit fails", () => {
+	const dir = join(dataDir, "fresh");
+	mkdirSync(dir);
+	writeFileSync(join(dir, "file.txt"), "x\n");
+
+	withGitWrapper('*" add "*) exit 1;;', () => {
+		expect(() => withoutUserGitConfig(() => initProject(dir))).toThrow(/git add failed/);
+	});
+
+	expect(existsSync(join(dir, ".git"))).toBe(false);
+});
+
+posix(
+	"a git identity probe that times out fails the init instead of committing as ThinkRail",
+	() => {
+		const dir = join(dataDir, "slow-identity");
+		mkdirSync(dir);
+		writeFileSync(join(dir, "file.txt"), "x\n");
+
+		setSyncGitTimeoutForTests(2_000);
+		try {
+			withGitWrapper('*" config user.email "*) sleep 30;;', () => {
+				expect(() => initProject(dir)).toThrow(
+					expect.objectContaining({
+						code: "GIT_TIMEOUT",
+						message: expect.stringMatching(/^Could not read the git identity/),
+					}),
+				);
+			});
+		} finally {
+			setSyncGitTimeoutForTests(undefined);
+		}
+
+		expect(existsSync(join(dir, ".git"))).toBe(false);
+		expect(listProjects()).toHaveLength(0);
+	},
+);
 
 test("legacy project records default to open in both projections", () => {
 	const repo = join(dataDir, "repo");
@@ -585,3 +810,15 @@ test.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
 		expect(listRecentProjects().map((project) => project.id)).toEqual(["locked"]);
 	},
 );
+
+test("a skill group switch records an explicit project choice in exactly one list", () => {
+	const dir = join(dataDir, "skills project");
+	makeRepo(dir);
+	const { id } = openProject(dir);
+	const on = setProjectGroupEnabled(id, "personal", true);
+	expect(on.enabledGroups).toEqual(["personal"]);
+	expect(on.disabledGroups).toEqual([]);
+	const off = setProjectGroupEnabled(id, "personal", false);
+	expect(off.enabledGroups).toEqual([]);
+	expect(off.disabledGroups).toEqual(["personal"]);
+});

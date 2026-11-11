@@ -189,8 +189,8 @@ afterEach(() => {
 });
 
 test("a watched worktree publishes a debounced fsChanged batch for a new file", async () => {
-	ensureWatch("ws1");
-	ensureWatch("ws1");
+	void ensureWatch("ws1");
+	void ensureWatch("ws1");
 	await sleep(100);
 	writeFileSync(join(worktree, "hello.ts"), "export {};\n");
 	await waitFor(() => payloads.length > 0);
@@ -202,7 +202,7 @@ test("a watched worktree publishes a debounced fsChanged batch for a new file", 
 
 test("a watched project-skill path carries detected evidence", async () => {
 	mkdirSync(join(worktree, ".claude", "skills", "demo"), { recursive: true });
-	ensureWatch("ws1");
+	void ensureWatch("ws1");
 	await sleep(100);
 	writeFileSync(join(worktree, ".claude", "skills", "demo", "SKILL.md"), "# Demo\n");
 	await waitFor(() => payloads.some((payload) => payload.skillChange === "detected"));
@@ -213,7 +213,7 @@ test("a watched project-skill path carries detected evidence", async () => {
 
 test("a missing classifier degrades a concrete event to unknown", async () => {
 	setSkillPathClassifier(null);
-	ensureWatch("ws1");
+	void ensureWatch("ws1");
 	await sleep(100);
 	writeFileSync(join(worktree, "unclassified.ts"), "export {};\n");
 	await waitFor(() => payloads.some((payload) => payload.paths.includes("unclassified.ts")));
@@ -227,8 +227,8 @@ test("a .git write nudges the repo-meta sink without ever becoming an fsChanged 
 	const started: string[] = [];
 	setRepoMetaPublisher((id) => nudges.push(id));
 	setWatchStartedPublisher((id) => started.push(`${id}:${nudges.length}`));
-	ensureWatch("ws1");
-	ensureWatch("ws1");
+	void ensureWatch("ws1");
+	void ensureWatch("ws1");
 	expect(started).toEqual(["ws1:0"]);
 	await sleep(100);
 
@@ -246,6 +246,36 @@ test("a .git write nudges the repo-meta sink without ever becoming an fsChanged 
 	await sleep(600);
 	expect(nudges).toEqual(["ws1"]);
 });
+
+test("a throwing repo-meta or fsChanged subscriber never escapes the watcher's timers", async () => {
+	const escaped: unknown[] = [];
+	const onUncaught = (error: unknown) => escaped.push(error);
+	process.on("uncaughtException", onUncaught);
+	try {
+		const nudges: string[] = [];
+		setRepoMetaPublisher((id) => {
+			nudges.push(id);
+			throw new Error(`Unknown workspace: ${id}`);
+		});
+		setWatchPublisher((payload) => {
+			payloads.push(payload);
+			throw new Error("subscriber failed");
+		});
+		void ensureWatch("ws1");
+		await waitFor(() => payloads.length > 0);
+		writeFileSync(join(worktree, "after.ts"), "export {};\n");
+		await waitFor(() => payloads.some((payload) => payload.paths.includes("after.ts")));
+		mkdirSync(join(worktree, ".git"), { recursive: true });
+		writeFileSync(join(worktree, ".git", "HEAD"), "ref: refs/heads/one\n");
+		await waitFor(() => nudges.length === 1);
+		await sleep(400);
+		writeFileSync(join(worktree, ".git", "HEAD"), "ref: refs/heads/two\n");
+		await waitFor(() => nudges.length === 2);
+		expect(escaped).toEqual([]);
+	} finally {
+		process.off("uncaughtException", onUncaught);
+	}
+}, 15_000);
 
 test("a watch-started publisher that throws leaves no half-registered watcher behind", async () => {
 	let calls = 0;
@@ -269,7 +299,7 @@ test("a linked worktree's git metadata lives outside the root — its churn stil
 
 	const nudges: string[] = [];
 	setRepoMetaPublisher((id) => nudges.push(id));
-	ensureWatch("ws1");
+	void ensureWatch("ws1");
 	await sleep(100);
 
 	writeFileSync(join(metaDir, "HEAD"), "ref: refs/heads/b2\n");
@@ -287,7 +317,7 @@ test("a linked worktree's git metadata lives outside the root — its churn stil
 });
 
 test("ignored churn (node_modules) never publishes", async () => {
-	ensureWatch("ws1");
+	void ensureWatch("ws1");
 	await sleep(100);
 	mkdirSync(join(worktree, "node_modules"));
 	await sleep(50);
@@ -297,8 +327,8 @@ test("ignored churn (node_modules) never publishes", async () => {
 });
 
 test("unknown workspace and stopWatch are safe no-ops; stopped watchers stay silent", async () => {
-	ensureWatch("nope");
-	ensureWatch("ws1");
+	void ensureWatch("nope");
+	void ensureWatch("ws1");
 	await sleep(100);
 	stopWatch("ws1");
 	stopWatch("ws1");
@@ -342,11 +372,11 @@ test("stopping before readiness settles callers conservatively without a late pu
 });
 
 test("a deleted-and-recreated worktree root (same path, new inode) is re-watched on the next read", async () => {
-	ensureWatch("ws1");
+	void ensureWatch("ws1");
 	await sleep(100);
 	rmSync(worktree, { recursive: true, force: true });
 	mkdirSync(worktree);
-	ensureWatch("ws1");
+	void ensureWatch("ws1");
 	await sleep(100);
 	payloads.length = 0;
 	writeFileSync(join(worktree, "reborn.ts"), "x\n");
@@ -390,7 +420,7 @@ test("prewarm-only watchers are globally capped: the oldest is evicted, real wat
 	expect(await isSettled(realReady)).toBe(false);
 	for (const ready of readies.values()) expect(await isSettled(ready)).toBe(false);
 
-	ensureWatch("p9", { prewarm: true });
+	void ensureWatch("p9", { prewarm: true });
 	const evicted = readies.get("p1");
 	if (!evicted) throw new Error("missing p1 readiness");
 	expect(await evicted).toEqual({ startupNudge: true });
@@ -408,7 +438,7 @@ test("a real read promotes a prewarmed watcher out of prewarm eviction", async (
 	);
 	expect(await isSettled(promoted)).toBe(false);
 
-	ensureWatch("p10", { prewarm: true });
+	void ensureWatch("p10", { prewarm: true });
 	expect(await isSettled(readies.get("p2") ?? Promise.resolve())).toBe(true);
 	expect(await isSettled(promoted)).toBe(false);
 	expect(await isSettled(readies.get("p3") ?? Promise.resolve())).toBe(false);
@@ -423,13 +453,13 @@ test("re-prewarming an alive prewarm-only watcher refreshes its eviction recency
 	);
 	expect(ensureWatch("p1", { prewarm: true })).toBe(first);
 
-	ensureWatch("p9", { prewarm: true });
+	void ensureWatch("p9", { prewarm: true });
 	expect(await isSettled(readies.get("p2") ?? Promise.resolve())).toBe(true);
 	expect(await isSettled(first)).toBe(false);
 });
 
 test("a watcher whose workspace record is gone is reaped on the next ensureWatch", async () => {
-	ensureWatch("ws1");
+	void ensureWatch("ws1");
 	await sleep(100);
 	const worktree2 = join(dataDir, "worktree2");
 	mkdirSync(worktree2);
@@ -446,7 +476,7 @@ test("a watcher whose workspace record is gone is reaped on the next ensureWatch
 			},
 		]),
 	);
-	ensureWatch("ws2");
+	void ensureWatch("ws2");
 	await sleep(100);
 	payloads.length = 0;
 	writeFileSync(join(worktree, "zombie.ts"), "x\n");

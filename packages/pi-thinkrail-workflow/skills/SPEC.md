@@ -217,6 +217,11 @@ the design tree / frontier, an uncapped round, facts looked up rather than asked
 bar. Rejected by user decision: a separate opt-in "grill me" skill (depth lives in the shared norm,
 so every workflow gets it) and grilling's "confirm shared understanding" gate (an empty frontier
 proceeds; each workflow's own gates still apply).
+Its inference confirmation is a **single "Looks right" option**: the tool's own Other row carries a
+correction and its per-question **discuss first** mark carries disagreement. The earlier authored
+rejection row ("Off base — ask me directly") is gone: it was an *answer* that looked like an escape, and
+the local sessions held 30 agent-authored look-alikes ("Не то — спроси иначе") that hid the real Other
+row. A discuss-first answer is therefore never settled on a guess — the agent explains, then asks again.
 Meta-rule 4's entry model is in effect: at the start of new work the parent module's
 `before_agent_start` rule points workflow-eligible work at `choosing-a-workflow`, which routes to today's
 family; already-routed work resumes, and direct work bypasses the router. `writing-workflow-skills` (self-trigger only) and the concept skills (reached by name) sit outside
@@ -257,8 +262,9 @@ fix:
 ## Per-skill design notes
 
 Each workflow's steps live once, in its own `SKILL.md` — the authoritative wording. Each skill body
-also carries its own degradation behavior (headless host with no `ask_user_question` UI, skipped or
-declined answers, a workspace with no pre-existing spec graph); nothing is configured here. What
+also carries its own degradation behavior (a session without the `ask_user_question` tool, a headless host
+with no UI for it, skipped or declined answers, a workspace with no pre-existing spec graph); nothing is
+configured here. What
 follows is only the rationale the skill bodies don't state:
 
 - **`brainstorming`** applies the discipline this repo holds itself to ("the spec leads the code")
@@ -320,8 +326,10 @@ follows is only the rationale the skill bodies don't state:
   V1" list as a prohibition against work being built. MVP discipline survives as elicitation (smallest
   useful first build); what is cut goes back to the user rather than into a later-list.
 - **`asking-user-questions`** carries the family's `ask_user_question` norms once: rounds, option
-  design, the inference-confirmation pattern, and skip/headless degradation. Callers keep the *when* —
-  and say where assumptions get recorded.
+  design, the inference-confirmation pattern, and the degradations: a skipped round, a headless host, and
+  a session without the tool (the extension switched off, or never installed), where the round goes out
+  as a plain chat message and the turn ends to wait. Callers keep the *when* — and say where assumptions
+  get recorded.
 - **`shipping-a-pr`** was mined from the operator's real PR sessions (2026-06→08: 125 scanned, 36
   with PR work): the recurring asks — verify-then-PR, self-review first, rebase on fresh main,
   screenshots for UI changes, "make PR up-to-date", "look at the checks", "do not fix review

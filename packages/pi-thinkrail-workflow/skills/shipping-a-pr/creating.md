@@ -44,11 +44,10 @@ Red flags — stop, a gate is being rationalized away:
   commands and results, never a bare "tests pass"). **When a chat TODO plan drove the work, don't
   write the body from memory — pull the material from the plan:** `plan.summary` already carries the
   cross-cutting intent and testing in the same three-section shape (see the `todos` skill — plan
-  summary), each step carries its own `summary` + `verification` + `commitSubject`, and the host-side
-  `renderPrBody` renders the whole plan into the UI's preview body (`server/src/pr/prBody.ts`). With a
-  repo template, reshape the plan material into the template's sections rather than restating it; with
-  no template, the plan summary IS the body shape — take it verbatim and let the auto `## Plan`
-  section cover the per-step detail.
+  summary), each step carries its own `summary` + `verification` + `commitSubject`, and the app's PR
+  preview body already renders the whole plan. With a repo template, reshape the plan material into the
+  template's sections rather than restating it; with no template, the plan summary IS the body shape —
+  take it verbatim and let the auto `## Plan` section cover the per-step detail.
 - **Stabilize the tree, push, then create.** Gates 3–5 may edit the tree gate 1 checked. When they do,
   commit everything, then repeat gates 3–5 against the new head; push only after a pass makes no
   further edits and `git status --porcelain` is empty *now* (the spine's point-of-action rule). Then

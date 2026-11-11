@@ -54,10 +54,10 @@ export function NotificationPermissionPrompt() {
 					<DialogDescription>{t("notifications.permission.description")}</DialogDescription>
 				</DialogHeader>
 				<DialogFooter>
-					<Button variant="outline" data-testid="notification-not-now" onClick={dismiss}>
+					<Button variant="outline" size="l" data-testid="notification-not-now" onClick={dismiss}>
 						{t("notifications.permission.notNow")}
 					</Button>
-					<Button data-testid="notification-enable" onClick={enable}>
+					<Button variant="primary" size="l" data-testid="notification-enable" onClick={enable}>
 						{t("notifications.permission.enable")}
 					</Button>
 				</DialogFooter>

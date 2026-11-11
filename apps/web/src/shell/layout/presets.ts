@@ -7,7 +7,7 @@ import type {
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
-import { isPreviewCompatibleTabKind } from "../../lib";
+import { isPreviewCompatibleTabKind, nullProto } from "../../lib";
 import {
 	collectAllGroups,
 	collectCenterGroups,
@@ -80,7 +80,7 @@ export const BUILTIN_LAYOUT_PRESETS: readonly LayoutPreset[] = [
 		left: side(true, 0.18, [{ id: "balanced-left", tools: ["projects"] }]),
 		right: side(true, 0.28, [
 			{ id: "balanced-right-top", tools: ["specs", "files"], weight: 1.25 },
-			{ id: "balanced-right-bottom", tools: ["review"] },
+			{ id: "balanced-right-bottom", tools: ["plan", "review"] },
 		]),
 		bottom: bottom(true, [{ id: "balanced-bottom", tools: [] }]),
 	},
@@ -116,6 +116,12 @@ export function layoutPresetName(t: Translator, preset: LayoutPreset): string {
 		? BUILTIN_PRESET_NAME_KEYS[preset.id]
 		: undefined;
 	return key ? t(key) : preset.name;
+}
+
+export function presetPlacesTool(preset: LayoutPreset, tool: LayoutToolId): boolean {
+	return [preset.left, preset.right, preset.bottom].some((region) =>
+		region.groups.some((group) => group.tools.includes(tool)),
+	);
 }
 
 export function minimumSideGroupLimit(preset: LayoutPreset): number {
@@ -274,7 +280,7 @@ export function reflowWorkspaceViewForFrame(
 		.flatMap((group) => group.tabs)
 		.filter((tab): tab is LayoutTerminalTab => tab.kind === "terminal");
 	const centerGroups = collectWorkbenchCenterGroups(nextFrame.center);
-	const groups = Object.create(null) as Record<string, WorkspaceGroupView>;
+	const groups = nullProto<Record<string, WorkspaceGroupView>>();
 	for (let index = 0; index < centerTabs.length; index += 1) {
 		const tab = centerTabs[index];
 		const target = index < centerGroups.length ? centerGroups[index] : centerGroups[0];

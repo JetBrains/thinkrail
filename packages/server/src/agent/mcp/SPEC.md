@@ -33,7 +33,10 @@ consistency, CIMD constraints, `authServerMetadataUrl`), `auth.provider` only wi
 **never in the project file**, project override entries (`enabled` / `exposure` / `toolExposure` only, on
 an existing global server, reported merged with `scope: "global"` and an `override` path), and the
 `-`/`_` namespace clash. Re-verify on every pi bump; a parity failure is a port bug, never a reason to
-relax a rule.
+relax a rule. One leading UTF-8 BOM is ignored consistently by the loader, writers, and raw-entry
+occupancy/fingerprint reads. A successful edit writes ordinary JSON without the BOM; a refused edit or
+removal of an absent name preserves the original bytes. This keeps Windows-authored files editable
+without bypassing approvals or treating an occupied name as absent.
 
 ## What's here
 
@@ -161,7 +164,9 @@ relax a rule.
   session manager; this child module never imports the status coordinator.
 - `engine.ts` — `createMcpEngine({ loadConfig, lockSignIns?, openUrl?, onCommandSettled? })` →
   `{ extensions, shutdown }`: pi's two built-in descriptors (`mcp` = `createMcpExtension`, `tool-search`),
-  `replaceable: true, builtin: true` exactly like pi's CLI. Optional host callbacks deliver Settings
+  `replaceable: true, builtin: true` exactly like pi's CLI; their names are `HOST_BUILTIN_EXTENSION_NAMES`,
+  which the pi packages catalog lists as the host's "pi built-in" rows (pi's `codemode` and `llama.cpp`
+  are not loaded by ThinkRail and never appear). Optional host callbacks deliver Settings
   authorization URLs through `openUrl` and invalidate status after mutating commands. Ordinary chats
   never open a browser on the host. The `mcp` factory first registers its own
   `session_start` / `mcp_servers_change` handlers that activate `tool_search` whenever
@@ -213,7 +218,7 @@ relax a rule.
   `globalMcpConfigPath`, `projectMcpConfigPath`, `addMcpServerConfig`, `updateMcpServerConfig`,
   `removeMcpServerConfig`, `assertProjectMcpConfigWritable`, `McpConfigPathUnsafeError`,
   `createMcpSessionHost` + `McpSessionHost` and the option labels `MCP_CONFIRM_DENY` / `MCP_CONFIRM_ONCE` /
-  `MCP_CONFIRM_CHAT` / `MCP_CONFIRM_ALWAYS`, `createMcpEngine` (`{ loadConfig, lockSignIns?, openUrl?, onCommandSettled? }`), `acquireMcpSignInLock`,
+  `MCP_CONFIRM_CHAT` / `MCP_CONFIRM_ALWAYS`, `createMcpEngine` (`{ loadConfig, lockSignIns?, openUrl?, onCommandSettled? }`), `HOST_BUILTIN_EXTENSION_NAMES`, `acquireMcpSignInLock`,
   `loadHostMcpConfig` + `McpProjectPolicy` + `mcpPolicyOf`, `summarizeMcpServers`, `maskMcpEndpoint` /
   `redactMcpText`, `readMcpServerLog`, `effectiveMcpServerConfig`, the `management.ts` mutations (`writeMcpServerEntry`,
   `removeMcpServerEntry`, `mcpEntryFingerprint`, `shareMcpOverrideWithRepo`),

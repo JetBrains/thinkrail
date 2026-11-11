@@ -4,6 +4,7 @@ import {
 	RiArrowGoBackLine as RotateCcw,
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
 import type * as React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -105,9 +106,6 @@ export function PanZoomView({ svg }: { svg: string }) {
 		}
 	};
 
-	const btn =
-		"rounded-sm p-4 text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary";
-
 	return (
 		<div className="relative min-h-0 flex-1">
 			<div
@@ -122,39 +120,30 @@ export function PanZoomView({ svg }: { svg: string }) {
 				dangerouslySetInnerHTML={{ __html: svg }}
 			/>
 			<div className="absolute right-8 bottom-8 flex items-center gap-4 rounded-sm border border-border-default bg-container-elevated-bg p-4 tr-text-metadata shadow-[var(--shadow-lg)]">
-				<button
-					type="button"
-					aria-label={t("visualize.panZoom.zoomOut")}
+				<IconButton
+					icon={Minus}
+					label={t("visualize.panZoom.zoomOut")}
 					data-testid="mermaid-zoom-out"
 					onClick={() => setZoom(scaleRef.current / 1.25)}
-					className={btn}
-				>
-					<Minus className="size-16" />
-				</button>
+				/>
 				<span
 					data-testid="mermaid-zoom-level"
 					className="min-w-[3.5ch] text-center text-text-muted tabular-nums"
 				>
 					{Math.round(scale * 100)}%
 				</span>
-				<button
-					type="button"
-					aria-label={t("visualize.panZoom.zoomIn")}
+				<IconButton
+					icon={Plus}
+					label={t("visualize.panZoom.zoomIn")}
 					data-testid="mermaid-zoom-in"
 					onClick={() => setZoom(scaleRef.current * 1.25)}
-					className={btn}
-				>
-					<Plus className="size-16" />
-				</button>
-				<button
-					type="button"
-					aria-label={t("visualize.panZoom.reset")}
+				/>
+				<IconButton
+					icon={RotateCcw}
+					label={t("visualize.panZoom.reset")}
 					data-testid="mermaid-zoom-reset"
 					onClick={reset}
-					className={btn}
-				>
-					<RotateCcw className="size-14" />
-				</button>
+				/>
 			</div>
 		</div>
 	);

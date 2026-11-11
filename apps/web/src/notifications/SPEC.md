@@ -42,8 +42,9 @@ Producer → queue → consumer, so the decision to notify is deferred to the mo
   id; while the request is in flight, only the completions that were relightable when it started) — relighting a result by hand never notifies here, though another
   unfocused window of the same owner may still notify on it. One
   surviving session opens its chat (`activateWorkspaceFromRoute`, landing at the latest message); several
-  open the cross-workspace `SessionSwitcher` palette (`openSessionSwitcher` on [[submodule-web-store]]) so
-  the user picks the one to attend, instead of landing in a window that may not show the right chat.
+  open the search palette (`openSearch` on [[submodule-web-store]]), whose empty state lists every chat
+  waiting for the user, so the user picks the one to attend, instead of landing in a window that may not
+  show the right chat.
   `formatNotification` keeps the title as the bold **ThinkRail** mark, the worktree as `subtitle`, and the
   reason as `body` (`N worktrees need your attention` for several); a per-session `tag` lets the browser
   replace rather than stack.
@@ -67,13 +68,15 @@ channel-agnostic above it:
 Selection is capability-detection only (the bridge's presence), never a `desktop` branch. No Service
 Worker on either channel: a fully-closed app has no live client and raises nothing by design.
 
-**OS-dependent (desktop).** The native rendering is the pinned Electrobun 2.0.1 backend, which takes
+**OS-dependent (desktop).** The native rendering is the pinned Electrobun 2.0.5 backend, which takes
 `title` + `body` + `subtitle` + `silent` and renders per platform: macOS `UNUserNotificationCenter`
 (native title/subtitle/body, OS-requested authorization on first show), Windows a `Shell_NotifyIconW` tray
-**balloon** (title + body; `subtitle` folds in as an extra line per the SDK — not a Windows Toast and no App
-User Model ID), Linux libnotify/D-Bus (DE-dependent, Wayland caveats, subtitle folded likewise). The macOS
-bundle id comes from `apps/desktop/electrobun.config.ts` (`identifier: ai.thinkrail.app`, name `ThinkRail`),
-and the OS supplies the app icon (the native call has no icon field). **Limitation:** the bridge exposes no
+**balloon** (title + body; `subtitle` folds in as an extra line per the SDK — not a Windows Toast), Linux
+libnotify/D-Bus (DE-dependent, Wayland caveats, subtitle folded likewise). The macOS bundle id comes from
+`apps/desktop/electrobun.config.ts` (`identifier: ai.thinkrail.app`, name `ThinkRail`), and macOS supplies
+the app icon (the native call has no icon field). The Windows balloon shows Electrobun's generic
+application icon. It carries no App User Model ID of its own, so the sender Windows shows follows the
+process's ID ([[module-desktop]]); that attribution is unverified. **Limitation:** the bridge exposes no
 way to read the OS permission state, so the desktop channel reports `granted` unconditionally; if the user
 has denied notifications at the OS level the call is accepted and silently not shown. Querying/handling OS
 permission (and click callbacks) is deferred.
@@ -93,7 +96,7 @@ known browser-API limitation that does not affect end users (only developers wit
 **Platform caveat (Windows):** on Windows, DevTools opens as a separate native window; focusing it fires
 `blur` on the main `BrowserWindow`, so `isWindowFocused()` returns `false` — the same limitation as the
 browser channel. On macOS, DevTools is docked inside the same native window and the main-window focus is
-preserved. Electrobun 2.0.1 exposes only per-window `focus`/`blur` events with no application-level
+preserved. Electrobun 2.0.5 exposes only per-window `focus`/`blur` events with no application-level
 activation signal, so a cross-window solution requires a future Electrobun API.
 
 ## Permission
@@ -116,7 +119,7 @@ toggle is host-synced app config and defaults on (notifications still require th
 - **Public surface (`index.ts` barrel):** `useAttentionNotifications`, `NotificationPermissionPrompt`,
   `selectNotificationChannel`, `NotificationChannel`, `NotificationPermissionState`, `ATTENTION_WINDOW_MS`.
 - **Allowed deps:** [[submodule-web-store]] (session-state reads, prompt state, `activateWorkspaceFromRoute`
-  and `openSessionSwitcher` actions), `ui` (the preface dialog), [[module-contracts]] (`SessionState` /
+  and `openSearch` actions), `ui` (the preface dialog), [[module-contracts]] (`SessionState` /
   `SessionCompletion` / `NativeNotificationBridge` types), `@thinkrail/locales` (notification and preface
   strings, resolved when each notification is built), React, Remix Icon.
 - **Forbidden:** a second source of truth for attention; raw agent-event listening; any host/`pi` import;

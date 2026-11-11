@@ -6,6 +6,8 @@ import {
 	type ReadingBandGeometry,
 } from "./readingBand";
 
+const TALL_ARRIVAL_SETTLE_MS = 300;
+
 interface Harness {
 	controller: ReturnType<typeof createReadingBandController>;
 	anchors: Array<{ index: number; inset: number }>;
@@ -20,6 +22,7 @@ interface Harness {
 	advance: (milliseconds: number) => void;
 	pendingFrames: () => number;
 	cancelledFrames: () => number;
+	stateChanges: () => number;
 }
 
 function createHarness({
@@ -29,16 +32,16 @@ function createHarness({
 	latestEdge = "bottom",
 	geometryAvailable = true,
 	runwayWritable = true,
-	movement = { settle: 75, trigger: 100 },
 	mountPending = false,
+	snap = (top: number) => top,
 }: {
+	snap?: (top: number) => number;
 	streaming?: boolean;
 	reducedMotion?: boolean;
 	viewportHeight?: number;
 	latestEdge?: "top" | "bottom";
 	geometryAvailable?: boolean;
 	runwayWritable?: boolean;
-	movement?: { settle: number; trigger: number };
 	mountPending?: boolean;
 } = {}): Harness {
 	let geometry: ReadingBandGeometry = {
@@ -51,6 +54,7 @@ function createHarness({
 	let now = 0;
 	let frameId = 0;
 	let cancelled = 0;
+	let published = 0;
 	const frames = new Map<number, (time: number) => void>();
 	const anchors: Array<{ index: number; inset: number }> = [];
 	const writes: number[] = [];
@@ -68,10 +72,11 @@ function createHarness({
 		writeScrollTop: (top) => {
 			const bounded = Math.min(geometry.maxScrollTop, Math.max(0, top));
 			writes.push(bounded);
-			const delta = bounded - geometry.scrollTop;
+			const achieved = snap(bounded);
+			const delta = achieved - geometry.scrollTop;
 			geometry = {
 				...geometry,
-				scrollTop: bounded,
+				scrollTop: achieved,
 				edgeBottom: geometry.edgeBottom === null ? null : geometry.edgeBottom - delta,
 			};
 		},
@@ -105,12 +110,13 @@ function createHarness({
 		cancelFrame: (id) => {
 			if (frames.delete(id)) cancelled += 1;
 		},
-		onStateChange: () => undefined,
+		onStateChange: () => {
+			published += 1;
+		},
 	};
 	const controller = createReadingBandController(environment, {
 		streaming,
 		latestEdge,
-		movement,
 		mountPending,
 	});
 
@@ -143,6 +149,7 @@ function createHarness({
 		},
 		pendingFrames: () => frames.size,
 		cancelledFrames: () => cancelled,
+		stateChanges: () => published,
 	};
 }
 
@@ -153,11 +160,20 @@ function advanceUntilIdle(harness: Harness, limit = 300) {
 	expect(harness.pendingFrames()).toBe(0);
 }
 
-function startConvergedStep(harness: Harness) {
+function startPinned(harness: Harness) {
 	harness.controller.contentChanged();
 	harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 601 });
 	harness.controller.contentChanged();
-	advanceUntilIdle(harness);
+	harness.advance(TALL_ARRIVAL_SETTLE_MS);
+}
+
+function grow(harness: Harness, pixels: number) {
+	const current = harness.readGeometry();
+	harness.setGeometry({
+		edgeBottom: (current.edgeBottom ?? 0) + pixels,
+		maxScrollTop: current.maxScrollTop + pixels,
+	});
+	harness.controller.contentChanged();
 }
 
 describe("reading-band newest-first header", () => {
@@ -262,40 +278,24 @@ describe("reading-band turn anchoring", () => {
 });
 
 describe("reading-band movement", () => {
-	it("steps one large layout expansion to the configured settle line", () => {
+	it("pins one large layout expansion to the pin line in the same callback", () => {
 		const harness = createHarness();
 		harness.setGeometry({ edgeBottom: 900, maxScrollTop: 900 });
 		harness.controller.contentChanged();
-		advanceUntilIdle(harness);
-		expect(harness.writes.at(-1)).toBe(550);
+		expect(harness.writes).toEqual([400]);
+		expect(harness.readGeometry().edgeBottom).toBe(600);
 		expect(harness.pendingFrames()).toBe(0);
+		expect(harness.controller.getMotionKind()).toBeNull();
 	});
 
-	it("uses the same destination without animation under reduced motion", () => {
-		const harness = createHarness({ reducedMotion: true });
+	it("pins the response edge in newest-first order too", () => {
+		const harness = createHarness({ latestEdge: "top" });
 		harness.setGeometry({ edgeBottom: 601 });
 		harness.controller.contentChanged();
-		expect(harness.writes).toEqual([251]);
-		expect(harness.pendingFrames()).toBe(0);
+		expect(harness.writes).toEqual([101]);
 	});
 
-	it("uses the response edge to calculate the settle destination", () => {
-		const harness = createHarness({ reducedMotion: true, latestEdge: "top" });
-		harness.setGeometry({ edgeBottom: 601 });
-		harness.controller.contentChanged();
-		expect(harness.writes).toEqual([251]);
-	});
-
-	it("re-evaluates immediately when the configured window changes", () => {
-		const harness = createHarness({ reducedMotion: true });
-		harness.setGeometry({ edgeBottom: 500 });
-		harness.controller.contentChanged();
-		expect(harness.writes).toEqual([]);
-		harness.controller.setMovement({ settle: 60, trigger: 80 });
-		expect(harness.writes).toEqual([240]);
-	});
-
-	it("re-evaluates the percentage window when the live viewport shrinks", () => {
+	it("re-pins when the live viewport shrinks", () => {
 		const harness = createHarness({ reducedMotion: true });
 		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 500 });
 		harness.controller.contentChanged();
@@ -303,7 +303,7 @@ describe("reading-band movement", () => {
 		harness.setGeometry({ viewportHeight: 400, maxScrollTop: 300 });
 		harness.controller.contentChanged();
 		expect(harness.runwayHeights).toEqual([]);
-		expect(harness.writes).toEqual([300]);
+		expect(harness.writes).toEqual([200]);
 	});
 });
 
@@ -354,15 +354,16 @@ describe("reading-band newest-row arrival", () => {
 });
 
 describe("reading-band reader intent", () => {
-	it("cancels an in-flight advance immediately and ignores later content growth", () => {
+	it("cancels an in-flight Follow response move and ignores later content growth", () => {
 		const harness = createHarness();
-		harness.setGeometry({ edgeBottom: 601 });
-		harness.controller.contentChanged();
+		harness.controller.readerLeft();
+		harness.setGeometry({ edgeBottom: 900 });
+		harness.controller.returnToEdge();
 		harness.advance(100);
 		const writesBeforeLeaving = harness.writes.length;
 		harness.controller.readerLeft();
 		harness.advance(120);
-		harness.setGeometry({ edgeBottom: 800 });
+		harness.setGeometry({ edgeBottom: 1_000 });
 		harness.controller.contentChanged();
 		expect(harness.writes).toHaveLength(writesBeforeLeaving);
 		expect(harness.cancelledFrames()).toBe(1);
@@ -376,8 +377,9 @@ describe("reading-band reader intent", () => {
 
 	it("cancels controller movement for a local reveal without changing follow state", () => {
 		const following = createHarness();
-		following.setGeometry({ edgeBottom: 601 });
-		following.controller.contentChanged();
+		following.controller.readerLeft();
+		following.setGeometry({ edgeBottom: 900 });
+		following.controller.returnToEdge();
 		expect(following.controller.getSnapshot().moving).toBe(true);
 		following.controller.cancelMovement();
 		expect(following.pendingFrames()).toBe(0);
@@ -432,7 +434,7 @@ describe("reading-band reader intent", () => {
 		harness.setGeometry({
 			scrollTop: 100,
 			maxScrollTop: 100,
-			edgeBottom: 601,
+			edgeBottom: 751,
 		});
 		harness.controller.contentChanged();
 		expect(harness.runwayHeights).toEqual([151]);
@@ -568,16 +570,19 @@ describe("reading-band reader intent", () => {
 	it("does not re-arm from geometry alone, but edge return and Follow response do", () => {
 		const harness = createHarness({ reducedMotion: true });
 		harness.controller.readerLeft();
-		harness.setGeometry({ scrollTop: 100, edgeBottom: 600 });
+		harness.setGeometry({ scrollTop: 100, edgeBottom: 750 });
 		harness.controller.contentChanged();
 		expect(harness.controller.getSnapshot().following).toBe(false);
+		expect(harness.writes).toEqual([]);
 
 		harness.controller.readerReachedEdge();
 		expect(harness.controller.getSnapshot().following).toBe(true);
+		expect(harness.writes.at(-1)).toBe(250);
 
 		harness.controller.readerLeft();
+		harness.setGeometry({ edgeBottom: 700 });
 		harness.controller.returnToEdge();
-		expect(harness.writes.at(-1)).toBe(250);
+		expect(harness.writes.at(-1)).toBe(350);
 		expect(harness.controller.getSnapshot().following).toBe(true);
 	});
 
@@ -760,7 +765,7 @@ describe("reading-band reader intent", () => {
 
 	it("places a mount only once its first row is mounted", () => {
 		const harness = createHarness({ latestEdge: "top", mountPending: true });
-		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900, edgeBottom: 600 });
+		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900, edgeBottom: 750 });
 		harness.controller.contentChanged();
 		expect(harness.writes).toEqual([]);
 		harness.setReferenceRow({ id: "r1", top: 0 });
@@ -771,38 +776,36 @@ describe("reading-band reader intent", () => {
 		expect(harness.controller.getSnapshot().runway).toBe(true);
 	});
 
-	it("holds a streaming mount at Settle through measurement without animation", () => {
+	it("holds a streaming mount at the pin line through measurement without animation", () => {
 		const harness = createHarness({ mountPending: true });
 		harness.setReferenceRow({ id: "r1", top: 0 });
-		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900, edgeBottom: 600 });
+		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900, edgeBottom: 750 });
 		harness.controller.contentChanged();
 		expect(harness.writes).toEqual([350]);
 		expect(harness.controller.getMotionKind()).toBe("mount");
-		harness.setGeometry({ edgeBottom: 580, maxScrollTop: 1_030 });
+		harness.setGeometry({ edgeBottom: 730, maxScrollTop: 1_030 });
 		harness.advance(16);
 		expect(harness.writes.at(-1)).toBe(480);
-		expect(harness.readGeometry().edgeBottom).toBe(450);
-		harness.setGeometry({ edgeBottom: 490, maxScrollTop: 1_070 });
+		expect(harness.readGeometry().edgeBottom).toBe(600);
+		harness.setGeometry({ edgeBottom: 640, maxScrollTop: 1_070 });
 		harness.controller.contentChanged();
 		expect(harness.writes.at(-1)).toBe(520);
-		expect(
-			harness.writes.every((write, index) => index === 0 || write >= harness.writes[index - 1]),
-		).toBe(true);
+		expect(harness.writes).toEqual(harness.writes.toSorted((a, b) => a - b));
 		advanceUntilIdle(harness);
 		expect(harness.controller.getMotionKind()).toBeNull();
-		expect(harness.readGeometry().edgeBottom).toBe(450);
+		expect(harness.readGeometry().edgeBottom).toBe(600);
 	});
 
-	it("holds a streaming mount at Settle when measurement pushes the edge below the fold", () => {
+	it("holds a streaming mount at the pin line when measurement pushes the edge below the fold", () => {
 		const harness = createHarness({ mountPending: true });
 		harness.setReferenceRow({ id: "r1", top: 0 });
-		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900, edgeBottom: 600 });
+		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900, edgeBottom: 750 });
 		harness.controller.contentChanged();
 		expect(harness.writes).toEqual([350]);
-		harness.setGeometry({ edgeBottom: 900, maxScrollTop: 1_400 });
+		harness.setGeometry({ edgeBottom: 1_050, maxScrollTop: 1_400 });
 		harness.advance(16);
 		expect(harness.writes.at(-1)).toBe(800);
-		expect(harness.readGeometry().edgeBottom).toBe(450);
+		expect(harness.readGeometry().edgeBottom).toBe(600);
 	});
 
 	it("lets a controller reveal that starts first own a pending mount", () => {
@@ -856,9 +859,9 @@ describe("reading-band reader intent", () => {
 		expect(harness.pendingFrames()).toBe(0);
 	});
 
-	it("places at Settle when the stream starts before the first row mounts", () => {
+	it("places at the pin line when the stream starts before the first row mounts", () => {
 		const harness = createHarness({ streaming: false, mountPending: true });
-		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900, edgeBottom: 600 });
+		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900, edgeBottom: 750 });
 		harness.controller.contentChanged();
 		harness.controller.setStreaming(true);
 		harness.setReferenceRow({ id: "r1", top: 0 });
@@ -884,12 +887,12 @@ describe("reading-band reader intent", () => {
 		expect(harness.writes).toEqual([]);
 	});
 
-	it("moves a stream that starts during the idle mount hold to Settle", () => {
+	it("moves a stream that starts during the idle mount hold to the pin line", () => {
 		const harness = createHarness({ streaming: false, mountPending: true });
 		harness.setReferenceRow({ id: "r1", top: 0 });
 		harness.controller.contentChanged();
 		expect(harness.controller.getMotionKind()).toBe("mount");
-		harness.setGeometry({ scrollTop: 1_000, maxScrollTop: 1_000, edgeBottom: 600 });
+		harness.setGeometry({ scrollTop: 1_000, maxScrollTop: 1_000, edgeBottom: 750 });
 		harness.controller.setStreaming(true);
 		harness.controller.contentChanged();
 		expect(harness.controller.getMotionKind()).toBe("mount");
@@ -918,27 +921,27 @@ describe("reading-band reader intent", () => {
 		harness.controller.contentChanged();
 		expect(harness.writes).toEqual([]);
 		expect(harness.pendingFrames()).toBe(0);
-		harness.setGeometry({ edgeBottom: 600 });
+		harness.setGeometry({ edgeBottom: 750 });
 		harness.controller.contentChanged();
 		expect(harness.writes).toEqual([350]);
 		advanceUntilIdle(harness);
 		expect(harness.writes.every((write) => write === 350)).toBe(true);
 	});
 
-	it("reconstructs at Settle after message order switches during a stream", () => {
+	it("reconstructs at the pin line after message order switches during a stream", () => {
 		const harness = createHarness({ mountPending: true });
 		harness.setReferenceRow({ id: "r1", top: 0 });
-		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900, edgeBottom: 600 });
+		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900, edgeBottom: 750 });
 		harness.controller.contentChanged();
 		harness.controller.setLatestEdge("top");
-		harness.setGeometry({ scrollTop: 300, maxScrollTop: 900, edgeBottom: 600 });
+		harness.setGeometry({ scrollTop: 300, maxScrollTop: 900, edgeBottom: 750 });
 		harness.controller.contentChanged();
 		expect(harness.writes).toEqual([350, 450]);
 	});
 });
 
 describe("reading-band derived room", () => {
-	it("stays still while the response fills below Trigger", () => {
+	it("stays still while the response fills below the pin line", () => {
 		const harness = createHarness();
 		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 599 });
 		harness.controller.contentChanged();
@@ -947,34 +950,45 @@ describe("reading-band derived room", () => {
 		expect(harness.pendingFrames()).toBe(0);
 	});
 
-	it("steps to Settle with one eased motion after crossing Trigger", () => {
+	it("holds the edge on the pin line after each growth in the same callback", () => {
 		const harness = createHarness();
 		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 601 });
 		harness.controller.contentChanged();
-		expect(harness.runwayHeights).toEqual([151]);
-		expect(harness.pendingFrames()).toBe(1);
-		expect(harness.controller.getMotionKind()).toBe("follow");
-
-		harness.advance(16);
-		expect(harness.writes[0]).toBeGreaterThan(100);
-		expect(harness.writes[0]).toBeLessThan(251);
-		harness.advance(203);
-		expect(harness.writes.at(-1)).toBeLessThan(251);
-		harness.advance(1);
-		expect(harness.writes.at(-1)).toBe(251);
-		expect(harness.readGeometry().edgeBottom).toBe(450);
-		expect(harness.controller.getMotionKind()).toBeNull();
-		expect(harness.pendingFrames()).toBe(0);
-		const writes = [...harness.writes];
-		harness.controller.contentChanged();
-		expect(harness.pendingFrames()).toBe(0);
-		expect(harness.writes).toEqual(writes);
+		expect(harness.runwayHeights).toEqual([1]);
+		expect(harness.writes).toEqual([101]);
+		expect(harness.readGeometry()).toMatchObject({
+			scrollTop: 101,
+			maxScrollTop: 101,
+			edgeBottom: 600,
+		});
+		for (let update = 1; update <= 5; update += 1) {
+			grow(harness, 40);
+			expect(harness.readGeometry()).toMatchObject({
+				scrollTop: 101 + update * 40,
+				edgeBottom: 600,
+			});
+			expect(harness.pendingFrames()).toBe(0);
+			expect(harness.controller.getMotionKind()).toBeNull();
+		}
+		expect(harness.runwayHeights).toEqual([1]);
 	});
 
-	it("retargets a step for growth during its eased movement without overshooting", () => {
+	it("publishes no state while the pin follows growth", () => {
 		const harness = createHarness();
-		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 601 });
-		harness.controller.contentChanged();
+		startPinned(harness);
+		const published = harness.stateChanges();
+		const snapshot = harness.controller.getSnapshot();
+		for (let update = 0; update < 10; update += 1) grow(harness, 25);
+		expect(harness.stateChanges()).toBe(published);
+		expect(harness.controller.getSnapshot()).toEqual(snapshot);
+		expect(harness.readGeometry().edgeBottom).toBe(600);
+	});
+
+	it("retargets Follow response for growth during its eased move without overshooting", () => {
+		const harness = createHarness();
+		harness.controller.readerLeft();
+		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 751 });
+		harness.controller.returnToEdge();
 		harness.advance(64);
 		const beforeGrowth = harness.readGeometry();
 		harness.setGeometry({
@@ -982,112 +996,69 @@ describe("reading-band derived room", () => {
 			maxScrollTop: beforeGrowth.maxScrollTop + 100,
 		});
 		const finalTarget =
-			harness.readGeometry().scrollTop + (harness.readGeometry().edgeBottom ?? 0) - 450;
+			harness.readGeometry().scrollTop + (harness.readGeometry().edgeBottom ?? 0) - 600;
 		harness.controller.contentChanged();
 		advanceUntilIdle(harness);
 		expect(harness.writes.every((write) => write <= finalTarget)).toBe(true);
 		expect(harness.readGeometry().scrollTop).toBe(finalTarget);
-		expect(harness.readGeometry().edgeBottom).toBe(450);
+		expect(harness.readGeometry().edgeBottom).toBe(600);
 	});
 
-	it("never rolls an in-flight step back when content shrinks under it", () => {
+	it("never rolls Follow response back when content shrinks under it", () => {
 		const harness = createHarness();
-		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 700 });
-		harness.controller.contentChanged();
+		harness.controller.readerLeft();
+		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 900 });
+		harness.controller.returnToEdge();
 		harness.advance(150);
-		const midStep = harness.readGeometry();
+		const midMove = harness.readGeometry();
 		harness.setGeometry({
-			edgeBottom: (midStep.edgeBottom ?? 0) - 60,
-			maxScrollTop: midStep.maxScrollTop - 60,
+			edgeBottom: (midMove.edgeBottom ?? 0) - 60,
+			maxScrollTop: midMove.maxScrollTop - 60,
 		});
 		const writesBefore = harness.writes.length;
 		advanceUntilIdle(harness);
 		const later = harness.writes.slice(writesBefore);
 		for (const [index, write] of later.entries()) {
-			expect(write).toBeGreaterThanOrEqual(
-				index === 0 ? midStep.scrollTop : (later[index - 1] ?? 0),
-			);
+			const previous = index === 0 ? midMove.scrollTop : (later[index - 1] ?? 0);
+			expect(write).toBeGreaterThanOrEqual(previous - 0.5);
 		}
 	});
 
-	it("does not recurse when a step target cannot be reached", () => {
+	it("does not recurse when the pin target cannot be reached", () => {
 		const harness = createHarness({ runwayWritable: false });
 		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 601 });
 		harness.controller.contentChanged();
+		harness.controller.contentChanged();
 		expect(harness.pendingFrames()).toBe(0);
-		expect(harness.writes).toEqual([]);
+		expect(harness.readGeometry().scrollTop).toBe(100);
 		expect(harness.controller.getMotionKind()).toBeNull();
 	});
 
-	it("keeps the reader still between steps while derived room shrinks one-for-one", () => {
+	it("absorbs a shrink while pinned in room, then consumes the room before pinning again", () => {
 		const harness = createHarness();
-		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 601 });
+		startPinned(harness);
+		harness.setGeometry({ edgeBottom: 540, maxScrollTop: 41 });
+		harness.controller.restoreScrollTop(101);
 		harness.controller.contentChanged();
-		advanceUntilIdle(harness);
-		expect(harness.readGeometry().scrollTop).toBeCloseTo(251, 8);
-		expect(harness.readRunwayHeight()).toBe(151);
+		expect(harness.readGeometry()).toMatchObject({
+			scrollTop: 101,
+			maxScrollTop: 101,
+			edgeBottom: 540,
+		});
+		expect(harness.readRunwayHeight()).toBe(61);
 		const writes = [...harness.writes];
 
-		for (let growth = 1; growth <= 3; growth += 1) {
-			const geometry = harness.readGeometry();
-			harness.setGeometry({
-				edgeBottom: (geometry.edgeBottom ?? 0) + 40,
-				maxScrollTop: geometry.maxScrollTop + 40,
-			});
-			harness.controller.contentChanged();
-			expect(harness.writes).toEqual(writes);
-			expect(harness.readGeometry().scrollTop).toBeCloseTo(251, 8);
-			expect(harness.readRunwayHeight()).toBe(151 - growth * 40);
-			expect(harness.pendingFrames()).toBe(0);
-		}
+		grow(harness, 40);
+		expect(harness.writes).toEqual(writes);
+		expect(harness.readGeometry().scrollTop).toBe(101);
+		expect(harness.readRunwayHeight()).toBe(21);
 
-		const geometry = harness.readGeometry();
-		harness.setGeometry({
-			edgeBottom: (geometry.edgeBottom ?? 0) + 40,
-			maxScrollTop: geometry.maxScrollTop + 40,
-		});
-		harness.controller.contentChanged();
-		expect(harness.controller.getMotionKind()).toBe("follow");
-		advanceUntilIdle(harness);
-		expect(harness.readGeometry().scrollTop).toBeCloseTo(411, 8);
-		expect(harness.readGeometry().edgeBottom).toBeCloseTo(450, 8);
-		expect(harness.writes.at(-1)).toBeCloseTo(411, 8);
-	});
-
-	it("uses custom Trigger and Settle in either message order under reduced motion", () => {
-		for (const latestEdge of ["bottom", "top"] as const) {
-			const harness = createHarness({
-				latestEdge,
-				movement: { settle: 60, trigger: 90 },
-				reducedMotion: true,
-			});
-			harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 541 });
-			harness.controller.contentChanged();
-			expect(harness.runwayHeights).toEqual([181]);
-			expect(harness.writes.at(-1)).toBe(281);
-		}
-	});
-
-	it("gives reduced motion the same final step geometry immediately", () => {
-		const animated = createHarness();
-		const reduced = createHarness({ reducedMotion: true });
-		for (const harness of [animated, reduced]) {
-			harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 601 });
-			harness.controller.contentChanged();
-		}
-		expect(reduced.pendingFrames()).toBe(0);
-		expect(reduced.readGeometry().scrollTop).toBe(251);
-		expect(reduced.readGeometry().maxScrollTop).toBe(251);
-		advanceUntilIdle(animated);
-		expect(reduced.readGeometry().scrollTop).toBeCloseTo(animated.readGeometry().scrollTop, 8);
-		expect(reduced.readGeometry().maxScrollTop).toBeCloseTo(
-			animated.readGeometry().maxScrollTop,
-			8,
-		);
-		expect(reduced.readGeometry().edgeBottom).toBeCloseTo(
-			animated.readGeometry().edgeBottom ?? 0,
-			10,
-		);
+		grow(harness, 40);
+		expect(harness.readGeometry()).toMatchObject({ scrollTop: 121, edgeBottom: 600 });
+		expect(harness.readRunwayHeight()).toBe(1);
+		expect(
+			harness.writes.every((write, index, writes) => write >= (writes[index - 1] ?? write)),
+		).toBe(true);
 	});
 
 	it("restarts the fill phase after a new user turn", () => {
@@ -1106,7 +1077,7 @@ describe("reading-band derived room", () => {
 
 	it("preserves room on reader takeover and only reconciles it downward after movement", () => {
 		const harness = createHarness({ reducedMotion: true });
-		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 601 });
+		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 751 });
 		harness.controller.contentChanged();
 		const writes = [...harness.writes];
 		harness.controller.readerLeft();
@@ -1119,28 +1090,24 @@ describe("reading-band derived room", () => {
 			buttonLabel: "Follow response",
 		});
 
-		harness.setGeometry({ scrollTop: 150, edgeBottom: 551 });
+		harness.setGeometry({ scrollTop: 150, edgeBottom: 701 });
 		harness.controller.reconcileRoom();
 		expect(harness.readGeometry().scrollTop).toBe(150);
 		expect(harness.runwayHeights.at(-1)).toBe(50);
 		expect(harness.writes).toEqual(writes);
-		harness.setGeometry({ maxScrollTop: 170, edgeBottom: 571 });
+		harness.setGeometry({ maxScrollTop: 170, edgeBottom: 721 });
 		harness.controller.contentChanged();
 		expect(harness.runwayHeights.at(-1)).toBe(30);
-		expect(
-			harness.runwayHeights.every(
-				(value, index, values) => index === 0 || value <= values[index - 1],
-			),
-		).toBe(true);
+		expect(harness.runwayHeights).toEqual(harness.runwayHeights.toSorted((a, b) => b - a));
 		expect(harness.writes).toEqual(writes);
 	});
 
 	it("settles a detached reader without scrolling and retains only reader-preserving room", () => {
 		const harness = createHarness({ reducedMotion: true });
-		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 601 });
+		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 751 });
 		harness.controller.contentChanged();
 		harness.controller.readerLeft();
-		harness.setGeometry({ scrollTop: 150, edgeBottom: 551 });
+		harness.setGeometry({ scrollTop: 150, edgeBottom: 701 });
 		harness.controller.reconcileRoom();
 		const writes = [...harness.writes];
 		harness.controller.settle();
@@ -1238,10 +1205,11 @@ describe("reading-band derived room", () => {
 		});
 	});
 
-	it("re-derives step room on a content notification while moving", () => {
+	it("re-derives Follow response room on a content notification while moving", () => {
 		const harness = createHarness();
-		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 601 });
-		harness.controller.contentChanged();
+		harness.controller.readerLeft();
+		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 751 });
+		harness.controller.returnToEdge();
 		expect(harness.runwayHeights).toEqual([151]);
 		harness.advance(16);
 		expect(harness.controller.getSnapshot().moving).toBe(true);
@@ -1329,40 +1297,32 @@ describe("reading-band derived room", () => {
 		harness.controller.userTurnArrived(5, "queued");
 		harness.advance(0);
 		expect(harness.controller.getSnapshot().runway).toBe(true);
-		harness.setGeometry({ edgeBottom: 601 });
+		harness.setGeometry({ edgeBottom: 751 });
 		harness.controller.contentChanged();
 		expect(harness.readGeometry().scrollTop).toBe(251);
 	});
 
-	it("Follow response steps to Settle, then stays still below Trigger", () => {
+	it("Follow response eases once to the pin line, then the pin holds the edge", () => {
 		const harness = createHarness();
 		harness.controller.readerLeft();
-		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 601 });
+		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 751 });
 		harness.controller.returnToEdge();
 		expect(harness.controller.getMotionKind()).toBe("follow");
+		harness.advance(16);
+		expect(harness.writes.at(-1)).toBeGreaterThan(100);
+		expect(harness.writes.at(-1)).toBeLessThan(251);
 		advanceUntilIdle(harness);
 		expect(harness.readGeometry().scrollTop).toBeCloseTo(251, 8);
-		expect(harness.readGeometry().edgeBottom).toBe(450);
-		const writes = [...harness.writes];
+		expect(harness.readGeometry().edgeBottom).toBeCloseTo(600, 8);
+		expect(harness.controller.getMotionKind()).toBeNull();
 
-		harness.setGeometry({ edgeBottom: 490, maxScrollTop: 291 });
-		harness.controller.contentChanged();
-		expect(harness.readGeometry().scrollTop).toBeCloseTo(251, 8);
-		expect(harness.readRunwayHeight()).toBe(111);
+		grow(harness, 40);
+		expect(harness.readGeometry().scrollTop).toBeCloseTo(291, 8);
+		expect(harness.readGeometry().edgeBottom).toBeCloseTo(600, 8);
 		expect(harness.pendingFrames()).toBe(0);
-		expect(harness.writes).toEqual(writes);
 	});
 
-	it("clamps a reduced-motion step after its same-frame room write", () => {
-		const harness = createHarness({ reducedMotion: true });
-		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 601 });
-		harness.controller.contentChanged();
-		expect(harness.runwayHeights).toEqual([151]);
-		expect(harness.writes).toEqual([251]);
-		expect(harness.readGeometry().maxScrollTop).toBe(251);
-	});
-
-	it("does not reschedule a completed step or recurse through contentChanged", () => {
+	it("does not reschedule a pin or recurse through contentChanged", () => {
 		const harness = createHarness();
 		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 601 });
 		harness.controller.contentChanged();
@@ -1373,37 +1333,32 @@ describe("reading-band derived room", () => {
 		expect(harness.writes).toEqual(writes);
 	});
 
-	it("pending native input blocks automatic following until it resolves", () => {
+	it("pending native input blocks the pin until it resolves", () => {
 		const harness = createHarness();
-		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 601 });
-		harness.controller.contentChanged();
-		advanceUntilIdle(harness);
+		startPinned(harness);
 		const resume = harness.controller.interruptForNativeInput("pending");
 		const writes = [...harness.writes];
-		harness.setGeometry({ edgeBottom: 490, maxScrollTop: 291 });
-		harness.controller.contentChanged();
+		grow(harness, 40);
 		expect(harness.pendingFrames()).toBe(0);
 		expect(harness.writes).toEqual(writes);
 
 		resume();
 		advanceUntilIdle(harness);
-		expect(harness.writes).toEqual(writes);
-		expect(harness.readGeometry().scrollTop).toBeCloseTo(251, 8);
+		expect(harness.readGeometry().scrollTop).toBeCloseTo(141, 8);
+		expect(harness.readGeometry().edgeBottom).toBeCloseTo(600, 8);
 	});
 
 	it("reader takeover releases pending native input so a later edge return follows", () => {
 		const harness = createHarness();
-		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 601 });
-		harness.controller.contentChanged();
-		advanceUntilIdle(harness);
+		startPinned(harness);
 		harness.controller.interruptForNativeInput("pending");
 		harness.controller.readerLeft();
 		harness.controller.readerReachedEdge();
-		harness.setGeometry({ edgeBottom: 560, maxScrollTop: 311 });
-		harness.controller.contentChanged();
+		grow(harness, 60);
 		advanceUntilIdle(harness);
 		expect(harness.controller.getSnapshot().following).toBe(true);
-		expect(harness.writes.at(-1)).toBeCloseTo(361, 8);
+		expect(harness.writes.at(-1)).toBeCloseTo(161, 8);
+		expect(harness.readGeometry().edgeBottom).toBeCloseTo(600, 8);
 	});
 
 	it("an attention reveal removes room and suppresses it for the rest of that flow", () => {
@@ -1422,7 +1377,7 @@ describe("reading-band derived room", () => {
 describe("reading-band reveal resumption and tall arrivals", () => {
 	it("resumes follow after a released reveal and ignores ineligible resume requests", () => {
 		const harness = createHarness();
-		startConvergedStep(harness);
+		startPinned(harness);
 		harness.controller.releaseRunway();
 		const writesAfterRelease = [...harness.writes];
 		const geometry = harness.readGeometry();
@@ -1437,7 +1392,7 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 		harness.controller.resumeAfterReveal();
 		advanceUntilIdle(harness);
 		const resumedGeometry = harness.readGeometry();
-		expect(resumedGeometry.edgeBottom).toBeCloseTo(450, 8);
+		expect(resumedGeometry.edgeBottom).toBeCloseTo(600, 8);
 
 		const idle = createHarness({ streaming: false });
 		idle.controller.releaseRunway();
@@ -1454,7 +1409,7 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 
 	it("resumes following when a reveal still in flight completes", () => {
 		const harness = createHarness();
-		startConvergedStep(harness);
+		startPinned(harness);
 		harness.controller.releaseRunway();
 		const geometry = harness.readGeometry();
 		harness.controller.revealTo(() => geometry.scrollTop - 200, true);
@@ -1466,13 +1421,13 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 		});
 		harness.controller.resumeAfterReveal();
 		advanceUntilIdle(harness);
-		expect(harness.readGeometry().edgeBottom).toBeCloseTo(450, 8);
+		expect(harness.readGeometry().edgeBottom).toBeCloseTo(600, 8);
 	});
 
-	it("caps one tall arrival step so its start lands at the turn inset", () => {
+	it("caps one tall arrival so its start lands at the turn inset", () => {
 		const harness = createHarness();
 		harness.setReferenceRow({ id: "r1", top: 100 });
-		startConvergedStep(harness);
+		startPinned(harness);
 		const before = harness.readGeometry();
 		const previousEdgeDoc = before.scrollTop + (before.edgeBottom ?? 0);
 		harness.setGeometry({
@@ -1487,25 +1442,23 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 	it("caps a tall block that arrives in chunks smaller than the reading space", () => {
 		const harness = createHarness();
 		harness.setReferenceRow({ id: "r1", top: 100 });
-		startConvergedStep(harness);
+		startPinned(harness);
 		const before = harness.readGeometry();
 		const previousEdgeDoc = before.scrollTop + (before.edgeBottom ?? 0);
-		for (let chunk = 1; chunk <= 4; chunk += 1) {
-			const current = harness.readGeometry();
-			harness.setGeometry({
-				edgeBottom: (current.edgeBottom ?? 0) + 350,
-				maxScrollTop: current.maxScrollTop + 350,
-			});
-			harness.controller.contentChanged();
+		for (let chunk = 0; chunk < 4; chunk += 1) {
+			grow(harness, 350);
+			harness.advance(16);
 		}
-		advanceUntilIdle(harness);
-		expect(harness.readGeometry().scrollTop).toBeLessThanOrEqual(previousEdgeDoc - 60 + 1);
+		expect(harness.readGeometry().scrollTop).toBeCloseTo(previousEdgeDoc - 60, 8);
+		expect(
+			harness.writes.every((write, index, writes) => write >= (writes[index - 1] ?? write)),
+		).toBe(true);
 	});
 
 	it("rebases the follow cap across width reflow before measuring the next growth", () => {
 		const harness = createHarness();
 		harness.setReferenceRow({ id: "r1", top: 100 });
-		startConvergedStep(harness);
+		startPinned(harness);
 		const before = harness.readGeometry();
 		harness.controller.rebaseFollowCap();
 		harness.setGeometry({
@@ -1514,15 +1467,14 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 		});
 		harness.controller.contentChanged();
 		advanceUntilIdle(harness);
-		const expectedSettle =
-			before.scrollTop + (before.edgeBottom ?? 0) + 1_500 - before.viewportHeight * 0.75;
-		expect(harness.readGeometry().scrollTop).toBeCloseTo(expectedSettle, 8);
+		const expectedPin = before.scrollTop + (before.edgeBottom ?? 0) + 1_500 - before.viewportHeight;
+		expect(harness.readGeometry().scrollTop).toBeCloseTo(expectedPin, 8);
 	});
 
 	it("keeps an existing cap after rebasing before small growth", () => {
 		const harness = createHarness();
 		harness.setReferenceRow({ id: "r1", top: 100 });
-		startConvergedStep(harness);
+		startPinned(harness);
 		const before = harness.readGeometry();
 		const oldEdgeDoc = before.scrollTop + (before.edgeBottom ?? 0);
 		harness.setGeometry({
@@ -1542,18 +1494,18 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 		harness.controller.contentChanged();
 		advanceUntilIdle(harness);
 		const after = harness.readGeometry();
-		const settle = after.scrollTop + (after.edgeBottom ?? 0) - after.viewportHeight * 0.75;
+		const pinned = after.scrollTop + (after.edgeBottom ?? 0) - after.viewportHeight;
 		expect(after.scrollTop).toBeCloseTo(capped.scrollTop, 8);
-		expect(after.scrollTop).toBeLessThan(settle);
+		expect(after.scrollTop).toBeLessThan(pinned);
 	});
 
 	it("does not cap an edge shift caused by content above the reference row", () => {
 		const harness = createHarness();
 		harness.setReferenceRow({ id: "r1", top: 100 });
-		startConvergedStep(harness);
+		startPinned(harness);
 		const before = harness.readGeometry();
 		const previousEdgeDoc = before.scrollTop + (before.edgeBottom ?? 0);
-		const expectedSettle = previousEdgeDoc + 600 - before.viewportHeight * 0.75;
+		const expectedPinned = previousEdgeDoc + 600 - before.viewportHeight;
 		harness.setGeometry({
 			scrollTop: before.scrollTop + 600,
 			maxScrollTop: before.maxScrollTop + 600,
@@ -1561,7 +1513,7 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 		harness.setReferenceRow({ id: "r1", top: 700 });
 		harness.controller.contentChanged();
 		advanceUntilIdle(harness);
-		expect(harness.readGeometry().scrollTop).toBeCloseTo(expectedSettle, 8);
+		expect(harness.readGeometry().scrollTop).toBeCloseTo(expectedPinned, 8);
 		harness.controller.settle();
 		advanceUntilIdle(harness);
 		expect(harness.controller.getSnapshot().following).toBe(true);
@@ -1570,7 +1522,7 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 	it("moves an active cap with its reference content", () => {
 		const harness = createHarness();
 		harness.setReferenceRow({ id: "r1", top: 100 });
-		startConvergedStep(harness);
+		startPinned(harness);
 		const before = harness.readGeometry();
 		const previousEdgeDoc = before.scrollTop + (before.edgeBottom ?? 0);
 		harness.setGeometry({
@@ -1596,7 +1548,7 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 	it("caps an appended tall row at the previous edge relative to its reference row", () => {
 		const harness = createHarness();
 		harness.setReferenceRow({ id: "r1", top: 100 });
-		startConvergedStep(harness);
+		startPinned(harness);
 		const before = harness.readGeometry();
 		const previousEdgeDoc = before.scrollTop + (before.edgeBottom ?? 0);
 		harness.setGeometry({
@@ -1612,7 +1564,7 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 	it("keeps the cap alive when its original reference row unmounts after appending", () => {
 		const harness = createHarness();
 		harness.setReferenceRow({ id: "r1", top: 100 });
-		startConvergedStep(harness);
+		startPinned(harness);
 		const before = harness.readGeometry();
 		const oldEdgeDoc = before.scrollTop + (before.edgeBottom ?? 0);
 		harness.setGeometry({
@@ -1644,7 +1596,7 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 	it("releases the cap when its active reference row is unmounted", () => {
 		const harness = createHarness();
 		harness.setReferenceRow({ id: "r1", top: 100 });
-		startConvergedStep(harness);
+		startPinned(harness);
 		const before = harness.readGeometry();
 		const previousEdgeDoc = before.scrollTop + (before.edgeBottom ?? 0);
 		harness.setGeometry({
@@ -1656,18 +1608,18 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 		expect(harness.readGeometry().scrollTop).toBeCloseTo(previousEdgeDoc - 60, 8);
 
 		const capped = harness.readGeometry();
-		const settle = capped.scrollTop + (capped.edgeBottom ?? 0) - capped.viewportHeight * 0.75;
+		const pinned = capped.scrollTop + (capped.edgeBottom ?? 0) - capped.viewportHeight;
 		harness.setRowTop("r1", null);
 		harness.setReferenceRow(null);
 		expect(() => harness.controller.contentChanged()).not.toThrow();
 		advanceUntilIdle(harness);
-		expect(harness.readGeometry().scrollTop).toBeCloseTo(settle, 8);
+		expect(harness.readGeometry().scrollTop).toBeCloseTo(pinned, 8);
 	});
 
 	it("does not cap newest-first growth, where latest rows are prepended", () => {
 		const harness = createHarness({ latestEdge: "top" });
 		harness.setReferenceRow({ id: "r1", top: 100 });
-		startConvergedStep(harness);
+		startPinned(harness);
 		const before = harness.readGeometry();
 		harness.setGeometry({
 			edgeBottom: (before.edgeBottom ?? 0) + 1_500,
@@ -1676,56 +1628,37 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 		harness.controller.contentChanged();
 		advanceUntilIdle(harness);
 		const after = harness.readGeometry();
-		expect((after.edgeBottom ?? 0) / after.viewportHeight).toBeCloseTo(0.75, 2);
+		expect((after.edgeBottom ?? 0) / after.viewportHeight).toBeCloseTo(1, 2);
 		harness.controller.settle();
 		expect(harness.controller.getSnapshot().following).toBe(true);
 	});
 
-	it("releases a tall-arrival cap at twice growth but steps only after one window", () => {
+	it("releases a tall-arrival cap continuously at twice the later growth", () => {
 		const harness = createHarness();
 		harness.setReferenceRow({ id: "r1", top: 100 });
-		startConvergedStep(harness);
+		startPinned(harness);
 		const before = harness.readGeometry();
-		const oldEdgeDoc = before.scrollTop + (before.edgeBottom ?? 0);
-		harness.setGeometry({
-			edgeBottom: (before.edgeBottom ?? 0) + 1_500,
-			maxScrollTop: before.maxScrollTop + 1_500,
-		});
-		harness.controller.contentChanged();
-		advanceUntilIdle(harness);
-		const cappedDestination = oldEdgeDoc - 60;
+		const cappedDestination = before.scrollTop + (before.edgeBottom ?? 0) - 60;
+		grow(harness, 1_500);
 		expect(harness.readGeometry().scrollTop).toBe(cappedDestination);
-		harness.advance(100);
-		const writes = [...harness.writes];
 
-		let current = harness.readGeometry();
-		harness.setGeometry({
-			edgeBottom: (current.edgeBottom ?? 0) + 50,
-			maxScrollTop: current.maxScrollTop + 50,
-		});
-		harness.controller.contentChanged();
-		expect(harness.controller.getMotionKind()).toBeNull();
+		grow(harness, 50);
+		expect(harness.readGeometry().scrollTop).toBe(cappedDestination);
+		harness.advance(TALL_ARRIVAL_SETTLE_MS);
+
+		grow(harness, 50);
+		expect(harness.readGeometry().scrollTop).toBeCloseTo(cappedDestination + 100, 8);
 		expect(harness.pendingFrames()).toBe(0);
-		expect(harness.writes).toEqual(writes);
-		expect(harness.readGeometry().scrollTop).toBe(cappedDestination);
-
-		current = harness.readGeometry();
-		harness.setGeometry({
-			edgeBottom: (current.edgeBottom ?? 0) + 50,
-			maxScrollTop: current.maxScrollTop + 50,
-		});
-		harness.controller.contentChanged();
-		expect(harness.controller.getMotionKind()).toBe("follow");
-		advanceUntilIdle(harness);
-		expect(harness.writes.length).toBeGreaterThan(writes.length);
+		expect(harness.controller.getMotionKind()).toBeNull();
+		grow(harness, 50);
 		expect(harness.readGeometry().scrollTop).toBeCloseTo(cappedDestination + 200, 8);
-		expect(harness.readGeometry().edgeBottom).toBeCloseTo(1_460, 8);
+		expect(harness.readGeometry().edgeBottom).toBeCloseTo(1_510, 8);
 	});
 
 	it("never moves backward when a cap destination is below the current scroll position", () => {
 		const harness = createHarness();
 		harness.setReferenceRow({ id: "r1", top: 100 });
-		startConvergedStep(harness);
+		startPinned(harness);
 		const before = harness.readGeometry();
 		harness.setGeometry({
 			edgeBottom: (before.edgeBottom ?? 0) + 1_500,
@@ -1756,7 +1689,7 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 	it("does not push an active cap for a second tall arrival", () => {
 		const harness = createHarness();
 		harness.setReferenceRow({ id: "r1", top: 100 });
-		startConvergedStep(harness);
+		startPinned(harness);
 		const before = harness.readGeometry();
 		const oldEdgeDoc = before.scrollTop + (before.edgeBottom ?? 0);
 		harness.setGeometry({
@@ -1777,7 +1710,7 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 		expect(harness.readGeometry().scrollTop).toBeCloseTo(oldEdgeDoc - 60, 8);
 	});
 
-	it("caps the first step when a tall arrival crosses Trigger from the fill phase", () => {
+	it("caps a tall arrival that crosses the pin line from the fill phase", () => {
 		const harness = createHarness();
 		harness.setReferenceRow({ id: "r1", top: 100 });
 		harness.controller.contentChanged();
@@ -1795,7 +1728,7 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 	it("settles normally with a cap when nothing is hidden below the reader", () => {
 		const harness = createHarness();
 		harness.setReferenceRow({ id: "r1", top: 100 });
-		startConvergedStep(harness);
+		startPinned(harness);
 		const before = harness.readGeometry();
 		harness.setGeometry({
 			edgeBottom: (before.edgeBottom ?? 0) + 1_500,
@@ -1816,7 +1749,7 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 	it("moves forward to the unseen end when settlement arrives with a cap", () => {
 		const capped = createHarness();
 		capped.setReferenceRow({ id: "r1", top: 100 });
-		startConvergedStep(capped);
+		startPinned(capped);
 		const before = capped.readGeometry();
 		capped.setGeometry({
 			edgeBottom: (before.edgeBottom ?? 0) + 1_500,
@@ -1833,7 +1766,7 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 		expect(capped.controller.getSnapshot()).toMatchObject({ following: true, buttonLabel: null });
 
 		const ordinary = createHarness();
-		startConvergedStep(ordinary);
+		startPinned(ordinary);
 		ordinary.controller.settle();
 		expect(ordinary.controller.getSnapshot()).toMatchObject({ following: true, buttonLabel: null });
 	});
@@ -1841,7 +1774,7 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 	it("clears a tall-arrival cap when Follow response returns to the edge", () => {
 		const harness = createHarness();
 		harness.setReferenceRow({ id: "r1", top: 100 });
-		startConvergedStep(harness);
+		startPinned(harness);
 		const before = harness.readGeometry();
 		harness.setGeometry({
 			edgeBottom: (before.edgeBottom ?? 0) + 1_500,
@@ -1852,35 +1785,37 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 		harness.controller.returnToEdge();
 		advanceUntilIdle(harness);
 		const geometry = harness.readGeometry();
-		expect(geometry.edgeBottom).toBeCloseTo(450, 8);
+		expect(geometry.edgeBottom).toBeCloseTo(600, 8);
 	});
 
-	it("steps gradual response growth without a tall-arrival cap", () => {
+	it("pins a fast per-frame text stream in a short viewport without a tall-arrival cap", () => {
+		const harness = createHarness({ viewportHeight: 300 });
+		harness.setReferenceRow({ id: "r1", top: 100 });
+		harness.controller.contentChanged();
+		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 301 });
+		harness.controller.contentChanged();
+		harness.advance(TALL_ARRIVAL_SETTLE_MS);
+		const startingScrollTop = harness.readGeometry().scrollTop;
+		for (let frame = 1; frame <= 60; frame += 1) {
+			grow(harness, 20);
+			expect(harness.readGeometry().edgeBottom).toBe(300);
+			expect(harness.readGeometry().scrollTop).toBe(startingScrollTop + frame * 20);
+			harness.advance(16);
+		}
+	});
+
+	it("pins a streaming text response without a tall-arrival cap", () => {
 		const harness = createHarness();
 		harness.setReferenceRow({ id: "r1", top: 100 });
-		startConvergedStep(harness);
+		startPinned(harness);
 		const startingScrollTop = harness.readGeometry().scrollTop;
-		for (let update = 0; update < 5; update += 1) {
-			const current = harness.readGeometry();
-			harness.setGeometry({
-				edgeBottom: (current.edgeBottom ?? 0) + 30,
-				maxScrollTop: current.maxScrollTop + 30,
-			});
-			harness.controller.contentChanged();
+		for (let delta = 1; delta <= 40; delta += 1) {
+			grow(harness, 30);
+			expect(harness.readGeometry().edgeBottom).toBe(600);
+			expect(harness.readGeometry().scrollTop).toBe(startingScrollTop + delta * 30);
 			expect(harness.pendingFrames()).toBe(0);
-			expect(harness.readGeometry().scrollTop).toBeCloseTo(startingScrollTop, 8);
-			expect(harness.readGeometry().edgeBottom).toBeCloseTo(450 + (update + 1) * 30, 8);
+			harness.advance(50);
 		}
-		const current = harness.readGeometry();
-		harness.setGeometry({
-			edgeBottom: (current.edgeBottom ?? 0) + 30,
-			maxScrollTop: current.maxScrollTop + 30,
-		});
-		harness.controller.contentChanged();
-		expect(harness.controller.getMotionKind()).toBe("follow");
-		advanceUntilIdle(harness);
-		expect(harness.readGeometry().edgeBottom).toBeCloseTo(450, 8);
-		expect(harness.readGeometry().scrollTop).toBeCloseTo(startingScrollTop + 180, 8);
 	});
 });
 
@@ -1924,13 +1859,64 @@ describe("reading-band on-screen restoration", () => {
 		expect(harness.readGeometry().scrollTop).toBe(282);
 	});
 
+	it("re-applies the pin after restoring an anchor that Virtuoso compensated", () => {
+		const harness = createHarness();
+		startPinned(harness);
+		const before = harness.readGeometry();
+		harness.setGeometry({
+			maxScrollTop: before.maxScrollTop + 70,
+			scrollTop: before.scrollTop + 70,
+		});
+		harness.controller.contentChanged();
+		const writes = harness.writes.length;
+		harness.controller.restoreScrollTop(before.scrollTop);
+		expect(harness.writes.slice(writes)).toEqual([before.scrollTop + 70]);
+		expect(harness.readGeometry()).toMatchObject({
+			scrollTop: before.scrollTop + 70,
+			edgeBottom: 600,
+		});
+	});
+
+	it("re-pins after a guard restore with exactly the room the pin needs", () => {
+		const harness = createHarness();
+		startPinned(harness);
+		harness.setGeometry({ edgeBottom: 540, maxScrollTop: 41 });
+		harness.controller.restoreScrollTop(101);
+		harness.controller.contentChanged();
+		expect(harness.readRunwayHeight()).toBe(61);
+		const before = harness.readGeometry();
+		harness.setGeometry({
+			scrollTop: before.scrollTop + 70,
+			maxScrollTop: before.maxScrollTop + 150,
+			edgeBottom: 620,
+		});
+		harness.controller.restoreScrollTop(before.scrollTop);
+		const after = harness.readGeometry();
+		expect(after).toMatchObject({ scrollTop: 191, maxScrollTop: 191, edgeBottom: 600 });
+		expect(harness.readRunwayHeight()).toBe(1);
+	});
+
+	it("restores without pinning once the reader is detached", () => {
+		const harness = createHarness();
+		startPinned(harness);
+		harness.controller.readerLeft();
+		const before = harness.readGeometry();
+		harness.setGeometry({
+			maxScrollTop: before.maxScrollTop + 70,
+			scrollTop: before.scrollTop + 70,
+		});
+		harness.controller.restoreScrollTop(before.scrollTop);
+		expect(harness.readGeometry()).toMatchObject({ scrollTop: before.scrollTop, edgeBottom: 670 });
+	});
+
 	it("reports its active motion kind and pending native input", () => {
 		const harness = createHarness();
 		expect(harness.controller.getMotionKind()).toBeNull();
 		expect(harness.controller.isNativeInputPending()).toBe(false);
 
-		harness.setGeometry({ edgeBottom: 601 });
-		harness.controller.contentChanged();
+		harness.controller.readerLeft();
+		harness.setGeometry({ edgeBottom: 751 });
+		harness.controller.returnToEdge();
 		expect(harness.controller.getMotionKind()).toBe("follow");
 		const resume = harness.controller.interruptForNativeInput();
 		expect(harness.controller.getMotionKind()).toBeNull();
@@ -1939,5 +1925,136 @@ describe("reading-band on-screen restoration", () => {
 		resume();
 		expect(harness.controller.getMotionKind()).toBe("follow");
 		expect(harness.controller.isNativeInputPending()).toBe(false);
+	});
+});
+
+describe("reading-band quantized scroll writes", () => {
+	const webkitTruncation = Math.floor;
+	const coarseTruncation = (top: number) => Math.floor(top / 2) * 2;
+
+	function returnedMidStream(
+		options: Parameters<typeof createHarness>[0],
+		returnPath: "returnToEdge" | "readerReachedEdge",
+	) {
+		const harness = createHarness(options);
+		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 450 });
+		harness.controller.readerLeft();
+		harness.controller[returnPath]();
+		return harness;
+	}
+
+	it("follows a fractional growth once under reduced motion after the reader returns", () => {
+		for (const returnPath of ["returnToEdge", "readerReachedEdge"] as const) {
+			const harness = returnedMidStream(
+				{ reducedMotion: true, snap: webkitTruncation },
+				returnPath,
+			);
+			harness.setGeometry({ edgeBottom: 450.8 });
+			expect(() => harness.controller.contentChanged()).not.toThrow();
+			expect(harness.readGeometry().scrollTop).toBe(100);
+			expect(harness.controller.getSnapshot()).toMatchObject({ following: true, moving: false });
+			expect(harness.pendingFrames()).toBe(0);
+
+			const writes = harness.writes.length;
+			harness.setGeometry({ edgeBottom: 460 });
+			harness.controller.contentChanged();
+			expect(harness.writes).toHaveLength(writes);
+		}
+	});
+
+	it("completes an animated follow whose destination the engine truncates", () => {
+		for (const snap of [webkitTruncation, coarseTruncation]) {
+			const harness = returnedMidStream({ snap }, "returnToEdge");
+			harness.setGeometry({ edgeBottom: 451.9 });
+			harness.controller.contentChanged();
+			advanceUntilIdle(harness);
+			expect(harness.controller.getMotionKind()).toBeNull();
+			expect(harness.controller.getSnapshot().moving).toBe(false);
+			const writes = harness.writes.length;
+			harness.advance(16);
+			expect(harness.writes).toHaveLength(writes);
+		}
+	});
+
+	it("completes a large fractional pin at either quantum", () => {
+		for (const reducedMotion of [false, true]) {
+			for (const snap of [webkitTruncation, coarseTruncation]) {
+				const harness = createHarness({ reducedMotion, snap });
+				harness.setGeometry({ edgeBottom: 900.7, maxScrollTop: 900 });
+				harness.controller.contentChanged();
+				advanceUntilIdle(harness);
+				expect(harness.readGeometry().scrollTop).toBe(snap(400.7));
+				expect(harness.controller.getSnapshot().moving).toBe(false);
+			}
+		}
+	});
+
+	it("completes a fractional reveal without rewriting it every frame", () => {
+		for (const reducedMotion of [false, true]) {
+			const harness = createHarness({ reducedMotion, snap: webkitTruncation });
+			harness.controller.revealTo(() => 700.6, true);
+			advanceUntilIdle(harness);
+			expect(harness.readGeometry().scrollTop).toBe(700);
+			expect(harness.writes.filter((write) => write === 700.6).length).toBeLessThanOrEqual(
+				reducedMotion ? 1 : 2,
+			);
+		}
+	});
+
+	it("holds a fractional streaming mount with one write while geometry is unchanged", () => {
+		const harness = createHarness({ mountPending: true, snap: webkitTruncation });
+		harness.setReferenceRow({ id: "r1", top: 0 });
+		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900, edgeBottom: 750.6 });
+		harness.controller.contentChanged();
+		advanceUntilIdle(harness);
+		expect(harness.writes).toEqual([350.6]);
+		expect(harness.readGeometry().scrollTop).toBe(350);
+	});
+
+	it("does not rewrite a truncated pin while geometry is unchanged", () => {
+		const harness = createHarness({ snap: webkitTruncation });
+		harness.setGeometry({ edgeBottom: 700.6, maxScrollTop: 900 });
+		harness.controller.contentChanged();
+		harness.controller.contentChanged();
+		expect(harness.writes).toHaveLength(1);
+		expect(harness.readGeometry().scrollTop).toBe(200);
+
+		harness.setGeometry({ edgeBottom: 601.2 });
+		harness.controller.contentChanged();
+		expect(harness.writes).toHaveLength(2);
+		expect(harness.readGeometry().scrollTop).toBe(201);
+	});
+
+	it("does not reuse a truncated write once its evidence no longer applies", () => {
+		const harness = createHarness({ reducedMotion: true, snap: webkitTruncation });
+		harness.controller.readerLeft();
+		let target = 100.8;
+		harness.controller.revealTo(() => target, true);
+		expect(harness.writes).toEqual([100.8]);
+
+		target = 101.2;
+		harness.advance(16);
+		expect(harness.writes.at(-1)).toBe(101.2);
+		expect(harness.readGeometry().scrollTop).toBe(101);
+
+		target = 101.8;
+		harness.advance(16);
+		expect(harness.writes.at(-1)).toBe(101.8);
+		const settledWrites = harness.writes.length;
+		harness.advance(16);
+		expect(harness.writes).toHaveLength(settledWrites);
+
+		harness.setGeometry({ scrollTop: 90 });
+		harness.advance(16);
+		expect(harness.writes).toHaveLength(settledWrites + 1);
+		expect(harness.readGeometry().scrollTop).toBe(101);
+
+		const writes = harness.writes.length;
+		harness.setGeometry({ maxScrollTop: 1_200 });
+		harness.advance(16);
+		expect(harness.writes).toHaveLength(writes + 1);
+		harness.advance(16);
+		expect(harness.writes).toHaveLength(writes + 1);
+		advanceUntilIdle(harness);
 	});
 });

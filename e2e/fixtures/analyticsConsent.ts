@@ -6,6 +6,12 @@ export const CONFIRMED_ANALYTICS_CONFIG = {
 	analyticsConsentConfirmed: true,
 };
 
+export const E2E_BASE_CONFIG = {
+	...CONFIRMED_ANALYTICS_CONFIG,
+	onboardingDismissed: true,
+	otherAgentSkills: false,
+};
+
 export async function seedAnalyticsConsent(
 	baseURL: string | undefined,
 	analyticsEnabled: boolean,

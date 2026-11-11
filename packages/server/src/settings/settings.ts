@@ -1,17 +1,25 @@
 import {
 	type AppConfig,
 	type AppConfigUpdate,
+	CODE_FONT_SIZE,
 	COMPOSER_GROWTH_LIMITS,
+	type ExtensionSettingValues,
+	FONT_WEIGHT_OFFSET,
+	isCodeFontSize,
 	isComposerGrowthLimit,
+	isFontChoice,
+	isFontWeightOffset,
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
 	isLocalePreference,
+	isQuestionPanelHeight,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
 	isSystemThemePair,
 	isTerminalWindowsShell,
 	isThemeMode,
 	LINE_WIDTH_COLUMNS,
+	QUESTION_PANEL_HEIGHT_PERCENT,
 	RECENT_MODELS_LIMIT,
 	sameModel,
 	type WireModel,
@@ -36,10 +44,12 @@ const ACCEPTED_UPDATE_KEYS = {
 	terminalReplayKb: true,
 	terminalWindowsShell: true,
 	composerGrowthLimit: true,
+	questionPanelHeight: true,
 	chatLineWidth: true,
 	fileLineWidth: true,
 	chatLineWidthBounded: true,
 	fileLineWidthBounded: true,
+	voiceInputEnabled: true,
 	customLayoutPresets: true,
 	favoriteModels: true,
 	defaultModel: true,
@@ -54,7 +64,16 @@ const ACCEPTED_UPDATE_KEYS = {
 	jbcentralQuotaRefreshSeconds: true,
 	settleIdleDays: true,
 	disabledExtensions: true,
+	extensionSettings: true,
+	otherAgentSkills: true,
+	disabledPackages: true,
 	locale: true,
+	onboardingDismissed: true,
+	interfaceFont: true,
+	codeFont: true,
+	codeFontSize: true,
+	codeLigatures: true,
+	fontWeightOffset: true,
 	chatMessageOrder: true,
 	layout: true,
 	recentModels: true,
@@ -88,12 +107,44 @@ function validateFavoriteModels(value: unknown): WireModel[] {
 	return value.filter((model, index) => value.findIndex((m) => sameModel(m, model)) === index);
 }
 
-function validateDisabledExtensions(value: unknown): string[] {
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function validateExtensionSettings(value: unknown): ExtensionSettingValues {
+	const invalid = () => new Error("extensionSettings must map extension names to boolean settings");
+	if (!isPlainObject(value)) throw invalid();
+	const result: ExtensionSettingValues = {};
+	for (const [name, settings] of Object.entries(value)) {
+		if (name.trim().length === 0 || !isPlainObject(settings)) throw invalid();
+		const entries = Object.entries(settings);
+		const flags = entries.filter(
+			(entry): entry is [string, boolean] =>
+				entry[0].trim().length > 0 && typeof entry[1] === "boolean",
+		);
+		if (flags.length !== entries.length) throw invalid();
+		result[name] = Object.fromEntries(flags);
+	}
+	return result;
+}
+
+function mergeExtensionSettings(
+	current: ExtensionSettingValues,
+	update: ExtensionSettingValues,
+): ExtensionSettingValues {
+	const next: ExtensionSettingValues = { ...current };
+	for (const [name, settings] of Object.entries(update)) {
+		next[name] = { ...(current[name] ?? {}), ...settings };
+	}
+	return next;
+}
+
+function validateNameList(value: unknown, setting: string, noun: string): string[] {
 	if (
 		!Array.isArray(value) ||
 		!value.every((name) => typeof name === "string" && name.trim().length > 0)
 	) {
-		throw new Error("disabledExtensions must be a list of extension names");
+		throw new Error(`${setting} must be a list of ${noun}`);
 	}
 	return [...new Set(value as string[])];
 }
@@ -132,18 +183,51 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 			);
 		}
 	}
+	if (
+		runtimeUpdate.questionPanelHeight !== undefined &&
+		!isQuestionPanelHeight(runtimeUpdate.questionPanelHeight)
+	) {
+		throw new Error(
+			`questionPanelHeight must be a whole number from ${QUESTION_PANEL_HEIGHT_PERCENT.min} to ${QUESTION_PANEL_HEIGHT_PERCENT.max}`,
+		);
+	}
 	for (const [name, value] of [
 		["chatLineWidthBounded", runtimeUpdate.chatLineWidthBounded],
 		["fileLineWidthBounded", runtimeUpdate.fileLineWidthBounded],
+		["voiceInputEnabled", runtimeUpdate.voiceInputEnabled],
 		["analyticsEnabled", runtimeUpdate.analyticsEnabled],
 		["analyticsConsentConfirmed", runtimeUpdate.analyticsConsentConfirmed],
 		["notificationsEnabled", runtimeUpdate.notificationsEnabled],
 		["reviewAutoFix", runtimeUpdate.reviewAutoFix],
 		["agentReviewEnabled", runtimeUpdate.agentReviewEnabled],
+		["onboardingDismissed", runtimeUpdate.onboardingDismissed],
+		["codeLigatures", runtimeUpdate.codeLigatures],
+		["otherAgentSkills", runtimeUpdate.otherAgentSkills],
 	] as const) {
 		if (value !== undefined && typeof value !== "boolean") {
 			throw new Error(`${name} must be a boolean`);
 		}
+	}
+	for (const [name, value] of [
+		["interfaceFont", runtimeUpdate.interfaceFont],
+		["codeFont", runtimeUpdate.codeFont],
+	] as const) {
+		if (value !== undefined && !isFontChoice(value)) {
+			throw new Error(`${name} must be a font family or null plus up to 8 distinct fallbacks`);
+		}
+	}
+	if (runtimeUpdate.codeFontSize !== undefined && !isCodeFontSize(runtimeUpdate.codeFontSize)) {
+		throw new Error(
+			`codeFontSize must be a whole number from ${CODE_FONT_SIZE.min} to ${CODE_FONT_SIZE.max}`,
+		);
+	}
+	if (
+		runtimeUpdate.fontWeightOffset !== undefined &&
+		!isFontWeightOffset(runtimeUpdate.fontWeightOffset)
+	) {
+		throw new Error(
+			`fontWeightOffset must be a multiple of ${FONT_WEIGHT_OFFSET.step} from ${FONT_WEIGHT_OFFSET.min} to ${FONT_WEIGHT_OFFSET.max}`,
+		);
 	}
 	if (
 		runtimeUpdate.analyticsConsentConfirmed !== undefined &&
@@ -166,10 +250,20 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		jbcentralQuotaEnabled,
 		jbcentralQuotaRefreshSeconds,
 		disabledExtensions,
+		extensionSettings,
+		disabledPackages,
 		...rest
 	} = runtimeUpdate;
+	const extensionSettingsUpdate =
+		extensionSettings === undefined ? undefined : validateExtensionSettings(extensionSettings);
 	const nextDisabledExtensions =
-		disabledExtensions === undefined ? undefined : validateDisabledExtensions(disabledExtensions);
+		disabledExtensions === undefined
+			? undefined
+			: validateNameList(disabledExtensions, "disabledExtensions", "extension names");
+	const nextDisabledPackages =
+		disabledPackages === undefined
+			? undefined
+			: validateNameList(disabledPackages, "disabledPackages", "package identities");
 	for (const [name, value] of [
 		["defaultModel", defaultModel],
 		["reviewModel", reviewModel],
@@ -262,6 +356,15 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 			? {}
 			: { favoriteModels: validateFavoriteModels(favoriteModels) }),
 		...(nextDisabledExtensions === undefined ? {} : { disabledExtensions: nextDisabledExtensions }),
+		...(extensionSettingsUpdate === undefined
+			? {}
+			: {
+					extensionSettings: mergeExtensionSettings(
+						current.extensionSettings ?? {},
+						extensionSettingsUpdate,
+					),
+				}),
+		...(nextDisabledPackages === undefined ? {} : { disabledPackages: nextDisabledPackages }),
 	};
 	if (defaultModel !== undefined) {
 		if (defaultModel === null) delete next.defaultModel;

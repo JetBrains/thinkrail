@@ -13,6 +13,7 @@ import {
 	RiArrowGoBackLine as Revert,
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
@@ -35,8 +36,9 @@ import {
 	computeActionBlocks,
 } from "./changeBlocks";
 import { createDiffCache } from "./diffCache";
-import PierreProvider from "./PierreProvider";
+import PierreProvider, { usePierrePlain } from "./PierreProvider";
 import { PierreScroller } from "./PierreScroller";
+import { PlainCode } from "./PlainCode";
 import {
 	type BlockedSelection,
 	COLLAPSED_CONTEXT_THRESHOLD,
@@ -48,6 +50,7 @@ import {
 	usePierreFocus,
 } from "./pierreReview";
 import { usePierreVirtualizer } from "./pierreVirtualizer";
+import { plainDiffRuns } from "./plainRuns";
 
 type DiffAnnotationMetadata =
 	| { kind: "thread"; id: string }
@@ -159,44 +162,33 @@ function HunkToolbar({
 		>
 			{triage ? (
 				<IconTooltip label={kept ? t("viewer.hunk.keptTooltip") : t("viewer.hunk.keepTooltip")}>
-					<button
-						type="button"
+					<Button
+						variant="ghost"
+						size="m"
+						iconLeft={Check}
 						data-testid="hunk-keep"
 						aria-label={kept ? t("viewer.hunk.undoKeep") : t("viewer.hunk.keepLabel")}
 						aria-pressed={kept}
+						selected={kept}
 						onClick={() => triage.setKept(contentKey, !kept)}
-						className={`flex h-24 items-center gap-4 rounded-sm px-8 tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-							kept ? "text-feedback-success" : "hover:bg-control-bg-hovered hover:text-text-default"
-						}`}
 					>
-						<Check className="size-14" />
 						{kept ? t("viewer.hunk.kept") : t("viewer.hunk.keep")}
-					</button>
+					</Button>
 				</IconTooltip>
 			) : null}
-			<IconTooltip label={t("viewer.hunk.revert")}>
-				<button
-					type="button"
-					data-testid="hunk-revert"
-					aria-label={t("viewer.hunk.revert")}
-					disabled={reverting}
-					onClick={revert}
-					className="flex size-24 items-center justify-center rounded-sm outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text"
-				>
-					<Revert className="size-14" />
-				</button>
-			</IconTooltip>
-			<IconTooltip label={t("viewer.hunk.askAgent")}>
-				<button
-					type="button"
-					data-testid="hunk-ask-agent"
-					aria-label={t("viewer.hunk.askAgent")}
-					onClick={() => onAskAgent(block)}
-					className="flex size-24 items-center justify-center rounded-sm outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-				>
-					<AskAgent className="size-14" />
-				</button>
-			</IconTooltip>
+			<IconButton
+				icon={Revert}
+				label={t("viewer.hunk.revert")}
+				data-testid="hunk-revert"
+				disabled={reverting}
+				onClick={revert}
+			/>
+			<IconButton
+				icon={AskAgent}
+				label={t("viewer.hunk.askAgent")}
+				data-testid="hunk-ask-agent"
+				onClick={() => onAskAgent(block)}
+			/>
 			{actions.agentWorking ? (
 				<span className="tr-text-metadata text-text-subtle">{t("viewer.hunk.agentWorking")}</span>
 			) : null}
@@ -218,6 +210,7 @@ function PierreDiffSurface({
 	virtualize = false,
 }: ResourceDiffProps) {
 	const t = useT();
+	const plain = usePierrePlain();
 	const originalText = textSide(original);
 	const modifiedText = textSide(modified);
 	const originalHash = contentHash(original);
@@ -234,30 +227,28 @@ function PierreDiffSurface({
 					modifiedHash,
 					ignoreWhitespace,
 				],
-				() =>
-					parseDiffFromFile(
-						originalText === null
-							? null
-							: {
-									name: resource.path,
-									contents: originalText,
-									...(resource.language ? { lang: resource.language } : {}),
-									...(originalHash
-										? { cacheKey: `${resource.language ?? resource.path}:${originalHash}` }
-										: {}),
-								},
-						modifiedText === null
-							? null
-							: {
-									name: resource.path,
-									contents: modifiedText,
-									...(resource.language ? { lang: resource.language } : {}),
-									...(modifiedHash
-										? { cacheKey: `${resource.language ?? resource.path}:${modifiedHash}` }
-										: {}),
-								},
+				() => {
+					const sideKey = (hash: string | undefined) =>
+						hash ? `${resource.language ?? resource.path}:${hash}` : undefined;
+					const originalKey = sideKey(originalHash);
+					const modifiedKey = sideKey(modifiedHash);
+					const side = (contents: string, cacheKey: string | undefined) => ({
+						name: resource.path,
+						contents,
+						...(resource.language ? { lang: resource.language } : {}),
+						...(cacheKey ? { cacheKey } : {}),
+					});
+					const parsed = parseDiffFromFile(
+						originalText === null ? null : side(originalText, originalKey),
+						modifiedText === null ? null : side(modifiedText, modifiedKey),
 						{ ignoreWhitespace },
-					),
+					);
+					const oneSidedKey =
+						originalText === null ? modifiedKey : modifiedText === null ? originalKey : undefined;
+					return parsed.cacheKey === undefined && oneSidedKey
+						? { ...parsed, cacheKey: `${parsed.type}:${oneSidedKey}` }
+						: parsed;
+				},
 			),
 		[
 			ignoreWhitespace,
@@ -297,8 +288,8 @@ function PierreDiffSurface({
 		onHunkKeys?.([...contentKeyById.values()]);
 	}, [contentKeyById, onHunkKeys]);
 	const placedThreadIds = useMemo(
-		() => diffPlacedThreadIds(fileDiff, review),
-		[fileDiff, review?.base.threads, review?.worktree.threads],
+		() => (plain ? NO_PLACED_THREADS : diffPlacedThreadIds(fileDiff, review)),
+		[fileDiff, plain, review?.base.threads, review?.worktree.threads],
 	);
 	useEffect(() => {
 		onPlacedThreadIds?.(placedThreadIds);
@@ -451,91 +442,91 @@ function PierreDiffSurface({
 						{t("viewer.code.noDifferences")}
 					</p>
 				) : null}
-				<FileDiff<DiffAnnotationMetadata>
-					fileDiff={fileDiff}
-					options={options}
-					metrics={metrics}
-					lineAnnotations={annotations}
-					selectedLines={selectedLines}
-					className="flex-1"
-					renderGutterUtility={(getHoveredLine) => (
-						<IconTooltip label={t("viewer.code.commentOnLine")}>
-							<button
-								type="button"
+				{plain ? (
+					<PlainCode runs={plainDiffRuns(fileDiff)} diff />
+				) : (
+					<FileDiff<DiffAnnotationMetadata>
+						fileDiff={fileDiff}
+						options={options}
+						metrics={metrics}
+						lineAnnotations={annotations}
+						selectedLines={selectedLines}
+						className="flex-1"
+						renderGutterUtility={(getHoveredLine) => (
+							<IconButton
+								icon={MessageSquarePlus}
+								label={t("viewer.code.commentOnLine")}
+								variant="primary"
 								data-testid="review-add-icon"
-								aria-label={t("viewer.code.commentOnLine")}
 								onPointerDown={(event) => {
 									event.preventDefault();
 									event.stopPropagation();
 								}}
 								onClick={() => openGutterComposer(getHoveredLine())}
-								className="flex size-24 items-center justify-center rounded-sm bg-primary text-text-on-primary outline-none focus-visible:ring-2 focus-visible:ring-primary"
-							>
-								<MessageSquarePlus className="size-14" />
-							</button>
-						</IconTooltip>
-					)}
-					renderAnnotation={(annotation) => {
-						const metadata = annotation.metadata;
-						if (metadata.kind === "thread") {
-							const entry = threadById.get(metadata.id);
-							return entry && placedThreadIds.has(metadata.id) ? (
-								<ReviewThreadCard
-									key={entry.thread.id}
-									thread={entry.thread}
-									actions={entry.actions}
-								/>
-							) : null;
-						}
-						if (metadata.kind === "hunk") {
-							const block = blockById.get(metadata.id);
-							return block && hunkActions ? (
-								<HunkToolbar
-									key={metadata.id}
-									block={block}
-									contentKey={contentKeyById.get(metadata.id) ?? metadata.id}
-									actions={hunkActions}
-									onAskAgent={openAskAgent}
-								/>
-							) : null;
-						}
-						if (!composer || composer.id !== metadata.id || !review) return null;
-						if (composer.kind === "blocked") {
-							return (
-								<div
-									key={composer.id}
-									data-testid="review-selection-blocked"
-									className="review-composer review-composer-flow flex items-center gap-8"
-								>
-									<span className="tr-text-metadata text-text-muted">{t(composer.message)}</span>
-									<button
-										type="button"
-										data-testid="review-selection-blocked-close"
-										className="tr-text-metadata text-text-default underline-offset-2 hover:underline"
-										onClick={closeComposer}
-									>
-										{t("common.dismiss")}
-									</button>
-								</div>
-							);
-						}
-						return (
-							<ReviewComposer
-								key={pending.key ?? composer.id}
-								input={pending.input}
-								draft={composer.draft}
-								label={composer.label}
-								commenting={surfaceForSide(review, composer.side).commenting}
-								{...(composer.initialText !== undefined
-									? { initialText: composer.initialText }
-									: {})}
-								{...(composer.notice !== undefined ? { notice: composer.notice } : {})}
-								onClose={closeComposer}
-								className="review-composer-flow"
 							/>
-						);
-					}}
-				/>
+						)}
+						renderAnnotation={(annotation) => {
+							const metadata = annotation.metadata;
+							if (metadata.kind === "thread") {
+								const entry = threadById.get(metadata.id);
+								return entry && placedThreadIds.has(metadata.id) ? (
+									<ReviewThreadCard
+										key={entry.thread.id}
+										thread={entry.thread}
+										actions={entry.actions}
+									/>
+								) : null;
+							}
+							if (metadata.kind === "hunk") {
+								const block = blockById.get(metadata.id);
+								return block && hunkActions ? (
+									<HunkToolbar
+										key={metadata.id}
+										block={block}
+										contentKey={contentKeyById.get(metadata.id) ?? metadata.id}
+										actions={hunkActions}
+										onAskAgent={openAskAgent}
+									/>
+								) : null;
+							}
+							if (!composer || composer.id !== metadata.id || !review) return null;
+							if (composer.kind === "blocked") {
+								return (
+									<div
+										key={composer.id}
+										data-testid="review-selection-blocked"
+										className="review-composer review-composer-flow flex items-center gap-8"
+									>
+										<span className="tr-text-metadata text-text-muted">{t(composer.message)}</span>
+										<button
+											type="button"
+											data-testid="review-selection-blocked-close"
+											className="tr-text-metadata text-text-default underline-offset-2 hover:underline"
+											onClick={closeComposer}
+										>
+											{t("common.dismiss")}
+										</button>
+									</div>
+								);
+							}
+							return (
+								<ReviewComposer
+									key={pending.key ?? composer.id}
+									input={pending.input}
+									draft={composer.draft}
+									label={composer.label}
+									commenting={surfaceForSide(review, composer.side).commenting}
+									{...(composer.initialText !== undefined
+										? { initialText: composer.initialText }
+										: {})}
+									{...(composer.notice !== undefined ? { notice: composer.notice } : {})}
+									onClose={closeComposer}
+									className="review-composer-flow"
+								/>
+							);
+						}}
+					/>
+				)}
 			</VirtualizerContext.Provider>
 		</PierreScroller>
 	);

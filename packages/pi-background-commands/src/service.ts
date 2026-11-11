@@ -3,7 +3,9 @@ import { createLocalBashOperations } from "@earendil-works/pi-coding-agent";
 import { boundedError, OutputTail } from "./output";
 import { shellEnvironment } from "./shell-context";
 import type {
+	BackgroundCommandCompletion,
 	BackgroundCommandCompletionBinding,
+	BackgroundCommandFlush,
 	BackgroundCommandHandle,
 	BackgroundCommandSnapshot,
 	BackgroundCommandStart,
@@ -56,26 +58,38 @@ export function createBackgroundCommands(
 			} catch {}
 		}
 	};
-	const flushCompletions = () => {
-		if (flushing || disposed) return;
+	const gateOpen = (target: BackgroundCommandCompletionBinding, flush: BackgroundCommandFlush) => {
+		try {
+			return (
+				binding.canDeliverCompletion?.() !== false && target.canDeliverCompletion?.(flush) !== false
+			);
+		} catch {
+			return false;
+		}
+	};
+	const flushCompletions = (flush: BackgroundCommandFlush = {}) => {
+		const target = completionBinding;
+		if (flushing || disposed || !target) return;
 		flushing = true;
 		try {
-			for (const record of records.values()) {
-				const target = completionBinding;
-				if (disposed || !target || !record.pending) continue;
-				try {
-					if (
-						binding.canDeliverCompletion?.() === false ||
-						target.canDeliverCompletion?.() === false
-					)
-						continue;
-					const output = record.handle.output;
-					if (!output || disposed || completionBinding !== target) continue;
-					record.pending = false;
-					target.deliver({ snapshot: record.handle.snapshot, output });
-				} catch {
-					record.pending = true;
-				}
+			if (!gateOpen(target, flush)) return;
+			const batch = [...records.values()].flatMap((record) => {
+				const output = record.pending ? record.handle.output : undefined;
+				return output ? [{ record, completion: { snapshot: record.handle.snapshot, output } }] : [];
+			});
+			if (batch.length === 0) return;
+			for (const { record } of batch) record.pending = false;
+			let accepted = new Set<BackgroundCommandCompletion>();
+			try {
+				accepted = new Set(
+					target.deliver(
+						batch.map(({ completion }) => completion),
+						flush,
+					),
+				);
+			} catch {}
+			for (const { record, completion } of batch) {
+				if (!accepted.has(completion) && !disposed) record.pending = true;
 			}
 		} finally {
 			flushing = false;
@@ -120,6 +134,9 @@ export function createBackgroundCommands(
 						changed();
 					}
 					return handle.snapshot;
+				},
+				claimCompletion() {
+					if (snapshot.finishedAt !== undefined) record.pending = false;
 				},
 			};
 			let settle = () => {};
@@ -192,8 +209,8 @@ export function createBackgroundCommands(
 		},
 		bindCompletion(target) {
 			const current: BackgroundCommandCompletionBinding = {
-				deliver: (completion) => target.deliver(completion),
-				canDeliverCompletion: () => target.canDeliverCompletion?.() !== false,
+				deliver: (batch, flush) => target.deliver(batch, flush),
+				canDeliverCompletion: (flush) => target.canDeliverCompletion?.(flush) !== false,
 			};
 			completionBinding = disposed ? undefined : current;
 			flushCompletions();

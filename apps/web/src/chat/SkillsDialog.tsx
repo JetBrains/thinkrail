@@ -4,7 +4,14 @@ import {
 	RiShieldCheckLine as ShieldCheck,
 	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
-import type { Project, SkillCatalogEntry, Workspace } from "@thinkrail/contracts";
+import {
+	isSkillGroupEnabled,
+	OTHER_AGENT_SKILL_GROUPS,
+	type Project,
+	SKILL_LISTING_MAX_TOKENS,
+	type SkillCatalogEntry,
+	type Workspace,
+} from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { T, type Translator, t as translate, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
@@ -22,6 +29,7 @@ import {
 	trustGrantParams,
 	untrustedNoticeText,
 } from "./projectTrust";
+import { skillCatalogSize } from "./skillCatalogSize";
 import { useProjectTrustSummary } from "./useProjectTrustSummary";
 
 const TIER_META: Record<string, { label: MessageKey | null; hint: MessageKey; rank: number }> = {
@@ -88,6 +96,7 @@ export function SkillsDialog({
 }) {
 	const t = useT();
 	const project = useAppStore((s) => s.projects.find((p) => p.id === projectId));
+	const otherAgentSkills = useAppStore((s) => s.otherAgentSkills);
 	const [entries, setEntries] = useState<SkillCatalogEntry[] | null>(null);
 	const [busy, setBusy] = useState(false);
 	const workspaceId = workspace?.workspaceId;
@@ -156,8 +165,8 @@ export function SkillsDialog({
 			translate("chat.skills.skillUpdateFailed"),
 		);
 
-	const disabledGroups = new Set(project?.disabledGroups ?? []);
-	const pluginsDisabled = disabledGroups.has("@plugins");
+	const groupEnabled = (key: string) => isSkillGroupEnabled(project, key, otherAgentSkills);
+	const pluginsDisabled = !groupEnabled("@plugins");
 	const catalogAliases = (entries ?? [])
 		.filter((entry) => entry.decision === "untrusted")
 		.map((entry) => entry.name);
@@ -174,10 +183,18 @@ export function SkillsDialog({
 	const isLeadingKey = (key: string) => key === "bundled" || key === "pi";
 	const leadingGroups = groups.filter((g) => isLeadingKey(g.key));
 	const otherGroups = groups.filter((g) => !isLeadingKey(g.key));
+	const size = entries ? skillCatalogSize(entries) : null;
+	const otherAgentsOff =
+		!otherAgentSkills &&
+		groups.some(
+			(g) =>
+				(g.isPlugin || OTHER_AGENT_SKILL_GROUPS.includes(g.key)) &&
+				!groupEnabled(g.isPlugin ? "@plugins" : g.key),
+		);
 
 	const renderGroup = (group: Group) => {
 		const lockedByMaster = group.isPlugin && pluginsDisabled;
-		const groupOn = !lockedByMaster && !disabledGroups.has(group.key);
+		const groupOn = !lockedByMaster && groupEnabled(group.key);
 		return (
 			<div key={group.key} data-testid="skill-group" data-group={group.key} data-on={groupOn}>
 				<div
@@ -189,7 +206,7 @@ export function SkillsDialog({
 					{group.isPlugin ? (
 						<Puzzle className="size-14 shrink-0 text-text-muted" aria-hidden />
 					) : null}
-					<span className="tr-text-eyebrow text-text-default">{group.label}</span>
+					<span className="truncate tr-text-eyebrow text-text-default">{group.label}</span>
 					<span className="min-w-0 flex-1 truncate text-text-muted tr-text-metadata">
 						{group.hint}
 					</span>
@@ -238,7 +255,7 @@ export function SkillsDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent data-testid="skills-dialog" className="max-w-[560px] gap-12 p-12">
+			<DialogContent data-testid="skills-dialog" className="max-w-[640px] gap-12 p-12">
 				<div className="flex items-center justify-between gap-8 pr-[2rem]">
 					<DialogTitle className="tr-text-ui text-text-default">
 						{t("chat.skills.title")}
@@ -251,18 +268,47 @@ export function SkillsDialog({
 							wrapTrigger
 						>
 							<Button
-								size="sm"
+								size="m"
 								variant="outline"
+								iconLeft={RefreshCw}
 								data-testid="skills-reload"
 								disabled={busy || workspace.streaming}
 								onClick={() => void reload()}
 							>
-								<RefreshCw className="size-14" />
 								{t("chat.skills.reload")}
 							</Button>
 						</IconTooltip>
 					) : null}
 				</div>
+
+				{size ? (
+					<p
+						data-testid="skills-size"
+						data-large={size.large}
+						className={cn(
+							"tr-text-metadata",
+							size.large ? "text-feedback-warning" : "text-text-muted",
+						)}
+					>
+						{size.budgeted
+							? t("chat.skills.sizeBudgeted", {
+									count: size.count,
+									tokens: size.tokens.toLocaleString(),
+									limit: SKILL_LISTING_MAX_TOKENS.toLocaleString(),
+								})
+							: t("chat.skills.size", { count: size.count, tokens: size.tokens.toLocaleString() })}
+						{size.large ? ` ${t("chat.skills.sizeLarge")}` : null}
+					</p>
+				) : null}
+
+				{otherAgentsOff ? (
+					<p
+						data-testid="skills-other-agents-off"
+						className="rounded-sm border border-border-default bg-container-elevated-bg px-12 py-8 text-text-muted tr-text-metadata"
+					>
+						{t("chat.skills.otherAgentsOff")}
+					</p>
+				) : null}
 
 				{workspace?.stale ? (
 					<div
@@ -295,7 +341,7 @@ export function SkillsDialog({
 						<div className="flex justify-end">
 							<Button
 								variant="outline"
-								size="sm"
+								size="m"
 								disabled={busy}
 								onClick={() =>
 									void mutate(
@@ -314,7 +360,7 @@ export function SkillsDialog({
 					</div>
 				) : null}
 
-				<div className="max-h-[50vh] overflow-y-auto">
+				<div className="relative max-h-[50vh] overflow-y-auto">
 					{entries === null ? (
 						<LoadingRegion rows={4} className="px-8 py-12" />
 					) : entries.length === 0 ? (
@@ -403,17 +449,24 @@ function SkillRow({
 			data-testid="skill-row"
 			data-skill={entry.name}
 			data-decision={entry.decision}
-			className="flex items-center gap-8 py-8 pr-8 pl-12 hover:bg-control-bg-hovered"
+			className="flex items-center gap-12 py-12 pr-8 pl-12 hover:bg-control-bg-hovered"
 		>
-			<span className="flex min-w-0 flex-1 flex-col">
-				<span className="truncate tr-text-ui text-text-default">{entry.name}</span>
+			<span className="flex min-w-0 flex-1 flex-col gap-4">
+				<span className="truncate tr-title-card text-text-default">{entry.name}</span>
 				{entry.description ? (
-					<span className="truncate text-text-muted tr-text-metadata">{entry.description}</span>
+					<span title={entry.description} className="line-clamp-2 text-text-muted tr-text-metadata">
+						{entry.description}
+					</span>
 				) : null}
 			</span>
 			{entry.decision === "pending-ack" ? (
-				<Button size="sm" data-testid="skill-ack" disabled={busy} onClick={onAcknowledge}>
-					<ShieldCheck className="size-14" />
+				<Button
+					size="m"
+					iconLeft={ShieldCheck}
+					data-testid="skill-ack"
+					disabled={busy}
+					onClick={onAcknowledge}
+				>
 					{t("chat.skills.enable")}
 				</Button>
 			) : (

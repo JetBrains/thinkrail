@@ -1,6 +1,7 @@
 import { RiSendPlaneLine as Send, RiDeleteBin6Line as Trash2 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import { IconTooltip } from "@thinkrail/ui/tooltip";
+import { IconButton } from "@thinkrail/ui/button";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { useEffect, useRef, useState } from "react";
 import type { ReviewThread, ReviewThreadActions } from "../registry";
 import { outdatedReason, threadLabel } from "../registry";
@@ -105,37 +106,31 @@ export function ReviewThreadCard({
 				)}
 				{thread.status === "draft" && (
 					<span className="review-thread-actions">
-						<IconTooltip label={t("review.comment.send")} wrapTrigger>
-							<button
-								type="button"
-								data-testid="review-thread-send"
-								aria-label={t("review.comment.send")}
-								className="review-thread-action disabled:pointer-events-none"
-								disabled={busy || !draftText.trim()}
-								onClick={() =>
-									run(async () => {
-										if (draftText.trim() !== thread.body) {
-											await actions.onUpdateComment(thread.id, draftText.trim());
-										}
-										await actions.onSendComment(thread.id);
-									})
-								}
-							>
-								<Send className="size-12" />
-							</button>
-						</IconTooltip>
-						<IconTooltip label={t("review.comment.deleteDraft")} wrapTrigger>
-							<button
-								type="button"
-								data-testid="review-thread-delete"
-								aria-label={t("review.comment.deleteDraft")}
-								className="review-thread-action disabled:pointer-events-none"
-								disabled={busy}
-								onClick={() => run(() => actions.onDeleteComment(thread.id))}
-							>
-								<Trash2 className="size-12" />
-							</button>
-						</IconTooltip>
+						<IconButton
+							icon={Send}
+							label={t("review.comment.send")}
+							wrapTrigger
+							size="s"
+							data-testid="review-thread-send"
+							disabled={busy || !draftText.trim()}
+							onClick={() =>
+								run(async () => {
+									if (draftText.trim() !== thread.body) {
+										await actions.onUpdateComment(thread.id, draftText.trim());
+									}
+									await actions.onSendComment(thread.id);
+								})
+							}
+						/>
+						<IconButton
+							icon={Trash2}
+							label={t("review.comment.deleteDraft")}
+							wrapTrigger
+							size="s"
+							data-testid="review-thread-delete"
+							disabled={busy}
+							onClick={() => run(() => actions.onDeleteComment(thread.id))}
+						/>
 					</span>
 				)}
 			</div>
@@ -163,6 +158,7 @@ export function ReviewThreadCard({
 					}}
 					onKeyDown={(e) => {
 						e.stopPropagation();
+						if (isImeComposing(e.nativeEvent)) return;
 						if (e.key === "Escape") {
 							cancelledRef.current = true;
 							changeEdit(() => undefined);

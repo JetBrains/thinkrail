@@ -83,7 +83,7 @@ Grab the desktop app below, or see the rest of what ThinkRail does on [**our mai
 
 Find us on social media platforms: [**X/Twitter**](https://x.com/ThinkRailAI), [**YouTube**](https://www.youtube.com/@ThinkRailAI), and [**TikTok**](https://www.tiktok.com/@thinkrail).
 You can also browse [**our GitHub repository**](https://github.com/JetBrains/thinkrail),
-take [**our survey**](https://forms.gle/es1ksqAax6hnDWCP8), and join [**our Discord server**](https://discord.gg/Wybu9ceWkY)
+take [**our survey**](https://forms.gle/es1ksqAax6hnDWCP8), and join [**our Discord server**](https://thinkrail.ai/discord)
 to say "hi!" and let us know what you think. Your feedback is greatly appreciated.
 
 Happy developing!

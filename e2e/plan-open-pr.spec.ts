@@ -97,5 +97,6 @@ test("Open PR is disabled in the Default workspace, whose branch is its own base
 	await expect(pane).toBeVisible();
 	const openPr = pane.getByTestId("plan-open-pr");
 	await expect(openPr).toBeDisabled();
-	await expect(openPr).toHaveAttribute("title", /base branch/);
+	await openPr.hover({ force: true });
+	await expect(page.getByRole("tooltip")).toContainText(/base branch/);
 });

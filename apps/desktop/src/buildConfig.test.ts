@@ -35,9 +35,9 @@ test("selects real Bun and preserves the physical runtime resources without reti
 		bun: { entrypoint: "src/index.ts", version: rootManifest.packageManager.replace(/^bun@/, "") },
 		views: { preload: { entrypoint: "src/preload.ts", format: "iife" } },
 		copy: { "../web/dist": "views/web", ".stage/runtime": "runtime" },
-		mac: { bundleCEF: false, icons: "assets/icon.iconset" },
-		linux: { bundleCEF: false, icon: "assets/icon.png" },
-		win: { bundleCEF: false, icon: "assets/icon.ico" },
+		mac: { bundleCEF: false, icons: "../../packages/shared/assets/icon.iconset" },
+		linux: { bundleCEF: false, icon: "../../packages/shared/assets/icon.png" },
+		win: { bundleCEF: false, icon: "../../packages/shared/assets/icon.ico" },
 	});
 	expect(config.scripts).toEqual({ preBuild: "preBuild.ts", postBuild: "postBuild.ts" });
 	expect(config.build).not.toHaveProperty("bunVersion");
@@ -55,7 +55,7 @@ test("generated server runtime threads the opener and desktop proxies explicit r
 });
 
 test("uses the exact npm bootstrap pin while Bun owns the workspace dependency graph", () => {
-	expect(manifest.devDependencies.electrobun).toBe("2.0.1");
+	expect(manifest.devDependencies.electrobun).toBe("2.0.5");
 	expect(manifest.dependencies).not.toHaveProperty("electrobun");
 	expect(hutchConfig).toEqual({ packageManager: "bun" });
 });

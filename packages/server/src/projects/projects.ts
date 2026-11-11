@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmdirSync, rmSync, statSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
@@ -10,8 +10,8 @@ import type {
 	ProjectPathStatus,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
-import { canonicalPath, git } from "../git";
-import { loadProjects, loadWorkspaces, saveProjects } from "../persistence";
+import { canonicalPath, git, INDEX_WRITE_TIMEOUT_MS } from "../git";
+import { landsInChatsRoot, loadProjects, loadWorkspaces, saveProjects } from "../persistence";
 
 type ProjectPublisher = (project: Project) => void;
 
@@ -25,7 +25,17 @@ function emit(project: Project): void {
 	publishProject?.(project);
 }
 
-function resolveProjectPath(path: string): string {
+let guardProjectPath: ((path: string) => void) | null = null;
+
+export function setProjectPathGuard(fn: ((path: string) => void) | null): void {
+	guardProjectPath = fn;
+}
+
+export function assertProjectPathAllowed(path: string): void {
+	guardProjectPath?.(path);
+}
+
+export function resolveProjectPath(path: string): string {
 	const home =
 		(process.platform === "win32" ? process.env.USERPROFILE : process.env.HOME) || homedir();
 	const underHome =
@@ -39,8 +49,16 @@ function resolveProjectPath(path: string): string {
 }
 
 function gitToplevel(path: string): string | null {
-	const result = git(path, ["rev-parse", "--show-toplevel"]);
+	const result = git(path, ["rev-parse", "--show-toplevel"], {
+		action: "read the repository root",
+	});
+	if (!result.ok && /dubious ownership/i.test(result.err))
+		throw new Error(`Git refused to open ${path}:\n${result.err}`);
 	return result.ok && result.out ? resolve(result.out) : null;
+}
+
+function gitStepFailed(step: string, path: string, err: string): Error {
+	return new Error(err ? `${step} failed: ${path}\n${err}` : `${step} failed: ${path}`);
 }
 
 function slugify(name: string): string {
@@ -86,8 +104,20 @@ export function getProjects(): Project[] {
 	return projects;
 }
 
-export function openProject(inputPath: string): Project {
+/** The one reserved-root door check, before any filesystem or git side effect; the path keeps its spelling. */
+export function assertOutsideChatsRoot(path: string, use = "opened as a project"): void {
+	if (landsInChatsRoot(path)) {
+		throw new CodedError(
+			"CHATS_CONTAINER",
+			`Chats without a project live here; this folder cannot be ${use}.`,
+		);
+	}
+}
+
+export function openProject(inputPath: string, displayName?: string): Project {
 	const path = resolveProjectPath(inputPath);
+	assertProjectPathAllowed(path);
+	assertOutsideChatsRoot(path);
 	const root = gitToplevel(path);
 	if (!root) throw new CodedError("NOT_GIT", `Not a git repository: ${path}`);
 
@@ -109,9 +139,10 @@ export function openProject(inputPath: string): Project {
 		);
 
 	const taken = new Set(projects.map((p) => p.slug));
+	const label = displayName?.replace(/\s+/g, " ").trim();
 	const project: Project = {
 		id: randomUUID(),
-		name: basename(root),
+		name: label && label.length <= PROJECT_NAME_MAX_LENGTH ? label : basename(root),
 		path: root,
 		slug: uniqueSlug(slugify(basename(root)), taken),
 		lastOpened: Date.now(),
@@ -340,10 +371,17 @@ export function setProjectGroupEnabled(id: string, group: string, enabled: boole
 	const projects = getProjects();
 	const project = projects.find((p) => p.id === id);
 	if (!project) throw new Error(`Unknown project: ${id}`);
-	const groups = new Set(project.disabledGroups ?? []);
-	if (enabled) groups.delete(group);
-	else groups.add(group);
-	project.disabledGroups = [...groups];
+	const disabled = new Set(project.disabledGroups ?? []);
+	const on = new Set(project.enabledGroups ?? []);
+	if (enabled) {
+		disabled.delete(group);
+		on.add(group);
+	} else {
+		disabled.add(group);
+		on.delete(group);
+	}
+	project.disabledGroups = [...disabled];
+	project.enabledGroups = [...on];
 	saveProjects(projects);
 	return project;
 }
@@ -364,32 +402,78 @@ function inspectResolvedProjectPath(path: string): ProjectPathStatus {
 }
 
 export function inspectProjectPath(inputPath: string): ProjectPathStatus {
-	return inspectResolvedProjectPath(resolveProjectPath(inputPath));
+	const path = resolveProjectPath(inputPath);
+	assertOutsideChatsRoot(path);
+	return inspectResolvedProjectPath(path);
 }
 
 export function initProject(inputPath: string): Project {
 	const path = resolveProjectPath(inputPath);
+	assertProjectPathAllowed(path);
+	assertOutsideChatsRoot(path);
 	const status = inspectResolvedProjectPath(path);
 	if (status.kind === "missing") throw new Error(`No such folder: ${path}`);
 	if (status.kind === "notDirectory") throw new Error(`Not a folder: ${path}`);
 	if (status.kind === "repo") return openProject(path);
+	bootstrapRepository(path);
+	return openProject(path);
+}
 
-	const init = git(path, ["init", "-b", "main"]);
-	if (!init.ok) throw new Error(`git init failed: ${path}`);
+export function createProject(
+	parentPath: string,
+	requestedName: string,
+	displayName?: string,
+): Project {
+	const name = requestedName.trim();
+	if (!name || name === "." || name === ".." || /[/\\\0]/.test(name)) {
+		throw new Error(`Invalid project folder name: ${requestedName}`);
+	}
+	const parent = resolveProjectPath(parentPath);
+	const path = join(parent, name);
+	assertProjectPathAllowed(path);
+	assertOutsideChatsRoot(path);
+	mkdirSync(parent, { recursive: true });
+	let created = false;
 	try {
-		const added = git(path, ["add", "-A"]);
-		if (!added.ok) throw new Error(`git add failed: ${path}`);
-
-		const identity: string[] = [];
-		if (!git(path, ["config", "user.name"]).out) identity.push("-c", "user.name=ThinkRail");
-		if (!git(path, ["config", "user.email"]).out)
-			identity.push("-c", "user.email=thinkrail@localhost");
-		const commit = git(path, [...identity, "commit", "--allow-empty", "-m", "Initial commit"]);
-		if (!commit.ok) throw new Error(`git commit failed: ${path}`);
+		if (!statSync(path).isDirectory()) throw new Error(`Not a folder: ${path}`);
+		if (readdirSync(path).length > 0)
+			throw new Error(`Folder already exists and isn't empty: ${path}`);
+	} catch (err) {
+		if (!(err instanceof Error && "code" in err && err.code === "ENOENT")) throw err;
+		mkdirSync(path);
+		created = true;
+	}
+	try {
+		bootstrapRepository(path);
+		return openProject(path, displayName);
 	} catch (err) {
 		rmSync(join(path, ".git"), { recursive: true, force: true });
+		if (created && readdirSync(path).length === 0) rmdirSync(path);
 		throw err;
 	}
+}
 
-	return openProject(path);
+function bootstrapRepository(path: string): void {
+	const gitDir = join(path, ".git");
+	const createdGitDir = !existsSync(gitDir);
+	try {
+		const init = git(path, ["init", "-b", "main"]);
+		if (!init.ok) throw gitStepFailed("git init", path, init.err);
+		const added = git(path, ["add", "-A"], { timeoutMs: INDEX_WRITE_TIMEOUT_MS });
+		if (!added.ok) throw gitStepFailed("git add", path, added.err);
+
+		const identity: string[] = [];
+		const identityProbe = { action: "read the git identity" };
+		if (!git(path, ["config", "user.name"], identityProbe).out)
+			identity.push("-c", "user.name=ThinkRail");
+		if (!git(path, ["config", "user.email"], identityProbe).out)
+			identity.push("-c", "user.email=thinkrail@localhost");
+		const commit = git(path, [...identity, "commit", "--allow-empty", "-m", "Initial commit"], {
+			timeoutMs: INDEX_WRITE_TIMEOUT_MS,
+		});
+		if (!commit.ok) throw gitStepFailed("git commit", path, commit.err);
+	} catch (err) {
+		if (createdGitDir) rmSync(gitDir, { recursive: true, force: true });
+		throw err;
+	}
 }

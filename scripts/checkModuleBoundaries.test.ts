@@ -210,6 +210,43 @@ test("rejects manifest, type-only, dynamic, CommonJS, and relative cross-boundar
 	]);
 });
 
+test("scans JSX in plain JavaScript sources", () => {
+	const root = fixture();
+	write(
+		root,
+		"apps/web/src/component.js",
+		'const server = require("@thinkrail/server");\nexport const view = <div />;',
+	);
+
+	expect(moduleBoundaryViolations(root)).toEqual([
+		'apps/web/src/component.js: import "@thinkrail/server" creates forbidden apps/web -> packages/server edge',
+	]);
+});
+
+test("parses .cjs sources as CommonJS", () => {
+	const root = fixture();
+	write(
+		root,
+		"apps/web/src/config.cjs",
+		'const server = require("@thinkrail/server");\nif (!server) return;\nmodule.exports = server;',
+	);
+
+	expect(moduleBoundaryViolations(root)).toEqual([
+		'apps/web/src/config.cjs: import "@thinkrail/server" creates forbidden apps/web -> packages/server edge',
+	]);
+});
+
+test("fails on a source file it cannot parse", () => {
+	const root = fixture();
+	write(
+		root,
+		"apps/web/src/broken.ts",
+		'import { x } from "@thinkrail/server";\nexport const y = x +;',
+	);
+
+	expect(() => moduleBoundaryViolations(root)).toThrow(/cannot parse apps\/web\/src\/broken\.ts: /);
+});
+
 function sdkFixture(): string {
 	const root = fixture();
 	for (const [moduleRoot, name] of Object.entries({
@@ -273,16 +310,17 @@ for (const [host, entry, relativeBase] of [
 	["apps/web", "web", "../../../thinkrail-extensions"],
 	["packages/server", "server", "../../../thinkrail-extensions"],
 ] as const) {
-	test.each(
-		hostEntryLeaks.filter((suffix) => suffix !== `/${entry}`),
-	)(`${host} rejects extension entry %s`, (suffix) => {
-		const root = sdkFixture();
-		const specifier = `@thinkrail/ext-future${suffix}`;
-		write(root, `${host}/src/leak.ts`, `export type { Value } from "${specifier}";`);
-		const violations = moduleBoundaryViolations(root);
-		expect(violations).toHaveLength(1);
-		expect(violations[0]).toContain(`only public @thinkrail/ext-future/${entry}`);
-	});
+	test.each(hostEntryLeaks.filter((suffix) => suffix !== `/${entry}`))(
+		`${host} rejects extension entry %s`,
+		(suffix) => {
+			const root = sdkFixture();
+			const specifier = `@thinkrail/ext-future${suffix}`;
+			write(root, `${host}/src/leak.ts`, `export type { Value } from "${specifier}";`);
+			const violations = moduleBoundaryViolations(root);
+			expect(violations).toHaveLength(1);
+			expect(violations[0]).toContain(`only public @thinkrail/ext-future/${entry}`);
+		},
+	);
 	test(`${host} rejects relative imports even into the correct extension half`, () => {
 		const root = sdkFixture();
 		write(root, `${host}/src/leak.ts`, `require("${relativeBase}/future/${entry}/index");`);
@@ -300,36 +338,38 @@ test("discovers new pi and ThinkRail extensions and rejects host and sibling dep
 	write(
 		root,
 		"thinkrail-extensions/future/web/pi.ts",
-		'import type { Value } from "@thinkrail/pi-future";',
+		'import type { Value } from "@thinkrail/pi-future"; import { value } from "@thinkrail/pi-future";',
 	);
 	write(root, "thinkrail-extensions/future/server/sibling.ts", 'import "@thinkrail/pi-visualize";');
-	expect(moduleBoundaryViolations(root)).toHaveLength(5);
+	const violations = moduleBoundaryViolations(root);
+	expect(violations).toHaveLength(5);
+	expect(violations.filter((violation) => violation.includes("web/pi.ts"))).toEqual([
+		expect.stringContaining("pi value import"),
+	]);
 });
 
-test.each([
-	"dependencies",
-	"devDependencies",
-	"optionalDependencies",
-	"peerDependencies",
-])("checks discovered SDK and extension manifest %s edges", (section) => {
-	const root = sdkFixture();
-	for (const [moduleRoot, name] of Object.entries({
-		"packages/ui": "@thinkrail/ui",
-		"packages/extension-api": "@thinkrail/extension-api",
-		"pi-extensions/future": "@thinkrail/pi-future",
-		"thinkrail-extensions/future": "@thinkrail/ext-future",
-	})) {
-		write(
-			root,
-			`${moduleRoot}/package.json`,
-			JSON.stringify({
-				name,
-				[section]: { "@thinkrail/web": "workspace:*" },
-			}),
-		);
-	}
-	expect(moduleBoundaryViolations(root)).toHaveLength(4);
-});
+test.each(["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"])(
+	"checks discovered SDK and extension manifest %s edges",
+	(section) => {
+		const root = sdkFixture();
+		for (const [moduleRoot, name] of Object.entries({
+			"packages/ui": "@thinkrail/ui",
+			"packages/extension-api": "@thinkrail/extension-api",
+			"pi-extensions/future": "@thinkrail/pi-future",
+			"thinkrail-extensions/future": "@thinkrail/ext-future",
+		})) {
+			write(
+				root,
+				`${moduleRoot}/package.json`,
+				JSON.stringify({
+					name,
+					[section]: { "@thinkrail/web": "workspace:*" },
+				}),
+			);
+		}
+		expect(moduleBoundaryViolations(root)).toHaveLength(4);
+	},
+);
 
 test("SDK sources cannot reach host internals or each other", () => {
 	const root = sdkFixture();
@@ -350,18 +390,16 @@ for (const [file, relativeSpecifier] of [
 	["apps/web/src/leak.ts", "../../../packages/extension-api/src/web"],
 	["thinkrail-extensions/future/web/leak.ts", "../../../packages/extension-api/src/web"],
 ] as const) {
-	test.each([
-		"",
-		"/server",
-		"/web/helpers",
-		"/web/../server",
-	])(`${file} rejects extension-api entry %s`, (suffix) => {
-		const root = sdkFixture();
-		write(root, file, `export * from "@thinkrail/extension-api${suffix}";`);
-		const violations = moduleBoundaryViolations(root);
-		expect(violations).toHaveLength(1);
-		expect(violations[0]).toContain("only public @thinkrail/extension-api/web");
-	});
+	test.each(["", "/server", "/web/helpers", "/web/../server"])(
+		`${file} rejects extension-api entry %s`,
+		(suffix) => {
+			const root = sdkFixture();
+			write(root, file, `export * from "@thinkrail/extension-api${suffix}";`);
+			const violations = moduleBoundaryViolations(root);
+			expect(violations).toHaveLength(1);
+			expect(violations[0]).toContain("only public @thinkrail/extension-api/web");
+		},
+	);
 	test(`${file} rejects extension-api relative bypass`, () => {
 		const root = sdkFixture();
 		write(root, file, `import type { Value } from "${relativeSpecifier}";`);

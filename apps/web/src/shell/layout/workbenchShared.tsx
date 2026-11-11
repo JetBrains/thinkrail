@@ -19,6 +19,7 @@ import { type LayoutAttention, readLayoutNavigationClock, tupleKey } from "../..
 import type { AuxiliaryRailEntry } from "./auxiliaryPresentation";
 import {
 	type CenterSplitDirection,
+	type ChatFirstPrompts,
 	canJoinAuxiliaryGroup,
 	canPlaceLayoutTab,
 	collectCenterGroups,
@@ -75,6 +76,7 @@ export interface WorkbenchProps {
 		prepare: (latestDocument?: WorkspaceLayoutDocument) => PreparedLayoutClose,
 	) => void;
 	onRenameChat?: (sessionId: string, titleInput: string, currentTitle: string) => void;
+	chatFirstPrompts?: ChatFirstPrompts;
 	onNewChat: (groupId: string) => void;
 	onNewTerminal: (
 		groupId: string,
@@ -359,8 +361,12 @@ export function useHorizontalOverflow(
 	return overflow;
 }
 
-export function tabSearchKeywords(t: Translator, tab: LayoutTab): string[] {
-	const name = layoutTabName(t, tab);
+export function tabSearchKeywords(
+	t: Translator,
+	tab: LayoutTab,
+	chatFirstPrompts: ChatFirstPrompts | undefined,
+): string[] {
+	const name = layoutTabName(t, tab, chatFirstPrompts);
 	switch (tab.kind) {
 		case "file":
 		case "diff":
@@ -413,11 +419,23 @@ function isFocusLost(active: Element | null): boolean {
 	);
 }
 
+function focusRestsInSelectedPanel(tab: HTMLElement | null, active: Element | null): boolean {
+	if (!tab || isFocusLost(active)) return false;
+	if (tab.getAttribute("aria-selected") !== "true" && tab.getAttribute("aria-pressed") !== "true") {
+		return false;
+	}
+	const panelId = tab.getAttribute("aria-controls");
+	const panel = panelId ? globalThis.document.getElementById(panelId) : null;
+	return panel?.contains(active) ?? false;
+}
+
 export function focusLayoutRequest(request: LayoutTabFocusRequest): void {
-	if (request.onlyIfFocusLost && !isFocusLost(globalThis.document.activeElement)) return;
+	const active = globalThis.document.activeElement;
+	if (request.onlyIfFocusLost && !isFocusLost(active)) return;
 	const tab = request.tabId
 		? globalThis.document.getElementById(tabDomId(request.location, request.tabId))
 		: null;
+	if (focusRestsInSelectedPanel(tab, active)) return;
 	const pane = globalThis.document.getElementById(groupDomId(request.location));
 	const rail = globalThis.document
 		.getElementById(railGroupDomId(request.location))
@@ -602,6 +620,7 @@ export interface SharedGroupProps {
 	onHideSide: (region: LayoutAuxiliaryRegion) => void;
 	onRevealTool: (tool: LayoutToolId) => void;
 	onRenameChat: WorkbenchProps["onRenameChat"];
+	chatFirstPrompts: WorkbenchProps["chatFirstPrompts"];
 	canFocusAdjacentGroup: boolean;
 }
 

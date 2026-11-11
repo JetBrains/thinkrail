@@ -29,7 +29,8 @@ export function formatByteLength(t: Translator, bytes: number | undefined): stri
 	if (bytes === undefined || !Number.isFinite(bytes) || bytes < 0)
 		return t("viewer.fileInfo.unknownSize");
 	if (bytes < 1024) return `${bytes} B`;
-	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
+	const kilobytes = (bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0);
+	if (Number(kilobytes) < 1024) return `${kilobytes} KB`;
 	return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
 }
 

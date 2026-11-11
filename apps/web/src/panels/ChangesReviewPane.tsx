@@ -9,33 +9,36 @@ import {
 } from "@remixicon/react";
 import type { GitFileChange, GitStatus } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { diffRendererCapabilities } from "@thinkrail/resource-renderers";
+import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
-import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from "react";
-import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Virtuoso } from "react-virtuoso";
+import { useShallow } from "zustand/react/shallow";
 import { usePhoneViewport } from "@/lib";
 import {
 	type ChangesTab,
+	selectChangesTabRendererIds,
 	selectDiffBaseRef,
 	selectDiffTabTargetRef,
 	toast,
 	useAppStore,
 } from "../store";
-import { errorText, getTransport, wsErrorCode } from "../transport";
+import { errorText, wsErrorCode } from "../transport";
 import { ChangesFileSection } from "./ChangesFileSection";
 import { ChangesReviewGuide, guideSteps } from "./ChangesReviewGuide";
 import { LARGE_SCOPE_FILES, scopeKey, scopeLabel, sectionCollapsedByDefault } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
+import { peekGitStatus, readGitStatus } from "./gitStatusCache";
 import { HeaderIconButton } from "./HeaderIconButton";
 import { ownsReviewShortcut } from "./reviewShortcuts";
 import { SendAllReviewsButton } from "./SendReviewButton";
 import { createSectionContentCache } from "./sectionContentCache";
+import { useReviewReveal } from "./useReviewReveal";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 import { useWorkspaceTurns } from "./useWorkspaceTurns";
 
-const SECTION_HEADER_HEIGHT = 32;
-const END_NOTE_HEIGHT = 48;
-const USER_SCROLL_EVENTS = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
 const VIEWED_KEY = "v";
 const NEXT_UNREVIEWED_KEY = "j";
 
@@ -64,20 +67,22 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const t = useT();
 	const { workspaceId, scope } = tab;
 	const mobile = usePhoneViewport();
-	const [status, setStatus] = useState<GitStatus | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [scopeGone, setScopeGone] = useState(false);
 	const warnedRef = useRef(false);
 	const baseRef = useAppStore((state) => selectDiffBaseRef(state, workspaceId));
 	const targetRef = useAppStore((state) => selectDiffTabTargetRef(state, { workspaceId, scope }));
+	const [status, setStatus] = useState<GitStatus | null>(() =>
+		peekGitStatus(workspaceId, scope, targetRef),
+	);
+	const [statusSettled, setStatusSettled] = useState(false);
 	const layout = useAppStore((state) => state.changesLayout);
-	const setLayout = useAppStore((state) => state.setChangesLayout);
+	const setStoreLayout = useAppStore((state) => state.setChangesLayout);
 	const setView = useAppStore((state) => state.setChangesTabView);
 	const setIgnoreWhitespace = useAppStore((state) => state.setChangesTabIgnoreWhitespace);
 	const setViewed = useAppStore((state) => state.setChangesTabViewed);
 	const setActivePath = useAppStore((state) => state.setChangesTabActivePath);
 	const setCollapsed = useAppStore((state) => state.setChangesTabCollapsed);
-	const consumeReveal = useAppStore((state) => state.consumeChangesTabReveal);
 	const requestReveal = useAppStore((state) => state.requestChangesTabReveal);
 	const [cache] = useState(createSectionContentCache);
 	const turns = useWorkspaceTurns(workspaceId);
@@ -90,19 +95,21 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const [guideHidden, setGuideHidden] = useState(false);
 	const guideOpen = guideAvailable && !guideHidden && layout === "stacked" && !mobile;
 	const [largeNoticeDismissed, setLargeNoticeDismissed] = useState(false);
-	const restoredStacked = useRef(false);
 
+	const readKey = `${scopeKey(scope)}:${targetRef}`;
 	const { reload } = useWorkspaceRead(
 		workspaceId,
-		(id) => getTransport().request("git.status", { workspaceId: id, scope }),
+		(id) => readGitStatus(id, scope, targetRef),
 		{
 			onResult: (result) => {
 				setStatus(result);
+				setStatusSettled(true);
 				setError(null);
 				setScopeGone(false);
 				warnedRef.current = false;
 			},
 			onFailure: (_id, failure) => {
+				setStatusSettled(true);
 				if (wsErrorCode(failure) === "UNKNOWN_COMMIT") {
 					setStatus(null);
 					setScopeGone(true);
@@ -118,14 +125,14 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 				setError(errorText(failure));
 			},
 			onSwitch: () => {
-				setStatus(null);
+				setStatus(peekGitStatus(workspaceId, scope, targetRef));
+				setStatusSettled(false);
 				setError(null);
 				setScopeGone(false);
 				warnedRef.current = false;
-				restoredStacked.current = false;
 			},
 		},
-		`${scopeKey(scope)}:${targetRef}`,
+		readKey,
 	);
 
 	const files = useMemo(() => status?.changes ?? [], [status]);
@@ -147,6 +154,18 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	);
 	const viewedCount = files.filter((change) => viewedSet.has(change.path)).length;
 	const view = mobile ? "inline" : (tab.view ?? "split");
+	const rendererIds = useAppStore(
+		useShallow((state) => selectChangesTabRendererIds(state, workspaceId, tab.id)),
+	);
+	const controls = useMemo(() => {
+		const capabilities = files.map((change) =>
+			diffRendererCapabilities(workspaceId, change.path, scope, rendererIds[change.path], mobile),
+		);
+		return {
+			layout: capabilities.some((candidate) => candidate.layout),
+			whitespace: capabilities.some((candidate) => candidate.whitespace),
+		};
+	}, [files, mobile, rendererIds, scope, workspaceId]);
 	const ignoreWhitespace = tab.ignoreWhitespace ?? false;
 
 	const [lastIndex, setLastIndex] = useState(0);
@@ -156,147 +175,46 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 		foundIndex >= 0 ? foundIndex : Math.min(lastIndex, Math.max(0, files.length - 1));
 	const current = files[currentIndex];
 
-	const virtuoso = useRef<VirtuosoHandle>(null);
-	const scrollerRef = useRef<HTMLElement | null>(null);
-	const [tailHeight, setTailHeight] = useState(0);
-	const tailObserver = useRef<ResizeObserver | null>(null);
-	const settling = useRef<{ path: string; commentId?: string } | null>(null);
-	const releaseSettling = useCallback(() => {
-		const commentId = settling.current?.commentId;
-		settling.current = null;
-		if (commentId) useAppStore.getState().clearReviewFocus(commentId);
-	}, []);
-	const detachScroller = useRef<(() => void) | null>(null);
-	const attachScroller = useCallback(
-		(element: HTMLElement | Window | null) => {
-			detachScroller.current?.();
-			detachScroller.current = null;
-			tailObserver.current?.disconnect();
-			tailObserver.current = null;
-			const scroller = element instanceof HTMLElement ? element : null;
-			scrollerRef.current = scroller;
-			if (!scroller) return;
-			const measure = () => {
-				setTailHeight(Math.max(0, scroller.clientHeight - SECTION_HEADER_HEIGHT - END_NOTE_HEIGHT));
-			};
-			measure();
-			tailObserver.current = new ResizeObserver(measure);
-			tailObserver.current.observe(scroller);
-			for (const type of USER_SCROLL_EVENTS)
-				scroller.addEventListener(type, releaseSettling, { passive: true, capture: true });
-			detachScroller.current = () => {
-				for (const type of USER_SCROLL_EVENTS)
-					scroller.removeEventListener(type, releaseSettling, true);
-			};
-		},
-		[releaseSettling],
-	);
-	useEffect(
-		() => () => {
-			tailObserver.current?.disconnect();
-			detachScroller.current?.();
-			releaseSettling();
-		},
-		[releaseSettling],
-	);
-	const activePathRef = useRef(tab.activePath);
-	useInsertionEffect(() => {
-		activePathRef.current = tab.activePath;
-	});
-	const spyFrame = useRef(0);
-	const scrollToSection = useCallback(
-		(index: number, target: { path: string; commentId?: string }) => {
-			releaseSettling();
-			settling.current = target;
-			virtuoso.current?.scrollToIndex({ index, align: "start" });
-		},
-		[releaseSettling],
-	);
-	const revealComment = useCallback(() => {
-		const commentId = settling.current?.commentId;
-		const scroller = scrollerRef.current;
-		if (!commentId || !scroller) return false;
-		const card = [...scroller.querySelectorAll<HTMLElement>("[data-comment-id]")].find(
-			(element) => element.dataset.commentId === commentId,
-		);
-		if (!card) return false;
-		card.scrollIntoView({ block: "center" });
-		return true;
-	}, []);
-	const spyActiveSection = useCallback(() => {
-		if (!restoredStacked.current) return;
-		cancelAnimationFrame(spyFrame.current);
-		spyFrame.current = requestAnimationFrame(() => {
-			if (settling.current) {
-				revealComment();
-				return;
-			}
-			const scroller = scrollerRef.current;
-			if (!scroller) return;
-			const edge = scroller.getBoundingClientRect().top + SECTION_HEADER_HEIGHT / 2;
-			let active: string | null = null;
-			for (const section of scroller.querySelectorAll<HTMLElement>(
-				'[data-testid="changes-section"]',
-			)) {
-				if (section.getBoundingClientRect().top <= edge) active = section.dataset.path ?? null;
-			}
-			if (active !== null && active !== activePathRef.current) {
-				setActivePath(workspaceId, tab.id, active);
-			}
-		});
-	}, [revealComment, setActivePath, tab.id, workspaceId]);
-	useEffect(() => () => cancelAnimationFrame(spyFrame.current), []);
-	useEffect(() => {
-		const reveal = tab.reveal;
-		if (!reveal || !status) return;
-		const index = files.findIndex((change) => change.path === reveal.path);
-		if (index < 0) {
-			consumeReveal(workspaceId, tab.id, null);
-			return;
-		}
-		const target = {
-			path: reveal.path,
-			...(reveal.commentId ? { commentId: reveal.commentId } : {}),
-		};
-		releaseSettling();
-		consumeReveal(workspaceId, tab.id, target);
-		if (layout === "stacked") {
-			restoredStacked.current = true;
-			scrollToSection(index, target);
-		}
-	}, [
-		consumeReveal,
-		files,
-		layout,
-		releaseSettling,
-		scrollToSection,
-		status,
-		tab.id,
-		tab.reveal,
+	const {
+		virtuoso,
+		attachScroller,
+		tailHeight,
+		spyActiveSection,
+		onTotalListHeightChanged,
+		handoffPath,
+		startHandoff,
+	} = useReviewReveal({
 		workspaceId,
-	]);
+		tabId: tab.id,
+		files,
+		status,
+		statusSettled,
+		readKey,
+		layout,
+		reveal: tab.reveal,
+		activePath: tab.activePath,
+	});
+	const setLayout = (next: typeof layout) => {
+		startHandoff(next === "stacked" && layout === "single" ? (current?.path ?? null) : null);
+		setStoreLayout(next);
+	};
 
 	useEffect(() => {
 		if (!status || tab.reveal) return;
 		if (tab.activePath !== null && files.some((change) => change.path === tab.activePath)) return;
+		if (tab.activePath !== null && !statusSettled) return;
 		setActivePath(workspaceId, tab.id, current?.path ?? null);
-	}, [current, files, setActivePath, status, tab.activePath, tab.id, tab.reveal, workspaceId]);
-
-	const pendingReveal = tab.reveal !== null;
-	useEffect(() => {
-		if (layout !== "stacked") {
-			restoredStacked.current = false;
-			settling.current = null;
-			return;
-		}
-		if (pendingReveal || !status || restoredStacked.current) return;
-		restoredStacked.current = true;
-		const index = files.findIndex((change) => change.path === activePathRef.current);
-		const change = files[index];
-		if (!change) return;
-		const frame = requestAnimationFrame(() => scrollToSection(index, { path: change.path }));
-		return () => cancelAnimationFrame(frame);
-	}, [files, layout, pendingReveal, scrollToSection, status]);
+	}, [
+		current,
+		files,
+		setActivePath,
+		status,
+		statusSettled,
+		tab.activePath,
+		tab.id,
+		tab.reveal,
+		workspaceId,
+	]);
 
 	const setPathViewed = useCallback(
 		(path: string, next: boolean) => setViewed(workspaceId, tab.id, path, next),
@@ -417,9 +335,8 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 										Object.fromEntries(files.map((change) => [change.path, true])),
 									)
 								}
-							>
-								<ChevronUp className="size-14" />
-							</HeaderIconButton>
+								icon={ChevronUp}
+							/>
 							<HeaderIconButton
 								testid="changes-review-expand-all"
 								label={t("changes.review.expandAll")}
@@ -430,9 +347,8 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 										Object.fromEntries(files.map((change) => [change.path, false])),
 									)
 								}
-							>
-								<ChevronDown className="size-14" />
-							</HeaderIconButton>
+								icon={ChevronDown}
+							/>
 						</>
 					) : null}
 					{guideAvailable && layout === "stacked" && !mobile ? (
@@ -441,19 +357,19 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 							label={guideOpen ? t("changes.review.hideGuide") : t("changes.review.showGuide")}
 							active={guideOpen}
 							onClick={() => setGuideHidden((hidden) => !hidden)}
-						>
-							<Guide className="size-14" />
-						</HeaderIconButton>
+							icon={Guide}
+						/>
 					) : null}
-					<HeaderIconButton
-						testid="changes-review-toggle-whitespace"
-						label={t("changes.review.hideWhitespace")}
-						active={ignoreWhitespace}
-						onClick={() => setIgnoreWhitespace(workspaceId, tab.id, !ignoreWhitespace)}
-					>
-						<Pilcrow className="size-14" />
-					</HeaderIconButton>
-					{!mobile ? (
+					{controls.whitespace ? (
+						<HeaderIconButton
+							testid="changes-review-toggle-whitespace"
+							label={t("changes.review.hideWhitespace")}
+							active={ignoreWhitespace}
+							onClick={() => setIgnoreWhitespace(workspaceId, tab.id, !ignoreWhitespace)}
+							icon={Pilcrow}
+						/>
+					) : null}
+					{!mobile && controls.layout ? (
 						<>
 							<ToggleSegment
 								testid="changes-review-toggle-split"
@@ -490,25 +406,20 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 						{scopeGone ? error : t("changes.readFailed", { error })}
 					</p>
 					{scopeGone ? (
-						<button
-							type="button"
+						<Button
+							variant="ghost"
+							size="s"
 							data-testid="changes-review-all-changes"
 							onClick={() =>
 								useAppStore.getState().requestChangesView(workspaceId, null, { kind: "branch" })
 							}
-							className="rounded-sm px-4 py-2 tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							{t("changes.review.allChanges")}
-						</button>
+						</Button>
 					) : (
-						<button
-							type="button"
-							data-testid="changes-review-retry"
-							onClick={reload}
-							className="rounded-sm px-4 py-2 tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
-						>
+						<Button variant="ghost" size="s" data-testid="changes-review-retry" onClick={reload}>
 							{t("common.retry")}
-						</button>
+						</Button>
 					)}
 				</div>
 			) : status === null ? (
@@ -517,190 +428,189 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 				<p data-testid="changes-review-empty" className="p-12 tr-text-metadata text-text-muted">
 					{t("changes.empty")}
 				</p>
-			) : layout === "single" && current ? (
-				<>
-					<div
-						data-testid="changes-review-walk"
-						className="flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-12"
-					>
-						<HeaderIconButton
-							testid="changes-review-prev"
-							label={t("changes.review.previousFile")}
-							disabled={currentIndex === 0}
-							onClick={() => step(-1)}
-						>
-							<ChevronLeft className="size-14" />
-						</HeaderIconButton>
-						<span
-							data-testid="changes-review-counter"
-							className="tr-text-metadata tabular-nums text-text-muted"
-						>
-							{currentIndex + 1} / {files.length}
-						</span>
-						<HeaderIconButton
-							testid="changes-review-next"
-							label={t("changes.review.nextFile")}
-							disabled={currentIndex >= files.length - 1}
-							onClick={() => step(1)}
-						>
-							<ChevronRight className="size-14" />
-						</HeaderIconButton>
-						<button
-							type="button"
-							data-testid="changes-review-mark-viewed"
-							aria-pressed={viewedSet.has(current.path)}
-							onClick={markViewedAndAdvance}
-							className={`ml-auto flex h-24 items-center gap-4 rounded-sm border px-8 tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-								viewedSet.has(current.path)
-									? "border-primary text-primary"
-									: "border-control-border-default text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-							}`}
-						>
-							<Check className="size-14" />
-							{viewedSet.has(current.path)
-								? t("changes.review.viewed")
-								: t("changes.review.markViewed")}
-							<kbd className="rounded-xs border border-control-border-default px-4 tr-code-text text-text-subtle">
-								{VIEWED_KEY.toUpperCase()}
-							</kbd>
-						</button>
-					</div>
-					<div className="min-h-0 flex-1">
-						<ChangesFileSection
-							key={current.path}
-							workspaceId={workspaceId}
-							tabId={tab.id}
-							scope={scope}
-							tabView={tab.view}
-							ignoreWhitespace={ignoreWhitespace}
-							section={tab.sections[current.path]}
-							keptList={tab.kept[current.path]}
-							change={current}
-							mode="single"
-							collapsed={false}
-							collapsedByDefault={false}
-							viewed={viewedSet.has(current.path)}
-							cache={cache}
-							onToggleCollapsed={NOOP_TOGGLE}
-							onSetViewed={setPathViewed}
-						/>
-					</div>
-				</>
 			) : (
-				<div className="flex min-h-0 flex-1">
-					{guideOpen ? (
-						<ChangesReviewGuide
-							tab={tab}
-							files={files}
-							guide={reviewGuide}
-							comments={reviewComments}
-							onReveal={(path, commentId) => requestReveal(workspaceId, tab.id, path, commentId)}
-						/>
-					) : null}
-					<div className="relative min-h-0 flex-1 bg-container-content-bg">
-						{showLargeNotice ? (
+				<div className="relative flex min-h-0 flex-1 flex-col">
+					{(layout === "single" || handoffPath !== null) && current ? (
+						<>
 							<div
-								data-testid="changes-review-large-notice"
-								className="flex items-center gap-8 border-border-default border-b bg-feedback-info-subtle px-12 py-4 tr-text-metadata text-text-muted"
+								data-testid="changes-review-walk"
+								className="flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-12"
 							>
-								<span>{t("changes.review.largeNotice", { count: files.length })}</span>
-								<button
-									type="button"
-									onClick={() => setLayout("single")}
-									className="text-text-default underline-offset-2 hover:underline"
+								<HeaderIconButton
+									testid="changes-review-prev"
+									label={t("changes.review.previousFile")}
+									disabled={currentIndex === 0}
+									onClick={() => step(-1)}
+									icon={ChevronLeft}
+								/>
+								<span
+									data-testid="changes-review-counter"
+									className="tr-text-metadata tabular-nums text-text-muted"
 								>
-									{t("changes.review.switchToOneFile")}
-								</button>
-								<button
-									type="button"
-									onClick={() => setLargeNoticeDismissed(true)}
-									className="ml-auto text-text-subtle hover:text-text-default"
+									{currentIndex + 1} / {files.length}
+								</span>
+								<HeaderIconButton
+									testid="changes-review-next"
+									label={t("changes.review.nextFile")}
+									disabled={currentIndex >= files.length - 1}
+									onClick={() => step(1)}
+									icon={ChevronRight}
+								/>
+								<Button
+									variant="outline"
+									size="m"
+									iconLeft={Check}
+									data-testid="changes-review-mark-viewed"
+									aria-pressed={viewedSet.has(current.path)}
+									selected={viewedSet.has(current.path)}
+									onClick={markViewedAndAdvance}
+									className="ml-auto"
 								>
-									{t("common.dismiss")}
-								</button>
+									{viewedSet.has(current.path)
+										? t("changes.review.viewed")
+										: t("changes.review.markViewed")}
+									<kbd className="rounded-xs border border-control-border-default px-4 tr-code-text text-text-subtle">
+										{VIEWED_KEY.toUpperCase()}
+									</kbd>
+								</Button>
 							</div>
-						) : null}
-						<Virtuoso<GitFileChange, ReviewListContext>
-							ref={virtuoso}
-							data={files}
-							computeItemKey={(_index, change) => change.path}
-							className="h-full min-h-0 [overflow-anchor:none]"
-							increaseViewportBy={{ top: 200, bottom: 600 }}
-							scrollerRef={attachScroller}
-							onScroll={spyActiveSection}
-							rangeChanged={spyActiveSection}
-							totalListHeightChanged={() => {
-								if (revealComment()) return;
-								const index = files.findIndex((change) => change.path === settling.current?.path);
-								if (index >= 0) {
-									virtuoso.current?.scrollToIndex({ index, align: "start" });
-									return;
-								}
-								releaseSettling();
-								spyActiveSection();
-							}}
-							itemContent={(_index, change) => (
+							<div className="min-h-0 flex-1">
 								<ChangesFileSection
+									key={current.path}
 									workspaceId={workspaceId}
 									tabId={tab.id}
 									scope={scope}
 									tabView={tab.view}
 									ignoreWhitespace={ignoreWhitespace}
-									section={tab.sections[change.path]}
-									keptList={tab.kept[change.path]}
-									change={change}
-									mode="stacked"
-									collapsed={isCollapsed(change)}
-									collapsedByDefault={sectionCollapsedByDefault(change)}
-									viewed={viewedSet.has(change.path)}
+									section={tab.sections[current.path]}
+									keptList={tab.kept[current.path]}
+									change={current}
+									mode="single"
+									collapsed={false}
+									collapsedByDefault={false}
+									viewed={viewedSet.has(current.path)}
 									cache={cache}
-									onToggleCollapsed={toggleCollapsed}
+									onToggleCollapsed={NOOP_TOGGLE}
 									onSetViewed={setPathViewed}
 								/>
-							)}
-							context={{ tailHeight, fileCount: files.length }}
-							components={REVIEW_LIST_COMPONENTS}
-						/>
+							</div>
+						</>
+					) : null}
+					{layout === "stacked" ? (
 						<div
-							data-testid="changes-review-triage"
-							className="absolute inset-x-0 bottom-0 flex h-32 items-center gap-8 overflow-hidden whitespace-nowrap border-border-default border-t bg-container-header-bg px-12"
+							className={
+								handoffPath !== null ? "invisible absolute inset-0 flex" : "flex min-h-0 flex-1"
+							}
 						>
-							<span className="shrink-0 tr-text-metadata text-text-muted">
-								{t("changes.review.progress", { viewed: viewedCount, total: files.length })}
-							</span>
-							<progress
-								data-testid="changes-review-progress"
-								aria-label={t("changes.review.progressLabel")}
-								max={Math.max(files.length, 1)}
-								value={viewedCount}
-								className="h-4 w-120 min-w-0 shrink appearance-none overflow-hidden rounded-xs bg-control-bg-hovered accent-primary [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-control-bg-hovered [&::-webkit-progress-value]:bg-primary"
-							/>
-							<span className="ml-auto flex shrink-0 items-center gap-4">
-								<button
-									type="button"
-									data-testid="changes-review-next-unreviewed"
-									disabled={viewedCount >= files.length}
-									onClick={nextUnreviewed}
-									className="flex h-24 items-center gap-4 rounded-sm border border-control-border-default px-8 tr-text-metadata text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text disabled:hover:bg-transparent"
+							{guideOpen ? (
+								<ChangesReviewGuide
+									tab={tab}
+									files={files}
+									guide={reviewGuide}
+									comments={reviewComments}
+									onReveal={(path, commentId) =>
+										requestReveal(workspaceId, tab.id, path, commentId)
+									}
+								/>
+							) : null}
+							<div className="relative min-h-0 flex-1 bg-container-content-bg">
+								{showLargeNotice ? (
+									<div
+										data-testid="changes-review-large-notice"
+										className="flex items-center gap-8 border-border-default border-b bg-feedback-info-subtle px-12 py-4 tr-text-metadata text-text-muted"
+									>
+										<span>{t("changes.review.largeNotice", { count: files.length })}</span>
+										<button
+											type="button"
+											onClick={() => setLayout("single")}
+											className="text-text-default underline-offset-2 hover:underline"
+										>
+											{t("changes.review.switchToOneFile")}
+										</button>
+										<Button
+											variant="ghost"
+											size="s"
+											onClick={() => setLargeNoticeDismissed(true)}
+											className="ml-auto"
+										>
+											{t("common.dismiss")}
+										</Button>
+									</div>
+								) : null}
+								<Virtuoso<GitFileChange, ReviewListContext>
+									ref={virtuoso}
+									data={files}
+									computeItemKey={(_index, change) => change.path}
+									className="h-full min-h-0 [overflow-anchor:none]"
+									increaseViewportBy={{ top: 200, bottom: 600 }}
+									scrollerRef={attachScroller}
+									onScroll={spyActiveSection}
+									rangeChanged={spyActiveSection}
+									totalListHeightChanged={onTotalListHeightChanged}
+									itemContent={(_index, change) => (
+										<ChangesFileSection
+											workspaceId={workspaceId}
+											tabId={tab.id}
+											scope={scope}
+											tabView={tab.view}
+											ignoreWhitespace={ignoreWhitespace}
+											section={tab.sections[change.path]}
+											keptList={tab.kept[change.path]}
+											change={change}
+											mode="stacked"
+											collapsed={isCollapsed(change)}
+											collapsedByDefault={sectionCollapsedByDefault(change)}
+											viewed={viewedSet.has(change.path)}
+											cache={cache}
+											onToggleCollapsed={toggleCollapsed}
+											onSetViewed={setPathViewed}
+										/>
+									)}
+									context={{ tailHeight, fileCount: files.length }}
+									components={REVIEW_LIST_COMPONENTS}
+								/>
+								<div
+									data-testid="changes-review-triage"
+									className="absolute inset-x-0 bottom-0 flex h-32 items-center gap-8 overflow-hidden whitespace-nowrap border-border-default border-t bg-container-header-bg px-12"
 								>
-									{t("changes.review.nextUnreviewed")}
-									<kbd className="rounded-xs border border-control-border-default px-4 tr-code-text text-text-subtle">
-										{NEXT_UNREVIEWED_KEY.toUpperCase()}
-									</kbd>
-								</button>
-								<button
-									type="button"
-									data-testid="changes-review-mark-all"
-									disabled={viewedCount >= files.length}
-									onClick={markAllViewed}
-									className="flex h-24 items-center gap-4 rounded-sm border border-control-border-default px-8 tr-text-metadata text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text disabled:hover:bg-transparent"
-								>
-									<Check className="size-14" />
-									{t("changes.review.markAllViewed")}
-								</button>
-							</span>
+									<span className="shrink-0 tr-text-metadata text-text-muted">
+										{t("changes.review.progress", { viewed: viewedCount, total: files.length })}
+									</span>
+									<progress
+										data-testid="changes-review-progress"
+										aria-label={t("changes.review.progressLabel")}
+										max={Math.max(files.length, 1)}
+										value={viewedCount}
+										className="h-4 w-120 min-w-0 shrink appearance-none overflow-hidden rounded-xs bg-control-bg-hovered accent-primary [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-control-bg-hovered [&::-webkit-progress-value]:bg-primary"
+									/>
+									<span className="ml-auto flex shrink-0 items-center gap-4">
+										<Button
+											variant="outline"
+											size="m"
+											data-testid="changes-review-next-unreviewed"
+											disabled={viewedCount >= files.length}
+											onClick={nextUnreviewed}
+										>
+											{t("changes.review.nextUnreviewed")}
+											<kbd className="rounded-xs border border-control-border-default px-4 tr-code-text text-text-subtle">
+												{NEXT_UNREVIEWED_KEY.toUpperCase()}
+											</kbd>
+										</Button>
+										<Button
+											variant="outline"
+											size="m"
+											iconLeft={Check}
+											data-testid="changes-review-mark-all"
+											disabled={viewedCount >= files.length}
+											onClick={markAllViewed}
+										>
+											{t("changes.review.markAllViewed")}
+										</Button>
+									</span>
+								</div>
+							</div>
 						</div>
-					</div>
+					) : null}
 				</div>
 			)}
 		</div>

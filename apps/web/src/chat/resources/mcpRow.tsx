@@ -2,6 +2,7 @@ import { RiPlugLine } from "@remixicon/react";
 import type { McpServerResourceSummary } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import { useId } from "react";
 import { type McpStateTone, mcpStateTone, mcpStatusLabel } from "@/lib";
@@ -116,17 +117,17 @@ function McpRow({
 						{server.state === "pending-reload" ? ` · ${t("resources.mcp.pendingReload")}` : ""}
 					</span>
 					{mcpRowActions(server).map((item) => (
-						<button
+						<Button
 							key={item.id}
-							type="button"
+							variant="soft-primary"
+							size="s"
 							data-testid={`resource-mcp-${item.id}`}
 							aria-describedby={item.id === "disable" ? describedBy : undefined}
 							disabled={!authoritative || !!action?.pending}
 							onClick={() => onAction(item.id)}
-							className="rounded-xs px-4 text-primary outline-none hover:bg-control-bg focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text disabled:hover:bg-transparent"
 						>
 							{t(item.label)}
-						</button>
+						</Button>
 					))}
 				</span>
 				{action?.error ? (
@@ -166,14 +167,14 @@ export function McpServerSection({
 				<h3 className="tr-text-eyebrow">{t("resources.mcp.title")}</h3>
 				<span className="tr-text-metadata">· {servers.length}</span>
 				<span className="flex-1" />
-				<button
-					type="button"
+				<Button
+					variant="soft-primary"
+					size="s"
 					data-testid="resources-mcp-settings"
 					onClick={onOpenSettings}
-					className="rounded-xs px-4 text-primary tr-text-metadata outline-none hover:bg-control-bg focus-visible:ring-2 focus-visible:ring-primary"
 				>
 					{t("resources.mcp.settings")}
-				</button>
+				</Button>
 			</div>
 			{servers.length === 0 ? (
 				<p className="px-8 py-4 text-text-subtle tr-text-metadata">{t("resources.mcp.empty")}</p>

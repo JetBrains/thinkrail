@@ -232,13 +232,8 @@ export function installLinkShareClickedEvent(
 	};
 }
 
-export function cliDisclosureLocation(
-	disclosure: CliDisclosure,
-): "hero" | "install_section" | "blog_post" | undefined {
-	if (disclosure.matches(".blog-post details.cli-disclosure")) return "blog_post";
-	if (disclosure.matches("details.cli-disclosure")) return "hero";
-	if (disclosure.matches("details.install-reference")) return "install_section";
-	return undefined;
+export function cliDisclosureLocation(disclosure: CliDisclosure): "blog_post" | undefined {
+	return disclosure.matches(".blog-post details.cli-disclosure") ? "blog_post" : undefined;
 }
 
 export function cliDisclosureOpenedEvent(

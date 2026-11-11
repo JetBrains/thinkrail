@@ -7,6 +7,7 @@ import { useResourceHost } from "../host";
 import type { ResourceDiffProps } from "../registry";
 import { MarkdownDocument } from "./MarkdownPreview";
 import { focusSegments } from "./renderedDiffFocus";
+import { type DoneMerge, mergeKey, peekMerge, rememberMerge } from "./renderedDiffMerges";
 import { useScrollViewState } from "./useScrollViewState";
 
 const DIFF_MARKS = [
@@ -20,29 +21,38 @@ const HEADING_TAGS = new Set(["h1", "h2", "h3", "h4", "h5", "h6"]);
 const BOOLEAN_ATTRIBUTES = new Set(["open", "checked", "disabled"]);
 const HTML_INTEGER = /^[\t\n\f\r ]*([+-]?\d+)/;
 
-type MergeState =
-	| { state: "pending" }
-	| { state: "failed" }
-	| { state: "done"; html: string; before: string };
+type MergeState = { state: "pending" } | { state: "failed" } | DoneMerge;
 const PENDING: MergeState = { state: "pending" };
 const FAILED: MergeState = { state: "failed" };
 
-function useHtmldiffMerge(before: string, after: string): MergeState {
-	const [merge, setMerge] = useState<MergeState>(PENDING);
+function useHtmldiffMerge(before: string, after: string): { merge: MergeState; cached: boolean } {
+	const key = useMemo(() => mergeKey(before, after), [before, after]);
+	const [merge, setMerge] = useState<MergeState>(() => peekMerge(key) ?? PENDING);
+	const [cachedAtMount] = useState(() => merge.state === "done");
+	const hit = peekMerge(key);
+	if (hit && hit !== merge) setMerge(hit);
 
 	useEffect(() => {
+		const cached = peekMerge(key);
+		if (cached) {
+			rememberMerge(key, cached);
+			return;
+		}
 		const worker = new Worker(new URL("./htmldiff.worker.ts", import.meta.url), {
 			type: "module",
 		});
-		worker.onmessage = (event: MessageEvent<string>) =>
-			setMerge({ state: "done", html: event.data, before });
+		worker.onmessage = (event: MessageEvent<string>) => {
+			const done: DoneMerge = { state: "done", html: event.data, before };
+			rememberMerge(key, done);
+			setMerge(done);
+		};
 		worker.onerror = () => setMerge(FAILED);
 		worker.onmessageerror = () => setMerge(FAILED);
 		worker.postMessage({ before, after });
 		return () => worker.terminate();
-	}, [before, after]);
+	}, [key, before, after]);
 
-	return merge;
+	return { merge: hit ?? merge, cached: cachedAtMount };
 }
 
 type Changed = (element: Element) => boolean;
@@ -294,7 +304,7 @@ export default function RenderedDiff({
 			openFile,
 		],
 	);
-	const merge = useHtmldiffMerge(before, after);
+	const { merge, cached } = useHtmldiffMerge(before, after);
 	const view = useMemo(() => {
 		if (merge.state !== "done") return null;
 		const root = parseRoot(merge.html);
@@ -319,7 +329,7 @@ export default function RenderedDiff({
 		<div
 			ref={attachScroller}
 			data-testid="rendered-diff"
-			className="h-full overflow-auto bg-container-content-bg motion-safe:animate-reveal"
+			className={`h-full overflow-auto bg-container-content-bg ${cached ? "" : "motion-safe:animate-reveal"}`}
 		>
 			{view.empty ? (
 				<p data-testid="rendered-diff-empty" className="px-12 py-8 tr-text-ui text-text-muted">

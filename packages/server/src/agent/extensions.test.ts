@@ -1,20 +1,37 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, spyOn } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SettingsManager } from "@earendil-works/pi-coding-agent";
-import { registryInlineExtensions } from "../extensions";
+import { DefaultPackageManager, SettingsManager } from "@earendil-works/pi-coding-agent";
+import { SPEC_SECTION } from "pi-spec-graph";
+import { type HostSessionServices, registryInlineExtensions, workspaceFiles } from "../extensions";
 import {
 	buildResourceLoader,
+	bumpPackagesRevision,
 	childBaseExtensionFactories,
 	childExtensionFactories,
 	disabledExtensions,
+	extensionSettings,
+	isLoaderPolicyStale,
 	listProjectAliasSkillNames,
+	listSkillCatalog,
 	listSkillCommands,
+	providerExtensionPaths,
 	setDisabledExtensionsResolver,
+	setDisabledPackagesResolver,
+	setExtensionSettingsResolver,
+	setInstalledPackagesListener,
+	setSpecsEnabledResolver,
+	withoutSpecRule,
 } from "./extensions";
+import { headlessSearchPolicy } from "./headlessSearch";
 import { oversizedImageGuard } from "./imageGuard";
+import { createPiSettings } from "./packages";
+import { writeFixturePiPackage } from "./packages/testFixtures";
 import type { SkillAdmissionContext } from "./skillAdmission";
+import { skillCarryover } from "./skillCarryover";
+import { skillCatalog } from "./skillCatalog";
 
 function ctx(trusted: boolean, acknowledged: string[] = []): SkillAdmissionContext {
 	return {
@@ -23,6 +40,8 @@ function ctx(trusted: boolean, acknowledged: string[] = []): SkillAdmissionConte
 		acknowledged,
 		disabled: [],
 		disabledGroups: [],
+		enabledGroups: [],
+		otherAgentSkills: true,
 		overrides: {},
 	};
 }
@@ -232,6 +251,8 @@ describe("listSkillCommands", () => {
 				acknowledged: [],
 				disabled: [],
 				disabledGroups: [],
+				enabledGroups: [],
+				otherAgentSkills: true,
 				overrides: {},
 			});
 			expect(enabled.some((command) => command.name === "skill:personal-widget")).toBe(true);
@@ -242,9 +263,72 @@ describe("listSkillCommands", () => {
 				acknowledged: [],
 				disabled: [],
 				disabledGroups: ["personal"],
+				enabledGroups: [],
+				otherAgentSkills: true,
 				overrides: {},
 			});
 			expect(groupOff.some((command) => command.name === "skill:personal-widget")).toBe(false);
+		} finally {
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("a switched-off personal skill never shadows a same-name project alias", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-skill-shadow-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		try {
+			writeSkill(join(home, ".claude", "skills"), "deploy", "personal deploy");
+			writeSkill(join(project, ".claude", "skills"), "deploy", "project deploy");
+			const admission: SkillAdmissionContext = {
+				trusted: true,
+				piResourceTrusted: true,
+				acknowledged: ["deploy"],
+				disabled: [],
+				disabledGroups: [],
+				enabledGroups: [],
+				otherAgentSkills: false,
+				overrides: {},
+			};
+			const commands = await listSkillCommands(project, admission);
+			expect(
+				commands.filter((command) => command.name === "skill:deploy").map((c) => c.description),
+			).toEqual(["project deploy"]);
+			const catalog = await listSkillCatalog(project, admission);
+			expect(
+				catalog
+					.filter((entry) => entry.name === "deploy")
+					.map((entry) => [entry.group, entry.decision])
+					.sort(),
+			).toEqual([
+				["personal", "disabled"],
+				["project", "load"],
+			]);
+			const overridden = { ...admission, overrides: { lint: "on" as const } };
+			expect(
+				(await listSkillCommands(project, overridden))
+					.filter((command) => command.name === "skill:deploy")
+					.map((c) => c.description),
+			).toEqual(["project deploy"]);
+			expect(
+				(await listSkillCatalog(project, overridden))
+					.filter((entry) => entry.name === "deploy")
+					.map((entry) => [entry.group, entry.decision])
+					.sort(),
+			).toEqual([
+				["personal", "disabled"],
+				["project", "load"],
+			]);
+			const optedIn = await listSkillCommands(project, { ...admission, otherAgentSkills: true });
+			expect(
+				optedIn.filter((command) => command.name === "skill:deploy").map((c) => c.description),
+			).toEqual(["personal deploy"]);
 		} finally {
 			restore();
 			rmSync(root, { recursive: true, force: true });
@@ -302,6 +386,42 @@ describe("buildResourceLoader", () => {
 		});
 	}
 
+	it("projects provider owners the loader loaded: never an excluded generation artifact, never a project owner when untrusted", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-provider-owners-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		const generationArtifact = join(agentDir, "extensions", "generation.ts");
+		const registering = (provider: string) =>
+			`export default function owner(pi) { pi.registerProvider("${provider}", { baseUrl: "http://owner.local", apiKey: "x", api: "owner", models: [], streamSimple: () => { throw new Error("unused"); } }); }\n`;
+		mkdirSync(join(project, ".pi", "extensions"), { recursive: true });
+		mkdirSync(join(agentDir, "extensions"), { recursive: true });
+		mkdirSync(home, { recursive: true });
+		writeFileSync(generationArtifact, registering("generation-owned"));
+		writeFileSync(join(project, ".pi", "extensions", "repo.ts"), registering("project-owned"));
+		const restore = stubSkillEnv(home, agentDir);
+		try {
+			const load = (excluded: string[]) =>
+				buildResourceLoader(
+					project,
+					SettingsManager.create(project, agentDir, { projectTrusted: true }),
+					() => ctx(true),
+					excluded,
+				);
+			const plain = await load([]);
+			const excluding = await load([generationArtifact]);
+			expect(providerExtensionPaths(plain, "generation-owned", true)).toHaveLength(1);
+			expect(providerExtensionPaths(excluding, "generation-owned", true)).toEqual([]);
+			for (const loader of [plain, excluding]) {
+				expect(providerExtensionPaths(loader, "project-owned", true)).toHaveLength(1);
+				expect(providerExtensionPaths(loader, "project-owned", false)).toEqual([]);
+			}
+		} finally {
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("reload re-reads admission so a mid-session group toggle applies", async () => {
 		const root = mkdtempSync(join(tmpdir(), "thinkrail-skill-reload-"));
 		const project = join(root, "project");
@@ -321,6 +441,8 @@ describe("buildResourceLoader", () => {
 				acknowledged: [],
 				disabled: [],
 				disabledGroups: [],
+				enabledGroups: [],
+				otherAgentSkills: true,
 				overrides: {},
 			};
 			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
@@ -356,6 +478,8 @@ describe("buildResourceLoader", () => {
 				acknowledged: [],
 				disabled: [],
 				disabledGroups: [],
+				enabledGroups: [],
+				otherAgentSkills: true,
 				overrides: {},
 			};
 			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
@@ -390,6 +514,8 @@ describe("buildResourceLoader", () => {
 				acknowledged: [],
 				disabled: [],
 				disabledGroups: [],
+				enabledGroups: [],
+				otherAgentSkills: true,
 				overrides: {},
 			};
 			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
@@ -405,10 +531,23 @@ describe("buildResourceLoader", () => {
 	});
 });
 
+const hostServices: HostSessionServices = {
+	expectToolResponse: () => {},
+	awaitToolResponse: async () => ({ kind: "deferred" }),
+	workspaceFiles,
+};
+
 describe("registry extensions", () => {
 	async function visualizeTool(cwd: string, agentDir: string) {
 		const settingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted: true });
-		const loader = await buildResourceLoader(cwd, settingsManager, () => ctx(true));
+		const loader = await buildResourceLoader(
+			cwd,
+			settingsManager,
+			() => ctx(true),
+			[],
+			[],
+			hostServices,
+		);
 		const extension = loader
 			.getExtensions()
 			.extensions.find((candidate) => candidate.tools.has("visualize"));
@@ -459,7 +598,14 @@ describe("registry extensions", () => {
 		setDisabledExtensionsResolver(() => disabled);
 		try {
 			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
-			const loader = await buildResourceLoader(project, settingsManager, () => ctx(true));
+			const loader = await buildResourceLoader(
+				project,
+				settingsManager,
+				() => ctx(true),
+				[],
+				[],
+				hostServices,
+			);
 			const paths = () => loader.getExtensions().extensions.map((extension) => extension.path);
 			const tools = () =>
 				loader.getExtensions().extensions.flatMap((extension) => [...extension.tools.keys()]);
@@ -482,6 +628,97 @@ describe("registry extensions", () => {
 		}
 	});
 
+	it("marks a loader stale when an extension setting changes and current again after reload", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-settings-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		let values: Record<string, Record<string, boolean>> = {};
+		setExtensionSettingsResolver(() => values);
+		try {
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(
+				project,
+				settingsManager,
+				() => ctx(true),
+				[],
+				[],
+				hostServices,
+			);
+			expect(isLoaderPolicyStale(loader)).toBe(false);
+			values = { "ask-user-question": { richPreviews: false } };
+			expect(isLoaderPolicyStale(loader)).toBe(true);
+			await loader.reload();
+			expect(isLoaderPolicyStale(loader)).toBe(false);
+			values = { "ask-user-question": { richPreviews: false } };
+			expect(isLoaderPolicyStale(loader)).toBe(false);
+		} finally {
+			setExtensionSettingsResolver(null);
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("loads extensions with the settings snapshot it records, so a change-and-revert mid-reload stays consistent", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-settings-race-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		const off = { "ask-user-question": { richPreviews: false } };
+		const on = { "ask-user-question": { richPreviews: true } };
+		let reads: Record<string, Record<string, boolean>>[] = [];
+		let settled = on;
+		setExtensionSettingsResolver(() => reads.shift() ?? settled);
+		try {
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(
+				project,
+				settingsManager,
+				() => ctx(true),
+				[],
+				[],
+				hostServices,
+			);
+			const askSchema = () =>
+				JSON.stringify(
+					loader
+						.getExtensions()
+						.extensions.flatMap((extension) => [...extension.tools.values()])
+						.find((tool) => tool.definition.name === "ask_user_question")?.definition.parameters,
+				);
+			expect(askSchema()).toContain("previewFile");
+			reads = [off, on];
+			settled = off;
+			await loader.reload();
+			reads = [];
+			expect(askSchema()).not.toContain("previewFile");
+			expect(isLoaderPolicyStale(loader)).toBe(false);
+		} finally {
+			setExtensionSettingsResolver(null);
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("treats a throwing extension settings resolver as no stored values", () => {
+		setExtensionSettingsResolver(() => {
+			throw new Error("broken config");
+		});
+		try {
+			expect(extensionSettings()).toEqual({});
+		} finally {
+			setExtensionSettingsResolver(null);
+		}
+	});
+
 	it("treats a throwing resolver as nothing disabled", () => {
 		setDisabledExtensionsResolver(() => {
 			throw new Error("settings unavailable");
@@ -494,14 +731,333 @@ describe("registry extensions", () => {
 	});
 
 	it("keeps the curated child set and appends registry children", () => {
-		const children = childExtensionFactories();
+		const children = childExtensionFactories("w1");
 		expect(children).toHaveLength(3 + registryInlineExtensions("childExtensions").length);
-		expect(children.slice(0, 3).every((inline) => typeof inline === "function")).toBe(true);
-		expect(children.slice(3)).toEqual(registryInlineExtensions("childExtensions"));
+		expect(children[0]).toBe(headlessSearchPolicy);
+		expect(typeof children[1]).toBe("function");
+		expect(children[2]).toBe(skillCatalog);
+		const names = (inlines: typeof children) =>
+			inlines.map((inline) => (typeof inline === "function" ? "fn" : inline.name));
+		expect(names(children.slice(3))).toEqual(names(registryInlineExtensions("childExtensions")));
+		expect(names(children.slice(3))).toEqual(["web-access"]);
 	});
 
-	it("guards every child's images from the base set, not the opt-in curated set", () => {
-		expect(childBaseExtensionFactories()).toEqual([oversizedImageGuard]);
-		expect(childExtensionFactories()).not.toContain(oversizedImageGuard);
+	it("loads web access with its skill and drops both while the extension is off", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-skills-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		let disabled = new Set<string>();
+		setDisabledExtensionsResolver(() => disabled);
+		try {
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(project, settingsManager, () => ctx(true));
+			const paths = () => loader.getExtensions().extensions.map((extension) => extension.path);
+			const tools = () =>
+				loader.getExtensions().extensions.flatMap((extension) => [...extension.tools.keys()]);
+			const skills = () => loader.getSkills().skills.map((skill) => skill.name);
+			expect(paths()).toEqual(expect.arrayContaining(["<inline:web-access>"]));
+			expect(tools()).toEqual(
+				expect.arrayContaining(["web_search", "fetch_content", "get_search_content"]),
+			);
+			expect(skills()).toContain("librarian");
+			expect(skills()).toContain("spec-graph");
+			const commands = async () =>
+				(await listSkillCommands(project, ctx(true))).map((command) => command.name);
+			const catalog = async () =>
+				(await listSkillCatalog(project, ctx(true))).map((entry) => entry.name);
+			expect(await commands()).toContain("skill:librarian");
+			expect(await catalog()).toContain("librarian");
+
+			disabled = new Set(["web-access"]);
+			await loader.reload();
+			expect(paths().some((path) => path.startsWith("<inline:web-access"))).toBe(false);
+			expect(tools()).not.toContain("web_search");
+			expect(skills()).not.toContain("librarian");
+			expect(skills()).toContain("spec-graph");
+			expect(await commands()).not.toContain("skill:librarian");
+			expect(await catalog()).not.toContain("librarian");
+
+			disabled = new Set();
+			await loader.reload();
+			expect(tools()).toContain("web_search");
+			expect(skills()).toContain("librarian");
+			expect(await commands()).toContain("skill:librarian");
+		} finally {
+			setDisabledExtensionsResolver(() => new Set());
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("lets a personal skill of the same name through while the extension that shadows it is off", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-shadow-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const personalSkills = join(home, ".claude", "skills");
+		writeSkill(personalSkills, "librarian", "my own librarian");
+		const restore = stubSkillEnv(home, agentDir);
+		let disabled = new Set(["web-access"]);
+		setDisabledExtensionsResolver(() => disabled);
+		try {
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(project, settingsManager, () => ctx(true));
+			const librarian = () =>
+				loader.getSkills().skills.find((skill) => skill.name === "librarian")?.filePath;
+			const catalogLibrarian = async () =>
+				(await listSkillCatalog(project, ctx(true))).find((entry) => entry.name === "librarian")
+					?.sourceInfo.path;
+			expect(librarian()).toStartWith(personalSkills);
+			expect(await catalogLibrarian()).toStartWith(personalSkills);
+			expect(await listSkillCommands(project, ctx(true))).toContainEqual(
+				expect.objectContaining({ name: "skill:librarian" }),
+			);
+
+			disabled = new Set();
+			await loader.reload();
+			expect(librarian()).toBeDefined();
+			expect(librarian()).not.toStartWith(personalSkills);
+			expect(await catalogLibrarian()).not.toStartWith(personalSkills);
+		} finally {
+			setDisabledExtensionsResolver(() => new Set());
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("keeps a user's own pi-web-access headless while the web-access extension is off", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-user-web-access-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(join(agentDir, "extensions"), { recursive: true });
+		const extensionEntry = createRequire(import.meta.url).resolve(
+			"@thinkrail/ext-web-access/server",
+		);
+		const packageEntry = createRequire(extensionEntry).resolve("pi-web-access/index.ts");
+		writeFileSync(
+			join(agentDir, "extensions", "user-web-access.ts"),
+			`export { default } from ${JSON.stringify(packageEntry)};\n`,
+		);
+		const restore = stubSkillEnv(home, agentDir);
+		setDisabledExtensionsResolver(() => new Set(["web-access"]));
+		try {
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(project, settingsManager, () => ctx(true));
+			const { extensions } = loader.getExtensions();
+			expect(extensions.find((extension) => extension.tools.has("web_search"))?.path).toContain(
+				"user-web-access",
+			);
+			const input: Record<string, unknown> = { query: "q" };
+			for (const extension of extensions) {
+				for (const handler of extension.handlers.get("tool_call") ?? []) {
+					await handler(
+						{ type: "tool_call", toolName: "web_search", toolCallId: "call", input },
+						{} as never,
+					);
+				}
+			}
+			expect(input.workflow).toBe("none");
+		} finally {
+			setDisabledExtensionsResolver(() => new Set());
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("a workspace without specs gets no spec-graph child and no spec rule, the rest unchanged", async () => {
+		setSpecsEnabledResolver((workspaceId) => workspaceId !== "chat-1");
+		try {
+			const withSpecs = childExtensionFactories("w1");
+			const withoutSpecs = childExtensionFactories("chat-1");
+			const specGraph = withSpecs[1];
+			if (!specGraph) throw new Error("the spec-graph child is missing");
+			expect(withoutSpecs).toHaveLength(withSpecs.length - 1);
+			expect(withoutSpecs[0]).toBe(headlessSearchPolicy);
+			expect(childExtensionFactories("w1")).toContain(specGraph);
+			expect(withoutSpecs).not.toContain(specGraph);
+			const sections = (workspaceId: string) => {
+				const handlers: ((event: unknown) => void)[] = [];
+				const pi = {
+					on: (_name: string, handler: (event: unknown) => void) => handlers.push(handler),
+				};
+				const factory = withoutSpecRule(workspaceId);
+				if (typeof factory !== "function") throw new Error("an inline factory expected");
+				void factory(pi as never);
+				const sections: Record<string, string> = { [SPEC_SECTION]: "rule", other: "kept" };
+				const event = { systemPromptOptions: { sections } };
+				for (const handler of handlers) handler(event);
+				return event.systemPromptOptions.sections;
+			};
+			expect(sections("w1")).toEqual({ [SPEC_SECTION]: "rule", other: "kept" });
+			expect(sections("chat-1")).toEqual({ other: "kept" });
+		} finally {
+			setSpecsEnabledResolver(() => true);
+		}
+	});
+
+	it("guards every child's images and compacted skills from the tool-free base set, and offers the skill catalog only to opted-in children", () => {
+		expect(childBaseExtensionFactories()).toEqual([oversizedImageGuard, skillCarryover]);
+		expect(childExtensionFactories("w1")).not.toContain(oversizedImageGuard);
+		expect(childExtensionFactories("w1")).not.toContain(skillCarryover);
+		expect(childExtensionFactories("w1")).toContain(skillCatalog);
+	});
+});
+
+describe("pi packages", () => {
+	const writePackage = (root: string) =>
+		writeFixturePiPackage(join(root, "pkgs", "fixture-tools"), {
+			extensions: [{ file: "hello.ts", tool: "fixture_hello" }],
+		});
+
+	it("drops a switched-off package's extensions, skills and prompts and re-decides on reload", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-pi-packages-off-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		const pkg = writePackage(root);
+		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: [pkg] }));
+		let disabled = new Set<string>();
+		setDisabledPackagesResolver(() => disabled);
+		try {
+			const settingsManager = createPiSettings(project, agentDir, {
+				projectTrusted: true,
+				packages: "enabled",
+			});
+			const loader = await buildResourceLoader(project, settingsManager, () => ctx(true));
+			const tools = () =>
+				loader.getExtensions().extensions.flatMap((extension) => [...extension.tools.keys()]);
+			const skills = () => loader.getSkills().skills.map((skill) => skill.name);
+			const prompts = () => loader.getPrompts().prompts.map((prompt) => prompt.name);
+			expect(tools()).toContain("fixture_hello");
+			expect(skills()).toContain("triage");
+			expect(prompts()).toContain("standup");
+			expect(isLoaderPolicyStale(loader)).toBe(false);
+
+			disabled = new Set([`local:${pkg}`]);
+			expect(isLoaderPolicyStale(loader)).toBe(true);
+			await loader.reload();
+			expect(isLoaderPolicyStale(loader)).toBe(false);
+			expect(tools()).not.toContain("fixture_hello");
+			expect(skills()).not.toContain("triage");
+			expect(prompts()).not.toContain("standup");
+			expect(await listSkillCommands(project, ctx(true))).not.toContainEqual(
+				expect.objectContaining({ name: "skill:triage" }),
+			);
+			expect((await listSkillCatalog(project, ctx(true))).map((entry) => entry.name)).not.toContain(
+				"triage",
+			);
+
+			disabled = new Set();
+			await loader.reload();
+			expect(tools()).toContain("fixture_hello");
+			expect(skills()).toContain("triage");
+			expect((await listSkillCatalog(project, ctx(true))).map((entry) => entry.name)).toContain(
+				"triage",
+			);
+
+			bumpPackagesRevision();
+			expect(isLoaderPolicyStale(loader)).toBe(true);
+			await loader.reload();
+			expect(isLoaderPolicyStale(loader)).toBe(false);
+		} finally {
+			setDisabledPackagesResolver(() => new Set());
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("never installs a switched-off package that is missing on disk, and hides it from a child's settings too", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-pi-packages-missing-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		const offline = process.env.PI_OFFLINE;
+		delete process.env.PI_OFFLINE;
+		writeFileSync(
+			join(agentDir, "settings.json"),
+			JSON.stringify({ packages: ["npm:@fixture/switched-off@1.0.0"] }),
+		);
+		setDisabledPackagesResolver(() => new Set(["npm:@fixture/switched-off"]));
+		const prototype = DefaultPackageManager.prototype as unknown as {
+			installNpm: () => Promise<void>;
+		};
+		const installNpm = spyOn(prototype, "installNpm").mockResolvedValue();
+		try {
+			const settingsManager = createPiSettings(project, agentDir, {
+				projectTrusted: true,
+				packages: "enabled",
+			});
+			const loader = await buildResourceLoader(project, settingsManager, () => ctx(true));
+			expect(installNpm).not.toHaveBeenCalled();
+			expect(settingsManager.getGlobalSettings().packages).toEqual([]);
+			expect(loader.getExtensions().errors).toEqual([]);
+		} finally {
+			installNpm.mockRestore();
+			setDisabledPackagesResolver(() => new Set());
+			if (offline === undefined) delete process.env.PI_OFFLINE;
+			else process.env.PI_OFFLINE = offline;
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("tells the packages layer when a chat's load installed a declared package", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-pi-packages-installed-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		const pkg = join(root, "pkgs", "late");
+		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: [pkg] }));
+		let installed = 0;
+		const previousListener = setInstalledPackagesListener(() => {
+			installed += 1;
+		});
+		const original = DefaultPackageManager.prototype.resolve;
+		const resolveSpy = spyOn(DefaultPackageManager.prototype, "resolve").mockImplementation(
+			async function (this: DefaultPackageManager, ...args) {
+				if (!existsSync(pkg)) {
+					mkdirSync(pkg, { recursive: true });
+					writeFileSync(join(pkg, "package.json"), JSON.stringify({ name: "late", pi: {} }));
+				}
+				return original.apply(this, args);
+			},
+		);
+		try {
+			const settingsManager = createPiSettings(project, agentDir, {
+				projectTrusted: true,
+				packages: "enabled",
+			});
+			const loader = await buildResourceLoader(project, settingsManager, () => ctx(true));
+			expect(installed).toBe(1);
+			await loader.reload();
+			expect(installed).toBe(1);
+		} finally {
+			resolveSpy.mockRestore();
+			setInstalledPackagesListener(previousListener);
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 });

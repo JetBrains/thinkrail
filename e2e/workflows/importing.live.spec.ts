@@ -1,7 +1,10 @@
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "@playwright/test";
-import type { AskUserQuestionItem, AskUserQuestionResult } from "@thinkrail/contracts";
+import type {
+	AskUserQuestionItem,
+	AskUserQuestionResult,
+} from "@thinkrail/pi-ask-user-question/core";
 import {
 	type CheckContext,
 	checks,

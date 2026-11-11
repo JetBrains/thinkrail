@@ -2,7 +2,6 @@ import {
 	RiArrowRightLine as ArrowRight,
 	RiCheckLine as Check,
 	RiArrowDownSLine as ChevronDown,
-	RiArrowRightSLine as ChevronRight,
 	RiComputerLine as Device,
 	RiPaletteLine as Palette,
 } from "@remixicon/react";
@@ -23,21 +22,28 @@ import {
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
 import { cn } from "@thinkrail/ui/utils";
-import { type ReactNode, useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { toast, useAppStore } from "@/store";
 import {
 	deriveSystemThemePair,
 	getThemes,
+	getUserThemeIssues,
 	onSystemAppearanceChange,
+	onThemesChange,
 	readSystemAppearance,
 	resolveTheme,
 	resolveThemePreference,
 	type ThemeDescriptor,
 	type ThemeResolution,
 } from "@/themes";
-import { errorText, getTransport } from "@/transport";
+import { errorText, getTransport, supportsFonts } from "@/transport";
+import { CustomFontsGroup } from "./CustomFontsSettings";
+import { CustomThemesGroup } from "./CustomThemesSettings";
+import { FontsGroup } from "./FontsSettings";
 import { LineWidthControl } from "./LineWidthSettings";
 import { SegmentedControl, type SegmentedControlOption } from "./SegmentedControl";
+import { SettingsDisclosure } from "./SettingsDisclosure";
+import { useFolderActions } from "./SettingsFolder";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
 import { SettingsNotice } from "./SettingsNotice";
 import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
@@ -56,7 +62,9 @@ const BUNDLED_THEME_LABELS: Readonly<Record<string, MessageKey>> = {
 };
 
 function themeLabel(t: Translator, theme: Pick<ThemeDescriptor, "id" | "label">): string {
-	const key = BUNDLED_THEME_LABELS[theme.id];
+	const key = Object.hasOwn(BUNDLED_THEME_LABELS, theme.id)
+		? BUNDLED_THEME_LABELS[theme.id]
+		: undefined;
 	return key ? t(key) : theme.label;
 }
 
@@ -118,13 +126,13 @@ function ThemeDropdown({
 			<DropdownMenuTrigger asChild>
 				<Button
 					variant="outline"
+					size="l"
+					iconRight={ChevronDown}
 					disabled={disabled}
 					aria-label={label}
 					data-testid={`system-theme-${appearance}-trigger`}
-					className="h-32 justify-between"
 				>
 					<span className="truncate">{themeLabel(t, resolution.theme)}</span>
-					<ChevronDown className="size-16" />
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end" className="min-w-[var(--radix-dropdown-menu-trigger-width)]">
@@ -194,40 +202,6 @@ function ThemeList({
 	);
 }
 
-function Disclosure({
-	label,
-	summary,
-	expanded,
-	testId,
-	onToggle,
-	children,
-}: {
-	label: string;
-	summary: string;
-	expanded: boolean;
-	testId: string;
-	onToggle: () => void;
-	children: ReactNode;
-}) {
-	const Chevron = expanded ? ChevronDown : ChevronRight;
-	return (
-		<div className="flex flex-col border-border-muted border-b">
-			<button
-				type="button"
-				onClick={onToggle}
-				aria-expanded={expanded}
-				data-testid={testId}
-				className="flex w-full items-center gap-8 py-12 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary"
-			>
-				<span className="flex-1 tr-text-ui text-text-default">{label}</span>
-				<span className="truncate tr-text-metadata text-text-muted">{summary}</span>
-				<Chevron className="size-20 shrink-0 text-text-muted" aria-hidden="true" />
-			</button>
-			{expanded ? children : null}
-		</div>
-	);
-}
-
 export function AppearanceSettings() {
 	const t = useT();
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
@@ -237,9 +211,13 @@ export function AppearanceSettings() {
 	const [pending, setPending] = useState(false);
 	const [expanded, setExpanded] = useState(false);
 	const systemAppearance = useSyncExternalStore(onSystemAppearanceChange, readSystemAppearance);
+	const themes = useSyncExternalStore(onThemesChange, getThemes);
+	const userThemeIssues = useSyncExternalStore(onThemesChange, getUserThemeIssues);
+	const userThemes = useAppStore((state) => state.userThemes);
+	const appVersion = useAppStore((state) => state.hostAppVersion);
 
-	const themes = getThemes();
 	const systemSupported = (protocolVersion ?? 0) >= THEME_SYSTEM_PROTOCOL_VERSION;
+	const fontsSupported = supportsFonts(protocolVersion);
 	const activeTheme = resolveTheme(theme);
 	const fixedResolution = resolveThemePreference({ theme, themeMode: "fixed" });
 	const pair = systemThemePair ?? deriveSystemThemePair(theme);
@@ -350,6 +328,8 @@ export function AppearanceSettings() {
 		if (next.light !== pair.light || next.dark !== pair.dark) update({ systemThemePair: next });
 	};
 
+	const themesFolderActions = useFolderActions("themes.reveal");
+
 	const fallbacks = systemMode
 		? [
 				{ appearance: "light", resolution: lightResolution },
@@ -417,7 +397,7 @@ export function AppearanceSettings() {
 					/>
 				) : null}
 				{systemMode ? (
-					<Disclosure
+					<SettingsDisclosure
 						label={t("settings.appearance.themePair")}
 						summary={`${themeLabel(t, lightResolution.theme)} / ${themeLabel(t, darkResolution.theme)}`}
 						expanded={expanded}
@@ -450,9 +430,9 @@ export function AppearanceSettings() {
 								}
 							/>
 						</div>
-					</Disclosure>
+					</SettingsDisclosure>
 				) : (
-					<Disclosure
+					<SettingsDisclosure
 						label={t("settings.appearance.theme")}
 						summary={themeLabel(t, activeTheme)}
 						expanded={expanded}
@@ -467,7 +447,7 @@ export function AppearanceSettings() {
 								onSelect={selectFixed}
 							/>
 						</div>
-					</Disclosure>
+					</SettingsDisclosure>
 				)}
 				<SettingsRow
 					label={t("settings.appearance.contrastLevel")}
@@ -484,6 +464,14 @@ export function AppearanceSettings() {
 					}
 				/>
 			</SettingsGroup>
+			{fontsSupported ? <FontsGroup /> : null}
+			{fontsSupported ? <CustomFontsGroup /> : null}
+			<CustomThemesGroup
+				snapshot={userThemes}
+				issues={userThemeIssues}
+				appVersion={appVersion}
+				{...themesFolderActions}
+			/>
 			<SettingsGroup title={t("settings.appearance.editorGroup")}>
 				<LineWidthControl kind="file" />
 			</SettingsGroup>

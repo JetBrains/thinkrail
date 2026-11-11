@@ -1,6 +1,7 @@
 import { RiCloseLine as X } from "@remixicon/react";
 import { REQUEST_IMAGE_BASE64_BUDGET } from "@thinkrail/contracts";
 import { t as translate, useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	type ClipboardEvent,
@@ -144,20 +145,11 @@ export function usePromptImages(): PromptImagesController {
 	return { images, pending, errors, addFiles, removeImage, dismissError, restore, reset };
 }
 
-// Padding presets for the chip strip. Both surfaces align the strip with the input field's left
-// edge and leave the same 12px gap below it; they differ only in structure — the composer strip
-// sits above a `p-12` input shell (so it owns its own left/top padding), while the dialog textarea
-// is flush (so only the bottom gap is needed).
-export const PROMPT_IMAGE_CHIPS_PADDING = {
-	composer: "px-12 pt-12",
-	dialog: "pb-12",
-} as const;
-
 export function PromptImageChips({
 	controller,
 	leading,
 	testId = "composer-images",
-	className = PROMPT_IMAGE_CHIPS_PADDING.composer,
+	className = "px-12 pt-12",
 }: {
 	controller: PromptImagesController;
 	leading?: ReactNode;
@@ -186,7 +178,7 @@ export function PromptImageChips({
 							onClick={() => dismissError(err.id)}
 							className="hover:opacity-80"
 						>
-							<X className="size-12" />
+							<X className="size-14" />
 						</button>
 					}
 				/>
@@ -202,14 +194,12 @@ export function PromptImageChips({
 					label={img.name}
 					meta={img.width && img.height ? ` · ${img.width}×${img.height}` : undefined}
 					trailing={
-						<button
-							type="button"
-							aria-label={t("chat.promptImages.remove")}
+						<IconButton
+							icon={X}
+							size="s"
+							label={t("chat.promptImages.remove")}
 							onClick={() => removeImage(img.id)}
-							className="text-text-muted hover:text-text-default"
-						>
-							<X className="size-12" />
-						</button>
+						/>
 					}
 				/>
 			))}

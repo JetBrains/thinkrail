@@ -44,6 +44,13 @@ resolved when the operation runs, never persisted. Helpers evaluated during rend
 translator as their first argument, so a language change recomputes them. `layoutTabName` words every
 default name at render from the tab's kind (tool, untitled chat, default terminal, Changes / diff scope,
 plan document) through `lib`'s default-name helpers, and shows a name set by the user or agent verbatim.
+Its optional third argument, the Workbench's **`chatFirstPrompts`** prop (`ChatFirstPrompts`, first prompt by
+session id, injected by the shell beside `onRenameChat`), labels an unnamed chat tab — and a plan
+document whose stored chat name is empty, by `sourceId` — by the chat's first prompt through `lib`'s
+`chatDisplayName` wherever the strip, its overflow search, the drag overlay and the move-target summaries
+(`describeLayoutGroup`, `tabSearchKeywords`) show the name; the chat tab renders the same `chatLabel` for
+`data-title-source` and the full-prompt tooltip, while the rename field still edits the real `name`. The label is presentation only: the document's `name` stays `""`, so every mutation the
+Workbench commits from the document it was given leaves the chat unnamed.
 
 A file, spec, or diff browse click opens its preview at once, with no settle wait. A double click then
 promotes that same placement in place. A keep that arrives while the read is still in flight coalesces
@@ -99,17 +106,22 @@ the plain pane header, and its Hide control are the one owner of edge-chrome sty
 `AuxiliaryGroupHeader` reuses the header component, and the shell's Project Home branch
 ([[submodule-web-shell]]) composes the exported `AuxiliaryRail` / `AuxiliaryRailToolButton` /
 `AuxiliaryPaneHeader` around its own geometry so a tool looks identical with or without a frame. Every
-rail entry is a `data-active` frame around the control, so the selected fill (`control-bg-selected`, the
-same role every tab strip uses) and the accent indicator sit on the frame while hover, focus, and drop
-cues sit on the control. Tab
+rail entry is a `data-active` 32px frame (24px in the bottom rail) around a control that wears the shared
+`ghost` M icon-button skin (`buttonVariants`, [[module-ui]] "Button system": 24px square, 16px icon,
+shared hover — pressed looks the same — and the ghost icon-only focus ring drawn inside the square, so no
+rail margin or strip edge clips it). The control keeps its own element for the roving toolbar, drag and drop and
+adornments; the open entry sets `data-selected` (the shared `control-bg-selected` fill), while drop cues sit on the
+control — the passive drop hint adds an inset `primary-soft` ring, so it still shows on a selected entry whose
+fill wins the background. Adornments (review badge, terminal ordinal) are offset to the 32px frame's
+corners and the join droppable is the frame itself, so neither shrinks with the 24px control. Tab
 and tool icons resolve in one place (`tabIcon`), Line at rest and Fill when active; rail tooltips open away
 from their edge. Rail geometry is excluded from available pane space, but
 saved dimensions remain workbench-wide ratios; viewport projection never rewrites them. Measurement
 observers follow the actual DOM node through ref attachment/cleanup, including keyed panel-group
 replacement; a mounted workbench does not imply its measured descendants survived. Rail selection is
-the tab strip's grammar turned sideways: the selected fill, a Fill icon, and a short accent edge (the
-rail's analogue of a resource tab's underline), identical in every theme — a palette decides how loud
-each reads, never a per-theme selector in the component.
+the selected fill plus a Fill icon (and `aria-pressed`) — no accent edge: the rail is a column of icon
+buttons, not a tab strip, so it carries no underline analogue. It is identical in every theme — a palette
+decides how loud it reads, never a per-theme selector in the component.
 
 ## Layout grammar
 
@@ -191,7 +203,7 @@ directional edge hints at drag start and fill the true resulting half on hover. 
 clears on pointer leave; all hints clear on drop or cancel; decorative layers never alter hit-testing or the
 committed result.
 
-Creating or deleting a group is visibly a frame command and therefore affects every workspace in this window. Moving a resource among existing groups affects only its workspace view. Moving a singleton tool changes frame placement globally within this window. Uncommitted drag/resize drafts stay runtime-local and commit once on drop/pointer-up; no host revision can cancel them. A local projection epoch and required workspace identity fence gestures and delayed focus/preview-settle work without remounting the workbench. A workspace switch cancels an active gesture even when a singleton placement or deterministic terminal id also exists in the new view; stale focus requests are not replayed on return. A focus request marked `onlyIfFocusLost` runs only when DOM focus is absent, on `body`, disconnected, or no longer rendered; the check happens when the request executes, after the arrangement commits. `hideSide`/`hideBottom` mark their center focus target `focusOnlyIfLost`, and every path that applies them honors it: the global chords, header and menu hide, and collapsing a region by dragging its separator to zero. Tab removal also cancels its drag. Invalidating a resize restores the live panel group's committed
+Creating or deleting a group is visibly a frame command and therefore affects every workspace in this window. Moving a resource among existing groups affects only its workspace view. Moving a singleton tool changes frame placement globally within this window. Uncommitted drag/resize drafts stay runtime-local and commit once on drop/pointer-up; no host revision can cancel them. A local projection epoch and required workspace identity fence gestures and delayed focus/preview-settle work without remounting the workbench. A workspace switch cancels an active gesture even when a singleton placement or deterministic terminal id also exists in the new view; stale focus requests are not replayed on return. A focus request marked `onlyIfFocusLost` runs only when DOM focus is absent, on `body`, disconnected, or no longer rendered; the check happens when the request executes, after the arrangement commits. A tab focus request also yields when DOM focus already rests inside the panel that its selected tab controls: the content claimed focus first (a palette pick's composer focus, a terminal restoring its own), and moving it to the tab button would undo that. `hideSide`/`hideBottom` mark their center focus target `focusOnlyIfLost`, and every path that applies them honors it: the global chords, header and menu hide, and collapsing a region by dragging its separator to zero. Tab removal also cancels its drag. Invalidating a resize restores the live panel group's committed
 projection before paint and rejects the remainder of that gesture until release, not merely its pending
 persistence. The same recovery applies to outer/aligned sides, bottom height, auxiliary stacks, and
 recursive center splits without keying the workbench by workspace. The canceled-drag announcement is reserved for a pointer/keyboard gesture in progress when its base or workspace is replaced, or a tab drag whose tab left the document: `@thinkrail/ui/resizable` reports layout on every group mount and ordinary resize, so a group that merely lived through earlier local transitions announces nothing.
@@ -201,7 +213,8 @@ Pointer is never the sole arrangement path. Keyboard controls and shadcn menus c
 Center resource strips and auxiliary terminal-session strips have bounded readable tab widths and no fixed previous/next controls: wheel, trackpad, touch,
 roving-keyboard navigation, active reveal, and the searchable keyboard overflow list scroll the same list.
 Native scrollbars stay hidden; pointer-transparent edge fades appear only where clipped and update without
-changing the fixed 28 px strip. Full-height strip actions share that width. A control renders only when it can
+changing the fixed 28 px strip. Strip actions are shared `IconButton ghost m` controls (24 px squares,
+vertically centred in the strip) rather than full-height cells. A control renders only when it can
 act: overflow search only while clipped; every expanded auxiliary pane has a Hide action because its rail
 remains available for restoration. Singleton tool icons have no inline close glyph; explicit Remove tool
 from group stays in their menu and on Delete, separate from pane visibility. Terminals and center
@@ -224,10 +237,13 @@ preview, the four splits) and auxiliary terminals carry no splits.
 
 Balanced, Focus, and Review are web-owned resource-free frame definitions with a below-center bottom slot:
 Balanced and Review show it; Focus hides it. Balanced and Focus start with one center group; Review provides
-its deliberate vertical pair. Custom presets use the same grammar and capture geometry,
+its deliberate vertical pair. Balanced's lower right group opens on the TODO List with Review beside it: on a
+fresh workspace the plan is what there is to look at, while review comments only exist once there is a diff. Custom presets use the same grammar and capture geometry,
 topology, tools, folds, and empty structural slots, never workspace resources or terminal count. Preset node
 ids are template-local labels: instantiation mints frontend-local frame ids and returns the old→new group map
-used to rehome every workspace view. Only custom definitions cross the wire through settings. Built-in preset
+used to rehome every workspace view. Only custom definitions cross the wire through settings; a set that
+places the TODO List (`plan`) is saved only to a host at `LAYOUT_PLAN_PRESET_PROTOCOL_VERSION` or newer — an
+older host's validator rejects the tool, so Layout settings explains that instead of sending it. Built-in preset
 names are display copy: `layoutPresetName` renders them through the locale catalog by preset id while the
 definition keeps its stable `name`; custom preset names are user data and render verbatim.
 
@@ -248,7 +264,7 @@ The singular `attention` object is not threaded into leaves. Only the region wra
 - A resize or drag gesture mutates only root-local projection state; because document, attention, and the shared callbacks are all unchanged, the memoized group subtree does not re-render and no feature body re-renders during the gesture. The pointer-up commit that actually changes the document is the only re-render.
 - A selection or focus change in one group re-renders that group's chrome only; sibling groups keep their `selectedId` and skip. Every mounted tab body sits behind the memoized `GroupTabBody` boundary keyed by selected-tab identity and depending only on the stable body renderers, so a body re-renders only when its own selected tab changes — never because a sibling, a resize, or a drag re-rendered. The shell host keeps that true for editor-tab cache writes too: a file/diff/changes body resolves its own cache tab inside the body (`EditorResourceBody`), never through the renderer's closure, so a review tab's keystroke-rate writes re-render that body alone (`e2e/perf/editorTabIsolation.perf.ts`).
 
-The memoization assumes the injected render callbacks are referentially stable: the shell host passes `renderTabBody`/`renderToolBody`/`renderTabAdornment`/`renderEmptyCenter`/`renderCenterActions` as memoized identities, so a parent re-render (such as an attention change) does not break a sibling group's chrome memo by prop identity alone.
+The memoization assumes the injected render callbacks are referentially stable: the shell host passes `renderTabBody`/`renderToolBody`/`renderTabAdornment`/`renderEmptyCenter`/`renderCenterActions` as memoized identities, so a parent re-render (such as an attention change) does not break a sibling group's chrome memo by prop identity alone. `chatFirstPrompts` is a shallow-stable record (the shell selects it with `useShallow`), so it changes identity only when an unnamed chat's label changes.
 
 `e2e/perf/layoutIsolation.perf.ts` pins both guarantees against the render profiler.
 

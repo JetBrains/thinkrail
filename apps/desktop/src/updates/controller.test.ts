@@ -119,6 +119,7 @@ test("enables only supported packaged production identities and blocks artifact 
 	for (const channel of ["stable", "canary"]) {
 		for (const [platform, arch] of [
 			["darwin", "arm64"],
+			["darwin", "x64"],
 			["win32", "x64"],
 			["linux", "x64"],
 			["linux", "arm64"],
@@ -132,7 +133,10 @@ test("enables only supported packaged production identities and blocks artifact 
 	expect(nativeUpdatesEnabled({ ...enabled, baseUrl: "not a URL" })).toBe(false);
 	expect(nativeUpdatesEnabled({ ...enabled, baseUrl: "http://updates.example.test" })).toBe(false);
 	expect(nativeUpdatesEnabled({ ...enabled, artifactTestSeam: true })).toBe(false);
-	expect(nativeUpdatesEnabled({ ...enabled, platform: "darwin", arch: "x64" })).toBe(false);
+	expect(nativeUpdatesEnabled({ ...enabled, platform: "darwin", arch: "x64" })).toBe(true);
+	expect(nativeUpdatesEnabled({ ...enabled, platform: "win32", arch: "arm64" as never })).toBe(
+		false,
+	);
 	expect(hasDesktopArtifactTestSeam({ THINKRAIL_DESKTOP_READY_FILE: "/tmp/ready" })).toBe(true);
 	expect(hasDesktopArtifactTestSeam({})).toBe(false);
 });

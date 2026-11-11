@@ -1,6 +1,7 @@
 import {
 	type PromptHit,
 	type QueueLane,
+	type ResourceKind,
 	type SessionQueueContent,
 	type SubagentResourceSummary,
 	sameModel,
@@ -19,7 +20,6 @@ import {
 import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useNow } from "@/components/useNow";
-import { registerWebExtensions } from "@/extensions";
 import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
 import {
 	EMPTY_RUNTIME,
@@ -27,6 +27,7 @@ import {
 	selectCanRenameChat,
 	selectCatalogModel,
 	selectCompactionTurnIds,
+	selectComposerFocusRequested,
 	selectPickerModels,
 	selectSkillsStale,
 	selectSupportsMcp,
@@ -46,8 +47,10 @@ import {
 	type MentionCandidate,
 	type SubmitBehavior,
 } from "./Composer";
+import { ExtraUsageNotice } from "./ExtraUsageNotice";
 import { mentionLookup } from "./fileTargets";
 import { HistoryOverlay } from "./HistoryOverlay";
+import { awaitingToolCallIdOf } from "./interactionState";
 import { parseModelRef, RunModelLabel } from "./ModelEffortLabel";
 import type { ModelSelection } from "./ModelEffortPicker";
 import {
@@ -60,6 +63,7 @@ import { QueueStrip } from "./QueueStrip";
 import { deriveRecentPrompts } from "./recentPrompts";
 import {
 	CommandLogView,
+	newestResourceId,
 	ResourcesAttention,
 	ResourcesButton,
 	ResourcesDock,
@@ -69,6 +73,7 @@ import { SkillsDialog } from "./SkillsDialog";
 import { SubagentTranscriptDialog, SubagentTranscriptPane } from "./SubagentTranscriptDialog";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { useChatResources, useCommandLog } from "./useChatResources";
+import { inspectedResult, resultTargetKey, useFreshResults } from "./useFreshResults";
 import { useModelCatalog } from "./useModelCatalog";
 import { useModelPreferences } from "./useModelPreferences";
 import { useSessionStats } from "./useSessionStats";
@@ -76,9 +81,8 @@ import "./tools/register";
 import type { ChatAttachment } from "./types";
 import { useHistorySearch } from "./useHistorySearch";
 
-registerWebExtensions();
-
 const TRY_AGAIN_PROMPT = "Try again.";
+const NOTHING_EXPANDED: Partial<Record<ResourceKind, boolean>> = {};
 
 function renderSubagentModel({ model, thinkingLevel }: SubagentResourceSummary) {
 	return <RunModelLabel model={model} thinkingLevel={thinkingLevel} />;
@@ -96,6 +100,9 @@ export default function ChatView({
 	const t = useT();
 	const sessionExists = useAppStore((s) => s.sessions[sessionId] !== undefined);
 	const isStreaming = useAppStore((s) => s.sessions[sessionId]?.isStreaming ?? false);
+	const awaitingResponse = useAppStore(
+		(s) => awaitingToolCallIdOf(s.sessions[sessionId]?.hostState ?? null) != null,
+	);
 	const draft = useAppStore((s) => s.sessions[sessionId]?.draft ?? "");
 	const queue = useAppStore((s) => s.sessions[sessionId]?.queue ?? EMPTY_RUNTIME.queue);
 	const sessionModel = useAppStore((s) => s.sessions[sessionId]?.model ?? null);
@@ -108,6 +115,8 @@ export default function ChatView({
 	const extUiWidget = useAppStore(
 		(s) => s.sessions[sessionId]?.extUiWidget ?? EMPTY_RUNTIME.extUiWidget,
 	);
+	const notice = useAppStore((s) => s.sessions[sessionId]?.notice ?? null);
+	const [disablingNotice, setDisablingNotice] = useState(false);
 	const commands = useAppStore((s) => s.sessions[sessionId]?.commands ?? EMPTY_RUNTIME.commands);
 	const stats = useAppStore((s) => s.sessions[sessionId]?.stats ?? null);
 	const statsRefreshTick = useAppStore((s) => s.sessions[sessionId]?.statsRefreshTick ?? 0);
@@ -123,6 +132,8 @@ export default function ChatView({
 	const canRenameChat = useAppStore(selectCanRenameChat);
 	const supportsMcp = useAppStore(selectSupportsMcp);
 	const composerGrowthLimit = useAppStore((state) => state.composerGrowthLimit);
+	const questionPanelHeight = useAppStore((state) => state.questionPanelHeight);
+	const [dockTarget, setDockTarget] = useState<HTMLDivElement | null>(null);
 	const chatLineWidth = useAppStore((state) => state.chatLineWidth);
 	const chatLineWidthBounded = useAppStore((state) => state.chatLineWidthBounded);
 	const chatMessageOrder = useAppStore((state) => state.chatMessageOrder);
@@ -194,6 +205,16 @@ export default function ChatView({
 	const composerRef = useRef<ComposerHandle>(null);
 	const transcriptRef = useRef<ChatTranscriptHandle>(null);
 	const resources = useChatResources(workspaceId, sessionId);
+	const freshResults = useFreshResults(
+		workspaceId,
+		sessionId,
+		resources.groups.recentFinished,
+		resources.visible && resources.authoritative,
+	);
+	const freshIds = new Set([
+		...freshResults.commands.map((command) => command.id),
+		...freshResults.subagents.map((child) => child.childSessionId),
+	]);
 	const resourcesTrigger = useRef<HTMLButtonElement>(null);
 	const [stopAllOpen, setStopAllOpen] = useState(false);
 	const [inspector, setInspector] = useState<{
@@ -201,6 +222,7 @@ export default function ChatView({
 		sessionId: string;
 		open: boolean;
 		selectedId: string | null;
+		expanded: Partial<Record<ResourceKind, boolean>>;
 	} | null>(null);
 	const inspectorOpen =
 		inspector?.workspaceId === workspaceId && inspector.sessionId === sessionId && inspector.open;
@@ -208,6 +230,10 @@ export default function ChatView({
 		inspector?.workspaceId === workspaceId && inspector.sessionId === sessionId
 			? inspector.selectedId
 			: null;
+	const inspectorExpanded =
+		inspector?.workspaceId === workspaceId && inspector.sessionId === sessionId
+			? inspector.expanded
+			: NOTHING_EXPANDED;
 	const openInspector = useCallback(
 		(selectedId?: string) =>
 			setInspector((previous) => ({
@@ -219,9 +245,25 @@ export default function ChatView({
 					(previous?.workspaceId === workspaceId && previous.sessionId === sessionId
 						? previous.selectedId
 						: null),
+				expanded: NOTHING_EXPANDED,
 			})),
 		[workspaceId, sessionId],
 	);
+	const setFinishedExpanded = useCallback(
+		(kind: ResourceKind, expanded: boolean) =>
+			setInspector((previous) =>
+				previous?.workspaceId === workspaceId && previous.sessionId === sessionId
+					? { ...previous, expanded: { ...previous.expanded, [kind]: expanded } }
+					: previous,
+			),
+		[workspaceId, sessionId],
+	);
+	const openFinished = () =>
+		openInspector(
+			newestResourceId(freshResults.commands, freshResults.subagents) ??
+				newestResourceId(resources.groups.finishedCommands, resources.groups.finishedSubagents) ??
+				undefined,
+		);
 	const setInspectorOpen = useCallback(
 		(open: boolean) => {
 			if (open) openInspector();
@@ -234,7 +276,7 @@ export default function ChatView({
 			setInspector((previous) =>
 				previous?.workspaceId === workspaceId && previous.sessionId === sessionId
 					? { ...previous, selectedId }
-					: { workspaceId, sessionId, open: true, selectedId },
+					: { workspaceId, sessionId, open: true, selectedId, expanded: NOTHING_EXPANDED },
 			),
 		[workspaceId, sessionId],
 	);
@@ -255,6 +297,12 @@ export default function ChatView({
 			? inspectorSelectedId
 			: null;
 	const commandLog = useCommandLog(workspaceId, sessionId, selectedCommandId);
+	const markResultSeen = freshResults.markSeen;
+	const inspected = inspectedResult(resources.groups, selectedCommandId, selectedSubagentId);
+	const inspectedKey = inspected ? resultTargetKey(inspected) : null;
+	useEffect(() => {
+		if (inspected) markResultSeen(inspected);
+	}, [inspectedKey, markResultSeen]);
 	const now = useNow();
 	const returnToResources = (event: Event) => {
 		event.preventDefault();
@@ -324,9 +372,10 @@ export default function ChatView({
 					"--chat-transcript-width",
 					`calc(${chatLineWidth}ch + 2 * var(--chat-gutter))`,
 				);
+				element.style.setProperty("--question-panel-height", String(questionPanelHeight));
 			}
 		},
-		[chatLineWidth],
+		[chatLineWidth, questionPanelHeight],
 	);
 
 	const {
@@ -466,7 +515,7 @@ export default function ChatView({
 		const superseded = () => selection !== pairSelection.current;
 		useAppStore.getState().setCurrentModel(sessionId, model);
 		if (level) useAppStore.getState().setThinkingLevel(sessionId, level);
-		getTransport()
+		void getTransport()
 			.request("session.setModel", { sessionId, model })
 			.then(
 				() => (level && !superseded() ? requestLevel(level, previous.level) : undefined),
@@ -542,6 +591,7 @@ export default function ChatView({
 		behavior: Exclude<SubmitBehavior, "interrupt">,
 	) => {
 		const queued = behavior !== "send";
+		freshResults.markAllSeen();
 		if (!queued && (text || attachments.length > 0)) {
 			transcriptRef.current?.armImmediateTurn();
 			useAppStore.getState().appendUserMessage(sessionId, text, attachments);
@@ -693,7 +743,24 @@ export default function ChatView({
 		else composerRef.current?.openHistory();
 	}, [historyOpenRequest, sessionId, historyOverlayOpen, cycleScope]);
 
+	const composerFocusRequested = useAppStore((s) =>
+		selectComposerFocusRequested(s, workspaceId, sessionId),
+	);
+	useEffect(() => {
+		if (!composerFocusRequested) return;
+		useAppStore.getState().clearComposerFocusRequest();
+		composerRef.current?.refocus();
+	}, [composerFocusRequested]);
+
 	const widgetEntries = Object.entries(extUiWidget);
+	const disableNotice = () => {
+		setDisablingNotice(true);
+		getTransport()
+			.request("provider.disableWarning", { warning: "anthropicExtraUsage" })
+			.then(() => useAppStore.getState().silenceNotice("anthropicExtraUsage"))
+			.catch((err) => toast.error(errorText(err), translate("chat.extraUsage.disableFailed")))
+			.finally(() => setDisablingNotice(false));
+	};
 	const focusComposer = useCallback(() => composerRef.current?.refocus(), []);
 	// Keep a stable `onTryAgain` identity (it is passed to every transcript row) while always calling the
 	// latest `performSend` closure.
@@ -724,6 +791,7 @@ export default function ChatView({
 											: null
 									}
 									working={resources.authoritative && resources.groups.activeCount > 0}
+									freshCount={freshResults.count}
 									open={inspectorOpen}
 									onClick={() => setInspectorOpen(!inspectorOpen)}
 								/>
@@ -751,14 +819,16 @@ export default function ChatView({
 				focusComposer={focusComposer}
 				openSubagentTranscript={setTranscriptChildId}
 				resultOpener={resultOpener}
+				markResultSeen={markResultSeen}
 				onTryAgain={onTryAgain}
 				historyOpen={historyState.open}
 				inspectorOpen={inspectorOpen}
 				stillRunning={stillRunning}
 				readMcpOutput={supportsMcp ? readMcpOutput : undefined}
 				openMcpSettings={supportsMcp ? openMcpSettings : undefined}
-				openProviderSettings={supportsMcp ? openProviderSettings : undefined}
+				openProviderSettings={openProviderSettings}
 				findModel={findModel}
+				dockTarget={dockTarget}
 				resourcesOverlay={
 					resources.visible ? (
 						<ResourcesInspector
@@ -769,9 +839,14 @@ export default function ChatView({
 							now={now}
 							authoritative={resources.authoritative}
 							loading={resources.loading}
-							stale={resources.stale}
+							staleness={resources.staleness}
 							error={resources.projection?.error ?? null}
 							actions={resources.actions}
+							newIds={freshIds}
+							expanded={inspectorExpanded}
+							onExpandedChange={setFinishedExpanded}
+							{...(resources.loadOlder ? { onLoadMore: resources.loadOlder } : {})}
+							retained={resources.retained}
 							selectedId={inspectorSelectedId}
 							onSelect={selectResource}
 							onRetry={resources.retry}
@@ -784,7 +859,16 @@ export default function ChatView({
 							renderSubagentModel={renderSubagentModel}
 							detail={
 								selectedCommandId ? (
-									<CommandLogView {...commandLog} onRetry={commandLog.retry} />
+									<CommandLogView
+										{...commandLog}
+										onRetry={commandLog.retry}
+										interrupted={
+											resources.groups.finishedCommands.find(
+												(command) => command.id === selectedCommandId,
+											)?.interrupted === true
+										}
+										retained={resources.retained}
+									/>
 								) : selectedSubagentId ? (
 									<SubagentTranscriptPane
 										key={selectedSubagentId}
@@ -798,6 +882,11 @@ export default function ChatView({
 					) : null
 				}
 			/>
+			<div
+				ref={setDockTarget}
+				data-testid="chat-dock"
+				className="flex max-h-[calc(var(--question-panel-height)*1cqh)] min-h-0 flex-col"
+			/>
 			{widgetEntries.length > 0 ? (
 				<div className="shrink-0 border-border-default border-t bg-container-elevated-bg px-12 py-4 text-text-muted tr-text-metadata">
 					{widgetEntries.map(([key, lines]) => (
@@ -810,12 +899,25 @@ export default function ChatView({
 				<ResourcesDock
 					commands={resources.groups.commands}
 					subagents={resources.groups.subagents}
+					finishedCount={resources.groups.finishedCount}
+					freshCount={freshResults.count}
 					now={now}
 					authoritative={resources.authoritative}
+					staleness={resources.staleness}
 					actions={resources.actions}
 					onInspect={openInspector}
+					onOpenFinished={openFinished}
 					onStopCommand={resources.stopCommand}
 					onStopSubagent={resources.stopSubagent}
+				/>
+			) : null}
+			{notice === "anthropicExtraUsage" ? (
+				<ExtraUsageNotice
+					context="chat"
+					className="mx-12 mb-8 shrink-0"
+					onDismiss={() => useAppStore.getState().dismissSessionNotice(sessionId)}
+					onDisable={disableNotice}
+					disabling={disablingNotice}
 				/>
 			) : null}
 			<div className="relative shrink-0">
@@ -833,12 +935,16 @@ export default function ChatView({
 					onOpenMessage={openMessage}
 					onSaveAsTemplate={onSaveAsTemplateHit}
 					onDeleteChat={(wsId, id) => void onDeleteHistoryChat(wsId, id)}
+					canDeleteChat={(wsId) =>
+						selectWorkspaceById(useAppStore.getState(), wsId)?.kind !== "chat"
+					}
 				/>
 				<Composer
 					ref={composerRef}
 					value={draft}
 					onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
 					isStreaming={isStreaming}
+					awaitingResponse={awaitingResponse}
 					growthLimit={composerGrowthLimit}
 					commands={mergedCommands}
 					templatePending={templatePending}

@@ -23,7 +23,7 @@ export function SkeletonRows({ rows = 6, label }: { rows?: number; label?: strin
 			aria-label={label ?? t("components.skeleton.loading")}
 			aria-busy="true"
 			data-testid="skeleton-rows"
-			className="flex flex-col gap-8"
+			className="flex animate-loading-in flex-col gap-8"
 		>
 			{ROWS.slice(0, Math.min(rows, ROWS.length)).map(({ key, width }) => (
 				<span key={key} className={`h-3 animate-pulse rounded-sm bg-control-bg-hovered ${width}`} />

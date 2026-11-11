@@ -4,6 +4,7 @@ import {
 	RiArrowGoBackLine as RotateCcw,
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { shallowEqualArrays } from "../lib";
 
@@ -105,23 +106,25 @@ function PanelErrorFallback({
 			</p>
 			<div className="mt-4 flex items-center gap-8">
 				{isChunkError ? (
-					<button
-						type="button"
+					<Button
+						variant="outline"
+						size="m"
+						iconLeft={RefreshCw}
 						data-testid="error-reload"
 						onClick={() => window.location.reload()}
-						className="flex items-center gap-4 rounded-sm border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
 					>
-						<RefreshCw className="size-16" /> {t("components.errorBoundary.reload")}
-					</button>
+						{t("components.errorBoundary.reload")}
+					</Button>
 				) : (
-					<button
-						type="button"
+					<Button
+						variant="outline"
+						size="m"
+						iconLeft={RotateCcw}
 						data-testid="error-retry"
 						onClick={reset}
-						className="flex items-center gap-4 rounded-sm border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
 					>
-						<RotateCcw className="size-16" /> {t("components.errorBoundary.tryAgain")}
-					</button>
+						{t("components.errorBoundary.tryAgain")}
+					</Button>
 				)}
 			</div>
 		</div>

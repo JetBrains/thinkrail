@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { diffRendererCapabilities, registerResourceRenderer } from "../registry";
 import { binaryRenderer } from "./binary";
 import { codeRenderer } from "./code";
 import { csvRenderer } from "./csv";
@@ -50,4 +51,32 @@ test("bundled renderer registrations declare only supported diff controls", () =
 		"thinkrail/pdf": { copy: false, layout: false, whitespace: false },
 		"thinkrail/svg": { copy: false, layout: false, whitespace: false },
 	});
+});
+
+test("diff capabilities resolve from a path before content loads", () => {
+	const disposers = renderers.map((renderer) => registerResourceRenderer(renderer));
+	try {
+		const scope = { kind: "uncommitted" } as const;
+		const resolve = (path: string, selectedId?: string) => {
+			const { layout, whitespace } = diffRendererCapabilities("ws", path, scope, selectedId, false);
+			return { layout, whitespace };
+		};
+		expect({
+			md: resolve("docs/a.md"),
+			png: resolve("a.png"),
+			pdf: resolve("a.pdf"),
+			svg: resolve("a.svg"),
+			ts: resolve("src/a.ts"),
+			mdAsCode: resolve("docs/a.md", "thinkrail/code"),
+		}).toEqual({
+			md: { layout: false, whitespace: false },
+			png: { layout: false, whitespace: false },
+			pdf: { layout: false, whitespace: false },
+			svg: { layout: false, whitespace: false },
+			ts: { layout: true, whitespace: true },
+			mdAsCode: { layout: true, whitespace: true },
+		});
+	} finally {
+		for (const dispose of disposers.reverse()) dispose();
+	}
 });

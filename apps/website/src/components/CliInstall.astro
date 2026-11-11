@@ -1,0 +1,75 @@
+---
+import { installCommands } from "../installCommands";
+
+const cliTabs = [
+	{
+		id: "unix",
+		label: "macOS / Linux / WSL",
+		command: installCommands.macos,
+		copyLabel: "Copy macOS, Linux, and WSL install command",
+	},
+	{
+		id: "cmd",
+		label: "Windows CMD",
+		command: installCommands.windows.cmd,
+		copyLabel: "Copy Windows CMD install command",
+	},
+	{
+		id: "powershell",
+		label: "Windows PowerShell",
+		command: installCommands.windows.powershell,
+		copyLabel: "Copy Windows PowerShell install command",
+	},
+] as const;
+---
+
+<div class="cli-install" data-cli-install>
+	<div class="install-frame">
+		<div class="install-tabs">
+			<div class="install-os-tabs" role="tablist" aria-label="Choose an install command">
+				{
+					cliTabs.map((tab, index) => (
+						<button
+							type="button"
+							class="install-tab"
+							role="tab"
+							id={`cli-${tab.id}-tab`}
+							aria-controls={`cli-${tab.id}`}
+							aria-selected={index === 0 ? "true" : "false"}
+							tabindex={index === 0 ? undefined : "-1"}
+							data-cli-tab={tab.id}
+						>
+							{tab.label}
+						</button>
+					))
+				}
+			</div>
+		</div>
+		{
+			cliTabs.map((tab) => (
+				<div
+					class="install-panel"
+					id={`cli-${tab.id}`}
+					role="tabpanel"
+					aria-labelledby={`cli-${tab.id}-tab`}
+					data-cli-panel={tab.id}
+				>
+					<p class="install-fallback-heading">{tab.label}</p>
+					<div class="install-line">
+						<code data-install-command tabindex="0">
+							{tab.command}
+						</code>
+						<button type="button" class="copy-btn" data-copy={tab.command} aria-label={tab.copyLabel}>
+							<svg class="i" aria-hidden="true">
+								<use href="#i-copy" />
+							</svg>
+							<svg class="i i-done" aria-hidden="true">
+								<use href="#i-check" />
+							</svg>
+						</button>
+					</div>
+				</div>
+			))
+		}
+	</div>
+</div>

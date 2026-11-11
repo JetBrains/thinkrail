@@ -17,6 +17,7 @@ import {
 	toWireModel,
 	usePiRuntime,
 } from "./agentSessionManager";
+import { refreshModelListings } from "./modelAvailability";
 import {
 	activatePiRuntimeGeneration,
 	configurePiRuntime,
@@ -84,16 +85,21 @@ async function runtimeWithReplacement(includeOriginal = false): Promise<ModelRun
 }
 
 let agentDir: string;
+let dataDir: string;
 let cwd: string;
 let priorAgentDir: string | undefined;
+let priorDataDir: string | undefined;
 let priorOffline: string | undefined;
 
 beforeEach(async () => {
 	priorAgentDir = process.env.PI_CODING_AGENT_DIR;
+	priorDataDir = process.env.THINKRAIL_DATA_DIR;
 	priorOffline = process.env.PI_OFFLINE;
 	agentDir = mkdtempSync(join(tmpdir(), "thinkrail-generation-agent-"));
+	dataDir = mkdtempSync(join(tmpdir(), "thinkrail-generation-data-"));
 	cwd = mkdtempSync(join(tmpdir(), "thinkrail-generation-cwd-"));
 	process.env.PI_CODING_AGENT_DIR = agentDir;
+	process.env.THINKRAIL_DATA_DIR = dataDir;
 	process.env.PI_OFFLINE = "1";
 	configurePiRuntime(await runtimeWithFaux());
 	setSessionManagerFactory(() => SessionManager.inMemory(cwd));
@@ -106,9 +112,12 @@ afterEach(() => {
 	setSessionManagerFactory((sessionCwd) => SessionManager.create(sessionCwd));
 	if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
 	else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
+	if (priorDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
+	else process.env.THINKRAIL_DATA_DIR = priorDataDir;
 	if (priorOffline === undefined) delete process.env.PI_OFFLINE;
 	else process.env.PI_OFFLINE = priorOffline;
 	rmSync(agentDir, { recursive: true, force: true });
+	rmSync(dataDir, { recursive: true, force: true });
 	rmSync(cwd, { recursive: true, force: true });
 });
 
@@ -240,6 +249,49 @@ describe("PI runtime generations", () => {
 			provider: "generation-faux",
 			id: "generation-model",
 		});
+	});
+
+	test("a disk reattach replaces a persisted model the account no longer serves", async () => {
+		const listed = createFauxCore({
+			provider: "listed-faux",
+			api: "openai-responses",
+			models: [modelDef("dropped-model"), modelDef("kept-model")],
+			tokensPerSecond: 2_000,
+		});
+		const proxy = Bun.serve({
+			port: 0,
+			fetch: () => Response.json({ data: [{ id: "kept-model" }] }),
+		});
+		try {
+			const runtime = await runtimeWithFaux(false);
+			runtime.registerProvider("listed-faux", {
+				api: "openai-responses",
+				baseUrl: `http://127.0.0.1:${proxy.port}/v1`,
+				apiKey: "faux",
+				streamSimple: listed.streamSimple,
+				models: ["dropped-model", "kept-model"].map((id) => ({
+					...modelDef(id),
+					api: "openai-responses",
+				})),
+			});
+			configurePiRuntime(runtime);
+			setSessionManagerFactory((sessionCwd) => SessionManager.create(sessionCwd));
+			listed.setResponses([fauxAssistantMessage("BEFORE_LISTING")]);
+			const session = await createSession({
+				cwd,
+				workspaceId: "workspace-generation",
+				model: toWireModel(listed.getModel()),
+			});
+			await promptSession(session.sessionId, "persist this turn");
+			disposeAllSessions();
+
+			expect(await refreshModelListings(runtime, new Set(["listed-faux"]))).toBe(true);
+
+			const reopened = await reopenAfterTeardown(session.sessionId, "workspace-generation", cwd);
+			expect(reopened.summary.model).toMatchObject({ provider: "listed-faux", id: "kept-model" });
+		} finally {
+			proxy.stop(true);
+		}
 	});
 
 	test("a disk transcript stays readable when no model is available", async () => {

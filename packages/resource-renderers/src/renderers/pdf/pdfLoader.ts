@@ -26,7 +26,7 @@ export async function loadPdfDocument(
 	if (signal.aborted) return null;
 	const pdfjs = await loadPdfModule();
 	if (signal.aborted) return null;
-	return pdfjs.getDocument({ data, isEvalSupported: false }).promise;
+	return pdfjs.getDocument({ data }).promise;
 }
 
 interface PendingPdfRender {
@@ -37,8 +37,11 @@ interface PendingPdfRender {
 export class PdfRenderQueue {
 	private active = 0;
 	private readonly pending: PendingPdfRender[] = [];
+	private readonly limit: number;
 
-	constructor(private readonly limit = 2) {}
+	constructor(limit = 2) {
+		this.limit = limit;
+	}
 
 	run<T>(job: () => Promise<T>, signal?: AbortSignal): Promise<T> {
 		return new Promise<T>((resolve, reject) => {

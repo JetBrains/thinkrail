@@ -1,13 +1,9 @@
-import {
-	RiFileCopyLine as Copy,
-	RiExternalLinkLine as ExternalLink,
-	RiFolderOpenLine as FolderOpen,
-} from "@remixicon/react";
+import { RiExternalLinkLine as ExternalLink } from "@remixicon/react";
 import type { LocalLocaleFileErrorCode, LocalLocalesSnapshot } from "@thinkrail/contracts";
 import { languageName, SYSTEM_LOCALE } from "@thinkrail/locales";
 import { T, useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
 import { type ReactNode, useMemo } from "react";
+import { REPO_URL } from "@/constants/branding";
 import {
 	effectiveLocale,
 	type LanguageOption,
@@ -15,20 +11,23 @@ import {
 	languageOptions,
 	useSystemLanguages,
 } from "@/i18n";
-import { copyText } from "@/lib";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
+import { type FolderActions, SettingsFolderRow, useFolderActions } from "./SettingsFolder";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
 import { SettingsRadioCards, type SettingsRadioChoice } from "./SettingsRadioCards";
 import { SettingsRow } from "./SettingsRow";
 
-const REPO_URL = "https://github.com/JetBrains/thinkrail";
 export const CONTRIBUTE_TRANSLATIONS_URL = `${REPO_URL}/blob/main/CONTRIBUTING.md#translations`;
 
-export function englishSourceUrl(appVersion: string | null): string {
+export function repoSourceUrl(appVersion: string | null, path: string): string {
 	const released =
 		appVersion && /^\d+\.\d+\.\d+(?:-[\w.]+)?$/.test(appVersion) && appVersion !== "0.0.0";
-	return `${REPO_URL}/blob/${released ? `v${appVersion}` : "main"}/packages/locales/en.json`;
+	return `${REPO_URL}/blob/${released ? `v${appVersion}` : "main"}/${path}`;
+}
+
+export function englishSourceUrl(appVersion: string | null): string {
+	return repoSourceUrl(appVersion, "packages/locales/en.json");
 }
 
 function InlineLink({ href, children }: { href: string; children?: ReactNode }) {
@@ -99,15 +98,7 @@ export function LanguageSettings() {
 			.catch((error) => toast.error(errorText(error, t("settings.language.changeFailed"))));
 	};
 
-	const copyFolder = async (folder: string) => {
-		if (await copyText(folder)) toast.success(t("settings.language.folderCopied"));
-	};
-
-	const revealFolder = () => {
-		getTransport()
-			.request("locales.reveal", {})
-			.catch((error) => toast.error(errorText(error, t("settings.language.openFolderFailed"))));
-	};
+	const folderActions = useFolderActions("locales.reveal");
 
 	return (
 		<LanguagePage
@@ -116,20 +107,17 @@ export function LanguageSettings() {
 			appVersion={appVersion}
 			systemLanguages={systemLanguages.split(",")}
 			onSelect={select}
-			onCopyFolder={(folder) => void copyFolder(folder)}
-			onRevealFolder={revealFolder}
+			{...folderActions}
 		/>
 	);
 }
 
-export interface LanguagePageProps {
+export interface LanguagePageProps extends FolderActions {
 	preference: string;
 	snapshot: LocalLocalesSnapshot | null;
 	appVersion: string | null;
 	systemLanguages: readonly string[];
 	onSelect: (preference: string) => void;
-	onCopyFolder: (folder: string) => void;
-	onRevealFolder: () => void;
 }
 
 export function LanguagePage({
@@ -216,31 +204,12 @@ export function LanguagePage({
 					/>
 				</p>
 				{folder ? (
-					<SettingsRow
+					<SettingsFolderRow
 						label={t("settings.language.folder.label")}
-						description={
-							<code data-testid="language-folder-path" className="tr-code-text break-all">
-								{folder}
-							</code>
-						}
-						testId="language-folder"
-						control={
-							<div className="flex gap-8">
-								<Button variant="outline" size="sm" onClick={() => onCopyFolder(folder)}>
-									<Copy className="size-14" />
-									{t("settings.language.folder.copy")}
-								</Button>
-								<Button
-									variant="outline"
-									size="sm"
-									data-testid="language-open-folder"
-									onClick={onRevealFolder}
-								>
-									<FolderOpen className="size-14" />
-									{t("settings.language.folder.open")}
-								</Button>
-							</div>
-						}
+						folder={folder}
+						testIdPrefix="language"
+						onCopyFolder={onCopyFolder}
+						onRevealFolder={onRevealFolder}
 					/>
 				) : null}
 				<SettingsRow

@@ -12,8 +12,15 @@ checklist.
    - `name: "@thinkrail/pi-<name>"`, `version: "0.0.0"` (the first changeset produces the first
      real version), `private` absent, `license: "Apache-2.0"`, `repository.directory`,
      `publishConfig: { access: "public", provenance: true }`.
+   - `homepage` and the README's ThinkRail link carry `utm_source=pi-package&utm_medium=referral`,
+     `utm_campaign=pi-<name>` and `utm_content=homepage` / `readme`: pi.dev and npm send no referrer.
    - `keywords` include `"pi-package"` and a `pi` manifest (`extensions`, `skills` …) **only** for an
      installable extension. A portable library (no factory) gets neither.
+   - `pi.video`: a short MP4 demo for the pi.dev gallery, kept outside `files` at
+     `.github/readme-assets/pi-packages/<name>.mp4` and linked by its raw GitHub URL on `main`. Record it
+     in vanilla `pi` from the local source (`pi -e ./pi-extensions/<name>/index.ts`), e.g. with a VHS
+     tape: 1920×1080, H.264, no audio, ≈20 s, ending on the result. pi.dev shows no poster, so the
+     first frame is the thumbnail: open on about a second of the final frame.
    - `files`: everything the entrypoints and `exports` transitively import, tests excluded. The parity
      gate installs from the tarball, so an omission fails there.
    - Pi SDK packages (`@earendil-works/pi-ai`, `pi-coding-agent`, `pi-tui`, `pi-agent-core`, `typebox`) are
@@ -82,14 +89,27 @@ npm publish dist/pi-packages/<tarball> --access public --provenance=false
 `--provenance=false` is required for this one manual publish: the manifest's `publishConfig` asks for
 provenance, which only a CI provider can generate. The automated release keeps provenance.
 
-Then, on npmjs.com → the package → **Settings → Trusted Publisher → GitHub Actions**:
+Then register the Trusted Publisher — from the CLI (same login):
 
-| field | value |
-| --- | --- |
-| Organization / user | `JetBrains` |
-| Repository | `thinkrail` |
-| Workflow filename | `release-pi-packages.yml` |
-| Environment | `npm-release` |
+```bash
+npm trust github @thinkrail/pi-<name> --file release-pi-packages.yml --repo JetBrains/thinkrail \
+  --env npm-release --allow-publish --allow-stage-publish
+npm trust list @thinkrail/pi-<name>             # expect permissions: publish, stage publish
+```
+
+or on npmjs.com → the package → **Settings → Trusted Publisher → GitHub Actions** with the same values
+(`JetBrains` / `thinkrail` / `release-pi-packages.yml` / `npm-release`) and **Allow `npm publish` ticked**.
+
+Two npm rules decide whether that configuration ever works:
+
+- **`npm publish` must be allowed explicitly.** Configurations created after 2026-09-03 default to
+  `npm stage publish` only; the release workflow publishes directly, so a stage-only configuration fails
+  with `ENEEDAUTH`/403. `npm trust list` shows the permissions.
+- **It expires unused after 48 hours.** A configuration is validated by its first successful OIDC publish;
+  one that has not published within 48 hours of creation shows *Expired* on npmjs.com and must be
+  revoked (`npm trust revoke <package> --id=<id>`) and recreated. The manual bootstrap publish does
+  **not** validate it (it uses the login, not OIDC), so create the configuration **when the next version
+  PR for that package is about to merge**, not at bootstrap time — the merge's publish validates it.
 
 After the first successful OIDC publish, set the package's publishing access to *Require two-factor
 authentication and disallow tokens*.
@@ -102,4 +122,6 @@ authentication and disallow tokens*.
 - **Publish job skipped everything** — the versions on `main` are already on npm (nothing to do) or
   changesets are still pending (cut the version PR first).
 - **Publish fails with `ENEEDAUTH`/403** — Trusted Publisher is not configured for that package yet (see
-  bootstrap) or the workflow/environment names do not match the npm configuration exactly.
+  bootstrap), has expired unused (48-hour rule), allows only `npm stage publish`, or the
+  workflow/environment names do not match the npm configuration exactly. `npm trust list <package>`
+  shows what npm has.

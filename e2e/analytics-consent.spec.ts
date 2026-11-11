@@ -12,6 +12,8 @@ import { E2E_DATA_DIR } from "./fixtures/paths";
 import { shot } from "./fixtures/screenshots";
 
 const configPath = join(E2E_DATA_DIR, "config.json");
+const CONSENT_COPY =
+	"Share anonymous usage and how you found ThinkRail, so we can see what works. You can change this anytime in Settings → Privacy.";
 const ANALYTICS_COPY =
 	"Share anonymous product usage and how you found ThinkRail. We never collect prompts, code, files, credentials, or account identity.";
 
@@ -70,7 +72,8 @@ for (const enabled of [true, false]) {
 		await expect(dialog).toBeVisible();
 		await expect(toggle).toBeChecked();
 		await expect(dialog.getByRole("heading")).toHaveText("Help improve ThinkRail");
-		await expect(dialog).toContainText(ANALYTICS_COPY);
+		await expect(dialog).toContainText(CONSENT_COPY);
+		await expect(dialog).toContainText("Never collected: prompts, code, files, credentials");
 		await expect(dialog.getByRole("button")).toHaveCount(2);
 		await expect(dialog.getByTestId("analytics-consent-confirm")).toHaveText("Done");
 		await waitForPrime(updates);
@@ -281,10 +284,7 @@ for (const enabled of [true, false]) {
 	});
 }
 
-test("consent takes precedence over an addressed interview invitation", async ({
-	page,
-	baseURL,
-}) => {
+test("consent takes precedence over an addressed survey invitation", async ({ page, baseURL }) => {
 	await seedAnalyticsConsent(baseURL, false, false);
 	let browserSocket: WebSocketRoute | undefined;
 	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
@@ -295,10 +295,10 @@ test("consent takes precedence over an addressed interview invitation", async ({
 	await expect(page.getByTestId("analytics-consent-dialog")).toBeVisible();
 	if (!browserSocket) throw new Error("Expected the app WebSocket");
 	browserSocket.send(JSON.stringify({ channel: WS_CHANNELS.feedbackInterview, data: {} }));
-	await expect(page.getByTestId("interview-prompt-dialog")).toBeHidden();
+	await expect(page.getByTestId("survey-invitation-dialog")).toBeHidden();
 	await page.getByTestId("analytics-consent-confirm").click();
 	await expect(page.getByTestId("analytics-consent-dialog")).toBeHidden();
-	await expect(page.getByTestId("interview-prompt-dialog")).toBeVisible();
+	await expect(page.getByTestId("survey-invitation-dialog")).toBeVisible();
 });
 
 test("pre-v65 hosts keep the legacy Privacy switch without a consent dialog or confirmation writes", async ({

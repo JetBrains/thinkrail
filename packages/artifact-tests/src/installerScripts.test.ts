@@ -58,6 +58,11 @@ function makeFixture(): Fixture {
 	);
 	writeTool(
 		fakeBin,
+		"sysctl",
+		`[ "$*" = "-n sysctl.proc_translated" ] || exit 1\nprintf '%s\\n' "\${FAKE_PROC_TRANSLATED:-0}"\n`,
+	);
+	writeTool(
+		fakeBin,
 		"mktemp",
 		`last=""
 for arg in "$@"; do last="$arg"; done
@@ -411,35 +416,56 @@ describe("install.sh controlled installation", () => {
 		["nightly", "1.2.3-nightly.7", "v1.2.3-nightly.7", "Linux", "aarch64", "thinkrail-linux-arm64"],
 		["stable", "1.2.3", "v1.2.3", "Darwin", "arm64", "thinkrail-darwin-arm64"],
 		["nightly", "1.2.3-nightly.7", "v1.2.3-nightly.7", "Darwin", "arm64", "thinkrail-darwin-arm64"],
-	])("selects the exact %s %s target (%s, %s/%s, %s)", (channel, version, tag, unameS, unameM, assetName) => {
+		["stable", "1.2.3", "v1.2.3", "Darwin", "x86_64", "thinkrail-darwin-x64"],
+		["nightly", "1.2.3-nightly.7", "v1.2.3-nightly.7", "Darwin", "x86_64", "thinkrail-darwin-x64"],
+	])(
+		"selects the exact %s %s target (%s, %s/%s, %s)",
+		(channel, version, tag, unameS, unameM, assetName) => {
+			const fixture = makeFixture();
+			const result = runInstaller(
+				fixture,
+				[
+					"--channel",
+					channel,
+					"--version",
+					version,
+					"--prefix",
+					shellPath(fixture.prefix),
+					"--no-modify-path",
+				],
+				{ FAKE_UNAME_S: unameS, FAKE_UNAME_M: unameM, FAKE_ASSET_NAME: assetName },
+			);
+			expect(result.exitCode).toBe(0);
+			const requests = curlRequests(fixture);
+			expect(requests).toHaveLength(2);
+			expect(requests[0]).toContain(`/releases/download/${tag}/${assetName}`);
+			expect(requests[1]).toContain(`/releases/download/${tag}/SHA256SUMS`);
+			const metadata = JSON.parse(
+				readFileSync(join(fixture.home, ".config", "thinkrail", "install.json"), "utf8"),
+			);
+			expect(metadata).toMatchObject({ channel, version, tag, path_entry_added: false });
+			expect(
+				readdirSync(join(fixture.home, ".config", "thinkrail")).filter((name) =>
+					name.includes(".tmp."),
+				),
+			).toEqual([]);
+		},
+	);
+
+	test("installs the native arm64 CLI from a Rosetta shell on Apple Silicon", () => {
 		const fixture = makeFixture();
 		const result = runInstaller(
 			fixture,
-			[
-				"--channel",
-				channel,
-				"--version",
-				version,
-				"--prefix",
-				shellPath(fixture.prefix),
-				"--no-modify-path",
-			],
-			{ FAKE_UNAME_S: unameS, FAKE_UNAME_M: unameM, FAKE_ASSET_NAME: assetName },
+			["--version", "1.2.3", "--prefix", shellPath(fixture.prefix), "--no-modify-path"],
+			{
+				FAKE_UNAME_S: "Darwin",
+				FAKE_UNAME_M: "x86_64",
+				FAKE_PROC_TRANSLATED: "1",
+				FAKE_ASSET_NAME: "thinkrail-darwin-arm64",
+			},
 		);
 		expect(result.exitCode).toBe(0);
-		const requests = curlRequests(fixture);
-		expect(requests).toHaveLength(2);
-		expect(requests[0]).toContain(`/releases/download/${tag}/${assetName}`);
-		expect(requests[1]).toContain(`/releases/download/${tag}/SHA256SUMS`);
-		const metadata = JSON.parse(
-			readFileSync(join(fixture.home, ".config", "thinkrail", "install.json"), "utf8"),
-		);
-		expect(metadata).toMatchObject({ channel, version, tag, path_entry_added: false });
-		expect(
-			readdirSync(join(fixture.home, ".config", "thinkrail")).filter((name) =>
-				name.includes(".tmp."),
-			),
-		).toEqual([]);
+		expect(curlRequests(fixture)[0]).toContain("/releases/download/v1.2.3/thinkrail-darwin-arm64");
 	});
 
 	test("installs under a Unix prefix containing Unicode and safe punctuation", () => {

@@ -2,15 +2,16 @@ import type { LineAnnotation, SelectedLineRange } from "@pierre/diffs";
 import { File, VirtualizerContext } from "@pierre/diffs/react";
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import { IconTooltip } from "@thinkrail/ui/tooltip";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { IconButton } from "@thinkrail/ui/button";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import type { AnchorDraft, ResourceViewProps } from "../../registry";
 import { ReviewComposer } from "../../support/ReviewComposer";
 import { ReviewThreadCard } from "../../support/ReviewThreadCard";
 import { useScrollViewState } from "../../support/useScrollViewState";
 import { type AnnotationSlot, reconcileAnnotationSlots } from "./annotationSlots";
-import PierreProvider from "./PierreProvider";
+import PierreProvider, { usePierrePlain } from "./PierreProvider";
 import { PierreScroller } from "./PierreScroller";
+import { PlainCode } from "./PlainCode";
 import {
 	composerLineLabel,
 	draftLineLabel,
@@ -19,6 +20,7 @@ import {
 	usePierreFocus,
 } from "./pierreReview";
 import { usePierreVirtualizer } from "./pierreVirtualizer";
+import { plainFileRuns } from "./plainRuns";
 
 const NO_PLACED_THREADS: ReadonlySet<string> = new Set();
 
@@ -71,8 +73,11 @@ function PierreFileSurface({
 	onPlacedThreadIds,
 	viewState,
 	onViewState,
+	reveal,
+	onRevealHandled,
 }: ResourceViewProps) {
 	const t = useT();
+	const plain = usePierrePlain();
 	const text = content.kind === "text" ? content.text : "";
 	const hash = content.kind === "absent" || !content.hash ? undefined : content.hash;
 	const file = useMemo(
@@ -85,8 +90,8 @@ function PierreFileSurface({
 		[hash, resource.language, resource.path, text],
 	);
 	const placedThreadIds = useMemo(
-		() => filePlacedThreadIds(text, review?.threads ?? []),
-		[review?.threads, text],
+		() => (plain ? NO_PLACED_THREADS : filePlacedThreadIds(text, review?.threads ?? [])),
+		[plain, review?.threads, text],
 	);
 	useEffect(() => {
 		onPlacedThreadIds?.(placedThreadIds);
@@ -149,6 +154,25 @@ function PierreFileSurface({
 	);
 	const { virtualizer, metrics, attach } = usePierreVirtualizer(attachScroller);
 	usePierreFocus(rootRef, virtualizer, [{ review }], placedThreadIds);
+	const revealLine = reveal?.line;
+	const revealTick = reveal?.tick;
+	const revealHandled = useEffectEvent((tick: number) => onRevealHandled?.(tick));
+	useEffect(() => {
+		if (revealLine === undefined || revealTick === undefined) return;
+		let frame = 0;
+		let attempts = 0;
+		const attempt = () => {
+			if (virtualizer.revealLine(revealLine)) {
+				setSelectedLines({ start: revealLine, end: revealLine });
+				revealHandled(revealTick);
+				return;
+			}
+			attempts += 1;
+			if (attempts < 30) frame = requestAnimationFrame(attempt);
+		};
+		attempt();
+		return () => cancelAnimationFrame(frame);
+	}, [virtualizer, revealLine, revealTick]);
 
 	return (
 		<PierreScroller
@@ -156,20 +180,23 @@ function PierreFileSurface({
 			testId="file-view"
 			className="h-full overflow-auto bg-container-workspace-bg [overflow-anchor:none] pierre-code-surface pierre-file-surface"
 		>
-			<VirtualizerContext.Provider value={virtualizer}>
-				<File<FileAnnotationMetadata>
-					file={file}
-					options={options}
-					metrics={metrics}
-					lineAnnotations={annotations}
-					selectedLines={selectedLines}
-					className="flex-1"
-					renderGutterUtility={(getHoveredLine) => (
-						<IconTooltip label={t("viewer.code.commentOnLine")}>
-							<button
-								type="button"
+			{plain ? (
+				<PlainCode runs={plainFileRuns(text)} />
+			) : (
+				<VirtualizerContext.Provider value={virtualizer}>
+					<File<FileAnnotationMetadata>
+						file={file}
+						options={options}
+						metrics={metrics}
+						lineAnnotations={annotations}
+						selectedLines={selectedLines}
+						className="flex-1"
+						renderGutterUtility={(getHoveredLine) => (
+							<IconButton
+								icon={MessageSquarePlus}
+								label={t("viewer.code.commentOnLine")}
+								variant="primary"
 								data-testid="review-add-icon"
-								aria-label={t("viewer.code.commentOnLine")}
 								onPointerDown={(event) => {
 									event.preventDefault();
 									event.stopPropagation();
@@ -178,34 +205,31 @@ function PierreFileSurface({
 									const line = getHoveredLine();
 									if (line) openSelection({ start: line.lineNumber, end: line.lineNumber });
 								}}
-								className="flex size-24 items-center justify-center rounded-sm bg-primary text-text-on-primary outline-none focus-visible:ring-2 focus-visible:ring-primary"
-							>
-								<MessageSquarePlus className="size-14" />
-							</button>
-						</IconTooltip>
-					)}
-					renderAnnotation={(annotation) => {
-						const metadata = annotation.metadata;
-						if (metadata.kind === "thread") {
-							const thread = threadById.get(metadata.id);
-							return thread && review && placedThreadIds.has(metadata.id) ? (
-								<ReviewThreadCard key={thread.id} thread={thread} actions={review.actions} />
-							) : null;
-						}
-						if (!composer || composer.id !== metadata.id || !review) return null;
-						return (
-							<ReviewComposer
-								key={composer.id}
-								draft={composer.draft}
-								label={composer.label}
-								commenting={review.commenting}
-								onClose={closeComposer}
-								className="review-composer-flow"
 							/>
-						);
-					}}
-				/>
-			</VirtualizerContext.Provider>
+						)}
+						renderAnnotation={(annotation) => {
+							const metadata = annotation.metadata;
+							if (metadata.kind === "thread") {
+								const thread = threadById.get(metadata.id);
+								return thread && review && placedThreadIds.has(metadata.id) ? (
+									<ReviewThreadCard key={thread.id} thread={thread} actions={review.actions} />
+								) : null;
+							}
+							if (!composer || composer.id !== metadata.id || !review) return null;
+							return (
+								<ReviewComposer
+									key={composer.id}
+									draft={composer.draft}
+									label={composer.label}
+									commenting={review.commenting}
+									onClose={closeComposer}
+									className="review-composer-flow"
+								/>
+							);
+						}}
+					/>
+				</VirtualizerContext.Provider>
+			)}
 		</PierreScroller>
 	);
 }

@@ -889,10 +889,12 @@ test("A commit scope keeps the header readable: short sha on the pill, subject i
 
 	const label = page.getByTestId("changes-scope-label");
 	await expect(label).toHaveText(/^[0-9a-f]{7,}$/);
-	await expect(page.getByTestId("changes-scope-trigger")).toHaveAttribute(
-		"title",
-		/e2e scope commit/,
+	await expect(page.getByTestId("changes-scope-trigger")).toHaveAccessibleName(
+		/^Diff scope: [0-9a-f]{7,}$/,
 	);
+	await page.getByTestId("changes-scope-trigger").hover();
+	await expect(page.getByRole("tooltip")).toContainText(/e2e scope commit/);
+	await page.mouse.move(0, 0);
 	await expect(page.getByTestId("changes-target-picker")).toContainText("main");
 });
 
@@ -1000,6 +1002,7 @@ test("A failed read says so — it never renders as an empty (clean) change set"
 	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("changes-target-picker").click();
 	await page.locator('[data-testid="branch-option"][data-branch="doomed"]').click();
+	await expect(page.getByTestId("changes-target-picker")).toContainText("doomed");
 	await expect(page.getByTestId("change-item").filter({ hasText: "README.md" })).toHaveCount(1);
 	gitQuiet(worktree, "branch", "-D", "doomed");
 

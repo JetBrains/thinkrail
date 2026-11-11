@@ -20,11 +20,13 @@ import {
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { Button, IconButton, withIconClass } from "@thinkrail/ui/button";
+import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { copyText } from "@/lib";
 import { getTransport } from "@/transport";
 import { SettingsSwitch } from "./SettingsSwitch";
+import { SETTINGS_INPUT, useSettingsDraft } from "./settingsDraft";
 
 const LOGIN_CMD = "central login";
 
@@ -49,16 +51,23 @@ function JbcentralQuotaSettings({
 }: JbcentralQuotaSettingsProps) {
 	const t = useT();
 	const savedText = String(refreshSeconds);
-	const [draft, setDraft] = useState(savedText);
-	const [submitted, setSubmitted] = useState<string | null>(null);
 	const [saveError, setSaveError] = useState<string | null>(null);
-
-	useEffect(() => {
-		setDraft(savedText);
-		setSubmitted(null);
-	}, [savedText]);
-
-	const invalid = !isJbcentralQuotaRefreshSeconds(Number(draft));
+	const { invalid, inputProps } = useSettingsDraft({
+		saved: savedText,
+		isValid: (draft) => isJbcentralQuotaRefreshSeconds(Number(draft)),
+		commit: (draft) => {
+			setSaveError(null);
+			return onRefreshSecondsChange(Number(draft)).then(
+				() => true,
+				() => {
+					setSaveError(t("settings.jbcentral.quota.intervalSaveFailed"));
+					return false;
+				},
+			);
+		},
+		enterBlurs: true,
+		onEdit: () => setSaveError(null),
+	});
 	const error = invalid
 		? t("settings.jbcentral.quota.invalid", {
 				min: JBCENTRAL_QUOTA_REFRESH_SECONDS.min,
@@ -66,17 +75,6 @@ function JbcentralQuotaSettings({
 			})
 		: saveError;
 	const errorId = "jbcentral-quota-interval-error";
-
-	const commitInterval = () => {
-		if (invalid || draft === savedText || draft === submitted) return;
-		setSubmitted(draft);
-		setSaveError(null);
-		onRefreshSecondsChange(Number(draft)).catch(() => {
-			setDraft(savedText);
-			setSubmitted(null);
-			setSaveError(t("settings.jbcentral.quota.intervalSaveFailed"));
-		});
-	};
 
 	return (
 		<div
@@ -107,30 +105,13 @@ function JbcentralQuotaSettings({
 					type="number"
 					inputMode="numeric"
 					data-testid="jbcentral-quota-interval"
-					data-settings-draft-input
 					min={JBCENTRAL_QUOTA_REFRESH_SECONDS.min}
 					max={JBCENTRAL_QUOTA_REFRESH_SECONDS.max}
 					step={1}
-					value={draft}
+					{...inputProps}
 					disabled={!enabled}
-					aria-invalid={invalid}
 					aria-describedby={error ? errorId : undefined}
-					onChange={(event) => {
-						setDraft(event.currentTarget.value);
-						setSubmitted(null);
-						setSaveError(null);
-					}}
-					onBlur={commitInterval}
-					onKeyDown={(event) => {
-						if (event.key === "Enter") {
-							event.preventDefault();
-							event.currentTarget.blur();
-						} else if (event.key === "Escape") {
-							setDraft(savedText);
-							setSaveError(null);
-						}
-					}}
-					className="h-32 w-64 rounded-sm border border-control-border-default bg-control-bg px-8 tr-text-ui text-text-default outline-none focus:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text aria-invalid:border-feedback-error"
+					className={cn(SETTINGS_INPUT, "w-64")}
 				/>
 			</div>
 
@@ -239,8 +220,13 @@ export function JetBrainsAiCard({
 				<h3 className="tr-text-label-pill text-text-subtle">{t("settings.jbcentral.title")}</h3>
 				<div className="flex shrink-0 items-center gap-4">
 					{busyAction ? (
-						<Button size="sm" disabled data-testid="jetbrains-configuring">
-							<Loader2 className="size-14 animate-spin" />
+						<Button
+							variant="primary"
+							size="m"
+							iconLeft={Loader2}
+							loading
+							data-testid="jetbrains-configuring"
+						>
 							{t(ACTION_BUSY_LABEL[busyAction])}
 						</Button>
 					) : signedOut ? (
@@ -252,11 +238,12 @@ export function JetBrainsAiCard({
 					) : status.state === "load-failed" && retryAction ? (
 						<>
 							<Button
-								size="sm"
+								variant="primary"
+								size="m"
+								iconLeft={RefreshCw}
 								data-testid="jetbrains-retry"
 								onClick={() => void runAction(retryAction)}
 							>
-								<RefreshCw className="size-14" />
 								{t("common.retry")}
 							</Button>
 							{status.configured ? (
@@ -268,11 +255,11 @@ export function JetBrainsAiCard({
 					) : needsRecheck(status) ? (
 						<Button
 							variant="ghost"
-							size="sm"
+							size="m"
+							iconLeft={RefreshCw}
 							data-testid="jetbrains-recheck"
 							onClick={() => void onChanged()}
 						>
-							<RefreshCw className="size-14" />
 							{t("settings.jbcentral.recheck")}
 						</Button>
 					) : null}
@@ -317,20 +304,21 @@ export function JetBrainsAiCard({
 function ActionButton({ action, onAction }: { action: JbcentralAction; onAction: () => void }) {
 	const t = useT();
 	const disconnect = action === "disconnect";
+	const icon = disconnect
+		? LogOut
+		: action === "update"
+			? Wrench
+			: action === "start-proxy"
+				? Play
+				: null;
 	return (
 		<Button
-			variant={disconnect ? "outline" : "default"}
-			size="sm"
+			variant={disconnect ? "outline" : "primary"}
+			size="m"
+			{...(icon ? { iconLeft: icon } : {})}
 			data-testid={`jetbrains-${action}`}
 			onClick={onAction}
 		>
-			{disconnect ? (
-				<LogOut className="size-14" />
-			) : action === "update" ? (
-				<Wrench className="size-14" />
-			) : action === "start-proxy" ? (
-				<Play className="size-14" />
-			) : null}
 			{t(ACTION_LABEL[action])}
 		</Button>
 	);
@@ -356,12 +344,12 @@ function StatusBody({
 					<CopyableCommand command={install.command} />
 					<Button
 						variant="ghost"
-						size="sm"
+						size="m"
+						iconLeft={RefreshCw}
 						data-testid="jetbrains-recheck"
 						onClick={() => void onChanged()}
 						className="self-start"
 					>
-						<RefreshCw className="size-14" />
 						{t("settings.jbcentral.recheck")}
 					</Button>
 				</div>
@@ -439,18 +427,14 @@ function SignInButton({
 }) {
 	return (
 		<Button
-			variant="soft"
-			size="sm"
+			variant="soft-primary"
+			size="m"
+			iconLeft={ExternalLink}
+			loading={signingIn}
 			data-testid="jetbrains-signin"
-			disabled={signingIn}
 			onClick={onSignIn}
 			className="self-start"
 		>
-			{signingIn ? (
-				<Loader2 className="size-14 animate-spin" />
-			) : (
-				<ExternalLink className="size-14" />
-			)}
 			{label}
 		</Button>
 	);
@@ -556,6 +540,8 @@ function failureText(action: JbcentralAction, reason: JbcentralActionFailureReas
 	}
 }
 
+const CopiedCheck = withIconClass(Check, "text-feedback-success");
+
 function CopyableCommand({ command }: { command: string }) {
 	const t = useT();
 	const [copied, setCopied] = useState(false);
@@ -569,20 +555,14 @@ function CopyableCommand({ command }: { command: string }) {
 			<code className="min-w-0 flex-1 select-all break-all tr-code-text text-text-default">
 				{command}
 			</code>
-			<button
-				type="button"
+			<IconButton
+				icon={copied ? CopiedCheck : Copy}
+				label={t("settings.jbcentral.copyCommand", { command })}
+				tooltip={t("common.copy")}
 				data-testid="jetbrains-copy-cmd"
-				aria-label={t("settings.jbcentral.copyCommand", { command })}
-				title={t("common.copy")}
 				onClick={() => void copy()}
-				className="flex size-24 shrink-0 items-center justify-center rounded-sm text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-			>
-				{copied ? (
-					<Check className="size-14 text-feedback-success" />
-				) : (
-					<Copy className="size-14" />
-				)}
-			</button>
+				className="shrink-0"
+			/>
 		</div>
 	);
 }

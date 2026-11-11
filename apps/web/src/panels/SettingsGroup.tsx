@@ -39,3 +39,31 @@ export function SettingsPageContainer({ children, testId }: SettingsPageContaine
 		</div>
 	);
 }
+
+export const SETTINGS_TAG =
+	"shrink-0 rounded-xs border border-border-default px-4 tr-text-label-pill";
+
+export function SettingsSubheading({
+	title,
+	description,
+	testId,
+	titleAttribute,
+}: {
+	title: string;
+	description?: string;
+	testId?: string;
+	titleAttribute?: string;
+}) {
+	return (
+		<div
+			data-testid={testId}
+			title={titleAttribute}
+			className="flex min-w-0 flex-col gap-2 pt-16 pb-4"
+		>
+			<h4 className="tr-text-ui text-text-default">{title}</h4>
+			{description ? (
+				<p className="break-words text-text-muted tr-text-metadata">{description}</p>
+			) : null}
+		</div>
+	);
+}

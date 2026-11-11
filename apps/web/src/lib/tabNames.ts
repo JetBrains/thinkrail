@@ -8,6 +8,52 @@ export function chatName(t: Translator, name: string | null | undefined): string
 	return name?.trim() || t("store.chatTab.defaultName");
 }
 
+const FALLBACK_CHAT_TITLE_LENGTH = 48;
+
+export function fallbackChatTitle(firstPrompt: string | null | undefined): string | undefined {
+	if (!firstPrompt) return undefined;
+	if (firstPrompt.length <= FALLBACK_CHAT_TITLE_LENGTH) return firstPrompt;
+	const boundary = firstPrompt.slice(0, FALLBACK_CHAT_TITLE_LENGTH + 1).lastIndexOf(" ");
+	const hardCut = firstPrompt.charCodeAt(FALLBACK_CHAT_TITLE_LENGTH - 1);
+	const cut = firstPrompt.slice(
+		0,
+		boundary > FALLBACK_CHAT_TITLE_LENGTH / 2
+			? boundary
+			: hardCut >= 0xd800 && hardCut <= 0xdbff
+				? FALLBACK_CHAT_TITLE_LENGTH - 1
+				: FALLBACK_CHAT_TITLE_LENGTH,
+	);
+	return `${cut.trimEnd()}…`;
+}
+
+export type ChatTitleSource = "name" | "prompt" | "default";
+
+export interface ChatLabel {
+	text: string;
+	source: ChatTitleSource;
+	tooltip?: string;
+}
+
+export function chatLabel(
+	t: Translator,
+	name: string | null | undefined,
+	firstPrompt: string | null | undefined,
+): ChatLabel {
+	const named = name?.trim();
+	if (named) return { text: named, source: "name" };
+	const fallback = fallbackChatTitle(firstPrompt);
+	if (fallback && firstPrompt) return { text: fallback, source: "prompt", tooltip: firstPrompt };
+	return { text: t("store.chatTab.defaultName"), source: "default" };
+}
+
+export function chatDisplayName(
+	t: Translator,
+	name: string | null | undefined,
+	firstPrompt: string | null | undefined,
+): string {
+	return chatLabel(t, name, firstPrompt).text;
+}
+
 export function defaultTerminalTitle(index: number): string {
 	return `Terminal ${index}`;
 }

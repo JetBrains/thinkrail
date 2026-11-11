@@ -8,7 +8,6 @@ import {
 	RiFolderOpenLine as FolderOpen,
 	RiGitBranchLine as GitBranch,
 	RiHome2Line as House,
-	RiLoader4Line as Loader2,
 	RiMailOpenLine as MailOpen,
 	RiMailUnreadLine as MailUnread,
 	RiMore2Line as MoreVertical,
@@ -23,9 +22,9 @@ import {
 	RiDeleteBin6Line as Trash2,
 	RiCloseLine as X,
 } from "@remixicon/react";
-import type { EditorInfo, Project, Workspace } from "@thinkrail/contracts";
+import type { EditorInfo, Project, Workspace, WorkspaceCreation } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { IconButton } from "@thinkrail/ui/button";
 import {
 	ContextMenu,
 	ContextMenuContent,
@@ -44,9 +43,9 @@ import {
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
-import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { type MouseEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
 import { copyText, platformShortcutLabel } from "@/lib";
@@ -61,6 +60,8 @@ import {
 	selectAutoSettledCounts,
 	selectProjectIsRunning,
 	selectProjectNeedsAttention,
+	selectRepoProjects,
+	selectSupportsOnboarding,
 	selectWorkspaceIsRunning,
 	selectWorkspaceNeedsAttention,
 	selectWorkspacePartition,
@@ -75,6 +76,7 @@ import {
 } from "../store";
 import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
+import { ChatsSection } from "./ChatsSection";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
@@ -84,7 +86,9 @@ import {
 	SETTLED_NOTICE_QUIET_MS,
 	settledShelfNoticed,
 } from "./settledShelfNotice";
+import { startProjectSetupChat } from "./setupPrompt";
 import { useOpenProject } from "./useOpenProject";
+import { WorkspaceCreationRow } from "./WorkspaceCreation";
 import {
 	canRenameProject,
 	canRenameWorkspace,
@@ -103,18 +107,32 @@ import {
 } from "./workspaceActions";
 
 const HOVER_CONTROL_CLASS =
-	"flex size-20 shrink-0 items-center justify-center rounded-sm text-text-muted opacity-100 outline-none transition hover:bg-container-elevated-bg hover:text-text-default [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:opacity-100 disabled:pointer-events-none disabled:opacity-0";
+	"shrink-0 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100";
+
+function groupCreationsByProject(
+	creations: Record<string, WorkspaceCreation>,
+): Record<string, WorkspaceCreation[]> {
+	const grouped: Record<string, WorkspaceCreation[]> = {};
+	for (const creation of Object.values(creations)) {
+		grouped[creation.projectId] = [...(grouped[creation.projectId] ?? []), creation];
+	}
+	for (const list of Object.values(grouped)) list.sort((a, b) => a.startedAt - b.startedAt);
+	return grouped;
+}
 
 export function ProjectTree() {
 	const t = useT();
-	const projects = useAppStore((s) => s.projects);
+	const projects = useAppStore(useShallow(selectRepoProjects));
 	const recentProjects = useAppStore((s) => s.recentProjects);
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
 	const workspaces = useAppStore((s) => s.workspaces);
-	const worktreeCreations = useAppStore((s) => s.worktreeCreationsByProject);
+	const workspaceCreations = useAppStore((s) => s.workspaceCreations);
+	const activeCreationId = useAppStore((s) => s.activeCreationId);
+	const creationsByProject = groupCreationsByProject(workspaceCreations);
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const activeWorkspaceLiveLatch = useAppStore((s) => s.activeWorkspaceLiveLatch);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
+	const supportsCreate = useAppStore(selectSupportsOnboarding);
 	const supportsSettling = useAppStore((s) => s.workspaceSettlingSupported);
 	const sessionStateByWorkspace = useAppStore((s) => s.sessionStateByWorkspace);
 	const settleIdleDays = useAppStore((s) => s.settleIdleDays);
@@ -225,9 +243,11 @@ export function ProjectTree() {
 		if (willExpand) void loadWorkspaces(projectId);
 	};
 
-	const { openProject, pickAndOpen, enterHostPath, dialogs } = useOpenProject((project) =>
-		selectProject(project.id),
-	);
+	const { openProject, pickAndOpen, enterHostPath, startNewProject, cloneRepository, dialogs } =
+		useOpenProject(async (project, { setup }) => {
+			await selectProject(project.id).catch(() => {});
+			if (setup) await startProjectSetupChat(project.id);
+		});
 
 	const onExistingWorktreeOpened = async (workspace: Workspace) => {
 		const rows = await getTransport().request("workspace.list", {
@@ -266,24 +286,25 @@ export function ProjectTree() {
 
 	return (
 		<nav data-testid="project-tree" className="flex flex-col gap-4">
+			<ChatsSection />
 			<header className="flex h-panel-row items-center justify-between pr-4 pl-8">
 				<span className="tr-text-eyebrow text-text-muted">{t("panels.projectTree.title")}</span>
 				<AddProjectMenu
 					recentProjects={recentProjects}
 					onOpen={() => void pickAndOpen()}
 					onEnterHostPath={enterHostPath}
+					onClone={cloneRepository}
 					onOpenRecent={(p) => void openProject(p)}
+					{...(supportsCreate ? { onStartNew: startNewProject } : {})}
 				>
-					<Button
+					<IconButton
 						ref={addProjectButtonRef}
+						icon={Plus}
+						label={t("panels.projectTree.addProject")}
 						variant="ghost"
-						size="icon"
-						className="size-panel-row"
+						size="s"
 						data-testid="add-project-menu"
-						aria-label={t("panels.projectTree.addProject")}
-					>
-						<Plus className="size-14" />
-					</Button>
+					/>
 				</AddProjectMenu>
 			</header>
 
@@ -324,44 +345,49 @@ export function ProjectTree() {
 									partition={selectWorkspacePartition(partitionState, project.id, now)}
 									shelfExpanded={settledShelfExpanded[project.id] === true}
 									shelfShown={settledShelfShown[project.id] ?? SETTLED_SHELF_PAGE}
-									renderRow={(ws, settled) => (
-										<WorkspaceRow
-											key={ws.id}
-											workspace={ws}
-											settled={settled}
-											now={now}
-											isActive={activeWorkspaceId === ws.id}
-											needsAttention={selectWorkspaceNeedsAttention(stateProjection, ws.id)}
-											isRunning={selectWorkspaceIsRunning(stateProjection, ws.id)}
-											canRename={canRenameWorkspace(protocolVersion, ws)}
-											canSettle={canSettleWorkspace(protocolVersion, ws)}
-											readAction={
-												supportsWorkspaceReadState(protocolVersion)
-													? selectWorkspaceReadAction(stateProjection, ws.id)
-													: null
-											}
-											editors={editors}
-											onSelect={() => selectWorkspace(ws)}
-											onOpenIn={(editor) => openWorkspaceIn(ws, editor)}
-											onCopyPath={() => void copyText(ws.worktreePath)}
-											onReveal={() => revealWorkspace(ws)}
-											onRename={(name) => renameWorkspace(ws, name)}
-											onSettle={() => settleWorkspace(ws.id)}
-											onKeepActive={() => unsettleWorkspace(ws.id)}
-											onMarkRead={() => markWorkspaceRead(ws.id)}
-											onMarkUnread={() => markWorkspaceUnread(ws.id)}
-										/>
-									)}
+									renderRow={(ws, settled) =>
+										workspaceCreations[ws.id] ? null : (
+											<WorkspaceRow
+												key={ws.id}
+												workspace={ws}
+												settled={settled}
+												now={now}
+												isActive={activeWorkspaceId === ws.id}
+												needsAttention={selectWorkspaceNeedsAttention(stateProjection, ws.id)}
+												isRunning={selectWorkspaceIsRunning(stateProjection, ws.id)}
+												canRename={canRenameWorkspace(protocolVersion, ws)}
+												canSettle={canSettleWorkspace(protocolVersion, ws)}
+												readAction={
+													supportsWorkspaceReadState(protocolVersion)
+														? selectWorkspaceReadAction(stateProjection, ws.id)
+														: null
+												}
+												editors={editors}
+												onSelect={() => selectWorkspace(ws)}
+												onOpenIn={(editor) => openWorkspaceIn(ws, editor)}
+												onCopyPath={() => void copyText(ws.worktreePath)}
+												onReveal={() => revealWorkspace(ws)}
+												onRename={(name) => renameWorkspace(ws, name)}
+												onSettle={() => settleWorkspace(ws.id)}
+												onKeepActive={() => unsettleWorkspace(ws.id)}
+												onMarkRead={() => markWorkspaceRead(ws.id)}
+												onMarkUnread={() => markWorkspaceUnread(ws.id)}
+											/>
+										)
+									}
 								/>
 							)}
-							{isExpanded && (worktreeCreations[project.id] ?? 0) > 0 && (
-								<div
-									data-testid="worktree-creating-row"
-									className="flex items-center gap-8 py-4 pr-8 pl-16 tr-text-ui text-text-muted"
-								>
-									<Loader2 className="size-14 shrink-0 animate-spin motion-reduce:animate-none" />
-									{t("panels.projectTree.creatingWorktree")}
-								</div>
+							{isExpanded && (creationsByProject[project.id]?.length ?? 0) > 0 && (
+								<ul aria-label={t("panels.workspaceCreation.listLabel")}>
+									{creationsByProject[project.id]?.map((creation) => (
+										<WorkspaceCreationRow
+											key={creation.id}
+											creation={creation}
+											isActive={activeCreationId === creation.id}
+											onSelect={() => useAppStore.getState().selectCreation(creation.id)}
+										/>
+									))}
+								</ul>
 							)}
 						</li>
 					);
@@ -556,6 +582,7 @@ function ProjectRow({
 	const row = (
 		<div
 			data-testid="project-item"
+			data-row
 			data-menu-open={menuOpen}
 			data-attention={needsAttention || undefined}
 			data-running={isRunning || undefined}
@@ -612,18 +639,15 @@ function ProjectRow({
 					{workspaceCount}
 				</span>
 			)}
-			<IconTooltip label={createWorkspaceLabel}>
-				<Button
-					variant="ghost"
-					size="icon"
-					className="size-panel-row shrink-0"
-					data-testid="add-workspace"
-					aria-label={createWorkspaceLabel}
-					onClick={onAddWorkspace}
-				>
-					<Plus className="size-14" />
-				</Button>
-			</IconTooltip>
+			<IconButton
+				icon={Plus}
+				label={createWorkspaceLabel}
+				variant="ghost"
+				size="s"
+				className="shrink-0"
+				data-testid="add-workspace"
+				onClick={onAddWorkspace}
+			/>
 		</div>
 	);
 	return (
@@ -833,32 +857,31 @@ function WorkspaceRow({
 		</span>
 	) : null;
 	const hoverAction = isSettled ? (
-		<IconTooltip label={t("panels.projectTree.keepActive")}>
-			<button
-				type="button"
-				data-testid="workspace-keep-active"
-				aria-label={t("panels.projectTree.keepActiveLabel", { name: displayName })}
-				onClick={onKeepActive}
-				className={HOVER_CONTROL_CLASS}
-			>
-				<ArrowGoBack className="size-14" />
-			</button>
-		</IconTooltip>
+		<IconButton
+			icon={ArrowGoBack}
+			label={t("panels.projectTree.keepActiveLabel", { name: displayName })}
+			tooltip={t("panels.projectTree.keepActive")}
+			variant="ghost"
+			size="s"
+			data-testid="workspace-keep-active"
+			onClick={onKeepActive}
+			className={HOVER_CONTROL_CLASS}
+		/>
 	) : canSettle ? (
-		<IconTooltip
-			label={settleBlocked ? t("panels.projectTree.settleBlocked") : t("panels.projectTree.settle")}
-		>
-			<button
-				type="button"
-				data-testid="workspace-settle"
-				aria-label={t("panels.projectTree.settleLabel", { name: displayName })}
-				disabled={settleBlocked}
-				onClick={onSettle}
-				className={HOVER_CONTROL_CLASS}
-			>
-				<Check className="size-14" />
-			</button>
-		</IconTooltip>
+		<IconButton
+			icon={Check}
+			label={t("panels.projectTree.settleLabel", { name: displayName })}
+			tooltip={
+				settleBlocked ? t("panels.projectTree.settleBlocked") : t("panels.projectTree.settle")
+			}
+			wrapTrigger
+			variant="ghost"
+			size="s"
+			data-testid="workspace-settle"
+			disabled={settleBlocked}
+			onClick={onSettle}
+			className={HOVER_CONTROL_CLASS}
+		/>
 	) : null;
 
 	return (
@@ -866,6 +889,7 @@ function WorkspaceRow({
 			<fieldset
 				aria-label={displayName}
 				data-testid="workspace-item"
+				data-row
 				data-active={isActive}
 				data-kind={workspace.kind ?? "worktree"}
 				data-settled={settled?.kind}
@@ -924,12 +948,15 @@ function WorkspaceRow({
 				>
 					{hoverAction}
 					<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-						<DropdownMenuTrigger
-							data-testid="workspace-menu"
-							aria-label={t("panels.projectTree.workspaceActions", { name: displayName })}
-							className={HOVER_CONTROL_CLASS}
-						>
-							<MoreVertical className="size-14" />
+						<DropdownMenuTrigger asChild>
+							<IconButton
+								icon={MoreVertical}
+								label={t("panels.projectTree.workspaceActions", { name: displayName })}
+								variant="ghost"
+								size="s"
+								data-testid="workspace-menu"
+								className={HOVER_CONTROL_CLASS}
+							/>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent
 							align="end"

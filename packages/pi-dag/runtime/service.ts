@@ -95,8 +95,10 @@ class Engine implements D.DagService {
 	private readonly bindings = new Set<Binding>();
 	private closed = false;
 	private closing?: Promise<void>;
+	private readonly options: DagServiceOptions;
 
-	constructor(private readonly options: DagServiceOptions) {
+	constructor(options: DagServiceOptions) {
+		this.options = options;
 		this.store = createDagStore(options);
 	}
 
@@ -1344,7 +1346,7 @@ class Engine implements D.DagService {
 				const state = this.next(owned);
 				const current = D.currentTarget(state, job.target);
 				const { details, finalText, errorMessage, ...evidence } = outcome;
-				const { task: _task, thinkingLevel: _thinkingLevel, ...stats } = details;
+				const { task: _task, ...stats } = details;
 				current.activation.phase = "settled";
 				const observed: D.StoredOutcome = { ...evidence, details: stats };
 				const rejected: string[] = [];

@@ -10,3 +10,9 @@ export function remoteBranchPresentation(branches: BranchList | null): RemoteBra
 	}
 	return { kind: "flat", refs: branches?.remote ?? [] };
 }
+
+export function hasRemoteBranches(presentation: RemoteBranchPresentation): boolean {
+	return presentation.kind === "grouped"
+		? presentation.groups.some((group) => group.branches.length > 0)
+		: presentation.refs.length > 0;
+}

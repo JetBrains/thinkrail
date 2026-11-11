@@ -8,6 +8,7 @@ import {
 	revealWorkbenchTool,
 } from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
+import { pierreLines, selectPierreLine } from "./fixtures/pierre";
 
 const section = (page: Page, path: string) =>
 	page.locator(`[data-testid="changes-section"][data-path="${path}"]`);
@@ -209,10 +210,56 @@ test("rich Changes composers share the same preservation and cancellation policy
 	await rich.getByTestId("view-toggle-json").click();
 	await expect(rich.getByTestId("review-composer-input")).toHaveValue("Unsaved structural note");
 	await page.getByTestId("changes-review-layout-stacked").click();
+	await expect(page.getByTestId("changes-review-walk")).toHaveCount(0);
 	await expect(rich.getByTestId("review-composer-input")).toHaveValue("Unsaved structural note");
 	expect(mutations).toEqual([]);
 	await rich.getByTestId("review-composer-cancel").click();
 	await rich.getByTestId("view-toggle-code").click();
 	await rich.getByTestId("view-toggle-json").click();
 	await expect(rich.getByTestId("review-composer-input")).toHaveCount(0);
+});
+
+test("a diff composer stays shown while a scroll-up shrinks the virtual window to its line", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
+	writeFileSync(
+		join(worktree, "draft-long.ts"),
+		`${Array.from({ length: 1500 }, (_, line) => `export const value${line} = ${line};`).join("\n")}\n`,
+	);
+	await revealWorkbenchTool(page, "changes");
+	await row(page, "draft-long.ts").dblclick();
+	const diff = page.getByTestId("diff-view");
+	await expect(pierreLines(diff, "value3 =").last()).toBeVisible();
+	await expect(async () => {
+		await diff.hover();
+		await page.mouse.wheel(0, 300);
+		await expect(pierreLines(diff, "value404 =").last()).toBeInViewport({ timeout: 300 });
+	}).toPass();
+	await selectPierreLine(diff, "value404 =");
+	await page.getByTestId("review-composer-input").fill("Keep me on line 405");
+	const sweep = await diff.evaluate(async (scroller, text) => {
+		const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+		const lineRendered = () =>
+			[...scroller.querySelectorAll("*")]
+				.flatMap((node) =>
+					node.shadowRoot ? [...node.shadowRoot.querySelectorAll("[data-line]")] : [],
+				)
+				.some((line) => line.textContent?.includes(text));
+		const composerShown = () =>
+			(document.querySelector('[data-testid="review-composer"]')?.getClientRects().length ?? 0) > 0;
+		for (let top = scroller.scrollTop; top >= 0; top -= 10) {
+			scroller.scrollTop = top;
+			await frame();
+			await frame();
+			if (!lineRendered()) return { leftWindowAt: top, composerLostAt: null };
+			if (!composerShown()) return { leftWindowAt: null, composerLostAt: top };
+		}
+		return { leftWindowAt: null, composerLostAt: null };
+	}, "value404 =");
+	expect(sweep.composerLostAt).toBeNull();
+	expect(sweep.leftWindowAt).not.toBeNull();
+	await expect(page.getByTestId("review-composer-input")).toHaveValue("Keep me on line 405");
 });

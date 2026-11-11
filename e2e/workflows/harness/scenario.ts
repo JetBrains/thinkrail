@@ -44,9 +44,12 @@ export interface ScenarioResult {
 	durationMs: number;
 }
 
+function missingEntryError(def: ScenarioDef) {
+	return new Error(`Scenario "${def.name}": needs an entry or a user simulator.`);
+}
+
 export function defineScenario(def: ScenarioDef): ScenarioDef {
-	if (!def.entry && !def.user)
-		throw new Error(`Scenario "${def.name}": needs an entry or a user simulator.`);
+	if (!def.entry && !def.user) throw missingEntryError(def);
 	return def;
 }
 
@@ -56,8 +59,8 @@ function entryText(def: ScenarioDef): Promise<string> {
 		return Promise.resolve(
 			`/skill:${def.entry.skill}${def.entry.args ? ` ${def.entry.args}` : ""}`,
 		);
-	// biome-ignore lint/style/noNonNullAssertion: defineScenario guarantees entry or user.
-	return openingMessage(def.user!);
+	if (def.user) return openingMessage(def.user);
+	throw missingEntryError(def);
 }
 
 export async function runScenario(def: ScenarioDef): Promise<ScenarioResult> {
@@ -161,7 +164,7 @@ export async function runScenario(def: ScenarioDef): Promise<ScenarioResult> {
 		watcher?.cancel();
 		dialog?.detach();
 		restoreFactory?.();
-		if (sessionId) endSession(sessionId);
+		if (sessionId) await endSession(sessionId);
 		appendRunRecord({
 			at: new Date().toISOString(),
 			model,

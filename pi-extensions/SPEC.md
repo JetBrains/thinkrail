@@ -27,11 +27,13 @@ host — two copies coexist on purpose and the wiring PR deletes the old one. A 
   scope is deliberate: unscoped `pi-*` names collide (`pi-subagents` is
   third-party) and the scope attributes ownership in the
   `pi.dev/packages` gallery, which is an index of npm packages carrying the `pi-package` keyword — there
-  is no registry to submit to.
+  is no registry to submit to. The gallery enumerates npm's `keywords:pi-package` search, which pages only
+  to offset 5000, so a valid package can be missing from its listing while its direct
+  `pi.dev/packages/<name>` page works (earendil-works/pi#7885); link the direct page.
 - **Two shapes.** An *installable pi extension* carries a `pi` manifest (`extensions: ["./index.ts"]`,
-  `skills` where present, `image`) and the `pi-package` keyword. A *portable library* (e.g. delegation)
-  has named exports only — no manifest, no keyword, never a no-op factory — and is verified through its
-  packed consumer.
+  `skills` where present, and a `video` gallery preview) and the `pi-package` keyword. A *portable
+  library* (e.g. delegation) has named exports only — no manifest, no keyword, never a no-op factory —
+  and is verified through its packed consumer.
 - **Raw TypeScript, no build step** (pi loads entrypoints through jiti). `files` is a package-specific
   whitelist of everything the entrypoints and `exports` transitively import, tests excluded; `exports`
   preserves every subpath an existing consumer uses (e.g. `./core`). Pi SDK packages are
@@ -62,7 +64,11 @@ Required before a package's first publish, and the definition of "works in vanil
   resolves from the fixture (Node ignores `import.meta.resolve`'s parent URL — resolving from the script's
   own location silently tested the repo's pi). The runner loads through `DefaultResourceLoader.reload()`,
   asserts zero errors and the expected tools/skills, and executes a per-package case table (tool calls,
-  expected text/error, and a `renderResult(...).render(width)` check). *Session-bound* tools (registered
+  expected text/error, a `renderResult(...).render(width)` check, and an expected `terminate` flag). A
+  case may script the UI the tool sees: `ui.mode` (`tui` or `rpc`), `ui.replies` answering `select`
+  (a number picks that choice) and `input` in order with `null` dismissing, and `ui.keys` as raw terminal
+  input fed to the component a `ui.custom` factory returns; cases without `ui` get an empty context.
+  *Session-bound* tools (registered
   in `session_start`, e.g. subagents, background-commands) will need a mode that binds an isolated
   `AgentSession` on pi's faux provider — added with the first wave that ships one. Token-backed smokes
   stay on-demand.
@@ -88,9 +94,13 @@ existing tags makes a retry after a failed tag push safe.
 Trusted Publishing is configured per *existing* package, so each new package gets one manual bootstrap
 publish first: `bun run release:pack <dir>` packs it and prints the `npm publish … --provenance=false`
 command for an npm-org owner (the manifest's `publishConfig.provenance` would otherwise make a local
-publish fail; only CI can attest).
+publish fail; only CI can attest). The trusted-publisher configuration itself (`npm trust github …`) must
+allow `npm publish` (npm's post-2026-09 default is stage-only) and is validated only by a first OIDC
+publish within 48 hours of its creation — the manual bootstrap does not count — so it is created right
+before the package's next version PR merges, not at bootstrap. Operational detail: `pi-extensions/README.md`.
 
-Order: visualize → delegation + subagents → background-commands → spec-graph → todos. Not published:
+Order: visualize → ask-user-question → delegation + subagents → background-commands → spec-graph →
+todos. Not published:
 `pi-thinkrail-workflow` (workspace-internal), `pi-dag` (until it has a consumer).
 
 ## Boundary
@@ -105,3 +115,4 @@ Order: visualize → delegation + subagents → background-commands → spec-gra
 | package | shape | notes |
 | --- | --- | --- |
 | `visualize` | extension | `visualize` tool; `lovely-mermaid` for TUI box-drawing and the best-effort vanilla validation; exports `createVisualizeExtension({ validateMermaid })` so an embedder can inject a strict validator — ThinkRail does, from [[module-ext-visualize]]. Detail: [[module-pi-visualize]]. |
+| `ask-user-question` | extension | `ask_user_question` tool: a terminal questionnaire in pi's interactive mode, one dialog per question in RPC hosts; exports `createAskUserQuestionExtension({ ask, guidance, filePreviews, checkFile })` so an embedder can answer through its own UI and opt into file previews with its own path check (off in vanilla pi), and a runtime-import-free `./core`. ThinkRail composes it from [[module-ext-ask-user-question]] with an asker over its answer mailbox and the host's workspace-file check. Detail: [[module-pi-ask-user-question]]. |

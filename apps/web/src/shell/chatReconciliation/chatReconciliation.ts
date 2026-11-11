@@ -10,6 +10,7 @@ import {
 	isConnectedGeneration,
 	layoutOpenOptionsForNavigation,
 	selectAttentionCenterTab,
+	selectComposerFocusRequestStale,
 	selectCurrentRouteChatTarget,
 	selectWorkspaceSessionIds,
 	shouldAdvanceAcceptedNavigation,
@@ -173,6 +174,13 @@ export function useDeletedChatPlacementReconciliation(workspaceId: string): void
 			});
 		}
 	}, [connectionGeneration, deletedSessions, document, workspaceId]);
+}
+
+export function useComposerFocusExpiry(workspaceId: string): void {
+	const stale = useAppStore((state) => selectComposerFocusRequestStale(state, workspaceId));
+	useEffect(() => {
+		if (stale) useAppStore.getState().clearComposerFocusRequest();
+	}, [stale]);
 }
 
 export function useWorkspaceChatCatalogReconciliation(
@@ -423,6 +431,7 @@ export function useWorkspaceChatCatalogReconciliation(
 					history.map((summary) => ({
 						sessionId: summary.sessionId,
 						title: summary.title,
+						...(summary.firstPrompt ? { firstPrompt: summary.firstPrompt } : {}),
 						closedAt: summary.updatedAt,
 					})),
 				);

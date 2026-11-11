@@ -44,9 +44,14 @@ import {
 	withAvailablePlacementId,
 } from "./model";
 import { BUILTIN_LAYOUT_PRESETS } from "./presets";
-import type { LayoutCenterTab, LayoutTerminalTab, WorkspaceLayoutDocument } from "./types";
+import type {
+	LayoutCenterTab,
+	LayoutFileTab,
+	LayoutTerminalTab,
+	WorkspaceLayoutDocument,
+} from "./types";
 
-const file = (id: string): LayoutCenterTab => ({
+const file = (id: string): LayoutFileTab => ({
 	kind: "file",
 	id,
 	name: `${id}.ts`,
@@ -72,8 +77,8 @@ function baseDocument(tabs: LayoutCenterTab[] = []): WorkspaceLayoutDocument {
 	};
 }
 
-function mutation<T extends { document: WorkspaceLayoutDocument } | { reason: string }>(result: T) {
-	if ("reason" in result) throw new Error(result.reason);
+function mutation(result: LayoutOperationResult) {
+	if (isLayoutUnavailable(result)) throw new Error(result.reason);
 	return result;
 }
 
@@ -142,7 +147,7 @@ describe("workspace layout model", () => {
 			visible: true,
 			groups: [{ id: "bottom-folded", weight: 1, folded: true, tabs: [] }],
 		};
-		const attention = reconcileAttention(document);
+		const attention = reconcileAttention(document, undefined);
 		expect(
 			mutation(showSide(document, "right", 6, attention)).document.right.groups[0]?.folded,
 		).toBe(false);
@@ -158,8 +163,8 @@ describe("workspace layout model", () => {
 		expect(layoutTabName(currentTranslator(), file("one"))).toBe("one.ts");
 	});
 
-	test("default chat, terminal, Changes, diff and plan names follow the current language", () => {
-		applyLocale("de", {
+	test("default chat, terminal, Changes, diff and plan names follow the current language", async () => {
+		await applyLocale("de", {
 			de: {
 				"store.chatTab.defaultName": "Unterhaltung",
 				"store.terminal.defaultTitle": "Konsole {{index}}",
@@ -172,6 +177,27 @@ describe("workspace layout model", () => {
 			const chat = (name: string) => ({ kind: "chat", id: "c", name, sessionId: "s" }) as const;
 			expect(layoutTabName(t, chat(""))).toBe("Unterhaltung");
 			expect(layoutTabName(t, chat("Fix login"))).toBe("Fix login");
+			const prompts = { s: "Please refactor the authentication module so that tokens refresh" };
+			expect(layoutTabName(t, chat(""), prompts)).toBe(
+				"Please refactor the authentication module so\u2026",
+			);
+			expect(layoutTabName(t, chat("Fix login"), prompts)).toBe("Fix login");
+			expect(layoutTabName(t, chat(""), { other: "x" })).toBe("Unterhaltung");
+			expect(describeLayoutGroup(t, [chat(""), toolTab("plan")], prompts)).toContain(
+				"Please refactor the authentication module so\u2026",
+			);
+			const plan = {
+				kind: "document",
+				id: "d",
+				name: "",
+				documentKind: "todo-plan",
+				sourceId: "s",
+				docPath: "TODO.md",
+			} as const;
+			expect(layoutTabName(t, plan)).toBe("Plan: Unterhaltung");
+			expect(layoutTabName(t, plan, prompts)).toBe(
+				"Plan: Please refactor the authentication module so\u2026",
+			);
 			expect(layoutTabName(t, { kind: "terminal", id: "t", name: "Terminal 2", tabKey: "k" })).toBe(
 				"Konsole 2",
 			);
@@ -198,7 +224,7 @@ describe("workspace layout model", () => {
 				}),
 			).toBe("Plan: Unterhaltung");
 		} finally {
-			applyLocale("en", {});
+			await applyLocale("en", {});
 		}
 	});
 
@@ -360,9 +386,11 @@ describe("workspace layout model", () => {
 		};
 		let document = baseDocument([file("one"), terminal]);
 		document = mutation(createAuxiliaryGroup(document, "bottom", terminal, 0, 1)).document;
+		const [bottomGroup] = document.bottom.groups;
+		if (!bottomGroup) throw new Error("expected one bottom group");
 		expect(findTabLocation(document, terminal.id)).toEqual({
 			area: "bottom",
-			groupId: document.bottom.groups[0]?.id,
+			groupId: bottomGroup.id,
 		});
 		expect(document.bottom.visible).toBe(true);
 		expect(
@@ -896,8 +924,16 @@ describe("workspace layout model", () => {
 			lastFocusedSideGroupId: {},
 			navigationClockByGroup: {},
 		});
-		expect(fromUntrustedPlainObjects.selectedByGroup.constructor).toBe("one");
-		expect(fromUntrustedPlainObjects.navigationClockByGroup.constructor).toBe(0);
+		expect(
+			Object.getOwnPropertyDescriptor(fromUntrustedPlainObjects.selectedByGroup, "constructor")
+				?.value,
+		).toBe("one");
+		expect(
+			Object.getOwnPropertyDescriptor(
+				fromUntrustedPlainObjects.navigationClockByGroup,
+				"constructor",
+			)?.value,
+		).toBe(0);
 	});
 
 	test("session pruning removes both chat and registered TODO references without touching neighbors", () => {
@@ -1017,7 +1053,7 @@ describe("workspace layout model", () => {
 					}
 					default: {
 						const side = random() % 2 === 0 ? "left" : "right";
-						result = setSideVisibility(document, side, !document[side].visible);
+						result = { document: setSideVisibility(document, side, !document[side].visible) };
 					}
 				}
 				if (!isLayoutUnavailable(result)) document = result.document;
