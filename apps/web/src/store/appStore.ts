@@ -817,7 +817,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 						...rt.turns,
 						{
 							kind: "continuationRequest",
-							id: crypto.randomUUID(),
+							id: randomUuid(),
 							details: event.message.details,
 							timestamp: event.message.timestamp,
 						},
@@ -831,7 +831,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 						...rt.turns,
 						{
 							kind: "handoff",
-							id: crypto.randomUUID(),
+							id: randomUuid(),
 							details: event.message.details,
 							timestamp: event.message.timestamp,
 						},
