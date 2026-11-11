@@ -3,6 +3,7 @@ import {
 	type DeviceMessage,
 	encodeDeviceMessage,
 	type HostMessage,
+	type IceServer,
 	offerTranscript,
 	type PairingNostrRoute,
 	pairingMacInput,
@@ -17,6 +18,7 @@ import { hostRejection, isTerminalConnectError, RemoteConnectError } from "./con
 import { toDeviceChannel } from "./deviceChannel";
 import { createDeviceWireClient, type DeviceWireClient } from "./deviceWireClient";
 import { createReconnectLoop } from "./reconnectLoop";
+import { RelayUnreachableError } from "./relayPicker";
 import { openSignaling, type SignalingPipe } from "./signalingRoute";
 
 export interface RemoteConnection {
@@ -49,9 +51,9 @@ export interface RemoteConnection {
 
 const DEVICE_KEY_STORAGE = "thinkrail.remote.deviceKey";
 /**
- * How long one attempt may take from reaching the relay to an open data channel. Past it the attempt fails
- * instead of leaving the app on "Connecting…": as `host_silent` when the host never answered, else as
- * `no_direct_route` (signaling worked, WebRTC did not).
+ * How long one attempt may take from its start to an open data channel. Past it the attempt fails instead of
+ * leaving the app on "Connecting…": as `relay_unreachable` when no signaling route got ready, `host_silent`
+ * when the host never answered, else as `no_direct_route` (signaling worked, WebRTC did not).
  */
 export const CONNECT_TIMEOUT_MS = 20_000;
 
@@ -201,18 +203,8 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 		lastRoutes = next;
 		routesHandler(next);
 	});
-	let active: { pipe: SignalingPipe; pc: RTCPeerConnection } | null = null;
-
-	const teardownActive = (): void => {
-		if (!active) return;
-		try {
-			active.pipe.close();
-		} catch {}
-		try {
-			active.pc.close();
-		} catch {}
-		active = null;
-	};
+	/** The attempt in flight or live: `abort` ends it, `probe` drops a live one whose peer or channel is dead. */
+	let current: { abort(): void; probe(): void } | null = null;
 
 	const sign = async (data: Uint8Array<ArrayBuffer>): Promise<string> => {
 		const signature = await crypto.subtle.sign({ name: "Ed25519" }, key.privateKey, data);
@@ -222,140 +214,193 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 	let relayUrl = params.relayUrls[0] ?? "";
 
 	/** One connection attempt: `pairing` sends the QR token's `hello`, otherwise the device `resume`s. */
-	const attempt = async (pairing: boolean): Promise<void> => {
-		const nonce = randomToken();
-		let challenge = "";
-		const initiate: DeviceMessage =
-			pairing && tokenId !== undefined
-				? { kind: "hello", tokenId, devicePublicKey: key.publicKeyRaw, label: params.label, nonce }
-				: { kind: "resume", devicePublicKey: key.publicKeyRaw, nonce };
-		const { pipe, ice } = await openSignaling(routes.relayUrls, params.hostKey, routes.nostr);
-		if (closed) {
-			pipe.close();
-			throw new Error("connection closed");
-		}
-		relayUrl = pipe.route === "relay" ? pipe.url : "";
-		return new Promise<void>((resolve, reject) => {
-			const pc = new RTCPeerConnection({ iceServers: withPublicStun(ice ? [...ice] : undefined) });
-			active = { pipe, pc };
+	const attempt = (pairing: boolean): Promise<void> =>
+		new Promise<void>((resolve, reject) => {
+			const nonce = randomToken();
+			let challenge = "";
+			const initiate: DeviceMessage =
+				pairing && tokenId !== undefined
+					? {
+							kind: "hello",
+							tokenId,
+							devicePublicKey: key.publicKeyRaw,
+							label: params.label,
+							nonce,
+						}
+					: { kind: "resume", devicePublicKey: key.publicKeyRaw, nonce };
+			let pipe: SignalingPipe | null = null;
+			let pc: RTCPeerConnection | null = null;
+			let channel: RTCDataChannel | null = null;
 			let settled = false;
 			let over = false;
 			let heardHost = false;
 			let signals: Promise<void> = Promise.resolve();
 
-			const dropped = (error: RemoteConnectError): void => {
+			const dropped = (error: unknown): void => {
 				if (over) return;
 				over = true;
 				clearTimeout(timer);
-				teardownActive();
+				if (current === handle) current = null;
+				try {
+					pipe?.close();
+				} catch {}
+				try {
+					pc?.close();
+				} catch {}
 				if (settled) {
 					if (!closed) loop.dropped();
 				} else {
 					reject(error);
 				}
 			};
+			const handle = {
+				abort: () => dropped(new RemoteConnectError("failed", "the connection was closed")),
+				probe: () => {
+					const peerState = pc?.connectionState;
+					const peerDead = peerState !== undefined && peerState !== "connected";
+					if (settled && (peerDead || channel?.readyState !== "open"))
+						dropped(new RemoteConnectError("relay_lost", "the connection went quiet"));
+				},
+			};
+			current = handle;
 			const timer = setTimeout(
 				() =>
 					dropped(
-						heardHost
-							? new RemoteConnectError(
-									"no_direct_route",
-									"the connection to the computer timed out",
-								)
-							: new RemoteConnectError("host_silent", "the computer did not answer"),
+						pipe === null
+							? new RelayUnreachableError([...routes.relayUrls, ...(routes.nostr?.relays ?? [])])
+							: heardHost
+								? new RemoteConnectError(
+										"no_direct_route",
+										"the connection to the computer timed out",
+									)
+								: new RemoteConnectError("host_silent", "the computer did not answer"),
 					),
 				CONNECT_TIMEOUT_MS,
 			);
-			const send = (message: DeviceMessage): void => pipe.send(encodeDeviceMessage(message));
 
-			pc.addEventListener("icecandidate", (event) => {
-				if (event.candidate)
-					send({ kind: "candidate", candidate: JSON.stringify(event.candidate.toJSON()) });
-			});
-			pc.addEventListener("connectionstatechange", () => {
-				if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
-					dropped(new RemoteConnectError("no_direct_route", "peer connection lost"));
+			const start = (opened: SignalingPipe, ice: readonly IceServer[] | undefined): void => {
+				if (over) {
+					opened.close();
+					return;
 				}
-			});
-			pc.addEventListener("datachannel", (event) => {
-				event.channel.addEventListener("close", () =>
-					dropped(new RemoteConnectError("relay_lost", "the computer closed the connection")),
-				);
-				event.channel.addEventListener("open", () => {
-					client.attach(toDeviceChannel(event.channel));
-					clearTimeout(timer);
-					settled = true;
-					resolve();
+				pipe = opened;
+				relayUrl = opened.route === "relay" ? opened.url : "";
+				const peer = new RTCPeerConnection({
+					iceServers: withPublicStun(ice ? [...ice] : undefined),
 				});
-			});
+				pc = peer;
+				const send = (message: DeviceMessage): void => opened.send(encodeDeviceMessage(message));
 
-			const onHost = async (message: HostMessage): Promise<void> => {
-				heardHost = true;
-				switch (message.kind) {
-					case "challenge": {
-						challenge = message.challenge;
-						const signature = await sign(base64urlToBytes(challenge));
-						send(
-							pairing && params.token !== undefined
-								? {
-										kind: "proof",
-										signature,
-										mac: await pairingMac(params.token, key.publicKeyRaw, challenge),
-									}
-								: { kind: "proof", signature },
-						);
-						return;
+				peer.addEventListener("icecandidate", (event) => {
+					if (event.candidate && !over)
+						send({ kind: "candidate", candidate: JSON.stringify(event.candidate.toJSON()) });
+				});
+				peer.addEventListener("connectionstatechange", () => {
+					if (peer.connectionState === "failed" || peer.connectionState === "disconnected") {
+						dropped(new RemoteConnectError("no_direct_route", "peer connection lost"));
 					}
-					case "rejected":
-						dropped(hostRejection(message.reason, message.code));
-						return;
-					case "offer": {
-						if (!challenge || !(await hostSigned(params.hostKey, nonce, challenge, message))) {
-							dropped(new RemoteConnectError("identity_mismatch", "host identity check failed"));
+				});
+				peer.addEventListener("datachannel", (event) => {
+					const opening = event.channel;
+					opening.addEventListener("close", () =>
+						dropped(new RemoteConnectError("relay_lost", "the computer closed the connection")),
+					);
+					opening.addEventListener("open", () => {
+						if (over || settled) {
+							opening.close();
 							return;
 						}
-						await pc.setRemoteDescription({ type: "offer", sdp: message.sdp });
-						const answer = await pc.createAnswer();
-						await pc.setLocalDescription(answer);
-						if (answer.sdp) {
-							const signature = await sign(answerTranscript(challenge, answer.sdp));
-							send({ kind: "answer", sdp: answer.sdp, signature });
+						channel = opening;
+						client.attach(toDeviceChannel(opening));
+						clearTimeout(timer);
+						settled = true;
+						if (opened.route === "nostr") opened.close();
+						resolve();
+					});
+				});
+
+				const onHost = async (message: HostMessage): Promise<void> => {
+					if (over || settled) return;
+					heardHost = true;
+					switch (message.kind) {
+						case "challenge": {
+							if (challenge) return;
+							challenge = message.challenge;
+							const signature = await sign(base64urlToBytes(challenge));
+							send(
+								pairing && params.token !== undefined
+									? {
+											kind: "proof",
+											signature,
+											mac: await pairingMac(params.token, key.publicKeyRaw, challenge),
+										}
+									: { kind: "proof", signature },
+							);
+							return;
 						}
-						return;
+						case "rejected":
+							dropped(hostRejection(message.reason, message.code));
+							return;
+						case "offer": {
+							if (!challenge || !(await hostSigned(params.hostKey, nonce, challenge, message))) {
+								dropped(new RemoteConnectError("identity_mismatch", "host identity check failed"));
+								return;
+							}
+							await peer.setRemoteDescription({ type: "offer", sdp: message.sdp });
+							const answer = await peer.createAnswer();
+							await peer.setLocalDescription(answer);
+							if (answer.sdp && !over) {
+								const signature = await sign(answerTranscript(challenge, answer.sdp));
+								send({ kind: "answer", sdp: answer.sdp, signature });
+							}
+							return;
+						}
+						case "candidate":
+							await peer.addIceCandidate(JSON.parse(message.candidate) as RTCIceCandidateInit);
+							return;
+						default:
+							return;
 					}
-					case "candidate":
-						await pc.addIceCandidate(JSON.parse(message.candidate) as RTCIceCandidateInit);
-						return;
-					default:
-						return;
-				}
+				};
+
+				opened.listen(
+					(data) => {
+						const host = parseHostMessage(data);
+						if (!host) return;
+						signals = signals
+							.then(() => onHost(host))
+							.catch((error: unknown) => {
+								if (!settled)
+									dropped(
+										new RemoteConnectError(
+											"failed",
+											error instanceof Error ? error.message : String(error),
+										),
+									);
+							});
+					},
+					(error) => {
+						if (!settled) dropped(error);
+					},
+				);
+				send(initiate);
 			};
 
-			pipe.listen((data) => {
-				const host = parseHostMessage(data);
-				if (!host) return;
-				signals = signals
-					.then(() => onHost(host))
-					.catch((error: unknown) =>
-						dropped(
-							new RemoteConnectError(
-								"failed",
-								error instanceof Error ? error.message : String(error),
-							),
-						),
-					);
-			}, dropped);
-			send(initiate);
+			openSignaling(routes.relayUrls, params.hostKey, routes.nostr)
+				.then(({ pipe: opened, ice }) => start(opened, ice))
+				.catch(dropped);
 		});
-	};
 
 	let lostHandler: (error: RemoteConnectError) => void = () => {};
-	const lose = (error: RemoteConnectError): void => {
-		if (closed) return;
+	const shutDown = (): void => {
 		closed = true;
 		loop.stop();
-		teardownActive();
+		current?.abort();
 		client.close();
+	};
+	const lose = (error: RemoteConnectError): void => {
+		if (closed) return;
+		shutDown();
 		lostHandler(error);
 	};
 
@@ -403,13 +448,11 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 			routesHandler = handler;
 			if (lastRoutes) handler(lastRoutes);
 		},
-		reconnectNow: () => loop.now(),
-		close: () => {
-			closed = true;
-			loop.stop();
-			teardownActive();
-			client.close();
+		reconnectNow: () => {
+			current?.probe();
+			loop.now();
 		},
+		close: shutDown,
 	};
 }
 

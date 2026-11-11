@@ -32,7 +32,7 @@ older than the computer, no direct route, …), or the raw message of anything u
 good (`onLost` — it revoked this phone) leaves any of its screens for the Devices tab, where its row shows
 why. Open, its row shows `HostBanner` in place of its projects, with the one action that fixes the failure
 (`recoveryOf`): **Scan QR code** in place when the phone must pair again (revoked, the key changed, an expired
-code), **Reconnect** for a passing failure, nothing when only an app update helps. Nothing waits on that tap:
+code), **Reconnect** for a passing failure, nothing when only an app update helps. The tap clears the shown reason, so the row reads **Connecting…** until that attempt lands or fails again. Nothing waits on that tap:
 the controller retries a passing failure on its own, a dropped channel shows **Connecting…** while it comes
 back and the reason (with **Reconnect**) once a retry failed, returning to the app (`@capacitor/app` `resume`) or the network coming back (`online`) retries at once,
 and the routes a computer sends replace its saved entry in place. Welcome fits one screen without scrolling: three one-line steps (which network, how to turn access on, scan) and the scan button, with the paste field folded behind **Enter link manually**.
@@ -60,21 +60,23 @@ Welcome). **Sessions** (`ChatsScreen.tsx`, `chats.ts`): the sessions that need a
 question, an unread result or failure), then **Running**, then **Done**: the ones the phone saw waiting or working
 that since finished (`settleDone`, newest first, at most 20, kept on the device until **Clear**), so an answered
 session does not vanish once its result is read elsewhere; other idle ones stay in the tree — each naming its project and workspace,
-the tab badged with the Needs-you count; a tap lands in that chat. **Settings**: **Devices** — each paired device with Connected / Connecting… / the failure, **Forget** at the right edge of its line (confirmed in place) and, only when unreachable, **Reconnect** under the reason; then the same **Scan QR code** / **Enter link manually** rows as Add a device — then theme and language. the IDE tree's actions, on touch (`TreeActions.tsx` over `sheet.tsx`'s
+the tab badged with the Needs-you count; a tap lands in that chat (a row whose computer could not list its place says why, and a tap re-reads it). **Settings**: **Devices** — each paired device with Connected / Connecting… / the failure, **Forget** at the right edge of its line (confirmed in place) and, only when unreachable, **Reconnect** under the reason; then the same **Scan QR code** / **Enter link manually** rows as Add a device — then theme and language. the IDE tree's actions, on touch (`TreeActions.tsx` over `sheet.tsx`'s
   bottom `Sheet` / `ConfirmSheet` / `RenameSheet`, built on the shared `@thinkrail/ui/dialog`, with the IDE's
   strings; short action menus and confirmations stay bottom sheets, a list you pick from — models, base
   branches — opens as a full page with a back arrow, never a floating inset window): a project row's **+** opens `NewWorktreeScreen.tsx`, the IDE's New workspace dialog on a phone —
   an optional task, the base branch (its own stack screen over `git.listBranches`, default first, via `baseBranches`) and
   the model + effort (`ModelSheet`, starting from `model.default`); its one button runs `newWorktree.ts`'s
   `startWorktree` (`workspace.create` → `session.create` with a picked model → `session.prompt` with the task)
-  and lands in that chat, a first message that did not go back in its field with why — and its **⋯** offers New worktree,
+  and lands in that chat, a first message that did not go back in its field with why; a retry after the chat failed
+  to start reuses the worktree it already made (`created`) instead of cutting another — and its **⋯** offers New worktree,
   Rename (`project.rename`) and Close project (confirmed, `project.close`); a workspace row's **⋯** offers
   Rename (worktrees only), Mark as read / unread, Settle (blocked while running or unread, as in the IDE; the
   phone hides the Settled shelf, so it is unsettled on the computer) and Remove (confirmed; "Remove from
-  ThinkRail" for an external folder). Rows update from the host's pushes; a failure shows in a dismissible
-  banner at the top of the tree; a tapped workspace always lands in a chat, as the IDE does (`WorkspaceScreen.tsx`'s `WorkspaceOpener`):
+  ThinkRail" for an external folder). Rows update from the host's pushes; a row's ⋯ spins and takes no second action while one runs; a failure shows in
+  a dismissible banner at the top of the tree; a tapped workspace always lands in a chat, as the IDE does (`WorkspaceScreen.tsx`'s `WorkspaceOpener`):
   the newest chat the host holds `live`, else the newest from history (`session.getMessages` attaches a disk
-  session, the same reopen the IDE does), else a new one via `session.create`; back returns to the screen it came from. When
+  session, the same reopen the IDE does), else a new one via `session.create` (a failure says why with **Retry**); back returns to the screen it came from, and an
+  answer arriving after back no longer navigates (`async.ts`'s `useMounted`). When
   the workspace has more than one chat the chat header shows a history button opening `ChatHistoryScreen`:
   **Open** chats, then **Recent** (closed) ones, each newest first, the current one marked, **+** to start a
   chat; picking one switches to it and back returns to the chat. Titles come from contracts' `chatTitle`,
@@ -85,7 +87,8 @@ the tab badged with the Needs-you count; a tap lands in that chat. **Settings**:
   transcript refresh and after a model change: a slim `<meter>` of the context used with its percent of the
   window, since the phone font lacks the IDE's ▰ / ▱, then the billed parts, on one line; a tap opens the toolbar's
   buttons under it — `ChatTools.tsx`'s **Resources** (`session.resources`, refreshed on `session.resourcesChanged`,
-  as chat-ui's `ResourceRow`s, live first; a subagent opens its transcript, Stop only with write access) and
+  as chat-ui's `ResourceRow`s, live first; a subagent opens its transcript, Stop only with write access, pending until the host answers and its failure on
+  the row) and
   **Skills** (`skills.state`, grouped by chat-ui's `groupSkills` with the IDE dialog's group / All plugins / per-skill
   switches, Enable for a skill awaiting confirmation and Reload; read-only phones see them locked)
   as full pages): it renders the
@@ -97,7 +100,10 @@ the tab badged with the Needs-you count; a tap lands in that chat. **Settings**:
   over models grouped by provider (`modelSections.ts`, current provider first, a search field only past 8
   models); a tap picks and closes, and the composer's `/model` opens it — send / steer / follow-up /
   interrupt through the same `session.*` methods as the IDE, tool-card answers through
-  `session.respondToTool`). Extension cards are the IDE's own registry (`registerWebExtensions`), with the
+  `session.respondToTool`). Every chat action reports its failure in one line above the field ("what failed: why"):
+  a message that did not go returns to the field ahead of anything typed since, with its images; a failed model or
+  effort change reverts only while it is still the shown choice; queue edits and stop run one at a time
+  (`async.ts`'s `singleFlight`), and an interrupt sent while a stop is still in flight stays in the field. Extension cards are the IDE's own registry (`registerWebExtensions`), with the
   store's `hostState.awaitingToolCallId` so only the call the agent waits on accepts an answer. An extension
   dialog (`select` / `confirm` / `input` / `editor`) is the store's `pendingExtUi` — fed from `session.state`'s
   `needsInput` as in the IDE — so a phone that opens a chat after it was raised still sees it: on its tool card
@@ -112,7 +118,7 @@ the tab badged with the Needs-you count; a tap lands in that chat. **Settings**:
   `setStatus` / `setWidget` / `setTitle` are IDE chrome and not shown. Paths in tool cards are relative to the
   workspace's `worktreePath`. An Agent card's **Open transcript** pushes `SubagentScreen.tsx`, the IDE's
   subagent transcript dialog as a stack screen over `subagent.getTranscript`, re-read while the run is
-  queued or running; back returns to the chat as left. Diagrams (fenced mermaid and visualize) render inline
+  queued or running (a failed read keeps the transcript on screen under the reason and retries while the run was live); back returns to the chat as left. Diagrams (fenced mermaid and visualize) render inline
   with the shared fullscreen pan/zoom view; changed-file lists are text only, since the phone opens no files. The
   transcript streams token by token from the store (`hydrateStandaloneChat` loads it without a workbench
   placement, `useTranscriptSync` repairs it after a reconnect, `useSessionStats` refreshes the usage line);
@@ -162,7 +168,7 @@ roots, so back shows them exactly as left — scroll,
 expanded projects, transcript — with no reload. `useHostRequest` starts a reopened screen from the read's
 last value for that host and refreshes in place; the tree re-reads `project.list` on `project.updated` and a
 project's `workspace.list` on `workspace.created/updated/removed`, keeping the rows on screen, so rows keyed
-by id stay put and only a new one appears. A loader shows only the first time a read has no value.
+by id stay put and only a new one appears. A loader shows only the first time a read has no value. Other params or another client never show the previous read's rows — they start from their own last value or a loader — and a failed read shows why with **Retry**, loading again when re-issued.
 
 Add a device pairs through `PairForm.tsx`'s `PairActions` — grouped **Scan QR code** /
 **Enter link manually** rows (the latter opens the paste field), the same `usePairing` flow `Welcome`'s

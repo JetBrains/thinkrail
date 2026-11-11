@@ -18,6 +18,8 @@ export function ConnectByLinkDialog({ onClose }: { onClose: () => void }) {
 	const state = useSyncExternalStore(controller.subscribe, controller.getState);
 	const [link, setLink] = useState("");
 
+	useEffect(() => () => controller.reset(), [controller]);
+
 	useEffect(() => {
 		if (state.status === "connected") {
 			mountRemoteSession(state.connection.client, state.connection.hostKey);

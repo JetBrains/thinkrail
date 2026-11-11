@@ -15,7 +15,7 @@ import { ComputersScreen } from "./ComputersScreen";
 import { needsYouCount, useDoneSessions } from "./chats";
 import { deviceLabel } from "./deviceLabel";
 import { localStore } from "./deviceStore";
-import { failureOf, failureText, type HostFailure, type HostStatus } from "./hostStatus";
+import { connectSavedHost, failureOf, type HostFailure, type HostStatus } from "./hostStatus";
 import { NewWorktreeScreen } from "./NewWorktreeScreen";
 import {
 	leaveHost,
@@ -39,7 +39,10 @@ import { applyDevicePreferences } from "./theme";
 import { Welcome } from "./Welcome";
 import { ChatHistoryScreen, WorkspaceOpener } from "./WorkspaceScreen";
 
-export type PairState = { kind: "idle" } | { kind: "pairing" } | { kind: "failed"; reason: string };
+export type PairState =
+	| { kind: "idle" }
+	| { kind: "pairing" }
+	| { kind: "failed"; failure: HostFailure };
 
 export function App() {
 	const registry = useMemo(() => createHostRegistry(localStore), []);
@@ -85,17 +88,7 @@ export function App() {
 		});
 	}, []);
 	const connectHost = useCallback(
-		(host: SavedHost): Promise<void> => {
-			if (controller.clientFor(host.hostKey)) {
-				controller.reconnectNow();
-				return Promise.resolve();
-			}
-			markFailure(host.hostKey, null);
-			return controller
-				.connect(host)
-				.then(() => markFailure(host.hostKey, null))
-				.catch((error: unknown) => markFailure(host.hostKey, failureOf(error)));
-		},
+		(host: SavedHost): Promise<void> => connectSavedHost(controller, host, markFailure),
 		[controller, markFailure],
 	);
 	const statusOf = (hostKey: string): HostStatus => {
@@ -138,11 +131,11 @@ export function App() {
 				setPair({ kind: "idle" });
 				return true;
 			} catch (error) {
-				setPair({ kind: "failed", reason: failureText(t, failureOf(error)) });
+				setPair({ kind: "failed", failure: failureOf(error) });
 				return false;
 			}
 		},
-		[controller, registry, connectHost, t],
+		[controller, registry, connectHost],
 	);
 
 	useEffect(() => {
@@ -157,16 +150,6 @@ export function App() {
 		const retryNow = (): void => controller.reconnectNow();
 		const resume = CapApp.addListener("resume", retryNow);
 		window.addEventListener("online", retryNow);
-		return () => {
-			offLost();
-			offRetry();
-			offRoutes();
-			void resume.then((handle) => handle.remove());
-			window.removeEventListener("online", retryNow);
-		};
-	}, [controller, registry, markFailure]);
-
-	useEffect(() => {
 		const unsubscribe = controller.subscribe(() => {
 			setItems(controller.items());
 			setFailures((current) => {
@@ -180,6 +163,18 @@ export function App() {
 			});
 		});
 		for (const host of registry.list()) void connectHost(host);
+		return () => {
+			offLost();
+			offRetry();
+			offRoutes();
+			unsubscribe();
+			void resume.then((handle) => handle.remove());
+			window.removeEventListener("online", retryNow);
+			controller.stop();
+		};
+	}, [controller, registry, markFailure, connectHost]);
+
+	useEffect(() => {
 		const onLink = (url: string | undefined): void => {
 			if (isPairLink(url)) void pairWith(url.trim());
 		};
@@ -188,11 +183,9 @@ export function App() {
 			.catch(() => {});
 		const deepLink = CapApp.addListener("appUrlOpen", (event) => onLink(event.url));
 		return () => {
-			unsubscribe();
 			void deepLink.then((handle) => handle.remove());
-			controller.stop();
 		};
-	}, [controller, registry, pairWith, connectHost]);
+	}, [pairWith]);
 
 	const back = useCallback((): boolean => {
 		if (stack.length === 0) return false;

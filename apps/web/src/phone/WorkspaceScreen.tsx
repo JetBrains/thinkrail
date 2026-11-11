@@ -9,9 +9,10 @@ import {
 } from "@thinkrail/contracts";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import type { DeviceWireClient, RemoteSessionItem } from "@thinkrail/remote-client";
-import { IconButton } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import { useLayoutEffect, useRef, useState } from "react";
 import { useNow } from "../components/useNow";
+import { reasonOf, singleFlight, useMounted } from "./async";
 import { ListRow, LoadedList, Loader, Notice, Screen } from "./layout";
 import { workspaceName } from "./ProjectTree";
 import { statusOf } from "./status";
@@ -70,8 +71,29 @@ export const createChat = async (
 	};
 };
 
-const reasonOf = (error: unknown): string =>
-	error instanceof Error ? error.message : String(error);
+/** A header's **+**: starts one chat at a time and opens it, unless the screen was left while it started. */
+export function useStartChat(
+	client: DeviceWireClient | null,
+	workspaceId: string,
+	onOpen: (chat: OpenChat) => void,
+): { creating: boolean; failure: string | null; start: () => void } {
+	const t = useT();
+	const mounted = useMounted();
+	const [creating, setCreating] = useState(false);
+	const [flight] = useState(() => singleFlight(setCreating));
+	const [failure, setFailure] = useState<string | null>(null);
+	const start = (): void => {
+		if (!client) return;
+		setFailure(null);
+		flight(() => createChat(t, client, workspaceId))?.then(
+			(chat) => {
+				if (mounted.current) onOpen(chat);
+			},
+			(error: unknown) => setFailure(reasonOf(error)),
+		);
+	};
+	return { creating, failure, start };
+}
 
 /** The workspace's chats from `session.list`, re-read when a session appears or leaves in it. */
 export function useWorkspaceChats(
@@ -110,28 +132,47 @@ export function WorkspaceOpener({
 }) {
 	const t = useT();
 	const chats = useWorkspaceChats(client, workspace.id, items);
+	const mounted = useMounted();
 	const [failure, setFailure] = useState<string | null>(null);
+	const [attempt, setAttempt] = useState(0);
 	const [empty, setEmpty] = useState(false);
-	const started = useRef(false);
+	const started = useRef(-1);
 
 	useLayoutEffect(() => {
-		if (started.current || chats.kind !== "ready" || !client) return;
-		started.current = true;
+		if (started.current === attempt || chats.kind !== "ready" || !client) return;
+		started.current = attempt;
 		const main =
 			chats.value.find((summary) => summary.sessionId === sessionId) ?? ordered(chats.value)[0];
 		if (main) onOpen(chatOf(t, main));
 		else if (readOnly) setEmpty(true);
 		else
-			createChat(t, client, workspace.id).then(onOpen, (error: unknown) =>
-				setFailure(reasonOf(error)),
+			createChat(t, client, workspace.id).then(
+				(chat) => {
+					if (mounted.current) onOpen(chat);
+				},
+				(error: unknown) => setFailure(reasonOf(error)),
 			);
-	}, [chats, client, workspace.id, sessionId, onOpen, readOnly, t]);
+	}, [chats, client, workspace.id, sessionId, onOpen, readOnly, t, attempt, mounted]);
 
-	const reason = failure ?? (chats.kind === "failed" ? chats.reason : null);
 	return (
 		<Screen title={workspaceName(t, workspace)} back={{ label: backLabel, onBack }}>
-			{reason ? (
-				<Notice text={t("mobile.list.failed", { reason })} alert />
+			{failure ? (
+				<div className="flex flex-col items-center gap-8 pb-40">
+					<Notice text={t("mobile.workspace.newChatFailed", { reason: failure })} alert />
+					<Button
+						variant="outline"
+						className="h-touch rounded-md"
+						data-testid="workspace-open-retry"
+						onClick={() => {
+							setFailure(null);
+							setAttempt((count) => count + 1);
+						}}
+					>
+						{t("common.retry")}
+					</Button>
+				</div>
+			) : chats.kind === "failed" ? (
+				<Notice text={t("mobile.list.failed", { reason: chats.reason })} alert />
 			) : empty ? (
 				<Notice text={t("mobile.workspace.readOnlyEmpty")} />
 			) : (
@@ -171,16 +212,11 @@ export function ChatHistoryScreen({
 	const loaded = useWorkspaceChats(client, workspace.id, items);
 	const sorted = loaded.kind === "ready" ? { ...loaded, value: ordered(loaded.value) } : loaded;
 	const now = useNow();
-	const [creating, setCreating] = useState(false);
-	const [createFailure, setCreateFailure] = useState<string | null>(null);
-	const startChat = (): void => {
-		if (!client) return;
-		setCreating(true);
-		setCreateFailure(null);
-		createChat(t, client, workspace.id)
-			.then(onOpen, (error: unknown) => setCreateFailure(reasonOf(error)))
-			.finally(() => setCreating(false));
-	};
+	const {
+		creating,
+		failure: createFailure,
+		start: startChat,
+	} = useStartChat(client, workspace.id, onOpen);
 
 	return (
 		<Screen

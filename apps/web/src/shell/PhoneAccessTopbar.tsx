@@ -10,7 +10,7 @@ import { REMOTE_ACCESS_PROTOCOL_VERSION, type RemoteAccessStatus } from "@thinkr
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { type PhoneRoute, phoneHasNoRoute, phoneReach } from "../panels/phoneAccessState";
 import { SettingsSwitch } from "../panels/SettingsSwitch";
 import { type ShownPairing, usePhoneAccess } from "../panels/usePhoneAccess";
@@ -32,11 +32,14 @@ function clockTime(epochMs: number): string {
 export interface PhoneAccessPanelProps {
 	headingId: string;
 	status: RemoteAccessStatus | null;
+	loadFailed: boolean;
 	pairing: ShownPairing | null;
 	issuing: boolean;
 	justPaired: string | null;
 	expired: boolean;
 	pending: boolean;
+	busyDevices: ReadonlySet<string>;
+	onReload: () => void;
 	onToggle: (enabled: boolean) => void;
 	onShowCode: () => void;
 	onCopyLink: (link: string) => void;
@@ -48,11 +51,14 @@ export interface PhoneAccessPanelProps {
 export function PhoneAccessPanel({
 	headingId,
 	status,
+	loadFailed,
 	pairing,
 	issuing,
 	justPaired,
 	expired,
 	pending,
+	busyDevices,
+	onReload,
 	onToggle,
 	onShowCode,
 	onCopyLink,
@@ -83,7 +89,28 @@ export function PhoneAccessPanel({
 				/>
 			</div>
 
-			{!enabled ? (
+			{status === null ? (
+				loadFailed ? (
+					<div
+						data-testid="phone-quick-load-failed"
+						className="flex flex-col items-start gap-8 px-12 py-12"
+					>
+						<p className="m-0 tr-text-metadata text-feedback-error">
+							{t("settings.phone.loadFailed")}
+						</p>
+						<Button variant="outline" size="m" data-testid="phone-quick-reload" onClick={onReload}>
+							{t("common.retry")}
+						</Button>
+					</div>
+				) : (
+					<p
+						data-testid="phone-quick-loading"
+						className="m-0 px-12 py-12 tr-text-metadata text-text-muted"
+					>
+						{t("common.loading")}
+					</p>
+				)
+			) : !enabled ? (
 				<p className="m-0 px-12 py-12 tr-text-metadata text-text-muted">
 					{t("shell.phone.offHint")}
 				</p>
@@ -118,6 +145,7 @@ export function PhoneAccessPanel({
 									size="m"
 									iconLeft={RiRefreshLine}
 									data-testid="phone-quick-new-code"
+									loading={issuing}
 									onClick={onShowCode}
 								>
 									{t("settings.phone.newCode")}
@@ -221,6 +249,7 @@ export function PhoneAccessPanel({
 									tone="danger"
 									size="s"
 									data-testid={`phone-quick-revoke-${device.id}`}
+									loading={busyDevices.has(device.id)}
 									onClick={() => onRevoke(device.id)}
 								>
 									{t("shell.phone.disconnect")}
@@ -264,11 +293,14 @@ function PhoneAccessPopoverBody({
 		<PhoneAccessPanel
 			headingId={headingId}
 			status={access.status}
+			loadFailed={access.loadFailed}
 			pairing={access.pairing}
 			issuing={access.issuing}
 			justPaired={access.justPaired}
 			expired={access.expired}
 			pending={access.pending}
+			busyDevices={access.busyDevices}
+			onReload={access.reload}
 			onToggle={access.toggle}
 			onShowCode={access.showCode}
 			onCopyLink={access.copyLink}
@@ -291,15 +323,20 @@ export function PhoneAccessTopbar() {
 	const [open, setOpen] = useState(false);
 	const [enabled, setEnabled] = useState(false);
 	const headingId = useId();
-	const adoptStatus = useCallback((status: RemoteAccessStatus) => setEnabled(status.enabled), []);
+	const adopted = useRef(0);
+	const adoptStatus = useCallback((status: RemoteAccessStatus) => {
+		adopted.current += 1;
+		setEnabled(status.enabled);
+	}, []);
 
 	useEffect(() => {
 		if (!supported || connection !== "connected") return;
 		let current = true;
+		const asked = adopted.current;
 		getTransport()
 			.request("remote.status", {})
 			.then((status) => {
-				if (current) setEnabled(status.enabled);
+				if (current && adopted.current === asked) setEnabled(status.enabled);
 			})
 			.catch(() => {});
 		return () => {

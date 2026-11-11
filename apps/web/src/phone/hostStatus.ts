@@ -4,6 +4,8 @@ import {
 	RelayUnreachableError,
 	type RemoteConnectCode,
 	RemoteConnectError,
+	type RemoteSessionsController,
+	type SavedHost,
 } from "@thinkrail/remote-client";
 
 /**
@@ -68,3 +70,23 @@ export const recoveryOf = (failure: HostFailure): HostRecovery => {
 			return "reconnect";
 	}
 };
+
+/**
+ * Connects a saved computer, or retries one whose channel is down now. Either way its last failure clears
+ * first, so the row shows Connecting… until this attempt lands or fails again (`onRetryFailed` re-marks it).
+ */
+export function connectSavedHost(
+	controller: Pick<RemoteSessionsController, "clientFor" | "connect" | "reconnectNow">,
+	host: SavedHost,
+	markFailure: (hostKey: string, failure: HostFailure | null) => void,
+): Promise<void> {
+	markFailure(host.hostKey, null);
+	if (controller.clientFor(host.hostKey)) {
+		controller.reconnectNow();
+		return Promise.resolve();
+	}
+	return controller
+		.connect(host)
+		.then(() => markFailure(host.hostKey, null))
+		.catch((error: unknown) => markFailure(host.hostKey, failureOf(error)));
+}

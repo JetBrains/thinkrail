@@ -314,3 +314,107 @@ test("routes the host sends are merged into the saved host, and later connects u
 	fake.pushRoutes({ signalingUrls: ["ws://10.0.0.9:1"] });
 	expect(saved[1]?.nostr).toBeUndefined();
 });
+
+function deferred<T>() {
+	let resolve: (value: T) => void = () => {};
+	let reject: (error: unknown) => void = () => {};
+	const promise = new Promise<T>((res, rej) => {
+		resolve = res;
+		reject = rej;
+	});
+	return { promise, resolve, reject };
+}
+
+test("a connect still in flight is joined, not raced, by a second connect", async () => {
+	const fake = fakeConnection(laptop, [rec("s1")]);
+	const pending = deferred<RemoteConnection>();
+	let connects = 0;
+	const controller = createRemoteSessions(() => {
+		connects++;
+		return pending.promise;
+	});
+	const first = controller.connect(laptop);
+	const second = controller.connect(laptop);
+	pending.resolve(fake.connection);
+	await Promise.all([first, second]);
+	expect(connects).toBe(1);
+	expect(controller.clientFor("K1")).toBe(fake.connection.client);
+});
+
+test("a connect that lands after disconnect is closed and never registers", async () => {
+	const fake = fakeConnection(laptop, [rec("s1")]);
+	const pending = deferred<RemoteConnection>();
+	const controller = createRemoteSessions(() => pending.promise);
+	let notes = 0;
+	controller.subscribe(() => notes++);
+	const connecting = controller.connect(laptop);
+	controller.disconnect("K1");
+	pending.resolve(fake.connection);
+	await connecting;
+	expect(fake.isClosed()).toBe(true);
+	expect(controller.clientFor("K1")).toBeNull();
+	expect(notes).toBe(0);
+});
+
+test("an old attempt landing after forget and a fresh connect does not replace the new connection", async () => {
+	const stale = fakeConnection(laptop, [rec("old")]);
+	const fresh = fakeConnection(laptop, [rec("new")]);
+	const attempts = [deferred<RemoteConnection>(), deferred<RemoteConnection>()];
+	let call = 0;
+	const controller = createRemoteSessions(() => {
+		const next = attempts[call++];
+		if (!next) throw new Error("unexpected connect");
+		return next.promise;
+	});
+	const old = controller.connect(laptop);
+	controller.disconnect("K1");
+	const again = controller.connect(laptop);
+	attempts[1]?.resolve(fresh.connection);
+	await again;
+	attempts[0]?.resolve(stale.connection);
+	await old;
+	expect(stale.isClosed()).toBe(true);
+	expect(fresh.isClosed()).toBe(false);
+	expect(controller.clientFor("K1")).toBe(fresh.connection.client);
+	expect(controller.items().map((item) => item.record.sessionId)).toEqual(["new"]);
+});
+
+test("a failed connect after disconnect neither rejects nor starts a background retry", async () => {
+	const pending = deferred<RemoteConnection>();
+	let calls = 0;
+	const controller = createRemoteSessions(
+		() => {
+			calls++;
+			return pending.promise;
+		},
+		{ initialBackoffMs: 1, maxBackoffMs: 1 },
+	);
+	const connecting = controller.connect(laptop);
+	controller.disconnect("K1");
+	pending.reject(new RemoteConnectError("host_silent", "no answer"));
+	await connecting;
+	await Bun.sleep(20);
+	expect(calls).toBe(1);
+});
+
+test("connecting during a background retry joins that attempt instead of opening a second", async () => {
+	const fake = fakeConnection(laptop, [rec("s1")]);
+	const retry = deferred<RemoteConnection>();
+	let calls = 0;
+	const controller = createRemoteSessions(
+		() => {
+			calls++;
+			if (calls === 1) return Promise.reject(new RemoteConnectError("host_silent", "no answer"));
+			return retry.promise;
+		},
+		{ initialBackoffMs: 1, maxBackoffMs: 1 },
+	);
+	await expect(controller.connect(laptop)).rejects.toBeInstanceOf(RemoteConnectError);
+	await until(() => calls === 2);
+	const joined = controller.connect(laptop);
+	retry.resolve(fake.connection);
+	await joined;
+	expect(calls).toBe(2);
+	expect(fake.isClosed()).toBe(false);
+	expect(controller.clientFor("K1")).toBe(fake.connection.client);
+});

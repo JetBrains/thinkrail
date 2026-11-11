@@ -77,6 +77,18 @@ test("a failed chat start names the worktree that was made", async () => {
 	expect(error.workspace).toBe(workspace);
 });
 
+test("a retry after a failed chat start reuses that worktree instead of cutting another", async () => {
+	const host = fakeHost();
+	await startWorktree(host.request, {
+		projectId: "p1",
+		baseRef: "release",
+		model: null,
+		prompt: "",
+		created: workspace,
+	});
+	expect(host.calls).toEqual([["session.create", { workspaceId: "ws-1" }]]);
+});
+
 test("a first message that does not go still opens the chat, with the reason", async () => {
 	const host = fakeHost({ "session.prompt": "busy" });
 	const started = await startWorktree(host.request, {

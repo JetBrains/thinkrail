@@ -19,8 +19,9 @@ export interface RemoteSessionItem {
 
 export interface RemoteSessionsController {
 	/**
-	 * Connects a saved host and begins tracking its sessions. A failure rejects, and unless no retry can fix it
-	 * the controller keeps retrying in the background (`onRetryFailed` hears each miss) until it connects.
+	 * Connects a saved host and begins tracking its sessions; a second call while one is in flight joins it. A
+	 * failure rejects, and unless no retry can fix it the controller keeps retrying in the background
+	 * (`onRetryFailed` hears each miss) until it connects. A host disconnected meanwhile resolves quietly.
 	 */
 	connect(host: SavedHost): Promise<void>;
 	/** Every tracked session across all connected hosts (for the mobile session list). */
@@ -73,6 +74,10 @@ export function createRemoteSessions(
 	const hosts = new Map<string, HostEntry>();
 	const known = new Map<string, SavedHost>();
 	const retries = new Map<string, ReconnectLoop>();
+	const opening = new Map<string, Promise<void>>();
+	/** Bumped when a host is disconnected, so an attempt begun before it never registers. */
+	const epochs = new Map<string, number>();
+	const epochOf = (hostKey: string): number => epochs.get(hostKey) ?? 0;
 	const listeners = new Set<() => void>();
 	const lostListeners = new Set<(hostKey: string, error: RemoteConnectError) => void>();
 	const retryListeners = new Set<(hostKey: string, error: unknown) => void>();
@@ -88,11 +93,19 @@ export function createRemoteSessions(
 		retries.delete(hostKey);
 	};
 
-	const open = async (hostKey: string): Promise<void> => {
+	const forget = (hostKey: string): void => {
+		known.delete(hostKey);
+		epochs.set(hostKey, epochOf(hostKey) + 1);
+		opening.delete(hostKey);
+		stopRetry(hostKey);
+	};
+
+	const attach = async (hostKey: string): Promise<void> => {
 		const host = known.get(hostKey);
 		if (!host) throw new Error("host forgotten");
+		const epoch = epochOf(hostKey);
 		const connection = await connector(host);
-		if (!known.has(hostKey)) {
+		if (epochOf(hostKey) !== epoch) {
 			connection.close();
 			throw new Error("host forgotten");
 		}
@@ -146,8 +159,20 @@ export function createRemoteSessions(
 		const initial = await connection.client
 			.request<SessionStateRecord[]>("session.stateList", {})
 			.catch(() => [] as SessionStateRecord[]);
+		if (hosts.get(hostKey) !== entry) return;
 		for (const record of initial) sessions.set(record.sessionId, record);
 		notify();
+	};
+
+	/** One attempt per host at a time: a connect during a background retry joins it instead of racing it. */
+	const open = (hostKey: string): Promise<void> => {
+		const inFlight = opening.get(hostKey);
+		if (inFlight) return inFlight;
+		const run = attach(hostKey).finally(() => {
+			if (opening.get(hostKey) === run) opening.delete(hostKey);
+		});
+		opening.set(hostKey, run);
+		return run;
 	};
 
 	const retryInBackground = (hostKey: string): void => {
@@ -177,11 +202,12 @@ export function createRemoteSessions(
 			if (hosts.has(host.hostKey)) return;
 			known.set(host.hostKey, host);
 			stopRetry(host.hostKey);
+			const epoch = epochOf(host.hostKey);
 			try {
 				await open(host.hostKey);
 			} catch (error) {
-				if (known.has(host.hostKey) && !isTerminalConnectError(error))
-					retryInBackground(host.hostKey);
+				if (epochOf(host.hostKey) !== epoch) return;
+				if (!isTerminalConnectError(error)) retryInBackground(host.hostKey);
 				throw error;
 			}
 		},
@@ -227,8 +253,7 @@ export function createRemoteSessions(
 			for (const entry of hosts.values()) entry.connection.reconnectNow();
 		},
 		disconnect(hostKey) {
-			known.delete(hostKey);
-			stopRetry(hostKey);
+			forget(hostKey);
 			const entry = hosts.get(hostKey);
 			if (!entry) return;
 			entry.connection.close();
@@ -236,9 +261,8 @@ export function createRemoteSessions(
 			notify();
 		},
 		stop() {
-			for (const loop of retries.values()) loop.stop();
-			retries.clear();
-			known.clear();
+			for (const hostKey of new Set([...known.keys(), ...opening.keys(), ...retries.keys()]))
+				forget(hostKey);
 			for (const entry of hosts.values()) entry.connection.close();
 			hosts.clear();
 			listeners.clear();

@@ -20,7 +20,9 @@ export type ScanOutcome =
 
 /** False only when the WebView can list devices and none is a camera (the iOS Simulator); the native scanner then shows nothing and never answers. */
 async function hasCamera(): Promise<boolean> {
-	const devices = await navigator.mediaDevices?.enumerateDevices?.().catch(() => undefined);
+	const devices = await Promise.resolve()
+		.then(() => navigator.mediaDevices?.enumerateDevices?.())
+		.catch(() => undefined);
 	return devices === undefined || devices.some((device) => device.kind === "videoinput");
 }
 
@@ -38,7 +40,7 @@ export async function scanPairLink(labels: {
 		const value = ScanResult.trim();
 		return isPairLink(value) ? { kind: "link", link: value } : { kind: "notPairLink" };
 	} catch (error) {
-		const code = (error as { code?: unknown }).code;
+		const code = (error as { code?: unknown } | null | undefined)?.code;
 		if (code === CANCELLED) return { kind: "cancelled" };
 		if (code === CAMERA_DENIED) return { kind: "cameraDenied" };
 		return { kind: "failed", reason: error instanceof Error ? error.message : String(error) };

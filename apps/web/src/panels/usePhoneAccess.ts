@@ -1,10 +1,11 @@
-import type { RemoteAccessStatus, RemoteDeviceAccess } from "@thinkrail/contracts";
+import type { RemoteAccessStatus, RemoteDeviceAccess, WsParams } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import QRCode from "qrcode";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { toast } from "@/store";
 import { getTransport } from "@/transport";
 import {
+	createLatestGate,
 	initialPhoneAccess,
 	newDevice,
 	phoneAccessReducer,
@@ -14,11 +15,21 @@ import {
 
 export type { ShownPairing } from "./phoneAccessState";
 
+/** The `remote.*` requests whose reply is the whole new status. */
+type StatusMethod =
+	| "remote.status"
+	| "remote.setEnabled"
+	| "remote.revokeDevice"
+	| "remote.renameDevice"
+	| "remote.setDeviceAccess";
+
 /** While access is on: a phone pairing, a phone (dis)connecting, the network check settling or changing. */
 const STATUS_POLL_MS = 2_000;
 
 export interface PhoneAccess {
 	status: RemoteAccessStatus | null;
+	/** The first status read failed; `reload` tries again. */
+	loadFailed: boolean;
 	pairing: ShownPairing | null;
 	/** A code is being minted. */
 	issuing: boolean;
@@ -26,6 +37,9 @@ export interface PhoneAccess {
 	justPaired: string | null;
 	expired: boolean;
 	pending: boolean;
+	/** Paired phones with a rename, access change or revoke in flight. */
+	busyDevices: ReadonlySet<string>;
+	reload: () => void;
 	toggle: (enabled: boolean) => void;
 	showCode: () => void;
 	copyLink: (link: string) => void;
@@ -52,20 +66,43 @@ export function usePhoneAccess({ autoCode = false }: { autoCode?: boolean } = {}
 	const [state, dispatch] = useReducer(phoneAccessReducer, initialPhoneAccess);
 	const [expired, setExpired] = useState(false);
 	const [pending, setPending] = useState(false);
+	const [busyDevices, setBusyDevices] = useState<ReadonlySet<string>>(() => new Set());
+	const [loadAttempt, setLoadAttempt] = useState(0);
 	const statusRef = useRef<RemoteAccessStatus | null>(null);
 	const generationRef = useRef(0);
+	const issuingRef = useRef(false);
+	const pendingRef = useRef(false);
+	const busyRef = useRef(new Set<string>());
+	const [gate] = useState(createLatestGate);
 	useEffect(() => {
-		statusRef.current = state.status;
 		generationRef.current = state.generation;
-	}, [state.status, state.generation]);
+		issuingRef.current = state.issuing;
+	}, [state.generation, state.issuing]);
 
-	const adopt = useCallback(
-		(status: RemoteAccessStatus) => dispatch({ type: "status", status }),
-		[],
+	const requestStatus = useCallback(
+		<M extends StatusMethod>(
+			method: M,
+			params: WsParams<M>,
+			event: "status" | "polled" = "status",
+		): Promise<void> => {
+			const ticket = gate.ticket();
+			return getTransport()
+				.request(method, params)
+				.then((status) => {
+					if (!gate.accept(ticket)) return;
+					const added = event === "polled" ? newDevice(statusRef.current, status) : null;
+					statusRef.current = status;
+					dispatch({ type: event, status });
+					if (added) toast.success(t("settings.phone.paired", { name: added.label }));
+				});
+		},
+		[gate, t],
 	);
 
 	const issue = useCallback(
 		(auto: boolean): void => {
+			if (issuingRef.current) return;
+			issuingRef.current = true;
 			const generation = generationRef.current;
 			dispatch({ type: "issuing", auto });
 			getTransport()
@@ -83,17 +120,9 @@ export function usePhoneAccess({ autoCode = false }: { autoCode?: boolean } = {}
 	);
 
 	useEffect(() => {
-		let cancelled = false;
-		getTransport()
-			.request("remote.status", {})
-			.then((status) => {
-				if (!cancelled) adopt(status);
-			})
-			.catch(() => {});
-		return () => {
-			cancelled = true;
-		};
-	}, [adopt]);
+		if (loadAttempt > 0) dispatch({ type: "reload" });
+		requestStatus("remote.status", {}).catch(() => dispatch({ type: "loadFailed" }));
+	}, [requestStatus, loadAttempt]);
 
 	useEffect(() => {
 		if (autoCode && shouldAutoIssue(state)) issue(true);
@@ -111,62 +140,74 @@ export function usePhoneAccess({ autoCode = false }: { autoCode?: boolean } = {}
 	useEffect(() => {
 		if (!enabled) return;
 		const timer = setInterval(() => {
-			void getTransport()
-				.request("remote.status", {})
-				.then((status) => {
-					const added = newDevice(statusRef.current, status);
-					dispatch({ type: "polled", status });
-					if (added) toast.success(t("settings.phone.paired", { name: added.label }));
-				})
-				.catch(() => {});
+			requestStatus("remote.status", {}, "polled").catch(() => {});
 		}, STATUS_POLL_MS);
 		return () => clearInterval(timer);
-	}, [enabled, t]);
+	}, [enabled, requestStatus]);
 
 	const toggle = (enabled: boolean): void => {
+		if (pendingRef.current) return;
+		pendingRef.current = true;
 		setPending(true);
-		getTransport()
-			.request("remote.setEnabled", { enabled })
-			.then(adopt)
+		requestStatus("remote.setEnabled", { enabled })
 			.catch(() => toast.error(t("settings.phone.changeFailed")))
-			.finally(() => setPending(false));
+			.finally(() => {
+				pendingRef.current = false;
+				setPending(false);
+			});
 	};
 
 	const copyLink = (link: string): void => {
-		void navigator.clipboard
-			?.writeText(link)
+		const copied =
+			navigator.clipboard?.writeText(link) ?? Promise.reject(new Error("no clipboard"));
+		copied
 			.then(() => toast.success(t("settings.phone.linkCopied")))
-			.catch(() => {});
+			.catch(() => toast.error(t("settings.phone.copyFailed")));
 	};
 
-	const revoke = (deviceId: string): void => {
-		getTransport()
-			.request("remote.revokeDevice", { id: deviceId })
-			.then(adopt)
-			.catch(() => toast.error(t("settings.phone.revokeFailed")));
+	const onDevice = (deviceId: string, run: () => Promise<void>, failure: string): void => {
+		if (busyRef.current.has(deviceId)) return;
+		busyRef.current.add(deviceId);
+		setBusyDevices(new Set(busyRef.current));
+		run()
+			.catch(() => toast.error(failure))
+			.finally(() => {
+				busyRef.current.delete(deviceId);
+				setBusyDevices(new Set(busyRef.current));
+			});
 	};
 
-	const rename = (deviceId: string, label: string): void => {
-		getTransport()
-			.request("remote.renameDevice", { id: deviceId, label })
-			.then(adopt)
-			.catch(() => toast.error(t("settings.phone.renameFailed")));
-	};
+	const revoke = (deviceId: string): void =>
+		onDevice(
+			deviceId,
+			() => requestStatus("remote.revokeDevice", { id: deviceId }),
+			t("settings.phone.revokeFailed"),
+		);
 
-	const setAccess = (deviceId: string, access: RemoteDeviceAccess): void => {
-		getTransport()
-			.request("remote.setDeviceAccess", { id: deviceId, access })
-			.then(adopt)
-			.catch(() => toast.error(t("settings.phone.accessFailed")));
-	};
+	const rename = (deviceId: string, label: string): void =>
+		onDevice(
+			deviceId,
+			() => requestStatus("remote.renameDevice", { id: deviceId, label }),
+			t("settings.phone.renameFailed"),
+		);
+
+	const setAccess = (deviceId: string, access: RemoteDeviceAccess): void =>
+		onDevice(
+			deviceId,
+			() => requestStatus("remote.setDeviceAccess", { id: deviceId, access }),
+			t("settings.phone.accessFailed"),
+		);
 
 	return {
 		status: state.status,
+		loadFailed: state.loadFailed,
 		pairing: state.pairing,
 		issuing: state.issuing,
 		justPaired: state.justPaired,
 		expired,
 		pending,
+		busyDevices,
+		reload: () => setLoadAttempt((attempt) => attempt + 1),
 		toggle,
 		showCode: () => issue(false),
 		copyLink,

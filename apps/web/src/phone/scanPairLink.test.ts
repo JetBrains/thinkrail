@@ -16,3 +16,16 @@ test("with no camera (the iOS Simulator) the scan says so instead of opening a s
 	});
 	expect(await scanPairLink(labels)).toEqual({ kind: "noCamera" });
 });
+
+test("a device list that throws does not strand the scan: it goes on to the scanner and reports its outcome", async () => {
+	Object.defineProperty(navigator, "mediaDevices", {
+		configurable: true,
+		value: {
+			enumerateDevices: () => {
+				throw new Error("not allowed");
+			},
+		},
+	});
+	const outcome = await scanPairLink(labels);
+	expect(outcome.kind).not.toBe("noCamera");
+});

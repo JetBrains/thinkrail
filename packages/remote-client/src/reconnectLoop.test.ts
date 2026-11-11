@@ -107,3 +107,52 @@ test("a terminal failure stops retrying and reports the error", async () => {
 	loop.dropped();
 	expect(timers.pending).toEqual([]);
 });
+
+test("stop() mid-attempt: the late result fires nothing and schedules nothing", async () => {
+	const timers = manualTimers();
+	let finish: (ok: boolean) => void = () => {};
+	const events: string[] = [];
+	const loop = createReconnectLoop({
+		attempt: () =>
+			new Promise<void>((resolve, reject) => {
+				finish = (ok) => (ok ? resolve() : reject(new Error("down")));
+			}),
+		isTerminal: () => false,
+		onLost: () => events.push("lost"),
+		onRetryFailed: () => events.push("retry"),
+		onOpenChange: (open) => events.push(`open:${open}`),
+		...timers,
+	});
+	loop.dropped();
+	timers.fire();
+	loop.stop();
+	finish(false);
+	await settle();
+	expect(events).toEqual([]);
+	expect(timers.pending).toEqual([]);
+	expect(loop.open).toBe(false);
+});
+
+test("a connection that drops before its attempt's result lands is retried, not left open", async () => {
+	const timers = manualTimers();
+	let attempts = 0;
+	const loop = createReconnectLoop({
+		attempt: async () => {
+			attempts++;
+			if (attempts === 1) loop.dropped();
+		},
+		isTerminal: () => false,
+		onLost: () => {},
+		initialBackoffMs: 100,
+		...timers,
+	});
+	loop.dropped();
+	timers.fire();
+	await settle();
+	expect(loop.open).toBe(false);
+	expect(timers.pending).toHaveLength(1);
+	timers.fire();
+	await settle();
+	expect(attempts).toBe(2);
+	expect(loop.open).toBe(true);
+});

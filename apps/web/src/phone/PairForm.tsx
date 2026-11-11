@@ -10,6 +10,7 @@ import { RunningIcon } from "@thinkrail/ui/running-icon";
 import { Textarea } from "@thinkrail/ui/textarea";
 import { useState } from "react";
 import type { PairState } from "./App";
+import { failureText } from "./hostStatus";
 import { type ScanOutcome, scanPairLink } from "./scanPairLink";
 
 type ScanProblem = Exclude<ScanOutcome, { kind: "link" } | { kind: "cancelled" }>;
@@ -36,8 +37,7 @@ export function usePairing(pair: PairState, onPair: (link: string) => Promise<bo
 		const outcome = await scanPairLink({
 			instructions: t("mobile.pair.scanInstructions"),
 			cancel: t("mobile.pair.cancel"),
-		});
-		setScanning(false);
+		}).finally(() => setScanning(false));
 		if (outcome.kind === "link") await onPair(outcome.link);
 		else if (outcome.kind !== "cancelled") setScanProblem(outcome);
 		return outcome.kind;
@@ -53,7 +53,7 @@ export function usePairing(pair: PairState, onPair: (link: string) => Promise<bo
 					: scanProblem?.kind === "failed"
 						? t("mobile.pair.scanFailed", { reason: scanProblem.reason })
 						: pair.kind === "failed"
-							? pair.reason
+							? failureText(t, pair.failure)
 							: null;
 
 	return { link, setLink, scanning, pairing: pair.kind === "pairing", scan, submit, problem };
@@ -179,7 +179,7 @@ export function PairActions({
 					icon={RiQrScan2Line}
 					label={t("mobile.pair.scan")}
 					busy={pairing.scanning}
-					disabled={pairing.pairing}
+					disabled={pairing.pairing || pairing.scanning}
 					onClick={() =>
 						void pairing.scan().then((kind) => {
 							if (kind === "noCamera") setManual(true);

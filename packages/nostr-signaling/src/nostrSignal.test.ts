@@ -56,6 +56,24 @@ describe("openNostrSignal", () => {
 		expect(hostInbox).toHaveLength(2);
 	});
 
+	test("a frame created before notBefore is never delivered", async () => {
+		const relays = [relay().url];
+		const hostInbox: [string, string][] = [];
+		const host = openNostrSignal({
+			secretKey: generateNostrSecret(),
+			relays,
+			onMessage: (from, data) => hostInbox.push([from, data]),
+			readyTimeoutMs: 2_000,
+			notBefore: Math.floor(Date.now() / 1000) + 30,
+		});
+		cleanup.push(() => host.close());
+		const device = signal(relays, []);
+		await Promise.all([host.ready, device.ready]);
+		await device.send(host.publicKey, "resume");
+		await Bun.sleep(150);
+		expect(hostInbox).toEqual([]);
+	});
+
 	test("a dead relay in the list does not block the live one", async () => {
 		const live = relay().url;
 		const hostInbox: [string, string][] = [];

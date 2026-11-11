@@ -33,21 +33,29 @@ uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `loc
     host's Nostr route from the link (`createNostrPipe`, a fresh Nostr key per attempt), and
     `pickSignalingPipe` keeps a relay that is ready within `LOCAL_ROUTE_GRACE_MS` (it is the host itself on a
     shared network), else the ready Nostr route; both failing is the relay's own refusal when it gave one,
-    else a `RelayUnreachableError` (code `relay_unreachable`) naming every address. A phone moving between the
+    else a `RelayUnreachableError` (code `relay_unreachable`) naming every address; the losing routes are closed, and an open relay socket that does not
+    answer `connect` within `BROKER_READY_TIMEOUT_MS` (8s) fails as `relay_lost`. A phone moving between the
     host's Wi‑Fi, Tailscale and any other network takes whichever route works. The peer gathers through contracts' `PUBLIC_STUN_URLS`. A failed attempt rejects with a
     `RemoteConnectError` (`connectError.ts`) whose code names the cause — the relay's `no host available` /
     `host busy`, the host's coded `rejected` (read by reason from a host too old to send a code), a host key
-    mismatch, a dropped relay — and an attempt with no open data channel after `CONNECT_TIMEOUT_MS` (20s) fails
-    as `host_silent` when the host never answered, else `no_direct_route`, so the app never waits forever.
+    mismatch, a dropped relay — and an attempt with no open data channel `CONNECT_TIMEOUT_MS` (20s) after it began
+    (signaling included) fails as `relay_unreachable` with no route ready, `host_silent` when the host never
+    answered, else `no_direct_route`, so the app never waits forever; every exit (failure, timeout, `close`)
+    closes that attempt's signaling and peer. Once the data channel opens, only the peer and the channel can end
+    the connection: later host frames (a replayed `challenge`, a `rejected`) and a lost signaling route are
+    ignored, a Nostr route is closed (the host does not tie the peer to it; a relay route stays, because the host
+    closes its peer with the relay session), and a second `challenge` mid-handshake is not answered again.
     A closed data channel counts as a drop like a failed peer, so a phone the computer revoked reconnects,
     and a reconnect refused for good (`unknown_device`, `identity_mismatch`, `app_outdated`) stops retrying,
     closes the connection and fires `onLost`; `remoteSessions` then drops that host and tells its `onLost`
     listeners. The retry schedule is `reconnectLoop.ts`; `onOpenChange` reports the channel going down and
-    back, `onRetryFailed` each failed attempt meanwhile (so the app shows why), `reconnectNow` skips the wait. The host's `remote.hostRoutes` push replaces the routes later attempts
+    back, `onRetryFailed` each failed attempt meanwhile (so the app shows why), `reconnectNow` skips the wait and first drops a channel that looks open while its
+    peer is not `connected` or the channel is not `open` (a phone woken from suspension). The host's `remote.hostRoutes` push replaces the routes later attempts
     dial and reaches `onRoutes`, so a phone paired before a route existed (Nostr) or before the computer's
     address changed follows the computer without a new QR.
   - `reconnectLoop.ts` — `createReconnectLoop`: one attempt at a time, doubling capped backoff reset on
-    success, `now()` to retry at once, a terminal failure ending it (`isTerminalConnectError`).
+    success, `now()` to retry at once, a terminal failure ending it (`isTerminalConnectError`); a drop reported
+    while an attempt is still settling is retried rather than left open, and `stop()` silences a late result.
   - `signalingRoute.ts` — `SignalingPipe` (one route's frame exchange: `ready` with any TURN servers,
     `listen`, `send`, `close`), `createBrokerPipe`, `createNostrPipe`, `pickSignalingPipe` and
     `openSignaling`, the route choice above.
@@ -56,7 +64,9 @@ uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `loc
     replaces one in place (never re-adding a forgotten host), `withRoutes` merges the routes a host sent.
   - `remoteSessions.ts` — one wire client per host, aggregating live sessions into one list, plus each host's
     welcome (`welcomeFor`: protocol version and config) and what it lets this phone do (`accessFor`, `write` until a
-    `remote.deviceAccess` push says `read`); `disconnect` closes and drops one host. A host whose first
+    `remote.deviceAccess` push says `read`); `disconnect` closes and drops one host. One attempt per host runs at a time (a `connect` during
+    another or during a background retry joins it), and an attempt begun before `disconnect`/`stop` is closed
+    when it lands and never registers; the `connect` it belonged to resolves quietly. A host whose first
     connect failed for a reason a retry can fix keeps being retried in the background (2s doubling to 30s;
     `onRetryFailed` hears each miss, and each failed attempt of a live host whose channel is down) until it
     connects or is disconnected; `isReconnecting` marks a live host

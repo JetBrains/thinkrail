@@ -11,6 +11,7 @@ export type RemoteConnectionState =
 export interface RemoteConnectionController {
 	getState(): RemoteConnectionState;
 	subscribe(listener: () => void): () => void;
+	/** A newer `connect` or a `reset` supersedes one in flight; its late connection is closed, never shown. */
 	connect(link: string, label: string): Promise<void>;
 	reset(): void;
 }
@@ -28,6 +29,7 @@ export function createRemoteConnectionController(
 	connector: Connector = connectRemoteProject,
 ): RemoteConnectionController {
 	let state: RemoteConnectionState = { status: "idle" };
+	let attempt = 0;
 	const listeners = new Set<() => void>();
 	const set = (next: RemoteConnectionState): void => {
 		state = next;
@@ -41,6 +43,7 @@ export function createRemoteConnectionController(
 			return () => void listeners.delete(listener);
 		},
 		async connect(link, label) {
+			const current = ++attempt;
 			if (!parsePairingUri(link)) {
 				set({ status: "error", kind: "invalid-link" });
 				return;
@@ -48,8 +51,13 @@ export function createRemoteConnectionController(
 			set({ status: "connecting", link });
 			try {
 				const connection = await connector(link, { label });
+				if (current !== attempt) {
+					connection.close();
+					return;
+				}
 				set({ status: "connected", connection });
 			} catch (error) {
+				if (current !== attempt) return;
 				set({
 					status: "error",
 					kind: "failed",
@@ -58,6 +66,7 @@ export function createRemoteConnectionController(
 			}
 		},
 		reset() {
+			attempt += 1;
 			set({ status: "idle" });
 		},
 	};

@@ -30,6 +30,7 @@ import {
 	type Project,
 	type QueueLane,
 	type SessionQueueContent,
+	sameModel,
 	type ThinkingLevel,
 	type WireModel,
 } from "@thinkrail/contracts";
@@ -44,6 +45,7 @@ import { useTranscriptSync } from "../chat/useTranscriptSync";
 import { hydrateStandaloneChat } from "../shell/chatReconciliation";
 import { EMPTY_RUNTIME, useAppStore } from "../store";
 import { getTransport, respondToTool } from "../transport";
+import { reasonOf, singleFlight } from "./async";
 import { ResourcesTool, SkillsTool } from "./ChatTools";
 import { useHostClient, useHostWelcome } from "./hostView";
 import { Loader, Notice, Screen } from "./layout";
@@ -51,7 +53,7 @@ import { ModelSheet } from "./ModelSheet";
 import { queuedDraft } from "./queuedDraft";
 import { UsageBar } from "./SessionUsage";
 import { useStoreHost } from "./storeHost";
-import { createChat, type OpenChat, useWorkspaceChats } from "./WorkspaceScreen";
+import { type OpenChat, useStartChat, useWorkspaceChats } from "./WorkspaceScreen";
 
 export interface OpenSession {
 	hostKey: string;
@@ -86,9 +88,6 @@ const PHONE_MODEL_PREFERENCES: ModelPreferences = {
 	isDefault: () => false,
 	setDefault: () => {},
 };
-
-const reasonOf = (error: unknown): string =>
-	error instanceof Error ? error.message : String(error);
 
 export function SessionScreen({
 	session,
@@ -125,7 +124,13 @@ export function SessionScreen({
 	const hostProtocol = useAppStore((s) => s.protocolVersion) ?? undefined;
 	const [loadError, setLoadError] = useState<string | null>(null);
 	const [draft, setDraft] = useState(session.unsent?.text ?? "");
-	const [sendError, setSendError] = useState<string | null>(session.unsent?.reason ?? null);
+	const [failure, setFailure] = useState<string | null>(() =>
+		session.unsent ? t("mobile.session.sendFailed", { reason: session.unsent.reason }) : null,
+	);
+	const failed = (action: string, error: unknown): void =>
+		setFailure(t("mobile.session.actionFailed", { action, reason: reasonOf(error) }));
+	const [queueFlight] = useState(() => singleFlight());
+	const [abortFlight] = useState(() => singleFlight());
 	const bottom = useRef<HTMLDivElement>(null);
 	const composerRef = useRef<ComposerHandle>(null);
 	const isStreaming = runtime?.isStreaming ?? false;
@@ -187,16 +192,11 @@ export function SessionScreen({
 	const chats = useWorkspaceChats(client, workspaceId, items);
 	const [disablingNotice, setDisablingNotice] = useState(false);
 	const [usageOpen, setUsageOpen] = useState(false);
-	const [creating, setCreating] = useState(false);
-	const [createFailure, setCreateFailure] = useState<string | null>(null);
-	const startChat = (): void => {
-		if (!client) return;
-		setCreating(true);
-		setCreateFailure(null);
-		createChat(t, client, workspaceId)
-			.then(onOpenChat, (error: unknown) => setCreateFailure(reasonOf(error)))
-			.finally(() => setCreating(false));
-	};
+	const {
+		creating,
+		failure: createFailure,
+		start: startChat,
+	} = useStartChat(client, workspaceId, onOpenChat);
 
 	const rows = useMemo(
 		() => (runtime ? deriveRows(runtime.turns, runtime.toolResults, isStreaming) : []),
@@ -232,7 +232,14 @@ export function SessionScreen({
 				useAppStore.getState().clearPendingExtUi(sessionId, id);
 				getTransport()
 					.request("session.extUiReply", { response: { id, value } })
-					.catch((error: unknown) => setSendError(reasonOf(error)));
+					.catch((error: unknown) =>
+						setFailure(
+							t("mobile.session.actionFailed", {
+								action: t("mobile.session.answerFailed"),
+								reason: reasonOf(error),
+							}),
+						),
+					);
 			},
 			draft: () => dialogDraft,
 			rememberDraft: (text) => {
@@ -244,7 +251,7 @@ export function SessionScreen({
 				return true;
 			},
 		};
-	}, [pendingRequest, sessionId]);
+	}, [pendingRequest, sessionId, t]);
 	const dialogOnToolCard =
 		pendingExtUi?.request.toolCallId !== undefined &&
 		rowsHaveToolCall(rows, pendingExtUi.request.toolCallId);
@@ -273,7 +280,7 @@ export function SessionScreen({
 		attachments: ChatAttachment[],
 		behavior: Exclude<SubmitBehavior, "interrupt">,
 	): void => {
-		setSendError(null);
+		setFailure(null);
 		if (behavior === "send" && (text || attachments.length > 0)) {
 			useAppStore.getState().appendUserMessage(sessionId, text, attachments);
 		}
@@ -287,16 +294,15 @@ export function SessionScreen({
 		getTransport()
 			.request(method, { sessionId, text, ...(images.length > 0 ? { images } : {}) })
 			.catch((error: unknown) => {
-				setDraft(text);
-				setSendError(reasonOf(error));
+				restoreQueued({ steering: [{ text, images }], followUp: [] });
+				setFailure(t("mobile.session.sendFailed", { reason: reasonOf(error) }));
 			});
 	};
 
 	const restoreQueued = (content: SessionQueueContent): void => {
-		const restored = queuedDraft(draft, content);
-		setDraft(restored.text);
+		setDraft((current) => queuedDraft(current, content).text);
 		composerRef.current?.restoreAttachments(
-			restored.images.map((image, index) => ({
+			queuedDraft("", content).images.map((image, index) => ({
 				name: `queued-image-${index + 1}`,
 				content: image,
 			})),
@@ -305,12 +311,11 @@ export function SessionScreen({
 	};
 
 	const removeQueued = (kind: QueueLane, index: number, restore: boolean): void => {
-		getTransport()
-			.request("session.removeQueued", { sessionId, kind, index })
-			.then(({ removed }) => {
+		queueFlight(() => getTransport().request("session.removeQueued", { sessionId, kind, index }))
+			?.then(({ removed }) => {
 				if (restore && removed) restoreQueued({ steering: [removed], followUp: [] });
 			})
-			.catch((error: unknown) => setSendError(reasonOf(error)));
+			.catch((error: unknown) => failed(t("mobile.session.queueFailed"), error));
 	};
 
 	const disableNotice = (): void => {
@@ -319,7 +324,7 @@ export function SessionScreen({
 		getTransport()
 			.request("provider.disableWarning", { warning: notice })
 			.then(() => useAppStore.getState().silenceNotice(notice))
-			.catch((error: unknown) => setSendError(reasonOf(error)))
+			.catch((error: unknown) => failed(t("chat.extraUsage.disableFailed"), error))
 			.finally(() => setDisablingNotice(false));
 	};
 
@@ -333,10 +338,18 @@ export function SessionScreen({
 			send(text, attachments, behavior);
 			return { accepted: true };
 		}
-		getTransport()
-			.request("session.abort", { sessionId })
-			.then(() => send(text, attachments, "send"))
-			.catch((error: unknown) => setSendError(reasonOf(error)));
+		const interrupted = abortFlight(() => getTransport().request("session.abort", { sessionId }));
+		if (!interrupted) return { accepted: false, reason: t("mobile.session.stopping") };
+		interrupted.then(
+			() => send(text, attachments, "send"),
+			(error: unknown) => {
+				restoreQueued({
+					steering: [{ text, images: attachments.map((attachment) => attachment.content) }],
+					followUp: [],
+				});
+				failed(t("mobile.session.stopFailed"), error);
+			},
+		);
 		return { accepted: true };
 	};
 
@@ -344,16 +357,23 @@ export function SessionScreen({
 		if (ready) send(TRY_AGAIN_PROMPT, [], "send");
 	};
 
+	const live = () => useAppStore.getState().sessions[sessionId];
+
 	const onSelectThinking = (level: ThinkingLevel): void => {
-		const previous = thinkingLevel;
+		const previous = live()?.thinkingLevel ?? thinkingLevel;
+		if (level === previous) return;
 		useAppStore.getState().setThinkingLevel(sessionId, level);
 		getTransport()
 			.request("session.setThinkingLevel", { sessionId, level })
-			.catch(() => useAppStore.getState().setThinkingLevel(sessionId, previous));
+			.catch((error: unknown) => {
+				if (live()?.thinkingLevel === level)
+					useAppStore.getState().setThinkingLevel(sessionId, previous);
+				failed(t("chat.view.effortChangeFailed"), error);
+			});
 	};
 
 	const onSelectModel = ({ model: next, level }: ModelSelection): void => {
-		const previous = model;
+		const previous = live()?.model ?? model;
 		useAppStore.getState().setCurrentModel(sessionId, next);
 		getTransport()
 			.request("session.setModel", { sessionId, model: next })
@@ -362,10 +382,20 @@ export function SessionScreen({
 					if (level) onSelectThinking(level);
 					refreshStats();
 				},
-				() => {
-					if (previous) useAppStore.getState().setCurrentModel(sessionId, previous);
+				(error: unknown) => {
+					if (previous && sameModel(live()?.model, next))
+						useAppStore.getState().setCurrentModel(sessionId, previous);
+					failed(t("chat.view.modelSwitchFailed", { model: next.name }), error);
 				},
 			);
+	};
+
+	const onAbort = (): void => {
+		abortFlight(() => getTransport().request("session.abort", { sessionId, restoreQueue: true }))
+			?.then(({ restoredQueue }) => {
+				if (restoredQueue) restoreQueued(restoredQueue);
+			})
+			.catch((error: unknown) => failed(t("mobile.session.stopFailed"), error));
 	};
 
 	return (
@@ -442,12 +472,12 @@ export function SessionScreen({
 											{t("mobile.workspace.newChatFailed", { reason: createFailure })}
 										</p>
 									) : null}
-									{sendError ? (
+									{failure ? (
 										<p
 											role="alert"
 											className="m-0 px-chat-gutter py-8 text-feedback-error tr-text-metadata"
 										>
-											{t("mobile.session.sendFailed", { reason: sendError })}
+											{failure}
 										</p>
 									) : null}
 									{pendingExtUi && !dialogOnToolCard ? (
@@ -511,14 +541,7 @@ export function SessionScreen({
 										onSelectThinking={onSelectThinking}
 										externalModelPicker={externalPicker}
 										onSubmit={onSubmit}
-										onAbort={() => {
-											getTransport()
-												.request("session.abort", { sessionId, restoreQueue: true })
-												.then(({ restoredQueue }) => {
-													if (restoredQueue) restoreQueued(restoredQueue);
-												})
-												.catch((error: unknown) => setSendError(reasonOf(error)));
-										}}
+										onAbort={onAbort}
 									/>
 								</footer>
 							)

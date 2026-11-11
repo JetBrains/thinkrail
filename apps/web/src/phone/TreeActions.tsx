@@ -11,10 +11,11 @@ import {
 	RiRefreshLine,
 } from "@remixicon/react";
 import type { Project, Workspace } from "@thinkrail/contracts";
-import { T, type Translator, useT } from "@thinkrail/locales/react";
+import { T, useT } from "@thinkrail/locales/react";
 import type { DeviceWireClient, SavedHost } from "@thinkrail/remote-client";
 import { IconButton } from "@thinkrail/ui/button";
 import { useState } from "react";
+import { reasonOf, singleFlight } from "./async";
 import { workspaceName } from "./ProjectTree";
 import { ConfirmSheet, RenameSheet, Sheet, SheetAction } from "./sheet";
 import type { ScopeStatus } from "./status";
@@ -22,29 +23,38 @@ import type { ScopeStatus } from "./status";
 /** Reports a failed tree action as "what failed: why", for the tree's banner. */
 export type ReportFailure = (text: string) => void;
 
-const reasonOf = (error: unknown): string =>
-	error instanceof Error ? error.message : String(error);
-
-const run = (
-	t: Translator,
-	report: ReportFailure,
-	action: string,
-	request: () => Promise<unknown>,
-): void => {
-	void request().catch((error: unknown) =>
-		report(t("mobile.tree.actionFailed", { action, reason: reasonOf(error) })),
-	);
-};
+/** A row's actions, one at a time: its ⋯ spins while one runs and a failure goes to the tree's banner. */
+function useRowAction(report: ReportFailure) {
+	const t = useT();
+	const [pending, setPending] = useState(false);
+	const [flight] = useState(() => singleFlight(setPending));
+	const run = (action: string, request: () => Promise<unknown>): void => {
+		flight(request)?.catch((error: unknown) =>
+			report(t("mobile.tree.actionFailed", { action, reason: reasonOf(error) })),
+		);
+	};
+	return { pending, run };
+}
 
 type Open = "menu" | "rename" | "confirm" | null;
 
-function MoreButton({ label, onOpen }: { label: string; onOpen: () => void }) {
+function MoreButton({
+	label,
+	pending = false,
+	onOpen,
+}: {
+	label: string;
+	pending?: boolean;
+	onOpen: () => void;
+}) {
 	return (
 		<IconButton
 			size="l"
 			className="size-touch shrink-0"
 			icon={RiMoreLine}
 			label={label}
+			loading={pending}
+			disabled={pending}
 			onClick={onOpen}
 		/>
 	);
@@ -64,6 +74,7 @@ export function ProjectActions({
 }) {
 	const t = useT();
 	const [open, setOpen] = useState<Open>(null);
+	const { pending, run } = useRowAction(onFailure);
 	const close = (next: boolean): void => {
 		if (!next) setOpen(null);
 	};
@@ -71,6 +82,7 @@ export function ProjectActions({
 		<>
 			<MoreButton
 				label={t("panels.projectTree.workspaceActions", { name: project.name })}
+				pending={pending}
 				onOpen={() => setOpen("menu")}
 			/>
 			<Sheet open={open === "menu"} onOpenChange={close} title={project.name}>
@@ -101,7 +113,7 @@ export function ProjectActions({
 				label={t("panels.projectTree.projectName")}
 				current={project.name}
 				onRename={(name) =>
-					run(t, onFailure, t("panels.workspaceActions.renameProjectFailed"), () =>
+					run(t("panels.workspaceActions.renameProjectFailed"), () =>
 						client.request("project.rename", { id: project.id, name }),
 					)
 				}
@@ -114,7 +126,7 @@ export function ProjectActions({
 				icon={RiCloseCircleLine}
 				confirmLabel={t("panels.projectTree.closeProject")}
 				onConfirm={() =>
-					run(t, onFailure, t("panels.projectTree.closeFailed", { name: project.name }), () =>
+					run(t("panels.projectTree.closeFailed", { name: project.name }), () =>
 						client.request("project.close", { id: project.id }),
 					)
 				}
@@ -144,14 +156,16 @@ export function WorkspaceActions({
 	const external = workspace.kind === "external";
 	const removable = workspace.kind !== "default";
 	const busy = status.running || status.attention;
+	const { pending, run } = useRowAction(onFailure);
 	const act = (action: string, request: () => Promise<unknown>) => (): void => {
 		setOpen(null);
-		run(t, onFailure, action, request);
+		run(action, request);
 	};
 	return (
 		<>
 			<MoreButton
 				label={t("panels.projectTree.workspaceActions", { name })}
+				pending={pending}
 				onOpen={() => setOpen("menu")}
 			/>
 			<Sheet open={open === "menu"} onOpenChange={close} title={name}>
@@ -210,7 +224,7 @@ export function WorkspaceActions({
 				label={t("panels.projectTree.workspaceName")}
 				current={workspace.name}
 				onRename={(next) =>
-					run(t, onFailure, t("panels.workspaceActions.renameWorkspaceFailed"), () =>
+					run(t("panels.workspaceActions.renameWorkspaceFailed"), () =>
 						client.request("workspace.rename", { id: workspace.id, name: next }),
 					)
 				}
@@ -237,7 +251,7 @@ export function WorkspaceActions({
 				icon={RiDeleteBinLine}
 				confirmLabel={external ? t("panels.removeWorkspace.confirmExternal") : t("common.remove")}
 				onConfirm={() =>
-					run(t, onFailure, t("panels.workspaceActions.removeFailed"), () =>
+					run(t("panels.workspaceActions.removeFailed"), () =>
 						client.request("workspace.remove", { id: workspace.id }),
 					)
 				}

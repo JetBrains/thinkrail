@@ -4,6 +4,7 @@ import type { HostSession } from "./hostSession";
 import { encodeHostMessage, parseDeviceMessage } from "./signalingProtocol";
 
 const SESSION_TTL_MS = 60_000;
+const START_SKEW_SECONDS = 2;
 const SWEEP_MS = 15_000;
 const MAX_SESSIONS = 32;
 const MAX_FRAMES_PER_SESSION = 64;
@@ -112,6 +113,7 @@ export function connectNostrHost(options: NostrHostOptions): NostrHostConnection
 		secretKey: options.secretKey,
 		relays,
 		onMessage: (from, data) => router.receive(from, data),
+		notBefore: Math.floor(Date.now() / 1000) - START_SKEW_SECONDS,
 	});
 	const sweeper = setInterval(() => router.sweep(), SWEEP_MS);
 	const publicKey = signal.publicKey;

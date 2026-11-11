@@ -1,7 +1,7 @@
 import { type RemixiconComponentType, RiArrowLeftSLine, RiArrowRightSLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { AttentionDot } from "@thinkrail/ui/attention-dot";
-import { IconButton } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import { RunningIcon } from "@thinkrail/ui/running-icon";
 import { cn } from "@thinkrail/ui/utils";
 import type { ComponentType, ReactNode } from "react";
@@ -164,8 +164,19 @@ export function LoadedList<T>({
 }) {
 	const t = useT();
 	if (loaded.kind === "loading") return loading ?? <Loader text={t("mobile.list.loading")} />;
-	if (loaded.kind === "failed")
-		return <Notice text={t("mobile.list.failed", { reason: loaded.reason })} alert />;
+	if (loaded.kind === "failed") {
+		const { retry } = loaded;
+		return (
+			<div className="flex flex-col items-center">
+				<Notice text={t("mobile.list.failed", { reason: loaded.reason })} alert />
+				{retry ? (
+					<Button variant="outline" className="-mt-24 mb-24 h-touch rounded-md" onClick={retry}>
+						{t("common.retry")}
+					</Button>
+				) : null}
+			</div>
+		);
+	}
 	if (loaded.value.length === 0) return typeof empty === "string" ? <Notice text={empty} /> : empty;
 	return <ul className="m-0 list-none p-0">{children(loaded.value)}</ul>;
 }

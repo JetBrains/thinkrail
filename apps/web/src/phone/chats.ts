@@ -4,7 +4,7 @@ import type {
 	RemoteSessionItem,
 	RemoteSessionsController,
 } from "@thinkrail/remote-client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useConnectedHosts } from "./hostView";
 
 export type ChatSection = "needsYou" | "running" | "done";
@@ -99,16 +99,51 @@ const PLACE_PUSHES = [
 	WS_CHANNELS.workspaceRemoved,
 ];
 
+/** The chats' places read so far, and per computer why its last read failed (cleared by the next that lands). */
+export interface PlaceBook {
+	places: ReadonlyMap<string, ChatPlace>;
+	failures: ReadonlyMap<string, string>;
+}
+
+export const EMPTY_PLACES: PlaceBook = { places: new Map(), failures: new Map() };
+
+export function recordPlaces(
+	book: PlaceBook,
+	hostKey: string,
+	outcome: { found: readonly ChatPlace[] } | { failed: string },
+): PlaceBook {
+	const failures = new Map(book.failures);
+	if ("failed" in outcome) {
+		failures.set(hostKey, outcome.failed);
+		return { places: book.places, failures };
+	}
+	failures.delete(hostKey);
+	const places = new Map(book.places);
+	for (const place of outcome.found) places.set(placeKey(hostKey, place.workspace.id), place);
+	return { places, failures };
+}
+
+/** A chat's place; else why its computer's read failed; else `undefined` while it loads. */
+export const placeIn = (
+	book: PlaceBook,
+	item: RemoteSessionItem,
+): ChatPlace | { failed: string } | undefined => {
+	const place = book.places.get(placeKey(item.hostKey, item.record.workspaceId));
+	if (place) return place;
+	const failed = book.failures.get(item.hostKey);
+	return failed === undefined ? undefined : { failed };
+};
+
 /**
  * The project and workspace each chat lives in, read once per host and project that has a chat
- * (`project.list`, `workspace.list`) and re-read on their pushes; a chat whose place has not arrived yet maps
- * to `undefined`.
+ * (`project.list`, `workspace.list`) and re-read on their pushes or `retry`; a chat whose place has not
+ * arrived yet maps to `undefined`, one whose computer's read failed to the reason.
  */
 export function useChatPlaces(
 	controller: RemoteSessionsController,
 	items: readonly RemoteSessionItem[],
-): (item: RemoteSessionItem) => ChatPlace | undefined {
-	const [places, setPlaces] = useState<ReadonlyMap<string, ChatPlace>>(() => new Map());
+): { placeOf: (item: RemoteSessionItem) => ReturnType<typeof placeIn>; retry: () => void } {
+	const [book, setBook] = useState<PlaceBook>(EMPTY_PLACES);
 	const [pushes, setPushes] = useState(0);
 	const scope = [...new Set(items.map((item) => `${item.hostKey}\n${item.record.projectId}`))]
 		.sort()
@@ -158,15 +193,12 @@ export function useChatPlaces(
 				)
 				.then(
 					(found) => {
-						if (!live) return;
-						setPlaces((current) => {
-							const next = new Map(current);
-							for (const place of found.flat())
-								next.set(placeKey(hostKey, place.workspace.id), place);
-							return next;
-						});
+						if (live) setBook((current) => recordPlaces(current, hostKey, { found: found.flat() }));
 					},
-					() => {},
+					(error: unknown) => {
+						const failed = error instanceof Error ? error.message : String(error);
+						if (live) setBook((current) => recordPlaces(current, hostKey, { failed }));
+					},
 				);
 		}
 		return () => {
@@ -174,5 +206,6 @@ export function useChatPlaces(
 		};
 	}, [controller, scope, connected, pushes]);
 
-	return (item) => places.get(placeKey(item.hostKey, item.record.workspaceId));
+	const retry = useCallback(() => setPushes((count) => count + 1), []);
+	return { placeOf: (item) => placeIn(book, item), retry };
 }

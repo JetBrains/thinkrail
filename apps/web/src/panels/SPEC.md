@@ -1203,7 +1203,10 @@ a project picker, the prompt hero, and the reused
   pure `phoneAccessState.ts` reducer (unit-tested): a phone pairing from the shown code replaces it with who
   paired, a failed mint ends the wait, the quick panel's own code waits for the internet check so it carries a
   public address found, and turning access off bumps a generation so a code minted before it —
-  dead once the relay restarts — is never shown.
+  dead once the relay restarts — is never shown. Every request that returns the whole status (read, poll,
+  switch, revoke, rename, access) passes `createLatestGate`, so a reply to a request sent before one already
+  applied is dropped. Both views say loading until the first status lands and offer Retry when it fails; a code
+  being made and a phone with a change in flight keep their buttons busy until the reply.
   **`PrivacySettings`** manages the additional-data preference and
   confirmation together; the event contract belongs to [[submodule-server-analytics]]. The pane ends with a link to the analytics section of the project readme.
   **`AnalyticsConsentDialog`** mounts once through shell after a capable host's unconfirmed config hydrates,
