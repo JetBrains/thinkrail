@@ -538,6 +538,7 @@ export function AskUserQuestionCard({
 		"data-tone": canRespond ? "active" : "idle",
 		"aria-label": t("tools.ask.cardLabel"),
 		"aria-keyshortcuts": "Shift+Escape Meta+Enter Control+Enter",
+		tabIndex: -1,
 		onKeyDown: onCardKeyDown,
 	};
 

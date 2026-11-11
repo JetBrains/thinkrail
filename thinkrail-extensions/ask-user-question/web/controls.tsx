@@ -273,6 +273,7 @@ export function NoteSlot({
 	onOpen,
 	onNote,
 	onFinish,
+	onBlur,
 	onArrow,
 }: {
 	optionText: string;
@@ -284,6 +285,7 @@ export function NoteSlot({
 	onOpen: () => void;
 	onNote: (text: string) => void;
 	onFinish: () => void;
+	onBlur: () => void;
 	onArrow: (key: LiftKey) => void;
 }) {
 	const t = useT();
@@ -311,6 +313,7 @@ export function NoteSlot({
 						value={note}
 						placeholder={t("tools.ask.notePlaceholder")}
 						onChange={(event) => onNote(event.target.value)}
+						onBlur={onBlur}
 						onKeyDown={(event) => {
 							const lift = liftOutKey(event);
 							if (lift) {

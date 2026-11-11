@@ -259,6 +259,11 @@ export function QuestionBody({
 										onOpen={() => openNote(option.label, index)}
 										onNote={(text) => onNote(option.label, text)}
 										onFinish={() => finishNote(option.label)}
+										onBlur={() => {
+											// Close the note when focus leaves the field, like Escape,
+											// but do not steal focus — the field may regain it via click.
+											onCloseNote();
+										}}
 										onArrow={(key: LiftKey) => moveTo(key === "ArrowUp" ? index : index + 1)}
 									/>
 								</div>
