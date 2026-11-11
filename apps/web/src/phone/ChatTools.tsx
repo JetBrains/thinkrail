@@ -70,7 +70,7 @@ export function ResourcesTool({
 	const stop = (key: string, method: string, params: Record<string, string>): void => {
 		if (!client || actions[key]?.pending) return;
 		setActions((current) => ({ ...current, [key]: { pending: true, error: null } }));
-		client
+		void client
 			.request(method, params)
 			.then(() => null, reasonOf)
 			.then((error) => setActions((current) => ({ ...current, [key]: { pending: false, error } })));

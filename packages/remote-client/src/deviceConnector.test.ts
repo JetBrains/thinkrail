@@ -51,8 +51,10 @@ const b64url = (bytes: ArrayBuffer): string =>
 class FakeSocket extends Emitter {
 	closed = false;
 	private nonce = "";
-	constructor(readonly url: string) {
+	readonly url: string;
+	constructor(url: string) {
 		super();
+		this.url = url;
 		sockets.push(this);
 		queueMicrotask(() => this.emit("open"));
 	}
