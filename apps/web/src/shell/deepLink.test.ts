@@ -1,6 +1,11 @@
 import { expect, test } from "bun:test";
 import type { Workspace } from "@thinkrail/contracts";
-import { fileIsInsideWorkspace, findWorkspaceForFile, getNativeDeepLinkBridge } from "./deepLink";
+import {
+	fileIsInsideWorkspace,
+	findWorkspaceForFile,
+	getNativeDeepLinkBridge,
+	workspaceFilePath,
+} from "./deepLink";
 
 function workspace(id: string, worktreePath: string): Workspace {
 	return {
@@ -37,6 +42,13 @@ test("prefers the most specific workspace and breaks ties with the active one", 
 
 test("returns null when no workspace contains the file", () => {
 	expect(findWorkspaceForFile("/elsewhere/a.ts", [workspace("default", "/repo")])).toBeNull();
+});
+
+test("opens and reveals with the workspace-relative identity", () => {
+	expect(workspaceFilePath("/repo/src/a.ts", workspace("default", "/repo"))).toBe("src/a.ts");
+	expect(workspaceFilePath("C:\\Repo\\src\\a.ts", workspace("default", "c:\\repo"))).toBe(
+		"src/a.ts",
+	);
 });
 
 test("accepts only a bridge with subscribe()", () => {

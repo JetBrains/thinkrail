@@ -118,7 +118,7 @@ const notificationBridge: NativeNotificationBridge = Object.freeze({
 	isWindowFocused: () => nativeWindowFocused,
 });
 const deepLinkBridge: NativeDeepLinkBridge = Object.freeze({
-	subscribe: (listener) => {
+	subscribe: (listener: (request: NativeOpenFileRequest) => void) => {
 		deepLinkListeners.add(listener);
 		const queued = pendingDeepLinks.splice(0);
 		for (const request of queued) listener(request);

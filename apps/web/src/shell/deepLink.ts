@@ -1,6 +1,6 @@
 import type { NativeDeepLinkBridge, NativeOpenFileRequest, Workspace } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
-import { normalizePath } from "../lib";
+import { normalizePath, projectRelativePath } from "../lib";
 import { toast, useAppStore } from "../store";
 import { getTransport } from "../transport";
 
@@ -40,6 +40,11 @@ export function findWorkspaceForFile(
 	return best;
 }
 
+/** The identity `openFileAtLine` both opens and reveals; an absolute path only matches the open tab. */
+export function workspaceFilePath(file: string, workspace: Workspace): string {
+	return projectRelativePath(file, workspace.worktreePath);
+}
+
 export function getNativeDeepLinkBridge(value: unknown): NativeDeepLinkBridge | null {
 	if (typeof value !== "object" || value === null) return null;
 	const subscribe = Reflect.get(value, "subscribe");
@@ -47,7 +52,11 @@ export function getNativeDeepLinkBridge(value: unknown): NativeDeepLinkBridge | 
 }
 
 function loadedWorkspaces(): Workspace[] {
-	return Object.values(useAppStore.getState().workspaces).flat();
+	const state = useAppStore.getState();
+	const openProjects = new Set(state.projects.map((project) => project.id));
+	return Object.values(state.workspaces)
+		.flat()
+		.filter((workspace) => openProjects.has(workspace.projectId));
 }
 
 function waitForWelcome(): Promise<void> {
@@ -78,17 +87,18 @@ async function loadProjectWorkspaces(projectIds: readonly string[]): Promise<voi
 
 async function resolveWorkspace(file: string): Promise<Workspace | null> {
 	const state = useAppStore.getState();
-	const active = findWorkspaceForFile(file, loadedWorkspaces(), state.activeWorkspaceId);
-	if (active) return active;
+	const cached = findWorkspaceForFile(file, loadedWorkspaces(), state.activeWorkspaceId);
 	const likely = state.projects.filter((project) => fileIsInsideWorkspace(file, project.path));
 	await loadProjectWorkspaces(likely.map((project) => project.id));
-	const afterLikely = findWorkspaceForFile(
+	const mostSpecific = findWorkspaceForFile(
 		file,
 		loadedWorkspaces(),
 		useAppStore.getState().activeWorkspaceId,
 	);
-	if (afterLikely) return afterLikely;
-	const remaining = state.projects.filter((project) => !likely.includes(project));
+	if (mostSpecific) return mostSpecific;
+	if (cached) return cached;
+	const likelyIds = new Set(likely.map((project) => project.id));
+	const remaining = state.projects.filter((project) => !likelyIds.has(project.id));
 	await loadProjectWorkspaces(remaining.map((project) => project.id));
 	return findWorkspaceForFile(file, loadedWorkspaces(), useAppStore.getState().activeWorkspaceId);
 }
@@ -96,7 +106,10 @@ async function resolveWorkspace(file: string): Promise<Workspace | null> {
 export async function openDeepLink(request: NativeOpenFileRequest): Promise<void> {
 	await waitForWelcome();
 	const workspace = await resolveWorkspace(request.file);
-	if (!workspace) {
+	if (
+		!workspace ||
+		!useAppStore.getState().projects.some((project) => project.id === workspace.projectId)
+	) {
 		toast.error(t("shell.deepLink.openFailed", { path: request.file }));
 		return;
 	}
@@ -109,7 +122,7 @@ export async function openDeepLink(request: NativeOpenFileRequest): Promise<void
 	const { openFileAtLine } = await import("../panels/openTabs");
 	await openFileAtLine(
 		workspace.id,
-		request.file,
+		workspaceFilePath(request.file, workspace),
 		{ line, ...(column === undefined ? {} : { column }) },
 		"keep",
 	);
