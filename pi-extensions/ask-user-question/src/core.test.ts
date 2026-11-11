@@ -8,6 +8,7 @@ import {
 	type AskUserQuestionResult,
 	buildQuestionnaireResponse,
 	DECLINE_MESSAGE,
+	DISCUSS_INSTRUCTION,
 	isAckDetails,
 	isAskUserQuestionResult,
 	isolateAskUserQuestionBatch,
@@ -15,6 +16,7 @@ import {
 	MAX_LABEL_LENGTH,
 	MAX_RECOMMENDED_REASON_LENGTH,
 	outcomeResult,
+	previewFileSources,
 	validateQuestionnaire,
 } from "./core.ts";
 import { AskUserQuestionSchema } from "./schema.ts";
@@ -95,7 +97,8 @@ describe("validateQuestionnaire", () => {
 			questions: [{ question: "q", header: "h", options }],
 		});
 		expect(validateQuestionnaire({ questions: [] }).message).toContain("At least one question");
-		expect(validateQuestionnaire(one([{ label: "only", description: "" }])).ok).toBe(false);
+		expect(validateQuestionnaire(one([])).ok).toBe(false);
+		expect(validateQuestionnaire(one([{ label: "Looks right", description: "" }])).ok).toBe(true);
 		expect(
 			validateQuestionnaire(
 				one([
@@ -104,7 +107,13 @@ describe("validateQuestionnaire", () => {
 				]),
 			).message,
 		).toContain("unique within a question");
-		for (const reserved of ["Other", "Type something.", "Chat about this", "Next →"]) {
+		for (const reserved of [
+			"Other",
+			"Type something.",
+			"Chat about this",
+			"Discuss this…",
+			"Next →",
+		]) {
 			expect(
 				validateQuestionnaire(
 					one([
@@ -118,6 +127,60 @@ describe("validateQuestionnaire", () => {
 		const second = duplicated.questions[1];
 		if (second) second.question = "Which library?";
 		expect(validateQuestionnaire(duplicated).message).toContain("Question text must be unique");
+	});
+});
+
+describe("validateQuestionnaire — previews", () => {
+	const withPreview = (
+		question: Partial<AskUserQuestionArgs["questions"][number]>,
+		option: Record<string, string> = {},
+	): AskUserQuestionArgs => ({
+		questions: [
+			{
+				question: "Which layout?",
+				header: "Layout",
+				...question,
+				options: [
+					{ label: "Split", description: "two columns", ...option },
+					{ label: "Stacked", description: "one column" },
+				],
+			},
+		],
+	});
+
+	test("a question preview and partial option previews are valid", () => {
+		expect(
+			validateQuestionnaire(withPreview({ preview: "Today: one column." }, { preview: "x" })).ok,
+		).toBe(true);
+	});
+
+	test("file previews need the host to offer them", () => {
+		const file = withPreview({}, { previewFile: "mockups/split.html" });
+		expect(validateQuestionnaire(file).message).toContain("file previews are not available");
+		expect(validateQuestionnaire(file, { filePreviews: true }).ok).toBe(true);
+	});
+
+	test("previewBefore needs previewFile, and preview excludes previewFile", () => {
+		expect(
+			validateQuestionnaire(withPreview({}, { previewBefore: "a.html" }), { filePreviews: true })
+				.message,
+		).toContain("previewBefore needs previewFile");
+		expect(
+			validateQuestionnaire(withPreview({ preview: "x", previewFile: "a.html" }), {
+				filePreviews: true,
+			}).message,
+		).toContain("either preview or previewFile");
+	});
+
+	test("previewFileSources lists every distinct path once with its location", () => {
+		const args = withPreview(
+			{ previewFile: "mockups/now.html" },
+			{ previewFile: "mockups/split.html", previewBefore: "mockups/now.html" },
+		);
+		expect(previewFileSources(args)).toEqual([
+			{ location: "questions[0].previewFile", path: "mockups/now.html" },
+			{ location: "questions[0].options[0].previewFile", path: "mockups/split.html" },
+		]);
 	});
 });
 
@@ -167,6 +230,71 @@ describe("buildQuestionnaireResponse", () => {
 		expect(text(result)).toContain("selected preview: ```ts");
 		expect(text(result)).toContain("user notes: for tz");
 		expect(result.details).toBe(answered);
+	});
+
+	test("a file preview is echoed as its path, never its content", () => {
+		const result = buildQuestionnaireResponse(
+			{
+				cancelled: false,
+				answers: [
+					{
+						questionIndex: 0,
+						question: "Which library?",
+						kind: "option",
+						answer: "luxon",
+						previewFile: "mockups/luxon.html",
+						previewBefore: "mockups/now.html",
+					},
+				],
+			},
+			args(),
+		);
+		expect(text(result)).toContain("selected preview: file mockups/now.html → mockups/luxon.html");
+	});
+
+	test("a question marked for discussion is reported with its reason, its text and one instruction", () => {
+		const result = buildQuestionnaireResponse(
+			{
+				cancelled: false,
+				answers: [
+					{ questionIndex: 0, question: "Which library?", kind: "option", answer: "luxon" },
+					{
+						questionIndex: 1,
+						question: "Which runtime?",
+						kind: "discuss",
+						answer: null,
+						reason: "context",
+						notes: "what changes between them?",
+					},
+				],
+			},
+			twoQuestions(),
+		);
+		const body = text(result);
+		expect(body).toContain(
+			'"Which runtime?"=(the user wants to discuss this question first: they need more context). user notes: what changes between them?',
+		);
+		expect(body.split(DISCUSS_INSTRUCTION)).toHaveLength(2);
+		expect(body).not.toContain("declined to answer");
+		expect(result.details.cancelled).toBe(false);
+	});
+
+	test("every question marked for discussion is still an answered round, not a decline", () => {
+		const result = outcomeResult(
+			{
+				kind: "answered",
+				result: {
+					cancelled: false,
+					answers: [
+						{ questionIndex: 0, question: "Which library?", kind: "discuss", answer: null },
+					],
+				},
+			},
+			args(),
+		);
+		expect(text(result)).toContain("discuss this question first");
+		expect(text(result)).toContain(DISCUSS_INSTRUCTION);
+		expect(result.terminate).toBeUndefined();
 	});
 
 	test("marks a multi answer's typed text as the user's own answer", () => {

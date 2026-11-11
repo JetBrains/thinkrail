@@ -1,5 +1,6 @@
 import type { UserMessage } from "@thinkrail/contracts";
 import type { Translator } from "@thinkrail/locales/react";
+import { browserPlatform, isApplePlatform } from "@thinkrail/ui/keyboard";
 
 export const DOUBLE_CLICK_SETTLE_MS = 250;
 
@@ -114,6 +115,14 @@ export function randomId(prefix = "id"): string {
 	const bytes = crypto.getRandomValues(new Uint8Array(16));
 	const value = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 	return `${prefix}-${value}`;
+}
+
+export function randomUuid(): string {
+	const bytes = crypto.getRandomValues(new Uint8Array(16));
+	bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
+	bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+	const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 export function userText(content: UserMessage["content"]): string {
@@ -357,30 +366,13 @@ export function cssColorToHex(color: string): string {
 	return `#${channels.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
 }
 
-const APPLE_PLATFORM = /Mac|iPhone|iPad|iPod/;
-
-function browserPlatform(): string {
-	return typeof navigator === "undefined" ? "" : (navigator.platform ?? "");
-}
-
-function isApplePlatform(platform: string): boolean {
-	return APPLE_PLATFORM.test(platform);
-}
+export { hasPlatformModifier } from "@thinkrail/ui/keyboard";
 
 export function platformFamily(platform = browserPlatform()) {
 	if (isApplePlatform(platform)) return "apple";
 	if (/^Win/.test(platform)) return "windows";
 	if (/Linux/.test(platform)) return "linux";
 	return "other";
-}
-
-export function hasPlatformModifier(
-	event: Pick<KeyboardEvent, "ctrlKey" | "metaKey">,
-	platform = browserPlatform(),
-): boolean {
-	return isApplePlatform(platform)
-		? event.metaKey && !event.ctrlKey
-		: event.ctrlKey && !event.metaKey;
 }
 
 export function platformShortcutLabel(

@@ -1,6 +1,6 @@
 import type { GitDiffScope, Workspace } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
-import { type GitResult, git, gitAsync } from "./gitExec";
+import { type GitResult, git, gitAsync, throwOnTimeout } from "./gitExec";
 
 export function diffBaseRef(ws: Pick<Workspace, "baseBranch" | "diffBase">): string {
 	return ws.diffBase ?? ws.baseBranch;
@@ -22,15 +22,42 @@ function throwExecutionFailure(result: GitResult): void {
 		throw new Error(`Could not resolve the diff range: ${result.err || "git failed"}`);
 }
 
+function commitOidArgs(ref: string): string[] {
+	return ["rev-parse", "--verify", "--quiet", "--end-of-options", `${ref}^{commit}`];
+}
+
+function commitOidFrom(result: GitResult): string | null {
+	return result.ok && result.out ? result.out : null;
+}
+
 export function resolveCommitOid(worktreePath: string, ref: string): string | null {
-	const out = git(worktreePath, [
-		"rev-parse",
-		"--verify",
-		"--quiet",
-		"--end-of-options",
-		`${ref}^{commit}`,
-	]);
-	return out.ok && out.out ? out.out : null;
+	return commitOidFrom(git(worktreePath, commitOidArgs(ref), { action: `resolve ${ref}` }));
+}
+
+async function resolveCommitOidAsync(worktreePath: string, ref: string): Promise<string | null> {
+	return commitOidFrom(
+		throwOnTimeout(await gitAsync(worktreePath, commitOidArgs(ref)), `resolve ${ref}`),
+	);
+}
+
+const EMPTY_TREE: Record<string, string> = {
+	sha1: "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+	sha256: "6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321",
+};
+
+async function unbornRange(worktreePath: string): Promise<DiffRange | null> {
+	const format = await gitAsync(worktreePath, ["rev-parse", "--show-object-format"]);
+	throwExecutionFailure(format);
+	const emptyTree = EMPTY_TREE[format.out];
+	if (!format.ok || !emptyTree) return null;
+	return {
+		listPrefix: ["diff"],
+		listRevs: [emptyTree],
+		untracked: true,
+		originalRef: null,
+		modifiedRef: null,
+		resolvedOriginalOid: null,
+	};
 }
 
 export async function resolveDiffRange(
@@ -38,13 +65,16 @@ export async function resolveDiffRange(
 	scope: GitDiffScope = { kind: "branch" },
 ): Promise<DiffRange> {
 	if (scope.kind === "uncommitted") {
+		const head = await resolveCommitOidAsync(ws.worktreePath, "HEAD");
+		const unborn = head ? null : await unbornRange(ws.worktreePath);
+		if (unborn) return unborn;
 		return {
 			listPrefix: ["diff"],
 			listRevs: ["HEAD"],
 			untracked: true,
 			originalRef: "HEAD",
 			modifiedRef: null,
-			resolvedOriginalOid: resolveCommitOid(ws.worktreePath, "HEAD"),
+			resolvedOriginalOid: head,
 		};
 	}
 	if (scope.kind === "pinned") {
@@ -140,6 +170,12 @@ export async function resolveDiffRange(
 	]);
 	throwExecutionFailure(mergeBase);
 	const resolvedForkPoint = mergeBase.ok && mergeBase.out ? mergeBase.out : null;
+	const resolvedOriginalOid =
+		resolvedForkPoint ?? (await resolveCommitOidAsync(ws.worktreePath, base));
+	if (!resolvedOriginalOid && !(await resolveCommitOidAsync(ws.worktreePath, "HEAD"))) {
+		const unborn = await unbornRange(ws.worktreePath);
+		if (unborn) return unborn;
+	}
 	const forkPoint = resolvedForkPoint ?? base;
 	return {
 		listPrefix: ["diff"],
@@ -147,7 +183,7 @@ export async function resolveDiffRange(
 		untracked: true,
 		originalRef: forkPoint,
 		modifiedRef: null,
-		resolvedOriginalOid: resolvedForkPoint ?? resolveCommitOid(ws.worktreePath, base),
+		resolvedOriginalOid,
 	};
 }
 

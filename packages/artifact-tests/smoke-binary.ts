@@ -57,7 +57,7 @@ const adapter: ArtifactHostAdapter = {
 			const cache = env.XDG_CACHE_HOME;
 			if (!cache) throw new Error("XDG_CACHE_HOME is missing");
 			const skillsDir = globSync(join(cache, "thinkrail", "skills", "*")).find((path) =>
-				existsSync(join(path, "brainstorming", "SKILL.md")),
+				existsSync(join(path, "host", "brainstorming", "SKILL.md")),
 			);
 			const runtimeDir = globSync(join(cache, "thinkrail", "runtime", "*")).find((path) =>
 				existsSync(join(path, "macos-trash")),

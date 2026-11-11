@@ -2,12 +2,14 @@ import i18next, { type TFunction } from "i18next";
 import { type ComponentProps, useSyncExternalStore } from "react";
 import { Trans } from "react-i18next";
 import {
+	BUNDLED_LOCALES,
 	bundledCatalog,
 	type Catalog,
 	completePlurals,
 	EN,
 	type EnglishCatalog,
 	fallbackChain,
+	loadBundledCatalog,
 } from "./index";
 
 declare module "i18next" {
@@ -93,11 +95,36 @@ export function localeOf(translate: Translator): string {
 
 export type LocaleOverlays = Readonly<Record<string, Catalog>>;
 
-let touched = new Set<string>(["en"]);
+let touched: ReadonlySet<string> = new Set(["en"]);
+let latestApply = 0;
 
-export function applyLocale(tag: string, overlays: LocaleOverlays): void {
+export async function applyLocale(tag: string, overlays: LocaleOverlays): Promise<void> {
 	const chain = fallbackChain(tag);
 	const languages = new Set([...touched, ...chain, ...Object.keys(overlays)]);
+	const apply = ++latestApply;
+	const pending = chain.filter(
+		(language) => BUNDLED_LOCALES.includes(language) && !bundledCatalog(language),
+	);
+	if (pending.length === 0) {
+		install(tag, overlays, languages);
+		return;
+	}
+	const results = await Promise.allSettled(pending.map(loadBundledCatalog));
+	if (apply !== latestApply) return;
+	const failure = results.find((result) => result.status === "rejected");
+	if (!failure) {
+		install(tag, overlays, languages);
+		return;
+	}
+	const rendered =
+		chain.find(
+			(language) => bundledCatalog(language) || Object.keys(overlays[language] ?? {}).length > 0,
+		) ?? "en";
+	install(rendered, overlays, languages);
+	throw failure.reason;
+}
+
+function install(tag: string, overlays: LocaleOverlays, languages: ReadonlySet<string>): void {
 	for (const language of languages) {
 		const bundled = bundledCatalog(language);
 		const local = overlays[language];

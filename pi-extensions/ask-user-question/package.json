@@ -1,7 +1,7 @@
 {
 	"name": "@thinkrail/pi-ask-user-question",
-	"version": "0.0.0",
-	"description": "A pi extension adding an `ask_user_question` tool: the agent asks structured multiple-choice questions instead of guessing, answered in a terminal questionnaire, in an RPC host's dialogs, or in a host's own UI.",
+	"version": "0.2.0",
+	"description": "A pi extension adding an `ask_user_question` tool: the agent asks structured multiple-choice questions instead of guessing, answered in a terminal questionnaire, in an RPC host's dialogs, or in a host's own UI such as ThinkRail, the agentic IDE built on pi.",
 	"license": "Apache-2.0",
 	"type": "module",
 	"keywords": [
@@ -12,7 +12,7 @@
 		"ask-user-question",
 		"questionnaire"
 	],
-	"homepage": "https://thinkrail.ai",
+	"homepage": "https://thinkrail.ai/?utm_source=pi-package&utm_medium=referral&utm_campaign=pi-ask-user-question&utm_content=homepage",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/JetBrains/thinkrail.git",
@@ -40,7 +40,8 @@
 	"pi": {
 		"extensions": [
 			"./index.ts"
-		]
+		],
+		"video": "https://github.com/JetBrains/thinkrail/raw/refs/heads/main/.github/readme-assets/pi-packages/ask-user-question.mp4"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",

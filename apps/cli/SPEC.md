@@ -50,7 +50,7 @@ it too),
 `-v`/`--version` (print the baked version and exit), `-h`/`--help`, and one positional `project-dir` (a
 git repo to open as a project on boot, best-effort). Env defaults: `THINKRAIL_PORT` / `THINKRAIL_HOST` /
 `THINKRAIL_STATIC_DIR` (flag > env > default). `THINKRAIL_NO_ANALYTICS` is documented in `--help` but
-deliberately **not** parsed here — the host's analytics module is its single reader (see below).
+deliberately **not** parsed here — the host's analytics module is its single reader (see below). Ports must be plain decimals 0-65535: an empty or non-decimal `--port`, or an empty `--host`, throws; an empty or invalid `THINKRAIL_PORT` / `THINKRAIL_HOST` is ignored and the default is used.
 
 ## Update advisory
 
@@ -199,16 +199,16 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   when the `.ts` is absent:
   - `src/web-assets.generated.ts` — enumerates `apps/web/dist`: a Bun file-attribute import per asset +
     a `{ route, data }[]` manifest + a content-hash version.
-  - `src/bundled-extensions.generated.ts` — **value-imports the four bundled pi-package entries**
-    (`pi-web-access`, `pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`), resolved from the
+  - `src/bundled-extensions.generated.ts` — **value-imports the three bundled pi-package entries**
+    (`pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`), resolved from the
     *server package's* module context (absolute paths — they aren't deps of `cli`), so Bun compiles the
-    raw `.ts` and their real deps (`yaml`, `unpdf`, …) into the binary; the `pi-web-access` factory is named
-    by `BuildRuntimeSources.webAccessIndex`, not by position. ThinkRail extensions listed in the server
+    raw `.ts` and their real deps (`yaml`, …) into the binary. ThinkRail extensions listed in the server
     registry ([[submodule-server-extensions]]) get no generated entry — `@thinkrail/server` imports them
-    statically, so `bun build --compile` carries them (and their deps such as `linkedom`) through the normal
-    server graph. Plus every `BuildRuntimeSources.skillRoots` dir (`pi-spec-graph`/`pi-thinkrail-workflow`/
-    `pi-todos` `skills/`, the server's own host skills in `packages/server/skills`, and any registry
-    extension's `skillPackages` roots) embedded like web assets
+    statically, so `bun build --compile` carries them (and their deps such as `linkedom`, or
+    `pi-web-access` with `unpdf`) through the normal server graph. Plus every `BuildRuntimeSources.skillRoots`
+    entry (`pi-spec-graph`/`pi-thinkrail-workflow`/`pi-todos` `skills/` and the server's own host skills in
+    `packages/server/skills` under the `host/` route; each registry extension's `skillPackages` roots under
+    `extensions/<name>/`, so a switched-off extension's folder can be left out of pi's skill inputs) embedded like web assets
     (matching what dev wires via `additionalSkillPaths` — parity, not a superset). Its `.d.ts` types the
     factories via the server's exported `BundledExtensionFactory`, so `cli` still never imports
     `@earendil-works/pi-coding-agent`.
@@ -286,7 +286,7 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   so the whole assertion is Windows-executable-shaped, and an ubuntu-only smoke let #255 ship a release
   matrix that failed for two days while publishing nothing (see `module-ci-release`). It does not prompt a
   provider; real turn behavior stays in `e2e:agent`. The smoke's **broad-net sibling** is `bun run e2e:binary` (root
-  `playwright.binary.config.ts`): the whole no-agent e2e suite executed against this binary — in CI on
+  `e2e/playwright.binary.config.ts`): the whole no-agent e2e suite executed against this binary — in CI on
   those same runs. And `bun run check:seams` (root `scripts/check-binary-seams.ts`) is the build-time canary
   for the seam class: it fails when a pi bump introduces a new bundler-opaque dynamic import the server's
   `registerBundledRuntime` doesn't statically register. The scan **excludes `pi-coding-agent/dist/bundle/`**

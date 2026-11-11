@@ -53,6 +53,8 @@ export const E2E_BINARY_PORT = PORT_BASE + 2;
 
 export const E2E_RESTART_PORT = PORT_BASE + 4;
 
+export const E2E_SPEECH_PORT = PORT_BASE + 6;
+
 export const E2E_DATA_DIR = join(tmpdir(), `thinkrail-e2e-${E2E_STATE_KEY}`);
 
 export const E2E_HOME_DIR = join(E2E_DATA_DIR, "home");
@@ -91,6 +93,12 @@ export const E2E_DESKTOP_CONTROL_FILE = join(E2E_DATA_DIR, "desktop.control");
 export const E2E_DESKTOP_USER_DATA = join(E2E_DATA_DIR, "desktop-user-data");
 
 export const E2E_PICK_DIR_POINTER = join(E2E_DATA_DIR, "pick-dir");
+
+export const E2E_INSTALLED_FONTS = join(E2E_DATA_DIR, "installed-fonts.json");
+
+export const E2E_SPEECH_FIXTURE_DIR = join(E2E_DATA_DIR, "speech-fixture");
+
+export const E2E_SPEECH_MANIFEST = join(E2E_SPEECH_FIXTURE_DIR, "manifest.json");
 
 export const E2E_PLAIN_DIR = join(E2E_DATA_DIR, "plain-folder");
 

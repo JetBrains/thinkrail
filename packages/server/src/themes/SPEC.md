@@ -19,8 +19,8 @@ file container, not the theme: the manifest schema, id rules, and catalog belong
 ## Boundary
 
 - **Owns:** creating the folder on start; scanning `*.theme.json` (dot-prefixed names ignored); the
-  per-file read status; the size caps (256 KB per file, 64 files — the rest report `too-many`); the
-  folder poller.
+  per-file read status; the size caps (256 KB per file, 64 files — the rest report `too-many`); what its
+  folder watch counts as a change (persistence's `watchDataFolder` polls).
 - **Public surface (barrel):** `themesDir()`, `readUserThemes(dir?)` (read on every request — a handful
   of small files, so no cache), `watchUserThemes({ dir?, onChange, intervalMs? })` → stop function,
   and the caps `MAX_THEME_FILE_BYTES` / `MAX_THEME_FILES` / `MAX_THEME_NESTING`.
@@ -29,7 +29,7 @@ file container, not the theme: the manifest schema, id rules, and catalog belong
   `too-large`, `too-many`, `unreadable`, `invalid-json` and `manifest` the parsed, unvalidated JSON;
   `themes.changed` is an invalidation nudge, not data; `themes.reveal` → `Ack` (`host` composes
   `themesDir()` with `editors`' file-manager reveal).
-- **Allowed deps:** `persistence` (`dataDir`), `log`.
+- **Allowed deps:** `persistence` (`dataDir`, the data-folder helpers), `log`.
 - **Forbidden:** the theme schema or any colour knowledge, `settings` (which theme is active is an
   `AppConfig` field the client resolves), `agent`, any workspace path.
 

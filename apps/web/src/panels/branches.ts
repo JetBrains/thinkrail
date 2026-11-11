@@ -4,19 +4,20 @@ import { getTransport } from "../transport";
 
 const NO_BRANCHES: BranchList = { local: [], remote: [], defaultBranch: "" };
 
-async function listBranchesOrEmpty(projectId: string): Promise<BranchList> {
+async function listBranchesOrEmpty(projectId: string): Promise<BranchList | null> {
 	try {
 		return await getTransport().request("git.listBranches", { projectId });
 	} catch {
-		return NO_BRANCHES;
+		return null;
 	}
 }
 
 export function useBranchList(
 	projectId: string | null,
 	onLoaded?: (list: BranchList) => void,
-): { branches: BranchList | null; refreshing: boolean; refresh: () => void } {
+): { branches: BranchList | null; failed: boolean; refreshing: boolean; refresh: () => void } {
 	const [branches, setBranches] = useState<BranchList | null>(null);
+	const [failed, setFailed] = useState(false);
 	const [refreshing, setRefreshing] = useState(false);
 	const latestOnLoaded = useRef(onLoaded);
 	latestOnLoaded.current = onLoaded;
@@ -25,11 +26,14 @@ export function useBranchList(
 	useEffect(() => {
 		const mine = ++generation.current;
 		setBranches(null);
+		setFailed(false);
 		setRefreshing(false);
 		if (!projectId) return;
-		void listBranchesOrEmpty(projectId).then((list) => {
+		void listBranchesOrEmpty(projectId).then((loaded) => {
 			if (generation.current !== mine) return;
+			const list = loaded ?? NO_BRANCHES;
 			setBranches(list);
+			setFailed(loaded === null);
 			latestOnLoaded.current?.(list);
 		});
 		return () => {
@@ -44,7 +48,9 @@ export function useBranchList(
 		getTransport()
 			.request("git.listBranches", { projectId })
 			.then((list) => {
-				if (generation.current === mine) setBranches(list);
+				if (generation.current !== mine) return;
+				setBranches(list);
+				setFailed(false);
 			})
 			.catch(() => {})
 			.finally(() => {
@@ -52,5 +58,5 @@ export function useBranchList(
 			});
 	}, [projectId]);
 
-	return { branches, refreshing, refresh };
+	return { branches, failed, refreshing, refresh };
 }

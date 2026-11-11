@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { removeTree } from "@thinkrail/shared/removeTree";
+import { toolHomeEnv } from "@thinkrail/shared/toolHomes";
 import { channel, posthogProjectKey, version } from "@thinkrail/shared/version";
 import {
 	type ArtifactHostAdapter,
@@ -27,11 +28,18 @@ export function startAnalyticsCollector() {
 	const events: CollectedEvent[] = [];
 	const errors: unknown[] = [];
 	let requests = 0;
+	let surveyReads = 0;
 	const server = Bun.serve({
 		hostname: "127.0.0.1",
 		port: 0,
 		async fetch(request) {
 			requests += 1;
+			const url = new URL(request.url);
+			if (request.method === "GET" && url.pathname === "/api/surveys/") {
+				surveyReads += 1;
+				if (!url.searchParams.get("token")) errors.push(new Error("survey list without a token"));
+				return Response.json({ surveys: [] });
+			}
 			try {
 				assert(request.method === "POST", "collector expected POST");
 				assert(new URL(request.url).pathname === "/batch/", "collector expected /batch/");
@@ -62,6 +70,9 @@ export function startAnalyticsCollector() {
 		get requests() {
 			return requests;
 		},
+		get surveyReads() {
+			return surveyReads;
+		},
 		stop: () => server.stop(true),
 	};
 }
@@ -80,16 +91,12 @@ export function analyticsProbeEnvironment(
 	return hostEnvironment(
 		{
 			...overrides,
-			HOME: join(root, "home"),
-			USERPROFILE: join(root, "home"),
+			...toolHomeEnv(join(root, "home")),
 			LOCALAPPDATA: join(root, "local"),
 			APPDATA: join(root, "roaming"),
 			XDG_CONFIG_HOME: join(root, "config"),
 			XDG_DATA_HOME: join(root, "xdg-data"),
 			XDG_CACHE_HOME: join(root, "cache"),
-			CLAUDE_CONFIG_DIR: join(root, "home", ".claude"),
-			CODEX_HOME: join(root, "home", ".codex"),
-			GEMINI_CLI_HOME: join(root, "home"),
 			THINKRAIL_DATA_DIR: join(root, "data"),
 			PI_CODING_AGENT_DIR: join(root, "agent"),
 			PI_OFFLINE: "1",

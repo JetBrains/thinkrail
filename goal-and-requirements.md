@@ -39,7 +39,8 @@ to move fast without losing control of what the agent did.
 
 - **Isolation by default.** A workspace ThinkRail creates is a git worktree with its own branch and cwd:
   agents run in parallel and the main branch stays clean until the user merges. Working directly in the
-  project folder (the Default workspace) is an explicit choice, never the default.
+  project folder (the Default workspace) is an explicit choice, never the default — except the setup chat of
+  a project ThinkRail just created empty, which has nothing to isolate yet.
 - **A real IDE around the agent.** Editor, diffs, terminals, and review in one workbench, so the user
   sees and steers the agent's work instead of reconstructing it from a scrollback.
 - **Specs as ground truth.** The project's intent lives in a spec graph beside the code that the agent
@@ -73,7 +74,17 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   [[module-cli]]).
 - **Projects → workspaces** — a git repo is a project; a workspace is a git worktree, plus the built-in
   Default workspace (the project folder itself) and existing worktrees attached in place
-  ([[submodule-server-workspaces]]).
+  ([[submodule-server-workspaces]]). A Git repository URL can be cloned into a chosen new host folder and
+  opened as a project, with optional shallow history and cancellation ([[submodule-server-projects]]).
+- **Voice input** — local dictation into every text field, extensions' included and with no work on
+  their part (the code editor and the terminal excepted), through a mic on the focused field or ⌘⇧Space /
+  Ctrl+Shift+Space. Text lands at the cursor and is never auto-sent. NVIDIA's Nemotron streaming model runs on the host after
+  a one-time, user-started download ([[submodule-server-speech]], [[submodule-web-speech]]).
+- **Chats without a project** — a chat that belongs to no repository works in its own scratch folder
+  under the built-in Chats container: files, terminal and plan, no git, review or pull request;
+  started from the Welcome screen, the Create dialog, the palette or the Chats section, deleted to the
+  Trash as a whole, and continued in a real workspace when it turns into work — the agent's summary
+  becomes the new chat's first message ([[submodule-server-workspaces]]).
 - **Workbench** — a splittable layout of files, diffs, documents, chats, and terminals with movable side
   and bottom tool panels, kept local to each window ([[submodule-web-shell-layout]]).
 - **Chats** — concurrent `pi` sessions per workspace, each with its own model, pi-reported token/cost,
@@ -85,8 +96,14 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   is committed on its own when its changes are provably its own, and can be reviewed by an independent
   reviewer ([[module-pi-todos]], [[submodule-server-todos]],
   [[submodule-server-host-plan-review]]).
-- **Subagents** — delegation to isolated child sessions, in the foreground, in parallel, or in the
-  background ([[module-pi-subagents]]).
+- **Subagents and background commands** — delegation to isolated child sessions, in the foreground, in
+  parallel, or in the background ([[module-pi-subagents]]), and commands the agent runs without holding its
+  turn ([[module-pi-background-commands]]); each chat's Resources view watches, inspects and stops them, and
+  keeps their finished history — outcomes and command log tails — for the workspace's lifetime, across host
+  restarts ([[submodule-web-chat-resources]], [[submodule-server-resource-history]]).
+- **Workspaces from chat** — on request ("in a side workspace"), the agent starts ordinary workspaces
+  with their own chats in any open project and checks their chats', PRs', and diffs' status; the agent,
+  not the host, decides what to do with them ([[submodule-server-agent]], [[submodule-server-host]]).
 - **Review** — anchored comments on files and diffs, collected without starting the agent and sent as
   structured context to chats that can resolve them; local review, not a forge integration
   ([[submodule-server-reviews]]).
@@ -98,11 +115,16 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   diverged branch with the agent, reopen, and delete the remote branch
   ([[submodule-server-pr]], [[submodule-web-shell-location-bar]]).
 - **Specs** — the agent searches, navigates, and maintains the spec graph through `spec_*` tools; the
-  read-only Specs tool renders it as a tree ([[module-spec-graph]], [[submodule-server-spec]]).
+  read-only Specs tool renders it as a tree. The agent and the search palette's `#` scope find the
+  sections that answer a question by words with one engine, and the palette hands a question that shares
+  no words with the specs to the agent ([[module-spec-graph]], [[submodule-server-spec]],
+  [[submodule-web-search]]).
 - **Workflows** — bundled workflow skills for project setup, design brainstorming, and shipping a PR
   ([[module-thinkrail-workflow]]).
-- **Providers** — in-app sign-in and API keys through pi's auth, and JetBrains AI through the user's
-  `central` CLI ([[submodule-server-auth]], [[central-integration]]).
+- **Providers** — in-app sign-in and API keys through pi's auth, JetBrains AI through the user's
+  `central` CLI, and the user's own OpenAI-compatible servers (a company gateway or a local model server)
+  added from Settings into pi's `models.json` ([[submodule-server-auth]], [[central-integration]],
+  [[submodule-server-agent]]).
 - **Pi configuration** — the user's own pi config folder, or another one (a personal vs a work setup), plus
   extra environment variables, chosen in Settings and applied to the whole host at the next start; one setup
   per host, not per project ([[submodule-server-environment]]).
@@ -110,6 +132,11 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   guessing, and inline diagrams, comparisons and file previews in chat; a proposed UI change is shown as
   a rendered before/after mockup through the same renderers and review comments as diff review
   ([[submodule-web-chat-tools-web]], [[module-ext-ask-user-question]], [[module-ext-visualize]]).
+- **Pi packages** — install a pi package by source (npm, git or a local folder) from Settings, for the
+  user or for a repository, and see everything pi loads: each package's extensions, skills and prompts
+  with their tools, hand-dropped extension files, and pi's built-ins — switching any of them off in pi's
+  own settings format, a whole package through a ThinkRail setting. Changes reach open chats when their
+  turn ends ([[submodule-server-agent-packages]], [[submodule-web-panels]]).
 - **MCP servers** — pi's built-in MCP, read from the user's `mcp.json`, managed from Settings and visible
   per chat next to background commands and subagents; a confirm in the chat, on the call, before calls
   that may change data, with a per-project "Always allow" for tools the user trusts
@@ -123,9 +150,14 @@ What ThinkRail does, at product level; the linked spec owns the detail.
 - **Themes** — light, dark, minimal and high-contrast themes ship built-in, following the system
   appearance or a fixed choice; a user adds a theme by saving a copy of a bundled theme file with new
   colours in `~/.thinkrail/themes`, live on save ([[submodule-web-themes]]).
+- **Fonts** — the interface and code fonts are the user's choice among the bundled faces, the fonts
+  installed on the host machine, and font files added in Settings (kept in `~/.thinkrail/fonts`), with
+  fallback fonts, a code size, code ligatures and one text-weight knob; one choice per host, applied at
+  once in every window, and a font missing on a device falls back to the bundled face with a warning
+  ([[submodule-web-fonts]], [[submodule-server-fonts]]).
 - **Brand** — ThinkRail green accent (bright on dark themes, deepened on light ones so it clears AA on
   both), a Darcula-family dark background, Orbitron for the brand display role, Geist and JetBrains Mono
-  for UI and code ([[submodule-web-themes]], [[web-typography]]).
+  as the default UI and code faces ([[submodule-web-themes]], [[web-typography]]).
 
 ## Non-goals
 

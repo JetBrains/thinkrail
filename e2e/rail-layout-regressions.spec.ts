@@ -131,7 +131,7 @@ test("a terminal dropped on a rail boundary beside a folded tool pane gets its o
 		1,
 	);
 	await expect(specs).toHaveAttribute("aria-pressed", "false");
-	await expect(page.getByTestId("review-panel")).toBeVisible();
+	await expect(page.getByTestId("tool-rail-plan")).toHaveAttribute("aria-pressed", "true");
 });
 
 test("a fresh resize remains writable after its previous handle was removed during cancellation", async ({

@@ -92,7 +92,7 @@ Children:
 
 | Canonical name | Implementation | `data-testid` | Responsibility |
 |---|---|---|---|
-| Add-Project Button / Menu | `panels/AddProjectMenu.tsx` → `AddProjectMenu` (the rail "+") | `add-project-menu` | Open project / Open GitHub (soon) / Recents dropdown |
+| Add-Project Button / Menu | `panels/AddProjectMenu.tsx` → `AddProjectMenu` (the rail "+") | `add-project-menu` | Open project / Enter host path… / Clone repository… / Recents dropdown |
 | Project Row | inline row in `ProjectTree` | `project-item` | A project (git repo); clicking selects it (project home) |
 | — Project Expander | chevron control | `project-expand` | Expands/collapses the project's workspace list |
 | — Project Name | inline `<button>` | `project-name` | Selects the project (project home) |
@@ -256,7 +256,7 @@ Row / message renderers (all in `chat/turns.tsx` unless noted):
 |---|---|---|---|---|
 | Turn Dispatcher | `ChatTurnView` | — | — | Dispatches a derived row to its renderer |
 | User Message | `UserTurn` | `chat-message` (`data-role="user"`) | `user` | A user prompt bubble |
-| Assistant Markdown | `chat/Markdown.tsx` → `Markdown` | — | `markdown` | Assistant text (GFM + shiki) |
+| Assistant Markdown | `chat/Markdown.tsx` → `Markdown` | — | `markdown` | Assistant text (GFM + Pierre highlighting) |
 | System Notice | `SystemTurn` | `chat-message` | `system` | Web-local system notice |
 | Error Turn | `ErrorTurn` | `chat-message` | `error` | Persistent tinted failure notice (never folded) |
 | Retry Indicator | `RetryIndicator` | `retry-indicator` | `retry` | Retry countdown (turn / summarization) |

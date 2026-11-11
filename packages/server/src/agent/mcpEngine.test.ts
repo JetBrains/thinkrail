@@ -69,14 +69,8 @@ const agentDir = join(root, "agent");
 const pidFile = join(root, "fixture.pids");
 const fixture = join(import.meta.dir, "mcp", "fixtures", "stdioServer.ts");
 const probeMarker = join(root, "probe-starts.log");
-const testExtensions = [
-	"other-mcp.ts",
-	"hang-shutdown.ts",
-	"hang-reload.ts",
-	"register-mcp.ts",
-	"reload-pause.ts",
-	"closing-probe.ts",
-];
+const writtenExtensions: string[] = [];
+let extensionSequence = 0;
 let requests: ExtUiRequest[] = [];
 let legacyRequests: ExtUiRequest[] = [];
 let sequence = 0;
@@ -140,12 +134,16 @@ beforeEach(() => {
 	rmSync(pidFile, { force: true });
 	rmSync(join(agentDir, "settings.json"), { force: true });
 	rmSync(probeMarker, { force: true });
-	for (const name of testExtensions) rmSync(join(agentDir, "extensions", name), { force: true });
+	for (const path of writtenExtensions.splice(0)) rmSync(path, { force: true });
 	writeMcpConfig();
 });
 
-function writeExtension(name: string, lines: string[]): void {
-	writeFileSync(join(agentDir, "extensions", name), [...lines, ""].join("\n"));
+// Bun's module registry can serve a path's first evaluation to every later load: never reuse a path.
+function writeExtension(name: string, lines: string[]): string {
+	const path = join(agentDir, "extensions", `${++extensionSequence}-${name}`);
+	writeFileSync(path, [...lines, ""].join("\n"));
+	writtenExtensions.push(path);
+	return path;
 }
 
 function writeHangingShutdownExtension(): void {
@@ -503,7 +501,7 @@ test("emergency disposal during graceful closure waits for the replacement runne
 	const loadReleased = join(root, "overlap-load-released");
 	const newEntered = join(root, "new-shutdown-entered");
 	const newReleased = join(root, "new-shutdown-released");
-	writeExtension("closing-probe.ts", [
+	const closingProbe = writeExtension("closing-probe.ts", [
 		'import { existsSync, writeFileSync } from "node:fs";',
 		"export default function closing(pi) {",
 		'  pi.on("session_shutdown", async (event) => {',
@@ -516,7 +514,7 @@ test("emergency disposal during graceful closure waits for the replacement runne
 	const p = await chat();
 	await waitFor(async () => (await stateOf(p.sessionId, "fixture")) === "connected");
 	const before = pids();
-	rmSync(join(agentDir, "extensions", "closing-probe.ts"));
+	rmSync(closingProbe);
 	writeExtension("reload-pause.ts", [
 		'import { appendFileSync, existsSync, writeFileSync } from "node:fs";',
 		"export default async function pause(pi) {",
@@ -628,15 +626,11 @@ test("pi settings that turn builtin:mcp off make MCP read-only with no chat open
 });
 
 test("an installed extension that owns /mcp replaces the built-in instead of running alongside it", async () => {
-	writeFileSync(
-		join(agentDir, "extensions", "other-mcp.ts"),
-		[
-			"export default function otherMcp(pi) {",
-			'  pi.registerCommand("mcp", { description: "another MCP manager", handler: async () => {} });',
-			"}",
-			"",
-		].join("\n"),
-	);
+	writeExtension("other-mcp.ts", [
+		"export default function otherMcp(pi) {",
+		'  pi.registerCommand("mcp", { description: "another MCP manager", handler: async () => {} });',
+		"}",
+	]);
 	const p = await chat();
 	await Bun.sleep(300);
 	expect(mcpCommands(p.sessionId).map((command) => command.description)).toEqual([

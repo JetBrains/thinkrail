@@ -1,7 +1,15 @@
 export {
+	cancelProjectClone,
+	cloneProject,
+	inspectCloneDestination,
+	startProjectClone,
+} from "./clone";
+export {
 	acknowledgeProjectSkills,
 	approveProjectMcpServer,
+	assertOutsideChatsRoot,
 	closeProject,
+	createProject,
 	getProjects,
 	grantProjectMcpTool,
 	initProject,
@@ -15,6 +23,7 @@ export {
 	setPiTrustSeed,
 	setProjectGroupEnabled,
 	setProjectMcpOverride,
+	setProjectPathGuard,
 	setProjectPublisher,
 	setProjectSkillEnabled,
 	setProjectTrust,

@@ -604,7 +604,10 @@ describe("Central artifact watcher", () => {
 		);
 		existing.add("/users/test/.pi");
 		callbacks.get("/users/test")?.(".pi");
-		await new Promise((resolve) => setTimeout(resolve, 5));
+		const deadline = Date.now() + 1_000;
+		while (watched.length < 3 && Date.now() < deadline) {
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
 
 		expect(watched).toEqual(["/users/test", "/users/test/.pi", "/users/test/.pi/agent/extensions"]);
 		stop();
