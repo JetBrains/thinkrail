@@ -15,11 +15,6 @@ function connection(): RemoteConnection {
 		hostKey: "KEY",
 		relayUrl: "ws://relay:1",
 		relayUrls: ["ws://relay:1"],
-		projectRef: "proj",
-		onLost: () => {},
-		onOpenChange: () => {},
-		onRetryFailed: () => {},
-		onRoutes: () => {},
 		reconnectNow: () => {},
 		close: () => {},
 	};
@@ -43,7 +38,7 @@ test("transitions idle → connecting → connected and notifies subscribers", a
 	await controller.connect(LINK, "Phone");
 	expect(states).toEqual(["connecting", "connected"]);
 	const state = controller.getState();
-	expect(state.status === "connected" && state.connection.projectRef).toBe("proj");
+	expect(state.status === "connected" && state.connection.hostKey).toBe("KEY");
 });
 
 test("surfaces a connector failure as an error state", async () => {

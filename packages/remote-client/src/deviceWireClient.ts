@@ -37,7 +37,7 @@ interface Pending {
  * reconnect-safe: a dropped WebRTC channel does not fail in-flight requests — when `attach` installs a fresh
  * channel, it sends `resume` with the ids still waiting and replays them, and subscriptions persist. Ids are
  * unique per client, so the host's replay cache answers a re-sent request from its first run instead of running
- * it twice; each response read is `ack`ed so the host can drop it. Only
+ * it twice; the responses read are `ack`ed, batched once per microtask, so the host can drop them. Only
  * `close` rejects outstanding work. Responses are matched by id; `{ channel, data }` pushes fan to subscribers;
  * a snapshot push (`server.welcome`) is also kept and replayed to a subscriber that arrives after it.
  */
@@ -49,6 +49,16 @@ export function createDeviceWireClient(): DeviceWireClient {
 	const pending = new Map<string, Pending>();
 	const subscribers = new Map<string, Set<(data: unknown) => void>>();
 	const sticky = new Map<string, unknown>();
+	let acks: string[] = [];
+	const ack = (id: string): void => {
+		acks.push(id);
+		if (acks.length > 1) return;
+		queueMicrotask(() => {
+			const ids = acks;
+			acks = [];
+			if (channel?.open) channel.send(JSON.stringify({ ack: ids }));
+		});
+	};
 
 	const onMessage = (raw: string): void => {
 		let message: unknown;
@@ -63,7 +73,7 @@ export function createDeviceWireClient(): DeviceWireClient {
 			const entry = pending.get(frame.id);
 			if (!entry) return;
 			pending.delete(frame.id);
-			if (channel?.open) channel.send(JSON.stringify({ ack: [frame.id] }));
+			ack(frame.id);
 			if (frame.ok === true) entry.resolve(frame.result);
 			else {
 				const error = typeof frame.error === "string" ? frame.error : "remote request failed";

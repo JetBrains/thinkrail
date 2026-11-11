@@ -48,7 +48,8 @@ each step's mechanics and invariants live in the module spec it links.
    key, the token and the computer's name.
 3. The phone sends `hello` with the token **id** (never the token), its public key and a nonce. The host
    answers a `challenge`; the phone returns a `proof` — its signature over the challenge plus an HMAC of the
-   token. Only then is the device registered, with an access level (`write` or `read`).
+   token. Only then is the device registered, with an access level (`write` or `read`). The connection that
+   paired is the phone's connection from then on; a failed pairing is reported, never retried.
 
 ## Connecting (every time)
 
@@ -71,7 +72,7 @@ unreachable (no route got ready — `RelayUnreachableError`), `host_silent` (the
 
 ## Staying connected
 
-- **Reconnect loop** ([[module-remote-client]]): a dropped channel or failed attempt retries with doubling
+- **Reconnect loop** ([[module-remote-client]]): a saved host's first attempt, a dropped channel or a failed attempt retries with doubling
   backoff; only `unknown_device`, `identity_mismatch` and `app_outdated` stop it. The app shows Connecting
   while retrying and the last failure's reason once a retry failed.
 - **Resume and network change:** the app coming to the foreground or the network returning calls
