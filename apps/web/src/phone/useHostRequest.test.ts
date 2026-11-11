@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { DeviceWireClient } from "@thinkrail/remote-client";
-import { type Settled, shownLoaded } from "./useHostRequest";
+import { pushedProjectId, type Settled, shownLoaded } from "./useHostRequest";
 
 const a = {} as DeviceWireClient;
 const b = {} as DeviceWireClient;
@@ -43,4 +43,11 @@ test("nothing settled yet starts from the cache, so returning never flashes a lo
 		value: ["cached"],
 	});
 	expect(shownLoaded(null, a, "k1", "r1", undefined)).toEqual({ kind: "loading" });
+});
+
+test("a workspace push names its project, whether it carries the workspace or a removed one's ids", () => {
+	expect(pushedProjectId({ id: "w1", projectId: "p1", name: "main" })).toBe("p1");
+	expect(pushedProjectId({ projectId: "p2", id: "w2" })).toBe("p2");
+	expect(pushedProjectId({ id: "p3", name: "project" })).toBeUndefined();
+	expect(pushedProjectId(null)).toBeUndefined();
 });

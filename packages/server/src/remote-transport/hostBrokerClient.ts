@@ -1,11 +1,13 @@
 import {
 	type ClientToBroker,
 	encodeBrokerFrame,
+	encodeHostMessage,
+	type HostMessage,
 	parseBrokerMessage,
+	parseDeviceMessage,
 	registerTranscript,
 } from "@thinkrail/contracts";
 import type { HostSession } from "./hostSession";
-import { encodeHostMessage, type HostMessage, parseDeviceMessage } from "./signalingProtocol";
 
 export interface BrokerClientSocket {
 	send(raw: string): void;
@@ -17,10 +19,7 @@ export interface HostBrokerDeps {
 	hostKey: string;
 	/** Signs with the host identity key, to prove ownership of `hostKey` when registering. */
 	sign: (data: Uint8Array) => Uint8Array;
-	/**
-	 * Builds a fully-wired session for a brokered device. `toDevice` sends host signaling back through the
-	 * broker for this session; the caller wires the handshake, WebRTC peer, and channel handoff.
-	 */
+	/** `toDevice` sends host signaling back through the broker for this session. */
 	openSession: (sessionId: string, toDevice: (message: HostMessage) => void) => HostSession;
 }
 
@@ -37,12 +36,6 @@ export interface HostBrokerClient {
 	readonly sessionCount: number;
 }
 
-/**
- * The host's outbound broker client: registers by public key (answering the broker's challenge with a
- * signature), then maps each brokered device session to a `HostSession`, relaying signaling payloads in
- * (device→host) and out (host→device). It speaks the shared broker protocol from `contracts` rather than
- * importing the relay service.
- */
 export function createHostBrokerClient(deps: HostBrokerDeps): HostBrokerClient {
 	const sessions = new Map<string, HostSession>();
 	let socket: BrokerClientSocket | null = null;
@@ -112,10 +105,6 @@ export interface BrokerConnection {
 const MIN_BACKOFF_MS = 1_000;
 const MAX_BACKOFF_MS = 30_000;
 
-/**
- * Drives the broker client over a real WebSocket to the relay and keeps it there: when the relay restarts or
- * the network drops, it reconnects with capped exponential backoff and registers again.
- */
 export function connectHostBroker(url: string, deps: HostBrokerDeps): BrokerConnection {
 	const client = createHostBrokerClient(deps);
 	let stopped = false;

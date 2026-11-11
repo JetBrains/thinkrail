@@ -10,11 +10,6 @@ export interface HostPeerSignal {
 	candidate?: string;
 }
 
-/**
- * The host as the WebRTC offerer: it creates the DataChannel and offer after authorization, emits local
- * SDP/ICE for the signaling layer to relay, consumes the device's answer/candidates, and surfaces the opened
- * channel as a `RemoteChannel`. Kept behind an interface so the session orchestrator is testable with a fake.
- */
 export interface HostPeer {
 	start(): Promise<void>;
 	acceptAnswer(sdp: string): Promise<void>;
@@ -114,8 +109,7 @@ export function createWeriftHostPeer(
 			const channel = pc.createDataChannel("wire");
 			channel.stateChanged.subscribe((state) => {
 				if (state === "open") emitChannel(toRemoteChannel(channel));
-				// The wire is the peer's only use: once it closes (a revoked device, a dropped phone), tear the
-				// whole connection down so the device sees it end rather than sit on a live peer with no channel.
+				// Without this the device never sees the connection end.
 				else if (state === "closed") void pc.close();
 			});
 			const offer = await pc.createOffer();

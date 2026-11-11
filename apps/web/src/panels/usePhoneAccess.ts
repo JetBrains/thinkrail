@@ -1,17 +1,26 @@
-import type { RemoteAccessStatus, RemoteDeviceAccess, WsParams } from "@thinkrail/contracts";
-import { useT } from "@thinkrail/locales/react";
+import {
+	REMOTE_ACCESS_PROTOCOL_VERSION,
+	type RemoteAccessStatus,
+	type RemoteDeviceAccess,
+	WS_CHANNELS,
+	type WsParams,
+} from "@thinkrail/contracts";
+import { t as translate, useT } from "@thinkrail/locales/react";
 import QRCode from "qrcode";
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { toast } from "@/store";
+import { useCallback, useEffect, useReducer, useState, useSyncExternalStore } from "react";
+import { copyText } from "@/lib";
+import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import {
-	createLatestGate,
+	foldRemoteStatus,
 	initialPhoneAccess,
-	newDevice,
+	initialRemoteStatus,
 	phoneAccessReducer,
+	type RemoteStatusSource,
 	type ShownPairing,
 	shouldAutoIssue,
 } from "./phoneAccessState";
+import { createKeyedFlight } from "./singleFlight";
 
 export type { ShownPairing } from "./phoneAccessState";
 
@@ -23,12 +32,9 @@ type StatusMethod =
 	| "remote.renameDevice"
 	| "remote.setDeviceAccess";
 
-/** While access is on: a phone pairing, a phone (dis)connecting, the network check settling or changing. */
-const STATUS_POLL_MS = 2_000;
-
 export interface PhoneAccess {
 	status: RemoteAccessStatus | null;
-	/** The first status read failed; `reload` tries again. */
+	/** The status read failed; `reload` tries again. */
 	loadFailed: boolean;
 	pairing: ShownPairing | null;
 	/** A code is being minted. */
@@ -48,62 +54,105 @@ export interface PhoneAccess {
 	setAccess: (deviceId: string, access: RemoteDeviceAccess) => void;
 }
 
+let source: RemoteStatusSource = initialRemoteStatus;
+const listeners = new Set<() => void>();
+let followed: ReturnType<typeof getTransport> | null = null;
+let readGeneration: number | null = null;
+
+function install(next: RemoteStatusSource): void {
+	source = next;
+	for (const listener of listeners) listener();
+}
+
+function applyStatus(status: RemoteAccessStatus): void {
+	const next = foldRemoteStatus(source, status, useAppStore.getState().connectionGeneration);
+	install(next);
+	if (next.paired) toast.success(translate("settings.phone.paired", { name: next.paired.label }));
+}
+
+function requestStatus<M extends StatusMethod>(method: M, params: WsParams<M>): Promise<void> {
+	return getTransport().request(method, params).then(applyStatus);
+}
+
+function readStatus(): void {
+	if (source.loadFailed) install({ ...source, loadFailed: false });
+	requestStatus("remote.status", {}).catch(() => {
+		if (source.status === null) install({ ...source, loadFailed: true });
+	});
+}
+
+/** One subscription per transport and one read per connection, however many views follow. */
+function follow(generation: number): void {
+	const transport = getTransport();
+	if (followed !== transport) {
+		followed = transport;
+		install(initialRemoteStatus);
+		transport.subscribe(WS_CHANNELS.remoteStatusChanged, (data) => {
+			if (followed === transport) applyStatus(data as RemoteAccessStatus);
+		});
+	}
+	if (readGeneration === generation) return;
+	readGeneration = generation;
+	readStatus();
+}
+
+function listen(listener: () => void): () => void {
+	listeners.add(listener);
+	return () => listeners.delete(listener);
+}
+
+/**
+ * The host's phone-access status, shared by the topbar, its quick panel and Settings: read once per
+ * connection, then kept current by the host's `remote.statusChanged` push and every change's reply.
+ */
+export function useRemoteAccessStatus(): RemoteStatusSource {
+	const supported = useAppStore(
+		(state) =>
+			state.protocolVersion !== null && state.protocolVersion >= REMOTE_ACCESS_PROTOCOL_VERSION,
+	);
+	const connected = useAppStore((state) => state.status === "connected");
+	const generation = useAppStore((state) => state.connectionGeneration);
+	useEffect(() => {
+		if (supported && connected) follow(generation);
+	}, [supported, connected, generation]);
+	return useSyncExternalStore(listen, () => source);
+}
+
 async function qrImage(link: string): Promise<string> {
 	const svg = await QRCode.toString(link, { type: "svg" });
 	return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 /**
- * Phone access over `remote.*`, shared by Settings → Phone access and the topbar quick panel: reads the
- * status on mount, switches the relay at once, mints a one-time code and, while access is on, polls
- * `remote.status` so a phone that pairs replaces the code with "paired" and a toast, and connected phones and the
- * network check stay current. `autoCode` mints a code as soon as access is on — the quick panel opens straight
- * onto a scannable QR. The transitions live in the
- * pure `phoneAccessReducer`; this hook only runs the requests.
+ * Phone access over `remote.*`, shared by Settings → Phone access and the topbar quick panel: follows the
+ * shared status, switches the relay at once and mints a one-time code, which a phone pairing from it
+ * replaces with "paired". `autoCode` mints a code as soon as access is on — the quick panel opens straight
+ * onto a scannable QR. The transitions live in the pure `phoneAccessReducer`; this hook only runs the
+ * requests.
  */
 export function usePhoneAccess({ autoCode = false }: { autoCode?: boolean } = {}): PhoneAccess {
 	const t = useT();
-	const [state, dispatch] = useReducer(phoneAccessReducer, initialPhoneAccess);
-	const [expired, setExpired] = useState(false);
+	const shared = useRemoteAccessStatus();
+	const [state, dispatch] = useReducer(phoneAccessReducer, shared.status, (status) =>
+		status
+			? phoneAccessReducer(initialPhoneAccess, { type: "status", status })
+			: initialPhoneAccess,
+	);
 	const [pending, setPending] = useState(false);
 	const [busyDevices, setBusyDevices] = useState<ReadonlySet<string>>(() => new Set());
-	const [loadAttempt, setLoadAttempt] = useState(0);
-	const statusRef = useRef<RemoteAccessStatus | null>(null);
-	const generationRef = useRef(0);
-	const issuingRef = useRef(false);
-	const pendingRef = useRef(false);
-	const busyRef = useRef(new Set<string>());
-	const [gate] = useState(createLatestGate);
-	useEffect(() => {
-		generationRef.current = state.generation;
-		issuingRef.current = state.issuing;
-	}, [state.generation, state.issuing]);
-
-	const requestStatus = useCallback(
-		<M extends StatusMethod>(
-			method: M,
-			params: WsParams<M>,
-			event: "status" | "polled" = "status",
-		): Promise<void> => {
-			const ticket = gate.ticket();
-			return getTransport()
-				.request(method, params)
-				.then((status) => {
-					if (!gate.accept(ticket)) return;
-					const added = event === "polled" ? newDevice(statusRef.current, status) : null;
-					statusRef.current = status;
-					dispatch({ type: event, status });
-					if (added) toast.success(t("settings.phone.paired", { name: added.label }));
-				});
-		},
-		[gate, t],
+	const [toggleFlight] = useState(() =>
+		createKeyedFlight<"toggle">((busy) => setPending(busy.size > 0)),
 	);
+	const [deviceFlight] = useState(() => createKeyedFlight<string>(setBusyDevices));
 
+	useEffect(() => {
+		if (shared.status) dispatch({ type: "status", status: shared.status, paired: shared.paired });
+	}, [shared]);
+
+	const { issuing, generation } = state;
 	const issue = useCallback(
 		(auto: boolean): void => {
-			if (issuingRef.current) return;
-			issuingRef.current = true;
-			const generation = generationRef.current;
+			if (issuing) return;
 			dispatch({ type: "issuing", auto });
 			getTransport()
 				.request("remote.issueLink", {})
@@ -116,13 +165,8 @@ export function usePhoneAccess({ autoCode = false }: { autoCode?: boolean } = {}
 					toast.error(t("settings.phone.pairFailed"));
 				});
 		},
-		[t],
+		[issuing, generation, t],
 	);
-
-	useEffect(() => {
-		if (loadAttempt > 0) dispatch({ type: "reload" });
-		requestStatus("remote.status", {}).catch(() => dispatch({ type: "loadFailed" }));
-	}, [requestStatus, loadAttempt]);
 
 	useEffect(() => {
 		if (autoCode && shouldAutoIssue(state)) issue(true);
@@ -131,88 +175,61 @@ export function usePhoneAccess({ autoCode = false }: { autoCode?: boolean } = {}
 	const { pairing } = state;
 	useEffect(() => {
 		if (!pairing) return;
-		setExpired(Date.now() >= pairing.expiresAt);
-		const timer = setInterval(() => setExpired(Date.now() >= pairing.expiresAt), STATUS_POLL_MS);
-		return () => clearInterval(timer);
+		const timer = setTimeout(
+			() => dispatch({ type: "expired", link: pairing.link }),
+			Math.max(0, pairing.expiresAt - Date.now()),
+		);
+		return () => clearTimeout(timer);
 	}, [pairing]);
 
-	const enabled = state.status?.enabled === true;
-	useEffect(() => {
-		if (!enabled) return;
-		const timer = setInterval(() => {
-			requestStatus("remote.status", {}, "polled").catch(() => {});
-		}, STATUS_POLL_MS);
-		return () => clearInterval(timer);
-	}, [enabled, requestStatus]);
-
-	const toggle = (enabled: boolean): void => {
-		if (pendingRef.current) return;
-		pendingRef.current = true;
-		setPending(true);
-		requestStatus("remote.setEnabled", { enabled })
-			.catch(() => toast.error(t("settings.phone.changeFailed")))
-			.finally(() => {
-				pendingRef.current = false;
-				setPending(false);
-			});
-	};
+	const toggle = (enabled: boolean): void =>
+		toggleFlight("toggle", () =>
+			requestStatus("remote.setEnabled", { enabled }).catch(() =>
+				toast.error(t("settings.phone.changeFailed")),
+			),
+		);
 
 	const copyLink = (link: string): void => {
-		const copied =
-			navigator.clipboard?.writeText(link) ?? Promise.reject(new Error("no clipboard"));
-		copied
-			.then(() => toast.success(t("settings.phone.linkCopied")))
-			.catch(() => toast.error(t("settings.phone.copyFailed")));
+		void copyText(link).then((copied) =>
+			copied
+				? toast.success(t("settings.phone.linkCopied"))
+				: toast.error(t("settings.phone.copyFailed")),
+		);
 	};
 
-	const onDevice = (deviceId: string, run: () => Promise<void>, failure: string): void => {
-		if (busyRef.current.has(deviceId)) return;
-		busyRef.current.add(deviceId);
-		setBusyDevices(new Set(busyRef.current));
-		run()
-			.catch(() => toast.error(failure))
-			.finally(() => {
-				busyRef.current.delete(deviceId);
-				setBusyDevices(new Set(busyRef.current));
-			});
-	};
-
-	const revoke = (deviceId: string): void =>
-		onDevice(
-			deviceId,
-			() => requestStatus("remote.revokeDevice", { id: deviceId }),
-			t("settings.phone.revokeFailed"),
-		);
-
-	const rename = (deviceId: string, label: string): void =>
-		onDevice(
-			deviceId,
-			() => requestStatus("remote.renameDevice", { id: deviceId, label }),
-			t("settings.phone.renameFailed"),
-		);
-
-	const setAccess = (deviceId: string, access: RemoteDeviceAccess): void =>
-		onDevice(
-			deviceId,
-			() => requestStatus("remote.setDeviceAccess", { id: deviceId, access }),
-			t("settings.phone.accessFailed"),
-		);
+	const onDevice = (deviceId: string, run: () => Promise<void>, failure: string): void =>
+		deviceFlight(deviceId, () => run().catch(() => toast.error(failure)));
 
 	return {
-		status: state.status,
-		loadFailed: state.loadFailed,
-		pairing: state.pairing,
-		issuing: state.issuing,
+		status: shared.status,
+		loadFailed: shared.loadFailed,
+		pairing,
+		issuing,
 		justPaired: state.justPaired,
-		expired,
+		expired: state.expired,
 		pending,
 		busyDevices,
-		reload: () => setLoadAttempt((attempt) => attempt + 1),
+		reload: readStatus,
 		toggle,
 		showCode: () => issue(false),
 		copyLink,
-		revoke,
-		rename,
-		setAccess,
+		revoke: (deviceId) =>
+			onDevice(
+				deviceId,
+				() => requestStatus("remote.revokeDevice", { id: deviceId }),
+				t("settings.phone.revokeFailed"),
+			),
+		rename: (deviceId, label) =>
+			onDevice(
+				deviceId,
+				() => requestStatus("remote.renameDevice", { id: deviceId, label }),
+				t("settings.phone.renameFailed"),
+			),
+		setAccess: (deviceId, access) =>
+			onDevice(
+				deviceId,
+				() => requestStatus("remote.setDeviceAccess", { id: deviceId, access }),
+				t("settings.phone.accessFailed"),
+			),
 	};
 }

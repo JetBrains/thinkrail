@@ -36,6 +36,7 @@ See [[submodule-server-remote-transport]] (the host side of the same handshake) 
     `iceFor()` TURN credentials to the device's `ready` only: one side's relay candidate crosses any NAT
     (TURN permissions are per IP), and the host's WebRTC stack would stall on an unreachable TURN. Disconnects close the affected sessions and
     notify the peer. Socket I/O is abstracted (`BrokerSocket`) so the core is unit-tested without a network.
+    `verifyEd25519` (raw base64url key, signature as base64url or bytes) is also the host's device-key check.
   - `server.ts` — `startBroker`, the thin Bun WebSocket wrapper: `/health`, connections per client address
     (`X-Forwarded-For` only when `trustProxy`), a per-connection token-bucket message rate, the payload cap,
     and a deadline for a connection to register or connect.

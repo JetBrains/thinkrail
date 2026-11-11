@@ -10,15 +10,58 @@ export interface ShownPairing extends RemotePairingLink {
 	qrSrc: string;
 }
 
-/** What the phone-access UI shows, kept pure so every transition is unit-tested without a DOM. */
+/** The host's phone-access status as every view follows it: read once per connection, then pushed. */
+export interface RemoteStatusSource {
+	status: RemoteAccessStatus | null;
+	/** The read failed and nothing has arrived since; a retry reads again. */
+	loadFailed: boolean;
+	/** The phone this status added over the last one on the same connection — the one that just paired. */
+	paired: RemotePairedDevice | null;
+	/** The connection the status arrived on; a status from another one is no baseline to diff against. */
+	generation: number | null;
+}
+
+export const initialRemoteStatus: RemoteStatusSource = {
+	status: null,
+	loadFailed: false,
+	paired: null,
+	generation: null,
+};
+
+/** The device in `next` that `previous` did not list — the phone that just paired — if any. */
+export function newDevice(
+	previous: RemoteAccessStatus | null,
+	next: RemoteAccessStatus,
+): RemotePairedDevice | null {
+	const known = new Set((previous?.devices ?? []).map((device) => device.id));
+	return next.devices.find((device) => !known.has(device.id)) ?? null;
+}
+
+/** Takes a status from a read, a push or a change's reply; the one place a newly paired phone is noticed. */
+export function foldRemoteStatus(
+	previous: RemoteStatusSource,
+	status: RemoteAccessStatus,
+	generation: number,
+): RemoteStatusSource {
+	const baseline = previous.generation === generation ? previous.status : null;
+	return {
+		status,
+		loadFailed: false,
+		paired: baseline ? newDevice(baseline, status) : null,
+		generation,
+	};
+}
+
+/** A code's lifecycle in one view, kept pure so every transition is unit-tested without a DOM. */
 export interface PhoneAccessState {
+	/** The last status this view took, for its transitions; the views render the shared one. */
 	status: RemoteAccessStatus | null;
 	/** The one-time code on screen. */
 	pairing: ShownPairing | null;
+	/** The shown code's expiry has passed. */
+	expired: boolean;
 	/** A code is being minted. */
 	issuing: boolean;
-	/** The first status read failed, so there is nothing to show until a retry. */
-	loadFailed: boolean;
 	/** The phone that paired from the shown code, until the next code is asked for. */
 	justPaired: string | null;
 	/** A code was already minted on its own for this "on" stretch, so closing it does not mint another. */
@@ -31,43 +74,31 @@ export interface PhoneAccessState {
 }
 
 export type PhoneAccessEvent =
-	/** A fresh status from the host: the first read, a switch, a revoke. */
-	| { type: "status"; status: RemoteAccessStatus }
-	/** A status read while a code is shown; a device the last status did not have means the code was used. */
-	| { type: "polled"; status: RemoteAccessStatus }
+	/** A status from the host; `paired` (from `foldRemoteStatus`) means the shown code was used. */
+	| { type: "status"; status: RemoteAccessStatus; paired?: RemotePairedDevice | null }
 	| { type: "issuing"; auto?: boolean }
 	| { type: "issued"; pairing: ShownPairing; generation: number }
 	| { type: "issueFailed"; generation: number }
-	| { type: "loadFailed" }
-	| { type: "reload" };
+	| { type: "expired"; link: string };
 
 export const initialPhoneAccess: PhoneAccessState = {
 	status: null,
 	pairing: null,
+	expired: false,
 	issuing: false,
-	loadFailed: false,
 	justPaired: null,
 	autoIssued: false,
 	generation: 0,
 };
 
-/** The device in `next` that `previous` did not list — the phone that just paired — if any. */
-export function newDevice(
-	previous: RemoteAccessStatus | null,
-	next: RemoteAccessStatus,
-): RemotePairedDevice | null {
-	const known = new Set((previous?.devices ?? []).map((device) => device.id));
-	return next.devices.find((device) => !known.has(device.id)) ?? null;
-}
-
-function withStatus(previous: PhoneAccessState, status: RemoteAccessStatus): PhoneAccessState {
-	const state = previous.loadFailed ? { ...previous, loadFailed: false } : previous;
+function withStatus(state: PhoneAccessState, status: RemoteAccessStatus): PhoneAccessState {
 	if (status.enabled) return { ...state, status };
 	if (!state.status?.enabled && state.status !== null) return { ...state, status };
 	return {
 		...state,
 		status,
 		pairing: null,
+		expired: false,
 		issuing: false,
 		justPaired: null,
 		autoIssued: false,
@@ -80,12 +111,11 @@ export function phoneAccessReducer(
 	event: PhoneAccessEvent,
 ): PhoneAccessState {
 	switch (event.type) {
-		case "status":
-			return withStatus(state, event.status);
-		case "polled": {
-			const added = newDevice(state.status, event.status);
+		case "status": {
 			const next = withStatus(state, event.status);
-			return added && next.pairing ? { ...next, pairing: null, justPaired: added.label } : next;
+			return event.paired && next.pairing
+				? { ...next, pairing: null, expired: false, justPaired: event.paired.label }
+				: next;
 		}
 		case "issuing":
 			return {
@@ -96,34 +126,12 @@ export function phoneAccessReducer(
 			};
 		case "issued":
 			if (event.generation !== state.generation || !state.status?.enabled) return state;
-			return { ...state, issuing: false, pairing: event.pairing };
+			return { ...state, issuing: false, pairing: event.pairing, expired: false };
 		case "issueFailed":
 			return event.generation === state.generation ? { ...state, issuing: false } : state;
-		case "loadFailed":
-			return state.status === null ? { ...state, loadFailed: true } : state;
-		case "reload":
-			return { ...state, loadFailed: false };
+		case "expired":
+			return state.pairing?.link === event.link ? { ...state, expired: true } : state;
 	}
-}
-
-/**
- * Orders replies to requests that each return the whole status: a reply is fresh only when no later-sent
- * request's reply was taken already, so a slow poll never undoes a switch or a revoke.
- */
-export function createLatestGate(): { ticket(): number; accept(ticket: number): boolean } {
-	let issued = 0;
-	let accepted = 0;
-	return {
-		ticket: () => {
-			issued += 1;
-			return issued;
-		},
-		accept: (ticket) => {
-			if (ticket <= accepted) return false;
-			accepted = ticket;
-			return true;
-		},
-	};
 }
 
 /**

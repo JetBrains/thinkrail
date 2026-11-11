@@ -18,11 +18,6 @@ export interface PairingTokens {
 	readonly size: number;
 }
 
-/**
- * In-memory store of pending QR pairings, keyed by `pairingTokenId` so the relay-visible `hello` never carries
- * the token. Tokens are one-time and short-lived, so a leaked QR cannot be replayed and nothing persists
- * across restarts.
- */
 export function createPairingTokens(ttlMs: number = DEFAULT_TTL_MS): PairingTokens {
 	const pending = new Map<string, PairingRequest>();
 	const prune = (now: number): void => {

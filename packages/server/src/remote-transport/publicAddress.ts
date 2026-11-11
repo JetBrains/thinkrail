@@ -43,11 +43,6 @@ export interface PublicAddressDeps {
 /** What the internet-facing check found, once it has run. */
 export type PublicDiscovery = { state: "reachable" | "closed"; ip: string } | { state: "offline" };
 
-/**
- * The public address of a host behind 1:1 NAT (a cloud VM whose interface carries only a private IP): the
- * STUN-mapped address, `reachable` only when the relay answers there, so a home router's address — which does
- * not forward the port — is reported `closed` and never advertised.
- */
 export async function discoverPublicAddress(
 	port: number,
 	deps: PublicAddressDeps = {},

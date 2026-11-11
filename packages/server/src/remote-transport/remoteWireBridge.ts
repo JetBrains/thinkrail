@@ -11,10 +11,6 @@ export type WireDispatch = (
 	context: WireDispatchContext,
 ) => Promise<unknown>;
 
-/**
- * The host's request de-duplication for one client, the same the WS path uses: a request id seen again with
- * the same method and params gets the first run's response instead of running twice.
- */
 export interface RemoteWireReplay {
 	run(id: string, method: string, params: unknown, execute: () => Promise<string>): Promise<string>;
 	/** Responses the device has read, so the host may drop them. */
@@ -39,14 +35,6 @@ export interface RemoteWireBridge {
 	close(): void;
 }
 
-/**
- * Runs the host wire protocol over a `RemoteChannel`: decodes request frames, dispatches them through the
- * injected `dispatch` (the host's `handleRequest`), and replies with the same `{ id, ok, result | error }`
- * framing the WS uses; `push` forwards `{ channel, data }` events. With `replay`, a device's `ack` and `resume`
- * frames reach it, and once the device sent `resume` (it acks, so its responses do not pile up) every request
- * runs through it, so a request re-sent after a reconnect never runs twice. An older app that never sends
- * `resume` is served without it.
- */
 export function bridgeRemoteWire(
 	channel: RemoteChannel,
 	deps: RemoteWireBridgeDeps,

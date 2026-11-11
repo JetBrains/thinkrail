@@ -1,5 +1,6 @@
 import type { DeviceWireClient } from "@thinkrail/remote-client";
 import { useCallback, useEffect, useState } from "react";
+import { reasonOf } from "./async";
 
 export type Loaded<T> =
 	| { kind: "loading" }
@@ -42,13 +43,21 @@ export function shownLoaded<T>(
 	return settled.loaded;
 }
 
-/** One wire read for a screen. A screen opened again starts from the read's last value for this client and refreshes it in place, so returning never flashes a loader; `reload` changing, or a push on a `refreshOn` channel, re-issues it while the last value stays on screen, so rows keyed by id stay put and only new ones appear. A different client or params start from that read's own last value or a loader; a failure carries `retry`. */
+/** The project a workspace push is about (a workspace, or a removed one's `{ projectId, id }`); undefined for any other payload. */
+export function pushedProjectId(data: unknown): string | undefined {
+	if (typeof data !== "object" || data === null) return undefined;
+	const projectId = Reflect.get(data, "projectId");
+	return typeof projectId === "string" ? projectId : undefined;
+}
+
+/** One wire read for a screen. A screen opened again starts from the read's last value for this client and refreshes it in place, so returning never flashes a loader; `reload` changing, or a push on a `refreshOn` channel that `refreshIf` accepts, re-issues it while the last value stays on screen, so rows keyed by id stay put and only new ones appear. A different client or params start from that read's own last value or a loader; a failure carries `retry`. */
 export function useHostRequest<T>(
 	client: DeviceWireClient | null,
 	method: string,
 	params: Record<string, unknown>,
 	reload = "",
 	refreshOn: readonly string[] = [],
+	refreshIf?: (data: unknown) => boolean,
 ): Loaded<T> {
 	const key = JSON.stringify({ method, params });
 	const [settled, setSettled] = useState<Settled<T> | null>(null);
@@ -58,44 +67,39 @@ export function useHostRequest<T>(
 	const channels = refreshOn.join();
 	useEffect(() => {
 		if (!client || !channels) return;
-		const bump = (): void => setPushes((count) => count + 1);
+		const bump = (data: unknown): void => {
+			if (!refreshIf || refreshIf(data)) setPushes((count) => count + 1);
+		};
 		const unsubscribes = channels.split(",").map((channel) => client.subscribe(channel, bump));
 		return () => {
 			for (const unsubscribe of unsubscribes) unsubscribe();
 		};
-	}, [client, channels]);
-	const request = JSON.stringify({ key, reload, pushes, retries });
+	}, [client, channels, refreshIf]);
+	const request = `${reload}\n${pushes}\n${retries}`;
 
 	useEffect(() => {
 		if (!client) return;
 		let live = true;
-		const { key: read } = JSON.parse(request) as { key: string };
-		const { method: name, params: body } = JSON.parse(read) as {
-			method: string;
-			params: Record<string, unknown>;
-		};
-		client.request<T>(name, body).then(
+		const read = JSON.parse(key) as { method: string; params: Record<string, unknown> };
+		client.request<T>(read.method, read.params).then(
 			(value) => {
-				remember(client, read, value);
-				if (live) setSettled({ client, key: read, request, loaded: { kind: "ready", value } });
+				remember(client, key, value);
+				if (live) setSettled({ client, key, request, loaded: { kind: "ready", value } });
 			},
 			(error: unknown) => {
 				if (live)
 					setSettled({
 						client,
-						key: read,
+						key,
 						request,
-						loaded: {
-							kind: "failed",
-							reason: error instanceof Error ? error.message : String(error),
-						},
+						loaded: { kind: "failed", reason: reasonOf(error) },
 					});
 			},
 		);
 		return () => {
 			live = false;
 		};
-	}, [client, request]);
+	}, [client, key, request]);
 
 	const shown = shownLoaded<T>(settled, client, key, request, cachedFor(client, key));
 	return shown.kind === "failed" ? { ...shown, retry } : shown;

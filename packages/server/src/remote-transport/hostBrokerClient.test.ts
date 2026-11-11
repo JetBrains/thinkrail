@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
+import type { DeviceMessage, HostMessage } from "@thinkrail/contracts";
 import { type ClientToBroker, parseClientMessage, registerTranscript } from "@thinkrail/contracts";
 import { createHostBrokerClient } from "./hostBrokerClient";
 import type { HostSession } from "./hostSession";
-import type { DeviceMessage, HostMessage } from "./signalingProtocol";
 
 function fixture() {
 	const outbound: ClientToBroker[] = [];
