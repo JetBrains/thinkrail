@@ -13,14 +13,17 @@ import { scopeKey } from "./changesModel";
 import { readGitStatus } from "./gitStatusCache";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 
-export function useGitStatus(workspaceId: string) {
+/** `null` reads nothing: a chat without a project has no git status to ask for. */
+export function useGitStatus(workspaceId: string | null) {
 	const [status, setStatus] = useState<GitStatus | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const warnedRef = useRef(false);
 	const setDiffScope = useAppStore((s) => s.setDiffScope);
-	const scope = useAppStore((s) => selectDiffScope(s, workspaceId));
-	const baseRef = useAppStore((s) => selectDiffBaseRef(s, workspaceId));
-	const targetRef = useAppStore((s) => selectDiffTabTargetRef(s, { workspaceId, scope }));
+	const scope = useAppStore((s) => selectDiffScope(s, workspaceId ?? ""));
+	const baseRef = useAppStore((s) => selectDiffBaseRef(s, workspaceId ?? ""));
+	const targetRef = useAppStore((s) =>
+		selectDiffTabTargetRef(s, { workspaceId: workspaceId ?? "", scope }),
+	);
 
 	const { reload } = useWorkspaceRead(
 		workspaceId,
@@ -32,7 +35,7 @@ export function useGitStatus(workspaceId: string) {
 				warnedRef.current = false;
 			},
 			onFailure: (_id, failure) => {
-				if (wsErrorCode(failure) === "UNKNOWN_COMMIT") {
+				if (wsErrorCode(failure) === "UNKNOWN_COMMIT" && workspaceId) {
 					setDiffScope(workspaceId, { kind: "branch" });
 					toast.info(
 						scope.kind === "turn" ? t("changes.panel.turnGone") : t("changes.panel.commitGone"),

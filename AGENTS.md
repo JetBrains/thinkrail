@@ -10,6 +10,8 @@ session state.
 - Use `architecture.md` for system topology, cross-module decisions, and repo-wide invariants.
 - For a pi upgrade or a host workaround around pi, read `pi-compatibility.md`: verify every applicable
   removal gate against the installed SDK, update the registry, and report what was removed or retained.
+  An Electrobun upgrade or a host workaround around Electrobun/Hutch does the same with
+  `electrobun-compatibility.md`.
 - Read the owning `SPEC.md` when work is governed by or may alter a module boundary, contract,
   invariant, documented behavior, or architecture decision.
 - For subagent model/effort reporting, read `packages/pi-delegation/SPEC.md` for current-run response
@@ -140,7 +142,7 @@ Green gates are necessary but not sufficient:
 ## Stack
 
 Bun + Turbo monorepo · TypeScript strict · React 19 + Zustand + Tailwind v4 · in-process `pi`
-(Node >= 22.19). App state lives under `~/.thinkrail`.
+(Node >= 22.23.4 for development; `pi` itself needs >= 22.19). App state lives under `~/.thinkrail`.
 
 Dependencies pin exact versions. Cross-cutting dependencies are pinned once in the root
 `workspaces.catalog` and referenced through `catalog:`; peer dependencies and local protocols are the

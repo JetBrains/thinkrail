@@ -87,7 +87,9 @@ test("a manifest written before the destructive keys existed still parses, with 
 		const parsed = parseThemeManifest(legacy);
 		if (!parsed.ok) throw new Error(`${file}: ${parsed.issues.join("; ")}`);
 		const { danger, dangerHover, onDanger, text, background } = parsed.value.colors;
-		expect(dangerHover, `${file}: derived dangerHover`).toBe(source.colors.dangerHover);
+		expect<string | undefined>(dangerHover, `${file}: derived dangerHover`).toBe(
+			source.colors.dangerHover,
+		);
 		expect([text, background]).toContain(onDanger);
 		for (const fill of [danger, dangerHover])
 			expect(

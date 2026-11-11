@@ -22,12 +22,10 @@
 		"test": "bun test"
 	},
 	"peerDependencies": {
-		"@earendil-works/pi-ai": "*",
 		"@earendil-works/pi-coding-agent": "*",
 		"typebox": "*"
 	},
 	"devDependencies": {
-		"@earendil-works/pi-ai": "catalog:",
 		"@earendil-works/pi-coding-agent": "catalog:",
 		"@types/bun": "catalog:",
 		"typebox": "catalog:",

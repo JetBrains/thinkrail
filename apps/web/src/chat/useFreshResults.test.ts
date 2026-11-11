@@ -51,11 +51,8 @@ test("acknowledging before the first snapshot keeps the first-visit baseline pen
 });
 
 test("a foreground subagent is never a new result: the agent's card already delivered it", () => {
-	const foreground: SubagentResourceSummary = {
-		...child,
-		childSessionId: "fg",
-		detached: undefined,
-	};
+	const { detached: _detached, ...attached } = child;
+	const foreground: SubagentResourceSummary = { ...attached, childSessionId: "fg" };
 	const finished = { finishedCommands: [], finishedSubagents: [child, foreground] };
 	expect(freshOf(finished, new Set()).subagents).toEqual([child]);
 });

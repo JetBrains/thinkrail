@@ -70,10 +70,10 @@ ${surface}
 `;
 }
 
-function run(root: string, listSkipped = false) {
+async function run(root: string, listSkipped = false) {
 	const stdout: string[] = [];
 	const stderr: string[] = [];
-	const code = runSpecSurfaceCheck(root, {
+	const code = await runSpecSurfaceCheck(root, {
 		listSkipped,
 		stdout: (line) => stdout.push(line),
 		stderr: (line) => stderr.push(line),
@@ -152,7 +152,7 @@ test("readSurfaceBlock keeps an indented sub-bullet inside the block", () => {
 	expect(declaredNames(block)).toEqual(["alpha", "beta"]);
 });
 
-test("blank-separated paragraphs remain inside a public-surface list item", () => {
+test("blank-separated paragraphs remain inside a public-surface list item", async () => {
 	const declaration =
 		"- **Public surface:** `kept`,\n\n  `promised`.\n- **Allowed deps:** `outside`.\n";
 	const block = surfaceOf(declaration);
@@ -163,7 +163,7 @@ test("blank-separated paragraphs remain inside a public-surface list item", () =
 	const root = fixture();
 	write(root, "module/SPEC.md", spec("blank-continuation", declaration.trimEnd()));
 	write(root, "module/index.ts", "export const kept = 1;\n");
-	const result = run(root);
+	const result = await run(root);
 	expect(result.code).toBe(1);
 	expect(result.stderr).toContain("barrel no longer exports: promised");
 });
@@ -175,7 +175,7 @@ test("diffSurface reports both directions", () => {
 	});
 });
 
-test("a tagged exact surface uses TypeScript's effective export names", () => {
+test("a tagged exact surface uses TypeScript's effective export names", async () => {
 	const root = fixture();
 	write(
 		root,
@@ -203,13 +203,13 @@ export default function rootDefault() {}
 	write(root, "module/values.ts", "export const value = 1;\n");
 	write(root, "module/defaults.ts", "export default function targetDefault() {}\n");
 
-	const result = run(root);
+	const result = await run(root);
 	expect(result.code).toBe(0);
 	expect(result.stdout).toContain("1 enrolled, 1 compared");
 	expect(result.stderr).toBe("");
 });
 
-test("transitive star exports follow cycles without duplicating names", () => {
+test("transitive star exports follow cycles without duplicating names", async () => {
 	const root = fixture();
 	write(
 		root,
@@ -220,10 +220,10 @@ test("transitive star exports follow cycles without duplicating names", () => {
 	write(root, "module/a.ts", 'export * from "./b";\nexport const alpha = 1;\n');
 	write(root, "module/b.ts", 'export * from "./a";\nexport interface Beta {}\n');
 
-	expect(run(root)).toMatchObject({ code: 0, stderr: "" });
+	expect(await run(root)).toMatchObject({ code: 0, stderr: "" });
 });
 
-test("tagged structural failures cannot silently become skips", () => {
+test("tagged structural failures cannot silently become skips", async () => {
 	const root = fixture();
 	write(root, "missing/SPEC.md", spec("missing", "- **Owns:** nothing."));
 	write(root, "missing/index.ts", "export const value = 1;\n");
@@ -231,7 +231,7 @@ test("tagged structural failures cannot silently become skips", () => {
 	write(root, "prose/index.ts", "export const initTransport = 1;\n");
 	write(root, "barrelless/SPEC.md", spec("barrelless", "- **Public surface:** `value`."));
 
-	const result = run(root);
+	const result = await run(root);
 	expect(result.code).toBe(1);
 	expect(result.stderr).toContain("tagged public-surface-checked but declares no public surface");
 	expect(result.stderr).toContain("public surface is not a bare identifier list");
@@ -239,18 +239,18 @@ test("tagged structural failures cannot silently become skips", () => {
 	expect(result.stdout).not.toContain("missing/SPEC.md");
 });
 
-test("surface differences report promises and undeclared exports", () => {
+test("surface differences report promises and undeclared exports", async () => {
 	const root = fixture();
 	write(root, "module/SPEC.md", spec("module-diff", "- **Public surface:** `actual`, `promised`."));
 	write(root, "module/index.ts", "export const actual = 1;\nexport const undeclared = 2;\n");
 
-	const result = run(root);
+	const result = await run(root);
 	expect(result.code).toBe(1);
 	expect(result.stderr).toContain("barrel no longer exports: promised");
 	expect(result.stderr).toContain("surface does not list: undeclared");
 });
 
-test("direct and transitive unresolved re-exports fail", () => {
+test("direct and transitive unresolved re-exports fail", async () => {
 	const root = fixture();
 	write(root, "direct/SPEC.md", spec("direct", "- **Public surface:** `value`."));
 	write(root, "direct/index.ts", 'export { value } from "./missing";\n');
@@ -258,13 +258,13 @@ test("direct and transitive unresolved re-exports fail", () => {
 	write(root, "transitive/index.ts", 'export * from "./middle";\n');
 	write(root, "transitive/middle.ts", 'export * from "./missing";\n');
 
-	const result = run(root);
+	const result = await run(root);
 	expect(result.code).toBe(1);
 	expect(result.stderr).toContain("direct/index.ts → ./missing");
 	expect(result.stderr).toContain("transitive/middle.ts → ./missing");
 });
 
-test("dependency and out-of-root declaration re-exports are validated", () => {
+test("dependency and out-of-root declaration re-exports are validated", async () => {
 	const dependencyRoot = fixture();
 	write(
 		dependencyRoot,
@@ -290,7 +290,7 @@ test("dependency and out-of-root declaration re-exports are validated", () => {
 		"package/node_modules/dep/index.d.ts",
 		'export const ok: number;\nexport * from "./missing";\n',
 	);
-	const dependencyResult = run(dependencyRoot);
+	const dependencyResult = await run(dependencyRoot);
 	expect(dependencyResult.code).toBe(1);
 	expect(dependencyResult.stderr).toContain("package/node_modules/dep/index.d.ts → ./missing");
 
@@ -321,12 +321,12 @@ test("dependency and out-of-root declaration re-exports are validated", () => {
 		"index.d.ts",
 		'export const ok: number;\nexport * from "./missing";\n',
 	);
-	const outsideResult = run(outsideRoot);
+	const outsideResult = await run(outsideRoot);
 	expect(outsideResult.code).toBe(1);
 	expect(outsideResult.stderr).toContain("index.d.ts → ./missing");
 });
 
-test("ambient-module re-export graphs are validated", () => {
+test("ambient-module re-export graphs are validated", async () => {
 	const root = fixture();
 	write(
 		root,
@@ -348,12 +348,12 @@ test("ambient-module re-export graphs are validated", () => {
 		'declare module "foo" { export const x: number; export * from "missing-package"; }\n',
 	);
 
-	const result = run(root);
+	const result = await run(root);
 	expect(result.code).toBe(1);
 	expect(result.stderr).toContain("package/globals.d.ts → missing-package");
 });
 
-test("merged ambient modules share explicit star precedence", () => {
+test("merged ambient modules share explicit star precedence", async () => {
 	const root = fixture();
 	write(
 		root,
@@ -375,10 +375,10 @@ declare module "foo" { export { shared } from "left" }
 `,
 	);
 
-	expect(run(root)).toMatchObject({ code: 0, stderr: "" });
+	expect(await run(root)).toMatchObject({ code: 0, stderr: "" });
 });
 
-test("exported import-equals declarations resolve star precedence", () => {
+test("exported import-equals declarations resolve star precedence", async () => {
 	const root = fixture();
 	write(
 		root,
@@ -398,10 +398,10 @@ test("exported import-equals declarations resolve star precedence", () => {
 	write(root, "package/src/left.ts", "export const Shared = 1;\n");
 	write(root, "package/src/right.ts", "export const Shared = 2;\n");
 
-	expect(run(root)).toMatchObject({ code: 0, stderr: "" });
+	expect(await run(root)).toMatchObject({ code: 0, stderr: "" });
 });
 
-test("direct CommonJS export assignments normalize to one default surface", () => {
+test("direct CommonJS export assignments normalize to one default surface", async () => {
 	const root = fixture();
 	write(
 		root,
@@ -422,7 +422,7 @@ test("direct CommonJS export assignments normalize to one default surface", () =
 	write(root, "object/SPEC.md", spec("export-equals-object", "- **Public surface:** `default`."));
 	write(root, "object/index.ts", "const api = { value: 1 };\nexport = api;\n");
 
-	const result = run(root);
+	const result = await run(root);
 	expect(result.code).toBe(0);
 	expect(result.stdout).toContain("3 enrolled, 3 compared");
 
@@ -442,13 +442,13 @@ test("direct CommonJS export assignments normalize to one default surface", () =
 	);
 	write(invalid, "module/index.ts", "class Api {}\nexport = Api;\n");
 
-	const mismatch = run(invalid);
+	const mismatch = await run(invalid);
 	expect(mismatch.code).toBe(1);
 	expect(mismatch.stderr).toContain("barrel no longer exports: prototype");
 	expect(mismatch.stderr).toContain("surface does not list: default");
 });
 
-test("module-valued exported aliases join transitive validation", () => {
+test("module-valued exported aliases join transitive validation", async () => {
 	const root = fixture();
 	write(
 		root,
@@ -468,14 +468,14 @@ test("module-valued exported aliases join transitive validation", () => {
 	write(root, "equals/SPEC.md", spec("import-equals-alias", "- **Public surface:** `api`."));
 	write(root, "equals/index.ts", 'export import api = require("middle");\n');
 
-	const result = run(root);
+	const result = await run(root);
 	expect(result.code).toBe(1);
 	expect(result.stderr).toContain("namespace/SPEC.md");
 	expect(result.stderr).toContain("equals/SPEC.md");
 	expect(result.stderr).toContain("globals.d.ts → missing-package");
 });
 
-test("invalid named and ambiguous star re-exports fail", () => {
+test("invalid named and ambiguous star re-exports fail", async () => {
 	const root = fixture();
 	write(root, "named/SPEC.md", spec("named", "- **Public surface:** `Missing`."));
 	write(root, "named/index.ts", 'export { Missing } from "./types";\n');
@@ -485,13 +485,13 @@ test("invalid named and ambiguous star re-exports fail", () => {
 	write(root, "ambiguous/left.ts", "export const shared = 1;\n");
 	write(root, "ambiguous/right.ts", "export const shared = 2;\n");
 
-	const result = run(root);
+	const result = await run(root);
 	expect(result.code).toBe(1);
 	expect(result.stderr).toContain("TS2305");
 	expect(result.stderr).toContain("TS2308");
 });
 
-test("alias and star validation survives TypeScript diagnostic suppression", () => {
+test("alias and star validation survives TypeScript diagnostic suppression", async () => {
 	const root = fixture();
 	write(
 		root,
@@ -523,7 +523,7 @@ test("alias and star validation survives TypeScript diagnostic suppression", () 
 	write(root, "direct/SPEC.md", spec("direct-suppressed", "- **Public surface:** `x`."));
 	write(root, "direct/index.ts", "// @ts-nocheck\nexport const x = 1;\nexport { x };\n");
 
-	const result = run(root);
+	const result = await run(root);
 	expect(result.code).toBe(1);
 	expect(result.stderr).toContain("invalid exported alias in named/index.ts: Missing");
 	expect(result.stderr).toContain("invalid export specifier in named/index.ts: Missing as Surface");
@@ -532,7 +532,7 @@ test("alias and star validation survives TypeScript diagnostic suppression", () 
 	expect(result.stderr).toContain("duplicate explicit export in direct/index.ts: x");
 });
 
-test("untagged specs remain successful skips and list only when requested", () => {
+test("untagged specs remain successful skips and list only when requested", async () => {
 	const root = fixture();
 	write(
 		root,
@@ -541,17 +541,17 @@ test("untagged specs remain successful skips and list only when requested", () =
 	);
 	write(root, "module/index.ts", 'export * from "./missing";\n');
 
-	const quiet = run(root);
+	const quiet = await run(root);
 	expect(quiet.code).toBe(0);
 	expect(quiet.stdout).not.toContain("module/SPEC.md");
 	expect(quiet.stderr).toBe("");
 
-	const listed = run(root, true);
+	const listed = await run(root, true);
 	expect(listed.code).toBe(0);
 	expect(listed.stdout).toContain("module/SPEC.md: not enrolled");
 });
 
-test("canonical scalar-tag specs at nonstandard Markdown paths can use src barrels", () => {
+test("canonical scalar-tag specs at nonstandard Markdown paths can use src barrels", async () => {
 	const root = fixture();
 	write(
 		root,
@@ -571,13 +571,13 @@ tags: [${PUBLIC_SURFACE_TAG}]
 `,
 	);
 
-	const result = run(root, true);
+	const result = await run(root, true);
 	expect(result.code).toBe(0);
 	expect(result.stdout).toContain("1 enrolled, 1 compared");
 	expect(result.stdout).not.toContain("invalid/SPEC.md");
 });
 
-test("nearest tsconfig options participate in module resolution", () => {
+test("nearest tsconfig options participate in module resolution", async () => {
 	const root = fixture();
 	write(
 		root,
@@ -595,5 +595,5 @@ test("nearest tsconfig options participate in module resolution", () => {
 	write(root, "package/src/index.ts", 'export type { Resolved } from "#types";\n');
 	write(root, "package/src/types.ts", "export interface Resolved {}\n");
 
-	expect(run(root)).toMatchObject({ code: 0, stderr: "" });
+	expect(await run(root)).toMatchObject({ code: 0, stderr: "" });
 });
