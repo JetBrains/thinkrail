@@ -68,6 +68,7 @@ import { StatusIcon } from "../chat/TodoList";
 import { useToolInteraction } from "../chat/toolInteraction";
 import { getToolRenderer } from "../chat/toolRegistry";
 import { hydrateSessionRuntime, useChatTodos } from "../chat/useChatTodos";
+import { copyText } from "../lib";
 import {
 	isChatWorkspace,
 	selectAgentReviewCommentCount,
@@ -1053,22 +1054,21 @@ export default function PlanPane({
 			},
 		);
 	const copyMarkdown = () => {
-		void navigator.clipboard
-			.writeText(exportMarkdown())
-			.then(() =>
-				pushToast({
-					variant: "success",
-					title: t("plan.copied.title"),
-					message: t("plan.copied.message"),
-				}),
-			)
-			.catch(() =>
-				pushToast({
-					variant: "error",
-					title: t("plan.copyFailed.title"),
-					message: t("plan.copyFailed.message"),
-				}),
-			);
+		void copyText(exportMarkdown()).then((copied) =>
+			pushToast(
+				copied
+					? {
+							variant: "success",
+							title: t("plan.copied.title"),
+							message: t("plan.copied.message"),
+						}
+					: {
+							variant: "error",
+							title: t("plan.copyFailed.title"),
+							message: t("plan.copyFailed.message"),
+						},
+			),
+		);
 	};
 	const exportMarkdown = () => planToMarkdown(t, data, title);
 	const renderGroup = (group: TodoGroupItem): ReactNode => (

@@ -11,6 +11,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { randomUuid } from "../lib";
 import { FileChip } from "./FileChip";
 import { fileToAttachedImage } from "./imageAttachment";
 import {
@@ -94,7 +95,7 @@ export function usePromptImages(owner?: PromptImagesOwner): PromptImagesControll
 						const name = picked[i]?.name || translate("chat.promptImages.fallbackName");
 						if (result.status !== "fulfilled" || result.value === null) {
 							nextErrors.push({
-								id: crypto.randomUUID(),
+								id: randomUuid(),
 								name,
 								reason: translate("chat.promptImages.unsupported"),
 							});
@@ -103,14 +104,14 @@ export function usePromptImages(owner?: PromptImagesOwner): PromptImagesControll
 						const size = result.value.content.data.length;
 						if (used + size > REQUEST_IMAGE_BASE64_BUDGET) {
 							nextErrors.push({
-								id: crypto.randomUUID(),
+								id: randomUuid(),
 								name,
 								reason: translate("chat.promptImages.limitReached"),
 							});
 							return;
 						}
 						used += size;
-						additions.push({ id: crypto.randomUUID(), name, ...result.value });
+						additions.push({ id: randomUuid(), name, ...result.value });
 					});
 					return {
 						...current,
@@ -154,7 +155,7 @@ export function usePromptImages(owner?: PromptImagesOwner): PromptImagesControll
 			update((current) => ({
 				...current,
 				images: [
-					...attachments.map((attachment) => ({ id: crypto.randomUUID(), ...attachment })),
+					...attachments.map((attachment) => ({ id: randomUuid(), ...attachment })),
 					...current.images,
 				],
 			}));
