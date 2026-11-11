@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { ONBOARDING_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import type { OnboardingWizardGate } from "./appStore";
-import { selectOnboardingActive } from "./selectors";
+import { selectOnboardingActive, selectOnboardingEligible } from "./selectors";
 
 const coldStart = {
 	protocolVersion: ONBOARDING_PROTOCOL_VERSION,
@@ -31,4 +31,14 @@ test("first-run prompts are free once the wizard is decided against, done, or im
 		selectOnboardingActive({ ...coldStart, protocolVersion: ONBOARDING_PROTOCOL_VERSION - 1 }),
 	).toBe(false);
 	expect(selectOnboardingActive({ ...coldStart, protocolVersion: null })).toBe(false);
+});
+
+test("the built-in Chats container, present from boot, is no project: the wizard stays eligible and active", () => {
+	const withContainer = { ...coldStart, projects: [{ kind: "chats" as const }] };
+	expect(selectOnboardingEligible(withContainer)).toBe(true);
+	expect(selectOnboardingActive(withContainer)).toBe(true);
+	expect(selectOnboardingActive({ ...withContainer, onboardingWizard: "shown" })).toBe(true);
+	expect(
+		selectOnboardingActive({ ...withContainer, projects: [{ kind: "chats" as const }, {}] }),
+	).toBe(false);
 });

@@ -13,8 +13,8 @@ Converge host-owned chat/session existence and transcripts with this frontend su
 
 ## Boundary
 
-- **Owns:** generation-qualified hydration for locally placed chats; authoritative session-list reconciliation with bounded passive auto-open; exact-chat route-target validation and first-priority local placement/focus; failed catalog/transcript reporting and retryable history fallback; missing/tombstoned session pruning; chat-location/deep-link orchestration; and stale-read/local-placement rechecks before installation.
-- **Public surface (`index.ts`):** mounted tombstone, catalog/cache, and chat-location reconciliation hooks plus locally placed-chat hydration/current-destination operations required by intent handling and retry UI.
+- **Owns:** generation-qualified hydration for locally placed chats; authoritative session-list reconciliation with bounded passive auto-open; exact-chat route-target validation and first-priority local placement/focus; failed catalog/transcript reporting and retryable history fallback; missing/tombstoned session pruning; chat-location/deep-link orchestration; expiry of a palette composer focus request once its destination settles elsewhere (`useComposerFocusExpiry` clears what `selectComposerFocusRequestStale` reports); and stale-read/local-placement rechecks before installation.
+- **Public surface (`index.ts`):** mounted tombstone, catalog/cache, chat-location, and composer-focus-expiry reconciliation hooks plus locally placed-chat hydration/current-destination operations required by intent handling and retry UI.
 - **External deps:** contracts chat/session types; chat transcript hydration; store session/cache/navigation APIs; transport session reads; shell-neutral `lib`; React.
 - **Forbidden:** host session lifetime, terminal reconciliation, frame geometry/topology, generic placement policy, feature-panel rendering, server/shared/pi imports, current-layout transport, or selecting a tab merely because domain hydration arrived.
 

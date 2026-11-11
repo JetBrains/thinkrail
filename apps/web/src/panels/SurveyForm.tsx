@@ -191,8 +191,8 @@ function SurveyAnswer({
 				</div>
 				{question.lowerBoundLabel || question.upperBoundLabel ? (
 					<div className="flex w-full justify-between gap-8 text-text-muted tr-text-metadata">
-						<span>{question.lowerBoundLabel}</span>
-						<span>{question.upperBoundLabel}</span>
+						<span className="min-w-0">{question.lowerBoundLabel}</span>
+						<span className="min-w-0">{question.upperBoundLabel}</span>
 					</div>
 				) : null}
 			</div>
@@ -287,7 +287,7 @@ function ChoiceRow({
 			)}
 		>
 			<input type={kind} name={name} checked={checked} onChange={onSelect} className="sr-only" />
-			<span className="tr-text-ui text-text-default">{label}</span>
+			<span className="min-w-0 tr-text-ui text-text-default">{label}</span>
 		</label>
 	);
 }

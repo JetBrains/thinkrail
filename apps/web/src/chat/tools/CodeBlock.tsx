@@ -1,4 +1,5 @@
 import { useHighlightedCode } from "@/lib/highlightCode";
+import { HighlightedHtml } from "../HighlightedHtml";
 
 export function CodeBlock({ code, lang }: { code: string; lang: string }) {
 	const html = useHighlightedCode(code, lang);
@@ -11,9 +12,9 @@ export function CodeBlock({ code, lang }: { code: string; lang: string }) {
 		);
 	}
 	return (
-		<div
+		<HighlightedHtml
+			html={html}
 			className="overflow-auto rounded-sm tr-code-text [&_pre]:!m-0 [&_pre]:!bg-container-header-bg [&_pre]:p-8"
-			dangerouslySetInnerHTML={{ __html: html }}
 		/>
 	);
 }

@@ -21,7 +21,7 @@ test("a closed chat reopens from history with its transcript intact", { tag: "@a
 	await page.getByTestId("chat-input").fill("Reply with the single word: pong");
 	await page.getByTestId("chat-send").click();
 	await expect(
-		page.locator('[data-testid="chat-message"][data-role="system"]').filter({ hasText: "Done" }),
+		page.locator('[data-testid="turn-divider-status"][data-outcome="done"]'),
 	).toBeVisible({ timeout: 80_000 });
 	await expect(userMsg).toBeVisible();
 

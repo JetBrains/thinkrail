@@ -90,14 +90,16 @@ function DeleteChatButton({
 	sessionId,
 	isSelected,
 	onDeleteChat,
+	canDeleteChat,
 }: {
 	workspaceId: string | undefined;
 	sessionId: string;
 	isSelected: boolean;
 	onDeleteChat: (workspaceId: string, sessionId: string) => void;
+	canDeleteChat: (workspaceId: string) => boolean;
 }) {
 	const t = useT();
-	if (!workspaceId) return null;
+	if (!workspaceId || !canDeleteChat(workspaceId)) return null;
 	return (
 		<IconTooltip label={t("chat.history.deleteChat")}>
 			<button
@@ -128,6 +130,7 @@ function PromptRow({
 	onSaveAsTemplate,
 	onOpenMessage,
 	onDeleteChat,
+	canDeleteChat,
 }: {
 	hit: PromptHit;
 	highlight: HighlightTerms;
@@ -138,6 +141,7 @@ function PromptRow({
 	onSaveAsTemplate: () => void;
 	onOpenMessage: (target: ChatLocationRequest) => void;
 	onDeleteChat: (workspaceId: string, sessionId: string) => void;
+	canDeleteChat: (workspaceId: string) => boolean;
 }) {
 	const t = useT();
 	const now = useNow();
@@ -222,6 +226,7 @@ function PromptRow({
 				sessionId={hit.sessionId}
 				isSelected={isSelected}
 				onDeleteChat={onDeleteChat}
+				canDeleteChat={canDeleteChat}
 			/>
 		</div>
 	);
@@ -233,12 +238,14 @@ function MessageRow({
 	isSelected,
 	onPick,
 	onDeleteChat,
+	canDeleteChat,
 }: {
 	hit: MessageHit;
 	highlight: HighlightTerms;
 	isSelected: boolean;
 	onPick: () => void;
 	onDeleteChat: (workspaceId: string, sessionId: string) => void;
+	canDeleteChat: (workspaceId: string) => boolean;
 }) {
 	const t = useT();
 	const now = useNow();
@@ -280,6 +287,7 @@ function MessageRow({
 				sessionId={hit.sessionId}
 				isSelected={isSelected}
 				onDeleteChat={onDeleteChat}
+				canDeleteChat={canDeleteChat}
 			/>
 		</div>
 	);
@@ -357,6 +365,7 @@ export interface HistoryOverlayProps {
 	onOpenMessage: (target: ChatLocationRequest) => void;
 	onSaveAsTemplate: (hit: PromptHit) => void;
 	onDeleteChat: (workspaceId: string, sessionId: string) => void;
+	canDeleteChat: (workspaceId: string) => boolean;
 	onSetScope: (kind: HistoryScope["kind"]) => void;
 }
 
@@ -377,6 +386,7 @@ function HistoryPicker({
 	onOpenMessage,
 	onSaveAsTemplate,
 	onDeleteChat,
+	canDeleteChat,
 	onSetScope,
 }: HistoryOverlayProps) {
 	const t = useT();
@@ -518,6 +528,7 @@ function HistoryPicker({
 									onSaveAsTemplate={() => onSaveAsTemplate(hit)}
 									onOpenMessage={onOpenMessage}
 									onDeleteChat={onDeleteChat}
+									canDeleteChat={canDeleteChat}
 								/>
 							))}
 						</div>
@@ -541,6 +552,7 @@ function HistoryPicker({
 										if (target) onOpenMessage(target);
 									}}
 									onDeleteChat={onDeleteChat}
+									canDeleteChat={canDeleteChat}
 								/>
 							))}
 						</div>

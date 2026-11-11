@@ -109,7 +109,7 @@ export async function addMcpServersWithProjectOptIn(
 
 function DialogBody({ children }: { children: ReactNode }) {
 	return (
-		<div className="-mx-16 flex min-h-0 flex-1 flex-col gap-12 overflow-y-auto px-16">
+		<div className="-mx-16 relative flex min-h-0 flex-1 flex-col gap-12 overflow-y-auto px-16">
 			{children}
 		</div>
 	);
@@ -697,10 +697,7 @@ export function McpAddDialog({
 	const reviewing = step.kind === "review";
 	return (
 		<Dialog open={open} onOpenChange={(next) => !saving && onOpenChange(next)}>
-			<DialogContent
-				data-testid="mcp-add-dialog"
-				className="flex max-h-[85vh] max-w-[36rem] flex-col"
-			>
+			<DialogContent data-testid="mcp-add-dialog" className="max-w-[36rem]">
 				<DialogHeader>
 					<DialogTitle>{reviewing ? t("mcp.review.title") : t("mcp.addDialog.title")}</DialogTitle>
 					<DialogDescription>
@@ -908,10 +905,7 @@ export function McpEditDialog({
 
 	return (
 		<Dialog open onOpenChange={(open) => !open && !saving && onClose()}>
-			<DialogContent
-				data-testid="mcp-edit-dialog"
-				className="flex max-h-[85vh] max-w-[36rem] flex-col"
-			>
+			<DialogContent data-testid="mcp-edit-dialog" className="max-w-[36rem]">
 				<DialogHeader>
 					<DialogTitle>
 						{review ? t("mcp.review.title") : t("mcp.editDialog.title", { name })}
@@ -1029,10 +1023,7 @@ export function McpApproveDialog({
 	};
 	return (
 		<Dialog open onOpenChange={(open) => !open && !saving && onClose()}>
-			<DialogContent
-				data-testid="mcp-approve-dialog"
-				className="flex max-h-[85vh] max-w-[32rem] flex-col"
-			>
+			<DialogContent data-testid="mcp-approve-dialog" className="max-w-[32rem]">
 				<DialogHeader>
 					<DialogTitle>{t("mcp.approveDialog.title", { name: summary.name })}</DialogTitle>
 					<DialogDescription>
@@ -1131,10 +1122,7 @@ export function McpDetailsDialog({
 	const { summary } = row;
 	return (
 		<Dialog open onOpenChange={(open) => !open && onClose()}>
-			<DialogContent
-				data-testid="mcp-details-dialog"
-				className="flex max-h-[85vh] max-w-[34rem] flex-col"
-			>
+			<DialogContent data-testid="mcp-details-dialog" className="max-w-[34rem]">
 				<DialogHeader>
 					<DialogTitle>{summary.name}</DialogTitle>
 					{summary.description ? (
@@ -1232,10 +1220,7 @@ export function McpLogDialog({
 	const { name } = row.summary;
 	return (
 		<Dialog open onOpenChange={(open) => !open && onClose()}>
-			<DialogContent
-				data-testid="mcp-log-dialog"
-				className="flex max-h-[85vh] max-w-[40rem] flex-col"
-			>
+			<DialogContent data-testid="mcp-log-dialog" className="max-w-[40rem]">
 				<DialogHeader>
 					<DialogTitle>{t("mcp.log.title", { name })}</DialogTitle>
 					<DialogDescription>{t("mcp.log.description")}</DialogDescription>

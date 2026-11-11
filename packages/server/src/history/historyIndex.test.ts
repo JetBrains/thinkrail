@@ -90,8 +90,18 @@ describe("HistoryIndex.search", () => {
 		const jsonl = readFileSync(path as string, "utf8");
 		expect(JSON.parse(jsonl.split("\n")[1] ?? "{}").message.role).toBe("system");
 		expect(extractSession(jsonl)?.entries).toEqual([
-			{ text: "visible prompt", role: "user", timestamp: 2, messageIndex: 0 },
-			{ text: "visible answer", role: "assistant", timestamp: 3, messageIndex: 1 },
+			expect.objectContaining({
+				text: "visible prompt",
+				role: "user",
+				timestamp: 2,
+				messageIndex: 0,
+			}),
+			expect.objectContaining({
+				text: "visible answer",
+				role: "assistant",
+				timestamp: 3,
+				messageIndex: 1,
+			}),
 		]);
 
 		const result = await new HistoryIndex(dir).search({

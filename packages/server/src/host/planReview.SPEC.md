@@ -51,8 +51,8 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
   the selected model when one is available. `runReview` passes `thinkingLevel` **unconditionally** — an
   omitted level makes pi-delegation inherit the parent worker's effort, so an unset setting would silently
   run the reviewer at the worker's effort instead of the default. `runReviewSubagent` spawns the child
-  with `contextFiles: true` and `extensions: true`, and `REVIEWER_TOOLS` carries `spec_grep`/`spec_get`/
-  `spec_graph` alongside `read`/`grep`/`find`/`ls`/`bash`, reproducing the built-in `reviewer` agent's
+  with `contextFiles: true` and `extensions: true`, and `REVIEWER_TOOLS` carries `spec_search`/`spec_grep`/
+  `spec_get`/`spec_graph` alongside `read`/`grep`/`find`/`ls`/`bash`, reproducing the built-in `reviewer` agent's
   context/tool policy so plan review follows repository guidance and can audit invariants. Only the
   system prompt + JSON output contract differ (the host parses the verdict).
 - **The host owns the reviewer's role, the package owns only facts.** `reviewerRole.ts` holds the

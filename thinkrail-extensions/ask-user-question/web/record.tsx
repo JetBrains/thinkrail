@@ -1,4 +1,5 @@
 import {
+	RiArrowDownLine as ArrowDown,
 	RiChat3Line as ChatLine,
 	RiCheckLine as Check,
 	RiCheckboxCircleLine as CheckCircle,
@@ -95,13 +96,46 @@ export function ClosedRecord({ error, rawText }: { error: boolean; rawText: stri
 	);
 }
 
-export function WaitingCard({ children }: { children: ReactNode }) {
+export function DockedStub({ count, onOpen }: { count: number; onOpen: () => void }) {
+	const t = useT();
+	return (
+		<div
+			data-testid="ask-user-question"
+			data-tone="docked"
+			className="flex min-w-0 items-center gap-4 text-text-muted tr-text-metadata"
+		>
+			<MessageCircleQuestion aria-hidden="true" className="size-14 shrink-0 text-primary" />
+			<span className="min-w-0 truncate">{t("tools.ask.dockedStub", { count })}</span>
+			<button
+				type="button"
+				tabIndex={0}
+				data-testid="ask-docked-open"
+				onClick={onOpen}
+				className="flex shrink-0 items-center gap-2 rounded-sm px-4 text-primary outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+			>
+				{t("tools.ask.dockedOpen")}
+				<ArrowDown aria-hidden="true" className="size-14" />
+			</button>
+		</div>
+	);
+}
+
+export function WaitingCard({
+	docked = false,
+	children,
+}: {
+	docked?: boolean;
+	children: ReactNode;
+}) {
 	return (
 		<div
 			data-testid="ask-user-question"
 			data-tone="pending"
 			role="status"
-			className="flex items-center gap-4 rounded-lg border border-border-default bg-container-elevated-bg px-12 py-8 text-text-muted tr-text-metadata"
+			className={cn(
+				"flex items-center gap-4 bg-container-elevated-bg px-12 py-8 text-text-muted tr-text-metadata",
+				docked ? "border-primary border-t-2" : "rounded-lg border border-border-default",
+			)}
 		>
 			<MessageCircleQuestion className="size-14 shrink-0" />
 			{children}

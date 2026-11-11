@@ -106,6 +106,11 @@ describe("WsTransport channel replay", () => {
 			WS_CHANNELS.feedbackGithubStar,
 			{},
 		],
+		[
+			"does not replay a Find in Files batch to a late subscriber",
+			WS_CHANNELS.searchTextResults,
+			{ seq: 1, files: [], done: { reason: "complete", files: 0, lines: 0 } },
+		],
 	])("%s", (_name, channel, data) => {
 		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
 		transport.connect();

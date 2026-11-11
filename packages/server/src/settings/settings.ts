@@ -12,12 +12,14 @@ import {
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
 	isLocalePreference,
+	isQuestionPanelHeight,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
 	isSystemThemePair,
 	isTerminalWindowsShell,
 	isThemeMode,
 	LINE_WIDTH_COLUMNS,
+	QUESTION_PANEL_HEIGHT_PERCENT,
 	RECENT_MODELS_LIMIT,
 	sameModel,
 	type WireModel,
@@ -42,10 +44,12 @@ const ACCEPTED_UPDATE_KEYS = {
 	terminalReplayKb: true,
 	terminalWindowsShell: true,
 	composerGrowthLimit: true,
+	questionPanelHeight: true,
 	chatLineWidth: true,
 	fileLineWidth: true,
 	chatLineWidthBounded: true,
 	fileLineWidthBounded: true,
+	voiceInputEnabled: true,
 	customLayoutPresets: true,
 	favoriteModels: true,
 	defaultModel: true,
@@ -61,6 +65,7 @@ const ACCEPTED_UPDATE_KEYS = {
 	settleIdleDays: true,
 	disabledExtensions: true,
 	extensionSettings: true,
+	otherAgentSkills: true,
 	disabledPackages: true,
 	locale: true,
 	onboardingDismissed: true,
@@ -178,9 +183,18 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 			);
 		}
 	}
+	if (
+		runtimeUpdate.questionPanelHeight !== undefined &&
+		!isQuestionPanelHeight(runtimeUpdate.questionPanelHeight)
+	) {
+		throw new Error(
+			`questionPanelHeight must be a whole number from ${QUESTION_PANEL_HEIGHT_PERCENT.min} to ${QUESTION_PANEL_HEIGHT_PERCENT.max}`,
+		);
+	}
 	for (const [name, value] of [
 		["chatLineWidthBounded", runtimeUpdate.chatLineWidthBounded],
 		["fileLineWidthBounded", runtimeUpdate.fileLineWidthBounded],
+		["voiceInputEnabled", runtimeUpdate.voiceInputEnabled],
 		["analyticsEnabled", runtimeUpdate.analyticsEnabled],
 		["analyticsConsentConfirmed", runtimeUpdate.analyticsConsentConfirmed],
 		["notificationsEnabled", runtimeUpdate.notificationsEnabled],
@@ -188,6 +202,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		["agentReviewEnabled", runtimeUpdate.agentReviewEnabled],
 		["onboardingDismissed", runtimeUpdate.onboardingDismissed],
 		["codeLigatures", runtimeUpdate.codeLigatures],
+		["otherAgentSkills", runtimeUpdate.otherAgentSkills],
 	] as const) {
 		if (value !== undefined && typeof value !== "boolean") {
 			throw new Error(`${name} must be a boolean`);

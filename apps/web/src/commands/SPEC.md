@@ -45,8 +45,10 @@ not reproduce.
 
 | Command | Handler | Context / gate | Palette |
 | --- | --- | --- | --- |
-| `workspace.new` New workspace… (`Mod+N`; `Mod+Alt+N` shown in a browser) | shell `NewWorkspaceDialog` | context project | yes |
-| `workspace.openDefault` Work in project folder | `panels/defaultWorkspace.enterDefaultWorkspace` | context project | yes |
+| `workspace.new` New workspace… (`Mod+N`; `Mod+Alt+N` shown in a browser) | shell `NewWorkspaceDialog` | context repository (`selectContextRepoProject`, never the Chats container) | yes |
+| `chat.newProjectless` New chat without a project | `panels/chatActions.startProjectlessChat` | a host with chats without a project (`canStartProjectlessChat`) | yes |
+| Start work from the typed text (the Start work row, `Mod+↵` from any row) | the same shell `NewWorkspaceDialog`, opened with the text as its prompt through `PaletteStart.openDialog` — nothing starts without the dialog | a context repository, or a host with chats without a project (the dialog then opens on its chat target); a typed query in All or Work | yes |
+| `workspace.openDefault` Work in project folder | `panels/defaultWorkspace.enterDefaultWorkspace` | context repository | yes |
 | `chat.new` New chat | `panels/openChat.startChatInTab` | active workspace, online | yes |
 | `project.open` Open project… | `panels/useOpenProject.pickAndOpen` (dialogs mounted by shell) | online | yes |
 | `project.openPath` Open a path on the host… | `panels/useOpenProject.enterHostPath` | online | yes |
@@ -61,6 +63,7 @@ not reproduce.
 | `workspace.settle` / `unsettle` | `panels/workspaceActions` | `canSettleWorkspace`; Settle disabled while an agent works or a chat needs you (`selectWorkspaceSettleBlocked`), as in the tree | yes |
 | `workspace.reveal`, `workspace.copyPath`, `workspace.openIn.<editor>` | `panels/workspaceActions`, `lib.copyText` | active workspace | yes |
 | `terminal.new` New terminal | `store.addTerminal` | active workspace, online (placement reserves on the host) | yes |
+| `files.findInFiles` Find in files… (`Mod+Shift+F`) | `findInFiles.openFindInFiles` (the shell binds the chord, `FindInFilesHost` composes the window) | `supportsTextSearch` + an active workspace, or a context project that is not the Chats container | yes |
 | Remove workspace, close project, stop trusting, layout apply/reset, clear review, MCP approve/remove, stop all subagents, delete template | their confirm dialogs | confirmation | Row UI |
 | Publish / push / open, mark ready, merge, reopen a pull request, delete the remote branch, hand checks or a diverged branch to the agent | `shell/locationBar` topbar review card | branch status + GitHub facts | Row UI |
 | Rename workspace/project/chat | inline editors | an inline editor | Row UI |
