@@ -89,16 +89,18 @@ re-opened transcripts provider-valid.
     reads. Activation changes the current pointer for pre-session reads and future session creation; it never
     mutates, drains, or recreates existing sessions. A live session keeps its original runtime generation. A disk session
     attached after activation keeps its saved model when that model is available in the current runtime.
-    If it is unavailable, Pi chooses its settings default, then its ordered provider defaults, then the
-    first available model; this need not match ThinkRail's AppConfig default or the saved provider.
-    The exception is a model pi still lists but the account does not serve (`modelAvailability` filtered
-    it), which pi would otherwise restore verbatim; the host passes `preferredDefaultModel` instead.
-    Opening does not change the saved model. An ordinary physical-model fallback becomes durable when
-    Pi appends an assistant response, not at send acceptance; explicit model selection persists at once.
-    Merely opening a chat preserves its original model for when that provider returns. The host exposes
-    the replacement in normal session state but discards the SDK's `modelFallbackMessage`, so there is
-    no separate fallback warning. With no available model, the transcript remains readable and no
-    placeholder model is persisted as a replacement.
+    The saved model is pi's restore selection (`piBranchSelection` mirrors pi's unexported
+    `getBranchSelection`), not the last physical response: a still-registered virtual `model_change`
+    holds, so a router whose last routed model is gone still opens and runs on the router.
+    If it is unavailable — absent from the runtime, or listed by pi but not served to the account
+    (`modelAvailability` filtered it) — the chat still opens and its transcript stays readable, but the
+    host never runs it on a model the user did not choose: it reports `model: null`, logs the saved ref,
+    and `admitRun` rejects every run with "The chat's saved model … is unavailable" until
+    `setSessionModel` succeeds. Whatever model pi picked internally is never sent to, so the explicit
+    choice is the only switch and pi records it as a `model_change`. Opening does not change the saved
+    model, so the chat restores it once that provider returns. Post-mortem (#1309): the earlier design
+    let pi's settings/provider default answer silently and discarded `modelFallbackMessage`, billing a
+    13× pricier model on another provider with no `model_change` and no warning.
 
     Every models **read** goes through **`settledAvailableModels(runtime)`** — pi's
     `getAvailableSnapshot()` narrowed by `modelAvailability`, **never `getAvailable()`**: that one awaits `refreshAvailability()`, which

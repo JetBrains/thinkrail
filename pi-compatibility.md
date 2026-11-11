@@ -262,6 +262,15 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   Remove the ChatGPT rule when the installed `providers/openai.js` filters OAuth chat models itself, and
   the listing rule when pi narrows a rerouted provider's catalog to what its endpoint serves; run
   `modelAvailability.test.ts` and `runtimeGenerations.test.ts`.
+- **Restored model selection** — [[submodule-server-agent]], `piBranchSelection` in
+  `agentSessionManager.ts`. A reopened chat is checked against its saved model before pi restores it,
+  and that must be pi's virtual-aware `getBranchSelection` (a registered virtual `model_change` holds
+  over the physical responses it routed), not `buildSessionContext().model` (the last physical
+  response) — else a still-registered router whose last target is gone reads as unavailable and every
+  send is refused. Pi exports neither it nor `isVirtualModel`, so the host mirrors the walk and matches
+  the `"pi-virtual"` API. **Removal gate:** pi exports `getBranchSelection` or otherwise reports the
+  restored selection publicly. `runtimeGenerations.test.ts` pins parity against the installed dist ("the
+  restored selection mirrors pi's virtual-aware branch selection"); rerun it on every pi bump.
 - **Default-model preference** — [[submodule-server-agent]], `modelDefaults.ts`. Pi's
   `defaultModelPerProvider` is not exported, so the host mirrors it for new-chat, reviewer, and
   one-shot defaults. Remove the mirror when a public export or initial-model resolver exists; until
