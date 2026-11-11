@@ -178,7 +178,10 @@ by id stay put and only a new one appears. A loader shows only the first time a 
 
 Add a device pairs through `PairForm.tsx`'s `PairActions` — grouped **Scan QR code** /
 **Enter link manually** rows (the latter opens the paste field), the same `usePairing` flow `Welcome`'s
-first-run `PairForm` uses. `SettingsScreen.tsx` opens with the brand card, then the phone's own settings: the IDE Settings rows that apply to a device, rendered
+first-run `PairForm` uses. While a scanned or pasted link pairs, the whole screen is `Welcome.tsx`'s
+`PairingSplash` — the R mark large and the computer's name from the link — over the welcome or the tabs, and it
+stays until that computer's `project.list` has answered (`prefetchHostRequest` fills the read's cache, capped at
+6s), so the tree opens filled instead of on a loader; a failure returns to the form with its reason. `SettingsScreen.tsx` opens with the brand card, then the phone's own settings: the IDE Settings rows that apply to a device, rendered
 with the shared `@thinkrail/ui/settings` primitives and the IDE's strings — **Theme mode**
 (System / Light / Dark), **Contrast level** (Default / High) and **Language** (System or a bundled locale,
 named by `languageName`). They are device preferences (`preferences.ts`, one JSON entry in the

@@ -141,7 +141,9 @@ test("a phone pairs by link, finds the project on the computer and reads its cha
 		await expect
 			.poll(async () => restingBottom - ((await composer.boundingBox())?.y ?? 0))
 			.toBeGreaterThan(250);
-		await expect(phone.getByText("The phone now runs on the same store as the IDE.")).toBeInViewport();
+		await expect(
+			phone.getByText("The phone now runs on the same store as the IDE."),
+		).toBeInViewport();
 		await phone.evaluate(() => window.dispatchEvent(new Event("keyboardWillHide")));
 		await expect.poll(async () => (await composer.boundingBox())?.y ?? 0).toBe(restingBottom);
 	});

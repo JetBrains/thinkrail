@@ -1,5 +1,6 @@
 import { RiQrScan2Line, RiTerminalBoxLine, RiWifiLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
+import { RunningIcon } from "@thinkrail/ui/running-icon";
 import type { PairState } from "./App";
 import { PairForm } from "./PairForm";
 
@@ -58,6 +59,28 @@ export function Welcome({
 			<section className="pb-24">
 				<PairForm pair={pair} onPair={onPair} />
 			</section>
+		</main>
+	);
+}
+
+/** While a scanned or pasted link pairs and the computer's projects load: the brand mark, large, and whom it reaches. */
+export function PairingSplash({ hostName }: { hostName?: string | undefined }) {
+	const t = useT();
+	return (
+		<main
+			role="status"
+			data-testid="pairing-splash"
+			className="flex h-full flex-col items-center justify-center gap-24 bg-container-workspace-bg px-24 pt-safe-top pb-safe-bottom text-center"
+		>
+			<RunningIcon className="size-96 text-primary" />
+			<div className="flex flex-col gap-8">
+				<h1 className="m-0 text-text-default tr-heading-sm">
+					{hostName
+						? t("mobile.pair.connectingTo", { name: hostName })
+						: t("mobile.pair.connecting")}
+				</h1>
+				<p className="m-0 text-text-muted tr-text-reading">{t("mobile.pair.connectingHint")}</p>
+			</div>
 		</main>
 	);
 }

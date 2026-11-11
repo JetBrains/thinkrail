@@ -921,6 +921,8 @@
 	"mobile.pair.cancel": "Cancel",
 	"mobile.pair.connect": "Connect",
 	"mobile.pair.connecting": "Connecting…",
+	"mobile.pair.connectingHint": "Pairing this phone and loading your projects.",
+	"mobile.pair.connectingTo": "Connecting to {{name}}…",
 	"mobile.pair.linkLabel": "Pairing link",
 	"mobile.pair.manual": "Enter link manually",
 	"mobile.pair.placeholder": "Paste a thinkrail://pair link",

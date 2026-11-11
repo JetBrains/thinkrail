@@ -1,5 +1,5 @@
 import { App as CapApp } from "@capacitor/app";
-import { chatTitle } from "@thinkrail/contracts";
+import { chatTitle, parsePairingUri } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import {
 	createHostRegistry,
@@ -39,12 +39,13 @@ import { isPairLink } from "./scanPairLink";
 import { closeTopLayer } from "./sheet";
 import { TabBar, tabLabelKey } from "./TabBar";
 import { applyDevicePreferences } from "./theme";
-import { Welcome } from "./Welcome";
+import { prefetchHostRequest } from "./useHostRequest";
+import { PairingSplash, Welcome } from "./Welcome";
 import { ChatHistoryScreen, WorkspaceOpener } from "./WorkspaceScreen";
 
 export type PairState =
 	| { kind: "idle" }
-	| { kind: "pairing" }
+	| { kind: "pairing"; hostName?: string | undefined }
 	| { kind: "failed"; failure: HostFailure };
 
 export function App() {
@@ -102,9 +103,11 @@ export function App() {
 
 	const pairWith = useCallback(
 		async (link: string): Promise<boolean> => {
-			setPair({ kind: "pairing" });
+			setPair({ kind: "pairing", hostName: parsePairingUri(link.trim())?.hostName });
 			try {
 				const host = await controller.pair(link, { label: deviceLabel(navigator.userAgent) });
+				const client = controller.clientFor(host.hostKey);
+				if (client) await prefetchHostRequest(client, "project.list", {}, PREFETCH_MS);
 				setHosts(registry.add(host));
 				setPair({ kind: "idle" });
 				return true;
@@ -165,8 +168,9 @@ export function App() {
 
 	const doneSessions = useDoneSessions(items, localStore);
 
+	const connecting = pair.kind === "pairing" ? <PairingSplash hostName={pair.hostName} /> : null;
 	if (hosts.length === 0) {
-		return <Welcome pair={pair} onPair={pairWith} />;
+		return connecting ?? <Welcome pair={pair} onPair={pairWith} />;
 	}
 	const titleOf = (route: Route): string => {
 		switch (route.kind) {
@@ -398,6 +402,7 @@ export function App() {
 					</Layer>
 				);
 			})}
+			{connecting ? <div className="absolute inset-0">{connecting}</div> : null}
 		</div>
 	);
 }
@@ -452,6 +457,8 @@ function screenKey(route: Route): string {
 
 /** Matches `--animate-screen-pop` in phone.css: how long a popped screen stays mounted to slide out. */
 const SCREEN_POP_MS = 260;
+/** How long a fresh pairing waits for the computer's projects before showing the tree loading them itself. */
+const PREFETCH_MS = 6_000;
 
 const hostItems = (items: RemoteSessionItem[], hostKey: string) =>
 	items.filter((item) => item.hostKey === hostKey);
