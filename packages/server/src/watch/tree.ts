@@ -311,19 +311,24 @@ export function watchTree(root: string, options: TreeWatchOptions): TreeWatcher 
 		await walk(tops, true);
 	}
 
+	function settle(): void {
+		flushing = false;
+		if (changed.size > 0 || recheckQueued || relist.size > 0) schedule();
+	}
+
 	function schedule(): void {
 		if (flushing || closed) return;
 		flushing = true;
-		void guard(flush()).then(() => {
-			flushing = false;
-			if (changed.size > 0 || recheckQueued || relist.size > 0) schedule();
-		});
+		void guard(flush()).then(settle);
 	}
 
 	watchDir("");
 	live.add(tree);
+	flushing = true;
+	const ready = guard(walk([""], false));
+	void ready.then(settle);
 	return {
-		ready: guard(walk([""], false)),
+		ready,
 		close,
 		recheck: () => {
 			recheckQueued = true;

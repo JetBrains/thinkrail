@@ -74,7 +74,8 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   a whole batch on a path inside a submodule and answers for another nested repo with the outer rules. A
   `.gitignore` event or a repo-metadata nudge re-checks the folders skipped as ignored (`git add -f`, an
   `info/exclude` edit); new folders and re-checks share one queue per tree that runs one `ignoredPaths`
-  call at a time. A new folder is walked and all it holds is reported, since files written before its
+  call at a time, and the first walk holds that queue, so a re-check asked for mid-walk runs after the
+  walk's own (possibly older) answer instead of being overwritten by it. A new folder is walked and all it holds is reported, since files written before its
   watch have no event. A symlinked root is followed, links inside it are not. Readiness waits for the
   first walk. Known limits: a change inside an ignored folder sends no event; a submodule with a path part
   `objects`, `logs`, `lfs` or `hooks` sends no nudge for its commits; an edit of the global excludes or a

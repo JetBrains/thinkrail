@@ -108,6 +108,41 @@ test("a folder created after the walk is watched and reports what it already hol
 	await waitFor(() => seen("fresh/deep/second.ts"));
 });
 
+test("an ignore recheck during the first walk wins over that walk's older answer", async () => {
+	put("dist/x.js");
+	let releaseFirst: () => void = () => {};
+	const firstHeld = new Promise<void>((resolve) => {
+		releaseFirst = resolve;
+	});
+	let calls = 0;
+	watcher = watchTree(root, {
+		onEvent: (path) => events.push(path),
+		onMissed: () => {},
+		onError: () => {
+			errors += 1;
+		},
+		skipDir: () => false,
+		ignoredDirs: async (paths) => {
+			calls += 1;
+			if (calls === 1) {
+				await firstHeld;
+				return new Set(paths.filter((path) => path === "dist"));
+			}
+			return new Set();
+		},
+	});
+	await waitFor(() => calls === 1);
+	watcher.recheck();
+	await sleep(50);
+	releaseFirst();
+	await watcher.ready;
+	await waitFor(() => calls >= 2);
+	await sleep(100);
+	put("dist/x.js", "y");
+	await waitFor(() => seen("dist/x.js"));
+	expect(errors).toBe(0);
+});
+
 test("a new folder the ignore check reports stays unwatched", async () => {
 	ignored.add("build");
 	await start();
