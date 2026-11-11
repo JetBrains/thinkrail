@@ -20,10 +20,9 @@ type Connector = (link: string, options: { label: string }) => Promise<RemoteCon
 
 /**
  * Drives the "add a project by link" lifecycle: validate the pairing link, connect through the device
- * connector, and track idle → connecting → connected | error for the UI. The connector is injected (default
- * `connectRemoteProject`) so the controller is unit-tested without a browser/relay. Mounting the connected
- * client into the app's store/transport is a separate, larger step (the store leans on the WS transport's
- * file/blob + reconnect surface a DataChannel does not yet provide).
+ * connector, and track idle → connecting → connected | error for the UI, which mounts the connected client
+ * (`mountRemoteSession`). The connector is injected (default `connectRemoteProject`) so the controller is
+ * unit-tested without a browser/relay.
  */
 export function createRemoteConnectionController(
 	connector: Connector = connectRemoteProject,

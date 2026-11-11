@@ -1,15 +1,18 @@
 import {
 	type RemoteDeviceAccess,
-	type RemoteHostRoutes,
 	type ServerWelcome,
 	type SessionStateRecord,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
-import { isTerminalConnectError, RemoteConnectError } from "./connectError";
-import { connectSavedHost, type RemoteConnection } from "./deviceConnector";
+import type { RemoteConnectError } from "./connectError";
+import {
+	type ConnectionEvents,
+	connectRemoteProject,
+	connectSavedHost,
+	type RemoteConnection,
+} from "./deviceConnector";
 import type { DeviceWireClient } from "./deviceWireClient";
 import { type SavedHost, withRoutes } from "./hostRegistry";
-import { createReconnectLoop, type ReconnectLoop } from "./reconnectLoop";
 
 export interface RemoteSessionItem {
 	hostKey: string;
@@ -17,217 +20,262 @@ export interface RemoteSessionItem {
 	record: SessionStateRecord;
 }
 
+/**
+ * Where a host's connection stands: open, on its way (the first attempt, a dropped channel coming back, a retry
+ * just asked for), or down with the last attempt's failure — a passing one still being retried, or the refusal
+ * that ended it for good.
+ */
+export type HostConnectionStatus =
+	| { kind: "connected" }
+	| { kind: "connecting" }
+	| { kind: "unreachable"; error: unknown };
+
+/** Everything the controller tracks, as one immutable value: a new one after every change it notifies. */
+export interface RemoteSessionsSnapshot {
+	/** Every tracked session across all connected hosts. */
+	items: RemoteSessionItem[];
+	/** Each host's connection status; the same map until a status changes. A host never connected has none. */
+	statuses: ReadonlyMap<string, HostConnectionStatus>;
+	/** The wire client of each host that has been open. */
+	clients: ReadonlyMap<string, DeviceWireClient>;
+	/** What each tracked computer lets this phone do. */
+	access: ReadonlyMap<string, RemoteDeviceAccess>;
+}
+
 export interface RemoteSessionsController {
 	/**
-	 * Connects a saved host and begins tracking its sessions; a second call while one is in flight joins it. A
-	 * failure rejects, and unless no retry can fix it the controller keeps retrying in the background
-	 * (`onRetryFailed` hears each miss) until it connects. A host disconnected meanwhile resolves quietly.
+	 * Starts connecting a saved host and tracking its sessions; its connection retries on its own until it opens
+	 * or is refused for good. For a host already tracked it retries now, and one whose channel is down reads
+	 * `connecting` again until that attempt lands or fails.
 	 */
-	connect(host: SavedHost): Promise<void>;
-	/** Every tracked session across all connected hosts (for the mobile session list). */
-	items(): RemoteSessionItem[];
-	/** The wire client for a connected host — a session screen uses it to stream, send, and approve. */
+	connect(host: SavedHost): void;
+	/**
+	 * Pairs a computer by its `thinkrail://pair` link and tracks the connection that paired it, so pairing is one
+	 * handshake. Resolves with the host to save; rejects when the link or that first attempt fails.
+	 */
+	pair(link: string, options: { label: string }): Promise<SavedHost>;
+	/** The tracked state for a renderer (`useSyncExternalStore`); the same value until the next notify. */
+	snapshot(): RemoteSessionsSnapshot;
+	/** The wire client of a host that has been open — a session screen uses it to stream, send, and approve. */
 	clientFor(hostKey: string): DeviceWireClient | null;
 	/** The host's `server.welcome` (protocol version, config), once it has arrived. */
 	welcomeFor(hostKey: string): ServerWelcome | null;
-	/** A host whose channel dropped and is coming back on its own; its client stays, requests wait. */
-	isReconnecting(hostKey: string): boolean;
 	/** What the computer lets this phone do; `write` until it says otherwise (a host before access modes never does). */
 	accessFor(hostKey: string): RemoteDeviceAccess;
 	subscribe(listener: () => void): () => void;
 	/**
 	 * Hears a host whose connection ended for good (the computer revoked this phone, …); the host is already
-	 * dropped from the controller, so `clientFor` is null and its sessions are gone.
+	 * dropped, so `clientFor` is null, its sessions are gone and its status holds the refusal.
 	 */
 	onLost(listener: (hostKey: string, error: RemoteConnectError) => void): () => void;
-	/** Hears a retry fail: of a host that never connected, or of a live host whose channel is down. */
-	onRetryFailed(listener: (hostKey: string, error: unknown) => void): () => void;
 	/** Hears a host send its current routes, already merged into the saved host so it can be stored. */
 	onRoutes(listener: (host: SavedHost) => void): () => void;
 	/** Retries every host that is down now, skipping the backoff (the app came back, the network changed). */
 	reconnectNow(): void;
-	/** Closes one host's connection and drops its sessions (the phone forgot that computer). */
+	/** Closes one host's connection and drops its sessions and status (the phone forgot that computer). */
 	disconnect(hostKey: string): void;
 	stop(): void;
 }
 
 interface HostEntry {
-	label: string;
+	host: SavedHost;
 	connection: RemoteConnection;
+	/** Opened at least once: until then there is no client to hand out, its requests would only wait. */
+	opened: boolean;
+	open: boolean;
 	sessions: Map<string, SessionStateRecord>;
 	welcome: ServerWelcome | null;
 	access: RemoteDeviceAccess;
-	reconnecting: boolean;
 }
 
-type Connector = (host: SavedHost) => Promise<RemoteConnection>;
+type SavedConnector = (host: SavedHost, events: ConnectionEvents) => RemoteConnection;
+type Pairer = (
+	link: string,
+	options: { label: string } & ConnectionEvents,
+) => Promise<RemoteConnection>;
+
+const CONNECTED: HostConnectionStatus = { kind: "connected" };
+const CONNECTING: HostConnectionStatus = { kind: "connecting" };
 
 /**
- * The lightweight mobile core: holds one wire client per paired host and aggregates their live sessions into a
- * single list. A thin viewer/controller — it tracks session state and streams, not the full IDE. The connector
- * is injected (default `connectSavedHost`) so it is unit-tested with fakes.
+ * The lightweight mobile core: holds one connection per paired host, aggregates their live sessions into a
+ * single list and tracks how each connection stands. A thin viewer/controller — it tracks session state and
+ * streams, not the full IDE. The connectors are injected (default `connectSavedHost` / `connectRemoteProject`)
+ * so it is unit-tested with fakes.
  */
 export function createRemoteSessions(
-	connector: Connector = connectSavedHost,
-	retry: { initialBackoffMs?: number; maxBackoffMs?: number } = {},
+	deps: { connect?: SavedConnector; pair?: Pairer } = {},
 ): RemoteSessionsController {
+	const connector = deps.connect ?? connectSavedHost;
+	const pairer = deps.pair ?? connectRemoteProject;
 	const hosts = new Map<string, HostEntry>();
-	const known = new Map<string, SavedHost>();
-	const retries = new Map<string, ReconnectLoop>();
-	const opening = new Map<string, Promise<void>>();
-	/** Bumped when a host is disconnected, so an attempt begun before it never registers. */
-	const epochs = new Map<string, number>();
-	const epochOf = (hostKey: string): number => epochs.get(hostKey) ?? 0;
+	let statuses: ReadonlyMap<string, HostConnectionStatus> = new Map();
+	let snapshot: RemoteSessionsSnapshot | null = null;
+	/** Bumped by `stop`, so a pairing that lands after it is closed instead of tracked. */
+	let generation = 0;
 	const listeners = new Set<() => void>();
 	const lostListeners = new Set<(hostKey: string, error: RemoteConnectError) => void>();
-	const retryListeners = new Set<(hostKey: string, error: unknown) => void>();
 	const routeListeners = new Set<(host: SavedHost) => void>();
 	const notify = (): void => {
+		snapshot = null;
 		for (const listener of listeners) listener();
 	};
-	const lost = (hostKey: string, error: RemoteConnectError): void => {
-		for (const listener of lostListeners) listener(hostKey, error);
+	const setStatus = (hostKey: string, status: HostConnectionStatus | null): void => {
+		if ((statuses.get(hostKey) ?? null) === status) return;
+		const next = new Map(statuses);
+		if (status) next.set(hostKey, status);
+		else next.delete(hostKey);
+		statuses = next;
 	};
-	const stopRetry = (hostKey: string): void => {
-		retries.get(hostKey)?.stop();
-		retries.delete(hostKey);
+	const isLive = (entry: HostEntry | undefined): entry is HostEntry =>
+		entry !== undefined && hosts.get(entry.host.hostKey) === entry;
+
+	const seed = (entry: HostEntry): void => {
+		void entry.connection.client
+			.request<SessionStateRecord[]>("session.stateList", {})
+			.catch(() => [] as SessionStateRecord[])
+			.then((initial) => {
+				if (!isLive(entry)) return;
+				for (const record of initial) entry.sessions.set(record.sessionId, record);
+				notify();
+			});
 	};
 
-	const forget = (hostKey: string): void => {
-		known.delete(hostKey);
-		epochs.set(hostKey, epochOf(hostKey) + 1);
-		opening.delete(hostKey);
-		stopRetry(hostKey);
-	};
+	/** The connection's reports, bound to the entry it will belong to; one that is no longer tracked is ignored. */
+	const eventsFor = (entryOf: () => HostEntry | undefined): ConnectionEvents => ({
+		onOpenChange: (open) => {
+			const entry = entryOf();
+			if (!isLive(entry)) return;
+			entry.open = open;
+			setStatus(entry.host.hostKey, open ? CONNECTED : CONNECTING);
+			if (open && !entry.opened) {
+				entry.opened = true;
+				seed(entry);
+			}
+			notify();
+		},
+		onRetryFailed: (error) => {
+			const entry = entryOf();
+			if (!isLive(entry)) return;
+			setStatus(entry.host.hostKey, { kind: "unreachable", error });
+			notify();
+		},
+		onLost: (error) => {
+			const entry = entryOf();
+			if (!isLive(entry)) return;
+			const { hostKey } = entry.host;
+			hosts.delete(hostKey);
+			setStatus(hostKey, { kind: "unreachable", error });
+			notify();
+			for (const listener of lostListeners) listener(hostKey, error);
+		},
+		onRoutes: (routes) => {
+			const entry = entryOf();
+			if (!isLive(entry)) return;
+			entry.host = withRoutes(entry.host, routes);
+			for (const listener of routeListeners) listener(entry.host);
+		},
+	});
 
-	const attach = async (hostKey: string): Promise<void> => {
-		const host = known.get(hostKey);
-		if (!host) throw new Error("host forgotten");
-		const epoch = epochOf(hostKey);
-		const connection = await connector(host);
-		if (epochOf(hostKey) !== epoch) {
-			connection.close();
-			throw new Error("host forgotten");
-		}
-		const sessions = new Map<string, SessionStateRecord>();
+	const track = (host: SavedHost, connection: RemoteConnection, open: boolean): HostEntry => {
 		const entry: HostEntry = {
-			label: host.label,
+			host,
 			connection,
-			sessions,
+			opened: open,
+			open,
+			sessions: new Map(),
 			welcome: null,
 			access: "write",
-			reconnecting: false,
 		};
-		hosts.set(hostKey, entry);
-		connection.onLost((error) => {
-			if (hosts.get(hostKey) !== entry) return;
-			hosts.delete(hostKey);
-			notify();
-			lost(hostKey, error);
-		});
-		connection.onOpenChange((isOpen) => {
-			if (hosts.get(hostKey) !== entry) return;
-			entry.reconnecting = !isOpen;
-			notify();
-		});
-		connection.onRetryFailed((error) => {
-			if (hosts.get(hostKey) !== entry) return;
-			for (const listener of retryListeners) listener(hostKey, error);
-		});
-		connection.onRoutes((routes: RemoteHostRoutes) => {
-			const current = known.get(hostKey);
-			if (!current || hosts.get(hostKey) !== entry) return;
-			const next = withRoutes(current, routes);
-			known.set(hostKey, next);
-			for (const listener of routeListeners) listener(next);
-		});
-
-		connection.client.subscribe(WS_CHANNELS.serverWelcome, (data) => {
+		hosts.set(host.hostKey, entry);
+		setStatus(host.hostKey, open ? CONNECTED : CONNECTING);
+		const { client } = connection;
+		client.subscribe(WS_CHANNELS.serverWelcome, (data) => {
 			entry.welcome = data as ServerWelcome;
 			notify();
 		});
-		connection.client.subscribe(WS_CHANNELS.remoteDeviceAccess, (data) => {
+		client.subscribe(WS_CHANNELS.remoteDeviceAccess, (data) => {
 			const access = (data as { access?: unknown }).access;
 			entry.access = access === "read" ? "read" : "write";
 			notify();
 		});
-		connection.client.subscribe(WS_CHANNELS.sessionState, (data) => {
+		client.subscribe(WS_CHANNELS.sessionState, (data) => {
 			const record = data as SessionStateRecord;
-			sessions.set(record.sessionId, record);
+			entry.sessions.set(record.sessionId, record);
 			notify();
 		});
-		const initial = await connection.client
-			.request<SessionStateRecord[]>("session.stateList", {})
-			.catch(() => [] as SessionStateRecord[]);
-		if (hosts.get(hostKey) !== entry) return;
-		for (const record of initial) sessions.set(record.sessionId, record);
+		if (open) seed(entry);
 		notify();
+		return entry;
 	};
 
-	/** One attempt per host at a time: a connect during a background retry joins it instead of racing it. */
-	const open = (hostKey: string): Promise<void> => {
-		const inFlight = opening.get(hostKey);
-		if (inFlight) return inFlight;
-		const run = attach(hostKey).finally(() => {
-			if (opening.get(hostKey) === run) opening.delete(hostKey);
-		});
-		opening.set(hostKey, run);
-		return run;
-	};
-
-	const retryInBackground = (hostKey: string): void => {
-		if (retries.has(hostKey)) return;
-		const loop = createReconnectLoop({
-			attempt: () => open(hostKey),
-			isTerminal: (error) => isTerminalConnectError(error) || !known.has(hostKey),
-			onLost: (error) => {
-				retries.delete(hostKey);
-				if (error instanceof RemoteConnectError && known.has(hostKey)) lost(hostKey, error);
-			},
-			onRetryFailed: (error) => {
-				for (const listener of retryListeners) listener(hostKey, error);
-			},
-			onOpenChange: (isOpen) => {
-				if (isOpen) stopRetry(hostKey);
-			},
-			initialBackoffMs: retry.initialBackoffMs ?? 2_000,
-			maxBackoffMs: retry.maxBackoffMs ?? 30_000,
-		});
-		retries.set(hostKey, loop);
-		loop.dropped();
+	const drop = (hostKey: string): boolean => {
+		const entry = hosts.get(hostKey);
+		entry?.connection.close();
+		hosts.delete(hostKey);
+		const had = entry !== undefined || statuses.has(hostKey);
+		setStatus(hostKey, null);
+		return had;
 	};
 
 	return {
-		async connect(host) {
-			if (hosts.has(host.hostKey)) return;
-			known.set(host.hostKey, host);
-			stopRetry(host.hostKey);
-			const epoch = epochOf(host.hostKey);
-			try {
-				await open(host.hostKey);
-			} catch (error) {
-				if (epochOf(host.hostKey) !== epoch) return;
-				if (!isTerminalConnectError(error)) retryInBackground(host.hostKey);
-				throw error;
+		connect(host) {
+			const entry = hosts.get(host.hostKey);
+			if (entry) {
+				if (!entry.open && statuses.get(host.hostKey) !== CONNECTING) {
+					setStatus(host.hostKey, CONNECTING);
+					notify();
+				}
+				entry.connection.reconnectNow();
+				return;
 			}
+			let created: HostEntry | undefined;
+			created = track(
+				host,
+				connector(
+					host,
+					eventsFor(() => created),
+				),
+				false,
+			);
 		},
-		items() {
-			const all: RemoteSessionItem[] = [];
+		async pair(link, options) {
+			let paired: HostEntry | undefined;
+			const started = generation;
+			const connection = await pairer(link, {
+				label: options.label,
+				...eventsFor(() => paired),
+			});
+			if (generation !== started) {
+				connection.close();
+				throw new Error("remote sessions stopped");
+			}
+			const host = pairedHost(connection, Date.now());
+			drop(host.hostKey);
+			paired = track(host, connection, true);
+			return host;
+		},
+		snapshot() {
+			if (snapshot) return snapshot;
+			const items: RemoteSessionItem[] = [];
+			const clients = new Map<string, DeviceWireClient>();
+			const access = new Map<string, RemoteDeviceAccess>();
 			for (const [hostKey, entry] of hosts) {
 				for (const record of entry.sessions.values()) {
-					all.push({ hostKey, hostLabel: entry.label, record });
+					items.push({ hostKey, hostLabel: entry.host.label, record });
 				}
+				if (entry.opened) clients.set(hostKey, entry.connection.client);
+				access.set(hostKey, entry.access);
 			}
-			return all;
+			snapshot = { items, statuses, clients, access };
+			return snapshot;
 		},
 		clientFor(hostKey) {
-			return hosts.get(hostKey)?.connection.client ?? null;
+			const entry = hosts.get(hostKey);
+			return entry?.opened ? entry.connection.client : null;
 		},
 		welcomeFor(hostKey) {
 			return hosts.get(hostKey)?.welcome ?? null;
-		},
-		isReconnecting(hostKey) {
-			return hosts.get(hostKey)?.reconnecting ?? false;
 		},
 		accessFor(hostKey) {
 			return hosts.get(hostKey)?.access ?? "write";
@@ -240,35 +288,46 @@ export function createRemoteSessions(
 			lostListeners.add(listener);
 			return () => void lostListeners.delete(listener);
 		},
-		onRetryFailed(listener) {
-			retryListeners.add(listener);
-			return () => void retryListeners.delete(listener);
-		},
 		onRoutes(listener) {
 			routeListeners.add(listener);
 			return () => void routeListeners.delete(listener);
 		},
 		reconnectNow() {
-			for (const loop of retries.values()) loop.now();
 			for (const entry of hosts.values()) entry.connection.reconnectNow();
 		},
 		disconnect(hostKey) {
-			forget(hostKey);
-			const entry = hosts.get(hostKey);
-			if (!entry) return;
-			entry.connection.close();
-			hosts.delete(hostKey);
-			notify();
+			if (drop(hostKey)) notify();
 		},
 		stop() {
-			for (const hostKey of new Set([...known.keys(), ...opening.keys(), ...retries.keys()]))
-				forget(hostKey);
+			generation += 1;
 			for (const entry of hosts.values()) entry.connection.close();
 			hosts.clear();
+			statuses = new Map();
+			snapshot = null;
 			listeners.clear();
 			lostListeners.clear();
-			retryListeners.clear();
 			routeListeners.clear();
 		},
 	};
+}
+
+/** The saved host for a connection that just paired; a link that sent no name is named by its address. */
+function pairedHost(connection: RemoteConnection, pairedAt: number): SavedHost {
+	return {
+		hostKey: connection.hostKey,
+		relayUrl: connection.relayUrl,
+		relayUrls: connection.relayUrls,
+		...(connection.nostr ? { nostr: connection.nostr } : {}),
+		label: connection.hostName ?? addressLabel(connection),
+		pairedAt,
+	};
+}
+
+function addressLabel(connection: RemoteConnection): string {
+	const url = connection.relayUrl || connection.relayUrls[0] || connection.nostr?.relays[0] || "";
+	try {
+		return new URL(url).host;
+	} catch {
+		return url;
+	}
 }

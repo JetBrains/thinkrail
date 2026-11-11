@@ -21,6 +21,5 @@ src/panels/branches.ts useBranchList
 src/panels/useBranchStatus.ts useBranchStatus
 src/panels/useLiveTabContent.ts useLiveTabContent
 src/panels/useWorkspaceRead.ts useWorkspaceRead
-src/phone/App.tsx App
 src/phone/ChatTools.tsx ResourcesTool
 src/shell/layout/workbenchRails.tsx AuxiliaryRegionRail

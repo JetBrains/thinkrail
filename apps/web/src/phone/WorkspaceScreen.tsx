@@ -12,7 +12,7 @@ import type { DeviceWireClient, RemoteSessionItem } from "@thinkrail/remote-clie
 import { Button, IconButton } from "@thinkrail/ui/button";
 import { useLayoutEffect, useRef, useState } from "react";
 import { useNow } from "../components/useNow";
-import { reasonOf, singleFlight, useMounted } from "./async";
+import { reasonOf, singleFlight } from "./async";
 import { ListRow, LoadedList, Loader, Notice, Screen } from "./layout";
 import { workspaceName } from "./ProjectTree";
 import { statusOf } from "./status";
@@ -78,7 +78,6 @@ export function useStartChat(
 	onOpen: (chat: OpenChat) => void,
 ): { creating: boolean; failure: string | null; start: () => void } {
 	const t = useT();
-	const mounted = useMounted();
 	const [creating, setCreating] = useState(false);
 	const [flight] = useState(() => singleFlight(setCreating));
 	const [failure, setFailure] = useState<string | null>(null);
@@ -87,7 +86,7 @@ export function useStartChat(
 		setFailure(null);
 		flight(() => createChat(t, client, workspaceId))?.then(
 			(chat) => {
-				if (mounted.current) onOpen(chat);
+				onOpen(chat);
 			},
 			(error: unknown) => setFailure(reasonOf(error)),
 		);
@@ -132,7 +131,6 @@ export function WorkspaceOpener({
 }) {
 	const t = useT();
 	const chats = useWorkspaceChats(client, workspace.id, items);
-	const mounted = useMounted();
 	const [failure, setFailure] = useState<string | null>(null);
 	const [attempt, setAttempt] = useState(0);
 	const [empty, setEmpty] = useState(false);
@@ -148,11 +146,11 @@ export function WorkspaceOpener({
 		else
 			createChat(t, client, workspace.id).then(
 				(chat) => {
-					if (mounted.current) onOpen(chat);
+					onOpen(chat);
 				},
 				(error: unknown) => setFailure(reasonOf(error)),
 			);
-	}, [chats, client, workspace.id, sessionId, onOpen, readOnly, t, attempt, mounted]);
+	}, [chats, client, workspace.id, sessionId, onOpen, readOnly, t, attempt]);
 
 	return (
 		<Screen title={workspaceName(t, workspace)} back={{ label: backLabel, onBack }}>

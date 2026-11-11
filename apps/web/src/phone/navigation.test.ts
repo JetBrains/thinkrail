@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import type { Project } from "@thinkrail/contracts";
 import type { RemoteSessionItem } from "@thinkrail/remote-client";
 import { chatSections, needsYouCount, settleDone } from "./chats";
-import { leaveHost, pop, push, type Route, replaceTop } from "./navigation";
+import { leaveHost, pop, popIf, push, type Route, replaceTop } from "./navigation";
 
 const host = (hostKey: string): Route => ({
 	kind: "newWorktree",
@@ -11,9 +11,23 @@ const host = (hostKey: string): Route => ({
 });
 
 test("back pops one screen; a resolved opener or a started worktree swaps the top so back skips it", () => {
-	const stack = push(push([], host("a")), host("b"));
-	expect(pop(stack)).toEqual([host("a")]);
-	expect(replaceTop(stack, host("c"))).toEqual([host("a"), host("c")]);
+	const a = host("a");
+	const b = host("b");
+	const stack = push(push([], a), b);
+	expect(pop(stack)).toEqual([a]);
+	expect(replaceTop(stack, b, host("c"))).toEqual([a, host("c")]);
+	expect(replaceTop(stack, b, host("c"), 1)).toEqual([host("c")]);
+	expect(popIf(stack, b)).toEqual([a]);
+});
+
+test("a screen that is no longer on top cannot replace or close what is", () => {
+	const a = host("a");
+	const b = host("b");
+	const stack = push(push([], a), b);
+	expect(replaceTop(stack, a, host("c"))).toBe(stack);
+	expect(replaceTop(stack, host("b"), host("c"))).toBe(stack);
+	expect(popIf(stack, a)).toBe(stack);
+	expect(popIf([], a)).toEqual([]);
 });
 
 test("losing a computer leaves its screens and everything pushed over them, keeping what lies under", () => {

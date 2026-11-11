@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import type { SavedHost } from "@thinkrail/remote-client";
-import { connectSavedHost, recoveryOf } from "./hostStatus";
+import { RemoteConnectError } from "@thinkrail/remote-client";
+import { hostStatusOf, recoveryOf } from "./hostStatus";
 
 test("a phone the computer no longer accepts pairs again; a passing failure reconnects; an old app does neither", () => {
 	expect(recoveryOf({ kind: "remote", code: "unknown_device", message: "" })).toBe("repair");
@@ -12,32 +12,20 @@ test("a phone the computer no longer accepts pairs again; a passing failure reco
 	expect(recoveryOf({ kind: "error", message: "boom" })).toBe("reconnect");
 });
 
-test("Reconnect clears the shown failure first, so the row says Connecting… while the attempt runs", async () => {
-	const host = { hostKey: "h" } as SavedHost;
-	const marks: unknown[] = [];
-	const mark = (_hostKey: string, failure: unknown): void => void marks.push(failure);
-	let retried = 0;
-	await connectSavedHost(
-		{
-			clientFor: () => ({}) as never,
-			connect: () => Promise.resolve(),
-			reconnectNow: () => void retried++,
-		},
-		host,
-		mark,
-	);
-	expect(retried).toBe(1);
-	expect(marks).toEqual([null]);
-
-	marks.length = 0;
-	await connectSavedHost(
-		{
-			clientFor: () => null,
-			connect: () => Promise.reject(new Error("down")),
-			reconnectNow: () => {},
-		},
-		host,
-		mark,
-	);
-	expect(marks).toEqual([null, { kind: "error", message: "down" }]);
+test("the controller's status reads as the screens show it, its error named as a failure", () => {
+	expect(hostStatusOf(undefined)).toEqual({ kind: "connecting" });
+	expect(hostStatusOf({ kind: "connected" })).toEqual({ kind: "connected" });
+	expect(hostStatusOf({ kind: "unreachable", error: new Error("down") })).toEqual({
+		kind: "unreachable",
+		failure: { kind: "error", message: "down" },
+	});
+	expect(
+		hostStatusOf({
+			kind: "unreachable",
+			error: new RemoteConnectError("unknown_device", "revoked"),
+		}),
+	).toEqual({
+		kind: "unreachable",
+		failure: { kind: "remote", code: "unknown_device", message: "revoked" },
+	});
 });

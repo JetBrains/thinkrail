@@ -21,12 +21,17 @@ uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `loc
   - `deviceChannel.ts` — `DeviceChannel` + `toDeviceChannel` (native `RTCDataChannel` adapter; contracts'
     channel framing both ways, binary frames read as `ArrayBuffer` so chunks keep their order).
   - `deviceWireClient.ts` — the reconnect-safe wire client (request/response + pushes, replay on `attach`
-    after a `resume` naming the ids still awaited, each response `ack`ed; ids are unique per client so the
+    after a `resume` naming the ids still awaited, the responses read `ack`ed in one frame per microtask; ids are unique per client so the
     host's replay cache never mistakes a restarted app's request for an old one;
     the snapshot pushes `server.welcome` and `remote.hostRoutes` are kept and replayed to a later subscriber,
     because the host sends them once as the channel opens — before any screen subscribes).
   - `deviceConnector.ts` — `connectRemoteProject` (first pairing, link + token) and `connectSavedHost`
-    (token-less `resume`), sharing one WebRTC + auto-reconnect machinery; persistent device key. The relay is
+    (token-less `resume`), sharing one WebRTC + auto-reconnect machinery; persistent device key. A connection's
+    `ConnectionEvents` (`onLost`, `onOpenChange`, `onRetryFailed`, `onRoutes`) are given when it is created, so
+    none is missed or replayed. `connectSavedHost` returns at once and its reconnect loop makes every attempt,
+    the first included: a host not reachable yet is retried like a dropped one. Pairing makes its own first
+    attempt and rejects to the caller when it fails (a bad or expired code is reported, never retried); only
+    then does the loop take over. The relay is
     untrusted: `hello` sends only the token's SHA-256 id, the proof adds the token HMAC, the offer is applied
     only when the host key from the link signed it (bound to this attempt's nonce and challenge), and the
     answer is signed with the device key. TURN servers in the relay's `ready` join the public STUN set. Every
@@ -50,8 +55,8 @@ uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `loc
     A closed data channel counts as a drop like a failed peer, so a phone the computer revoked reconnects,
     and a reconnect refused for good (`unknown_device`, `identity_mismatch`, `app_outdated`) stops retrying,
     closes the connection and fires `onLost`; `remoteSessions` then drops that host and tells its `onLost`
-    listeners. The retry schedule is `reconnectLoop.ts`; `onOpenChange` reports the channel going down and
-    back, `onRetryFailed` each failed attempt meanwhile (so the app shows why), `reconnectNow` skips the wait and first drops a channel that looks open while its
+    listeners. The retry schedule is `reconnectLoop.ts`; `onOpenChange` reports the channel opening, going down
+    and coming back, `onRetryFailed` each failed attempt meanwhile (so the app shows why), `reconnectNow` skips the wait and first drops a channel that looks open while its
     peer is not `connected` or the channel is not `open` (a phone woken from suspension). The host's `remote.hostRoutes` push replaces the routes later attempts
     dial and reaches `onRoutes`, so a phone paired before a route existed (Nostr) or before the computer's
     address changed follows the computer without a new QR.
@@ -64,17 +69,22 @@ uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `loc
   - `hostRegistry.ts` — the locally-stored set of paired hosts over an injected `KeyValueStore`; a host keeps
     every advertised `relayUrls` (older entries only the one `relayUrl`) and its Nostr route; `update`
     replaces one in place (never re-adding a forgotten host), `withRoutes` merges the routes a host sent.
-  - `remoteSessions.ts` — one wire client per host, aggregating live sessions into one list, plus each host's
-    welcome (`welcomeFor`: protocol version and config) and what it lets this phone do (`accessFor`, `write` until a
-    `remote.deviceAccess` push says `read`); `disconnect` closes and drops one host. One attempt per host runs at a time (a `connect` during
-    another or during a background retry joins it), and an attempt begun before `disconnect`/`stop` is closed
-    when it lands and never registers; the `connect` it belonged to resolves quietly. A host whose first
-    connect failed for a reason a retry can fix keeps being retried in the background (2s doubling to 30s;
-    `onRetryFailed` hears each miss, and each failed attempt of a live host whose channel is down) until it
-    connects or is disconnected; `isReconnecting` marks a live host
-    whose channel dropped; `onRoutes` hands back the saved host merged with the routes it sent, and later
-    retries dial them; `reconnectNow` retries every host that is down at once.
-- **Public surface:** the `index.ts` barrel.
+  - `remoteSessions.ts` — one connection per host, aggregating live sessions into one list, plus each host's
+    welcome (`welcomeFor`: protocol version and config), what it lets this phone do (`accessFor`, `write` until a
+    `remote.deviceAccess` push says `read`) and how its connection stands (`connected`, `connecting`, or
+    `unreachable` with the last failure — recorded from its own `onOpenChange` / `onRetryFailed` / `onLost`, so
+    the app keeps no failure state of its own). `snapshot()` is all of it as one immutable value, replaced on
+    every notify, for `useSyncExternalStore`. `clientFor` stays null until a host's channel first opened. `connect`
+    tracks a saved host at once (its connection retries on its own); for a tracked host it retries now and, when
+    its channel is down, reads `connecting` again until that attempt lands or fails. `pair` tracks the connection
+    that paired, so pairing is one handshake. `disconnect` closes and drops one host; a dropped connection's
+    late reports are ignored. A host lost for good keeps its refusal as status until it is connected again or
+    disconnected; `onRoutes` hands back the saved host merged with the routes it sent, and later retries dial
+    them; `reconnectNow` retries every host now. `stop` closes everything, and a pairing landing after it is closed.
+- **Public surface:** the `index.ts` barrel — the controller (`createRemoteSessions` and its types), the
+  registry, `connectRemoteProject` (the IDE's open-by-link), `DeviceWireClient`, and the errors
+  (`RemoteConnectError`, `RelayUnreachableError`, `RemoteRequestError`). The channel adapter, the wire client
+  factory and `connectSavedHost` are internal.
 - **Allowed deps:** `contracts` (broker + signaling + pairing + session types), `nostr-signaling` (the
   internet route), platform browser APIs. Never `server`, `pi`, `web`, or any UI package.
 - **Forbidden:** value-importing `pi`/`server`; a WebRTC or crypto library of its own (use the platform; the

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, jest, test } from "bun:test";
 import {
 	type BrokerToClient,
+	buildPairingUri,
 	encodeBrokerFrame,
 	encodeHostMessage,
 	type HostMessage,
@@ -9,7 +10,12 @@ import {
 	parseDeviceMessage,
 } from "@thinkrail/contracts";
 import { RemoteConnectError } from "./connectError";
-import { CONNECT_TIMEOUT_MS, connectSavedHost } from "./deviceConnector";
+import {
+	CONNECT_TIMEOUT_MS,
+	type ConnectionEvents,
+	connectRemoteProject,
+	connectSavedHost,
+} from "./deviceConnector";
 import { BROKER_READY_TIMEOUT_MS } from "./signalingRoute";
 
 type Listener = (event: unknown) => void;
@@ -170,59 +176,117 @@ const settle = async (until?: () => boolean): Promise<void> => {
 		await new Promise<void>((resolve) => setImmediate(resolve));
 };
 
-const connect = () => connectSavedHost({ relayUrl: "ws://host:1", hostKey, label: "phone" });
+const connect = (events: ConnectionEvents = {}) =>
+	connectSavedHost({ relayUrl: "ws://host:1", hostKey, label: "phone" }, events);
 
-test("a relay that opens but never gets ready fails the attempt as relay_lost, socket closed", async () => {
+/** A saved-host connection with what it reported: open changes, retried failures, a loss. */
+function watched() {
+	const opens: boolean[] = [];
+	const misses: unknown[] = [];
+	const lost: RemoteConnectError[] = [];
+	const connection = connect({
+		onOpenChange: (open) => opens.push(open),
+		onRetryFailed: (error) => misses.push(error),
+		onLost: (error) => lost.push(error),
+	});
+	return { connection, opens, misses, lost };
+}
+
+const codeOf = (error: unknown): string | undefined =>
+	error instanceof RemoteConnectError ? error.code : undefined;
+
+test("a saved host returns at once and its loop makes the first attempt", async () => {
+	const { connection, opens } = watched();
+	await settle(() => peers[0]?.answered === true);
+	expect(opens).toEqual([]);
+	peers[0]?.openChannel();
+	await settle(() => opens.length > 0);
+	expect(opens).toEqual([true]);
+	connection.close();
+});
+
+test("a relay that opens but never gets ready fails the attempt as relay_lost, socket closed, and is retried", async () => {
 	hostMode = "silent";
-	const outcome = connect().then(
-		() => null,
-		(error: unknown) => error,
-	);
+	const { connection, misses } = watched();
 	await settle(() => sockets.length > 0);
 	await settle();
 	jest.advanceTimersByTime(BROKER_READY_TIMEOUT_MS);
-	await settle();
-	expect(((await outcome) as RemoteConnectError).code).toBe("relay_lost");
+	await settle(() => misses.length > 0);
+	expect(misses.map(codeOf)).toEqual(["relay_lost"]);
 	expect(sockets.every((socket) => socket.closed)).toBe(true);
+	jest.advanceTimersByTime(500);
+	await settle(() => sockets.length > 1);
+	expect(sockets).toHaveLength(2);
+	connection.close();
 });
 
 test("a host that never answers fails as host_silent with its peer and socket closed", async () => {
 	hostMode = "ready";
-	const outcome = connect().then(
+	const { connection, misses } = watched();
+	await settle(() => peers.length > 0);
+	jest.advanceTimersByTime(CONNECT_TIMEOUT_MS);
+	await settle(() => misses.length > 0);
+	expect(misses.map(codeOf)).toEqual(["host_silent"]);
+	expect(peers[0]?.closed).toBe(true);
+	expect(sockets[0]?.closed).toBe(true);
+	connection.close();
+});
+
+test("a channel opening after its attempt timed out is closed, not attached", async () => {
+	const { connection, misses } = watched();
+	await settle(() => peers[0]?.answered === true);
+	jest.advanceTimersByTime(CONNECT_TIMEOUT_MS);
+	await settle(() => misses.length > 0);
+	expect(misses.map(codeOf)).toEqual(["no_direct_route"]);
+	const late = peers[0]?.openChannel();
+	expect(late?.readyState).toBe("closed");
+	connection.close();
+});
+
+test("a pairing whose first attempt fails rejects and is not retried", async () => {
+	hostMode = "ready";
+	const link = buildPairingUri({
+		signalingUrls: ["ws://host:1"],
+		token: "token",
+		hostPublicKey: hostKey,
+		projectRef: "default",
+	});
+	const outcome = connectRemoteProject(link, { label: "phone" }).then(
 		() => null,
 		(error: unknown) => error,
 	);
 	await settle(() => peers.length > 0);
 	jest.advanceTimersByTime(CONNECT_TIMEOUT_MS);
-	const error = await outcome;
-	expect(error).toBeInstanceOf(RemoteConnectError);
-	expect((error as RemoteConnectError).code).toBe("host_silent");
-	expect(peers[0]?.closed).toBe(true);
-	expect(sockets[0]?.closed).toBe(true);
+	expect(codeOf(await outcome)).toBe("host_silent");
+	jest.advanceTimersByTime(60_000);
+	await settle();
+	expect(peers).toHaveLength(1);
 });
 
-test("a channel opening after its attempt timed out is closed, not attached", async () => {
-	const outcome = connect().then(
-		() => null,
-		(error: unknown) => error,
-	);
-	await settle(() => peers[0]?.answered === true);
-	jest.advanceTimersByTime(CONNECT_TIMEOUT_MS);
-	expect(((await outcome) as RemoteConnectError).code).toBe("no_direct_route");
-	const late = peers[0]?.openChannel();
-	expect(late?.readyState).toBe("closed");
+test("a refusal no retry fixes ends a saved host's loop through onLost", async () => {
+	const { connection, lost, misses } = watched();
+	await settle(() => sockets[0]?.proofs === 1);
+	sockets[0]?.host({ kind: "rejected", reason: "unknown device", code: "unknown_device" });
+	await settle(() => lost.length > 0);
+	expect(lost.map(codeOf)).toEqual(["unknown_device"]);
+	expect(misses).toEqual([]);
+	jest.advanceTimersByTime(60_000);
+	await settle();
+	expect(sockets).toHaveLength(1);
+	connection.close();
 });
 
-test("close() during a reconnect attempt ends it at once and nothing fires after", async () => {
-	const pending = connect();
+async function live() {
+	const watch = watched();
 	await settle(() => peers[0]?.answered === true);
 	const channel = peers[0]?.openChannel();
-	const connection = await pending;
-	const opens: boolean[] = [];
-	const misses: unknown[] = [];
-	connection.onOpenChange((open) => opens.push(open));
-	connection.onRetryFailed((error) => misses.push(error));
+	await settle(() => watch.opens.length > 0);
+	watch.opens.length = 0;
+	return { ...watch, channel };
+}
 
+test("close() during a reconnect attempt ends it at once and nothing fires after", async () => {
+	const { connection, channel, opens, misses } = await live();
 	channel?.close();
 	expect(opens).toEqual([false]);
 	expect(peers[0]?.closed).toBe(true);
@@ -242,10 +306,7 @@ test("close() during a reconnect attempt ends it at once and nothing fires after
 });
 
 test("reconnectNow during an in-flight attempt does not start a second one", async () => {
-	const pending = connect();
-	await settle(() => peers[0]?.answered === true);
-	const channel = peers[0]?.openChannel();
-	const connection = await pending;
+	const { connection, channel, opens } = await live();
 	channel?.close();
 	connection.reconnectNow();
 	await settle(() => peers[1]?.answered === true);
@@ -253,23 +314,11 @@ test("reconnectNow during an in-flight attempt does not start a second one", asy
 	connection.reconnectNow();
 	await settle();
 	expect(peers).toHaveLength(2);
-	const opens: boolean[] = [];
-	connection.onOpenChange((open) => opens.push(open));
 	peers[1]?.openChannel();
-	await settle(() => opens.length > 0);
-	expect(opens).toEqual([true]);
+	await settle(() => opens.length > 1);
+	expect(opens).toEqual([false, true]);
 	connection.close();
 });
-
-async function live() {
-	const pending = connect();
-	await settle(() => peers[0]?.answered === true);
-	const channel = peers[0]?.openChannel();
-	const connection = await pending;
-	const opens: boolean[] = [];
-	connection.onOpenChange((open) => opens.push(open));
-	return { connection, channel, opens };
-}
 
 test("host frames after the channel opened never tear the live connection down", async () => {
 	const { connection, opens } = await live();
@@ -283,14 +332,13 @@ test("host frames after the channel opened never tear the live connection down",
 });
 
 test("a second challenge mid-handshake is not answered again", async () => {
-	const pending = connect();
+	const { connection } = watched();
 	await settle(() => sockets[0]?.proofs === 1);
 	sockets[0]?.host({ kind: "challenge", challenge: "c2Vjb25k" });
 	await settle(() => peers[0]?.answered === true);
 	await settle();
 	expect(sockets[0]?.proofs).toBe(1);
-	peers[0]?.openChannel();
-	(await pending).close();
+	connection.close();
 });
 
 test("losing the signaling route after the channel opened keeps the connection", async () => {

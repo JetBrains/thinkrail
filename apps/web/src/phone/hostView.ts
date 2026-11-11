@@ -1,5 +1,9 @@
 import type { RemoteDeviceAccess, ServerWelcome } from "@thinkrail/contracts";
-import type { DeviceWireClient, RemoteSessionsController } from "@thinkrail/remote-client";
+import type {
+	DeviceWireClient,
+	RemoteSessionsController,
+	RemoteSessionsSnapshot,
+} from "@thinkrail/remote-client";
 import { useSyncExternalStore } from "react";
 
 export function useHostClient(
@@ -37,4 +41,9 @@ export function useConnectedHosts(
 			.filter((hostKey) => hostKey && controller.clientFor(hostKey))
 			.join("\t");
 	return useSyncExternalStore(controller.subscribe, read, read);
+}
+
+/** Everything the controller tracks, re-read on each change it notifies, for a screen that spans hosts. */
+export function useRemoteSessions(controller: RemoteSessionsController): RemoteSessionsSnapshot {
+	return useSyncExternalStore(controller.subscribe, controller.snapshot, controller.snapshot);
 }

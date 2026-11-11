@@ -1,11 +1,10 @@
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import {
+	type HostConnectionStatus,
 	RelayUnreachableError,
 	type RemoteConnectCode,
 	RemoteConnectError,
-	type RemoteSessionsController,
-	type SavedHost,
 } from "@thinkrail/remote-client";
 
 /**
@@ -71,22 +70,8 @@ export const recoveryOf = (failure: HostFailure): HostRecovery => {
 	}
 };
 
-/**
- * Connects a saved computer, or retries one whose channel is down now. Either way its last failure clears
- * first, so the row shows Connecting… until this attempt lands or fails again (`onRetryFailed` re-marks it).
- */
-export function connectSavedHost(
-	controller: Pick<RemoteSessionsController, "clientFor" | "connect" | "reconnectNow">,
-	host: SavedHost,
-	markFailure: (hostKey: string, failure: HostFailure | null) => void,
-): Promise<void> {
-	markFailure(host.hostKey, null);
-	if (controller.clientFor(host.hostKey)) {
-		controller.reconnectNow();
-		return Promise.resolve();
-	}
-	return controller
-		.connect(host)
-		.then(() => markFailure(host.hostKey, null))
-		.catch((error: unknown) => markFailure(host.hostKey, failureOf(error)));
-}
+/** The controller's connection status as the screens show it; a host it never connected reads Connecting…. */
+export const hostStatusOf = (status: HostConnectionStatus | undefined): HostStatus =>
+	status?.kind === "unreachable"
+		? { kind: "unreachable", failure: failureOf(status.error) }
+		: (status ?? { kind: "connecting" });

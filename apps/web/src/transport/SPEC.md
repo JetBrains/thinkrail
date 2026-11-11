@@ -241,7 +241,9 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   `WorkspaceFsChangedPayload` for `workspace.fsChanged`, and `AppConfig` for `server.welcome`'s config +
   `settings.changed`); `store`
   (welcome + event routing — a runtime edge owned by the parent graph); `lib` (plain-HTTP-safe random page
-  identity); `@thinkrail/locales` (user-visible request-failure messages); the browser `WebSocket`.
+  identity); `@thinkrail/locales` (user-visible request-failure messages); `@thinkrail/remote-client`
+  (`remoteTransport.ts`'s `DeviceWireClient`, whose coded `RemoteRequestError` becomes the same `RequestError`, and
+  only an explicit `timeoutMs` bounds a remote request — the wire client waits out a reconnect); the browser `WebSocket`.
 - **Forbidden:** `server`/`shared`/any `pi` package; importing `panels`/`shell`; or requesting, subscribing to, or folding current-layout state. Browser layout persistence uses only `backendKey()` as part of its frontend-local storage identity; native stable persistence has no transport edge.
 
 ## Get right
