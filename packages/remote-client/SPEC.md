@@ -20,7 +20,9 @@ uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `loc
 - **Owns:**
   - `deviceChannel.ts` — `DeviceChannel` + `toDeviceChannel` (native `RTCDataChannel` adapter; contracts'
     channel framing both ways, binary frames read as `ArrayBuffer` so chunks keep their order).
-  - `deviceWireClient.ts` — the reconnect-safe wire client (request/response + pushes, replay on `attach`;
+  - `deviceWireClient.ts` — the reconnect-safe wire client (request/response + pushes, replay on `attach`
+    after a `resume` naming the ids still awaited, each response `ack`ed; ids are unique per client so the
+    host's replay cache never mistakes a restarted app's request for an old one;
     the snapshot pushes `server.welcome` and `remote.hostRoutes` are kept and replayed to a later subscriber,
     because the host sends them once as the channel opens — before any screen subscribes).
   - `deviceConnector.ts` — `connectRemoteProject` (first pairing, link + token) and `connectSavedHost`

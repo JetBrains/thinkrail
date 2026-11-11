@@ -79,6 +79,9 @@ unreachable (no route got ready — `RelayUnreachableError`), `host_silent` (the
   suspended the app) is dropped and redialled at once.
 - **Late frames are ignored.** Once the channel is open only the peer or the channel can end the connection;
   host signaling frames, a lost signaling route or a replayed `challenge` cannot.
+- **No request runs twice.** Requests still waiting are re-sent on the new channel, and the host answers a
+  repeated id from its first run (the same replay cache the browser's WS uses), so a prompt or a worktree
+  whose reply was lost is not run again.
 - **Routes follow the host.** On every connect the host pushes its current routes (`remote.hostRoutes`), and
   the phone updates the saved host, so a new Wi‑Fi address or relay list needs no new QR.
 - **Host restarts.** The host ignores Nostr frames created before it started, so a relay replaying the last
@@ -97,8 +100,6 @@ unreachable (no route got ready — `RelayUnreachableError`), `host_silent` (the
 - **No TURN yet.** A pair where neither STUN nor NAT-PMP works (office or hotel NAT, a router without
   NAT-PMP) cannot connect off-LAN. Planned: TURN credentials from a hosted relay.
 - **No PCP / UPnP IGD**, only NAT-PMP.
-- **Requests are replayed after a reconnect.** A write the host already ran whose reply was lost (send a
-  prompt, create or remove a worktree) can run twice; it needs request ids the host deduplicates.
 - **iOS keeps nothing alive in the background**; the connection is re-made on resume.
 
 ## Diagnosing a phone that will not connect
