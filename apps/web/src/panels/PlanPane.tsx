@@ -19,6 +19,7 @@ import {
 } from "@remixicon/react";
 import type { ReviewComment, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { ResourceScopeProvider } from "@thinkrail/resource-renderers";
 import { Button, buttonVariants, IconButton } from "@thinkrail/ui/button";
 import {
 	DropdownMenu,
@@ -36,6 +37,7 @@ import {
 	awaitingToolCallIdOf,
 	deriveInteractionStates,
 	InteractionStatesContext,
+	type PendingInteraction,
 } from "../chat/interactionState";
 import { Markdown } from "../chat/Markdown";
 import { SectionLabel, VerificationBadge, VerificationGlyph } from "../chat/planKit";
@@ -51,7 +53,6 @@ import {
 	itemOpenFindings,
 	itemRevisions,
 	lastAgentText,
-	type PendingInteraction,
 	type PlanGlance,
 	pendingInteraction,
 	planCompletionSummary,
@@ -68,6 +69,7 @@ import { useToolInteraction } from "../chat/toolInteraction";
 import { getToolRenderer } from "../chat/toolRegistry";
 import { hydrateSessionRuntime, useChatTodos } from "../chat/useChatTodos";
 import {
+	isChatWorkspace,
 	selectAgentReviewCommentCount,
 	selectChatName,
 	selectChatTitle,
@@ -77,7 +79,7 @@ import {
 import { errorText, getTransport, respondToTool, supportsPlanReview } from "../transport";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { openChatInTab } from "./openChat";
-import { openDiffInTab } from "./openTabs";
+import { openDiffInTab, openFileInTab } from "./openTabs";
 import { PlanCommitsMenu } from "./PlanCommitsMenu";
 import { FileRow } from "./planFileRow";
 import {
@@ -664,24 +666,36 @@ function PlanCardSection({
 	);
 }
 
-function PlanInteractionCard({ pending }: { pending: PendingInteraction }) {
+function PlanInteractionCard({
+	workspaceId,
+	sessionId,
+	pending,
+}: {
+	workspaceId: string;
+	sessionId: string;
+	pending: PendingInteraction;
+}) {
 	const interaction = useToolInteraction(pending.toolCallId, pending.toolName);
 	const Renderer = getToolRenderer(pending.toolName);
+	const scope = useMemo(() => ({ workspaceId, sessionId }), [workspaceId, sessionId]);
 	return (
-		<Renderer
-			toolCallId={pending.toolCallId}
-			toolName={pending.toolName}
-			args={pending.args}
-			result={pending.result}
-			status={pending.status}
-			streaming={pending.streaming}
-			interaction={interaction}
-		/>
+		<ResourceScopeProvider value={scope}>
+			<Renderer
+				toolCallId={pending.toolCallId}
+				toolName={pending.toolName}
+				args={pending.args}
+				result={pending.result}
+				status={pending.status}
+				streaming={pending.streaming}
+				interaction={interaction}
+				onOpenFile={(path) => void openFileInTab(workspaceId, path, "preview")}
+			/>
+		</ResourceScopeProvider>
 	);
 }
 
 // Keep the session's live slot isolated from the heavy PlanPane.
-function PlanSessionLive({ sessionId }: { workspaceId: string; sessionId: string }) {
+function PlanSessionLive({ workspaceId, sessionId }: { workspaceId: string; sessionId: string }) {
 	const t = useT();
 	const runtime = useAppStore((s) => s.sessions[sessionId]);
 	const [focusScope] = useState<object>(() => ({}));
@@ -715,7 +729,11 @@ function PlanSessionLive({ sessionId }: { workspaceId: string; sessionId: string
 					}}
 				>
 					<div data-testid="plan-ask" className="mb-8">
-						<PlanInteractionCard pending={pending} />
+						<PlanInteractionCard
+							workspaceId={workspaceId}
+							sessionId={sessionId}
+							pending={pending}
+						/>
 					</div>
 				</InteractionStatesContext.Provider>
 			</ChatActionsContext.Provider>
@@ -885,6 +903,7 @@ export default function PlanPane({
 	const pushToast = useAppStore((s) => s.pushToast);
 	const requestToolView = useAppStore((s) => s.requestToolView);
 	const workspace = useAppStore((s) => selectWorkspaceById(s, workspaceId));
+	const chat = workspace !== null && isChatWorkspace(workspace);
 	const glance = useAppStore((s): PlanGlance => {
 		const rt = s.sessions[sessionId];
 		return rt ? sessionGlance(rt) : "waiting";
@@ -897,14 +916,14 @@ export default function PlanPane({
 	}, [connection, hasRuntime, workspaceId, sessionId]);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const workspaceSettlingSupported = useAppStore((s) => s.workspaceSettlingSupported);
-	const canReview = supportsPlanReview(protocolVersion);
+	const canReview = supportsPlanReview(protocolVersion) && !chat;
 	const {
 		review: branchReview,
 		url: branchReviewUrl,
 		status: branchStatus,
 		noteOpenReview,
 		refreshBranchStatus,
-	} = useBranchStatus(workspace, connection);
+	} = useBranchStatus(chat ? null : workspace, connection);
 	const branchReviewWithUrl =
 		branchReview && branchReviewUrl ? { ...branchReview, url: branchReviewUrl } : branchReview;
 	const resolvedBranchReview = resolveBranchReview(
@@ -1121,7 +1140,7 @@ export default function PlanPane({
 								{openReview ? openReviewLabel(openReview) : t("plan.header.pr")}
 							</span>
 						</div>
-						{workspace ? (
+						{workspace && !chat ? (
 							<div
 								data-testid="plan-context"
 								className="mt-2 flex flex-wrap items-center gap-8 tr-text-metadata text-text-subtle"
@@ -1179,42 +1198,44 @@ export default function PlanPane({
 							</span>
 						)
 					) : null}
-					<Button
-						variant={
-							(planReady && !openReview) || unpushed > 0 || (openReview && diverged)
-								? "primary"
-								: "ghost"
-						}
-						size="l"
-						iconLeft={GitPullRequestArrow}
-						loading={prBusy}
-						data-testid="plan-open-pr"
-						data-diverged={openReview && diverged ? "" : undefined}
-						disabled={prBusy || sameBranch || (!!openReview && diverged && !integrateCommand)}
-						onClick={openReview && diverged ? copyIntegrateCommand : () => void openPrFlow(false)}
-						tooltip={
-							sameBranch
-								? t("plan.openPr.sameBranch")
-								: openReview && diverged
-									? integrateCommand
-										? t("plan.openPr.divergedCopy", { command: integrateCommand })
-										: t("plan.openPr.divergedManual", { branch })
-									: openReview
-										? t("plan.openPr.pushTitle")
-										: t("plan.openPr.openTitle")
-						}
-						className="shrink-0"
-					>
-						{ship.submitting
-							? t("plan.openPr.pushing")
-							: openReview
-								? diverged
-									? t("plan.openPr.diverged")
-									: unpushed > 0
-										? t("plan.openPr.pushUpdatesCount", { count: unpushed })
-										: t("plan.openPr.pushUpdates")
-								: t("plan.openPr.open")}
-					</Button>
+					{chat ? null : (
+						<Button
+							variant={
+								(planReady && !openReview) || unpushed > 0 || (openReview && diverged)
+									? "primary"
+									: "ghost"
+							}
+							size="l"
+							iconLeft={GitPullRequestArrow}
+							loading={prBusy}
+							data-testid="plan-open-pr"
+							data-diverged={openReview && diverged ? "" : undefined}
+							disabled={prBusy || sameBranch || (!!openReview && diverged && !integrateCommand)}
+							onClick={openReview && diverged ? copyIntegrateCommand : () => void openPrFlow(false)}
+							tooltip={
+								sameBranch
+									? t("plan.openPr.sameBranch")
+									: openReview && diverged
+										? integrateCommand
+											? t("plan.openPr.divergedCopy", { command: integrateCommand })
+											: t("plan.openPr.divergedManual", { branch })
+										: openReview
+											? t("plan.openPr.pushTitle")
+											: t("plan.openPr.openTitle")
+							}
+							className="shrink-0"
+						>
+							{ship.submitting
+								? t("plan.openPr.pushing")
+								: openReview
+									? diverged
+										? t("plan.openPr.diverged")
+										: unpushed > 0
+											? t("plan.openPr.pushUpdatesCount", { count: unpushed })
+											: t("plan.openPr.pushUpdates")
+									: t("plan.openPr.open")}
+						</Button>
+					)}
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
 							<IconButton

@@ -22,7 +22,7 @@ interface Outcome {
 	ok: boolean;
 }
 
-function describe(frame: LoginFrame): string {
+function describeFrame(frame: LoginFrame): string {
 	switch (frame.kind) {
 		case "authUrl":
 			return `sign-in page ${new URL(frame.url).host}`;
@@ -48,8 +48,10 @@ class Wire {
 	private seq = 0;
 	private readonly replies = new Map<string, Reply>();
 	readonly frames = new Map<string, LoginFrame[]>();
+	private readonly socket: WebSocket;
 
-	private constructor(private readonly socket: WebSocket) {
+	private constructor(socket: WebSocket) {
+		this.socket = socket;
 		socket.addEventListener("close", () => {
 			for (const reply of this.replies.values()) reply.reject(new Error("host connection closed"));
 			this.replies.clear();
@@ -126,7 +128,7 @@ async function runFlow(
 			for (; seen < frames.length; seen++) {
 				const frame = frames[seen];
 				if (!frame || frame.kind === "progress") continue;
-				trail.push(describe(frame));
+				trail.push(describeFrame(frame));
 				if (frame.kind === "select") {
 					const choice = choices[picked++];
 					if (choice === undefined)

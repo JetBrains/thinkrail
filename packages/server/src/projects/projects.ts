@@ -11,7 +11,7 @@ import type {
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { canonicalPath, git, INDEX_WRITE_TIMEOUT_MS } from "../git";
-import { loadProjects, loadWorkspaces, saveProjects } from "../persistence";
+import { landsInChatsRoot, loadProjects, loadWorkspaces, saveProjects } from "../persistence";
 
 type ProjectPublisher = (project: Project) => void;
 
@@ -23,6 +23,16 @@ export function setProjectPublisher(fn: ProjectPublisher | null): void {
 
 function emit(project: Project): void {
 	publishProject?.(project);
+}
+
+let guardProjectPath: ((path: string) => void) | null = null;
+
+export function setProjectPathGuard(fn: ((path: string) => void) | null): void {
+	guardProjectPath = fn;
+}
+
+export function assertProjectPathAllowed(path: string): void {
+	guardProjectPath?.(path);
 }
 
 export function resolveProjectPath(path: string): string {
@@ -94,8 +104,20 @@ export function getProjects(): Project[] {
 	return projects;
 }
 
+/** The one reserved-root door check, before any filesystem or git side effect; the path keeps its spelling. */
+export function assertOutsideChatsRoot(path: string, use = "opened as a project"): void {
+	if (landsInChatsRoot(path)) {
+		throw new CodedError(
+			"CHATS_CONTAINER",
+			`Chats without a project live here; this folder cannot be ${use}.`,
+		);
+	}
+}
+
 export function openProject(inputPath: string, displayName?: string): Project {
 	const path = resolveProjectPath(inputPath);
+	assertProjectPathAllowed(path);
+	assertOutsideChatsRoot(path);
 	const root = gitToplevel(path);
 	if (!root) throw new CodedError("NOT_GIT", `Not a git repository: ${path}`);
 
@@ -349,10 +371,17 @@ export function setProjectGroupEnabled(id: string, group: string, enabled: boole
 	const projects = getProjects();
 	const project = projects.find((p) => p.id === id);
 	if (!project) throw new Error(`Unknown project: ${id}`);
-	const groups = new Set(project.disabledGroups ?? []);
-	if (enabled) groups.delete(group);
-	else groups.add(group);
-	project.disabledGroups = [...groups];
+	const disabled = new Set(project.disabledGroups ?? []);
+	const on = new Set(project.enabledGroups ?? []);
+	if (enabled) {
+		disabled.delete(group);
+		on.add(group);
+	} else {
+		disabled.add(group);
+		on.delete(group);
+	}
+	project.disabledGroups = [...disabled];
+	project.enabledGroups = [...on];
 	saveProjects(projects);
 	return project;
 }
@@ -373,11 +402,15 @@ function inspectResolvedProjectPath(path: string): ProjectPathStatus {
 }
 
 export function inspectProjectPath(inputPath: string): ProjectPathStatus {
-	return inspectResolvedProjectPath(resolveProjectPath(inputPath));
+	const path = resolveProjectPath(inputPath);
+	assertOutsideChatsRoot(path);
+	return inspectResolvedProjectPath(path);
 }
 
 export function initProject(inputPath: string): Project {
 	const path = resolveProjectPath(inputPath);
+	assertProjectPathAllowed(path);
+	assertOutsideChatsRoot(path);
 	const status = inspectResolvedProjectPath(path);
 	if (status.kind === "missing") throw new Error(`No such folder: ${path}`);
 	if (status.kind === "notDirectory") throw new Error(`Not a folder: ${path}`);
@@ -396,8 +429,10 @@ export function createProject(
 		throw new Error(`Invalid project folder name: ${requestedName}`);
 	}
 	const parent = resolveProjectPath(parentPath);
-	mkdirSync(parent, { recursive: true });
 	const path = join(parent, name);
+	assertProjectPathAllowed(path);
+	assertOutsideChatsRoot(path);
+	mkdirSync(parent, { recursive: true });
 	let created = false;
 	try {
 		if (!statSync(path).isDirectory()) throw new Error(`Not a folder: ${path}`);

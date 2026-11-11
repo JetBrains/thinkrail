@@ -164,7 +164,7 @@ export async function runScenario(def: ScenarioDef): Promise<ScenarioResult> {
 		watcher?.cancel();
 		dialog?.detach();
 		restoreFactory?.();
-		if (sessionId) endSession(sessionId);
+		if (sessionId) await endSession(sessionId);
 		appendRunRecord({
 			at: new Date().toISOString(),
 			model,
