@@ -753,21 +753,25 @@ test("auto naming skips a long run of existing workspace-N branches in one pass"
 		git(repo, "branch", `workspace-${n}`);
 	}
 
-	// One batched branch listing replaces one `show-ref` probe per candidate (#1229), so the
-	// allocation stays cheap no matter how many names are taken.
 	const ws = await createWorkspace("p1");
 	expect(ws.branch).toBe("workspace-61");
 });
 
 test("auto naming still skips a branch whose name is also used by a tag", async () => {
-	// A tag that shares the branch's name makes `%(refname:short)` emit "heads/<name>"
-	// for that branch, so the listing strips "refs/heads/" itself and must not rely on
-	// git's disambiguated short names to decide which names are taken.
 	git(repo, "branch", "workspace-1");
 	git(repo, "tag", "workspace-1");
 
 	const ws = await createWorkspace("p1");
 	expect(ws.branch).toBe("workspace-2");
+});
+
+test("naming skips a branch that differs from the candidate only by case", async () => {
+	git(repo, "branch", "Workspace-1");
+	git(repo, "branch", "Fix-Login");
+	git(repo, "pack-refs", "--all");
+
+	expect((await createWorkspace("p1")).branch).toBe("workspace-2");
+	expect((await createWorkspace("p1", "fix login")).branch).toBe("fix-login-2");
 });
 
 test("forgetWorkspace drops the record + returns it, but leaves the worktree for a separate reclaim", async () => {
