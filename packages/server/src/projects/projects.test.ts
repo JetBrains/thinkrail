@@ -518,6 +518,74 @@ posix("initProject keeps the host event loop running while git adds and commits"
 	expect(gitOut(dir, "rev-parse", "HEAD")).not.toBe("");
 });
 
+async function untilExists(path: string): Promise<void> {
+	const deadline = performance.now() + 5_000;
+	while (!existsSync(path)) {
+		if (performance.now() > deadline) throw new Error(`timed out waiting for ${path}`);
+		await Bun.sleep(10);
+	}
+}
+
+const firstAddFailsLate = (marker: string) =>
+	`*" add "*) if [ ! -e ${JSON.stringify(marker)} ]; then : > ${JSON.stringify(marker)}; sleep 1; exit 1; fi;;`;
+
+posix(
+	"an overlapping init waits for the in-flight bootstrap and its cleanup, then re-evaluates",
+	async () => {
+		const dir = join(dataDir, "contended");
+		mkdirSync(dir);
+		writeFileSync(join(dir, "file.txt"), "x\n");
+
+		await withoutUserGitConfig(() =>
+			withGitWrapper(firstAddFailsLate(join(dataDir, "add-delayed")), async () => {
+				const settled: string[] = [];
+				const first = initProject(dir).finally(() => settled.push("first"));
+				await untilExists(join(dir, ".git", "HEAD"));
+				expect(() => openProject(dir)).toThrow(
+					expect.objectContaining({ code: "PROJECT_BOOTSTRAPPING" }),
+				);
+				const second = initProject(dir).finally(() => settled.push("second"));
+
+				await expect(first).rejects.toThrow(/git add failed/);
+				const project = await second;
+				expect(settled).toEqual(["first", "second"]);
+				expect(project.path).toBe(dir);
+			}),
+		);
+
+		expect(gitOut(dir, "ls-tree", "--name-only", "HEAD")).toBe("file.txt");
+		expect(listProjects().map((p) => p.path)).toEqual([dir]);
+	},
+);
+
+posix(
+	"overlapping requests for a folder createProject is bootstrapping wait for its cleanup",
+	async () => {
+		const parent = join(dataDir, "parent");
+		const dir = join(parent, "app");
+
+		await withoutUserGitConfig(() =>
+			withGitWrapper(firstAddFailsLate(join(dataDir, "add-delayed")), async () => {
+				const first = createProject(parent, "app");
+				await untilExists(join(dir, ".git", "HEAD"));
+				expect(() => openProject(dir)).toThrow(
+					expect.objectContaining({ code: "PROJECT_BOOTSTRAPPING" }),
+				);
+				const retried = createProject(parent, "app", "Retried");
+				const init = initProject(dir);
+
+				await expect(first).rejects.toThrow(/git add failed/);
+				const [created, opened] = await Promise.all([retried, init]);
+				expect(created.name).toBe("Retried");
+				expect(opened.id).toBe(created.id);
+			}),
+		);
+
+		expect(gitOut(dir, "rev-parse", "HEAD")).not.toBe("");
+		expect(listProjects()).toHaveLength(1);
+	},
+);
+
 posix("the initial commit cannot start git's automatic maintenance", async () => {
 	const dir = join(dataDir, "no-gc");
 	mkdirSync(dir);

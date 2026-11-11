@@ -22,8 +22,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
 - **Owns:** the wire — entity types, the `pi` event/message types (re-exported), the WS method & channel
   registries, and the protocol version. Including **`WsErrorCode`** — the closed set of failures the *host
   names* (`WsResponse.errorCode`, today `UNKNOWN_COMMIT`, `PUSH_AUTH_FAILED`,
-  `NOT_GIT` and `ALREADY_OPEN` (the two `project.open` refusals: a folder that is not a repository, and a
-  folder already owned by a workspace),
+  `NOT_GIT`, `ALREADY_OPEN` and `PROJECT_BOOTSTRAPPING` (the three `project.open` refusals: a folder that is
+  not a repository, a folder already owned by a workspace, and a folder another request is still
+  bootstrapping into a repository — an expected, transient refusal Error Tracking must not count as a bug),
   `PROJECT_CLONE_INVALID`, `PROJECT_CLONE_FAILED`, and `PROJECT_CLONE_CLEANUP_FAILED` (input
   correction, Git failure, and incomplete cleanup requiring filesystem intervention),
   `CHATS_CONTAINER` / `CHAT_WORKSPACE` / `NOT_A_CHAT` /

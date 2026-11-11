@@ -67,9 +67,14 @@ bootstrap it into one so it can be opened.
   none on Windows, where a killed git leaves `index.lock`); an expired one is killed with its process group
   before the `.git` this call created is removed. The commit passes `-c maintenance.auto=false -c
   gc.auto=0`, so the first commit of a big tree cannot start an automatic `gc`/maintenance that outlasts
-  it. The identity and top-level probes stay short synchronous reads. Known gap: nothing serializes another
-  open or init of the same folder while its bootstrap runs; one that lands after `git init` sees a repo and
-  opens it before the initial commit exists.
+  it. The identity and top-level probes stay short synchronous reads. **A bootstrap reserves its folder**
+  (keyed by canonical path) from before `git init` until its open — or, after a failure, its `.git` and
+  folder cleanup — has finished, and releases it however it ends. An `initProject` or `createProject` of a
+  reserved folder waits for it, then re-evaluates from scratch: it opens the finished repository, or
+  bootstraps again (making the folder again) after a failure cleaned up. `openProject` stays synchronous for
+  its many callers, so for a reserved folder — or a path git resolves to one — it rejects with
+  `PROJECT_BOOTSTRAPPING` instead. Nothing can adopt, or commit into, a repository that a failing bootstrap
+  is about to delete.
   **`createProject(parentPath, name)`** is the start-from-nothing path: `name` must be one plain folder
   name (no separators, not `.`/`..`), the resolved parent is created when missing, the target folder is
   made — an existing **empty** folder is reused, a non-empty one or a file rejects — and then gets the same
@@ -154,6 +159,6 @@ and truncating first can separate a secret suffix from the URL prefix needed to 
   `setPiTrustSeed`.
 - **Allowed deps:** `persistence`; the `git` sub-module (shared `git()` runner, which now owns the
   environment its children spawn under — this module passes none); `contracts` (`Project`, `ProjectPathStatus`);
-  `shared/codedError` (the two named open failures); Node/Bun.
+  `shared/codedError` (the named open and bootstrap failures); Node/Bun.
 - **Forbidden:** `host`; sibling features other than `git` (`workspaces` depends on `projects`, never the
   reverse).

@@ -114,12 +114,44 @@ export function assertOutsideChatsRoot(path: string, use = "opened as a project"
 	}
 }
 
+const bootstraps = new Map<string, Promise<void>>();
+
+function pendingBootstrap(path: string): Promise<void> | undefined {
+	return bootstraps.get(canonicalPath(path));
+}
+
+function refuseWhileBootstrapping(path: string, own?: string): void {
+	const key = canonicalPath(path);
+	if (key !== own && bootstraps.has(key))
+		throw new CodedError(
+			"PROJECT_BOOTSTRAPPING",
+			`This folder is still being set up as a git repository: ${path}`,
+		);
+}
+
+async function holdingBootstrap<T>(path: string, run: (own: string) => Promise<T>): Promise<T> {
+	const own = canonicalPath(path);
+	const settled = Promise.withResolvers<void>();
+	bootstraps.set(own, settled.promise);
+	try {
+		return await run(own);
+	} finally {
+		bootstraps.delete(own);
+		settled.resolve();
+	}
+}
+
 export function openProject(inputPath: string, displayName?: string): Project {
-	const path = resolveProjectPath(inputPath);
+	return openResolvedProject(resolveProjectPath(inputPath), displayName);
+}
+
+function openResolvedProject(path: string, displayName?: string, ownBootstrap?: string): Project {
 	assertProjectPathAllowed(path);
 	assertOutsideChatsRoot(path);
+	refuseWhileBootstrapping(path, ownBootstrap);
 	const root = gitToplevel(path);
 	if (!root) throw new CodedError("NOT_GIT", `Not a git repository: ${path}`);
+	refuseWhileBootstrapping(root, ownBootstrap);
 
 	const projects = getProjects();
 	const existing = projects.find((p) => p.path === root);
@@ -411,12 +443,19 @@ export async function initProject(inputPath: string): Promise<Project> {
 	const path = resolveProjectPath(inputPath);
 	assertProjectPathAllowed(path);
 	assertOutsideChatsRoot(path);
+	const pending = pendingBootstrap(path);
+	if (pending) {
+		await pending;
+		return initProject(inputPath);
+	}
 	const status = inspectResolvedProjectPath(path);
 	if (status.kind === "missing") throw new Error(`No such folder: ${path}`);
 	if (status.kind === "notDirectory") throw new Error(`Not a folder: ${path}`);
 	if (status.kind === "repo") return openProject(path);
-	await bootstrapRepository(path);
-	return openProject(path);
+	return holdingBootstrap(path, async (own) => {
+		await bootstrapRepository(path);
+		return openResolvedProject(path, undefined, own);
+	});
 }
 
 export async function createProject(
@@ -433,6 +472,11 @@ export async function createProject(
 	assertProjectPathAllowed(path);
 	assertOutsideChatsRoot(path);
 	mkdirSync(parent, { recursive: true });
+	const pending = pendingBootstrap(path);
+	if (pending) {
+		await pending;
+		return createProject(parentPath, requestedName, displayName);
+	}
 	let created = false;
 	try {
 		if (!statSync(path).isDirectory()) throw new Error(`Not a folder: ${path}`);
@@ -443,14 +487,16 @@ export async function createProject(
 		mkdirSync(path);
 		created = true;
 	}
-	try {
-		await bootstrapRepository(path);
-		return openProject(path, displayName);
-	} catch (err) {
-		rmSync(join(path, ".git"), { recursive: true, force: true });
-		if (created && readdirSync(path).length === 0) rmdirSync(path);
-		throw err;
-	}
+	return holdingBootstrap(path, async (own) => {
+		try {
+			await bootstrapRepository(path);
+			return openResolvedProject(path, displayName, own);
+		} catch (err) {
+			rmSync(join(path, ".git"), { recursive: true, force: true });
+			if (created && readdirSync(path).length === 0) rmdirSync(path);
+			throw err;
+		}
+	});
 }
 
 async function bootstrapStep(
