@@ -62,6 +62,17 @@ broker (the host's own for Wi‑Fi/Tailscale, or a hosted one) and public Nostr 
     device's (see [[module-relay]]). It gathers through contracts'
     `PUBLIC_STUN_URLS` (tests pass none), so a phone off the host's network can still connect peer-to-peer;
     there is no TURN until one is deployed.
+    Given a `PortMapper`, each private-IPv4 UDP host candidate's port is mapped on the router and its public
+    address signalled as one more `srflx` candidate; the leases are released when the peer closes or fails.
+    STUN alone fails when the phone sits behind a carrier's symmetric NAT (CGNAT) and the home router filters
+    by port: the phone's checks arrive from a port the host never wrote to. A mapped port takes them from
+    anyone, so that pair connects with no relay (observed: an Odido phone against a home router).
+  - `natPmp.ts` — `createNatPmpMapper`, NAT-PMP (RFC 6886) against the OS default gateway (`defaultGateway`:
+    macOS `route`, Linux `/proc/net/route`, Windows `route print`): the router's public address, then a UDP
+    mapping asked for 10 minutes and renewed at half the granted lifetime while held, deleted on `release`.
+    A router that does not answer is skipped for a minute, so a network without NAT-PMP (office, hotel,
+    UPnP-only) costs one ~750 ms wait per minute; such a pair still needs TURN. `startRemoteAccess` shares one
+    mapper across its sessions (`portMapper: null` turns it off).
   - `hostSession.ts` — `createHostSession`, one device session's orchestration: runs the handshake, and only
     after `accepted` starts the peer. It signs the offer with the host identity key over
     `offerTranscript(nonce, challenge, sdp)` and accepts only an answer the paired device key signed over

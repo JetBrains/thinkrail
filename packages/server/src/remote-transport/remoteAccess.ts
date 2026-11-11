@@ -17,6 +17,7 @@ import { type BrokerConnection, connectHostBroker, type HostBrokerDeps } from ".
 import { createWeriftHostPeer } from "./hostPeer";
 import { createHostSession } from "./hostSession";
 import type { RelayAddress } from "./localRelay";
+import { createNatPmpMapper, type PortMapper } from "./natPmp";
 import {
 	connectNostrHost,
 	type NostrHostConnection,
@@ -57,6 +58,8 @@ export interface RemoteAccessOptions {
 	nostrRelays?: readonly string[];
 	/** Nostr connector; injected in tests. */
 	connectNostr?: (options: NostrHostOptions) => NostrHostConnection;
+	/** Asks the router to forward a public port to each session's ICE port (NAT-PMP by default); null turns it off. */
+	portMapper?: PortMapper | null;
 }
 
 /**
@@ -71,6 +74,8 @@ export function startRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
 	const connect = options.connect ?? connectHostBroker;
 	const configured: readonly RelayAddress[] = [{ url: options.relayUrl, route: "relay" }];
 	const advertised = options.advertised ?? (() => configured);
+	const portMapper =
+		options.portMapper === undefined ? createNatPmpMapper() : (options.portMapper ?? undefined);
 
 	const openSession: HostBrokerDeps["openSession"] = (_sessionId, toDevice) => {
 		const handshake = createHostHandshake({
@@ -81,7 +86,7 @@ export function startRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
 			registerDevice: (device) => void addDevice(device),
 			findDevice: (key) => findDeviceByKey(key),
 		});
-		const peer = createWeriftHostPeer();
+		const peer = createWeriftHostPeer(undefined, portMapper);
 		const session = createHostSession({
 			handshake,
 			peer,
