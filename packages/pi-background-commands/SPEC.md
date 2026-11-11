@@ -140,9 +140,11 @@ unbounded second notification queue.
 A finished command reaches the agent once, at its next step, under the same delivery rule as
 detached subagents ([[module-pi-subagents]] Result delivery): the extension lets the service release
 pending records only at an eligible `turn_end`, at `agent_before_settle`, to an idle parent as one
-batch that starts at most one run, or through an embedder's `flushCompletions({ atTurnEnd: true })`
-from its `turn_end` listener; it schedules an idle flush after `agent_settled` and after compaction
-or tree events. Each message is one displayed Pi custom message with a bounded result excerpt and a
+batch that starts at most one run (at once, even while a scheduled idle flush is pending; only a wake
+Pi deferred inside `agent_settled` holds later records for that run's next step), or through an
+embedder's `flushCompletions({ atTurnEnd: true })` from its `turn_end` listener; it schedules an idle
+flush after `agent_settled` and after compaction or tree events. Each message is one displayed Pi
+custom message with a bounded result excerpt and a
 `delivery` marker (`wake` | `run` | `appended`). The exported `BACKGROUND_COMMAND_COMPLETION_MESSAGE`
 is `background-command-completion`; message details omit the full command and retain only a
 40-line/4-KiB diagnostic output excerpt plus bounded snapshot metadata. The tool guidance tells the
@@ -166,7 +168,8 @@ lifecycle changes, not every byte of output; output is read separately while ins
 
 Exercise admission and eviction, bounded multibyte output, natural/nonzero/null exits, launch errors,
 per-job stop isolation, parent-abort independence, duplicate stop, notification/reload races and
-bounded disposal, plus delivery: next-step delivery within one run, one run per idle batch, a read
+bounded disposal, plus delivery: next-step delivery within one run, one run per idle batch, an idle
+wake within the completion's own tick, one run for completions landing inside `agent_settled`, a read
 finished output never pushed again while a host read never claims, and no wake after a parent stop. Integration checks use real local commands and Pi's public executor; provider-driven
 coverage verifies tool use and completion through a real Pi session. Windows CI runs the package
 suite natively, including the descendant marker used by shutdown/process-tree coverage; visible-console

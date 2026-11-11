@@ -23,7 +23,8 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
 
 - **Owns:** the watcher registry + its lifecycle: `ensureWatch(workspaceId)` (idempotent and
   **self-healing**; returns the live watcher's shared readiness promise; started lazily by `host` when a
-  workspace read or `workspace.watchReady` preflight lands — the read is the "a client is looking" signal;
+  workspace read or a `workspace.watchReady` preflight lands — the read is the "a client is looking"
+  signal — and as a **prewarm** watch for the root a `search.query` resolved;
   readiness reports whether the watcher was already known ready), `stopWatch(workspaceId)` (called
   in `workspace.remove`'s fast path),
   `stopAllWatches()` (called in `server.stop()`); the ignore filter (any path segment `.git` or
@@ -50,7 +51,8 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   hang and torn-down watchers cannot publish. An invalidation nudge remains idempotent, so the fallback's
   possible duplicate is one cheap no-op refetch.
 - **Prewarm tier (globally bounded):** `ensureWatch(workspaceId, { prewarm: true })` — reached via
-  `workspace.watchReady`'s optional `prewarm` flag, the web's pre-selection warm-up — starts the same
+  `workspace.watchReady`'s optional `prewarm` flag, the web's pre-selection warm-up, and by the search
+  palette's root watch — starts the same
   watcher but marks its entry **prewarm-only**. Prewarm-only entries live in one global pool capped at
   **8**: creating one beyond the cap evicts the least-recently-prewarmed prewarm-only entry through
   `stopWatch` (its conservative readiness settle included), so clicking through many projects reuses one
@@ -75,7 +77,8 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
     *linked worktree* (every workspace this app creates) `.git` is a *file* (`gitdir: <path>`) pointing at
     `<repo>/.git/worktrees/<name>`, i.e. **outside the watched root**, so a commit made in that worktree's
     terminal would otherwise produce no signal at all. Resolved with plain fs (stat + parse the gitfile
-    line), never by shelling out — this module has no `git` sibling edge. Recursive because an attached-
+    line), never by shelling out — this module has no `git` sibling edge (`git`'s `headBranchAt` mirrors
+    the same gitfile parse for the same reason). Recursive because an attached-
     branch `git update-ref HEAD …` can update only the nested per-worktree `logs/HEAD`, leaving the top-
     level `HEAD` untouched, while the common branch ref is outside this directory. The git dir here is
     only the small per-worktree directory, so its `objects/` are not in scope. A missing/unreadable git
@@ -85,8 +88,8 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
     nudge, feeding a self-sustaining refresh loop. Directory-only notifications are ignored because the
     concrete file event accompanies them. A wildcard event still nudges conservatively.
 
-  `host` fans the nudge out to two convergences: `refreshUserOwnedWorkspace` (a user-owned workspace's
-  folder-truth branch labels) **and** a pathless, skill-neutral `fsChanged` frame (`paths: []`,
+  `host` fans the nudge out to two convergences: `syncWorkspaceBranch` (a workspace's branch label follows
+  its live checkout) **and** a pathless, skill-neutral `fsChanged` frame (`paths: []`,
   `truncated: false`, `skillChange: "none"`) so the clients' git-derived reads re-read — `git.status` and an
   open `uncommitted`-scope diff tab are relative to `HEAD`, and would otherwise keep reporting a committed
   change as uncommitted until the next file edit.

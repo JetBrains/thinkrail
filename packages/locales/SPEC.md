@@ -20,12 +20,18 @@ halves) renders through, so they cannot drift onto separate instances.
 
 ## Public surface
 
-- **Root `@thinkrail/locales`** (pure, browser- and server-safe, no React):
+- **Root `@thinkrail/locales`** (browser- and server-safe, no React; pure except the translation loader
+  and its cache):
   - `EN` — the English catalog; `MessageKey` — its key union (plural suffixes `_one`/`_other`/… fold
     into the base key).
-  - `BUNDLED_LOCALES` — the tags shipped with this build (`en` first, then the `BUNDLED` registry) and
-    `bundledCatalog(tag)`. Docs and tests derive the shipped list from it rather than naming it, so a
-    new bundled language changes only its catalog, the `BUNDLED` entry, and the README's list.
+  - `BUNDLED_LOCALES` — the tags shipped with this build (`en` first, then the `TRANSLATIONS` registry);
+    `loadBundledCatalog(tag)` — fetches a translation on demand, shares a download already running, and
+    caches it; a network error, an HTTP error, a body that is not JSON (the host answers a missing asset
+    with `index.html`) or not an object rejects as `TranslationLoadError` (original error as `cause`),
+    caches nothing, and the next call retries; `bundledCatalog(tag)` — the
+    catalog if already loaded (English always is). Docs and tests derive the shipped list from
+    `BUNDLED_LOCALES` rather than naming it, so a new bundled language changes only its catalog, the
+    `TRANSLATIONS` entry, and the README's list.
   - `SYSTEM_LOCALE` (`"system"`), `canonicalLocale(tag)`, `languageName(tag)` (own-language name via
     `Intl.DisplayNames`, first letter upper-cased), `DESKTOP_MENU_KEYS` and `DESKTOP_DIALOG_KEYS` — the keys the
     desktop's native menu, error dialogs, and startup splash render, one list each for the desktop and the web that pushes
@@ -62,10 +68,15 @@ halves) renders through, so they cannot drift onto separate instances.
   `currentTranslator()` / `t` / `currentLocale()` — the same, read at call time, for event-time code only
   (handlers, effects, store actions, toasts); `<T>` (react-i18next `Trans` driven by `useT()`'s translator;
   it escapes interpolated values before markup is parsed and unescapes text nodes after, so a value such as
-  a branch named `feature/<b>x</b>` renders literally); and `applyLocale(tag, overlays)` which removes and
-  re-adds `bundled ∪ overlay` for every chain member (so a deleted overlay's strings disappear), switches
-  language and publishes the new translator. i18next runs with `load: "currentOnly"` and the explicit
-  `fallbackChain`, so it consults exactly `tag → base → en` (never an unlisted script fallback).
+  a branch named `feature/<b>x</b>` renders literally); and `applyLocale(tag, overlays)` which loads any
+  bundled catalog the fallback chain still lacks, then removes and re-adds `bundled ∪ overlay` for every
+  chain member (so a deleted overlay's strings disappear), switches language and publishes the new
+  translator. It applies before returning when nothing in the chain needs loading. An overlay outside the
+  chain is installed without its bundled catalog, which loads on the apply that selects it. A call that a
+  newer one superseded installs nothing. If a catalog fails to load, it applies what it has, switches to the
+  first chain language that has strings (an empty overlay has none; English covers the gap), and rejects;
+  a later apply retries the download. i18next runs with `load: "currentOnly"` and the explicit `fallbackChain`, so it consults exactly
+  `tag → base → en` (never an unlisted script fallback).
 
 ## Format
 
@@ -96,14 +107,20 @@ so the files diff cleanly.
   change, reviewed like one. Plural pairs carry real English singulars (`"1 group"`, never `"1 groups"`).
 - **A bundled translation is partial by design and guarded by a test, not at runtime.** A string it lacks
   renders English through the chain, so it can ship incomplete and fill in later. The Russian catalog
-  currently covers every key in `en.json` and all four CLDR categories for its plural families; a new
-  key still lands in `en.json` first and should be translated in Russian in the same change. `applyLocale` loads bundled catalogs as-is (`validateCatalog` and `completePlurals` run
-  only on local files), so a catalog test requires every bundled translation to pass `validateCatalog`
+  covers all four CLDR categories for its plural families but not every key — the search palette's and
+  its command and keyboard strings are deliberately English for now, and a few newer strings lag; a new
+  key lands in `en.json` first and is translated in Russian in the same change unless its feature is left
+  English on purpose. The loader validates a downloaded body with `validateCatalog`, which
+  rejects a non-object, and `completePlurals` runs only on local files, so a catalog test requires every bundled translation to pass `validateCatalog`
   with nothing dropped, to hold only sorted `en.json` keys — plus a plural form for a category English
   lacks when the language needs one — and to carry every plural form its language needs. Changing an
   English string's placeholders or markup, or removing a key, therefore fails in the same change, and
   that change updates or deletes the translation (deleting falls back to English). A rewording that
   changes the meaning deletes the translation too, rather than leaving it stale.
+- **Only English is in the startup bundle.** Each translation is a JSON asset (`new URL(…,
+  import.meta.url)`) fetched on demand, so a user downloads only the one they pick. Never `import()` it:
+  Chromium caches a failed module import per URL, so a failed chunk could not retry without a reload. Never
+  value-import a translation catalog statically: one such import pulls every user's startup cost back up.
 - **A literal the user must type stays verbatim.** A protocol answer, JSON key, flag, or command quoted
   inside translated prose keeps its exact spelling: OpenSSH accepts only `yes` for a host key, so
   `panels.prSetup.hostKeyHint` keeps `yes` in every catalog — a translated «sí» makes ssh re-prompt and
@@ -131,9 +148,8 @@ so the files diff cleanly.
 
 ## Deferred
 
-Loading bundled translations on demand (each is imported into every consumer's bundle), locale-aware
-number formats (token
-counts, cost and context percentages still use English separators), composite phrases that embed a
-translated count fragment (`chat.trust.untrustedNotice` interpolates a "1 skill" list), RTL layout (`dir`), a first-paint locale
-hint (until the host answers `locales.list`, a local language renders English for a moment), and
-translating server error text (errors would move to codes the client renders).
+Locale-aware number formats (token counts, cost and context percentages still use English separators),
+composite phrases that embed a translated count fragment (`chat.trust.untrustedNotice` interpolates a "1
+skill" list), RTL layout (`dir`), a first-paint locale hint (until the host answers and the translation
+loads, a non-English language renders English for a moment), and translating server error text (errors would
+move to codes the client renders).

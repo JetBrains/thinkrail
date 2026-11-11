@@ -115,6 +115,7 @@ const AMBIENT_KEYS = ["ANTHROPIC_API_KEY", "ANTHROPIC_OAUTH_TOKEN"] as const;
 
 describe("session extra-usage notice", () => {
 	let agentDir: string;
+	let dataDir: string;
 	let cwd: string;
 	let notices: ExtUiRequest[];
 	let credentials: InMemoryCredentialStore;
@@ -122,12 +123,14 @@ describe("session extra-usage notice", () => {
 	const prior = new Map<string, string | undefined>();
 
 	beforeEach(async () => {
-		for (const key of ["PI_CODING_AGENT_DIR", "PI_OFFLINE", ...AMBIENT_KEYS])
+		for (const key of ["PI_CODING_AGENT_DIR", "THINKRAIL_DATA_DIR", "PI_OFFLINE", ...AMBIENT_KEYS])
 			prior.set(key, process.env[key]);
 		for (const key of AMBIENT_KEYS) delete process.env[key];
 		agentDir = mkdtempSync(join(tmpdir(), "thinkrail-extra-usage-agent-"));
+		dataDir = mkdtempSync(join(tmpdir(), "thinkrail-extra-usage-data-"));
 		cwd = mkdtempSync(join(tmpdir(), "thinkrail-extra-usage-cwd-"));
 		process.env.PI_CODING_AGENT_DIR = agentDir;
+		process.env.THINKRAIL_DATA_DIR = dataDir;
 		process.env.PI_OFFLINE = "1";
 		credentials = new InMemoryCredentialStore();
 		runtime = await ModelRuntime.create({
@@ -160,6 +163,7 @@ describe("session extra-usage notice", () => {
 			else process.env[key] = value;
 		}
 		rmSync(agentDir, { recursive: true, force: true });
+		rmSync(dataDir, { recursive: true, force: true });
 		rmSync(cwd, { recursive: true, force: true });
 	});
 

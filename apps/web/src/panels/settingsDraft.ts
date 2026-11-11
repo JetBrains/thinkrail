@@ -1,3 +1,4 @@
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import {
 	type ChangeEvent,
 	type KeyboardEvent,
@@ -101,6 +102,7 @@ export function useSettingsDraft({
 			onChange: (event) => setDraft(event.currentTarget.value),
 			onBlur: commitDraft,
 			onKeyDown: (event) => {
+				if (isImeComposing(event.nativeEvent)) return;
 				if (event.key === "Enter") {
 					event.preventDefault();
 					if (enterBlurs) event.currentTarget.blur();

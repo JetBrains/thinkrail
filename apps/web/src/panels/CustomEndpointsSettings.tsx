@@ -18,6 +18,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { formatContext } from "@/chat/modelPicker";
@@ -162,10 +163,7 @@ function EndpointDialog({
 
 	return (
 		<Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
-			<DialogContent
-				data-testid="custom-endpoints-dialog"
-				className="flex max-h-[85vh] max-w-[36rem] flex-col"
-			>
+			<DialogContent data-testid="custom-endpoints-dialog" className="max-w-[36rem]">
 				<DialogHeader>
 					<DialogTitle>
 						{draft.id
@@ -174,7 +172,7 @@ function EndpointDialog({
 					</DialogTitle>
 					<DialogDescription>{t("settings.customEndpoints.dialogDescription")}</DialogDescription>
 				</DialogHeader>
-				<div className="-mx-16 flex min-h-0 flex-1 flex-col gap-12 overflow-y-auto px-16">
+				<div className="-mx-16 relative flex min-h-0 flex-1 flex-col gap-12 overflow-y-auto px-16">
 					<Field label={t("settings.customEndpoints.name")} htmlFor={`${id}-name`}>
 						<input
 							id={`${id}-name`}
@@ -329,6 +327,7 @@ function EndpointDialog({
 								placeholder={t("settings.customEndpoints.manualPlaceholder")}
 								onChange={(event) => setManualId(event.currentTarget.value)}
 								onKeyDown={(event) => {
+									if (isImeComposing(event.nativeEvent)) return;
 									if (event.key !== "Enter") return;
 									event.preventDefault();
 									addManual();

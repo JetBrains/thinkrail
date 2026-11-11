@@ -2,11 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-	bumpPackageSwitchGeneration,
-	isLoaderPackagePolicyStale,
-	packagePolicyKey,
-} from "./extensions";
+import { bumpPackageSwitchGeneration, isLoaderPolicyStale, packagePolicyKey } from "./extensions";
 import { watchUserMcpConfig } from "./mcpSessions";
 import {
 	handlePiSettingsFileChanged,
@@ -120,7 +116,7 @@ describe("pi package settings changes", () => {
 		}
 	});
 
-	it("isLoaderPackagePolicyStale ignores loaders it never recorded", () => {
-		expect(isLoaderPackagePolicyStale({} as never)).toBe(false);
+	it("isLoaderPolicyStale ignores loaders it never recorded", () => {
+		expect(isLoaderPolicyStale({} as never)).toBe(false);
 	});
 });

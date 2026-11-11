@@ -1,7 +1,11 @@
 import { realpathSync, rmSync, utimesSync } from "node:fs";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { enterDefaultWorkspace, hideAuxiliaryWorkbench, openFixtureProject } from "./fixtures/app";
-import { moveMouseToChatViewport, readChatScrollGeometry } from "./fixtures/chatScroll";
+import {
+	moveMouseToChatViewport,
+	readChatScrollGeometry,
+	waitForScrollStability,
+} from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
@@ -158,31 +162,6 @@ function seedTallChat(
 	});
 	utimesSync(session.path, new Date(BASE_TS + 100_000), new Date(BASE_TS + 100_000));
 	return session;
-}
-
-async function waitForScrollStability(chatScroll: Locator, timeoutMs = 5_000): Promise<void> {
-	await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false", { timeout: timeoutMs });
-	await chatScroll.evaluate(async (root) => {
-		const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
-		if (!scroller) throw new Error("missing Virtuoso scroller");
-		let previousTop = scroller.scrollTop;
-		let previousHeight = scroller.scrollHeight;
-		let stableFrames = 0;
-		for (let frame = 0; frame < 120; frame += 1) {
-			await new Promise(requestAnimationFrame);
-			const currentTop = scroller.scrollTop;
-			const currentHeight = scroller.scrollHeight;
-			stableFrames =
-				Math.abs(currentTop - previousTop) <= 0.5 && Math.abs(currentHeight - previousHeight) <= 0.5
-					? stableFrames + 1
-					: 0;
-			if (stableFrames >= 4) return;
-			previousTop = currentTop;
-			previousHeight = currentHeight;
-		}
-		throw new Error("chat scroll did not stabilize");
-	});
-	await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false", { timeout: timeoutMs });
 }
 
 function latestDistance(
