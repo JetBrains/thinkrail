@@ -85,7 +85,15 @@ export async function detectReviewProvider(
 }
 
 export function githubSlug(remoteUrl: string): string | null {
-	const match = /github\.com[/:]([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/.exec(remoteUrl.trim());
+	const url = remoteUrl.trim();
+	if (providerFromRemoteUrl(url) !== "github") return null;
+	let path: string | undefined;
+	try {
+		const parsed = new URL(url);
+		if (parsed.hostname) path = parsed.pathname;
+	} catch {}
+	path ??= /^(?:[^@/:\s]+@)?[^/:\s]+:(.*)$/.exec(url)?.[1];
+	const match = /^\/*([^/\s]+)\/([^/\s]+?)(?:\.git)?\/*$/.exec(path ?? "");
 	return match ? `${match[1]}/${match[2]}` : null;
 }
 
@@ -154,7 +162,7 @@ export function findBranchReviewOutcomeWithRunner(
 	const key = cacheKey(cwd, branch);
 	pruneCached(now());
 	const running = inFlight.get(key);
-	if (running) return running;
+	if (running && !options.fresh) return running;
 	if (!options.fresh) {
 		const hit = cached.get(key);
 		if (hit) return Promise.resolve({ value: hit.value, reliable: true });

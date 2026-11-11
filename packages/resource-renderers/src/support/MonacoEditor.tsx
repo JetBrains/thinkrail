@@ -1,9 +1,17 @@
 import { useT } from "@thinkrail/locales/react";
 import { onFontsChange } from "@thinkrail/ui/fonts";
 import type { editor } from "monaco-editor/editor/editor.api.js";
-import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+	useEffect,
+	useEffectEvent,
+	useId,
+	useLayoutEffect,
+	useRef,
+	useState,
+	useSyncExternalStore,
+} from "react";
 import { type ResourceHost, useResourceHost, useResourcePreferences } from "../host";
-import type { ResourceDescriptor, ResourceViewProps, SurfaceReview } from "../registry";
+import type { ResourceViewProps, SurfaceReview } from "../registry";
 import { MonacoReviewZones } from "./MonacoReviewZones";
 import { decorateEditorContextMenus } from "./monacoMenuIcons";
 import {
@@ -12,11 +20,9 @@ import {
 	editorFont,
 	ensureMonaco,
 	fileEditorOptions,
-	languageForPath,
 	remeasureEditorFonts,
 	revealLineNow,
 	syncFileModel,
-	warmLanguage,
 } from "./monacoSetup";
 import {
 	applyReviewDecorations,
@@ -36,9 +42,8 @@ function isEditorViewState(value: unknown): value is editor.ICodeEditorViewState
 	return Array.isArray(Reflect.get(value, "cursorState")) && Reflect.has(value, "viewState");
 }
 
-export function warm(host: ResourceHost, resource: ResourceDescriptor): void {
+export function warm(host: ResourceHost): void {
 	ensureMonaco(host.code);
-	setTimeout(() => warmLanguage(languageForPath(resource.path)), 0);
 }
 
 export default function MonacoEditor({
@@ -47,6 +52,8 @@ export default function MonacoEditor({
 	review,
 	viewState,
 	onViewState,
+	reveal,
+	onRevealHandled,
 }: ResourceViewProps) {
 	const t = useT();
 	const { fileLineWidth, fileLineWidthBounded } = useResourcePreferences();
@@ -173,6 +180,25 @@ export default function MonacoEditor({
 		else codeEditor.revealLineInCenter(line);
 		review.onFocusHandled();
 	}, [review]);
+
+	const revealLine = reveal?.line;
+	const revealColumn = reveal?.column;
+	const revealLength = reveal?.length;
+	const revealTick = reveal?.tick;
+	const revealHandled = useEffectEvent((tick: number) => onRevealHandled?.(tick));
+	useLayoutEffect(() => {
+		const codeEditor = editorRef.current;
+		if (!codeEditor || revealLine === undefined || revealTick === undefined) return;
+		revealLineNow(codeEditor, revealLine);
+		const column = revealColumn ?? 1;
+		codeEditor.setSelection({
+			startLineNumber: revealLine,
+			startColumn: column,
+			endLineNumber: revealLine,
+			endColumn: column + (revealLength ?? 0),
+		});
+		revealHandled(revealTick);
+	}, [revealLine, revealColumn, revealLength, revealTick]);
 
 	return (
 		<>

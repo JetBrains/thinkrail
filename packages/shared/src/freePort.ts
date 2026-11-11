@@ -52,3 +52,10 @@ export async function findFreePort(
 	}
 	return osAssignedPort(host);
 }
+
+/** Strict port parse: plain decimal digits only, 0-65535. Anything else is undefined. */
+export function parsePort(value: string | undefined): number | undefined {
+	if (value === undefined || !/^\d+$/.test(value)) return undefined;
+	const port = Number(value);
+	return port <= 65535 ? port : undefined;
+}

@@ -8,9 +8,10 @@ const FILES = {
 	"config.yaml": "name: sample\ncount: 3\n",
 	"fence.md": "# Fence\n\n```sh\necho fenced\n```\n",
 	"notes.zzz": "export plain words\n",
+	"main.zig": "pub fn main() void {}\n",
+	"mix.ex": "defmodule Sample do\nend\n",
+	"report.mdx": 'import { Chart } from "./Chart";\n',
 };
-
-const ONIG_WASM = /\/assets\/onig[^/]*\.wasm$/;
 
 function visibleTokens(page: Page) {
 	return page.locator('[data-testid="editor-pane"]:visible .view-line span span');
@@ -25,7 +26,7 @@ async function openFile(page: Page, name: string, text: string) {
 	await expect(page.locator('[data-testid="editor-pane"]:visible')).toContainText(text);
 }
 
-test("Monaco colours each catalog language on first use and leaves unknown files plain", async ({
+test("Monaco colours catalog and other Pierre languages on first use and leaves unknown files plain", async ({
 	page,
 }) => {
 	const pageErrors: string[] = [];
@@ -38,15 +39,26 @@ test("Monaco colours each catalog language on first use and leaves unknown files
 	await revealWorkbenchTool(page, "files");
 
 	await openFile(page, "code.ts", "answer");
-	await expect(visibleTokens(page).filter({ hasText: /^export$/ })).not.toHaveClass(/\bmtk1\b/);
+	await expect(visibleTokens(page).filter({ hasText: /export/ })).not.toHaveClass(/\bmtk1\b/);
 
 	await openFile(page, "config.yaml", "count");
 	await expect(visibleTokens(page).filter({ hasText: /^name$/ })).not.toHaveClass(/\bmtk1\b/);
 
+	await page.getByTestId("file-node").filter({ hasText: "report.mdx" }).dblclick();
+	await page.getByTestId("view-toggle-code").click();
+	await expect(visibleCode(page)).toContainText("Chart");
+	await expect(visibleTokens(page).filter({ hasText: /^import/ })).not.toHaveClass(/\bmtk1\b/);
+
 	await page.getByTestId("file-node").filter({ hasText: "fence.md" }).dblclick();
 	await page.getByTestId("view-toggle-code").click();
 	await expect(visibleCode(page)).toContainText("echo fenced");
-	await expect(visibleTokens(page).filter({ hasText: /^echo$/ })).not.toHaveClass(/\bmtk1\b/);
+	await expect(visibleTokens(page).filter({ hasText: /^echo/ })).not.toHaveClass(/\bmtk1\b/);
+
+	await openFile(page, "main.zig", "pub fn");
+	await expect(visibleTokens(page).filter({ hasText: /pub/ })).not.toHaveClass(/\bmtk1\b/);
+
+	await openFile(page, "mix.ex", "defmodule");
+	await expect(visibleTokens(page).filter({ hasText: /defmodule/ })).not.toHaveClass(/\bmtk1\b/);
 
 	await openFile(page, "notes.zzz", "plain words");
 	await expect(visibleTokens(page).filter({ hasText: "export plain words" })).toHaveClass(
@@ -55,23 +67,72 @@ test("Monaco colours each catalog language on first use and leaves unknown files
 	expect(pageErrors).toEqual([]);
 });
 
-test("a failed onig.wasm fetch is retried by a later file instead of being kept for the page", async ({
+test("without WebAssembly Monaco shows files as plain text and the page keeps working", async ({
 	page,
 }) => {
-	let wasmRequests = 0;
-	await page.route(ONIG_WASM, (route) => {
-		wasmRequests += 1;
-		return wasmRequests === 1 ? route.abort() : route.continue();
-	});
+	const pageErrors: string[] = [];
+	page.on("pageerror", (error) => pageErrors.push(error.message));
+	await page.addInitScript(() => Reflect.deleteProperty(globalThis, "WebAssembly"));
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
 	writeFileSync(join(workspace.worktreePath, "first.ts"), "export const first = 1;\n");
-	writeFileSync(join(workspace.worktreePath, "second.ts"), "export const second = 2;\n");
 	await revealWorkbenchTool(page, "files");
 
 	await openFile(page, "first.ts", "first");
-	await expect.poll(() => wasmRequests).toBeGreaterThan(0);
-	await openFile(page, "second.ts", "second");
-	await expect(visibleTokens(page).filter({ hasText: /^export$/ })).not.toHaveClass(/\bmtk1\b/);
-	expect(wasmRequests).toBe(2);
+	await expect(visibleTokens(page).first()).toHaveClass(/\bmtk1\b/);
+	expect(pageErrors).toEqual([]);
+});
+
+async function coloredClass(page: Page, text: RegExp) {
+	const token = visibleTokens(page).filter({ hasText: text }).first();
+	await expect(token).not.toHaveClass(/\bmtk1\b/);
+	return (await token.getAttribute("class")) ?? "";
+}
+
+test("two files side by side with the same first line keep their own colours", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const shared = "export const shared = 1;";
+	const one = join(workspace.worktreePath, "one.ts");
+	writeFileSync(one, `${shared}\n/* inside\nwords */\n`);
+	writeFileSync(join(workspace.worktreePath, "two.ts"), `${shared}\nconst after = 2;\n`);
+	await revealWorkbenchTool(page, "files");
+
+	await openFile(page, "one.ts", "inside");
+	const comment = await coloredClass(page, /words/);
+	const keyword = await coloredClass(page, /export/);
+	expect(comment).not.toBe(keyword);
+	await openFile(page, "two.ts", "after");
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await page.getByTestId("editor-tab").filter({ hasText: "two.ts" }).click({ button: "right" });
+	await page.getByRole("menuitem", { name: "Split right" }).click();
+	const groups = page.getByTestId("center-group");
+	await expect(groups).toHaveCount(2);
+	const tokensOf = (name: string) =>
+		groups
+			.filter({ has: page.getByTestId("editor-tab").filter({ hasText: name }) })
+			.locator(".view-line span span");
+
+	await expect(tokensOf("two.ts").filter({ hasText: /^const\s$/ })).toHaveClass(keyword);
+	await expect(tokensOf("one.ts").filter({ hasText: /words/ })).toHaveClass(comment);
+	writeFileSync(one, `// changed\n${shared}\n/* inside\nwords */\n`);
+	await expect(tokensOf("one.ts").filter({ hasText: /changed/ })).toHaveClass(comment);
+	await expect(tokensOf("one.ts").filter({ hasText: /words/ })).toHaveClass(comment);
+	await expect(tokensOf("two.ts").filter({ hasText: /^const\s$/ })).toHaveClass(keyword);
+});
+
+test("a file changed on disk recolours in the open editor", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const file = join(workspace.worktreePath, "live.ts");
+	writeFileSync(file, "export const before = 1;\n");
+	await revealWorkbenchTool(page, "files");
+
+	await openFile(page, "live.ts", "before");
+	const keyword = await coloredClass(page, /export/);
+	writeFileSync(file, "// comment line\nexport const later = 2;\n");
+	await expect(visibleCode(page)).toContainText("later", { timeout: 15_000 });
+	await expect(visibleTokens(page).filter({ hasText: /export/ })).toHaveClass(keyword);
+	await expect(visibleTokens(page).filter({ hasText: /comment/ })).not.toHaveClass(keyword);
+	await expect(visibleTokens(page).filter({ hasText: /comment/ })).not.toHaveClass(/\bmtk1\b/);
 });

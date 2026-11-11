@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
+import { setSyncGitTimeoutForTests } from "../git";
 import type { PrCommandRunner } from "./pr";
 import { deleteRemoteBranch, mergePr, readyPr, reopenPr } from "./reviewActions";
 
@@ -189,6 +190,36 @@ describe("readyPr / reopenPr", () => {
 		await expect(readyPr(params, run)).rejects.toThrow(/moved from "feature" to "main"/);
 		expect(calls).toHaveLength(0);
 	});
+
+	test.skipIf(process.platform === "win32")(
+		"a branch read that times out never asks gh, instead of trusting the stored branch",
+		async () => {
+			sh(repo, "switch", "-q", "main");
+			seedWorkspaces([
+				{ id: "w1", kind: "default", name: "Default", branch: "feature", baseBranch: "main" },
+			]);
+			const { run, calls } = fakeGh({ headRefName: "feature", state: "OPEN" });
+			const bin = join(dataDir, "bin");
+			mkdirSync(bin, { recursive: true });
+			writeFileSync(
+				join(bin, "git"),
+				`#!/bin/sh\ncase " $* " in *" symbolic-ref "*) sleep 30;; esac\nexec ${JSON.stringify(Bun.which("git"))} "$@"\n`,
+			);
+			chmodSync(join(bin, "git"), 0o755);
+			const path = process.env.PATH;
+			process.env.PATH = `${bin}${delimiter}${path ?? ""}`;
+			setSyncGitTimeoutForTests(2_000);
+			try {
+				await expect(readyPr(params, run)).rejects.toThrow(
+					expect.objectContaining({ code: "GIT_TIMEOUT" }),
+				);
+			} finally {
+				setSyncGitTimeoutForTests(undefined);
+				process.env.PATH = path;
+			}
+			expect(calls).toHaveLength(0);
+		},
+	);
 });
 
 describe("mergePr", () => {

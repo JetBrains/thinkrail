@@ -1,5 +1,5 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.5.0/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.6.3/schema.json",
 	"vcs": {
 		"enabled": true,
 		"clientKind": "git",
@@ -10,6 +10,7 @@
 		"includes": [
 			"**",
 			"!designs",
+			"!design-audit/buttons.html",
 			"!**/.claude",
 			"!apps/web/src/styles/generated",
 			"!apps/web/src/chat/generated"
@@ -22,13 +23,34 @@
 	},
 	"linter": {
 		"enabled": true,
+		"domains": {
+			"test": "recommended"
+		},
 		"rules": {
 			"preset": "recommended",
-			"suspicious": {
-				"noExplicitAny": "error"
+			"nursery": {
+				"noImpliedEval": "error",
+				"noFloatingPromises": "error"
 			},
 			"style": {
-				"noNonNullAssertion": "error"
+				"noNonNullAssertion": "error",
+				"useThrowOnlyError": "error",
+				"useThrowNewError": "error",
+				"noEnum": "error",
+				"noNamespace": "error",
+				"noParameterProperties": "error",
+				"useReadonlyClassProperties": "error"
+			},
+			"suspicious": {
+				"noExplicitAny": "error",
+				"noNestedPromises": "error",
+				"noUnusedExpressions": "error",
+				"useGuardForIn": "error",
+				"noEvolvingTypes": "error",
+				"noIdenticalTestTitle": "error"
+			},
+			"correctness": {
+				"noPlaywrightMissingAwait": "error"
 			}
 		}
 	},
@@ -36,6 +58,14 @@
 		"formatter": {
 			"quoteStyle": "double",
 			"semicolons": "always"
+		}
+	},
+	"markdown": {
+		"formatter": {
+			"enabled": false
+		},
+		"linter": {
+			"enabled": false
 		}
 	},
 	"css": {
@@ -65,6 +95,22 @@
 		{
 			"includes": ["apps/web/src/**", "!apps/web/src/lib/nullProto.ts"],
 			"plugins": ["./biome-plugins/nullProto.grit"]
+		},
+		{
+			"includes": [
+				"apps/web/**",
+				"apps/website/**",
+				"packages/resource-renderers/**",
+				"packages/ui/**",
+				"thinkrail-extensions/*/web/**"
+			],
+			"linter": {
+				"rules": {
+					"correctness": {
+						"useHookAtTopLevel": "error"
+					}
+				}
+			}
 		}
 	]
 }

@@ -636,65 +636,68 @@ test.each([
 	["followUp", "control"],
 	["steering", "removed"],
 	["followUp", "removed"],
-] as const)("%s queued %s input consumes interruptions only when delivered to the agent", async (mode, kind) => {
-	const p = await parent();
-	const extensions = join(p.cwd, ".pi", "extensions");
-	mkdirSync(extensions, { recursive: true });
-	writeFileSync(
-		join(extensions, "custom-turn.ts"),
-		'export default function(pi) { pi.registerCommand("automatic", { description: "Test automatic turn", handler: async () => { pi.sendMessage({ customType: "test/automatic", content: "AUTOMATIC", display: false }, { triggerTurn: true }); } }); }',
-	);
-	await reloadSessionResources(p.sessionId);
-	command(p, "queued-user-interruption");
-	const entered = Promise.withResolvers<void>();
-	const release = Promise.withResolvers<void>();
-	let input = "";
-	let automaticHadNotice = false;
-	const callsBefore = faux.state.callCount;
-	const text =
-		kind === "control"
-			? "[thinkrail:todo-nudge] Continue internally."
-			: "USER ARRIVED WHILE AUTOMATIC WAS STREAMING";
-	faux.setResponses([
-		async (context) => {
-			automaticHadNotice = JSON.stringify(context.messages).includes(
-				"bun run queued-user-interruption",
-			);
-			entered.resolve();
-			await release.promise;
-			return fauxAssistantMessage("AUTOMATIC RESPONSE");
-		},
-		(context) => {
-			input = JSON.stringify(context.messages);
-			return fauxAssistantMessage("USER RESPONSE");
-		},
-	]);
-	await promptSession(p.sessionId, "/automatic");
-	await entered.promise;
-	try {
-		expect(getSessionState(p.sessionId).execution).toBe("running");
-		const deliver = mode === "steering" ? promptSession : followUpSession;
-		await deliver(p.sessionId, text);
-		if (kind === "removed") clearQueueSession(p.sessionId);
-	} finally {
-		release.resolve();
-	}
-	const deadline = Date.now() + 5000;
-	while (getSessionState(p.sessionId).execution === "running") {
-		if (Date.now() > deadline) throw new Error("queued turn did not settle");
-		await Bun.sleep(5);
-	}
-	if (kind === "removed") expect(input).toBe("");
-	else expect(input).toContain(text);
-	expect(automaticHadNotice).toBe(false);
-	expect(faux.state.callCount - callsBefore).toBe(kind === "removed" ? 1 : 2);
-	const arrivedWithNotice = input.includes("bun run queued-user-interruption");
-	const beforeIdle = (await noticeMessages(p)).length;
-	faux.setResponses([fauxAssistantMessage("IDLE USER RESPONSE")]);
-	await promptSession(p.sessionId, "NEXT IDLE USER REQUEST");
-	const afterIdle = (await noticeMessages(p)).length;
-	expect(beforeIdle).toBe(kind === "user" ? 1 : 0);
-	expect(afterIdle).toBe(1);
-	expect(arrivedWithNotice).toBe(kind === "user");
-	await removeSession(p.sessionId);
-});
+] as const)(
+	"%s queued %s input consumes interruptions only when delivered to the agent",
+	async (mode, kind) => {
+		const p = await parent();
+		const extensions = join(p.cwd, ".pi", "extensions");
+		mkdirSync(extensions, { recursive: true });
+		writeFileSync(
+			join(extensions, "custom-turn.ts"),
+			'export default function(pi) { pi.registerCommand("automatic", { description: "Test automatic turn", handler: async () => { pi.sendMessage({ customType: "test/automatic", content: "AUTOMATIC", display: false }, { triggerTurn: true }); } }); }',
+		);
+		await reloadSessionResources(p.sessionId);
+		command(p, "queued-user-interruption");
+		const entered = Promise.withResolvers<void>();
+		const release = Promise.withResolvers<void>();
+		let input = "";
+		let automaticHadNotice = false;
+		const callsBefore = faux.state.callCount;
+		const text =
+			kind === "control"
+				? "[thinkrail:todo-nudge] Continue internally."
+				: "USER ARRIVED WHILE AUTOMATIC WAS STREAMING";
+		faux.setResponses([
+			async (context) => {
+				automaticHadNotice = JSON.stringify(context.messages).includes(
+					"bun run queued-user-interruption",
+				);
+				entered.resolve();
+				await release.promise;
+				return fauxAssistantMessage("AUTOMATIC RESPONSE");
+			},
+			(context) => {
+				input = JSON.stringify(context.messages);
+				return fauxAssistantMessage("USER RESPONSE");
+			},
+		]);
+		await promptSession(p.sessionId, "/automatic");
+		await entered.promise;
+		try {
+			expect(getSessionState(p.sessionId).execution).toBe("running");
+			const deliver = mode === "steering" ? promptSession : followUpSession;
+			await deliver(p.sessionId, text);
+			if (kind === "removed") clearQueueSession(p.sessionId);
+		} finally {
+			release.resolve();
+		}
+		const deadline = Date.now() + 5000;
+		while (getSessionState(p.sessionId).execution === "running") {
+			if (Date.now() > deadline) throw new Error("queued turn did not settle");
+			await Bun.sleep(5);
+		}
+		if (kind === "removed") expect(input).toBe("");
+		else expect(input).toContain(text);
+		expect(automaticHadNotice).toBe(false);
+		expect(faux.state.callCount - callsBefore).toBe(kind === "removed" ? 1 : 2);
+		const arrivedWithNotice = input.includes("bun run queued-user-interruption");
+		const beforeIdle = (await noticeMessages(p)).length;
+		faux.setResponses([fauxAssistantMessage("IDLE USER RESPONSE")]);
+		await promptSession(p.sessionId, "NEXT IDLE USER REQUEST");
+		const afterIdle = (await noticeMessages(p)).length;
+		expect(beforeIdle).toBe(kind === "user" ? 1 : 0);
+		expect(afterIdle).toBe(1);
+		expect(arrivedWithNotice).toBe(kind === "user");
+		await removeSession(p.sessionId);
+	},
+);

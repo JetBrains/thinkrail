@@ -43,7 +43,7 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
     `powershell.exe`. No further fallback to `cmd.exe` — `powershell.exe` ships on every supported
     Windows release, so it is already the guaranteed floor. `defaultWhich` passes an explicit
     `{ PATH: process.env.PATH }` rather than calling `Bun.which` bare, the same trap `editors`'
-    `defaultWhich` guards against: `Bun.which` alone reads the PATH snapshotted at process start, not
+    `pathWhich` guards against: `Bun.which` alone reads the PATH snapshotted at process start, not
     `resolveShellEnv()`'s later-repaired live `process.env.PATH`.
   - `"pwsh"` / `"powershell"` / `"cmd"`: literal pins to `pwsh.exe` / `powershell.exe` / `cmd.exe` — no
     existence check, no silent substitution. A pin that turns out to be missing fails to spawn the same
@@ -198,13 +198,15 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   into the body, where it stops being a re-derivable summary and becomes literal bytes that every later
   snapshot replays and re-persists: one bad mode then outlives the run that observed it, across restarts.
 - Attach hands back the recording and then **discards** held batcher output — the replay already contains it.
+- Pending output is capped in UTF-16 code units. Trimming the oldest output must drop an entire surrogate
+  pair when the boundary bisects it, so the delivered tail never gains an orphaned low surrogate.
 
 ## Validation
 
 - `outputRecorder.test.ts` — bounds, line/escape-safe trimming, alt-screen exclusion (incl. a switch split
   across reads and enter+exit in one read), mode restoration, mouse tracking never restored, and `restore()`
   keeping mode sequences out of the body (incl. a recording persisted by a host that still replayed them).
-- `outputBatcher.test.ts` — batching, backpressure, truncation, `reset`.
+- `outputBatcher.test.ts` — batching, backpressure, Unicode-safe truncation, `reset`.
 - `shellBusy.test.ts` — child detection, including that an unanswerable platform reports *not* busy.
 - `shellArgs.test.ts` — shell executable precedence across Unix and Windows plus platform-specific
   arguments; `auto`'s pwsh-then-powershell resolution via an injected `WhichFn`; every explicit preference
