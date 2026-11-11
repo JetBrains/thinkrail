@@ -101,6 +101,25 @@ Place images in an `images/` subdirectory and reference them with relative paths
 
 Astro resolves, optimizes, and fingerprints them automatically during build.
 
+The original files are also published at `/blog/<slug>/images/<file>`, so a link to `./images/<file>`
+opens the full-resolution image. An image inside a table is shown as a thumbnail. Wrap it in a link
+so that clicking it shows the original file:
+
+```markdown
+| Feature | Screenshot |
+|---|---|
+| The settings panel | [![The settings panel](./images/settings.png)](./images/settings.png) |
+```
+
+A header row whose cells are all empty is hidden, so a table can go without a visible header — for
+example one two-cell table per row, with the screenshot alternating sides:
+
+```markdown
+|  |  |
+|---|---|
+| [![The settings panel](./images/settings.png)](./images/settings.png) | The settings panel |
+```
+
 ### YouTube Videos
 
 Embed YouTube videos using the `<iframe>` tag:
@@ -128,7 +147,8 @@ are rewritten to the nocookie domain, and a `title` + `loading="lazy"` are added
 4. **Use draft mode**: Set `draft: true` while writing. Drafts render in the local dev server
    but are excluded from production builds.
 
-5. **Optimize images**: Compress PNGs/JPGs before committing. Large images slow page loads.
+5. **Optimize images**: Compress PNGs/JPGs before committing. Large images slow page loads, and the
+   originals ship as-is. A lossless optimizer such as `oxipng` typically saves a third or more.
 
 6. **Preview locally**: Run `bun run dev` in `apps/website/` — the blog is served at
    `http://localhost:4321/blog/` with hot reload as you edit. `bun run build && bun run preview`

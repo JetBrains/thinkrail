@@ -95,7 +95,14 @@ minutes to hours later (89 % of completions in a 2026-10 log sample). Delivery p
   outcome that is still pending. This covers arrival, a flush scheduled a macrotask after `agent_settled`
   (after the host's round closer), after `session_compact`/`session_compact_failed`/`session_tree`
   (pi still counts as compacting inside those events), and an embedder's `flushCompletions()`.
-  A host flush while the parent is busy does nothing; boundaries deliver.
+  A host flush while the parent is busy does nothing; boundaries deliver. Arrival never waits for a
+  pending scheduled flush, so a waking outcome has started its run before its own tick ends and an
+  embedder republishing on the same change sees that run, not an idle parent with no work left
+  (gating arrival on the flush was the 2026-10 spurious-unread race). The one hold is a wake pi
+  defers: requested inside `agent_settled`, it leaves the parent reading idle and each deferred
+  request later starts its own run, so later outcomes wait for that run's next step (released at
+  `turn_start` or by the next scheduled flush, whichever comes first — a safety valve, so a settle
+  emission longer than one macrotask can still queue a second wake).
 - **Pull claims the push**: every delivery point drops outcomes whose child snapshot is `collected`.
 
 `delivery` records what happened for the web's round layout: `wake` — the result started the
@@ -120,7 +127,7 @@ committing, git-read stays open. User-authored definitions keep the community `.
 (`name`, `description`, `tools`, `model`, `thinking`, `max_turns`, `inherit_project_context`,
 `skills`, `extensions`; body = system prompt). Malformed files are skipped, never fatal. All four
 builtins set `extensions: true` (the embedder's curated child set — inert under pure-pi
-zero-config) with the spec READ tools (`spec_grep`/`spec_get`/`spec_graph`) allowlisted for the
+zero-config) with the spec READ tools (`spec_search`/`spec_grep`/`spec_get`/`spec_graph`) allowlisted for the
 read-only roles and web tools (`web_search`/`fetch_content`) for the scout. The reviewer alone opts
 into project context: its judgment depends on repository guidance, and its prompt admits only
 material, reachable, unmitigated findings attributed to the named target. It must falsify candidate
@@ -189,8 +196,9 @@ registers a synthetic provider and the zero-config subagents extension delegates
 session tests pin gated replay, real reload gaps, permanent closure, synchronous send failures,
 reentrant flushing and default/legacy runner isolation, and Result delivery: a pulled result is never
 pushed (also across Stop and the next prompt), next-step delivery on tool and final turns within one
-run, several outcomes in one request, one run per idle batch, no wake after a parent stop, one wake
-after a provider error. End to end: `e2e/subagents.live.spec.ts` (`@agent` — the real host driving real children: foreground
+run, several outcomes in one request, one run per idle batch, a same-tick idle wake while the
+post-settle flush is pending, one run for outcomes landing inside `agent_settled`, no wake after a
+parent stop, one wake after a provider error. End to end: `e2e/subagents.live.spec.ts` (`@agent` — the real host driving real children: foreground
 fan-out, background completion, transcript reads). The core SPEC's pure-pi bar: **`bun run
 smoke:subagents`** — this extension with default bindings under the repo-pinned vanilla pi CLI, in
 an isolated throwaway agent dir; on-demand only (needs pi auth, spends real tokens), never a

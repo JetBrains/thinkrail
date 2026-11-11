@@ -18,6 +18,7 @@ import type { TodoGroupItem, TodoItem, TodoPlan, TodoStatus } from "@thinkrail/c
 import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
 import { PlanStatusIcon, SectionLabel } from "./planKit";
@@ -125,6 +126,7 @@ export function TodoAddRow({
 				value={draft}
 				onChange={(e) => setDraft(e.target.value)}
 				onKeyDown={(e) => {
+					if (isImeComposing(e.nativeEvent)) return;
 					if (e.key === "Enter") void submit();
 				}}
 				placeholder={t("chat.todo.addPlaceholder")}

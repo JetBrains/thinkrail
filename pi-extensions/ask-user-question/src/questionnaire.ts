@@ -1,4 +1,14 @@
-import type { AskUserQuestionAnswer, AskUserQuestionItem, AskUserQuestionOption } from "./core.ts";
+import type {
+	AskUserQuestionAnswer,
+	AskUserQuestionDiscussReason,
+	AskUserQuestionItem,
+	AskUserQuestionOption,
+} from "./core.ts";
+
+export interface QuestionDiscussion {
+	reason?: AskUserQuestionDiscussReason;
+	text: string;
+}
 
 export interface QuestionState {
 	option: string | null;
@@ -6,10 +16,31 @@ export interface QuestionState {
 	customActive: boolean;
 	multi: string[];
 	notes: Record<string, string>;
+	discuss: QuestionDiscussion | null;
 }
 
 export function emptyQuestionState(): QuestionState {
-	return { option: null, customText: "", customActive: false, multi: [], notes: {} };
+	return {
+		option: null,
+		customText: "",
+		customActive: false,
+		multi: [],
+		notes: {},
+		discuss: null,
+	};
+}
+
+export function selectSingleOption(state: QuestionState, label: string): QuestionState {
+	const previous = state.option;
+	const carried = previous && previous !== label ? state.notes[previous] : undefined;
+	const notes =
+		carried !== undefined && !state.notes[label]?.trim()
+			? Object.fromEntries([
+					...Object.entries(state.notes).filter(([key]) => key !== previous),
+					[label, carried],
+				])
+			: state.notes;
+	return { ...state, option: label, customActive: false, notes, discuss: null };
 }
 
 export function splitRecommended(label: string): { text: string; recommended: boolean } {
@@ -35,6 +66,16 @@ export function deriveAnswer(
 	state: QuestionState,
 ): AskUserQuestionAnswer | null {
 	const base = { questionIndex: index, question: question.question };
+	if (state.discuss) {
+		const text = state.discuss.text.trim();
+		return {
+			...base,
+			kind: "discuss",
+			answer: null,
+			...(state.discuss.reason ? { reason: state.discuss.reason } : {}),
+			...(text ? { notes: text } : {}),
+		};
+	}
 	if (question.multiSelect) {
 		const valid = state.multi.filter((label) => question.options.some((o) => o.label === label));
 		const custom = state.customActive ? state.customText.trim() : "";
@@ -62,11 +103,22 @@ export function deriveAnswer(
 			...base,
 			kind: "option",
 			answer: state.option,
-			...(option.preview ? { preview: option.preview } : {}),
+			...previewEcho(option),
 			...(note ? { notes: note } : {}),
 		};
 	}
 	return null;
+}
+
+export function previewEcho(
+	option: AskUserQuestionOption,
+): Pick<AskUserQuestionAnswer, "preview" | "previewFile" | "previewBefore"> {
+	if (option.previewFile)
+		return {
+			previewFile: option.previewFile,
+			...(option.previewBefore ? { previewBefore: option.previewBefore } : {}),
+		};
+	return option.preview ? { preview: option.preview } : {};
 }
 
 export function deriveAnswers(
@@ -78,7 +130,15 @@ export function deriveAnswers(
 		.filter((answer): answer is AskUserQuestionAnswer => answer != null);
 }
 
+const DISCUSS_SUMMARY: Record<AskUserQuestionDiscussReason, string> = {
+	unclear: "unclear",
+	irrelevant: "not relevant",
+	context: "needs more context",
+};
+
 export function answerSummary(answer: AskUserQuestionAnswer): string {
+	if (answer.kind === "discuss")
+		return `discuss first${answer.reason ? ` (${DISCUSS_SUMMARY[answer.reason]})` : ""}`;
 	if (answer.kind === "custom") return `“${answer.answer ?? ""}”`;
 	if (answer.kind === "option") return splitRecommended(answer.answer ?? "").text;
 	const selected = (answer.selected ?? []).map((label) => splitRecommended(label).text);

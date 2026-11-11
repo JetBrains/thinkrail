@@ -299,3 +299,9 @@ test("a ghost icon-only button draws its focus ring inside its square, so a flus
 	);
 	expect(outlineIcon).toContain("focus-visible:outline-offset-2");
 });
+
+test("a caller's aria-busy survives on an enabled button that is not loading", () => {
+	const text = render(<IconButton aria-busy icon={RiAddLine} label="Downloading" />);
+	expect(text).toContain('aria-busy="true"');
+	expect(text).not.toMatch(/ disabled=""/);
+});

@@ -19,7 +19,9 @@ test("renders mermaid fences as diagrams in the rendered markdown view", async (
 	await expect(error).toHaveCount(1);
 	await expect(error).toContainText("broken");
 
-	await expect(preview.locator("pre.shiki", { hasText: "plain-fence-stays-code" })).toBeVisible();
+	await expect(
+		preview.locator("pre.highlights", { hasText: "plain-fence-stays-code" }),
+	).toBeVisible();
 
 	await preview.getByTestId("mermaid-fullscreen").click();
 	const dialog = page.getByTestId("mermaid-fullscreen-dialog");

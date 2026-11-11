@@ -2,6 +2,9 @@ import { expect, mock, test } from "bun:test";
 import { addMcpServersWithProjectOptIn, type McpAddResult } from "./McpServerDialogs";
 import { MCP_PRESETS } from "./mcpPresets";
 
+type AddServers = Parameters<typeof addMcpServersWithProjectOptIn>[2];
+type EnableInProject = NonNullable<Parameters<typeof addMcpServersWithProjectOptIn>[3]>;
+
 function playwrightServer() {
 	const preset = MCP_PRESETS.find((preset) => preset.id === "playwright");
 	if (!preset) throw new Error("Missing Playwright preset");
@@ -12,11 +15,11 @@ test("the project-opt-in preset adds once before enabling the committed server",
 	const server = playwrightServer();
 	const results: McpAddResult[] = [{ name: server.name, error: null }];
 	const order: string[] = [];
-	const add = mock(async () => {
+	const add = mock<AddServers>(async () => {
 		order.push("add");
 		return results;
 	});
-	const enable = mock(async () => {
+	const enable = mock<EnableInProject>(async () => {
 		order.push("enable");
 	});
 	expect(server.entry.enabled).toBe(false);
@@ -29,8 +32,8 @@ test("the project-opt-in preset adds once before enabling the committed server",
 test("an unconfirmed enable never becomes a failed add, even if its callback rejects", async () => {
 	const server = playwrightServer();
 	const results: McpAddResult[] = [{ name: server.name, error: null }];
-	const add = mock(async () => results);
-	const enable = mock(async () => {
+	const add = mock<AddServers>(async () => results);
+	const enable = mock<EnableInProject>(async () => {
 		throw new Error("Couldn't confirm project enable");
 	});
 	expect(await addMcpServersWithProjectOptIn([server], "user", add, enable)).toBe(results);
@@ -45,8 +48,8 @@ test("only successful adds are opted in and partial-add failures remain retryabl
 		{ name: "playwright", error: null },
 		{ name: "failed", error: "Add refused" },
 	];
-	const add = mock(async () => results);
-	const enable = mock(async () => {
+	const add = mock<AddServers>(async () => results);
+	const enable = mock<EnableInProject>(async () => {
 		throw new Error("Enable refused");
 	});
 	const added = await addMcpServersWithProjectOptIn(servers, "user", add, enable);
@@ -67,7 +70,7 @@ test("an ordinary JSON add preserves each add result without project opt-in", as
 		{ name: "saved", error: null },
 		{ name: "failed", error: "Add refused" },
 	];
-	const add = mock(async () => results);
+	const add = mock<AddServers>(async () => results);
 	expect(await addMcpServersWithProjectOptIn(servers, "project", add)).toBe(results);
 	expect(add.mock.calls).toEqual([[servers, "project"]]);
 });
@@ -75,8 +78,8 @@ test("an ordinary JSON add preserves each add result without project opt-in", as
 test("a synchronous enable callback rejection also leaves the add committed", async () => {
 	const server = playwrightServer();
 	const results: McpAddResult[] = [{ name: server.name, error: null }];
-	const add = mock(async () => results);
-	const enable = mock((): Promise<void> => {
+	const add = mock<AddServers>(async () => results);
+	const enable = mock<EnableInProject>((): Promise<void> => {
 		throw new Error("Enable unavailable");
 	});
 	expect(await addMcpServersWithProjectOptIn([server], "user", add, enable)).toBe(results);

@@ -7,12 +7,15 @@ import { initChatPreferencesPersistence } from "./chat/chatPreferences";
 import { initModelVisibilityPersistence } from "./chat/modelVisibility";
 import { ErrorBoundary, setErrorBoundaryReporter } from "./components/ErrorBoundary";
 import { registerWebExtensions } from "./extensions";
+import { initializeFonts } from "./fonts";
 import { useLocaleSync } from "./i18n";
 import { initNavigation } from "./navigation";
 import { initFilesTreePersistence } from "./panels/filesTreeState";
 import { initProjectExpansionPersistence } from "./panels/projectExpansion";
+import { initSearchPreferences } from "./search";
 import { AppResourceHost } from "./shell/AppResourceHost";
 import { Shell } from "./shell/Shell";
+import { DictationLayer } from "./speech";
 import { applyThemePreference, initializeThemes, readThemeHint } from "./themes";
 import {
 	clientErrorReport,
@@ -23,6 +26,7 @@ import {
 
 initializeThemes();
 applyThemePreference(readThemeHint());
+initializeFonts();
 initTransport();
 installClientErrorReporting();
 setErrorBoundaryReporter((error, reportId) =>
@@ -32,6 +36,7 @@ initChatPreferencesPersistence();
 initModelVisibilityPersistence();
 initProjectExpansionPersistence();
 initFilesTreePersistence();
+initSearchPreferences();
 initNavigation();
 registerWebExtensions();
 
@@ -44,6 +49,7 @@ function App() {
 				<AppResourceHost>
 					<Shell />
 				</AppResourceHost>
+				<DictationLayer />
 			</TooltipProvider>
 		</ErrorBoundary>
 	);

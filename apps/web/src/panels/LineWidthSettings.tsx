@@ -2,11 +2,11 @@ import { type AppConfigUpdate, isLineWidth, LINE_WIDTH_COLUMNS } from "@thinkrai
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
-import { useEffect, useState } from "react";
-import { toast, useAppStore } from "@/store";
-import { errorText, getTransport } from "@/transport";
+import { useAppStore } from "@/store";
 import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
 import { SettingsSwitch } from "./SettingsSwitch";
+import { saveSettings } from "./saveSettings";
+import { SETTINGS_INPUT, useSettingsDraft } from "./settingsDraft";
 
 type LineWidthKind = "chat" | "file";
 
@@ -34,18 +34,6 @@ function parsedWidth(draft: string): number | null {
 	return isLineWidth(value) ? value : null;
 }
 
-function updateLineWidth(config: AppConfigUpdate, failure: string): Promise<boolean> {
-	return getTransport()
-		.request("settings.update", { config })
-		.then(
-			() => true,
-			(err: unknown) => {
-				toast.error(errorText(err), failure);
-				return false;
-			},
-		);
-}
-
 function widthConfig(kind: LineWidthKind, value: number): AppConfigUpdate {
 	return kind === "chat" ? { chatLineWidth: value } : { fileLineWidth: value };
 }
@@ -62,24 +50,17 @@ export function LineWidthControl({ kind }: { kind: LineWidthKind }) {
 	const bounded = useAppStore((state) =>
 		kind === "chat" ? state.chatLineWidthBounded : state.fileLineWidthBounded,
 	);
-	const [draft, setDraft] = useState(String(value));
-	const [submitted, setSubmitted] = useState<number | null>(null);
-	useEffect(() => {
-		setDraft(String(value));
-		setSubmitted(null);
-	}, [value]);
-	const parsed = parsedWidth(draft);
-	const invalid = parsed === null;
-	const errorId = `${kind}-line-width-error`;
 	const copy = COPY[kind];
-
-	const commit = () => {
-		if (parsed === null || parsed === value || parsed === submitted) return;
-		setSubmitted(parsed);
-		void updateLineWidth(widthConfig(kind, parsed), t(copy.failure)).then((saved) => {
-			if (!saved) setSubmitted(null);
-		});
-	};
+	const { invalid, inputProps } = useSettingsDraft({
+		saved: String(value),
+		isValid: (draft) => parsedWidth(draft) !== null,
+		commit: (draft) => {
+			const parsed = parsedWidth(draft);
+			if (parsed === null || parsed === value) return undefined;
+			return saveSettings(widthConfig(kind, parsed), t(copy.failure));
+		},
+	});
+	const errorId = `${kind}-line-width-error`;
 
 	return (
 		<div
@@ -112,23 +93,11 @@ export function LineWidthControl({ kind }: { kind: LineWidthKind }) {
 						max={LINE_WIDTH_COLUMNS.max}
 						step={1}
 						inputMode="numeric"
-						value={draft}
+						{...inputProps}
 						aria-label={t(copy.inputLabel)}
-						aria-invalid={invalid}
 						aria-describedby={invalid ? errorId : undefined}
 						data-testid={`${kind}-line-width-input`}
-						data-settings-draft-input
-						onChange={(event) => setDraft(event.currentTarget.value)}
-						onBlur={commit}
-						onKeyDown={(event) => {
-							if (event.key === "Enter") {
-								event.preventDefault();
-								commit();
-							} else if (event.key === "Escape") {
-								setDraft(String(value));
-							}
-						}}
-						className="h-32 w-80 rounded-sm border border-control-border-default bg-control-bg px-8 tr-text-ui text-text-default outline-none focus:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary aria-invalid:border-feedback-error"
+						className={cn(SETTINGS_INPUT, "w-80")}
 					/>
 				}
 			/>
@@ -141,7 +110,7 @@ export function LineWidthControl({ kind }: { kind: LineWidthKind }) {
 						label={t(copy.boundedLabel)}
 						testId={`${kind}-line-width-bounded`}
 						onChange={(next) => {
-							void updateLineWidth(boundedConfig(kind, next), t(copy.failure));
+							void saveSettings(boundedConfig(kind, next), t(copy.failure));
 						}}
 					/>
 				}

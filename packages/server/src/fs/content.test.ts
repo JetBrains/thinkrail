@@ -67,6 +67,78 @@ test("svg is sniffed as text with an image type, directly or behind an XML prolo
 	);
 });
 
+test("svg detection requires the document root, not a nested element or comment", () => {
+	for (const xml of [
+		'<?xml version="1.0"?><document><svg></svg></document>',
+		'<?xml version="1.0"?><!-- <svg> is an example --><document/>',
+		'<?xml version="1.0"?><document><![CDATA[<svg>]]></document>',
+	]) {
+		expect(classifyBytes(BYTES.encode(xml))).toEqual({ text: true });
+	}
+});
+
+test("svg roots survive XML declarations, comments, processing instructions and doctypes", () => {
+	for (const svg of [
+		"<svg/>",
+		'<!-- exported artwork -->\n<svg xmlns="http://www.w3.org/2000/svg"/>',
+		'<?xml version="1.0"?><!-- <svg> example --><?editor settings?><svg/>',
+		'<?xml version="1.0"?><!DOCTYPE svg SYSTEM "image>format.dtd"><svg/>',
+		'<?xml version="1.0"?><!DOCTYPE svg [<!ENTITY label "a > b">]><svg/>',
+	]) {
+		expect(classifyBytes(BYTES.encode(svg))).toEqual({ text: true, mime: "image/svg+xml" });
+	}
+});
+
+test("unterminated XML declarations and lookalike names do not prove an SVG root", () => {
+	for (const xml of [
+		"<svgish/>",
+		"<!-- <svg/>",
+		'<?xml version="1.0"?><!DOCTYPE svg [<!ENTITY x "<svg/>">',
+		'<?xml version="1.0"?><!-- <svg/>',
+		'<?xml version="1.0"?> prose <svg/>',
+	]) {
+		expect(classifyBytes(BYTES.encode(xml))).toEqual({ text: true });
+	}
+});
+
+test("processing-instruction content does not alter the doctype subset depth", () => {
+	for (const bracket of ["[", "]"]) {
+		const svg = `<?xml version="1.0"?><!DOCTYPE svg [<?editor ${bracket} ?>]><svg></svg>`;
+		expect(classifyBytes(BYTES.encode(svg))).toEqual({ text: true, mime: "image/svg+xml" });
+	}
+});
+
+test("AVIF compatibility can be declared in a file-type box's compatible brands", () => {
+	for (const large of [false, true]) {
+		for (const brand of ["avif", "avis"]) {
+			const offset = large ? 16 : 8;
+			const bytes = new Uint8Array(offset + 16);
+			const view = new DataView(bytes.buffer);
+			view.setUint32(0, large ? 1 : bytes.length);
+			bytes.set(BYTES.encode("ftyp"), 4);
+			if (large) view.setBigUint64(8, BigInt(bytes.length));
+			bytes.set(BYTES.encode("mif1"), offset);
+			bytes.set(BYTES.encode(`mif1${brand}`), offset + 8);
+			expect(classifyBytes(bytes)).toEqual({ text: false, mime: "image/avif" });
+			const padded = new Uint8Array(bytes.length + 5);
+			padded.set(bytes, 5);
+			expect(classifyBytes(padded.subarray(5)).mime).toBe("image/avif");
+		}
+	}
+});
+
+test("AVIF brands are aligned fields inside ftyp, not minor versions or following boxes", () => {
+	for (const bytes of [
+		BYTES.encode("\u0000\u0000\u0000\u0010ftypmif1avif"),
+		BYTES.encode("\u0000\u0000\u0000\u0010ftypmif1\u0000\u0000\u0000\u0000avif"),
+		BYTES.encode("\u0000\u0000\u0000\u0014ftypmif1\u0000\u0000\u0000\u0000xavif"),
+		BYTES.encode("\u0000\u0000\u0000\u0014ftypmif1\u0000\u0000\u0000\u0000avi"),
+		BYTES.encode("\u0000\u0000\u0000\u0001ftypavif"),
+	]) {
+		expect(classifyBytes(bytes)).toEqual({ text: false });
+	}
+});
+
 test("the extension map is the fallback when bytes prove no media type", () => {
 	expect(resourceMeta(BYTES.encode("# Title\n"), "docs/a.md").mime).toBe("text/markdown");
 	expect(resourceMeta(BYTES.encode("{}"), "a.json").mime).toBe("application/json");

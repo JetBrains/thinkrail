@@ -42,8 +42,9 @@ Producer → queue → consumer, so the decision to notify is deferred to the mo
   id; while the request is in flight, only the completions that were relightable when it started) — relighting a result by hand never notifies here, though another
   unfocused window of the same owner may still notify on it. One
   surviving session opens its chat (`activateWorkspaceFromRoute`, landing at the latest message); several
-  open the cross-workspace `SessionSwitcher` palette (`openSessionSwitcher` on [[submodule-web-store]]) so
-  the user picks the one to attend, instead of landing in a window that may not show the right chat.
+  open the search palette (`openSearch` on [[submodule-web-store]]), whose empty state lists every chat
+  waiting for the user, so the user picks the one to attend, instead of landing in a window that may not
+  show the right chat.
   `formatNotification` keeps the title as the bold **ThinkRail** mark, the worktree as `subtitle`, and the
   reason as `body` (`N worktrees need your attention` for several); a per-session `tag` lets the browser
   replace rather than stack.
@@ -118,7 +119,7 @@ toggle is host-synced app config and defaults on (notifications still require th
 - **Public surface (`index.ts` barrel):** `useAttentionNotifications`, `NotificationPermissionPrompt`,
   `selectNotificationChannel`, `NotificationChannel`, `NotificationPermissionState`, `ATTENTION_WINDOW_MS`.
 - **Allowed deps:** [[submodule-web-store]] (session-state reads, prompt state, `activateWorkspaceFromRoute`
-  and `openSessionSwitcher` actions), `ui` (the preface dialog), [[module-contracts]] (`SessionState` /
+  and `openSearch` actions), `ui` (the preface dialog), [[module-contracts]] (`SessionState` /
   `SessionCompletion` / `NativeNotificationBridge` types), `@thinkrail/locales` (notification and preface
   strings, resolved when each notification is built), React, Remix Icon.
 - **Forbidden:** a second source of truth for attention; raw agent-event listening; any host/`pi` import;

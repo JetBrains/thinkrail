@@ -76,9 +76,8 @@ export function createSetTitleTool(): ToolDefinition<typeof SetTitleSchema, SetT
 		promptGuidelines: PROMPT_GUIDELINES,
 		parameters: SetTitleSchema,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			const input = params as SetTitleParams;
-			const text = await host.apply(ctx.sessionManager.getSessionId(), input);
-			return { content: [{ type: "text", text }], details: input };
+			const text = await host.apply(ctx.sessionManager.getSessionId(), params);
+			return { content: [{ type: "text", text }], details: params };
 		},
 	};
 }

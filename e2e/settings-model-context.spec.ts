@@ -10,7 +10,7 @@ import { E2eWire } from "./fixtures/wire";
 
 const modelsPath = join(E2E_PI_AGENT_DIR, "models.json");
 const modelId = "gpt-5.5";
-const providers = ["openai", "openai-codex", "context-proxy"];
+const providers = ["openai", "openai-codex", "context-proxy"] as const;
 const seed = {
 	providers: {
 		openai: {
@@ -125,7 +125,8 @@ test("one shared selector sets 1M for API, Codex and proxy models and Default re
 test("shared changes reach every provider row and uniform row changes flow back to the shared control", async ({
 	page,
 }) => {
-	const rows = providers.map((provider) => `${provider}-${modelId}`);
+	const rowOf = (provider: (typeof providers)[number]) => `${provider}-${modelId}`;
+	const rows = providers.map(rowOf);
 	const shared = page.getByTestId("context-limit-all");
 	const checked = async (target: string, preset: "default" | "1m" | "custom") => {
 		await expect(
@@ -152,17 +153,17 @@ test("shared changes reach every provider row and uniform row changes flow back 
 	await expectOverrides(null);
 	for (const row of rows) await checked(row, "default");
 
-	await choose(page, rows[0], "1m");
+	await choose(page, rowOf("openai"), "1m");
 	await expect(shared).toHaveAttribute("data-context-override", "mixed");
 	await expect(shared.getByRole("radio", { checked: true })).toHaveCount(0);
 	await choose(page, "all", "1m");
 	await expectOverrides(1_000_000);
 	for (const row of rows) await checked(row, "1m");
 
-	await choose(page, rows[0], "default");
-	await choose(page, rows[1], "default");
+	await choose(page, rowOf("openai"), "default");
+	await choose(page, rowOf("openai-codex"), "default");
 	await expect(shared).toHaveAttribute("data-context-override", "mixed");
-	await choose(page, rows[2], "default");
+	await choose(page, rowOf("context-proxy"), "default");
 	await checked("all", "default");
 	await expectOverrides(null);
 

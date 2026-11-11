@@ -10,9 +10,7 @@ test("two chats in one workspace stream independently; closing one keeps the oth
 	await expect(worktreeRows(page).first()).toHaveAttribute("data-active", "true");
 
 	const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
-	const doneNotice = page
-		.locator('[data-testid="chat-message"][data-role="system"]')
-		.filter({ hasText: "Done" });
+	const doneNotice = page.locator('[data-testid="turn-divider-status"][data-outcome="done"]');
 
 	await expect(chatTabs).toHaveCount(1);
 	await page.getByTestId("chat-input").fill("Reply with the single word: alpha");
