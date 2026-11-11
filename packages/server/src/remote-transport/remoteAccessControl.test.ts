@@ -8,7 +8,11 @@ import { addDevice, loadRemoteAccessEnabled, saveRemoteAccessEnabled } from "../
 import type { RemoteChannel } from "./channel";
 import type { LocalRelay } from "./localRelay";
 import type { RemoteAccess, RemoteAccessOptions } from "./remoteAccess";
-import { createRemoteAccessControl, type RemoteAccessControlOptions } from "./remoteAccessControl";
+import {
+	createRemoteAccessControl,
+	type RemoteAccessControlOptions,
+	type RemoteAccessState,
+} from "./remoteAccessControl";
 
 function fixture(over: Partial<RemoteAccessControlOptions> = {}) {
 	const dir = mkdtempSync(join(tmpdir(), "trpi-remote-control-"));
@@ -209,5 +213,90 @@ test("the Nostr route is on by default with the public relays, and an empty list
 		off.control.stop();
 		on.cleanup();
 		off.cleanup();
+	}
+});
+
+const settle = () => Bun.sleep(150);
+
+test("every change is heard once as the whole state, a burst coalesced and a no-op not repeated", async () => {
+	const heard: RemoteAccessState[] = [];
+	const paired: string[] = [];
+	const f = fixture({
+		onStatus: (state) => heard.push(state),
+		onPaired: (device) => paired.push(`${device.id}:${device.access}`),
+	});
+	try {
+		const phone: PairedDevice = { id: "d1", label: "Phone", publicKey: "P1", pairedAt: 1 };
+		addDevice(phone, f.dir);
+		f.control.setEnabled(true, { persist: false });
+		const channel = fakeChannel();
+		f.started[0]?.onPaired?.(phone, channel);
+		await settle();
+		expect(paired).toEqual(["d1:write"]);
+		expect(heard).toHaveLength(1);
+		expect(heard[0]).toMatchObject({ enabled: true, devices: [{ id: "d1", connected: true }] });
+
+		f.control.renameDevice("d1", "Phone");
+		await settle();
+		expect(heard).toHaveLength(1);
+
+		f.control.setDeviceAccess("d1", "read");
+		f.control.renameDevice("d1", "iPhone");
+		await settle();
+		expect(heard).toHaveLength(2);
+		expect(heard[1]?.devices).toMatchObject([{ label: "iPhone", access: "read" }]);
+
+		channel.close();
+		await settle();
+		expect(heard[2]?.devices).toMatchObject([{ id: "d1", connected: false }]);
+
+		f.control.setEnabled(false, { persist: false });
+		await settle();
+		expect(heard[3]).toMatchObject({ enabled: false, addresses: [] });
+	} finally {
+		f.control.stop();
+		f.cleanup();
+	}
+});
+
+test("the relay's public check settling after start is heard without anyone asking", async () => {
+	const heard: RemoteAccessState[] = [];
+	let settled = () => {};
+	const relay = {
+		connectUrl: "ws://127.0.0.1:1",
+		port: 1,
+		addresses: [{ url: "ws://192.168.0.2:1", route: "lan" as const }],
+		publicCheck: { state: "checking" } as LocalRelay["publicCheck"],
+		ready: new Promise<void>((resolve) => {
+			settled = resolve;
+		}),
+		stop: () => {},
+	};
+	const f = fixture({ onStatus: (state) => heard.push(state), startLocal: () => relay });
+	try {
+		f.control.setEnabled(true, { persist: false });
+		await settle();
+		expect(heard.at(-1)?.relay).toMatchObject({ publicCheck: { state: "checking" } });
+		relay.publicCheck = { state: "reachable", ip: "203.0.113.7" };
+		settled();
+		await settle();
+		expect(heard.at(-1)?.relay).toMatchObject({ publicCheck: { state: "reachable" } });
+		expect(heard).toHaveLength(2);
+	} finally {
+		f.control.stop();
+		f.cleanup();
+	}
+});
+
+test("nothing is heard after the host stops", async () => {
+	const heard: RemoteAccessState[] = [];
+	const f = fixture({ onStatus: (state) => heard.push(state) });
+	try {
+		f.control.setEnabled(true, { persist: false });
+		f.control.stop();
+		await settle();
+		expect(heard).toEqual([]);
+	} finally {
+		f.cleanup();
 	}
 });

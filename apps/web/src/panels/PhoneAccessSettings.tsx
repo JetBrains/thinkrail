@@ -1,54 +1,23 @@
-import { RiFileCopyLine, RiQrCodeLine } from "@remixicon/react";
-import type { RemoteAccessStatus, RemoteDeviceAccess } from "@thinkrail/contracts";
+import { RiQrCodeLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { SettingsGroup, SettingsPageContainer, SettingsRow } from "@thinkrail/ui/settings";
 import { PhoneAccessNetwork } from "./PhoneAccessNetwork";
 import { PhoneDeviceRow } from "./PhoneDeviceRow";
+import { PhonePairingCode } from "./PhonePairingCode";
 import { phoneHasNoRoute, phoneReach } from "./phoneAccessState";
 import { SettingsNotice } from "./SettingsNotice";
 import { SettingsSwitch } from "./SettingsSwitch";
-import { type ShownPairing, usePhoneAccess } from "./usePhoneAccess";
+import { type PhoneAccess, usePhoneAccess } from "./usePhoneAccess";
 
 export type { ShownPairing } from "./usePhoneAccess";
 
 export interface PhoneAccessViewProps {
-	status: RemoteAccessStatus | null;
-	loadFailed: boolean;
-	pairing: ShownPairing | null;
-	issuing: boolean;
-	expired: boolean;
-	pending: boolean;
-	busyDevices: ReadonlySet<string>;
-	onReload: () => void;
-	onToggle: (enabled: boolean) => void;
-	onShowCode: () => void;
-	onCopyLink: (link: string) => void;
-	onRevoke: (deviceId: string) => void;
-	onRename: (deviceId: string, label: string) => void;
-	onSetAccess: (deviceId: string, access: RemoteDeviceAccess) => void;
+	access: PhoneAccess;
 }
 
-function clockTime(epochMs: number): string {
-	return new Date(epochMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
-
-export function PhoneAccessView({
-	status,
-	loadFailed,
-	pairing,
-	issuing,
-	expired,
-	pending,
-	busyDevices,
-	onReload,
-	onToggle,
-	onShowCode,
-	onCopyLink,
-	onRevoke,
-	onRename,
-	onSetAccess,
-}: PhoneAccessViewProps) {
+export function PhoneAccessView({ access }: PhoneAccessViewProps) {
+	const { status, loadFailed, pairing, issuing, expired, pending, busyDevices } = access;
 	const t = useT();
 	const enabled = status?.enabled ?? false;
 	const devices = status?.devices ?? [];
@@ -69,7 +38,7 @@ export function PhoneAccessView({
 							disabled={pending || status === null}
 							label={t("settings.phone.enable")}
 							testId="phone-access-toggle"
-							onChange={onToggle}
+							onChange={access.toggle}
 						/>
 					}
 				/>
@@ -83,7 +52,7 @@ export function PhoneAccessView({
 									variant="outline"
 									size="m"
 									data-testid="phone-access-reload"
-									onClick={onReload}
+									onClick={access.reload}
 								>
 									{t("common.retry")}
 								</Button>
@@ -111,7 +80,7 @@ export function PhoneAccessView({
 								iconLeft={RiQrCodeLine}
 								data-testid="phone-access-show-code"
 								loading={issuing}
-								onClick={onShowCode}
+								onClick={access.showCode}
 							>
 								{pairing ? t("settings.phone.newCode") : t("settings.phone.showCode")}
 							</Button>
@@ -119,36 +88,12 @@ export function PhoneAccessView({
 					/>
 				) : null}
 				{enabled && pairing ? (
-					<div
-						data-testid="phone-access-code"
-						data-expired={expired}
-						className="flex flex-wrap items-center gap-16 border-border-muted border-b py-12"
-					>
-						<img
-							src={pairing.qrSrc}
-							alt={t("settings.phone.qrAlt")}
-							className="size-192 shrink-0 rounded-sm"
-						/>
-						<div className="flex min-w-160 flex-1 flex-col gap-8">
-							<p className="tr-text-ui text-text-default">{t("settings.phone.scanHint")}</p>
-							<p className="tr-text-metadata text-text-muted">
-								{expired
-									? t("settings.phone.expired")
-									: t("settings.phone.expiresAt", { time: clockTime(pairing.expiresAt) })}
-							</p>
-							<div className="flex">
-								<Button
-									variant="ghost"
-									size="m"
-									iconLeft={RiFileCopyLine}
-									data-testid="phone-access-copy-link"
-									onClick={() => onCopyLink(pairing.link)}
-								>
-									{t("settings.phone.copyLink")}
-								</Button>
-							</div>
-						</div>
-					</div>
+					<PhonePairingCode
+						layout="row"
+						pairing={pairing}
+						expired={expired}
+						onCopyLink={access.copyLink}
+					/>
 				) : null}
 			</SettingsGroup>
 			{reach ? <PhoneAccessNetwork reach={reach} /> : null}
@@ -170,9 +115,9 @@ export function PhoneAccessView({
 							key={device.id}
 							device={device}
 							busy={busyDevices.has(device.id)}
-							onRename={onRename}
-							onSetAccess={onSetAccess}
-							onRevoke={onRevoke}
+							onRename={access.rename}
+							onSetAccess={access.setAccess}
+							onRevoke={access.revoke}
 						/>
 					))
 				)}
@@ -182,23 +127,5 @@ export function PhoneAccessView({
 }
 
 export function PhoneAccessSettings() {
-	const access = usePhoneAccess();
-	return (
-		<PhoneAccessView
-			status={access.status}
-			loadFailed={access.loadFailed}
-			pairing={access.pairing}
-			issuing={access.issuing}
-			expired={access.expired}
-			pending={access.pending}
-			busyDevices={access.busyDevices}
-			onReload={access.reload}
-			onToggle={access.toggle}
-			onShowCode={access.showCode}
-			onCopyLink={access.copyLink}
-			onRevoke={access.revoke}
-			onRename={access.rename}
-			onSetAccess={access.setAccess}
-		/>
-	);
+	return <PhoneAccessView access={usePhoneAccess()} />;
 }

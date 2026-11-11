@@ -6,27 +6,27 @@ import type { ChatTurn } from "@thinkrail/chat-ui/types";
 import type { TranscriptMessage } from "@thinkrail/contracts";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
-import { queuedDraft } from "./queuedDraft";
+import { draftWith, queuedDraft } from "./queuedDraft";
 
 test("puts queued text before the current draft and collects images", () => {
 	const image = { type: "image" as const, data: "x", mimeType: "image/png" };
-	expect(
-		queuedDraft("mine", {
-			steering: [{ text: "first", images: [image] }],
-			followUp: [{ text: "second" }],
-		}),
-	).toEqual({ text: "first\n\nsecond\n\nmine", images: [image] });
-	expect(queuedDraft("  ", { steering: [{ text: "only" }], followUp: [] }).text).toBe("only");
+	const queued = queuedDraft({
+		steering: [{ text: "first", images: [image] }],
+		followUp: [{ text: " " }, { text: "second" }],
+	});
+	expect(queued).toEqual({ text: "first\n\nsecond", images: [image] });
+	expect(draftWith(queued.text, "mine")).toBe("first\n\nsecond\n\nmine");
+	expect(draftWith(queuedDraft({ steering: [{ text: "only" }], followUp: [] }).text, "  ")).toBe(
+		"only",
+	);
+	expect(draftWith("", "typed")).toBe("typed");
 });
 
 test("a message that did not send goes back before what was typed since, with its images", () => {
 	const image = { type: "image" as const, data: "x", mimeType: "image/png" };
-	expect(
-		queuedDraft("typed since", { steering: [{ text: "lost", images: [image] }], followUp: [] }),
-	).toEqual({
-		text: "lost\n\ntyped since",
-		images: [image],
-	});
+	const queued = queuedDraft({ steering: [{ text: "lost", images: [image] }], followUp: [] });
+	expect(draftWith(queued.text, "typed since")).toBe("lost\n\ntyped since");
+	expect(queued.images).toEqual([image]);
 });
 
 const failed = [

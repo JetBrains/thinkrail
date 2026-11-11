@@ -1,8 +1,8 @@
+import type { DeviceMessage, HostMessage } from "@thinkrail/contracts";
 import { answerTranscript, offerTranscript } from "@thinkrail/contracts";
 import type { PairedDevice } from "../remote";
 import type { RemoteChannel } from "./channel";
 import type { HostPeer } from "./hostPeer";
-import type { DeviceMessage, HostMessage } from "./signalingProtocol";
 import type { AuthorizedDevice, HostHandshake } from "./signalingSession";
 
 export interface HostSessionDeps {
@@ -19,10 +19,7 @@ export interface HostSessionDeps {
 export interface HostSession {
 	/** Feeds a device signaling frame: the authorization handshake first, then WebRTC negotiation. */
 	receive(message: DeviceMessage): void;
-	/**
-	 * Feeds a frame that did not parse. A device built for this protocol never sends one, so it means the app
-	 * is older than the host: say so and end the session, rather than drop it and leave the phone waiting.
-	 */
+	/** Feeds a frame that did not parse: the app is older than the host, so the session ends `outdated_app`. */
 	receiveUnreadable(): void;
 	onChannel(handler: (channel: RemoteChannel, device: PairedDevice) => void): void;
 	/** True once the data channel is open: signaling is done and the session must outlive its broker entry. */
@@ -34,12 +31,6 @@ export interface HostSession {
 export const OUTDATED_APP_REASON =
 	"this ThinkRail app is older than the one on the computer; update it on the phone and scan a new QR code";
 
-/**
- * One remote device session on the host: runs the authorize-before-negotiate handshake, and only once the
- * device is accepted does it start the WebRTC peer. Both SDPs are signed — the host's offer with its identity
- * key (bound to the device's nonce), the device's answer with its device key (bound to the challenge) — so the
- * relay carrying them cannot substitute its own WebRTC endpoint on either side.
- */
 export function createHostSession(deps: HostSessionDeps): HostSession {
 	let authorized: AuthorizedDevice | null = null;
 	let closed = false;

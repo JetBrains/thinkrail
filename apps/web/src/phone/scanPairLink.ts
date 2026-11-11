@@ -2,6 +2,7 @@ import {
 	CapacitorBarcodeScanner,
 	CapacitorBarcodeScannerTypeHint,
 } from "@capacitor/barcode-scanner";
+import { reasonOf } from "./async";
 
 const PAIR_LINK = /^thinkrail:\/\/pair\b/;
 const CANCELLED = "OS-PLUG-BARC-0006";
@@ -43,6 +44,6 @@ export async function scanPairLink(labels: {
 		const code = (error as { code?: unknown } | null | undefined)?.code;
 		if (code === CANCELLED) return { kind: "cancelled" };
 		if (code === CAMERA_DENIED) return { kind: "cameraDenied" };
-		return { kind: "failed", reason: error instanceof Error ? error.message : String(error) };
+		return { kind: "failed", reason: reasonOf(error) };
 	}
 }

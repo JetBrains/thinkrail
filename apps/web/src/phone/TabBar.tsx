@@ -34,7 +34,6 @@ export function TabBar({
 }: {
 	tabs: readonly Tab[];
 	active: Tab;
-	/** Chats waiting on you; shown on the Chats tab when above zero. */
 	badge: number;
 	onSelect: (tab: Tab) => void;
 }) {

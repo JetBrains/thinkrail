@@ -1,7 +1,7 @@
+import { encodeHostMessage, parseDeviceMessage } from "@thinkrail/contracts";
 import { type NostrSignal, normalizeRelays, openNostrSignal } from "@thinkrail/nostr-signaling";
 import type { HostBrokerDeps } from "./hostBrokerClient";
 import type { HostSession } from "./hostSession";
-import { encodeHostMessage, parseDeviceMessage } from "./signalingProtocol";
 
 const SESSION_TTL_MS = 60_000;
 const START_SKEW_SECONDS = 2;
@@ -27,12 +27,6 @@ export interface NostrHostRouter {
 	readonly sessionCount: number;
 }
 
-/**
- * The Nostr counterpart of the broker client: there is no broker to open sessions, so a device's Nostr key
- * names its session. Signaling is short-lived, so each session is dropped after its window, bounded in count
- * and frames: a sender past the frame cap stays blocked until its window ends, and an unknown sender past the
- * session cap is ignored, so its phone times out.
- */
 export function createNostrHostRouter(deps: NostrHostRouterDeps): NostrHostRouter {
 	const now = deps.now ?? Date.now;
 	const sessions = new Map<

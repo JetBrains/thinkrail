@@ -34,11 +34,6 @@ function clientAddress(req: Request, direct: string | undefined, trustProxy: boo
 	return forwarded || direct || "unknown";
 }
 
-/**
- * Wires the broker core to a Bun WebSocket server. Each socket is one host or device connection. It enforces
- * the abuse limits a shared relay needs — connections per address, a per-connection message rate, a payload
- * cap, and a deadline to register — and logs nothing about the traffic.
- */
 export function startBroker(options: StartBrokerOptions = {}): RunningBroker {
 	const limits = options.limits ?? DEFAULT_LIMITS;
 	const broker = options.broker ?? createBroker({ maxSessionsPerHost: limits.maxSessionsPerHost });

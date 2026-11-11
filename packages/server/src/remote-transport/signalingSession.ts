@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { RejectCode } from "@thinkrail/contracts";
+import type { DeviceMessage, HostMessage, RejectCode } from "@thinkrail/contracts";
 import type { PairedDevice, PairingProof, PairingRequest } from "../remote";
-import type { DeviceMessage, HostMessage } from "./signalingProtocol";
 
 export interface HandshakeDeps {
 	newChallenge: () => string;
@@ -53,12 +52,6 @@ export interface HostHandshake {
 	handle(message: DeviceMessage): HandshakeStep;
 }
 
-/**
- * The host side of the pairing authorization handshake, run over the signaling channel *before* any WebRTC
- * negotiation: `hello` → `challenge` → `proof` (with the QR-token HMAC on a first pairing) →
- * `accepted`/`rejected`. Pure and dependency-injected, so an unauthorized peer never reaches SDP/ICE exchange. The media negotiation that follows an `authorized` step
- * is the WebRTC adapter's concern.
- */
 export function createHostHandshake(deps: HandshakeDeps): HostHandshake {
 	const now = deps.now ?? Date.now;
 	const newDeviceId = deps.newDeviceId ?? randomUUID;

@@ -13,7 +13,6 @@ export {
 	fingerprintOf,
 	type HostIdentity,
 	loadOrCreateIdentity,
-	publicKeyFromRaw,
 	verifySignature,
 } from "./identity";
 export {
@@ -25,4 +24,3 @@ export {
 	verifyPairingProof,
 } from "./pairing";
 export { createPairingTokens, type PairingRequest, type PairingTokens } from "./pairingToken";
-export { buildPairingUri, type PairingUriParams, parsePairingUri } from "./pairingUri";

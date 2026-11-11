@@ -370,7 +370,7 @@ function localRemoteAccess(ctx: RequestContext): RemoteAccessControl {
 	return ctx.remoteAccess;
 }
 
-function remoteAccessStatus(state: RemoteAccessState): RemoteAccessStatus {
+export function remoteAccessStatus(state: RemoteAccessState): RemoteAccessStatus {
 	return {
 		enabled: state.enabled,
 		addresses: state.addresses.map(({ url, route }) => ({ url, route })),

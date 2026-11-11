@@ -1,13 +1,23 @@
 import type { ImageContent, SessionQueueContent } from "@thinkrail/contracts";
 
-/** Queued messages put back in the field, as the IDE does when one is edited or a run is stopped. */
-export function queuedDraft(
-	current: string,
-	content: SessionQueueContent,
-): { text: string; images: ImageContent[] } {
+const PARAGRAPH = "\n\n";
+const nonBlank = (part: string): boolean => part.trim() !== "";
+
+/** Queued messages as one draft, as the IDE puts them back in the field when one is edited or a run is stopped. */
+export function queuedDraft(content: SessionQueueContent): {
+	text: string;
+	images: ImageContent[];
+} {
 	const messages = [...content.steering, ...content.followUp];
-	const text = [...messages.map((message) => message.text), current]
-		.filter((part) => part.trim() !== "")
-		.join("\n\n");
-	return { text, images: messages.flatMap((message) => message.images ?? []) };
+	return {
+		text: messages
+			.map((message) => message.text)
+			.filter(nonBlank)
+			.join(PARAGRAPH),
+		images: messages.flatMap((message) => message.images ?? []),
+	};
 }
+
+/** The field after restoring `queued` into it: the restored text ahead of what was typed since. */
+export const draftWith = (queued: string, current: string): string =>
+	[queued, current].filter(nonBlank).join(PARAGRAPH);

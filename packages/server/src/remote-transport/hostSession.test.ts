@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
+import type { HostMessage } from "@thinkrail/contracts";
 import { answerTranscript, offerTranscript } from "@thinkrail/contracts";
 import type { PairedDevice } from "../remote";
 import type { RemoteChannel } from "./channel";
 import type { HostPeer, HostPeerSignal } from "./hostPeer";
 import { createHostSession, type HostSessionDeps, OUTDATED_APP_REASON } from "./hostSession";
-import type { HostMessage } from "./signalingProtocol";
 import { createHostHandshake } from "./signalingSession";
 
 function fakePeer() {

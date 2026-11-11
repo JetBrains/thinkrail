@@ -24,6 +24,7 @@ import {
 	MCP_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
+	REMOTE_ACCESS_PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
 	SPEECH_SOCKET_ROUTE,
 	TEXT_SEARCH_PROTOCOL_VERSION,
@@ -208,6 +209,7 @@ import { setFsNudgePublisher } from "./fsNudge";
 import { applyGitCeiling } from "./gitCeiling";
 import {
 	handleRequest,
+	remoteAccessStatus,
 	requestErrorReport,
 	requestMethodDiagnostic,
 	workspaceCreationHandoff,
@@ -578,6 +580,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					ws.subscribe(WS_CHANNELS.fontsChanged);
 				const speech = ws.data.protocolVersion >= SPEECH_PROTOCOL_VERSION;
 				if (speech) ws.subscribe(WS_CHANNELS.speechChanged);
+				if (ws.data.protocolVersion >= REMOTE_ACCESS_PROTOCOL_VERSION)
+					ws.subscribe(WS_CHANNELS.remoteStatusChanged);
 				const setupCapture = additionalCapture();
 				const welcome: ServerWelcome = buildWelcome(ws.data.protocolVersion);
 				setupObservation.observe(setupCapture, {
@@ -799,9 +803,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			});
 			// The device has no WS "open" event, so hand it the same welcome snapshot over the bridge.
 			bridge.push(WS_CHANNELS.serverWelcome, buildWelcome(PROTOCOL_VERSION));
-			bridge.push(WS_CHANNELS.remoteDeviceAccess, {
-				access: remoteAccess.state().devices.find((d) => d.id === device.id)?.access ?? "read",
-			});
+			bridge.push(WS_CHANNELS.remoteDeviceAccess, { access: device.access });
 			const routes = remoteAccess.routes();
 			if (routes) bridge.push(WS_CHANNELS.remoteHostRoutes, routes);
 		},
@@ -810,6 +812,15 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				bridge.push(WS_CHANNELS.remoteDeviceAccess, { access });
 			}
 		},
+		// Local sockets only: phone access is managed on this computer, so the status never reaches a device.
+		onStatus: (state) =>
+			nativePublish(
+				WS_CHANNELS.remoteStatusChanged,
+				JSON.stringify({
+					channel: WS_CHANNELS.remoteStatusChanged,
+					data: remoteAccessStatus(state),
+				}),
+			),
 	});
 	try {
 		if (remote) remoteAccess.setEnabled(true, { persist: false });

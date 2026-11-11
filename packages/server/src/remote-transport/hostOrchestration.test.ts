@@ -1,8 +1,9 @@
 import { expect, test } from "bun:test";
-import { sign as edSign, verify as edVerify, generateKeyPairSync } from "node:crypto";
+import { sign as edSign, generateKeyPairSync } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { HostMessage } from "@thinkrail/contracts";
 import { answerTranscript, offerTranscript } from "@thinkrail/contracts";
 import { RTCPeerConnection } from "werift";
 import {
@@ -12,7 +13,6 @@ import {
 	newChallenge,
 	pairingMac,
 	pairingTokenId,
-	publicKeyFromRaw,
 	verifyPairingMac,
 	verifyPairingProof,
 	verifySignature,
@@ -20,7 +20,6 @@ import {
 import type { RemoteChannel } from "./channel";
 import { createWeriftHostPeer } from "./hostPeer";
 import { createHostSession } from "./hostSession";
-import type { HostMessage } from "./signalingProtocol";
 import { createHostHandshake } from "./signalingSession";
 import { toRemoteChannel } from "./weriftRemoteChannel";
 
@@ -85,10 +84,9 @@ test("host orchestration pairs a device over the handshake and opens a working W
 				const mac = pairingMac(token, devicePublicKey, challenge);
 				session.receive({ kind: "proof", signature, mac });
 			} else if (message.kind === "offer") {
-				const genuine = edVerify(
-					null,
+				const genuine = verifySignature(
+					hostPublicKey,
 					offerTranscript(nonce, challenge, message.sdp),
-					publicKeyFromRaw(hostPublicKey),
 					Buffer.from(message.signature, "base64url"),
 				);
 				if (!genuine) throw new Error("offer not signed by the host");

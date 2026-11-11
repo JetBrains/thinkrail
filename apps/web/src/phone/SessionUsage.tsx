@@ -16,7 +16,6 @@ export function UsageBar({
 	stats: SessionStats | null;
 	open: boolean;
 	onToggle: () => void;
-	/** The toolbar's buttons (Resources, Skills), shown while open. */
 	children: ReactNode;
 }) {
 	const t = useT();

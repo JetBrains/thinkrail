@@ -38,7 +38,7 @@ import { useT } from "@thinkrail/locales/react";
 import type { RemoteSessionItem, RemoteSessionsController } from "@thinkrail/remote-client";
 import { IconButton } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useModelCatalog } from "../chat/useModelCatalog";
 import { useSessionStats } from "../chat/useSessionStats";
 import { useTranscriptSync } from "../chat/useTranscriptSync";
@@ -50,7 +50,7 @@ import { ResourcesTool, SkillsTool } from "./ChatTools";
 import { useHostClient, useHostWelcome } from "./hostView";
 import { Loader, Notice, Screen } from "./layout";
 import { ModelSheet } from "./ModelSheet";
-import { queuedDraft } from "./queuedDraft";
+import { draftWith, queuedDraft } from "./queuedDraft";
 import { UsageBar } from "./SessionUsage";
 import { useStoreHost } from "./storeHost";
 import { type OpenChat, useStartChat, useWorkspaceChats } from "./WorkspaceScreen";
@@ -88,6 +88,14 @@ const PHONE_MODEL_PREFERENCES: ModelPreferences = {
 	isDefault: () => false,
 	setDefault: () => {},
 };
+
+function FailureLine({ children }: { children: string }) {
+	return (
+		<p role="alert" className="m-0 px-chat-gutter py-8 text-feedback-error tr-text-metadata">
+			{children}
+		</p>
+	);
+}
 
 export function SessionScreen({
 	session,
@@ -127,8 +135,11 @@ export function SessionScreen({
 	const [failure, setFailure] = useState<string | null>(() =>
 		session.unsent ? t("mobile.session.sendFailed", { reason: session.unsent.reason }) : null,
 	);
-	const failed = (action: string, error: unknown): void =>
-		setFailure(t("mobile.session.actionFailed", { action, reason: reasonOf(error) }));
+	const failed = useCallback(
+		(action: string, error: unknown): void =>
+			setFailure(t("mobile.session.actionFailed", { action, reason: reasonOf(error) })),
+		[t],
+	);
 	const [queueFlight] = useState(() => singleFlight());
 	const [abortFlight] = useState(() => singleFlight());
 	const bottom = useRef<HTMLDivElement>(null);
@@ -183,7 +194,6 @@ export function SessionScreen({
 	}, [ready, sessionId]);
 	const { models: catalog, refreshing: modelsRefreshing } = useModelCatalog(ready);
 
-	/** The model picker lives above the field on a phone; `/model` in the composer opens it through this. */
 	const pickerRef = useRef<ModelEffortPickerHandle>(null);
 	const externalPicker = useMemo<ModelEffortPickerHandle>(
 		() => ({ open: (query) => pickerRef.current?.open(query) }),
@@ -232,14 +242,7 @@ export function SessionScreen({
 				useAppStore.getState().clearPendingExtUi(sessionId, id);
 				getTransport()
 					.request("session.extUiReply", { response: { id, value } })
-					.catch((error: unknown) =>
-						setFailure(
-							t("mobile.session.actionFailed", {
-								action: t("mobile.session.answerFailed"),
-								reason: reasonOf(error),
-							}),
-						),
-					);
+					.catch((error: unknown) => failed(t("mobile.session.answerFailed"), error));
 			},
 			draft: () => dialogDraft,
 			rememberDraft: (text) => {
@@ -251,7 +254,7 @@ export function SessionScreen({
 				return true;
 			},
 		};
-	}, [pendingRequest, sessionId, t]);
+	}, [pendingRequest, sessionId, failed, t]);
 	const dialogOnToolCard =
 		pendingExtUi?.request.toolCallId !== undefined &&
 		rowsHaveToolCall(rows, pendingExtUi.request.toolCallId);
@@ -294,21 +297,28 @@ export function SessionScreen({
 		getTransport()
 			.request(method, { sessionId, text, ...(images.length > 0 ? { images } : {}) })
 			.catch((error: unknown) => {
-				restoreQueued({ steering: [{ text, images }], followUp: [] });
+				restoreUnsent(text, attachments);
 				setFailure(t("mobile.session.sendFailed", { reason: reasonOf(error) }));
 			});
 	};
 
 	const restoreQueued = (content: SessionQueueContent): void => {
-		setDraft((current) => queuedDraft(current, content).text);
+		const restored = queuedDraft(content);
+		setDraft((current) => draftWith(restored.text, current));
 		composerRef.current?.restoreAttachments(
-			queuedDraft("", content).images.map((image, index) => ({
+			restored.images.map((image, index) => ({
 				name: `queued-image-${index + 1}`,
 				content: image,
 			})),
 		);
 		composerRef.current?.refocus();
 	};
+
+	const restoreUnsent = (text: string, attachments: ChatAttachment[]): void =>
+		restoreQueued({
+			steering: [{ text, images: attachments.map((attachment) => attachment.content) }],
+			followUp: [],
+		});
 
 	const removeQueued = (kind: QueueLane, index: number, restore: boolean): void => {
 		queueFlight(() => getTransport().request("session.removeQueued", { sessionId, kind, index }))
@@ -343,10 +353,7 @@ export function SessionScreen({
 		interrupted.then(
 			() => send(text, attachments, "send"),
 			(error: unknown) => {
-				restoreQueued({
-					steering: [{ text, images: attachments.map((attachment) => attachment.content) }],
-					followUp: [],
-				});
+				restoreUnsent(text, attachments);
 				failed(t("mobile.session.stopFailed"), error);
 			},
 		);
@@ -465,21 +472,11 @@ export function SessionScreen({
 							) : (
 								<footer className="@container bg-container-workspace-bg pb-safe-bottom">
 									{createFailure ? (
-										<p
-											role="alert"
-											className="m-0 px-chat-gutter py-8 text-feedback-error tr-text-metadata"
-										>
+										<FailureLine>
 											{t("mobile.workspace.newChatFailed", { reason: createFailure })}
-										</p>
+										</FailureLine>
 									) : null}
-									{failure ? (
-										<p
-											role="alert"
-											className="m-0 px-chat-gutter py-8 text-feedback-error tr-text-metadata"
-										>
-											{failure}
-										</p>
-									) : null}
+									{failure ? <FailureLine>{failure}</FailureLine> : null}
 									{pendingExtUi && !dialogOnToolCard ? (
 										<div
 											data-testid="ext-ui-dock"

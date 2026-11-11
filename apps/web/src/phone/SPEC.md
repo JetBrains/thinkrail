@@ -25,14 +25,17 @@ queue, dialogs, notices, model and stats from the store's event reducer, exactly
 computer's Wi‑Fi/LAN and Tailscale addresses, its Nostr route and its name, so the phone connects directly on
 the same Wi‑Fi or tailnet, and from any other network through public Nostr relays; the connector races the
 routes on every (re)connect, and the saved host keeps the Nostr route. Pairing stays
-host-authorized: the QR's one-time token, then the device key. `hostStatus.ts` turns a failed connect into
+host-authorized: the QR's one-time token, then the device key, and pairing is one handshake: the controller
+(`pair`) keeps the connection that paired. Each computer's status — Connected, Connecting…, or unreachable with
+the last failure — is the controller's (`snapshot().statuses`, which `App` reads through `hostView.ts`'s
+`useRemoteSessions` with the sessions, clients and access); `hostStatus.ts` (`hostStatusOf`) turns a failure into
 `network` (no route answered — `RelayUnreachableError` — shown as "check the phone's internet and that
 phone access is on"), a `RemoteConnectError` code with its own what-to-do line (expired QR, phone access off, app
 older than the computer, no direct route, …), or the raw message of anything unexpected. A computer lost for
 good (`onLost` — it revoked this phone) leaves any of its screens for the Devices tab, where its row shows
 why. Open, its row shows `HostBanner` in place of its projects, with the one action that fixes the failure
 (`recoveryOf`): **Scan QR code** in place when the phone must pair again (revoked, the key changed, an expired
-code), **Reconnect** for a passing failure, nothing when only an app update helps. The tap clears the shown reason, so the row reads **Connecting…** until that attempt lands or fails again. Nothing waits on that tap:
+code), **Reconnect** for a passing failure, nothing when only an app update helps. The tap (`connect` again) clears the shown reason, so the row reads **Connecting…** until that attempt lands or fails again. Nothing waits on that tap:
 the controller retries a passing failure on its own, a dropped channel shows **Connecting…** while it comes
 back and the reason (with **Reconnect**) once a retry failed, returning to the app (`@capacitor/app` `resume`) or the network coming back (`online`) retries at once,
 and the routes a computer sends replace its saved entry in place. Welcome fits one screen without scrolling: three one-line steps (which network, how to turn access on, scan) and the scan button, with the paste field folded behind **Enter link manually**.
@@ -60,7 +63,7 @@ Welcome). **Sessions** (`ChatsScreen.tsx`, `chats.ts`): the sessions that need a
 question, an unread result or failure), then **Running**, then **Done**: the ones the phone saw waiting or working
 that since finished (`settleDone`, newest first, at most 20, kept on the device until **Clear**), so an answered
 session does not vanish once its result is read elsewhere; other idle ones stay in the tree — each naming its project and workspace,
-the tab badged with the Needs-you count; a tap lands in that chat (a row whose computer could not list its place says why, and a tap re-reads it). **Settings**: **Devices** — each paired device with Connected / Connecting… / the failure, **Forget** at the right edge of its line (confirmed in place) and, only when unreachable, **Reconnect** under the reason; then the same **Scan QR code** / **Enter link manually** rows as Add a device — then theme and language. the IDE tree's actions, on touch (`TreeActions.tsx` over `sheet.tsx`'s
+the tab badged with the Needs-you count; a tap lands in that chat (a row whose computer could not list its place says why, and a tap re-reads it). A place push re-reads only the computer that sent it, and a workspace push only when it names one of the chats' projects there. **Settings**: **Devices** — each paired device with Connected / Connecting… / the failure, **Forget** at the right edge of its line (confirmed in place) and, only when unreachable, **Reconnect** under the reason; then the same **Scan QR code** / **Enter link manually** rows as Add a device — then theme and language. the IDE tree's actions, on touch (`TreeActions.tsx` over `sheet.tsx`'s
   bottom `Sheet` / `ConfirmSheet` / `RenameSheet`, built on the shared `@thinkrail/ui/dialog`, with the IDE's
   strings; short action menus and confirmations stay bottom sheets, a list you pick from — models, base
   branches — opens as a full page with a back arrow, never a floating inset window): a project row's **+** opens `NewWorktreeScreen.tsx`, the IDE's New workspace dialog on a phone —
@@ -76,7 +79,7 @@ the tab badged with the Needs-you count; a tap lands in that chat (a row whose c
   a dismissible banner at the top of the tree; a tapped workspace always lands in a chat, as the IDE does (`WorkspaceScreen.tsx`'s `WorkspaceOpener`):
   the newest chat the host holds `live`, else the newest from history (`session.getMessages` attaches a disk
   session, the same reopen the IDE does), else a new one via `session.create` (a failure says why with **Retry**); back returns to the screen it came from, and an
-  answer arriving after back no longer navigates (`async.ts`'s `useMounted`). When
+  answer arriving after back no longer navigates. When
   the workspace has more than one chat the chat header shows a history button opening `ChatHistoryScreen`:
   **Open** chats, then **Recent** (closed) ones, each newest first, the current one marked, **+** to start a
   chat; picking one switches to it and back returns to the chat. Titles come from contracts' `chatTitle`,
@@ -100,7 +103,7 @@ the tab badged with the Needs-you count; a tap lands in that chat (a row whose c
   over models grouped by provider (`modelSections.ts`, current provider first, a search field only past 8
   models); a tap picks and closes, and the composer's `/model` opens it — send / steer / follow-up /
   interrupt through the same `session.*` methods as the IDE, tool-card answers through
-  `session.respondToTool`). Every chat action reports its failure in one line above the field ("what failed: why"):
+  `session.respondToTool`). Every chat action reports its failure in one line above the field ("what failed: why"; `async.ts`'s `reasonOf` words a read-only or revoked refusal and a closed connection in the phone's locale instead of the host's English):
   a message that did not go returns to the field ahead of anything typed since, with its images; a failed model or
   effort change reverts only while it is still the shown choice; queue edits and stop run one at a time
   (`async.ts`'s `singleFlight`), and an interrupt sent while a stop is still in flight stays in the field. Extension cards are the IDE's own registry (`registerWebExtensions`), with the
@@ -134,7 +137,7 @@ the tab badged with the Needs-you count; a tap lands in that chat (a row whose c
   `PairForm.tsx`, `theme.ts`, `storeHost.ts`, and a `localStorage` `KeyValueStore` (`deviceStore.ts`; the
   Capacitor WKWebView persists it on-device). Live status comes from the controller's `session.state` stream; lists are read on screen
   entry, and a workspace's chats re-read when a session appears or leaves in it.
-- **Allowed deps:** the sibling `store`, `transport`, `extensions` barrels, `shell/chatReconciliation`, and the
+- **Allowed deps:** the sibling `store`, `transport`, `extensions`, `themes` barrels, `shell/chatReconciliation`, and the
   chat hooks `chat/useTranscriptSync`, `chat/useSessionStats`, `chat/useModelCatalog`;
   `@thinkrail/remote-client` (the entire remote engine), `@thinkrail/chat-ui` (the chat renderers and composer —
   never a copy of them), `@thinkrail/contracts`, `@thinkrail/design-tokens` (palettes, semantic CSS,
@@ -162,12 +165,15 @@ sidebar), the chat and every other screen on `container-workspace-bg`; `Screen`'
 Screen headers follow iOS: a sub-screen shows an icon-only back arrow (its destination is the arrow's
 accessible label, not visible text) with the title centered; the top level shows the large left title.
 
-Navigation is a stack over tabs, as on iOS/Android: `App` keeps every tab root and the screens under the top
+Navigation is a stack over tabs, as on iOS/Android. A screen never moves the stack itself: `App` binds each
+screen's replace and close to its own route, and `navigation.ts`'s `replaceTop` / `popIf` change nothing unless
+that route is on top, so a late answer (a chat resolved, a worktree started, a pairing done) after back or under
+another screen leaves the stack as it is. `App` keeps every tab root and the screens under the top
 one mounted, hidden and `inert` (the tree under a chat, the chat under its history), the tab bar only on the
 roots, so back shows them exactly as left — scroll,
 expanded projects, transcript — with no reload. `useHostRequest` starts a reopened screen from the read's
 last value for that host and refreshes in place; the tree re-reads `project.list` on `project.updated` and a
-project's `workspace.list` on `workspace.created/updated/removed`, keeping the rows on screen, so rows keyed
+project's `workspace.list` on a `workspace.created/updated/removed` naming that project (`refreshIf`), keeping the rows on screen, so rows keyed
 by id stay put and only a new one appears. A loader shows only the first time a read has no value. Other params or another client never show the previous read's rows — they start from their own last value or a loader — and a failed read shows why with **Retry**, loading again when re-issued.
 
 Add a device pairs through `PairForm.tsx`'s `PairActions` — grouped **Scan QR code** /
@@ -178,8 +184,8 @@ with the shared `@thinkrail/ui/settings` primitives and the IDE's strings — **
 named by `languageName`). They are device preferences (`preferences.ts`, one JSON entry in the
 `localStorage` store), never written to a host: a phone can pair several computers, and the IDE's own
 choice belongs to the IDE. `theme.ts`'s `applyDevicePreferences` applies them before paint (a layout
-effect in `App`) — the bundled `dark` / `light` / `high-contrast-*` manifest via `applyPalette`, following
-`prefers-color-scheme` while System, and the locale via `resolveLocale` + `applyLocale`, following
+effect in `App`) — the bundled `dark` / `light` / `high-contrast-*` theme through the `themes` module's
+`applyTheme`, following its `onSystemAppearanceChange` while System, and the locale via `resolveLocale` + `applyLocale`, following
 `languagechange` while System. Custom themes, theme pairs and local locale files are host-folder features
 and stay in the IDE.
 

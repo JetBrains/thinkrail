@@ -41,9 +41,11 @@ export interface RemoteAccessControlOptions {
 	/** Public Nostr relays a phone on any network signals through; the public defaults unless given, `[]` turns it off. */
 	nostrRelays?: readonly string[];
 	hostName?: string;
-	onPaired: (device: PairedDevice, channel: RemoteChannel) => void;
+	onPaired: (device: PairedDevice & { access: RemoteDeviceAccess }, channel: RemoteChannel) => void;
 	/** A paired device's access changed on this computer; its live channels should hear of it. */
 	onAccessChanged?: (deviceId: string, access: RemoteDeviceAccess) => void;
+	/** The state changed: coalesced, and only when it differs from the last one heard. */
+	onStatus?: (state: RemoteAccessState) => void;
 	/** Where the setting and device registry live; the host data dir by default. Injected in tests. */
 	dataDir?: string;
 	startLocal?: () => LocalRelay;
@@ -73,6 +75,10 @@ export interface RemoteAccessControl {
 	stop(): void;
 }
 
+const STATUS_COALESCE_MS = 100;
+/** The relay's addresses and public check and the Nostr live count are read, not announced; sampled this often while on. */
+const STATUS_SAMPLE_MS = 2_000;
+
 /**
  * Owns the lifecycle of remote access so it can be switched at runtime from Settings rather than only by a
  * launch flag: starting brings up the relay (the host's own unless one is configured) and the broker
@@ -85,6 +91,22 @@ export function createRemoteAccessControl(
 	const startAccess = options.startAccess ?? startRemoteAccess;
 	let running: { access: RemoteAccess; relay: LocalRelay | null } | null = null;
 	const channels = new Map<string, Set<RemoteChannel>>();
+	let heard: string | null = null;
+	let flush: ReturnType<typeof setTimeout> | undefined;
+	let sampler: ReturnType<typeof setInterval> | undefined;
+	let stopped = false;
+
+	const changed = (): void => {
+		if (!options.onStatus || stopped || flush !== undefined) return;
+		flush = setTimeout(() => {
+			flush = undefined;
+			const now = state();
+			const key = JSON.stringify(now);
+			if (key === heard) return;
+			heard = key;
+			options.onStatus?.(now);
+		}, STATUS_COALESCE_MS);
+	};
 
 	const track = (device: PairedDevice, channel: RemoteChannel): void => {
 		const open = channels.get(device.id) ?? new Set<RemoteChannel>();
@@ -93,8 +115,10 @@ export function createRemoteAccessControl(
 		channel.onClose(() => {
 			open.delete(channel);
 			if (open.size === 0 && channels.get(device.id) === open) channels.delete(device.id);
+			changed();
 		});
-		options.onPaired(device, channel);
+		options.onPaired({ ...device, access: accessOf(device) }, channel);
+		changed();
 	};
 
 	const start = (): void => {
@@ -109,6 +133,11 @@ export function createRemoteAccessControl(
 				onPaired: track,
 			});
 			running = { access, relay };
+			if (options.onStatus) {
+				sampler = setInterval(changed, STATUS_SAMPLE_MS);
+				sampler.unref?.();
+				void relay?.ready.then(changed);
+			}
 		} catch (error) {
 			relay?.stop();
 			throw error;
@@ -120,6 +149,8 @@ export function createRemoteAccessControl(
 		running.access.stop();
 		running.relay?.stop();
 		running = null;
+		clearInterval(sampler);
+		sampler = undefined;
 	};
 
 	const relayOf = (current: NonNullable<typeof running>): RemoteRelay =>
@@ -152,6 +183,7 @@ export function createRemoteAccessControl(
 			if (enabled) start();
 			else halt();
 			if (persist) saveRemoteAccessEnabled(enabled, options.dataDir);
+			changed();
 			return state();
 		},
 		ready: () => running?.relay?.ready ?? Promise.resolve(),
@@ -165,15 +197,18 @@ export function createRemoteAccessControl(
 			// The registry alone only stops the next resume; a live connection must close too.
 			for (const channel of channels.get(deviceId) ?? []) channel.close();
 			channels.delete(deviceId);
+			changed();
 			return state();
 		},
 		renameDevice(deviceId, label) {
 			updateDevice(deviceId, { label }, options.dataDir);
+			changed();
 			return state();
 		},
 		setDeviceAccess(deviceId, access) {
 			updateDevice(deviceId, { access }, options.dataDir);
 			options.onAccessChanged?.(deviceId, access);
+			changed();
 			return state();
 		},
 		mayRequest(deviceId, method) {
@@ -183,8 +218,14 @@ export function createRemoteAccessControl(
 		},
 		restore() {
 			if (loadRemoteAccessEnabled(options.dataDir)) start();
+			changed();
 			return state();
 		},
-		stop: halt,
+		stop() {
+			stopped = true;
+			halt();
+			clearTimeout(flush);
+			flush = undefined;
+		},
 	};
 }

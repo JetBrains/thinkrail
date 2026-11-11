@@ -10,7 +10,8 @@ export function toRemoteChannel(channel: RTCDataChannel): RemoteChannel {
 			return !closed && channel.readyState === "open";
 		},
 		send(data) {
-			for (const frame of chunkFrames(data) ?? [data]) channel.send(Buffer.from(frame));
+			for (const frame of chunkFrames(data) ?? [data])
+				channel.send(Buffer.from(frame.buffer, frame.byteOffset, frame.byteLength));
 		},
 		onMessage(handler) {
 			const assemble = createChannelAssembler();

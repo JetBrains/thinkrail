@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { parsePairingUri } from "../remote";
+import { parsePairingUri } from "@thinkrail/contracts";
 import type { BrokerConnection, HostBrokerDeps } from "./hostBrokerClient";
 import type { RelayAddress } from "./localRelay";
 import { startRemoteAccess } from "./remoteAccess";

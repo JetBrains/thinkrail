@@ -1,47 +1,39 @@
-import {
-	applyPalette,
-	assertThemeManifest,
-	bundledThemeSources,
-	type ThemeManifest,
-} from "@thinkrail/design-tokens";
+import type { ThemeAppearance } from "@thinkrail/design-tokens";
 import { BUNDLED_LOCALES, resolveLocale } from "@thinkrail/locales";
 import { applyLocale } from "@thinkrail/locales/react";
+import {
+	applyTheme,
+	initializeThemes,
+	onSystemAppearanceChange,
+	readSystemAppearance,
+} from "../themes";
 import type { DevicePreferences } from "./preferences";
 
-const DARK_QUERY = "(prefers-color-scheme: dark)";
-
-const manifests = new Map<string, ThemeManifest>(
-	Object.values(bundledThemeSources()).map((source) => {
-		const manifest = assertThemeManifest(source);
-		return [manifest.id, manifest];
-	}),
-);
+/** The bundled theme a device preference names under the OS's current appearance. */
+export function deviceThemeId(
+	preferences: Pick<DevicePreferences, "theme" | "contrast">,
+	system: ThemeAppearance,
+): string {
+	const appearance = preferences.theme === "system" ? system : preferences.theme;
+	return preferences.contrast === "high" ? `high-contrast-${appearance}` : appearance;
+}
 
 /** Applies the phone's own theme and language, following the OS while either is set to System; returns the unsubscribe. */
 export function applyDevicePreferences(preferences: DevicePreferences): () => void {
-	const media = window.matchMedia(DARK_QUERY);
-	const applyTheme = (): void => {
-		const appearance =
-			preferences.theme === "system" ? (media.matches ? "dark" : "light") : preferences.theme;
-		const id = preferences.contrast === "high" ? `high-contrast-${appearance}` : appearance;
-		const manifest = manifests.get(id);
-		if (!manifest) return;
-		const root = document.documentElement;
-		applyPalette(root, manifest);
-		root.dataset.themeContrast = manifest.contrast;
-		root.dataset.theme = manifest.id;
-	};
+	initializeThemes();
 	const applyLanguage = (): void => {
 		const tag = resolveLocale(preferences.locale, BUNDLED_LOCALES, navigator.languages);
 		void applyLocale(tag, {});
 		document.documentElement.lang = tag;
 	};
-	applyTheme();
+	applyTheme(deviceThemeId(preferences, readSystemAppearance()));
 	applyLanguage();
-	media.addEventListener("change", applyTheme);
+	const stopFollowingTheme = onSystemAppearanceChange((system) =>
+		applyTheme(deviceThemeId(preferences, system)),
+	);
 	window.addEventListener("languagechange", applyLanguage);
 	return () => {
-		media.removeEventListener("change", applyTheme);
+		stopFollowingTheme();
 		window.removeEventListener("languagechange", applyLanguage);
 	};
 }

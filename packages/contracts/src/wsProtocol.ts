@@ -654,6 +654,8 @@ export const WS_CHANNELS = {
 	remoteDeviceAccess: "remote.deviceAccess",
 	/** To one paired device only: the host's current `RemoteHostRoutes`, after the welcome. */
 	remoteHostRoutes: "remote.hostRoutes",
+	/** To this computer's own clients only: the whole `RemoteAccessStatus`, whenever it changes. */
+	remoteStatusChanged: "remote.statusChanged",
 } as const;
 
 type SameUnion<A extends B, B extends C, C = A> = A;

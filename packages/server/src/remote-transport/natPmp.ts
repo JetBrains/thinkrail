@@ -103,11 +103,6 @@ export interface NatPmpOptions {
 	now?: () => number;
 }
 
-/**
- * NAT-PMP (RFC 6886) against the default gateway: the port mapping Tailscale and others use so a peer
- * behind a strict NAT (a phone on a carrier's CGNAT) can still reach this host directly. A router that does
- * not answer is left alone for a while, so a network without it costs one short wait, not one per session.
- */
 export function createNatPmpMapper(options: NatPmpOptions = {}): PortMapper {
 	const findGateway = options.gateway ?? (() => defaultGateway());
 	const routerPort = options.port ?? NAT_PMP_PORT;
