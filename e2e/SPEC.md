@@ -623,7 +623,8 @@ focus, tabs/question/footer at one y across paging and choosing, notes and Other
 place under a height that never shrinks, Discuss marking/cancelling/sending (asserted in the session file),
 the receipt's fold, per-question Options and remembered manual fold, and the keyboard model (arrows only
 move, Enter picks, Space opens a note, `d` discusses, fields park on their own row, the platform chord
-submits or nudges) (`ask-user-question.spec.ts`). `ask-previews.spec.ts` writes mockups
+submits or nudges), and an open note closing on a background press or on focus leaving the card without
+stealing the press aimed at a row or Add note below it (`ask-user-question.spec.ts`). `ask-previews.spec.ts` writes mockups
 into the fixture repository (removed in `finally`) and pins the question preview and the option pane (HTML,
 before/after, mermaid, none) at one card height, full-screen keys that never page or skip, a file removed
 under its preview, and the picked file's path in the persisted answer; `plan-ask.spec.ts` adds the same file
