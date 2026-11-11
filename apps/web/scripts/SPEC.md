@@ -12,7 +12,8 @@ Build-time tooling for `apps/web`. **Nothing here ships**: these modules run und
 machine or in CI, never in the browser bundle. They read files from `src/`, write generated files back
 into `src/`, and exit with a status code.
 
-The directory holds four pipelines — typography, colour, spacing and provider glyphs — built the same way, plus the
+The directory holds four pipelines — typography, colour, spacing and provider glyphs — built the same way, the
+favicon rasterizer, plus the
 React Compiler census: a diagnostic whose baseline is a ratchet gate. They live here rather than in `src/` because
 they are *generators*: they use `node:fs` and `node:path`, which must never reach browser-bundled code.
 
@@ -30,6 +31,7 @@ they are *generators*: they use `node:fs` and `node:path`, which must never reac
 | `generate-spacing.ts` | CLI. Writes `src/styles/generated/spacing.css` — the `--space-<n>` tokens + the Tailwind base; `--check` fails when it is stale. |
 | `providerGlyphs.ts` | the library: the **only** pi-provider-id → vendor-mark mapping, plus the reader that accepts a vendored SVG only when it is a 24×24, path-only, `currentColor` glyph (layered marks keep their per-path opacity) and the renderer that shares one constant per mark. Source set: the dev-only `@lobehub/icons-static-svg` (MIT; the marks stay their owners' trademarks). |
 | `generate-provider-glyphs.ts` | CLI. Writes `src/chat/generated/providerGlyphs.ts`; `--check` fails when it is stale. The generated module is Biome-ignored like `styles/generated`. |
+| `generate-favicons.ts` | CLI (`favicons:generate`). Reads the mark path from `public/favicon.svg` as data, composes the native app tile around it, and writes `public/favicon.ico` + `public/apple-touch-icon.png`. No `--check`: rasterizer output is not byte-stable across platforms. |
 | `providerGlyphs.test.ts` | pins that every mapped mark exists in the vendored set and that coloured, oddly sized or non-path SVGs are rejected rather than flattened. |
 | `generatedFiles.ts` | what every generate CLI does with a rendered file: `--check` reports drift, otherwise write. The **only** definition of "stale", so the three pipelines and the tests cannot disagree. |
 | `generatedFiles.test.ts` | pins that definition — content drift and a missing file are stale, a CRLF working tree is not. |
@@ -53,7 +55,7 @@ in agreement about the same functions.
 
 ## Boundary
 
-- **Allowed deps:** `node:fs`, `node:path`, `node:module` (resolving the vendored glyph set), the three JSON sources + their schemas, the dev-only `@lobehub/icons-static-svg` files read as *data*, and two further reads
+- **Allowed deps:** `node:fs`, `node:path`, `node:module` (resolving the vendored glyph set), the three JSON sources + their schemas, the dev-only `@lobehub/icons-static-svg` files read as *data*, the dev-only `@resvg/resvg-js` + `resedit` that `generate-favicons.ts` rasterizes and packs with (reading `public/favicon.svg`, writing the two rasters beside it), and two further reads
   taken as *data*, never as imports: `src/themes/schema.ts` (for `colors.ts`, so the roles and
   `THEME_COLOR_KEYS` cannot drift) and `apps/web/package.json` (for `typography.ts`, so a `selfHosted`
   entry and the installed font packages cannot drift).

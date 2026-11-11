@@ -194,8 +194,14 @@ and its ordinary shutdown.
 
 Other menu shortcuts are forwarded `NativeCommand`s: the menu action is the command id (an exhaustive `Record<NativeCommand, true>` gates it) and main sends
 `nativeCommand`. A shared `repeatGate` makes them edge-triggered: after a forward with a key down, further
-actions drop until no non-modifier key is down, so key-repeat never fires a command twice. A click with no
-key down, or unreadable key state, always forwards. Command-W (`close-item`) asks the web client to close
+actions drop until no non-modifier key is down, so key-repeat never fires a command twice — a genuinely
+held key keeps producing key-down events (macOS auto-repeat) and the latch holds while they flow. The
+latch also releases when the state reads a key down but no key-down event has arrived for 2.5 s — longer
+than macOS's slowest delay-until-repeat (~1.8 s), so a held key's first repeat still finds the latch armed: a
+synthetic-input stack (KVM-over-IP, remote desktop) that loses a key-up packet leaves a phantom "down"
+that produces no events, and without this staleness release every gated command stays dead until restart
+(#1199). A click with no key down, or unreadable key state, always forwards; unreadable event freshness
+falls back to trusting the state. Command-W (`close-item`) asks the web client to close
 its focused item or do nothing; it never closes the native window. Command-comma (`open-settings`) asks it
 to open Settings; the web decides whether a modal blocks it. The preload exposes hints and commands
 as the frozen non-enumerable `__THINKRAIL_NATIVE_SHORTCUTS__` `NativeShortcutsBridge` (built by
@@ -276,9 +282,9 @@ Linux is not planned: `hiddenInset` is a no-op under GTK and `hidden` removes de
 WM-provided resize handles. Fully custom macOS chrome (`titleBarStyle: "hidden"` with drawn traffic lights)
 was rejected because the platform provides real ones.
 
-**Geometry contract.** The desktop publishes three CSS custom properties on `<html>`: the two inset
-properties plus `--window-chrome-drag-region` (`drag` | `no-drag`), which tells the page whether its
-header is the title bar. The drag flag rides only the initial preload global (it is a per-policy constant);
+**Geometry contract.** The desktop publishes two CSS custom properties on `<html>`, the two insets, plus the
+`data-window-chrome-drag-region` attribute (`drag` | `no-drag`), which tells the page whether its header is
+the title bar. The drag flag rides only the initial preload global (it is a per-policy constant);
 geometry updates arrive as `windowChromeChanged { insetLeft, insetRight }`. The web consumes the properties
 with `0px` fallbacks, so a browser-hosted client and the neutral E2E-host window (`about:blank`, no
 preload) are unaffected and the *web client still has no desktop branch*. The preload validates geometry,
@@ -294,7 +300,8 @@ neutral E2E-host window (`THINKRAIL_DESKTOP_E2E_HOST=1`) keeps the default nativ
 nothing.
 
 **Dragging.** The desktop's only contribution is the `drag` flag: the web header's `window-drag` utility
-resolves to `-webkit-app-region: drag` only when `--window-chrome-drag-region` says so, and Electrobun's
+resolves to `-webkit-app-region: drag` only when `data-window-chrome-drag-region` says so (an attribute, because
+Chromium 156 WebView2 computes a `var()` app-region as `none`), and Electrobun's
 own injected preload rewrites app-region declarations from same-origin stylesheets into a mirrored custom
 property it hit-tests against on `mousedown`. A decorated window (Linux, the neutral window)
 publishes `no-drag` and so never acquires a second, partial drag strip.
@@ -316,10 +323,8 @@ miniaturizes; `None` and unknown values do nothing. `Fill` uses zoom because App
 private and unreachable through Electrobun; this window's standard zoom frame is the screen's visible
 frame, so only tiling margins differ. A double-click arriving while the previous one is still resolving is
 dropped. This workaround exists only because Electrobun lacks the behavior, tracked upstream in
-[electrobun#561](https://github.com/blackboardsh/electrobun/issues/561). An Electrobun upgrade must
-re-check the mirror property name and that issue: once the framework handles drag-region double-clicks
-itself, remove the preload listener, `titleBarDoubleClick` message, and handler, or the window toggles
-twice.
+[electrobun#561](https://github.com/blackboardsh/electrobun/issues/561); its removal gate lives in
+[[electrobun-compatibility]].
 
 ## Navigation and window security
 
@@ -341,10 +346,8 @@ WebView2 report nothing for `_blank` or `window.open`, because Electrobun handle
 `NEW_WINDOW_ACTION` nor `NewWindowRequested` (the WebView2 half is
 [electrobun#569](https://github.com/blackboardsh/electrobun/issues/569)). Cmd/Ctrl-click keeps
 Electrobun's own preload path, which emits `new-window-open`. Clicks the page already handled, `download`
-links, same-origin URLs, and schemes outside the allowlist below stay with the page. An Electrobun
-upgrade must re-check both gaps. Once the constructor option reaches native code, the explicit call
-becomes redundant. Once every renderer reports and cancels new-window requests, the preload routing can
-go. On Windows a cancelled navigation may still send its GET request (WebView2's documented behaviour); the
+links, same-origin URLs, and schemes outside the allowlist below stay with the page. Both gaps' removal
+gates live in [[electrobun-compatibility]]. On Windows a cancelled navigation may still send its GET request (WebView2's documented behaviour); the
 window stays on its page and never commits the URL. Post-mortem: before the rules were applied explicitly,
 every navigation was allowed. A non-`_blank`
 external navigation replaced the app with the external page, which then also received the desktop
@@ -382,6 +385,35 @@ The host reads the staged preload bundle and passes its JavaScript **source text
 `BrowserWindow.preload`. A `views://` preload URL is forbidden: Electrobun 1.18.1 resolves it on macOS but
 injects the literal URL as code on Linux.
 
+## Microphone
+
+Voice input ([[submodule-web-speech]]) records in the page through `getUserMedia`. The page is the
+host's loopback origin, a secure context, and navigation rules keep every other origin out of the native
+webview, so granting the microphone to the webview grants it only to ThinkRail's own UI.
+
+- **macOS.** `build.mac.entitlements` carries `com.apple.security.device.audio-input`, which the
+  hardened runtime needs before TCC can prompt. Its string value is the usage text: Electrobun 2.0.5
+  writes it as `NSMicrophoneUsageDescription` into `Info.plist` (verified on a `package:dev` build). The
+  first dictation shows macOS's own prompt, plus the Electrobun WKWebView wrapper's per-origin
+  "Microphone Access" dialog.
+- **TCC attribution.** macOS asks the *responsible* process. A ThinkRail launched from another app's
+  terminal (`bun run desktop:dev` inside ThinkRail) is attributed to that parent app. If the parent's
+  `Info.plist` has no `NSMicrophoneUsageDescription` (any release before voice input), TCC cannot
+  prompt, and WebKit denies `getUserMedia` within milliseconds. This was seen with a dev build started
+  from ThinkRail canary 0.4.0-nightly.3 (`responsible_path` in the `tccd` log). Test the microphone
+  with an app opened through LaunchServices (Finder or `open …/ThinkRail-dev.app`).
+- WebKit also hides `navigator.mediaDevices` entirely in an app whose own `Info.plist` lacks the
+  usage string (checked with a minimal WKWebView probe), so the page reports an unsupported browser
+  there.
+- **Windows.** `build.win.autoGrantPermissions: ["microphone"]` answers WebView2's permission request
+  without a dialog. Auto-grant applies to every origin the webview loads, which here is only ours.
+- **Linux.** Unconfigured. Whether WebKitGTK prompts or grants by default is unverified.
+- **Release signing.** The private pipeline re-signs every Mach-O with its own entitlement plist, so
+  `build.mac.entitlements` does not reach release builds; that plist and its verification must carry
+  `com.apple.security.device.audio-input` too, or TCC denies the microphone without prompting. Check a
+  release with `codesign -d --entitlements - ThinkRail.app`.
+- **Unverified.** The Linux behavior is checked on release builds, not in CI.
+
 ## Lifecycle
 
 Every quit path calls the shared idempotent asynchronous server shutdown once, including a startup
@@ -414,7 +446,7 @@ drivers and assertions live in the test package, which product code never import
 
 The package pins the Electrobun `2.0.5` npm bootstrap as a build-only dependency. That exact pin selects
 its paired Hutch `0.28.2` toolchain and SDK; direct global Hutch invocation and floating version overrides
-are not part of the build path. The pin is the lowest release that publishes a macOS x64 core, so Intel
+are not part of the build path. Every bump re-checks the removal gates in [[electrobun-compatibility]]. The pin is the lowest release that publishes a macOS x64 core, so Intel
 Macs build from the same unmodified `electrobun build` path as every other target; both macOS
 architectures target macOS 14 or later and build only on a native runner. The application explicitly
 selects the Bun main process (`build.mainProcess: "bun"`, Electrobun's default since 2.0.4). The packaged
@@ -469,8 +501,17 @@ three gaps, closed by the project:
   ICO) through `user32` and sends it to the splash and the main window, sized for the window's DPI. A
   failure is reported and non-fatal.
 
-Removal gates: Hutch writing the executable identity and replacing the main process's icon groups;
-Electrobun setting a window icon on Windows.
+  `WM_SETICON` stores the handle rather than copying the icon, so each icon must outlive its window.
+  They are set once per window and never destroyed: four handles for the life of the process, which
+  the OS reclaims at exit; nothing grows, so a `DestroyIcon` pass would only matter if icons were
+  re-applied. They are not re-applied on `WM_DPICHANGED` either: after a move to a monitor with another
+  scale, Windows rescales the loaded frames, so the Alt+Tab and Task Manager icon can read slightly soft
+  until a restart. The native caption icon is never shown (`hiddenInset` with the app's own controls),
+  and a pinned taskbar button takes its icon from the launcher. Re-applying would mean subclassing the
+  window procedure from Bun FFI with a callback on the native message thread, which is out of proportion
+  to that effect; the decision is deliberate.
+
+Removal gates for both live in [[electrobun-compatibility]].
 
 **Taskbar identity.** A pinned shortcut targets the launcher while the window belongs to `bun.exe`, and
 Electrobun sets no AppUserModelID. Without one, Windows derives each side's identity from its own exe
@@ -505,7 +546,7 @@ itself:
   window before this change, which point at `bun.exe` and stay separate. Failures are reported and
   non-fatal. An unreadable manifest is reported too, and the pins are still stamped.
 
-Removal gate: Electrobun giving its process and shortcuts a shared AppUserModelID.
+Removal gate: [[electrobun-compatibility]].
 
 Electrobun's `build.views` owns the browser preload bundle; `build.copy` owns physical resource inclusion.
 There is no custom SDK resolver, SDK metadata validator, or Electrobun command runner. App-local Hutch
@@ -524,8 +565,9 @@ approved, desktop alone sets `exactOptionalPropertyTypes: false` to match Electr
 while retaining `strict: true` and `noUncheckedIndexedAccess: true`. Also explicitly approved, and
 temporary, desktop sets `noImplicitReturns: false` because Electrobun's browser and native SDK sources
 fail it; the other base lint-style flags stay on. The flag cannot be scoped to the SDK files, so it also
-stops checking desktop's own source, which passes it today. Remove the override once an Electrobun
-release ships [blackboardsh/electrobun#590](https://github.com/blackboardsh/electrobun/pull/590). These
+stops checking desktop's own source, which passes it today. Its removal gate
+([blackboardsh/electrobun#590](https://github.com/blackboardsh/electrobun/pull/590)) lives in
+[[electrobun-compatibility]]. These
 settings apply to the desktop compilation, including imported workspace source; every other package
 retains its separate unchanged strict check. The optional-property incompatibility is tracked in
 Electrobun issue #516; `skipLibCheck` cannot exclude imported implementation `.ts`. The direct-source
@@ -560,8 +602,10 @@ only the private pipeline's verified final DMG is a signed release. The handoff 
 belong to [[module-ci-release]].
 
 Linux uses native WebKitGTK without CEF and declares Ubuntu 24.04+/glibc 2.38 plus `libgtk-3-0`,
-`libwebkit2gtk-4.1-0`, `libayatana-appindicator3-1`, and `librsvg2-2`. Xvfb software-rendering flags are
-CI-only and are never shipped as user configuration.
+`libwebkit2gtk-4.1-0`, `libayatana-appindicator3-1`, and `librsvg2-2`. Desktop notifications also need
+`libnotify-bin`: Electrobun shows them by running the `notify-send` it provides, and without it they are
+dropped.
+Xvfb software-rendering flags are CI-only and are never shipped as user configuration.
 
 ## Auto-update policy
 
@@ -596,9 +640,7 @@ the JetBrains Central proxy daemon started from a pi `session_start`, editors, M
 made the helper's `app → app.previous` rename fail with `AccessDenied` for its whole retry window, roll
 back, and relaunch the old build. POSIX renames are unaffected. Children started by a build without this
 rule keep the old cwd, so the first update from such a build may still need them ended once. The step is an
-Electrobun 2.0.5 workaround with two removal gates. The read-before-`chdir` ordering goes once Electrobun
-resolves resources from the executable path. The `chdir` itself goes once its launcher starts the main
-process outside the replaceable bundle.
+Electrobun 2.0.5 workaround; its two removal gates live in [[electrobun-compatibility]].
 
 Reference: [pinned updater handoff](https://github.com/blackboardsh/electrobun/blob/v2.0.5/package/src/sdks/main/core/Updater.ts#L2251-L2364).
 
@@ -612,6 +654,6 @@ release checks described in [[module-ci-release]].
 
 ## Deferred
 
-Shared/remote backend profiles, profile selection, multi-window/deep-link routing, CEF, and removing the
-`user32` style-bit shim once blackboardsh/electrobun#558 ships. The update feed publication described above
+Shared/remote backend profiles, profile selection, multi-window/deep-link routing, and CEF. Removing
+Electrobun workarounds follows [[electrobun-compatibility]]. The update feed publication described above
 remains release-owned.
