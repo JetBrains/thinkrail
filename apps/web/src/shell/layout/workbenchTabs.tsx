@@ -26,9 +26,9 @@ import {
 	chatLabel,
 	copyText,
 	DOUBLE_CLICK_SETTLE_MS,
+	joinWorkspacePath,
 	type LayoutAttention,
 	tupleKey,
-	workspaceFileCopyText,
 } from "../../lib";
 import {
 	type AuxiliaryRailControlProps,
@@ -416,10 +416,6 @@ export interface WorkbenchTabProps {
 	onKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => void;
 }
 
-export function tabCopyRelativePath(tab: LayoutTab): string | null {
-	return tab.kind === "file" || tab.kind === "diff" ? tab.path : null;
-}
-
 export const WorkbenchTab = memo(function WorkbenchTab({
 	tab,
 	index,
@@ -597,7 +593,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 		: -1;
 	const currentAuxiliaryLimit = currentAuxiliary === "bottom" ? maxBottomGroups : maxSideGroups;
 	const name = layoutTabName(t, tab, chatFirstPrompts);
-	const copyRelativePath = tabCopyRelativePath(tab);
+	const filePath = tab.kind === "file" || tab.kind === "diff" ? tab.path : null;
 	const chatTitle =
 		tab.kind === "chat" ? chatLabel(t, tab.name, chatFirstPrompts?.[tab.sessionId]) : undefined;
 	const groupRemoval = removeLayoutGroup(t, document, location);
@@ -813,22 +809,18 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 						? t(rail?.vertical ? "workbench.tab.moveDownLast" : "workbench.tab.moveRightLast")
 						: t(rail?.vertical ? "workbench.tab.moveDown" : "workbench.tab.moveRight")}
 				</ContextMenuItem>
-				{copyRelativePath ? (
+				{filePath ? (
 					<>
 						<ContextMenuSeparator />
 						<ContextMenuItem
 							data-testid="tab-copy-path"
-							onSelect={() => {
-								void copyText(workspaceFileCopyText(worktreePath, copyRelativePath, "absolute"));
-							}}
+							onSelect={() => void copyText(joinWorkspacePath(worktreePath, filePath))}
 						>
 							{t("workbench.tab.copyPath")}
 						</ContextMenuItem>
 						<ContextMenuItem
 							data-testid="tab-copy-relative-path"
-							onSelect={() => {
-								void copyText(workspaceFileCopyText(worktreePath, copyRelativePath, "relative"));
-							}}
+							onSelect={() => void copyText(filePath)}
 						>
 							{t("workbench.tab.copyRelativePath")}
 						</ContextMenuItem>

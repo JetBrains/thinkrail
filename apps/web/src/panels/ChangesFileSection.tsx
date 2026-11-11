@@ -319,7 +319,7 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 								}}
 							>
 								<Copy />
-								{t("changes.section.copyPath")}
+								{t("changes.section.copyRelativePath")}
 							</DropdownMenuItem>
 							{hunkActions ? (
 								<DropdownMenuItem onSelect={() => void hunkActions.revertFile()}>

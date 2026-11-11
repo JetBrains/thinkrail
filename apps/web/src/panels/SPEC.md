@@ -299,12 +299,11 @@ treatment.
   is showing its folders expand (and stay expanded) and it scrolls `nearest` into view; on return All
   reveals only if the active file differs from the persisted `seenActivePath`, and then skips the scroll
   restore so the two cannot fight. Auto-reveal never switches the side tab or the mode. Clicks still open
-  the editor. Right-clicking a file or folder row — or the Context Menu key / Shift+F10 on a focused row —
-  offers **Copy path** (the workspace worktree path joined with the row, keeping a UNC prefix and POSIX
-  literal backslashes) and **Copy relative path** (the row's host-produced worktree-relative path).
-  A compacted directory copies its deepest path, matching the row label.
-  Copying identifies the clicked row and does not open or select it. A failed first status read shows no marks; a failed refresh keeps the last ones, like the
-  Changed list. The tree's look is remembered per workspace across reloads (`store.filesTreeByWorkspace`:
+  the editor. Right-clicking a file or folder row (a touch long-press, or the Context Menu key / Shift+F10 on
+  a focused row) opens its menu: **Copy path** (absolute, through `joinWorkspacePath`) and **Copy relative
+  path** (worktree-relative). A compacted folder copies its deepest path, matching its label, and copying
+  neither opens nor selects the row. A failed first status read shows no marks; a failed refresh keeps the
+  last ones, like the Changed list. The tree's look is remembered per workspace across reloads (`store.filesTreeByWorkspace`:
   All expanded folders, Changed-tree collapsed folders shared by every scope, scroll per view through
   `RememberedScrollArea` — a Changed view's scroll belongs to its scope and compare target, so changing
   either starts at the top), persisted by the `filesTreeState` module (native stable preferences, else
@@ -2465,10 +2464,10 @@ own section. The kebab menu (`plan-menu`, a
 - **Row actions: one menu, two triggers.** Every **file** row (both views) is wrapped in
   **`ChangeRowActions`**: a hover/focus-revealed `⌄` button *and* right-click on the row open the same
   dropdown. The `⌄` is not garnish — it is the **touch path**, where right-click does not exist (mobile-first).
-  Items: **View** (the same action as a plain click) and **Copy path** (worktree-relative). Deliberately
+  Items: **View** (the same action as a plain click) and **Copy relative path**. Deliberately
   nothing else: the panel is **read-only** — no discard-file/-folder/-all — and no “Open in ‹external app›”,
-  which a host-side `open` would make silently wrong for every remote/phone client (Copy path is the portable
-  escape hatch). **Folder rows get no menu** — nothing in that list applies to a folder. Built on the existing
+  which a host-side `open` would make silently wrong for every remote/phone client (Copy relative path is the
+  portable escape hatch). **Folder rows get no menu** — nothing in that list applies to a folder. Built on the existing
   `@thinkrail/ui/dropdown-menu` (no new `context-menu` primitive); the right-click handler is handed back
   through a render prop so it lands on the row's real interactive element rather than a bare div, and the `⌄`
   trigger is a *sibling* of the row's button (a button inside a button is invalid).

@@ -1,15 +1,22 @@
+import { RiFileCopyLine as Copy } from "@remixicon/react";
 import type { FileNode } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { describeResource, PENDING_TEXT_META } from "@thinkrail/resource-renderers";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuTrigger,
+	openContextMenuFromKeyboard,
+} from "@thinkrail/ui/context-menu";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactElement, useEffect, useMemo, useRef, useState } from "react";
 import { statusLetter } from "../chat/planView";
-import { firstClickOnly } from "../lib";
+import { copyText, firstClickOnly, joinWorkspacePath } from "../lib";
 import { selectFilesTreeView, selectWorkspaceById, type TabIntent, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { type ChangeMarks, statusMarkClass } from "./changesModel";
 import { holdEditorWarm, useEditorWarm, warmOnHover } from "./editorWarm";
-import { FileCopyMenu, fileTreeCopyRelativePath } from "./FileCopyMenu";
 import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
 import { openFileInTab } from "./openTabs";
 import { TreeRow } from "./TreeRow";
@@ -31,7 +38,6 @@ export function FileTree({
 }: TreeFocus & { workspaceId: string; marks: ChangeMarks }) {
 	const t = useT();
 	const [nodes, setNodes] = useState<FileNode[] | null>(null);
-	const worktreePath = useAppStore((s) => selectWorkspaceById(s, workspaceId)?.worktreePath ?? "");
 	const expanded = useAppStore((s) => selectFilesTreeView(s, workspaceId).expanded);
 	const expandedPaths = useMemo(() => new Set(expanded), [expanded]);
 	const warm = useEditorWarm();
@@ -67,7 +73,6 @@ export function FileTree({
 					key={node.path}
 					node={node}
 					workspaceId={workspaceId}
-					worktreePath={worktreePath}
 					marks={marks}
 					focus={focus}
 					expandedPaths={expandedPaths}
@@ -82,7 +87,6 @@ export function FileTree({
 function FileNodeRow({
 	node,
 	workspaceId,
-	worktreePath,
 	marks,
 	focus,
 	expandedPaths,
@@ -91,7 +95,6 @@ function FileNodeRow({
 }: {
 	node: FileNode;
 	workspaceId: string;
-	worktreePath: string;
 	marks: ChangeMarks;
 	focus: TreeFocus;
 	expandedPaths: ReadonlySet<string>;
@@ -147,10 +150,7 @@ function FileNodeRow({
 
 	return (
 		<li>
-			<FileCopyMenu
-				worktreePath={worktreePath}
-				relativePath={fileTreeCopyRelativePath(node, directory)}
-			>
+			<FileTreeMenu workspaceId={workspaceId} path={directory?.path ?? node.path}>
 				<TreeRow
 					ref={revealRow}
 					testid="file-node"
@@ -187,7 +187,7 @@ function FileNodeRow({
 									trigger === "focus" ? warmFile(node.path) : warmOnHover(() => warmFile(node.path))
 					}
 				/>
-			</FileCopyMenu>
+			</FileTreeMenu>
 			{isDir && expanded && children && (
 				<ul className="flex flex-col pl-tree-indent">
 					{children.map((child) => (
@@ -195,7 +195,6 @@ function FileNodeRow({
 							key={child.path}
 							node={child}
 							workspaceId={workspaceId}
-							worktreePath={worktreePath}
 							marks={marks}
 							focus={focus}
 							expandedPaths={expandedPaths}
@@ -206,5 +205,38 @@ function FileNodeRow({
 				</ul>
 			)}
 		</li>
+	);
+}
+
+function FileTreeMenu({
+	workspaceId,
+	path,
+	children,
+}: {
+	workspaceId: string;
+	path: string;
+	children: ReactElement;
+}) {
+	const t = useT();
+	const copyPath = (absolute: boolean) => {
+		const worktreePath = selectWorkspaceById(useAppStore.getState(), workspaceId)?.worktreePath;
+		void copyText(absolute ? joinWorkspacePath(worktreePath ?? "", path) : path);
+	};
+	return (
+		<ContextMenu>
+			<ContextMenuTrigger asChild onKeyDown={openContextMenuFromKeyboard}>
+				{children}
+			</ContextMenuTrigger>
+			<ContextMenuContent data-testid="file-tree-actions">
+				<ContextMenuItem data-testid="file-copy-path" onSelect={() => copyPath(true)}>
+					<Copy />
+					{t("panels.fileTree.copyPath")}
+				</ContextMenuItem>
+				<ContextMenuItem data-testid="file-copy-relative-path" onSelect={() => copyPath(false)}>
+					<Copy />
+					{t("panels.fileTree.copyRelativePath")}
+				</ContextMenuItem>
+			</ContextMenuContent>
+		</ContextMenu>
 	);
 }

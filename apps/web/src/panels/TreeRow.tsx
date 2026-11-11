@@ -8,6 +8,11 @@ import {
 } from "@remixicon/react";
 import type { ComponentPropsWithoutRef, MouseEvent, ReactNode, Ref } from "react";
 
+type MenuTriggerHandlers = Pick<
+	ComponentPropsWithoutRef<"button">,
+	"onKeyDown" | "onPointerDown" | "onPointerMove" | "onPointerCancel" | "onPointerUp"
+>;
+
 export function TreeRow({
 	ref,
 	testid,
@@ -30,7 +35,7 @@ export function TreeRow({
 	onPointerCancel,
 	onPointerUp,
 	onWarm,
-}: {
+}: MenuTriggerHandlers & {
 	ref?: Ref<HTMLButtonElement> | undefined;
 	testid: string;
 	kind: "dir" | "file";
@@ -46,11 +51,6 @@ export function TreeRow({
 	onClick?: ((event: MouseEvent) => void) | undefined;
 	onDoubleClick?: (() => void) | undefined;
 	onContextMenu?: ((event: MouseEvent) => void) | undefined;
-	onKeyDown?: ComponentPropsWithoutRef<"button">["onKeyDown"];
-	onPointerDown?: ComponentPropsWithoutRef<"button">["onPointerDown"];
-	onPointerMove?: ComponentPropsWithoutRef<"button">["onPointerMove"];
-	onPointerCancel?: ComponentPropsWithoutRef<"button">["onPointerCancel"];
-	onPointerUp?: ComponentPropsWithoutRef<"button">["onPointerUp"];
 	onWarm?: ((trigger: "hover" | "focus") => void) | undefined;
 }) {
 	const Chevron = expanded ? ChevronDown : ChevronRight;
