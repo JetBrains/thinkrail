@@ -11,6 +11,7 @@ export default {
 		name: "ThinkRail",
 		identifier: "ai.thinkrail.app",
 		version,
+		urlSchemes: ["thinkrail"],
 	},
 	runtime: {
 		exitOnLastWindowClosed: true,

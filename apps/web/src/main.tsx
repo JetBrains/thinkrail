@@ -14,6 +14,7 @@ import { initFilesTreePersistence } from "./panels/filesTreeState";
 import { initProjectExpansionPersistence } from "./panels/projectExpansion";
 import { initSearchPreferences } from "./search";
 import { AppResourceHost } from "./shell/AppResourceHost";
+import { installDeepLinks } from "./shell/deepLink";
 import { Shell } from "./shell/Shell";
 import { DictationLayer } from "./speech";
 import { applyThemePreference, initializeThemes, readThemeHint } from "./themes";
@@ -38,6 +39,7 @@ initProjectExpansionPersistence();
 initFilesTreePersistence();
 initSearchPreferences();
 initNavigation();
+installDeepLinks();
 registerWebExtensions();
 
 function App() {

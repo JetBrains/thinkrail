@@ -103,7 +103,8 @@ another.
    `Utils.openExternal` callback used by the host's one-shot browser attribution claim. The callback passes through
    `DesktopHostOptions` and the generated runtime. The first native-window `dom-ready` explicitly calls the
    proxied `host.server.startAttributionClaim()` readiness method; host boot and elapsed time do not start a
-   saved-choice claim. No deep-link or RPC surface is added. The runtime also passes `appRoot`
+   saved-choice claim. The launcher registers `thinkrail` as a macOS URL scheme (`app.urlSchemes`);
+   the only deep-link surface is the `open-url` path below. The runtime also passes `appRoot`
    (`runtimeDir/..`, i.e. `Resources/app`) so error-report frames are rooted at the packaged app, and returns
    `reportDesktopError` as `DesktopHost.reportError`.
 5. Restore the valid route fragment and bounded client-preference map for
@@ -358,6 +359,16 @@ channels; the unscoped payload has no webview id, and the instance listener's ty
 popups. Payload types are derived from SDK event factories, not copied into local declarations. Detail
 can be a raw URL, a popup object, or serialized navigation JSON; bounded decoding retains only a string
 URL and the HTTP/HTTPS/mailto allowlist, which the preload routing reuses.
+
+**Deep links.** The packaged app registers `thinkrail://` through `app.urlSchemes` (macOS; the app must
+live in `/Applications` for LaunchServices to register it, and Electrobun 2.0.5 has no Windows/Linux
+scheme registration). `apps/desktop/src/deepLink.ts` accepts exactly
+`thinkrail://open?file=<absolute path>&line=<1-based>&column=<optional>`; `line` defaults to 1, and a
+malformed position, non-absolute path, or other scheme/host is ignored. The main process focuses and
+activates the window, then sends a `NativeOpenFileRequest` over the `openFile` webview message; requests
+arriving before `dom-ready` are queued and flushed once. The URL never navigates the webview. The web
+client resolves the path against open workspaces and opens the file at the line, see
+[[submodule-web-shell]].
 
 A desktop preload sends typed, one-way route, local-preference, page-zoom, and title-bar double-click
 messages, and is the only writer of the window-chrome CSS properties described above. It wraps
@@ -654,6 +665,7 @@ release checks described in [[module-ci-release]].
 
 ## Deferred
 
-Shared/remote backend profiles, profile selection, multi-window/deep-link routing, and CEF. Removing
+Shared/remote backend profiles, profile selection, multi-window routing, Windows/Linux URL-scheme
+registration, and CEF. Removing
 Electrobun workarounds follows [[electrobun-compatibility]]. The update feed publication described above
 remains release-owned.

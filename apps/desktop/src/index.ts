@@ -2,7 +2,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { NativeCommand, NativeQuitHint, NativeWindowState } from "@thinkrail/contracts";
+import type {
+	NativeCommand,
+	NativeOpenFileRequest,
+	NativeQuitHint,
+	NativeWindowState,
+} from "@thinkrail/contracts";
 import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
 import { channel, posthogProjectKey, version } from "@thinkrail/shared/version";
 import Electrobun, {
@@ -20,6 +25,7 @@ import {
 	readMenuLabels,
 } from "./applicationMenu";
 import { attributionClaimOnFirstReadiness } from "./attributionReadiness";
+import { parseThinkRailDeepLink } from "./deepLink";
 import { desktopError, setDesktopErrorReporter } from "./errorReporting";
 import { installExternalNavigation, windowNavigationRules } from "./externalNavigation";
 import { createKeyStateReader } from "./keyState";
@@ -81,6 +87,7 @@ import {
 } from "./windowsWindowIcon";
 
 type BeforeQuitEvent = ReturnType<typeof Electrobun.events.events.app.beforeQuit>;
+type OpenUrlEvent = ReturnType<typeof Electrobun.events.events.app.openUrl>;
 
 const BACKEND_PROFILE_ID = "local";
 const WINDOW_ID = "main";
@@ -345,6 +352,8 @@ async function start(): Promise<void> {
 		writeReady(windowControlsProbePath, windowControlsProbe);
 	};
 	let mainWindow: BrowserWindow;
+	const pendingDeepLinks: NativeOpenFileRequest[] = [];
+	let webReady = false;
 	const handlePageZoomGesture = createPageZoomGestureHandler({
 		getPageZoom: () => mainWindow.getPageZoom(),
 		setPageZoom: (zoom) => mainWindow.setPageZoom(zoom),
@@ -471,6 +480,14 @@ async function start(): Promise<void> {
 	});
 	setWindowsWindowIcon(mainWindow);
 	if (!neutral) {
+		Electrobun.events.on("open-url", (event: OpenUrlEvent) => {
+			const request = parseThinkRailDeepLink(event.data.url);
+			if (!request) return;
+			mainWindow.show();
+			mainWindow.activate();
+			if (webReady) rpc.send.openFile(request);
+			else pendingDeepLinks.push(request);
+		});
 		mainWindow.webview.setNavigationRules(windowNavigationRules(origin));
 		handleTitleBarDoubleClick = createTitleBarDoubleClickHandler({
 			enabled: windowChrome.titleBarDoubleClick,
@@ -570,6 +587,8 @@ async function start(): Promise<void> {
 	mainWindow.webview.on("dom-ready", () => {
 		if (ready) return;
 		ready = true;
+		webReady = true;
+		for (const request of pendingDeepLinks.splice(0)) rpc.send.openFile(request);
 		releaseStartupSplash?.();
 		startupSplash = undefined;
 		startAttributionClaim();

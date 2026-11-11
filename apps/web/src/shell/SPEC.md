@@ -217,6 +217,14 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
 
 Letter chords match physical `KeyboardEvent.code`, never layout-dependent `key`. The layout and create chords remain app-owned inside xterm, do not repeat, and are suppressed while a modal dialog is open. With no active workspace, right/bottom chords neither act nor swallow the browser chord; `Mod+B` toggles the Project Home Projects pane with the focus rules above. With no context project, `Mod+N` likewise neither acts nor swallows. Terminal `Ctrl+R` still belongs to xterm; `Ctrl+Shift+R`, macOS `Cmd+R`, F5, and browser reload remain untouched. All other arrangement operations are exposed by the layout command/menu system in [[submodule-web-shell-layout]].
 
+**Desktop deep links.** `main.tsx` calls `installDeepLinks` once. The optional
+`NativeDeepLinkBridge` (`__THINKRAIL_NATIVE_DEEP_LINKS__`, [[module-contracts]]) is read from the preload;
+a browser has none and the installer is a no-op there. A request waits for the first welcome, then resolves
+its absolute path against the active workspace first and every open project's loaded `workspace.list`
+(missing lists are read without diff stats), activates the containing workspace, and calls
+`openFileAtLine(..., "keep")`. An unresolved path shows the `shell.deepLink.openFailed` toast. Requests are
+processed one at a time in arrival order; the preload queues any that arrive before this subscription.
+
 **Native shortcuts.** Shell always mounts the `AppShortcuts` leaf. `useAppShortcuts` reads `NativeShortcutsBridge` (`__THINKRAIL_NATIVE_SHORTCUTS__`, [[module-contracts]]; desktop hosts only) once. Without the bridge it adds no listeners and renders nothing. With the bridge, the leaf renders the hint, so hint changes re-render only that leaf. Every app-level close/quit/settings shortcut dispatches through one command table, `shortcutCommands.ts`: a command id (`close-item`, `quit`, `open-settings`) maps to Ctrl chords per shortcut platform, each chord carrying its terminal rule, and the hook supplies the id → handler map. Both native commands from `subscribeCommand` and web keydown chords run the same handler. The shortcut platform is `platformFamily()` (`apple` / `windows` / `linux`) when the bridge exists, else `browser`.
 
 | Platform | Quit | Close item | Open Settings |

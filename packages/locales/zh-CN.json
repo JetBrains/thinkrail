@@ -1855,6 +1855,7 @@
 	"shell.connection.connected": "已连接",
 	"shell.connection.connecting": "正在连接…",
 	"shell.connection.disconnected": "未连接",
+	"shell.deepLink.openFailed": "找不到 {{path}} 所在的工作区",
 	"shell.jbcentralQuota.availableLabel": "{{value}} 个循环 JetBrains AI 额度，更新于 {{time}}",
 	"shell.jbcentralQuota.availableTooltip": "JetBrains AI 周期额度 · 更新于 {{time}}",
 	"shell.jbcentralQuota.creditsUnit": "额度",

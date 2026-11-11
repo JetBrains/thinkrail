@@ -28,6 +28,7 @@ test("selects real Bun and preserves the physical runtime resources without reti
 		name: "ThinkRail",
 		identifier: "ai.thinkrail.app",
 		version,
+		urlSchemes: ["thinkrail"],
 	});
 	expect(config.runtime).toEqual({ exitOnLastWindowClosed: true });
 	expect(config.build).toMatchObject({
