@@ -8,6 +8,7 @@ import {
 	type ExtensionContext,
 	truncateHead,
 } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
 import {
 	flatItems,
 	groupStatus,
@@ -101,4 +102,11 @@ export function consistencyNudge(plan: TodoPlan): string | undefined {
 export function withNudges(text: string, ...nudges: (string | undefined)[]): string {
 	const extra = nudges.filter((n): n is string => Boolean(n));
 	return extra.length ? `${text}\n${extra.join("\n")}` : text;
+}
+
+export function stringEnum<const T extends readonly string[]>(
+	values: T,
+	options: { description: string },
+) {
+	return Type.Unsafe<T[number]>({ type: "string", enum: [...values], ...options });
 }

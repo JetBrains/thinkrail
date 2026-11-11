@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { readdir } from "node:fs/promises";
+import { delimiter, win32 } from "node:path";
 import type { EditorInfo } from "@thinkrail/contracts";
 import { spawnDetached } from "@thinkrail/shared/spawn";
 
@@ -27,18 +30,72 @@ const JETBRAINS_ID = "jetbrains";
 
 const TERMINAL_CANDIDATE = { id: "vim", label: "Vim", bin: "vim" };
 
+const EDITOR_BINS = [...GUI_CANDIDATES, ...JETBRAINS_CANDIDATES, TERMINAL_CANDIDATE].map(
+	(candidate) => candidate.bin,
+);
+
+const PATH_SCAN_CONCURRENCY = 8;
+
 export type WhichFn = (bin: string) => string | null;
 
-export const defaultWhich: WhichFn = (bin) =>
-	Bun.which(bin, { PATH: process.env.PATH ?? "" }) ?? null;
+async function binsListedIn(dir: string, bins: readonly string[]): Promise<Set<string> | null> {
+	let entries: string[];
+	try {
+		entries = await readdir(dir);
+	} catch (error) {
+		const code = (error as NodeJS.ErrnoException).code;
+		return code === "ENOENT" || code === "ENOTDIR" ? new Set() : null;
+	}
+	const listed = new Set<string>();
+	for (const entry of entries) {
+		const name = entry.toLowerCase();
+		for (const bin of bins) if (name === bin || name.startsWith(`${bin}.`)) listed.add(bin);
+	}
+	return listed;
+}
 
-export type SpawnFn = (cmd: string[]) => void;
+export async function pathWhich(
+	bins: readonly string[],
+	searchPath: string = process.env.PATH ?? "",
+): Promise<WhichFn> {
+	const names = bins.map((bin) => bin.toLowerCase());
+	const dirs = searchPath.split(delimiter).filter(Boolean);
+	const listed: (Set<string> | null)[] = dirs.map(() => null);
+	let next = 0;
+	const scan = async () => {
+		while (next < dirs.length) {
+			const index = next++;
+			listed[index] = await binsListedIn(dirs[index] ?? "", names);
+		}
+	};
+	await Promise.all(Array.from({ length: Math.min(PATH_SCAN_CONCURRENCY, dirs.length) }, scan));
+	return (bin) => {
+		const name = bin.toLowerCase();
+		const candidates = dirs.filter((_, index) => listed[index]?.has(name) ?? true);
+		if (candidates.length === 0) return null;
+		return Bun.which(bin, { PATH: candidates.join(delimiter) }) ?? null;
+	};
+}
 
-export const defaultSpawn: SpawnFn = (cmd) => {
-	if (!spawnDetached(cmd)) throw new Error("Failed to launch the requested application");
+export type SpawnFn = (cmd: string[], options?: { windowsHide?: boolean }) => void;
+
+export const defaultSpawn: SpawnFn = (cmd, options) => {
+	if (!spawnDetached(cmd, options)) throw new Error("Failed to launch the requested application");
 };
 
-export function listAvailableEditors(which: WhichFn = defaultWhich): EditorInfo[] {
+let discovery: Promise<EditorInfo[]> | null = null;
+
+export function listAvailableEditors(which?: WhichFn): Promise<EditorInfo[]> {
+	if (which) return Promise.resolve(editorsOnPath(which));
+	discovery ??= pathWhich(EDITOR_BINS)
+		.then(editorsOnPath)
+		.finally(() => {
+			discovery = null;
+		});
+	return discovery;
+}
+
+function editorsOnPath(which: WhichFn): EditorInfo[] {
 	const editors: EditorInfo[] = [];
 	for (const c of GUI_CANDIDATES) {
 		if (which(c.bin)) editors.push({ id: c.id, label: c.label, kind: "gui" });
@@ -64,13 +121,13 @@ function resolveGuiBin(editorId: string, which: WhichFn): string | null {
 	return null;
 }
 
-export function openEditor(
+export async function openEditor(
 	editorId: string,
 	worktreePath: string,
-	which: WhichFn = defaultWhich,
+	which?: WhichFn,
 	spawn: SpawnFn = defaultSpawn,
-): void {
-	const bin = resolveGuiBin(editorId, which);
+): Promise<void> {
+	const bin = resolveGuiBin(editorId, which ?? (await pathWhich(EDITOR_BINS)));
 	if (!bin) throw new Error(`"${editorId}" isn't installed on this host`);
 	spawn([bin, worktreePath]);
 }
@@ -80,14 +137,15 @@ export function revealInFileManager(
 	spawn: SpawnFn = defaultSpawn,
 	platform: NodeJS.Platform = process.platform,
 ): void {
+	if (!existsSync(worktreePath)) throw new Error(`Folder not found: ${worktreePath}`);
 	const cmd =
 		platform === "darwin"
 			? ["open", worktreePath]
 			: platform === "win32"
-				? ["explorer", worktreePath]
+				? ["explorer", win32.normalize(worktreePath)]
 				: ["xdg-open", worktreePath];
 	try {
-		spawn(cmd);
+		spawn(cmd, { windowsHide: false });
 	} catch {
 		throw new Error(`No file manager launcher available on this host (${platform}).`);
 	}

@@ -16,7 +16,7 @@ export type {
 
 import type { AgentEvent, AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { ImageContent, Message, Model, StopReason, TextContent } from "@earendil-works/pi-ai";
-import type { ProviderAuthKind } from "./domain";
+import type { ProviderAuthKind, ProviderWarning } from "./domain";
 
 const NON_EXECUTABLE_TOOL_CALL_STOP_REASONS: ReadonlySet<string> = new Set([
 	"error",
@@ -244,6 +244,8 @@ export interface SkillCatalogEntry {
 	plugin?: string;
 	group: string;
 	decision: SkillDecision;
+	/** pi's `disable-model-invocation`: callable only as `/skill:`, never listed in the prompt. */
+	manualOnly?: boolean;
 }
 
 /** The tool call a dialog is about; absent when it is not tied to one (a command, startup, parallel calls). */
@@ -292,6 +294,7 @@ export type ExtUiRequest =
 	| { id: string; sessionId: string; kind: "setStatus"; key: string; text: string | null }
 	| { id: string; sessionId: string; kind: "setWidget"; key: string; content: string[] | null }
 	| { id: string; sessionId: string; kind: "setTitle"; title: string }
+	| { id: string; sessionId: string; kind: "notice"; notice: ProviderWarning }
 	| { id: string; sessionId: string; kind: "dismiss" };
 
 export interface ExtUiResponse {

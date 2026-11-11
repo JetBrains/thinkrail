@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { commitsAheadOf } from "../git";
+import { delimiter, join } from "node:path";
+import { commitsAheadOf, setSyncGitTimeoutForTests } from "../git";
 import {
 	discoverTemplates,
 	gitlabNewMrUrl,
@@ -127,6 +127,73 @@ describe("pushBranch", () => {
 			pushBranch({ workspaceId: "w0", branch: "feature", confirmBase: true }),
 		).rejects.toThrow(/moved from "feature" to "main"/);
 		expect(sh(remote, "for-each-ref", "refs/heads")).toBe("");
+	});
+
+	const posix = test.skipIf(process.platform === "win32");
+
+	async function withHangingGit<T>(pattern: string, run: () => Promise<T>): Promise<T> {
+		const bin = join(dataDir, "bin");
+		mkdirSync(bin, { recursive: true });
+		writeFileSync(
+			join(bin, "git"),
+			`#!/bin/sh\ncase " $* " in ${pattern}) sleep 30;; esac\nexec ${JSON.stringify(Bun.which("git"))} "$@"\n`,
+		);
+		chmodSync(join(bin, "git"), 0o755);
+		const path = process.env.PATH;
+		process.env.PATH = `${bin}${delimiter}${path ?? ""}`;
+		setSyncGitTimeoutForTests(2_000);
+		try {
+			return await run();
+		} finally {
+			setSyncGitTimeoutForTests(undefined);
+			if (path === undefined) delete process.env.PATH;
+			else process.env.PATH = path;
+		}
+	}
+
+	posix(
+		"a branch read that times out aborts the push instead of trusting the stored branch",
+		async () => {
+			sh(repo, "switch", "-q", "main");
+			seedWorkspaces([
+				{ id: "w0", kind: "default", name: "Default", branch: "feature", baseBranch: "main" },
+			]);
+			const pushed = withHangingGit('*" symbolic-ref "*', () =>
+				pushBranch({ workspaceId: "w0", branch: "feature", confirmBase: true }),
+			);
+			await expect(pushed).rejects.toThrow(expect.objectContaining({ code: "GIT_TIMEOUT" }));
+			expect(sh(remote, "for-each-ref", "refs/heads")).toBe("");
+		},
+	);
+
+	posix("a managed reftable workspace whose branch read times out aborts the push", async () => {
+		sh(repo, "refs", "migrate", "--ref-format=reftable");
+		const pushed = withHangingGit('*" symbolic-ref "*', () =>
+			pushBranch({ workspaceId: "w1", branch: "feature" }),
+		);
+		await expect(pushed).rejects.toThrow(expect.objectContaining({ code: "GIT_TIMEOUT" }));
+		expect(sh(remote, "for-each-ref", "refs/heads")).toBe("");
+	});
+
+	posix("a core.sshCommand probe that times out pushes nothing", async () => {
+		const pushed = withHangingGit('*" core.sshCommand "*', () =>
+			pushBranch({ workspaceId: "w1", branch: "feature" }),
+		);
+		await expect(pushed).rejects.toThrow(/^Could not read core\.sshCommand: timed out/);
+		expect(sh(remote, "for-each-ref", "refs/heads")).toBe("");
+	});
+
+	test("a managed workspace switched in its terminal pushes the live branch, never the stale one", async () => {
+		sh(repo, "switch", "-q", "-c", "feature-live");
+		await expect(pushBranch({ workspaceId: "w1", branch: "feature" })).rejects.toThrow(
+			/moved from "feature" to "feature-live"/,
+		);
+		expect(sh(remote, "for-each-ref", "refs/heads")).toBe("");
+
+		await pushBranch({ workspaceId: "w1", branch: "feature-live" });
+		expect(sh(remote, "for-each-ref", "--format=%(refname)", "refs/heads")).toBe(
+			"refs/heads/feature-live",
+		);
 	});
 
 	test("a repository without origin names the missing remote", async () => {

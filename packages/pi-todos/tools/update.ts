@@ -1,4 +1,3 @@
-import { StringEnum } from "@earendil-works/pi-ai/compat";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { TODO_STATUSES, type Todo, type TodoPatch, type TodoPlan } from "../core/index.ts";
@@ -7,6 +6,7 @@ import {
 	errorResult,
 	formatTodo,
 	storeFor,
+	stringEnum,
 	textResult,
 	withNudges,
 } from "./shared.ts";
@@ -14,7 +14,7 @@ import {
 const parameters = Type.Object({
 	id: Type.String({ description: "Id of the item to update." }),
 	status: Type.Optional(
-		StringEnum(TODO_STATUSES, {
+		stringEnum(TODO_STATUSES, {
 			description:
 				"New lifecycle status: pending | in_progress | done. Setting in_progress auto-returns any other in_progress item to pending (one step in work at a time).",
 		}),
