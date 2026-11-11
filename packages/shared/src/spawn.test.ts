@@ -210,6 +210,7 @@ test("spawnSyncCapturedBytes reports exit + decoded stderr and a missing binary 
 
 test("spawnDetached confirms a real launch and rejects empty or missing commands", () => {
 	expect(spawnDetached([process.execPath, "-e", ""])).toBe(true);
+	expect(spawnDetached([process.execPath, "-e", ""], { windowsHide: false })).toBe(true);
 	expect(spawnDetached([])).toBe(false);
 	expect(spawnDetached(["thinkrail-no-such-binary-xyz"])).toBe(false);
 });

@@ -109,7 +109,7 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   submodule's `.git/modules/<sub>/index.lock`): counting that would make the client's
   `git.status`/branch re-read produce the next nudge, a self-sustaining refresh loop (#1102). A real update
   still surfaces a non-lock path — git renames the lock onto its target or appends to a reflog. A wildcard
-  event (null filename) nudges it too. Two sources feed the one nudge:
+  event (null filename) nudges it too. Three sources feed the one nudge:
   - `.git`-prefixed events seen by the **worktree** watcher — covers a **repo root** workspace, whose
     `.git` directory lives inside the watched tree;
   - **non-recursive** watchers on the worktree's git dir and its `logs/` **when that dir lies outside the
@@ -125,6 +125,23 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
     recursive: the per-worktree dir can hold submodule git dirs under `modules/` — `objects/` included —
     whose churn would bring back event storms. A missing `logs/` (reflogs disabled), a missing/unreadable
     git dir (non-git folder) or a failed start degrades silently.
+  - non-recursive watches on a linked worktree's **remote-tracking refs** in the shared git dir (found
+    through the gitdir's `commondir` file): a terminal `git push` writes only there, so the Remote status
+    would otherwise stay stale (#1009). ThinkRail branches are created `--no-track`, so there is no upstream
+    config to follow, yet a push still updates `refs/remotes/<remote>/<branch>` through the remote's fetch
+    refspec; the watch therefore follows the checked-out branch name under **every** remote, never parsed
+    config. Per remote it watches the deepest existing directory along `<remote>/<branch>` and matches only
+    the next path component (a slashed branch's parent dirs may not exist before its first push). It also
+    watches `packed-refs` in the shared dir and `refs/remotes` itself (or `refs`, until `remotes` exists)
+    for a remote dir appearing or vanishing — `git pack-refs` deletes an emptied `refs/remotes/<remote>/`
+    and the next push recreates it. Unlike the sources above these match exact names: the shared dir
+    serves every worktree of the repo, so another branch's ref update must not nudge this one, and a ref
+    update always ends in a rename onto the ref's own name. Whenever the nudge fires, the target set is
+    re-derived and every one of these watches is closed and re-created, never diffed against the old set:
+    `git pack-refs` and the next push can delete and recreate a remote dir within one debounce, under the
+    same path and often (ext4) the same inode, so a kept watch would stay bound to the deleted dir. A
+    terminal branch switch is itself a nudge, so it rebinds. Not recursive: `refs/` grows with the repo's
+    branch count.
 
   `host` fans the nudge out to two convergences: `syncWorkspaceBranch` (a workspace's branch label follows
   its live checkout) **and** a pathless, skill-neutral `fsChanged` frame (`paths: []`,

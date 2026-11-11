@@ -289,7 +289,14 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   **`syncedConnectionGeneration`** (which connected host generation the runtime's transcript was last read
   from) / `stats` / **`statsRefreshTick`** (browser-local invalidation for the mounted chat's authoritative
   stats read) / `commands` / `draft` / **`readingAnchor`** (browser-local detached transcript position
-  that survives the chat tab's unmount; written only by `chat` through `setChatReadingAnchor`) and its
+  that survives the chat tab's unmount; written only by `chat` through `setChatReadingAnchor`) /
+  **`promptImages`** (the composer's transient ready images, pending decodes, errors and a fresh generation
+  token; the pure model `PromptImagesState` + `newPromptImagesState` is the store's own
+  `promptImageState.ts`, so runtime creation runs no `chat` code). `updateChatPromptImages(sessionId, update)` changes
+  that draft atomically through the same existing-runtime-only boundary as text drafts. Remounts and
+  transcript reconciliation retain it; closing the runtime or clearing its workspace releases it.
+  A new runtime gets a different generation even when its session id is reused, so old decodes cannot
+  attach to a reopened chat. It has no disk or host representation. The runtime also owns its
   **extension-UI state** (`pendingExtUi` (typed by
   `chat`'s `ExtUiDialogRequest`) + `extUiQueue` (overlapping dialogs FIFO so none orphans its server
   promise) + `extUiStatus` / `extUiWidget`), and **`notice`**: the host's closed `ProviderWarning` code
@@ -882,7 +889,8 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   and the resource helper `orderMcpResources`; `selectSupportsProjectTrust` (the
   `PROJECT_TRUST_PROTOCOL_VERSION` gate for the trust summary and the pi-level resource grant);
   `toast` (the fire-from-anywhere helper),
-  `Toast` (type), web-local frame/workspace-view/attention selectors and atomic actions, resource render-state types
+  `Toast` (type), the prompt-image draft model `newPromptImagesState` + `PromptImagesState` /
+  `PromptImage` / `PromptImageError` (`chat`'s `usePromptImages` shares it for dialog-local drafts), web-local frame/workspace-view/attention selectors and atomic actions, resource render-state types
   (file/diff/virtual-document/plan/chat), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
   `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `ChatLocationRequest` (type), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
@@ -892,7 +900,7 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   `matchesWorktreePath`, `shallowEqualArrays` for the snapshot-identity guard, `userText` plus the skill
   invocation parser/matcher for user-message echo reconciliation, the MCP attention/active predicates; a
   leaf, so the edge adds no cycle); `chat`
-  (`ChatTurn`/`ToolResultState`, **type-only**); `auth` (`LoginState`, **type-only**); `transport`
+  (`ChatTurn`/`ToolResultState`/`AttachedImage`, **type-only**); `auth` (`LoginState`, **type-only**); `transport`
   (`ConnectionStatus`, **type-only**); `@thinkrail/locales` (default chat/terminal names, settled-reason
   copy and toasts, resolved when created); `zustand`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `panels`, shell runtime (the web-local layout state edge is type-only), or transport runtime.

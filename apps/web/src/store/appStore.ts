@@ -127,6 +127,7 @@ import {
 	type McpWorkspaceProjection,
 	withoutMcpSession,
 } from "./mcp";
+import { newPromptImagesState, type PromptImagesState } from "./promptImageState";
 import {
 	type HistoryTarget,
 	isChatResourceConnectionCurrent,
@@ -520,6 +521,7 @@ export interface SessionRuntime {
 	stats: SessionStats | null;
 	commands: SlashCommandInfo[];
 	draft: string;
+	promptImages: PromptImagesState;
 	readingAnchor: ChatReadingAnchor | null;
 	pendingExtUi: ExtUiDialogRequest | null;
 	extUiQueue: ExtUiDialogRequest[];
@@ -553,6 +555,7 @@ function newRuntime(
 		stats: null,
 		commands: [],
 		draft: "",
+		promptImages: newPromptImagesState(),
 		readingAnchor: null,
 		pendingExtUi: null,
 		extUiQueue: [],
@@ -1486,6 +1489,10 @@ interface AppState {
 	setStats: (sessionId: string, stats: SessionStats) => void;
 	setCommands: (sessionId: string, commands: SlashCommandInfo[]) => void;
 	setChatDraft: (sessionId: string, text: string) => void;
+	updateChatPromptImages: (
+		sessionId: string,
+		update: (current: PromptImagesState) => PromptImagesState,
+	) => void;
 	setChatReadingAnchor: (sessionId: string, anchor: ChatReadingAnchor | null) => void;
 	dismissSessionNotice: (sessionId: string) => void;
 	silenceNotice: (notice: ProviderWarning) => void;
@@ -4621,6 +4628,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, commands }))),
 	setChatDraft: (sessionId, draft) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, draft }))),
+	updateChatPromptImages: (sessionId, update) =>
+		set((s) =>
+			withRuntime(s, sessionId, (rt) => {
+				const promptImages = update(rt.promptImages);
+				return promptImages === rt.promptImages ? rt : { ...rt, promptImages };
+			}),
+		),
 	setChatReadingAnchor: (sessionId, readingAnchor) =>
 		set((s) =>
 			withRuntime(s, sessionId, (rt) =>

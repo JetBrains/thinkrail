@@ -26,7 +26,10 @@ worktree in the host's file manager — the workspace row's "Open in" menu.
   matching `apps/cli`'s `openBrowser`); throws when the id is unknown or no longer installed. `revealInFileManager
   (worktreePath)` opens the OS's own file manager there: `open` (macOS), `explorer` (Windows), `xdg-open`
   (Linux desktop default) — fire-and-forget, so `explorer`'s well-known nonzero-on-success exit is never
-  inspected.
+  inspected. Because that exit can't signal failure, it throws up front when the folder is missing (so the
+  client's failure toast fires instead of Explorer falling back to Documents), hands `explorer` a
+  backslash-normalized path (it also opens Documents for a forward-slash path), and launches with
+  `windowsHide: false` — `explorer` applies the hide flag to the folder window it opens.
 - **Vim is `kind: "terminal"`, not launched here.** It has no GUI window of its own — spawning it detached
   with no attached TTY would just print "Warning: Output is not to a terminal" and exit. The **client**
   handles that case itself: open/focus the clicked workspace's embedded terminal and run `vim .` there
@@ -56,7 +59,7 @@ worktree in the host's file manager — the workspace row's "Open in" menu.
 - **Public surface (barrel):** `listAvailableEditors`, `openEditor`, `revealInFileManager`, `WhichFn`,
   `SpawnFn`.
 - **Allowed deps:** `Bun.which`, `node:fs/promises` (`readdir`), `@thinkrail/shared/spawn` (`spawnDetached`),
-  `process.env`/`process.platform`,
+  `node:fs` (`existsSync`), `node:path` (`win32.normalize`), `process.env`/`process.platform`,
   `contracts` (the `EditorInfo` wire type).
 - **Forbidden:** `host`; sibling features (`workspaces` resolves `worktreePath` before calling in — this
   module never looks up a workspace itself).
