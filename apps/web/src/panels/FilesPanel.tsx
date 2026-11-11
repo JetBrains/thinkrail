@@ -2,7 +2,13 @@ import { RiCollapseVerticalLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { selectActiveFilePath, selectFilesTreeView, useAppStore } from "../store";
+import {
+	isChatWorkspace,
+	selectActiveFilePath,
+	selectFilesTreeView,
+	selectWorkspaceById,
+	useAppStore,
+} from "../store";
 import { ChangesPanel } from "./ChangesPanel";
 import {
 	buildChangeMarks,
@@ -17,10 +23,14 @@ import { useGitStatus } from "./useGitStatus";
 
 export function FilesPanel({ workspaceId }: { workspaceId: string }) {
 	const t = useT();
-	const mode = useAppStore((s) => s.filesMode);
+	const chat = useAppStore((s) => {
+		const workspace = selectWorkspaceById(s, workspaceId);
+		return workspace !== null && isChatWorkspace(workspace);
+	});
+	const mode = useAppStore((s) => (chat ? "all" : s.filesMode));
 	const setMode = useAppStore((s) => s.setFilesMode);
 	const changesView = useAppStore((s) => s.changesView);
-	const { status, error, reload } = useGitStatus(workspaceId);
+	const { status, error, reload } = useGitStatus(chat ? null : workspaceId);
 	const marks = useMemo(() => buildChangeMarks(status?.changes ?? []), [status]);
 	const count = status?.changes.length ?? 0;
 	const canCollapse = mode === "all" || (changesView === "tree" && count > 0);
@@ -50,12 +60,16 @@ export function FilesPanel({ workspaceId }: { workspaceId: string }) {
 					active={mode === "all"}
 					onClick={() => setMode("all")}
 				/>
-				<ToggleSegment
-					testid="files-mode-changed"
-					label={count > 0 ? t("panels.files.changedCount", { count }) : t("panels.files.changed")}
-					active={mode === "changed"}
-					onClick={() => setMode("changed")}
-				/>
+				{chat ? null : (
+					<ToggleSegment
+						testid="files-mode-changed"
+						label={
+							count > 0 ? t("panels.files.changedCount", { count }) : t("panels.files.changed")
+						}
+						active={mode === "changed"}
+						onClick={() => setMode("changed")}
+					/>
+				)}
 				{canCollapse ? (
 					<div className="ml-auto flex shrink-0">
 						<HeaderIconButton

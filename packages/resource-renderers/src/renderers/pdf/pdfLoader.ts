@@ -37,8 +37,11 @@ interface PendingPdfRender {
 export class PdfRenderQueue {
 	private active = 0;
 	private readonly pending: PendingPdfRender[] = [];
+	private readonly limit: number;
 
-	constructor(private readonly limit = 2) {}
+	constructor(limit = 2) {
+		this.limit = limit;
+	}
 
 	run<T>(job: () => Promise<T>, signal?: AbortSignal): Promise<T> {
 		return new Promise<T>((resolve, reject) => {

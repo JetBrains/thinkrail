@@ -6,7 +6,7 @@ import { completeInitialTerminalReservation } from "../workspaces";
 const log = logger("host");
 
 export function provisionInitialTerminal(workspace: Workspace): Workspace {
-	if (!workspace.initialTerminalPending) return workspace;
+	if (!workspace.initialTerminalPending || workspace.deletionPending) return workspace;
 	try {
 		reserveTerminal(workspace.id, INITIAL_TERMINAL_TAB_KEY, "Terminal 1");
 		return completeInitialTerminalReservation(workspace.id);

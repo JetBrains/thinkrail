@@ -11,6 +11,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { randomUuid } from "../lib";
 import { FileChip } from "./FileChip";
 import { type AttachedImage, fileToAttachedImage } from "./imageAttachment";
 import type { ChatAttachment } from "./types";
@@ -89,7 +90,7 @@ export function usePromptImages(): PromptImagesController {
 					const name = picked[i]?.name || translate("chat.promptImages.fallbackName");
 					if (result.status !== "fulfilled" || result.value === null) {
 						nextErrors.push({
-							id: crypto.randomUUID(),
+							id: randomUuid(),
 							name,
 							reason: translate("chat.promptImages.unsupported"),
 						});
@@ -98,14 +99,14 @@ export function usePromptImages(): PromptImagesController {
 					const size = result.value.content.data.length;
 					if (used + size > REQUEST_IMAGE_BASE64_BUDGET) {
 						nextErrors.push({
-							id: crypto.randomUUID(),
+							id: randomUuid(),
 							name,
 							reason: translate("chat.promptImages.limitReached"),
 						});
 						return;
 					}
 					used += size;
-					additions.push({ id: crypto.randomUUID(), name, ...result.value });
+					additions.push({ id: randomUuid(), name, ...result.value });
 				});
 				if (additions.length > 0) commit([...imagesRef.current, ...additions]);
 				if (nextErrors.length > 0) setErrors((prev) => [...prev, ...nextErrors]);
@@ -129,7 +130,7 @@ export function usePromptImages(): PromptImagesController {
 		(attachments: ChatAttachment[]) => {
 			if (attachments.length === 0) return;
 			commit([
-				...attachments.map((attachment) => ({ id: crypto.randomUUID(), ...attachment })),
+				...attachments.map((attachment) => ({ id: randomUuid(), ...attachment })),
 				...imagesRef.current,
 			]);
 		},
@@ -145,20 +146,11 @@ export function usePromptImages(): PromptImagesController {
 	return { images, pending, errors, addFiles, removeImage, dismissError, restore, reset };
 }
 
-// Padding presets for the chip strip. Both surfaces align the strip with the input field's left
-// edge and leave the same 12px gap below it; they differ only in structure — the composer strip
-// sits above a `p-12` input shell (so it owns its own left/top padding), while the dialog textarea
-// is flush (so only the bottom gap is needed).
-export const PROMPT_IMAGE_CHIPS_PADDING = {
-	composer: "px-12 pt-12",
-	dialog: "pb-12",
-} as const;
-
 export function PromptImageChips({
 	controller,
 	leading,
 	testId = "composer-images",
-	className = PROMPT_IMAGE_CHIPS_PADDING.composer,
+	className = "px-12 pt-12",
 }: {
 	controller: PromptImagesController;
 	leading?: ReactNode;

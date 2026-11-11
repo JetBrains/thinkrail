@@ -9,7 +9,7 @@ import type {
 	ServerWelcome,
 	WorkspaceFsChangedPayload,
 } from "@thinkrail/contracts";
-import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import { PROTOCOL_VERSION, WS_CHANNELS, WS_MAX_FRAME_BYTES } from "@thinkrail/contracts";
 import { isPortFree } from "@thinkrail/shared/freePort";
 import {
 	configurePiRuntime,
@@ -554,7 +554,10 @@ test("welcome omits closed projects whose folders are gone", async () => {
 	);
 
 	const welcome = frame.data as ServerWelcome;
-	expect(welcome.projects.map((project) => project.id)).toEqual(["open"]);
+	expect(welcome.projects.filter((project) => project.kind !== "chats").map((p) => p.id)).toEqual([
+		"open",
+	]);
+	expect(welcome.projects.filter((project) => project.kind === "chats")).toHaveLength(1);
 	expect(welcome.recentProjects?.map((project) => project.id)).toEqual(["open", "kept"]);
 });
 
@@ -656,6 +659,29 @@ test.if(process.platform === "linux")(
 		await collector.waitForFrame(published(".thinkrail/context/fresh/new.md"));
 	},
 );
+
+test.each([
+	["exactly at the frame cap reaches its handler", WS_MAX_FRAME_BYTES, "answered"],
+	["one byte over the frame cap closes the socket", WS_MAX_FRAME_BYTES + 1, "closed"],
+])("a request frame %s", async (_name, bytes, expected) => {
+	const b = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+	const collector = await collectSocket(b.port, "frame-cap");
+	const closed = new Promise<string>((resolve) =>
+		collector.socket.addEventListener("close", () => resolve("closed")),
+	);
+	const envelope = JSON.stringify({ id: "cap", method: "project.list", params: { padding: "" } });
+	const padding = "A".repeat(bytes - envelope.length);
+	collector.socket.send(JSON.stringify({ id: "cap", method: "project.list", params: { padding } }));
+
+	const outcome = await Promise.race([
+		collector
+			.waitForFrame((candidate) => candidate.id === "cap")
+			.then((frame) => (frame.ok ? "answered" : "failed")),
+		closed,
+	]);
+	expect(outcome).toBe(expected);
+	collector.socket.close();
+});
 
 test("shutdown is idempotent and releases the port", async () => {
 	const options = { port: grabFreePort(), host: "localhost", portMode: "exact" as const };

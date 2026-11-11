@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { findFreePort, isPortFree } from "./freePort";
+import { findFreePort, isPortFree, parsePort } from "./freePort";
 
 const servers: ReturnType<typeof Bun.serve>[] = [];
 function listenOn(port: number): number {
@@ -35,4 +35,29 @@ test("findFreePort skips a taken port and scans upward", async () => {
 	const taken = listenOn(0);
 	const chosen = await findFreePort(taken);
 	expect(chosen).toBeGreaterThan(taken);
+});
+
+test("parsePort accepts plain decimal ports from 0 to 65535", () => {
+	expect(parsePort("0")).toBe(0);
+	expect(parsePort("24242")).toBe(24242);
+	expect(parsePort("65535")).toBe(65535);
+});
+
+test("parsePort rejects empty, non-decimal and out-of-range values", () => {
+	for (const bad of [
+		undefined,
+		"",
+		" ",
+		"abc",
+		"0x10",
+		"1e3",
+		"-1",
+		"+80",
+		" 80",
+		"80.5",
+		"65536",
+		"99999",
+	]) {
+		expect(parsePort(bad)).toBeUndefined();
+	}
 });

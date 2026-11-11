@@ -24,7 +24,8 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
 
 - **Owns:** the watcher registry + its lifecycle: `ensureWatch(workspaceId)` (idempotent and
   **self-healing**; returns the live watcher's shared readiness promise; started lazily by `host` when a
-  workspace read or `workspace.watchReady` preflight lands — the read is the "a client is looking" signal;
+  workspace read or a `workspace.watchReady` preflight lands — the read is the "a client is looking"
+  signal — and as a **prewarm** watch for the root a `search.query` resolved;
   readiness reports whether the watcher was already known ready), `stopWatch(workspaceId)` (called
   in `workspace.remove`'s fast path),
   `stopAllWatches()` (called in `server.stop()`); the ignore filter (any path segment `.git` or
@@ -51,7 +52,8 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   hang and torn-down watchers cannot publish. An invalidation nudge remains idempotent, so the fallback's
   possible duplicate is one cheap no-op refetch.
 - **Prewarm tier (globally bounded):** `ensureWatch(workspaceId, { prewarm: true })` — reached via
-  `workspace.watchReady`'s optional `prewarm` flag, the web's pre-selection warm-up — starts the same
+  `workspace.watchReady`'s optional `prewarm` flag, the web's pre-selection warm-up, and by the search
+  palette's root watch — starts the same
   watcher but marks its entry **prewarm-only**. Prewarm-only entries live in one global pool capped at
   **8**: creating one beyond the cap evicts the least-recently-prewarmed prewarm-only entry through
   `stopWatch` (its conservative readiness settle included), so clicking through many projects reuses one
@@ -120,23 +122,33 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   instead arms a separately debounced (300ms), **pathless** `setRepoMetaPublisher(workspaceId)` nudge. This
   is the only signal for a change that leaves the working tree byte-identical: `git switch -c <new-branch>`
   writes nothing outside the git dir, and a `git commit` moves `HEAD` without touching a worktree file.
-  It is deliberately **not** matched on specific paths (`.git/HEAD`, `.git/logs/HEAD`, …): the platform
-  streams coalesce and report *a* representative path per burst, so which git-internal path surfaces is not
-  reliable. A wildcard event (null filename) nudges it too. Two sources feed the one nudge:
+  It is **not** matched on an allow-list of specific paths (`.git/HEAD`, `.git/logs/HEAD`, …): the
+  platform streams coalesce and report *a* representative path per burst, so which git-internal path
+  surfaces is not reliable. It drops only a deny-list instead — transient `*.lock` files and
+  directory-only notifications (a directory's own change event; the concrete file event accompanies it)
+  — because git commands, `status` included, routinely create and remove `index.lock` (also a
+  submodule's `.git/modules/<sub>/index.lock`): counting that would make the client's
+  `git.status`/branch re-read produce the next nudge, a self-sustaining refresh loop (#1102). A real update
+  still surfaces a non-lock path — git renames the lock onto its target or appends to a reflog. A wildcard
+  event (null filename) nudges it too. Two sources feed the one nudge:
   - `.git`-prefixed events seen by the **worktree** watcher — covers a **repo root** workspace, whose
     `.git` directory lives inside the watched tree;
-  - a second, **non-recursive** watcher on the worktree's git dir **when that dir lies outside the root**
-    (a repo root's in-tree `.git` directory is already covered above, so it is never watched twice): for a
-    *linked worktree* (every workspace this app creates) `.git` is a *file* (`gitdir: <path>`) pointing at
-    `<repo>/.git/worktrees/<name>`, i.e. **outside the watched root**, so a commit made in that worktree's
-    terminal would otherwise produce no signal at all. Resolved with plain fs (stat + parse the gitfile
-    line), never by shelling out — this module has no `git` sibling edge. Non-recursive because only the
-    dir's top level holds the refs that move (`HEAD`, `index`, `ORIG_HEAD`) while `objects/`/`logs/` are
-    pure storms, so a commit inside a linked worktree's submodule (its git dir is under `<gitdir>/modules/`)
-    sends no nudge; a missing/unreadable git dir (non-git folder) or a failed start degrades silently.
+  - **non-recursive** watchers on the worktree's git dir and its `logs/` **when that dir lies outside the
+    root** (a repo root's in-tree `.git` directory is already covered above, so it is never watched twice):
+    for a *linked worktree* (every workspace this app creates) `.git` is a *file* (`gitdir: <path>`) pointing
+    at `<repo>/.git/worktrees/<name>`, i.e. **outside the watched root**, so a commit made in that
+    worktree's terminal would otherwise produce no signal at all. Resolved with plain fs (stat + parse the
+    gitfile line), never by shelling out — this module has no `git` sibling edge (`git`'s `headBranchAt`
+    mirrors the same gitfile parse for the same reason). The top level holds the per-worktree files that
+    move (`HEAD`, `index`, `ORIG_HEAD`, `COMMIT_EDITMSG`). `logs/` is watched because, with locks dropped,
+    an attached-branch `git update-ref HEAD …` leaves only `HEAD.lock` at the top level and an append to
+    `logs/HEAD` (the branch ref itself is in the shared git dir). Neither is
+    recursive: the per-worktree dir can hold submodule git dirs under `modules/` — `objects/` included —
+    whose churn would bring back event storms. A missing `logs/` (reflogs disabled), a missing/unreadable
+    git dir (non-git folder) or a failed start degrades silently.
 
-  `host` fans the nudge out to two convergences: `refreshUserOwnedWorkspace` (a user-owned workspace's
-  folder-truth branch labels) **and** a pathless, skill-neutral `fsChanged` frame (`paths: []`,
+  `host` fans the nudge out to two convergences: `syncWorkspaceBranch` (a workspace's branch label follows
+  its live checkout) **and** a pathless, skill-neutral `fsChanged` frame (`paths: []`,
   `truncated: false`, `skillChange: "none"`) so the clients' git-derived reads re-read — `git.status` and an
   open `uncommitted`-scope diff tab are relative to `HEAD`, and would otherwise keep reporting a committed
   change as uncommitted until the next file edit. Known limit: a populated submodule makes the nudge feed

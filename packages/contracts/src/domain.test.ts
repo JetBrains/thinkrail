@@ -22,10 +22,12 @@ import {
 	isLiveResource,
 	isLocalePreference,
 	isPlanReviewResult,
+	isQuestionPanelHeight,
 	isRetriedAttempt,
 	JBCENTRAL_QUOTA_REFRESH_SECONDS,
 	normalizeFontSettings,
 	parsePiPackageInput,
+	QUESTION_PANEL_HEIGHT_PERCENT,
 	REQUEST_IMAGE_BASE64_BUDGET,
 	type ResourceRecord,
 	resourceHistoryCursor,
@@ -34,6 +36,7 @@ import {
 	TODO_NUDGE_PREFIX,
 	tallyResources,
 } from "./domain";
+import { WS_MAX_FRAME_BYTES } from "./wsProtocol";
 
 describe("isRetriedAttempt", () => {
 	const failed = { role: "assistant", stopReason: "error" };
@@ -143,6 +146,19 @@ describe("config defaults", () => {
 			fileLineWidthBounded: true,
 		});
 	});
+
+	test("the question panel caps at 60% of the chat by default, in whole percents from 40 to 100", () => {
+		expect(DEFAULT_CONFIG.questionPanelHeight).toBe(QUESTION_PANEL_HEIGHT_PERCENT.default);
+		expect(QUESTION_PANEL_HEIGHT_PERCENT).toEqual({ min: 40, max: 100, default: 60 });
+		for (const valid of [40, 60, 100]) expect(isQuestionPanelHeight(valid)).toBe(true);
+		for (const invalid of [39, 101, 60.5, "60", null]) {
+			expect(isQuestionPanelHeight(invalid)).toBe(false);
+		}
+	});
+
+	test("voice input is on by default", () => {
+		expect(DEFAULT_CONFIG.voiceInputEnabled).toBe(true);
+	});
 });
 
 describe("JetBrains Central health", () => {
@@ -188,10 +204,11 @@ describe("image payload ceiling", () => {
 		expect(IMAGE_MAX_BASE64_BYTES).toBe(4.5 * 1024 * 1024);
 	});
 
-	test("the request-wide image budget leaves headroom under Anthropic's 32MB per-request cap", () => {
-		expect(REQUEST_IMAGE_BASE64_BUDGET).toBe(24 * 1024 * 1024);
-		expect(REQUEST_IMAGE_BASE64_BUDGET).toBeLessThan(32 * 1024 * 1024);
-		expect(REQUEST_IMAGE_BASE64_BUDGET).toBeGreaterThan(IMAGE_MAX_BASE64_BYTES * 4);
+	test("a message's image budget leaves room for its text under the 16MB WebSocket frame cap", () => {
+		expect(WS_MAX_FRAME_BYTES).toBe(16 * 1024 * 1024);
+		expect(REQUEST_IMAGE_BASE64_BUDGET).toBe(12 * 1024 * 1024);
+		expect(REQUEST_IMAGE_BASE64_BUDGET).toBeLessThan(WS_MAX_FRAME_BYTES);
+		expect(REQUEST_IMAGE_BASE64_BUDGET).toBeGreaterThan(IMAGE_MAX_BASE64_BYTES * 2);
 	});
 
 	test("the provider-accepted media types are exactly png/jpeg/gif/webp", () => {

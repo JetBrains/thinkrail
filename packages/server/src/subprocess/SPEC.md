@@ -10,13 +10,14 @@ tags: [host, public-surface-checked]
 
 ## Responsibility
 
-Run one child process to completion under a wall-clock budget, and return what it wrote. The single
+Run one child process to completion under a wall-clock budget, and return what it wrote — or, for a
+long-lived host-owned child, own the same spawn and tree-kill mechanics without a deadline. The single
 answer to "how does this host spawn something that might never come back" — the lifetime mechanics only,
 never what a particular child's output means.
 
 ## Boundary
 
-- **Owns:** `runBounded(argv, { timeoutMs, cwd?, env?, stdout?, signal?, stdin? })` →
+- **Owns:** `runBounded(argv, { timeoutMs, cwd?, env?, stdout?, signal?, idleTimeoutMs?, onStderr?, stdin? })` →
   `{ ok, out, err, timedOut, launchFailed, waitedMs, aborted? }`: capture both streams and complete on the child's
   **exit**; stdout defaults to decoded text, while `stdout: "bytes"` preserves it as `Uint8Array` for
   callers reading opaque content (stderr remains text diagnostics). POSIX children are detached
@@ -30,6 +31,12 @@ never what a particular child's output means.
   so callers may safely clean up a partial clone directory. Only cancellation carries `aborted: true` (`ok: false`, neither
   timeout nor launch failure), retaining captured stdout/stderr with the same drain grace. Once exit or
   expiry wins, later aborts have no effect; the listener is removed before draining.
+  **`idleTimeoutMs`** is a second, resettable deadline: any stdout or stderr bytes restart it, and its expiry
+  is reported exactly like `timeoutMs` (`timedOut: true`, tree killed) — the bound for a child that may
+  legitimately run for hours as long as it keeps talking (a large `git checkout --progress`).
+  **`onStderr`** receives each decoded stderr chunk as it arrives (the full text is still captured in
+  `err`); it is a pass-through, never parsed here, and a callback that throws is ignored so the drain and the
+  idle deadline keep working.
 - **Also owns:** `streamBounded(argv, { timeoutMs, cwd?, env? })` → `{ stdout, exited }` — the same
   spawn, deadline, group kill and stderr capture, for the one caller that must relay a child's stdout
   while it is still being produced (the host's `/blob` route). Completion is still the child's exit,
@@ -42,8 +49,25 @@ never what a particular child's output means.
   truncated relay for a complete one; cancelling the stream kills the child. `exited` resolves to the
   same shape `runBounded` returns, minus `out`. Streaming does not accept an abort signal; consumers
   cancel its stdout stream instead.
-- **Public surface:** `runBounded`, `streamBounded`, `BoundedRun`, `BoundedBytesRun`, `BoundedRunOptions`,
-  `BoundedBytesRunOptions`, `BoundedStream`, `BoundedStreamOptions`.
+- **Also owns:** `spawnSupervised(argv, { cwd?, env? })` → `{ pid, exited, stop, stderrTail }` for
+  the one long-lived host-owned child (the `speech` engine).
+  - It uses the same spawn shape: POSIX group leader, Windows hidden but not detached, stdin ignored,
+    and both pipes drained from spawn. Stdout is discarded, and the last 4 KB of stderr is kept for
+    diagnosis.
+  - It has no deadline; the caller owns the lifetime. `stop()` runs the same tree kill as expiry and
+    resolves on the direct child's exit.
+  - `exited` is the exit code, or `null` after a signal or a failed launch, and is never a throw.
+  - `exitWithParent` (POSIX only) runs the child under a tiny `/bin/sh` watchdog.
+    - The watchdog holds a stdin pipe from the host and kills the child when that pipe reaches EOF.
+      That happens when the host dies, even by SIGKILL, which no exit handler sees.
+    - It passes the child's exit code through. A child killed by a signal makes the watchdog re-raise
+      that signal on itself, so `exited` stays `null` as for an unwatched child. The group kill still
+      stops both.
+    - Why it exists: Playwright and crash-killed hosts left detached engines holding ~1 GB each,
+      found running hours later.
+- **Public surface:** `runBounded`, `streamBounded`, `spawnSupervised`, `BoundedRun`, `BoundedBytesRun`,
+  `BoundedRunOptions`, `BoundedBytesRunOptions`, `BoundedStream`, `BoundedStreamOptions`, `Supervised`,
+  `SupervisedOptions`.
 - **Allowed deps:** Bun/Node process APIs. Nothing else — it knows no feature, no wire type, no
   persistence.
 - **Forbidden:** message wording, retry, truncation, or any policy about a specific program. `git`'s

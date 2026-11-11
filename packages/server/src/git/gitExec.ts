@@ -1,3 +1,5 @@
+import { accessSync, constants } from "node:fs";
+import { resolve } from "node:path";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { spawnSyncCaptured, spawnSyncCapturedBytes } from "@thinkrail/shared/spawn";
 import { type BoundedStream, runBounded, streamBounded } from "../subprocess";
@@ -52,6 +54,8 @@ type GitAsyncOptions = {
 	network?: boolean;
 	signal?: AbortSignal;
 	redactStderr?: (text: string) => string;
+	idleTimeoutMs?: number;
+	onStderr?: (text: string) => void;
 };
 
 class GitTimeoutError extends CodedError {
@@ -200,6 +204,8 @@ export async function gitAsync(
 		timeoutMs: opts.timeoutMs ?? NETWORK_TIMEOUT_MS,
 		env: opts.env ?? nonInteractiveGitEnv(),
 		...(opts.signal ? { signal: opts.signal } : {}),
+		...(opts.idleTimeoutMs !== undefined ? { idleTimeoutMs: opts.idleTimeoutMs } : {}),
+		...(opts.onStderr ? { onStderr: opts.onStderr } : {}),
 		...(opts.stdin ? { stdin: opts.stdin } : {}),
 	});
 	if (opts.redactStderr) run.err = opts.redactStderr(run.err);
@@ -213,10 +219,45 @@ export async function gitAsync(
 	};
 }
 
+function executable(path: string): boolean {
+	try {
+		accessSync(path, constants.X_OK);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+export async function gitRunHook(
+	cwd: string,
+	hook: string,
+	args: string[],
+	opts: Pick<GitAsyncOptions, "timeoutMs" | "idleTimeoutMs" | "signal"> = {},
+): Promise<GitResult> {
+	const probe = await gitAsync(cwd, ["hook", "-h"], {
+		env: { ...nonInteractiveGitEnv(), LC_ALL: "C" },
+	});
+	if (!probe.err.includes("'hook' is not a git command"))
+		return gitAsync(cwd, ["hook", "run", "--ignore-missing", hook, "--", ...args], opts);
+	const located = await gitAsync(cwd, ["rev-parse", "--git-path", `hooks/${hook}`]);
+	if (!located.ok) return located;
+	const script = resolve(cwd, located.out);
+	if (!executable(script)) return { ok: true, out: "", err: "" };
+	const run = await runBounded([script, ...args], {
+		cwd,
+		timeoutMs: opts.timeoutMs ?? NETWORK_TIMEOUT_MS,
+		env: nonInteractiveGitEnv(),
+		...(opts.idleTimeoutMs !== undefined ? { idleTimeoutMs: opts.idleTimeoutMs } : {}),
+		...(opts.signal ? { signal: opts.signal } : {}),
+	});
+	if (run.timedOut) return { ok: false, out: "", ...timeoutFailure(run, false) };
+	return { ok: run.ok, out: run.out.trim(), ...executionDiagnostics(run) };
+}
+
 export function gitAsyncStream(
 	cwd: string,
 	args: string[],
-	opts: Omit<GitAsyncOptions, "signal" | "redactStderr"> = {},
+	opts: Omit<GitAsyncOptions, "signal" | "redactStderr" | "idleTimeoutMs" | "onStderr"> = {},
 ): BoundedStream {
 	return streamBounded(["git", "-C", cwd, ...args], {
 		timeoutMs: opts.timeoutMs ?? NETWORK_TIMEOUT_MS,
@@ -227,7 +268,7 @@ export function gitAsyncStream(
 export async function gitAsyncBytes(
 	cwd: string,
 	args: string[],
-	opts: GitAsyncOptions = {},
+	opts: Omit<GitAsyncOptions, "idleTimeoutMs" | "onStderr"> = {},
 ): Promise<GitAsyncBytesResult> {
 	const run = await runBounded(["git", "-C", cwd, ...args], {
 		timeoutMs: opts.timeoutMs ?? NETWORK_TIMEOUT_MS,

@@ -75,8 +75,7 @@ async function openSeededClosedChat(page: Page, messages: SeededMessages) {
 async function settleSubmittedTurn(page: Page): Promise<void> {
 	const abort = page.getByTestId("chat-abort");
 	const settled = page
-		.locator('[data-testid="chat-message"][data-role="system"]')
-		.filter({ hasText: "Done" })
+		.getByTestId("turn-divider-status")
 		.last()
 		.or(page.locator('[data-testid="chat-message"][data-role="error"]').last());
 	await expect(abort.or(settled).first()).toBeVisible({ timeout: 20_000 });

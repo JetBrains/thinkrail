@@ -76,8 +76,6 @@ async function routeNoticeWire(page: Page): Promise<NoticeWire> {
 	};
 }
 
-test.describe.configure({ mode: "serial" });
-
 test("an Anthropic subscription sign-in warns about extra usage before the user authorises", async ({
 	page,
 }) => {
