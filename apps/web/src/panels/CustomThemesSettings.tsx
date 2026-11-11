@@ -1,13 +1,10 @@
-import { RiFileCopyLine as Copy, RiFolderOpenLine as FolderOpen } from "@remixicon/react";
 import type { UserThemesSnapshot } from "@thinkrail/contracts";
 import { T, type Translator, useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
 import type { ReactNode } from "react";
 import type { UserThemeIssue } from "@/themes";
 import { repoSourceUrl } from "./LanguageSettings";
+import { type FolderActions, SettingsFileIssues, SettingsFolderRow } from "./SettingsFolder";
 import { SettingsGroup } from "./SettingsGroup";
-import { SettingsNotice } from "./SettingsNotice";
-import { SettingsRow } from "./SettingsRow";
 
 const EXAMPLE_THEME_PATH = "apps/web/src/themes/bundled/dark.theme.json";
 
@@ -44,12 +41,10 @@ function ExampleLink({ href, children }: { href: string; children?: ReactNode })
 	);
 }
 
-export interface CustomThemesGroupProps {
+export interface CustomThemesGroupProps extends FolderActions {
 	snapshot: UserThemesSnapshot | null;
 	issues: readonly UserThemeIssue[];
 	appVersion: string | null;
-	onCopyFolder: (folder: string) => void;
-	onRevealFolder: () => void;
 }
 
 export function CustomThemesGroup({
@@ -72,50 +67,22 @@ export function CustomThemesGroup({
 					]}
 				/>
 			</p>
-			<SettingsRow
+			<SettingsFolderRow
 				label={t("settings.appearance.custom.folder")}
-				description={
-					<code data-testid="custom-themes-folder-path" className="tr-code-text break-all">
-						{folder}
-					</code>
-				}
+				folder={folder}
+				testIdPrefix="custom-themes"
 				noBorder={issues.length === 0}
-				control={
-					<div className="flex gap-8">
-						<Button variant="outline" size="m" iconLeft={Copy} onClick={() => onCopyFolder(folder)}>
-							{t("settings.language.folder.copy")}
-						</Button>
-						<Button
-							variant="outline"
-							size="m"
-							iconLeft={FolderOpen}
-							data-testid="custom-themes-open-folder"
-							onClick={onRevealFolder}
-						>
-							{t("settings.language.folder.open")}
-						</Button>
-					</div>
-				}
+				onCopyFolder={onCopyFolder}
+				onRevealFolder={onRevealFolder}
 			/>
-			{issues.length > 0 ? (
-				<div className="flex flex-col gap-4 py-12">
-					{issues.map((issue) => (
-						<SettingsNotice
-							key={issue.fileName}
-							variant="warning"
-							testId={`custom-theme-issue-${issue.fileName}`}
-						>
-							<span className="flex flex-col gap-4">
-								<span className="tr-code-text">{issue.fileName}</span>
-								<span>{issueLabel(t, issue)}</span>
-								{issue.detail ? (
-									<span className="break-words text-text-muted">{issue.detail}</span>
-								) : null}
-							</span>
-						</SettingsNotice>
-					))}
-				</div>
-			) : null}
+			<SettingsFileIssues
+				testIdPrefix="custom-theme-issue"
+				issues={issues.map((issue) => ({
+					fileName: issue.fileName,
+					label: issueLabel(t, issue),
+					detail: issue.detail,
+				}))}
+			/>
 		</SettingsGroup>
 	);
 }

@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { renameSync, writeFileSync } from "node:fs";
 
 const statePath = process.argv[2];
 const cleanupPath = process.argv[3];
@@ -8,11 +8,17 @@ if (!statePath || !cleanupPath || !Number.isInteger(innerRunnerPid) || innerRunn
 	throw new Error("Signal tree state, cleanup path, and inner runner PID are required");
 }
 
+function writeAtomically(path: string, content: string): void {
+	writeFileSync(`${path}.tmp`, content);
+	renameSync(`${path}.tmp`, path);
+}
+
 const handleSignal = (): void => {
 	process.off("SIGINT", handleSignal);
 	process.off("SIGTERM", handleSignal);
 	setTimeout(() => {
-		writeFileSync(cleanupPath, "cleaned\n");
+		const grandchildAlive = grandchild.exitCode === null && grandchild.signalCode === null;
+		writeAtomically(cleanupPath, JSON.stringify({ grandchildAlive }));
 		process.exit(0);
 	}, 100);
 };
@@ -37,7 +43,7 @@ await new Promise<void>((resolve, reject) => {
 });
 grandchild.stdout.destroy();
 grandchild.unref();
-writeFileSync(
+writeAtomically(
 	statePath,
 	JSON.stringify({ innerRunner: innerRunnerPid, child: process.pid, grandchild: grandchild.pid }),
 );

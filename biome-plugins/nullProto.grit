@@ -1,0 +1,5 @@
+language js
+
+`Object.create(null)` as $call where {
+	register_diagnostic(span=$call, message="Build prototype-free dictionaries with `nullProto<T>()` from `apps/web/src/lib`: `Object.create(null)` is `any` and skips the value-type check.", severity="error")
+}

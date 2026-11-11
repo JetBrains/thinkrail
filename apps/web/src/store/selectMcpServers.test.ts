@@ -306,7 +306,8 @@ test("older hosts grant name-only actions only to unique valid rows, never same-
 			approval: { state, fingerprint: "f" },
 		});
 		for (const configError of [undefined, "Invalid repository definition"]) {
-			const rows = deriveMcpServerRows(projection([user, { ...project, configError }]), NOW);
+			const configured = configError === undefined ? project : { ...project, configError };
+			const rows = deriveMcpServerRows(projection([user, configured]), NOW);
 			expect(rows.every((row) => !row.effective)).toBe(true);
 		}
 		expect(deriveMcpServerRows(projection([project]), NOW)[0]?.effective).toBe(

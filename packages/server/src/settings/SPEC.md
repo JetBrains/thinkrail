@@ -15,7 +15,7 @@ effort defaults, terminal replay budget and Windows shell preference, chat compo
 visual line widths plus independent pane bounds, bounded custom layout-preset catalog, JetBrains quota
 display/cadence, the host-wide subagent default, plan-review policy, the host-registry extensions the
 user turned off, and the UI language preference (`locale`). `defaultModel` / `defaultEffort`
-select the defaults every new chat receives (unset model means the preferred available model — pi's provider default, else the first; unset effort means medium);
+select the defaults every new chat receives (unset model means pi's `settings.json` default when available, else the preferred available model — pi's provider default, else the first — among non-environment connections, then among all available connections; unset effort means medium);
 `reviewModel` / `reviewEffort`
 select the reviewer runtime (unset means that same new-chat default); `reviewAutoFix: false` records a `request_changes`
 verdict and waits instead of auto-sending a fix. **`favoriteModels`** is the picker's starred list in display
@@ -40,7 +40,7 @@ interval (`1–3600`, default 30), because those values govern host process cade
 - `settleIdleDays` — the Settled-shelf idle window: a positive integer number of days (clamped to 1…365) or
   `null` for never; default `7`. Validated like every other known field; a hand-edited non-number falls
   back to the default rather than disabling settling.
-- **Owns:** cached current `AppConfig`; `getConfig()`; `updateConfig(partial)` (reject a non-object or unknown key → merge → validate known fields → persist → publish the merged `AppConfig` and successful applied `AppConfigUpdate`); line-width and resource-free custom-preset validation/normalization; custom-preset safety caps; `setSettingsPublisher`; and `resetConfigCache` for tests.
+- **Owns:** cached current `AppConfig`; `getConfig()`; `updateConfig(partial)` (reject a non-object or unknown key → merge → validate known fields → persist → publish the merged `AppConfig` and successful applied `AppConfigUpdate`); the font settings' shape (`interfaceFont` / `codeFont` through `isFontChoice`, `codeFontSize`, `codeLigatures`, `fontWeightOffset`), each normalized back to its own default on load — which family a choice names, and whether it renders, is the client's; line-width and resource-free custom-preset validation/normalization; custom-preset safety caps; `setSettingsPublisher`; and `resetConfigCache` for tests.
 - **Public surface (barrel):** `getConfig`, `updateConfig`, `noteRecentModel`, `setSettingsPublisher`, `SettingsPublisher`, `resetConfigCache`, plus pure custom-preset normalization used by host startup after persistence load.
 - **Allowed deps:** `persistence` (`loadConfig`/`saveConfig`); `contracts` (`AppConfig`, `LayoutPreset`,
   `isTerminalWindowsShell`).
@@ -53,6 +53,7 @@ interval (`1–3600`, default 30), because those values govern host process cade
   `isTerminalWindowsShell` guard, while a wire mutation outside the closed shell union rejects the complete
   update before cache, persistence, or broadcast changes. Settings owns validation and synchronization;
   `terminal` owns executable resolution and spawning.
+- `questionPanelHeight` defaults to 60 and accepts only whole percents from 40 through 100 (`isQuestionPanelHeight`); a malformed stored value falls back to the default and an invalid update rejects the complete mutation.
 - `chatLineWidth` / `fileLineWidth` independently default to 120 and accept only finite integers from 40 through 240; their `Bounded` switches independently default to `true`. A malformed stored field falls back without discarding valid siblings; any invalid supplied field rejects the complete mutation before cache, persistence, or broadcast changes.
 - `subagentsEnabled` defaults to `true` when absent so old config preserves current behavior; a present non-boolean update is rejected before cache, persistence, or broadcast changes. Settings owns only that global default; workspace override and effective-value resolution stay outside this module.
 - `onboardingDismissed` defaults to `false` when absent or malformed on disk; a present non-boolean update is rejected like the other boolean fields. Only the web onboarding wizard reads it.
@@ -63,6 +64,15 @@ interval (`1–3600`, default 30), because those values govern host process cade
   means, so a stale entry for a removed extension never breaks boot or a later update. A malformed stored
   list keeps its valid names. Settings owns only the list; `host` turns it into the agent's resolver and the
   live tool refresh ([[module-server]] § host-mediated policy).
+- `extensionSettings` maps extension `name` → setting key → boolean; absent means `{}` (every declared
+  default applies). A wire update must be an object of non-blank names to objects of non-blank keys with
+  boolean values, or the whole mutation is rejected; it is **merged per key** into the stored map, so a
+  Settings switch never resets an extension's other settings. Like `disabledExtensions`, undeclared names
+  and keys are kept and inert — the registry's descriptors decide what a key means.
+- `disabledPackages` is the same shape for installed pi packages, keyed by the package identity the
+  catalog reports (`PiPackageSummary.identity`); it exists because pi has no "whole package off" setting
+  and writing pi's per-resource filters would reset a user's own filters on re-enable. Validation,
+  dedupe and unknown-key tolerance are identical to `disabledExtensions`.
 - `locale` is `"system"` (default) or a canonical BCP-47 tag (`isLocalePreference`: `pt-BR`, not
   `pt-br`). Settings never checks that a language is available — bundled catalogs belong to the web build
   and local files to [[submodule-server-locales]] — so a tag whose file was deleted persists and returns

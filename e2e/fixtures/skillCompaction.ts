@@ -112,7 +112,7 @@ export async function compact(page: Page, worktreePath: string): Promise<void> {
 		})
 		.toBe(true);
 	if (compactions() === before)
-		throw new Error(`Compaction failed: ${await failed.last().innerText()}`);
+		throw new Error(`Compaction failed: ${await failed.last().textContent()}`);
 	await expect(page.getByTestId("chat-scroll")).toHaveAttribute("data-streaming", "false");
 }
 

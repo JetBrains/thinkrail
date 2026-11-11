@@ -1,4 +1,3 @@
-import { StringEnum } from "@earendil-works/pi-ai";
 import { type Static, Type } from "typebox";
 
 const ComparisonOptionSchema = Type.Object({
@@ -17,7 +16,9 @@ const ComparisonOptionSchema = Type.Object({
 });
 
 export const VisualizeSchema = Type.Object({
-	type: StringEnum(["diagram", "comparison", "file"], {
+	type: Type.Unsafe<"diagram" | "comparison" | "file">({
+		type: "string",
+		enum: ["diagram", "comparison", "file"],
 		description:
 			"Which visualization to render. 'diagram' needs `mermaid`; 'comparison' needs `options`; 'file' needs `path`.",
 	}),

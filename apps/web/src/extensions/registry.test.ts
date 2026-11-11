@@ -8,6 +8,7 @@ import {
 	getToolChrome,
 	getToolRenderer,
 	getToolSummary,
+	isDockedTool,
 	isInteractiveTool,
 	resolveProminence,
 } from "../chat/toolRegistry";
@@ -51,14 +52,15 @@ test("visualize summaries preserve titles and diagram/comparison fallbacks", () 
 	}
 });
 
-test("the ask_user_question card registers bare and interactive from its extension — the one the plan page resolves by name", () => {
+test("the ask_user_question card registers bare, interactive and docked from its extension — the one the plan page resolves by name", () => {
 	registerWebExtensions();
 	const registration = askUserQuestion.toolRenderers.ask_user_question;
 	expect(typeof registration.renderer).toBe("function");
-	expect(registration.options).toEqual({ chrome: "bare", interactive: true });
+	expect(registration.options).toEqual({ chrome: "bare", interactive: true, dock: true });
 	expect(getToolRenderer("ask_user_question")).toBe(registration.renderer);
 	expect(getToolChrome("ask_user_question")).toBe("bare");
 	expect(isInteractiveTool("ask_user_question")).toBe(true);
+	expect(isDockedTool("ask_user_question")).toBe(true);
 	// Interactivity is opt-in per registration: the other extension tool and unknown names are not.
 	expect(isInteractiveTool("visualize")).toBe(false);
 	expect(isInteractiveTool("unregistered-extension-tool")).toBe(false);

@@ -91,6 +91,34 @@ describe("output batcher", () => {
 		expect(accepted).toEqual([{ data: "56789ABCDE", truncated: true }]);
 	});
 
+	test("truncation drops a whole character when the ceiling bisects a surrogate pair", () => {
+		const { accepted, batcher } = harness({ maxPendingChars: 4, maxBatchChars: 1000 });
+		batcher.push("prefix😀abc");
+		batcher.resume();
+		expect(accepted).toEqual([{ data: "abc", truncated: true }]);
+	});
+
+	test("truncation retains a complete surrogate pair that fits at the boundary", () => {
+		const { accepted, batcher } = harness({ maxPendingChars: 5, maxBatchChars: 1000 });
+		batcher.push("prefix😀abc");
+		batcher.resume();
+		expect(accepted).toEqual([{ data: "😀abc", truncated: true }]);
+	});
+
+	test("backpressured output is truncated without sending an orphaned low surrogate", () => {
+		const { accepted, batcher, state } = harness({ maxPendingChars: 4, maxBatchChars: 4 });
+		state.delivery = "backpressured";
+		batcher.push("first");
+		batcher.push("😀");
+		batcher.push("abc");
+		state.delivery = "delivered";
+		batcher.resume();
+		expect(accepted).toEqual([
+			{ data: "irst", truncated: true },
+			{ data: "abc", truncated: true },
+		]);
+	});
+
 	test("a delivered batch clears the truncation flag rather than latching it", async () => {
 		const { accepted, batcher, state } = harness({ maxPendingChars: 4, maxBatchChars: 1000 });
 

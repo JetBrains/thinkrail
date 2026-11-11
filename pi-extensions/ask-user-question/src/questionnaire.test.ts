@@ -7,6 +7,7 @@ import {
 	emptyQuestionState,
 	type QuestionState,
 	readRecommendation,
+	selectSingleOption,
 	splitRecommended,
 } from "./questionnaire.ts";
 
@@ -135,5 +136,50 @@ describe("answerSummary", () => {
 				selected: ["web", "cli"],
 			}),
 		).toBe("web, cli, “mine”");
+	});
+});
+
+describe("discussion, previews and the travelling note", () => {
+	const layout: AskUserQuestionItem = {
+		question: "Which layout?",
+		header: "Layout",
+		options: [
+			{ label: "Split", description: "two", previewFile: "split.html", previewBefore: "now.html" },
+			{ label: "Stacked", description: "one", preview: "```\n[ a ]\n```" },
+		],
+	};
+
+	test("a discussion wins over everything else and carries its reason and text", () => {
+		const state = {
+			...emptyQuestionState(),
+			option: "Split",
+			discuss: { reason: "unclear" as const, text: " why? " },
+		};
+		expect(deriveAnswer(layout, 0, state)).toEqual({
+			questionIndex: 0,
+			question: "Which layout?",
+			kind: "discuss",
+			answer: null,
+			reason: "unclear",
+			notes: "why?",
+		});
+	});
+
+	test("a file preview is echoed as paths; a markdown preview as text", () => {
+		expect(deriveAnswer(layout, 0, { ...emptyQuestionState(), option: "Split" })).toMatchObject({
+			previewFile: "split.html",
+			previewBefore: "now.html",
+		});
+		expect(deriveAnswer(layout, 0, { ...emptyQuestionState(), option: "Stacked" })).toMatchObject({
+			preview: "```\n[ a ]\n```",
+		});
+	});
+
+	test("selecting another option carries the note over unless that option has its own", () => {
+		const start = { ...emptyQuestionState(), option: "Split", notes: { Split: "keep it tight" } };
+		expect(selectSingleOption(start, "Stacked").notes).toEqual({ Stacked: "keep it tight" });
+		const own = { ...start, notes: { Split: "keep it tight", Stacked: "own note" } };
+		expect(selectSingleOption(own, "Stacked").notes).toEqual(own.notes);
+		expect(selectSingleOption({ ...start, discuss: { text: "" } }, "Split").discuss).toBeNull();
 	});
 });
