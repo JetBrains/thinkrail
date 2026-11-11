@@ -9,9 +9,13 @@ export type {
 	AskUserQuestionArgs,
 	AskUserQuestionAsker,
 	AskUserQuestionDetails,
+	AskUserQuestionDiscussReason,
 	AskUserQuestionItem,
 	AskUserQuestionOption,
+	AskUserQuestionPreviewFields,
 	AskUserQuestionResult,
+	PreviewFileSource,
+	ValidationOptions,
 	ValidationResult,
 } from "./src/core.ts";
 export {
@@ -23,6 +27,9 @@ export {
 	buildQuestionnaireResponse,
 	CHAT_LABEL,
 	DECLINE_MESSAGE,
+	DISCUSS_INSTRUCTION,
+	DISCUSS_LABEL,
+	DISCUSS_REASONS,
 	executableAskCallIds,
 	isAckDetails,
 	isAskUserQuestionArgs,
@@ -35,18 +42,26 @@ export {
 	MIN_OPTIONS,
 	OTHER_LABEL,
 	outcomeResult,
+	previewFileSources,
 	RESERVED_LABELS,
 	validateQuestionnaire,
 } from "./src/core.ts";
 export type {
 	AskUserQuestionExtensionOptions,
+	AskUserQuestionFileChecker,
 	AskUserQuestionGuidance,
 } from "./src/extension.ts";
 export {
 	createAskUserQuestionExtension,
 	DEFAULT_DESCRIPTION,
 	DEFAULT_PROMPT_GUIDELINES,
+	defaultDescription,
 } from "./src/extension.ts";
-export { type AskUserQuestionParams, AskUserQuestionSchema } from "./src/schema.ts";
+export {
+	type AskUserQuestionParams,
+	AskUserQuestionSchema,
+	type AskUserQuestionSchemaOptions,
+	createAskUserQuestionSchema,
+} from "./src/schema.ts";
 
 export default createAskUserQuestionExtension();

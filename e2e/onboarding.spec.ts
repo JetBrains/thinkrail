@@ -515,8 +515,9 @@ test("the onboarding wizard verifies the connection in place, then collapses to 
 	await expect(wizard.getByTestId("connect-provider-options")).toHaveCount(0);
 	await expect(wizard.getByTestId("onboarding-skip")).toHaveCount(0);
 	await expect(page.getByTestId("welcome-cta")).toContainText("Start a new project");
-	await expect(page.getByTestId("welcome-action")).toHaveCount(1);
-	await expect(page.getByTestId("welcome-action")).toContainText("Open project");
+	await expect(page.getByTestId("welcome-action")).toHaveCount(2);
+	await expect(page.getByTestId("welcome-action").first()).toContainText("Open project");
+	await expect(page.getByTestId("welcome-action").last()).toContainText("Chat without a project");
 	await expect.poll(() => readConfig()?.onboardingDismissed).toBe(true);
 
 	await page.getByTestId("welcome-cta").click();

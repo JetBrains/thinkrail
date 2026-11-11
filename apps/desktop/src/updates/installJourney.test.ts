@@ -49,7 +49,11 @@ class FakeUpdater implements NativeUpdaterDependency {
 }
 
 class MemoryJournal implements UpdateJournalStore {
-	constructor(public value: UpdateJournal | null = null) {}
+	value: UpdateJournal | null;
+
+	constructor(value: UpdateJournal | null = null) {
+		this.value = value;
+	}
 
 	read(): UpdateJournal | null {
 		return this.value;

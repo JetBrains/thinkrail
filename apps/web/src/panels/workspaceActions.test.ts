@@ -1,7 +1,12 @@
 import { expect, test } from "bun:test";
-import { WORKSPACE_RENAME_PROTOCOL_VERSION, type Workspace } from "@thinkrail/contracts";
+import {
+	WORKSPACE_RENAME_PROTOCOL_VERSION,
+	WORKSPACE_SETTLE_PROTOCOL_VERSION,
+	type Workspace,
+} from "@thinkrail/contracts";
 import {
 	canRenameWorkspace,
+	canSettleWorkspace,
 	createRenameController,
 	workspaceRenameValue,
 } from "./workspaceActions";
@@ -106,4 +111,15 @@ test("reset abandons an open or pending edit so a later capable welcome renames 
 	expect(renamed).toEqual([]);
 	rename.reset();
 	expect(editing).toEqual([true, false]);
+});
+
+test("settling is offered for a worktree only — never the Default workspace or a chat without a project", () => {
+	expect(canSettleWorkspace(WORKSPACE_SETTLE_PROTOCOL_VERSION, managed)).toBe(true);
+	expect(
+		canSettleWorkspace(WORKSPACE_SETTLE_PROTOCOL_VERSION, { ...managed, kind: "default" }),
+	).toBe(false);
+	expect(canSettleWorkspace(WORKSPACE_SETTLE_PROTOCOL_VERSION, { ...managed, kind: "chat" })).toBe(
+		false,
+	);
+	expect(canSettleWorkspace(WORKSPACE_SETTLE_PROTOCOL_VERSION - 1, managed)).toBe(false);
 });

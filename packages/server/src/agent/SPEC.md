@@ -125,7 +125,8 @@ re-opened transcripts provider-valid.
     and a failed re-read keeps the last listing. Failures log only a closed count, never provider ids or
     the provider's error text. Direct API keys and other subscriptions keep pi's catalog: no listing was verified to
     agree with pi's aliases there.
-  - `modelDefaults` — `preferredDefaultModel(available)`: pi's `defaultModelPerProvider` in pi's order,
+  - `modelDefaults` — `piDefaultModelRef()` reads pi's global `defaultProvider`/`defaultModel`, undefined when
+    either is unset or the file is unreadable. `preferredDefaultModel(available)`: pi's `defaultModelPerProvider` in pi's order,
     then any available model whose id is one of those defaults, else the first available model. Pi does
     not export that map, so the host mirrors it under a parity test against the installed dist; the first
     pass is what pi's own `findInitialModel` would pick. The same-id pass covers a provider whose own
@@ -155,6 +156,27 @@ re-opened transcripts provider-valid.
     appear. Live sessions keep the model they were created with; new chats resolve the updated metadata.
     pi owns schema validation and the effective value. Accepted gap: a Central rebuild whose runtime loaded the file before a save and activated
     after its refresh serves the old budget until the next read refreshes it.
+  - `cacheWarming` — pi's `cacheWarming` setting (`off` / `streaming` / `idle`) in pi's global
+    `settings.json`, the only state. Pi 1.5.1 made `idle` its default — every idle chat re-sends its
+    prompt with a one-token reply for up to 30 minutes after a run whenever pi's economics predict a
+    saving — and ThinkRail must not turn that spend on for existing users silently, so the host default is
+    `streaming` (pi 1.5.0's behavior) whenever the file names no valid mode. `buildSessionSettings` puts a
+    file-backed getter in front of `getCacheWarmingMode` (`applyCacheWarmingDefault`): pi's only caller is
+    the cache warmer, which asks at each decision (`validateRun` before every warm, and when a run
+    settles), and the getter answers from pi's file — re-parsed only when the file's mtime/size changed —
+    rather than from the snapshot the session's `SettingsManager` loaded. One write therefore reaches every
+    session at once without a fan-out: open chats, delegated children (whose `SettingsManager` the same
+    `buildSessionSettings` builds, see `delegation`), sessions still being created, and even a mode the pi
+    CLI edits while ThinkRail runs; an idle run already scheduled stops at its next tick instead of
+    spending. `readCacheWarmingSetting` reports the effective mode with its `source`;
+    `writeCacheWarmingMode` writes through a host `SettingsManager` (`setCacheWarmingMode → flush →
+    drainErrors`, refusing with `CACHE_WARMING_WRITE_FAILED` when pi's `save()` would silently skip an
+    unparsable file). Pi stays the owner: the pi CLI reads the same key, and a user who sets it there sees
+    it as their choice here. Accepted gaps while `idle` is opted into: a delegated child's warms after its
+    run settles land as `cache_warm` entries in the child's transcript, which `subagentUsage` totals into
+    the parent only when the child runs again or is reconciled, so the parent's live total lags that
+    spend; and a second client with Settings → Models open learns of another client's change on its next
+    mount, since the setting has no push channel (unlike `provider.changed` for `models.json`).
   - `customEndpoints` — the settings adapter for the user's own OpenAI-compatible servers (a company
     gateway or a local llama.cpp / vLLM / sglang / Ollama / LM Studio server), again a `models.json` editor
     and not a registry: each is a `custom-*` provider with `api: "openai-completions"`, served by pi like any
@@ -217,15 +239,17 @@ re-opened transcripts provider-valid.
   - `agentSessionManager` — sessions keyed by `session.sessionId` (each `Entry` also tracks its
     `workspaceId`), `createSession({ cwd, workspaceId, model?, thinkingLevel? })` → `createAgentSession(...)`
     with a per-session `SessionManager` **and `buildSessionSettings(cwd, projectTrusted)`** (the user's
-    real settings + an in-memory `images.autoResize:false` override — never persisted — so the `read` tool
-    sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary can't bundle;
-    the web UI downsizes user-attached images itself at attach time — `apps/web`'s `chat/imageAttachment`
-    caps the long edge at 1568px — and the `imageGuard` extension below is the in-context second line of
-    defense). The override is **re-applied after every `settings.reload()`**: pi's `SettingsManager.reload()`
-    rebuilds settings from disk and drops `applyOverrides`, and the resource loader reloads settings on every
-    `reload()` — including inside `createAgentSession` — so a one-shot override never reached a prompt. Since
-    pi 0.87 the same setting also governs prompt-attached and tool-result images, so the override is what keeps
-    pi from rewriting user text with `[Image omitted…]` hints (which would defeat the client's optimistic-echo
+    real settings with `getImageAutoResize()` answering `false` on that instance — never persisted — so the
+    `read` tool sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary
+    can't bundle; the web UI downsizes user-attached images itself at attach time — `apps/web`'s
+    `chat/imageAttachment` caps the long edge at 1568px — and the `imageGuard` extension below is the
+    in-context second line of defense). The override sits on the getter, not in the merged settings: pi
+    rebuilds `settings` from disk on every `reload()` (the resource loader reloads inside
+    `createAgentSession`), on a trust change and on every persisting setter's `save()` — an in-memory
+    `applyOverrides` would be dropped by pi's own persisting setters — while every pi consumer of the flag
+    (prompt, queued and tool-result images) asks `getImageAutoResize()`. Since pi 0.87 the same setting also
+    governs prompt-attached and tool-result images, so the override is what keeps pi from rewriting user
+    text with `[Image omitted…]` hints (which would defeat the client's optimistic-echo
     dedup). Delegated children run on the same settings: `delegation` binds `buildSessionSettings` as the
     core's `buildChildSettings`, which receives the trust the parent context's `isProjectTrusted`
     answers (`liveParentContext`; pi-delegation decision #31, issue #604). A shared `registerSession`
@@ -252,24 +276,9 @@ re-opened transcripts provider-valid.
     membership/order. The host projects only a conservative `hasImages` aggregate into summaries/events, so
     image bytes do not ride the ordinary read stream.
 
-    **One membership override compensates for a Pi defect: a delivered image-only (empty-text) queued
-    message is never cleared.** Pi keys its on-delivery queue removal on the delivered user message's text
-    (`contentText`), so a message queued with images but no text stays in Pi's `_steeringMessages` /
-    `_followUpMessages` forever and its "Steering"/"Follow-up" chip never disappears. The manager therefore
-    counts such deliveries per lane (`stuckEmptyDeliveries`): on a user `message_start` whose text is empty,
-    whose content carries an image, and for which Pi still reports more empty-text entries in a lane than
-    already counted, it increments that lane's counter and **synthesizes the emptying `queue_update`** Pi
-    withheld. Every place that reads a lane for display — the projected `queue_update`, the transient-mirror
-    sync, and `queueStateOf` — first drops that many empty-text entries from Pi's list, so a later genuine
-    `queue_update` cannot resurrect the phantom. The counter is per live entry only (Pi's ephemeral queues
-    never survive a process restart) and resets whenever `clearQueue()` empties both lanes.
-
-    **Remove this whole override on the pi bump that ships the upstream fix** (earendil-works/pi#8612,
-    still open when last checked). Once Pi clears empty-text image deliveries natively, drop
-    `stuckEmptyDeliveries`, `displayedLane`, the synthesized `queue_update`, and the `effectivePendingCount`
-    adjustment. The removal gate is the installed code, not the PR state: on every pi bump grep the installed
-    `agent-session.js` for the `if (messageText)` guard around `this._steeringMessages.indexOf` — while that
-    guard is present the workaround is still required; when it is gone the fix has shipped.
+    Pi ≥ 1.5.1 clears a delivered image-only (empty-text) queued message itself (upstream #8612); the host
+    override that counted such deliveries and synthesized the emptying `queue_update` is gone, and the
+    manager's image-only steer/follow-up regressions now pin pi's native behavior.
 
   - **Normalized session state** is one host projection over orthogonal facts, never a second agent runtime.
     Live derivation reads Pi execution/queue state, the question phase registry's exact expected/waiting id,
@@ -296,8 +305,10 @@ re-opened transcripts provider-valid.
     `backgroundWork`, so clients show the idle chat as working (contracts' `isSessionWorking`) instead of
     quietly finished.
 
-    State ids come from Pi's active session-entry chain: run/interruption from the latest user entry,
-    completion from the decisive assistant entry, questions/dialogs from their interaction ids. A question
+    State ids come from Pi's active session-entry chain: run/interruption from the latest run-opening
+    entry — a user entry, or a `chat-handoff` custom message (a continued chat's first turn has no user
+    entry; other custom messages such as tool responses never open a run) — completion from the decisive
+    assistant entry, questions/dialogs from their interaction ids. A question
     needs input from the live mailbox; without a live phase, an attached session reads it from the
     transcript only as an acknowledged call (repair ack), while disk state still reads an unanswered
     dangling call, which attach-time repair will ack. Disk state
@@ -326,6 +337,8 @@ re-opened transcripts provider-valid.
     New-session and pre-session entrypoints capture the current generation; operations on a live session use
     that session's retained runtime. `abort` remains available as the cancellation control path.
     `prompt`/`steer`/`followUp` (with images) /
+    — `promptSession`'s optional `onPreflight` fires with pi's `preflightResult` (model and auth validated,
+    the run started, queued or handled), which lets a caller stop waiting before the agent's turn ends
     — **both `promptSession` and `followUpSession` resolve the delivery mode against the session's
     LIVE `isStreaming`, never the caller's belief about it**: `prompt()` throws mid-turn (so it falls
     back to `steer`), and pi's `followUp()` only *enqueues* into a queue that a run already in flight
@@ -356,9 +369,10 @@ re-opened transcripts provider-valid.
     `listAvailableModels` / `listSettledModels` (the same snapshot without starting a refresh) / **`clampThinkingForModel`** (pi's `clampThinkingLevel` for a `{model, level}`
     pair — `model.clampThinking`; the host uses it so defaults and live-session effort changes follow Pi).
     Earlier, #394 showed ThinkRail's `available[0]` differed from Pi's pick and hit a proxy 400. ThinkRail
-    now resolves new-chat defaults host-side from `AppConfig`, falling back to `preferredDefaultModel`
-    (pi's provider default, then the first available model) when the saved default is unavailable,
-    without rewriting that setting. `available[0]` alone was catalog order — `openai/gpt-4`, an 8K-context
+    resolves new-chat defaults host-side from `AppConfig`, falling back to pi's global `settings.json`
+    default (`piDefaultModelRef`), then `preferredDefaultModel` (pi's provider default, then the first
+    available model), when an earlier choice is unset or unavailable, without rewriting either setting.
+    Project `.pi/settings.json` defaults do not apply to new chats. `available[0]` alone was catalog order — `openai/gpt-4`, an 8K-context
     model, for a fresh OpenAI connection. An explicitly requested unavailable model is rejected rather
     than silently substituted. The host passes the chosen model explicitly so the UI and session agree.
     Plan review uses this same `resolveNewChatModel({})` for unset reviewer overrides: AppConfig
@@ -448,7 +462,9 @@ re-opened transcripts provider-valid.
     returned result is not persisted ahead of attach-time repair. `disposeAllSessions` remains the synchronous
     emergency stop, but registers its best-effort child cascades
     in the same pending set; `getSessionWorkspaceId(sessionId)` (the live session→workspace
-    lookup the host's `set_title` handler keys on); `removeSession`/`disposeAllSessions`;
+    lookup the host's `set_title` handler keys on) and `getSessionAttribution(sessionId)` (the same, also for a
+    session still preparing — the extension-UI publisher's scope, since `session_start` runs before
+    registration); `removeSession`/`disposeAllSessions`;
     **`removeWorkspaceSessions(workspaceId, cwd?)`** (the **archive teardown**: close session admission for
     the workspace before its first await, capture every registered parent, synchronously close its resource
     owners, and start parent abort/removal while concurrently draining preparations from the retired
@@ -692,6 +708,48 @@ re-opened transcripts provider-valid.
     message. The count-aware cap also degrades a raw >2000px `read`-tool image to a note instead of a
     brick once a session crosses 21 images. Pure core (`guardOversizedImages`, `imageDimensions`)
     unit-tested with hand-built header bytes.
+  - `skillCatalog` — the skill-listing budget (#1210): an inline extension in `buildResourceLoader`'s
+    shared factories and the opt-in `childExtensionFactories` — never the tool-free base set, since it
+    registers `skill_search` (pi-delegation decision #25), so a child gets it only with `extensions: true`
+    and its `tools` allowlist still decides whether the search is callable. Pi lists every admitted
+    skill's name, full description and location in the system prompt with no cap, and portable aliases
+    import other agents' whole libraries, so one machine sent 1,395 skills (~165K tokens) on every
+    request, which compaction can never shrink. Modeled on Claude Code's listing budget and Codex's
+    2% budget, plus Anthropic's tool search: when pi's own section would exceed **2% of the context
+    window, clamped to 4K–8K tokens and never above 10% of the window** (the contracts'
+    `SKILL_LISTING_MIN_TOKENS` / `SKILL_LISTING_MAX_TOKENS`, which the Skills dialog quotes; 4K for a virtual or unknown
+    window), the `before_agent_start` handler sets `sections.skills` (pi lets a custom section replace
+    its own) to a listing within that budget: skills ranked project, then host-supplied (bundled and
+    extension skills, `temporary` scope), then pi-native user skills, then other agents' aliases
+    (`claude` / `codex` / `github-copilot` / `gemini` sources), pi order within a tier; descriptions
+    shortened to 240 characters and rendered by pi's own `formatSkillsForPrompt`, so the entry format
+    follows pi; then a line that says how many are listed and to call `skill_search`, and a per-source
+    count of the unlisted rest, so the omission is never silent. A catalog that fits
+    keeps pi's section untouched. `skill_search(query, limit?)` runs BM25 over name (weighted) and
+    description across every model-invocable admitted skill and returns names, descriptions and
+    `SKILL.md` locations, folding a trailing plural `s`; the model still loads a skill with `read`, so
+    `skillCarryover` sees it. The listing instruction alone did not make a live model search (it solved
+    the task without the skill), the recall gap tool-search docs and retrieval papers report, so the
+    host also hints: for a user-started run with a budgeted section, the prompt is searched against the
+    catalog and up to 3 **unlisted** skills matched distinctively — a matched term in at most 5% of the
+    catalog that is in the skill's name, or two such terms — come back as `before_agent_start`'s
+    `message`, a persisted `thinkrail/skill-hint` custom message (`display: false`; the web ignores
+    unknown custom types) whose `details.skills` names them. It lands in the history tail after the
+    user turn, so the cached prefix is untouched. A skill is not hinted again while an earlier hint
+    naming it is still in pi's compaction-aware context (`buildContextEntries`), so the rule survives a
+    reload or restart and lapses only once compaction summarizes that hint away. A `/skill:` prompt
+    reaches the handler expanded into the skill's whole body, so only the request typed after it
+    (`parseSkillBlock`'s `userMessage`) is matched, and the invoked skill is never hinted. A session
+    that already sent pi's full section keeps it until its next compaction, because the budgeted one
+    arrives as a mid-conversation patch where the provider allows one; the saving is immediate only
+    for new sessions. The
+    section is memoized on the budget and the skill set, so it changes only on reload or a model with a
+    different window: per-turn relevance filtering was rejected because every change re-sends the
+    whole section (a mid-conversation patch, or a full cache miss where the model has none). A session
+    that cannot call both `read` and `skill_search` (absent from `selectedTools` or hidden) keeps pi's
+    full section, so a narrow allowlist never loses unlisted skills it could not search for. Unlisted
+    membership for the hint is keyed by `filePath`, since pi shallow-copies every skill per run. Admission (`skillsGate`) still decides what is
+    loadable; the budget decides only what is listed, so Settings → Skills and `/skill:` are unchanged.
   - `skillCarryover` — the post-compaction skill restorer: an inline extension in both
     `buildResourceLoader`'s shared factories and `childBaseExtensionFactories`, so delegated children
     carry it too. Pi's compaction summarizes a loaded skill's body away while the system prompt keeps
@@ -795,20 +853,26 @@ re-opened transcripts provider-valid.
     owner, so already-running detached children finish and retain completion delivery; a disabled launch is still rejected immediately by the live
     predicate even before a streaming parent's tool set can be refreshed.
     The plan-review `request_review` tool follows the same live-toggle shape: it is always registered, but
-    `setAgentReviewEnabledResolver` (host-injected, global — no `agent` → settings edge) decides whether it
-    stays in a session's active set, and `refreshAgentReviewTool(workspaceId?)` applies a change idle-sync /
+    `setAgentReviewEnabledResolver` (host-injected, per workspace — no `agent` → settings edge; the host
+    answers the global setting, and `false` for a chat without a project) decides whether it stays in a
+    session's active set, and `refreshAgentReviewTool(workspaceId?)` applies a change idle-sync /
     streaming-deferred to `agent_settled`, exactly like the subagent tools. Because `setActiveToolsByName`
-    rebuilds the system prompt from active tools' guidelines, dropping the tool drops its guidance too. Only
+    rebuilds the system prompt from active tools' guidelines, dropping the tool drops its guidance too.
+    `setSpecsEnabledResolver` (host-injected, per workspace; `false` for a chat without a project) is the
+    same kind of gate for pi-spec-graph: such a workspace's sessions drop every `spec_*` tool from their
+    active set at registration and after a reload, a per-session inline extension deletes the spec rule's
+    prompt section after pi-spec-graph wrote it (inline extensions load after path and bundled ones), and
+    `childExtensionFactories(workspaceId)` leaves pi-spec-graph out of their delegated children. Only
     the tool is gated — the `startPlanReview` button path is a separate host seam. See `submodule-server-host-plan-review`.
     **Registry extensions** follow the same shape, keyed by extension name instead of workspace. A
     host-injected `setDisabledExtensionsResolver(() => ReadonlySet<string>)` (global — no `agent` →
     settings edge; a throwing resolver means nothing disabled) is read by `buildResourceLoader` at **every
     loader reload** (snapshotted beside project trust), so the gated registry factories skip a disabled
     extension and `extensionsOverride` omits its `<inline:…>` entry — new parents never load it — and by
-    `childExtensionFactories()` when a hidden child's loader runs. `refreshExtensionTools()` updates live
-    sessions: tools whose `sourceInfo.path` belongs to a disabled registry extension leave the active set
-    (remembered per entry so re-enabling restores exactly the withheld tools, never ones that were inactive
-    by default) idle-sync / streaming-deferred to `agent_settled`, latest policy wins, and
+    `childExtensionFactories(workspaceId)` when a hidden child's loader runs. `refreshExtensionTools()`
+    updates live sessions: tools whose `sourceInfo.path` belongs to a disabled registry extension leave
+    the active set (remembered per entry so re-enabling restores exactly the withheld tools, never ones
+    that were inactive by default) idle-sync / streaming-deferred to `agent_settled`, latest policy wins, and
     `setActiveToolsByName` drops their guidance with them. Hooks of a disabled extension keep running in an
     open session until its next resource reload — pi cannot unload an extension, and reloading on every
     disable would bust the prompt cache. Two cases do reload, gated through `requestSessionReload`: an
@@ -856,10 +920,17 @@ re-opened transcripts provider-valid.
     install, remove, update or outside settings change, and a switch generation the host bumps on every
     `disabledPackages` write — so a loader that resolved while a package was flipped off and back on
     never compares equal to the restored set) joins the extension policy generation
-    above, and each session loader records the key it last resolved under; `isLoaderPackagePolicyStale`
-    is one more predicate of the reconciliation `applyExtensionTools` runs at registration, after every
-    reload and on `refreshExtensionTools`, so a session prepared under an older policy reloads when it
-    registers and a change mid-reload re-reloads — the fan-out alone would miss both.
+    above, and each session loader records the key it last resolved under — together with the
+    **extension setting values** (`AppConfig.extensionSettings`, reaching `agent` through a host-injected
+    resolver like the disabled set; a `settings.update` of them calls `refreshExtensionTools`). A reload
+    snapshots the setting values once, and its extension factories read that snapshot, never the live
+    values, so the recorded key always describes the tools actually loaded, even across a change and revert
+    during the reload.
+    `isLoaderPolicyStale` is one more predicate of the reconciliation `applyExtensionTools` runs at
+    registration, after every reload and on `refreshExtensionTools`, so a session prepared under an older
+    policy or older setting values reloads when it registers (or once its turn ends) and a change
+    mid-reload re-reloads — the fan-out alone would miss both. A pending question keeps the arguments it
+    was asked with.
     The **`set_title`** tool (`titleTool.ts`) is how chats and workspaces get named: the main agent calls it
     with `chat_title?` / `workspace_name?` / `branch?` (English kebab slug). It is always registered and
     active, and listed via `promptSnippet`; toggling it off after naming would rebuild the system prompt
@@ -878,6 +949,30 @@ re-opened transcripts provider-valid.
     costs one prompt-cache miss per chat, early in it. The write policy and the workspace half of that state are
     not here: the host injects both through `setTitleToolHost({ apply, workspaceNeedsName })`, because naming
     composes `agent` + `workspaces`.
+    The **workspace tools** (`workspaceTools.ts`) let a chat operate other workspaces. There are exactly two,
+    always registered and active (no setting, like `set_title`), and top-level only:
+    - **`start_workspace { prompt, project?, base_branch?, model?, effort?, attachments? }`** starts an
+      ordinary new workspace with a first chat. It returns the new ids once the child's first prompt is
+      accepted (pi's preflight in the host's creation hand-off), and never waits for the child's turn to
+      finish. It hands pi's abort signal to the host's `start`, because pi awaits a running tool and reports
+      Stop only through that signal: without it, Stop would wait out the base fetch and the checkout and
+      still spawn the workspace.
+    - **`workspace_status { project?, workspaces? }`** reports chat states, PR state, diff stats and
+      (for named workspaces) each chat's final message. The report is bounded like pi's own tools
+      (`truncateHead` at pi's default line and byte limits) with a footer saying the later workspaces and
+      older chats were cut: a default workspace with dozens of chats would otherwise return their final
+      messages in one unbounded result. A named lookup lists its misses first, so a cut never hides them.
+    `project` defaults to the chat's own project. In a chat without a project it is required, and the
+    host enforces that.
+    Both delegate to a host seam, `setWorkspaceToolsHost({ start, status })`, because they compose
+    `agent` + `projects` + `workspaces` + `git`. Their `promptGuidelines` make the agent **always** act on
+    side/separate/parallel-workspace cues, but only *suggest* splitting work the user did not ask to
+    parallelize. Nothing else is built in by design: no waiting primitive (the agent decides how and whether
+    to wait), no steering, stopping, archiving or merging of another workspace, and no cap or confirmation.
+    `readFinalAssistantTexts(workspaceId, cwd, sessionIds)` serves the status final messages. For a live
+    entry it reads the entry's messages. Otherwise it lists the workspace's transcripts **once** and opens
+    each match read-only, never through `attachDiskSession`, so a status check neither loads nor announces
+    other workspaces' chats, and never re-parses the directory per chat.
     Cascades: `removeSession`/`disposeAllSessions` fire
     `disposeSessionChildren` — `removeSession` returns that cascade, the **delete transaction
     awaits it before `publishDeleted`/resolving** (safe: the cascade carries its own swallow, so a
@@ -1002,7 +1097,17 @@ re-opened transcripts provider-valid.
     (granting trust acknowledges only what's present, so a later pull/branch skill is `pending-ack` until
     confirmed) + `disabledSkills` / **`disabledGroups`** baselines (a group key = a plugin name, a source tier
     `project`/`personal`/`bundled`/`pi`, or the special `@plugins` — assigned per skill by `skillGroup`, matching
-    `SkillCatalogEntry.group`), layered with the workspace's per-skill `skillOverrides` (the trust gate is
+    `SkillCatalogEntry.group`) + **`enabledGroups`**, resolved through the contracts' `isSkillGroupEnabled`
+    against the host's `AppConfig.otherAgentSkills` (off by default, so `personal` and Claude plugins load
+    only after a host-wide or per-project opt-in; `project`/`bundled`/`pi` — including pi's own
+    `~/.agents/skills` — stay on. A compatibility root whose group is off (`sourceMayLoad`) is left out of
+    `additionalSkillPaths` at every reload, never filtered afterwards: pi resolves same-name skills
+    first-wins before any override runs, so a switched-off personal `deploy` would otherwise shadow a
+    trusted project `deploy` and lose both. While any per-skill `on` override exists, such roots are
+    appended after every root whose group is on, so the override can reach its skill without one of them
+    shadowing a loadable one. `listSkillCatalog` lists the admitted load plus the skills those roots hold
+    (as off), so the Skills dialog can still switch them on; `refreshSkillAdmission()` reloads, through the gated `requestSessionReload`,
+    only live sessions whose loaded Personal/plugin skill files differ from the new decision), layered with the workspace's per-skill `skillOverrides` (the trust gate is
     checked before the toggle layer, so an "on" override can never un-gate an untrusted alias, and a per-skill
     `on` beats a group disable). `skillsGate` filters + relabels in one `skillsOverride`; only `load` skills
     reach the system prompt / `/skill:` list. A **disabled registry extension's** skill roots
@@ -1117,7 +1222,8 @@ re-opened transcripts provider-valid.
   the runtime-generation facade (`usePiRuntime`, candidate prepare/activate, current generation id, and the
   closed `load-failed` outcome—no manager internals) plus `configurePiRuntime`/factory test seams and the
   pre-bootstrap `configurePiRuntimeGenerationInitializer` composition seam; `listModelContextSettings` /
-  `setModelContextWindow` (the `modelContext` adapter); `listCustomEndpoints` / `probeCustomEndpoint` /
+  `setModelContextWindow` (the `modelContext` adapter); `readCacheWarmingSetting` / `writeCacheWarmingMode`
+  (the `cacheWarming` adapter); `listCustomEndpoints` / `probeCustomEndpoint` /
   `saveCustomEndpoint` / `removeCustomEndpoint` (the `customEndpoints` adapter); `setModelsFilePublisher`
   (their shared `provider.changed` seam); `piLoginOptions` (pi login options
   carrying the lazily created installation device id, for `auth`);
@@ -1129,7 +1235,7 @@ re-opened transcripts provider-valid.
   `describeToolResponse`/`buildToolResponseMessage`/`awaitingToolCallId`); normalized-state operations
   (`listSessionStates`/`acknowledgeCompletion`/`markWorkspaceUnread`/`markWorkspaceRead`/`nudgeSession` +
   publisher/project seams);
-  `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript`
+  `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript` + `trashWorkspaceDelegation`
   (the delegation embedding); the skill catalog helpers
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /
@@ -1216,7 +1322,7 @@ context-budget limitations and their upgrade checks live in [[pi-compatibility]]
 
 Pi owns provider retry; the host never adds one. Pi retries only errors that match its retryable
 patterns: "Anthropic stream ended before message_stop" does, "Could not parse Anthropic SSE event" does
-not. `patches/@earendil-works%2Fpi-ai@1.5.0.patch` (root `patchedDependencies`, upstream
+not. `patches/@earendil-works%2Fpi-ai@1.5.2.patch` (root `patchedDependencies`, upstream
 earendil-works/pi#10390, #564) fixes two defects in pi-ai's `anthropic-messages` SSE parser that end a
 turn with that parse error. The two fixes have different outcomes:
 
@@ -1271,6 +1377,26 @@ shared with the pi CLI. There is no ThinkRail copy of the setting.
 
 The parity entry and its removal gate live in [[pi-compatibility]].
 
+## Continue in workspace
+
+`continueTool.ts` registers `continue_in_workspace({ summary })` the way `titleTool.ts` registers
+`set_title`: a global inline extension whose behaviour is a host-injected `ContinueToolHost`
+(`setContinueToolHost`), so `agent` never imports `host`. The tool's description tells the agent it only
+works after ThinkRail asked (the request card); the host side refuses every call without a pending
+binding, which also keeps delegation children out. `clampHandoffSummary` bounds the summary to
+`CHAT_HANDOFF_SUMMARY_MAX_LENGTH`. `sendHostMessageToSession(sessionId, customType, content, details)` is
+the one way the host authors a message the agent answers: a `display: true` custom message delivered as a
+follow-up with `triggerTurn`, queued behind a running turn and never a steer — the review-fix request
+rides it too. Until pi delivers it (its `message_start`, matched by the `details` object pi carries through)
+the entry keeps it as pending, and `isHostMessagePending(sessionId, details)` says so. Pi's `clearQueue()`
+also drops a queued custom message, which no text lane shows, so a queue edit (`removeQueuedSession`) or
+a drain into the composer (`clearQueueSession`) queues every pending one again while the run lasts — a
+host message draws its position from the counter the text messages use, so an edit re-queues it in its
+place among the kept follow-ups — and any other clear (Stop, disposal, shutdown), or one the run did not
+outlast, drops it and calls the sender's `onDropped`. Like a text keeper, a host message pi already took
+for a turn still preparing (a pre-turn compaction) is queued once more by an edit in that window; a
+second continuation call joins the first, so the repeat costs one turn, nothing else.
+
 ## Session titles
 
 `agentSessionManager` is the only durable chat-title writer. Its `renameSession(sessionId,
@@ -1279,7 +1405,14 @@ length limit, resolves the session strictly inside the supplied workspace/cwd, a
 normalized title is already current. A live session writes through `AgentSession.setSessionName`; a disk-only
 session opens its exact transcript with `SessionManager.open(...).appendSessionInfo(...)` without attaching an
 agent or resolving a model. Both paths publish the same `session_info_changed` Pi event, while
-`SessionSummary.title` remains the hydration projection.
+`SessionSummary.title` remains the hydration projection. Every `pi.event` publication hands the
+host its workspace beside the payload (`setSessionPublisher`'s second argument, never on the wire), so a
+detached session's event is attributable without a live entry to look it up by. The title is also **exposed, not copied, on the
+state record**: `SessionStateRecord.title` carries pi's current session name (live entries from
+`sessionName`, disk records from the transcript header), the publication fingerprint includes it so a
+title-only change republishes `session.state`, and the disk-only rename path publishes a fresh record
+itself — the Chats rows, the topbar and the palette read titles from there, with no per-workspace
+`session.list` backfill needed for a host of this protocol.
 
 **The name rides the state record.** Every `SessionStateRecord` the manager builds carries `title`: a live
 entry reads `AgentSession.sessionName`, and it is part of `publishEntryState`'s dedupe key, so the publish
@@ -1369,7 +1502,15 @@ workspace archive close command admission and signal command/child work before a
 under the existing host shutdown budget. A per-session teardown tombstone prevents a persisted parent
 from reattaching until its previous resource cascade settles. Workspace archive closes a generation and
 awaits in-flight parent preparation before removing delegation/transcript storage, so stale preparation
-cannot register after teardown. Resource closure runs for every captured workspace parent before
+cannot register after teardown. That barrier is public on its own as **`closeWorkspaceSessions(workspaceId,
+teardown)`**: generation bump and closed admission, drained preparations, stopped and disposed live
+sessions and settled child cascades, then `teardown` before admission reopens. Archive's
+`removeWorkspaceSessions` runs its permanent purge inside it; deleting a chat without a project runs its
+Trash moves inside it ([[submodule-server-host]]), so no session can start in a folder being trashed and
+the transcripts are listed only once nothing can still write one. Its delegated conversations go with it
+through **`trashWorkspaceDelegation(workspaceId)`** — the recoverable twin of archive's
+`removeWorkspaceDelegation` (`rmSync`): after the child cascades settled, the workspace's delegation store
+moves to the Trash, and only then is its delegation service released, so a failed move keeps both for Retry. Resource closure runs for every captured workspace parent before
 any parent abort is awaited; individual removal likewise signals resources before waiting for the main turn.
 Streaming destructive removal reuses the manager's queue-draining Stop path, discarding the drained
 input while retaining the same bounded accepted-answer persistence grace before the parent is disposed.

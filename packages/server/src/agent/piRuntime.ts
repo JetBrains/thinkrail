@@ -217,6 +217,17 @@ export async function getPiRuntime(): Promise<ModelRuntime> {
 	return (await getPiRuntimeGeneration()).runtime;
 }
 
+/** Settle in-flight credential writes on the active generation and `others`; never creates a generation. */
+export async function settlePiCredentialWrites(others: Iterable<ModelRuntime> = []): Promise<void> {
+	const runtimes = new Set(others);
+	if (activeGeneration) {
+		try {
+			runtimes.add((await activeGeneration).runtime);
+		} catch {}
+	}
+	await Promise.allSettled([...runtimes].map((runtime) => runtime.settleCredentialWrites()));
+}
+
 export async function preparePiRuntimeGeneration(
 	additionalExtensionPaths: readonly string[],
 ): Promise<PreparePiRuntimeGenerationResult> {
