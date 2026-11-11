@@ -366,7 +366,9 @@ function EndpointDialog({
 								data-testid="custom-endpoints-show-more"
 								onClick={() => setShown((count) => count + MODEL_PAGE)}
 							>
-								{t("settings.customEndpoints.showMore", { count: visible.length - shown })}
+								{t("settings.customEndpoints.showMore", {
+									count: Math.min(MODEL_PAGE, visible.length - shown),
+								})}
 							</Button>
 						) : null}
 					</div>
