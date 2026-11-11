@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import { PROTOCOL_VERSION, WS_CHANNELS, WS_MAX_FRAME_BYTES } from "@thinkrail/contracts";
+import { wsErrorCode } from "./requestError";
 import { WsTransport } from "./transport";
 
 class TestWebSocket {
@@ -307,5 +308,56 @@ describe("WsTransport response receipts", () => {
 		replacement?.open();
 		expect(resumesIn(replacement?.sent ?? [])).toEqual([[]]);
 		expect(requestsIn(replacement?.sent ?? [])).toEqual([]);
+	});
+});
+
+describe("WsTransport frame cap", () => {
+	const envelopeBytes = JSON.stringify({
+		id: "trpi_1",
+		method: "session.prompt",
+		params: { sessionId: "s1", text: "" },
+	}).length;
+	const utf8Bytes = (frame: string) => new TextEncoder().encode(frame).byteLength;
+
+	test("sends a frame exactly at the cap", async () => {
+		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+		transport.connect();
+		const socket = TestWebSocket.instances[0];
+		socket?.open();
+
+		const text = "a".repeat(WS_MAX_FRAME_BYTES - envelopeBytes);
+		const result = transport.request("session.prompt", { sessionId: "s1", text });
+		const frame = socket?.sent.at(-1) ?? "";
+		expect(utf8Bytes(frame)).toBe(WS_MAX_FRAME_BYTES);
+		expect(parse(frame).id).toBe("trpi_1");
+
+		socket?.message(JSON.stringify({ id: "trpi_1", ok: true, result: { ok: true } }));
+		expect(await result).toEqual({ ok: true });
+	});
+
+	test.each([
+		["one byte over the cap", "a".repeat(WS_MAX_FRAME_BYTES - envelopeBytes + 1)],
+		[
+			"over the cap in UTF-8 though under it in UTF-16 code units",
+			"ж".repeat(Math.floor((WS_MAX_FRAME_BYTES - envelopeBytes) / 2) + 1),
+		],
+	])("rejects a frame %s without sending or replaying it", async (_name, text) => {
+		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+		transport.connect();
+		const first = TestWebSocket.instances[0];
+		first?.open();
+
+		const error = await transport.request("session.prompt", { sessionId: "s1", text }).then(
+			() => undefined,
+			(err: unknown) => err,
+		);
+		expect(wsErrorCode(error)).toBe("FRAME_TOO_LARGE");
+		expect(requestsIn(first?.sent ?? [])).toEqual([]);
+
+		first?.close();
+		await tick(520);
+		const replacement = TestWebSocket.instances[1];
+		replacement?.open();
+		expect(replacement?.sent).toEqual([JSON.stringify({ resume: [] })]);
 	});
 });
