@@ -13,7 +13,7 @@ references: [module-pi-ask-user-question, submodule-web-chat, submodule-server-a
 The ThinkRail halves of the `ask_user_question` capability.
 - `./server` composes the portable tool ([[module-pi-ask-user-question]]) for every parent session, with
   ThinkRail's own wording and an asker that waits on the host's interactive-tool mailbox.
-- `./web` is the inline questionnaire card.
+- `./web` is the questionnaire card: the docked form, its transcript stub and the answered receipt.
 
 The host keeps the interactive-tool lifecycle — mailbox phases, restart repair, late responses, composer
 supersede, Stop/Submit ordering and needs-input ([[submodule-server-agent]]) — and knows nothing about
@@ -39,7 +39,7 @@ client of that contract ([[module-extension-api]]) and is deletable without a co
   question lifecycle starts only for calls this extension runs. The asker awaits `session.awaitToolResponse(toolCallId, signal)`. A `response` must be a questionnaire
   result (checked with the package's `isAskUserQuestionResult`, else the call fails); `deferred` and
   `abandoned` pass through as outcomes, so the package returns the canonical ack or the stop and ends the
-  turn. `guidance` is ThinkRail's description and prompt guidelines: the inline card, a composer reply that
+  turn. `guidance` is ThinkRail's description and prompt guidelines: the card docked above the message box, a composer reply that
   supersedes it, Discuss, question versus option previews, and — only with rich previews on — mockup files
   under `session.workspaceFiles.scratchDir` (`.thinkrail/context/mockups/`) referenced by `previewFile`.
   Off, the model is offered neither the fields nor that guidance: the saving is the agent's mockup writing
@@ -48,7 +48,7 @@ client of that contract ([[module-extension-api]]) and is deletable without a co
   `session.workspaceFiles.check`. The server half has no named exports; it imports only
   `extension-api/server` and its pi package. The package's deferral ack `{ kind: "ack" }` is the host's pending marker — a test pins it.
 - `@thinkrail/ext-ask-user-question/web` default-exports a `defineWebExtension` descriptor that registers
-  `AskUserQuestionCard` for `ask_user_question` with `{ chrome: "bare", interactive: true }`. Nothing is
+  `AskUserQuestionCard` for `ask_user_question` with `{ chrome: "bare", interactive: true, dock: true }`. Nothing is
   exported by name: the plan page reaches the card through the tool registry, as the chat does.
 - The card imports `extension-api/web`, the package's argument/result **types** (type-only, from
   `@thinkrail/pi-ask-user-question/core`; a value import of the pi package stays forbidden in browser code,
@@ -64,7 +64,7 @@ client of that contract ([[module-extension-api]]) and is deletable without a co
     so a call the host is not waiting on never asks for attention);
   - `respond`;
   - the focus scope;
-  - layout and reveal callbacks;
+  - the layout callback and its `placement` (docked, transcript stub, or neither);
   - composer hand-off.
 
   Without `interaction` the card is read-only.
@@ -74,6 +74,26 @@ client of that contract ([[module-extension-api]]) and is deletable without a co
 ## Rendering contract (web)
 
 Registered `"bare"`: the card owns its full-width frame and never folds. Behaviors worth their invariants:
+
+- **Docked in the chat, a card elsewhere.** While the chat's host awaits the call, the chat renders it
+  twice ([[submodule-web-chat]]): the live form in the interaction dock above the Resources strip and the
+  composer (`placement: "dock"`), and a one-line **stub** at the call's place in the transcript
+  (`placement: "stub"`: "Question from agent · N questions · Answer below ↓"). The docked form is a
+  **sheet**: full column width, accent top rule, no radius; one header row holds the attention line, the
+  question tabs (a single question shows its short header) and a collapse toggle; the page stack sits in
+  a body that scrolls; the footer (legend, nudge, Skip, Next/Submit) is pinned. The chat caps the dock at
+  its *Question panel height* setting (40–100% of the chat, default 60), so only the content between
+  header and footer scrolls. This overturns the earlier "no nested vertical scroller" rule for the dock:
+  with a fixed bottom edge the alternative is a form that swallows the transcript. **Collapse** is manual
+  and keeps only the header row; a tab click expands on that page, the stub expands and focuses the form,
+  every new question arrives expanded, and a page change scrolls the body back to its top. Collapse and the
+  stub's focus request live in a per-call `useSyncExternalStore` store (`dockState.ts`), dropped with the
+  answer cache; the stub never writes the answer cache, so it cannot overwrite the dock's answers. Without
+  a placement (the plan page, a call the host is not awaiting) the card renders as before, inline. After the
+  answer the stub becomes the receipt; the docked form shows "Answer sent" until the host accepts it.
+  Rejected: a separate floating card with margins (the user chose the sheet, which reads as part of the
+  input area) and collapsing on its own when the composer is used (the form would resize without a
+  gesture).
 
 - **The lifecycle derives from the transcript across two host paths:** a live blocking call resolves with
   the real tool result; a restarted dangling call is repaired to the pending marker and later paired with a
@@ -91,8 +111,9 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   Unanswered questions are sent as not answered without a warning: the chips' answered marks already show
   the gaps. A synthetic **Review & submit** page once gated submission; it was removed as an extra step
   that re-showed what the chips and pages already showed. A single question keeps its direct **Submit**.
-- **Per-call UI state survives virtualization** — a module-level cache keyed by `toolCallId` (dropped
-  once no longer awaiting), since react-virtuoso unmounts off-screen rows; it holds every page's answers,
+- **Per-call UI state survives remounts** — a module-level cache keyed by `toolCallId` (dropped
+  once no longer awaiting), since react-virtuoso unmounts off-screen rows and a chat switch remounts the
+  dock; it holds every page's answers,
   cursor, open note, discuss mark and Show all state. This is the pattern the
   activity fold's expansion state reuses.
 - **The card never jumps.** Every page is rendered in one grid cell, so the card takes the tallest page's
@@ -102,7 +123,8 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   themselves to `[data-ask-active]`. Only the user's own input may grow it (a note, Other, the discuss panel,
   Show all), and a **height ratchet** then keeps the largest height for the rest of the questionnaire: a
   ResizeObserver on the grid writes it as `--ask-stack-height` on a holder, cached per call and keyed by
-  width, so a Virtuoso remount keeps it and a width change resets it. Rejected: a ratchet alone (the first
+  width, so a remount keeps it and a width change resets it; a zero-width measurement (the collapsed
+  sheet) is ignored. Rejected: a ratchet alone (the first
   visit to a taller page still jumps), animating the height (still moves; no `interpolate-size` in stable
   WebKit), a fixed height with an inner scroller, and a list of every question (screens long). Heavy preview
   content mounts only on the active page, always inside a frame of fixed height, so a ghost page measures
@@ -154,36 +176,25 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   state), and each toggle routes through `interaction.prepareLayoutChange`. A skipped round, a superseded
   question, a stopped call and an error are one muted line each. No answer time: the renderer has no
   timestamp and a contract field for it was not worth it.
-- **Attention without hostile focus theft** — once its arguments are complete, an awaiting card is
-  revealed with an assertive visual “needs you” treatment plus a polite assistive-tech announcement. The
-  spoken half is an **always-mounted live region filled a frame later by the same one-shot claim**: a
-  region inserted together with its text is announced unreliably, and a virtualized remount must not
-  re-announce a question the user has already been told about. **Exactly one copy is in the accessibility
-  tree**: the visible line goes `aria-hidden` once the region carries the text, so a remount (region
-  deliberately empty) still exposes the line.
-  Per active-chat mount it focuses the selected choice (including Other) or first authored choice once;
-  a virtualized remount never reclaims focus, while a fresh `ChatView` mount does (see [[submodule-web-chat]] —
-  that means any switch back to the chat tab, not only reopening the chat). It reveals but does **not**
-  move focus away from Monaco, xterm, content-editable/form fields, a non-empty composer draft, or a
-  surface that **owns focus while it is open** — a dialog, a menu, another choice list (a second
-  questionnaire mid-answer): out-waiting a modal focus scope either loses the fight or yanks an untrapped
-  popover out from under the user, so the card does not enter it. A **coarse pointer never gives up
-  focus** at all: on a phone there is no keyboard flow to hand off to, and focusing a row (the Other input
-  especially) raises the soft keyboard over someone who was reading — the reveal + scroll-into-view *are*
-  the attention treatment there. A **page change** follows a tap, so it may focus — except into a text
-  field on a coarse pointer (`shouldFocusPageTarget`), which would raise that same keyboard. Each page
-  change first asks the parent chat scroll owner to clear and suppress any temporary streaming runway, then
-  reveals the new page's start with `block: "nearest"` — no scroll at all while it is visible, since paging
-  no longer moves anything; it applies the focus rule afterward with browser auto-scroll suppressed. A fresh `ChatView` attention claim repeats
-  that current-page reveal through one bounded settling window so Virtuoso's later initial-edge placement cannot
-  undo it; focus eligibility remains independent from reveal. The card stays in ordinary transcript flow — no
-  nested vertical scroller — so long pages use the same chat scrollbar to reach later answers and Next/Submit.
-  The only inner scrollers are bounded by design: a text field past its 8-line cap, the option pane's
-  markdown, and the file frames.
-  Reveal still occurs when coarse-pointer focus is withheld and never re-arms follow mode. The empty composer
-  left focused after Send is safe to hand off. The settling window **yields to the user**: the first real
-  `pointerdown`/`keydown`/`wheel` after the reveal ends the claim, so a later frame can never pull focus or the
-  transcript back out from under an interaction the user made while it was still trying.
+- **Attention without hostile focus theft** — once its arguments are complete, an awaiting form shows an
+  assertive visual “needs you” treatment plus a polite assistive-tech announcement. The spoken half is an
+  **always-mounted live region filled a frame later by the same one-shot claim**: a region inserted
+  together with its text is announced unreliably, and a remount must not re-announce a question the user
+  has already been told about. **Exactly one copy is in the accessibility tree**: the visible line goes
+  `aria-hidden` once the region carries the text, so a remount (region deliberately empty) still exposes
+  the line. The stub never claims.
+  Per active-chat mount the form focuses the selected choice (including Other) or first authored choice
+  once; a fresh `ChatView` mount claims again (see [[submodule-web-chat]] — any switch back to the chat
+  tab). It does **not** move focus away from Monaco, xterm, content-editable/form fields, a non-empty
+  composer draft, or a surface that **owns focus while it is open** — a dialog, a menu, another choice
+  list: out-waiting a modal focus scope either loses the fight or yanks an untrapped popover out from
+  under the user. A **coarse pointer never gives up focus** at all: focusing a row (the Other input
+  especially) raises the soft keyboard over someone who was reading. A **page change** follows a tap, so
+  it may focus — except into a text field on a coarse pointer (`shouldFocusPageTarget`). The transcript is
+  never scrolled for attention: the dock is always visible. The card used to reveal itself in the
+  virtualized transcript through a bounded settling window that yielded to the user's first input; docking
+  removed the reveal, the settling window and the `revealElement` / `cancelAutomaticReveal` members of the
+  tool contract. The empty composer left focused after Send is safe to hand off.
   The mirror image holds on the way out: replying or declining unmounts the focused control, so the card
   hands focus **back to the composer**
   (`interaction.focusComposer`) instead of stranding it on `<body>` — but only when it still holds focus
