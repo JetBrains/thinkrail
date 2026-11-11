@@ -97,9 +97,19 @@ describe("WsTransport channel replay", () => {
 			{},
 		],
 		[
-			"does not replay an addressed interview invitation to a late subscriber",
+			"does not replay an addressed survey invitation to a late subscriber",
 			WS_CHANNELS.feedbackInterview,
 			{},
+		],
+		[
+			"does not replay the addressed GitHub star ask to a late subscriber",
+			WS_CHANNELS.feedbackGithubStar,
+			{},
+		],
+		[
+			"does not replay a Find in Files batch to a late subscriber",
+			WS_CHANNELS.searchTextResults,
+			{ seq: 1, files: [], done: { reason: "complete", files: 0, lines: 0 } },
 		],
 	])("%s", (_name, channel, data) => {
 		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
@@ -177,7 +187,7 @@ describe("WsTransport reconnect delivery", () => {
 		const replacement = TestWebSocket.instances[1];
 		expect(replacement).toBeDefined();
 		replacement?.open();
-		expect(replacement?.sent).toEqual([JSON.stringify({ resume: [id] }), originalFrame]);
+		expect(replacement?.sent).toEqual([JSON.stringify({ resume: [id] }), originalFrame ?? ""]);
 
 		replacement?.message(JSON.stringify({ id, ok: true, result: [] }));
 		expect(await result).toEqual([]);
@@ -254,7 +264,7 @@ describe("WsTransport response receipts", () => {
 		replacement?.open();
 		const queuedId = requestsIn(replacement?.sent ?? [])[1]?.id;
 
-		expect(resumesIn(replacement?.sent ?? [])).toEqual([[stillOpenId, queuedId ?? ""]]);
+		expect(resumesIn(replacement?.sent ?? [])).toEqual([[stillOpenId ?? "", queuedId ?? ""]]);
 		expect(resumesIn(replacement?.sent ?? [])[0]).not.toContain(resolvedId);
 
 		replacement?.message(JSON.stringify({ id: stillOpenId, ok: true, result: [] }));
@@ -277,5 +287,25 @@ describe("WsTransport response receipts", () => {
 		await tick(0);
 
 		expect(acksIn(socket?.sent ?? [])).toEqual([id ?? "", id ?? ""]);
+	});
+
+	test("a request that times out is released to the host and left out of the next reconciliation", async () => {
+		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+		transport.connect();
+		const first = TestWebSocket.instances[0];
+		first?.open();
+
+		const result = transport.request("project.list", {}, { timeoutMs: 10 });
+		const id = requestsIn(first?.sent ?? [])[0]?.id ?? "";
+		await expect(result).rejects.toThrow();
+		await tick(0);
+		expect(acksIn(first?.sent ?? [])).toEqual([id]);
+
+		first?.close();
+		await tick(520);
+		const replacement = TestWebSocket.instances[1];
+		replacement?.open();
+		expect(resumesIn(replacement?.sent ?? [])).toEqual([[]]);
+		expect(requestsIn(replacement?.sent ?? [])).toEqual([]);
 	});
 });

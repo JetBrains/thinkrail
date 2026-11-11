@@ -36,7 +36,7 @@ function finite(value: unknown): value is number {
 
 function pulledCommand(raw: unknown): BackgroundCommandCompletionDetails | undefined {
 	if (!raw || typeof raw !== "object" || !("details" in raw)) return undefined;
-	const details = (raw as { details: unknown }).details as
+	const details = raw.details as
 		| { snapshot?: Record<string, unknown>; output?: { text?: unknown; truncated?: unknown } }
 		| undefined;
 	const snapshot = details?.snapshot;
@@ -72,7 +72,7 @@ export function pulledResult(
 	if (toolName === "get_subagent_result") {
 		const details =
 			tool.raw && typeof tool.raw === "object" && "details" in tool.raw
-				? (tool.raw as { details: unknown }).details
+				? tool.raw.details
 				: undefined;
 		if (!isDelegationRunDetails(details)) return undefined;
 		if (details.status === "queued" || details.status === "running") return undefined;

@@ -13,6 +13,7 @@ import { useModelCatalog } from "@/chat/useModelCatalog";
 import { useModelPreferences } from "@/chat/useModelPreferences";
 import { selectCatalogModel, selectPickerModels, toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
+import { CacheWarmingSettings } from "./CacheWarmingSettings";
 import { ModelContextSettings } from "./ModelContextSettings";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
 import { SettingsRow } from "./SettingsRow";
@@ -211,6 +212,8 @@ export function ModelsSettings() {
 			</SettingsGroup>
 
 			<ModelContextSettings />
+
+			<CacheWarmingSettings />
 		</SettingsPageContainer>
 	);
 }

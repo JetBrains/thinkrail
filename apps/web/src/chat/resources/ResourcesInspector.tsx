@@ -34,6 +34,7 @@ import {
 	type Resource,
 	type ResourceActions,
 	ResourceRow,
+	type ResourcesStaleness,
 	resourceActivity,
 	resourceId,
 	resourceName,
@@ -63,7 +64,7 @@ export interface ResourcesInspectorProps {
 	now: number;
 	authoritative: boolean;
 	loading: boolean;
-	stale: boolean;
+	staleness: ResourcesStaleness | null;
 	error: string | null;
 	actions: ResourceActions;
 	selectedId: string | null;
@@ -470,9 +471,21 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 	};
 
 	const summary = !props.authoritative ? (
-		<span className="inline-flex items-center gap-4 whitespace-nowrap rounded-full border border-border-muted px-8 text-text-muted tr-text-metadata">
-			<RiLoader4Line className="size-12 animate-spin motion-reduce:animate-none" />
-			{t("resources.inspector.reconnecting")}
+		<span
+			data-testid="resources-inspector-staleness"
+			data-staleness={props.staleness ?? "loading"}
+			className="inline-flex items-center gap-4 whitespace-nowrap rounded-full border border-border-muted px-8 text-text-muted tr-text-metadata"
+		>
+			{props.staleness === "refreshFailed" || props.staleness === "unavailable" ? (
+				<RiAlertLine className="size-12 text-feedback-warning" aria-hidden />
+			) : (
+				<RiLoader4Line className="size-12 animate-spin motion-reduce:animate-none" />
+			)}
+			{props.staleness === "disconnected"
+				? t("resources.inspector.reconnecting")
+				: props.staleness === "refreshFailed" || props.staleness === "unavailable"
+					? t("resources.inspector.outOfDate")
+					: t("resources.inspector.updating")}
 		</span>
 	) : live.length > 0 ? (
 		<span className="inline-flex items-center gap-4 whitespace-nowrap rounded-full border border-primary-muted bg-primary-subtle px-8 text-primary tr-text-metadata">
@@ -557,7 +570,7 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 							{t("resources.inspector.loading")}
 						</p>
 					) : null}
-					{props.stale ? (
+					{props.staleness === "disconnected" ? (
 						<p className="mx-8 flex items-center gap-8 rounded-sm border border-feedback-warning-muted bg-container-elevated-bg px-8 py-4 text-text-default tr-text-metadata">
 							<RiAlertLine className="size-14 shrink-0 text-feedback-warning" aria-hidden />
 							{t("resources.inspector.stale")}
@@ -573,7 +586,14 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 									className="mt-2 size-14 shrink-0 text-feedback-error"
 									aria-hidden
 								/>
-								<span className="min-w-0 flex-1 break-words">{props.error}</span>
+								<span className="flex min-w-0 flex-1 flex-col gap-2 break-words">
+									{props.staleness === "refreshFailed" ? (
+										<span>{t("resources.inspector.refreshFailed")}</span>
+									) : props.staleness === "unavailable" ? (
+										<span>{t("resources.inspector.refreshUnavailable")}</span>
+									) : null}
+									<span>{props.error}</span>
+								</span>
 							</div>
 							<div className="flex justify-end">
 								<Button
