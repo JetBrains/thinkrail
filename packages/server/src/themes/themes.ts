@@ -1,4 +1,4 @@
-import { mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type {
 	UserThemeFile,
@@ -6,7 +6,7 @@ import type {
 	UserThemesSnapshot,
 } from "@thinkrail/contracts";
 import { logger } from "../log";
-import { dataDir } from "../persistence";
+import { dataDir, listDataFolder, watchDataFolder } from "../persistence";
 
 const log = logger("themes");
 
@@ -14,7 +14,6 @@ export const MAX_THEME_FILE_BYTES = 256 * 1024;
 export const MAX_THEME_FILES = 64;
 export const MAX_THEME_NESTING = 32;
 const THEME_SUFFIX = ".theme.json";
-const POLL_MS = 1_000;
 
 export function themesDir(root: string = dataDir()): string {
 	return join(root, "themes");
@@ -66,26 +65,7 @@ function nestingDepth(text: string): number {
 }
 
 function themeFileNames(dir: string): string[] {
-	try {
-		return readdirSync(dir)
-			.filter((name) => name.endsWith(THEME_SUFFIX) && !name.startsWith("."))
-			.sort();
-	} catch {
-		return [];
-	}
-}
-
-function folderSignature(dir: string): string {
-	return themeFileNames(dir)
-		.map((name) => {
-			try {
-				const stat = statSync(join(dir, name));
-				return `${name}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`;
-			} catch {
-				return `${name}:gone`;
-			}
-		})
-		.join("\n");
+	return listDataFolder(dir, (name) => name.endsWith(THEME_SUFFIX));
 }
 
 export function readUserThemes(dir: string = themesDir()): UserThemesSnapshot {
@@ -104,20 +84,13 @@ export interface ThemesWatchOptions {
 export function watchUserThemes({
 	dir = themesDir(),
 	onChange,
-	intervalMs = POLL_MS,
+	intervalMs,
 }: ThemesWatchOptions): () => void {
-	try {
-		mkdirSync(dir, { recursive: true });
-	} catch {
-		log.warn(`could not create theme folder ${dir}`);
-	}
-	let signature = folderSignature(dir);
-	const timer = setInterval(() => {
-		const next = folderSignature(dir);
-		if (next === signature) return;
-		signature = next;
-		onChange();
-	}, intervalMs);
-	timer.unref();
-	return () => clearInterval(timer);
+	return watchDataFolder({
+		dir,
+		list: themeFileNames,
+		onChange,
+		onCreateFailed: () => log.warn(`could not create theme folder ${dir}`),
+		...(intervalMs === undefined ? {} : { intervalMs }),
+	});
 }

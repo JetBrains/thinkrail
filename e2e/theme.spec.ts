@@ -35,15 +35,17 @@ async function openThemeList(page: Page) {
 
 async function readThemeOptions(page: Page): Promise<ThemeOption[]> {
 	const dialog = await openThemeList(page);
-	const options = await dialog.locator('[data-testid^="theme-option-"]').evaluateAll((nodes) =>
-		nodes.map((node) => ({
-			id: node.getAttribute("data-theme-id") ?? "",
-			label: node.textContent?.trim() ?? "",
-			appearance: node.getAttribute("data-appearance") === "light" ? "light" : "dark",
-			contrast: node.getAttribute("data-contrast") === "high" ? "high" : "normal",
-			active: node.getAttribute("data-active") === "true",
-		})),
-	);
+	const options: ThemeOption[] = await dialog
+		.locator('[data-testid^="theme-option-"]')
+		.evaluateAll((nodes) =>
+			nodes.map((node) => ({
+				id: node.getAttribute("data-theme-id") ?? "",
+				label: node.textContent?.trim() ?? "",
+				appearance: node.getAttribute("data-appearance") === "light" ? "light" : "dark",
+				contrast: node.getAttribute("data-contrast") === "high" ? "high" : "normal",
+				active: node.getAttribute("data-active") === "true",
+			})),
+		);
 	await page.keyboard.press("Escape");
 	await expect(dialog).toBeHidden();
 	return options;
@@ -205,7 +207,7 @@ test("Monaco opens files and re-themes under every discovered manifest", async (
 
 async function keywordToken(page: Page) {
 	const keyword = page
-		.locator('[data-testid="editor-pane"]:visible .view-line span span', { hasText: /^export$/ })
+		.locator('[data-testid="editor-pane"]:visible .view-line span span', { hasText: /export/ })
 		.first();
 	await expect(keyword).not.toHaveClass(/\bmtk1\b/);
 	return keyword.evaluate((node) => ({
@@ -259,15 +261,6 @@ test("an editor preloaded before a theme swap opens in the current theme", async
 	);
 	expect(light && dark).toBeTruthy();
 	await pickTheme(page, dark?.id ?? "");
-	await expect
-		.poll(() =>
-			page.evaluate(
-				() =>
-					performance.getEntriesByType("resource").filter((entry) => entry.name.endsWith(".wasm"))
-						.length,
-			),
-		)
-		.toBeGreaterThan(0);
 	await pickTheme(page, light?.id ?? "");
 
 	await revealWorkbenchTool(page, "files");

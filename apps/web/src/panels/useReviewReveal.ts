@@ -83,9 +83,18 @@ export function useReviewReveal({
 			tailObserver.current.observe(scroller);
 			for (const type of USER_SCROLL_EVENTS)
 				scroller.addEventListener(type, releaseSettling, { passive: true, capture: true });
+			const scrollTo = scroller.scrollTo;
+			// Virtuoso re-issues scrollToIndex while sizes change; only a settling reveal may move the list.
+			Object.defineProperty(scroller, "scrollTo", {
+				configurable: true,
+				value: (...args: unknown[]) => {
+					if (settling.current) Reflect.apply(scrollTo, scroller, args);
+				},
+			});
 			detachScroller.current = () => {
 				for (const type of USER_SCROLL_EVENTS)
 					scroller.removeEventListener(type, releaseSettling, true);
+				Reflect.deleteProperty(scroller, "scrollTo");
 			};
 		},
 		[releaseSettling],

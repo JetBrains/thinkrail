@@ -546,6 +546,7 @@ test("a terminal can move to its own side group; resize, fold, and visibility ga
 		sideTargetBox.y + sideTargetBox.height / 2,
 		{ steps: 8 },
 	);
+	await expect(sideTarget).toHaveAttribute("data-drop-active", "true");
 	await page.mouse.up();
 
 	await expect(sideGroups(page, "left")).toHaveCount(2);
@@ -697,6 +698,7 @@ test("hiding a side or the bottom keeps focus outside it and recovers focus from
 
 		await pressPlatformShortcut(page, "b");
 		await expect(page.getByTestId("left-nav")).toBeVisible();
+		await expect(page.getByTestId("tool-rail-projects")).toBeFocused();
 		const insideLeft = page.getByTestId("left-nav").getByTestId("project-expand").first();
 		await insideLeft.focus();
 		await expect(insideLeft).toBeFocused();
@@ -941,6 +943,7 @@ test("pointer drag exposes deterministic split targets and moves one tab", async
 	await page.mouse.move(reorderBox.x + reorderBox.width / 2, reorderBox.y + reorderBox.height / 2, {
 		steps: 8,
 	});
+	await expect(reorderTarget).toHaveAttribute("data-drop-active", "true");
 	await page.mouse.up();
 	await expect(page.getByTestId("editor-tab").nth(0)).toContainText("notes.txt");
 	await expect(page.getByTestId("editor-tab").nth(1)).toContainText("README.md");
@@ -959,6 +962,7 @@ test("pointer drag exposes deterministic split targets and moves one tab", async
 	await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, {
 		steps: 8,
 	});
+	await expect(splitTarget).toHaveAttribute("data-drop-active", "true");
 	await page.mouse.up();
 
 	await expect(page.getByTestId("center-group")).toHaveCount(2);
@@ -1270,6 +1274,7 @@ test("another window cannot cancel or rearrange an active tab drag", async ({ pa
 	const target = await splitTarget.boundingBox();
 	if (!target) throw new Error("split target has no box");
 	await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 6 });
+	await expect(splitTarget).toHaveAttribute("data-drop-active", "true");
 	await page.mouse.up();
 	await expect(page.getByTestId("center-group")).toHaveCount(2);
 	await page2.close();

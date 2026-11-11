@@ -1,0 +1,18 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"rootDir": "../..",
+		"types": ["bun"]
+	},
+	"include": [
+		"*.test.ts",
+		"*.test.tsx",
+		"src/**/*.d.ts",
+		"src/**/*.test.ts",
+		"src/**/*.test.tsx",
+		"scripts",
+		"vite.config.ts"
+	],
+	// Empty on purpose: overrides the test exclude inherited from `tsconfig.json`.
+	"exclude": []
+}
