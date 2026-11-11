@@ -477,14 +477,17 @@ the palette ranks with — kept here so host-side search can rank with the same 
   since the review has no chat to carry it. An older client reads the dropped fields as absent, so the pin
   is what lets a client tell "this host has no reviewer chat" from "this host is older" rather than inferring it;
   **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, analyticsConsentConfirmed, terminalReplayKb,
-  terminalWindowsShell, composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded,
+  terminalWindowsShell, composerGrowthLimit, questionPanelHeight, chatLineWidth, fileLineWidth, chatLineWidthBounded,
   fileLineWidthBounded, voiceInputEnabled, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
   favoriteModels, recentModels, reviewAutoFix, agentReviewEnabled, subagentsEnabled, subagentMaxConcurrent,
   jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, disabledExtensions, extensionSettings, otherAgentSkills,
   onboardingDismissed, interfaceFont, codeFont, codeFontSize, codeLigatures, fontWeightOffset }` — an extensible
   bag; the five font fields join at v102 and normalize together through `normalizeFontSettings` (host load, web
   store, fonts runtime); the line-width fields join the wire at protocol v61, `terminalWindowsShell` at v62, and
-  `voiceInputEnabled` (default `true`) with voice input at v107. `onboardingDismissed` (v94, default `false`)
+  `voiceInputEnabled` (default `true`) with voice input at v107, and `questionPanelHeight`
+  (**`QUESTION_PANEL_PROTOCOL_VERSION`** = v114; whole percents `QUESTION_PANEL_HEIGHT_PERCENT` 40–100,
+  default 60, `isQuestionPanelHeight`) caps the chat's interaction dock; a client of an older host hides
+  the setting and uses the default. `onboardingDismissed` (v94, default `false`)
   records that the user finished or skipped the cold-start onboarding wizard, so it never returns.
   `otherAgentSkills` (**`OTHER_AGENT_SKILLS_PROTOCOL_VERSION`** = v108, default `false`) is the host-wide
   opt-in for other agents' user skill directories and Claude plugins: every listed skill is resent in every

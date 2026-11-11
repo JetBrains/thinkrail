@@ -408,8 +408,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
     mailbox** (`awaitToolResponse`) — the first per-session host service an extension receives. The
     mailbox, restart repair, late responses, composer supersede, Stop/Submit, needs-input and the web
     `interaction` props are **tool-agnostic**: keyed by `toolCallId`, told which tool names wait for a
-    person by the descriptor's `interactiveTools` and the renderer's `interactive` flag, and never
-    naming a tool in `contracts`, `agent` or `apps/web`. `ask_user_question` is the first client of that
+    person by the descriptor's `interactiveTools` and the renderer's `interactive` flag (plus `dock`, which
+    moves an awaited call's live form from the transcript into the chat's interaction dock above the
+    composer), and never naming a tool in `contracts`, `agent` or `apps/web`. `ask_user_question` is the first client of that
     contract, not a special case; the extension is deletable without touching the core (the vanilla
     package then falls back to pi's `ctx.ui` dialogs, which the host already renders). Product rule: a
     built-in (registry) extension wins a same-name tool collision with a user package while it is

@@ -1423,6 +1423,17 @@ export function isComposerGrowthLimit(value: unknown): value is ComposerGrowthLi
 	return COMPOSER_GROWTH_LIMITS.some((limit) => limit === value);
 }
 
+export const QUESTION_PANEL_HEIGHT_PERCENT = { min: 40, max: 100, default: 60 } as const;
+
+export function isQuestionPanelHeight(value: unknown): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isInteger(value) &&
+		value >= QUESTION_PANEL_HEIGHT_PERCENT.min &&
+		value <= QUESTION_PANEL_HEIGHT_PERCENT.max
+	);
+}
+
 export const LINE_WIDTH_COLUMNS = { min: 40, max: 240, default: 120 } as const;
 
 export function isLineWidth(value: unknown): value is number {
@@ -1441,6 +1452,8 @@ export interface AppConfig extends ThemePreference {
 	notificationsEnabled: boolean;
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
+	/** The chat's docked question panel caps at this percent of the chat height. */
+	questionPanelHeight: number;
 	chatLineWidth: number;
 	fileLineWidth: number;
 	chatLineWidthBounded: boolean;
@@ -1825,6 +1838,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
 	terminalWindowsShell: "auto",
 	composerGrowthLimit: "half-chat",
+	questionPanelHeight: QUESTION_PANEL_HEIGHT_PERCENT.default,
 	chatLineWidth: LINE_WIDTH_COLUMNS.default,
 	fileLineWidth: LINE_WIDTH_COLUMNS.default,
 	chatLineWidthBounded: true,

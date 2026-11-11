@@ -567,6 +567,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   readiness edge avoids a second derived config-hydration flag; after the first welcome, disconnect/reconnect
   keeps the last authoritative config while a later welcome can replace it. **`terminalReplayKb: number`**,
   **`terminalWindowsShell: TerminalWindowsShell`**, **`composerGrowthLimit: ComposerGrowthLimit`**,
+  **`questionPanelHeight`** (an invalid or absent value reads as the contracts default),
   **`chatLineWidth` / `fileLineWidth`**, their independent **`chatLineWidthBounded` /
   `fileLineWidthBounded`** switches, **`voiceInputEnabled`** (absent from an older host reads as on),
   **`customLayoutPresets: LayoutPreset[]`**,
@@ -850,7 +851,7 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   this client made, the only ones it follows) — the layout placement selectors (recursive center plus left/right/bottom auxiliary
   groups), `selectAttentionCenterTab` (the selected resource in local last center focus),
   `isNavigationChange(state, previous)` (a change of the active workspace, the selected project or a counted
-  tab switch — what overtakes a pending palette pick, route restore or continuation open),
+  tab switch — what overtakes a pending palette pick, route restore or `chat`'s `openWorkspace`),
   `selectCurrentRouteChatTarget` (exact-chat intent only while its workspace and stamped navigation remain
   current), `selectSkillsStale`, **`selectDiffScope` + `BRANCH_SCOPE`** (what a workspace's
   Changes panel is diffing, defaulting to the shared branch-scope constant), **`selectDiffBaseRef`** (the ref

@@ -4167,6 +4167,14 @@ test("applyConfig projects the composer growth limit", () => {
 	expect(useAppStore.getState()).toHaveProperty("composerGrowthLimit", "roomy");
 });
 
+test("applyConfig projects the question panel height and defaults an invalid one", () => {
+	useAppStore.getState().applyConfig({ ...DEFAULT_CONFIG, questionPanelHeight: 85 });
+	expect(useAppStore.getState().questionPanelHeight).toBe(85);
+
+	useAppStore.getState().applyConfig({ ...DEFAULT_CONFIG, questionPanelHeight: 20 });
+	expect(useAppStore.getState().questionPanelHeight).toBe(DEFAULT_CONFIG.questionPanelHeight);
+});
+
 test("applyConfig projects synchronized chat and file line-width settings", () => {
 	useAppStore.getState().applyConfig({
 		...DEFAULT_CONFIG,

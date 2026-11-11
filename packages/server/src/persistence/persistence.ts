@@ -19,6 +19,7 @@ import {
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
 	isLocalePreference,
+	isQuestionPanelHeight,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
 	isTerminalWindowsShell,
@@ -554,11 +555,14 @@ export function saveWorkspaces(workspaces: Workspace[]): void {
 	saveChats({ ...stored, chats });
 }
 
+export type CreationOrigin = "agent";
+
 export type WorkspaceCreationRecord = Omit<WorkspaceCreation, "kickoff"> & {
 	worktreePath: string;
 	renamed?: true;
 	baseOid?: string;
 	kickoff?: WorkspaceKickoff;
+	origin?: CreationOrigin;
 };
 
 export function loadWorkspaceCreations(): WorkspaceCreationRecord[] {
@@ -650,6 +654,9 @@ export function loadConfig(): AppConfig {
 		composerGrowthLimit: isComposerGrowthLimit(value.composerGrowthLimit)
 			? value.composerGrowthLimit
 			: DEFAULT_CONFIG.composerGrowthLimit,
+		questionPanelHeight: isQuestionPanelHeight(value.questionPanelHeight)
+			? value.questionPanelHeight
+			: DEFAULT_CONFIG.questionPanelHeight,
 		chatLineWidth: isLineWidth(value.chatLineWidth)
 			? value.chatLineWidth
 			: DEFAULT_CONFIG.chatLineWidth,

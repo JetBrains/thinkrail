@@ -990,7 +990,9 @@ a project picker, the prompt hero, and the reused
   toast without changing geometry); **`ChatSettings`** (one **Appearance and behavior** group of rows —
   **Message order** segmented over `store.chatMessageOrder` (Oldest first, the compatibility default /
   Newest first, the opt-in), **Composer size** segmented over the composer-growth limit (Compact / Roomy /
-  Half chat), and the chat `LineWidthControl`. It exposes no scroll-follow controls: streaming follow is
+  Half chat), **Question panel height** (`QuestionPanelHeightControl`, props-driven: the same auto-save
+  integer field as Line width over `questionPanelHeight`, 40–100 with an inline range error, hidden below
+  `QUESTION_PANEL_PROTOCOL_VERSION`), and the chat `LineWidthControl`. It exposes no scroll-follow controls: streaming follow is
   fixed (see `apps/web/src/chat/SPEC.md`). Message order applies immediately and persists only in this
   client through the chat preference seam: browsers use current-host-qualified keys, while a native shell
   may inject its stable backend-profile/window adapter. Another browser, native window, or host is unaffected. Composer growth
