@@ -67,6 +67,7 @@ import {
 	serverExtensions,
 	workspaceFiles,
 } from "../extensions";
+import { displayTranscriptMessages } from "../history";
 import { logger } from "../log";
 import {
 	dataDir,
@@ -957,9 +958,16 @@ export function getSessionRuntimeGeneration(sessionId: string): PiRuntimeGenerat
 }
 
 function transcriptMessages(session: AgentSession): TranscriptMessage[] {
-	return session.messages.filter((message) =>
+	const manager = session.sessionManager;
+	const display = displayTranscriptMessages(manager.getEntries(), manager.getLeafId());
+	const live = session.messages.filter((message) =>
 		isTranscriptMessageRole(message.role),
 	) as TranscriptMessage[];
+	const cut = display.findLastIndex((message) => message.role === "compactionSummary");
+	if (cut < 0) return live;
+	const liveCut = live.findLastIndex((message) => message.role === "compactionSummary");
+	if (liveCut < 0) return display;
+	return [...display.slice(0, cut), ...live.slice(liveCut)];
 }
 
 export async function reloadSessionResources(sessionId: string): Promise<void> {

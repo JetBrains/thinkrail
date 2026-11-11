@@ -244,9 +244,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
     type-only mirror of pi-coding-agent's Node-only `CustomMessage`, so extension-injected messages like
     the ask replies cross the wire, and with **`WireCompactionSummary`** (mirror of the Node-only
     `CompactionSummaryMessage`: `summary`/`tokensBefore`/`timestamp`), the resolved-context record of a
-    compaction — pi places it before the kept tail and drops the summarized messages, so forwarding it is
-    what makes the compaction boundary survive reload/reopen instead of rendering a transcript that begins
-    mid-conversation. The summary reflects the now-live session after a disk re-open). The role universe a
+    compaction — pi places it before the kept tail and drops the summarized messages from **model**
+    context. The host's `getMessages` display transcript puts those summarized turns back in front of
+    the marker so reload/reopen can still review them; the marker is what keeps the cut visible rather
+    than a transcript that begins mid-conversation. The summary reflects the now-live session after a disk re-open). The role universe a
     host may send is pinned by the runtime **`isTranscriptMessageRole(role)`** guard: the single source for
     the server's transcript filter and history index, whose alignment keeps a history hit's `messageIndex`
     valid against the client's `turnIdByMessageIndex` — a role added to one side but not the other would
