@@ -1,5 +1,6 @@
+import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
-import { delimiter } from "node:path";
+import { delimiter, win32 } from "node:path";
 import type { EditorInfo } from "@thinkrail/contracts";
 import { spawnDetached } from "@thinkrail/shared/spawn";
 
@@ -76,10 +77,10 @@ export async function pathWhich(
 	};
 }
 
-export type SpawnFn = (cmd: string[]) => void;
+export type SpawnFn = (cmd: string[], options?: { windowsHide?: boolean }) => void;
 
-export const defaultSpawn: SpawnFn = (cmd) => {
-	if (!spawnDetached(cmd)) throw new Error("Failed to launch the requested application");
+export const defaultSpawn: SpawnFn = (cmd, options) => {
+	if (!spawnDetached(cmd, options)) throw new Error("Failed to launch the requested application");
 };
 
 let discovery: Promise<EditorInfo[]> | null = null;
@@ -136,14 +137,15 @@ export function revealInFileManager(
 	spawn: SpawnFn = defaultSpawn,
 	platform: NodeJS.Platform = process.platform,
 ): void {
+	if (!existsSync(worktreePath)) throw new Error(`Folder not found: ${worktreePath}`);
 	const cmd =
 		platform === "darwin"
 			? ["open", worktreePath]
 			: platform === "win32"
-				? ["explorer", worktreePath]
+				? ["explorer", win32.normalize(worktreePath)]
 				: ["xdg-open", worktreePath];
 	try {
-		spawn(cmd);
+		spawn(cmd, { windowsHide: false });
 	} catch {
 		throw new Error(`No file manager launcher available on this host (${platform}).`);
 	}
