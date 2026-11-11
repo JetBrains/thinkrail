@@ -25,7 +25,7 @@ import {
 	readMenuLabels,
 } from "./applicationMenu";
 import { attributionClaimOnFirstReadiness } from "./attributionReadiness";
-import { parseThinkRailDeepLink } from "./deepLink";
+import { deliverDeepLinkWhenReady } from "./deepLinkBootstrap";
 import { desktopError, setDesktopErrorReporter } from "./errorReporting";
 import { installExternalNavigation, windowNavigationRules } from "./externalNavigation";
 import { createKeyStateReader } from "./keyState";
@@ -87,19 +87,6 @@ import {
 } from "./windowsWindowIcon";
 
 type BeforeQuitEvent = ReturnType<typeof Electrobun.events.events.app.beforeQuit>;
-type OpenUrlEvent = ReturnType<typeof Electrobun.events.events.app.openUrl>;
-
-const earlyDeepLinks: NativeOpenFileRequest[] = [];
-let deliverDeepLink: ((request: NativeOpenFileRequest) => void) | null = null;
-
-// Register before any asynchronous startup work so Electrobun's cold-launch URL
-// buffer is consumed by a listener that exists from module load.
-Electrobun.events.on("open-url", (event: OpenUrlEvent) => {
-	const request = parseThinkRailDeepLink(event.data.url);
-	if (!request) return;
-	if (deliverDeepLink) deliverDeepLink(request);
-	else earlyDeepLinks.push(request);
-});
 
 const BACKEND_PROFILE_ID = "local";
 const WINDOW_ID = "main";
@@ -498,8 +485,7 @@ async function start(): Promise<void> {
 			if (webReady) rpc.send.openFile(request);
 			else pendingDeepLinks.push(request);
 		};
-		deliverDeepLink = deliver;
-		for (const request of earlyDeepLinks.splice(0)) deliver(request);
+		deliverDeepLinkWhenReady(deliver);
 		mainWindow.webview.setNavigationRules(windowNavigationRules(origin));
 		handleTitleBarDoubleClick = createTitleBarDoubleClickHandler({
 			enabled: windowChrome.titleBarDoubleClick,

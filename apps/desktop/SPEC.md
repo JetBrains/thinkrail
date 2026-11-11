@@ -364,9 +364,9 @@ URL and the HTTP/HTTPS/mailto allowlist, which the preload routing reuses.
 live in `/Applications` for LaunchServices to register it, and Electrobun 2.0.5 has no Windows/Linux
 scheme registration). `apps/desktop/src/deepLink.ts` accepts exactly
 `thinkrail://open?file=<absolute path>&line=<1-based>&column=<optional>`; `line` defaults to 1, and a
-malformed position, non-absolute path, or other scheme/host is ignored. The `open-url` listener is
-installed at module load, before the asynchronous startup work, so Electrobun's cold-launch buffer is never
-flushed without a listener; it holds requests until the window and RPC exist. The main process then
+malformed position, non-absolute path, or other scheme/host is ignored. `apps/desktop/src/entry.ts`
+imports `deepLinkBootstrap.ts` before `index.ts`; the bootstrap registers on `electrobun/main/events` before
+the native SDK installs its URL callback and holds cold-launch URLs until the window and RPC exist. The main process then
 focuses and activates the window and sends a `NativeOpenFileRequest` over the `openFile` webview message;
 requests arriving before `dom-ready` are queued and flushed once. The URL never navigates the webview. The web
 client resolves the path against open workspaces and opens the file at the line, see
