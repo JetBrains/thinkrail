@@ -23,6 +23,7 @@ if (!root || !["start", "resume", "verify"].includes(mode ?? ""))
 	throw new Error("Expected fixture mode and root");
 const cwd = join(root, "workspace");
 const workspaceId = "restart-workspace";
+const phase = (name: string) => process.stderr.write(`[${mode}] ${name}\n`);
 const faux = createFauxCore({ provider: "restart-faux", models: [{ id: "restart" }] });
 const runtime = await ModelRuntime.create({
 	credentials: new InMemoryCredentialStore(),
@@ -54,7 +55,9 @@ if (mode === "start") {
 		model: toWireModel(faux.getModel()),
 	});
 	faux.setResponses([fauxAssistantMessage("READY")]);
+	phase("prompting");
 	await promptSession(sessionId, "Remember this chat before restart.");
+	phase("starting command");
 	const commandId = await withSessionResources(
 		workspaceId,
 		sessionId,
@@ -79,13 +82,11 @@ if (mode === "start") {
 		info: { createdBy: "test", roleName: "PROCESS_RESTART_CHILD", detached: true },
 		session: { model: { provider: "restart-faux", id: "restart" } },
 	});
+	phase("starting subagent");
 	void child.runQueued("Inspect the cross-process recovery schema.");
 	await entered.promise;
-	const deadline = Date.now() + 10_000;
-	while (!existsSync(join(cwd, "command-ready"))) {
-		if (Date.now() > deadline) throw new Error("Background shell fixture did not start");
-		await Bun.sleep(10);
-	}
+	phase("waiting for the command's shell");
+	while (!existsSync(join(cwd, "command-ready"))) await Bun.sleep(10);
 	const resources = await getSessionResources(workspaceId, sessionId, cwd);
 	if (
 		resources.commands.find((command) => command.id === commandId)?.status !== "running" ||
@@ -95,7 +96,7 @@ if (mode === "start") {
 		throw new Error("Fixture work must be running at the crash boundary");
 	writeFileSync(
 		join(root, "start.tmp"),
-		JSON.stringify({ pid: process.pid, sessionId, commandId, childSessionId: child.sessionId }),
+		JSON.stringify({ sessionId, commandId, childSessionId: child.sessionId }),
 	);
 	renameSync(join(root, "start.tmp"), join(root, "start.json"));
 	setInterval(() => {}, 1000);
@@ -103,6 +104,7 @@ if (mode === "start") {
 	const { sessionId, commandId, childSessionId } = JSON.parse(
 		readFileSync(join(root, "start.json"), "utf8"),
 	) as { sessionId: string; commandId: string; childSessionId: string };
+	phase("opening");
 	const resources = await getSessionResources(workspaceId, sessionId, cwd);
 	await getSessionMessages(sessionId, workspaceId, cwd);
 	const callsOnOpen = faux.state.callCount;
@@ -125,11 +127,11 @@ if (mode === "start") {
 			return fauxAssistantMessage("CONTINUED");
 		},
 	]);
+	phase("prompting");
 	await promptSession(sessionId, "Continue after restarting the host.");
 	writeFileSync(
 		join(root, `${mode}.json`),
 		JSON.stringify({
-			pid: process.pid,
 			callsOnOpen,
 			callsAfterPrompt: faux.state.callCount,
 			before,
