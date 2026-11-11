@@ -12,16 +12,22 @@ function PopoverContent({
 	align = "center",
 	sideOffset = 6,
 	container,
+	collisionBoundary,
+	collisionPadding,
 	onEscapeKeyDown,
 	...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content> & {
 	container?: HTMLElement | null | undefined;
 }) {
+	const boundary = collisionBoundary ?? container ?? undefined;
+	const padding = collisionPadding ?? (container ? 8 : undefined);
 	return (
 		<PopoverPrimitive.Portal container={container ?? undefined}>
 			<PopoverPrimitive.Content
 				align={align}
 				sideOffset={sideOffset}
+				{...(boundary ? { collisionBoundary: boundary } : {})}
+				{...(padding !== undefined ? { collisionPadding: padding } : {})}
 				className={cn(
 					"z-50 overflow-hidden rounded-md border border-border-default bg-container-elevated-bg text-text-default shadow-[var(--shadow-md)] outline-none",
 					className,

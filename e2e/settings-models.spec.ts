@@ -165,7 +165,9 @@ test("without saved defaults, Settings and a fresh chat use the first available 
 	}
 });
 
-test("the settings model picker scrolls with the wheel inside the dialog", async ({ page }) => {
+test("the settings model picker stays inside the dialog and scrolls with the wheel", async ({
+	page,
+}) => {
 	await openWorkspaceChat(page);
 	await connectFixtureProvider(page);
 	try {
@@ -186,6 +188,21 @@ test("the settings model picker scrolls with the wheel inside the dialog", async
 			const toggle = groups.nth(index);
 			if ((await toggle.getAttribute("aria-expanded")) === "false") await toggle.click();
 		}
+		expect(
+			await list.evaluate((element) => {
+				const host = element.closest('[data-testid="settings-dialog"]');
+				const popover = element.closest("[data-side]");
+				if (!(host instanceof HTMLElement) || !(popover instanceof HTMLElement)) return false;
+				const dialogBox = host.getBoundingClientRect();
+				const popoverBox = popover.getBoundingClientRect();
+				return (
+					popoverBox.left >= dialogBox.left - 1 &&
+					popoverBox.right <= dialogBox.right + 1 &&
+					popoverBox.top >= dialogBox.top - 1 &&
+					popoverBox.bottom <= dialogBox.bottom + 1
+				);
+			}),
+		).toBe(true);
 		await list.evaluate((element) => {
 			element.scrollTop = 0;
 		});

@@ -139,7 +139,9 @@ moved here from the app when the resource renderers became a package, because bo
   extension web sources: a file with both a key handler and a text field must use the guard. The scan is
   file-level, and each allow-list entry carries its reason.
 - React 19 refs pass through controls; dialog/popover portals preserve accessible focus and scroll
-  behavior. Popover accepts a host Dialog container for scroll-lock compatibility.
+  behavior. Popover accepts a host Dialog container for scroll-lock compatibility; that
+  container is also the collision boundary (8px padding), so a dialog-portaled list stays fully
+  painted instead of losing its right edge and scrollbar to the dialog's overflow.
 - Icon-only controls use `IconTooltip` with `aria-label`, not native `title`; one root `TooltipProvider`
   sets the delay. Native `title` remains only for non-control truncation fallbacks or surfaces outside
   the provider (the app's review widgets). `wrapTrigger` supplies the interactive flex span for a disabled

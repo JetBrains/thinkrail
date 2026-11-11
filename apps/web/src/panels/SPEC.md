@@ -1193,7 +1193,9 @@ a project picker, the prompt hero, and the reused
   `reviewEffort`), independent of the Chat model row's loading state, then the two automation toggles
   below. Both model rows use `ModelSelector`/`ThinkingSelector` over `useModelCatalog` and pass
   `useSettingsDialogContainer()` so those popovers portal inside the dialog (Radix's scroll lock
-  otherwise cancels wheel/touch on a body-portaled list). The review selector carries an
+  otherwise cancels wheel/touch on a body-portaled list). The popover collides against that
+  container the way `FontPicker` does, so the dialog's `overflow-hidden` does not clip the
+  list's right edge (model ids, scrollbar, Refresh). The review selector carries an
   **explicit default-model row** (`model-option-default`, labelled with the host's `model.default` result)
   that writes `{ reviewModel: null, reviewEffort: null }` — the null-clears wire form, see
   `submodule-server-settings` — so a chosen reviewer model can be restored to the host's new-chat default

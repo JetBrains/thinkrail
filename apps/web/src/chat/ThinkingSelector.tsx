@@ -38,7 +38,7 @@ export function ThinkingSelector({
 				<span className="capitalize">{t(LEVEL_LABEL[level])}</span>
 				<ChevronDown className="size-16 shrink-0 text-text-muted" />
 			</PopoverTrigger>
-			<PopoverContent align="start" container={container} className="w-[160px] p-4">
+			<PopoverContent align="end" container={container} className="w-[160px] p-4">
 				{levels.map((l) => (
 					<button
 						key={l}

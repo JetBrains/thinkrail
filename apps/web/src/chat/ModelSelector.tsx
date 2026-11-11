@@ -204,7 +204,11 @@ export function ModelSelector({
 				</span>
 				<ChevronDown className="size-16 shrink-0 text-text-muted" />
 			</PopoverTrigger>
-			<PopoverContent align="start" container={container} className="w-340 p-0">
+			<PopoverContent
+				align="end"
+				container={container}
+				className="flex max-h-[var(--radix-popover-content-available-height)] w-340 flex-col p-0"
+			>
 				<Command className="min-h-0 flex-1 bg-transparent" filter={pickerFilter(groups, groupRow)}>
 					<CommandInput
 						placeholder={t("chat.modelPicker.search")}
