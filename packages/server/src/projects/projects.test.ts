@@ -69,13 +69,13 @@ function makeRepo(path: string): void {
 	git(path, "commit", "-m", "init");
 }
 
-function withoutUserGitConfig<T>(run: () => T): T {
+async function withoutUserGitConfig<T>(run: () => T | Promise<T>): Promise<Awaited<T>> {
 	const savedGlobal = process.env.GIT_CONFIG_GLOBAL;
 	const savedSystem = process.env.GIT_CONFIG_SYSTEM;
 	process.env.GIT_CONFIG_GLOBAL = "/dev/null";
 	process.env.GIT_CONFIG_SYSTEM = "/dev/null";
 	try {
-		return run();
+		return await run();
 	} finally {
 		if (savedGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL;
 		else process.env.GIT_CONFIG_GLOBAL = savedGlobal;
@@ -174,7 +174,7 @@ test("inspectProjectPath: a git repo (and any subdirectory) is `repo`", () => {
 	expect(inspectProjectPath(sub)).toEqual({ kind: "repo" });
 });
 
-test("host-home paths resolve consistently across inspect, open, and init", () => {
+test("host-home paths resolve consistently across inspect, open, and init", async () => {
 	const home = join(dataDir, "host-home");
 	const repo = join(home, "repo");
 	const plain = join(home, "plain");
@@ -189,7 +189,9 @@ test("host-home paths resolve consistently across inspect, open, and init", () =
 		expect(inspectProjectPath("~/repo")).toEqual({ kind: "repo" });
 		expect(openProject("~/repo").path).toBe(realpathSync(repo));
 		expect(inspectProjectPath("~/plain")).toEqual({ kind: "initable" });
-		expect(withoutUserGitConfig(() => initProject("~/plain")).path).toBe(realpathSync(plain));
+		expect((await withoutUserGitConfig(() => initProject("~/plain"))).path).toBe(
+			realpathSync(plain),
+		);
 	} finally {
 		if (savedHome === undefined) delete process.env.HOME;
 		else process.env.HOME = savedHome;
@@ -219,18 +221,21 @@ test.skipIf(process.platform !== "win32")(
 	},
 );
 
-test("relative project paths are rejected instead of using the host process cwd", () => {
-	for (const operation of [openProject, inspectProjectPath, initProject]) {
+test("relative project paths are rejected instead of using the host process cwd", async () => {
+	for (const operation of [openProject, inspectProjectPath]) {
 		expect(() => operation("relative/project")).toThrow("must be absolute or start with ~/");
 	}
+	await expect(initProject("relative/project")).rejects.toThrow(
+		"must be absolute or start with ~/",
+	);
 });
 
-test("initProject: initialises a plain folder, commits its contents, and opens it", () => {
+test("initProject: initialises a plain folder, commits its contents, and opens it", async () => {
 	const dir = join(dataDir, "plain");
 	mkdirSync(dir);
 	writeFileSync(join(dir, "hello.txt"), "hi\n");
 
-	const project = withoutUserGitConfig(() => initProject(dir));
+	const project = await withoutUserGitConfig(() => initProject(dir));
 	expect(project.path).toBe(realpathSync(dir));
 	expect(existsSync(join(dir, ".git"))).toBe(true);
 	expect(gitOut(dir, "rev-parse", "HEAD")).not.toBe("");
@@ -238,11 +243,11 @@ test("initProject: initialises a plain folder, commits its contents, and opens i
 	expect(listProjects()).toHaveLength(1);
 });
 
-test("initProject: an empty folder gets an empty initial commit (a HEAD), so worktrees work", () => {
+test("initProject: an empty folder gets an empty initial commit (a HEAD), so worktrees work", async () => {
 	const dir = join(dataDir, "empty");
 	mkdirSync(dir);
 
-	withoutUserGitConfig(() => initProject(dir));
+	await withoutUserGitConfig(() => initProject(dir));
 	expect(gitOut(dir, "rev-parse", "HEAD")).not.toBe("");
 	expect(gitOut(dir, "ls-tree", "-r", "HEAD", "--name-only")).toBe("");
 	const wt = join(dataDir, "wt");
@@ -250,10 +255,10 @@ test("initProject: an empty folder gets an empty initial commit (a HEAD), so wor
 	expect(existsSync(wt)).toBe(true);
 });
 
-test("createProject: makes the folder and missing parents, bootstraps a repo, and opens it", () => {
+test("createProject: makes the folder and missing parents, bootstraps a repo, and opens it", async () => {
 	const parent = join(dataDir, "nested", "parent");
 
-	const project = withoutUserGitConfig(() => createProject(parent, " my-app ", " My  App "));
+	const project = await withoutUserGitConfig(() => createProject(parent, " my-app ", " My  App "));
 	const path = join(parent, "my-app");
 	expect(project.path).toBe(realpathSync(path));
 	expect(project.name).toBe("My App");
@@ -261,10 +266,10 @@ test("createProject: makes the folder and missing parents, bootstraps a repo, an
 	expect(listProjects().map((p) => p.id)).toEqual([project.id]);
 });
 
-test("createProject: preserves Unicode parent and project names on disk and in saved records", () => {
+test("createProject: preserves Unicode parent and project names on disk and in saved records", async () => {
 	const parent = join(dataDir, "中文测试");
 	const path = join(parent, "项目-🚀");
-	const project = withoutUserGitConfig(() => createProject(parent, "项目-🚀"));
+	const project = await withoutUserGitConfig(() => createProject(parent, "项目-🚀"));
 
 	expect(project.path).toBe(realpathSync(path));
 	expect(project.name).toBe("项目-🚀");
@@ -273,33 +278,36 @@ test("createProject: preserves Unicode parent and project names on disk and in s
 	expect(getProjects().map((p) => p.path)).toEqual([project.path]);
 });
 
-test("createProject: reuses an empty folder but rejects a non-empty one or a file", () => {
+test("createProject: reuses an empty folder but rejects a non-empty one or a file", async () => {
 	mkdirSync(join(dataDir, "empty"));
-	expect(withoutUserGitConfig(() => createProject(dataDir, "empty")).path).toBe(
+	expect((await withoutUserGitConfig(() => createProject(dataDir, "empty"))).path).toBe(
 		realpathSync(join(dataDir, "empty")),
 	);
 
 	mkdirSync(join(dataDir, "full"));
 	writeFileSync(join(dataDir, "full", "a.txt"), "a\n");
-	expect(() => createProject(dataDir, "full")).toThrow("already exists and isn't empty");
+	await expect(createProject(dataDir, "full")).rejects.toThrow("already exists and isn't empty");
 	expect(existsSync(join(dataDir, "full", ".git"))).toBe(false);
 
 	writeFileSync(join(dataDir, "file"), "x\n");
-	expect(() => createProject(dataDir, "file")).toThrow("Not a folder");
+	await expect(createProject(dataDir, "file")).rejects.toThrow("Not a folder");
 });
 
-test("createProject: a folder inside an enclosing repo becomes its own project", () => {
+test("createProject: a folder inside an enclosing repo becomes its own project", async () => {
 	const outer = join(dataDir, "outer");
 	makeRepo(outer);
 
-	const project = withoutUserGitConfig(() => createProject(outer, "inner"));
+	const project = await withoutUserGitConfig(() => createProject(outer, "inner"));
 	expect(project.path).toBe(realpathSync(join(outer, "inner")));
 	expect(resolve(gitOut(join(outer, "inner"), "rev-parse", "--show-toplevel"))).toBe(
 		realpathSync(join(outer, "inner")),
 	);
 });
 
-function withFailingCommitHook<T>(hookBody: string, run: () => T): T {
+async function withFailingCommitHook<T>(
+	hookBody: string,
+	run: () => T | Promise<T>,
+): Promise<Awaited<T>> {
 	const hooks = join(dataDir, "hooks");
 	mkdirSync(hooks, { recursive: true });
 	writeFileSync(join(hooks, "pre-commit"), `#!/bin/sh\n${hookBody}\nexit 1\n`, { mode: 0o755 });
@@ -311,7 +319,7 @@ function withFailingCommitHook<T>(hookBody: string, run: () => T): T {
 	delete process.env.GIT_CONFIG_COUNT;
 	delete process.env.GIT_CONFIG_PARAMETERS;
 	try {
-		return run();
+		return await run();
 	} finally {
 		keys.forEach((key, index) => {
 			const value = saved[index];
@@ -321,45 +329,47 @@ function withFailingCommitHook<T>(hookBody: string, run: () => T): T {
 	}
 }
 
-test("createProject: a failed bootstrap removes the folder it made, but nothing written into it meanwhile", () => {
+test("createProject: a failed bootstrap removes the folder it made, but nothing written into it meanwhile", async () => {
 	const parent = join(dataDir, "parent");
-	expect(() => withFailingCommitHook(":", () => createProject(parent, "clean"))).toThrow(
+	await expect(withFailingCommitHook(":", () => createProject(parent, "clean"))).rejects.toThrow(
 		"git commit failed",
 	);
 	expect(existsSync(join(parent, "clean"))).toBe(false);
 
-	expect(() =>
+	await expect(
 		withFailingCommitHook("echo kept > hook-output.txt", () => createProject(parent, "busy")),
-	).toThrow("git commit failed");
+	).rejects.toThrow("git commit failed");
 	expect(existsSync(join(parent, "busy", ".git"))).toBe(false);
 	expect(readFileSync(join(parent, "busy", "hook-output.txt"), "utf8")).toBe("kept\n");
 	expect(listProjects()).toEqual([]);
 });
 
-test("createProject: rejects names that are not one plain folder name", () => {
+test("createProject: rejects names that are not one plain folder name", async () => {
 	for (const name of ["", "  ", ".", "..", "a/b", "a\\b"]) {
-		expect(() => createProject(dataDir, name)).toThrow("Invalid project folder name");
+		await expect(createProject(dataDir, name)).rejects.toThrow("Invalid project folder name");
 	}
-	expect(() => createProject("relative", "app")).toThrow("must be absolute or start with ~/");
+	await expect(createProject("relative", "app")).rejects.toThrow(
+		"must be absolute or start with ~/",
+	);
 });
 
-test("initProject: commits even with no configured git identity (the -c fallback)", () => {
+test("initProject: commits even with no configured git identity (the -c fallback)", async () => {
 	const dir = join(dataDir, "noid");
 	mkdirSync(dir);
 	writeFileSync(join(dir, "file.txt"), "x\n");
 
-	withoutUserGitConfig(() => initProject(dir));
+	await withoutUserGitConfig(() => initProject(dir));
 	expect(gitOut(dir, "rev-parse", "HEAD")).not.toBe("");
 	expect(gitOut(dir, "log", "-1", "--format=%an")).toBe("ThinkRail");
 });
 
-test("initProject: an existing repo is opened, not re-initialised (dedupe, history preserved)", () => {
+test("initProject: an existing repo is opened, not re-initialised (dedupe, history preserved)", async () => {
 	const repo = join(dataDir, "repo");
 	makeRepo(repo);
 	const originalHead = gitOut(repo, "rev-parse", "HEAD");
 
-	const first = initProject(repo);
-	const second = initProject(repo);
+	const first = await initProject(repo);
+	const second = await initProject(repo);
 	expect(second.id).toBe(first.id);
 	expect(listProjects()).toHaveLength(1);
 	expect(gitOut(repo, "rev-parse", "HEAD")).toBe(originalHead);
@@ -367,7 +377,7 @@ test("initProject: an existing repo is opened, not re-initialised (dedupe, histo
 
 const posix = test.skipIf(process.platform === "win32");
 
-function withGitWrapper<T>(caseBody: string, run: () => T): T {
+async function withGitWrapper<T>(caseBody: string, run: () => T | Promise<T>): Promise<Awaited<T>> {
 	const executable = Bun.which("git");
 	if (!executable) throw new Error("git not found");
 	const bin = join(dataDir, "bin");
@@ -380,14 +390,14 @@ function withGitWrapper<T>(caseBody: string, run: () => T): T {
 	const path = process.env.PATH;
 	process.env.PATH = `${bin}${delimiter}${path ?? ""}`;
 	try {
-		return run();
+		return await run();
 	} finally {
 		if (path === undefined) delete process.env.PATH;
 		else process.env.PATH = path;
 	}
 }
 
-posix("a timed-out top-level probe is an error, never an init offer for a real repo", () => {
+posix("a timed-out top-level probe is an error, never an init offer for a real repo", async () => {
 	const repo = join(dataDir, "slow-repo");
 	makeRepo(repo);
 	writeFileSync(join(repo, "untracked.txt"), "keep me untracked\n");
@@ -395,11 +405,11 @@ posix("a timed-out top-level probe is an error, never an init offer for a real r
 
 	setSyncGitTimeoutForTests(300);
 	try {
-		withGitWrapper('*" --show-toplevel "*) sleep 30;;', () => {
+		await withGitWrapper('*" --show-toplevel "*) sleep 30;;', async () => {
 			expect(() => inspectProjectPath(repo)).toThrow(
 				expect.objectContaining({ code: "GIT_TIMEOUT" }),
 			);
-			expect(() => initProject(repo)).toThrow(expect.objectContaining({ code: "GIT_TIMEOUT" }));
+			await expect(initProject(repo)).rejects.toMatchObject({ code: "GIT_TIMEOUT" });
 			expect(() => openProject(repo)).toThrow(expect.objectContaining({ code: "GIT_TIMEOUT" }));
 		});
 	} finally {
@@ -411,44 +421,44 @@ posix("a timed-out top-level probe is an error, never an init offer for a real r
 	expect(listProjects()).toHaveLength(0);
 });
 
-posix("initProject keeps a .git it did not create when the initial commit fails", () => {
+posix("initProject keeps a .git it did not create when the initial commit fails", async () => {
 	const dir = join(dataDir, "has-git-dir");
 	mkdirSync(join(dir, ".git"), { recursive: true });
 	writeFileSync(join(dir, ".git", "sentinel"), "user data\n");
 	writeFileSync(join(dir, "file.txt"), "x\n");
 
-	withGitWrapper('*" add "*) exit 1;;', () => {
-		expect(() => withoutUserGitConfig(() => initProject(dir))).toThrow(/git add failed/);
+	await withGitWrapper('*" add "*) exit 1;;', async () => {
+		await expect(withoutUserGitConfig(() => initProject(dir))).rejects.toThrow(/git add failed/);
 	});
 
 	expect(readFileSync(join(dir, ".git", "sentinel"), "utf8")).toBe("user data\n");
 });
 
-posix("initProject shows git's own error when the initial commit fails", () => {
+posix("initProject shows git's own error when the initial commit fails", async () => {
 	const dir = join(dataDir, "add-stderr");
 	mkdirSync(dir);
 	writeFileSync(join(dir, "file.txt"), "x\n");
 
-	withGitWrapper(
+	await withGitWrapper(
 		'*" add "*) echo "fatal: detected dubious ownership in repository" >&2; exit 128;;',
-		() => {
-			expect(() => withoutUserGitConfig(() => initProject(dir))).toThrow(
+		async () => {
+			await expect(withoutUserGitConfig(() => initProject(dir))).rejects.toThrow(
 				/git add failed: .*\nfatal: detected dubious ownership in repository/,
 			);
 		},
 	);
 });
 
-posix("a repository git refuses to trust is an error, never an init offer", () => {
+posix("a repository git refuses to trust is an error, never an init offer", async () => {
 	const repo = join(dataDir, "untrusted-repo");
 	makeRepo(repo);
 	const head = gitOut(repo, "rev-parse", "HEAD");
 
-	withGitWrapper(
+	await withGitWrapper(
 		'*" --show-toplevel "*) echo "fatal: detected dubious ownership in repository" >&2; exit 128;;',
-		() => {
+		async () => {
 			expect(() => inspectProjectPath(repo)).toThrow(/dubious ownership/);
-			expect(() => initProject(repo)).toThrow(/dubious ownership/);
+			await expect(initProject(repo)).rejects.toThrow(/dubious ownership/);
 		},
 	);
 
@@ -456,13 +466,13 @@ posix("a repository git refuses to trust is an error, never an init offer", () =
 	expect(listProjects()).toHaveLength(0);
 });
 
-posix("initProject removes the .git it created when the initial commit fails", () => {
+posix("initProject removes the .git it created when the initial commit fails", async () => {
 	const dir = join(dataDir, "fresh");
 	mkdirSync(dir);
 	writeFileSync(join(dir, "file.txt"), "x\n");
 
-	withGitWrapper('*" add "*) exit 1;;', () => {
-		expect(() => withoutUserGitConfig(() => initProject(dir))).toThrow(/git add failed/);
+	await withGitWrapper('*" add "*) exit 1;;', async () => {
+		await expect(withoutUserGitConfig(() => initProject(dir))).rejects.toThrow(/git add failed/);
 	});
 
 	expect(existsSync(join(dir, ".git"))).toBe(false);
@@ -470,20 +480,18 @@ posix("initProject removes the .git it created when the initial commit fails", (
 
 posix(
 	"a git identity probe that times out fails the init instead of committing as ThinkRail",
-	() => {
+	async () => {
 		const dir = join(dataDir, "slow-identity");
 		mkdirSync(dir);
 		writeFileSync(join(dir, "file.txt"), "x\n");
 
 		setSyncGitTimeoutForTests(2_000);
 		try {
-			withGitWrapper('*" config user.email "*) sleep 30;;', () => {
-				expect(() => initProject(dir)).toThrow(
-					expect.objectContaining({
-						code: "GIT_TIMEOUT",
-						message: expect.stringMatching(/^Could not read the git identity/),
-					}),
-				);
+			await withGitWrapper('*" config user.email "*) sleep 30;;', async () => {
+				await expect(initProject(dir)).rejects.toMatchObject({
+					code: "GIT_TIMEOUT",
+					message: expect.stringMatching(/^Could not read the git identity/),
+				});
 			});
 		} finally {
 			setSyncGitTimeoutForTests(undefined);
@@ -493,6 +501,35 @@ posix(
 		expect(listProjects()).toHaveLength(0);
 	},
 );
+
+posix("initProject keeps the host event loop running while git adds and commits", async () => {
+	const dir = join(dataDir, "slow-init");
+	mkdirSync(dir);
+	writeFileSync(join(dir, "hello.txt"), "hi\n");
+
+	await withGitWrapper('*" add "*|*" commit "*) sleep 1;;', async () => {
+		const started = performance.now();
+		const init = withoutUserGitConfig(() => initProject(dir));
+		await Bun.sleep(100);
+		expect(performance.now() - started).toBeLessThan(1_000);
+		await init;
+	});
+
+	expect(gitOut(dir, "rev-parse", "HEAD")).not.toBe("");
+});
+
+posix("the initial commit cannot start git's automatic maintenance", async () => {
+	const dir = join(dataDir, "no-gc");
+	mkdirSync(dir);
+	writeFileSync(join(dir, "hello.txt"), "hi\n");
+	const calls = join(dataDir, "commit-calls.log");
+
+	await withGitWrapper(`*" commit "*) printf '%s\\n' "$*" >> ${JSON.stringify(calls)};;`, () =>
+		withoutUserGitConfig(() => initProject(dir)),
+	);
+
+	expect(readFileSync(calls, "utf8")).toContain("-c maintenance.auto=false -c gc.auto=0 commit");
+});
 
 test("legacy project records default to open in both projections", () => {
 	const repo = join(dataDir, "repo");
@@ -570,10 +607,10 @@ test("renameProject changes only the display name, publishes it, and survives cl
 	expect(() => renameProject("missing", "Name")).toThrow("Unknown project: missing");
 });
 
-test("setProjectTrust: persists a revocable, fail-closed trust decision", () => {
+test("setProjectTrust: persists a revocable, fail-closed trust decision", async () => {
 	const repo = join(dataDir, "repo");
 	makeRepo(repo);
-	const project = initProject(repo);
+	const project = await initProject(repo);
 
 	expect(project.trusted).toBeUndefined();
 	expect(isProjectTrusted(project.id)).toBe(false);
@@ -589,10 +626,10 @@ test("setProjectTrust: persists a revocable, fail-closed trust decision", () => 
 	expect(() => setProjectTrust("nope", true)).toThrow();
 });
 
-test("setProjectTrust: pi-level resource trust needs its own explicit grant, and a revoke clears both", () => {
+test("setProjectTrust: pi-level resource trust needs its own explicit grant, and a revoke clears both", async () => {
 	const repo = join(dataDir, "repo");
 	makeRepo(repo);
-	const project = initProject(repo);
+	const project = await initProject(repo);
 	const published: Array<{ trusted: boolean | undefined; piResourceTrust: string | undefined }> =
 		[];
 	setProjectPublisher(({ trusted, piResourceTrust }) =>
@@ -652,7 +689,7 @@ test("a record that predates pi-level trust is not grandfathered: it stays as st
 	expect(asked).toEqual([]);
 });
 
-test("a newly added project starts untrusted unless pi already trusts its path", () => {
+test("a newly added project starts untrusted unless pi already trusts its path", async () => {
 	const plain = join(dataDir, "plain");
 	const piTrusted = join(dataDir, "pi-trusted");
 	makeRepo(plain);
@@ -662,7 +699,7 @@ test("a newly added project starts untrusted unless pi already trusts its path",
 
 	expect(openProject(plain).piResourceTrust).toBe("untrusted");
 	expect(openProject(piTrusted).piResourceTrust).toBe("granted");
-	expect(initProject(plain).piResourceTrust).toBe("untrusted");
+	expect((await initProject(plain)).piResourceTrust).toBe("untrusted");
 });
 
 test("MCP approvals and per-project overrides persist in the project record and clear cleanly", () => {

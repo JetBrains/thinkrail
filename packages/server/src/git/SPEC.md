@@ -27,10 +27,11 @@ ref off the workspace-create critical path.
   `timed out after <n>s — …` wording as the async runners; the rest of git's process group is
   then killed, so hooks, filters and credential helpers do not outlive it. `worktree remove` and whole-tree
   reads (`gitUncommittedPaths`' tracked diff and untracked listing) pass **`SLOW_GIT_TIMEOUT_MS`** (5 minutes)
-  instead, so a large but healthy repository still finishes. Index writers (the initial `add -A` + `commit` of
-  `initProject`, `gitCommitPaths`' add and commit) pass **`INDEX_WRITE_TIMEOUT_MS`**: the same 5 minutes, but
-  `null` (no deadline) on Windows, where the timeout kill is `TerminateProcess` and git cannot remove
-  `index.lock`. `renameWorkspace`'s `branch -m` also passes `null`: a kill between deleting the old ref and
+  instead, so a large but healthy repository still finishes. Index writers (`gitCommitPaths`' add and commit,
+  and through `gitAsync` the initial `add -A` + `commit` of `projects`' bootstrap) pass
+  **`INDEX_WRITE_TIMEOUT_MS`**: the same 5 minutes, but `null` (no deadline) on Windows, where the timeout
+  kill is `TerminateProcess` and git cannot remove `index.lock`; an async caller spells that `null` as an
+  unbounded `timeoutMs`. `renameWorkspace`'s `branch -m` also passes `null`: a kill between deleting the old ref and
   creating the new one leaves the worktree without a branch, and nothing here can recover it. Known gap: a Windows read that refreshes the index (`status`, `diff`) and hits its deadline
   can still leave `index.lock` behind. **A timeout is not an answer, so sync git throws on it by default:**
   `git`/`gitBytes` throw a **`GitTimeoutError`** (`CodedError("GIT_TIMEOUT")`, so error tracking tells a
@@ -47,8 +48,7 @@ ref off the workspace-create critical path.
   fast; `undefined` restores it. `gitAsync(cwd, args, opts?)` and
   **`gitAsyncBytes(cwd, args, opts?)`** are the bounded async twins over `subprocess.runBounded`; the latter
   preserves stdout as `Uint8Array`, while stderr remains decoded diagnostics. They keep network-bound ops
-  like `fetch`, **request-path historical reads**, and the projects module's bootstrap write path (`git
-  init`/`add`/`commit`, which pass a 30-minute `timeoutMs` on the bulk steps) off the event loop:
+  like `fetch`, **request-path historical reads** and `projects`' repository bootstrap off the event loop:
   this module owns only the
   git-shaped 55s budget and stalled/stderr wording, never child-lifetime mechanics. `opts.env` lets a
   caller run prompt-free with its own environment and pins blob diagnostics to English; the captured runners'

@@ -54,12 +54,22 @@ bootstrap it into one so it can be opened.
   `notDirectory` — so the UI picks between opening, an init offer, or an error) and **`initProject`**
   (bootstrap a plain directory: `git init` + `git add -A` + an **allow-empty** initial commit — committing
   the folder's contents, or an empty commit when it is empty, so the repo gets a HEAD and `git worktree
-  add` works; an already-a-repo path short-circuits to `openProject`; a missing / non-dir path throws; a
-  timed-out top-level probe throws `GIT_TIMEOUT` rather than classifying a slow repo as `initable`; a
-  top-level probe git refuses with "dubious ownership" (e.g. a WSL share opened from Windows) throws with
+  add` works; an already-a-repo path short-circuits to `openProject`; a missing / non-dir path rejects; a
+  timed-out top-level probe rejects with `GIT_TIMEOUT` rather than classifying a slow repo as `initable`; a
+  top-level probe git refuses with "dubious ownership" (e.g. a WSL share opened from Windows) rejects with
   git's stderr rather than offering `git init` inside what may be an existing repo; a
-  timed-out `user.name`/`user.email` probe throws rather than committing as ThinkRail; a failed
-  init/add/commit throws with git's stderr and removes `.git` only when this call created it).
+  timed-out `user.name`/`user.email` probe rejects rather than committing as ThinkRail; a failed
+  init/add/commit rejects with git's stderr — a timed-out one with `GIT_TIMEOUT` — and removes `.git` only
+  when this call created it). **The bootstrap's `init`, `add -A` and `commit` run through `gitAsync`, off
+  the host event loop:** a synchronous `add` over a large folder froze the whole app for minutes (#1032),
+  and a quit meanwhile left a process with no window, since shutdown runs on the same loop. `add` and
+  `commit` take the index-writer deadline `INDEX_WRITE_TIMEOUT_MS` ([[submodule-server-git]]: 5 minutes,
+  none on Windows, where a killed git leaves `index.lock`); an expired one is killed with its process group
+  before the `.git` this call created is removed. The commit passes `-c maintenance.auto=false -c
+  gc.auto=0`, so the first commit of a big tree cannot start an automatic `gc`/maintenance that outlasts
+  it. The identity and top-level probes stay short synchronous reads. Known gap: nothing serializes another
+  open or init of the same folder while its bootstrap runs; one that lands after `git init` sees a repo and
+  opens it before the initial commit exists.
   **`createProject(parentPath, name)`** is the start-from-nothing path: `name` must be one plain folder
   name (no separators, not `.`/`..`), the resolved parent is created when missing, the target folder is
   made — an existing **empty** folder is reused, a non-empty one or a file rejects — and then gets the same

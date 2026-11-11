@@ -235,7 +235,10 @@ treatment.
   rather than run the same hung probe again) `project.inspect` → either offers to
   bootstrap the folder into a repo — a modal **`ConfirmDialog`**
   (confirm → `project.init`) — when it's `initable`, or surfaces the error in a **`NoticeDialog`** — so a
-  non-git folder is never a silent no-op. The native picker remains the local fast path and keeps its raised
+  non-git folder is never a silent no-op. `project.init` waits 13 minutes, the host's longest bootstrap on
+  macOS/Linux (two 5-minute index writes plus short probes, [[submodule-server-projects]]) with a minute to
+  spare; a Windows bootstrap has no host deadline, so one that outlasts the wait reports a timeout while the
+  host finishes and publishes the project. The native picker remains the local fast path and keeps its raised
   timeout because it waits on a human; if the host cannot present it, the rejection instead opens an
   **Open project from host path** dialog carrying the reason and an autofocused path field. The dialog says
   the path belongs to the computer running ThinkRail, accepts a host-absolute path or `~` / `~/…`, and
