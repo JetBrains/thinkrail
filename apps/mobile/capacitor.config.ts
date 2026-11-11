@@ -9,7 +9,7 @@ const config: CapacitorConfig = {
 	backgroundColor: darkTheme.colors.background,
 	ios: { contentInset: "never", scrollEnabled: false },
 	server: { androidScheme: "http" },
-	plugins: { Keyboard: { resize: KeyboardResize.Native, resizeOnFullScreen: true } },
+	plugins: { Keyboard: { resize: KeyboardResize.None, resizeOnFullScreen: true } },
 };
 
 export default config;

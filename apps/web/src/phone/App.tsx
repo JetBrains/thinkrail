@@ -7,6 +7,7 @@ import {
 	type RemoteSessionItem,
 	type SavedHost,
 } from "@thinkrail/remote-client";
+import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { AddComputerScreen } from "./AddComputerScreen";
 import { ChatsScreen } from "./ChatsScreen";
@@ -25,6 +26,7 @@ import {
 	type Route,
 	replaceTop,
 	type Stack,
+	stackMotion,
 	TABS,
 	type Tab,
 } from "./navigation";
@@ -54,6 +56,27 @@ export function App() {
 	const [pair, setPair] = useState<PairState>({ kind: "idle" });
 	const [tab, setTab] = useState<Tab>("computers");
 	const [stack, setStack] = useState<Stack>([]);
+	const [motion, setMotion] = useState<{ stack: Stack; entering: Route | null; leaving: Route[] }>({
+		stack,
+		entering: null,
+		leaving: [],
+	});
+	if (motion.stack !== stack) {
+		const moved = stackMotion(motion.stack, stack);
+		setMotion({
+			stack,
+			entering: moved.entering,
+			leaving: [...motion.leaving.filter((route) => !stack.includes(route)), ...moved.leaving],
+		});
+	}
+	useEffect(() => {
+		if (motion.leaving.length === 0) return;
+		const timer = setTimeout(
+			() => setMotion((current) => ({ ...current, leaving: [] })),
+			SCREEN_POP_MS,
+		);
+		return () => clearTimeout(timer);
+	}, [motion.leaving]);
 	const [preferences, setPreferences] = useState<DevicePreferences>(() =>
 		readPreferences(localStore),
 	);
@@ -299,7 +322,10 @@ export function App() {
 	};
 	return (
 		<div className="relative h-full">
-			<Layer covered={stack.length > 0 || tab !== "computers"}>
+			<Layer
+				covered={stack.length > 0 || tab !== "computers"}
+				visible={tab === "computers" && stack.length <= 1}
+			>
 				<ComputersScreen
 					hosts={hosts}
 					statusOf={statusOf}
@@ -321,7 +347,10 @@ export function App() {
 					footer={tabBar}
 				/>
 			</Layer>
-			<Layer covered={stack.length > 0 || tab !== "chats"}>
+			<Layer
+				covered={stack.length > 0 || tab !== "chats"}
+				visible={tab === "chats" && stack.length <= 1}
+			>
 				<ChatsScreen
 					controller={controller}
 					items={items}
@@ -339,7 +368,10 @@ export function App() {
 					footer={tabBar}
 				/>
 			</Layer>
-			<Layer covered={stack.length > 0 || tab !== "settings"}>
+			<Layer
+				covered={stack.length > 0 || tab !== "settings"}
+				visible={tab === "settings" && stack.length <= 1}
+			>
 				<SettingsScreen
 					hosts={hosts}
 					statusOf={statusOf}
@@ -352,19 +384,48 @@ export function App() {
 					footer={tabBar}
 				/>
 			</Layer>
-			{stack.map((route, index) => (
-				<Layer key={screenKey(route)} covered={index < stack.length - 1}>
-					{screen(route, index)}
-				</Layer>
-			))}
+			{[...stack, ...motion.leaving].map((route) => {
+				const index = stack.indexOf(route);
+				const leaving = index === -1;
+				return (
+					<Layer
+						key={screenKey(route)}
+						covered={leaving || index < stack.length - 1}
+						visible={leaving || index >= stack.length - 2}
+						motion={leaving ? "pop" : route === motion.entering ? "push" : undefined}
+					>
+						{screen(route, leaving ? stack.length : index)}
+					</Layer>
+				);
+			})}
 		</div>
 	);
 }
 
-function Layer({ covered, children }: { covered: boolean; children: ReactNode }) {
+/**
+ * One full-screen layer. A covered layer is inert; it stays painted only while `visible` (the screen right
+ * under the top one, which a pushed screen slides over), else it is transparent.
+ */
+function Layer({
+	covered,
+	visible = !covered,
+	motion,
+	children,
+}: {
+	covered: boolean;
+	visible?: boolean;
+	motion?: "push" | "pop" | undefined;
+	children: ReactNode;
+}) {
 	return (
 		<div
-			className={covered ? "pointer-events-none absolute inset-0 opacity-0" : "absolute inset-0"}
+			className={cn(
+				"absolute inset-0",
+				covered && "pointer-events-none",
+				!visible && "opacity-0",
+				motion === "push" && "motion-safe:animate-screen-push",
+				motion === "pop" && "motion-safe:animate-screen-pop",
+			)}
 			aria-hidden={covered || undefined}
 			inert={covered}
 		>
@@ -388,6 +449,9 @@ function screenKey(route: Route): string {
 			return `${route.kind}:${route.hostKey}:${route.chat.sessionId}`;
 	}
 }
+
+/** Matches `--animate-screen-pop` in phone.css: how long a popped screen stays mounted to slide out. */
+const SCREEN_POP_MS = 260;
 
 const hostItems = (items: RemoteSessionItem[], hostKey: string) =>
 	items.filter((item) => item.hostKey === hostKey);
