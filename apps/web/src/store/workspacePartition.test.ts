@@ -25,6 +25,11 @@ function ws(id: string, overrides: Partial<Workspace> = {}): Workspace {
 	};
 }
 
+function unstamped(id: string, overrides: Partial<Workspace> = {}): Workspace {
+	const { lastActiveAt: _lastActiveAt, ...row } = ws(id, overrides);
+	return row;
+}
+
 function session(
 	workspaceId: string,
 	state: Partial<SessionStateRecord["state"]>,
@@ -42,6 +47,7 @@ function session(
 					completion: null,
 					completionUnread: false,
 					queuedCount: 0,
+					backgroundWork: false,
 					...state,
 				},
 			},
@@ -73,10 +79,16 @@ describe("selectWorkspaceSettledReason", () => {
 		expect(selectWorkspaceSettledReason({ ...base, settleIdleDays: 7 }, idle, NOW)).toBeNull();
 	});
 
-	test("an unstamped legacy row stays live until the host backfills it", () => {
+	test("a chat without a project never settles — not idle, not by an override", () => {
+		const chat = ws("chat", { kind: "chat", lastActiveAt: NOW - 30 * DAY });
+		expect(selectWorkspaceSettledReason(base, chat, NOW)).toBeNull();
 		expect(
-			selectWorkspaceSettledReason(base, ws("legacy", { lastActiveAt: undefined }), NOW),
+			selectWorkspaceSettledReason(base, { ...chat, settledOverride: "settled" }, NOW),
 		).toBeNull();
+	});
+
+	test("an unstamped legacy row stays live until the host backfills it", () => {
+		expect(selectWorkspaceSettledReason(base, unstamped("legacy"), NOW)).toBeNull();
 	});
 
 	test("working, needs-attention, and Default rows never settle, whatever else says", () => {
@@ -185,8 +197,9 @@ describe("selectWorkspaceSettledReason", () => {
 });
 
 describe("selectWorkspacePartition", () => {
+	const home = ws("home", { kind: "default", name: "Default", lastActiveAt: NOW });
 	const rows = [
-		ws("home", { kind: "default", name: "Default", lastActiveAt: NOW }),
+		home,
 		ws("b-old", { name: "Bravo", lastActiveAt: NOW - 2 * DAY }),
 		ws("a-new", { name: "Alpha", lastActiveAt: NOW - 1 * DAY }),
 		ws("merged", {
@@ -206,7 +219,7 @@ describe("selectWorkspacePartition", () => {
 	});
 
 	test("recent order: Default stays first, then newest activity; settled rows sort the same way", () => {
-		const reversed = { ...state, workspaces: { p1: [rows[0], ...rows.slice(1).reverse()] } };
+		const reversed = { ...state, workspaces: { p1: [home, ...rows.slice(1).reverse()] } };
 		const partition = selectWorkspacePartition(reversed, "p1", NOW, "recent");
 		expect(partition.live.map((w) => w.id)).toEqual(["home", "a-new", "b-old"]);
 		expect(partition.settled.map((row) => row.workspace.id)).toEqual(["merged", "idle"]);
@@ -231,8 +244,8 @@ describe("selectWorkspacePartition", () => {
 	test("a pre-v78 host keeps the raw legacy order and ignores stale settled facts", () => {
 		const legacyRows = [
 			ws("home", { kind: "default", name: "Default" }),
-			ws("first", { lastActiveAt: undefined, settledOverride: "settled" }),
-			ws("second", { lastActiveAt: undefined }),
+			unstamped("first", { settledOverride: "settled" }),
+			unstamped("second"),
 		];
 		expect(
 			selectWorkspacePartition(

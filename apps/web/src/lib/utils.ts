@@ -1,5 +1,6 @@
 import type { UserMessage } from "@thinkrail/contracts";
 import type { Translator } from "@thinkrail/locales/react";
+import { browserPlatform, isApplePlatform } from "@thinkrail/ui/keyboard";
 
 export const DOUBLE_CLICK_SETTLE_MS = 250;
 
@@ -278,30 +279,13 @@ export function cssColorToHex(color: string): string {
 	return `#${channels.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
 }
 
-const APPLE_PLATFORM = /Mac|iPhone|iPad|iPod/;
-
-function browserPlatform(): string {
-	return typeof navigator === "undefined" ? "" : (navigator.platform ?? "");
-}
-
-function isApplePlatform(platform: string): boolean {
-	return APPLE_PLATFORM.test(platform);
-}
+export { hasPlatformModifier } from "@thinkrail/ui/keyboard";
 
 export function platformFamily(platform = browserPlatform()) {
 	if (isApplePlatform(platform)) return "apple";
 	if (/^Win/.test(platform)) return "windows";
 	if (/Linux/.test(platform)) return "linux";
 	return "other";
-}
-
-export function hasPlatformModifier(
-	event: Pick<KeyboardEvent, "ctrlKey" | "metaKey">,
-	platform = browserPlatform(),
-): boolean {
-	return isApplePlatform(platform)
-		? event.metaKey && !event.ctrlKey
-		: event.ctrlKey && !event.metaKey;
 }
 
 export function platformShortcutLabel(

@@ -50,7 +50,7 @@ it too),
 `-v`/`--version` (print the baked version and exit), `-h`/`--help`, and one positional `project-dir` (a
 git repo to open as a project on boot, best-effort). Env defaults: `THINKRAIL_PORT` / `THINKRAIL_HOST` /
 `THINKRAIL_STATIC_DIR` (flag > env > default). `THINKRAIL_NO_ANALYTICS` is documented in `--help` but
-deliberately **not** parsed here — the host's analytics module is its single reader (see below).
+deliberately **not** parsed here — the host's analytics module is its single reader (see below). Ports must be plain decimals 0-65535: an empty or non-decimal `--port`, or an empty `--host`, throws; an empty or invalid `THINKRAIL_PORT` / `THINKRAIL_HOST` is ignored and the default is used.
 
 ## Update advisory
 
@@ -286,7 +286,7 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   so the whole assertion is Windows-executable-shaped, and an ubuntu-only smoke let #255 ship a release
   matrix that failed for two days while publishing nothing (see `module-ci-release`). It does not prompt a
   provider; real turn behavior stays in `e2e:agent`. The smoke's **broad-net sibling** is `bun run e2e:binary` (root
-  `playwright.binary.config.ts`): the whole no-agent e2e suite executed against this binary — in CI on
+  `e2e/playwright.binary.config.ts`): the whole no-agent e2e suite executed against this binary — in CI on
   those same runs. And `bun run check:seams` (root `scripts/check-binary-seams.ts`) is the build-time canary
   for the seam class: it fails when a pi bump introduces a new bundler-opaque dynamic import the server's
   `registerBundledRuntime` doesn't statically register. The scan **excludes `pi-coding-agent/dist/bundle/`**

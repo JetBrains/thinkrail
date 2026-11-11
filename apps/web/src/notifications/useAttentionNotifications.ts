@@ -37,10 +37,10 @@ function collectCandidates(state: AppState): AttentionCandidate[] {
 
 function navigate(spec: NotificationSpec): void {
 	const state = useAppStore.getState();
-	if (spec.target.kind === "switcher") {
+	if (spec.target.kind === "search") {
 		// Several worktrees need attention — surface the cross-workspace palette so the user picks
 		// one, instead of just focusing a window that may not be showing the right chat.
-		state.openSessionSwitcher();
+		state.openSearch();
 		return;
 	}
 	const projectId = selectWorkspaceById(state, spec.target.workspaceId)?.projectId;

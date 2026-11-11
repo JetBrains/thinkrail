@@ -18,10 +18,11 @@ class MockNotification {
 	static throwOnConstruct = false;
 	onclick: ((event: { preventDefault: () => void }) => void) | null = null;
 	closed = false;
-	constructor(
-		public title: string,
-		public options: { body: string; tag: string; icon?: string },
-	) {
+	title: string;
+	options: { body: string; tag: string; icon?: string };
+	constructor(title: string, options: { body: string; tag: string; icon?: string }) {
+		this.title = title;
+		this.options = options;
 		if (MockNotification.throwOnConstruct) throw new TypeError("unsupported");
 		MockNotification.instances.push(this);
 	}
@@ -171,7 +172,15 @@ describe("web notification channel", () => {
 
 	test("uses the body alone when there is no subtitle", () => {
 		const channel = createWebNotificationChannel();
-		channel.show(spec({ subtitle: undefined, body: "2 worktrees need your attention" }), () => {});
+		channel.show(
+			{
+				title: "ThinkRail",
+				body: "2 worktrees need your attention",
+				tag: "attention:s1",
+				target: { kind: "chat", workspaceId: "w1", sessionId: "s1" },
+			},
+			() => {},
+		);
 		expect(MockNotification.instances[0]?.options.body).toBe("2 worktrees need your attention");
 	});
 
