@@ -251,7 +251,13 @@ channel fan-out, and the process-boot wrapper both launchers share.
   pick + `chat_started`): only a user's pick (`pick` — `session.create`, `chat.create` and a dialog's
   kickoff that **named** a model) is recorded as recent through `settings`' `noteRecentModel`, as is every
   `session.setModel`; a default-resolved creation, the review chat, Continue's destination and an agent's
-  `start_workspace` are the host's or the agent's choice, not the user's, and are not recorded. `model.contextSettings` and `model.setContextWindow` delegate to agent's `modelContext`
+  `start_workspace` are the host's or the agent's choice, not the user's, and are not recorded. Without an
+  explicit model, an available saved model or an available pi global default, the resolver first applies
+  pi's model preference to connections whose wire auth kind is not `env`, then to the whole available
+  catalog. An ambient API key must not preempt a configured subscription; explicit selections, available
+  saved defaults and pi's global default still take precedence, including environment-backed ones. This
+  changes only new-chat resolution, never an existing session's model or a failed request's connection.
+  `model.contextSettings` and `model.setContextWindow` delegate to agent's `modelContext`
   adapter and return its `ModelContextSetting[]`; the mutation names a provider/model target or all
   eligible pairs, never arbitrary model metadata, and successful saves reuse `provider.changed` to
   invalidate catalogs across clients. The four `customEndpoints.*` methods delegate to agent's

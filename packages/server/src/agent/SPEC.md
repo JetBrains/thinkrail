@@ -365,7 +365,8 @@ re-opened transcripts provider-valid.
     Earlier, #394 showed ThinkRail's `available[0]` differed from Pi's pick and hit a proxy 400. ThinkRail
     resolves new-chat defaults host-side from `AppConfig`, falling back to pi's global `settings.json`
     default (`piDefaultModelRef`), then `preferredDefaultModel` (pi's provider default, then the first
-    available model), when an earlier choice is unset or unavailable, without rewriting either setting.
+    available model) among non-environment connections, then among all available connections, when an
+    earlier choice is unset or unavailable, without rewriting either setting.
     Project `.pi/settings.json` defaults do not apply to new chats. `available[0]` alone was catalog order — `openai/gpt-4`, an 8K-context
     model, for a fresh OpenAI connection. An explicitly requested unavailable model is rejected rather
     than silently substituted. The host passes the chosen model explicitly so the UI and session agree.
