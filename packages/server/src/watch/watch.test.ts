@@ -257,6 +257,7 @@ test("transient git lock files do not nudge repo metadata", async () => {
 	writeFileSync(join(worktree, ".git", "index.lock"), "x\n");
 	await sleep(100);
 	rmSync(join(worktree, ".git", "index.lock"));
+	mkdirSync(join(worktree, ".git", "refs", "heads"), { recursive: true });
 	await sleep(600);
 	expect(nudges).toHaveLength(0);
 
@@ -373,6 +374,26 @@ test("a linked worktree's nested reflog update nudges repo metadata", async () =
 
 	await waitFor(() => nudges.length > 0);
 	expect(nudges).toEqual(["ws1"]);
+});
+
+test("a linked worktree's nested submodule git dirs never nudge repo metadata", async () => {
+	const metaDir = join(dataDir, "repo", ".git", "worktrees", "ws");
+	const objects = join(metaDir, "modules", "sub", "objects");
+	mkdirSync(objects, { recursive: true });
+	mkdirSync(join(metaDir, "logs"), { recursive: true });
+	writeFileSync(join(metaDir, "HEAD"), "ref: refs/heads/b\n");
+	writeFileSync(join(worktree, ".git"), `gitdir: ${metaDir}\n`);
+
+	const nudges: string[] = [];
+	setRepoMetaPublisher((id) => nudges.push(id));
+	void ensureWatch("ws1");
+	await sleep(100);
+
+	mkdirSync(join(objects, "ab"));
+	writeFileSync(join(objects, "ab", "cdef"), "blob\n");
+	writeFileSync(join(metaDir, "modules", "sub", "HEAD"), "ref: refs/heads/sub\n");
+	await sleep(600);
+	expect(nudges).toHaveLength(0);
 });
 
 test("ignored churn (node_modules) never publishes", async () => {
