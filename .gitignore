@@ -44,11 +44,3 @@ playwright-report-desktop/
 
 # Astro's generated type cache
 .astro/
-
-# Local Trellis / Cursor hook state — never ship
-.trellis
-.cursor/hooks/
-.cursor/hooks.json
-.cursor/agents/trellis-*
-.cursor/commands/trellis-*
-.cursor/skills/trellis-*/
