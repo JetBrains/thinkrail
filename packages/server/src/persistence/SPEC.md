@@ -58,12 +58,14 @@ target. A crash, power loss, or full disk mid-save therefore leaves the previous
 empty or torn one. A rename replaces the file's inode, so the replacement carries the permissions
 explicitly instead of inheriting the process umask: an existing file keeps its exact mode, a new file is
 owner-only (`0600`), and `environment.json` is always `0600`. Otherwise one launch under a looser umask
-could turn a private `terminals.json`, which holds recorded shell output, world-readable. The registry and config loads (`projects`, `workspaces`, `terminals`, `config`,
-`environment`) tell a missing file (its empty default) apart from an unreadable one: an I/O error, a parse
-failure, or the wrong top-level shape (array vs object) renames the file to `<file>.corrupt-<epoch-ms>`
-(best effort) and loads the empty default. The next save then cannot overwrite the only copy of the
+could turn a private `terminals.json`, which holds recorded shell output, world-readable. The registry and
+config loads (`projects`, `workspaces`, `workspace-creations`, `terminals`, `config`, `environment`) tell a
+missing file (its empty default) apart from an unreadable one: an I/O error, a parse failure, or the wrong
+top-level shape (array vs object) renames the file to `<file>.corrupt-<epoch-ms>` (best effort) and loads
+the empty default (`DEFAULT_CONFIG` for config). The next save then cannot overwrite the only copy of the
 user's projects and workspaces; the set-aside file is the diagnosis, since `persistence` sits below `log`.
-Shape checks stop at the top level, and record-level validation stays with each loader.
+Shape checks stop at the top level, and record-level validation stays with each loader. `chats.json` keeps
+the stricter store rules above.
 
 Session metadata writes are complete-copy temp-file replacements. Lifecycle persists only facts a transcript
 cannot prove—`agent_settled` outcome and explicit Stop—keyed to the active run/completion ids; stale records

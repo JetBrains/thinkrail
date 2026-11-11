@@ -18,10 +18,13 @@ import {
 	loadHostEnvironment,
 	loadProjects,
 	loadTerminalSessions,
+	loadWorkspaceCreations,
 	loadWorkspaces,
+	resetChatsStoreForTests,
 	saveConfig,
 	saveProjects,
 	saveTerminalSessions,
+	saveWorkspaceCreations,
 	saveWorkspaces,
 } from "./persistence";
 
@@ -34,6 +37,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	resetChatsStoreForTests();
 	rmSync(root, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
@@ -52,6 +56,10 @@ function workspace(id: string): Workspace {
 
 function project(id: string): Project {
 	return { id, name: id, path: join(root, id), slug: id, lastOpened: 1 };
+}
+
+function chatsContainer(): Project {
+	return { ...project("chats"), kind: "chats" };
 }
 
 function setAsideCopies(file: string): string[] {
@@ -76,18 +84,21 @@ test("a torn workspaces.json is set aside, so the next save cannot destroy its r
 test("empty or wrongly shaped registry files are set aside and load as their empty default", () => {
 	writeFileSync(join(root, "projects.json"), "");
 	writeFileSync(join(root, "workspaces.json"), "{}");
+	writeFileSync(join(root, "workspace-creations.json"), "{}");
 	writeFileSync(join(root, "terminals.json"), "[]");
 	writeFileSync(join(root, "config.json"), "[]");
 	writeFileSync(join(root, "environment.json"), "{ not json");
 
 	expect(loadProjects()).toEqual([]);
 	expect(loadWorkspaces()).toEqual([]);
+	expect(loadWorkspaceCreations()).toEqual([]);
 	expect(loadTerminalSessions()).toEqual({});
 	expect(loadConfig()).toEqual(DEFAULT_CONFIG);
 	expect(loadHostEnvironment()).toEqual({ vars: [] });
 
 	expect(setAsideCopies("projects.json")).toEqual([""]);
 	expect(setAsideCopies("workspaces.json")).toEqual(["{}"]);
+	expect(setAsideCopies("workspace-creations.json")).toEqual(["{}"]);
 	expect(setAsideCopies("terminals.json")).toEqual(["[]"]);
 	expect(setAsideCopies("config.json")).toEqual(["[]"]);
 	expect(setAsideCopies("environment.json")).toEqual(["{ not json"]);
@@ -96,7 +107,9 @@ test("empty or wrongly shaped registry files are set aside and load as their emp
 test("missing registry files load as their empty default without leaving anything behind", () => {
 	expect(loadProjects()).toEqual([]);
 	expect(loadWorkspaces()).toEqual([]);
+	expect(loadWorkspaceCreations()).toEqual([]);
 	expect(loadTerminalSessions()).toEqual({});
+	expect(loadConfig()).toEqual(DEFAULT_CONFIG);
 	expect(readdirSync(root)).toEqual([]);
 });
 
@@ -129,6 +142,24 @@ function withUmask(mask: number, run: () => void): void {
 const registrySaves: Array<[string, () => void]> = [
 	["projects.json", () => saveProjects([project("a")])],
 	["workspaces.json", () => saveWorkspaces([workspace("a")])],
+	["chats.json", () => saveProjects([chatsContainer()])],
+	[
+		"workspace-creations.json",
+		() =>
+			saveWorkspaceCreations([
+				{
+					id: "a",
+					projectId: "p",
+					name: "a",
+					branch: "a",
+					baseBranch: "main",
+					worktreePath: join(root, "a"),
+					state: "running",
+					phase: "preparing",
+					startedAt: 1,
+				},
+			]),
+	],
 	[
 		"terminals.json",
 		() => saveTerminalSessions({ a: [{ tabKey: "t", title: "zsh", recorded: "out" }] }),

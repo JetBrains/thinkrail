@@ -487,9 +487,7 @@ function readChatsStore(): ChatsStore {
 }
 
 function setAsideChats(root: string, path: string): ChatsStore {
-	try {
-		renameSync(path, `${path}.corrupt-${Date.now()}`);
-	} catch {}
+	setAside(path);
 	return remember(root, { kind: "set-aside" });
 }
 
