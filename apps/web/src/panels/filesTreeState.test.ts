@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { StablePreferenceAdapter } from "../clientPreferences";
+import { nullProto } from "../lib";
 import { useAppStore } from "../store";
 import {
 	initFilesTreePersistence,
@@ -53,7 +54,10 @@ test("persistence hydrates the store and writes later changes back", () => {
 			w1: { expanded: ["src"], changedCollapsed: [], scroll: {}, seenActivePath: null },
 		}),
 	);
-	useAppStore.setState({ filesTreeByWorkspace: {}, removedWorkspaceIds: Object.create(null) });
+	useAppStore.setState({
+		filesTreeByWorkspace: {},
+		removedWorkspaceIds: nullProto<Record<string, true>>(),
+	});
 	const dispose = initFilesTreePersistence(adapter);
 	expect(useAppStore.getState().filesTreeByWorkspace.w1?.expanded).toEqual(["src"]);
 

@@ -102,6 +102,9 @@ function engineApi(
 	};
 }
 
+/** The pi built-in extensions the host supplies as its own replaceable inline factories. */
+export const HOST_BUILTIN_EXTENSION_NAMES = ["mcp", "tool-search"] as const;
+
 export function createMcpEngine(options: {
 	loadConfig: (ctx: ExtensionContext) => LoadedMcpConfig;
 	lockSignIns?: boolean;
@@ -117,7 +120,7 @@ export function createMcpEngine(options: {
 	return {
 		extensions: [
 			{
-				name: "mcp",
+				name: HOST_BUILTIN_EXTENSION_NAMES[0],
 				replaceable: true,
 				builtin: true,
 				factory: (pi) => {
@@ -129,7 +132,7 @@ export function createMcpEngine(options: {
 				},
 			},
 			{
-				name: "tool-search",
+				name: HOST_BUILTIN_EXTENSION_NAMES[1],
 				replaceable: true,
 				builtin: true,
 				factory: createToolSearchExtension(),

@@ -21,10 +21,12 @@ import {
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton, withIconClass } from "@thinkrail/ui/button";
+import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { copyText } from "@/lib";
 import { getTransport } from "@/transport";
 import { SettingsSwitch } from "./SettingsSwitch";
+import { SETTINGS_INPUT, useSettingsDraft } from "./settingsDraft";
 
 const LOGIN_CMD = "central login";
 
@@ -49,16 +51,23 @@ function JbcentralQuotaSettings({
 }: JbcentralQuotaSettingsProps) {
 	const t = useT();
 	const savedText = String(refreshSeconds);
-	const [draft, setDraft] = useState(savedText);
-	const [submitted, setSubmitted] = useState<string | null>(null);
 	const [saveError, setSaveError] = useState<string | null>(null);
-
-	useEffect(() => {
-		setDraft(savedText);
-		setSubmitted(null);
-	}, [savedText]);
-
-	const invalid = !isJbcentralQuotaRefreshSeconds(Number(draft));
+	const { invalid, inputProps } = useSettingsDraft({
+		saved: savedText,
+		isValid: (draft) => isJbcentralQuotaRefreshSeconds(Number(draft)),
+		commit: (draft) => {
+			setSaveError(null);
+			return onRefreshSecondsChange(Number(draft)).then(
+				() => true,
+				() => {
+					setSaveError(t("settings.jbcentral.quota.intervalSaveFailed"));
+					return false;
+				},
+			);
+		},
+		enterBlurs: true,
+		onEdit: () => setSaveError(null),
+	});
 	const error = invalid
 		? t("settings.jbcentral.quota.invalid", {
 				min: JBCENTRAL_QUOTA_REFRESH_SECONDS.min,
@@ -66,17 +75,6 @@ function JbcentralQuotaSettings({
 			})
 		: saveError;
 	const errorId = "jbcentral-quota-interval-error";
-
-	const commitInterval = () => {
-		if (invalid || draft === savedText || draft === submitted) return;
-		setSubmitted(draft);
-		setSaveError(null);
-		onRefreshSecondsChange(Number(draft)).catch(() => {
-			setDraft(savedText);
-			setSubmitted(null);
-			setSaveError(t("settings.jbcentral.quota.intervalSaveFailed"));
-		});
-	};
 
 	return (
 		<div
@@ -107,30 +105,13 @@ function JbcentralQuotaSettings({
 					type="number"
 					inputMode="numeric"
 					data-testid="jbcentral-quota-interval"
-					data-settings-draft-input
 					min={JBCENTRAL_QUOTA_REFRESH_SECONDS.min}
 					max={JBCENTRAL_QUOTA_REFRESH_SECONDS.max}
 					step={1}
-					value={draft}
+					{...inputProps}
 					disabled={!enabled}
-					aria-invalid={invalid}
 					aria-describedby={error ? errorId : undefined}
-					onChange={(event) => {
-						setDraft(event.currentTarget.value);
-						setSubmitted(null);
-						setSaveError(null);
-					}}
-					onBlur={commitInterval}
-					onKeyDown={(event) => {
-						if (event.key === "Enter") {
-							event.preventDefault();
-							event.currentTarget.blur();
-						} else if (event.key === "Escape") {
-							setDraft(savedText);
-							setSaveError(null);
-						}
-					}}
-					className="h-32 w-64 rounded-sm border border-control-border-default bg-control-bg px-8 tr-text-ui text-text-default outline-none focus:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text aria-invalid:border-feedback-error"
+					className={cn(SETTINGS_INPUT, "w-64")}
 				/>
 			</div>
 

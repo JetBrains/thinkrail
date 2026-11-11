@@ -118,7 +118,7 @@ export function ExistingWorktreeDialog({
 
 				{loadError ? (
 					<div className="flex flex-col items-start gap-8 rounded-sm bg-feedback-error-subtle p-12 text-feedback-error tr-text-ui">
-						<p>{loadError}</p>
+						<p className="max-w-full">{loadError}</p>
 						<Button
 							variant="outline"
 							size="m"
@@ -142,7 +142,7 @@ export function ExistingWorktreeDialog({
 
 				{candidates && candidates.length > 0 ? (
 					<div
-						className="flex max-h-[min(50vh,24rem)] flex-col gap-4 overflow-y-auto pr-4 motion-safe:animate-reveal"
+						className="relative flex max-h-[min(50vh,24rem)] flex-col gap-4 overflow-y-auto pr-4 motion-safe:animate-reveal"
 						data-testid="existing-worktree-list"
 					>
 						{candidates.map((candidate) => {

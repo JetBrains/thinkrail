@@ -9,6 +9,7 @@ import {
 	worktreeRow,
 } from "./fixtures/app";
 import { commitFile, gitAs } from "./fixtures/git";
+import { writeGhScenario } from "./fixtures/github";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 
 // The topbar's Remote and Pull request segments without a forge review (v87 `workspace.branchStatus`).
@@ -36,6 +37,7 @@ test("Remote publishes, then pushes new commits, with no PR involved", async ({
 	const remoteValue = page.getByTestId("scope-remote-value");
 	const remoteAction = page.getByTestId("scope-ship-remote-primary");
 	await expect(remoteValue).toHaveAttribute("data-kind", "noOrigin");
+	await revalidate(page);
 	await expect(page.getByTestId("scope-review-value")).toHaveText("No PR");
 
 	commitFile(workspace.worktreePath, "ship.ts", "export const ship = 1;\n", "feat: ship it");
@@ -186,6 +188,7 @@ test("Open PR from the topbar composes from commits or the repository template",
 			"https://github.com/acme/sample.git",
 		);
 		gitAs(workspace.worktreePath, "config", "protocol.https.allow", "never");
+		writeGhScenario({ prs: [] });
 		await revalidate(page);
 
 		const openPr = page.getByTestId("scope-ship-review-primary");

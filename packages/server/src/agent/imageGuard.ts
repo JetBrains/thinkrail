@@ -184,7 +184,7 @@ export function guardOversizedImages(messages: AgentMessage[]): AgentMessage[] |
 			const note = notes.get(block);
 			return note ? { type: "text", text: note } : block;
 		});
-		return Object.assign({}, message, { content }) as AgentMessage;
+		return Object.assign({}, message, { content });
 	});
 	return guarded;
 }

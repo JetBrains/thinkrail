@@ -26,19 +26,17 @@ function context(
 	};
 }
 
-test.each([
-	"runtime",
-	"models_json_key",
-	"models_json_command",
-	"fallback",
-] as const)("explicit %s key configuration does not inherit a cached subscription label", (source) => {
-	expect(
-		observedAuthMethod(
-			"anthropic",
-			context({ configured: true, source }, { oauth: true, subscription: true }),
-		),
-	).toBe("api_key");
-});
+test.each(["runtime", "models_json_key", "models_json_command", "fallback"] as const)(
+	"explicit %s key configuration does not inherit a cached subscription label",
+	(source) => {
+		expect(
+			observedAuthMethod(
+				"anthropic",
+				context({ configured: true, source }, { oauth: true, subscription: true }),
+			),
+		).toBe("api_key");
+	},
+);
 
 test("cached auth distinguishes subscription sign-in, ordinary OAuth and stored API keys", () => {
 	expect(observedAuthMethod("anthropic", context(undefined, { subscription: true }))).toBe(
@@ -59,11 +57,14 @@ test.each([
 	["amazon-bedrock", "AWS_BEARER_TOKEN_BEDROCK", "api_key"],
 	["amazon-bedrock", "AWS_PROFILE", "other"],
 	["amazon-bedrock", "ECS task role", "other"],
-] as const)("%s %s is classified from metadata without resolving its value", (provider, label, expected) => {
-	expect(
-		observedAuthMethod(provider, context({ configured: true, source: "environment", label })),
-	).toBe(expected);
-});
+] as const)(
+	"%s %s is classified from metadata without resolving its value",
+	(provider, label, expected) => {
+		expect(
+			observedAuthMethod(provider, context({ configured: true, source: "environment", label })),
+		).toBe(expected);
+	},
+);
 
 test("mixed cloud and private credential paths stay conservative", () => {
 	for (const provider of ["amazon-bedrock", "google-vertex", "private-provider", "local-server"]) {
