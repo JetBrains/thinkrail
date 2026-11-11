@@ -5,6 +5,7 @@ export {
 } from "./errorReports";
 export { errorText } from "./errorText";
 export { hostUrl, uploadUserFont } from "./fonts";
+export { instanceToken, setInstanceTokenForTests } from "./instanceToken";
 export { requestMcpList, watchMcpWorkspace } from "./mcp";
 export { RequestError, RequestTimeoutError, wsErrorCode } from "./requestError";
 export {

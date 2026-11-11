@@ -189,9 +189,10 @@ test("the host passes /files its maxBytes from the request URL", async () => {
 	try {
 		server = await createServer({ port: 0, host: "127.0.0.1", analytics: { mute: true } });
 		const base = `http://127.0.0.1:${server.port}/files/w1/notes.md`;
-		expect((await fetch(`${base}?maxBytes=8`)).status).toBe(200);
-		expect((await fetch(`${base}?maxBytes=7`)).status).toBe(413);
-		expect((await fetch(`${base}?maxBytes=x`)).status).toBe(400);
+		const token = `token=${server.authToken}`;
+		expect((await fetch(`${base}?${token}&maxBytes=8`)).status).toBe(200);
+		expect((await fetch(`${base}?${token}&maxBytes=7`)).status).toBe(413);
+		expect((await fetch(`${base}?${token}&maxBytes=x`)).status).toBe(400);
 	} finally {
 		await server?.shutdown();
 		resetAnalyticsForTests();

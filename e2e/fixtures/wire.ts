@@ -1,4 +1,10 @@
-import type { WsMethodName, WsParams, WsRequest, WsResult } from "@thinkrail/contracts";
+import {
+	instanceTokenFromHtml,
+	type WsMethodName,
+	type WsParams,
+	type WsRequest,
+	type WsResult,
+} from "@thinkrail/contracts";
 import { E2E_PORT } from "./paths";
 
 export class E2eWireTransientError extends Error {}
@@ -19,7 +25,11 @@ export class E2eWire {
 	}
 
 	static async connect(port = E2E_PORT, timeoutMs = 10_000): Promise<E2eWire> {
-		const socket = new WebSocket(`ws://localhost:${port}/ws`);
+		const page = await fetch(`http://localhost:${port}/`, {
+			signal: AbortSignal.timeout(timeoutMs),
+		});
+		const token = instanceTokenFromHtml(await page.text()) ?? "";
+		const socket = new WebSocket(`ws://localhost:${port}/ws?token=${encodeURIComponent(token)}`);
 		await new Promise<void>((resolve, reject) => {
 			const timer = setTimeout(() => {
 				socket.close();

@@ -33,7 +33,14 @@ bytes are** — the one byte-level classification every content read in the host
   `changes` module's atomic writes. Lexical escapes, `.git`, and an existing symlink chain whose resolved
   target leaves the worktree are refused; missing leaf paths are allowed so a deleted file can be
   restored. `changes` passes `{ followLeaf: false }` so containment validates through the parent and its
-  own `lstat` can reject even an escaping leaf symlink without following it. **`readableFileSize(root,
+  own `lstat` can reject even an escaping leaf symlink without following it. Following the leaf, the
+  existing target is re-resolved through `realpath` and re-checked against the canonical root; I/O uses
+  that canonical path while `readDir` still reports paths relative to the logical root, so a symlinked
+  worktree or directory keeps its worktree-relative node paths. `readFile` then opens the canonical path
+  with `O_NOFOLLOW` and reads through that descriptor, so a leaf swapped for a symlink after the check
+  fails (`ELOOP` → "Path escapes the worktree") instead of being read (#920 Finding-3). Residual: a
+  directory component swapped between `realpath` and `open` is not covered, and Windows has no
+  `O_NOFOLLOW`, where only the re-check applies. **`readableFileSize(root,
   path)`** applies the same rule under a root without a workspace lookup: the byte size of the regular
   file `readFile` would serve, `"missing"` for anything it would refuse or cannot read as a file (an
   escape, `.git`, a directory, a gone, dangling or looping path), `null` when the stat failed otherwise

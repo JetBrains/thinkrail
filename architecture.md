@@ -94,7 +94,12 @@ dependency. This keeps test process drivers outside both launchers and the serve
    protocol version so an independently-shipped UI can detect host-version drift.
 4. **Transport endpoint is a parameter.** Defaults to same-origin (`location.host`); a remote browser,
    desktop, or mobile client points it at the selected host's Tailscale MagicDNS name. Native resume state
-   is keyed by backend profile so ids from one host are never interpreted against another.
+   is keyed by backend profile so ids from one host are never interpreted against another. The host gates
+   its sockets and `/files`/`/blob` on a persisted per-instance token it embeds only in the page it serves,
+   refuses a foreign `Host` (DNS rebinding) and a foreign `Origin` on socket upgrades — both derived from
+   the configured endpoint; a wildcard `--host` bind cannot enumerate its names and so leaves trust to the
+   token. A client that does not load the host-served page (a native shell with its own bundle) must
+   obtain the token out of band. See `packages/server/src/host/SPEC.md`.
 5. **UI = panels + shell.** Layout-agnostic, store-driven panels (project→workspace nav, file tree,
    the code renderer, changes/diff, workspace-local review, terminal, chat, composer) never know their
    arrangement. Each desktop frontend window owns one locally persisted, resource-free workbench frame: a
@@ -129,10 +134,12 @@ dependency. This keeps test process drivers outside both launchers and the serve
    GitHub PR through the user's own `gh` CLI (no stored tokens, no provider REST API), body rendered from
    the verified plan, with a compare-URL fallback when `gh`/GitHub isn't available (see
    [[submodule-server-pr]]).
-7. **Auth is external.** Tailscale ACLs / device identity are the auth; the app carries an `owner` field,
-   not a login UI. The host sends no CORS headers, and its one HTTP write route (`PUT /fonts/<file>`)
+7. **Auth is external.** Tailscale ACLs / device identity are the network auth; the app carries an `owner`
+   field, not a login UI. The host sends no CORS headers, and its one HTTP write route (`PUT /fonts/<file>`)
    requires a non-simple request header, so a website the user visits cannot write through it
-   ([[submodule-server-host]]).
+   ([[submodule-server-host]]). The per-instance token and `Host`/`Origin` checks in Decision 4 are
+   orthogonal: they stop a co-located browser page from hijacking the local host, which network ACLs do
+   not cover.
 8. **Hydrate-then-stream (every client reconstructs domain state from the host).** A client never relies on
    having *witnessed* events to know domain state—on connect it **reads** current state, then **subscribes**
    to live deltas. The host exposes `project.list` / `workspace.list` / **`session.list`** /

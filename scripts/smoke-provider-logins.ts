@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -71,7 +72,7 @@ class Wire {
 	}
 
 	static async connect(port: number): Promise<Wire> {
-		const socket = new WebSocket(`ws://localhost:${port}/ws`);
+		const socket = new WebSocket(`ws://localhost:${port}/ws?token=${hostToken}`);
 		await new Promise((resolve, reject) => {
 			socket.addEventListener("open", resolve, { once: true });
 			socket.addEventListener("error", reject, { once: true });
@@ -165,6 +166,7 @@ async function probeMethod(
 	return branches;
 }
 
+const hostToken = randomBytes(32).toString("base64url");
 const sandbox = mkdtempSync(join(tmpdir(), "thinkrail-smoke-logins-"));
 for (const dir of ["data", "home", "pi-agent"]) mkdirSync(join(sandbox, dir));
 const host = spawn("bun", ["--no-env-file", join(repoRoot, "packages/server/src/dev.ts")], {
@@ -174,6 +176,7 @@ const host = spawn("bun", ["--no-env-file", join(repoRoot, "packages/server/src/
 		...toolHomeEnv(join(sandbox, "home")),
 		THINKRAIL_PORT: "0",
 		THINKRAIL_DATA_DIR: join(sandbox, "data"),
+		THINKRAIL_DEV_AUTH_TOKEN: hostToken,
 		PI_CODING_AGENT_DIR: join(sandbox, "pi-agent"),
 		THINKRAIL_NO_ANALYTICS: "1",
 	},

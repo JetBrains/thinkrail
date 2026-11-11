@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { join, normalize } from "node:path";
 import type {
 	HostPlatform,
@@ -16,6 +16,8 @@ import {
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
 	GITHUB_STAR_PROTOCOL_VERSION,
+	INSTANCE_TOKEN_PARAM,
+	instanceTokenMeta,
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
@@ -113,7 +115,7 @@ import {
 import { watchUserFonts } from "../fonts";
 import { watchLocalLocales } from "../locales";
 import { logger, observeLoggedErrors } from "../log";
-import { loadWorkspaces } from "../persistence";
+import { ensureInstanceToken, loadWorkspaces } from "../persistence";
 import {
 	getProjects,
 	grantProjectMcpTool,
@@ -257,10 +259,12 @@ export interface CreateServerOptions {
 		check(): Promise<HostUpdateNotice | null>;
 		run(): Promise<void>;
 	};
+	authToken?: string;
 }
 
 export interface RunningServer {
 	readonly port: number;
+	readonly authToken: string;
 	startAttributionClaim: () => void;
 	stop: () => void;
 	shutdown: () => Promise<void>;
@@ -304,6 +308,37 @@ function clientProtocolVersion(value: string | null): number {
 	return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
 }
 
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+const WILDCARD_HOSTS = new Set(["0.0.0.0", "::"]);
+
+function bareHostname(value: string): string {
+	return value.toLowerCase().replace(/^\[|\]$/g, "");
+}
+
+function hostnameOf(value: string, withScheme: boolean): string | null {
+	try {
+		return bareHostname(new URL(withScheme ? value : `http://${value}`).hostname);
+	} catch {
+		return null;
+	}
+}
+
+function isBoundHostname(candidate: string | null, host: string): boolean {
+	if (candidate === null) return false;
+	const bound = bareHostname(host);
+	if (WILDCARD_HOSTS.has(bound)) return true;
+	if (LOOPBACK_HOSTS.has(bound) && LOOPBACK_HOSTS.has(candidate)) return true;
+	return candidate === bound;
+}
+
+function isTrustedHostHeader(value: string | null, host: string): boolean {
+	return value === null || isBoundHostname(hostnameOf(value, false), host);
+}
+
+function isTrustedOrigin(origin: string | null, host: string): boolean {
+	return origin === null || isBoundHostname(hostnameOf(origin, true), host);
+}
+
 function sameHostUpdateRelease(
 	current: HostUpdateNotice | undefined,
 	next: HostUpdateNotice,
@@ -334,6 +369,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		appVersion,
 		analytics,
 		hostUpdate,
+		authToken = ensureInstanceToken(),
 	} = options;
 
 	setSessionProjectResolver((workspaceId) => {
@@ -400,11 +436,27 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		);
 	};
 
+	const expectedToken = Buffer.from(authToken);
+	const hasInstanceToken = (url: URL): boolean => {
+		const presented = Buffer.from(url.searchParams.get(INSTANCE_TOKEN_PARAM) ?? "");
+		return presented.length === expectedToken.length && timingSafeEqual(presented, expectedToken);
+	};
+
 	const server = Bun.serve<SocketData, never>({
 		port,
 		hostname: host,
 		async fetch(req, srv) {
 			const url = new URL(req.url);
+			if (!isTrustedHostHeader(req.headers.get("host"), host)) {
+				return new Response("forbidden host", { status: 403 });
+			}
+			const isSocket = url.pathname === "/ws" || url.pathname === SPEECH_SOCKET_ROUTE;
+			if (isSocket && !isTrustedOrigin(req.headers.get("origin"), host)) {
+				return new Response("forbidden origin", { status: 403 });
+			}
+			if (isSocket && !hasInstanceToken(url)) {
+				return new Response("unauthorized", { status: 401 });
+			}
 			if (url.pathname === "/ws") {
 				const clientKey = url.searchParams.get("client") ?? `anon-${randomUUID()}`;
 				const protocolVersion = clientProtocolVersion(url.searchParams.get("protocol"));
@@ -427,16 +479,18 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				return new Response("ok");
 			}
 			if (url.pathname.startsWith(FILES_PREFIX)) {
+				if (!hasInstanceToken(url)) return new Response("unauthorized", { status: 401 });
 				return serveWorktreeFile(url.pathname, url.searchParams.get("maxBytes"));
 			}
 			if (url.pathname.startsWith(BLOB_PREFIX)) {
+				if (!hasInstanceToken(url)) return new Response("unauthorized", { status: 401 });
 				return serveBlob(url.pathname, req.signal);
 			}
 			if (url.pathname.startsWith(USER_FONTS_ROUTE)) {
 				return serveUserFonts(req, url.pathname);
 			}
 			if (staticDir) {
-				return serveStatic(url.pathname, staticDir);
+				return serveStatic(url.pathname, staticDir, authToken);
 			}
 			return new Response("not found", { status: 404 });
 		},
@@ -1214,6 +1268,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		get port() {
 			return server.port ?? port;
 		},
+		authToken,
 		startAttributionClaim: startAttributionClaimWhenReady,
 		stop,
 		shutdown,
@@ -1273,12 +1328,47 @@ function restoreSeamDefaults(): void {
 	setModelListingPublisher(null);
 }
 
-async function serveStatic(pathname: string, staticDir: string): Promise<Response> {
+const injectedIndexCache = new Map<string, string>();
+
+async function injectedIndex(
+	file: Bun.BunFile,
+	staticDir: string,
+	authToken: string,
+): Promise<string> {
+	const key = `${staticDir}\0${authToken}`;
+	const cached = injectedIndexCache.get(key);
+	if (cached !== undefined) return cached;
+	const html = await file.text();
+	const meta = instanceTokenMeta(authToken);
+	const injected = html.includes("</head>")
+		? html.replace("</head>", `${meta}</head>`)
+		: `${meta}${html}`;
+	injectedIndexCache.set(key, injected);
+	return injected;
+}
+
+async function serveIndex(
+	file: Bun.BunFile,
+	staticDir: string,
+	authToken: string,
+): Promise<Response> {
+	return new Response(await injectedIndex(file, staticDir, authToken), {
+		headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" },
+	});
+}
+
+async function serveStatic(
+	pathname: string,
+	staticDir: string,
+	authToken: string,
+): Promise<Response> {
 	const safe = normalize(pathname).replace(/^(\.\.(\/|\\|$))+/, "");
 	const requested = safe === "/" || safe === "" ? "index.html" : safe;
 	const file = Bun.file(join(staticDir, requested));
+	if (requested.replace(/^[\\/]+/, "") === "index.html" && (await file.exists()))
+		return serveIndex(file, staticDir, authToken);
 	if (await file.exists()) return new Response(file);
 	const index = Bun.file(join(staticDir, "index.html"));
-	if (await index.exists()) return new Response(index);
+	if (await index.exists()) return serveIndex(index, staticDir, authToken);
 	return new Response("not found", { status: 404 });
 }
