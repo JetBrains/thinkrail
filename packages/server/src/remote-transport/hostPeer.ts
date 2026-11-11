@@ -1,7 +1,7 @@
 import { type IceServer, withPublicStun } from "@thinkrail/contracts";
-import { RTCPeerConnection } from "werift";
 import type { RemoteChannel } from "./channel";
 import type { PortLease, PortMapper } from "./natPmp";
+import { RTCPeerConnection } from "./werift";
 import { toRemoteChannel } from "./weriftRemoteChannel";
 
 export interface HostPeerSignal {
