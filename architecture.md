@@ -124,7 +124,8 @@ artifact consumes those rather than re-deriving them.
    one host at a time:** installing a transport closes the previous one and resets every host-scoped slice,
    and frontend-local storage is keyed by the transport's `backendKey()`. A client that spans several
    computers — the phone shell — keeps its cross-computer overview in `remote-client` and mounts the store on
-   the computer whose chat is open, rather than adding a host dimension to the store.
+   the computer whose chat is open, rather than adding a host dimension to the store. How a paired phone
+   reaches its host from any network (pairing, signaling routes, WebRTC, reconnect): [[remote-access]].
 5. **UI = panels + shell.** Layout-agnostic, store-driven panels (project→workspace nav, file tree,
    the code renderer, changes/diff, workspace-local review, terminal, chat, composer) never know their
    arrangement. Each desktop frontend window owns one locally persisted, resource-free workbench frame: a
