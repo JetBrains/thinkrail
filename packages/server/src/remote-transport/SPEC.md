@@ -92,7 +92,9 @@ broker (the host's own for Wi‑Fi/Tailscale, or a hosted one) and public Nostr 
     to `receiveUnreadable`). Each session is dropped after a 60s signaling window — closed if its channel never
     opened (`HostSession.opened`), only forgotten if it did — and bounded: 32 live sessions (an unknown sender
     past it is ignored and times out) and 64 frames each (past it the sender stays blocked until its window
-    ends).
+    ends). Frames created before this run started (less 2s of clock skew) are ignored: a relay replaying the
+    last minute to a restarted host would otherwise open a fresh handshake for a phone's live attempt and
+    answer it a second `challenge` and a `rejected`.
   - `remoteAccess.ts` — `startRemoteAccess`, the composition root: loads identity, connects to the broker
     and, given `nostrRelays`, to Nostr, both feeding one session factory; runs each device's handshake +
     WebRTC, and mints one-time pairing links (`issueLink`) carrying every `advertised` relay address

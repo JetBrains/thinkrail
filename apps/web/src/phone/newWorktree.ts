@@ -5,6 +5,7 @@ import type {
 	Workspace,
 	WsResult,
 } from "@thinkrail/contracts";
+import { reasonOf } from "./async";
 
 /** What the New worktree screen sends, as the IDE's New workspace dialog does. */
 export interface NewWorktreeChoice {
@@ -15,6 +16,8 @@ export interface NewWorktreeChoice {
 	model: { model: WireModel; thinkingLevel: ThinkingLevel } | null;
 	/** The first message; blank opens an empty chat. */
 	prompt: string;
+	/** The worktree an earlier try created before its chat failed: a retry starts the chat there instead of cutting another. */
+	created?: Workspace | null;
 }
 
 export interface StartedWorktree {
@@ -38,31 +41,30 @@ export class WorktreeStartError extends Error {
 
 type Request = <T>(method: string, params: unknown) => Promise<T>;
 
-const messageOf = (error: unknown): string =>
-	error instanceof Error ? error.message : String(error);
-
 /** Create the worktree, start its chat with the chosen model, and send the task when there is one. */
 export async function startWorktree(
 	request: Request,
 	choice: NewWorktreeChoice,
 ): Promise<StartedWorktree> {
-	const workspace = await request<WsResult<"workspace.create">>("workspace.create", {
-		projectId: choice.projectId,
-		...(choice.baseRef ? { baseRef: choice.baseRef } : {}),
-	}).catch((error: unknown) => {
-		throw new WorktreeStartError("create", messageOf(error), null);
-	});
+	const workspace =
+		choice.created ??
+		(await request<WsResult<"workspace.create">>("workspace.create", {
+			projectId: choice.projectId,
+			...(choice.baseRef ? { baseRef: choice.baseRef } : {}),
+		}).catch((error: unknown) => {
+			throw new WorktreeStartError("create", reasonOf(error), null);
+		}));
 	const chat = await request<WsResult<"session.create">>("session.create", {
 		workspaceId: workspace.id,
 		...(choice.model ? choice.model : {}),
 	}).catch((error: unknown) => {
-		throw new WorktreeStartError("chat", messageOf(error), workspace);
+		throw new WorktreeStartError("chat", reasonOf(error), workspace);
 	});
 	const text = choice.prompt.trim();
 	const promptError = text
 		? await request("session.prompt", { sessionId: chat.sessionId, text }).then(
 				() => null,
-				messageOf,
+				reasonOf,
 			)
 		: null;
 	return { workspace, chat, promptError };

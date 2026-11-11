@@ -5,12 +5,14 @@ import type {
 	Project,
 	ThinkingLevel,
 	WireModel,
+	Workspace,
 } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import type { DeviceWireClient } from "@thinkrail/remote-client";
 import { Button } from "@thinkrail/ui/button";
 import { Textarea } from "@thinkrail/ui/textarea";
 import { useState } from "react";
+import { reasonOf, useMounted } from "./async";
 import { Screen } from "./layout";
 import { ModelSheet } from "./ModelSheet";
 import {
@@ -57,6 +59,8 @@ export function NewWorktreeScreen({
 	const [branchSheet, setBranchSheet] = useState(false);
 	const [creating, setCreating] = useState(false);
 	const [failure, setFailure] = useState<string | null>(null);
+	const [created, setCreated] = useState<Workspace | null>(null);
+	const mounted = useMounted();
 
 	const defaultBranch = branches.kind === "ready" ? branches.value.defaultBranch : null;
 	const base = baseRef ?? defaultBranch;
@@ -74,11 +78,15 @@ export function NewWorktreeScreen({
 			baseRef: baseRef && baseRef !== defaultBranch ? baseRef : null,
 			model: picked,
 			prompt,
+			created,
 		}).then(
-			(started) => onStarted(started, prompt.trim()),
+			(started) => {
+				if (mounted.current) onStarted(started, prompt.trim());
+			},
 			(error: unknown) => {
 				setCreating(false);
-				const reason = error instanceof Error ? error.message : String(error);
+				if (error instanceof WorktreeStartError && error.workspace) setCreated(error.workspace);
+				const reason = reasonOf(error);
 				setFailure(
 					error instanceof WorktreeStartError && error.step === "chat"
 						? t("mobile.newWorktree.chatFailed", { reason })
@@ -143,7 +151,7 @@ export function NewWorktreeScreen({
 						<button
 							type="button"
 							data-testid="new-worktree-base"
-							disabled={branches.kind !== "ready" || creating}
+							disabled={branches.kind !== "ready" || creating || created !== null}
 							onClick={() => setBranchSheet(true)}
 							className="flex min-h-touch w-full items-center gap-12 border-0 bg-transparent px-16 py-12 text-left active:bg-control-bg-hovered disabled:opacity-60"
 						>

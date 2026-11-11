@@ -40,6 +40,8 @@ export function createReconnectLoop(options: ReconnectLoopOptions): ReconnectLoo
 	let backoff = initial;
 	let timer: unknown = null;
 	let attempting = false;
+	/** The connection an attempt just made dropped before the attempt's result came back. */
+	let droppedMidAttempt = false;
 	let open = false;
 	let stopped = false;
 
@@ -57,10 +59,15 @@ export function createReconnectLoop(options: ReconnectLoopOptions): ReconnectLoo
 		if (stopped || attempting || open) return;
 		cancelTimer();
 		attempting = true;
+		droppedMidAttempt = false;
 		options.attempt().then(
 			() => {
 				attempting = false;
 				if (stopped) return;
+				if (droppedMidAttempt) {
+					schedule();
+					return;
+				}
 				backoff = initial;
 				setOpen(true);
 			},
@@ -96,6 +103,7 @@ export function createReconnectLoop(options: ReconnectLoopOptions): ReconnectLoo
 			setOpen(true);
 		},
 		dropped() {
+			if (attempting) droppedMidAttempt = true;
 			setOpen(false);
 			schedule();
 		},

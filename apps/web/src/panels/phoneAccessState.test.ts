@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import type { RemoteAccessStatus } from "@thinkrail/contracts";
 import {
+	createLatestGate,
 	initialPhoneAccess,
 	newDevice,
 	type PhoneAccessEvent,
@@ -213,4 +214,23 @@ test("a status read that stays off does not count as another off", () => {
 	const once = run({ type: "status", status: on }, { type: "status", status: off });
 	const twice = phoneAccessReducer(once, { type: "status", status: off });
 	expect(twice.generation).toBe(once.generation);
+});
+
+test("a failed first read is shown until a retry, and a status that arrives clears it", () => {
+	const failed = run({ type: "loadFailed" });
+	expect(failed.loadFailed).toBe(true);
+	expect(phoneAccessReducer(failed, { type: "reload" }).loadFailed).toBe(false);
+	expect(phoneAccessReducer(failed, { type: "status", status: on }).loadFailed).toBe(false);
+	expect(run({ type: "status", status: on }, { type: "loadFailed" }).loadFailed).toBe(false);
+});
+
+test("the latest gate drops a reply to a request sent before one already taken", () => {
+	const gate = createLatestGate();
+	const poll = gate.ticket();
+	const toggle = gate.ticket();
+	expect(gate.accept(toggle)).toBe(true);
+	expect(gate.accept(poll)).toBe(false);
+	const next = gate.ticket();
+	expect(gate.accept(next)).toBe(true);
+	expect(gate.accept(next)).toBe(false);
 });

@@ -37,7 +37,7 @@ export function ChatsScreen({
 }) {
 	const t = useT();
 	const sections = chatSections(items, done);
-	const placeOf = useChatPlaces(
+	const { placeOf, retry } = useChatPlaces(
 		controller,
 		sections.flatMap((group) => group.items),
 	);
@@ -69,11 +69,15 @@ export function ChatsScreen({
 							) : null}
 						</li>,
 						...rows.map((item) => {
-							const place = placeOf(item);
+							const found = placeOf(item);
+							const failed = found && "failed" in found ? found.failed : undefined;
+							const place = found && !("failed" in found) ? found : undefined;
 							const title = chatTitle(item.record.title, item.record.firstPrompt);
 							const where = place
 								? `${place.project.name} · ${workspaceName(t, place.workspace)}`
-								: undefined;
+								: failed !== undefined
+									? t("mobile.list.failed", { reason: failed })
+									: undefined;
 							return (
 								<ListRow
 									key={`${item.hostKey}:${item.record.sessionId}`}
@@ -88,6 +92,7 @@ export function ChatsScreen({
 									status={statusOf(item.record.state)}
 									onOpen={() => {
 										if (place) onOpen(item, place);
+										else if (failed !== undefined) retry();
 									}}
 								/>
 							);

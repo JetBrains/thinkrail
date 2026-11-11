@@ -2,6 +2,7 @@ import { RiBookOpenLine, RiRefreshLine, RiShieldCheckLine } from "@remixicon/rea
 import { ResourcesButton } from "@thinkrail/chat-ui/resources/ResourcesButton";
 import {
 	isLiveState,
+	type ResourceActions,
 	ResourceRow,
 	resourceId,
 	resourceState,
@@ -28,6 +29,7 @@ import { Button } from "@thinkrail/ui/button";
 import { Switch } from "@thinkrail/ui/switch";
 import { type ReactNode, useState } from "react";
 import { useNow } from "../components/useNow";
+import { reasonOf } from "./async";
 import { Loader, Notice } from "./layout";
 import { PageSheet } from "./sheet";
 import { useHostRequest } from "./useHostRequest";
@@ -64,8 +66,14 @@ export function ResourcesTool({
 		resources.filter((resource) => !isLiveState(resourceState(resource))),
 	);
 	const now = useNow();
-	const stop = (method: string, params: Record<string, string>): void => {
-		void client?.request(method, params).catch(() => {});
+	const [actions, setActions] = useState<ResourceActions>({});
+	const stop = (key: string, method: string, params: Record<string, string>): void => {
+		if (!client || actions[key]?.pending) return;
+		setActions((current) => ({ ...current, [key]: { pending: true, error: null } }));
+		client
+			.request(method, params)
+			.then(() => null, reasonOf)
+			.then((error) => setActions((current) => ({ ...current, [key]: { pending: false, error } })));
 	};
 	const section = (title: string, rows: typeof resources): ReactNode =>
 		rows.length > 0 ? (
@@ -78,7 +86,7 @@ export function ResourcesTool({
 							resource={resource}
 							now={now}
 							authoritative={!readOnly}
-							action={undefined}
+							action={actions[resourceId(resource)]}
 							onSelect={() => {
 								if (resource.kind !== "subagent") return;
 								setOpen(false);
@@ -86,12 +94,12 @@ export function ResourcesTool({
 							}}
 							onStop={() =>
 								resource.kind === "command"
-									? stop("backgroundCommand.stop", {
+									? stop(resourceId(resource), "backgroundCommand.stop", {
 											workspaceId,
 											sessionId,
 											commandId: resource.summary.id,
 										})
-									: stop("subagent.stop", {
+									: stop(resourceId(resource), "subagent.stop", {
 											workspaceId,
 											parentSessionId: sessionId,
 											childSessionId: resource.summary.childSessionId,

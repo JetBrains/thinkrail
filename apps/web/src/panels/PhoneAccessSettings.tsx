@@ -14,9 +14,13 @@ export type { ShownPairing } from "./usePhoneAccess";
 
 export interface PhoneAccessViewProps {
 	status: RemoteAccessStatus | null;
+	loadFailed: boolean;
 	pairing: ShownPairing | null;
+	issuing: boolean;
 	expired: boolean;
 	pending: boolean;
+	busyDevices: ReadonlySet<string>;
+	onReload: () => void;
 	onToggle: (enabled: boolean) => void;
 	onShowCode: () => void;
 	onCopyLink: (link: string) => void;
@@ -31,9 +35,13 @@ function clockTime(epochMs: number): string {
 
 export function PhoneAccessView({
 	status,
+	loadFailed,
 	pairing,
+	issuing,
 	expired,
 	pending,
+	busyDevices,
+	onReload,
 	onToggle,
 	onShowCode,
 	onCopyLink,
@@ -65,6 +73,26 @@ export function PhoneAccessView({
 						/>
 					}
 				/>
+				{loadFailed ? (
+					<div className="border-border-muted border-b py-12">
+						<SettingsNotice
+							variant="error"
+							testId="phone-access-load-failed"
+							action={
+								<Button
+									variant="outline"
+									size="m"
+									data-testid="phone-access-reload"
+									onClick={onReload}
+								>
+									{t("common.retry")}
+								</Button>
+							}
+						>
+							{t("settings.phone.loadFailed")}
+						</SettingsNotice>
+					</div>
+				) : null}
 				{enabled && phoneHasNoRoute(status) ? (
 					<div className="border-border-muted border-b py-12">
 						<SettingsNotice variant="warning" testId="phone-access-no-network">
@@ -82,6 +110,7 @@ export function PhoneAccessView({
 								size="m"
 								iconLeft={RiQrCodeLine}
 								data-testid="phone-access-show-code"
+								loading={issuing}
 								onClick={onShowCode}
 							>
 								{pairing ? t("settings.phone.newCode") : t("settings.phone.showCode")}
@@ -124,13 +153,23 @@ export function PhoneAccessView({
 			</SettingsGroup>
 			{reach ? <PhoneAccessNetwork reach={reach} /> : null}
 			<SettingsGroup title={t("settings.phone.devices")} testId="phone-access-devices">
-				{devices.length === 0 ? (
+				{status === null ? (
+					loadFailed ? null : (
+						<p
+							data-testid="phone-access-loading"
+							className="py-12 tr-text-metadata text-text-muted"
+						>
+							{t("common.loading")}
+						</p>
+					)
+				) : devices.length === 0 ? (
 					<p className="py-12 tr-text-metadata text-text-muted">{t("settings.phone.noDevices")}</p>
 				) : (
 					devices.map((device) => (
 						<PhoneDeviceRow
 							key={device.id}
 							device={device}
+							busy={busyDevices.has(device.id)}
 							onRename={onRename}
 							onSetAccess={onSetAccess}
 							onRevoke={onRevoke}
@@ -147,9 +186,13 @@ export function PhoneAccessSettings() {
 	return (
 		<PhoneAccessView
 			status={access.status}
+			loadFailed={access.loadFailed}
 			pairing={access.pairing}
+			issuing={access.issuing}
 			expired={access.expired}
 			pending={access.pending}
+			busyDevices={access.busyDevices}
+			onReload={access.reload}
 			onToggle={access.toggle}
 			onShowCode={access.showCode}
 			onCopyLink={access.copyLink}
