@@ -1708,7 +1708,7 @@
 	"search.palette.searching": "Buscando…",
 	"search.palette.title": "Buscar",
 	"search.preview.branch": "Rama",
-	"search.preview.from": "De",
+	"search.preview.from": "Desde",
 	"search.preview.review": "Revisión",
 	"search.preview.reviewClosed": "{{ref}} cerrado",
 	"search.preview.reviewMerged": "{{ref}} fusionado",

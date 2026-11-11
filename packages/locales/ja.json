@@ -2032,7 +2032,7 @@
 	"settings.packages.installDialog.sourceHelp.title": "次のいずれかを貼り付けできます:",
 	"settings.packages.installDialog.sourceHelpLabel": "ここに何を貼り付けできますか?",
 	"settings.packages.installDialog.sourceLabel": "ソース",
-	"settings.packages.installDialog.sourcePlaceholder": "@scope/package or https://pi.dev/packages/…",
+	"settings.packages.installDialog.sourcePlaceholder": "@scope/package または https://pi.dev/packages/…",
 	"settings.packages.installDialog.submit": "{{name}} をインストール",
 	"settings.packages.installDialog.timedOut": "インストールに想定より時間がかかっています — 一覧を確認してください。完了する場合もあります。",
 	"settings.packages.installDialog.title": "pi パッケージをインストール",
