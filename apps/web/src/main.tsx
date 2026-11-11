@@ -15,6 +15,7 @@ import { initProjectExpansionPersistence } from "./panels/projectExpansion";
 import { initSearchPreferences } from "./search";
 import { AppResourceHost } from "./shell/AppResourceHost";
 import { Shell } from "./shell/Shell";
+import { DictationLayer } from "./speech";
 import { applyThemePreference, initializeThemes, readThemeHint } from "./themes";
 import {
 	clientErrorReport,
@@ -48,6 +49,7 @@ function App() {
 				<AppResourceHost>
 					<Shell />
 				</AppResourceHost>
+				<DictationLayer />
 			</TooltipProvider>
 		</ErrorBoundary>
 	);

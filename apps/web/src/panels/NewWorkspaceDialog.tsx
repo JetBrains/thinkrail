@@ -4,6 +4,7 @@ import {
 	RiGitBranchLine as GitBranch,
 	RiHome2Line as House,
 	type RemixiconComponentType as LucideIcon,
+	RiChat3Line,
 	RiSparkling2Line as Sparkles,
 	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
@@ -40,6 +41,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { Textarea } from "@thinkrail/ui/textarea";
 import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { type DefaultPairOption, ModelEffortPicker } from "@/chat/ModelEffortPicker";
 import {
 	deriveProjectTrustNotice,
@@ -48,12 +50,7 @@ import {
 	trustGrantParams,
 	untrustedNoticeText,
 } from "@/chat/projectTrust";
-import {
-	imagePasteDropHandlers,
-	PROMPT_IMAGE_CHIPS_PADDING,
-	PromptImageChips,
-	usePromptImages,
-} from "@/chat/promptImages";
+import { imagePasteDropHandlers, PromptImageChips, usePromptImages } from "@/chat/promptImages";
 import { SkillsButton } from "@/chat/SkillsButton";
 import { SkillsDialog } from "@/chat/SkillsDialog";
 import { useModelCatalog } from "@/chat/useModelCatalog";
@@ -78,7 +75,9 @@ import {
 } from "@/prompt";
 import {
 	selectCatalogModel,
+	selectChatsContainer,
 	selectPickerModels,
+	selectRepoProjects,
 	toast,
 	useAppStore,
 	type WorkspaceRetryDraft,
@@ -86,9 +85,10 @@ import {
 import { createSessionWithSkillBaseline, errorText, getTransport } from "@/transport";
 import { BranchPicker } from "./BranchPicker";
 import { useBranchList } from "./branches";
+import { canStartProjectlessChat, startProjectlessChat } from "./chatActions";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
 
-type WorkspaceTarget = "worktree" | "default";
+type WorkspaceTarget = "worktree" | "default" | "chat";
 
 export function reconcileModel(
 	models: readonly WireModel[],
@@ -118,7 +118,8 @@ export function NewWorkspaceDialog({
 	onOpenChange,
 }: {
 	open: boolean;
-	projectId: string;
+	/** The repository new work starts in; `null` when none is open — the chat target is the only one left. */
+	projectId: string | null;
 	initialPrompt?: string;
 	promptNote?: string;
 	retryDraft?: WorkspaceRetryDraft;
@@ -126,10 +127,18 @@ export function NewWorkspaceDialog({
 }) {
 	const t = useT();
 	const projects = useAppStore((s) => s.projects);
+	const repoProjects = useAppStore(useShallow(selectRepoProjects));
+	const chatsContainer = useAppStore(selectChatsContainer);
+	const canChat = useAppStore(canStartProjectlessChat);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 
-	const [selectedProjectId, setSelectedProjectId] = useState(projectId);
-	const [target, setTarget] = useState<WorkspaceTarget>("worktree");
+	const initialTarget: WorkspaceTarget = projectId === null ? "chat" : "worktree";
+	const [selectedProjectId, setSelectedProjectId] = useState(
+		projectId ?? repoProjects[0]?.id ?? chatsContainer?.id ?? "",
+	);
+	const [target, setTarget] = useState<WorkspaceTarget>(initialTarget);
+	const chat = target === "chat";
+	const scopeProjectId = chat && chatsContainer ? chatsContainer.id : selectedProjectId;
 	const [baseRef, setBaseRef] = useState<string>("");
 	const [prompt, setPrompt] = useState("");
 	const [skillCommands, setSkillCommands] = useState<SlashCommandInfo[]>([]);
@@ -168,11 +177,11 @@ export function NewWorkspaceDialog({
 	const loadTemplate = useCallback(
 		(name: string) => {
 			const location: TemplateReadLocation = supportsProjectTemplatePreview
-				? { projectId: selectedProjectId }
+				? { projectId: scopeProjectId }
 				: {};
 			return getTransport().request("template.get", { ...location, name });
 		},
-		[selectedProjectId, supportsProjectTemplatePreview],
+		[scopeProjectId, supportsProjectTemplatePreview],
 	);
 	const applyTemplate = useCallback(
 		(template: ParsedTemplate) => {
@@ -184,7 +193,7 @@ export function NewWorkspaceDialog({
 	);
 	const { pending: templatePending, pick: pickTemplate } = useTemplateCommandPicker({
 		draft: prompt,
-		contextKey: `${selectedProjectId}:${supportsProjectTemplatePreview ? "project" : "global"}`,
+		contextKey: `${scopeProjectId}:${supportsProjectTemplatePreview ? "project" : "global"}`,
 		load: loadTemplate,
 		onApply: applyTemplate,
 	});
@@ -212,9 +221,12 @@ export function NewWorkspaceDialog({
 
 	useEffect(() => {
 		if (!open) return;
-		setSelectedProjectId(projectId);
+		const opened = useAppStore.getState();
+		setSelectedProjectId(
+			projectId ?? selectRepoProjects(opened)[0]?.id ?? selectChatsContainer(opened)?.id ?? "",
+		);
 		updatePromptDraft(retryDraft?.kickoff?.text ?? initialPrompt ?? "", null);
-		setTarget("worktree");
+		setTarget(initialTarget);
 		setCreating(false);
 		attachedImages.reset();
 		const retryImages = retryDraft?.kickoff?.images ?? [];
@@ -229,6 +241,7 @@ export function NewWorkspaceDialog({
 	}, [
 		open,
 		projectId,
+		initialTarget,
 		initialPrompt,
 		retryDraft,
 		updatePromptDraft,
@@ -237,11 +250,18 @@ export function NewWorkspaceDialog({
 	]);
 
 	useEffect(() => {
-		if (!open) return;
+		if (!open || chat) return;
 		if (projects.some((p) => p.id === selectedProjectId)) return;
 		onOpenChange(false);
 		toast.info(i18n.t("panels.newWorkspace.projectClosed"));
-	}, [open, projects, selectedProjectId, onOpenChange]);
+	}, [open, chat, projects, selectedProjectId, onOpenChange]);
+
+	const chooseTarget = (next: WorkspaceTarget) => {
+		setTarget(next);
+		if (next === "chat" || repoProjects.some((p) => p.id === selectedProjectId)) return;
+		const first = repoProjects[0];
+		if (first) setSelectedProjectId(first.id);
+	};
 
 	useEffect(() => {
 		if (!open) return;
@@ -249,20 +269,20 @@ export function NewWorkspaceDialog({
 		setSkillCommands([]);
 		setTemplates([]);
 		void slashCommandCatalogOrEmpty(() =>
-			getTransport().request("skill.list", { projectId: selectedProjectId }),
+			getTransport().request("skill.list", { projectId: scopeProjectId }),
 		).then((commands) => {
 			if (!cancelled) setSkillCommands(commands);
 		});
 		return () => {
 			cancelled = true;
 		};
-	}, [open, selectedProjectId]);
+	}, [open, scopeProjectId]);
 
 	useEffect(() => {
 		if (!open || !slashActive) return;
 		let cancelled = false;
 		const location: TemplateReadLocation = supportsProjectTemplatePreview
-			? { projectId: selectedProjectId }
+			? { projectId: scopeProjectId }
 			: {};
 		getTransport()
 			.request("template.list", location)
@@ -275,9 +295,9 @@ export function NewWorkspaceDialog({
 		return () => {
 			cancelled = true;
 		};
-	}, [open, selectedProjectId, slashActive, supportsProjectTemplatePreview]);
+	}, [open, scopeProjectId, slashActive, supportsProjectTemplatePreview]);
 
-	const trustSummary = useProjectTrustSummary(selectedProjectId, open);
+	const trustSummary = useProjectTrustSummary(selectedProjectId, open && !chat);
 
 	const {
 		models: allModels,
@@ -386,7 +406,7 @@ export function NewWorkspaceDialog({
 		failed: branchesFailed,
 		refreshing,
 		refresh: refreshBranches,
-	} = useBranchList(open ? selectedProjectId : null, (list) => {
+	} = useBranchList(open && !chat ? selectedProjectId : null, (list) => {
 		const initial = retryDraft?.baseRef ?? list.defaultBranch;
 		setBaseRef(initial);
 		prefetchBase(initial);
@@ -398,6 +418,16 @@ export function NewWorkspaceDialog({
 		setCreating(true);
 		const text = finalizeTemplateSlotSession(prompt, slotSession).trim();
 		const attachments = attachedImages.images.map(({ name, content }) => ({ name, content }));
+		if (target === "chat") {
+			const started = await startProjectlessChat({
+				text,
+				images: attachments,
+				...(model && explicitPair ? { model: { model, thinkingLevel } } : {}),
+			});
+			setCreating(false);
+			if (started) onOpenChange(false);
+			return;
+		}
 		let workspace: Workspace;
 		if (target === "default") {
 			const def = await enterDefaultWorkspace(selectedProjectId);
@@ -506,7 +536,7 @@ export function NewWorkspaceDialog({
 	};
 
 	const selectedProject = projects.find((p) => p.id === selectedProjectId);
-	const trustNotice = deriveProjectTrustNotice(selectedProject, trustSummary);
+	const trustNotice = deriveProjectTrustNotice(chat ? undefined : selectedProject, trustSummary);
 	const trustEnables = trustNotice.kind === "untrusted" ? trustEnablesText(t, trustNotice) : null;
 	const isolated = target === "worktree";
 
@@ -516,7 +546,7 @@ export function NewWorkspaceDialog({
 				ref={setDialogEl}
 				hideClose
 				data-testid="new-workspace-dialog"
-				className="max-w-[600px] gap-12 p-12"
+				className="max-w-[600px] gap-12 overflow-visible p-12"
 				onEscapeKeyDown={(event) => {
 					if (slashCompletion.open) {
 						event.preventDefault();
@@ -532,115 +562,138 @@ export function NewWorkspaceDialog({
 					promptRef.current?.focus();
 				}}
 			>
-				<DialogHeader>
-					<DialogTitle>
-						{isolated
-							? t("panels.newWorkspace.titleIsolated")
-							: t("panels.newWorkspace.titleDefault")}
-					</DialogTitle>
-					<DialogDescription>
-						{isolated
-							? t("panels.newWorkspace.descriptionIsolated")
-							: t("panels.newWorkspace.descriptionDefault")}
-					</DialogDescription>
-				</DialogHeader>
+				<div className="-mx-12 -mt-12 -mb-2 flex min-h-0 flex-1 flex-col gap-12 overflow-y-auto px-12 pt-12 pb-2">
+					<DialogHeader>
+						<DialogTitle>
+							{chat
+								? t("panels.newWorkspace.titleChat")
+								: isolated
+									? t("panels.newWorkspace.titleIsolated")
+									: t("panels.newWorkspace.titleDefault")}
+						</DialogTitle>
+						<DialogDescription>
+							{chat
+								? t("panels.newWorkspace.descriptionChat")
+								: isolated
+									? t("panels.newWorkspace.descriptionIsolated")
+									: t("panels.newWorkspace.descriptionDefault")}
+						</DialogDescription>
+					</DialogHeader>
 
-				<fieldset
-					data-testid="ws-target"
-					className="flex w-fit items-center gap-2 rounded-md border border-control-border-default bg-control-bg p-2"
-				>
-					<legend className="sr-only">{t("panels.newWorkspace.targetLegend")}</legend>
-					<TargetOption
-						icon={GitBranch}
-						label={t("panels.newWorkspace.targetIsolated")}
-						name={targetGroupName}
-						active={isolated}
-						testid="ws-target-worktree"
-						onSelect={() => setTarget("worktree")}
-					/>
-					<TargetOption
-						icon={House}
-						label={t("panels.newWorkspace.targetDefault")}
-						name={targetGroupName}
-						active={!isolated}
-						testid="ws-target-default"
-						onSelect={() => setTarget("default")}
-					/>
-				</fieldset>
-
-				<div className="flex flex-wrap items-center gap-8">
-					<ProjectPicker
-						projects={projects}
-						current={selectedProject?.name ?? t("panels.newWorkspace.projectFallback")}
-						container={dialogEl}
-						onSelect={setSelectedProjectId}
-					/>
-					{isolated ? (
-						<BranchPicker
-							branches={branches}
-							failed={branchesFailed}
-							selected={baseRef}
-							label={t("panels.newWorkspace.baseLabel")}
-							testid="ws-branch-picker"
-							triggerClassName={`${PILL} max-w-[220px]`}
-							refreshing={refreshing}
-							container={dialogEl}
-							onSelect={selectBaseRef}
-							onRefresh={refreshBranches}
-						/>
-					) : null}
-					<SkillsButton
-						onOpen={() => setManageSkills(true)}
-						testId="ws-manage-skills"
-						className="ml-auto"
-					/>
-				</div>
-
-				{trustNotice.kind === "untrusted" ? (
-					<div
-						data-testid="ws-trust-notice"
-						className="flex w-full flex-col gap-8 rounded-sm border border-feedback-warning-muted bg-container-elevated-bg px-12 py-8 text-left"
+					<fieldset
+						data-testid="ws-target"
+						className="flex w-fit max-w-full flex-wrap items-center gap-2 rounded-md border border-control-border-default bg-control-bg p-2"
 					>
-						<div className="flex items-start gap-8">
-							<TriangleAlert className="mt-2 size-14 shrink-0 text-feedback-warning" aria-hidden />
-							<span className="flex min-w-0 flex-1 flex-col gap-2">
-								<span className="tr-text-ui text-text-default">
-									{untrustedNoticeText(t, trustNotice)} {t("panels.newWorkspace.trustUnaffected")}
-								</span>
-								{trustEnables ? (
-									<span className="text-text-muted tr-text-metadata">{trustEnables}</span>
-								) : null}
-							</span>
-						</div>
-						<div className="flex justify-end">
-							<Button
-								variant="outline"
-								size="m"
-								data-testid="ws-trust-project"
-								disabled={trusting}
-								onClick={() => void trustProject(trustNotice)}
-							>
-								{t("panels.newWorkspace.trustProject")}
-							</Button>
-						</div>
-					</div>
-				) : null}
+						<legend className="sr-only">{t("panels.newWorkspace.targetLegend")}</legend>
+						{repoProjects.length > 0 ? (
+							<>
+								<TargetOption
+									icon={GitBranch}
+									label={t("panels.newWorkspace.targetIsolated")}
+									name={targetGroupName}
+									active={isolated}
+									testid="ws-target-worktree"
+									onSelect={() => chooseTarget("worktree")}
+								/>
+								<TargetOption
+									icon={House}
+									label={t("panels.newWorkspace.targetDefault")}
+									name={targetGroupName}
+									active={target === "default"}
+									testid="ws-target-default"
+									onSelect={() => chooseTarget("default")}
+								/>
+							</>
+						) : null}
+						{canChat ? (
+							<TargetOption
+								icon={RiChat3Line}
+								label={t("panels.newWorkspace.targetChat")}
+								name={targetGroupName}
+								active={chat}
+								testid="ws-target-chat"
+								onSelect={() => chooseTarget("chat")}
+							/>
+						) : null}
+					</fieldset>
 
-				<div className="relative">
+					<div className="flex flex-wrap items-center gap-8">
+						{chat ? null : (
+							<ProjectPicker
+								projects={repoProjects}
+								current={selectedProject?.name ?? t("panels.newWorkspace.projectFallback")}
+								container={dialogEl}
+								onSelect={setSelectedProjectId}
+							/>
+						)}
+						{isolated ? (
+							<BranchPicker
+								branches={branches}
+								failed={branchesFailed}
+								selected={baseRef}
+								label={t("panels.newWorkspace.baseLabel")}
+								testid="ws-branch-picker"
+								triggerClassName={`${PILL} max-w-[220px]`}
+								refreshing={refreshing}
+								container={dialogEl}
+								onSelect={selectBaseRef}
+								onRefresh={refreshBranches}
+							/>
+						) : null}
+						{chat ? null : (
+							<SkillsButton
+								onOpen={() => setManageSkills(true)}
+								testId="ws-manage-skills"
+								className="ml-auto"
+							/>
+						)}
+					</div>
+
+					{trustNotice.kind === "untrusted" ? (
+						<div
+							data-testid="ws-trust-notice"
+							className="flex w-full flex-col gap-8 rounded-sm border border-feedback-warning-muted bg-container-elevated-bg px-12 py-8 text-left"
+						>
+							<div className="flex items-start gap-8">
+								<TriangleAlert
+									className="mt-2 size-14 shrink-0 text-feedback-warning"
+									aria-hidden
+								/>
+								<span className="flex min-w-0 flex-1 flex-col gap-2">
+									<span className="tr-text-ui text-text-default">
+										{untrustedNoticeText(t, trustNotice)} {t("panels.newWorkspace.trustUnaffected")}
+									</span>
+									{trustEnables ? (
+										<span className="text-text-muted tr-text-metadata">{trustEnables}</span>
+									) : null}
+								</span>
+							</div>
+							<div className="flex justify-end">
+								<Button
+									variant="outline"
+									size="m"
+									data-testid="ws-trust-project"
+									disabled={trusting}
+									onClick={() => void trustProject(trustNotice)}
+								>
+									{t("panels.newWorkspace.trustProject")}
+								</Button>
+							</div>
+						</div>
+					) : null}
 					{promptNote ? (
 						<p
 							data-testid="ws-prompt-note"
-							className="mb-4 flex items-start gap-8 rounded-sm border border-primary-muted bg-clip-padding bg-primary-subtle px-12 py-8 text-left text-text-muted tr-text-metadata leading-snug"
+							className="flex items-start gap-8 rounded-sm border border-primary-muted bg-clip-padding bg-primary-subtle px-12 py-8 text-left text-text-muted tr-text-metadata leading-snug"
 						>
 							<Sparkles className="mt-2 size-14 shrink-0 text-primary" />
-							<span>{promptNote}</span>
+							<span className="min-w-0 wrap-anywhere">{promptNote}</span>
 						</p>
 					) : null}
-					<PromptImageChips
-						controller={attachedImages}
-						testId="ws-prompt-images"
-						className={PROMPT_IMAGE_CHIPS_PADDING.dialog}
-					/>
+					<PromptImageChips controller={attachedImages} testId="ws-prompt-images" className="" />
+				</div>
+
+				<div className="relative shrink-0">
 					<Textarea
 						ref={promptRef}
 						data-testid="ws-prompt"
@@ -677,7 +730,7 @@ export function NewWorkspaceDialog({
 							if (slashCompletion.handleKeyDown(e)) return;
 							if (e.key === "Enter" && !e.shiftKey) {
 								e.preventDefault();
-								if (submitEnabled) void create();
+								if (submitEnabled && !e.repeat) void create();
 							}
 						}}
 					/>
@@ -686,14 +739,14 @@ export function NewWorkspaceDialog({
 							commands={slashCompletion.matches}
 							activeIndex={slashCompletion.activeIndex}
 							onSelect={slashCompletion.pick}
-							className="absolute top-full left-8 z-50 mt-4"
+							className="absolute bottom-full left-8 z-50 mb-4"
 						/>
 					) : slotSession ? (
 						<TemplateSlotHint
 							activeIndex={slotSession.activeIndex}
 							count={slotSession.slots.length}
 							onNext={() => stepPromptSlot(1)}
-							className="absolute top-full left-8 z-50 mt-4"
+							className="absolute bottom-full left-8 z-50 mb-4"
 						/>
 					) : prompt.trim() && isolated ? (
 						<p
@@ -712,7 +765,7 @@ export function NewWorkspaceDialog({
 					)}
 				</div>
 
-				<div className="flex flex-wrap items-center gap-8">
+				<div className="flex shrink-0 flex-wrap items-center gap-8">
 					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-8">
 						<ModelEffortPicker
 							models={models}
@@ -761,7 +814,7 @@ export function NewWorkspaceDialog({
 					</Button>
 				</div>
 				<SkillsDialog
-					projectId={selectedProjectId}
+					projectId={scopeProjectId}
 					open={manageSkills}
 					onOpenChange={setManageSkills}
 				/>

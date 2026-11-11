@@ -85,10 +85,7 @@ test("single-select: focus, roving keys, and Enter resolve the tool", {
 	);
 
 	await expect(
-		page
-			.locator('[data-testid="chat-message"][data-role="system"]')
-			.filter({ hasText: "✓ Done" })
-			.first(),
+		page.locator('[data-testid="turn-divider-status"][data-outcome="done"]').first(),
 	).toBeVisible({ timeout: 60_000 });
 });
 
@@ -439,10 +436,7 @@ test("discuss: a question marked to discuss reaches the agent as a discussion, n
 	await expect(record.getByTestId("ask-receipt-answer")).toContainText("Let’s discuss first");
 	await expect(record).toContainText("I do not understand what this decides.");
 	await expect(
-		page
-			.locator('[data-testid="chat-message"][data-role="system"]')
-			.filter({ hasText: "✓ Done" })
-			.first(),
+		page.locator('[data-testid="turn-divider-status"][data-outcome="done"]').first(),
 	).toBeVisible({ timeout: 90_000 });
 });
 

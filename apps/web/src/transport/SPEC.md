@@ -34,8 +34,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   response can, and the request it named is already gone from `pending`, so nothing would replay or re-ack it;
   `resume` repairs them all at once by restating the truth rather than confirming the confirmations —, channel
   `subscribe` with last-value replay for snapshots; append-only terminal data and the one-shot terminal
-  exit/detach + session-creation/deletion + `provider.changed` invalidation + addressed `feedback.interview` and `feedback.githubStar`
-  channels, plus scoped `session.resourcesChanged` invalidations and per-session `mcp.status` snapshots, are never cached or replayed to late
+  exit/detach + session-creation/deletion + `provider.changed` invalidation + addressed `feedback.interview`, `feedback.githubStar`
+  and `search.textResults` channels, plus scoped `session.resourcesChanged` invalidations and per-session `mcp.status` snapshots, are never cached or replayed to late
   subscribers. Resource metadata hydration belongs to the mounted chat integration, not replayed
   invalidation payloads. Reconnect/backoff;
   `inferUrl` defaults to
@@ -59,7 +59,10 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   its MCP login cancellation) each row it held when the read was sent that the reply no longer lists and
   the store still holds, so a pushed full workspace snapshot or
   removal missed while disconnected (including a rename) cannot stay stale; rows that arrived after the
-  read was sent are never retired by it, and it adds no rows (creation stays with the push and backfill);
+  read was sent are never retired by it, and it adds no rows (creation stays with the push and backfill) — except to the Chats
+  container, whose list is its membership: a chat it lists that this surface does not hold is added
+  through `addWorkspace`, the `workspace.created` path (which refuses an id this surface saw removed), so
+  a chat another window started while this one was away appears;
   on a v104+ host it also re-reads `workspace.listCreations` (older hosts install an empty set), first
   re-listing the watched creation's project when the creation is gone, so a create that finished while
   disconnected lands on its workspace instead of racing the list refresh;
@@ -170,7 +173,11 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   `watchMcpWorkspace`, `ConnectionStatus`,
   `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
   `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`,
-  `supportsUserThemes`, `supportsFonts`, `supportsExtensionSettings`, `hostUrl`, `uploadUserFont`, `supportsToolResponses`, `respondToTool`,
+  `supportsUserThemes`, `supportsFonts`, `supportsExtensionSettings`, `supportsSpeech`, `openSpeechSocket`,
+  `hostUrl`, `uploadUserFont`, `supportsToolResponses`, `respondToTool`,
+  `supportsTextSearch` (v112 — Find in Files asks `search.text` and listens on `search.textResults` only of a
+  host that serves them; against an older host the palette hides the command and the window opened by the
+  chord says the host needs an update),
   `installClientErrorReporting`, `reportClientError`, `clientErrorReport`. `respondToTool(sessionId,
   toolCallId, response)` is the one place a tool response leaves the client (chat and plan page both use
   it): it sends `session.respondToTool` to a v93+ host and the retired `session.answerQuestion` below
@@ -182,7 +189,11 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   is the one binary upload — a `PUT` of the raw file to the host's `/fonts/` route with the upload guard
   header, answered by that file's `UserFontFile` entry — while `hostUrl` resolves a host-relative path
   (custom face URLs) against the endpoint; `supportsExtensionSettings` (v105) lets `ExtensionsSettings`
-  offer per-extension setting switches only to a host that stores `extensionSettings`; `supportsPlanReview` is exported
+  offer per-extension setting switches only to a host that stores `extensionSettings`. `openSpeechSocket()`
+  opens the dictation side socket (`/speech?protocol=`) on the same endpoint for [[submodule-web-speech]].
+  It carries binary audio and never a request. `server.welcome`'s `speech` seed and every `speech.changed`
+  push install the store's `speech` status whole; `supportsSpeech` (v107) gates the same way.
+  `supportsPlanReview` is exported
   because a sibling panel (`PlanPane`) gates the plan-review UI on it — an older host serves no
   `todo.startReview`/`reviewAll`, so the client must not offer them; `supportsPlanSummaryGeneration` (v69) is
   exported because `chat/useChatTodos` gates the auto-summary `todo.generateSummary` request on it — an older

@@ -83,7 +83,9 @@ async function excludedExtensionPaths(): Promise<readonly string[]> {
 export async function piPackagesCatalog(
 	target: PiPackagesTarget,
 	disabledPackages: ReadonlySet<string>,
+	opts: { fresh?: boolean } = {},
 ): Promise<PiPackagesCatalog> {
+	if (opts.fresh) invalidatePiPackageCatalog();
 	return listPiPackageCatalog({
 		...(target.cwd ? { cwd: target.cwd } : {}),
 		agentDir: getAgentDir(),

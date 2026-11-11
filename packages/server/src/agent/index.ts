@@ -1,5 +1,6 @@
 export * from "./agentSessionManager";
 export { disableAnthropicExtraUsageWarning, globalProviderWarnings } from "./anthropicExtraUsage";
+export { readCacheWarmingSetting, writeCacheWarmingMode } from "./cacheWarming";
 export {
 	getResourceHistoryPage,
 	getSessionResources,
@@ -9,6 +10,12 @@ export {
 	stopBackgroundCommand,
 	stopSubagent,
 } from "./chatResources";
+export {
+	CONTINUE_IN_WORKSPACE_TOOL_NAME,
+	type ContinueToolHost,
+	clampHandoffSummary,
+	setContinueToolHost,
+} from "./continueTool";
 export {
 	listCustomEndpoints,
 	probeCustomEndpoint,
@@ -21,6 +28,7 @@ export {
 	refreshSubagentConcurrency,
 	runReviewSubagent,
 	setSubagentConcurrencyResolver,
+	trashWorkspaceDelegation,
 } from "./delegation";
 export {
 	type BundledExtensionFactory,
@@ -33,6 +41,7 @@ export {
 	setDisabledExtensionsResolver,
 	setDisabledPackagesResolver,
 	setExtensionSettingsResolver,
+	setSpecsEnabledResolver,
 } from "./extensions";
 export {
 	effectiveMcpServerConfig,
@@ -133,3 +142,12 @@ export {
 } from "./titleTool";
 export * from "./toolResponses";
 export * from "./webUiContext";
+export {
+	START_WORKSPACE_TOOL_NAME,
+	type StartedWorkspace,
+	type StartWorkspaceParams,
+	setWorkspaceToolsHost,
+	WORKSPACE_STATUS_TOOL_NAME,
+	type WorkspaceStatusParams,
+	type WorkspaceToolsHost,
+} from "./workspaceTools";

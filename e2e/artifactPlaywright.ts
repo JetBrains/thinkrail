@@ -15,6 +15,7 @@ import {
 	E2E_INSTALLED_FONTS,
 	E2E_PI_AGENT_DIR,
 	E2E_PICK_DIR_POINTER,
+	E2E_SPEECH_MANIFEST,
 } from "./fixtures/paths";
 
 export function artifactHostEnvironment(cacheDir: string): Record<string, string> {
@@ -27,6 +28,7 @@ export function artifactHostEnvironment(cacheDir: string): Record<string, string
 		XDG_CACHE_HOME: cacheDir,
 		THINKRAIL_PICK_DIR: E2E_PICK_DIR_POINTER,
 		THINKRAIL_INSTALLED_FONTS: E2E_INSTALLED_FONTS,
+		THINKRAIL_SPEECH_MANIFEST: E2E_SPEECH_MANIFEST,
 		THINKRAIL_GH_OFFLINE: "1",
 		...toolHomeEnv(E2E_HOME_DIR),
 		PI_CODING_AGENT_DIR: E2E_PI_AGENT_DIR,
