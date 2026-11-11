@@ -1,6 +1,8 @@
 import {
 	buildSessionProjection,
 	type CompactionEntry,
+	type ContextEditEntry,
+	type ProjectedSessionEntry,
 	type SessionEntry,
 	type SessionProjection,
 	sessionEntryToContextMessages,
@@ -18,6 +20,33 @@ function leafPath(entries: readonly SessionEntry[], leafId?: string | null): Ses
 		current = current.parentId ? byId.get(current.parentId) : undefined;
 	}
 	return path.reverse();
+}
+
+type ContextMessage = ProjectedSessionEntry["messages"][number];
+
+export function projectContextEntry(
+	entry: SessionEntry,
+	edit: ContextEditEntry | undefined,
+): ContextMessage[] {
+	const messages = sessionEntryToContextMessages(entry);
+	if (!edit) return messages;
+	const { replacement } = edit;
+	if (replacement === null) return [];
+	return messages.map((message) => {
+		if (
+			message.role !== "user" &&
+			message.role !== "assistant" &&
+			message.role !== "toolResult" &&
+			message.role !== "custom"
+		)
+			return message;
+		const content =
+			(message.role === "assistant" || message.role === "toolResult") &&
+			typeof replacement.content === "string"
+				? [{ type: "text", text: replacement.content }]
+				: replacement.content;
+		return { ...message, content } as ContextMessage;
+	});
 }
 
 function summarizedPrefixEnd(path: readonly SessionEntry[], compaction: CompactionEntry): number {
@@ -40,9 +69,11 @@ export function displaySessionProjection(
 	const path = leafPath(list, leafId);
 	const cut = summarizedPrefixEnd(path, compaction);
 	if (cut <= 0) return projected;
+	const edits = new Map<string, ContextEditEntry>();
+	for (const entry of path) if (entry.type === "context_edit") edits.set(entry.targetId, entry);
 	const prefix = path.slice(0, cut).map((sourceEntry) => ({
 		sourceEntry,
-		messages: sessionEntryToContextMessages(sourceEntry),
+		messages: projectContextEntry(sourceEntry, edits.get(sourceEntry.id)),
 	}));
 	const next = [...prefix, ...projected.entries];
 	return { ...projected, entries: next, messages: next.flatMap((entry) => entry.messages) };

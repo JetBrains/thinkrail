@@ -279,6 +279,14 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   discovery and prompt-template/frontmatter rules where public APIs cannot serve its read/edit UI.
   Prefer public discovery/parsing APIs when they meet those needs; retain parity coverage in history,
   template and composer tests until then.
+- **Context edits on summarized display turns** — [[submodule-server-history]], `displayTranscript.ts`
+  (`projectContextEntry`). The display projection puts the turns the latest compaction summarized back
+  in front of its marker, and they must carry the branch's latest `context_edit` the way pi projects kept
+  entries, or an omitted recovery attempt (`replacement: null`) comes back once a later compaction
+  advances past it. Pi's per-entry `projectContextEntry` is exported from `core/session-manager.js` but not
+  the package root, so the host mirrors it. **Removal gate:** pi exporting `projectContextEntry`, or a
+  projection that keeps summarized entries, from the package root. On upgrades run
+  `history/displayTranscript.test.ts`, whose parity test compares the mirror with pi's dist function.
 - **Subagent usage totals from child transcripts** — [[submodule-server-agent]], `subagentUsage.ts`.
   Pi's session-total loop (`AgentSession.getSessionStats`) is not exported for a bare session file, so
   the host mirrors which entries carry spend (`usage`, compaction/branch-summary `usage`, assistant and

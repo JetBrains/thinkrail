@@ -36,8 +36,9 @@ to preserve).
   **`isTranscriptMessageRole`**, the very guard `getSessionMessages` sends by (one policy, not a local copy
   of it). So `messageIndex` matches the client's `turnIdByMessageIndex` exactly
   (no raw-file-order drift). Abandoned-branch text still never becomes a hit; summarized text does, because
-  the same session still renders those turns. The compaction summary is sent (it renders the client's
-  compaction marker), so it consumes an index slot without being searchable.
+  the same session still renders those turns — minus what the branch's context edits omitted. The
+  compaction summary is sent (it renders the client's compaction marker), so it consumes an index slot
+  without being searchable.
   The internal
   `TODO_NUDGE_PREFIX` control message (hidden from the transcript on hydrate) is skipped after its index
   slot is consumed, so alignment holds; a **superseded auto-retry attempt** (the shared
@@ -133,7 +134,11 @@ Verified against the installed `dist/core/session-manager.{js,d.ts}`. Re-verify 
   `SessionManager` to *pin* layout/format facts against the real thing), `@thinkrail/contracts`,
   `node:fs`, `node:fs/promises`, `node:path`.
 - **`displayTranscript.ts`** is the one display projection `extractSession` and `session.getMessages`
-  share: model context still drops summarized turns; the UI/index keep them above the compaction marker.
+  share: model context still drops summarized turns; the UI/index keep them above the compaction marker,
+  each through the active branch's latest `context_edit` for it, as pi projects kept entries — an omission
+  (`replacement: null`, e.g. pi 1.5.2's truncated attempt before compact-and-retry) stays dropped, a
+  replacement stays applied. Pi's per-entry `projectContextEntry` is not a package-root export, so
+  `displayTranscript.ts` mirrors it ([[pi-compatibility]]).
 - **Forbidden:** importing `agent`/`workspaces`/`projects` (scope mapping is injected by the host handler
   via the `filter`/`labels` callbacks passed into `search()`); writing anything to disk (`writeFixtureSession`
   is test-only, never called from production code paths).
