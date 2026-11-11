@@ -41,8 +41,10 @@ export interface NostrSignal {
 
 export class NostrUnreachableError extends Error {
 	readonly code = "nostr_unreachable";
-	constructor(readonly relays: readonly string[]) {
+	readonly relays: readonly string[];
+	constructor(relays: readonly string[]) {
 		super(`no Nostr relay answered (${relays.join(", ")})`);
+		this.relays = relays;
 		this.name = "NostrUnreachableError";
 	}
 }
