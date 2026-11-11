@@ -79,6 +79,7 @@ const NON_COLOR = new Set([
 	"none",
 	"inset",
 	"solid",
+	"dashed",
 	"offset-0",
 	"offset-2",
 ]);

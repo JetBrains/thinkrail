@@ -1,18 +1,19 @@
 import { existsSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { getAgentDir, ProjectTrustStore, SettingsManager } from "@earendil-works/pi-coding-agent";
+import { getAgentDir, ProjectTrustStore } from "@earendil-works/pi-coding-agent";
 import type { ProjectResourceKind, ProjectTrustSummary } from "@thinkrail/contracts";
 import { discoverAgentDefinitions } from "pi-subagents";
 import { listProjectAliasSkillNames } from "./extensions";
 import { loadMcpConfigFiles } from "./mcp";
+import { createPiSettings } from "./packages";
 
 export function piTrustsProjectPath(path: string): boolean {
 	const agentDir = getAgentDir();
 	try {
 		const decision = new ProjectTrustStore(agentDir).get(path);
 		if (decision !== null) return decision;
-		const settings = SettingsManager.create(path, agentDir, { projectTrusted: false });
+		const settings = createPiSettings(path, agentDir, { projectTrusted: false, packages: "none" });
 		return settings.getDefaultProjectTrust() === "always";
 	} catch {
 		return false;

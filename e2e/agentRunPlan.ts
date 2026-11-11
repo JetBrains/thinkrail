@@ -1,5 +1,6 @@
 import { stripAmbientPiCredentials } from "./ambientCredentials";
 import { isRealCentralE2e, REAL_CENTRAL_E2E_ENV } from "./fixtures/centralAgent";
+import { PLAYWRIGHT_CONFIG } from "./processRunner";
 
 export const CENTRAL_PLAYWRIGHT_RUNNER_AUTH_ENV = "THINKRAIL_E2E_CENTRAL_RUNNER_AUTHORIZED";
 export const WEB_BUILD_READY_ENV = "THINKRAIL_E2E_WEB_BUILD_READY";
@@ -43,7 +44,16 @@ export function createAgentRunPlan(
 	delete childEnv.PLAYWRIGHT_BLOB_OUTPUT_FILE;
 	return {
 		buildCommand,
-		playwrightCommand: [bun, "x", "playwright", "test", ...playwrightArgs, "--workers=1"],
+		playwrightCommand: [
+			bun,
+			"x",
+			"playwright",
+			"test",
+			"-c",
+			PLAYWRIGHT_CONFIG,
+			...playwrightArgs,
+			"--workers=1",
+		],
 		env: childEnv,
 	};
 }

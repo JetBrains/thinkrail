@@ -9,11 +9,12 @@ import {
 } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
-import { useEffect, useState } from "react";
+import { cn } from "@thinkrail/ui/utils";
 import { workspaceName } from "../store";
-import { SettingsGroup } from "./SettingsGroup";
+import { SettingsGroup, SettingsSubheading } from "./SettingsGroup";
 import { SettingsRow } from "./SettingsRow";
 import { SettingsSwitch } from "./SettingsSwitch";
+import { SETTINGS_INPUT, useSettingsDraft } from "./settingsDraft";
 
 function parseLimit(draft: string): number | null {
 	if (!/^\d+$/.test(draft)) return null;
@@ -78,22 +79,15 @@ function LimitField({
 	onCommit: (value: number | null) => void;
 }) {
 	const t = useT();
-	const savedText = saved === undefined ? "" : String(saved);
-	const [draft, setDraft] = useState(savedText);
-	const [submitted, setSubmitted] = useState<string | null>(null);
-	useEffect(() => {
-		setDraft(savedText);
-		setSubmitted(null);
-	}, [savedText]);
-	const parsed = parseLimit(draft);
-	const invalid = parsed === null && !(allowEmpty && draft === "");
+	const { invalid, inputProps } = useSettingsDraft({
+		saved: saved === undefined ? "" : String(saved),
+		isValid: (draft) => parseLimit(draft) !== null || (allowEmpty && draft === ""),
+		commit: (draft) => {
+			onCommit(parseLimit(draft));
+			return undefined;
+		},
+	});
 	const errorId = `${testId}-error`;
-
-	const commit = () => {
-		if (invalid || draft === savedText || draft === submitted) return;
-		setSubmitted(draft);
-		onCommit(parsed);
-	};
 
 	return (
 		<span className="flex flex-col items-end gap-2">
@@ -103,28 +97,13 @@ function LimitField({
 				max={SUBAGENT_MAX_CONCURRENT.max}
 				step={1}
 				inputMode="numeric"
-				value={draft}
+				{...inputProps}
 				placeholder={placeholder === undefined ? undefined : String(placeholder)}
 				disabled={disabled}
 				aria-label={label}
-				aria-invalid={invalid}
 				aria-describedby={invalid ? errorId : undefined}
 				data-testid={testId}
-				data-settings-draft-input
-				onChange={(event) => {
-					setDraft(event.currentTarget.value);
-					setSubmitted(null);
-				}}
-				onBlur={commit}
-				onKeyDown={(event) => {
-					if (event.key === "Enter") {
-						event.preventDefault();
-						commit();
-					} else if (event.key === "Escape") {
-						setDraft(savedText);
-					}
-				}}
-				className="h-32 w-64 rounded-sm border border-control-border-default bg-control-bg px-8 text-right tr-text-ui text-text-default outline-none placeholder:text-text-subtle focus:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text aria-invalid:border-feedback-error"
+				className={cn(SETTINGS_INPUT, "w-64 text-right")}
 			/>
 			{invalid ? (
 				<span id={errorId} className="text-feedback-error tr-text-metadata">
@@ -208,18 +187,12 @@ export function SubagentSettings({
 				/>
 			) : null}
 			{workspace ? (
-				<div
-					data-testid="subagents-workspace-heading"
-					title={workspaceLabel}
-					className="flex min-w-0 flex-col gap-2 pt-16 pb-4"
-				>
-					<span className="tr-text-ui text-text-default">
-						{t("settings.subagents.workspaceHeading")}
-					</span>
-					<span className="break-words text-text-muted tr-text-metadata">
-						{t("settings.subagents.workspaceDescription", { name: workspaceLabel })}
-					</span>
-				</div>
+				<SettingsSubheading
+					testId="subagents-workspace-heading"
+					titleAttribute={workspaceLabel}
+					title={t("settings.subagents.workspaceHeading")}
+					description={t("settings.subagents.workspaceDescription", { name: workspaceLabel })}
+				/>
 			) : null}
 			{workspace ? (
 				<SettingsRow

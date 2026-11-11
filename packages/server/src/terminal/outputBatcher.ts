@@ -65,7 +65,11 @@ export function createOutputBatcher(options: OutputBatcherOptions): OutputBatche
 			if (disposed || chunk === "") return;
 			pending += chunk;
 			if (pending.length > maxPendingChars) {
-				pending = pending.slice(pending.length - maxPendingChars);
+				let start = pending.length - maxPendingChars;
+				const before = pending.charCodeAt(start - 1);
+				const after = pending.charCodeAt(start);
+				if (before >= 0xd800 && before <= 0xdbff && after >= 0xdc00 && after <= 0xdfff) start++;
+				pending = pending.slice(start);
 				truncated = true;
 			}
 			if (blocked) return;

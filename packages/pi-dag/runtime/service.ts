@@ -95,8 +95,10 @@ class Engine implements D.DagService {
 	private readonly bindings = new Set<Binding>();
 	private closed = false;
 	private closing?: Promise<void>;
+	private readonly options: DagServiceOptions;
 
-	constructor(private readonly options: DagServiceOptions) {
+	constructor(options: DagServiceOptions) {
+		this.options = options;
 		this.store = createDagStore(options);
 	}
 

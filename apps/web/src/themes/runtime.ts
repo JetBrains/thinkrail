@@ -9,11 +9,7 @@ import {
 	type UserThemeFile,
 	type UserThemeFileErrorCode,
 } from "@thinkrail/contracts";
-import {
-	asStablePreferenceAdapter,
-	getStablePreferenceAdapter,
-	type StablePreferenceAdapter,
-} from "../clientPreferences";
+import { firstPaintPreferenceStorage } from "../clientPreferences";
 import { STORAGE_PREFIX } from "../constants/branding";
 import {
 	ANSI_COLOR_KEYS,
@@ -253,7 +249,7 @@ function writeUserThemeCache(preference: ThemePreference): void {
 		const theme = isUserThemeId(id) ? catalog.byId.get(id) : undefined;
 		return theme ? [{ ...theme, id: id.slice(USER_THEME_ID_PREFIX.length) }] : [];
 	});
-	const storage = themeHintStorage();
+	const storage = firstPaintPreferenceStorage();
 	const serialized = JSON.stringify(manifests);
 	if (manifests.length === 0 || serialized.length > MAX_USER_THEME_CACHE_CHARS) {
 		storage?.removeItem(USER_THEMES_KEY);
@@ -264,7 +260,7 @@ function writeUserThemeCache(preference: ThemePreference): void {
 
 export function installCachedUserThemes(): void {
 	try {
-		const raw = themeHintStorage()?.getItem(USER_THEMES_KEY);
+		const raw = firstPaintPreferenceStorage()?.getItem(USER_THEMES_KEY);
 		const parsed: unknown = typeof raw === "string" ? JSON.parse(raw) : null;
 		if (!Array.isArray(parsed)) return;
 		installUserThemes(
@@ -454,16 +450,9 @@ export function applyThemePreference(preference: ThemePreference): ThemeResoluti
 	return resolution;
 }
 
-function themeHintStorage(): StablePreferenceAdapter | null {
-	return (
-		getStablePreferenceAdapter() ??
-		asStablePreferenceAdapter(Reflect.get(globalThis, "localStorage"))
-	);
-}
-
 export function readThemeHint(): ThemePreference {
 	try {
-		const value = themeHintStorage()?.getItem(HINT_KEY);
+		const value = firstPaintPreferenceStorage()?.getItem(HINT_KEY);
 		if (typeof value !== "string") return defaultThemePreference();
 		if (isThemeIdSlug(value)) return { theme: value, themeMode: "fixed" };
 		const parsed = JSON.parse(value) as unknown;
@@ -483,7 +472,10 @@ export function readThemeHint(): ThemePreference {
 export function writeThemeHint(preference: ThemePreference): void {
 	try {
 		const normalized = normalizeThemeHint(preference);
-		themeHintStorage()?.setItem(HINT_KEY, JSON.stringify({ version: HINT_VERSION, ...normalized }));
+		firstPaintPreferenceStorage()?.setItem(
+			HINT_KEY,
+			JSON.stringify({ version: HINT_VERSION, ...normalized }),
+		);
 		writeUserThemeCache(normalized);
 	} catch {
 		return;

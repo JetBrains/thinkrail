@@ -34,6 +34,7 @@ export {
 } from "./events";
 export {
 	type AnalyticsOptions,
+	captureSurveyResponse,
 	type ErrorReport,
 	getAdditionalAnalyticsCapture,
 	initializeAnalytics,
@@ -41,8 +42,10 @@ export {
 	reportError,
 	reportFatalError,
 	resetAnalyticsForTests,
+	type SurveyEndpoint,
 	setAdditionalAnalyticsEnabled,
 	shutdownAnalytics,
 	startAttributionClaim,
+	surveyEndpoint,
 	track,
 } from "./service";

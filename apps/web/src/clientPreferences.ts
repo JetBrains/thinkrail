@@ -19,3 +19,10 @@ export function asStablePreferenceAdapter(value: unknown): StablePreferenceAdapt
 export function getStablePreferenceAdapter(): StablePreferenceAdapter | null {
 	return asStablePreferenceAdapter(Reflect.get(globalThis, STABLE_PREFERENCES_GLOBAL));
 }
+
+export function firstPaintPreferenceStorage(): StablePreferenceAdapter | null {
+	return (
+		getStablePreferenceAdapter() ??
+		asStablePreferenceAdapter(Reflect.get(globalThis, "localStorage"))
+	);
+}

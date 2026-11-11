@@ -428,7 +428,7 @@ test("itemOpenFindings: counts open agent comments anchored in the item's change
 		review: { state: "changes_requested", revision: 1, feedback: "fix it" },
 	};
 	const c = (over: { author?: "agent"; status: "draft" | "sent" | "resolved"; path?: string }) => ({
-		author: over.author,
+		...(over.author ? { author: over.author } : {}),
 		status: over.status,
 		anchor: over.path ? { path: over.path, side: "worktree" as const, selectors: [] } : null,
 	});

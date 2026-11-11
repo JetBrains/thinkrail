@@ -22,7 +22,7 @@ to that capability by **tool name**: `WebSearchCard` (`web_search`), `WebFetchCa
 - **Owns:** `WebSearchCard` (query + provider + synthesized answer/sources), `WebFetchCard` (fetched URL or
   local-video path + extracted content), `WebStoredContentCard` (response id + selected query/URL + recovered
   full content), their shared folded Markdown result body, and registration.
-- **Public surface:** none beyond the side-effect `register` (no barrel — chat pulls shiki; per-file like
+- **Public surface:** none beyond the side-effect `register` (no barrel — chat pulls the highlighter; per-file like
   its siblings).
 - **Allowed deps:** sibling/parent chat primitives (`toolRegistry`, `ToolFileLink`, `Collapsible`,
   `Markdown`); `@thinkrail/extension-api/web` (`ToolRenderProps`/`ToolStatus` + pure helpers); `@remixicon/react`.

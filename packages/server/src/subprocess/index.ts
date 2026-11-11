@@ -8,3 +8,4 @@ export {
 	runBounded,
 	streamBounded,
 } from "./runBounded";
+export { type Supervised, type SupervisedOptions, spawnSupervised } from "./supervised";

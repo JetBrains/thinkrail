@@ -14,8 +14,10 @@ The seven `pi` custom tools that expose the backlog to the agent — `todo_list`
 `todo_update`, `todo_promote`, `todo_remove`, `todo_write`, `todo_plan_summary`. Each is a **thin
 wrapper** over `core/`: a TypeBox `parameters` schema, an `execute` that calls one `TodoStore` method
 against `ctx.cwd`, and a `textResult`/`errorResult` return.
-The finite-vocabulary `status` param derives its enum from the `core/` tuple via
-`StringEnum`, so the schema and the model move together (pinned by `tools.test.ts`).
+The finite-vocabulary `status` param derives its enum from the `core/` tuple via `shared.ts`'s
+`stringEnum` (a TypeBox `Type.Unsafe` over `{ type: "string", enum }`, the shape every provider
+accepts, unlike `Type.Union` of literals; pi-ai's `StringEnum` is pi-schema-typed since pi 1.5), so the
+schema and the model move together (pinned by `tools.test.ts`).
 
 **This layer is where the agent-facing constraints live** (core stays permissive — both the user lane
 and the host wire use loose items, and the agent can author loose too):
@@ -79,7 +81,7 @@ The `index.ts` barrel: `registerTodoTools(pi)`, the sole entry point, called by 
 ## Boundary
 
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (types and public truncation helpers),
-  `@earendil-works/pi-ai/compat` (`StringEnum`), `typebox`, and `../core` (through its barrel).
+  `typebox`, and `../core` (through its barrel).
   Node built-ins may create response-only private OS temporary files; project TODO persistence
   still belongs exclusively to `TodoStore`.
 - **Forbidden:** reaching into `core/` internals (import via the barrel), any `@thinkrail/*` package,
