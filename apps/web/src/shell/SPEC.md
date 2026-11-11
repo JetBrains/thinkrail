@@ -80,7 +80,8 @@ New workspace dialog. No selected project
 leaves the logo alone.
 
 Right before host connection status sits the **phone access** shortcut (`PhoneAccessTopbar`, only against a host
-at `REMOTE_ACCESS_PROTOCOL_VERSION`): a QR icon, tinted primary while access is on, opening a popover that
+at `REMOTE_ACCESS_PROTOCOL_VERSION`, and hidden below the `sm` width, where a phone-width window has no room for it
+and no use pairing a phone): a QR icon, tinted primary while access is on, opening a popover that
 mounts `usePhoneAccess({ autoCode: true })` from panels only while open — the relay switch (so a user never
 needs `--remote`), a one-time pairing QR minted as soon as access is on with its expiry, New code and Copy
 link — or, once a phone pairs from it, "<phone> is paired." with **Pair another phone** — a one-line summary of
