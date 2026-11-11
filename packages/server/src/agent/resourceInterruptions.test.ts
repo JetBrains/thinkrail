@@ -3,12 +3,15 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
-import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
+import {
+	createFauxCore,
+	fauxAssistantMessage,
+	fauxToolCall,
+} from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import { recordResource, resourceHistoryRoot } from "../resourceHistory";
 import {
 	abortSession,
-	clearQueueSession,
 	compactSession,
 	createSession,
 	disposeAllSessions,
@@ -19,6 +22,7 @@ import {
 	reloadSessionResources,
 	removeSession,
 	setSessionManagerFactory,
+	setSessionPublisher,
 	setSkillAdmissionResolver,
 	settleSessionsForShutdown,
 	toWireModel,
@@ -51,6 +55,7 @@ const saved = {
 };
 let sequence = 0;
 let runtime: ModelRuntime;
+const settleWaiters = new Map<string, () => void>();
 
 beforeAll(async () => {
 	process.env.PI_CODING_AGENT_DIR = join(root, "agent");
@@ -71,6 +76,9 @@ beforeAll(async () => {
 	configurePiRuntime(runtime);
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 	setSkillAdmissionResolver(() => admissionContextFor({ piResourceTrust: "granted" }));
+	setSessionPublisher(({ sessionId, event }) => {
+		if (event.type === "agent_settled") settleWaiters.get(sessionId)?.();
+	});
 });
 
 afterAll(async () => {
@@ -79,6 +87,7 @@ afterAll(async () => {
 	configurePiRuntime(null);
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 	setSkillAdmissionResolver(() => admissionContextFor(undefined));
+	setSessionPublisher(() => {});
 	for (const [name, value] of [
 		["PI_CODING_AGENT_DIR", saved.agent],
 		["THINKRAIL_DATA_DIR", saved.data],
@@ -125,13 +134,36 @@ function command(p: Parent, id: string, status: "running" | "completed" | "stopp
 	});
 }
 
-async function noticeMessages(p: Parent) {
+async function persistedBranch(p: Parent) {
 	await getSessionMessages(p.sessionId, p.workspaceId, p.cwd);
 	const info = (await SessionManager.list(p.cwd)).find((row) => row.id === p.sessionId);
 	if (!info) throw new Error("missing persisted parent");
-	return SessionManager.open(info.path)
-		.getBranch()
-		.filter((entry) => entry.type === "custom_message" && entry.customType === noticeType);
+	return SessionManager.open(info.path).getBranch();
+}
+
+async function noticeMessages(p: Parent) {
+	return (await persistedBranch(p)).filter(
+		(entry) => entry.type === "custom_message" && entry.customType === noticeType,
+	);
+}
+
+function nextSettle(sessionId: string): Promise<void> {
+	const settled = Promise.withResolvers<void>();
+	settleWaiters.set(sessionId, () => {
+		settleWaiters.delete(sessionId);
+		settled.resolve();
+	});
+	return settled.promise;
+}
+
+async function withAutomaticTurn(p: Parent) {
+	const extensions = join(p.cwd, ".pi", "extensions");
+	mkdirSync(extensions, { recursive: true });
+	writeFileSync(
+		join(extensions, "custom-turn.ts"),
+		'export default function(pi) { pi.registerCommand("automatic", { description: "Test automatic turn", handler: async () => { pi.sendMessage({ customType: "test/automatic", content: "AUTOMATIC", display: false }, { triggerTurn: true }); } }); }',
+	);
+	await reloadSessionResources(p.sessionId);
 }
 
 test("restart interruptions reach the next user request once, without waking an inspected chat", async () => {
@@ -178,68 +210,37 @@ test("restart interruptions reach the next user request once, without waking an 
 	await removeSession(p.sessionId);
 });
 
-test("interruption receipts preserve other extensions' boundary state and context edits", async () => {
+test("the notice is stored right after the prompt it accompanied and appears once in every request of the run", async () => {
 	const p = await parent();
-	const extensions = join(p.cwd, ".pi", "extensions");
-	mkdirSync(extensions, { recursive: true });
-	writeFileSync(
-		join(extensions, "boundary-writes.ts"),
-		`export default function(pi) {
-			pi.on("turn_end", (event) => ({ entries: [
-				...event.entries,
-				{ type: "custom", customType: "test/boundary-state", data: { targetId: event.messageEntryId } },
-				{ type: "context_edit", targetId: event.messageEntryId, replacement: { content: [{ type: "text", text: "Saved by the project extension" }] } },
-			] }));
-		}`,
-	);
-	await reloadSessionResources(p.sessionId);
-	const readBranch = async () => {
-		const info = (await SessionManager.list(p.cwd)).find((row) => row.id === p.sessionId);
-		if (!info) throw new Error("missing persisted parent");
-		return SessionManager.open(info.path).getBranch();
-	};
-	const writes = (entries: Awaited<ReturnType<typeof readBranch>>) =>
-		entries.filter(
-			(entry) =>
-				(entry.type === "custom" && entry.customType === "test/boundary-state") ||
-				entry.type === "context_edit",
-		);
-	const requests = faux.state.callCount;
-	faux.setResponses([fauxAssistantMessage("NORMAL")]);
-	await promptSession(p.sessionId, "Save extension state without an interruption.");
-	const normal = writes(await readBranch());
-	expect(normal).toMatchObject([
-		{ type: "custom", data: { targetId: expect.any(String) } },
-		{
-			type: "context_edit",
-			targetId: expect.any(String),
-			replacement: { content: [{ type: "text", text: "Saved by the project extension" }] },
+	command(p, "ordered-interruption");
+	const inputs: string[] = [];
+	faux.setResponses([
+		(context) => {
+			inputs.push(JSON.stringify(context.messages));
+			return fauxAssistantMessage(fauxToolCall("read", { path: ".pi/settings.json" }));
+		},
+		(context) => {
+			inputs.push(JSON.stringify(context.messages));
+			return fauxAssistantMessage("READ");
 		},
 	]);
-	expect(await noticeMessages(p)).toHaveLength(0);
-	command(p, "extension-coexistence");
-	faux.setResponses([fauxAssistantMessage("NOTIFIED")]);
-	await promptSession(p.sessionId, "Save extension state while reporting interrupted work.");
-	const branch = await readBranch();
-	const savedWrites = writes(branch);
-	expect(savedWrites.map((entry) => entry.type)).toEqual([
-		"custom",
-		"context_edit",
-		"custom",
-		"context_edit",
+	await promptSession(p.sessionId, "Read the settings.");
+	expect(inputs).toHaveLength(2);
+	for (const input of inputs) expect(input.match(/bun run ordered-interruption/g)).toHaveLength(1);
+	const branch = await persistedBranch(p);
+	const prompt = branch.findIndex(
+		(entry) =>
+			entry.type === "message" &&
+			entry.message.role === "user" &&
+			JSON.stringify(entry.message.content).includes("Read the settings."),
+	);
+	expect(branch.slice(prompt + 1).map((entry) => entry.type)).toEqual([
+		"custom_message",
+		"message",
+		"message",
+		"message",
 	]);
-	expect(savedWrites.slice(0, 2)).toEqual(normal);
-	expect(branch.at(-1)).toMatchObject({
-		type: "custom_message",
-		customType: noticeType,
-		details: { version: 1, resourceIds: ["command:extension-coexistence"] },
-	});
-	expect(faux.state.callCount - requests).toBe(2);
-	await removeSession(p.sessionId);
-	await getSessionResources(p.workspaceId, p.sessionId, p.cwd);
-	expect(writes(await readBranch())).toEqual(savedWrites);
-	expect(await noticeMessages(p)).toHaveLength(1);
-	expect(faux.state.callCount - requests).toBe(2);
+	expect(branch[prompt + 1]).toMatchObject({ customType: noticeType, display: false });
 	await removeSession(p.sessionId);
 });
 
@@ -540,22 +541,20 @@ test("large escaped task data stays bounded and an already stopped interrupted c
 
 test("an automatic custom-message turn does not consume a pending interruption notice", async () => {
 	const p = await parent();
-	const extensions = join(p.cwd, ".pi", "extensions");
-	mkdirSync(extensions, { recursive: true });
-	writeFileSync(
-		join(extensions, "custom-turn.ts"),
-		'export default function(pi) { pi.registerCommand("automatic", { description: "Test automatic turn", handler: async () => { pi.sendMessage({ customType: "test/automatic", content: "AUTOMATIC", display: false }, { triggerTurn: true }); } }); }',
-	);
-	await reloadSessionResources(p.sessionId);
+	await withAutomaticTurn(p);
 	command(p, "still-pending");
-	const before = faux.state.callCount;
-	faux.setResponses([fauxAssistantMessage("AUTOMATIC RESPONSE")]);
+	let automatic = "";
+	faux.setResponses([
+		(context) => {
+			automatic = JSON.stringify(context.messages);
+			return fauxAssistantMessage("AUTOMATIC RESPONSE");
+		},
+	]);
+	const settled = nextSettle(p.sessionId);
 	await promptSession(p.sessionId, "/automatic");
-	const deadline = Date.now() + 5_000;
-	while (faux.state.callCount === before || getSessionState(p.sessionId).execution === "running") {
-		if (Date.now() > deadline) throw new Error("automatic fixture turn did not settle");
-		await Bun.sleep(5);
-	}
+	await settled;
+	expect(automatic).toContain("AUTOMATIC");
+	expect(automatic).not.toContain("bun run still-pending");
 	expect(await noticeMessages(p)).toEqual([]);
 	faux.setResponses([fauxAssistantMessage("USER RESPONSE")]);
 	await promptSession(p.sessionId, "Continue as requested.");
@@ -627,77 +626,55 @@ test("malformed optional archive data cannot block valid interruption notices", 
 	const receipts = await noticeMessages(p);
 	expect(validCommandIncluded).toBe(true);
 	expect(receipts).toHaveLength(1);
+	await removeSession(p.sessionId);
 });
 
-test.each([
-	["steering", "user"],
-	["followUp", "user"],
-	["steering", "control"],
-	["followUp", "control"],
-	["steering", "removed"],
-	["followUp", "removed"],
-] as const)(
-	"%s queued %s input consumes interruptions only when delivered to the agent",
-	async (mode, kind) => {
+test.each(["steering", "followUp"] as const)(
+	"a %s message delivered inside an automatic turn leaves the notice for the next prompt",
+	async (mode) => {
 		const p = await parent();
-		const extensions = join(p.cwd, ".pi", "extensions");
-		mkdirSync(extensions, { recursive: true });
-		writeFileSync(
-			join(extensions, "custom-turn.ts"),
-			'export default function(pi) { pi.registerCommand("automatic", { description: "Test automatic turn", handler: async () => { pi.sendMessage({ customType: "test/automatic", content: "AUTOMATIC", display: false }, { triggerTurn: true }); } }); }',
-		);
-		await reloadSessionResources(p.sessionId);
-		command(p, "queued-user-interruption");
+		await withAutomaticTurn(p);
+		command(p, "queued-interruption");
 		const entered = Promise.withResolvers<void>();
 		const release = Promise.withResolvers<void>();
-		let input = "";
-		let automaticHadNotice = false;
-		const callsBefore = faux.state.callCount;
-		const text =
-			kind === "control"
-				? "[thinkrail:todo-nudge] Continue internally."
-				: "USER ARRIVED WHILE AUTOMATIC WAS STREAMING";
+		const inputs: string[] = [];
 		faux.setResponses([
 			async (context) => {
-				automaticHadNotice = JSON.stringify(context.messages).includes(
-					"bun run queued-user-interruption",
-				);
+				inputs.push(JSON.stringify(context.messages));
 				entered.resolve();
 				await release.promise;
 				return fauxAssistantMessage("AUTOMATIC RESPONSE");
 			},
 			(context) => {
-				input = JSON.stringify(context.messages);
-				return fauxAssistantMessage("USER RESPONSE");
+				inputs.push(JSON.stringify(context.messages));
+				return fauxAssistantMessage("QUEUED RESPONSE");
 			},
 		]);
+		const settled = nextSettle(p.sessionId);
 		await promptSession(p.sessionId, "/automatic");
 		await entered.promise;
 		try {
 			expect(getSessionState(p.sessionId).execution).toBe("running");
 			const deliver = mode === "steering" ? promptSession : followUpSession;
-			await deliver(p.sessionId, text);
-			if (kind === "removed") clearQueueSession(p.sessionId);
+			await deliver(p.sessionId, "USER ARRIVED WHILE AUTOMATIC WAS STREAMING");
 		} finally {
 			release.resolve();
 		}
-		const deadline = Date.now() + 5000;
-		while (getSessionState(p.sessionId).execution === "running") {
-			if (Date.now() > deadline) throw new Error("queued turn did not settle");
-			await Bun.sleep(5);
-		}
-		if (kind === "removed") expect(input).toBe("");
-		else expect(input).toContain(text);
-		expect(automaticHadNotice).toBe(false);
-		expect(faux.state.callCount - callsBefore).toBe(kind === "removed" ? 1 : 2);
-		const arrivedWithNotice = input.includes("bun run queued-user-interruption");
-		const beforeIdle = (await noticeMessages(p)).length;
-		faux.setResponses([fauxAssistantMessage("IDLE USER RESPONSE")]);
+		await settled;
+		expect(inputs).toHaveLength(2);
+		expect(inputs[1]).toContain("USER ARRIVED WHILE AUTOMATIC WAS STREAMING");
+		for (const input of inputs) expect(input).not.toContain("bun run queued-interruption");
+		expect(await noticeMessages(p)).toEqual([]);
+		let idle = "";
+		faux.setResponses([
+			(context) => {
+				idle = JSON.stringify(context.messages);
+				return fauxAssistantMessage("IDLE USER RESPONSE");
+			},
+		]);
 		await promptSession(p.sessionId, "NEXT IDLE USER REQUEST");
-		const afterIdle = (await noticeMessages(p)).length;
-		expect(beforeIdle).toBe(kind === "user" ? 1 : 0);
-		expect(afterIdle).toBe(1);
-		expect(arrivedWithNotice).toBe(kind === "user");
+		expect(idle).toContain("bun run queued-interruption");
+		expect(await noticeMessages(p)).toHaveLength(1);
 		await removeSession(p.sessionId);
 	},
 );

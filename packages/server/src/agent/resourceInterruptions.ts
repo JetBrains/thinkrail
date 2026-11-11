@@ -1,7 +1,7 @@
 import type { ExtensionFactory, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { isControlMessage, type ResourceRecord, resourceRecordId } from "@thinkrail/contracts";
 
-export const RESOURCE_INTERRUPTION_MESSAGE = "thinkrail/resource-interruptions";
+const RESOURCE_INTERRUPTION_MESSAGE = "thinkrail/resource-interruptions";
 const MAX_RECORDS = 20;
 const MAX_CHARS = 12_000;
 const PREAMBLE =
@@ -89,42 +89,11 @@ export function resourceInterruptionExtension(
 	readInterrupted: () => readonly ResourceRecord[],
 ): ExtensionFactory {
 	return (pi) => {
-		let deliveredUser = false;
-		let queuedNotice: ReturnType<typeof interruptionNotice>;
-		pi.on("message_start", (event, ctx) => {
-			if (event.message.role !== "user" || ctx.sessionManager.getSessionId() !== sessionId) return;
-			const text =
-				typeof event.message.content === "string"
-					? event.message.content
-					: event.message.content
-							.filter((part) => part.type === "text")
-							.map((part) => part.text)
-							.join("\n");
-			if (!isControlMessage(text)) deliveredUser = true;
-		});
-		pi.on("context", (event, ctx) => {
+		pi.on("before_agent_start", (event, ctx) => {
+			if (event.messageType !== "user" || isControlMessage(event.prompt)) return;
 			if (ctx.sessionManager.getSessionId() !== sessionId) return;
-			if (deliveredUser && !queuedNotice) {
-				deliveredUser = false;
-				queuedNotice = interruptionNotice(ctx.sessionManager.getBranch(), readInterrupted());
-			}
-			if (!queuedNotice) return;
-			return {
-				messages: [
-					...event.messages,
-					{ role: "custom" as const, ...queuedNotice, timestamp: Date.now() },
-				],
-			};
-		});
-		pi.on("turn_end", (event) => {
-			if (!queuedNotice) return;
-			const message = queuedNotice;
-			queuedNotice = undefined;
-			return { entries: [...event.entries, { type: "custom_message" as const, ...message }] };
-		});
-		pi.on("agent_settled", () => {
-			deliveredUser = false;
-			queuedNotice = undefined;
+			const message = interruptionNotice(ctx.sessionManager.getBranch(), readInterrupted());
+			return message ? { message } : undefined;
 		});
 	};
 }
