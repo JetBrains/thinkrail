@@ -2590,6 +2590,28 @@ own section. The kebab menu (`plan-menu`, a
   key handler intercepts keydown at `keyCode === 229` and derives the control bytes from `event.code`
   (which stays accurate under an IME) via `imeControlBytes`, writing them to the PTY itself; anything
   that isn't a rescued chord is left to normal text input.
+- **Korean IME replacement bridge (WebKit).** WebKit — Safari and the desktop app's WKWebView — drives
+  the macOS Korean input method without `composition*` events: a syllable's first jamo lands as an
+  `insertText` input, every re-composition of it (`ㄱ`→`가`→`간`) as `insertReplacementText`, the next
+  syllable as a fresh `insertText`, and the `keyCode` 229 keydown *follows* the input it produced.
+  xterm 6.0.0 writes the bare `insertText` to the PTY at once and ignores `insertReplacementText`
+  (upstream #5704, #6144), so `가` reached the shell as `ㄱ`, finals never arrived (`간` → `ㄱ`), and a
+  syllable whose input landed before the previous key's keyup was dropped outright. `TerminalInstance`
+  captures `input`/`keydown` on the mount host — ahead of xterm's own textarea listeners — and routes
+  them through `terminalImeBridge`: a single Hangul `insertText` is held instead of forwarded, each
+  `insertReplacementText` replaces the held syllable, and the held syllable reaches the PTY through
+  `term.input` when the next syllable starts, on any non-IME keydown (Enter, Space, chords, arrows,
+  digits), on a 229 chord or Escape — ahead of the bytes the rescue above writes, so Ctrl+U/Ctrl+C
+  discard the syllable with the line instead of leaving it for the next command — on `compositionstart`
+  (a real composition taking over), on `paste` (xterm hands the clipboard straight to `onData`, with no
+  input or keydown to commit on) or on focus-out; modifier-only keydowns never commit. An unmodified
+  Backspace the input method passes through while a syllable is held drops the held syllable instead of
+  emitting DEL, since nothing reached the PTY; a modified one (Option/Alt+Backspace word-delete) commits
+  it and stays xterm's. Once the replacement model has been seen, bare 229 keydowns are kept from
+  xterm so its deferred textarea diff cannot echo a syllable twice under load; the rescued chords above
+  still pass. Chrome and Firefox never emit `insertReplacementText` for an IME, so the bridge is inert
+  there. Known gap: the held syllable has no on-screen preview until it commits (xterm draws one only
+  for `composition*` input); upstream's #5704 adds that inside xterm — revisit when it ships.
 - Heavy deps (Monaco / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
   A lazy chunk that fails to load (or a render throw) is contained by the `components/ErrorBoundary` the
   **shell** wraps each region in (see `shell/SPEC.md`), so a single panel degrades instead of blanking the
