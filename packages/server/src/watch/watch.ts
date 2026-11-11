@@ -124,19 +124,10 @@ function scheduleRepoMeta(workspaceId: string, watcher: FSWatcher): void {
 	if (entry) entry.metaTimer = timer;
 }
 
-function directoryInode(path: string): number | null {
-	try {
-		const stat = statSync(path);
-		return stat.isDirectory() ? stat.ino : null;
-	} catch {
-		return null;
-	}
-}
-
 function resolveCommonGitDir(gitDir: string): string | null {
 	try {
 		const commonDir = resolve(gitDir, readFileSync(join(gitDir, "commondir"), "utf8").trim());
-		return directoryInode(commonDir) === null ? null : commonDir;
+		return isDirectory(commonDir) ? commonDir : null;
 	} catch {
 		return null;
 	}
@@ -167,7 +158,7 @@ function remoteRefTargets(gitDir: string, commonDir: string): RefWatchTarget[] {
 	const packedRefs: RefWatchTarget = [commonDir, "packed-refs"];
 	const refs = join(commonDir, "refs");
 	const remotes = join(refs, "remotes");
-	if (directoryInode(remotes) === null) return [packedRefs, [refs, "remotes"]];
+	if (!isDirectory(remotes)) return [packedRefs, [refs, "remotes"]];
 	const targets: RefWatchTarget[] = [packedRefs, [remotes, null]];
 	const segments = headBranch(gitDir)?.split("/") ?? [];
 	const leaf = segments.pop();
@@ -176,7 +167,7 @@ function remoteRefTargets(gitDir: string, commonDir: string): RefWatchTarget[] {
 		let dir = join(remotes, remote);
 		let name = leaf;
 		for (const segment of segments) {
-			if (directoryInode(join(dir, segment)) === null) {
+			if (!isDirectory(join(dir, segment))) {
 				name = segment;
 				break;
 			}
@@ -200,7 +191,7 @@ function watchRefDir(
 		watcher.on("error", () => {
 			watcher.close();
 			const remoteRefs = entries.get(workspaceId)?.remoteRefs;
-			if (remoteRefs) remoteRefs.key = "";
+			if (remoteRefs) remoteRefs.watchers = remoteRefs.watchers.filter((w) => w !== watcher);
 		});
 		return watcher;
 	} catch {
@@ -211,12 +202,8 @@ function watchRefDir(
 function syncRemoteRefWatch(workspaceId: string, entry: WatchEntry): void {
 	const remoteRefs = entry.remoteRefs;
 	if (!remoteRefs) return;
-	const targets = remoteRefTargets(remoteRefs.gitDir, remoteRefs.commonDir);
-	const key = JSON.stringify(targets.map(([dir, name]) => [dir, name, directoryInode(dir)]));
-	if (key === remoteRefs.key) return;
 	for (const watcher of remoteRefs.watchers) watcher.close();
-	remoteRefs.key = key;
-	remoteRefs.watchers = targets.flatMap(
+	remoteRefs.watchers = remoteRefTargets(remoteRefs.gitDir, remoteRefs.commonDir).flatMap(
 		(target) => watchRefDir(workspaceId, entry.watcher, target) ?? [],
 	);
 }
@@ -231,7 +218,6 @@ export function isIgnoredPath(relPath: string): boolean {
 interface RemoteRefWatch {
 	gitDir: string;
 	commonDir: string;
-	key: string;
 	watchers: FSWatcher[];
 }
 
@@ -360,7 +346,7 @@ export function ensureWatch(
 				.flatMap((dir) => watchGitDir(workspaceId, dir, watcher) ?? []);
 		const commonDir = gitDir ? resolveCommonGitDir(gitDir) : null;
 		if (gitDir && commonDir) {
-			entry.remoteRefs = { gitDir, commonDir, key: "", watchers: [] };
+			entry.remoteRefs = { gitDir, commonDir, watchers: [] };
 			syncRemoteRefWatch(workspaceId, entry);
 		}
 		return ready;

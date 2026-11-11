@@ -102,9 +102,12 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
     for a remote dir appearing or vanishing — `git pack-refs` deletes an emptied `refs/remotes/<remote>/`
     and the next push recreates it. Unlike the sources above these match exact names: the shared dir
     serves every worktree of the repo, so another branch's ref update must not nudge this one, and a ref
-    update always ends in a rename onto the ref's own name. The target set, keyed with each dir's inode so
-    a deleted-and-recreated dir is re-watched, is re-derived whenever the nudge fires; a terminal branch
-    switch is itself a nudge, so it rebinds. Not recursive: `refs/` grows with the repo's branch count.
+    update always ends in a rename onto the ref's own name. Whenever the nudge fires, the target set is
+    re-derived and every one of these watches is closed and re-created, never diffed against the old set:
+    `git pack-refs` and the next push can delete and recreate a remote dir within one debounce, under the
+    same path and often (ext4) the same inode, so a kept watch would stay bound to the deleted dir. A
+    terminal branch switch is itself a nudge, so it rebinds. Not recursive: `refs/` grows with the repo's
+    branch count.
 
   `host` fans the nudge out to two convergences: `syncWorkspaceBranch` (a workspace's branch label follows
   its live checkout) **and** a pathless, skill-neutral `fsChanged` frame (`paths: []`,
