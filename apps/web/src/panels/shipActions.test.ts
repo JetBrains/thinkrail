@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import type { BranchStatus, OpenBranchReview, ReviewDetails } from "@thinkrail/contracts";
+import type {
+	BranchReviewState,
+	BranchStatus,
+	OpenBranchReview,
+	ReviewDetails,
+} from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
 import {
 	fixChecksPrompt,
@@ -9,20 +14,23 @@ import {
 	syncCommand,
 } from "./shipActions";
 
-const published: BranchStatus = {
+const uncounted: BranchStatus = {
 	hasOrigin: true,
 	provider: "github",
 	published: true,
 	pushesElsewhere: false,
-	ahead: 0,
-	behind: 0,
 	aheadOfBase: 3,
 	onBase: false,
 	review: null,
 };
+const published: BranchStatus = { ...uncounted, ahead: 0, behind: 0 };
 
-function model(status: Partial<BranchStatus>, extra: Partial<ShipContext> = {}) {
-	const merged = { ...published, ...status };
+function model(
+	status: Partial<BranchStatus>,
+	extra: Partial<ShipContext> = {},
+	base: BranchStatus = published,
+) {
+	const merged = { ...base, ...status };
 	return shipActions(currentTranslator(), {
 		status: merged,
 		review: merged.review,
@@ -40,7 +48,7 @@ const ids = (arm: { primary: { id: string } | null; secondary: { id: string }[] 
 	secondary: arm.secondary.map((a) => a.id),
 });
 
-const pr = (state: OpenBranchReview["state"]): OpenBranchReview => ({
+const pr = (state: BranchReviewState): OpenBranchReview => ({
 	kind: "pull-request",
 	number: 128,
 	state,
@@ -62,7 +70,7 @@ test("Default on its base with local commits offers Push — the runner confirms
 });
 
 test("a fresh workspace with no commits offers nothing yet", () => {
-	const m = model({ published: false, ahead: undefined, behind: undefined, aheadOfBase: 0 });
+	const m = model({ published: false, aheadOfBase: 0 }, {}, uncounted);
 	expect(m.remote.value).toEqual({ kind: "unpublished" });
 	expect(ids(m.remote).primary).toBeNull();
 	expect(m.review.value).toBe("none");
@@ -70,7 +78,7 @@ test("a fresh workspace with no commits offers nothing yet", () => {
 });
 
 test("unpublished commits: Publish in Remote, Open PR with draft and the disabled merge stub", () => {
-	const m = model({ published: false, ahead: undefined, behind: undefined });
+	const m = model({ published: false }, {}, uncounted);
 	expect(ids(m.remote)).toEqual({ primary: "publish", secondary: [] });
 	expect(ids(m.review)).toEqual({ primary: "openPr", secondary: ["openDraftPr", "mergeLocal"] });
 	expect(m.review.secondary[1]).toMatchObject({
@@ -88,13 +96,7 @@ test("published and in sync: Open PR is the next step", () => {
 });
 
 test("a repository without origin can only (later) merge locally", () => {
-	const m = model({
-		hasOrigin: false,
-		provider: null,
-		published: false,
-		ahead: undefined,
-		behind: undefined,
-	});
+	const m = model({ hasOrigin: false, provider: null, published: false }, {}, uncounted);
 	expect(m.remote.value).toEqual({ kind: "noOrigin" });
 	expect(ids(m.remote).primary).toBeNull();
 	expect(ids(m.review)).toEqual({ primary: null, secondary: ["mergeLocal"] });
@@ -114,7 +116,7 @@ test("another forge or a local bare origin pushes but offers no PR", () => {
 });
 
 test("published counts unknown read as published, never in sync", () => {
-	const m = model({ ahead: undefined, behind: undefined });
+	const m = model({}, {}, uncounted);
 	expect(m.remote.value).toEqual({ kind: "published" });
 	expect(ids(m.remote).primary).toBeNull();
 });
@@ -133,19 +135,24 @@ test("a diverged branch offers Sync, never Push", () => {
 });
 
 test("merged or closed: Settle, or Keep active once settled; Default is never removable", () => {
-	const unpublished = { published: false, ahead: undefined, behind: undefined };
-	expect(ids(model({ ...unpublished, review: pr("merged") }).review)).toEqual({
+	const unpublished = { published: false };
+	expect(ids(model({ ...unpublished, review: pr("merged") }, {}, uncounted).review)).toEqual({
 		primary: "settle",
 		secondary: ["remove"],
 	});
-	expect(ids(model({ ...unpublished, review: pr("closed") }, { settled: true }).review)).toEqual({
+	expect(
+		ids(model({ ...unpublished, review: pr("closed") }, { settled: true }, uncounted).review),
+	).toEqual({
 		primary: null,
 		secondary: ["keepActive", "reopen", "remove"],
 	});
 	expect(
 		ids(
-			model({ ...unpublished, review: pr("merged") }, { canSettle: false, removable: false })
-				.review,
+			model(
+				{ ...unpublished, review: pr("merged") },
+				{ canSettle: false, removable: false },
+				uncounted,
+			).review,
 		),
 	).toEqual({ primary: null, secondary: [] });
 });
@@ -208,11 +215,7 @@ test("unpushed or missing remote commits leave the PR's next step to the Remote 
 	expect(ids(ahead.review)).toEqual({ primary: null, secondary: [] });
 	const draftBehind = model({ behind: 2, review: openPr({ draft: true }) });
 	expect(ids(draftBehind.review)).toEqual({ primary: null, secondary: ["ready"] });
-	const unknown = model({
-		ahead: undefined,
-		behind: undefined,
-		review: openPr({ mergeState: "clean" }),
-	});
+	const unknown = model({ review: openPr({ mergeState: "clean" }) }, {}, uncounted);
 	expect(ids(unknown.review).primary).toBeNull();
 });
 
@@ -224,7 +227,7 @@ test("a host without review actions keeps the open PR's arm empty", () => {
 test("the resolved review wins over the status review and names the noun", () => {
 	const mr: OpenBranchReview = { kind: "merge-request", number: 4, state: "merged" };
 	const m = shipActions(currentTranslator(), {
-		status: { ...published, review: null },
+		status: published,
 		review: mr,
 		base: "main",
 		canSettle: true,
@@ -243,7 +246,7 @@ test("Sync offers git pull only when origin pulls from where it pushes and the b
 });
 
 test("a push repository that couldn't be read offers no remote action and claims no state", () => {
-	const m = model({ published: null, pushesElsewhere: true, ahead: undefined, behind: undefined });
+	const m = model({ published: null, pushesElsewhere: true }, {}, uncounted);
 	expect(m.remote.value).toEqual({ kind: "unreachable" });
 	expect(ids(m.remote)).toEqual({ primary: null, secondary: [] });
 });

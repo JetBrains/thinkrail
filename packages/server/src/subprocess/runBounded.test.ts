@@ -306,6 +306,49 @@ async function collect(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> 
 	return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
+test("the idle deadline lets a chatty child run past it and stops a silent one", async () => {
+	const chunks: string[] = [];
+	const chatty = await runBounded(
+		bun(
+			"let n = 0; const t = setInterval(() => { process.stderr.write('tick ' + n + '\\r'); if (++n === 6) { clearInterval(t); } }, 60);",
+		),
+		{ timeoutMs: 10_000, idleTimeoutMs: 200, onStderr: (text) => chunks.push(text) },
+	);
+	expect(chatty.ok).toBe(true);
+	expect(chatty.timedOut).toBe(false);
+	expect(chunks.join("")).toContain("tick 5");
+
+	const silent = await runBounded(
+		bun('process.stderr.write("start"); setTimeout(() => {}, 5_000);'),
+		{
+			timeoutMs: 10_000,
+			idleTimeoutMs: 200,
+		},
+	);
+	expect(silent.ok).toBe(false);
+	expect(silent.timedOut).toBe(true);
+	expect(silent.err).toBe("start");
+	expect(silent.waitedMs).toBeLessThan(2_000);
+});
+
+test("a throwing stderr callback neither stops the drain nor trips the idle deadline", async () => {
+	const result = await runBounded(
+		bun(
+			'let n = 0; const t = setInterval(() => { process.stderr.write("line " + n + "\\n"); if (++n === 6) clearInterval(t); }, 60);',
+		),
+		{
+			timeoutMs: 10_000,
+			idleTimeoutMs: 200,
+			onStderr: () => {
+				throw new Error("callback failed");
+			},
+		},
+	);
+	expect(result.ok).toBe(true);
+	expect(result.timedOut).toBe(false);
+	expect(result.err).toContain("line 5");
+});
+
 test("streamBounded hands stdout over as it arrives and closes on a clean exit", async () => {
 	const run = streamBounded(
 		bun(
