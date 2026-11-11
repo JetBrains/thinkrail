@@ -81,14 +81,20 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
     the same gitfile parse for the same reason). Non-recursive because only the
     dir's top level holds the refs that move (`HEAD`, `index`, `ORIG_HEAD`) while `objects/`/`logs/` are
     pure storms; a missing/unreadable git dir (non-git folder) or a failed start degrades silently.
-
-  - **Shared Git metadata for linked worktrees:** the private gitdir points to
-    a common Git directory. A non-recursive watcher observes shared config
-    and packed-reference changes. Another watcher monitors the parent
-    directory of the configured remote-tracking ref, filtering events to
-    that ref and its lockfile. This detects terminal pushes without watching
-    every Git ref recursively. Config and HEAD changes can rebind the
-    remote-ref watcher. `stopWatch` closes all associated watchers and timers.
+  - non-recursive watches on a linked worktree's **remote-tracking refs** in the shared git dir (found
+    through the gitdir's `commondir` file): a terminal `git push` writes only there, so the Remote status
+    would otherwise stay stale (#1009). ThinkRail branches are created `--no-track`, so there is no upstream
+    config to follow, yet a push still updates `refs/remotes/<remote>/<branch>` through the remote's fetch
+    refspec; the watch therefore follows the checked-out branch name under **every** remote, never parsed
+    config. Per remote it watches the deepest existing directory along `<remote>/<branch>` and matches only
+    the next path component (a slashed branch's parent dirs may not exist before its first push). It also
+    watches `packed-refs` in the shared dir and `refs/remotes` itself (or `refs`, until `remotes` exists)
+    for a remote dir appearing or vanishing — `git pack-refs` deletes an emptied `refs/remotes/<remote>/`
+    and the next push recreates it. Unlike the sources above these match exact names: the shared dir
+    serves every worktree of the repo, so another branch's ref update must not nudge this one, and a ref
+    update always ends in a rename onto the ref's own name. The target set, keyed with each dir's inode so
+    a deleted-and-recreated dir is re-watched, is re-derived whenever the nudge fires; a terminal branch
+    switch is itself a nudge, so it rebinds. Not recursive: `refs/` grows with the repo's branch count.
 
   `host` fans the nudge out to two convergences: `syncWorkspaceBranch` (a workspace's branch label follows
   its live checkout) **and** a pathless, skill-neutral `fsChanged` frame (`paths: []`,
