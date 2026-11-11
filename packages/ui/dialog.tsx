@@ -5,6 +5,7 @@ import type * as React from "react";
 import { useSyncExternalStore } from "react";
 import { IconButton } from "./button";
 import { yieldEscapeToIme } from "./keyboard";
+import { isToastPress } from "./toast";
 import { cn } from "./utils";
 
 const OPEN_MODAL_LAYER = '[data-modal-layer][data-state="open"]';
@@ -46,11 +47,26 @@ function DialogOverlay({
 	);
 }
 
+function keepOpenOnToast<E extends Event>(handler: ((event: E) => void) | undefined) {
+	return (event: E) => {
+		handler?.(event);
+		const original = event instanceof CustomEvent ? event.detail?.originalEvent : undefined;
+		const target = event.target;
+		if (
+			(original instanceof Event && isToastPress(original)) ||
+			(target instanceof Element && target.closest("[data-toast-viewport]") !== null)
+		) {
+			event.preventDefault();
+		}
+	};
+}
+
 function DialogContent({
 	className,
 	children,
 	hideClose = false,
 	onEscapeKeyDown,
+	onInteractOutside,
 	...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & { hideClose?: boolean }) {
 	const t = useT();
@@ -63,6 +79,7 @@ function DialogContent({
 					className,
 				)}
 				onEscapeKeyDown={yieldEscapeToIme(onEscapeKeyDown)}
+				onInteractOutside={keepOpenOnToast(onInteractOutside)}
 				{...props}
 			>
 				{children}
@@ -79,6 +96,7 @@ function DialogContent({
 function DialogPanel({
 	className,
 	onEscapeKeyDown,
+	onInteractOutside,
 	...props
 }: React.ComponentProps<typeof DialogPrimitive.Content>) {
 	return (
@@ -88,6 +106,7 @@ function DialogPanel({
 				className,
 			)}
 			onEscapeKeyDown={yieldEscapeToIme(onEscapeKeyDown)}
+			onInteractOutside={keepOpenOnToast(onInteractOutside)}
 			{...props}
 		/>
 	);

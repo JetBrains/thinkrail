@@ -269,8 +269,9 @@ ref off the workspace-create critical path.
   purpose: the two modules have no sibling edge. Consumed by `workspaces` for managed workspaces;
   **`canonicalPath(path)`** — the symlink-resolved form any path compared against git output must
   take (git resolves symlinks, a caller's path does not), shared with `workspaces`' worktree-identity
-  checks; `prefetchBranch(projectId, ref)` — best-effort background
-  `git fetch` of a configured remote ref (via `gitAsync`), so a later `createWorkspace` branches off a
+  checks; `prefetchBranch(projectId, ref, signal?)` — best-effort background
+  `git fetch` of a configured remote ref (via `gitAsync`; an aborted `signal` — Stop on `start_workspace`
+  — kills it), so a later `createWorkspace` branches off a
   fresh tip without the network round-trip on its critical path (local/unknown ref or offline → no-op).
   Its ref is
   **wire-supplied and passes the same `isSafeRef` gate `createWorkspace` uses** before it reaches git:

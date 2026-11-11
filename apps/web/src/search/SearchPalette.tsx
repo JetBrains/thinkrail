@@ -20,7 +20,7 @@ import { localeOf, type Translator, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
-import { IconTooltip, Tooltip, TooltipContent, TooltipTrigger } from "@thinkrail/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	type KeyboardEvent as ReactKeyboardEvent,
@@ -36,6 +36,8 @@ import {
 } from "react";
 import { shortcutKeys } from "../commands";
 import { AttentionDot } from "../components/AttentionDot";
+import { Keycaps, KeyHint } from "../components/Keycaps";
+import { highlightRanges } from "../components/MatchHighlight";
 import { RunningIcon } from "../components/RunningIcon";
 import { hasPlatformModifier, useMediaQuery } from "../lib";
 import { selectHostReachable, useAppStore } from "../store";
@@ -48,7 +50,14 @@ import {
 	useHostSearch,
 } from "./hostSearch";
 import { recordPick } from "./learning";
-import type { PaletteFile, PaletteItem, PaletteRow, PaletteSection } from "./model";
+import type {
+	PaletteAsk,
+	PaletteFile,
+	PaletteItem,
+	PaletteRow,
+	PaletteSection,
+	PaletteStart,
+} from "./model";
 import { readLearning, readPreviewOpen, writeLearning, writePreviewOpen } from "./preferences";
 import {
 	parseSearchQuery,
@@ -59,7 +68,14 @@ import {
 	withScopePrefix,
 } from "./query";
 import { scopeChordIndex } from "./scopeChord";
-import { flattenRows, groupSections, rankSections } from "./sections";
+import {
+	askEligible,
+	flattenRows,
+	groupSections,
+	rankSections,
+	startEligible,
+	startPrompt,
+} from "./sections";
 
 const WIDE_VIEWPORT = "(min-width: 48rem)";
 const SPINNER_DELAY_MS = 200;
@@ -105,6 +121,8 @@ export interface SearchPaletteProps {
 	readonly actions: readonly PaletteItem[];
 	readonly scopes: readonly SearchScope[];
 	readonly host?: PaletteHost;
+	readonly start?: PaletteStart;
+	readonly ask?: PaletteAsk;
 	readonly notice?: PaletteNotice;
 }
 
@@ -128,6 +146,8 @@ function PaletteContent({
 	actions: emptyActions,
 	scopes,
 	host,
+	start,
+	ask,
 	notice,
 }: SearchPaletteProps) {
 	const t = useT();
@@ -186,6 +206,19 @@ function PaletteContent({
 		[hostState.groups, hostState.stale],
 	);
 	const reasons = useMemo(() => hostSearchReasons(hostState), [hostState]);
+	const startText = startEligible(parsed) ? startPrompt(parsed.raw) : "";
+	const startInput = useMemo(
+		() => (start && startText ? { start, text: startText } : undefined),
+		[start, startText],
+	);
+	const askText = askEligible(parsed) ? startPrompt(parsed.raw) : "";
+	const askInput = useMemo(
+		() =>
+			ask && askText
+				? { ask, text: askText, ...(offlineReason ? { disabledReason: offlineReason } : {}) }
+				: undefined,
+		[ask, askText, offlineReason],
+	);
 	const ranked = useMemo(
 		() => rankSections({ parsed, rootItems: allItems, learning, nowMs }),
 		[parsed, allItems, learning, nowMs],
@@ -196,6 +229,8 @@ function PaletteContent({
 				t,
 				parsed,
 				hostOverflow: overflow,
+				...(startInput ? { start: startInput } : {}),
+				...(askInput ? { ask: askInput } : {}),
 				rootItems: allItems,
 				waiting,
 				actions: emptyActions,
@@ -209,6 +244,8 @@ function PaletteContent({
 			t,
 			parsed,
 			overflow,
+			startInput,
+			askInput,
 			allItems,
 			waiting,
 			emptyActions,
@@ -262,6 +299,19 @@ function PaletteContent({
 		writeLearning(next);
 	};
 
+	const startFromText = () => {
+		if (!startInput) return;
+		pickedRef.current = startInput.start.openDialog(startInput.text);
+		onClose();
+	};
+
+	const askFromText = () => {
+		if (!askInput || askInput.disabledReason) return;
+		pickedRef.current = true;
+		onClose();
+		askInput.ask.ask(askInput.text);
+	};
+
 	const activate = (row: PaletteRow | null) => {
 		if (!row) return;
 		const { item } = row;
@@ -274,6 +324,14 @@ function PaletteContent({
 		if (more?.kind === "expand") {
 			setExpanded((current) => new Set(current).add(more.group));
 			setSelectedId(more.nextId);
+			return;
+		}
+		if (item.kind === "start") {
+			startFromText();
+			return;
+		}
+		if (item.kind === "ask") {
+			askFromText();
 			return;
 		}
 		if (item.run) {
@@ -331,6 +389,16 @@ function PaletteContent({
 			cycleScope(event.shiftKey ? -1 : 1);
 			return;
 		}
+		if (mod && event.key === "Enter" && !event.altKey && !event.shiftKey) {
+			claim();
+			if (!event.repeat) startFromText();
+			return;
+		}
+		if (askInput && event.altKey && event.key === "Enter" && !mod && !event.shiftKey) {
+			claim();
+			if (!event.repeat) askFromText();
+			return;
+		}
 		if (mod && event.code === "KeyI" && !event.shiftKey && !event.altKey) {
 			claim();
 			if (wide) togglePreview();
@@ -356,7 +424,7 @@ function PaletteContent({
 				return;
 			case "Enter":
 				claim();
-				activate(selected);
+				if (!event.repeat) activate(selected);
 				return;
 		}
 		if (fromFrame && !event.ctrlKey && !event.metaKey && !MODIFIER_KEYS.has(event.key)) {
@@ -488,10 +556,19 @@ function PaletteContent({
 				</div>
 				<footer className="flex h-32 shrink-0 items-center gap-12 border-border-muted border-t px-12 tr-text-metadata text-text-subtle">
 					<div className="@container flex h-16 min-w-0 flex-1 flex-wrap gap-x-12 overflow-hidden">
-						<Hint keys={["↑", "↓"]} label={t("search.hint.select")} />
-						<Hint keys={["↵"]} label={t(enterLabel(selected?.item))} />
-						<Hint keys={["Tab"]} label={t("search.hint.scope")} />
-						<Hint keys={["esc"]} label={t(query ? "search.hint.clear" : "search.hint.close")} />
+						<KeyHint keys={["↑", "↓"]} label={t("search.hint.select")} />
+						<KeyHint keys={["↵"]} label={t(enterLabel(selected?.item))} />
+						<KeyHint keys={["Tab"]} label={t("search.hint.scope")} />
+						{startInput ? (
+							<KeyHint
+								keys={shortcutKeys({ key: "↵", mod: true })}
+								label={t("search.hint.start")}
+							/>
+						) : null}
+						{askInput && !askInput.disabledReason && selected?.item.kind !== "ask" ? (
+							<KeyHint keys={shortcutKeys({ key: "↵", alt: true })} label={t("search.hint.ask")} />
+						) : null}
+						<KeyHint keys={["esc"]} label={t(query ? "search.hint.clear" : "search.hint.close")} />
 					</div>
 					{wide ? (
 						<Button
@@ -513,7 +590,9 @@ function PaletteContent({
 					) : null}
 				</footer>
 				<p role="status" aria-live="polite" className="sr-only">
-					{t("search.palette.resultCount", { count: rows.length })}
+					{t("search.palette.resultCount", {
+						count: rows.filter((row) => row.item.kind !== "start").length,
+					})}
 					{hostState.pending ? ` ${t("search.palette.searching")}` : ""}
 					{reasons.map((reason) => ` ${reasonText(t, reason)}`).join("")}
 				</p>
@@ -617,33 +696,9 @@ function StatusMark({ t, reasons }: { t: Translator; reasons: readonly HostSearc
 function enterLabel(item: PaletteItem | undefined): MessageKey {
 	if (!item) return "search.hint.open";
 	if (item.kind === "command") return "search.hint.run";
+	if (item.kind === "start") return "search.hint.start";
+	if (item.kind === "ask") return "search.hint.ask";
 	return "search.hint.open";
-}
-
-function Keycaps({ keys }: { keys: readonly string[] }) {
-	return (
-		<span className="flex shrink-0 items-center gap-2">
-			{keys.map((key) => (
-				<kbd
-					key={key}
-					className="inline-flex h-16 min-w-16 items-center justify-center rounded-xs border border-border-default px-4 tr-text-metadata text-text-muted"
-				>
-					{key}
-				</kbd>
-			))}
-		</span>
-	);
-}
-
-function Hint({ keys, label }: { keys: readonly string[]; label: string }) {
-	return (
-		<IconTooltip label={label} side="top">
-			<span className="flex shrink-0 items-center gap-4">
-				<Keycaps keys={keys} />
-				<span className="hidden @[296px]:inline">{label}</span>
-			</span>
-		</IconTooltip>
-	);
 }
 
 function ScopeChips({
@@ -735,26 +790,6 @@ function Sections({
 	));
 }
 
-function highlight(
-	text: string,
-	ranges: readonly (readonly [number, number])[] | undefined,
-): ReactNode {
-	if (!ranges || ranges.length === 0) return text;
-	const parts: ReactNode[] = [];
-	let cursor = 0;
-	for (const [start, end] of ranges) {
-		if (start > cursor) parts.push(text.slice(cursor, start));
-		parts.push(
-			<mark key={start} className="rounded-xs bg-primary-soft text-text-default">
-				{text.slice(start, end)}
-			</mark>,
-		);
-		cursor = end;
-	}
-	if (cursor < text.length) parts.push(text.slice(cursor));
-	return parts;
-}
-
 function Row({
 	row,
 	id,
@@ -824,11 +859,11 @@ function Row({
 						item.disabledReason ? "text-text-disabled" : "text-text-default",
 					)}
 				>
-					{highlight(item.title, row.ranges.title)}
+					<RowTitle title={item.title} lead={item.titleLead ?? 0} ranges={row.ranges.title} />
 				</span>
 				{item.subtitle ? (
 					<span className="truncate tr-text-metadata text-text-subtle">
-						{highlight(item.subtitle, row.ranges.subtitle)}
+						{highlightRanges(item.subtitle, row.ranges.subtitle)}
 					</span>
 				) : null}
 			</span>
@@ -844,6 +879,30 @@ function Row({
 				) : null}
 			</span>
 		</div>
+	);
+}
+
+function RowTitle({
+	title,
+	lead,
+	ranges = [],
+}: {
+	title: string;
+	lead: number;
+	ranges: readonly (readonly [number, number])[] | undefined;
+}): ReactNode {
+	if (lead <= 0) return highlightRanges(title, ranges);
+	const before = ranges
+		.filter(([start]) => start < lead)
+		.map(([start, end]): [number, number] => [start, Math.min(end, lead)]);
+	const after = ranges
+		.filter(([, end]) => end > lead)
+		.map(([start, end]): [number, number] => [Math.max(start, lead) - lead, end - lead]);
+	return (
+		<>
+			<span className="text-text-muted">{highlightRanges(title.slice(0, lead), before)}</span>
+			{highlightRanges(title.slice(lead), after)}
+		</>
 	);
 }
 

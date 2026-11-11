@@ -1,6 +1,7 @@
 import type {
 	AppConfig,
 	AppSurvey,
+	ChatContinuation,
 	ComposerGrowthLimit,
 	ExtUiRequest,
 	FontChoice,
@@ -55,9 +56,12 @@ import {
 	DEFAULT_CONFIG,
 	type ExtensionSettingValues,
 	isBackgroundCommandCompletionMessage,
+	isChatHandoffMessage,
+	isContinueInWorkspaceRequestMessage,
 	isControlMessage,
 	isLineWidth,
 	isLocalePreference,
+	isQuestionPanelHeight,
 	isSettleIdleDays,
 	isSubagentCompletionMessage,
 	isSubagentMaxConcurrent,
@@ -136,6 +140,7 @@ import {
 	selectFilesTreeView,
 	selectLayoutIdentityPlacement,
 	selectLayoutResourcePlacement,
+	selectRepoProjects,
 	selectSupportsMcp,
 	selectWorkspaceById,
 	selectWorkspaceNavTick,
@@ -157,6 +162,13 @@ export interface FileTab {
 	rendererId?: string;
 	viewState?: unknown;
 	loadedTick?: number;
+	reveal?: FileReveal;
+}
+export interface FileReveal {
+	line: number;
+	column?: number;
+	length?: number;
+	tick: number;
 }
 export interface ChatTab {
 	kind: "chat";
@@ -333,6 +345,12 @@ export interface RouteChatTarget {
 	navTick: number;
 	navigation: CenterNavigationStamp | null;
 	validated: boolean;
+}
+
+export interface ComposerFocusRequest {
+	workspaceId: string;
+	sessionId: string | null;
+	navTick: number;
 }
 
 export interface LayoutOpenOptions {
@@ -791,6 +809,34 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 					],
 				};
 			}
+			if (isContinueInWorkspaceRequestMessage(event.message)) {
+				return {
+					...rt,
+					turns: [
+						...rt.turns,
+						{
+							kind: "continuationRequest",
+							id: crypto.randomUUID(),
+							details: event.message.details,
+							timestamp: event.message.timestamp,
+						},
+					],
+				};
+			}
+			if (isChatHandoffMessage(event.message)) {
+				return {
+					...rt,
+					turns: [
+						...rt.turns,
+						{
+							kind: "handoff",
+							id: crypto.randomUUID(),
+							details: event.message.details,
+							timestamp: event.message.timestamp,
+						},
+					],
+				};
+			}
 			if (event.message.role !== "assistant" || !rt.currentAssistantId) return rt;
 			const id = rt.currentAssistantId;
 			const turn: ChatTurn = { kind: "assistant", id, message: event.message, streaming: false };
@@ -997,6 +1043,10 @@ interface AppState {
 	recentProjects: Project[];
 	workspaces: Record<string, Workspace[]>;
 	removedWorkspaceIds: Record<string, true>;
+	/** Continue-in-workspace operations this client heard about, by operation id (host-owned phases). */
+	chatContinuations: Record<string, ChatContinuation>;
+	/** The operations this client started: the one that follows the new chat when the host reports `started`. */
+	initiatedContinuations: Record<string, true>;
 	expandedProjectIds: Record<string, true>;
 	workspaceSettlingSupported: boolean;
 	settledShelfExpanded: Record<string, true>;
@@ -1008,6 +1058,7 @@ interface AppState {
 	workspaceSelectionHistory: string[];
 	routeChatTarget: RouteChatTarget | null;
 	routeChatTargetGeneration: number;
+	composerFocusRequest: ComposerFocusRequest | null;
 	workbenchFrame: WorkbenchFrame | null;
 	workspaceViewsByWorkspace: Record<string, WorkspaceViewState>;
 	layoutStateReady: boolean;
@@ -1060,6 +1111,7 @@ interface AppState {
 	specRequest: {
 		workspaceId: string;
 		path: string;
+		line?: number;
 		navigation: CenterNavigationStamp | null;
 	} | null;
 	specsByWorkspace: Record<string, SpecGraphNode[]>;
@@ -1098,6 +1150,7 @@ interface AppState {
 	terminalReplayKb: number;
 	terminalWindowsShell: TerminalWindowsShell;
 	composerGrowthLimit: ComposerGrowthLimit;
+	questionPanelHeight: number;
 	chatLineWidth: number;
 	fileLineWidth: number;
 	chatLineWidthBounded: boolean;
@@ -1114,6 +1167,7 @@ interface AppState {
 	agentReviewEnabled: boolean;
 	disabledExtensions: string[];
 	extensionSettings: ExtensionSettingValues;
+	otherAgentSkills: boolean;
 	disabledPackages: string[];
 	locale: string;
 	localLocales: LocalLocalesSnapshot | null;
@@ -1154,6 +1208,9 @@ interface AppState {
 	updateWorkspace: (workspace: Workspace) => void;
 	removeWorkspace: (projectId: string, workspaceId: string) => void;
 	applyWorkspaceRemoved: (projectId: string, workspaceId: string) => void;
+	applyChatContinuation: (continuation: ChatContinuation) => void;
+	noteInitiatedContinuation: (operationId: string) => void;
+	forgetInitiatedContinuation: (operationId: string) => void;
 	selectProject: (projectId: string, opts?: { reveal?: boolean }) => void;
 	toggleProjectExpanded: (projectId: string) => void;
 	toggleSettledShelf: (projectId: string, expanded?: boolean) => void;
@@ -1168,6 +1225,8 @@ interface AppState {
 	) => void;
 	validateRouteChatTarget: (sessionId: string) => void;
 	clearRouteChatTarget: () => void;
+	requestComposerFocus: (workspaceId: string, sessionId?: string) => void;
+	clearComposerFocusRequest: () => void;
 	hydrateLocalLayoutState: (payload: LocalLayoutStatePayload) => void;
 	applyLocalLayoutState: (payload: LocalLayoutStatePayload, invalidateProjection?: boolean) => void;
 	setLocalLayoutPreferences: (preferences: LocalLayoutPreferences) => void;
@@ -1198,6 +1257,13 @@ interface AppState {
 	) => CenterNavigationStamp | null;
 	noteNavigation: (workspaceId: string) => void;
 	setTabRenderer: (workspaceId: string, id: string, rendererId: string) => void;
+	revealFileTab: (
+		workspaceId: string,
+		path: string,
+		at: Omit<FileReveal, "tick">,
+		rendererId?: string,
+	) => void;
+	clearFileTabReveal: (workspaceId: string, id: string, tick: number) => void;
 	setTabViewState: (workspaceId: string, id: string, viewState: unknown) => void;
 	setDiffTabView: (id: string, view: DiffTabView) => void;
 	setDiffTabIgnoreWhitespace: (id: string, ignoreWhitespace: boolean) => void;
@@ -1451,7 +1517,7 @@ interface AppState {
 	clearChatLocation: () => void;
 	requestHistoryOpen: (target: HistoryTarget) => void;
 	clearHistoryOpen: () => void;
-	requestSpecView: (workspaceId: string, path: string) => void;
+	requestSpecView: (workspaceId: string, path: string, line?: number) => void;
 	clearSpecRequest: () => void;
 	setWorkspaceSpecs: (workspaceId: string, nodes: SpecGraphNode[]) => void;
 	setWorkspaceReview: (workspaceId: string, snapshot: ReviewSnapshot) => void;
@@ -1504,6 +1570,9 @@ function configPatch(config: AppConfig) {
 			? config.terminalWindowsShell
 			: DEFAULT_CONFIG.terminalWindowsShell,
 		composerGrowthLimit: config.composerGrowthLimit ?? DEFAULT_CONFIG.composerGrowthLimit,
+		questionPanelHeight: isQuestionPanelHeight(config.questionPanelHeight)
+			? config.questionPanelHeight
+			: DEFAULT_CONFIG.questionPanelHeight,
 		chatLineWidth: isLineWidth(config.chatLineWidth)
 			? config.chatLineWidth
 			: DEFAULT_CONFIG.chatLineWidth,
@@ -1538,6 +1607,7 @@ function configPatch(config: AppConfig) {
 			config.extensionSettings && typeof config.extensionSettings === "object"
 				? config.extensionSettings
 				: DEFAULT_CONFIG.extensionSettings,
+		otherAgentSkills: typeof config.otherAgentSkills === "boolean" ? config.otherAgentSkills : true,
 		disabledPackages: Array.isArray(config.disabledPackages)
 			? config.disabledPackages
 			: DEFAULT_CONFIG.disabledPackages,
@@ -1566,6 +1636,18 @@ function withWorkspaceSelected(history: string[], workspaceId: string): string[]
 		: [workspaceId, ...history.filter((id) => id !== workspaceId)];
 }
 
+/** No route enters a removed workspace or a chat whose deletion did not finish; the open one stays open. */
+function refusesEntry(
+	state: Pick<AppState, "workspaces" | "activeWorkspaceId" | "removedWorkspaceIds">,
+	workspaceId: string,
+): boolean {
+	if (state.removedWorkspaceIds[workspaceId]) return true;
+	return (
+		state.activeWorkspaceId !== workspaceId &&
+		selectWorkspaceById(state, workspaceId)?.deletionPending === true
+	);
+}
+
 function workspaceActivationPatch(
 	state: Pick<
 		AppState,
@@ -1589,7 +1671,7 @@ function workspaceActivationPatch(
 			| "activeWorkspaceLiveLatch"
 	  >
 	| Record<string, never> {
-	if (state.removedWorkspaceIds[workspace.id]) return {};
+	if (refusesEntry(state, workspace.id)) return {};
 	const record = state.workspaces[workspace.projectId]?.find((w) => w.id === workspace.id);
 	const activeWorkspaceLiveLatch =
 		state.activeWorkspaceId === workspace.id
@@ -1624,7 +1706,9 @@ function recentWorkspaceFallback(
 	for (const workspaceId of state.workspaceSelectionHistory) {
 		if (workspaceId === excludedWorkspaceId || state.removedWorkspaceIds[workspaceId]) continue;
 		const workspace = selectWorkspaceById(state, workspaceId);
-		if (workspace && openProjectIds.has(workspace.projectId)) return workspace;
+		if (workspace && openProjectIds.has(workspace.projectId) && !workspace.deletionPending) {
+			return workspace;
+		}
 	}
 	return null;
 }
@@ -1650,7 +1734,7 @@ function reconcileProjectNavigation(
 	const currentProjectId = selectActiveWorkspaceProjectId(state) ?? state.selectedProjectId;
 	if (!currentProjectId || projects.some((project) => project.id === currentProjectId)) return {};
 	return {
-		selectedProjectId: projects[0]?.id ?? null,
+		selectedProjectId: selectRepoProjects({ projects })[0]?.id ?? null,
 		activeWorkspaceId: null,
 		activeCreationId: null,
 	};
@@ -2329,6 +2413,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	recentProjects: [],
 	workspaces: {},
 	removedWorkspaceIds: nullProto<Record<string, true>>(),
+	chatContinuations: {},
+	initiatedContinuations: {},
 	expandedProjectIds: nullProto<Record<string, true>>(),
 	workspaceSettlingSupported: false,
 	settledShelfExpanded: nullProto<Record<string, true>>(),
@@ -2339,6 +2425,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	workspaceSelectionHistory: [],
 	routeChatTarget: null,
 	routeChatTargetGeneration: 0,
+	composerFocusRequest: null,
 	workbenchFrame: null,
 	workspaceViewsByWorkspace: {},
 	layoutStateReady: false,
@@ -2421,6 +2508,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
 	terminalWindowsShell: DEFAULT_CONFIG.terminalWindowsShell,
 	composerGrowthLimit: DEFAULT_CONFIG.composerGrowthLimit,
+	questionPanelHeight: DEFAULT_CONFIG.questionPanelHeight,
 	chatLineWidth: DEFAULT_CONFIG.chatLineWidth,
 	fileLineWidth: DEFAULT_CONFIG.fileLineWidth,
 	chatLineWidthBounded: DEFAULT_CONFIG.chatLineWidthBounded,
@@ -2438,6 +2526,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	agentReviewEnabled: DEFAULT_CONFIG.agentReviewEnabled,
 	disabledExtensions: DEFAULT_CONFIG.disabledExtensions,
 	extensionSettings: DEFAULT_CONFIG.extensionSettings,
+	otherAgentSkills: DEFAULT_CONFIG.otherAgentSkills,
 	disabledPackages: DEFAULT_CONFIG.disabledPackages,
 	locale: DEFAULT_CONFIG.locale,
 	localLocales: null,
@@ -2730,6 +2819,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 				workspaces: { ...s.workspaces, [projectId]: list.filter((w) => w.id !== workspaceId) },
 			};
 		}),
+	applyChatContinuation: (continuation) =>
+		set((s) => ({
+			chatContinuations: { ...s.chatContinuations, [continuation.operationId]: continuation },
+		})),
+	noteInitiatedContinuation: (operationId) =>
+		set((s) => ({ initiatedContinuations: { ...s.initiatedContinuations, [operationId]: true } })),
+	forgetInitiatedContinuation: (operationId) =>
+		set((s) => ({ initiatedContinuations: omitKey(s.initiatedContinuations, operationId) })),
 	applyWorkspaceRemoved: (projectId, workspaceId) => {
 		const s = get();
 		const wasActive = s.activeWorkspaceId === workspaceId;
@@ -2763,6 +2860,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 					state.chatLocationRequest?.workspaceId === workspaceId ? null : state.chatLocationRequest,
 				routeChatTarget:
 					state.routeChatTarget?.workspaceId === workspaceId ? null : state.routeChatTarget,
+				composerFocusRequest:
+					state.composerFocusRequest?.workspaceId === workspaceId
+						? null
+						: state.composerFocusRequest,
 				historyOpenRequest:
 					state.historyOpenRequest && removedSessions.has(state.historyOpenRequest.sessionId)
 						? null
@@ -2827,12 +2928,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 			routeChatTarget: null,
 		}),
 	activateWorkspace: (workspace) => {
-		if (get().removedWorkspaceIds[workspace.id]) return;
+		if (refusesEntry(get(), workspace.id)) return;
 		set((state) => workspaceActivationPatch(state, workspace));
 	},
 	activateWorkspaceFromRoute: (workspace, sessionId) =>
 		set((state) => {
-			if (state.removedWorkspaceIds[workspace.id]) return {};
+			if (refusesEntry(state, workspace.id)) return {};
 			const advanced = advanceCenterNavigation(state, workspace.id);
 			return {
 				...advanced.patch,
@@ -2859,6 +2960,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	clearRouteChatTarget: () =>
 		set((state) => (state.routeChatTarget ? { routeChatTarget: null } : state)),
+	requestComposerFocus: (workspaceId, sessionId) =>
+		set((state) => ({
+			composerFocusRequest: {
+				workspaceId,
+				sessionId: sessionId ?? null,
+				navTick: selectWorkspaceNavTick(state, workspaceId),
+			},
+		})),
+	clearComposerFocusRequest: () =>
+		set((state) => (state.composerFocusRequest ? { composerFocusRequest: null } : state)),
 	hydrateLocalLayoutState: (payload) => {
 		set((state) =>
 			state.layoutStateReady
@@ -3147,6 +3258,36 @@ export const useAppStore = create<AppState>((set, get) => ({
 				return next;
 			}),
 		),
+	revealFileTab: (workspaceId, path, at, rendererId) =>
+		set((s) => {
+			const tab = (s.tabsByWorkspace[workspaceId] ?? []).find(
+				(candidate): candidate is FileTab => candidate.kind === "file" && candidate.path === path,
+			);
+			if (!tab) return {};
+			return patchResourceTab(s, workspaceId, tab.id, (current) => {
+				if (current.kind !== "file") return current;
+				const next: FileTab = {
+					...current,
+					reveal: { ...at, tick: (current.reveal?.tick ?? 0) + 1 },
+				};
+				if (rendererId && current.rendererId !== rendererId) {
+					next.rendererId = rendererId;
+					delete next.viewState;
+				}
+				return next;
+			});
+		}),
+	clearFileTabReveal: (workspaceId, id, tick) =>
+		set((s) => {
+			const tab = (s.tabsByWorkspace[workspaceId] ?? []).find((candidate) => candidate.id === id);
+			if (tab?.kind !== "file" || tab.reveal?.tick !== tick) return {};
+			return patchResourceTab(s, workspaceId, id, (current) => {
+				if (current.kind !== "file") return current;
+				const next: FileTab = { ...current };
+				delete next.reveal;
+				return next;
+			});
+		}),
 	setTabViewState: (workspaceId, id, viewState) =>
 		set((s) =>
 			patchResourceTab(s, workspaceId, id, (tab) => {
@@ -4614,7 +4755,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	requestChatLocation: (req) =>
 		set((state) => {
 			if (
-				state.removedWorkspaceIds[req.workspaceId] ||
+				refusesEntry(state, req.workspaceId) ||
 				isSessionDeleted(state, req.workspaceId, req.sessionId)
 			) {
 				return {};
@@ -4634,7 +4775,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	requestHistoryOpen: (target) =>
 		set((s) => {
 			if (
-				s.removedWorkspaceIds[target.workspaceId] ||
+				refusesEntry(s, target.workspaceId) ||
 				isSessionDeleted(s, target.workspaceId, target.sessionId)
 			) {
 				return {};
@@ -4677,7 +4818,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			};
 		}),
 	clearHistoryOpen: () => set({ historyOpenRequest: null }),
-	requestSpecView: (workspaceId, path) =>
+	requestSpecView: (workspaceId, path, line) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const advanced = advanceCenterNavigation(s, workspaceId);
@@ -4687,7 +4828,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 					workspaceId,
 					tool: "specs",
 				}),
-				specRequest: { workspaceId, path, navigation: advanced.stamp },
+				specRequest: {
+					workspaceId,
+					path,
+					...(line === undefined ? {} : { line }),
+					navigation: advanced.stamp,
+				},
 				...advanced.patch,
 			};
 		}),

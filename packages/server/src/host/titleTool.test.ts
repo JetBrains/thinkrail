@@ -115,32 +115,35 @@ test("a manual rename always wins over the agent", async () => {
 test.each([
 	["before", true],
 	["after", false],
-])("the agent names a workspace whose terminal checked out a branch (nudge %s naming), but never moves that branch", async (_order, nudged) => {
-	const ws = await createWorkspace("p1");
-	git(ws.worktreePath, "switch", "-c", "feature/mine");
-	if (nudged) syncWorkspaceBranch(ws.id);
-	const refs = () =>
-		Bun.spawnSync(["git", "-C", repo, "for-each-ref", "--format=%(refname:short)", "refs/heads"])
-			.stdout.toString()
-			.trim();
-	const before = refs();
+])(
+	"the agent names a workspace whose terminal checked out a branch (nudge %s naming), but never moves that branch",
+	async (_order, nudged) => {
+		const ws = await createWorkspace("p1");
+		git(ws.worktreePath, "switch", "-c", "feature/mine");
+		if (nudged) syncWorkspaceBranch(ws.id);
+		const refs = () =>
+			Bun.spawnSync(["git", "-C", repo, "for-each-ref", "--format=%(refname:short)", "refs/heads"])
+				.stdout.toString()
+				.trim();
+		const before = refs();
 
-	const text = await applyAgentTitle(
-		"s1",
-		{ chat_title: "Agent title", workspace_name: "Agent name", branch: "agent-name" },
-		fakeChat(ws.id).deps,
-	);
+		const text = await applyAgentTitle(
+			"s1",
+			{ chat_title: "Agent title", workspace_name: "Agent name", branch: "agent-name" },
+			fakeChat(ws.id).deps,
+		);
 
-	expect(text).toContain(
-		'Workspace renamed to "Agent name" (branch feature/mine unchanged: it was checked out in this worktree outside ThinkRail. To rename the branch, call set_title again with workspace_name and branch after HEAD is back on the workspace\'s own branch).',
-	);
-	expect(getWorkspace(ws.id)).toMatchObject({
-		name: "Agent name",
-		branch: "feature/mine",
-		renamed: true,
-	});
-	expect(refs()).toBe(before);
-});
+		expect(text).toContain(
+			'Workspace renamed to "Agent name" (branch feature/mine unchanged: it was checked out in this worktree outside ThinkRail. To rename the branch, call set_title again with workspace_name and branch after HEAD is back on the workspace\'s own branch).',
+		);
+		expect(getWorkspace(ws.id)).toMatchObject({
+			name: "Agent name",
+			branch: "feature/mine",
+			renamed: true,
+		});
+		expect(refs()).toBe(before);
+	},
+);
 
 test("a detached HEAD still names the workspace and says the branch was kept", async () => {
 	const ws = await createWorkspace("p1");

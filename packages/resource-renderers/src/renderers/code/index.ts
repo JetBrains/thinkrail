@@ -1,7 +1,9 @@
 import type { ResourceRenderer } from "../../registry";
 
+export const SOURCE_RENDERER_ID = "thinkrail/code";
+
 export const codeRenderer: ResourceRenderer = {
-	id: "thinkrail/code",
+	id: SOURCE_RENDERER_ID,
 	labelKey: "viewer.renderer.source",
 	match: { text: true },
 	rank: 100,

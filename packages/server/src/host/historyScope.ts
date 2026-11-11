@@ -1,11 +1,13 @@
 import type { HistoryScope, Project, Workspace } from "@thinkrail/contracts";
 
+/** `hidden` names cwds the asking client may not learn of: they are out of every scope, whatever it names. */
 export function buildHistoryScope(
 	scope: HistoryScope,
 	projects: Project[],
 	workspacesByProject: (
 		projectId: string,
 	) => Array<Pick<Workspace, "id" | "projectId" | "worktreePath">>,
+	hidden?: (cwd: string) => boolean,
 ): {
 	filter: (cwd: string, sessionId: string) => boolean;
 	labels: (cwd: string) => { workspaceId?: string; projectId?: string };
@@ -58,5 +60,7 @@ export function buildHistoryScope(
 		return entry ? { workspaceId: entry.workspaceId, projectId: entry.projectId } : {};
 	};
 
-	return { filter, labels };
+	if (!hidden) return { filter, labels };
+	const scoped = filter;
+	return { filter: (cwd, sessionId) => !hidden(cwd) && scoped(cwd, sessionId), labels };
 }

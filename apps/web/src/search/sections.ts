@@ -1,15 +1,28 @@
-import { RiMoreLine } from "@remixicon/react";
+import { RiChatAiLine, RiMoreLine, RiSparkling2Line } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import { frecencyScore, type LearningSnapshot } from "./learning";
-import type { PaletteItem, PaletteRow, PaletteSection } from "./model";
-import type { ParsedQuery, SearchScope } from "./query";
+import type { PaletteAsk, PaletteItem, PaletteRow, PaletteSection, PaletteStart } from "./model";
+import { type ParsedQuery, type SearchScope, stripScopePrefix } from "./query";
 import { compareRanked, pickTopHit, plainRow, type RankedItem, rankItems, toRow } from "./rank";
+
+export interface StartInput {
+	readonly start: PaletteStart;
+	readonly text: string;
+}
+
+export interface AskInput {
+	readonly ask: PaletteAsk;
+	readonly text: string;
+	readonly disabledReason?: string;
+}
 
 export interface SectionsInput {
 	readonly t: Translator;
 	readonly parsed: ParsedQuery;
 	readonly hostOverflow?: Readonly<Record<string, number>>;
+	readonly start?: StartInput;
+	readonly ask?: AskInput;
 	readonly rootItems: readonly PaletteItem[];
 	readonly waiting: readonly PaletteItem[];
 	readonly actions: readonly PaletteItem[];
@@ -29,8 +42,11 @@ const GROUP_LABELS: Readonly<Record<string, MessageKey>> = {
 	projects: "search.group.projects",
 	commands: "search.group.commands",
 	settings: "search.group.settings",
+	start: "search.group.start",
+	ask: "search.group.ask",
 	files: "search.group.files",
 	specs: "search.group.specs",
+	sections: "search.group.sections",
 	plans: "search.group.plans",
 	transcripts: "search.group.transcripts",
 };
@@ -208,6 +224,92 @@ function emptyRootSections(input: SectionsInput): PaletteSection[] {
 	);
 }
 
+export const START_ROW_ID = "start";
+
+export function startRow(t: Translator, input: StartInput): PaletteItem {
+	const { start, text } = input;
+	return {
+		id: START_ROW_ID,
+		kind: "start",
+		title: t("search.start.title", { text }),
+		subtitle: t("search.start.subtitle"),
+		group: "start",
+		scope: "all",
+		icon: RiSparkling2Line,
+		shortcut: { key: "↵", mod: true },
+		run: () => start.openDialog(text),
+	};
+}
+
+/** The one rule for the Start work row and the `Mod+↵` shortcut: a typed query in the All or Work scope. */
+export function startEligible(parsed: ParsedQuery): boolean {
+	return (
+		parsed.terms.length > 0 &&
+		parsed.text.trim().length > 0 &&
+		(parsed.scope === "all" || parsed.scope === "work")
+	);
+}
+
+/** The prompt is the text as typed — only a scope prefix stripped, whitespace and tokens untouched. */
+export function startPrompt(raw: string): string {
+	return stripScopePrefix(raw).trim();
+}
+
+function onlyLate(section: PaletteSection): boolean {
+	return section.items.every((row) => row.item.kind === "more" || (row.item.late ?? 0) > 0);
+}
+
+function beforeLate(sections: PaletteSection[], row: PaletteSection): PaletteSection[] {
+	const late = sections.findIndex(onlyLate);
+	return late === -1
+		? [...sections, row]
+		: [...sections.slice(0, late), row, ...sections.slice(late)];
+}
+
+function withStart(sections: PaletteSection[], input: SectionsInput): PaletteSection[] {
+	const { start, parsed, t } = input;
+	if (!start || !startEligible(parsed)) return sections;
+	return beforeLate(sections, {
+		id: "start",
+		title: groupLabel(t, "start"),
+		items: [plainRow(startRow(t, start))],
+	});
+}
+
+export const ASK_ROW_ID = "ask";
+
+export function askRow(t: Translator, input: AskInput): PaletteItem {
+	const { ask, text, disabledReason } = input;
+	return {
+		id: ASK_ROW_ID,
+		kind: "ask",
+		title: t("search.ask.title", { text }),
+		subtitle: ask.target
+			? t("search.ask.subtitle", { workspace: ask.target })
+			: t("search.ask.subtitleHere"),
+		group: "ask",
+		scope: "specs",
+		icon: RiChatAiLine,
+		shortcut: { key: "↵", alt: true },
+		...(disabledReason ? { disabledReason } : {}),
+		run: () => ask.ask(text),
+	};
+}
+
+export function askEligible(parsed: ParsedQuery): boolean {
+	return parsed.text.trim().length > 0 && parsed.scope === "specs";
+}
+
+function withAsk(sections: PaletteSection[], input: SectionsInput): PaletteSection[] {
+	const { ask, parsed, t } = input;
+	if (!ask || !askEligible(parsed)) return sections;
+	return beforeLate(sections, {
+		id: "ask",
+		title: groupLabel(t, "ask"),
+		items: [plainRow(askRow(t, ask))],
+	});
+}
+
 export interface RankedSections {
 	readonly rest: readonly RankedItem[];
 	readonly top: RankedItem | null;
@@ -229,11 +331,20 @@ export function groupSections(
 	input: SectionsInput,
 ): PaletteSection[] {
 	const { t, parsed } = input;
-	if (!ranked) return emptyRootSections(input);
+	if (!ranked) return withAsk(emptyRootSections(input), input);
 	const sections = groupRanked(t, ranked.rest, parsed.scope !== "all", input);
-	return ranked.top
-		? [{ id: "top", title: groupLabel(t, "top"), items: [toRow(ranked.top, true)] }, ...sections]
-		: sections;
+	return withAsk(
+		withStart(
+			ranked.top
+				? [
+						{ id: "top", title: groupLabel(t, "top"), items: [toRow(ranked.top, true)] },
+						...sections,
+					]
+				: sections,
+			input,
+		),
+		input,
+	);
 }
 
 export function buildSections(input: SectionsInput): PaletteSection[] {

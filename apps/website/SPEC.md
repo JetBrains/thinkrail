@@ -379,6 +379,10 @@ current desktop-first hierarchy rather than freezing obsolete CLI-only instructi
   active); the terminal keeps its static install transcript — `main.ts` guards make every
   landing-only enhancement inert (no sections → no scroll-spy; only the landing command tabs drive the
   terminal replay).
+- **A post may have hand-authored sub-pages** at `src/pages/blog/<slug>/<page>.astro` (e.g.
+  `/blog/the-chat/languages/`, the list of highlighted languages linked from that post). They render
+  through `BlogLayout` but are not posts: no collection entry, no index/RSS/Files-list row, no install
+  picker. Their data is copied, not imported — the site never depends on `apps/web`.
 - **Every article ends with the install picker.** `src/components/InstallPicker.astro` is the
   blog picker markup (OS tabs, desktop downloads, **Browser UI via command line** disclosure with Windows
   shell tabs). `src/pages/blog/[slug].astro` renders it in a `.blog-post-install`
@@ -427,8 +431,16 @@ an app release. `validateBuild` fails a build that drops it. Discord clicks emit
 
 `public/favicon.svg` is the IDE-shell landing/blog tab icon: a rounded tile in the brand primary green carrying the
 **header wordmark's TR mark** (same `viewBox` + paths, not redrawn) in black, centred with balanced
-padding for legibility at tab sizes. It is wired via `<link rel="icon" type="image/svg+xml">` in
-`index.html`; there is no `.ico` fallback.
+padding for legibility at tab sizes. `BaseHead` wires it via `<link rel="icon" type="image/svg+xml">`,
+next to two raster fallbacks for clients that skip SVG icons (Safari 18 and earlier, tools and feed
+readers that only fetch `/favicon.ico`):
+- `favicon.ico` (48/32/16);
+- a 180 px `apple-touch-icon.png` filled with the tile green, because iOS masks its own corners.
+
+`scripts/generate-favicons.ts` (`favicons:generate`) renders both from `favicon.svg`. They are committed
+rather than built, since rasterizer output is not byte-stable across platforms. The RSS channel names
+the touch icon as its `<image>`. The build check fails when either file or the landing/blog links go
+missing.
 
 `public/og.png` is a capture of the site's own hero inside the IDE shell (dark theme, Landing
 selected, terminal install transcript finished, worktree note visible). The transcript in the

@@ -41,7 +41,9 @@ only when its change can affect artifacts (change classifier below). Real-provid
 
 The three browser suites dominate wall time, so each runs as a matrix of Playwright shards on separate
 runners ([[module-browser-e2e]] owns the slicing). Shard counts trade runner minutes for wall time and are
-tuned against observed per-job durations.
+tuned against observed per-job durations. The source suite gets three jobs to the artifact suites' four
+runners because each of its jobs runs two lanes, and because it alone is the critical path of every app PR
+that does not touch artifacts.
 
 **Required gate.** The ruleset requires one check, "CI passed": an aggregate job that succeeds only when the
 change classifier, conformance/lint/typecheck and unit tests succeeded and every other job either succeeded
@@ -79,11 +81,17 @@ no job is re-run automatically. They install Chromium without `--with-deps`: the
 carries its shared libraries, and the extra apt packages (CJK/Thai/X fonts) feed no assertion while their
 Ubuntu-mirror download was the slowest step of the job, often for minutes. A missing library fails
 Chromium's launch loudly. The one exception is the source no-agent E2E job, which also runs the
-questionnaire specs under WebKit. The image lacks WebKit's libraries, so that job installs the packages
-Playwright's `install-deps --dry-run webkit` reports missing, minus its font and X-server group
-(`fonts-*`, `xfonts-*`, `ttf-*`, `xvfb`), not `--with-deps`, which always adds that group. Those fonts
-feed no assertion, and the Azure mirror trickled one of them for minutes, past the wait deadline, in two of
-four shard runs; apt also gets a 20 s HTTP timeout with five retries for outright stalls. The browsers
+questionnaire specs under WebKit. The image lacks WebKit's libraries, so that job installs the `webkit` set of
+`.github/actions/apt-packages` (below): Playwright's Ubuntu 26.04 WebKit package list without its four
+GStreamer plugin packages (`gstreamer1.0-libav`, `-plugins-bad`, `-plugins-base`, `-plugins-good`) and without
+its font and X-server group. The plugins load only to play media, which no spec does, yet on a bare Ubuntu 26.04
+they alone add 163 of the list's 375 packages (94 of 221 MB: libavcodec, onnxruntime, tensorflow-lite, codecs,
+a soundfont). Before the
+cache, every shard fetched that set from the Azure Ubuntu mirror, which now and then trickles one file: apt
+pipelines a host's downloads over one connection and a trickle never trips its idle timeout, so the queue
+stalled until the 420 s wait failed, in 27 of 478 shard runs (6–10 November 2026). Because the list names
+Ubuntu 26.04 packages, the job pins `ubuntu-26.04`, and `install-playwright.sh wait webkit` launches headless
+WebKit once, so a missing library fails that step by name instead of every WebKit test. The browsers
 themselves are not cached: the Playwright CDN download takes seconds, no slower than an Actions-cache
 restore of the same bytes. Linux jobs, here and in the website workflows,
 install dependencies without the Actions cache for the same reason: a cold `bun install --frozen-lockfile` on a hosted runner takes 3–4 s,
@@ -106,13 +114,14 @@ release download (`ReleaseDownloadFailed`, a timed-out Hutch index) failed whole
 Native artifact smokes run only in shard 1: repeating an identical probe per shard adds no coverage and
 multiplies exposure to runner-environment faults.
 
-Linux desktop jobs install their GTK/WebKitGTK runtime through `.github/actions/desktop-apt`, from `.deb`
-files cached under a hash of the exact package versions apt plans to install after `apt-get update`. A
+Linux desktop jobs install their GTK/WebKitGTK runtime, and the source E2E job WebKit's libraries, through
+`.github/actions/apt-packages` (sets `desktop.txt` and `webkit.txt` beside it), from `.deb` files cached under a
+hash of the exact package versions apt plans to install after `apt-get update`. A
 mirror update or a different runner image changes that plan and so the key: the previous cache is restored
 by prefix, only the changed packages download, and `apt-get autoclean` drops versions the archive no longer
 offers, so a slow Ubuntu mirror costs little between image releases and while an image rolls out. A cache
-saved on a PR or merge-group ref is private to that ref, so the `CI cache` workflow seeds it on every push
-to main, the one scope every PR and merge group can restore. The install step is bounded at ten minutes: a
+saved on a PR or merge-group ref is private to that ref, so the `CI cache` workflow seeds both sets on every
+push to main, on the runner image each consumer pins, the one scope every PR and merge group can restore. The install step is bounded at ten minutes: a
 mirror that trickles bytes never trips apt's own timeouts and would otherwise hold the job for hours. The
 jobs start Xvfb as their own step and proceed only once an X client connects to the exported `DISPLAY`; a
 server that never answers is restarted a bounded number of times, then fails the job. Beyond the suites'

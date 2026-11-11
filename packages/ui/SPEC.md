@@ -163,10 +163,17 @@ moved here from the app when the resource renderers became a package, because bo
   border (`border-feedback-*-muted`) on a neutral `bg-container-elevated-bg` background. `ToastAction` is
   unstyled: the caller supplies the control through `asChild`. Queue ownership, icons, and notification
   lifetimes stay in the app (`panels/Toaster` composes the primitives).
+- `DialogContent` and `DialogPanel` stay open for a press that began in the toast viewport (the viewport
+  records its `pointerdown`s; `isToastPress` reads them) and for focus landing in the viewport, so a toast's
+  action or close works over a dialog. Radix would do this through its
+  dismissable-layer branch, but the dialog and the toast resolve different copies of that module; the
+  dialog's copy also defers an outside press to its `click`, by when a closed toast is already detached,
+  so the record is per event, not per element. Unifying the copies is not the fix: Radix then makes each
+  toast the topmost layer, and the first Escape would close an error toast instead of the dialog.
 - Resizable handles paint a 1 px line at their leading edge; the pointer hit area extends only into the
   following panel (fine-pointer margin 1 px), so the preceding panel's trailing-edge scrollbar stays
   usable. There is no grip variant.
 - Primitives use only the host's token utilities, never shadcn's default oklch palette.
 
-Code highlighting is deliberately absent: `CodeBlock` and shiki depend on the app's theme registration
+Code highlighting is deliberately absent: `CodeBlock` and its highlighter depend on the app's theme registration
 and remain app-local until a second extension requires that seam.

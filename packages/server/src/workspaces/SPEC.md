@@ -21,6 +21,30 @@ folder itself (git's *main working tree*) — the "just work in my project folde
 **non-removable and non-renamable**. Any **existing worktree** the user explicitly attaches is recorded in
 place as `kind: "external"` — outside the data dir, never created or mutated here.
 
+A third kind is **ThinkRail-owned and never git**: a **chat without a project** (`kind: "chat"`) is its own
+folder `<dataDir>/chats/<yyyy-mm-dd>-<short id>` (local date; the id extends on collision — no words from
+the prompt, architecture Decision 8 stands) in the one built-in **Chats container** project
+(`Project.kind: "chats"`, root `<dataDir>/chats`, slug `chats`, permanently untrusted, found or created by
+kind with an opaque id, never closed). The record keeps the required wire fields with inert values
+(`branch: ""`, `baseBranch: ""`, `name: "Chat"`, `renamed: true` so `set_title` names only the
+conversation); `kind` is the only marker and every git consumer gates on it. `chats.ts` owns the container
+and chat records: `ensureChatsContainer`, `createChatRecord`, `chatWorkspaces`, `getChatWorkspace`,
+`markChatDeletionPending` (persisted before any destructive step so a crash leaves a visible
+"deletion incomplete" chat, never a half-gone one), `recordChatContinuation` (the durable
+`continuedTo: { projectId, workspaceId, sessionId }[]` link to the workspace a chat's summary went to —
+it survives compaction of the transcript card), `dropChatRecord`, an in-memory chat-id cache for the
+host's per-event push scoping (`isChatWorkspaceId` / `isChatsContainerId` — only this process writes the
+store), and the refusal helpers (`assertNotChatsContainer`, `assertNotChatWorkspace`) the doors below use.
+The session, the terminal and the teardown are composed in `host` (`host/chats.ts`): a chat owns exactly
+one top-level session, a second one is a new chat, and deleting trashes the transcripts file by file, the
+delegated conversations and then the folder (`trash` is not this module's dependency). Refused here: `renameWorkspace`, settle /
+unsettle, `setWorkspaceDiffBase`, `forgetWorkspace` / `removeWorkspace` (delete the chat instead),
+`workspaceDiffStats`; `reclaimWorktree`, `recordWorkspaceHead` and `setWorkspaceReview` are no-ops;
+`listWorkspaces(container)` returns the chat rows without Default ensure, external refresh or diff stats;
+`openProjectById` never hands the container to `createWorkspace` / `openExistingWorktree`, and a worktree
+registered under the chats root is neither offered by `listExistingWorktrees` nor admitted by
+`openExistingWorktree` (the projects barrel's reserved-root check, before any Git read).
+
 ## Boundary
 
 - **Owns:** `listExistingWorktrees(projectId)` (**async** — parses `git worktree list --porcelain -z` read
@@ -86,9 +110,10 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   after its git subprocess)),
   **background creation** (`creations.ts` over the `creationRecords.ts` store; issue #874 — a sync
   `worktree add` of a large monorepo froze the host's only event loop for the whole checkout and outlived the
-  client's 60s request): `startWorkspaceCreation(projectId, { name?, baseRef?, kickoff? })` plans the branch and
-  path synchronously, persists a record in `workspace-creations.json` (`state: running`, `phase: preparing`, the
-  full kickoff incl. images) and returns its `WorkspaceCreation` view before any git runs. The job then
+  client's 60s request): `startWorkspaceCreation(projectId, { name?, baseRef?, kickoff?, origin? })` plans the
+  branch and path synchronously, persists a record in `workspace-creations.json` (`state: running`, `phase:
+  preparing`, the full kickoff incl. images, and a host-only `origin: "agent"` for an agent's `start_workspace`,
+  which never reaches the wire view) and returns its `WorkspaceCreation` view before any git runs. The job then
   (1) fetches a missing remote base, resolves the OID, and runs `worktree add --no-checkout` through `gitAsync`
   (no file writes, so it is quick), (2) moves to `phase: checking-out` and runs `git checkout --progress
   --no-recurse-submodules -f <branch> --` in the new worktree — the split exists because git reports checkout
@@ -111,8 +136,9 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   hook that stays silent for longer (a huge LFS object) hits the same window on every retry; a configurable
   window is a follow-up. On success the
   record becomes the `Workspace` (same id) through `registerManagedWorkspace`, the injected **handoff**
-  (`setWorkspaceCreationHandoff`) runs, and the record is deleted with a `removed` event carrying the workspace
-  plus the handoff's `sessionId` / `kickoffError`. **On failure** (`WORKTREE_ADD_FAILED`,
+  (`setWorkspaceCreationHandoff`, given the kickoff and the origin) runs, and the record is deleted with a
+  `removed` event carrying the workspace plus the handoff's `sessionId` / `kickoffError`; the chat's model and
+  effort the handoff also reports go only to the job's in-process caller. **On failure** (`WORKTREE_ADD_FAILED`,
   `WORKTREE_CHECKOUT_FAILED`, `WORKTREE_CHECKOUT_STALLED`, `WORKSPACE_PATH_TAKEN`; the message is git's
   stderr minus progress lines, for display only) the job cleans up **only what it provably created**. The
   ownership marker is the persisted `baseOid`, written only after the folder was confirmed absent, right
@@ -144,6 +170,13 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   full kickoff (Edit & retry prefills from it); an in-memory latch refuses a second dismiss or a retry while one
   runs. Projects resolve through `getProjects()`, so closing a
   project (a soft flag) never strands a creation.
+  `createWorkspace` and **`createWorkspaceWithChat(projectId, opts, signal?)`** start a job and await it in
+  process: a job that fails is discarded (the caller has the error), and the second returns the handoff's
+  outcome. Its `signal` (Stop on `start_workspace`) aborts the job's git work and discards the record and
+  anything the job cut, failing with `WorkspaceCreationStopped`; a cleanup that cannot finish (a folder
+  git cannot remove) keeps the record, marked `interrupted` with its marker, so Retry and Dismiss clean up
+  again, and the call fails saying what was left. Once the handoff runs the workspace is registered and
+  the call completes regardless.
   `renameWorkspace` (**sync**; throws for Default/external before any Git read, then adopts the live managed
   branch like `syncWorkspaceBranch`, so it never acts on a stale stored branch;
   sets the sanitized, casing- and script-preserving display `name` and always
@@ -345,7 +378,8 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   Creations publish the same way through `setWorkspaceCreationPublisher` (`WorkspaceCreationEvent`:
   `changed` with the `WorkspaceCreation` view, `removed` with `WorkspaceCreationRemoved`); the host owns the
   handoff that turns a finished creation into a terminal and a chat, so this module never reaches `agent`.
-- **Public surface (barrel):** `createWorkspace`, `startWorkspaceCreation`, `awaitWorkspaceCreation`,
+- **Public surface (barrel):** `createWorkspace`, `createWorkspaceWithChat`, `HandedOff`,
+  `WorkspaceCreationStopped`, `startWorkspaceCreation`, `awaitWorkspaceCreation`,
   `listWorkspaceCreations`, `retryWorkspaceCreation`, `dismissWorkspaceCreation`,
   `interruptWorkspaceCreations`, `replayPendingHandoffs`, `stopWorkspaceCreations`,
   `setWorkspaceCreationHandoff`, `CreationHandoff`,
@@ -357,7 +391,12 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,
   `WorkspaceLifecycleEvent`, `setWorkspaceDiffBase`, `setWorkspaceSkillOverride`,
   `setWorkspaceSubagentsOverride`, `setWorkspaceSubagentMaxConcurrent`, `recordWorkspaceActivity`, `backfillWorkspaceActivity`,
-  `recordWorkspaceHead`, `seedWorkspaceHead`, `settleWorkspace`, `unsettleWorkspace`, `setWorkspaceReview`.
+  `recordWorkspaceHead`, `seedWorkspaceHead`, `settleWorkspace`, `unsettleWorkspace`, `setWorkspaceReview`,
+  `chatsRoot`, `isUnderChatsRoot`, `isChatsContainer`, `isChatWorkspace`,
+  `isChatsContainerId`, `isChatWorkspaceId`, `resetChatIdCache`, `ensureChatsContainer`,
+  `createChatRecord`, `chatWorkspaces`, `getChatWorkspace`, `markChatDeletionPending`,
+  `recordChatContinuation`, `dropChatRecord`, `setChatPublishers`, `assertNotChatsContainer`,
+  `assertNotChatWorkspace`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`, `log`; `contracts`;
   `@thinkrail/shared/paths` (the scratch-dir path convention), `@thinkrail/shared/codedError`; Node.
 - **Forbidden:** `host`; reaching into another feature's internals (use its barrel).
