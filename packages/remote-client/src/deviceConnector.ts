@@ -38,6 +38,8 @@ export interface RemoteConnection {
 	onLost(handler: (error: RemoteConnectError) => void): void;
 	/** Hears the channel go down (reconnecting on its own) and come back. */
 	onOpenChange(handler: (open: boolean) => void): void;
+	/** Hears each failed reconnect attempt while the channel is down, so the app can say why. */
+	onRetryFailed(handler: (error: unknown) => void): void;
 	/** Hears the host's current routes (the last one at once, if it came first); later reconnects already use them. */
 	onRoutes(handler: (routes: RemoteHostRoutes) => void): void;
 	/** Retries now instead of after the backoff (the app came to the foreground, the network changed). */
@@ -358,6 +360,7 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 	};
 
 	let openHandler: (open: boolean) => void = () => {};
+	let retryHandler: (error: unknown) => void = () => {};
 	const loop = createReconnectLoop({
 		attempt: () => attempt(false),
 		isTerminal: isTerminalConnectError,
@@ -368,6 +371,7 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 					: new RemoteConnectError("failed", String(error)),
 			),
 		onOpenChange: (open) => openHandler(open),
+		onRetryFailed: (error) => retryHandler(error),
 	});
 
 	try {
@@ -391,6 +395,9 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 		},
 		onOpenChange: (handler) => {
 			openHandler = handler;
+		},
+		onRetryFailed: (handler) => {
+			retryHandler = handler;
 		},
 		onRoutes: (handler) => {
 			routesHandler = handler;

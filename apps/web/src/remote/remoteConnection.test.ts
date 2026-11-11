@@ -18,6 +18,7 @@ function connection(): RemoteConnection {
 		projectRef: "proj",
 		onLost: () => {},
 		onOpenChange: () => {},
+		onRetryFailed: () => {},
 		onRoutes: () => {},
 		reconnectNow: () => {},
 		close: () => {},

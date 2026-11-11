@@ -39,7 +39,7 @@ export interface RemoteSessionsController {
 	 * dropped from the controller, so `clientFor` is null and its sessions are gone.
 	 */
 	onLost(listener: (hostKey: string, error: RemoteConnectError) => void): () => void;
-	/** Hears a background retry of a host that is not connected fail again. */
+	/** Hears a retry fail: of a host that never connected, or of a live host whose channel is down. */
 	onRetryFailed(listener: (hostKey: string, error: unknown) => void): () => void;
 	/** Hears a host send its current routes, already merged into the saved host so it can be stored. */
 	onRoutes(listener: (host: SavedHost) => void): () => void;
@@ -116,6 +116,10 @@ export function createRemoteSessions(
 			if (hosts.get(hostKey) !== entry) return;
 			entry.reconnecting = !isOpen;
 			notify();
+		});
+		connection.onRetryFailed((error) => {
+			if (hosts.get(hostKey) !== entry) return;
+			for (const listener of retryListeners) listener(hostKey, error);
 		});
 		connection.onRoutes((routes: RemoteHostRoutes) => {
 			const current = known.get(hostKey);

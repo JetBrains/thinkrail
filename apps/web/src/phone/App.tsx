@@ -99,9 +99,11 @@ export function App() {
 		[controller, markFailure],
 	);
 	const statusOf = (hostKey: string): HostStatus => {
-		if (controller.clientFor(hostKey))
-			return controller.isReconnecting(hostKey) ? { kind: "connecting" } : { kind: "connected" };
 		const failure = failures.get(hostKey);
+		if (controller.clientFor(hostKey)) {
+			if (!controller.isReconnecting(hostKey)) return { kind: "connected" };
+			return failure ? { kind: "unreachable", failure } : { kind: "connecting" };
+		}
 		return failure ? { kind: "unreachable", failure } : { kind: "connecting" };
 	};
 	const forgetHost = useCallback(
@@ -165,7 +167,18 @@ export function App() {
 	}, [controller, registry, markFailure]);
 
 	useEffect(() => {
-		const unsubscribe = controller.subscribe(() => setItems(controller.items()));
+		const unsubscribe = controller.subscribe(() => {
+			setItems(controller.items());
+			setFailures((current) => {
+				const back = [...current.keys()].filter(
+					(hostKey) => controller.clientFor(hostKey) && !controller.isReconnecting(hostKey),
+				);
+				if (back.length === 0) return current;
+				const next = new Map(current);
+				for (const hostKey of back) next.delete(hostKey);
+				return next;
+			});
+		});
 		for (const host of registry.list()) void connectHost(host);
 		const onLink = (url: string | undefined): void => {
 			if (isPairLink(url)) void pairWith(url.trim());

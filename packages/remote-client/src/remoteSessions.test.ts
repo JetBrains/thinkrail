@@ -35,6 +35,7 @@ function fakeConnection(host: SavedHost, seed: SessionStateRecord[]) {
 	let openChange: (open: boolean) => void = () => {};
 	let routes: (next: RemoteHostRoutes) => void = () => {};
 	let reconnects = 0;
+	let retryFailed: (error: unknown) => void = () => {};
 	const client: DeviceWireClient = {
 		attach: () => {},
 		request<T>(method: string): Promise<T> {
@@ -64,6 +65,9 @@ function fakeConnection(host: SavedHost, seed: SessionStateRecord[]) {
 		onRoutes: (handler) => {
 			routes = handler;
 		},
+		onRetryFailed: (handler) => {
+			retryFailed = handler;
+		},
 		reconnectNow: () => {
 			reconnects++;
 		},
@@ -76,6 +80,7 @@ function fakeConnection(host: SavedHost, seed: SessionStateRecord[]) {
 		setOpen: (open: boolean) => openChange(open),
 		pushRoutes: (next: RemoteHostRoutes) => routes(next),
 		reconnects: () => reconnects,
+		failRetry: (error: unknown) => retryFailed(error),
 		lose: (error: RemoteConnectError) => lost(error),
 		pushState: (record: SessionStateRecord) => onState(record),
 		pushAccess: (access: string) => onAccess({ access }),
@@ -279,6 +284,10 @@ test("a dropped channel shows as reconnecting until it is back", async () => {
 	fake.setOpen(false);
 	expect(controller.isReconnecting("K1")).toBe(true);
 	expect(controller.clientFor("K1")).not.toBeNull();
+	const heard: string[] = [];
+	controller.onRetryFailed((hostKey) => heard.push(hostKey));
+	fake.failRetry(new RemoteConnectError("no_direct_route", "timed out"));
+	expect(heard).toEqual(["K1"]);
 	fake.setOpen(true);
 	expect(controller.isReconnecting("K1")).toBe(false);
 });
