@@ -400,9 +400,10 @@ re-opened transcripts provider-valid.
     reference also use PI's model resolver—then returns `{ summary, messages }` —
     `TranscriptMessage[]`: the pi-canonical subset **plus
     `custom` messages**, which carry the `tool-response` replies (and the retired `ask-user-answers` form in
-    older transcripts) an interactive tool's card pairs by tool call id, **plus `compactionSummary`**, pi's durable marker for the messages compaction summarized away —
-    kept precisely because pi's resolved transcript is all that survives, so dropping it would hand the
-    client a chat that starts mid-conversation with nothing to explain the gap. Which roles those are is
+    older transcripts) an interactive tool's card pairs by tool call id, **plus `compactionSummary`**, pi's durable marker for the messages compaction summarized away.
+    `history.displayTranscriptMessages` puts those summarized turns back in front of the marker so the
+    same session can still review them; the marker is what keeps the cut visible. Live `session.messages`
+    still supply the streaming tail after that marker. Which roles those are is
     **not decided here**: the filter is contracts' `isTranscriptMessageRole`, shared with `history`'s index
     so the two cannot drift and shift `messageIndex`), plus **`ensureSessionAttached(sessionId, workspaceId, cwd)`** — the same single-flighted
     re-open with no transcript read, for a caller that only needs the session *promptable* again (the
@@ -1296,8 +1297,10 @@ re-opened transcripts provider-valid.
   `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/`ImageContent`/`SessionStats`/`SessionSummary`/
   `Session*Payload`/`SlashCommandInfo`/`ExtUi*`/`AskUserQuestion*`/`ProviderStatus*`); `log` (diagnostics +
   session-lifecycle debug traces); `persistence` (`dataDir` for delegation plus the narrow session
-  receipt stores); `trash` (the recoverable-delete primitive); Node.
-- **Forbidden:** `host`; sibling features other than `log`, `trash` and those narrow persistence surfaces (session
+  receipt stores); `trash` (the recoverable-delete primitive); `history` (`displayTranscript` only — `getMessages` must
+  emit the same display projection the search index extracts, including turns Pi summarized away from
+  model context); Node.
+- **Forbidden:** `host`; sibling features other than `log`, `trash`, `history` (`displayTranscript` only) and those narrow persistence surfaces (session
   worktree `cwd` remains an input, never a workspace-registry lookup); Central process/filesystem knowledge—the
   caller supplies only the desired opaque extension paths for a candidate.
 

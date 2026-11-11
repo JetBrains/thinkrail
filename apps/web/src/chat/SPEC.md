@@ -108,8 +108,9 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   raises the refresh error, and a new generation/compaction key gets a fresh budget. Store reconciliation
   replaces only host-derived conversation state and preserves browser-local state. The persisted
   `compactionSummary` then becomes the same row in place (the live id,
-  estimated-after count, and live `resuming` flag survive when they still apply), and the messages Pi
-  summarized disappear immediately rather than only after reload. Its `summary` opens on click
+  estimated-after count, and live `resuming` flag survive when they still apply). The host's display
+  transcript keeps the turns Pi summarized **above** that marker so the same session can still scroll
+  back through them; only the model's context is the summary-plus-kept-tail. Its `summary` opens on click
   (`data-testid="chat-compaction"`). Hydration/reopen starts directly from that same durable form. Both forms
   share the **"Context compacted"** title; only facts unavailable after reload disappear.
 - `markdown` — a non-empty assistant text block (react-markdown + remark-gfm + code highlighting). Safe

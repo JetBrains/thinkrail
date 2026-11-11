@@ -146,7 +146,9 @@ the host from env via `bootHost` for dev/e2e.
 - `agent` → `log`, `persistence` (`dataDir` for delegation plus session lifecycle/receipt load-save operations),
   `trash` (a chat delete's recoverable transcript move), `resourceHistory` (records its owners' lifecycle and reads
   what they no longer hold), `extensions` (the registry's flattened parent and
-  child inline extensions plus, in unbundled dev, its skill roots) — otherwise the pi runtime alone; auth
+  child inline extensions plus, in unbundled dev, its skill roots), `history` (`displayTranscript` — the
+  JSONL display projection `getMessages` shares with search so compaction keeps pre-cut turns reviewable)
+  — otherwise the pi runtime alone; auth
   passes desired opaque Central paths through its public generation seam
 - `extensions` → `@thinkrail/ext-*/server` + `@thinkrail/extension-api/server` (external); `buildSupport.ts`
   (build-only) also reads it to stage the extensions' skill roots
