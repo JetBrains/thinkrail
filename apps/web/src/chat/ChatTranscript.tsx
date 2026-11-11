@@ -1,5 +1,6 @@
 import { RiArrowDownLine as ArrowDown, RiArrowUpLine as ArrowUp } from "@remixicon/react";
 import type { ChatContinuation, GitDiffScope, TurnChangeSet } from "@thinkrail/contracts";
+import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import type { MessageKey } from "@thinkrail/locales";
 import { t as translate, useT } from "@thinkrail/locales/react";
 import { ResourceScopeProvider } from "@thinkrail/resource-renderers";
@@ -18,6 +19,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { useShallow } from "zustand/react/shallow";
 import {
@@ -25,6 +27,7 @@ import {
 	selectChatAttended,
 	selectChatsContainer,
 	selectReadyCompletionAck,
+	selectWorkspaceById,
 	specPathMatcher,
 	toast,
 	useAppStore,
@@ -33,15 +36,19 @@ import { errorText, getTransport, respondToTool } from "@/transport";
 import { ACTIVITY_BREADCRUMB_HEIGHT, ActivityBreadcrumbTrail } from "./activityBreadcrumbs";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
 import type { ChatMessageOrder } from "./chatPreferences";
-import { openContinuationTarget, refreshContinuation, requestContinuation } from "./continuations";
+import { refreshContinuation, requestContinuation } from "./continuations";
 import { type PendingExtUi, PendingExtUiContext, PendingExtUiPrompt } from "./ExtUiPrompt";
 import { FoldGeometryProvider } from "./foldState";
 import {
 	awaitingToolCallIdOf,
 	deriveInteractionStates,
+	dockedInteraction,
 	InteractionStatesContext,
+	latestPendingInteraction,
+	type PendingInteraction,
 } from "./interactionState";
 import { deriveMessageActions } from "./messageActions";
+import { openWorkspace } from "./openWorkspace";
 import { turnAnchorText } from "./recentPrompts";
 import { estimateChatRowHeights } from "./rowHeightEstimates";
 import {
@@ -53,8 +60,10 @@ import {
 	stabilizeRows,
 } from "./rows";
 import { type StreamStatus, StreamStatusSlot, streamStatus } from "./StreamIndicator";
+import { useToolInteraction } from "./toolInteraction";
+import { getToolRenderer } from "./toolRegistry";
 import { ChatTurnView } from "./turns";
-import { useChatScroll } from "./useChatScroll";
+import { type ChatReadingPosition, useChatScroll } from "./useChatScroll";
 import { useTranscriptSync } from "./useTranscriptSync";
 import { useWindowFocused } from "./useWindowFocused";
 import { advanceVirtualRows, initialVirtualRows } from "./virtualRows";
@@ -153,6 +162,11 @@ function useVirtualRows(
 	return virtualRows;
 }
 
+function LiveWorkspaceName({ workspaceId, fallback }: { workspaceId: string; fallback: string }) {
+	const name = useAppStore((state) => selectWorkspaceById(state, workspaceId)?.name);
+	return name ?? fallback;
+}
+
 export type ChatTranscriptHandle = {
 	armImmediateTurn: () => void;
 	cancelImmediateTurn: (streaming: boolean) => void;
@@ -187,6 +201,7 @@ const ChatTranscript = forwardRef<
 		openMcpSettings?: ChatActions["openMcpSettings"];
 		openProviderSettings?: ChatActions["openProviderSettings"];
 		findModel?: ChatActions["findModel"];
+		dockTarget?: HTMLElement | null;
 		resourcesOverlay?: ReactNode;
 	}
 >(function ChatTranscript(
@@ -207,6 +222,7 @@ const ChatTranscript = forwardRef<
 		openMcpSettings,
 		openProviderSettings,
 		findModel,
+		dockTarget,
 		resourcesOverlay,
 	},
 	ref,
@@ -313,6 +329,26 @@ const ChatTranscript = forwardRef<
 		return row ? { id: row.id, index } : null;
 	}, [chatMessageOrder, rows]);
 
+	const locationRowsRef = useRef(rows);
+	const locationTurnsRef = useRef(turns);
+	const locationTurnMapRef = useRef(runtime.turnIdByMessageIndex);
+	useInsertionEffect(() => {
+		locationRowsRef.current = rows;
+		locationTurnsRef.current = turns;
+		locationTurnMapRef.current = runtime.turnIdByMessageIndex;
+	});
+	const [readingRestore] = useState(
+		() => useAppStore.getState().sessions[sessionId]?.readingAnchor ?? null,
+	);
+	const readingPosition = useMemo<ChatReadingPosition>(
+		() => ({
+			restore: readingRestore,
+			resolveIndex: (rowId) => locationRowsRef.current.findIndex((row) => row.id === rowId),
+			save: (anchor) => useAppStore.getState().setChatReadingAnchor(sessionId, anchor),
+		}),
+		[readingRestore, sessionId],
+	);
+
 	const virtuosoRef = useRef<VirtuosoHandle>(null);
 	const {
 		followOutput,
@@ -344,6 +380,7 @@ const ChatTranscript = forwardRef<
 		latestRow,
 		firstItemIndex,
 		rowHeightEstimates,
+		readingPosition,
 	);
 
 	const readyCompletionId = useAppStore((state) =>
@@ -418,14 +455,6 @@ const ChatTranscript = forwardRef<
 
 	const chatLocationRequest = useAppStore((s) => s.chatLocationRequest);
 	const activeChatLocationReveal = useRef<typeof chatLocationRequest>(null);
-	const locationRowsRef = useRef(rows);
-	const locationTurnsRef = useRef(turns);
-	const locationTurnMapRef = useRef(runtime.turnIdByMessageIndex);
-	useInsertionEffect(() => {
-		locationRowsRef.current = rows;
-		locationTurnsRef.current = turns;
-		locationTurnMapRef.current = runtime.turnIdByMessageIndex;
-	});
 	const locationRowsReady = rows.length > 0;
 	const [flashRowId, setFlashRowId] = useState<string | null>(null);
 
@@ -569,9 +598,23 @@ const ChatTranscript = forwardRef<
 		[runtime.turns, runtime.toolResponses, runtime.toolResults],
 	);
 	const awaitingToolCallId = awaitingToolCallIdOf(runtime.hostState);
+	const dockedCall = useMemo(
+		() =>
+			dockedInteraction(
+				latestPendingInteraction(runtime.turns, runtime.toolResults, interactionStates),
+				awaitingToolCallId,
+			),
+		[runtime.turns, runtime.toolResults, interactionStates, awaitingToolCallId],
+	);
+	const dockedToolCallId = dockedCall?.toolCallId;
 	const interactionContext = useMemo(
-		() => ({ states: interactionStates, focusScope: interactionFocusScope, awaitingToolCallId }),
-		[interactionStates, interactionFocusScope, awaitingToolCallId],
+		() => ({
+			states: interactionStates,
+			focusScope: interactionFocusScope,
+			awaitingToolCallId,
+			dockedToolCallId,
+		}),
+		[interactionStates, interactionFocusScope, awaitingToolCallId, dockedToolCallId],
 	);
 
 	const continuations = useAppStore((s) => s.chatContinuations);
@@ -609,17 +652,6 @@ const ChatTranscript = forwardRef<
 			openProviderSettings,
 			findModel,
 			continuationOf,
-			openContinuation: (continuation) => {
-				if (!continuation.workspaceId) return;
-				void openContinuationTarget(
-					{
-						projectId: continuation.projectId,
-						workspaceId: continuation.workspaceId,
-						...(continuation.sessionId ? { sessionId: continuation.sessionId } : {}),
-					},
-					t("chat.turn.continuation.gone"),
-				);
-			},
 			retryContinuation: (details) => {
 				void requestContinuation(workspaceId, details.projectId).catch((err: unknown) =>
 					toast.error(errorText(err), t("chat.turn.continuation.retryFailed")),
@@ -628,15 +660,17 @@ const ChatTranscript = forwardRef<
 			openHandoffSource: (details) => {
 				const container = selectChatsContainer(useAppStore.getState());
 				if (!container) return;
-				void openContinuationTarget(
+				void openWorkspace(
 					{
-						projectId: container.id,
 						workspaceId: details.sourceWorkspaceId,
+						projectId: container.id,
 						sessionId: details.sourceSessionId,
 					},
 					t("chat.turn.handoff.sourceGone"),
 				);
 			},
+			openWorkspace,
+			WorkspaceName: LiveWorkspaceName,
 		}),
 		[
 			cancelAutomaticReveal,
@@ -802,10 +836,38 @@ const ChatTranscript = forwardRef<
 						) : null}
 						{resourcesOverlay}
 					</div>
+					{dockTarget && dockedCall
+						? createPortal(
+								<ResourceScopeProvider value={resourceScope}>
+									<DockedTool
+										key={dockedCall.toolCallId}
+										call={dockedCall}
+										workspaceRoot={workspaceRoot}
+										onOpenFile={onOpenFile}
+									/>
+								</ResourceScopeProvider>,
+								dockTarget,
+							)
+						: null}
 				</InteractionStatesContext.Provider>
 			</PendingExtUiContext.Provider>
 		</ChatActionsContext.Provider>
 	);
 });
+
+function DockedTool({
+	call,
+	workspaceRoot,
+	onOpenFile,
+}: {
+	call: PendingInteraction;
+	workspaceRoot: string | undefined;
+	onOpenFile: ((path: string) => void) | undefined;
+}) {
+	const Renderer = getToolRenderer(call.toolName);
+	const interaction = useToolInteraction(call.toolCallId, call.toolName, "dock");
+	const props: ToolRenderProps = { ...call, workspaceRoot, onOpenFile, interaction };
+	return <Renderer {...props} />;
+}
 
 export default ChatTranscript;

@@ -12,6 +12,7 @@ import {
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
 	isLocalePreference,
+	isQuestionPanelHeight,
 	isSettledRemovalDays,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
@@ -19,6 +20,7 @@ import {
 	isTerminalWindowsShell,
 	isThemeMode,
 	LINE_WIDTH_COLUMNS,
+	QUESTION_PANEL_HEIGHT_PERCENT,
 	RECENT_MODELS_LIMIT,
 	sameModel,
 	type WireModel,
@@ -43,6 +45,7 @@ const ACCEPTED_UPDATE_KEYS = {
 	terminalReplayKb: true,
 	terminalWindowsShell: true,
 	composerGrowthLimit: true,
+	questionPanelHeight: true,
 	chatLineWidth: true,
 	fileLineWidth: true,
 	chatLineWidthBounded: true,
@@ -181,6 +184,14 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 				`${name} must be a whole number from ${LINE_WIDTH_COLUMNS.min} to ${LINE_WIDTH_COLUMNS.max}`,
 			);
 		}
+	}
+	if (
+		runtimeUpdate.questionPanelHeight !== undefined &&
+		!isQuestionPanelHeight(runtimeUpdate.questionPanelHeight)
+	) {
+		throw new Error(
+			`questionPanelHeight must be a whole number from ${QUESTION_PANEL_HEIGHT_PERCENT.min} to ${QUESTION_PANEL_HEIGHT_PERCENT.max}`,
+		);
 	}
 	for (const [name, value] of [
 		["chatLineWidthBounded", runtimeUpdate.chatLineWidthBounded],

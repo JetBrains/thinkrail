@@ -30,7 +30,6 @@ import {
 	clampThinkingForModel,
 	clearQueueSession,
 	compactSession,
-	createSession,
 	deleteSession,
 	disableAnthropicExtraUsageWarning,
 	ensureSessionAttached,
@@ -236,7 +235,6 @@ import {
 	checkWorkspaceRemoval,
 	createWorkspace,
 	dismissWorkspaceCreation,
-	ensureWorkspaceScratchDir,
 	forgetWorkspace,
 	getWorkspace,
 	isChatsContainer,
@@ -265,7 +263,8 @@ import {
 	workspaceDiffStats,
 } from "../workspaces";
 import { ackSend } from "./ackSend";
-import { sessionProviderAnalytics, trackChatStarted } from "./authAnalytics";
+import { sessionProviderAnalytics } from "./authAnalytics";
+import { startChatSession } from "./chatSession";
 import {
 	assertChatOpen,
 	assertSessionDeletable,
@@ -298,7 +297,7 @@ import {
 	mcpTestConnection,
 	mcpUpdate,
 } from "./mcp";
-import { noteNewChat, resolveNewChatModel } from "./newChatModel";
+import { resolveNewChatModel } from "./newChatModel";
 import {
 	packagesCheckUpdates,
 	packagesInstall,
@@ -325,7 +324,7 @@ import {
 import { startPlanReview } from "./requestReview";
 import { withChangeLock, withReviewLock } from "./reviewLock";
 import { runObservation } from "./runAnalytics";
-import { hostSearch } from "./search";
+import { hostSearch, publishSearchText } from "./search";
 import { findWorkspaceReviewOutcome, scheduleLifecyclePass } from "./settledLifecycle";
 import { taskObservation } from "./taskAnalytics";
 import {
@@ -446,49 +445,40 @@ async function sendUserMessage(
 	return { ok: true };
 }
 
-async function startChat(
-	workspaceId: string,
-	choice: { model?: WireModel; thinkingLevel?: ThinkingLevel },
-): Promise<WsResult<"session.create">> {
-	const ws = getWorkspace(workspaceId);
-	ensureWorkspaceScratchDir(ws);
-	const defaults = await resolveNewChatModel(choice);
-	const created = await createSession({
-		cwd: ws.worktreePath,
-		workspaceId,
-		...(defaults.model ? { model: defaults.model } : {}),
-		thinkingLevel: defaults.thinkingLevel,
-	});
-	noteNewChat(choice, defaults, created);
-	return created;
-}
-
 const creationClients = new Map<string, string>();
 
-export const workspaceCreationHandoff: CreationHandoff = async (workspace, kickoff) => {
+export const workspaceCreationHandoff: CreationHandoff = async (workspace, kickoff, origin) => {
 	const clientKey = creationClients.get(workspace.id) ?? "";
 	creationClients.delete(workspace.id);
 	provisionInitialTerminal(workspace);
 	if (!kickoff) return {};
 	await ensureWatch(workspace.id, { prewarm: false });
-	const { sessionId } = await startChat(workspace.id, {
-		...(kickoff.model ? { model: kickoff.model } : {}),
-		...(kickoff.thinkingLevel ? { thinkingLevel: kickoff.thinkingLevel } : {}),
-	});
-	if (!kickoff.text && !kickoff.images?.length) return { sessionId };
+	const internal = origin === "agent";
+	const chat = await startChatSession(
+		workspace,
+		{
+			...(kickoff.model ? { model: kickoff.model } : {}),
+			...(kickoff.thinkingLevel ? { thinkingLevel: kickoff.thinkingLevel } : {}),
+		},
+		{ pick: !internal },
+	);
+	const { sessionId } = chat;
+	if (!kickoff.text && !kickoff.images?.length) return chat;
 	let preflighted: () => void = () => {};
 	const preflight = new Promise<void>((resolve) => {
 		preflighted = resolve;
 	});
-	const sent = sendUserMessage("prompt", sessionId, kickoff.text, clientKey, () =>
-		promptSession(sessionId, kickoff.text, kickoff.images, { onPreflight: preflighted }),
-	);
+	const send = () =>
+		promptSession(sessionId, kickoff.text, kickoff.images, { onPreflight: preflighted });
+	const sent = internal
+		? ackSend(runObservation.send(sessionId, "internal", send))
+		: sendUserMessage("prompt", sessionId, kickoff.text, clientKey, send);
 	sent.catch(() => {});
 	try {
 		await Promise.race([preflight, sent]);
-		return { sessionId };
+		return chat;
 	} catch (err) {
-		return { sessionId, kickoffError: err instanceof Error ? err.message : String(err) };
+		return { ...chat, kickoffError: err instanceof Error ? err.message : String(err) };
 	}
 };
 
@@ -616,18 +606,7 @@ async function sendToFileChat(
 			`review ${workspaceId}: linked chat ${existing} is no longer on disk — starting a new review chat`,
 		);
 	}
-	ensureWorkspaceScratchDir(ws);
-	const defaults = await resolveNewChatModel(opts);
-	const created = await createSession({
-		cwd: ws.worktreePath,
-		workspaceId,
-		...(defaults.model ? { model: defaults.model } : {}),
-		thinkingLevel: defaults.thinkingLevel,
-	});
-	trackChatStarted({
-		sessionId: created.sessionId,
-		model: defaults.model ? created.model : null,
-	});
+	const created = await startChatSession(ws, opts);
 	await markCommentsSent(workspaceId, ids, created.sessionId);
 	fireReviewPrompt(workspaceId, comments, created.sessionId, pkg, capture);
 	return { ...created, reused: false };
@@ -918,8 +897,8 @@ const handlers: WsHandlers = {
 	"chat.inspect": (params) => inspectChat(params.workspaceId),
 	"chat.continue": (params) => startContinuation(params.workspaceId, params.projectId),
 	"chat.continuationStatus": (params) => continuationStatus(params.operationId),
-	"workspace.openIn": (p) => {
-		openEditor(p.editor, getWorkspace(p.id).worktreePath);
+	"workspace.openIn": async (p) => {
+		await openEditor(p.editor, getWorkspace(p.id).worktreePath);
 		return { ok: true } as const;
 	},
 	"workspace.reveal": (params) => {
@@ -1282,7 +1261,7 @@ const handlers: WsHandlers = {
 			const { workspace: _workspace, ...created } = await recoverChatSession(ws.id, p);
 			return created;
 		}
-		return startChat(p.workspaceId, p);
+		return startChatSession(ws, p, { pick: true });
 	},
 	"session.prompt": (p, ctx) => {
 		return sendUserMessage("prompt", p.sessionId, p.text, ctx.clientKey, () =>
@@ -1624,6 +1603,8 @@ const handlers: WsHandlers = {
 	},
 
 	"search.query": (p, ctx) => hostSearch().query(p, { chats: seesChats(ctx.protocolVersion) }),
+	"search.text": (p, ctx) =>
+		hostSearch().text(ctx.clientKey, p, (batch) => publishSearchText(ctx.clientKey, batch)),
 	"search.preview": (p, ctx) => hostSearch().preview(p, { chats: seesChats(ctx.protocolVersion) }),
 
 	"review.get": async (p) => {

@@ -68,6 +68,7 @@ import {
 	serverExtensions,
 	workspaceFiles,
 } from "../extensions";
+import { displayTranscriptMessages } from "../history";
 import { logger } from "../log";
 import {
 	dataDir,
@@ -129,7 +130,6 @@ import {
 	watchMcpStatus,
 } from "./mcpSessions";
 import { refreshModelListings } from "./modelAvailability";
-import { preferredDefaultModel } from "./modelDefaults";
 import { createPiSettings } from "./packages";
 import {
 	getPiRuntimeGeneration,
@@ -218,7 +218,10 @@ interface Entry {
 	toolResponseWaiters: ToolResponseWaiters;
 	mcpHost: McpSessionHost;
 	extraUsageWarned: boolean;
+	unavailableSavedModel: SavedModelRef | undefined;
 }
+
+type SavedModelRef = Pick<WireModel, "provider" | "id">;
 
 const sessions = new Map<string, Entry>();
 let sessionLifecycleGeneration = 0;
@@ -968,9 +971,16 @@ export function getSessionRuntimeGeneration(sessionId: string): PiRuntimeGenerat
 }
 
 function transcriptMessages(session: AgentSession): TranscriptMessage[] {
-	return session.messages.filter((message) =>
+	const manager = session.sessionManager;
+	const display = displayTranscriptMessages(manager.getEntries(), manager.getLeafId());
+	const live = session.messages.filter((message) =>
 		isTranscriptMessageRole(message.role),
 	) as TranscriptMessage[];
+	const cut = display.findLastIndex((message) => message.role === "compactionSummary");
+	if (cut < 0) return live;
+	const liveCut = live.findLastIndex((message) => message.role === "compactionSummary");
+	if (liveCut < 0) return display;
+	return [...display.slice(0, cut), ...live.slice(liveCut)];
 }
 
 export async function reloadSessionResources(sessionId: string): Promise<void> {
@@ -1090,6 +1100,12 @@ function runGatedReload(entry: Entry): Promise<void> {
 function admitRun(entry: Entry): void {
 	if (entry.reloadRunning) {
 		throw new Error("The chat is reloading its resources — try again in a moment.");
+	}
+	const saved = entry.unavailableSavedModel;
+	if (saved) {
+		throw new Error(
+			`The chat's saved model ${saved.provider}/${saved.id} is unavailable. Choose a model to continue.`,
+		);
 	}
 }
 
@@ -1261,6 +1277,7 @@ async function prepareSessionEntry(
 		toolResponseWaiters,
 		mcpHost,
 		extraUsageWarned: false,
+		unavailableSavedModel: undefined,
 	};
 	entry.commandHistory = archiveCommandHistory(
 		workspaceId,
@@ -1409,6 +1426,7 @@ async function registerSession(
 	mcpHost: McpSessionHost,
 	lifecycleToken: WorkspaceLifecycleToken,
 	announceCreation = false,
+	unavailableSavedModel?: SavedModelRef,
 ): Promise<CreateSessionResult> {
 	const prepared = await prepareSessionEntry(
 		session,
@@ -1426,6 +1444,7 @@ async function registerSession(
 		abandonPreparedEntry(prepared.entry);
 		throw new Error(`Workspace is unavailable: ${workspaceId}`);
 	}
+	prepared.entry.unavailableSavedModel = unavailableSavedModel;
 	prepared.entry.registered = true;
 	sessions.set(session.sessionId, prepared.entry);
 	if (preparingEntries.get(session.sessionId) === prepared.entry)
@@ -1484,6 +1503,7 @@ type ParentSessionOptions = CreateAgentSessionOptions & {
 	cwd: string;
 	sessionManager: SessionManager;
 	settingsManager: SettingsManager;
+	unavailableSavedModel?: SavedModelRef;
 };
 
 function createParentSession(
@@ -1508,7 +1528,8 @@ async function createParentSessionInternal(
 	lifecycleToken: WorkspaceLifecycleToken,
 	announceCreation = false,
 ): Promise<CreateSessionResult> {
-	const { sessionManager, settingsManager, cwd } = options;
+	const { unavailableSavedModel, ...agentOptions } = options;
+	const { sessionManager, settingsManager, cwd } = agentOptions;
 	const sessionId = sessionManager.getSessionId();
 	const toolResponseWaiters = createToolResponseWaiters();
 	const mcpHost = createMcpSessionHost({
@@ -1559,7 +1580,7 @@ async function createParentSessionInternal(
 	});
 	try {
 		const result = await createAgentSession({
-			...options,
+			...agentOptions,
 			modelRuntime: generation.runtime,
 			resourceLoader: await buildResourceLoader(
 				cwd,
@@ -1587,6 +1608,7 @@ async function createParentSessionInternal(
 			mcpHost,
 			lifecycleToken,
 			announceCreation,
+			unavailableSavedModel,
 		);
 	} catch (error) {
 		if (sessions.get(sessionId)?.commands === commands) {
@@ -1647,7 +1669,10 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 		workspaceId: entry.workspaceId,
 		title: session.sessionName ?? "",
 		...entryFirstPrompt(entry),
-		model: session.model ? sessionWireModel(session.model, entry.generation) : null,
+		model:
+			session.model && !entry.unavailableSavedModel
+				? sessionWireModel(session.model, entry.generation)
+				: null,
 		thinkingLevel: session.thinkingLevel,
 		isStreaming: session.isStreaming,
 		messageCount: session.messages.length,
@@ -2072,6 +2097,30 @@ function attachDiskSession(
 	return pending;
 }
 
+const PI_VIRTUAL_MODEL_API = "pi-virtual";
+
+export function piBranchSelection(
+	branch: readonly SessionEntry[],
+	getModel: (provider: string, modelId: string) => Pick<Model<string>, "api"> | undefined,
+): { provider: string; modelId: string } | undefined {
+	let response: { provider: string; modelId: string } | undefined;
+	for (const entry of [...branch].reverse()) {
+		if (entry.type === "model_change") {
+			const change = { provider: entry.provider, modelId: entry.modelId };
+			const virtual = getModel(change.provider, change.modelId)?.api === PI_VIRTUAL_MODEL_API;
+			return !response || virtual ? change : response;
+		}
+		if (
+			!response &&
+			entry.type === "message" &&
+			entry.message.role === "assistant" &&
+			entry.message.api !== PI_VIRTUAL_MODEL_API
+		)
+			response = { provider: entry.message.provider, modelId: entry.message.model };
+	}
+	return response;
+}
+
 function persistedSessionModelRef(model: unknown): { provider: string; id: string } | undefined {
 	if (typeof model !== "object" || model === null) return undefined;
 	const provider = Reflect.get(model, "provider");
@@ -2105,15 +2154,21 @@ async function openDiskSession(
 		skillAdmissionResolver(workspaceId).piResourceTrusted,
 	);
 	const sessionManager = SessionManager.open(info.path);
-	const persistedModel = persistedSessionModelRef(sessionManager.buildSessionContext().model);
+	const persistedModel = persistedSessionModelRef(
+		piBranchSelection(sessionManager.getBranch(), (provider, id) =>
+			generation.runtime.getModel(provider, id),
+		),
+	);
 	let exactModel: Model<string> | undefined;
+	let unavailableSavedModel: SavedModelRef | undefined;
 	if (persistedModel) {
 		try {
 			exactModel = resolvePersistedModel(generation.runtime, persistedModel);
 		} catch {
-			const pi = generation.runtime.getAvailableSnapshot();
-			if (pi.some((model) => sameModel(model, persistedModel)))
-				exactModel = preferredDefaultModel(settledAvailableModels(generation.runtime));
+			unavailableSavedModel = persistedModel;
+			log.warn(
+				`session ${sessionId}: saved model ${persistedModel.provider}/${persistedModel.id} is unavailable; waiting for an explicit model choice`,
+			);
 		}
 	}
 	repairDanglingToolCalls(sessionManager, enabledInteractiveTools());
@@ -2123,6 +2178,7 @@ async function openDiskSession(
 			sessionManager,
 			settingsManager,
 			...(exactModel ? { model: exactModel } : {}),
+			...(unavailableSavedModel ? { unavailableSavedModel } : {}),
 		},
 		workspaceId,
 		generation,
@@ -2192,6 +2248,50 @@ export function getSessionMessages(
 	cwd: string,
 ): Promise<{ summary: SessionSummary; messages: TranscriptMessage[] }> {
 	return getSessionMessagesInternal(sessionId, workspaceId, cwd);
+}
+
+export async function readFinalAssistantTexts(
+	workspaceId: string,
+	cwd: string,
+	sessionIds: readonly string[],
+): Promise<Map<string, string | null>> {
+	const texts = new Map<string, string | null>();
+	const onDisk: string[] = [];
+	for (const sessionId of sessionIds) {
+		const entry = sessions.get(sessionId);
+		if (isSessionDeleted(sessionId, workspaceId)) texts.set(sessionId, null);
+		else if (!entry) onDisk.push(sessionId);
+		else {
+			texts.set(
+				sessionId,
+				entry.workspaceId === workspaceId ? finalAssistantText(entry.session.messages) : null,
+			);
+		}
+	}
+	if (onDisk.length === 0) return texts;
+	const wanted = new Set(onDisk);
+	for (const info of await SessionManager.list(cwd)) {
+		if (info.cwd !== cwd || !wanted.has(info.id) || texts.has(info.id)) continue;
+		texts.set(
+			info.id,
+			finalAssistantText(SessionManager.open(info.path).buildSessionContext().messages),
+		);
+	}
+	for (const sessionId of onDisk) if (!texts.has(sessionId)) texts.set(sessionId, null);
+	return texts;
+}
+
+function finalAssistantText(messages: readonly AgentSession["messages"][number][]): string | null {
+	for (let index = messages.length - 1; index >= 0; index--) {
+		const message = messages[index];
+		if (message?.role !== "assistant") continue;
+		const text = message.content
+			.flatMap((part) => (part.type === "text" ? [part.text] : []))
+			.join("\n")
+			.trim();
+		if (text) return text;
+	}
+	return null;
 }
 
 export async function respondToTool(
@@ -2639,6 +2739,7 @@ export async function setSessionModel(sessionId: string, model: WireModel): Prom
 	const entry = mustGetEntry(sessionId);
 	const resolved = resolveWireModel(entry.generation.runtime, model);
 	await entry.session.setModel(resolved);
+	entry.unavailableSavedModel = undefined;
 	return sessionWireModel(resolved, entry.generation);
 }
 

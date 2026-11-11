@@ -1,6 +1,7 @@
 import { t as globalT, useT } from "@thinkrail/locales/react";
 import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { openFindInFiles } from "../findInFiles";
 import { chatDisplayName, copyText } from "../lib";
 import { canStartProjectlessChat, startProjectlessChat } from "../panels/chatActions";
 import { enterDefaultWorkspace } from "../panels/defaultWorkspace";
@@ -21,6 +22,7 @@ import {
 import {
 	buildWorkItems,
 	commandItems,
+	type PaletteAsk,
 	type PaletteHost,
 	type PaletteItem,
 	type PaletteStart,
@@ -31,12 +33,14 @@ import {
 import {
 	isChatsContainer,
 	isChatWorkspace,
+	isDefaultWorkspace,
 	type SettingsSection,
 	selectActiveWorkspace,
 	selectChatWorkspaceFirstPrompt,
 	selectChatWorkspaceTitle,
 	selectContextProject,
 	selectContextRepoProject,
+	selectHasTextSearchScope,
 	selectHistoryTarget,
 	selectHostReachable,
 	selectHostSearchAvailable,
@@ -51,7 +55,7 @@ import {
 	useAppStore,
 	workspaceName,
 } from "../store";
-import { errorText, getTransport } from "../transport";
+import { errorText, getTransport, supportsTextSearch } from "../transport";
 import {
 	openChatHistory,
 	toggleBottomPanel,
@@ -59,14 +63,14 @@ import {
 	toggleRightSide,
 } from "./chordActions";
 import { type HostHitTargets, openHostHit } from "./openHostHit";
-import { createPaletteBackfill, mergeProjectWorkspaces } from "./paletteBackfill";
+import { createPaletteBackfill } from "./paletteBackfill";
 import {
 	buildCommands,
 	buildSettingsItems,
 	emptyStateActionIds,
 	type PaletteCatalogDeps,
 } from "./paletteCatalog";
-import { createPaletteNavigator } from "./paletteNavigation";
+import { paletteNavigator } from "./paletteNavigation";
 import { readSettingsShortcutLabel } from "./useAppShortcuts";
 
 const LOCAL_SCOPES: readonly SearchScope[] = ["all", "work", "commands"];
@@ -80,13 +84,6 @@ const paletteBackfill = createPaletteBackfill({
 	concurrency: BACKFILL_CONCURRENCY,
 });
 
-const paletteNavigator = createPaletteNavigator(async (projectId) =>
-	mergeProjectWorkspaces(
-		projectId,
-		await getTransport().request("workspace.list", { projectId, includeDiffStats: false }),
-	),
-);
-
 function useWorkspaceBackfill(): void {
 	useEffect(() => paletteBackfill.watch(), []);
 }
@@ -95,10 +92,23 @@ const hostHitTargets: HostHitTargets = {
 	navigateToWorkspace: paletteNavigator.navigateToWorkspace,
 	loadWorkspaceRow: paletteNavigator.loadWorkspaceRow,
 	openFile: (workspaceId, path) => openFileInTab(workspaceId, path, "keep"),
-	openSpec: (workspaceId, path) => useAppStore.getState().requestSpecView(workspaceId, path),
+	openSpec: (workspaceId, path, line) =>
+		useAppStore.getState().requestSpecView(workspaceId, path, line),
 	openChatLocation: (location) => useAppStore.getState().requestChatLocation(location),
 	openPlan: (workspaceId) => useAppStore.getState().requestToolView(workspaceId, "plan"),
 };
+
+export async function askTheAgent(
+	workspaceId: string | null,
+	projectId: string | null,
+	text: string,
+	stillWanted: () => boolean = paletteNavigator.beginPick(),
+): Promise<void> {
+	const target =
+		workspaceId ??
+		(projectId ? ((await enterDefaultWorkspace(projectId, stillWanted))?.id ?? null) : null);
+	if (target) await startChatInTab(target, { prompt: `${text}\n\n${globalT("search.ask.note")}` });
+}
 
 export interface SearchPaletteOptions {
 	readonly openNewWorkspace: (projectId: string | null, initialPrompt?: string) => boolean;
@@ -123,6 +133,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
 	const contextProject = useAppStore(selectContextProject);
 	const contextRepoProject = useAppStore(selectContextRepoProject);
+	const textSearchScoped = useAppStore(selectHasTextSearchScope);
 	const canStartChat = useAppStore(canStartProjectlessChat);
 	const historySessionId = useAppStore((s) => selectHistoryTarget(s)?.sessionId ?? null);
 	const readAction = useAppStore((s) =>
@@ -207,6 +218,19 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		[contextRepoProject, canStartChat, openNewWorkspace],
 	);
 
+	const ask = useMemo<PaletteAsk | undefined>(() => {
+		const projectId = contextRepoProject?.id ?? null;
+		if (!hostSearch || (!activeWorkspaceId && !projectId)) return undefined;
+		const target =
+			activeWorkspace ??
+			(projectId ? workspaces[projectId]?.find(isDefaultWorkspace) : undefined) ??
+			null;
+		return {
+			ask: (text) => void askTheAgent(activeWorkspaceId, projectId, text),
+			...(target ? { target: workspaceName(t, target) } : {}),
+		};
+	}, [hostSearch, activeWorkspaceId, activeWorkspace, contextRepoProject, workspaces, t]);
+
 	const binding = useMemo(() => {
 		const store = () => useAppStore.getState();
 		const deps: PaletteCatalogDeps = {
@@ -218,6 +242,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			historyAvailable: historySessionId !== null,
 			canCreateProject: selectSupportsOnboarding({ protocolVersion }),
 			nativeShortcuts,
+			findInFilesAvailable: supportsTextSearch(protocolVersion) && textSearchScoped,
 			readAction,
 			canSettle: activeWorkspace !== null && canSettleWorkspace(protocolVersion, activeWorkspace),
 			settled,
@@ -238,6 +263,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				toggleBottom: toggleBottomPanel,
 				showTool: (workspaceId, tool) => store().requestToolView(workspaceId, tool),
 				openHistory: openChatHistory,
+				findInFiles: openFindInFiles,
 				markRead: markWorkspaceRead,
 				markUnread: markWorkspaceUnread,
 				settle: settleWorkspace,
@@ -296,6 +322,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		contextProject,
 		contextRepoProject,
 		canStartChat,
+		textSearchScoped,
 		editors,
 		projects,
 		workspaces,
@@ -317,6 +344,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				: LOCAL_SCOPES,
 		...(host ? { host } : {}),
 		...(start ? { start } : {}),
+		...(ask ? { ask } : {}),
 		...(online
 			? hostSearch
 				? {}

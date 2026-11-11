@@ -22,8 +22,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
 - **Owns:** the wire — entity types, the `pi` event/message types (re-exported), the WS method & channel
   registries, and the protocol version. Including **`WsErrorCode`** — the closed set of failures the *host
   names* (`WsResponse.errorCode`, today `UNKNOWN_COMMIT`, `PUSH_AUTH_FAILED`,
-  `NOT_GIT` and `ALREADY_OPEN` (the two `project.open` refusals: a folder that is not a repository, and a
-  folder already owned by a workspace),
+  `NOT_GIT`, `ALREADY_OPEN` and `PROJECT_BOOTSTRAPPING` (the three `project.open` refusals: a folder that is
+  not a repository, a folder already owned by a workspace, and a folder another request is still
+  bootstrapping into a repository — an expected, transient refusal Error Tracking must not count as a bug),
   `PROJECT_CLONE_INVALID`, `PROJECT_CLONE_FAILED`, and `PROJECT_CLONE_CLEANUP_FAILED` (input
   correction, Git failure, and incomplete cleanup requiring filesystem intervention),
   `CHATS_CONTAINER` / `CHAT_WORKSPACE` / `NOT_A_CHAT` /
@@ -36,7 +37,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `CONTINUATION_UNKNOWN` (`chat.continuationStatus` for an operation the host neither holds nor linked —
   a restart lost it mid-flight; the card offers Retry), `CONTINUATION_IN_FLIGHT` (`chat.continue` for
   another project while the chat is already being continued — the first gesture is never silently
-  joined by a different choice), `RESOURCE_UNAVAILABLE`, and `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is
+  joined by a different choice), `TEXT_SEARCH_TIMEOUT` / `TEXT_SEARCH_FAILED` (a text search git could not
+  finish in its budget, or could not run — the host's logged classifier; the client only sees the search
+  end `failed`), `RESOURCE_UNAVAILABLE`, and `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is
   `subagent.getTranscript`'s **permanent** miss, the
   signal that stops the transcript dialog's polling. A known child whose first transcript file is not
   written yet instead returns empty messages with its current status, so a live run remains pollable;
@@ -58,7 +61,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`REQUEST_REPLAY_OVERFLOW`** — the host's replay namespace for this page is full
   ([[submodule-server-host]]), and the page treats it as an ordinary retryable failure — and **`GIT_TIMEOUT`**
   — a sync git killed at its deadline ([[submodule-server-git]]); an older client wraps it like any unknown
-  code, so it needs no protocol bump.
+  code, so it needs no protocol bump. One code is named by the client and never sent by the host:
+  **`FRAME_TOO_LARGE`**, a request refused before sending because its frame exceeds `WS_MAX_FRAME_BYTES`
+  (below) — the composer hands that prompt back to its draft instead of losing it.
   Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
@@ -133,7 +138,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   badge and glance uses) from `piProtocol` (`isTranscriptMessageRole` is the one definition of which roles a transcript carries: the host filters
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
   would silently shift every later jump anchor); `export *` (value) of `wsProtocol`
-  (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions).
+  (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, `WS_MAX_FRAME_BYTES`, and
+  feature-introduction versions).
 - **Allowed deps:** none at runtime. **Type-only** devDeps on `@earendil-works/pi-ai` +
   `@earendil-works/pi-agent-core`, imported **from their package roots** (type-only → erased at build).
 - **Deployment obligation:** wire contracts describe host behavior and compatibility, never the launcher
@@ -239,9 +245,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
     type-only mirror of pi-coding-agent's Node-only `CustomMessage`, so extension-injected messages like
     the ask replies cross the wire, and with **`WireCompactionSummary`** (mirror of the Node-only
     `CompactionSummaryMessage`: `summary`/`tokensBefore`/`timestamp`), the resolved-context record of a
-    compaction — pi places it before the kept tail and drops the summarized messages, so forwarding it is
-    what makes the compaction boundary survive reload/reopen instead of rendering a transcript that begins
-    mid-conversation. The summary reflects the now-live session after a disk re-open). The role universe a
+    compaction — pi places it before the kept tail and drops the summarized messages from **model**
+    context. The host's `getMessages` display transcript puts those summarized turns back in front of
+    the marker so reload/reopen can still review them; the marker is what keeps the cut visible rather
+    than a transcript that begins mid-conversation. The summary reflects the now-live session after a disk re-open). The role universe a
     host may send is pinned by the runtime **`isTranscriptMessageRole(role)`** guard: the single source for
     the server's transcript filter and history index, whose alignment keeps a history hit's `messageIndex`
     valid against the client's `turnIdByMessageIndex` — a role added to one side but not the other would
@@ -357,7 +364,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   together with **`workspace.settle`** / **`workspace.unsettle`** (`{ id }` — Default rejected server-side;
   the response is the updated record and the `workspace.updated` push converges every client). Settling
   never touches disk; `workspace.remove` stays the unguarded teardown. **`SETTLED_REMOVAL_PROTOCOL_VERSION`**
-  (v112) adds **`workspace.removalCheck { ids }`** → `WorkspaceRemovalCheck[]` (uncommitted files and
+  (v115) adds **`workspace.removalCheck { ids }`** → `WorkspaceRemovalCheck[]` (uncommitted files and
   unpushed commits per row, `null` when git could not answer) and **`workspace.removeSettled { id,
   lastActiveAt? }`** → `SettledRemovalResult` (`{ removed: true }` or `{ removed: false, reason:
   "changed" | "running" | "unsafe" }`), the host-rechecked removal behind the long-settled review),
@@ -479,14 +486,17 @@ the palette ranks with — kept here so host-side search can rank with the same 
   since the review has no chat to carry it. An older client reads the dropped fields as absent, so the pin
   is what lets a client tell "this host has no reviewer chat" from "this host is older" rather than inferring it;
   **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, analyticsConsentConfirmed, terminalReplayKb,
-  terminalWindowsShell, composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded,
+  terminalWindowsShell, composerGrowthLimit, questionPanelHeight, chatLineWidth, fileLineWidth, chatLineWidthBounded,
   fileLineWidthBounded, voiceInputEnabled, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
   favoriteModels, recentModels, reviewAutoFix, agentReviewEnabled, subagentsEnabled, subagentMaxConcurrent,
   jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, disabledExtensions, extensionSettings, otherAgentSkills,
   onboardingDismissed, interfaceFont, codeFont, codeFontSize, codeLigatures, fontWeightOffset }` — an extensible
   bag; the five font fields join at v102 and normalize together through `normalizeFontSettings` (host load, web
   store, fonts runtime); the line-width fields join the wire at protocol v61, `terminalWindowsShell` at v62, and
-  `voiceInputEnabled` (default `true`) with voice input at v107. `onboardingDismissed` (v94, default `false`)
+  `voiceInputEnabled` (default `true`) with voice input at v107, and `questionPanelHeight`
+  (**`QUESTION_PANEL_PROTOCOL_VERSION`** = v114; whole percents `QUESTION_PANEL_HEIGHT_PERCENT` 40–100,
+  default 60, `isQuestionPanelHeight`) caps the chat's interaction dock; a client of an older host hides
+  the setting and uses the default. `onboardingDismissed` (v94, default `false`)
   records that the user finished or skipped the cold-start onboarding wizard, so it never returns.
   `otherAgentSkills` (**`OTHER_AGENT_SKILLS_PROTOCOL_VERSION`** = v108, default `false`) is the host-wide
   opt-in for other agents' user skill directories and Claude plugins: every listed skill is resent in every
@@ -517,7 +527,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   spawns queue — overridden only by `Workspace.subagentMaxConcurrentOverride`; **`settleIdleDays`** (default `7`, `null` = never; on the wire
   from `WORKSPACE_SETTLE_PROTOCOL_VERSION` = v78) is the idle window after which a quiet workspace settles
   into its project's shelf — a host-wide number because "how long is quiet" is a habit, not a project fact;
-  **`settledRemovalDays`** (default `null` = never, 1–365, `isSettledRemovalDays`; v112) is how long a row
+  **`settledRemovalDays`** (default `null` = never, 1–365, `isSettledRemovalDays`; v115) is how long a row
   stays settled before the client suggests reviewing it for removal — opt-in because removal deletes chats; `agentReviewEnabled` (default `false`, on the
   wire from `AGENT_REVIEW_SETTING_PROTOCOL_VERSION` = v68) gates the worker's in-session `request_review`
   tool and applies live to open sessions — the Review button is independent (see [[submodule-server-host-plan-review]]); `disabledExtensions` (default `[]`, on the wire
@@ -604,13 +614,15 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `session.getMessages` order, `anchorText` makes the anchor drift-tolerant), and
   **`HistorySearchResult`** (the prompts + full-text messages sections, with totals and indexing status);
   the **search palette DTOs** (`SEARCH_PROTOCOL_VERSION`, v106): **`SearchKind`** (`transcript` / `file` /
-  `spec` / `plan` — chats and workspaces are the palette's own rows), **`SearchContext`** (the active workspace + context project the
+  `spec` / `section` / `plan` — chats and workspaces are the palette's own rows; `section` from
+  `SPEC_SECTIONS_PROTOCOL_VERSION`, v113, a ranked spec section that replaced a spec's line-level body hit), **`SearchContext`** (the active workspace + context project the
   host turns into its one file/spec root), **`SearchHit`** (a union per kind over **`SearchHitBase`** — a stable
   `kind:id[:locator]` id, title / subtitle, the shared matcher's `MatchTier` + `score` and highlight `ranges`
   so the browser merges host hits with its local ones by the same rule, and the `projectId` / `workspaceId`
   every hit opens in — with each kind's own required target: a file's root-relative `path` and byte `size`
-  when readable, a spec's `path` / `specId` / `size` and the body line a `content` hit matched (`snippet`), a
-  plan's `sessionId`, a transcript's `sessionId` / `messageIndex` + `anchorText`; a size lets the client
+  when readable, a spec's `path` / `specId` / `size` (its title, id or path matched), a section's `path` / `specId`, its
+  best line as `snippet` and **`SearchHitSection`** — the heading trail, its 1-based `line`, and how many of
+  the query's words the section holds (`matched` of `terms`) — a plan's `sessionId`, a transcript's `sessionId` / `messageIndex` + `anchorText`; a size lets the client
   decline to preview a large file; nothing else rides the wire — sort keys stay on the host), **`SearchGroup`** (one per kind:
   capped `hits`, the true `total`, a lifecycle `state` — `ready`, `indexing` (never loaded: the client
   polls), `refreshing` (a reload runs behind these hits: the client re-asks quietly), `failed` (the last
@@ -620,7 +632,15 @@ the palette ranks with — kept here so host-side search can rank with the same 
   bounded transcript window or `unavailable` — files and specs render client-side over `fs.readFile`), and the limits `MAX_SEARCH_QUERY_LENGTH`,
   `MAX_SEARCH_GROUP_LIMIT`, `MAX_SEARCH_PREVIEW_BYTES` (the preview pane's
   read cap); the matcher gains the `content` tier for
-  body/transcript matches, always below every field tier;
+  body/transcript matches, always below every field tier; the **Find in Files DTOs**
+  (`TEXT_SEARCH_PROTOCOL_VERSION`, v112): **`TextSearchMatch`** (a matching line — 1-based `line`, the
+  first match's 1-based UTF-16 `column` + `length` so a client can open the file at it, the line `text`
+  cut around that match and the `[start, end)` `ranges` of every match inside it), **`TextSearchFile`**
+  (one root-relative `path` with its matches, the grouping unit), **`TextSearchBatch`** (the `seq` it
+  answers, the `root` workspace the paths belong to, a slice of files, and on the last batch
+  `done: { reason: TextSearchEnd, files, lines }` — `complete` / `limit` / `failed`) and the limits
+  **`TEXT_SEARCH_LIMITS`** (`lines` 2 000 matching lines, `fileBytes` 1 MB, `lineChars` 400,
+  `minQuery` 2, `maxQuery` 200 — the host enforces them, the client renders them);
   the **review DTOs** — **`Review`** (one open review per workspace; `baseSha` — the reviewed diff's
   ORIGINAL side (the branch range's fork point, what that diff actually displays — never the target's
   tip, which can carry upstream commits the review never showed) pinned to a **full commit oid at
@@ -754,8 +774,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`customEndpoints.remove`** (v101, `CUSTOM_ENDPOINTS_PROTOCOL_VERSION`; the user's OpenAI-compatible
   servers stored as pi `models.json` providers whose ids carry **`CUSTOM_ENDPOINT_ID_PREFIX`** (`custom-`,
   tested by `isCustomEndpointId`). A `CustomEndpointModel` carries only what a server reported —
-  `contextWindow` / `maxTokens` / `reasoning` / `vision` are `null` when it did not say (distinct from an
-  explicit `false`, so a re-detect can clear a capability), and a `tools` hint is never saved. Probing takes `{baseUrl, apiKey? | endpointId?}` (an `endpointId` without `apiKey` reuses
+  `contextWindow` / `maxTokens` / `reasoning` / `vision` / `chatTemplateThinking` are `null` when it did
+  not say (distinct from an explicit `false`, so a re-detect can clear a capability), and a `tools` hint is
+  never saved. `chatTemplateThinking` is additive on the wire: a draft without it is read as `null`, so an
+  older client never changes a saved thinking format. Probing takes `{baseUrl, apiKey? | endpointId?}` (an `endpointId` without `apiKey` reuses
   that endpoint's saved key host-side, only for its unchanged address) and returns either the normalized
   `baseUrl` with the models, or a closed `CustomEndpointProbeFailure` (`invalid-url`, `unauthorized`,
   `timeout`, `unreachable`, `not-openai` with an optional HTTP `status`, `no-models`) so the client
@@ -806,7 +828,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   this action omits it against an older host) / **`workspace.openReview`** (the active
   branch's optional `OpenBranchReview` metadata; optional `allowCached: true` permits a settled host
   cache hit while omission preserves the original force-fresh behavior for older independently shipped
-  clients; either form still joins a lookup already in flight) / **`workspace.branchStatus`** (v87, same
+  clients; ordinary concurrent lookups share the in-flight generation; a fresh lookup starts a new generation, and callers of the superseded generation adopt the newer generation's answer) / **`workspace.branchStatus`** (v87, same
   params and freshness rules → `BranchStatus`; supersedes `openReview` for v87 clients, which stays for
   older ones; v88 adds `skipFetch: true` — a CI poll: a fresh review lookup without fetching origin) /
   **`workspace.push`** (v87, `{ workspaceId, branch, confirmBase? }` → `{ dirtyFiles }`: publish or
@@ -928,7 +950,12 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`search.query`** + **`search.preview`** (the palette's host
   providers from `SEARCH_PROTOCOL_VERSION`, v106: `{ query, kinds?, context, limit? }` → per-kind
   groups with the shared matcher's tiers; a preview is a bounded
-  transcript read that never attaches a session) / **`history.search`** (the prompt-recall + conversation-search read; results capped,
+  transcript read that never attaches a session) / **`search.text`** (Find in Files from
+  `TEXT_SEARCH_PROTOCOL_VERSION`, v112: `{ seq, query, context, caseSensitive, wholeWord }` — a plain
+  substring over the same one root as the `file` kind; answers `{ seq }` at once or `{ seq, superseded }`
+  for a `seq` older than the client's latest, and streams the matches on the addressed
+  `search.textResults` push; `seq` is the client's monotonic counter, never reused across a reload) /
+  **`history.search`** (the prompt-recall + conversation-search read; results capped,
   recency-ordered; the messages section is assistant-only — a user-role hit surfaces as a jumpable
   `PromptHit` instead, never a separate `MessageHit`) / the **`review.*` set** — **`get`** (the open
   review + comments, lazily created; re-anchored on read) / **`commentAdd`**/**`commentUpdate`**/
@@ -982,7 +1009,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `terminal.data` + **`terminal.exit`** + **`terminal.detached`** (the addressed terminal channels — sent to
   the single *attached* client rather than broadcast, so a shell's bytes never
   reach another browser; `terminal.data` may carry `truncated` when the host had to drop held output,
-  `terminal.detached` says another client took the tab over) / the **workspace lifecycle
+  `terminal.detached` says another client took the tab over) / **`search.textResults`** (the addressed
+  Find in Files stream — `TextSearchBatch`es sent only to the socket whose `search.text` they answer,
+  never broadcast or replayed; a client drops a batch whose `seq` is not its latest) / the **workspace lifecycle
   trio** — **`workspace.created`**
   / **`workspace.updated`** / **`workspace.removed`** — registry membership changes fanned out to every
   client so it stays shared domain state (architecture #9), all emitted by the server's `workspaces`
@@ -1023,7 +1052,11 @@ the palette ranks with — kept here so host-side search can rank with the same 
   still considers unresolved, so the host can release everything else. `resume` exists because a receipt is only
   as reliable as the socket carrying it and nothing would ever re-send a lost one: restating the live set beats
   confirming the confirmations. This behavior is protocol-versioned — a replaying UI must never run against a
-  pre-dedup host.
+  pre-dedup host. **`WS_MAX_FRAME_BYTES`** (16 MiB, UTF-8 bytes) is the largest client→host frame: the
+  host's `maxPayloadLength` and the size above which `WsTransport.request` refuses to send. A frame over it
+  would close the socket and be replayed on every reconnect, so a message's `REQUEST_IMAGE_BASE64_BUDGET`
+  (12 MiB) stays under it with room for the text. It equals Bun's default, which every earlier host
+  already enforced, so it needs no protocol bump.
 
 ## Chat Resources
 

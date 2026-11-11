@@ -67,20 +67,47 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   instead arms a separately debounced (300ms), **pathless** `setRepoMetaPublisher(workspaceId)` nudge. This
   is the only signal for a change that leaves the working tree byte-identical: `git switch -c <new-branch>`
   writes nothing outside the git dir, and a `git commit` moves `HEAD` without touching a worktree file.
-  It is deliberately **not** matched on specific paths (`.git/HEAD`, `.git/logs/HEAD`, …): the platform
-  streams coalesce and report *a* representative path per burst, so which git-internal path surfaces is not
-  reliable. A wildcard event (null filename) nudges it too. Two sources feed the one nudge:
+  It is **not** matched on an allow-list of specific paths (`.git/HEAD`, `.git/logs/HEAD`, …): the
+  platform streams coalesce and report *a* representative path per burst, so which git-internal path
+  surfaces is not reliable. It drops only a deny-list instead — transient `*.lock` files and
+  directory-only notifications (a directory's own change event; the concrete file event accompanies it)
+  — because git commands, `status` included, routinely create and remove `index.lock` (also a
+  submodule's `.git/modules/<sub>/index.lock`): counting that would make the client's
+  `git.status`/branch re-read produce the next nudge, a self-sustaining refresh loop (#1102). A real update
+  still surfaces a non-lock path — git renames the lock onto its target or appends to a reflog. A wildcard
+  event (null filename) nudges it too. Three sources feed the one nudge:
   - `.git`-prefixed events seen by the recursive **root** watcher — covers a **repo root** workspace, whose
     `.git` directory lives inside the watched tree;
-  - a second, **non-recursive** watcher on the worktree's git dir **when that dir lies outside the root**
-    (a repo root's in-tree `.git` directory is already covered above, so it is never watched twice): for a
-    *linked worktree* (every workspace this app creates) `.git` is a *file* (`gitdir: <path>`) pointing at
-    `<repo>/.git/worktrees/<name>`, i.e. **outside the watched root**, so a commit made in that worktree's
-    terminal would otherwise produce no signal at all. Resolved with plain fs (stat + parse the gitfile
-    line), never by shelling out — this module has no `git` sibling edge (`git`'s `headBranchAt` mirrors
-    the same gitfile parse for the same reason). Non-recursive because only the
-    dir's top level holds the refs that move (`HEAD`, `index`, `ORIG_HEAD`) while `objects/`/`logs/` are
-    pure storms; a missing/unreadable git dir (non-git folder) or a failed start degrades silently.
+  - **non-recursive** watchers on the worktree's git dir and its `logs/` **when that dir lies outside the
+    root** (a repo root's in-tree `.git` directory is already covered above, so it is never watched twice):
+    for a *linked worktree* (every workspace this app creates) `.git` is a *file* (`gitdir: <path>`) pointing
+    at `<repo>/.git/worktrees/<name>`, i.e. **outside the watched root**, so a commit made in that
+    worktree's terminal would otherwise produce no signal at all. Resolved with plain fs (stat + parse the
+    gitfile line), never by shelling out — this module has no `git` sibling edge (`git`'s `headBranchAt`
+    mirrors the same gitfile parse for the same reason). The top level holds the per-worktree files that
+    move (`HEAD`, `index`, `ORIG_HEAD`, `COMMIT_EDITMSG`). `logs/` is watched because, with locks dropped,
+    an attached-branch `git update-ref HEAD …` leaves only `HEAD.lock` at the top level and an append to
+    `logs/HEAD` (the branch ref itself is in the shared git dir). Neither is
+    recursive: the per-worktree dir can hold submodule git dirs under `modules/` — `objects/` included —
+    whose churn would bring back event storms. A missing `logs/` (reflogs disabled), a missing/unreadable
+    git dir (non-git folder) or a failed start degrades silently.
+  - non-recursive watches on a linked worktree's **remote-tracking refs** in the shared git dir (found
+    through the gitdir's `commondir` file): a terminal `git push` writes only there, so the Remote status
+    would otherwise stay stale (#1009). ThinkRail branches are created `--no-track`, so there is no upstream
+    config to follow, yet a push still updates `refs/remotes/<remote>/<branch>` through the remote's fetch
+    refspec; the watch therefore follows the checked-out branch name under **every** remote, never parsed
+    config. Per remote it watches the deepest existing directory along `<remote>/<branch>` and matches only
+    the next path component (a slashed branch's parent dirs may not exist before its first push). It also
+    watches `packed-refs` in the shared dir and `refs/remotes` itself (or `refs`, until `remotes` exists)
+    for a remote dir appearing or vanishing — `git pack-refs` deletes an emptied `refs/remotes/<remote>/`
+    and the next push recreates it. Unlike the sources above these match exact names: the shared dir
+    serves every worktree of the repo, so another branch's ref update must not nudge this one, and a ref
+    update always ends in a rename onto the ref's own name. Whenever the nudge fires, the target set is
+    re-derived and every one of these watches is closed and re-created, never diffed against the old set:
+    `git pack-refs` and the next push can delete and recreate a remote dir within one debounce, under the
+    same path and often (ext4) the same inode, so a kept watch would stay bound to the deleted dir. A
+    terminal branch switch is itself a nudge, so it rebinds. Not recursive: `refs/` grows with the repo's
+    branch count.
 
   `host` fans the nudge out to two convergences: `syncWorkspaceBranch` (a workspace's branch label follows
   its live checkout) **and** a pathless, skill-neutral `fsChanged` frame (`paths: []`,

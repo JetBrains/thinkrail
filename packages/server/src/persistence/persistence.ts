@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import {
+	closeSync,
+	fchmodSync,
+	fsyncSync,
 	mkdirSync,
+	openSync,
 	readFileSync,
 	realpathSync,
 	renameSync,
@@ -19,6 +23,7 @@ import {
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
 	isLocalePreference,
+	isQuestionPanelHeight,
 	isSettledRemovalDays,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
@@ -104,25 +109,49 @@ function storedDirectory(path: string): string {
 	return resolve(path);
 }
 
-function readJson<T>(file: string, fallback: T): T {
+function setAside(path: string): string | null {
+	const setAsidePath = `${path}.corrupt-${Date.now()}`;
 	try {
-		return JSON.parse(readFileSync(join(dataDir(), file), "utf8")) as T;
+		renameSync(path, setAsidePath);
+		return setAsidePath;
 	} catch {
-		return fallback;
+		return null;
 	}
 }
 
-function writeJson(file: string, value: unknown): void {
-	mkdirSync(dataDir(), { recursive: true });
-	writeFileSync(join(dataDir(), file), `${JSON.stringify(value, null, "\t")}\n`);
+function readJson<T>(file: string, fallback: T, accepts: (raw: unknown) => boolean): T {
+	const path = join(dataDir(), file);
+	try {
+		const raw: unknown = JSON.parse(readFileSync(path, "utf8"));
+		if (accepts(raw)) return raw as T;
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") return fallback;
+	}
+	setAside(path);
+	return fallback;
+}
+
+const NEW_FILE_MODE = 0o600;
+
+function replacementMode(target: string): number {
+	const existing = statSync(target, { throwIfNoEntry: false });
+	return existing ? existing.mode & 0o777 : NEW_FILE_MODE;
 }
 
 function writeJsonAtomic(file: string, value: unknown, mode?: number): void {
 	mkdirSync(dataDir(), { recursive: true });
 	const target = join(dataDir(), file);
 	const temporary = `${target}.${randomUUID()}.tmp`;
+	const permissions = mode ?? replacementMode(target);
 	try {
-		writeFileSync(temporary, `${JSON.stringify(value, null, "\t")}\n`, mode ? { mode } : undefined);
+		const fd = openSync(temporary, "w", permissions);
+		try {
+			fchmodSync(fd, permissions);
+			writeFileSync(fd, `${JSON.stringify(value, null, "\t")}\n`);
+			fsyncSync(fd);
+		} finally {
+			closeSync(fd);
+		}
 		renameSync(temporary, target);
 	} finally {
 		rmSync(temporary, { force: true });
@@ -154,13 +183,7 @@ function loadSessionMetadata<T>(
 		if ((caught as NodeJS.ErrnoException).code === "ENOENT") return { kind: "missing" };
 		error = caught;
 	}
-	const setAsidePath = `${path}.corrupt-${Date.now()}`;
-	try {
-		renameSync(path, setAsidePath);
-		return { kind: "set-aside", file, error, setAsidePath };
-	} catch {
-		return { kind: "set-aside", file, error, setAsidePath: null };
-	}
+	return { kind: "set-aside", file, error, setAsidePath: setAside(path) };
 }
 
 export const SESSION_RECEIPTS_VERSION = 1;
@@ -465,9 +488,7 @@ function readChatsStore(): ChatsStore {
 }
 
 function setAsideChats(root: string, path: string): ChatsStore {
-	try {
-		renameSync(path, `${path}.corrupt-${Date.now()}`);
-	} catch {}
+	setAside(path);
 	return remember(root, { kind: "set-aside" });
 }
 
@@ -515,7 +536,7 @@ export function isChatWorkspace(workspace: Pick<Workspace, "kind">): boolean {
 }
 
 export function loadProjects(): Project[] {
-	const repositories = readJson<Project[]>("projects.json", []).map((project) => ({
+	const repositories = readJson<Project[]>("projects.json", [], Array.isArray).map((project) => ({
 		...project,
 		path: storedDirectory(project.path),
 	}));
@@ -525,7 +546,7 @@ export function loadProjects(): Project[] {
 
 /** Partitions on save: repository projects to `projects.json`, the Chats container to `chats.json`. */
 export function saveProjects(projects: Project[]): void {
-	writeJson(
+	writeJsonAtomic(
 		"projects.json",
 		projects.filter((project) => !isChatsContainer(project)),
 	);
@@ -536,16 +557,18 @@ export function saveProjects(projects: Project[]): void {
 }
 
 export function loadWorkspaces(): Workspace[] {
-	const repositories = readJson<Workspace[]>("workspaces.json", []).map((workspace) => ({
-		...workspace,
-		worktreePath: storedDirectory(workspace.worktreePath),
-	}));
+	const repositories = readJson<Workspace[]>("workspaces.json", [], Array.isArray).map(
+		(workspace) => ({
+			...workspace,
+			worktreePath: storedDirectory(workspace.worktreePath),
+		}),
+	);
 	return [...repositories, ...loadChats().chats];
 }
 
 /** Partitions on save: repository workspaces to `workspaces.json`, chat workspaces to `chats.json`. */
 export function saveWorkspaces(workspaces: Workspace[]): void {
-	writeJson(
+	writeJsonAtomic(
 		"workspaces.json",
 		workspaces.filter((workspace) => !isChatWorkspace(workspace)),
 	);
@@ -555,18 +578,23 @@ export function saveWorkspaces(workspaces: Workspace[]): void {
 	saveChats({ ...stored, chats });
 }
 
+export type CreationOrigin = "agent";
+
 export type WorkspaceCreationRecord = Omit<WorkspaceCreation, "kickoff"> & {
 	worktreePath: string;
 	renamed?: true;
 	baseOid?: string;
 	kickoff?: WorkspaceKickoff;
+	origin?: CreationOrigin;
 };
 
 export function loadWorkspaceCreations(): WorkspaceCreationRecord[] {
-	return readJson<WorkspaceCreationRecord[]>("workspace-creations.json", []).map((creation) => ({
-		...creation,
-		worktreePath: storedDirectory(creation.worktreePath),
-	}));
+	return readJson<WorkspaceCreationRecord[]>("workspace-creations.json", [], Array.isArray).map(
+		(creation) => ({
+			...creation,
+			worktreePath: storedDirectory(creation.worktreePath),
+		}),
+	);
 }
 
 export function saveWorkspaceCreations(creations: WorkspaceCreationRecord[]): void {
@@ -582,11 +610,11 @@ export interface PersistedTerminalTab {
 export type PersistedTerminalSessions = Record<string, PersistedTerminalTab[]>;
 
 export function loadTerminalSessions(): PersistedTerminalSessions {
-	return readJson<PersistedTerminalSessions>("terminals.json", {});
+	return readJson<PersistedTerminalSessions>("terminals.json", {}, isRecord);
 }
 
 export function saveTerminalSessions(sessions: PersistedTerminalSessions): void {
-	writeJson("terminals.json", sessions);
+	writeJsonAtomic("terminals.json", sessions);
 }
 
 /** A persisted model list keeps only entries that still identify a model; anything else is dropped, not repaired. */
@@ -624,9 +652,8 @@ function storedExtensionSettings(value: unknown): ExtensionSettingValues {
 }
 
 export function loadConfig(): AppConfig {
-	const raw = readJson<unknown>("config.json", null);
-	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return structuredClone(DEFAULT_CONFIG);
-	const value = raw as Record<string, unknown>;
+	const value = readJson<Record<string, unknown> | null>("config.json", null, isRecord);
+	if (!value) return structuredClone(DEFAULT_CONFIG);
 	const extensions = { ...value };
 	delete extensions.chatMessageOrder;
 	delete extensions.layout;
@@ -651,6 +678,9 @@ export function loadConfig(): AppConfig {
 		composerGrowthLimit: isComposerGrowthLimit(value.composerGrowthLimit)
 			? value.composerGrowthLimit
 			: DEFAULT_CONFIG.composerGrowthLimit,
+		questionPanelHeight: isQuestionPanelHeight(value.questionPanelHeight)
+			? value.questionPanelHeight
+			: DEFAULT_CONFIG.questionPanelHeight,
 		chatLineWidth: isLineWidth(value.chatLineWidth)
 			? value.chatLineWidth
 			: DEFAULT_CONFIG.chatLineWidth,
@@ -714,12 +744,11 @@ export function loadConfig(): AppConfig {
 }
 
 export function saveConfig(config: AppConfig): void {
-	writeJson("config.json", config);
+	writeJsonAtomic("config.json", config);
 }
 
 export function loadHostEnvironment(): HostEnvironment {
-	const raw = readJson<unknown>("environment.json", {});
-	const value = isRecord(raw) ? raw : {};
+	const value = readJson<Record<string, unknown>>("environment.json", {}, isRecord);
 	const vars = Array.isArray(value.vars)
 		? value.vars.filter(
 				(entry): entry is { name: string; value: string } =>

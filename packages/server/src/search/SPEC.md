@@ -2,7 +2,7 @@
 id: submodule-server-search
 type: submodule-design
 status: active
-title: search — the palette's host-side providers and the transcript preview
+title: search — the palette's host-side providers, Find in Files and the transcript preview
 parent: module-server
 depends-on: [module-contracts, submodule-server-history, submodule-server-spec, submodule-server-todos, submodule-server-git, submodule-server-log]
 references: [submodule-web-search]
@@ -14,18 +14,22 @@ tags: [search, public-surface-checked]
 Answer the search palette's `search.query` and `search.preview` for the corpora only the host can see —
 file names, spec titles and bodies, TODO plans and chat transcripts (chat titles and workspaces the palette
 lists itself, from the host's session records and workspace lists) — ranking them with the one matcher from [[module-contracts]] so
-the browser can merge host hits with its own by tier and score. Registry-free: `host/search.ts`
+the browser can merge host hits with its own by tier and score; and run Find in Files' `search.text`,
+streaming matching lines over the same one root (`git grep` in a repository, an in-process read in a
+chat's folder). Registry-free: `host/search.ts`
 composes `createSearchService` with injected readers (open projects, persisted workspace records, the
-history index, spec snapshots, stored plans, and the file check — `fs`'s `readableFileSize`, the
-reader's own containment rule), the same shape as `host/historyScope.ts`.
+history index, spec snapshots and section search, stored plans, the file check — `fs`'s `readableFileSize`, the
+reader's own containment rule — and the text check, `fs`'s `classifyBytes`), the same shape as `host/historyScope.ts`.
 
 ## Boundary
 
 - **Public surface (barrel):** `createSearchService`, `SearchService`, `SearchReaders`.
-- **Internals:** the file-list cache, root resolution and the providers are composed by the service and
-  reached by tests per file, never through the barrel.
+- **Internals:** the file-list cache, root resolution, the providers and the text search are composed
+  by the service and reached by tests per file, never through the barrel.
 - **Allowed deps:** `contracts` (DTOs, the matcher, the content matcher and `searchHitFields`), `git`
-  (`gitAsyncStream` for `ls-files`), `log` (a failed load or provider, error type only); `history`,
+  (`gitAsyncStream` for `ls-files` and `grep`), `log` (a failed load or provider, error type only),
+  `shared` (`CodedError` for a text search failure's code), Node `fs` (`readdir` for a chat folder's walk;
+  `stat` / `readFile` for its text search); `history`,
   `spec` and `todos` for types only — their readers, the Default provisioning and the root watch are
   injected. A file hit's size and readability come from the
   injected `stat`, never a second containment rule here.
@@ -60,8 +64,8 @@ transcript may still be on disk, but nothing may reopen it.
 
 - Terms come from `parseMatchTerms` over the query clamped to `MAX_SEARCH_QUERY_LENGTH`; an empty
   query answers empty groups (the browser owns the empty state). Field matches go through the matcher
-  with the terms as parsed (a quoted term is a literal); a body or transcript match takes each term's
-  text as a case-insensitive substring, so a quoted phrase matches as one. `kinds` narrows the providers; the
+  with the terms as parsed (a quoted term is a literal); a transcript match takes each term's text as
+  a case-insensitive substring, so a quoted phrase matches as one. `kinds` narrows the providers; the
   per-group `limit` is clamped to `MAX_SEARCH_GROUP_LIMIT`, `total` keeps the true count.
 - **Lifecycle (per group `state`):** `indexing` — the corpus has never loaded (a file list, the first
   spec snapshot, a cold history index; or a plan whose session a cold index has not reached) and the
@@ -106,14 +110,24 @@ transcript may still be on disk, but nothing may reopen it.
 - **Specs:** the `spec` module's per-root snapshot — every build runs off the request path, the first
   included (a root's first read answers `indexing` with no hits unless the build lands within the wait),
   and only on a read after its TTL lapsed or the worktree changed, the previous snapshot answering
-  meanwhile as `refreshing` (title / id / path through the
-  matcher; a body match from three characters becomes a `content`-tier hit with the matching line as
-  `snippet`).
-- **Content folding:** spec bodies and messages match through `matchContent`, so a body folds exactly
-  like a title. Each entry's prepared fold is cached against the entry object (`WeakMap`): history
-  entries survive revalidation, so the cost is about one more copy of the indexed message text, released
-  with the index's records; a spec body is prepared again once per snapshot rebuild. A snippet is cut
-  from the raw text around the first match and highlighted with `contentRanges` on the snippet itself.
+  meanwhile as `refreshing` — title / id / path through the matcher.
+- **Sections:** the spec bodies, through the `spec` module's `specSections(root)` — the ranked section
+  engine of `pi-spec-graph/core` that the agent's `spec_search` also uses, so both surfaces answer a
+  question with the same sections; the engine folds case and diacritics like the matcher. The provider
+  hands it the query **as typed** (the engine has its own tokenizer; the matcher's terms would lose a
+  phrase), and maps each hit to a `section` hit: one per section, `content` tier with the engine's score
+  (so `buildGroup`'s order is the engine's), the spec title as `title`, the path as `subtitle`, the best
+  line as `snippet`, `ranges` for the title, the heading and the snippet, and `section: { heading, line,
+  matched, terms }`; the id names the section by its heading trail and its occurrence among same-named
+  sections of the file, never by its line, so a re-index after an edit replaces a kept row instead of
+  listing the section twice. The index is built with the root's spec snapshot, off the request: the group
+  is `indexing` until it lands and `refreshing` while the snapshot is re-read. Sections replaced the
+  snapshot's line-level body hits — a body hit is a section, never a line.
+- **Content folding:** messages match through `matchContent`, so a message folds exactly like a title.
+  Each entry's prepared fold is cached against the entry object (`WeakMap`): history entries survive
+  revalidation, so the cost is about one more copy of the indexed message text, released with the
+  index's records. A snippet is cut from the raw text around the first match and highlighted with
+  `contentRanges` on the snippet itself.
 - **Transcripts:** hits are substring-AND over entries, one per message, `content` tier with an equal score so the timestamp alone orders them newest first (a
   user message never outranks a newer assistant one), carrying `messageIndex` / `anchorText` for the
   client's drift-tolerant jump. The scan visits the newest chat first and each chat's newest message
@@ -131,6 +145,63 @@ transcript may still be on disk, but nothing may reopen it.
   own failure, or any other, fails the load like a git failure. It answers no specs (an empty `spec`
   group; no snapshot is built for it), while its files, transcripts and plans stay searchable. The Chats
   container itself is never a root: a query in its context provisions nothing and answers no files.
+
+## Text (Find in Files)
+
+`search.text { seq, query, context, caseSensitive, wholeWord }` searches file **contents** in the same
+one root as the `file` kind (so both searches see one file set) — resolved the same way, so Project Home
+provisions a Default record not listed yet and a failed provision ends the search `failed`, and the root is
+watched — and answers at once — `{ seq }` or
+`{ seq, superseded }` for a `seq` older than the client's latest; the matches follow on the addressed
+`search.textResults` push through the `emit` the host hands in (one socket, never a broadcast).
+
+- **Engine (a repository):** one `git -c grep.column=false -c grep.fullName=false grep --no-color -n -z -I
+  --fixed-strings [-i] [-w] --untracked --exclude-standard -- . <exclusions>` process per search in the root,
+  streamed through `gitAsyncStream` under `LC_ALL=C`. The `-c` overrides keep a user's git config from
+  reshaping the output (an extra column field, top-level-relative paths); the exclusions are the palette's
+  hidden folders (`SEARCH_HIDDEN_DIRS` — `node_modules`, `.hg`, `.svn` — as `:(exclude,glob)**/<name>/**`
+  pathspecs, and a record under one is dropped too), so both searches see one file set. Git folds only
+  ASCII case under C, so a case-insensitive query with a non-ASCII cased letter is sent as an extended
+  regex spelling out each letter's case variants (`(ä|Ä)(p|P)…` — its lower and upper forms, closed once
+  more, so the Kelvin sign also asks for `k` and `K`; rarer fold partners such as a final `ς` for `σ` are not
+  asked of git); every other query is a fixed string.
+  Records are `path NUL line NUL text LF`: the path and line number end at a NUL (a path may hold a
+  newline), the text at the newline, CRLF trimmed; a record is capped at `TEXT_SEARCH_BUDGET.recordBytes`
+  (`fileBytes` plus framing — any longer line belongs to a file the size limit drops).
+- **Engine (a chat's folder):** a chat is never a repository, so no git runs there: each search walks the
+  folder afresh through the file-list cache (`load(root, false)`, which also refreshes the palette's `file`
+  list — no `.gitignore`, the hidden folders skipped, regular files only, a walk past `walkMaxFiles`
+  searching the files it listed) and reads them in-process, skipping a file over `fileBytes` or one the
+  text check rejects (below), and checks each line with the same matcher.
+- **Only what the file view shows:** a match is kept only in a file the injected `isText` — `fs`'s own
+  `classifyBytes` (strict UTF-8, no NUL in the first 8 KiB, no binary magic), the rule `fs.readFile` uses
+  before it returns source — accepts, so every hit opens at its line; git's `-I` alone would keep a
+  Latin-1 file whose content the editor gets back empty. A repository's matching file is read once per
+  search for it (with the `fileBytes` check), a chat folder's file is classified as it is read.
+- **Query:** a plain substring clamped to `TEXT_SEARCH_LIMITS.maxQuery`; under `minQuery` characters or
+  without a root the search completes empty without spawning or reading. Smart-case is the client's: the
+  host only sees an explicit `caseSensitive`.
+- **Matches:** per matching line, 1-based `line` (git's newline-based numbering — an editor that also
+  breaks lines at a lone CR numbers such a file differently, a documented v1 limit), the first match's
+  `column` / `length` (so the client can open at it) and every match's `[start, end)` range inside `text`,
+  which is cut to `TEXT_SEARCH_LIMITS.lineChars` around the first match. The host recomputes ranges itself
+  (git only reports lines) with a Unicode case-insensitive regex over the original text, so a letter whose
+  lowercase changes length (`İ`) never shifts or drops a match, and a whole-word candidate rejected at a
+  word edge is retried one code point later, as git's `-w` does — never inside a surrogate pair, where a
+  Unicode regex steps back to the same candidate and the scan would never end. Matches are grouped by file in the order they arrive; the first one is sent at
+  once and later ones at most `TEXT_SEARCH_BUDGET.flushMs` after they arrive, even while git is still
+  scanning.
+- **End:** the final batch carries `done: { reason, files, lines }` — `complete`, `limit` when
+  `TEXT_SEARCH_LIMITS.lines` matching lines were reached (the process is killed), or `failed` (git exited
+  abnormally, timed out or could not launch, a chat's folder could not be listed, or the root's Default
+  could not be provisioned; git's "no match" exit is `complete`). A failure is logged through `logger("search")` with `TEXT_SEARCH_TIMEOUT` or
+  `TEXT_SEARCH_FAILED`, never with git's stderr; a cancelled search is not a failure.
+- **Per-client superseding:** the service keeps the latest text `seq` and the running search's
+  `AbortController` per `clientKey`; a newer `search.text` aborts the older one (cancelling the stream
+  kills the process tree) and an aborted search emits nothing more — the client never sees a stale
+  batch or `done`. The host cancels a client's search when its socket closes (`cancelText`; the batches
+  could only reach the dead socket, and the client asks again on its next connection) and
+  `forgetClient` drops the reaped client's state.
 
 ## Preview
 

@@ -33,10 +33,9 @@ export const FILE_LIST_LIMITS = {
 	maxCachedPaths: 256_000,
 } as const;
 
-const HIDDEN_DIRECTORIES = new Set([".git", "node_modules", ".hg", ".svn"]);
-const UNTRACKED_EXCLUDES = [...HIDDEN_DIRECTORIES]
-	.filter((name) => name !== ".git")
-	.flatMap((name) => ["-x", name]);
+export const SEARCH_HIDDEN_DIRS = ["node_modules", ".hg", ".svn"] as const;
+const HIDDEN_DIRECTORIES = new Set<string>([".git", ...SEARCH_HIDDEN_DIRS]);
+const UNTRACKED_EXCLUDES = SEARCH_HIDDEN_DIRS.flatMap((name) => ["-x", name]);
 
 export class FileListUnavailable extends Error {
 	override readonly name = "FileListUnavailable";
@@ -44,7 +43,7 @@ export class FileListUnavailable extends Error {
 
 const decoder = new TextDecoder();
 
-function isHiddenFromSearch(path: string): boolean {
+export function isHiddenFromSearch(path: string): boolean {
 	return path.split("/").some((segment) => HIDDEN_DIRECTORIES.has(segment));
 }
 

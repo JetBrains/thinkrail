@@ -242,7 +242,10 @@ treatment.
   rather than run the same hung probe again) `project.inspect` → either offers to
   bootstrap the folder into a repo — a modal **`ConfirmDialog`**
   (confirm → `project.init`) — when it's `initable`, or surfaces the error in a **`NoticeDialog`** — so a
-  non-git folder is never a silent no-op. The native picker remains the local fast path and keeps its raised
+  non-git folder is never a silent no-op. `project.init` waits 13 minutes, the host's longest bootstrap on
+  macOS/Linux (two 5-minute index writes plus short probes, [[submodule-server-projects]]) with a minute to
+  spare; a Windows bootstrap has no host deadline, so one that outlasts the wait reports a timeout while the
+  host finishes and publishes the project. The native picker remains the local fast path and keeps its raised
   timeout because it waits on a human; if the host cannot present it, the rejection instead opens an
   **Open project from host path** dialog carrying the reason and an autofocused path field. The dialog says
   the path belongs to the computer running ThinkRail, accepts a host-absolute path or `~` / `~/…`, and
@@ -714,7 +717,15 @@ a project picker, the prompt hero, and the reused
   shared by Language, Custom themes and Custom fonts; `saveSettings` is the one `settings.update` call that
   toasts its failure. Popovers inside the dialog render into the dialog element
   (`settingsDialogContainer`), because Radix's scroll lock cancels wheel and touch scrolling anywhere
-  outside it. Free-text settings and the font weight slider share one **auto-save input pattern**
+  outside it (the Models pickers missed this, so their lists ignored the wheel: #607). The dialog clips
+  overflow, so these popovers also take it as their collision boundary and cap their height at Radix's
+  available height; the model popover caps its width too (without that cap, arrow keys scrolled a
+  narrow dialog sideways). Under the dialog's focus scope, a popover whose trigger can't take focus back
+  on close leaves focus on the dialog element, so the Models pickers use `aria-disabled`, not
+  `disabled`, while busy; `FontPicker` doesn't yet. A modal `DropdownMenu` holds its own scroll lock and
+  may stay on `body`; the Layout "Add new layout" and Templates delete popovers still render there (only
+  a long layout name can't be swiped sideways in its field).
+  Free-text settings and the font weight slider share one **auto-save input pattern**
   (`settingsDraft.useSettingsDraft`): Enter, blur or a slider release saves a valid, changed value once
   (no Save/Apply button); an invalid draft stays visible with `aria-invalid` and a range message linked by
   `aria-describedby`, and is never sent; Escape reverts to the authoritative value; the input carries
@@ -866,13 +877,13 @@ a project picker, the prompt hero, and the reused
   empty or preset name; there is no server-kind choice), a password key field (blank keeps a saved key on
   edit; an edit that changes the address's origin shows a warning and disables Save, since a different
   server is added as a new one; **Remove key** sends `apiKey: ""` and keeps Detect from reusing it), **Find models**
-  (`customEndpoints.probe`, run automatically when an edit opens), a per-model use switch, and a manual
-  model-id field for gateways that list nothing. **A model row has no editable parameters** (decision: they
+  (`customEndpoints.probe`, only on click — never on open, since gateways can list thousands), a manual
+  model-id field above the list, a filter field and 50-row paging once the list exceeds a page, and a per-model use switch. **A model row has no editable parameters** (decision: they
   describe the server rather than configure it — its real limits are set by whoever runs it). It shows only
   the facts the server reported (context, thinking, images, tools; "No tools" in warning tone), and an
   unreported fact is simply absent and left to pi's default. Re-detecting keeps selections and saved
   facts the server doesn't report, takes reported ones, drops a saved max output once a new context is
-  reported, and keeps models the server no longer lists; an unchanged saved address stays as written. The
+  reported, keeps models the server no longer lists, and keeps existing rows first with newly found ones appended; an unchanged saved address stays as written. The
   pure draft rules live in `customEndpointDraft`; probe failures render as localized inline status and
   host save errors render inline; and
   the **`JetBrainsAiCard`** — route Central-supported models through the user's JetBrains subscription while
@@ -915,7 +926,11 @@ a project picker, the prompt hero, and the reused
   range inline, and waits for `settings.changed` rather than installing optimistic authority. Older hosts get
   neither control. **`GithubSettings`** (the Integrations section's "Local GitHub" group —
   `github.authStatus()` shown as `settings-gh-status[data-connected]`: Connected + login, or a Not connected
-  notice naming `gh auth login`; Refresh (`github.refresh`) is offered in both states);
+  notice naming `gh auth login`; Refresh (`github.refresh`) is offered in both states. Only an answered
+  probe is a status, and only the latest request's: reopening the section shows the last answer while it
+  re-probes, and a failed request never reads as signed out — it keeps the answer, or with none shows a
+  could-not-check notice. Before any answer the block is a skeleton; `data-connected` exists only once
+  gh has answered);
   **`LanguageSettings`** (gated by `LOCALES_PROTOCOL_VERSION`; a store-integrating container over the
   props-driven `LanguagePage`, whose derivations come from [[submodule-web-i18n]]): one radio list — **System**
   (default; names the language System resolves to) then every available language by its own-language name
@@ -997,7 +1012,9 @@ a project picker, the prompt hero, and the reused
   toast without changing geometry); **`ChatSettings`** (one **Appearance and behavior** group of rows —
   **Message order** segmented over `store.chatMessageOrder` (Oldest first, the compatibility default /
   Newest first, the opt-in), **Composer size** segmented over the composer-growth limit (Compact / Roomy /
-  Half chat), and the chat `LineWidthControl`. It exposes no scroll-follow controls: streaming follow is
+  Half chat), **Question panel height** (`QuestionPanelHeightControl`, props-driven: the same auto-save
+  integer field as Line width over `questionPanelHeight`, 40–100 with an inline range error, hidden below
+  `QUESTION_PANEL_PROTOCOL_VERSION`), and the chat `LineWidthControl`. It exposes no scroll-follow controls: streaming follow is
   fixed (see `apps/web/src/chat/SPEC.md`). Message order applies immediately and persists only in this
   client through the chat preference seam: browsers use current-host-qualified keys, while a native shell
   may inject its stable backend-profile/window adapter. Another browser, native window, or host is unaffected. Composer growth
@@ -2196,7 +2213,9 @@ own section. The kebab menu (`plan-menu`, a
   the worktree-relative **tab identity**, so a deep link can never open a second tab for a file already open
   under its relative path; that lives in the choke point, not in each caller, and it means a spec created
   seconds ago and not yet in the graph opens just the same) — a spec has nothing to preview short of its
-  content, and the tree row lights up from the local selected-resource identity. That intent is
+  content, and the tree row lights up from the local selected-resource identity. A request that carries
+  a `line` (a palette section hit) then reveals it with `revealFileTab` and no renderer override, so the
+  rendered spec scrolls to that heading instead of switching to source. That intent is
   **consumed** (`clearSpecRequest`) once handled: like the Changes link, it opens a center tab, so
   replaying it on a remount or a graph refetch would yank the user's tab back mid-edit. Two intents, two
   effects: a spec chip must never land in the git-derived Changes view, which structurally cannot show a
@@ -2501,7 +2520,16 @@ own section. The kebab menu (`plan-menu`, a
   `MarkdownPreview`; `thinkrail/code` is the text fallback and uses Monaco on desktop plus Pierre `File`
   on phone-class viewports; `thinkrail/binary` shows identity and a host-backed
   download. The candidate list alone determines whether the resource toggle exists. No format predicate or
-  preview/source field remains in the pane or tab.
+  preview/source field remains in the pane or tab. A tab's `reveal` (the store's `FileReveal`) is passed
+  through to the mounted view as the renderer contract's `reveal`, so the code renderer scrolls to and marks
+  that line, and the view's `onRevealHandled` clears it (`clearFileTabReveal`) so a later remount keeps the
+  reading position; `openTabs.ts`' **`openFileAtLine(workspaceId, path, at, intent)`** is Find in Files'
+  open-at-a-line entry (`↵` / `⌘↵`): the ordinary `openFileInTab` at the caller's intent, then
+  `revealFileTab` naming `SOURCE_RENDERER_ID`, so a Markdown or HTML file opens as source at the line
+  rather than as its rendered document (a spec section opened through `specRequest`, below, names no
+  renderer, so the rendered spec scrolls to its heading). An open that finds a read of the same file in flight joins it —
+  `openReadTab` hands every caller that read's completion — so each caller reveals after the tab is
+  installed, in call order, and the latest hit wins.
 
   `MarkdownPreview` retains the document typography, frontmatter stripping, alerts, Mermaid rendering,
   source-line stamps, review commenting, and bounded reading measure described above. These are renderer
@@ -2574,6 +2602,28 @@ own section. The kebab menu (`plan-menu`, a
   key handler intercepts keydown at `keyCode === 229` and derives the control bytes from `event.code`
   (which stays accurate under an IME) via `imeControlBytes`, writing them to the PTY itself; anything
   that isn't a rescued chord is left to normal text input.
+- **Korean IME replacement bridge (WebKit).** WebKit — Safari and the desktop app's WKWebView — drives
+  the macOS Korean input method without `composition*` events: a syllable's first jamo lands as an
+  `insertText` input, every re-composition of it (`ㄱ`→`가`→`간`) as `insertReplacementText`, the next
+  syllable as a fresh `insertText`, and the `keyCode` 229 keydown *follows* the input it produced.
+  xterm 6.0.0 writes the bare `insertText` to the PTY at once and ignores `insertReplacementText`
+  (upstream #5704, #6144), so `가` reached the shell as `ㄱ`, finals never arrived (`간` → `ㄱ`), and a
+  syllable whose input landed before the previous key's keyup was dropped outright. `TerminalInstance`
+  captures `input`/`keydown` on the mount host — ahead of xterm's own textarea listeners — and routes
+  them through `terminalImeBridge`: a single Hangul `insertText` is held instead of forwarded, each
+  `insertReplacementText` replaces the held syllable, and the held syllable reaches the PTY through
+  `term.input` when the next syllable starts, on any non-IME keydown (Enter, Space, chords, arrows,
+  digits), on a 229 chord or Escape — ahead of the bytes the rescue above writes, so Ctrl+U/Ctrl+C
+  discard the syllable with the line instead of leaving it for the next command — on `compositionstart`
+  (a real composition taking over), on `paste` (xterm hands the clipboard straight to `onData`, with no
+  input or keydown to commit on) or on focus-out; modifier-only keydowns never commit. An unmodified
+  Backspace the input method passes through while a syllable is held drops the held syllable instead of
+  emitting DEL, since nothing reached the PTY; a modified one (Option/Alt+Backspace word-delete) commits
+  it and stays xterm's. Once the replacement model has been seen, bare 229 keydowns are kept from
+  xterm so its deferred textarea diff cannot echo a syllable twice under load; the rescued chords above
+  still pass. Chrome and Firefox never emit `insertReplacementText` for an IME, so the bridge is inert
+  there. Known gap: the held syllable has no on-screen preview until it commits (xterm draws one only
+  for `composition*` input); upstream's #5704 adds that inside xterm — revisit when it ships.
 - Heavy deps (Monaco / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
   A lazy chunk that fails to load (or a render throw) is contained by the `components/ErrorBoundary` the
   **shell** wraps each region in (see `shell/SPEC.md`), so a single panel degrades instead of blanking the

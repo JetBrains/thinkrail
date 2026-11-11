@@ -314,7 +314,7 @@ test("removal candidates are rows settled for at least settledRemovalDays, by wh
 	};
 	const ids = (settledRemovalDays: number | null) =>
 		selectSettledRemovalCandidates(
-			{ ...base, workspaces, settledRemovalDays, protocolVersion: 112 },
+			{ ...base, workspaces, settledRemovalDays, protocolVersion: 115 },
 			NOW,
 		).map((row) => row.workspace.id);
 	expect(ids(null)).toEqual([]);

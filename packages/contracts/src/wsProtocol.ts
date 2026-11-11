@@ -143,8 +143,11 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 112;
-export const SETTLED_REMOVAL_PROTOCOL_VERSION = 112;
+export const PROTOCOL_VERSION = 115;
+export const SETTLED_REMOVAL_PROTOCOL_VERSION = 115;
+export const QUESTION_PANEL_PROTOCOL_VERSION = 114;
+export const SPEC_SECTIONS_PROTOCOL_VERSION = 113;
+export const TEXT_SEARCH_PROTOCOL_VERSION = 112;
 export const CACHE_WARMING_SETTINGS_PROTOCOL_VERSION = 111;
 export const CONTINUATION_PROTOCOL_VERSION = 110;
 export const CHATS_PROTOCOL_VERSION = 109;
@@ -556,6 +559,7 @@ export const WS_METHODS = {
 	historySearch: "history.search",
 	searchQuery: "search.query",
 	searchPreview: "search.preview",
+	searchText: "search.text",
 	reviewGet: "review.get",
 	reviewCommentAdd: "review.commentAdd",
 	reviewCommentUpdate: "review.commentUpdate",
@@ -607,6 +611,7 @@ export const WS_CHANNELS = {
 	workspaceCreationChanged: "workspace.creationChanged",
 	workspaceCreationRemoved: "workspace.creationRemoved",
 	chatContinuation: "chat.continuation",
+	searchTextResults: "search.textResults",
 	settingsChanged: "settings.changed",
 	hostUpdateAvailable: "host.updateAvailable",
 	feedbackInterview: "feedback.interview",
@@ -830,6 +835,8 @@ export interface CustomEndpointModel {
 	vision: boolean | null;
 	/** Whether the server says the model takes tool calls; never saved, so a listed endpoint reports null. */
 	tools: boolean | null;
+	/** The chat template turns thinking on and off through `enable_thinking` (llama.cpp reports it). */
+	chatTemplateThinking: boolean | null;
 }
 
 /** An OpenAI-compatible `custom-*` provider in pi's `models.json`. The key itself never crosses the wire. */
@@ -1351,6 +1358,16 @@ export interface WsMethodMap {
 		result: SearchQueryResult;
 	};
 	"search.preview": { params: SearchPreviewTarget; result: SearchPreviewResult };
+	"search.text": {
+		params: {
+			seq: number;
+			query: string;
+			context: SearchContext;
+			caseSensitive: boolean;
+			wholeWord: boolean;
+		};
+		result: { seq: number; superseded?: true };
+	};
 	"review.get": { params: { workspaceId: string }; result: ReviewSnapshot };
 	"review.commentAdd": {
 		params: {
@@ -1494,11 +1511,14 @@ export interface WsResume {
 
 export type WsClientMessage = WsRequest | WsAck | WsResume;
 
+export const WS_MAX_FRAME_BYTES = 16 * 1024 * 1024;
+
 export type WsErrorCode =
 	| "UNKNOWN_COMMIT"
 	| "PUSH_AUTH_FAILED"
 	| "NOT_GIT"
 	| "ALREADY_OPEN"
+	| "PROJECT_BOOTSTRAPPING"
 	| "PROJECT_CLONE_INVALID"
 	| "PROJECT_CLONE_FAILED"
 	| "PROJECT_CLONE_CLEANUP_FAILED"
@@ -1544,6 +1564,9 @@ export type WsErrorCode =
 	| "CHAT_DELETION_PENDING"
 	| "CONTINUATION_UNKNOWN"
 	| "CONTINUATION_IN_FLIGHT"
+	| "TEXT_SEARCH_TIMEOUT"
+	| "TEXT_SEARCH_FAILED"
+	| "FRAME_TOO_LARGE"
 	| SpeechErrorCode;
 
 export interface WsResponse {

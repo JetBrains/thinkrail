@@ -316,6 +316,56 @@ test("an unavailable or ambiguous per-call model throws loud", () => {
 	}
 });
 
+test("parent-model words in the call mean no invocation model, never a lookup", () => {
+	for (const model of ["inherit", "parent", "default", "INHERIT", "Parent"]) {
+		const mapping = toSpawnMapping(definition({ thinking: "low" }), {
+			cwd: "/tmp/x",
+			availableModels: [...AVAILABLE, { provider: "openai", id: "default-preview" }],
+			model,
+		});
+		expect(mapping.session.model).toBeUndefined();
+		expect(mapping.session.thinkingLevel).toBe("low");
+	}
+	const pinned = toSpawnMapping(definition({ model: "openai/gpt-5" }), {
+		cwd: "/tmp/x",
+		availableModels: AVAILABLE,
+		model: "inherit",
+	});
+	expect(pinned.session.model).toEqual({ provider: "openai", id: "gpt-5" });
+	for (const model of ["inherit:high", "provider/model"]) {
+		expect(() =>
+			toSpawnMapping(definition(), { cwd: "/tmp/x", availableModels: AVAILABLE, model }),
+		).toThrow(`requests model "${model}"`);
+	}
+});
+
+test("a missing per-call model lists the available refs and says how to use the parent's", () => {
+	expect(() =>
+		toSpawnMapping(definition({ name: "worker" }), {
+			cwd: "/tmp/x",
+			availableModels: AVAILABLE,
+			model: "provider/model",
+		}),
+	).toThrow(
+		'Agent "worker" requests model "provider/model", which is not available in this session. Available models: anthropic/claude-opus-4-5, anthropic/claude-haiku-4-5, openai/gpt-5. Leave model out to use the parent\'s model.',
+	);
+	const many = Array.from({ length: 23 }, (_, i) => ({ provider: "p", id: `m${i}` }));
+	let message = "";
+	try {
+		toSpawnMapping(definition(), { cwd: "/tmp/x", availableModels: many, model: "nope" });
+	} catch (error) {
+		message = (error as Error).message;
+	}
+	expect(message).toContain("p/m19 (+3 more).");
+	expect(message).not.toContain("p/m20");
+	expect(() =>
+		toSpawnMapping(definition(), { cwd: "/tmp/x", availableModels: [], model: "nope" }),
+	).toThrow("No models are available in this session. Leave model out");
+	expect(() =>
+		toSpawnMapping(definition(), { cwd: "/tmp/x", availableModels: AVAILABLE, model: "claude-" }),
+	).not.toThrow("Available models");
+});
+
 test("an unavailable pin cannot fall back to a valid invocation model", () => {
 	expect(() =>
 		toSpawnMapping(definition({ model: "openai/missing:xhigh" }), {
@@ -333,4 +383,15 @@ test("a pinned model that matches nothing throws loud", () => {
 			availableModels: AVAILABLE,
 		}),
 	).toThrow('pins model "unobtanium"');
+	let message = "";
+	try {
+		toSpawnMapping(definition({ model: "unobtanium" }), {
+			cwd: "/tmp/x",
+			availableModels: AVAILABLE,
+		});
+	} catch (error) {
+		message = (error as Error).message;
+	}
+	expect(message).toContain("Available models: anthropic/claude-opus-4-5");
+	expect(message).not.toContain("Leave model out");
 });

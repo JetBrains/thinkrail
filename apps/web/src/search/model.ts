@@ -13,9 +13,11 @@ export type PaletteItemKind =
 	| "chat"
 	| "file"
 	| "spec"
+	| "section"
 	| "plan"
 	| "transcript"
 	| "start"
+	| "ask"
 	| "more";
 
 export type PaletteMore =
@@ -32,6 +34,7 @@ export interface PaletteFile {
 	readonly workspaceId: string;
 	readonly path: string;
 	readonly size?: number;
+	readonly line?: number;
 }
 
 export interface PaletteMatch {
@@ -47,6 +50,8 @@ export interface PaletteItem {
 	readonly group: string;
 	readonly scope: SearchScope;
 	readonly icon: RemixiconComponentType;
+	/** How many leading characters of `title` are context (a section's spec name) and render muted. */
+	readonly titleLead?: number;
 	readonly subtitle?: string;
 	readonly titleSource?: ChatTitleSource;
 	readonly titleTooltip?: string;
@@ -72,6 +77,13 @@ export interface PaletteItem {
  */
 export interface PaletteStart {
 	readonly openDialog: (text: string) => boolean;
+}
+
+/** Ask the agent from the typed text: the shell starts a new chat in the context workspace with the question. */
+export interface PaletteAsk {
+	readonly ask: (text: string) => void;
+	/** The workspace the new chat opens in, named on the row. */
+	readonly target?: string;
 }
 
 export interface PaletteSection {

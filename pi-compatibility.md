@@ -262,6 +262,15 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   Remove the ChatGPT rule when the installed `providers/openai.js` filters OAuth chat models itself, and
   the listing rule when pi narrows a rerouted provider's catalog to what its endpoint serves; run
   `modelAvailability.test.ts` and `runtimeGenerations.test.ts`.
+- **Restored model selection** — [[submodule-server-agent]], `piBranchSelection` in
+  `agentSessionManager.ts`. A reopened chat is checked against its saved model before pi restores it,
+  and that must be pi's virtual-aware `getBranchSelection` (a registered virtual `model_change` holds
+  over the physical responses it routed), not `buildSessionContext().model` (the last physical
+  response) — else a still-registered router whose last target is gone reads as unavailable and every
+  send is refused. Pi exports neither it nor `isVirtualModel`, so the host mirrors the walk and matches
+  the `"pi-virtual"` API. **Removal gate:** pi exports `getBranchSelection` or otherwise reports the
+  restored selection publicly. `runtimeGenerations.test.ts` pins parity against the installed dist ("the
+  restored selection mirrors pi's virtual-aware branch selection"); rerun it on every pi bump.
 - **Default-model preference** — [[submodule-server-agent]], `modelDefaults.ts`. Pi's
   `defaultModelPerProvider` is not exported, so the host mirrors it for new-chat, reviewer, and
   one-shot defaults. Remove the mirror when a public export or initial-model resolver exists; until
@@ -279,6 +288,14 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   discovery and prompt-template/frontmatter rules where public APIs cannot serve its read/edit UI.
   Prefer public discovery/parsing APIs when they meet those needs; retain parity coverage in history,
   template and composer tests until then.
+- **Context edits on summarized display turns** — [[submodule-server-history]], `displayTranscript.ts`
+  (`projectContextEntry`). The display projection puts the turns the latest compaction summarized back
+  in front of its marker, and they must carry the branch's latest `context_edit` the way pi projects kept
+  entries, or an omitted recovery attempt (`replacement: null`) comes back once a later compaction
+  advances past it. Pi's per-entry `projectContextEntry` is exported from `core/session-manager.js` but not
+  the package root, so the host mirrors it. **Removal gate:** pi exporting `projectContextEntry`, or a
+  projection that keeps summarized entries, from the package root. On upgrades run
+  `history/displayTranscript.test.ts`, whose parity test compares the mirror with pi's dist function.
 - **Subagent usage totals from child transcripts** — [[submodule-server-agent]], `subagentUsage.ts`.
   Pi's session-total loop (`AgentSession.getSessionStats`) is not exported for a bare session file, so
   the host mirrors which entries carry spend (`usage`, compaction/branch-summary `usage`, assistant and

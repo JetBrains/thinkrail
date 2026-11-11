@@ -1,5 +1,3 @@
-import { existsSync } from "node:fs";
-import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
 import { toolHomeEnv } from "@thinkrail/shared/toolHomes";
@@ -9,7 +7,12 @@ import {
 	isRealCentralE2e,
 	REAL_CENTRAL_E2E_ENV,
 } from "./fixtures/centralAgent";
-import { hermeticE2ePath, hermeticE2eShell, resolveBunExecutable } from "./fixtures/executables";
+import {
+	executableOnPath,
+	hermeticE2ePath,
+	hermeticE2eShell,
+	resolveBunExecutable,
+} from "./fixtures/executables";
 import {
 	E2E_CENTRAL_BAD_EXTENSION_SOURCE,
 	E2E_CENTRAL_EXTENSION_SOURCE,
@@ -39,8 +42,7 @@ const centralMode = isRealCentralE2e();
 assertCentralPlaywrightRunner(process.env, process.argv);
 const bunExecutable = resolveBunExecutable();
 const hostPath = hermeticE2ePath(E2E_FAKE_BIN_DIR);
-if (hostPath.split(delimiter).some((directory) => existsSync(join(directory, "pi"))))
-	throw new Error("e2e host PATH must not contain pi");
+if (executableOnPath(hostPath, "pi")) throw new Error("e2e host PATH must not contain pi");
 const hostCommand =
 	process.env.THINKRAIL_E2E_SKIP_BUILD === "1"
 		? `${JSON.stringify(bunExecutable)} packages/server/src/dev.ts`

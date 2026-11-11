@@ -6,6 +6,7 @@ import {
 	isSubagentMaxConcurrent,
 	RECENT_MODELS_LIMIT,
 	type ReviewFixDetails,
+	SEARCH_KINDS,
 	SETTLE_IDLE_DAYS,
 	SUBAGENT_MAX_CONCURRENT,
 } from "./domain";
@@ -55,6 +56,7 @@ import {
 	PROJECT_TRUST_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	PROVIDER_WARNINGS_PROTOCOL_VERSION,
+	QUESTION_PANEL_PROTOCOL_VERSION,
 	RESOURCE_HISTORY_PROTOCOL_VERSION,
 	RESOURCE_META_PROTOCOL_VERSION,
 	REVIEW_ACTIONS_PROTOCOL_VERSION,
@@ -65,10 +67,12 @@ import {
 	SESSION_STATE_PROTOCOL_VERSION,
 	SESSION_TITLE_MAX_LENGTH,
 	SETTLED_REMOVAL_PROTOCOL_VERSION,
+	SPEC_SECTIONS_PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
+	TEXT_SEARCH_PROTOCOL_VERSION,
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 	TOOL_RESPONSE_CUSTOM_TYPE,
@@ -321,9 +325,9 @@ test("host search and its previews are pinned to v106", () => {
 	expect(WS_METHODS.searchPreview).toBe("search.preview");
 });
 
-test("settled workspace removal is pinned to v112", () => {
+test("settled workspace removal is pinned to v115", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SETTLED_REMOVAL_PROTOCOL_VERSION);
-	expect(SETTLED_REMOVAL_PROTOCOL_VERSION).toBe(112);
+	expect(SETTLED_REMOVAL_PROTOCOL_VERSION).toBe(115);
 	expect(WS_METHODS.workspaceRemovalCheck).toBe("workspace.removalCheck");
 	expect(WS_METHODS.workspaceRemoveSettled).toBe("workspace.removeSettled");
 	expect(DEFAULT_CONFIG.settledRemovalDays).toBeNull();
@@ -331,6 +335,25 @@ test("settled workspace removal is pinned to v112", () => {
 	expect(isSettledRemovalDays(30)).toBe(true);
 	expect(isSettledRemovalDays(0)).toBe(false);
 	expect(isSettledRemovalDays(1.5)).toBe(false);
+});
+
+test("spec sections in search are pinned to v113", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SPEC_SECTIONS_PROTOCOL_VERSION);
+	expect(SPEC_SECTIONS_PROTOCOL_VERSION).toBe(113);
+	expect(SEARCH_KINDS).toContain("section");
+});
+
+test("find in files is pinned to v112", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(TEXT_SEARCH_PROTOCOL_VERSION);
+	expect(TEXT_SEARCH_PROTOCOL_VERSION).toBe(112);
+	expect(WS_METHODS.searchText).toBe("search.text");
+	expect(WS_CHANNELS.searchTextResults).toBe("search.textResults");
+});
+
+test("the question panel height setting is pinned to v114", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(QUESTION_PANEL_PROTOCOL_VERSION);
+	expect(QUESTION_PANEL_PROTOCOL_VERSION).toBe(114);
+	expect(DEFAULT_CONFIG.questionPanelHeight).toBe(60);
 });
 
 test("continue in workspace is pinned to v110", () => {

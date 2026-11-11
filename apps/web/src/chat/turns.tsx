@@ -135,7 +135,7 @@ function ChatTurnViewImpl({
 						className={cn(
 							"tr-text-reading text-text-default",
 							isFinalAnswer &&
-								"w-full min-w-0 pl-24 [&>div>*:last-child]:mb-0 [&_ol]:list-inside [&_ul]:list-inside",
+								"w-full min-w-0 pl-24 [&>div>*:last-child]:mb-0 [&_ol]:list-inside [&_ul]:list-inside [&_li>p:first-child]:inline",
 						)}
 					>
 						<AssistantMarkdown
@@ -517,6 +517,14 @@ function ContinuationRequestCard({ details }: { details: ContinueInWorkspaceRequ
 						: phase === "lost"
 							? t("chat.turn.continuation.lost")
 							: t("chat.turn.continuation.failed", { reason: continuation?.reason ?? "" });
+	const opened =
+		phase === "started" && continuation?.workspaceId
+			? {
+					workspaceId: continuation.workspaceId,
+					projectId: continuation.projectId,
+					sessionId: continuation.sessionId,
+				}
+			: null;
 	return (
 		<div data-testid="continuation-card" data-phase={phase} className={HOST_CARD_CLASS}>
 			<span className="block tr-text-reading text-text-default">
@@ -531,14 +539,14 @@ function ContinuationRequestCard({ details }: { details: ContinueInWorkspaceRequ
 			>
 				{status}
 			</p>
-			{phase === "started" && continuation ? (
+			{opened ? (
 				<Button
 					type="button"
 					variant="outline"
 					size="m"
 					data-testid="continuation-open"
 					className="mt-8"
-					onClick={() => actions?.openContinuation?.(continuation)}
+					onClick={() => actions?.openWorkspace?.(opened)}
 				>
 					{t("chat.turn.continuation.open")}
 				</Button>

@@ -48,9 +48,11 @@ describe("pi package mutations", () => {
 	let pkg: string;
 	let settingsPath: string;
 	let ctx: PiPackageHostContext;
-	const originalOffline = process.env.PI_OFFLINE;
+	let originalOffline: string | undefined;
 
 	beforeEach(() => {
+		originalOffline = process.env.PI_OFFLINE;
+		delete process.env.PI_OFFLINE;
 		root = mkdtempSync(join(tmpdir(), "thinkrail-pi-mutations-"));
 		agentDir = join(root, "agent");
 		mkdirSync(join(agentDir, "extensions"), { recursive: true });

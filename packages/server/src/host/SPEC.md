@@ -163,8 +163,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   reconstruct pre-consent work; campaign-only enrichment is inactive while off and restored from its strict
   server record when on without retrying a consumed claim.
   `shutdownAnalytics()` remains a best-effort drain in `stop()` and awaited by graceful shutdown;
-  every capture site lives here, including the existing basic events: `chat_started` in `session.create` and
-  `chat.create` (the host's new-chat
+  every capture site lives here, including the existing basic events: `chat_started` in `chatSession.ts#startChatSession`, every chat start's one path (the host's new-chat
   resolution decides `none` for a chat created with no usable model instead of pi's placeholder; otherwise
   the created session's actual model is reported), `message_sent` (via the
   local `trackSend(mode, text)`) after an **accepted** `session.prompt`/`session.steer`/`session.followUp`
@@ -242,12 +241,23 @@ channel fan-out, and the process-boot wrapper both launchers share.
   is reported with its registered method (CodedErrors included), and `observeLoggedErrors` routes host
   `log.warn/error(msg, err)` calls as `host_logged` — so host diagnostics that carry an error go through
   the logger, never `console.*`. The host's `resolveNewChatModel` composes AppConfig settings with pi's global default model, the agent's settled available
-  model list and Pi thinking clamp; `model.default`, `session.create`, `chat.create`, and newly-created
-  review chats share that resolver, and creation passes its model and effort explicitly — a chat's
-  recovery through `session.create` included. A `session.create` or `chat.create` that **named** a
-  model and every `session.setModel` also record the resolved model as recent through `settings`'
-  `noteRecentModel` — a default-resolved creation is the host's choice, not the user's, and is not
-  recorded; `noteNewChat` is that one bookkeeping (recent pick + `chat_started`) for both creation paths. `model.contextSettings` and `model.setContextWindow` delegate to agent's `modelContext`
+  model list and Pi thinking clamp; `model.default` and chat creation share that resolver.
+  `chatSession.ts#startChatSession` is the one `createSession` call: `session.create`, the review chat,
+  Continue in workspace, the creation hand-off's kickoff chat (the New Workspace dialog's and an agent's
+  `start_workspace`), and a chat without a project — `chat.create` and recovery through `session.create`,
+  inside its per-chat claim, whose `assertClaimed` refuses a chat being deleted before, around and after
+  the agent's barrier — all start their chat through it, so no path can diverge on the scratch folder, the
+  resolver, the explicit model and effort, or `chat_started`. Its one bookkeeping is `noteNewChat` (recent
+  pick + `chat_started`): only a user's pick (`pick` — `session.create`, `chat.create` and a dialog's
+  kickoff that **named** a model) is recorded as recent through `settings`' `noteRecentModel`, as is every
+  `session.setModel`; a default-resolved creation, the review chat, Continue's destination and an agent's
+  `start_workspace` are the host's or the agent's choice, not the user's, and are not recorded. Without an
+  explicit model, an available saved model or an available pi global default, the resolver first applies
+  pi's model preference to connections whose wire auth kind is not `env`, then to the whole available
+  catalog. An ambient API key must not preempt a configured subscription; explicit selections, available
+  saved defaults and pi's global default still take precedence, including environment-backed ones. This
+  changes only new-chat resolution, never an existing session's model or a failed request's connection.
+  `model.contextSettings` and `model.setContextWindow` delegate to agent's `modelContext`
   adapter and return its `ModelContextSetting[]`; the mutation names a provider/model target or all
   eligible pairs, never arbitrary model metadata, and successful saves reuse `provider.changed` to
   invalidate catalogs across clients. The four `customEndpoints.*` methods delegate to agent's
@@ -502,6 +512,46 @@ channel fan-out, and the process-boot wrapper both launchers share.
     an owed branch move never counts as unnamed and never re-prompts), so agent's
     turn-start `pending-naming` reminder and the write policy can't disagree.
   - A target the agent never names stays unnamed; there is no fallback.
+  - `workspaceTools.ts` — the **workspace-tools host** (`setWorkspaceToolsHost`), composing `agent` +
+    `projects` + `workspaces` + `git` for `start_workspace` / `workspace_status`:
+    - A spawned workspace goes through the same background creation as the New Workspace dialog
+      (`workspaces`' `createWorkspaceWithChat`, the kickoff carrying the prompt, images, model and effort,
+      `origin: "agent"`): its creation row and progress show in every client while it runs, and
+      `workspaceCreationHandoff` provisions the initial terminal, waits for `ensureWatch`, starts the chat
+      through `chatSession.ts#startChatSession` and sends the prompt. The base is the dialog's default
+      (`listBranches().defaultBranch` plus its prefetch — not the creation's checkout-HEAD fallback), the
+      name an auto `workspace-N` that the child renames itself through `set_title`. The first prompt is
+      plain text, so pi's own `/template` and `/skill:` expansion applies. The tool returns once the new
+      chat's prompt passed pi's preflight, with the chat's model and effort from the hand-off's outcome
+      (host-only; the `creationRemoved` push carries just `sessionId` / `kickoffError`).
+    - Projects are the open repositories, matched by id, slug or name (default: the caller's). The
+      Chats container is never one ([[submodule-server-workspaces]]): it is never resolved or listed,
+      and its chats never match a named status lookup. A chat without a project has no default, so
+      both tools refuse a call without `project` and list the open repositories.
+      Attachments resolve against the caller's worktree: images ride as prompt images, and other files
+      are listed by absolute path, because the child's worktree only has committed refs.
+    - Project, model and attachments are validated **before** any worktree exists. If the chat fails to
+      start, or does not take its prompt, after the worktree is created, the workspace is **kept** and the
+      error names it (and its chat, once it exists). A creation that fails is discarded, not left as a
+      failed row to retry: the agent got the error and decides. Like any creation it still fails
+      visibly first — every client toasts the failure (and a hand-off's `kickoffError`), as it does for
+      Continue in workspace's creation — because a workspace starting, or not, in the user's project is
+      theirs to see even when an agent asked for it.
+    - Stop cancels a start in progress: the signal kills the default-base prefetch, and a start stopped
+      before the creation starts creates nothing; the creation's abort kills its git work and discards
+      the record and anything it cut, and the tool says no workspace was created — or, when that
+      cleanup cannot finish, that the partial workspace stays as an interrupted row to retry or dismiss. Once the hand-off runs, the workspace is registered and its chat starts
+      regardless: the start completes and reports it.
+    - An agent's spawn is not the user's explicit setup operation, so it records no `worktree_create`
+      setup action ([[submodule-server-analytics]]); its chat still reports `chat_started`.
+    - `origin: "agent"` (persisted on the creation record, so a hand-off replayed after a restart keeps
+      it) makes the hand-off send through `ackSend` + `runObservation.send(…, "internal")` rather than
+      `sendUserMessage`, and start the chat without the recent-model pick: an agent-sent prompt is not a
+      user `message_sent`, never claims the feedback invitation, and its model is not the user's choice.
+    - Status reuses existing state only: `listSessions` state (labelled working / needs_you / finished /
+      failed / interrupted / idle), the cached `Workspace.review` (no new PR refresh), and diff stats.
+      Start and status take their reads and effects as injected deps, so both are unit-tested without
+      projects, worktrees or sessions.
   - The **workspace-archive teardown** — the other composition of `agent` + `terminal` + `workspaces` only
     the host may make. `workspace.remove` **rejects a `kind: "default"` workspace loudly, before any
     side-effect** (the record's `worktreePath` is the project folder — the reclaim's `rm -rf` fallback
@@ -571,8 +621,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   recovery, when the transcript is genuinely gone from disk (there is no UI to close a review and
   start over, so wedging it would be worse); every other re-open failure throws rather than silently
   forking the conversation.
-- **Scratch-dir seeding on chat start:** every chat start (`session.create` and the creation handoff below)
-  goes through one `startChat` that calls `workspaces`' `ensureWorkspaceScratchDir` before creating the
+- **Scratch-dir seeding on chat start:** every chat start goes through `chatSession.ts#startChatSession`
+  (above), which calls `workspaces`' `ensureWorkspaceScratchDir` before creating the
   session — the Default workspace's gitignored `.thinkrail/context/` lands in the user's repo only when a chat
   actually starts there (and a worktree's deleted scratch dir self-heals). Host-composed — no new module edges.
 - **Background workspace creation (v104):** `workspace.startCreate` / `listCreations` / `retryCreation` /
@@ -581,9 +631,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `workspace.creationRemoved`, subscribed only by v104+ sockets) and the **handoff**
   `workspaceCreationHandoff` (then replays any handoff a crash cut short): when a checkout finishes it provisions the initial terminal and, when the create
   carried a kickoff, waits for the workspace watcher (`ensureWatch`, the readiness the browser's own chat start
-  awaits) and starts the chat through `startChat` (the kickoff's model/effort, else the saved defaults)
+  awaits) and starts the chat through `startChatSession` (the kickoff's model/effort, else the saved defaults)
   and sends its text/images through `sendUserMessage` under the `clientKey` that started (or last retried) the
-  creation, so the chat runs even with no window open. **The handoff waits only for pi's preflight, never the agent's turn:**
+  creation, so the chat runs even with no window open — an agent's `start_workspace` creation
+  (`origin: "agent"`) sends as internal instead (above). **The handoff waits only for pi's preflight, never the agent's turn:**
   `promptSession`'s `onPreflight` resolves once pi has validated the model and auth and started (or queued /
   handled) the run, so the creation is handed back — and its chat opened — within moments; a rejection
   before that point (no model, no API key) comes back as `kickoffError` beside the `sessionId`, and failures
@@ -750,7 +801,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   gesture makes at most one workspace, chat, handoff and link. The apply revalidates the project, moves to
   `creating`, creates the workspace (default base) through `createWorkspace` — [[submodule-server-workspaces]]'s
   background creation, so its creation row shows in every client while it runs and the creation hand-off
-  provisions the initial terminal — and records its id at once, then the chat (host default model, `noteNewChat`'s bookkeeping) and its id, then sends
+  provisions the initial terminal — and records its id at once, then the chat (host default model, through `chatSession.ts#startChatSession`) and its id, then sends
   the `chat-handoff` custom message — the clamped summary plus a link back, the new chat's first turn and
   run ([[submodule-server-agent]]'s run boundary) — reporting `firstMessage: sent | failed` apart from the
   phase, remembers the link on the source record (`continuedTo` with the `operationId`,
@@ -770,12 +821,18 @@ channel fan-out, and the process-boot wrapper both launchers share.
   scoped `chat.continuation` push (sockets ≥ `CONTINUATION_PROTOCOL_VERSION`, and only those that see
   chats); `chat.continuationStatus` answers a client that missed the pushes (a reload, a reconnect). Only
   the initiating client navigates — a web-side rule.
-- **Search composition (`search.ts`):** `search.query` / `search.preview` go to one lazily created
-  `SearchService` ([[submodule-server-search]]) fed with `listProjects`, `listAllWorkspaceRecords`, the
+- **Search composition (`search.ts`):** `search.query` / `search.preview` / `search.text` go to one lazily
+  created `SearchService` ([[submodule-server-search]]) fed with `listProjects`, `listAllWorkspaceRecords`, the
   history index's `sessions()`, `specSnapshot` and `listStoredPlans`, plus `listWorkspaces` (without diff
   stats) to provision a project's missing Default record and `ensureWatch(id, { prewarm: true })` to watch
-  the root a query resolved; a query carries no client state — the handler passes only the connection's
-  audience (`{ chats: seesChats(protocolVersion) }`). The `workspace.fsChanged` publisher also
+  the root a query resolved, and `fs`'s `classifyBytes` as Find in Files' text check; a query carries no client state — the handler passes only the connection's
+  audience (`{ chats: seesChats(protocolVersion) }`). `search.text` is the one stateful request: the
+  handler passes the socket's `clientKey`, so the service supersedes an older `seq` and aborts the client's
+  previous run; a closed socket cancels its run and a reaped client is forgotten. Find in Files' batches
+  ride the **addressed** `search.textResults` push: `createServer` installs `setSearchTextPublisher`, which
+  `ws.send`s each batch to the requesting `clientKey`'s socket only (sockets ≥
+  `TEXT_SEARCH_PROTOCOL_VERSION`; a gone socket drops the batch, the terminal / MCP-login pattern). The
+  `workspace.fsChanged` publisher also
   calls `invalidateRoot(worktreePath)` so a watched workspace's file list and spec snapshot refresh on the
   next keystroke. `fs.readFile` forwards `maxBytes` to `fs`.
 
@@ -871,9 +928,9 @@ enabled/confirmed choice before entering analytics attribution.
   (published from auth's Central/runtime invalidation seam and on a successful provider login) + **`host.updateAvailable`** (published for each
   retained CLI-update lifecycle replacement) use push channels. Every
   **broadcast** push channel a client should hear must be `ws.subscribe`d in the WS
-  `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Five channels are deliberately
-  **not** subscribed and not broadcast: `feedback.interview`, `feedback.githubStar`, `terminal.data`, `terminal.exit`, and
-  `terminal.detached` are sent with `ws.send` to one addressed client. Adding an addressed channel means
+  `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Six channels are deliberately
+  **not** subscribed and not broadcast: `feedback.interview`, `feedback.githubStar`, `terminal.data`, `terminal.exit`,
+  `terminal.detached` and `search.textResults` are sent with `ws.send` to one addressed client. Adding an addressed channel means
   wiring a publisher, not a subscription.
 - **Terminal backpressure never trusts the `drain` event alone.** A backpressured `ws.send` latches the
   client in `terminalBackpressured` and blocks its batchers, and the batcher deliberately retries only on
@@ -884,6 +941,14 @@ enabled/confirmed choice before entering analytics attribution.
   `terminalSend.ts`), so the host lifts the latch and resumes that client's terminals. A socket with
   buffered bytes stays latched, and a latch whose socket is already gone is left to `close`/`open`.
   Reloading the client always recovered (open clears the flag and resumes), which is why this hid so long.
+- **The composer's image budget stays under the inbound frame cap, never the other way round.** Bun
+  closes a socket on a frame over `maxPayloadLength` before any handler sees it, taking every open
+  request with it, and the client replayed that frame on every reconnect (#671). `maxPayloadLength` is
+  `WS_MAX_FRAME_BYTES` (16 MiB, [[module-contracts]]); the 12 MiB `REQUEST_IMAGE_BASE64_BUDGET` leaves
+  room under it for the prompt text, and `WsTransport.request` refuses a larger frame before it is sent
+  ([[submodule-web-transport]]). Raising the cap instead was tried and rejected: pi echoes a prompt's
+  images back through `pi.event` several times, and past Bun's outbound backpressure limit those frames
+  are dropped (#1179, #1180); providers also reject a whole request near 20 MB.
 - The host is the single place features are wired together — features never reach back into it.
 - **A font upload must carry `X-ThinkRail-Request: font-upload`** (`USER_FONT_UPLOAD_HEADER`), else 403.
   The host has no auth, no Origin check and no CORS ([[architecture]] Decision 7). A cross-origin upload
@@ -891,7 +956,7 @@ enabled/confirmed choice before entering analytics attribution.
   the route answers 405 with no `Access-Control-*` headers, so another website's write never leaves the
   browser; the same-origin client needs no preflight. Never add CORS headers to `/fonts/`, and keep the
   header check should the route ever accept a simple method such as `POST`. It is the host's only HTTP
-  write because the alternatives fail the feature: base64 over the WebSocket hits Bun's 16 MB frame cap
+  write because the alternatives fail the feature: base64 over the WebSocket hits the 16 MiB frame cap
   (CJK fonts run past 20 MB) and a pending frame is replayed on every reconnect, and the host's native
   file dialog cannot take a drag-and-drop and opens on the host's screen, not a remote browser's.
 - **Login-shell environment import is opt-in at boot** (`resolveShellEnv: true`, passed by the dev,
@@ -908,10 +973,10 @@ enabled/confirmed choice before entering analytics attribution.
 - **A send (prompt/steer/followUp/respondToTool) is acked when ACCEPTED, not when the turn ends**
   (`ackSend`): pi's send methods resolve only at turn end, and a turn can outlive the client's request
   timeout (long tool rounds and multi-minute reasoning turns are routine) — awaiting completion would
-  surface a phantom "request timed out" over a healthy turn. A rejection inside the ack window still
-  fails the request (bad model / missing key; for `respondToTool` also an unknown/responded/superseded
-  call — `assessRespondability`'s loud verdicts, or a response without a value); later faults reach the
-  client via the event stream.
+  surface a phantom "request timed out" over a healthy turn. A rejection inside the ack window still fails the request (bad
+  model / missing key; for `respondToTool` also an unknown/responded/superseded call —
+  `assessRespondability`'s loud verdicts, or a response without a value); later faults reach the client
+  via the event stream.
 
 ### Drift & overwrite
 

@@ -247,6 +247,25 @@ test("a .git write nudges the repo-meta sink without ever becoming an fsChanged 
 	expect(nudges).toEqual(["ws1"]);
 });
 
+test("transient git lock files do not nudge repo metadata", async () => {
+	const nudges: string[] = [];
+	setRepoMetaPublisher((id) => nudges.push(id));
+	mkdirSync(join(worktree, ".git"), { recursive: true });
+	void ensureWatch("ws1");
+	await sleep(100);
+
+	writeFileSync(join(worktree, ".git", "index.lock"), "x\n");
+	await sleep(100);
+	rmSync(join(worktree, ".git", "index.lock"));
+	mkdirSync(join(worktree, ".git", "refs", "heads"), { recursive: true });
+	await sleep(600);
+	expect(nudges).toHaveLength(0);
+
+	writeFileSync(join(worktree, ".git", "HEAD"), "ref: refs/heads/live\n");
+	await waitFor(() => nudges.length > 0);
+	expect(nudges).toEqual(["ws1"]);
+});
+
 test("a throwing repo-meta or fsChanged subscriber never escapes the watcher's timers", async () => {
 	const escaped: unknown[] = [];
 	const onUncaught = (error: unknown) => escaped.push(error);
@@ -314,6 +333,67 @@ test("a linked worktree's git metadata lives outside the root — its churn stil
 	writeFileSync(join(metaDir, "HEAD"), "ref: refs/heads/b3\n");
 	await sleep(600);
 	expect(nudges).toEqual(["ws1"]);
+});
+
+test("a linked worktree's transient git lock does not nudge repo metadata", async () => {
+	const metaDir = join(dataDir, "repo", ".git", "worktrees", "ws");
+	mkdirSync(metaDir, { recursive: true });
+	writeFileSync(join(metaDir, "HEAD"), "ref: refs/heads/b\n");
+	writeFileSync(join(worktree, ".git"), `gitdir: ${metaDir}\n`);
+
+	const nudges: string[] = [];
+	setRepoMetaPublisher((id) => nudges.push(id));
+	void ensureWatch("ws1");
+	await sleep(100);
+
+	writeFileSync(join(metaDir, "index.lock"), "x\n");
+	rmSync(join(metaDir, "index.lock"));
+	await sleep(600);
+	expect(nudges).toHaveLength(0);
+
+	writeFileSync(join(metaDir, "HEAD"), "ref: refs/heads/b2\n");
+	await waitFor(() => nudges.length > 0);
+	expect(nudges).toEqual(["ws1"]);
+});
+
+test("a linked worktree's nested reflog update nudges repo metadata", async () => {
+	const metaDir = join(dataDir, "repo", ".git", "worktrees", "ws");
+	mkdirSync(join(metaDir, "logs"), { recursive: true });
+	writeFileSync(join(metaDir, "HEAD"), "ref: refs/heads/b\n");
+	writeFileSync(join(metaDir, "logs", "HEAD"), "initial\n");
+	writeFileSync(join(worktree, ".git"), `gitdir: ${metaDir}\n`);
+
+	const nudges: string[] = [];
+	setRepoMetaPublisher((id) => nudges.push(id));
+	void ensureWatch("ws1");
+	await sleep(100);
+
+	writeFileSync(join(metaDir, "HEAD.lock"), "ref: refs/heads/b2\n");
+	writeFileSync(join(metaDir, "logs", "HEAD"), "initial\nupdated\n");
+	rmSync(join(metaDir, "HEAD.lock"));
+
+	await waitFor(() => nudges.length > 0);
+	expect(nudges).toEqual(["ws1"]);
+});
+
+test("a linked worktree's nested submodule git dirs never nudge repo metadata", async () => {
+	const metaDir = join(dataDir, "repo", ".git", "worktrees", "ws");
+	const objects = join(metaDir, "modules", "sub", "objects");
+	mkdirSync(objects, { recursive: true });
+	mkdirSync(join(metaDir, "logs"), { recursive: true });
+	writeFileSync(join(metaDir, "HEAD"), "ref: refs/heads/b\n");
+	writeFileSync(join(worktree, ".git"), `gitdir: ${metaDir}\n`);
+
+	const nudges: string[] = [];
+	setRepoMetaPublisher((id) => nudges.push(id));
+	void ensureWatch("ws1");
+	await sleep(100);
+
+	mkdirSync(join(objects, "ab"));
+	writeFileSync(join(objects, "ab", "cdef"), "blob\n");
+	writeFileSync(join(metaDir, "modules", "sub", "HEAD"), "ref: refs/heads/sub\n");
+	await sleep(600);
+	expect(nudges).toHaveLength(0);
 });
 
 test("ignored churn (node_modules) never publishes", async () => {
@@ -483,3 +563,85 @@ test("a watcher whose workspace record is gone is reaped on the next ensureWatch
 	await sleep(1000);
 	expect(payloads.filter((p) => p.workspaceId === "ws1")).toHaveLength(0);
 });
+
+function git(cwd: string, ...args: string[]): void {
+	const result = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "ignore", stderr: "pipe" });
+	if (!result.success)
+		throw new Error(`git ${args.join(" ")} failed: ${new TextDecoder().decode(result.stderr)}`);
+}
+
+function commitIn(cwd: string, name: string): void {
+	writeFileSync(join(cwd, name), `${name}\n`);
+	git(cwd, "add", name);
+	git(cwd, "commit", "-q", "-m", name);
+}
+
+function seedRepoWithRemote(): string {
+	const repo = join(dataDir, "source-repo");
+	git(dataDir, "init", "-q", "-b", "main", repo);
+	git(repo, "config", "user.name", "ThinkRail Test");
+	git(repo, "config", "user.email", "test@thinkrail.test");
+	git(repo, "config", "commit.gpgsign", "false");
+	commitIn(repo, "README.md");
+	git(dataDir, "init", "-q", "--bare", join(dataDir, "remote.git"));
+	git(repo, "remote", "add", "origin", join(dataDir, "remote.git"));
+	rmSync(worktree, { recursive: true, force: true });
+	return repo;
+}
+
+test("a linked worktree push refreshes remote metadata, and only for its own branch", async () => {
+	const repo = seedRepoWithRemote();
+	git(repo, "worktree", "add", "-q", "-b", "feature/issue1009", worktree);
+	const nudges: string[] = [];
+	setRepoMetaPublisher((id) => nudges.push(id));
+	await ensureWatch("ws1");
+
+	git(worktree, "push", "-q", "-u", "origin", "HEAD");
+	await waitFor(() => nudges.length > 0, 4000);
+
+	commitIn(worktree, "next.txt");
+	await sleep(550);
+	nudges.length = 0;
+	git(worktree, "push", "-q");
+	await waitFor(() => nudges.length > 0, 4000);
+
+	nudges.length = 0;
+	git(repo, "branch", "feature/unrelated");
+	git(repo, "push", "-q", "origin", "feature/unrelated");
+	await sleep(700);
+	expect(nudges).toHaveLength(0);
+
+	stopWatch("ws1");
+	commitIn(worktree, "third.txt");
+	git(worktree, "push", "-q");
+	await sleep(700);
+	expect(nudges).toHaveLength(0);
+}, 15_000);
+
+test("a push without an upstream refreshes remote metadata across pack-refs and a branch switch", async () => {
+	const repo = seedRepoWithRemote();
+	git(repo, "push", "-q", "origin", "main");
+	git(repo, "worktree", "add", "-q", "--no-track", "-b", "feat", worktree, "main");
+	const nudges: string[] = [];
+	setRepoMetaPublisher((id) => nudges.push(id));
+	await ensureWatch("ws1");
+	const settle = async (step: () => void) => {
+		step();
+		await sleep(550);
+		nudges.length = 0;
+	};
+	const pushNudges = async () => {
+		git(worktree, "push", "-q", "origin", "HEAD");
+		await waitFor(() => nudges.length > 0, 4000);
+		expect(nudges).toEqual(["ws1"]);
+	};
+
+	await pushNudges();
+	await settle(() => commitIn(worktree, "next.txt"));
+	git(repo, "pack-refs", "--all");
+	await pushNudges();
+	await settle(() => commitIn(worktree, "again.txt"));
+	await pushNudges();
+	await settle(() => git(worktree, "switch", "-q", "-c", "other"));
+	await pushNudges();
+}, 20_000);

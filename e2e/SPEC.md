@@ -87,7 +87,12 @@ headless workflow suite keeps its local PI-auth mode. Concurrent provider turns 
 cost, and determinism, so neither is sharded. The agent runner builds the web artifact under the caller's
 normal environment, then removes PI's complete ambient provider/cloud credential environment surface before
 starting Playwright or any host. The hosts also receive the same complete hermetic `PATH` as the default
-suite. This split is load-bearing: build
+suite: the fake bin plus `/usr/bin`, `/bin`, `/usr/sbin`, `/sbin` on POSIX; on Windows, where none of those
+exist, the fake bin plus the directory of the runner's `git.exe`, `%SystemRoot%\System32` and `%SystemRoot%`.
+Those ambient Windows directories are not lane-owned, so setup fails closed if any holds a `pi`, `central` or
+`code` under any `PATHEXT` suffix (a `.cmd` forwarder to git cannot replace them: Bun rejects cmd.exe
+metacharacters in `.cmd` arguments, which the host's `git --format=%(…)` calls carry), and every host-PATH
+`pi` guard resolves names with those suffixes. This split is load-bearing: build
 tooling may need developer-installed executables and caller environment, while exact-model preflight must
 prove Central without an API key, token, Google ADC/project/location, or AWS profile/key/token/container/
 web-identity/config source making another provider available. A drift canary derives every uppercase
@@ -572,7 +577,14 @@ word-boundary cut, found by words past the cut), an inline rename that starts fr
 from the optimistic first send; it cannot persist a sent prompt without a provider, so the live path's
 durability is the server unit test's. Palette name coverage (`search-palette.spec.ts`) seeds a named chat in
 a workspace the page never opened, finds it by a word only its title holds, renames it from a second wire
-client while the palette stays open, and pins that the page sent no `session.list` for either. Visualize coverage
+client while the palette stays open, and pins that the page sent no `session.list` for either. Find in Files coverage (`find-in-files.spec.ts`) writes its probe
+files into the fixture repository as an untracked folder removed after every test — a binary with NUL
+bytes so `git grep -I` skips it, and a file past the host's line limit — and pins the chord, grouping
+and counts, the Monaco preview and the open-at-line selection overlay, the restored window, smart-case
+and the `Aa` / `W` toggles, the limit banner, the Project Home scope entering the Default workspace, the
+palette command, double Shift staying inert over the window, the window staying inside a short and a
+narrow window (`expectDialogContained`), and the older-host notice with no `search.text` frame on the
+wire. Visualize coverage
 (`visualize.spec.ts`) independently seeds short historical tool-call/result transcripts through the
 sanctioned session fixture before workspace entry. It pins completed/default-expanded diagrams,
 fullscreen SVG growth, pan/reset/Escape and claimed WebKit pinch gestures, exact comparison pros/cons
@@ -603,8 +615,11 @@ the single shared image strip, the collapsed JSON tree, Full output through the 
 (a recorded file and an expired one), Sign in deep links into Settings › MCP servers or Providers according
 to pi's reported authentication kind (provider identity remains visible), and the raw-text fallback for a truncated listing; its element shots under `e2e/screenshots/mcp-tool-cards/` are review evidence
 only. Questionnaire coverage uses canonical persisted tool-call/ack fixtures (submitting one exercises the
-restart-repaired response path) to pin six-question rounds beyond four, tall-page and restored-page reveal,
-coarse-pointer focus, tabs/question/footer at one y across paging and choosing, notes and Other growing in
+restart-repaired response path) to pin six-question rounds beyond four, the docked sheet (stub in the
+transcript, pinned controls around a scrolling body under the 60% cap, restored page, collapse kept across
+a chat switch, stub expand-and-focus, the sheet above the composer under an open Resources inspector, the
+receipt left in the transcript after answering, the cap following *Question panel height*), coarse-pointer
+focus, tabs/question/footer at one y across paging and choosing, notes and Other growing in
 place under a height that never shrinks, Discuss marking/cancelling/sending (asserted in the session file),
 the receipt's fold, per-question Options and remembered manual fold, and the keyboard model (arrows only
 move, Enter picks, Space opens a note, `d` discusses, fields park on their own row, the platform chord

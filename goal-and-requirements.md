@@ -101,6 +101,9 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   turn ([[module-pi-background-commands]]); each chat's Resources view watches, inspects and stops them, and
   keeps their finished history — outcomes and command log tails — for the workspace's lifetime, across host
   restarts ([[submodule-web-chat-resources]], [[submodule-server-resource-history]]).
+- **Workspaces from chat** — on request ("in a side workspace"), the agent starts ordinary workspaces
+  with their own chats in any open project and checks their chats', PRs', and diffs' status; the agent,
+  not the host, decides what to do with them ([[submodule-server-agent]], [[submodule-server-host]]).
 - **Review** — anchored comments on files and diffs, collected without starting the agent and sent as
   structured context to chats that can resolve them; local review, not a forge integration
   ([[submodule-server-reviews]]).
@@ -112,7 +115,10 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   diverged branch with the agent, reopen, and delete the remote branch
   ([[submodule-server-pr]], [[submodule-web-shell-location-bar]]).
 - **Specs** — the agent searches, navigates, and maintains the spec graph through `spec_*` tools; the
-  read-only Specs tool renders it as a tree ([[module-spec-graph]], [[submodule-server-spec]]).
+  read-only Specs tool renders it as a tree. The agent and the search palette's `#` scope find the
+  sections that answer a question by words with one engine, and the palette hands a question that shares
+  no words with the specs to the agent ([[module-spec-graph]], [[submodule-server-spec]],
+  [[submodule-web-search]]).
 - **Workflows** — bundled workflow skills for project setup, design brainstorming, and shipping a PR
   ([[module-thinkrail-workflow]]).
 - **Providers** — in-app sign-in and API keys through pi's auth, JetBrains AI through the user's

@@ -1423,6 +1423,17 @@ export function isComposerGrowthLimit(value: unknown): value is ComposerGrowthLi
 	return COMPOSER_GROWTH_LIMITS.some((limit) => limit === value);
 }
 
+export const QUESTION_PANEL_HEIGHT_PERCENT = { min: 40, max: 100, default: 60 } as const;
+
+export function isQuestionPanelHeight(value: unknown): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isInteger(value) &&
+		value >= QUESTION_PANEL_HEIGHT_PERCENT.min &&
+		value <= QUESTION_PANEL_HEIGHT_PERCENT.max
+	);
+}
+
 export const LINE_WIDTH_COLUMNS = { min: 40, max: 240, default: 120 } as const;
 
 export function isLineWidth(value: unknown): value is number {
@@ -1441,6 +1452,8 @@ export interface AppConfig extends ThemePreference {
 	notificationsEnabled: boolean;
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
+	/** The chat's docked question panel caps at this percent of the chat height. */
+	questionPanelHeight: number;
 	chatLineWidth: number;
 	fileLineWidth: number;
 	chatLineWidthBounded: boolean;
@@ -1853,6 +1866,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
 	terminalWindowsShell: "auto",
 	composerGrowthLimit: "half-chat",
+	questionPanelHeight: QUESTION_PANEL_HEIGHT_PERCENT.default,
 	chatLineWidth: LINE_WIDTH_COLUMNS.default,
 	fileLineWidth: LINE_WIDTH_COLUMNS.default,
 	chatLineWidthBounded: true,
@@ -1945,7 +1959,7 @@ export const ACCEPTED_IMAGE_TYPES: readonly string[] = [
 	"image/webp",
 ];
 
-export const REQUEST_IMAGE_BASE64_BUDGET = 24 * 1024 * 1024;
+export const REQUEST_IMAGE_BASE64_BUDGET = 12 * 1024 * 1024;
 
 export function isRetriedAttempt(
 	messages: readonly { role: string; stopReason?: string }[],
@@ -1993,7 +2007,7 @@ export interface HistorySearchResult {
 	indexing: boolean;
 }
 
-export const SEARCH_KINDS = ["transcript", "file", "spec", "plan"] as const;
+export const SEARCH_KINDS = ["transcript", "file", "spec", "section", "plan"] as const;
 
 export type SearchKind = (typeof SEARCH_KINDS)[number];
 
@@ -2022,11 +2036,28 @@ export interface SearchHitBase {
 	workspaceId: string;
 }
 
+/** Where a `section` hit sits in its spec, and how many of the query's words it holds. */
+export interface SearchHitSection {
+	/** The heading trail joined by ` › `; empty for the text before the first heading. */
+	heading: string;
+	/** 1-based line of the heading in the file. */
+	line: number;
+	matched: number;
+	terms: number;
+}
+
 export type SearchHit =
 	/** A root-relative POSIX `path`; `size` is the bytes on disk when the host could read them. */
 	| (SearchHitBase & { kind: "file"; path: string; size?: number })
-	/** `snippet` is the body line a `content`-tier hit matched. */
-	| (SearchHitBase & { kind: "spec"; path: string; specId: string; size: number; snippet?: string })
+	| (SearchHitBase & { kind: "spec"; path: string; specId: string; size: number })
+	/** A spec section ranked by the query's words; `snippet` is its best-matching text. */
+	| (SearchHitBase & {
+			kind: "section";
+			path: string;
+			specId: string;
+			snippet: string;
+			section: SearchHitSection;
+	  })
 	| (SearchHitBase & { kind: "plan"; sessionId: string })
 	/** `anchorText` re-finds the message when compaction moved `messageIndex`. */
 	| (SearchHitBase & {
@@ -2055,6 +2086,41 @@ export interface SearchGroup {
 
 export interface SearchQueryResult {
 	groups: SearchGroup[];
+}
+
+export const TEXT_SEARCH_LIMITS = {
+	lines: 2000,
+	fileBytes: 1_000_000,
+	lineChars: 400,
+	minQuery: 2,
+	maxQuery: 200,
+} as const;
+
+export interface TextSearchMatch {
+	/** 1-based line number in the file. */
+	line: number;
+	/** 1-based UTF-16 column and length of the first match in the full line, for opening at it. */
+	column: number;
+	length: number;
+	/** The matched line, cut to `TEXT_SEARCH_LIMITS.lineChars` around its first match. */
+	text: string;
+	/** `[start, end)` UTF-16 offsets of every match inside `text`. */
+	ranges: [number, number][];
+}
+
+export interface TextSearchFile {
+	path: string;
+	matches: TextSearchMatch[];
+}
+
+export type TextSearchEnd = "complete" | "limit" | "failed";
+
+export interface TextSearchBatch {
+	seq: number;
+	/** The workspace whose files these are; absent when the context resolves to no root. */
+	root?: { projectId: string; workspaceId: string };
+	files: TextSearchFile[];
+	done?: { reason: TextSearchEnd; files: number; lines: number };
 }
 
 /** The transcript window around a chat hit; files and specs render client-side through `fs.readFile`. */

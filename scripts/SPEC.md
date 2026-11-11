@@ -86,7 +86,8 @@ conditionals, `||`/`??`, `+`, and template parts; literal children inside `{…}
 properties (`label`, `title`, `description`, `detail`, `hint`, `message`, `reason`, …); and literal
 `toast.*()` messages or `errorText()` fallbacks. "Text" means a run of two or more letters after trimming
 symbols, so `⌘K`, `·`, and counts pass; the bare brand `ThinkRail` is the one allowed word. It is a
-heuristic floor, not a proof: review still owns strings returned from plain functions. It also checks
+heuristic floor, not a proof: review still owns strings returned from plain functions. The literal scan unwraps
+parentheses, type assertions (`as` and `<T>`), `satisfies`, and non-null assertions. It also checks
 `packages/locales/en.json`: keys sorted, values non-empty, and every key (plural base for `_one`/`_other`)
 referenced as a string literal by some UI, desktop, or locales source, so removed UI leaves no orphaned
 translations. Finally, on the same TypeScript API process, it builds the web TypeScript 7 program and fails on any **render-time read of the global

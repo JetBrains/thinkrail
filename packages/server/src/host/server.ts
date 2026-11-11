@@ -22,10 +22,12 @@ import {
 	PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
 	SPEECH_SOCKET_ROUTE,
+	TEXT_SEARCH_PROTOCOL_VERSION,
 	USER_FONTS_ROUTE,
 	USER_THEMES_PROTOCOL_VERSION,
 	WORKSPACE_CREATION_PROTOCOL_VERSION,
 	WS_CHANNELS,
+	WS_MAX_FRAME_BYTES,
 } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
@@ -80,6 +82,7 @@ import {
 	setTitleToolHost,
 	settleCredentialWritesForShutdown,
 	settleSessionsForShutdown,
+	setWorkspaceToolsHost,
 	watchUserMcpConfig,
 } from "../agent";
 import {
@@ -210,7 +213,7 @@ import {
 	setReviewFailedPublisher,
 } from "./requestReview";
 import { runObservation } from "./runAnalytics";
-import { hostSearch } from "./search";
+import { hostSearch, setSearchTextPublisher } from "./search";
 import {
 	REVIEW_REFRESH_INTERVAL_MS,
 	refreshOpenProjectReviews,
@@ -225,6 +228,7 @@ import {
 } from "./terminalSend";
 import { titleToolHost } from "./titleTool";
 import { markClientStale, reconcilePendingReviewsOnBoot } from "./todoReview";
+import { workspaceToolsHost } from "./workspaceTools";
 
 export interface CreateServerOptions {
 	port?: number;
@@ -394,6 +398,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				clearTerminalClient(clientKey);
 				releaseInvitation(clientKey);
 				cancelMcpProbesOwnedBy(clientKey);
+				hostSearch().forgetClient(clientKey);
 			}, CLIENT_REPLAY_RETENTION_MS),
 		);
 	};
@@ -439,6 +444,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			return new Response("not found", { status: 404 });
 		},
 		websocket: {
+			maxPayloadLength: WS_MAX_FRAME_BYTES,
 			open(ws) {
 				if (ws.data.speechSocket) {
 					ws.data.speech = createSpeechRelay(ws);
@@ -625,6 +631,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				if (sockets.get(clientKey) === ws) {
 					sockets.delete(clientKey);
 					terminalBackpressured.delete(clientKey);
+					hostSearch().cancelText(clientKey);
 				}
 				if (sockets.has(clientKey) || reapTimers.has(clientKey)) return;
 				armClientReap(clientKey);
@@ -722,6 +729,16 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			terminalBackpressured.add(clientKey);
 			ws.close();
 			return "unavailable";
+		}
+	});
+
+	setSearchTextPublisher((clientKey, batch) => {
+		const ws = sockets.get(clientKey);
+		if (!ws || ws.data.protocolVersion < TEXT_SEARCH_PROTOCOL_VERSION) return;
+		try {
+			ws.send(JSON.stringify({ channel: WS_CHANNELS.searchTextResults, data: batch }));
+		} catch {
+			ws.close();
 		}
 	});
 
@@ -975,6 +992,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			belowProtocol: CONTINUATION_PROTOCOL_VERSION,
 		}),
 	);
+	setWorkspaceToolsHost(workspaceToolsHost);
 	reconcilePendingReviewsOnBoot();
 
 	setSettingsPublisher((config, appliedUpdate) => {
@@ -1213,6 +1231,7 @@ function restoreSeamDefaults(): void {
 	setTerminalPublisher(() => "unavailable");
 	setFeedbackPublisher(null);
 	setGithubStarPublisher(null);
+	setSearchTextPublisher(null);
 	configureSurveySource(null);
 	setSkillAdmissionResolver(null);
 	setMcpPolicyResolver(null);
