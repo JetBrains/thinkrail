@@ -15,7 +15,26 @@ const remember = (client: DeviceWireClient, key: string, value: unknown): void =
 	lastValues.set(client, values);
 };
 
-const cachedFor = (client: DeviceWireClient | null, key: string) =>
+/**
+ * Reads ahead what a screen about to open will ask for, so it opens on the answer instead of a loader. Gives up
+ * quietly after `withinMs` or on a failure: the screen then reads it itself.
+ */
+export function prefetchHostRequest(
+	client: DeviceWireClient,
+	method: string,
+	params: Record<string, unknown>,
+	withinMs: number,
+): Promise<void> {
+	const key = JSON.stringify({ method, params });
+	const read = client.request(method, params).then(
+		(value) => remember(client, key, value),
+		() => {},
+	);
+	return Promise.race([read, new Promise<void>((resolve) => setTimeout(resolve, withinMs))]);
+}
+
+/** The last answer to a read (`key` as `useHostRequest` builds it) for this client, if any. */
+export const cachedFor = (client: DeviceWireClient | null, key: string) =>
 	client ? lastValues.get(client)?.get(key) : undefined;
 
 /** A reply, with the client, read (`key`) and issue of it (`request`) it answered. */

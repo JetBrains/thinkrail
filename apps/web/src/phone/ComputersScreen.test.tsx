@@ -69,3 +69,11 @@ test("Add a device is its own page: how to reach the computer, then scan or past
 	expect(html).toContain("Scan QR code");
 	expect(html).toContain("Enter link manually");
 });
+
+test("while a link pairs, the phone shows the brand mark large and the computer it is reaching", async () => {
+	const { PairingSplash } = await import("./Welcome");
+	const named = renderToStaticMarkup(<PairingSplash hostName="Studio Mac" />);
+	expect(named).toContain('data-testid="pairing-splash"');
+	expect(named).toContain("Connecting to Studio Mac…");
+	expect(renderToStaticMarkup(<PairingSplash />)).toContain("Connecting…");
+});
