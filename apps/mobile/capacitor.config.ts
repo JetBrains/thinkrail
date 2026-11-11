@@ -1,6 +1,6 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 import { KeyboardResize } from "@capacitor/keyboard";
-import darkTheme from "@thinkrail/design-tokens/themes/dark.theme.json";
+import darkTheme from "@thinkrail/design-tokens/themes/dark.theme.json" with { type: "json" };
 
 const config: CapacitorConfig = {
 	appId: "ai.thinkrail.mobile",
