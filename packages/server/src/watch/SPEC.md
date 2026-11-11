@@ -65,58 +65,37 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   re-creates the watcher and its fresh conservative startup nudge covers the blind window.
 - **On Linux each directory gets its own watcher, and ignored folders get none.** Bun's recursive watch
   there adds an inotify watch per directory, so a large git-ignored folder used up
-  `fs.inotify.max_user_watches` and every start failed (#852). `node_modules` and nested `.git` get no
-  watcher; of the root `.git` only the top level, `refs/`, `reftable/`, `info/` and `modules/` do, for the
-  repo-metadata nudge. A commit inside a submodule writes only to its git dir under `modules/`, which can
-  sit at any depth (the name can hold `/`, nested submodules nest again), so every folder there is watched
-  except `objects`, `logs`, `lfs` and `hooks`. Two kinds of path never go to the ignore check. Root `.git`
-  paths: an allowlist `.gitignore` (`*` plus `!` rules) reports `.git` itself. Paths inside a nested repo,
-  also one whose `.git` appears after the walk: git fails the whole batch on a path inside a submodule and
-  answers with the outer repo's rules for any other nested repo. A `.gitignore` event or a repo-metadata
-  nudge re-checks the folders skipped as ignored (`git add -f` or an `info/exclude` edit changes the
-  answer); a deleted one leaves that list, because a rule like `run-*` still matches a missing path. A
-  re-check skips watched folders, since adding them would send the whole tree to git each time. New
-  folders and re-checks share one queue that runs one `ignoredPaths` call at a time (the first walk's call
-  per level can run at the same time), so a checkout that adds a thousand folders can't start a thousand
-  `git check-ignore` runs. A new directory is walked and all it holds is reported, since files written
-  before its watch have no event; there is no inode check, because a recreated folder can get the old
-  inode back. A symlinked root is followed, links inside it are not. Readiness waits for the first walk,
-  so an edit right after it can't land in a folder that is not watched yet. Cost: a 22.8k-folder tree
-  takes about 50 MB RSS against 2-4 MB for one recursive watch, and its walk 0.3-0.5 s in slices under 50
-  ms. Known limits: a change inside an ignored folder sends no event, a submodule whose name has a part
-  `objects`, `logs`, `lfs` or `hooks` (like `libs/logs`) sends no nudge for its commits, an edit of the
-  global excludes or a linked worktree's shared `info/exclude` waits for the next nudge, ignored folders
-  inside a nested repo stay watched, a folder that becomes ignored after it is watched stays watched until
-  the watcher restarts, and a worktree with more non-ignored folders than the limit still fails, each
-  retry walking it again up to the limit.
-- **On Linux a stopped tree closes its watchers over several turns.** One queue closes 256 per event-loop
-  turn for all stopped trees, oldest first: closing them in one loop blocked the host for 3 s for eight
-  22.8k-folder trees and for 23-25 s after a start failed at 524,288 watches. Bun shares one inotify watch
-  per path ([[submodule-server-locales]]): a path that is deleted or moved away and made again while any
-  old watcher still holds it gets a dead watch, and closing the old one later does not revive it. So a new
-  watcher first closes every other watcher on its path, waiting in the queue or live in another tree (a
-  nested repo opened as its own workspace), and re-opens the live ones after its own. It does this on
-  every open, not only for a renamed path: a folder below a moved-away parent gets no event of its own and
-  keeps following the old inode, so marking only renamed paths left both trees on a dead watch. Trees
-  compare the real path of their root, resolved once at start, because Bun shares the watch of a real
-  folder also across a symlinked spelling; the published paths stay relative to the root. A re-opened
-  watcher loses the events Bun had not delivered yet, so its tree reports the folder as missed, and the
-  workspace gets a truncated batch with the folder's `skillChange`: an open file tab re-reads only for its
-  own path, a truncated batch or a batch with no paths, and `unknown` would look like a skill change to
-  the web. A re-opened skill folder still gives `detected`, so after an overlapping start the nested
-  workspace's chats show the skills badge though usually nothing changed: a `SKILL.md` write lost in the
-  hand-off must still refresh skills. The tree also lists the folder again and walks the subfolders it
-  doesn't know, because a lost folder event would leave a new folder unwatched for good. A tree that
-  starts on top of a live overlapping one thus closes each shared folder's watcher and opens it twice (its
-  own open and the re-open): a 22.8k-folder nested repo was ready after 1.40-1.54 s against 0.98-1.03 s
-  alone, with twice the watch calls and +98-109 MB RSS against +68-74 MB at ready. A new watch that hits
-  `ENOSPC` closes up to 4 batches of waiting watchers and retries, so a new tree doesn't fail only because
-  an old one is still closing. Then it gives up: watchers of deleted folders free no slot, and closing all
-  of them in one call blocked about 1 s for four 22.8k-folder trees. Known limit: old and new watches are
-  open together until the queue drains, about 10 s after a switch of eight 22.8k-folder trees (up to 320k
-  watches against 182k, about 900 MB RSS against 520 MB), so another program of the same user near the
-  limit can hit `ENOSPC` then. Near the limit the new trees also grow only as fast as the old ones close:
-  at a 210,000 limit all eight were ready after about 9-10 s, against about 4 s with a high limit.
+  `fs.inotify.max_user_watches` and every start failed (#852); Bun keeps all watches on one inotify
+  descriptor, so the limit is watches (`ENOSPC`), never descriptors (`EMFILE`). `node_modules` and nested
+  `.git` get no watcher; of the root `.git` only the top level, `refs/`, `reftable/`, `info/` and
+  `modules/` do, for the repo-metadata nudge — `modules/` minus any `objects`, `logs`, `lfs` or `hooks`
+  folder, since a submodule's git dir can sit at any depth there. Root `.git` paths and paths inside a
+  nested repo never go to the ignore check: an allowlist `.gitignore` reports `.git` itself, and git fails
+  a whole batch on a path inside a submodule and answers for another nested repo with the outer rules. A
+  `.gitignore` event or a repo-metadata nudge re-checks the folders skipped as ignored (`git add -f`, an
+  `info/exclude` edit); new folders and re-checks share one queue per tree that runs one `ignoredPaths`
+  call at a time. A new folder is walked and all it holds is reported, since files written before its
+  watch have no event. A symlinked root is followed, links inside it are not. Readiness waits for the
+  first walk. Known limits: a change inside an ignored folder sends no event; a submodule with a path part
+  `objects`, `logs`, `lfs` or `hooks` sends no nudge for its commits; an edit of the global excludes or a
+  linked worktree's shared `info/exclude` waits for the next nudge; ignored folders inside a nested repo,
+  and a folder that becomes ignored after it is watched, stay watched until the watcher restarts; a
+  worktree with more non-ignored folders than `max_user_watches` still fails, and each later read retries
+  the walk up to the limit, as the recursive watch did.
+- **On Linux watchers close in the background and never share a path.** One queue closes 256 watchers per
+  event-loop turn for all stopped trees, because closing a large tree in one loop blocked the host for
+  seconds; a new watch that hits `ENOSPC` first closes up to 4 of those batches and retries. Bun shares
+  one inotify watch per path ([[submodule-server-locales]]), and a path deleted or moved away and made
+  again while an old watcher holds it gets a dead watch. So every open first closes the other watchers on
+  its path, queued or live in an overlapping tree (a nested repo opened as its own workspace; roots are
+  compared by real path), and re-opens the live ones after its own — on every open, since a folder below a
+  moved-away parent gets no event of its own. A re-opened watcher has lost undelivered events, so its tree
+  re-lists the folder and reports a truncated batch with the folder's own `skillChange` (`unknown` would
+  read as a skill change; a skill folder still gives `detected`). Cost for 22.8k folders: about 50 MB RSS
+  against 2-4 MB for one recursive watch and a 0.3-0.5 s walk in slices under 50 ms, about 1.5× that on
+  top of an overlapping tree. Known limit: old and new watches coexist until the queue drains (about 10 s
+  after switching eight such trees), so near the limit new trees grow only as fast as old ones close, and
+  another program of the same user can hit `ENOSPC` meanwhile.
 - **Repo-metadata nudge (second seam):** a git-metadata write is *metadata, not content*, so it never
   becomes an `fsChanged` path (the `.git` blackout stands — plumbing storms must not turn into frames). It
   instead arms a separately debounced (300ms), **pathless** `setRepoMetaPublisher(workspaceId)` nudge. This
@@ -151,10 +130,7 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   its live checkout) **and** a pathless, skill-neutral `fsChanged` frame (`paths: []`,
   `truncated: false`, `skillChange: "none"`) so the clients' git-derived reads re-read — `git.status` and an
   open `uncommitted`-scope diff tab are relative to `HEAD`, and would otherwise keep reporting a committed
-  change as uncommitted until the next file edit. Known limit: a populated submodule makes the nudge feed
-  itself while a client reads git status, because `git diff HEAD` runs `git status` inside the submodule,
-  which takes `index.lock` in its git dir; on Linux that is about one nudge every 320 ms, and the macOS
-  recursive watcher does the same.
+  change as uncommitted until the next file edit.
 - **Timer-driven delivery is contained:** the coalescer flush, the startup nudge, and the repo-metadata nudge
   run from this module's own timers, so a subscriber throw is warn-logged and swallowed rather than becoming
   a fatal `uncaughtException` that takes down the host (an e2e reset deleting `workspaces.json` mid-nudge
