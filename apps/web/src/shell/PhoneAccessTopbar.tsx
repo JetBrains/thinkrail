@@ -277,6 +277,7 @@ export function PhoneAccessTopbar() {
 					label={label}
 					tooltip={label}
 					selected={open}
+					className="max-sm:hidden"
 					data-testid="open-phone-access"
 					data-active={enabled}
 				/>
