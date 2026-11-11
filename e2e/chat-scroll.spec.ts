@@ -8,6 +8,12 @@ import {
 } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
+import {
+	interceptAppWire,
+	playStreamReplay,
+	streamedMarkdown,
+	textStreamReplay,
+} from "./fixtures/streamReplay";
 
 const BASE_TS = 1_700_850_000_000;
 const NATIVE_SCROLL_INTENT_EXPIRY_MS = 650;
@@ -706,6 +712,51 @@ for (const testCase of orderCases) {
 			const restored = await readTopVisibleRow(chatScroll);
 			expect(restored.id).toBe(reading.id);
 			expect(Math.abs(restored.top - reading.top)).toBeLessThanOrEqual(2);
+		} finally {
+			rmSync(session.path, { force: true });
+		}
+	});
+
+	test(`${testCase.order} restores a history reading position across a tab switch while working`, async ({
+		page,
+	}) => {
+		const wire = await interceptAppWire(page);
+		const { session, chatScroll } = await openTallChat(page, testCase.order);
+		try {
+			const replay = textStreamReplay(
+				session.id,
+				streamedMarkdown(`${testCase.order} detached stream`, 2_000),
+				BASE_TS + 200_000,
+			);
+			const opening = replay.steps.slice(0, 20);
+			await playStreamReplay(wire(), { ...replay, steps: opening }, 0);
+			await expect(chatScroll).toHaveAttribute("data-streaming", "true");
+			await waitForScrollStability(chatScroll);
+			await moveIntoStableHistory(page, chatScroll, testCase.order, testCase.historyWheel);
+			for (let step = 0; step < 3; step += 1) {
+				await page.mouse.wheel(0, testCase.historyWheel);
+				await waitForScrollStability(chatScroll);
+			}
+			const reading = await readTopVisibleRow(chatScroll);
+
+			await switchAwayAndBack(page);
+
+			await expect(chatScroll).toHaveAttribute("data-streaming", "true");
+			await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+			await expect(page.getByTestId(testCase.buttonTestId)).toHaveText("Follow response");
+			await waitForScrollStability(chatScroll);
+			const restored = await readTopVisibleRow(chatScroll);
+			expect(restored.id).toBe(reading.id);
+			expect(Math.abs(restored.top - reading.top)).toBeLessThanOrEqual(2);
+
+			await playStreamReplay(wire(), { ...replay, steps: replay.steps.slice(opening.length) }, 0);
+			await expect(chatScroll).toHaveAttribute("data-streaming", "false");
+			await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+			await expect(page.getByTestId(testCase.buttonTestId)).toHaveText("Latest");
+			await waitForScrollStability(chatScroll);
+			const settled = await readTopVisibleRow(chatScroll);
+			expect(settled.id).toBe(reading.id);
+			expect(Math.abs(settled.top - reading.top)).toBeLessThanOrEqual(2);
 		} finally {
 			rmSync(session.path, { force: true });
 		}
