@@ -702,6 +702,31 @@ test("invalid line-width updates are rejected before persistence or broadcast", 
 	}
 });
 
+test("the question panel height persists a whole percent from 40 to 100 and rejects the rest", () => {
+	expect(updateConfig({ questionPanelHeight: 85 }).questionPanelHeight).toBe(85);
+	for (const questionPanelHeight of [39, 101, 72.5, "60"]) {
+		const before = getConfig();
+		expect(() => updateConfig({ questionPanelHeight } as unknown as AppConfigUpdate)).toThrow(
+			"questionPanelHeight must be a whole number from 40 to 100",
+		);
+		expect(getConfig()).toEqual(before);
+	}
+});
+
+test("an older or malformed config loads the default question panel height", () => {
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({ ...DEFAULT_CONFIG, questionPanelHeight: 150 }),
+	);
+	resetConfigCache();
+	expect(getConfig().questionPanelHeight).toBe(60);
+
+	const { questionPanelHeight: _omitted, ...older } = DEFAULT_CONFIG;
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify(older));
+	resetConfigCache();
+	expect(getConfig().questionPanelHeight).toBe(60);
+});
+
 test("a non-boolean subagents update is rejected before persistence or broadcast", () => {
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));

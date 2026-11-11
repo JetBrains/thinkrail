@@ -6,9 +6,7 @@ import { CHATS_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import {
-	type CreateSessionResult,
 	closeWorkspaceSessions,
-	createSession,
 	deleteSession,
 	listSessions,
 	trashWorkspaceDelegation,
@@ -25,14 +23,14 @@ import {
 	chatWorkspaces,
 	createChatRecord,
 	dropChatRecord,
-	ensureWorkspaceScratchDir,
 	getChatWorkspace,
 	isChatWorkspaceId,
 	isUnderChatsRoot,
 	markChatDeletionPending,
 } from "../workspaces";
+import { startChatSession } from "./chatSession";
 import { provisionInitialTerminal } from "./initialTerminal";
-import { type NewChatModelRequest, noteNewChat, resolveNewChatModel } from "./newChatModel";
+import type { NewChatModelRequest } from "./newChatModel";
 import { runObservation } from "./runAnalytics";
 import { taskObservation } from "./taskAnalytics";
 
@@ -108,7 +106,13 @@ function claimStart(
 						"A chat without a project holds one conversation; start a new chat instead.",
 					);
 				}
-				return startChatSession(workspace, requested, () => claims.get(workspace.id) === claim);
+				const created = await startChatSession(workspace, requested, {
+					pick: true,
+					assertClaimed: () => {
+						if (claims.get(workspace.id) !== claim) throw beingDeleted();
+					},
+				});
+				return { workspace, ...created };
 			})
 			.finally(() => {
 				if (claims.get(workspace.id) === claim) claims.delete(workspace.id);
@@ -116,30 +120,6 @@ function claimStart(
 	};
 	claims.set(workspace.id, claim);
 	return claim.done;
-}
-
-async function startChatSession(
-	workspace: Workspace,
-	requested: NewChatModelRequest,
-	claimed: () => boolean,
-): Promise<ChatCreateResult> {
-	const defaults = await resolveNewChatModel(requested);
-	if (!claimed()) throw beingDeleted();
-	ensureWorkspaceScratchDir(workspace);
-	let created: CreateSessionResult;
-	try {
-		created = await createSession({
-			cwd: workspace.worktreePath,
-			workspaceId: workspace.id,
-			...(defaults.model ? { model: defaults.model } : {}),
-			thinkingLevel: defaults.thinkingLevel,
-		});
-	} catch (error) {
-		throw claimed() ? error : beingDeleted();
-	}
-	if (!claimed()) throw beingDeleted();
-	noteNewChat(requested, defaults, created);
-	return { workspace, ...created };
 }
 
 export function assertSessionDeletable(workspaceId: string): void {

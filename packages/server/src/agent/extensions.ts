@@ -54,6 +54,7 @@ import {
 	discoverCompatibilitySkillSources,
 } from "./skillSources";
 import { setTitleExtension } from "./titleTool";
+import { workspaceToolsExtension } from "./workspaceTools";
 
 export type BundledExtensionFactory = ExtensionFactory;
 
@@ -442,6 +443,7 @@ export async function buildResourceLoader(
 		requestReviewExtension,
 		setTitleExtension,
 		continueInWorkspaceExtension,
+		workspaceToolsExtension,
 		oversizedImageGuard,
 		skillCatalog,
 		skillCarryover,

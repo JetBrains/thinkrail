@@ -80,7 +80,9 @@ describe("the ask-user-question server half", () => {
 		const { tool, factories } = compose(async () => ({ kind: "deferred" }));
 		expect(factories).toHaveLength(1);
 		expect(tool.name).toBe(ASK_USER_QUESTION_TOOL_NAME);
-		expect(tool.description).toContain("render inline in the chat as an interactive card");
+		expect(tool.description).toContain(
+			"render as an interactive card docked above the chat's message box",
+		);
 		expect(tool.description).toContain("then the card is superseded");
 		expect(tool.promptGuidelines?.length).toBe(4);
 	});

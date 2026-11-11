@@ -62,6 +62,7 @@ import {
 	isControlMessage,
 	isLineWidth,
 	isLocalePreference,
+	isQuestionPanelHeight,
 	isSettleIdleDays,
 	isSubagentCompletionMessage,
 	isSubagentMaxConcurrent,
@@ -1113,6 +1114,7 @@ interface AppState {
 	specRequest: {
 		workspaceId: string;
 		path: string;
+		line?: number;
 		navigation: CenterNavigationStamp | null;
 	} | null;
 	specsByWorkspace: Record<string, SpecGraphNode[]>;
@@ -1151,6 +1153,7 @@ interface AppState {
 	terminalReplayKb: number;
 	terminalWindowsShell: TerminalWindowsShell;
 	composerGrowthLimit: ComposerGrowthLimit;
+	questionPanelHeight: number;
 	chatLineWidth: number;
 	fileLineWidth: number;
 	chatLineWidthBounded: boolean;
@@ -1526,7 +1529,7 @@ interface AppState {
 	clearChatLocation: () => void;
 	requestHistoryOpen: (target: HistoryTarget) => void;
 	clearHistoryOpen: () => void;
-	requestSpecView: (workspaceId: string, path: string) => void;
+	requestSpecView: (workspaceId: string, path: string, line?: number) => void;
 	clearSpecRequest: () => void;
 	setWorkspaceSpecs: (workspaceId: string, nodes: SpecGraphNode[]) => void;
 	setWorkspaceReview: (workspaceId: string, snapshot: ReviewSnapshot) => void;
@@ -1579,6 +1582,9 @@ function configPatch(config: AppConfig) {
 			? config.terminalWindowsShell
 			: DEFAULT_CONFIG.terminalWindowsShell,
 		composerGrowthLimit: config.composerGrowthLimit ?? DEFAULT_CONFIG.composerGrowthLimit,
+		questionPanelHeight: isQuestionPanelHeight(config.questionPanelHeight)
+			? config.questionPanelHeight
+			: DEFAULT_CONFIG.questionPanelHeight,
 		chatLineWidth: isLineWidth(config.chatLineWidth)
 			? config.chatLineWidth
 			: DEFAULT_CONFIG.chatLineWidth,
@@ -2514,6 +2520,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
 	terminalWindowsShell: DEFAULT_CONFIG.terminalWindowsShell,
 	composerGrowthLimit: DEFAULT_CONFIG.composerGrowthLimit,
+	questionPanelHeight: DEFAULT_CONFIG.questionPanelHeight,
 	chatLineWidth: DEFAULT_CONFIG.chatLineWidth,
 	fileLineWidth: DEFAULT_CONFIG.fileLineWidth,
 	chatLineWidthBounded: DEFAULT_CONFIG.chatLineWidthBounded,
@@ -4839,7 +4846,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			};
 		}),
 	clearHistoryOpen: () => set({ historyOpenRequest: null }),
-	requestSpecView: (workspaceId, path) =>
+	requestSpecView: (workspaceId, path, line) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const advanced = advanceCenterNavigation(s, workspaceId);
@@ -4849,7 +4856,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 					workspaceId,
 					tool: "specs",
 				}),
-				specRequest: { workspaceId, path, navigation: advanced.stamp },
+				specRequest: {
+					workspaceId,
+					path,
+					...(line === undefined ? {} : { line }),
+					navigation: advanced.stamp,
+				},
 				...advanced.patch,
 			};
 		}),

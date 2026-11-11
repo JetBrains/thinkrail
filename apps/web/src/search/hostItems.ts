@@ -1,5 +1,12 @@
-import { RiChatHistoryLine, RiFileTextLine, RiListCheck3, RiNodeTree } from "@remixicon/react";
 import {
+	RiChatHistoryLine,
+	RiFileTextLine,
+	RiHeading,
+	RiListCheck3,
+	RiNodeTree,
+} from "@remixicon/react";
+import {
+	contentRanges,
 	foldMatchText,
 	MATCH_TIER,
 	type MatchRange,
@@ -19,6 +26,7 @@ export const HOST_GROUP_OF_KIND: Readonly<Record<SearchKind, string>> = {
 	transcript: "transcripts",
 	file: "files",
 	spec: "specs",
+	section: "sections",
 	plan: "plans",
 };
 
@@ -47,11 +55,24 @@ function rangesOf(fields: readonly { key: string; ranges: readonly MatchRange[] 
 }
 
 export function rematchHit(hit: SearchHit, terms: readonly MatchTerm[]): SearchHit | null {
+	const folded = terms.map((term) => foldMatchText(term.text)).filter(Boolean);
+	if (hit.kind === "section") {
+		const { heading } = hit.section;
+		const fields = { title: hit.title, heading, snippet: hit.snippet };
+		if (!matchContent(folded, prepareContent(Object.values(fields).join("\n")))) return null;
+		const ranges = rangesOf(
+			Object.entries(fields).map(([key, text]) => ({
+				key,
+				ranges: contentRanges(folded, prepareContent(text)),
+			})),
+		);
+		return { ...hit, score: 0, ranges };
+	}
 	if (hit.tier === MATCH_TIER.content) {
-		const [key, text] = hit.kind === "spec" ? ["snippet", hit.snippet ?? ""] : ["title", hit.title];
-		const folded = terms.map((term) => foldMatchText(term.text)).filter(Boolean);
-		const match = matchContent(folded, prepareContent(text));
-		return match ? { ...hit, score: 0, ranges: rangesOf([{ key, ranges: match.ranges }]) } : null;
+		const match = matchContent(folded, prepareContent(hit.title));
+		return match
+			? { ...hit, score: 0, ranges: rangesOf([{ key: "title", ranges: match.ranges }]) }
+			: null;
 	}
 	const match = matchFields(terms, searchHitFields(hit));
 	if (!match) return null;
@@ -83,6 +104,12 @@ function matchOf(hit: SearchHit, ranges: PaletteMatch["ranges"]): { match: Palet
 function lateOf(context: HostItemContext, id: string): { late?: number } {
 	const late = context.late.get(id);
 	return late === undefined ? {} : { late };
+}
+
+const SECTION_SEPARATOR = " › ";
+
+function shifted(ranges: readonly MatchRange[] | undefined, by: number): MatchRange[] {
+	return (ranges ?? []).map(([start, end]) => [start + by, end + by]);
 }
 
 function where(context: HostItemContext, hit: SearchHit): string {
@@ -130,18 +157,36 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem {
 				...base,
 				kind: "spec",
 				title: hit.title,
-				subtitle: hit.snippet ?? hit.path,
+				subtitle: hit.path,
 				group: "specs",
 				scope: "specs",
 				icon: RiNodeTree,
-				...matchOf(
-					hit,
-					hit.snippet
-						? { subtitle: hit.ranges?.snippet ?? [] }
-						: { title: hit.ranges?.title ?? [], subtitle: hit.ranges?.path ?? [] },
-				),
+				...matchOf(hit, { title: hit.ranges?.title ?? [], subtitle: hit.ranges?.path ?? [] }),
 				file: { workspaceId: hit.workspaceId, path: hit.path, size: hit.size },
 			};
+		case "section": {
+			const { heading, line, matched, terms } = hit.section;
+			const lead = heading ? hit.title.length + SECTION_SEPARATOR.length : 0;
+			return {
+				...base,
+				kind: "section",
+				title: heading ? `${hit.title}${SECTION_SEPARATOR}${heading}` : hit.title,
+				...(lead > 0 ? { titleLead: lead } : {}),
+				subtitle: hit.snippet || hit.path,
+				badge: context.t("search.section.words", { matched, terms }),
+				group: "sections",
+				scope: "specs",
+				icon: RiHeading,
+				...matchOf(hit, {
+					title: [
+						...(hit.ranges?.title ?? []),
+						...(heading ? shifted(hit.ranges?.heading, lead) : []),
+					],
+					subtitle: hit.snippet ? (hit.ranges?.snippet ?? []) : [],
+				}),
+				file: { workspaceId: hit.workspaceId, path: hit.path, line },
+			};
+		}
 		case "plan":
 			return {
 				...base,

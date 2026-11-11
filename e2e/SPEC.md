@@ -614,8 +614,11 @@ the single shared image strip, the collapsed JSON tree, Full output through the 
 (a recorded file and an expired one), Sign in deep links into Settings › MCP servers or Providers according
 to pi's reported authentication kind (provider identity remains visible), and the raw-text fallback for a truncated listing; its element shots under `e2e/screenshots/mcp-tool-cards/` are review evidence
 only. Questionnaire coverage uses canonical persisted tool-call/ack fixtures (submitting one exercises the
-restart-repaired response path) to pin six-question rounds beyond four, tall-page and restored-page reveal,
-coarse-pointer focus, tabs/question/footer at one y across paging and choosing, notes and Other growing in
+restart-repaired response path) to pin six-question rounds beyond four, the docked sheet (stub in the
+transcript, pinned controls around a scrolling body under the 60% cap, restored page, collapse kept across
+a chat switch, stub expand-and-focus, the sheet above the composer under an open Resources inspector, the
+receipt left in the transcript after answering, the cap following *Question panel height*), coarse-pointer
+focus, tabs/question/footer at one y across paging and choosing, notes and Other growing in
 place under a height that never shrinks, Discuss marking/cancelling/sending (asserted in the session file),
 the receipt's fold, per-question Options and remembered manual fold, and the keyboard model (arrows only
 move, Enter picks, Space opens a note, `d` discusses, fields park on their own row, the platform chord
