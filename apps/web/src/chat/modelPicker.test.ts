@@ -110,7 +110,7 @@ describe("describeAuth", () => {
 });
 
 describe("groupByProvider", () => {
-	test("keeps catalog order and lifts the first known auth per provider", () => {
+	test("keeps the providers' catalog order and lifts the first known auth per provider", () => {
 		const groups = groupByProvider(t, [
 			model({ id: "a", provider: "openai" }),
 			model({ id: "b", provider: "anthropic", auth: { kind: "oauth" } }),
@@ -169,6 +169,17 @@ describe("newestFirst", () => {
 			"Pixtral 12B",
 			"Ministral 8B (latest)",
 			"Mixtral 8x22B Instruct",
+		]);
+	});
+
+	test("equal versions and unversioned names keep catalog order, not alphabetical", () => {
+		const names = ["Zeta", "Claude Sonnet 5.5", "Alpha", "Claude Opus 5.5"];
+		const sorted = newestFirst(names.map((name) => model({ id: name, name })));
+		expect(sorted.map((m) => m.name)).toEqual([
+			"Claude Sonnet 5.5",
+			"Claude Opus 5.5",
+			"Zeta",
+			"Alpha",
 		]);
 	});
 

@@ -133,12 +133,13 @@ function compareVersions(a: readonly number[], b: readonly number[]): number {
 }
 
 export function newestFirst(models: readonly WireModel[]): WireModel[] {
-	return [...models].sort((a, b) => {
-		const va = nameVersion(a.name);
-		const vb = nameVersion(b.name);
-		if (va && vb) return compareVersions(va, vb);
-		return va ? -1 : vb ? 1 : 0;
-	});
+	return models
+		.map((model) => ({ model, version: nameVersion(model.name) }))
+		.sort((a, b) => {
+			if (a.version && b.version) return compareVersions(a.version, b.version);
+			return a.version ? -1 : b.version ? 1 : 0;
+		})
+		.map(({ model }) => model);
 }
 
 export function groupByProvider(t: Translator, models: readonly WireModel[]): ProviderGroup[] {

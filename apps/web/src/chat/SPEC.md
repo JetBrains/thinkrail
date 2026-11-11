@@ -998,7 +998,11 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   off by a divider, and its rows are indented under the header and drop their own vendor glyph and
   provider word (the header carries both) — a flat, unpadded list made headers and models hard to tell
   apart. Pinned models are never repeated inside groups. A group lists its models newest first by the
-  version in the name (`newestFirst`; pi has no release date). Headers, counts and rows are matched by the pickers' own cmdk `filter`
+  version in the name (`newestFirst`; pi has no release date): parenthesised suffixes and parameter
+  sizes (`120B`, `8x22B`) are not versions, equal versions keep pi's order, and names without one go
+  last. The sort is display-only and per group — provider order, Pinned, Recent and the Default row
+  keep their own order, the catalog itself is never reordered, and a search still ranks rows by score
+  (ties fall back to this order). Headers, counts and rows are matched by the pickers' own cmdk `filter`
   (`chat/pickerGroups.ts`, a port of cmdk's default scorer), so a header matches when any of its models
   does and its count equals the rows it reveals. With no query and no models the list reads "No models to
   show. Connect a provider, or show hidden models in Settings → Models → Visible models."; "No models
