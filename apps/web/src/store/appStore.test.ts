@@ -2257,6 +2257,7 @@ test("reconcileSession replaces stale host state while preserving browser-local 
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "sync", null, "medium");
 	store.setChatDraft("sync", "keep my draft");
+	store.setChatReadingAnchor("sync", { rowId: "row-1", offset: -24 });
 	store.appendUserMessage("sync", "old summarized prompt");
 	store.handlePiEvent(agentStart, "sync");
 	store.handlePiEvent({ type: "compaction_start", reason: "overflow" }, "sync");
@@ -2319,11 +2320,27 @@ test("reconcileSession replaces stale host state while preserving browser-local 
 		resuming: true,
 	});
 	expect(after.draft).toBe("keep my draft");
+	expect(after.readingAnchor).toEqual({ rowId: "row-1", offset: -24 });
 	expect(after.queue).toEqual({ steering: [], followUp: ["continue afterward"] });
 	expect(after.thinkingLevel).toBe("high");
 	expect(after.syncedConnectionGeneration).toBe(7);
 	expect(after.eventRevision).toBe(before.eventRevision + 1);
 	expect(after.statsRefreshTick).toBe(before.statsRefreshTick);
+});
+
+test("setChatReadingAnchor stores a detached reading position and skips an identical write", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "reading", null, "medium");
+	expect(rt("reading").readingAnchor).toBeNull();
+
+	store.setChatReadingAnchor("reading", { rowId: "row-3", offset: -40 });
+	const saved = rt("reading");
+	expect(saved.readingAnchor).toEqual({ rowId: "row-3", offset: -40 });
+	store.setChatReadingAnchor("reading", { rowId: "row-3", offset: -40 });
+	expect(rt("reading")).toBe(saved);
+
+	store.setChatReadingAnchor("reading", null);
+	expect(rt("reading").readingAnchor).toBeNull();
 });
 
 test("reconcileSession rejects a transcript read crossed by even a UI-ignored Pi event", () => {

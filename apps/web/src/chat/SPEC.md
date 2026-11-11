@@ -707,6 +707,24 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   item overscan lets nearby outliers replace estimates before coarse input exhausts a false range. Native
   wheel physics remain untouched. `chat-history.spec.ts` pins the default latest edge and tall-history
   geometry; `chat-order.spec.ts` pins both projections.
+- **A detached reader keeps their place across remounts** — only the selected tab's body is mounted, so
+  switching chat tabs unmounts the transcript (#971). On unmount the transcript writes the session
+  runtime's `readingAnchor`: the topmost visible row id and its offset from the viewport top while
+  detached, or `null` while following. It is a row anchor rather than a pixel `scrollTop` because the
+  remounted list re-measures its virtual rows, so a pixel offset drifts. A mount that finds an anchor
+  detaches instead of placing, materializes the row through the same cancellable measured-size
+  materialization as row reveal (never Virtuoso's retrying `scrollToIndex`), writes the exact offset at
+  once, and holds it with the anchor-stabilization motion through measurement frames. The reader stays
+  detached, so the streaming pin and the on-screen guard stay idle: a working chat returns showing
+  **Follow response**, and settlement leaves the restored content where it is. A settlement that lands
+  before the row materializes skips its row-reveal cancellation while the restore's reveal generation is
+  still current, so the restore survives it; reader input, a reveal, or teardown still ends the restore.
+  Reader input during that wait wins; a row that never materializes within the bounded wait (for example
+  after compaction) returns to the latest edge, or to the pin line while working. A following reader saves
+  `null` and gets the ordinary mount placement above, so a streaming chat keeps following on return. Neither a pending
+  placement nor a pending restore writes an anchor, so a StrictMode re-mount or a quick switch away cannot
+  overwrite the reader's place with a transient position. `chat-scroll.spec.ts` pins both orders, idle,
+  working, and settling before the row materializes.
 - **Alignment is explicit, not inferred from proximity** — `useChatScroll` owns two orthogonal facts:
   actual work (`agent_start` through `agent_settled`) and alignment (`following` or manually `detached`).
   Following while working means the configured response window; following while idle means the physical
