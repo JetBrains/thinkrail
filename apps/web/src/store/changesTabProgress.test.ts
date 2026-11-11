@@ -3,7 +3,9 @@ import { createChangesTab, useAppStore } from "./appStore";
 
 beforeEach(() => {
 	useAppStore.setState(useAppStore.getInitialState(), true);
-	useAppStore.getState().openTab(createChangesTab("ws", "changes", "Changes", { kind: "branch" }));
+	useAppStore
+		.getState()
+		.openTab(createChangesTab("ws", "changes", "Changes", { kind: "branch" }), "keep");
 });
 
 function changesTab() {

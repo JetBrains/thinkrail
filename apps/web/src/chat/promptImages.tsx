@@ -145,20 +145,11 @@ export function usePromptImages(): PromptImagesController {
 	return { images, pending, errors, addFiles, removeImage, dismissError, restore, reset };
 }
 
-// Padding presets for the chip strip. Both surfaces align the strip with the input field's left
-// edge and leave the same 12px gap below it; they differ only in structure — the composer strip
-// sits above a `p-12` input shell (so it owns its own left/top padding), while the dialog textarea
-// is flush (so only the bottom gap is needed).
-export const PROMPT_IMAGE_CHIPS_PADDING = {
-	composer: "px-12 pt-12",
-	dialog: "pb-12",
-} as const;
-
 export function PromptImageChips({
 	controller,
 	leading,
 	testId = "composer-images",
-	className = PROMPT_IMAGE_CHIPS_PADDING.composer,
+	className = "px-12 pt-12",
 }: {
 	controller: PromptImagesController;
 	leading?: ReactNode;

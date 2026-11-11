@@ -378,21 +378,25 @@ test("closing an unknown tab is not an error and not busy", () => {
 	expect(closeTerminalTab(WS, "never-existed")).toEqual({ closed: false, busy: false });
 });
 
-test("a shell with something running refuses to close until forced", async () => {
-	const attached = attachTerminal(WS, "tab-a", "client-1");
-	expect(attached.created).toBe(true);
-	await waitForTerminalOutput(attached.id);
-	writeTerminal(attached.id, `echo TR_BUSY && ${BUSY_LOOP_COMMAND}\r`, "client-1");
-	await waitForTerminalOutput(attached.id, "TR_BUSY");
-	await Bun.sleep(300);
+test(
+	"a shell with something running refuses to close until forced",
+	async () => {
+		const attached = attachTerminal(WS, "tab-a", "client-1");
+		expect(attached.created).toBe(true);
+		await waitForTerminalOutput(attached.id);
+		writeTerminal(attached.id, `echo TR_BUSY && ${BUSY_LOOP_COMMAND}\r`, "client-1");
+		await waitForTerminalOutput(attached.id, "TR_BUSY");
+		await Bun.sleep(300);
 
-	const refused = closeTerminalTab(WS, "tab-a");
-	expect(refused).toEqual({ closed: false, busy: true });
-	expect(listTerminals(WS)).toHaveLength(1);
+		const refused = closeTerminalTab(WS, "tab-a");
+		expect(refused).toEqual({ closed: false, busy: true });
+		expect(listTerminals(WS)).toHaveLength(1);
 
-	expect(closeTerminalTab(WS, "tab-a", true)).toEqual({ closed: true, busy: false });
-	expect(listTerminals(WS)).toHaveLength(0);
-});
+		expect(closeTerminalTab(WS, "tab-a", true)).toEqual({ closed: true, busy: false });
+		expect(listTerminals(WS)).toHaveLength(0);
+	},
+	TERMINAL_TEST_TIMEOUT_MS,
+);
 
 test(
 	"a host restart gives the tabs back with fresh shells showing the old output",
@@ -443,21 +447,25 @@ test("persisting writes nothing for a workspace whose tabs were all closed", () 
 	expect(listTerminals(WS)).toHaveLength(0);
 });
 
-test("only the attached client may drive a terminal", async () => {
-	const attached = attachTerminal(WS, "tab-a", "client-1");
-	await waitForTerminalOutput(attached.id);
+test(
+	"only the attached client may drive a terminal",
+	async () => {
+		const attached = attachTerminal(WS, "tab-a", "client-1");
+		await waitForTerminalOutput(attached.id);
 
-	attachTerminal(WS, "tab-a", "client-2");
-	expect(writeTerminal(attached.id, "printf 'TR_%s\\n' FROM_DISPLACED\r", "client-1")).toBeNull();
-	resizeTerminal(attached.id, 5, 2, "client-1");
-	writeTerminal(attached.id, "printf 'TR_%s\\n' SYNC\r", "client-2");
-	await waitForTerminalOutput(attached.id, "TR_SYNC");
-	expect(terminalOutput(attached.id)).not.toContain("FROM_DISPLACED");
+		attachTerminal(WS, "tab-a", "client-2");
+		expect(writeTerminal(attached.id, "printf 'TR_%s\\n' FROM_DISPLACED\r", "client-1")).toBeNull();
+		resizeTerminal(attached.id, 5, 2, "client-1");
+		writeTerminal(attached.id, "printf 'TR_%s\\n' SYNC\r", "client-2");
+		await waitForTerminalOutput(attached.id, "TR_SYNC");
+		expect(terminalOutput(attached.id)).not.toContain("FROM_DISPLACED");
 
-	attachTerminal(WS, "tab-a", "client-1");
-	expect(writeTerminal(attached.id, "printf 'TR_%s\\n' RECLAIMED\r", "client-1")).toBe(WS);
-	await waitForTerminalOutput(attached.id, "TR_RECLAIMED");
-});
+		attachTerminal(WS, "tab-a", "client-1");
+		expect(writeTerminal(attached.id, "printf 'TR_%s\\n' RECLAIMED\r", "client-1")).toBe(WS);
+		await waitForTerminalOutput(attached.id, "TR_RECLAIMED");
+	},
+	TERMINAL_TEST_TIMEOUT_MS,
+);
 
 test("opening and closing a tab broadcasts the new list", () => {
 	const seen: unknown[] = [];
@@ -471,30 +479,38 @@ test("opening and closing a tab broadcasts the new list", () => {
 	expect(seen.at(-1)).toEqual({ workspaceId: WS, tabs: [] });
 });
 
-test("a displaced client that tries to type is told it is displaced", async () => {
-	const attached = attachTerminal(WS, "tab-a", "client-1");
-	await waitForTerminalOutput(attached.id);
-	attachTerminal(WS, "tab-a", "client-2");
-	pushed = [];
+test(
+	"a displaced client that tries to type is told it is displaced",
+	async () => {
+		const attached = attachTerminal(WS, "tab-a", "client-1");
+		await waitForTerminalOutput(attached.id);
+		attachTerminal(WS, "tab-a", "client-2");
+		pushed = [];
 
-	writeTerminal(attached.id, "echo TR_LOST_NOTICE\r", "client-1");
+		writeTerminal(attached.id, "echo TR_LOST_NOTICE\r", "client-1");
 
-	const told = pushed.filter((frame) => frame.channel === "terminal.detached");
-	expect(told).toHaveLength(1);
-	expect(told[0]?.clientKey).toBe("client-1");
-	expect(told[0]?.data).toEqual({ workspaceId: WS, tabKey: "tab-a" });
-});
+		const told = pushed.filter((frame) => frame.channel === "terminal.detached");
+		expect(told).toHaveLength(1);
+		expect(told[0]?.clientKey).toBe("client-1");
+		expect(told[0]?.data).toEqual({ workspaceId: WS, tabKey: "tab-a" });
+	},
+	TERMINAL_TEST_TIMEOUT_MS,
+);
 
-test("the attached client is not told it is displaced", async () => {
-	const attached = attachTerminal(WS, "tab-a", "client-1");
-	await waitForTerminalOutput(attached.id);
-	pushed = [];
+test(
+	"the attached client is not told it is displaced",
+	async () => {
+		const attached = attachTerminal(WS, "tab-a", "client-1");
+		await waitForTerminalOutput(attached.id);
+		pushed = [];
 
-	writeTerminal(attached.id, "echo TR_FINE\r", "client-1");
-	resizeTerminal(attached.id, 100, 30, "client-1");
+		writeTerminal(attached.id, "echo TR_FINE\r", "client-1");
+		resizeTerminal(attached.id, 100, 30, "client-1");
 
-	expect(pushed.filter((frame) => frame.channel === "terminal.detached")).toHaveLength(0);
-});
+		expect(pushed.filter((frame) => frame.channel === "terminal.detached")).toHaveLength(0);
+	},
+	TERMINAL_TEST_TIMEOUT_MS,
+);
 
 test.skipIf(process.platform === "win32")(
 	"a shell runs as the real user with the host's pi folder, without the launching terminal's identity",

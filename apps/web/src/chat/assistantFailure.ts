@@ -31,6 +31,37 @@ export function isModelUnavailableError(message: string): boolean {
 	return MODEL_UNAVAILABLE.some((pattern) => pattern.test(message));
 }
 
+export const CLAUDE_USAGE_URL = "https://claude.ai/settings/usage";
+const CHATGPT_USAGE_URL = "https://chatgpt.com/settings/usage";
+
+export interface SubscriptionLimit {
+	url: string;
+	label: "chat.extraUsage.manage" | "chat.failure.checkChatgptUsage";
+}
+
+const SUBSCRIPTION_LIMITS: (SubscriptionLimit & { pattern: RegExp })[] = [
+	{
+		pattern: /Third-party apps now draw from your extra usage/,
+		url: CLAUDE_USAGE_URL,
+		label: "chat.extraUsage.manage",
+	},
+	{
+		pattern:
+			/subscription_sharing_(?:workplace_individual_)?usage_limit_exceeded|Subscription Sharing usage limit|You have hit your ChatGPT usage limit/,
+		url: CHATGPT_USAGE_URL,
+		label: "chat.failure.checkChatgptUsage",
+	},
+];
+
+export function subscriptionLimit(turn: {
+	text: string;
+	failure?: AssistantFailure | undefined;
+}): SubscriptionLimit | null {
+	if (turn.failure !== "error") return null;
+	const match = SUBSCRIPTION_LIMITS.find(({ pattern }) => pattern.test(turn.text));
+	return match ? { url: match.url, label: match.label } : null;
+}
+
 export function errorTurnText(
 	t: Translator,
 	turn: { text: string; failure?: AssistantFailure | undefined },

@@ -1,6 +1,7 @@
 import { RiSendPlaneLine as Send, RiDeleteBin6Line as Trash2 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { useEffect, useRef, useState } from "react";
 import type { ReviewThread, ReviewThreadActions } from "../registry";
 import { outdatedReason, threadLabel } from "../registry";
@@ -157,6 +158,7 @@ export function ReviewThreadCard({
 					}}
 					onKeyDown={(e) => {
 						e.stopPropagation();
+						if (isImeComposing(e.nativeEvent)) return;
 						if (e.key === "Escape") {
 							cancelledRef.current = true;
 							changeEdit(() => undefined);

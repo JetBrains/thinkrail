@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { GithubStarAsk } from "@thinkrail/contracts";
 import {
 	completeSurvey,
 	recordAcceptedMessage,
@@ -10,8 +11,10 @@ import {
 	resetFeedbackForTests,
 	respondToInvitation,
 	setFeedbackPublisher,
+	setGithubStarPublisher,
 	surveyIsCompleted,
 } from "./feedback";
+import { setGithubStarsFetchForTests } from "./githubStars";
 import {
 	configureSurveySource,
 	refreshInAppSurvey,
@@ -26,16 +29,18 @@ interface StoredFeedback {
 	submittedSurveyId: string | null;
 	submittedIteration: number | null;
 	lastInvitedAt: number | null;
+	githubStarAsked: boolean;
 }
 
 function feedback(overrides: Partial<StoredFeedback> = {}): StoredFeedback {
 	return {
 		acceptedMessages: 0,
-		nextInvitationAt: 10,
+		nextInvitationAt: 20,
 		dismissed: false,
 		submittedSurveyId: null,
 		submittedIteration: null,
 		lastInvitedAt: null,
+		githubStarAsked: false,
 		...overrides,
 	};
 }
@@ -71,6 +76,7 @@ beforeEach(async () => {
 
 afterEach(() => {
 	resetFeedbackForTests();
+	setGithubStarsFetchForTests(null);
 	resetSurveyForTests();
 	rmSync(directory, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
@@ -79,7 +85,7 @@ afterEach(() => {
 
 test("missing and malformed state use the complete defaults", () => {
 	respondToInvitation("postpone");
-	expect(stored()).toEqual(feedback());
+	expect(stored()).toEqual(feedback({ nextInvitationAt: 10 }));
 
 	for (const malformed of [
 		"{not json",
@@ -117,9 +123,9 @@ test("accepted messages persist synchronously and one client holds the eligible 
 		return true;
 	});
 
-	for (let count = 0; count < 9; count += 1) recordAcceptedMessage("client-a");
+	for (let count = 0; count < 19; count += 1) recordAcceptedMessage("client-a");
 	expect(delivered).toEqual([]);
-	expect(stored().acceptedMessages).toBe(9);
+	expect(stored().acceptedMessages).toBe(19);
 
 	recordAcceptedMessage("client-a");
 	expect(delivered).toEqual(["client-a"]);
@@ -127,12 +133,12 @@ test("accepted messages persist synchronously and one client holds the eligible 
 	releaseInvitation("client-b");
 	recordAcceptedMessage("client-b");
 	expect(delivered).toEqual(["client-a"]);
-	expect(stored().acceptedMessages).toBe(12);
+	expect(stored().acceptedMessages).toBe(22);
 
 	releaseInvitation("client-a");
 	recordAcceptedMessage("client-b");
 	expect(delivered).toEqual(["client-a", "client-b"]);
-	expect(stored().acceptedMessages).toBe(13);
+	expect(stored().acceptedMessages).toBe(23);
 });
 
 test("postpone schedules ten additional accepted messages and clears the claim", () => {
@@ -141,11 +147,11 @@ test("postpone schedules ten additional accepted messages and clears the claim",
 		delivered.push(clientKey);
 		return true;
 	});
-	for (let count = 0; count < 10; count += 1) recordAcceptedMessage("client-a");
+	for (let count = 0; count < 20; count += 1) recordAcceptedMessage("client-a");
 
 	respondToInvitation("postpone");
 	expect(stored()).toEqual(
-		feedback({ acceptedMessages: 10, nextInvitationAt: 20, lastInvitedAt: expect.any(Number) }),
+		feedback({ acceptedMessages: 20, nextInvitationAt: 30, lastInvitedAt: expect.any(Number) }),
 	);
 	for (let count = 0; count < 9; count += 1) recordAcceptedMessage("client-b");
 	expect(delivered).toEqual(["client-a"]);
@@ -184,13 +190,13 @@ test("don't ask again keeps counting but does not offer the usage prompt again",
 		delivered.push(clientKey);
 		return true;
 	});
-	for (let count = 0; count < 10; count += 1) recordAcceptedMessage("client-a");
+	for (let count = 0; count < 20; count += 1) recordAcceptedMessage("client-a");
 	expect(delivered).toEqual(["client-a"]);
 	respondToInvitation("never");
 	for (let count = 0; count < 10; count += 1) recordAcceptedMessage("client-b");
 	expect(delivered).toEqual(["client-a"]);
 	expect(stored()).toEqual(
-		feedback({ acceptedMessages: 20, dismissed: true, lastInvitedAt: expect.any(Number) }),
+		feedback({ acceptedMessages: 30, dismissed: true, lastInvitedAt: expect.any(Number) }),
 	);
 });
 
@@ -200,7 +206,7 @@ test("failed delivery and process-local reset release eligible claims", () => {
 		attempts.push(clientKey);
 		return false;
 	});
-	for (let count = 0; count < 10; count += 1) recordAcceptedMessage("client-a");
+	for (let count = 0; count < 20; count += 1) recordAcceptedMessage("client-a");
 
 	setFeedbackPublisher((clientKey) => {
 		attempts.push(clientKey);
@@ -216,15 +222,15 @@ test("failed delivery and process-local reset release eligible claims", () => {
 	});
 	recordAcceptedMessage("client-c");
 	expect(attempts).toEqual(["client-a", "client-b", "client-c"]);
-	expect(stored()).toEqual(feedback({ acceptedMessages: 12, lastInvitedAt: expect.any(Number) }));
+	expect(stored()).toEqual(feedback({ acceptedMessages: 22, lastInvitedAt: expect.any(Number) }));
 });
 
 test("a throwing publisher releases the claim without losing the accepted count", () => {
 	setFeedbackPublisher(() => {
 		throw new Error("socket closed");
 	});
-	for (let count = 0; count < 10; count += 1) recordAcceptedMessage("client-a");
-	expect(stored().acceptedMessages).toBe(10);
+	for (let count = 0; count < 20; count += 1) recordAcceptedMessage("client-a");
+	expect(stored().acceptedMessages).toBe(20);
 
 	const delivered: string[] = [];
 	setFeedbackPublisher((clientKey) => {
@@ -241,7 +247,7 @@ test("count persistence failure preserves an existing claim and cannot reject a 
 		delivered.push(clientKey);
 		return true;
 	});
-	for (let count = 0; count < 10; count += 1) recordAcceptedMessage("client-a");
+	for (let count = 0; count < 20; count += 1) recordAcceptedMessage("client-a");
 
 	const blockedDataDir = join(directory, "not-a-directory");
 	writeFileSync(blockedDataDir, "blocked");
@@ -251,7 +257,7 @@ test("count persistence failure preserves an existing claim and cannot reject a 
 	process.env.THINKRAIL_DATA_DIR = directory;
 	recordAcceptedMessage("client-b");
 	expect(delivered).toEqual(["client-a"]);
-	expect(stored().acceptedMessages).toBe(12);
+	expect(stored().acceptedMessages).toBe(22);
 });
 
 test("a failed threshold write is retained and offered after persistence recovers", () => {
@@ -260,7 +266,7 @@ test("a failed threshold write is retained and offered after persistence recover
 		delivered.push(clientKey);
 		return true;
 	});
-	for (let count = 0; count < 9; count += 1) recordAcceptedMessage("client-a");
+	for (let count = 0; count < 19; count += 1) recordAcceptedMessage("client-a");
 
 	const blockedDataDir = join(directory, "not-a-directory");
 	writeFileSync(blockedDataDir, "blocked");
@@ -271,7 +277,7 @@ test("a failed threshold write is retained and offered after persistence recover
 	process.env.THINKRAIL_DATA_DIR = directory;
 	recordAcceptedMessage("client-b");
 	expect(delivered).toEqual(["client-b"]);
-	expect(stored().acceptedMessages).toBe(11);
+	expect(stored().acceptedMessages).toBe(21);
 });
 
 test("reconnect redelivers only to the claimed client and releases a failed redelivery", () => {
@@ -280,7 +286,7 @@ test("reconnect redelivers only to the claimed client and releases a failed rede
 		attempts.push(clientKey);
 		return true;
 	});
-	for (let count = 0; count < 10; count += 1) recordAcceptedMessage("client-a");
+	for (let count = 0; count < 20; count += 1) recordAcceptedMessage("client-a");
 
 	redeliverInvitation("client-b");
 	redeliverInvitation("client-a");
@@ -305,12 +311,12 @@ test("invalid responses do not mutate state or release the claim", () => {
 		delivered.push(clientKey);
 		return true;
 	});
-	for (let count = 0; count < 10; count += 1) recordAcceptedMessage("client-a");
+	for (let count = 0; count < 20; count += 1) recordAcceptedMessage("client-a");
 
 	expect(() => respondToInvitation("later" as "postpone")).toThrow("Invalid invitation response");
 	recordAcceptedMessage("client-b");
 	expect(delivered).toEqual(["client-a"]);
-	expect(stored()).toEqual(feedback({ acceptedMessages: 11, lastInvitedAt: expect.any(Number) }));
+	expect(stored()).toEqual(feedback({ acceptedMessages: 21, lastInvitedAt: expect.any(Number) }));
 });
 
 test("an old feedback file without survey completion still counts", () => {
@@ -332,7 +338,7 @@ test("a launched, unfinished survey is required before the invitation, per id an
 		return true;
 	});
 	await launch();
-	for (let count = 0; count < 10; count += 1) recordAcceptedMessage("client-a");
+	for (let count = 0; count < 20; count += 1) recordAcceptedMessage("client-a");
 	expect(delivered).toEqual([]);
 
 	await launch({ id: "survey-1", iteration: 1 });
@@ -351,7 +357,7 @@ test("a launched, unfinished survey is required before the invitation, per id an
 	expect(delivered).toEqual(["client-a", "client-b"]);
 	expect(stored()).toEqual(
 		feedback({
-			acceptedMessages: 13,
+			acceptedMessages: 23,
 			submittedSurveyId: "survey-1",
 			submittedIteration: 1,
 			lastInvitedAt: expect.any(Number),
@@ -401,7 +407,7 @@ test("an idle host does not invite from a copy it can no longer refresh", async 
 		delivered.push(clientKey);
 		return true;
 	});
-	for (let count = 0; count < 9; count += 1) recordAcceptedMessage("client-a");
+	for (let count = 0; count < 19; count += 1) recordAcceptedMessage("client-a");
 
 	status = 503;
 	at += 2 * 60 * 60 * 1000;
@@ -449,7 +455,7 @@ test("PostHog's wait period keeps a postponed invitation away for that many days
 		await Bun.sleep(0);
 	};
 
-	await send(10);
+	await send(20);
 	expect(delivered).toEqual(["client-a"]);
 	expect(stored().lastInvitedAt).toBe(at);
 	respondToInvitation("postpone");
@@ -476,4 +482,178 @@ test("a malformed invitation time resets the file to the defaults", () => {
 	resetFeedbackForTests();
 	recordAcceptedMessage("client-a");
 	expect(stored()).toEqual(feedback({ acceptedMessages: 1 }));
+});
+
+function publisher(
+	ask: (clientKey: string, ask: GithubStarAsk) => boolean,
+	canAsk: (clientKey: string) => boolean = () => true,
+) {
+	return { canAsk, ask };
+}
+
+function githubStars(stars: number | null, calls: { count: number } = { count: 0 }): typeof fetch {
+	return (async () => {
+		calls.count += 1;
+		return stars === null
+			? new Response("rate limited", { status: 403 })
+			: new Response(JSON.stringify({ stargazers_count: stars }));
+	}) as unknown as typeof fetch;
+}
+
+test("the GitHub star ask goes once, on the tenth accepted message, with the star count", async () => {
+	const asked: Array<[string, GithubStarAsk]> = [];
+	const calls = { count: 0 };
+	setGithubStarsFetchForTests(githubStars(7124, calls));
+	setGithubStarPublisher(
+		publisher((clientKey, ask) => {
+			asked.push([clientKey, ask]);
+			return true;
+		}),
+	);
+	for (let count = 0; count < 9; count += 1) recordAcceptedMessage("client-a");
+	expect(calls.count).toBe(0);
+	recordAcceptedMessage("client-b");
+	recordAcceptedMessage("client-a");
+	await Bun.sleep(0);
+	expect(asked).toEqual([["client-b", { stars: 7124 }]]);
+	expect(calls.count).toBe(1);
+	for (let count = 0; count < 20; count += 1) recordAcceptedMessage("client-a");
+	await Bun.sleep(0);
+	expect(asked).toHaveLength(1);
+	expect(stored().githubStarAsked).toBe(true);
+
+	resetFeedbackForTests();
+	setGithubStarsFetchForTests(githubStars(7124, calls));
+	setGithubStarPublisher(
+		publisher((clientKey, ask) => {
+			asked.push([clientKey, ask]);
+			return true;
+		}),
+	);
+	recordAcceptedMessage("client-a");
+	await Bun.sleep(0);
+	expect(asked).toHaveLength(1);
+	expect(calls.count).toBe(1);
+});
+
+test("an unreachable GitHub still asks, without a count", async () => {
+	const asked: GithubStarAsk[] = [];
+	setGithubStarsFetchForTests((async () => {
+		throw new Error("offline");
+	}) as unknown as typeof fetch);
+	setGithubStarPublisher(
+		publisher((_clientKey, ask) => {
+			asked.push(ask);
+			return true;
+		}),
+	);
+	for (let count = 0; count < 10; count += 1) recordAcceptedMessage("client-a");
+	await Bun.sleep(0);
+	expect(asked).toEqual([{ stars: null }]);
+
+	resetFeedbackForTests();
+	writeFileSync(
+		join(directory, "feedback.json"),
+		JSON.stringify(feedback({ acceptedMessages: 9 })),
+	);
+	setGithubStarsFetchForTests(githubStars(null));
+	setGithubStarPublisher(
+		publisher((_clientKey, ask) => {
+			asked.push(ask);
+			return true;
+		}),
+	);
+	recordAcceptedMessage("client-a");
+	await Bun.sleep(0);
+	expect(asked).toEqual([{ stars: null }, { stars: null }]);
+});
+
+test("an undelivered GitHub star ask retries on the next message", async () => {
+	const asked: string[] = [];
+	setGithubStarsFetchForTests(githubStars(7124));
+	setGithubStarPublisher(publisher(() => false));
+	for (let count = 0; count < 10; count += 1) recordAcceptedMessage("client-a");
+	await Bun.sleep(0);
+	expect(stored().githubStarAsked).toBe(false);
+	setGithubStarPublisher(
+		publisher(() => {
+			throw new Error("socket closed");
+		}),
+	);
+	recordAcceptedMessage("client-a");
+	await Bun.sleep(0);
+	setGithubStarPublisher(
+		publisher((clientKey) => {
+			asked.push(clientKey);
+			return true;
+		}),
+	);
+	recordAcceptedMessage("client-a");
+	await Bun.sleep(0);
+	expect(asked).toEqual(["client-a"]);
+	expect(stored()).toEqual(feedback({ acceptedMessages: 12, githubStarAsked: true }));
+});
+
+test("an install already past ten messages is asked once, and a due survey waits one message", async () => {
+	writeFileSync(
+		join(directory, "feedback.json"),
+		JSON.stringify({ acceptedMessages: 30, nextInvitationAt: 10, dismissed: false }),
+	);
+	resetFeedbackForTests();
+	const sent: string[] = [];
+	setGithubStarsFetchForTests(githubStars(7124));
+	setGithubStarPublisher(
+		publisher(() => {
+			sent.push("star");
+			return true;
+		}),
+	);
+	setFeedbackPublisher(() => {
+		sent.push("survey");
+		return true;
+	});
+	recordAcceptedMessage("client-a");
+	recordAcceptedMessage("client-a");
+	await Bun.sleep(0);
+	expect(sent).toEqual(["star"]);
+	recordAcceptedMessage("client-a");
+	expect(sent).toEqual(["star", "survey"]);
+});
+
+test("a malformed GitHub star flag resets the file to the defaults", () => {
+	writeFileSync(
+		join(directory, "feedback.json"),
+		JSON.stringify({
+			acceptedMessages: 3,
+			nextInvitationAt: 20,
+			dismissed: false,
+			githubStarAsked: "yes",
+		}),
+	);
+	resetFeedbackForTests();
+	recordAcceptedMessage("client-a");
+	expect(stored()).toEqual(feedback({ acceptedMessages: 1 }));
+});
+
+test("a client that cannot show the star ask neither reads GitHub nor holds back the survey", () => {
+	const calls = { count: 0 };
+	const sent: string[] = [];
+	setGithubStarsFetchForTests(githubStars(7124, calls));
+	setGithubStarPublisher(
+		publisher(
+			() => {
+				sent.push("star");
+				return true;
+			},
+			() => false,
+		),
+	);
+	setFeedbackPublisher(() => {
+		sent.push("survey");
+		return true;
+	});
+	for (let count = 0; count < 20; count += 1) recordAcceptedMessage("old-client");
+	expect(sent).toEqual(["survey"]);
+	expect(calls.count).toBe(0);
+	expect(stored().githubStarAsked).toBe(false);
 });

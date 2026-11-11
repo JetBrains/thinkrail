@@ -35,6 +35,7 @@ export {
 	type ResourceEnvironment,
 	type ResourceIntent,
 	type ResourceRenderer,
+	type ResourceReveal,
 	type ResourceViewModule,
 	type ResourceViewProps,
 	type ReviewThread,
@@ -46,9 +47,14 @@ export {
 	type SurfaceReview,
 	threadLabel,
 } from "./registry";
+export { SOURCE_RENDERER_ID } from "./renderers/code";
 export { createAskAgentRequest } from "./renderers/code/changeBlocks";
 export { registerBundledResourceRenderers } from "./renderers/register";
 export { ReviewDraftContext, type ReviewDraftPersistence } from "./renderers/reviewDraftState";
+export {
+	FramedResourcePreview,
+	type FramedResourcePreviewProps,
+} from "./support/FramedResourcePreview";
 export { GuardedRendererDiff } from "./support/GuardedRendererDiff";
 export { surfaceLineCount, VIRTUALIZED_DIFF_LINES } from "./support/largeDiff";
 export { type RendererLayout, RendererToggles } from "./support/RendererToggles";
