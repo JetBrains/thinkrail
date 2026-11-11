@@ -200,7 +200,6 @@ import {
 	syncWorkspaceBranch,
 	type WorkspaceLifecycleEvent,
 } from "../workspaces";
-import { guardAccess } from "./accessToken";
 import { seesChats } from "./chats";
 import { continueToolHost, observeContinuation, setContinuationPublisher } from "./continuations";
 import { BLOB_PREFIX, FILES_PREFIX, serveBlob, serveWorktreeFile } from "./fileRoutes";
@@ -259,11 +258,6 @@ import { workspaceToolsHost } from "./workspaceTools";
 export interface CreateServerOptions {
 	port?: number;
 	host?: string;
-	/**
-	 * When set, the HTTP/WS surface (`/ws`, `/files`, `/blob`) requires this token. Unset leaves the
-	 * host unauthenticated for local, same-origin use. See `accessToken.ts` and the remote-access plan.
-	 */
-	accessToken?: string;
 	/**
 	 * Turns phone access on for this run (`--remote`), whatever Settings says: paired devices drive the host
 	 * over a signaling relay — `relayUrl` when given, else one the host runs itself, reachable at this
@@ -405,7 +399,6 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const {
 		port = 24242,
 		host = "localhost",
-		accessToken,
 		remote,
 		staticDir,
 		projectPath,
@@ -467,7 +460,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			clientKey,
 			setTimeout(() => {
 				reapTimers.delete(clientKey);
-				if (sockets.has(clientKey)) return;
+				if (sockets.has(clientKey) || remoteClients.has(clientKey)) return;
 				if (!requestReplays.clearClient(clientKey)) {
 					armClientReap(clientKey);
 					return;
@@ -486,8 +479,6 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		async fetch(req, srv) {
 			const url = new URL(req.url);
 			if (url.pathname === "/ws") {
-				const denied = guardAccess(req, accessToken);
-				if (denied) return denied;
 				const clientKey = url.searchParams.get("client") ?? `anon-${randomUUID()}`;
 				const protocolVersion = clientProtocolVersion(url.searchParams.get("protocol"));
 				await refreshRecentProjectFolders(RECENT_FOLDER_CHECK_BUDGET_MS);
@@ -514,13 +505,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					: new Response("method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
 			}
 			if (url.pathname.startsWith(FILES_PREFIX)) {
-				const denied = guardAccess(req, accessToken);
-				if (denied) return denied;
 				return serveWorktreeFile(url.pathname, url.searchParams.get("maxBytes"));
 			}
 			if (url.pathname.startsWith(BLOB_PREFIX)) {
-				const denied = guardAccess(req, accessToken);
-				if (denied) return denied;
 				return serveBlob(url.pathname, req.signal);
 			}
 			if (url.pathname.startsWith(USER_FONTS_ROUTE)) {
@@ -749,26 +736,41 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const nativePublish = server.publish.bind(server);
 	const forwardingPublish: typeof server.publish = (topic, data, compress) => {
 		const status = nativePublish(topic, data, compress);
-		if (remoteBridges.size > 0 && typeof data === "string") {
-			try {
-				const parsed = JSON.parse(data) as { channel?: unknown; data?: unknown };
-				if (typeof parsed.channel === "string") {
-					for (const bridge of remoteBridges) bridge.push(parsed.channel, parsed.data);
-				}
-			} catch {}
-		}
+		if (typeof data === "string") for (const bridge of remoteBridges) bridge.pushFramed(data);
 		return status;
 	};
 	server.publish = forwardingPublish;
 
 	const deviceBridges = new Map<string, Set<RemoteWireBridge>>();
+	const remoteClients = new Set<string>();
 	const remoteAccess: RemoteAccessControl = createRemoteAccessControl({
 		...(remote?.relayUrl ? { relayUrl: remote.relayUrl } : {}),
 		hostName: computerName(),
 		onPaired: (device, channel) => {
 			const clientKey = `remote:${device.id}`;
+			remoteClients.add(clientKey);
+			const pendingReap = reapTimers.get(clientKey);
+			if (pendingReap !== undefined) {
+				clearTimeout(pendingReap);
+				reapTimers.delete(clientKey);
+			}
 			const bridge = bridgeRemoteWire(channel, {
 				clientKey,
+				replay: {
+					run: (id, method, params, execute) =>
+						requestReplays.run(
+							clientKey,
+							id,
+							createHash("sha256")
+								.update(JSON.stringify([method, params, null]))
+								.digest("hex"),
+							execute,
+							requestMethodDiagnostic(method),
+						),
+					acknowledge: (ids) => reportAbandoned(requestReplays.acknowledge(clientKey, ids)),
+					retain: (ids) => reportAbandoned(requestReplays.retain(clientKey, ids)),
+				},
+				onError: (error, method) => reportError(error, requestErrorReport(method)),
 				dispatch: (method, params) => {
 					const verdict = remoteAccess.mayRequest(device.id, method);
 					if (verdict === "revoked")
@@ -789,7 +791,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			channel.onClose(() => {
 				remoteBridges.delete(bridge);
 				own.delete(bridge);
-				if (own.size === 0 && deviceBridges.get(device.id) === own) deviceBridges.delete(device.id);
+				if (own.size === 0 && deviceBridges.get(device.id) === own) {
+					deviceBridges.delete(device.id);
+					remoteClients.delete(clientKey);
+					if (!stopping && !reapTimers.has(clientKey)) armClientReap(clientKey);
+				}
 			});
 			// The device has no WS "open" event, so hand it the same welcome snapshot over the bridge.
 			bridge.push(WS_CHANNELS.serverWelcome, buildWelcome(PROTOCOL_VERSION));

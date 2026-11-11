@@ -134,7 +134,7 @@ export function shouldAutoIssue(state: PhoneAccessState): boolean {
 	const relay = state.status?.relay;
 	return (
 		state.status?.enabled === true &&
-		state.status.addresses.length > 0 &&
+		!phoneHasNoRoute(state.status) &&
 		!(relay?.kind === "builtIn" && relay.publicCheck.state === "checking") &&
 		!state.pairing &&
 		!state.issuing &&

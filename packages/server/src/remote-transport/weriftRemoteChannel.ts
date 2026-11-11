@@ -2,11 +2,7 @@ import { chunkFrames, createChannelAssembler } from "@thinkrail/contracts";
 import type { RTCDataChannel } from "werift";
 import type { RemoteChannel } from "./channel";
 
-/**
- * Adapts a werift `RTCDataChannel` to the transport-agnostic `RemoteChannel` the wire protocol runs over.
- * werift (pure TS) is validated under Bun, so the host side needs no native WebRTC binding. The peer
- * negotiation that produces the channel, and its wiring through the signaling server, are later slices.
- */
+/** Adapts a werift `RTCDataChannel` to the transport-agnostic `RemoteChannel` the wire protocol runs over. */
 export function toRemoteChannel(channel: RTCDataChannel): RemoteChannel {
 	let closed = false;
 	return {

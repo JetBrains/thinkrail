@@ -69,3 +69,94 @@ test("push frames a channel event", () => {
 	bridge.push("pi.event", { token: "hi" });
 	expect(sent).toEqual([{ channel: "pi.event", data: { token: "hi" } }]);
 });
+
+test("with a replay, a request re-sent after a reconnect replies from the first run, and ack/resume reach it", async () => {
+	const { channel, sent, deliver } = fakeChannel();
+	const runs = new Map<string, Promise<string>>();
+	const acked: string[][] = [];
+	const retained: string[][] = [];
+	let executed = 0;
+	bridgeRemoteWire(channel, {
+		clientKey: "d",
+		dispatch: async () => ++executed,
+		replay: {
+			run: (id, _method, _params, execute) => {
+				const known = runs.get(id) ?? execute();
+				runs.set(id, known);
+				return known;
+			},
+			acknowledge: (ids) => void acked.push([...ids]),
+			retain: (ids) => void retained.push([...ids]),
+		},
+	});
+
+	deliver({ resume: [] });
+	deliver({ id: "a:1", method: "session.prompt", params: { text: "hi" } });
+	deliver({ id: "a:1", method: "session.prompt", params: { text: "hi" } });
+	await flush();
+	expect(executed).toBe(1);
+	expect(sent).toEqual([
+		{ id: "a:1", ok: true, result: 1 },
+		{ id: "a:1", ok: true, result: 1 },
+	]);
+
+	deliver({ ack: ["a:1", 7] });
+	deliver({ resume: ["a:2"] });
+	expect(acked).toEqual([["a:1"]]);
+	expect(retained).toEqual([[], ["a:2"]]);
+});
+
+test("an app that never sent resume is served without the replay", async () => {
+	const { channel, sent, deliver } = fakeChannel();
+	let runs = 0;
+	bridgeRemoteWire(channel, {
+		clientKey: "d",
+		dispatch: async () => "ok",
+		replay: {
+			run: async (_id, _method, _params, execute) => {
+				runs += 1;
+				return execute();
+			},
+			acknowledge: () => {},
+			retain: () => {},
+		},
+	});
+	deliver({ id: "d1", method: "session.list" });
+	await flush();
+	expect(runs).toBe(0);
+	expect(sent).toEqual([{ id: "d1", ok: true, result: "ok" }]);
+});
+
+test("a replay refusal (a reused id, a full namespace) replies as a failure and is reported", async () => {
+	const { channel, sent, deliver } = fakeChannel();
+	const reported: string[] = [];
+	bridgeRemoteWire(channel, {
+		clientKey: "d",
+		dispatch: async () => null,
+		onError: (_error, method) => void reported.push(method),
+		errorCodeOf: () => "REQUEST_REPLAY_OVERFLOW",
+		replay: {
+			run: async () => {
+				throw new Error("full");
+			},
+			acknowledge: () => {},
+			retain: () => {},
+		},
+	});
+	deliver({ resume: [] });
+	deliver({ id: "a:1", method: "session.list" });
+	await flush();
+	await flush();
+	expect(sent).toEqual([
+		{ id: "a:1", ok: false, error: "full", errorCode: "REQUEST_REPLAY_OVERFLOW" },
+	]);
+	expect(reported).toEqual(["session.list"]);
+});
+
+test("pushFramed sends an already framed broadcast as is", () => {
+	const { channel, sent } = fakeChannel();
+	bridgeRemoteWire(channel, { clientKey: "d", dispatch: async () => null }).pushFramed(
+		JSON.stringify({ channel: "pi.event", data: 1 }),
+	);
+	expect(sent).toEqual([{ channel: "pi.event", data: 1 }]);
+});

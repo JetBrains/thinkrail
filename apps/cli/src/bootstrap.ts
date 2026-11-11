@@ -94,7 +94,7 @@ async function bootstrap(build: BuildKind): Promise<void> {
 
 	const remote = server.remote;
 	if (options.remote) await remote.ready();
-	const { enabled, addresses } = remote.state();
+	const { enabled, addresses, nostr } = remote.state();
 	if (options.remote && !enabled) {
 		console.warn("thinkrail remote: phone access could not start; see the log for details.");
 	} else if (options.remote) {
@@ -105,18 +105,16 @@ async function bootstrap(build: BuildKind): Promise<void> {
 			public: "public IP",
 			relay: "relay",
 		} as const;
-		if (addresses.length === 0) {
+		if (addresses.length === 0 && !nostr) {
 			console.warn(
 				"thinkrail remote: no Wi-Fi/LAN, Tailscale or public address on this computer, so a phone can't reach it." +
 					" Connect to a network (or start Tailscale) and restart with --remote.",
 			);
 			return;
 		}
-		console.log(
-			`thinkrail remote: reachable at\n${addresses
-				.map((address) => `  ${address.url}  (${route[address.route]})`)
-				.join("\n")}`,
-		);
+		const lines = addresses.map((address) => `  ${address.url}  (${route[address.route]})`);
+		if (nostr) lines.push(`  any network, through Nostr relays (${nostr.relays.join(", ")})`);
+		console.log(`thinkrail remote: reachable at\n${lines.join("\n")}`);
 		const publicAddress = addresses.find((address) => address.route === "public");
 		if (publicAddress) {
 			console.log(

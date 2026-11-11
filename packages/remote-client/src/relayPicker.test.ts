@@ -51,6 +51,15 @@ test("a failing address does not block a later one", async () => {
 	expect((await picked).url).toBe("ws://tailscale");
 });
 
+test("a dead address that reports both error and close counts once, so a slower one still wins", async () => {
+	const { opened, open } = harness();
+	const result = openFirstRelay(["ws://lan", "ws://tailscale"], open);
+	opened.get("ws://lan")?.emit("error");
+	opened.get("ws://lan")?.emit("close");
+	opened.get("ws://tailscale")?.emit("open");
+	expect((await result).url).toBe("ws://tailscale");
+});
+
 test("rejects with the tried addresses once every one fails", async () => {
 	const { opened, open } = harness();
 	const picked = openFirstRelay(["ws://lan", "ws://tailscale"], open);

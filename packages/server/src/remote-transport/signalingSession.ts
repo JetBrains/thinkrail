@@ -44,7 +44,7 @@ type State =
 			projectRef: string;
 			/** The QR token of a first pairing, whose HMAC the proof must carry. */
 			token?: string;
-			/** Set when resuming an already-paired device, so its id is preserved rather than minted anew. */
+			/** Set when resuming an already-paired device: it must still be registered under this id at `proof`, and its record is kept as is. */
 			deviceId?: string;
 	  }
 	| { phase: "closed" };
@@ -122,13 +122,21 @@ export function createHostHandshake(deps: HandshakeDeps): HostHandshake {
 				signature: message.signature,
 			});
 			if (!ok) return reject("pairing proof rejected");
-			const device: PairedDevice = {
-				id: state.deviceId ?? newDeviceId(),
-				label: state.label,
-				publicKey: state.devicePublicKey,
-				pairedAt: now(),
-			};
-			deps.registerDevice(device);
+			let device: PairedDevice;
+			if (state.deviceId !== undefined) {
+				const known = deps.findDevice(state.devicePublicKey);
+				if (known?.id !== state.deviceId)
+					return reject("unknown device; pair again with a fresh link", "unknown_device");
+				device = known;
+			} else {
+				device = {
+					id: newDeviceId(),
+					label: state.label,
+					publicKey: state.devicePublicKey,
+					pairedAt: now(),
+				};
+				deps.registerDevice(device);
+			}
 			const authorized: AuthorizedDevice = {
 				device,
 				projectRef: state.projectRef,

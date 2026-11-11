@@ -35,12 +35,15 @@ interface Pending {
 /**
  * The device side of the wire protocol, mirroring the host's `remoteWireBridge`. It is channel-agnostic and
  * reconnect-safe: a dropped WebRTC channel does not fail in-flight requests — when `attach` installs a fresh
- * channel (after re-pairing), every pending request is replayed onto it, and subscriptions persist. Only
+ * channel, it sends `resume` with the ids still waiting and replays them, and subscriptions persist. Ids are
+ * unique per client, so the host's replay cache answers a re-sent request from its first run instead of running
+ * it twice; each response read is `ack`ed so the host can drop it. Only
  * `close` rejects outstanding work. Responses are matched by id; `{ channel, data }` pushes fan to subscribers;
  * a snapshot push (`server.welcome`) is also kept and replayed to a subscriber that arrives after it.
  */
 export function createDeviceWireClient(): DeviceWireClient {
 	let channel: DeviceChannel | null = null;
+	const instance = crypto.randomUUID();
 	let nextId = 0;
 	let closed = false;
 	const pending = new Map<string, Pending>();
@@ -60,6 +63,7 @@ export function createDeviceWireClient(): DeviceWireClient {
 			const entry = pending.get(frame.id);
 			if (!entry) return;
 			pending.delete(frame.id);
+			if (channel?.open) channel.send(JSON.stringify({ ack: [frame.id] }));
 			if (frame.ok === true) entry.resolve(frame.result);
 			else {
 				const error = typeof frame.error === "string" ? frame.error : "remote request failed";
@@ -84,10 +88,11 @@ export function createDeviceWireClient(): DeviceWireClient {
 			next.onClose(() => {
 				if (channel === next) channel = null; // pending wait for the next attach
 			});
-			for (const entry of pending.values()) next.send(entry.frame); // replay in-flight requests
+			next.send(JSON.stringify({ resume: [...pending.keys()] }));
+			for (const entry of pending.values()) next.send(entry.frame);
 		},
 		request(method, params) {
-			const id = `d${++nextId}`;
+			const id = `${instance}:${++nextId}`;
 			const frame = JSON.stringify({ id, method, ...(params !== undefined ? { params } : {}) });
 			return new Promise((resolve, reject) => {
 				if (closed) {

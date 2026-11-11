@@ -116,8 +116,13 @@ broker (the host's own for Wi‑Fi/Tailscale, or a hosted one) and public Nostr 
     listens for a phone until Settings or `--remote` turns it on.
   - `remoteWireBridge.ts` — `bridgeRemoteWire`, which runs the host wire protocol over a `RemoteChannel`:
     it decodes request frames, dispatches them through the host's `handleRequest` (injected), replies with
-    the WS's `{ id, ok, result | error }` framing, and `push`es `{ channel, data }` events. Replay/ack is
-    omitted (the DataChannel has no mid-stream reconnect to replay).
+    the WS's `{ id, ok, result | error }` framing, and `push`es `{ channel, data }` events (`pushFramed` sends
+    a host broadcast's JSON as is, with no re-parse). Given `replay` (the host binds the same
+    `RequestReplayCache` the WS uses, under `remote:<deviceId>`), a device that sent `resume` has every request
+    run through it, so a request re-sent after a reconnect answers from its first run; `ack` drops a read
+    response and `resume` keeps only the ids still awaited. An app too old to send `resume` is served without
+    it, so its unacknowledged responses never fill the cache. Failures go to `onError` (Error Tracking), and
+    the device's client state is reaped like a closed WS once its last channel closes.
 - **Public surface:** the `index.ts` barrel.
 - **Allowed deps:** `remote` (types + the injected pairing primitives), `contracts` (the shared broker-frame
   protocol and public STUN servers), `@thinkrail/relay` (only `startBroker`, for the local relay),

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { RemoteDeviceAccess } from "@thinkrail/contracts";
 import { dataDir } from "../persistence";
@@ -26,23 +26,35 @@ function filePath(dir: string): string {
 	return join(dir, DEVICES_FILE);
 }
 
+const cache = new Map<string, { mtimeMs: number; size: number; devices: PairedDevice[] }>();
+
+/** Re-parsed only when the file changed, since the host consults it on every request from a phone. */
 export function loadDevices(dir: string = dataDir()): PairedDevice[] {
 	const path = filePath(dir);
-	if (!existsSync(path)) return [];
-	try {
-		const parsed = JSON.parse(readFileSync(path, "utf8")) as StoredDevices;
-		return parsed.version === DEVICES_VERSION && Array.isArray(parsed.devices)
-			? parsed.devices
-			: [];
-	} catch {
+	const stat = statSync(path, { throwIfNoEntry: false });
+	if (!stat) {
+		cache.delete(path);
 		return [];
 	}
+	const cached = cache.get(path);
+	if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached.devices;
+	let devices: PairedDevice[] = [];
+	try {
+		const parsed = JSON.parse(readFileSync(path, "utf8")) as StoredDevices;
+		if (parsed.version === DEVICES_VERSION && Array.isArray(parsed.devices))
+			devices = parsed.devices;
+	} catch {}
+	cache.set(path, { mtimeMs: stat.mtimeMs, size: stat.size, devices });
+	return devices;
 }
 
 function save(dir: string, devices: PairedDevice[]): void {
 	mkdirSync(dir, { recursive: true });
 	const payload: StoredDevices = { version: DEVICES_VERSION, devices };
-	writeFileSync(filePath(dir), `${JSON.stringify(payload, null, "\t")}\n`, { mode: 0o600 });
+	const path = filePath(dir);
+	writeFileSync(path, `${JSON.stringify(payload, null, "\t")}\n`, { mode: 0o600 });
+	const stat = statSync(path);
+	cache.set(path, { mtimeMs: stat.mtimeMs, size: stat.size, devices });
 }
 
 /** Adds a device, replacing any prior entry with the same public key or id (re-pairing refreshes it). */

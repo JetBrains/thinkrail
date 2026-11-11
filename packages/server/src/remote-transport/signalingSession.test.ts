@@ -97,7 +97,38 @@ test("resume re-authorizes a known device without a token, preserving its id", (
 	const step = hs.handle({ kind: "proof", signature: "valid" });
 	expect(step.authorized?.device.id).toBe("dev-known");
 	expect(step.authorized?.device.label).toBe("Known phone");
-	expect(registered.at(-1)?.id).toBe("dev-known");
+	expect(registered).toEqual([]);
+});
+
+test("resume keeps the device's stored record, so a read-only phone stays read-only after reconnecting", () => {
+	const stored: PairedDevice = {
+		id: "dev-known",
+		label: "Known phone",
+		publicKey: "KNOWNKEY",
+		pairedAt: 1,
+		access: "read",
+	};
+	const { deps: d } = deps({ findDevice: (key) => (key === "KNOWNKEY" ? stored : null) });
+	const hs = createHostHandshake(d);
+	hs.handle({ kind: "resume", devicePublicKey: "KNOWNKEY", nonce: "N" });
+	expect(hs.handle({ kind: "proof", signature: "valid" }).authorized?.device).toBe(stored);
+});
+
+test("a device revoked between resume and proof is rejected, not paired again", () => {
+	let present = true;
+	const { deps: d, registered } = deps({
+		findDevice: (key) =>
+			present && key === "KNOWNKEY"
+				? { id: "dev-known", label: "Known phone", publicKey: "KNOWNKEY", pairedAt: 1 }
+				: null,
+	});
+	const hs = createHostHandshake(d);
+	hs.handle({ kind: "resume", devicePublicKey: "KNOWNKEY", nonce: "N" });
+	present = false;
+	const step = hs.handle({ kind: "proof", signature: "valid" });
+	expect(step.send).toMatchObject({ kind: "rejected", code: "unknown_device" });
+	expect(step.authorized).toBeUndefined();
+	expect(registered).toEqual([]);
 });
 
 test("resume for an unknown device is rejected", () => {
