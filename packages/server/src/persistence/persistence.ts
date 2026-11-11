@@ -554,11 +554,14 @@ export function saveWorkspaces(workspaces: Workspace[]): void {
 	saveChats({ ...stored, chats });
 }
 
+export type CreationOrigin = "agent";
+
 export type WorkspaceCreationRecord = Omit<WorkspaceCreation, "kickoff"> & {
 	worktreePath: string;
 	renamed?: true;
 	baseOid?: string;
 	kickoff?: WorkspaceKickoff;
+	origin?: CreationOrigin;
 };
 
 export function loadWorkspaceCreations(): WorkspaceCreationRecord[] {

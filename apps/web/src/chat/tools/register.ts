@@ -7,6 +7,7 @@ import { ReadCard } from "./ReadCard";
 import { RequestReviewCard, requestReviewSummary } from "./RequestReviewCard";
 import { ResolveCommentCard } from "./ResolveCommentCard";
 import { SpecToolCard, specToolSummary } from "./SpecToolCard";
+import { StartWorkspaceCard, startWorkspaceSummary } from "./StartWorkspaceCard";
 import "./mcp/register";
 import "./subagent/register";
 import "./web/register";
@@ -42,6 +43,12 @@ registerToolRenderer("resolve_comment", ResolveCommentCard, {
 
 registerToolRenderer("request_review", RequestReviewCard, {
 	summary: requestReviewSummary,
+	prominence: "primary",
+	defaultExpanded: true,
+});
+
+registerToolRenderer("start_workspace", StartWorkspaceCard, {
+	summary: startWorkspaceSummary,
 	prominence: "primary",
 	defaultExpanded: true,
 });
