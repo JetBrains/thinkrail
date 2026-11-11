@@ -694,10 +694,6 @@ a.tree-row:hover {
 	border-bottom-color: var(--container-workspace-bg);
 }
 
-.tab.active .i {
-	color: var(--text);
-}
-
 /* The scrolling editor pane */
 
 .editor {
@@ -961,7 +957,14 @@ p.hero-lede {
 
 .cli-install .install-os-tabs {
 	max-width: 100%;
+	margin-bottom: -1px;
 	overflow-x: auto;
+	overflow-y: hidden;
+	scrollbar-width: none;
+}
+
+.cli-install .install-os-tabs::-webkit-scrollbar {
+	display: none;
 }
 
 .cli-install .install-line {
@@ -1230,11 +1233,6 @@ a.hero-download-other {
 	text-decoration: none;
 }
 
-a.hero-download-other .i {
-	width: 12px;
-	height: 12px;
-}
-
 a.hero-download-other:hover {
 	color: var(--text);
 	text-decoration: none;
@@ -1247,11 +1245,6 @@ a.hero-download-other:hover {
 	margin-left: 2px;
 	padding-left: 9px;
 	border-left: 1px solid var(--border2);
-}
-
-.hero-ctas .gh-stars .i {
-	width: 12px;
-	height: 12px;
 }
 
 .btn {
@@ -1351,10 +1344,6 @@ a.hero-download-other:hover {
 	font-size: 14.5px;
 }
 
-.feature-card h3 .i {
-	color: var(--accent);
-}
-
 .feature-card p {
 	font-size: 13.5px;
 	margin: 0;
@@ -1400,16 +1389,6 @@ a.hero-download-other:hover {
 .chat-msg.assistant {
 	font-size: 14.5px;
 	color: var(--muted);
-}
-
-.chat-msg.assistant p {
-	font-size: 14.5px;
-	margin: 0 0 10px;
-}
-
-.chat-msg.assistant ol {
-	margin: 0;
-	font-size: 14px;
 }
 
 .chat-done {
@@ -1528,10 +1507,6 @@ html.anim .chat-demo [data-step].on {
 	background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
-.spec-row.depth-0 .i {
-	color: var(--accent);
-}
-
 .spec-row.depth-1 {
 	padding-left: 32px;
 }
@@ -1626,12 +1601,6 @@ h3.install-cli-heading {
 	font-family: var(--font-mono);
 	font-size: 12px;
 	font-weight: 600;
-}
-
-p.install-linux-note a,
-p.install-fineprint a {
-	text-decoration: underline;
-	text-underline-offset: 3px;
 }
 
 /* ── Footer section ─────────────────────────────────────────────────────── */
@@ -1764,11 +1733,6 @@ p.footer-fineprint {
 a.tree-row.selected {
 	background: color-mix(in srgb, var(--accent) 16%, transparent);
 	color: var(--text);
-}
-
-.ft-row.active .i,
-a.tree-row.selected .i {
-	color: var(--accent);
 }
 
 .ft-row.dim {
@@ -2009,11 +1973,6 @@ html:not(.anim) .term-caret {
 		opacity 150ms ease-out;
 }
 
-[data-mock-hint]:hover .i {
-	color: var(--muted);
-	opacity: 0.85;
-}
-
 /* Re-enable pointer events for the tooltip layer */
 .mock-tooltip-layer {
 	position: fixed;
@@ -2074,6 +2033,41 @@ html:not(.anim) .term-caret {
 	width: 14px;
 	height: 14px;
 	fill: currentColor;
+}
+
+a.hero-download-other .i {
+	width: 12px;
+	height: 12px;
+}
+
+.feature-card h3 .i {
+	color: var(--accent);
+}
+
+.tab.active .i {
+	color: var(--text);
+}
+
+.hero-ctas .gh-stars .i {
+	width: 12px;
+	height: 12px;
+}
+
+.spec-row.depth-0 .i {
+	color: var(--accent);
+}
+
+.ft-row.active .i {
+	color: var(--accent);
+}
+
+[data-mock-hint]:hover .i {
+	color: var(--muted);
+	opacity: 0.85;
+}
+
+a.tree-row.selected .i {
+	color: var(--accent);
 }
 
 .mock-tooltip.visible {
@@ -2230,20 +2224,6 @@ html:not(.anim) .term-caret {
 		max-width: 100%;
 		padding: 7px 11px;
 		line-height: 1.4;
-	}
-
-	.chat-msg.assistant,
-	.chat-msg.assistant p,
-	.chat-msg.assistant ol {
-		line-height: 1.4;
-	}
-
-	.chat-msg.assistant p {
-		margin-bottom: 6px;
-	}
-
-	.chat-msg.assistant ol {
-		margin: 6px 0;
 	}
 
 	.chat-msg.assistant li {
@@ -2515,6 +2495,32 @@ html:not(.anim) .term-caret {
 	padding-left: var(--space-xl);
 }
 
+.chat-msg.assistant p {
+	font-size: 14.5px;
+	margin: 0 0 10px;
+}
+
+.chat-msg.assistant ol {
+	margin: 0;
+	font-size: 14px;
+}
+
+@media (max-width: 560px) {
+	.chat-msg.assistant,
+	.chat-msg.assistant p,
+	.chat-msg.assistant ol {
+		line-height: 1.4;
+	}
+
+	.chat-msg.assistant p {
+		margin-bottom: 6px;
+	}
+
+	.chat-msg.assistant ol {
+		margin: 6px 0;
+	}
+}
+
 .blog-post-content li {
 	margin-bottom: var(--space-sm);
 }
@@ -2629,16 +2635,6 @@ html:not(.anim) .term-caret {
 	}
 }
 
-.blog-post-content table img {
-	display: block;
-	width: 100%;
-	margin: 0;
-}
-
-.blog-post-content table a > img {
-	cursor: zoom-in;
-}
-
 .image-zoom {
 	max-width: 95vw;
 	max-height: 95vh;
@@ -2657,6 +2653,16 @@ html:not(.anim) .term-caret {
 	max-width: 95vw;
 	max-height: 95vh;
 	border-radius: 0.5rem;
+}
+
+.blog-post-content table img {
+	display: block;
+	width: 100%;
+	margin: 0;
+}
+
+.blog-post-content table a > img {
+	cursor: zoom-in;
 }
 
 .blog-post-content iframe {
@@ -2722,6 +2728,12 @@ html:not(.anim) .term-caret {
 	text-decoration: none;
 	font-size: var(--text-sm);
 	transition: color var(--transition-fast);
+}
+
+p.install-linux-note a,
+p.install-fineprint a {
+	text-decoration: underline;
+	text-underline-offset: 3px;
 }
 
 .blog-post-nav a:hover {

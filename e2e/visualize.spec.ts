@@ -305,7 +305,7 @@ test("malformed historical tool diagrams and chat fences fall back to plain sour
 		await expect(fallback).toContainText("Diagram failed to render:");
 		await expect(fallback.locator("pre")).toHaveText(MALFORMED_SOURCE);
 		await expect(fallback.locator("pre > *")).toHaveCount(0);
-		await expect(fallback.locator("pre.shiki")).toHaveCount(0);
+		await expect(fallback.locator("pre.highlights")).toHaveCount(0);
 		await expect(surface.getByTestId("mermaid-svg")).toHaveCount(0);
 		await expect(surface.getByTestId("mermaid-fullscreen")).toHaveCount(0);
 	}

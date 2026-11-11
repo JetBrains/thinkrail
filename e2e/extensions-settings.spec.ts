@@ -40,9 +40,41 @@ async function setExtension(page: Page, name: string, enabled: boolean): Promise
 	await closeSettings(page);
 }
 
+const RICH_PREVIEWS = "extension-setting-toggle-ask-user-question-richPreviews";
+
 test.afterEach(async ({ page }) => {
 	if (page.isClosed()) return;
 	for (const { name } of EXTENSIONS) await setExtension(page, name, true);
+	await openExtensionsSettings(page);
+	const richPreviews = page.getByTestId(RICH_PREVIEWS);
+	if ((await richPreviews.getAttribute("data-active")) !== "true") await richPreviews.click();
+	await expect(richPreviews).toHaveAttribute("data-active", "true");
+	await closeSettings(page);
+});
+
+test("the questionnaire's rich-preview switch sits under its extension, survives a reload and follows the extension", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const section = await openExtensionsSettings(page);
+	const row = section.getByTestId("extension-setting-ask-user-question-richPreviews");
+	await expect(row).toContainText("Rich previews in questions");
+	const toggle = row.getByTestId(RICH_PREVIEWS);
+	await expect(toggle).toHaveAttribute("data-active", "true");
+	await expect(toggle).toBeEnabled();
+
+	await toggle.click();
+	await expect(toggle).toHaveAttribute("data-active", "false");
+	await closeSettings(page);
+	await page.reload();
+	await openExtensionsSettings(page);
+	await expect(page.getByTestId(RICH_PREVIEWS)).toHaveAttribute("data-active", "false");
+
+	await page.getByTestId("extension-toggle-ask-user-question").click();
+	await expect(page.getByTestId(RICH_PREVIEWS)).toBeDisabled();
+	await page.getByTestId("extension-toggle-ask-user-question").click();
+	await expect(page.getByTestId(RICH_PREVIEWS)).toBeEnabled();
+	await closeSettings(page);
 });
 
 for (const { name, title, tool } of EXTENSIONS) {

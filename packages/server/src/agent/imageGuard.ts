@@ -3,12 +3,12 @@ import {
 	ACCEPTED_IMAGE_TYPES,
 	type AgentMessage,
 	IMAGE_MAX_BASE64_BYTES,
-	REQUEST_IMAGE_BASE64_BUDGET,
 } from "@thinkrail/contracts";
 
 export const SINGLE_IMAGE_EDGE_LIMIT = 8000;
 export const MANY_IMAGE_EDGE_LIMIT = 2000;
 export const MANY_IMAGE_THRESHOLD = 20;
+export const CONTEXT_IMAGE_BASE64_BUDGET = 24 * 1024 * 1024;
 
 interface Dimensions {
 	width: number;
@@ -164,13 +164,13 @@ export function guardOversizedImages(messages: AgentMessage[]): AgentMessage[] |
 
 	const survivors = imageBlocks.filter((b) => !notes.has(b));
 	let totalBytes = survivors.reduce((sum, b) => sum + b.data.length, 0);
-	if (totalBytes > REQUEST_IMAGE_BASE64_BUDGET) {
+	if (totalBytes > CONTEXT_IMAGE_BASE64_BUDGET) {
 		const bySize = [...survivors].sort((a, b) => b.data.length - a.data.length);
 		for (const block of bySize) {
-			if (totalBytes <= REQUEST_IMAGE_BASE64_BUDGET) break;
+			if (totalBytes <= CONTEXT_IMAGE_BASE64_BUDGET) break;
 			notes.set(
 				block,
-				`[image removed: ${mb(block.data.length)} of base64 pushed the request's total image payload over the ${mbLimit(REQUEST_IMAGE_BASE64_BUDGET)} budget (the provider caps the whole request) — ${REMOVAL_HINT}]`,
+				`[image removed: ${mb(block.data.length)} of base64 pushed the request's total image payload over the ${mbLimit(CONTEXT_IMAGE_BASE64_BUDGET)} budget (the provider caps the whole request) — ${REMOVAL_HINT}]`,
 			);
 			totalBytes -= block.data.length;
 		}
@@ -184,7 +184,7 @@ export function guardOversizedImages(messages: AgentMessage[]): AgentMessage[] |
 			const note = notes.get(block);
 			return note ? { type: "text", text: note } : block;
 		});
-		return Object.assign({}, message, { content }) as AgentMessage;
+		return Object.assign({}, message, { content });
 	});
 	return guarded;
 }

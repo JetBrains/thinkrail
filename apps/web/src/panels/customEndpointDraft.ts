@@ -75,6 +75,7 @@ export function addManualModel(draft: EndpointDraft, rawId: string): EndpointDra
 		reasoning: null,
 		vision: null,
 		tools: null,
+		chatTemplateThinking: null,
 		selected: true,
 	};
 	return { ...draft, models: [...draft.models, row] };
@@ -94,6 +95,7 @@ export function mergeProbe(
 			model.contextWindow === null ? (model.maxTokens ?? previous.maxTokens) : model.maxTokens,
 		reasoning: model.reasoning ?? previous.reasoning,
 		vision: model.vision ?? previous.vision,
+		chatTemplateThinking: model.chatTemplateThinking ?? previous.chatTemplateThinking,
 		selected: previous.selected,
 	});
 	const existing = draft.models.map((row) => {

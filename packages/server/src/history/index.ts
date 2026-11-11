@@ -1,8 +1,9 @@
+export { displayTranscriptMessages } from "./displayTranscript";
 export { type ExtractedSession, extractSession, type HistoryEntry } from "./extract";
 export {
 	clampLimit,
 	getHistoryIndex,
 	HistoryIndex,
-	makeSnippet,
-	matchesTerms,
+	type HistorySession,
+	type HistoryState,
 } from "./historyIndex";

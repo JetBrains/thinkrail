@@ -1,3 +1,4 @@
+import type { MatchTier } from "./match";
 import type { SessionState, ThinkingLevel, WireModel } from "./piProtocol";
 
 export interface SessionStateRecord {
@@ -63,11 +64,15 @@ export interface Project {
 	path: string;
 	slug: string;
 	lastOpened: number;
+	/** The one built-in container of chats without a project: not a repository, never git, never closed. */
+	kind?: "chats";
 	closed?: true;
 	trusted?: boolean;
 	acknowledgedSkills?: string[];
 	disabledSkills?: string[];
 	disabledGroups?: string[];
+	/** Skill groups switched on for this project although `AppConfig.otherAgentSkills` leaves them off. */
+	enabledGroups?: string[];
 	/**
 	 * pi-level trust for the project's native `.pi/` resources, separate from the alias-skill `trusted`
 	 * grant; absent (a record that predates pi-level trust) reads as untrusted. Never enables MCP servers by itself.
@@ -125,13 +130,16 @@ export const DEFAULT_WORKSPACE_NAME = "Default";
 export interface Workspace {
 	id: string;
 	projectId: string;
-	kind?: "default" | "external";
+	/** `chat`: a projectless chat's own folder in the Chats container — never a git checkout, `branch`/`baseBranch` are "". */
+	kind?: "default" | "external" | "chat";
 	name: string;
 	branch: string;
 	worktreePath: string;
 	baseBranch: string;
 	diffBase?: string;
 	renamed?: boolean;
+	/** Session id of the chat whose `set_title` named the workspace but kept its branch; only that chat may still move it. */
+	branchNamePending?: string;
 	initialTerminalPending?: true;
 	diffStats?: DiffStats;
 	skillOverrides?: Record<string, "on" | "off">;
@@ -144,6 +152,18 @@ export interface Workspace {
 	settledAt?: number;
 	/** The host's last-known review for the branch; refreshed host-side so every client sees one state. */
 	review?: OpenBranchReview;
+	/** A chat whose deletion started but did not finish; the UI offers Retry and nothing else. */
+	deletionPending?: true;
+	/** Where a chat without a project was continued: the workspaces (and their first chats) its summary went to. */
+	continuedTo?: ChatContinuationLink[];
+}
+
+export interface ChatContinuationLink {
+	/** The gesture that made the link: a continuation card finds its outcome here after a host restart. */
+	operationId: string;
+	projectId: string;
+	workspaceId: string;
+	sessionId: string;
 }
 
 export type BranchReviewState = "open" | "merged" | "closed";
@@ -1403,6 +1423,17 @@ export function isComposerGrowthLimit(value: unknown): value is ComposerGrowthLi
 	return COMPOSER_GROWTH_LIMITS.some((limit) => limit === value);
 }
 
+export const QUESTION_PANEL_HEIGHT_PERCENT = { min: 40, max: 100, default: 60 } as const;
+
+export function isQuestionPanelHeight(value: unknown): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isInteger(value) &&
+		value >= QUESTION_PANEL_HEIGHT_PERCENT.min &&
+		value <= QUESTION_PANEL_HEIGHT_PERCENT.max
+	);
+}
+
 export const LINE_WIDTH_COLUMNS = { min: 40, max: 240, default: 120 } as const;
 
 export function isLineWidth(value: unknown): value is number {
@@ -1421,10 +1452,14 @@ export interface AppConfig extends ThemePreference {
 	notificationsEnabled: boolean;
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
+	/** The chat's docked question panel caps at this percent of the chat height. */
+	questionPanelHeight: number;
 	chatLineWidth: number;
 	fileLineWidth: number;
 	chatLineWidthBounded: boolean;
 	fileLineWidthBounded: boolean;
+	/** When false, no text field shows the dictation mic and the chord does nothing. */
+	voiceInputEnabled: boolean;
 	customLayoutPresets: LayoutPreset[];
 	/** The model new chats start with; unset uses the first available model. */
 	defaultModel?: WireModel;
@@ -1452,6 +1487,10 @@ export interface AppConfig extends ThemePreference {
 	/** Idle days after which a quiet workspace settles onto its project's shelf; `null` = never. */
 	settleIdleDays: number | null;
 	disabledExtensions: string[];
+	/** Values of settings bundled extensions declare, by extension name then setting key. */
+	extensionSettings: ExtensionSettingValues;
+	/** Load skills from other agents' user directories and Claude plugins in projects that do not decide for themselves. */
+	otherAgentSkills: boolean;
 	/** pi package identities (`PiPackageSummary.identity`) switched off host-wide; pi has no such setting. */
 	disabledPackages: string[];
 	/** UI language: `"system"` (follow the browser) or a BCP-47 tag; an unavailable tag renders English. */
@@ -1470,6 +1509,13 @@ export interface AppConfig extends ThemePreference {
 	fontWeightOffset: number;
 }
 
+export type ExtensionSettingValues = Record<string, Record<string, boolean>>;
+
+export interface ExtensionSettingDescriptor {
+	key: string;
+	default: boolean;
+}
+
 export interface ExtensionCatalogEntry {
 	name: string;
 	title: string;
@@ -1477,10 +1523,28 @@ export interface ExtensionCatalogEntry {
 	enabled: boolean;
 	tools: string[];
 	hasChildExtensions: boolean;
+	/** Absent before `EXTENSION_SETTINGS_PROTOCOL_VERSION`. */
+	settings?: ExtensionSettingDescriptor[];
 }
 
 /** How many recently chosen models the host remembers. */
 export const RECENT_MODELS_LIMIT = 5;
+
+export const OTHER_AGENT_SKILL_GROUPS: readonly string[] = ["personal", "@plugins"];
+
+/** Bounds of the host's per-request skill listing budget; a larger catalog is listed in part. */
+export const SKILL_LISTING_MIN_TOKENS = 4_000;
+export const SKILL_LISTING_MAX_TOKENS = 8_000;
+
+export function isSkillGroupEnabled(
+	project: { disabledGroups?: readonly string[]; enabledGroups?: readonly string[] } | undefined,
+	group: string,
+	otherAgentSkills: boolean,
+): boolean {
+	if (project?.enabledGroups?.includes(group)) return true;
+	if (project?.disabledGroups?.includes(group)) return false;
+	return otherAgentSkills || !OTHER_AGENT_SKILL_GROUPS.includes(group);
+}
 
 /** The `settings.update` payload: `null` clears an optional override back to unset (⇒ the default). */
 export type AppConfigUpdate = Partial<
@@ -1496,6 +1560,10 @@ export type AppConfigUpdate = Partial<
 };
 
 export type SurveyInvitationResponse = "postpone" | "never";
+
+export interface GithubStarAsk {
+	stars: number | null;
+}
 
 export const SURVEY_OPEN_TEXT_LIMIT = 2000;
 
@@ -1770,10 +1838,12 @@ export const DEFAULT_CONFIG: AppConfig = {
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
 	terminalWindowsShell: "auto",
 	composerGrowthLimit: "half-chat",
+	questionPanelHeight: QUESTION_PANEL_HEIGHT_PERCENT.default,
 	chatLineWidth: LINE_WIDTH_COLUMNS.default,
 	fileLineWidth: LINE_WIDTH_COLUMNS.default,
 	chatLineWidthBounded: true,
 	fileLineWidthBounded: true,
+	voiceInputEnabled: true,
 	customLayoutPresets: [],
 	favoriteModels: [],
 	recentModels: [],
@@ -1785,6 +1855,8 @@ export const DEFAULT_CONFIG: AppConfig = {
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
 	settleIdleDays: SETTLE_IDLE_DAYS.default,
 	disabledExtensions: [],
+	extensionSettings: {},
+	otherAgentSkills: false,
 	disabledPackages: [],
 	locale: SYSTEM_LOCALE_PREFERENCE,
 	onboardingDismissed: false,
@@ -1858,7 +1930,7 @@ export const ACCEPTED_IMAGE_TYPES: readonly string[] = [
 	"image/webp",
 ];
 
-export const REQUEST_IMAGE_BASE64_BUDGET = 24 * 1024 * 1024;
+export const REQUEST_IMAGE_BASE64_BUDGET = 12 * 1024 * 1024;
 
 export function isRetriedAttempt(
 	messages: readonly { role: string; stopReason?: string }[],
@@ -1905,6 +1977,142 @@ export interface HistorySearchResult {
 	messageTotal: number;
 	indexing: boolean;
 }
+
+export const SEARCH_KINDS = ["transcript", "file", "spec", "section", "plan"] as const;
+
+export type SearchKind = (typeof SEARCH_KINDS)[number];
+
+export const MAX_SEARCH_QUERY_LENGTH = 200;
+
+export const MAX_SEARCH_GROUP_LIMIT = 50;
+
+export const MAX_SEARCH_PREVIEW_BYTES = 2 * 1024 * 1024;
+
+/** Where the palette is: the active workspace, else the context project's folder, is the one root files and specs are searched in. */
+export interface SearchContext {
+	projectId?: string;
+	workspaceId?: string;
+}
+
+export interface SearchHitBase {
+	/** `kind:id[:locator]` — stable across replies so the client can keep a selection. */
+	id: string;
+	title: string;
+	subtitle?: string;
+	/** The shared matcher's tier and score; the client merges host hits with its own by these. */
+	tier: MatchTier;
+	score: number;
+	ranges?: Record<string, [number, number][]>;
+	projectId: string;
+	workspaceId: string;
+}
+
+/** Where a `section` hit sits in its spec, and how many of the query's words it holds. */
+export interface SearchHitSection {
+	/** The heading trail joined by ` › `; empty for the text before the first heading. */
+	heading: string;
+	/** 1-based line of the heading in the file. */
+	line: number;
+	matched: number;
+	terms: number;
+}
+
+export type SearchHit =
+	/** A root-relative POSIX `path`; `size` is the bytes on disk when the host could read them. */
+	| (SearchHitBase & { kind: "file"; path: string; size?: number })
+	| (SearchHitBase & { kind: "spec"; path: string; specId: string; size: number })
+	/** A spec section ranked by the query's words; `snippet` is its best-matching text. */
+	| (SearchHitBase & {
+			kind: "section";
+			path: string;
+			specId: string;
+			snippet: string;
+			section: SearchHitSection;
+	  })
+	| (SearchHitBase & { kind: "plan"; sessionId: string })
+	/** `anchorText` re-finds the message when compaction moved `messageIndex`. */
+	| (SearchHitBase & {
+			kind: "transcript";
+			sessionId: string;
+			messageIndex: number;
+			anchorText: string;
+	  });
+
+/** `indexing`: never loaded yet; `refreshing`: a reload runs behind these hits; `failed`: the last load failed (its last good hits stay). */
+export type SearchGroupState = "ready" | "indexing" | "refreshing" | "failed";
+
+/** Why a group may miss hits: the scan ran out of time, or only `fileList` files of the root are listed. */
+export interface SearchGroupCut {
+	time?: true;
+	fileList?: number;
+}
+
+export interface SearchGroup {
+	kind: SearchKind;
+	hits: SearchHit[];
+	total: number;
+	state: SearchGroupState;
+	cut?: SearchGroupCut;
+}
+
+export interface SearchQueryResult {
+	groups: SearchGroup[];
+}
+
+export const TEXT_SEARCH_LIMITS = {
+	lines: 2000,
+	fileBytes: 1_000_000,
+	lineChars: 400,
+	minQuery: 2,
+	maxQuery: 200,
+} as const;
+
+export interface TextSearchMatch {
+	/** 1-based line number in the file. */
+	line: number;
+	/** 1-based UTF-16 column and length of the first match in the full line, for opening at it. */
+	column: number;
+	length: number;
+	/** The matched line, cut to `TEXT_SEARCH_LIMITS.lineChars` around its first match. */
+	text: string;
+	/** `[start, end)` UTF-16 offsets of every match inside `text`. */
+	ranges: [number, number][];
+}
+
+export interface TextSearchFile {
+	path: string;
+	matches: TextSearchMatch[];
+}
+
+export type TextSearchEnd = "complete" | "limit" | "failed";
+
+export interface TextSearchBatch {
+	seq: number;
+	/** The workspace whose files these are; absent when the context resolves to no root. */
+	root?: { projectId: string; workspaceId: string };
+	files: TextSearchFile[];
+	done?: { reason: TextSearchEnd; files: number; lines: number };
+}
+
+/** The transcript window around a chat hit; files and specs render client-side through `fs.readFile`. */
+export interface SearchPreviewTarget {
+	kind: "chat";
+	sessionId: string;
+	messageIndex?: number;
+	/** The hit's `anchorText`: the focus moves to the message it starts when compaction shifted the index. */
+	anchorText?: string;
+}
+
+export interface SearchPreviewMessage {
+	role: "user" | "assistant";
+	messageIndex: number;
+	text: string;
+	focus: boolean;
+}
+
+export type SearchPreviewResult =
+	| { kind: "transcript"; title: string; messages: SearchPreviewMessage[] }
+	| { kind: "unavailable" };
 
 export type TemplateScope = "global" | "project";
 
