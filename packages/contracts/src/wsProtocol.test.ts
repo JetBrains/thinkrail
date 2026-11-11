@@ -97,7 +97,7 @@ test("system theme settings advance the protocol", () => {
 });
 
 test("scheduled prompts are introduced after continuation support", () => {
-	expect(SCHEDULED_PROMPTS_PROTOCOL_VERSION).toBe(111);
+	expect(SCHEDULED_PROMPTS_PROTOCOL_VERSION).toBe(115);
 	expect(SCHEDULED_PROMPTS_PROTOCOL_VERSION).toBeGreaterThan(CONTINUATION_PROTOCOL_VERSION);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SCHEDULED_PROMPTS_PROTOCOL_VERSION);
 	expect(WS_METHODS.scheduledPromptsCreate).toBe("scheduledPrompts.create");
@@ -345,7 +345,7 @@ test("find in files is pinned to v112", () => {
 });
 
 test("the question panel height setting is pinned to v114", () => {
-	expect(PROTOCOL_VERSION).toBe(114);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(QUESTION_PANEL_PROTOCOL_VERSION);
 	expect(QUESTION_PANEL_PROTOCOL_VERSION).toBe(114);
 	expect(DEFAULT_CONFIG.questionPanelHeight).toBe(60);
 });

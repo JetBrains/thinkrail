@@ -2514,6 +2514,14 @@ function stagePromptModelSelection(
 	};
 }
 
+function assertScheduledPromptCanDeliver(entry: Entry): void {
+	if (stateFromEntry(entry).needsInput)
+		throw new CodedError(
+			"SCHEDULED_PROMPT_BLOCKED_BY_NEEDS_INPUT",
+			"Cannot deliver scheduled prompt while the session awaits a response.",
+		);
+}
+
 export async function scheduleFollowUpSession(
 	sessionId: string,
 	text: string,
@@ -2537,6 +2545,7 @@ export async function acceptScheduledFollowUpSession(
 	if (entry.session.isStreaming) {
 		return withFollowUpAdmission(entry, async () => {
 			if (!isCurrent()) return false;
+			assertScheduledPromptCanDeliver(entry);
 			if (modelSelection && entry.priorFollowUpMode === undefined) {
 				entry.priorFollowUpMode = entry.session.agent.followUpMode;
 				entry.session.agent.followUpMode = "one-at-a-time";
@@ -2555,6 +2564,7 @@ export async function acceptScheduledFollowUpSession(
 	const release = admitPreflight(entry);
 	try {
 		if (!isCurrent()) return false;
+		assertScheduledPromptCanDeliver(entry);
 		const clearStagedSelection = stagePromptModelSelection(entry, modelSelection);
 		await new Promise<void>((resolve, reject) => {
 			let started = false;

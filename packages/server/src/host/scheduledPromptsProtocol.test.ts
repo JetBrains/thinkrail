@@ -86,7 +86,7 @@ afterEach(async () => {
 	else process.env.THINKRAIL_DATA_DIR = originalDataDir;
 });
 
-test("scheduled prompt requests and events are unavailable to the v110 main client", async () => {
+test("scheduled prompt requests and events are unavailable to the v114 client", async () => {
 	expect(CONTINUATION_PROTOCOL_VERSION).toBe(110);
 	expect(SCHEDULED_PROMPTS_PROTOCOL_VERSION).toBeGreaterThan(CONTINUATION_PROTOCOL_VERSION);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SCHEDULED_PROMPTS_PROTOCOL_VERSION);
@@ -115,7 +115,7 @@ test("scheduled prompt requests and events are unavailable to the v110 main clie
 	server = await createServer({ port: 0, host: "127.0.0.1", analytics: { mute: true } });
 	const [current, main] = await Promise.all([
 		connect(server.port, "scheduled-protocol-current", SCHEDULED_PROMPTS_PROTOCOL_VERSION),
-		connect(server.port, "scheduled-protocol-main", CONTINUATION_PROTOCOL_VERSION),
+		connect(server.port, "scheduled-protocol-main", PROTOCOL_VERSION - 1),
 	]);
 	sockets.push(current.socket, main.socket);
 	const dueAt = Date.now() + 3_600_000;

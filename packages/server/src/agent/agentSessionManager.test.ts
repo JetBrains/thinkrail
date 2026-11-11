@@ -2606,6 +2606,9 @@ test("a live question blocks continuation, keeps the follow-up lane behind it, a
 		const nudge = nudgeSession(session.sessionId, "[thinkrail:todo-nudge] ignored");
 		expect(nudge.disposition).toBe("needs_input");
 		await nudge.send();
+		await expect(
+			acceptScheduledFollowUpSession(session.sessionId, "scheduled while awaiting answer"),
+		).rejects.toThrow(expect.objectContaining({ code: "SCHEDULED_PROMPT_BLOCKED_BY_NEEDS_INPUT" }));
 		await followUpSession(session.sessionId, "QUEUED_WHILE_ASKING");
 		await Promise.resolve();
 		expect(continuationCalls).toBe(0);
@@ -3090,6 +3093,10 @@ test("restart repair leaves a dangling question answerable through the custom-me
 		if (ack?.role !== "toolResult") throw new Error("repair ack was not persisted");
 		expect(ack.details).toEqual({ kind: "ack" });
 		expect(ack.isError).toBe(false);
+		expect(getSessionState(fixture.id).needsInput?.kind).toBe("tool-response");
+		await expect(
+			acceptScheduledFollowUpSession(fixture.id, "scheduled while awaiting answer"),
+		).rejects.toThrow(expect.objectContaining({ code: "SCHEDULED_PROMPT_BLOCKED_BY_NEEDS_INPUT" }));
 
 		await respondToTool(fixture.id, toolCallId, {
 			cancelled: false,

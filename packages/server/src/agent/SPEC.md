@@ -658,7 +658,8 @@ re-opened transcripts provider-valid.
     pending marker (`details {kind:"ack"}`, the host's `TOOL_RESPONSE_PENDING_TEXT`) for an eligible
     dangling call whose tool name is in the enabled `interactiveTools` map before `createAgentSession`;
     respondability likewise reports a call of any other tool as unknown, leaving the card answerable but the
-    session idle. No argument-shape check: while ours is enabled it wins the name, and a disabled
+    session idle. Scheduled delivery is rejected while the state still needs an answer. No argument-shape
+    check: while ours is enabled it wins the name, and a disabled
     extension's tool is simply not interactive, so a foreign same-name call gets the ordinary error repair.
     A length-truncated call receives the same error repair as any other non-executable tool call. With no
     live phase, `respondToTool` injects a `tool-response` custom message (content from `describeResponse`,
