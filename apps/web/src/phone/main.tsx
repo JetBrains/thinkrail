@@ -4,9 +4,11 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { registerWebExtensions } from "../extensions";
 import { App } from "./App";
+import { followKeyboard } from "./keyboardInset";
 import "./phone.css";
 
 registerWebExtensions();
+followKeyboard();
 
 const root = document.getElementById("root");
 if (root)
