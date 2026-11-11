@@ -46,7 +46,6 @@ const EMPTY_TREE: Record<string, string> = {
 };
 
 async function unbornRange(worktreePath: string): Promise<DiffRange | null> {
-	if (resolveCommitOid(worktreePath, "HEAD")) return null;
 	const format = await gitAsync(worktreePath, ["rev-parse", "--show-object-format"]);
 	throwExecutionFailure(format);
 	const emptyTree = EMPTY_TREE[format.out];
@@ -66,7 +65,8 @@ export async function resolveDiffRange(
 	scope: GitDiffScope = { kind: "branch" },
 ): Promise<DiffRange> {
 	if (scope.kind === "uncommitted") {
-		const unborn = await unbornRange(ws.worktreePath);
+		const head = await resolveCommitOidAsync(ws.worktreePath, "HEAD");
+		const unborn = head ? null : await unbornRange(ws.worktreePath);
 		if (unborn) return unborn;
 		return {
 			listPrefix: ["diff"],
@@ -74,7 +74,7 @@ export async function resolveDiffRange(
 			untracked: true,
 			originalRef: "HEAD",
 			modifiedRef: null,
-			resolvedOriginalOid: await resolveCommitOidAsync(ws.worktreePath, "HEAD"),
+			resolvedOriginalOid: head,
 		};
 	}
 	if (scope.kind === "pinned") {
@@ -170,7 +170,9 @@ export async function resolveDiffRange(
 	]);
 	throwExecutionFailure(mergeBase);
 	const resolvedForkPoint = mergeBase.ok && mergeBase.out ? mergeBase.out : null;
-	if (!resolvedForkPoint && !resolveCommitOid(ws.worktreePath, base)) {
+	const resolvedOriginalOid =
+		resolvedForkPoint ?? (await resolveCommitOidAsync(ws.worktreePath, base));
+	if (!resolvedOriginalOid && !(await resolveCommitOidAsync(ws.worktreePath, "HEAD"))) {
 		const unborn = await unbornRange(ws.worktreePath);
 		if (unborn) return unborn;
 	}
@@ -181,7 +183,7 @@ export async function resolveDiffRange(
 		untracked: true,
 		originalRef: forkPoint,
 		modifiedRef: null,
-		resolvedOriginalOid: resolvedForkPoint ?? (await resolveCommitOidAsync(ws.worktreePath, base)),
+		resolvedOriginalOid,
 	};
 }
 
