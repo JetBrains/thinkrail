@@ -365,12 +365,20 @@ ref off the workspace-create critical path.
   `null`. Returning the canonical sha lets the adopted-commit review resolver reject an abbreviated /
   non-canonical id, and the shared cap guarantees it never accepts a commit past the newest
   `COMMIT_LIST_MAX` — for which no adopted item is ever emitted. Kept in lock-step with `listCommits`.
-  **`ignoredPaths(worktreePath, paths)`** → the subset git ignores (`git -c core.quotePath=false
-  check-ignore -- <paths>`, arguments chunked under 24k chars for Windows' command-line limit; tracked files
-  never count, and a path inside an ignored folder does). The host uses it to mark `fs.readDir` nodes
-  `gitignored`, so the Files tree can dim them. It never throws: a non-repository, a failure or a timeout
-  reports nothing. Names git must C-quote (a `"`, `\` or control character) are never reported, because
-  `check-ignore -z` needs stdin, which the bounded runners do not offer.
+  **`ignoredPaths(worktreePath, paths)`** → the subset git ignores (tracked files never count, and a path
+  inside an ignored folder does). Every path is passed as `./<path>`, so `:!x` is never read as pathspec
+  magic, which would fail the run (`check-ignore` refuses `--literal-pathspecs`). One `--no-index` run
+  reads every path from `--stdin -z`; only its matches get the index check, which takes them as arguments
+  (one index pass per run, about 3× faster than `--stdin`, which rescans the index per path) in batches
+  of at most 512 paths and 24,000 characters, four at a time, each with its own 10 s deadline. That
+  check's output C-quotes a name with a `"`, `\` or control character (`-z` needs `--stdin`), so each
+  line is unquoted before use. A sparse checkout skips the `--no-index` run, which doesn't read a
+  `.gitignore` that exists only in the index (skip-worktree); its mark is `info/sparse-checkout` in the
+  worktree's git dir, which `git sparse-checkout disable` leaves behind, costing only speed. The host uses
+  it to mark `fs.readDir` nodes `gitignored`, so the Files tree can dim them. It never throws: a non-repository, a failure or a
+  timeout adds only what git printed before it stopped, so a path git refuses (inside a submodule, beyond
+  a symlink) drops its whole index batch. Known limit: the index check still reads glob characters, so
+  `a*` is not reported while a tracked `ab` exists.
 - **Public surface (barrel):** `git`, `gitAsync`, `gitAsyncBytes`, `gitAsyncStream`, `gitRunHook`, `nonInteractiveGitEnv`, `SLOW_GIT_TIMEOUT_MS`, `INDEX_WRITE_TIMEOUT_MS`, `throwOnTimeout`,
   `setSyncGitTimeoutForTests`,
   `remoteRefOid`, `remoteRefOidAsync`, `remoteTrackingRef`, `gitStatus`,

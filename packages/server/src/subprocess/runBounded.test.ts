@@ -244,6 +244,26 @@ test("cwd and env reach the child", async () => {
 	expect(result.out).toBe(`${realpathSync(dir)}|from-opts`);
 });
 
+test("stdin reaches the child, also when it exits before reading it", async () => {
+	const input = "x".repeat(4_000_000);
+	const echoed = await runBounded(
+		bun("process.stdout.write(String((await Bun.stdin.text()).length));"),
+		{
+			timeoutMs: 10_000,
+			stdin: new Blob([input]),
+		},
+	);
+	expect(echoed.ok).toBe(true);
+	expect(echoed.out).toBe(String(input.length));
+
+	const early = await runBounded(bun("process.exit(3);"), {
+		timeoutMs: 10_000,
+		stdin: new Blob([input]),
+	});
+	expect(early.ok).toBe(false);
+	expect(early.timedOut).toBe(false);
+});
+
 test("the env defaults to the live process.env, not a launch-time snapshot", async () => {
 	process.env[SENTINEL] = "mutated-after-startup";
 

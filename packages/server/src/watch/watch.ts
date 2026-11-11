@@ -8,6 +8,7 @@ import type {
 import { logger } from "../log";
 import { loadWorkspaces } from "../persistence";
 import { type Coalescer, createCoalescer } from "./coalesce";
+import { NOTHING_IGNORED, type TreeWatcher, watchTree } from "./tree";
 
 const log = logger("watch");
 
@@ -20,11 +21,19 @@ const MAX_PREWARM_ONLY_WATCHES = 8;
 const IGNORED_SEGMENTS = new Set([".git", "node_modules"]);
 const IGNORED_NAMES = new Set([".DS_Store"]);
 const REPO_META_DEBOUNCE_MS = 300;
+const WATCH_EACH_DIRECTORY = process.platform === "linux";
+const STARTED = Promise.resolve();
+const WATCHED_GIT_DIRS = new Set(["refs", "reftable", "info", "modules"]);
+const SKIPPED_SUBMODULE_DIRS = new Set(["objects", "logs", "lfs", "hooks"]);
 
 type WatchPublisher = (payload: WorkspaceFsChangedPayload) => void;
 type SkillPathClassifier = (relativePath: string) => boolean;
 type RepoMetaPublisher = (workspaceId: string) => void;
 type WatchStartedPublisher = (workspaceId: string) => void;
+type IgnoredPathsResolver = (
+	worktreePath: string,
+	paths: readonly string[],
+) => Promise<ReadonlySet<string>>;
 
 const ALREADY_READY: WorkspaceWatchReadyResult = { startupNudge: false };
 const STARTUP_NUDGE: WorkspaceWatchReadyResult = { startupNudge: true };
@@ -35,6 +44,7 @@ let publish: WatchPublisher | null = null;
 let publishRepoMeta: RepoMetaPublisher | null = null;
 let publishWatchStarted: WatchStartedPublisher | null = null;
 let isSkillPath: SkillPathClassifier | null = null;
+let resolveIgnoredPaths: IgnoredPathsResolver | null = null;
 
 export function setWatchPublisher(publisher: WatchPublisher | null): void {
 	publish = publisher;
@@ -50,6 +60,10 @@ export function setRepoMetaPublisher(publisher: RepoMetaPublisher | null): void 
 
 export function setWatchStartedPublisher(publisher: WatchStartedPublisher | null): void {
 	publishWatchStarted = publisher;
+}
+
+export function setIgnoredPathsResolver(resolver: IgnoredPathsResolver | null): void {
+	resolveIgnoredPaths = resolver;
 }
 
 function isRepoMetaPath(relPath: string): boolean {
@@ -83,7 +97,7 @@ function resolveExternalGitDir(worktreePath: string): string | null {
 	}
 }
 
-function watchGitDir(workspaceId: string, dir: string, rootWatcher: FSWatcher): FSWatcher | null {
+function watchGitDir(workspaceId: string, dir: string, rootWatcher: TreeWatcher): FSWatcher | null {
 	try {
 		const watcher = watch(dir, { recursive: false }, (_event, filename) => {
 			if (typeof filename !== "string" || isGitMetaChange(dir, filename))
@@ -110,7 +124,7 @@ function deliver(sink: string, workspaceId: string, send: () => void): void {
 	}
 }
 
-function scheduleRepoMeta(workspaceId: string, watcher: FSWatcher): void {
+function scheduleRepoMeta(workspaceId: string, watcher: TreeWatcher): void {
 	const entry = entries.get(workspaceId);
 	if (entry && entry.watcher !== watcher) return;
 	if (entry?.metaTimer) clearTimeout(entry.metaTimer);
@@ -118,6 +132,7 @@ function scheduleRepoMeta(workspaceId: string, watcher: FSWatcher): void {
 		const live = entries.get(workspaceId);
 		if (!live || live.watcher !== watcher) return;
 		live.metaTimer = null;
+		live.watcher.recheck();
 		syncRemoteRefWatch(workspaceId, live);
 		deliver("repo-meta", workspaceId, () => publishRepoMeta?.(workspaceId));
 	}, REPO_META_DEBOUNCE_MS);
@@ -180,7 +195,7 @@ function remoteRefTargets(gitDir: string, commonDir: string): RefWatchTarget[] {
 
 function watchRefDir(
 	workspaceId: string,
-	rootWatcher: FSWatcher,
+	rootWatcher: TreeWatcher,
 	[dir, name]: RefWatchTarget,
 ): FSWatcher | null {
 	try {
@@ -215,6 +230,35 @@ export function isIgnoredPath(relPath: string): boolean {
 	return name !== undefined && IGNORED_NAMES.has(name);
 }
 
+function isSkippedDir(relPath: string): boolean {
+	const segments = relPath.split("/");
+	if (segments.includes("node_modules")) return true;
+	const git = segments.indexOf(".git");
+	if (git !== 0 || segments.length === 1) return git > 0;
+	if (!WATCHED_GIT_DIRS.has(segments[1] ?? "")) return true;
+	return (
+		segments[1] === "modules" && segments.some((segment) => SKIPPED_SUBMODULE_DIRS.has(segment))
+	);
+}
+
+function ignoredWorktreeDirs(worktreePath: string, paths: string[]): Promise<ReadonlySet<string>> {
+	const checked = paths.filter((path) => !isRepoMetaPath(path));
+	if (!resolveIgnoredPaths || checked.length === 0) return Promise.resolve(NOTHING_IGNORED);
+	return resolveIgnoredPaths(worktreePath, checked);
+}
+
+function watchRecursive(
+	root: string,
+	onEvent: (relPath: string | null) => void,
+	onError: () => void,
+): TreeWatcher {
+	const watcher = watch(root, { recursive: true }, (_event, filename) => {
+		onEvent(typeof filename === "string" ? filename.replaceAll("\\", "/") : null);
+	});
+	watcher.on("error", onError);
+	return { ready: STARTED, close: () => watcher.close(), recheck: () => {} };
+}
+
 interface RemoteRefWatch {
 	gitDir: string;
 	commonDir: string;
@@ -222,7 +266,7 @@ interface RemoteRefWatch {
 }
 
 interface WatchEntry {
-	watcher: FSWatcher;
+	watcher: TreeWatcher;
 	coalescer: Coalescer;
 	rootIno: number;
 	nudgeTimer: ReturnType<typeof setTimeout> | null;
@@ -292,25 +336,31 @@ export function ensureWatch(
 	});
 
 	try {
-		const watcher = watch(ws.worktreePath, { recursive: true }, (_event, filename) => {
-			const rel = typeof filename === "string" ? filename.replaceAll("\\", "/") : null;
+		const skillChangeOf = (rel: string): WorkspaceSkillChange =>
+			isSkillPath === null ? "unknown" : isSkillPath(rel) ? "detected" : "none";
+		const onEvent = (rel: string | null) => {
 			if (rel === null || (isRepoMetaPath(rel) && isGitMetaChange(ws.worktreePath, rel)))
 				scheduleRepoMeta(workspaceId, watcher);
 			if (rel !== null && isIgnoredPath(rel)) return;
-			const skillChange: WorkspaceSkillChange =
-				rel === null
-					? "unknown"
-					: isSkillPath === null
-						? "unknown"
-						: isSkillPath(rel)
-							? "detected"
-							: "none";
-			coalescer.add(rel, skillChange);
-		});
-		watcher.on("error", () => {
+			coalescer.add(rel, rel === null ? "unknown" : skillChangeOf(rel));
+		};
+		const onMissed = (rel: string) => {
+			if (isRepoMetaPath(rel)) scheduleRepoMeta(workspaceId, watcher);
+			if (!isIgnoredPath(rel)) coalescer.add(null, skillChangeOf(rel));
+		};
+		const onError = () => {
 			log.warn(`worktree watcher failed for workspace ${workspaceId}`);
 			stopWatch(workspaceId);
-		});
+		};
+		const watcher = WATCH_EACH_DIRECTORY
+			? watchTree(ws.worktreePath, {
+					onEvent,
+					onMissed,
+					onError,
+					skipDir: isSkippedDir,
+					ignoredDirs: (paths) => ignoredWorktreeDirs(ws.worktreePath, paths),
+				})
+			: watchRecursive(ws.worktreePath, onEvent, onError);
 		let resolveReady: (result: WorkspaceWatchReadyResult) => void = () => {};
 		const ready = new Promise<WorkspaceWatchReadyResult>((resolve) => {
 			resolveReady = resolve;
@@ -331,14 +381,17 @@ export function ensureWatch(
 		entries.set(workspaceId, entry);
 		publishWatchStarted?.(workspaceId);
 		if (entry.prewarmOnly) evictExcessPrewarmOnlyWatches();
-		entry.nudgeTimer = setTimeout(() => {
+		void watcher.ready.then(() => {
 			if (entries.get(workspaceId) !== entry) return;
-			entry.nudgeTimer = null;
-			deliver("fsChanged", workspaceId, () =>
-				publish?.({ workspaceId, paths: [], truncated: true, skillChange: "unknown" }),
-			);
-			settleReady(entry);
-		}, STARTUP_NUDGE_MS);
+			entry.nudgeTimer = setTimeout(() => {
+				if (entries.get(workspaceId) !== entry) return;
+				entry.nudgeTimer = null;
+				deliver("fsChanged", workspaceId, () =>
+					publish?.({ workspaceId, paths: [], truncated: true, skillChange: "unknown" }),
+				);
+				settleReady(entry);
+			}, STARTUP_NUDGE_MS);
+		});
 		const gitDir = resolveExternalGitDir(ws.worktreePath);
 		if (gitDir)
 			entry.metaWatchers = [gitDir, join(gitDir, "logs")]

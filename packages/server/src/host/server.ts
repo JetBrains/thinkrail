@@ -30,6 +30,7 @@ import {
 	WS_MAX_FRAME_BYTES,
 } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
+import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import {
 	admissionContextFor,
 	bumpPackageSwitchGeneration,
@@ -43,6 +44,7 @@ import {
 	initializeSessionStates,
 	isProjectSkillPath,
 	liveSessionIdsOf,
+	mayHoldProjectSkills,
 	mcpPolicyOf,
 	piTrustsProjectPath,
 	primeProjectPiSettings,
@@ -113,6 +115,7 @@ import {
 	setGithubStarPublisher,
 } from "../feedback";
 import { watchUserFonts } from "../fonts";
+import { ignoredPaths } from "../git";
 import { watchLocalLocales } from "../locales";
 import { logger, observeLoggedErrors } from "../log";
 import { loadWorkspaces } from "../persistence";
@@ -151,6 +154,7 @@ import { watchUserThemes } from "../themes";
 import { isTodoToolEnd, maybeAttachChangeArtifacts } from "../todos";
 import { setTurnPublisher, TurnTracker } from "../turns";
 import {
+	setIgnoredPathsResolver,
 	setRepoMetaPublisher,
 	setSkillPathClassifier,
 	setWatchPublisher,
@@ -283,6 +287,11 @@ const RECENT_FOLDER_CHECK_BUDGET_MS = 250;
 const log = logger("host");
 
 const isRequestId = (id: unknown): id is string => typeof id === "string";
+
+const onScratchDirPath = (path: string) =>
+	path === WORKSPACE_CONTEXT_DIR ||
+	WORKSPACE_CONTEXT_DIR.startsWith(`${path}/`) ||
+	path.startsWith(`${WORKSPACE_CONTEXT_DIR}/`);
 
 function formatReplayLoad(load: ReplayLoad): string {
 	const occupancy = ({ pending, settled, abandoned }: ReplayLoad[string]) =>
@@ -951,6 +960,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	void initSpeech().catch((err) => log.warn("voice input state could not be read", err));
 	setWatchPublisher(publishFsChanged);
 	setSkillPathClassifier(isProjectSkillPath);
+	setIgnoredPathsResolver((worktreePath, paths) =>
+		ignoredPaths(
+			worktreePath,
+			paths.filter((path) => !mayHoldProjectSkills(path) && !onScratchDirPath(path)),
+		),
+	);
 	setFsNudgePublisher(publishFsChanged);
 
 	setWatchStartedPublisher(seedWorkspaceHead);
@@ -1252,6 +1267,7 @@ function restoreSeamDefaults(): void {
 	setSpeechPublisher(null);
 	setWatchPublisher(null);
 	setSkillPathClassifier(null);
+	setIgnoredPathsResolver(null);
 	setFsNudgePublisher(null);
 	setWatchStartedPublisher(null);
 	setRepoMetaPublisher(null);

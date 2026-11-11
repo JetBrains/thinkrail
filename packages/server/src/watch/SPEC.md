@@ -11,7 +11,8 @@ tags: [live-refresh, public-surface-checked]
 ## Responsibility
 
 The filesystem change notifier behind the UI's live refresh: one recursive watcher per watched
-workspace worktree (Bun's native `fs.watch(root, { recursive: true })` — no watcher dependency),
+workspace worktree (Bun's native `fs.watch(root, { recursive: true })` — no watcher dependency; on Linux
+one per directory, see below),
 coalescing events into a debounced **`workspace.fsChanged`** publish (`WorkspaceFsChangedPayload`:
 `{ workspaceId, paths, truncated, skillChange }`). The frame is an **invalidation nudge, not data** — clients
 re-read through the existing read methods (`fs.*` / `git.*` / `spec.graph`), so the reads stay the
@@ -62,6 +63,40 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   recency, and a prewarm can never demote a real watcher (including across an inode-change
   re-creation). Correctness under eviction rides the existing recovery paths: the next real call
   re-creates the watcher and its fresh conservative startup nudge covers the blind window.
+- **On Linux each directory gets its own watcher, and ignored folders get none.** Bun's recursive watch
+  there adds an inotify watch per directory, so a large git-ignored folder used up
+  `fs.inotify.max_user_watches` and every start failed (#852); Bun keeps all watches on one inotify
+  descriptor, so the limit is watches (`ENOSPC`), never descriptors (`EMFILE`). `node_modules` and nested
+  `.git` get no watcher; of the root `.git` only the top level, `refs/`, `reftable/`, `info/` and
+  `modules/` do, for the repo-metadata nudge — `modules/` minus any `objects`, `logs`, `lfs` or `hooks`
+  folder, since a submodule's git dir can sit at any depth there. Root `.git` paths and paths inside a
+  nested repo never go to the ignore check: an allowlist `.gitignore` reports `.git` itself, and git fails
+  a whole batch on a path inside a submodule and answers for another nested repo with the outer rules. A
+  `.gitignore` event or a repo-metadata nudge re-checks the folders skipped as ignored (`git add -f`, an
+  `info/exclude` edit); new folders and re-checks share one queue per tree that runs one `ignoredPaths`
+  call at a time, and the first walk holds that queue, so a re-check asked for mid-walk runs after the
+  walk's own (possibly older) answer instead of being overwritten by it. A new folder is walked and all it holds is reported, since files written before its
+  watch have no event. A symlinked root is followed, links inside it are not. Readiness waits for the
+  first walk. Known limits: a change inside an ignored folder sends no event; a submodule with a path part
+  `objects`, `logs`, `lfs` or `hooks` sends no nudge for its commits; an edit of the global excludes or a
+  linked worktree's shared `info/exclude` waits for the next nudge; ignored folders inside a nested repo,
+  and a folder that becomes ignored after it is watched, stay watched until the watcher restarts; a
+  worktree with more non-ignored folders than `max_user_watches` still fails, and each later read retries
+  the walk up to the limit, as the recursive watch did.
+- **On Linux watchers close in the background and never share a path.** One queue closes 256 watchers per
+  event-loop turn for all stopped trees, because closing a large tree in one loop blocked the host for
+  seconds; a new watch that hits `ENOSPC` first closes up to 4 of those batches and retries. Bun shares
+  one inotify watch per path ([[submodule-server-locales]]), and a path deleted or moved away and made
+  again while an old watcher holds it gets a dead watch. So every open first closes the other watchers on
+  its path, queued or live in an overlapping tree (a nested repo opened as its own workspace; roots are
+  compared by real path), and re-opens the live ones after its own — on every open, since a folder below a
+  moved-away parent gets no event of its own. A re-opened watcher has lost undelivered events, so its tree
+  re-lists the folder and reports a truncated batch with the folder's own `skillChange` (`unknown` would
+  read as a skill change; a skill folder still gives `detected`). Cost for 22.8k folders: about 50 MB RSS
+  against 2-4 MB for one recursive watch and a 0.3-0.5 s walk in slices under 50 ms, about 1.5× that on
+  top of an overlapping tree. Known limit: old and new watches coexist until the queue drains (about 10 s
+  after switching eight such trees), so near the limit new trees grow only as fast as old ones close, and
+  another program of the same user can hit `ENOSPC` meanwhile.
 - **Repo-metadata nudge (second seam):** a git-metadata write is *metadata, not content*, so it never
   becomes an `fsChanged` path (the `.git` blackout stands — plumbing storms must not turn into frames). It
   instead arms a separately debounced (300ms), **pathless** `setRepoMetaPublisher(workspaceId)` nudge. This
@@ -76,7 +111,7 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   `git.status`/branch re-read produce the next nudge, a self-sustaining refresh loop (#1102). A real update
   still surfaces a non-lock path — git renames the lock onto its target or appends to a reflog. A wildcard
   event (null filename) nudges it too. Three sources feed the one nudge:
-  - `.git`-prefixed events seen by the recursive **root** watcher — covers a **repo root** workspace, whose
+  - `.git`-prefixed events seen by the **worktree** watcher — covers a **repo root** workspace, whose
     `.git` directory lives inside the watched tree;
   - **non-recursive** watchers on the worktree's git dir and its `logs/` **when that dir lies outside the
     root** (a repo root's in-tree `.git` directory is already covered above, so it is never watched twice):
@@ -119,9 +154,9 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   a fatal `uncaughtException` that takes down the host (an e2e reset deleting `workspaces.json` mid-nudge
   once did exactly that). Later events keep flowing. The watch-started nudge is the exception: it runs in
   the guarded registration region described below.
-- **Composition seams:** never imports `host` or `agent` — `host` injects both the publish callback and
-  `agent`'s pure project-skill path classifier at wiring time (the publisher-tee pattern). A missing
-  classifier degrades concrete events to `skillChange: "unknown"`, never false-clean.
+- **Composition seams:** never imports `host`, `agent` or `git` — `host` injects the publish callback,
+  `agent`'s pure project-skill path classifier and `git`'s ignore check at wiring time (the publisher-tee
+  pattern). A missing classifier degrades concrete events to `skillChange: "unknown"`, never false-clean.
 - **Self-healing per read (out-of-band worktree churn is normal — e2e resets, `rm -rf` in a terminal):**
   every `ensureWatch` re-stats the root and **re-creates the watcher when the inode changed** (a
   deleted+recreated path leaves the old stream silently following a dead inode), **reaps zombie
@@ -139,6 +174,6 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   region, and a throw there — from it or from anything after `entries.set` — tears the fresh entry down
   (`stopWatch`) rather than leaving a registered watcher whose readiness never settles.
 - **Public surface (barrel):** `ensureWatch`, `stopWatch`, `stopAllWatches`, `setWatchPublisher`,
-  `setRepoMetaPublisher`, `setWatchStartedPublisher`, `setSkillPathClassifier`.
+  `setRepoMetaPublisher`, `setWatchStartedPublisher`, `setSkillPathClassifier`, `setIgnoredPathsResolver`.
 - **Allowed deps:** `persistence` (workspace lookup), `log`; `contracts` (payload type); Bun/Node.
 - **Forbidden:** `host`; sibling features; any pi package.
