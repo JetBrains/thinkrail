@@ -413,7 +413,7 @@
 	"chat.templateEditor.description": "Описание",
 	"chat.templateEditor.descriptionPlaceholder": "Для чего нужен этот шаблон",
 	"chat.templateEditor.editTitle": "Изменить {{name}}",
-	"chat.templateEditor.invalidName": "Имя не может быть пустым, начинаться с «.» или содержать «/», «\\», «:» или нулевой байт.",
+	"chat.templateEditor.invalidName": "Имя не может быть пустым, начинаться с «.», содержать «/», «\\», «:» или нулевой байт, а также совпадать с именем устройства Windows, например CON, NUL или COM1.",
 	"chat.templateEditor.name": "Имя",
 	"chat.templateEditor.namePlaceholder": "standup",
 	"chat.templateEditor.newTitle": "Новый шаблон",

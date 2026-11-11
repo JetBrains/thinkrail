@@ -1,4 +1,4 @@
-import type { TemplateInfo, TemplateScope } from "@thinkrail/contracts";
+import { isValidTemplateName, type TemplateInfo, type TemplateScope } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
@@ -18,21 +18,6 @@ import { errorText, getTransport } from "@/transport";
 
 const INPUT_CLASS =
 	"w-full rounded-sm border border-control-border-default bg-control-bg px-12 py-8 tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus-visible:border-control-border-active disabled:bg-control-disabled-bg disabled:text-control-disabled-text";
-
-const WINDOWS_DEVICE_NAME =
-	/^(?:con|prn|aux|nul|com[1-9\u00b9\u00b2\u00b3]|lpt[1-9\u00b9\u00b2\u00b3])(?:\.|$)/i;
-
-function isValidTemplateName(name: string): boolean {
-	if (name.length === 0) return false;
-	if (name.startsWith(".")) return false;
-	return (
-		!name.includes("/") &&
-		!name.includes("\\") &&
-		!name.includes("\0") &&
-		!name.includes(":") &&
-		!WINDOWS_DEVICE_NAME.test(name)
-	);
-}
 
 export function TemplateEditorDialog({
 	open,

@@ -2128,6 +2128,24 @@ export interface Template extends TemplateInfo {
 	content: string;
 }
 
+const WINDOWS_DEVICE_NAME = /^(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³]) *(?:\.|$)/i;
+
+export function isWindowsDeviceName(name: string): boolean {
+	return WINDOWS_DEVICE_NAME.test(name);
+}
+
+export function isValidTemplateName(name: string): boolean {
+	if (name.length === 0) return false;
+	if (name.startsWith(".")) return false;
+	return (
+		!name.includes("/") &&
+		!name.includes("\\") &&
+		!name.includes("\0") &&
+		!name.includes(":") &&
+		!isWindowsDeviceName(name)
+	);
+}
+
 export type ReviewCommentKind = "inline" | "diff" | "file" | "review";
 
 export type ReviewCommentStatus = "draft" | "sent" | "resolved" | "dismissed";

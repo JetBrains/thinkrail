@@ -376,7 +376,7 @@
 	"chat.templateEditor.description": "Descripción",
 	"chat.templateEditor.descriptionPlaceholder": "Para qué sirve esta plantilla",
 	"chat.templateEditor.editTitle": "Editar {{name}}",
-	"chat.templateEditor.invalidName": "El nombre no puede estar vacío ni empezar por \".\", y tampoco puede contener \"/\", \"\\\", \":\" ni un byte nulo.",
+	"chat.templateEditor.invalidName": "El nombre no puede estar vacío, empezar por \".\", contener \"/\", \"\\\", \":\" ni un byte nulo, ni ser un nombre de dispositivo de Windows como CON, NUL o COM1.",
 	"chat.templateEditor.name": "Nombre",
 	"chat.templateEditor.namePlaceholder": "reunión",
 	"chat.templateEditor.newTitle": "Nueva plantilla",

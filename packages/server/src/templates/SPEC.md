@@ -101,15 +101,17 @@ assumption; re-verify on a pi bump.
   `resource-loader.js`'s `updatePromptsFromPaths`). A template saved through `template.save` must show
   up the next time any client asks (`template.list`, the web `/` menu, the Templates settings panel), so
   this module never memoizes; the cost is a couple of small `readdir`s per call, which is cheap enough.
-- `isValidTemplateName` is the **traversal gate**: applied to every caller-supplied `name` before it's
+- `isValidTemplateName` (from `@thinkrail/contracts`, so the web template editor checks the very same
+  rule before it sends) is the **traversal gate**: applied to every caller-supplied `name` before it's
   `join()`-ed into a path, in `getTemplate`, `saveTemplate`, and `deleteTemplate` alike. Its job is
   path-traversal *safety*, not naming style, so it rejects only the shapes that are unsafe as a
   single filename segment — empty, a leading `.` (covers `.`, `..`, and `.hidden`-style dotfiles with
   one rule), a path separator anywhere in the name (`/` or `\`), an embedded NUL byte, or a colon
   (rejected on every OS, specifically the NTFS alternate-data-stream case: NTFS reads `a:b.md`
   as an alternate data stream of a file named `a`, so a colon-named template could not survive a
-  Windows checkout). It also rejects reserved Win32 device names (`CON`, `PRN`, `AUX`, `NUL`,
-  `COM1`–`COM9`, `LPT1`–`LPT9`, including superscript ¹²³ variants and dotted suffixes), regardless
+  Windows checkout). It also rejects reserved Win32 device names (`isWindowsDeviceName`: `CON`, `PRN`,
+  `AUX`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`, including superscript ¹²³ variants, any case, alone or
+  followed by spaces or an extension — Windows 10 reads `con.notes.md` and `NUL .md` as the device), regardless
   of host OS: a `NUL.md` template may silently discard writes on Windows. Other names, including
   interior dots (`foo.bar`), uppercase, spaces, and unicode remain legal. A hand-placed unsafe file
   on Linux/macOS disappears from `template.list` and is refused by get/save/delete; deliberate for
@@ -200,9 +202,10 @@ assumption; re-verify on a pi bump.
   `argumentHint`. Never touches any other path — no `resolvePath` / symlink-following of caller input,
   only `join(dir, \`${name}.md\`)` after `name` has passed `isValidTemplateName`.
 - **Public surface (barrel):** `templateDirs`, `TemplateDirs`, `listTemplates`, `getTemplate`,
-  `saveTemplate`, `deleteTemplate`, `isValidTemplateName`.
+  `saveTemplate`, `deleteTemplate`.
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (`getAgentDir`, `CONFIG_DIR_NAME`,
-  `parseFrontmatter` — root exports only), `@thinkrail/contracts` (`TemplateInfo`, `TemplateScope`),
+  `parseFrontmatter` — root exports only), `@thinkrail/contracts` (`TemplateInfo`, `TemplateScope`,
+  `isValidTemplateName`),
   `node:fs`, `node:path`.
 - **Forbidden:** importing `workspaces` / `projects` — stays registry-free like `history`; the
   `template.*` handler resolves the read request's one optional `workspaceId` / `projectId` location to `cwd`
