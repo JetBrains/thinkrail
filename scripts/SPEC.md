@@ -17,13 +17,16 @@ Repository-wide development orchestration and conformance gates that do not belo
 
 - **Owns:** the multi-process development launcher; the on-demand provider sign-in smoke (`smoke:logins`); exact-version/catalog validation; the PI binary-seam canary; module dependency/import boundary validation; the UI-text gate (`check:i18n`); declared-spec-surface to TypeScript-barrel conformance; the on-demand CI flake report (`ci:flakes`); and focused root contract tests that compose otherwise independent product implementations.
 - **Public surface:** the root `package.json` commands consumed by developers, Husky, and CI.
-- **Allowed deps:** Bun/Node, the developer's authenticated `gh` CLI (read-only, `ci:flakes` only), the TypeScript compiler API, `pi-spec-graph/core` for the canonical spec/frontmatter model, and `mdast-util-from-markdown` for CommonMark block structure; read-only inspection of workspace manifests and source trees; the public package metadata and bundle outputs each check validates; and test-only imports of real product internals when a root harness must prove a cross-package contract without creating a product dependency.
+- **Allowed deps:** Bun/Node, the developer's authenticated `gh` CLI (read-only, `ci:flakes` only), the TypeScript 7 API (`typescript/async`, `typescript/ast`, `typescript/ast/is`) for the spec-surface and `check:i18n` checks, `oxc-parser` for the syntax-only import scans of the boundary and binary-seam checks, `pi-spec-graph/core` for the canonical spec/frontmatter model, and `mdast-util-from-markdown` for CommonMark block structure; read-only inspection of workspace manifests and source trees; the public package metadata and bundle outputs each check validates; and test-only imports of real product internals when a root harness must prove a cross-package contract without creating a product dependency.
 - **Forbidden:** product runtime logic, a second source of package or feature behavior, editing source as part of a check, or application-internal imports outside focused root contract tests. A root contract test may compose implementations but must not become the protocol source or a product dependency.
 
 `smoke:logins` boots a throwaway host in a temp HOME/data/pi-agent sandbox (no ambient credentials, real
-network) and, for every provider `provider.status` lists, starts each offered sign-in method over the wire,
-walks every branch of pi's select prompts, and passes when each flow reaches its first user step (a sign-in
-page, a device code, or a prompt); an error frame or a 15 s stall fails it. It cancels every flow, so nothing
+network): it runs from the sandbox with `--no-env-file` and `toolHomeEnv`, so neither the repo `.env` nor a
+real tool home leaks in, and the host binds port 0 and reports it. For every provider `provider.status` lists,
+it starts each offered sign-in method over the wire, walks every branch of pi's select prompts, and passes
+only when each flow reaches its first user step (a sign-in page, a device code, or a prompt); any other
+terminal frame (an immediate `success` included), a 15 s stall, a 10 s request timeout, a dropped host
+connection, or zero flows fails it. It waits for the host to exit before deleting the sandbox. It cancels every flow, so nothing
 is ever stored, and needs no accounts — it catches a pi upgrade or registry change that breaks how a sign-in
 starts, not whether a real credential is accepted. It is on demand, never a commit or CI gate, because it
 depends on providers' live endpoints.
@@ -40,35 +43,54 @@ The extension boundary follows [[module-thinkrail-extensions]] and is registered
 
 These are static literal-import checks, not a runtime module resolver. Negative filesystem fixtures cover the same discovery and scan entrypoint as the real workspace gate.
 
-`ci:flakes` (`bun run ci:flakes [--days 14] [--repo …] [--workflow ci.yml]`) prints a Markdown report of the
-CI workflow's test failures over a window, read through `gh api`: runs, per-attempt jobs, and the logs of failed
-test jobs only. Pure parsers read bun `(fail)` lines keyed by their `##[group]<file>:` context (the closing
-`N tests failed:` summary only repeats them) and Playwright `failed`/`flaky` summary blocks. A change is a PR —
-its PR runs and merge-queue entries count once — or, without a PR, a branch. Per test it counts failures,
-Playwright flaky passes, distinct changes, merge-queue failures, and failures whose SHA later passed the same
-job or a whole run. A test is flake-classified on a passing rerun, a flaky mark, failures for 3+ changes, or
-merge-queue failures for 2+ changes; the rest are listed apart as probably genuine. Failed steps no parsed test
-explains (build, install, download, or a step failing beside a test failure) are listed by step, and an
-attempt counts as flake-only only when every failure in it is a flake-classified test. It automates the hand
-analysis behind the 2026-10 CI-flake series; it is a diagnostic, never a gate, and has no scheduled run. Flaky
-passes in otherwise green jobs are not seen, because only failed jobs' logs are read.
+`ci:flakes` (`bun run ci:flakes [--days 14] [--repo …] [--workflow ci.yml] [--concurrency 8]`) prints a
+Markdown report of the CI workflow's test failures over a window, read through `gh api`; a call failing with a
+GitHub 5xx or a timeout is retried twice with backoff, since one transient error would discard the whole run. REST supplies the runs,
+the per-attempt jobs of every run that failed, was re-run, or holds a failed job, and failed test jobs' logs;
+GraphQL, batched 100 nodes a query (about one rate-limit point per 100 check runs), supplies the PRs updated in
+the window and every run's check runs of all attempts with their annotations. A job a re-run carried over from an
+earlier attempt (started before it was created) is dropped, so an attempt counts only what it ran, and an
+attempt-1 failure counts even when attempt 2 passed. Pure parsers read bun `(fail)` lines keyed by their
+`##[group]<file>:` context (the closing `N tests failed:` summary only repeats them) and Playwright
+`failed`/`flaky` summary blocks, from a failed job's log or else from the `🎭 Playwright Run Summary` annotation
+every Playwright job publishes, so a test that failed then passed on retry inside a green job is seen.
+
+A change is a PR or, without one, a branch. A run resolves to its PR by head repository and branch (the latest PR
+opened by then, since GitHub links only open same-repo PRs to runs) or by its merge-queue `pr-<N>` branch, so a
+PR's runs and queue entries count once. PRs linked because one's base branch is, or was before a retarget,
+another's head branch form a stack that counts as one change: members carry each other's commits, so one
+deterministic failure would otherwise count once per member. A base resolves to the PR that owned that head
+branch when the base was set (the newest opened by then, or the branch's only PR), so a reused branch name
+never joins a later PR to an old stack. A merge-queue entry whose
+`gh-readonly-queue/…/pr-<N>-<sha>` base is another entry's head SHA contains that entry's commits, so a test or
+step both failed counts for the lower entry's change; a failure the lower entry lacked stays the entry's own. Per
+test it counts failures, Playwright flaky passes, distinct changes, merge-queue failures, and failures whose SHA
+later passed the same job or a whole run. A test is flake-classified on a passing rerun, a flaky mark, failures
+for 3+ changes, or merge-queue failures for 2+ changes; the rest are listed apart as probably genuine. Failed
+steps no parsed test explains (build, install, download, or a step failing beside a test failure) are listed by
+step, and an attempt counts as flake-only only when every failure in it is a flake-classified test. Known limits:
+stacks are seen only through base branches, so PRs sharing commits while all targeting `main` stay apart, and a
+parent PR untouched in the window is not fetched; independent failures inside one stack collapse into one
+change, leaving reruns and flaky marks as their evidence; at most 100 check runs per run are read. It automates
+the hand analysis behind the 2026-10 CI-flake series; it is a diagnostic, never a gate, and has no scheduled run.
 
 `check:spec-surface` enrolls only valid specs tagged `public-surface-checked`. Enrollment is explicit so adding prose cannot silently turn enforcement off: an enrolled spec must retain a bare backticked identifier list and a discoverable TypeScript barrel, or the check fails. Unenrolled prose surfaces remain descriptive and are reported only by `--list-skipped`.
 
-The TypeScript compiler resolves the barrel's effective export names, including type-only and default exports and transitive re-exports; a CommonJS `export =` assignment is the module's singular `default` surface rather than the assigned value's synthetic members. An unresolved re-export is a violation rather than a silently incomplete surface. The declared and effective name sets must match in both directions. Filesystem-level tests exercise enrollment, resolution, and failure behavior through the same runner CI invokes.
+The TypeScript 7 checker, reached through its API server, resolves the barrel's effective export names, including type-only and default exports and transitive re-exports; a CommonJS `export =` assignment is the module's singular `default` surface rather than the assigned value's synthetic members. An unresolved re-export is a violation rather than a silently incomplete surface. The declared and effective name sets must match in both directions. The check uses the async API because the sync client reads Node-internal pipe handles that Bun does not expose; one API process serves every compiler group and is closed before the check returns. Filesystem-level tests exercise enrollment, resolution, and failure behavior through the same runner CI invokes.
 
 `check:i18n` enforces [[architecture]] Decision 23 over `apps/web/src`, `packages/ui`, and extension `web/`
-halves (tests and generated files excluded). With the TypeScript AST it rejects literal UI text in four
-shapes: JSX text; text-bearing JSX attributes (`aria-label`, `title`, `placeholder`, `alt`, `label`,
+halves (tests and generated files excluded). With the TypeScript 7 AST it rejects literal
+UI text in four shapes: JSX text; text-bearing JSX attributes (`aria-label`, `title`, `placeholder`, `alt`, `label`,
 `description`, `hint`, and `*Label`/`*Title`/`*Description`/… props), including literals reached through
 conditionals, `||`/`??`, `+`, and template parts; literal children inside `{…}`; prose in text-named object
 properties (`label`, `title`, `description`, `detail`, `hint`, `message`, `reason`, …); and literal
 `toast.*()` messages or `errorText()` fallbacks. "Text" means a run of two or more letters after trimming
 symbols, so `⌘K`, `·`, and counts pass; the bare brand `ThinkRail` is the one allowed word. It is a
-heuristic floor, not a proof: review still owns strings returned from plain functions. It also checks
+heuristic floor, not a proof: review still owns strings returned from plain functions. The literal scan unwraps
+parentheses, type assertions (`as` and `<T>`), `satisfies`, and non-null assertions. It also checks
 `packages/locales/en.json`: keys sorted, values non-empty, and every key (plural base for `_one`/`_other`)
 referenced as a string literal by some UI, desktop, or locales source, so removed UI leaves no orphaned
-translations. Finally it builds the web TypeScript program and fails on any **render-time read of the global
+translations. Finally, on the same TypeScript API process, it builds the web TypeScript 7 program and fails on any **render-time read of the global
 translator** ([[module-locales]] § Render reads the translator as a value): a reference to `t`, `i18n`,
 `currentLocale` or `currentTranslator` from `@thinkrail/locales/react` evaluated in a render root — a
 component or hook body, a class `render()`, and what they run synchronously: `useMemo`/`useState`
@@ -77,3 +99,5 @@ a call (direct, through a namespace import, or passed by reference to such a cal
 reaches them synchronously, default parameters included, transitively; a module-load call; and any getter
 or registered tool `summary` that reads them. Event handlers (`on*` and other non-render props), effects and
 deferred callbacks are event-time and pass. Fixture tests pin each shape, both flagged and allowed. There is no suppression mechanism; a false positive is fixed in the checker with a test.
+
+`typecheck:root` type-checks root tooling: these scripts and the root Playwright configs, plus the `e2e/` helpers those configs import, through the root `tsconfig.json`. Turbo registers it as `//#typecheck:root`, and `bun run typecheck` runs it beside every workspace `typecheck`. Each nested tooling tree extends the root config with its own `include` and runs as an extra `tsc -p` step of `typecheck:root` (today: `e2e/tsconfig.json`).

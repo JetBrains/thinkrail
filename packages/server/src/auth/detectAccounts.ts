@@ -50,7 +50,9 @@ function envPath(env: NodeJS.ProcessEnv, name: string): string | undefined {
 	return value ? value : undefined;
 }
 
-async function readConfig(path: string, maxBytes: number): Promise<string | null> {
+const pendingReads = new Map<string, Promise<string | null>>();
+
+async function readConfigOnce(path: string, maxBytes: number): Promise<string | null> {
 	try {
 		const info = await stat(path);
 		if (!info.isFile() || info.size > maxBytes) return null;
@@ -58,6 +60,15 @@ async function readConfig(path: string, maxBytes: number): Promise<string | null
 	} catch {
 		return null;
 	}
+}
+
+function readConfig(path: string, maxBytes: number): Promise<string | null> {
+	const key = `${maxBytes}:${path}`;
+	const pending = pendingReads.get(key);
+	if (pending) return pending;
+	const read = readConfigOnce(path, maxBytes).finally(() => pendingReads.delete(key));
+	pendingReads.set(key, read);
+	return read;
 }
 
 async function readJson(path: string, maxBytes = MAX_CONFIG_BYTES): Promise<Json | null> {
@@ -283,12 +294,20 @@ export function resolveDetectedAccounts(
 	});
 }
 
-export async function detectAccounts(
-	options: DetectAccountsOptions = {},
-): Promise<DetectedAccount[]> {
+let pendingDetection: Promise<DetectedAccount[]> | null = null;
+
+async function detectOnce(options: DetectAccountsOptions): Promise<DetectedAccount[]> {
 	const signals = await detectAccountSignals(options);
 	if (signals.length === 0) return [];
 	return usePiRuntime((runtime) =>
 		resolveDetectedAccounts(signals, (id) => Boolean(runtime.getProvider(id)?.auth.oauth)),
 	);
+}
+
+export function detectAccounts(options?: DetectAccountsOptions): Promise<DetectedAccount[]> {
+	if (options) return detectOnce(options);
+	pendingDetection ??= detectOnce({}).finally(() => {
+		pendingDetection = null;
+	});
+	return pendingDetection;
 }

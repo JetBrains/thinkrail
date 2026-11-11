@@ -57,8 +57,15 @@ interface AnalyticsGrant {
 	capture: AdditionalAnalyticsCapture;
 }
 
+export interface SurveyEndpoint {
+	apiKey: string;
+	host?: string;
+	fetchImpl?: typeof fetch;
+}
+
 interface AnalyticsState {
 	basic: AnalyticsSink;
+	surveyEndpoint: SurveyEndpoint;
 	additional: AnalyticsGrant | null;
 	createAdditionalSink: (() => AnalyticsSink) | null;
 	clientId: string;
@@ -125,6 +132,11 @@ export function initializeAnalyticsWithSinkFactoryForTests(
 		const appInstalled = build !== "source" && claimAppInstalled();
 		state = {
 			basic,
+			surveyEndpoint: {
+				apiKey,
+				...(host ? { host } : {}),
+				...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+			},
 			additional: null,
 			createAdditionalSink: options.mute || env.THINKRAIL_NO_ANALYTICS ? null : createSink,
 			clientId: record.id,
@@ -170,6 +182,21 @@ export function initializeAnalyticsWithSinkFactoryForTests(
 export function track(event: BasicAnalyticsEvent): void {
 	const s = state;
 	if (s && !s.shutdownPromise) send(s, s.basic, event);
+}
+
+export function surveyEndpoint(): SurveyEndpoint | null {
+	return state?.surveyEndpoint ?? null;
+}
+
+export function captureSurveyResponse(properties: Record<string, unknown>): boolean {
+	const s = state;
+	if (!s || s.shutdownPromise) return false;
+	try {
+		return s.basic.sendSurveyResponse(s.clientId, { ...s.env, ...properties });
+	} catch {
+		log.debug("survey capture failed");
+		return false;
+	}
 }
 
 export interface ErrorReport {

@@ -1,8 +1,6 @@
-import { existsSync } from "node:fs";
-import { delimiter, join } from "node:path";
 import { devices, type PlaywrightTestConfig } from "@playwright/test";
 import { toolHomeEnv } from "@thinkrail/shared/toolHomes";
-import { hermeticE2ePath, hermeticE2eShell } from "./fixtures/executables";
+import { executableOnPath, hermeticE2ePath, hermeticE2eShell } from "./fixtures/executables";
 import {
 	E2E_CENTRAL_BAD_EXTENSION_SOURCE,
 	E2E_CENTRAL_EXTENSION_SOURCE,
@@ -12,19 +10,23 @@ import {
 	E2E_EDITOR_LOG,
 	E2E_FAKE_BIN_DIR,
 	E2E_HOME_DIR,
+	E2E_INSTALLED_FONTS,
 	E2E_PI_AGENT_DIR,
 	E2E_PICK_DIR_POINTER,
+	E2E_SPEECH_MANIFEST,
 } from "./fixtures/paths";
 
 export function artifactHostEnvironment(cacheDir: string): Record<string, string> {
 	const hostPath = hermeticE2ePath(E2E_FAKE_BIN_DIR);
-	if (hostPath.split(delimiter).some((directory) => existsSync(join(directory, "pi")))) {
+	if (executableOnPath(hostPath, "pi")) {
 		throw new Error("artifact e2e host PATH must not contain pi");
 	}
 	return {
 		THINKRAIL_DATA_DIR: E2E_DATA_DIR,
 		XDG_CACHE_HOME: cacheDir,
 		THINKRAIL_PICK_DIR: E2E_PICK_DIR_POINTER,
+		THINKRAIL_INSTALLED_FONTS: E2E_INSTALLED_FONTS,
+		THINKRAIL_SPEECH_MANIFEST: E2E_SPEECH_MANIFEST,
 		THINKRAIL_GH_OFFLINE: "1",
 		...toolHomeEnv(E2E_HOME_DIR),
 		PI_CODING_AGENT_DIR: E2E_PI_AGENT_DIR,
@@ -46,7 +48,7 @@ export function artifactPlaywrightConfig(
 	managedFixtures: boolean,
 ): PlaywrightTestConfig {
 	return {
-		testDir: "./e2e",
+		testDir: ".",
 		testIgnore: "workflows/**",
 		grepInvert: /@agent|@dev-seam/,
 		fullyParallel: true,
@@ -55,13 +57,13 @@ export function artifactPlaywrightConfig(
 		retries: process.env.CI ? 1 : 0,
 		timeout: 30_000,
 		reporter: process.env.CI
-			? [["github"], ["html", { open: "never", outputFolder: `playwright-report-${name}` }]]
+			? [["github"], ["html", { open: "never", outputFolder: `../playwright-report-${name}` }]]
 			: "list",
-		outputDir: `test-results-${name}`,
+		outputDir: `../test-results-${name}`,
 		...(managedFixtures
 			? {
-					globalSetup: "./e2e/global-setup.ts",
-					globalTeardown: "./e2e/global-teardown.ts",
+					globalSetup: "./global-setup.ts",
+					globalTeardown: "./global-teardown.ts",
 				}
 			: {}),
 		use: {

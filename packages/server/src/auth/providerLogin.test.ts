@@ -86,40 +86,40 @@ describe("startLogin", () => {
 		expect(frames).toEqual([]);
 	});
 
-	test.each([
-		"configure",
-		"activate",
-	])("delayed success retains its login generation after %s", async (cutover) => {
-		const replacement = install(async () => {});
-		const replacementGeneration = await getPiRuntimeGeneration();
-		const completion = Promise.withResolvers<void>();
-		const h = install(async (_id, i) => {
-			i.notify({ type: "progress", message: "Waiting" });
-			await completion.promise;
-			i.notify({ type: "progress", message: "Done" });
-		});
-		const originalGeneration = await getPiRuntimeGeneration();
-		const { loginId } = startLogin("anthropic");
-		await tick();
-		expect(h.loginCalls()).toEqual([["anthropic", "oauth"]]);
+	test.each(["configure", "activate"])(
+		"delayed success retains its login generation after %s",
+		async (cutover) => {
+			const replacement = install(async () => {});
+			const replacementGeneration = await getPiRuntimeGeneration();
+			const completion = Promise.withResolvers<void>();
+			const h = install(async (_id, i) => {
+				i.notify({ type: "progress", message: "Waiting" });
+				await completion.promise;
+				i.notify({ type: "progress", message: "Done" });
+			});
+			const originalGeneration = await getPiRuntimeGeneration();
+			const { loginId } = startLogin("anthropic");
+			await tick();
+			expect(h.loginCalls()).toEqual([["anthropic", "oauth"]]);
 
-		if (cutover === "configure") configurePiRuntime(replacementGeneration.runtime);
-		else activatePiRuntimeGeneration(replacementGeneration);
-		const currentGeneration = await getPiRuntimeGeneration();
-		expect(currentGeneration).not.toBe(originalGeneration);
-		expect(currentGeneration.runtime).toBe(replacementGeneration.runtime);
+			if (cutover === "configure") configurePiRuntime(replacementGeneration.runtime);
+			else activatePiRuntimeGeneration(replacementGeneration);
+			const currentGeneration = await getPiRuntimeGeneration();
+			expect(currentGeneration).not.toBe(originalGeneration);
+			expect(currentGeneration.runtime).toBe(replacementGeneration.runtime);
 
-		completion.resolve();
-		await tick();
-		expect(h.frames).toEqual([
-			{ loginId, providerId: "anthropic", frame: { kind: "progress", message: "Waiting" } },
-			{ loginId, providerId: "anthropic", frame: { kind: "progress", message: "Done" } },
-			{ loginId, providerId: "anthropic", frame: { kind: "success" } },
-		]);
-		expect(h.publications.slice(0, 2)).toEqual(h.frames.slice(0, 2).map((push) => [push]));
-		expect(h.publications.at(-1)?.[1]).toBe(originalGeneration);
-		expect(replacement.loginCalls()).toEqual([]);
-	});
+			completion.resolve();
+			await tick();
+			expect(h.frames).toEqual([
+				{ loginId, providerId: "anthropic", frame: { kind: "progress", message: "Waiting" } },
+				{ loginId, providerId: "anthropic", frame: { kind: "progress", message: "Done" } },
+				{ loginId, providerId: "anthropic", frame: { kind: "success" } },
+			]);
+			expect(h.publications.slice(0, 2)).toEqual(h.frames.slice(0, 2).map((push) => [push]));
+			expect(h.publications.at(-1)?.[1]).toBe(originalGeneration);
+			expect(replacement.loginCalls()).toEqual([]);
+		},
+	);
 
 	test("passes pi's login options so flows that need a device id (ChatGPT) can run", async () => {
 		const h = install(async () => {});
@@ -334,22 +334,25 @@ describe("cancelLogin", () => {
 		expect(h.frames.map((f) => f.frame.kind)).toEqual(["prompt"]);
 	});
 
-	test("a new login for the same provider supersedes an abandoned one, silently", async () => {
+	test("a new login for the same provider supersedes an abandoned one with a terminal frame", async () => {
 		const signals: (AbortSignal | undefined)[] = [];
 		const h = install(async (_id, i) => {
 			signals.push(i.signal);
 			await i.prompt({ type: "select", message: "method", options: [{ id: "a", label: "A" }] });
 		});
+		const superseded: string[] = [];
 		const first = startLogin("anthropic");
 		const other = startLogin("openai-codex");
 		await tick();
-		const second = startLogin("anthropic");
+		const second = startLogin("anthropic", "oauth", (id) => superseded.push(id));
 		await tick();
 
 		expect(signals.map((s) => s?.aborted)).toEqual([true, false, false]);
+		expect(superseded).toEqual([first.loginId]);
 		expect(h.frames.map((f) => [f.loginId, f.frame.kind])).toEqual([
 			[first.loginId, "select"],
 			[other.loginId, "select"],
+			[first.loginId, "error"],
 			[second.loginId, "select"],
 		]);
 		resolveLogin({ loginId: first.loginId, value: "a" });

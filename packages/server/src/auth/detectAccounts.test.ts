@@ -13,10 +13,14 @@ const NOW = Date.parse("2026-10-26T12:00:00Z");
 
 const realStat = fsPromises.stat;
 const hungPaths = new Set<string>();
+let hungStats = 0;
 mock.module("node:fs/promises", () => ({
 	...fsPromises,
-	stat: (path: string, ...rest: []) =>
-		hungPaths.has(path) ? new Promise(() => {}) : realStat(path, ...rest),
+	stat: (path: string, ...rest: []) => {
+		if (!hungPaths.has(path)) return realStat(path, ...rest);
+		hungStats++;
+		return new Promise(() => {});
+	},
 }));
 
 let home: string;
@@ -27,6 +31,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	hungPaths.clear();
+	hungStats = 0;
 	rmSync(home, { recursive: true, force: true });
 });
 
@@ -386,6 +391,22 @@ describe("file robustness", () => {
 			jest.advanceTimersByTime(1);
 			await detecting;
 			expect(found).toEqual(["kimi-cli"]);
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	test("repeated detection reuses a hung read instead of stacking file-system operations", async () => {
+		hungPaths.add(join(home, ".claude", ".credentials.json"));
+		jest.useFakeTimers();
+		try {
+			for (let round = 0; round < 3; round++) {
+				const detecting = sources();
+				while (jest.getTimerCount() < 6) await realStat(home);
+				jest.advanceTimersByTime(1500);
+				expect(await detecting).toEqual([]);
+			}
+			expect(hungStats).toBe(1);
 		} finally {
 			jest.useRealTimers();
 		}

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import { PROTOCOL_VERSION, WS_CHANNELS, WS_MAX_FRAME_BYTES } from "@thinkrail/contracts";
+import { wsErrorCode } from "./requestError";
 import { WsTransport } from "./transport";
 
 class TestWebSocket {
@@ -97,9 +98,19 @@ describe("WsTransport channel replay", () => {
 			{},
 		],
 		[
-			"does not replay an addressed interview invitation to a late subscriber",
+			"does not replay an addressed survey invitation to a late subscriber",
 			WS_CHANNELS.feedbackInterview,
 			{},
+		],
+		[
+			"does not replay the addressed GitHub star ask to a late subscriber",
+			WS_CHANNELS.feedbackGithubStar,
+			{},
+		],
+		[
+			"does not replay a Find in Files batch to a late subscriber",
+			WS_CHANNELS.searchTextResults,
+			{ seq: 1, files: [], done: { reason: "complete", files: 0, lines: 0 } },
 		],
 	])("%s", (_name, channel, data) => {
 		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
@@ -177,7 +188,7 @@ describe("WsTransport reconnect delivery", () => {
 		const replacement = TestWebSocket.instances[1];
 		expect(replacement).toBeDefined();
 		replacement?.open();
-		expect(replacement?.sent).toEqual([JSON.stringify({ resume: [id] }), originalFrame]);
+		expect(replacement?.sent).toEqual([JSON.stringify({ resume: [id] }), originalFrame ?? ""]);
 
 		replacement?.message(JSON.stringify({ id, ok: true, result: [] }));
 		expect(await result).toEqual([]);
@@ -254,7 +265,7 @@ describe("WsTransport response receipts", () => {
 		replacement?.open();
 		const queuedId = requestsIn(replacement?.sent ?? [])[1]?.id;
 
-		expect(resumesIn(replacement?.sent ?? [])).toEqual([[stillOpenId, queuedId ?? ""]]);
+		expect(resumesIn(replacement?.sent ?? [])).toEqual([[stillOpenId ?? "", queuedId ?? ""]]);
 		expect(resumesIn(replacement?.sent ?? [])[0]).not.toContain(resolvedId);
 
 		replacement?.message(JSON.stringify({ id: stillOpenId, ok: true, result: [] }));
@@ -277,5 +288,76 @@ describe("WsTransport response receipts", () => {
 		await tick(0);
 
 		expect(acksIn(socket?.sent ?? [])).toEqual([id ?? "", id ?? ""]);
+	});
+
+	test("a request that times out is released to the host and left out of the next reconciliation", async () => {
+		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+		transport.connect();
+		const first = TestWebSocket.instances[0];
+		first?.open();
+
+		const result = transport.request("project.list", {}, { timeoutMs: 10 });
+		const id = requestsIn(first?.sent ?? [])[0]?.id ?? "";
+		await expect(result).rejects.toThrow();
+		await tick(0);
+		expect(acksIn(first?.sent ?? [])).toEqual([id]);
+
+		first?.close();
+		await tick(520);
+		const replacement = TestWebSocket.instances[1];
+		replacement?.open();
+		expect(resumesIn(replacement?.sent ?? [])).toEqual([[]]);
+		expect(requestsIn(replacement?.sent ?? [])).toEqual([]);
+	});
+});
+
+describe("WsTransport frame cap", () => {
+	const envelopeBytes = JSON.stringify({
+		id: "trpi_1",
+		method: "session.prompt",
+		params: { sessionId: "s1", text: "" },
+	}).length;
+	const utf8Bytes = (frame: string) => new TextEncoder().encode(frame).byteLength;
+
+	test("sends a frame exactly at the cap", async () => {
+		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+		transport.connect();
+		const socket = TestWebSocket.instances[0];
+		socket?.open();
+
+		const text = "a".repeat(WS_MAX_FRAME_BYTES - envelopeBytes);
+		const result = transport.request("session.prompt", { sessionId: "s1", text });
+		const frame = socket?.sent.at(-1) ?? "";
+		expect(utf8Bytes(frame)).toBe(WS_MAX_FRAME_BYTES);
+		expect(parse(frame).id).toBe("trpi_1");
+
+		socket?.message(JSON.stringify({ id: "trpi_1", ok: true, result: { ok: true } }));
+		expect(await result).toEqual({ ok: true });
+	});
+
+	test.each([
+		["one byte over the cap", "a".repeat(WS_MAX_FRAME_BYTES - envelopeBytes + 1)],
+		[
+			"over the cap in UTF-8 though under it in UTF-16 code units",
+			"ж".repeat(Math.floor((WS_MAX_FRAME_BYTES - envelopeBytes) / 2) + 1),
+		],
+	])("rejects a frame %s without sending or replaying it", async (_name, text) => {
+		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+		transport.connect();
+		const first = TestWebSocket.instances[0];
+		first?.open();
+
+		const error = await transport.request("session.prompt", { sessionId: "s1", text }).then(
+			() => undefined,
+			(err: unknown) => err,
+		);
+		expect(wsErrorCode(error)).toBe("FRAME_TOO_LARGE");
+		expect(requestsIn(first?.sent ?? [])).toEqual([]);
+
+		first?.close();
+		await tick(520);
+		const replacement = TestWebSocket.instances[1];
+		replacement?.open();
+		expect(replacement?.sent).toEqual([JSON.stringify({ resume: [] })]);
 	});
 });

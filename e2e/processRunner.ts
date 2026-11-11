@@ -3,6 +3,7 @@ import { constants } from "node:os";
 import { fileURLToPath } from "node:url";
 
 export const E2E_ROOT_DIR = fileURLToPath(new URL("..", import.meta.url));
+export const PLAYWRIGHT_CONFIG = "e2e/playwright.config.ts";
 export const PARENT_SIGNAL_OWNER_ENV = "THINKRAIL_E2E_PARENT_SIGNAL_OWNER";
 export const PROCESS_TERMINATION_GRACE_MS = 2_000;
 

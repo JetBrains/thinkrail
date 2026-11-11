@@ -44,8 +44,8 @@ export async function stopTurn(sessionId: string): Promise<void> {
 	} catch {}
 }
 
-export function endSession(sessionId: string): void {
-	removeSession(sessionId);
+export async function endSession(sessionId: string): Promise<void> {
+	await removeSession(sessionId);
 }
 
 export function endAllSessions(): void {

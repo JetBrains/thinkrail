@@ -79,6 +79,120 @@ test("the bytes mode preserves stdout that is not valid UTF-8", async () => {
 	expect(result.err).toBe("err");
 });
 
+async function waitForFile(path: string): Promise<void> {
+	for (let attempt = 0; attempt < 300; attempt++) {
+		if (existsSync(path)) return;
+		await Bun.sleep(10);
+	}
+	throw new Error(`child did not create ${path}`);
+}
+
+test("a pre-aborted signal never launches a child, for text or bytes", async () => {
+	const signal = AbortSignal.abort();
+	const marker = join(dir, "started");
+	const argv = bun(`require("node:fs").writeFileSync(${JSON.stringify(marker)}, "started");`);
+	const text = await runBounded(argv, { timeoutMs: 10_000, signal });
+	const bytes = await runBounded(argv, { timeoutMs: 10_000, signal, stdout: "bytes" });
+	for (const result of [text, bytes]) {
+		expect(result).toMatchObject({
+			ok: false,
+			aborted: true,
+			timedOut: false,
+			launchFailed: false,
+			err: "",
+		});
+	}
+	expect(text.out).toBe("");
+	expect(bytes.out).toEqual(new Uint8Array());
+	expect(existsSync(marker)).toBe(false);
+	const missing = await runBounded(["thinkrail-no-such-binary"], { timeoutMs: 10_000, signal });
+	expect(missing.launchFailed).toBe(false);
+	expect(missing.aborted).toBe(true);
+});
+
+test("abort retains output and returns only after the direct child exits", async () => {
+	for (const stdout of ["text", "bytes"] as const) {
+		const ready = join(dir, `ready-${stdout}`);
+		const controller = new AbortController();
+		const argv = bun(
+			`process.stdout.write(Uint8Array.from([0, 255, 65])); process.stderr.write("diagnosis");
+			require("node:fs").writeFileSync(${JSON.stringify(ready)}, String(process.pid));
+			setInterval(() => {}, 1000);`,
+		);
+		const options = { timeoutMs: 10_000, signal: controller.signal };
+		const pending =
+			stdout === "bytes" ? runBounded(argv, { ...options, stdout }) : runBounded(argv, options);
+		try {
+			await waitForFile(ready);
+			controller.abort();
+			const result = await pending;
+			expect(result).toMatchObject({
+				ok: false,
+				aborted: true,
+				timedOut: false,
+				launchFailed: false,
+				err: "diagnosis",
+			});
+			expect(result.out).toEqual(stdout === "bytes" ? new Uint8Array([0, 255, 65]) : "\u0000�A");
+			expect(() => process.kill(Number(readFileSync(ready, "utf8")), 0)).toThrow();
+		} finally {
+			controller.abort();
+			await pending;
+		}
+	}
+});
+
+test("abort kills the process tree", async () => {
+	const ready = join(dir, "grandchild.pid");
+	const controller = new AbortController();
+	const pending = runBounded(
+		bun(
+			`${outlivingChild(`require("node:fs").writeFileSync(${JSON.stringify(ready)}, String(process.pid)); setInterval(() => {}, 1000);`)} setInterval(() => {}, 1000);`,
+		),
+		{ timeoutMs: 10_000, signal: controller.signal },
+	);
+	try {
+		await waitForFile(ready);
+		controller.abort();
+		expect((await pending).aborted).toBe(true);
+		expect(await gone(Number(readFileSync(ready, "utf8")))).toBe(true);
+	} finally {
+		controller.abort();
+		await pending;
+	}
+});
+
+posix("abort after natural exit cannot cancel the drain or kill healthy descendants", async () => {
+	const ready = join(dir, "pids.json");
+	const controller = new AbortController();
+	const pending = runBounded(
+		bun(`
+		const child = Bun.spawn([process.execPath, "-e", "setInterval(() => {}, 1000)"], { stdout: "inherit", stderr: "inherit" });
+		child.unref();
+		require("node:fs").writeFileSync(${JSON.stringify(ready)}, JSON.stringify([process.pid, child.pid]));
+		process.stdout.write("done");
+	`),
+		{ timeoutMs: 10_000, signal: controller.signal },
+	);
+	let descendant: number | undefined;
+	try {
+		await waitForFile(ready);
+		const [parent, child] = JSON.parse(readFileSync(ready, "utf8")) as [number, number];
+		descendant = child;
+		expect(await gone(parent)).toBe(true);
+		controller.abort();
+		const result = await pending;
+		expect(result.ok).toBe(true);
+		expect(result.out).toBe("done");
+		expect(result).not.toHaveProperty("aborted");
+		expect(() => process.kill(child, 0)).not.toThrow();
+	} finally {
+		controller.abort();
+		await pending;
+		if (descendant !== undefined) process.kill(descendant, "SIGKILL");
+	}
+});
+
 test("a failed launch is a result, not a throw", async () => {
 	const result = await runBounded(["thinkrail-no-such-binary"], { timeoutMs: 10_000 });
 
@@ -130,6 +244,26 @@ test("cwd and env reach the child", async () => {
 	expect(result.out).toBe(`${realpathSync(dir)}|from-opts`);
 });
 
+test("stdin reaches the child, also when it exits before reading it", async () => {
+	const input = "x".repeat(4_000_000);
+	const echoed = await runBounded(
+		bun("process.stdout.write(String((await Bun.stdin.text()).length));"),
+		{
+			timeoutMs: 10_000,
+			stdin: new Blob([input]),
+		},
+	);
+	expect(echoed.ok).toBe(true);
+	expect(echoed.out).toBe(String(input.length));
+
+	const early = await runBounded(bun("process.exit(3);"), {
+		timeoutMs: 10_000,
+		stdin: new Blob([input]),
+	});
+	expect(early.ok).toBe(false);
+	expect(early.timedOut).toBe(false);
+});
+
 test("the env defaults to the live process.env, not a launch-time snapshot", async () => {
 	process.env[SENTINEL] = "mutated-after-startup";
 
@@ -156,7 +290,7 @@ test("a timeoutMs setTimeout cannot represent does not collapse into an instant 
 	}
 });
 
-posix("the timeout kills the whole process group, not just the child", async () => {
+test("the timeout kills the whole process tree, not just the child", async () => {
 	const pidFile = join(dir, "grandchild.pid");
 	const grandchild = `require("node:fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 30_000);`;
 
@@ -166,6 +300,7 @@ posix("the timeout kills the whole process group, not just the child", async () 
 	);
 
 	expect(result.timedOut).toBe(true);
+	expect(result).not.toHaveProperty("aborted");
 	expect(result.ok).toBe(false);
 	expect(existsSync(pidFile)).toBe(true);
 	expect(await gone(Number(readFileSync(pidFile, "utf8")))).toBe(true);
@@ -190,6 +325,49 @@ posix("the timeout path drains after the kill, bounded by the grace", async () =
 async function collect(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
 	return new Uint8Array(await new Response(stream).arrayBuffer());
 }
+
+test("the idle deadline lets a chatty child run past it and stops a silent one", async () => {
+	const chunks: string[] = [];
+	const chatty = await runBounded(
+		bun(
+			"let n = 0; const t = setInterval(() => { process.stderr.write('tick ' + n + '\\r'); if (++n === 6) { clearInterval(t); } }, 60);",
+		),
+		{ timeoutMs: 10_000, idleTimeoutMs: 200, onStderr: (text) => chunks.push(text) },
+	);
+	expect(chatty.ok).toBe(true);
+	expect(chatty.timedOut).toBe(false);
+	expect(chunks.join("")).toContain("tick 5");
+
+	const silent = await runBounded(
+		bun('process.stderr.write("start"); setTimeout(() => {}, 5_000);'),
+		{
+			timeoutMs: 10_000,
+			idleTimeoutMs: 200,
+		},
+	);
+	expect(silent.ok).toBe(false);
+	expect(silent.timedOut).toBe(true);
+	expect(silent.err).toBe("start");
+	expect(silent.waitedMs).toBeLessThan(2_000);
+});
+
+test("a throwing stderr callback neither stops the drain nor trips the idle deadline", async () => {
+	const result = await runBounded(
+		bun(
+			'let n = 0; const t = setInterval(() => { process.stderr.write("line " + n + "\\n"); if (++n === 6) clearInterval(t); }, 60);',
+		),
+		{
+			timeoutMs: 10_000,
+			idleTimeoutMs: 200,
+			onStderr: () => {
+				throw new Error("callback failed");
+			},
+		},
+	);
+	expect(result.ok).toBe(true);
+	expect(result.timedOut).toBe(false);
+	expect(result.err).toContain("line 5");
+});
 
 test("streamBounded hands stdout over as it arrives and closes on a clean exit", async () => {
 	const run = streamBounded(
@@ -220,7 +398,7 @@ test("streamBounded errors the stream instead of closing it when the child exits
 	expect(await run.exited).toMatchObject({ ok: false, err: "boom\n", timedOut: false });
 });
 
-posix("streamBounded kills the child when the consumer cancels, and on expiry", async () => {
+test("streamBounded kills the child when the consumer cancels, and on expiry", async () => {
 	const cancelled = streamBounded(
 		bun('process.stdout.write("x"); setInterval(() => process.stdout.write("x"), 10);'),
 		{ timeoutMs: 10_000 },

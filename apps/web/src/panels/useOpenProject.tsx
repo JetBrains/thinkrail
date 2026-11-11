@@ -1,15 +1,18 @@
 import type { Project } from "@thinkrail/contracts";
 import { T, useT } from "@thinkrail/locales/react";
 import { type ReactNode, useState } from "react";
-import { useAppStore } from "../store";
+import { selectSupportsProjectClone, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
+import { CloneProjectDialog } from "./CloneProjectDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { CreateProjectDialog } from "./CreateProjectDialog";
 import { createLatestOperation } from "./latestOperation";
 import { NoticeDialog } from "./NoticeDialog";
 import { OpenProjectPathDialog } from "./OpenProjectPathDialog";
+import { explainOpenFailure } from "./openProjectFailure";
 
 const PICK_TIMEOUT_MS = 30 * 60_000;
+const INIT_TIMEOUT_MS = 13 * 60_000;
 const projectOpenIntents = createLatestOperation();
 
 export type OpenedProjectIntent = { setup: boolean };
@@ -21,9 +24,12 @@ export function useOpenProject(
 	pickAndOpen: () => Promise<void>;
 	enterHostPath: () => void;
 	startNewProject: () => void;
+	cloneRepository: (() => void) | undefined;
 	dialogs: ReactNode;
 } {
 	const t = useT();
+	const supportsClone = useAppStore(selectSupportsProjectClone);
+	const [cloneIntent, setCloneIntent] = useState<{ isCurrent: () => boolean } | null>(null);
 	const [initTarget, setInitTarget] = useState<string | null>(null);
 	const [creating, setCreating] = useState(false);
 	const [openError, setOpenError] = useState<string | null>(null);
@@ -50,16 +56,10 @@ export function useOpenProject(
 			if (!isCurrent()) return;
 		} catch (err) {
 			if (!isCurrent()) return;
-			const status = await getTransport()
-				.request("project.inspect", { path: trimmed })
-				.catch(() => null);
+			const failure = await explainOpenFailure(err, trimmed, t);
 			if (!isCurrent()) return;
-			if (status?.kind === "initable") setInitTarget(trimmed);
-			else if (status?.kind === "missing")
-				setOpenError(t("panels.openProject.missing", { path: trimmed }));
-			else if (status?.kind === "notDirectory")
-				setOpenError(t("panels.openProject.notDirectory", { path: trimmed }));
-			else setOpenError(errorText(err, t("panels.openProject.openPathFailed", { path: trimmed })));
+			if (failure.kind === "initable") setInitTarget(trimmed);
+			else setOpenError(failure.text);
 		}
 	};
 
@@ -69,7 +69,11 @@ export function useOpenProject(
 	const initProject = async (path: string) => {
 		const isCurrent = projectOpenIntents.begin();
 		try {
-			const project = await getTransport().request("project.init", { path });
+			const project = await getTransport().request(
+				"project.init",
+				{ path },
+				{ timeoutMs: INIT_TIMEOUT_MS },
+			);
 			if (!isCurrent()) return;
 			await adopt(project, isCurrent);
 			if (!isCurrent()) return;
@@ -83,6 +87,12 @@ export function useOpenProject(
 		projectOpenIntents.begin();
 		setCreating(true);
 	};
+
+	const cloneRepository = supportsClone
+		? () => {
+				setCloneIntent({ isCurrent: projectOpenIntents.begin() });
+			}
+		: undefined;
 
 	const enterHostPath = () => {
 		projectOpenIntents.begin();
@@ -128,6 +138,12 @@ export function useOpenProject(
 					if (initTarget) void initProject(initTarget);
 				}}
 			/>
+			{cloneIntent ? (
+				<CloneProjectDialog
+					onClose={() => setCloneIntent(null)}
+					onCloned={(project) => void adopt(project, cloneIntent.isCurrent)}
+				/>
+			) : null}
 			{creating ? (
 				<CreateProjectDialog
 					onClose={() => setCreating(false)}
@@ -154,5 +170,5 @@ export function useOpenProject(
 		</>
 	);
 
-	return { openProject, pickAndOpen, enterHostPath, startNewProject, dialogs };
+	return { openProject, pickAndOpen, enterHostPath, startNewProject, cloneRepository, dialogs };
 }

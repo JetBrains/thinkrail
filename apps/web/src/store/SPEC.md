@@ -21,7 +21,17 @@ one atomic store action. A monotonic invalidation revision and connection genera
 read installation and failure; tombstones and cleared entries reject late replies. Connection status
 changes mark retained snapshots stale, and an unsupported welcome clears them. `selectors.ts` is the
 canonical owner of Resources selectors and predicates, including active counts and active/finished
-grouping; the host already bounds recent records. Components do not derive these independently.
+grouping (through the contracts' `isLiveResource`, so an interrupted run is never live) and the finished
+totals: the host's per-kind `history` tallies, or tallies of the snapshot's own finished records from an
+older host. The host bounds the snapshot to a window of recent finished records; anything older the user
+pages in lives on the same projection as `older`, one contiguous run per kind right after that window
+(`chatResources.ts`): a new snapshot carries a kind's run only while its window still reaches into the old
+chain (else drops it, rather than show a list with a silent hole), a new connection generation drops it (a
+restart may surface interrupted runs inside it), and `appendChatResourceHistory` keeps a page only if the
+chain still ends where the page was asked from. `selectChatResourceGroups(snapshot, includeMcp, older)`
+hands back every held finished record per kind (window then run, newest first), the window alone as
+`recentFinished` (the only records that can be new), and what the host holds beyond them (`remaining`);
+`selectChatResourceOldest` names the next page's anchor. Components do not derive these independently.
 `chatResources.ts` is the store's private implementation file for resource projection/state/scope/read
 types and the `staleChatResources` state transform. A parent settling does not clear its still-running
 resources or change the Projects rail's existing activity contract. The optional `mcpServers` list is part
@@ -71,11 +81,17 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   monotonic edges with different meanings: `setStatus("connected")` advances **`connectionGeneration`**
   for reconnect hydration, while **`welcomeGeneration`** advances only when one complete
   `server.welcome` snapshot lands. Every connection-status transition clears `protocolVersion`, so UI
-  capabilities remain unavailable between sockets and until the current socket's welcome is installed.
+  capabilities remain unavailable between sockets and until the current socket's welcome is installed;
+  **`welcomeProtocolVersion`** keeps the last installed welcome's protocol across a reconnect (in memory
+  only), for the one capability that must outlive a blip: **`selectHostSearchAvailable`** (the search
+  palette keeps its host scopes and rows) beside **`selectHostReachable`** (connected and this
+  connection's welcome — when a host search request may go out).
   **`installWelcomeSnapshot(protocolVersion, projects, recentProjects,
-  config?, hostPlatform?, hostUpdate?)`** installs protocol + both sorted project views + optional config,
-  host platform, optional host-update lifecycle snapshot + navigation repair and then advances that readiness
+  config?, hostPlatform?, hostUpdate?, hostAppVersion?, speech?)`** installs protocol + both sorted project views + optional config,
+  host platform, optional host-update lifecycle snapshot, the voice-input **`speech`** status (`null` from a
+  pre-v107 host) + navigation repair and then advances that readiness
   edge in one Zustand write; route validation and capability reads never observe a partial welcome.
+  `installSpeechStatus` replaces `speech` whole on each `speech.changed` push.
   `installProjectSnapshot` remains the project-only primitive for focused
   callers. **`projects`** is the open rail, while **`recentProjects`** is the last-opened-ordered set of every
   known open + closed project; the server omits closed records whose folder no longer exists.
@@ -144,7 +160,19 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   navigation stamp still hold. The shell's chat-reconciliation module validates/hydrates that exact target
   before ordinary locally placed-chat hydration; successful authoritative absence consumes it, while failures
   retain it for reconnect.
-  The store owns no URL/history/storage access — `navigation` owns serialization and drivers. It also owns
+  The store owns no URL/history/storage access — `navigation` owns serialization and drivers. It owns the
+  **background-creation slice** (v104): `workspaceCreations` by id, folded from `workspace.creationChanged`
+  (`applyWorkspaceCreation`, which also raises one error toast when a running creation turns `failed`) and
+  replaced on hydration (`setWorkspaceCreations`), and **`activeCreationId`** — mutually exclusive with
+  `activeWorkspaceId`: `selectCreation` clears the workspace, and every workspace activation, `selectProject`,
+  `selectMain` and project reconciliation clears the creation. **`applyWorkspaceCreationRemoved` is the whole
+  removal reaction**: if that creation was selected it activates the new workspace (or lands on its project
+  after a dismiss) and queues `creationChatToOpen` (`sessionId`, `kickoffError`, and the prompt this window
+  sent) for the shell's handoff hook; if not, it never moves focus and only toasts a `kickoffError`. The window
+  that started a creation keeps its full prompt in `sentCreationPrompts` (freed on removal or when hydration no
+  longer lists the creation) so a rejected kickoff still shows the user's message above the error turn.
+  Hydration that finds the watched creation gone lands on its workspace when the re-listed project holds it,
+  else on the project. `workspaceRetryDraft` carries Edit & retry's prefill to the shell's dialog. It also owns
   the **workspace lifecycle reactions** every client runs
   identically on the `workspace.created`/`updated`/`removed` pushes (no per-client optimism — the backend
   is authoritative): **`addWorkspace(ws)`** upserts a
@@ -188,7 +216,10 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   that document once; a missing or invalid document is represented by a Balanced frame with no workspace views. `clearWorkspaceTabs` removes the
   workspace view, attention, and associated local state when the workspace disappears. A page-lifetime
   `removedWorkspaceIds` tombstone rejects stale catalog/session/cache/workspace arrivals so an in-flight read
-  cannot recreate it.
+  cannot recreate it. No route enters a tombstoned workspace or a chat whose deletion did not finish
+  (`deletionPending`): `activateWorkspace`, `activateWorkspaceFromRoute`, `requestChatLocation`,
+  `requestHistoryOpen` and the removal fallback refuse them (`refusesEntry`), while a pending chat that is
+  already active stays active, its rows offering Retry.
 
   **Browser-local resource render state** is keyed by workspace + canonical resource id, never embedded in
   the frame. Loaded file/diff content and metadata, renderer choice, opaque renderer view state, diff layout,
@@ -257,11 +288,24 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   received Pi event; the compare-and-install fence for an authoritative transcript read) /
   **`syncedConnectionGeneration`** (which connected host generation the runtime's transcript was last read
   from) / `stats` / **`statsRefreshTick`** (browser-local invalidation for the mounted chat's authoritative
-  stats read) / `commands` / `draft` and its **extension-UI state** (`pendingExtUi` (typed by
+  stats read) / `commands` / `draft` / **`readingAnchor`** (browser-local detached transcript position
+  that survives the chat tab's unmount; written only by `chat` through `setChatReadingAnchor`) /
+  **`promptImages`** (the composer's transient ready images, pending decodes, errors and a fresh generation
+  token; the pure model `PromptImagesState` + `newPromptImagesState` is the store's own
+  `promptImageState.ts`, so runtime creation runs no `chat` code). `updateChatPromptImages(sessionId, update)` changes
+  that draft atomically through the same existing-runtime-only boundary as text drafts. Remounts and
+  transcript reconciliation retain it; closing the runtime or clearing its workspace releases it.
+  A new runtime gets a different generation even when its session id is reused, so old decodes cannot
+  attach to a reopened chat. It has no disk or host representation. The runtime also owns its
+  **extension-UI state** (`pendingExtUi` (typed by
   `chat`'s `ExtUiDialogRequest`) + `extUiQueue` (overlapping dialogs FIFO so none orphans its server
-  promise) + `extUiStatus` / `extUiWidget`). `openChatSession` creates a runtime; `closeChatRuntime` /
+  promise) + `extUiStatus` / `extUiWidget`), and **`notice`**: the host's closed `ProviderWarning` code
+  (ExtUi `notice`, replayed like `notify`). `dismissSessionNotice(sessionId)` clears one chat;
+  `silenceNotice(notice)` clears every chat once "Don't warn again" lands, and also drops
+  buffered orphan `notice` frames, so a chat opened later does not replay one. `openChatSession` creates a runtime; `closeChatRuntime` /
   `clearWorkspaceState` drop it; per-session mutators (`appendUserMessage` / **`appendErrorTurn`** / `setStats` / `setCommands` /
-  `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `clearPendingExtUi`) take a `sessionId`.
+  `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `setChatReadingAnchor` / `clearPendingExtUi`)
+  take a `sessionId`.
   **`appendErrorTurn(sessionId, text)`** appends an `error` turn for a **rejected** turn-driving wire call
   (`session.prompt`/`steer`/`followUp`/`create`) — e.g. `prompt()` throwing "no API key" / a bad model —
   so a failed send lands in the chat instead of being swallowed; it carries no recovery action because Pi
@@ -269,7 +313,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   steer/follow-up cannot settle work the host is still running. A *streaming* fault instead ends the run through
   **`reduceSessionEvent`** at `agent_settled`, using the host-projected final terminal metadata:
   `stopReason: "error"` carries Pi's `errorMessage`, and `stopReason: "length"` becomes an actionable
-  truncation error — neither may become "✓ Done". The closer is placed by `chat`'s `insertRoundCloser`
+  truncation error — neither may end in a "Done" footer. The closer is placed by `chat`'s `insertRoundCloser`
   (ahead of trailing results that woke nobody, the same rule hydration uses). That settlement-created error turn alone carries the
   web-local `recovery: "try-again"` marker; hydration gives the same marker only to its synthesized current
   final failure. `appendUserMessage` consumes every prior marker in the same optimistic write that adds the
@@ -314,8 +358,12 @@ re-read while a server starts. The state vocabulary and the attention/active pre
     host will report; the runtime only until the host has reported one, since a hydrated runtime may start
     after a compaction); `selectChatTitle` folds it through `chatDisplayName`,
     `selectUnnamedChatFirstPrompts` collects it for the workspace's unnamed chat *and plan* tabs by session
-    id, and `selectSwitcherGroups` reads the same selector into `SwitcherSession.firstPrompt` beside the
-    real `chatTitle` (its hook subscribes to `sessions` only while the palette is open).
+    id, and `selectRecordFirstPrompts` for every reported session — the search palette's chat rows, read
+    through `useShallow` so a streamed delta does not rebuild the palette. The record's `title` likewise
+    leads **`selectKnownChatTitle`** (the palette's chat name): when the host sends it, it wins — `""` reads
+    as unnamed, so a stale tab name or history row cannot outlive a rename or clear that happened while
+    this client was away — and only a record from an older host without the field falls back to the named
+    layout tab, then the history row.
     `SessionRuntime.hostState` is installed with transcript hydration and by state pushes delivered after Pi
     events. A result is **read when it is seen**, not on a gesture: `selectReadyCompletionAck` returns the
     exact unread completion id only while the connection is current, the runtime is synced to this
@@ -350,8 +398,8 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   intent. No peer can restore placement remotely. **`reopenChat(workspaceId, …)`** restores runtime/history
   membership in its captured workspace even after another workspace becomes active; shell adds placement to
   that workspace's locally chosen center group through the one transition path. **`noteClosedChats`** records
-  disk-only sessions (from `session.list`) and peer-created sessions (from the `session.created` summary)
-  there too—idempotently, skipping live/open sessions while refreshing an existing history row from a newer
+  disk-only sessions (from the active workspace's `session.list` reconciliation) and peer-created sessions
+  (from the `session.created` summary) there too—idempotently, skipping live/open sessions while refreshing an existing history row from a newer
   summary—so a chat that survived a host restart or was created in another frontend is reopenable without
   gaining local placement. A `ClosedChat` keeps the summary's `firstPrompt` beside its `title`, and the
   close transition copies the open chat's (`selectChatFirstPrompt`); history rows still read through
@@ -413,7 +461,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   banner a session error gets — an extension crash must not read as chatter); every other level stays a
   `system` turn. Level is the *only* input, so the host's own error notifies ride the same road: the
   `Review send failed: …` that `host/handlers` publishes after a rolled-back send renders as that banner
-  too. That is deliberate — a send that silently rolled back is exactly what a user must not scroll past. A **fire-and-forget** ext-UI frame (`notify`/`setStatus`/`setWidget`/`setTitle`)
+  too. That is deliberate — a send that silently rolled back is exactly what a user must not scroll past. A **fire-and-forget** ext-UI frame (`notify`/`setStatus`/`setWidget`/`setTitle`/`notice`)
   that has **no runtime to land in** is held in **`extUiOrphans`** (bounded, newest 64) instead of being
   dropped, and **both** runtime-installing actions — `openChatSession` *and* `hydrateSession` — drain that
   session's frames through the shared `replayExtUiOrphans` the moment its runtime exists. The admission
@@ -484,8 +532,12 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   if the frame arrived first; ignoring frames for a different live login); both keep an MCP
   push's `target`, which is how Providers and MCP settings each open only their own logins,
   **`clearLoginInput()`** drops the live input the instant a reply is sent (no double-submit),
-  and **`clearLogin()`** dismisses it. The **settings surface** state — **`settingsOpen`** +
-  **`settingsSection`** (a const-object enum: `Providers`/`Models`/`Mcp`/`Github`/`Appearance`/`Chat`/`Layout`/`Updates`/`Terminal`/`Workspaces`/`Templates`/`Notifications`/`Privacy`/`Feedback`/`Extensions`;
+  and **`clearLogin(loginId?)`** dismisses it — only that login when an id is given, so a stale surface
+  never drops a newer one; **`clearSettledLogin(providerId)`** is the post-connect handoff, clearing only that
+  provider's finished (success/error) target-less login. A terminal frame for a login this client does not
+  hold opens nothing (a superseded login's error reaches every client); it is kept as **`unheldLoginFrame`**
+  so `beginLogin` can replay it when it was this client's own fast failure beating the start response. The **settings surface** state — **`settingsOpen`** +
+  **`settingsSection`** (a const-object enum: `Providers`/`Models`/`Mcp`/`Github`/`Appearance`/`Chat`/`Layout`/`Keyboard`/`Updates`/`Terminal`/`Workspaces`/`Templates`/`Notifications`/`Privacy`/`Feedback`/`Extensions`;
   the `LineWidth` and `Review` keys are retained so old deep links still type-check but are not navigation
   sections — `panels/settingsNav` resolves them to an available section, and their controls now live in
   Chat/Appearance and Models) with **`openSettings(section?)`** (deep-links to a section, defaults to Providers) /
@@ -494,15 +546,26 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   updater snapshots/actions remain in `updates`' shell-local hook state; the optional **`hostUpdate`** lifecycle
   snapshot is host domain state, installed atomically from `server.welcome` or replaced by the one
   `host.updateAvailable` push. It remains visible through a temporary disconnect; a later welcome replaces or
-  clears it. The
+  clears it. The ephemeral **`searchOpen`** plus **`openSearch()`** / **`closeSearch()`** is the render
+  flag for the search palette ([[submodule-web-search]]), kept here so the global chord, the topbar button
+  and an aggregate attention notification ([[submodule-web-notifications]]) open the same instance;
+  **`searchSession`** advances on every `openSearch()`, so a notification click on an already-open palette
+  remounts it on the empty query (its Waiting view). The palette's query, scope and selection are its own
+  component state, never store state. The
+  client-local **`doubleShiftSearch`** + **`setDoubleShiftSearch()`** mirror the double-Shift preference
+  `search` persists through the stable preference adapter (not host config: Sticky Keys and single-Shift
+  IME conflicts belong to the client — the desktop adapter keeps it per backend profile and window, a
+  browser per endpoint). The
   ephemeral **`notificationPromptOpen`** plus **`openNotificationPrompt()`** / **`closeNotificationPrompt()`**
   is the client-local render flag for the attention-notification permission preface (cadence/snooze and the
   trigger live in [[submodule-web-notifications]], never the store). The
-  ephemeral **`interviewPromptOpen`** plus
-  **`showInterviewPrompt()`** / **`hideInterviewPrompt()`** is the render projection of the host's addressed
-  invitation; transport opens it idempotently, clears it before each valid welcome's possible redelivery so
-  a host restart cannot leave a stale projection, and the panel hides it after `feedback.respond` is
-  acknowledged. Counts, postponement, dismissal, and client claims never live in the store. The **theme**
+  ephemeral **`surveyInvitationOpen`** plus
+  **`showSurveyInvitation()`** / **`hideSurveyInvitation()`** is the render projection of the host's addressed
+  survey invitation, cleared before each valid welcome. **`surveyWindowOpen`** is the one survey window both
+  the invitation and Settings → Feedback open; **`openSurveyWindow()`** opens it and closes the invitation and
+  Settings in the same update, **`closeSurveyWindow()`** closes it. **`inAppSurvey`** (written by
+  **`setInAppSurvey`**) is the narrowed launched survey the Feedback pane and the window draw. Counts,
+  dismissal and completion stay in host `feedback.json`. The **theme**
   preference state — **`theme: ThemeId`** (the retained opaque fixed choice), **`themeMode: ThemeMode`**,
   and optional **`systemThemePair: SystemThemePair`** — arrives through **`applyConfig(config)`** from
   `server.welcome` / the `settings.changed` broadcast. A welcome from a pre-feature host (or any malformed
@@ -514,14 +577,17 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   readiness edge avoids a second derived config-hydration flag; after the first welcome, disconnect/reconnect
   keeps the last authoritative config while a later welcome can replace it. **`terminalReplayKb: number`**,
   **`terminalWindowsShell: TerminalWindowsShell`**, **`composerGrowthLimit: ComposerGrowthLimit`**,
+  **`questionPanelHeight`** (an invalid or absent value reads as the contracts default),
   **`chatLineWidth` / `fileLineWidth`**, their independent **`chatLineWidthBounded` /
-  `fileLineWidthBounded`** switches, **`customLayoutPresets: LayoutPreset[]`**,
+  `fileLineWidthBounded`** switches, **`voiceInputEnabled`** (absent from an older host reads as on),
+  **`customLayoutPresets: LayoutPreset[]`**,
   optional **`defaultModel: WireModel` / `defaultEffort: ThinkingLevel`** for new chats, the picker's
   **`favoriteModels` / `recentModels: WireModel[]`** (defaulting to `[]` so a pre-v77 host reads as "none"),
   **`analyticsEnabled: boolean`**, **`analyticsConsentConfirmed: boolean`**,
   **`notificationsEnabled: boolean`** (the attention-notification master toggle),
   **`subagentsEnabled: boolean`**, **`subagentMaxConcurrent: number`**, **`disabledExtensions: string[]`**
-  (defaulting to `[]` so a pre-v82 host reads as "all on"), **`jbcentralQuotaEnabled: boolean`**,
+  (defaulting to `[]` so a pre-v82 host reads as "all on"), **`extensionSettings: ExtensionSettingValues`**
+  (defaulting to `{}` so a pre-v105 host reads as "every declared default"), **`jbcentralQuotaEnabled: boolean`**,
   **`jbcentralQuotaRefreshSeconds: number`**, and **`onboardingDismissed: boolean`** (absent ⇒ `false`) ride the same `applyConfig` fold (host-owned, fieldwise
   defaulted/validated from the contracts helpers so an older or malformed host snapshot cannot poison
   the store). `terminalWindowsShell` narrows through `isTerminalWindowsShell` and otherwise uses
@@ -530,20 +596,17 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   controls, and shell quota read sides. Analytics preference and confirmation default independently to false;
   the store never upgrades a preference to confirmation. A selector combines host capability, hydrated
   configuration, and absent confirmation to drive the one first-launch prompt; `selectOnboardingActive`
-holds it (and the interview invitation) while the client-local **`onboardingWizard`** gate
+holds it (and the survey invitation) while the client-local **`onboardingWizard`** gate
 (`pending | shown | hidden`, set by Welcome through `setOnboardingWizard`) is shown — including its done
 screen, after `onboardingDismissed` is already persisted, until a project opens — or still pending on a
 cold-start-shaped store (capable host, not dismissed, no open or recent projects). Project Home reads the same
 selector to hide its Projects rail and pane, so onboarding has the whole window. Persisted preference priming
   and final choice updates converge through `applyConfig`; the dialog's visual draft remains component-local.
-  **`chatMessageOrder: ChatMessageOrder`** and **`streamingResponseMovement:
-  StreamingResponseMovement`** are instead client-local presentation preferences, hydrated together by
+  **`chatMessageOrder: ChatMessageOrder`** is instead a client-local presentation preference, hydrated by
   the chat preference seam from host-qualified browser localStorage or the native shell's injected
-  backend-profile/window-scoped adapter. Message order defaults oldest-first; movement defaults to
-  `{ settle: 75, trigger: 100 }`. `setChatMessageOrder` / `setStreamingResponseMovement` change them
-  without a server round trip, and `applyConfig` can never overwrite either. `ChatView` projects each
-  runtime from order without rewriting canonical turns and passes the movement window into its sole scroll
-  controller. **`hiddenModels: ModelRef[]`** (`{ provider, id }` pairs) is a client-local model visibility
+  backend-profile/window-scoped adapter. It defaults oldest-first. `setChatMessageOrder` changes it
+  without a server round trip, and `applyConfig` can never overwrite it. `ChatView` projects each
+  runtime from order without rewriting canonical turns. **`hiddenModels: ModelRef[]`** (`{ provider, id }` pairs) is a client-local model visibility
   preference with pure **`hydrateHiddenModels(list)`** / **`setModelVisibility(model, visible)`** /
   **`toggleModelVisibility(model)`** actions; the store touches no storage — `chat/modelVisibility`
   hydrates and persists it, and `applyConfig` can never overwrite it. **`selectPickerModels(models,
@@ -565,6 +628,12 @@ selector to hide its Projects rail and pane, so onboarding has the whole window.
   the cap's eviction candidate rather than an Undo receipt.
   It's the home for a **rejected wire call with no better place to land** (no chat tab to host an error turn),
   complementing `appendErrorTurn` (which handles the in-chat case).
+  **`packagesVersion`** + **`bumpPackagesVersion()`** is the same shape for installed pi packages: the
+  transport bumps it on `packages.changed`, and `panels/ExtensionsSettings.tsx` re-lists off it.
+  **`disabledPackages: string[]`** mirrors `disabledExtensions` from the settings broadcast; the
+  Extensions page uses it only to compute the next whole list for `settings.update` — what a package
+  row *shows* is the catalog's `enabled` (the host's effective state, which a `packages.changed` push
+  refreshes after every switch flip), never a client-side reading of this list.
   The host-wide **`templatesVersion: number`** counter + **`bumpTemplatesVersion()`** (increment) is a bare
   invalidation signal, the same shape as `fsChangesByWorkspace`'s `tick` below — **`panels/TemplatesSettings.tsx`**
   and **`chat/TemplateEditorDialog.tsx`** call it after a `template.save`/`delete`, and the Templates
@@ -620,7 +689,8 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   dimension, and neither identity may outlive the content it describes. The transient
   A **`reveal-tool` `LayoutIntent`** is the arrangement-agnostic request to reveal/focus a singleton
   side tool; the shell layout integration consumes it and resolves the tool's current saved location.
-  **`changesRequest`** and **`specRequest`** add an optional path/item target to that reveal and carry a
+  **`changesRequest`** and **`specRequest`** (with an optional `line` to open the spec at) add an
+  optional path/item target to that reveal and carry a
   browser-local request-time center destination without exposing layout concerns to feature views. Async
   resolution carries the local
   destination group's navigation-clock stamp captured at click time: if later attention overtakes it, the
@@ -658,7 +728,16 @@ target's diff under the new target's label; the cached value is what the mount c
 and `DiffTab` share `rendererId` plus opaque `viewState`, written by workspace-explicit `setTabRenderer`
 and `setTabViewState` so an unmount callback settling after a workspace switch still updates its owning tab.
 The registry owns view-state interpretation; changing renderer or phone/desktop implementation drops the
-prior opaque state, and each implementation rejects state it cannot interpret. Diff-only presentation keeps
+prior opaque state, and each implementation rejects state it cannot interpret. A `FileTab` may also carry
+a **`reveal`** (`FileReveal`: `line`, optional `column` / `length`, and a `tick`) written by
+`revealFileTab(workspaceId, path, at, rendererId?)` — the open-at-a-line request Find in Files makes
+after `openFileInTab`: it finds the workspace's file tab by path, bumps `tick` so the same line reveals
+again, and when a renderer id is named switches the tab to it (dropping the opaque `viewState`, as
+`setTabRenderer` does) so a Markdown or HTML file opens at its source line. The pane forwards it to the
+renderer, which reports the `tick` it applied; **`clearFileTabReveal(workspaceId, id, tick)`** then drops
+the reveal (only while it still carries that tick, so a newer reveal survives), so a remount restores the
+tab's saved `viewState` instead of jumping back to the hit. Like `rendererId` and `viewState`, the reveal
+lives only in this client's tab cache, never in the persisted layout document. Diff-only presentation keeps
 `view` split|inline via
 `setDiffTabView` (split by default) and `ignoreWhitespace` via `setDiffTabIgnoreWhitespace`. Legacy persisted
 `view` on file documents and `rendered` on diff documents are outside the accepted cache shape and are
@@ -739,7 +818,20 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   and the intent carries the chat resource so a cache/placement id alias (including an id collision resolved
   by placement-only minting) still selects semantically. That selection deliberately does not focus the tab,
   because the mounted history query owns focus. The shell updates the group's local attention so the target
-  body mounts and consumes the request without publishing a structural snapshot. The `EditorTab` (`FileTab`
+  body mounts and consumes the request without publishing a structural snapshot. The third sibling,
+  **`composerFocusRequest { workspaceId, sessionId | null, navTick }`** — set by
+  **`requestComposerFocus(workspaceId, sessionId?)`**, cleared by **`clearComposerFocusRequest()`** —
+  carries a palette pick's "type next" intent to the destination chat. It is stamped with the workspace's
+  navigation tick instead of queuing a selection, so it never changes which tab shows:
+  **`selectComposerFocusRequested`** holds only while that workspace is active, its tick is unchanged (a counted tab
+  switch or another navigation expires it), the session matches when one is named, and the chat is attended
+  (`selectChatAttended`). A chat that mounts late (hydration, a route target opening its tab) still takes it.
+  **`selectComposerFocusRequestStale`** marks a request that can no longer be consumed: its workspace is no
+  longer active, its tick moved, or the destination's layout is loaded and its attended center tab is
+  something other than the requested chat. It waits while the layout or the attended tab is still missing,
+  and while a chat row's route target for that session is pending. A request left waiting for a chat that
+  appears later through an unrelated path (another group taking focus, a closed tab) would steal focus from
+  whatever the user was doing, so the shell drops a stale request as soon as the destination settles. The `EditorTab` (`FileTab`
   | `ChatTab` | `DocTab` | `DiffTab` | `ChangesTab` | `PlanTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types.
   (Chat *render* types + renderers live in the `chat` module.) The pure context
   selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context
@@ -752,8 +844,24 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   identities from its supplied document + local attention, while host attachment remains exclusive per terminal),
   `selectActiveWorkspaceProjectId`, `selectHistoryTarget` + `HistoryTarget` (the shell's `Ctrl+R` routing
   target: the locally selected chat resource, or the workspace's newest chat otherwise),
-  `selectContextProject`, the layout placement selectors (recursive center plus left/right/bottom auxiliary
+  `selectContextProject`, **`selectContextRepoProject`** (the repository new work is created in — the
+  context project unless it is the Chats container, else the selected or first repository; the dialog,
+  `Mod+N` and the palette read this one), the **chats without a project** selectors — `isChatWorkspace`,
+  `isChatsContainer`, `selectRepoProjects` (every repository listing and fallback, incl.
+  `reconcileProjectNavigation`'s project loss), `selectChatsContainer`, `selectChatWorkspaces` (newest
+  activity first), `selectChatWorkspaceTitle` (the host's `SessionStateRecord.title`, also the first
+  answer of `selectKnownChatTitle`), `selectChatWorkspaceFirstPrompt` (the conversation's
+  `selectChatFirstPrompt`, for the unnamed chat's label), `selectActiveRepoWorkspaceId` (the active
+  workspace unless it is a chat, for repository-scoped settings such as pi packages), `selectHasTextSearchScope` (Find in Files has a
+  root: the active workspace, else a context project that is not the Chats container), `supportsProjectlessChats`; the `chatContinuations` slice
+  (`applyChatContinuation` from the `chat.continuation` push or a status read — host-owned phases by
+  operation id, read by the transcript's continuation card and by `chat/continuations`' follow and
+  reconnect reads) and
+  `initiatedContinuations` (`noteInitiatedContinuation` / `forgetInitiatedContinuation`: the gestures
+  this client made, the only ones it follows) — the layout placement selectors (recursive center plus left/right/bottom auxiliary
   groups), `selectAttentionCenterTab` (the selected resource in local last center focus),
+  `isNavigationChange(state, previous)` (a change of the active workspace, the selected project or a counted
+  tab switch — what overtakes a pending palette pick, route restore or `chat`'s `openWorkspace`),
   `selectCurrentRouteChatTarget` (exact-chat intent only while its workspace and stamped navigation remain
   current), `selectSkillsStale`, **`selectDiffScope` + `BRANCH_SCOPE`** (what a workspace's
   Changes panel is diffing, defaulting to the shared branch-scope constant), **`selectDiffBaseRef`** (the ref
@@ -781,7 +889,8 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   and the resource helper `orderMcpResources`; `selectSupportsProjectTrust` (the
   `PROJECT_TRUST_PROTOCOL_VERSION` gate for the trust summary and the pi-level resource grant);
   `toast` (the fire-from-anywhere helper),
-  `Toast` (type), web-local frame/workspace-view/attention selectors and atomic actions, resource render-state types
+  `Toast` (type), the prompt-image draft model `newPromptImagesState` + `PromptImagesState` /
+  `PromptImage` / `PromptImageError` (`chat`'s `usePromptImages` shares it for dialog-local drafts), web-local frame/workspace-view/attention selectors and atomic actions, resource render-state types
   (file/diff/virtual-document/plan/chat), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
   `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `ChatLocationRequest` (type), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
@@ -791,7 +900,7 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   `matchesWorktreePath`, `shallowEqualArrays` for the snapshot-identity guard, `userText` plus the skill
   invocation parser/matcher for user-message echo reconciliation, the MCP attention/active predicates; a
   leaf, so the edge adds no cycle); `chat`
-  (`ChatTurn`/`ToolResultState`, **type-only**); `auth` (`LoginState`, **type-only**); `transport`
+  (`ChatTurn`/`ToolResultState`/`AttachedImage`, **type-only**); `auth` (`LoginState`, **type-only**); `transport`
   (`ConnectionStatus`, **type-only**); `@thinkrail/locales` (default chat/terminal names, settled-reason
   copy and toasts, resolved when created); `zustand`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `panels`, shell runtime (the web-local layout state edge is type-only), or transport runtime.

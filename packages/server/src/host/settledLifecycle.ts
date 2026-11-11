@@ -4,10 +4,14 @@ import type { SessionStateRecord, Workspace } from "@thinkrail/contracts";
 import { listSessions } from "../agent";
 import { findBranchReviewOutcome } from "../branch-review";
 import { logger } from "../log";
+import { onBaseBranch } from "../pr";
 import { listProjects } from "../projects";
 import { getConfig } from "../settings";
 import {
 	backfillWorkspaceActivity,
+	isChatsContainer,
+	isChatsContainerId,
+	isChatWorkspace,
 	listWorkspaceRecords,
 	recordWorkspaceActivity,
 	setWorkspaceReview,
@@ -43,7 +47,7 @@ export function reviewRefreshRows(
 ): Workspace[] {
 	const idleDays = getConfig().settleIdleDays;
 	return rows.filter((row) => {
-		if (row.kind === "default") return false;
+		if (row.kind === "default" || isChatWorkspace(row)) return false;
 		if (row.settledOverride === "settled") return false;
 		if (
 			(row.review?.state === "merged" || row.review?.state === "closed") &&
@@ -78,7 +82,7 @@ async function backfillActivity(row: Workspace): Promise<void> {
 	} catch {
 		at = undefined;
 	}
-	if (at === undefined && row.kind !== "default") {
+	if (at === undefined && row.kind !== "default" && !isChatWorkspace(row)) {
 		try {
 			at = statSync(join(row.worktreePath, ".git")).mtimeMs;
 		} catch {
@@ -92,9 +96,17 @@ async function backfillActivity(row: Workspace): Promise<void> {
 	}
 }
 
+export async function findWorkspaceReviewOutcome(
+	workspace: Pick<Workspace, "worktreePath" | "branch" | "baseBranch">,
+	opts: { fresh: boolean },
+) {
+	if (onBaseBranch(workspace)) return { reliable: true, value: null };
+	return findBranchReviewOutcome(workspace.worktreePath, workspace.branch, opts);
+}
+
 async function refreshReview(row: Workspace, fresh: boolean): Promise<void> {
 	try {
-		const outcome = await findBranchReviewOutcome(row.worktreePath, row.branch, { fresh });
+		const outcome = await findWorkspaceReviewOutcome(row, { fresh });
 		if (outcome.reliable) {
 			reviewRefreshedAt.set(row.id, { branch: row.branch, at: Date.now() });
 			setWorkspaceReview(row.id, outcome.value, row.branch);
@@ -124,6 +136,7 @@ export function scheduleLifecyclePass(
 ): Promise<void> {
 	const running = passesInFlight.get(projectId);
 	if (running) return running;
+	if (isChatsContainerId(projectId)) return Promise.resolve();
 	const pass = (async () => {
 		const rows = listWorkspaceRecords(projectId);
 		await forEachBounded(rows, REVIEW_REFRESH_CONCURRENCY, backfillActivity);
@@ -138,6 +151,7 @@ export function scheduleLifecyclePass(
 
 export async function refreshOpenProjectReviews(): Promise<void> {
 	for (const project of listProjects()) {
+		if (isChatsContainer(project)) continue;
 		try {
 			await scheduleLifecyclePass(project.id, { fresh: true });
 		} catch {

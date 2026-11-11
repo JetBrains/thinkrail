@@ -45,10 +45,7 @@ export function ConnectProviderDialog({
 					onClose();
 				}}
 			>
-				<DialogContent
-					data-testid="connect-provider-dialog"
-					className="max-h-[85vh] max-w-[36rem] gap-16 overflow-y-auto"
-				>
+				<DialogContent data-testid="connect-provider-dialog" className="max-w-[36rem]">
 					<DialogHeader>
 						<DialogTitle>{t("panels.connectProvider.title")}</DialogTitle>
 						<DialogDescription>{t("panels.connectProvider.description")}</DialogDescription>
@@ -57,7 +54,7 @@ export function ConnectProviderDialog({
 						auth={auth}
 						detected={detected}
 						onConnected={(provider) => {
-							useAppStore.getState().clearLogin();
+							useAppStore.getState().clearSettledLogin(provider.id);
 							void announceProviderConnected(provider);
 							onClose();
 							onConnected?.(provider);

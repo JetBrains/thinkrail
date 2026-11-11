@@ -97,7 +97,7 @@ export function OnboardingWizard({
 					provider={provider}
 					connected={connected}
 					onPick={(fresh) => {
-						useAppStore.getState().clearLogin();
+						useAppStore.getState().clearSettledLogin(fresh.id);
 						setProvider(fresh);
 					}}
 					onBack={() => setProvider(null)}

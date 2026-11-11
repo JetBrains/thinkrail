@@ -46,11 +46,13 @@ export class TaskObservation {
 	private grant: AdditionalAnalyticsCapture | null = null;
 	private readonly completed = new Map<string, Set<string>>();
 	private readonly tools = new Map<string, Map<string, () => Promise<void>>>();
+	private readonly getCapture: typeof additionalCapture;
+	private readonly read: typeof readGroups;
 
-	constructor(
-		private readonly getCapture = additionalCapture,
-		private readonly read = readGroups,
-	) {}
+	constructor(getCapture = additionalCapture, read = readGroups) {
+		this.getCapture = getCapture;
+		this.read = read;
+	}
 
 	clear(): void {
 		this.grant = null;
