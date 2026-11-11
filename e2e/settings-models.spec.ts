@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import type { AppConfig, ModelDefault } from "@thinkrail/contracts";
-import { expandModelGroup, openWorkspaceChat } from "./fixtures/app";
+import { expandModelGroup, openWorkspaceChat, revealModelGroups } from "./fixtures/app";
 import { connectCentral, openProviders, waitForCentralState } from "./fixtures/jbcentral";
 import { E2E_SCREENSHOT_DIR } from "./fixtures/paths";
 import { E2eWire } from "./fixtures/wire";
@@ -162,5 +162,45 @@ test("without saved defaults, Settings and a fresh chat use the first available 
 		await disconnectFixtureProvider(page);
 	} finally {
 		await restoreDefaults(page, defaults);
+	}
+});
+
+test("the settings model picker scrolls with the wheel inside the dialog", async ({ page }) => {
+	await openWorkspaceChat(page);
+	await connectFixtureProvider(page);
+	try {
+		await page.getByTestId("settings-nav-models").click();
+		const dialog = page.getByTestId("settings-dialog");
+		const selector = dialog.getByTestId("default-model-row").getByTestId("model-selector");
+		await expect(selector).toBeVisible();
+		await selector.click();
+		await revealModelGroups(page);
+		const list = page.locator("[cmdk-list]");
+		await expect(list).toBeVisible();
+		expect(
+			await list.evaluate((element) => element.closest('[data-testid="settings-dialog"]') !== null),
+		).toBe(true);
+		const groups = page.getByTestId("model-group-toggle");
+		const groupCount = await groups.count();
+		for (let index = 0; index < groupCount; index++) {
+			const toggle = groups.nth(index);
+			if ((await toggle.getAttribute("aria-expanded")) === "false") await toggle.click();
+		}
+		await list.evaluate((element) => {
+			element.scrollTop = 0;
+		});
+		await list.hover();
+		await page.mouse.wheel(0, 600);
+		await expect.poll(() => list.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+		await page.keyboard.press("Escape");
+		await expect(list).toBeHidden();
+		await page.keyboard.press("Escape");
+		await expect(dialog).toBeHidden();
+	} finally {
+		if (await page.getByTestId("settings-dialog").isVisible()) {
+			await page.keyboard.press("Escape");
+			await expect(page.getByTestId("settings-dialog")).toBeHidden();
+		}
+		await disconnectFixtureProvider(page);
 	}
 });
