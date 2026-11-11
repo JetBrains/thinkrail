@@ -21,5 +21,18 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
-      - uses: ./.github/actions/desktop-apt
+      - uses: ./.github/actions/apt-packages
         timeout-minutes: 10
+        with:
+          set: desktop
+
+  webkit-apt:
+    name: WebKit apt packages
+    timeout-minutes: 15
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/apt-packages
+        timeout-minutes: 10
+        with:
+          set: webkit

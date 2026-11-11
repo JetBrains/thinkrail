@@ -1,5 +1,3 @@
-import { existsSync } from "node:fs";
-import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
 import { toolHomeEnv } from "@thinkrail/shared/toolHomes";
@@ -9,7 +7,12 @@ import {
 	isRealCentralE2e,
 	REAL_CENTRAL_E2E_ENV,
 } from "./fixtures/centralAgent";
-import { hermeticE2ePath, hermeticE2eShell, resolveBunExecutable } from "./fixtures/executables";
+import {
+	executableOnPath,
+	hermeticE2ePath,
+	hermeticE2eShell,
+	resolveBunExecutable,
+} from "./fixtures/executables";
 import {
 	E2E_CENTRAL_BAD_EXTENSION_SOURCE,
 	E2E_CENTRAL_EXTENSION_SOURCE,
@@ -23,7 +26,9 @@ import {
 	E2E_PI_AGENT_DIR,
 	E2E_PICK_DIR_POINTER,
 	E2E_PORT,
+	E2E_SPEECH_MANIFEST,
 } from "./fixtures/paths";
+import { REAL_SPEECH_E2E_ENV } from "./fixtures/speech";
 
 const rootDir = fileURLToPath(new URL("..", import.meta.url));
 const staticDir = fileURLToPath(new URL("../apps/web/dist", import.meta.url));
@@ -37,10 +42,7 @@ const centralMode = isRealCentralE2e();
 assertCentralPlaywrightRunner(process.env, process.argv);
 const bunExecutable = resolveBunExecutable();
 const hostPath = hermeticE2ePath(E2E_FAKE_BIN_DIR);
-if (hostPath.split(delimiter).some((directory) => existsSync(join(directory, "pi"))))
-	throw new Error("e2e host PATH must not contain pi");
-const isShardLane =
-	process.env.THINKRAIL_E2E_LANE !== undefined || !!process.env.THINKRAIL_E2E_JOB_SHARD;
+if (executableOnPath(hostPath, "pi")) throw new Error("e2e host PATH must not contain pi");
 const hostCommand =
 	process.env.THINKRAIL_E2E_SKIP_BUILD === "1"
 		? `${JSON.stringify(bunExecutable)} packages/server/src/dev.ts`
@@ -51,9 +53,7 @@ export default defineConfig({
 	// no webServer; `bun run test:workflows`. Never picked up by the browser suites.
 	testIgnore: "workflows/**",
 	...(centralMode ? { grep: /@agent/ } : { grepInvert: /@agent/ }),
-	// One worker owns one stateful host. Shard lanes stay serial internally; fullyParallel only lets
-	// Playwright distribute individual tests (rather than uneven whole files) across separate processes.
-	fullyParallel: isShardLane,
+	// One worker owns one stateful host; the shard runner deals tests to lanes through test lists.
 	workers: 1,
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 1 : 0,
@@ -96,6 +96,11 @@ export default defineConfig({
 			THINKRAIL_PICK_DIR: E2E_PICK_DIR_POINTER,
 			// The host's installed-font list, read from this file per request instead of the OS font service.
 			THINKRAIL_INSTALLED_FONTS: E2E_INSTALLED_FONTS,
+			// Voice input installs from a local fake engine and tiny model, never NVIDIA's servers —
+			// except in the opt-in real-engine run (voice-input.real.spec.ts).
+			...(process.env[REAL_SPEECH_E2E_ENV] === "1"
+				? {}
+				: { THINKRAIL_SPEECH_MANIFEST: E2E_SPEECH_MANIFEST }),
 			// Force the New-Workspace dialog's `gh` probe to "Not connected" so the suite is deterministic
 			// regardless of the dev machine's real `gh` auth — and exercises the offline/local-branch degrade path.
 			THINKRAIL_GH_OFFLINE: "1",

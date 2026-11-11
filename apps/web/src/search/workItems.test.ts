@@ -57,17 +57,20 @@ function items(
 	records: SessionStateRecord[],
 	knownTitles: Record<string, string> = {},
 	firstPrompts: Record<string, string> = {},
+	extra: Partial<WorkItemsState> & { transcriptPreviews?: boolean } = {},
 ) {
 	const closed = Object.entries(knownTitles).map(([sessionId, title]) => ({
 		sessionId,
 		title,
 		closedAt: 0,
 	}));
+	const { transcriptPreviews = false, ...stateExtra } = extra;
 	return buildWorkItems({
 		t: currentTranslator(),
-		state: state(records, { closedChatsByWorkspace: { w1: closed } }),
+		state: state(records, { closedChatsByWorkspace: { w1: closed }, ...stateExtra }),
 		contextProjectId: null,
 		firstPrompts,
+		transcriptPreviews,
 		navigateToProject: () => {},
 		navigateToWorkspace: () => {},
 	});
@@ -87,6 +90,22 @@ describe("buildWorkItems", () => {
 		expect(failedChat?.title).toBe("Broken build");
 		expect(failedChat?.attention).toBeUndefined();
 		expect(result.find((item) => item.id === "workspace:w1")?.attention).toBe("needs-input");
+	});
+
+	test("a chat without a project whose deletion is pending is never offered as a destination", () => {
+		const chatRecord = (pending: boolean) =>
+			items(
+				[waiting],
+				{},
+				{ "s-waiting": "Draft the release notes" },
+				{
+					workspaces: {
+						p1: [{ ...workspace, kind: "chat", ...(pending ? { deletionPending: true } : {}) }],
+					},
+				},
+			).filter((item) => item.kind === "chat");
+		expect(chatRecord(false)).toHaveLength(1);
+		expect(chatRecord(true)).toEqual([]);
 	});
 
 	test("an idle chat is listed only once its title is known", () => {
@@ -115,6 +134,23 @@ describe("buildWorkItems", () => {
 			title: "Chat",
 			titleSource: "default",
 		});
+	});
+
+	test("a chat previews its transcript only against a host that searches, and the project folder is found by its branch", () => {
+		const titles = { "s-idle": "Spec review" };
+		const plain = items([record("s-idle")], titles);
+		expect(plain.find((item) => item.id === "chat:s-idle")?.previewTarget).toBeUndefined();
+		const searching = items([record("s-idle")], titles, {}, { transcriptPreviews: true });
+		expect(searching.find((item) => item.id === "chat:s-idle")?.previewTarget).toEqual({
+			kind: "chat",
+			sessionId: "s-idle",
+		});
+		const folder: Workspace = { ...workspace, id: "w-def", kind: "default", branch: "release-zqx" };
+		const withFolder = items([], {}, {}, { workspaces: { p1: [workspace, folder] } });
+		expect(withFolder.find((item) => item.id === "workspace:w-def")?.keywords).toEqual([
+			"release-zqx",
+		]);
+		expect(withFolder.find((item) => item.id === "workspace:w1")?.keywords).toEqual([]);
 	});
 
 	test("Waiting lists chats that need you by urgency, leaving running and quiet chats out", () => {
@@ -174,6 +210,7 @@ describe("buildWorkItems", () => {
 			},
 			contextProjectId: null,
 			firstPrompts: {},
+			transcriptPreviews: false,
 			navigateToProject: () => {},
 			navigateToWorkspace: () => {},
 		});

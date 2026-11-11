@@ -24,7 +24,10 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   avoid claiming an addressed feature for an independently shipped older client that cannot render it), **reconnect-safe unresolved requests** — a
   frame that was in flight when its socket died returns to the queue and is replayed under the same request id,
   while the host deduplicates `(clientKey, requestId)`, so an accepted mutation cannot become a false failure or
-  execute twice —, the two frames that are this side's half of that bargain — **`{ ack: [id] }` receipts**
+  execute twice —, the **frame cap** (a request whose frame exceeds `WS_MAX_FRAME_BYTES` in UTF-8 bytes is
+  rejected with a `RequestError` coded `FRAME_TOO_LARGE` before it enters `pending`: the host would close
+  the socket on it, taking every open request along, and replay would resend it on every reconnect — #671;
+  a frame at most a third of the cap in UTF-16 code units is never encoded to measure it), the two frames that are this side's half of that bargain — **`{ ack: [id] }` receipts**
   (every response read is acknowledged, batched on a microtask; until one arrives the host must assume the reply
   died with the socket and keep it replayable; a request whose own deadline fires while connected is acknowledged
   too, which tells the host to abandon it rather than hold its slot for a reply nobody awaits — offline, the next
@@ -34,8 +37,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   response can, and the request it named is already gone from `pending`, so nothing would replay or re-ack it;
   `resume` repairs them all at once by restating the truth rather than confirming the confirmations —, channel
   `subscribe` with last-value replay for snapshots; append-only terminal data and the one-shot terminal
-  exit/detach + session-creation/deletion + `provider.changed` invalidation + addressed `feedback.interview` and `feedback.githubStar`
-  channels, plus scoped `session.resourcesChanged` invalidations and per-session `mcp.status` snapshots, are never cached or replayed to late
+  exit/detach + session-creation/deletion + `provider.changed` invalidation + addressed `feedback.interview`, `feedback.githubStar`
+  and `search.textResults` channels, plus scoped `session.resourcesChanged` invalidations and per-session `mcp.status` snapshots, are never cached or replayed to late
   subscribers. Resource metadata hydration belongs to the mounted chat integration, not replayed
   invalidation payloads. Reconnect/backoff;
   `inferUrl` defaults to
@@ -59,7 +62,10 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   its MCP login cancellation) each row it held when the read was sent that the reply no longer lists and
   the store still holds, so a pushed full workspace snapshot or
   removal missed while disconnected (including a rename) cannot stay stale; rows that arrived after the
-  read was sent are never retired by it, and it adds no rows (creation stays with the push and backfill);
+  read was sent are never retired by it, and it adds no rows (creation stays with the push and backfill) — except to the Chats
+  container, whose list is its membership: a chat it lists that this surface does not hold is added
+  through `addWorkspace`, the `workspace.created` path (which refuses an id this surface saw removed), so
+  a chat another window started while this one was away appears;
   on a v104+ host it also re-reads `workspace.listCreations` (older hosts install an empty set), first
   re-listing the watched creation's project when the creation is gone, so a create that finished while
   disconnected lands on its workspace instead of racing the list refresh;
@@ -111,7 +117,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `requestError.ts` (**`RequestError`** + **`wsErrorCode(err)`** — a rejection that carries the host's named
   `WsResponse.errorCode`. A coded response rejects with a `RequestError`, a request that outlives its
   `timeoutMs` with a **`RequestTimeoutError`** (the host may still finish it — a long install dialog says
-  "check the list" rather than "nothing happened"), and an unnamed host error with a plain `Error`, so *having*
+  "check the list" rather than "nothing happened"), a frame over the cap with a `RequestError` coded
+  `FRAME_TOO_LARGE` that this side names itself, and an unnamed host error with a plain `Error`, so *having*
   a code is exactly how a caller tells "this specific failure" from "the read failed"); `skillLoad.ts` (the one app-integration coordinator for session
   resource loads: single-flight `workspace.watchReady` per workspace; unless the watcher was already known
   ready, fold the conservative `skillChange: "unknown"` wildcard locally as a replay-safe fallback; capture
@@ -170,7 +177,11 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   `watchMcpWorkspace`, `ConnectionStatus`,
   `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
   `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`,
-  `supportsUserThemes`, `supportsFonts`, `supportsExtensionSettings`, `hostUrl`, `uploadUserFont`, `supportsToolResponses`, `respondToTool`,
+  `supportsUserThemes`, `supportsFonts`, `supportsExtensionSettings`, `supportsSpeech`, `openSpeechSocket`,
+  `hostUrl`, `uploadUserFont`, `supportsToolResponses`, `respondToTool`,
+  `supportsTextSearch` (v112 — Find in Files asks `search.text` and listens on `search.textResults` only of a
+  host that serves them; against an older host the palette hides the command and the window opened by the
+  chord says the host needs an update),
   `installClientErrorReporting`, `reportClientError`, `clientErrorReport`. `respondToTool(sessionId,
   toolCallId, response)` is the one place a tool response leaves the client (chat and plan page both use
   it): it sends `session.respondToTool` to a v93+ host and the retired `session.answerQuestion` below
@@ -182,7 +193,11 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   is the one binary upload — a `PUT` of the raw file to the host's `/fonts/` route with the upload guard
   header, answered by that file's `UserFontFile` entry — while `hostUrl` resolves a host-relative path
   (custom face URLs) against the endpoint; `supportsExtensionSettings` (v105) lets `ExtensionsSettings`
-  offer per-extension setting switches only to a host that stores `extensionSettings`; `supportsPlanReview` is exported
+  offer per-extension setting switches only to a host that stores `extensionSettings`. `openSpeechSocket()`
+  opens the dictation side socket (`/speech?protocol=`) on the same endpoint for [[submodule-web-speech]].
+  It carries binary audio and never a request. `server.welcome`'s `speech` seed and every `speech.changed`
+  push install the store's `speech` status whole; `supportsSpeech` (v107) gates the same way.
+  `supportsPlanReview` is exported
   because a sibling panel (`PlanPane`) gates the plan-review UI on it — an older host serves no
   `todo.startReview`/`reviewAll`, so the client must not offer them; `supportsPlanSummaryGeneration` (v69) is
   exported because `chat/useChatTodos` gates the auto-summary `todo.generateSummary` request on it — an older
@@ -199,7 +214,7 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   resource shape needs no gate: a host older than `RESOURCE_META_PROTOCOL_VERSION` answers `fs.readFile`
   and `git.diffFile` without `meta`, which the panes read as "text" — exactly the surface that host's own
   client showed — and `/blob` is only ever addressed for a side the host itself reported as byte-only.
-- **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
+- **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `WS_MAX_FRAME_BYTES`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
   `WorkspaceRemoved` for `workspace.removed`, `SessionCreatedPayload` for `session.created`,
   `SessionDeletedPayload` for `session.deleted`,

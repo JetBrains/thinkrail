@@ -1,7 +1,25 @@
-import { type MatchTerm, parseMatchTerms } from "@thinkrail/contracts";
+import {
+	MAX_SEARCH_QUERY_LENGTH,
+	type MatchTerm,
+	parseMatchTerms,
+	SEARCH_KINDS,
+	type SearchKind,
+} from "@thinkrail/contracts";
 
 export const SEARCH_SCOPES = ["all", "work", "files", "specs", "commands"] as const;
 export type SearchScope = (typeof SEARCH_SCOPES)[number];
+
+const SCOPE_KINDS: Record<SearchScope, readonly SearchKind[]> = {
+	all: SEARCH_KINDS.filter((kind) => kind !== "section"),
+	work: ["transcript", "plan"],
+	files: ["file"],
+	specs: ["spec", "section"],
+	commands: [],
+};
+
+export function scopeKinds(scope: SearchScope): readonly SearchKind[] {
+	return SCOPE_KINDS[scope];
+}
 
 export const SCOPE_PREFIX: Record<Exclude<SearchScope, "all">, string> = {
 	work: "@",
@@ -34,7 +52,7 @@ export function parseSearchQuery(
 	const prefixScope = PULL_REQUEST_NUMBER.test(trimmed.trim())
 		? undefined
 		: PREFIX_SCOPE.get(trimmed[0] ?? "");
-	const text = (prefixScope ? trimmed.slice(1) : trimmed).trim();
+	const text = (prefixScope ? trimmed.slice(1) : trimmed).trim().slice(0, MAX_SEARCH_QUERY_LENGTH);
 	const scope = prefixScope && offered.includes(prefixScope) ? prefixScope : "all";
 	return { raw, scope, text, terms: parseMatchTerms(text) };
 }

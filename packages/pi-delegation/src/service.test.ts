@@ -23,6 +23,7 @@ import { Type } from "typebox";
 import {
 	createDelegationService,
 	DelegationError,
+	type DelegationRunDetails,
 	type DelegationService,
 	deriveChildSessionFile,
 	type LifecycleEvent,
@@ -68,29 +69,28 @@ function registerFauxProvider(
 		headers?: Record<string, string>;
 		onRequestHeaders?: (headers: ProviderHeaders | undefined) => void;
 	} = {},
-): void {
+) {
+	const provider =
+		id === "faux"
+			? faux
+			: createFauxCore({
+					provider: id,
+					api: faux.api,
+					models: [{ ...faux.getModel(), id, name: id }],
+					tokensPerSecond: 4000,
+				});
 	target.registerProvider(id, {
-		api: faux.api,
+		api: provider.api,
 		baseUrl: "http://faux.local",
 		apiKey: "faux",
 		streamSimple: (model, context, streamOptions) => {
 			options.onRequestHeaders?.(streamOptions?.headers);
-			return faux.streamSimple(model, context, streamOptions);
+			return provider.streamSimple(model, context, streamOptions);
 		},
 		...(options.headers ? { headers: options.headers } : {}),
-		models: [
-			{
-				id,
-				name: id,
-				api: faux.api,
-				reasoning: false,
-				input: ["text"],
-				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-				contextWindow: 100_000,
-				maxTokens: 4096,
-			},
-		],
+		models: provider.models,
 	});
+	return provider;
 }
 
 function fauxModel(): Model<string> {
@@ -154,6 +154,152 @@ function subagentSpec(overrides: Record<string, unknown> = {}) {
 		...overrides,
 	};
 }
+
+function registerRoutedFauxProvider() {
+	const routed = createFauxCore({
+		provider: "routed-faux",
+		api: "routed-faux",
+		models: [
+			{ id: "reasoning", reasoning: true, contextWindow: 100_000, maxTokens: 4096 },
+			{ id: "plain", reasoning: false, contextWindow: 100_000, maxTokens: 4096 },
+		],
+		tokensPerSecond: 100_000,
+	});
+	const requests: { model: string; thinkingLevel: string }[] = [];
+	runtime.registerProvider(routed.provider, {
+		api: routed.api,
+		baseUrl: "http://faux.local",
+		apiKey: "synthetic",
+		models: routed.models,
+		streamSimple: (model, context, options) => {
+			requests.push({
+				model: `${model.provider}/${model.id}`,
+				thinkingLevel: options?.reasoning ?? "off",
+			});
+			return routed.streamSimple(model, context, options);
+		},
+	});
+	const selection = { provider: "delegation-router", id: "auto" };
+	const plain = routed.getModel("plain");
+	if (!plain) throw new Error("plain model not registered");
+	runtime.registerVirtualModel({
+		...selection,
+		name: "Delegation router",
+		thinkingLevels: ["low"],
+		route: () => ({
+			model: requests.length === 0 ? routed.getModel() : plain,
+			thinkingLevel: "high",
+		}),
+	});
+	return { routed, requests, selection };
+}
+
+test("virtual model details follow this run's routed responses in progress and terminal snapshots", async () => {
+	const { routed, requests, selection } = registerRoutedFauxProvider();
+	const path = join(parentCwd, "routed-details.txt");
+	writeFileSync(path, "local routing fixture");
+	routed.setResponses([
+		fauxAssistantMessage(fauxToolCall("read", { path })),
+		fauxAssistantMessage("ROUTED_DONE"),
+	]);
+	const child = await service.createChild(
+		subagentSpec({ session: { model: selection, thinkingLevel: "low", tools: ["read"] } }),
+	);
+	const updates: DelegationRunDetails[] = [];
+	const progress: DelegationRunDetails[] = [];
+	child.onEvent((event) => {
+		if (event.type === "run-progress") progress.push(event.details);
+	});
+	const selected = { model: "delegation-router/auto", thinkingLevel: "low" };
+	try {
+		const running = child.runQueued("Read the routing fixture.", {
+			onUpdate: (details) => updates.push(details),
+		});
+		expect(child.snapshot).toMatchObject({ status: "queued", details: selected });
+		const outcome = await running;
+		expect(outcome.status).toBe("completed");
+		expect(outcome.finalText).toBe("ROUTED_DONE");
+		expect(requests).toEqual([
+			{ model: "routed-faux/reasoning", thinkingLevel: "high" },
+			{ model: "routed-faux/plain", thinkingLevel: "off" },
+		]);
+		expect(updates[0]).toMatchObject(selected);
+		for (const observations of [updates, progress]) {
+			expect(observations).toContainEqual(
+				expect.objectContaining({ model: "routed-faux/reasoning", thinkingLevel: "high" }),
+			);
+			expect(observations.at(-1)).toMatchObject({
+				model: "routed-faux/plain",
+				thinkingLevel: "off",
+			});
+		}
+		expect(outcome.details).toMatchObject({ model: "routed-faux/plain", thinkingLevel: "off" });
+		expect(child.snapshot?.details).toEqual(outcome.details);
+		const saved = SessionManager.open(child.record.sessionFile).getEntries();
+		expect(saved.findLast((entry) => entry.type === "model_change")).toMatchObject({
+			provider: selection.provider,
+			modelId: selection.id,
+		});
+		expect(saved.findLast((entry) => entry.type === "thinking_level_change")).toMatchObject({
+			thinkingLevel: "low",
+		});
+	} finally {
+		await child.dispose();
+		runtime.unregisterVirtualModel(selection.provider, selection.id);
+		runtime.unregisterProvider(routed.provider);
+	}
+});
+
+test.each(["stop", "error", "aborted"] as const)(
+	"reused resource details isolate routed responses from no-response runs and retain %s metadata",
+	async (stopReason) => {
+		const { routed, requests, selection } = registerRoutedFauxProvider();
+		const resource = await service.registerResource(
+			"routed-details",
+			{ kind: "runtime", modelRuntime: runtime, cwd: parentCwd, model: selection },
+			{
+				childExtensionFactories: [
+					(pi) => {
+						pi.on("input", (event) =>
+							event.text === "handled" ? { action: "handled" } : undefined,
+						);
+					},
+				],
+			},
+		);
+		const child = await resource.createChild({
+			visibility: "hidden",
+			info: { createdBy: "workflow:test" },
+			session: { model: selection, thinkingLevel: "low", tools: [], extensions: true },
+		});
+		const selected = { model: "delegation-router/auto", thinkingLevel: "low" };
+		try {
+			routed.setResponses([fauxAssistantMessage("FIRST")]);
+			expect((await child.runQueued("first")).details).toMatchObject({
+				model: "routed-faux/reasoning",
+				thinkingLevel: "high",
+			});
+			const aborted = await child.runQueued("never starts", { signal: AbortSignal.abort() });
+			expect(aborted.status).toBe("aborted");
+			expect(aborted.details).toMatchObject(selected);
+			const handled = await child.runQueued("handled");
+			expect(handled.finalText).toBeUndefined();
+			expect(handled.details).toMatchObject(selected);
+			expect(requests).toHaveLength(1);
+			routed.setResponses([fauxAssistantMessage("NEXT", { stopReason })]);
+			const updates: DelegationRunDetails[] = [];
+			const next = child.runQueued("next", { onUpdate: (details) => updates.push(details) });
+			const outcome = await next;
+			expect(updates[0]).toMatchObject(selected);
+			expect(outcome.status).toBe(stopReason === "stop" ? "completed" : stopReason);
+			expect(outcome.details).toMatchObject({ model: "routed-faux/plain", thinkingLevel: "off" });
+		} finally {
+			await resource.release();
+			runtime.unregisterVirtualModel(selection.provider, selection.id);
+			runtime.unregisterProvider(routed.provider);
+		}
+	},
+);
 
 async function codeOf(promise: Promise<unknown>): Promise<string> {
 	const error = await promise.then(
@@ -363,7 +509,7 @@ test("the self-created runtime mirrors public provider registrations and removes
 		modelsPath: null,
 		allowModelNetwork: false,
 	});
-	registerFauxProvider(sourceRuntime, "mirrored");
+	const mirrored = registerFauxProvider(sourceRuntime, "mirrored");
 	const sourceModel = sourceRuntime.getModel("mirrored", "mirrored");
 	if (!sourceModel) throw new Error("mirrored model not registered");
 	const fallback = createDelegationService({
@@ -386,7 +532,7 @@ test("the self-created runtime mirrors public provider registrations and removes
 			tools: [],
 		},
 	});
-	faux.setResponses([fauxAssistantMessage("MIRRORED_DONE")]);
+	mirrored.setResponses([fauxAssistantMessage("MIRRORED_DONE")]);
 	const child = await fallback.createChild(mirroredSpec);
 	try {
 		const outcome = await child.runQueued("Probe.");
@@ -414,7 +560,7 @@ test("the self-created runtime replaces same-id provider configs without retaini
 	});
 	const requestHeaders: (ProviderHeaders | undefined)[] = [];
 	const captureHeaders = (headers: ProviderHeaders | undefined) => requestHeaders.push(headers);
-	registerFauxProvider(sourceRuntime, "replaced", {
+	let replaced = registerFauxProvider(sourceRuntime, "replaced", {
 		headers: { "x-stale-secret": "secret" },
 		onRequestHeaders: captureHeaders,
 	});
@@ -440,7 +586,7 @@ test("the self-created runtime replaces same-id provider configs without retaini
 			tools: [],
 		},
 	});
-	faux.setResponses([fauxAssistantMessage("OLD_CONFIG"), fauxAssistantMessage("NEW_CONFIG")]);
+	replaced.setResponses([fauxAssistantMessage("OLD_CONFIG")]);
 	const first = await fallback.createChild(replacedSpec);
 	try {
 		expect((await first.runQueued("Use old config.")).status).toBe("completed");
@@ -450,7 +596,8 @@ test("the self-created runtime replaces same-id provider configs without retaini
 	}
 
 	sourceRuntime.unregisterProvider("replaced");
-	registerFauxProvider(sourceRuntime, "replaced", { onRequestHeaders: captureHeaders });
+	replaced = registerFauxProvider(sourceRuntime, "replaced", { onRequestHeaders: captureHeaders });
+	replaced.setResponses([fauxAssistantMessage("NEW_CONFIG")]);
 	const second = await fallback.createChild(replacedSpec);
 	try {
 		expect((await second.runQueued("Use new config.")).status).toBe("completed");
@@ -472,7 +619,7 @@ test("self-created runtimes isolate provider synchronization per parent lineage"
 		modelsPath: null,
 		allowModelNetwork: false,
 	});
-	registerFauxProvider(sourceA, "lineage-a");
+	const lineageA = registerFauxProvider(sourceA, "lineage-a");
 	registerFauxProvider(sourceB, "lineage-b");
 	const modelA = sourceA.getModel("lineage-a", "lineage-a");
 	const modelB = sourceB.getModel("lineage-b", "lineage-b");
@@ -520,7 +667,7 @@ test("self-created runtimes isolate provider synchronization per parent lineage"
 			},
 		}),
 	);
-	faux.setResponses([fauxAssistantMessage("LINEAGE_A_STILL_WORKS")]);
+	lineageA.setResponses([fauxAssistantMessage("LINEAGE_A_STILL_WORKS")]);
 	try {
 		const outcome = await childA.runQueued("Run after parent B synchronized.");
 		expect(outcome.status).toBe("completed");
@@ -561,7 +708,7 @@ test("a parent's retained runtime wins over the service-level binding", async ()
 		modelsPath: null,
 		allowModelNetwork: false,
 	});
-	registerFauxProvider(parentRuntime, "fauxp");
+	const retained = registerFauxProvider(parentRuntime, "fauxp");
 	const generational = createDelegationService({
 		resolveParent: (id) =>
 			id === parent.sessionId
@@ -576,7 +723,7 @@ test("a parent's retained runtime wins over the service-level binding", async ()
 		scope: "ws-parent-runtime",
 		modelRuntime: runtime,
 	});
-	faux.setResponses([fauxAssistantMessage("PARENT_GEN_DONE")]);
+	retained.setResponses([fauxAssistantMessage("PARENT_GEN_DONE")]);
 	const child = await generational.createChild(
 		subagentSpec({
 			session: { systemPrompt: "probe", model: { provider: "fauxp", id: "fauxp" } },
@@ -603,31 +750,31 @@ test("one run at a time per child: a second runQueued rejects already-running", 
 	}
 });
 
-test.each([
-	true,
-	false,
-])("a signal-aborted queued start wins over a later user reason (pre-aborted: %s)", async (preAborted) => {
-	const child = await service.createChild(subagentSpec());
-	const callsBefore = faux.state.callCount;
-	try {
-		const controller = new AbortController();
-		if (preAborted) controller.abort();
-		else {
-			child.onEvent((event) => {
-				if (event.type === "run-queued") controller.abort();
-			});
+test.each([true, false])(
+	"a signal-aborted queued start wins over a later user reason (pre-aborted: %s)",
+	async (preAborted) => {
+		const child = await service.createChild(subagentSpec());
+		const callsBefore = faux.state.callCount;
+		try {
+			const controller = new AbortController();
+			if (preAborted) controller.abort();
+			else {
+				child.onEvent((event) => {
+					if (event.type === "run-queued") controller.abort();
+				});
+			}
+			const run = child.runQueued("Never runs.", { signal: controller.signal });
+			await child.abort("user");
+			const outcome = await run;
+			expect(outcome.status).toBe("aborted");
+			expect(outcome.details.abortReason).toBeUndefined();
+			expect(child.snapshot?.details).toEqual(outcome.details);
+			expect(faux.state.callCount).toBe(callsBefore);
+		} finally {
+			await child.dispose();
 		}
-		const run = child.runQueued("Never runs.", { signal: controller.signal });
-		await child.abort("user");
-		const outcome = await run;
-		expect(outcome.status).toBe("aborted");
-		expect(outcome.details.abortReason).toBeUndefined();
-		expect(child.snapshot?.details).toEqual(outcome.details);
-		expect(faux.state.callCount).toBe(callsBefore);
-	} finally {
-		await child.dispose();
-	}
-});
+	},
+);
 
 test("a run that completes naturally AT the cap keeps its real answer (no spurious wrap-up)", async () => {
 	faux.setResponses([
@@ -901,168 +1048,163 @@ test("a stale preparation cannot register into a replacement parent lifetime", a
 	}
 });
 
-test.each([
-	undefined,
-	"user",
-	"engine",
-	"",
-])("queued handle cancellation keeps its first reason (%s), settles immediately and skips provider work", async (reason) => {
-	const paced = createDelegationService({
-		resolveParent: (id) =>
-			id === parent.sessionId
-				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
-				: undefined,
-		delegationRoot,
-		scope: "ws-handle-queued-abort",
-		modelRuntime: runtime,
-		maxConcurrentPerParent: 1,
-	});
-	const started = gate();
-	const finish = gate();
-	const callsBefore = faux.state.callCount;
-	faux.setResponses([
-		async () => {
-			started.open();
-			await finish.opened;
-			return fauxAssistantMessage("A_DONE");
-		},
-		fauxAssistantMessage("C_DONE"),
-	]);
-	const childA = await paced.createChild(subagentSpec());
-	const childB = await paced.createChild(subagentSpec());
-	const childC = await paced.createChild(subagentSpec());
-	const events: LifecycleEvent[] = [];
-	childB.onEvent((event) => events.push(event));
-	try {
-		const runA = childA.runQueued("Slow.");
-		await started.opened;
-		const runB = childB.runQueued("Queued, then handle-aborted.");
-		const runC = childC.runQueued("Next surviving sibling.");
-		expect(childB.snapshot?.status).toBe("queued");
+test.each([undefined, "user", "engine", ""])(
+	"queued handle cancellation keeps its first reason (%s), settles immediately and skips provider work",
+	async (reason) => {
+		const paced = createDelegationService({
+			resolveParent: (id) =>
+				id === parent.sessionId
+					? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+					: undefined,
+			delegationRoot,
+			scope: "ws-handle-queued-abort",
+			modelRuntime: runtime,
+			maxConcurrentPerParent: 1,
+		});
+		const started = gate();
+		const finish = gate();
+		const callsBefore = faux.state.callCount;
+		faux.setResponses([
+			async () => {
+				started.open();
+				await finish.opened;
+				return fauxAssistantMessage("A_DONE");
+			},
+			fauxAssistantMessage("C_DONE"),
+		]);
+		const childA = await paced.createChild(subagentSpec());
+		const childB = await paced.createChild(subagentSpec());
+		const childC = await paced.createChild(subagentSpec());
+		const events: LifecycleEvent[] = [];
+		childB.onEvent((event) => events.push(event));
+		try {
+			const runA = childA.runQueued("Slow.");
+			await started.opened;
+			const runB = childB.runQueued("Queued, then handle-aborted.");
+			const runC = childC.runQueued("Next surviving sibling.");
+			expect(childB.snapshot?.status).toBe("queued");
 
-		await Promise.all([childB.abort(reason), childB.abort("later")]);
-		const outcomeB = await runB;
-		expect(outcomeB.status).toBe("aborted");
-		expect(outcomeB.details.abortReason).toBe(reason);
-		expect(childB.collectResult()?.details).toEqual(outcomeB.details);
-		expect(events.map((event) => event.type)).toEqual(["run-queued", "run-terminal"]);
-		expect(events.at(-1)).toMatchObject({ outcome: outcomeB });
-		expect(childA.snapshot?.status).toBe("running");
-		expect(childC.snapshot?.status).toBe("queued");
-		expect(faux.state.callCount).toBe(callsBefore + 1);
+			await Promise.all([childB.abort(reason), childB.abort("later")]);
+			const outcomeB = await runB;
+			expect(outcomeB.status).toBe("aborted");
+			expect(outcomeB.details.abortReason).toBe(reason);
+			expect(childB.collectResult()?.details).toEqual(outcomeB.details);
+			expect(events.map((event) => event.type)).toEqual(["run-queued", "run-terminal"]);
+			expect(events.at(-1)).toMatchObject({ outcome: outcomeB });
+			expect(childA.snapshot?.status).toBe("running");
+			expect(childC.snapshot?.status).toBe("queued");
+			expect(faux.state.callCount).toBe(callsBefore + 1);
 
-		finish.open();
-		expect((await runA).finalText).toBe("A_DONE");
-		expect((await runC).finalText).toBe("C_DONE");
-		expect(faux.state.callCount).toBe(callsBefore + 2);
-	} finally {
-		finish.open();
-		await paced.disposeChildrenOf(parent.sessionId);
-	}
-});
+			finish.open();
+			expect((await runA).finalText).toBe("A_DONE");
+			expect((await runC).finalText).toBe("C_DONE");
+			expect(faux.state.callCount).toBe(callsBefore + 2);
+		} finally {
+			finish.open();
+			await paced.disposeChildrenOf(parent.sessionId);
+		}
+	},
+);
 
-test.each([
-	undefined,
-	"user",
-	"engine",
-	"",
-])("running handle cancellation keeps its first reason (%s) and resets it on reuse", async (reason) => {
-	const started = gate();
-	const finish = gate();
-	faux.setResponses([
-		async () => {
-			started.open();
-			await finish.opened;
-			return fauxAssistantMessage("INTERRUPTED");
-		},
-		fauxAssistantMessage("NEXT_RUN"),
-	]);
-	const child = await service.createChild(subagentSpec());
-	try {
-		const run = child.runQueued("Reusable task.");
-		await started.opened;
-		expect(child.snapshot?.status).toBe("running");
-		const aborting = Promise.all([child.abort(reason), child.abort("later")]);
-		finish.open();
-		await aborting;
-		const outcome = await run;
-		expect(outcome.status).toBe("aborted");
-		expect(outcome.details.abortReason).toBe(reason);
-		expect(child.collectResult()?.details).toEqual(outcome.details);
+test.each([undefined, "user", "engine", ""])(
+	"running handle cancellation keeps its first reason (%s) and resets it on reuse",
+	async (reason) => {
+		const started = gate();
+		const finish = gate();
+		faux.setResponses([
+			async () => {
+				started.open();
+				await finish.opened;
+				return fauxAssistantMessage("INTERRUPTED");
+			},
+			fauxAssistantMessage("NEXT_RUN"),
+		]);
+		const child = await service.createChild(subagentSpec());
+		try {
+			const run = child.runQueued("Reusable task.");
+			await started.opened;
+			expect(child.snapshot?.status).toBe("running");
+			const aborting = Promise.all([child.abort(reason), child.abort("later")]);
+			finish.open();
+			await aborting;
+			const outcome = await run;
+			expect(outcome.status).toBe("aborted");
+			expect(outcome.details.abortReason).toBe(reason);
+			expect(child.collectResult()?.details).toEqual(outcome.details);
 
-		const terminal = structuredClone(child.snapshot);
-		await child.abort("user");
-		expect(child.snapshot).toEqual(terminal);
-		const nextRun = child.runQueued("Reusable task.");
-		expect(child.snapshot?.details.abortReason).toBeUndefined();
-		const next = await nextRun;
-		expect(next.status).toBe("completed");
-		expect(next.finalText).toBe("NEXT_RUN");
-		expect(next.details.abortReason).toBeUndefined();
-	} finally {
-		finish.open();
-		await child.dispose();
-	}
-});
+			const terminal = structuredClone(child.snapshot);
+			await child.abort("user");
+			expect(child.snapshot).toEqual(terminal);
+			const nextRun = child.runQueued("Reusable task.");
+			expect(child.snapshot?.details.abortReason).toBeUndefined();
+			const next = await nextRun;
+			expect(next.status).toBe("completed");
+			expect(next.finalText).toBe("NEXT_RUN");
+			expect(next.details.abortReason).toBeUndefined();
+		} finally {
+			finish.open();
+			await child.dispose();
+		}
+	},
+);
 
-test.each([
-	true,
-	false,
-])("running caller cancellation and handle cancellation keep the first cause (caller first: %s)", async (callerFirst) => {
-	const started = gate();
-	const finish = gate();
-	faux.setResponses([
-		async () => {
-			started.open();
-			await finish.opened;
-			return fauxAssistantMessage("INTERRUPTED");
-		},
-	]);
-	const child = await service.createChild(subagentSpec());
-	const controller = new AbortController();
-	try {
-		const run = child.runQueued("Cancellable task.", { signal: controller.signal });
-		await started.opened;
-		if (callerFirst) controller.abort();
-		const aborting = child.abort("user");
-		controller.abort();
-		finish.open();
-		await aborting;
-		const outcome = await run;
-		expect(outcome.status).toBe("aborted");
-		expect(outcome.details.abortReason).toBe(callerFirst ? undefined : "user");
-		expect(child.snapshot?.details).toEqual(outcome.details);
-	} finally {
-		finish.open();
-		await child.dispose();
-	}
-});
+test.each([true, false])(
+	"running caller cancellation and handle cancellation keep the first cause (caller first: %s)",
+	async (callerFirst) => {
+		const started = gate();
+		const finish = gate();
+		faux.setResponses([
+			async () => {
+				started.open();
+				await finish.opened;
+				return fauxAssistantMessage("INTERRUPTED");
+			},
+		]);
+		const child = await service.createChild(subagentSpec());
+		const controller = new AbortController();
+		try {
+			const run = child.runQueued("Cancellable task.", { signal: controller.signal });
+			await started.opened;
+			if (callerFirst) controller.abort();
+			const aborting = child.abort("user");
+			controller.abort();
+			finish.open();
+			await aborting;
+			const outcome = await run;
+			expect(outcome.status).toBe("aborted");
+			expect(outcome.details.abortReason).toBe(callerFirst ? undefined : "user");
+			expect(child.snapshot?.details).toEqual(outcome.details);
+		} finally {
+			finish.open();
+			await child.dispose();
+		}
+	},
+);
 
-test.each([
-	"stop",
-	"error",
-	"aborted",
-] as const)("a terminal %s outcome is unchanged by user cancellation, including in its lifecycle callback", async (stopReason) => {
-	faux.setResponses([fauxAssistantMessage("FINAL", { stopReason })]);
-	const child = await service.createChild(subagentSpec());
-	let terminalAbort: Promise<void> | undefined;
-	child.onEvent((event) => {
-		if (event.type === "run-terminal") terminalAbort = child.abort("user");
-	});
-	try {
-		await child.abort("user");
-		const outcome = await child.runQueued("Finish naturally.");
-		await terminalAbort;
-		expect(outcome.status).toBe(stopReason === "stop" ? "completed" : stopReason);
-		expect(outcome.details.abortReason).toBeUndefined();
-		const terminal = structuredClone(child.snapshot);
-		await child.abort("user");
-		expect(child.snapshot).toEqual(terminal);
-		expect(child.snapshot?.details).toEqual(outcome.details);
-	} finally {
-		await child.dispose();
-	}
-});
+test.each(["stop", "error", "aborted"] as const)(
+	"a terminal %s outcome is unchanged by user cancellation, including in its lifecycle callback",
+	async (stopReason) => {
+		faux.setResponses([fauxAssistantMessage("FINAL", { stopReason })]);
+		const child = await service.createChild(subagentSpec());
+		let terminalAbort: Promise<void> | undefined;
+		child.onEvent((event) => {
+			if (event.type === "run-terminal") terminalAbort = child.abort("user");
+		});
+		try {
+			await child.abort("user");
+			const outcome = await child.runQueued("Finish naturally.");
+			await terminalAbort;
+			expect(outcome.status).toBe(stopReason === "stop" ? "completed" : stopReason);
+			expect(outcome.details.abortReason).toBeUndefined();
+			const terminal = structuredClone(child.snapshot);
+			await child.abort("user");
+			expect(child.snapshot).toEqual(terminal);
+			expect(child.snapshot?.details).toEqual(outcome.details);
+		} finally {
+			await child.dispose();
+		}
+	},
+);
 
 test("ChildHandle.dispose settles a queued run before removing the child", async () => {
 	const paced = createDelegationService({
@@ -1376,7 +1518,7 @@ test("a child loads the parent extension that owns its model's provider, opted i
 }
 `,
 	);
-	registerFauxProvider(runtime, "bound");
+	const boundFaux = registerFauxProvider(runtime, "bound");
 	const servesObserved: FauxResponseFactory = (_context, options) =>
 		seen.has(options?.sessionId ?? "")
 			? fauxAssistantMessage("SERVED")
@@ -1403,7 +1545,7 @@ test("a child loads the parent extension that owns its model's provider, opted i
 		modelRuntime: runtime,
 	});
 	try {
-		faux.setResponses([servesObserved]);
+		boundFaux.setResponses([servesObserved]);
 		const unowned = await service.createChild(subagentSpec(boundChild));
 		try {
 			expect((await unowned.runQueued("Go.")).errorMessage).toBe("unobserved session");
@@ -1411,7 +1553,7 @@ test("a child loads the parent extension that owns its model's provider, opted i
 			await unowned.dispose();
 		}
 
-		faux.setResponses([servesObserved]);
+		boundFaux.setResponses([servesObserved]);
 		const bound = await owning.createChild(subagentSpec(boundChild));
 		const outcome = await bound.runQueued("Go.");
 		expect(outcome.status).toBe("completed");

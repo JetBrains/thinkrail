@@ -3,9 +3,9 @@ import type { AgentDefinition } from "./definitions";
 const SPEC_FIRST = `If the repository carries specs (a SPEC.md beside a module, or top-level
 goal/architecture documents), treat them as ground truth: read the relevant spec before the code,
 and check your findings against the decisions recorded there. When spec tools are available
-(spec_grep, spec_get, spec_graph), reach for them before grepping raw files.`;
+(spec_search, spec_grep, spec_get, spec_graph), reach for them before grepping raw files.`;
 
-const SPEC_READ_TOOLS = ["spec_grep", "spec_get", "spec_graph"];
+const SPEC_READ_TOOLS = ["spec_search", "spec_grep", "spec_get", "spec_graph"];
 
 export const BUILTIN_AGENTS: readonly AgentDefinition[] = [
 	{

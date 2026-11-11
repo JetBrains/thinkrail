@@ -86,9 +86,3 @@ export function focusQuestionAttention(card: HTMLElement): void {
 	if (selected) selected.focus({ preventScroll: true });
 	else focusCurrentQuestionPage(card);
 }
-
-export function currentQuestionPageStart(card: HTMLElement): HTMLElement {
-	return (
-		activeQuestionPage(card).querySelector<HTMLElement>('[data-ask-page-start="true"]') ?? card
-	);
-}

@@ -10,8 +10,8 @@ import type {
 	ProjectPathStatus,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
-import { canonicalPath, git, INDEX_WRITE_TIMEOUT_MS } from "../git";
-import { loadProjects, loadWorkspaces, saveProjects } from "../persistence";
+import { canonicalPath, git, gitAsync, INDEX_WRITE_TIMEOUT_MS, throwOnTimeout } from "../git";
+import { landsInChatsRoot, loadProjects, loadWorkspaces, saveProjects } from "../persistence";
 
 type ProjectPublisher = (project: Project) => void;
 
@@ -104,11 +104,54 @@ export function getProjects(): Project[] {
 	return projects;
 }
 
+/** The one reserved-root door check, before any filesystem or git side effect; the path keeps its spelling. */
+export function assertOutsideChatsRoot(path: string, use = "opened as a project"): void {
+	if (landsInChatsRoot(path)) {
+		throw new CodedError(
+			"CHATS_CONTAINER",
+			`Chats without a project live here; this folder cannot be ${use}.`,
+		);
+	}
+}
+
+const bootstraps = new Map<string, Promise<void>>();
+
+function pendingBootstrap(path: string): Promise<void> | undefined {
+	return bootstraps.get(canonicalPath(path));
+}
+
+function refuseWhileBootstrapping(path: string, own?: string): void {
+	const key = canonicalPath(path);
+	if (key !== own && bootstraps.has(key))
+		throw new CodedError(
+			"PROJECT_BOOTSTRAPPING",
+			`This folder is still being set up as a git repository: ${path}`,
+		);
+}
+
+async function holdingBootstrap<T>(path: string, run: (own: string) => Promise<T>): Promise<T> {
+	const own = canonicalPath(path);
+	const settled = Promise.withResolvers<void>();
+	bootstraps.set(own, settled.promise);
+	try {
+		return await run(own);
+	} finally {
+		bootstraps.delete(own);
+		settled.resolve();
+	}
+}
+
 export function openProject(inputPath: string, displayName?: string): Project {
-	const path = resolveProjectPath(inputPath);
+	return openResolvedProject(resolveProjectPath(inputPath), displayName);
+}
+
+function openResolvedProject(path: string, displayName?: string, ownBootstrap?: string): Project {
 	assertProjectPathAllowed(path);
+	assertOutsideChatsRoot(path);
+	refuseWhileBootstrapping(path, ownBootstrap);
 	const root = gitToplevel(path);
 	if (!root) throw new CodedError("NOT_GIT", `Not a git repository: ${path}`);
+	refuseWhileBootstrapping(root, ownBootstrap);
 
 	const projects = getProjects();
 	const existing = projects.find((p) => p.path === root);
@@ -360,10 +403,17 @@ export function setProjectGroupEnabled(id: string, group: string, enabled: boole
 	const projects = getProjects();
 	const project = projects.find((p) => p.id === id);
 	if (!project) throw new Error(`Unknown project: ${id}`);
-	const groups = new Set(project.disabledGroups ?? []);
-	if (enabled) groups.delete(group);
-	else groups.add(group);
-	project.disabledGroups = [...groups];
+	const disabled = new Set(project.disabledGroups ?? []);
+	const on = new Set(project.enabledGroups ?? []);
+	if (enabled) {
+		disabled.delete(group);
+		on.add(group);
+	} else {
+		disabled.add(group);
+		on.delete(group);
+	}
+	project.disabledGroups = [...disabled];
+	project.enabledGroups = [...on];
 	saveProjects(projects);
 	return project;
 }
@@ -384,25 +434,35 @@ function inspectResolvedProjectPath(path: string): ProjectPathStatus {
 }
 
 export function inspectProjectPath(inputPath: string): ProjectPathStatus {
-	return inspectResolvedProjectPath(resolveProjectPath(inputPath));
+	const path = resolveProjectPath(inputPath);
+	assertOutsideChatsRoot(path);
+	return inspectResolvedProjectPath(path);
 }
 
-export function initProject(inputPath: string): Project {
+export async function initProject(inputPath: string): Promise<Project> {
 	const path = resolveProjectPath(inputPath);
 	assertProjectPathAllowed(path);
+	assertOutsideChatsRoot(path);
+	const pending = pendingBootstrap(path);
+	if (pending) {
+		await pending;
+		return initProject(inputPath);
+	}
 	const status = inspectResolvedProjectPath(path);
 	if (status.kind === "missing") throw new Error(`No such folder: ${path}`);
 	if (status.kind === "notDirectory") throw new Error(`Not a folder: ${path}`);
 	if (status.kind === "repo") return openProject(path);
-	bootstrapRepository(path);
-	return openProject(path);
+	return holdingBootstrap(path, async (own) => {
+		await bootstrapRepository(path);
+		return openResolvedProject(path, undefined, own);
+	});
 }
 
-export function createProject(
+export async function createProject(
 	parentPath: string,
 	requestedName: string,
 	displayName?: string,
-): Project {
+): Promise<Project> {
 	const name = requestedName.trim();
 	if (!name || name === "." || name === ".." || /[/\\\0]/.test(name)) {
 		throw new Error(`Invalid project folder name: ${requestedName}`);
@@ -410,7 +470,13 @@ export function createProject(
 	const parent = resolveProjectPath(parentPath);
 	const path = join(parent, name);
 	assertProjectPathAllowed(path);
+	assertOutsideChatsRoot(path);
 	mkdirSync(parent, { recursive: true });
+	const pending = pendingBootstrap(path);
+	if (pending) {
+		await pending;
+		return createProject(parentPath, requestedName, displayName);
+	}
 	let created = false;
 	try {
 		if (!statSync(path).isDirectory()) throw new Error(`Not a folder: ${path}`);
@@ -421,24 +487,35 @@ export function createProject(
 		mkdirSync(path);
 		created = true;
 	}
-	try {
-		bootstrapRepository(path);
-		return openProject(path, displayName);
-	} catch (err) {
-		rmSync(join(path, ".git"), { recursive: true, force: true });
-		if (created && readdirSync(path).length === 0) rmdirSync(path);
-		throw err;
-	}
+	return holdingBootstrap(path, async (own) => {
+		try {
+			await bootstrapRepository(path);
+			return openResolvedProject(path, displayName, own);
+		} catch (err) {
+			rmSync(join(path, ".git"), { recursive: true, force: true });
+			if (created && readdirSync(path).length === 0) rmdirSync(path);
+			throw err;
+		}
+	});
 }
 
-function bootstrapRepository(path: string): void {
+async function bootstrapStep(
+	path: string,
+	step: string,
+	args: string[],
+	opts: { timeoutMs?: number } = {},
+): Promise<void> {
+	const result = throwOnTimeout(await gitAsync(path, args, opts), `run ${step}`);
+	if (!result.ok) throw gitStepFailed(step, path, result.err);
+}
+
+async function bootstrapRepository(path: string): Promise<void> {
 	const gitDir = join(path, ".git");
 	const createdGitDir = !existsSync(gitDir);
+	const indexWrite = { timeoutMs: INDEX_WRITE_TIMEOUT_MS ?? Number.POSITIVE_INFINITY };
 	try {
-		const init = git(path, ["init", "-b", "main"]);
-		if (!init.ok) throw gitStepFailed("git init", path, init.err);
-		const added = git(path, ["add", "-A"], { timeoutMs: INDEX_WRITE_TIMEOUT_MS });
-		if (!added.ok) throw gitStepFailed("git add", path, added.err);
+		await bootstrapStep(path, "git init", ["init", "-b", "main"]);
+		await bootstrapStep(path, "git add", ["add", "-A"], indexWrite);
 
 		const identity: string[] = [];
 		const identityProbe = { action: "read the git identity" };
@@ -446,10 +523,13 @@ function bootstrapRepository(path: string): void {
 			identity.push("-c", "user.name=ThinkRail");
 		if (!git(path, ["config", "user.email"], identityProbe).out)
 			identity.push("-c", "user.email=thinkrail@localhost");
-		const commit = git(path, [...identity, "commit", "--allow-empty", "-m", "Initial commit"], {
-			timeoutMs: INDEX_WRITE_TIMEOUT_MS,
-		});
-		if (!commit.ok) throw gitStepFailed("git commit", path, commit.err);
+		const noAutoGc = ["-c", "maintenance.auto=false", "-c", "gc.auto=0"];
+		await bootstrapStep(
+			path,
+			"git commit",
+			[...identity, ...noAutoGc, "commit", "--allow-empty", "-m", "Initial commit"],
+			indexWrite,
+		);
 	} catch (err) {
 		if (createdGitDir) rmSync(gitDir, { recursive: true, force: true });
 		throw err;

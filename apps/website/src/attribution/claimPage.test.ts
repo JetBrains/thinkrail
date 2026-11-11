@@ -111,15 +111,16 @@ describe("attribution claim page", () => {
 			name: "marketing embedded in another field name",
 			cookie: `CookieConsent=${encodeURIComponent("{notmarketing:true}")}`,
 		},
-	])("does not read or bind with $name consent and still navigates to the blog", async ({
-		cookie,
-	}) => {
-		const page = fixture({ context, cookie });
-		await runClaimPage(page.dependencies);
-		expect(page.contextReads()).toBe(0);
-		expect(page.requests).toHaveLength(0);
-		expect(page.replacements).toEqual(["/blog/"]);
-	});
+	])(
+		"does not read or bind with $name consent and still navigates to the blog",
+		async ({ cookie }) => {
+			const page = fixture({ context, cookie });
+			await runClaimPage(page.dependencies);
+			expect(page.contextReads()).toBe(0);
+			expect(page.requests).toHaveLength(0);
+			expect(page.replacements).toEqual(["/blog/"]);
+		},
+	);
 
 	test("binds when Cookiebot records that consent is not required", async () => {
 		const page = fixture({ context, cookie: "CookieConsent=-1" });

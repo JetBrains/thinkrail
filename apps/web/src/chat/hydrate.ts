@@ -2,13 +2,15 @@ import type { AgentSettlement, TranscriptMessage } from "@thinkrail/contracts";
 import {
 	customMessageText,
 	isBackgroundCommandCompletionMessage,
+	isChatHandoffMessage,
+	isContinueInWorkspaceRequestMessage,
 	isControlMessage,
 	isRetriedAttempt,
 	isSubagentCompletionMessage,
 	isTodoReviewFixMessage,
 	readToolResponseMessage,
 } from "@thinkrail/contracts";
-import { userText } from "../lib";
+import { randomUuid, userText } from "../lib";
 import { assistantFailure } from "./assistantFailure";
 import { insertRoundCloser } from "./roundCloser";
 import type { ChatTurn, ToolResultState } from "./types";
@@ -31,7 +33,7 @@ function transcriptTurnId(
 ): string {
 	return options.idScope
 		? `${options.idScope}:${message.role}:${message.timestamp}:${index}`
-		: crypto.randomUUID();
+		: randomUuid();
 }
 
 export function messagesToRuntime(
@@ -98,6 +100,22 @@ export function messagesToRuntime(
 				text: customMessageText(message.content),
 				timestamp: message.timestamp,
 			});
+		} else if (isContinueInWorkspaceRequestMessage(message)) {
+			turnId = transcriptTurnId(message, index, options);
+			turns.push({
+				kind: "continuationRequest",
+				id: turnId,
+				details: message.details,
+				timestamp: message.timestamp,
+			});
+		} else if (isChatHandoffMessage(message)) {
+			turnId = transcriptTurnId(message, index, options);
+			turns.push({
+				kind: "handoff",
+				id: turnId,
+				details: message.details,
+				timestamp: message.timestamp,
+			});
 		}
 		turnIdByMessageIndex.push(turnId);
 	}
@@ -115,7 +133,7 @@ export function messagesToRuntime(
 				kind: "error",
 				id: options.idScope
 					? `${options.idScope}:error:${persistedTerminal?.timestamp ?? "settlement"}`
-					: crypto.randomUUID(),
+					: randomUuid(),
 				text: failure.message,
 				failure: failure.failure,
 				recovery: "try-again",
