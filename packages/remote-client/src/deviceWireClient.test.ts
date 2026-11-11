@@ -70,6 +70,20 @@ describe("createDeviceWireClient", () => {
 		expect(io.sent.at(-1)).toEqual({ ack: [id] });
 	});
 
+	test("responses read together are acked in one frame", async () => {
+		const io = fakeChannel();
+		const client = createDeviceWireClient();
+		client.attach(io.channel);
+		const first = client.request("project.list");
+		const firstId = io.sent.at(-1)?.id as string;
+		const second = client.request("session.list");
+		const secondId = io.sent.at(-1)?.id as string;
+		io.deliver({ id: firstId, ok: true, result: 1 });
+		io.deliver({ id: secondId, ok: false, error: "nope" });
+		await Promise.allSettled([first, second]);
+		expect(io.sent.filter((frame) => "ack" in frame)).toEqual([{ ack: [firstId, secondId] }]);
+	});
+
 	test("rejects with a RemoteRequestError carrying the error code", async () => {
 		const io = fakeChannel();
 		const client = createDeviceWireClient();

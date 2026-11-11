@@ -1,5 +1,4 @@
 import { t } from "@thinkrail/locales/react";
-import { useEffect, useRef } from "react";
 import { errorText } from "../transport";
 
 const SESSION_CLOSED = "remote session closed";
@@ -29,16 +28,4 @@ export function singleFlight(onPending: (pending: boolean) => void = () => {}) {
 			onPending(false);
 		});
 	};
-}
-
-/** False once the screen left, so a late answer does not navigate from wherever the user went since. */
-export function useMounted(): { readonly current: boolean } {
-	const mounted = useRef(true);
-	useEffect(() => {
-		mounted.current = true;
-		return () => {
-			mounted.current = false;
-		};
-	}, []);
-	return mounted;
 }

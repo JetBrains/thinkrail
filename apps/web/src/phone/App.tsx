@@ -2,7 +2,6 @@ import { App as CapApp } from "@capacitor/app";
 import { chatTitle } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import {
-	connectRemoteProject,
 	createHostRegistry,
 	createRemoteSessions,
 	type RemoteSessionItem,
@@ -15,11 +14,13 @@ import { ComputersScreen } from "./ComputersScreen";
 import { needsYouCount, useDoneSessions } from "./chats";
 import { deviceLabel } from "./deviceLabel";
 import { localStore } from "./deviceStore";
-import { connectSavedHost, failureOf, type HostFailure, type HostStatus } from "./hostStatus";
+import { failureOf, type HostFailure, type HostStatus, hostStatusOf } from "./hostStatus";
+import { useRemoteSessions } from "./hostView";
 import { NewWorktreeScreen } from "./NewWorktreeScreen";
 import {
 	leaveHost,
 	pop,
+	popIf,
 	push,
 	type Route,
 	replaceTop,
@@ -48,7 +49,8 @@ export function App() {
 	const registry = useMemo(() => createHostRegistry(localStore), []);
 	const controller = useMemo(() => createRemoteSessions(), []);
 	const [hosts, setHosts] = useState<SavedHost[]>(() => registry.list());
-	const [items, setItems] = useState<RemoteSessionItem[]>([]);
+	const remote = useRemoteSessions(controller);
+	const { items } = remote;
 	const [pair, setPair] = useState<PairState>({ kind: "idle" });
 	const [tab, setTab] = useState<Tab>("computers");
 	const [stack, setStack] = useState<Stack>([]);
@@ -61,73 +63,26 @@ export function App() {
 		setPreferences(next);
 	}, []);
 	const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
-	const toggleProject = useCallback((key: string) => {
-		setExpanded((current) => {
-			const next = new Set(current);
-			if (!next.delete(key)) next.add(key);
-			return next;
-		});
-	}, []);
+	const toggleProject = useCallback((key: string) => setExpanded(toggleIn(key)), []);
 	const [collapsedHosts, setCollapsedHosts] = useState<ReadonlySet<string>>(() => new Set());
-	const toggleHost = useCallback((hostKey: string) => {
-		setCollapsedHosts((current) => {
-			const next = new Set(current);
-			if (!next.delete(hostKey)) next.add(hostKey);
-			return next;
-		});
-	}, []);
+	const toggleHost = useCallback((hostKey: string) => setCollapsedHosts(toggleIn(hostKey)), []);
 	const t = useT();
-	const [failures, setFailures] = useState<ReadonlyMap<string, HostFailure>>(() => new Map());
-	const markFailure = useCallback((hostKey: string, failure: HostFailure | null) => {
-		setFailures((current) => {
-			if (failure === null && !current.has(hostKey)) return current;
-			const next = new Map(current);
-			if (failure === null) next.delete(hostKey);
-			else next.set(hostKey, failure);
-			return next;
-		});
-	}, []);
-	const connectHost = useCallback(
-		(host: SavedHost): Promise<void> => connectSavedHost(controller, host, markFailure),
-		[controller, markFailure],
-	);
-	const statusOf = (hostKey: string): HostStatus => {
-		const failure = failures.get(hostKey);
-		if (controller.clientFor(hostKey)) {
-			if (!controller.isReconnecting(hostKey)) return { kind: "connected" };
-			return failure ? { kind: "unreachable", failure } : { kind: "connecting" };
-		}
-		return failure ? { kind: "unreachable", failure } : { kind: "connecting" };
-	};
+	const statusOf = (hostKey: string): HostStatus => hostStatusOf(remote.statuses.get(hostKey));
 	const forgetHost = useCallback(
 		(hostKey: string) => {
 			controller.disconnect(hostKey);
-			markFailure(hostKey, null);
 			setStack((current) => leaveHost(current, hostKey));
 			setHosts(registry.remove(hostKey));
 		},
-		[controller, registry, markFailure],
+		[controller, registry],
 	);
 
 	const pairWith = useCallback(
 		async (link: string): Promise<boolean> => {
 			setPair({ kind: "pairing" });
 			try {
-				const connection = await connectRemoteProject(link, {
-					label: deviceLabel(navigator.userAgent),
-				});
-				const host: SavedHost = {
-					hostKey: connection.hostKey,
-					relayUrl: connection.relayUrl,
-					relayUrls: connection.relayUrls,
-					...(connection.nostr ? { nostr: connection.nostr } : {}),
-					label: connection.hostName ?? hostLabelOf(connection),
-					pairedAt: Date.now(),
-				};
-				connection.close();
-				controller.disconnect(host.hostKey);
+				const host = await controller.pair(link, { label: deviceLabel(navigator.userAgent) });
 				setHosts(registry.add(host));
-				await connectHost(host);
 				setPair({ kind: "idle" });
 				return true;
 			} catch (error) {
@@ -135,44 +90,26 @@ export function App() {
 				return false;
 			}
 		},
-		[controller, registry, connectHost],
+		[controller, registry],
 	);
 
 	useEffect(() => {
-		const offLost = controller.onLost((hostKey, error) => {
-			markFailure(hostKey, failureOf(error));
-			setStack((current) => leaveHost(current, hostKey));
-		});
-		const offRetry = controller.onRetryFailed((hostKey, error) =>
-			markFailure(hostKey, failureOf(error)),
+		const offLost = controller.onLost((hostKey) =>
+			setStack((current) => leaveHost(current, hostKey)),
 		);
 		const offRoutes = controller.onRoutes((host) => setHosts(registry.update(host)));
 		const retryNow = (): void => controller.reconnectNow();
 		const resume = CapApp.addListener("resume", retryNow);
 		window.addEventListener("online", retryNow);
-		const unsubscribe = controller.subscribe(() => {
-			setItems(controller.items());
-			setFailures((current) => {
-				const back = [...current.keys()].filter(
-					(hostKey) => controller.clientFor(hostKey) && !controller.isReconnecting(hostKey),
-				);
-				if (back.length === 0) return current;
-				const next = new Map(current);
-				for (const hostKey of back) next.delete(hostKey);
-				return next;
-			});
-		});
-		for (const host of registry.list()) void connectHost(host);
+		for (const host of registry.list()) controller.connect(host);
 		return () => {
 			offLost();
-			offRetry();
 			offRoutes();
-			unsubscribe();
 			void resume.then((handle) => handle.remove());
 			window.removeEventListener("online", retryNow);
 			controller.stop();
 		};
-	}, [controller, registry, markFailure, connectHost]);
+	}, [controller, registry]);
 
 	useEffect(() => {
 		const onLink = (url: string | undefined): void => {
@@ -193,7 +130,6 @@ export function App() {
 		return true;
 	}, [stack.length]);
 	const open = (route: Route): void => setStack((current) => push(current, route));
-	const replace = (route: Route): void => setStack((current) => replaceTop(current, route));
 
 	useEffect(() => {
 		const listener = CapApp.addListener("backButton", () => {
@@ -228,6 +164,9 @@ export function App() {
 	const tabBar = <TabBar tabs={TABS} active={tab} badge={needsYouCount(items)} onSelect={setTab} />;
 	const screen = (route: Route, index: number): ReactNode => {
 		const label = backLabel(index);
+		const replace = (to: Route, under = 0): void =>
+			setStack((current) => replaceTop(current, route, to, under));
+		const close = (): void => setStack((current) => popIf(current, route));
 		switch (route.kind) {
 			case "addComputer":
 				return (
@@ -235,23 +174,20 @@ export function App() {
 						pair={pair}
 						onPair={async (link) => {
 							const paired = await pairWith(link);
-							if (paired)
-								setStack((current) =>
-									current.at(-1)?.kind === "addComputer" ? pop(current) : current,
-								);
+							if (paired) close();
 							return paired;
 						}}
 						backLabel={label}
-						onBack={back}
+						onBack={close}
 					/>
 				);
 			case "newWorktree":
 				return (
 					<NewWorktreeScreen
 						project={route.project}
-						client={controller.clientFor(route.hostKey)}
+						client={remote.clients.get(route.hostKey) ?? null}
 						backLabel={label}
-						onBack={back}
+						onBack={close}
 						onStarted={({ workspace, chat, promptError }, prompt) =>
 							replace({
 								kind: "chat",
@@ -274,12 +210,12 @@ export function App() {
 					<WorkspaceOpener
 						workspace={route.workspace}
 						sessionId={route.sessionId}
-						client={controller.clientFor(route.hostKey)}
+						client={remote.clients.get(route.hostKey) ?? null}
 						items={hostItems(items, route.hostKey)}
 						backLabel={label}
-						onBack={back}
+						onBack={close}
 						onOpen={(chat) => replace({ ...route, kind: "chat", chat })}
-						readOnly={controller.accessFor(route.hostKey) === "read"}
+						readOnly={remote.access.get(route.hostKey) === "read"}
 					/>
 				);
 			case "chat":
@@ -296,7 +232,7 @@ export function App() {
 						controller={controller}
 						items={hostItems(items, route.hostKey)}
 						backLabel={label}
-						onBack={back}
+						onBack={close}
 						onHistory={() =>
 							open({
 								kind: "history",
@@ -306,7 +242,7 @@ export function App() {
 								chat: route.chat,
 							})
 						}
-						readOnly={controller.accessFor(route.hostKey) === "read"}
+						readOnly={remote.access.get(route.hostKey) === "read"}
 						onOpenChat={(chat) => replace({ ...route, chat })}
 						onOpenSubagent={(childSessionId) =>
 							open({
@@ -329,25 +265,24 @@ export function App() {
 							parentSessionId: route.chat.sessionId,
 							childSessionId: route.childSessionId,
 						}}
-						client={controller.clientFor(route.hostKey)}
+						client={remote.clients.get(route.hostKey) ?? null}
 						workspaceRoot={route.workspace.worktreePath}
 						backLabel={label}
-						onBack={back}
+						onBack={close}
 					/>
 				);
 			case "history":
 				return (
 					<ChatHistoryScreen
 						workspace={route.workspace}
-						client={controller.clientFor(route.hostKey)}
+						client={remote.clients.get(route.hostKey) ?? null}
 						items={hostItems(items, route.hostKey)}
 						current={route.chat.sessionId}
-						readOnly={controller.accessFor(route.hostKey) === "read"}
+						readOnly={remote.access.get(route.hostKey) === "read"}
 						backLabel={label}
-						onBack={back}
+						onBack={close}
 						onOpen={(chat) =>
-							setStack((current) => [
-								...pop(pop(current)),
+							replace(
 								{
 									kind: "chat",
 									hostKey: route.hostKey,
@@ -355,7 +290,8 @@ export function App() {
 									workspace: route.workspace,
 									chat,
 								},
-							])
+								1,
+							)
 						}
 					/>
 				);
@@ -375,7 +311,7 @@ export function App() {
 					onToggleHost={toggleHost}
 					expanded={expanded}
 					onToggle={toggleProject}
-					onReconnect={(host) => void connectHost(host)}
+					onReconnect={(host) => controller.connect(host)}
 					onForget={(host) => forgetHost(host.hostKey)}
 					onNewWorktree={(hostKey, project) => open({ kind: "newWorktree", hostKey, project })}
 					onOpen={(hostKey, project, workspace) =>
@@ -407,7 +343,7 @@ export function App() {
 				<SettingsScreen
 					hosts={hosts}
 					statusOf={statusOf}
-					onReconnect={(host) => void connectHost(host)}
+					onReconnect={(host) => controller.connect(host)}
 					onForget={forgetHost}
 					pair={pair}
 					onPair={pairWith}
@@ -425,7 +361,6 @@ export function App() {
 	);
 }
 
-/** One screen of the stack: the screens under the top stay mounted (scroll, loaded lists, transcript) but hidden and inert, so going back shows them as they were. */
 function Layer({ covered, children }: { covered: boolean; children: ReactNode }) {
 	return (
 		<div
@@ -457,16 +392,10 @@ function screenKey(route: Route): string {
 const hostItems = (items: RemoteSessionItem[], hostKey: string) =>
 	items.filter((item) => item.hostKey === hostKey);
 
-/** A host name for a computer whose link sent none: the relay's address, else the Nostr relay it answered on. */
-function hostLabelOf(connection: {
-	relayUrl: string;
-	relayUrls: readonly string[];
-	nostr?: { relays: readonly string[] };
-}): string {
-	const url = connection.relayUrl || connection.relayUrls[0] || connection.nostr?.relays[0] || "";
-	try {
-		return new URL(url).host;
-	} catch {
-		return url;
-	}
-}
+const toggleIn =
+	(key: string) =>
+	(current: ReadonlySet<string>): ReadonlySet<string> => {
+		const next = new Set(current);
+		if (!next.delete(key)) next.add(key);
+		return next;
+	};

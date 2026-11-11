@@ -12,7 +12,7 @@ import type { DeviceWireClient } from "@thinkrail/remote-client";
 import { Button } from "@thinkrail/ui/button";
 import { Textarea } from "@thinkrail/ui/textarea";
 import { useState } from "react";
-import { reasonOf, useMounted } from "./async";
+import { reasonOf } from "./async";
 import { Screen } from "./layout";
 import { ModelSheet } from "./ModelSheet";
 import {
@@ -60,7 +60,6 @@ export function NewWorktreeScreen({
 	const [creating, setCreating] = useState(false);
 	const [failure, setFailure] = useState<string | null>(null);
 	const [created, setCreated] = useState<Workspace | null>(null);
-	const mounted = useMounted();
 
 	const defaultBranch = branches.kind === "ready" ? branches.value.defaultBranch : null;
 	const base = baseRef ?? defaultBranch;
@@ -81,7 +80,7 @@ export function NewWorktreeScreen({
 			created,
 		}).then(
 			(started) => {
-				if (mounted.current) onStarted(started, prompt.trim());
+				onStarted(started, prompt.trim());
 			},
 			(error: unknown) => {
 				setCreating(false);

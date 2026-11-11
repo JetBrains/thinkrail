@@ -1,15 +1,6 @@
 export { type RemoteConnectCode, RemoteConnectError } from "./connectError";
-export { type DeviceChannel, toDeviceChannel } from "./deviceChannel";
-export {
-	connectRemoteProject,
-	connectSavedHost,
-	type RemoteConnection,
-} from "./deviceConnector";
-export {
-	createDeviceWireClient,
-	type DeviceWireClient,
-	RemoteRequestError,
-} from "./deviceWireClient";
+export { connectRemoteProject, type RemoteConnection } from "./deviceConnector";
+export { type DeviceWireClient, RemoteRequestError } from "./deviceWireClient";
 export {
 	createHostRegistry,
 	type HostRegistry,
@@ -19,6 +10,8 @@ export {
 export { RelayUnreachableError } from "./relayPicker";
 export {
 	createRemoteSessions,
+	type HostConnectionStatus,
 	type RemoteSessionItem,
 	type RemoteSessionsController,
+	type RemoteSessionsSnapshot,
 } from "./remoteSessions";
