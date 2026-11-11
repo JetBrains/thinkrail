@@ -236,6 +236,9 @@ test("resource descriptions derive language and mime without overriding host met
 			mime: "application/custom",
 		}),
 	).toMatchObject({ mime: "application/custom", text: false });
+	expect(
+		describeResource("ws", "docs/page.mdx", { hash: "hash", byteLength: 5, text: true }),
+	).toMatchObject({ mime: "text/markdown", language: "mdx" });
 });
 
 test("placement uses anchor capabilities for the requested intent", () => {

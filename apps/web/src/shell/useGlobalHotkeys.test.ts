@@ -23,7 +23,7 @@ const all = {
 	workspace: true,
 	bottom: true,
 	newWorkspace: true,
-	sessionSwitcher: true,
+	search: true,
 } as const;
 
 describe("global hotkey routing", () => {
@@ -45,15 +45,13 @@ describe("global hotkey routing", () => {
 		expect(globalHotkeyCommand(key("KeyB", { altKey: true }), all, false, "Linux")).toBeNull();
 	});
 
-	test("routes Mod+K to session-switcher when available, suppressed behind modal", () => {
-		expect(globalHotkeyCommand(key("KeyK"), all, false, "Linux")).toBe("session-switcher");
+	test("routes Mod+K to search when available, suppressed behind modal", () => {
+		expect(globalHotkeyCommand(key("KeyK"), all, false, "Linux")).toBe("search");
 		expect(
 			globalHotkeyCommand(key("KeyK", { ctrlKey: false, metaKey: true }), all, false, "MacIntel"),
-		).toBe("session-switcher");
+		).toBe("search");
 		expect(globalHotkeyCommand(key("KeyK"), all, true, "Linux")).toBeNull();
-		expect(
-			globalHotkeyCommand(key("KeyK"), { ...all, sessionSwitcher: false }, false, "Linux"),
-		).toBeNull();
+		expect(globalHotkeyCommand(key("KeyK"), { ...all, search: false }, false, "Linux")).toBeNull();
 		expect(globalHotkeyCommand(key("KeyK", { shiftKey: true }), all, false, "Linux")).toBeNull();
 		expect(globalHotkeyCommand(key("KeyK", { altKey: true }), all, false, "Linux")).toBeNull();
 	});
@@ -82,6 +80,29 @@ describe("global hotkey routing", () => {
 		expect(globalHotkeyCommand(key("KeyN", { metaKey: false }), all, false, "MacIntel")).toBeNull();
 	});
 
+	test("routes Mod+Shift+F to find-in-files only when available, never with Alt or behind a modal; plain Mod+F stays the browser's", () => {
+		const withFind = { ...all, findInFiles: true };
+		expect(globalHotkeyCommand(key("KeyF", { shiftKey: true }), withFind, false, "Linux")).toBe(
+			"find-in-files",
+		);
+		expect(
+			globalHotkeyCommand(
+				key("KeyF", { ctrlKey: false, metaKey: true, shiftKey: true }),
+				withFind,
+				false,
+				"MacIntel",
+			),
+		).toBe("find-in-files");
+		expect(globalHotkeyCommand(key("KeyF", { shiftKey: true }), all, false, "Linux")).toBeNull();
+		expect(globalHotkeyCommand(key("KeyF"), withFind, false, "Linux")).toBeNull();
+		expect(
+			globalHotkeyCommand(key("KeyF", { shiftKey: true, altKey: true }), withFind, false, "Linux"),
+		).toBeNull();
+		expect(
+			globalHotkeyCommand(key("KeyF", { shiftKey: true }), withFind, true, "Linux"),
+		).toBeNull();
+	});
+
 	test("does not claim unavailable workspace commands or any panel chord behind a modal", () => {
 		expect(
 			globalHotkeyCommand(
@@ -91,7 +112,7 @@ describe("global hotkey routing", () => {
 					workspace: false,
 					bottom: false,
 					newWorkspace: false,
-					sessionSwitcher: false,
+					search: false,
 				},
 				false,
 				"Linux",

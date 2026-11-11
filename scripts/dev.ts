@@ -1,10 +1,14 @@
 #!/usr/bin/env bun
 
-import { findFreePort } from "@thinkrail/shared/freePort";
+import { findFreePort, parsePort } from "@thinkrail/shared/freePort";
 import { printStartupMark } from "@thinkrail/shared/startupMark";
 
 const host = process.env.THINKRAIL_HOST ?? "localhost";
-const preferred = Number(process.env.THINKRAIL_PORT ?? 24242);
+const rawPort = process.env.THINKRAIL_PORT;
+const preferred = parsePort(rawPort) ?? 24242;
+if (rawPort !== undefined && parsePort(rawPort) === undefined) {
+	console.warn(`thinkrail dev: ignoring invalid THINKRAIL_PORT=${rawPort}; using ${preferred}`);
+}
 const port = await findFreePort(preferred, host);
 if (port !== preferred) {
 	console.log(`thinkrail dev: host port ${preferred} is in use → using ${port}`);

@@ -1,6 +1,16 @@
-import { readdirSync, readFileSync, realpathSync } from "node:fs";
+import {
+	closeSync,
+	type Dirent,
+	openSync,
+	readdirSync,
+	readFileSync,
+	readSync,
+	realpathSync,
+	statSync,
+} from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { FileNode, ResourceMeta } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 import { loadWorkspaces } from "../persistence";
 import { decodeText, resourceMeta } from "./content";
 
@@ -45,6 +55,14 @@ function assertExistingAncestorContained(root: string, abs: string): void {
 	}
 }
 
+function resolveUnderRoot(root: string, path: string, followLeaf: boolean): string {
+	const abs = resolve(root, path);
+	if (!isContained(resolve(root), abs)) throw new Error("Path escapes the worktree");
+	if (isGitMetadataPath(resolve(root), abs)) throw new Error("The .git directory is not readable");
+	assertExistingAncestorContained(root, followLeaf ? abs : dirname(abs));
+	return abs;
+}
+
 function resolveInWorktree(
 	workspaceId: string,
 	path: string,
@@ -52,13 +70,32 @@ function resolveInWorktree(
 ): { root: string; abs: string } {
 	const ws = loadWorkspaces().find((workspace) => workspace.id === workspaceId);
 	if (!ws) throw new Error(`Unknown workspace: ${workspaceId}`);
+	return { root: ws.worktreePath, abs: resolveUnderRoot(ws.worktreePath, path, followLeaf) };
+}
 
-	const root = ws.worktreePath;
-	const abs = resolve(root, path);
-	if (!isContained(resolve(root), abs)) throw new Error("Path escapes the worktree");
-	if (isGitMetadataPath(resolve(root), abs)) throw new Error("The .git directory is not readable");
-	assertExistingAncestorContained(root, followLeaf ? abs : dirname(abs));
-	return { root, abs };
+export function readableFileSize(root: string, path: string): number | "missing" | null {
+	try {
+		const stats = statSync(resolveUnderRoot(root, path, true));
+		return stats.isFile() ? stats.size : "missing";
+	} catch (error) {
+		const code =
+			typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+		return code === undefined || code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP"
+			? "missing"
+			: null;
+	}
+}
+
+function entryKind(root: string, dir: string, entry: Dirent): FileNode["kind"] {
+	if (entry.isDirectory()) return "dir";
+	if (!entry.isSymbolicLink()) return "file";
+	try {
+		const target = join(dir, entry.name);
+		if (!statSync(target).isDirectory()) return "file";
+		return isContained(realpathSync(root), realpathSync(target)) ? "dir" : "file";
+	} catch {
+		return "file";
+	}
 }
 
 export function readDir(workspaceId: string, path: string): FileNode[] {
@@ -70,18 +107,46 @@ export function readDir(workspaceId: string, path: string): FileNode[] {
 			(entry): FileNode => ({
 				path: posixRelative(root, join(abs, entry.name)),
 				name: entry.name,
-				kind: entry.isDirectory() ? "dir" : "file",
+				kind: entryKind(root, abs, entry),
 			}),
 		)
 		.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "dir" ? -1 : 1));
 }
 
+const BOUNDED_READ_CHUNK = 64 * 1024;
+
+function readBounded(abs: string, maxBytes: number): Uint8Array {
+	if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) {
+		throw new Error("maxBytes must be a non-negative integer");
+	}
+	const fd = openSync(abs, "r");
+	try {
+		const chunks: Buffer[] = [];
+		let total = 0;
+		while (true) {
+			const chunk = Buffer.allocUnsafe(Math.min(BOUNDED_READ_CHUNK, maxBytes + 1 - total));
+			const read = readSync(fd, chunk, 0, chunk.length, total);
+			if (read === 0) break;
+			chunks.push(chunk.subarray(0, read));
+			total += read;
+			if (total > maxBytes) {
+				throw new CodedError("FILE_TOO_LARGE", "The file is larger than the read allows");
+			}
+		}
+		return Buffer.concat(chunks, total);
+	} finally {
+		closeSync(fd);
+	}
+}
+
 export function readFile(
 	workspaceId: string,
 	path: string,
+	options: { readonly maxBytes?: number } = {},
 ): { content: string; meta: ResourceMeta } {
 	const { abs } = resolveInWorktree(workspaceId, path, true);
-	const bytes = readFileSync(abs);
+	const bytes =
+		options.maxBytes === undefined ? readFileSync(abs) : readBounded(abs, options.maxBytes);
 	const meta = resourceMeta(bytes, path);
 	return { content: meta.text ? decodeText(bytes) : "", meta };
 }

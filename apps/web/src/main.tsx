@@ -12,8 +12,10 @@ import { useLocaleSync } from "./i18n";
 import { initNavigation } from "./navigation";
 import { initFilesTreePersistence } from "./panels/filesTreeState";
 import { initProjectExpansionPersistence } from "./panels/projectExpansion";
+import { initSearchPreferences } from "./search";
 import { AppResourceHost } from "./shell/AppResourceHost";
 import { Shell } from "./shell/Shell";
+import { DictationLayer } from "./speech";
 import { applyThemePreference, initializeThemes, readThemeHint } from "./themes";
 import {
 	clientErrorReport,
@@ -34,6 +36,7 @@ initChatPreferencesPersistence();
 initModelVisibilityPersistence();
 initProjectExpansionPersistence();
 initFilesTreePersistence();
+initSearchPreferences();
 initNavigation();
 registerWebExtensions();
 
@@ -46,6 +49,7 @@ function App() {
 				<AppResourceHost>
 					<Shell />
 				</AppResourceHost>
+				<DictationLayer />
 			</TooltipProvider>
 		</ErrorBoundary>
 	);

@@ -14,6 +14,7 @@ import {
 	preparePiRuntimeGeneration,
 	refreshCatalogs,
 	refreshCatalogsDetached,
+	settlePiCredentialWrites,
 } from "./piRuntime";
 
 let priorOffline: string | undefined;
@@ -75,6 +76,8 @@ test("a session loader excludes an opaque generation artifact but preserves othe
 				acknowledged: [],
 				disabled: [],
 				disabledGroups: [],
+				enabledGroups: [],
+				otherAgentSkills: true,
 				overrides: {},
 			}),
 			[centralPath],
@@ -122,6 +125,8 @@ test("an excluding session loader re-resolves its extension set on every reload 
 				acknowledged: [],
 				disabled: [],
 				disabledGroups: [],
+				enabledGroups: [],
+				otherAgentSkills: true,
 				overrides: {},
 			}),
 			[centralPath],
@@ -291,6 +296,25 @@ test("refresh() on the shared runtime never opts into the network (provider.stat
 		} finally {
 			globalThis.fetch = originalFetch;
 		}
+	} finally {
+		cleanup(agentDir);
+	}
+});
+
+test("host shutdown waits for the active runtime's credential writes and never creates a runtime for it", async () => {
+	configurePiRuntime(null);
+	await settlePiCredentialWrites();
+
+	const { runtime, agentDir } = await isolatedRuntime();
+	try {
+		let settled = false;
+		const settle = jest.spyOn(runtime, "settleCredentialWrites").mockImplementation(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 5));
+			settled = true;
+		});
+		await settlePiCredentialWrites();
+		expect(settle).toHaveBeenCalledTimes(1);
+		expect(settled).toBe(true);
 	} finally {
 		cleanup(agentDir);
 	}

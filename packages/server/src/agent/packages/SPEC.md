@@ -64,7 +64,13 @@ this module never spawns npm or git itself.
   re-lists after a chat's load and no chat reloads.
 - `extensionCache.ts` — `advancePiExtensionCache`: pi clears its process-wide factory cache only on a
   loaded loader's reload and exports no clearer; an empty loader reloaded twice does it. Used before the
-  boot runtime and before the install probe.
+  boot runtime and before the install probe. It reaches only pi's map. In a Bun source run (dev,
+  `bun test`) jiti imports natively wherever its transform is not forced (the boot runtime forces it), and
+  Bun's module registry keeps a path's first evaluation, so a rewritten extension file is seen only at a
+  new path; tests give each extension body its own file name. Such a test fails alone but may pass in the
+  package run, where an earlier file's dynamic import makes jiti's `moduleCache: false` eviction work
+  (Bun 1.4.4). The binary and desktop bundle are unaffected: pi's embedded-modules loader never imports
+  natively.
 - `catalog.ts` — `listPiPackageCatalog(options)`: rows are seeded from `listConfiguredPackages()`, one per
   declaration — a declaration with no install on disk is a row without `installedPath` (the UI's **Not
   installed**, Remove only: pi retries at a chat's next start, and this row is the only way out of a
@@ -77,7 +83,8 @@ this module never spawns npm or git itself.
   `"local"` for an explicit `extensions[]` entry) and the host-supplied built-ins, and excludes the Central
   artifact path like the session loader does. Human-readable metadata comes only from a package's
   `package.json` (a loaded `Extension` has no name). The result cache is long-lived because every change
-  path calls `invalidatePiPackageCatalog()`. `listPiPackageRevealTargets` validates a reveal path from
+  path calls `invalidatePiPackageCatalog()`; a file dropped into a scanned folder by hand is the one change
+  no path sees, so the Extensions page's opening read (`packages.list` with `force`) drops the cache first. `listPiPackageRevealTargets` validates a reveal path from
   the same reads.
 - `mutations.ts` — one module queue (two `SettingsManager`s racing on one field would lose a write);
   every write validates `scope` / `type` at the boundary, is opened on the scope it writes

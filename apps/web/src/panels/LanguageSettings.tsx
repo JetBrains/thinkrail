@@ -3,6 +3,7 @@ import type { LocalLocaleFileErrorCode, LocalLocalesSnapshot } from "@thinkrail/
 import { languageName, SYSTEM_LOCALE } from "@thinkrail/locales";
 import { T, useT } from "@thinkrail/locales/react";
 import { type ReactNode, useMemo } from "react";
+import { REPO_URL } from "@/constants/branding";
 import {
 	effectiveLocale,
 	type LanguageOption,
@@ -17,7 +18,6 @@ import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
 import { SettingsRadioCards, type SettingsRadioChoice } from "./SettingsRadioCards";
 import { SettingsRow } from "./SettingsRow";
 
-const REPO_URL = "https://github.com/JetBrains/thinkrail";
 export const CONTRIBUTE_TRANSLATIONS_URL = `${REPO_URL}/blob/main/CONTRIBUTING.md#translations`;
 
 export function repoSourceUrl(appVersion: string | null, path: string): string {

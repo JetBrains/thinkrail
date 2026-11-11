@@ -244,7 +244,10 @@ describe("listPiPackageCatalog", () => {
 	it("lists a declared package even when it contributes nothing, and a single-file package", async () => {
 		const empty = join(root, "pkgs", "empty");
 		mkdirSync(empty, { recursive: true });
-		writeFileSync(join(empty, "package.json"), JSON.stringify({ name: "@fixture/empty", pi: {} }));
+		writeFileSync(
+			join(empty, "package.json"),
+			JSON.stringify({ name: "@fixture/empty", pi: { extensions: [] } }),
+		);
 		const single = join(root, "pkgs", "single.ts");
 		writeFileSync(single, extensionSource("single_tool"));
 		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: [empty, single] }));
