@@ -8,11 +8,15 @@ import {
 	pairingMacInput,
 	parseHostMessage,
 	parsePairingUri,
+	parseRemoteHostRoutes,
+	type RemoteHostRoutes,
+	WS_CHANNELS,
 	withPublicStun,
 } from "@thinkrail/contracts";
-import { hostRejection, RemoteConnectError } from "./connectError";
+import { hostRejection, isTerminalConnectError, RemoteConnectError } from "./connectError";
 import { toDeviceChannel } from "./deviceChannel";
 import { createDeviceWireClient, type DeviceWireClient } from "./deviceWireClient";
+import { createReconnectLoop } from "./reconnectLoop";
 import { openSignaling, type SignalingPipe } from "./signalingRoute";
 
 export interface RemoteConnection {
@@ -32,18 +36,16 @@ export interface RemoteConnection {
 	 * fix (this phone was revoked, the host key changed, the app is too old). The connection is closed by then.
 	 */
 	onLost(handler: (error: RemoteConnectError) => void): void;
+	/** Hears the channel go down (reconnecting on its own) and come back. */
+	onOpenChange(handler: (open: boolean) => void): void;
+	/** Hears the host's current routes (the last one at once, if it came first); later reconnects already use them. */
+	onRoutes(handler: (routes: RemoteHostRoutes) => void): void;
+	/** Retries now instead of after the backoff (the app came to the foreground, the network changed). */
+	reconnectNow(): void;
 	close(): void;
 }
 
-/** Refusals a retry cannot fix; anything else (no network, a host restarting) keeps reconnecting. */
-const TERMINAL: ReadonlySet<string> = new Set([
-	"unknown_device",
-	"identity_mismatch",
-	"app_outdated",
-]);
-
 const DEVICE_KEY_STORAGE = "thinkrail.remote.deviceKey";
-const MAX_BACKOFF_MS = 10_000;
 /**
  * How long one attempt may take from reaching the relay to an open data channel. Past it the attempt fails
  * instead of leaving the app on "Connecting…": as `host_silent` when the host never answered, else as
@@ -184,7 +186,19 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 	const tokenId = params.token !== undefined ? await tokenIdOf(params.token) : undefined;
 
 	let closed = false;
-	let backoff = 500;
+	let routes: { relayUrls: readonly string[]; nostr: PairingNostrRoute | undefined } = {
+		relayUrls: params.relayUrls,
+		nostr: params.nostr,
+	};
+	let routesHandler: (next: RemoteHostRoutes) => void = () => {};
+	let lastRoutes: RemoteHostRoutes | null = null;
+	client.subscribe(WS_CHANNELS.remoteHostRoutes, (data) => {
+		const next = parseRemoteHostRoutes(data);
+		if (!next) return;
+		routes = { relayUrls: next.signalingUrls, nostr: next.nostr };
+		lastRoutes = next;
+		routesHandler(next);
+	});
 	let active: { pipe: SignalingPipe; pc: RTCPeerConnection } | null = null;
 
 	const teardownActive = (): void => {
@@ -213,7 +227,7 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 			pairing && tokenId !== undefined
 				? { kind: "hello", tokenId, devicePublicKey: key.publicKeyRaw, label: params.label, nonce }
 				: { kind: "resume", devicePublicKey: key.publicKeyRaw, nonce };
-		const { pipe, ice } = await openSignaling(params.relayUrls, params.hostKey, params.nostr);
+		const { pipe, ice } = await openSignaling(routes.relayUrls, params.hostKey, routes.nostr);
 		if (closed) {
 			pipe.close();
 			throw new Error("connection closed");
@@ -233,7 +247,7 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 				clearTimeout(timer);
 				teardownActive();
 				if (settled) {
-					if (!closed) scheduleReconnect();
+					if (!closed) loop.dropped();
 				} else {
 					reject(error);
 				}
@@ -269,7 +283,6 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 					client.attach(toDeviceChannel(event.channel));
 					clearTimeout(timer);
 					settled = true;
-					backoff = 500;
 					resolve();
 				});
 			});
@@ -338,25 +351,33 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 	const lose = (error: RemoteConnectError): void => {
 		if (closed) return;
 		closed = true;
+		loop.stop();
 		teardownActive();
 		client.close();
 		lostHandler(error);
 	};
 
-	const scheduleReconnect = (): void => {
-		if (closed) return;
-		const delay = backoff;
-		backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
-		setTimeout(() => {
-			if (closed) return;
-			attempt(false).catch((error: unknown) => {
-				if (error instanceof RemoteConnectError && TERMINAL.has(error.code)) lose(error);
-				else scheduleReconnect();
-			});
-		}, delay);
-	};
+	let openHandler: (open: boolean) => void = () => {};
+	const loop = createReconnectLoop({
+		attempt: () => attempt(false),
+		isTerminal: isTerminalConnectError,
+		onLost: (error) =>
+			lose(
+				error instanceof RemoteConnectError
+					? error
+					: new RemoteConnectError("failed", String(error)),
+			),
+		onOpenChange: (open) => openHandler(open),
+	});
 
-	await attempt(params.token !== undefined);
+	try {
+		await attempt(params.token !== undefined);
+	} catch (error) {
+		closed = true;
+		client.close();
+		throw error;
+	}
+	loop.opened();
 
 	return {
 		client,
@@ -368,8 +389,17 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 		onLost: (handler) => {
 			lostHandler = handler;
 		},
+		onOpenChange: (handler) => {
+			openHandler = handler;
+		},
+		onRoutes: (handler) => {
+			routesHandler = handler;
+			if (lastRoutes) handler(lastRoutes);
+		},
+		reconnectNow: () => loop.now(),
 		close: () => {
 			closed = true;
+			loop.stop();
 			teardownActive();
 			client.close();
 		},

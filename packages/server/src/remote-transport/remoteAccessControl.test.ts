@@ -37,6 +37,7 @@ function fixture(over: Partial<RemoteAccessControlOptions> = {}) {
 			},
 			addresses: options.advertised?.() ?? [{ url: options.relayUrl, route: "relay" }],
 			nostr: options.nostrRelays?.length ? { relays: options.nostrRelays, connected: 2 } : null,
+			routes: () => ({ signalingUrls: [options.relayUrl] }),
 			issueLink: () => ({ link: "thinkrail://pair?v=1", expiresAt: 5 }),
 			stop: () => events.push("access:stop"),
 		};
@@ -63,6 +64,7 @@ test("access is off by default and pairing needs it on", () => {
 		expect(f.control.state()).toEqual({ enabled: false, addresses: [], devices: [] });
 		expect(f.control.state().relay).toBeUndefined();
 		expect(() => f.control.issueLink("default")).toThrow();
+		expect(f.control.routes()).toBeNull();
 		expect(f.events).toEqual([]);
 	} finally {
 		f.cleanup();
@@ -83,6 +85,7 @@ test("turning it on starts the host's own relay and remembers the choice; off te
 		expect(f.started[0]?.relayUrl).toBe("ws://127.0.0.1:1");
 		expect(loadRemoteAccessEnabled(f.dir)).toBe(true);
 		expect(f.control.issueLink("default").link).toStartWith("thinkrail://pair");
+		expect(f.control.routes()?.signalingUrls).toHaveLength(1);
 
 		f.control.setEnabled(true);
 		expect(f.events.filter((e) => e === "access:start")).toHaveLength(1);

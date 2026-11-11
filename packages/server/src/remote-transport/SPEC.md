@@ -86,13 +86,14 @@ broker (the host's own for Wi‑Fi/Tailscale, or a hosted one) and public Nostr 
     and, given `nostrRelays`, to Nostr, both feeding one session factory; runs each device's handshake +
     WebRTC, and mints one-time pairing links (`issueLink`) carrying every `advertised` relay address
     (default: the connect URL), the Nostr route (key + relays) and the computer's name, with their expiry.
-    `nostr` reports the route and how many of its relays are live.
+    `nostr` reports the route and how many of its relays are live; `routes()` is the same route set the
+    link carries, read now.
   - `remoteAccessControl.ts` — `createRemoteAccessControl`, the runtime switch the host owns: `setEnabled`
     starts the relay (the host's own via `startLocalRelay` unless a `relayUrl` is configured) plus
     `startRemoteAccess` with the Nostr route on (`DEFAULT_NOSTR_RELAYS` unless `nostrRelays` is given; `[]`
     turns it off), and stopping tears both down, which closes every live device channel; the choice
     persists through the `remote` module's setting (`restore` brings it back at startup) unless the caller
-    passes `persist: false` for a one-run `--remote`. `issueLink` refuses while off. It owns the live device
+    passes `persist: false` for a one-run `--remote`. `issueLink` refuses while off; `routes()` is null while off. It owns the live device
     channels, so `state()` marks each paired device `connected` and `revokeDevice` drops the registry entry and
     closes that device's open channels itself; `renameDevice` / `setDeviceAccess` update the registry, the
     latter telling the host (`onAccessChanged`) so the device's live channels hear their new access;

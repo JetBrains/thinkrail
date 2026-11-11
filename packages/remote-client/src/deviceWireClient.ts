@@ -2,7 +2,10 @@ import { WS_CHANNELS } from "@thinkrail/contracts";
 import type { DeviceChannel } from "./deviceChannel";
 
 /** Snapshot pushes: the host sends them once when a channel opens, so a later subscriber gets the last one. */
-const STICKY_CHANNELS: ReadonlySet<string> = new Set([WS_CHANNELS.serverWelcome]);
+const STICKY_CHANNELS: ReadonlySet<string> = new Set([
+	WS_CHANNELS.serverWelcome,
+	WS_CHANNELS.remoteHostRoutes,
+]);
 
 export class RemoteRequestError extends Error {
 	readonly code: string | undefined;

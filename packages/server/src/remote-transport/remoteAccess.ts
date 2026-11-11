@@ -1,3 +1,4 @@
+import type { RemoteHostRoutes } from "@thinkrail/contracts";
 import {
 	addDevice,
 	buildPairingUri,
@@ -29,6 +30,8 @@ export interface RemoteAccess {
 	readonly addresses: readonly RelayAddress[];
 	/** The Nostr route phones on any network signal through, and how many of its relays are live; null when off. */
 	readonly nostr: { relays: readonly string[]; connected: number } | null;
+	/** Every route a device reaches this host by right now; pushed to a paired device so its saved copy follows. */
+	routes(): RemoteHostRoutes;
 	/** Mints a one-time pairing link (the `thinkrail://pair` URI) for a project, with when it expires. */
 	issueLink(projectRef: string): PairingLink;
 	stop(): void;
@@ -103,6 +106,13 @@ export function startRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
 				})
 			: null;
 
+	const routes = (): RemoteHostRoutes => ({
+		signalingUrls: advertised().map((address) => address.url),
+		...(nostr && nostr.relays.length > 0
+			? { nostr: { publicKey: nostr.publicKey, relays: nostr.relays } }
+			: {}),
+	});
+
 	return {
 		identity,
 		get addresses() {
@@ -111,17 +121,15 @@ export function startRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
 		get nostr() {
 			return nostr ? { relays: nostr.relays, connected: nostr.connectedRelays() } : null;
 		},
+		routes,
 		issueLink(projectRef) {
 			const { token, expiresAt } = tokens.issue(projectRef);
 			const link = buildPairingUri({
-				signalingUrls: advertised().map((address) => address.url),
+				...routes(),
 				token,
 				hostPublicKey: identity.publicKey,
 				projectRef,
 				...(options.hostName ? { hostName: options.hostName } : {}),
-				...(nostr && nostr.relays.length > 0
-					? { nostr: { publicKey: nostr.publicKey, relays: nostr.relays } }
-					: {}),
 			});
 			return { link, expiresAt };
 		},

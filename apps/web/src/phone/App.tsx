@@ -86,6 +86,10 @@ export function App() {
 	}, []);
 	const connectHost = useCallback(
 		(host: SavedHost): Promise<void> => {
+			if (controller.clientFor(host.hostKey)) {
+				controller.reconnectNow();
+				return Promise.resolve();
+			}
 			markFailure(host.hostKey, null);
 			return controller
 				.connect(host)
@@ -95,9 +99,10 @@ export function App() {
 		[controller, markFailure],
 	);
 	const statusOf = (hostKey: string): HostStatus => {
+		if (controller.clientFor(hostKey))
+			return controller.isReconnecting(hostKey) ? { kind: "connecting" } : { kind: "connected" };
 		const failure = failures.get(hostKey);
-		if (failure) return { kind: "unreachable", failure };
-		return controller.clientFor(hostKey) ? { kind: "connected" } : { kind: "connecting" };
+		return failure ? { kind: "unreachable", failure } : { kind: "connecting" };
 	};
 	const forgetHost = useCallback(
 		(hostKey: string) => {
@@ -138,14 +143,26 @@ export function App() {
 		[controller, registry, connectHost, t],
 	);
 
-	useEffect(
-		() =>
-			controller.onLost((hostKey, error) => {
-				markFailure(hostKey, failureOf(error));
-				setStack((current) => leaveHost(current, hostKey));
-			}),
-		[controller, markFailure],
-	);
+	useEffect(() => {
+		const offLost = controller.onLost((hostKey, error) => {
+			markFailure(hostKey, failureOf(error));
+			setStack((current) => leaveHost(current, hostKey));
+		});
+		const offRetry = controller.onRetryFailed((hostKey, error) =>
+			markFailure(hostKey, failureOf(error)),
+		);
+		const offRoutes = controller.onRoutes((host) => setHosts(registry.update(host)));
+		const retryNow = (): void => controller.reconnectNow();
+		const resume = CapApp.addListener("resume", retryNow);
+		window.addEventListener("online", retryNow);
+		return () => {
+			offLost();
+			offRetry();
+			offRoutes();
+			void resume.then((handle) => handle.remove());
+			window.removeEventListener("online", retryNow);
+		};
+	}, [controller, registry, markFailure]);
 
 	useEffect(() => {
 		const unsubscribe = controller.subscribe(() => setItems(controller.items()));
