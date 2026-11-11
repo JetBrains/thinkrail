@@ -1,6 +1,12 @@
 import { expect, test } from "bun:test";
 import type { DeviceWireClient } from "@thinkrail/remote-client";
-import { pushedProjectId, type Settled, shownLoaded } from "./useHostRequest";
+import {
+	cachedFor,
+	prefetchHostRequest,
+	pushedProjectId,
+	type Settled,
+	shownLoaded,
+} from "./useHostRequest";
 
 const a = {} as DeviceWireClient;
 const b = {} as DeviceWireClient;
@@ -50,4 +56,24 @@ test("a workspace push names its project, whether it carries the workspace or a 
 	expect(pushedProjectId({ projectId: "p2", id: "w2" })).toBe("p2");
 	expect(pushedProjectId({ id: "p3", name: "project" })).toBeUndefined();
 	expect(pushedProjectId(null)).toBeUndefined();
+});
+
+test("a prefetched read is what the screen then opens on, and a slow or failed one gives up quietly", async () => {
+	const answering = { request: async () => ["p1"] } as unknown as DeviceWireClient;
+	await prefetchHostRequest(answering, "project.list", {}, 1_000);
+	const key = JSON.stringify({ method: "project.list", params: {} });
+	expect(shownLoaded(null, answering, key, "", cachedFor(answering, key))).toEqual({
+		kind: "ready",
+		value: ["p1"],
+	});
+
+	const silent = { request: () => new Promise(() => {}) } as unknown as DeviceWireClient;
+	const started = Date.now();
+	await prefetchHostRequest(silent, "project.list", {}, 20);
+	expect(Date.now() - started).toBeLessThan(500);
+
+	const failing = {
+		request: async () => Promise.reject(new Error("x")),
+	} as unknown as DeviceWireClient;
+	await expect(prefetchHostRequest(failing, "project.list", {}, 1_000)).resolves.toBeUndefined();
 });
