@@ -1,5 +1,5 @@
-import { type FSWatcher, readFileSync, statSync, watch } from "node:fs";
-import { isAbsolute, resolve } from "node:path";
+import { type FSWatcher, readdirSync, readFileSync, statSync, watch } from "node:fs";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import type {
 	WorkspaceFsChangedPayload,
 	WorkspaceSkillChange,
@@ -25,6 +25,7 @@ type WatchPublisher = (payload: WorkspaceFsChangedPayload) => void;
 type SkillPathClassifier = (relativePath: string) => boolean;
 type RepoMetaPublisher = (workspaceId: string) => void;
 type WatchStartedPublisher = (workspaceId: string) => void;
+type WatchHandle = { close: () => void };
 
 const ALREADY_READY: WorkspaceWatchReadyResult = { startupNudge: false };
 const STARTUP_NUDGE: WorkspaceWatchReadyResult = { startupNudge: true };
@@ -59,7 +60,7 @@ function isRepoMetaPath(relPath: string): boolean {
 function resolveExternalGitDir(worktreePath: string): string | null {
 	const dotGit = resolve(worktreePath, ".git");
 	try {
-		if (statSync(dotGit).isDirectory()) return null;
+		if (statSync(dotGit).isDirectory()) return dotGit;
 		const pointer = readFileSync(dotGit, "utf8").trim();
 		const match = /^gitdir:\s*(.+)$/.exec(pointer);
 		if (!match?.[1]) return null;
@@ -74,7 +75,7 @@ function resolveExternalGitDir(worktreePath: string): string | null {
 function watchGitDir(
 	workspaceId: string,
 	gitDir: string,
-	rootWatcher: FSWatcher,
+	rootWatcher: WatchHandle,
 ): FSWatcher | null {
 	try {
 		const watcher = watch(gitDir, { recursive: false }, () => {
@@ -101,7 +102,7 @@ function deliver(sink: string, workspaceId: string, send: () => void): void {
 	}
 }
 
-function scheduleRepoMeta(workspaceId: string, watcher: FSWatcher): void {
+function scheduleRepoMeta(workspaceId: string, watcher: WatchHandle): void {
 	const entry = entries.get(workspaceId);
 	if (entry && entry.watcher !== watcher) return;
 	if (entry?.metaTimer) clearTimeout(entry.metaTimer);
@@ -121,8 +122,84 @@ export function isIgnoredPath(relPath: string): boolean {
 	return name !== undefined && IGNORED_NAMES.has(name);
 }
 
+function watchWorktree(
+	rootPath: string,
+	onChange: (relativePath: string | null, event: string) => void,
+	onError: () => void,
+): WatchHandle {
+	const watchers = new Map<string, FSWatcher>();
+	const reportedDirectories = new Set<string>();
+	let closed = false;
+
+	const watchDirectory = (directory: string): void => {
+		if (closed || watchers.has(directory)) return;
+		const relativeDirectory = relative(rootPath, directory).split(sep).join("/");
+		if (relativeDirectory.length > 0 && isIgnoredPath(relativeDirectory)) return;
+
+		let watcher: FSWatcher;
+		try {
+			watcher = watch(directory, { recursive: false }, (event, filename) => {
+				const name = typeof filename === "string" ? filename : null;
+				const relativePath = name
+					? [relativeDirectory, name.replaceAll("\\", "/")].filter(Boolean).join("/")
+					: relativeDirectory || null;
+				onChange(relativePath, event);
+
+				if (event !== "rename" || name === null) return;
+				const child = resolve(directory, name);
+				try {
+					if (statSync(child).isDirectory()) watchDirectory(child);
+				} catch {
+					watchers.get(child)?.close();
+					watchers.delete(child);
+				}
+			});
+		} catch {
+			onError();
+			return;
+		}
+
+		watchers.set(directory, watcher);
+		watcher.on("error", onError);
+	};
+
+	const scan = (): void => {
+		const queue = [rootPath];
+		while (queue.length > 0) {
+			const directory = queue.pop();
+			if (!directory) continue;
+			watchDirectory(directory);
+			try {
+				for (const child of readdirSync(directory, { withFileTypes: true })) {
+					if (!child.isDirectory()) continue;
+					const childPath = resolve(directory, child.name);
+					const childRelativePath = relative(rootPath, childPath).split(sep).join("/");
+					if (child.name === ".git" && !reportedDirectories.has(childPath)) {
+						reportedDirectories.add(childPath);
+						onChange(childRelativePath, "rename");
+					}
+					if (!isIgnoredPath(childRelativePath)) queue.push(childPath);
+				}
+			} catch {
+				// The directory may disappear while the tree is being indexed.
+			}
+		}
+	};
+	scan();
+	const discoveryTimer = setInterval(scan, STARTUP_NUDGE_MS);
+
+	return {
+		close: () => {
+			closed = true;
+			clearInterval(discoveryTimer);
+			for (const watcher of watchers.values()) watcher.close();
+			watchers.clear();
+		},
+	};
+}
+
 interface WatchEntry {
-	watcher: FSWatcher;
+	watcher: WatchHandle;
 	coalescer: Coalescer;
 	rootIno: number;
 	nudgeTimer: ReturnType<typeof setTimeout> | null;
@@ -191,24 +268,35 @@ export function ensureWatch(
 	});
 
 	try {
-		const watcher = watch(ws.worktreePath, { recursive: true }, (_event, filename) => {
-			const rel = typeof filename === "string" ? filename.replaceAll("\\", "/") : null;
-			if (rel === null || isRepoMetaPath(rel)) scheduleRepoMeta(workspaceId, watcher);
-			if (rel !== null && isIgnoredPath(rel)) return;
-			const skillChange: WorkspaceSkillChange =
-				rel === null
-					? "unknown"
-					: isSkillPath === null
+		let watcher: WatchHandle;
+		watcher = watchWorktree(
+			ws.worktreePath,
+			(filename, _event) => {
+				const rel = typeof filename === "string" ? filename.replaceAll("\\", "/") : null;
+				if (rel === null || isRepoMetaPath(rel)) scheduleRepoMeta(workspaceId, watcher);
+				if (rel === ".git" && _event === "rename") {
+					const entry = entries.get(workspaceId);
+					const gitDir = resolveExternalGitDir(ws.worktreePath);
+					if (entry?.watcher === watcher && entry.metaWatcher === null && gitDir) {
+						entry.metaWatcher = watchGitDir(workspaceId, gitDir, watcher);
+					}
+				}
+				if (rel !== null && isIgnoredPath(rel)) return;
+				const skillChange: WorkspaceSkillChange =
+					rel === null
 						? "unknown"
-						: isSkillPath(rel)
-							? "detected"
-							: "none";
-			coalescer.add(rel, skillChange);
-		});
-		watcher.on("error", () => {
-			log.warn(`worktree watcher failed for workspace ${workspaceId}`);
-			stopWatch(workspaceId);
-		});
+						: isSkillPath === null
+							? "unknown"
+							: isSkillPath(rel)
+								? "detected"
+								: "none";
+				coalescer.add(rel, skillChange);
+			},
+			() => {
+				log.warn(`worktree watcher failed for workspace ${workspaceId}`);
+				stopWatch(workspaceId);
+			},
+		);
 		let resolveReady: (result: WorkspaceWatchReadyResult) => void = () => {};
 		const ready = new Promise<WorkspaceWatchReadyResult>((resolve) => {
 			resolveReady = resolve;
