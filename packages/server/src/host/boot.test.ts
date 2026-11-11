@@ -1,11 +1,15 @@
 import { afterEach, beforeAll, beforeEach, expect, spyOn, test } from "bun:test";
-import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
-import type { HostUpdateNotice, ServerWelcome } from "@thinkrail/contracts";
-import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import type {
+	HostUpdateNotice,
+	ServerWelcome,
+	WorkspaceFsChangedPayload,
+} from "@thinkrail/contracts";
+import { PROTOCOL_VERSION, WS_CHANNELS, WS_MAX_FRAME_BYTES } from "@thinkrail/contracts";
 import { isPortFree } from "@thinkrail/shared/freePort";
 import {
 	configurePiRuntime,
@@ -555,6 +559,128 @@ test("welcome omits closed projects whose folders are gone", async () => {
 	]);
 	expect(welcome.projects.filter((project) => project.kind === "chats")).toHaveLength(1);
 	expect(welcome.recentProjects?.map((project) => project.id)).toEqual(["open", "kept"]);
+});
+
+test.if(process.platform === "linux")(
+	"on Linux a project skill under a git-ignored folder still reports a skill change",
+	async () => {
+		const dir = process.env.THINKRAIL_DATA_DIR;
+		if (!dir) throw new Error("missing fixture data directory");
+		const worktree = join(dir, "repo");
+		const skill = join(worktree, ".claude", "skills", "demo", "SKILL.md");
+		const venv = join(worktree, ".claude", "skills", "demo", ".venv");
+		mkdirSync(venv, { recursive: true });
+		expect(Bun.spawnSync(["git", "init", "-q", worktree]).success).toBe(true);
+		writeFileSync(join(worktree, ".gitignore"), ".claude/\ntmp/\n");
+		mkdirSync(join(worktree, "tmp"));
+		writeFileSync(skill, "v1\n");
+		writeFileSync(
+			join(dir, "workspaces.json"),
+			JSON.stringify([
+				{
+					id: "skills",
+					projectId: "p",
+					name: "skills",
+					branch: "main",
+					worktreePath: worktree,
+					baseBranch: "main",
+				},
+			]),
+		);
+		const b = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+		const collector = await collectSocket(b.port, "skills");
+		collector.socket.send(
+			JSON.stringify({
+				id: "ready",
+				method: "workspace.watchReady",
+				params: { workspaceId: "skills" },
+			}),
+		);
+		expect((await collector.waitForFrame((frame) => frame.id === "ready")).ok).toBe(true);
+		writeFileSync(join(worktree, "tmp", "out.txt"), "x\n");
+		writeFileSync(join(venv, "out.txt"), "x\n");
+		writeFileSync(skill, "v2\n");
+		await collector.waitForFrame(
+			(frame) =>
+				frame.channel === WS_CHANNELS.workspaceFsChanged &&
+				(frame.data as WorkspaceFsChangedPayload).skillChange === "detected",
+		);
+		const paths = collector.frames.flatMap((frame) =>
+			frame.channel === WS_CHANNELS.workspaceFsChanged
+				? (frame.data as WorkspaceFsChangedPayload).paths
+				: [],
+		);
+		expect(paths.filter((path) => path.startsWith("tmp/") || path.includes("/.venv/"))).toEqual([]);
+	},
+);
+
+test.if(process.platform === "linux")(
+	"on Linux a doc in a subfolder of the git-ignored scratch dir still sends an event",
+	async () => {
+		const dir = process.env.THINKRAIL_DATA_DIR;
+		if (!dir) throw new Error("missing fixture data directory");
+		const worktree = join(dir, "repo");
+		const scratch = join(worktree, ".thinkrail", "context");
+		mkdirSync(join(scratch, "topic"), { recursive: true });
+		expect(Bun.spawnSync(["git", "init", "-q", worktree]).success).toBe(true);
+		writeFileSync(join(worktree, ".gitignore"), ".thinkrail/\n");
+		writeFileSync(join(scratch, ".gitignore"), "*\n");
+		writeFileSync(join(scratch, "topic", "doc.md"), "v1\n");
+		writeFileSync(
+			join(dir, "workspaces.json"),
+			JSON.stringify([
+				{
+					id: "scratch",
+					projectId: "p",
+					name: "scratch",
+					branch: "main",
+					worktreePath: worktree,
+					baseBranch: "main",
+				},
+			]),
+		);
+		const b = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+		const collector = await collectSocket(b.port, "scratch");
+		collector.socket.send(
+			JSON.stringify({
+				id: "ready",
+				method: "workspace.watchReady",
+				params: { workspaceId: "scratch" },
+			}),
+		);
+		expect((await collector.waitForFrame((frame) => frame.id === "ready")).ok).toBe(true);
+		writeFileSync(join(scratch, "topic", "doc.md"), "v2\n");
+		mkdirSync(join(scratch, "fresh"));
+		writeFileSync(join(scratch, "fresh", "new.md"), "x\n");
+		const published = (path: string) => (frame: SocketFrame) =>
+			frame.channel === WS_CHANNELS.workspaceFsChanged &&
+			(frame.data as WorkspaceFsChangedPayload).paths.includes(path);
+		await collector.waitForFrame(published(".thinkrail/context/topic/doc.md"));
+		await collector.waitForFrame(published(".thinkrail/context/fresh/new.md"));
+	},
+);
+
+test.each([
+	["exactly at the frame cap reaches its handler", WS_MAX_FRAME_BYTES, "answered"],
+	["one byte over the frame cap closes the socket", WS_MAX_FRAME_BYTES + 1, "closed"],
+])("a request frame %s", async (_name, bytes, expected) => {
+	const b = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+	const collector = await collectSocket(b.port, "frame-cap");
+	const closed = new Promise<string>((resolve) =>
+		collector.socket.addEventListener("close", () => resolve("closed")),
+	);
+	const envelope = JSON.stringify({ id: "cap", method: "project.list", params: { padding: "" } });
+	const padding = "A".repeat(bytes - envelope.length);
+	collector.socket.send(JSON.stringify({ id: "cap", method: "project.list", params: { padding } }));
+
+	const outcome = await Promise.race([
+		collector
+			.waitForFrame((candidate) => candidate.id === "cap")
+			.then((frame) => (frame.ok ? "answered" : "failed")),
+		closed,
+	]);
+	expect(outcome).toBe(expected);
+	collector.socket.close();
 });
 
 test("shutdown is idempotent and releases the port", async () => {

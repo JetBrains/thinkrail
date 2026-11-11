@@ -1,3 +1,4 @@
+export { displayTranscriptMessages } from "./displayTranscript";
 export { type ExtractedSession, extractSession, type HistoryEntry } from "./extract";
 export {
 	clampLimit,
