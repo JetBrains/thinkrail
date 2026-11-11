@@ -48,6 +48,8 @@ bytes are** — the one byte-level classification every content read in the host
   8 KiB bounded-head size; `classifyBytes(bytes)` → `{ text, mime? }` — **mime** is what the *bytes*
   prove (magic numbers for png/jpeg/gif/webp/avif/bmp/ico/pdf/zip/gzip/woff/woff2; AVIF accepts `avif` or
   `avis` in the initial `ftyp` box's major or compatible brands, bounded by that box and the sniff head;
+  BMP needs its `BM` signature **and** a known DIB header size (12/40/52/56/64/108/124) at offset 14 —
+  two printable letters prove nothing, so prose starting with "BM" stays text;
   plus `image/svg+xml` for
   text whose first element is `<svg>` or `<svg/>`, after any XML declarations, comments, processing
   instructions or doctype in the bounded head — a nested or quoted `<svg>` does not establish the root,

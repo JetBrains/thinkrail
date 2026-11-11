@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import type { AgentMessage, ImageContent } from "@thinkrail/contracts";
 import {
+	type AgentMessage,
+	type ImageContent,
+	REQUEST_IMAGE_BASE64_BUDGET,
+} from "@thinkrail/contracts";
+import {
+	CONTEXT_IMAGE_BASE64_BUDGET,
 	guardOversizedImages,
 	imageDimensions,
 	isAnthropicFamilyModel,
@@ -294,6 +299,12 @@ describe("guardOversizedImages", () => {
 		expect(content[0]?.type).toBe("text");
 		expect(content[0]?.text).toContain("media type image/heic is not supported");
 		expect(content[1]?.type).toBe("image");
+	});
+
+	test("the context image budget sits under Anthropic's 32MB request cap and never under one message's", () => {
+		expect(CONTEXT_IMAGE_BASE64_BUDGET).toBe(24 * 1024 * 1024);
+		expect(CONTEXT_IMAGE_BASE64_BUDGET).toBeLessThan(32 * 1024 * 1024);
+		expect(CONTEXT_IMAGE_BASE64_BUDGET).toBeGreaterThanOrEqual(REQUEST_IMAGE_BASE64_BUDGET);
 	});
 
 	test("strips largest-first down to the request-wide 24MB image budget — each image alone is legal", () => {

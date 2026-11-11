@@ -58,6 +58,23 @@ async function runtime() {
 
 type Route = (request: Request) => unknown;
 
+function fetchRewrittenTo(backend: string): typeof fetch {
+	const target = new URL(backend);
+	const realFetch = globalThis.fetch;
+	return Object.assign(
+		(input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+			const raw =
+				typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+			const url = new URL(raw);
+			url.protocol = target.protocol;
+			url.hostname = target.hostname;
+			url.port = target.port;
+			return realFetch(url, init);
+		},
+		{ preconnect: realFetch.preconnect },
+	);
+}
+
 function serve(routes: Record<string, Route>, auth?: string) {
 	const seen: string[] = [];
 	server = Bun.serve({
@@ -252,6 +269,143 @@ test("probes fill facts from Ollama, llama.cpp and LM Studio without a server ki
 	});
 	expect(await probeCustomEndpoint({ baseUrl: `${gateway.url}/v1` })).toMatchObject({
 		models: [model("text-only", { vision: false })],
+	});
+});
+
+const ollamaShowRoutes = {
+	"GET /v1/models": () => ({
+		data: [
+			{ id: "kimi-k3.1-pro" },
+			{ id: "qwen3:14b" },
+			{ id: "nemotron-3-ultra" },
+			{ id: "listed", max_model_len: 8_192 },
+		],
+	}),
+	"POST /api/show": async (request: Request) => {
+		const { model: id } = (await request.json()) as { model: string };
+		if (id === "qwen3:14b")
+			return {
+				capabilities: ["completion", "tools"],
+				parameters: "temperature 0.7\nnum_ctx 40960",
+				model_info: { "general.architecture": "qwen3", "qwen3.context_length": 262_144 },
+			};
+		if (id === "nemotron-3-ultra")
+			return {
+				capabilities: ["completion"],
+				model_info: { "general.architecture": "", ".context_length": 262_144 },
+			};
+		if (id === "listed")
+			return {
+				capabilities: ["completion"],
+				parameters: "num_ctx 4096",
+				model_info: { "general.architecture": "qwen2", "qwen2.context_length": 131_072 },
+			};
+		return {
+			capabilities: ["completion", "thinking", "tools", "vision"],
+			model_info: {
+				"general.architecture": "kimi-k3",
+				"kimi-k3.context_length": 1_048_576,
+				"kimi-k3.vision.context_length": 4_096,
+			},
+		};
+	},
+} satisfies Record<string, Route>;
+
+test("a local Ollama leaves model_info context unknown unless num_ctx or the listing set one", async () => {
+	const ollama = serve({
+		...ollamaShowRoutes,
+		"GET /api/version": () => ({ version: "0.12.0" }),
+	});
+	expect(await probeCustomEndpoint({ baseUrl: `${ollama.url}/v1` })).toEqual({
+		ok: true,
+		baseUrl: `${ollama.url}/v1`,
+		models: [
+			model("kimi-k3.1-pro", { reasoning: true, vision: true, tools: true }),
+			model("qwen3:14b", { contextWindow: 40_960, reasoning: false, vision: false, tools: true }),
+			model("nemotron-3-ultra", { reasoning: false, vision: false, tools: false }),
+			model("listed", { contextWindow: 8_192, reasoning: false, vision: false, tools: false }),
+		],
+	});
+});
+
+test("a source-built local Ollama reporting version 0.0.0 is not treated as cloud", async () => {
+	const ollama = serve({
+		"GET /v1/models": () => ({ data: [{ id: "qwen3:14b" }] }),
+		"GET /api/version": () => ({ version: "0.0.0" }),
+		"POST /api/show": () => ({
+			capabilities: ["completion", "thinking"],
+			model_info: { "general.architecture": "qwen3", "qwen3.context_length": 262_144 },
+		}),
+	});
+	expect(await probeCustomEndpoint({ baseUrl: `${ollama.url}/v1` })).toEqual({
+		ok: true,
+		baseUrl: `${ollama.url}/v1`,
+		models: [model("qwen3:14b", { reasoning: true, vision: false, tools: false })],
+	});
+});
+
+test("Ollama cloud uses model_info context length unless num_ctx or the listing set one", async () => {
+	const ollama = serve({
+		...ollamaShowRoutes,
+		"GET /api/version": () => ({ version: "0.0.0" }),
+	});
+	const realFetch = globalThis.fetch;
+	globalThis.fetch = fetchRewrittenTo(ollama.url);
+	try {
+		expect(await probeCustomEndpoint({ baseUrl: "https://ollama.com/v1" })).toEqual({
+			ok: true,
+			baseUrl: "https://ollama.com/v1",
+			models: [
+				model("kimi-k3.1-pro", {
+					contextWindow: 1_048_576,
+					reasoning: true,
+					vision: true,
+					tools: true,
+				}),
+				model("qwen3:14b", { contextWindow: 40_960, reasoning: false, vision: false, tools: true }),
+				model("nemotron-3-ultra", {
+					contextWindow: 262_144,
+					reasoning: false,
+					vision: false,
+					tools: false,
+				}),
+				model("listed", { contextWindow: 8_192, reasoning: false, vision: false, tools: false }),
+			],
+		});
+		for (const baseUrl of ["https://notollama.com/v1", "https://ollama.com.example/v1"]) {
+			expect(await probeCustomEndpoint({ baseUrl })).toMatchObject({
+				ok: true,
+				baseUrl,
+				models: [
+					model("kimi-k3.1-pro", { reasoning: true, vision: true, tools: true }),
+					model("qwen3:14b", {
+						contextWindow: 40_960,
+						reasoning: false,
+						vision: false,
+						tools: true,
+					}),
+					model("nemotron-3-ultra", { reasoning: false, vision: false, tools: false }),
+					model("listed", { contextWindow: 8_192, reasoning: false, vision: false, tools: false }),
+				],
+			});
+		}
+	} finally {
+		globalThis.fetch = realFetch;
+	}
+});
+
+test("a failed Ollama version check does not read model_info", async () => {
+	const ollama = serve({
+		"GET /v1/models": () => ({ data: [{ id: "qwen3:14b" }] }),
+		"POST /api/show": () => ({
+			capabilities: ["completion"],
+			model_info: { "general.architecture": "qwen3", "qwen3.context_length": 262_144 },
+		}),
+	});
+	expect(await probeCustomEndpoint({ baseUrl: `${ollama.url}/v1` })).toEqual({
+		ok: true,
+		baseUrl: `${ollama.url}/v1`,
+		models: [model("qwen3:14b")],
 	});
 });
 
