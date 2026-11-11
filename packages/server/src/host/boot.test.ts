@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { HostUpdateNotice, ServerWelcome } from "@thinkrail/contracts";
-import { PROTOCOL_VERSION, REQUEST_IMAGE_BASE64_BUDGET, WS_CHANNELS } from "@thinkrail/contracts";
+import { PROTOCOL_VERSION, WS_CHANNELS, WS_MAX_FRAME_BYTES } from "@thinkrail/contracts";
 import { isPortFree } from "@thinkrail/shared/freePort";
 import {
 	configurePiRuntime,
@@ -557,25 +557,26 @@ test("welcome omits closed projects whose folders are gone", async () => {
 	expect(welcome.recentProjects?.map((project) => project.id)).toEqual(["open", "kept"]);
 });
 
-test("a request frame carrying the whole prompt image budget reaches its handler", async () => {
+test.each([
+	["exactly at the frame cap reaches its handler", WS_MAX_FRAME_BYTES, "answered"],
+	["one byte over the frame cap closes the socket", WS_MAX_FRAME_BYTES + 1, "closed"],
+])("a request frame %s", async (_name, bytes, expected) => {
 	const b = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
-	const collector = await collectSocket(b.port, "frame-budget");
+	const collector = await collectSocket(b.port, "frame-cap");
 	const closed = new Promise<string>((resolve) =>
-		collector.socket.addEventListener("close", (event) => resolve(`closed ${event.code}`)),
+		collector.socket.addEventListener("close", () => resolve("closed")),
 	);
-	collector.socket.send(
-		JSON.stringify({
-			id: "budget",
-			method: "project.list",
-			params: { padding: "A".repeat(REQUEST_IMAGE_BASE64_BUDGET) },
-		}),
-	);
+	const envelope = JSON.stringify({ id: "cap", method: "project.list", params: { padding: "" } });
+	const padding = "A".repeat(bytes - envelope.length);
+	collector.socket.send(JSON.stringify({ id: "cap", method: "project.list", params: { padding } }));
 
 	const outcome = await Promise.race([
-		collector.waitForFrame((candidate) => candidate.id === "budget").then((frame) => frame.ok),
+		collector
+			.waitForFrame((candidate) => candidate.id === "cap")
+			.then((frame) => (frame.ok ? "answered" : "failed")),
 		closed,
 	]);
-	expect(outcome).toBe(true);
+	expect(outcome).toBe(expected);
 	collector.socket.close();
 });
 

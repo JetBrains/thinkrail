@@ -693,8 +693,10 @@ re-opened transcripts provider-valid.
     whole context carries more than 20 images — stripping changes the very count that selects that cap,
     so 2000px violators are stripped **largest-first only until the survivors fit back under the
     threshold** (18 small + 3 at 2500px ⇒ one stripped, the other two stay legal under 8000px); and the
-    **request-wide `REQUEST_IMAGE_BASE64_BUDGET`** (24MB of base64, headroom under Anthropic's 32MB
-    per-request cap — several per-image-legal blocks can still overflow the whole request), enforced by
+    **request-wide `CONTEXT_IMAGE_BASE64_BUDGET`** (24MB of base64, headroom under Anthropic's 32MB
+    per-request cap — several per-image-legal blocks can still overflow the whole request; deliberately
+    its own constant, larger than the composer's 12MB per-message `REQUEST_IMAGE_BASE64_BUDGET`, so a long
+    chat keeps its screenshots), enforced by
     stripping survivors **largest-first until the aggregate fits**. This is what un-bricks a session poisoned by an oversized image
     (history is re-sent every turn, so one bad image 400s forever): sessions are append-only and the host
     has no image codec (the autoResize tradeoff above), so the guard transforms the **outgoing context

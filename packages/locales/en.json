@@ -4,6 +4,7 @@
 	"app.githubStar.actionStars": "View on GitHub | ☆ {{stars}}",
 	"app.githubStar.message": "Check the GitHub repo: your star can help others find it, and your issues could help us make it better!",
 	"app.githubStar.title": "Find ThinkRail useful or have feedback?",
+	"app.transport.frameTooLarge": "Not sent: over the {{limit}} MB limit for one request.",
 	"app.transport.mcpUnavailable": "MCP servers are unavailable until the host reconnects.",
 	"app.transport.requestFailed": "request failed",
 	"app.transport.requestFailedFallback": "The request failed.",
