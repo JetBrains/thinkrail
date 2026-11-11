@@ -3502,6 +3502,22 @@ test("summaries and state records carry the first prompt's head as a display fal
 	const attached = await getSessionMessages(compacted, "ws-first-prompt", cwd);
 	expect(attached.summary.firstPrompt).toBe("The real first prompt");
 	expect(attached.messages.some((message) => message.role === "user")).toBe(true);
+	expect(
+		attached.messages.some(
+			(message) =>
+				message.role === "user" &&
+				typeof message.content === "string" &&
+				message.content.includes("The real first prompt"),
+		),
+	).toBe(true);
+	expect(
+		attached.messages.some(
+			(message) =>
+				message.role === "user" &&
+				typeof message.content === "string" &&
+				message.content === "A later prompt",
+		),
+	).toBe(true);
 	expect(SessionManager.open(listedPath(unnamed, cwd)).getSessionName()).toBeUndefined();
 
 	fauxA.setResponses([fauxAssistantMessage("noted"), fauxAssistantMessage("ok")]);

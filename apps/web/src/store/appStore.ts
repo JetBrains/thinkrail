@@ -498,6 +498,11 @@ export interface MarkedUnread {
 	held: boolean;
 }
 
+export interface ChatReadingAnchor {
+	rowId: string;
+	offset: number;
+}
+
 export interface SessionRuntime {
 	turns: ChatTurn[];
 	turnIdByMessageIndex?: (string | null)[];
@@ -517,6 +522,7 @@ export interface SessionRuntime {
 	commands: SlashCommandInfo[];
 	draft: string;
 	promptImages: PromptImagesState;
+	readingAnchor: ChatReadingAnchor | null;
 	pendingExtUi: ExtUiDialogRequest | null;
 	extUiQueue: ExtUiDialogRequest[];
 	extUiStatus: Record<string, string>;
@@ -550,6 +556,7 @@ function newRuntime(
 		commands: [],
 		draft: "",
 		promptImages: newPromptImagesState(),
+		readingAnchor: null,
 		pendingExtUi: null,
 		extUiQueue: [],
 		extUiStatus: {},
@@ -1486,6 +1493,7 @@ interface AppState {
 		sessionId: string,
 		update: (current: PromptImagesState) => PromptImagesState,
 	) => void;
+	setChatReadingAnchor: (sessionId: string, anchor: ChatReadingAnchor | null) => void;
 	dismissSessionNotice: (sessionId: string) => void;
 	silenceNotice: (notice: ProviderWarning) => void;
 	clearPendingExtUi: (sessionId: string, id: string) => void;
@@ -4626,6 +4634,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 				const promptImages = update(rt.promptImages);
 				return promptImages === rt.promptImages ? rt : { ...rt, promptImages };
 			}),
+		),
+	setChatReadingAnchor: (sessionId, readingAnchor) =>
+		set((s) =>
+			withRuntime(s, sessionId, (rt) =>
+				rt.readingAnchor?.rowId === readingAnchor?.rowId &&
+				rt.readingAnchor?.offset === readingAnchor?.offset
+					? rt
+					: { ...rt, readingAnchor },
+			),
 		),
 	dismissSessionNotice: (sessionId) =>
 		set((s) => withRuntime(s, sessionId, (rt) => (rt.notice ? { ...rt, notice: null } : rt))),
