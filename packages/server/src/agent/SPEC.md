@@ -561,10 +561,11 @@ re-opened transcripts provider-valid.
     TUI `Component` factory a web host cannot render (`setFooter`, `setHeader`, `setEditorComponent`,
     `custom`, `setWidget`'s factory overload; the string-array overload **is** rendered).
     *Translatable* ones must behave: **`theme` is a real `Theme`** (`plainTextTheme`) whose every
-    decorator returns its input unchanged. `setEditorText` publishes a fire-and-forget request replacing
-    that session's browser composer draft, including an empty string. `pasteToEditor` uses the same
-    replacement behavior as pi's RPC mode. `getEditorText` remains empty because the host cannot
-    synchronously read a browser-local draft. `getAllThemes: []` / `getTheme: undefined` match pi's own
+    decorator returns its input unchanged. `setEditorText` and `pasteToEditor` publish fire-and-forget
+    frames of their own kinds for that session's browser composer: a replacement (an empty string clears
+    the draft) and a paste. The paste keeps pi's TUI meaning, not its RPC mode's (which delegates to
+    `setEditorText`), because the browser composer has a caret. `getEditorText` remains empty because the
+    host cannot synchronously read a browser-local draft. `getAllThemes: []` / `getTheme: undefined` match pi's own
     rpc mode; `setTheme`'s `{success:true}` is a known lie, tracked separately — a web host has no TUI
     theme to switch to, so pi's rpc-mode form (`{success:false}`) is the honest answer.
     `plainTextTheme` subclasses pi's `Theme` and overrides `fg`/`bg`/`style`/`bold`/`italic`/`underline`/

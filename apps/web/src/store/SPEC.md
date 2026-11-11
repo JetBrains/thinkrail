@@ -304,7 +304,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   `silenceNotice(notice)` clears every chat once "Don't warn again" lands, and also drops
   buffered orphan `notice` frames, so a chat opened later does not replay one. `openChatSession` creates a runtime; `closeChatRuntime` /
   `clearWorkspaceState` drop it; per-session mutators (`appendUserMessage` / **`appendErrorTurn`** / `setStats` / `setCommands` /
-  `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `setChatReadingAnchor` / `clearPendingExtUi`)
+  `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `consumeComposerEdit` / `setChatReadingAnchor` / `clearPendingExtUi`)
   take a `sessionId`.
   **`appendErrorTurn(sessionId, text)`** appends an `error` turn for a **rejected** turn-driving wire call
   (`session.prompt`/`steer`/`followUp`/`create`) — e.g. `prompt()` throwing "no API key" / a bad model —
@@ -462,8 +462,14 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   `system` turn. Level is the *only* input, so the host's own error notifies ride the same road: the
   `Review send failed: …` that `host/handlers` publishes after a rolled-back send renders as that banner
   too. That is deliberate — a send that silently rolled back is exactly what a user must not scroll past.
-  `setEditorText` replaces only the addressed runtime's `draft`, including an empty string, without
-  submitting the text. A **fire-and-forget** ext-UI frame (`notify`/`setStatus`/`setWidget`/`setTitle`/`setEditorText`/`notice`)
+  `setEditorText` / `pasteToEditor` never write `draft` themselves: they leave the addressed runtime one
+  pending **`composerEdit`** (`{ id, kind: "replace" | "paste", text }`) for that chat's composer to apply
+  through its own edit path, so a replacement also ends the composer's template-slot session and a paste
+  lands at its caret. Pending edits fold: a replacement supersedes everything before it and a paste
+  appends to the pending text, which is what applying them one by one would produce.
+  `consumeComposerEdit(sessionId, id)` clears the edit only while it is still that one. A runtime whose
+  chat is not shown keeps the edit until its composer mounts. A **fire-and-forget** ext-UI frame
+  (`notify`/`setStatus`/`setWidget`/`setTitle`/`setEditorText`/`pasteToEditor`/`notice`)
   that has **no runtime to land in** is held in **`extUiOrphans`** (bounded, newest 64) instead of being
   dropped, and **both** runtime-installing actions — `openChatSession` *and* `hydrateSession` — drain that
   session's frames through the shared `replayExtUiOrphans` the moment its runtime exists. The admission

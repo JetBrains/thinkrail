@@ -12,7 +12,7 @@ import {
 
 const ESC = "\u001b";
 
-test("extension editor setters replace their own chat's composer text, including an empty draft", () => {
+test("extension editor calls address their own chat's composer and keep paste apart from replace", () => {
 	const frames: ExtUiRequest[] = [];
 	setExtUiPublisher((frame) => frames.push(frame));
 	try {
@@ -31,7 +31,7 @@ test("extension editor setters replace their own chat's composer text, including
 			{
 				id: expect.any(String),
 				sessionId: "editor-b",
-				kind: "setEditorText",
+				kind: "pasteToEditor",
 				text: "Pasted draft",
 			},
 			{ id: expect.any(String), sessionId: "editor-a", kind: "setEditorText", text: "" },

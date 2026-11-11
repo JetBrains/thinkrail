@@ -1546,7 +1546,7 @@ test("closeChatRuntime drops only its own runtime", () => {
 	expect(rt("b").isStreaming).toBe(true);
 });
 
-test("extension editor text replaces only the addressed draft and can clear it", () => {
+test("extension editor text waits for the addressed composer and a replacement can clear it", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
 	store.openChatSession("ws1", "b", null, "medium");
@@ -1558,21 +1558,40 @@ test("extension editor text replaces only the addressed draft and can clear it",
 		kind: "setEditorText",
 		text: "New 中文\ndraft",
 	});
-	expect(rt("a").draft).toBe("New 中文\ndraft");
-	expect(rt("b").draft).toBe("Other chat");
+	expect(rt("a").composerEdit).toEqual({ id: "edit-a", kind: "replace", text: "New 中文\ndraft" });
+	expect(rt("a").draft).toBe("Old draft");
+	expect(rt("b").composerEdit).toBeNull();
 	store.applyExtUi({ id: "clear-a", sessionId: "a", kind: "setEditorText", text: "" });
-	expect(rt("a").draft).toBe("");
-	expect(rt("b").draft).toBe("Other chat");
+	expect(rt("a").composerEdit).toEqual({ id: "clear-a", kind: "replace", text: "" });
+	store.consumeComposerEdit("a", "edit-a");
+	expect(rt("a").composerEdit?.id).toBe("clear-a");
+	store.consumeComposerEdit("a", "clear-a");
+	expect(rt("a").composerEdit).toBeNull();
+});
+
+test("pending extension pastes fold into the edit a composer applies once", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	store.applyExtUi({ id: "p1", sessionId: "a", kind: "pasteToEditor", text: "one" });
+	store.applyExtUi({ id: "p2", sessionId: "a", kind: "pasteToEditor", text: " two" });
+	expect(rt("a").composerEdit).toEqual({ id: "p2", kind: "paste", text: "one two" });
+	store.applyExtUi({ id: "r", sessionId: "a", kind: "setEditorText", text: "Base" });
+	store.applyExtUi({ id: "p3", sessionId: "a", kind: "pasteToEditor", text: " tail" });
+	expect(rt("a").composerEdit).toEqual({ id: "p3", kind: "replace", text: "Base tail" });
 });
 
 test("extension editor text received before a chat opens is applied in order", () => {
 	const store = useAppStore.getState();
 	store.applyExtUi({ id: "edit-first", sessionId: "later", kind: "setEditorText", text: "First" });
-	store.applyExtUi({ id: "edit-last", sessionId: "later", kind: "setEditorText", text: "Last" });
+	store.applyExtUi({ id: "paste-last", sessionId: "later", kind: "pasteToEditor", text: " last" });
 	store.openChatSession("ws1", "other", null, "medium");
-	expect(rt("other").draft).toBe("");
+	expect(rt("other").composerEdit).toBeNull();
 	store.openChatSession("ws1", "later", null, "medium");
-	expect(rt("later").draft).toBe("Last");
+	expect(rt("later").composerEdit).toEqual({
+		id: "paste-last",
+		kind: "replace",
+		text: "First last",
+	});
 	expect(useAppStore.getState().extUiOrphans).toEqual([]);
 });
 

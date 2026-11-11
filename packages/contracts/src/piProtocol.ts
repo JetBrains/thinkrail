@@ -294,7 +294,7 @@ export type ExtUiRequest =
 	| { id: string; sessionId: string; kind: "setStatus"; key: string; text: string | null }
 	| { id: string; sessionId: string; kind: "setWidget"; key: string; content: string[] | null }
 	| { id: string; sessionId: string; kind: "setTitle"; title: string }
-	| { id: string; sessionId: string; kind: "setEditorText"; text: string }
+	| { id: string; sessionId: string; kind: "setEditorText" | "pasteToEditor"; text: string }
 	| { id: string; sessionId: string; kind: "notice"; notice: ProviderWarning }
 	| { id: string; sessionId: string; kind: "dismiss" };
 

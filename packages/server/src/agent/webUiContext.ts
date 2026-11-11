@@ -215,7 +215,7 @@ export function createWebUiContext(
 			publish({ id: nextId(), sessionId, kind: "setTitle", title });
 		},
 		pasteToEditor(text) {
-			this.setEditorText(text);
+			publish({ id: nextId(), sessionId, kind: "pasteToEditor", text });
 		},
 		setEditorText(text) {
 			publish({ id: nextId(), sessionId, kind: "setEditorText", text });

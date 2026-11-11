@@ -28,6 +28,7 @@ import {
 	customMessageText,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
+	EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION,
 	EXTENSION_SETTINGS_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
@@ -340,6 +341,11 @@ test("the question panel height setting is pinned to v114", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(QUESTION_PANEL_PROTOCOL_VERSION);
 	expect(QUESTION_PANEL_PROTOCOL_VERSION).toBe(114);
 	expect(DEFAULT_CONFIG.questionPanelHeight).toBe(60);
+});
+
+test("extension editor text is pinned to v115", () => {
+	expect(PROTOCOL_VERSION).toBe(115);
+	expect(EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION).toBe(115);
 });
 
 test("continue in workspace is pinned to v110", () => {
