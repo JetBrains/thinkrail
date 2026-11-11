@@ -23,6 +23,41 @@ export function sourceLineRehype(options?: { offset?: number }): (tree: HastNode
 	return visit;
 }
 
+export function sourceBlockAt(container: ParentNode, line: number): HTMLElement | null {
+	let best: HTMLElement | null = null;
+	let bestStart = 0;
+	for (const element of container.querySelectorAll<HTMLElement>("[data-md-line-start]")) {
+		const start = Number(element.dataset.mdLineStart);
+		if (start <= line && start > bestStart) {
+			best = element;
+			bestStart = start;
+		}
+	}
+	return best;
+}
+
+export function revealSourceLine(
+	container: HTMLElement,
+	line: number,
+	onRevealed: () => void,
+): () => void {
+	const reveal = () => {
+		const block =
+			sourceBlockAt(container, line) ??
+			container.querySelector<HTMLElement>("[data-md-line-start]");
+		if (!block) return false;
+		block.scrollIntoView({ block: "start" });
+		onRevealed();
+		return true;
+	};
+	if (reveal()) return () => {};
+	const observer = new MutationObserver(() => {
+		if (reveal()) observer.disconnect();
+	});
+	observer.observe(container, { childList: true, subtree: true });
+	return () => observer.disconnect();
+}
+
 export function frontmatterOffset(raw: string, stripped: string): number {
 	return Math.max(0, raw.split("\n").length - stripped.split("\n").length);
 }

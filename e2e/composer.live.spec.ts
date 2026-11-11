@@ -112,7 +112,7 @@ test("stats refresh after a turn completes (cheap win #3)", { tag: "@agent" }, a
 	await page.getByTestId("chat-send").click();
 
 	await expect(
-		page.locator('[data-testid="chat-message"][data-role="system"]').filter({ hasText: "Done" }),
+		page.locator('[data-testid="turn-divider-status"][data-outcome="done"]'),
 	).toBeVisible({ timeout: 80_000 });
 	const stats = page.getByTestId("session-stats");
 	await expect(stats).toBeVisible();

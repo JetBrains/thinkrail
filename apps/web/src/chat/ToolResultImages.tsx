@@ -41,7 +41,7 @@ function ToolResultImage({ image, label }: { image: ImageContent; label: string 
 				</DialogTrigger>
 				<DialogContent
 					data-testid="tool-result-image-dialog"
-					className="flex h-[90vh] w-[95vw] max-w-[95vw] flex-col gap-8"
+					className="h-[90vh] w-[95vw] max-w-[95vw] gap-8"
 				>
 					<DialogHeader>
 						<DialogTitle>{label}</DialogTitle>
@@ -51,7 +51,7 @@ function ToolResultImage({ image, label }: { image: ImageContent; label: string 
 							src={src}
 							alt={label}
 							decoding="async"
-							className="max-h-[80vh] max-w-full object-contain"
+							className="max-h-full max-w-full object-contain"
 						/>
 					</div>
 				</DialogContent>

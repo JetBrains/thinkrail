@@ -83,8 +83,15 @@ What a `./web` half may import:
 - `@thinkrail/locales/react` ([[module-locales]]) — `useT` / `<T>` / `t` over the one shared i18next
   instance; an extension's UI text is keys in `packages/locales/en.json` under its own prefix
   (`visualize.*`), held by `check:i18n` like the app.
-- **Not in the SDK (yet):** the highlighted `CodeBlock` and the shiki highlighter — not dependency-closed
-  (highlighter → theme barrel). They move together with the generic CSS-variable shiki map when a second
+- **Voice input needs nothing from an extension.**
+  - The host's dictation layer ([[submodule-web-speech]]) serves every text input, textarea and
+    contenteditable an extension renders.
+  - It writes through a native `input` event, so a React-controlled field sees an ordinary `onChange`.
+  - A field that should hold its own submit button while listening can listen for the bubbling
+    `thinkrail:dictation` event (`detail.listening`) on the field.
+- **Not in the SDK (yet):** the highlighted `CodeBlock` and the chat highlighter — not dependency-closed
+  (highlighter → theme barrel). They move together with the generic CSS-variable Pierre token table
+  (`THINKRAIL_PIERRE_THEME`) when a second
   extension needs highlighting.
 
 ## Composition — the registry files

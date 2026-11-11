@@ -97,28 +97,22 @@ test("strict snapshots round-trip and reject unknown schema or missing domain ev
 	expect(() => decodeState(state)).toThrow("Proposal producer mismatch");
 });
 
-test.each([
-	"off",
-	"minimal",
-	"low",
-	"medium",
-	"high",
-	"xhigh",
-	"max",
-	undefined,
-] as const)("stored outcome round-trips thinkingLevel %s without inferring absent effort", (thinkingLevel) => {
-	const { state, activation } = fixture();
-	if (!activation.outcome) throw new Error("Missing outcome");
-	state.definitionValue.defaults.thinkingLevel = "high";
-	activation.outcome.details.model = "provider/worker";
-	if (thinkingLevel !== undefined) activation.outcome.details.thinkingLevel = thinkingLevel;
-	const restored = decodeState(JSON.parse(JSON.stringify(state)));
-	expect(restored.schemaVersion).toBe(1);
-	const details = restored.nodes.worker?.attempts[0]?.activations[0]?.outcome?.details;
-	expect(details).toEqual(activation.outcome.details);
-	expect(details?.thinkingLevel).toBe(thinkingLevel);
-	if (thinkingLevel === undefined) expect(details).not.toHaveProperty("thinkingLevel");
-});
+test.each(["off", "minimal", "low", "medium", "high", "xhigh", "max", undefined] as const)(
+	"stored outcome round-trips thinkingLevel %s without inferring absent effort",
+	(thinkingLevel) => {
+		const { state, activation } = fixture();
+		if (!activation.outcome) throw new Error("Missing outcome");
+		state.definitionValue.defaults.thinkingLevel = "high";
+		activation.outcome.details.model = "provider/worker";
+		if (thinkingLevel !== undefined) activation.outcome.details.thinkingLevel = thinkingLevel;
+		const restored = decodeState(JSON.parse(JSON.stringify(state)));
+		expect(restored.schemaVersion).toBe(1);
+		const details = restored.nodes.worker?.attempts[0]?.activations[0]?.outcome?.details;
+		expect(details).toEqual(activation.outcome.details);
+		expect(details?.thinkingLevel).toBe(thinkingLevel);
+		if (thinkingLevel === undefined) expect(details).not.toHaveProperty("thinkingLevel");
+	},
+);
 
 test.each([
 	{ thinkingLevel: "ultra" },
