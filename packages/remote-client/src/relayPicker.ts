@@ -60,6 +60,8 @@ export function openFirstRelay<S extends RelaySocket>(
 			};
 			const onFail = (): void => {
 				socket.removeEventListener("open", onOpen);
+				socket.removeEventListener("error", onFail);
+				socket.removeEventListener("close", onFail);
 				failed += 1;
 				if (failed === urls.length) finish(null);
 			};

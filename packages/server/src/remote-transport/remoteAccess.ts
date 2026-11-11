@@ -64,9 +64,8 @@ export interface RemoteAccessOptions {
 
 /**
  * Composition root for host-side remote access: loads the host identity, connects out to the broker, and for
- * each brokered device runs the pairing handshake and WebRTC negotiation. `issueLink` mints the one-time
- * pairing link to share. Wiring the opened `RemoteChannel` to the host wire protocol is a later slice; until
- * then `onPaired` surfaces the connection.
+ * each device runs the pairing handshake and WebRTC negotiation, handing the open channel to `onPaired`.
+ * `issueLink` mints the one-time pairing link to share.
  */
 export function startRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
 	const identity = options.identity ?? loadOrCreateIdentity();

@@ -130,6 +130,8 @@ test("the quick panel mints one code on its own per on-stretch, and only where a
 	expect(shouldAutoIssue(initialPhoneAccess)).toBe(false);
 	expect(shouldAutoIssue(run({ type: "status", status: off }))).toBe(false);
 	expect(shouldAutoIssue(run({ type: "status", status: { ...on, addresses: [] } }))).toBe(false);
+	const nostrOnly = { ...on, addresses: [], nostr: { relays: ["wss://r"], connected: 1 } };
+	expect(shouldAutoIssue(run({ type: "status", status: nostrOnly }))).toBe(true);
 	const fresh = run({ type: "status", status: on });
 	expect(shouldAutoIssue(fresh)).toBe(true);
 	const minting = phoneAccessReducer(fresh, { type: "issuing", auto: true });

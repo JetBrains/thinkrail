@@ -34,6 +34,16 @@ function fakeChannel() {
 }
 
 describe("createDeviceWireClient", () => {
+	test("request ids are unique per client, so a restarted app never reuses one the host still holds", () => {
+		const ids = [createDeviceWireClient(), createDeviceWireClient()].map((client) => {
+			const io = fakeChannel();
+			client.attach(io.channel);
+			void client.request("session.list");
+			return io.sent.at(-1)?.id;
+		});
+		expect(ids[0]).not.toBe(ids[1]);
+	});
+
 	test("a welcome that arrived before anyone subscribed reaches a later subscriber; event pushes do not", () => {
 		const io = fakeChannel();
 		const client = createDeviceWireClient();
@@ -53,9 +63,11 @@ describe("createDeviceWireClient", () => {
 		const client = createDeviceWireClient();
 		client.attach(io.channel);
 		const result = client.request("project.list", { a: 1 });
-		expect(io.sent).toEqual([{ id: "d1", method: "project.list", params: { a: 1 } }]);
-		io.deliver({ id: "d1", ok: true, result: { items: [] } });
+		const id = io.sent.at(-1)?.id as string;
+		expect(io.sent.at(-1)).toEqual({ id, method: "project.list", params: { a: 1 } });
+		io.deliver({ id, ok: true, result: { items: [] } });
 		await expect(result).resolves.toEqual({ items: [] });
+		expect(io.sent.at(-1)).toEqual({ ack: [id] });
 	});
 
 	test("rejects with a RemoteRequestError carrying the error code", async () => {
@@ -63,7 +75,12 @@ describe("createDeviceWireClient", () => {
 		const client = createDeviceWireClient();
 		client.attach(io.channel);
 		const result = client.request("project.open");
-		io.deliver({ id: "d1", ok: false, error: "Not a git repository", errorCode: "NOT_GIT" });
+		io.deliver({
+			id: io.sent.at(-1)?.id,
+			ok: false,
+			error: "Not a git repository",
+			errorCode: "NOT_GIT",
+		});
 		await expect(result).rejects.toBeInstanceOf(RemoteRequestError);
 		await result.catch((err: RemoteRequestError) => {
 			expect(err.message).toBe("Not a git repository");
@@ -76,14 +93,14 @@ describe("createDeviceWireClient", () => {
 		const client = createDeviceWireClient();
 		client.attach(first.channel);
 		const result = client.request("session.get");
-		expect(first.sent).toHaveLength(1);
+		const id = first.sent.at(-1)?.id as string;
 
-		first.drop(); // network flap — request must survive
+		first.drop();
 
 		const second = fakeChannel();
 		client.attach(second.channel);
-		expect(second.sent).toEqual([{ id: "d1", method: "session.get" }]); // replayed
-		second.deliver({ id: "d1", ok: true, result: "ok" });
+		expect(second.sent).toEqual([{ resume: [id] }, { id, method: "session.get" }]);
+		second.deliver({ id, ok: true, result: "ok" });
 		await expect(result).resolves.toBe("ok");
 	});
 

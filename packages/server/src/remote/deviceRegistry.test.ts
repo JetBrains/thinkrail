@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -54,4 +54,20 @@ test("findDeviceByKey and revokeDevice", () => {
 		expect(loadDevices(dir).map((d) => d.id)).toEqual(["dev-2"]);
 		expect(findDeviceByKey("KEY_A", dir)).toBeNull();
 	});
+});
+
+test("loadDevices sees a change written behind its back", () => {
+	const dir = mkdtempSync(join(tmpdir(), "trdev-"));
+	addDevice({ id: "a", label: "A", publicKey: "K", pairedAt: 1 }, dir);
+	expect(loadDevices(dir).map((d) => d.label)).toEqual(["A"]);
+	writeFileSync(
+		join(dir, "remote-devices.json"),
+		JSON.stringify({
+			version: 1,
+			devices: [{ id: "a", label: "Renamed elsewhere", publicKey: "K", pairedAt: 1 }],
+		}),
+	);
+	expect(loadDevices(dir).map((d) => d.label)).toEqual(["Renamed elsewhere"]);
+	rmSync(dir, { recursive: true, force: true });
+	expect(loadDevices(dir)).toEqual([]);
 });
