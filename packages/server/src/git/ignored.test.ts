@@ -166,6 +166,8 @@ for (const [label, path] of [
 	["tab", "src/a\tb.log"],
 	["newline", "src/a\nb.log"],
 	["backslash", "src/a\\b.log"],
+	["control character", "src/a\u0001b.log"],
+	["non-ASCII", "src/ä·日本.log"],
 	["pathspec magic", ":(glob)literal.log"],
 ] as const) {
 	test(`ignoredPaths preserves a literal filename containing ${label}`, async () => {
