@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { type RTCDataChannel, RTCPeerConnection } from "werift";
+import { type RTCDataChannel, RTCPeerConnection } from "./werift";
 import { toRemoteChannel } from "./weriftRemoteChannel";
 
 // Loopback over real werift peer connections under Bun: proves the adapter round-trips bytes both ways.
