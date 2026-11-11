@@ -177,7 +177,7 @@ test("a transient workspace read failure preserves the URL and restores after re
 			) {
 				injected = true;
 				ws.send(JSON.stringify({ id: frame.id, ok: false, error: "injected transient failure" }));
-				ws.close();
+				void ws.close();
 				return;
 			}
 			server.send(message);

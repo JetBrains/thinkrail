@@ -15,6 +15,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { copyText } from "@/lib";
@@ -40,12 +41,14 @@ function DeviceLink({ href, children }: { href: string; children?: ReactNode }) 
 export function LoginDialog({
 	state,
 	providerName,
+	notice,
 	onReply,
 	onCancel,
 	onClose,
 }: {
 	state: LoginState;
 	providerName: string;
+	notice?: ReactNode;
 	onReply: (value: string) => void;
 	onCancel: () => void;
 	onClose: () => void;
@@ -110,7 +113,6 @@ export function LoginDialog({
 				data-testid="login-dialog"
 				data-provider={state.providerId}
 				data-status={state.status}
-				className="max-h-[85vh] overflow-y-auto"
 			>
 				<DialogHeader>
 					<DialogTitle>
@@ -125,9 +127,11 @@ export function LoginDialog({
 					) : null}
 				</DialogHeader>
 
+				{notice && state.status !== "error" ? notice : null}
+
 				{state.status === "success" ? (
 					<p
-						className="flex items-center gap-8 text-feedback-success tr-text-ui"
+						className="flex items-center gap-8 wrap-anywhere text-feedback-success tr-text-ui"
 						data-testid="login-success"
 					>
 						<Check className="size-16 shrink-0" />
@@ -144,7 +148,7 @@ export function LoginDialog({
 				) : (
 					<div className="flex flex-col gap-12">
 						{state.url ? (
-							<div className="flex gap-8">
+							<div className="flex flex-wrap gap-8">
 								<a
 									href={state.url}
 									target="_blank"
@@ -211,7 +215,7 @@ export function LoginDialog({
 										{loginSelectMessage(state.input.message)}
 									</p>
 								) : null}
-								<div className="grid gap-8 sm:grid-cols-2">
+								<div className="grid grid-cols-1 gap-8 sm:grid-cols-2">
 									{state.input.options.map((option) => {
 										const { title, detail, recommended } = loginOptionParts(option.label, t);
 										return (
@@ -270,6 +274,7 @@ export function LoginDialog({
 									type={state.input.secret ? "password" : "text"}
 									placeholder={state.input.placeholder ?? ""}
 									onKeyDown={(e) => {
+										if (isImeComposing(e.nativeEvent)) return;
 										if (e.key === "Enter") {
 											e.preventDefault();
 											submitPrompt();
@@ -282,7 +287,7 @@ export function LoginDialog({
 
 						{progress ? (
 							<p
-								className="flex items-center gap-8 text-text-muted tr-text-ui"
+								className="flex items-center gap-8 wrap-anywhere text-text-muted tr-text-ui"
 								data-testid="login-progress"
 							>
 								<Loader2 className="size-16 shrink-0 animate-spin" />

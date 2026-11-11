@@ -3,6 +3,6 @@ export {
 	clampLimit,
 	getHistoryIndex,
 	HistoryIndex,
-	makeSnippet,
-	matchesTerms,
+	type HistorySession,
+	type HistoryState,
 } from "./historyIndex";

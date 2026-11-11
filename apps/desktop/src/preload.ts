@@ -8,6 +8,7 @@ import type {
 	NativeWindowState,
 } from "@thinkrail/contracts";
 import Electrobun, { Electroview } from "electrobun/view";
+import { installExternalLinkRouting } from "./externalNavigation";
 import { handlePageZoomShortcut, installPageZoomGestures } from "./pageZoom";
 import {
 	INITIAL_DESKTOP_PREFERENCES_GLOBAL,
@@ -33,9 +34,7 @@ interface DesktopPreferenceAdapter {
 }
 
 const initialWindowChrome = takePreloadGlobal(INITIAL_WINDOW_CHROME_GLOBAL);
-const windowChromeStyle = createWindowChromeStyleWriter(
-	() => document.documentElement?.style ?? null,
-);
+const windowChromeStyle = createWindowChromeStyleWriter(() => document.documentElement ?? null);
 document.addEventListener("DOMContentLoaded", windowChromeStyle.flush, { once: true });
 windowChromeStyle.update(initialWindowChrome);
 
@@ -68,6 +67,7 @@ const rpc = Electroview.defineRPC<DesktopRpc>({
 });
 const electroview = new Electrobun.Electroview({ rpc });
 installTitleBarDoubleClick(window, () => electroview.rpc?.send.titleBarDoubleClick());
+installExternalLinkRouting(window);
 window.addEventListener("keydown", (event) =>
 	handlePageZoomShortcut(event, navigator.platform, (action) => {
 		electroview.rpc?.send.pageZoomRequested({ action });

@@ -12,7 +12,7 @@ import {
 import type { VirtuosoHandle } from "react-virtuoso";
 import type { ChatReadingAnchor } from "@/store";
 import type { ChatRevealOptions } from "./ChatActions";
-import type { ChatMessageOrder, StreamingResponseMovement } from "./chatPreferences";
+import type { ChatMessageOrder } from "./chatPreferences";
 import type { FoldAnchorResolver } from "./foldState";
 import {
 	createReadingBandController,
@@ -218,7 +218,6 @@ export function useChatScroll(
 	latestRow: RowLocation | null,
 	firstItemIndex: number,
 	rowHeightEstimates: readonly number[],
-	movement: StreamingResponseMovement,
 	readingPosition: ChatReadingPosition,
 ): ChatScroll {
 	const edge = latestEdge(messageOrder);
@@ -347,7 +346,7 @@ export function useChatScroll(
 			cancelFrame: (id) => cancelAnimationFrame(id),
 			onStateChange: setSnapshot,
 		},
-		{ streaming: isStreaming, latestEdge: edge, movement, mountPending: true },
+		{ streaming: isStreaming, latestEdge: edge, mountPending: true },
 	);
 
 	const guardActive = useCallback(() => {
@@ -690,10 +689,6 @@ export function useChatScroll(
 		}
 		if (isStreaming !== previous.isStreaming) controller.setStreaming(isStreaming);
 	}, [cancelRowReveal, controller, isStreaming, settlementTick]);
-
-	useLayoutEffect(() => {
-		controller.setMovement(movement);
-	}, [controller, movement]);
 
 	useEffect(() => {
 		if (!snapshot.moving) clearFoldResizeObserver();

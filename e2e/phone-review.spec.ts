@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
 	hideAuxiliaryWorkbench,
@@ -9,7 +9,7 @@ import {
 	revealWorkbenchTool,
 } from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
-import { pierreLines, selectPierreLine } from "./fixtures/pierre";
+import { pierreLineNumbers, pierreLines, selectPierreLine } from "./fixtures/pierre";
 
 const worktree = () => join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
 
@@ -28,6 +28,10 @@ async function noHorizontalOverflow(page: Page): Promise<void> {
 		.toBeLessThanOrEqual(0);
 }
 
+function backgroundOf(element: Locator) {
+	return element.evaluate((node) => getComputedStyle(node).backgroundColor);
+}
+
 test("a phone-class viewport renders a code file with Pierre, swapping Monaco out and back with the viewport", async ({
 	page,
 }) => {
@@ -40,9 +44,13 @@ test("a phone-class viewport renders a code file with Pierre, swapping Monaco ou
 	await goPhone(page);
 	const fileView = page.getByTestId("file-view");
 	await expect(fileView).toBeVisible();
-	await expect(pierreLines(fileView, "plain-text-fixture")).toHaveCount(1);
+	const line = pierreLines(fileView, "plain-text-fixture");
+	await expect(line).toHaveCount(1);
 	await expect(page.locator(".monaco-editor")).toHaveCount(0);
 	await noHorizontalOverflow(page);
+	const surface = await backgroundOf(fileView);
+	await expect.poll(() => backgroundOf(line)).toBe(surface);
+	await expect.poll(() => backgroundOf(pierreLineNumbers(fileView).first())).toBe(surface);
 
 	await page.setViewportSize({ width: 1280, height: 800 });
 	await expect(page.locator(".monaco-editor").first()).toBeVisible();

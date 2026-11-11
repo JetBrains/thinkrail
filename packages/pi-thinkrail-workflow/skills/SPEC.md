@@ -217,6 +217,11 @@ the design tree / frontier, an uncapped round, facts looked up rather than asked
 bar. Rejected by user decision: a separate opt-in "grill me" skill (depth lives in the shared norm,
 so every workflow gets it) and grilling's "confirm shared understanding" gate (an empty frontier
 proceeds; each workflow's own gates still apply).
+Its inference confirmation is a **single "Looks right" option**: the tool's own Other row carries a
+correction and its per-question **discuss first** mark carries disagreement. The earlier authored
+rejection row ("Off base — ask me directly") is gone: it was an *answer* that looked like an escape, and
+the local sessions held 30 agent-authored look-alikes ("Не то — спроси иначе") that hid the real Other
+row. A discuss-first answer is therefore never settled on a guess — the agent explains, then asks again.
 Meta-rule 4's entry model is in effect: at the start of new work the parent module's
 `before_agent_start` rule points workflow-eligible work at `choosing-a-workflow`, which routes to today's
 family; already-routed work resumes, and direct work bypasses the router. `writing-workflow-skills` (self-trigger only) and the concept skills (reached by name) sit outside

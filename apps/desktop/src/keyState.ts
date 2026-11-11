@@ -7,6 +7,7 @@ export interface KeyState {
 	cmdDown: boolean;
 	mouseAfterKey: boolean;
 	keyAfterModifiers: boolean;
+	sinceKeyDown: number | null;
 }
 
 const HID_SYSTEM_STATE = 1;
@@ -50,6 +51,7 @@ export function decodeKeyState(sample: KeySample): KeyState {
 		cmdDown: (sample.flags & COMMAND_FLAG) !== 0n,
 		mouseAfterKey: sample.sinceMouseUp < sample.sinceKeyDown,
 		keyAfterModifiers: sample.sinceKeyDown < sample.sinceFlagsChanged,
+		sinceKeyDown: Number.isFinite(sample.sinceKeyDown) ? sample.sinceKeyDown : null,
 	};
 }
 
