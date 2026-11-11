@@ -56,9 +56,9 @@ describe("request replay cache", () => {
 		expect(executions).toBe(1);
 	});
 
-	test("rejects an id reused for a different payload", () => {
+	test("rejects an id reused for a different payload", async () => {
 		const cache = new RequestReplayCache<string>();
-		cache.run("page", "req-1", "method-a", () => "ok");
+		await cache.run("page", "req-1", "method-a", () => "ok");
 
 		expect(() => cache.run("page", "req-1", "method-b", () => "wrong")).toThrow(
 			RequestReplayConflictError,
@@ -347,9 +347,9 @@ describe("request replay cache", () => {
 		expect(() => cache.run("page", "b", "b", () => "x")).toThrow(RequestReplayOverflowError);
 	});
 
-	test("receipts for unknown ids and unknown clients are ignored", () => {
+	test("receipts for unknown ids and unknown clients are ignored", async () => {
 		const cache = new RequestReplayCache<string>();
-		cache.run("page", "req-1", "same", () => "ok");
+		await cache.run("page", "req-1", "same", () => "ok");
 
 		expect(() => cache.acknowledge("page", ["never-sent"])).not.toThrow();
 		expect(() => cache.acknowledge("ghost", ["req-1"])).not.toThrow();

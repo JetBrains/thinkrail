@@ -9,11 +9,14 @@ export interface SpecSurfaceRunOptions {
 	stderr?: (line: string) => void;
 }
 
-export function runSpecSurfaceCheck(inputRoot: string, options: SpecSurfaceRunOptions = {}): 0 | 1 {
+export async function runSpecSurfaceCheck(
+	inputRoot: string,
+	options: SpecSurfaceRunOptions = {},
+): Promise<0 | 1> {
 	const root = resolve(inputRoot);
 	const stdout = options.stdout ?? console.log;
 	const stderr = options.stderr ?? console.error;
-	const report = checkSpecSurfaces(root);
+	const report = await checkSpecSurfaces(root);
 	const summary = `${report.enrolled} enrolled, ${report.checked} compared; ${report.skipped.length} not enrolled`;
 
 	if (options.listSkipped) {
@@ -34,7 +37,7 @@ export function runSpecSurfaceCheck(inputRoot: string, options: SpecSurfaceRunOp
 }
 
 if (import.meta.main) {
-	process.exitCode = runSpecSurfaceCheck(join(import.meta.dir, ".."), {
+	process.exitCode = await runSpecSurfaceCheck(join(import.meta.dir, ".."), {
 		listSkipped: process.argv.includes("--list-skipped"),
 	});
 }

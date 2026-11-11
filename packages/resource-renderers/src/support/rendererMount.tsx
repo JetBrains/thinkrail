@@ -22,6 +22,7 @@ import {
 const viewComponents = new Map<string, ComponentType<ResourceViewProps>>();
 const lazyViews = new Map<string, ComponentType<ResourceViewProps>>();
 const pendingViews = new Map<string, Promise<ResourceViewModule>>();
+const failedViews = new Set<string>();
 const diffComponents = new Map<string, LazyExoticComponent<ComponentType<ResourceDiffProps>>>();
 
 function loadView(renderer: ResourceRenderer, mobile: boolean): Promise<ResourceViewModule> {
@@ -32,15 +33,16 @@ function loadView(renderer: ResourceRenderer, mobile: boolean): Promise<Resource
 	if (!load) throw new Error(`Resource renderer has no view loader: ${renderer.id}`);
 	const next = load({ mobile }).then(
 		(module) => {
-			if (!viewComponents.has(key)) viewComponents.set(key, module.default);
+			if (!viewComponents.has(key) || failedViews.delete(key)) {
+				viewComponents.set(key, module.default);
+				lazyViews.delete(key);
+			}
 			return module;
 		},
 		(error: unknown) => {
 			pendingViews.delete(key);
-			if (viewComponents.get(key) === lazyViews.get(key)) {
-				viewComponents.delete(key);
-				lazyViews.delete(key);
-			}
+			if (lazyViews.has(key) && viewComponents.get(key) === lazyViews.get(key))
+				failedViews.add(key);
 			throw error;
 		},
 	);
@@ -56,13 +58,12 @@ export function preloadRendererView(
 	renderer: ResourceRenderer,
 	mobile: boolean,
 	host: ResourceHost,
-	resource: ResourceDescriptor,
 ): Promise<void> {
 	if (!renderer.loadView) return Promise.resolve();
 	return loadView(renderer, mobile)
 		.then(async (module) => {
 			await nextTask();
-			module.warm?.(host, resource);
+			module.warm?.(host);
 		})
 		.catch((error: unknown) =>
 			console.warn(`[resource-renderers] view preload failed: ${renderer.id}`, error),
@@ -76,7 +77,7 @@ export function usePreloadResourceView(): (resource: ResourceDescriptor) => void
 		(resource: ResourceDescriptor) => {
 			const candidates = resolveRenderers(resource, "view", { mobile });
 			const renderer = selectResourceRenderer(candidates, undefined, resource.path);
-			if (renderer.capabilities.preload) void preloadRendererView(renderer, mobile, host, resource);
+			if (renderer.capabilities.preload) void preloadRendererView(renderer, mobile, host);
 		},
 		[host, mobile],
 	);

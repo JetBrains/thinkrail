@@ -123,7 +123,7 @@ export function FontPreview({ codeFontSize }: { codeFontSize: number }) {
 					<code className="tr-code-block">{CODE_BLOCK_SAMPLE}</code>
 				</pre>
 			</div>
-			<div className="flex gap-8">
+			<div className="flex flex-wrap gap-8">
 				<Button variant="soft-primary" size="m">
 					{t("settings.appearance.fonts.preview.openPr")}
 				</Button>

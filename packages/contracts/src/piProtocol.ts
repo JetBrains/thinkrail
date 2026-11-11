@@ -244,6 +244,8 @@ export interface SkillCatalogEntry {
 	plugin?: string;
 	group: string;
 	decision: SkillDecision;
+	/** pi's `disable-model-invocation`: callable only as `/skill:`, never listed in the prompt. */
+	manualOnly?: boolean;
 }
 
 /** The tool call a dialog is about; absent when it is not tied to one (a command, startup, parallel calls). */

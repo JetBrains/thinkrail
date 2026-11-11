@@ -7,11 +7,12 @@ import {
 	readFileSync,
 	realpathSync,
 	rmSync,
+	statSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
-import type { WorkspaceCreation, WorkspaceCreationRemoved } from "@thinkrail/contracts";
+import type { WireModel, WorkspaceCreation, WorkspaceCreationRemoved } from "@thinkrail/contracts";
 import {
 	createProject,
 	initProject,
@@ -28,6 +29,7 @@ import {
 	awaitWorkspaceCreation,
 	checkoutFailureText,
 	createWorkspace,
+	createWorkspaceWithChat,
 	dismissWorkspaceCreation,
 	interruptWorkspaceCreations,
 	listWorkspaceCreations,
@@ -37,6 +39,7 @@ import {
 	setWorkspaceCreationHandoff,
 	startWorkspaceCreation,
 	stopWorkspaceCreations,
+	WorkspaceCreationStopped,
 } from "./creations";
 import {
 	listExistingWorktrees,
@@ -499,6 +502,7 @@ posix(
 					phase: "checking-out",
 					startedAt: 1,
 					kickoff: { text: "still here" },
+					origin: "agent",
 				},
 			]),
 		);
@@ -506,14 +510,105 @@ posix(
 		expect(listWorkspaceCreations()[0]?.state).toBe("running");
 
 		const handed: unknown[] = [];
-		setWorkspaceCreationHandoff(async (ws, kickoff) => {
-			handed.push({ id: ws.id, kickoff });
+		setWorkspaceCreationHandoff(async (ws, kickoff, origin) => {
+			handed.push({ id: ws.id, kickoff, origin });
 			return { sessionId: "s-replayed" };
 		});
 		await replayPendingHandoffs();
-		expect(handed).toEqual([{ id: workspace.id, kickoff: { text: "still here" } }]);
+		expect(handed).toEqual([
+			{ id: workspace.id, kickoff: { text: "still here" }, origin: "agent" },
+		]);
 		expect(listWorkspaceCreations()).toEqual([]);
 		expect(removed().at(-1)).toMatchObject({ id: workspace.id, sessionId: "s-replayed" });
+	},
+);
+
+posix(
+	"an agent's creation keeps its origin on the record for the handoff and returns the chat's model off the wire",
+	async () => {
+		const model = { provider: "faux", id: "m" } as WireModel;
+		const seen: unknown[] = [];
+		setWorkspaceCreationHandoff(async (_workspace, kickoff, origin) => {
+			const [record] = JSON.parse(
+				readFileSync(join(dataDir, "workspace-creations.json"), "utf8"),
+			) as { origin?: string }[];
+			seen.push({ kickoff, origin, persisted: record?.origin });
+			return { sessionId: "s-1", model, thinkingLevel: "high" };
+		});
+		const kickoff = { text: "Fix the flaky test" };
+		const handed = await createWorkspaceWithChat("p1", { kickoff, origin: "agent" });
+		expect(seen).toEqual([{ kickoff, origin: "agent", persisted: "agent" }]);
+		expect(handed).toMatchObject({ sessionId: "s-1", model, thinkingLevel: "high" });
+		expect(removed()).toEqual([
+			{ id: handed.workspace.id, projectId: "p1", workspace: handed.workspace, sessionId: "s-1" },
+		]);
+		expect(listWorkspaceCreations()).toEqual([]);
+	},
+);
+
+posix(
+	"a stopped creation cuts no worktree and leaves no record; a Stop once the chat starts keeps both",
+	async () => {
+		const stopped = new AbortController();
+		stopped.abort();
+		await expect(createWorkspaceWithChat("p1", {}, stopped.signal)).rejects.toBeInstanceOf(
+			WorkspaceCreationStopped,
+		);
+		expect(listWorkspaceCreations()).toEqual([]);
+
+		hook("sleep 5");
+		const stop = new AbortController();
+		const running = createWorkspaceWithChat("p1", { kickoff: { text: "x" } }, stop.signal);
+		await until(() => listWorkspaceCreations()[0]?.phase === "checking-out");
+		stop.abort();
+		await expect(running).rejects.toThrow("The workspace creation was stopped");
+		expect(registered()).toEqual([resolve(repo)]);
+		expect(gitOut(repo, "branch", "--list", "workspace-*")).toBe("");
+		expect(existsSync(join(dataDir, "worktrees", "repo", "workspace-1"))).toBe(false);
+		expect(listWorkspaceCreations()).toEqual([]);
+		expect(removed().at(-1)).toEqual({ id: expect.any(String), projectId: "p1" });
+
+		hook("true");
+		const late = new AbortController();
+		setWorkspaceCreationHandoff(async () => {
+			late.abort();
+			return { sessionId: "s-kept", thinkingLevel: "medium" };
+		});
+		const kept = await createWorkspaceWithChat("p1", { kickoff: { text: "y" } }, late.signal);
+		expect(kept.sessionId).toBe("s-kept");
+		expect(registered()).toContain(resolve(kept.workspace.worktreePath));
+	},
+);
+
+posix(
+	"a stopped creation whose cleanup cannot finish stays as an interrupted row to retry or dismiss",
+	async () => {
+		const path = join(dataDir, "worktrees", "repo", "workspace-1");
+		hook("mkdir -p locked && touch locked/f && chmod 555 locked && sleep 5");
+		const stop = new AbortController();
+		try {
+			const running = createWorkspaceWithChat("p1", { kickoff: { text: "x" } }, stop.signal);
+			await until(
+				() =>
+					existsSync(join(path, "locked", "f")) &&
+					(statSync(join(path, "locked")).mode & 0o200) === 0,
+			);
+			stop.abort();
+			await expect(running).rejects.toThrow(
+				"Stopped, but the partial workspace could not be removed",
+			);
+			const [record] = listWorkspaceCreations();
+			expect(record?.state).toBe("interrupted");
+			expect(changed().at(-1)).toMatchObject({ id: record?.id, state: "interrupted" });
+			expect(existsSync(path)).toBe(true);
+
+			chmodSync(join(path, "locked"), 0o755);
+			await dismissWorkspaceCreation(record?.id ?? "");
+			expect(existsSync(path)).toBe(false);
+			expect(listWorkspaceCreations()).toEqual([]);
+		} finally {
+			if (existsSync(join(path, "locked"))) chmodSync(join(path, "locked"), 0o755);
+		}
 	},
 );
 
