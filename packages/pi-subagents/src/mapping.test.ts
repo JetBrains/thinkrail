@@ -170,28 +170,23 @@ test("missing bases and unknown suffixes receive actionable diagnostics, not qua
 	);
 });
 
-test.each([
-	"off",
-	"minimal",
-	"low",
-	"medium",
-	"high",
-	"xhigh",
-	"max",
-] as const)("%s is supported on qualified, exact and unique-prefix model references from either source", (thinking) => {
-	for (const ref of ["openai/gpt-5", "gpt-5", "gpt"]) {
-		for (const source of ["definition", "invocation"]) {
-			const model = `${ref}:${thinking}`;
-			const mapping = toSpawnMapping(definition(source === "definition" ? { model } : {}), {
-				cwd: "/tmp/x",
-				availableModels: AVAILABLE,
-				model,
-			});
-			expect(mapping.session.model).toEqual({ provider: "openai", id: "gpt-5" });
-			expect(mapping.session.thinkingLevel).toBe(thinking);
+test.each(["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const)(
+	"%s is supported on qualified, exact and unique-prefix model references from either source",
+	(thinking) => {
+		for (const ref of ["openai/gpt-5", "gpt-5", "gpt"]) {
+			for (const source of ["definition", "invocation"]) {
+				const model = `${ref}:${thinking}`;
+				const mapping = toSpawnMapping(definition(source === "definition" ? { model } : {}), {
+					cwd: "/tmp/x",
+					availableModels: AVAILABLE,
+					model,
+				});
+				expect(mapping.session.model).toEqual({ provider: "openai", id: "gpt-5" });
+				expect(mapping.session.thinkingLevel).toBe(thinking);
+			}
 		}
-	}
-});
+	},
+);
 
 test("literal colon IDs and whole-reference prefixes keep their existing meaning", () => {
 	for (const literal of [

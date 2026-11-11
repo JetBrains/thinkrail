@@ -16,12 +16,16 @@ bytes are** — the one byte-level classification every content read in the host
 ## Boundary
 
 - **Owns:** `readDir`/`readFile(workspaceId, path)` — every path resolved + contained to the worktree
-  root; `.git` hidden; directories sorted first. `readDir` reports worktree-relative paths with `/`
+  root; `.git` hidden; directories sorted first; a symlink lists as `dir` only when its target is a
+  directory inside the worktree, otherwise as `file`. `readDir` reports worktree-relative paths with `/`
   separators on every OS — the same form git status and watch events use — so a browser can match a
   listed node to a changed path (Windows' `relative()` would otherwise yield `src\auth`). (`.thinkrail/` is **not** hidden — it is shown like any
   other dir, so future host-managed content there stays visible; its ephemeral `context/` is kept out of
   git, not out of the tree.) `readFile` answers **`{ content, meta }`**: a file is read as bytes and
-  decoded only when it is text, so `content` is `""` for a byte-only resource and the client fetches
+  decoded only when it is text; with `{ maxBytes }` it opens the file once and reads it in 64 KiB chunks,
+  at most `maxBytes + 1` bytes in all, refusing a larger file with `CodedError("FILE_TOO_LARGE")` before
+  classifying — whatever the file grows to meanwhile, and without allocating the cap up front (`maxBytes`
+  must be a non-negative integer), so `content` is `""` for a byte-only resource and the client fetches
   those bytes over the host's `/files` route instead of receiving mojibake.
   **`resolveWorktreeFile(workspaceId, path)`** returns the
   contained absolute path for the host to stream a file's raw bytes over HTTP (the `/files/…` route
@@ -29,8 +33,12 @@ bytes are** — the one byte-level classification every content read in the host
   `changes` module's atomic writes. Lexical escapes, `.git`, and an existing symlink chain whose resolved
   target leaves the worktree are refused; missing leaf paths are allowed so a deleted file can be
   restored. `changes` passes `{ followLeaf: false }` so containment validates through the parent and its
-  own `lstat` can reject even an escaping leaf symlink without following it. This module owns the path
-  safety; its callers own the streaming and the writing. **`workspaceRelativePath(root, path)`** is the one
+  own `lstat` can reject even an escaping leaf symlink without following it. **`readableFileSize(root,
+  path)`** applies the same rule under a root without a workspace lookup: the byte size of the regular
+  file `readFile` would serve, `"missing"` for anything it would refuse or cannot read as a file (an
+  escape, `.git`, a directory, a gone, dangling or looping path), `null` when the stat failed otherwise
+  (a permission error) — `host` injects it into the search palette's file hits so none leads to a read
+  that fails. This module owns the path safety; its callers own the streaming and the writing. **`workspaceRelativePath(root, path)`** is the one
   conversion from a native or absolute path to the wire's worktree-relative POSIX form (architecture
   Decision 22): resolved against the root, `null` when outside (a name such as `..env` is inside), `""` for
   the root itself. `reviews` normalizes anchors through it. It keeps host
@@ -41,8 +49,9 @@ bytes are** — the one byte-level classification every content read in the host
   prove (magic numbers for png/jpeg/gif/webp/avif/bmp/ico/pdf/zip/gzip/woff/woff2; AVIF accepts `avif` or
   `avis` in the initial `ftyp` box's major or compatible brands, bounded by that box and the sniff head;
   plus `image/svg+xml` for
-  text whose root element is `<svg>`, directly or behind an XML prolog — a prolog alone is not an
-  image, and `application/vnd.git-lfs` for a text file of at most 1 KiB that is exactly the three-line pointer
+  text whose first element is `<svg>` or `<svg/>`, after any XML declarations, comments, processing
+  instructions or doctype in the bounded head — a nested or quoted `<svg>` does not establish the root,
+  and `application/vnd.git-lfs` for a text file of at most 1 KiB that is exactly the three-line pointer
   `git lfs` itself writes — `version`, `oid sha256:`, `size`, in that order, nothing else, so no prose
   that merely quotes a pointer can be mistaken for one — so a `.png` whose content is a pointer is
   reported as the pointer it is, not as an image that failed to decode); **text** is "no recognized binary magic number, no NUL byte in the first 8 KiB, and a strict
@@ -56,10 +65,10 @@ bytes are** — the one byte-level classification every content read in the host
   fallback and treating
   `null` bytes as absence (`hash`/`byteLength` null, `text: true` — nothing to decode, and the empty
   string it pairs with is valid text).
-- **Public surface (barrel):** `readDir`, `readFile`, `resolveWorktreeFile`, `workspaceRelativePath`, `classifyBytes`,
+- **Public surface (barrel):** `readDir`, `readFile`, `readableFileSize`, `resolveWorktreeFile`, `workspaceRelativePath`, `classifyBytes`,
   `CONTENT_SNIFF_BYTES`, `mimeFromPath`, `hashBytes`, `decodeText`, `resourceMeta`.
-- **Allowed deps:** `persistence` (workspace lookup); `contracts` (`FileNode`, `ResourceMeta`); Node
-  `fs`/`path`/`crypto`.
+- **Allowed deps:** `persistence` (workspace lookup); `contracts` (`FileNode`, `ResourceMeta`); `shared`
+  (`CodedError`); Node `fs`/`path`/`crypto`.
 - **Forbidden:** `host`; sibling features.
 
 ## Get right

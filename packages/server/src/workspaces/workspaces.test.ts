@@ -11,14 +11,14 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, join, relative, resolve } from "node:path";
+import { basename, delimiter, join, relative, resolve } from "node:path";
 import type { Workspace } from "@thinkrail/contracts";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import { setSyncGitTimeoutForTests } from "../git";
+import { createWorkspace } from "./creations";
 import {
 	backfillWorkspaceActivity,
 	completeInitialTerminalReservation,
-	createWorkspace,
 	ensureWorkspaceScratchDir,
 	forgetWorkspace,
 	listExistingWorktrees,
@@ -28,7 +28,6 @@ import {
 	reclaimWorktree,
 	recordWorkspaceActivity,
 	recordWorkspaceHead,
-	refreshUserOwnedWorkspace,
 	removeWorkspace,
 	renameWorkspace,
 	seedWorkspaceHead,
@@ -38,6 +37,7 @@ import {
 	setWorkspaceReview,
 	setWorkspaceSubagentMaxConcurrent,
 	setWorkspaceSubagentsOverride,
+	syncWorkspaceBranch,
 	unsettleWorkspace,
 	type WorkspaceLifecycleEvent,
 } from "./workspaces";
@@ -333,7 +333,7 @@ test("openExistingWorktree adopts idempotently and removal never reclaims the ch
 		"An existing worktree cannot be renamed by ThinkRail",
 	);
 
-	removeWorkspace(workspace.id);
+	await removeWorkspace(workspace.id);
 	expect(listWorkspaceRecords("p1").some((candidate) => candidate.id === workspace.id)).toBe(false);
 	expect(readFileSync(join(external, "uncommitted.txt"), "utf8")).toBe("keep untracked\n");
 	expectCheckoutUnchanged();
@@ -382,7 +382,7 @@ test("external workspace branch metadata converges on refresh and list", async (
 	setWorkspacePublisher((event) => events.push(event));
 
 	git(external, "switch", "-c", "feature/live");
-	refreshUserOwnedWorkspace(workspace.id);
+	syncWorkspaceBranch(workspace.id);
 	expect(events).toEqual([
 		{
 			kind: "updated",
@@ -400,7 +400,7 @@ test("external workspace branch metadata converges on refresh and list", async (
 
 	events.length = 0;
 	rmSync(external, { recursive: true, force: true });
-	refreshUserOwnedWorkspace(workspace.id);
+	syncWorkspaceBranch(workspace.id);
 	expect(events).toHaveLength(0);
 	expect(
 		listWorkspaceRecords("p1").find((candidate) => candidate.id === workspace.id)?.branch,
@@ -434,7 +434,7 @@ posix(
 		setSyncGitTimeoutForTests(2_000);
 		const listed = await withGitWrapper(hang, async () => {
 			const result = await listWorkspaces("p1", { includeDiffStats: false });
-			refreshUserOwnedWorkspace(stored?.id ?? "");
+			syncWorkspaceBranch(stored?.id ?? "");
 			return result;
 		}).finally(() => setSyncGitTimeoutForTests(undefined));
 
@@ -490,7 +490,7 @@ test("createWorkspace marks a user-named workspace renamed; an auto-named one st
 test("renameWorkspace moves the branch in place: record + git follow, the worktree dir does not", async () => {
 	const ws = await createWorkspace("p1");
 	setWorkspaceReview(ws.id, { kind: "pull-request", number: 8, state: "merged" }, ws.branch);
-	const renamed = renameWorkspace(ws.id, "add login flow", { branch: "add login flow" });
+	const renamed = renameWorkspace(ws.id, "add login flow", { branch: "add login flow" }).workspace;
 
 	expect(renamed.name).toBe("add login flow");
 	expect(renamed.branch).toBe("add-login-flow");
@@ -514,7 +514,7 @@ test("renameWorkspace without a branch slug changes only the display name", asyn
 	const events: WorkspaceLifecycleEvent[] = [];
 	setWorkspacePublisher((event) => events.push(event));
 
-	const renamed = renameWorkspace(ws.id, "Published Workspace");
+	const renamed = renameWorkspace(ws.id, "Published Workspace").workspace;
 
 	expect(renamed).toMatchObject({
 		name: "Published Workspace",
@@ -538,7 +538,7 @@ test("renameWorkspace keeps any-script display names and derives the branch only
 	const ws = await createWorkspace("p1");
 	const renamed = renameWorkspace(ws.id, "Ревью #567: Добавить зум", {
 		branch: "Review 567 add zoom",
-	});
+	}).workspace;
 	expect(renamed).toMatchObject({
 		name: "Ревью #567: Добавить зум",
 		branch: "review-567-add-zoom",
@@ -547,14 +547,14 @@ test("renameWorkspace keeps any-script display names and derives the branch only
 	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe("review-567-add-zoom");
 
 	const other = await createWorkspace("p1");
-	const kept = renameWorkspace(other.id, "Только имя", { branch: "Ёжик" });
+	const kept = renameWorkspace(other.id, "Только имя", { branch: "Ёжик" }).workspace;
 	expect(kept).toMatchObject({ name: "Только имя", branch: other.branch, renamed: true });
 });
 
 test("renameWorkspace suffixes on collision with an existing branch", async () => {
 	git(repo, "branch", "add-login-flow");
 	const ws = await createWorkspace("p1");
-	const renamed = renameWorkspace(ws.id, "add login flow", { branch: "add login flow" });
+	const renamed = renameWorkspace(ws.id, "add login flow", { branch: "add login flow" }).workspace;
 	expect(renamed.branch).toBe("add-login-flow-2");
 	expect(renamed.name).toBe("add login flow");
 });
@@ -732,7 +732,7 @@ test("renameWorkspace also suffixes when the candidate's worktree dir is occupie
 	renameWorkspace(first.id, "real name", { branch: "real name" });
 
 	const second = await createWorkspace("p1");
-	const renamed = renameWorkspace(second.id, "workspace 1", { branch: "workspace 1" });
+	const renamed = renameWorkspace(second.id, "workspace 1", { branch: "workspace 1" }).workspace;
 	expect(renamed.branch).toBe("workspace-1-2");
 	expect(renamed.name).toBe("workspace 1");
 });
@@ -757,11 +757,45 @@ test("forgetWorkspace drops the record + returns it, but leaves the worktree for
 	expect(await worktrees()).toHaveLength(0);
 	expect(registeredWorktrees(repo)).toContain(ws.worktreePath);
 
-	reclaimWorktree(forgotten as NonNullable<typeof forgotten>);
+	await reclaimWorktree(forgotten as NonNullable<typeof forgotten>);
 	expect(registeredWorktrees(repo)).not.toContain(ws.worktreePath);
 
 	expect(forgetWorkspace(ws.id)).toBeNull();
 });
+
+test.skipIf(process.platform === "win32").each([false, true])(
+	"worktree reclamation keeps the event loop responsive (filesystem fallback: %s)",
+	async (fallback) => {
+		const ws = await createWorkspace("p1");
+		const executable = Bun.which("git");
+		if (!executable) throw new Error("Git is required for this test");
+		const marker = join(dataDir, "reclaim-started");
+		const bin = join(dataDir, "bin");
+		mkdirSync(bin);
+		writeFileSync(
+			join(bin, "git"),
+			`#!/bin/sh\nif [ "$3" = worktree ] && [ "$4" = remove ]; then\n  touch "${marker}"\n  sleep 0.3\n  ${fallback ? "exit 1" : ":"}\nfi\nexec "${executable}" "$@"\n`,
+		);
+		chmodSync(join(bin, "git"), 0o755);
+		const savedPath = process.env.PATH;
+		process.env.PATH = `${bin}${delimiter}${savedPath ?? ""}`;
+		let servedDuringReclaim = false;
+		const heartbeat = setInterval(() => {
+			if (existsSync(marker) && existsSync(ws.worktreePath)) servedDuringReclaim = true;
+		}, 10);
+		try {
+			await reclaimWorktree(ws);
+			expect(servedDuringReclaim).toBe(true);
+			expect(existsSync(ws.worktreePath)).toBe(false);
+			expect(registeredWorktrees(repo)).not.toContain(ws.worktreePath);
+			expect(gitOut(repo, "show-ref", "--verify", `refs/heads/${ws.branch}`)).not.toBe("");
+		} finally {
+			clearInterval(heartbeat);
+			if (savedPath === undefined) delete process.env.PATH;
+			else process.env.PATH = savedPath;
+		}
+	},
+);
 
 test("membership mutations emit lifecycle events through the injected publisher", async () => {
 	const events: WorkspaceLifecycleEvent[] = [];
@@ -784,7 +818,7 @@ test("membership mutations emit lifecycle events through the injected publisher"
 test("a null publisher makes lifecycle emits silent no-ops", async () => {
 	setWorkspacePublisher(null);
 	const ws = await createWorkspace("p1");
-	expect(() => removeWorkspace(ws.id)).not.toThrow();
+	await expect(removeWorkspace(ws.id)).resolves.toBeUndefined();
 	expect(await worktrees()).toHaveLength(0);
 });
 
@@ -794,7 +828,7 @@ test("removeWorkspace cleans up even when the worktree dir is already gone", asy
 
 	rmSync(ws.worktreePath, { recursive: true, force: true });
 
-	expect(() => removeWorkspace(ws.id)).not.toThrow();
+	await expect(removeWorkspace(ws.id)).resolves.toBeUndefined();
 	expect(await worktrees()).toHaveLength(0);
 
 	const list = Bun.spawnSync(["git", "-C", repo, "worktree", "list"], { stdout: "pipe" });
@@ -859,7 +893,7 @@ test("the Default workspace's branch and base refresh from the folder on each li
 	expect((await listWorkspaces("p1"))[0]?.diffStats).toEqual({ added: 2, removed: 0 });
 });
 
-test("refreshUserOwnedWorkspace re-syncs and publishes Default drift off the list path", async () => {
+test("syncWorkspaceBranch re-syncs and publishes Default drift off the list path", async () => {
 	await listWorkspaces("p1");
 	const def = listWorkspaceRecords("p1").find((w) => w.kind === "default");
 	if (!def) throw new Error("expected the ensured Default workspace");
@@ -868,25 +902,25 @@ test("refreshUserOwnedWorkspace re-syncs and publishes Default drift off the lis
 	const events: WorkspaceLifecycleEvent[] = [];
 	setWorkspacePublisher((e) => events.push(e));
 
-	refreshUserOwnedWorkspace(def.id);
+	syncWorkspaceBranch(def.id);
 	expect(events).toHaveLength(0);
 
 	setWorkspaceReview(def.id, { kind: "pull-request", number: 5, state: "merged" }, def.branch);
 	events.length = 0;
 	git(repo, "switch", "-c", "feature/live");
-	refreshUserOwnedWorkspace(def.id);
+	syncWorkspaceBranch(def.id);
 	expect(events).toEqual([
 		{ kind: "updated", workspace: { ...def, branch: "feature/live", baseBranch: "feature/live" } },
 	]);
 	expect(listWorkspaceRecords("p1").find((w) => w.id === def.id)?.branch).toBe("feature/live");
 	expect(listWorkspaceRecords("p1").find((w) => w.id === def.id)?.review).toBeUndefined();
 
-	refreshUserOwnedWorkspace(worktree.id);
-	refreshUserOwnedWorkspace("nope");
+	syncWorkspaceBranch(worktree.id);
+	syncWorkspaceBranch("nope");
 	expect(events).toHaveLength(1);
 });
 
-test("refreshUserOwnedWorkspace drops an external worktree's branch-bound review", async () => {
+test("syncWorkspaceBranch drops an external worktree's branch-bound review", async () => {
 	const path = join(dataDir, "outside");
 	git(repo, "worktree", "add", "-b", "outside-a", path);
 	const external = await openExistingWorktree("p1", path);
@@ -899,7 +933,7 @@ test("refreshUserOwnedWorkspace drops an external worktree's branch-bound review
 	setWorkspacePublisher((event) => events.push(event));
 
 	git(path, "switch", "-c", "outside-b");
-	refreshUserOwnedWorkspace(external.id);
+	syncWorkspaceBranch(external.id);
 
 	const refreshed = listWorkspaceRecords("p1").find((workspace) => workspace.id === external.id);
 	if (!refreshed) throw new Error("expected the refreshed external workspace");
@@ -908,16 +942,174 @@ test("refreshUserOwnedWorkspace drops an external worktree's branch-bound review
 	expect(events).toEqual([{ kind: "updated", workspace: refreshed }]);
 });
 
+function managedRecord(id: string): Workspace {
+	const record = listWorkspaceRecords("p1").find((workspace) => workspace.id === id);
+	if (!record) throw new Error(`expected workspace ${id}`);
+	return record;
+}
+
+function localBranches(): string[] {
+	return gitOut(repo, "for-each-ref", "--format=%(refname:short)", "refs/heads").split("\n");
+}
+
+test("a managed workspace adopts a branch checked out in its terminal, once", async () => {
+	const ws = await createWorkspace("p1");
+	setWorkspaceReview(ws.id, { kind: "pull-request", number: 7, state: "merged" }, ws.branch);
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((event) => events.push(event));
+
+	git(ws.worktreePath, "switch", "-c", "feature/live");
+	syncWorkspaceBranch(ws.id);
+
+	const adopted = managedRecord(ws.id);
+	expect(adopted).toMatchObject({
+		branch: "feature/live",
+		name: ws.name,
+		baseBranch: ws.baseBranch,
+	});
+	expect(adopted.review).toBeUndefined();
+	expect(events).toEqual([{ kind: "updated", workspace: adopted }]);
+
+	syncWorkspaceBranch(ws.id);
+	expect(events).toHaveLength(1);
+});
+
+test("listWorkspaces adopts managed drift and answers with the live branch", async () => {
+	const ws = await createWorkspace("p1");
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((event) => events.push(event));
+	git(ws.worktreePath, "switch", "-c", "feature/listed");
+
+	expect((await worktrees()).find((w) => w.id === ws.id)?.branch).toBe("feature/listed");
+	expect(managedRecord(ws.id).renamed).toBeUndefined();
+	expect(events.filter((e) => e.kind === "updated")).toHaveLength(1);
+	expect((await listWorkspaces("p1", { includeDiffStats: false })).length).toBe(2);
+	expect(events.filter((e) => e.kind === "updated")).toHaveLength(1);
+});
+
+test("a detached or missing managed checkout keeps its stored branch", async () => {
+	const detached = await createWorkspace("p1");
+	const missing = await createWorkspace("p1");
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((event) => events.push(event));
+
+	git(detached.worktreePath, "switch", "--detach");
+	rmSync(missing.worktreePath, { recursive: true, force: true });
+	syncWorkspaceBranch(detached.id);
+	syncWorkspaceBranch(missing.id);
+	await listWorkspaces("p1");
+
+	expect(managedRecord(detached.id).branch).toBe(detached.branch);
+	expect(managedRecord(missing.id).branch).toBe(missing.branch);
+	expect(events.filter((e) => e.kind === "updated")).toHaveLength(0);
+});
+
+test("switching a managed workspace to its base branch is adopted", async () => {
+	const ws = await createWorkspace("p1");
+	git(repo, "switch", "-c", "elsewhere");
+	git(ws.worktreePath, "switch", "main");
+
+	syncWorkspaceBranch(ws.id);
+	expect(managedRecord(ws.id)).toMatchObject({ branch: "main", baseBranch: "main" });
+});
+
+test("renameWorkspace never moves a branch the user just switched away from", async () => {
+	const ws = await createWorkspace("p1");
+	git(ws.worktreePath, "switch", "-c", "feature/mine");
+
+	const { workspace: renamed, branchKept } = renameWorkspace(ws.id, "Named later", {
+		branch: "named later",
+	});
+	expect(branchKept).toBe("not-own");
+	expect(renamed.branch).toBe("feature/mine");
+	expect(renamed.name).toBe("Named later");
+	expect(localBranches()).toContain(ws.branch);
+	expect(localBranches()).not.toContain("named-later");
+	expect(gitOut(ws.worktreePath, "symbolic-ref", "--short", "HEAD")).toBe("feature/mine");
+
+	expect(renameWorkspace(ws.id, "Named again", { branch: "named again" }).workspace.branch).toBe(
+		"feature/mine",
+	);
+	expect(localBranches()).not.toContain("named-again");
+});
+
+test("a managed folder that lost its .git never adopts an enclosing repo's branch", async () => {
+	const ws = await createWorkspace("p1");
+	git(dataDir, "init", "-b", "outer-branch");
+	git(dataDir, "config", "user.email", "t@thinkrail.test");
+	git(dataDir, "config", "user.name", "test");
+	git(dataDir, "commit", "--allow-empty", "-m", "outer");
+	rmSync(join(ws.worktreePath, ".git"), { force: true });
+
+	syncWorkspaceBranch(ws.id);
+	await listWorkspaces("p1");
+	expect(managedRecord(ws.id)).toMatchObject({ branch: ws.branch });
+});
+
+test("a detached HEAD keeps the branch but still names the workspace", async () => {
+	const ws = await createWorkspace("p1");
+	git(ws.worktreePath, "switch", "--detach");
+
+	const { workspace, branchKept } = renameWorkspace(ws.id, "Named later", {
+		branch: "named later",
+	});
+	expect(branchKept).toBe("detached");
+	expect(workspace).toMatchObject({ name: "Named later", branch: ws.branch, renamed: true });
+	expect(localBranches()).toContain(ws.branch);
+	expect(localBranches()).not.toContain("named-later");
+});
+
+test("a round trip back to the own branch makes it movable again", async () => {
+	const ws = await createWorkspace("p1");
+	git(ws.worktreePath, "switch", "-c", "detour");
+	syncWorkspaceBranch(ws.id);
+	expect(managedRecord(ws.id).branch).toBe("detour");
+	git(ws.worktreePath, "switch", "-");
+
+	const { workspace, branchKept } = renameWorkspace(ws.id, "Back home", { branch: "back home" });
+	expect(branchKept).toBeUndefined();
+	expect(workspace.branch).toBe("back-home");
+	expect(gitOut(ws.worktreePath, "symbolic-ref", "--short", "HEAD")).toBe("back-home");
+	expect(basename(workspace.worktreePath)).toBe(ws.branch);
+});
+
+test("a gitfile with a relative gitdir and a CRLF HEAD still read the live branch", async () => {
+	const ws = await createWorkspace("p1");
+	const gitFile = join(ws.worktreePath, ".git");
+	const gitDir = readFileSync(gitFile, "utf8")
+		.trim()
+		.replace(/^gitdir:\s*/, "");
+	writeFileSync(gitFile, `gitdir: ${relative(ws.worktreePath, gitDir)}\r\n`);
+	writeFileSync(join(gitDir, "HEAD"), "ref: refs/heads/feature/crlf \r\n");
+
+	syncWorkspaceBranch(ws.id);
+	expect(managedRecord(ws.id).branch).toBe("feature/crlf");
+});
+
+test("adopting a terminal branch -m never re-points stacked children", async () => {
+	const parent = await createWorkspace("p1");
+	const child = await createWorkspace("p1", undefined, parent.branch);
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((event) => events.push(event));
+
+	git(parent.worktreePath, "branch", "-m", "feature/renamed");
+	syncWorkspaceBranch(parent.id);
+
+	expect(managedRecord(parent.id).branch).toBe("feature/renamed");
+	expect(managedRecord(child.id).baseBranch).toBe(parent.branch);
+	expect(events.map((e) => e.kind === "updated" && e.workspace.id)).toEqual([parent.id]);
+});
+
 test("the Default workspace is non-removable and non-renamable — loud server-side guards", async () => {
 	const def = (await listWorkspaces("p1"))[0];
 	if (!def) throw new Error("expected the ensured Default workspace");
 
 	expect(() => forgetWorkspace(def.id)).toThrow("The Default workspace cannot be removed");
-	expect(() => removeWorkspace(def.id)).toThrow("The Default workspace cannot be removed");
+	await expect(removeWorkspace(def.id)).rejects.toThrow("The Default workspace cannot be removed");
 	expect(() => renameWorkspace(def.id, "anything")).toThrow(
 		"The Default workspace cannot be renamed",
 	);
-	reclaimWorktree(def);
+	await reclaimWorktree(def);
 	expect(existsSync(join(repo, "README.md"))).toBe(true);
 	expect((await listWorkspaces("p1"))[0]?.id).toBe(def.id);
 });
@@ -990,7 +1182,7 @@ test("reclaimWorktree refuses a record pointing at the project folder even witho
 	const def = (await listWorkspaces("p1"))[0];
 	if (!def) throw new Error("expected the ensured Default workspace");
 	const { kind: _dropped, ...corrupt } = def;
-	reclaimWorktree(corrupt);
+	await reclaimWorktree(corrupt);
 	expect(existsSync(join(repo, "README.md"))).toBe(true);
 });
 

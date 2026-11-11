@@ -18,8 +18,8 @@ test("a run's failure is recorded as a kind plus the provider's own message", ()
 	expect(assistantFailure({ stopReason: "stop" })).toBeNull();
 });
 
-test("notices translate at render; a provider message stays verbatim", () => {
-	applyLocale("de", {
+test("notices translate at render; a provider message stays verbatim", async () => {
+	await applyLocale("de", {
 		de: {
 			"chat.failure.error": "Der Lauf endete mit einem Fehler.",
 			"chat.failure.truncated": "Die Antwort wurde abgeschnitten.",

@@ -198,7 +198,7 @@ function ComposeForm({
 					</div>
 				</div>
 			) : null}
-			<div className="flex min-h-0 flex-1 flex-col gap-4">
+			<div className="flex flex-1 flex-col gap-4">
 				<label htmlFor="open-pr-compose-body" className="tr-text-eyebrow text-text-subtle">
 					{t("panels.prCompose.bodyLabel")}
 				</label>
@@ -273,10 +273,7 @@ export function PrComposeDialog({
 }) {
 	return (
 		<Dialog open={state !== null} onOpenChange={(open) => !open && !busy && onClose()}>
-			<DialogContent
-				data-testid="open-pr-compose-dialog"
-				className="max-w-[40rem] max-h-[85vh] overflow-y-auto"
-			>
+			<DialogContent data-testid="open-pr-compose-dialog" className="max-w-[40rem]">
 				{state ? (
 					<ComposeForm
 						key={`${state.draft}-${state.title}`}

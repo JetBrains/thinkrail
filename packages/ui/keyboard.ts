@@ -15,3 +15,22 @@ export function yieldEscapeToIme(
 		handler?.(event);
 	};
 }
+
+const APPLE_PLATFORM = /Mac|iPhone|iPad|iPod/;
+
+export function browserPlatform(): string {
+	return typeof navigator === "undefined" ? "" : (navigator.platform ?? "");
+}
+
+export function isApplePlatform(platform = browserPlatform()): boolean {
+	return APPLE_PLATFORM.test(platform);
+}
+
+export function hasPlatformModifier(
+	event: Pick<KeyboardEvent, "ctrlKey" | "metaKey">,
+	platform = browserPlatform(),
+): boolean {
+	return isApplePlatform(platform)
+		? event.metaKey && !event.ctrlKey
+		: event.ctrlKey && !event.metaKey;
+}

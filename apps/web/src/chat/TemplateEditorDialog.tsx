@@ -133,7 +133,7 @@ export function TemplateEditorDialog({
 					</DialogTitle>
 				</DialogHeader>
 
-				<div className="flex max-h-[60vh] flex-col gap-12 overflow-y-auto">
+				<div className="relative flex max-h-[60vh] flex-col gap-12 overflow-y-auto">
 					<Field id="template-name" label={t("chat.templateEditor.name")}>
 						<input
 							id="template-name"
