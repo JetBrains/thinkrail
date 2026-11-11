@@ -233,12 +233,12 @@ when it drifts from this file.
 ### The code stack's system fallbacks
 
 Bundled faces are deliberately narrow: JetBrains Mono carries latin/latin-ext/greek/cyrillic/vietnamese
-subsets and nothing else. The `code` stack therefore names system families after it, in three groups —
-Nerd Font / Powerline faces, monospace CJK (Sarasa, Noto Sans Mono CJK, Source Han Mono), then
-proportional CJK, symbol and colour-emoji faces. Coverage matters most for the **terminal**, where the
-shell draws `eza --icons`, `lazygit` or a `starship` prompt. A user-selected stack still ends in this
-default (`--tr-font-family-code-default`), so the chain also covers every surface the user has not
-overridden.
+subsets and nothing else. The `code` stack therefore names system families after it, in order —
+Nerd Font / Powerline faces, monospace CJK (Sarasa, Noto Sans Mono CJK, Source Han Mono), Latin
+monospace faces, then proportional CJK, symbol and colour-emoji faces. Coverage matters most for the
+**terminal**, where the shell draws `eza --icons`, `lazygit` or a `starship` prompt. A user-selected
+stack still ends in this default (`--tr-font-family-code-default`), so the chain also covers every
+surface the user has not overridden.
 
 Two rules keep that chain honest. Nerd Font families must be **named**: browsers do not consult system
 fonts for private-use codepoints (`U+E000–F8FF`, `U+1FB00+`), so an installed Nerd Font is invisible

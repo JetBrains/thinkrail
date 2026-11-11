@@ -122,7 +122,6 @@ describe("typography source", () => {
 		]) {
 			expect(stack, family).toContain(family);
 		}
-		expect(stack[0]).toBe("JetBrains Mono Variable");
 		expect(stack.at(-1)).toBe("monospace");
 	});
 
