@@ -762,6 +762,69 @@ for (const testCase of orderCases) {
 		}
 	});
 
+	test(`${testCase.order} keeps restoring a reading position when the response settles meanwhile`, async ({
+		page,
+	}) => {
+		const wire = await interceptAppWire(page);
+		const { session, chatScroll } = await openTallChat(page, testCase.order);
+		type HeldFrames = Window & { releaseHeldFrames?: () => void };
+		try {
+			const replay = textStreamReplay(
+				session.id,
+				streamedMarkdown(`${testCase.order} settling stream`, 2_000),
+				BASE_TS + 200_000,
+			);
+			const opening = replay.steps.slice(0, 20);
+			await playStreamReplay(wire(), { ...replay, steps: opening }, 0);
+			await expect(chatScroll).toHaveAttribute("data-streaming", "true");
+			await waitForScrollStability(chatScroll);
+			await moveIntoStableHistory(page, chatScroll, testCase.order, testCase.historyWheel);
+			for (let step = 0; step < 3; step += 1) {
+				await page.mouse.wheel(0, testCase.historyWheel);
+				await waitForScrollStability(chatScroll);
+			}
+			const reading = await readTopVisibleRow(chatScroll);
+
+			await page.getByTestId("new-chat").first().click();
+			await expect(chatTabs(page).first()).toHaveAttribute("data-active", "false");
+			await page.evaluate(() => {
+				const request = window.requestAnimationFrame.bind(window);
+				const cancel = window.cancelAnimationFrame.bind(window);
+				const held = new Map<number, FrameRequestCallback>();
+				const released = new Map<number, number>();
+				let nextHeld = -1;
+				window.requestAnimationFrame = (callback) => {
+					held.set(nextHeld, callback);
+					return nextHeld--;
+				};
+				window.cancelAnimationFrame = (id) => {
+					if (!held.delete(id)) cancel(released.get(id) ?? id);
+				};
+				(window as HeldFrames).releaseHeldFrames = () => {
+					window.requestAnimationFrame = request;
+					for (const [id, callback] of held) released.set(id, request(callback));
+					held.clear();
+				};
+			});
+			await chatTabs(page).first().getByRole("tab").click();
+			await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+			await playStreamReplay(wire(), { ...replay, steps: replay.steps.slice(opening.length) }, 0);
+			await expect(chatScroll).toHaveAttribute("data-streaming", "false");
+			await page.evaluate(() => (window as HeldFrames).releaseHeldFrames?.());
+
+			await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+			await waitForScrollStability(chatScroll);
+			const restored = await readTopVisibleRow(chatScroll);
+			expect(restored.id).toBe(reading.id);
+			expect(Math.abs(restored.top - reading.top)).toBeLessThanOrEqual(2);
+		} finally {
+			await page
+				.evaluate(() => (window as HeldFrames).releaseHeldFrames?.())
+				.catch(() => undefined);
+			rmSync(session.path, { force: true });
+		}
+	});
+
 	test(`${testCase.order} lets the reader move right after a restored tab switch`, async ({
 		page,
 	}) => {

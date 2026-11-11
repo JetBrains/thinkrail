@@ -223,6 +223,7 @@ export function useChatScroll(
 	const edge = latestEdge(messageOrder);
 	const readingPositionRef = useRef(readingPosition);
 	const readingRestorePending = useRef(readingPosition.restore !== null);
+	const readingRestoreGeneration = useRef<number | null>(null);
 	const firstItemIndexRef = useRef(firstItemIndex);
 	const rowHeightEstimatesRef = useRef(rowHeightEstimates);
 	const scrollerRef = useRef<HTMLElement | null>(null);
@@ -682,7 +683,10 @@ export function useChatScroll(
 		observedLifecycle.current = { isStreaming, settlementTick };
 		if (settlementTick !== previous.settlementTick) {
 			pendingImmediateTurn.current = false;
-			cancelRowReveal();
+			const restoring =
+				readingRestorePending.current &&
+				readingRestoreGeneration.current === rowRevealGeneration.current;
+			if (!restoring) cancelRowReveal();
 			controller.settle();
 			if (isStreaming) controller.setStreaming(true);
 			return;
@@ -734,6 +738,7 @@ export function useChatScroll(
 		if (!scrollerElement || !anchor || !readingRestorePending.current) return;
 		readerLeft();
 		const generation = rowRevealGeneration.current;
+		readingRestoreGeneration.current = generation;
 		const anchorTarget = () => {
 			const row = mountedChatRow(scrollerElement, anchor.rowId);
 			if (!row) return null;
