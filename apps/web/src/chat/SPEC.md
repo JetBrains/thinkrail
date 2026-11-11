@@ -190,7 +190,9 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   The message content reserves one horizontal `size-24` band on the action's side (`pl-24` for the final
   assistant Markdown wrapper, `pr-24` for the user bubble) instead of a vertical band, so text and the
   large-message toggle cannot sit beneath the hit target. Final-answer list markers stay inside their
-  content box rather than painting back into the assistant's action band. The assistant wrapper removes
+  content box rather than painting back into the assistant's action band. A list item's first paragraph
+  is inline so loose-list text shares the marker's first line (#506); later paragraphs and nested lists
+  remain blocks. The assistant wrapper removes
   only its final Markdown block's trailing margin to align the action with the actual final line;
   inter-block and leading margins stay unchanged. `MessageWithCopy` also carries the
   `data-testid="chat-message"`/`data-role` hooks the jump/flash + tests rely on. `CopyButton` is a
@@ -901,10 +903,11 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   provider-accepted** (`ACCEPTED_IMAGE_TYPES`, shared via `contracts`); undecodable + unsupported
   (HEIC…) is **refused** (`fileToAttachedImage` → `null`) — raw pass-through would 400 every later
   turn — and surfaced as a dismissible error chip (`composer-image-error` testid) in the attachment
-  strip, cleared on send. One message's batch is also bounded by the request-wide
-  **`REQUEST_IMAGE_BASE64_BUDGET`** (24MB of base64, headroom under Anthropic's 32MB per-request cap):
-  files that would push the batch over it are refused with the same error-chip surface. The server's
-  `imageGuard` extension is the second line of defense for history. While files are still decoding, a placeholder chip renders
+  strip, cleared on send. One message's batch is also bounded by
+  **`REQUEST_IMAGE_BASE64_BUDGET`** (12MB of base64 — under the 16MB `WS_MAX_FRAME_BYTES` with room for
+  the text, since a bigger frame would close the socket; the server's `imageGuard` keeps its own 24MB
+  budget for the whole context): files that would push the batch over it are refused with the same
+  error-chip surface. The server's `imageGuard` extension is the second line of defense for history. While files are still decoding, a placeholder chip renders
   (`composer-image-pending` testid) and sends are held (`canSubmit` is the one reading — `submitText`
   refuses, the send button disables) — a send mid-decode would otherwise go without the image and strand
   it on the next message. A held send keeps its text: the composer's own gestures leave the draft in
@@ -1761,7 +1764,8 @@ Unknown custom messages retain their existing behavior.
   **`useTranscriptSync.ts`** authoritative read that converges an existing runtime. A
   **rejected** send (`prompt`/`steer`/`followUp`) lands in the chat via the store's `appendErrorTurn` —
   never swallowed and never given the settlement-only Try again affordance; *streaming* faults arrive as pi
-  events instead.
+  events instead. A send the transport refused as **`FRAME_TOO_LARGE`** never left the page, so its text
+  and images also go back to the composer to be trimmed and resent.
 
 ## Streaming model
 

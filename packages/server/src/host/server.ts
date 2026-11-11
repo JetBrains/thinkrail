@@ -27,6 +27,7 @@ import {
 	USER_THEMES_PROTOCOL_VERSION,
 	WORKSPACE_CREATION_PROTOCOL_VERSION,
 	WS_CHANNELS,
+	WS_MAX_FRAME_BYTES,
 } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
@@ -443,6 +444,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			return new Response("not found", { status: 404 });
 		},
 		websocket: {
+			maxPayloadLength: WS_MAX_FRAME_BYTES,
 			open(ws) {
 				if (ws.data.speechSocket) {
 					ws.data.speech = createSpeechRelay(ws);
