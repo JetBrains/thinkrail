@@ -17,7 +17,7 @@ export interface AttentionEvent {
 /** Where a click on the emitted notification should land. */
 export type NotificationTarget =
 	| { kind: "chat"; workspaceId: string; sessionId: string }
-	| { kind: "switcher" };
+	| { kind: "search" };
 
 /** A ready-to-show notification derived from one flush of accumulated events. */
 export interface NotificationSpec {
@@ -56,7 +56,7 @@ function truncate(text: string): string {
 
 /**
  * Collapse a window's accumulated attention events into one notification: a single worktree opens
- * its chat on click, several open the session switcher. Returns null when nothing passed.
+ * its chat on click, several open search. Returns null when nothing passed.
  */
 export function formatNotification(events: readonly AttentionEvent[]): NotificationSpec | null {
 	const [event] = events;
@@ -76,6 +76,6 @@ export function formatNotification(events: readonly AttentionEvent[]): Notificat
 		title: APP_NAME,
 		body: truncate(t("notifications.aggregate.body", { count: events.length })),
 		tag: AGGREGATE_TAG,
-		target: { kind: "switcher" },
+		target: { kind: "search" },
 	};
 }

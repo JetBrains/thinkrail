@@ -236,6 +236,20 @@ test("a model-authored Thinking heading stays bounded and appears only while fol
 	);
 });
 
+async function scrollCodeLineToViewportCenter(block: Locator, line: string) {
+	await block.evaluate((element, lineText) => {
+		const scroller = element.closest<HTMLElement>("[data-virtuoso-scroller]");
+		if (!scroller) throw new Error("missing Virtuoso scroller");
+		const lines = (element.textContent ?? "").split("\n");
+		const index = lines.indexOf(lineText);
+		if (index < 0) throw new Error(`missing code line: ${lineText}`);
+		const rect = element.getBoundingClientRect();
+		const viewport = scroller.getBoundingClientRect();
+		const lineCenter = rect.top + (rect.height * (index + 0.5)) / lines.length;
+		scroller.scrollTop += lineCenter - (viewport.top + viewport.height / 2);
+	}, line);
+}
+
 for (const order of ["oldest-first", "newest-first"] as const) {
 	test(`${order} disclosure expansion preserves following and detached reading anchors`, async ({
 		page,
@@ -397,14 +411,8 @@ for (const order of ["oldest-first", "newest-first"] as const) {
 		await expectDetachedToggleAnchor(activityToggle);
 		await expectDetachedToggleAnchor(messageToggle);
 
-		const retainedPreviewAnchor = page.getByText("coalescer regression line 5", { exact: true });
-		await retainedPreviewAnchor.evaluate((element) => {
-			const scroller = element.closest<HTMLElement>("[data-virtuoso-scroller]");
-			if (!scroller) throw new Error("missing Virtuoso scroller");
-			const target = element.getBoundingClientRect();
-			const viewport = scroller.getBoundingClientRect();
-			scroller.scrollTop += target.top + target.height / 2 - (viewport.top + viewport.height / 2);
-		});
+		const retainedPreviewAnchor = page.locator("code", { hasText: "coalescer regression line 5" });
+		await scrollCodeLineToViewportCenter(retainedPreviewAnchor, "coalescer regression line 5");
 		await page.evaluate(() => new Promise(requestAnimationFrame));
 		expect((await readChatViewportIntersection(longOutputToggle)).intersects).toBe(false);
 		const retainedPreviewTop = (await retainedPreviewAnchor.boundingBox())?.y;
@@ -428,14 +436,8 @@ for (const order of ["oldest-first", "newest-first"] as const) {
 		await expect(longOutputToggle).toHaveAttribute("aria-expanded", "true");
 		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
 
-		const clippedPreviewAnchor = page.getByText("coalescer regression line 30", { exact: true });
-		await clippedPreviewAnchor.evaluate((element) => {
-			const scroller = element.closest<HTMLElement>("[data-virtuoso-scroller]");
-			if (!scroller) throw new Error("missing Virtuoso scroller");
-			const target = element.getBoundingClientRect();
-			const viewport = scroller.getBoundingClientRect();
-			scroller.scrollTop += target.top + target.height / 2 - (viewport.top + viewport.height / 2);
-		});
+		const clippedPreviewAnchor = page.locator("code", { hasText: "coalescer regression line 30" });
+		await scrollCodeLineToViewportCenter(clippedPreviewAnchor, "coalescer regression line 30");
 		await page.evaluate(() => new Promise(requestAnimationFrame));
 		expect((await readChatViewportIntersection(longOutputToggle)).intersects).toBe(false);
 		await longOutputToggle.evaluate((element: HTMLElement) => element.click());
@@ -522,14 +524,8 @@ for (const order of ["oldest-first", "newest-first"] as const) {
 		await thinkingToggle.evaluate((element: HTMLElement) => element.click());
 		await expect(thinkingToggle).toHaveAttribute("aria-expanded", "true");
 		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
-		const activityContent = page.getByText("coalescer regression line 30", { exact: true });
-		await activityContent.evaluate((element) => {
-			const scroller = element.closest<HTMLElement>("[data-virtuoso-scroller]");
-			if (!scroller) throw new Error("missing Virtuoso scroller");
-			const target = element.getBoundingClientRect();
-			const viewport = scroller.getBoundingClientRect();
-			scroller.scrollTop += target.top + target.height / 2 - (viewport.top + viewport.height / 2);
-		});
+		const activityContent = page.locator("code", { hasText: "coalescer regression line 30" });
+		await scrollCodeLineToViewportCenter(activityContent, "coalescer regression line 30");
 		await page.evaluate(() => new Promise(requestAnimationFrame));
 		await expect(trail).toBeVisible();
 		await trail

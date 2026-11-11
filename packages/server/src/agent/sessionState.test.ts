@@ -305,6 +305,44 @@ describe("deriveSessionState", () => {
 		});
 	});
 
+	test("a continued chat's handoff opens its first run, as a user prompt does; other custom messages never open one", () => {
+		const custom = (id: string, customType: string, parentId: string | null): SessionEntry =>
+			({
+				type: "custom_message",
+				id,
+				parentId,
+				timestamp: new Date(0).toISOString(),
+				customType,
+				content: "brief",
+				display: true,
+			}) as SessionEntry;
+		const handoffFirst = [custom("h1", "chat-handoff", null), assistant("a1", "stop", "h1")];
+		expect(deriveSessionState(inputs({ entries: handoffFirst }))).toEqual({
+			execution: "idle",
+			runId: "h1",
+			needsInput: null,
+			completion: { completionId: "completion:a1", outcome: "succeeded" },
+			completionUnread: true,
+			queuedCount: 0,
+			backgroundWork: false,
+		});
+		expect(
+			deriveSessionState(inputs({ entries: handoffFirst, cancelledRunId: "h1" })).completion,
+		).toEqual({ completionId: "completion:a1", outcome: "cancelled" });
+		expect(
+			deriveSessionState(
+				inputs({
+					entries: [
+						user(),
+						assistant("a1", "stop"),
+						custom("r1", "todo-review-fix", "a1"),
+						assistant("a2", "stop", "r1"),
+					],
+				}),
+			).runId,
+		).toBe("u1");
+	});
+
 	test("a new or empty session is idle without inventing a completion", () => {
 		expect(deriveSessionState(inputs({ entries: [] }))).toEqual({
 			execution: "idle",

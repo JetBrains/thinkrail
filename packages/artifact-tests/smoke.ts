@@ -14,22 +14,13 @@ import {
 	type RunningArtifactHost,
 	runArtifactHostProbes,
 } from "./src/artifactProbes";
+import { readSettledJson } from "./src/documents";
 import { pollUntil, terminateProcess, within } from "./src/lifecycle";
 import { windowsIdentityMismatches } from "./src/windowsIdentity";
 
 const root = mkdtempSync(join(tmpdir(), "thinkrail-desktop-smoke-"));
 const DESKTOP_READY_TIMEOUT_MS = 120_000;
 let sequence = 0;
-
-function readSettledJson(path: string): unknown {
-	try {
-		return JSON.parse(readFileSync(path, "utf8"));
-	} catch (error) {
-		if (error instanceof SyntaxError) return undefined;
-		if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
-		throw error;
-	}
-}
 
 async function verifyTitleBarDoubleClick(
 	controlPath: string,

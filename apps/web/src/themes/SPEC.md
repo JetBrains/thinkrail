@@ -32,8 +32,7 @@ cannot express through the manifest keys is a product decision for all themes, n
   construction (bundled + user) and fixed/system resolution; user-theme validation, its per-file issue
   list and its client-side cache; deterministic pair derivation and same-appearance fallback;
   operating-system color-scheme reads/subscription; atomic CSS-custom-property application; the versioned
-  first-paint preference hint; the semantic syntax-variable contract; Shiki's generic CSS-variable TextMate
-  scope map; and the hex resolver + Monaco colour-key map that adapt that same definition for the strict
+  first-paint preference hint; the semantic syntax-variable contract; Pierre's CSS-variable token map; and the hex resolver + Monaco colour-key map that adapt that same definition for the strict
   desktop editor API.
 - **Public surface:** `index.ts` only — `initializeThemes` (the synchronous bootstrap: bundled
   catalog plus cached user themes), `installUserThemes` / `clearUserThemes` / `getUserThemeIssues` /
@@ -41,11 +40,11 @@ cannot express through the manifest keys is a product decision for all themes, n
   `applyTheme` / `resolveTheme`, preference-aware `applyThemePreference` /
   `resolveThemePreference`, `deriveSystemThemePair`, `readSystemAppearance`,
   `onSystemAppearanceChange`, `getThemes`, `readThemeHint` /
-  `writeThemeHint`, and the manifest/descriptor/preference-result types plus the Shiki registration and its
-  `resolveThinkrailShikiTheme` strict-consumer adapter.
+  `writeThemeHint`, and the manifest/descriptor/preference-result types plus the `resolveThinkrailEditorTheme` strict-consumer
+  adapter and `THINKRAIL_PIERRE_THEME`.
 - **Allowed external deps:** `@thinkrail/contracts` for the opaque ids, theme preference shapes and
-  configured default; browser DOM/media/storage APIs and Vite's build-time glob; Shiki types only, to type
-  the generic registration.
+  configured default; browser DOM/media/storage APIs and Vite's build-time glob; Pierre types only, to type
+  the generic registrations.
 - **Forbidden:** server/shared/pi; store, transport, panels, shell, or component state; reading files or
   discovering themes itself (user files arrive only through `installUserThemes`); executable theme code;
   selectors/layout or arbitrary CSS supplied by a manifest.
@@ -58,7 +57,7 @@ label/order, light-or-dark appearance, normal-or-high contrast metadata, a compl
 palette. Color values are canonical
 six/eight-digit hex; the two selected-text foreground overrides may explicitly be `null` to retain the
 consumer's native foreground. There is no inheritance or partial overlay. The engine owns appearance-level
-effects, TextMate/Monaco scope mapping, and CSS-token mapping, so those mechanics never leak into
+effects, Pierre token and Monaco mapping, and CSS-token mapping, so those mechanics never leak into
 manifests. Typography, spacing, radii, fonts, and motion remain product tokens, not theme values; the
 user's font choice is a separate host setting ([[submodule-web-fonts]]), so changing the theme never
 changes a font.
@@ -195,13 +194,15 @@ then the shell retains and observes the hint instead of overwriting it with stor
 the native shell's already-injected stable preference adapter when present and localStorage otherwise,
 which survives Electrobun's changing loopback origins without giving the launcher theme semantics.
 
-Shiki uses one web-only TextMate registration whose colors are semantic CSS variables (an explicitly
-supported Shiki mode). Chat consumes that registration directly and needs no re-highlight. Monaco passes the
-same registration through `resolveThinkrailShikiTheme`, which canonicalizes every available CSS variable to
-hex, omits an unavailable value so Monaco's inherited base remains usable, and attaches the token-owned editor
+Chat and Pierre diffs use `THINKRAIL_PIERRE_THEME`: a table from Pierre token names to the same semantic variables, so a
+theme swap needs no re-highlight. Pierre's theme sets a color per token kind it reports, so an exact match with
+Shiki is not possible. Every language uses this one table.
+
+Monaco reads the same table through `resolveThinkrailEditorTheme`, which canonicalizes every available CSS variable to
+hex, omits an unavailable value so Monaco's inherited base remains usable, and adds the token-owned editor
 UI map; the panel supplies `cssColorToHex` so themes retain no dependency back into `lib`. Monaco picks its
-base from appearance/contrast metadata, never a known theme id, and replaces the resolved registration under
-one fixed name after an atomic theme swap. Thus adding a theme never adds a Shiki import, CSS selector, or
+base from appearance/contrast metadata, never a known theme id, and replaces the resolved theme under
+one fixed name after an atomic theme swap. Thus adding a theme never adds a highlighter import, CSS selector, or
 editor-specific catalog entry. Unit coverage pins exact and wrong-appearance resolution, both fallback tiers,
 pair derivation, absent-signal light behavior, legacy/versioned hints, media-listener cleanup, and complete
 hex resolution of the shared syntax map.

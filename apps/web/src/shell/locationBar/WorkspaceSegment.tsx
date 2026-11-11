@@ -48,9 +48,9 @@ import {
 	isDefaultWorkspace,
 	isExternalWorkspace,
 	selectWorkspaceIsRunning,
-	selectWorkspaceNeedsAttention,
 	selectWorkspacePartition,
 	selectWorkspaceReadAction,
+	selectWorkspaceSettleBlocked,
 	selectWorkspaceSettledReason,
 	settledReasonLabel,
 	supportsWorkspaceReadState,
@@ -99,9 +99,7 @@ export function WorkspaceSegment({
 	const activeWorkspaceLiveLatch = useAppStore((s) => s.activeWorkspaceLiveLatch);
 	const settleIdleDays = useAppStore((s) => s.settleIdleDays);
 	const activeBlocked = useAppStore(
-		(s) =>
-			workspace !== null &&
-			(selectWorkspaceIsRunning(s, workspace.id) || selectWorkspaceNeedsAttention(s, workspace.id)),
+		(s) => workspace !== null && selectWorkspaceSettleBlocked(s, workspace.id),
 	);
 	const canSettle = workspace !== null && canSettleWorkspace(protocolVersion, workspace);
 	const readAction = useAppStore((s) =>

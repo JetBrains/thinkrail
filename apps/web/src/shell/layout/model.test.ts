@@ -163,8 +163,8 @@ describe("workspace layout model", () => {
 		expect(layoutTabName(currentTranslator(), file("one"))).toBe("one.ts");
 	});
 
-	test("default chat, terminal, Changes, diff and plan names follow the current language", () => {
-		applyLocale("de", {
+	test("default chat, terminal, Changes, diff and plan names follow the current language", async () => {
+		await applyLocale("de", {
 			de: {
 				"store.chatTab.defaultName": "Unterhaltung",
 				"store.terminal.defaultTitle": "Konsole {{index}}",
@@ -224,7 +224,7 @@ describe("workspace layout model", () => {
 				}),
 			).toBe("Plan: Unterhaltung");
 		} finally {
-			applyLocale("en", {});
+			await applyLocale("en", {});
 		}
 	});
 

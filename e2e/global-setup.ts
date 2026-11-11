@@ -32,6 +32,7 @@ import {
 } from "./fixtures/paths";
 import { seedFixtureRepo } from "./fixtures/repo";
 import { seedExternalCwdSessions } from "./fixtures/sessions";
+import { seedSpeechFixture } from "./fixtures/speech";
 import { seedTemplateFixtures } from "./fixtures/templates";
 import { E2eWire } from "./fixtures/wire";
 
@@ -61,7 +62,12 @@ export default function globalSetup(config?: FullConfig): void | Promise<void> {
 		writeFileSync(join(E2E_DATA_DIR, "config.json"), JSON.stringify(E2E_BASE_CONFIG));
 		writeFileSync(
 			join(E2E_DATA_DIR, "feedback.json"),
-			JSON.stringify({ acceptedMessages: 0, nextInvitationAt: 10, dismissed: true }),
+			JSON.stringify({
+				acceptedMessages: 0,
+				nextInvitationAt: 20,
+				dismissed: true,
+				githubStarAsked: true,
+			}),
 		);
 		mkdirSync(E2E_HOME_DIR, { recursive: true });
 		writeFileSync(join(E2E_HOME_DIR, ".zshrc"), "# ThinkRail e2e isolated shell\n");
@@ -101,6 +107,7 @@ export default function globalSetup(config?: FullConfig): void | Promise<void> {
 		seedFixtureRepo();
 		writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
 		writeFileSync(E2E_INSTALLED_FONTS, "[]");
+		seedSpeechFixture();
 	} catch (error) {
 		if (!centralMode) throw error;
 		removeTree(E2E_DATA_DIR);

@@ -8,5 +8,6 @@
 		"types": ["astro/client", "bun"]
 	},
 	"include": ["src", "astro.config.ts", ".astro/types.d.ts"],
-	"exclude": ["src/**/*.test.ts", "dist"]
+	"exclude": ["src/**/*.test.ts", "dist"],
+	"contentMappers": [{ "package": "@astrojs/ts-content-mapper", "extensions": [".astro"] }]
 }

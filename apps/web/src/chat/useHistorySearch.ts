@@ -4,8 +4,9 @@ import type {
 	MessageHit,
 	PromptHit,
 } from "@thinkrail/contracts";
+import { t } from "@thinkrail/locales/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type ChatLocationRequest, useAppStore } from "@/store";
+import { type ChatLocationRequest, selectWorkspaceById, toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 
 export type { ChatLocationRequest };
@@ -221,8 +222,12 @@ export function useHistorySearch(
 					useAppStore.getState().setWorkspaces(target.projectId, list);
 				} catch {}
 			}
-			close();
 			const store = useAppStore.getState();
+			if (selectWorkspaceById(store, target.workspaceId)?.deletionPending) {
+				toast.error(t("search.item.unavailable"));
+				return;
+			}
+			close();
 			store.setChatObscured(sessionId, false);
 			store.requestChatLocation(target);
 		},
