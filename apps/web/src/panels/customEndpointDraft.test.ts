@@ -84,6 +84,19 @@ test("re-detecting keeps saved facts the server doesn't report and refreshes the
 	expect(smaller.models[0]).toMatchObject({ contextWindow: 4_096, maxTokens: null });
 });
 
+test("re-detecting keeps existing rows in place and appends newly found models", () => {
+	const merged = mergeProbe(editEndpointDraft(saved), {
+		ok: true,
+		baseUrl: "https://gw.example/v1",
+		models: [model("new"), model("manual"), model("a")],
+	});
+	expect(merged.models.map((row) => [row.id, row.selected])).toEqual([
+		["a", true],
+		["manual", true],
+		["new", false],
+	]);
+});
+
 test("an unchanged saved address stays as written while a typed one takes the probed form", () => {
 	const draft = editEndpointDraft(saved);
 	expect(
