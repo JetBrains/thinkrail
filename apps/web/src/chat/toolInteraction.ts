@@ -42,8 +42,6 @@ export function useToolInteraction(
 			respond: (value) => actions.respondToTool(toolCallId, value),
 			focusScope,
 			prepareLayoutChange,
-			revealElement: actions.revealChatElement,
-			cancelAutomaticReveal: actions.cancelAutomaticReveal,
 			focusComposer: actions.focusComposer,
 			hostProtocol,
 			placement,

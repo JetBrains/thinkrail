@@ -1,6 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { hideAuxiliaryWorkbench, openWorkspaceChat, waitForAgentSettled } from "./fixtures/app";
-import { moveMouseToChatViewport, readChatScrollGeometry } from "./fixtures/chatScroll";
+import {
+	moveMouseToChatViewport,
+	readChatScrollGeometry,
+	readChatViewportIntersection,
+} from "./fixtures/chatScroll";
 
 async function openChatAndSend(
 	page: import("@playwright/test").Page,
@@ -174,7 +178,7 @@ test("a reader who scrolls away while the answer streams stays put when the agen
 	expect(Math.abs(settledTop - anchor.top)).toBeLessThanOrEqual(2);
 });
 
-test("answering a question card while following keeps the text above it still", {
+test("choosing in a docked question keeps the transcript still and answering lands on the latest edge", {
 	tag: "@agent",
 }, async ({ page }) => {
 	test.setTimeout(150_000);
@@ -198,9 +202,9 @@ test("answering a question card while following keeps the text above it still", 
 	await chatScroll.evaluate((root) => {
 		const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
 		const cardRow = root
-			.querySelector('[data-testid="ask-user-question"][data-tone="active"]')
+			.querySelector('[data-testid="ask-user-question"][data-tone="docked"]')
 			?.closest<HTMLElement>("[data-chat-row-id]");
-		if (!scroller || !cardRow) throw new Error("missing scroller or question row");
+		if (!scroller || !cardRow) throw new Error("missing scroller or docked question row");
 		const rows = [...root.querySelectorAll<HTMLElement>("[data-chat-row-id]")];
 		const above = rows[rows.indexOf(cardRow) - 1];
 		if (!above) throw new Error("no row above the question card");
@@ -242,16 +246,21 @@ test("answering a question card while following keeps the text above it still", 
 				}
 			).__answerSamples,
 	);
-	const beforeSubmit = samples.filter((sample) => !sample.submitted).at(-1)?.top;
-	const afterSubmit = samples.filter((sample) => sample.submitted);
-	expect(beforeSubmit).not.toBeNull();
-	expect(beforeSubmit).not.toBeUndefined();
-	expect(afterSubmit.length).toBeGreaterThan(20);
-	for (const sample of afterSubmit) {
+	const beforeSubmit = samples.filter((sample) => !sample.submitted);
+	const resting = beforeSubmit[0]?.top;
+	expect(beforeSubmit.length).toBeGreaterThan(5);
+	expect(resting).not.toBeNull();
+	expect(resting).not.toBeUndefined();
+	for (const sample of beforeSubmit) {
 		expect(sample.top).not.toBeNull();
-		expect(Math.abs((sample.top ?? 0) - (beforeSubmit ?? 0))).toBeLessThanOrEqual(2);
+		expect(Math.abs((sample.top ?? 0) - (resting ?? 0))).toBeLessThanOrEqual(2);
 	}
+	await expect(page.getByTestId("chat-dock")).toBeEmpty();
 	await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
+	const receipt = page.locator('[data-testid="ask-user-question"][data-tone="answered"]').first();
+	await expect
+		.poll(async () => (await readChatViewportIntersection(receipt)).intersects)
+		.toBe(true);
 });
 
 test("the outer activity run reveals a thinking subtree that owns its following tools", {

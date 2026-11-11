@@ -5,11 +5,16 @@ import type {
 	McpReadOutputResult,
 	WireModel,
 } from "@thinkrail/contracts";
-import type { ToolRevealOptions } from "@thinkrail/extension-api/web";
 import { type ComponentType, createContext, useContext } from "react";
 import type { ResourceTarget } from "./resources";
 
-export type ChatRevealOptions = ToolRevealOptions;
+export interface ChatRevealOptions {
+	block: "start" | "nearest";
+	provenance: "automatic-attention" | "user-navigation";
+	runway: "preserve" | "release";
+	stability: "none" | "bounded";
+	topInset?: number;
+}
 
 export type ResultTarget = ResourceTarget;
 
