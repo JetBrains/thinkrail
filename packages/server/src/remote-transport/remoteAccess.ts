@@ -1,7 +1,6 @@
-import type { RemoteHostRoutes } from "@thinkrail/contracts";
+import { buildPairingUri, type RemoteHostRoutes } from "@thinkrail/contracts";
 import {
 	addDevice,
-	buildPairingUri,
 	createPairingTokens,
 	findDeviceByKey,
 	type HostIdentity,
@@ -62,11 +61,6 @@ export interface RemoteAccessOptions {
 	portMapper?: PortMapper | null;
 }
 
-/**
- * Composition root for host-side remote access: loads the host identity, connects out to the broker, and for
- * each device runs the pairing handshake and WebRTC negotiation, handing the open channel to `onPaired`.
- * `issueLink` mints the one-time pairing link to share.
- */
 export function startRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
 	const identity = options.identity ?? loadOrCreateIdentity();
 	const tokens = createPairingTokens();

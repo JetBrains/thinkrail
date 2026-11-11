@@ -10,9 +10,9 @@ title: remote-transport — signaling + WebRTC channel
 ## Responsibility
 
 How a remote device reaches a host over an **end-to-end encrypted WebRTC** DataChannel for the "add project
-by QR" mode: the signaling message protocol, the host-side authorization handshake carried over signaling
+by QR" mode: the host-side authorization handshake carried over signaling
 *before* any media negotiation, and the transport-agnostic channel interface the existing wire protocol runs
-over. The sibling [[submodule-server-remote]] owns *who may connect* (identity, pairing tokens, device
+over. The signaling frames (`DeviceMessage` / `HostMessage`, `parseDeviceMessage`) are `contracts`'. The sibling [[submodule-server-remote]] owns *who may connect* (identity, pairing tokens, device
 registry); this module owns *how the connection is brokered and secured in transit*.
 
 Transport decision (fixed): **WebRTC DataChannels + self-hosted coturn**. The channel is E2E (DTLS) and NAT
@@ -25,8 +25,6 @@ broker (the host's own for Wi‑Fi/Tailscale, or a hosted one) and public Nostr 
 ## Boundary
 
 - **Owns:**
-  - `signalingProtocol.ts` — the `DeviceMessage` / `HostMessage` frames and `parseDeviceMessage` (device
-    input is untrusted: every frame is shape-, type- and bound-checked; the label is trimmed and capped).
   - `signalingSession.ts` — `createHostHandshake`, the pure host-side authorization state machine
     (`hello` → `challenge` → `proof` → `accepted`/`rejected`), dependency-injected over the `remote`
     module's token consume / proof + MAC verify / device registry, so an unauthorized peer never reaches
@@ -112,8 +110,14 @@ broker (the host's own for Wi‑Fi/Tailscale, or a hosted one) and public Nostr 
     latter telling the host (`onAccessChanged`) so the device's live channels hear their new access;
     `mayRequest(deviceId, method)` re-reads the registry on every call — `allowed`, `readOnly` or `revoked` —
     so a change on the computer applies to the next request without reconnecting; `state().relay` reports the built-in relay's port and public
-    check, or the configured URL, for Settings' network check. Access is **off by default** — nothing
-    listens for a phone until Settings or `--remote` turns it on.
+    check, or the configured URL, for Settings' network check. `onPaired` hands the host the device with its
+    resolved access. `onStatus` hears the whole `state()` whenever it changes, coalesced over 100 ms and
+    deduplicated against the last one heard: switch, restore, revoke, rename, access change and a device
+    channel opening or closing announce themselves; the relay's addresses and public check and the Nostr
+    live count are read rather than announced, so while on the control also samples every 2 s (and once when
+    the relay's check settles) and speaks only on a difference. The host publishes it on
+    `remote.statusChanged` to its own sockets only — never through the device bridges. Access is **off by
+    default** — nothing listens for a phone until Settings or `--remote` turns it on.
   - `remoteWireBridge.ts` — `bridgeRemoteWire`, which runs the host wire protocol over a `RemoteChannel`:
     it decodes request frames, dispatches them through the host's `handleRequest` (injected), replies with
     the WS's `{ id, ok, result | error }` framing, and `push`es `{ channel, data }` events (`pushFramed` sends
@@ -123,9 +127,10 @@ broker (the host's own for Wi‑Fi/Tailscale, or a hosted one) and public Nostr 
     response and `resume` keeps only the ids still awaited. An app too old to send `resume` is served without
     it, so its unacknowledged responses never fill the cache. Failures go to `onError` (Error Tracking), and
     the device's client state is reaped like a closed WS once its last channel closes.
-- **Public surface:** the `index.ts` barrel.
-- **Allowed deps:** `remote` (types + the injected pairing primitives), `contracts` (the shared broker-frame
-  protocol and public STUN servers), `@thinkrail/relay` (only `startBroker`, for the local relay),
+- **Public surface:** the `index.ts` barrel — `createRemoteAccessControl` (+ `RemoteAccessControl`,
+  `RemoteAccessState`) and `bridgeRemoteWire` (+ `RemoteWireBridge`), the only names `host` consumes.
+- **Allowed deps:** `remote` (types + the injected pairing primitives), `contracts` (the shared broker and signaling
+  frames and public STUN servers), `@thinkrail/relay` (only `startBroker`, for the local relay),
   `@thinkrail/nostr-signaling` (the Nostr carrier and its default relays), `werift` (host-side WebRTC),
   `node:crypto`, `node:os`; later the `host` wire protocol behind
   `RemoteChannel`. Never the browser.

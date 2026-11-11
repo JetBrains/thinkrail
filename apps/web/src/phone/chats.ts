@@ -1,11 +1,14 @@
 import { type Project, sessionAttention, type Workspace, WS_CHANNELS } from "@thinkrail/contracts";
 import type {
+	DeviceWireClient,
 	KeyValueStore,
 	RemoteSessionItem,
 	RemoteSessionsController,
 } from "@thinkrail/remote-client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { reasonOf } from "./async";
 import { useConnectedHosts } from "./hostView";
+import { pushedProjectId } from "./useHostRequest";
 
 export type ChatSection = "needsYou" | "running" | "done";
 
@@ -134,78 +137,100 @@ export const placeIn = (
 	return failed === undefined ? undefined : { failed };
 };
 
+/** The places of the chats in `projectIds` on one computer: its open projects, then each one's workspaces. */
+export async function readPlaces(
+	client: Pick<DeviceWireClient, "request">,
+	projectIds: readonly string[],
+): Promise<ChatPlace[]> {
+	const projects = await client.request<Project[]>("project.list", {});
+	const found = await Promise.all(
+		projects
+			.filter((project) => projectIds.includes(project.id))
+			.map((project) =>
+				client
+					.request<Workspace[]>("workspace.list", {
+						projectId: project.id,
+						includeDiffStats: false,
+					})
+					.then((workspaces) => workspaces.map((workspace) => ({ project, workspace }))),
+			),
+	);
+	return found.flat();
+}
+
+/** Whether a place push from a computer can move one of the chats in `projectIds` there: a workspace push only for one of those projects. */
+export const pushTouches = (projectIds: readonly string[], data: unknown): boolean => {
+	const projectId = pushedProjectId(data);
+	return projectId === undefined || projectIds.includes(projectId);
+};
+
+const projectsByHost = (scope: string): ReadonlyMap<string, readonly string[]> => {
+	const byHost = new Map<string, string[]>();
+	if (!scope) return byHost;
+	for (const entry of scope.split("\t")) {
+		const [hostKey = "", projectId = ""] = entry.split("\n");
+		byHost.set(hostKey, [...(byHost.get(hostKey) ?? []), projectId]);
+	}
+	return byHost;
+};
+
 /**
  * The project and workspace each chat lives in, read once per host and project that has a chat
- * (`project.list`, `workspace.list`) and re-read on their pushes or `retry`; a chat whose place has not
- * arrived yet maps to `undefined`, one whose computer's read failed to the reason.
+ * (`project.list`, `workspace.list`), re-read for a computer that pushes a change to one of those projects,
+ * and for every computer on `retry`; a chat whose place has not arrived yet maps to `undefined`, one whose
+ * computer's read failed to the reason.
  */
 export function useChatPlaces(
 	controller: RemoteSessionsController,
 	items: readonly RemoteSessionItem[],
 ): { placeOf: (item: RemoteSessionItem) => ReturnType<typeof placeIn>; retry: () => void } {
 	const [book, setBook] = useState<PlaceBook>(EMPTY_PLACES);
-	const [pushes, setPushes] = useState(0);
+	const [retries, setRetries] = useState(0);
 	const scope = [...new Set(items.map((item) => `${item.hostKey}\n${item.record.projectId}`))]
 		.sort()
 		.join("\t");
 	const hostKeys = [...new Set(items.map((item) => item.hostKey))].sort();
-	/** The computers among them with a channel up; a read skipped while one was connecting runs once it is. */
 	const connected = useConnectedHosts(controller, hostKeys);
+	const byHost = useMemo(() => projectsByHost(scope), [scope]);
+	const issued = useRef(new Map<string, number>());
+
+	const read = useCallback(
+		(hostKey: string, projectIds: readonly string[]): void => {
+			const client = controller.clientFor(hostKey);
+			if (!client) return;
+			const ticket = (issued.current.get(hostKey) ?? 0) + 1;
+			issued.current.set(hostKey, ticket);
+			const settle = (outcome: { found: readonly ChatPlace[] } | { failed: string }): void => {
+				if (issued.current.get(hostKey) === ticket)
+					setBook((current) => recordPlaces(current, hostKey, outcome));
+			};
+			readPlaces(client, projectIds).then(
+				(found) => settle({ found }),
+				(error: unknown) => settle({ failed: reasonOf(error) }),
+			);
+		},
+		[controller],
+	);
+
+	useEffect(() => {
+		for (const [hostKey, projectIds] of byHost) read(hostKey, projectIds);
+	}, [byHost, connected, retries, read]);
 
 	useEffect(() => {
 		if (!connected) return;
-		const bump = (): void => setPushes((count) => count + 1);
 		const unsubscribes = connected.split("\t").flatMap((hostKey) => {
 			const client = controller.clientFor(hostKey);
-			return client ? PLACE_PUSHES.map((channel) => client.subscribe(channel, bump)) : [];
+			const refresh = (data: unknown): void => {
+				const projectIds = byHost.get(hostKey);
+				if (projectIds && pushTouches(projectIds, data)) read(hostKey, projectIds);
+			};
+			return client ? PLACE_PUSHES.map((channel) => client.subscribe(channel, refresh)) : [];
 		});
 		return () => {
 			for (const unsubscribe of unsubscribes) unsubscribe();
 		};
-	}, [controller, connected]);
+	}, [controller, connected, byHost, read]);
 
-	useEffect(() => {
-		if (!scope) return;
-		let live = true;
-		const byHost = new Map<string, string[]>();
-		for (const entry of scope.split("\t")) {
-			const [hostKey = "", projectId = ""] = entry.split("\n");
-			byHost.set(hostKey, [...(byHost.get(hostKey) ?? []), projectId]);
-		}
-		for (const [hostKey, projectIds] of byHost) {
-			const client = controller.clientFor(hostKey);
-			if (!client) continue;
-			void client
-				.request<Project[]>("project.list", {})
-				.then((projects) =>
-					Promise.all(
-						projects
-							.filter((project) => projectIds.includes(project.id))
-							.map((project) =>
-								client
-									.request<Workspace[]>("workspace.list", {
-										projectId: project.id,
-										includeDiffStats: false,
-									})
-									.then((workspaces) => workspaces.map((workspace) => ({ project, workspace }))),
-							),
-					),
-				)
-				.then(
-					(found) => {
-						if (live) setBook((current) => recordPlaces(current, hostKey, { found: found.flat() }));
-					},
-					(error: unknown) => {
-						const failed = error instanceof Error ? error.message : String(error);
-						if (live) setBook((current) => recordPlaces(current, hostKey, { failed }));
-					},
-				);
-		}
-		return () => {
-			live = false;
-		};
-	}, [controller, scope, connected, pushes]);
-
-	const retry = useCallback(() => setPushes((count) => count + 1), []);
+	const retry = useCallback(() => setRetries((count) => count + 1), []);
 	return { placeOf: (item) => placeIn(book, item), retry };
 }

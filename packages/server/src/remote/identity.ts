@@ -1,15 +1,14 @@
 import {
 	createHash,
 	createPrivateKey,
-	createPublicKey,
 	sign as edSign,
-	verify as edVerify,
 	generateKeyPairSync,
 	hkdfSync,
 	type KeyObject,
 } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { verifyEd25519 } from "@thinkrail/relay";
 import { dataDir } from "../persistence";
 
 const IDENTITY_FILE = "remote-identity.json";
@@ -52,21 +51,12 @@ export function fingerprintOf(publicKeyRaw: string): string {
 		.slice(0, 16);
 }
 
-/** Rebuilds a public KeyObject from a base64url raw Ed25519 key (e.g. a paired device's key). */
-export function publicKeyFromRaw(publicKeyRaw: string): KeyObject {
-	return createPublicKey({ key: { kty: "OKP", crv: "Ed25519", x: publicKeyRaw }, format: "jwk" });
-}
-
 export function verifySignature(
 	publicKeyRaw: string,
 	data: Uint8Array,
 	signature: Uint8Array,
 ): boolean {
-	try {
-		return edVerify(null, data, publicKeyFromRaw(publicKeyRaw), signature);
-	} catch {
-		return false;
-	}
+	return verifyEd25519(publicKeyRaw, data, signature);
 }
 
 /** Loads the host's long-term Ed25519 identity, creating and persisting it (0600) on first use. */

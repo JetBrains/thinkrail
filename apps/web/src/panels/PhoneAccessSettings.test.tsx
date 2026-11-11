@@ -2,11 +2,8 @@ import { expect, test } from "bun:test";
 import type { RemoteAccessStatus } from "@thinkrail/contracts";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
-import {
-	PhoneAccessView,
-	type PhoneAccessViewProps,
-	type ShownPairing,
-} from "./PhoneAccessSettings";
+import { PhoneAccessView, type ShownPairing } from "./PhoneAccessSettings";
+import type { PhoneAccess } from "./usePhoneAccess";
 
 const off: RemoteAccessStatus = { enabled: false, addresses: [], devices: [] };
 const on: RemoteAccessStatus = {
@@ -29,26 +26,28 @@ const pairing: ShownPairing = {
 	qrSrc: "data:image/svg+xml;charset=utf-8,%3Csvg%3E",
 };
 
-function render(over: Partial<PhoneAccessViewProps>): string {
+function render(over: Partial<PhoneAccess>): string {
+	const access: PhoneAccess = {
+		status: off,
+		loadFailed: false,
+		pairing: null,
+		issuing: false,
+		justPaired: null,
+		expired: false,
+		pending: false,
+		busyDevices: new Set(),
+		reload: () => {},
+		toggle: () => {},
+		showCode: () => {},
+		copyLink: () => {},
+		revoke: () => {},
+		rename: () => {},
+		setAccess: () => {},
+		...over,
+	};
 	return renderToStaticMarkup(
 		<TooltipProvider>
-			<PhoneAccessView
-				status={off}
-				loadFailed={false}
-				pairing={null}
-				issuing={false}
-				expired={false}
-				pending={false}
-				busyDevices={new Set()}
-				onReload={() => {}}
-				onToggle={() => {}}
-				onShowCode={() => {}}
-				onCopyLink={() => {}}
-				onRevoke={() => {}}
-				onRename={() => {}}
-				onSetAccess={() => {}}
-				{...over}
-			/>
+			<PhoneAccessView access={access} />
 		</TooltipProvider>,
 	);
 }

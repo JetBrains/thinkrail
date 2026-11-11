@@ -10,7 +10,7 @@ title: remote — identity, pairing, device registry
 ## Responsibility
 
 The transport-agnostic core of remote "add project by QR" access: the host's long-term identity, the
-one-time pairing tokens a QR carries, the `thinkrail://pair` URI format, verification of a device's
+one-time pairing tokens a QR carries (the `thinkrail://pair` URI format itself is `contracts`'), verification of a device's
 proof-of-key, and the persisted registry of paired devices. It owns *who may connect and how a connection
 is authorized*, never *how bytes travel* — the signaling/relay transport (WebRTC + coturn) and its wiring
 into the WS surface are a later phase and a separate module.
@@ -22,17 +22,15 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for the produc
 - **Owns:**
   - `identity.ts` — the host's long-term **Ed25519** keypair (`node:crypto`), loaded or created and
     persisted `0600` under the data dir as `remote-identity.json`; exposes the base64url raw public key
-    (what the QR carries), a short fingerprint, `sign`, and `verifySignature` / `publicKeyFromRaw` for
-    checking a device's key. `nostrSecret` is the host's secp256k1 key for Nostr signaling, HKDF-derived from
+    (what the QR carries), a short fingerprint, `sign`, and `verifySignature` for checking a
+    device's key (delegating to `@thinkrail/relay`'s `verifyEd25519`, the one raw-key Ed25519 check).
+    `nostrSecret` is the host's secp256k1 key for Nostr signaling, HKDF-derived from
     the Ed25519 private key (`thinkrail/nostr-signaling/v1`), so it needs no file of its own and lives and
     dies with the identity; it only addresses the host on relays, while the Ed25519 key still proves it.
   - `pairingToken.ts` — an **in-memory**, single-use, short-TTL store of pending QR pairings
     (`createPairingTokens`), keyed by `pairingTokenId` (base64url SHA-256 of the token), because the relay
     carries `hello` and must never see the token itself. A leaked QR cannot be replayed and nothing survives a
     restart.
-  - `pairingUri.ts` — build/parse the `thinkrail://pair?v=1&s=…&t=…&k=…&p=…[&n=…]` URI: one `s` per relay
-    address the host is reachable at (Wi‑Fi/LAN, Tailscale — the device races them), the one-time token, host
-    public key, project ref, and optionally the computer's name. A link with a single `s` stays valid.
   - `pairing.ts` — `newChallenge()`, `verifyPairingProof()` (a device signs the host challenge to prove it
     holds its key), `pairingTokenId()`, and `pairingMac` / `verifyPairingMac` — the HMAC-SHA256 under the QR
     token over `pairingMacInput(devicePublicKey, challenge)` that proves a first-pairing device read the QR
@@ -47,8 +45,8 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for the produc
     commands and resources, a worktree's skills, the model catalog, branches). It is an allow-list, so a method added later is a write until it
     is listed here.
 - **Public surface:** the `index.ts` barrel.
-- **Allowed deps:** `persistence` (`dataDir`), `contracts` (the pairing URI and `pairingAuth` transcripts),
-  `node:crypto`, `node:fs`, `node:path`; never `host` or any other sibling feature.
+- **Allowed deps:** `persistence` (`dataDir`), `contracts` (`pairingAuth` transcripts), `@thinkrail/relay`
+  (only `verifyEd25519`, a pure `node:crypto` helper), `node:crypto`, `node:fs`, `node:path`; never `host` or any other sibling feature.
 - **Forbidden:** importing a transport/relay/WebRTC concern, `host`, or browser code; being bundled into
   the browser.
 

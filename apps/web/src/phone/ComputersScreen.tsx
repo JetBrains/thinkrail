@@ -51,7 +51,6 @@ export function ComputersScreen({
 	onForget: (host: SavedHost) => void;
 	onNewWorktree: (hostKey: string, project: Project) => void;
 	onOpen: (hostKey: string, project: Project, workspace: Workspace) => void;
-	/** Opens the Add a computer page. */
 	onAdd: () => void;
 	footer: ReactNode;
 }) {

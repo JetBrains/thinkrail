@@ -2,8 +2,8 @@ import { expect, test } from "bun:test";
 import type { RemoteAccessStatus } from "@thinkrail/contracts";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { ShownPairing } from "../panels/usePhoneAccess";
-import { PhoneAccessPanel, type PhoneAccessPanelProps } from "./PhoneAccessTopbar";
+import type { PhoneAccess, ShownPairing } from "../panels/usePhoneAccess";
+import { PhoneAccessPanel } from "./PhoneAccessTopbar";
 
 const off: RemoteAccessStatus = { enabled: false, addresses: [], devices: [] };
 const on: RemoteAccessStatus = {
@@ -20,27 +20,28 @@ const pairing: ShownPairing = {
 	qrSrc: "data:image/svg+xml;charset=utf-8,%3Csvg%3E",
 };
 
-function render(over: Partial<PhoneAccessPanelProps>): string {
+function render(over: Partial<PhoneAccess>): string {
+	const access: PhoneAccess = {
+		status: off,
+		loadFailed: false,
+		pairing: null,
+		issuing: false,
+		justPaired: null,
+		expired: false,
+		pending: false,
+		busyDevices: new Set(),
+		reload: () => {},
+		toggle: () => {},
+		showCode: () => {},
+		copyLink: () => {},
+		revoke: () => {},
+		rename: () => {},
+		setAccess: () => {},
+		...over,
+	};
 	return renderToStaticMarkup(
 		<TooltipProvider>
-			<PhoneAccessPanel
-				headingId="h"
-				status={off}
-				loadFailed={false}
-				pairing={null}
-				issuing={false}
-				justPaired={null}
-				expired={false}
-				pending={false}
-				busyDevices={new Set()}
-				onReload={() => {}}
-				onToggle={() => {}}
-				onShowCode={() => {}}
-				onCopyLink={() => {}}
-				onRevoke={() => {}}
-				onOpenSettings={() => {}}
-				{...over}
-			/>
+			<PhoneAccessPanel headingId="h" access={access} onOpenSettings={() => {}} />
 		</TooltipProvider>,
 	);
 }
@@ -123,4 +124,12 @@ test("a new code in the making and a revoke in flight cannot be pressed again", 
 	expect(code).toContain('disabled=""');
 	const revoke = markup.match(/<button[^>]*data-testid="phone-quick-revoke-d1"[^>]*>/)?.[0] ?? "";
 	expect(revoke).toContain('aria-busy="true"');
+});
+
+test("an expired code dims its QR and says so instead of the time it works until", () => {
+	const markup = render({ status: on, pairing, expired: true });
+	expect(markup).toContain('data-testid="phone-quick-code" data-expired="true"');
+	expect(markup).toContain("opacity-30");
+	expect(markup).toContain("This code has expired.");
+	expect(markup).not.toContain("works once, until");
 });

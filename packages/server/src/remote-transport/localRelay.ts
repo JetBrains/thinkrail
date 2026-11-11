@@ -64,11 +64,6 @@ export function relayAddresses(
 	return [...lan, ...tailscale, ...publicAddresses];
 }
 
-/**
- * Runs the signaling relay inside the host, so `--remote` needs no separately started relay: it listens on all
- * interfaces at the fixed port (so a paired phone's saved addresses survive a restart), or a free one when that
- * is taken.
- */
 export function startLocalRelay(port = LOCAL_RELAY_PORT, deps: LocalRelayDeps = {}): LocalRelay {
 	const interfaces = deps.interfaces ?? networkInterfaces;
 	const discoverPublic = deps.discoverPublic ?? discoverPublicAddress;

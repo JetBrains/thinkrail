@@ -1,21 +1,20 @@
 import {
 	RiCheckboxCircleFill,
 	RiEyeLine,
-	RiFileCopyLine,
 	RiQrCodeLine,
 	RiRefreshLine,
 	RiSmartphoneLine,
 } from "@remixicon/react";
-import { REMOTE_ACCESS_PROTOCOL_VERSION, type RemoteAccessStatus } from "@thinkrail/contracts";
+import { REMOTE_ACCESS_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useId, useState } from "react";
+import { PhonePairingCode } from "../panels/PhonePairingCode";
 import { type PhoneRoute, phoneHasNoRoute, phoneReach } from "../panels/phoneAccessState";
 import { SettingsSwitch } from "../panels/SettingsSwitch";
-import { type ShownPairing, usePhoneAccess } from "../panels/usePhoneAccess";
+import { type PhoneAccess, usePhoneAccess, useRemoteAccessStatus } from "../panels/usePhoneAccess";
 import { SettingsSection, useAppStore } from "../store";
-import { getTransport } from "../transport";
 
 const ROUTE_NAME = {
 	lan: "shell.phone.routeLan",
@@ -25,46 +24,16 @@ const ROUTE_NAME = {
 	nostr: "shell.phone.routeNostr",
 } as const satisfies Record<PhoneRoute, string>;
 
-function clockTime(epochMs: number): string {
-	return new Date(epochMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
-
 export interface PhoneAccessPanelProps {
 	headingId: string;
-	status: RemoteAccessStatus | null;
-	loadFailed: boolean;
-	pairing: ShownPairing | null;
-	issuing: boolean;
-	justPaired: string | null;
-	expired: boolean;
-	pending: boolean;
-	busyDevices: ReadonlySet<string>;
-	onReload: () => void;
-	onToggle: (enabled: boolean) => void;
-	onShowCode: () => void;
-	onCopyLink: (link: string) => void;
-	onRevoke: (deviceId: string) => void;
+	access: PhoneAccess;
 	onOpenSettings: () => void;
 }
 
 /** The props-only quick panel: the relay switch, the one-time QR while on, and paired phones with Disconnect. */
-export function PhoneAccessPanel({
-	headingId,
-	status,
-	loadFailed,
-	pairing,
-	issuing,
-	justPaired,
-	expired,
-	pending,
-	busyDevices,
-	onReload,
-	onToggle,
-	onShowCode,
-	onCopyLink,
-	onRevoke,
-	onOpenSettings,
-}: PhoneAccessPanelProps) {
+export function PhoneAccessPanel({ headingId, access, onOpenSettings }: PhoneAccessPanelProps) {
+	const { status, loadFailed, pairing, issuing, justPaired, expired, pending, busyDevices } =
+		access;
 	const t = useT();
 	const enabled = status?.enabled ?? false;
 	const devices = status?.devices ?? [];
@@ -85,7 +54,7 @@ export function PhoneAccessPanel({
 					disabled={pending || status === null}
 					label={t("settings.phone.enable")}
 					testId="phone-quick-toggle"
-					onChange={onToggle}
+					onChange={access.toggle}
 				/>
 			</div>
 
@@ -98,7 +67,12 @@ export function PhoneAccessPanel({
 						<p className="m-0 tr-text-metadata text-feedback-error">
 							{t("settings.phone.loadFailed")}
 						</p>
-						<Button variant="outline" size="m" data-testid="phone-quick-reload" onClick={onReload}>
+						<Button
+							variant="outline"
+							size="m"
+							data-testid="phone-quick-reload"
+							onClick={access.reload}
+						>
 							{t("common.retry")}
 						</Button>
 					</div>
@@ -128,39 +102,24 @@ export function PhoneAccessPanel({
 					className="flex flex-col items-center gap-8 border-border-muted border-b px-12 py-12"
 				>
 					{pairing ? (
-						<>
-							<img
-								src={pairing.qrSrc}
-								alt={t("settings.phone.qrAlt")}
-								className={`size-192 rounded-sm ${expired ? "opacity-30" : ""}`}
-							/>
-							<p className="m-0 text-center tr-text-metadata text-text-muted">
-								{expired
-									? t("settings.phone.expired")
-									: t("shell.phone.scanUntil", { time: clockTime(pairing.expiresAt) })}
-							</p>
-							<div className="flex items-center gap-8">
+						<PhonePairingCode
+							layout="stack"
+							pairing={pairing}
+							expired={expired}
+							onCopyLink={access.copyLink}
+							actions={
 								<Button
 									variant="outline"
 									size="m"
 									iconLeft={RiRefreshLine}
 									data-testid="phone-quick-new-code"
 									loading={issuing}
-									onClick={onShowCode}
+									onClick={access.showCode}
 								>
 									{t("settings.phone.newCode")}
 								</Button>
-								<IconButton
-									variant="ghost"
-									size="m"
-									icon={RiFileCopyLine}
-									label={t("settings.phone.copyLink")}
-									tooltip={t("settings.phone.copyLink")}
-									data-testid="phone-quick-copy-link"
-									onClick={() => onCopyLink(pairing.link)}
-								/>
-							</div>
-						</>
+							}
+						/>
 					) : issuing ? (
 						<>
 							<div className="size-192 rounded-sm bg-container-content-bg" />
@@ -184,7 +143,7 @@ export function PhoneAccessPanel({
 								size="m"
 								iconLeft={RiQrCodeLine}
 								data-testid="phone-quick-show-code"
-								onClick={onShowCode}
+								onClick={access.showCode}
 							>
 								{justPaired ? t("shell.phone.pairAnother") : t("settings.phone.showCode")}
 							</Button>
@@ -250,7 +209,7 @@ export function PhoneAccessPanel({
 									size="s"
 									data-testid={`phone-quick-revoke-${device.id}`}
 									loading={busyDevices.has(device.id)}
-									onClick={() => onRevoke(device.id)}
+									onClick={() => access.revoke(device.id)}
 								>
 									{t("shell.phone.disconnect")}
 								</Button>
@@ -275,36 +234,18 @@ export function PhoneAccessPanel({
 	);
 }
 
-/** Mounted only while the popover is open, so the status read and the pairing poll stop when it closes. */
+/** Mounted only while the popover is open, so a code is minted only for an open panel. */
 function PhoneAccessPopoverBody({
 	headingId,
-	onStatus,
 	onOpenSettings,
 }: {
 	headingId: string;
-	onStatus: (status: RemoteAccessStatus) => void;
 	onOpenSettings: () => void;
 }) {
-	const access = usePhoneAccess({ autoCode: true });
-	useEffect(() => {
-		if (access.status) onStatus(access.status);
-	}, [access.status, onStatus]);
 	return (
 		<PhoneAccessPanel
 			headingId={headingId}
-			status={access.status}
-			loadFailed={access.loadFailed}
-			pairing={access.pairing}
-			issuing={access.issuing}
-			justPaired={access.justPaired}
-			expired={access.expired}
-			pending={access.pending}
-			busyDevices={access.busyDevices}
-			onReload={access.reload}
-			onToggle={access.toggle}
-			onShowCode={access.showCode}
-			onCopyLink={access.copyLink}
-			onRevoke={access.revoke}
+			access={usePhoneAccess({ autoCode: true })}
 			onOpenSettings={onOpenSettings}
 		/>
 	);
@@ -318,31 +259,10 @@ function PhoneAccessPopoverBody({
 export function PhoneAccessTopbar() {
 	const t = useT();
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
-	const connection = useAppStore((state) => state.status);
 	const supported = protocolVersion !== null && protocolVersion >= REMOTE_ACCESS_PROTOCOL_VERSION;
+	const enabled = useRemoteAccessStatus().status?.enabled === true;
 	const [open, setOpen] = useState(false);
-	const [enabled, setEnabled] = useState(false);
 	const headingId = useId();
-	const adopted = useRef(0);
-	const adoptStatus = useCallback((status: RemoteAccessStatus) => {
-		adopted.current += 1;
-		setEnabled(status.enabled);
-	}, []);
-
-	useEffect(() => {
-		if (!supported || connection !== "connected") return;
-		let current = true;
-		const asked = adopted.current;
-		getTransport()
-			.request("remote.status", {})
-			.then((status) => {
-				if (current && adopted.current === asked) setEnabled(status.enabled);
-			})
-			.catch(() => {});
-		return () => {
-			current = false;
-		};
-	}, [supported, connection]);
 
 	if (!supported) return null;
 	const label = enabled ? t("shell.phone.buttonOn") : t("shell.phone.button");
@@ -364,7 +284,6 @@ export function PhoneAccessTopbar() {
 			<PopoverContent align="end" data-testid="phone-access-popover" aria-labelledby={headingId}>
 				<PhoneAccessPopoverBody
 					headingId={headingId}
-					onStatus={adoptStatus}
 					onOpenSettings={() => {
 						setOpen(false);
 						useAppStore.getState().openSettings(SettingsSection.Phone);

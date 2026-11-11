@@ -156,7 +156,6 @@ export function LoadedList<T>({
 	children,
 }: {
 	loaded: Loaded<T[]>;
-	/** A line of text, or a whole `EmptyState`. */
 	empty: string | ReactNode;
 	/** Replaces the full-screen loader, e.g. with a row inside the tree. */
 	loading?: ReactNode;

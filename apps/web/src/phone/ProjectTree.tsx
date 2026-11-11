@@ -19,6 +19,7 @@ import { IconButton } from "@thinkrail/ui/button";
 import { ProjectGlyph, WorkspaceBranch, WorkspaceGlyph } from "@thinkrail/ui/project-tree";
 import { RunningIcon } from "@thinkrail/ui/running-icon";
 import { cn } from "@thinkrail/ui/utils";
+import { useCallback } from "react";
 import { useNow } from "../components/useNow";
 import type { PairState } from "./App";
 import { HostBanner } from "./HostBanner";
@@ -27,7 +28,7 @@ import { useHostAccess, useHostClient, useHostWelcome } from "./hostView";
 import { LoadedList } from "./layout";
 import { scopeStatus } from "./status";
 import { HostActions, ProjectActions, type ReportFailure, WorkspaceActions } from "./TreeActions";
-import { useHostRequest } from "./useHostRequest";
+import { pushedProjectId, useHostRequest } from "./useHostRequest";
 
 const PROJECT_PUSHES = [WS_CHANNELS.projectUpdated];
 const WORKSPACE_PUSHES = [
@@ -65,7 +66,6 @@ export function HostTree({
 	host: SavedHost;
 	status: HostStatus;
 	controller: RemoteSessionsController;
-	/** This computer's sessions. */
 	items: RemoteSessionItem[];
 	pair: PairState;
 	onPair: (link: string) => Promise<boolean>;
@@ -321,15 +321,18 @@ function ProjectWorkspaces({
 	const t = useT();
 	const client = useHostClient(controller, host.hostKey);
 	const readOnly = useHostAccess(controller, host.hostKey) === "read";
+	const projectId = project.id;
+	const ofProject = useCallback(
+		(data: unknown) => pushedProjectId(data) === projectId,
+		[projectId],
+	);
 	const loaded = useHostRequest<Workspace[]>(
 		client,
 		"workspace.list",
-		{
-			projectId: project.id,
-			includeDiffStats: false,
-		},
+		{ projectId, includeDiffStats: false },
 		"",
 		WORKSPACE_PUSHES,
+		ofProject,
 	);
 	const welcome = useHostWelcome(controller, host.hostKey);
 	const now = useNow();

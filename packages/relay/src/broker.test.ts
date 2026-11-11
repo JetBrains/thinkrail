@@ -181,6 +181,22 @@ test("a host at its session cap turns further devices away", () => {
 	expect(broker.sessionCount).toBe(1);
 });
 
+test("a closed session frees its slot under the host's session cap", () => {
+	const { broker, host, device } = fixture({ maxSessionsPerHost: 1 });
+	const second = spy();
+	broker.connect("second", second);
+	register(broker, "host", "K");
+	broker.receive("device", JSON.stringify({ t: "connect", hostKey: "K" }));
+	broker.receive("host", JSON.stringify({ t: "close", session: "S1" }));
+	broker.receive("second", JSON.stringify({ t: "connect", hostKey: "K" }));
+	expect(second.sent).toEqual([{ t: "ready" }]);
+	broker.disconnect("host");
+	expect(second.closed).toBe(true);
+	expect(device.closed).toBe(true);
+	expect(host.sent.at(-1)).toEqual({ t: "open", session: "S2" });
+	expect(broker.sessionCount).toBe(0);
+});
+
 test("verifyEd25519 checks a real host signature over the register transcript", () => {
 	const { publicKey, privateKey } = generateKeyPairSync("ed25519");
 	const hostKey = (publicKey.export({ format: "jwk" }) as { x: string }).x;
@@ -189,4 +205,5 @@ test("verifyEd25519 checks a real host signature over the register transcript", 
 	expect(verifyEd25519(hostKey, data, signature)).toBe(true);
 	expect(verifyEd25519(hostKey, registerTranscript("other"), signature)).toBe(false);
 	expect(verifyEd25519("not-a-key", data, signature)).toBe(false);
+	expect(verifyEd25519(hostKey, data, Buffer.from(signature, "base64url"))).toBe(true);
 });

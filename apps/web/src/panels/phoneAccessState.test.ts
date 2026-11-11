@@ -1,8 +1,9 @@
 import { expect, test } from "bun:test";
 import type { RemoteAccessStatus } from "@thinkrail/contracts";
 import {
-	createLatestGate,
+	foldRemoteStatus,
 	initialPhoneAccess,
+	initialRemoteStatus,
 	newDevice,
 	type PhoneAccessEvent,
 	type PhoneAccessState,
@@ -53,7 +54,7 @@ test("a phone pairing from the shown code replaces the code with who paired, not
 		{ type: "status", status: on },
 		{ type: "issuing", auto: true },
 		{ type: "issued", pairing: code, generation: 0 },
-		{ type: "polled", status: onWithPhone },
+		{ type: "status", status: onWithPhone, paired: phone },
 	);
 	expect(paired.pairing).toBeNull();
 	expect(paired.issuing).toBe(false);
@@ -62,12 +63,12 @@ test("a phone pairing from the shown code replaces the code with who paired, not
 	expect(shouldAutoIssue(paired)).toBe(false);
 });
 
-test("a poll with no new phone keeps the code", () => {
+test("a status with no new phone keeps the code", () => {
 	const still = run(
 		{ type: "status", status: on },
 		{ type: "issuing" },
 		{ type: "issued", pairing: code, generation: 0 },
-		{ type: "polled", status: on },
+		{ type: "status", status: on, paired: null },
 	);
 	expect(still.pairing).toEqual(code);
 	expect(still.justPaired).toBeNull();
@@ -78,7 +79,7 @@ test("asking for another code clears the paired note", () => {
 		{ type: "status", status: on },
 		{ type: "issuing" },
 		{ type: "issued", pairing: code, generation: 0 },
-		{ type: "polled", status: onWithPhone },
+		{ type: "status", status: onWithPhone, paired: phone },
 		{ type: "issuing" },
 	);
 	expect(again.justPaired).toBeNull();
@@ -218,21 +219,37 @@ test("a status read that stays off does not count as another off", () => {
 	expect(twice.generation).toBe(once.generation);
 });
 
-test("a failed first read is shown until a retry, and a status that arrives clears it", () => {
-	const failed = run({ type: "loadFailed" });
-	expect(failed.loadFailed).toBe(true);
-	expect(phoneAccessReducer(failed, { type: "reload" }).loadFailed).toBe(false);
-	expect(phoneAccessReducer(failed, { type: "status", status: on }).loadFailed).toBe(false);
-	expect(run({ type: "status", status: on }, { type: "loadFailed" }).loadFailed).toBe(false);
+test("a status on the same connection names the phone it added; the first one and another connection's do not", () => {
+	const first = foldRemoteStatus(initialRemoteStatus, on, 1);
+	expect(first.paired).toBeNull();
+	const paired = foldRemoteStatus(first, onWithPhone, 1);
+	expect(paired.paired).toEqual(phone);
+	expect(foldRemoteStatus(paired, onWithPhone, 1).paired).toBeNull();
+	expect(foldRemoteStatus(first, onWithPhone, 2).paired).toBeNull();
+	expect(foldRemoteStatus({ ...initialRemoteStatus, loadFailed: true }, on, 1).loadFailed).toBe(
+		false,
+	);
 });
 
-test("the latest gate drops a reply to a request sent before one already taken", () => {
-	const gate = createLatestGate();
-	const poll = gate.ticket();
-	const toggle = gate.ticket();
-	expect(gate.accept(toggle)).toBe(true);
-	expect(gate.accept(poll)).toBe(false);
-	const next = gate.ticket();
-	expect(gate.accept(next)).toBe(true);
-	expect(gate.accept(next)).toBe(false);
+test("a shown code expires once its time is up, and a new code starts fresh", () => {
+	const shown = run(
+		{ type: "status", status: on },
+		{ type: "issuing" },
+		{ type: "issued", pairing: code, generation: 0 },
+	);
+	expect(shown.expired).toBe(false);
+	expect(phoneAccessReducer(shown, { type: "expired", link: "thinkrail://other" }).expired).toBe(
+		false,
+	);
+	const expired = phoneAccessReducer(shown, { type: "expired", link: code.link });
+	expect(expired.expired).toBe(true);
+	const next = run(
+		{ type: "status", status: on },
+		{ type: "issuing" },
+		{ type: "issued", pairing: code, generation: 0 },
+		{ type: "expired", link: code.link },
+		{ type: "issuing" },
+		{ type: "issued", pairing: { ...code, link: "thinkrail://pair?v=2" }, generation: 0 },
+	);
+	expect(next.expired).toBe(false);
 });

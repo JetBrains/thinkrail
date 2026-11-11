@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { DeviceMessage } from "@thinkrail/contracts";
 import {
 	encodeDeviceMessage,
 	encodeHostMessage,
@@ -9,7 +10,6 @@ import { generateNostrSecret, openNostrSignal } from "@thinkrail/nostr-signaling
 import { startTestNostrRelay } from "@thinkrail/nostr-signaling/testing";
 import type { HostSession } from "./hostSession";
 import { connectNostrHost, createNostrHostRouter } from "./nostrHostSignaling";
-import type { DeviceMessage } from "./signalingProtocol";
 
 const hello = encodeDeviceMessage({ kind: "resume", devicePublicKey: "DEV", nonce: "n" });
 
