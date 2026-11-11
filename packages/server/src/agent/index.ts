@@ -1,5 +1,8 @@
 export * from "./agentSessionManager";
+export { disableAnthropicExtraUsageWarning, globalProviderWarnings } from "./anthropicExtraUsage";
+export { readCacheWarmingSetting, writeCacheWarmingMode } from "./cacheWarming";
 export {
+	getResourceHistoryPage,
 	getSessionResources,
 	readBackgroundCommandOutput,
 	setSessionResourcesPublisher,
@@ -8,20 +11,37 @@ export {
 	stopSubagent,
 } from "./chatResources";
 export {
+	CONTINUE_IN_WORKSPACE_TOOL_NAME,
+	type ContinueToolHost,
+	clampHandoffSummary,
+	setContinueToolHost,
+} from "./continueTool";
+export {
+	listCustomEndpoints,
+	probeCustomEndpoint,
+	removeCustomEndpoint,
+	saveCustomEndpoint,
+} from "./customEndpoints";
+export {
 	type ReviewSubagentRun,
 	readChildTranscript,
 	refreshSubagentConcurrency,
 	runReviewSubagent,
 	setSubagentConcurrencyResolver,
+	trashWorkspaceDelegation,
 } from "./delegation";
 export {
 	type BundledExtensionFactory,
 	type BundledExtensions,
+	bumpPackageSwitchGeneration,
 	listProjectAliasSkillNames,
 	listSkillCatalog,
 	listSkillCommands,
 	registerBundledRuntime,
 	setDisabledExtensionsResolver,
+	setDisabledPackagesResolver,
+	setExtensionSettingsResolver,
+	setSpecsEnabledResolver,
 } from "./extensions";
 export {
 	effectiveMcpServerConfig,
@@ -55,11 +75,28 @@ export {
 export { setModelListingPublisher } from "./modelAvailability";
 export {
 	listModelContextSettings,
-	setModelContextPublisher,
 	setModelContextWindow,
 } from "./modelContext";
-export { preferredDefaultModel } from "./modelDefaults";
+export { piDefaultModelRef, preferredDefaultModel } from "./modelDefaults";
+export { setModelsFilePublisher } from "./modelsFile";
 export * from "./oneshot";
+export {
+	handlePiSettingsFileChanged,
+	handleProjectPiSettingsChanged,
+	type PiPackagesTarget,
+	piPackagesCatalog,
+	piPackagesCheckUpdates,
+	piPackagesInstall,
+	piPackagesRemove,
+	piPackagesRevealTarget,
+	piPackagesSetResourceEnabled,
+	piPackagesUpdate,
+	primeProjectPiSettings,
+	primeUserPiSettings,
+	publishPiPackagesChanged,
+	refreshPiPackages,
+	setPiPackagesPublisher,
+} from "./piPackages";
 export {
 	activatePiRuntimeGeneration,
 	configurePiRuntime,
@@ -105,3 +142,12 @@ export {
 } from "./titleTool";
 export * from "./toolResponses";
 export * from "./webUiContext";
+export {
+	START_WORKSPACE_TOOL_NAME,
+	type StartedWorkspace,
+	type StartWorkspaceParams,
+	setWorkspaceToolsHost,
+	WORKSPACE_STATUS_TOOL_NAME,
+	type WorkspaceStatusParams,
+	type WorkspaceToolsHost,
+} from "./workspaceTools";

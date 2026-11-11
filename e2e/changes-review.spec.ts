@@ -9,7 +9,7 @@ import {
 } from "./fixtures/app";
 import { commitFile, gitAs } from "./fixtures/git";
 import { E2E_DATA_DIR } from "./fixtures/paths";
-import { pierreDeletionsSide, selectPierreLine } from "./fixtures/pierre";
+import { holdPierreWorkers, pierreDeletionsSide, selectPierreLine } from "./fixtures/pierre";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
 const reviewTab = (page: Page) => page.locator('[data-testid="editor-tab"][data-kind="changes"]');
@@ -140,6 +140,13 @@ test("the Split/Inline and whitespace toggles appear when a code file is in the 
 		"true",
 	);
 	await expect(codeDiff.locator("[data-unified]")).toHaveCount(1);
+});
+
+test("a code diff colors tokens through the shared code variables", async ({ page }) => {
+	await seedThreeChanges(page);
+	await row(page, "script.ts").click();
+	const codeDiff = section(page, "script.ts").getByTestId("diff-view");
+	await expect(codeDiff.locator('span[style*="--code-keyword"]').first()).toBeVisible();
 });
 
 test("a double click opens the per-file tab and a section's Open as tab does the same", async ({
@@ -535,6 +542,7 @@ test("the guide reveals a finding deep inside a bounded (virtualized) section", 
 		}),
 	);
 
+	const workers = await holdPierreWorkers(page);
 	await page.reload();
 	await revealWorkbenchTool(page, "changes");
 	await row(page, "script.ts").click();
@@ -546,6 +554,8 @@ test("the guide reveals a finding deep inside a bounded (virtualized) section", 
 		"data-active",
 		"true",
 	);
+	await workers.requested;
+	workers.release();
 	await expect(page.locator('[data-comment-id="finding-1"]')).toBeInViewport({ timeout: 8000 });
 	await expect(page.locator('[data-comment-id="finding-1"]')).toContainText(
 		"RISK deep in the file",

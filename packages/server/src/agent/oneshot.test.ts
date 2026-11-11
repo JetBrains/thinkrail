@@ -49,8 +49,8 @@ test("pickModel(cheap) falls back to the cheapest by token cost when nothing is 
 test("pickModel(cheap) skips unpriced models and falls back to the default model when none is priced", async () => {
 	stubAvailable([withProvider("free", "free-1", 0), withProvider("cheapo", "cheapo-1", 1)]);
 	expect((await pickModel("cheap"))?.id).toBe("cheapo-1");
-	stubAvailable([withProvider("free", "free-1", 0), withProvider("openai", "gpt-5.5", 0)]);
-	expect((await pickModel("cheap"))?.id).toBe("gpt-5.5");
+	stubAvailable([withProvider("free", "free-1", 0), withProvider("openai", "gpt-6.1-sol", 0)]);
+	expect((await pickModel("cheap"))?.id).toBe("gpt-6.1-sol");
 });
 
 test("pickModel(default) returns the first available model; empty set → null", async () => {

@@ -15,7 +15,12 @@ import { preloadRendererView, RendererView, usePreloadResourceView } from "./ren
 
 const host: ResourceHost = {
 	markdown: () => null,
-	code: { languages: [], languageId: () => null, theme: () => ({ name: "test", settings: [] }) },
+	code: {
+		languages: [],
+		languageId: () => null,
+		pierreTheme: { name: "test", appearance: "dark", style: {} },
+		editorTheme: () => ({ rules: [], colors: {} }),
+	},
 	bytesUrl: () => "",
 	openFile: () => {},
 	openComparison: () => {},
@@ -80,7 +85,7 @@ function render(renderer: ResourceRenderer, resource: ResourceDescriptor, mobile
 
 test("a preloaded view renders without suspending", async () => {
 	const { renderer, resource } = testRenderer(async () => viewModule("ready"));
-	await preloadRendererView(renderer, false, host, resource);
+	await preloadRendererView(renderer, false, host);
 	expect(render(renderer, resource)).toBe("<span>ready</span>");
 });
 
@@ -96,7 +101,7 @@ test("a failed preload does not reject and a later mount retries the loader", as
 		if (attempt === 1) throw new Error("chunk failed");
 		return viewModule("retried");
 	});
-	await preloadRendererView(renderer, false, host, resource);
+	await preloadRendererView(renderer, false, host);
 	expect(calls).toEqual([false]);
 	expect(render(renderer, resource)).toContain("loading");
 	expect(calls).toEqual([false, false]);
@@ -114,7 +119,7 @@ test("a lazy stored while the load is in flight keeps serving once the load reso
 	const inFlight = RendererView(props);
 	expect(render(renderer, resource)).toContain("loading");
 	finish(viewModule("late"));
-	await preloadRendererView(renderer, false, host, resource);
+	await preloadRendererView(renderer, false, host);
 	expect(RendererView(props).type).toBe(inFlight.type);
 	expect(render(renderer, resource)).toBe("<span>late</span>");
 });
@@ -128,7 +133,25 @@ test("a load that fails after a mount stored its lazy is retried by the next mou
 	});
 	expect(render(renderer, resource)).toContain("loading");
 	await new Promise((resolve) => setTimeout(resolve, 0));
-	await preloadRendererView(renderer, false, host, resource);
+	await preloadRendererView(renderer, false, host);
+	expect(calls).toEqual([false, false]);
+	expect(render(renderer, resource)).toBe("<span>recovered</span>");
+});
+
+test("re-rendering a mounted load that failed does not reload it until a later load replaces it", async () => {
+	let attempt = 0;
+	const { renderer, calls, resource } = testRenderer(async () => {
+		attempt += 1;
+		if (attempt === 1) throw new Error("chunk failed");
+		return viewModule("recovered");
+	});
+	expect(render(renderer, resource)).toContain("loading");
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	render(renderer, resource);
+	render(renderer, resource);
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	expect(calls).toEqual([false]);
+	await preloadRendererView(renderer, false, host);
 	expect(calls).toEqual([false, false]);
 	expect(render(renderer, resource)).toBe("<span>recovered</span>");
 });
@@ -139,32 +162,30 @@ test("a warm that throws does not reject and the view still renders", async () =
 			throw new Error("warm failed");
 		}),
 	);
-	await expect(preloadRendererView(renderer, false, host, resource)).resolves.toBeUndefined();
+	await expect(preloadRendererView(renderer, false, host)).resolves.toBeUndefined();
 	expect(render(renderer, resource)).toBe("<span>warm failed</span>");
 });
 
 test("concurrent preloads import once and warm each request", async () => {
-	const warmed: [ResourceHost, string][] = [];
-	const { renderer, calls, resource } = testRenderer(async () =>
-		viewModule("once", (warmHost, warmResource) => warmed.push([warmHost, warmResource.path])),
+	const warmed: ResourceHost[] = [];
+	const otherHost = { ...host };
+	const { renderer, calls } = testRenderer(async () =>
+		viewModule("once", (warmHost) => warmed.push(warmHost)),
 	);
 	await Promise.all([
-		preloadRendererView(renderer, false, host, resource),
-		preloadRendererView(renderer, false, host, { ...resource, path: "other.file" }),
+		preloadRendererView(renderer, false, host),
+		preloadRendererView(renderer, false, otherHost),
 	]);
 	expect(calls).toEqual([false]);
-	expect(warmed).toEqual([
-		[host, resource.path],
-		[host, "other.file"],
-	]);
+	expect(warmed).toHaveLength(2);
+	expect(warmed[0]).toBe(host);
+	expect(warmed[1]).toBe(otherHost);
 });
 
 test("warm runs in a later task than the loaded module", async () => {
 	const order: string[] = [];
-	const { renderer, resource } = testRenderer(async () =>
-		viewModule("yielded", () => order.push("warm")),
-	);
-	const preload = preloadRendererView(renderer, false, host, resource);
+	const { renderer } = testRenderer(async () => viewModule("yielded", () => order.push("warm")));
+	const preload = preloadRendererView(renderer, false, host);
 	setTimeout(() => order.push("task"), 0);
 	await preload;
 	expect(order).toEqual(["task", "warm"]);
@@ -174,7 +195,7 @@ test("phone and desktop implementations load and cache separately", async () => 
 	const { renderer, calls, resource } = testRenderer(async (mobile) =>
 		viewModule(mobile ? "phone" : "desktop"),
 	);
-	await preloadRendererView(renderer, false, host, resource);
+	await preloadRendererView(renderer, false, host);
 	expect(render(renderer, resource, true)).toContain("loading");
 	expect(calls).toEqual([false, true]);
 	expect(render(renderer, resource, false)).toBe("<span>desktop</span>");

@@ -635,7 +635,7 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 				}}
 			/>
 			<Dialog open={syncOpen} onOpenChange={setSyncOpen}>
-				<DialogContent data-testid="ship-sync-dialog" className="max-w-[32rem]">
+				<DialogContent data-testid="ship-sync-dialog" className="max-w-[36rem]">
 					<DialogHeader>
 						<DialogTitle>{t("panels.ship.sync.title")}</DialogTitle>
 						<DialogDescription>{t("panels.ship.sync.description", { branch })}</DialogDescription>

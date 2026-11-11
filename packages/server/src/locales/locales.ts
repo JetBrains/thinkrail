@@ -1,4 +1,4 @@
-import { mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type {
 	LocalLocaleFile,
@@ -7,13 +7,12 @@ import type {
 } from "@thinkrail/contracts";
 import { localeTagFromFileName, validateCatalog } from "@thinkrail/locales";
 import { logger } from "../log";
-import { dataDir } from "../persistence";
+import { dataDir, listDataFolder, watchDataFolder } from "../persistence";
 
 const log = logger("locales");
 
 export const MAX_LOCALE_FILE_BYTES = 2 * 1024 * 1024;
 export const MAX_LOCALE_FILES = 64;
-const POLL_MS = 1_000;
 
 export function localesDir(root: string = dataDir()): string {
 	return join(root, "locales");
@@ -60,26 +59,7 @@ function readLocaleFile(dir: string, fileName: string): LocalLocaleFile {
 }
 
 function localeFileNames(dir: string): string[] {
-	try {
-		return readdirSync(dir)
-			.filter((name) => name.endsWith(".json") && !name.startsWith("."))
-			.sort();
-	} catch {
-		return [];
-	}
-}
-
-function folderSignature(dir: string): string {
-	return localeFileNames(dir)
-		.map((name) => {
-			try {
-				const stat = statSync(join(dir, name));
-				return `${name}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`;
-			} catch {
-				return `${name}:gone`;
-			}
-		})
-		.join("\n");
+	return listDataFolder(dir, (name) => name.endsWith(".json"));
 }
 
 export function readLocalLocales(dir: string = localesDir()): LocalLocalesSnapshot {
@@ -108,20 +88,13 @@ export interface LocalesWatchOptions {
 export function watchLocalLocales({
 	dir = localesDir(),
 	onChange,
-	intervalMs = POLL_MS,
+	intervalMs,
 }: LocalesWatchOptions): () => void {
-	try {
-		mkdirSync(dir, { recursive: true });
-	} catch {
-		log.warn(`could not create locale folder ${dir}`);
-	}
-	let signature = folderSignature(dir);
-	const timer = setInterval(() => {
-		const next = folderSignature(dir);
-		if (next === signature) return;
-		signature = next;
-		onChange();
-	}, intervalMs);
-	timer.unref();
-	return () => clearInterval(timer);
+	return watchDataFolder({
+		dir,
+		list: localeFileNames,
+		onChange,
+		onCreateFailed: () => log.warn(`could not create locale folder ${dir}`),
+		...(intervalMs === undefined ? {} : { intervalMs }),
+	});
 }

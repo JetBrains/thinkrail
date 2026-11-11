@@ -35,7 +35,7 @@ function classText(tag: string, src: string): string {
 	const literals = [...expr.matchAll(/["'`]([^"'`]*)["'`]/g)].map((m) => m[1]);
 	const consts = [...expr.matchAll(/\b([A-Z][A-Z0-9_]+)\b/g)].map((m) => {
 		const def = src.match(new RegExp(`const ${m[1]}\\s*=\\s*([\\s\\S]*?);\\n`));
-		return def ? [...def[1].matchAll(/["'`]([^"'`]*)["'`]/g)].map((x) => x[1]).join(" ") : "";
+		return def?.[1] ? [...def[1].matchAll(/["'`]([^"'`]*)["'`]/g)].map((x) => x[1]).join(" ") : "";
 	});
 	return [...literals, ...consts].join(" ");
 }
@@ -134,7 +134,7 @@ const SPECIALIZED: Exception[] = [
 		reason: "sign-in method choice rows: multi-line, left-aligned option cards, not actions",
 	},
 	{
-		file: "thinkrail-extensions/ask-user-question/web/AskUserQuestionCard.tsx",
+		file: "thinkrail-extensions/ask-user-question/web/controls.tsx",
 		contains: 'data-testid="ask-tab"',
 		reason: "question pager tabs (role=tab) of the ask-user-question card",
 	},

@@ -78,7 +78,8 @@ as a permanently open foreign window and force every sibling chat into the fallb
 - **Commit the item's delta.** `git.gitCommitPaths` commits **exactly the delta paths** — the item's own
   work, never "everything currently dirty" — `--no-verify` (the commit must not run/fail the
   user's hooks; author/committer stay the user's own config — it's their branch). It
-  preserves the user's index across any failure (see [[submodule-server-git]]). The item gets **one
+  preserves the user's index across any failure, unless HEAD moved to a commit that is not ours (see
+  [[submodule-server-git]]). The item gets **one
   `commit` artifact** (the sha, `label` = the item title) and **nothing else**: the commit is
   self-sufficient — its file list is *derived*, never denormalized into the JSON (see the `listTodos`
   decoration below).
@@ -346,6 +347,13 @@ before the already-enqueued replacement pass has reconciled the current plan.
   `approveTodoReview(...)` / `requestTodoFix(...) → { pkg, previous }` / `rollbackTodoFix(...)` + the
   pure `renderFixPackage` (the review ops; the send itself is `host`'s composition), and the
   `TodoReviewRecord` type. **Mapping only** — no plan logic; `TodoStore` owns disk.
+  **`listStoredPlans(root) → StoredPlanFile[]`** is the Git-free reader the search palette's host
+  providers use: it enumerates `<root>/.thinkrail/context/todos/<sessionId>.json` (sidecars such as
+  `.baselines.json` are skipped by the id grammar) and hands each plan back as a lazy
+  `TodoStore.read()` — no artifact settling, no git, no review decoration. A read parses a file only when
+  its `mtime` or size changed since the last read (a bounded per-file memo), so a search over every open
+  project's plans costs one `stat` per plan per keystroke; an empty plan is never memoized, since
+  `TodoStore.read()` also answers empty when the read itself failed.
 - **Allowed deps:** `workspaces` (worktree-path lookup via `getWorkspace`, which throws on unknown);
   `git` (`gitStatus` — the uncommitted changed-path set + the commit-scope DTO decoration;
   `gitCommitPaths` — the per-done-item delta commit; `gitHeadSha` — the baseline's head;

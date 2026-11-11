@@ -75,7 +75,7 @@ test("the watch reads once and polls with backoff only while a server is startin
 	expect(h.reads).toHaveLength(1);
 	await h.settleRead();
 	expect(h.results).toEqual([null]);
-	expect(h.timers.map((timer) => timer.ms)).toEqual([MCP_STARTING_POLL_MS[0]]);
+	expect(h.timers.map((timer) => timer.ms)).toEqual(MCP_STARTING_POLL_MS.slice(0, 1));
 	h.fire();
 	expect(h.reads).toHaveLength(2);
 	await h.settleRead(true);
@@ -134,6 +134,7 @@ const listResult = (name: string, workspace = workspaceId): McpListResult => ({
 			name,
 			scope: "user",
 			source: "/agent/mcp.json",
+			fingerprint: "fingerprint",
 			transport: "stdio",
 			endpoint: `bun ${name}.ts`,
 			exposure: "deferred",
@@ -197,11 +198,21 @@ const mutations = [
 			requestMcpList("mcp.update", {
 				workspaceId,
 				scope: "user",
+				expectedFingerprint: "fingerprint",
 				name: "docs",
 				entry: { command: "docs" },
 			}),
 	],
-	["mcp.remove", () => requestMcpList("mcp.remove", { workspaceId, scope: "user", name: "docs" })],
+	[
+		"mcp.remove",
+		() =>
+			requestMcpList("mcp.remove", {
+				workspaceId,
+				scope: "user",
+				expectedFingerprint: "fingerprint",
+				name: "docs",
+			}),
+	],
 	[
 		"mcp.setProjectOverride",
 		() => requestMcpList("mcp.setProjectOverride", { workspaceId, name: "docs", enabled: false }),
@@ -213,7 +224,13 @@ const mutations = [
 	["mcp.shareWithRepo", () => requestMcpList("mcp.shareWithRepo", { workspaceId, name: "docs" })],
 ] as const;
 
-const remove = () => requestMcpList("mcp.remove", { workspaceId, scope: "user", name: "docs" });
+const remove = () =>
+	requestMcpList("mcp.remove", {
+		workspaceId,
+		scope: "user",
+		expectedFingerprint: "fingerprint",
+		name: "docs",
+	});
 const read = (workspace = workspaceId) => requestMcpList("mcp.list", { workspaceId: workspace });
 
 describe("MCP list request ordering", () => {
@@ -387,66 +404,72 @@ describe("MCP list request ordering", () => {
 	test.each([
 		["read", read],
 		["mutation", remove],
-	] as const)("reconnect fences the old %s and rejects queued work without delaying new reads", async (_name, start) => {
-		const old = start();
-		const mutation = remove();
-		const afterMutation = read();
-		const failures = Promise.allSettled([mutation, afterMutation]);
-		state().setStatus("disconnected");
-		state().setStatus("connected");
-		useAppStore.setState({ protocolVersion: MCP_PROTOCOL_VERSION });
-		const fresh = read();
-		expect(fresh).not.toBe(old);
-		expect(transport.requests).toHaveLength(2);
-		transport.at(0).resolve(listResult("obsolete"));
-		await old;
-		expect(await failures).toEqual([
-			{
-				status: "rejected",
-				reason: new Error("MCP servers are unavailable until the host reconnects."),
-			},
-			{
-				status: "rejected",
-				reason: new Error("MCP servers are unavailable until the host reconnects."),
-			},
-		]);
-		expect(state().mcpByWorkspace[workspaceId]).toBeUndefined();
-		expect(transport.requests).toHaveLength(2);
-		expect(read()).toBe(fresh);
-		const current = listResult("current");
-		transport.at(1).resolve(current);
-		await fresh;
-		expectInstalled(current);
-	});
+	] as const)(
+		"reconnect fences the old %s and rejects queued work without delaying new reads",
+		async (_name, start) => {
+			const old = start();
+			const mutation = remove();
+			const afterMutation = read();
+			const failures = Promise.allSettled([mutation, afterMutation]);
+			state().setStatus("disconnected");
+			state().setStatus("connected");
+			useAppStore.setState({ protocolVersion: MCP_PROTOCOL_VERSION });
+			const fresh = read();
+			expect(fresh).not.toBe(old);
+			expect(transport.requests).toHaveLength(2);
+			transport.at(0).resolve(listResult("obsolete"));
+			await old;
+			expect(await failures).toEqual([
+				{
+					status: "rejected",
+					reason: new Error("MCP servers are unavailable until the host reconnects."),
+				},
+				{
+					status: "rejected",
+					reason: new Error("MCP servers are unavailable until the host reconnects."),
+				},
+			]);
+			expect(state().mcpByWorkspace[workspaceId]).toBeUndefined();
+			expect(transport.requests).toHaveLength(2);
+			expect(read()).toBe(fresh);
+			const current = listResult("current");
+			transport.at(1).resolve(current);
+			await fresh;
+			expectInstalled(current);
+		},
+	);
 
 	test.each([
 		["disconnect", () => state().setStatus("disconnected")],
 		["unsupported host", () => state().installWelcomeSnapshot(MCP_PROTOCOL_VERSION - 1, [], [])],
 		["workspace removal", () => state().applyWorkspaceRemoved("project", workspaceId)],
-	] as const)("%s prevents queued work from dispatching and late replies from installing", async (_name, invalidate) => {
-		const first = read();
-		const mutation = remove();
-		const afterMutation = read();
-		const failures = Promise.allSettled([mutation, afterMutation]);
-		invalidate();
-		transport.at(0).resolve(listResult("obsolete"));
-		await first;
-		expect(await failures).toEqual([
-			{
-				status: "rejected",
-				reason: new Error("MCP servers are unavailable until the host reconnects."),
-			},
-			{
-				status: "rejected",
-				reason: new Error("MCP servers are unavailable until the host reconnects."),
-			},
-		]);
-		expect(transport.requests).toHaveLength(1);
-		expect(state().mcpByWorkspace[workspaceId]).toBeUndefined();
-		await expect(read()).rejects.toThrow("until the host reconnects");
-		await expect(remove()).rejects.toThrow("until the host reconnects");
-		expect(transport.requests).toHaveLength(1);
-	});
+	] as const)(
+		"%s prevents queued work from dispatching and late replies from installing",
+		async (_name, invalidate) => {
+			const first = read();
+			const mutation = remove();
+			const afterMutation = read();
+			const failures = Promise.allSettled([mutation, afterMutation]);
+			invalidate();
+			transport.at(0).resolve(listResult("obsolete"));
+			await first;
+			expect(await failures).toEqual([
+				{
+					status: "rejected",
+					reason: new Error("MCP servers are unavailable until the host reconnects."),
+				},
+				{
+					status: "rejected",
+					reason: new Error("MCP servers are unavailable until the host reconnects."),
+				},
+			]);
+			expect(transport.requests).toHaveLength(1);
+			expect(state().mcpByWorkspace[workspaceId]).toBeUndefined();
+			await expect(read()).rejects.toThrow("until the host reconnects");
+			await expect(remove()).rejects.toThrow("until the host reconnects");
+			expect(transport.requests).toHaveLength(1);
+		},
+	);
 
 	test("workspaces dispatch independently and install only their own results", async () => {
 		const first = read();
@@ -455,6 +478,7 @@ describe("MCP list request ordering", () => {
 		const other = requestMcpList("mcp.remove", {
 			workspaceId: otherWorkspace,
 			scope: "user",
+			expectedFingerprint: "fingerprint",
 			name: "docs",
 		});
 		const otherRead = read(otherWorkspace);
@@ -462,6 +486,7 @@ describe("MCP list request ordering", () => {
 		expect(transport.at(1).params).toEqual({
 			workspaceId: otherWorkspace,
 			scope: "user",
+			expectedFingerprint: "fingerprint",
 			name: "docs",
 		});
 		transport.at(1).resolve(listResult("other", otherWorkspace));
@@ -474,7 +499,12 @@ describe("MCP list request ordering", () => {
 		expect(state().mcpByWorkspace[workspaceId]).toBeUndefined();
 		transport.at(0).resolve(listResult("first"));
 		await first;
-		expect(transport.at(3).params).toEqual({ workspaceId, scope: "user", name: "docs" });
+		expect(transport.at(3).params).toEqual({
+			workspaceId,
+			scope: "user",
+			expectedFingerprint: "fingerprint",
+			name: "docs",
+		});
 		const updated = listResult("updated");
 		transport.at(3).resolve(updated);
 		await queued;

@@ -37,6 +37,59 @@ test("Windows picker: a PowerShell FolderBrowserDialog, -Sta, owned by a top-mos
 	}
 });
 
+for (const picker of pickersFor("win32")) {
+	const shell = picker.cmd[0] ?? "";
+	test.skipIf(process.platform !== "win32" || (shell === "pwsh.exe" && !Bun.which(shell)))(
+		`Windows picker preserves Unicode through ${shell} stdout under a legacy code page`,
+		async () => {
+			const flag = picker.cmd.indexOf("-EncodedCommand");
+			expect(flag).toBeGreaterThan(-1);
+			const script = Buffer.from(picker.cmd[flag + 1] ?? "", "base64").toString("utf16le");
+			const lines = script.split("\n");
+			const gui = lines.indexOf("Add-Type -AssemblyName System.Windows.Forms");
+			const output = lines.at(-1) ?? "";
+			expect(gui).toBeGreaterThan(0);
+			expect(output).toBe("if ($ok) { Write-Output $d.SelectedPath }");
+			const headless = [
+				...lines.slice(0, gui),
+				"$d = [pscustomobject]@{ SelectedPath = $env:THINKRAIL_TEST_PICKED_PATH }",
+				"$ok = [bool]$env:THINKRAIL_TEST_PICKED_PATH",
+				output,
+			].join("\n");
+			const cmd = [...picker.cmd];
+			cmd[flag + 1] = Buffer.from(
+				`[Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding(936)\n${headless}`,
+				"utf16le",
+			).toString("base64");
+			for (const path of [
+				"C:\\Users\\tester\\Documents\\ascii-test",
+				"C:\\Users\\tester\\Documents\\中文测试",
+				"C:\\test folder\\日本語-🚀",
+				"C:\\café\\проект",
+				"C:\\",
+				"\\\\server\\share\\中文",
+				"",
+			]) {
+				const proc = Bun.spawn(cmd, {
+					stdout: "pipe",
+					stderr: "pipe",
+					env: { ...process.env, THINKRAIL_TEST_PICKED_PATH: path },
+					windowsHide: true,
+					timeout: 10_000,
+				});
+				const [stdout, stderr, code] = await Promise.all([
+					new Response(proc.stdout).text(),
+					new Response(proc.stderr).text(),
+					proc.exited,
+				]);
+				expect(code, stderr).toBe(0);
+				expect(picker.parse(stdout)).toBe(path || null);
+			}
+		},
+		30_000,
+	);
+}
+
 test("pickers distinguish cancellation from a failed non-zero exit", () => {
 	const execution = { stdout: "", stderr: "", code: 1 };
 	expect(

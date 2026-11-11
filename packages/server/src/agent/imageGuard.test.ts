@@ -10,6 +10,12 @@ import {
 	SINGLE_IMAGE_EDGE_LIMIT,
 } from "./imageGuard";
 
+function guardedContent(guarded: AgentMessage[] | undefined, index: number) {
+	const message = guarded?.[index] as { content?: { type: string; text?: string }[] } | undefined;
+	if (!message?.content) throw new Error(`no guarded message at ${index}`);
+	return message.content;
+}
+
 function pngBytes(width: number, height: number): Buffer {
 	const sig = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 	const ihdr = Buffer.alloc(21);
@@ -193,7 +199,7 @@ describe("guardOversizedImages", () => {
 		const messages = [user([image(pngBytes(9000, 100))])];
 		const guarded = guardOversizedImages(messages);
 		expect(guarded).toBeDefined();
-		const content = (guarded?.[0] as { content: { type: string; text?: string }[] }).content;
+		const content = guardedContent(guarded, 0);
 		expect(content).toHaveLength(1);
 		expect(content[0]?.type).toBe("text");
 		expect(content[0]?.text).toContain("9000×100");
@@ -209,9 +215,9 @@ describe("guardOversizedImages", () => {
 		];
 		const guarded = guardOversizedImages(messages);
 		expect(guarded).toBeDefined();
-		const tr = (guarded?.[0] as { content: { type: string }[] }).content;
+		const tr = guardedContent(guarded, 0);
 		expect(tr.every((b) => b.type === "image")).toBe(true);
-		const u = (guarded?.[1] as { content: { type: string; text?: string }[] }).content;
+		const u = guardedContent(guarded, 1);
 		expect(u[0]?.type).toBe("text");
 		expect(u[0]?.text).toContain(`${MANY_IMAGE_EDGE_LIMIT}px`);
 	});
@@ -230,7 +236,7 @@ describe("guardOversizedImages", () => {
 			toolResult([{ type: "text", text: "read it" }, image(jpegBytes(9500, 200), "image/jpeg")]),
 		];
 		const guarded = guardOversizedImages(messages);
-		const content = (guarded?.[0] as { content: { type: string; text?: string }[] }).content;
+		const content = guardedContent(guarded, 0);
 		expect(content[0]).toEqual({ type: "text", text: "read it" });
 		expect(content[1]?.type).toBe("text");
 		expect(content[1]?.text).toContain("9500×200");
@@ -258,7 +264,7 @@ describe("guardOversizedImages", () => {
 		]);
 		const guarded = guardOversizedImages([user([image(hugeGif, "image/gif"), image(hugeMystery)])]);
 		expect(guarded).toBeDefined();
-		const content = (guarded?.[0] as { content: { type: string; text?: string }[] }).content;
+		const content = guardedContent(guarded, 0);
 		expect(content.every((b) => b.type === "text")).toBe(true);
 		expect(content[0]?.text).toContain("4.5MB image payload limit");
 		expect(content[1]?.text).toContain("4.5MB image payload limit");
@@ -272,7 +278,7 @@ describe("guardOversizedImages", () => {
 		expect(decoded.length).toBeLessThan(5 * 1024 * 1024);
 		expect(decoded.toString("base64").length).toBeGreaterThan(4.5 * 1024 * 1024);
 		const guarded = guardOversizedImages([user([image(decoded, "image/gif")])]);
-		const content = (guarded?.[0] as { content: { type: string; text?: string }[] }).content;
+		const content = guardedContent(guarded, 0);
 		expect(content[0]?.text).toContain("4.5MB image payload limit");
 	});
 
@@ -284,7 +290,7 @@ describe("guardOversizedImages", () => {
 			]),
 		]);
 		expect(guarded).toBeDefined();
-		const content = (guarded?.[0] as { content: { type: string; text?: string }[] }).content;
+		const content = guardedContent(guarded, 0);
 		expect(content[0]?.type).toBe("text");
 		expect(content[0]?.text).toContain("media type image/heic is not supported");
 		expect(content[1]?.type).toBe("image");
@@ -303,7 +309,7 @@ describe("guardOversizedImages", () => {
 		const blocks = [3.1, 3.1, 3.1, 3.1, 3.1, 3.2, 3.3].map((m) => gif(Math.round(m * mib)));
 		const guarded = guardOversizedImages([user(blocks)]);
 		expect(guarded).toBeDefined();
-		const content = (guarded?.[0] as { content: { type: string; text?: string }[] }).content;
+		const content = guardedContent(guarded, 0);
 		const stripped = content.filter((b) => b.type === "text");
 		const kept = content.filter((b) => b.type === "image");
 		expect(stripped.length).toBe(2);
@@ -340,9 +346,9 @@ describe("guardOversizedImages", () => {
 		];
 		const guarded = guardOversizedImages(messages);
 		expect(guarded).toBeDefined();
-		const tr = (guarded?.[0] as { content: { type: string }[] }).content;
+		const tr = guardedContent(guarded, 0);
 		expect(tr.every((b) => b.type === "image")).toBe(true);
-		const u = (guarded?.[1] as { content: { type: string; text?: string }[] }).content;
+		const u = guardedContent(guarded, 1);
 		expect(u[0]?.type).toBe("text");
 		expect(u[0]?.text).toContain("2600×100");
 		expect(u[1]?.type).toBe("image");

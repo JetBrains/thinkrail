@@ -28,11 +28,18 @@ export function startAnalyticsCollector() {
 	const events: CollectedEvent[] = [];
 	const errors: unknown[] = [];
 	let requests = 0;
+	let surveyReads = 0;
 	const server = Bun.serve({
 		hostname: "127.0.0.1",
 		port: 0,
 		async fetch(request) {
 			requests += 1;
+			const url = new URL(request.url);
+			if (request.method === "GET" && url.pathname === "/api/surveys/") {
+				surveyReads += 1;
+				if (!url.searchParams.get("token")) errors.push(new Error("survey list without a token"));
+				return Response.json({ surveys: [] });
+			}
 			try {
 				assert(request.method === "POST", "collector expected POST");
 				assert(new URL(request.url).pathname === "/batch/", "collector expected /batch/");
@@ -62,6 +69,9 @@ export function startAnalyticsCollector() {
 		errors,
 		get requests() {
 			return requests;
+		},
+		get surveyReads() {
+			return surveyReads;
 		},
 		stop: () => server.stop(true),
 	};

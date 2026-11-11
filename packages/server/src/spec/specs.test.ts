@@ -2,7 +2,15 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { evictSpecIndex, projectHasSpecs, specGraph } from "./specs";
+import {
+	evictSpecIndex,
+	evictSpecRoot,
+	invalidateSpecSnapshot,
+	projectHasSpecs,
+	specGraph,
+	specSections,
+	specSnapshot,
+} from "./specs";
 
 let dataDir: string;
 let worktree: string;
@@ -107,4 +115,69 @@ test("evictSpecIndex drops the cached index; a later read rebuilds cleanly", () 
 
 	evictSpecIndex("ws1");
 	expect(specGraph("ws1").nodes.map((n) => n.id)).toEqual(["root-spec"]);
+});
+
+const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
+const snapshotIds = (root: string) => specSnapshot(root).entries.map((entry) => entry.id);
+
+test("a spec snapshot builds off the request, and a change is rebuilt only when it is read", async () => {
+	evictSpecRoot(worktree);
+	writeSpec("SPEC.md", "id: root\ntype: module-design\ntitle: Root");
+	expect(specSnapshot(worktree)).toMatchObject({ entries: [], built: false });
+	await settle();
+	expect(specSnapshot(worktree)).toMatchObject({ built: true, rebuilding: null });
+	expect(snapshotIds(worktree)).toEqual(["root"]);
+
+	writeSpec("auth/SPEC.md", "id: auth\ntype: module-design\ntitle: Auth");
+	invalidateSpecSnapshot(worktree);
+	await settle();
+	expect(specSnapshot(worktree).rebuilding).not.toBeNull();
+	expect(snapshotIds(worktree)).toEqual(["root"]);
+	await settle();
+	expect(snapshotIds(worktree).sort()).toEqual(["auth", "root"]);
+});
+
+test("an evicted root is never brought back by a build still pending for it", async () => {
+	evictSpecRoot(worktree);
+	writeSpec("SPEC.md", "id: root\ntype: module-design\ntitle: Root");
+	specSnapshot(worktree);
+	evictSpecRoot(worktree);
+	await settle();
+	expect(specSnapshot(worktree)).toMatchObject({ entries: [], built: false });
+	await settle();
+	expect(snapshotIds(worktree)).toEqual(["root"]);
+	evictSpecRoot(worktree);
+});
+
+test("section search builds its index off the request, then ranks sections and follows edits", async () => {
+	writeFileSync(
+		join(worktree, "SPEC.md"),
+		"---\nid: root\ntype: module-design\ntitle: Root\n---\n## Session titles\nrenameSession writes the chat title.\n",
+	);
+	const cold = specSections(worktree);
+	expect(cold.built).toBe(false);
+	expect(cold.search("rename title", 5)).toEqual({ hits: [], total: 0 });
+	await cold.rebuilding;
+	const ready = specSections(worktree);
+	expect(ready).toMatchObject({ built: true, rebuilding: null });
+	expect(
+		ready.search("rename title", 5).hits.map((hit) => [hit.path, hit.heading, hit.line]),
+	).toEqual([["SPEC.md", "Session titles", 6]]);
+
+	mkdirSync(join(worktree, "zoo"));
+	writeFileSync(
+		join(worktree, "zoo", "SPEC.md"),
+		"---\nid: zoo\ntype: module-design\ntitle: Zoo\n---\n## Zebra\nA zebra crossing.\n",
+	);
+	invalidateSpecSnapshot(worktree);
+	const stale = specSections(worktree);
+	expect(stale.built).toBe(true);
+	expect(stale.rebuilding).not.toBeNull();
+	expect(stale.search("zebra", 5).hits).toEqual([]);
+	await stale.rebuilding;
+	expect(
+		specSections(worktree)
+			.search("zebra", 5)
+			.hits.map((hit) => hit.path),
+	).toEqual(["zoo/SPEC.md"]);
 });

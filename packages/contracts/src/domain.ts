@@ -1,3 +1,4 @@
+import type { MatchTier } from "./match";
 import type { SessionState, ThinkingLevel, WireModel } from "./piProtocol";
 
 export interface SessionStateRecord {
@@ -5,6 +6,7 @@ export interface SessionStateRecord {
 	workspaceId: string;
 	projectId: string;
 	state: SessionState;
+	title?: string;
 	firstPrompt?: string;
 }
 
@@ -62,11 +64,15 @@ export interface Project {
 	path: string;
 	slug: string;
 	lastOpened: number;
+	/** The one built-in container of chats without a project: not a repository, never git, never closed. */
+	kind?: "chats";
 	closed?: true;
 	trusted?: boolean;
 	acknowledgedSkills?: string[];
 	disabledSkills?: string[];
 	disabledGroups?: string[];
+	/** Skill groups switched on for this project although `AppConfig.otherAgentSkills` leaves them off. */
+	enabledGroups?: string[];
 	/**
 	 * pi-level trust for the project's native `.pi/` resources, separate from the alias-skill `trusted`
 	 * grant; absent (a record that predates pi-level trust) reads as untrusted. Never enables MCP servers by itself.
@@ -124,13 +130,16 @@ export const DEFAULT_WORKSPACE_NAME = "Default";
 export interface Workspace {
 	id: string;
 	projectId: string;
-	kind?: "default" | "external";
+	/** `chat`: a projectless chat's own folder in the Chats container — never a git checkout, `branch`/`baseBranch` are "". */
+	kind?: "default" | "external" | "chat";
 	name: string;
 	branch: string;
 	worktreePath: string;
 	baseBranch: string;
 	diffBase?: string;
 	renamed?: boolean;
+	/** Session id of the chat whose `set_title` named the workspace but kept its branch; only that chat may still move it. */
+	branchNamePending?: string;
 	initialTerminalPending?: true;
 	diffStats?: DiffStats;
 	skillOverrides?: Record<string, "on" | "off">;
@@ -143,6 +152,18 @@ export interface Workspace {
 	settledAt?: number;
 	/** The host's last-known review for the branch; refreshed host-side so every client sees one state. */
 	review?: OpenBranchReview;
+	/** A chat whose deletion started but did not finish; the UI offers Retry and nothing else. */
+	deletionPending?: true;
+	/** Where a chat without a project was continued: the workspaces (and their first chats) its summary went to. */
+	continuedTo?: ChatContinuationLink[];
+}
+
+export interface ChatContinuationLink {
+	/** The gesture that made the link: a continuation card finds its outcome here after a host restart. */
+	operationId: string;
+	projectId: string;
+	workspaceId: string;
+	sessionId: string;
 }
 
 export type BranchReviewState = "open" | "merged" | "closed";
@@ -486,6 +507,8 @@ export interface BackgroundCommandSummary {
 	finishedAt?: number;
 	exitCode?: number | null;
 	errorMessage?: string;
+	/** The host or the chat's teardown ended this run; `status` is then terminal (see `interruptedResource`). */
+	interrupted?: true;
 }
 
 export interface BackgroundCommandCompletionDetails
@@ -508,6 +531,125 @@ export interface SubagentResourceSummary {
 	thinkingLevel?: ThinkingLevel;
 	abortReason?: string;
 	durationMs?: number;
+	finishedAt?: number;
+	/** The host or the chat's teardown ended this run; `status` is then terminal (see `interruptedResource`). */
+	interrupted?: true;
+}
+
+export type ResourceRecord =
+	| { kind: "command"; summary: BackgroundCommandSummary }
+	| { kind: "subagent"; summary: SubagentResourceSummary };
+
+export type ResourceKind = ResourceRecord["kind"];
+
+export type ResourceOutcome = "done" | "failed" | "stopped" | "interrupted";
+
+export type ResourceTally = Record<ResourceOutcome, number>;
+
+export interface SessionResourceHistory {
+	commands: ResourceTally;
+	subagents: ResourceTally;
+}
+
+export interface ResourceHistoryCursor {
+	at: number;
+	id: string;
+}
+
+export type ResourceHistoryPage =
+	| { kind: "command"; items: BackgroundCommandSummary[]; hasMore: boolean }
+	| { kind: "subagent"; items: SubagentResourceSummary[]; hasMore: boolean };
+
+export const RESOURCE_HISTORY_PAGE_LIMIT = 20;
+export const RESOURCE_HISTORY_MAX_PAGE_LIMIT = 100;
+
+export function resourceRecordId(record: ResourceRecord): string {
+	return record.kind === "command" ? record.summary.id : record.summary.childSessionId;
+}
+
+function hasLiveStatus(record: ResourceRecord): boolean {
+	const { status } = record.summary;
+	return record.kind === "command"
+		? status === "running" || status === "stopping"
+		: status === "queued" || status === "running";
+}
+
+export function isLiveResource(record: ResourceRecord): boolean {
+	return !record.summary.interrupted && hasLiveStatus(record);
+}
+
+export function interruptedResource(record: ResourceRecord): ResourceRecord {
+	return record.kind === "command"
+		? {
+				kind: "command",
+				summary: {
+					...record.summary,
+					status: hasLiveStatus(record) ? "stopped" : record.summary.status,
+					interrupted: true,
+				},
+			}
+		: {
+				kind: "subagent",
+				summary: {
+					...record.summary,
+					status: hasLiveStatus(record) ? "aborted" : record.summary.status,
+					interrupted: true,
+				},
+			};
+}
+
+export function resourceOutcome(record: ResourceRecord): ResourceOutcome | null {
+	if (record.summary.interrupted) return "interrupted";
+	if (record.kind === "command") {
+		switch (record.summary.status) {
+			case "completed":
+				return record.summary.exitCode === 0 ? "done" : "failed";
+			case "error":
+				return "failed";
+			case "stopped":
+				return "stopped";
+			default:
+				return null;
+		}
+	}
+	switch (record.summary.status) {
+		case "completed":
+			return "done";
+		case "error":
+			return "failed";
+		case "aborted":
+			return "stopped";
+		default:
+			return null;
+	}
+}
+
+function emptyResourceTally(): ResourceTally {
+	return { done: 0, failed: 0, stopped: 0, interrupted: 0 };
+}
+
+export function tallyResources(records: readonly ResourceRecord[]): ResourceTally {
+	const tally = emptyResourceTally();
+	for (const record of records) {
+		const outcome = resourceOutcome(record);
+		if (outcome) tally[outcome]++;
+	}
+	return tally;
+}
+
+export function resourceTallyTotal(tally: ResourceTally): number {
+	return tally.done + tally.failed + tally.stopped + tally.interrupted;
+}
+
+export function resourceHistoryCursor(record: ResourceRecord): ResourceHistoryCursor {
+	const at =
+		record.summary.finishedAt ??
+		(record.kind === "command" ? record.summary.startedAt : Date.parse(record.summary.createdAt));
+	return { at: Number.isFinite(at) ? at : 0, id: resourceRecordId(record) };
+}
+
+export function compareResourceHistory(a: ResourceHistoryCursor, b: ResourceHistoryCursor): number {
+	return b.at - a.at || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
 }
 
 export interface SessionResources {
@@ -517,6 +659,8 @@ export interface SessionResources {
 	subagents: SubagentResourceSummary[];
 	/** Absent on hosts without MCP support (`MCP_PROTOCOL_VERSION`). */
 	mcpServers?: McpServerResourceSummary[];
+	/** Every finished record of this chat by outcome; absent before `RESOURCE_HISTORY_PROTOCOL_VERSION`. */
+	history?: SessionResourceHistory;
 }
 
 export type McpServerScope = "user" | "project";
@@ -662,6 +806,203 @@ export interface McpListResult {
 	configErrors?: McpConfigFileError[];
 	/** MCP is provided by a user-installed extension or disabled through pi settings; management is read-only. */
 	handledElsewhere?: { by: string };
+}
+
+export type PiPackageScope = "user" | "project";
+
+export type PiPackageSourceKind = "npm" | "git" | "local";
+
+const NPM_NAME = String.raw`(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*`;
+const BARE_NPM_SPEC = new RegExp(`^(${NPM_NAME})(?:@([^/\\s@]+))?$`, "i");
+const EXTENSION_FILE = /\.(m|c)?(j|t)sx?$/i;
+const PI_INSTALL_COMMAND = /^pi\s+install\b/;
+const PI_INSTALL_LOCAL_FLAGS = new Set(["-l", "--local"]);
+
+export interface PiPackageInput {
+	/** The source string pi accepts, or "" when the input names nothing. */
+	source: string;
+	/** `true` when a pasted `pi install` line carried `-l` / `--local`. */
+	local: boolean;
+	/** The bare name `source` was inferred from (`bigpowers` → `npm:bigpowers`); absent otherwise. */
+	bareName?: string;
+}
+
+/**
+ * The install field's forgiving forms, reduced to what pi accepts: a pasted `pi install …` line (its
+ * `-l` is reported, not dropped), a pi.dev or npmjs.com package URL and a bare npm name become `npm:…`;
+ * everything else — `npm:` / `git:` sources, git URLs, paths — is returned trimmed. Never throws.
+ */
+export function parsePiPackageInput(raw: string): PiPackageInput {
+	let source = unwrapQuotes(raw.trim());
+	let local = false;
+	if (PI_INSTALL_COMMAND.test(source)) {
+		const words = shellWords(source).slice(2);
+		local = words.some((word) => PI_INSTALL_LOCAL_FLAGS.has(word));
+		const sources = words.filter((word) => !word.startsWith("-"));
+		source = sources.length === 1 ? (sources[0] ?? "") : "";
+	}
+	const fromUrl = packageUrlSource(source);
+	if (fromUrl !== null) return { source: fromUrl, local };
+	if (
+		BARE_NPM_SPEC.test(source) &&
+		!EXTENSION_FILE.test(source) &&
+		!/^(npm|git|builtin|file):/i.test(source)
+	) {
+		return { source: `npm:${source}`, local, bareName: source };
+	}
+	return { source, local };
+}
+
+/** Strips one balanced pair of surrounding quotes or backticks — a pasted `\`pi install …\`` or `"npm:x"`. */
+function unwrapQuotes(text: string): string {
+	const first = text[0];
+	if (first && "`'\"".includes(first) && text.length >= 2 && text.endsWith(first)) {
+		return text.slice(1, -1).trim();
+	}
+	return text;
+}
+
+/** Shell-style words: quotes group, a backslash escapes the next character (inside double quotes only `\"` / `\\`). */
+function shellWords(text: string): string[] {
+	const words: string[] = [];
+	let current = "";
+	let quote: string | null = null;
+	let inWord = false;
+	const chars = [...text];
+	for (let i = 0; i < chars.length; i += 1) {
+		const char = chars[i] ?? "";
+		if (quote === "'") {
+			if (char === "'") quote = null;
+			else current += char;
+			continue;
+		}
+		if (
+			char === "\\" &&
+			i + 1 < chars.length &&
+			(quote === null || /["\\]/.test(chars[i + 1] ?? ""))
+		) {
+			current += chars[i + 1];
+			inWord = true;
+			i += 1;
+			continue;
+		}
+		if (quote === '"') {
+			if (char === '"') quote = null;
+			else current += char;
+			continue;
+		}
+		if (char === '"' || char === "'") {
+			quote = char;
+			inWord = true;
+			continue;
+		}
+		if (/\s/.test(char)) {
+			if (inWord) words.push(current);
+			current = "";
+			inWord = false;
+			continue;
+		}
+		current += char;
+		inWord = true;
+	}
+	if (inWord) words.push(current);
+	return words;
+}
+
+function packageUrlSource(source: string): string | null {
+	if (!/^https?:\/\//i.test(source)) return null;
+	let url: URL;
+	try {
+		url = new URL(source);
+	} catch {
+		return source;
+	}
+	const host = url.hostname.replace(/^www\./, "");
+	if (host !== "pi.dev" && host !== "npmjs.com") return source;
+	let path: string;
+	try {
+		path = decodeURIComponent(url.pathname).replace(/\/+$/, "");
+	} catch {
+		return source;
+	}
+	const piDev = host === "pi.dev" ? path.match(/^\/packages\/(.+)$/) : null;
+	if (piDev?.[1]) return `npm:${piDev[1]}`;
+	const npmjs = host === "npmjs.com" ? path.match(/^\/package\/(.+?)(?:\/v\/([^/]+))?$/) : null;
+	if (npmjs?.[1]) return `npm:${npmjs[1]}${npmjs[2] ? `@${npmjs[2]}` : ""}`;
+	return source;
+}
+
+/** The pi resource kinds the Extensions page lists and toggles; themes are terminal-only and never shown. */
+export type PiPackageResourceType = "extensions" | "skills" | "prompts";
+
+/** One file a pi package contributes, in pi's resolved `enabled` state; `path` is the toggle target. */
+export interface PiPackageResource {
+	type: PiPackageResourceType;
+	path: string;
+	/** pi's `pi config` display rule: `parent/file.ts` for a nested extension, the folder for a skill, else the file name. */
+	displayName: string;
+	enabled: boolean;
+	/** Extensions only, when the host could load the file: the tool and command names it registered. */
+	tools?: string[];
+	commands?: string[];
+	/** Extensions only: pi's load error. */
+	error?: string;
+}
+
+/** One installed pi package as declared in a settings file; every summary is on disk. */
+export interface PiPackageSummary {
+	/** Host-wide identity the package switch keys on: npm by name, git by repo without ref, local by resolved path. */
+	identity: string;
+	/** The source string exactly as declared (`npm:@scope/pkg@1.2.0`, `git:host/owner/repo@ref`, a path). */
+	source: string;
+	kind: PiPackageSourceKind;
+	scope: PiPackageScope;
+	name: string;
+	version?: string;
+	description?: string;
+	/** Absent when the declaration has no install on disk: pi retries at a chat's next start; the row offers Remove only. */
+	installedPath?: string;
+	/** Every `disabledPackages` key that switches this package off: its own `identity` and those of pi-equivalent declarations. */
+	switchKeys: string[];
+	/** The host-wide switch, closed over pi's equivalence: `false` when any of `switchKeys` is in `disabledPackages`. */
+	enabled: boolean;
+	/** `true` for a user declaration pi leaves aside because the repository declares the same identity. */
+	shadowed?: boolean;
+	resources: PiPackageResource[];
+}
+
+/** An extension pi discovers outside any package: a file under `<agentDir>/extensions`, `.pi/extensions`, or an explicit `extensions[]` settings path. */
+export interface PiLooseExtension {
+	path: string;
+	displayName: string;
+	scope: PiPackageScope;
+	/** `true` for an `extensions[]` settings entry, `false` for an auto-discovered directory file. */
+	explicit: boolean;
+	enabled: boolean;
+	tools?: string[];
+	commands?: string[];
+	error?: string;
+}
+
+/** One of pi's built-in extensions the host runs (`mcp`, `tool-search`), toggled through `±builtin:<name>` in pi settings. */
+export interface PiBuiltinExtension {
+	name: string;
+	enabled: boolean;
+	/** `project` when a `.pi/settings.json` entry decides it, else `user`. */
+	scope: PiPackageScope;
+}
+
+export interface PiPackagesCatalog {
+	/** The effective pi folder; every path shown derives from it, never from a hardcoded `~/.pi/agent`. */
+	agentDir: string;
+	settingsPath: string;
+	/** Present when the catalog was read for a workspace. */
+	projectSettingsPath?: string;
+	/** pi-level trust of that workspace's project; repository packages are read only when `true`. */
+	projectTrusted: boolean;
+	packages: PiPackageSummary[];
+	loose: PiLooseExtension[];
+	builtins: PiBuiltinExtension[];
 }
 
 export type BackgroundCommandOutputResult =
@@ -818,10 +1159,15 @@ export function isJbcentralConnected(status: JbcentralStatus): boolean {
 	return status.state === "configured" && !status.signedOut && !status.proxyStopped;
 }
 
+/** A pi `warnings.*` setting the host surfaces; `anthropicExtraUsage` warns that Claude subscription auth bills per token. */
+export type ProviderWarning = "anthropicExtraUsage";
+
 export interface ProviderStatusReport {
 	providers: ProviderStatus[];
 	jbcentral: JbcentralStatus;
 	jbcentralInstall: JbcentralInstall;
+	/** pi's global `warnings.*` switches (default on); absent from hosts older than v99. */
+	warnings?: Record<ProviderWarning, boolean>;
 }
 
 export type JbcentralActionResult =
@@ -932,6 +1278,92 @@ export function isSystemThemePair(value: unknown): value is SystemThemePair {
 	);
 }
 
+export const FONT_ROLES = ["interface", "code"] as const;
+export type FontRole = (typeof FONT_ROLES)[number];
+
+/** A bundled face named by the role it ships for, or a family name the client resolves. */
+export type FontFamilyRef = { builtin: FontRole } | { name: string };
+
+/** One role's font: `family: null` is the role's bundled default; fallbacks draw what it lacks. */
+export interface FontChoice {
+	family: FontFamilyRef | null;
+	fallbacks: FontFamilyRef[];
+}
+
+export const FONT_FAMILY_NAME_MAX_LENGTH = 128;
+export const FONT_FALLBACKS_MAX = 8;
+/** `editorDelta`: the editor and diffs render this many px below the code size. */
+export const CODE_FONT_SIZE = { min: 10, max: 24, default: 13, editorDelta: 2 } as const;
+export const FONT_WEIGHT_OFFSET = { min: -70, max: 130, step: 10, default: 0 } as const;
+
+const FONT_NAME_DELIMITERS = /["\\;{}]/;
+
+export function hasControlCharacter(text: string): boolean {
+	return [...text].some((char) => {
+		const code = char.codePointAt(0) ?? 0;
+		return code < 0x20 || code === 0x7f;
+	});
+}
+
+export function isFontFamilyName(value: unknown): value is string {
+	return (
+		typeof value === "string" &&
+		value.length > 0 &&
+		value.length <= FONT_FAMILY_NAME_MAX_LENGTH &&
+		value.trim() === value &&
+		!FONT_NAME_DELIMITERS.test(value) &&
+		!hasControlCharacter(value)
+	);
+}
+
+export function isFontRole(value: unknown): value is FontRole {
+	return FONT_ROLES.some((role) => role === value);
+}
+
+export function isFontFamilyRef(value: unknown): value is FontFamilyRef {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+	const keys = Object.keys(value);
+	if (keys.length !== 1) return false;
+	if (keys[0] === "builtin") return isFontRole(Reflect.get(value, "builtin"));
+	return keys[0] === "name" && isFontFamilyName(Reflect.get(value, "name"));
+}
+
+export function fontFamilyRefKey(ref: FontFamilyRef): string {
+	return "builtin" in ref ? `builtin:${ref.builtin}` : `name:${ref.name}`;
+}
+
+export function isFontChoice(value: unknown): value is FontChoice {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+	const family = Reflect.get(value, "family");
+	const fallbacks = Reflect.get(value, "fallbacks");
+	return (
+		(family === null || isFontFamilyRef(family)) &&
+		Array.isArray(fallbacks) &&
+		fallbacks.length <= FONT_FALLBACKS_MAX &&
+		fallbacks.every(isFontFamilyRef) &&
+		new Set(fallbacks.map(fontFamilyRefKey)).size === fallbacks.length
+	);
+}
+
+export function isCodeFontSize(value: unknown): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isInteger(value) &&
+		value >= CODE_FONT_SIZE.min &&
+		value <= CODE_FONT_SIZE.max
+	);
+}
+
+export function isFontWeightOffset(value: unknown): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isInteger(value) &&
+		value >= FONT_WEIGHT_OFFSET.min &&
+		value <= FONT_WEIGHT_OFFSET.max &&
+		value % FONT_WEIGHT_OFFSET.step === 0
+	);
+}
+
 export type LayoutToolId = "projects" | "specs" | "files" | "review" | "plan";
 
 export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";
@@ -991,6 +1423,17 @@ export function isComposerGrowthLimit(value: unknown): value is ComposerGrowthLi
 	return COMPOSER_GROWTH_LIMITS.some((limit) => limit === value);
 }
 
+export const QUESTION_PANEL_HEIGHT_PERCENT = { min: 40, max: 100, default: 60 } as const;
+
+export function isQuestionPanelHeight(value: unknown): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isInteger(value) &&
+		value >= QUESTION_PANEL_HEIGHT_PERCENT.min &&
+		value <= QUESTION_PANEL_HEIGHT_PERCENT.max
+	);
+}
+
 export const LINE_WIDTH_COLUMNS = { min: 40, max: 240, default: 120 } as const;
 
 export function isLineWidth(value: unknown): value is number {
@@ -1009,10 +1452,14 @@ export interface AppConfig extends ThemePreference {
 	notificationsEnabled: boolean;
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
+	/** The chat's docked question panel caps at this percent of the chat height. */
+	questionPanelHeight: number;
 	chatLineWidth: number;
 	fileLineWidth: number;
 	chatLineWidthBounded: boolean;
 	fileLineWidthBounded: boolean;
+	/** When false, no text field shows the dictation mic and the chord does nothing. */
+	voiceInputEnabled: boolean;
 	customLayoutPresets: LayoutPreset[];
 	/** The model new chats start with; unset uses the first available model. */
 	defaultModel?: WireModel;
@@ -1040,10 +1487,33 @@ export interface AppConfig extends ThemePreference {
 	/** Idle days after which a quiet workspace settles onto its project's shelf; `null` = never. */
 	settleIdleDays: number | null;
 	disabledExtensions: string[];
+	/** Values of settings bundled extensions declare, by extension name then setting key. */
+	extensionSettings: ExtensionSettingValues;
+	/** Load skills from other agents' user directories and Claude plugins in projects that do not decide for themselves. */
+	otherAgentSkills: boolean;
+	/** pi package identities (`PiPackageSummary.identity`) switched off host-wide; pi has no such setting. */
+	disabledPackages: string[];
 	/** UI language: `"system"` (follow the browser) or a BCP-47 tag; an unavailable tag renders English. */
 	locale: string;
 	/** The user finished or skipped the cold-start onboarding wizard. */
 	onboardingDismissed: boolean;
+	/** All UI, chat and documents; the brand face is not user-changeable. */
+	interfaceFont: FontChoice;
+	/** The editor, diffs, code blocks and the terminal. */
+	codeFont: FontChoice;
+	/** Terminal and code blocks, in px; the editor and diffs render 2 px smaller. */
+	codeFontSize: number;
+	/** Ligatures in the editor, diffs and code in chat and documents; the terminal never draws them. */
+	codeLigatures: boolean;
+	/** Shifts every text weight but the brand face's together. */
+	fontWeightOffset: number;
+}
+
+export type ExtensionSettingValues = Record<string, Record<string, boolean>>;
+
+export interface ExtensionSettingDescriptor {
+	key: string;
+	default: boolean;
 }
 
 export interface ExtensionCatalogEntry {
@@ -1053,10 +1523,28 @@ export interface ExtensionCatalogEntry {
 	enabled: boolean;
 	tools: string[];
 	hasChildExtensions: boolean;
+	/** Absent before `EXTENSION_SETTINGS_PROTOCOL_VERSION`. */
+	settings?: ExtensionSettingDescriptor[];
 }
 
 /** How many recently chosen models the host remembers. */
 export const RECENT_MODELS_LIMIT = 5;
+
+export const OTHER_AGENT_SKILL_GROUPS: readonly string[] = ["personal", "@plugins"];
+
+/** Bounds of the host's per-request skill listing budget; a larger catalog is listed in part. */
+export const SKILL_LISTING_MIN_TOKENS = 4_000;
+export const SKILL_LISTING_MAX_TOKENS = 8_000;
+
+export function isSkillGroupEnabled(
+	project: { disabledGroups?: readonly string[]; enabledGroups?: readonly string[] } | undefined,
+	group: string,
+	otherAgentSkills: boolean,
+): boolean {
+	if (project?.enabledGroups?.includes(group)) return true;
+	if (project?.disabledGroups?.includes(group)) return false;
+	return otherAgentSkills || !OTHER_AGENT_SKILL_GROUPS.includes(group);
+}
 
 /** The `settings.update` payload: `null` clears an optional override back to unset (⇒ the default). */
 export type AppConfigUpdate = Partial<
@@ -1071,7 +1559,69 @@ export type AppConfigUpdate = Partial<
 	reviewEffort?: ThinkingLevel | null;
 };
 
-export type InterviewResponse = "book" | "postpone" | "never";
+export type SurveyInvitationResponse = "postpone" | "never";
+
+export interface GithubStarAsk {
+	stars: number | null;
+}
+
+export const SURVEY_OPEN_TEXT_LIMIT = 2000;
+
+export type SurveyRatingScale = 3 | 5 | 7 | 10;
+
+export function surveyRatingValues(scale: SurveyRatingScale): number[] {
+	if (scale === 10) return [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+	return Array.from({ length: scale }, (_, index) => index + 1);
+}
+
+interface SurveyQuestionBase {
+	id: string;
+	question: string;
+	description?: string;
+	optional?: true;
+}
+
+export interface SurveyOpenQuestion extends SurveyQuestionBase {
+	type: "open";
+}
+
+export interface SurveyChoiceQuestion extends SurveyQuestionBase {
+	type: "single_choice" | "multiple_choice";
+	choices: string[];
+	hasOpenChoice?: true;
+	shuffleOptions?: true;
+}
+
+export interface SurveyRatingQuestion extends SurveyQuestionBase {
+	type: "rating";
+	display: "number" | "emoji";
+	scale: SurveyRatingScale;
+	lowerBoundLabel: string;
+	upperBoundLabel: string;
+}
+
+export type SurveyQuestion = SurveyOpenQuestion | SurveyChoiceQuestion | SurveyRatingQuestion;
+
+export interface AppSurvey {
+	id: string;
+	iteration: number;
+	questions: SurveyQuestion[];
+	placeholder?: string;
+	thankYou?: string;
+	shuffleQuestions?: true;
+	language?: string;
+}
+
+export type SurveyAnswerValue = string | string[];
+
+export interface SurveySubmitParams {
+	submissionId: string;
+	surveyId: string;
+	iteration: number;
+	language?: string;
+	answers: Record<string, SurveyAnswerValue>;
+	others?: Record<string, string>;
+}
 
 export const TERMINAL_REPLAY_KB = { min: 0, max: 1024, default: 64 } as const;
 
@@ -1164,6 +1714,99 @@ export interface UserThemesSnapshot {
 	files: UserThemeFile[];
 }
 
+const USER_FONT_FILE_ERROR_CODES = [
+	"too-large",
+	"too-many",
+	"unsupported-collection",
+	"invalid-font",
+	"unreadable",
+] as const;
+export type UserFontFileErrorCode = (typeof USER_FONT_FILE_ERROR_CODES)[number];
+
+/** What a user font file declares in its own tables. */
+export interface UserFontFace {
+	family: string;
+	style: "normal" | "italic";
+	/** One value for a static face; the `wght` axis range for a variable one. */
+	weight: { min: number; max: number };
+	monospace: boolean;
+}
+
+export interface UserFontFileOk {
+	fileName: string;
+	ok: true;
+	/** Same-origin path serving the file, versioned by its content signature. */
+	url: string;
+	face: UserFontFace;
+}
+
+export interface UserFontFileError {
+	fileName: string;
+	ok: false;
+	error: UserFontFileErrorCode;
+	/** Parser or OS detail for `invalid-font` / `unreadable`, untranslated. */
+	detail?: string;
+}
+
+export type UserFontFile = UserFontFileOk | UserFontFileError;
+
+/** The host's user font files (`<dataDir>/fonts/`), as `fonts.list` reports them. */
+export interface UserFontsSnapshot {
+	dir: string;
+	files: UserFontFile[];
+}
+
+function isUserFontFace(value: unknown): value is UserFontFace {
+	if (typeof value !== "object" || value === null) return false;
+	const weight = Reflect.get(value, "weight");
+	const style = Reflect.get(value, "style");
+	if (typeof weight !== "object" || weight === null) return false;
+	const min = Reflect.get(weight, "min");
+	const max = Reflect.get(weight, "max");
+	return (
+		isFontFamilyName(Reflect.get(value, "family")) &&
+		(style === "normal" || style === "italic") &&
+		typeof min === "number" &&
+		typeof max === "number" &&
+		min <= max &&
+		typeof Reflect.get(value, "monospace") === "boolean"
+	);
+}
+
+/** The shape `fonts.list` and a `/fonts/` upload report for one file. */
+export function isUserFontFile(value: unknown): value is UserFontFile {
+	if (typeof value !== "object" || value === null) return false;
+	if (typeof Reflect.get(value, "fileName") !== "string") return false;
+	const ok = Reflect.get(value, "ok");
+	if (ok === true) {
+		return (
+			typeof Reflect.get(value, "url") === "string" && isUserFontFace(Reflect.get(value, "face"))
+		);
+	}
+	const error = Reflect.get(value, "error");
+	return ok === false && USER_FONT_FILE_ERROR_CODES.some((code) => code === error);
+}
+
+/** A family the host operating system's font service reports. */
+export interface InstalledFontFamily {
+	name: string;
+	/** Advisory: clients confirm by measuring the face they actually render. */
+	monospaceHint: boolean;
+}
+
+export interface InstalledFontsResult {
+	families: InstalledFontFamily[];
+}
+
+/** Serves (`GET`) and accepts (`PUT`) user font files by base name. */
+export const USER_FONTS_ROUTE = "/fonts/";
+/** Required on `PUT` uploads: a non-simple header forces a CORS preflight the host never answers. */
+export const USER_FONT_UPLOAD_HEADER = {
+	name: "X-ThinkRail-Request",
+	value: "font-upload",
+} as const;
+export const USER_FONT_EXTENSIONS = [".ttf", ".otf", ".woff", ".woff2"] as const;
+
 export const SUBAGENT_MAX_CONCURRENT = { min: 1, max: 16, default: 4 } as const;
 
 export function isSubagentMaxConcurrent(value: unknown): value is number {
@@ -1195,10 +1838,12 @@ export const DEFAULT_CONFIG: AppConfig = {
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
 	terminalWindowsShell: "auto",
 	composerGrowthLimit: "half-chat",
+	questionPanelHeight: QUESTION_PANEL_HEIGHT_PERCENT.default,
 	chatLineWidth: LINE_WIDTH_COLUMNS.default,
 	fileLineWidth: LINE_WIDTH_COLUMNS.default,
 	chatLineWidthBounded: true,
 	fileLineWidthBounded: true,
+	voiceInputEnabled: true,
 	customLayoutPresets: [],
 	favoriteModels: [],
 	recentModels: [],
@@ -1210,9 +1855,42 @@ export const DEFAULT_CONFIG: AppConfig = {
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
 	settleIdleDays: SETTLE_IDLE_DAYS.default,
 	disabledExtensions: [],
+	extensionSettings: {},
+	otherAgentSkills: false,
+	disabledPackages: [],
 	locale: SYSTEM_LOCALE_PREFERENCE,
 	onboardingDismissed: false,
+	interfaceFont: { family: null, fallbacks: [] },
+	codeFont: { family: null, fallbacks: [] },
+	codeFontSize: CODE_FONT_SIZE.default,
+	codeLigatures: false,
+	fontWeightOffset: FONT_WEIGHT_OFFSET.default,
 };
+
+export type FontSettings = Pick<
+	AppConfig,
+	"interfaceFont" | "codeFont" | "codeFontSize" | "codeLigatures" | "fontWeightOffset"
+>;
+
+/** Each font field independently: a malformed one falls back to its own default. */
+export function normalizeFontSettings(value: unknown): FontSettings {
+	const record = typeof value === "object" && value !== null ? value : {};
+	const interfaceFont = Reflect.get(record, "interfaceFont");
+	const codeFont = Reflect.get(record, "codeFont");
+	const codeFontSize = Reflect.get(record, "codeFontSize");
+	const codeLigatures = Reflect.get(record, "codeLigatures");
+	const fontWeightOffset = Reflect.get(record, "fontWeightOffset");
+	return {
+		interfaceFont: isFontChoice(interfaceFont) ? interfaceFont : DEFAULT_CONFIG.interfaceFont,
+		codeFont: isFontChoice(codeFont) ? codeFont : DEFAULT_CONFIG.codeFont,
+		codeFontSize: isCodeFontSize(codeFontSize) ? codeFontSize : DEFAULT_CONFIG.codeFontSize,
+		codeLigatures:
+			typeof codeLigatures === "boolean" ? codeLigatures : DEFAULT_CONFIG.codeLigatures,
+		fontWeightOffset: isFontWeightOffset(fontWeightOffset)
+			? fontWeightOffset
+			: DEFAULT_CONFIG.fontWeightOffset,
+	};
+}
 
 export function normalizeThemePreference(value: unknown): ThemePreference {
 	const record = typeof value === "object" && value !== null && !Array.isArray(value) ? value : {};
@@ -1299,6 +1977,142 @@ export interface HistorySearchResult {
 	messageTotal: number;
 	indexing: boolean;
 }
+
+export const SEARCH_KINDS = ["transcript", "file", "spec", "section", "plan"] as const;
+
+export type SearchKind = (typeof SEARCH_KINDS)[number];
+
+export const MAX_SEARCH_QUERY_LENGTH = 200;
+
+export const MAX_SEARCH_GROUP_LIMIT = 50;
+
+export const MAX_SEARCH_PREVIEW_BYTES = 2 * 1024 * 1024;
+
+/** Where the palette is: the active workspace, else the context project's folder, is the one root files and specs are searched in. */
+export interface SearchContext {
+	projectId?: string;
+	workspaceId?: string;
+}
+
+export interface SearchHitBase {
+	/** `kind:id[:locator]` — stable across replies so the client can keep a selection. */
+	id: string;
+	title: string;
+	subtitle?: string;
+	/** The shared matcher's tier and score; the client merges host hits with its own by these. */
+	tier: MatchTier;
+	score: number;
+	ranges?: Record<string, [number, number][]>;
+	projectId: string;
+	workspaceId: string;
+}
+
+/** Where a `section` hit sits in its spec, and how many of the query's words it holds. */
+export interface SearchHitSection {
+	/** The heading trail joined by ` › `; empty for the text before the first heading. */
+	heading: string;
+	/** 1-based line of the heading in the file. */
+	line: number;
+	matched: number;
+	terms: number;
+}
+
+export type SearchHit =
+	/** A root-relative POSIX `path`; `size` is the bytes on disk when the host could read them. */
+	| (SearchHitBase & { kind: "file"; path: string; size?: number })
+	| (SearchHitBase & { kind: "spec"; path: string; specId: string; size: number })
+	/** A spec section ranked by the query's words; `snippet` is its best-matching text. */
+	| (SearchHitBase & {
+			kind: "section";
+			path: string;
+			specId: string;
+			snippet: string;
+			section: SearchHitSection;
+	  })
+	| (SearchHitBase & { kind: "plan"; sessionId: string })
+	/** `anchorText` re-finds the message when compaction moved `messageIndex`. */
+	| (SearchHitBase & {
+			kind: "transcript";
+			sessionId: string;
+			messageIndex: number;
+			anchorText: string;
+	  });
+
+/** `indexing`: never loaded yet; `refreshing`: a reload runs behind these hits; `failed`: the last load failed (its last good hits stay). */
+export type SearchGroupState = "ready" | "indexing" | "refreshing" | "failed";
+
+/** Why a group may miss hits: the scan ran out of time, or only `fileList` files of the root are listed. */
+export interface SearchGroupCut {
+	time?: true;
+	fileList?: number;
+}
+
+export interface SearchGroup {
+	kind: SearchKind;
+	hits: SearchHit[];
+	total: number;
+	state: SearchGroupState;
+	cut?: SearchGroupCut;
+}
+
+export interface SearchQueryResult {
+	groups: SearchGroup[];
+}
+
+export const TEXT_SEARCH_LIMITS = {
+	lines: 2000,
+	fileBytes: 1_000_000,
+	lineChars: 400,
+	minQuery: 2,
+	maxQuery: 200,
+} as const;
+
+export interface TextSearchMatch {
+	/** 1-based line number in the file. */
+	line: number;
+	/** 1-based UTF-16 column and length of the first match in the full line, for opening at it. */
+	column: number;
+	length: number;
+	/** The matched line, cut to `TEXT_SEARCH_LIMITS.lineChars` around its first match. */
+	text: string;
+	/** `[start, end)` UTF-16 offsets of every match inside `text`. */
+	ranges: [number, number][];
+}
+
+export interface TextSearchFile {
+	path: string;
+	matches: TextSearchMatch[];
+}
+
+export type TextSearchEnd = "complete" | "limit" | "failed";
+
+export interface TextSearchBatch {
+	seq: number;
+	/** The workspace whose files these are; absent when the context resolves to no root. */
+	root?: { projectId: string; workspaceId: string };
+	files: TextSearchFile[];
+	done?: { reason: TextSearchEnd; files: number; lines: number };
+}
+
+/** The transcript window around a chat hit; files and specs render client-side through `fs.readFile`. */
+export interface SearchPreviewTarget {
+	kind: "chat";
+	sessionId: string;
+	messageIndex?: number;
+	/** The hit's `anchorText`: the focus moves to the message it starts when compaction shifted the index. */
+	anchorText?: string;
+}
+
+export interface SearchPreviewMessage {
+	role: "user" | "assistant";
+	messageIndex: number;
+	text: string;
+	focus: boolean;
+}
+
+export type SearchPreviewResult =
+	| { kind: "transcript"; title: string; messages: SearchPreviewMessage[] }
+	| { kind: "unavailable" };
 
 export type TemplateScope = "global" | "project";
 

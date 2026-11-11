@@ -1,8 +1,14 @@
-import { StringEnum } from "@earendil-works/pi-ai/compat";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { countItems, TODO_STATUSES, type TodoPlan, type WritePlan } from "../core/index.ts";
-import { consistencyNudge, formatPlan, storeFor, textResult, withNudges } from "./shared.ts";
+import {
+	consistencyNudge,
+	formatPlan,
+	storeFor,
+	stringEnum,
+	textResult,
+	withNudges,
+} from "./shared.ts";
 
 const item = Type.Object({
 	title: Type.String({
@@ -10,7 +16,7 @@ const item = Type.Object({
 			'The step\'s one-line title: imperative and about the change/outcome, short and scannable — not the process ("make a plan", "read the files") and not agent bookkeeping (that goes in note).',
 	}),
 	status: Type.Optional(
-		StringEnum(TODO_STATUSES, { description: "Initial status (defaults to pending)." }),
+		stringEnum(TODO_STATUSES, { description: "Initial status (defaults to pending)." }),
 	),
 	note: Type.Optional(Type.String({ description: "A short secondary line." })),
 });
