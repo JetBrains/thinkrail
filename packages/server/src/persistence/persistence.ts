@@ -19,6 +19,7 @@ import {
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
 	isLocalePreference,
+	isQuestionPanelHeight,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
 	isTerminalWindowsShell,
@@ -653,6 +654,9 @@ export function loadConfig(): AppConfig {
 		composerGrowthLimit: isComposerGrowthLimit(value.composerGrowthLimit)
 			? value.composerGrowthLimit
 			: DEFAULT_CONFIG.composerGrowthLimit,
+		questionPanelHeight: isQuestionPanelHeight(value.questionPanelHeight)
+			? value.questionPanelHeight
+			: DEFAULT_CONFIG.questionPanelHeight,
 		chatLineWidth: isLineWidth(value.chatLineWidth)
 			? value.chatLineWidth
 			: DEFAULT_CONFIG.chatLineWidth,

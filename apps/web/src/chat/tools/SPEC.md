@@ -39,8 +39,8 @@ renderers are registered by the host's `extensions/registry.ts`. Unregistered to
   `reviewFix`/review-package renderers). Registered `primary` + `defaultExpanded`; `data-verdict` +
   `data-testid="request-review-card"` are the test hooks.
 - **Ask user question** is owned by [[module-ext-ask-user-question]], outside this module. Its card
-  registers bare and `interactive` through the public web entrypoint; the plan page renders it through the
-  registry.
+  registers bare, `interactive` and `dock` through the public web entrypoint (the chat renders an awaited
+  call in its interaction dock — see the parent spec); the plan page renders it through the registry.
 - **`StartWorkspaceCard`** — the card for the host-owned `start_workspace` tool (capability: the server
   `agent` workspace tools + the `host` workspace-tools seam). It reads the started ids from `details`
   defensively and shows the prompt (folded when long), the branch/base/model meta, and the workspace's

@@ -1,5 +1,6 @@
 import { RiArrowDownLine as ArrowDown, RiArrowUpLine as ArrowUp } from "@remixicon/react";
 import type { ChatContinuation, GitDiffScope, TurnChangeSet } from "@thinkrail/contracts";
+import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import type { MessageKey } from "@thinkrail/locales";
 import { t as translate, useT } from "@thinkrail/locales/react";
 import { ResourceScopeProvider } from "@thinkrail/resource-renderers";
@@ -18,6 +19,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { useShallow } from "zustand/react/shallow";
 import {
@@ -40,7 +42,10 @@ import { FoldGeometryProvider } from "./foldState";
 import {
 	awaitingToolCallIdOf,
 	deriveInteractionStates,
+	dockedInteraction,
 	InteractionStatesContext,
+	latestPendingInteraction,
+	type PendingInteraction,
 } from "./interactionState";
 import { deriveMessageActions } from "./messageActions";
 import { openWorkspace } from "./openWorkspace";
@@ -55,6 +60,8 @@ import {
 	stabilizeRows,
 } from "./rows";
 import { type StreamStatus, StreamStatusSlot, streamStatus } from "./StreamIndicator";
+import { useToolInteraction } from "./toolInteraction";
+import { getToolRenderer } from "./toolRegistry";
 import { ChatTurnView } from "./turns";
 import { useChatScroll } from "./useChatScroll";
 import { useTranscriptSync } from "./useTranscriptSync";
@@ -194,6 +201,7 @@ const ChatTranscript = forwardRef<
 		openMcpSettings?: ChatActions["openMcpSettings"];
 		openProviderSettings?: ChatActions["openProviderSettings"];
 		findModel?: ChatActions["findModel"];
+		dockTarget?: HTMLElement | null;
 		resourcesOverlay?: ReactNode;
 	}
 >(function ChatTranscript(
@@ -214,6 +222,7 @@ const ChatTranscript = forwardRef<
 		openMcpSettings,
 		openProviderSettings,
 		findModel,
+		dockTarget,
 		resourcesOverlay,
 	},
 	ref,
@@ -576,9 +585,23 @@ const ChatTranscript = forwardRef<
 		[runtime.turns, runtime.toolResponses, runtime.toolResults],
 	);
 	const awaitingToolCallId = awaitingToolCallIdOf(runtime.hostState);
+	const dockedCall = useMemo(
+		() =>
+			dockedInteraction(
+				latestPendingInteraction(runtime.turns, runtime.toolResults, interactionStates),
+				awaitingToolCallId,
+			),
+		[runtime.turns, runtime.toolResults, interactionStates, awaitingToolCallId],
+	);
+	const dockedToolCallId = dockedCall?.toolCallId;
 	const interactionContext = useMemo(
-		() => ({ states: interactionStates, focusScope: interactionFocusScope, awaitingToolCallId }),
-		[interactionStates, interactionFocusScope, awaitingToolCallId],
+		() => ({
+			states: interactionStates,
+			focusScope: interactionFocusScope,
+			awaitingToolCallId,
+			dockedToolCallId,
+		}),
+		[interactionStates, interactionFocusScope, awaitingToolCallId, dockedToolCallId],
 	);
 
 	const continuations = useAppStore((s) => s.chatContinuations);
@@ -800,10 +823,38 @@ const ChatTranscript = forwardRef<
 						) : null}
 						{resourcesOverlay}
 					</div>
+					{dockTarget && dockedCall
+						? createPortal(
+								<ResourceScopeProvider value={resourceScope}>
+									<DockedTool
+										key={dockedCall.toolCallId}
+										call={dockedCall}
+										workspaceRoot={workspaceRoot}
+										onOpenFile={onOpenFile}
+									/>
+								</ResourceScopeProvider>,
+								dockTarget,
+							)
+						: null}
 				</InteractionStatesContext.Provider>
 			</PendingExtUiContext.Provider>
 		</ChatActionsContext.Provider>
 	);
 });
+
+function DockedTool({
+	call,
+	workspaceRoot,
+	onOpenFile,
+}: {
+	call: PendingInteraction;
+	workspaceRoot: string | undefined;
+	onOpenFile: ((path: string) => void) | undefined;
+}) {
+	const Renderer = getToolRenderer(call.toolName);
+	const interaction = useToolInteraction(call.toolCallId, call.toolName, "dock");
+	const props: ToolRenderProps = { ...call, workspaceRoot, onOpenFile, interaction };
+	return <Renderer {...props} />;
+}
 
 export default ChatTranscript;

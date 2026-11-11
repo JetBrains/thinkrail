@@ -167,6 +167,7 @@ interface ComposerProps {
 	value: string;
 	onChange: (value: string) => void;
 	isStreaming: boolean;
+	awaitingResponse: boolean;
 	growthLimit: ComposerGrowthLimit;
 	commands: SlashCommandItem[];
 	templatePending: boolean;
@@ -208,6 +209,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		value,
 		onChange,
 		isStreaming,
+		awaitingResponse,
 		growthLimit,
 		commands,
 		templatePending,
@@ -685,11 +687,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							onDrop={onDrop}
 							rows={1}
 							placeholder={
-								isStreaming
-									? t("chat.composer.placeholderStreaming")
-									: expanded
-										? t("chat.composer.placeholderExpanded")
-										: t("chat.composer.placeholder")
+								awaitingResponse
+									? t("chat.composer.placeholderQuestion")
+									: isStreaming
+										? t("chat.composer.placeholderStreaming")
+										: expanded
+											? t("chat.composer.placeholderExpanded")
+											: t("chat.composer.placeholder")
 							}
 							className={cn(
 								"absolute inset-0 size-full resize-none overflow-x-hidden overflow-y-auto rounded-sm bg-transparent px-12 py-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted",

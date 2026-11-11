@@ -422,6 +422,9 @@ remain app-local. A registration is:
 - a **`summary`** — a pure one-liner for collapsed headers and activity-step rows,
 - a **`chrome`** — `"card"` (default, the `ToolCard` frame) or `"bare"` (owns its frame; for
   interactive/primary tools like `ask_user_question`),
+- **`interactive`** (fill `ToolRenderProps.interaction`, below) and **`dock`** (with `interactive`: a call
+  the host awaits renders in the interaction dock, the transcript row as its stub — read through
+  `isDockedTool`),
 - **prominence metadata** — `prominence`: `"routine"` (default, incl. unregistered tools — enters the
   outer Activity run, directly before the first thought or under the current nested Thinking disclosure)
   or `"primary"` (escapes the fold; `"bare"` chrome implies it **unconditionally**, even
@@ -443,7 +446,9 @@ two routes:
   (`toolInteraction.ts`), and the plan page does the same for its card. The adapter reads `ChatActions`,
   `interactionState`, the fold-geometry context and the store's `protocolVersion` (passed as
   `hostProtocol` so a renderer can withhold an affordance an older host cannot serve), and fills `interaction` for every tool whose renderer
-  is registered `interactive` (`isInteractiveTool`) — it knows no tool by name. Its `state.accepting` is
+  is registered `interactive` (`isInteractiveTool`) — it knows no tool by name. It hands the docked call's
+  transcript row `placement: "stub"` (the context's `dockedToolCallId`) and the dock's copy
+  `placement: "dock"`. Its `state.accepting` is
   true only while the host's `needsInput` names this call (`awaitingToolCallIdOf`, carried in the
   interaction context; a pre-v93 host's `kind: "question"` / `question:<id>` is read the same way for one
   compatibility window) or no host state has arrived yet, so a call the host is not waiting on (another
@@ -471,7 +476,7 @@ accident (the MCP order keeps Deny furthest from Always allow). It never takes f
 fills it a frame after each new request ("Your input is needed: <question>"), once per request; an
 anchored prompt's first mount reveals itself (`revealChatElement`, `automatic-attention`, `block:
 "nearest"` under the breadcrumb inset; the first pointer/key/wheel yields), later remounts do not
-(`PendingExtUi.claimReveal`). A row virtualized away gets no reveal, as with `ask_user_question`; the live
+(`PendingExtUi.claimReveal`). A row virtualized away gets no reveal; the live
 region and the needs-input marker still tell the user. **Bounds:** the docked prompt is capped at 60% of
 the chat height (`max-h-[60cqh]`); its body (question, field, select options) scrolls while Cancel/Submit
 and the hint stay put, and the editor is capped at 40%. On the way out it follows the
@@ -510,6 +515,23 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `ChatTranscript`). The shell still reads `turns`/`toolResponses`/`toolResults`, but only through
   shallow-compared derived selectors (recent prompts, plan glance) that stay stable across streamed deltas,
   so it does not re-render on them.
+- **Interaction dock** — the live form of a docked interactive call renders above the composer stack, not
+  in the transcript. The docked call is the session's latest pending interaction (`latestPendingInteraction`)
+  whose tool registered `dock`, whose arguments are complete and that the host awaits (`dockedInteraction`:
+  `awaitingToolCallId` unknown or naming it — the `accepting` rule). `ChatTranscript` derives it from the
+  states it already computes, publishes `dockedToolCallId` in `InteractionStatesContext`, and **portals** the
+  call's renderer (`placement: "dock"`, keyed by call, inside its own providers and `ResourceScopeProvider`)
+  into an always-present, empty-when-idle `chat-dock` slot that `ChatView` places between the transcript
+  region and the widgets / QueueStrip / Resources strip / composer. Outside the transcript region the Resources
+  inspector (`absolute inset-0` over that region) cannot cover it; inside `ChatView`'s size container its
+  `max-h` is the *Question panel height* setting in `cqh` (`--question-panel-height`, set beside
+  `--chat-transcript-width`), and as a shrinkable `min-h-0` item it lets the transcript shrink to nothing at
+  100%. The transcript's scroller ResizeObserver keeps the latest edge pinned while following and the
+  reading position while detached, so opening, collapsing and closing the dock need no scroll code.
+  *Rejected:* a self-subscribing dock component in `ChatView` sharing the plan page's
+  `PlanInteractionCard` — a second runtime subscription, a second provider stack and a second focus scope
+  to reconcile with the transcript's. An unanchored extension prompt keeps its own dock inside the
+  transcript region, above this one.
 - **Structured tool-file navigation** — `ChatView` accepts an optional `onOpenFile(path)` from the shell and
   passes it through every `ToolRenderProps` path (routine, primary, card, or bare). The shared tool-file
   primitive offers that action only for a non-empty relative path or an absolute path contained by
@@ -825,11 +847,11 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   inaccessible, visually empty slot with identical geometry. The visible phase is single-line and clipped
   within the slot on narrow panes while its complete live-region text remains accessible. Starting, changing,
   or ending a phase therefore moves neither transcript alignment nor composer.
-- **Tool attention preserves alignment provenance** — an awaiting `ask_user_question` may clear temporary
-  room and perform its established bounded start reveal/focus, but that automatic path leaves following or
-  detached exactly as it found it and cannot expose the button. A reader who was already detached keeps the
-  affordance because of that prior action; a subsequent user-driven tool-page navigation may detach. All
-  attention, history, breadcrumb, and row reveals route through the same controller. A history row outside
+- **Tool attention preserves alignment provenance** — an automatic attention reveal (an anchored extension
+  prompt's first mount) leaves following or detached exactly as it found it and cannot expose the button. A
+  reader who was already detached keeps the affordance because of that prior action. A docked interactive
+  call never reveals: it renders outside the list (the interaction dock below). All attention, history,
+  breadcrumb, and row reveals route through the same controller. A history row outside
   the virtual DOM gets a bounded, hook-owned materialization from Virtuoso's measured size snapshot; once
   mounted, its centered correction uses the controller, so no independent retry can outlive reader
   cancellation or compete with settlement. Size-aware `nearest` keeps a
@@ -1088,7 +1110,9 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   calls; queue = runs after the agent settles; only abort halts an in-flight response) and proved
   illegible from key-name hints alone. While streaming the composer therefore self-documents: the
   primary pill reads **Steer ↩** instead of Send, the placeholder states *when* a steer lands ("Steer the
-  agent at its next step…"), and a **send-options menu** (`send-menu` — the chevron segment of that
+  agent at its next step…") — except while the host awaits a tool response (`awaitingResponse`, from
+  `awaitingToolCallIdOf`), when it says a message replaces the question ("Reply in your own words — this
+  replaces the question…"), since the host supersedes every awaited call on a composer send — and a **send-options menu** (`send-menu` — the chevron segment of that
   pill; rows `send-mode-steer` / `send-mode-queue` / `send-mode-interrupt`) names each mode with a one-line
   meaning + shortcut. The chevron stays enabled with an empty draft so the shortcuts remain discoverable;
   only the rows disable. Menu rows are **actions** (send the current draft with that mode), never a

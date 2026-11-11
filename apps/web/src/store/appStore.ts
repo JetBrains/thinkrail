@@ -61,6 +61,7 @@ import {
 	isControlMessage,
 	isLineWidth,
 	isLocalePreference,
+	isQuestionPanelHeight,
 	isSettleIdleDays,
 	isSubagentCompletionMessage,
 	isSubagentMaxConcurrent,
@@ -1149,6 +1150,7 @@ interface AppState {
 	terminalReplayKb: number;
 	terminalWindowsShell: TerminalWindowsShell;
 	composerGrowthLimit: ComposerGrowthLimit;
+	questionPanelHeight: number;
 	chatLineWidth: number;
 	fileLineWidth: number;
 	chatLineWidthBounded: boolean;
@@ -1568,6 +1570,9 @@ function configPatch(config: AppConfig) {
 			? config.terminalWindowsShell
 			: DEFAULT_CONFIG.terminalWindowsShell,
 		composerGrowthLimit: config.composerGrowthLimit ?? DEFAULT_CONFIG.composerGrowthLimit,
+		questionPanelHeight: isQuestionPanelHeight(config.questionPanelHeight)
+			? config.questionPanelHeight
+			: DEFAULT_CONFIG.questionPanelHeight,
 		chatLineWidth: isLineWidth(config.chatLineWidth)
 			? config.chatLineWidth
 			: DEFAULT_CONFIG.chatLineWidth,
@@ -2503,6 +2508,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
 	terminalWindowsShell: DEFAULT_CONFIG.terminalWindowsShell,
 	composerGrowthLimit: DEFAULT_CONFIG.composerGrowthLimit,
+	questionPanelHeight: DEFAULT_CONFIG.questionPanelHeight,
 	chatLineWidth: DEFAULT_CONFIG.chatLineWidth,
 	fileLineWidth: DEFAULT_CONFIG.fileLineWidth,
 	chatLineWidthBounded: DEFAULT_CONFIG.chatLineWidthBounded,
