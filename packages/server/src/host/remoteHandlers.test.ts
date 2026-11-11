@@ -31,6 +31,7 @@ function fakeControl() {
 			};
 			return state;
 		},
+		routes: () => null,
 		issueLink: () => ({ link: "thinkrail://pair?v=1", expiresAt: 5 }),
 		revokeDevice: (id) => {
 			state = { ...state, devices: state.devices.filter((d) => d.id !== id) };

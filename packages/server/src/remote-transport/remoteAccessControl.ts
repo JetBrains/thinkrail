@@ -1,4 +1,9 @@
-import type { RemoteDeviceAccess, RemoteNostrRoute, RemoteRelay } from "@thinkrail/contracts";
+import type {
+	RemoteDeviceAccess,
+	RemoteHostRoutes,
+	RemoteNostrRoute,
+	RemoteRelay,
+} from "@thinkrail/contracts";
 import { DEFAULT_NOSTR_RELAYS } from "@thinkrail/nostr-signaling";
 import {
 	accessOf,
@@ -54,6 +59,8 @@ export interface RemoteAccessControl {
 	setEnabled(enabled: boolean, options?: { persist?: boolean }): RemoteAccessState;
 	/** Settles once the addresses a phone can reach are known (the public one is looked up after start). */
 	ready(): Promise<void>;
+	/** The routes a paired device should keep for this host; null while access is off. */
+	routes(): RemoteHostRoutes | null;
 	/** Mints a one-time pairing link; throws while access is off. */
 	issueLink(projectRef: string): PairingLink;
 	revokeDevice(deviceId: string): RemoteAccessState;
@@ -148,6 +155,7 @@ export function createRemoteAccessControl(
 			return state();
 		},
 		ready: () => running?.relay?.ready ?? Promise.resolve(),
+		routes: () => running?.access.routes() ?? null,
 		issueLink(projectRef) {
 			if (!running) throw new Error("Phone access is off.");
 			return running.access.issueLink(projectRef);

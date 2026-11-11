@@ -1,4 +1,4 @@
-import type { PairingNostrRoute } from "@thinkrail/contracts";
+import type { PairingNostrRoute, RemoteHostRoutes } from "@thinkrail/contracts";
 
 export interface SavedHost {
 	hostKey: string;
@@ -21,6 +21,8 @@ export interface KeyValueStore {
 export interface HostRegistry {
 	list(): SavedHost[];
 	add(host: SavedHost): SavedHost[];
+	/** Replaces a saved host in place; a host no longer saved stays forgotten. */
+	update(host: SavedHost): SavedHost[];
 	remove(hostKey: string): SavedHost[];
 }
 
@@ -49,8 +51,27 @@ export function createHostRegistry(store: KeyValueStore): HostRegistry {
 			hosts.push(host);
 			return save(hosts);
 		},
+		update(host) {
+			const hosts = load();
+			const index = hosts.findIndex((h) => h.hostKey === host.hostKey);
+			if (index < 0) return hosts;
+			hosts[index] = host;
+			return save(hosts);
+		},
 		remove(hostKey) {
 			return save(load().filter((h) => h.hostKey !== hostKey));
 		},
 	};
+}
+
+/** The saved host with the routes its computer sent now; a route the computer dropped is dropped too. */
+export function withRoutes(host: SavedHost, routes: RemoteHostRoutes): SavedHost {
+	const next: SavedHost = {
+		...host,
+		relayUrl: routes.signalingUrls[0] ?? host.relayUrl,
+		relayUrls: routes.signalingUrls,
+	};
+	if (routes.nostr) next.nostr = routes.nostr;
+	else delete next.nostr;
+	return next;
 }

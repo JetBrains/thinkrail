@@ -65,3 +65,13 @@ export function hostRejection(reason: string, code: RejectCode | undefined): Rem
 			return new RemoteConnectError("rejected", reason);
 	}
 }
+
+const TERMINAL: ReadonlySet<RemoteConnectCode> = new Set([
+	"unknown_device",
+	"identity_mismatch",
+	"app_outdated",
+]);
+
+/** A refusal no retry fixes (this phone was revoked, the host key changed, the app is too old). */
+export const isTerminalConnectError = (error: unknown): boolean =>
+	error instanceof RemoteConnectError && TERMINAL.has(error.code);

@@ -32,7 +32,10 @@ older than the computer, no direct route, …), or the raw message of anything u
 good (`onLost` — it revoked this phone) leaves any of its screens for the Devices tab, where its row shows
 why. Open, its row shows `HostBanner` in place of its projects, with the one action that fixes the failure
 (`recoveryOf`): **Scan QR code** in place when the phone must pair again (revoked, the key changed, an expired
-code), **Reconnect** for a passing failure, nothing when only an app update helps. Welcome fits one screen without scrolling: three one-line steps (which network, how to turn access on, scan) and the scan button, with the paste field folded behind **Enter link manually**.
+code), **Reconnect** for a passing failure, nothing when only an app update helps. Nothing waits on that tap:
+the controller retries a passing failure on its own, a dropped channel shows **Connecting…** while it comes
+back, returning to the app (`@capacitor/app` `resume`) or the network coming back (`online`) retries at once,
+and the routes a computer sends replace its saved entry in place. Welcome fits one screen without scrolling: three one-line steps (which network, how to turn access on, scan) and the scan button, with the paste field folded behind **Enter link manually**.
 
 ## Boundary
 
