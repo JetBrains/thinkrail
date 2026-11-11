@@ -14,15 +14,18 @@ import {
 	isJsxExpression,
 	isJsxFragment,
 	isJsxText,
+	isNonNullExpression,
 	isNoSubstitutionTemplateLiteral,
 	isParenthesizedExpression,
 	isPropertyAccessExpression,
 	isPropertyAssignment,
+	isSatisfiesExpression,
 	isStringLiteral,
 	isTemplateExpression,
 	isTemplateHead,
 	isTemplateMiddle,
 	isTemplateTail,
+	isTypeAssertion,
 } from "typescript/ast/is";
 import { API, ScriptKind } from "typescript/async";
 import { renderReachViolations } from "./i18nRenderReach";
@@ -97,7 +100,13 @@ function literalParts(node: Node): Node[] {
 	if (isTemplateExpression(node)) {
 		return [node.head, ...node.templateSpans.map((span) => span.literal)];
 	}
-	if (isParenthesizedExpression(node) || isAsExpression(node)) {
+	if (
+		isParenthesizedExpression(node) ||
+		isAsExpression(node) ||
+		isTypeAssertion(node) ||
+		isSatisfiesExpression(node) ||
+		isNonNullExpression(node)
+	) {
 		return literalParts(node.expression);
 	}
 	if (isConditionalExpression(node)) {

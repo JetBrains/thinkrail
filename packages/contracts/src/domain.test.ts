@@ -36,6 +36,7 @@ import {
 	TODO_NUDGE_PREFIX,
 	tallyResources,
 } from "./domain";
+import { WS_MAX_FRAME_BYTES } from "./wsProtocol";
 
 describe("isRetriedAttempt", () => {
 	const failed = { role: "assistant", stopReason: "error" };
@@ -203,10 +204,11 @@ describe("image payload ceiling", () => {
 		expect(IMAGE_MAX_BASE64_BYTES).toBe(4.5 * 1024 * 1024);
 	});
 
-	test("the request-wide image budget leaves headroom under Anthropic's 32MB per-request cap", () => {
-		expect(REQUEST_IMAGE_BASE64_BUDGET).toBe(24 * 1024 * 1024);
-		expect(REQUEST_IMAGE_BASE64_BUDGET).toBeLessThan(32 * 1024 * 1024);
-		expect(REQUEST_IMAGE_BASE64_BUDGET).toBeGreaterThan(IMAGE_MAX_BASE64_BYTES * 4);
+	test("a message's image budget leaves room for its text under the 16MB WebSocket frame cap", () => {
+		expect(WS_MAX_FRAME_BYTES).toBe(16 * 1024 * 1024);
+		expect(REQUEST_IMAGE_BASE64_BUDGET).toBe(12 * 1024 * 1024);
+		expect(REQUEST_IMAGE_BASE64_BUDGET).toBeLessThan(WS_MAX_FRAME_BYTES);
+		expect(REQUEST_IMAGE_BASE64_BUDGET).toBeGreaterThan(IMAGE_MAX_BASE64_BYTES * 2);
 	});
 
 	test("the provider-accepted media types are exactly png/jpeg/gif/webp", () => {

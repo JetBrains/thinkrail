@@ -49,9 +49,23 @@ Durable host state—projects, workspaces, cross-frontend app config, terminal c
 
 Project and workspace loads return `Project.path` / `Workspace.worktreePath` in the host's resolved spelling
 (architecture Decision 22). A record stored in another spelling — git's `C:/…`, an unresolved segment, a
-file an older host wrote — heals on read and is persisted by the next save of that file; loads never write,
-and a value that is not absolute on this host stays as stored. Saves do not normalize: the producers resolve
+file an older host wrote — heals on read and is persisted by the next save of that file; loads never write
+a record, and a value that is not absolute on this host stays as stored. Saves do not normalize: the producers resolve
 at their own doors, so an object a create call returns never differs from what it stored.
+
+Every JSON save is a complete-copy replacement: write a sibling temp file, fsync it, rename it over the
+target. A crash, power loss, or full disk mid-save therefore leaves the previous file whole, never an
+empty or torn one. A rename replaces the file's inode, so the replacement carries the permissions
+explicitly instead of inheriting the process umask: an existing file keeps its exact mode, a new file is
+owner-only (`0600`), and `environment.json` is always `0600`. Otherwise one launch under a looser umask
+could turn a private `terminals.json`, which holds recorded shell output, world-readable. The registry and
+config loads (`projects`, `workspaces`, `workspace-creations`, `terminals`, `config`, `environment`) tell a
+missing file (its empty default) apart from an unreadable one: an I/O error, a parse failure, or the wrong
+top-level shape (array vs object) renames the file to `<file>.corrupt-<epoch-ms>` (best effort) and loads
+the empty default (`DEFAULT_CONFIG` for config). The next save then cannot overwrite the only copy of the
+user's projects and workspaces; the set-aside file is the diagnosis, since `persistence` sits below `log`.
+Shape checks stop at the top level, and record-level validation stays with each loader. `chats.json` keeps
+the stricter store rules above.
 
 Session metadata writes are complete-copy temp-file replacements. Lifecycle persists only facts a transcript
 cannot prove—`agent_settled` outcome and explicit Stop—keyed to the active run/completion ids; stale records

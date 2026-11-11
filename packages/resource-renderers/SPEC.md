@@ -330,6 +330,11 @@ mounted document that the next text change keeps on screen), but advertises no d
 pane's unplaced strip, **Show in Source** selects the code renderer, and diff authoring is available only
 in Source. It is selected by registry match rather than a path branch in the pane. Scopes whose modified
 side is historical receive no review surface or mutation actions.
+When a review surface is available but the selected renderer has no anchors for the current intent,
+the unplaced strip explains how to start a comment and offers a renderer with anchor support, even
+before the first thread exists. The action uses the same renderer selection as **Show in Source**;
+supported previews and historical scopes do not show this fallback.
+
 
 **The rendered diff focuses on its changes the way Pierre does.** The merged document is parsed once
 and a prose-root block is *changed* when it is or contains `ins`, `del`, or a `[data-diff-node]`

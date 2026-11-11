@@ -36,7 +36,7 @@ import {
 	useAppStore,
 	workspaceName,
 } from "@/store";
-import { errorText, getTransport, watchMcpWorkspace } from "@/transport";
+import { errorText, getTransport, watchMcpWorkspace, wsErrorCode } from "@/transport";
 import type { ResultTarget } from "./ChatActions";
 import { ChatHeader } from "./ChatHeader";
 import ChatTranscript, { type ChatTranscriptHandle } from "./ChatTranscript";
@@ -59,6 +59,7 @@ import {
 	parseNativeChatCommand,
 	prepareNameChatCommand,
 } from "./nativeCommands";
+import type { PromptImagesOwner } from "./promptImages";
 import { QueueStrip } from "./QueueStrip";
 import { deriveRecentPrompts } from "./recentPrompts";
 import {
@@ -104,6 +105,18 @@ export default function ChatView({
 		(s) => awaitingToolCallIdOf(s.sessions[sessionId]?.hostState ?? null) != null,
 	);
 	const draft = useAppStore((s) => s.sessions[sessionId]?.draft ?? "");
+	const imageDraft = useAppStore(
+		(s) => s.sessions[sessionId]?.promptImages ?? EMPTY_RUNTIME.promptImages,
+	);
+	const imageOwner = useMemo<PromptImagesOwner>(
+		() => ({
+			state: imageDraft,
+			read: () =>
+				useAppStore.getState().sessions[sessionId]?.promptImages ?? EMPTY_RUNTIME.promptImages,
+			update: (change) => useAppStore.getState().updateChatPromptImages(sessionId, change),
+		}),
+		[imageDraft, sessionId],
+	);
 	const queue = useAppStore((s) => s.sessions[sessionId]?.queue ?? EMPTY_RUNTIME.queue);
 	const sessionModel = useAppStore((s) => s.sessions[sessionId]?.model ?? null);
 	const thinkingLevel = useAppStore(
@@ -608,8 +621,10 @@ export default function ChatView({
 			.request(method, params)
 			.catch((err) => {
 				useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
-				if (queued) restoreTextToDraft(text);
-				else {
+				const tooLarge = wsErrorCode(err) === "FRAME_TOO_LARGE";
+				if (queued || tooLarge) restoreTextToDraft(text);
+				if (tooLarge) composerRef.current?.restoreAttachments(attachments);
+				if (!queued) {
 					const streaming = useAppStore.getState().sessions[sessionId]?.isStreaming ?? false;
 					transcriptRef.current?.cancelImmediateTurn(streaming);
 				}
@@ -943,6 +958,7 @@ export default function ChatView({
 					ref={composerRef}
 					value={draft}
 					onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
+					imageOwner={imageOwner}
 					isStreaming={isStreaming}
 					awaitingResponse={awaitingResponse}
 					growthLimit={composerGrowthLimit}
