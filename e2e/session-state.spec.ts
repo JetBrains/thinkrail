@@ -65,7 +65,7 @@ test("an unresolved persisted question is level-triggered in project and workspa
 	page,
 }) => {
 	await openFixtureProject(page);
-	const args: AskUserQuestionArgs = {
+	const args = {
 		questions: [
 			{
 				question: "Which rollout?",
@@ -76,7 +76,7 @@ test("an unresolved persisted question is level-triggered in project and workspa
 				],
 			},
 		],
-	};
+	} satisfies AskUserQuestionArgs;
 	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
 		name: "needs input state",
 		messages: [

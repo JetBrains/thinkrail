@@ -1,5 +1,6 @@
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 import type * as React from "react";
+import { yieldEscapeToIme } from "./keyboard";
 import { cn } from "./utils";
 
 const Popover = PopoverPrimitive.Root;
@@ -11,6 +12,7 @@ function PopoverContent({
 	align = "center",
 	sideOffset = 6,
 	container,
+	onEscapeKeyDown,
 	...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content> & {
 	container?: HTMLElement | null | undefined;
@@ -24,6 +26,7 @@ function PopoverContent({
 					"z-50 overflow-hidden rounded-md border border-border-default bg-container-elevated-bg text-text-default shadow-[var(--shadow-md)] outline-none",
 					className,
 				)}
+				onEscapeKeyDown={yieldEscapeToIme(onEscapeKeyDown)}
 				{...props}
 			/>
 		</PopoverPrimitive.Portal>

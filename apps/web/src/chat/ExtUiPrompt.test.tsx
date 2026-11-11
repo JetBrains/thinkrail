@@ -46,7 +46,13 @@ function renderWith(row: ChatRow, request: ExtUiDialogRequest | null): string {
 		<PendingExtUiContext.Provider
 			value={
 				request
-					? { request, reply: () => {}, draft: () => undefined, rememberDraft: () => {} }
+					? {
+							request,
+							reply: () => {},
+							draft: () => undefined,
+							rememberDraft: () => {},
+							claimReveal: () => false,
+						}
 					: null
 			}
 		>

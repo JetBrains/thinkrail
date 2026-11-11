@@ -22,6 +22,13 @@ test("LFS sizes read like a file manager", () => {
 	expect(formatLfsSize(5 * 1024 ** 3)).toBe("5.0 GB");
 });
 
+test("an LFS size that rounds up to 1024 of a unit is shown in the next unit", () => {
+	expect(formatLfsSize(1024 ** 2 - 1)).toBe("1.0 MB");
+	expect(formatLfsSize(1024 ** 3 - 1)).toBe("1.0 GB");
+	expect(formatLfsSize(1023 * 1024)).toBe("1023 KB");
+	expect(formatLfsSize(1024 ** 2)).toBe("1.0 MB");
+});
+
 test("the LFS renderer claims only pointer text, places no anchors, and outranks the code renderer", () => {
 	expect(lfsRenderer.match).toEqual({ mime: ["application/vnd.git-lfs"], text: true });
 	expect(lfsRenderer.rank).toBeGreaterThan(100);

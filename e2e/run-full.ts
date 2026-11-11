@@ -5,6 +5,7 @@ import {
 	WEB_BUILD_READY_ENV,
 } from "./agentRunPlan";
 import { REAL_CENTRAL_E2E_ENV } from "./fixtures/centralAgent";
+import { REAL_SPEECH_E2E_ENV } from "./fixtures/speech";
 import {
 	countSelectedPlaywrightTests,
 	type FullRunPhase,
@@ -13,6 +14,7 @@ import {
 import { holdE2eIdleSleep } from "./idleSleep";
 import {
 	PARENT_SIGNAL_OWNER_ENV,
+	PLAYWRIGHT_CONFIG,
 	processRunnerInterruption,
 	runE2eProcess,
 	signalExitCode,
@@ -26,6 +28,7 @@ function noAgentEnv(): NodeJS.ProcessEnv {
 	delete env.PLAYWRIGHT_BLOB_OUTPUT_FILE;
 	delete env[REAL_CENTRAL_E2E_ENV];
 	delete env[CENTRAL_PLAYWRIGHT_RUNNER_AUTH_ENV];
+	delete env[REAL_SPEECH_E2E_ENV];
 	return env;
 }
 
@@ -42,7 +45,18 @@ function phaseRunnerEnv(phase: FullRunPhase, webBuildReady: boolean): NodeJS.Pro
 
 async function countSelectedTests(phase: FullRunPhase, args: readonly string[]): Promise<number> {
 	const result = await runE2eProcess(
-		[bun, "x", "playwright", "test", ...args, "--list", "--reporter=json", "--workers=1"],
+		[
+			bun,
+			"x",
+			"playwright",
+			"test",
+			"-c",
+			PLAYWRIGHT_CONFIG,
+			...args,
+			"--list",
+			"--reporter=json",
+			"--workers=1",
+		],
 		{ env: phase === "agent" ? agentEnv() : noAgentEnv(), stdout: "pipe" },
 	);
 	const count = countSelectedPlaywrightTests(result.stdout);

@@ -11,7 +11,14 @@ import {
 	showingAuxiliaryKey,
 	visibleAuxiliaryGroups,
 } from "./auxiliaryPresentation";
-import { closeLayoutTab, reconcileAttention, selectTab, toolTab } from "./model";
+import {
+	closeLayoutTab,
+	isLayoutUnavailable,
+	type LayoutOperationResult,
+	reconcileAttention,
+	selectTab,
+	toolTab,
+} from "./model";
 import type { LayoutTerminalTab, WorkspaceLayoutDocument } from "./types";
 
 const terminal = (id: string): LayoutTerminalTab => ({
@@ -48,9 +55,9 @@ function document(): WorkspaceLayoutDocument {
 	};
 }
 
-function mutation<T extends { document: WorkspaceLayoutDocument } | { reason: string }>(value: T) {
-	if ("reason" in value) throw new Error(value.reason);
-	return value;
+function mutation(result: LayoutOperationResult) {
+	if (isLayoutUnavailable(result)) throw new Error(result.reason);
+	return result;
 }
 
 test("visible-pane resizing preserves folded weights and original group identities", () => {
@@ -87,7 +94,7 @@ test("rail extents do not reinterpret saved workbench-wide dimensions", () => {
 
 test("rail entries keep each pane's terminals together and tools in their own pane", () => {
 	const doc = document();
-	const entries = projectAuxiliaryRail(doc, reconcileAttention(doc), "right");
+	const entries = projectAuxiliaryRail(doc, reconcileAttention(doc, undefined), "right");
 	const terminals = entries.filter((entry) => entry.kind === "terminals");
 	expect(terminals.map((entry) => entry.groupId)).toEqual(["shells", "other"]);
 	expect(terminals[0]?.tabs.map((tab) => tab.id)).toEqual(["build", "tests"]);
@@ -102,7 +109,7 @@ test("rail entries keep each pane's terminals together and tools in their own pa
 
 test("rail clusters mirror the panes in order and park unplaced tools in a trailing cluster", () => {
 	const doc = document();
-	const attention = reconcileAttention(doc);
+	const attention = reconcileAttention(doc, undefined);
 	expect(
 		clusterAuxiliaryRail(projectAuxiliaryRail(doc, attention, "right")).map((cluster) => [
 			cluster.groupId,
@@ -134,7 +141,10 @@ test("rail clusters mirror the panes in order and park unplaced tools in a trail
 test("a terminal entry restores the pane's selected session, else its first", () => {
 	const doc = document();
 	const location = { area: "right", groupId: "shells" } as const;
-	const attention = reconcileAttention(doc, selectTab(reconcileAttention(doc), location, "tests"));
+	const attention = reconcileAttention(
+		doc,
+		selectTab(reconcileAttention(doc, undefined), location, "tests"),
+	);
 	const entry = projectAuxiliaryRail(doc, attention, "right").find(
 		(entry) => entry.kind === "terminals" && entry.groupId === "shells",
 	);
@@ -147,7 +157,7 @@ test("a terminal entry restores the pane's selected session, else its first", ()
 
 test("an active rail entry hides only its own pane without deleting resources", () => {
 	const doc = document();
-	const attention = reconcileAttention(doc);
+	const attention = reconcileAttention(doc, undefined);
 	const entry = projectAuxiliaryRail(doc, attention, "right").find(
 		(entry) => entry.kind === "terminals" && entry.groupId === "shells",
 	);
@@ -165,7 +175,7 @@ test("restorable singleton entries honor bottom targets and noncanonical placeme
 	const doc = document();
 	const closed = closeLayoutTab(doc, "custom-files").document;
 	closed.toolRestoreTargets.files = { region: "bottom", index: 0 };
-	const attention = reconcileAttention(closed);
+	const attention = reconcileAttention(closed, undefined);
 	expect(
 		projectAuxiliaryRail(closed, attention, "right").some(
 			(entry) => entry.kind === "tool" && entry.tool === "files",
@@ -186,7 +196,7 @@ test("restorable singleton entries honor bottom targets and noncanonical placeme
 
 test("an empty bottom entry reveals only a process-free creation surface", () => {
 	const doc = document();
-	const attention = reconcileAttention(doc);
+	const attention = reconcileAttention(doc, undefined);
 	const entry = projectAuxiliaryRail(doc, attention, "bottom").find(
 		(entry) => entry.kind === "empty",
 	);
@@ -203,9 +213,9 @@ test("a tool shows only as the selected tab of an expanded pane", () => {
 	const location = { area: "right", groupId: "tools" } as const;
 	const reviewSelected = reconcileAttention(
 		doc,
-		selectTab(reconcileAttention(doc), location, toolTab("review").id),
+		selectTab(reconcileAttention(doc, undefined), location, toolTab("review").id),
 	);
-	expect(isToolShowing(doc, reconcileAttention(doc), "review")).toBe(false);
+	expect(isToolShowing(doc, reconcileAttention(doc, undefined), "review")).toBe(false);
 	expect(isToolShowing(doc, reviewSelected, "review")).toBe(true);
 	const folded = document();
 	folded.right.groups = folded.right.groups.map((group) =>
@@ -220,7 +230,7 @@ test("the showing auxiliary key changes with the selected tool, not with the cen
 	const location = { area: "right", groupId: "tools" } as const;
 	const filesSelected = reconcileAttention(
 		doc,
-		selectTab(reconcileAttention(doc), location, "custom-files"),
+		selectTab(reconcileAttention(doc, undefined), location, "custom-files"),
 	);
 	const reviewSelected = reconcileAttention(
 		doc,

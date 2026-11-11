@@ -305,7 +305,7 @@ test("the action cluster keeps Update, quota Retry and Settings out of the drag 
 
 	const buttons = ["update-ready", "jbcentral-quota", "open-settings"];
 	await page.evaluate(() =>
-		document.documentElement.style.setProperty("--window-chrome-drag-region", "drag"),
+		document.documentElement.setAttribute("data-window-chrome-drag-region", "drag"),
 	);
 	await setInsets(page, 80, 138);
 	await expectUsableHeader(page, buttons, "drag");
@@ -357,7 +357,7 @@ test("HTML window controls appear only with the native bridge and drive it", asy
 	});
 	await openAppFresh(page);
 	await page.evaluate(() =>
-		document.documentElement.style.setProperty("--window-chrome-drag-region", "drag"),
+		document.documentElement.setAttribute("data-window-chrome-drag-region", "drag"),
 	);
 	await setInsets(page, 0, 138);
 

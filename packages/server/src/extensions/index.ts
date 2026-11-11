@@ -6,6 +6,9 @@ export type {
 export { listExtensionCatalog } from "./catalog";
 export {
 	type ExtensionDisabled,
+	type ExtensionSettingValue,
+	extensionSessionServices,
+	type HostSessionServices,
 	omitDisabledRegistryExtensions,
 	preferRegistryTools,
 	type RegistryExtensionKind,
@@ -20,3 +23,4 @@ export {
 	STAGED_HOST_SKILLS_ROUTE,
 	stagedExtensionSkillRoute,
 } from "./skills";
+export { checkWorkspaceFile, MOCKUP_DIR, workspaceFiles } from "./workspaceFiles";

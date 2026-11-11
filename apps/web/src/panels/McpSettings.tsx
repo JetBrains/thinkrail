@@ -88,6 +88,7 @@ import {
 	mcpSettingWrite,
 } from "./mcpServerView";
 import { startChatInTab } from "./openChat";
+import { SETTINGS_TAG } from "./SettingsGroup";
 
 const TONE_TEXT: Record<McpStateTone, string> = {
 	success: "text-feedback-success",
@@ -118,8 +119,7 @@ const ACTION_LABEL = {
 	"show-log": "mcp.action.showLog",
 } as const satisfies Record<McpRowAction, MessageKey>;
 
-const CHIP_CLASS =
-	"shrink-0 rounded-xs border border-border-default px-4 tr-text-label-pill text-text-muted";
+const CHIP_CLASS = cn(SETTINGS_TAG, "text-text-muted");
 
 type Settled<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -192,6 +192,12 @@ export async function approveMcpServer(
 	return refreshOnFailure(workspaceId, () =>
 		requestMcpList("mcp.approve", { workspaceId, name: summary.name, fingerprint }),
 	);
+}
+
+function cancelLoginQuietly(loginId: string): void {
+	void getTransport()
+		.request("provider.loginCancel", { loginId })
+		.catch(() => {});
 }
 
 function writeSetting(
@@ -814,9 +820,7 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 					}
 					const { loginId } = await getTransport().request(method, { workspaceId, name });
 					if (useAppStore.getState().removedWorkspaceIds[workspaceId]) {
-						void getTransport()
-							.request("provider.loginCancel", { loginId })
-							.catch(() => {});
+						cancelLoginQuietly(loginId);
 						return null;
 					}
 					useAppStore
