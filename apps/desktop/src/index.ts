@@ -492,13 +492,14 @@ async function start(): Promise<void> {
 	});
 	setWindowsWindowIcon(mainWindow);
 	if (!neutral) {
-		deliverDeepLink = (request) => {
+		const deliver = (request: NativeOpenFileRequest) => {
 			mainWindow.show();
 			mainWindow.activate();
 			if (webReady) rpc.send.openFile(request);
 			else pendingDeepLinks.push(request);
 		};
-		for (const request of earlyDeepLinks.splice(0)) deliverDeepLink(request);
+		deliverDeepLink = deliver;
+		for (const request of earlyDeepLinks.splice(0)) deliver(request);
 		mainWindow.webview.setNavigationRules(windowNavigationRules(origin));
 		handleTitleBarDoubleClick = createTitleBarDoubleClickHandler({
 			enabled: windowChrome.titleBarDoubleClick,
