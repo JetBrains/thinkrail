@@ -18,7 +18,7 @@ export type BoundedRunOptions = {
 	signal?: AbortSignal;
 	idleTimeoutMs?: number;
 	onStderr?: (text: string) => void;
-	stdin?: Uint8Array;
+	stdin?: Blob;
 };
 
 export type BoundedBytesRunOptions = Omit<BoundedRunOptions, "stdout"> & {

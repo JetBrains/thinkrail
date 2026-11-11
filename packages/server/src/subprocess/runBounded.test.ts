@@ -244,13 +244,13 @@ test("cwd and env reach the child", async () => {
 	expect(result.out).toBe(`${realpathSync(dir)}|from-opts`);
 });
 
-test("stdin bytes reach the child, also when it exits before reading them", async () => {
+test("stdin reaches the child, also when it exits before reading it", async () => {
 	const input = "x".repeat(4_000_000);
 	const echoed = await runBounded(
 		bun("process.stdout.write(String((await Bun.stdin.text()).length));"),
 		{
 			timeoutMs: 10_000,
-			stdin: new TextEncoder().encode(input),
+			stdin: new Blob([input]),
 		},
 	);
 	expect(echoed.ok).toBe(true);
@@ -258,7 +258,7 @@ test("stdin bytes reach the child, also when it exits before reading them", asyn
 
 	const early = await runBounded(bun("process.exit(3);"), {
 		timeoutMs: 10_000,
-		stdin: new TextEncoder().encode(input),
+		stdin: new Blob([input]),
 	});
 	expect(early.ok).toBe(false);
 	expect(early.timedOut).toBe(false);

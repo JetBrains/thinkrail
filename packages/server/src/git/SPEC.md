@@ -366,19 +366,19 @@ ref off the workspace-create critical path.
   non-canonical id, and the shared cap guarantees it never accepts a commit past the newest
   `COMMIT_LIST_MAX` — for which no adopted item is ever emitted. Kept in lock-step with `listCommits`.
   **`ignoredPaths(worktreePath, paths)`** → the subset git ignores (tracked files never count, and a path
-  inside an ignored folder does). One `git check-ignore --no-index --stdin -z` run takes every path. Only
-  the paths it matches go to `git -c core.quotePath=false check-ignore -- <paths>` with the index
-  (arguments chunked under 24k chars for Windows' command-line limit, run in parallel), because that check
-  scans the whole index for each path: one level of 22,650 folders in a repo with 67,500 tracked files
-  took 1.3 s that way and 12 s as one `--stdin` run, past the 10 s timeout (then nothing counts as
-  ignored), while the `--no-index` run takes 70 ms. A sparse checkout skips that run, which doesn't read a
-  `.gitignore` that exists only in the index (skip-worktree). Its mark is `info/sparse-checkout` in the
-  worktree's git dir; `git sparse-checkout disable` leaves the file, which then only costs speed.
-  Each path goes as `./<path>`: git reads a name like `:!x` as pathspec magic and fails the run, and
-  `check-ignore` refuses `--literal-pathspecs`. The host uses it to mark `fs.readDir` nodes `gitignored`,
-  so the Files tree can dim them. It never throws: a non-repository, a failure or a timeout reports
-  nothing. Names git must C-quote (a `"`, `\` or control character) are never reported, because `-z` needs
-  `--stdin`, which makes the index check of a 10,000-entry ignored folder 5.2 s instead of 0.45 s.
+  inside an ignored folder does). Paths go to `git check-ignore --stdin -z` as `./<path>` records, so a
+  name stays literal: a `"`, `\` or control character survives, and `:!x` is not read as pathspec magic,
+  which would fail the run (`check-ignore` refuses `--literal-pathspecs`). One `--no-index` run takes every
+  path; only its matches get the index check, which scans the whole index once per path, so it runs in
+  batches of 512, four at a time, each with its own 10 s deadline: with 67,500 tracked files 10,000
+  matches take about 5.5 s (one run 11.6 s; argv chunks 0.85 s, but they C-quote such names). A
+  sparse checkout skips the `--no-index` run, which doesn't read a `.gitignore` that exists only in the
+  index (skip-worktree); its mark is `info/sparse-checkout` in the worktree's git dir, which
+  `git sparse-checkout disable` leaves behind, costing only speed. The host uses it to mark `fs.readDir`
+  nodes `gitignored`, so the Files tree can dim them. It never throws: a non-repository, a failure or a
+  timeout adds only what git printed before it stopped, so a path git refuses (inside a submodule, beyond
+  a symlink) drops the rest of its batch. Known limit: the index check still reads glob characters, so
+  `a*` is not reported while a tracked `ab` exists.
 - **Public surface (barrel):** `git`, `gitAsync`, `gitAsyncBytes`, `gitAsyncStream`, `gitRunHook`, `nonInteractiveGitEnv`, `SLOW_GIT_TIMEOUT_MS`, `INDEX_WRITE_TIMEOUT_MS`, `throwOnTimeout`,
   `setSyncGitTimeoutForTests`,
   `remoteRefOid`, `remoteRefOidAsync`, `remoteTrackingRef`, `gitStatus`,

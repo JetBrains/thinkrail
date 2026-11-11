@@ -137,3 +137,39 @@ test.skipIf(process.platform === "win32")(
 		expect([...ignored].sort()).toEqual([":!x", "dist"]);
 	},
 );
+
+test("a path git refuses fails only its own batch of the index check", async () => {
+	const dir = repo();
+	const gitlink = Bun.spawnSync([
+		"git",
+		"-C",
+		dir,
+		"update-index",
+		"--add",
+		"--cacheinfo",
+		`160000,${"1".repeat(40)},sub`,
+	]);
+	if (!gitlink.success) throw new Error("git update-index failed");
+	const paths = [
+		"sub/inside.log",
+		...Array.from({ length: 1_500 }, (_, index) => `src/file-${index}.log`),
+		"src/last.log",
+	];
+	const ignored = await ignoredPaths(dir, paths);
+	expect(ignored.has("sub/inside.log")).toBe(false);
+	expect(ignored.has("src/file-0.log")).toBe(false);
+	expect(ignored.has("src/last.log")).toBe(true);
+});
+
+for (const [label, path] of [
+	["quote", 'src/a"b.log'],
+	["tab", "src/a\tb.log"],
+	["newline", "src/a\nb.log"],
+	["backslash", "src/a\\b.log"],
+	["pathspec magic", ":(glob)literal.log"],
+] as const) {
+	test(`ignoredPaths preserves a literal filename containing ${label}`, async () => {
+		const dir = repo();
+		expect(await ignoredPaths(dir, [path, "src/y.ts"])).toEqual(new Set([path]));
+	});
+}
