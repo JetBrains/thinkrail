@@ -3598,6 +3598,14 @@ test("requestChangesView / requestSpecView pair independent path requests with r
 	useAppStore.getState().requestSpecView("w1", ".thinkrail/context/TASK-x.md");
 	expect(useAppStore.getState().specRequest).not.toBe(first);
 	expect(useAppStore.getState().specRequest).toEqual(first);
+
+	useAppStore.getState().requestSpecView("w1", "SPEC.md", 42);
+	expect(useAppStore.getState().specRequest).toEqual({
+		workspaceId: "w1",
+		path: "SPEC.md",
+		line: 42,
+		navigation: null,
+	});
 });
 
 test("requestToolView reveals a tool without fabricating a path request", () => {
@@ -4157,6 +4165,14 @@ test("applyConfig projects the composer growth limit", () => {
 		composerGrowthLimit: "roomy",
 	});
 	expect(useAppStore.getState()).toHaveProperty("composerGrowthLimit", "roomy");
+});
+
+test("applyConfig projects the question panel height and defaults an invalid one", () => {
+	useAppStore.getState().applyConfig({ ...DEFAULT_CONFIG, questionPanelHeight: 85 });
+	expect(useAppStore.getState().questionPanelHeight).toBe(85);
+
+	useAppStore.getState().applyConfig({ ...DEFAULT_CONFIG, questionPanelHeight: 20 });
+	expect(useAppStore.getState().questionPanelHeight).toBe(DEFAULT_CONFIG.questionPanelHeight);
 });
 
 test("applyConfig projects synchronized chat and file line-width settings", () => {

@@ -36,7 +36,7 @@ For latest version, see the [Releases page](https://github.com/JetBrains/thinkra
 
 ## What you get
 
-- **Isolated workspaces.** Open any git repo as a project and create `git worktree` workspaces from it, each with its own branch and working directory. Agents can then work in parallel without touching your original codebase; when they finish, merge the results you want to keep and delete the rest. You can also attach existing git worktrees or explicitly work in the project folder.
+- **Isolated workspaces.** Open any git repo as a project and create `git worktree` workspaces from it, each with its own branch and working directory. Agents can then work in parallel without touching your original codebase; when they finish, merge the results you want to keep and delete the rest. Ask a chat to do something "in a side workspace" and the agent starts that workspace and its chat itself, then checks how its chats and pull requests are doing. You can also attach existing git worktrees or explicitly work in the project folder.
 
   * Finished and dormant workspaces are settled when their pull request merges or closes, or after a quiet week, and return the moment you work in them again.
 
@@ -52,7 +52,7 @@ For latest version, see the [Releases page](https://github.com/JetBrains/thinkra
 
 - **Chats without a project.** Ask, plan, or draft without a repository. Each chat gets its own scratch folder under **Chats** for its files, terminal, and plan, with no branch, review, or pull request. Start one from the Welcome screen, the Create dialog, the palette, or the Chats section; deleting a chat moves its whole folder to the Trash. When a chat turns into work, **Continue in workspace** has the agent write a handoff summary and starts a new workspace chat with it.
 
-- **Always up-to-date specifications.** A connected graph of `SPEC.md` files lives beside the code; the agent reads, searches, and maintains it through dedicated `spec_*` tools, so project intent persists across sessions. The read-only Specs tool renders the graph as a tree in its own view.
+- **Always up-to-date specifications.** A connected graph of `SPEC.md` files lives beside the code; the agent reads, searches, and maintains it through dedicated `spec_*` tools, so project intent persists across sessions. The read-only Specs tool renders the graph as a tree in its own view. Type `#` and a question in the palette to find the spec sections that answer it, in any word order and word form, ranked the way the agent's own `spec_search` ranks them. Press `↵` to open the spec at that heading, or `⌥↵` to ask the agent in a new chat when the specs phrase it differently.
 
 - **Skills.** ThinkRail loads your `pi` skills and any already in your project. It can also import skills from Claude, Codex, and other coding agents: switch them on in Settings → Extensions, or per project in the Skills dialog, which also shows the size of your skill catalog. A large library is listed within a small prompt budget, and the agent finds the rest with a skill search.
 

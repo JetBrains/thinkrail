@@ -477,14 +477,17 @@ the palette ranks with — kept here so host-side search can rank with the same 
   since the review has no chat to carry it. An older client reads the dropped fields as absent, so the pin
   is what lets a client tell "this host has no reviewer chat" from "this host is older" rather than inferring it;
   **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, analyticsConsentConfirmed, terminalReplayKb,
-  terminalWindowsShell, composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded,
+  terminalWindowsShell, composerGrowthLimit, questionPanelHeight, chatLineWidth, fileLineWidth, chatLineWidthBounded,
   fileLineWidthBounded, voiceInputEnabled, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
   favoriteModels, recentModels, reviewAutoFix, agentReviewEnabled, subagentsEnabled, subagentMaxConcurrent,
   jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, disabledExtensions, extensionSettings, otherAgentSkills,
   onboardingDismissed, interfaceFont, codeFont, codeFontSize, codeLigatures, fontWeightOffset }` — an extensible
   bag; the five font fields join at v102 and normalize together through `normalizeFontSettings` (host load, web
   store, fonts runtime); the line-width fields join the wire at protocol v61, `terminalWindowsShell` at v62, and
-  `voiceInputEnabled` (default `true`) with voice input at v107. `onboardingDismissed` (v94, default `false`)
+  `voiceInputEnabled` (default `true`) with voice input at v107, and `questionPanelHeight`
+  (**`QUESTION_PANEL_PROTOCOL_VERSION`** = v114; whole percents `QUESTION_PANEL_HEIGHT_PERCENT` 40–100,
+  default 60, `isQuestionPanelHeight`) caps the chat's interaction dock; a client of an older host hides
+  the setting and uses the default. `onboardingDismissed` (v94, default `false`)
   records that the user finished or skipped the cold-start onboarding wizard, so it never returns.
   `otherAgentSkills` (**`OTHER_AGENT_SKILLS_PROTOCOL_VERSION`** = v108, default `false`) is the host-wide
   opt-in for other agents' user skill directories and Claude plugins: every listed skill is resent in every
@@ -600,13 +603,15 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `session.getMessages` order, `anchorText` makes the anchor drift-tolerant), and
   **`HistorySearchResult`** (the prompts + full-text messages sections, with totals and indexing status);
   the **search palette DTOs** (`SEARCH_PROTOCOL_VERSION`, v106): **`SearchKind`** (`transcript` / `file` /
-  `spec` / `plan` — chats and workspaces are the palette's own rows), **`SearchContext`** (the active workspace + context project the
+  `spec` / `section` / `plan` — chats and workspaces are the palette's own rows; `section` from
+  `SPEC_SECTIONS_PROTOCOL_VERSION`, v113, a ranked spec section that replaced a spec's line-level body hit), **`SearchContext`** (the active workspace + context project the
   host turns into its one file/spec root), **`SearchHit`** (a union per kind over **`SearchHitBase`** — a stable
   `kind:id[:locator]` id, title / subtitle, the shared matcher's `MatchTier` + `score` and highlight `ranges`
   so the browser merges host hits with its local ones by the same rule, and the `projectId` / `workspaceId`
   every hit opens in — with each kind's own required target: a file's root-relative `path` and byte `size`
-  when readable, a spec's `path` / `specId` / `size` and the body line a `content` hit matched (`snippet`), a
-  plan's `sessionId`, a transcript's `sessionId` / `messageIndex` + `anchorText`; a size lets the client
+  when readable, a spec's `path` / `specId` / `size` (its title, id or path matched), a section's `path` / `specId`, its
+  best line as `snippet` and **`SearchHitSection`** — the heading trail, its 1-based `line`, and how many of
+  the query's words the section holds (`matched` of `terms`) — a plan's `sessionId`, a transcript's `sessionId` / `messageIndex` + `anchorText`; a size lets the client
   decline to preview a large file; nothing else rides the wire — sort keys stay on the host), **`SearchGroup`** (one per kind:
   capped `hits`, the true `total`, a lifecycle `state` — `ready`, `indexing` (never loaded: the client
   polls), `refreshing` (a reload runs behind these hits: the client re-asks quietly), `failed` (the last

@@ -18,7 +18,7 @@ the browser can merge host hits with its own by tier and score; and run Find in 
 streaming matching lines over the same one root (`git grep` in a repository, an in-process read in a
 chat's folder). Registry-free: `host/search.ts`
 composes `createSearchService` with injected readers (open projects, persisted workspace records, the
-history index, spec snapshots, stored plans, the file check — `fs`'s `readableFileSize`, the
+history index, spec snapshots and section search, stored plans, the file check — `fs`'s `readableFileSize`, the
 reader's own containment rule — and the text check, `fs`'s `classifyBytes`), the same shape as `host/historyScope.ts`.
 
 ## Boundary
@@ -64,8 +64,8 @@ transcript may still be on disk, but nothing may reopen it.
 
 - Terms come from `parseMatchTerms` over the query clamped to `MAX_SEARCH_QUERY_LENGTH`; an empty
   query answers empty groups (the browser owns the empty state). Field matches go through the matcher
-  with the terms as parsed (a quoted term is a literal); a body or transcript match takes each term's
-  text as a case-insensitive substring, so a quoted phrase matches as one. `kinds` narrows the providers; the
+  with the terms as parsed (a quoted term is a literal); a transcript match takes each term's text as
+  a case-insensitive substring, so a quoted phrase matches as one. `kinds` narrows the providers; the
   per-group `limit` is clamped to `MAX_SEARCH_GROUP_LIMIT`, `total` keeps the true count.
 - **Lifecycle (per group `state`):** `indexing` — the corpus has never loaded (a file list, the first
   spec snapshot, a cold history index; or a plan whose session a cold index has not reached) and the
@@ -110,14 +110,24 @@ transcript may still be on disk, but nothing may reopen it.
 - **Specs:** the `spec` module's per-root snapshot — every build runs off the request path, the first
   included (a root's first read answers `indexing` with no hits unless the build lands within the wait),
   and only on a read after its TTL lapsed or the worktree changed, the previous snapshot answering
-  meanwhile as `refreshing` (title / id / path through the
-  matcher; a body match from three characters becomes a `content`-tier hit with the matching line as
-  `snippet`).
-- **Content folding:** spec bodies and messages match through `matchContent`, so a body folds exactly
-  like a title. Each entry's prepared fold is cached against the entry object (`WeakMap`): history
-  entries survive revalidation, so the cost is about one more copy of the indexed message text, released
-  with the index's records; a spec body is prepared again once per snapshot rebuild. A snippet is cut
-  from the raw text around the first match and highlighted with `contentRanges` on the snippet itself.
+  meanwhile as `refreshing` — title / id / path through the matcher.
+- **Sections:** the spec bodies, through the `spec` module's `specSections(root)` — the ranked section
+  engine of `pi-spec-graph/core` that the agent's `spec_search` also uses, so both surfaces answer a
+  question with the same sections; the engine folds case and diacritics like the matcher. The provider
+  hands it the query **as typed** (the engine has its own tokenizer; the matcher's terms would lose a
+  phrase), and maps each hit to a `section` hit: one per section, `content` tier with the engine's score
+  (so `buildGroup`'s order is the engine's), the spec title as `title`, the path as `subtitle`, the best
+  line as `snippet`, `ranges` for the title, the heading and the snippet, and `section: { heading, line,
+  matched, terms }`; the id names the section by its heading trail and its occurrence among same-named
+  sections of the file, never by its line, so a re-index after an edit replaces a kept row instead of
+  listing the section twice. The index is built with the root's spec snapshot, off the request: the group
+  is `indexing` until it lands and `refreshing` while the snapshot is re-read. Sections replaced the
+  snapshot's line-level body hits — a body hit is a section, never a line.
+- **Content folding:** messages match through `matchContent`, so a message folds exactly like a title.
+  Each entry's prepared fold is cached against the entry object (`WeakMap`): history entries survive
+  revalidation, so the cost is about one more copy of the indexed message text, released with the
+  index's records. A snippet is cut from the raw text around the first match and highlighted with
+  `contentRanges` on the snippet itself.
 - **Transcripts:** hits are substring-AND over entries, one per message, `content` tier with an equal score so the timestamp alone orders them newest first (a
   user message never outranks a newer assistant one), carrying `messageIndex` / `anchorText` for the
   client's drift-tolerant jump. The scan visits the newest chat first and each chat's newest message

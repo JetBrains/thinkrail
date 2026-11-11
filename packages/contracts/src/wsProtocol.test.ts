@@ -5,6 +5,7 @@ import {
 	isSubagentMaxConcurrent,
 	RECENT_MODELS_LIMIT,
 	type ReviewFixDetails,
+	SEARCH_KINDS,
 	SETTLE_IDLE_DAYS,
 	SUBAGENT_MAX_CONCURRENT,
 } from "./domain";
@@ -54,6 +55,7 @@ import {
 	PROJECT_TRUST_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	PROVIDER_WARNINGS_PROTOCOL_VERSION,
+	QUESTION_PANEL_PROTOCOL_VERSION,
 	RESOURCE_HISTORY_PROTOCOL_VERSION,
 	RESOURCE_META_PROTOCOL_VERSION,
 	REVIEW_ACTIONS_PROTOCOL_VERSION,
@@ -63,6 +65,7 @@ import {
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	SESSION_TITLE_MAX_LENGTH,
+	SPEC_SECTIONS_PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
@@ -320,11 +323,23 @@ test("host search and its previews are pinned to v106", () => {
 	expect(WS_METHODS.searchPreview).toBe("search.preview");
 });
 
+test("spec sections in search are pinned to v113", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SPEC_SECTIONS_PROTOCOL_VERSION);
+	expect(SPEC_SECTIONS_PROTOCOL_VERSION).toBe(113);
+	expect(SEARCH_KINDS).toContain("section");
+});
+
 test("find in files is pinned to v112", () => {
-	expect(PROTOCOL_VERSION).toBe(112);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(TEXT_SEARCH_PROTOCOL_VERSION);
 	expect(TEXT_SEARCH_PROTOCOL_VERSION).toBe(112);
 	expect(WS_METHODS.searchText).toBe("search.text");
 	expect(WS_CHANNELS.searchTextResults).toBe("search.textResults");
+});
+
+test("the question panel height setting is pinned to v114", () => {
+	expect(PROTOCOL_VERSION).toBe(114);
+	expect(QUESTION_PANEL_PROTOCOL_VERSION).toBe(114);
+	expect(DEFAULT_CONFIG.questionPanelHeight).toBe(60);
 });
 
 test("continue in workspace is pinned to v110", () => {

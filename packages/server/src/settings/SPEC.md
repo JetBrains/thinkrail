@@ -53,6 +53,7 @@ interval (`1–3600`, default 30), because those values govern host process cade
   `isTerminalWindowsShell` guard, while a wire mutation outside the closed shell union rejects the complete
   update before cache, persistence, or broadcast changes. Settings owns validation and synchronization;
   `terminal` owns executable resolution and spawning.
+- `questionPanelHeight` defaults to 60 and accepts only whole percents from 40 through 100 (`isQuestionPanelHeight`); a malformed stored value falls back to the default and an invalid update rejects the complete mutation.
 - `chatLineWidth` / `fileLineWidth` independently default to 120 and accept only finite integers from 40 through 240; their `Bounded` switches independently default to `true`. A malformed stored field falls back without discarding valid siblings; any invalid supplied field rejects the complete mutation before cache, persistence, or broadcast changes.
 - `subagentsEnabled` defaults to `true` when absent so old config preserves current behavior; a present non-boolean update is rejected before cache, persistence, or broadcast changes. Settings owns only that global default; workspace override and effective-value resolution stay outside this module.
 - `onboardingDismissed` defaults to `false` when absent or malformed on disk; a present non-boolean update is rejected like the other boolean fields. Only the web onboarding wizard reads it.

@@ -142,3 +142,12 @@ export {
 } from "./titleTool";
 export * from "./toolResponses";
 export * from "./webUiContext";
+export {
+	START_WORKSPACE_TOOL_NAME,
+	type StartedWorkspace,
+	type StartWorkspaceParams,
+	setWorkspaceToolsHost,
+	WORKSPACE_STATUS_TOOL_NAME,
+	type WorkspaceStatusParams,
+	type WorkspaceToolsHost,
+} from "./workspaceTools";

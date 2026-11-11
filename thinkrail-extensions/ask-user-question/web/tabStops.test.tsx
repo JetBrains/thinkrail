@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { ASK_DISCUSS_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import type { ToolInteraction } from "@thinkrail/extension-api/web";
 import type { AskUserQuestionItem } from "@thinkrail/pi-ask-user-question/core";
+import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AskUserQuestionCard } from "./AskUserQuestionCard";
 import { QuestionBody } from "./QuestionBody";
@@ -36,8 +37,6 @@ const interaction: ToolInteraction = {
 	respond: async () => undefined,
 	focusScope: {},
 	prepareLayoutChange: () => noop,
-	revealElement: noop,
-	cancelAutomaticReveal: noop,
 	focusComposer: noop,
 	hostProtocol: ASK_DISCUSS_PROTOCOL_VERSION,
 };
@@ -93,6 +92,29 @@ describe("every control is an explicit tab stop (WebKit skips buttons without on
 		);
 		expect(html).toContain('data-testid="ask-skip"');
 		expect(controlsWithoutTabStop(html)).toEqual([]);
+	});
+
+	it("covers the docked sheet's collapse toggle and the transcript stub", () => {
+		const docked = (placement: "dock" | "stub") =>
+			renderToStaticMarkup(
+				<TooltipProvider>
+					<AskUserQuestionCard
+						toolCallId={`call-tab-stops-${placement}`}
+						toolName="ask_user_question"
+						args={{ questions: [single, multi] }}
+						result={undefined}
+						status="running"
+						streaming={false}
+						interaction={{ ...interaction, placement }}
+					/>
+				</TooltipProvider>,
+			);
+		const sheet = docked("dock");
+		expect(sheet).toContain('data-testid="ask-collapse"');
+		expect(controlsWithoutTabStop(sheet)).toEqual([]);
+		const stub = docked("stub");
+		expect(stub).toContain('data-testid="ask-docked-open"');
+		expect(controlsWithoutTabStop(stub)).toEqual([]);
 	});
 
 	it("covers the note toggle and the open note editor", () => {

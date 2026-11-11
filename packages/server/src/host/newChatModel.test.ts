@@ -137,15 +137,15 @@ test("an ambient OpenAI API key does not preempt the configured Codex subscripti
 	expect(await resolve()).toEqual({ model: subscriptionModel, thinkingLevel: "medium" });
 });
 
-test.each([
-	"api-key",
-	"central",
-] as const)("a configured %s connection takes precedence over an environment connection", async (kind) => {
-	const configured = wireModel("custom", "chosen", { kind });
-	const { resolve } = resolver({}, [environmentModel, configured]);
+test.each(["api-key", "central"] as const)(
+	"a configured %s connection takes precedence over an environment connection",
+	async (kind) => {
+		const configured = wireModel("custom", "chosen", { kind });
+		const { resolve } = resolver({}, [environmentModel, configured]);
 
-	expect(await resolve()).toEqual({ model: configured, thinkingLevel: "medium" });
-});
+		expect(await resolve()).toEqual({ model: configured, thinkingLevel: "medium" });
+	},
+);
 
 test("an unavailable saved model falls back to the configured subscription", async () => {
 	const { resolve } = resolver({ defaultModel: wireModel("missing", "gone") }, [

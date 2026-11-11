@@ -312,6 +312,7 @@ describe("SearchService.text", () => {
 				workspaces: () => [chat],
 				sessions: async () => ({ sessions: [], state: "ready" }),
 				specs: () => ({ entries: [], built: true, rebuilding: null }),
+				sections: () => ({ built: true, rebuilding: null, search: () => ({ hits: [], total: 0 }) }),
 				plans: () => [],
 				invalidateSpecs: () => {},
 				ensureDefault: async () => [],
@@ -369,6 +370,7 @@ describe("SearchService.text", () => {
 				workspaces: () => (listed ? [defaultRecord] : []),
 				sessions: async () => ({ sessions: [], state: "ready" }),
 				specs: () => ({ entries: [], built: true, rebuilding: null }),
+				sections: () => ({ built: true, rebuilding: null, search: () => ({ hits: [], total: 0 }) }),
 				plans: () => [],
 				invalidateSpecs: () => {},
 				ensureDefault: async () => {
@@ -435,6 +437,7 @@ describe("SearchService.text", () => {
 				workspaces: () => [workspace],
 				sessions: async () => ({ sessions: [], state: "ready" }),
 				specs: () => ({ entries: [], built: true, rebuilding: null }),
+				sections: () => ({ built: true, rebuilding: null, search: () => ({ hits: [], total: 0 }) }),
 				plans: () => [],
 				invalidateSpecs: () => {},
 				ensureDefault: async () => [],
