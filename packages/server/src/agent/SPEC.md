@@ -89,6 +89,9 @@ re-opened transcripts provider-valid.
     reads. Activation changes the current pointer for pre-session reads and future session creation; it never
     mutates, drains, or recreates existing sessions. A live session keeps its original runtime generation. A disk session
     attached after activation keeps its saved model when that model is available in the current runtime.
+    The saved model is pi's restore selection (`piBranchSelection` mirrors pi's unexported
+    `getBranchSelection`), not the last physical response: a still-registered virtual `model_change`
+    holds, so a router whose last routed model is gone still opens and runs on the router.
     If it is unavailable — absent from the runtime, or listed by pi but not served to the account
     (`modelAvailability` filtered it) — the chat still opens and its transcript stays readable, but the
     host never runs it on a model the user did not choose: it reports `model: null`, logs the saved ref,

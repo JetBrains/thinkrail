@@ -2076,6 +2076,30 @@ function attachDiskSession(
 	return pending;
 }
 
+const PI_VIRTUAL_MODEL_API = "pi-virtual";
+
+export function piBranchSelection(
+	branch: readonly SessionEntry[],
+	getModel: (provider: string, modelId: string) => Pick<Model<string>, "api"> | undefined,
+): { provider: string; modelId: string } | undefined {
+	let response: { provider: string; modelId: string } | undefined;
+	for (const entry of [...branch].reverse()) {
+		if (entry.type === "model_change") {
+			const change = { provider: entry.provider, modelId: entry.modelId };
+			const virtual = getModel(change.provider, change.modelId)?.api === PI_VIRTUAL_MODEL_API;
+			return !response || virtual ? change : response;
+		}
+		if (
+			!response &&
+			entry.type === "message" &&
+			entry.message.role === "assistant" &&
+			entry.message.api !== PI_VIRTUAL_MODEL_API
+		)
+			response = { provider: entry.message.provider, modelId: entry.message.model };
+	}
+	return response;
+}
+
 function persistedSessionModelRef(model: unknown): { provider: string; id: string } | undefined {
 	if (typeof model !== "object" || model === null) return undefined;
 	const provider = Reflect.get(model, "provider");
@@ -2109,7 +2133,11 @@ async function openDiskSession(
 		skillAdmissionResolver(workspaceId).piResourceTrusted,
 	);
 	const sessionManager = SessionManager.open(info.path);
-	const persistedModel = persistedSessionModelRef(sessionManager.buildSessionContext().model);
+	const persistedModel = persistedSessionModelRef(
+		piBranchSelection(sessionManager.getBranch(), (provider, id) =>
+			generation.runtime.getModel(provider, id),
+		),
+	);
 	let exactModel: Model<string> | undefined;
 	let unavailableSavedModel: SavedModelRef | undefined;
 	if (persistedModel) {
