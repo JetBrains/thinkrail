@@ -141,6 +141,9 @@ The effective reference follows definition pin → invocation model → parent i
 the invocation reference, including its thinking suffix, without resolving it. References resolve
 against the session's available models (`provider/id` → exact id → unique prefix); no provider
 substitution, custom model synthesis or parent fallback is permitted for an unresolved selection.
+The invocation words `inherit`, `parent` and `default` (any case) are the parent-inheritance
+spelling models carry over from Claude Code: they count as no invocation model and are never looked
+up, so they cannot name a model. A definition pin is not reinterpreted.
 
 Both definition and invocation model references accept one final `:<thinking>` suffix: `off`,
 `minimal`, `low`, `medium`, `high`, `xhigh` or `max`. Whole-reference resolution always comes first:
@@ -148,7 +151,9 @@ existing literal colon IDs and unique prefixes keep their meaning, and ambiguity
 a stripped reference. Only a missing whole reference permits suffix parsing; its nonempty base must
 resolve under the same rules, with no recursive stripping. Unknown suffixes remain literal unresolved
 references, with a syntax hint rather than silent default thinking. Missing and ambiguous selections
-have distinct diagnostics; provider qualification is suggested only for ambiguity. The exported
+have distinct diagnostics; provider qualification is suggested only for ambiguity. A missing
+selection lists the first 20 available `provider/id` refs, and a missing invocation reference also
+says that leaving `model` out uses the parent's model, so the next call can succeed. The exported
 `resolveModelRef` remains identity-only and does not interpret suffixes.
 
 Thinking precedence is explicit definition `thinking` → suffix on the winning reference → live parent.

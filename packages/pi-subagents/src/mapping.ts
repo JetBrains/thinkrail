@@ -7,6 +7,9 @@ import { isThinkingLevel, THINKING_LEVELS } from "./thinking";
 
 export const RECURSION_GUARD_TOOLS = ["Agent", "get_subagent_result"] as const;
 
+const PARENT_MODEL_ALIASES = new Set(["inherit", "parent", "default"]);
+const LISTED_MODELS_LIMIT = 20;
+
 type ModelRef = Pick<Model<string>, "provider" | "id">;
 type ModelMatch = { model: ModelRef } | { reason: "missing" | "ambiguous" };
 
@@ -80,6 +83,19 @@ export function buildChildSystemPrompt(definition: AgentDefinition, cwd: string)
 	return `${definition.systemPrompt.trim()}\n\n${BRIDGE}\n\n${env}`;
 }
 
+function availableModelsHint(available: readonly ModelRef[]): string {
+	if (available.length === 0) return " No models are available in this session.";
+	const listed = available
+		.slice(0, LISTED_MODELS_LIMIT)
+		.map((model) => `${model.provider}/${model.id}`)
+		.join(", ");
+	const more =
+		available.length > LISTED_MODELS_LIMIT
+			? ` (+${available.length - LISTED_MODELS_LIMIT} more)`
+			: "";
+	return ` Available models: ${listed}${more}.`;
+}
+
 export interface SpawnMapping {
 	session: SessionOptions;
 	maxTurns?: number;
@@ -95,7 +111,11 @@ export function toSpawnMapping(
 ): SpawnMapping {
 	let model: { provider: string; id: string } | undefined;
 	let thinkingLevel = definition.thinking;
-	const modelRef = definition.model ?? options.model;
+	const invocationRef =
+		options.model !== undefined && PARENT_MODEL_ALIASES.has(options.model.toLowerCase())
+			? undefined
+			: options.model;
+	const modelRef = definition.model ?? invocationRef;
 	if (modelRef !== undefined) {
 		let lookupRef = modelRef;
 		let match = matchModelRef(lookupRef, options.availableModels);
@@ -117,8 +137,11 @@ export function toSpawnMapping(
 				match.reason === "missing" && colon >= 0 && !isThinkingLevel(suffix)
 					? `; supported thinking suffixes: ${THINKING_LEVELS.join(", ")}`
 					: "";
+			const omit = selection === "requests" ? " Leave model out to use the parent's model." : "";
+			const guidance =
+				match.reason === "missing" ? `.${availableModelsHint(options.availableModels)}${omit}` : "";
 			throw new Error(
-				`Agent "${definition.name}" ${selection} model "${modelRef}"${base}, which ${reason}${hint}`,
+				`Agent "${definition.name}" ${selection} model "${modelRef}"${base}, which ${reason}${hint}${guidance}`,
 			);
 		}
 		model = match.model;
