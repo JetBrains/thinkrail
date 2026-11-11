@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { HostMessage } from "@thinkrail/contracts";
 import { answerTranscript, offerTranscript } from "@thinkrail/contracts";
-import { RTCPeerConnection } from "werift";
 import {
 	addDevice,
 	createPairingTokens,
@@ -21,6 +20,7 @@ import type { RemoteChannel } from "./channel";
 import { createWeriftHostPeer } from "./hostPeer";
 import { createHostSession } from "./hostSession";
 import { createHostHandshake } from "./signalingSession";
+import { RTCPeerConnection } from "./werift";
 import { toRemoteChannel } from "./weriftRemoteChannel";
 
 // End-to-end in-process: a real werift device answerer pairs with the host orchestration through an inline

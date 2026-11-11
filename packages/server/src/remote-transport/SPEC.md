@@ -53,6 +53,10 @@ broker (the host's own for Wi‑Fi/Tailscale, or a hosted one) and public Nostr 
     whose interface holds only a private IP): the STUN server-reflexive address from a werift gather, kept
     only when the relay's `/health` answers there. That self-probe is what tells a VPS from a home router,
     which does not forward the port, so a laptop never advertises its router's address.
+  - `werift.ts` — the one door to werift. Its certificate code (`@peculiar/x509` → `tsyringe`) throws at import
+    unless `reflect-metadata` ran first; `reflectMetadata.ts` loads that CommonJS polyfill with `require`, because
+    the compiled binary hoists ES module bodies above CommonJS ones and an `import` there would run too late (the
+    binary died at startup). Nothing else imports `werift` directly.
   - `hostPeer.ts` — `createWeriftHostPeer`, the host as WebRTC **offerer** (creates the DataChannel + offer,
     emits local SDP/ICE, consumes the device's answer/candidates, surfaces a `RemoteChannel`) over the public
     STUN servers only, behind a `HostPeer` interface so the orchestrator is testable with a fake. werift

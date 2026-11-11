@@ -1,6 +1,6 @@
 import { chunkFrames, createChannelAssembler } from "@thinkrail/contracts";
-import type { RTCDataChannel } from "werift";
 import type { RemoteChannel } from "./channel";
+import type { RTCDataChannel } from "./werift";
 
 /** Adapts a werift `RTCDataChannel` to the transport-agnostic `RemoteChannel` the wire protocol runs over. */
 export function toRemoteChannel(channel: RTCDataChannel): RemoteChannel {

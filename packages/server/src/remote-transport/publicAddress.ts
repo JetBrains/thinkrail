@@ -1,5 +1,5 @@
 import { withPublicStun } from "@thinkrail/contracts";
-import { RTCPeerConnection } from "werift";
+import { RTCPeerConnection } from "./werift";
 
 const withTimeout = <T>(work: Promise<T>, ms: number, fallback: T): Promise<T> =>
 	Promise.race([work, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))]);
