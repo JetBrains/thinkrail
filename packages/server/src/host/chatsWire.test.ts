@@ -93,7 +93,7 @@ function gitRepo(path: string): string {
 
 async function connect(client: string, protocol: number): Promise<Client> {
 	const socket = new WebSocket(
-		`ws://127.0.0.1:${server.port}/ws?client=${client}&protocol=${protocol}`,
+		`ws://127.0.0.1:${server.port}/ws?client=${client}&protocol=${protocol}&token=${server.authToken}`,
 	);
 	const frames: Frame[] = [];
 	const waiting = new Map<string, (frame: Frame) => void>();

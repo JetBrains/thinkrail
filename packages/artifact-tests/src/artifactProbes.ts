@@ -139,7 +139,11 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 async function connectRpc(baseUrl: string): Promise<WebSocket> {
-	const socket = new WebSocket(`${baseUrl.replace(/^http/, "ws")}/ws`);
+	const page = await (await fetch(`${baseUrl}/`)).text();
+	const token = /<meta name="thinkrail-instance-token" content="([^"]+)">/.exec(page)?.[1] ?? "";
+	const socket = new WebSocket(
+		`${baseUrl.replace(/^http/, "ws")}/ws?token=${encodeURIComponent(token)}`,
+	);
 	await new Promise<void>((resolve, reject) => {
 		socket.addEventListener("open", () => resolve(), { once: true });
 		socket.addEventListener("error", () => reject(new Error("WebSocket connection failed")), {

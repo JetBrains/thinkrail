@@ -18,6 +18,21 @@ function envPort(name: string): number | undefined {
 const hostPort = envPort("THINKRAIL_PORT") ?? 24242;
 const webPort = envPort("THINKRAIL_WEB_PORT");
 
+function devInstanceToken() {
+	return {
+		name: "thinkrail-dev-instance-token",
+		apply: "serve" as const,
+		transformIndexHtml(html: string) {
+			const token = process.env.THINKRAIL_DEV_AUTH_TOKEN;
+			if (!token) return html;
+			const meta = `<meta name="thinkrail-instance-token" content="${token}">`;
+			return html.includes("</head>")
+				? html.replace("</head>", `${meta}</head>`)
+				: `${meta}${html}`;
+		},
+	};
+}
+
 export default defineConfig(({ mode }) => {
 	const profile = mode === "profile";
 	const release = profile ? null : sourceMapRelease();
@@ -27,6 +42,7 @@ export default defineConfig(({ mode }) => {
 			react(),
 			babel({ presets: [reactCompilerPreset()] }),
 			tailwindcss(),
+			devInstanceToken(),
 			...(release ? [posthogSourceMapUpload(release)] : []),
 		],
 		resolve: {

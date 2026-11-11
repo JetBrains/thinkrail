@@ -107,6 +107,7 @@ if (posthogApiKey) {
 		"thinkrail dev: THINKRAIL_DEV_POSTHOG is on, so this run sends basic analytics and survey answers",
 	);
 }
+const devAuthToken = process.env.THINKRAIL_DEV_AUTH_TOKEN;
 
 const { port } = await bootHost({
 	port: envPort ?? 24242,
@@ -114,6 +115,7 @@ const { port } = await bootHost({
 	portMode: envPort === undefined ? "free" : "exact",
 	resolveShellEnv: true,
 	...(staticDir ? { staticDir } : {}),
+	...(devAuthToken ? { authToken: devAuthToken } : {}),
 	analytics: {
 		channel: "dev",
 		build: "source",
