@@ -42,12 +42,14 @@ export {
 	gitAsync,
 	gitAsyncBytes,
 	gitAsyncStream,
+	gitRunHook,
 	INDEX_WRITE_TIMEOUT_MS,
 	nonInteractiveGitEnv,
 	SLOW_GIT_TIMEOUT_MS,
 	setSyncGitTimeoutForTests,
 	throwOnTimeout,
 } from "./gitExec";
+export { headBranchAt } from "./head";
 export { ignoredPaths } from "./ignored";
 export { assertSafeRef, isSafeRef, remoteNameOf, remoteTrackingRef } from "./refs";
 export { snapshotWorktree } from "./snapshot";

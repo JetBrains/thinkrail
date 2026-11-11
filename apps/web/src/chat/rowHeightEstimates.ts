@@ -142,7 +142,7 @@ export function estimateChatRowHeight(row: ChatRow): number {
 			return clampHeight(24 + wrappedLines(text, 62) * PROSE_LINE_HEIGHT + attachments);
 		}
 		case "system":
-			return clampHeight(20 + wrappedLines(row.text ?? "") * PROSE_LINE_HEIGHT);
+			return clampHeight(20 + wrappedLines(row.text) * PROSE_LINE_HEIGHT);
 		case "error":
 			return clampHeight(28 + wrappedLines(row.text) * PROSE_LINE_HEIGHT);
 		case "backgroundCommandCompletion":
@@ -154,6 +154,10 @@ export function estimateChatRowHeight(row: ChatRow): number {
 					(row.details.note ? wrappedLines(row.details.note) * PROSE_LINE_HEIGHT : 0) +
 					row.details.comments.length * 28,
 			);
+		case "continuationRequest":
+			return 72;
+		case "handoff":
+			return clampHeight(56 + wrappedLines(row.details.summary) * PROSE_LINE_HEIGHT);
 		case "tool":
 			return estimateToolHeight(row);
 		case "activity":

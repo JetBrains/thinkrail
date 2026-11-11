@@ -113,7 +113,7 @@ export function ChangesReviewGuide({
 		if (index !== null) go(index);
 	};
 	const next = () => stepFrom(cursor, 1);
-	const previous = () => stepFrom(cursor < 0 ? 0 : cursor, -1);
+	const previous = () => stepFrom(Math.max(cursor, 0), -1);
 
 	useEffect(() => {
 		if (steps.length === 0) return;

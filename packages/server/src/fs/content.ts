@@ -11,7 +11,6 @@ const MAGIC: ReadonlyArray<{ mime: string; bytes: readonly number[] }> = [
 	{ mime: "image/jpeg", bytes: [0xff, 0xd8, 0xff] },
 	{ mime: "image/gif", bytes: [0x47, 0x49, 0x46, 0x38, 0x37, 0x61] },
 	{ mime: "image/gif", bytes: [0x47, 0x49, 0x46, 0x38, 0x39, 0x61] },
-	{ mime: "image/bmp", bytes: [0x42, 0x4d] },
 	{ mime: "image/x-icon", bytes: [0x00, 0x00, 0x01, 0x00] },
 	{ mime: "application/pdf", bytes: [0x25, 0x50, 0x44, 0x46, 0x2d] },
 	{ mime: "application/zip", bytes: [0x50, 0x4b, 0x03, 0x04] },
@@ -36,8 +35,7 @@ const EXTENSION_MIME: Readonly<Record<string, string>> = {
 	".txt": "text/plain",
 };
 
-const SVG_ROOT = /^\s*<svg[\s>]/;
-const XML_PROLOG = /^\s*<\?xml(?:\s|\?>)/;
+const SVG_ROOT = /^<svg(?:\s|\/?>)/;
 const LFS_POINTER_LIMIT = 1024;
 const LFS_POINTER =
 	/^version https:\/\/git-lfs\.github\.com\/spec\/v1\noid sha256:[0-9a-f]{64}\nsize \d{1,15}\n$/;
@@ -69,6 +67,16 @@ function isAvif(bytes: Uint8Array): boolean {
 	return false;
 }
 
+const BMP_SIGNATURE = [0x42, 0x4d];
+const BMP_DIB_HEADER_OFFSET = 14;
+const BMP_DIB_HEADER_SIZES: ReadonlySet<number> = new Set([12, 40, 52, 56, 64, 108, 124]);
+
+function isBmp(bytes: Uint8Array): boolean {
+	if (bytes.length < BMP_DIB_HEADER_OFFSET + 4 || !startsWith(bytes, BMP_SIGNATURE)) return false;
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	return BMP_DIB_HEADER_SIZES.has(view.getUint32(BMP_DIB_HEADER_OFFSET, true));
+}
+
 function sniffMagic(bytes: Uint8Array): string | undefined {
 	if (
 		startsWith(bytes, [0x52, 0x49, 0x46, 0x46]) &&
@@ -77,6 +85,7 @@ function sniffMagic(bytes: Uint8Array): string | undefined {
 		return "image/webp";
 	}
 	if (isAvif(bytes)) return "image/avif";
+	if (isBmp(bytes)) return "image/bmp";
 	return MAGIC.find(({ bytes: magic }) => startsWith(bytes, magic))?.mime;
 }
 
@@ -90,12 +99,45 @@ function isTextBytes(bytes: Uint8Array): boolean {
 	}
 }
 
+function doctypeEnd(head: string): number {
+	let quote = "";
+	let subsetDepth = 0;
+	for (let index = 9; index < head.length; index++) {
+		const char = head[index];
+		if (quote !== "") {
+			if (char === quote) quote = "";
+		} else if (head.startsWith("<!--", index)) {
+			const end = head.indexOf("-->", index + 4);
+			if (end === -1) return -1;
+			index = end + 2;
+		} else if (head.startsWith("<?", index)) {
+			const end = head.indexOf("?>", index + 2);
+			if (end === -1) return -1;
+			index = end + 1;
+		} else if (char === '"' || char === "'") quote = char;
+		else if (char === "[") subsetDepth++;
+		else if (char === "]") subsetDepth--;
+		else if (char === ">" && subsetDepth === 0) return index + 1;
+	}
+	return -1;
+}
+
 function isSvg(bytes: Uint8Array): boolean {
-	const head = UTF8.decode(bytes.subarray(0, CONTENT_SNIFF_BYTES));
-	if (SVG_ROOT.test(head)) return true;
-	if (!XML_PROLOG.test(head)) return false;
-	const prologEnd = head.indexOf("?>");
-	return prologEnd !== -1 && /<svg[\s>]/.test(head.slice(prologEnd + 2));
+	let head = UTF8.decode(bytes.subarray(0, CONTENT_SNIFF_BYTES)).trimStart();
+	for (;;) {
+		if (SVG_ROOT.test(head)) return true;
+		let end: number;
+		if (head.startsWith("<?")) {
+			const close = head.indexOf("?>", 2);
+			end = close === -1 ? -1 : close + 2;
+		} else if (head.startsWith("<!--")) {
+			const close = head.indexOf("-->", 4);
+			end = close === -1 ? -1 : close + 3;
+		} else if (/^<!DOCTYPE\s/.test(head)) end = doctypeEnd(head);
+		else return false;
+		if (end === -1) return false;
+		head = head.slice(end).trimStart();
+	}
 }
 
 function isLfsPointer(bytes: Uint8Array): boolean {

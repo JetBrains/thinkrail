@@ -56,7 +56,9 @@ stays with the referencing skill.
 - **A concrete scenario beats an abstract principle.** Ask "a user drags a file onto a busy session —
   queue it or reject it?", not "how should concurrency be handled?".
 - If the question can't be settled by talking (how something should look or feel), show a concrete
-  artifact in `options[].preview` — a mockup, snippet, or config — instead of describing it.
+  artifact instead of describing it: what the question is about (the design to approve, the current
+  state) in `questions[].preview`, the alternatives in `options[].preview` — and, when the tool offers
+  `previewFile`, a mockup file rather than pasted HTML or ASCII art.
 
 ## Options
 
@@ -67,27 +69,33 @@ stays with the referencing skill.
 - Options must be **decidable by the asked user**: frame them as observable behavior or outcomes
   ("collapsing a project stays collapsed after a rename"), never as implementation mechanics
   ("semantic guard", "activation ref").
-- Never author your own "Other", free-text, or escape options — the tool adds a free-text row to
-  every question and an always-available Skip, and reserved labels are rejected. This holds under
-  `multiSelect` too: the free-text row stays and is *additive* — a typed answer arrives alongside the
-  checked options, it does not replace them.
+- Never author your own "Other", free-text, escape or "discuss"-style options ("None of these",
+  "Not this — ask me differently") — the tool adds a free-text row and a way to mark the question
+  "discuss first" to every question, plus an always-available Skip, and reserved labels are rejected.
+  This holds under `multiSelect` too: the free-text row stays and is *additive* — a typed answer arrives
+  alongside the checked options, it does not replace them.
+- A question the user marks **discuss first** (with an optional reason: unclear, not relevant, needs
+  more context) is not answered: never settle it on a guess. Explain it in plain words — what is being
+  decided and why it matters, or whether it is needed at all when it seems not relevant — and ask it
+  again in a later round.
 - `multiSelect: true` when several answers are valid at once (feature checklists); single-select when
   confirming something or choosing one path.
 - `options[].preview` (markdown) when a concrete artifact — code, a config, a mockup — is clearer
-  shown than described. Single-select only.
+  shown than described. Single-select only; an option may honestly have none.
 - `header` is a short chip, ≤ 16 characters.
 
 ## Confirming an inference
 
 When you have inferred something and need a yes/adjust rather than an open answer: the inferred
-statement *is* the question text, with "Looks right" as the first option (description: "accurate as
-written") and a genuine rejection option second (e.g. "Off base — ask me directly"). Edits arrive
-through the tool's automatic free-text row — do not author an edit option. Read the response as:
+statement *is* the question text, with a single "Looks right" option (description: "accurate as
+written"). Edits arrive through the tool's automatic free-text row and disagreement through its
+"discuss first" mark — do not author an edit or rejection option. Read the response as:
 
 - **"Looks right"** → the inference holds; continue unchanged.
 - **Free-text tweak** (one fact changes) → update that field only; don't re-derive anything else.
 - **Substantial rewrite** → re-derive every inference that came from that statement before continuing.
-- **Rejection** → discard the inference entirely and ask an open-ended question instead.
+- **Discuss first** → the inference is not confirmed: discard it, then explain what you inferred and why
+  (for "unclear" or "needs more context") or ask an open-ended question instead.
 
 ## Degradation
 

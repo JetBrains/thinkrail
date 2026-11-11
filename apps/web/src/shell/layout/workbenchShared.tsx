@@ -419,11 +419,23 @@ function isFocusLost(active: Element | null): boolean {
 	);
 }
 
+function focusRestsInSelectedPanel(tab: HTMLElement | null, active: Element | null): boolean {
+	if (!tab || isFocusLost(active)) return false;
+	if (tab.getAttribute("aria-selected") !== "true" && tab.getAttribute("aria-pressed") !== "true") {
+		return false;
+	}
+	const panelId = tab.getAttribute("aria-controls");
+	const panel = panelId ? globalThis.document.getElementById(panelId) : null;
+	return panel?.contains(active) ?? false;
+}
+
 export function focusLayoutRequest(request: LayoutTabFocusRequest): void {
-	if (request.onlyIfFocusLost && !isFocusLost(globalThis.document.activeElement)) return;
+	const active = globalThis.document.activeElement;
+	if (request.onlyIfFocusLost && !isFocusLost(active)) return;
 	const tab = request.tabId
 		? globalThis.document.getElementById(tabDomId(request.location, request.tabId))
 		: null;
+	if (focusRestsInSelectedPanel(tab, active)) return;
 	const pane = globalThis.document.getElementById(groupDomId(request.location));
 	const rail = globalThis.document
 		.getElementById(railGroupDomId(request.location))

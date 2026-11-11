@@ -181,7 +181,7 @@ export function CloneProjectDialog({
 			<DialogContent
 				hideClose={busy}
 				data-testid="clone-project-dialog"
-				className="max-h-[90dvh] max-w-[32rem] gap-12 overflow-y-auto"
+				className="max-w-[32rem] gap-12"
 			>
 				<DialogHeader>
 					<DialogTitle>{t("panels.cloneProject.title")}</DialogTitle>

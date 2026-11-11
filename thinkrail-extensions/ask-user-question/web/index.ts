@@ -6,7 +6,7 @@ export default defineWebExtension({
 	toolRenderers: {
 		ask_user_question: {
 			renderer: AskUserQuestionCard,
-			options: { chrome: "bare", interactive: true },
+			options: { chrome: "bare", interactive: true, dock: true },
 		},
 	},
 });

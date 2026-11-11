@@ -1,4 +1,6 @@
 export { initializeThemes } from "./bundled";
+export { resolveThinkrailEditorTheme } from "./editor";
+export { THINKRAIL_PIERRE_THEME } from "./pierre";
 export {
 	applyTheme,
 	applyThemePreference,
@@ -20,8 +22,3 @@ export {
 	writeThemeHint,
 } from "./runtime";
 export type { ThemeManifest } from "./schema";
-export {
-	resolveThinkrailShikiTheme,
-	THINKRAIL_SHIKI_THEME,
-	THINKRAIL_SHIKI_THEME_NAME,
-} from "./shiki";
