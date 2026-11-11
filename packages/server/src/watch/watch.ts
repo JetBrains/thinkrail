@@ -56,14 +56,6 @@ function isRepoMetaPath(relPath: string): boolean {
 	return relPath.split(/[\\/]/)[0] === ".git";
 }
 
-function isDirectory(path: string): boolean {
-	try {
-		return statSync(path).isDirectory();
-	} catch {
-		return false;
-	}
-}
-
 function resolveExternalGitDir(worktreePath: string): string | null {
 	const dotGit = resolve(worktreePath, ".git");
 	try {
@@ -77,102 +69,6 @@ function resolveExternalGitDir(worktreePath: string): string | null {
 	} catch {
 		return null;
 	}
-}
-
-function resolveCommonGitDir(gitDir: string): string | null {
-	try {
-		const commonDir = resolve(gitDir, readFileSync(join(gitDir, "commondir"), "utf8").trim());
-		return isDirectory(commonDir) ? commonDir : null;
-	} catch {
-		return null;
-	}
-}
-
-function headBranch(gitDir: string): string | null {
-	try {
-		const head = readFileSync(join(gitDir, "HEAD"), "utf8").trim();
-		return /^ref: refs\/heads\/(.+)$/.exec(head)?.[1] ?? null;
-	} catch {
-		return null;
-	}
-}
-
-function subdirectories(dir: string): string[] {
-	try {
-		return readdirSync(dir, { withFileTypes: true })
-			.filter((entry) => entry.isDirectory())
-			.map((entry) => entry.name);
-	} catch {
-		return [];
-	}
-}
-
-type RefWatchTarget = [dir: string, name: string | null];
-
-function remoteRefTargets(gitDir: string, commonDir: string): RefWatchTarget[] {
-	const packedRefs: RefWatchTarget = [commonDir, "packed-refs"];
-	const refs = join(commonDir, "refs");
-	const remotes = join(refs, "remotes");
-	if (!isDirectory(remotes)) return [packedRefs, [refs, "remotes"]];
-	const targets: RefWatchTarget[] = [packedRefs, [remotes, null]];
-	const segments = headBranch(gitDir)?.split("/") ?? [];
-	const leaf = segments.pop();
-	if (leaf === undefined) return targets;
-	for (const remote of subdirectories(remotes)) {
-		let dir = join(remotes, remote);
-		let name = leaf;
-		for (const segment of segments) {
-			if (!isDirectory(join(dir, segment))) {
-				name = segment;
-				break;
-			}
-			dir = join(dir, segment);
-		}
-		targets.push([dir, name]);
-	}
-	return targets;
-}
-
-function watchRefDir(
-	workspaceId: string,
-	rootWatcher: FSWatcher,
-	[dir, name]: RefWatchTarget,
-): FSWatcher | null {
-	try {
-		const watcher = watch(dir, { recursive: false }, (_event, filename) => {
-			if (name === null || typeof filename !== "string" || filename === name)
-				scheduleRepoMeta(workspaceId, rootWatcher);
-		});
-		watcher.on("error", () => {
-			watcher.close();
-			const remoteRefs = entries.get(workspaceId)?.remoteRefs;
-			if (remoteRefs) remoteRefs.key = "";
-		});
-		return watcher;
-	} catch {
-		return null;
-	}
-}
-
-function inode(path: string): number | null {
-	try {
-		return statSync(path).ino;
-	} catch {
-		return null;
-	}
-}
-
-function syncRemoteRefWatch(workspaceId: string, entry: WatchEntry): void {
-	const remoteRefs = entry.remoteRefs;
-	if (!remoteRefs) return;
-	const targets = remoteRefTargets(remoteRefs.gitDir, remoteRefs.commonDir);
-	const key = JSON.stringify(targets.map(([dir, name]) => [dir, name, inode(dir)]));
-	if (key === remoteRefs.key) return;
-	for (const watcher of remoteRefs.watchers) watcher.close();
-	remoteRefs.key = key;
-	remoteRefs.watchers = targets.flatMap(
-		(target) => watchRefDir(workspaceId, entry.watcher, target) ?? [],
-	);
 }
 
 function watchGitDir(
@@ -217,6 +113,103 @@ function scheduleRepoMeta(workspaceId: string, watcher: FSWatcher): void {
 		deliver("repo-meta", workspaceId, () => publishRepoMeta?.(workspaceId));
 	}, REPO_META_DEBOUNCE_MS);
 	if (entry) entry.metaTimer = timer;
+}
+
+function directoryInode(path: string): number | null {
+	try {
+		const stat = statSync(path);
+		return stat.isDirectory() ? stat.ino : null;
+	} catch {
+		return null;
+	}
+}
+
+function resolveCommonGitDir(gitDir: string): string | null {
+	try {
+		const commonDir = resolve(gitDir, readFileSync(join(gitDir, "commondir"), "utf8").trim());
+		return directoryInode(commonDir) === null ? null : commonDir;
+	} catch {
+		return null;
+	}
+}
+
+function headBranch(gitDir: string): string | null {
+	try {
+		const head = readFileSync(join(gitDir, "HEAD"), "utf8").trim();
+		return /^ref: refs\/heads\/(.+)$/.exec(head)?.[1] ?? null;
+	} catch {
+		return null;
+	}
+}
+
+function subdirectories(dir: string): string[] {
+	try {
+		return readdirSync(dir, { withFileTypes: true })
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => entry.name);
+	} catch {
+		return [];
+	}
+}
+
+type RefWatchTarget = [dir: string, name: string | null];
+
+function remoteRefTargets(gitDir: string, commonDir: string): RefWatchTarget[] {
+	const packedRefs: RefWatchTarget = [commonDir, "packed-refs"];
+	const refs = join(commonDir, "refs");
+	const remotes = join(refs, "remotes");
+	if (directoryInode(remotes) === null) return [packedRefs, [refs, "remotes"]];
+	const targets: RefWatchTarget[] = [packedRefs, [remotes, null]];
+	const segments = headBranch(gitDir)?.split("/") ?? [];
+	const leaf = segments.pop();
+	if (leaf === undefined) return targets;
+	for (const remote of subdirectories(remotes)) {
+		let dir = join(remotes, remote);
+		let name = leaf;
+		for (const segment of segments) {
+			if (directoryInode(join(dir, segment)) === null) {
+				name = segment;
+				break;
+			}
+			dir = join(dir, segment);
+		}
+		targets.push([dir, name]);
+	}
+	return targets;
+}
+
+function watchRefDir(
+	workspaceId: string,
+	rootWatcher: FSWatcher,
+	[dir, name]: RefWatchTarget,
+): FSWatcher | null {
+	try {
+		const watcher = watch(dir, { recursive: false }, (_event, filename) => {
+			if (name === null || typeof filename !== "string" || filename === name)
+				scheduleRepoMeta(workspaceId, rootWatcher);
+		});
+		watcher.on("error", () => {
+			watcher.close();
+			const remoteRefs = entries.get(workspaceId)?.remoteRefs;
+			if (remoteRefs) remoteRefs.key = "";
+		});
+		return watcher;
+	} catch {
+		return null;
+	}
+}
+
+function syncRemoteRefWatch(workspaceId: string, entry: WatchEntry): void {
+	const remoteRefs = entry.remoteRefs;
+	if (!remoteRefs) return;
+	const targets = remoteRefTargets(remoteRefs.gitDir, remoteRefs.commonDir);
+	const key = JSON.stringify(targets.map(([dir, name]) => [dir, name, directoryInode(dir)]));
+	if (key === remoteRefs.key) return;
+	for (const watcher of remoteRefs.watchers) watcher.close();
+	remoteRefs.key = key;
+	remoteRefs.watchers = targets.flatMap(
+		(target) => watchRefDir(workspaceId, entry.watcher, target) ?? [],
+	);
 }
 
 export function isIgnoredPath(relPath: string): boolean {
