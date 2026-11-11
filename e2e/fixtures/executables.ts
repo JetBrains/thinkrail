@@ -22,7 +22,6 @@ function executableSuffixes(env: NodeJS.ProcessEnv): string[] {
 	return ["", ...(env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean)];
 }
 
-/** The first executable named `name` a host with this PATH could launch, Windows suffixes included. */
 export function executableOnPath(
 	path: string,
 	name: string,
