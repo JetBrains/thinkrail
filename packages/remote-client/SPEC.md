@@ -43,7 +43,7 @@ uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `loc
     and a reconnect refused for good (`unknown_device`, `identity_mismatch`, `app_outdated`) stops retrying,
     closes the connection and fires `onLost`; `remoteSessions` then drops that host and tells its `onLost`
     listeners. The retry schedule is `reconnectLoop.ts`; `onOpenChange` reports the channel going down and
-    back, `reconnectNow` skips the wait. The host's `remote.hostRoutes` push replaces the routes later attempts
+    back, `onRetryFailed` each failed attempt meanwhile (so the app shows why), `reconnectNow` skips the wait. The host's `remote.hostRoutes` push replaces the routes later attempts
     dial and reaches `onRoutes`, so a phone paired before a route existed (Nostr) or before the computer's
     address changed follows the computer without a new QR.
   - `reconnectLoop.ts` — `createReconnectLoop`: one attempt at a time, doubling capped backoff reset on
@@ -58,7 +58,8 @@ uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `loc
     welcome (`welcomeFor`: protocol version and config) and what it lets this phone do (`accessFor`, `write` until a
     `remote.deviceAccess` push says `read`); `disconnect` closes and drops one host. A host whose first
     connect failed for a reason a retry can fix keeps being retried in the background (2s doubling to 30s;
-    `onRetryFailed` hears each miss) until it connects or is disconnected; `isReconnecting` marks a live host
+    `onRetryFailed` hears each miss, and each failed attempt of a live host whose channel is down) until it
+    connects or is disconnected; `isReconnecting` marks a live host
     whose channel dropped; `onRoutes` hands back the saved host merged with the routes it sent, and later
     retries dial them; `reconnectNow` retries every host that is down at once.
 - **Public surface:** the `index.ts` barrel.
