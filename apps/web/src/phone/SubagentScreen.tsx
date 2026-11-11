@@ -11,6 +11,7 @@ import type { DelegationRunStatus, TranscriptMessage } from "@thinkrail/contract
 import { useT } from "@thinkrail/locales/react";
 import type { DeviceWireClient } from "@thinkrail/remote-client";
 import { useEffect, useMemo, useState } from "react";
+import { reasonOf } from "./async";
 import { Loader, Notice, Screen } from "./layout";
 
 const LIVE_POLL_MS = 1_500;
@@ -24,6 +25,45 @@ export interface OpenSubagent {
 /** A transcript is still growing until its run reaches a terminal status; one with no status is a finished read. */
 export const transcriptIsLive = (status: DelegationRunStatus | undefined): boolean =>
 	status !== undefined && !isTerminalRunStatus(status);
+
+type TranscriptRead = { messages: TranscriptMessage[]; status?: DelegationRunStatus };
+
+/**
+ * Reads a subagent transcript and keeps re-reading it while its run can grow — after a failed read too, while
+ * the last good read said it was live, so a passing drop does not freeze it. Returns the stop for unmount.
+ */
+export function pollTranscript(
+	read: () => Promise<TranscriptRead>,
+	on: { result: (result: TranscriptRead, live: boolean) => void; error: (reason: string) => void },
+	schedule: (next: () => void) => () => void = (next) => {
+		const timer = setTimeout(next, LIVE_POLL_MS);
+		return () => clearTimeout(timer);
+	},
+): () => void {
+	let stopped = false;
+	let live = false;
+	let cancel = (): void => {};
+	const tick = (): void => {
+		read().then(
+			(result) => {
+				if (stopped) return;
+				live = transcriptIsLive(result.status);
+				on.result(result, live);
+				if (live) cancel = schedule(tick);
+			},
+			(error: unknown) => {
+				if (stopped) return;
+				on.error(reasonOf(error));
+				if (live) cancel = schedule(tick);
+			},
+		);
+	};
+	tick();
+	return () => {
+		stopped = true;
+		cancel();
+	};
+}
 
 /** The IDE's subagent transcript dialog as a phone screen: read-only, re-read while the run is live. */
 export function SubagentScreen({
@@ -47,31 +87,22 @@ export function SubagentScreen({
 
 	useEffect(() => {
 		if (!client) return;
-		let cancelled = false;
-		let timer: ReturnType<typeof setTimeout> | undefined;
-		const read = (): void => {
-			client
-				.request<{ messages: TranscriptMessage[]; status?: DelegationRunStatus }>(
-					"subagent.getTranscript",
-					{ workspaceId, parentSessionId, childSessionId },
-				)
-				.then((result) => {
-					if (cancelled) return;
+		return pollTranscript(
+			() =>
+				client.request<TranscriptRead>("subagent.getTranscript", {
+					workspaceId,
+					parentSessionId,
+					childSessionId,
+				}),
+			{
+				result: (result, growing) => {
 					setMessages(result.messages);
 					setError(null);
-					const growing = transcriptIsLive(result.status);
 					setLive(growing);
-					if (growing) timer = setTimeout(read, LIVE_POLL_MS);
-				})
-				.catch((reason: unknown) => {
-					if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason));
-				});
-		};
-		read();
-		return () => {
-			cancelled = true;
-			if (timer) clearTimeout(timer);
-		};
+				},
+				error: setError,
+			},
+		);
 	}, [client, workspaceId, parentSessionId, childSessionId]);
 
 	const runtime = useMemo(
@@ -103,9 +134,8 @@ export function SubagentScreen({
 					data-testid="subagent-transcript"
 					className="@container flex flex-col gap-8 px-chat-gutter py-16"
 				>
-					{error ? (
-						<Notice text={t("mobile.list.failed", { reason: error })} alert />
-					) : messages === null ? (
+					{error ? <Notice text={t("mobile.list.failed", { reason: error })} alert /> : null}
+					{error && messages === null ? null : messages === null ? (
 						<Loader text={t("mobile.session.loading")} />
 					) : rows.length === 0 ? (
 						<Notice text={t("chat.subagentTranscript.empty")} />

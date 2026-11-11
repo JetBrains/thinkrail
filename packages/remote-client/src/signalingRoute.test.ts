@@ -92,6 +92,8 @@ describe("pickSignalingPipe", () => {
 		});
 		b.fail(new Error("no relay"));
 		await expect(offline).rejects.toBeInstanceOf(RelayUnreachableError);
+		expect(a.state.closed).toBe(true);
+		expect(b.state.closed).toBe(true);
 	});
 
 	test("with no Nostr route a relay failure surfaces as is", async () => {

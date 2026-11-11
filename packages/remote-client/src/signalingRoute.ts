@@ -21,6 +21,9 @@ export interface SignalingPipe {
 	close(): void;
 }
 
+/** How long an open relay socket may take to answer `connect` with `ready` (or a refusal). */
+export const BROKER_READY_TIMEOUT_MS = 8_000;
+
 /** A broker connection over an open socket: `connect` to the host key, then frames once it is `ready`. */
 export function createBrokerPipe(socket: WebSocket, url: string, hostKey: string): SignalingPipe {
 	let onFrame: (data: string) => void = () => {};
@@ -33,7 +36,15 @@ export function createBrokerPipe(socket: WebSocket, url: string, hostKey: string
 		fail = reject;
 	});
 	ready.catch(() => {});
-	const lost = (error: RemoteConnectError): void => (isReady ? onLost(error) : fail(error));
+	const lost = (error: RemoteConnectError): void => {
+		clearTimeout(readyTimer);
+		if (isReady) onLost(error);
+		else fail(error);
+	};
+	const readyTimer = setTimeout(() => {
+		lost(new RemoteConnectError("relay_lost", "the relay did not answer"));
+		socket.close();
+	}, BROKER_READY_TIMEOUT_MS);
 
 	socket.addEventListener("error", () =>
 		lost(new RemoteConnectError("relay_lost", "relay connection failed")),
@@ -47,6 +58,7 @@ export function createBrokerPipe(socket: WebSocket, url: string, hostKey: string
 		if (!frame) return;
 		if (frame.t === "error") lost(brokerFailure(frame.reason));
 		else if (frame.t === "ready") {
+			clearTimeout(readyTimer);
 			isReady = true;
 			settle(frame.ice);
 		} else if (frame.t === "frame") onFrame(frame.data);
@@ -62,7 +74,10 @@ export function createBrokerPipe(socket: WebSocket, url: string, hostKey: string
 			onLost = gone;
 		},
 		send: (data) => socket.send(encodeBrokerFrame({ t: "frame", data })),
-		close: () => socket.close(),
+		close: () => {
+			clearTimeout(readyTimer);
+			socket.close();
+		},
 	};
 }
 
@@ -145,6 +160,7 @@ export function pickSignalingPipe(options: {
 			if (done || !brokerError || !nostrError) return;
 			done = true;
 			clearTimeout(timer);
+			options.nostr?.close();
 			reject(
 				brokerError instanceof RemoteConnectError || !options.nostr
 					? brokerError

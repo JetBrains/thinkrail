@@ -12,13 +12,21 @@ function calendarDate(epochMs: number): string {
 
 export interface PhoneDeviceRowProps {
 	device: RemotePairedDevice;
+	/** A rename, access change or revoke for this phone is in flight. */
+	busy: boolean;
 	onRename: (deviceId: string, label: string) => void;
 	onSetAccess: (deviceId: string, access: RemoteDeviceAccess) => void;
 	onRevoke: (deviceId: string) => void;
 }
 
 /** One paired phone: its name (renamed in place), when it paired and whether it is live, Read / Write access, Revoke. */
-export function PhoneDeviceRow({ device, onRename, onSetAccess, onRevoke }: PhoneDeviceRowProps) {
+export function PhoneDeviceRow({
+	device,
+	busy,
+	onRename,
+	onSetAccess,
+	onRevoke,
+}: PhoneDeviceRowProps) {
 	const t = useT();
 	const [draft, setDraft] = useState<string | null>(null);
 	const commit = (): void => {
@@ -31,6 +39,7 @@ export function PhoneDeviceRow({ device, onRename, onSetAccess, onRevoke }: Phon
 			data-testid={`phone-access-device-${device.id}`}
 			data-connected={device.connected}
 			data-access={device.access}
+			aria-busy={busy || undefined}
 			className="flex items-center gap-8 border-border-muted border-b py-12"
 		>
 			<RiSmartphoneLine className="size-14 shrink-0 text-text-muted" />
@@ -43,6 +52,7 @@ export function PhoneDeviceRow({ device, onRename, onSetAccess, onRevoke }: Phon
 							icon={RiPencilLine}
 							label={t("common.rename")}
 							data-testid={`phone-access-rename-${device.id}`}
+							disabled={busy}
 							onClick={() => setDraft(device.label)}
 						/>
 					</span>
@@ -82,12 +92,14 @@ export function PhoneDeviceRow({ device, onRename, onSetAccess, onRevoke }: Phon
 					testid={`phone-access-read-${device.id}`}
 					label={t("settings.phone.accessRead")}
 					active={device.access === "read"}
+					disabled={busy}
 					onClick={() => onSetAccess(device.id, "read")}
 				/>
 				<ToggleSegment
 					testid={`phone-access-write-${device.id}`}
 					label={t("settings.phone.accessWrite")}
 					active={device.access === "write"}
+					disabled={busy}
 					onClick={() => onSetAccess(device.id, "write")}
 				/>
 			</fieldset>
@@ -96,6 +108,7 @@ export function PhoneDeviceRow({ device, onRename, onSetAccess, onRevoke }: Phon
 				tone="danger"
 				size="m"
 				data-testid={`phone-access-revoke-${device.id}`}
+				disabled={busy}
 				onClick={() => onRevoke(device.id)}
 			>
 				{t("settings.phone.revoke")}

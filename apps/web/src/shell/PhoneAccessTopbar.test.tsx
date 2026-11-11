@@ -26,11 +26,14 @@ function render(over: Partial<PhoneAccessPanelProps>): string {
 			<PhoneAccessPanel
 				headingId="h"
 				status={off}
+				loadFailed={false}
 				pairing={null}
 				issuing={false}
 				justPaired={null}
 				expired={false}
 				pending={false}
+				busyDevices={new Set()}
+				onReload={() => {}}
 				onToggle={() => {}}
 				onShowCode={() => {}}
 				onCopyLink={() => {}}
@@ -100,4 +103,24 @@ test("the panel says which networks reach this computer and marks connected phon
 		pairing,
 	});
 	expect(tailnet).toContain("Connects over Wi‑Fi · Tailscale");
+});
+
+test("before the status arrives the panel says loading, not that access is off", () => {
+	const markup = render({ status: null });
+	expect(markup).toContain("phone-quick-loading");
+	expect(markup).not.toContain("Turn on to pair");
+});
+
+test("a failed status read offers a retry", () => {
+	const markup = render({ status: null, loadFailed: true });
+	expect(markup).toContain("phone-quick-load-failed");
+	expect(markup).toContain("phone-quick-reload");
+});
+
+test("a new code in the making and a revoke in flight cannot be pressed again", () => {
+	const markup = render({ status: on, pairing, issuing: true, busyDevices: new Set(["d1"]) });
+	const code = markup.match(/<button[^>]*data-testid="phone-quick-new-code"[^>]*>/)?.[0] ?? "";
+	expect(code).toContain('disabled=""');
+	const revoke = markup.match(/<button[^>]*data-testid="phone-quick-revoke-d1"[^>]*>/)?.[0] ?? "";
+	expect(revoke).toContain('aria-busy="true"');
 });

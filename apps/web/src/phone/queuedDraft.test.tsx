@@ -19,6 +19,16 @@ test("puts queued text before the current draft and collects images", () => {
 	expect(queuedDraft("  ", { steering: [{ text: "only" }], followUp: [] }).text).toBe("only");
 });
 
+test("a message that did not send goes back before what was typed since, with its images", () => {
+	const image = { type: "image" as const, data: "x", mimeType: "image/png" };
+	expect(
+		queuedDraft("typed since", { steering: [{ text: "lost", images: [image] }], followUp: [] }),
+	).toEqual({
+		text: "lost\n\ntyped since",
+		images: [image],
+	});
+});
+
 const failed = [
 	{ role: "user", content: "hi", timestamp: 1 },
 	{

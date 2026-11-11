@@ -17,7 +17,8 @@ aggregator — lives in [[module-remote-client]]; this sub-module only drives it
 
 - **Owns:** `remoteConnection.ts` — `createRemoteConnectionController`: the "add a project by link" lifecycle
   (validate link → connecting → connected | error), with the connector injected so it is unit-tested
-  without a browser. The UI surface subscribes to it.
+  without a browser. A newer `connect` or `reset` supersedes one in flight: its late connection is closed and
+  its late failure dropped. The UI surface subscribes to it.
 - **Allowed deps:** `contracts`, `remote-client`. Never `server`, `pi`, or any server-only package.
 - **Forbidden:** reimplementing any part of the remote protocol (it lives in `remote-client`).
 

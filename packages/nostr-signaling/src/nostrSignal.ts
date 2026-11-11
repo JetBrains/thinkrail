@@ -19,6 +19,8 @@ export interface NostrSignalOptions {
 	onMessage: (from: string, data: string) => void;
 	/** Events older than this are ignored (a relay replaying the subscription's window). */
 	maxAgeSeconds?: number;
+	/** Unix seconds before which no event is taken, however a relay replays: a restarted host never re-answers attempts addressed to its previous run. */
+	notBefore?: number;
 	/** How long `ready` waits for a first relay subscription to go live. */
 	readyTimeoutMs?: number;
 }
@@ -85,6 +87,7 @@ export function openNostrSignal(options: NostrSignalOptions): NostrSignal {
 		if (seen.size >= MAX_SEEN) seen.clear();
 		seen.add(event.id);
 		if (event.created_at < Math.floor(Date.now() / 1000) - maxAge) return;
+		if (options.notBefore !== undefined && event.created_at < options.notBefore) return;
 		let envelope: Envelope | null;
 		try {
 			envelope = parseEnvelope(nip44.decrypt(event.content, conversationKey(event.pubkey)));

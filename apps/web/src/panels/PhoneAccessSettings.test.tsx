@@ -34,9 +34,13 @@ function render(over: Partial<PhoneAccessViewProps>): string {
 		<TooltipProvider>
 			<PhoneAccessView
 				status={off}
+				loadFailed={false}
 				pairing={null}
+				issuing={false}
 				expired={false}
 				pending={false}
+				busyDevices={new Set()}
+				onReload={() => {}}
 				onToggle={() => {}}
 				onShowCode={() => {}}
 				onCopyLink={() => {}}
@@ -145,4 +149,39 @@ test("each phone shows its Read / Write access with the active one pressed", () 
 	expect(markup).toMatch(/data-testid="phone-access-read-d1" data-active="true"/);
 	expect(markup).toMatch(/data-testid="phone-access-write-d1" data-active="false"/);
 	expect(markup).toContain('data-testid="phone-access-rename-d1"');
+});
+
+test("loading: the switch waits and the devices list says loading, not empty", () => {
+	const markup = render({ status: null });
+	expect(markup).toContain("phone-access-loading");
+	expect(markup).not.toContain("No phones paired yet.");
+	expect(markup).toMatch(
+		/data-testid="phone-access-toggle"[^>]*disabled=""|disabled=""[^>]*data-testid="phone-access-toggle"/,
+	);
+});
+
+test("a failed first read says so with a retry instead of loading forever", () => {
+	const markup = render({ status: null, loadFailed: true });
+	expect(markup).toContain("phone-access-load-failed");
+	expect(markup).toContain("phone-access-reload");
+	expect(markup).not.toContain("phone-access-loading");
+});
+
+test("a code being made shows on the button and it cannot be pressed again", () => {
+	const markup = render({ status: on, issuing: true });
+	expect(markup).toMatch(/<button[^>]*data-testid="phone-access-show-code"[^>]*>/);
+	const button = markup.match(/<button[^>]*data-testid="phone-access-show-code"[^>]*>/)?.[0] ?? "";
+	expect(button).toContain('aria-busy="true"');
+	expect(button).toContain('disabled=""');
+});
+
+test("a phone with a change in flight has its controls disabled", () => {
+	const markup = render({ status: on, busyDevices: new Set(["d1"]) });
+	const revoke = markup.match(/<button[^>]*data-testid="phone-access-revoke-d1"[^>]*>/)?.[0] ?? "";
+	expect(revoke).toContain('disabled=""');
+	const read = markup.match(/<button[^>]*data-testid="phone-access-read-d1"[^>]*>/)?.[0] ?? "";
+	expect(read).toContain('disabled=""');
+	const idle = render({ status: on });
+	const free = idle.match(/<button[^>]*data-testid="phone-access-revoke-d1"[^>]*>/)?.[0] ?? "";
+	expect(free).not.toContain('disabled=""');
 });

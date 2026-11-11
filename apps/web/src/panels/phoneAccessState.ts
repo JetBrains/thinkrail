@@ -17,6 +17,8 @@ export interface PhoneAccessState {
 	pairing: ShownPairing | null;
 	/** A code is being minted. */
 	issuing: boolean;
+	/** The first status read failed, so there is nothing to show until a retry. */
+	loadFailed: boolean;
 	/** The phone that paired from the shown code, until the next code is asked for. */
 	justPaired: string | null;
 	/** A code was already minted on its own for this "on" stretch, so closing it does not mint another. */
@@ -35,12 +37,15 @@ export type PhoneAccessEvent =
 	| { type: "polled"; status: RemoteAccessStatus }
 	| { type: "issuing"; auto?: boolean }
 	| { type: "issued"; pairing: ShownPairing; generation: number }
-	| { type: "issueFailed"; generation: number };
+	| { type: "issueFailed"; generation: number }
+	| { type: "loadFailed" }
+	| { type: "reload" };
 
 export const initialPhoneAccess: PhoneAccessState = {
 	status: null,
 	pairing: null,
 	issuing: false,
+	loadFailed: false,
 	justPaired: null,
 	autoIssued: false,
 	generation: 0,
@@ -55,7 +60,8 @@ export function newDevice(
 	return next.devices.find((device) => !known.has(device.id)) ?? null;
 }
 
-function withStatus(state: PhoneAccessState, status: RemoteAccessStatus): PhoneAccessState {
+function withStatus(previous: PhoneAccessState, status: RemoteAccessStatus): PhoneAccessState {
+	const state = previous.loadFailed ? { ...previous, loadFailed: false } : previous;
 	if (status.enabled) return { ...state, status };
 	if (!state.status?.enabled && state.status !== null) return { ...state, status };
 	return {
@@ -93,7 +99,31 @@ export function phoneAccessReducer(
 			return { ...state, issuing: false, pairing: event.pairing };
 		case "issueFailed":
 			return event.generation === state.generation ? { ...state, issuing: false } : state;
+		case "loadFailed":
+			return state.status === null ? { ...state, loadFailed: true } : state;
+		case "reload":
+			return { ...state, loadFailed: false };
 	}
+}
+
+/**
+ * Orders replies to requests that each return the whole status: a reply is fresh only when no later-sent
+ * request's reply was taken already, so a slow poll never undoes a switch or a revoke.
+ */
+export function createLatestGate(): { ticket(): number; accept(ticket: number): boolean } {
+	let issued = 0;
+	let accepted = 0;
+	return {
+		ticket: () => {
+			issued += 1;
+			return issued;
+		},
+		accept: (ticket) => {
+			if (ticket <= accepted) return false;
+			accepted = ticket;
+			return true;
+		},
+	};
 }
 
 /**
