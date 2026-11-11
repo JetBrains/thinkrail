@@ -241,6 +241,10 @@
 	outline: 1px solid var(--color-focus-ring);
 	outline-offset: -1px;
 }
+@utility focus-ring-inset-deep {
+	outline: 1px solid var(--color-focus-ring);
+	outline-offset: -4px;
+}
 @layer base {
 	:focus-visible {
 		@apply focus-ring;

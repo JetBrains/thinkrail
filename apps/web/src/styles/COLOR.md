@@ -84,6 +84,8 @@ When the container holds other focusable controls with their own ring, scope it 
   `overflow: hidden` or scrolling container, or in a flush strip where an outset ring clips: tabs, tree,
   list and menu rows, ghost icon-only buttons in header strips. Never on an element with its own border:
   the inset ring covers it.
+- **Deep inset** (`focus-ring-inset-deep`, 4px in) is for a tab that draws an active underline or edge
+  border: the ring clears both, so focus reads apart from the selected underline.
 - **Text fields** (input, textarea, composer shell, inline rename) keep the `control-border-active` border
   swap and add the outset ring.
 - **Selected and focused** stay apart: where selection draws an accent border or ring, focus uses the

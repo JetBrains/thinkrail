@@ -6,7 +6,7 @@ const isLayoutRole = (value: string) => /^[a-z]+(?:-[a-z]+)+$/.test(value);
 const twMerge = extendTailwindMerge<"focus-ring">({
 	extend: {
 		theme: { spacing: [isLayoutRole] },
-		classGroups: { "focus-ring": ["focus-ring", "focus-ring-inset"] },
+		classGroups: { "focus-ring": ["focus-ring", "focus-ring-inset", "focus-ring-inset-deep"] },
 		conflictingClassGroups: { "outline-style": ["focus-ring"] },
 	},
 });
