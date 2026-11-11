@@ -161,6 +161,19 @@ export const PROVIDER_WARNINGS_PROTOCOL_VERSION = 99;
 export const SURVEY_TRANSLATIONS_PROTOCOL_VERSION = 98;
 export const RESOURCE_HISTORY_PROTOCOL_VERSION = 96;
 export const PROJECT_CLONE_PROTOCOL_VERSION = 95;
+
+export const INSTANCE_TOKEN_META = "thinkrail-instance-token";
+export const INSTANCE_TOKEN_PARAM = "token";
+
+export function instanceTokenMeta(token: string): string {
+	return `<meta name="${INSTANCE_TOKEN_META}" content="${token}">`;
+}
+
+export function instanceTokenFromHtml(html: string): string | null {
+	const match = /<meta name="thinkrail-instance-token" content="([^"]+)">/.exec(html);
+	return match?.[1] ?? null;
+}
+
 export const ONBOARDING_PROTOCOL_VERSION = 94;
 export const LAYOUT_PLAN_PRESET_PROTOCOL_VERSION = 94;
 export const TOOL_RESPONSE_PROTOCOL_VERSION = 93;

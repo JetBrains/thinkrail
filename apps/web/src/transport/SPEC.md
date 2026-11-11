@@ -41,7 +41,11 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `inferUrl` defaults to
   same-origin; **`httpBase()`** derives the host's HTTP origin
   from the WS `url` — for building host HTTP URLs like the `/files/<workspaceId>/<path>` worktree-file
-  endpoint the markdown viewer points relative `<img>`s at, targeting the same host the transport dials); `piEventBatcher.ts`
+  endpoint the markdown viewer points relative `<img>`s at, targeting the same host the transport dials.
+  The host gates `/ws` and those resource routes on a **per-instance token** it embedded in the served
+  page's `<meta name="thinkrail-instance-token">`; **`instanceToken()`** reads it once and the `/ws` URL, the
+  `/speech` socket URL and `resourceBytesUrl` carry it as the `token` query param. `httpBase()` stays token-free — it is also a
+  storage-identity key — so the token is appended by the URL builders, not baked into the origin); `piEventBatcher.ts`
   (the browser-side bounded queue for consecutive `pi.event` frames: exact arrival order, no dropped events,
   one atomic delivery at roughly 30 Hz, a 128-event forced-flush ceiling, and `flush`/`dispose` lifecycle);
   `wireTransport.ts` (`initTransport`/
@@ -178,7 +182,8 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   `supportsTextSearch` (v112 — Find in Files asks `search.text` and listens on `search.textResults` only of a
   host that serves them; against an older host the palette hides the command and the window opened by the
   chord says the host needs an update),
-  `installClientErrorReporting`, `reportClientError`, `clientErrorReport`. `respondToTool(sessionId,
+  `installClientErrorReporting`, `reportClientError`, `clientErrorReport`, `instanceToken`,
+  `setInstanceTokenForTests`. `respondToTool(sessionId,
   toolCallId, response)` is the one place a tool response leaves the client (chat and plan page both use
   it): it sends `session.respondToTool` to a v93+ host and the retired `session.answerQuestion` below
   (`supportsToolResponses`), for one compatibility window — [[module-contracts]]. `runHostUpdate` is the typed empty host action

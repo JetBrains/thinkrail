@@ -194,6 +194,7 @@ test("the host routes /fonts/ and nudges only sockets that speak the fonts proto
 	try {
 		server = await createServer({ port: 0, host: "127.0.0.1", analytics: { mute: true } });
 		const base = `127.0.0.1:${server.port}`;
+		const token = server.authToken;
 		const put = await fetch(`http://${base}/fonts/Wired.ttf`, {
 			method: "PUT",
 			headers: UPLOAD,
@@ -206,7 +207,9 @@ test("the host routes /fonts/ and nudges only sockets that speak the fonts proto
 
 		const messages = new Map<number, unknown[]>();
 		const connect = async (protocol: number) => {
-			const socket = new WebSocket(`ws://${base}/ws?client=fonts-${protocol}&protocol=${protocol}`);
+			const socket = new WebSocket(
+				`ws://${base}/ws?client=fonts-${protocol}&protocol=${protocol}&token=${token}`,
+			);
 			sockets.push(socket);
 			const received: unknown[] = [];
 			messages.set(protocol, received);

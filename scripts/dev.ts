@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { randomBytes } from "node:crypto";
 import { findFreePort, parsePort } from "@thinkrail/shared/freePort";
 import { printStartupMark } from "@thinkrail/shared/startupMark";
 
@@ -19,6 +20,8 @@ const openHost = host === "0.0.0.0" || host === "::" ? "localhost" : host;
 const webUrl = `http://${openHost}:${webPort}/`;
 printStartupMark({ status: "starting", endpoint: webUrl });
 
+const devAuthToken = process.env.THINKRAIL_DEV_AUTH_TOKEN ?? randomBytes(32).toString("base64url");
+
 const turbo = Bun.spawn(
 	["bunx", "turbo", "run", "dev", "--filter=@thinkrail/web", "--filter=@thinkrail/server"],
 	{
@@ -26,6 +29,7 @@ const turbo = Bun.spawn(
 			...process.env,
 			THINKRAIL_PORT: String(port),
 			THINKRAIL_WEB_PORT: String(webPort),
+			THINKRAIL_DEV_AUTH_TOKEN: devAuthToken,
 		},
 		stdin: "inherit",
 		stdout: "inherit",
