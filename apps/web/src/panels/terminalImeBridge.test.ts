@@ -105,9 +105,72 @@ describe("terminal IME bridge (WebKit replacement model)", () => {
 
 		input("insertText", "ㄴ");
 		expect(keydown(IME, "Escape")).toBe(false);
+		expect(sent).toEqual(["가", "ㄴ"]);
 		expect(keydown(IME, "c", { ctrlKey: true })).toBe(false);
-		expect(sent).toEqual(["가"]);
+		expect(sent).toEqual(["가", "ㄴ"]);
 	});
+
+	for (const [name, key, mods, bytes] of [
+		["Ctrl+U", "ㅕ", { ctrlKey: true }, "\x15"],
+		["Ctrl+C", "ㅊ", { ctrlKey: true }, "\x03"],
+		["Escape", "Escape", {}, "\x1b"],
+	] as const) {
+		test(`a held syllable reaches the PTY before a rescued 229 ${name}`, () => {
+			const { sent, input, keydown } = harness();
+			input("insertText", "ㄱ");
+			keydown(IME, "ㄱ");
+			input("insertReplacementText", "가");
+			keydown(IME, "ㅏ");
+			if (!keydown(IME, key, mods)) sent.push(bytes);
+			if (!keydown(ENTER, "Enter")) sent.push("\r");
+			expect(sent.join("")).toBe(`가${bytes}\r`);
+		});
+	}
+
+	test("modifier-only 229 keydowns leave the held syllable composing", () => {
+		const { sent, bridge, input, keydown } = harness();
+		input("insertText", "ㄱ");
+		keydown(IME, "ㄱ");
+		input("insertReplacementText", "가");
+		expect(keydown(IME, "Control", { ctrlKey: true })).toBe(false);
+		expect(keydown(IME, "Alt", { altKey: true })).toBe(false);
+		expect(keydown(IME, "Meta", { metaKey: true })).toBe(false);
+		expect(keydown(IME, "Shift")).toBe(true);
+		expect(sent).toEqual([]);
+		expect(bridge.pending).toBe("가");
+	});
+
+	test("a paste handover commits the held syllable ahead of the clipboard text", () => {
+		const { sent, bridge, input, keydown } = harness();
+		input("insertText", "ㄱ");
+		keydown(IME, "ㄱ");
+		input("insertReplacementText", "가");
+		bridge.flush();
+		sent.push("XYZ");
+		if (!keydown(ENTER, "Enter")) sent.push("\r");
+		expect(sent.join("")).toBe("가XYZ\r");
+	});
+
+	for (const [name, mods] of [
+		["Alt", { altKey: true }],
+		["Ctrl", { ctrlKey: true }],
+		["Meta", { metaKey: true }],
+	] as const) {
+		test(`${name}+Backspace commits the held syllable and stays xterm's`, () => {
+			const { sent, bridge, input, keydown } = harness();
+			input("insertText", "ㄱ");
+			keydown(IME, "ㄱ");
+			input("insertReplacementText", "가");
+			keydown(IME, "ㅏ");
+			input("insertText", "ㄴ");
+			keydown(IME, "ㄴ");
+			input("insertReplacementText", "나");
+			keydown(IME, "ㅏ");
+			expect(keydown(BACKSPACE, "Backspace", mods)).toBe(false);
+			expect(sent).toEqual(["가", "나"]);
+			expect(bridge.pending).toBe("");
+		});
+	}
 
 	test("modifier keys do not commit a syllable that is still being composed", () => {
 		const { sent, input, keydown } = harness();

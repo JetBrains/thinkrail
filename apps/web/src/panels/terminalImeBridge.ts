@@ -72,13 +72,15 @@ export function createTerminalImeBridge(send: (data: string) => void): TerminalI
 			event.stopPropagation();
 		},
 		keydown(event) {
+			const modified = event.ctrlKey || event.altKey || event.metaKey;
 			if (event.keyCode === IME_SENTINEL_KEYCODE) {
-				const chord = event.ctrlKey || event.altKey || event.metaKey || event.key === "Escape";
-				if (replacementModelSeen && !chord) event.stopPropagation();
+				if (modified || event.key === "Escape") {
+					if (!MODIFIER_KEYS.has(event.key)) flush();
+				} else if (replacementModelSeen) event.stopPropagation();
 				return;
 			}
 			if (MODIFIER_KEYS.has(event.key)) return;
-			if (event.keyCode === BACKSPACE_KEYCODE && pending !== "") {
+			if (event.keyCode === BACKSPACE_KEYCODE && !modified && pending !== "") {
 				pending = "";
 				event.stopPropagation();
 				return;

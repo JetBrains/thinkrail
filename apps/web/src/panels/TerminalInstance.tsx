@@ -173,6 +173,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		host.addEventListener("input", onImeInput, true);
 		host.addEventListener("keydown", onImeKeydown, true);
 		host.addEventListener("compositionstart", onImeHandover, true);
+		host.addEventListener("paste", onImeHandover, true);
 		host.addEventListener("focusout", onImeHandover);
 		const updateScrollEdges = () => {
 			const buffer = term.buffer.active;
@@ -405,6 +406,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			host.removeEventListener("input", onImeInput, true);
 			host.removeEventListener("keydown", onImeKeydown, true);
 			host.removeEventListener("compositionstart", onImeHandover, true);
+			host.removeEventListener("paste", onImeHandover, true);
 			host.removeEventListener("focusout", onImeHandover);
 			serverIdRef.current = null;
 			term.dispose();

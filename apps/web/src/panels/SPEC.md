@@ -2589,9 +2589,13 @@ own section. The kebab menu (`plan-menu`, a
   them through `terminalImeBridge`: a single Hangul `insertText` is held instead of forwarded, each
   `insertReplacementText` replaces the held syllable, and the held syllable reaches the PTY through
   `term.input` when the next syllable starts, on any non-IME keydown (Enter, Space, chords, arrows,
-  digits), on `compositionstart` (a real composition taking over) or on focus-out. A Backspace the input
-  method passes through while a syllable is held drops the held syllable instead of emitting DEL, since
-  nothing reached the PTY. Once the replacement model has been seen, bare 229 keydowns are kept from
+  digits), on a 229 chord or Escape — ahead of the bytes the rescue above writes, so Ctrl+U/Ctrl+C
+  discard the syllable with the line instead of leaving it for the next command — on `compositionstart`
+  (a real composition taking over), on `paste` (xterm hands the clipboard straight to `onData`, with no
+  input or keydown to commit on) or on focus-out; modifier-only keydowns never commit. An unmodified
+  Backspace the input method passes through while a syllable is held drops the held syllable instead of
+  emitting DEL, since nothing reached the PTY; a modified one (Option/Alt+Backspace word-delete) commits
+  it and stays xterm's. Once the replacement model has been seen, bare 229 keydowns are kept from
   xterm so its deferred textarea diff cannot echo a syllable twice under load; the rescued chords above
   still pass. Chrome and Firefox never emit `insertReplacementText` for an IME, so the bridge is inert
   there. Known gap: the held syllable has no on-screen preview until it commits (xterm draws one only
