@@ -12,14 +12,14 @@ import {
 	useState,
 } from "react";
 import { randomUuid } from "../lib";
-import { FileChip } from "./FileChip";
-import { fileToAttachedImage } from "./imageAttachment";
 import {
 	newPromptImagesState,
 	type PromptImage,
 	type PromptImageError,
 	type PromptImagesState,
-} from "./promptImageState";
+} from "../store";
+import { FileChip } from "./FileChip";
+import { fileToAttachedImage } from "./imageAttachment";
 import type { ChatAttachment } from "./types";
 
 export interface PromptImagesOwner {

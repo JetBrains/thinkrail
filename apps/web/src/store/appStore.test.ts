@@ -16,7 +16,6 @@ import {
 	type WorkspaceSkillChange,
 } from "@thinkrail/contracts";
 import type { HydratedRuntime } from "../chat/hydrate";
-import type { PromptImage } from "../chat/promptImageState";
 import type { ChatTurn, FailureRecovery } from "../chat/types";
 import { nullProto, userText } from "../lib";
 import {
@@ -38,6 +37,7 @@ import {
 	toast,
 	useAppStore,
 } from "./appStore";
+import type { PromptImage } from "./promptImageState";
 import {
 	selectActiveFilePath,
 	selectChatAttended,

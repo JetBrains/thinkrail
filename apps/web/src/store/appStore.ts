@@ -78,7 +78,6 @@ import type { LoginState } from "../auth";
 import { assistantFailure } from "../chat/assistantFailure";
 import type { ChatMessageOrder } from "../chat/chatPreferences";
 import type { HydratedRuntime } from "../chat/hydrate";
-import { newPromptImagesState, type PromptImagesState } from "../chat/promptImageState";
 import { insertRoundCloser } from "../chat/roundCloser";
 import type {
 	ChatAttachment,
@@ -128,6 +127,7 @@ import {
 	type McpWorkspaceProjection,
 	withoutMcpSession,
 } from "./mcp";
+import { newPromptImagesState, type PromptImagesState } from "./promptImageState";
 import {
 	type HistoryTarget,
 	isChatResourceConnectionCurrent,

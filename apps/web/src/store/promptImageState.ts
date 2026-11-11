@@ -1,5 +1,5 @@
+import type { AttachedImage } from "../chat/imageAttachment";
 import { randomId } from "../lib";
-import type { AttachedImage } from "./imageAttachment";
 
 export interface PromptImage extends AttachedImage {
 	id: string;
