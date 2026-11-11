@@ -93,7 +93,7 @@ export function SubagentTranscriptPane(scope: TranscriptScope) {
 				<div
 					data-testid="subagent-transcript"
 					data-live={live || undefined}
-					className="flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto"
+					className="relative flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto"
 				>
 					{error ? (
 						<span role="alert" className="text-feedback-error tr-text-ui">

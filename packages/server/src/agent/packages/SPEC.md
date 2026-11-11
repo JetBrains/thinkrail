@@ -83,7 +83,8 @@ this module never spawns npm or git itself.
   `"local"` for an explicit `extensions[]` entry) and the host-supplied built-ins, and excludes the Central
   artifact path like the session loader does. Human-readable metadata comes only from a package's
   `package.json` (a loaded `Extension` has no name). The result cache is long-lived because every change
-  path calls `invalidatePiPackageCatalog()`. `listPiPackageRevealTargets` validates a reveal path from
+  path calls `invalidatePiPackageCatalog()`; a file dropped into a scanned folder by hand is the one change
+  no path sees, so the Extensions page's opening read (`packages.list` with `force`) drops the cache first. `listPiPackageRevealTargets` validates a reveal path from
   the same reads.
 - `mutations.ts` — one module queue (two `SettingsManager`s racing on one field would lose a write);
   every write validates `scope` / `type` at the boundary, is opened on the scope it writes

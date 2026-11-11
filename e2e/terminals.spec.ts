@@ -513,6 +513,67 @@ test("Ctrl+C still interrupts while an input method is active", async ({ page })
 	await expect(term).toContainText("TR_INTERRUPTED_42");
 });
 
+test("a held Korean syllable reaches the shell before a paste or a rescued chord", async ({
+	page,
+}) => {
+	const writes: string[] = [];
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		const server = ws.connectToServer();
+		ws.onMessage((message) => {
+			const text = message.toString();
+			try {
+				const frame = JSON.parse(text) as {
+					method?: string;
+					params?: { data?: string };
+				};
+				if (frame.method === "terminal.write" && frame.params?.data) writes.push(frame.params.data);
+			} catch {}
+			server.send(message);
+		});
+		server.onMessage((message) => ws.send(message));
+	});
+
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+	const textarea = visibleTerminal(page).locator(".xterm-helper-textarea");
+	await textarea.focus();
+	const composeSyllable = (jamo: string, syllable: string) =>
+		textarea.evaluate(
+			(element, typed) => {
+				const input = (inputType: string, data: string) =>
+					element.dispatchEvent(new InputEvent("input", { inputType, data, bubbles: true }));
+				input("insertText", typed.jamo);
+				input("insertReplacementText", typed.syllable);
+			},
+			{ jamo, syllable },
+		);
+
+	const ordered = (...marks: string[]) =>
+		writes.flatMap((data) => marks.filter((mark) => data.includes(mark)));
+	await composeSyllable("ㄱ", "가");
+	await textarea.evaluate((element) => {
+		const clipboardData = new DataTransfer();
+		clipboardData.setData("text/plain", "XYZ");
+		element.dispatchEvent(
+			new ClipboardEvent("paste", { clipboardData, bubbles: true, cancelable: true }),
+		);
+	});
+	await expect.poll(() => ordered("가", "XYZ")).toEqual(["가", "XYZ"]);
+
+	await composeSyllable("ㄴ", "나");
+	const cdp = await page.context().newCDPSession(page);
+	for (const type of ["keyDown", "keyUp"] as const) {
+		await cdp.send("Input.dispatchKeyEvent", {
+			type,
+			code: "KeyU",
+			modifiers: 2,
+			windowsVirtualKeyCode: 229,
+		});
+	}
+	await expect.poll(() => ordered("나", "\x15")).toEqual(["나", "\x15"]);
+});
+
 test("a shell that dies while detached is not re-attached as if alive", async ({ page }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);

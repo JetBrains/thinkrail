@@ -7,6 +7,7 @@ export {
 export {
 	acknowledgeProjectSkills,
 	approveProjectMcpServer,
+	assertOutsideChatsRoot,
 	closeProject,
 	createProject,
 	getProjects,

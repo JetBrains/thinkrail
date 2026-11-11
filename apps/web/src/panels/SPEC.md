@@ -28,6 +28,54 @@ treatment.
 
 ## Boundary
 
+- **Owns:** `ChatsSection` + `chatActions.ts` — the **Chats without a project** home. The section tops the
+  Projects panel whenever the host speaks `CHATS_PROTOCOL_VERSION` (the host ensures the container at boot;
+  an empty section reads "Chats without a project appear here", and the container never counts as a
+  project — not for the first-run wizard either): one row per `kind: "chat"` workspace, newest activity first, labelled by
+  `lib`'s `chatLabel` over the host's `SessionStateRecord.title` and the conversation's first prompt
+  (`selectChatWorkspaceFirstPrompt`) — an unnamed chat reads as its first prompt, with `data-title-source`
+  and the full first line as tooltip, else "Chat" — with the shared attention dot / running icon, the
+  active highlight, and a menu of Open in / Copy path / Reveal / Mark read / **Delete chat…** — the
+  confirmation (`ChatDeleteDialog`, shared with the topbar's chat menu) names the folder's file count
+  from `chat.inspect` ("…with 3 files move to the Trash"), is bound to the chat it was opened for and
+  closes when that chat is removed, starts deleting elsewhere, or (topbar) stops being the active chat;
+  a chat whose deletion did not finish shows "Deletion incomplete" and offers only Retry, and no
+  navigating surface (topbar Chats entry, sibling menu) opens it. `chatActions`
+  owns the three host calls: `startProjectlessChat({ text?, images?, model? })` (`chat.create` → put the
+  workspace under its container in the store, activate it, open the host-created session, prewarm the
+  watcher, send the first prompt, end a first-run wizard still showing; a start already in flight is
+  joined, so a double click makes one chat), `deleteProjectlessChat`, `inspectProjectlessChat`;
+  `canStartProjectlessChat` is the protocol gate every start surface shares. Start surfaces: the Chats
+  `+`, the Welcome's "Chat without a project" card (next to Open project when no repository is open),
+  the Create dialog's **Chat without a project** target (`ws-target-chat` — the only target when no
+  repository is open; it hides the project and branch pickers and Manage skills — the container is
+  never trusted, so only global skills apply — scopes templates to the container and honours the
+  dialog's explicit model; the dialog takes its defaults once per opening, so another window opening or
+  reordering projects never resets a draft or a creation in flight, choosing a repository target while no
+  repository is selected selects the first open one in the same update (so no request asks the
+  container), and only a repository target closes when its project does), the palette's `chat.newProjectless` command and start row, and
+  New chat inside a chat (`openChat` turns the host's `CHAT_HAS_SESSION` refusal into a sibling chat — one
+  chat = one folder; `CHAT_DELETING` / `CHAT_DELETION_PENDING` are reported, never turned into a chat). `FilesPanel` asks no git status in a chat and hides its Changed mode. Settle, and the
+  automatic Settled shelf, never apply to a chat (`canSettleWorkspace`, `selectWorkspaceSettledReason`);
+  Recently closed and prompt history offer no per-session Trash for a chat (the host refuses
+  `session.delete` there — deleting a chat is the whole-chat confirmation, never a silent broadening).
+  The topbar's Chats entry loads the container's list before it decides there is no chat to open.
+  Repository
+  listings and fallbacks (`ProjectTree`, `WelcomePanel`, the dialog's project picker) read
+  `selectRepoProjects`, never `s.projects`, so the container is never offered as a project.
+  **Continue in workspace:** `ContinueChatDialog` (reached from the Chats row menu and the topbar chat
+  segment) picks a repository — the context repository at the moment it opens, kept while the user's pick
+  exists, so a project another window opens or reorders never changes it — and calls
+  `continueChatInWorkspace(chatId, projectId)` → `chat/continuations`' `requestContinuation`
+  (`chat.continue`), closing at once (the agent's turn runs on its own); the store's
+  `initiatedContinuations` remembers the operations this client started, and `chat/continuations`
+  follows them to the new chat when the host reports `started` — the initiating client alone — or
+  toasts the failure. The dialog is bound to the chat that opened it: the topbar segment keys it by that
+  chat's id (navigating elsewhere, or a delete elsewhere that moves this window to another chat, closes
+  it), it never shows over a chat whose deletion did not finish, and the project picker is named by its
+  label and its current value. A first chat loads the container's list through
+  `loadProjectWorkspaces` instead of seeding it, so the Chats section never shows a partial list. A chat row reads "Continued in <project>" from the record's
+  `continuedTo`.
 - **Owns:** `ProjectTree`. Each top-level project row is a compact IDE-tree row at the shared `--panel-row-height` (`web-spacing`):
   **always-visible chevron** + folder/name + a collapsed-only plain workspace count + an **always-visible Create
   workspace `+` in a fixed right-edge column**. That `+` is the **same control as the Projects-header Add
@@ -187,7 +235,10 @@ treatment.
   rather than run the same hung probe again) `project.inspect` → either offers to
   bootstrap the folder into a repo — a modal **`ConfirmDialog`**
   (confirm → `project.init`) — when it's `initable`, or surfaces the error in a **`NoticeDialog`** — so a
-  non-git folder is never a silent no-op. The native picker remains the local fast path and keeps its raised
+  non-git folder is never a silent no-op. `project.init` waits 13 minutes, the host's longest bootstrap on
+  macOS/Linux (two 5-minute index writes plus short probes, [[submodule-server-projects]]) with a minute to
+  spare; a Windows bootstrap has no host deadline, so one that outlasts the wait reports a timeout while the
+  host finishes and publishes the project. The native picker remains the local fast path and keeps its raised
   timeout because it waits on a human; if the host cannot present it, the rejection instead opens an
   **Open project from host path** dialog carrying the reason and an autofocused path field. The dialog says
   the path belongs to the computer running ThinkRail, accepts a host-absolute path or `~` / `~/…`, and
@@ -281,7 +332,7 @@ treatment.
   `FileTree` and `ChangesTree` so the two trees stay identical. `TreeRow`'s optional `onWarm` reports
   `hover` (pointer enter) or `focus`. `FileTree` file rows warm at once on focus and through
   `warmOnHover` on hover, which keeps one pending row and fires after the pointer rests 150 ms, so a
-  sweep across the tree loads nothing. A warm preloads the code view and the row's grammar
+  sweep across the tree loads nothing. A warm preloads the code view
   through **`useEditorWarm`** (`editorWarm.ts`, also used by the shell's idle preload): it returns
   `usePreloadResourceView`'s callback, or `undefined` on phone-class viewports and `saveData` connections.
   `editorWarm` also owns the boot gate: a `FileTree` holds `holdEditorWarm()` until its first listing
@@ -659,7 +710,15 @@ a project picker, the prompt hero, and the reused
   shared by Language, Custom themes and Custom fonts; `saveSettings` is the one `settings.update` call that
   toasts its failure. Popovers inside the dialog render into the dialog element
   (`settingsDialogContainer`), because Radix's scroll lock cancels wheel and touch scrolling anywhere
-  outside it. Free-text settings and the font weight slider share one **auto-save input pattern**
+  outside it (the Models pickers missed this, so their lists ignored the wheel: #607). The dialog clips
+  overflow, so these popovers also take it as their collision boundary and cap their height at Radix's
+  available height; the model popover caps its width too (without that cap, arrow keys scrolled a
+  narrow dialog sideways). Under the dialog's focus scope, a popover whose trigger can't take focus back
+  on close leaves focus on the dialog element, so the Models pickers use `aria-disabled`, not
+  `disabled`, while busy; `FontPicker` doesn't yet. A modal `DropdownMenu` holds its own scroll lock and
+  may stay on `body`; the Layout "Add new layout" and Templates delete popovers still render there (only
+  a long layout name can't be swiped sideways in its field).
+  Free-text settings and the font weight slider share one **auto-save input pattern**
   (`settingsDraft.useSettingsDraft`): Enter, blur or a slider release saves a valid, changed value once
   (no Save/Apply button); an invalid draft stays visible with `aria-invalid` and a range message linked by
   `aria-describedby`, and is never sent; Escape reverts to the authoritative value; the input carries
@@ -811,13 +870,13 @@ a project picker, the prompt hero, and the reused
   empty or preset name; there is no server-kind choice), a password key field (blank keeps a saved key on
   edit; an edit that changes the address's origin shows a warning and disables Save, since a different
   server is added as a new one; **Remove key** sends `apiKey: ""` and keeps Detect from reusing it), **Find models**
-  (`customEndpoints.probe`, run automatically when an edit opens), a per-model use switch, and a manual
-  model-id field for gateways that list nothing. **A model row has no editable parameters** (decision: they
+  (`customEndpoints.probe`, only on click — never on open, since gateways can list thousands), a manual
+  model-id field above the list, a filter field and 50-row paging once the list exceeds a page, and a per-model use switch. **A model row has no editable parameters** (decision: they
   describe the server rather than configure it — its real limits are set by whoever runs it). It shows only
   the facts the server reported (context, thinking, images, tools; "No tools" in warning tone), and an
   unreported fact is simply absent and left to pi's default. Re-detecting keeps selections and saved
   facts the server doesn't report, takes reported ones, drops a saved max output once a new context is
-  reported, and keeps models the server no longer lists; an unchanged saved address stays as written. The
+  reported, keeps models the server no longer lists, and keeps existing rows first with newly found ones appended; an unchanged saved address stays as written. The
   pure draft rules live in `customEndpointDraft`; probe failures render as localized inline status and
   host save errors render inline; and
   the **`JetBrainsAiCard`** — route Central-supported models through the user's JetBrains subscription while
@@ -860,7 +919,11 @@ a project picker, the prompt hero, and the reused
   range inline, and waits for `settings.changed` rather than installing optimistic authority. Older hosts get
   neither control. **`GithubSettings`** (the Integrations section's "Local GitHub" group —
   `github.authStatus()` shown as `settings-gh-status[data-connected]`: Connected + login, or a Not connected
-  notice naming `gh auth login`; Refresh (`github.refresh`) is offered in both states);
+  notice naming `gh auth login`; Refresh (`github.refresh`) is offered in both states. Only an answered
+  probe is a status, and only the latest request's: reopening the section shows the last answer while it
+  re-probes, and a failed request never reads as signed out — it keeps the answer, or with none shows a
+  could-not-check notice. Before any answer the block is a skeleton; `data-connected` exists only once
+  gh has answered);
   **`LanguageSettings`** (gated by `LOCALES_PROTOCOL_VERSION`; a store-integrating container over the
   props-driven `LanguagePage`, whose derivations come from [[submodule-web-i18n]]): one radio list — **System**
   (default; names the language System resolves to) then every available language by its own-language name
@@ -942,14 +1005,12 @@ a project picker, the prompt hero, and the reused
   toast without changing geometry); **`ChatSettings`** (one **Appearance and behavior** group of rows —
   **Message order** segmented over `store.chatMessageOrder` (Oldest first, the compatibility default /
   Newest first, the opt-in), **Composer size** segmented over the composer-growth limit (Compact / Roomy /
-  Half chat), the chat `LineWidthControl`, and the **Streaming response movement** row, a two-handle range
-  over `store.streamingResponseMovement`. The movement row's
-  copy is “When the chat moves while an answer grows, and where its newest edge lands”; one axis runs
-  Top → Message box, Settle is 25–90, Trigger is 35–100, both step by 5 with a 10-point minimum gap, and
-  the displayed default is 75%→100%. It exposes no runway/tail/lifecycle controls. Message order and
-  movement both apply immediately and persist only in this client through the chat preference seam:
-  browsers use current-host-qualified keys, while a native shell may inject its stable
-  backend-profile/window adapter. Another browser, native window, or host is unaffected. Composer growth
+  Half chat), **Question panel height** (`QuestionPanelHeightControl`, props-driven: the same auto-save
+  integer field as Line width over `questionPanelHeight`, 40–100 with an inline range error, hidden below
+  `QUESTION_PANEL_PROTOCOL_VERSION`), and the chat `LineWidthControl`. It exposes no scroll-follow controls: streaming follow is
+  fixed (see `apps/web/src/chat/SPEC.md`). Message order applies immediately and persists only in this
+  client through the chat preference seam: browsers use current-host-qualified keys, while a native shell
+  may inject its stable backend-profile/window adapter. Another browser, native window, or host is unaffected. Composer growth
   remains a top-level `AppConfig` field and converges on `settings.changed`, with a toast on rejection.
   Explanatory copy says “message box” rather than the internal “composer” name for where the user types.
   The final **Subagents** group (`SubagentSettings.tsx`) is rows, not a table: global **Allow subagents**
@@ -991,6 +1052,24 @@ a project picker, the prompt hero, and the reused
   tidying). The copy names the three things
   that count as activity and the three things that never settle, because the setting is only legible
   together with those rules;
+  **`VoiceSettings`** (from `SPEECH_PROTOCOL_VERSION`, in the Interface group after Keyboard) shows the
+  store's `speech` status ([[submodule-web-speech]]). An unsupported platform gets a warning notice and
+  nothing else. Otherwise its rows say what the user can do, never how voice is built: no engine,
+  version, backend or PATH text, which an earlier version showed and users found unreadable (the
+  speech SPECs carry those details).
+  - **Voice input:** a switch for `AppConfig.voiceInputEnabled` (`settings.update`). While it is off,
+    only this row and Delete voice files remain, plus Status while a download is still running, so its
+    progress and Cancel never disappear.
+  - **Status:** not set up (with the download size), downloading with a percentage, ready, or the
+    failure in error colour. Its action is Download, Try again, or Cancel download.
+  - **Language:** an All languages / English only segmented control. Selecting the other one sends
+    `speech.install {model}`, which downloads that model and deletes the current one. Disabled while
+    installing.
+  - **Shortcut:** the platform chord.
+  - **Delete voice files:** shown only while ThinkRail's speech files use disk. It states the space it
+    frees and sends `speech.remove`, which never touches a `nemo-speech` on PATH.
+  The mic itself is not here: the page-level dictation layer ([[submodule-web-speech]]) shows it on
+  whichever text field has focus;
   **`TerminalSettings`** — a **Scrollback** segmented control (`store.terminalReplayKb`, five presets from
   Off to 1 MB; a valid non-preset host value selects none rather than a wrong preset;
   `settings.update { terminalReplayKb }`, applies to terminals opened from now on) and, on
@@ -1113,7 +1192,15 @@ a project picker, the prompt hero, and the reused
   no optimistic value or AppConfig field; reads follow catalog/provider invalidation, fence stale
   replies, disable controls while pending, and replace controls with Retry on failure. The props-driven
   `ModelContextControls` owns presentation; older hosts get neither the block nor its requests.
-  `ModelsSettings` organizes its controls into three visual groups:
+  At v111, **`CacheWarmingSettings`** adds a **Prompt cache** group: three `SettingsRadioCards` (Off /
+  While a run is active / Also between runs) over pi's `cacheWarming` setting, read through
+  `cacheWarming.get` and written through `cacheWarming.set` — pi's `settings.json` is the only state, there
+  is no AppConfig field. The reply's `source` drives the **ThinkRail default** hint on the streaming card
+  (shown only while pi's file names no mode, since ThinkRail's default differs from pi's `idle`), and the
+  `data-cache-warming-source` attribute on `cache-warming`. Reads fence stale replies, disable the cards
+  while pending, and replace them with Retry on failure; a failed write toasts. The props-driven
+  `CacheWarmingControls` owns presentation; older hosts get neither the group nor its requests.
+  `ModelsSettings` organizes its controls into four visual groups:
 
   **DEFAULT MODEL** — a **Chat model** row (`defaultModel`, `defaultEffort`) and the **Visible models**
   disclosure. **REVIEW** (`models-review-group`) — everything that configures review in one place, because
@@ -1147,9 +1234,11 @@ a project picker, the prompt hero, and the reused
 
   **GPT CONTEXT WINDOW** — the `ModelContextSettings` block described above.
 
+  **PROMPT CACHE** (`cache-warming-group`) — the `CacheWarmingSettings` block described above.
+
   There is **no separate Review navigation section**; all review-related controls live in Models' REVIEW group.
   **`ExtensionsSettings`** (the **Extensions** section, nav `settings-nav-extensions`, listed only at
-  `protocolVersion >= EXTENSION_CATALOG_PROTOCOL_VERSION`) is one page in three groups. Its description
+  `protocolVersion >= EXTENSION_CATALOG_PROTOCOL_VERSION`) is one page in up to four groups. Its description
   carries the page's only statement about chats — "Changes apply to open chats when their current turn
   ends." — and a primary **Install package…** button; there is no dynamic notice about which chats are
   pending. **Built into ThinkRail** is the host-registry catalog as before: `extension.list` each time the
@@ -1162,15 +1251,21 @@ a project picker, the prompt hero, and the reused
   `MessageKey` map — a setting without copy is not shown), valued from **`store.extensionSettings`** else the
   declared default, disabled while the extension is off, and written one key at a time through
   `settings.update { extensionSettings: { name: { key: value } } }` (the host merges); they appear only
-  while `supportsExtensionSettings(protocolVersion)` holds. **Installed** and **pi built-in**
+  while `supportsExtensionSettings(protocolVersion)` holds. **Skills** (only at
+  `protocolVersion >= OTHER_AGENT_SKILLS_PROTOCOL_VERSION`) is one switch, `other-agent-skills-toggle`, over
+  `store.otherAgentSkills`, writing `settings.update { otherAgentSkills }`; per-project choices made in the
+  Skills dialog still win over it. **Installed** and **pi built-in**
   (`PiPackagesSettings.tsx`, props-driven; every `packages.*` request and the row state live in the
   **`usePiPackages`** hook, `usePiPackages.ts`, so the page component only composes) exist only while
   `supportsPiPackages(protocolVersion)` holds — against an older host the page is the bundled group
   alone with its former description, no Install button and no package request — and list
-  `packages.list` for the active workspace (user scope alone without one) through **one** request path
+  `packages.list` for the active workspace (user scope alone without one, or for a chat without a project —
+  `selectActiveRepoWorkspaceId`) through **one** request path
   (`listPackages`, generation-guarded so a slow older response never overwrites a newer one), re-run on
   mount, on a workspace change and on the store's `packagesVersion` (the `packages.changed` push, which
-  the host also sends after a package switch so a re-enabled row regains its chips). The update check
+  the host also sends after a package switch so a re-enabled row regains its chips). The mount and
+  workspace-change reads pass `force`, so the host rebuilds its catalog: an extension file dropped into a
+  scanned folder by hand changes nothing the host watches, and a cached list would hide it for minutes. The update check
   is guarded the same way: a check started later (a workspace switch, a manual check, the re-check
   after an update) wins, and only the latest clears "Checking…" or re-flags rows. A **package row** (`PackageRow`) is name ·
   kind / scope tags (`npm` / `git` / `local`, Global / Repository) · an **Update available** tag when the
@@ -1536,7 +1631,7 @@ own section. The kebab menu (`plan-menu`, a
   page) and supersedes any read already in flight for the same key, so a pre-mutation answer cannot
   overwrite the mutation result. The keyed state and request generation are shared by every mounted
   hook consumer, keeping the plan and shell scope label on one mutation result. A stale mutation closure
-  cannot write through after that hook has moved to another branch. The focus-refetch overwrites state.
+  cannot write through after that hook has moved to another branch.
   Workspace activation explicitly opts into the host's 60-second settled-answer cache with
   `allowCached: true`, while omission on focus preserves the wire's original force-fresh behavior for
   older clients, so a PR closed/merged on GitHub drops out of the chip, label, and stepper on that
@@ -1544,7 +1639,21 @@ own section. The kebab menu (`plan-menu`, a
   intent and spends it on reconnect rather than falling back to a cache-eligible activation read. The
   workspace's `fsChanged` tick re-reads with `allowCached: true` (`reload`): the host drops its cached
   answer on a `.git` meta nudge, so a PR opened or pushed from a terminal still surfaces, while a fresh
-  read would `git fetch`, write `.git`, nudge again, and loop. The
+  read would `git fetch`, write `.git`, nudge again, and loop. Cache-eligible reads (activation,
+  reconnect, fs tick) are **single-flight** per mount: ticks during one fold into one follow-up, sent only
+  while still connected. A stalled host otherwise collected one read per tick until the transport's replay
+  cap refused every request. Fresh reads (focus, explicit refresh, CI poll) skip that lane, so a cached
+  reload never waits behind a 55s `git fetch` and a refresh is never queued behind an older cached
+  answer. Only a fresh read or `noteOpenReview` bumps the generation (`beginRequest(key, { supersede })`):
+  a cached read joins the current one, so it cannot void a refresh or poll already in flight, while a
+  fresh read voids any cached answer begun before it. Each read also carries a sequence number: a fresh
+  answer landing after a cached one requested later keeps that cached answer's branch facts and ahead /
+  behind counts, and adds only its review (the fresh PR state and checks). Otherwise a refresh measured
+  before a commit would overwrite the newer `aheadOfBase`. A *cached* answer landing after a newer one is
+  dropped whole: the shell and the plan pane run separate cached lanes for one key, and a slow cached "open"
+  must not restore itself over a newer "merged". Since a cached and a fresh read can share a
+  generation, a failed read clears the key (`failRequest`) only when no answer has landed at that
+  generation, so a refresh that times out cannot wipe the cached answer that arrived while it ran. The
   URL is kept across refetches while the review number matches. A `compare` result opens the prefilled
   GitHub
   compare page (`window.open`); every outcome toasts, uncommitted files get a separate info toast.
@@ -1636,7 +1745,7 @@ own section. The kebab menu (`plan-menu`, a
   presentational.
 - **Public surface:** layout-agnostic feature renderers (`ProjectTree`, `WelcomePanel`, file/diff/doc/chat
   panes, singleton side tools, terminal bodies, Settings, and `Toaster`), imported **per-file** so
-  Monaco/shiki/xterm stay lazy. Tab strips, group headers, side stacks, and center topology are not panel
+  Monaco/xterm stay lazy. Tab strips, group headers, side stacks, and center topology are not panel
   surfaces; the shell layout module wraps these renderers.
 - **Allowed deps:** `store`, `transport`, `components` (`SkeletonRows` — every async panel's pending
   state renders content-shaped skeleton rows, never a bare "Loading…" line), `@thinkrail/ui/*` (incl. `popover`/`command`/`textarea` for the
@@ -1647,8 +1756,7 @@ own section. The kebab menu (`plan-menu`, a
   `VisibleModelsSettings`' rows; `TemplateEditorDialog`, reused by `TemplatesSettings`; `ExtraUsageNotice`, the
   sign-in notice `useProviderAuth` passes to `LoginDialog`), `auth` (`LoginDialog`, mounted through
   `useProviderAuth` and by `McpSettings`), `@thinkrail/resource-renderers`, `lib`, `themes` (catalog + generic application contract),
-  `contracts`; `@remixicon/react`; and the heavy libs each lazy panel owns (`shiki`,
-  `@xterm/*`) loaded via `import()`.
+  `contracts`; `@remixicon/react`; and the heavy libs each lazy panel owns (`@xterm/*`) loaded via `import()`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.
 
 - **Ship — the branch's delivery state and actions, one implementation for topbar and Plan pane.**
@@ -1812,7 +1920,7 @@ own section. The kebab menu (`plan-menu`, a
   **Pierre owns every diff and every phone-class code file.** Threads with a `lineRange` become
   `lineAnnotations` at the range's end line (`base` → `deletions`, `worktree` → `additions`) and render
   `ReviewThreadCard`; annotation metadata and arrays preserve comment-id identity across unrelated
-  review pushes. Because Pierre 1.5.1 keys React annotation wrappers by array index, each mount keeps
+  review pushes. Because Pierre keys React annotation wrappers by array index, each mount keeps
   append-only comment-id slots with tombstones and reserves the always-present first slot for the composer.
   Line-number selection and the gutter utility open a composer on that exact side. A
   selection crossing both side spaces (unified view, a drag from a deleted line into an added one) opens
@@ -1833,35 +1941,38 @@ own section. The kebab menu (`plan-menu`, a
 
   **Pierre diff text-selection crash (WebKit) — a vendored `@pierre/diffs` patch.** Drag-selecting code
   in a review diff crashed WebKit's web-content process (Electrobun desktop: "A problem repeatedly
-  occurred"; `EXC_BREAKPOINT` in `WebCore::EventHandler::handleMouseDraggedEvent`). Pierre's
-  `InteractionManager` moves the gutter utility into the hovered line's number cell whenever the hovered
-  line changes and removes it on `pointerleave`; with our `renderGutterUtility` that node holds a
-  `<slot>`. WebKit rebuilds the renderers of the whole shadow host on every slot insertion or removal, and
-  doing so synchronously inside a pointer handler of a text drag crashes it: a Pierre-free page reproduces
-  the signature, while a moved plain element, the same slot move deferred to a frame, or a diff under
-  ~100 lines does not. Invariant: a Pierre surface never inserts, removes, or moves a `<slot>`
-  synchronously from a pointer or mouse handler. `patches/@pierre%2Fdiffs@1.5.1.patch` (root
-  `patchedDependencies`) carries the open upstream proposal pierrecomputer/pierre#1185 (issue
-  pierrecomputer/pierre#1184) plus two additions it lacks: placement is a no-op while a mouse button is
-  held outside Pierre's own selection session — armed by `pointermove` and by `pointerleave`, so a drag
-  whose first move already exits the diff cannot remove the slot — and the first button-free move
-  re-places the utility, even on the row where the drag ended. Bun applies a patch only to its exact
-  version and skips a mismatched one silently (install succeeds and the lockfile drops the entry), so
-  the review e2e tests "a text-selection drag leaves the comment button on the line it started from"
-  and "… that leaves the diff on its first move keeps the comment button" are the guard: they fail on
-  Chromium whenever the patched behavior is missing, including a Pierre release that carries only
-  #1185. A Pierre bump keeps them green and, once a release contains the fix, deletes the patch file and
-  its `patchedDependencies` entry. The same patch also fixes `FileDiff.trimColumnRows`: when a
-  virtualized window's end shrinks, 1.5.1 trims the annotation and no-newline rows trailing the last
-  kept line along with the dropped lines, and later appended chunks never re-emit them, so a composer,
-  thread, or toolbar on that line vanishes until a full render (seen when a composer's focus scroll
-  moved the window). Rows trailing a kept line now stay; separators, which precede their line, still go.
-  The guard is "Changes keeps unsaved composer selection…" in `e2e/changes-review-drafts.spec.ts`.
-  Turbo hashes `patches/**`, so an edited patch rebuilds the web
-  bundle instead of restoring a stale one from cache. The tests' controls (the utility sat on the start
-  line; the selection holds the dragged text) keep an emptied layout from passing — earlier
-  `display:grid` bisections "fixed" the crash only that way. The crash itself reproduces only in WebKit
-  (a temporary Playwright `webkit` project). Tracked in #683.
+  occurred"; `EXC_BREAKPOINT` in `WebCore::EventHandler::handleMouseDraggedEvent`). The root cause is a
+  WebKit regression from 307588@main (WebKit bug 307875): `handleMouseDraggedEvent` holds a `CheckedPtr`
+  to the drag target's renderer across `hitTest()` / `updateStyleIfNeeded()`. A `<slot>` moved
+  synchronously from `pointermove` invalidates the shadow host's style, that update destroys the
+  renderer, and the `CheckedPtr` crashes. A Pierre-free page reproduces it; a moved plain element or the
+  same slot move deferred to a frame does not. Pierre's `InteractionManager` moves the gutter utility
+  into the hovered line's number cell whenever the hovered line changes and removes it on
+  `pointerleave`. Only a custom `renderGutterUtility`, which we use, puts a `<slot>` in that node; the
+  default gutter button does not crash, and the crash does not depend on diff size. Invariant: a Pierre
+  surface never inserts, removes, or moves a `<slot>` synchronously from a pointer or mouse handler.
+  `patches/@pierre%2Fdiffs@1.6.4.patch` (root `patchedDependencies`) makes placement a no-op while a
+  mouse button is held outside Pierre's own selection session — armed by `pointermove` and by
+  `pointerleave`, so a drag whose first move already exits the diff cannot remove the slot — and the
+  first button-free move re-places the utility, even on the row where the drag ended. Upstream tracking:
+  pierrecomputer/pierre#1184 and WebKit bug 330739. Removal gate: a Pierre release stops moving the slot synchronously during a
+  pointer drag. A WebKit fix alone is not enough: the desktop app uses the system WebKit, and users update
+  macOS late. The same patch also fixes `FileDiff.trimColumnRows`: when a virtualized window's end
+  shrinks, Pierre trims the annotation and no-newline rows trailing the last kept line along with the
+  dropped lines, and later appended chunks never re-emit them, so a composer, thread, or toolbar on that
+  line stays hidden while the line is still rendered. Rows trailing a kept line now stay; separators,
+  which precede their line, still go. Removal gate: a Pierre release that keeps those rows. Bun applies
+  a patch only to its exact version and skips a mismatched one silently (install succeeds and the
+  lockfile drops the entry), so Chromium e2e tests that fail without the patch are the guards. Crash
+  half: "a text-selection drag leaves the comment button on the line it started from" and "… that leaves
+  the diff on its first move keeps the comment button" in `e2e/review.spec.ts`. `trimColumnRows` half:
+  "a diff composer stays shown while a scroll-up shrinks the virtual window to its line" in
+  `e2e/changes-review-drafts.spec.ts`. A Pierre bump keeps them green; delete the patch file and its
+  `patchedDependencies` entry only when both removal gates hold. Turbo hashes `patches/**`, so an edited
+  patch rebuilds the web bundle instead of restoring a stale one from cache. The crash tests' controls
+  (the utility sat on the start line; the selection holds the dragged text) keep an emptied layout from
+  passing — earlier `display:grid` bisections "fixed" the crash only that way. The crash itself
+  reproduces only in WebKit (a temporary Playwright `webkit` project). Tracked in #683.
 
   **Monaco renders desktop files only.** `reviewWidgets.ts` keeps its content-widget selection affordance,
   context-menu action, decorations, and view-zone reconciliation for that one surface. It exposes stable
@@ -1960,6 +2071,10 @@ own section. The kebab menu (`plan-menu`, a
   *paused* read. A visible `FileTree` directory probes while collapsed only as far as needed to identify
   its compact single-directory run; descendants below the run's deepest directory mount and read only
   when that compact row is expanded. No tick has to be threaded down as a prop.
+  The wiring of this hook and `useLiveTabContent` (ticks during a slow read, a workspace or file switch
+  mid-read) is tested in `liveReads.test.tsx` by mounting real hooks through
+  `react-dom/client` on a headless container: a tree that renders no host elements needs only a stub
+  `window`, so the web package needs no DOM library or testing dependency.
   Its users — `FileTree` (root + each visible directory chain), `FilesPanel` (`git.status`, via
   `useGitStatus`, feeding both modes),
   `useWorkspaceSpecs` (`spec.graph`) — plus `FilePane`/`DiffPane`, which follow the same tick contract per
@@ -2089,7 +2204,9 @@ own section. The kebab menu (`plan-menu`, a
   the worktree-relative **tab identity**, so a deep link can never open a second tab for a file already open
   under its relative path; that lives in the choke point, not in each caller, and it means a spec created
   seconds ago and not yet in the graph opens just the same) — a spec has nothing to preview short of its
-  content, and the tree row lights up from the local selected-resource identity. That intent is
+  content, and the tree row lights up from the local selected-resource identity. A request that carries
+  a `line` (a palette section hit) then reveals it with `revealFileTab` and no renderer override, so the
+  rendered spec scrolls to that heading instead of switching to source. That intent is
   **consumed** (`clearSpecRequest`) once handled: like the Changes link, it opens a center tab, so
   replaying it on a remount or a graph refetch would yank the user's tab back mid-edit. Two intents, two
   effects: a spec chip must never land in the git-derived Changes view, which structurally cannot show a
@@ -2394,7 +2511,16 @@ own section. The kebab menu (`plan-menu`, a
   `MarkdownPreview`; `thinkrail/code` is the text fallback and uses Monaco on desktop plus Pierre `File`
   on phone-class viewports; `thinkrail/binary` shows identity and a host-backed
   download. The candidate list alone determines whether the resource toggle exists. No format predicate or
-  preview/source field remains in the pane or tab.
+  preview/source field remains in the pane or tab. A tab's `reveal` (the store's `FileReveal`) is passed
+  through to the mounted view as the renderer contract's `reveal`, so the code renderer scrolls to and marks
+  that line, and the view's `onRevealHandled` clears it (`clearFileTabReveal`) so a later remount keeps the
+  reading position; `openTabs.ts`' **`openFileAtLine(workspaceId, path, at, intent)`** is Find in Files'
+  open-at-a-line entry (`↵` / `⌘↵`): the ordinary `openFileInTab` at the caller's intent, then
+  `revealFileTab` naming `SOURCE_RENDERER_ID`, so a Markdown or HTML file opens as source at the line
+  rather than as its rendered document (a spec section opened through `specRequest`, below, names no
+  renderer, so the rendered spec scrolls to its heading). An open that finds a read of the same file in flight joins it —
+  `openReadTab` hands every caller that read's completion — so each caller reveals after the tab is
+  installed, in call order, and the latest hit wins.
 
   `MarkdownPreview` retains the document typography, frontmatter stripping, alerts, Mermaid rendering,
   source-line stamps, review commenting, and bounded reading measure described above. These are renderer
@@ -2467,7 +2593,29 @@ own section. The kebab menu (`plan-menu`, a
   key handler intercepts keydown at `keyCode === 229` and derives the control bytes from `event.code`
   (which stays accurate under an IME) via `imeControlBytes`, writing them to the PTY itself; anything
   that isn't a rescued chord is left to normal text input.
-- Heavy deps (Monaco / shiki / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
+- **Korean IME replacement bridge (WebKit).** WebKit — Safari and the desktop app's WKWebView — drives
+  the macOS Korean input method without `composition*` events: a syllable's first jamo lands as an
+  `insertText` input, every re-composition of it (`ㄱ`→`가`→`간`) as `insertReplacementText`, the next
+  syllable as a fresh `insertText`, and the `keyCode` 229 keydown *follows* the input it produced.
+  xterm 6.0.0 writes the bare `insertText` to the PTY at once and ignores `insertReplacementText`
+  (upstream #5704, #6144), so `가` reached the shell as `ㄱ`, finals never arrived (`간` → `ㄱ`), and a
+  syllable whose input landed before the previous key's keyup was dropped outright. `TerminalInstance`
+  captures `input`/`keydown` on the mount host — ahead of xterm's own textarea listeners — and routes
+  them through `terminalImeBridge`: a single Hangul `insertText` is held instead of forwarded, each
+  `insertReplacementText` replaces the held syllable, and the held syllable reaches the PTY through
+  `term.input` when the next syllable starts, on any non-IME keydown (Enter, Space, chords, arrows,
+  digits), on a 229 chord or Escape — ahead of the bytes the rescue above writes, so Ctrl+U/Ctrl+C
+  discard the syllable with the line instead of leaving it for the next command — on `compositionstart`
+  (a real composition taking over), on `paste` (xterm hands the clipboard straight to `onData`, with no
+  input or keydown to commit on) or on focus-out; modifier-only keydowns never commit. An unmodified
+  Backspace the input method passes through while a syllable is held drops the held syllable instead of
+  emitting DEL, since nothing reached the PTY; a modified one (Option/Alt+Backspace word-delete) commits
+  it and stays xterm's. Once the replacement model has been seen, bare 229 keydowns are kept from
+  xterm so its deferred textarea diff cannot echo a syllable twice under load; the rescued chords above
+  still pass. Chrome and Firefox never emit `insertReplacementText` for an IME, so the bridge is inert
+  there. Known gap: the held syllable has no on-screen preview until it commits (xterm draws one only
+  for `composition*` input); upstream's #5704 adds that inside xterm — revisit when it ships.
+- Heavy deps (Monaco / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
   A lazy chunk that fails to load (or a render throw) is contained by the `components/ErrorBoundary` the
   **shell** wraps each region in (see `shell/SPEC.md`), so a single panel degrades instead of blanking the
   app; panels themselves don't own the boundary.

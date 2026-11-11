@@ -29,14 +29,16 @@ to preserve).
   `HistoryEntry[]` — all from **one parse**, so the index never needs a second source (`listAll`) for
   metadata. Pi session files are **trees** (abandoned branches) that compaction rewrites, so it resolves
   the file the way pi does before the client renders it — `parseSessionEntries` →
-  `migrateSessionEntries` → `buildSessionProjection` (follow the current leaf, apply the latest compaction,
-  drop summarized/abandoned entries; the same projection `buildSessionContext` returns, with each
+  `migrateSessionEntries` → `displaySessionProjection` (follow the current leaf, keep summarized turns
+  in front of the latest compaction marker, then the same kept tail `buildSessionProjection` returns, with each
   message's source entry) — then indexes the resolved messages, each with its pi entry's id as `entryId`
   (`<id>:<part>` when one entry contributes several messages), which compaction never changes, filtered through contracts'
   **`isTranscriptMessageRole`**, the very guard `getSessionMessages` sends by (one policy, not a local copy
   of it). So `messageIndex` matches the client's `turnIdByMessageIndex` exactly
-  (no raw-file-order drift), and abandoned/summarized text never becomes a hit — the compaction summary is
-  sent (it renders the client's compaction marker), so it consumes an index slot without being searchable.
+  (no raw-file-order drift). Abandoned-branch text still never becomes a hit; summarized text does, because
+  the same session still renders those turns — minus what the branch's context edits omitted. The
+  compaction summary is sent (it renders the client's compaction marker), so it consumes an index slot
+  without being searchable.
   The internal
   `TODO_NUDGE_PREFIX` control message (hidden from the transcript on hydrate) is skipped after its index
   slot is consumed, so alignment holds; a **superseded auto-retry attempt** (the shared
@@ -120,16 +122,23 @@ Verified against the installed `dist/core/session-manager.{js,d.ts}`. Re-verify 
   build budget for a cold build **or** a warm revalidation, and a `state` (`cold` / `refreshing` /
   `ready`, **`HistoryState`**) instead of the prompt-recall `indexing` flag; the `search` module matches entries with the shared content matcher, so no second
   parse of the corpus exists (prompt recall keeps its own `matchesTerms` / `makeSnippet`).
-- **Public surface (`index.ts`):** `HistoryIndex` (+ `HistorySession`), `getHistoryIndex()`, `clampLimit`, `extractSession`, types. **No test helpers** — `writeFixtureSession`/`defaultSessionDirFor`
+- **Public surface (`index.ts`):** `HistoryIndex` (+ `HistorySession`), `getHistoryIndex()`, `clampLimit`, `extractSession`, `displayTranscriptMessages`, types. **No test helpers** — `writeFixtureSession`/`defaultSessionDirFor`
   are disk-writing test-only builders and must not enter the runtime module graph; they're reachable only
   through the server package's dedicated **`@thinkrail/server/history-test-fixtures`** subpath export
   (package.json), the sanctioned test boundary — same pattern as `@thinkrail/server/agent`. In-package
   tests import them relatively (`./testFixtures`); the e2e seeder imports the subpath.
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (`getAgentDir` — the default sessions root — plus
   the exported session-tree helpers `parseSessionEntries`/`migrateSessionEntries`/`buildSessionProjection`
-  used by `extract.ts`; **not `SessionManager`** in production code — see Responsibility. Tests may use
+  / `sessionEntryToContextMessages` used by `extract.ts` and `displayTranscript.ts`; **not `SessionManager`**
+  in production code — see Responsibility. Tests may use
   `SessionManager` to *pin* layout/format facts against the real thing), `@thinkrail/contracts`,
   `node:fs`, `node:fs/promises`, `node:path`.
+- **`displayTranscript.ts`** is the one display projection `extractSession` and `session.getMessages`
+  share: model context still drops summarized turns; the UI/index keep them above the compaction marker,
+  each through the active branch's latest `context_edit` for it, as pi projects kept entries — an omission
+  (`replacement: null`, e.g. pi 1.5.2's truncated attempt before compact-and-retry) stays dropped, a
+  replacement stays applied. Pi's per-entry `projectContextEntry` is not a package-root export, so
+  `displayTranscript.ts` mirrors it ([[pi-compatibility]]).
 - **Forbidden:** importing `agent`/`workspaces`/`projects` (scope mapping is injected by the host handler
   via the `filter`/`labels` callbacks passed into `search()`); writing anything to disk (`writeFixtureSession`
   is test-only, never called from production code paths).
