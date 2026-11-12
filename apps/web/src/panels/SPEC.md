@@ -1049,7 +1049,7 @@ a project picker, the prompt hero, and the reused
   client-local `markdownOutlineSide`, applied at once with no host round trip); **`LineWidthControl({kind})`** (`LineWidthSettings.tsx`, no page of its own — the
   `chat` control sits in Chat, the `file` one in Appearance → Editor — a 40–240 integer **Line width** field
   on the auto-save input pattern plus an independent host-synchronized **Fit to pane** switch
-  (`${kind}-line-width-bounded`); defaults are 120/on. A changed authoritative width from
+  (`${kind}-line-width-bounded`); defaults are 80 (chat) / 120 (file), Fit to pane on. A changed authoritative width from
   `settings.changed` replaces a stale draft; mutations converge only on that broadcast and rejected calls
   toast without changing geometry); **`ChatSettings`** (one **Appearance and behavior** group of rows —
   **Message order** segmented over `store.chatMessageOrder` (Oldest first, the compatibility default /

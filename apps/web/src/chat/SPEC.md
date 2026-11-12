@@ -163,7 +163,7 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   remount, so a code block re-renders from the highlight cache (highlighted at once on a hit), a Mermaid diagram redraws, and focus
   or a selection inside them is lost; kept blocks hold substrings of older stream texts, about 1 MB for a
   110k-char message, until the row unmounts.
-- **Configurable transcript measure** — the host-synchronized `chatLineWidth` (40–240, default 120)
+- **Configurable transcript measure** — the host-synchronized `chatLineWidth` (40–240, default 80)
   is an approximate CSS `ch` text measure because chat retains its proportional reading font. `ChatView`,
   the store-aware integration boundary, applies it to one centered outer column shared by every transcript
   row, the stream indicator, and sticky activity breadcrumbs; ordinary row gutters sit outside the measure,

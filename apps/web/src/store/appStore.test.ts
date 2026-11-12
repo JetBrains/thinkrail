@@ -4336,7 +4336,7 @@ test("applyConfig defaults absent or malformed line-width fields independently",
 	Reflect.set(config, "chatLineWidthBounded", "yes");
 	useAppStore.getState().applyConfig(config);
 	expect(useAppStore.getState()).toMatchObject({
-		chatLineWidth: 120,
+		chatLineWidth: 80,
 		fileLineWidth: 160,
 		chatLineWidthBounded: true,
 		fileLineWidthBounded: false,
