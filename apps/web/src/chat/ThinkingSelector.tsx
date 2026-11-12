@@ -63,7 +63,7 @@ export function ThinkingSelector({
 							onSelect(l);
 							setOpen(false);
 						}}
-						className="flex w-full items-center gap-8 rounded-sm px-8 py-4 text-left tr-text-ui text-text-default capitalize outline-none transition-colors hover:bg-control-bg-hovered"
+						className="flex w-full items-center gap-8 rounded-sm px-8 py-4 text-left tr-text-ui text-text-default capitalize transition-colors focus-visible:focus-ring-inset hover:bg-control-bg-hovered"
 					>
 						<span className="flex w-14 shrink-0 justify-center">
 							{l === level ? <Check className="size-14 text-primary" /> : null}

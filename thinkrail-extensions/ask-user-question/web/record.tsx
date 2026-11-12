@@ -111,7 +111,7 @@ export function DockedStub({ count, onOpen }: { count: number; onOpen: () => voi
 				tabIndex={0}
 				data-testid="ask-docked-open"
 				onClick={onOpen}
-				className="flex shrink-0 items-center gap-2 rounded-sm px-4 text-primary outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex shrink-0 items-center gap-2 rounded-sm px-4 text-primary hover:bg-control-bg-hovered focus-visible:focus-ring"
 			>
 				{t("tools.ask.dockedOpen")}
 				<ArrowDown aria-hidden="true" className="size-14" />
