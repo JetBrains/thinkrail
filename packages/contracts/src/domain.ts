@@ -64,6 +64,8 @@ export interface Project {
 	path: string;
 	slug: string;
 	lastOpened: number;
+	/** Open projects list highest rank first; absent reads as `lastOpened`. */
+	rank?: number;
 	/** The one built-in container of chats without a project: not a repository, never git, never closed. */
 	kind?: "chats";
 	closed?: true;
@@ -84,6 +86,17 @@ export interface Project {
 	mcpOverrides?: Record<string, McpProjectOverride>;
 	/** "Always allow" MCP tools per server name (never written to `.pi/mcp.json`). */
 	mcpToolGrants?: Record<string, McpToolGrant>;
+}
+
+export function projectRank(project: Pick<Project, "rank" | "lastOpened">): number {
+	return project.rank ?? project.lastOpened;
+}
+
+export function compareProjectRank(
+	a: Pick<Project, "id" | "rank" | "lastOpened">,
+	b: Pick<Project, "id" | "rank" | "lastOpened">,
+): number {
+	return projectRank(b) - projectRank(a) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 }
 
 /** Tools (pi tool names) granted while the server keeps the command + args or URL hashed as `target`. */

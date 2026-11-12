@@ -243,7 +243,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   params are not shape-validated at runtime. The registry includes `workspace.rename` as the direct manual door into
   `renameWorkspace(id, name)` (no `branch` option) — the workspaces module changes only the
   display label, persists, and publishes it, so the handler never mutates Git, emits, or patches a client
-  separately; `project.rename` likewise delegates to the projects module's `renameProject`, which owns validation and the push. `client.reportError` hands the untrusted browser report to analytics' `reportClientError` (the
+  separately; `project.rename` and `project.move` likewise delegate to the projects module's `renameProject` / `moveProject`, which own validation and the push; both refuse the Chats container as either end. `client.reportError` hands the untrusted browser report to analytics' `reportClientError` (the
   only sanitizer) and always acks. Error tracking also rides two `server.ts` seams: every failed WS request
   is reported with its registered method (CodedErrors included), and `observeLoggedErrors` routes host
   `log.warn/error(msg, err)` calls as `host_logged` — so host diagnostics that carry an error go through

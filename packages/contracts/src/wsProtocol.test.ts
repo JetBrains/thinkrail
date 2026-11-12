@@ -24,6 +24,8 @@ import {
 	CONTINUATION_PROTOCOL_VERSION,
 	CUSTOM_ENDPOINT_ID_PREFIX,
 	CUSTOM_ENDPOINTS_PROTOCOL_VERSION,
+	CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION,
+	CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS,
 	completionDelivery,
 	customMessageText,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
@@ -39,19 +41,24 @@ import {
 	isBackgroundCommandCompletionMessage,
 	isCacheWarmingMode,
 	isCustomEndpointId,
+	isModelContextWindow,
+	isSharedModelContextTarget,
 	isTodoReviewFixMessage,
 	isToolResponsePending,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	MCP_TOOL_GRANTS_PROTOCOL_VERSION,
+	MODEL_CONTEXT_WINDOW_LIMITS,
 	MODEL_PICKER_PROTOCOL_VERSION,
+	modelContextWindowLimits,
 	normalizeSessionTitle,
 	ONBOARDING_PROTOCOL_VERSION,
 	OTHER_AGENT_SKILLS_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
+	PROJECT_ORDER_PROTOCOL_VERSION,
 	PROJECT_RENAME_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROJECT_TRUST_PROTOCOL_VERSION,
@@ -345,6 +352,12 @@ test("find in files is pinned to v112", () => {
 	expect(WS_CHANNELS.searchTextResults).toBe("search.textResults");
 });
 
+test("project order is pinned to v117", () => {
+	expect(PROTOCOL_VERSION).toBe(117);
+	expect(PROJECT_ORDER_PROTOCOL_VERSION).toBe(117);
+	expect(WS_METHODS.projectMove).toBe("project.move");
+});
+
 test("the question panel height setting is pinned to v114", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(QUESTION_PANEL_PROTOCOL_VERSION);
 	expect(QUESTION_PANEL_PROTOCOL_VERSION).toBe(114);
@@ -480,6 +493,22 @@ test("model context settings name their two methods at v76", () => {
 	expect(WS_METHODS.modelSetContextWindow).toBe("model.setContextWindow");
 	expect(CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION).toBe(76);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION);
+});
+
+test("custom server models take a targeted context window from v116, outside the GPT preset", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION);
+	expect(CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION).toBe(116);
+	const custom = `${CUSTOM_ENDPOINT_ID_PREFIX}gateway`;
+	expect(modelContextWindowLimits(custom)).toBe(CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS);
+	expect(modelContextWindowLimits("openai")).toBe(MODEL_CONTEXT_WINDOW_LIMITS);
+	expect(isModelContextWindow(8_192, modelContextWindowLimits(custom))).toBe(true);
+	expect(isModelContextWindow(8_192)).toBe(false);
+	for (const value of [1_023, 10_000_001, 4_096.5])
+		expect(isModelContextWindow(value, CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS)).toBe(false);
+	expect(isSharedModelContextTarget({ provider: "openai", override: null })).toBe(true);
+	expect(isSharedModelContextTarget({ provider: "openai", override: 1_050_000 })).toBe(false);
+	expect(isSharedModelContextTarget({ provider: custom, override: null })).toBe(false);
+	expect(isSharedModelContextTarget({ provider: custom, override: 300_000 })).toBe(false);
 });
 
 test("resource metadata rides the two content reads from v75", () => {

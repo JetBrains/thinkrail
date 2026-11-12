@@ -165,6 +165,7 @@ import {
 	inspectCloneDestination,
 	inspectProjectPath,
 	listProjects,
+	moveProject,
 	openProject,
 	renameProject,
 	setProjectGroupEnabled,
@@ -673,6 +674,11 @@ const handlers: WsHandlers = {
 	"project.rename": (params) => {
 		repositoryProject(params.id);
 		return renameProject(params.id, params.name);
+	},
+	"project.move": (params) => {
+		repositoryProject(params.id);
+		repositoryProject(params.targetId);
+		return moveProject(params.id, params.targetId, params.placement);
 	},
 	"project.setTrust": async (p) => {
 		const project = repositoryProject(p.id);

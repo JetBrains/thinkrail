@@ -144,6 +144,8 @@ export type TemplateReadLocation =
 export const PROTOCOL_VERSION = 118;
 export const FS_MUTATIONS_PROTOCOL_VERSION = 118;
 export const EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION = 115;
+export const CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION = 116;
+export const PROJECT_ORDER_PROTOCOL_VERSION = 117;
 export const QUESTION_PANEL_PROTOCOL_VERSION = 114;
 export const SPEC_SECTIONS_PROTOCOL_VERSION = 113;
 export const TEXT_SEARCH_PROTOCOL_VERSION = 112;
@@ -387,6 +389,7 @@ export const WS_METHODS = {
 	projectList: "project.list",
 	projectClose: "project.close",
 	projectRename: "project.rename",
+	projectMove: "project.move",
 	projectInspect: "project.inspect",
 	projectInit: "project.init",
 	projectCreate: "project.create",
@@ -786,14 +789,23 @@ export interface ModelDefault {
 	thinkingLevel: ThinkingLevel;
 }
 
-export const MODEL_CONTEXT_WINDOW_LIMITS = { min: 272_000, max: 1_000_000 } as const;
+export interface ModelContextWindowLimits {
+	readonly min: number;
+	readonly max: number;
+}
 
-export function isModelContextWindow(value: unknown): value is number {
+export const MODEL_CONTEXT_WINDOW_LIMITS = { min: 272_000, max: 1_000_000 } as const;
+export const CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS = { min: 1_024, max: 10_000_000 } as const;
+
+export function isModelContextWindow(
+	value: unknown,
+	limits: ModelContextWindowLimits = MODEL_CONTEXT_WINDOW_LIMITS,
+): value is number {
 	return (
 		typeof value === "number" &&
 		Number.isSafeInteger(value) &&
-		value >= MODEL_CONTEXT_WINDOW_LIMITS.min &&
-		value <= MODEL_CONTEXT_WINDOW_LIMITS.max
+		value >= limits.min &&
+		value <= limits.max
 	);
 }
 
@@ -876,10 +888,19 @@ export interface CustomEndpointDraft {
 	models: CustomEndpointModel[];
 }
 
+export function modelContextWindowLimits(provider: string): ModelContextWindowLimits {
+	return isCustomEndpointId(provider)
+		? CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS
+		: MODEL_CONTEXT_WINDOW_LIMITS;
+}
+
 export function isSharedModelContextTarget(
-	setting: Pick<ModelContextSetting, "override">,
+	setting: Pick<ModelContextSetting, "provider" | "override">,
 ): boolean {
-	return setting.override === null || isModelContextWindow(setting.override);
+	return (
+		!isCustomEndpointId(setting.provider) &&
+		(setting.override === null || isModelContextWindow(setting.override))
+	);
 }
 
 /**
@@ -896,6 +917,10 @@ export interface WsMethodMap {
 	"project.list": { params: Record<string, never>; result: Project[] };
 	"project.close": { params: { id: string }; result: Ack };
 	"project.rename": { params: { id: string; name: string }; result: Project };
+	"project.move": {
+		params: { id: string; targetId: string; placement: "before" | "after" };
+		result: Project;
+	};
 	"project.inspect": { params: { path: string }; result: ProjectPathStatus };
 	"project.init": { params: { path: string }; result: Project };
 	"project.create": {

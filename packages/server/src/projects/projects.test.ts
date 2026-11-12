@@ -25,6 +25,7 @@ import {
 	isProjectTrusted,
 	listProjects,
 	listRecentProjects,
+	moveProject,
 	openProject,
 	refreshRecentProjectFolders,
 	renameProject,
@@ -673,6 +674,87 @@ test("renameProject changes only the display name, publishes it, and survives cl
 	expect(() => renameProject(project.id, "   ")).toThrow("Invalid project name");
 	expect(() => renameProject(project.id, "x".repeat(101))).toThrow("Invalid project name");
 	expect(() => renameProject("missing", "Name")).toThrow("Unknown project: missing");
+});
+
+function seedProjects(...records: Array<Partial<Project> & Pick<Project, "id" | "lastOpened">>) {
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify(
+			records.map((record) => ({
+				name: record.id,
+				path: `/p/${record.id}`,
+				slug: record.id,
+				...record,
+			})),
+		),
+	);
+}
+
+const openIds = () => listProjects().map((project) => project.id);
+
+test("moveProject places a project before or after another, publishing and persisting only that record", () => {
+	seedProjects(
+		{ id: "a", lastOpened: 400 },
+		{ id: "b", lastOpened: 300 },
+		{ id: "c", lastOpened: 200 },
+	);
+	const published: string[] = [];
+	setProjectPublisher((snapshot) => published.push(snapshot.id));
+
+	moveProject("c", "a", "before");
+	expect(openIds()).toEqual(["c", "a", "b"]);
+	moveProject("c", "b", "after");
+	expect(openIds()).toEqual(["a", "b", "c"]);
+	moveProject("a", "c", "before");
+	expect(openIds()).toEqual(["b", "a", "c"]);
+	expect(published).toEqual(["c", "c", "a"]);
+	expect(listRecentProjects().map((project) => project.id)).toEqual(["a", "b", "c"]);
+
+	moveProject("a", "c", "before");
+	moveProject("a", "a", "after");
+	expect(published).toEqual(["c", "c", "a"]);
+	expect(() => moveProject("a", "missing", "before")).toThrow("Unknown project: missing");
+});
+
+test("moveProject ignores closed projects and renumbers the open ones when neighbours leave no room", () => {
+	seedProjects(
+		{ id: "a", lastOpened: 300 },
+		{ id: "b", lastOpened: 300 },
+		{ id: "gone", lastOpened: 250, closed: true },
+		{ id: "c", lastOpened: 200 },
+	);
+	expect(() => moveProject("a", "gone", "after")).toThrow("Unknown project: gone");
+	const published: string[] = [];
+	setProjectPublisher((snapshot) => published.push(snapshot.id));
+
+	moveProject("c", "a", "after");
+
+	expect(openIds()).toEqual(["a", "c", "b"]);
+	expect(published.toSorted()).toEqual(["a", "b", "c"]);
+	expect(getProjects().find((project) => project.id === "gone")?.rank).toBeUndefined();
+});
+
+test("opening puts a new or reopened project on top without disturbing the others' order", () => {
+	const [first, second, third] = [
+		join(dataDir, "first"),
+		join(dataDir, "second"),
+		join(dataDir, "third"),
+	] as const;
+	for (const repo of [first, second, third]) makeRepo(repo);
+	const a = openProject(first);
+	const b = openProject(second);
+	moveProject(a.id, b.id, "before");
+	expect(openIds()).toEqual([a.id, b.id]);
+
+	const c = openProject(third);
+	expect(openIds()).toEqual([c.id, a.id, b.id]);
+	openProject(second);
+	expect(openIds()).toEqual([c.id, a.id, b.id]);
+
+	closeProject(a.id);
+	expect(openIds()).toEqual([c.id, b.id]);
+	openProject(first);
+	expect(openIds()).toEqual([a.id, c.id, b.id]);
 });
 
 test("setProjectTrust: persists a revocable, fail-closed trust decision", async () => {

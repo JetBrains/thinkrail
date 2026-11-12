@@ -89,8 +89,28 @@ treatment.
   ~700ms long press is its touch equivalent. With a project-name button focused, the standard Context Menu
   key or Shift+F10 opens the same menu for keyboard-only use; arrow/activate/Escape keys work normally.
   The menu is neutral: **Plus Create workspace**, **FolderOpen Open existing worktree…**, separator,
-  **Pencil Rename** (only when the host's protocol is at least `PROJECT_RENAME_PROTOCOL_VERSION`), **X Close
-  project**. Rename swaps the project name for the same inline input as workspace rename (Enter/blur
+  **ArrowUp Move up** / **ArrowDown Move down** + separator (only when the host's protocol is at least
+  `PROJECT_ORDER_PROTOCOL_VERSION`; disabled at either end), **Pencil Rename** (only when the host's protocol is at least `PROJECT_RENAME_PROTOCOL_VERSION`), **X Close
+  project**. **Project order is host-owned** (`Project.rank`, architecture Decision 9: projects are domain
+  state), so every window and client shows one arrangement and converges on the `project.updated` push;
+  `workspaceActions.moveProject` sends `project.move` and toasts a refusal; its reply is never applied as
+  state, because a reconnect can replay a cached reply over a newer welcome snapshot, and the host has
+  already pushed the moved ranks. Three equivalent gestures place a project before/after a neighbour:
+  dragging its name button (not the chevron, `+`, or rename input), the menu's Move up/down, and
+  **Alt+Shift+↑/↓** on the focused name (`aria-keyshortcuts`, the workbench's reorder chord); below
+  `PROJECT_ORDER_PROTOCOL_VERSION` none of them is offered and the chord passes through untouched. The
+  drag is `@dnd-kit/core`'s, like the workbench's tab drag, with a `MouseSensor` (5 px activation, so a
+  click still selects and a drag never navigates; touch keeps scrolling and reorders through the
+  long-press menu) and `pointerWithin`: each
+  project group carries before/after half drop zones that light the workbench's `border-primary`
+  insertion line, zones whose move would be a no-op stay disabled, the source dims, and a `DragOverlay`
+  chip names the project. Escape or a drop outside a zone changes nothing. The Chats section sits outside
+  that drag context, so it is never draggable or a drop target and no project can land above it; the
+  host refuses the container at either end anyway. After a keyboard or menu move focus returns to the
+  moved name; every completed move fills the rail's polite `role="status"` region ("… moved to position
+  2 of 3"), while dnd-kit's own announcements stay silent and its screen-reader instructions are the
+  localized keyboard hint the name button is described by. A project opened or reopened lands on top;
+  the rest keep their order. Rename swaps the project name for the same inline input as workspace rename (Enter/blur
   commits a changed trimmed name via `project.rename`, Escape cancels) and waits for the `project.updated`
   push — no optimistic label; rejection raises an error toast. Create is exactly the direct `+` flow. Open existing worktree opens the
   `ExistingWorktreeDialog` chooser fed by `workspace.listExisting` (branch + absolute path per row;
@@ -886,10 +906,23 @@ a project picker, the prompt hero, and the reused
   edit; an edit that changes the address's origin shows a warning and disables Save, since a different
   server is added as a new one; **Remove key** sends `apiKey: ""` and keeps Detect from reusing it), **Find models**
   (`customEndpoints.probe`, only on click — never on open, since gateways can list thousands), a manual
-  model-id field above the list, a filter field and 50-row paging once the list exceeds a page, and a per-model use switch. **A model row has no editable parameters** (decision: they
-  describe the server rather than configure it — its real limits are set by whoever runs it). It shows only
-  the facts the server reported (context, thinking, images, tools; "No tools" in warning tone), and an
-  unreported fact is simply absent and left to pi's default. Re-detecting keeps selections and saved
+  model-id field above the list, a filter field and 50-row paging once the list exceeds a page, and a per-model use switch. **A model row's only editable parameter is its context
+  window** (decision: the other facts describe the server rather than configure it, but a gateway's
+  listing rarely reports the window whoever runs the server set, and pi's 128K default then sizes
+  compaction and budgets for the wrong model). The row shows only the facts the server reported
+  (context, thinking, images, tools; "No tools" in warning tone), and an unreported fact is simply absent
+  and left to pi's default. From `CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION` (v116) it also carries a
+  compact **context window** field (`custom-endpoints-context`) that is not part of the draft: it reads
+  and writes the model's `modelOverrides` value through the same `useModelContextSettings` hook as
+  `ModelContextSettings` (`model.contextSettings` / a targeted `model.setContextWindow`), so a re-Detect
+  or Save never touches it. Empty means the detected window (placeholder "Detected", or "Unknown" when
+  the server reported none); a whole number in the contracts' custom range saves on Enter or blur through
+  the shared auto-save input pattern, an emptied field or the reset icon returns to the detected window,
+  and Escape reverts the draft without closing the dialog. The field is disabled while the dialog is
+  busy, for an unused row, and for a model pi doesn't serve yet (an unsaved server or newly found model —
+  its title asks to save the server first). A failed context read or write is not an unsaved model: every
+  field locks with the load-failure title, and the list is headed by the same `ModelContextLoadFailed`
+  line and Retry that `ModelContextControls` shows. Re-detecting keeps selections and saved
   facts the server doesn't report, takes reported ones, drops a saved max output once a new context is
   reported, keeps models the server no longer lists, and keeps existing rows first with newly found ones appended; an unchanged saved address stays as written. The
   pure draft rules live in `customEndpointDraft`; probe failures render as localized inline status and
@@ -1193,21 +1226,27 @@ a project picker, the prompt hero, and the reused
   come from that same resolved, Pi-clamped model. Both triggers are disabled, and choices in an already-open
   picker are ignored, while a save or re-read is in flight. At v76, **`ModelContextSettings`** adds
   one Default / 1M / Custom selector over every eligible GPT model the host returns as
-  `ModelContextSetting[]`; a collapsed **By each model** disclosure reveals one selector per provider/model
-  pair, so the same model on
+  `ModelContextSetting[]`. Rows of a server the **Custom servers** group lists are left to that server's
+  dialog: `ModelsSettings` passes the same `useCustomEndpoints` state, and the block stays on its loading
+  line until that list answers, so rows never flash in and out (a failed list, or a host without the
+  group, hides none). Any other `custom-*` provider — say a hand-written `openai-responses` one the dialog
+  can't represent — keeps its row under By each model, bounded by `modelContextWindowLimits` (the GPT range on a host older
+  than `CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION`, which still enforces it), and never joins the shared control. A collapsed **By each model** disclosure reveals one selector per
+  provider/model pair, so the same model on
   different providers stays independently editable. Selection is keyed on the explicit `override`
   (Default = `null`, the catalog value pi reports). The shared control summarizes only the rows the
   contracts' `isSharedModelContextTarget` admits — it shows "Customized by model" when their overrides
-  differ, counts the external rows it leaves alone, and is omitted when it would govern none — and
-  choosing a shared preset replaces those rows' overrides in one `model.setContextWindow` call. Custom reveals a whole-number field bounded by the contracts' 272K–1M
-  range that saves on Enter or blur — except a blur onto a sibling preset of the same control, so picking
+  differ, counts the non-`custom-*` external rows it leaves alone, and is omitted when it would govern none — and
+  choosing a shared preset replaces those rows' overrides in one `model.setContextWindow` call. Custom reveals a whole-number field bounded by the row's
+  `modelContextWindowLimits` (the contracts' 272K–1M range but for a `custom-*` row) that saves on Enter or blur — except a blur onto a sibling preset of the same control, so picking
   Default/1M never first commits a half-typed value; the copy labels it an app policy, not a verified provider limit, and
   external values outside it stay visible but cannot be re-applied. Drafts are UI-local and are dropped
   when their authoritative override changes; inputs are not remounted, and after a disabled save focus
   returns only to the control that initiated it. Pi's shared configuration is authoritative — there is
   no optimistic value or AppConfig field; reads follow catalog/provider invalidation, fence stale
   replies, disable controls while pending, and replace controls with Retry on failure. The props-driven
-  `ModelContextControls` owns presentation; older hosts get neither the block nor its requests.
+  `ModelContextControls` owns presentation and `useModelContextSettings` the reads and writes, shared
+  with the custom server dialog; older hosts get neither the block nor its requests.
   At v111, **`CacheWarmingSettings`** adds a **Prompt cache** group: three `SettingsRadioCards` (Off /
   While a run is active / Also between runs) over pi's `cacheWarming` setting, read through
   `cacheWarming.get` and written through `cacheWarming.set` — pi's `settings.json` is the only state, there
