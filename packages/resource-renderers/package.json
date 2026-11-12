@@ -11,24 +11,23 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@pierre/diffs": "1.5.1",
+		"@pierre/diffs": "1.6.4",
+		"@pierre/highlights": "catalog:",
 		"@remixicon/react": "catalog:",
-		"@shikijs/monaco": "4.2.0",
 		"@thinkrail/contracts": "workspace:*",
 		"@thinkrail/locales": "workspace:*",
 		"@thinkrail/ui": "workspace:*",
 		"diff": "catalog:",
-		"jsondiffpatch": "0.7.3",
-		"monaco-editor": "0.55.1",
+		"jsondiffpatch": "0.7.6",
+		"monaco-editor": "0.57.0",
 		"node-htmldiff": "0.9.4",
-		"pdfjs-dist": "5.4.449",
+		"pdfjs-dist": "6.4.299",
 		"react": "catalog:",
 		"react-dom": "catalog:",
 		"react-markdown": "catalog:",
 		"react-virtuoso": "catalog:",
 		"rehype-raw": "7.0.0",
-		"rehype-sanitize": "6.0.0",
-		"shiki": "catalog:"
+		"rehype-sanitize": "6.0.0"
 	},
 	"devDependencies": {
 		"@types/bun": "catalog:",

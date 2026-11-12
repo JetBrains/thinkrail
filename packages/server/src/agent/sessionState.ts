@@ -1,15 +1,17 @@
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import type {
-	AgentMessage,
-	AgentSettlement,
-	ExtUiRequest,
-	SessionCompletion,
-	SessionState,
+import {
+	type AgentMessage,
+	type AgentSettlement,
+	CHAT_HANDOFF_CUSTOM_TYPE,
+	type ExtUiRequest,
+	type SessionCompletion,
+	type SessionState,
 } from "@thinkrail/contracts";
-import { awaitingQuestionToolCallId } from "./askUserQuestion";
+import type { InteractiveTools } from "../extensions";
+import { awaitingToolCallId } from "./toolResponses";
 
-export interface LiveQuestionState {
-	interactionId: string;
+export interface LiveInteractionState {
+	toolCallId: string;
 	needsInput: boolean;
 }
 
@@ -20,7 +22,9 @@ export interface SessionStateInputs {
 	backgroundWorkActive: boolean;
 	lastSettlement: AgentSettlement | null | undefined;
 	lifecycleCompletion: { runId: string; completion: SessionCompletion } | null | undefined;
-	liveQuestion: LiveQuestionState | null;
+	liveInteraction: LiveInteractionState | null;
+	liveRegistry: boolean;
+	interactiveTools: InteractiveTools;
 	pendingDialog: Extract<ExtUiRequest, { kind: "select" | "confirm" | "input" | "editor" }> | null;
 	handledCompletionId: string | undefined;
 	cancelledRunId: string | undefined;
@@ -41,7 +45,7 @@ function customMessage(entry: Extract<SessionEntry, { type: "custom_message" }>)
 		display: entry.display,
 		...(entry.details !== undefined ? { details: entry.details } : {}),
 		timestamp: Date.parse(entry.timestamp),
-	} as AgentMessage;
+	};
 }
 
 export function sessionStateMessages(entries: readonly SessionEntry[]): AgentMessage[] {
@@ -52,14 +56,20 @@ export function sessionStateMessages(entries: readonly SessionEntry[]): AgentMes
 	});
 }
 
-function latestUser(
+/** Host messages that open a run as a user prompt does: a continued chat's first turn answers its handoff. */
+const RUN_OPENING_CUSTOM_TYPES: ReadonlySet<string> = new Set([CHAT_HANDOFF_CUSTOM_TYPE]);
+
+function opensRun(entry: SessionEntry | undefined): entry is SessionEntry {
+	if (entry?.type === "message") return (entry.message as MessageView).role === "user";
+	return entry?.type === "custom_message" && RUN_OPENING_CUSTOM_TYPES.has(entry.customType);
+}
+
+function latestRunStart(
 	entries: readonly SessionEntry[],
-): { entry: MessageEntry; index: number } | null {
+): { entry: SessionEntry; index: number } | null {
 	for (let index = entries.length - 1; index >= 0; index--) {
 		const entry = entries[index];
-		if (entry?.type === "message" && (entry.message as MessageView).role === "user") {
-			return { entry, index };
-		}
+		if (opensRun(entry)) return { entry, index };
 	}
 	return null;
 }
@@ -126,8 +136,12 @@ function deriveCompletion(
 	return completionFrom(`interrupted:${runId}`, undefined, cancelled);
 }
 
+function toolResponseInput(toolCallId: string): SessionState["needsInput"] {
+	return { interactionId: `tool:${toolCallId}`, kind: "tool-response", toolCallId };
+}
+
 export function deriveSessionState(inputs: SessionStateInputs): SessionState {
-	const turn = latestUser(inputs.entries);
+	const turn = latestRunStart(inputs.entries);
 	const runId = turn?.entry.id ?? null;
 	let needsInput: SessionState["needsInput"] = null;
 	if (inputs.pendingDialog !== null) {
@@ -136,16 +150,15 @@ export function deriveSessionState(inputs: SessionStateInputs): SessionState {
 			kind: "dialog",
 			request: inputs.pendingDialog,
 		};
-	} else if (inputs.liveQuestion?.needsInput) {
-		needsInput = {
-			interactionId: `question:${inputs.liveQuestion.interactionId}`,
-			kind: "question",
-		};
-	} else if (inputs.liveQuestion === null) {
-		const questionId = awaitingQuestionToolCallId(sessionStateMessages(inputs.entries));
-		if (questionId !== null) {
-			needsInput = { interactionId: `question:${questionId}`, kind: "question" };
-		}
+	} else if (inputs.liveInteraction?.needsInput) {
+		needsInput = toolResponseInput(inputs.liveInteraction.toolCallId);
+	} else if (inputs.liveInteraction === null) {
+		const toolCallId = awaitingToolCallId(
+			sessionStateMessages(inputs.entries),
+			inputs.interactiveTools,
+			inputs.liveRegistry,
+		);
+		if (toolCallId !== null) needsInput = toolResponseInput(toolCallId);
 	}
 
 	if (needsInput !== null || inputs.isStreaming) {

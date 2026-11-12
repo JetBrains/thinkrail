@@ -1,9 +1,14 @@
+import { completionDelivery } from "@thinkrail/contracts";
 import type { ChatTurn } from "./types";
 
 function isUnansweredResult(turn: ChatTurn | undefined): boolean {
-	if (turn?.kind === "backgroundCommandCompletion") return turn.details.status === "stopped";
-	if (turn?.kind === "subagentCompletion") return turn.details.abortReason === "user";
-	return false;
+	if (turn?.kind !== "backgroundCommandCompletion" && turn?.kind !== "subagentCompletion")
+		return false;
+	const delivery = completionDelivery(turn.details);
+	if (delivery !== undefined) return delivery === "appended";
+	return turn.kind === "backgroundCommandCompletion"
+		? turn.details.status === "stopped"
+		: turn.details.abortReason === "user";
 }
 
 export function insertRoundCloser(turns: readonly ChatTurn[], closer: ChatTurn): ChatTurn[] {

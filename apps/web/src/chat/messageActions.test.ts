@@ -20,7 +20,14 @@ describe("deriveMessageActions", () => {
 			{
 				kind: "divider",
 				id: "divider-1",
-				data: { elapsedMs: 1, toolCount: 0, specs: [], changedFiles: [] },
+				data: {
+					outcome: "done",
+					elapsedMs: 1,
+					toolCount: 0,
+					specs: [],
+					changedFiles: [],
+					receipt: null,
+				},
 			},
 			user("user-2"),
 			markdown("answer-2"),
@@ -44,7 +51,14 @@ describe("deriveMessageActions", () => {
 			{
 				kind: "divider",
 				id: "divider-1",
-				data: { elapsedMs: 1, toolCount: 0, specs: [], changedFiles: [], receipt: null },
+				data: {
+					outcome: "done",
+					elapsedMs: 1,
+					toolCount: 0,
+					specs: [],
+					changedFiles: [],
+					receipt: null,
+				},
 			},
 			{
 				kind: "backgroundCommandCompletion",
@@ -87,5 +101,34 @@ describe("deriveMessageActions", () => {
 		);
 
 		expect(state.finalAnswerRowIds.size).toBe(0);
+	});
+	test("a result delivered mid-run does not make the narration before it a final answer", () => {
+		const details = {
+			childSessionId: "child-1",
+			task: "review",
+			status: "completed",
+			usage: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				cost: 0,
+				turns: 0,
+				contextTokens: 0,
+			},
+			durationMs: 0,
+		} as const;
+		const rows: ChatRow[] = [
+			user("user-1"),
+			markdown("narration"),
+			{
+				kind: "subagentCompletion",
+				id: "result",
+				details: { ...details, delivery: "run" },
+				text: "",
+			},
+			markdown("answer"),
+		];
+		expect([...deriveMessageActions(rows, false).finalAnswerRowIds]).toEqual(["answer"]);
 	});
 });

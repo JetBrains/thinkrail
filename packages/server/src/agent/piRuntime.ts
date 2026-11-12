@@ -1,11 +1,11 @@
 import {
 	createAgentSessionServices,
-	DefaultResourceLoader,
 	getAgentDir,
 	ModelRuntime,
-	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { logger } from "../log";
+import { accountAvailableModels, type ModelAvailabilityRuntime } from "./modelAvailability";
+import { advancePiExtensionCache, createPiSettings } from "./packages";
 
 const log = logger("agent");
 
@@ -26,7 +26,8 @@ export type PreparePiRuntimeGenerationResult =
 export type PiRuntimeGenerationInitializer = (runtime: ModelRuntime) => void | Promise<void>;
 
 export const piLoginOptions: NonNullable<Parameters<ModelRuntime["login"]>[3]> = {
-	getDeviceId: () => SettingsManager.create(process.cwd()).getOrCreateDeviceId(),
+	getDeviceId: () =>
+		createPiSettings(process.cwd(), undefined, { packages: "none" }).getOrCreateDeviceId(),
 };
 
 let nextGenerationId = 1;
@@ -114,25 +115,10 @@ async function createRuntimeOfflineByDefault(): Promise<ModelRuntime> {
 	}
 }
 
-async function advanceExtensionCacheGeneration(): Promise<void> {
-	const agentDir = getAgentDir();
-	const loader = new DefaultResourceLoader({
-		cwd: agentDir,
-		agentDir,
-		noExtensions: true,
-		noSkills: true,
-		noPromptTemplates: true,
-		noThemes: true,
-		noContextFiles: true,
-	});
-	await loader.reload();
-	await loader.reload();
-}
-
 async function createRuntimeWithExtensions(
 	additionalExtensionPaths: readonly string[],
 ): Promise<PreparedRuntime> {
-	await advanceExtensionCacheGeneration();
+	await advancePiExtensionCache(getAgentDir());
 	const runtime = await createRuntimeOfflineByDefault();
 	await generationInitializer(runtime);
 	const providerStatus = captureProviderStatus(runtime);
@@ -153,6 +139,7 @@ async function createRuntimeWithExtensions(
 	try {
 		services = await createAgentSessionServices({
 			cwd: getAgentDir(),
+			settingsManager: createPiSettings(getAgentDir(), getAgentDir(), { packages: "none" }),
 			modelRuntime: runtime,
 			resourceLoaderOptions: {
 				noExtensions: true,
@@ -230,6 +217,17 @@ export async function getPiRuntime(): Promise<ModelRuntime> {
 	return (await getPiRuntimeGeneration()).runtime;
 }
 
+/** Settle in-flight credential writes on the active generation and `others`; never creates a generation. */
+export async function settlePiCredentialWrites(others: Iterable<ModelRuntime> = []): Promise<void> {
+	const runtimes = new Set(others);
+	if (activeGeneration) {
+		try {
+			runtimes.add((await activeGeneration).runtime);
+		} catch {}
+	}
+	await Promise.allSettled([...runtimes].map((runtime) => runtime.settleCredentialWrites()));
+}
+
 export async function preparePiRuntimeGeneration(
 	additionalExtensionPaths: readonly string[],
 ): Promise<PreparePiRuntimeGenerationResult> {
@@ -246,12 +244,12 @@ export function activatePiRuntimeGeneration(generation: PiRuntimeGeneration): vo
 	activeGeneration = Promise.resolve(generation);
 }
 
-export type AvailableModelsRuntime = Pick<ModelRuntime, "getAvailableSnapshot">;
+export type AvailableModelsRuntime = ModelAvailabilityRuntime;
 
 export function settledAvailableModels(
 	runtime: AvailableModelsRuntime,
 ): ReturnType<ModelRuntime["getAvailableSnapshot"]> {
-	return runtime.getAvailableSnapshot();
+	return accountAvailableModels(runtime);
 }
 
 export type CatalogRefreshRuntime = Pick<ModelRuntime, "refresh">;

@@ -1,7 +1,7 @@
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
-import { IconTooltip } from "@thinkrail/ui/tooltip";
+import { IconButton } from "@thinkrail/ui/button";
 import { useEffect, useMemo, useRef } from "react";
 import { useResourceHost } from "../../host";
 import type { ResourceDiffProps, ReviewThread, SurfaceReview } from "../../registry";
@@ -86,17 +86,12 @@ function CellCommentButton({
 		{ number: cell.index + 1 },
 	);
 	return (
-		<IconTooltip label={label}>
-			<button
-				type="button"
-				aria-label={label}
-				data-testid={`notebook-comment-cell-${side}`}
-				className="flex size-24 items-center justify-center rounded-sm text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-				onClick={() => onSelect({ index: cell.index, side })}
-			>
-				<MessageSquarePlus className="size-14" />
-			</button>
-		</IconTooltip>
+		<IconButton
+			icon={MessageSquarePlus}
+			label={label}
+			data-testid={`notebook-comment-cell-${side}`}
+			onClick={() => onSelect({ index: cell.index, side })}
+		/>
 	);
 }
 

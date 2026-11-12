@@ -49,6 +49,7 @@ export type SetupAction =
 	| "directory_pick"
 	| "project_open"
 	| "project_init"
+	| "project_create"
 	| "worktree_create"
 	| "worktree_attach";
 export type AnalyticsDurationBucket = "<10s" | "10–59s" | "1–4m" | "5–14m" | "15m+" | "unknown";
@@ -63,7 +64,7 @@ export type AnalyticsRunOutcome =
 
 export interface AnalyticsRunProperties {
 	origin: "user" | "internal" | "mixed" | "unknown";
-	workspace_kind: "default" | "managed" | "external";
+	workspace_kind: "default" | "managed" | "external" | "chat";
 	provider: string;
 	model: string;
 }

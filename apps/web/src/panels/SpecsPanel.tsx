@@ -50,7 +50,10 @@ export function SpecsPanel({
 	useEffect(() => {
 		if (specRequest?.workspaceId !== workspaceId) return;
 		if (useAppStore.getState().specRequest !== specRequest) return;
-		void openFileInTab(workspaceId, specRequest.path, "preview", specRequest.navigation);
+		const { path, line, navigation } = specRequest;
+		void openFileInTab(workspaceId, path, "preview", navigation).then(() => {
+			if (line !== undefined) useAppStore.getState().revealFileTab(workspaceId, path, { line });
+		});
 		useAppStore.getState().clearSpecRequest();
 	}, [specRequest, workspaceId]);
 
@@ -89,8 +92,13 @@ export function SpecsPanel({
 					<span className="min-w-0 flex-1">
 						{nodes === null ? t("panels.specs.loadFailed") : t("panels.specs.updateFailed")}
 					</span>
-					<Button variant="ghost" size="sm" data-testid="specs-retry" onClick={onRetry}>
-						<RefreshCw className="size-14" />
+					<Button
+						variant="ghost"
+						size="m"
+						iconLeft={RefreshCw}
+						data-testid="specs-retry"
+						onClick={onRetry}
+					>
 						{t("common.retry")}
 					</Button>
 				</div>

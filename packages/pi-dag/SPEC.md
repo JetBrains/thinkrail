@@ -119,8 +119,13 @@ with exclusive ownership checked before mutations; dead-owner recovery is not le
 Reads do not claim ownership. They distinguish local, other/indeterminate and inactive ownership;
 inactive execution is projected paused/uncertain without writing a snapshot. Unknown/corrupt state
 fails closed, so the snapshot schema is closed: a stored outcome keeps only the run-detail fields it
-names, and a field newly added to `DelegationRunDetails` (e.g. `thinkingLevel`) is stripped at
-settlement until the schema deliberately adopts it. Dispatch follows committed intent,
+names, and fields newly added to `DelegationRunDetails` must be stripped at settlement until the
+schema deliberately adopts them. Stored outcomes retain the child's effective `model` and optional
+`thinkingLevel`, which `getDag` exposes unchanged after restoration. Missing effort in older outcomes
+remains absent, never inferred from configuration. This optional addition keeps snapshot schema
+version 1: older snapshots remain readable, but downgrading to a host whose closed schema predates
+`thinkingLevel` rejects snapshots containing it. No downgrade migration is provided.
+Dispatch follows committed intent,
 then commits observation. Unobserved effects remain uncertain after process loss; no exactly-once
 external-side-effect claim. A failed commit cannot publish speculative in-memory state.
 

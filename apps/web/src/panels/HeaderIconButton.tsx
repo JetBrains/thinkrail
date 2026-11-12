@@ -1,5 +1,4 @@
-import { IconTooltip } from "@thinkrail/ui/tooltip";
-import type { ReactNode } from "react";
+import { type ButtonIcon, IconButton } from "@thinkrail/ui/button";
 
 export function HeaderIconButton({
 	testid,
@@ -7,33 +6,27 @@ export function HeaderIconButton({
 	active,
 	disabled,
 	onClick,
-	children,
+	icon,
 }: {
 	testid: string;
 	label: string;
 	active?: boolean;
 	disabled?: boolean;
 	onClick: () => void;
-	children: ReactNode;
+	icon: ButtonIcon;
 }) {
 	return (
-		<IconTooltip label={label}>
-			<button
-				type="button"
-				data-testid={testid}
-				data-active={active}
-				aria-pressed={active}
-				aria-label={label}
-				disabled={disabled}
-				onClick={onClick}
-				className={`flex size-24 items-center justify-center rounded-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text ${
-					active
-						? "bg-container-elevated-bg text-text-default"
-						: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-				}`}
-			>
-				{children}
-			</button>
-		</IconTooltip>
+		<IconButton
+			icon={icon}
+			label={label}
+			variant="ghost"
+			size="m"
+			selected={active === true}
+			data-testid={testid}
+			data-active={active}
+			aria-pressed={active}
+			disabled={disabled}
+			onClick={onClick}
+		/>
 	);
 }

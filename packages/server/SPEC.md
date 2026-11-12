@@ -23,14 +23,16 @@ e2e).
   persistence.
 - **Public surface:** `createServer(options) → Promise<RunningServer>`
   (`{ port, startAttributionClaim, stop, shutdown }`) — saved-choice attribution waits for the launcher's
-  explicit UI-readiness call; `stop()` is synchronous resource disposal for low-level tests while `shutdown()` is the idempotent,
+  explicit UI-readiness call; `stop()` is synchronous resource disposal for low-level tests (Linux worktree
+  watchers finish closing over the next turns, see `watch`) while `shutdown()` is the idempotent,
   bounded production lifecycle (settle sessions + drain turn receipts/analytics and dispose sockets/PTYS/watchers)
   every launcher must await — the public
   factory starts Central artifact watching and applies the initial current PI runtime before binding a socket
   or exposing handlers—falling back to a plain runtime with closed `load-failed` status when the configured
   Central extension fails—so every embedder gets the same bootstrap invariant — and
   `bootHost(options) → BootedHost` (the process-boot wrapper: installs crash logging, resolves the
-  login-shell environment only when the launcher opts in with `resolveShellEnv: true`, pre-warms the
+  login-shell environment only when the launcher opts in with `resolveShellEnv: true`, applies the stored
+  host environment ([[submodule-server-environment]]), pre-warms the
   same initialization before choosing a port, awaits `createServer`, and installs SIGINT/SIGTERM graceful-shutdown handlers), both re-exported from
   `host/`; plus `registerBundledRuntime` (+ its types, re-exported from `agent/`) — the compiled-binary
   seam by which a launcher that cannot path-load the bundled pi extensions (no `node_modules` inside a
@@ -71,7 +73,11 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `persistence` | JSON domain/config state under the data dir | [persistence/SPEC.md](src/persistence/SPEC.md) |
 | `log` | explicit leveled diagnostics → pretty stderr + agent-oriented JSONL under `<dataDir>/logs` (pino-roll daily/10 MB rotation, 14 rotated + active); arbitrary console output stays terminal-only | [log/SPEC.md](src/log/SPEC.md) |
 | `settings` | server-synced app config, including the shared custom-layout-preset catalog and Central quota preferences (never current/default layout) | [settings/SPEC.md](src/settings/SPEC.md) |
+| `environment` | the stored host environment (pi config folder + variables) applied to `process.env` at boot | [environment/SPEC.md](src/environment/SPEC.md) |
 | `locales` | the user's local language files in `<dataDir>/locales/`: validate, watch, `locales.list`/`changed` | [locales/SPEC.md](src/locales/SPEC.md) |
+| `themes` | the user's theme files in `<dataDir>/themes/`: read, watch, `themes.list`/`changed` (the client validates) | [themes/SPEC.md](src/themes/SPEC.md) |
+| `fonts` | the user's font files in `<dataDir>/fonts/` (in-house sfnt reader, uploads, watch) and the OS's installed families: `fonts.list`/`installed`/`changed` | [fonts/SPEC.md](src/fonts/SPEC.md) |
+| `speech` | on-demand local voice input: pinned `nemo-speech` + Nemotron download, PATH reuse, `speech.*` state | [speech/SPEC.md](src/speech/SPEC.md) |
 | `projects` | stable known-repo registry: open/recent views + lossless close/reopen (validate, dedupe, slug) | [projects/SPEC.md](src/projects/SPEC.md) |
 | `workspaces` | workspaces = `git worktree`s on their own branch | [workspaces/SPEC.md](src/workspaces/SPEC.md) |
 | `git` | the `git(cwd, args)` runner + worktree status/diff vs base + branch list | [git/SPEC.md](src/git/SPEC.md) |
@@ -83,6 +89,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `changes` | host-owned revert of a hunk or a file's whole change in the worktree, with undo receipts | [changes/SPEC.md](src/changes/SPEC.md) |
 | `turns` | per-agent-run worktree snapshots → the change set each run produced (`workspace.turns`, `turn.changed`) | [turns/SPEC.md](src/turns/SPEC.md) |
 | `trash` | move a path to the OS trash through the bundled helpers (never `unlink`) | [trash/SPEC.md](src/trash/SPEC.md) |
+| `resourceHistory` | the durable per-chat archive of background commands and subagents behind Resources (records + command log tails) | [resourceHistory/SPEC.md](src/resourceHistory/SPEC.md) |
 | `spec` | the worktree's spec-graph snapshot (`spec.graph`) + project-level `projectHasSpecs`, via `pi-spec-graph/core` | [spec/SPEC.md](src/spec/SPEC.md) |
 | `todos` | a chat's per-session TODO plan read/write (`todo.*`), via `pi-todos/core` | [todos/SPEC.md](src/todos/SPEC.md) |
 | `reviews` | draft review comments on files/diffs: store + anchoring + context-package render | [reviews/SPEC.md](src/reviews/SPEC.md) |
@@ -93,10 +100,11 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `auth` | provider status/login plus native JetBrains Central lifecycle and quota orchestration | [auth/SPEC.md](src/auth/SPEC.md) |
 | `assist` | ad-hoc one-shot tasks (plan summaries, PR descriptions) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
 | `analytics` | always-on basic events + sanitized error reports, and preference-controlled optional insights → PostHog sink (privacy contract in its spec) | [analytics/SPEC.md](src/analytics/SPEC.md) |
-| `feedback` | host-scoped usage count + addressed product-interview invitation lifecycle | [feedback/SPEC.md](src/feedback/SPEC.md) |
+| `feedback` | host-scoped usage count, addressed survey invitation lifecycle and the launched PostHog survey | [feedback/SPEC.md](src/feedback/SPEC.md) |
 | `dialog` | the host's native folder picker | [dialog/SPEC.md](src/dialog/SPEC.md) |
 | `editors` | detect installed editors/IDEs, launch one at a worktree, reveal a worktree in the file manager | [editors/SPEC.md](src/editors/SPEC.md) |
 | `history` | prompt recall + conversation search over pi's session files | [history/SPEC.md](src/history/SPEC.md) |
+| `search` | the search palette's host providers (file names and specs from one root, plans, chat transcripts — chats and workspaces are the palette's own rows) and the transcript preview, ranked with the shared matcher; Find in Files' bounded text search over the same root | [search/SPEC.md](src/search/SPEC.md) |
 | `templates` | file CRUD over pi's prompt-template dirs (global + project scoped) | [templates/SPEC.md](src/templates/SPEC.md) |
 
 `src/index.ts` re-exports `host` + the `agent` barrel's `registerBundledRuntime` seam; explicit package
@@ -107,7 +115,8 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `locales`, `history`, `templates`, `analytics`, `feedback`, `log`, `persistence` (`dataDir`, for the crash report)
+- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `fonts`, `speech`, `history`, `search`, `templates`, `analytics`, `feedback`, `trash` (a chat's folder), `log`, `persistence` (`dataDir`, for the crash report)
+- `search` → `contracts`, `git` (`gitAsyncStream` for `ls-files` and `grep`), `log`; `history`, `spec` and `todos` for types only — `host/search.ts` injects every reader (projects, workspace records, the history index's `sessions()`, spec snapshots, stored plans, the file check `fs.readableFileSize` and the text check `fs.classifyBytes`), the Default provisioning (`workspaces.listWorkspaces`) and the root watch (`watch.ensureWatch`, prewarm); it opens no file itself but the bounded text search's direct read of a chat folder's walked files (`git grep` reads a repository's) — files and specs preview client-side over `fs.readFile`
 - `workspaces` → `projects`, `git`, `persistence`
 - `branch-review` → `git`, `subprocess`
 - `pr` → `workspaces`, `git`, `todos`, `branch-review` (provider detection + gh-output parsing + the shared CLI runner), `github` (`ghSetupProblem` — the named compare-fallback reason)
@@ -116,10 +125,12 @@ the host from env via `bootHost` for dev/e2e.
 - `changes` → `git` (the scope→range resolver + the original side's blob at its resolved oid), `fs` (path containment + byte identity), `persistence` (workspace lookup), `trash` (a revert that removes a file)
 - `turns` → `git` (`snapshotWorktree` + the `turn` scope's `gitStatus`), `persistence` (`turns.json`), `log`; it never imports `agent` — `host` feeds it the session event stream and resolves a session to its workspace, the same composition the run analytics observer uses
 - `github` → `subprocess` (both `gh auth status` probes run under the same bounded runner as `git`/`branch-review`)
-- `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `locales`, `analytics`, `feedback` → `persistence` (`locales` also → `@thinkrail/locales` root, external-style: catalog validation and file naming) (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external—the identity-bucketing vocabulary and delivery SDK)
+- `fonts` → `subprocess` (the installed-font query runs under the same bounded runner)
+- `speech` → `subprocess` (PATH probe, archive unpack), `persistence` (`dataDir`), `log`
+- `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `locales`, `themes`, `fonts`, `analytics`, `feedback` → `persistence` (`locales` also → `@thinkrail/locales` root, external-style: catalog validation and file naming) (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external—the identity-bucketing vocabulary and delivery SDK)
 - `log` → `persistence` (`dataDir`) — and **any feature module (+ `host`) may → `log`**: it is the one
   cross-cutting edge, like `persistence`, exempt from the never-each-other rule (today: `host`,
-  `agent`, `workspaces`, `watch`, `git`, `todos`, `reviews`, `analytics`). `persistence` never imports
+  `agent`, `workspaces`, `watch`, `git`, `todos`, `reviews`, `analytics`, `resourceHistory`, `fonts`, `speech`, `search`). `persistence` never imports
   `log` (would cycle); `initLogging` is called only from `host`'s `bootHost`
 - `todos` → `workspaces` (worktree path lookup) + `pi-todos/core` (external, value-imported, pi-free)
 - `reviews` → `workspaces` (worktree path lookup), `persistence` (data dir), `git` (the review's baseSha
@@ -130,14 +141,19 @@ the host from env via `bootHost` for dev/e2e.
   `reviewLock`, and re-attaches the review's persisted chat via `agent.ensureSessionAttached`), and the
   agent-side `resolve_comment` tool delegates back through a seam
   `host` installs (`agent.setReviewCommentHandler` → `reviews.resolveCommentFromAgent`)
+- `environment` → `persistence` (`environment.json`), `log` (+ `@thinkrail/shared/shellEnv` for the launch keys and pi's `getAgentDir`, external); never `settings`
 - `assist` → `agent` (the one-shot completion primitive)
 - `auth` → `agent` (the current runtime/auth facade plus candidate prepare/activate; one-way, `agent` never imports `auth`)
 - `agent` → `log`, `persistence` (`dataDir` for delegation plus session lifecycle/receipt load-save operations),
-  `trash` (a chat delete's recoverable transcript move), `extensions` (the registry's flattened parent and
-  child inline extensions plus, in unbundled dev, its skill roots) — otherwise the pi runtime alone; auth
+  `trash` (a chat delete's recoverable transcript move), `resourceHistory` (records its owners' lifecycle and reads
+  what they no longer hold), `extensions` (the registry's flattened parent and
+  child inline extensions plus, in unbundled dev, its skill roots), `history` (`displayTranscript` — the
+  JSONL display projection `getMessages` shares with search so compaction keeps pre-cut turns reviewable)
+  — otherwise the pi runtime alone; auth
   passes desired opaque Central paths through its public generation seam
 - `extensions` → `@thinkrail/ext-*/server` + `@thinkrail/extension-api/server` (external); `buildSupport.ts`
   (build-only) also reads it to stage the extensions' skill roots
+- `resourceHistory` → `persistence` (`dataDir`), `log`
 - `persistence`, `dialog`, `history`, `templates`, `subprocess`, `trash` → (leaves)
 
 Rules: features never import `host`, and never each other except the edges above. The graph is acyclic.
@@ -173,7 +189,9 @@ The Chat Resources integration adds `agent` → `pi-background-commands` as an e
 package edge, alongside its existing delegation packages. `host` continues to compose the wire
 through the `agent` barrel; there is no new resource-manager sibling or `agent` → `terminal` /
 `subprocess` / `settings` edge. Command lifecycle and bounded output belong to the portable package,
-while the manager owns its association with an actual parent session.
+while the manager owns its association with an actual parent session. What must outlive the host — the
+chat's finished records and command log tails — lives in the `resourceHistory` leaf, which only `agent`
+feeds and reads; `host` reaches it solely through the `agent` barrel.
 
 Subagent availability is also host-mediated: `settings` owns the global default, `workspaces` owns the
 optional local override, and `host` injects their effective value into `agent` plus requests live-session
@@ -196,6 +214,11 @@ and calls `refreshExtensionTools()` after an applied update that contains `disab
   promise, while abrupt death relies on operating-system process cleanup.
 - **WS commands return values directly**; only events + extension-UI use push channels.
 - Binds beyond localhost via `host` option (the Tailscale seam).
+- **Tests never see the developer's home** — `bunfig.toml` preloads `test/isolatedHome.ts`, which points
+  `HOME` at a fresh temp dir, removed after the run, and clears `CLAUDE_CONFIG_DIR` / `CODEX_HOME` /
+  `GEMINI_CLI_HOME` / `PI_CODING_AGENT_DIR` (turbo passes the last one through). Portable
+  skill aliases and pi's `~/.agents/skills` otherwise imported the machine's real libraries, so the skill
+  catalog budget and its hint made results depend on whoever ran the suite.
 
 ## Later
 

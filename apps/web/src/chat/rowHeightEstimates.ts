@@ -1,5 +1,5 @@
 import { type ChatRow, LARGE_USER_MESSAGE } from "./rows";
-import { resolveProminence } from "./toolRegistry";
+import { isInteractiveTool, resolveProminence } from "./toolRegistry";
 
 const MAX_ESTIMATED_HEIGHT = 20_000;
 const MIN_ESTIMATED_HEIGHT = 20;
@@ -121,7 +121,7 @@ function estimateToolPayload(row: Extract<ChatRow, { kind: "tool" }>, baseHeight
 }
 
 function estimateToolHeight(row: Extract<ChatRow, { kind: "tool" }>): number {
-	if (row.toolName === "ask_user_question") return estimateToolPayload(row, 120);
+	if (isInteractiveTool(row.toolName)) return estimateToolPayload(row, 120);
 	const status = row.tool?.status ?? (row.dead ? "error" : "running");
 	const expanded =
 		status === "error" || (status === "done" && resolveProminence(row.toolName).defaultExpanded);
@@ -142,7 +142,7 @@ export function estimateChatRowHeight(row: ChatRow): number {
 			return clampHeight(24 + wrappedLines(text, 62) * PROSE_LINE_HEIGHT + attachments);
 		}
 		case "system":
-			return clampHeight(20 + wrappedLines(row.text ?? "") * PROSE_LINE_HEIGHT);
+			return clampHeight(20 + wrappedLines(row.text) * PROSE_LINE_HEIGHT);
 		case "error":
 			return clampHeight(28 + wrappedLines(row.text) * PROSE_LINE_HEIGHT);
 		case "backgroundCommandCompletion":
@@ -154,6 +154,10 @@ export function estimateChatRowHeight(row: ChatRow): number {
 					(row.details.note ? wrappedLines(row.details.note) * PROSE_LINE_HEIGHT : 0) +
 					row.details.comments.length * 28,
 			);
+		case "continuationRequest":
+			return 72;
+		case "handoff":
+			return clampHeight(56 + wrappedLines(row.details.summary) * PROSE_LINE_HEIGHT);
 		case "tool":
 			return estimateToolHeight(row);
 		case "activity":

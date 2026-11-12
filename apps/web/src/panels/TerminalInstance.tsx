@@ -14,6 +14,7 @@ import { flushSync } from "react-dom";
 import "@xterm/xterm/css/xterm.css";
 import { i18n, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { type ResolvedFont, resolveFont, watchFont } from "@thinkrail/ui/fonts";
 import { onThemeSwap } from "@thinkrail/ui/theme";
 import { type QuietScrollEdges, QuietScrollFrame } from "@/components/QuietScrollArea";
 import { cssColorToHex } from "@/lib";
@@ -21,6 +22,7 @@ import { SettingsSection, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { createPtySizeSync, runAfterTerminalRelayout } from "./ptySizeSync";
 import { stripAnsiDim, terminalContrastFloor } from "./terminalContrast";
+import { createTerminalImeBridge } from "./terminalImeBridge";
 import { createTerminalPrebindBuffer } from "./terminalPrebindBuffer";
 
 const RESIZE_DEBOUNCE_MS = 60;
@@ -137,11 +139,13 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		const focusedTab =
 			initialFocusTarget instanceof Element ? initialFocusTarget.closest('[role="tab"]') : null;
 		const initialFocusRequestsTerminal = focusedTab?.parentElement?.dataset.kind === "terminal";
+		const font = resolveFont("tr-code-block");
 		const term = new XTerm({
 			allowProposedApi: true,
 			cursorBlink: true,
-			fontSize: Number.parseFloat(cssVar("--tr-font-size-s13") ?? "") || 13,
-			fontFamily: cssVar("--tr-font-family-code") ?? "monospace",
+			fontSize: font.size || 13,
+			fontFamily: font.family || "monospace",
+			fontWeight: font.weight || "normal",
 			theme: readTheme(),
 			minimumContrastRatio: contrastFloor(),
 			scrollback: 5000,
@@ -157,6 +161,20 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		tryLoad(() => term.loadAddon(webFonts));
 		termRef.current = term;
 		term.open(host);
+		// WebKit feeds the macOS Korean IME to xterm as insertText + insertReplacementText (upstream #5704) — see panels/SPEC.md.
+		const imeBridge = createTerminalImeBridge((data) => term.input(data, true));
+		const onImeInput = (event: Event): void => {
+			if (event instanceof InputEvent) imeBridge.input(event);
+		};
+		const onImeKeydown = (event: Event): void => {
+			if (event instanceof KeyboardEvent) imeBridge.keydown(event);
+		};
+		const onImeHandover = (): void => imeBridge.flush();
+		host.addEventListener("input", onImeInput, true);
+		host.addEventListener("keydown", onImeKeydown, true);
+		host.addEventListener("compositionstart", onImeHandover, true);
+		host.addEventListener("paste", onImeHandover, true);
+		host.addEventListener("focusout", onImeHandover);
 		const updateScrollEdges = () => {
 			const buffer = term.buffer.active;
 			const next = {
@@ -329,10 +347,24 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 				});
 		};
 		reattachRef.current = () => attach(true);
+		const applyFont = (next: ResolvedFont): void => {
+			term.options.fontFamily = "monospace";
+			term.options.fontFamily = next.family;
+			term.options.fontSize = next.size;
+			term.options.fontWeight = next.weight;
+		};
 		void runAfterTerminalRelayout(
 			() => webFonts.relayout(),
 			() => {
 				if (disposed) return;
+				const latest = resolveFont("tr-code-block");
+				const { fontFamily, fontSize, fontWeight } = term.options;
+				if (
+					fontFamily !== latest.family ||
+					fontSize !== latest.size ||
+					fontWeight !== latest.weight
+				)
+					applyFont(latest);
 				applyFit();
 				attach();
 			},
@@ -349,6 +381,11 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			term.options.theme = readTheme();
 			term.options.minimumContrastRatio = contrastFloor();
 		});
+		const stopFontsWatch = watchFont("tr-code-block", ["family", "size", "weight"], (next) => {
+			if (disposed) return;
+			applyFont(next);
+			applyFit();
+		});
 
 		return () => {
 			disposed = true;
@@ -358,6 +395,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			clearTimeout(fitTimer);
 			resizeObserver.disconnect();
 			stopThemeWatch();
+			stopFontsWatch();
 			onData.dispose();
 			onViewportScroll.dispose();
 			onBufferWrite.dispose();
@@ -365,6 +403,11 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			unsubscribe();
 			unsubscribeExit();
 			unsubscribeDetached();
+			host.removeEventListener("input", onImeInput, true);
+			host.removeEventListener("keydown", onImeKeydown, true);
+			host.removeEventListener("compositionstart", onImeHandover, true);
+			host.removeEventListener("paste", onImeHandover, true);
+			host.removeEventListener("focusout", onImeHandover);
 			serverIdRef.current = null;
 			term.dispose();
 		};
@@ -413,17 +456,17 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 					<p className="tr-text-metadata text-text-muted">
 						{t("panels.terminalInstance.detached")}
 					</p>
-					<button
-						type="button"
+					<Button
+						variant="outline"
+						size="m"
 						data-testid="terminal-take-back"
 						aria-disabled={retrying}
 						onClick={retrying ? undefined : retry}
-						className="rounded-sm bg-control-bg px-8 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
 					>
 						{retrying
 							? t("panels.terminalInstance.takingBack")
 							: t("panels.terminalInstance.takeBack")}
-					</button>
+					</Button>
 				</div>
 			) : null}
 			{failureMessage !== null && !detached ? (
@@ -441,7 +484,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 						<div className="flex items-center gap-8">
 							<Button
 								variant="outline"
-								size="sm"
+								size="m"
 								data-testid="terminal-open-settings"
 								disabled={retrying}
 								onClick={openTerminalSettings}
@@ -449,7 +492,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 								{t("panels.terminalInstance.settings")}
 							</Button>
 							<Button
-								size="sm"
+								size="m"
 								data-testid="terminal-start-retry"
 								aria-disabled={retrying}
 								onClick={retrying ? undefined : retry}

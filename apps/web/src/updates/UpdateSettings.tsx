@@ -283,29 +283,45 @@ export function UpdateSettings({ updates }: UpdateSettingsProps) {
 					{updates.state.status === "idle" || checking ? (
 						<Button
 							variant="outline"
+							size="l"
+							iconLeft={Refresh}
 							data-testid="update-check"
 							disabled={checking}
 							onClick={updates.checkForUpdates}
 						>
-							<Refresh className="size-14" />
 							{checking ? t("updates.action.checking") : t("updates.action.check")}
 						</Button>
 					) : null}
 					{retry ? (
-						<Button variant="outline" data-testid="update-retry" onClick={retry}>
-							<Refresh className="size-14" />
+						<Button
+							variant="outline"
+							size="l"
+							iconLeft={Refresh}
+							data-testid="update-retry"
+							onClick={retry}
+						>
 							{t("common.retry")}
 						</Button>
 					) : null}
 					{nativeAvailable && failedAction !== "download" ? (
-						<Button data-testid="update-download" onClick={updates.downloadUpdate}>
-							<DownloadCloud className="size-14" />
+						<Button
+							variant="primary"
+							size="l"
+							iconLeft={DownloadCloud}
+							data-testid="update-download"
+							onClick={updates.downloadUpdate}
+						>
 							{t("updates.action.download")}
 						</Button>
 					) : null}
 					{ready && failedAction !== "install" ? (
-						<Button data-testid="update-restart" onClick={updates.restartToUpdate}>
-							<Restart className="size-14" />
+						<Button
+							variant="primary"
+							size="l"
+							iconLeft={Restart}
+							data-testid="update-restart"
+							onClick={updates.restartToUpdate}
+						>
 							{t("updates.action.installRestart")}
 						</Button>
 					) : null}
@@ -313,11 +329,12 @@ export function UpdateSettings({ updates }: UpdateSettingsProps) {
 			) : updates.canRun && (hostAvailable || hostFailed) ? (
 				<div className="flex flex-wrap justify-end gap-8">
 					<Button
-						{...(hostFailed ? { variant: "outline" as const } : {})}
+						variant={hostFailed ? "outline" : "primary"}
+						size="l"
+						iconLeft={hostFailed ? Refresh : DownloadCloud}
 						data-testid={hostFailed ? "update-retry" : "update-run-host"}
 						onClick={updates.runUpdate}
 					>
-						{hostFailed ? <Refresh className="size-14" /> : <DownloadCloud className="size-14" />}
 						{hostFailed ? t("common.retry") : t("updates.action.run")}
 					</Button>
 				</div>

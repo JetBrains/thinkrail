@@ -9,13 +9,17 @@ import {
 } from "@remixicon/react";
 import type { GitFileChange, GitStatus } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { diffRendererCapabilities } from "@thinkrail/resource-renderers";
+import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
-import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from "react";
-import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Virtuoso } from "react-virtuoso";
+import { useShallow } from "zustand/react/shallow";
 import { usePhoneViewport } from "@/lib";
 import {
 	type ChangesTab,
+	selectChangesTabRendererIds,
 	selectDiffBaseRef,
 	selectDiffTabTargetRef,
 	toast,
@@ -31,13 +35,10 @@ import { HeaderIconButton } from "./HeaderIconButton";
 import { ownsReviewShortcut } from "./reviewShortcuts";
 import { SendAllReviewsButton } from "./SendReviewButton";
 import { createSectionContentCache } from "./sectionContentCache";
+import { useReviewReveal } from "./useReviewReveal";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 import { useWorkspaceTurns } from "./useWorkspaceTurns";
 
-const SECTION_HEADER_HEIGHT = 32;
-const END_NOTE_HEIGHT = 48;
-const HANDOFF_MAX_FRAMES = 30;
-const USER_SCROLL_EVENTS = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
 const VIEWED_KEY = "v";
 const NEXT_UNREVIEWED_KEY = "j";
 
@@ -77,13 +78,11 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const [statusSettled, setStatusSettled] = useState(false);
 	const layout = useAppStore((state) => state.changesLayout);
 	const setStoreLayout = useAppStore((state) => state.setChangesLayout);
-	const [handoffPath, setHandoffPath] = useState<string | null>(null);
 	const setView = useAppStore((state) => state.setChangesTabView);
 	const setIgnoreWhitespace = useAppStore((state) => state.setChangesTabIgnoreWhitespace);
 	const setViewed = useAppStore((state) => state.setChangesTabViewed);
 	const setActivePath = useAppStore((state) => state.setChangesTabActivePath);
 	const setCollapsed = useAppStore((state) => state.setChangesTabCollapsed);
-	const consumeReveal = useAppStore((state) => state.consumeChangesTabReveal);
 	const requestReveal = useAppStore((state) => state.requestChangesTabReveal);
 	const [cache] = useState(createSectionContentCache);
 	const turns = useWorkspaceTurns(workspaceId);
@@ -96,8 +95,8 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const [guideHidden, setGuideHidden] = useState(false);
 	const guideOpen = guideAvailable && !guideHidden && layout === "stacked" && !mobile;
 	const [largeNoticeDismissed, setLargeNoticeDismissed] = useState(false);
-	const restoredStacked = useRef(false);
 
+	const readKey = `${scopeKey(scope)}:${targetRef}`;
 	const { reload } = useWorkspaceRead(
 		workspaceId,
 		(id) => readGitStatus(id, scope, targetRef),
@@ -131,10 +130,9 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 				setError(null);
 				setScopeGone(false);
 				warnedRef.current = false;
-				restoredStacked.current = false;
 			},
 		},
-		`${scopeKey(scope)}:${targetRef}`,
+		readKey,
 	);
 
 	const files = useMemo(() => status?.changes ?? [], [status]);
@@ -156,6 +154,18 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	);
 	const viewedCount = files.filter((change) => viewedSet.has(change.path)).length;
 	const view = mobile ? "inline" : (tab.view ?? "split");
+	const rendererIds = useAppStore(
+		useShallow((state) => selectChangesTabRendererIds(state, workspaceId, tab.id)),
+	);
+	const controls = useMemo(() => {
+		const capabilities = files.map((change) =>
+			diffRendererCapabilities(workspaceId, change.path, scope, rendererIds[change.path], mobile),
+		);
+		return {
+			layout: capabilities.some((candidate) => candidate.layout),
+			whitespace: capabilities.some((candidate) => candidate.whitespace),
+		};
+	}, [files, mobile, rendererIds, scope, workspaceId]);
 	const ignoreWhitespace = tab.ignoreWhitespace ?? false;
 
 	const [lastIndex, setLastIndex] = useState(0);
@@ -164,131 +174,30 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const currentIndex =
 		foundIndex >= 0 ? foundIndex : Math.min(lastIndex, Math.max(0, files.length - 1));
 	const current = files[currentIndex];
-	const setLayout = (next: typeof layout) => {
-		setHandoffPath(next === "stacked" && layout === "single" ? (current?.path ?? null) : null);
-		setStoreLayout(next);
-	};
 
-	const virtuoso = useRef<VirtuosoHandle>(null);
-	const scrollerRef = useRef<HTMLElement | null>(null);
-	const [tailHeight, setTailHeight] = useState(0);
-	const tailObserver = useRef<ResizeObserver | null>(null);
-	const settling = useRef<{ path: string; commentId?: string } | null>(null);
-	const releaseSettling = useCallback(() => {
-		const commentId = settling.current?.commentId;
-		settling.current = null;
-		if (commentId) useAppStore.getState().clearReviewFocus(commentId);
-	}, []);
-	const detachScroller = useRef<(() => void) | null>(null);
-	const attachScroller = useCallback(
-		(element: HTMLElement | Window | null) => {
-			detachScroller.current?.();
-			detachScroller.current = null;
-			tailObserver.current?.disconnect();
-			tailObserver.current = null;
-			const scroller = element instanceof HTMLElement ? element : null;
-			scrollerRef.current = scroller;
-			if (!scroller) return;
-			const measure = () => {
-				setTailHeight(Math.max(0, scroller.clientHeight - SECTION_HEADER_HEIGHT - END_NOTE_HEIGHT));
-			};
-			measure();
-			tailObserver.current = new ResizeObserver(measure);
-			tailObserver.current.observe(scroller);
-			for (const type of USER_SCROLL_EVENTS)
-				scroller.addEventListener(type, releaseSettling, { passive: true, capture: true });
-			detachScroller.current = () => {
-				for (const type of USER_SCROLL_EVENTS)
-					scroller.removeEventListener(type, releaseSettling, true);
-			};
-		},
-		[releaseSettling],
-	);
-	useEffect(
-		() => () => {
-			tailObserver.current?.disconnect();
-			detachScroller.current?.();
-			releaseSettling();
-		},
-		[releaseSettling],
-	);
-	const activePathRef = useRef(tab.activePath);
-	useInsertionEffect(() => {
-		activePathRef.current = tab.activePath;
-	});
-	const spyFrame = useRef(0);
-	const scrollToSection = useCallback(
-		(index: number, target: { path: string; commentId?: string }) => {
-			releaseSettling();
-			settling.current = target;
-			virtuoso.current?.scrollToIndex({ index, align: "start" });
-		},
-		[releaseSettling],
-	);
-	const revealComment = useCallback(() => {
-		const commentId = settling.current?.commentId;
-		const scroller = scrollerRef.current;
-		if (!commentId || !scroller) return false;
-		const card = [...scroller.querySelectorAll<HTMLElement>("[data-comment-id]")].find(
-			(element) => element.dataset.commentId === commentId,
-		);
-		if (!card) return false;
-		card.scrollIntoView({ block: "center" });
-		return true;
-	}, []);
-	const spyActiveSection = useCallback(() => {
-		if (!restoredStacked.current) return;
-		cancelAnimationFrame(spyFrame.current);
-		spyFrame.current = requestAnimationFrame(() => {
-			if (settling.current) {
-				revealComment();
-				return;
-			}
-			const scroller = scrollerRef.current;
-			if (!scroller) return;
-			const edge = scroller.getBoundingClientRect().top + SECTION_HEADER_HEIGHT / 2;
-			let active: string | null = null;
-			for (const section of scroller.querySelectorAll<HTMLElement>(
-				'[data-testid="changes-section"]',
-			)) {
-				if (section.getBoundingClientRect().top <= edge) active = section.dataset.path ?? null;
-			}
-			if (active !== null && active !== activePathRef.current) {
-				setActivePath(workspaceId, tab.id, active);
-			}
-		});
-	}, [revealComment, setActivePath, tab.id, workspaceId]);
-	useEffect(() => () => cancelAnimationFrame(spyFrame.current), []);
-	useEffect(() => {
-		const reveal = tab.reveal;
-		if (!reveal || !status) return;
-		const index = files.findIndex((change) => change.path === reveal.path);
-		if (index < 0) {
-			if (statusSettled) consumeReveal(workspaceId, tab.id, null);
-			return;
-		}
-		const target = {
-			path: reveal.path,
-			...(reveal.commentId ? { commentId: reveal.commentId } : {}),
-		};
-		releaseSettling();
-		consumeReveal(workspaceId, tab.id, target);
-		if (layout === "stacked") {
-			restoredStacked.current = true;
-			scrollToSection(index, target);
-		}
-	}, [
-		consumeReveal,
+	const {
+		virtuoso,
+		attachScroller,
+		tailHeight,
+		spyActiveSection,
+		onTotalListHeightChanged,
+		handoffPath,
+		startHandoff,
+	} = useReviewReveal({
+		workspaceId,
+		tabId: tab.id,
 		files,
-		layout,
-		releaseSettling,
-		scrollToSection,
 		status,
 		statusSettled,
-		tab.id,
-		tab.reveal,
-		workspaceId,
-	]);
+		readKey,
+		layout,
+		reveal: tab.reveal,
+		activePath: tab.activePath,
+	});
+	const setLayout = (next: typeof layout) => {
+		startHandoff(next === "stacked" && layout === "single" ? (current?.path ?? null) : null);
+		setStoreLayout(next);
+	};
 
 	useEffect(() => {
 		if (!status || tab.reveal) return;
@@ -306,58 +215,6 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 		tab.reveal,
 		workspaceId,
 	]);
-
-	const pendingReveal = tab.reveal !== null;
-	useEffect(() => {
-		if (layout !== "stacked") {
-			restoredStacked.current = false;
-			settling.current = null;
-			return;
-		}
-		if (pendingReveal || !status || restoredStacked.current) return;
-		const index = files.findIndex((change) => change.path === activePathRef.current);
-		const change = files[index];
-		if (!change && activePathRef.current !== null && !statusSettled) return;
-		restoredStacked.current = true;
-		if (!change) return;
-		let scrolled = false;
-		const frame = requestAnimationFrame(() => {
-			scrolled = true;
-			scrollToSection(index, { path: change.path });
-		});
-		return () => {
-			cancelAnimationFrame(frame);
-			if (!scrolled) restoredStacked.current = false;
-		};
-	}, [files, layout, pendingReveal, scrollToSection, status, statusSettled]);
-
-	useEffect(() => {
-		if (handoffPath === null || layout !== "stacked") return;
-		let frame = 0;
-		let frames = 0;
-		let last = Number.NaN;
-		const check = () => {
-			frames += 1;
-			const scroller = scrollerRef.current;
-			const section = scroller
-				? [...scroller.querySelectorAll<HTMLElement>('[data-testid="changes-section"]')].find(
-						(element) => element.dataset.path === handoffPath,
-					)
-				: undefined;
-			const offset =
-				section && scroller
-					? section.getBoundingClientRect().top - scroller.getBoundingClientRect().top
-					: Number.NaN;
-			if ((Math.abs(offset) < 1 && Math.abs(offset - last) < 1) || frames > HANDOFF_MAX_FRAMES) {
-				setHandoffPath(null);
-				return;
-			}
-			last = offset;
-			frame = requestAnimationFrame(check);
-		};
-		frame = requestAnimationFrame(check);
-		return () => cancelAnimationFrame(frame);
-	}, [handoffPath, layout]);
 
 	const setPathViewed = useCallback(
 		(path: string, next: boolean) => setViewed(workspaceId, tab.id, path, next),
@@ -478,9 +335,8 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 										Object.fromEntries(files.map((change) => [change.path, true])),
 									)
 								}
-							>
-								<ChevronUp className="size-14" />
-							</HeaderIconButton>
+								icon={ChevronUp}
+							/>
 							<HeaderIconButton
 								testid="changes-review-expand-all"
 								label={t("changes.review.expandAll")}
@@ -491,9 +347,8 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 										Object.fromEntries(files.map((change) => [change.path, false])),
 									)
 								}
-							>
-								<ChevronDown className="size-14" />
-							</HeaderIconButton>
+								icon={ChevronDown}
+							/>
 						</>
 					) : null}
 					{guideAvailable && layout === "stacked" && !mobile ? (
@@ -502,19 +357,19 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 							label={guideOpen ? t("changes.review.hideGuide") : t("changes.review.showGuide")}
 							active={guideOpen}
 							onClick={() => setGuideHidden((hidden) => !hidden)}
-						>
-							<Guide className="size-14" />
-						</HeaderIconButton>
+							icon={Guide}
+						/>
 					) : null}
-					<HeaderIconButton
-						testid="changes-review-toggle-whitespace"
-						label={t("changes.review.hideWhitespace")}
-						active={ignoreWhitespace}
-						onClick={() => setIgnoreWhitespace(workspaceId, tab.id, !ignoreWhitespace)}
-					>
-						<Pilcrow className="size-14" />
-					</HeaderIconButton>
-					{!mobile ? (
+					{controls.whitespace ? (
+						<HeaderIconButton
+							testid="changes-review-toggle-whitespace"
+							label={t("changes.review.hideWhitespace")}
+							active={ignoreWhitespace}
+							onClick={() => setIgnoreWhitespace(workspaceId, tab.id, !ignoreWhitespace)}
+							icon={Pilcrow}
+						/>
+					) : null}
+					{!mobile && controls.layout ? (
 						<>
 							<ToggleSegment
 								testid="changes-review-toggle-split"
@@ -551,25 +406,20 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 						{scopeGone ? error : t("changes.readFailed", { error })}
 					</p>
 					{scopeGone ? (
-						<button
-							type="button"
+						<Button
+							variant="ghost"
+							size="s"
 							data-testid="changes-review-all-changes"
 							onClick={() =>
 								useAppStore.getState().requestChangesView(workspaceId, null, { kind: "branch" })
 							}
-							className="rounded-sm px-4 py-2 tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							{t("changes.review.allChanges")}
-						</button>
+						</Button>
 					) : (
-						<button
-							type="button"
-							data-testid="changes-review-retry"
-							onClick={reload}
-							className="rounded-sm px-4 py-2 tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
-						>
+						<Button variant="ghost" size="s" data-testid="changes-review-retry" onClick={reload}>
 							{t("common.retry")}
-						</button>
+						</Button>
 					)}
 				</div>
 			) : status === null ? (
@@ -591,9 +441,8 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 									label={t("changes.review.previousFile")}
 									disabled={currentIndex === 0}
 									onClick={() => step(-1)}
-								>
-									<ChevronLeft className="size-14" />
-								</HeaderIconButton>
+									icon={ChevronLeft}
+								/>
 								<span
 									data-testid="changes-review-counter"
 									className="tr-text-metadata tabular-nums text-text-muted"
@@ -605,28 +454,25 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 									label={t("changes.review.nextFile")}
 									disabled={currentIndex >= files.length - 1}
 									onClick={() => step(1)}
-								>
-									<ChevronRight className="size-14" />
-								</HeaderIconButton>
-								<button
-									type="button"
+									icon={ChevronRight}
+								/>
+								<Button
+									variant="outline"
+									size="m"
+									iconLeft={Check}
 									data-testid="changes-review-mark-viewed"
 									aria-pressed={viewedSet.has(current.path)}
+									selected={viewedSet.has(current.path)}
 									onClick={markViewedAndAdvance}
-									className={`ml-auto flex h-24 items-center gap-4 rounded-sm border px-8 tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-										viewedSet.has(current.path)
-											? "border-primary text-primary"
-											: "border-control-border-default text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-									}`}
+									className="ml-auto"
 								>
-									<Check className="size-14" />
 									{viewedSet.has(current.path)
 										? t("changes.review.viewed")
 										: t("changes.review.markViewed")}
 									<kbd className="rounded-xs border border-control-border-default px-4 tr-code-text text-text-subtle">
 										{VIEWED_KEY.toUpperCase()}
 									</kbd>
-								</button>
+								</Button>
 							</div>
 							<div className="min-h-0 flex-1">
 								<ChangesFileSection
@@ -681,13 +527,14 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 										>
 											{t("changes.review.switchToOneFile")}
 										</button>
-										<button
-											type="button"
+										<Button
+											variant="ghost"
+											size="s"
 											onClick={() => setLargeNoticeDismissed(true)}
-											className="ml-auto text-text-subtle hover:text-text-default"
+											className="ml-auto"
 										>
 											{t("common.dismiss")}
-										</button>
+										</Button>
 									</div>
 								) : null}
 								<Virtuoso<GitFileChange, ReviewListContext>
@@ -699,18 +546,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 									scrollerRef={attachScroller}
 									onScroll={spyActiveSection}
 									rangeChanged={spyActiveSection}
-									totalListHeightChanged={() => {
-										if (revealComment()) return;
-										const index = files.findIndex(
-											(change) => change.path === settling.current?.path,
-										);
-										if (index >= 0) {
-											virtuoso.current?.scrollToIndex({ index, align: "start" });
-											return;
-										}
-										releaseSettling();
-										spyActiveSection();
-									}}
+									totalListHeightChanged={onTotalListHeightChanged}
 									itemContent={(_index, change) => (
 										<ChangesFileSection
 											workspaceId={workspaceId}
@@ -748,28 +584,28 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 										className="h-4 w-120 min-w-0 shrink appearance-none overflow-hidden rounded-xs bg-control-bg-hovered accent-primary [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-control-bg-hovered [&::-webkit-progress-value]:bg-primary"
 									/>
 									<span className="ml-auto flex shrink-0 items-center gap-4">
-										<button
-											type="button"
+										<Button
+											variant="outline"
+											size="m"
 											data-testid="changes-review-next-unreviewed"
 											disabled={viewedCount >= files.length}
 											onClick={nextUnreviewed}
-											className="flex h-24 items-center gap-4 rounded-sm border border-control-border-default px-8 tr-text-metadata text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text disabled:hover:bg-transparent"
 										>
 											{t("changes.review.nextUnreviewed")}
 											<kbd className="rounded-xs border border-control-border-default px-4 tr-code-text text-text-subtle">
 												{NEXT_UNREVIEWED_KEY.toUpperCase()}
 											</kbd>
-										</button>
-										<button
-											type="button"
+										</Button>
+										<Button
+											variant="outline"
+											size="m"
+											iconLeft={Check}
 											data-testid="changes-review-mark-all"
 											disabled={viewedCount >= files.length}
 											onClick={markAllViewed}
-											className="flex h-24 items-center gap-4 rounded-sm border border-control-border-default px-8 tr-text-metadata text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text disabled:hover:bg-transparent"
 										>
-											<Check className="size-14" />
 											{t("changes.review.markAllViewed")}
-										</button>
+										</Button>
 									</span>
 								</div>
 							</div>

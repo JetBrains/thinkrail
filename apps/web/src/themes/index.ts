@@ -1,10 +1,16 @@
-export { initializeBundledThemes } from "./bundled";
+export { initializeThemes } from "./bundled";
+export { resolveThinkrailEditorTheme } from "./editor";
+export { THINKRAIL_PIERRE_THEME } from "./pierre";
 export {
 	applyTheme,
 	applyThemePreference,
+	clearUserThemes,
 	deriveSystemThemePair,
 	getThemes,
+	getUserThemeIssues,
+	installUserThemes,
 	onSystemAppearanceChange,
+	onThemesChange,
 	readSystemAppearance,
 	readThemeHint,
 	resolveTheme,
@@ -12,11 +18,7 @@ export {
 	type ThemeDescriptor,
 	type ThemePreference,
 	type ThemeResolution,
+	type UserThemeIssue,
 	writeThemeHint,
 } from "./runtime";
 export type { ThemeManifest } from "./schema";
-export {
-	resolveThinkrailShikiTheme,
-	THINKRAIL_SHIKI_THEME,
-	THINKRAIL_SHIKI_THEME_NAME,
-} from "./shiki";

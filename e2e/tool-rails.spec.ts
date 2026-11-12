@@ -40,6 +40,12 @@ async function markMounted(page: Page, testIds: readonly string[]): Promise<void
 	}, testIds);
 }
 
+async function expectPlanPanelVisible(page: Page): Promise<void> {
+	const plan = page.getByTestId("tool-rail-plan");
+	await expect(plan).toHaveAttribute("aria-pressed", "true");
+	await expect(page.locator(`[id="${await plan.getAttribute("aria-controls")}"]`)).toBeVisible();
+}
+
 async function expectStillMounted(page: Page, testIds: readonly string[]): Promise<void> {
 	for (const id of testIds)
 		await expect(page.getByTestId(id)).toHaveAttribute("data-mount-probe", id);
@@ -51,6 +57,7 @@ test("folding, hiding, and showing regions keep the center and the other panes m
 	await openDefaultWorkbench(page);
 	await page.getByTestId("new-chat").click();
 	await expect(page.getByTestId("chat-input")).toBeVisible();
+	await expect(page.getByTestId("plan-rail-pane")).toBeVisible();
 	const center = ["center-tabs", "chat-input", "terminal-instance"] as const;
 	const specs = page.getByTestId("tool-rail-specs");
 	const toggle = async (
@@ -62,11 +69,11 @@ test("folding, hiding, and showing regions keep the center and the other panes m
 		await expectStillMounted(page, survivors);
 	};
 
-	await toggle([...center, "left-nav", "review-panel"], async () => {
+	await toggle([...center, "left-nav", "plan-rail-pane"], async () => {
 		await specs.click();
 		await expect(specs).toHaveAttribute("aria-pressed", "false");
 	});
-	await toggle([...center, "left-nav", "review-panel"], async () => {
+	await toggle([...center, "left-nav", "plan-rail-pane"], async () => {
 		await specs.click();
 		await expect(specs).toHaveAttribute("aria-pressed", "true");
 	});
@@ -77,20 +84,21 @@ test("folding, hiding, and showing regions keep the center and the other panes m
 	await toggle([...center, "left-nav"], async () => {
 		await pressPlatformShortcut(page, "j");
 		await expect(page.getByTestId("right-stack")).toBeVisible();
+		await expect(page.getByTestId("plan-rail-pane")).toBeVisible();
 	});
-	await toggle([...center, "review-panel"], async () => {
+	await toggle([...center, "plan-rail-pane"], async () => {
 		await pressPlatformShortcut(page, "b");
 		await expect(page.getByTestId("left-nav")).toHaveCount(0);
 	});
-	await toggle([...center, "review-panel"], async () => {
+	await toggle([...center, "plan-rail-pane"], async () => {
 		await pressPlatformShortcut(page, "b");
 		await expect(page.getByTestId("left-nav")).toBeVisible();
 	});
-	await toggle(["center-tabs", "chat-input", "left-nav", "review-panel"], async () => {
+	await toggle(["center-tabs", "chat-input", "left-nav", "plan-rail-pane"], async () => {
 		await pressPlatformShortcut(page, "Shift+j");
 		await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
 	});
-	await toggle(["center-tabs", "chat-input", "left-nav", "review-panel"], async () => {
+	await toggle(["center-tabs", "chat-input", "left-nav", "plan-rail-pane"], async () => {
 		await pressPlatformShortcut(page, "Shift+j");
 		await waitTerminalReady(page);
 	});
@@ -116,7 +124,7 @@ test("edge tools hide only their pane while terminal sessions stay grouped", asy
 	await expect(specs).toHaveAttribute("aria-pressed", "true");
 	await specs.click();
 	await expect(specs).toHaveAttribute("aria-pressed", "false");
-	await expect(page.getByTestId("review-panel")).toBeVisible();
+	await expectPlanPanelVisible(page);
 	await specs.click();
 	await expect(specs).toHaveAttribute("aria-pressed", "true");
 	await expect(page.getByTestId("spec-node").first()).toBeVisible();
@@ -230,8 +238,7 @@ test("rail clusters include unplaced tools, boundary drops create panes, and too
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(2);
 	expect(await railClusters(page, "right-layout-rail")).toEqual([
 		["tool-rail-specs", "tool-rail-files"],
-		["tool-rail-review"],
-		["tool-rail-plan"],
+		["tool-rail-plan", "tool-rail-review"],
 	]);
 
 	await startDrag(page, page.getByTestId("tool-rail-files"));
@@ -244,8 +251,7 @@ test("rail clusters include unplaced tools, boundary drops create panes, and too
 	expect(await railClusters(page, "right-layout-rail")).toEqual([
 		["tool-rail-specs"],
 		["tool-rail-files"],
-		["tool-rail-review"],
-		["tool-rail-plan"],
+		["tool-rail-plan", "tool-rail-review"],
 	]);
 
 	await startDrag(page, page.getByTestId("tool-rail-files"));
@@ -254,8 +260,7 @@ test("rail clusters include unplaced tools, boundary drops create panes, and too
 	expect(await railClusters(page, "right-layout-rail")).toEqual([
 		["tool-rail-specs"],
 		["empty-rail-group"],
-		["tool-rail-review", "tool-rail-files"],
-		["tool-rail-plan"],
+		["tool-rail-plan", "tool-rail-review", "tool-rail-files"],
 	]);
 	await expect(page.locator('[data-side="right"][data-group-id]')).toHaveCount(3);
 
@@ -273,30 +278,30 @@ test("rail clusters include unplaced tools, boundary drops create panes, and too
 	expect(await railClusters(page, "right-layout-rail")).toEqual([
 		["tool-rail-specs"],
 		["empty-rail-group"],
-		["empty-rail-group"],
-		["tool-rail-review", "tool-rail-plan"],
+		["tool-rail-plan"],
+		["tool-rail-review"],
 	]);
 	await expect(page.getByTestId("tool-rail-review")).toHaveClass(/text-text-subtle/);
 	await page.getByTestId("tool-rail-review").click();
 	await expect(page.getByTestId("tool-rail-review")).toHaveAttribute("aria-pressed", "true");
 });
 
-test("the plan rail entry is an idempotent toggler \u2014 one click opens, another closes, revealWorkbenchTool is a no-op when already open", async ({
+test("the plan rail entry is an idempotent toggler \u2014 Balanced opens on it, one click closes, another reopens, revealWorkbenchTool is a no-op when already open", async ({
 	page,
 }) => {
 	await openWorkspaceChat(page);
 	const plan = page.getByTestId("tool-rail-plan");
 	await expect(plan).toBeVisible();
-	await expect(plan).toHaveAttribute("aria-pressed", "false");
-	await expect(page.getByTestId("plan-rail-pane")).toHaveCount(0);
-
-	await plan.click();
 	await expect(plan).toHaveAttribute("aria-pressed", "true");
 	await expect(page.getByTestId("plan-rail-pane")).toBeVisible();
 
 	await plan.click();
 	await expect(plan).toHaveAttribute("aria-pressed", "false");
-	await expect(page.getByTestId("plan-rail-pane")).toHaveCount(0);
+	await expect(page.getByTestId("plan-rail-pane")).toBeHidden();
+
+	await plan.click();
+	await expect(plan).toHaveAttribute("aria-pressed", "true");
+	await expect(page.getByTestId("plan-rail-pane")).toBeVisible();
 
 	await revealWorkbenchTool(page, "plan");
 	await revealWorkbenchTool(page, "plan");
@@ -329,7 +334,7 @@ test("rail keyboard navigation changes focus without selection and keeps collaps
 	await expect(files).toHaveAttribute("aria-pressed", "false");
 	await expect(panel).toBeHidden();
 	await expect(panel).toHaveAttribute("aria-labelledby", (await files.getAttribute("id")) ?? "");
-	await expect(page.getByTestId("review-panel")).toBeVisible();
+	await expectPlanPanelVisible(page);
 	await page.keyboard.press("Enter");
 	await expect(panel).toBeVisible();
 	await expect(rail.locator('[data-rail-entry][tabindex="0"]')).toHaveCount(1);
@@ -342,7 +347,7 @@ test("the plan rail entry is reachable by keyboard, exposes aria-controls, and l
 	const rail = page.getByTestId("right-layout-rail");
 	const plan = page.getByTestId("tool-rail-plan");
 	await expect(plan).toBeVisible();
-	await expect(plan).toHaveAttribute("aria-pressed", "false");
+	await expect(plan).toHaveAttribute("aria-pressed", "true");
 
 	await page.getByTestId("tool-rail-specs").focus();
 	for (let i = 0; i < 10 && !(await plan.evaluate((el) => el === document.activeElement)); i += 1) {
@@ -350,6 +355,8 @@ test("the plan rail entry is reachable by keyboard, exposes aria-controls, and l
 	}
 	await expect(plan).toBeFocused();
 
+	await page.keyboard.press("Space");
+	await expect(plan).toHaveAttribute("aria-pressed", "false");
 	await page.keyboard.press("Enter");
 	await expect(plan).toHaveAttribute("aria-pressed", "true");
 	const panelId = await plan.getAttribute("aria-controls");

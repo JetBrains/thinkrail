@@ -1,7 +1,6 @@
 import {
 	RiArrowDownSLine as ChevronDown,
 	RiGitPullRequestLine as GitPullRequestArrow,
-	RiLoader4Line as Loader2,
 	RiSparkling2Line as Sparkles,
 } from "@remixicon/react";
 import type { PrBodySource } from "@thinkrail/contracts";
@@ -199,7 +198,7 @@ function ComposeForm({
 					</div>
 				</div>
 			) : null}
-			<div className="flex min-h-0 flex-1 flex-col gap-4">
+			<div className="flex flex-1 flex-col gap-4">
 				<label htmlFor="open-pr-compose-body" className="tr-text-eyebrow text-text-subtle">
 					{t("panels.prCompose.bodyLabel")}
 				</label>
@@ -216,19 +215,16 @@ function ComposeForm({
 			{source ? (
 				<div className="flex flex-wrap items-center gap-8">
 					<Button
-						variant="soft"
-						size="sm"
+						variant="soft-primary"
+						size="m"
+						iconLeft={Sparkles}
 						data-testid="open-pr-compose-generate"
 						disabled={locked}
+						loading={working === "generate"}
 						onClick={() =>
 							run("generate", () => sources.generate(source === "template" ? template : undefined))
 						}
 					>
-						{working === "generate" ? (
-							<Loader2 className="size-14 animate-spin" />
-						) : (
-							<Sparkles className="size-14" />
-						)}
 						{source === "template"
 							? t("panels.prCompose.fillTemplate")
 							: t("panels.prCompose.generate")}
@@ -243,7 +239,9 @@ function ComposeForm({
 			<DialogFooter>
 				<Button
 					data-testid="open-pr-compose-submit"
+					iconLeft={GitPullRequestArrow}
 					disabled={locked || title.trim().length === 0}
+					loading={busy}
 					onClick={() =>
 						onSubmit({
 							title,
@@ -253,11 +251,6 @@ function ComposeForm({
 						})
 					}
 				>
-					{busy ? (
-						<Loader2 className="size-14 animate-spin" />
-					) : (
-						<GitPullRequestArrow className="size-14" />
-					)}
 					{action}
 				</Button>
 			</DialogFooter>
@@ -280,10 +273,7 @@ export function PrComposeDialog({
 }) {
 	return (
 		<Dialog open={state !== null} onOpenChange={(open) => !open && !busy && onClose()}>
-			<DialogContent
-				data-testid="open-pr-compose-dialog"
-				className="max-w-[40rem] max-h-[85vh] overflow-y-auto"
-			>
+			<DialogContent data-testid="open-pr-compose-dialog" className="max-w-[40rem]">
 				{state ? (
 					<ComposeForm
 						key={`${state.draft}-${state.title}`}

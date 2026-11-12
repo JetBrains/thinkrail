@@ -4,6 +4,7 @@ import type {
 	DelegationRunDetails,
 } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import type { MouseEvent, ReactNode } from "react";
 import {
@@ -20,8 +21,11 @@ export type ResultSource =
 	| { kind: "command"; details: BackgroundCommandCompletionDetails }
 	| { kind: "subagent"; details: DelegationRunDetails };
 
+export type ResultReceipt = "received" | "awaitingReply";
+
 export interface ResultRowProps {
 	source: ResultSource;
+	receipt?: ResultReceipt | undefined;
 	expanded: boolean;
 	onToggle?: ((event: MouseEvent<HTMLButtonElement>) => void) | undefined;
 	toggleRef?: ((element: HTMLElement | null) => void) | undefined;
@@ -87,6 +91,7 @@ function resultFacts(source: ResultSource): {
 
 export function ResultRow({
 	source,
+	receipt,
 	expanded,
 	onToggle,
 	toggleRef,
@@ -112,6 +117,13 @@ export function ResultRow({
 				<span className="size-16 shrink-0" />
 			)}
 			<KindGlyph kind={source.kind} state={state} dotRingClassName="ring-container-workspace-bg" />
+			{receipt ? (
+				<span data-testid="background-result-receipt" className="shrink-0 text-text-subtle">
+					{receipt === "received"
+						? t("resources.result.receivedByAgent")
+						: t("resources.result.awaitingReply")}
+				</span>
+			) : null}
 			<span className="shrink-0 text-text-subtle">
 				{command ? t("resources.result.background") : t("resources.result.subagent")}
 			</span>
@@ -166,15 +178,16 @@ export function ResultRow({
 					<div className={headerClass}>{header}</div>
 				)}
 				{onOpen ? (
-					<button
-						type="button"
+					<Button
+						variant="soft-primary"
+						size="s"
+						iconLeft={RiFileList3Line}
 						data-testid="background-result-open"
 						onClick={onOpen}
-						className="flex shrink-0 items-center gap-4 rounded-sm px-4 py-2 text-primary outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+						className="shrink-0"
 					>
-						<RiFileList3Line className="size-12 shrink-0" />
 						{command ? t("resources.result.openLog") : t("resources.result.transcript")}
-					</button>
+					</Button>
 				) : null}
 			</div>
 			{expanded && children ? (

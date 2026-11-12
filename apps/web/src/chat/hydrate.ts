@@ -1,18 +1,16 @@
-import type {
-	AgentSettlement,
-	AskUserAnswersDetails,
-	TranscriptMessage,
-} from "@thinkrail/contracts";
+import type { AgentSettlement, TranscriptMessage } from "@thinkrail/contracts";
 import {
 	customMessageText,
-	isAskUserAnswersMessage,
 	isBackgroundCommandCompletionMessage,
+	isChatHandoffMessage,
+	isContinueInWorkspaceRequestMessage,
 	isControlMessage,
 	isRetriedAttempt,
 	isSubagentCompletionMessage,
 	isTodoReviewFixMessage,
+	readToolResponseMessage,
 } from "@thinkrail/contracts";
-import { userText } from "../lib";
+import { randomUuid, userText } from "../lib";
 import { assistantFailure } from "./assistantFailure";
 import { insertRoundCloser } from "./roundCloser";
 import type { ChatTurn, ToolResultState } from "./types";
@@ -20,7 +18,7 @@ import type { ChatTurn, ToolResultState } from "./types";
 export interface HydratedRuntime {
 	turns: ChatTurn[];
 	toolResults: Record<string, ToolResultState>;
-	askAnswers: Record<string, AskUserAnswersDetails["result"]>;
+	toolResponses: Record<string, unknown>;
 	turnIdByMessageIndex: (string | null)[];
 }
 
@@ -35,7 +33,7 @@ function transcriptTurnId(
 ): string {
 	return options.idScope
 		? `${options.idScope}:${message.role}:${message.timestamp}:${index}`
-		: crypto.randomUUID();
+		: randomUuid();
 }
 
 export function messagesToRuntime(
@@ -45,9 +43,10 @@ export function messagesToRuntime(
 ): HydratedRuntime {
 	const turns: ChatTurn[] = [];
 	const toolResults: Record<string, ToolResultState> = {};
-	const askAnswers: HydratedRuntime["askAnswers"] = {};
+	const toolResponses: HydratedRuntime["toolResponses"] = {};
 	const turnIdByMessageIndex: HydratedRuntime["turnIdByMessageIndex"] = [];
 	for (const [index, message] of messages.entries()) {
+		const toolResponse = readToolResponseMessage(message);
 		let turnId: string | null = null;
 		if (message.role === "user") {
 			if (!isControlMessage(userText(message.content))) {
@@ -73,8 +72,8 @@ export function messagesToRuntime(
 				status: message.isError ? "error" : "done",
 				raw: { content: message.content, details: message.details },
 			};
-		} else if (isAskUserAnswersMessage(message)) {
-			askAnswers[message.details.toolCallId] = message.details.result;
+		} else if (toolResponse) {
+			toolResponses[toolResponse.toolCallId] = toolResponse.response;
 		} else if (isBackgroundCommandCompletionMessage(message)) {
 			turnId = transcriptTurnId(message, index, options);
 			turns.push({
@@ -101,6 +100,22 @@ export function messagesToRuntime(
 				text: customMessageText(message.content),
 				timestamp: message.timestamp,
 			});
+		} else if (isContinueInWorkspaceRequestMessage(message)) {
+			turnId = transcriptTurnId(message, index, options);
+			turns.push({
+				kind: "continuationRequest",
+				id: turnId,
+				details: message.details,
+				timestamp: message.timestamp,
+			});
+		} else if (isChatHandoffMessage(message)) {
+			turnId = transcriptTurnId(message, index, options);
+			turns.push({
+				kind: "handoff",
+				id: turnId,
+				details: message.details,
+				timestamp: message.timestamp,
+			});
 		}
 		turnIdByMessageIndex.push(turnId);
 	}
@@ -118,12 +133,12 @@ export function messagesToRuntime(
 				kind: "error",
 				id: options.idScope
 					? `${options.idScope}:error:${persistedTerminal?.timestamp ?? "settlement"}`
-					: crypto.randomUUID(),
+					: randomUuid(),
 				text: failure.message,
 				failure: failure.failure,
 				recovery: "try-again",
 			})
 		: turns;
 
-	return { turns: closed, toolResults, askAnswers, turnIdByMessageIndex };
+	return { turns: closed, toolResults, toolResponses, turnIdByMessageIndex };
 }

@@ -111,7 +111,7 @@ export function NotificationsSettings() {
 						action={
 							<Button
 								variant="outline"
-								size="sm"
+								size="m"
 								data-testid="notifications-allow"
 								onClick={requestPermission}
 							>

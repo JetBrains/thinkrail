@@ -1,13 +1,12 @@
 import {
 	RiGitBranchLine as GitBranch,
-	RiLoader4Line as Loader2,
 	RiChatNewLine as MessageSquarePlus,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import { t, useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
-import { IconTooltip } from "@thinkrail/ui/tooltip";
 import {
 	Fragment,
 	lazy,
@@ -18,12 +17,13 @@ import {
 	useMemo,
 	useState,
 } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { prepareChatTitle } from "../chat/chatTitle";
 import { useAutoPlanSummary } from "../chat/useChatTodos";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { preloadedLazy } from "../components/preloadedLazy";
 import { QuietScrollArea } from "../components/QuietScrollArea";
-import { type LayoutAttention, layoutResourceIdentity } from "../lib";
+import { chatDisplayName, type LayoutAttention, layoutResourceIdentity } from "../lib";
 import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
 import { FilesPanel } from "../panels/FilesPanel";
@@ -41,16 +41,20 @@ import {
 	createChangesTab,
 	type EditorTab,
 	editorSessionId,
+	isChatWorkspace,
 	isConnectedGeneration,
 	isDefaultWorkspace,
 	isExternalWorkspace,
 	isFileComparison,
 	type LayoutIntent,
 	selectCanRenameChat,
+	selectChatWorkspaceFirstPrompt,
+	selectChatWorkspaceTitle,
 	selectContextProject,
 	selectDiffTabTargetRef,
 	selectRailPlanSessionId,
 	selectReviewDraftCount,
+	selectUnnamedChatFirstPrompts,
 	selectWorkspaceById,
 	selectWorkspaceNavTick,
 	selectWorkspaceTick,
@@ -63,6 +67,7 @@ import {
 	currentChatDestination,
 	hydrateChatResource,
 	useChatLocationReconciliation,
+	useComposerFocusExpiry,
 	useDeletedChatPlacementReconciliation,
 	useWorkspaceChatCatalogReconciliation,
 } from "./chatReconciliation";
@@ -123,6 +128,19 @@ const RESTORING_LABEL = {
 	terminal: "shell.workbench.restoring.terminal",
 } satisfies Record<string, MessageKey>;
 
+/** A chat without a project has no repository: git- and spec-backed bodies say so instead of asking the host. */
+function ChatUnavailable() {
+	const t = useT();
+	return (
+		<div
+			data-testid="chat-tool-unavailable"
+			className="flex h-full items-center justify-center p-16 text-center text-text-subtle tr-text-ui"
+		>
+			{t("panels.chats.notAvailable")}
+		</div>
+	);
+}
+
 function MissingResource({ kind }: { kind: keyof typeof RESTORING_LABEL }) {
 	const t = useT();
 	return (
@@ -160,6 +178,11 @@ function EditorResourceBody({ workspaceId, tab }: { workspaceId: string; tab: Ed
 	const editor = useAppStore((state) =>
 		findEditorResource(state.tabsByWorkspace[workspaceId] ?? NO_EDITOR_TABS, tab.id, identity),
 	);
+	const chat = useAppStore((state) => {
+		const workspace = selectWorkspaceById(state, workspaceId);
+		return workspace !== null && isChatWorkspace(workspace);
+	});
+	if (chat && tab.kind !== "file" && !isFileComparison(tab)) return <ChatUnavailable />;
 	if (!editor) {
 		return <MissingResource kind={tab.kind} />;
 	}
@@ -246,13 +269,9 @@ function ChatResourceBody({
 	return (
 		<div className="flex h-full flex-col items-center justify-center gap-8 text-text-muted">
 			<span className="tr-text-ui">{t("shell.workbench.chatRestoreSlow")}</span>
-			<button
-				type="button"
-				onClick={retry}
-				className="rounded-sm border border-border-default px-8 py-4 tr-text-ui hover:bg-control-bg-hovered"
-			>
+			<Button variant="outline" size="m" onClick={retry}>
 				{t("common.retry")}
-			</button>
+			</Button>
 		</div>
 	);
 }
@@ -337,9 +356,20 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const chatStarting = useAppStore((state) => (state.chatStartsByWorkspace[workspaceId] ?? 0) > 0);
 	const deletedSessions = useAppStore((state) => state.deletedSessionsByWorkspace[workspaceId]);
 	const terminalClose = useTerminalClose();
-	const specs = useWorkspaceSpecs(workspaceId);
-	const review = useWorkspaceReview(workspaceId);
-	useLoadWorkspaceTurns(workspaceId);
+	const isChat = workspace != null && isChatWorkspace(workspace);
+	const chatTitle = useAppStore((state) =>
+		isChat
+			? chatDisplayName(
+					t,
+					selectChatWorkspaceTitle(state, workspaceId),
+					selectChatWorkspaceFirstPrompt(state, workspaceId),
+				)
+			: "",
+	);
+	const repositoryId = isChat ? null : workspaceId;
+	const specs = useWorkspaceSpecs(repositoryId);
+	const review = useWorkspaceReview(repositoryId);
+	useLoadWorkspaceTurns(repositoryId);
 	useIdleEditorPreload(workspaceId);
 	const reviewComments = useAppStore((state) => state.reviewsByWorkspace[workspaceId]?.comments);
 	const railPlanSessionId = useAppStore((state) => selectRailPlanSessionId(state, workspaceId));
@@ -453,6 +483,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	useWorkspaceChatCatalogReconciliation(workspaceId, commit);
 	const { terminals } = useTerminalPlacementReconciliation(workspaceId, commit);
 	useChatLocationReconciliation(workspaceId, changeAttention);
+	useComposerFocusExpiry(workspaceId);
 
 	useEffect(() => {
 		if (!document || status !== "connected") return;
@@ -577,6 +608,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				: emptyWorkspaceProjection(frame, workspaceProjectionReference(workspaceId)),
 		[attention, document, frame, workspaceId],
 	);
+	const chatFirstPrompts = useAppStore(
+		useShallow((state) => selectUnnamedChatFirstPrompts(state, workspaceId)),
+	);
 	const rendered = document && attention ? { document, attention } : pendingProjection;
 
 	const renderResourceBody = useCallback(
@@ -644,13 +678,19 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					<ProjectTree />
 				</QuietScrollArea>
 			),
-			specs: (
+			specs: isChat ? (
+				<ChatUnavailable />
+			) : (
 				<QuietScrollArea className="h-full" viewportClassName="p-panel-inset">
 					<SpecsPanel workspaceId={workspaceId} failed={specs.failed} onRetry={specs.reload} />
 				</QuietScrollArea>
 			),
 			files: <FilesPanel key={workspaceId} workspaceId={workspaceId} />,
-			review: <ReviewPanel key={workspaceId} workspaceId={workspaceId} failed={review.failed} />,
+			review: isChat ? (
+				<ChatUnavailable />
+			) : (
+				<ReviewPanel key={workspaceId} workspaceId={workspaceId} failed={review.failed} />
+			),
 			plan: railPlanSessionId ? (
 				<ErrorBoundary
 					label={t("shell.workbench.panel.planRail")}
@@ -682,7 +722,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			);
 		}
 		return bodies;
-	}, [railPlanSessionId, review.failed, specs.failed, specs.reload, t, workspaceId]);
+	}, [isChat, railPlanSessionId, review.failed, specs.failed, specs.reload, t, workspaceId]);
 	const renderToolBody = useCallback((tool: LayoutToolId) => toolBodies[tool], [toolBodies]);
 
 	const isDefault = workspace != null && isDefaultWorkspace(workspace);
@@ -693,7 +733,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			const currentAttention = useAppStore.getState().layoutAttentionByWorkspace[workspaceId];
 			if (!currentAttention) return;
 			changeAttention({ ...currentAttention, lastFocusedCenterGroupId: groupId });
-			void startChatInTab(workspaceId, groupId);
+			void startChatInTab(workspaceId, { preferredGroupId: groupId });
 		},
 		[changeAttention, workspaceId],
 	);
@@ -736,13 +776,17 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				className="flex h-full flex-col items-center justify-center gap-4 px-16 text-center"
 			>
 				<span className="tr-text-eyebrow text-text-muted">
-					{isDefault
-						? t("shell.workbench.ready.defaultEyebrow")
-						: isExternal
-							? t("shell.workbench.ready.externalEyebrow")
-							: t("shell.workbench.ready.worktreeEyebrow")}
+					{isChat
+						? t("panels.chats.title")
+						: isDefault
+							? t("shell.workbench.ready.defaultEyebrow")
+							: isExternal
+								? t("shell.workbench.ready.externalEyebrow")
+								: t("shell.workbench.ready.worktreeEyebrow")}
 				</span>
-				{workspace ? (
+				{workspace && isChat ? (
+					<h2 className="max-w-full truncate tr-title-entity text-text-default">{chatTitle}</h2>
+				) : workspace ? (
 					<>
 						<h2 className="max-w-full truncate tr-title-entity text-text-default">
 							{isDefault ? (contextProject?.name ?? workspaceName(t, workspace)) : workspace.name}
@@ -765,32 +809,40 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					</>
 				) : null}
 				<p className="mt-4 tr-text-ui text-text-muted">
-					{isDefault
-						? t("shell.workbench.ready.defaultDescription")
-						: t("shell.workbench.ready.worktreeDescription")}
+					{isChat
+						? t("panels.newWorkspace.descriptionChat")
+						: isDefault
+							? t("shell.workbench.ready.defaultDescription")
+							: t("shell.workbench.ready.worktreeDescription")}
 				</p>
-				<button
-					type="button"
+				<Button
+					variant="outline"
+					size="m"
+					iconLeft={MessageSquarePlus}
+					loading={chatStarting}
 					data-testid="start-chat"
 					data-starting={chatStarting || undefined}
 					disabled={chatStarting}
 					onClick={() => startChat(groupId)}
-					className="mt-4 flex items-center gap-4 rounded-sm border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered disabled:text-text-muted disabled:hover:bg-container-elevated-bg"
+					className="mt-4"
 				>
-					{chatStarting ? (
-						<>
-							<Loader2 className="size-14 animate-spin motion-reduce:animate-none" />{" "}
-							{t("shell.workbench.ready.startingChat")}
-						</>
-					) : (
-						<>
-							<MessageSquarePlus className="size-14" /> {t("shell.workbench.ready.newChat")}
-						</>
-					)}
-				</button>
+					{chatStarting
+						? t("shell.workbench.ready.startingChat")
+						: t("shell.workbench.ready.newChat")}
+				</Button>
 			</div>
 		),
-		[chatStarting, contextProject, isDefault, isExternal, startChat, t, workspace],
+		[
+			chatStarting,
+			chatTitle,
+			contextProject,
+			isChat,
+			isDefault,
+			isExternal,
+			startChat,
+			t,
+			workspace,
+		],
 	);
 
 	const renderCenterActions = useCallback(
@@ -802,17 +854,15 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					targetGroupId={groupId}
 					{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
 				/>
-				<IconTooltip label={t("shell.workbench.newTerminal")}>
-					<button
-						type="button"
-						data-testid="new-terminal"
-						aria-label={t("shell.workbench.newTerminal")}
-						onClick={() => useAppStore.getState().addTerminal(workspaceId, undefined, groupId)}
-						className="flex w-panel-header-row shrink-0 items-center justify-center border-border-default border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-					>
-						<SquareTerminal className="size-14" />
-					</button>
-				</IconTooltip>
+				<IconButton
+					variant="ghost"
+					size="m"
+					icon={SquareTerminal}
+					label={t("shell.workbench.newTerminal")}
+					data-testid="new-terminal"
+					onClick={() => useAppStore.getState().addTerminal(workspaceId, undefined, groupId)}
+					className="shrink-0 self-center"
+				/>
 			</>
 		),
 		[canRenameChat, requestRenameChat, t, workspaceId],
@@ -854,6 +904,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				onUserNavigation={() => useAppStore.getState().noteNavigation(workspaceId)}
 				readNavigationTick={() => selectWorkspaceNavTick(useAppStore.getState(), workspaceId)}
 				{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
+				chatFirstPrompts={chatFirstPrompts}
 				onRequestClose={(tab, prepare) => {
 					if (tab.kind === "terminal") {
 						const close = () => {

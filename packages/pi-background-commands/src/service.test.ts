@@ -162,8 +162,9 @@ test("completion latches survive rebind, gaps, a closed deletion gate and rollba
 	const delivered: BackgroundCommandCompletion[] = [];
 	const old: BackgroundCommandCompletion[] = [];
 	const unbind = service.bindCompletion({
-		deliver: (c) => {
-			old.push(c);
+		deliver: (batch) => {
+			old.push(...batch);
+			return batch;
 		},
 	});
 	const handle = service.start({ command: "gap" });
@@ -172,8 +173,9 @@ test("completion latches survive rebind, gaps, a closed deletion gate and rollba
 	await waitFor(() => handle.snapshot.status === "completed");
 	canDeliver = false;
 	service.bindCompletion({
-		deliver: (c) => {
-			delivered.push(c);
+		deliver: (batch) => {
+			delivered.push(...batch);
+			return batch;
 		},
 	});
 	service.flushCompletions();
@@ -182,8 +184,9 @@ test("completion latches survive rebind, gaps, a closed deletion gate and rollba
 	service.flushCompletions();
 	unbind();
 	service.bindCompletion({
-		deliver: (c) => {
-			delivered.push(c);
+		deliver: (batch) => {
+			delivered.push(...batch);
+			return batch;
 		},
 	});
 	service.flushCompletions();
@@ -204,9 +207,10 @@ test("reentrant completion bindings cannot claim twice and a failed send can be 
 	await waitFor(() => handle.snapshot.status === "completed");
 	let delivered = 0;
 	service.bindCompletion({
-		deliver() {
+		deliver(batch) {
 			delivered++;
 			service.flushCompletions();
+			return batch;
 		},
 	});
 	service.flushCompletions();
@@ -220,8 +224,9 @@ test("disposal signals every job before waiting, closes admission, stays silent 
 	const two = service.start({ command: "two" });
 	let delivered = 0;
 	service.bindCompletion({
-		deliver() {
+		deliver(batch) {
 			delivered++;
+			return batch;
 		},
 	});
 	const start = Date.now();
@@ -237,8 +242,9 @@ test("disposal signals every job before waiting, closes admission, stays silent 
 	executor.call(1).reject(new Error("aborted"));
 	await waitFor(() => one.snapshot.status === "stopped" && two.snapshot.status === "stopped");
 	service.bindCompletion({
-		deliver() {
+		deliver(batch) {
 			delivered++;
+			return batch;
 		},
 	});
 	expect(delivered).toBe(0);
@@ -248,8 +254,9 @@ test("each completion binding has independent ownership even when the callback o
 	const { executor, service } = fixture();
 	let deliveries = 0;
 	const target = {
-		deliver() {
+		deliver(batch: readonly BackgroundCommandCompletion[]) {
 			deliveries++;
+			return batch;
 		},
 	};
 	const oldUnbind = service.bindCompletion(target);
@@ -364,5 +371,40 @@ test("split multibyte characters do not appear partially, and incomplete final b
 	executor.call().resolve({ exitCode: 0 });
 	await waitFor(() => command.snapshot.status === "completed");
 	expect(command.output).toEqual({ text: "🦊�", truncated: false });
+	await service.dispose();
+});
+
+test("a completion claim only suppresses the report of a command that has finished", async () => {
+	const { executor, service } = fixture();
+	const delivered: string[] = [];
+	service.bindCompletion({
+		deliver: (batch) => {
+			delivered.push(...batch.map((completion) => completion.snapshot.id));
+			return batch;
+		},
+	});
+	const early = service.start({ command: "claimed while running" });
+	const late = service.start({ command: "claimed after finishing" });
+	early.claimCompletion();
+	service.bindCompletion({
+		deliver: (batch) => {
+			delivered.push(...batch.map((completion) => completion.snapshot.id));
+			return batch;
+		},
+		canDeliverCompletion: () => false,
+	});
+	executor.call().resolve({ exitCode: 0 });
+	executor.call(1).resolve({ exitCode: 0 });
+	await waitFor(
+		() => early.snapshot.finishedAt !== undefined && late.snapshot.finishedAt !== undefined,
+	);
+	late.claimCompletion();
+	service.bindCompletion({
+		deliver: (batch) => {
+			delivered.push(...batch.map((completion) => completion.snapshot.id));
+			return batch;
+		},
+	});
+	expect(delivered).toEqual([early.id]);
 	await service.dispose();
 });

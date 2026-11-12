@@ -58,12 +58,12 @@ export function ConfirmPopover({
 					</p>
 				) : null}
 				<div className="flex justify-end gap-8 pt-4">
-					<Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+					<Button variant="outline" size="m" onClick={() => onOpenChange(false)}>
 						{cancelLabel ?? t("common.cancel")}
 					</Button>
 					<Button
-						variant={destructive ? "destructive" : "default"}
-						size="sm"
+						variant={destructive ? "destructive" : "primary"}
+						size="m"
 						data-testid={confirmTestId}
 						onClick={() => {
 							onConfirm();

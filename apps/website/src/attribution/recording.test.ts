@@ -7,6 +7,7 @@ import {
 } from "./recording";
 
 const journeyId = "01890f47-75a3-4d8f-9a72-4f0e35be292b";
+const nextJourneyId = "5f0c1a2b-3c4d-4e5f-8a6b-7c8d9e0f1a2b";
 
 function fixture(initialJourney?: string, initialConsent?: boolean) {
 	const values = new Map<string, string>();
@@ -17,6 +18,7 @@ function fixture(initialJourney?: string, initialConsent?: boolean) {
 	let href = "https://thinkrail.ai/";
 	let referrer = "";
 	let bridgeGenerationCalls = 0;
+	let failWrites = false;
 	const storage = {
 		getItem(key: string) {
 			calls.push(`get:${key}`);
@@ -24,6 +26,7 @@ function fixture(initialJourney?: string, initialConsent?: boolean) {
 		},
 		setItem(key: string, value: string) {
 			calls.push(`set:${key}`);
+			if (failWrites) throw new Error("quota exceeded");
 			values.set(key, value);
 		},
 		removeItem(key: string) {
@@ -50,8 +53,12 @@ function fixture(initialJourney?: string, initialConsent?: boolean) {
 				bridgeGenerationCalls += 1;
 				return "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 			},
+			recordedJourneys: new Set<string>(),
 		},
 		bridgeGenerationCalls: () => bridgeGenerationCalls,
+		setFailWrites(value: boolean) {
+			failWrites = value;
+		},
 		setJourney(value: string | undefined, ...consent: [] | [boolean | undefined]) {
 			currentJourney = value;
 			currentConsent = consent.length === 0 ? value !== undefined : consent[0];
@@ -123,5 +130,69 @@ describe("attribution recording consent timing", () => {
 		initAttributionRecording(page.dependencies);
 
 		expect(page.values.get(attributionStorageKey)).toContain('"campaign":"returning"');
+	});
+});
+
+describe("attribution recording per document", () => {
+	test("records a page's navigation once, so later actions keep its download bridge", () => {
+		const page = fixture(journeyId, true);
+		page.setNavigation("https://thinkrail.ai/?utm_source=newsletter", "https://www.google.com/");
+		initAttributionRecording(page.dependencies);
+		const bridgeId = recordCurrentDownloadBridge(page.dependencies);
+		const stored = page.values.get(attributionStorageKey);
+		page.calls.length = 0;
+
+		recordCurrentAttributionTouch(page.dependencies);
+		recordCurrentAttributionTouch(page.dependencies);
+
+		expect(bridgeId).toBeDefined();
+		expect(page.calls).toEqual([]);
+		expect(page.values.get(attributionStorageKey)).toBe(stored);
+		expect(readAttributionContext(journeyId, page.dependencies.storage())?.bridge_id).toBe(
+			bridgeId,
+		);
+	});
+
+	test("records a later grant's navigation at its first action only", () => {
+		const page = fixture();
+		page.setNavigation("https://thinkrail.ai/?utm_source=newsletter", "");
+		initAttributionRecording(page.dependencies);
+		page.setJourney(journeyId);
+		recordCurrentAttributionTouch(page.dependencies);
+		const bridgeId = recordCurrentDownloadBridge(page.dependencies);
+		page.calls.length = 0;
+
+		recordCurrentAttributionTouch(page.dependencies);
+
+		expect(bridgeId).toBeDefined();
+		expect(page.calls).toEqual([]);
+		expect(readAttributionContext(journeyId, page.dependencies.storage())?.bridge_id).toBe(
+			bridgeId,
+		);
+	});
+
+	test("records the page again for a new journey", () => {
+		const page = fixture(journeyId, true);
+		initAttributionRecording(page.dependencies);
+		page.setJourney(undefined, false);
+		page.setJourney(nextJourneyId, true);
+
+		recordCurrentAttributionTouch(page.dependencies);
+
+		expect(readAttributionContext(nextJourneyId, page.dependencies.storage())).toMatchObject({
+			first_touch: expect.objectContaining({ referrer_class: "direct" }),
+		});
+	});
+
+	test("retries a touch whose write failed", () => {
+		const page = fixture(journeyId, true);
+		page.setFailWrites(true);
+		initAttributionRecording(page.dependencies);
+		expect(page.values.has(attributionStorageKey)).toBeFalse();
+
+		page.setFailWrites(false);
+		recordCurrentAttributionTouch(page.dependencies);
+
+		expect(page.values.has(attributionStorageKey)).toBeTrue();
 	});
 });

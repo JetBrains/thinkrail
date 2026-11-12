@@ -114,6 +114,14 @@
 				"info": { "$ref": "#/$defs/hexColor" },
 				"success": { "$ref": "#/$defs/hexColor" },
 				"danger": { "$ref": "#/$defs/hexColor" },
+				"dangerHover": {
+					"$ref": "#/$defs/hexColor",
+					"description": "Destructive button hover fill. Optional: defaults to danger darkened 12% toward black."
+				},
+				"onDanger": {
+					"$ref": "#/$defs/hexColor",
+					"description": "Label on the destructive fills. Optional: defaults to the palette's text or background colour, whichever reads better on danger and dangerHover."
+				},
 				"warning": { "$ref": "#/$defs/hexColor" }
 			}
 		},

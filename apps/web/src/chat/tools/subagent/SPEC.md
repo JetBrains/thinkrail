@@ -45,7 +45,9 @@ Adopted:
 - `completionReport` strips pi-subagents' `Subagent "<role>" (<id>) <status>:` header (the join on that
   exact content format is deliberate; an unmatched text passes through whole); `reportTeaser` is the
   report's first readable line with Markdown block markers and emphasis removed.
-- `get_subagent_result` stays **routine** (folds into activity) with the same body + summary.
+- `get_subagent_result` stays **routine** (folds into activity) with the same body + summary, except that
+  the parent chat renders a pull of a finished run as that run's background result row
+  ([[submodule-web-chat]], first receipt only).
 
 ## Boundary
 

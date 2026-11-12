@@ -19,7 +19,7 @@ import {
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import { createDelegationService, type DelegationService } from "pi-delegation";
+import { createDelegationService, type DelegationService, type RunOutcome } from "pi-delegation";
 import defaultSubagents, {
 	createSubagents,
 	createSubagentsExtension,
@@ -392,98 +392,119 @@ test("a per-call model runs an unpinned agent on a different model than the pare
 	await service.disposeChildrenOf(parent.sessionId);
 });
 
+test("a call that sets model to inherit runs the unpinned agent on the parent's model", async () => {
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall("Agent", { subagent_type: "worker", task: "Use my model.", model: "inherit" }),
+		),
+		fauxAssistantMessage("INHERIT_CHILD_OK"),
+		fauxAssistantMessage("PARENT_AFTER_INHERIT"),
+	]);
+
+	await parent.prompt("Delegate on the parent's model.");
+
+	expect(transcript()).toContain("INHERIT_CHILD_OK");
+	expect(transcript()).toContain("PARENT_AFTER_INHERIT");
+	const child = service.childrenOf(parent.sessionId)[0];
+	expect(child?.snapshot?.details.model).toBe("fauxa/fauxa");
+	await service.disposeChildrenOf(parent.sessionId);
+});
+
 test.each([
 	["fauxreasoner", "xhigh", false],
 	["fauxreasoner", "xhigh", true],
 	["fauxb", "off", false],
 	["fauxb", "off", true],
-] as const)("suffix thinking on %s becomes %s in the child, not the parent (background %s)", async (provider, expectedThinking, background) => {
-	const originalModel = parent.model;
-	const originalThinking = parent.thinkingLevel;
-	const marker = `THINKING_${provider}_${background}`;
-	fauxA.setResponses([
-		fauxAssistantMessage(
-			fauxToolCall("Agent", {
-				subagent_type: "reviewer",
-				task: "Report your findings.",
-				model: `${provider}/${provider}:xhigh`,
-				run_in_background: background,
-			}),
-		),
-		fauxAssistantMessage(background ? `STARTED_${marker}` : `DONE_${marker}`),
-		...(background ? [fauxAssistantMessage(`DONE_${marker}`)] : []),
-	]);
-	const core = provider === "fauxb" ? fauxB : fauxReasoner;
-	core.setResponses([fauxAssistantMessage(`CHILD_${marker}`)]);
-
-	await parent.prompt("Delegate with a thinking suffix.");
-	await waitFor(() => transcript().includes(`DONE_${marker}`));
-	await parent.waitForIdle();
-
-	const context = storedChildContext();
-	expect(context.model).toEqual({ provider, modelId: provider });
-	expect(context.thinkingLevel).toBe(expectedThinking);
-	expect(transcript()).toContain(`CHILD_${marker}`);
-	expect(parent.model).toEqual(originalModel);
-	expect(parent.thinkingLevel).toBe(originalThinking);
-});
-
-test.each([
-	false,
-	true,
-])("an unsuffixed child inherits live parent thinking (model selected %s)", async (selectModel) => {
-	const session = await makeSession();
-	try {
-		const model = runtime.getModel("fauxreasoner", "fauxreasoner");
-		if (!model) throw new Error("Reasoning model not registered");
-		await session.setModel(model);
-		session.setThinkingLevel("high");
-		fauxReasoner.setResponses([
+] as const)(
+	"suffix thinking on %s becomes %s in the child, not the parent (background %s)",
+	async (provider, expectedThinking, background) => {
+		const originalModel = parent.model;
+		const originalThinking = parent.thinkingLevel;
+		const marker = `THINKING_${provider}_${background}`;
+		fauxA.setResponses([
 			fauxAssistantMessage(
 				fauxToolCall("Agent", {
 					subagent_type: "reviewer",
-					task: "Inherit thinking.",
-					...(selectModel ? { model: "fauxreasoner/fauxreasoner" } : {}),
+					task: "Report your findings.",
+					model: `${provider}/${provider}:xhigh`,
+					run_in_background: background,
 				}),
 			),
-			fauxAssistantMessage("INHERITED_THINKING"),
-			fauxAssistantMessage("PARENT_DONE"),
+			fauxAssistantMessage(background ? `STARTED_${marker}` : `DONE_${marker}`),
+			...(background ? [fauxAssistantMessage(`DONE_${marker}`)] : []),
 		]);
-		await session.prompt("Delegate without a suffix.");
-		expect(storedChildContext(session).thinkingLevel).toBe("high");
-		expect(session.thinkingLevel).toBe("high");
-	} finally {
-		await service.disposeChildrenOf(session.sessionId);
-		liveParents.delete(session.sessionId);
-		session.dispose();
-	}
-});
+		const core = provider === "fauxb" ? fauxB : fauxReasoner;
+		core.setResponses([fauxAssistantMessage(`CHILD_${marker}`)]);
 
-test.each([
-	false,
-	true,
-])("invalid suffix selection is a tool error before child creation (background %s)", async (background) => {
-	const callsBefore = fauxReasoner.state.callCount;
-	fauxA.setResponses([
-		fauxAssistantMessage(
-			fauxToolCall("Agent", {
-				subagent_type: "reviewer",
-				task: "Never start.",
-				model: "fauxreasoner/missing:xhigh",
-				run_in_background: background,
-			}),
-		),
-		fauxAssistantMessage("PARENT_RECOVERED_SELECTION"),
-	]);
-	await parent.prompt("Try an unavailable model with a suffix.");
-	const result = parent.messages.filter((message) => message.role === "toolResult").at(-1);
-	expect(result?.isError).toBe(true);
-	expect(lastToolResultText()).toContain('base "fauxreasoner/missing"');
-	expect(lastToolResultText()).toContain("not available in this session");
-	expect(lastToolResultText()).not.toContain("qualify");
-	expect(service.childrenOf(parent.sessionId)).toEqual([]);
-	expect(fauxReasoner.state.callCount).toBe(callsBefore);
-});
+		await parent.prompt("Delegate with a thinking suffix.");
+		await waitFor(() => transcript().includes(`DONE_${marker}`));
+		await parent.waitForIdle();
+
+		const context = storedChildContext();
+		expect(context.model).toEqual({ provider, modelId: provider });
+		expect(context.thinkingLevel).toBe(expectedThinking);
+		expect(transcript()).toContain(`CHILD_${marker}`);
+		expect(parent.model).toEqual(originalModel);
+		expect(parent.thinkingLevel).toBe(originalThinking);
+	},
+);
+
+test.each([false, true])(
+	"an unsuffixed child inherits live parent thinking (model selected %s)",
+	async (selectModel) => {
+		const session = await makeSession();
+		try {
+			const model = runtime.getModel("fauxreasoner", "fauxreasoner");
+			if (!model) throw new Error("Reasoning model not registered");
+			await session.setModel(model);
+			session.setThinkingLevel("high");
+			fauxReasoner.setResponses([
+				fauxAssistantMessage(
+					fauxToolCall("Agent", {
+						subagent_type: "reviewer",
+						task: "Inherit thinking.",
+						...(selectModel ? { model: "fauxreasoner/fauxreasoner" } : {}),
+					}),
+				),
+				fauxAssistantMessage("INHERITED_THINKING"),
+				fauxAssistantMessage("PARENT_DONE"),
+			]);
+			await session.prompt("Delegate without a suffix.");
+			expect(storedChildContext(session).thinkingLevel).toBe("high");
+			expect(session.thinkingLevel).toBe("high");
+		} finally {
+			await service.disposeChildrenOf(session.sessionId);
+			liveParents.delete(session.sessionId);
+			session.dispose();
+		}
+	},
+);
+
+test.each([false, true])(
+	"invalid suffix selection is a tool error before child creation (background %s)",
+	async (background) => {
+		const callsBefore = fauxReasoner.state.callCount;
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall("Agent", {
+					subagent_type: "reviewer",
+					task: "Never start.",
+					model: "fauxreasoner/missing:xhigh",
+					run_in_background: background,
+				}),
+			),
+			fauxAssistantMessage("PARENT_RECOVERED_SELECTION"),
+		]);
+		await parent.prompt("Try an unavailable model with a suffix.");
+		const result = parent.messages.filter((message) => message.role === "toolResult").at(-1);
+		expect(result?.isError).toBe(true);
+		expect(lastToolResultText()).toContain('base "fauxreasoner/missing"');
+		expect(lastToolResultText()).toContain("not available in this session");
+		expect(lastToolResultText()).not.toContain("qualify");
+		expect(service.childrenOf(parent.sessionId)).toEqual([]);
+		expect(fauxReasoner.state.callCount).toBe(callsBefore);
+	},
+);
 
 test("a definition-pinned model silently wins over the per-call model", async () => {
 	fauxA.setResponses([
@@ -649,7 +670,7 @@ test("an unknown subagent_type surfaces as a tool error listing the available ty
 	const text = lastToolResultText();
 	expect(text).toContain('Unknown subagent type "nope"');
 	expect(text).toContain('"scout" (builtin)');
-	expect(text).toContain("model: call or parent");
+	expect(text).toContain("model: parent unless set");
 	expect(text).toContain("model: pinned fauxb");
 	expect(service.childrenOf(parent.sessionId)).toEqual([]);
 });
@@ -676,6 +697,7 @@ test("background: run_in_background returns immediately, completion arrives as a
 	expect(transcript()).toContain("BG_RESULT");
 
 	const child = service.childrenOf(parent.sessionId)[0];
+	expect(child?.record.info.detached).toBe(true);
 	expect(child?.collectResult()?.finalText).toBe("BG_RESULT");
 	expect(child?.snapshot?.collected).toBe(true);
 	await service.disposeChildrenOf(parent.sessionId);
@@ -689,99 +711,97 @@ function gate() {
 	return { opened, open };
 }
 
-test.each([
-	"user",
-	undefined,
-	"engine",
-	"",
-])("detached cancellation (%s) persists a displayed completion and only user cancellation avoids a parent turn", async (reason) => {
-	const session = await makeSession();
-	const started = gate();
-	const finish = gate();
-	const delivered = gate();
-	const unsubscribe = session.subscribe((event) => {
-		if (
-			event.type === "message_end" &&
-			event.message.role === "custom" &&
-			event.message.customType === SUBAGENT_COMPLETION_MESSAGE
-		) {
-			delivered.open();
-		}
-	});
-	try {
-		fauxA.setResponses([
-			fauxAssistantMessage(
-				fauxToolCall("Agent", {
-					subagent_type: "bg-runner",
-					task: "Wait for cancellation.",
-					run_in_background: true,
-				}),
-			),
-			fauxAssistantMessage("ACK_STARTED"),
-			fauxAssistantMessage("FOLLOW_UP"),
-		]);
-		fauxB.setResponses([
-			async () => {
-				started.open();
-				await finish.opened;
-				return fauxAssistantMessage("INTERRUPTED");
-			},
-		]);
-		await session.prompt("Delegate, then wait.");
-		await started.opened;
-		const child = service.childrenOf(session.sessionId).at(-1);
-		if (!child) throw new Error("no child spawned");
-		expect(child.snapshot?.status).toBe("running");
-		expect(session.isStreaming).toBe(false);
-		const callsBeforeStop = fauxA.state.callCount;
-
-		const aborting = Promise.all([child.abort(reason), child.abort("user")]);
-		finish.open();
-		await aborting;
-		await delivered.opened;
-		if (reason !== "user") {
-			await waitFor(() => JSON.stringify(session.messages).includes("FOLLOW_UP"));
-		}
-		await Bun.sleep(20);
-		expect(fauxA.state.callCount).toBe(callsBeforeStop + (reason === "user" ? 0 : 1));
-		expect(session.isStreaming).toBe(false);
-		expect(child.snapshot?.details.abortReason).toBe(reason);
-		const completions = session.sessionManager
-			.getEntries()
-			.filter(
-				(entry) =>
-					entry.type === "custom_message" && entry.customType === SUBAGENT_COMPLETION_MESSAGE,
-			);
-		expect(completions).toHaveLength(1);
-		const completion = completions[0];
-		if (completion?.type !== "custom_message") throw new Error("missing completion");
-		expect(completion).toMatchObject({
-			display: true,
-			details: child.snapshot?.details,
+test.each(["user", undefined, "engine", ""])(
+	"detached cancellation (%s) persists a displayed completion and only user cancellation avoids a parent turn",
+	async (reason) => {
+		const session = await makeSession();
+		const started = gate();
+		const finish = gate();
+		const delivered = gate();
+		const unsubscribe = session.subscribe((event) => {
+			if (
+				event.type === "message_end" &&
+				event.message.role === "custom" &&
+				event.message.customType === SUBAGENT_COMPLETION_MESSAGE
+			) {
+				delivered.open();
+			}
 		});
-		expect(completion.content).toContain("aborted:");
-
-		if (reason === "user") {
-			expect(fauxA.getPendingResponseCount()).toBe(1);
+		try {
 			fauxA.setResponses([
 				fauxAssistantMessage(
-					fauxToolCall("Agent", { subagent_type: "bg-runner", task: "Delegate again." }),
+					fauxToolCall("Agent", {
+						subagent_type: "bg-runner",
+						task: "Wait for cancellation.",
+						run_in_background: true,
+					}),
 				),
-				fauxAssistantMessage("PARENT_CONTINUES"),
+				fauxAssistantMessage("ACK_STARTED"),
+				fauxAssistantMessage("FOLLOW_UP"),
 			]);
-			fauxB.setResponses([fauxAssistantMessage("NEXT_CHILD")]);
-			await session.prompt("Keep working.");
-			expect(lastToolResultText(session)).toBe("NEXT_CHILD");
-			expect(service.childrenOf(session.sessionId)).toHaveLength(2);
+			fauxB.setResponses([
+				async () => {
+					started.open();
+					await finish.opened;
+					return fauxAssistantMessage("INTERRUPTED");
+				},
+			]);
+			await session.prompt("Delegate, then wait.");
+			await started.opened;
+			const child = service.childrenOf(session.sessionId).at(-1);
+			if (!child) throw new Error("no child spawned");
+			expect(child.snapshot?.status).toBe("running");
+			expect(session.isStreaming).toBe(false);
+			const callsBeforeStop = fauxA.state.callCount;
+
+			const aborting = Promise.all([child.abort(reason), child.abort("user")]);
+			finish.open();
+			await aborting;
+			await delivered.opened;
+			if (reason !== "user") {
+				await waitFor(() => JSON.stringify(session.messages).includes("FOLLOW_UP"));
+			}
+			await Bun.sleep(20);
+			expect(fauxA.state.callCount).toBe(callsBeforeStop + (reason === "user" ? 0 : 1));
+			expect(session.isStreaming).toBe(false);
+			expect(child.snapshot?.details.abortReason).toBe(reason);
+			const completions = session.sessionManager
+				.getEntries()
+				.filter(
+					(entry) =>
+						entry.type === "custom_message" && entry.customType === SUBAGENT_COMPLETION_MESSAGE,
+				);
+			expect(completions).toHaveLength(1);
+			const completion = completions[0];
+			if (completion?.type !== "custom_message") throw new Error("missing completion");
+			expect(completion).toMatchObject({
+				display: true,
+				details: child.snapshot?.details,
+			});
+			expect(completion.content).toContain("aborted:");
+
+			if (reason === "user") {
+				expect(fauxA.getPendingResponseCount()).toBe(1);
+				fauxA.setResponses([
+					fauxAssistantMessage(
+						fauxToolCall("Agent", { subagent_type: "bg-runner", task: "Delegate again." }),
+					),
+					fauxAssistantMessage("PARENT_CONTINUES"),
+				]);
+				fauxB.setResponses([fauxAssistantMessage("NEXT_CHILD")]);
+				await session.prompt("Keep working.");
+				expect(lastToolResultText(session)).toBe("NEXT_CHILD");
+				expect(service.childrenOf(session.sessionId)).toHaveLength(2);
+			}
+		} finally {
+			finish.open();
+			unsubscribe();
+			await service.disposeChildrenOf(session.sessionId);
+			liveParents.delete(session.sessionId);
+			session.dispose();
 		}
-	} finally {
-		finish.open();
-		unsubscribe();
-		await service.disposeChildrenOf(session.sessionId);
-		liveParents.delete(session.sessionId);
-		session.dispose();
-	}
-});
+	},
+);
 
 test("a foreground error outcome surfaces as a tool error carrying the reason", async () => {
 	fauxA.setResponses([
@@ -1031,138 +1051,140 @@ test("retained completion waits behind a closed gate, then repeated flush accept
 	}
 });
 
-test.each([
-	"gap",
-	"rebound",
-])("real Pi reload retains completion settling %s and ignores stale unbind", async (timing) => {
-	const owner = createSubagents({ service });
-	const inGap = deferred();
-	const resume = deferred();
-	let bindings = 0;
-	const sends: number[] = [];
-	const session = await makeSession(undefined, service, (pi) => {
-		const binding = ++bindings;
-		owner.extension({
-			...pi,
-			sendMessage: (message, options) => {
-				sends.push(binding);
-				pi.sendMessage(message, options);
-			},
+test.each(["gap", "rebound"])(
+	"real Pi reload retains completion settling %s and ignores stale unbind",
+	async (timing) => {
+		const owner = createSubagents({ service });
+		const inGap = deferred();
+		const resume = deferred();
+		let bindings = 0;
+		const sends: number[] = [];
+		const session = await makeSession(undefined, service, (pi) => {
+			const binding = ++bindings;
+			owner.extension({
+				...pi,
+				sendMessage: (message, options) => {
+					sends.push(binding);
+					pi.sendMessage(message, options);
+				},
+			});
+			pi.on("session_shutdown", async (event) => {
+				if (event.reason !== "reload") return;
+				inGap.resolve();
+				await resume.promise;
+			});
 		});
-		pi.on("session_shutdown", async (event) => {
-			if (event.reason !== "reload") return;
-			inGap.resolve();
-			await resume.promise;
-		});
-	});
-	const oldRunner = session.extensionRunner;
-	const finish = await launchDetached(session);
-	const reloading = session.reload();
-	try {
-		await inGap.promise;
-		if (timing === "gap") {
+		const oldRunner = session.extensionRunner;
+		const finish = await launchDetached(session);
+		const reloading = session.reload();
+		try {
+			await inGap.promise;
+			if (timing === "gap") {
+				finish.resolve();
+				await waitFor(
+					() => service.childrenOf(session.sessionId)[0]?.snapshot?.status === "completed",
+				);
+				owner.flushCompletions();
+				expect(completions(session)).toHaveLength(0);
+				expect(sends).toEqual([]);
+			}
+			resume.resolve();
+			await reloading;
+			await oldRunner.emit({ type: "session_shutdown", reason: "reload" });
+			finish.resolve();
+			await waitFor(() => !session.isStreaming && completions(session).length === 1);
+			owner.flushCompletions();
+			expect(sends).toEqual([2]);
+			expect(service.childrenOf(session.sessionId)).toHaveLength(1);
+			expect(session.getAllTools().filter((tool) => tool.name === "Agent")).toHaveLength(1);
+		} finally {
+			resume.resolve();
+			finish.resolve();
+			await reloading;
+			owner.dispose();
+			await service.disposeChildrenOf(session.sessionId);
+			session.dispose();
+		}
+	},
+);
+
+test.each(["dispose", "quit"])(
+	"permanent %s clears pending and future outcomes and cannot rebind open",
+	async (close) => {
+		let allowed = false;
+		const owner = createSubagents({ service, canDeliverCompletion: () => allowed });
+		const session = await makeSession(undefined, service, owner.extension);
+		const first = await launchDetached(session);
+		first.resolve();
+		await waitFor(() => service.childrenOf(session.sessionId)[0]?.snapshot?.status === "completed");
+		const second = await launchDetached(session);
+		try {
+			if (close === "dispose") owner.dispose();
+			else await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+			allowed = true;
+			await session.reload();
+			second.resolve();
+			await waitFor(() =>
+				service
+					.childrenOf(session.sessionId)
+					.every((child) => child.snapshot?.status === "completed"),
+			);
+			owner.flushCompletions();
+			expect(completions(session)).toHaveLength(0);
+			expect(session.isStreaming).toBe(false);
+		} finally {
+			second.resolve();
+			owner.dispose();
+			await service.disposeChildrenOf(session.sessionId);
+			session.dispose();
+		}
+	},
+);
+
+test.each([false, true])(
+	"sync send failure restores its claim unless disposed (dispose: %s), reentrance never duplicates",
+	async (disposeOnFailure) => {
+		let allowed = false;
+		let attempts = 0;
+		const owner = createSubagents({ service, canDeliverCompletion: () => allowed });
+		const session = await makeSession(undefined, service, (pi) =>
+			owner.extension({
+				...pi,
+				sendMessage(message, options) {
+					attempts++;
+					owner.flushCompletions();
+					if (attempts === 1) {
+						if (disposeOnFailure) owner.dispose();
+						throw new Error("synchronous rejection");
+					}
+					pi.sendMessage(message, options);
+					owner.flushCompletions();
+				},
+			}),
+		);
+		const finish = await launchDetached(session);
+		try {
 			finish.resolve();
 			await waitFor(
 				() => service.childrenOf(session.sessionId)[0]?.snapshot?.status === "completed",
 			);
+			allowed = true;
 			owner.flushCompletions();
+			expect(attempts).toBe(1);
 			expect(completions(session)).toHaveLength(0);
-			expect(sends).toEqual([]);
+			owner.flushCompletions();
+			owner.flushCompletions();
+			await waitFor(() => !session.isStreaming);
+			expect(attempts).toBe(disposeOnFailure ? 1 : 2);
+			expect(completions(session)).toHaveLength(disposeOnFailure ? 0 : 1);
+		} finally {
+			finish.resolve();
+			owner.dispose();
+			await service.disposeChildrenOf(session.sessionId);
+			session.dispose();
 		}
-		resume.resolve();
-		await reloading;
-		await oldRunner.emit({ type: "session_shutdown", reason: "reload" });
-		finish.resolve();
-		await waitFor(() => !session.isStreaming && completions(session).length === 1);
-		owner.flushCompletions();
-		expect(sends).toEqual([2]);
-		expect(service.childrenOf(session.sessionId)).toHaveLength(1);
-		expect(session.getAllTools().filter((tool) => tool.name === "Agent")).toHaveLength(1);
-	} finally {
-		resume.resolve();
-		finish.resolve();
-		await reloading;
-		owner.dispose();
-		await service.disposeChildrenOf(session.sessionId);
-		session.dispose();
-	}
-});
-
-test.each([
-	"dispose",
-	"quit",
-])("permanent %s clears pending and future outcomes and cannot rebind open", async (close) => {
-	let allowed = false;
-	const owner = createSubagents({ service, canDeliverCompletion: () => allowed });
-	const session = await makeSession(undefined, service, owner.extension);
-	const first = await launchDetached(session);
-	first.resolve();
-	await waitFor(() => service.childrenOf(session.sessionId)[0]?.snapshot?.status === "completed");
-	const second = await launchDetached(session);
-	try {
-		if (close === "dispose") owner.dispose();
-		else await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
-		allowed = true;
-		await session.reload();
-		second.resolve();
-		await waitFor(() =>
-			service
-				.childrenOf(session.sessionId)
-				.every((child) => child.snapshot?.status === "completed"),
-		);
-		owner.flushCompletions();
-		expect(completions(session)).toHaveLength(0);
-		expect(session.isStreaming).toBe(false);
-	} finally {
-		second.resolve();
-		owner.dispose();
-		await service.disposeChildrenOf(session.sessionId);
-		session.dispose();
-	}
-});
-
-test.each([
-	false,
-	true,
-])("sync send failure restores its claim unless disposed (dispose: %s), reentrance never duplicates", async (disposeOnFailure) => {
-	let allowed = false;
-	let attempts = 0;
-	const owner = createSubagents({ service, canDeliverCompletion: () => allowed });
-	const session = await makeSession(undefined, service, (pi) =>
-		owner.extension({
-			...pi,
-			sendMessage(message, options) {
-				attempts++;
-				owner.flushCompletions();
-				if (attempts === 1) {
-					if (disposeOnFailure) owner.dispose();
-					throw new Error("synchronous rejection");
-				}
-				pi.sendMessage(message, options);
-				owner.flushCompletions();
-			},
-		}),
-	);
-	const finish = await launchDetached(session);
-	try {
-		finish.resolve();
-		await waitFor(() => service.childrenOf(session.sessionId)[0]?.snapshot?.status === "completed");
-		allowed = true;
-		owner.flushCompletions();
-		expect(attempts).toBe(1);
-		expect(completions(session)).toHaveLength(0);
-		owner.flushCompletions();
-		owner.flushCompletions();
-		await waitFor(() => !session.isStreaming);
-		expect(attempts).toBe(disposeOnFailure ? 1 : 2);
-		expect(completions(session)).toHaveLength(disposeOnFailure ? 0 : 1);
-	} finally {
-		finish.resolve();
-		owner.dispose();
-		await service.disposeChildrenOf(session.sessionId);
-		session.dispose();
-	}
-});
+	},
+);
 
 test.each([
 	["default factory shutdown", "default", false],
@@ -1240,5 +1262,580 @@ test("a previous live runner's reload shutdown cannot unbind a newer sender for 
 		await service.disposeChildrenOf(first.sessionId);
 		first.dispose();
 		rebound.dispose();
+	}
+});
+
+function macrotask(): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function lastChild(session: AgentSession) {
+	const child = service.childrenOf(session.sessionId).at(-1);
+	if (!child) throw new Error("no child spawned");
+	return child;
+}
+
+async function childHeld(session: AgentSession, count = 1) {
+	await waitFor(() => {
+		const children = service.childrenOf(session.sessionId);
+		return (
+			children.length >= count && children.every((child) => child.snapshot?.status === "completed")
+		);
+	});
+	await macrotask();
+}
+
+function deliveries(session: AgentSession) {
+	return session.sessionManager
+		.getEntries()
+		.flatMap((entry) =>
+			entry.type === "custom_message" && entry.customType === SUBAGENT_COMPLETION_MESSAGE
+				? [(entry.details as { delivery?: string }).delivery]
+				: [],
+		);
+}
+
+function countSettles(session: AgentSession) {
+	const counter = { settles: 0 };
+	session.subscribe((event) => {
+		if (event.type === "agent_settled") counter.settles++;
+	});
+	return counter;
+}
+
+function requestText(context: { messages: unknown[] }): string {
+	return JSON.stringify(context.messages);
+}
+
+function background(task: string) {
+	return fauxAssistantMessage(
+		fauxToolCall("Agent", { subagent_type: "bg-runner", task, run_in_background: true }),
+	);
+}
+
+async function closeSession(session: AgentSession) {
+	await service.disposeChildrenOf(session.sessionId);
+	liveParents.delete(session.sessionId);
+	session.dispose();
+}
+
+test("a detached result the parent already pulled mid-run is never delivered again", async () => {
+	const session = await makeSession();
+	try {
+		fauxB.setResponses([fauxAssistantMessage("BG_RESULT")]);
+		fauxA.setResponses([
+			background("Job."),
+			async () => {
+				await childHeld(session);
+				return fauxAssistantMessage(
+					fauxToolCall("get_subagent_result", { session_id: lastChild(session).sessionId }),
+				);
+			},
+			fauxAssistantMessage("DONE"),
+			fauxAssistantMessage("ALREADY_HANDLED"),
+		]);
+		const before = fauxA.state.callCount;
+		await session.prompt("Delegate in the background, keep working, pull the result.");
+		await macrotask();
+		expect(completions(session)).toHaveLength(0);
+		expect(fauxA.state.callCount - before).toBe(3);
+		expect(JSON.stringify(session.messages)).not.toContain("ALREADY_HANDLED");
+	} finally {
+		await closeSession(session);
+	}
+});
+
+test("a result pulled before Stop never surfaces after the next, unrelated prompt", async () => {
+	const session = await makeSession();
+	const parked = deferred();
+	try {
+		fauxB.setResponses([fauxAssistantMessage("BG_RESULT")]);
+		fauxA.setResponses([
+			background("Job."),
+			async () => {
+				await childHeld(session);
+				return fauxAssistantMessage(
+					fauxToolCall("get_subagent_result", { session_id: lastChild(session).sessionId }),
+				);
+			},
+			async (_context, options) => {
+				parked.resolve();
+				await new Promise((resolve) =>
+					options?.signal?.addEventListener("abort", resolve, { once: true }),
+				);
+				return fauxAssistantMessage("ABORTED");
+			},
+		]);
+		const run = session.prompt("Delegate, pull, then get stopped.");
+		await parked.promise;
+		await session.abort();
+		await run;
+		await macrotask();
+		fauxA.setResponses([fauxAssistantMessage("ANSWER"), fauxAssistantMessage("ALREADY_HANDLED")]);
+		await session.prompt("An unrelated question.");
+		await macrotask();
+		expect(completions(session)).toHaveLength(0);
+		expect(JSON.stringify(session.messages)).not.toContain("ALREADY_HANDLED");
+	} finally {
+		await closeSession(session);
+	}
+});
+
+test("a result finishing during a tool turn reaches the very next request of the same run", async () => {
+	const session = await makeSession();
+	const counter = countSettles(session);
+	let sawReport = false;
+	try {
+		fauxB.setResponses([fauxAssistantMessage("BG_RESULT")]);
+		fauxA.setResponses([
+			background("Job."),
+			async () => {
+				await childHeld(session);
+				return fauxAssistantMessage(fauxToolCall("read", { path: "missing.txt" }));
+			},
+			(context) => {
+				sawReport = requestText(context).includes("BG_RESULT");
+				return fauxAssistantMessage("DONE");
+			},
+		]);
+		const before = fauxA.state.callCount;
+		await session.prompt("Delegate and keep working.");
+		await macrotask();
+		expect(sawReport).toBe(true);
+		expect(fauxA.state.callCount - before).toBe(3);
+		expect(counter.settles).toBe(1);
+		expect(deliveries(session)).toEqual(["run"]);
+	} finally {
+		await closeSession(session);
+	}
+});
+
+test("a result finishing during the final turn continues the same run instead of a new one", async () => {
+	const session = await makeSession();
+	const counter = countSettles(session);
+	let sawReport = false;
+	try {
+		fauxB.setResponses([fauxAssistantMessage("BG_RESULT")]);
+		fauxA.setResponses([
+			background("Job."),
+			async () => {
+				await childHeld(session);
+				return fauxAssistantMessage("WORK_DONE");
+			},
+			(context) => {
+				sawReport = requestText(context).includes("BG_RESULT");
+				return fauxAssistantMessage("REACTED");
+			},
+		]);
+		await session.prompt("Delegate and finish.");
+		await macrotask();
+		expect(sawReport).toBe(true);
+		expect(counter.settles).toBe(1);
+		expect(deliveries(session)).toEqual(["run"]);
+		expect(JSON.stringify(session.messages.at(-1))).toContain("REACTED");
+	} finally {
+		await closeSession(session);
+	}
+});
+
+test("several results held at one boundary arrive together in one request", async () => {
+	const session = await makeSession();
+	const counter = countSettles(session);
+	let reports = 0;
+	try {
+		fauxB.setResponses([
+			fauxAssistantMessage("FIRST_RESULT"),
+			fauxAssistantMessage("SECOND_RESULT"),
+		]);
+		fauxA.setResponses([
+			fauxAssistantMessage([
+				fauxToolCall("Agent", {
+					subagent_type: "bg-runner",
+					task: "One.",
+					run_in_background: true,
+				}),
+				fauxToolCall("Agent", {
+					subagent_type: "bg-runner",
+					task: "Two.",
+					run_in_background: true,
+				}),
+			]),
+			async () => {
+				await childHeld(session, 2);
+				return fauxAssistantMessage("WORK_DONE");
+			},
+			(context) => {
+				const text = requestText(context);
+				reports = ["FIRST_RESULT", "SECOND_RESULT"].filter((r) => text.includes(r)).length;
+				return fauxAssistantMessage("REACTED_TO_BOTH");
+			},
+		]);
+		const before = fauxA.state.callCount;
+		await session.prompt("Fan out and finish.");
+		await macrotask();
+		expect(reports).toBe(2);
+		expect(fauxA.state.callCount - before).toBe(3);
+		expect(counter.settles).toBe(1);
+		expect(deliveries(session)).toEqual(["run", "run"]);
+	} finally {
+		await closeSession(session);
+	}
+});
+
+test("results released to an idle parent together wake exactly one run", async () => {
+	let allowed = false;
+	const owner = createSubagents({ service, canDeliverCompletion: () => allowed });
+	const session = await makeSession(undefined, service, owner.extension);
+	const counter = countSettles(session);
+	let reports = 0;
+	try {
+		fauxB.setResponses([
+			fauxAssistantMessage("FIRST_RESULT"),
+			fauxAssistantMessage("SECOND_RESULT"),
+		]);
+		fauxA.setResponses([
+			fauxAssistantMessage([
+				fauxToolCall("Agent", {
+					subagent_type: "bg-runner",
+					task: "One.",
+					run_in_background: true,
+				}),
+				fauxToolCall("Agent", {
+					subagent_type: "bg-runner",
+					task: "Two.",
+					run_in_background: true,
+				}),
+			]),
+			fauxAssistantMessage("STARTED_BOTH"),
+			(context) => {
+				const text = requestText(context);
+				reports = ["FIRST_RESULT", "SECOND_RESULT"].filter((r) => text.includes(r)).length;
+				return fauxAssistantMessage("WOKEN_ONCE");
+			},
+			fauxAssistantMessage("SECOND_WAKE"),
+		]);
+		await session.prompt("Fan out in the background.");
+		await childHeld(session, 2);
+		expect(completions(session)).toHaveLength(0);
+		allowed = true;
+		owner.flushCompletions();
+		await waitFor(() => !session.isStreaming && counter.settles === 2);
+		await macrotask();
+		expect(counter.settles).toBe(2);
+		expect(reports).toBe(2);
+		expect(deliveries(session)).toEqual(["wake", "run"]);
+		expect(JSON.stringify(session.messages)).not.toContain("SECOND_WAKE");
+	} finally {
+		owner.dispose();
+		await closeSession(session);
+	}
+});
+
+function heldOutcomes() {
+	const release = deferred();
+	const runs: Promise<RunOutcome>[] = [];
+	const held: DelegationService = {
+		...service,
+		async createChild(spec) {
+			const child = await service.createChild(spec);
+			const runQueued = child.runQueued;
+			child.runQueued = (task, options) => {
+				const run = runQueued(task, options).then(async (outcome) => {
+					await release.promise;
+					return outcome;
+				});
+				runs.push(run);
+				return run;
+			};
+			return child;
+		},
+	};
+	const delivered = async () => {
+		release.resolve();
+		await Promise.all(runs);
+	};
+	return { service: held, delivered };
+}
+
+test("a result landing before the post-settle flush wakes the idle parent in the same tick", async () => {
+	const outcomes = heldOutcomes();
+	const session = await makeSession(undefined, outcomes.service);
+	const counter = countSettles(session);
+	let sawReport = false;
+	try {
+		fauxB.setResponses([fauxAssistantMessage("BG_RESULT")]);
+		fauxA.setResponses([
+			background("Job."),
+			async () => {
+				await childHeld(session);
+				return fauxAssistantMessage("STARTED");
+			},
+			(context) => {
+				sawReport = requestText(context).includes("BG_RESULT");
+				return fauxAssistantMessage("WOKEN");
+			},
+		]);
+		await session.prompt("Delegate in the background.");
+		await outcomes.delivered();
+		expect(session.isStreaming).toBe(true);
+		await waitFor(() => !session.isStreaming && counter.settles === 2);
+		await macrotask();
+		expect(sawReport).toBe(true);
+		expect(counter.settles).toBe(2);
+		expect(deliveries(session)).toEqual(["wake"]);
+	} finally {
+		await closeSession(session);
+	}
+});
+
+test("results landing while Pi settles the idle parent wake it only once", async () => {
+	const outcomes = heldOutcomes();
+	let landWhileSettling = true;
+	const session = await makeSession(undefined, outcomes.service, (pi) => {
+		pi.on("agent_settled", async () => {
+			if (!landWhileSettling) return;
+			landWhileSettling = false;
+			await outcomes.delivered();
+		});
+		return createSubagentsExtension({ service: outcomes.service })(pi);
+	});
+	const counter = countSettles(session);
+	let reports = 0;
+	try {
+		fauxB.setResponses([
+			fauxAssistantMessage("FIRST_RESULT"),
+			fauxAssistantMessage("SECOND_RESULT"),
+		]);
+		fauxA.setResponses([
+			fauxAssistantMessage([
+				fauxToolCall("Agent", {
+					subagent_type: "bg-runner",
+					task: "One.",
+					run_in_background: true,
+				}),
+				fauxToolCall("Agent", {
+					subagent_type: "bg-runner",
+					task: "Two.",
+					run_in_background: true,
+				}),
+			]),
+			async () => {
+				await childHeld(session, 2);
+				return fauxAssistantMessage("STARTED_BOTH");
+			},
+			fauxAssistantMessage("WOKEN"),
+			(context) => {
+				const text = requestText(context);
+				reports = ["FIRST_RESULT", "SECOND_RESULT"].filter((r) => text.includes(r)).length;
+				return fauxAssistantMessage("REACTED");
+			},
+		]);
+		await session.prompt("Fan out in the background.");
+		await waitFor(() => !session.isStreaming && completions(session).length === 2);
+		await macrotask();
+		expect(counter.settles).toBe(2);
+		expect(deliveries(session)).toEqual(["wake", "run"]);
+		expect(reports).toBe(2);
+	} finally {
+		await closeSession(session);
+	}
+});
+
+test("a result held when the user stops the parent is shown without waking it", async () => {
+	const session = await makeSession();
+	const counter = countSettles(session);
+	const parked = deferred();
+	try {
+		fauxB.setResponses([fauxAssistantMessage("BG_RESULT")]);
+		fauxA.setResponses([
+			background("Job."),
+			async (_context, options) => {
+				await childHeld(session);
+				parked.resolve();
+				await new Promise((resolve) =>
+					options?.signal?.addEventListener("abort", resolve, { once: true }),
+				);
+				return fauxAssistantMessage("ABORTED");
+			},
+			fauxAssistantMessage("WOKE_AFTER_STOP"),
+		]);
+		const run = session.prompt("Delegate, then get stopped.");
+		await parked.promise;
+		const callsAtStop = fauxA.state.callCount;
+		await session.abort();
+		await run;
+		await waitFor(() => completions(session).length === 1);
+		await macrotask();
+		expect(deliveries(session)).toEqual(["appended"]);
+		expect(fauxA.state.callCount).toBe(callsAtStop);
+		expect(counter.settles).toBe(1);
+		expect(session.isStreaming).toBe(false);
+	} finally {
+		await closeSession(session);
+	}
+});
+
+test("results held when a provider error ends the run wake the parent once", async () => {
+	const session = await makeSession();
+	const counter = countSettles(session);
+	let sawReport = false;
+	try {
+		fauxB.setResponses([fauxAssistantMessage("BG_RESULT")]);
+		fauxA.setResponses([
+			background("Job."),
+			async () => {
+				await childHeld(session);
+				return fauxAssistantMessage("", { stopReason: "error", errorMessage: "provider exploded" });
+			},
+			(context) => {
+				sawReport = requestText(context).includes("BG_RESULT");
+				return fauxAssistantMessage("RECOVERED");
+			},
+		]);
+		await session.prompt("Delegate, then hit a provider error.");
+		await waitFor(() => !session.isStreaming && counter.settles >= 1);
+		await macrotask();
+		expect(sawReport).toBe(true);
+		expect(counter.settles).toBe(1);
+		expect(deliveries(session)).toEqual(["run"]);
+	} finally {
+		await closeSession(session);
+	}
+});
+
+test("get_subagent_result tells the model a run is still going and that its report will arrive", async () => {
+	const session = await makeSession();
+	const release = deferred();
+	try {
+		fauxB.setResponses([
+			async () => {
+				await release.promise;
+				return fauxAssistantMessage("LATE_RESULT");
+			},
+		]);
+		fauxA.setResponses([
+			background("Slow job."),
+			async () =>
+				fauxAssistantMessage(
+					fauxToolCall("get_subagent_result", { session_id: lastChild(session).sessionId }),
+				),
+			fauxAssistantMessage("WILL_WAIT"),
+		]);
+		await session.prompt("Delegate and check once.");
+		expect(lastToolResultText(session)).toContain("delivered to you automatically");
+	} finally {
+		release.resolve();
+		await closeSession(session);
+	}
+});
+
+test("a pulled aborted run states that it was aborted and why", async () => {
+	const session = await makeSession();
+	const started = deferred();
+	const finish = deferred();
+	try {
+		fauxB.setResponses([
+			async () => {
+				started.resolve();
+				await finish.promise;
+				return fauxAssistantMessage("PARTIAL");
+			},
+		]);
+		fauxA.setResponses([background("Interrupted job."), fauxAssistantMessage("ACK")]);
+		await session.prompt("Delegate.");
+		await started.promise;
+		const child = lastChild(session);
+		const aborting = child.abort("user");
+		finish.resolve();
+		await aborting;
+		await waitFor(() => completions(session).length === 1);
+		fauxA.setResponses([
+			fauxAssistantMessage(fauxToolCall("get_subagent_result", { session_id: child.sessionId })),
+			fauxAssistantMessage("READ_IT"),
+		]);
+		await session.prompt("Read the stopped run.");
+		expect(lastToolResultText(session)).toStartWith("Run aborted (user)");
+	} finally {
+		finish.resolve();
+		await closeSession(session);
+	}
+});
+
+test("a rejected waking send keeps the wake for the retry instead of losing it", async () => {
+	let allowed = false;
+	let rejectWake = true;
+	const owner = createSubagents({ service, canDeliverCompletion: () => allowed });
+	const session = await makeSession(undefined, service, (pi) =>
+		owner.extension({
+			...pi,
+			sendMessage(message, options) {
+				if (options?.triggerTurn && rejectWake) {
+					rejectWake = false;
+					throw new Error("runtime unavailable");
+				}
+				pi.sendMessage(message, options);
+			},
+		}),
+	);
+	const counter = countSettles(session);
+	const stoppedStarted = deferred();
+	const releaseStopped = deferred();
+	let sawNatural = false;
+	try {
+		const child = async (context: { messages: unknown[] }) => {
+			if (!requestText(context).includes("Stopped.")) return fauxAssistantMessage("NATURAL_RESULT");
+			stoppedStarted.resolve();
+			await releaseStopped.promise;
+			return fauxAssistantMessage("STOPPED_PARTIAL");
+		};
+		fauxB.setResponses([child, child]);
+		fauxA.setResponses([
+			fauxAssistantMessage([
+				fauxToolCall("Agent", {
+					subagent_type: "bg-runner",
+					task: "Natural.",
+					run_in_background: true,
+				}),
+				fauxToolCall("Agent", {
+					subagent_type: "bg-runner",
+					task: "Stopped.",
+					run_in_background: true,
+				}),
+			]),
+			fauxAssistantMessage("STARTED_BOTH"),
+			(context) => {
+				sawNatural = requestText(context).includes("NATURAL_RESULT");
+				return fauxAssistantMessage("WOKEN");
+			},
+		]);
+		await session.prompt("Fan out.");
+		await stoppedStarted.promise;
+		const stopped = service
+			.childrenOf(session.sessionId)
+			.find((child) => child.snapshot?.task === "Stopped.");
+		if (!stopped) throw new Error("missing stopped child");
+		const aborting = stopped.abort("user");
+		releaseStopped.resolve();
+		await aborting;
+		await waitFor(() =>
+			service
+				.childrenOf(session.sessionId)
+				.every(
+					(child) => child.snapshot?.status === "completed" || child.snapshot?.status === "aborted",
+				),
+		);
+		await macrotask();
+		allowed = true;
+		owner.flushCompletions();
+		expect(completions(session)).toHaveLength(1);
+		expect(counter.settles).toBe(1);
+		owner.flushCompletions();
+		await waitFor(() => !session.isStreaming && counter.settles === 2);
+		expect(sawNatural).toBe(true);
+		expect(completions(session)).toHaveLength(2);
+	} finally {
+		releaseStopped.resolve();
+		owner.dispose();
+		await closeSession(session);
 	}
 });

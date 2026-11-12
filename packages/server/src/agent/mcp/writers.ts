@@ -71,7 +71,7 @@ function editMcpServers(
 	const file = lstatOrNull(path);
 	const target = file?.isSymbolicLink() ? realpathSync(path) : path;
 	const mode = (target === path ? file : lstatSync(target))?.mode;
-	const text = file ? readFileSync(target, "utf8") : undefined;
+	const text = file ? readFileSync(target, "utf8").replace(/^\uFEFF/, "") : undefined;
 	const parsed: unknown = text === undefined ? {} : JSON.parse(text);
 	if (!isRecord(parsed) || (parsed.mcpServers !== undefined && !isRecord(parsed.mcpServers))) {
 		throw new Error(`${path}: expected an object with an "mcpServers" object`);

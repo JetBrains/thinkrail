@@ -1,12 +1,22 @@
 import type { AuthInteraction, AuthPrompt, AuthType } from "@earendil-works/pi-ai";
 import type { LoginFrame, LoginPush, LoginReply } from "@thinkrail/contracts";
-import { type PiRuntimeGeneration, piLoginOptions, usePiRuntime } from "../agent";
+import {
+	type PiRuntimeGeneration,
+	piLoginOptions,
+	recheckAnthropicExtraUsage,
+	usePiRuntime,
+} from "../agent";
 
 let publish: (push: LoginPush, generation?: PiRuntimeGeneration) => void = () => {};
 export function setLoginPublisher(
 	fn: (push: LoginPush, generation?: PiRuntimeGeneration) => void,
 ): void {
 	publish = fn;
+}
+
+let publishLogout: () => void = () => {};
+export function setLogoutPublisher(fn: () => void): void {
+	publishLogout = fn;
 }
 
 let seq = 0;
@@ -45,7 +55,23 @@ function frameForPrompt(prompt: AuthPrompt): LoginFrame {
 	};
 }
 
-export function startLogin(providerId: string, type: AuthType = "oauth"): { loginId: string } {
+const SUPERSEDED_LOGIN_MESSAGE = "Another sign-in for this provider replaced this one.";
+
+export function startLogin(
+	providerId: string,
+	type: AuthType = "oauth",
+	onSuperseded: (loginId: string) => void = () => {},
+): { loginId: string } {
+	for (const [id, pending] of [...logins]) {
+		if (pending.providerId !== providerId) continue;
+		onSuperseded(id);
+		cancelLogin(id);
+		publish({
+			loginId: id,
+			providerId,
+			frame: { kind: "error", message: SUPERSEDED_LOGIN_MESSAGE },
+		});
+	}
 	const loginId = nextId();
 	const entry: Pending = { providerId, abort: new AbortController(), settled: false };
 	logins.set(loginId, entry);
@@ -110,6 +136,7 @@ export function startLogin(providerId: string, type: AuthType = "oauth"): { logi
 			if (terminate(loginId)) {
 				publish({ loginId, providerId, frame: { kind: "success" } }, generation);
 			}
+			if (providerId === "anthropic") recheckAnthropicExtraUsage();
 		})
 		.catch((err: unknown) => {
 			if (terminate(loginId)) {
@@ -142,6 +169,7 @@ export function cancelAllLogins(): void {
 	for (const loginId of [...logins.keys()]) cancelLogin(loginId);
 }
 
-export function logoutProvider(providerId: string): Promise<void> {
-	return usePiRuntime((runtime) => runtime.logout(providerId));
+export async function logoutProvider(providerId: string): Promise<void> {
+	await usePiRuntime((runtime) => runtime.logout(providerId));
+	publishLogout();
 }

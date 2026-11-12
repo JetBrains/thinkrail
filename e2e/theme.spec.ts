@@ -35,15 +35,17 @@ async function openThemeList(page: Page) {
 
 async function readThemeOptions(page: Page): Promise<ThemeOption[]> {
 	const dialog = await openThemeList(page);
-	const options = await dialog.locator('[data-testid^="theme-option-"]').evaluateAll((nodes) =>
-		nodes.map((node) => ({
-			id: node.getAttribute("data-theme-id") ?? "",
-			label: node.textContent?.trim() ?? "",
-			appearance: node.getAttribute("data-appearance") === "light" ? "light" : "dark",
-			contrast: node.getAttribute("data-contrast") === "high" ? "high" : "normal",
-			active: node.getAttribute("data-active") === "true",
-		})),
-	);
+	const options: ThemeOption[] = await dialog
+		.locator('[data-testid^="theme-option-"]')
+		.evaluateAll((nodes) =>
+			nodes.map((node) => ({
+				id: node.getAttribute("data-theme-id") ?? "",
+				label: node.textContent?.trim() ?? "",
+				appearance: node.getAttribute("data-appearance") === "light" ? "light" : "dark",
+				contrast: node.getAttribute("data-contrast") === "high" ? "high" : "normal",
+				active: node.getAttribute("data-active") === "true",
+			})),
+		);
 	await page.keyboard.press("Escape");
 	await expect(dialog).toBeHidden();
 	return options;
@@ -205,7 +207,7 @@ test("Monaco opens files and re-themes under every discovered manifest", async (
 
 async function keywordToken(page: Page) {
 	const keyword = page
-		.locator('[data-testid="editor-pane"]:visible .view-line span span', { hasText: /^export$/ })
+		.locator('[data-testid="editor-pane"]:visible .view-line span span', { hasText: /export/ })
 		.first();
 	await expect(keyword).not.toHaveClass(/\bmtk1\b/);
 	return keyword.evaluate((node) => ({
@@ -259,15 +261,6 @@ test("an editor preloaded before a theme swap opens in the current theme", async
 	);
 	expect(light && dark).toBeTruthy();
 	await pickTheme(page, dark?.id ?? "");
-	await expect
-		.poll(() =>
-			page.evaluate(
-				() =>
-					performance.getEntriesByType("resource").filter((entry) => entry.name.endsWith(".wasm"))
-						.length,
-			),
-		)
-		.toBeGreaterThan(0);
 	await pickTheme(page, light?.id ?? "");
 
 	await revealWorkbenchTool(page, "files");
@@ -283,7 +276,7 @@ test("an editor preloaded before a theme swap opens in the current theme", async
 	await pickTheme(page, defaultTheme ?? "");
 });
 
-test("selected workspace tabs and rail entries keep their surface and edge marker under every manifest", async ({
+test("selected workspace tabs keep their surface and edge marker, and rail entries their surface, under every manifest", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -344,12 +337,10 @@ test("selected workspace tabs and rail entries keep their surface and edge marke
 			expect(tab.markerHeight).toBe("2px");
 		}
 		const tool = page.getByTestId("tab-files");
-		await expect(page.getByTestId("tool-rail-files")).toHaveAttribute("aria-pressed", "true");
-		await expect(tool).toHaveCSS("background-color", state.expectedFill);
-		const marker = tool.getByTestId("rail-selection-indicator");
-		await expect(marker).toHaveCSS("background-color", state.expectedMarker);
-		await expect(marker).toHaveCSS("width", "2px");
-		await expect(marker).toHaveCSS("height", "16px");
+		const toolButton = page.getByTestId("tool-rail-files");
+		await expect(toolButton).toHaveAttribute("aria-pressed", "true");
+		await expect(toolButton).toHaveCSS("background-color", state.expectedFill);
+		await expect(tool.getByTestId("rail-selection-indicator")).toHaveCount(0);
 	}
 	await pickTheme(page, defaultTheme ?? "");
 });

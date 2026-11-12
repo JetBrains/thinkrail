@@ -30,6 +30,17 @@ function attributeValues(content: string, attributes: string[]): string[] {
 	return [...content.matchAll(expression)].map((match) => match[1] ?? "");
 }
 
+export function relativeLinkTargets(pagePath: string, html: string): string[] {
+	const page = `https://thinkrail.ai/${pagePath.replace(/index\.html$/, "")}`;
+	return [
+		...new Set(
+			attributeValues(html, ["src", "href"])
+				.filter((value) => !/^(?:[a-z][a-z\d+.-]*:|\/|#)/i.test(value))
+				.map((value) => new URL(value, page).pathname),
+		),
+	];
+}
+
 function stylesheetUrls(content: string): Set<string> {
 	return new Set(
 		[...content.matchAll(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"/g)].map(
@@ -124,7 +135,7 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 	const islandPages = ["vibecoding", "agenticDevelopment", "agenticIde"] as const;
 	const staticPages = ["landing", "blog", "introducingThinkRail", "claim"] as const;
 	const installPages = [
-		{ name: "landing", html: pages.landing, expectedDownloads: 2 },
+		{ name: "landing", html: pages.landing, expectedDownloads: 1 },
 		{
 			name: "introducingThinkRail",
 			html: pages.introducingThinkRail,
@@ -204,14 +215,32 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 			}
 		}
 	}
-	if (!pages.landing.includes('data-install-picker="hero"')) {
-		failures.push("landing: hero install picker is missing");
+	if (!pages.landing.includes("data-hero-download")) {
+		failures.push("landing: hero download is missing");
+	}
+	if (!pages.landing.includes("Thanks for downloading ThinkRail!")) {
+		failures.push("landing: download thanks dialog is missing");
+	}
+	if (
+		!/class="hero-download-other"[^>]*href="#install"|href="#install"[^>]*class="hero-download-other"/.test(
+			pages.landing,
+		)
+	) {
+		failures.push("landing: other platforms link is missing");
+	}
+	if (!pages.landing.includes("data-cli-install")) {
+		failures.push("landing: install command tabs are missing");
 	}
 	for (const [path, html] of htmlPages) {
 		if (!/^blog\/[^/]+\/index\.html$/.test(path)) continue;
 		const picker = html.indexOf('data-install-picker="blog"');
 		if (picker < 0 || html.indexOf("Browser UI via command line", picker) < 0) {
 			failures.push(`${path}: blog install picker is missing`);
+		}
+		for (const url of relativeLinkTargets(path, html)) {
+			if (!(await outputPathExists(distDirectory, url))) {
+				failures.push(`${path}: missing local output for ${url}`);
+			}
 		}
 	}
 	if (!pages.landing.includes("Browser UI via command line")) {
@@ -285,6 +314,18 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		for (const id of new Set(duplicateIds)) failures.push(`${name} duplicate id: ${id}`);
 	}
 
+	for (const icon of ["favicon.ico", "apple-touch-icon.png"]) {
+		if (!(await Bun.file(`${distDirectory}/${icon}`).exists())) failures.push(`missing ${icon}`);
+	}
+	for (const name of ["landing", "blog"] as const) {
+		for (const required of [
+			'<link rel="icon" href="/favicon.ico" sizes="32x32">',
+			'<link rel="apple-touch-icon" href="/apple-touch-icon.png">',
+		]) {
+			if (!pages[name].includes(required)) failures.push(`${name}: missing ${required}`);
+		}
+	}
+
 	const robots = await Bun.file(`${distDirectory}/robots.txt`).text();
 	if (!robots.includes("Sitemap: https://thinkrail.ai/sitemap-index.xml")) {
 		failures.push("robots.txt missing production sitemap");
@@ -312,6 +353,11 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		"X-Frame-Options: DENY",
 	]) {
 		if (!headers.includes(required)) failures.push(`headers: missing ${required}`);
+	}
+
+	const redirects = await Bun.file(`${distDirectory}/_redirects`).text();
+	if (!/^\/discord https:\/\/discord\.gg\/\S+ 302$/m.test(redirects)) {
+		failures.push("redirects: missing /discord invite");
 	}
 
 	if (failures.length > 0) {

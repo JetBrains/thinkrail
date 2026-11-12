@@ -1,24 +1,19 @@
-import { createOnigurumaEngine } from "shiki/engine/oniguruma";
-import { createChatHighlighter } from "./highlighter";
+import { type ChatHighlight, createChatStreams } from "./chatHighlighter";
 
-export interface HighlightRequest {
-	id: number;
-	code: string;
-	lang: string;
-}
+export type HighlightRequest =
+	| { kind: "highlight"; id: number; key: string; code: string; lang: string }
+	| { kind: "release"; key: string };
 
-export interface HighlightReply {
-	id: number;
-	html: string | null;
-	failed?: boolean;
-}
+export type HighlightReply = { id: number; result: ChatHighlight };
 
-const highlight = createChatHighlighter(() => createOnigurumaEngine(import("shiki/wasm")));
+const streams = createChatStreams();
 
 self.onmessage = (event: MessageEvent<HighlightRequest>) => {
-	const { id, code, lang } = event.data;
-	void highlight(code, lang).then(
-		(html) => self.postMessage({ id, html } satisfies HighlightReply),
-		() => self.postMessage({ id, html: null, failed: true } satisfies HighlightReply),
-	);
+	const request = event.data;
+	if (request.kind === "release") {
+		streams.release(request.key);
+		return;
+	}
+	const { id, key, code, lang } = request;
+	self.postMessage({ id, result: streams.highlight(key, code, lang) } satisfies HighlightReply);
 };

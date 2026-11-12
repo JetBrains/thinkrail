@@ -3,7 +3,12 @@ import { useAppStore } from "./appStore";
 import { selectLoginBusy } from "./selectors";
 
 const reset = () =>
-	useAppStore.setState({ activeLogin: null, loginStarting: false, removedWorkspaceIds: {} });
+	useAppStore.setState({
+		activeLogin: null,
+		loginStarting: false,
+		unheldLoginFrame: null,
+		removedWorkspaceIds: {},
+	});
 beforeEach(reset);
 afterEach(reset);
 const state = () => useAppStore.getState();
@@ -97,8 +102,94 @@ test("a target removed during startup never opens a dialog or releases another s
 	expect(state().loginStarting).toBe(true);
 });
 
+test("another login's success invalidates provider status even while this client's own dialog keeps the slot", () => {
+	state().beginLogin("provider-1", "anthropic");
+	const version = state().providerStatusVersion;
+	state().applyLoginFrame({
+		loginId: "provider-2",
+		providerId: "openai",
+		frame: { kind: "success" },
+	});
+	expect(state().activeLogin).toMatchObject({ loginId: "provider-1", status: "active" });
+	expect(state().providerStatusVersion).toBe(version + 1);
+
+	state().applyLoginFrame({
+		loginId: "mcp-1",
+		providerId: "mcp:docs",
+		target: { kind: "mcp", workspaceId: "w", serverName: "docs" },
+		frame: { kind: "success" },
+	});
+	state().applyLoginFrame({
+		loginId: "provider-3",
+		providerId: "openai",
+		frame: { kind: "progress", message: "Waiting" },
+	});
+	expect(state().providerStatusVersion).toBe(version + 1);
+});
+
 test("a late start response never replaces another active modal", () => {
 	state().beginLogin("provider-1", "anthropic");
 	state().beginLogin("mcp-2", "mcp:docs", { kind: "mcp", workspaceId: "w", serverName: "docs" });
 	expect(state().activeLogin?.loginId).toBe("provider-1");
+});
+
+test("clearing by loginId never drops a newer login", () => {
+	state().beginLogin("provider-1", "anthropic");
+	state().clearLogin("provider-0");
+	expect(state().activeLogin?.loginId).toBe("provider-1");
+	state().clearLogin("provider-1");
+	expect(state().activeLogin).toBeNull();
+});
+
+test("the post-connect handoff clears only that provider's finished login", () => {
+	state().beginLogin("provider-1", "anthropic");
+	state().clearSettledLogin("anthropic");
+	expect(state().activeLogin?.status).toBe("active");
+	state().applyLoginFrame({
+		loginId: "provider-1",
+		providerId: "anthropic",
+		frame: { kind: "success" },
+	});
+	state().clearSettledLogin("openai");
+	expect(state().activeLogin?.status).toBe("success");
+	state().clearSettledLogin("anthropic");
+	expect(state().activeLogin).toBeNull();
+});
+
+test("a terminal frame for a login this client does not hold opens nothing until its start response claims it", () => {
+	state().reserveLogin();
+	state().applyLoginFrame({
+		loginId: "provider-1",
+		providerId: "anthropic",
+		frame: { kind: "error", message: "replaced" },
+	});
+	expect(state().activeLogin).toBeNull();
+	state().applyLoginFrame({
+		loginId: "provider-2",
+		providerId: "anthropic",
+		frame: { kind: "error", message: "failed fast" },
+	});
+	expect(state().activeLogin).toBeNull();
+	state().beginLogin("provider-2", "anthropic");
+	expect(state().activeLogin).toMatchObject({
+		loginId: "provider-2",
+		status: "error",
+		error: "failed fast",
+	});
+	expect(state().unheldLoginFrame).toBeNull();
+});
+
+test("the login method survives frames that create the dialog before the start response", () => {
+	state().reserveLogin();
+	state().applyLoginFrame({
+		loginId: "provider-2",
+		providerId: "anthropic",
+		frame: { kind: "select", message: "Select Anthropic login method:", options: [] },
+	});
+	expect(state().activeLogin?.method).toBeUndefined();
+	state().beginLogin("provider-2", "anthropic", undefined, "oauth");
+	expect(state().activeLogin).toMatchObject({ providerId: "anthropic", method: "oauth" });
+	state().clearLogin();
+	state().beginLogin("provider-3", "anthropic", undefined, "api_key");
+	expect(state().activeLogin?.method).toBe("api_key");
 });

@@ -1,15 +1,6 @@
-import { RiFullscreenLine as Fullscreen, RiArrowRightUpLine as OpenTab } from "@remixicon/react";
 import { strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
-import {
-	ResourcePreview,
-	type ResourcePreviewLayout,
-	useOptionalResourceHost,
-	useResourceScope,
-} from "@thinkrail/resource-renderers";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
-import { IconTooltip } from "@thinkrail/ui/tooltip";
-import { type ReactNode, useState } from "react";
+import { FramedResourcePreview } from "@thinkrail/resource-renderers";
 
 function FileLink({
 	path,
@@ -28,107 +19,6 @@ function FileLink({
 		>
 			{path}
 		</button>
-	);
-}
-
-function CardAction({
-	testid,
-	label,
-	onClick,
-	children,
-}: {
-	testid: string;
-	label: string;
-	onClick: () => void;
-	children: ReactNode;
-}) {
-	return (
-		<IconTooltip label={label}>
-			<button
-				type="button"
-				data-testid={testid}
-				aria-label={label}
-				onClick={onClick}
-				className="flex size-24 items-center justify-center rounded-sm text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-			>
-				{children}
-			</button>
-		</IconTooltip>
-	);
-}
-
-function FilePreview({ path, before }: { path: string; before: string | undefined }) {
-	const t = useT();
-	const host = useOptionalResourceHost();
-	const workspaceId = useResourceScope()?.workspaceId;
-	const [rendererId, setRendererId] = useState<string | undefined>(undefined);
-	const [layout, setLayout] = useState<ResourcePreviewLayout>("split");
-	const [viewState, setViewState] = useState<unknown>(undefined);
-	const [fullscreen, setFullscreen] = useState(false);
-	if (!host || !workspaceId) return null;
-	const openTab = () =>
-		before === undefined
-			? host.openFile(workspaceId, path, { keep: true })
-			: host.openComparison(workspaceId, before, path);
-	const openTabAction = (
-		<CardAction
-			testid="tool-visualize-open-tab"
-			label={t(before === undefined ? "visualize.file.openInTab" : "visualize.file.openDiffInTab")}
-			onClick={openTab}
-		>
-			<OpenTab className="size-14" />
-		</CardAction>
-	);
-	const shared = {
-		path,
-		before,
-		rendererId,
-		onRendererId: setRendererId,
-		viewState,
-		onViewState: setViewState,
-	};
-	return (
-		<>
-			<ResourcePreview
-				{...shared}
-				className="h-[480px] rounded-sm border border-border-default"
-				actions={
-					<>
-						{openTabAction}
-						<CardAction
-							testid="tool-visualize-fullscreen"
-							label={t("visualize.file.fullScreen")}
-							onClick={() => setFullscreen(true)}
-						>
-							<Fullscreen className="size-14" />
-						</CardAction>
-					</>
-				}
-			/>
-			<Dialog open={fullscreen} onOpenChange={setFullscreen}>
-				<DialogContent
-					data-testid="tool-visualize-fullscreen-dialog"
-					className="flex h-[90vh] w-[95vw] max-w-[95vw] flex-col gap-8"
-				>
-					<DialogHeader>
-						<DialogTitle>
-							{before === undefined
-								? path
-								: t("visualize.summary.fileComparison", { before, path })}
-						</DialogTitle>
-					</DialogHeader>
-					{fullscreen ? (
-						<ResourcePreview
-							{...shared}
-							layout={layout}
-							onLayout={setLayout}
-							className="min-h-0 flex-1 rounded-sm border border-border-default"
-							actions={openTabAction}
-						/>
-					) : null}
-				</DialogContent>
-			</Dialog>
-		</>
 	);
 }
 
@@ -157,7 +47,13 @@ export function FileCard({ args, status, onOpenFile }: ToolRenderProps) {
 				) : null}
 				<FileLink path={path} onOpenFile={onOpenFile} />
 			</div>
-			<FilePreview path={path} before={before} />
+			<FramedResourcePreview
+				path={path}
+				before={before}
+				title={before ? t("visualize.summary.fileComparison", { before, path }) : path}
+				frameClassName="h-[480px]"
+				testIdPrefix="tool-visualize"
+			/>
 		</div>
 	);
 }

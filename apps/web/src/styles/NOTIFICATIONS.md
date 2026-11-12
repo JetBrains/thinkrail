@@ -62,10 +62,10 @@ goes in a `mt-12` footer.
 
 ## Actions
 
-- Use `size="sm"` buttons. The primary action is `variant="outline"`. A secondary action next to it is
+- Use `size="m"` buttons. The primary action is `variant="outline"`. A secondary action next to it is
   `variant="ghost"`.
-- Never use a filled (`default`) or coloured button inside a notice. The border already carries the
-  severity, and a filled button would compete with the page's primary action.
+- Never use a filled (`primary`, `destructive`) or coloured button inside a notice. The border already
+  carries the severity, and a filled button would compete with the page's primary action.
 - A toast action is rendered through `ToastAction asChild` around a `Button`. That way Radix still closes
   the toast and announces the action's `altText`.
 

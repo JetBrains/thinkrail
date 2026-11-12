@@ -1,11 +1,7 @@
 ---
 import { desktopInstallerPlatforms, installCommands, windowsShellLabels } from "../installCommands";
 
-interface Props {
-	idPrefix: "hero" | "blog";
-}
-
-const { idPrefix } = Astro.props;
+const idPrefix = "blog";
 ---
 
 <div class:list={["install-picker", `install-picker-${idPrefix}`]} data-install-picker={idPrefix}>

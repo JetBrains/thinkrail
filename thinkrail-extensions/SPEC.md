@@ -19,31 +19,46 @@ host-level setting keyed on the descriptor `name`; the extension declares nothin
 install or discover a new extension is deliberately not designed.
 
 The first extension (`visualize`, [[module-ext-visualize]]) ships both halves; the host composes them from
-the two registry files below ([[submodule-server-extensions]], [[submodule-web-extensions]]). Install UX,
-marketplace, per-extension settings, a per-workspace on/off override, extension-contributed wire methods,
-panels and store contributions are explicit deferrals, not gaps. The on/off switch does not yet cover an
-extension's `skillPackages` — they keep staging and loading until an extension with skills exists.
+the two registry files below ([[submodule-server-extensions]], [[submodule-web-extensions]]). **Per-extension
+settings** exist for booleans: a descriptor declares `settings`, Settings → Extensions shows each as a nested
+switch under its extension (copy from locale keys; disabled while the extension is off; hidden for an older
+host), the value lives in `AppConfig.extensionSettings`, and a change reloads open chats when their current
+turn ends — ask-user-question's `richPreviews` was the first consumer. Install UX, marketplace, other setting
+types, a per-workspace on/off override, extension-contributed wire methods, panels and store contributions
+are explicit deferrals, not gaps. The on/off switch covers everything an
+extension contributes — its factories, its tools in live sessions, and the skills of its `skillPackages`
+— the way removing a package in pi drops its extensions and skills together.
 
 ## Shape — two entrypoints, no root barrel
 
-- `./server` — default export `defineServerExtension({ name, title?, description?, extensions, childExtensions?, skillPackages? })`
+- `./server` — default export `defineServerExtension({ name, title?, description?, extensions, sessionExtensions?, interactiveTools?, settings?, childExtensions?, skillPackages? })`
   (`title` / `description` are Settings display copy).
   `extensions` / `childExtensions` are pi `ExtensionFactory`s the host composes into every parent session /
   the curated child set, registered as named `InlineExtension`s so pi diagnostics keep an identity.
+  `sessionExtensions(session)` returns further parent factories built from one session's host services;
+  `interactiveTools` names the tools whose calls wait for the person and, optionally, how a late response
+  reads to the model ([[module-extension-api]]).
   `skillPackages` are **package specifiers** whose `pi.skills` directories the host stages — explicit module
   identity for the build step, never inferred from a function. Server-only; may value-import pi.
 - `./web` — default export `defineWebExtension({ name, toolRenderers })` keyed by tool name, **plus named
   exports** for components the host uses directly (visualize exports `MermaidView` for fenced mermaid in
   chat markdown). Browser-only; never value-imports pi; heavy renderers stay lazy.
 
-The `define*` objects and the named web exports are the whole contract. Future capabilities (wire methods,
-panels, settings) are added to these objects when a real consumer needs them.
+The `define*` objects and the named `./web` exports are the whole contract: named `./web` exports are
+components the host renders directly. `./server` has no named exports the host consumes — everything the
+host needs for a capability's lifecycle is declared on the descriptor (`interactiveTools`), so the core
+never imports an extension outside its two registry files and an extension can be deleted without touching
+the core.
+
+Future capabilities (wire methods, panels, settings) are added to these objects when a real consumer needs
+them.
 
 **The property fixed now so later extensions never force a rewrite — runtime/lifecycle ownership:**
 separate server and browser entrypoints; no imports of host internals; host-owned scoped state
 (per-session owners such as subagents and background commands, per-workspace services) is supplied through
 explicit seams and never created by an extension. Per-session owners therefore stay in the host's
-session manager, outside the static registry.
+session manager. An extension reaches their services only through `sessionExtensions(session)`, the
+explicit per-session seam. The descriptor itself stays static.
 
 ## Host UI SDK
 
@@ -68,8 +83,15 @@ What a `./web` half may import:
 - `@thinkrail/locales/react` ([[module-locales]]) — `useT` / `<T>` / `t` over the one shared i18next
   instance; an extension's UI text is keys in `packages/locales/en.json` under its own prefix
   (`visualize.*`), held by `check:i18n` like the app.
-- **Not in the SDK (yet):** the highlighted `CodeBlock` and the shiki highlighter — not dependency-closed
-  (highlighter → theme barrel). They move together with the generic CSS-variable shiki map when a second
+- **Voice input needs nothing from an extension.**
+  - The host's dictation layer ([[submodule-web-speech]]) serves every text input, textarea and
+    contenteditable an extension renders.
+  - It writes through a native `input` event, so a React-controlled field sees an ordinary `onChange`.
+  - A field that should hold its own submit button while listening can listen for the bubbling
+    `thinkrail:dictation` event (`detail.listening`) on the field.
+- **Not in the SDK (yet):** the highlighted `CodeBlock` and the chat highlighter — not dependency-closed
+  (highlighter → theme barrel). They move together with the generic CSS-variable Pierre token table
+  (`THINKRAIL_PIERRE_THEME`) when a second
   extension needs highlighting.
 
 ## Composition — the registry files
@@ -78,14 +100,17 @@ What a `./web` half may import:
   `@thinkrail/ext-*/server` and exports entries `{ specifier, extension }` — the descriptor **and its public
   server specifier as a string**. Static imports put the factories into the compiled CLI binary and the
   desktop bundle through the normal server graph, so the packagers generate no factory lists for them
-  (the generated lists remain only for the pi packages not yet wrapped as extensions). The resource
+  (the generated lists remain only for `pi-spec-graph`, `pi-thinkrail-workflow` and `pi-todos`, not yet
+  wrapped as extensions). The resource
   loader flattens `extensions` / `childExtensions` into named inline extensions in dev and bundled mode
   alike — one composition mode, no path-based dev loading. **Skill resolution is owner-scoped:** one
   shared resolver resolves the extension's entry from `specifier`, then each `skillPackages` manifest via
-  `createRequire(extensionEntry)` — build support stages the flattened roots, unbundled dev resolves at
-  runtime, the bundled runtime uses only the injected staged root. The launcher infrastructure (desktop's
-  bundled server runtime, `startDesktopHost`, `registerBundledRuntime`'s OAuth/Bedrock/trash registration,
-  the generated-module isolation of `pi-web-access`) is unchanged by this.
+  `createRequire(extensionEntry)` — unbundled dev resolves at runtime; build support stages an
+  extension's roots under `skills/extensions/<name>/` beside the host's under `skills/host/` (pi discovers
+  skills recursively), and the bundled runtime maps an extension to that folder of the injected staged root, so
+  **ownership survives flattening** and the switch can drop exactly that extension's skills. The launcher
+  infrastructure (desktop's bundled server runtime, `startDesktopHost`, `registerBundledRuntime`'s
+  OAuth/Bedrock/trash registration) is unchanged by this.
 - **Web:** `apps/web/src/extensions/registry.ts` exports the ordered web extensions;
   `registerWebExtensions()` feeds their `toolRenderers` into the chat tool registry. App-local tool
   registrations retain their side-effect imports; extension descriptors need none.
@@ -98,12 +123,14 @@ What a `./web` half may import:
 - **Public subpaths:** `apps/web` may import only `@thinkrail/ext-*/web`; `packages/server` only
   `@thinkrail/ext-*/server`.
 - Edges: `extension-api → contracts`; `ui → contracts`; `resource-renderers → contracts, ui`;
-  `ext-*/web → ui, extension-api, resource-renderers, contracts`;
+  `ext-*/web → ui, extension-api, resource-renderers, contracts` plus **type-only** imports of its own pi
+  package (the argument/result shapes belong to the package; the existing browser rule still rejects a
+  value import of any pi package);
   `ext-*/server → extension-api, its pi package`;
   `apps/web → contracts, ui, extension-api, resource-renderers, ext-*/web`;
   `packages/server → extension-api, ext-*/server` (and no longer directly on pi packages an extension owns).
 
-## Delivery template (every extension, every PR user-invisible)
+## Delivery template (every extension of ours, every PR user-invisible)
 
 1. **New pi package beside the old one**, published; old package and host wiring untouched.
 2. **Web half moves** into `thinkrail-extensions/<name>/web`, registered from the web registry; the server
@@ -114,9 +141,16 @@ What a `./web` half may import:
 PRs 1 and 2 are independent; PR 3 depends on both. A *new* extension without a web half renders through
 the default tool renderer until step 2 — never visualize, whose renderer exists before and after.
 
+**Wrapping a third-party pi package** has no step 1 (nothing of ours to publish). Its server half lands
+alone, composing the package unchanged plus any ThinkRail policy, while app-local renderers keep rendering
+the same tool names; the web half follows when its renderers' dependencies are in the SDK. A raw-`.ts`
+package that fails the repo's strict `tsc` is imported through a declaration-paired JavaScript re-export
+(`piWebAccess.js` + `.d.ts`): bundlers and Bun follow the `.js`, `tsc` stops at the declaration.
+
 ## Members
 
 | extension | pi capability | notes |
 | --- | --- | --- |
 | `visualize` | `@thinkrail/pi-visualize` | shipped. `./server` injects the **strict** mermaid validator (`mermaid` at the web renderer's catalog version, initialised through `linkedom` — required: DOMPurify needs a real `document` for flowchart/class/state/gantt/mindmap, verified under Bun). `./web` carries the diagram/comparison cards and exports `MermaidView`. The guarantee is syntax parsing, not SVG/layout success; the browser renderer keeps its fallback. |
-| `web-access` | third-party `pi-web-access` | planned next: wraps the npm package with the existing renderers and `headlessSearchPolicy`, removing the last packager special case. |
+| `ask-user-question` | `@thinkrail/pi-ask-user-question` | shipped; the first interactive tool. `./server` is session-only: `sessionExtensions` composes the portable tool with ThinkRail's wording and an asker over the host's interactive-tool mailbox (`awaitToolResponse`); `interactiveTools` declares `ask_user_question` with a `describeResponse` that renders a late answer in the package's own envelope wording. `./web` registers the questionnaire card `interactive`, fed entirely by the host through `ToolRenderProps.interaction`; the plan page renders it through the tool registry like the chat does. [[module-ext-ask-user-question]]. |
+| `web-access` | third-party `pi-web-access` | shipped (server half). `./server` composes the package unchanged for parents and children (the host keeps its headless-search policy, which must outlive the switch) and loads its `librarian` skill (`skillPackages`); the first extension with skills. Renderers stay app-local (`apps/web/src/chat/tools/web`) until `Markdown`, `Collapsible` and `ToolFileLink` join the SDK. [[module-ext-web-access]]. |

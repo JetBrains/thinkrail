@@ -1,5 +1,6 @@
 import { useT } from "@thinkrail/locales/react";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { useResourceEnvironment } from "../../host";
 import { HTML_VIEWPORT_LABELS, HTML_VIEWPORTS, type HtmlViewport } from "./viewport";
 
 export function HtmlPreviewNotice({
@@ -10,6 +11,7 @@ export function HtmlPreviewNotice({
 	onViewport: (viewport: HtmlViewport) => void;
 }) {
 	const t = useT();
+	if (useResourceEnvironment().compact) return null;
 	return (
 		<div className="flex shrink-0 flex-wrap items-center gap-8 border-border-default border-b bg-feedback-info-subtle px-12 py-4 tr-text-metadata text-feedback-info">
 			<span data-testid="html-disabled-notice" className="mr-auto">

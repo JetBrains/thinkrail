@@ -12,7 +12,9 @@ import {
 	errorText,
 	getSessionMessagesWithSkillBaseline,
 	getTransport,
+	wsErrorCode,
 } from "../transport";
+import { startProjectlessChat } from "./chatActions";
 
 function sendPrompt(sessionId: string, text: string): void {
 	useAppStore.getState().appendUserMessage(sessionId, text);
@@ -21,18 +23,37 @@ function sendPrompt(sessionId: string, text: string): void {
 		.catch((err) => useAppStore.getState().appendErrorTurn(sessionId, errorText(err)));
 }
 
+/** One chat = one folder: a second conversation in a chat without a project is a new chat, not a tab. */
+async function createSessionOrSiblingChat(
+	workspaceId: string,
+	prompt: string | undefined,
+): Promise<Awaited<ReturnType<typeof createSessionWithSkillBaseline>> | null> {
+	try {
+		return await createSessionWithSkillBaseline({ workspaceId });
+	} catch (err) {
+		if (wsErrorCode(err) !== "CHAT_HAS_SESSION") throw err;
+		await startProjectlessChat(prompt ? { text: prompt } : {});
+		return null;
+	}
+}
+
 export async function startChatInTab(
 	workspaceId: string,
-	preferredGroupId?: string,
-	prompt?: string,
+	{
+		preferredGroupId,
+		prompt,
+		draft,
+	}: { preferredGroupId?: string; prompt?: string; draft?: string } = {},
 ): Promise<void> {
 	const navigation = useAppStore.getState().beginCenterNavigation(workspaceId, preferredGroupId);
 	useAppStore.getState().beginChatStart(workspaceId);
 	try {
+		const created = await createSessionOrSiblingChat(workspaceId, prompt);
+		if (!created) return;
 		const {
 			result: { sessionId, model, thinkingLevel },
 			syncedTick,
-		} = await createSessionWithSkillBaseline({ workspaceId });
+		} = created;
 		const store = useAppStore.getState();
 		store.openChatSession(
 			workspaceId,
@@ -43,6 +64,7 @@ export async function startChatInTab(
 			layoutOpenOptionsForNavigation(store, workspaceId, navigation),
 		);
 		if (prompt) sendPrompt(sessionId, prompt);
+		else if (draft) store.setChatDraft(sessionId, draft);
 	} catch {
 		const state = useAppStore.getState();
 		if (
@@ -151,7 +173,7 @@ export async function promptWorkspaceChat(
 	sessionId: string | null,
 	text: string,
 ): Promise<void> {
-	if (!sessionId) return startChatInTab(workspaceId, undefined, text);
+	if (!sessionId) return startChatInTab(workspaceId, { prompt: text });
 	await openChatInTab(workspaceId, sessionId);
 	const runtime = useAppStore.getState().sessions[sessionId];
 	if (!runtime) return;

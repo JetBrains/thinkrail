@@ -6,16 +6,26 @@ import {
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
+import { IconButton, withIconClass } from "@thinkrail/ui/button";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { menuItemClass } from "@thinkrail/ui/menu-styles";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import { useNow } from "../components/useNow";
-import { chatName, relativeTime } from "../lib";
+import { chatLabel, relativeTime } from "../lib";
 import { openChatInTab } from "../panels/openChat";
-import { type ClosedChat, toast, useAppStore } from "../store";
+import {
+	type ClosedChat,
+	selectChatFirstPrompt,
+	selectWorkspaceById,
+	toast,
+	useAppStore,
+} from "../store";
 import { errorText, getTransport } from "../transport";
+
+const StartingIcon = withIconClass(Loader2, "animate-spin motion-reduce:animate-none");
 
 export function WorkspaceChatHistory({
 	workspaceId,
@@ -34,19 +44,18 @@ export function WorkspaceChatHistory({
 	if (closed.length === 0) return null;
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
-			<IconTooltip label={t("shell.chatHistory.view")} wrapTrigger>
-				<PopoverTrigger
+			<PopoverTrigger asChild>
+				<IconButton
+					variant="ghost"
+					size="m"
+					icon={chatStarting ? StartingIcon : History}
+					label={t("shell.chatHistory.reopen")}
+					tooltip={t("shell.chatHistory.view")}
+					wrapTrigger
 					data-testid="chat-history"
-					aria-label={t("shell.chatHistory.reopen")}
-					className="flex w-panel-header-row shrink-0 items-center justify-center border-border-default border-l text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-				>
-					{chatStarting ? (
-						<Loader2 className="size-14 animate-spin motion-reduce:animate-none" />
-					) : (
-						<History className="size-14" />
-					)}
-				</PopoverTrigger>
-			</IconTooltip>
+					className="shrink-0 self-center"
+				/>
+			</PopoverTrigger>
 			<PopoverContent
 				align="end"
 				data-testid="chat-history-popover"
@@ -94,6 +103,13 @@ function ClosedChatRow({
 }) {
 	const t = useT();
 	const now = useNow();
+	const firstPrompt = useAppStore((state) =>
+		selectChatFirstPrompt(state, workspaceId, chat.sessionId),
+	);
+	const label = chatLabel(t, chat.title, firstPrompt);
+	const projectless = useAppStore(
+		(state) => selectWorkspaceById(state, workspaceId)?.kind === "chat",
+	);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const reopenButtonRef = useRef<HTMLButtonElement>(null);
 	const editStartTitleRef = useRef(chat.title);
@@ -130,6 +146,7 @@ function ClosedChatRow({
 
 	const onNameKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
 		event.stopPropagation();
+		if (isImeComposing(event.nativeEvent)) return;
 		if (event.key === "Enter") {
 			event.preventDefault();
 			restoreRowFocusRef.current = true;
@@ -178,7 +195,9 @@ function ClosedChatRow({
 					}}
 					className={cn(menuItemClass, "min-w-0 flex-1")}
 				>
-					<span className="flex-1 truncate">{chatName(t, chat.title)}</span>
+					<span className="flex-1 truncate" data-title-source={label.source} title={label.tooltip}>
+						{label.text}
+					</span>
 					<span className="shrink-0 tr-text-metadata text-text-muted">
 						{relativeTime(t, chat.closedAt, now)}
 					</span>
@@ -189,49 +208,50 @@ function ClosedChatRow({
 				editing ? (
 					<span aria-hidden className="w-24 shrink-0" />
 				) : (
-					<IconTooltip label={t("shell.chatHistory.renameChat")}>
-						<button
-							type="button"
-							data-testid="closed-chat-rename"
-							aria-label={t("shell.chatHistory.renameNamed", { title: chatName(t, chat.title) })}
-							onClick={() => {
-								editStartTitleRef.current = chat.title;
-								cancelNextBlurRef.current = false;
-								restoreRowFocusRef.current = false;
-								setEditing(true);
-							}}
-							className={cn(menuItemClass, "shrink-0 px-4 text-text-muted")}
-						>
-							<Pencil className="size-14" />
-						</button>
-					</IconTooltip>
+					<IconButton
+						variant="ghost"
+						size="m"
+						icon={Pencil}
+						label={t("shell.chatHistory.renameNamed", { title: label.text })}
+						tooltip={t("shell.chatHistory.renameChat")}
+						data-testid="closed-chat-rename"
+						onClick={() => {
+							editStartTitleRef.current = chat.title;
+							cancelNextBlurRef.current = false;
+							restoreRowFocusRef.current = false;
+							setEditing(true);
+						}}
+						className="shrink-0"
+					/>
 				)
 			) : null}
-			<IconTooltip label={t("shell.chatHistory.trashChat")}>
-				<button
-					type="button"
-					data-testid="closed-chat-delete"
-					aria-label={t("shell.chatHistory.trashNamed", { title: chatName(t, chat.title) })}
-					onClick={() => {
-						onDismiss();
-						void getTransport()
-							.request("session.delete", { workspaceId, sessionId: chat.sessionId })
-							.then(() => useAppStore.getState().deleteChat(workspaceId, chat.sessionId))
-							.catch((error) => {
-								const state = useAppStore.getState();
-								if (
-									!state.removedWorkspaceIds[workspaceId] &&
-									!state.deletedSessionsByWorkspace[workspaceId]?.[chat.sessionId]
-								) {
-									toast.error(errorText(error), t("shell.chatHistory.deleteFailed"));
-								}
-							});
-					}}
-					className={cn(menuItemClass, "shrink-0 px-4 text-text-muted focus:text-feedback-error")}
-				>
-					<Trash2 className="size-14" />
-				</button>
-			</IconTooltip>
+			{projectless ? null : (
+				<IconTooltip label={t("shell.chatHistory.trashChat")}>
+					<button
+						type="button"
+						data-testid="closed-chat-delete"
+						aria-label={t("shell.chatHistory.trashNamed", { title: label.text })}
+						onClick={() => {
+							onDismiss();
+							void getTransport()
+								.request("session.delete", { workspaceId, sessionId: chat.sessionId })
+								.then(() => useAppStore.getState().deleteChat(workspaceId, chat.sessionId))
+								.catch((error) => {
+									const state = useAppStore.getState();
+									if (
+										!state.removedWorkspaceIds[workspaceId] &&
+										!state.deletedSessionsByWorkspace[workspaceId]?.[chat.sessionId]
+									) {
+										toast.error(errorText(error), t("shell.chatHistory.deleteFailed"));
+									}
+								});
+						}}
+						className={cn(menuItemClass, "shrink-0 px-4 text-text-muted focus:text-feedback-error")}
+					>
+						<Trash2 className="size-14" />
+					</button>
+				</IconTooltip>
+			)}
 		</div>
 	);
 }

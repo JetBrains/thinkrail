@@ -1,5 +1,7 @@
 import {
 	RiCheckLine as Check,
+	RiCheckboxBlankLine as CheckboxBlank,
+	RiCheckboxFill as CheckboxChecked,
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
 	RiFileCopyLine as Copy,
@@ -15,6 +17,7 @@ import {
 	ReviewDraftContext,
 	rendererImplementationKey,
 } from "@thinkrail/resource-renderers";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -234,20 +237,19 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 				className={`${mode === "stacked" ? "sticky top-0 z-10" : ""} flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-8`}
 			>
 				{mode === "stacked" ? (
-					<button
-						type="button"
-						data-testid="changes-section-toggle"
-						aria-label={
+					<IconButton
+						size="s"
+						icon={collapsed ? ChevronRight : ChevronDown}
+						label={
 							collapsed
 								? t("changes.section.expandFile", { name: base })
 								: t("changes.section.collapseFile", { name: base })
 						}
+						data-testid="changes-section-toggle"
 						aria-expanded={!collapsed}
 						onClick={toggleCollapsed}
-						className="flex size-20 shrink-0 items-center justify-center rounded-sm text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-					>
-						{collapsed ? <ChevronRight className="size-16" /> : <ChevronDown className="size-16" />}
-					</button>
+						className="shrink-0"
+					/>
 				) : null}
 				<span
 					className={`w-16 shrink-0 text-center tr-text-metadata ${statusNameClass(change.status) || "text-text-muted"}`}
@@ -288,24 +290,23 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 							testid="changes-section-revert"
 							label={t("changes.section.revertFile")}
 							onClick={() => void hunkActions.revertFile()}
-						>
-							<Revert className="size-14" />
-						</HeaderIconButton>
+							icon={Revert}
+						/>
 					) : null}
 					<HeaderIconButton
 						testid="changes-section-open-tab"
 						label={t("changes.section.openOwnTab")}
 						onClick={openAsTab}
-					>
-						<OpenAsTab className="size-14" />
-					</HeaderIconButton>
+						icon={OpenAsTab}
+					/>
 					<DropdownMenu>
-						<DropdownMenuTrigger
-							data-testid="changes-section-menu"
-							aria-label={t("changes.section.actions", { path })}
-							className="flex size-24 items-center justify-center rounded-sm text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:bg-control-bg-selected"
-						>
-							<More className="size-14" />
+						<DropdownMenuTrigger asChild>
+							<IconButton
+								icon={More}
+								label={t("changes.section.actions", { path })}
+								data-testid="changes-section-menu"
+								wrapTrigger
+							/>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end">
 							<DropdownMenuItem onSelect={openAsTab}>
@@ -332,24 +333,17 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 							</DropdownMenuItem>
 						</DropdownMenuContent>
 					</DropdownMenu>
-					<button
-						type="button"
+					<Button
+						variant="ghost"
+						size="m"
+						iconLeft={viewed ? CheckboxChecked : CheckboxBlank}
+						selected={viewed}
 						data-testid="changes-section-viewed"
 						aria-pressed={viewed}
 						onClick={onToggleViewed}
-						className="flex h-24 items-center gap-4 rounded-sm px-8 tr-text-metadata text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 					>
-						<span
-							className={`flex size-14 items-center justify-center rounded-xs border ${
-								viewed
-									? "border-primary bg-primary text-text-on-primary"
-									: "border-control-border-active"
-							}`}
-						>
-							{viewed ? <Check className="size-10" /> : null}
-						</span>
 						{t("changes.section.viewed")}
-					</button>
+					</Button>
 				</span>
 			</div>
 			{!bodyVisible ? (

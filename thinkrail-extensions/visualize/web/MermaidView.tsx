@@ -1,6 +1,8 @@
 import { RiFullscreenLine as Maximize2 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
+import { fontsLoaded, resolveFont, watchFont } from "@thinkrail/ui/fonts";
 import { onThemeSwap } from "@thinkrail/ui/theme";
 import { type ReactNode, useEffect, useState } from "react";
 import { renderMermaid } from "./mermaid";
@@ -22,24 +24,32 @@ export function MermaidView({
 
 	useEffect(() => {
 		let cancelled = false;
+		let generation = 0;
 		const run = () => {
-			renderMermaid(source).then((res) => {
-				if (cancelled) return;
-				if (res.svg !== undefined) {
-					setSvg(res.svg);
-					setError(null);
-				} else {
-					setError(res.error ?? "");
-				}
-			});
+			generation = generation + 1;
+			const current = generation;
+			const stale = () => cancelled || current !== generation;
+			void fontsLoaded(resolveFont("tr-code-block"))
+				.then(() => (stale() ? null : renderMermaid(source)))
+				.then((res) => {
+					if (res === null || stale()) return;
+					if (res.svg !== undefined) {
+						setSvg(res.svg);
+						setError(null);
+					} else {
+						setError(res.error ?? "");
+					}
+				});
 		};
 		setSvg(null);
 		setError(null);
 		run();
 		const stopThemeWatch = onThemeSwap(run);
+		const stopFontsWatch = watchFont("tr-code-block", ["family"], run);
 		return () => {
 			cancelled = true;
 			stopThemeWatch();
+			stopFontsWatch();
 		};
 	}, [source]);
 
@@ -71,20 +81,19 @@ export function MermaidView({
 				className="overflow-auto [&_svg]:h-auto [&_svg]:max-w-full"
 				dangerouslySetInnerHTML={{ __html: svg }}
 			/>
-			<button
-				type="button"
+			<IconButton
+				icon={Maximize2}
+				label={t("visualize.mermaid.fullScreenLabel")}
+				tooltip={t("visualize.mermaid.fullScreen")}
+				variant="outline"
 				data-testid="mermaid-fullscreen"
-				aria-label={t("visualize.mermaid.fullScreenLabel")}
-				title={t("visualize.mermaid.fullScreen")}
 				onClick={() => setOpen(true)}
-				className="absolute top-4 right-4 rounded-sm border border-border-default bg-container-elevated-bg p-4 text-text-muted transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-			>
-				<Maximize2 className="size-14" />
-			</button>
+				className="absolute top-4 right-4"
+			/>
 			<Dialog open={open} onOpenChange={setOpen}>
 				<DialogContent
 					data-testid="mermaid-fullscreen-dialog"
-					className="flex h-[90vh] w-[95vw] max-w-[95vw] flex-col gap-8"
+					className="h-[90vh] w-[95vw] max-w-[95vw] gap-8"
 				>
 					<DialogHeader>
 						<DialogTitle>{title || t("visualize.mermaid.dialogTitle")}</DialogTitle>

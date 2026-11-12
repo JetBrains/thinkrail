@@ -1,5 +1,6 @@
 import { RiSendPlaneLine as Send } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
 import { useMemo, useState } from "react";
 import { useAppStore } from "../store";
 import { allDraftIds, fileDraftIds } from "./reviewModel";
@@ -80,15 +81,16 @@ function SendButtonBase({
 			.finally(() => setBusy(false));
 	};
 	return (
-		<button
-			type="button"
+		<Button
+			variant="primary"
+			size="m"
+			iconLeft={Send}
 			data-testid={testid}
-			disabled={busy}
+			loading={busy}
 			onClick={() => void run()}
-			className="flex h-panel-header-control shrink-0 items-center gap-4 rounded-sm bg-control-primary-bg px-8 text-control-primary-text tr-text-action transition-colors hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
+			className="shrink-0"
 		>
-			<Send className="size-12" />
 			{label}
-		</button>
+		</Button>
 	);
 }

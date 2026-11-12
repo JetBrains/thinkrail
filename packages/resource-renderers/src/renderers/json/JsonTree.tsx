@@ -3,7 +3,7 @@ import {
 	RiArrowRightSLine as ChevronRight,
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { IconButton } from "@thinkrail/ui/button";
 import { type ReactNode, useEffect, useState } from "react";
 import type { ReviewThread } from "../../registry";
 import type { JsonDiffMark } from "./jsonDiff";
@@ -72,16 +72,13 @@ export function JsonTree({
 				}`}
 			>
 				{branch ? (
-					<Button
-						variant="ghost"
-						size="icon"
-						className="size-24 shrink-0"
-						aria-label={expanded ? t("viewer.json.collapseNode") : t("viewer.json.expandNode")}
+					<IconButton
+						icon={expanded ? ChevronDown : ChevronRight}
+						label={expanded ? t("viewer.json.collapseNode") : t("viewer.json.expandNode")}
+						className="shrink-0"
 						aria-expanded={expanded}
 						onClick={() => setExpanded((value) => !value)}
-					>
-						{expanded ? <ChevronDown className="size-16" /> : <ChevronRight className="size-16" />}
-					</Button>
+					/>
 				) : (
 					<span className="block size-24 shrink-0" />
 				)}

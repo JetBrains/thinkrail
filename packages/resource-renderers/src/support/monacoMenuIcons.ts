@@ -11,7 +11,7 @@ import {
 	RiScissorsLine as Scissors,
 } from "@remixicon/react";
 import { t } from "@thinkrail/locales/react";
-import type * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
+import type * as monaco from "monaco-editor/editor/editor.api.js";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 

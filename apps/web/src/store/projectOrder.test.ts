@@ -10,16 +10,17 @@ function project(id: string, lastOpened = 0): Project {
 	return { id, name: id, path: `/projects/${id}`, slug: id, lastOpened };
 }
 
-const projects = [project("a", 300), project("b", 200), project("c", 100)];
+const [a, b, c] = [project("a", 300), project("b", 200), project("c", 100)];
+const projects = [a, b, c];
 const orderedIds = () => selectOrderedProjects(useAppStore.getState()).map(({ id }) => id);
 
 test("without a preference the selector returns the original project array and order", () => {
-	expect(selectOrderedProjects({ projects, projectOrder: [] })).toBe(projects);
+	expect(selectOrderedProjects({ projects, projectOrder: [] })).toEqual(projects);
 });
 
 test("new unranked projects lead and preserve the saved projects' relative order", () => {
 	const state = { projects, projectOrder: ["c", "b"] };
-	expect(selectOrderedProjects(state)).toEqual([projects[0], projects[2], projects[1]]);
+	expect(selectOrderedProjects(state)).toEqual([a, c, b]);
 	expect(state.projects).toBe(projects);
 	expect(state.projectOrder).toEqual(["c", "b"]);
 });
@@ -27,7 +28,7 @@ test("new unranked projects lead and preserve the saved projects' relative order
 test("unknown and duplicate saved IDs do not create or duplicate rows", () => {
 	expect(
 		selectOrderedProjects({ projects, projectOrder: ["closed", "b", "b", "missing"] }),
-	).toEqual([projects[0], projects[2], projects[1]]);
+	).toEqual([a, c, b]);
 	expect(selectOrderedProjects({ projects: [], projectOrder: ["closed"] })).toEqual([]);
 });
 
@@ -61,12 +62,15 @@ test.each([
 	["b", "b", "after"],
 	["a", "b", "before"],
 	["b", "a", "after"],
-] as const)("invalid, self and adjacent moves are identity no-ops: %s %s %s", (id, targetId, placement) => {
-	useAppStore.setState({ projects, projectOrder: ["a", "closed", "b", "c"] });
-	const before = useAppStore.getState();
-	before.moveProject(id, targetId, placement);
-	expect(useAppStore.getState()).toBe(before);
-});
+] as const)(
+	"invalid, self and adjacent moves are identity no-ops: %s %s %s",
+	(id, targetId, placement) => {
+		useAppStore.setState({ projects, projectOrder: ["a", "closed", "b", "c"] });
+		const before = useAppStore.getState();
+		before.moveProject(id, targetId, placement);
+		expect(useAppStore.getState()).toBe(before);
+	},
+);
 
 test("an adjacent move does not create a preference when none was saved", () => {
 	useAppStore.setState({ projects });
@@ -133,7 +137,7 @@ test("closing and reopening restores a project's saved rank", () => {
 	store.applyProjectUpdated({ ...project("b", 200), closed: true });
 	expect(orderedIds()).toEqual(["a", "c"]);
 	expect(useAppStore.getState().projectOrder).toBe(preference);
-	store.applyProjectUpdated({ ...project("b", 900), closed: false });
+	store.applyProjectUpdated({ ...project("b", 900) });
 	expect(orderedIds()).toEqual(["b", "a", "c"]);
 	expect(useAppStore.getState().projectOrder).toBe(preference);
 });
@@ -146,7 +150,7 @@ test("reordering open projects preserves closed slots for subsequent reopen", ()
 	store.moveProject("c", "a", "before");
 	expect(useAppStore.getState().projectOrder).toEqual(["new", "b", "c", "closed", "a"]);
 	expect(orderedIds()).toEqual(["new", "c", "a"]);
-	store.applyProjectUpdated({ ...project("b", 900), closed: false });
-	store.applyProjectUpdated({ ...project("closed", 1000), closed: false });
+	store.applyProjectUpdated({ ...project("b", 900) });
+	store.applyProjectUpdated({ ...project("closed", 1000) });
 	expect(orderedIds()).toEqual(["new", "b", "c", "closed", "a"]);
 });

@@ -5,14 +5,16 @@
 	"type": "module",
 	"scripts": {
 		"dev": "astro dev",
-		"build": "astro check && bun run typecheck:functions && bun run build:functions && astro build && bun src/validateBuild.ts",
+		"build": "bun run typecheck && bun run build:functions && astro build && bun src/validateBuild.ts",
 		"build:functions": "bunx wrangler@4.124.0 pages functions build functions --project-directory . --outdir .wrangler/functions-build",
-		"typecheck": "astro check && bun run typecheck:functions",
+		"typecheck": "astro sync && tsc --noEmit --runExternalCode && bun run typecheck:functions && bun run typecheck:tests",
 		"typecheck:functions": "tsc --noEmit -p tsconfig.functions.json",
+		"typecheck:tests": "tsc --noEmit --runExternalCode -p tsconfig.test.json",
 		"test": "bun test",
 		"smoke:attribution": "bun src/attribution/localD1Smoke.ts",
 		"preview": "astro preview",
-		"verify:deployment": "bun src/verifyDeployment.ts"
+		"verify:deployment": "bun src/verifyDeployment.ts",
+		"favicons:generate": "bun scripts/generate-favicons.ts"
 	},
 	"dependencies": {
 		"@thinkrail/website-analytics": "workspace:*",
@@ -21,20 +23,22 @@
 		"react-dom": "catalog:"
 	},
 	"devDependencies": {
-		"@astrojs/check": "catalog:",
-		"@astrojs/markdown-satteri": "0.3.7",
-		"@astrojs/react": "6.0.4",
+		"@astrojs/markdown-satteri": "0.4.6",
+		"@astrojs/react": "7.1.1",
 		"@astrojs/rss": "4.0.19",
-		"@astrojs/sitemap": "3.7.3",
+		"@astrojs/sitemap": "3.7.4",
+		"@astrojs/ts-content-mapper": "0.2.0",
 		"@fontsource-variable/geist": "catalog:",
 		"@fontsource-variable/jetbrains-mono": "catalog:",
 		"@fontsource-variable/orbitron": "catalog:",
+		"@resvg/resvg-js": "catalog:",
 		"@tailwindcss/vite": "catalog:",
 		"@types/bun": "catalog:",
 		"@types/react": "catalog:",
 		"@types/react-dom": "catalog:",
 		"astro": "catalog:",
-		"sharp": "0.35.4",
+		"resedit": "catalog:",
+		"sharp": "0.35.5",
 		"tailwindcss": "catalog:",
 		"tw-animate-css": "1.4.0",
 		"typescript": "catalog:"

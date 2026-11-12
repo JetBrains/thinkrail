@@ -88,9 +88,10 @@ function validateOAuth(value: unknown): string | undefined {
 	) {
 		return "oauth.clientName must be a non-empty string";
 	}
-	if (value.clientRegistration !== undefined && value.clientRegistration !== "dcr") {
-		if (value.clientRegistration !== "cimd") {
-			return 'oauth.clientRegistration must be "dcr" or "cimd"';
+	const registration = value.clientRegistration;
+	if (registration !== undefined && registration !== "auto" && registration !== "dcr") {
+		if (registration !== "cimd") {
+			return 'oauth.clientRegistration must be "auto", "dcr", or "cimd"';
 		}
 		if (value.clientId !== undefined || value.clientName !== undefined) {
 			return 'oauth.clientRegistration "cimd" cannot be combined with oauth.clientId or oauth.clientName';
@@ -245,7 +246,7 @@ function readConfigFile(path: string, scope: McpConfigScope, state: LoadState): 
 	if (!existsSync(path)) return;
 	let parsed: unknown;
 	try {
-		parsed = JSON.parse(readFileSync(path, "utf8"));
+		parsed = JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, ""));
 	} catch (error) {
 		fileError(error instanceof Error ? error.message : String(error));
 		return;

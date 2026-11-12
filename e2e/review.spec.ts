@@ -5,6 +5,7 @@ import { type Browser, expect, type Locator, type Page, test } from "@playwright
 import {
 	createWorkspaceViaDialog,
 	openFixtureProject,
+	openPersistedChat,
 	revealWorkbenchTool,
 	worktreeRows,
 } from "./fixtures/app";
@@ -16,6 +17,7 @@ import {
 	pierreLineCenter,
 	selectPierreLine,
 } from "./fixtures/pierre";
+import { seedWorkspaceSession } from "./fixtures/sessions";
 
 const worktree = () => join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
 
@@ -135,6 +137,73 @@ async function persistedComments(page: Page): Promise<PersistedComment[]> {
 	const [snapshot] = await overWire(page, [{ method: "review.get", params: {} }]);
 	return (snapshot as { comments: PersistedComment[] }).comments;
 }
+
+test("sending a file review does not redirect its discussion to another open chat", async ({
+	page,
+}) => {
+	const sends: Record<string, unknown>[] = [];
+	let pinnedSession = "";
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		const server = ws.connectToServer();
+		ws.onMessage((message) => {
+			const frame = JSON.parse(String(message)) as {
+				id?: string;
+				method?: string;
+				params?: Record<string, unknown>;
+			};
+			if (frame.id && frame.method === "review.sendBatch" && frame.params) {
+				sends.push(frame.params);
+				ws.send(
+					JSON.stringify({
+						id: frame.id,
+						ok: true,
+						result: {
+							sessions: [
+								{
+									sessionId: frame.params.sessionId ?? pinnedSession,
+									model: null,
+									thinkingLevel: "medium",
+									reused: true,
+								},
+							],
+						},
+					}),
+				);
+				return;
+			}
+			server.send(message);
+		});
+		server.onMessage((message) => ws.send(message));
+	});
+	await openDiff(page);
+	pinnedSession = seedWorkspaceSession(worktree(), {
+		name: "Review script.ts",
+		messages: [{ role: "user", text: "Review script.ts", timestamp: 1_700_000_000_000 }],
+	}).id;
+	seedWorkspaceSession(worktree(), {
+		name: "Unrelated chat",
+		messages: [{ role: "user", text: "Work on another file", timestamp: 1_700_000_010_000 }],
+	});
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await openPersistedChat(page, "Review script.ts");
+	await openPersistedChat(page, "Unrelated chat");
+	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).dblclick();
+	await composeComment(page, "one = 1", "Earlier review comment");
+	await page.getByTestId("review-composer-save").click();
+	const [earlier] = await persistedComments(page);
+	if (!earlier) throw new Error("expected the earlier review comment");
+	markSentOnDisk(earlier.id, pinnedSession);
+	await composeComment(page, "two = 2", "Keep this in the file's review chat");
+	await page.getByTestId("review-composer-save").click();
+	await page.getByTestId("send-review-button").click();
+	await expect.poll(() => sends.length).toBe(1);
+	expect(sends[0]).not.toHaveProperty("sessionId");
+	await expect(
+		page.locator('[data-testid="editor-tab"][data-kind="chat"][data-active="true"]'),
+	).toContainText("Review script.ts");
+});
 
 test("selection → icon → inline composer → draft; the tab wears the violet Review flag", async ({
 	page,
@@ -1030,4 +1099,30 @@ test("opening a far-off base-side comment scrolls its card into view in the virt
 	).toContainText("FAR.txt");
 	await expect(card).toBeInViewport();
 	await expect(card).toContainText("Far-off base remark.");
+});
+
+test("Changed Markdown preview offers Source before the first review comment", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	writeFileSync(
+		join(worktree(), "README.md"),
+		"# sample-project\n\nReview this updated paragraph.\n",
+	);
+	await revealWorkbenchTool(page, "files");
+	await page.getByTestId("files-mode-changed").click();
+	await page.getByTestId("change-item").filter({ hasText: "README.md" }).dblclick();
+	await expect(page.getByTestId("rendered-diff")).toContainText("Review this updated paragraph.");
+	const hint = page.getByTestId("review-commenting-fallback");
+	await expect(hint).toContainText("To add a comment, switch to Source.");
+	await hint.getByRole("button", { name: "Comment in Source", exact: true }).click();
+	await expect(page.getByTestId("view-toggle-code")).toHaveAttribute("data-active", "true");
+	await expect(hint).toHaveCount(0);
+	await selectLine(page, "Review this updated paragraph.");
+	await expect(page.getByTestId("review-composer")).toBeVisible();
+	await page.getByTestId("review-composer-input").fill("Clarify this paragraph.");
+	await page.getByTestId("review-composer-save").click();
+	await expect(page.getByTestId("review-pending-badge")).toHaveText("1");
+	await page.getByTestId("view-toggle-markdown").click();
+	await expect(hint).toBeVisible();
+	await expect(page.getByTestId("review-unplaced-strip")).toContainText("Clarify this paragraph.");
 });

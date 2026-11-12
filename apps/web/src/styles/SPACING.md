@@ -25,15 +25,16 @@ styles/spacingUsage.test.ts    the adoption guard
 
 ## The scale
 
-`spacing.json` declares the steps **`0 · 2 · 4 · 8 · 12 · 16 · 24 · 32 · 40 · 64`**. The **step name IS
+`spacing.json` declares the steps **`0 · 2 · 4 · 6 · 8 · 12 · 16 · 24 · 32 · 40 · 64`**. The **step name IS
 its pixel value** — `"8": "8px"` — so an instruction that names a number maps to exactly one token and
 one family of utilities. `0` is the identity step (no spacing).
 
 The scale is an **intentionally defined primitive set, not an inventory of current usage**: a step may
 exist ahead of any consumer. `32`/`40`/`64` are reserved primitives with no rhythm call sites — they are
-canonical, not orphans, and are not removed for lack of use. Conversely, adding a step (a `6`, say) is a
-deliberate design decision, not a mechanical one — the audit found 6px used four ways, each resolved
-into an existing role rather than minting a new step.
+canonical, not orphans, and are not removed for lack of use. Conversely, adding a step is a deliberate design decision, not a mechanical one. `6` was added for
+one decided consumer — the icon↔text gap of the L button (`packages/ui` Button system: S 4 · M 4 · L 6,
+below the button's side padding except at S, where it equals it). The earlier audit's four unrelated 6px uses stay resolved into
+existing roles; a new 6px rhythm needs its own decision, not this step's existence.
 
 `spacing.json` is the authored source; no other authored source restates a canonical rhythm length. The
 generated output necessarily materializes those values as `--space-<n>` custom properties. They are read
@@ -102,7 +103,7 @@ The shared source scanner covers app source, `packages/ui`, and every `thinkrail
 - a spacing utility names a **canonical step** — `p-8`, `gap-4` — or a **declared rhythm role** —
   `p-panel-inset`: an `index.css` `--spacing-<role>: var(--<role>)` whose `tokens.css` value is
   `var(--space-<step>)`; the retired t-shirt aliases (`p-xs`), unknown alphabetic suffixes
-  (`p-bananas`), a sizing role used as rhythm (`p-panel-row`) and any off-scale number (`p-6`, `py-1`,
+  (`p-bananas`), a sizing role used as rhythm (`p-panel-row`) and any off-scale number (`p-10`, `py-1`,
   `gap-0.5`) are rejected; only prefix-appropriate Tailwind keywords such as `ml-auto`, `gap-px`, and
   `space-x-reverse` remain valid;
 - a length is **never a raw pixel value** at the call site (`py-[3px]`), and a step is **never re-spelled

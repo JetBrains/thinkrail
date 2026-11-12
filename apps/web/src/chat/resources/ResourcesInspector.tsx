@@ -1,18 +1,26 @@
 import {
 	RiAlertLine,
+	RiArrowDownSLine,
+	RiArrowRightSLine,
 	RiCloseLine,
 	RiErrorWarningLine,
 	RiInformationLine,
 	RiLoader4Line,
 	RiStopFill,
 } from "@remixicon/react";
-import type {
-	BackgroundCommandSummary,
-	McpServerResourceSummary,
-	SubagentResourceSummary,
+import {
+	type BackgroundCommandSummary,
+	type McpServerResourceSummary,
+	RESOURCE_HISTORY_PAGE_LIMIT,
+	type ResourceKind,
+	type ResourceTally,
+	resourceTallyTotal,
+	type SessionResourceHistory,
+	type SubagentResourceSummary,
+	tallyResources,
 } from "@thinkrail/contracts";
 import { type Translator, useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import { Dialog, DialogPanel, DialogTitle } from "@thinkrail/ui/dialog";
 import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, type ReactNode, useEffect, useRef } from "react";
@@ -26,10 +34,12 @@ import {
 	type Resource,
 	type ResourceActions,
 	ResourceRow,
+	type ResourcesStaleness,
 	resourceActivity,
 	resourceId,
 	resourceName,
 	resourceState,
+	StateIcon,
 	StateText,
 	sortLive,
 	sortSettled,
@@ -44,10 +54,17 @@ export interface ResourcesInspectorProps {
 	subagents: SubagentResourceSummary[];
 	finishedCommands: BackgroundCommandSummary[];
 	finishedSubagents: SubagentResourceSummary[];
+	history: SessionResourceHistory;
+	remaining?: Partial<Record<ResourceKind, number>>;
+	newIds?: ReadonlySet<string>;
+	expanded: Partial<Record<ResourceKind, boolean>>;
+	onExpandedChange: (kind: ResourceKind, expanded: boolean) => void;
+	onLoadMore?: (kind: ResourceKind) => void;
+	retained?: boolean;
 	now: number;
 	authoritative: boolean;
 	loading: boolean;
-	stale: boolean;
+	staleness: ResourcesStaleness | null;
 	error: string | null;
 	actions: ResourceActions;
 	selectedId: string | null;
@@ -66,12 +83,65 @@ export interface ResourcesInspectorProps {
 }
 
 const ESCAPE_KEY = "Esc";
+const FINISHED_ABOVE_FOLD = 5;
+const NONE: ReadonlySet<string> = new Set();
 
 function formatAgo(t: Translator, ms: number): string {
 	const minutes = Math.floor(ms / 60_000);
 	if (minutes < 1) return t("resources.ago.justNow");
 	if (minutes < 60) return t("resources.ago.minutes", { minutes });
 	return t("resources.ago.hours", { hours: Math.floor(minutes / 60) });
+}
+
+function hiddenTally(total: ResourceTally, shown: ResourceTally): ResourceTally {
+	return {
+		done: Math.max(0, total.done - shown.done),
+		failed: Math.max(0, total.failed - shown.failed),
+		stopped: Math.max(0, total.stopped - shown.stopped),
+		interrupted: Math.max(0, total.interrupted - shown.interrupted),
+	};
+}
+
+interface Category {
+	kind: ResourceKind;
+	live: Resource[];
+	above: Resource[];
+	below: Resource[];
+	total: number;
+	hidden: number;
+	tally: ResourceTally;
+	expanded: boolean;
+}
+
+function category(
+	kind: ResourceKind,
+	live: Resource[],
+	finished: Resource[],
+	historyTally: ResourceTally,
+	pinned: ReadonlySet<string>,
+	expanded: boolean,
+): Category {
+	const sorted = sortSettled(finished);
+	const above = sorted.filter(
+		(resource, index) =>
+			index < FINISHED_ABOVE_FOLD || (!expanded && pinned.has(resourceId(resource))),
+	);
+	const shown = new Set(above.map(resourceId));
+	const total = Math.max(resourceTallyTotal(historyTally), sorted.length);
+	return {
+		kind,
+		live: sortLive(live),
+		above,
+		below: sorted.filter((resource) => !shown.has(resourceId(resource))),
+		total,
+		hidden: total - above.length,
+		tally: hiddenTally(historyTally, tallyResources(above)),
+		expanded,
+	};
+}
+
+function visibleRows(group: Category): Resource[] {
+	return [...group.live, ...group.above, ...(group.expanded ? group.below : [])];
 }
 
 function DetailHeader({
@@ -117,7 +187,8 @@ function DetailHeader({
 				{live ? (
 					<Button
 						variant="outline"
-						size="sm"
+						size="m"
+						iconLeft={RiStopFill}
 						data-testid="resource-detail-stop"
 						disabled={
 							!authoritative ||
@@ -126,9 +197,8 @@ function DetailHeader({
 							(resource.kind === "subagent" && !!actions.all?.pending)
 						}
 						onClick={onStop}
-						className="gap-4 text-feedback-error"
+						tone="danger"
 					>
-						<RiStopFill className="size-14" />
 						{action?.pending ? t("resources.action.stopping") : t("resources.action.stop")}
 					</Button>
 				) : null}
@@ -181,7 +251,12 @@ function DetailHeader({
 						{resourceActivity(resource)}
 					</dd>
 				</div>
-				{reason ? (
+				{state === "interrupted" ? (
+					<div data-testid="resource-detail-interrupted" className="flex min-w-0 basis-full gap-4">
+						<dt className="shrink-0 text-text-default">{t("resources.detail.reason")}</dt>
+						<dd className="min-w-0 break-words">{t("resources.detail.interrupted")}</dd>
+					</div>
+				) : reason ? (
 					<div className="flex min-w-0 basis-full gap-4 text-feedback-error">
 						<dt className="shrink-0">{t("resources.detail.reason")}</dt>
 						<dd className="min-w-0 break-words">{reason}</dd>
@@ -197,11 +272,78 @@ function DetailHeader({
 	);
 }
 
+function FoldRow({ group, onToggle }: { group: Category; onToggle: () => void }) {
+	const t = useT();
+	const { done, failed } = group.tally;
+	const stopped = group.tally.stopped + group.tally.interrupted;
+	const Chevron = group.expanded ? RiArrowDownSLine : RiArrowRightSLine;
+	return (
+		<button
+			type="button"
+			data-testid="resources-fold"
+			data-kind={group.kind}
+			aria-expanded={group.expanded}
+			aria-label={t("resources.inspector.foldLabel", {
+				count: group.hidden,
+				done,
+				failed,
+				stopped,
+			})}
+			onClick={onToggle}
+			className="flex min-h-28 items-center gap-8 rounded-sm border border-border-muted px-8 text-left text-text-muted tr-text-metadata outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+		>
+			<Chevron className="size-14 shrink-0" />
+			<span className="min-w-0 truncate">
+				{t("resources.inspector.foldMore", { count: group.hidden })}
+			</span>
+			<span aria-hidden className="ml-auto flex shrink-0 items-center gap-8 tabular-nums">
+				{done > 0 ? (
+					<span className="inline-flex items-center gap-2">
+						<StateIcon state="done" />
+						{done}
+					</span>
+				) : null}
+				{failed > 0 ? (
+					<span className="inline-flex items-center gap-2">
+						<StateIcon state="failed" />
+						{failed}
+					</span>
+				) : null}
+				{stopped > 0 ? (
+					<span className="inline-flex items-center gap-2">
+						<StateIcon state="stopped" />
+						{stopped}
+					</span>
+				) : null}
+			</span>
+		</button>
+	);
+}
+
 export function ResourcesInspector(props: ResourcesInspectorProps) {
 	const t = useT();
-	const live = sortLive(toResources(props.commands, props.subagents));
-	const settled = sortSettled(toResources(props.finishedCommands, props.finishedSubagents));
-	const all = [...live, ...settled];
+	const fresh = props.newIds ?? NONE;
+	const pinned = props.selectedId ? new Set([...fresh, props.selectedId]) : fresh;
+	const groups = [
+		category(
+			"command",
+			toResources(props.commands, []),
+			toResources(props.finishedCommands, []),
+			props.history.commands,
+			pinned,
+			!!props.expanded.command,
+		),
+		category(
+			"subagent",
+			toResources([], props.subagents),
+			toResources([], props.finishedSubagents),
+			props.history.subagents,
+			pinned,
+			!!props.expanded.subagent,
+		),
+	];
+	const live = groups.flatMap((group) => group.live);
+	const all = groups.flatMap(visibleRows);
 	const selected = all.find((resource) => resourceId(resource) === props.selectedId) ?? all[0];
 	const listRef = useRef<HTMLDivElement>(null);
 
@@ -229,37 +371,121 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 			?.focus();
 	};
 
-	const section = (title: string, rows: Resource[], testId: string, empty: string) => (
-		<section data-testid={testId} aria-label={title} className="flex flex-col gap-2">
-			<div className="flex items-baseline gap-4 px-8 pt-8 pb-2 text-text-subtle">
-				<h3 className="tr-text-eyebrow">{title}</h3>
-				<span className="tr-text-metadata">· {rows.length}</span>
-			</div>
-			{rows.length === 0 ? (
-				<p className="px-8 py-4 text-text-subtle tr-text-metadata">{empty}</p>
-			) : (
-				rows.map((resource) => (
-					<ResourceRow
-						key={actionKey(resource)}
-						resource={resource}
-						now={props.now}
-						authoritative={props.authoritative}
-						action={props.actions[actionKey(resource)]}
-						stopAllPending={!!props.actions.all?.pending}
-						role="option"
-						selected={!!selected && resourceId(resource) === resourceId(selected)}
-						onSelect={() => props.onSelect(resourceId(resource))}
-						onStop={() => stopFor(resource)}
-					/>
-				))
-			)}
-		</section>
+	const row = (resource: Resource) => (
+		<ResourceRow
+			key={actionKey(resource)}
+			resource={resource}
+			now={props.now}
+			authoritative={props.authoritative}
+			action={props.actions[actionKey(resource)]}
+			stopAllPending={!!props.actions.all?.pending}
+			role="option"
+			selected={!!selected && resourceId(resource) === resourceId(selected)}
+			fresh={fresh.has(resourceId(resource))}
+			onSelect={() => props.onSelect(resourceId(resource))}
+			onStop={() => stopFor(resource)}
+		/>
 	);
 
+	const section = (group: Category) => {
+		if (group.live.length === 0 && group.total === 0) return null;
+		const title =
+			group.kind === "command"
+				? t("resources.inspector.commandsSection")
+				: t("resources.inspector.subagentsSection");
+		const meta = [
+			group.live.length > 0 ? t("resources.inspector.active", { count: group.live.length }) : null,
+			group.total > 0 ? t("resources.inspector.finished", { count: group.total }) : null,
+		]
+			.filter((part) => part !== null)
+			.join(" · ");
+		const left = props.remaining?.[group.kind] ?? 0;
+		const paging = props.actions[`history:${group.kind}`];
+		return (
+			<section
+				key={group.kind}
+				data-testid={group.kind === "command" ? "resources-commands" : "resources-subagents"}
+				aria-label={title}
+				className="flex flex-col gap-2"
+			>
+				<div className="flex items-baseline gap-4 px-8 pt-8 pb-2 text-text-subtle">
+					<h3 className="tr-text-eyebrow">{title}</h3>
+					<span className="tr-text-metadata">· {meta}</span>
+				</div>
+				{group.live.map(row)}
+				{group.total > 0 ? (
+					<div
+						data-testid="resources-finished"
+						className="flex items-baseline gap-4 px-8 pt-4 text-text-subtle tr-text-metadata"
+					>
+						<span className="text-text-muted">{t("resources.inspector.finishedSection")}</span>
+						<span>· {group.total}</span>
+					</div>
+				) : null}
+				{group.above.map(row)}
+				{group.hidden > 0 ? (
+					<FoldRow
+						group={group}
+						onToggle={() => props.onExpandedChange(group.kind, !group.expanded)}
+					/>
+				) : null}
+				{group.expanded ? group.below.map(row) : null}
+				{group.expanded && group.hidden > 0 ? (
+					<div className="flex items-center gap-8 px-4">
+						{left > 0 && props.onLoadMore ? (
+							<Button
+								variant="ghost"
+								size="s"
+								data-testid="resources-show-more"
+								data-kind={group.kind}
+								disabled={!props.authoritative || !!paging?.pending}
+								onClick={() => props.onLoadMore?.(group.kind)}
+							>
+								{paging?.pending
+									? t("resources.inspector.loadingMore")
+									: t("resources.inspector.showMore", {
+											count: Math.min(RESOURCE_HISTORY_PAGE_LIMIT, left),
+											left,
+										})}
+							</Button>
+						) : null}
+						<span className="flex-1" />
+						<Button
+							variant="ghost"
+							size="s"
+							data-testid="resources-collapse"
+							data-kind={group.kind}
+							onClick={() => props.onExpandedChange(group.kind, false)}
+						>
+							{t("resources.inspector.collapse")}
+						</Button>
+					</div>
+				) : null}
+				{paging?.error ? (
+					<p role="alert" className="px-8 text-feedback-error tr-text-metadata">
+						{paging.error}
+					</p>
+				) : null}
+			</section>
+		);
+	};
+
 	const summary = !props.authoritative ? (
-		<span className="inline-flex items-center gap-4 whitespace-nowrap rounded-full border border-border-muted px-8 text-text-muted tr-text-metadata">
-			<RiLoader4Line className="size-12 animate-spin motion-reduce:animate-none" />
-			{t("resources.inspector.reconnecting")}
+		<span
+			data-testid="resources-inspector-staleness"
+			data-staleness={props.staleness ?? "loading"}
+			className="inline-flex items-center gap-4 whitespace-nowrap rounded-full border border-border-muted px-8 text-text-muted tr-text-metadata"
+		>
+			{props.staleness === "refreshFailed" || props.staleness === "unavailable" ? (
+				<RiAlertLine className="size-12 text-feedback-warning" aria-hidden />
+			) : (
+				<RiLoader4Line className="size-12 animate-spin motion-reduce:animate-none" />
+			)}
+			{props.staleness === "disconnected"
+				? t("resources.inspector.reconnecting")
+				: props.staleness === "refreshFailed" || props.staleness === "unavailable"
+					? t("resources.inspector.outOfDate")
+					: t("resources.inspector.updating")}
 		</span>
 	) : live.length > 0 ? (
 		<span className="inline-flex items-center gap-4 whitespace-nowrap rounded-full border border-primary-muted bg-primary-subtle px-8 text-primary tr-text-metadata">
@@ -271,6 +497,8 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 			{t("resources.inspector.idle")}
 		</span>
 	);
+
+	const sections = groups.map(section).filter((node) => node !== null);
 
 	return (
 		<Dialog open={props.open} onOpenChange={props.onOpenChange} modal={false}>
@@ -302,16 +530,13 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 						</DialogTitle>
 						<span className="flex-1" />
 						{props.subagents.length > 0 ? (
-							<Button
+							<IconButton
 								variant="ghost"
-								size="icon"
+								size="m"
+								icon={RiStopFill}
 								data-testid="resources-stop-all"
-								aria-label={
-									props.actions.all?.pending
-										? t("resources.inspector.stoppingAll")
-										: t("resources.inspector.stopAll")
-								}
-								title={
+								wrapTrigger
+								label={
 									props.actions.all?.pending
 										? t("resources.inspector.stoppingAll")
 										: t("resources.inspector.stopAll")
@@ -324,20 +549,16 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 									)
 								}
 								onClick={props.onStopAll}
-								className="text-feedback-error hover:text-feedback-error"
-							>
-								<RiStopFill className="size-14" />
-							</Button>
+								tone="danger"
+							/>
 						) : null}
-						<button
-							type="button"
-							aria-label={t("resources.inspector.close")}
+						<IconButton
+							icon={RiCloseLine}
+							label={t("resources.inspector.close")}
 							data-testid="resources-inspector-close"
 							onClick={() => props.onOpenChange(false)}
-							className="inline-flex size-28 shrink-0 items-center justify-center rounded-sm text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-						>
-							<RiCloseLine className="size-16" />
-						</button>
+							className="shrink-0"
+						/>
 					</div>
 					{props.actions.all?.error ? (
 						<p role="alert" className="px-8 text-feedback-error tr-text-metadata">
@@ -349,7 +570,7 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 							{t("resources.inspector.loading")}
 						</p>
 					) : null}
-					{props.stale ? (
+					{props.staleness === "disconnected" ? (
 						<p className="mx-8 flex items-center gap-8 rounded-sm border border-feedback-warning-muted bg-container-elevated-bg px-8 py-4 text-text-default tr-text-metadata">
 							<RiAlertLine className="size-14 shrink-0 text-feedback-warning" aria-hidden />
 							{t("resources.inspector.stale")}
@@ -365,12 +586,19 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 									className="mt-2 size-14 shrink-0 text-feedback-error"
 									aria-hidden
 								/>
-								<span className="min-w-0 flex-1 break-words">{props.error}</span>
+								<span className="flex min-w-0 flex-1 flex-col gap-2 break-words">
+									{props.staleness === "refreshFailed" ? (
+										<span>{t("resources.inspector.refreshFailed")}</span>
+									) : props.staleness === "unavailable" ? (
+										<span>{t("resources.inspector.refreshUnavailable")}</span>
+									) : null}
+									<span>{props.error}</span>
+								</span>
 							</div>
 							<div className="flex justify-end">
 								<Button
 									variant="outline"
-									size="sm"
+									size="m"
 									data-testid="resources-retry"
 									onClick={props.onRetry}
 								>
@@ -379,17 +607,15 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 							</div>
 						</div>
 					) : null}
-					{section(
-						t("resources.inspector.activeSection"),
-						live,
-						"resources-active",
-						t("resources.inspector.activeEmpty"),
-					)}
-					{section(
-						t("resources.inspector.finishedSection"),
-						settled,
-						"resources-finished",
-						t("resources.inspector.finishedEmpty"),
+					{sections.length > 0 ? (
+						sections
+					) : (
+						<p
+							data-testid="resources-empty"
+							className="px-8 py-4 text-text-subtle tr-text-metadata"
+						>
+							{t("resources.inspector.empty")}
+						</p>
 					)}
 					{props.mcpServers ? (
 						<McpServerSection
@@ -403,7 +629,9 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 					) : null}
 					<p className="mt-auto flex items-center gap-8 px-8 pt-8 text-text-subtle tr-text-metadata">
 						<RiInformationLine className="size-14 shrink-0" />
-						{t("resources.inspector.retention")}
+						{props.retained
+							? t("resources.inspector.retentionWorkspace")
+							: t("resources.inspector.retention")}
 					</p>
 				</div>
 				<div data-testid="resources-inspector-detail" className="flex min-h-0 flex-col">
@@ -428,7 +656,9 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 						<span className="flex-1">
 							{selected?.kind === "subagent"
 								? t("resources.inspector.subagentFooter")
-								: t("resources.inspector.commandFooter")}
+								: props.retained
+									? t("resources.inspector.commandFooterRetained")
+									: t("resources.inspector.commandFooter")}
 						</span>
 						<kbd className="rounded-xs border border-border-default px-4">↑</kbd>
 						<kbd className="rounded-xs border border-border-default px-4">↓</kbd>

@@ -19,6 +19,8 @@ import {
 } from "@remixicon/react";
 import type { ReviewComment, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { ResourceScopeProvider } from "@thinkrail/resource-renderers";
+import { Button, buttonVariants, IconButton } from "@thinkrail/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -26,11 +28,17 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { AskStatesContext, deriveAskStates } from "../chat/askState";
 import { type ChatActions, ChatActionsContext } from "../chat/ChatActions";
+import {
+	awaitingToolCallIdOf,
+	deriveInteractionStates,
+	InteractionStatesContext,
+	type PendingInteraction,
+} from "../chat/interactionState";
 import { Markdown } from "../chat/Markdown";
 import { SectionLabel, VerificationBadge, VerificationGlyph } from "../chat/planKit";
 import { planToMarkdown } from "../chat/planMarkdown";
@@ -46,7 +54,7 @@ import {
 	itemRevisions,
 	lastAgentText,
 	type PlanGlance,
-	pendingAsk,
+	pendingInteraction,
 	planCompletionSummary,
 	planSections,
 	planStaleSummary,
@@ -57,18 +65,22 @@ import {
 	sessionGlance,
 } from "../chat/planView";
 import { StatusIcon } from "../chat/TodoList";
-import { AskUserQuestionCard } from "../chat/tools/AskUserQuestionCard";
+import { useToolInteraction } from "../chat/toolInteraction";
+import { getToolRenderer } from "../chat/toolRegistry";
 import { hydrateSessionRuntime, useChatTodos } from "../chat/useChatTodos";
+import { copyText } from "../lib";
 import {
+	isChatWorkspace,
 	selectAgentReviewCommentCount,
+	selectChatName,
 	selectChatTitle,
 	selectWorkspaceById,
 	useAppStore,
 } from "../store";
-import { errorText, getTransport, supportsPlanReview } from "../transport";
+import { errorText, getTransport, respondToTool, supportsPlanReview } from "../transport";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { openChatInTab } from "./openChat";
-import { openDiffInTab } from "./openTabs";
+import { openDiffInTab, openFileInTab } from "./openTabs";
 import { PlanCommitsMenu } from "./PlanCommitsMenu";
 import { FileRow } from "./planFileRow";
 import {
@@ -173,8 +185,6 @@ function ChangeSetBlock({
 const PLAN_CARD_CLASS =
 	"mb-16 rounded-md border border-border-default bg-container-elevated-bg p-12";
 const NEXT_ACTION_CLASS = `${PLAN_CARD_CLASS} flex items-center gap-8`;
-const NEXT_ACTION_BUTTON_CLASS =
-	"flex h-28 shrink-0 items-center rounded-sm bg-control-primary-bg px-8 tr-text-ui text-control-primary-text transition-colors hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text";
 
 type StageState = "done" | "active" | "pending";
 
@@ -376,16 +386,17 @@ function ItemBlock({
 									: t("plan.item.needsFix")}
 							</button>
 						) : needsReview ? (
-							<button
-								type="button"
+							<Button
+								variant="primary"
+								size="m"
 								data-testid="plan-start-review"
 								disabled={startDisabled}
-								title={startDisabled ? t("plan.item.reviewBusy") : undefined}
+								tooltip={startDisabled ? t("plan.item.reviewBusy") : undefined}
 								onClick={() => onStartReview(item.id)}
-								className="flex h-24 shrink-0 items-center rounded-sm bg-control-primary-bg px-8 text-control-primary-text tr-text-action opacity-100 transition hover:bg-control-primary-bg-hovered focus-visible:opacity-100 disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
+								className="shrink-0 opacity-100 focus-visible:opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
 							>
 								{t("plan.item.checkIt")}
-							</button>
+							</Button>
 						) : reviewed ? (
 							<span
 								data-testid="plan-item-verified"
@@ -617,6 +628,7 @@ function PlanComposer({
 				value={draft}
 				onChange={(e) => setDraft(e.target.value)}
 				onKeyDown={(e) => {
+					if (isImeComposing(e.nativeEvent)) return;
 					if (e.key === "Enter" && !e.shiftKey) {
 						e.preventDefault();
 						void submit();
@@ -655,45 +667,76 @@ function PlanCardSection({
 	);
 }
 
+function PlanInteractionCard({
+	workspaceId,
+	sessionId,
+	pending,
+}: {
+	workspaceId: string;
+	sessionId: string;
+	pending: PendingInteraction;
+}) {
+	const interaction = useToolInteraction(pending.toolCallId, pending.toolName);
+	const Renderer = getToolRenderer(pending.toolName);
+	const scope = useMemo(() => ({ workspaceId, sessionId }), [workspaceId, sessionId]);
+	return (
+		<ResourceScopeProvider value={scope}>
+			<Renderer
+				toolCallId={pending.toolCallId}
+				toolName={pending.toolName}
+				args={pending.args}
+				result={pending.result}
+				status={pending.status}
+				streaming={pending.streaming}
+				interaction={interaction}
+				onOpenFile={(path) => void openFileInTab(workspaceId, path, "preview")}
+			/>
+		</ResourceScopeProvider>
+	);
+}
+
 // Keep the session's live slot isolated from the heavy PlanPane.
-function PlanSessionLive({ sessionId }: { workspaceId: string; sessionId: string }) {
+function PlanSessionLive({ workspaceId, sessionId }: { workspaceId: string; sessionId: string }) {
 	const t = useT();
 	const runtime = useAppStore((s) => s.sessions[sessionId]);
 	const [focusScope] = useState<object>(() => ({}));
 	const actions = useMemo<ChatActions>(
 		() => ({
-			answerQuestion: (toolCallId, result) =>
-				getTransport()
-					.request("session.answerQuestion", { sessionId, toolCallId, result })
-					.then(() => undefined),
 			cancelAutomaticReveal: () => {},
 			focusComposer: () => {},
 			openSubagentTranscript: () => {},
+			respondToTool: (toolCallId, response) => respondToTool(sessionId, toolCallId, response),
 			resultOpener: () => undefined,
 			revealChatElement: () => {},
 		}),
 		[sessionId],
 	);
-	const askStates = useMemo(
-		() => (runtime ? deriveAskStates(runtime.turns, runtime.askAnswers, runtime.toolResults) : {}),
+	const interactionStates = useMemo(
+		() =>
+			runtime
+				? deriveInteractionStates(runtime.turns, runtime.toolResponses, runtime.toolResults)
+				: {},
 		[runtime],
 	);
-	const ask = runtime ? pendingAsk(runtime) : undefined;
-	if (ask) {
+	const pending = runtime ? pendingInteraction(runtime) : undefined;
+	if (pending) {
 		return (
 			<ChatActionsContext.Provider value={actions}>
-				<AskStatesContext.Provider value={{ states: askStates, focusScope }}>
+				<InteractionStatesContext.Provider
+					value={{
+						states: interactionStates,
+						focusScope,
+						awaitingToolCallId: awaitingToolCallIdOf(runtime?.hostState ?? null),
+					}}
+				>
 					<div data-testid="plan-ask" className="mb-8">
-						<AskUserQuestionCard
-							toolCallId={ask.toolCallId}
-							toolName="ask_user_question"
-							args={ask.args}
-							result={ask.result}
-							status={ask.status}
-							streaming={ask.streaming}
+						<PlanInteractionCard
+							workspaceId={workspaceId}
+							sessionId={sessionId}
+							pending={pending}
 						/>
 					</div>
-				</AskStatesContext.Provider>
+				</InteractionStatesContext.Provider>
 			</ChatActionsContext.Provider>
 		);
 	}
@@ -775,16 +818,17 @@ function SessionBlock({
 						{t("plan.session.question")}
 					</button>
 				) : null}
-				<button
-					type="button"
+				<Button
+					variant="ghost"
+					size="m"
+					iconLeft={Plus}
 					data-testid="plan-add-task"
 					onClick={() => setAdding((v) => !v)}
-					title={t("plan.session.addTaskTitle")}
-					className="ml-auto flex h-24 shrink-0 items-center gap-4 rounded-sm px-8 tr-text-action text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+					tooltip={t("plan.session.addTaskTitle")}
+					className="ml-auto shrink-0"
 				>
-					<Plus className="size-14" />
 					{t("plan.session.task")}
-				</button>
+				</Button>
 			</div>
 			{renderLive()}
 			{hasActive ? (
@@ -856,9 +900,11 @@ export default function PlanPane({
 	const t = useT();
 	const plan = useChatTodos(workspaceId, sessionId);
 	const title = useAppStore((s) => selectChatTitle(t, s, workspaceId, sessionId));
+	const chatName = useAppStore((s) => selectChatName(s, workspaceId, sessionId));
 	const pushToast = useAppStore((s) => s.pushToast);
 	const requestToolView = useAppStore((s) => s.requestToolView);
 	const workspace = useAppStore((s) => selectWorkspaceById(s, workspaceId));
+	const chat = workspace !== null && isChatWorkspace(workspace);
 	const glance = useAppStore((s): PlanGlance => {
 		const rt = s.sessions[sessionId];
 		return rt ? sessionGlance(rt) : "waiting";
@@ -871,14 +917,14 @@ export default function PlanPane({
 	}, [connection, hasRuntime, workspaceId, sessionId]);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const workspaceSettlingSupported = useAppStore((s) => s.workspaceSettlingSupported);
-	const canReview = supportsPlanReview(protocolVersion);
+	const canReview = supportsPlanReview(protocolVersion) && !chat;
 	const {
 		review: branchReview,
 		url: branchReviewUrl,
 		status: branchStatus,
 		noteOpenReview,
 		refreshBranchStatus,
-	} = useBranchStatus(workspace, connection);
+	} = useBranchStatus(chat ? null : workspace, connection);
 	const branchReviewWithUrl =
 		branchReview && branchReviewUrl ? { ...branchReview, url: branchReviewUrl } : branchReview;
 	const resolvedBranchReview = resolveBranchReview(
@@ -894,7 +940,7 @@ export default function PlanPane({
 	const ship = useShipRunner({
 		workspace,
 		sessionId,
-		title,
+		title: chatName,
 		bodySource: "plan",
 		openReview,
 		status: branchStatus,
@@ -1008,22 +1054,21 @@ export default function PlanPane({
 			},
 		);
 	const copyMarkdown = () => {
-		void navigator.clipboard
-			.writeText(exportMarkdown())
-			.then(() =>
-				pushToast({
-					variant: "success",
-					title: t("plan.copied.title"),
-					message: t("plan.copied.message"),
-				}),
-			)
-			.catch(() =>
-				pushToast({
-					variant: "error",
-					title: t("plan.copyFailed.title"),
-					message: t("plan.copyFailed.message"),
-				}),
-			);
+		void copyText(exportMarkdown()).then((copied) =>
+			pushToast(
+				copied
+					? {
+							variant: "success",
+							title: t("plan.copied.title"),
+							message: t("plan.copied.message"),
+						}
+					: {
+							variant: "error",
+							title: t("plan.copyFailed.title"),
+							message: t("plan.copyFailed.message"),
+						},
+			),
+		);
 	};
 	const exportMarkdown = () => planToMarkdown(t, data, title);
 	const renderGroup = (group: TodoGroupItem): ReactNode => (
@@ -1095,7 +1140,7 @@ export default function PlanPane({
 								{openReview ? openReviewLabel(openReview) : t("plan.header.pr")}
 							</span>
 						</div>
-						{workspace ? (
+						{workspace && !chat ? (
 							<div
 								data-testid="plan-context"
 								className="mt-2 flex flex-wrap items-center gap-8 tr-text-metadata text-text-subtle"
@@ -1121,16 +1166,17 @@ export default function PlanPane({
 						) : null}
 					</div>
 					{agentComments > 0 ? (
-						<button
-							type="button"
+						<Button
+							variant="ghost"
+							size="l"
+							iconLeft={MessageSquare}
 							data-testid="plan-review-comments"
 							onClick={onOpenReview}
-							title={t("plan.header.commentsTitle")}
-							className="flex h-32 shrink-0 items-center gap-4 rounded-sm px-8 tr-text-ui text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+							tooltip={t("plan.header.commentsTitle")}
+							className="shrink-0"
 						>
-							<MessageSquare className="size-14" />
 							{t("plan.header.comments", { count: agentComments })}
-						</button>
+						</Button>
 					) : null}
 					{openReview ? (
 						openReviewUrl ? (
@@ -1139,7 +1185,7 @@ export default function PlanPane({
 								href={openReviewUrl}
 								target="_blank"
 								rel="noopener noreferrer"
-								className="flex h-32 shrink-0 items-center rounded-sm px-8 tr-text-ui text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+								className={buttonVariants({ variant: "ghost", size: "l", className: "shrink-0" })}
 							>
 								{openReviewLabel(openReview)}
 							</a>
@@ -1152,51 +1198,54 @@ export default function PlanPane({
 							</span>
 						)
 					) : null}
-					<button
-						type="button"
-						data-testid="plan-open-pr"
-						data-diverged={openReview && diverged ? "" : undefined}
-						disabled={prBusy || sameBranch || (!!openReview && diverged && !integrateCommand)}
-						onClick={openReview && diverged ? copyIntegrateCommand : () => void openPrFlow(false)}
-						title={
-							sameBranch
-								? t("plan.openPr.sameBranch")
-								: openReview && diverged
-									? integrateCommand
-										? t("plan.openPr.divergedCopy", { command: integrateCommand })
-										: t("plan.openPr.divergedManual", { branch })
-									: openReview
-										? t("plan.openPr.pushTitle")
-										: t("plan.openPr.openTitle")
-						}
-						className={`flex h-32 shrink-0 items-center gap-4 rounded-sm px-8 tr-text-ui transition-colors ${
-							(planReady && !openReview) || unpushed > 0 || (openReview && diverged)
-								? "bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
-								: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
-						}`}
-					>
-						{prBusy ? (
-							<Loader2 className="size-14 animate-spin" />
-						) : (
-							<GitPullRequestArrow className="size-14" />
-						)}
-						{ship.submitting
-							? t("plan.openPr.pushing")
-							: openReview
-								? diverged
-									? t("plan.openPr.diverged")
-									: unpushed > 0
-										? t("plan.openPr.pushUpdatesCount", { count: unpushed })
-										: t("plan.openPr.pushUpdates")
-								: t("plan.openPr.open")}
-					</button>
-					<DropdownMenu>
-						<DropdownMenuTrigger
-							data-testid="plan-menu"
-							aria-label={t("plan.menu.label")}
-							className="flex size-32 shrink-0 items-center justify-center rounded-sm text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:bg-control-bg-hovered"
+					{chat ? null : (
+						<Button
+							variant={
+								(planReady && !openReview) || unpushed > 0 || (openReview && diverged)
+									? "primary"
+									: "ghost"
+							}
+							size="l"
+							iconLeft={GitPullRequestArrow}
+							loading={prBusy}
+							data-testid="plan-open-pr"
+							data-diverged={openReview && diverged ? "" : undefined}
+							disabled={prBusy || sameBranch || (!!openReview && diverged && !integrateCommand)}
+							onClick={openReview && diverged ? copyIntegrateCommand : () => void openPrFlow(false)}
+							tooltip={
+								sameBranch
+									? t("plan.openPr.sameBranch")
+									: openReview && diverged
+										? integrateCommand
+											? t("plan.openPr.divergedCopy", { command: integrateCommand })
+											: t("plan.openPr.divergedManual", { branch })
+										: openReview
+											? t("plan.openPr.pushTitle")
+											: t("plan.openPr.openTitle")
+							}
+							className="shrink-0"
 						>
-							<MoreVertical className="size-16" />
+							{ship.submitting
+								? t("plan.openPr.pushing")
+								: openReview
+									? diverged
+										? t("plan.openPr.diverged")
+										: unpushed > 0
+											? t("plan.openPr.pushUpdatesCount", { count: unpushed })
+											: t("plan.openPr.pushUpdates")
+									: t("plan.openPr.open")}
+						</Button>
+					)}
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<IconButton
+								size="l"
+								icon={MoreVertical}
+								label={t("plan.menu.label")}
+								data-testid="plan-menu"
+								wrapTrigger
+								className="shrink-0"
+							/>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end" data-testid="plan-menu-content">
 							<DropdownMenuItem data-testid="plan-copy-markdown" onSelect={() => copyMarkdown()}>
@@ -1244,14 +1293,15 @@ export default function PlanPane({
 						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
 							{t("plan.next.fix", { count: flagged.length })}
 						</span>
-						<button
-							type="button"
+						<Button
+							variant="primary"
+							size="m"
 							data-testid="plan-next-action-go"
 							onClick={() => flagged[0] && jumpToItem(flagged[0].id)}
-							className={NEXT_ACTION_BUTTON_CLASS}
+							className="shrink-0"
 						>
 							{t("plan.next.showStep")}
-						</button>
+						</Button>
 					</div>
 				) : unsettledReviewables.length > 0 ? (
 					<div data-testid="plan-next-action" data-kind="review" className={NEXT_ACTION_CLASS}>
@@ -1259,15 +1309,16 @@ export default function PlanPane({
 						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
 							{t("plan.next.review", { count: unsettledReviewables.length })}
 						</span>
-						<button
-							type="button"
+						<Button
+							variant="primary"
+							size="m"
 							data-testid="plan-next-action-go"
 							disabled={reviewingAny || !canReview}
 							onClick={() => void reviewAll()}
-							className={NEXT_ACTION_BUTTON_CLASS}
+							className="shrink-0"
 						>
 							{t("plan.menu.checkAll")}
-						</button>
+						</Button>
 					</div>
 				) : openReview && diverged ? (
 					<div data-testid="plan-next-action" data-kind="diverged" className={NEXT_ACTION_CLASS}>
@@ -1288,14 +1339,15 @@ export default function PlanPane({
 							) : null}
 						</div>
 						{integrateCommand ? (
-							<button
-								type="button"
+							<Button
+								variant="primary"
+								size="m"
 								data-testid="plan-next-action-go"
 								onClick={copyIntegrateCommand}
-								className={NEXT_ACTION_BUTTON_CLASS}
+								className="shrink-0"
 							>
 								{t("plan.next.copyCommand")}
-							</button>
+							</Button>
 						) : null}
 					</div>
 				) : openReview && unpushed > 0 ? (
@@ -1304,15 +1356,16 @@ export default function PlanPane({
 						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
 							{t("plan.next.unpushed", { count: unpushed, review: openReviewLabel(openReview) })}
 						</span>
-						<button
-							type="button"
+						<Button
+							variant="primary"
+							size="m"
 							data-testid="plan-next-action-go"
 							disabled={prBusy}
 							onClick={() => void openPrFlow(false)}
-							className={NEXT_ACTION_BUTTON_CLASS}
+							className="shrink-0"
 						>
 							{t("plan.openPr.pushUpdates")}
-						</button>
+						</Button>
 					</div>
 				) : planReady && !openReview && !sameBranch ? (
 					<div data-testid="plan-next-action" data-kind="ship" className={NEXT_ACTION_CLASS}>
@@ -1320,15 +1373,16 @@ export default function PlanPane({
 						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
 							{t("plan.next.ship")}
 						</span>
-						<button
-							type="button"
+						<Button
+							variant="primary"
+							size="m"
 							data-testid="plan-next-action-go"
 							disabled={prBusy}
 							onClick={() => void openPrFlow(false)}
-							className={NEXT_ACTION_BUTTON_CLASS}
+							className="shrink-0"
 						>
 							{t("plan.openPr.open")}
-						</button>
+						</Button>
 					</div>
 				) : null}
 				{summaryProse ? <PlanSummary summary={summaryProse} stale={!buildDone} /> : null}

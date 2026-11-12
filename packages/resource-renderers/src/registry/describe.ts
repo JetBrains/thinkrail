@@ -17,7 +17,7 @@ const LANGUAGE_BY_EXTENSION: Readonly<Record<string, string>> = {
 	html: "html",
 	htm: "html",
 	md: "markdown",
-	mdx: "markdown",
+	mdx: "mdx",
 	py: "python",
 	sh: "bash",
 	bash: "bash",

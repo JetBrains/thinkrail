@@ -13,8 +13,9 @@ import { type LayoutAttention, tupleKey } from "../../lib";
 import {
 	AuxiliaryRail,
 	type AuxiliaryRailControlProps,
-	AuxiliaryRailIndicator,
 	RAIL_ENTRY_BUTTON_CLASS,
+	RAIL_ICON,
+	railEntryButtonProps,
 	railEntryFrameClass,
 	railTooltipSide,
 } from "./AuxiliaryRail";
@@ -108,8 +109,7 @@ export function AuxiliaryRailButton({
 					? t("workbench.rail.terminal")
 					: t(EMPTY_GROUP_LABELS[entry.region], { position: ordinal });
 	return (
-		<div data-active={active} className={railEntryFrameClass(entry.region)}>
-			{active ? <AuxiliaryRailIndicator region={entry.region} /> : null}
+		<div ref={setNodeRef} data-active={active} className={railEntryFrameClass(entry.region)}>
 			<IconTooltip
 				label={
 					entry.kind === "terminals" ? (
@@ -125,7 +125,6 @@ export function AuxiliaryRailButton({
 				side={railTooltipSide(entry.region)}
 			>
 				<button
-					ref={setNodeRef}
 					type="button"
 					id={railControlId(entry)}
 					data-testid={
@@ -142,6 +141,7 @@ export function AuxiliaryRailButton({
 					aria-controls={
 						group ? groupPanelId({ area: entry.region, groupId: group.id }) : undefined
 					}
+					{...railEntryButtonProps(active)}
 					{...control}
 					onClick={onActivate}
 					data-drop-label={
@@ -151,25 +151,28 @@ export function AuxiliaryRailButton({
 					data-drop-hint={(dropEnabled && !isOver) || undefined}
 					className={cn(
 						RAIL_ENTRY_BUTTON_CLASS,
-						"data-[drop-hint]:bg-primary-subtle data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary",
+						"data-[drop-hint]:bg-primary-subtle data-[drop-hint]:ring-1 data-[drop-hint]:ring-inset data-[drop-hint]:ring-primary-soft data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary",
 						unplaced && "text-text-subtle",
 					)}
 				>
 					{entry.kind === "tool" ? (
-						tabIcon(toolTab(entry.tool), active)
+						tabIcon(toolTab(entry.tool), active, RAIL_ICON)
 					) : entry.kind === "terminals" || entry.region === "bottom" ? (
 						active ? (
-							<RiTerminalBoxFill className="size-14 shrink-0" />
+							<RiTerminalBoxFill className={RAIL_ICON} />
 						) : (
-							<SquareTerminal className="size-14 shrink-0" />
+							<SquareTerminal className={RAIL_ICON} />
 						)
 					) : (
-						<PanelsTopLeft className="size-14 shrink-0" />
+						<PanelsTopLeft className={RAIL_ICON} />
 					)}
 					{entry.kind === "terminals" && ordinal > 1 ? (
 						<span
 							aria-hidden="true"
-							className="absolute right-0 bottom-0 rounded-sm bg-container-header-bg px-2 tr-text-metadata"
+							className={cn(
+								"absolute -right-4 rounded-sm bg-container-header-bg px-2 tr-text-metadata",
+								entry.region === "bottom" ? "bottom-0" : "-bottom-4",
+							)}
 						>
 							{ordinal}
 						</span>

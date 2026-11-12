@@ -55,6 +55,15 @@ export function getToolSummary(t: Translator, toolName: string, props: ToolRende
 	return resolveRegistration(toolName)?.summary?.(props, t) ?? "";
 }
 
+export function isInteractiveTool(toolName: string): boolean {
+	return resolveRegistration(toolName)?.interactive === true;
+}
+
+export function isDockedTool(toolName: string): boolean {
+	const registration = resolveRegistration(toolName);
+	return registration?.interactive === true && registration.dock === true;
+}
+
 export function getToolChrome(toolName: string): ToolChrome {
 	return resolveRegistration(toolName)?.chrome ?? "card";
 }

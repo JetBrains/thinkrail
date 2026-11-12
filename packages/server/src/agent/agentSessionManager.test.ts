@@ -23,22 +23,26 @@ import {
 	fauxAssistantMessage,
 	fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
-import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import {
+	AgentSession,
+	ModelRuntime,
+	SessionManager,
+	SettingsManager,
+} from "@earendil-works/pi-coding-agent";
 import type {
 	AgentSettlement,
-	AskUserQuestionResult,
 	ExtUiRequest,
 	ImageContent,
 	SessionStateRecord,
 	SessionSummary,
 } from "@thinkrail/contracts";
-import { isAskUserAnswersMessage } from "@thinkrail/contracts";
+import { readToolResponseMessage, TOOL_RESPONSE_CUSTOM_TYPE } from "@thinkrail/contracts";
+import { interactiveTools } from "../extensions";
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
 import { setTrashImplementationForTests } from "../trash";
 import {
 	abortSession,
 	acknowledgeCompletion,
-	answerQuestion,
 	buildSessionSettings,
 	clampThinkingForModel,
 	clearQueueSession,
@@ -54,6 +58,7 @@ import {
 	getSessionStats,
 	hasSession,
 	initializeSessionStates,
+	isHostMessagePending,
 	listAvailableModels,
 	listSessionStates,
 	listSessions,
@@ -61,15 +66,20 @@ import {
 	markWorkspaceUnread,
 	nudgeSession,
 	promptSession,
+	readFinalAssistantTexts,
 	refreshAgentReviewTool,
 	refreshAvailableModels,
 	refreshExtensionTools,
+	refreshSkillAdmission,
 	refreshSubagentTools,
 	reloadSessionResources,
 	removeQueuedSession,
 	removeSession,
 	removeWorkspaceSessions,
 	renameSession,
+	requestSessionReload,
+	respondToTool,
+	sendHostMessageToSession,
 	setAgentReviewEnabledResolver,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
@@ -79,15 +89,19 @@ import {
 	setSessionStatePublisher,
 	setSkillAdmissionResolver,
 	setSubagentsEnabledResolver,
+	settleCredentialWritesForShutdown,
 	settleSessionsForShutdown,
 	steerSession,
 	toWireModel,
 } from "./agentSessionManager";
-import { ASK_ACK_TEXT, ASK_STOPPED_ERROR, assessAnswerability } from "./askUserQuestion";
+import { writeCacheWarmingMode } from "./cacheWarming";
 import { setDisabledExtensionsResolver } from "./extensions";
 import { configurePiRuntime } from "./piRuntime";
 import { admissionContextFor } from "./skillAdmission";
+import { assessRespondability, TOOL_RESPONSE_STOPPED_ERROR } from "./toolResponses";
 import { resolveExtUi, setExtUiPublisher } from "./webUiContext";
+
+const ALL_INTERACTIVE = interactiveTools(() => false);
 
 function modelDef(id: string) {
 	return {
@@ -250,7 +264,7 @@ async function waitForPath(path: string): Promise<void> {
 	throw new Error(`Timed out waiting for ${path}`);
 }
 
-function gatedQuestionAnswer(): AskUserQuestionResult {
+function gatedQuestionAnswer() {
 	return {
 		cancelled: false,
 		answers: [
@@ -320,6 +334,10 @@ beforeAll(async () => {
 afterAll(() => {
 	disposeAllSessions();
 	setSkillAdmissionResolver(() => admissionContextFor(undefined));
+	setSessionPublisher(() => {});
+	setSessionProjectResolver(() => null);
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	configurePiRuntime(null);
 	for (const dir of tmpDirs) rmSync(dir, { recursive: true, force: true });
 	if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
 	else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
@@ -327,6 +345,32 @@ afterAll(() => {
 	else process.env.THINKRAIL_DATA_DIR = priorDataDir;
 	if (priorOffline === undefined) delete process.env.PI_OFFLINE;
 	else process.env.PI_OFFLINE = priorOffline;
+});
+
+test("host shutdown settles credential writes on a live chat's retained runtime, not only the active one", async () => {
+	const s = await createSession({
+		cwd: tmpCwd("trpi-settle-creds-"),
+		workspaceId: "ws-settle-creds",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const retained = await ModelRuntime.create({
+		credentials: new InMemoryCredentialStore(),
+		modelsPath: null,
+		allowModelNetwork: false,
+	});
+	const liveSettle = jest.spyOn(runtime, "settleCredentialWrites");
+	const activeSettle = jest.spyOn(retained, "settleCredentialWrites");
+	configurePiRuntime(retained);
+	try {
+		await settleCredentialWritesForShutdown();
+		expect(liveSettle).toHaveBeenCalledTimes(1);
+		expect(activeSettle).toHaveBeenCalledTimes(1);
+	} finally {
+		configurePiRuntime(runtime);
+		liveSettle.mockRestore();
+		activeSettle.mockRestore();
+		await removeSession(s.sessionId);
+	}
 });
 
 test("session creation publishes a domain summary for other frontends", async () => {
@@ -345,7 +389,7 @@ test("session creation publishes a domain summary for other frontends", async ()
 			title: "",
 			live: true,
 		});
-		removeSession(created.sessionId);
+		await removeSession(created.sessionId);
 	} finally {
 		setSessionCreatedPublisher(() => {});
 	}
@@ -366,7 +410,7 @@ test("concurrent idle nudges reserve one prompt and queue the later wake-up", as
 	await first.send();
 	expect(seen(session.sessionId)).toContain("FIRST_NUDGE");
 	expect(seen(session.sessionId)).toContain("SECOND_NUDGE");
-	removeSession(session.sessionId);
+	await removeSession(session.sessionId);
 });
 
 test("two sessions in two worktrees stream independently; disposing one leaves the other working", async () => {
@@ -376,14 +420,12 @@ test("two sessions in two worktrees stream independently; disposing one leaves t
 	const a = await createSession({
 		cwd: tmpCwd("trpi-a-"),
 		workspaceId: "ws-a",
-		// biome-ignore lint/suspicious/noExplicitAny: faux Model<string> satisfies the SDK's Model<any>
-		model: fauxA.getModel() as any,
+		model: toWireModel(fauxA.getModel()),
 	});
 	const b = await createSession({
 		cwd: tmpCwd("trpi-b-"),
 		workspaceId: "ws-b",
-		// biome-ignore lint/suspicious/noExplicitAny: see above
-		model: fauxB.getModel() as any,
+		model: toWireModel(fauxB.getModel()),
 	});
 	expect(a.sessionId).not.toBe(b.sessionId);
 
@@ -395,9 +437,10 @@ test("two sessions in two worktrees stream independently; disposing one leaves t
 	expect(seen(b.sessionId)).not.toContain("ALPHA_REPLY");
 
 	const aEventsBefore = (events.get(a.sessionId) ?? []).length;
-	removeSession(a.sessionId);
+	const removing = removeSession(a.sessionId);
 	fauxB.appendResponses([fauxAssistantMessage("BRAVO_AGAIN")]);
 	await promptSession(b.sessionId, "again B");
+	await removing;
 
 	expect(seen(b.sessionId)).toContain("BRAVO_AGAIN");
 	expect((events.get(a.sessionId) ?? []).length).toBe(aEventsBefore);
@@ -528,11 +571,14 @@ test("agent_settled carries the final attempt's terminal metadata", async () => 
 	await promptSession(session.sessionId, "again");
 	const completionId = getSessionState(session.sessionId).completion?.completionId;
 	if (!completionId) throw new Error("settled run has no completion id");
-	expect(acknowledgeCompletion(session.sessionId, "stale").acknowledged).toBe(false);
+	expect(acknowledgeCompletion(session.sessionId, "stale")).toMatchObject({
+		acknowledged: false,
+		record: { title: "" },
+	});
 	expect(getSessionState(session.sessionId).completionUnread).toBe(true);
 	expect(acknowledgeCompletion(session.sessionId, completionId)).toMatchObject({
 		acknowledged: true,
-		record: { state: { completionUnread: false } },
+		record: { title: "", state: { completionUnread: false } },
 	});
 	expect(acknowledgeCompletion(session.sessionId, completionId).acknowledged).toBe(false);
 	await abortSession(session.sessionId);
@@ -633,7 +679,12 @@ test("marking a workspace unread relights its most recent result and read clears
 
 			const relit = await markWorkspaceUnread(workspace);
 			if (!relit) throw new Error("nothing was relit");
-			expect(relit).toMatchObject({ sessionId: newer, state: { completionUnread: true } });
+			expect(relit).toMatchObject({
+				sessionId: newer,
+				title: "",
+				firstPrompt: "hi",
+				state: { completionUnread: true },
+			});
 			expect(published).toEqual([relit]);
 			expect(await unreadOf()).toEqual({ [older]: false, [newer]: true });
 
@@ -641,6 +692,8 @@ test("marking a workspace unread relights its most recent result and read clears
 			expect(cleared).toEqual([
 				expect.objectContaining({
 					sessionId: newer,
+					title: "",
+					firstPrompt: "hi",
 					state: expect.objectContaining({ completionUnread: false }),
 				}),
 			]);
@@ -675,7 +728,7 @@ test("marking a live chat's workspace read and unread publishes through the live
 			});
 			expect(getSessionState(id).completionUnread).toBe(true);
 		} finally {
-			removeSession(id);
+			await removeSession(id);
 		}
 	}));
 
@@ -731,8 +784,8 @@ test("a length-truncated questionnaire is terminal and cannot be answered", asyn
 	try {
 		await continuationStarted;
 		await expect(
-			answerQuestion(session.sessionId, toolCallId, { answers: [], cancelled: true }),
-		).rejects.toThrow("not awaiting an answer");
+			respondToTool(session.sessionId, toolCallId, { answers: [], cancelled: true }),
+		).rejects.toThrow("not awaiting a response");
 		releaseContinuation();
 		await prompting;
 		const transcript = await getSessionMessages(session.sessionId, "ws-length-question", cwd);
@@ -744,7 +797,7 @@ test("a length-truncated questionnaire is terminal and cannot be answered", asyn
 	} finally {
 		releaseContinuation();
 		await prompting.catch(() => {});
-		removeSession(session.sessionId);
+		await removeSession(session.sessionId);
 	}
 });
 
@@ -766,7 +819,7 @@ test("a disabled workspace creates chats without active subagent tools", async (
 		expect(seen(sessionId)).toContain("SUBAGENTS_OFF");
 	} finally {
 		setSubagentsEnabledResolver(() => true);
-		if (sessionId) removeSession(sessionId);
+		if (sessionId) await removeSession(sessionId);
 	}
 });
 
@@ -841,7 +894,7 @@ test("an idle chat adopts subagent policy changes, survives resource reload, and
 		expect(seen(sessionId)).toContain("SUBAGENTS_ON");
 	} finally {
 		setSubagentsEnabledResolver(() => true);
-		if (sessionId) removeSession(sessionId);
+		if (sessionId) await removeSession(sessionId);
 	}
 });
 
@@ -878,7 +931,7 @@ test("an idle chat adopts an agent-review policy change live — request_review 
 		expect(seen(sessionId)).toContain("REVIEW_ON");
 	} finally {
 		setAgentReviewEnabledResolver(() => true);
-		if (sessionId) removeSession(sessionId);
+		if (sessionId) await removeSession(sessionId);
 	}
 });
 
@@ -941,7 +994,7 @@ test("a streaming chat defers its tool-set change until agent_settled", async ()
 	} finally {
 		release();
 		setSubagentsEnabledResolver(() => true);
-		if (sessionId) removeSession(sessionId);
+		if (sessionId) await removeSession(sessionId);
 		runtime.unregisterProvider("faux-subagent-policy");
 	}
 });
@@ -986,6 +1039,90 @@ test("an idle chat drops a disabled extension's tool and guidance live and resto
 	}
 });
 
+async function withPersistentVisualizeChat(
+	prefix: string,
+	run: (chat: {
+		setDisabled: (names: string[]) => void;
+		prompt: (label: string) => Promise<string>;
+		restart: () => Promise<void>;
+	}) => Promise<void>,
+): Promise<void> {
+	let disabled = new Set<string>();
+	setDisabledExtensionsResolver(() => disabled);
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const cwd = tmpCwd(`trpi-${prefix}-`);
+	const workspaceId = `ws-${prefix}`;
+	let sessionId: string | undefined;
+	try {
+		const session = await createSession({ cwd, workspaceId, model: toWireModel(fauxA.getModel()) });
+		const id = session.sessionId;
+		sessionId = id;
+		await run({
+			setDisabled: (names) => {
+				disabled = new Set(names);
+			},
+			prompt: async (label) => {
+				let state = "";
+				fauxA.setResponses([
+					(context) => {
+						state = visualizeToolState(context);
+						return fauxAssistantMessage(`${label}_${state}`);
+					},
+				]);
+				await promptSession(id, `Check ${label}.`);
+				return state;
+			},
+			restart: async () => {
+				await removeSession(id);
+				await getSessionMessages(id, workspaceId, cwd);
+			},
+		});
+	} finally {
+		setDisabledExtensionsResolver(() => new Set());
+		if (sessionId) await removeSession(sessionId);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+}
+test("a tool withheld in an open chat comes back after a restart once its extension is re-enabled", async () => {
+	await withPersistentVisualizeChat("extension-open-restart", async (chat) => {
+		expect(await chat.prompt("BEFORE")).toBe("VISUALIZE_ON");
+		chat.setDisabled(["visualize"]);
+		refreshExtensionTools();
+		expect(await chat.prompt("OFF")).toBe("VISUALIZE_OFF");
+		chat.setDisabled([]);
+		await chat.restart();
+		expect(await chat.prompt("AFTER_RESTART")).toBe("VISUALIZE_ON");
+	});
+});
+
+test("an extension disabled while the chat was closed comes back once re-enabled", async () => {
+	await withPersistentVisualizeChat("extension-closed-restart", async (chat) => {
+		expect(await chat.prompt("A")).toBe("VISUALIZE_ON");
+		chat.setDisabled(["visualize"]);
+		await chat.restart();
+		expect(await chat.prompt("B")).toBe("VISUALIZE_OFF");
+		chat.setDisabled([]);
+		await chat.restart();
+		expect(await chat.prompt("C")).toBe("VISUALIZE_ON");
+	});
+});
+
+test("a registry tool follows Settings across repeated toggle and restart cycles", async () => {
+	await withPersistentVisualizeChat("extension-toggle-cycles", async (chat) => {
+		for (let cycle = 0; cycle < 2; cycle++) {
+			expect(await chat.prompt(`ON_${cycle}`)).toBe("VISUALIZE_ON");
+			chat.setDisabled(["visualize"]);
+			refreshExtensionTools();
+			expect(await chat.prompt(`OFF_${cycle}`)).toBe("VISUALIZE_OFF");
+			await chat.restart();
+			expect(await chat.prompt(`STILL_OFF_${cycle}`)).toBe("VISUALIZE_OFF");
+			chat.setDisabled([]);
+			await chat.restart();
+		}
+		expect(await chat.prompt("FINAL")).toBe("VISUALIZE_ON");
+	});
+});
+
 test("a chat created with an extension off never loads it and reloads to adopt it when re-enabled", async () => {
 	let disabled = new Set(["visualize"]);
 	setDisabledExtensionsResolver(() => disabled);
@@ -1026,68 +1163,226 @@ test("a chat created with an extension off never loads it and reloads to adopt i
 	}
 });
 
-test("a streaming chat drops a disabled extension's tool only at agent_settled", async () => {
-	const slow = createFauxCore({
-		provider: "faux-extension-policy",
-		api: "faux-extension-policy",
-		models: [modelDef("faux-extension-policy")],
-		tokensPerSecond: 2000,
-	});
-	runtime.registerProvider("faux-extension-policy", cfg(slow, "faux-extension-policy"));
+function webAccessState(context: TranscriptContext): string {
+	const toolActive = getCurrentTools(context.messages).some((tool) => tool.name === "web_search");
+	const skillListed = getCurrentSystemPrompt(context.messages).includes("<name>librarian</name>");
+	if (toolActive && skillListed) return "WEB_ON";
+	if (!toolActive && !skillListed) return "WEB_OFF";
+	return `WEB_INCONSISTENT(tool=${toolActive},skill=${skillListed})`;
+}
+
+test("switching an extension's skills off reloads the idle chat once; a skill-less extension never reloads", async () => {
 	let disabled = new Set<string>();
 	setDisabledExtensionsResolver(() => disabled);
-	let release = () => {};
-	const gate = new Promise<void>((resolve) => {
-		release = resolve;
-	});
-	let started = () => {};
-	const requestStarted = new Promise<void>((resolve) => {
-		started = resolve;
-	});
-	let firstState = "";
-	let automaticContinuationState = "";
+	const originalReload = AgentSession.prototype.reload;
+	let reloads = 0;
 	let sessionId: string | undefined;
+	AgentSession.prototype.reload = async function (this: AgentSession, ...args) {
+		await originalReload.apply(this, args);
+		if (this.sessionId === sessionId) reloads++;
+	};
+	const settle = async (expected: number) => {
+		for (let waited = 0; reloads < expected && waited < 200; waited++) await Bun.sleep(10);
+		await Bun.sleep(30);
+	};
 	try {
-		const cwd = tmpCwd("trpi-extension-streaming-toggle-");
-		writeFileSync(join(cwd, "probe.txt"), "probe\n");
-		slow.setResponses([
-			async (context) => {
-				firstState = visualizeToolState(context);
-				started();
-				await gate;
-				return fauxAssistantMessage(fauxToolCall("read", { path: join(cwd, "probe.txt") }));
-			},
-			(context) => {
-				automaticContinuationState = visualizeToolState(context);
-				return fauxAssistantMessage("AUTOMATIC_WORK_DONE");
-			},
-			(context) => fauxAssistantMessage(`NEXT_TURN_${visualizeToolState(context)}`),
-		]);
 		const session = await createSession({
-			cwd,
-			workspaceId: "ws-extension-streaming-toggle",
-			model: toWireModel(slow.getModel()),
+			cwd: tmpCwd("trpi-extension-skills-toggle-"),
+			workspaceId: "ws-extension-skills-toggle",
+			model: toWireModel(fauxA.getModel()),
 		});
 		sessionId = session.sessionId;
-		const firstTurn = promptSession(sessionId, "Start the gated turn.");
-		await requestStarted;
+		const check = async (label: string) => {
+			fauxA.setResponses([
+				(context) => fauxAssistantMessage(`${label}_${webAccessState(context)}`),
+			]);
+			await promptSession(session.sessionId, `Check ${label}.`);
+		};
+		await check("START");
+		expect(seen(sessionId)).toContain("START_WEB_ON");
+		reloads = 0;
 
 		disabled = new Set(["visualize"]);
 		refreshExtensionTools();
-		expect(firstState).toBe("VISUALIZE_ON");
-		release();
-		await firstTurn;
-		expect(automaticContinuationState).toBe("VISUALIZE_ON");
-		await promptSession(sessionId, "Check the next turn.");
+		await settle(0);
+		expect(reloads).toBe(0);
 
-		expect(seen(sessionId)).toContain("NEXT_TURN_VISUALIZE_OFF");
+		disabled = new Set(["visualize", "web-access"]);
+		refreshExtensionTools();
+		await settle(1);
+		expect(reloads).toBe(1);
+		await check("OFF");
+		expect(seen(sessionId)).toContain("OFF_WEB_OFF");
+
+		disabled = new Set();
+		refreshExtensionTools();
+		await settle(2);
+		expect(reloads).toBe(2);
+		await check("BACK");
+		expect(seen(sessionId)).toContain("BACK_WEB_ON");
 	} finally {
-		release();
+		AgentSession.prototype.reload = originalReload;
 		setDisabledExtensionsResolver(() => new Set());
 		if (sessionId) await removeSession(sessionId);
-		runtime.unregisterProvider("faux-extension-policy");
 	}
 });
+
+test("an unchanged or skill-less policy refresh during a reload never buys a second reload", async () => {
+	let disabled = new Set<string>();
+	setDisabledExtensionsResolver(() => disabled);
+	const originalReload = AgentSession.prototype.reload;
+	let reloads = 0;
+	let sessionId: string | undefined;
+	let duringReload: (() => void) | undefined;
+	AgentSession.prototype.reload = async function (this: AgentSession, ...args) {
+		const run = duringReload;
+		duringReload = undefined;
+		const reloading = originalReload.apply(this, args);
+		run?.();
+		await reloading;
+		if (this.sessionId === sessionId) reloads++;
+	};
+	try {
+		const session = await createSession({
+			cwd: tmpCwd("trpi-extension-refresh-during-reload-"),
+			workspaceId: "ws-extension-refresh-during-reload",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		duringReload = () => {
+			refreshExtensionTools();
+			disabled = new Set(["visualize"]);
+			refreshExtensionTools();
+		};
+		await requestSessionReload(session.sessionId);
+		await Bun.sleep(300);
+		expect(reloads).toBe(1);
+		fauxA.setResponses([(context) => fauxAssistantMessage(`AFTER_${visualizeToolState(context)}`)]);
+		await promptSession(session.sessionId, "Check after the refreshes.");
+		expect(seen(sessionId)).toContain("AFTER_VISUALIZE_OFF");
+	} finally {
+		AgentSession.prototype.reload = originalReload;
+		setDisabledExtensionsResolver(() => new Set());
+		if (sessionId) await removeSession(sessionId);
+	}
+});
+
+test("re-enabling an extension while its disable reload runs reloads again to adopt it", async () => {
+	let disabled = new Set<string>();
+	let flipDuringReload = false;
+	setDisabledExtensionsResolver(() => {
+		const current = disabled;
+		if (flipDuringReload) {
+			flipDuringReload = false;
+			queueMicrotask(() => {
+				disabled = new Set();
+				refreshExtensionTools();
+			});
+		}
+		return current;
+	});
+	const originalReload = AgentSession.prototype.reload;
+	let reloads = 0;
+	let sessionId: string | undefined;
+	AgentSession.prototype.reload = async function (this: AgentSession, ...args) {
+		if (this.sessionId === sessionId && reloads === 0) flipDuringReload = true;
+		await originalReload.apply(this, args);
+		if (this.sessionId === sessionId) reloads++;
+	};
+	try {
+		const session = await createSession({
+			cwd: tmpCwd("trpi-extension-mid-reload-"),
+			workspaceId: "ws-extension-mid-reload",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		disabled = new Set(["web-access"]);
+		refreshExtensionTools();
+		for (let waited = 0; reloads < 2 && waited < 300; waited++) await Bun.sleep(10);
+		expect(reloads).toBe(2);
+		fauxA.setResponses([(context) => fauxAssistantMessage(`AFTER_${webAccessState(context)}`)]);
+		await promptSession(session.sessionId, "Check after the racing toggle.");
+		expect(seen(sessionId)).toContain("AFTER_WEB_ON");
+	} finally {
+		AgentSession.prototype.reload = originalReload;
+		setDisabledExtensionsResolver(() => new Set());
+		if (sessionId) await removeSession(sessionId);
+	}
+});
+
+test.each([false, true])(
+	"a streaming chat applies only the latest extension policy at agent_settled (enabled: %s)",
+	async (enabledAtSettlement) => {
+		const slow = createFauxCore({
+			provider: "faux-extension-policy",
+			api: "faux-extension-policy",
+			models: [modelDef("faux-extension-policy")],
+			tokensPerSecond: 2000,
+		});
+		runtime.registerProvider("faux-extension-policy", cfg(slow, "faux-extension-policy"));
+		let disabled = new Set<string>();
+		setDisabledExtensionsResolver(() => disabled);
+		let release = () => {};
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		let started = () => {};
+		const requestStarted = new Promise<void>((resolve) => {
+			started = resolve;
+		});
+		let firstState = "";
+		let automaticContinuationState = "";
+		let sessionId: string | undefined;
+		try {
+			const cwd = tmpCwd("trpi-extension-streaming-toggle-");
+			writeFileSync(join(cwd, "probe.txt"), "probe\n");
+			slow.setResponses([
+				async (context) => {
+					firstState = visualizeToolState(context);
+					started();
+					await gate;
+					return fauxAssistantMessage(fauxToolCall("read", { path: join(cwd, "probe.txt") }));
+				},
+				(context) => {
+					automaticContinuationState = visualizeToolState(context);
+					return fauxAssistantMessage("AUTOMATIC_WORK_DONE");
+				},
+				(context) => fauxAssistantMessage(`NEXT_TURN_${visualizeToolState(context)}`),
+			]);
+			const session = await createSession({
+				cwd,
+				workspaceId: "ws-extension-streaming-toggle",
+				model: toWireModel(slow.getModel()),
+			});
+			sessionId = session.sessionId;
+			const firstTurn = promptSession(sessionId, "Start the gated turn.");
+			await requestStarted;
+
+			disabled = new Set(["visualize"]);
+			refreshExtensionTools();
+			disabled = new Set();
+			refreshExtensionTools();
+			if (!enabledAtSettlement) {
+				disabled = new Set(["visualize"]);
+				refreshExtensionTools();
+			}
+			expect(firstState).toBe("VISUALIZE_ON");
+			release();
+			await firstTurn;
+			expect(automaticContinuationState).toBe("VISUALIZE_ON");
+			await promptSession(sessionId, "Check the next turn.");
+
+			expect(seen(sessionId)).toContain(
+				enabledAtSettlement ? "NEXT_TURN_VISUALIZE_ON" : "NEXT_TURN_VISUALIZE_OFF",
+			);
+		} finally {
+			release();
+			setDisabledExtensionsResolver(() => new Set());
+			if (sessionId) await removeSession(sessionId);
+			runtime.unregisterProvider("faux-extension-policy");
+		}
+	},
+);
 
 test("repeated streaming policy changes resolve only the latest value at settlement", async () => {
 	const slow = createFauxCore({
@@ -1213,7 +1508,7 @@ test("disabling an idle parent lets its running background child finish and deli
 	}
 });
 
-test("buildSessionSettings disables image autoResize, and the override survives a settings.reload() and a trust change", async () => {
+test("buildSessionSettings disables image autoResize, and the override survives a settings.reload(), a trust change and a persisted setting", async () => {
 	const settings = buildSessionSettings(tmpCwd("trpi-settings-"), false);
 	expect(settings.getImageAutoResize()).toBe(false);
 	expect(settings.isProjectTrusted()).toBe(false);
@@ -1222,6 +1517,66 @@ test("buildSessionSettings disables image autoResize, and the override survives 
 	settings.setProjectTrusted(true);
 	expect(settings.isProjectTrusted()).toBe(true);
 	expect(settings.getImageAutoResize()).toBe(false);
+	settings.setCacheWarmingMode("off");
+	expect(settings.getImageAutoResize()).toBe(false);
+	await settings.flush();
+	settings.setCacheWarmingMode("streaming");
+	await settings.flush();
+});
+
+test("every session's cache-warming getter follows pi's settings.json: chats, delegated children and sessions created mid-write", async () => {
+	const settingsPath = join(process.env.PI_CODING_AGENT_DIR ?? "", "settings.json");
+	const chat = buildSessionSettings(tmpCwd("trpi-cache-warming-"), false);
+	const child = buildSessionSettings(tmpCwd("trpi-cache-warming-child-"), true);
+	try {
+		expect(chat.getCacheWarmingMode()).toBe("streaming");
+		expect(child.getCacheWarmingMode()).toBe("streaming");
+		await chat.reload();
+		expect(chat.getCacheWarmingMode()).toBe("streaming");
+
+		expect(await writeCacheWarmingMode("idle")).toEqual({ mode: "idle", source: "user" });
+		expect(chat.getCacheWarmingMode()).toBe("idle");
+		expect(child.getCacheWarmingMode()).toBe("idle");
+		const late = buildSessionSettings(tmpCwd("trpi-cache-warming-late-"), false);
+		expect(late.getCacheWarmingMode()).toBe("idle");
+
+		// Only the file matters: a session's own stale snapshot cannot keep a child warming.
+		await writeCacheWarmingMode("off");
+		for (const settings of [chat, child, late]) expect(settings.getCacheWarmingMode()).toBe("off");
+		expect(
+			(JSON.parse(readFileSync(settingsPath, "utf8")) as { cacheWarming?: string }).cacheWarming,
+		).toBe("off");
+
+		// An edit from the pi CLI is seen as well, without a reload.
+		writeFileSync(settingsPath, JSON.stringify({ cacheWarming: "streaming" }));
+		expect(chat.getCacheWarmingMode()).toBe("streaming");
+		rmSync(settingsPath, { force: true });
+		expect(child.getCacheWarmingMode()).toBe("streaming");
+	} finally {
+		rmSync(settingsPath, { force: true });
+	}
+});
+
+test("a live chat's warmer reads the mode through the file-backed getter", async () => {
+	const settingsPath = join(process.env.PI_CODING_AGENT_DIR ?? "", "settings.json");
+	const s = await createSession({
+		cwd: tmpCwd("trpi-cache-warming-live-"),
+		workspaceId: "ws-cache-warming",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const applied = jest.spyOn(SettingsManager.prototype, "setCacheWarmingMode");
+	try {
+		await writeCacheWarmingMode("off");
+		// The host writes once; no per-session setter runs, yet every live getter already answers "off".
+		expect(applied.mock.calls.map(([mode]) => mode)).toEqual(["off"]);
+		expect(
+			buildSessionSettings(tmpCwd("trpi-cache-warming-probe-"), false).getCacheWarmingMode(),
+		).toBe("off");
+	} finally {
+		applied.mockRestore();
+		rmSync(settingsPath, { force: true });
+		await removeSession(s.sessionId);
+	}
 });
 
 test("a prompt image reaches the transcript raw — the autoResize override survives pi's loader reload", async () => {
@@ -1450,7 +1805,7 @@ test("createSession re-resolves a wire model ref by {provider,id}, never trustin
 	expect(seen(s.sessionId)).toContain("RESOLVED_REPLY");
 	expect(s.model).not.toBeNull();
 	expect(s.model).not.toHaveProperty("baseUrl");
-	removeSession(s.sessionId);
+	await removeSession(s.sessionId);
 });
 
 test("createSession rejects an unknown/unavailable model ref (no arbitrary baseUrl injection)", async () => {
@@ -1467,8 +1822,7 @@ test("getSessionStats + getSessionCommands read live session info (cheap wins #3
 	const s = await createSession({
 		cwd: tmpCwd("trpi-stats-"),
 		workspaceId: "ws-s",
-		// biome-ignore lint/suspicious/noExplicitAny: faux Model<string> satisfies the SDK's Model<any>
-		model: fauxA.getModel() as any,
+		model: toWireModel(fauxA.getModel()),
 	});
 	await promptSession(s.sessionId, "count me");
 
@@ -1479,7 +1833,7 @@ test("getSessionStats + getSessionCommands read live session info (cheap wins #3
 	expect(typeof stats.tokens.total).toBe("number");
 
 	expect(Array.isArray(getSessionCommands(s.sessionId))).toBe(true);
-	removeSession(s.sessionId);
+	await removeSession(s.sessionId);
 });
 
 test("graceful shutdown preserves an expected question before its tool executes", async () => {
@@ -1503,8 +1857,8 @@ test("graceful shutdown preserves an expected question before its tool executes"
 			)?.isStreaming,
 		).toBe(true);
 		await expect(
-			answerQuestion(session.sessionId, toolCallId, { answers: [], cancelled: true }),
-		).rejects.toThrow("not awaiting an answer");
+			respondToTool(session.sessionId, toolCallId, { answers: [], cancelled: true }),
+		).rejects.toThrow("not awaiting a response");
 		const stopping = abortSession(session.sessionId, true);
 		gate.release();
 		await stopping;
@@ -1513,7 +1867,7 @@ test("graceful shutdown preserves an expected question before its tool executes"
 		gate.release();
 		gate.remove();
 		await prompting.catch(() => {});
-		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
 	}
 });
 
@@ -1536,7 +1890,7 @@ test("graceful shutdown persists an accepted answer and aborts its continuation"
 		await waitForPath(gate.startedPath);
 		await followUpSession(session.sessionId, "QUEUED_BEFORE_SHUTDOWN");
 		const result = gatedQuestionAnswer();
-		const answering = answerQuestion(session.sessionId, toolCallId, result);
+		const answering = respondToTool(session.sessionId, toolCallId, result);
 		const settling = settleSessionsForShutdown(1000);
 		await followUpSession(session.sessionId, "QUEUED_DURING_SHUTDOWN");
 		gate.release();
@@ -1546,76 +1900,75 @@ test("graceful shutdown persists an accepted answer and aborts its continuation"
 			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
 		);
 		if (persisted?.role !== "toolResult") throw new Error("native result was not persisted");
-		expect(persisted.details).toEqual<AskUserQuestionResult>(result);
+		expect(persisted.details).toEqual(result);
 		expect(seen(session.sessionId)).not.toContain("SHUTDOWN_CONTINUATION_RAN");
 		expect(transcript.messages.filter((message) => message.role === "user")).toHaveLength(1);
 	} finally {
 		gate.release();
 		gate.remove();
 		await prompting.catch(() => {});
-		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
 	}
 });
 
-test.each([
-	"removeSession",
-	"removeWorkspaceSessions",
-	"archiveDuringDelete",
-])("%s drains queued input while allowing an accepted answer to persist", async (teardown) => {
-	const gate = installAskToolGate(`ask-${teardown}-accepted-gate`);
-	const toolCallId = `accepted-on-${teardown}`;
-	const cwd = tmpCwd("trpi-removal-accepted-");
-	const manager = SessionManager.inMemory(cwd);
-	setSessionManagerFactory(() => manager);
-	fauxA.setResponses([
-		gatedQuestionMessage(toolCallId),
-		fauxAssistantMessage("REMOVAL_CONTINUATION_RAN"),
-	]);
-	const session = await createSession({
-		cwd,
-		workspaceId: "ws-removal-accepted",
-		model: toWireModel(fauxA.getModel()),
-	});
-	const prompting = promptSession(session.sessionId, "Ask before continuing.");
-	prompting.catch(() => {});
-	try {
-		await waitForPath(gate.startedPath);
-		await followUpSession(session.sessionId, "QUEUED_BEFORE_REMOVAL");
-		const result = gatedQuestionAnswer();
-		const answering = answerQuestion(session.sessionId, toolCallId, result);
-		const removing =
-			teardown === "removeSession"
-				? removeSession(session.sessionId)
-				: teardown === "removeWorkspaceSessions"
-					? removeWorkspaceSessions("ws-removal-accepted")
-					: Promise.all([
-							deleteSession(session.sessionId, "ws-removal-accepted", cwd),
-							removeWorkspaceSessions("ws-removal-accepted"),
-						]);
-		if (teardown === "archiveDuringDelete") {
-			await expect(abortSession(session.sessionId, true)).rejects.toThrow("Unknown session");
-		} else {
-			await followUpSession(session.sessionId, "QUEUED_DURING_REMOVAL");
+test.each(["removeSession", "removeWorkspaceSessions", "archiveDuringDelete"])(
+	"%s drains queued input while allowing an accepted answer to persist",
+	async (teardown) => {
+		const gate = installAskToolGate(`ask-${teardown}-accepted-gate`);
+		const toolCallId = `accepted-on-${teardown}`;
+		const cwd = tmpCwd("trpi-removal-accepted-");
+		const manager = SessionManager.inMemory(cwd);
+		setSessionManagerFactory(() => manager);
+		fauxA.setResponses([
+			gatedQuestionMessage(toolCallId),
+			fauxAssistantMessage("REMOVAL_CONTINUATION_RAN"),
+		]);
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-removal-accepted",
+			model: toWireModel(fauxA.getModel()),
+		});
+		const prompting = promptSession(session.sessionId, "Ask before continuing.");
+		prompting.catch(() => {});
+		try {
+			await waitForPath(gate.startedPath);
+			await followUpSession(session.sessionId, "QUEUED_BEFORE_REMOVAL");
+			const result = gatedQuestionAnswer();
+			const answering = respondToTool(session.sessionId, toolCallId, result);
+			const removing =
+				teardown === "removeSession"
+					? removeSession(session.sessionId)
+					: teardown === "removeWorkspaceSessions"
+						? removeWorkspaceSessions("ws-removal-accepted")
+						: Promise.all([
+								deleteSession(session.sessionId, "ws-removal-accepted", cwd),
+								removeWorkspaceSessions("ws-removal-accepted"),
+							]);
+			if (teardown === "archiveDuringDelete") {
+				await expect(abortSession(session.sessionId, true)).rejects.toThrow("Unknown session");
+			} else {
+				await followUpSession(session.sessionId, "QUEUED_DURING_REMOVAL");
+			}
+			gate.release();
+			await Promise.all([answering, removing, prompting]);
+			const messages = manager.buildSessionContext().messages;
+			const persisted = messages.find(
+				(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+			);
+			if (persisted?.role !== "toolResult") throw new Error("native result was not persisted");
+			expect(JSON.stringify(persisted.details)).toBe(JSON.stringify(result));
+			expect(messages.filter((message) => message.role === "user")).toHaveLength(1);
+			expect(seen(session.sessionId)).not.toContain("REMOVAL_CONTINUATION_RAN");
+			expect(hasSession(session.sessionId)).toBe(false);
+		} finally {
+			gate.release();
+			gate.remove();
+			if (hasSession(session.sessionId)) await removeSession(session.sessionId);
+			await prompting.catch(() => {});
+			setSessionManagerFactory(() => SessionManager.inMemory());
 		}
-		gate.release();
-		await Promise.all([answering, removing, prompting]);
-		const messages = manager.buildSessionContext().messages;
-		const persisted = messages.find(
-			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
-		);
-		if (persisted?.role !== "toolResult") throw new Error("native result was not persisted");
-		expect(JSON.stringify(persisted.details)).toBe(JSON.stringify(result));
-		expect(messages.filter((message) => message.role === "user")).toHaveLength(1);
-		expect(seen(session.sessionId)).not.toContain("REMOVAL_CONTINUATION_RAN");
-		expect(hasSession(session.sessionId)).toBe(false);
-	} finally {
-		gate.release();
-		gate.remove();
-		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
-		await prompting.catch(() => {});
-		setSessionManagerFactory(() => SessionManager.inMemory());
-	}
-});
+	},
+);
 
 test("an answer accepted before execute persists before Stop aborts the continuation", async () => {
 	const gate = installAskToolGate("ask-answer-stop-gate");
@@ -1635,7 +1988,7 @@ test("an answer accepted before execute persists before Stop aborts the continua
 	try {
 		await waitForPath(gate.startedPath);
 		const result = gatedQuestionAnswer();
-		const answering = answerQuestion(session.sessionId, toolCallId, result);
+		const answering = respondToTool(session.sessionId, toolCallId, result);
 		await steerSession(session.sessionId, "STEER_BEFORE_STOP");
 		await followUpSession(session.sessionId, "FOLLOW_UP_BEFORE_STOP");
 		let stopResolved = false;
@@ -1659,13 +2012,13 @@ test("an answer accepted before execute persists before Stop aborts the continua
 			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
 		);
 		if (persisted?.role !== "toolResult") throw new Error("native result was not persisted");
-		expect(persisted.details).toEqual<AskUserQuestionResult>(result);
+		expect(persisted.details).toEqual(result);
 		expect(persisted.isError).toBe(false);
 	} finally {
 		gate.release();
 		gate.remove();
 		await prompting.catch(() => {});
-		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
 	}
 });
 
@@ -1685,8 +2038,8 @@ test("Stop claims an expected question before a late answer can win", async () =
 		await waitForPath(gate.startedPath);
 		const stopping = abortSession(session.sessionId, true);
 		await expect(
-			answerQuestion(session.sessionId, toolCallId, { answers: [], cancelled: true }),
-		).rejects.toThrow("not awaiting an answer");
+			respondToTool(session.sessionId, toolCallId, { answers: [], cancelled: true }),
+		).rejects.toThrow("not awaiting a response");
 		gate.release();
 		expect(await stopping).toEqual({ steering: [], followUp: [] });
 		await prompting;
@@ -1700,7 +2053,7 @@ test("Stop claims an expected question before a late answer can win", async () =
 		gate.release();
 		gate.remove();
 		await prompting.catch(() => {});
-		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
 	}
 });
 
@@ -1717,22 +2070,21 @@ test("emergency session disposal rejects an accepted answer that cannot persist"
 	prompting.catch(() => {});
 	try {
 		await waitForPath(gate.startedPath);
-		const answering = answerQuestion(session.sessionId, toolCallId, {
+		const answering = respondToTool(session.sessionId, toolCallId, {
 			answers: [],
 			cancelled: true,
 		});
 		disposeAllSessions();
-		await expect(answering).rejects.toThrow("Session disposed while waiting for a question");
+		await expect(answering).rejects.toThrow("Session disposed while waiting for a tool response");
 	} finally {
 		gate.release();
 		gate.remove();
 		await prompting.catch(() => {});
-		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
 	}
 });
 
-test("the host questionnaire wins over a same-name extension tool before and after reload", async () => {
-	const cwd = tmpCwd("trpi-question-collision-");
+function installExternalQuestionnaire(cwd: string): void {
 	const extensionDir = join(cwd, ".pi", "extensions");
 	mkdirSync(extensionDir, { recursive: true });
 	writeFileSync(
@@ -1753,6 +2105,31 @@ test("the host questionnaire wins over a same-name extension tool before and aft
 			"}",
 		].join("\n"),
 	);
+}
+
+function askToolState(context: TranscriptContext): string {
+	const toolActive = getCurrentTools(context.messages).some(
+		(tool) => tool.name === "ask_user_question",
+	);
+	const guidanceInPrompt = getCurrentSystemPrompt(context.messages).includes(
+		"Call ask_user_question whenever",
+	);
+	if (toolActive && guidanceInPrompt) return "ASK_ON";
+	if (!toolActive && !guidanceInPrompt) return "ASK_OFF";
+	return "ASK_INCONSISTENT";
+}
+
+async function waitForQuestion(sessionId: string): Promise<void> {
+	for (let attempt = 0; attempt < 200; attempt++) {
+		if (getSessionState(sessionId).needsInput?.kind === "tool-response") return;
+		await Bun.sleep(5);
+	}
+	throw new Error("Timed out waiting for the question to need input");
+}
+
+test("our ask_user_question wins over a same-name extension tool before and after reload", async () => {
+	const cwd = tmpCwd("trpi-question-collision-");
+	installExternalQuestionnaire(cwd);
 	const dialogs: ExtUiRequest[] = [];
 	setExtUiPublisher((request) => dialogs.push(request));
 	const session = await createSession({
@@ -1775,9 +2152,9 @@ test("the host questionnaire wins over a same-name extension tool before and aft
 					if (getSessionState(session.sessionId).needsInput) break;
 					await Bun.sleep(5);
 				}
-				expect(getSessionState(session.sessionId).needsInput?.kind).toBe("question");
+				expect(getSessionState(session.sessionId).needsInput?.kind).toBe("tool-response");
 				expect(dialogs.filter((request) => request.kind === "input")).toEqual([]);
-				await answerQuestion(session.sessionId, toolCallId, gatedQuestionAnswer());
+				await respondToTool(session.sessionId, toolCallId, gatedQuestionAnswer());
 				await prompting;
 				const { messages } = await getSessionMessages(
 					session.sessionId,
@@ -1802,8 +2179,346 @@ test("the host questionnaire wins over a same-name extension tool before and aft
 			expect.objectContaining({ message: "EXTERNAL_COMMAND_AVAILABLE" }),
 		);
 	} finally {
-		removeSession(session.sessionId);
+		await removeSession(session.sessionId);
 		setExtUiPublisher(() => {});
+	}
+});
+
+test("the ask-user-question switch drops the tool and guidance live, and the same mailbox answers once it is back", async () => {
+	let disabled = new Set<string>();
+	setDisabledExtensionsResolver(() => disabled);
+	const cwd = tmpCwd("trpi-ask-idle-toggle-");
+	let sessionId: string | undefined;
+	try {
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-ask-idle-toggle",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		fauxA.setResponses([(context) => fauxAssistantMessage(askToolState(context))]);
+		await promptSession(sessionId, "Check the ask tool.");
+		expect(seen(sessionId)).toContain("ASK_ON");
+
+		disabled = new Set(["ask-user-question"]);
+		refreshExtensionTools();
+		fauxA.setResponses([(context) => fauxAssistantMessage(`OFF_${askToolState(context)}`)]);
+		await promptSession(sessionId, "Check the switched-off ask tool.");
+		expect(seen(sessionId)).toContain("OFF_ASK_OFF");
+
+		disabled = new Set();
+		refreshExtensionTools();
+		const toolCallId = "ask-after-toggle";
+		let stateWhenAsking = "";
+		fauxA.setResponses([
+			(context) => {
+				stateWhenAsking = askToolState(context);
+				return gatedQuestionMessage(toolCallId);
+			},
+			fauxAssistantMessage("ASK_BACK_CONTINUED"),
+		]);
+		const prompting = promptSession(sessionId, "Choose a runtime.");
+		await waitForQuestion(sessionId);
+		expect(stateWhenAsking).toBe("ASK_ON");
+		await respondToTool(sessionId, toolCallId, gatedQuestionAnswer());
+		await prompting;
+		expect(seen(sessionId)).toContain("ASK_BACK_CONTINUED");
+		const { messages } = await getSessionMessages(sessionId, "ws-ask-idle-toggle", cwd);
+		expect(messages).toContainEqual(
+			expect.objectContaining({ role: "toolResult", toolCallId, details: gatedQuestionAnswer() }),
+		);
+	} finally {
+		setDisabledExtensionsResolver(() => new Set());
+		if (sessionId) await removeSession(sessionId);
+	}
+});
+
+test("a chat created with ask-user-question off leaves a same-name package in charge until re-enabling reloads ours ahead of it", async () => {
+	let disabled = new Set(["ask-user-question"]);
+	setDisabledExtensionsResolver(() => disabled);
+	const cwd = tmpCwd("trpi-ask-new-off-collision-");
+	installExternalQuestionnaire(cwd);
+	const dialogs: ExtUiRequest[] = [];
+	setExtUiPublisher((request) => dialogs.push(request));
+	let sessionId: string | undefined;
+	try {
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-ask-new-off-collision",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		let guidanceWhileOff = "";
+		fauxA.setResponses([
+			(context) => {
+				guidanceWhileOff = getCurrentSystemPrompt(context.messages);
+				return gatedQuestionMessage("ask-external");
+			},
+			fauxAssistantMessage("EXTERNAL_CONTINUED"),
+		]);
+		const externalPrompting = promptSession(sessionId, "Choose a runtime.");
+		for (let attempt = 0; attempt < 200; attempt++) {
+			if (dialogs.some((request) => request.kind === "input")) break;
+			await Bun.sleep(5);
+		}
+		const dialog = dialogs.find((request) => request.kind === "input");
+		if (!dialog) throw new Error("the external questionnaire never asked");
+		expect(guidanceWhileOff).not.toContain("Call ask_user_question whenever");
+		expect(getSessionState(sessionId).needsInput?.kind).not.toBe("tool-response");
+		resolveExtUi({ id: dialog.id, value: "1" });
+		await externalPrompting;
+		expect(seen(sessionId)).toContain("EXTERNAL_QUESTIONNAIRE");
+
+		const originalReload = AgentSession.prototype.reload;
+		let reloads = 0;
+		AgentSession.prototype.reload = async function (this: AgentSession, ...args) {
+			await originalReload.apply(this, args);
+			reloads++;
+		};
+		try {
+			disabled = new Set();
+			refreshExtensionTools();
+			for (let waited = 0; reloads === 0 && waited < 200; waited++) await Bun.sleep(10);
+		} finally {
+			AgentSession.prototype.reload = originalReload;
+		}
+		expect(reloads).toBe(1);
+
+		const toolCallId = "ask-ours-again";
+		let stateWhenAsking = "";
+		fauxA.setResponses([
+			(context) => {
+				stateWhenAsking = askToolState(context);
+				return gatedQuestionMessage(toolCallId);
+			},
+			fauxAssistantMessage("OURS_CONTINUED"),
+		]);
+		const prompting = promptSession(sessionId, "Choose a runtime again.");
+		await waitForQuestion(sessionId);
+		expect(stateWhenAsking).toBe("ASK_ON");
+		expect(dialogs.filter((request) => request.kind === "input")).toHaveLength(1);
+		await respondToTool(sessionId, toolCallId, gatedQuestionAnswer());
+		await prompting;
+		expect(seen(sessionId)).toContain("OURS_CONTINUED");
+		const { messages } = await getSessionMessages(sessionId, "ws-ask-new-off-collision", cwd);
+		expect(messages).toContainEqual(
+			expect.objectContaining({ role: "toolResult", toolCallId, details: gatedQuestionAnswer() }),
+		);
+	} finally {
+		for (const request of dialogs) resolveExtUi({ id: request.id, value: null });
+		setDisabledExtensionsResolver(() => new Set());
+		setExtUiPublisher(() => {});
+		if (sessionId) await removeSession(sessionId);
+	}
+});
+
+function installGatedForeignQuestionnaire(cwd: string): {
+	startedPath: string;
+	release: () => void;
+} {
+	const controlDir = tmpCwd("trpi-foreign-gate-");
+	const startedPath = join(controlDir, "started");
+	const releasePath = join(controlDir, "release");
+	const extensionDir = join(cwd, ".pi", "extensions");
+	mkdirSync(extensionDir, { recursive: true });
+	writeFileSync(
+		join(extensionDir, "foreign-questionnaire.ts"),
+		[
+			'import { existsSync, writeFileSync } from "node:fs";',
+			'import { setTimeout as sleep } from "node:timers/promises";',
+			"export default function (pi) {",
+			"  pi.registerTool({",
+			'    name: "ask_user_question", label: "Foreign questionnaire", description: "Foreign questionnaire",',
+			'    parameters: { type: "object", additionalProperties: true },',
+			"    async execute() {",
+			`      writeFileSync(${JSON.stringify(startedPath)}, "");`,
+			`      while (!existsSync(${JSON.stringify(releasePath)})) await sleep(2);`,
+			'      return { content: [{ type: "text", text: "FOREIGN_QUESTIONNAIRE" }] };',
+			"    },",
+			"  });",
+			"}",
+		].join("\n"),
+	);
+	return { startedPath, release: () => writeFileSync(releasePath, "") };
+}
+
+test("with ask-user-question off, a same-name package's call never becomes our live question", async () => {
+	setDisabledExtensionsResolver(() => new Set(["ask-user-question"]));
+	const cwd = tmpCwd("trpi-ask-off-foreign-live-");
+	const gate = installGatedForeignQuestionnaire(cwd);
+	let sessionId: string | undefined;
+	let prompting: Promise<void> | undefined;
+	try {
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-ask-off-foreign-live",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		const toolCallId = "foreign-live";
+		fauxA.setResponses([
+			gatedQuestionMessage(toolCallId),
+			fauxAssistantMessage("FOREIGN_CONTINUED"),
+		]);
+		prompting = promptSession(sessionId, "Choose a runtime.");
+		await waitForPath(gate.startedPath);
+		expect(getSessionState(sessionId).needsInput).toBeNull();
+		const answering = respondToTool(sessionId, toolCallId, gatedQuestionAnswer());
+		answering.catch(() => {});
+		gate.release();
+		await expect(answering).rejects.toThrow("Unknown tool call awaiting a response");
+		await prompting;
+		expect(seen(sessionId)).toContain("FOREIGN_CONTINUED");
+	} finally {
+		gate.release();
+		await prompting?.catch(() => {});
+		setDisabledExtensionsResolver(() => new Set());
+		if (sessionId) await removeSession(sessionId);
+	}
+});
+
+test("with ask-user-question off, a model calling the absent tool never raises a question", async () => {
+	setDisabledExtensionsResolver(() => new Set(["ask-user-question"]));
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const controlDir = tmpCwd("trpi-ask-off-absent-");
+	const startedPath = join(controlDir, "started");
+	const releasePath = join(controlDir, "release");
+	const probePath = join(agentDir, "extensions", "absent-ask-probe.ts");
+	mkdirSync(dirname(probePath), { recursive: true });
+	writeFileSync(
+		probePath,
+		[
+			'import { existsSync, writeFileSync } from "node:fs";',
+			'import { setTimeout as sleep } from "node:timers/promises";',
+			"export default function (pi) {",
+			'  pi.on("tool_execution_end", async (event) => {',
+			'    if (event.toolName !== "ask_user_question") return;',
+			`    writeFileSync(${JSON.stringify(startedPath)}, "");`,
+			`    while (!existsSync(${JSON.stringify(releasePath)})) await sleep(2);`,
+			"  });",
+			"}",
+		].join("\n"),
+	);
+	let sessionId: string | undefined;
+	let prompting: Promise<void> | undefined;
+	try {
+		const session = await createSession({
+			cwd: tmpCwd("trpi-ask-off-absent-cwd-"),
+			workspaceId: "ws-ask-off-absent",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		fauxA.setResponses([
+			gatedQuestionMessage("absent-ask"),
+			fauxAssistantMessage("ABSENT_CONTINUED"),
+		]);
+		prompting = promptSession(sessionId, "Choose a runtime.");
+		await waitForPath(startedPath);
+		expect(getSessionState(sessionId).needsInput).toBeNull();
+		writeFileSync(releasePath, "");
+		await prompting;
+		expect(seen(sessionId)).toContain("ABSENT_CONTINUED");
+	} finally {
+		writeFileSync(releasePath, "");
+		await prompting?.catch(() => {});
+		rmSync(probePath, { force: true });
+		setDisabledExtensionsResolver(() => new Set());
+		if (sessionId) await removeSession(sessionId);
+	}
+});
+
+test("switching ask-user-question off while a question waits still persists its answer, then drops the tool", async () => {
+	let disabled = new Set<string>();
+	setDisabledExtensionsResolver(() => disabled);
+	const cwd = tmpCwd("trpi-ask-off-pending-");
+	let sessionId: string | undefined;
+	try {
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-ask-off-pending",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		const toolCallId = "pending-while-off";
+		fauxA.setResponses([
+			gatedQuestionMessage(toolCallId),
+			fauxAssistantMessage("PENDING_CONTINUED"),
+		]);
+		const prompting = promptSession(sessionId, "Choose a runtime.");
+		await waitForQuestion(sessionId);
+		disabled = new Set(["ask-user-question"]);
+		refreshExtensionTools();
+		await respondToTool(sessionId, toolCallId, gatedQuestionAnswer());
+		await prompting;
+		expect(seen(sessionId)).toContain("PENDING_CONTINUED");
+		const { messages } = await getSessionMessages(sessionId, "ws-ask-off-pending", cwd);
+		expect(messages).toContainEqual(
+			expect.objectContaining({ role: "toolResult", toolCallId, details: gatedQuestionAnswer() }),
+		);
+		fauxA.setResponses([(context) => fauxAssistantMessage(`AFTER_${askToolState(context)}`)]);
+		await promptSession(sessionId, "Check the ask tool.");
+		expect(seen(sessionId)).toContain("AFTER_ASK_OFF");
+	} finally {
+		setDisabledExtensionsResolver(() => new Set());
+		if (sessionId) await removeSession(sessionId);
+	}
+});
+
+test("with ask-user-question off, restart repair and responding leave its dangling call alone", async () => {
+	setDisabledExtensionsResolver(() => new Set(["ask-user-question"]));
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const cwd = tmpCwd("trpi-restart-ask-off-");
+	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	const toolCallId = "restart-ask-off";
+	const fixture = writeFixtureSession(dir, {
+		id: "restart-ask-off-session",
+		cwd,
+		messages: [
+			{ role: "user", text: "Pick a runtime.", timestamp: 1 },
+			{
+				role: "assistant",
+				timestamp: 2,
+				stopReason: "toolUse",
+				content: [
+					{
+						type: "toolCall",
+						id: toolCallId,
+						name: "ask_user_question",
+						arguments: {
+							questions: [
+								{
+									question: "Which runtime?",
+									header: "Runtime",
+									options: [
+										{ label: "Bun", description: "fast" },
+										{ label: "Node", description: "compatible" },
+									],
+								},
+							],
+						},
+					},
+				],
+			},
+		],
+	});
+	try {
+		expect(await ensureSessionAttached(fixture.id, "ws-restart-ask-off", cwd)).toBe(true);
+		const repaired = await getSessionMessages(fixture.id, "ws-restart-ask-off", cwd);
+		const result = repaired.messages.find(
+			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+		);
+		if (result?.role !== "toolResult") throw new Error("repair result was not persisted");
+		expect(result.isError).toBe(true);
+		expect(result.details).toBeUndefined();
+		expect(getSessionState(fixture.id).needsInput).toBeNull();
+		await expect(respondToTool(fixture.id, toolCallId, gatedQuestionAnswer())).rejects.toThrow(
+			"Unknown tool call awaiting a response",
+		);
+	} finally {
+		setDisabledExtensionsResolver(() => new Set());
+		if (hasSession(fixture.id)) await removeSession(fixture.id);
+		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
 });
 
@@ -1862,7 +2577,7 @@ test("a live question blocks continuation, keeps the follow-up lane behind it, a
 		await Promise.resolve();
 		expect(continuationCalls).toBe(0);
 
-		const result: AskUserQuestionResult = {
+		const result = {
 			cancelled: false,
 			answers: [
 				{
@@ -1873,7 +2588,7 @@ test("a live question blocks continuation, keeps the follow-up lane behind it, a
 				},
 			],
 		};
-		const answering = answerQuestion(session.sessionId, toolCallId, result);
+		const answering = respondToTool(session.sessionId, toolCallId, result);
 		await continuationStarted;
 		await answering;
 
@@ -1883,7 +2598,7 @@ test("a live question blocks continuation, keeps the follow-up lane behind it, a
 		);
 		expect(persistedResult).toBeDefined();
 		if (persistedResult?.role !== "toolResult") throw new Error("native result was not persisted");
-		expect(persistedResult.details).toEqual<AskUserQuestionResult>(result);
+		expect(persistedResult.details).toEqual(result);
 		expect(messages.some((message) => message.role === "custom")).toBe(false);
 		expect(continuationContext).toContain('"role":"toolResult"');
 		expect(continuationContext).not.toContain("QUEUED_WHILE_ASKING");
@@ -1896,7 +2611,7 @@ test("a live question blocks continuation, keeps the follow-up lane behind it, a
 		expect(after.indexOf("QUESTION_CONTINUED")).toBeLessThan(after.indexOf("QUEUED_WHILE_ASKING"));
 	} finally {
 		releaseContinuation();
-		removeSession(session.sessionId);
+		await removeSession(session.sessionId);
 	}
 });
 
@@ -1921,7 +2636,7 @@ async function expectTypedPastTranscript(
 	typedText: string,
 ): Promise<void> {
 	await expect(
-		answerQuestion(sessionId, toolCallId, { answers: [], cancelled: true }),
+		respondToTool(sessionId, toolCallId, { answers: [], cancelled: true }),
 	).rejects.toThrow("superseded by a later message");
 	const { messages } = await getSessionMessages(sessionId, workspaceId, cwd);
 	const askIndex = messages.findIndex(
@@ -1931,11 +2646,14 @@ async function expectTypedPastTranscript(
 	if (persisted?.role !== "toolResult") throw new Error("ack result was not persisted");
 	expect(persisted.details).toEqual({ kind: "ack" });
 	expect(persisted.isError).toBe(false);
-	expect(JSON.stringify(persisted.content)).toContain(ASK_ACK_TEXT);
+	expect(JSON.stringify(persisted.content)).toContain("This turn ends here");
 	expect(messages[askIndex + 1]?.role).toBe("user");
 	expect(JSON.stringify(messages[askIndex + 1])).toContain(typedText);
 	expect(messages.some((message) => message.role === "custom")).toBe(false);
-	expect(assessAnswerability(messages, toolCallId)).toEqual({ ok: false, reason: "superseded" });
+	expect(assessRespondability(messages, toolCallId, ALL_INTERACTIVE)).toEqual({
+		ok: false,
+		reason: "superseded",
+	});
 }
 
 for (const [entryPoint, send] of [
@@ -1968,8 +2686,9 @@ for (const [entryPoint, send] of [
 			}
 			expect(seen(session.sessionId)).toContain('"toolName":"ask_user_question"');
 			expect(getSessionState(session.sessionId).needsInput).toEqual({
-				interactionId: `question:${toolCallId}`,
-				kind: "question",
+				interactionId: `tool:${toolCallId}`,
+				kind: "tool-response",
+				toolCallId,
 			});
 
 			await send(session.sessionId, "TYPED_PAST_THE_QUESTION");
@@ -1989,7 +2708,7 @@ for (const [entryPoint, send] of [
 			expect(seen(session.sessionId)).toContain("REPLIED_TO_TYPED_TEXT");
 			expect(getSessionState(session.sessionId).needsInput).toBeNull();
 		} finally {
-			removeSession(session.sessionId);
+			await removeSession(session.sessionId);
 		}
 	});
 }
@@ -2013,10 +2732,10 @@ test("input an extension handles (never queued) leaves the live question awaitin
 			if (seen(session.sessionId).includes('"toolName":"ask_user_question"')) break;
 			await new Promise((resolve) => setTimeout(resolve, 5));
 		}
-		expect(getSessionState(session.sessionId).needsInput?.kind).toBe("question");
+		expect(getSessionState(session.sessionId).needsInput?.kind).toBe("tool-response");
 
 		await steerSession(session.sessionId, "SWALLOWED_BY_EXTENSION");
-		expect(getSessionState(session.sessionId).needsInput?.kind).toBe("question");
+		expect(getSessionState(session.sessionId).needsInput?.kind).toBe("tool-response");
 		const { summary } = await getSessionMessages(
 			session.sessionId,
 			"ws-handled-input-question",
@@ -2024,11 +2743,11 @@ test("input an extension handles (never queued) leaves the live question awaitin
 		);
 		expect(summary.queue).toBeUndefined();
 
-		const result: AskUserQuestionResult = {
+		const result = {
 			cancelled: false,
 			answers: [{ questionIndex: 0, question: "Which library?", kind: "option", answer: "luxon" }],
 		};
-		await answerQuestion(session.sessionId, toolCallId, result);
+		await respondToTool(session.sessionId, toolCallId, result);
 		await prompting;
 		const transcript = JSON.stringify(
 			(await getSessionMessages(session.sessionId, "ws-handled-input-question", cwd)).messages,
@@ -2039,7 +2758,7 @@ test("input an extension handles (never queued) leaves the live question awaitin
 	} finally {
 		swallower.remove();
 		await prompting.catch(() => {});
-		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
 	}
 });
 
@@ -2076,7 +2795,7 @@ test("typing in the pre-execute window (tool_call hook still running) supersedes
 		gate.release();
 		gate.remove();
 		await prompting.catch(() => {});
-		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
 	}
 });
 
@@ -2106,18 +2825,18 @@ test("removing a queued message while a question is live re-queues the rest with
 		}
 		await followUpSession(session.sessionId, "FOLLOW_UP_ONE");
 		await followUpSession(session.sessionId, "FOLLOW_UP_TWO");
-		expect(getSessionState(session.sessionId).needsInput?.kind).toBe("question");
+		expect(getSessionState(session.sessionId).needsInput?.kind).toBe("tool-response");
 
 		const removed = await removeQueuedSession(session.sessionId, "followUp", 0);
 		expect(removed.removed).toEqual({ text: "FOLLOW_UP_ONE" });
 		expect(removed.queue).toEqual({ steering: ["PRE_QUEUED_STEER"], followUp: ["FOLLOW_UP_TWO"] });
-		expect(getSessionState(session.sessionId).needsInput?.kind).toBe("question");
+		expect(getSessionState(session.sessionId).needsInput?.kind).toBe("tool-response");
 
-		const result: AskUserQuestionResult = {
+		const result = {
 			cancelled: false,
 			answers: [{ questionIndex: 0, question: "Which library?", kind: "option", answer: "luxon" }],
 		};
-		await answerQuestion(session.sessionId, toolCallId, result);
+		await respondToTool(session.sessionId, toolCallId, result);
 		await prompting;
 		const transcript = JSON.stringify(
 			(await getSessionMessages(session.sessionId, "ws-live-question-queue-edit", cwd)).messages,
@@ -2130,7 +2849,68 @@ test("removing a queued message while a question is live re-queues the rest with
 		expect(transcript).toContain("FOLLOW_UP_TWO");
 	} finally {
 		await prompting.catch(() => {});
-		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
+	}
+});
+
+test("a queued host message survives an edit of the user's queue in its place and reaches the agent; Stop drops it and tells its sender", async () => {
+	const cwd = tmpCwd("trpi-host-message-queue-");
+	const workspaceId = "ws-host-message-queue";
+	const session = await createSession({ cwd, workspaceId, model: toWireModel(fauxA.getModel()) });
+	const kept = { marker: "kept" };
+	const stopped = { marker: "stopped" };
+	const dropped: string[] = [];
+	const release = Promise.withResolvers<void>();
+	let pendingAfterEdit = false;
+	fauxA.setResponses([
+		async () => {
+			await followUpSession(session.sessionId, "USER_BEFORE_HOST");
+			await sendHostMessageToSession(session.sessionId, "test-host", "HOST_KEPT", kept, {
+				onDropped: () => dropped.push("kept"),
+			});
+			await followUpSession(session.sessionId, "USER_REMOVED");
+			await removeQueuedSession(session.sessionId, "followUp", 1);
+			pendingAfterEdit = isHostMessagePending(session.sessionId, kept);
+			return fauxAssistantMessage("FIRST");
+		},
+		fauxAssistantMessage("USER_HANDLED"),
+		fauxAssistantMessage("HOST_HANDLED"),
+		async () => {
+			await sendHostMessageToSession(session.sessionId, "test-host", "HOST_STOPPED", stopped, {
+				onDropped: () => dropped.push("stopped"),
+			});
+			await release.promise;
+			return fauxAssistantMessage("STOPPED_TURN");
+		},
+	]);
+	try {
+		await promptSession(session.sessionId, "start");
+		expect(pendingAfterEdit).toBe(true);
+		expect(isHostMessagePending(session.sessionId, kept)).toBe(false);
+		const transcript = JSON.stringify(
+			(await getSessionMessages(session.sessionId, workspaceId, cwd)).messages,
+		);
+		expect(transcript).toContain("HOST_HANDLED");
+		expect(transcript).not.toContain("USER_REMOVED");
+		expect(transcript.indexOf("USER_BEFORE_HOST")).toBeGreaterThan(-1);
+		expect(transcript.indexOf("USER_BEFORE_HOST")).toBeLessThan(transcript.indexOf("HOST_KEPT"));
+
+		const running = promptSession(session.sessionId, "again");
+		for (let attempt = 0; attempt < 200; attempt++) {
+			if (isHostMessagePending(session.sessionId, stopped)) break;
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		expect(isHostMessagePending(session.sessionId, stopped)).toBe(true);
+		const stopping = abortSession(session.sessionId, true);
+		expect(dropped).toEqual(["stopped"]);
+		expect(isHostMessagePending(session.sessionId, stopped)).toBe(false);
+		release.resolve();
+		await stopping;
+		await running.catch(() => {});
+		expect(dropped).toEqual(["stopped"]);
+	} finally {
+		release.resolve();
+		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
 	}
 });
 
@@ -2163,7 +2943,7 @@ test("an accepted answer persists and its RPC settles when Stop races before tur
 			if (seen(session.sessionId).includes('"toolName":"ask_user_question"')) break;
 			await new Promise((resolve) => setTimeout(resolve, 5));
 		}
-		const result: AskUserQuestionResult = {
+		const result = {
 			cancelled: false,
 			answers: [
 				{
@@ -2174,7 +2954,7 @@ test("an accepted answer persists and its RPC settles when Stop races before tur
 				},
 			],
 		};
-		const answering = answerQuestion(session.sessionId, toolCallId, result);
+		const answering = respondToTool(session.sessionId, toolCallId, result);
 		const stopping = abortSession(session.sessionId, true);
 		await Promise.all([answering, stopping, prompting]);
 
@@ -2183,16 +2963,16 @@ test("an accepted answer persists and its RPC settles when Stop races before tur
 			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
 		);
 		if (persisted?.role !== "toolResult") throw new Error("answer result was not persisted");
-		expect(persisted.details).toEqual<AskUserQuestionResult>(result);
+		expect(persisted.details).toEqual(result);
 		expect(persisted.isError).toBe(false);
-		expect(transcript.messages.some((message) => isAskUserAnswersMessage(message))).toBe(false);
+		expect(transcript.messages.some((message) => readToolResponseMessage(message))).toBe(false);
 	} finally {
 		await prompting.catch(() => {});
-		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
 	}
 });
 
-test("Stop bounds a stalled post-tool hook and rejects an answer that did not persist", async () => {
+test("Stop bounds a stalled post-tool hook, and the answer it persisted is still acknowledged", async () => {
 	const hook = installStalledAskResultHook("stalled-ask-result");
 	const toolCallId = "stalled-answer-stop";
 	fauxA.setResponses([gatedQuestionMessage(toolCallId)]);
@@ -2208,11 +2988,11 @@ test("Stop bounds a stalled post-tool hook and rejects an answer that did not pe
 			if (seen(session.sessionId).includes('"toolName":"ask_user_question"')) break;
 			await new Promise((resolve) => setTimeout(resolve, 5));
 		}
-		const answering = answerQuestion(session.sessionId, toolCallId, gatedQuestionAnswer());
+		const answering = respondToTool(session.sessionId, toolCallId, gatedQuestionAnswer());
 		await waitForPath(hook.startedPath);
 
 		const stopping = abortSession(session.sessionId, true, 25);
-		await expect(answering).rejects.toThrow("accepted answer was not persisted");
+		await answering;
 		await Promise.all([stopping, prompting]);
 
 		const transcript = await getSessionMessages(session.sessionId, "ws-stalled-answer-stop", cwd);
@@ -2221,12 +3001,12 @@ test("Stop bounds a stalled post-tool hook and rejects an answer that did not pe
 		);
 		if (persisted?.role !== "toolResult") throw new Error("stopped result was not persisted");
 		expect(persisted.isError).toBe(false);
-		expect(persisted.details).toEqual<AskUserQuestionResult>(gatedQuestionAnswer());
+		expect(persisted.details).toEqual(gatedQuestionAnswer());
 		expect(persisted.content).toEqual([{ type: "text", text: "post-tool result replaced" }]);
 	} finally {
 		hook.remove();
 		await prompting.catch(() => {});
-		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
 	}
 }, 20_000);
 
@@ -2278,7 +3058,7 @@ test("restart repair leaves a dangling question answerable through the custom-me
 		expect(ack.details).toEqual({ kind: "ack" });
 		expect(ack.isError).toBe(false);
 
-		await answerQuestion(fixture.id, toolCallId, {
+		await respondToTool(fixture.id, toolCallId, {
 			cancelled: false,
 			answers: [
 				{
@@ -2290,14 +3070,16 @@ test("restart repair leaves a dangling question answerable through the custom-me
 			],
 		});
 		const answered = await getSessionMessages(fixture.id, "ws-restart-question", cwd);
-		expect(
-			answered.messages.some(
-				(message) => isAskUserAnswersMessage(message) && message.details.toolCallId === toolCallId,
-			),
-		).toBe(true);
+		const responseMessage = answered.messages.find(
+			(message) => readToolResponseMessage(message)?.toolCallId === toolCallId,
+		);
+		if (responseMessage?.role !== "custom") throw new Error("tool response was not persisted");
+		expect(responseMessage.customType).toBe(TOOL_RESPONSE_CUSTOM_TYPE);
+		expect(responseMessage.content).toContain("User has answered your questions");
+		expect(responseMessage.content).toContain('"Which runtime?"="Bun"');
 		expect(seen(fixture.id)).toContain("RESTART_QUESTION_CONTINUED");
 	} finally {
-		if (hasSession(fixture.id)) removeSession(fixture.id);
+		if (hasSession(fixture.id)) await removeSession(fixture.id);
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
 });
@@ -2350,15 +3132,15 @@ test("explicit Stop restores both queues and persists a terminal ask error", asy
 		);
 		if (result?.role !== "toolResult") throw new Error("stopped result was not persisted");
 		expect(result.isError).toBe(true);
-		expect(JSON.stringify(result.content)).toContain(ASK_STOPPED_ERROR);
-		expect(assessAnswerability(transcript.messages, toolCallId)).toEqual({
+		expect(JSON.stringify(result.content)).toContain(TOOL_RESPONSE_STOPPED_ERROR);
+		expect(assessRespondability(transcript.messages, toolCallId, ALL_INTERACTIVE)).toEqual({
 			ok: false,
 			reason: "not_awaiting",
 		});
 		expect(transcript.messages.filter((message) => message.role === "user")).toHaveLength(1);
 	} finally {
 		await prompting.catch(() => {});
-		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
 	}
 });
 
@@ -2415,9 +3197,9 @@ test("graceful settling leaves a live question dangling for restart ack repair",
 		if (repaired?.role !== "toolResult") throw new Error("restart ack was not persisted");
 		expect(repaired.details).toEqual({ kind: "ack" });
 		expect(repaired.isError).toBe(false);
-		expect(assessAnswerability(transcript.messages, toolCallId).ok).toBe(true);
+		expect(assessRespondability(transcript.messages, toolCallId, ALL_INTERACTIVE).ok).toBe(true);
 	} finally {
-		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
 });
@@ -2487,7 +3269,7 @@ test("disposing a session mid-run reports pi's stale-boundary errors at debug, n
 	} finally {
 		process.stderr.write = originalStderrWrite;
 		setExtUiPublisher(() => {});
-		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
 });
@@ -2498,8 +3280,7 @@ test("listSessions reports a workspace's live sessions; getSessionMessages retur
 	const s = await createSession({
 		cwd,
 		workspaceId: "ws-hyd",
-		// biome-ignore lint/suspicious/noExplicitAny: faux Model<string> satisfies the SDK's Model<any>
-		model: fauxA.getModel() as any,
+		model: toWireModel(fauxA.getModel()),
 	});
 	await promptSession(s.sessionId, "hello hydrate");
 
@@ -2513,7 +3294,7 @@ test("listSessions reports a workspace's live sessions; getSessionMessages retur
 	expect(messages.some((m) => m.role === "user")).toBe(true);
 	expect(messages.some((m) => m.role === "assistant")).toBe(true);
 	expect(messages.every((m) => ["user", "assistant", "toolResult"].includes(m.role))).toBe(true);
-	removeSession(s.sessionId);
+	await removeSession(s.sessionId);
 });
 
 test("renameSession persists a normalized live title and emits one durable title event", async () => {
@@ -2524,10 +3305,15 @@ test("renameSession persists a normalized live title and emits one durable title
 		model: toWireModel(fauxA.getModel()),
 	});
 	events.set(session.sessionId, []);
+	const published: SessionStateRecord[] = [];
+	setSessionStatePublisher((record) => published.push(record));
 
 	expect(
 		await renameSession(session.sessionId, "ws-rename-live", cwd, "  Fix auth\r\nredirect  "),
 	).toBe(true);
+	expect(published).toEqual([
+		expect.objectContaining({ sessionId: session.sessionId, title: "Fix auth redirect" }),
+	]);
 	expect(
 		(await listSessions("ws-rename-live", cwd)).find(
 			(candidate) => candidate.sessionId === session.sessionId,
@@ -2543,7 +3329,9 @@ test("renameSession persists a normalized live title and emits one durable title
 		false,
 	);
 	expect(events.get(session.sessionId)).toHaveLength(eventCount ?? 0);
-	removeSession(session.sessionId);
+	expect(published).toHaveLength(1);
+	setSessionStatePublisher(() => {});
+	await removeSession(session.sessionId);
 });
 
 test("renameSession's conditional write never replaces a durable title", async () => {
@@ -2573,7 +3361,7 @@ test("renameSession's conditional write never replaces a durable title", async (
 	await expect(
 		renameSession(session.sessionId, "ws-other", cwd, "Wrong workspace"),
 	).rejects.toThrow(`Unknown session: ${session.sessionId}`);
-	removeSession(session.sessionId);
+	await removeSession(session.sessionId);
 });
 
 test("renameSession updates a disk-only transcript without attaching an agent", async () => {
@@ -2587,15 +3375,209 @@ test("renameSession updates a disk-only transcript without attaching an agent", 
 		},
 	);
 	events.set(id, []);
+	const published: SessionStateRecord[] = [];
+	setSessionStatePublisher((record) => published.push(record));
 
-	expect(await renameSession(id, "ws-rename-disk", cwd, "New disk title")).toBe(true);
-	expect(hasSession(id)).toBe(false);
-	expect(SessionManager.open(path).getSessionName()).toBe("New disk title");
-	expect(
-		(await listSessions("ws-rename-disk", cwd)).find((row) => row.sessionId === id)?.title,
-	).toBe("New disk title");
-	expect(events.get(id)).toEqual([{ type: "session_info_changed", name: "New disk title" }]);
+	try {
+		expect(await renameSession(id, "ws-rename-disk", cwd, "New disk title")).toBe(true);
+		expect(hasSession(id)).toBe(false);
+		expect(SessionManager.open(path).getSessionName()).toBe("New disk title");
+		expect(
+			(await listSessions("ws-rename-disk", cwd)).find((row) => row.sessionId === id)?.title,
+		).toBe("New disk title");
+		expect(events.get(id)).toEqual([{ type: "session_info_changed", name: "New disk title" }]);
+		expect(published).toEqual([
+			{
+				sessionId: id,
+				workspaceId: "ws-rename-disk",
+				projectId: "project-ws-rename-disk",
+				state: expect.objectContaining({ execution: "idle" }),
+				title: "New disk title",
+				firstPrompt: "persisted prompt",
+			},
+		]);
+
+		expect(await renameSession(id, "ws-rename-disk", cwd, "New disk title")).toBe(false);
+		expect(
+			await renameSession(id, "ws-rename-disk", cwd, "Generated", { onlyIfUnnamed: true }),
+		).toBe(false);
+		expect(published).toHaveLength(1);
+	} finally {
+		setSessionStatePublisher(() => {});
+	}
 });
+
+test("state records carry pi's session name as read: long names, explicit clears and attached chats", () =>
+	withFreshDataDir(async () => {
+		const cwd = tmpCwd("trpi-record-title-");
+		const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+		const long = "x".repeat(100);
+		const at = Date.now();
+		const { id: longId } = writeFixtureSession(dir, {
+			cwd,
+			name: long,
+			messages: [{ role: "user", text: "long", timestamp: at - 3 }],
+		});
+		const { id: cleared } = writeFixtureSession(dir, {
+			cwd,
+			name: "",
+			messages: [{ role: "user", text: "cleared", timestamp: at - 2 }],
+		});
+		const { id: attached } = writeFixtureSession(dir, {
+			cwd,
+			name: "Attached title",
+			messages: [{ role: "user", text: "attached", timestamp: at - 1 }],
+		});
+		const workspace = { id: "ws-record-title", projectId: "p-record-title", cwd };
+		await initializeSessionStates([workspace]);
+		expect(await ensureSessionAttached(attached, workspace.id, cwd)).toBe(true);
+		try {
+			const titles = Object.fromEntries(
+				(await listSessionStates([workspace])).map((record) => [record.sessionId, record.title]),
+			);
+			expect(titles).toEqual({ [longId]: long, [cleared]: "", [attached]: "Attached title" });
+		} finally {
+			await removeSession(attached);
+		}
+	}));
+
+test("summaries and state records carry the first prompt's head as a display fallback, beside the real title", async () => {
+	const cwd = tmpCwd("trpi-first-prompt-");
+	const sessionDir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	const long = `  Please   refactor the auth module\nand keep the tests green ${"x".repeat(300)}`;
+	const { id: named } = writeFixtureSession(sessionDir, {
+		cwd,
+		name: "Named by the agent",
+		messages: [{ role: "user", text: long, timestamp: Date.now() - 3 }],
+	});
+	const { id: unnamed } = writeFixtureSession(sessionDir, {
+		cwd,
+		messages: [{ role: "user", text: long, timestamp: Date.now() - 2 }],
+	});
+	const compacted = writeCompactedFixtureSession(sessionDir, cwd, Date.now() - 1);
+	fauxA.setResponses([fauxAssistantMessage("ok")]);
+	const live = await createSession({
+		cwd,
+		workspaceId: "ws-first-prompt",
+		model: toWireModel(fauxA.getModel()),
+	});
+	expect(
+		(await listSessions("ws-first-prompt", cwd)).find((row) => row.sessionId === live.sessionId)
+			?.firstPrompt,
+	).toBeUndefined();
+	await promptSession(live.sessionId, "Live prompt\nsecond line");
+
+	const rows = await listSessions("ws-first-prompt", cwd);
+	const byId = Object.fromEntries(rows.map((row) => [row.sessionId, row]));
+	expect(byId[named]).toMatchObject({ title: "Named by the agent" });
+	expect(byId[named]?.firstPrompt).toBe(`Please refactor the auth module`);
+	expect(byId[unnamed]).toMatchObject({
+		title: "",
+		firstPrompt: "Please refactor the auth module",
+	});
+	expect(byId[live.sessionId]).toMatchObject({ title: "", firstPrompt: "Live prompt" });
+	expect(byId[compacted]?.firstPrompt).toBe("The real first prompt");
+
+	await initializeSessionStates([{ id: "ws-first-prompt", projectId: "p-first-prompt", cwd }]);
+	const records = await listSessionStates([
+		{ id: "ws-first-prompt", projectId: "p-first-prompt", cwd },
+	]);
+	const recordFor = (id: string) => records.find((record) => record.sessionId === id);
+	expect(recordFor(named)).toMatchObject({
+		title: "Named by the agent",
+		firstPrompt: "Please refactor the auth module",
+	});
+	expect(recordFor(unnamed)?.title).toBe("");
+	expect(recordFor(live.sessionId)?.title).toBe("");
+	expect(records.find((record) => record.sessionId === unnamed)?.firstPrompt).toBe(
+		"Please refactor the auth module",
+	);
+	expect(records.find((record) => record.sessionId === live.sessionId)?.firstPrompt).toBe(
+		"Live prompt",
+	);
+	expect(records.find((record) => record.sessionId === compacted)?.firstPrompt).toBe(
+		"The real first prompt",
+	);
+
+	const attached = await getSessionMessages(compacted, "ws-first-prompt", cwd);
+	expect(attached.summary.firstPrompt).toBe("The real first prompt");
+	expect(attached.messages.some((message) => message.role === "user")).toBe(true);
+	expect(
+		attached.messages.some(
+			(message) =>
+				message.role === "user" &&
+				typeof message.content === "string" &&
+				message.content.includes("The real first prompt"),
+		),
+	).toBe(true);
+	expect(
+		attached.messages.some(
+			(message) =>
+				message.role === "user" &&
+				typeof message.content === "string" &&
+				message.content === "A later prompt",
+		),
+	).toBe(true);
+	expect(SessionManager.open(listedPath(unnamed, cwd)).getSessionName()).toBeUndefined();
+
+	fauxA.setResponses([fauxAssistantMessage("noted"), fauxAssistantMessage("ok")]);
+	const packaged = await createSession({
+		cwd,
+		workspaceId: "ws-first-prompt",
+		model: toWireModel(fauxA.getModel()),
+	});
+	await promptSession(packaged.sessionId, '<review id="r" branch="b" base="c" comments="0">\nbody');
+	const summaryFor = async (id: string) =>
+		(await listSessions("ws-first-prompt", cwd)).find((row) => row.sessionId === id);
+	expect((await summaryFor(packaged.sessionId))?.firstPrompt).toBeUndefined();
+	await promptSession(packaged.sessionId, "/skill:setting-up-a-project Now a real prompt");
+	expect((await summaryFor(packaged.sessionId))?.firstPrompt).toBe("Now a real prompt");
+	await removeSession(live.sessionId);
+	await removeSession(compacted);
+	await removeSession(packaged.sessionId);
+});
+
+/** An image-only first message, a real prompt, then a compaction that keeps only the later turns. */
+function writeCompactedFixtureSession(dir: string, cwd: string, timestamp: number): string {
+	const sessionId = `sess-compacted-${timestamp}`;
+	const at = new Date(timestamp).toISOString();
+	const message = (id: string, parentId: string | null, role: string, content: unknown) =>
+		JSON.stringify({
+			type: "message",
+			id,
+			parentId,
+			timestamp: at,
+			message: { role, content, timestamp },
+		});
+	const lines = [
+		JSON.stringify({ type: "session", version: 3, id: sessionId, timestamp: at, cwd }),
+		message("u0", null, "user", [{ type: "image", data: "AA==", mimeType: "image/png" }]),
+		message("a0", "u0", "assistant", [{ type: "text", text: "I see an image" }]),
+		message("u1", "a0", "user", "The real first prompt\nwith a second line"),
+		message("a1", "u1", "assistant", [{ type: "text", text: "done" }]),
+		message("u2", "a1", "user", "A later prompt"),
+		JSON.stringify({
+			type: "compaction",
+			id: "c0",
+			parentId: "u2",
+			firstKeptEntryId: "u2",
+			summary: "earlier conversation summarized",
+			tokensBefore: 1000,
+			timestamp: at,
+		}),
+		message("a2", "c0", "assistant", [{ type: "text", text: "post-compaction answer" }]),
+	];
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(join(dir, `${timestamp}_${sessionId}.jsonl`), `${lines.join("\n")}\n`);
+	return sessionId;
+}
+
+function listedPath(sessionId: string, cwd: string): string {
+	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	const file = readdirSync(dir).find((name) => name.endsWith(`_${sessionId}.jsonl`));
+	if (!file) throw new Error(`no transcript for ${sessionId}`);
+	return join(dir, file);
+}
 
 test("renameSession serializes with a concurrent disk attach", async () => {
 	const cwd = tmpCwd("trpi-rename-attach-");
@@ -2617,7 +3599,7 @@ test("renameSession serializes with a concurrent disk attach", async () => {
 	expect(
 		(await listSessions("ws-rename-attach", cwd)).find((row) => row.sessionId === id)?.title,
 	).toBe("After attach");
-	removeSession(id);
+	await removeSession(id);
 });
 
 test("listSessions ignores a live session's transient physical rewrite but stays strict for detached files", async () => {
@@ -2638,11 +3620,35 @@ test("listSessions ignores a live session's transient physical rewrite but stays
 			s.sessionId,
 		);
 
-		removeSession(s.sessionId);
+		await removeSession(s.sessionId);
 		await expect(listSessions("ws-live-rewrite", cwd)).rejects.toThrow("unreadable or malformed");
 	} finally {
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
+});
+
+test("listing skips a non-session sidecar log in the pi sessions dir (#876)", async () => {
+	const cwd = tmpCwd("trpi-sidecar-");
+	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	const session = writeFixtureSession(dir, {
+		cwd,
+		messages: [
+			{ role: "user", text: "persist next to a sidecar log", timestamp: 1_000 },
+			{ role: "assistant", text: "SIDECAR_REPLY", stopReason: "stop", timestamp: 1_001 },
+		],
+	});
+	// pi-automode inserts `-pi-automode` before the extension of the session file it follows, so
+	// the log sits in the same directory but starts with a `message` entry, never a header.
+	writeFileSync(
+		session.path.replace(/\.jsonl$/, "-pi-automode.jsonl"),
+		`${JSON.stringify({
+			type: "message",
+			timestamp: new Date(1_002).toISOString(),
+			message: { role: "assistant", model: "classifier", content: [], usage: {} },
+		})}\n`,
+	);
+
+	expect((await listSessions("ws-sidecar", cwd)).map((row) => row.sessionId)).toEqual([session.id]);
 });
 
 test("disk-reopen: a disposed session is re-listed from disk and re-opened with its transcript (restart survival)", async () => {
@@ -2653,8 +3659,7 @@ test("disk-reopen: a disposed session is re-listed from disk and re-opened with 
 		const s = await createSession({
 			cwd,
 			workspaceId: "ws-disk",
-			// biome-ignore lint/suspicious/noExplicitAny: faux Model<string> satisfies the SDK's Model<any>
-			model: fauxA.getModel() as any,
+			model: toWireModel(fauxA.getModel()),
 		});
 		await promptSession(s.sessionId, "persist me");
 		await removeSession(s.sessionId);
@@ -2709,7 +3714,7 @@ test("deleteSession removes an empty live chat whose reserved transcript path is
 		expect(hasSession(session.sessionId)).toBe(false);
 		expect(trashCalls).toBe(0);
 	} finally {
-		if (sessionId && hasSession(sessionId)) removeSession(sessionId);
+		if (sessionId && hasSession(sessionId)) await removeSession(sessionId);
 		setTrashImplementationForTests(undefined);
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
@@ -2772,7 +3777,7 @@ test("a malformed detached transcript is never treated as authoritative absence"
 		const info = (await SessionManager.list(cwd)).find((item) => item.id === session.sessionId);
 		if (!info) throw new Error("expected the session transcript to exist");
 		const transcript = readFileSync(info.path);
-		removeSession(session.sessionId);
+		await removeSession(session.sessionId);
 		writeFileSync(info.path, "not a pi transcript\n");
 
 		await expect(listSessions("ws-delete-corrupt", cwd)).rejects.toThrow("unreadable or malformed");
@@ -2790,7 +3795,7 @@ test("a malformed detached transcript is never treated as authoritative absence"
 		const restored = await getSessionMessages(session.sessionId, "ws-delete-corrupt", cwd);
 		expect(restored.summary.live).toBe(true);
 	} finally {
-		if (sessionId) removeSession(sessionId);
+		if (sessionId) await removeSession(sessionId);
 		setSessionDeletedPublisher(() => {});
 		setTrashImplementationForTests(undefined);
 		setSessionManagerFactory(() => SessionManager.inMemory());
@@ -2849,7 +3854,7 @@ test("a pending delete blocks live commands, then trash failure restores the sam
 	} finally {
 		failTrash();
 		await deleting?.catch(() => {});
-		if (sessionId && hasSession(sessionId)) removeSession(sessionId);
+		if (sessionId && hasSession(sessionId)) await removeSession(sessionId);
 		setTrashImplementationForTests(undefined);
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
@@ -2908,7 +3913,7 @@ test("concurrent deletes of one chat coalesce into a single owned transaction", 
 	} finally {
 		failTrash();
 		await Promise.allSettled([first, second]);
-		if (sessionId && hasSession(sessionId)) removeSession(sessionId);
+		if (sessionId && hasSession(sessionId)) await removeSession(sessionId);
 		setTrashImplementationForTests(undefined);
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
@@ -3062,7 +4067,7 @@ test("stop losslessly restores an image-bearing queue before aborting", async ()
 		).toBeUndefined();
 		const transcript = await getSessionMessages(s.sessionId, "ws-queue", cwd);
 		expect(transcript.messages.filter((message) => message.role === "user")).toHaveLength(1);
-		removeSession(s.sessionId);
+		await removeSession(s.sessionId);
 	} finally {
 		runtime.unregisterProvider("fauxq");
 		setSessionManagerFactory(() => SessionManager.inMemory());
@@ -3086,10 +4091,10 @@ test("removing one queued image message returns its complete content", async () 
 		removed: { text: "edit this", images: [queuedImage] },
 		queue: { steering: [], followUp: [] },
 	});
-	removeSession(s.sessionId);
+	await removeSession(s.sessionId);
 });
 
-test("a delivered image-only steer clears its queue chip despite pi's empty-text defect", async () => {
+test("a delivered image-only steer clears its queue chip (pi #8612)", async () => {
 	const slow = createFauxCore({
 		provider: "faux-steer-image",
 		api: "faux-steer-image",
@@ -3154,14 +4159,14 @@ test("a delivered image-only steer clears its queue chip despite pi's empty-text
 				(event as { type: string }).type === "queue_update",
 		);
 		expect(queueEvents.at(-1)?.steering).toEqual([]);
-		removeSession(s.sessionId);
+		await removeSession(s.sessionId);
 	} finally {
 		release();
 		runtime.unregisterProvider("faux-steer-image");
 	}
 }, 20000);
 
-test("a delivered image-only follow-up clears its queue chip despite pi's empty-text defect", async () => {
+test("a delivered image-only follow-up clears its queue chip (pi #8612)", async () => {
 	const slow = createFauxCore({
 		provider: "faux-followup-image",
 		api: "faux-followup-image",
@@ -3225,14 +4230,14 @@ test("a delivered image-only follow-up clears its queue chip despite pi's empty-
 				(event as { type: string }).type === "queue_update",
 		);
 		expect(queueEvents.at(-1)?.followUp).toEqual([]);
-		removeSession(s.sessionId);
+		await removeSession(s.sessionId);
 	} finally {
 		release();
 		runtime.unregisterProvider("faux-followup-image");
 	}
 }, 20000);
 
-test("an idle image-only prompt never inflates the stuck-delivery counters", async () => {
+test("an idle image-only prompt leaves a later image-only steer's queue chip intact until delivery", async () => {
 	const slow = createFauxCore({
 		provider: "faux-prompt-image",
 		api: "faux-prompt-image",
@@ -3290,7 +4295,7 @@ test("an idle image-only prompt never inflates the stuck-delivery counters", asy
 			(await listSessions("ws-prompt-image", cwd)).find((row) => row.sessionId === s.sessionId)
 				?.queue,
 		).toBeUndefined();
-		removeSession(s.sessionId);
+		await removeSession(s.sessionId);
 	} finally {
 		release();
 		runtime.unregisterProvider("faux-prompt-image");
@@ -3371,7 +4376,7 @@ test("compactSession rejects an overlapping manual compaction", async () => {
 		await firstCompaction;
 	} finally {
 		releaseCompaction();
-		if (sessionId) removeSession(sessionId);
+		if (sessionId) await removeSession(sessionId);
 		runtime.unregisterProvider("faux-compact-lock");
 	}
 }, 20000);
@@ -3390,7 +4395,7 @@ test("removeQueuedSession on an idle session never strands the keepers — they 
 	expect(result.removed).toEqual({ text: "parked one" });
 	expect(result.queue).toEqual({ steering: [], followUp: [] });
 	expect(seen(s.sessionId)).toContain("PARKED_DELIVERED");
-	removeSession(s.sessionId);
+	await removeSession(s.sessionId);
 });
 
 test("removeWorkspaceSessions: archives a workspace's live sessions + purges their on-disk transcripts, leaving siblings", async () => {
@@ -3402,15 +4407,13 @@ test("removeWorkspaceSessions: archives a workspace's live sessions + purges the
 		const doomed = await createSession({
 			cwd: doomedCwd,
 			workspaceId: "ws-doomed",
-			// biome-ignore lint/suspicious/noExplicitAny: faux Model<string> satisfies the SDK's Model<any>
-			model: fauxA.getModel() as any,
+			model: toWireModel(fauxA.getModel()),
 		});
 		const keepCwd = tmpCwd("trpi-arch-keep-");
 		const survivor = await createSession({
 			cwd: keepCwd,
 			workspaceId: "ws-keep",
-			// biome-ignore lint/suspicious/noExplicitAny: see above
-			model: fauxB.getModel() as any,
+			model: toWireModel(fauxB.getModel()),
 		});
 		await Promise.all([
 			promptSession(doomed.sessionId, "persist doomed"),
@@ -3426,7 +4429,7 @@ test("removeWorkspaceSessions: archives a workspace's live sessions + purges the
 		expect(await listSessions("ws-doomed", doomedCwd)).toHaveLength(0);
 		expect(hasSession(survivor.sessionId)).toBe(true);
 		expect(await listSessions("ws-keep", keepCwd)).toHaveLength(1);
-		removeSession(survivor.sessionId);
+		await removeSession(survivor.sessionId);
 	} finally {
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
@@ -3467,4 +4470,92 @@ test("an extension failing in session_start reaches the client, named, before th
 		setExtUiPublisher(() => {});
 		rmSync(extensionPath, { force: true });
 	}
+});
+
+test("switching other agents' skills host-wide reloads an open chat's skill set", async () => {
+	const claudeDir = tmpCwd("trpi-other-agent-claude-");
+	const skillDir = join(claudeDir, "skills", "tr-other-agent-probe");
+	mkdirSync(skillDir, { recursive: true });
+	writeFileSync(
+		join(skillDir, "SKILL.md"),
+		"---\nname: tr-other-agent-probe\ndescription: A personal skill another agent keeps.\n---\nBody.\n",
+	);
+	const priorClaudeDir = process.env.CLAUDE_CONFIG_DIR;
+	process.env.CLAUDE_CONFIG_DIR = claudeDir;
+	let otherAgentSkills = false;
+	setSkillAdmissionResolver(() =>
+		admissionContextFor({ piResourceTrust: "granted" }, {}, otherAgentSkills),
+	);
+	const probe = (sessionId: string) =>
+		getSessionCommands(sessionId).some((command) => command.name === "skill:tr-other-agent-probe");
+	let sessionId: string | undefined;
+	try {
+		({ sessionId } = await createSession({
+			cwd: tmpCwd("trpi-other-agent-skills-"),
+			workspaceId: "ws-other-agent-skills",
+			model: toWireModel(fauxA.getModel()),
+		}));
+		expect(probe(sessionId)).toBe(false);
+		otherAgentSkills = true;
+		await refreshSkillAdmission();
+		expect(probe(sessionId)).toBe(true);
+		otherAgentSkills = false;
+		await refreshSkillAdmission();
+		expect(probe(sessionId)).toBe(false);
+	} finally {
+		if (sessionId) await removeSession(sessionId);
+		setSkillAdmissionResolver(() => admissionContextFor({ piResourceTrust: "granted" }));
+		if (priorClaudeDir === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+		else process.env.CLAUDE_CONFIG_DIR = priorClaudeDir;
+	}
+});
+
+test("readFinalAssistantTexts reads live and on-disk chats without attaching them", async () => {
+	fauxA.setResponses([fauxAssistantMessage("LIVE_FINAL")]);
+	const cwd = tmpCwd("trpi-final-");
+	const live = await createSession({
+		cwd,
+		workspaceId: "ws-final",
+		model: toWireModel(fauxA.getModel()),
+	});
+	await promptSession(live.sessionId, "hello");
+	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	const disk = writeFixtureSession(dir, {
+		cwd,
+		messages: [
+			{ role: "user", text: "do it", timestamp: 1 },
+			{ role: "assistant", text: "DISK_EARLIER", timestamp: 2 },
+			{ role: "user", text: "and then", timestamp: 3 },
+			{ role: "assistant", text: "DISK_FINAL", timestamp: 4 },
+		],
+	});
+	const silent = writeFixtureSession(dir, {
+		cwd,
+		messages: [{ role: "user", text: "only asked", timestamp: 1 }],
+	});
+	const foreign = writeFixtureSession(dir, {
+		cwd: tmpCwd("trpi-final-other-"),
+		messages: [
+			{ role: "user", text: "x", timestamp: 1 },
+			{ role: "assistant", text: "FOREIGN", timestamp: 2 },
+		],
+	});
+
+	const texts = await readFinalAssistantTexts("ws-final", cwd, [
+		live.sessionId,
+		disk.id,
+		silent.id,
+		foreign.id,
+		"missing",
+	]);
+
+	expect(texts.get(live.sessionId)).toBe("LIVE_FINAL");
+	expect(texts.get(disk.id)).toBe("DISK_FINAL");
+	expect(texts.get(silent.id)).toBeNull();
+	expect(texts.get(foreign.id)).toBeNull();
+	expect(texts.get("missing")).toBeNull();
+	expect(hasSession(disk.id)).toBe(false);
+	expect(
+		(await readFinalAssistantTexts("ws-elsewhere", cwd, [live.sessionId])).get(live.sessionId),
+	).toBeNull();
 });

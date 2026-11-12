@@ -6,6 +6,7 @@ import {
 	getToolChrome,
 	getToolRenderer,
 	getToolSummary,
+	isDockedTool,
 	registerToolRenderer,
 	registerToolRendererPrefix,
 	resolveProminence,
@@ -59,6 +60,18 @@ describe("toolRegistry chrome", () => {
 	it("honors a registered 'bare' chrome (renderer owns its frame)", () => {
 		registerToolRenderer("bare-chrome-tool", () => null, { chrome: "bare" });
 		expect(getToolChrome("bare-chrome-tool")).toBe("bare");
+	});
+});
+
+describe("toolRegistry dock", () => {
+	it("docks only an interactive tool that opted in", () => {
+		registerToolRenderer("docked-tool", () => null, { interactive: true, dock: true });
+		registerToolRenderer("inline-interactive-tool", () => null, { interactive: true });
+		registerToolRenderer("dock-without-interaction", () => null, { dock: true });
+		expect(isDockedTool("docked-tool")).toBe(true);
+		expect(isDockedTool("inline-interactive-tool")).toBe(false);
+		expect(isDockedTool("dock-without-interaction")).toBe(false);
+		expect(isDockedTool("never-registered-dock")).toBe(false);
 	});
 });
 
@@ -149,15 +162,15 @@ describe("prefix registrations (one resolver for every registry read)", () => {
 });
 
 describe("summaries translate through the render translator", () => {
-	it("the summary receives the translator the caller renders with", () => {
+	it("the summary receives the translator the caller renders with", async () => {
 		registerToolRenderer("translated-summary-tool", () => null, {
 			summary: (_props, translate) => translate("desktop.menu.edit"),
 		});
-		applyLocale("de", { de: { "desktop.menu.edit": "Bearbeiten" } });
+		await applyLocale("de", { de: { "desktop.menu.edit": "Bearbeiten" } });
 		expect(getToolSummary(currentTranslator(), "translated-summary-tool", props({}))).toBe(
 			"Bearbeiten",
 		);
-		applyLocale("en", {});
+		await applyLocale("en", {});
 		expect(getToolSummary(currentTranslator(), "translated-summary-tool", props({}))).toBe("Edit");
 	});
 });

@@ -38,9 +38,13 @@ function idle(): SessionState {
 		completion: null,
 		completionUnread: false,
 		queuedCount: 0,
+		backgroundWork: false,
 	};
 }
-const question: SessionState = { ...idle(), needsInput: { interactionId: "i", kind: "question" } };
+const question: SessionState = {
+	...idle(),
+	needsInput: { interactionId: "tool:i", kind: "tool-response", toolCallId: "i" },
+};
 const finished: SessionState = {
 	...idle(),
 	completion: { completionId: "c", outcome: "succeeded" },
@@ -119,7 +123,7 @@ describe("observer + engine pipeline", () => {
 		clock.run();
 		expect(emitted).toHaveLength(1);
 		expect(emitted[0]?.body).toBe("2 worktrees need your attention");
-		expect(emitted[0]?.target).toEqual({ kind: "switcher" });
+		expect(emitted[0]?.target).toEqual({ kind: "search" });
 	});
 
 	test("a session answered before the window flush is dropped", () => {

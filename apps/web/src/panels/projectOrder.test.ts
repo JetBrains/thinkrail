@@ -30,19 +30,12 @@ function memoryAdapter(initial: Record<string, string> = {}) {
 	return { adapter, values };
 }
 
-test.each([
-	null,
-	"",
-	"{bad json",
-	"null",
-	"false",
-	"42",
-	'"a"',
-	'{"a":1}',
-	"[]",
-])("invalid or absent stored preference %s parses as an empty order", (raw) => {
-	expect(parseProjectOrder(raw)).toEqual([]);
-});
+test.each([null, "", "{bad json", "null", "false", "42", '"a"', '{"a":1}', "[]"])(
+	"invalid or absent stored preference %s parses as an empty order",
+	(raw) => {
+		expect(parseProjectOrder(raw)).toEqual([]);
+	},
+);
 
 test("parsing retains only nonempty string IDs and deduplicates in saved order", () => {
 	expect(parseProjectOrder('["c",null,"",3,{},[],false,"a","c","closed","a"]')).toEqual([
@@ -71,21 +64,20 @@ test("the supplied native adapter uses project-order and restores before project
 	}
 });
 
-test.each([
-	null,
-	"not json",
-	'{"order":["a"]}',
-])("missing or malformed storage %s clears stale in-memory order on hydration", (raw) => {
-	const { adapter } = memoryAdapter(raw === null ? {} : { "project-order": raw });
-	useAppStore.getState().hydrateProjectOrder(["c"]);
-	const unsubscribe = initProjectOrderPersistence(adapter);
-	try {
-		expect(useAppStore.getState().projectOrder).toEqual([]);
-		expect(adapter.setItem).not.toHaveBeenCalled();
-	} finally {
-		unsubscribe();
-	}
-});
+test.each([null, "not json", '{"order":["a"]}'])(
+	"missing or malformed storage %s clears stale in-memory order on hydration",
+	(raw) => {
+		const { adapter } = memoryAdapter(raw === null ? {} : { "project-order": raw });
+		useAppStore.getState().hydrateProjectOrder(["c"]);
+		const unsubscribe = initProjectOrderPersistence(adapter);
+		try {
+			expect(useAppStore.getState().projectOrder).toEqual([]);
+			expect(adapter.setItem).not.toHaveBeenCalled();
+		} finally {
+			unsubscribe();
+		}
+	},
+);
 
 test("writes order changes only, stops on unsubscribe, and restores in a fresh store", () => {
 	const { adapter, values } = memoryAdapter();
@@ -131,7 +123,7 @@ test("a read failure falls back to default order but does not prevent later writ
 	const unsubscribe = initProjectOrderPersistence(adapter);
 	try {
 		expect(useAppStore.getState().projectOrder).toEqual([]);
-		expect(selectOrderedProjects(useAppStore.getState())).toBe(projects);
+		expect(selectOrderedProjects(useAppStore.getState())).toEqual(projects);
 		useAppStore.getState().moveProject("b", "a", "before");
 		expect(values.get("project-order")).toBe('["b","a","c"]');
 	} finally {

@@ -1,6 +1,6 @@
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import { IconTooltip } from "@thinkrail/ui/tooltip";
+import { IconButton } from "@thinkrail/ui/button";
 import { useEffect, useMemo, useRef } from "react";
 import { useResourceHost } from "../../host";
 import { anchorLabel, type ResourceViewProps, type ReviewThread } from "../../registry";
@@ -107,19 +107,12 @@ export default function NotebookView({
 										{cell.type === "code" ? `[${cell.executionCount ?? " "}]` : cell.index + 1}
 									</span>
 									{review ? (
-										<IconTooltip
+										<IconButton
+											icon={MessageSquarePlus}
 											label={t("viewer.notebook.commentOnCell", { number: cell.index + 1 })}
-										>
-											<button
-												type="button"
-												data-testid="notebook-comment-cell"
-												aria-label={t("viewer.notebook.commentOnCell", { number: cell.index + 1 })}
-												className="flex size-24 items-center justify-center rounded-sm text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-												onClick={() => composer.select(cell)}
-											>
-												<MessageSquarePlus className="size-14" />
-											</button>
-										</IconTooltip>
+											data-testid="notebook-comment-cell"
+											onClick={() => composer.select(cell)}
+										/>
 									) : null}
 									{threads.length > 0 ? (
 										<span

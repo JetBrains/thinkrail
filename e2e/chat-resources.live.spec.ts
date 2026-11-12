@@ -104,9 +104,7 @@ test("command logs and Stop stay scoped through parent Stop, view closure, reloa
 	await expect(parentTab).toHaveAttribute("data-active", "false");
 	await expect(trigger).toHaveAttribute("data-active-count", "0");
 	const newChatResources = await openResources(page);
-	await expect(
-		newChatResources.getByText("Nothing is running in the background.", { exact: true }),
-	).toBeVisible();
+	await expect(newChatResources.getByTestId("resources-empty")).toBeVisible();
 	await expect(page.locator(commandRows)).toHaveCount(0);
 	await page.keyboard.press("Escape");
 	await parentTab.locator("button").first().click();
@@ -149,7 +147,11 @@ test("natural command completion refreshes the closed inspector and survives tra
 		"running",
 	);
 	await expect(trigger).toHaveAttribute("data-active-count", "0", { timeout: 60_000 });
-	await expect(page.getByTestId("resources-dock")).toHaveCount(0);
+	const dock = page.getByTestId("resources-dock");
+	await expect(dock.locator(commandRows)).toHaveCount(0);
+	await expect(dock.getByTestId("resources-dock-finished")).toContainText("1 finished");
+	await expect(dock.getByTestId("resources-dock-fresh")).toHaveText("1 new");
+	await expect(trigger).toHaveAttribute("data-fresh-count", "1");
 	const result = page.getByTestId("background-command-completion");
 	await expect(result).toHaveAttribute("data-status", "completed", { timeout: 60_000 });
 	await expect(result).toHaveAttribute("data-expanded", "false");
@@ -158,6 +160,9 @@ test("natural command completion refreshes the closed inspector and survives tra
 	await expect(page.getByTestId("turn-divider")).toHaveCount(2);
 	await result.getByTestId("background-result-toggle").click();
 	await expect(result.getByTestId("background-result-body")).toContainText("RESOURCE_DONE");
+	await expect(dock.getByTestId("resources-dock-fresh")).toHaveCount(0);
+	await expect(dock.getByTestId("resources-dock-finished")).toContainText("1 finished");
+	await expect(trigger).not.toHaveAttribute("data-fresh-count");
 	await result.getByTestId("background-result-open").click();
 	await expect(inspector).toBeVisible();
 	const row = inspector.locator(commandRows).filter({ hasText: "resource-finish" });

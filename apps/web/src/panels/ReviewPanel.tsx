@@ -11,6 +11,7 @@ import {
 import type { ReviewComment } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { outdatedReason } from "@thinkrail/resource-renderers";
+import { IconButton } from "@thinkrail/ui/button";
 import { PopoverTrigger } from "@thinkrail/ui/popover";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
@@ -440,18 +441,16 @@ function CommentRow({
 			<span className="absolute top-4 right-8 flex items-center gap-4 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 has-[[data-state=open]]:opacity-100">
 				{isDraft && (
 					<>
-						<IconTooltip label={t("review.comment.send")} wrapTrigger>
-							<button
-								type="button"
-								data-testid="review-comment-send"
-								aria-label={t("review.comment.send")}
-								disabled={sending}
-								onClick={onSend}
-								className="text-text-subtle hover:text-text-default disabled:pointer-events-none"
-							>
-								<Send className="size-14" />
-							</button>
-						</IconTooltip>
+						<IconButton
+							variant="ghost"
+							size="s"
+							icon={Send}
+							label={t("review.comment.send")}
+							wrapTrigger
+							data-testid="review-comment-send"
+							disabled={sending}
+							onClick={onSend}
+						/>
 						<ConfirmPopover
 							open={confirmDelete}
 							onOpenChange={setConfirmDelete}
@@ -478,17 +477,14 @@ function CommentRow({
 					</>
 				)}
 				{comment.sessionId && (
-					<IconTooltip label={t("review.panel.showInFile")}>
-						<button
-							type="button"
-							data-testid="review-comment-file"
-							aria-label={t("review.panel.showInFile")}
-							onClick={onNavigate}
-							className="text-text-subtle hover:text-text-default"
-						>
-							<FileText className="size-14" />
-						</button>
-					</IconTooltip>
+					<IconButton
+						variant="ghost"
+						size="s"
+						icon={FileText}
+						label={t("review.panel.showInFile")}
+						data-testid="review-comment-file"
+						onClick={onNavigate}
+					/>
 				)}
 				{comment.status === "sent" && (
 					<IconTooltip label={t("review.panel.markResolved")}>
@@ -530,17 +526,14 @@ function ResolvedRow({
 			</span>
 			<span className="flex shrink-0 items-center gap-4 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
 				{comment.sessionId && (
-					<IconTooltip label={t("review.panel.openLinkedChat")}>
-						<button
-							type="button"
-							data-testid="review-comment-chat"
-							aria-label={t("review.panel.openLinkedChat")}
-							onClick={() => comment.sessionId && onOpenChat(comment.sessionId)}
-							className="text-text-subtle hover:text-text-default"
-						>
-							<MessageSquare className="size-14" />
-						</button>
-					</IconTooltip>
+					<IconButton
+						variant="ghost"
+						size="s"
+						icon={MessageSquare}
+						label={t("review.panel.openLinkedChat")}
+						data-testid="review-comment-chat"
+						onClick={() => comment.sessionId && onOpenChat(comment.sessionId)}
+					/>
 				)}
 			</span>
 		</div>

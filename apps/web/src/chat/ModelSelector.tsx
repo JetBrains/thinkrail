@@ -9,6 +9,7 @@ import {
 } from "@remixicon/react";
 import { sameModel, type WireModel } from "@thinkrail/contracts";
 import { type Translator, useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import {
 	Command,
 	CommandEmpty,
@@ -58,7 +59,7 @@ export function ModelSelector({
 	onSelect,
 	refreshing,
 	onRefresh,
-	container,
+	container = null,
 	className,
 	placeholder,
 	defaultOption,
@@ -129,29 +130,29 @@ export function ModelSelector({
 				<span className="mt-2 shrink-0 text-text-subtle tr-text-metadata">{model.id}</span>
 				{isCurrent ? <Check className="mt-2 size-14 shrink-0 text-primary" /> : null}
 				{preferences?.supported ? (
-					<button
-						type="button"
+					<IconButton
+						icon={isPinned ? StarFill : StarLine}
+						size="s"
 						data-testid="model-favorite-toggle"
 						data-favorite={isPinned}
-						aria-label={
+						label={
 							isPinned
 								? t("chat.modelPicker.unpin", { model: model.name })
 								: t("chat.modelPicker.pin", { model: model.name })
 						}
 						aria-pressed={isPinned}
+						selected={isPinned}
+						tone={isPinned ? "warning" : undefined}
 						onClick={(event) => {
 							event.stopPropagation();
 							preferences.toggleFavorite(model);
 						}}
 						className={cn(
-							"mt-2 flex size-16 shrink-0 items-center justify-center rounded-sm outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary",
-							isPinned
-								? "text-feedback-warning"
-								: "text-text-subtle opacity-0 group-hover/row:opacity-100 group-data-[selected=true]/row:opacity-100 focus-visible:opacity-100",
+							"mt-2 shrink-0",
+							!isPinned &&
+								"opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100 group-data-[selected=true]/row:opacity-100",
 						)}
-					>
-						{isPinned ? <StarFill className="size-12" /> : <StarLine className="size-12" />}
-					</button>
+					/>
 				) : null}
 			</CommandItem>
 		);
@@ -181,6 +182,7 @@ export function ModelSelector({
 		<Popover
 			open={open}
 			onOpenChange={(next) => {
+				if (next && disabled) return;
 				setOpen(next);
 				if (next) {
 					onRefresh(false);
@@ -192,7 +194,7 @@ export function ModelSelector({
 			<PopoverTrigger
 				data-testid="model-selector"
 				data-open={open}
-				disabled={disabled}
+				aria-disabled={disabled || undefined}
 				className={cn(
 					"flex h-32 max-w-[220px] items-center gap-8 rounded-sm border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected",
 					className,
@@ -203,7 +205,13 @@ export function ModelSelector({
 				</span>
 				<ChevronDown className="size-16 shrink-0 text-text-muted" />
 			</PopoverTrigger>
-			<PopoverContent align="start" container={container} className="w-340 p-0">
+			<PopoverContent
+				align="start"
+				container={container}
+				collisionBoundary={container}
+				collisionPadding={8}
+				className="flex max-h-[var(--radix-popover-content-available-height)] w-340 max-w-[var(--radix-popover-content-available-width)] flex-col p-0"
+			>
 				<Command className="min-h-0 flex-1 bg-transparent" filter={pickerFilter(groups, groupRow)}>
 					<CommandInput
 						placeholder={t("chat.modelPicker.search")}
@@ -259,17 +267,20 @@ export function ModelSelector({
 					</CommandList>
 				</Command>
 				<div className="pointer-events-none relative -mt-24 flex items-end justify-end bg-[linear-gradient(to_top,var(--container-elevated-bg),transparent)] px-8 pt-24 pb-8">
-					<button
-						type="button"
+					<Button
+						variant="outline"
+						size="m"
+						iconLeft={RefreshCw}
+						loading={refreshing}
+						spinIcon
 						data-testid="model-refresh"
 						data-refreshing={refreshing}
 						disabled={refreshing}
 						onClick={() => onRefresh(true)}
-						className="pointer-events-auto inline-flex items-center gap-4 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-text-metadata text-text-default shadow-sm outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-default disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+						className="pointer-events-auto"
 					>
-						<RefreshCw className={cn("size-12 shrink-0", refreshing && "animate-spin")} />
 						{refreshing ? t("chat.modelPicker.updating") : t("chat.modelPicker.refresh")}
-					</button>
+					</Button>
 				</div>
 			</PopoverContent>
 		</Popover>

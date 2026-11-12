@@ -16,6 +16,7 @@ type AttributionRecordingDependencies = {
 	href(): string | undefined;
 	referrer(): string | undefined;
 	generateBridgeId: BridgeIdGenerator;
+	recordedJourneys: Set<string>;
 };
 
 const browserDependencies: AttributionRecordingDependencies = {
@@ -33,18 +34,21 @@ const browserDependencies: AttributionRecordingDependencies = {
 	href: () => (typeof window === "undefined" ? undefined : window.location.href),
 	referrer: () => (typeof document === "undefined" ? undefined : document.referrer),
 	generateBridgeId: createBridgeId,
+	recordedJourneys: new Set<string>(),
 };
 
 export function recordCurrentAttributionTouch(
 	dependencies: AttributionRecordingDependencies = browserDependencies,
 ): void {
 	const journeyId = dependencies.currentJourneyId();
-	if (journeyId === undefined) return;
+	if (journeyId === undefined || dependencies.recordedJourneys.has(journeyId)) return;
 	const storage = dependencies.storage();
 	const href = dependencies.href();
 	const referrer = dependencies.referrer();
 	if (storage === undefined || href === undefined || referrer === undefined) return;
-	recordAttributionTouch(journeyId, href, referrer, storage);
+	if (recordAttributionTouch(journeyId, href, referrer, storage) !== undefined) {
+		dependencies.recordedJourneys.add(journeyId);
+	}
 }
 
 export function recordCurrentDownloadBridge(

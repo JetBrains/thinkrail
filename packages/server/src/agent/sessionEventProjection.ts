@@ -6,6 +6,8 @@ export function projectSessionEvent(
 	terminal: AgentSettlement | null,
 ): PiEvent {
 	if (event.type === "agent_settled") return { type: "agent_settled", terminal };
+	if (event.type === "entry_appended")
+		return { type: "entry_appended", entryType: event.entry.type };
 	if (event.type === "compaction_end") {
 		return {
 			type: "compaction_end",
@@ -28,7 +30,7 @@ export function projectSessionEvent(
 	if (event.type === "tool_execution_update") {
 		return { ...event, partialResult: withoutStructured(event.partialResult) };
 	}
-	return event as PiEvent;
+	return event;
 }
 
 function withoutStructured(result: unknown): unknown {

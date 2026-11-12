@@ -41,7 +41,7 @@ export function ProjectTrustNotice({ projectId }: { projectId: string }) {
 		<>
 			<Button
 				variant="ghost"
-				size="sm"
+				size="m"
 				data-testid="project-untrust-button"
 				disabled={busy}
 				onClick={() => setConfirmingRevoke(true)}
@@ -110,7 +110,7 @@ export function ProjectTrustNotice({ projectId }: { projectId: string }) {
 				{stopTrusting}
 				<Button
 					variant="outline"
-					size="sm"
+					size="m"
 					data-testid={pending ? "project-ack-button" : "project-trust-button"}
 					disabled={busy}
 					onClick={() =>
