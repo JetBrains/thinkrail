@@ -62,6 +62,12 @@ export function isTextEntryTarget(target: EventTarget | null): boolean {
 	);
 }
 
+const FOCUSABLE = "a[href], button, input, label, select, textarea, [tabindex]";
+
+export function isCardBackground(target: EventTarget | null, card: HTMLElement): boolean {
+	return target instanceof Element && target.closest(FOCUSABLE) === card;
+}
+
 export function isInsidePreview(target: EventTarget | null): boolean {
 	return target instanceof Element && !!target.closest("[data-ask-preview]");
 }
@@ -85,10 +91,4 @@ export function focusQuestionAttention(card: HTMLElement): void {
 	);
 	if (selected) selected.focus({ preventScroll: true });
 	else focusCurrentQuestionPage(card);
-}
-
-export function currentQuestionPageStart(card: HTMLElement): HTMLElement {
-	return (
-		activeQuestionPage(card).querySelector<HTMLElement>('[data-ask-page-start="true"]') ?? card
-	);
 }

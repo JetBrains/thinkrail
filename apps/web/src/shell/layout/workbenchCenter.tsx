@@ -74,7 +74,6 @@ export const CenterGroupView = memo(function CenterGroupView({
 			}}
 		>
 			<TabStrip
-				worktreePath={shared.worktreePath}
 				document={shared.document}
 				readAttention={shared.readAttention}
 				selectionEpochRef={shared.selectionEpochRef}
@@ -96,6 +95,7 @@ export const CenterGroupView = memo(function CenterGroupView({
 				{...(shared.chatFirstPrompts ? { chatFirstPrompts: shared.chatFirstPrompts } : {})}
 				canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 				renderTabAdornment={shared.renderTabAdornment}
+				worktreePath={shared.worktreePath}
 				trailing={
 					<>
 						{renderCenterActions(group.id)}

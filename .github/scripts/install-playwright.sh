@@ -1,30 +1,11 @@
 #!/usr/bin/env bash
-# Install Playwright's Chromium headless shell (plus WebKit and its system libraries, without Playwright's
-# optional font and X-server group, with `start webkit`), retrying the download a bounded number of times.
-webkit() {
-	bunx playwright install webkit && sudo apt-get update -q || return 1
-	local report
-	local -a missing
-	report=$(bunx playwright install-deps --dry-run webkit 2>&1)
-	case "$report" in
-	*"All system dependencies are installed"*) return 0 ;;
-	*"Missing system dependencies"*) ;;
-	*)
-		echo "$report"
-		return 1
-		;;
-	esac
-	mapfile -t missing < <(sed -n 's/^  //p' <<< "$report" | grep -vE '^(fonts-|xfonts-|ttf-|xvfb$)')
-	[ "${#missing[@]}" -eq 0 ] || sudo apt-get install -y --no-install-recommends "${missing[@]}"
-}
+# Download Playwright's Chromium headless shell (plus WebKit with `start webkit`), retrying a bounded number of
+# times. WebKit's system libraries come from `.github/actions/apt-packages`; `wait webkit` proves it launches.
 install() {
-	[ "${2:-}" != webkit ] ||
-		printf 'Acquire::Retries "5";\nAcquire::http::Timeout "20";\n' |
-		sudo tee /etc/apt/apt.conf.d/80-playwright-retries > /dev/null
 	for attempt in 1 2 3; do
 		bunx playwright install --only-shell chromium &&
-			{ [ "${2:-}" != webkit ] || webkit; } && return 0
-		echo "::warning::Playwright install failed on attempt $attempt"
+			{ [ "${2:-}" != webkit ] || bunx playwright install webkit; } && return 0
+		echo "::warning::Playwright download failed on attempt $attempt"
 		sleep 10
 	done
 	return 1
@@ -37,6 +18,7 @@ case "${1:-}" in
 	start)
 		rm -f "$status"
 		(
+			export PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1
 			install "$@"
 			echo $? > "$status.tmp" && mv "$status.tmp" "$status"
 		) > "$log" 2>&1 &
@@ -58,10 +40,15 @@ case "${1:-}" in
 			sleep 1
 		done
 		cat "$log"
-		exit "$(cat "$status")"
+		[ "$(cat "$status")" = 0 ] || exit "$(cat "$status")"
+		if [ "${2:-}" = webkit ] &&
+			! bun -e 'const { webkit } = await import("@playwright/test"); await (await webkit.launch()).close();'; then
+			echo "::error::WebKit cannot launch; add its missing libraries to .github/actions/apt-packages/webkit.txt"
+			exit 1
+		fi
 		;;
 	*)
-		echo "usage: $0 start [webkit]|wait" >&2
+		echo "usage: $0 start [webkit]|wait [webkit]" >&2
 		exit 2
 		;;
 esac

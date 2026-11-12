@@ -21,6 +21,30 @@ folder itself (git's *main working tree*) — the "just work in my project folde
 **non-removable and non-renamable**. Any **existing worktree** the user explicitly attaches is recorded in
 place as `kind: "external"` — outside the data dir, never created or mutated here.
 
+A third kind is **ThinkRail-owned and never git**: a **chat without a project** (`kind: "chat"`) is its own
+folder `<dataDir>/chats/<yyyy-mm-dd>-<short id>` (local date; the id extends on collision — no words from
+the prompt, architecture Decision 8 stands) in the one built-in **Chats container** project
+(`Project.kind: "chats"`, root `<dataDir>/chats`, slug `chats`, permanently untrusted, found or created by
+kind with an opaque id, never closed). The record keeps the required wire fields with inert values
+(`branch: ""`, `baseBranch: ""`, `name: "Chat"`, `renamed: true` so `set_title` names only the
+conversation); `kind` is the only marker and every git consumer gates on it. `chats.ts` owns the container
+and chat records: `ensureChatsContainer`, `createChatRecord`, `chatWorkspaces`, `getChatWorkspace`,
+`markChatDeletionPending` (persisted before any destructive step so a crash leaves a visible
+"deletion incomplete" chat, never a half-gone one), `recordChatContinuation` (the durable
+`continuedTo: { projectId, workspaceId, sessionId }[]` link to the workspace a chat's summary went to —
+it survives compaction of the transcript card), `dropChatRecord`, an in-memory chat-id cache for the
+host's per-event push scoping (`isChatWorkspaceId` / `isChatsContainerId` — only this process writes the
+store), and the refusal helpers (`assertNotChatsContainer`, `assertNotChatWorkspace`) the doors below use.
+The session, the terminal and the teardown are composed in `host` (`host/chats.ts`): a chat owns exactly
+one top-level session, a second one is a new chat, and deleting trashes the transcripts file by file, the
+delegated conversations and then the folder (`trash` is not this module's dependency). Refused here: `renameWorkspace`, settle /
+unsettle, `setWorkspaceDiffBase`, `forgetWorkspace` / `removeWorkspace` (delete the chat instead),
+`workspaceDiffStats`; `reclaimWorktree`, `recordWorkspaceHead` and `setWorkspaceReview` are no-ops;
+`listWorkspaces(container)` returns the chat rows without Default ensure, external refresh or diff stats;
+`openProjectById` never hands the container to `createWorkspace` / `openExistingWorktree`, and a worktree
+registered under the chats root is neither offered by `listExistingWorktrees` nor admitted by
+`openExistingWorktree` (the projects barrel's reserved-root check, before any Git read).
+
 ## Boundary
 
 - **Owns:** `listExistingWorktrees(projectId)` (**async** — parses `git worktree list --porcelain -z` read
@@ -72,7 +96,9 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `setWorkspaceDiffBase`); **branch name made unique
   against refs, worktree dirs *and* the project's in-flight creations** — archiving leaves the branch behind and renaming frees a
   branch name whose worktree directory stays occupied, so candidate names skip both, and a creation holds its
-  name from the first instant; path
+  name from the first instant; allocation lists heads once (`for-each-ref`, compared case-insensitively — a
+  case-only twin is the same ref file on macOS/Windows) and stays synchronous so a name is reserved atomically
+  (issue #1229: one `show-ref` per candidate blocked the event loop ~1 s at 100 `workspace-N` branches); path
   `dataDir/worktrees/<project-slug>/<branch>`; **seeds the ephemeral per-workspace scratch dir**
   (`WORKSPACE_CONTEXT_DIR`, with a self-ignoring `*` `.gitignore` — zero git footprint) in the
   new worktree, the home for temp docs (task-specs / working files) that stay out of git yet remain
@@ -86,9 +112,10 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   after its git subprocess)),
   **background creation** (`creations.ts` over the `creationRecords.ts` store; issue #874 — a sync
   `worktree add` of a large monorepo froze the host's only event loop for the whole checkout and outlived the
-  client's 60s request): `startWorkspaceCreation(projectId, { name?, baseRef?, kickoff? })` plans the branch and
-  path synchronously, persists a record in `workspace-creations.json` (`state: running`, `phase: preparing`, the
-  full kickoff incl. images) and returns its `WorkspaceCreation` view before any git runs. The job then
+  client's 60s request): `startWorkspaceCreation(projectId, { name?, baseRef?, kickoff?, origin? })` plans the
+  branch and path synchronously, persists a record in `workspace-creations.json` (`state: running`, `phase:
+  preparing`, the full kickoff incl. images, and a host-only `origin: "agent"` for an agent's `start_workspace`,
+  which never reaches the wire view) and returns its `WorkspaceCreation` view before any git runs. The job then
   (1) fetches a missing remote base, resolves the OID, and runs `worktree add --no-checkout` through `gitAsync`
   (no file writes, so it is quick), (2) moves to `phase: checking-out` and runs `git checkout --progress
   --no-recurse-submodules -f <branch> --` in the new worktree — the split exists because git reports checkout
@@ -111,8 +138,9 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   hook that stays silent for longer (a huge LFS object) hits the same window on every retry; a configurable
   window is a follow-up. On success the
   record becomes the `Workspace` (same id) through `registerManagedWorkspace`, the injected **handoff**
-  (`setWorkspaceCreationHandoff`) runs, and the record is deleted with a `removed` event carrying the workspace
-  plus the handoff's `sessionId` / `kickoffError`. **On failure** (`WORKTREE_ADD_FAILED`,
+  (`setWorkspaceCreationHandoff`, given the kickoff and the origin) runs, and the record is deleted with a
+  `removed` event carrying the workspace plus the handoff's `sessionId` / `kickoffError`; the chat's model and
+  effort the handoff also reports go only to the job's in-process caller. **On failure** (`WORKTREE_ADD_FAILED`,
   `WORKTREE_CHECKOUT_FAILED`, `WORKTREE_CHECKOUT_STALLED`, `WORKSPACE_PATH_TAKEN`; the message is git's
   stderr minus progress lines, for display only) the job cleans up **only what it provably created**. The
   ownership marker is the persisted `baseOid`, written only after the folder was confirmed absent, right
@@ -144,15 +172,38 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   full kickoff (Edit & retry prefills from it); an in-memory latch refuses a second dismiss or a retry while one
   runs. Projects resolve through `getProjects()`, so closing a
   project (a soft flag) never strands a creation.
-  `renameWorkspace` (**sync**; sets the sanitized, casing- and script-preserving display `name` and always
+  `createWorkspace` and **`createWorkspaceWithChat(projectId, opts, signal?)`** start a job and await it in
+  process: a job that fails is discarded (the caller has the error), and the second returns the handoff's
+  outcome. Its `signal` (Stop on `start_workspace`) aborts the job's git work and discards the record and
+  anything the job cut, failing with `WorkspaceCreationStopped`; a cleanup that cannot finish (a folder
+  git cannot remove) keeps the record, marked `interrupted` with its marker, so Retry and Dismiss clean up
+  again, and the call fails saying what was left. Once the handoff runs the workspace is registered and
+  the call completes regardless.
+  `renameWorkspace` (**sync**; throws for Default/external before any Git read, then adopts the live managed
+  branch like `syncWorkspaceBranch`, so it never acts on a stale stored branch;
+  sets the sanitized, casing- and script-preserving display `name` and always
   sets `renamed: true`, so automatic naming never touches it again. **`opts.branch`** is the agent's English
   slug from `set_title`: when present, the branch becomes the slug's ASCII kebab form, clamped to 60 (the display name
   may be any script, so the branch is never derived from it), uniqued against refs + worktree dirs, and moved with
   `git branch -m`, while the **worktree dir never moves** (pi keys sessions and terminals/tabs by that exact
-  cwd); a slug that sanitizes to nothing keeps the current branch. The branch-moving path re-points sibling
-  records whose `baseBranch` or `diffBase` named the old branch, re-loads the registry after the Git
-  subprocess so a concurrent removal is not resurrected, saves once, and emits `updated` for every changed
-  record. Without `opts.branch` — the manual wire method — only the display label changes: `branch`,
+  cwd); a blank or sanitizes-to-nothing slug keeps the current branch. The move runs only when
+  `branchMoveOwed(workspace, opts.by)` (not `renamed`, or `branchNamePending` equals the caller's
+  `opts.by`) and only on the workspace's **own branch**: the branch the worktree was created on,
+  derived as `basename(worktreePath)`. That is exact because the worktree dir is
+  `<dataDir>/worktrees/<slug>/<creation branch>` and never moves, ThinkRail branch names never contain `/`,
+  and the only branch move gives a branch other than the basename. Otherwise the name is still set,
+  `renamed: true` is still set, `branchNamePending = opts.by` (the naming chat's session id) records that
+  the move is owed to that chat only, and
+  the call returns `branchKept`: `"detached"` when `HEAD` is detached or unreadable (mid-rebase `-m` would
+  corrupt the rebase's head-name), `"not-own"` when the worktree has a branch checked out outside ThinkRail.
+  `renamed` locks only the display name: once `HEAD` is back on the own branch, a later call from the same
+  chat with `opts.branch` moves it. Every call that does not keep a branch clears `branchNamePending`, so a
+  manual rename cancels the owed move; a later chat never inherits it (its task would give a different slug,
+  and the branch may already back a PR). `branchNamePending` is the one persisted naming field besides
+  `renamed`. Returns `{ workspace, branchKept? }`. The branch-moving path
+  re-points sibling records whose `baseBranch` or `diffBase` named the old branch, re-loads the registry
+  after the Git subprocess so a concurrent removal is not resurrected, saves once, and emits `updated` for
+  every changed record. Without `opts.branch` — the manual wire method — only the display label changes: `branch`,
   `worktreePath`, `baseBranch`, and `diffBase` stay untouched, no Git mutation runs, and one full-snapshot
   `updated` is emitted.
   **`name` and `branch` deliberately differ** after such a rename — the name is display-only and may repeat;
@@ -160,8 +211,10 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   invalid names still throw; callers decide presentation),
   `listWorkspaces(projectId, { includeDiffStats? })` (**async**; complete authoritative membership/order
   after Default ensure + user-owned folder-truth reconciliation — that sync prologue's load→mutate→save
-  completes before the first await; the diff-stat badges then resolve **in parallel through `gitAsync`**,
-  off the event loop, and **membership is re-read after the awaits** (the same stale-snapshot discipline
+  completes before the first await — managed rows adopt their live branch there too, one registry load and
+  no Git spawn per row (`headBranchAt` reads the gitfile and `HEAD` from disk; only a reftable repo spawns
+  Git), saved once; then the diff-stat badges resolve through `gitAsync`
+  off the event loop (diff ranges never depend on `branch`), and **membership is re-read after the awaits** (the same stale-snapshot discipline
   as the writers): a workspace created while the badges resolved must appear in this response, because its
   `created` push may reach a client before this reply seeds that client's list, where a push into an
   unlisted project is deliberately not folded — a mid-flight row ships without stats until the next list.
@@ -232,13 +285,20 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   = the repo's default branch via `git`'s `resolveDefaultBranch` (unborn-safe — its last fallback is
   `currentBranch`, so the literal `"HEAD"` never persists) — so Default's Changes measure like
   any workspace, degenerating to uncommitted work when the folder sits on the default branch itself.
-  Drift is **not** only a list-time discovery: `refreshUserOwnedWorkspace(workspaceId)` is the same
+  Drift is **not** only a list-time discovery: `syncWorkspaceBranch(workspaceId)` is the same
   re-sync **without** the diff-stat listing (an external workspace re-syncs only its `branch`, and an
   unreadable checkout is never persisted as a fake detached `HEAD`; nor is a git that timed out — a
   timeout is no answer, so the stored fields stay and only a warning is logged — unless the caller passes
   `{ strict: true }`, which rethrows instead (the `pr` push/PR/branch-action guards, which must not
-  validate against a stale stored branch) — and an existing Default is returned as stored for the same reason; unknown id / a managed workspace /
-  no drift → no save, no emit), which the host wires to `watch`'s **repo-metadata nudge** (host-mediated,
+  validate against a stale stored branch) — and an existing Default is returned as stored for the same reason.
+  A managed workspace adopts the live symbolic `HEAD` via `headBranchAt` (a file read; only a reftable repo
+  spawns `git symbolic-ref`, whose timeout keeps the stored branch, or rethrows under `strict`) — detached or
+  unreadable keeps the stored branch — keeping `baseBranch` and the display name and dropping `review`; a
+  rename never `git branch -m`s an adopted branch because it is not the own branch (see `renameWorkspace`),
+  while `renamed` stays untouched so `set_title` can still name the workspace. Adoption never re-points
+  siblings' `baseBranch`/`diffBase`: the old branch stays their base, and if it is gone they fail loudly rather
+  than diff against an unrelated branch; unknown id / no drift → no save, no emit; returns nothing), which the
+  host wires to `watch`'s **repo-metadata nudge** (host-mediated,
   `watch` has no `workspaces` edge — see [[submodule-server-watch]]). So a `git switch` in the Default
   workspace's terminal converges the rail, the top bar and the empty receipt live, instead of leaving
   them on the old branch until a manual project reload — including a switch that leaves the working tree
@@ -278,9 +338,9 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   provider refresh is silent while nothing moves, and **only while the record is still on the branch the
   lookup was made for** — a provider answer is a fact about a branch, and an external worktree can be
   switched during the seconds a lookup takes; for the same reason every persisted branch transition drops
-  the `review` snapshot — both user-owned folder-truth refresh and the managed workspace's one-time branch
-  rename — since a merged snapshot that outlived its branch would shelve the new branch and, being merged,
-  never be refreshed passively. Every writer emits
+  the `review` snapshot — both folder-truth refresh (including a managed workspace adopting a branch
+  checked out in a terminal) and the managed workspace's one-time branch rename — since a merged snapshot
+  that outlived its branch would shelve the new branch and, being merged, never be refreshed passively. Every writer emits
   the full-snapshot `updated`.
   `createWorkspace` and `openExistingWorktree` stamp `lastActiveAt` at creation so a brand-new row is
   live by construction. **Migration:** the host backfills records without a stamp from the newest chat's
@@ -320,7 +380,8 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   Creations publish the same way through `setWorkspaceCreationPublisher` (`WorkspaceCreationEvent`:
   `changed` with the `WorkspaceCreation` view, `removed` with `WorkspaceCreationRemoved`); the host owns the
   handoff that turns a finished creation into a terminal and a chat, so this module never reaches `agent`.
-- **Public surface (barrel):** `createWorkspace`, `startWorkspaceCreation`, `awaitWorkspaceCreation`,
+- **Public surface (barrel):** `createWorkspace`, `createWorkspaceWithChat`, `HandedOff`,
+  `WorkspaceCreationStopped`, `startWorkspaceCreation`, `awaitWorkspaceCreation`,
   `listWorkspaceCreations`, `retryWorkspaceCreation`, `dismissWorkspaceCreation`,
   `interruptWorkspaceCreations`, `replayPendingHandoffs`, `stopWorkspaceCreations`,
   `setWorkspaceCreationHandoff`, `CreationHandoff`,
@@ -328,11 +389,16 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `openExistingWorktree`,
   `listWorkspaces`, `listWorkspaceRecords`, `listAllWorkspaceRecords`, `forgetWorkspace`,
   `reclaimWorktree`, `removeWorkspace`,
-  `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `refreshUserOwnedWorkspace`,
+  `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `syncWorkspaceBranch`, `branchMoveOwed`,
   `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,
   `WorkspaceLifecycleEvent`, `setWorkspaceDiffBase`, `setWorkspaceSkillOverride`,
   `setWorkspaceSubagentsOverride`, `setWorkspaceSubagentMaxConcurrent`, `recordWorkspaceActivity`, `backfillWorkspaceActivity`,
-  `recordWorkspaceHead`, `seedWorkspaceHead`, `settleWorkspace`, `unsettleWorkspace`, `setWorkspaceReview`.
+  `recordWorkspaceHead`, `seedWorkspaceHead`, `settleWorkspace`, `unsettleWorkspace`, `setWorkspaceReview`,
+  `chatsRoot`, `isUnderChatsRoot`, `isChatsContainer`, `isChatWorkspace`,
+  `isChatsContainerId`, `isChatWorkspaceId`, `resetChatIdCache`, `ensureChatsContainer`,
+  `createChatRecord`, `chatWorkspaces`, `getChatWorkspace`, `markChatDeletionPending`,
+  `recordChatContinuation`, `dropChatRecord`, `setChatPublishers`, `assertNotChatsContainer`,
+  `assertNotChatWorkspace`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`, `log`; `contracts`;
   `@thinkrail/shared/paths` (the scratch-dir path convention), `@thinkrail/shared/codedError`; Node.
 - **Forbidden:** `host`; reaching into another feature's internals (use its barrel).

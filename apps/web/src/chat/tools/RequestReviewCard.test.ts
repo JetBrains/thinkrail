@@ -80,4 +80,27 @@ describe("RequestReviewCard", () => {
 		);
 		expect(html).toContain("Reviewing the change set");
 	});
+
+	it("shows why the review failed instead of a bare no-verdict line", () => {
+		const html = renderToStaticMarkup(
+			createElement(RequestReviewCard, {
+				...props({
+					content: [{ type: "text", text: 'TODO "t_1" has no change set to review.' }],
+					details: {},
+				}),
+				status: "error",
+			}),
+		);
+		expect(html).toContain('data-testid="request-review-error"');
+		expect(html).toContain("has no change set to review");
+		expect(html).not.toContain("No review verdict.");
+	});
+
+	it("keeps the no-verdict line when a settled result carries no text", () => {
+		const html = renderToStaticMarkup(
+			createElement(RequestReviewCard, { ...props({ details: {} }), status: "done" }),
+		);
+		expect(html).toContain("No review verdict.");
+		expect(html).not.toContain('data-testid="request-review-error"');
+	});
 });

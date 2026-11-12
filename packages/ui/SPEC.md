@@ -87,7 +87,7 @@ test's documented specialized list names it.
   (never opacity, never hidden) through the `button-disabled` variant the app stylesheet defines — a
   `data-disabled` element, or a natively `:disabled` one that is not loading, so a button inside a disabled
   `<fieldset>` takes the skin too; `loading` swaps the icon (with `spinIcon`, it instead rotates the button's own icon in place — the refresh idiom of `apps/web/src/components` *Loading vocabulary* — and under reduced motion shows the static spinner glyph instead, so the state stays visible) (or, with no icon, overlays the label it keeps
-  transparent for width and the accessible name) for a spinner at the size's icon size, sets `aria-busy`, and natively disables the
+  transparent for width and the accessible name) for a spinner at the size's icon size, sets `aria-busy` (a caller's own `aria-busy` survives on a button that is not loading — the busy-but-clickable mic), and natively disables the
   element so the action cannot run twice; `selected` — or an open Radix trigger (`data-state="open"`) — is
   the persistent toggle/open fill (`control-bg-selected`) for `outline` and `ghost`, distinct from pressed;
   `soft-primary` shows selected as its hover look (`primary-muted` border on the hover tint), the one
@@ -126,7 +126,7 @@ moved here from the app when the resource renderers became a package, because bo
 `ask_user_question` card became an extension web half, because the app's extension prompts use it too.
 
 - Switch exposes native disabled behavior and `role="switch"`/`aria-checked`, not visible On/Off
-  text. Every modal dialog's overlay carries `data-modal-layer`, and `useModalLayerOpen()` reports whether one is open: it lets callers tell "covered by a modal" from their own visibility without a dialog registry, independent of how `aria-hidden` treats live regions. Dialog accepts `hideClose` for chromeless surfaces. `DialogPanel` renders Radix content in place
+  text. Every modal dialog's overlay carries `data-modal-layer`, and `useModalLayerOpen()` reports whether one is open: it lets callers tell "covered by a modal" from their own visibility without a dialog registry, independent of how `aria-hidden` treats live regions. Dialog accepts `hideClose` for chromeless surfaces. `DialogContent` contains what it holds: width and max height keep a window gutter, the body scrolls by default, long text wraps, and `DialogFooter` wraps its actions and then their labels (a footer `Button` grows past its fixed height only then). A caller adding a pinned footer scrolls an inner `min-h-0 flex-1` body; one portalling popovers into the content element sets `overflow-visible` and scrolls an inner body. An inner scroll body is `relative`: otherwise an absolutely positioned descendant (an `sr-only` label) takes the dialog as its containing block and stretches the dialog's own scroll area, giving it a second scrollbar. Flex rows of data still need `min-w-0`. `DialogPanel` renders Radix content in place
   without a portal or overlay for caller-positioned, non-modal dialogs; title/role semantics, Escape
   dismissal, and focus return remain Radix-owned while surrounding UI stays interactive.
 - **An active IME owns the key** ([[module-web]]'s text-field rule). `isImeComposing` is `isComposing`
@@ -156,17 +156,26 @@ moved here from the app when the resource renderers became a package, because bo
 - Context and dropdown menus share menu geometry and token classes: content surface, radius/shadow,
   item/icon spacing, separators, semantic action colors, focus rows, and viewport collision behavior.
   Context menus add pointer-position right-click/touch long-press anchoring; features own enabled gestures
-  and actions. Dropdowns are vertically bounded by the smaller of 60vh and Radix's available height,
-  scrollable with horizontal overflow hidden so long rows truncate rather than scroll.
+  and actions — a trigger opts into the keyboard gesture (Context Menu key or Shift+F10, anchored below the
+  trigger) by passing `openContextMenuFromKeyboard` as its `onKeyDown`. Dropdowns are vertically bounded by
+  the smaller of 60vh and Radix's available height, scrollable with horizontal overflow hidden so long rows
+  truncate rather than scroll.
 - Toast exposes `ToastProvider`/`Toast`/`ToastViewport`/`ToastTitle`/`ToastDescription`/`ToastAction`/
   `ToastClose` and `toastVariants` (`error`/`success`/`warning`/`info`). Severity is a uniform semantic
   border (`border-feedback-*-muted`) on a neutral `bg-container-elevated-bg` background. `ToastAction` is
   unstyled: the caller supplies the control through `asChild`. Queue ownership, icons, and notification
   lifetimes stay in the app (`panels/Toaster` composes the primitives).
+- `DialogContent` and `DialogPanel` stay open for a press that began in the toast viewport (the viewport
+  records its `pointerdown`s; `isToastPress` reads them) and for focus landing in the viewport, so a toast's
+  action or close works over a dialog. Radix would do this through its
+  dismissable-layer branch, but the dialog and the toast resolve different copies of that module; the
+  dialog's copy also defers an outside press to its `click`, by when a closed toast is already detached,
+  so the record is per event, not per element. Unifying the copies is not the fix: Radix then makes each
+  toast the topmost layer, and the first Escape would close an error toast instead of the dialog.
 - Resizable handles paint a 1 px line at their leading edge; the pointer hit area extends only into the
   following panel (fine-pointer margin 1 px), so the preceding panel's trailing-edge scrollbar stays
   usable. There is no grip variant.
 - Primitives use only the host's token utilities, never shadcn's default oklch palette.
 
-Code highlighting is deliberately absent: `CodeBlock` and shiki depend on the app's theme registration
+Code highlighting is deliberately absent: `CodeBlock` and its highlighter depend on the app's theme registration
 and remain app-local until a second extension requires that seam.

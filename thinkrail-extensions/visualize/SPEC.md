@@ -87,4 +87,4 @@ shadows and orthogonal edges, which clash with the app's flat surfaces, and re-l
 pan/zoom controls. The fullscreen canvas owns modifier-wheel zoom and WebKit gesture pinch from its
 local gesture-start baseline so desktop page zoom does not claim the gesture. Renderer failure shows
 the error and a plain source block matching the app CodeBlock's unhighlighted branch; it never imports
-the app's shiki highlighter. `args` and pan/zoom math retain focused unit coverage.
+the app's chat highlighter. `args` and pan/zoom math retain focused unit coverage.

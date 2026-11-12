@@ -19,9 +19,11 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 	return {
 		t: currentTranslator(),
 		contextProjectId: "p1",
+		canStartChat: false,
 		activeWorkspace: workspace,
 		editors: [],
 		historyAvailable: false,
+		findInFilesAvailable: false,
 		canCreateProject: true,
 		nativeShortcuts: false,
 		readAction: null,
@@ -31,6 +33,7 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 		settingsGroups: [],
 		actions: {
 			newWorkspace: noop,
+			newProjectlessChat: noop,
 			openDefaultWorkspace: noop,
 			openProject: noop,
 			openProjectPath: noop,
@@ -42,6 +45,7 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 			toggleBottom: noop,
 			showTool: noop,
 			openHistory: noop,
+			findInFiles: noop,
 			markRead: noop,
 			markUnread: noop,
 			settle: noop,
@@ -73,6 +77,24 @@ describe("palette project and Settings commands", () => {
 		expect(row("settings.open", deps({ nativeShortcuts: true }))?.shortcut).toEqual({
 			key: ",",
 			mod: true,
+		});
+	});
+
+	test("a chat without a project is offered only where one can start, and repository commands only with a repository", () => {
+		expect(row("chat.newProjectless", deps())).toBeUndefined();
+		expect(row("chat.newProjectless", deps({ canStartChat: true }))?.title).toBe(
+			"New chat without a project",
+		);
+		expect(row("workspace.new", deps({ contextProjectId: null }))).toBeUndefined();
+		expect(row("workspace.openDefault", deps({ contextProjectId: null }))).toBeUndefined();
+	});
+
+	test("Find in files is offered only where it has a scope, with the chord it shares with the shell", () => {
+		expect(row("files.findInFiles", deps())).toBeUndefined();
+		expect(row("files.findInFiles", deps({ findInFilesAvailable: true }))?.shortcut).toEqual({
+			key: "F",
+			mod: true,
+			shift: true,
 		});
 	});
 

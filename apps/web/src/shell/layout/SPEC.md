@@ -15,8 +15,8 @@ The shell-owned, headless workbench engine: the normalized frontend-local frame 
 ## Boundary
 
 - **Owns:** web-local `WorkbenchFrame`/`WorkspaceViewState` types; frame-plus-view projection; pure topology, placement, attention, and policy operations; semantic minimum and independent group-limit checks; one-result drag previews; center/side/bottom renderers; alignment-owned nested composition and side-width projection; tab-strip overflow; ARIA tab/separator behavior; and the terminal visibility gate.
-- **Public surface (`index.ts`):** all current-layout types; workbench renderer/controller; the edge-chrome primitives (`AuxiliaryRail`, `AuxiliaryRailToolButton`, `AuxiliaryPaneHeader`, `AuxiliaryPaneHideButton`); pure mutations, projection, and validation helpers; built-in preset definitions plus instantiate/apply/capture operations and `frameMatchesPreset` (geometry equality ignoring generated ids, which Settings uses to mark the applied preset); attention fallback helpers; and unavailable-reason results. Callers inject resource renderers, the workspace worktree path used by file-tab copy actions, and commit complete pure results rather than splicing arrays.
-- **External deps:** `@thinkrail/contracts` for the resource-free custom-preset DTO and git diff-scope type only; shell-neutral `lib` attention/id/copy/path primitives; React; `@thinkrail/ui/*` (including `@thinkrail/ui/resizable`); `@dnd-kit/core`.
+- **Public surface (`index.ts`):** all current-layout types; workbench renderer/controller; the edge-chrome primitives (`AuxiliaryRail`, `AuxiliaryRailToolButton`, `AuxiliaryPaneHeader`, `AuxiliaryPaneHideButton`); pure mutations, projection, and validation helpers; built-in preset definitions plus instantiate/apply/capture operations and `frameMatchesPreset` (geometry equality ignoring generated ids, which Settings uses to mark the applied preset); attention fallback helpers; and unavailable-reason results. Callers inject resource renderers, the workspace worktree path for file-tab copy actions, and commit complete pure results rather than splicing arrays.
+- **External deps:** `@thinkrail/contracts` for the resource-free custom-preset DTO and git diff-scope type only; shell-neutral `lib` attention/id primitives plus `copyText` / `joinWorkspacePath` for file-tab copy actions; React; `@thinkrail/ui/*` (including `@thinkrail/ui/resizable`); `@dnd-kit/core`.
 - **Forbidden:** server/shared/pi imports; domain-resource lifetime; browser persistence or WS calls; feature-panel internals; a mutable third-party docking model; inline component styles; or non-semantic colour values.
 
 ## State contract
@@ -61,10 +61,6 @@ click opens it. Outside the open paths, the legacy-selection Review reveal waits
 browse row's window. `isToolShowing` and `showingAuxiliaryKey` read which auxiliary tools are selected in
 an expanded pane, so the shell can tell whether Review shows and whether the user changed tools since.
 Pointer/resize drafts and viewport compression remain runtime-only.
-
-File and diff tab context menus add **Copy absolute path** and **Copy relative path** as a separate action group;
-other tab kinds omit them. These actions copy the path represented by the clicked tab without selecting
-it or keeping its preview. The shell injects the workspace worktree path used to form the full path.
 
 Frame groups may remain empty in any workspace. Closing a final resource therefore leaves topology untouched. Explicit remove/merge is the only way to delete a group, and its result rehomes every resource that references it across all locally retained workspace views. At least one center leaf always remains.
 
@@ -207,7 +203,7 @@ directional edge hints at drag start and fill the true resulting half on hover. 
 clears on pointer leave; all hints clear on drop or cancel; decorative layers never alter hit-testing or the
 committed result.
 
-Creating or deleting a group is visibly a frame command and therefore affects every workspace in this window. Moving a resource among existing groups affects only its workspace view. Moving a singleton tool changes frame placement globally within this window. Uncommitted drag/resize drafts stay runtime-local and commit once on drop/pointer-up; no host revision can cancel them. A local projection epoch and required workspace identity fence gestures and delayed focus/preview-settle work without remounting the workbench. A workspace switch cancels an active gesture even when a singleton placement or deterministic terminal id also exists in the new view; stale focus requests are not replayed on return. A focus request marked `onlyIfFocusLost` runs only when DOM focus is absent, on `body`, disconnected, or no longer rendered; the check happens when the request executes, after the arrangement commits. `hideSide`/`hideBottom` mark their center focus target `focusOnlyIfLost`, and every path that applies them honors it: the global chords, header and menu hide, and collapsing a region by dragging its separator to zero. Tab removal also cancels its drag. Invalidating a resize restores the live panel group's committed
+Creating or deleting a group is visibly a frame command and therefore affects every workspace in this window. Moving a resource among existing groups affects only its workspace view. Moving a singleton tool changes frame placement globally within this window. Uncommitted drag/resize drafts stay runtime-local and commit once on drop/pointer-up; no host revision can cancel them. A local projection epoch and required workspace identity fence gestures and delayed focus/preview-settle work without remounting the workbench. A workspace switch cancels an active gesture even when a singleton placement or deterministic terminal id also exists in the new view; stale focus requests are not replayed on return. A focus request marked `onlyIfFocusLost` runs only when DOM focus is absent, on `body`, disconnected, or no longer rendered; the check happens when the request executes, after the arrangement commits. A tab focus request also yields when DOM focus already rests inside the panel that its selected tab controls: the content claimed focus first (a palette pick's composer focus, a terminal restoring its own), and moving it to the tab button would undo that. `hideSide`/`hideBottom` mark their center focus target `focusOnlyIfLost`, and every path that applies them honors it: the global chords, header and menu hide, and collapsing a region by dragging its separator to zero. Tab removal also cancels its drag. Invalidating a resize restores the live panel group's committed
 projection before paint and rejects the remainder of that gesture until release, not merely its pending
 persistence. The same recovery applies to outer/aligned sides, bottom height, auxiliary stacks, and
 recursive center splits without keying the workbench by workspace. The canceled-drag announcement is reserved for a pointer/keyboard gesture in progress when its base or workspace is replaced, or a tab drag whose tab left the document: `@thinkrail/ui/resizable` reports layout on every group mount and ordinary resize, so a group that merely lived through earlier local transitions announces nothing.
@@ -235,7 +231,10 @@ tools. A terminal created from an auxiliary group lands in that workspace's matc
 target reroutes through the current local focus rule. Menus name a pane by its contents — `Move to right
 pane (Changes, Review)`, at most three names then `+N`, `(empty)` when it has none — never by an id, and
 a tab's menu lists only commands that can ever apply to it: tools carry no center-only items (keep
-preview, the four splits) and auxiliary terminals carry no splits.
+preview, the four splits) and auxiliary terminals carry no splits. File and diff tabs add **Copy path**
+and **Copy relative path** in a separate group; other kinds omit them. Copying identifies the clicked
+tab and does not select or keep it. The shell injects the workspace worktree path so the layout can join
+it with the tab's file path without importing store or transport.
 
 ## Presets and local persistence
 

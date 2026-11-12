@@ -297,7 +297,6 @@ export function AuxiliaryRegionRail({
 						>
 							{entry.kind === "tool" && entry.tab && location ? (
 								<WorkbenchTab
-									worktreePath={shared.worktreePath}
 									tab={entry.tab}
 									index={anchor(entry)}
 									reorderIndexes={{ previous: previousIndex, next: nextIndex }}
@@ -329,6 +328,7 @@ export function AuxiliaryRegionRail({
 									onRenameChat={shared.onRenameChat}
 									canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 									renderTabAdornment={shared.renderTabAdornment}
+									worktreePath={shared.worktreePath}
 									draggingTab={shared.draggingTab}
 									panelId={groupPanelId(location)}
 									onKeyDown={(event) => {

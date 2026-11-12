@@ -48,7 +48,7 @@ surfaces it governs.
 
 | Group | Ids |
 |---|---|
-| `fontFamilies` | `interface` (Geist Variable, all proportional UI + reading text) · `code` (JetBrains Mono Variable, code only; both `userSelectable`, `code` with `ligatures: none`) · `brand` → **Orbitron Variable** (self-hosted `@fontsource-variable/orbitron`, a distinct display face for the brand role — `wordmark` + `hero`; it was formerly a `$ref` to `interface`). Orbitron is **latin-only** and `brand.hero` renders a project's own name, so the stack falls back to the *interface* face before any system font — a non-Latin name lands on Geist (cyrillic/latin-ext/vietnamese, already bundled) rather than on whatever the OS supplies |
+| `fontFamilies` | `interface` (Geist Variable, all proportional UI + reading text) · `code` (JetBrains Mono Variable, code only, followed by the system fallback chain described under [Fonts](#fonts); both `userSelectable`, `code` with `ligatures: none`) · `brand` → **Orbitron Variable** (self-hosted `@fontsource-variable/orbitron`, a distinct display face for the brand role — `wordmark` + `hero`; it was formerly a `$ref` to `interface`). Orbitron is **latin-only** and `brand.hero` renders a project's own name, so the stack falls back to the *interface* face before any system font — a non-Latin name lands on Geist (cyrillic/latin-ext/vietnamese, already bundled) rather than on whatever the OS supplies |
 | `fontWeights` | `light` 370 · `regular` 400 · `medium` 500 · `semibold` 600 · `brand` 400 · `button` 470 — the bases the weight offset shifts (`fontWeightOffset.exclude`: `brand`) |
 | `fontSizes` | `s10` `s11` `s12` `s13` `s14` `s16` `s18` `s20` `s24` `s44` (px); `codeSize` names the code size (`s13`) |
 | `lineHeights` | `compact` 1.25 · `metadata` 1.25 (12px→15px) · `ui` 1.3 (14px→18.2px) · `code` 1.4 · `relaxed` 1.4 (13px→18.2px) · `default` 1.3 (14px→18.2px) · `reading` 1.45 (14px→20.3px) |
@@ -229,6 +229,24 @@ the generated output (`e2e/fixtures/typography.ts`), and `validate` rejects both
 that is not a dependency and a font dependency no family claims. The one other copy of the stacks lives
 in `apps/website` (a standalone leaf that cannot import ours); `apps/website/src/fonts.test.ts` fails
 when it drifts from this file.
+
+### The code stack's system fallbacks
+
+Bundled faces are deliberately narrow: JetBrains Mono carries latin/latin-ext/greek/cyrillic/vietnamese
+subsets and nothing else. The `code` stack therefore names system families after it, in order —
+Nerd Font / Powerline faces, monospace CJK (Sarasa, Noto Sans Mono CJK, Source Han Mono), Latin
+monospace faces, then proportional CJK, symbol and colour-emoji faces. Coverage matters most for the
+**terminal**, where the shell draws `eza --icons`, `lazygit` or a `starship` prompt. A user-selected
+stack still ends in this default (`--tr-font-family-code-default`), so the chain also covers every
+surface the user has not overridden.
+
+Two rules keep that chain honest. Nerd Font families must be **named**: browsers do not consult system
+fonts for private-use codepoints (`U+E000–F8FF`, `U+1FB00+`), so an installed Nerd Font is invisible
+unless the stack lists it. And nothing here is **bundled** — these entries cost zero bytes, but a host
+without those faces still renders boxes, so the chain is a reach, not a guarantee; never trim it to
+"clean up". Proportional CJK sits after the monospace entries on purpose: it only needs to satisfy
+ideographs, while a Latin cell must keep resolving to a real monospace face. Guarded by
+`typography.test.ts` ("keeps the code stack's system fallbacks for icons, CJK and emoji").
 
 `tokens.css` holds **no typography at all** — not a value and not an alias. It used to carry `--font`,
 `--font-mono`, `--font-accent`, `--font-mono-size` and `--line-height` as aliases onto the generated

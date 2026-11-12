@@ -1,6 +1,7 @@
 export {
 	ensureWatch,
 	notifyWorkspacePathsChanged,
+	setIgnoredPathsResolver,
 	setRepoMetaPublisher,
 	setSkillPathClassifier,
 	setWatchPublisher,

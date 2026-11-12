@@ -225,11 +225,12 @@ export function projectRelativePath(path: string, workspaceRoot?: string | undef
 	return canonical;
 }
 
-export function joinHostPath(parent: string, child: string): string {
-	if (parent.includes("\\") && !parent.includes("/")) {
-		return `${parent.replace(/\\+$/, "")}\\${child.replace(/\//g, "\\")}`;
-	}
-	return `${parent.replace(/\/+$/, "")}/${child}`;
+export function joinWorkspacePath(worktreePath: string, path: string): string {
+	if (!worktreePath || path.startsWith("/") || hasWindowsDriveRoot(path)) return path;
+	const windows = /^(?:[A-Za-z]:\\|\\\\)/.test(worktreePath);
+	const separator = windows ? "\\" : "/";
+	const root = worktreePath.endsWith(separator) ? worktreePath : `${worktreePath}${separator}`;
+	return `${root}${windows ? path.replaceAll("/", "\\") : path}`;
 }
 
 let colorCanvas: CanvasRenderingContext2D | null | undefined;

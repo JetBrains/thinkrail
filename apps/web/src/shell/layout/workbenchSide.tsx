@@ -324,7 +324,6 @@ export function AuxiliaryGroupHeader({
 	if (selected?.kind === "terminal")
 		return (
 			<TabStrip
-				worktreePath={shared.worktreePath}
 				document={shared.document}
 				readAttention={shared.readAttention}
 				selectionEpochRef={shared.selectionEpochRef}
@@ -347,6 +346,7 @@ export function AuxiliaryGroupHeader({
 				{...(shared.chatFirstPrompts ? { chatFirstPrompts: shared.chatFirstPrompts } : {})}
 				canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 				renderTabAdornment={shared.renderTabAdornment}
+				worktreePath={shared.worktreePath}
 				trailing={actions}
 			/>
 		);

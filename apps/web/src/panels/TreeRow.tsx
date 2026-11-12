@@ -6,26 +6,11 @@ import {
 	RiFolderFill,
 	RiFolderLine,
 } from "@remixicon/react";
-import type { ComponentPropsWithoutRef, ReactNode, Ref } from "react";
+import type { ComponentPropsWithoutRef, MouseEvent, ReactNode, Ref } from "react";
 
-type TreeRowProps = {
-	ref?: Ref<HTMLButtonElement> | undefined;
-	testid: string;
-	kind: "dir" | "file";
-	expanded?: boolean;
-	active?: boolean;
-	highlighted?: boolean;
-	subtle?: boolean;
-	dataStatus?: string | undefined;
-	dataViewed?: boolean;
-	label: string;
-	labelClassName?: string;
-	trailing?: ReactNode;
-	highlight?: "self" | "wrapper";
-	onWarm?: ((trigger: "hover" | "focus") => void) | undefined;
-} & Omit<
+type MenuTriggerHandlers = Pick<
 	ComponentPropsWithoutRef<"button">,
-	"children" | "className" | "onFocus" | "onPointerEnter" | "type"
+	"onKeyDown" | "onPointerDown" | "onPointerMove" | "onPointerCancel" | "onPointerUp"
 >;
 
 export function TreeRow({
@@ -34,7 +19,6 @@ export function TreeRow({
 	kind,
 	expanded,
 	active,
-	highlighted,
 	subtle = false,
 	dataStatus,
 	dataViewed,
@@ -46,16 +30,35 @@ export function TreeRow({
 	onDoubleClick,
 	onContextMenu,
 	onKeyDown,
+	onPointerDown,
+	onPointerMove,
+	onPointerCancel,
+	onPointerUp,
 	onWarm,
-	...buttonProps
-}: TreeRowProps) {
+}: MenuTriggerHandlers & {
+	ref?: Ref<HTMLButtonElement> | undefined;
+	testid: string;
+	kind: "dir" | "file";
+	expanded?: boolean;
+	active?: boolean;
+	subtle?: boolean;
+	dataStatus?: string | undefined;
+	dataViewed?: boolean;
+	label: string;
+	labelClassName?: string;
+	trailing?: ReactNode;
+	highlight?: "self" | "wrapper";
+	onClick?: ((event: MouseEvent) => void) | undefined;
+	onDoubleClick?: (() => void) | undefined;
+	onContextMenu?: ((event: MouseEvent) => void) | undefined;
+	onWarm?: ((trigger: "hover" | "focus") => void) | undefined;
+}) {
 	const Chevron = expanded ? ChevronDown : ChevronRight;
 	const Folder = active ? RiFolderFill : RiFolderLine;
 	const FileIcon = active ? RiFileFill : RiFileLine;
 	const tone = subtle ? "text-text-subtle" : "text-text-muted";
 	return (
 		<button
-			{...buttonProps}
 			ref={ref}
 			type="button"
 			data-testid={testid}
@@ -67,11 +70,15 @@ export function TreeRow({
 			onDoubleClick={onDoubleClick}
 			onContextMenu={onContextMenu}
 			onKeyDown={onKeyDown}
+			onPointerDown={onPointerDown}
+			onPointerMove={onPointerMove}
+			onPointerCancel={onPointerCancel}
+			onPointerUp={onPointerUp}
 			onPointerEnter={onWarm && (() => onWarm("hover"))}
 			onFocus={onWarm && (() => onWarm("focus"))}
 			className={`flex h-panel-row w-full min-w-0 items-center gap-4 rounded-sm px-4 text-left tr-text-ui ${tone} outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${
 				highlight === "self"
-					? `hover:bg-control-bg-hovered ${active || highlighted ? "bg-control-bg-selected" : ""}`
+					? `hover:bg-control-bg-hovered ${active ? "bg-control-bg-selected" : ""}`
 					: ""
 			}`}
 		>
