@@ -1,11 +1,19 @@
+import { RiFileCopyLine as Copy } from "@remixicon/react";
 import type { FileNode } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { describeResource, PENDING_TEXT_META } from "@thinkrail/resource-renderers";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuTrigger,
+	openContextMenuFromKeyboard,
+} from "@thinkrail/ui/context-menu";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactElement, useEffect, useMemo, useRef, useState } from "react";
 import { statusLetter } from "../chat/planView";
-import { firstClickOnly } from "../lib";
-import { selectFilesTreeView, type TabIntent, useAppStore } from "../store";
+import { copyText, firstClickOnly, joinWorkspacePath } from "../lib";
+import { selectFilesTreeView, selectWorkspaceById, type TabIntent, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { type ChangeMarks, statusMarkClass } from "./changesModel";
 import { holdEditorWarm, useEditorWarm, warmOnHover } from "./editorWarm";
@@ -142,42 +150,44 @@ function FileNodeRow({
 
 	return (
 		<li>
-			<TreeRow
-				ref={revealRow}
-				testid="file-node"
-				kind={isDir ? "dir" : "file"}
-				active={!isDir && focus.activePath === node.path}
-				subtle={ignored}
-				dataStatus={ignored ? "ignored" : undefined}
-				expanded={expanded}
-				label={label}
-				labelClassName={
-					fileStatus ? statusMarkClass(fileStatus) : dirChanged ? statusMarkClass("modified") : ""
-				}
-				trailing={
-					fileStatus ? (
-						<span
-							data-testid="file-status"
-							className={`shrink-0 tr-text-metadata ${statusMarkClass(fileStatus)}`}
-						>
-							{statusLetter(fileStatus)}
-						</span>
-					) : dirChanged ? (
-						<span
-							data-testid="file-folder-dot"
-							className="mr-4 size-6 shrink-0 rounded-full bg-feedback-warning"
-						/>
-					) : undefined
-				}
-				onClick={isDir ? toggleDirectory : firstClickOnly(() => open("preview"))}
-				onDoubleClick={isDir ? undefined : () => open("keep")}
-				onWarm={
-					isDir || !warmFile
-						? undefined
-						: (trigger) =>
-								trigger === "focus" ? warmFile(node.path) : warmOnHover(() => warmFile(node.path))
-				}
-			/>
+			<FileTreeMenu workspaceId={workspaceId} path={directory?.path ?? node.path}>
+				<TreeRow
+					ref={revealRow}
+					testid="file-node"
+					kind={isDir ? "dir" : "file"}
+					active={!isDir && focus.activePath === node.path}
+					subtle={ignored}
+					dataStatus={ignored ? "ignored" : undefined}
+					expanded={expanded}
+					label={label}
+					labelClassName={
+						fileStatus ? statusMarkClass(fileStatus) : dirChanged ? statusMarkClass("modified") : ""
+					}
+					trailing={
+						fileStatus ? (
+							<span
+								data-testid="file-status"
+								className={`shrink-0 tr-text-metadata ${statusMarkClass(fileStatus)}`}
+							>
+								{statusLetter(fileStatus)}
+							</span>
+						) : dirChanged ? (
+							<span
+								data-testid="file-folder-dot"
+								className="mr-4 size-6 shrink-0 rounded-full bg-feedback-warning"
+							/>
+						) : undefined
+					}
+					onClick={isDir ? toggleDirectory : firstClickOnly(() => open("preview"))}
+					onDoubleClick={isDir ? undefined : () => open("keep")}
+					onWarm={
+						isDir || !warmFile
+							? undefined
+							: (trigger) =>
+									trigger === "focus" ? warmFile(node.path) : warmOnHover(() => warmFile(node.path))
+					}
+				/>
+			</FileTreeMenu>
 			{isDir && expanded && children && (
 				<ul className="flex flex-col pl-tree-indent">
 					{children.map((child) => (
@@ -195,5 +205,38 @@ function FileNodeRow({
 				</ul>
 			)}
 		</li>
+	);
+}
+
+function FileTreeMenu({
+	workspaceId,
+	path,
+	children,
+}: {
+	workspaceId: string;
+	path: string;
+	children: ReactElement;
+}) {
+	const t = useT();
+	const copyPath = (absolute: boolean) => {
+		const worktreePath = selectWorkspaceById(useAppStore.getState(), workspaceId)?.worktreePath;
+		void copyText(absolute ? joinWorkspacePath(worktreePath ?? "", path) : path);
+	};
+	return (
+		<ContextMenu>
+			<ContextMenuTrigger asChild onKeyDown={openContextMenuFromKeyboard}>
+				{children}
+			</ContextMenuTrigger>
+			<ContextMenuContent data-testid="file-tree-actions">
+				<ContextMenuItem data-testid="file-copy-path" onSelect={() => copyPath(true)}>
+					<Copy />
+					{t("panels.fileTree.copyPath")}
+				</ContextMenuItem>
+				<ContextMenuItem data-testid="file-copy-relative-path" onSelect={() => copyPath(false)}>
+					<Copy />
+					{t("panels.fileTree.copyRelativePath")}
+				</ContextMenuItem>
+			</ContextMenuContent>
+		</ContextMenu>
 	);
 }

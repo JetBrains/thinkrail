@@ -782,6 +782,89 @@ test("Other, notes and Discuss park on their own row, and the platform chord sub
 	}
 });
 
+test("a press below an open note lands on the control it was aimed at", async ({ page }) => {
+	await openFixtureProject(page);
+	const session = seedQuestionnaire("press below note", "ask-press-below-note", KEYBOARD_ROUND);
+
+	try {
+		await enterDefaultWorkspace(page);
+		await hideAuxiliaryWorkbench(page);
+		await openPersistedChatAfterInput(page, "press below note");
+		const card = activeAsk(page);
+		const options = card.getByTestId("ask-option");
+		const note = card.getByTestId("ask-note");
+		await expect(options.first()).toBeFocused();
+
+		await options.first().click();
+		await card.getByTestId("ask-note-toggle").click();
+		await expect(note).toBeFocused();
+		await options.nth(1).click();
+		await expect(options.nth(1)).toHaveAttribute("data-selected", "true");
+		await expect(options.first()).toHaveAttribute("data-selected", "false");
+
+		await card.getByTestId("ask-tab").nth(1).click();
+		await expect(card.getByTestId("ask-question-text")).toHaveText(
+			"Which keyboard checks should run?",
+		);
+		await options.first().click();
+		await options.nth(1).click();
+		await card.getByTestId("ask-note-toggle").first().click();
+		await expect(note).toBeFocused();
+		await page.keyboard.type("Lint because");
+		await card.getByTestId("ask-note-toggle").click();
+		await expect(note).toBeFocused();
+		await expect(note).toHaveAccessibleName("Note for Keyboard types");
+		await expect(card.getByTestId("ask-note-text")).toHaveText("Lint because");
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
+test("a note closes when the card's background is pressed or focus leaves the card, and keeps its text", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const session = seedQuestionnaire("note leaves", "ask-note-leaves", KEYBOARD_ROUND);
+
+	try {
+		await enterDefaultWorkspace(page);
+		await hideAuxiliaryWorkbench(page);
+		await openPersistedChatAfterInput(page, "note leaves");
+		const card = activeAsk(page);
+		const options = card.getByTestId("ask-option");
+		const questionText = card.getByTestId("ask-question-text");
+		const note = card.getByTestId("ask-note");
+		const noteText = card.getByTestId("ask-note-text");
+		await expect(options.first()).toBeFocused();
+
+		await options.first().click();
+		await card.getByTestId("ask-note-toggle").click();
+		await expect(note).toBeFocused();
+		await page.keyboard.type("Kept after the press");
+		await questionText.click();
+		await expect(note).toHaveCount(0);
+		await expect(noteText).toHaveText("Kept after the press");
+		await expect(card).toBeFocused();
+		await page.keyboard.press("ArrowRight");
+		await expect(questionText).toHaveText("Which keyboard checks should run?");
+		await page.keyboard.press("ArrowLeft");
+		await expect(questionText).toHaveText(KEYBOARD_ROLLOUT.question);
+
+		await questionText.click();
+		await expect(card).toBeFocused();
+		await page.keyboard.press("ArrowDown");
+		await expect(options.first()).toBeFocused();
+
+		await card.getByTestId("ask-note-toggle").click();
+		await expect(note).toBeFocused();
+		await page.getByTestId("chat-input").click();
+		await expect(note).toHaveCount(0);
+		await expect(noteText).toHaveText("Kept after the press");
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
 test("the platform chord with nothing answered asks for a choice instead of sending", async ({
 	page,
 }) => {

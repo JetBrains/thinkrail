@@ -25,6 +25,9 @@ not this module; the theme-aware highlighter remains app-local.
   `@thinkrail/resource-renderers` keeps its own `canonicalWorkspacePath` for `describeResource` and
   `ResourcePreview` because a package cannot import the app's `lib`; `panels/pathIdentity.test.ts` pins it to
   `projectRelativePath` for workspace-relative paths),
+  **`joinWorkspacePath()`** (a worktree-relative path as the absolute path Copy path hands out, in the
+  worktree's own separators: a Windows or UNC root joins with `\`, a POSIX root keeps a name's literal `\`;
+  a path already outside the worktree passes through),
   **`viewport.ts`** → `isPhoneViewport()` plus the live `usePhoneViewport()` projection (coarse pointer
   or a viewport below 768px is phone-class; one combined media query is observed), built on the general
   **`useMediaQuery(query)`** (false where `matchMedia` is missing), and **`shallowEqualArrays()`** (element-wise `Object.is` — the "did this really change?" test behind the
@@ -120,6 +123,7 @@ not this module; the theme-aware highlighter remains app-local.
   `usePhoneViewport`, `useMediaQuery`, `normalizePath`, `isAbsolutePath`, `fileName`, `projectRelativePath` (canonical worktree-relative POSIX identity;
   collapses in-root `.`/`..` aliases but preserves an attempted leading escape for host rejection; Windows
   drive-rooted containment compares path/root case-insensitively while preserving the candidate's casing),
+  `joinWorkspacePath`,
   `shallowEqualArrays`, `userText`, `firstNonBlankLine` (first trimmed non-empty line, `undefined` when
   the text is blank — shared by chat's thinking-heading extraction and history prompt rows), `isShellInert` (a value made only of characters that stay literal in POSIX, PowerShell,
   and cmd, so it may be interpolated into a command a human copies and runs), `parseSkillInvocation`, `matchesSkillInvocationCommand`,

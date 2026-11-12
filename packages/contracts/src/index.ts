@@ -43,6 +43,8 @@ export {
 	isTerminalWindowsShell,
 	isThemeMode,
 	isUserFontFile,
+	isValidTemplateName,
+	isWindowsDeviceName,
 	JBCENTRAL_QUOTA_REFRESH_SECONDS,
 	LINE_WIDTH_COLUMNS,
 	MAX_HISTORY_LIMIT,
