@@ -133,6 +133,7 @@
 	],
 	"patchedDependencies": {
 		"@pierre/diffs@1.6.4": "patches/@pierre%2Fdiffs@1.6.4.patch",
-		"@earendil-works/pi-ai@1.5.2": "patches/@earendil-works%2Fpi-ai@1.5.2.patch"
+		"@earendil-works/pi-ai@1.5.2": "patches/@earendil-works%2Fpi-ai@1.5.2.patch",
+		"react-virtuoso@4.18.19": "patches/react-virtuoso@4.18.19.patch"
 	}
 }
