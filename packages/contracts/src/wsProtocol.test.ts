@@ -34,6 +34,7 @@ import {
 	EXTENSION_SETTINGS_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
+	FS_MUTATIONS_PROTOCOL_VERSION,
 	GITHUB_STAR_PROTOCOL_VERSION,
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
@@ -292,6 +293,13 @@ test("user-selectable fonts are pinned to v102", () => {
 	expect(WS_CHANNELS.fontsChanged).toBe("fonts.changed");
 });
 
+test("Files tree copy and delete are pinned to v118", () => {
+	expect(FS_MUTATIONS_PROTOCOL_VERSION).toBe(118);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(FS_MUTATIONS_PROTOCOL_VERSION);
+	expect(WS_METHODS.fsCopy).toBe("fs.copy");
+	expect(WS_METHODS.fsDelete).toBe("fs.delete");
+});
+
 test("background workspace creation is pinned to v104", () => {
 	expect(WORKSPACE_CREATION_PROTOCOL_VERSION).toBe(104);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(WORKSPACE_CREATION_PROTOCOL_VERSION);
@@ -345,7 +353,7 @@ test("find in files is pinned to v112", () => {
 });
 
 test("project order is pinned to v117", () => {
-	expect(PROTOCOL_VERSION).toBe(117);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PROJECT_ORDER_PROTOCOL_VERSION);
 	expect(PROJECT_ORDER_PROTOCOL_VERSION).toBe(117);
 	expect(WS_METHODS.projectMove).toBe("project.move");
 });

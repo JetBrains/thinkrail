@@ -66,6 +66,29 @@ export function setIgnoredPathsResolver(resolver: IgnoredPathsResolver | null): 
 	resolveIgnoredPaths = resolver;
 }
 
+function mutationSkillChange(paths: readonly string[], subtrees: boolean): WorkspaceSkillChange {
+	const classify = isSkillPath;
+	if (classify === null) return "unknown";
+	if (paths.some(classify)) return "detected";
+	return subtrees ? "unknown" : "none";
+}
+
+export function notifyWorkspacePathsChanged(
+	workspaceId: string,
+	paths: readonly string[],
+	{ subtrees = false }: { subtrees?: boolean } = {},
+): void {
+	const skillChange = mutationSkillChange(paths, subtrees);
+	deliver("fsChanged", workspaceId, () =>
+		publish?.({
+			workspaceId,
+			paths: paths.slice(0, MAX_PATHS),
+			truncated: paths.length > MAX_PATHS,
+			skillChange,
+		}),
+	);
+}
+
 function isRepoMetaPath(relPath: string): boolean {
 	return relPath.split(/[\\/]/)[0] === ".git";
 }

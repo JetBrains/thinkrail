@@ -3628,6 +3628,7 @@ test("applyWorkspaceRemoved drops the removed workspace's cached spec graph", ()
 test("files tree state keeps per-workspace folders and scroll, and drops a removed workspace", () => {
 	useAppStore.setState({
 		filesTreeByWorkspace: {},
+		fileClipboard: { workspaceId: "w1", path: "src/a.ts" },
 		removedWorkspaceIds: nullProto<Record<string, true>>(),
 		workspaces: { p1: [pushedWorkspace()] },
 	});
@@ -3653,6 +3654,7 @@ test("files tree state keeps per-workspace folders and scroll, and drops a remov
 
 	useAppStore.getState().applyWorkspaceRemoved("p1", "w1");
 	expect(useAppStore.getState().filesTreeByWorkspace.w1).toBeUndefined();
+	expect(useAppStore.getState().fileClipboard).toBeNull();
 	useAppStore.getState().setFilesTreeExpanded("w1", ["src"], true);
 	expect(useAppStore.getState().filesTreeByWorkspace.w1).toBeUndefined();
 });

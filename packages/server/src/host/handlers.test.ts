@@ -23,6 +23,7 @@ import type {
 	Workspace,
 	WorkspaceCreation,
 	WorkspaceCreationRemoved,
+	WorkspaceFsChangedPayload,
 	WorkspaceWatchReadyResult,
 } from "@thinkrail/contracts";
 import {
@@ -49,7 +50,8 @@ import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtur
 import { addComment, getReviewSnapshot } from "../reviews";
 import { resetConfigCache } from "../settings";
 import { todoReviewRecord } from "../todos";
-import { stopAllWatches } from "../watch";
+import { setTrashImplementationForTests } from "../trash";
+import { setWatchPublisher, stopAllWatches } from "../watch";
 import {
 	awaitWorkspaceCreation,
 	getWorkspace,
@@ -146,6 +148,8 @@ beforeEach(() => {
 
 afterEach(() => {
 	stopAllWatches();
+	setWatchPublisher(null);
+	setTrashImplementationForTests(undefined);
 	resetConfigCache();
 	resetFeedbackForTests();
 	resetSurveyForTests();
@@ -160,6 +164,69 @@ afterEach(() => {
 test("every contract method has a registered handler", () => {
 	const unregistered = Object.values(WS_METHODS).filter((m) => requestMethodDiagnostic(m) !== m);
 	expect(unregistered).toEqual([]);
+});
+
+test("file mutation handlers invalidate watcher-ignored paths after success", async () => {
+	const directory = join(repo, "node_modules", "demo");
+	mkdirSync(directory, { recursive: true });
+	writeFileSync(join(directory, "source.txt"), "content");
+	writeFileSync(
+		join(dataDir, "workspaces.json"),
+		JSON.stringify([
+			{
+				id: "w1",
+				projectId: "p1",
+				name: "Default",
+				worktreePath: repo,
+				createdAt: 1,
+			},
+		]),
+	);
+	const frames: WorkspaceFsChangedPayload[] = [];
+	setWatchPublisher((payload) => frames.push(payload));
+	setTrashImplementationForTests(async (input) => {
+		if (typeof input !== "string") throw new Error("expected one path");
+		rmSync(input, { recursive: true });
+	});
+
+	expect(
+		await handleRequest(
+			"fs.copy",
+			{
+				sourceWorkspaceId: "w1",
+				sourcePath: "node_modules/demo/source.txt",
+				destinationWorkspaceId: "w1",
+				destinationDirectory: "node_modules/demo",
+			},
+			CTX,
+		),
+	).toEqual({ path: "node_modules/demo/source copy.txt" });
+	expect(
+		await handleRequest(
+			"fs.delete",
+			{ workspaceId: "w1", path: "node_modules/demo/source copy.txt" },
+			CTX,
+		),
+	).toEqual({ ok: true });
+	expect(
+		await handleRequest("fs.delete", { workspaceId: "w1", path: "node_modules/demo" }, CTX),
+	).toEqual({ ok: true });
+	expect(frames.filter((frame) => frame.paths.length > 0)).toEqual([
+		{
+			workspaceId: "w1",
+			paths: ["node_modules/demo/source copy.txt"],
+			truncated: false,
+			skillChange: "unknown",
+		},
+		{
+			workspaceId: "w1",
+			paths: ["node_modules/demo/source copy.txt"],
+			truncated: false,
+			skillChange: "unknown",
+		},
+		{ workspaceId: "w1", paths: ["node_modules/demo"], truncated: false, skillChange: "unknown" },
+	]);
+	expect(existsSync(directory)).toBe(false);
 });
 
 test("clone handlers resolve the destination and return an opened local project", async () => {

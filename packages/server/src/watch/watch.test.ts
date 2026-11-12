@@ -15,6 +15,7 @@ import { createCoalescer } from "./coalesce";
 import {
 	ensureWatch,
 	isIgnoredPath,
+	notifyWorkspacePathsChanged,
 	setIgnoredPathsResolver,
 	setRepoMetaPublisher,
 	setSkillPathClassifier,
@@ -196,6 +197,41 @@ afterEach(() => {
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
+});
+
+test("host mutations publish ignored paths immediately with skill evidence", () => {
+	notifyWorkspacePathsChanged("ws1", ["node_modules/demo/copied.txt"]);
+	notifyWorkspacePathsChanged("ws1", ["skills copy", ".claude/skills/demo/SKILL.md"]);
+	expect(payloads).toEqual([
+		{
+			workspaceId: "ws1",
+			paths: ["node_modules/demo/copied.txt"],
+			truncated: false,
+			skillChange: "none",
+		},
+		{
+			workspaceId: "ws1",
+			paths: ["skills copy", ".claude/skills/demo/SKILL.md"],
+			truncated: false,
+			skillChange: "detected",
+		},
+	]);
+});
+
+test("a host mutation of an unlisted subtree is never skill-clean", () => {
+	notifyWorkspacePathsChanged("ws1", [".claude"], { subtrees: true });
+	notifyWorkspacePathsChanged("ws1", [".claude/skills/demo"], { subtrees: true });
+	expect(payloads.map((payload) => payload.skillChange)).toEqual(["unknown", "detected"]);
+});
+
+test("a host mutation caps its paths but classifies every one", () => {
+	const paths = Array.from({ length: 150 }, (_, index) => `copy/file-${index}.txt`);
+	paths.push(".claude/skills/late/SKILL.md");
+	notifyWorkspacePathsChanged("ws1", paths);
+	expect(payloads).toHaveLength(1);
+	expect(payloads[0]?.paths).toEqual(paths.slice(0, 100));
+	expect(payloads[0]?.truncated).toBe(true);
+	expect(payloads[0]?.skillChange).toBe("detected");
 });
 
 test("a watched worktree publishes a debounced fsChanged batch for a new file", async () => {

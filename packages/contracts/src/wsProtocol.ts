@@ -141,7 +141,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 117;
+export const PROTOCOL_VERSION = 118;
+export const FS_MUTATIONS_PROTOCOL_VERSION = 118;
 export const EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION = 115;
 export const CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION = 116;
 export const PROJECT_ORDER_PROTOCOL_VERSION = 117;
@@ -447,6 +448,8 @@ export const WS_METHODS = {
 	prReopen: "pr.reopen",
 	fsReadDir: "fs.readDir",
 	fsReadFile: "fs.readFile",
+	fsCopy: "fs.copy",
+	fsDelete: "fs.delete",
 	specGraph: "spec.graph",
 	todoList: "todo.list",
 	todoAdd: "todo.add",
@@ -1084,6 +1087,16 @@ export interface WsMethodMap {
 		params: { workspaceId: string; path: string; maxBytes?: number };
 		result: { content: string; meta: ResourceMeta };
 	};
+	"fs.copy": {
+		params: {
+			sourceWorkspaceId: string;
+			sourcePath: string;
+			destinationWorkspaceId: string;
+			destinationDirectory: string;
+		};
+		result: { path: string };
+	};
+	"fs.delete": { params: { workspaceId: string; path: string }; result: Ack };
 	"spec.graph": { params: { workspaceId: string }; result: SpecGraphSnapshot };
 	"todo.list": {
 		params: { workspaceId: string; sessionId: string; opened?: "page" | "rail" };
@@ -1571,6 +1584,8 @@ export type WsErrorCode =
 	| "WORKTREE_CHECKOUT_STALLED"
 	| "WORKSPACE_PATH_TAKEN"
 	| "FILE_TOO_LARGE"
+	| "COPY_TOO_LARGE"
+	| "ENTRY_CHANGED"
 	| "CHATS_CONTAINER"
 	| "CHAT_WORKSPACE"
 	| "CHATS_STORE_UNAVAILABLE"

@@ -37,7 +37,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `CONTINUATION_UNKNOWN` (`chat.continuationStatus` for an operation the host neither holds nor linked —
   a restart lost it mid-flight; the card offers Retry), `CONTINUATION_IN_FLIGHT` (`chat.continue` for
   another project while the chat is already being continued — the first gesture is never silently
-  joined by a different choice), `TEXT_SEARCH_TIMEOUT` / `TEXT_SEARCH_FAILED` (a text search git could not
+  joined by a different choice), `COPY_TOO_LARGE` (a Files tree folder paste with more entries than the host copies — nothing was written; the client words it), `ENTRY_CHANGED` (an entry a Files tree paste or a trash claim was acting on was replaced, moved out of the worktree or turned into a link mid-operation — the host stopped instead of following it; a paste keeps what it already wrote, a delete or a whole-file revert left the entry in place; the client words it), `TEXT_SEARCH_TIMEOUT` / `TEXT_SEARCH_FAILED` (a text search git could not
   finish in its budget, or could not run — the host's logged classifier; the client only sees the search
   end `failed`), `RESOURCE_UNAVAILABLE`, and `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is
   `subagent.getTranscript`'s **permanent** miss, the
@@ -394,6 +394,13 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`ExistingWorktreeCandidate`** (a `workspace.listExisting` row: absolute `path` + `branch`, or a
   `detached` row the chooser disables),
   `FileNode` (file-tree node; worktree-relative `/` path, `gitignored` set by the host when git ignores it),
+  the Files tree's two mutations from **`FS_MUTATIONS_PROTOCOL_VERSION`** (v118): `fs.copy`
+  (`{ sourceWorkspaceId, sourcePath, destinationWorkspaceId, destinationDirectory }` → `{ path }`, a file,
+  folder or symlink copied — never moved, even across workspaces — under a collision-free ` copy` / ` copy N`
+  name, refused with `COPY_TOO_LARGE` for a folder past the host's entry bound, stopped with
+  `ENTRY_CHANGED` when an entry changes under it) and `fs.delete` (`{ workspaceId, path }` → ack, a move to
+  the OS trash, `ENTRY_CHANGED` when the entry changed while it was claimed); a client hides both from
+  older hosts,
   **`ResourceMeta`** (what a resource's bytes *are*, host-decided and pinned by
   `RESOURCE_META_PROTOCOL_VERSION` = v75: sha-256 `hash` + `byteLength`, both `null` when the resource is
   absent; `text` = valid UTF-8, BOM-aware, and not claimed by a recognized binary magic number (an ASCII
