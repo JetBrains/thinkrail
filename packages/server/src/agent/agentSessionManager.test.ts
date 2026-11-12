@@ -36,9 +36,14 @@ import type {
 	SessionStateRecord,
 	SessionSummary,
 } from "@thinkrail/contracts";
-import { readToolResponseMessage, TOOL_RESPONSE_CUSTOM_TYPE } from "@thinkrail/contracts";
+import {
+	isRefImage,
+	readToolResponseMessage,
+	TOOL_RESPONSE_CUSTOM_TYPE,
+} from "@thinkrail/contracts";
 import { interactiveTools } from "../extensions";
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
+import { resetImages, serveImage, setImageSource } from "../images";
 import { setTrashImplementationForTests } from "../trash";
 import {
 	abortSession,
@@ -80,6 +85,7 @@ import {
 	requestSessionReload,
 	respondToTool,
 	sendHostMessageToSession,
+	sessionImageSource,
 	setAgentReviewEnabledResolver,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
@@ -1594,11 +1600,16 @@ test("a prompt image reaches the transcript raw — the autoResize override surv
 		]);
 		const transcript = await getSessionMessages(s.sessionId, "ws-raw-image", cwd);
 		const userMessage = transcript.messages.find((message) => message.role === "user");
-		expect(userMessage?.content).toEqual([
-			{ type: "text", text: "describe this" },
-			{ type: "image", mimeType: "image/png", data: rawImageData },
-		]);
+		const [text, image] =
+			typeof userMessage?.content === "string" ? [] : (userMessage?.content ?? []);
+		expect(text).toEqual({ type: "text", text: "describe this" });
+		if (image?.type !== "image" || !isRefImage(image)) throw new Error("no image reference");
+		setImageSource(sessionImageSource);
+		const served = serveImage(image.ref);
+		expect(served.status).toBe(200);
+		expect(Buffer.from(await served.arrayBuffer()).toString("base64")).toBe(rawImageData);
 	} finally {
+		resetImages();
 		await removeSession(s.sessionId);
 	}
 });

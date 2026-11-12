@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { ChatMediaContext } from "./ChatImage";
 import { ToolCard } from "./ToolCard";
 import { registerToolRenderer } from "./toolRegistry";
 
@@ -72,5 +73,34 @@ describe("tool result images", () => {
 			markup.indexOf("data:image/jpeg;base64,c2Vjb25k"),
 		);
 		expect(markup).not.toContain("data:image/svg+xml");
+	});
+	it("loads a host image reference through the chat's media context, never as inline bytes", () => {
+		const ref = `/images/session-1/${"b".repeat(64)}`;
+		const markup = renderToStaticMarkup(
+			createElement(
+				ChatMediaContext.Provider,
+				{ value: { resolveUrl: (path: string) => `http://host.test${path}`, retryEpoch: 0 } },
+				createElement(
+					TooltipProvider,
+					null,
+					createElement(ToolCard, {
+						toolCallId: "ref-image-call",
+						toolName: "unregistered-ref-image-output",
+						args: {},
+						tool: {
+							status: "error",
+							raw: {
+								content: [{ type: "image", ref, mimeType: "image/png", width: 4, height: 3 }],
+							},
+						},
+						streaming: false,
+					}),
+				),
+			),
+		);
+		expect(markup.match(/data-testid="tool-result-image-thumbnail"/g)).toHaveLength(1);
+		expect(markup).toContain(`src="http://host.test${ref}"`);
+		expect(markup).toContain('width="4"');
+		expect(markup).not.toContain("data:image");
 	});
 });

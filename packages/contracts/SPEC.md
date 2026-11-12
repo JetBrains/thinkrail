@@ -200,7 +200,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
     Every message an event carries (`message_*`, `turn_end` with its `toolResults`, `agent_end.messages`) is
     typed as **`WireAgentMessage`** — `TranscriptMessage` plus the `WireBranchSummary` / `WireBashExecution`
     mirrors — never pi-agent-core's `AgentMessage`.
-    **Image blocks travel as `WireImage`** (#1180, `IMAGE_REFS_PROTOCOL_VERSION` v119). `WireImage` is a union:
+    **Image blocks travel as `WireImage`** (#1180, `IMAGE_REFS_PROTOCOL_VERSION` v120). `WireImage` is a union:
     - `RefImage` (`{type:"image", mimeType, ref, width?, height?}`) is what the host sends in every host→page
       payload. Its `ref` is a host-relative path under **`IMAGES_ROUTE`** (`/images/`), fetched over HTTP
       ([[submodule-server-images]]).

@@ -1,10 +1,38 @@
-import { ACCEPTED_IMAGE_TYPES, type ImageContent } from "@thinkrail/contracts";
+import { ACCEPTED_IMAGE_TYPES, IMAGES_ROUTE, type WireImage } from "@thinkrail/contracts";
 
 const acceptedImageTypes = new Set(ACCEPTED_IMAGE_TYPES);
 
 export interface ParsedToolResultContent {
 	text: string;
-	images: ImageContent[];
+	images: WireImage[];
+}
+
+function positiveInteger(value: unknown): value is number {
+	return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+function imageOf(candidate: {
+	data?: unknown;
+	mimeType?: unknown;
+	ref?: unknown;
+	width?: unknown;
+	height?: unknown;
+}): WireImage | null {
+	const { mimeType } = candidate;
+	if (typeof mimeType !== "string" || !acceptedImageTypes.has(mimeType)) return null;
+	if (typeof candidate.ref === "string" && candidate.ref.startsWith(IMAGES_ROUTE)) {
+		const sized = positiveInteger(candidate.width) && positiveInteger(candidate.height);
+		return {
+			type: "image",
+			mimeType,
+			ref: candidate.ref,
+			...(sized ? { width: candidate.width as number, height: candidate.height as number } : {}),
+		};
+	}
+	if (typeof candidate.data === "string" && candidate.data.length > 0) {
+		return { type: "image", data: candidate.data, mimeType };
+	}
+	return null;
 }
 
 export function toolValueText(value: unknown): string {
@@ -31,7 +59,7 @@ export function parseToolResultContent(result: unknown): ParsedToolResultContent
 	}
 
 	const text: string[] = [];
-	const images: ImageContent[] = [];
+	const images: WireImage[] = [];
 	for (const block of content) {
 		if (typeof block !== "object" || block === null) continue;
 		const candidate = block as {
@@ -39,20 +67,17 @@ export function parseToolResultContent(result: unknown): ParsedToolResultContent
 			text?: unknown;
 			data?: unknown;
 			mimeType?: unknown;
+			ref?: unknown;
+			width?: unknown;
+			height?: unknown;
 		};
 		if (candidate.type === "text" && typeof candidate.text === "string") {
 			text.push(candidate.text);
 			continue;
 		}
-		if (
-			candidate.type === "image" &&
-			typeof candidate.data === "string" &&
-			candidate.data.length > 0 &&
-			typeof candidate.mimeType === "string" &&
-			acceptedImageTypes.has(candidate.mimeType)
-		) {
-			images.push({ type: "image", data: candidate.data, mimeType: candidate.mimeType });
-		}
+		if (candidate.type !== "image") continue;
+		const image = imageOf(candidate);
+		if (image) images.push(image);
 	}
 	return { text: text.join(""), images };
 }

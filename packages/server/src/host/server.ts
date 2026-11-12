@@ -16,6 +16,7 @@ import {
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
 	GITHUB_STAR_PROTOCOL_VERSION,
+	IMAGES_ROUTE,
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
@@ -56,6 +57,7 @@ import {
 	refreshSkillAdmission,
 	refreshSubagentConcurrency,
 	refreshSubagentTools,
+	sessionImageSource,
 	setAgentReviewEnabledResolver,
 	setContinueToolHost,
 	setDisabledExtensionsResolver,
@@ -116,6 +118,7 @@ import {
 } from "../feedback";
 import { watchUserFonts } from "../fonts";
 import { ignoredPaths } from "../git";
+import { forgetImageSession, resetImages, serveImage, setImageSource } from "../images";
 import { watchLocalLocales } from "../locales";
 import { logger, observeLoggedErrors } from "../log";
 import { loadWorkspaces } from "../persistence";
@@ -378,6 +381,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		})),
 	);
 
+	setImageSource(sessionImageSource);
 	const sockets = new Map<string, Bun.ServerWebSocket<SocketData>>();
 	const reapTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	const requestReplays = new RequestReplayCache<string>();
@@ -452,6 +456,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			}
 			if (url.pathname === "/health") {
 				return new Response("ok");
+			}
+			if (url.pathname.startsWith(IMAGES_ROUTE)) {
+				return req.method === "GET" || req.method === "HEAD"
+					? serveImage(url.pathname)
+					: new Response("method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
 			}
 			if (url.pathname.startsWith(FILES_PREFIX)) {
 				return serveWorktreeFile(url.pathname, url.searchParams.get("maxBytes"));
@@ -1069,6 +1078,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 
 	setSessionDeletedPublisher((payload: SessionDeletedPayload) => {
+		forgetImageSession(payload.sessionId);
 		runObservation.forget(payload.sessionId);
 		taskObservation.forget(payload.sessionId);
 		publishScoped(WS_CHANNELS.sessionDeleted, payload, { workspaceId: payload.workspaceId });
@@ -1257,6 +1267,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 }
 
 function restoreSeamDefaults(): void {
+	resetImages();
 	setPiTrustSeed(null);
 	setSessionProjectResolver(() => null);
 	setTerminalPublisher(() => "unavailable");

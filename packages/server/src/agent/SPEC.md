@@ -294,7 +294,7 @@ re-opened transcripts provider-valid.
 
     The host observers (turns, analytics, continuations, todos) therefore read the projected event. None of
     them reads image data. pi's own objects are never mutated: model context, persistence and the
-    oversized-image guard still see the bytes. The image source the host injects is agent's live lookup:
+    oversized-image guard still see the bytes. The image source the host injects is agent's live lookup, `sessionImageSource`:
     - the owning chat's `sessionManager.getEntries()` plus `session.messages`, which also covers compacted
       history and in-flight messages;
     - tombstoned chats are not servable.

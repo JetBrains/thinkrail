@@ -9,7 +9,7 @@ import {
 	type ReviewFixDetails,
 	type SubagentCompletionDetails,
 	type TurnChangeSet,
-	type UserMessage,
+	type WireUserMessage,
 } from "@thinkrail/contracts";
 import { strArg } from "@thinkrail/extension-api/web";
 import { projectRelativePath } from "../lib";
@@ -44,7 +44,7 @@ export interface ThinkingStep {
 export type ActivityStep = RoutineToolStep | ThinkingStep;
 
 export type ChatRow =
-	| { kind: "user"; id: string; message: UserMessage; attachmentNames?: string[] }
+	| { kind: "user"; id: string; message: WireUserMessage; attachmentNames?: string[] }
 	| { kind: "system"; id: string; text: string }
 	| {
 			kind: "error";

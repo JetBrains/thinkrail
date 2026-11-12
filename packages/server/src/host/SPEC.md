@@ -44,7 +44,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `application/xhtml+xml`, `image/svg+xml`) additionally receive
   `Content-Security-Policy: sandbox; default-src 'none'`, so direct navigation cannot execute repository
   script, the **`GET /images/<sessionId>/<sha>`** route, delegated to [[submodule-server-images]]'s `serveImage`.
-  It serves chat images as references, by allow-listed raster type only, with `no-store`; the host injects its
+  It serves chat images as references, by allow-listed raster type only, with `no-store`, and answers
+  any method but `GET`/`HEAD` with 405; the host injects its
   source (agent's live lookup plus the tombstone check), calls `forgetImageSession` on every `session.deleted`,
   and calls `resetImages` on stop. Then the **`/fonts/<file>`** route (`fontRoutes.ts`, ahead of the static fallback) over the
   [[submodule-server-fonts]] folder — the host's one HTTP write route and the only route that checks its

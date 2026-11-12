@@ -57,9 +57,10 @@ looped reconnects; see the host SPEC's outbound-limit bullet.
       until it reloads.
   - **`imageDimensions(base64)`** reads the PNG/JPEG/GIF/WebP header from at most 256 KiB. The
     oversized-image guard in `agent` shares it.
-- **Public surface (barrel):** `projectImages`, `imageDimensions`, `setImageSource`, `ImageSource`,
-  `forgetImageSession`, `resetImages`, `serveImage`, and `imageRefHash` (the memoized hash the
-  source's live lookup compares against).
+- **Public surface (barrel):** `projectImages`, `imageDimensions`, `Dimensions`, `setImageSource`,
+  `ImageSource`, `ImageBlock`, `forgetImageSession`, `resetImages` (its `cacheLimitChars` option exists
+  for tests), `serveImage`, and `imageRefHash` (the memoized hash the source's live lookup compares
+  against).
 - **Allowed deps:** `contracts` (`IMAGES_ROUTE`, `ACCEPTED_IMAGE_TYPES`, `WireImage`), `log`, and Node
   `crypto`.
 - **Forbidden:**
