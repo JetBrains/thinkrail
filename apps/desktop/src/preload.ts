@@ -1,7 +1,9 @@
 import type {
+	NativeDeepLinkBridge,
 	NativeMenuBridge,
 	NativeNotificationBridge,
 	NativeNotificationInput,
+	NativeOpenFileRequest,
 	NativeUpdateBridge,
 	NativeUpdateState,
 	NativeWindowControlsBridge,
@@ -40,6 +42,8 @@ windowChromeStyle.update(initialWindowChrome);
 
 const updateListeners = new Set<(state: NativeUpdateState) => void>();
 const windowStateListeners = new Set<(state: NativeWindowState) => void>();
+const deepLinkListeners = new Set<(request: NativeOpenFileRequest) => void>();
+const pendingDeepLinks: NativeOpenFileRequest[] = [];
 let nativeWindowFocused = document.hasFocus();
 window.addEventListener("focus", () => {
 	nativeWindowFocused = true;
@@ -50,6 +54,13 @@ const rpc = Electroview.defineRPC<DesktopRpc>({
 	handlers: {
 		requests: {},
 		messages: {
+			openFile: (request) => {
+				if (deepLinkListeners.size === 0) {
+					pendingDeepLinks.push(request);
+					return;
+				}
+				for (const listener of deepLinkListeners) listener(request);
+			},
 			updateStateChanged: (state) => {
 				for (const listener of updateListeners) listener(state);
 			},
@@ -105,6 +116,20 @@ const notificationBridge: NativeNotificationBridge = Object.freeze({
 		rpc.request.showNotification(input).catch(() => undefined);
 	},
 	isWindowFocused: () => nativeWindowFocused,
+});
+const deepLinkBridge: NativeDeepLinkBridge = Object.freeze({
+	subscribe: (listener: (request: NativeOpenFileRequest) => void) => {
+		deepLinkListeners.add(listener);
+		const queued = pendingDeepLinks.splice(0);
+		for (const request of queued) listener(request);
+		return () => deepLinkListeners.delete(listener);
+	},
+});
+Object.defineProperty(globals, "__THINKRAIL_NATIVE_DEEP_LINKS__", {
+	value: deepLinkBridge,
+	writable: false,
+	configurable: false,
+	enumerable: false,
 });
 Object.defineProperty(globals, "__THINKRAIL_NATIVE_NOTIFICATIONS__", {
 	value: notificationBridge,

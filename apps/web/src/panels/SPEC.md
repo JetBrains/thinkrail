@@ -2577,6 +2577,20 @@ own section. The kebab menu (`plan-menu`, a
   renderer, so the rendered spec scrolls to its heading). An open that finds a read of the same file in flight joins it —
   `openReadTab` hands every caller that read's completion — so each caller reveals after the tab is
   installed, in call order, and the latest hit wins.
+  **`workspaceForPath.resolveWorkspaceFile(path)`** is the client's one entry to "which open workspace holds
+  this absolute path" for any caller that holds a path from outside the app's own trees (desktop deep links
+  now; terminal path links reuse it rather than match roots themselves). From
+  `WORKSPACE_PATH_RESOLVE_PROTOCOL_VERSION` (v119) it asks the host's `workspace.resolvePath`, which matches
+  real paths ([[submodule-server-workspaces]]): the browser cannot see a symlink, so `/tmp/x` against
+  `/private/tmp/x`, or a project opened through a symlinked folder, only matches there. Against an older host
+  it falls back to the loaded roots' spelling: it lists the workspaces of unlisted open projects whose folder
+  encloses the path first, so a nested project is never shadowed by an already loaded parent, then the
+  remaining unlisted open projects (a worktree usually lives outside its project folder), and picks by
+  `pathWithinRoot` the most specific root, the active workspace between equal roots, never a deleting or
+  removed workspace, a closed project's cached rows or a root itself; it never overwrites a list that loaded
+  meanwhile. Either way it answers a `WorkspacePathMatch` (`workspaceId`, `projectId`, POSIX `relativePath`)
+  or `null`; entering the workspace, which loads its project's list when this client lacks the row, is the
+  caller's.
 
   `MarkdownPreview` retains the document typography, frontmatter stripping, alerts, Mermaid rendering,
   source-line stamps, review commenting, and bounded reading measure described above. These are renderer

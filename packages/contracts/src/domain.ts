@@ -307,6 +307,13 @@ export type ExistingWorktreeCandidate =
 	| { path: string; branch: string; status: "available" }
 	| { path: string; status: "detached" };
 
+/** The open workspace holding an absolute path, matched on real paths; `relativePath` is POSIX and contained. */
+export interface WorkspacePathMatch {
+	workspaceId: string;
+	projectId: string;
+	relativePath: string;
+}
+
 export interface EditorInfo {
 	id: string;
 	label: string;

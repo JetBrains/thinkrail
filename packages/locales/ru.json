@@ -2470,6 +2470,8 @@
 	"shell.connection.connected": "Подключено",
 	"shell.connection.connecting": "Подключение…",
 	"shell.connection.disconnected": "Нет подключения",
+	"shell.deepLink.notInProject": "{{path}} не входит в открытые проекты",
+	"shell.deepLink.openFailed": "Не удалось открыть {{path}}",
 	"shell.jbcentralQuota.availableLabel": "{{value}} регулярных кредитов JetBrains AI, обновлено {{time}}",
 	"shell.jbcentralQuota.availableTooltip": "Регулярные кредиты JetBrains AI · Обновлено {{time}}",
 	"shell.jbcentralQuota.creditsUnit": "кредиты",

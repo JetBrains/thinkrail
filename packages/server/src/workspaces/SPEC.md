@@ -369,6 +369,26 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   `O_EXCL` refuses to follow a symlink, but Windows' exclusive create (`CREATE_NEW`) follows the reparse
   point and would write outside the checkout. Seeding fills the gap, never overwrites (pinned by
   regression tests, the symlink one wherever the host may create symlinks).
+- **`resolveWorkspacePath(path)`** (**async**; the wire's `workspace.resolvePath`, v119) — the one answer to
+  "which open workspace holds this absolute path" for any client holding a path from outside the app's own
+  trees: desktop `thinkrail://` deep links now, terminal path links next, and they reuse it rather than
+  match roots themselves. Stored roots keep their `path.resolve` spelling (architecture Decision 22), so a
+  link spelled `/private/tmp/…` for a root stored as `/tmp/…`, or a real path a tool reports for a project
+  opened through a symlinked folder, never matches as a string; the match is made on real paths instead.
+  The target is `realpath`ed — when it does not exist, its nearest existing ancestor is and the rest is
+  re-appended, so a missing file still names its workspace and the client reports the failed read — and so
+  is each candidate root, once per call, all through `fs/promises`, so many workspaces never block the event
+  loop; a root that fails `realpath` is skipped. Candidates are the records of every open project
+  (`listProjects`: user-owned kinds and the Chats container's chats included, `deletionPending` excluded),
+  plus the folder of an open repository project whose Default was never ensured, which `listWorkspaces`
+  ensures only when it wins. Containment is a path prefix on the real root (never a same-prefix sibling);
+  spellings that differ only in case match only when the root's file system folds case — realpath need not
+  canonicalize case — probed by `stat`ing a case-swapped spelling of the root's deepest lettered component
+  and comparing device and inode. The longest real root wins (a nested project or a worktree inside another
+  folder over its parent); an exact tie keeps the first in open-project order. The answer is
+  `{ workspaceId, projectId, relativePath }` with a POSIX `relativePath` under the real root, or `null` for a
+  non-absolute path, any `..` segment (never followed), a path into `.git`, a root itself, or no containing
+  open workspace. It reads no file and grants nothing: opening stays `fs.readFile`'s containment check.
 - **Lifecycle events:** every membership mutation — `createWorkspace` (`created`), `renameWorkspace`
   (`updated`, the agent's `set_title` included since it goes through it), `forgetWorkspace`
   (`removed`) — emits a `WorkspaceLifecycleEvent` through an **injected publisher** (`setWorkspacePublisher`,
@@ -387,7 +407,7 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   `setWorkspaceCreationHandoff`, `CreationHandoff`,
   `setWorkspaceCreationPublisher`, `WorkspaceCreationEvent`, `creationOwnsPath`, `listExistingWorktrees`,
   `openExistingWorktree`,
-  `listWorkspaces`, `listWorkspaceRecords`, `listAllWorkspaceRecords`, `forgetWorkspace`,
+  `listWorkspaces`, `listWorkspaceRecords`, `listAllWorkspaceRecords`, `resolveWorkspacePath`, `forgetWorkspace`,
   `reclaimWorktree`, `removeWorkspace`,
   `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `syncWorkspaceBranch`, `branchMoveOwed`,
   `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,

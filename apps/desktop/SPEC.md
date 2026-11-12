@@ -103,7 +103,8 @@ another.
    `Utils.openExternal` callback used by the host's one-shot browser attribution claim. The callback passes through
    `DesktopHostOptions` and the generated runtime. The first native-window `dom-ready` explicitly calls the
    proxied `host.server.startAttributionClaim()` readiness method; host boot and elapsed time do not start a
-   saved-choice claim. No deep-link or RPC surface is added. The runtime also passes `appRoot`
+   saved-choice claim. The launcher registers `thinkrail` as a macOS URL scheme (`app.urlSchemes`);
+   the only deep-link surface is the `open-url` path below. The runtime also passes `appRoot`
    (`runtimeDir/..`, i.e. `Resources/app`) so error-report frames are rooted at the packaged app, and returns
    `reportDesktopError` as `DesktopHost.reportError`.
 5. Restore the valid route fragment and bounded client-preference map for
@@ -358,6 +359,23 @@ channels; the unscoped payload has no webview id, and the instance listener's ty
 popups. Payload types are derived from SDK event factories, not copied into local declarations. Detail
 can be a raw URL, a popup object, or serialized navigation JSON; bounded decoding retains only a string
 URL and the HTTP/HTTPS/mailto allowlist, which the preload routing reuses.
+
+**Deep links.** The packaged macOS app registers `thinkrail://` through `app.urlSchemes`; LaunchServices
+registers it only for a copy in `/Applications`. Electrobun 2.0.5 has no Windows or Linux scheme
+registration, so there the scheme is not registered and such a link does nothing. `deepLink.ts` accepts
+exactly `thinkrail://open?file=<absolute path>&line=<1-based>&column=<optional>` (`line` defaults to 1,
+positions are whole numbers up to 2,000,000, unknown parameters are ignored). Values decode like
+`decodeURIComponent`, not form encoding, so an unencoded LocatorJS template keeps `+page.svelte`'s `+`. Any
+other scheme, host, port, user info, path or fragment, a duplicated parameter, a relative path, a `..`
+segment, a control character, or an over-long URL/path rejects the whole link — the link names a file and
+nothing else; it never navigates the webview or runs anything. `entry.ts` evaluates `deepLinkBootstrap.ts`
+before `index.ts`, so its `open-url` listener exists before `electrobun/main` installs the native URL handler
+that delivers a cold-launch URL ([[electrobun-compatibility]]); the bootstrap holds requests until the first
+`dom-ready`, after which each one unminimizes, shows and activates the window and is sent as a
+`NativeOpenFileRequest` over the `openFile` webview message. The preload queues any that arrive before the web
+client subscribes. The web client opens only files inside already-open projects' workspaces, which the host
+matches on real paths, see [[submodule-web-shell]]; containment, `.git` and symlink escapes stay the host's
+`fs.readFile` checks.
 
 A desktop preload sends typed, one-way route, local-preference, page-zoom, and title-bar double-click
 messages, and is the only writer of the window-chrome CSS properties described above. It wraps
@@ -654,6 +672,6 @@ release checks described in [[module-ci-release]].
 
 ## Deferred
 
-Shared/remote backend profiles, profile selection, multi-window/deep-link routing, and CEF. Removing
-Electrobun workarounds follows [[electrobun-compatibility]]. The update feed publication described above
-remains release-owned.
+Shared/remote backend profiles, profile selection, multi-window routing, Windows/Linux URL-scheme
+registration, and CEF. Removing Electrobun workarounds follows [[electrobun-compatibility]]. The update
+feed publication described above remains release-owned.
