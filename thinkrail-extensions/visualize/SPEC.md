@@ -77,7 +77,10 @@ registration is primary and expanded by default; its title or diagram/comparison
 without rendering. Invalid or streaming arguments remain defensive and tool errors preserve readable
 result text.
 
-`MermaidView` derives mermaid's strict-mode theme from the host's CSS variables and re-renders after a
+`MermaidView` renders a diagram at its natural size — `useMaxWidth: false` for every diagram kind in
+mermaid's default config, scaled down to the available width by CSS — so a content-width parent can size to
+it; with mermaid's default (`width="100%"`) a diagram has no intrinsic width and never grows. It derives
+mermaid's strict-mode theme from the host's CSS variables and re-renders after a
 completed `data-theme` swap, or after a font settings change that moves the code family (resolved from
 `.tr-code-block` through `@thinkrail/ui/fonts`' `watchFont`, re-rendered once that face has loaded) or a
 change to the custom face set, which can change a family's metrics without its name; weight-only changes do
