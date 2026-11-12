@@ -7,8 +7,6 @@ import { type ComponentPropsWithoutRef, forwardRef, type ReactNode } from "react
 import { tupleKey } from "../../lib";
 import type { LayoutTab } from "./types";
 
-// The flex box centres the title vertically. `truncate` goes on an inner span,
-// since text directly inside a flex container gets no ellipsis.
 const TITLE_CLASS = "flex min-w-0 flex-1 items-center px-12 tr-title-compact text-text-default";
 const TITLE_TEXT_CLASS = "min-w-0 truncate";
 

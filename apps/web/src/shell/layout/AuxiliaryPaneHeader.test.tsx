@@ -11,7 +11,6 @@ describe("AuxiliaryPaneHeader title", () => {
 
 		expect(title).not.toBeNull();
 		const [, outer = "", inner = ""] = title ?? [];
-		// `truncate` on a flex container does not ellipsize its text.
 		expect(outer.split(" ")).toContain("flex");
 		expect(outer.split(" ")).not.toContain("truncate");
 		expect(inner.split(" ")).toEqual(expect.arrayContaining(["min-w-0", "truncate"]));
