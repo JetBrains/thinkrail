@@ -322,7 +322,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
 - **domain.ts** — app entities: `Project` (git repo + unique `slug` + optional **`closed: true`** — the
   persisted open-rail membership bit; absence means open for backward compatibility, and closing never
   changes the project's id or deletes its workspace associations — plus optional **`rank`**, the host-owned
-  place among the open projects (highest first; absent reads as `lastOpened`, so a pre-v115 record or host
+  place among the open projects (highest first; absent reads as `lastOpened`, so a pre-v117 record or host
   keeps the newest-opened order). The pure **`projectRank`** / **`compareProjectRank`** (id breaks ties)
   are the one ordering, so the host's `project.list` and every client's rail agree — plus the skill-trust fields **`trusted`**
   (the per-project grant), **`acknowledgedSkills`** (re-confirm-new — which committed aliases are OK'd) and
@@ -712,7 +712,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `PROJECT_RENAME_PROTOCOL_VERSION` pins its v85 introduction so a newer client omits the action against
   an older host), **`project.move`** (`{ id, targetId, placement: "before" | "after" }` → the moved
   `Project`; places one open repository project next to another — never the Chats container — and
-  broadcasts each record whose `rank` changed; `PROJECT_ORDER_PROTOCOL_VERSION` pins its v115
+  broadcasts each record whose `rank` changed; `PROJECT_ORDER_PROTOCOL_VERSION` pins its v117
   introduction), **`project.inspect`** (classify a path) + **`project.init`**
   (`git init` + commit, then open) + **`project.create`** (`{ parentPath, name, displayName? }` → the opened
   `Project`: make the folder `name` under `parentPath`, creating missing parents, then the same bootstrap as

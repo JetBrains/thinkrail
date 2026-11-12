@@ -337,9 +337,9 @@ test("find in files is pinned to v112", () => {
 	expect(WS_CHANNELS.searchTextResults).toBe("search.textResults");
 });
 
-test("project order is pinned to v115", () => {
-	expect(PROTOCOL_VERSION).toBe(115);
-	expect(PROJECT_ORDER_PROTOCOL_VERSION).toBe(115);
+test("project order is pinned to v117", () => {
+	expect(PROTOCOL_VERSION).toBe(117);
+	expect(PROJECT_ORDER_PROTOCOL_VERSION).toBe(117);
 	expect(WS_METHODS.projectMove).toBe("project.move");
 });
 
