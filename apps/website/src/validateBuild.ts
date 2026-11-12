@@ -20,11 +20,6 @@ const desktopDownloadUrls = [
 ] as const;
 
 const analyticsFreePages = new Set(["404.html", "attribution/claim/index.html"]);
-const promoRoutePaths = new Set([
-	"vibecoding/index.html",
-	"agentic-development/index.html",
-	"agentic-ide/index.html",
-]);
 
 function occurrences(content: string, value: string): number {
 	return content.split(value).length - 1;
@@ -292,9 +287,7 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		failures.push("landing: install command tabs are missing");
 	}
 	for (const [path, html] of htmlPages) {
-		if (!analyticsFreePages.has(path) && !promoRoutePaths.has(path)) {
-			failures.push(...validateHeaderInstall(path, html));
-		}
+		if (!analyticsFreePages.has(path)) failures.push(...validateHeaderInstall(path, html));
 		for (const id of duplicateIds(html)) failures.push(`${path} duplicate id: ${id}`);
 		if (!/^blog\/[^/]+\/index\.html$/.test(path)) continue;
 		failures.push(...validatePostInstall(path, html));
@@ -308,12 +301,13 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		failures.push("landing: browser UI command-line option is missing");
 	}
 	for (const name of islandPages) {
-		for (const forbiddenCommandLineCopy of [
-			"Browser UI via command line",
-			"raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh",
-			"raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1",
-		]) {
-			if (pages[name].includes(forbiddenCommandLineCopy)) {
+		const { body } = splitSiteHeader(pages[name]);
+		for (const [content, forbiddenCommandLineCopy] of [
+			[pages[name], "Browser UI via command line"],
+			[body, "raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh"],
+			[body, "raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1"],
+		] as const) {
+			if (content.includes(forbiddenCommandLineCopy)) {
 				failures.push(`${name}: command-line option leaked: ${forbiddenCommandLineCopy}`);
 			}
 		}

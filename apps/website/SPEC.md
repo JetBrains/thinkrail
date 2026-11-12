@@ -81,12 +81,14 @@ The parent owns the route-composition edges; the vibecoding leaf has no sibling 
 src/pages/{vibecoding,agentic-development,agentic-ide}/index.astro ──▶ src/vibecoding (through index.ts)
 src/pages/{vibecoding,agentic-development,agentic-ide}/index.astro ──▶ src/components/Analytics.astro
 landing + blog shells                                              ──▶ src/components/Analytics.astro
-src/main.ts, src/vibecoding                                        ──▶ src/installLinkShare.ts
+src/main.ts, src/vibecoding                                        ──▶ src/installLinkShare.ts, src/installCommands.ts
 ```
 
 `src/installLinkShare.ts` is the one framework-free phone "send link" helper both route families use: phone/tablet
-detection (Android, iPhone/iPad/iPod, or a touch Mac), the share URL, and native-share-then-clipboard delivery. It
-imports nothing, so the vibecoding island can reuse it without reaching the IDE shell.
+detection (Android, iPhone/iPad/iPod, or a touch Mac), the share URL, and native-share-then-clipboard delivery.
+`src/installCommands.ts` owns the install commands and `installCommandFor`, the title-bar command for a detected
+OS (PowerShell on Windows, `install.sh` otherwise). Both import nothing, so the vibecoding island can reuse them
+without reaching the IDE shell.
 
 - **Fonts are self-hosted; the site makes no external font request.** Packages and stacks are copied
   from the app's `typography.json`, not imported — and `src/fonts.test.ts` reads that JSON at test time
@@ -185,11 +187,11 @@ imports nothing, so the vibecoding island can reuse it without reaching the IDE 
   (right-aligned, clamped to the viewport, re-anchored on resize and scroll). Escape and outside clicks close
   it natively; browsers without the Popover API keep it hidden. One panel rather than one per invoker keeps
   element IDs and download links single per page; CSS anchor positioning alone cannot serve two invokers with
-  one popover across today's browsers. `validateBuild.ts` requires, on every IDE-shell page, exactly one
-  `data-install-popover` inside the title bar `<header>` offering each desktop download once, and unique
-  element IDs; on every post, the `data-install-launcher="post"` row inside `.blog-post-header` and the end
-  picker with its command-line option. Per-page download-link counts (landing, the introducing post, the
-  promo routes) count only links outside the site header.
+  one popover across today's browsers. `validateBuild.ts` requires, on every page except the analytics-free
+  ones, exactly one `data-install-popover` inside the first `<header>` offering each desktop download once,
+  and unique element IDs; on every post, the `data-install-launcher="post"` row inside `.blog-post-header`
+  and the end picker with its command-line option. Per-page download-link counts (landing, the introducing
+  post, the promo routes) and the promo routes' no-CLI check apply outside that header.
 - **Phone visitors get a "Send link to my computer" action** above the hero actions. It is in the static DOM
   but `hidden`, and `main.ts` reveals it only on a detected phone or tablet (the download link stays visible
   below it; no platform is hidden). Activation opens the native share sheet with the current page URL, its
