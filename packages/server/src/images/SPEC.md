@@ -45,7 +45,8 @@ looped reconnects; see the host SPEC's outbound-limit bullet.
     - `forgetImageSession(sessionId)` drops a deleted chat's entries.
     - `resetImages()` clears everything when the server stops. Its `cacheLimitChars` option exists for
       tests.
-    - `imageRefHash(block)` exposes the memoized hash, which the source's live lookup compares against.
+    - `findImageBlock(blocks, hash)` finds the block in a content array whose memoized hash matches. The
+      source's live lookup uses it.
   - **`serveImage(pathname)`** behaves as follows:
     - It validates a pi-session-id-shaped segment and a 64-hex sha, and ignores the query string
       (Retry's cache-buster).
@@ -61,8 +62,7 @@ looped reconnects; see the host SPEC's outbound-limit bullet.
   - **`imageDimensions(base64)`** reads the PNG/JPEG/GIF/WebP header from at most 256 KiB. The
     oversized-image guard in `agent` shares it.
 - **Public surface (barrel):** `projectImages`, `imageDimensions`, `Dimensions`, `setImageSource`,
-  `ImageSource`, `ImageBlock`, `imageRefHash`, `findImageBlock`, `forgetImageSession`, `resetImages`,
-  `serveImage`.
+  `ImageSource`, `ImageBlock`, `findImageBlock`, `forgetImageSession`, `resetImages`, `serveImage`.
 - **Allowed deps:** `contracts` (`IMAGES_ROUTE`, `ACCEPTED_IMAGE_TYPES`, `RefImage`), and Node `crypto`.
 - **Forbidden:**
   - `host`, `agent` and every other feature. `agent` imports this module, and `host` injects the source.

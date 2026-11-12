@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { IMAGES_ROUTE, type RefImage } from "@thinkrail/contracts";
 import {
+	findImageBlock,
 	forgetImageSession,
 	type ImageBlock,
 	type ImageSource,
-	imageRefHash,
 	projectImages,
 	resetImages,
 	serveImage,
@@ -31,8 +32,7 @@ const blocks = new Map<string, ImageBlock[]>();
 const deleted = new Set<string>();
 const source: ImageSource = {
 	isServable: (sessionId) => !deleted.has(sessionId),
-	find: (sessionId, hash) =>
-		blocks.get(sessionId)?.find((block) => imageRefHash(block) === hash) ?? null,
+	find: (sessionId, hash) => findImageBlock(blocks.get(sessionId), hash),
 };
 
 beforeEach(() => {
@@ -45,6 +45,10 @@ afterEach(() => {
 	deleted.clear();
 	resetImages();
 });
+
+function sha256Of(image: ImageBlock): string {
+	return createHash("sha256").update(`${image.mimeType}\0${image.data}`).digest("hex");
+}
 
 function refOf(value: unknown): RefImage {
 	return value as RefImage;
@@ -63,7 +67,7 @@ describe("projectImages", () => {
 		expect(ref).toEqual({
 			type: "image",
 			mimeType: "image/png",
-			ref: `${IMAGES_ROUTE}${SESSION}/${imageRefHash(image)}`,
+			ref: `${IMAGES_ROUTE}${SESSION}/${sha256Of(image)}`,
 			width: 800,
 			height: 600,
 		});

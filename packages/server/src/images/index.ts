@@ -4,7 +4,6 @@ export {
 	forgetImageSession,
 	type ImageBlock,
 	type ImageSource,
-	imageRefHash,
 	projectImages,
 	resetImages,
 	serveImage,

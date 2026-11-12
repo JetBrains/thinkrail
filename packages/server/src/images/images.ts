@@ -66,10 +66,6 @@ function memoOf(block: ImageBlock): Memo {
 	return memo;
 }
 
-export function imageRefHash(block: ImageBlock): string {
-	return memoOf(block).hash;
-}
-
 export function findImageBlock(blocks: unknown, hash: string): ImageBlock | null {
 	if (!Array.isArray(blocks)) return null;
 	for (const block of blocks) {
