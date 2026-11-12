@@ -9,11 +9,11 @@ Answer questions about open-source libraries by finding evidence with GitHub per
 
 ## Execution Model
 
-Pi executes tool calls sequentially, even when you emit multiple calls in one turn. But batching independent calls in a single turn still saves LLM round-trips (~5-10s each). Use these patterns:
+Pi runs the independent tool calls of one turn concurrently, and batching them saves LLM round-trips (~5-10s each). Use these patterns:
 
 | Pattern | When | Actually parallel? |
 |---------|------|-------------------|
-| Batch tool calls in one turn | Independent ops (web_search + fetch_content + read) | No, but saves round-trips |
+| Batch tool calls in one turn | Independent ops (web_search + fetch_content + read) | Yes, and saves round-trips |
 | `fetch_content({ urls: [...] })` | Multiple URLs to fetch | Yes (3 concurrent) |
 | Bash with `&` + `wait` | Multiple git/gh commands | Yes (OS-level) |
 
@@ -34,7 +34,7 @@ Before doing anything, classify the request to pick the right research strategy.
 
 Batch these in one turn:
 
-1. **web_search**: `"library-name topic"` via Perplexity for recent articles and discussions
+1. **web_search**: `"library-name topic"` for recent articles and discussions
 2. **fetch_content**: the library's GitHub repo URL to clone and check README, docs, or examples
 
 Synthesize web results + repo docs. Cite official documentation and link to relevant source files.
@@ -43,10 +43,10 @@ Synthesize web results + repo docs. Cite official documentation and link to rele
 
 The core workflow -- clone, find, permalink:
 
-1. **fetch_content** the GitHub repo URL -- this clones it locally and returns the file tree
+1. **fetch_content** the GitHub repo URL -- this clones it locally and returns the file tree after `Repository cloned to: <path>`; that path is the clone, use it for every step below
 2. Use **bash** to search the cloned repo: `grep -rn "function_name"`, `find . -name "*.ts"`
 3. Use **read** to examine specific files once you've located them
-4. Get the commit SHA: `cd /tmp/pi-github-repos/owner/repo && git rev-parse HEAD`
+4. Get the commit SHA: `cd <clone path> && git rev-parse HEAD`
 5. Construct permalink: `https://github.com/owner/repo/blob/<sha>/path/to/file#L10-L20`
 
 Batch the initial calls: fetch_content (clone) + web_search (recent discussions) in one turn. Then dig into the clone with grep/read once it's available.
@@ -56,7 +56,7 @@ Batch the initial calls: fetch_content (clone) + web_search (recent discussions)
 Use git operations on the cloned repo:
 
 ```bash
-cd /tmp/pi-github-repos/owner/repo
+cd <clone path>
 
 # Recent changes to a specific file
 git log --oneline -n 20 -- path/to/file.ts
@@ -109,7 +109,7 @@ https://github.com/<owner>/<repo>/blob/<commit-sha>/<filepath>#L<start>-L<end>
 Getting the SHA from a cloned repo:
 
 ```bash
-cd /tmp/pi-github-repos/owner/repo && git rev-parse HEAD
+cd <clone path> && git rev-parse HEAD
 ```
 
 Getting the SHA from a tag:
@@ -171,20 +171,20 @@ fetch_content({
 
 Use single timestamps for known moments, ranges for visual scanning, and frames-alone for a quick overview of the whole video.
 
-The `prompt` parameter only applies to video content (YouTube URLs and local video files). For non-video URLs, it's ignored.
+The `prompt` parameter applies to video content (YouTube URLs and local video files); for other URLs it is used only with `mode: "answer"`.
 
 ## Failure Recovery
 
 | Failure | Recovery |
 |---------|----------|
 | grep finds nothing | Broaden the query, try concept names instead of exact function names |
-| gh CLI rate limited | Use the already-cloned repo in /tmp/pi-github-repos/ for git operations |
+| gh CLI rate limited | Use git in the clone fetch_content already returned |
 | Repo too large to clone | fetch_content returns an API-only view automatically; use that or add `forceClone: true` |
 | File not found in clone | Branch name with slashes may have misresolved; list the repo tree and navigate manually |
 | Uncertain about implementation | State your uncertainty explicitly, propose a hypothesis, show what evidence you did find |
-| Video extraction fails | Ensure Chrome is signed into gemini.google.com (free) or set GEMINI_API_KEY |
-| Page returns 403/bot block | Gemini fallback triggers automatically; no action needed if Gemini is configured |
-| web_search fails | Check provider config; try explicit `provider: "gemini"` if Perplexity key is missing |
+| Video extraction fails | Set GEMINI_API_KEY, or turn on `allowBrowserCookies` in `web-search.json` and sign Chrome into gemini.google.com |
+| Page returns 403/bot block or reads as incomplete | Hosted extraction fallbacks are off unless `fetchRouting.allowRemoteHostedProviders` is on; retry with `mode: "raw"`, find another source, or tell the user the setting the error names |
+| web_search fails | Check provider config; name another configured `provider` |
 
 ## Guidelines
 
