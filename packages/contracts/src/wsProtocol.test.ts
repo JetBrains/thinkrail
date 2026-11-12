@@ -344,7 +344,7 @@ test("the question panel height setting is pinned to v114", () => {
 });
 
 test("extension editor text is pinned to v115", () => {
-	expect(PROTOCOL_VERSION).toBe(115);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION);
 	expect(EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION).toBe(115);
 });
 
