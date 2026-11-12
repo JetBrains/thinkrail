@@ -5,8 +5,7 @@ import { parseThinkRailDeepLink } from "./deepLink";
 const earlyDeepLinks: NativeOpenFileRequest[] = [];
 let deliverDeepLink: ((request: NativeOpenFileRequest) => void) | null = null;
 
-// This module is imported before `electrobun/main`, so the emitter exists before the
-// native SDK registers its URL callback and flushes a cold-launch URL.
+// Must evaluate before `electrobun/main` — see electrobun-compatibility.md.
 electrobunEventEmitter.on("open-url", (event: { data: { url: string } }) => {
 	const request = parseThinkRailDeepLink(event.data.url);
 	if (!request) return;

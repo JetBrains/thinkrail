@@ -99,7 +99,6 @@ mock.module("electrobun/main", () => ({
   default: {
     app: { isPackaged: true },
     events: { on: (name, callback) => {
-      if (name === "open-url") return;
       if (name !== "before-quit") throw new Error("unexpected subscription");
       calls.push("listener");
       if (failure === "listener") throw new Error("listener failed");

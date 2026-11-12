@@ -351,8 +351,6 @@ async function start(): Promise<void> {
 		writeReady(windowControlsProbePath, windowControlsProbe);
 	};
 	let mainWindow: BrowserWindow;
-	const pendingDeepLinks: NativeOpenFileRequest[] = [];
-	let webReady = false;
 	const handlePageZoomGesture = createPageZoomGestureHandler({
 		getPageZoom: () => mainWindow.getPageZoom(),
 		setPageZoom: (zoom) => mainWindow.setPageZoom(zoom),
@@ -479,13 +477,6 @@ async function start(): Promise<void> {
 	});
 	setWindowsWindowIcon(mainWindow);
 	if (!neutral) {
-		const deliver = (request: NativeOpenFileRequest) => {
-			mainWindow.show();
-			mainWindow.activate();
-			if (webReady) rpc.send.openFile(request);
-			else pendingDeepLinks.push(request);
-		};
-		deliverDeepLinkWhenReady(deliver);
 		mainWindow.webview.setNavigationRules(windowNavigationRules(origin));
 		handleTitleBarDoubleClick = createTitleBarDoubleClickHandler({
 			enabled: windowChrome.titleBarDoubleClick,
@@ -578,6 +569,12 @@ async function start(): Promise<void> {
 		command: (command) => rpc.send.nativeCommand({ command }),
 	};
 
+	const revealDeepLink = (request: NativeOpenFileRequest) => {
+		if (mainWindow.isMinimized()) mainWindow.unminimize();
+		mainWindow.show();
+		mainWindow.activate();
+		rpc.send.openFile(request);
+	};
 	let ready = false;
 	const startAttributionClaim = attributionClaimOnFirstReadiness(() =>
 		host.server.startAttributionClaim(),
@@ -585,10 +582,9 @@ async function start(): Promise<void> {
 	mainWindow.webview.on("dom-ready", () => {
 		if (ready) return;
 		ready = true;
-		webReady = true;
-		for (const request of pendingDeepLinks.splice(0)) rpc.send.openFile(request);
 		releaseStartupSplash?.();
 		startupSplash = undefined;
+		if (!neutral) deliverDeepLinkWhenReady(revealDeepLink);
 		startAttributionClaim();
 		updateController.start();
 		const readyPath = process.env.THINKRAIL_DESKTOP_READY_FILE;

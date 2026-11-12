@@ -2521,6 +2521,13 @@ own section. The kebab menu (`plan-menu`, a
   renderer, so the rendered spec scrolls to its heading). An open that finds a read of the same file in flight joins it —
   `openReadTab` hands every caller that read's completion — so each caller reveals after the tab is
   installed, in call order, and the latest hit wins.
+  **`workspaceForPath.resolveOpenWorkspaceForPath(path)`** is the one answer to "which open workspace owns
+  this absolute path" for any caller that holds a path from outside the app's own trees (desktop deep links;
+  terminal path links should reuse it). It lists the workspaces of unlisted open projects whose folder
+  encloses the path first, so a nested project is never shadowed by an already loaded parent, then the
+  remaining unlisted open projects (a worktree usually lives outside its project folder). Then it answers
+  with the store's `selectOpenWorkspaceForPath`. It never overwrites a list that loaded meanwhile and never
+  answers with a closed project's cached rows.
 
   `MarkdownPreview` retains the document typography, frontmatter stripping, alerts, Mermaid rendering,
   source-line stamps, review commenting, and bounded reading measure described above. These are renderer

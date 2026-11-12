@@ -16,6 +16,7 @@ import {
 	layoutResourceIdentity,
 	normalizePath,
 	parseTupleKey,
+	pathWithinRoot,
 	platformFamily,
 	platformShortcutLabel,
 	projectRelativePath,
@@ -199,6 +200,19 @@ test("projectRelativePath yields the worktree-relative tab identity from every r
 	expect(projectRelativePath("C:/src/foo.ts", "C:/")).toBe("src/foo.ts");
 	expect(projectRelativePath("/elsewhere/foo.ts", root)).toBe("/elsewhere/foo.ts");
 	expect(projectRelativePath("/wt/ws/src/foo.ts")).toBe("/wt/ws/src/foo.ts");
+});
+
+test("pathWithinRoot answers the root-relative path only for an absolute path the root contains", () => {
+	expect(pathWithinRoot("/wt/ws/src/foo.ts", "/wt/ws")).toBe("src/foo.ts");
+	expect(pathWithinRoot("/wt/ws/src/foo.ts", "/wt/ws/")).toBe("src/foo.ts");
+	expect(pathWithinRoot("/wt/ws", "/wt/ws")).toBe("");
+	expect(pathWithinRoot("/wt/ws/src/../foo.ts", "/wt/ws")).toBe("foo.ts");
+	expect(pathWithinRoot("/wt/ws/../other/foo.ts", "/wt/ws")).toBeNull();
+	expect(pathWithinRoot("/wt/ws-other/foo.ts", "/wt/ws")).toBeNull();
+	expect(pathWithinRoot("src/foo.ts", "/wt/ws")).toBeNull();
+	expect(pathWithinRoot("/wt/ws/src/foo.ts", "wt/ws")).toBeNull();
+	expect(pathWithinRoot("C:\\Repo\\src\\a.ts", "c:\\repo")).toBe("src/a.ts");
+	expect(pathWithinRoot("/src/a.ts", "/")).toBe("src/a.ts");
 });
 
 test("isAbsolutePath accepts posix and Windows roots, in either separator style", () => {

@@ -47,6 +47,7 @@ import {
 	type LayoutAttention,
 	layoutResourceIdentity,
 	normalizePath,
+	pathWithinRoot,
 	readLayoutSelection,
 	relativeTime,
 	userText,
@@ -937,6 +938,30 @@ export function selectWorkspaceById(
 		if (workspace) return workspace;
 	}
 	return null;
+}
+
+export function selectOpenWorkspaceForPath(
+	state: ActiveWorkspaceState & {
+		projects: readonly Pick<Project, "id">[];
+		removedWorkspaceIds: Record<string, unknown>;
+	},
+	path: string,
+): Workspace | null {
+	let best: Workspace | null = null;
+	let bestRemainder = Number.POSITIVE_INFINITY;
+	for (const project of state.projects) {
+		for (const workspace of state.workspaces[project.id] ?? []) {
+			if (workspace.deletionPending || state.removedWorkspaceIds[workspace.id]) continue;
+			const relative = pathWithinRoot(path, workspace.worktreePath);
+			if (!relative) continue;
+			const tie = relative.length === bestRemainder && workspace.id === state.activeWorkspaceId;
+			if (relative.length < bestRemainder || tie) {
+				best = workspace;
+				bestRemainder = relative.length;
+			}
+		}
+	}
+	return best;
 }
 
 export function selectActiveWorkspaceProjectId(state: ActiveWorkspaceState): string | null {

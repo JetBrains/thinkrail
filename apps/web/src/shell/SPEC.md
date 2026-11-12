@@ -217,16 +217,18 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
 
 Letter chords match physical `KeyboardEvent.code`, never layout-dependent `key`. The layout and create chords remain app-owned inside xterm, do not repeat, and are suppressed while a modal dialog is open. With no active workspace, right/bottom chords neither act nor swallow the browser chord; `Mod+B` toggles the Project Home Projects pane with the focus rules above. With no context project, `Mod+N` likewise neither acts nor swallows. Terminal `Ctrl+R` still belongs to xterm; `Ctrl+Shift+R`, macOS `Cmd+R`, F5, and browser reload remain untouched. All other arrangement operations are exposed by the layout command/menu system in [[submodule-web-shell-layout]].
 
-**Desktop deep links.** `main.tsx` calls `installDeepLinks` once. The optional
-`NativeDeepLinkBridge` (`__THINKRAIL_NATIVE_DEEP_LINKS__`, [[module-contracts]]) is read from the preload;
-a browser has none and the installer is a no-op there. A request waits for the first welcome, then resolves
-its absolute path against the eligible candidates only: cached rows are filtered to the current open
-projects, candidate projects whose folder contains the file are listed before a cached match is accepted,
-and the longest root wins. It activates the containing workspace, converts the file with
-`projectRelativePath(file, workspace.worktreePath)`, and calls `openFileAtLine(..., "keep")` with that
-workspace-relative identity so opening and revealing name the same tab. An unresolved path shows the
-`shell.deepLink.openFailed` toast. Requests are processed one at a time in arrival order; the preload queues
-any that arrive before this subscription.
+**Desktop deep links.** `main.tsx` calls `installDeepLinks` once. It reads the optional
+`NativeDeepLinkBridge` (`__THINKRAIL_NATIVE_DEEP_LINKS__`, [[module-contracts]]) from the preload; a browser
+has none and the installer is a no-op there. Requests run one at a time in arrival order. Each waits for the
+first welcome, then asks `panels/workspaceForPath.resolveOpenWorkspaceForPath` for the open workspace that
+owns the absolute path. Nothing outside the open projects is opened. A path no open workspace contains, or a
+workspace root itself, toasts `shell.deepLink.notInProject` and changes nothing. Otherwise the link enters the
+workspace through the shared `paletteNavigator` (Find in Files' entry: a deleting or vanished workspace is
+refused, a newer navigation overtakes it), then calls `openFileAtLine(..., "keep")` with the
+workspace-relative path `pathWithinRoot` derives, so opening and revealing name the same tab. Monaco clamps a
+line or column past the end of the file. When the host refuses the read (missing, a directory, `.git`, a
+symlink escaping the worktree, too large), no tab appears and `shell.deepLink.openFailed` says so. The
+workspace has already been entered by then.
 
 **Native shortcuts.** Shell always mounts the `AppShortcuts` leaf. `useAppShortcuts` reads `NativeShortcutsBridge` (`__THINKRAIL_NATIVE_SHORTCUTS__`, [[module-contracts]]; desktop hosts only) once. Without the bridge it adds no listeners and renders nothing. With the bridge, the leaf renders the hint, so hint changes re-render only that leaf. Every app-level close/quit/settings shortcut dispatches through one command table, `shortcutCommands.ts`: a command id (`close-item`, `quit`, `open-settings`) maps to Ctrl chords per shortcut platform, each chord carrying its terminal rule, and the hook supplies the id → handler map. Both native commands from `subscribeCommand` and web keydown chords run the same handler. The shortcut platform is `platformFamily()` (`apple` / `windows` / `linux`) when the bridge exists, else `browser`.
 

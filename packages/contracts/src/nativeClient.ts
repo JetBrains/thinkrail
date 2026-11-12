@@ -86,14 +86,12 @@ export interface NativeNotificationBridge {
 	isWindowFocused?: () => boolean;
 }
 
-/** An OS-delivered desktop deep link asking the web client to reveal an absolute file path. */
 export interface NativeOpenFileRequest {
 	file: string;
 	line: number;
 	column?: number;
 }
 
-/** Desktop-only bridge for incoming `thinkrail://` deep links. */
 export interface NativeDeepLinkBridge {
 	subscribe(listener: (request: NativeOpenFileRequest) => void): () => void;
 }
