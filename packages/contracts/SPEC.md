@@ -488,8 +488,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`ComposerGrowthLimit`** (`"compact" | "roomy" | "half-chat"`) is the closed, server-synced composer
   height preference: 6 visual lines, 10 visual lines, or 50% of the mounted chat panel respectively;
   `"half-chat"` is the default, and the web owns translating these semantic ids into geometry;
-  **`LINE_WIDTH_COLUMNS`** owns the shared `{ min: 40, max: 240, default: 120 }` integer contract for
-  the independently bounded chat/file visual wrap columns; **`isLineWidth`** is the one validator consumed
+  **`LINE_WIDTH_COLUMNS`** owns the shared 40–240 integer contract for the independently bounded
+  chat/file visual wrap columns, with a per-**`LineWidthKind`** (`"chat" | "file"`) default of 80 / 120 —
+  chat is a reading measure, files keep a code-width column; the wire still carries both values, so a
+  default change needs no protocol bump; **`isLineWidth`** is the one validator consumed
   on both sides of the wire;
   **`SUBAGENT_SETTINGS_PROTOCOL_VERSION`** pins the global/workspace controls to their v57 wire
   introduction so a later web client hides them against an older host without comparing against the moving

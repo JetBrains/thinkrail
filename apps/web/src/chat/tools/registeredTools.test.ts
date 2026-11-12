@@ -4,7 +4,12 @@ import { currentTranslator } from "@thinkrail/locales/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { registerWebExtensions } from "@/extensions";
-import { DefaultToolRenderer, getToolRenderer, getToolSummary } from "../toolRegistry";
+import {
+	DefaultToolRenderer,
+	getToolRenderer,
+	getToolSummary,
+	getToolWidth,
+} from "../toolRegistry";
 import "./register";
 import { specToolPaths, splitKnownPathReferences } from "./SpecToolCard";
 
@@ -132,6 +137,16 @@ describe("intentional bundled tool renderers", () => {
 
 		expect(segments.map((segment) => segment.path).filter(Boolean)).toEqual(["SPEC.md"]);
 		expect(segments.map((segment) => segment.text).join("")).toBe(text);
+	});
+
+	it("lets only visualize and the code/output tools grow past the chat column", () => {
+		const contentWidth = new Set(["read", "write", "edit", "bash", "visualize"]);
+		for (const toolName of INTENTIONAL_TOOLS) {
+			expect([toolName, getToolWidth(toolName)]).toEqual([
+				toolName,
+				contentWidth.has(toolName) ? "content" : "column",
+			]);
+		}
 	});
 
 	it("registers every non-TODO tool exposed by a normal session", () => {

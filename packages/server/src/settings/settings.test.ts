@@ -669,7 +669,7 @@ test("line-width fields default independently when an older or malformed config 
 	resetConfigCache();
 
 	expect(getConfig()).toMatchObject({
-		chatLineWidth: 120,
+		chatLineWidth: 80,
 		fileLineWidth: 180,
 		chatLineWidthBounded: true,
 		fileLineWidthBounded: false,

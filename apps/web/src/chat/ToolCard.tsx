@@ -6,10 +6,11 @@ import {
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
+import { CONTENT_WIDTH_BREAKOUT } from "./contentWidth";
 import { ToolPromptSlot } from "./ExtUiPrompt";
 import { useFold } from "./foldState";
 import { ToolRendererBody } from "./ToolRendererBody";
-import { getToolSummary, resolveProminence } from "./toolRegistry";
+import { getToolSummary, getToolWidth, resolveProminence } from "./toolRegistry";
 import type { ToolResultState } from "./types";
 
 export function ToolCard({
@@ -45,6 +46,7 @@ export function ToolCard({
 		streaming,
 	};
 	const summary = getToolSummary(t, toolName, renderProps);
+	const contentWidth = getToolWidth(toolName) === "content";
 
 	const autoExpand = isError || (resolveProminence(toolName).defaultExpanded && status === "done");
 	const [expanded, toggle, toggleRef] = useFold(toolCallId, autoExpand);
@@ -56,7 +58,10 @@ export function ToolCard({
 			data-tool={toolName}
 			data-status={status}
 			data-expanded={expanded}
-			className="rounded-sm border border-border-default bg-container-elevated-bg"
+			className={cn(
+				"rounded-sm border border-border-default bg-container-elevated-bg",
+				contentWidth && CONTENT_WIDTH_BREAKOUT,
+			)}
 		>
 			<button
 				ref={toggleRef}
@@ -64,7 +69,10 @@ export function ToolCard({
 				data-testid="tool-card-toggle"
 				aria-expanded={expanded}
 				onClick={toggle}
-				className="flex w-full cursor-pointer select-none items-center gap-4 px-8 py-4 text-left tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary"
+				className={cn(
+					"flex w-full cursor-pointer select-none items-center gap-4 px-8 py-4 text-left tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary",
+					contentWidth && "[contain:inline-size]",
+				)}
 			>
 				{status === "running" ? (
 					<Loader2 className="size-12 shrink-0 animate-spin text-text-muted motion-reduce:animate-none" />

@@ -1,4 +1,5 @@
 type Mermaid = typeof import("mermaid")["default"];
+type MermaidConfig = Parameters<Mermaid["initialize"]>[0];
 
 let mermaidPromise: Promise<Mermaid> | null = null;
 let idCounter = 0;
@@ -35,6 +36,17 @@ function themeVariables(): Record<string, string> {
 	};
 }
 
+function naturalSize(defaults: MermaidConfig): MermaidConfig {
+	return Object.fromEntries(
+		Object.entries(defaults)
+			.filter(
+				([, diagram]) =>
+					typeof diagram === "object" && diagram !== null && "useMaxWidth" in diagram,
+			)
+			.map(([kind]) => [kind, { useMaxWidth: false }]),
+	);
+}
+
 export interface MermaidRenderResult {
 	svg?: string;
 	error?: string;
@@ -45,6 +57,7 @@ export async function renderMermaid(source: string): Promise<MermaidRenderResult
 	try {
 		const mermaid = await loadMermaid();
 		mermaid.initialize({
+			...naturalSize(mermaid.mermaidAPI.defaultConfig),
 			startOnLoad: false,
 			securityLevel: "strict",
 			theme: "base",

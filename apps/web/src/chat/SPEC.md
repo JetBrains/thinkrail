@@ -163,7 +163,7 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   remount, so a code block re-renders from the highlight cache (highlighted at once on a hit), a Mermaid diagram redraws, and focus
   or a selection inside them is lost; kept blocks hold substrings of older stream texts, about 1 MB for a
   110k-char message, until the row unmounts.
-- **Configurable transcript measure** — the host-synchronized `chatLineWidth` (40–240, default 120)
+- **Configurable transcript measure** — the host-synchronized `chatLineWidth` (40–240, default 80)
   is an approximate CSS `ch` text measure because chat retains its proportional reading font. `ChatView`,
   the store-aware integration boundary, applies it to one centered outer column shared by every transcript
   row, the stream indicator, and sticky activity breadcrumbs; ordinary row gutters sit outside the measure,
@@ -175,6 +175,22 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   visible viewport and clips on the left; only assistant/tool content uses the full measure. Code blocks
   and tables retain their own inner scrolling. This changes presentation only:
   canonical turns and the props-driven row renderers never acquire settings state.
+- **Content-width blocks** — with Fit to pane on, a block whose content is wider than the column grows past
+  it: the frame of a renderer registered `width: "content"` (`visualize`, `bash`, `read`, `edit`, `write`;
+  the `ToolCard` root, the routine step body or the bare row) and the tables and fenced code of assistant
+  text (`BlockMarkdown`'s `wideBlocks`; user bubbles and other Markdown hosts stay column-bound). One CSS
+  utility (`contentWidth.ts`) sizes them: `max-content`, at least the parent's width, at most the parent's
+  width plus the transcript's free space (`100cqw − --chat-transcript-width`), centered on the parent. A
+  row's direct child thus spans at most the pane minus both gutters, centered on the column; an indented
+  parent (an activity step) keeps its inset out of the cap, so no block crosses a pane gutter. Wider
+  content scrolls inside the block. The bounded scroller is the inline-size container, so `cqw` excludes
+  its scrollbar; `--chat-transcript-width` is a registered `<length-percentage>` (`tokens.css`), so its
+  `ch` resolves once at `ChatView` and a block in a code font reads the rows' width. A content-width card's
+  header is inline-size-contained, so a long summary never sizes the card. Fit to pane off keeps every
+  block at column width. Content without intrinsic width (Monaco, iframe and diff file previews) stays
+  column width; growing it would take JS measurement. *Rejected:* #732's ResizeObserver-driven gutter
+  (duplicated the CSS, drifted at its breakpoint), a full-pane-width row with an inner text measure
+  (touches every row type and the virtualized list's measurement), per-tool-name width lists.
 - **Message copy** — plain user bubbles and the **round's concluding assistant answer** carry a
   hover-revealed (`group`/`opacity-0 group-hover:opacity-100`) **`CopyButton`** (`chat/CopyButton.tsx`,
   `data-testid="chat-copy"`) that copies the full message **source** — `userText(message.content)` for a
@@ -424,6 +440,8 @@ remain app-local. A registration is:
 - a **`summary`** — a pure one-liner for collapsed headers and activity-step rows,
 - a **`chrome`** — `"card"` (default, the `ToolCard` frame) or `"bare"` (owns its frame; for
   interactive/primary tools like `ask_user_question`),
+- a **`width`** — `"column"` (default) or `"content"` (the frame may grow past the transcript column; see
+  *Content-width blocks*), read through `getToolWidth`,
 - **`interactive`** (fill `ToolRenderProps.interaction`, below) and **`dock`** (with `interactive`: a call
   the host awaits renders in the interaction dock, the transcript row as its stub — read through
   `isDockedTool`),
@@ -435,7 +453,7 @@ remain app-local. A registration is:
   primary card renders expanded once complete, e.g. `visualize`). Read through the single
   **`resolveProminence`** seam — where a per-user override map (settings) can plug in later.
 
-Every registry read (renderer, summary, chrome, prominence) goes through one resolver: the exact tool
+Every registry read (renderer, summary, chrome, width, prominence) goes through one resolver: the exact tool
 name, else the longest app-local prefix registration (`registerToolRendererPrefix` — today only `mcp__`,
 because pi names MCP tools per server), else the default. Exact names always win, an empty prefix never
 matches, and extension descriptors stay exact-name only.

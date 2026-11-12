@@ -1454,7 +1454,13 @@ export function isQuestionPanelHeight(value: unknown): value is number {
 	);
 }
 
-export const LINE_WIDTH_COLUMNS = { min: 40, max: 240, default: 120 } as const;
+export type LineWidthKind = "chat" | "file";
+
+export const LINE_WIDTH_COLUMNS = {
+	min: 40,
+	max: 240,
+	default: { chat: 80, file: 120 } satisfies Record<LineWidthKind, number>,
+} as const;
 
 export function isLineWidth(value: unknown): value is number {
 	return (
@@ -1859,8 +1865,8 @@ export const DEFAULT_CONFIG: AppConfig = {
 	terminalWindowsShell: "auto",
 	composerGrowthLimit: "half-chat",
 	questionPanelHeight: QUESTION_PANEL_HEIGHT_PERCENT.default,
-	chatLineWidth: LINE_WIDTH_COLUMNS.default,
-	fileLineWidth: LINE_WIDTH_COLUMNS.default,
+	chatLineWidth: LINE_WIDTH_COLUMNS.default.chat,
+	fileLineWidth: LINE_WIDTH_COLUMNS.default.file,
 	chatLineWidthBounded: true,
 	fileLineWidthBounded: true,
 	voiceInputEnabled: true,

@@ -48,6 +48,8 @@ export type ToolChrome = "card" | "bare";
 
 export type ToolProminence = "routine" | "primary";
 
+export type ToolWidth = "column" | "content";
+
 export type ToolRenderer = (props: ToolRenderProps) => ReactNode;
 
 export type ToolSummary = (props: ToolRenderProps, t: Translator) => string;
@@ -56,6 +58,7 @@ export interface ToolRegistrationOptions {
 	summary?: ToolSummary;
 	chrome?: ToolChrome;
 	prominence?: ToolProminence;
+	width?: ToolWidth;
 	defaultExpanded?: boolean;
 	interactive?: boolean;
 	dock?: boolean;

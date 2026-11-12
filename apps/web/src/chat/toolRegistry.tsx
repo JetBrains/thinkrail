@@ -5,6 +5,7 @@ import {
 	type ToolRegistrationOptions,
 	type ToolRenderer,
 	type ToolRenderProps,
+	type ToolWidth,
 	toolValueText,
 } from "@thinkrail/extension-api/web";
 import type { Translator } from "@thinkrail/locales/react";
@@ -66,6 +67,10 @@ export function isDockedTool(toolName: string): boolean {
 
 export function getToolChrome(toolName: string): ToolChrome {
 	return resolveRegistration(toolName)?.chrome ?? "card";
+}
+
+export function getToolWidth(toolName: string): ToolWidth {
+	return resolveRegistration(toolName)?.width ?? "column";
 }
 
 export interface ResolvedProminence {

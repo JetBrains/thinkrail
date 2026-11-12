@@ -732,7 +732,7 @@ const ChatTranscript = forwardRef<
 										className={cn(
 											"h-full min-h-0 overflow-x-hidden [overflow-anchor:none]",
 											chatLineWidthBounded
-												? "w-full"
+												? "w-full [container-type:inline-size]"
 												: "w-[var(--chat-transcript-width)] min-w-full max-w-none",
 										)}
 										followOutput={followOutput}
