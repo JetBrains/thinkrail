@@ -68,6 +68,8 @@ export function TreeRow({
 			data-active={active ? true : undefined}
 			data-status={dataStatus}
 			data-viewed={dataViewed ? true : undefined}
+			aria-expanded={kind === "dir" ? Boolean(expanded) : undefined}
+			aria-current={active ? "true" : undefined}
 			onClick={onClick}
 			onDoubleClick={onDoubleClick}
 			onContextMenu={onContextMenu}
