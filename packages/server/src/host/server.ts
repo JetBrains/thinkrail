@@ -226,6 +226,7 @@ import {
 	refreshOpenProjectReviews,
 	stampSessionActivity,
 } from "./settledLifecycle";
+import { type SlowConsumerError, sendOrQuarantine, settleSlowConsumer } from "./socketSend";
 import { resolveSubagentMaxConcurrent, resolveSubagentsEnabled } from "./subagentPolicy";
 import { taskObservation } from "./taskAnalytics";
 import {
@@ -267,6 +268,7 @@ export interface CreateServerOptions {
 		check(): Promise<HostUpdateNotice | null>;
 		run(): Promise<void>;
 	};
+	outboundBufferLimitBytes?: number;
 }
 
 export interface RunningServer {
@@ -282,6 +284,7 @@ interface SocketData {
 	/** Present only on a `/speech` socket, which bypasses the JSON request wire entirely. */
 	speech?: SpeechRelay;
 	speechSocket?: true;
+	slowSince?: number;
 }
 
 const CLIENT_REPLAY_RETENTION_MS = 60_000;
@@ -309,19 +312,8 @@ function formatReplayLoad(load: ReplayLoad): string {
 		.join(", ");
 }
 
-function sendReply(
-	ws: Bun.ServerWebSocket<SocketData>,
-	frame: string,
-	methodDiagnostic: string,
-): void {
-	if (ws.send(frame) !== 0) return;
-	if (ws.readyState === WebSocket.OPEN) {
-		log.warn(
-			`${methodDiagnostic} reply dropped with ${ws.getBufferedAmount()} bytes buffered; closing the socket`,
-		);
-	}
-	ws.close();
-}
+const warnSlowConsumer = (message: string, error: SlowConsumerError): void =>
+	log.warn(message, error);
 
 function countMethods(methods: readonly string[]): string {
 	const counts = new Map<string, number>();
@@ -364,6 +356,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		appVersion,
 		analytics,
 		hostUpdate,
+		outboundBufferLimitBytes = WS_OUTBOUND_BUFFER_LIMIT_BYTES,
 	} = options;
 
 	setSessionProjectResolver((workspaceId) => {
@@ -478,7 +471,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		},
 		websocket: {
 			maxPayloadLength: WS_MAX_FRAME_BYTES,
-			backpressureLimit: WS_OUTBOUND_BUFFER_LIMIT_BYTES,
+			backpressureLimit: outboundBufferLimitBytes,
 			open(ws) {
 				if (ws.data.speechSocket) {
 					ws.data.speech = createSpeechRelay(ws);
@@ -632,7 +625,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 						},
 						methodDiagnostic,
 					);
-					sendReply(ws, response, methodDiagnostic);
+					sendOrQuarantine(ws, response, `${methodDiagnostic} reply`, warnSlowConsumer);
 				} catch (err) {
 					const error = err instanceof Error ? err.message : String(err);
 					if (err instanceof RequestReplayOverflowError && err.load) {
@@ -646,11 +639,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 						error,
 						...(code ? { errorCode: code } : {}),
 					});
-					sendReply(ws, reply, methodDiagnostic);
+					sendOrQuarantine(ws, reply, `${methodDiagnostic} reply`, warnSlowConsumer);
 				}
 			},
 			drain(ws) {
 				if (ws.data.speechSocket) return;
+				if (settleSlowConsumer(ws) !== "healthy") return;
 				if (sockets.get(ws.data.clientKey) !== ws) return;
 				terminalBackpressured.delete(ws.data.clientKey);
 				resumeClientTerminals(ws.data.clientKey);
@@ -674,6 +668,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 
 	const backpressureReconciler = setInterval(() => {
+		for (const socket of sockets.values()) settleSlowConsumer(socket);
 		const drained = drainedClientKeys(terminalBackpressured, (clientKey) =>
 			sockets.get(clientKey)?.getBufferedAmount(),
 		);
@@ -686,13 +681,39 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 	}, BACKPRESSURE_RECONCILE_MS);
 
+	const fanOut = (
+		channel: string,
+		frame: string,
+		admits: (socket: Bun.ServerWebSocket<SocketData>) => boolean,
+	): void => {
+		for (const socket of sockets.values()) {
+			if (socket.isSubscribed(channel) && admits(socket)) {
+				sendOrQuarantine(socket, frame, `${channel} push`, warnSlowConsumer);
+			}
+		}
+	};
+
+	const publishScoped = (
+		channel: string,
+		data: unknown,
+		scope: { workspaceId?: string; projectId?: string; belowProtocol?: number } = {},
+	) => {
+		const aboutChats =
+			(scope.workspaceId !== undefined && isChatWorkspaceId(scope.workspaceId)) ||
+			(scope.projectId !== undefined && isChatsContainerId(scope.projectId));
+		const floor = scope.belowProtocol ?? 0;
+		fanOut(
+			channel,
+			JSON.stringify({ channel, data }),
+			({ data: { protocolVersion } }) =>
+				protocolVersion >= floor && (!aboutChats || seesChats(protocolVersion)),
+		);
+	};
+
 	const publishHostUpdate = (notice: HostUpdateNotice): void => {
 		if (!hostUpdateActive) return;
 		hostUpdateNotice = notice;
-		server.publish(
-			WS_CHANNELS.hostUpdateAvailable,
-			JSON.stringify({ channel: WS_CHANNELS.hostUpdateAvailable, data: notice }),
-		);
+		publishScoped(WS_CHANNELS.hostUpdateAvailable, notice);
 	};
 
 	const clearHostUpdateTimer = (): void => {
@@ -754,7 +775,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setTerminalPublisher((clientKey, channel, data) => {
 		if (terminalBackpressured.has(clientKey)) return "unavailable";
 		const ws = sockets.get(clientKey);
-		if (!ws) return "unavailable";
+		if (!ws || ws.data.slowSince !== undefined) return "unavailable";
 		try {
 			const delivery = terminalDeliveryForSendStatus(ws.send(JSON.stringify({ channel, data })));
 			if (delivery !== "delivered") terminalBackpressured.add(clientKey);
@@ -769,22 +790,25 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setSearchTextPublisher((clientKey, batch) => {
 		const ws = sockets.get(clientKey);
 		if (!ws || ws.data.protocolVersion < TEXT_SEARCH_PROTOCOL_VERSION) return;
-		try {
-			ws.send(JSON.stringify({ channel: WS_CHANNELS.searchTextResults, data: batch }));
-		} catch {
-			ws.close();
-		}
+		sendOrQuarantine(
+			ws,
+			JSON.stringify({ channel: WS_CHANNELS.searchTextResults, data: batch }),
+			`${WS_CHANNELS.searchTextResults} push`,
+			warnSlowConsumer,
+		);
 	});
 
 	setFeedbackPublisher((clientKey) => {
 		const ws = sockets.get(clientKey);
 		if (!ws || ws.data.protocolVersion < FEEDBACK_SURVEY_PROTOCOL_VERSION) return false;
-		try {
-			return ws.send(JSON.stringify({ channel: WS_CHANNELS.feedbackInterview, data: {} })) !== 0;
-		} catch {
-			ws.close();
-			return false;
-		}
+		return (
+			sendOrQuarantine(
+				ws,
+				JSON.stringify({ channel: WS_CHANNELS.feedbackInterview, data: {} }),
+				`${WS_CHANNELS.feedbackInterview} push`,
+				warnSlowConsumer,
+			) !== "dropped"
+		);
 	});
 
 	const githubStarSocket = (clientKey: string) => {
@@ -796,14 +820,14 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		ask: (clientKey, ask) => {
 			const ws = githubStarSocket(clientKey);
 			if (!ws) return false;
-			try {
-				return (
-					ws.send(JSON.stringify({ channel: WS_CHANNELS.feedbackGithubStar, data: ask })) !== 0
-				);
-			} catch {
-				ws.close();
-				return false;
-			}
+			return (
+				sendOrQuarantine(
+					ws,
+					JSON.stringify({ channel: WS_CHANNELS.feedbackGithubStar, data: ask }),
+					`${WS_CHANNELS.feedbackGithubStar} push`,
+					warnSlowConsumer,
+				) !== "dropped"
+			);
 		},
 	});
 
@@ -855,33 +879,6 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setExtensionSettingsResolver(() => getConfig().extensionSettings ?? {});
 	setDisabledPackagesResolver(() => new Set(getConfig().disabledPackages));
 
-	/**
-	 * A push about a chat without a project, or its container, reaches only sockets that know the
-	 * kind; everything else broadcasts. One sender for every id-carrying channel.
-	 */
-	const publishScoped = (
-		channel: string,
-		data: unknown,
-		scope: { workspaceId?: string; projectId?: string; belowProtocol?: number },
-	) => {
-		const frame = JSON.stringify({ channel, data });
-		const aboutChats =
-			(scope.workspaceId !== undefined && isChatWorkspaceId(scope.workspaceId)) ||
-			(scope.projectId !== undefined && isChatsContainerId(scope.projectId));
-		const floor = scope.belowProtocol ?? 0;
-		if (floor === 0 && !aboutChats) {
-			server.publish(channel, frame);
-			return;
-		}
-		for (const socket of sockets.values()) {
-			if (socket.data.protocolVersion < floor) continue;
-			if (aboutChats && !seesChats(socket.data.protocolVersion)) continue;
-			try {
-				socket.send(frame);
-			} catch {}
-		}
-	};
-
 	setProjectPublisher((project) => {
 		const capture = additionalCapture();
 		if (capture) {
@@ -913,8 +910,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			event.kind === "changed"
 				? WS_CHANNELS.workspaceCreationChanged
 				: WS_CHANNELS.workspaceCreationRemoved;
-		const data = event.kind === "changed" ? event.creation : event.removed;
-		server.publish(channel, JSON.stringify({ channel, data }));
+		publishScoped(channel, event.kind === "changed" ? event.creation : event.removed);
 	});
 
 	const publishWorkspaceEvent = (event: WorkspaceLifecycleEvent) => {
@@ -964,24 +960,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	};
 	primeUserPiSettings();
 	for (const workspace of listAllWorkspaceRecords()) primeProjectPiSettings(workspace.worktreePath);
-	setPiPackagesPublisher(() =>
-		server.publish(
-			WS_CHANNELS.packagesChanged,
-			JSON.stringify({ channel: WS_CHANNELS.packagesChanged, data: {} }),
-		),
-	);
+	setPiPackagesPublisher(() => publishScoped(WS_CHANNELS.packagesChanged, {}));
 	const stopUserMcpWatch = watchUserMcpConfig({ onSettingsChanged: handlePiSettingsFileChanged });
-	const nudge = (channel: WsChannel) => () =>
-		server.publish(channel, JSON.stringify({ channel, data: {} }));
+	const nudge = (channel: WsChannel) => () => publishScoped(channel, {});
 	const stopLocalesWatch = watchLocalLocales({ onChange: nudge(WS_CHANNELS.localesChanged) });
 	const stopThemesWatch = watchUserThemes({ onChange: nudge(WS_CHANNELS.themesChanged) });
 	const stopFontsWatch = watchUserFonts({ onChange: nudge(WS_CHANNELS.fontsChanged) });
-	setSpeechPublisher((status) =>
-		server.publish(
-			WS_CHANNELS.speechChanged,
-			JSON.stringify({ channel: WS_CHANNELS.speechChanged, data: status }),
-		),
-	);
+	setSpeechPublisher((status) => publishScoped(WS_CHANNELS.speechChanged, status));
 	void initSpeech().catch((err) => log.warn("voice input state could not be read", err));
 	setWatchPublisher(publishFsChanged);
 	setSkillPathClassifier(isProjectSkillPath);
@@ -1003,19 +988,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 
 	setReviewPublisher((payload) => {
-		server.publish(
-			WS_CHANNELS.reviewChanged,
-			JSON.stringify({
-				channel: WS_CHANNELS.reviewChanged,
-				data: markClientStale(payload, payload.workspaceId),
-			}),
-		);
+		publishScoped(WS_CHANNELS.reviewChanged, markClientStale(payload, payload.workspaceId));
 	});
 	setReviewFailedPublisher((payload) => {
-		server.publish(
-			WS_CHANNELS.reviewFailed,
-			JSON.stringify({ channel: WS_CHANNELS.reviewFailed, data: payload }),
-		);
+		publishScoped(WS_CHANNELS.reviewFailed, payload);
 	});
 	setReviewCommentHandler((sessionId, commentId, note) => {
 		const capture = additionalCapture();
@@ -1036,10 +1012,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	reconcilePendingReviewsOnBoot();
 
 	setSettingsPublisher((config, appliedUpdate) => {
-		server.publish(
-			WS_CHANNELS.settingsChanged,
-			JSON.stringify({ channel: WS_CHANNELS.settingsChanged, data: config }),
-		);
+		publishScoped(WS_CHANNELS.settingsChanged, config);
 		if (applyAdditionalAnalyticsSettings(config, appliedUpdate)) {
 			setupObservation.clear();
 			runObservation.clear();
@@ -1087,9 +1060,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setMcpLoginPublisher((push, ownerClientKey) => {
 		const ws = sockets.get(ownerClientKey);
 		if (!ws) return;
-		try {
-			ws.send(JSON.stringify({ channel: WS_CHANNELS.providerLogin, data: push }));
-		} catch {}
+		sendOrQuarantine(
+			ws,
+			JSON.stringify({ channel: WS_CHANNELS.providerLogin, data: push }),
+			`${WS_CHANNELS.providerLogin} push`,
+			warnSlowConsumer,
+		);
 	});
 
 	setMcpStatusPublisher((snapshot) => {
@@ -1134,33 +1110,22 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 
 	setExtUiPublisher((request, audience) => {
-		const frame = JSON.stringify({ channel: WS_CHANNELS.piExtensionUi, data: request });
 		const workspaceId = getSessionAttribution(request.sessionId);
 		const aboutChat = workspaceId !== undefined && isChatWorkspaceId(workspaceId);
-		if (!audience && !aboutChat) {
-			server.publish(WS_CHANNELS.piExtensionUi, frame);
-			return;
-		}
-		for (const ws of sockets.values()) {
-			if (audience && ws.data.protocolVersion >= audience.belowProtocol) continue;
-			if (aboutChat && !seesChats(ws.data.protocolVersion)) continue;
-			try {
-				ws.send(frame);
-			} catch {}
-		}
+		fanOut(
+			WS_CHANNELS.piExtensionUi,
+			JSON.stringify({ channel: WS_CHANNELS.piExtensionUi, data: request }),
+			({ data: { protocolVersion } }) =>
+				(!audience || protocolVersion < audience.belowProtocol) &&
+				(!aboutChat || seesChats(protocolVersion)),
+		);
 	});
 
 	const publishProviderChanged = () => {
-		server.publish(
-			WS_CHANNELS.providerChanged,
-			JSON.stringify({ channel: WS_CHANNELS.providerChanged, data: {} }),
-		);
+		publishScoped(WS_CHANNELS.providerChanged, {});
 	};
 	setLoginPublisher((push, generation) => {
-		server.publish(
-			WS_CHANNELS.providerLogin,
-			JSON.stringify({ channel: WS_CHANNELS.providerLogin, data: push }),
-		);
+		publishScoped(WS_CHANNELS.providerLogin, push);
 		if (push.frame.kind === "success" && !push.target) publishProviderChanged();
 		trackLoginOutcome(push, generation);
 	});
