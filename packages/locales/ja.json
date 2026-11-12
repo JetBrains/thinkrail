@@ -341,7 +341,7 @@
 	"chat.templateEditor.description": "説明",
 	"chat.templateEditor.descriptionPlaceholder": "このテンプレートの用途",
 	"chat.templateEditor.editTitle": "{{name}}を編集",
-	"chat.templateEditor.invalidName": "名前を空にしたり、「.」で始めたり、「/」「\\」「:」やヌルバイトを含めたりすることはできません。",
+	"chat.templateEditor.invalidName": "名前を空にしたり、「.」で始めたり、「/」「\\」「:」やヌルバイトを含めたり、CON、NUL、COM1 などの Windows のデバイス名にしたりすることはできません。",
 	"chat.templateEditor.name": "名前",
 	"chat.templateEditor.namePlaceholder": "standup",
 	"chat.templateEditor.newTitle": "新規テンプレート",
