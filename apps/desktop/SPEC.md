@@ -373,8 +373,9 @@ before `index.ts`, so its `open-url` listener exists before `electrobun/main` in
 that delivers a cold-launch URL ([[electrobun-compatibility]]); the bootstrap holds requests until the first
 `dom-ready`, after which each one unminimizes, shows and activates the window and is sent as a
 `NativeOpenFileRequest` over the `openFile` webview message. The preload queues any that arrive before the web
-client subscribes. The web client opens only files inside already-open projects' workspaces, see
-[[submodule-web-shell]]; containment, `.git` and symlink escapes stay the host's `fs.readFile` checks.
+client subscribes. The web client opens only files inside already-open projects' workspaces, which the host
+matches on real paths, see [[submodule-web-shell]]; containment, `.git` and symlink escapes stay the host's
+`fs.readFile` checks.
 
 A desktop preload sends typed, one-way route, local-preference, page-zoom, and title-bar double-click
 messages, and is the only writer of the window-chrome CSS properties described above. It wraps

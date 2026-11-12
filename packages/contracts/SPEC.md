@@ -393,6 +393,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   Pull request segments derive their next action from, independent of whether a review exists),
   **`ExistingWorktreeCandidate`** (a `workspace.listExisting` row: absolute `path` + `branch`, or a
   `detached` row the chooser disables),
+  **`WorkspacePathMatch`** (a `workspace.resolvePath` answer: `workspaceId`, `projectId`, and a POSIX
+  `relativePath` contained in that workspace),
   `FileNode` (file-tree node; worktree-relative `/` path, `gitignored` set by the host when git ignores it),
   **`ResourceMeta`** (what a resource's bytes *are*, host-decided and pinned by
   `RESOURCE_META_PROTOCOL_VERSION` = v75: sha-256 `hash` + `byteLength`, both `null` when the resource is
@@ -838,6 +840,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`workspace.listExisting`** (the selected project's unattached Git worktrees, with detached rows
   disabled by status) / **`workspace.openExisting`** (revalidate + register one branch-backed checkout as
   `kind: "external"`, emitting the ordinary `workspace.created`, without mutating Git or disk) /
+  **`workspace.resolvePath`** (`{ path }` → `WorkspacePathMatch | null`, v119,
+  **`WORKSPACE_PATH_RESOLVE_PROTOCOL_VERSION`**: the open workspace that holds an absolute native path, matched
+  on real paths so a symlinked or `/tmp`-style spelling of either side still matches; `null` outside every
+  open workspace and for `..`, `.git` or a root itself — [[submodule-server-workspaces]]) /
   **`workspace.rename`** (`{ id, name }` → the locked updated `Workspace`; managed worktrees only;
   changes the display name while preserving the Git branch + cwd, and broadcasts the ordinary full-snapshot
   `workspace.updated`; `WORKSPACE_RENAME_PROTOCOL_VERSION` pins its v55 introduction so a newer client with

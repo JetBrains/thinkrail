@@ -46,7 +46,6 @@ import {
 	selectLayoutResourcePlacement,
 	selectLayoutTabPlaced,
 	selectLayoutTabPlacement,
-	selectOpenWorkspaceForPath,
 	selectProjectIsRunning,
 	selectProjectNeedsAttention,
 	selectReadyCompletionAck,
@@ -1062,53 +1061,5 @@ describe("the first prompt of an unnamed chat", () => {
 			s1: "Fix the login redirect",
 			s4: "Plan this one",
 		});
-	});
-});
-
-describe("the open workspace that owns an absolute path", () => {
-	const row = (
-		id: string,
-		projectId: string,
-		worktreePath: string,
-		extra: Partial<Workspace> = {},
-	) => ({ ...workspace, id, projectId, worktreePath, ...extra }) satisfies Workspace;
-	const state = (extra: Partial<Parameters<typeof selectOpenWorkspaceForPath>[0]> = {}) => ({
-		projects,
-		workspaces: {
-			p1: [row("one", "p1", "/one"), row("nested", "p1", "/one/packages/app")],
-			p2: [row("two", "p2", "/two"), row("doomed", "p2", "/two/doomed", { deletionPending: true })],
-			closed: [row("closed", "closed", "/closed")],
-		},
-		removedWorkspaceIds: {},
-		activeWorkspaceId: null,
-		...extra,
-	});
-	const owner = (path: string, extra?: Parameters<typeof state>[0]) =>
-		selectOpenWorkspaceForPath(state(extra), path)?.id ?? null;
-
-	test("picks the most specific root and never a same-prefix sibling", () => {
-		expect(owner("/one/packages/app/src/a.ts")).toBe("nested");
-		expect(owner("/one/src/a.ts")).toBe("one");
-		expect(owner("/one-other/a.ts")).toBeNull();
-	});
-
-	test("resolves dot segments before matching, so .. cannot borrow a root", () => {
-		expect(owner("/one/packages/../src/a.ts")).toBe("one");
-		expect(owner("/one/../closed/a.ts")).toBeNull();
-	});
-
-	test("skips closed projects, deleting or removed workspaces and the root itself", () => {
-		expect(owner("/closed/a.ts")).toBeNull();
-		expect(owner("/two/doomed/a.ts")).toBe("two");
-		expect(owner("/one/packages/app/a.ts", { removedWorkspaceIds: { nested: true } })).toBe("one");
-		expect(owner("/one")).toBeNull();
-	});
-
-	test("prefers the active workspace between equal roots", () => {
-		const twins = {
-			workspaces: { p1: [row("a", "p1", "/one"), row("b", "p1", "/one/")] },
-		};
-		expect(owner("/one/a.ts", twins)).toBe("a");
-		expect(owner("/one/a.ts", { ...twins, activeWorkspaceId: "b" })).toBe("b");
 	});
 });

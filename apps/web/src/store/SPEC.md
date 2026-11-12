@@ -852,10 +852,7 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   project from those canonical ids and collections; derived active-project state is never stored separately.
 - **Public surface (barrel):** `useAppStore`; `selectActiveWorkspace`, `selectWorkspaceById` (the
   one lookup for "the workspace with this id" — `selectActiveWorkspace` is it applied to the active id, and
-  `openFileInTab`/`ChatView` read the worktree root through it), `selectOpenWorkspaceForPath` (the one
-  "which loaded workspace of an open project owns this absolute path" rule: `pathWithinRoot` containment,
-  the most specific root, the active workspace between equal roots, never a deleting or removed workspace
-  or the root itself — `panels/workspaceForPath` adds the loading),
+  `openFileInTab`/`ChatView` read the worktree root through it),
   `selectCanRenameChat` (the one protocol-capability derivation shared by ChatView and shell controls),
   `selectWorkspaceTerminals` (the host-owned terminal catalog; the layout visibility gate derives mounted
   identities from its supplied document + local attention, while host attachment remains exclusive per terminal),
@@ -914,7 +911,7 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`/`WorkspaceFsChangedPayload`/`LayoutPreset`/`AppConfig`/`ThemeId`;
   `DEFAULT_CONFIG` for the pre-welcome default; `PiEvent`/`LoginFrame`, **type-only**); `lib` (the shared
   path + array + canonical-message primitives — `normalizePath`/`isAbsolutePath` for
-  `matchesWorktreePath`, `pathWithinRoot` for `selectOpenWorkspaceForPath`, `shallowEqualArrays` for the snapshot-identity guard, `userText` plus the skill
+  `matchesWorktreePath`, `shallowEqualArrays` for the snapshot-identity guard, `userText` plus the skill
   invocation parser/matcher for user-message echo reconciliation, the MCP attention/active predicates; a
   leaf, so the edge adds no cycle); `chat`
   (`ChatTurn`/`ToolResultState`/`AttachedImage`, **type-only**); `auth` (`LoginState`, **type-only**); `transport`

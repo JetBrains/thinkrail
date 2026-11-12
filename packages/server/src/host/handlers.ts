@@ -248,6 +248,7 @@ import {
 	reclaimWorktree,
 	recordWorkspaceActivity,
 	renameWorkspace,
+	resolveWorkspacePath,
 	retryWorkspaceCreation,
 	settleWorkspace,
 	setWorkspaceDiffBase,
@@ -737,6 +738,7 @@ const handlers: WsHandlers = {
 	"workspace.rename": (p) => {
 		return renameWorkspace(p.id, p.name).workspace;
 	},
+	"workspace.resolvePath": (p) => resolveWorkspacePath(p.path),
 	"workspace.list": async (p, ctx) => {
 		if (!seesChats(ctx.protocolVersion) && isChatsContainerId(p.projectId)) return [];
 		const rows = (

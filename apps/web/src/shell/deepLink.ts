@@ -1,8 +1,7 @@
 import type { NativeDeepLinkBridge, NativeOpenFileRequest } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
-import { pathWithinRoot } from "../lib";
 import { openFileAtLine } from "../panels/openTabs";
-import { resolveOpenWorkspaceForPath } from "../panels/workspaceForPath";
+import { resolveWorkspaceFile } from "../panels/workspaceForPath";
 import { toast, useAppStore } from "../store";
 import { paletteNavigator } from "./paletteNavigation";
 
@@ -46,21 +45,21 @@ export async function openDeepLink(
 	navigateToWorkspace = paletteNavigator.navigateToWorkspace,
 ): Promise<void> {
 	await waitForWelcome();
-	const workspace = await resolveOpenWorkspaceForPath(request.file);
-	const path = workspace ? pathWithinRoot(request.file, workspace.worktreePath) : null;
-	if (!workspace || !path) {
+	const found = await resolveWorkspaceFile(request.file);
+	if (!found) {
 		toast.error(t("shell.deepLink.notInProject", { path: request.file }));
 		return;
 	}
-	if (!(await navigateToWorkspace(workspace))) return;
+	const { workspaceId, projectId, relativePath } = found;
+	if (!(await navigateToWorkspace({ id: workspaceId, projectId }))) return;
 	const column = position(request.column);
 	await openFileAtLine(
-		workspace.id,
-		path,
+		workspaceId,
+		relativePath,
 		{ line: position(request.line) ?? 1, ...(column === undefined ? {} : { column }) },
 		"keep",
 	);
-	if (!fileTabOpen(workspace.id, path)) {
+	if (!fileTabOpen(workspaceId, relativePath)) {
 		toast.error(t("shell.deepLink.openFailed", { path: request.file }));
 	}
 }

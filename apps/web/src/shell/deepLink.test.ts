@@ -1,9 +1,10 @@
 import { afterAll, beforeEach, expect, mock, test } from "bun:test";
-import type {
-	NativeDeepLinkBridge,
-	NativeOpenFileRequest,
-	Project,
-	Workspace,
+import {
+	type NativeDeepLinkBridge,
+	type NativeOpenFileRequest,
+	PROTOCOL_VERSION,
+	type Project,
+	type Workspace,
 } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 
@@ -23,6 +24,12 @@ mock.module("../transport", () => ({
 	...actualTransport,
 	getTransport: () => ({
 		request: (method: string, params: { path?: string }) => {
+			if (method === "workspace.resolvePath" && params.path) {
+				const relativePath = params.path.startsWith("/repo/") ? params.path.slice(6) : "";
+				return Promise.resolve(
+					relativePath ? { workspaceId: "w-default", projectId: "p1", relativePath } : null,
+				);
+			}
 			if (method === "workspace.list") return Promise.resolve([defaultRow]);
 			if (method === "fs.readFile" && params.path) {
 				reads.push(params.path);
@@ -54,7 +61,11 @@ beforeEach(() => {
 	reads.length = 0;
 	entered.length = 0;
 	useAppStore.setState(initial, true);
-	useAppStore.setState({ projects: [project], welcomeGeneration: 1 });
+	useAppStore.setState({
+		projects: [project],
+		protocolVersion: PROTOCOL_VERSION,
+		welcomeGeneration: 1,
+	});
 });
 afterAll(() => useAppStore.setState(initial, true));
 
