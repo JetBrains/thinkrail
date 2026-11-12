@@ -5,6 +5,7 @@ status: draft
 title: images — image bytes off the WebSocket
 parent: module-server
 depends-on: [module-contracts]
+tags: [public-surface-checked]
 ---
 
 ## Responsibility
@@ -42,7 +43,9 @@ looped reconnects; see the host SPEC's outbound-limit bullet.
     - **The cache is only a cache.** An injected source seam (`setImageSource`) answers misses from
       the live session, and says whether a session is still servable.
     - `forgetImageSession(sessionId)` drops a deleted chat's entries.
-    - `resetImages()` clears everything when the server stops.
+    - `resetImages()` clears everything when the server stops. Its `cacheLimitChars` option exists for
+      tests.
+    - `imageRefHash(block)` exposes the memoized hash, which the source's live lookup compares against.
   - **`serveImage(pathname)`** behaves as follows:
     - It validates a pi-session-id-shaped segment and a 64-hex sha, and ignores the query string
       (Retry's cache-buster).
@@ -58,9 +61,7 @@ looped reconnects; see the host SPEC's outbound-limit bullet.
   - **`imageDimensions(base64)`** reads the PNG/JPEG/GIF/WebP header from at most 256 KiB. The
     oversized-image guard in `agent` shares it.
 - **Public surface (barrel):** `projectImages`, `imageDimensions`, `Dimensions`, `setImageSource`,
-  `ImageSource`, `ImageBlock`, `forgetImageSession`, `resetImages` (its `cacheLimitChars` option exists
-  for tests), `serveImage`, and `imageRefHash` (the memoized hash the source's live lookup compares
-  against).
+  `ImageSource`, `ImageBlock`, `imageRefHash`, `forgetImageSession`, `resetImages`, `serveImage`.
 - **Allowed deps:** `contracts` (`IMAGES_ROUTE`, `ACCEPTED_IMAGE_TYPES`, `WireImage`), `log`, and Node
   `crypto`.
 - **Forbidden:**
