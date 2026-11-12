@@ -59,11 +59,24 @@ export interface StampedHeading {
 	hidden: boolean;
 }
 
+const TEXT_NODE = 3;
+const ELEMENT_NODE = 1;
+
+// A heading's label as rendered: its text, with each image read as its alt text,
+// so `# ![Overview](diagram.png)` is "Overview" rather than an empty heading.
+function renderedLabel(node: Node): string {
+	if (node.nodeType === TEXT_NODE) return node.nodeValue ?? "";
+	if (node.nodeType === ELEMENT_NODE && (node as Element).tagName === "IMG") {
+		return (node as Element).getAttribute("alt") ?? "";
+	}
+	return Array.from(node.childNodes, renderedLabel).join("");
+}
+
 export function stampedHeadings(container: HTMLElement): StampedHeading[] {
 	return Array.from(container.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6")).flatMap(
 		(element) => {
 			const line = Number(element.dataset.mdLineStart);
-			const text = (element.textContent ?? "").replace(/\s+/g, " ").trim();
+			const text = renderedLabel(element).replace(/\s+/g, " ").trim();
 			if (!(line >= 1) || !text) return [];
 			const depth = Number(element.tagName.slice(1));
 			const hidden = closedDetailsAround(element, container).length > 0;

@@ -170,11 +170,14 @@ test("revealSourceLine waits for a document still rendering and reports once it 
 });
 
 interface FakeNode {
+	nodeType: number;
 	tagName: string;
 	parentElement: FakeNode | null;
 	dataset: { mdLineStart?: string };
 	textContent: string;
+	childNodes: unknown[];
 	attributes: Set<string>;
+	getAttribute(name: string): string | null;
 	hasAttribute(name: string): boolean;
 	setAttribute(name: string, value: string): void;
 }
@@ -182,11 +185,14 @@ interface FakeNode {
 function fakeNode(tagName: string, parentElement: FakeNode | null, extra: Partial<FakeNode> = {}) {
 	const attributes = new Set<string>();
 	const node: FakeNode = {
+		nodeType: 1,
 		tagName,
 		parentElement,
 		dataset: {},
 		textContent: "",
+		childNodes: [],
 		attributes,
+		getAttribute: () => null,
 		hasAttribute: (name) => attributes.has(name),
 		setAttribute: (name) => {
 			attributes.add(name);
@@ -196,12 +202,24 @@ function fakeNode(tagName: string, parentElement: FakeNode | null, extra: Partia
 	return node;
 }
 
+function textNode(value: string) {
+	return { nodeType: 3, nodeValue: value };
+}
+
+function imageNode(alt: string | null) {
+	return { ...fakeNode("IMG", null), getAttribute: (name: string) => (name === "alt" ? alt : null) };
+}
+
 function headingTree() {
 	const root = fakeNode("DIV", null);
 	const details = fakeNode("DETAILS", root);
 	const summary = fakeNode("SUMMARY", details);
 	const heading = (tag: string, parent: FakeNode, line: string, text: string) =>
-		fakeNode(tag, parent, { dataset: { mdLineStart: line }, textContent: text });
+		fakeNode(tag, parent, {
+			dataset: { mdLineStart: line },
+			textContent: text,
+			childNodes: [textNode(text)],
+		});
 	const nodes = [
 		heading("H1", root, "4", "  Title\n  one "),
 		heading("H2", root, "", "Unstamped"),
@@ -259,4 +277,24 @@ test("revealSourceLine opens a closed details before scrolling its block", () =>
 	details.parentElement = container as unknown as FakeNode;
 	revealSourceLine(container, 5, () => {})();
 	expect(scrolled).toEqual(["open"]);
+});
+
+test("stampedHeadings reads an image in a heading as its alt text", () => {
+	const root = fakeNode("DIV", null);
+	const link = { ...fakeNode("A", null), childNodes: [imageNode("Diagram")] };
+	const nodes = [
+		fakeNode("H1", root, { dataset: { mdLineStart: "1" }, childNodes: [imageNode("Overview")] }),
+		fakeNode("H2", root, {
+			dataset: { mdLineStart: "3" },
+			childNodes: [textNode("See "), link, textNode(" below")],
+		}),
+		fakeNode("H2", root, { dataset: { mdLineStart: "5" }, childNodes: [imageNode(null)] }),
+		fakeNode("H2", root, { dataset: { mdLineStart: "7" }, childNodes: [textNode("Install")] }),
+	];
+	const container = Object.assign(root, { querySelectorAll: () => nodes }) as unknown as HTMLElement;
+	expect(stampedHeadings(container).map(({ line, text }) => ({ line, text }))).toEqual([
+		{ line: 1, text: "Overview" },
+		{ line: 3, text: "See Diagram below" },
+		{ line: 7, text: "Install" },
+	]);
 });
