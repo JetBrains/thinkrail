@@ -113,13 +113,35 @@ describe("pathWhich", () => {
 		expect(which("idea")).not.toBeNull();
 	});
 
-	test("reads PATH asynchronously, letting other work run before it settles", async () => {
-		let otherWorkRan = false;
-		setImmediate(() => {
-			otherWorkRan = true;
+	test("waits on async directory reads, at most eight at a time, before settling", async () => {
+		const releases: (() => void)[] = [];
+		const listDir = (dir: string) =>
+			new Promise<string[]>((resolve) => {
+				releases.push(() => resolve(dir === second ? ["code"] : []));
+			});
+		const dirs = [...Array.from({ length: 11 }, (_, i) => join(root, `pending-${i}`)), second];
+		const turn = () => new Promise((resolve) => setImmediate(resolve));
+		let settled = false;
+		const scan = pathWhich(["code"], dirs.join(delimiter), listDir).then((which) => {
+			settled = true;
+			return which;
 		});
-		await pathWhich(["code"], Array.from({ length: 32 }, () => second).join(delimiter));
-		expect(otherWorkRan).toBe(true);
+
+		await turn();
+		expect(releases).toHaveLength(8);
+		expect(settled).toBe(false);
+
+		for (const release of releases.splice(0)) release();
+		await turn();
+		expect(releases).toHaveLength(4);
+		expect(settled).toBe(false);
+
+		for (const release of releases.splice(0)) release();
+		await turn();
+		expect(settled).toBe(true);
+		const which = await scan;
+		expect(which("code")).not.toBeNull();
+		expect(which("code")).toBe(Bun.which("code", { PATH: second }) ?? null);
 	});
 
 	test("concurrent editor.list callers share one PATH scan of the live PATH", async () => {
