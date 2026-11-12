@@ -68,7 +68,6 @@ export function TreeRow({
 			data-active={active ? true : undefined}
 			data-status={dataStatus}
 			data-viewed={dataViewed ? true : undefined}
-			// The open/closed and active states are otherwise visual only.
 			aria-expanded={kind === "dir" ? Boolean(expanded) : undefined}
 			aria-current={active ? "true" : undefined}
 			onClick={onClick}
