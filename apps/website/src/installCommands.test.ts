@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { desktopInstallerPlatforms, installCommands, windowsShellLabels } from "./installCommands";
+import {
+	desktopInstallerPlatforms,
+	installCommandFor,
+	installCommands,
+	windowsShellLabels,
+} from "./installCommands";
 
 const INSTALL_PS1_URL = "https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1";
 const RELEASE_DOWNLOAD_URL = "https://github.com/JetBrains/thinkrail/releases/latest/download";
@@ -55,5 +60,16 @@ describe("Windows install commands", () => {
 
 	it("uses the approved Command Prompt label", () => {
 		expect(windowsShellLabels.cmd).toBe("Command Prompt (cmd)");
+	});
+});
+
+describe("installCommandFor", () => {
+	it("offers PowerShell on Windows and the shell script everywhere else", () => {
+		expect(installCommandFor("windows")).toBe(installCommands.windows.powershell);
+		for (const platform of ["macos", "linux", null, undefined] as const) {
+			expect(installCommandFor(platform)).toBe(
+				"curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash",
+			);
+		}
 	});
 });

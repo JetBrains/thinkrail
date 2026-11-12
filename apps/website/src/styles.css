@@ -242,7 +242,8 @@ code {
 	padding: 0.1em 0.35em;
 }
 
-.visually-hidden {
+.visually-hidden,
+.install-launch-titlebar .install-launch-share .install-launch-label {
 	position: absolute;
 	width: 1px;
 	height: 1px;
@@ -959,6 +960,166 @@ p.hero-lede {
 	display: none;
 }
 
+/* Install launcher: command chip + Install (title bar, post row) and the one install popover. */
+
+.install-launch {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+}
+
+.install-launch [hidden] {
+	display: none;
+}
+
+.install-cmd {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	height: 30px;
+	padding: 0 3px 0 10px;
+	border: 1px solid var(--border2);
+	border-radius: 4px;
+	background: var(--container-workspace-bg);
+	color: var(--muted);
+	font-family: var(--font-mono);
+	font-size: 12px;
+	line-height: 1;
+}
+
+code.install-cmd-text {
+	min-width: 0;
+	padding: 0;
+	background: none;
+	color: var(--text);
+	font-size: inherit;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.install-cmd .copy-btn {
+	width: 24px;
+	height: 24px;
+	align-self: center;
+	border: 0;
+	border-radius: 4px;
+	font-size: 14px;
+}
+
+.install-launch-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	gap: 6px;
+	height: 30px;
+	padding: 0 10px 0 12px;
+	border: 0;
+	border-radius: 4px;
+	background: var(--control-primary-bg);
+	color: var(--control-primary-text);
+	font: inherit;
+	font-size: 13px;
+	font-weight: 600;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.install-launch-btn:hover {
+	background: var(--control-primary-bg-hovered);
+}
+
+.install-launch-btn .i {
+	width: 15px;
+	height: 15px;
+}
+
+.install-launch-titlebar .install-launch-share {
+	width: 32px;
+	padding: 0;
+}
+
+.install-launch-share:not(.copied) .i-done,
+.install-launch-share.copied .i:not(.i-done) {
+	display: none;
+}
+
+.install-launch-titlebar .install-cmd {
+	max-width: 340px;
+}
+
+.install-launch-post {
+	margin-top: var(--space-lg);
+}
+
+.install-popover {
+	--install-popover-width: min(420px, calc(100vw - 16px));
+	display: none;
+	width: var(--install-popover-width);
+	max-height: calc(100dvh - 16px);
+	overflow: auto;
+	padding: 14px;
+	border: 1px solid var(--border2);
+	border-radius: 8px;
+	background: var(--chrome);
+	color: var(--text);
+	box-shadow: var(--shadow);
+}
+
+.install-popover:popover-open {
+	display: block;
+}
+
+.install-popover.is-anchored {
+	top: var(--install-popover-top);
+	right: clamp(8px, var(--install-popover-right), calc(100vw - 8px - var(--install-popover-width)));
+	bottom: auto;
+	left: auto;
+	margin: 0;
+	max-height: calc(100dvh - var(--install-popover-top) - 8px);
+}
+
+p.install-popover-title {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px;
+	margin: 0 0 10px;
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.install-popover-title small {
+	color: var(--muted);
+	font-size: 12px;
+	font-weight: 400;
+}
+
+.install-popover-foot {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 16px;
+	margin-top: 12px;
+	padding-top: 10px;
+	border-top: 1px solid var(--border);
+	font-size: 13px;
+}
+
+.install-popover-foot a {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--muted);
+}
+
+.install-popover-foot a:hover {
+	color: var(--text);
+	text-decoration: none;
+}
+
 .install-picker {
 	max-width: 100%;
 }
@@ -989,11 +1150,13 @@ p.hero-lede {
 }
 
 .send-link-done,
-.send-link-btn.copied .send-link-label {
+.send-link-btn.copied .send-link-label,
+.install-launch-share.copied .send-link-label {
 	display: none;
 }
 
-.send-link-btn.copied .send-link-done {
+.send-link-btn.copied .send-link-done,
+.install-launch-share.copied .send-link-done {
 	display: inline;
 }
 
@@ -2087,6 +2250,18 @@ a.tree-row.selected .i {
 
 /* ── Responsive ─────────────────────────────────────────────────────────── */
 
+@media (max-width: 1280px) {
+	.install-launch-titlebar .install-cmd {
+		max-width: 230px;
+	}
+}
+
+@media (max-width: 1080px) {
+	.install-launch-titlebar .install-cmd {
+		display: none;
+	}
+}
+
 @media (max-width: 1180px) {
 	.cols {
 		grid-template-columns: 200px minmax(0, 1fr);
@@ -2719,7 +2894,7 @@ a.tree-row.selected .i {
 /* ── Blog Post Navigation ───────────────────────────────────────────────── */
 
 .blog-post-install {
-	margin-block: var(--space-2xl);
+	margin-top: var(--space-2xl);
 }
 
 .blog-post-nav {

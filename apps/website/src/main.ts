@@ -2,6 +2,7 @@ import { initDownloadThanks } from "./downloadThanks";
 import { deriveEditorTabs } from "./editorTabs";
 import { heroDownloadTarget } from "./heroDownload";
 import { initImageZoom } from "./imageZoom";
+import { installCommandFor } from "./installCommands";
 import { installShareUrl, isMobileDevice, shareInstallLink } from "./installLinkShare";
 import {
 	type BrowserPlatformHints,
@@ -328,10 +329,14 @@ const platformHints: BrowserPlatformHints = {
 	maxTouchPoints: browserNavigator.maxTouchPoints,
 };
 
-const sendLink = document.querySelector<HTMLElement>("[data-send-link]");
-if (sendLink && isMobileDevice(platformHints)) {
-	sendLink.hidden = false;
-	for (const button of sendLink.querySelectorAll<HTMLButtonElement>("[data-share-install-link]")) {
+if (isMobileDevice(platformHints)) {
+	for (const element of document.querySelectorAll<HTMLElement>("[data-install-desktop]")) {
+		element.hidden = true;
+	}
+	for (const element of document.querySelectorAll<HTMLElement>("[data-send-link]")) {
+		element.hidden = false;
+	}
+	for (const button of document.querySelectorAll<HTMLButtonElement>("[data-share-install-link]")) {
 		button.addEventListener("click", async () => {
 			const url = installShareUrl(window.location.href, button.dataset.shareInstallLink ?? "");
 			if ((await shareInstallLink(navigator, url)) !== "copied") return;
@@ -342,6 +347,45 @@ if (sendLink && isMobileDevice(platformHints)) {
 }
 
 const detectedInstallPlatform = detectInstallPlatform(platformHints);
+
+const preferredInstallCommand = installCommandFor(detectedInstallPlatform);
+for (const chip of document.querySelectorAll<HTMLElement>("[data-install-cmd]")) {
+	const text = chip.querySelector<HTMLElement>("[data-install-cmd-text]");
+	if (text) {
+		text.textContent = preferredInstallCommand;
+		text.title = preferredInstallCommand;
+	}
+	chip.querySelector("[data-copy]")?.setAttribute("data-copy", preferredInstallCommand);
+}
+
+const installPopover = document.querySelector<HTMLElement>("[data-install-popover]");
+if (installPopover) {
+	let invoker: HTMLElement | undefined;
+	let open = false;
+	const follow = () => {
+		if (!open || !invoker) return;
+		const rect = invoker.getBoundingClientRect();
+		installPopover.style.setProperty("--install-popover-top", `${rect.bottom + 6}px`);
+		installPopover.style.setProperty(
+			"--install-popover-right",
+			`${window.innerWidth - rect.right}px`,
+		);
+		installPopover.classList.add("is-anchored");
+	};
+	for (const button of document.querySelectorAll<HTMLElement>(
+		`[popovertarget="${installPopover.id}"]`,
+	)) {
+		button.addEventListener("click", () => {
+			invoker = button;
+		});
+	}
+	installPopover.addEventListener("beforetoggle", (event) => {
+		open = event.newState === "open";
+		follow();
+	});
+	window.addEventListener("resize", follow);
+	document.addEventListener("scroll", follow, { capture: true, passive: true });
+}
 
 function applyHeroDownload(architecture: CpuArchitecture | undefined): void {
 	const link = document.querySelector<HTMLAnchorElement>("[data-hero-download]");

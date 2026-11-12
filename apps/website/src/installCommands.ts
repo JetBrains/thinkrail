@@ -58,6 +58,12 @@ export const installCommands = {
 	},
 } as const;
 
+export function installCommandFor(
+	platform: keyof typeof installCommands | null | undefined,
+): string {
+	return platform === "windows" ? powershell : unix;
+}
+
 export const windowsShellLabels = {
 	powershell: "PowerShell",
 	cmd: "Command Prompt (cmd)",

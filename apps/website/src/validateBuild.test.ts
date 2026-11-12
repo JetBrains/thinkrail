@@ -1,49 +1,102 @@
 import { describe, expect, test } from "bun:test";
 import {
+	duplicateIds,
 	relativeLinkTargets,
+	splitSiteHeader,
 	validateAnalyticsPages,
-	validateBlogInstallPickers,
+	validateHeaderInstall,
+	validatePostInstall,
 } from "./validateBuild";
 
 const analyticsRuntime = "data-posthog-project data-gtm-container content_viewed";
 
-describe("validateBlogInstallPickers", () => {
+const downloads = [
+	"thinkrail-desktop-darwin-arm64.dmg",
+	"thinkrail-desktop-windows-x64.zip",
+	"thinkrail-desktop-linux-x64.tar.gz",
+	"thinkrail-desktop-linux-arm64.tar.gz",
+]
+	.map(
+		(asset) =>
+			`<a href="https://github.com/JetBrains/thinkrail/releases/latest/download/${asset}">`,
+	)
+	.join("");
+
+describe("splitSiteHeader", () => {
+	test("separates the first header from the rest of the page", () => {
+		expect(splitSiteHeader("<body><header>a</header><main>b</main></body>")).toEqual({
+			header: "<header>a</header>",
+			body: "<body><main>b</main></body>",
+		});
+		expect(splitSiteHeader("<main>b</main>")).toEqual({ header: "", body: "<main>b</main>" });
+	});
+});
+
+describe("validateHeaderInstall", () => {
+	const path = "index.html";
+	const panel = `<div class="install-popover" popover data-install-popover>${downloads}</div>`;
+
+	test("requires one header install panel offering every desktop download once", () => {
+		expect(validateHeaderInstall(path, `<header>${panel}</header><main></main>`)).toEqual([]);
+		expect(validateHeaderInstall(path, `<header></header><main>${panel}</main>`)).toContain(
+			`${path}: expected one install panel in the site header`,
+		);
+		expect(validateHeaderInstall(path, `<header>${panel}</header><main>${panel}</main>`)).toEqual([
+			`${path}: expected one install panel in the site header`,
+		]);
+		expect(
+			validateHeaderInstall(path, `<header>${panel.replace(downloads, "")}</header>`),
+		).toHaveLength(4);
+	});
+
+	test("ignores the marker's selector in scripts", () => {
+		expect(
+			validateHeaderInstall(
+				path,
+				`<header>${panel}</header><script>q("[data-install-popover]")</script>`,
+			),
+		).toEqual([]);
+	});
+});
+
+describe("validatePostInstall", () => {
 	const path = "blog/article/index.html";
-	const top =
-		'<section data-install-picker="blog-top"><button id="blog-top-macos"></button>Browser UI via command line</section>';
-	const bottom =
-		'<section data-install-picker="blog-bottom"><button id="blog-bottom-macos"></button>Browser UI via command line</section>';
-	const body = '<div class="blog-post-content">Article</div>';
+	const row = '<div class="install-launch" data-install-launcher="post"></div>';
+	const header = `<header class="blog-post-header"><h1>Title</h1>${row}</header>`;
+	const content = '<div class="blog-post-content">Article</div>';
+	const picker =
+		'<section><div data-install-picker="blog">Browser UI via command line</div></section>';
 
-	test("requires one top marker and one bottom marker", () => {
-		expect(validateBlogInstallPickers(path, `${top}${body}${bottom}`)).toEqual([]);
-		expect(
-			validateBlogInstallPickers(path, `${top}${body}${bottom}<a data-id="blog-top-macos">`),
-		).toEqual([]);
-		expect(validateBlogInstallPickers(path, `${body}${bottom}`)).toHaveLength(1);
-		expect(validateBlogInstallPickers(path, `${top}${body}`)).toHaveLength(1);
+	test("requires the post-header row and the end-of-post picker", () => {
+		expect(validatePostInstall(path, `${header}${content}${picker}`)).toEqual([]);
+		expect(validatePostInstall(path, `${header.replace(row, "")}${content}${picker}`)).toEqual([
+			`${path}: post header install row is missing`,
+		]);
+		expect(validatePostInstall(path, `${header}${content}`)).toEqual([
+			`${path}: blog install picker is missing`,
+		]);
 	});
 
-	test("keeps the page-level command-line install option check", () => {
+	test("rejects a row outside the post header and repeated controls", () => {
 		expect(
-			validateBlogInstallPickers(
-				path,
-				`${top}${body}${bottom}`.replace("Browser UI via command line", ""),
-			),
-		).toEqual([]);
+			validatePostInstall(path, `${header.replace(row, "")}${row}${content}${picker}`),
+		).toEqual([`${path}: post header install row is missing`]);
+		expect(validatePostInstall(path, `${header}${content}${picker}${picker}`)).toEqual([
+			`${path}: blog install picker is missing`,
+		]);
 		expect(
-			validateBlogInstallPickers(
+			validatePostInstall(
 				path,
-				`${top}${body}${bottom}`.replaceAll("Browser UI via command line", ""),
+				`${header}${content}${picker.replace("Browser UI via command line", "")}`,
 			),
-		).toEqual([`${path}: blog install pickers are missing the command-line option`]);
+		).toEqual([`${path}: blog install picker is missing`]);
 	});
+});
 
-	test("rejects repeated pickers and duplicate tab IDs", () => {
-		expect(validateBlogInstallPickers(path, `${top}${top}${body}${bottom}`)).toHaveLength(2);
-		expect(
-			validateBlogInstallPickers(path, `${top}${body}${bottom}<a id="blog-top-macos">`),
-		).toEqual([`${path}: duplicate element IDs`]);
+describe("duplicateIds", () => {
+	test("reports each repeated element ID once", () => {
+		expect(duplicateIds('<a id="a"></a><b id="b"></b><i id="a"></i><i id="a"></i>')).toEqual(["a"]);
+		expect(duplicateIds('<a id="a"></a><a data-id="a"></a>')).toEqual([]);
 	});
 });
 

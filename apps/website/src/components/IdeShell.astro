@@ -1,6 +1,8 @@
 ---
 import Copyright from "./Copyright.astro";
 import DownloadThanks from "./DownloadThanks.astro";
+import InstallLauncher from "./InstallLauncher.astro";
+import InstallPicker from "./InstallPicker.astro";
 
 interface Props {
 	workspace: string;
@@ -72,6 +74,10 @@ const { workspace, nav, skipHref } = Astro.props;
 		<path d="M12 22V12" />
 	</symbol>
 	<symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7" /><path d="M12 19V5" /></symbol>
+	<symbol id="i-send" viewBox="0 0 24 24">
+		<path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z" />
+		<path d="m21.854 2.147-10.94 10.939" />
+	</symbol>
 	<symbol id="i-menu" viewBox="0 0 24 24">
 		<path d="M4 6h16" />
 		<path d="M4 12h16" />
@@ -237,6 +243,7 @@ const { workspace, nav, skipHref } = Astro.props;
 			<a class="chrome-btn discord-btn" href="https://thinkrail.ai/discord" aria-label="Join the ThinkRail Discord">
 				<svg class="i i-fill" aria-hidden="true"><use href="#i-discord" /></svg>
 			</a>
+			<InstallLauncher placement="titlebar" />
 			<button
 				type="button"
 				class="theme-toggle"
@@ -249,6 +256,20 @@ const { workspace, nav, skipHref } = Astro.props;
 			<button type="button" class="chrome-btn nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="rail-right" aria-label="Open file tree">
 				<svg class="i" aria-hidden="true"><use href="#i-menu" /></svg>
 			</button>
+		</div>
+		<div class="install-popover" id="install-popover" popover role="dialog" aria-labelledby="install-popover-title" data-install-popover>
+			<p class="install-popover-title"><span id="install-popover-title">Install ThinkRail</span> <small>free · open source</small></p>
+			<InstallPicker idPrefix="header" />
+			<div class="install-popover-foot">
+				<a href="https://github.com/JetBrains/thinkrail" target="_blank" rel="noopener noreferrer">
+					<svg class="i i-fill" aria-hidden="true"><use href="#i-github" /></svg>
+					Star on GitHub
+				</a>
+				<a href="https://thinkrail.ai/discord" target="_blank" rel="noopener noreferrer">
+					<svg class="i i-fill" aria-hidden="true"><use href="#i-discord" /></svg>
+					Questions? Join Discord
+				</a>
+			</div>
 		</div>
 	</header>
 
