@@ -1,7 +1,7 @@
 ---
 id: submodule-server-images
 type: submodule-design
-status: draft
+status: active
 title: images — image bytes off the WebSocket
 parent: module-server
 depends-on: [module-contracts]
