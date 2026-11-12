@@ -967,16 +967,25 @@ enabled/confirmed choice before entering analytics attribution.
     closes. The page then re-read every mounted transcript on reconnect (`useTranscriptSync`), and the
     same big reply closed the socket again. That loop ran for hours, with every welcome stacking
     another full `session.stateList` scan until each one was abandoned.
-  - **Past the limit, the close stays.** Every reply and push goes through `sendOrClose`
-    (`socketSend.ts`). A frame refused with `0` on an open socket makes it warn, with the method or
-    channel and the buffered bytes, and close that socket only. The warning carries a
-    `SlowConsumerError` (`WS_SLOW_CONSUMER`), so Error Tracking counts how often it happens. `-1` means
-    buffered, never resent or closed. Bun's graceful close flushes what is already buffered. A client
-    that has not drained after about 20 s (measured: 18 s still delivered the close frame, 20 s did
-    not) is force-closed and the rest discarded, well inside the 60 s replay retention. The page
-    replays its unresolved ids and re-hydrates (Decision 8). A transcript that was streaming repairs at
-    its settlement, as after any reconnect. `outboundBufferLimitBytes` on `createServer` lowers the
-    limit for the wire test only.
+  - **Past the limit, the socket is quarantined, then closed.** Every reply and push goes through
+    `sendOrQuarantine` (`socketSend.ts`).
+    - **On a drop.** A frame refused with `0` on an open socket warns once, with the method or channel and
+      the buffered bytes. The warning carries a `SlowConsumerError` (`WS_SLOW_CONSUMER`), so Error
+      Tracking counts how often it happens. From then on nothing more is sent to that socket: replies,
+      pushes and terminal output are all held back. `-1` means buffered, and is never resent or closed.
+    - **Closing.** `settleSlowConsumer` closes the socket gracefully once its buffer is empty, from
+      Bun's `drain` or the 1 s reconciler. If it has not drained 30 s after the drop
+      (`SLOW_CONSUMER_DRAIN_DEADLINE_MS`), it `terminate`s the socket instead. The page then replays
+      its unresolved ids and re-hydrates (Decision 8). A transcript that was streaming repairs at its
+      settlement, as after any reconnect.
+    - **Why not close at once.** Closing at once was tried and rejected in review. Bun runs the
+      `close` handler, and so starts the 60 s replay reap, the moment `close()` is called. A drain
+      that keeps making progress resets uWS's own close timeout, and `terminate()` after `close()` is
+      a no-op. A probe reader taking 64 KiB every 250 ms kept a closed socket open for 33 s. So a tab
+      draining for over 60 s reconnected after its replay results were gone, and a running
+      folder-picker request ran twice.
+    - **Test-only seam.** `outboundBufferLimitBytes` on `createServer` lowers the limit for the wire
+      test only.
   - **`closeOnBackpressureLimit` is rejected.** It closes with 1006 and discards the buffered frame:
     a probe client received 0 frames.
   - **Why finite, why this value.** Memory grows only while a client reads slower than the host writes,
@@ -988,11 +997,11 @@ enabled/confirmed choice before entering analytics attribution.
     name the socket that dropped a frame, and for a frame under 16 KiB it reports the status from
     before uWS drains its queue. So a burst of small pushes could cross the limit, lose its tail
     (`agent_settled` included) and leave the tab streaming forever while it kept talking to the host.
-    A fully silent client is different: Bun's idle timeout already closes it. `publishScoped` and
+    `publishScoped` and
     `pi.extensionUi`'s audience filter share one `fanOut` loop: subscription, then the socket filter,
-    then `sendOrClose`. A test rejects any `.publish(` call in the server source. Addressed sends
-    (search results, MCP login, feedback asks) use the same rule; the terminal publisher keeps its
-    own latch.
+    then `sendOrQuarantine`. A test rejects any `.publish(` call in the server source. Addressed sends
+    (search results, MCP login, feedback asks) use the same rule. The terminal publisher keeps its
+    own latch and treats a quarantined socket as unavailable.
 - The host is the single place features are wired together — features never reach back into it.
 - **A font upload must carry `X-ThinkRail-Request: font-upload`** (`USER_FONT_UPLOAD_HEADER`), else 403.
   The host has no auth, no Origin check and no CORS ([[architecture]] Decision 7). A cross-origin upload

@@ -226,7 +226,7 @@ import {
 	refreshOpenProjectReviews,
 	stampSessionActivity,
 } from "./settledLifecycle";
-import { type SlowConsumerError, sendOrClose } from "./socketSend";
+import { type SlowConsumerError, sendOrQuarantine, settleSlowConsumer } from "./socketSend";
 import { resolveSubagentMaxConcurrent, resolveSubagentsEnabled } from "./subagentPolicy";
 import { taskObservation } from "./taskAnalytics";
 import {
@@ -284,6 +284,7 @@ interface SocketData {
 	/** Present only on a `/speech` socket, which bypasses the JSON request wire entirely. */
 	speech?: SpeechRelay;
 	speechSocket?: true;
+	slowSince?: number;
 }
 
 const CLIENT_REPLAY_RETENTION_MS = 60_000;
@@ -624,7 +625,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 						},
 						methodDiagnostic,
 					);
-					sendOrClose(ws, response, `${methodDiagnostic} reply`, warnSlowConsumer);
+					sendOrQuarantine(ws, response, `${methodDiagnostic} reply`, warnSlowConsumer);
 				} catch (err) {
 					const error = err instanceof Error ? err.message : String(err);
 					if (err instanceof RequestReplayOverflowError && err.load) {
@@ -638,11 +639,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 						error,
 						...(code ? { errorCode: code } : {}),
 					});
-					sendOrClose(ws, reply, `${methodDiagnostic} reply`, warnSlowConsumer);
+					sendOrQuarantine(ws, reply, `${methodDiagnostic} reply`, warnSlowConsumer);
 				}
 			},
 			drain(ws) {
 				if (ws.data.speechSocket) return;
+				if (settleSlowConsumer(ws) !== "healthy") return;
 				if (sockets.get(ws.data.clientKey) !== ws) return;
 				terminalBackpressured.delete(ws.data.clientKey);
 				resumeClientTerminals(ws.data.clientKey);
@@ -666,6 +668,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 
 	const backpressureReconciler = setInterval(() => {
+		for (const socket of sockets.values()) settleSlowConsumer(socket);
 		const drained = drainedClientKeys(terminalBackpressured, (clientKey) =>
 			sockets.get(clientKey)?.getBufferedAmount(),
 		);
@@ -685,7 +688,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	): void => {
 		for (const socket of sockets.values()) {
 			if (socket.isSubscribed(channel) && admits(socket)) {
-				sendOrClose(socket, frame, `${channel} push`, warnSlowConsumer);
+				sendOrQuarantine(socket, frame, `${channel} push`, warnSlowConsumer);
 			}
 		}
 	};
@@ -772,7 +775,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setTerminalPublisher((clientKey, channel, data) => {
 		if (terminalBackpressured.has(clientKey)) return "unavailable";
 		const ws = sockets.get(clientKey);
-		if (!ws) return "unavailable";
+		if (!ws || ws.data.slowSince !== undefined) return "unavailable";
 		try {
 			const delivery = terminalDeliveryForSendStatus(ws.send(JSON.stringify({ channel, data })));
 			if (delivery !== "delivered") terminalBackpressured.add(clientKey);
@@ -787,7 +790,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setSearchTextPublisher((clientKey, batch) => {
 		const ws = sockets.get(clientKey);
 		if (!ws || ws.data.protocolVersion < TEXT_SEARCH_PROTOCOL_VERSION) return;
-		sendOrClose(
+		sendOrQuarantine(
 			ws,
 			JSON.stringify({ channel: WS_CHANNELS.searchTextResults, data: batch }),
 			`${WS_CHANNELS.searchTextResults} push`,
@@ -799,7 +802,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		const ws = sockets.get(clientKey);
 		if (!ws || ws.data.protocolVersion < FEEDBACK_SURVEY_PROTOCOL_VERSION) return false;
 		return (
-			sendOrClose(
+			sendOrQuarantine(
 				ws,
 				JSON.stringify({ channel: WS_CHANNELS.feedbackInterview, data: {} }),
 				`${WS_CHANNELS.feedbackInterview} push`,
@@ -818,7 +821,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			const ws = githubStarSocket(clientKey);
 			if (!ws) return false;
 			return (
-				sendOrClose(
+				sendOrQuarantine(
 					ws,
 					JSON.stringify({ channel: WS_CHANNELS.feedbackGithubStar, data: ask }),
 					`${WS_CHANNELS.feedbackGithubStar} push`,
@@ -1057,7 +1060,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setMcpLoginPublisher((push, ownerClientKey) => {
 		const ws = sockets.get(ownerClientKey);
 		if (!ws) return;
-		sendOrClose(
+		sendOrQuarantine(
 			ws,
 			JSON.stringify({ channel: WS_CHANNELS.providerLogin, data: push }),
 			`${WS_CHANNELS.providerLogin} push`,
