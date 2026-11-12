@@ -229,6 +229,19 @@ the palette ranks with — kept here so host-side search can rank with the same 
     casting pi's richer object wholesale, and wire data remains untrusted, so the reducer guards the field
     shapes rather than assuming them;
   - **`SessionEventPayload`** (`{ sessionId, event: PiEvent }`) — the `pi.event` push frame.
+    - **Two events are full snapshots.** A `message_update` whose `assistantMessageEvent` carries
+      `partial` holds the whole response so far; that includes `text_end`, `thinking_end` and
+      `toolcall_end`. A `tool_execution_update` holds the whole `partialResult` for its
+      `(sessionId, toolCallId)`.
+    - **A backpressured connection may get only the newest unsent snapshot** per assistant message or
+      tool call. That snapshot is still delivered once the backpressure clears, even if the producer
+      emits nothing more. Consumers render these events from the snapshot, never by accumulating the
+      nested deltas, and never by requiring every content-boundary event.
+    - **Ordering.** No other Pi event is conflated. A held snapshot is delivered before any later
+      non-snapshot Pi event, `session.state` or `pi.extensionUi` of the same session.
+    - **Discarding.** Session deletion and connection teardown discard held snapshots.
+    - **What reopens this contract.** A delta-only representation, or a consumer that needs every
+      event, must revisit it.
   - the cheap-win mirrors (declared in the Node-only `pi-coding-agent`): **`SessionStats`** + **`ContextUsage`**
     (tokens/cost/context bar — display only) and **`SlashCommandInfo`** + **`SlashCommandSourceInfo`** (the
     command autocomplete rows, returned by live `session.getCommands`, skill-only pre-session `skill.list`,

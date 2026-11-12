@@ -1370,6 +1370,21 @@ test("a message_update with no prior message_start still builds the turn (mid-st
 	expect(rt("a").turns.filter((t) => t.kind === "assistant")).toHaveLength(1);
 });
 
+test("a mid-stream client given only the newest partial before message_end keeps the finished answer", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "held", null, "medium");
+	const final = { role: "assistant", content: [{ type: "text", text: "whole reply" }] };
+
+	store.handlePiEvent({ type: "message_end", message: final } as unknown as PiEvent, "held");
+	expect(rt("held").turns.filter((t) => t.kind === "assistant")).toHaveLength(0);
+
+	store.handlePiEvent(assistantText("whole re"), "held");
+	store.handlePiEvent({ type: "message_end", message: final } as unknown as PiEvent, "held");
+	const assistants = rt("held").turns.filter((t) => t.kind === "assistant");
+	expect(assistants).toHaveLength(1);
+	expect(assistants[0]).toMatchObject({ streaming: false, message: final });
+});
+
 test("a durable session title event renames an open chat without moving attention", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "named", null, "medium");
