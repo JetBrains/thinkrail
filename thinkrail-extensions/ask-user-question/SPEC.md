@@ -238,7 +238,13 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   **Fields park focus on their own row.** Enter (no modifier) or plain Escape closes the note, Other or
   discuss text and moves focus to that field's row — the saved-note button, the Other row, the discuss
   panel (`tabIndex=-1` targets). From a parked row Enter reopens the field (on the Other row it also
-  re-picks Other when it has text) and ↑/↓ continue the choice order. Parking was chosen over returning
+  re-picks Other when it has text) and ↑/↓ continue the choice order. **The card itself is a focus target**
+  (`tabIndex=-1`, the accent ring like every other indicator): a press on its own background parks focus on
+  it, where ←/→ still page and ↑/↓ re-enter the choices at the cursor (issue #1304). **A note closes,
+  keeping its text, when focus leaves the card** (not when the window loses focus — the field is still open
+  on return) **or on a press on the card's background**; presses on controls are left to their own
+  handlers, because closing on the field's blur shrinks the slot between mousedown and mouseup and the row
+  below an open note would miss its click. Parking was chosen over returning
   to the options because, with Enter picking, a habitual second Enter there would replace a typed Other
   answer or uncheck the option a note was written for. `Shift+Escape` in a note is **consumed** (it closes
   the note rather than letting the card's skip throw it away mid-sentence), also mid-IME-composition,

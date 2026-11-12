@@ -748,6 +748,32 @@ test("creating after a rename skips the freed name whose worktree dir is still o
 	expect(existsSync(next.worktreePath)).toBe(true);
 });
 
+test("auto naming skips a long run of existing workspace-N branches in one pass", async () => {
+	for (let n = 1; n <= 60; n += 1) {
+		git(repo, "branch", `workspace-${n}`);
+	}
+
+	const ws = await createWorkspace("p1");
+	expect(ws.branch).toBe("workspace-61");
+});
+
+test("auto naming still skips a branch whose name is also used by a tag", async () => {
+	git(repo, "branch", "workspace-1");
+	git(repo, "tag", "workspace-1");
+
+	const ws = await createWorkspace("p1");
+	expect(ws.branch).toBe("workspace-2");
+});
+
+test("naming skips a branch that differs from the candidate only by case", async () => {
+	git(repo, "branch", "Workspace-1");
+	git(repo, "branch", "Fix-Login");
+	git(repo, "pack-refs", "--all");
+
+	expect((await createWorkspace("p1")).branch).toBe("workspace-2");
+	expect((await createWorkspace("p1", "fix login")).branch).toBe("fix-login-2");
+});
+
 test("forgetWorkspace drops the record + returns it, but leaves the worktree for a separate reclaim", async () => {
 	const ws = await createWorkspace("p1");
 	expect(await worktrees()).toHaveLength(1);

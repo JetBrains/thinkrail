@@ -234,6 +234,14 @@ export function pathWithinRoot(path: string, root: string): string | null {
 	return isAbsolutePath(canonical) && isAbsolutePath(root) ? rootRelative(canonical, root) : null;
 }
 
+export function joinWorkspacePath(worktreePath: string, path: string): string {
+	if (!worktreePath || path.startsWith("/") || hasWindowsDriveRoot(path)) return path;
+	const windows = /^(?:[A-Za-z]:\\|\\\\)/.test(worktreePath);
+	const separator = windows ? "\\" : "/";
+	const root = worktreePath.endsWith(separator) ? worktreePath : `${worktreePath}${separator}`;
+	return `${root}${windows ? path.replaceAll("/", "\\") : path}`;
+}
+
 let colorCanvas: CanvasRenderingContext2D | null | undefined;
 
 function canvasNormalize(color: string): string {
