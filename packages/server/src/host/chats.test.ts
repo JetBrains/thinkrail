@@ -322,6 +322,10 @@ test("a chat is created with its folder, record and one session, listed without 
 	for (const [method, params] of [
 		["project.close", { id: workspace.projectId }],
 		["project.rename", { id: workspace.projectId, name: "Mine" }],
+		[
+			"project.move",
+			{ id: workspace.projectId, targetId: workspace.projectId, placement: "after" },
+		],
 		["project.setTrust", { id: workspace.projectId, trusted: true }],
 		["workspace.create", { projectId: workspace.projectId }],
 		["workspace.listExisting", { projectId: workspace.projectId }],

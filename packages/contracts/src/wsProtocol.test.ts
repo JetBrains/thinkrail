@@ -50,6 +50,7 @@ import {
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
+	PROJECT_ORDER_PROTOCOL_VERSION,
 	PROJECT_RENAME_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROJECT_TRUST_PROTOCOL_VERSION,
@@ -336,8 +337,14 @@ test("find in files is pinned to v112", () => {
 	expect(WS_CHANNELS.searchTextResults).toBe("search.textResults");
 });
 
+test("project order is pinned to v115", () => {
+	expect(PROTOCOL_VERSION).toBe(115);
+	expect(PROJECT_ORDER_PROTOCOL_VERSION).toBe(115);
+	expect(WS_METHODS.projectMove).toBe("project.move");
+});
+
 test("the question panel height setting is pinned to v114", () => {
-	expect(PROTOCOL_VERSION).toBe(114);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(QUESTION_PANEL_PROTOCOL_VERSION);
 	expect(QUESTION_PANEL_PROTOCOL_VERSION).toBe(114);
 	expect(DEFAULT_CONFIG.questionPanelHeight).toBe(60);
 });
