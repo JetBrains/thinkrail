@@ -148,15 +148,22 @@ re-opened transcripts provider-valid.
     272K editing minimum (the cap this setting exists to lift), plus any model that already carries an
     override so it can always be reverted; each entry pairs pi's effective `contextWindow` with the
     file's explicit `override` (`null` = pi default). Eligibility is derived from pi's catalog, never
-    from a model-id list, so catalog defaults above 1M stay untouched by a bulk save. A save validates
-    the contracts' 272K–1M range first, patches `providers.<p>.modelOverrides.<id>.contextWindow` for the
+    from a model-id list, so catalog defaults above 1M stay untouched by a bulk save. Every available
+    model of a `custom-*` provider (see `customEndpoints`) is eligible too, whatever its window: its
+    server's operator set the real limit, which listings rarely report. Such a model takes only targeted
+    saves, within the contracts' wider custom range (`modelContextWindowLimits`, 1,024–10M), and never
+    joins the shared GPT target. A save validates the target's range first (272K–1M for `available` and
+    every other provider), patches `providers.<p>.modelOverrides.<id>.contextWindow` for the
     target — or, for `available`, every eligible pair the contracts' `isSharedModelContextTarget` admits, so
     a shared save never rewrites an override outside the range that only a targeted save can touch — and
     prunes override objects it empties (never `providers`), writing through `modelsFile`; a changed file is followed by one
     network-disabled `runtime.refresh` on the current generation and the host's `provider.changed`
     signal; a no-op save does neither. Every read also refreshes locally first so external pi CLI edits
     appear. Live sessions keep the model they were created with; new chats resolve the updated metadata.
-    pi owns schema validation and the effective value. Accepted gap: a Central rebuild whose runtime loaded the file before a save and activated
+    pi owns schema validation and the effective value. pi applies `modelOverrides` after a provider's
+    own `models[]`, so a custom server's user-set window wins over the detected one that
+    `customEndpoints` writes into `models[]`, survives every re-Detect and save, and Default falls back
+    to the detected value. Accepted gap: a Central rebuild whose runtime loaded the file before a save and activated
     after its refresh serves the old budget until the next read refreshes it.
   - `cacheWarming` — pi's `cacheWarming` setting (`off` / `streaming` / `idle`) in pi's global
     `settings.json`, the only state. Pi 1.5.1 made `idle` its default — every idle chat re-sends its
@@ -217,8 +224,11 @@ re-opened transcripts provider-valid.
       gets conservative compat (`supportsStore: false`, `supportsDeveloperRole: false`, `maxTokensField:
       "max_tokens"`) because pi detects compat from the URL and would send OpenAI-only fields to an unknown
       host; every OpenAI-compatible server accepts these. An edit keeps the provider's `compat` and every
-      field the form doesn't manage, and removes the managed fields from that model's `modelOverrides`,
-      which pi would otherwise apply over the saved values. A model whose chat template takes
+      field the form doesn't manage, and removes the managed fields (`maxTokens`, `reasoning`, `input`)
+      from that model's `modelOverrides`, which pi would otherwise apply over the saved values. The
+      context window is not one of them: `models[].contextWindow` holds only the detected value, which is
+      what the listing reports, and `modelOverrides.<id>.contextWindow` is the user's own value, owned by
+      `modelContext` and kept by every save. A model whose chat template takes
       `enable_thinking` (`chatTemplateThinking: true`) gets `compat.thinkingFormat: "qwen-chat-template"`:
       without it pi sends OpenAI's `reasoning_effort`, which Qwen-style templates on llama.cpp and vLLM
       ignore, so thinking could never be turned off and every turn (compaction included) would pay for it.

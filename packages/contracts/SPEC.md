@@ -752,11 +752,16 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`ModelContextSetting[]`** — the eligible OpenAI models' `provider`/`id`/`name`, pi's effective
   `contextWindow`, and the explicit models.json `override` or `null` for pi's default. The mutation takes
   `{target: "available" | {provider,id}, contextWindow: number | null}`: `null` removes the override;
-  a number must satisfy **`isModelContextWindow`** within **`MODEL_CONTEXT_WINDOW_LIMITS`**
-  (272,000–1,000,000), the app's editing policy rather than a verified provider capacity, enforced on
-  both sides. External values outside it are read without clamping, and the `available` target covers
-  only settings **`isSharedModelContextTarget`** accepts (no override, or one inside the range): an
-  override the app could not have written is changed only by naming its `{provider,id}`. Saves emit the
+  a number must satisfy **`isModelContextWindow`** within the target's
+  **`modelContextWindowLimits(provider)`** — **`MODEL_CONTEXT_WINDOW_LIMITS`** (272,000–1,000,000) for
+  `available` and every provider but a custom server's — the app's editing policy rather than a verified
+  provider capacity, enforced on both sides. From **`CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION`** (v115) the
+  list also carries every available `custom-*` provider model (`isCustomEndpointId`), editable only by a
+  targeted save within **`CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS`** (1,024–10,000,000: a guard against typos,
+  wide enough for any served window); an older host refuses that target as ineligible. External values
+  outside a range are read without clamping, and the `available` target covers only settings
+  **`isSharedModelContextTarget`** accepts (not a custom server's, and no override or one inside the
+  range): an override the app could not have written is changed only by naming its `{provider,id}`. Saves emit the
   existing `provider.changed` invalidation; no AppConfig state or raw configuration crosses the wire) /
   **`cacheWarming.get`** / **`cacheWarming.set`** (v111, `CACHE_WARMING_SETTINGS_PROTOCOL_VERSION`; both
   return a **`CacheWarmingSetting`** — pi's `cacheWarming` mode, one of **`CACHE_WARMING_MODES`** `off` /
@@ -770,7 +775,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   tested by `isCustomEndpointId`). A `CustomEndpointModel` carries only what a server reported —
   `contextWindow` / `maxTokens` / `reasoning` / `vision` / `chatTemplateThinking` are `null` when it did
   not say (distinct from an explicit `false`, so a re-detect can clear a capability), and a `tools` hint is
-  never saved. `chatTemplateThinking` is additive on the wire: a draft without it is read as `null`, so an
+  never saved. A listed `contextWindow` is the detected one; a window the user set is a
+  `model.contextSettings` override and never travels in a draft. `chatTemplateThinking` is additive on the wire: a draft without it is read as `null`, so an
   older client never changes a saved thinking format. Probing takes `{baseUrl, apiKey? | endpointId?}` (an `endpointId` without `apiKey` reuses
   that endpoint's saved key host-side, only for its unchanged address) and returns either the normalized
   `baseUrl` with the models, or a closed `CustomEndpointProbeFailure` (`invalid-url`, `unauthorized`,

@@ -871,10 +871,21 @@ a project picker, the prompt hero, and the reused
   edit; an edit that changes the address's origin shows a warning and disables Save, since a different
   server is added as a new one; **Remove key** sends `apiKey: ""` and keeps Detect from reusing it), **Find models**
   (`customEndpoints.probe`, only on click — never on open, since gateways can list thousands), a manual
-  model-id field above the list, a filter field and 50-row paging once the list exceeds a page, and a per-model use switch. **A model row has no editable parameters** (decision: they
-  describe the server rather than configure it — its real limits are set by whoever runs it). It shows only
-  the facts the server reported (context, thinking, images, tools; "No tools" in warning tone), and an
-  unreported fact is simply absent and left to pi's default. Re-detecting keeps selections and saved
+  model-id field above the list, a filter field and 50-row paging once the list exceeds a page, and a per-model use switch. **A model row's only editable parameter is its context
+  window** (decision: the other facts describe the server rather than configure it, but a gateway's
+  listing rarely reports the window whoever runs the server set, and pi's 128K default then sizes
+  compaction and budgets for the wrong model). The row shows only the facts the server reported
+  (context, thinking, images, tools; "No tools" in warning tone), and an unreported fact is simply absent
+  and left to pi's default. From `CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION` (v115) it also carries a
+  compact **context window** field (`custom-endpoints-context`) that is not part of the draft: it reads
+  and writes the model's `modelOverrides` value through the same `useModelContextSettings` hook as
+  `ModelContextSettings` (`model.contextSettings` / a targeted `model.setContextWindow`), so a re-Detect
+  or Save never touches it. Empty means the detected window (placeholder "Detected", or "Unknown" when
+  the server reported none); a whole number in the contracts' custom range saves on Enter or blur through
+  the shared auto-save input pattern, an emptied field or the reset icon returns to the detected window,
+  and Escape reverts the draft without closing the dialog. The field is disabled while the dialog is
+  busy, for an unused row, and for a model pi doesn't serve yet (an unsaved server or newly found model —
+  its title asks to save the server first). Re-detecting keeps selections and saved
   facts the server doesn't report, takes reported ones, drops a saved max output once a new context is
   reported, keeps models the server no longer lists, and keeps existing rows first with newly found ones appended; an unchanged saved address stays as written. The
   pure draft rules live in `customEndpointDraft`; probe failures render as localized inline status and
@@ -1177,8 +1188,8 @@ a project picker, the prompt hero, and the reused
   come from that same resolved, Pi-clamped model. Both triggers are disabled, and choices in an already-open
   picker are ignored, while a save or re-read is in flight. At v76, **`ModelContextSettings`** adds
   one Default / 1M / Custom selector over every eligible GPT model the host returns as
-  `ModelContextSetting[]`; a collapsed **By each model** disclosure reveals one selector per provider/model
-  pair, so the same model on
+  `ModelContextSetting[]` (a `custom-*` server's rows are left to that server's dialog); a collapsed
+  **By each model** disclosure reveals one selector per provider/model pair, so the same model on
   different providers stays independently editable. Selection is keyed on the explicit `override`
   (Default = `null`, the catalog value pi reports). The shared control summarizes only the rows the
   contracts' `isSharedModelContextTarget` admits — it shows "Customized by model" when their overrides
@@ -1191,7 +1202,8 @@ a project picker, the prompt hero, and the reused
   returns only to the control that initiated it. Pi's shared configuration is authoritative — there is
   no optimistic value or AppConfig field; reads follow catalog/provider invalidation, fence stale
   replies, disable controls while pending, and replace controls with Retry on failure. The props-driven
-  `ModelContextControls` owns presentation; older hosts get neither the block nor its requests.
+  `ModelContextControls` owns presentation and `useModelContextSettings` the reads and writes, shared
+  with the custom server dialog; older hosts get neither the block nor its requests.
   At v111, **`CacheWarmingSettings`** adds a **Prompt cache** group: three `SettingsRadioCards` (Off /
   While a run is active / Also between runs) over pi's `cacheWarming` setting, read through
   `cacheWarming.get` and written through `cacheWarming.set` — pi's `settings.json` is the only state, there

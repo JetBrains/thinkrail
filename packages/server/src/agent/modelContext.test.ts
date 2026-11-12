@@ -15,6 +15,7 @@ import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createAgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import { parse } from "jsonc-parser";
+import { saveCustomEndpoint } from "./customEndpoints";
 import { listModelContextSettings, setModelContextWindow } from "./modelContext";
 import { setModelsFilePublisher } from "./modelsFile";
 import { configurePiRuntime } from "./piRuntime";
@@ -365,4 +366,102 @@ test("external edits are re-read on every read", async () => {
 		override: 700_000,
 	});
 	expect(pi.getModel("openai", "gpt-5.5")?.contextWindow).toBe(700_000);
+});
+
+const relay = { provider: "custom-gw", id: "relay" };
+
+function customServer(models: Record<string, unknown>[]): void {
+	writeFileSync(
+		path,
+		JSON.stringify({
+			providers: {
+				"custom-gw": {
+					name: "Gateway",
+					baseUrl: "http://127.0.0.1:9/v1",
+					api: "openai-completions",
+					apiKey: "thinkrail-no-key",
+					models,
+				},
+			},
+		}),
+	);
+}
+
+test("custom server models take targeted saves in their own range and stay out of the shared preset", async () => {
+	customServer([{ id: "relay", contextWindow: 65_536 }, { id: "unreported" }]);
+	const pi = await runtime();
+	const listed = await listModelContextSettings();
+	expect(listed.filter((entry) => entry.provider === "custom-gw")).toEqual([
+		{ ...relay, name: "relay", contextWindow: 65_536, override: null },
+		{
+			provider: "custom-gw",
+			id: "unreported",
+			name: "unreported",
+			contextWindow: 128_000,
+			override: null,
+		},
+	]);
+	for (const value of [1_023, 10_000_001, 8_192.5]) {
+		await expect(setModelContextWindow(relay, value)).rejects.toThrow(
+			"between 1,024 and 10,000,000",
+		);
+	}
+	await expect(setModelContextWindow(ref, 8_192)).rejects.toThrow("between 272,000 and 1,000,000");
+	await setModelContextWindow(relay, 8_192);
+	expect(pi.getModel("custom-gw", "relay")?.contextWindow).toBe(8_192);
+
+	const shared = await setModelContextWindow("available", 1_000_000);
+	expect(shared.map((entry) => [entry.provider, entry.id, entry.override])).toEqual([
+		["openai", "gpt-5.5", 1_000_000],
+		["custom-gw", "relay", 8_192],
+		["custom-gw", "unreported", null],
+	]);
+	await setModelContextWindow("available", null);
+	const providers = (config() as { providers: Record<string, Record<string, unknown>> }).providers;
+	expect(Object.keys(providers)).toEqual(["custom-gw"]);
+	expect(providers["custom-gw"]?.modelOverrides).toEqual({ relay: { contextWindow: 8_192 } });
+});
+
+test("a user's custom server window survives a re-detected save and Default returns to the detected one", async () => {
+	customServer([{ id: "relay", contextWindow: 65_536 }]);
+	const pi = await runtime();
+	await setModelContextWindow(relay, 262_144);
+	await saveCustomEndpoint({
+		id: "custom-gw",
+		name: "Gateway",
+		baseUrl: "http://127.0.0.1:9/v1",
+		models: [
+			{
+				id: "relay",
+				contextWindow: 32_768,
+				maxTokens: null,
+				reasoning: null,
+				vision: null,
+				tools: null,
+				chatTemplateThinking: null,
+			},
+		],
+	});
+	const saved = config() as {
+		providers: Record<string, { models: unknown[]; modelOverrides?: unknown }>;
+	};
+	expect(saved.providers["custom-gw"]?.models).toEqual([
+		expect.objectContaining({ id: "relay", contextWindow: 32_768 }),
+	]);
+	expect(saved.providers["custom-gw"]?.modelOverrides).toEqual({
+		relay: { contextWindow: 262_144 },
+	});
+	expect(pi.getModel("custom-gw", "relay")?.contextWindow).toBe(262_144);
+	expect((await listModelContextSettings()).find((entry) => entry.id === "relay")).toEqual({
+		...relay,
+		name: "relay",
+		contextWindow: 262_144,
+		override: 262_144,
+	});
+
+	await setModelContextWindow(relay, null);
+	expect(pi.getModel("custom-gw", "relay")?.contextWindow).toBe(32_768);
+	expect(
+		(config() as { providers: Record<string, Record<string, unknown>> }).providers["custom-gw"],
+	).not.toHaveProperty("modelOverrides");
 });

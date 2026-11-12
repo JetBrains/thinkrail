@@ -109,3 +109,18 @@ test("empty and loading states do not invent eligible models", () => {
 	expect(render({ settings: [] })).not.toContain('type="radio"');
 	expect(render({ settings: null, pending: true })).not.toContain('type="radio"');
 });
+
+test("custom server rows belong to their server's dialog, not the GPT block", () => {
+	const custom: ModelContextSetting = {
+		provider: "custom-gw",
+		id: "relay",
+		name: "relay",
+		contextWindow: 8_192,
+		override: 8_192,
+	};
+	const html = render({ settings: [setting, custom] });
+	expect(html).toContain("1 available model");
+	expect(html).not.toContain("kept at a limit");
+	expect(html).not.toContain("custom-gw");
+	expect(render({ settings: [custom] })).toContain("No eligible models");
+});

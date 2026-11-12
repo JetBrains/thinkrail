@@ -25,6 +25,7 @@ import { NotificationsSettings } from "./NotificationsSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { ProvidersSettings } from "./ProvidersSettings";
 import { SettingsDialogContainer } from "./settingsDialogContainer";
+import { keepSettingsDraftOnEscape } from "./settingsDraft";
 import { resolveSettingsSection, settingsNavGroups } from "./settingsNav";
 import { TemplatesSettings } from "./TemplatesSettings";
 import { TerminalSettings } from "./TerminalSettings";
@@ -64,14 +65,7 @@ export function SettingsDialog({
 				ref={setContentEl}
 				data-testid="settings-dialog"
 				hideClose
-				onEscapeKeyDown={(event) => {
-					if (
-						document.activeElement instanceof HTMLElement &&
-						document.activeElement.hasAttribute("data-settings-draft-input")
-					) {
-						event.preventDefault();
-					}
-				}}
+				onEscapeKeyDown={keepSettingsDraftOnEscape}
 				className="h-[80vh] max-w-[52rem] gap-0 overflow-hidden p-0"
 			>
 				<DialogHeader className="flex-row items-center justify-between border-border-default border-b px-16 py-8">

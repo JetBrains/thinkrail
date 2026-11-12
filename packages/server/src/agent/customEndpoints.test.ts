@@ -491,7 +491,7 @@ test("saved endpoints become available pi models, and a keyless one gets pi's pl
 	expect((await listCustomEndpoints())[0]?.hasApiKey).toBe(false);
 });
 
-test("edits keep hand-added fields, clear managed overrides and guard the saved key", async () => {
+test("edits keep hand-added fields and the user's context window, clear managed overrides and guard the saved key", async () => {
 	await runtime();
 	writeFileSync(
 		path,
@@ -505,13 +505,13 @@ test("edits keep hand-added fields, clear managed overrides and guard the saved 
 					authHeader: true,
 					compat: { supportsStore: false },
 					models: [{ id: "a", contextWindow: 8_000, maxTokens: 2_000, temperature: 0.2 }],
-					modelOverrides: { a: { contextWindow: 4_000, name: "Alias" } },
+					modelOverrides: { a: { contextWindow: 4_000, maxTokens: 1_000, name: "Alias" } },
 				},
 			},
 		}),
 	);
 	const [listed] = await listCustomEndpoints();
-	expect(listed?.models[0]).toEqual(model("a", { contextWindow: 4_000, maxTokens: 2_000 }));
+	expect(listed?.models[0]).toEqual(model("a", { contextWindow: 8_000, maxTokens: 1_000 }));
 
 	await saveCustomEndpoint({
 		id: "custom-gw",
@@ -525,7 +525,7 @@ test("edits keep hand-added fields, clear managed overrides and guard the saved 
 		apiKey: "sk-saved",
 		authHeader: true,
 		compat: { supportsStore: false },
-		modelOverrides: { a: { name: "Alias" } },
+		modelOverrides: { a: { contextWindow: 4_000, name: "Alias" } },
 	});
 	expect(saved?.models).toEqual([expect.objectContaining({ id: "a", temperature: 0.2 })]);
 

@@ -1,12 +1,16 @@
 import {
+	RiArrowGoBackLine as ArrowGoBack,
 	RiAddLine as Plus,
 	RiSearchLine as Search,
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import {
 	CUSTOM_ENDPOINTS_PROTOCOL_VERSION,
+	CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION,
+	CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS,
 	type CustomEndpoint,
 	type CustomEndpointModel,
+	type ModelContextSetting,
 } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
@@ -32,6 +36,7 @@ import {
 	canSave,
 	draftParams,
 	type EndpointDraft,
+	type EndpointModelRow,
 	editEndpointDraft,
 	LOCAL_SERVER_PRESETS,
 	mergeProbe,
@@ -39,8 +44,15 @@ import {
 	probeFailureText,
 	probeTarget,
 } from "./customEndpointDraft";
+import {
+	isContextWindowText,
+	type ModelContextState,
+	tokenRange,
+	useModelContextSettings,
+} from "./ModelContextSettings";
 import { SettingsGroup } from "./SettingsGroup";
 import { SettingsSwitch } from "./SettingsSwitch";
+import { keepSettingsDraftOnEscape, useSettingsDraft } from "./settingsDraft";
 
 const INPUT_CLASS =
 	"h-32 w-full min-w-0 rounded-sm border border-control-border-default bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus:border-control-border-active disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text";
@@ -96,6 +108,127 @@ function ModelFacts({ model }: { model: CustomEndpointModel }) {
 	);
 }
 
+export interface ModelRowContext {
+	setting: ModelContextSetting | undefined;
+	change: (contextWindow: number | null) => Promise<boolean>;
+}
+
+export function EndpointModelItem({
+	model,
+	divided,
+	busy,
+	context,
+	onSelect,
+}: {
+	model: EndpointModelRow;
+	divided: boolean;
+	busy: boolean;
+	context: ModelRowContext | null;
+	onSelect: (selected: boolean) => void;
+}) {
+	const t = useT();
+	const errorId = useId();
+	const limits = CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS;
+	const override = context?.setting?.override ?? null;
+	const { invalid, submit, inputProps } = useSettingsDraft({
+		saved: override === null ? "" : String(override),
+		isValid: (draft) => draft.trim() === "" || isContextWindowText(draft.trim(), limits),
+		commit: (draft) =>
+			context?.change(draft.trim() === "" ? null : Number(draft.trim())) ?? Promise.resolve(false),
+	});
+	const locked = busy || !model.selected || context?.setting === undefined;
+	return (
+		<li
+			data-testid="custom-endpoints-row"
+			data-model={model.id}
+			className={cn("flex flex-col gap-4 py-8", divided && "border-border-muted border-t")}
+		>
+			<div className="flex items-center gap-8">
+				<span className="flex min-w-0 flex-1 flex-col">
+					<span
+						className={cn(
+							"truncate tr-text-ui",
+							model.selected ? "text-text-default" : "text-text-muted",
+						)}
+						title={model.id}
+					>
+						{model.id}
+					</span>
+					<ModelFacts model={model} />
+				</span>
+				{context ? (
+					<span className="flex shrink-0 items-center gap-4">
+						{override === null ? null : (
+							<IconButton
+								icon={ArrowGoBack}
+								label={t("settings.customEndpoints.contextReset", { name: model.id })}
+								data-testid="custom-endpoints-context-reset"
+								disabled={locked}
+								onClick={() => submit("")}
+							/>
+						)}
+						<input
+							type="text"
+							inputMode="numeric"
+							data-testid="custom-endpoints-context"
+							{...inputProps}
+							disabled={locked}
+							aria-label={t("settings.modelContext.controlLabel", { name: model.id })}
+							aria-describedby={invalid ? errorId : undefined}
+							title={
+								context.setting === undefined
+									? t("settings.customEndpoints.contextSaveFirst")
+									: t("settings.customEndpoints.contextHint", { range: tokenRange(t, limits) })
+							}
+							placeholder={
+								model.contextWindow === null
+									? t("settings.customEndpoints.contextUnknown")
+									: t("settings.customEndpoints.contextDetected")
+							}
+							className={cn(
+								INPUT_CLASS,
+								"w-96 text-right tr-code-text aria-invalid:border-feedback-error",
+							)}
+						/>
+					</span>
+				) : null}
+				<SettingsSwitch
+					checked={model.selected}
+					disabled={busy}
+					label={t("settings.customEndpoints.use", { name: model.id })}
+					testId="custom-endpoints-use"
+					onChange={onSelect}
+				/>
+			</div>
+			{context && invalid ? (
+				<p
+					id={errorId}
+					data-testid="custom-endpoints-context-error"
+					className="text-right tr-text-metadata text-feedback-error"
+				>
+					{t("settings.modelContext.invalid", { range: tokenRange(t, limits) })}
+				</p>
+			) : null}
+		</li>
+	);
+}
+
+export function modelRowContext(
+	context: ModelContextState,
+	endpointId: string | undefined,
+	modelId: string,
+): ModelRowContext {
+	return {
+		setting: context.settings?.find(
+			(setting) => setting.provider === endpointId && setting.id === modelId,
+		),
+		change: (contextWindow) =>
+			endpointId === undefined
+				? Promise.resolve(false)
+				: context.change({ provider: endpointId, id: modelId }, contextWindow),
+	};
+}
+
 function EndpointDialog({
 	initial,
 	onClose,
@@ -114,6 +247,7 @@ function EndpointDialog({
 	const [probing, setProbing] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [status, setStatus] = useState<Status>(null);
+	const modelContext = useModelContextSettings(CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION);
 	const busy = probing || saving;
 	const needle = filter.trim().toLowerCase();
 	const visible = needle
@@ -164,7 +298,11 @@ function EndpointDialog({
 
 	return (
 		<Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
-			<DialogContent data-testid="custom-endpoints-dialog" className="max-w-[36rem]">
+			<DialogContent
+				data-testid="custom-endpoints-dialog"
+				className="max-w-[36rem]"
+				onEscapeKeyDown={keepSettingsDraftOnEscape}
+			>
 				<DialogHeader>
 					<DialogTitle>
 						{draft.id
@@ -320,42 +458,21 @@ function EndpointDialog({
 						{draft.models.length > 0 ? (
 							<ul className="flex flex-col" data-testid="custom-endpoints-models">
 								{visible.slice(0, shown).map((model, index) => (
-									<li
+									<EndpointModelItem
 										key={model.id}
-										data-testid="custom-endpoints-row"
-										data-model={model.id}
-										className={cn(
-											"flex items-center gap-8 py-8",
-											index > 0 && "border-border-muted border-t",
-										)}
-									>
-										<span className="flex min-w-0 flex-1 flex-col">
-											<span
-												className={cn(
-													"truncate tr-text-ui",
-													model.selected ? "text-text-default" : "text-text-muted",
-												)}
-												title={model.id}
-											>
-												{model.id}
-											</span>
-											<ModelFacts model={model} />
-										</span>
-										<SettingsSwitch
-											checked={model.selected}
-											disabled={busy}
-											label={t("settings.customEndpoints.use", { name: model.id })}
-											testId="custom-endpoints-use"
-											onChange={(selected) =>
-												setDraft((current) => ({
-													...current,
-													models: current.models.map((row) =>
-														row.id === model.id ? { ...row, selected } : row,
-													),
-												}))
-											}
-										/>
-									</li>
+										model={model}
+										divided={index > 0}
+										busy={busy}
+										context={modelContext && modelRowContext(modelContext, draft.id, model.id)}
+										onSelect={(selected) =>
+											setDraft((current) => ({
+												...current,
+												models: current.models.map((row) =>
+													row.id === model.id ? { ...row, selected } : row,
+												),
+											}))
+										}
+									/>
 								))}
 							</ul>
 						) : null}
