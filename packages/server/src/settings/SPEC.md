@@ -15,7 +15,7 @@ effort defaults, terminal replay budget and Windows shell preference, chat compo
 visual line widths plus independent pane bounds, bounded custom layout-preset catalog, JetBrains quota
 display/cadence, the host-wide subagent default, plan-review policy, the host-registry extensions the
 user turned off, and the UI language preference (`locale`). `defaultModel` / `defaultEffort`
-select the defaults every new chat receives (unset model means pi's `settings.json` default when available, else the preferred available model — pi's provider default, else the first; unset effort means medium);
+select the defaults every new chat receives (unset model means pi's `settings.json` default when available, else the preferred available model — pi's provider default, else the first — among non-environment connections, then among all available connections; unset effort means medium);
 `reviewModel` / `reviewEffort`
 select the reviewer runtime (unset means that same new-chat default); `reviewAutoFix: false` records a `request_changes`
 verdict and waits instead of auto-sending a fix. **`favoriteModels`** is the picker's starred list in display
@@ -53,7 +53,8 @@ interval (`1–3600`, default 30), because those values govern host process cade
   `isTerminalWindowsShell` guard, while a wire mutation outside the closed shell union rejects the complete
   update before cache, persistence, or broadcast changes. Settings owns validation and synchronization;
   `terminal` owns executable resolution and spawning.
-- `chatLineWidth` / `fileLineWidth` independently default to 120 and accept only finite integers from 40 through 240; their `Bounded` switches independently default to `true`. A malformed stored field falls back without discarding valid siblings; any invalid supplied field rejects the complete mutation before cache, persistence, or broadcast changes.
+- `questionPanelHeight` defaults to 60 and accepts only whole percents from 40 through 100 (`isQuestionPanelHeight`); a malformed stored value falls back to the default and an invalid update rejects the complete mutation.
+- `chatLineWidth` defaults to 80 and `fileLineWidth` to 120 (`LINE_WIDTH_COLUMNS.default`); both accept only finite integers from 40 through 240. Every settings write persists the whole config, so a stored width keeps its value across a default change — there is no migration; their `Bounded` switches independently default to `true`. A malformed stored field falls back without discarding valid siblings; any invalid supplied field rejects the complete mutation before cache, persistence, or broadcast changes.
 - `subagentsEnabled` defaults to `true` when absent so old config preserves current behavior; a present non-boolean update is rejected before cache, persistence, or broadcast changes. Settings owns only that global default; workspace override and effective-value resolution stay outside this module.
 - `onboardingDismissed` defaults to `false` when absent or malformed on disk; a present non-boolean update is rejected like the other boolean fields. Only the web onboarding wizard reads it.
 - `subagentMaxConcurrent` (per-chat concurrent subagents) defaults to 4 when absent or malformed on disk; a wire update outside `isSubagentMaxConcurrent` (whole 1–16) rejects the complete mutation — never clamped. Like `subagentsEnabled`, settings owns only the global value.

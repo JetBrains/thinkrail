@@ -70,22 +70,35 @@ export function usePiPackages({
 	const checkGeneration = useRef(0);
 	const scoped = workspaceId ? { workspaceId } : {};
 
-	const listPackages = useCallback(() => {
-		const generation = ++listGeneration.current;
-		return getTransport()
-			.request("packages.list", workspaceId ? { workspaceId } : {})
-			.then((result) => {
-				if (generation === listGeneration.current) setCatalog(result);
-			})
-			.catch(() => {
-				if (generation === listGeneration.current) setCatalog("failed");
-			});
-	}, [workspaceId]);
+	const listPackages = useCallback(
+		(force = false) => {
+			const generation = ++listGeneration.current;
+			return getTransport()
+				.request("packages.list", {
+					...(workspaceId ? { workspaceId } : {}),
+					...(force ? { force } : {}),
+				})
+				.then((result) => {
+					if (generation === listGeneration.current) setCatalog(result);
+				})
+				.catch(() => {
+					if (generation === listGeneration.current) setCatalog("failed");
+				});
+		},
+		[workspaceId],
+	);
 
+	const freshFor = useRef<string | null>(null);
 	useEffect(() => {
-		if (!enabled) return;
-		void listPackages();
-	}, [listPackages, packagesVersion, enabled]);
+		if (!enabled) {
+			freshFor.current = null;
+			return;
+		}
+		const scope = workspaceId ?? "";
+		const force = freshFor.current !== scope;
+		freshFor.current = scope;
+		void listPackages(force);
+	}, [listPackages, packagesVersion, enabled, workspaceId]);
 
 	const setRowErrors = (keys: readonly string[], message: string | null) =>
 		setErrors((current) => {

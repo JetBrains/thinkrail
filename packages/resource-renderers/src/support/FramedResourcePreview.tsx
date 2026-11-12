@@ -75,7 +75,7 @@ export function FramedResourcePreview({
 			<Dialog open={fullscreen} onOpenChange={setFullscreen}>
 				<DialogContent
 					data-testid={`${testIdPrefix}-fullscreen-dialog`}
-					className="flex h-[90vh] w-[95vw] max-w-[95vw] flex-col gap-8"
+					className="h-[90vh] w-[95vw] max-w-[95vw] gap-8"
 				>
 					<DialogHeader>
 						<DialogTitle>{title}</DialogTitle>

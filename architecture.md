@@ -39,7 +39,8 @@ packages/locales    UI string catalogs (bundled en.json) + pure catalog rules; .
                     instance ── depends on ─▶ nothing in the workspace (i18next, react-i18next)
 packages/shared     shellEnv (server-side only)
 packages/spec-graph portable pi extension: spec_* tools + skill (bundled into every session by packages/server;
-                    its pi-free core/ read model also backs the host's spec.graph read method)
+                    its pi-free core/ read model also backs the host's spec.graph read method and the
+                    palette's ranked section search — the engine the agent's spec_search uses)
 packages/pi-delegation         portable pure-pi package: the delegation core — controlled child sessions
                     for live session parents or independent resource owners
 packages/pi-dag               portable durable backend DAGs over pi-delegation; host-owned resources;
@@ -115,7 +116,15 @@ dependency. This keeps test process drivers outside both launchers and the serve
    switch on: it enters Default for that setup chat, because a fresh repo has nothing to isolate yet
    ([[submodule-web-panels]]); and an **existing worktree** the user explicitly attaches in place
    (`kind: "external"`), which ThinkRail may forget but never mutates (see
-   [[submodule-server-workspaces]]). The shell is built first,
+   [[submodule-server-workspaces]]). **A third `kind`-marked exception is ThinkRail-owned and never
+   git:** a **chat without a project** (`kind: "chat"`) is its own folder under `~/.thinkrail/chats`
+   inside the one built-in **Chats container** (`Project.kind: "chats"`, not a repository, never
+   closed), held apart in `chats.json`; files, terminal and Plan work there, nothing git-, review- or
+   spec-backed does, the host refuses every repository door for it, `GIT_CEILING_DIRECTORIES` keeps
+   git from walking up out of its folder, deleting it trashes the conversation and the folder as a
+   whole, and **Continue in workspace** hands it over — the chat's own agent writes a summary, the host
+   creates a workspace chat whose first message is that summary, and the chat keeps the link (see
+   [[submodule-server-workspaces]], [[submodule-server-host]]). The shell is built first,
    `pi` connected last. **Open PR** is a deterministic, host-side push + open/update of the branch's
    GitHub PR through the user's own `gh` CLI (no stored tokens, no provider REST API), body rendered from
    the verified plan, with a compare-URL fallback when `gh`/GitHub isn't available (see
@@ -213,7 +222,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
     rejects any range, any catalog drift, and a lockfile graph that resolves `react` or `react-dom` outside
     its one catalog pin (the React pin rationale belongs to [[module-web]]). Every pi
     upgrade also follows [[pi-compatibility]], the architecture-owned registry of host adaptations and
-    their removal gates; detailed rationale stays in the owning module specs. Any other root `overrides`
+    their removal gates, and every Electrobun upgrade follows [[electrobun-compatibility]]; detailed rationale stays in the owning module specs. Any other root `overrides`
     entry is an exact security pin whose rationale and removal gate live with its owner. Exempt:
     `peerDependencies` (extension packages declare `"*"` on purpose — the host provides the dep) and local
     protocols (`workspace:` / `link:` / `file:`). An exact SemVer prerelease/build suffix is still an exact
@@ -337,7 +346,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
     through their own renderers' diffs. Monaco renders files on
     desktop and never loads on a phone. Write-paths are host-derived and compare-and-swap guarded
     (`change.revert`/`change.undo`, [[submodule-server-changes]]); the client never sends bytes to
-    write. ThinkRail hosts no VS Code extensions: language intelligence (TextMate grammars, Shiki) is
+    write. ThinkRail hosts no VS Code extensions: language intelligence (Pierre lexers) is
     imported as libraries. Active content (HTML, SVG, notebook outputs) renders only inside sandboxed,
     network-denying frames. The renderers, registry and review surfaces are one package
     ([[module-resource-renderers]]) behind a host seam (markdown, code highlighting, byte URLs, link
@@ -399,8 +408,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
     mailbox** (`awaitToolResponse`) — the first per-session host service an extension receives. The
     mailbox, restart repair, late responses, composer supersede, Stop/Submit, needs-input and the web
     `interaction` props are **tool-agnostic**: keyed by `toolCallId`, told which tool names wait for a
-    person by the descriptor's `interactiveTools` and the renderer's `interactive` flag, and never
-    naming a tool in `contracts`, `agent` or `apps/web`. `ask_user_question` is the first client of that
+    person by the descriptor's `interactiveTools` and the renderer's `interactive` flag (plus `dock`, which
+    moves an awaited call's live form from the transcript into the chat's interaction dock above the
+    composer), and never naming a tool in `contracts`, `agent` or `apps/web`. `ask_user_question` is the first client of that
     contract, not a special case; the extension is deletable without touching the core (the vanilla
     package then falls back to pi's `ctx.ui` dialogs, which the host already renders). Product rule: a
     built-in (registry) extension wins a same-name tool collision with a user package while it is
@@ -408,7 +418,8 @@ dependency. This keeps test process drivers outside both launchers and the serve
     Third: web-access — the first wrap of a **third-party** pi package (`pi-web-access`), so there is no
     package of ours to publish and delivery collapses to the server half; its renderers stay app-local
     until the components they use join the SDK. It loads everything the package declares, as `pi install`
-    would — tools and its `librarian` skill — and is the first extension with skills, so the switch now
+    would, plus the `librarian` skill upstream later dropped, which the extension now owns — and is the
+    first extension with skills, so the switch now
     drops an extension's skills with its tools (launchers stage them under an owner folder so ownership
     survives flattening). Detail: [[module-thinkrail-extensions]].
 
@@ -457,11 +468,48 @@ dependency. This keeps test process drivers outside both launchers and the serve
     its standard format and tooling); catalogs in `contracts` (data and translation logic are not wire
     types). Deferred: RTL layout, an agent translation skill.
 
+24. **Voice input is host-local speech recognition behind a media side socket.** Dictation runs NVIDIA's
+    `nemo-speech` with a Nemotron streaming ASR model on the host ([[submodule-server-speech]]). Audio
+    never reaches a cloud service, and transcripts never reach the agent until the user sends the draft.
+    - **Distribution.** Nothing ships with ThinkRail. On the user's first explicit Download, the host
+      fetches a pinned runtime from NVIDIA's GitHub release and a pinned model from NVIDIA's Hugging Face
+      repo, each checked against its SHA-256, into `<dataDir>/speech/`. A compatible `nemo-speech` on PATH
+      is reused (the user's own tools).
+      - Why download over bundling: Electrobun updates are full-package downloads. Bundling the model
+        would cost every user ~750 MB per release, and bundling the runtime alone still adds 7–22 MB to
+        every update.
+      - Accepted cost: NVIDIA's binaries are not signed by ThinkRail (ad-hoc on macOS, unsigned on
+        Windows). MDM or Defender may block them, and that reads as an engine failure.
+    - **Engine.** It runs as a supervised loopback child: lazily started, stopped after 10 idle minutes,
+      on a random port with a per-launch API key.
+    - **Audio path.** Audio travels on `/speech`, a second WebSocket next to the JSON wire. The wire
+      hashes and retains every request for replay (Decision 8's reconnect model), which cannot absorb
+      50 audio frames a second.
+      - Rejected: base64 frames on the wire (that same retention); the browser talking to the engine's
+        port directly (breaks remote clients and exposes another local port).
+    - **Voice is a property of the page, not of fields.** One dictation layer in the web app follows
+      focus to any text input, textarea or contenteditable, and writes into it through native `input`
+      events.
+      - Every field gets voice with no API: the app's, resource renderers', and extension cards'.
+        Extensions need nothing from the Host UI SDK ([[module-thinkrail-extensions]]).
+      - The code editor and the terminal are excluded.
+      - Rejected: per-field mic components. Every surface and every extension would have to adopt and
+        wire one, and the first version did exactly that through `ResourceHost`.
+    - **Where the mic is.** The browser owns the microphone ([[submodule-web-speech]]), because a remote
+      client's microphone is at the client. So voice works only in a secure context (HTTPS or
+      localhost).
+    - **Deferred:** GPU backend downloads, a hosted NVIDIA API (a credential ThinkRail would have to
+      keep), text-to-speech, voice commands, and auto-send.
+
 ## Invariants
 
 - Never **value**-import `pi` in browser-bundled code; import types only, from the `pi-ai` /
   `pi-agent-core` package roots (type-only imports are erased at build, keeping the bundle provider-free).
   `@earendil-works/pi-coding-agent` is server-only — it never reaches `contracts`/`web`.
+- TypeScript stays type-strippable: `erasableSyntaxOnly` in `tsconfig.base.json` plus Biome
+  `noParameterProperties`/`noEnum`/`noNamespace` (which also cover files outside any tsconfig) ban enums,
+  namespaces, and constructor parameter properties, so sources contain only erasable TS syntax and
+  type-stripping tools (Node strip-types, Bun, oxc) need no TS emit.
 - One id model: the UI tab id vs `session.sessionId` (the `AgentSession` id). No separate pi UUID.
 - The agent runs in-process with **no crash isolation** — wrap session calls and forward errors; a fatal
   fault takes the whole host down (accepted tradeoff vs the subprocess RPC mode).
@@ -474,5 +522,6 @@ dependency. This keeps test process drivers outside both launchers and the serve
   This includes PR revalidation on window focus; terminal-busy checks are close actions and Central quota
   resumes on visibility changes, not ordinary focus. Sync and fire-and-forget cases use
   `@thinkrail/shared/spawn`; bespoke bounded runners set the option directly. Exempt: spawns that inherit
-  an existing terminal's stdio (the `update`/`uninstall` CLI subcommands, the build script) and shell
-  probes that are no-ops on win32 (`shellEnv`).
+  an existing terminal's stdio (the `update`/`uninstall` CLI subcommands, the build script), shell
+  probes that are no-ops on win32 (`shellEnv`), and the file-manager reveal (`explorer.exe` honors the
+  hide flag by opening its folder window invisibly).

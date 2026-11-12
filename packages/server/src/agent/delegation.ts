@@ -1,4 +1,4 @@
-import { rmSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import {
 	buildSessionContext,
@@ -21,7 +21,9 @@ import {
 	type RunStatus,
 } from "pi-delegation";
 import { createSubagents, type Subagents } from "pi-subagents";
+import { projectImages } from "../images";
 import { dataDir } from "../persistence";
+import { trashFile } from "../trash";
 import {
 	buildSessionSettings,
 	canUseSessionResources,
@@ -102,7 +104,7 @@ export function delegationServiceFor(workspaceId: string): DelegationService {
 			scope: workspaceId,
 			modelRuntime: getPiRuntime,
 			childBaseExtensionFactories: childBaseExtensionFactories(),
-			childExtensionFactories: childExtensionFactories(),
+			childExtensionFactories: childExtensionFactories(workspaceId),
 			buildChildSettings: buildSessionSettings,
 		});
 		created.onLifecycle((event) => {
@@ -184,6 +186,14 @@ export function removeWorkspaceDelegation(workspaceId: string): void {
 	rmSync(join(delegationRootDir(), workspaceId), { recursive: true, force: true });
 }
 
+/** Recoverable twin of `removeWorkspaceDelegation`: the store goes to the Trash, then the service is released. */
+export async function trashWorkspaceDelegation(workspaceId: string): Promise<void> {
+	assertWorkspaceStorageId(workspaceId);
+	const store = join(delegationRootDir(), workspaceId);
+	if (existsSync(store)) await trashFile(store);
+	services.delete(workspaceId);
+}
+
 function assertWorkspaceStorageId(value: string): void {
 	if (!isHostResourceId(value)) throw new Error("Invalid workspaceId: not a plain id");
 }
@@ -220,7 +230,10 @@ export function readChildTranscript(
 		isTranscriptMessageRole(message.role),
 	) as TranscriptMessage[];
 	const status = ownedChild?.snapshot?.status;
-	return { messages, ...(status !== undefined ? { status } : {}) };
+	return {
+		messages: projectImages(messages, parentSessionId) as TranscriptMessage[],
+		...(status !== undefined ? { status } : {}),
+	};
 }
 
 export interface ReviewSubagentRun {

@@ -115,7 +115,8 @@ test("a reported error reaches PostHog as a classifier with no personal data in 
 	}
 	const list = entry.properties.$exception_list as Array<Record<string, unknown>>;
 	expect(list.map((exception) => exception.value)).toEqual(["request project.open", ""]);
-	const frames = (list[0]?.stacktrace as { frames: Array<Record<string, unknown>> }).frames;
+	const frames = (list[0] as { stacktrace: { frames: Array<Record<string, unknown>> } }).stacktrace
+		.frames;
 	expect(
 		frames.some((frame) => frame.filename === "packages/server/src/analytics/errorReports.test.ts"),
 	).toBe(true);
@@ -178,30 +179,29 @@ test("message lines shaped like stack frames never become frames, causes and bin
 	expect(wire).toContain("packages/server/src/analytics/errorReports.test.ts");
 });
 
-test.each([
-	{ additionalEnabled: false },
-	{ mute: true },
-	{ env: { THINKRAIL_NO_ANALYTICS: "1" } },
-])("error reports ignore the additional-data preference and per-run suppression %j", async (options) => {
-	const sent: BatchEntry[] = [];
-	boot(sent, options);
-	reportError(new Error("boom"), { source: "host_logged", handled: true, scope: "agent" });
-	await shutdownAnalytics();
-	expect(exceptions(sent)).toHaveLength(1);
-	expect(exceptions(sent)[0]?.properties.scope).toBe("agent");
-});
+test.each([{ additionalEnabled: false }, { mute: true }, { env: { THINKRAIL_NO_ANALYTICS: "1" } }])(
+	"error reports ignore the additional-data preference and per-run suppression %j",
+	async (options) => {
+		const sent: BatchEntry[] = [];
+		boot(sent, options);
+		reportError(new Error("boom"), { source: "host_logged", handled: true, scope: "agent" });
+		await shutdownAnalytics();
+		expect(exceptions(sent)).toHaveLength(1);
+		expect(exceptions(sent)[0]?.properties.scope).toBe("agent");
+	},
+);
 
-test.each([
-	{ CI: "1" },
-	{ NODE_ENV: "test" },
-])("automated environment %j reports no errors", async (env) => {
-	const sent: BatchEntry[] = [];
-	boot(sent, { env });
-	reportError(new Error("boom"), { source: "request", handled: true });
-	await reportFatalError(new Error("fatal"));
-	await shutdownAnalytics();
-	expect(sent).toEqual([]);
-});
+test.each([{ CI: "1" }, { NODE_ENV: "test" }])(
+	"automated environment %j reports no errors",
+	async (env) => {
+		const sent: BatchEntry[] = [];
+		boot(sent, { env });
+		reportError(new Error("boom"), { source: "request", handled: true });
+		await reportFatalError(new Error("fatal"));
+		await shutdownAnalytics();
+		expect(sent).toEqual([]);
+	},
+);
 
 function raise(message: string): Error {
 	return new Error(message);
@@ -260,7 +260,7 @@ test("a fatal report is sent immediately as level fatal, tagged with its crash k
 		code: "ENOENT",
 		$exception_level: "fatal",
 	});
-	const [root] = entry?.properties.$exception_list as Array<Record<string, unknown>>;
+	const [root] = (entry as BatchEntry).properties.$exception_list as Array<Record<string, unknown>>;
 	expect(root?.value).toBe("host_crash unhandledRejection ENOENT");
 	expect(root?.mechanism).toMatchObject({ handled: false, type: "onunhandledrejection" });
 });
@@ -300,7 +300,8 @@ test("client errors keep WebKit stacks parseable and their frames web-relative",
 	const list = render?.properties.$exception_list as Array<Record<string, unknown>>;
 	expect(list[0]?.type).toBe("TypeError");
 	expect(list[0]?.value).toBe("ui render:plan_rail");
-	const frames = (list[0]?.stacktrace as { frames: Array<Record<string, unknown>> }).frames;
+	const frames = (list[0] as { stacktrace: { frames: Array<Record<string, unknown>> } }).stacktrace
+		.frames;
 	expect(frames).toContainEqual({
 		platform: "web:javascript",
 		filename: "web/assets/index-abc.js",

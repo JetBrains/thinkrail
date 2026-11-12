@@ -24,8 +24,8 @@ bootstrap it into one so it can be opened.
   with the named `NOT_GIT` code), records the root in the host's resolved spelling (git prints `C:/…` on
   Windows; architecture Decision 22), dedupes by root,
   and assigns a stable unique readable `slug`; `getProjects` returns all known records with slug backfill,
-  `listProjects` returns open records by `lastOpened`, and `listRecentProjects` returns open + closed records
-  by `lastOpened`, synchronously dropping only *closed* records whose folder the last completed check
+  `listProjects` returns open records in the user's order (`compareProjectRank`), and `listRecentProjects`
+  returns open + closed records by `lastOpened`, synchronously dropping only *closed* records whose folder the last completed check
   found definitively gone (missing, or no longer a directory). Open records are never checked, so a
   temporarily unmounted drive loses nothing; other filesystem errors do not prove deletion, and a record
   not yet checked stays listed. **`refreshRecentProjectFolders(budgetMs)`** re-stats closed records'
@@ -34,7 +34,15 @@ bootstrap it into one so it can be opened.
   filter is display-only: stored records are untouched. A persisted
   optional **`Project.closed: true`** is the entire membership state: absence means open, so existing
   records migrate as open. **`openProject`** finds a known root even when closed, clears `closed`, bumps
-  `lastOpened`, preserves its id, persists, and publishes the full snapshot; **`closeProject`** marks that
+  `lastOpened`, preserves its id, persists, and publishes the full snapshot; a new or reopened project
+  gets a `rank` above every open repository, so it lands on top, while reopening one already open pins
+  its current rank, so an open never moves a project the user arranged.
+  **`moveProject(id, targetId, "before" | "after")`** is the one order mutation, over open repositories
+  only (the Chats container and closed records are unknown to it; self and no-op moves change nothing):
+  the moved record takes the midpoint of its new neighbours' ranks (one rank past the edge at either
+  end), so a move persists and publishes that one record; only when the neighbours leave no
+  representable room (equal ranks, or a gap halved to nothing) are all open repositories renumbered,
+  each changed record published. **`closeProject`** marks that
   same record closed and publishes it without deleting the project, repository, workspace records, or
   live runtimes. **`renameProject`** replaces only the display `name` (whitespace-collapsed, trimmed,
   1–100 chars) and publishes the record; the folder-derived `slug`, `path`, and id never change, so
@@ -54,12 +62,27 @@ bootstrap it into one so it can be opened.
   `notDirectory` — so the UI picks between opening, an init offer, or an error) and **`initProject`**
   (bootstrap a plain directory: `git init` + `git add -A` + an **allow-empty** initial commit — committing
   the folder's contents, or an empty commit when it is empty, so the repo gets a HEAD and `git worktree
-  add` works; an already-a-repo path short-circuits to `openProject`; a missing / non-dir path throws; a
-  timed-out top-level probe throws `GIT_TIMEOUT` rather than classifying a slow repo as `initable`; a
-  top-level probe git refuses with "dubious ownership" (e.g. a WSL share opened from Windows) throws with
+  add` works; an already-a-repo path short-circuits to `openProject`; a missing / non-dir path rejects; a
+  timed-out top-level probe rejects with `GIT_TIMEOUT` rather than classifying a slow repo as `initable`; a
+  top-level probe git refuses with "dubious ownership" (e.g. a WSL share opened from Windows) rejects with
   git's stderr rather than offering `git init` inside what may be an existing repo; a
-  timed-out `user.name`/`user.email` probe throws rather than committing as ThinkRail; a failed
-  init/add/commit throws with git's stderr and removes `.git` only when this call created it).
+  timed-out `user.name`/`user.email` probe rejects rather than committing as ThinkRail; a failed
+  init/add/commit rejects with git's stderr — a timed-out one with `GIT_TIMEOUT` — and removes `.git` only
+  when this call created it). **The bootstrap's `init`, `add -A` and `commit` run through `gitAsync`, off
+  the host event loop:** a synchronous `add` over a large folder froze the whole app for minutes (#1032),
+  and a quit meanwhile left a process with no window, since shutdown runs on the same loop. `add` and
+  `commit` take the index-writer deadline `INDEX_WRITE_TIMEOUT_MS` ([[submodule-server-git]]: 5 minutes,
+  none on Windows, where a killed git leaves `index.lock`); an expired one is killed with its process group
+  before the `.git` this call created is removed. The commit passes `-c maintenance.auto=false -c
+  gc.auto=0`, so the first commit of a big tree cannot start an automatic `gc`/maintenance that outlasts
+  it. The identity and top-level probes stay short synchronous reads. **A bootstrap reserves its folder**
+  (keyed by canonical path) from before `git init` until its open — or, after a failure, its `.git` and
+  folder cleanup — has finished, and releases it however it ends. An `initProject` or `createProject` of a
+  reserved folder waits for it, then re-evaluates from scratch: it opens the finished repository, or
+  bootstraps again (making the folder again) after a failure cleaned up. `openProject` stays synchronous for
+  its many callers, so for a reserved folder — or a path git resolves to one — it rejects with
+  `PROJECT_BOOTSTRAPPING` instead. Nothing can adopt, or commit into, a repository that a failing bootstrap
+  is about to delete.
   **`createProject(parentPath, name)`** is the start-from-nothing path: `name` must be one plain folder
   name (no separators, not `.`/`..`), the resolved parent is created when missing, the target folder is
   made — an existing **empty** folder is reused, a non-empty one or a file rejects — and then gets the same
@@ -100,6 +123,19 @@ bootstrap it into one so it can be opened.
   leaving it untouched otherwise; `trusted: false` revokes both. A trust change persists and publishes the
   record, so every client shows the persisted trust even when the host request that made it then fails
   (an open chat could not reload).
+## The reserved Chats root
+
+Chats without a project keep their folders under `<dataDir>/chats` ([[submodule-server-workspaces]]),
+which is never a repository. **One policy refuses it at every door** that would make a project or
+workspace of a folder — `inspectProjectPath`, `openProject`, `initProject`, `createProject`,
+`inspectCloneDestination` (so `cloneProject` refuses before it reserves a folder or Git downloads
+anything) and, through this barrel, `workspaces`' existing-worktree admission: `assertOutsideChatsRoot`
+throws `CHATS_CONTAINER` before any filesystem or Git side effect. Containment is persistence's
+`landsInChatsRoot` — the lexical check plus canonical containment, the nearest existing ancestor of the
+path and of the root each resolved through `realpath`, so an alias spelling (`/tmp` for `/private/tmp`,
+a symlink, a folder that does not exist yet) cannot slip past. The check only answers; the path the door
+records keeps its resolved spelling (architecture Decision 22).
+
 ## Repository cloning
 
 `inspectCloneDestination` returns the validated absolute destination for the UI preview without reserving
@@ -123,13 +159,14 @@ Git diagnostics are redacted before truncation: user-configured URL rewrites can
 and truncating first can separate a secret suffix from the URL prefix needed to recognize it.
 
 - **Public surface (barrel):** `cloneProject`, `inspectCloneDestination`, `startProjectClone`, `cancelProjectClone`, `openProject`, `listProjects`, `listRecentProjects`,
-  `refreshRecentProjectFolders`, `closeProject`, `renameProject`,
+  `assertOutsideChatsRoot`,
+  `refreshRecentProjectFolders`, `closeProject`, `renameProject`, `moveProject`,
   `getProjects`, `setProjectPublisher`, `setProjectPathGuard`, `inspectProjectPath`, `initProject`, `createProject`, `setProjectTrust`,
   `setProjectSkillEnabled`, `setProjectGroupEnabled`, `acknowledgeProjectSkills`,
   `approveProjectMcpServer`, `setProjectMcpOverride`, `grantProjectMcpTool`, `revokeProjectMcpTool`,
   `setPiTrustSeed`.
 - **Allowed deps:** `persistence`; the `git` sub-module (shared `git()` runner, which now owns the
   environment its children spawn under — this module passes none); `contracts` (`Project`, `ProjectPathStatus`);
-  `shared/codedError` (the two named open failures); Node/Bun.
+  `shared/codedError` (the named open and bootstrap failures); Node/Bun.
 - **Forbidden:** `host`; sibling features other than `git` (`workspaces` depends on `projects`, never the
   reverse).

@@ -1,10 +1,16 @@
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { AgentSettlement, PiEvent } from "@thinkrail/contracts";
+import { projectImages } from "../images";
 
 export function projectSessionEvent(
 	event: AgentSessionEvent,
 	terminal: AgentSettlement | null,
+	sessionId: string,
 ): PiEvent {
+	return projectImages(allowlistedEvent(event, terminal), sessionId) as PiEvent;
+}
+
+function allowlistedEvent(event: AgentSessionEvent, terminal: AgentSettlement | null): PiEvent {
 	if (event.type === "agent_settled") return { type: "agent_settled", terminal };
 	if (event.type === "entry_appended")
 		return { type: "entry_appended", entryType: event.entry.type };
@@ -30,7 +36,7 @@ export function projectSessionEvent(
 	if (event.type === "tool_execution_update") {
 		return { ...event, partialResult: withoutStructured(event.partialResult) };
 	}
-	return event as PiEvent;
+	return event;
 }
 
 function withoutStructured(result: unknown): unknown {

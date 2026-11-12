@@ -22,7 +22,7 @@ jobs:
       app: ${{ steps.classify.outputs.app }}
       artifacts: ${{ steps.classify.outputs.artifacts }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - id: classify
         env:
           BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_ref }}
@@ -48,16 +48,14 @@ jobs:
     timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
-      - name: Cache bun install
-        uses: actions/cache@v5
+      # The website typecheck runs Astro 7.4 and its content mapper under Node >= 22.23.4.
+      - uses: actions/setup-node@v7
         with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-
+          node-version: 22
       - run: bun install --frozen-lockfile
       - run: bun run check:deps
       - run: bun run check:boundaries
@@ -77,16 +75,10 @@ jobs:
     timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
-      - name: Cache bun install
-        uses: actions/cache@v5
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - run: bun run test
 
@@ -97,53 +89,46 @@ jobs:
     if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
       # Vanilla pi is an npm CLI on Node; the gate loads the packed packages under Node on purpose.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - name: Cache bun install
-        uses: actions/cache@v5
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - run: bun run check:pi-packages
 
   e2e-shard:
-    name: E2E (no-agent) shard ${{ matrix.shard }}/2
+    name: E2E (no-agent) shard ${{ matrix.shard }}/3
     timeout-minutes: 30
     needs: changes
     if: needs.changes.outputs.app == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     env:
-      THINKRAIL_E2E_JOB_SHARD: ${{ matrix.shard }}/2
+      THINKRAIL_E2E_JOB_SHARD: ${{ matrix.shard }}/3
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
-      - name: Cache bun install
-        uses: actions/cache@v5
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - name: Start Playwright Chromium and WebKit download
         run: .github/scripts/install-playwright.sh start webkit
+      - name: Install WebKit system libraries
+        uses: ./.github/actions/apt-packages
+        timeout-minutes: 10
+        with:
+          set: webkit
       - run: bun run build:web
       - name: Install Playwright Chromium and WebKit
         timeout-minutes: 8
-        run: .github/scripts/install-playwright.sh wait
+        run: .github/scripts/install-playwright.sh wait webkit
       # `bun run e2e` boots the host on an isolated port + state dir, runs this job's slice of the
       # @agent-free suite headless, then tears it all down. It reuses the web build above.
       - run: bun run e2e
@@ -151,7 +136,7 @@ jobs:
           THINKRAIL_E2E_SKIP_BUILD: "1"
       - name: Upload Playwright report
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report-${{ matrix.shard }}
           path: playwright-report/
@@ -168,16 +153,10 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
-      - name: Cache bun install
-        uses: actions/cache@v5
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - name: Start Playwright Chromium download
         run: .github/scripts/install-playwright.sh start
@@ -193,10 +172,12 @@ jobs:
         run: .github/scripts/install-playwright.sh wait
       # This shard of the no-agent e2e suite against the artifact (grep-inverts @dev-seam too — the fake
       # login providers only exist in the dev boot): the broad net for works-from-source/broken-in-the-binary.
-      - run: bun run e2e:binary --shard=${{ matrix.shard }}/4
+      - run: bun run e2e:binary
+        env:
+          THINKRAIL_E2E_JOB_SHARD: ${{ matrix.shard }}/4
       - name: Upload Playwright report
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report-binary-${{ matrix.shard }}
           path: playwright-report-binary/
@@ -209,7 +190,7 @@ jobs:
     if: needs.changes.outputs.app == 'true'
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
@@ -230,7 +211,7 @@ jobs:
     if: needs.changes.outputs.artifacts == 'true'
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
@@ -253,22 +234,18 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
-      - name: Cache bun install
-        uses: actions/cache@v5
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - name: Start Playwright Chromium download
         run: .github/scripts/install-playwright.sh start
       - name: Install desktop runtime packages
-        uses: ./.github/actions/desktop-apt
+        uses: ./.github/actions/apt-packages
         timeout-minutes: 10
+        with:
+          set: desktop
       - name: Start virtual display
         run: |
           for attempt in 1 2 3; do
@@ -298,10 +275,12 @@ jobs:
         timeout-minutes: 5
         run: .github/scripts/install-playwright.sh wait
       - name: Run no-agent e2e against the embedded desktop host
-        run: env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 bun run e2e:desktop --shard=${{ matrix.shard }}/4
+        run: env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 bun run e2e:desktop
+        env:
+          THINKRAIL_E2E_JOB_SHARD: ${{ matrix.shard }}/4
       - name: Upload Playwright report
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report-desktop-${{ matrix.shard }}
           path: playwright-report-desktop/
@@ -311,7 +290,18 @@ jobs:
   ci-passed:
     name: CI passed
     timeout-minutes: 5
-    needs: [changes, lint, test, pi-packages, e2e-shard, binary-shard, binary-windows, desktop-shard, desktop-windows]
+    needs:
+      [
+        changes,
+        lint,
+        test,
+        pi-packages,
+        e2e-shard,
+        binary-shard,
+        binary-windows,
+        desktop-shard,
+        desktop-windows,
+      ]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:

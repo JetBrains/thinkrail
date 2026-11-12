@@ -20,7 +20,7 @@ It consumes finished artifacts; it does not build the application or supply appl
 - **Owns:** artifact locators, isolated environments, native/installer smoke entrypoints, shared host
   probes, their fixtures and helper unit tests, and the public build action's desktop packaging-invocation
   and artifact-collector contract tests.
-- **Public surface:** `locateDesktopLauncher`, `waitForDocument`
+- **Public surface:** `locateDesktopLauncher`, `waitForDocument`, `within`
 - **Allowed deps:** CLI's public artifact-name helper; server's sanctioned history-fixture export; shared
   release identity, its Windows file identity and icon, and retrying teardown; `resedit` to read Windows
   executable resources;
@@ -31,7 +31,7 @@ It consumes finished artifacts; it does not build the application or supply appl
   production packages importing this package, or real-user state mutation during tests.
 
 The root smoke commands execute the CLI, desktop and installer entrypoints directly. Browser E2E
-orchestration stays in [[module-browser-e2e]] and imports the pure locator and ready-document poller through this package's barrel.
+orchestration stays in [[module-browser-e2e]] and imports the pure locator, ready-document poller and timer-clearing `within` deadline through this package's barrel.
 Unit tests and strict typechecking use ordinary workspace Turbo tasks; there is no package build step,
 SDK preparation, declaration generation, or Playwright test discovery here. Product unit tests remain
 with their owning modules. The process-tree lifecycle test reads a fixture pid file only once it parses as
@@ -45,7 +45,9 @@ fixture value-imports a bare `@earendil-works/pi-coding-agent` specifier and sur
 its model name, so the load exercises pi's virtual-module mapping through the transform path the host
 forces — a bundle missing the `PI_BUNDLED_NODE` define fails this probe; [[submodule-server-agent]] owns
 the seam),
-exercise the bundled factories/skills, run **two scripted provider turns** — the fixture also registers a
+exercise the bundled factories/skills (`extension.list` must report a tool for every registry extension,
+so an extension entry the bundle cannot load — `pi-web-access`'s lazily imported `dist` included — fails),
+run **two scripted provider turns** — the fixture also registers a
 pi-ai faux `streamSimple` under its own `api` name that calls `visualize` with a dangling flowchart edge,
 so the probe asserts the strict mermaid parse error reaches the transcript as an `isError` tool result
 (the packaged host composes the ThinkRail extension registry, never the portable package's best-effort

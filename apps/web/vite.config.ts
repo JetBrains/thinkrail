@@ -3,6 +3,7 @@ import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import { diffsStub } from "./diffsStub";
 import { posthogSourceMapUpload, sourceMapRelease } from "./sourceMapUpload";
 
 function envPort(name: string): number | undefined {
@@ -22,6 +23,7 @@ export default defineConfig(({ mode }) => {
 	const release = profile ? null : sourceMapRelease();
 	return {
 		plugins: [
+			diffsStub(),
 			react(),
 			babel({ presets: [reactCompilerPreset()] }),
 			tailwindcss(),
@@ -41,12 +43,17 @@ export default defineConfig(({ mode }) => {
 					target: `ws://localhost:${hostPort}`,
 					ws: true,
 				},
+				"/speech": {
+					target: `ws://localhost:${hostPort}`,
+					ws: true,
+				},
 				"/files": { target: `http://localhost:${hostPort}` },
 				"/blob": { target: `http://localhost:${hostPort}` },
 				"/fonts": { target: `http://localhost:${hostPort}` },
+				"/images": { target: `http://localhost:${hostPort}` },
 			},
 		},
-		worker: { format: "es" },
+		worker: { format: "es", plugins: () => [diffsStub()] },
 		build: profile
 			? { outDir: "dist-profile", minify: false }
 			: { outDir: "dist", ...(release ? { sourcemap: "hidden" as const } : {}) },

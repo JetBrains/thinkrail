@@ -32,7 +32,7 @@ async function forceBadModelOnCreate(page: Page): Promise<void> {
 	});
 }
 
-test("a bad model surfaces a visible error toast, not a false ✓ Done", {
+test("a bad model surfaces a visible error toast, not a false Done", {
 	tag: "@agent",
 }, async ({ page }) => {
 	await forceBadModelOnCreate(page);
@@ -52,6 +52,6 @@ test("a bad model surfaces a visible error toast, not a false ✓ Done", {
 	await expect(toast).toContainText(BOGUS_MODEL_ID);
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
 	await expect(
-		page.locator('[data-testid="chat-message"][data-role="system"]').filter({ hasText: "Done" }),
+		page.locator('[data-testid="turn-divider-status"][data-outcome="done"]'),
 	).toHaveCount(0);
 });

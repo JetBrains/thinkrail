@@ -34,7 +34,7 @@ async function observeResourceWire(
 	let welcomes = 0;
 	let resourceScope: WsParams<"session.resources"> | undefined;
 	const transcriptRequests: WsParams<"subagent.getTranscript">[] = [];
-	let disconnect = () => {};
+	let disconnect: () => Promise<void> = () => Promise.resolve();
 	await page.routeWebSocket(/\/ws(\?|$)/, (browser) => {
 		const server = browser.connectToServer();
 		disconnect = () => browser.close({ code: 1012, reason: "Reconnect probe" });
@@ -167,7 +167,7 @@ test("Resources rehydrates on welcome after a real socket reconnect and browser 
 	await expect(trigger).toHaveAttribute("data-active-count", "0");
 	await expect.poll(() => wire.reads).toBeGreaterThan(0);
 	const initial = wire.reads;
-	wire.disconnect();
+	await wire.disconnect();
 	await expect.poll(() => wire.reads).toBeGreaterThan(initial);
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await expect(trigger).toHaveAttribute("data-active-count", "0");
@@ -221,7 +221,7 @@ test("an older welcome retires the inspector with its transcript and returns foc
 
 	const initialWelcomes = wire.welcomes;
 	wire.setProtocolVersion(CHAT_RESOURCES_PROTOCOL_VERSION - 1);
-	wire.disconnect();
+	await wire.disconnect();
 	await expect.poll(() => wire.welcomes).toBeGreaterThan(initialWelcomes);
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await expect(trigger).toHaveCount(0);
@@ -332,7 +332,6 @@ test("Resources keeps a chat's archived history: the dock sums it, the inspector
 	const dock = page.getByTestId("resources-dock");
 	const finishedLine = dock.getByTestId("resources-dock-finished");
 	await expect(finishedLine).toContainText("30 finished");
-	await expect(dock.getByTestId("resources-dock-fresh")).toHaveCount(0);
 	await expect(dock.locator('[data-testid="resource-command"]')).toHaveCount(0);
 	await expect(page.getByTestId("resources-trigger")).toHaveAttribute("data-active-count", "0");
 	await shot(dock, "chat-resources", "history-dock");

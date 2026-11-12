@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { discoverCompatibilitySkillSources, isProjectSkillPath } from "./skillSources";
+import {
+	discoverCompatibilitySkillSources,
+	isProjectSkillPath,
+	mayHoldProjectSkills,
+} from "./skillSources";
 
 const temporaryRoots: string[] = [];
 
@@ -42,6 +46,34 @@ describe("isProjectSkillPath", () => {
 			"skills/x",
 		]) {
 			expect(isProjectSkillPath(path)).toBe(false);
+		}
+	});
+});
+
+describe("mayHoldProjectSkills", () => {
+	it("matches a project skill directory and the folder above it, but not dot-folders inside it", () => {
+		for (const path of [
+			".claude",
+			".pi",
+			".agents/skills",
+			".github/skills/review",
+			".github/skills/review/scripts",
+			".gemini\\skills",
+		]) {
+			expect(mayHoldProjectSkills(path)).toBe(true);
+		}
+		for (const path of [
+			".claude/cache",
+			".claudex",
+			"src",
+			"skills",
+			"nested/.pi",
+			"nested/.pi/skills",
+			".claude/skills/.cache",
+			".claude/skills/review/.venv",
+			".pi\\skills\\review\\.venv\\lib",
+		]) {
+			expect(mayHoldProjectSkills(path)).toBe(false);
 		}
 	});
 });

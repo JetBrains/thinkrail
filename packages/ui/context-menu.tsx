@@ -40,10 +40,20 @@ function ContextMenuSeparator({
 	);
 }
 
+function openContextMenuFromKeyboard(event: React.KeyboardEvent<HTMLElement>) {
+	if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+	event.preventDefault();
+	const rect = event.currentTarget.getBoundingClientRect();
+	event.currentTarget.dispatchEvent(
+		new MouseEvent("contextmenu", { bubbles: true, clientX: rect.left, clientY: rect.bottom }),
+	);
+}
+
 export {
 	ContextMenu,
 	ContextMenuContent,
 	ContextMenuItem,
 	ContextMenuSeparator,
 	ContextMenuTrigger,
+	openContextMenuFromKeyboard,
 };

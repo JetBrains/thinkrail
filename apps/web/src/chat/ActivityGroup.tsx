@@ -12,11 +12,12 @@ import { cn } from "@thinkrail/ui/utils";
 import { useContext } from "react";
 import { firstNonBlankLine } from "@/lib";
 import type { ActivityBreadcrumbKind } from "./activityBreadcrumbs";
+import { CONTENT_WIDTH_BREAKOUT } from "./contentWidth";
 import { PendingExtUiContext, ToolPromptSlot } from "./ExtUiPrompt";
 import { useFold } from "./foldState";
 import type { ActivityStep, RoutineToolStep, ThinkingStep } from "./rows";
 import { ToolRendererBody } from "./ToolRendererBody";
-import { getToolSummary } from "./toolRegistry";
+import { getToolSummary, getToolWidth } from "./toolRegistry";
 
 export function ActivityGroup({
 	id,
@@ -400,7 +401,13 @@ function RoutineToolRow({
 				summary={summary}
 			/>
 			{expanded ? (
-				<div className={cn("px-8 pb-4 pl-16", status === "error" && "text-feedback-error")}>
+				<div
+					className={cn(
+						"px-8 pb-4 pl-16",
+						status === "error" && "text-feedback-error",
+						getToolWidth(step.toolName) === "content" && CONTENT_WIDTH_BREAKOUT,
+					)}
+				>
 					<ToolRendererBody {...renderProps} imageLabel={summary} />
 				</div>
 			) : null}

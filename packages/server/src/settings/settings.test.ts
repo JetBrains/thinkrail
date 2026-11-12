@@ -59,22 +59,22 @@ test("getConfig falls back to DEFAULT_CONFIG when no config.json exists", () => 
 	expect(getConfig()).toEqual(DEFAULT_CONFIG);
 });
 
-test.each([
-	true,
-	false,
-])("legacy analytics preference %s seeds selection without consent", (enabled) => {
-	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ analyticsEnabled: enabled }));
-	expect(getConfig()).toMatchObject({
-		analyticsEnabled: enabled,
-		analyticsConsentConfirmed: false,
-	});
-	updateConfig({ theme: "light" });
-	resetConfigCache();
-	expect(getConfig()).toMatchObject({
-		analyticsEnabled: enabled,
-		analyticsConsentConfirmed: false,
-	});
-});
+test.each([true, false])(
+	"legacy analytics preference %s seeds selection without consent",
+	(enabled) => {
+		writeFileSync(join(dataDir, "config.json"), JSON.stringify({ analyticsEnabled: enabled }));
+		expect(getConfig()).toMatchObject({
+			analyticsEnabled: enabled,
+			analyticsConsentConfirmed: false,
+		});
+		updateConfig({ theme: "light" });
+		resetConfigCache();
+		expect(getConfig()).toMatchObject({
+			analyticsEnabled: enabled,
+			analyticsConsentConfirmed: false,
+		});
+	},
+);
 
 test("new and malformed analytics config defaults off and unconfirmed", () => {
 	expect(getConfig()).toMatchObject({ analyticsEnabled: false, analyticsConsentConfirmed: false });
@@ -86,21 +86,24 @@ test("new and malformed analytics config defaults off and unconfirmed", () => {
 	expect(getConfig()).toMatchObject({ analyticsEnabled: false, analyticsConsentConfirmed: false });
 });
 
-test.each([
-	true,
-	false,
-])("explicit analytics choice %s persists and broadcasts atomically", (enabled) => {
-	const published: AppConfig[] = [];
-	setSettingsPublisher((config) => published.push(config));
-	updateConfig({ analyticsEnabled: enabled, analyticsConsentConfirmed: true });
-	expect(published).toHaveLength(1);
-	expect(published[0]).toMatchObject({
-		analyticsEnabled: enabled,
-		analyticsConsentConfirmed: true,
-	});
-	resetConfigCache();
-	expect(getConfig()).toMatchObject({ analyticsEnabled: enabled, analyticsConsentConfirmed: true });
-});
+test.each([true, false])(
+	"explicit analytics choice %s persists and broadcasts atomically",
+	(enabled) => {
+		const published: AppConfig[] = [];
+		setSettingsPublisher((config) => published.push(config));
+		updateConfig({ analyticsEnabled: enabled, analyticsConsentConfirmed: true });
+		expect(published).toHaveLength(1);
+		expect(published[0]).toMatchObject({
+			analyticsEnabled: enabled,
+			analyticsConsentConfirmed: true,
+		});
+		resetConfigCache();
+		expect(getConfig()).toMatchObject({
+			analyticsEnabled: enabled,
+			analyticsConsentConfirmed: true,
+		});
+	},
+);
 
 test("preference-only updates cannot infer expanded consent", () => {
 	updateConfig({ analyticsEnabled: true });
@@ -378,6 +381,26 @@ test("agentReviewEnabled defaults off; an old config loads the default; toggling
 	expect(() => updateConfig(invalid)).toThrow("agentReviewEnabled must be a boolean");
 });
 
+test("otherAgentSkills is off for a new install, and every config it writes keeps it off", () => {
+	expect(DEFAULT_CONFIG.otherAgentSkills).toBe(false);
+	resetConfigCache();
+	expect(getConfig().otherAgentSkills).toBe(false);
+	updateConfig({ agentReviewEnabled: true });
+	resetConfigCache();
+	expect(getConfig().otherAgentSkills).toBe(false);
+});
+
+test("otherAgentSkills stays on for a config that predates it; opting out round-trips; non-boolean rejected", () => {
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
+	resetConfigCache();
+	expect(getConfig().otherAgentSkills).toBe(true);
+	expect(updateConfig({ otherAgentSkills: false }).otherAgentSkills).toBe(false);
+	resetConfigCache();
+	expect(getConfig().otherAgentSkills).toBe(false);
+	const invalid = { otherAgentSkills: 1 } as unknown as AppConfigUpdate;
+	expect(() => updateConfig(invalid)).toThrow("otherAgentSkills must be a boolean");
+});
+
 test("onboardingDismissed defaults off; an old config loads the default; dismissing round-trips; non-boolean rejected", () => {
 	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
 	resetConfigCache();
@@ -640,15 +663,17 @@ test("line-width fields default independently when an older or malformed config 
 			fileLineWidth: 180,
 			chatLineWidthBounded: "yes",
 			fileLineWidthBounded: false,
+			voiceInputEnabled: "no",
 		}),
 	);
 	resetConfigCache();
 
 	expect(getConfig()).toMatchObject({
-		chatLineWidth: 120,
+		chatLineWidth: 80,
 		fileLineWidth: 180,
 		chatLineWidthBounded: true,
 		fileLineWidthBounded: false,
+		voiceInputEnabled: true,
 	});
 });
 
@@ -660,6 +685,7 @@ test("invalid line-width updates are rejected before persistence or broadcast", 
 		{ fileLineWidth: Number.POSITIVE_INFINITY },
 		{ chatLineWidthBounded: "true" },
 		{ fileLineWidthBounded: 1 },
+		{ voiceInputEnabled: "off" },
 	];
 
 	for (const update of invalidUpdates) {
@@ -674,6 +700,31 @@ test("invalid line-width updates are rejected before persistence or broadcast", 
 		expect(published).toEqual([]);
 		expect(existsSync(join(dataDir, "config.json"))).toBe(false);
 	}
+});
+
+test("the question panel height persists a whole percent from 40 to 100 and rejects the rest", () => {
+	expect(updateConfig({ questionPanelHeight: 85 }).questionPanelHeight).toBe(85);
+	for (const questionPanelHeight of [39, 101, 72.5, "60"]) {
+		const before = getConfig();
+		expect(() => updateConfig({ questionPanelHeight } as unknown as AppConfigUpdate)).toThrow(
+			"questionPanelHeight must be a whole number from 40 to 100",
+		);
+		expect(getConfig()).toEqual(before);
+	}
+});
+
+test("an older or malformed config loads the default question panel height", () => {
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({ ...DEFAULT_CONFIG, questionPanelHeight: 150 }),
+	);
+	resetConfigCache();
+	expect(getConfig().questionPanelHeight).toBe(60);
+
+	const { questionPanelHeight: _omitted, ...older } = DEFAULT_CONFIG;
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify(older));
+	resetConfigCache();
+	expect(getConfig().questionPanelHeight).toBe(60);
 });
 
 test("a non-boolean subagents update is rejected before persistence or broadcast", () => {
@@ -802,6 +853,7 @@ test("loadConfig ignores the old layout settings object", () => {
 	expect(getConfig()).toEqual({
 		...DEFAULT_CONFIG,
 		theme: "acme.persisted",
+		otherAgentSkills: true,
 	});
 });
 

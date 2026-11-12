@@ -6,3 +6,4 @@ export {
 	parseFragment,
 	serializeLocation,
 } from "./location";
+export { supersedePendingRoute } from "./restore";

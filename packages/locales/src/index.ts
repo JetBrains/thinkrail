@@ -1,8 +1,4 @@
 import en from "../en.json";
-import es from "../es.json";
-import ja from "../ja.json";
-import ru from "../ru.json";
-import zhCN from "../zh-CN.json";
 
 export type Catalog = Readonly<Record<string, string>>;
 export type EnglishCatalog = typeof en;
@@ -38,12 +34,52 @@ export const DESKTOP_DIALOG_KEYS = [
 	"desktop.splash.starting",
 ] as const satisfies readonly (keyof EnglishCatalog)[];
 
-const BUNDLED: Readonly<Record<string, Catalog>> = { en: EN, es, ja, ru, "zh-CN": zhCN };
+const TRANSLATIONS: Readonly<Record<string, URL>> = {
+	es: new URL("../es.json", import.meta.url),
+	ja: new URL("../ja.json", import.meta.url),
+	ru: new URL("../ru.json", import.meta.url),
+	"zh-CN": new URL("../zh-CN.json", import.meta.url),
+	"zh-TW": new URL("../zh-TW.json", import.meta.url),
+};
 
-export const BUNDLED_LOCALES: readonly string[] = Object.keys(BUNDLED);
+export const BUNDLED_LOCALES: readonly string[] = ["en", ...Object.keys(TRANSLATIONS)];
+
+const loaded = new Map<string, Catalog>([["en", EN]]);
+const downloads = new Map<string, Promise<Catalog>>();
+
+class TranslationLoadError extends Error {
+	override name = "TranslationLoadError";
+}
 
 export function bundledCatalog(tag: string): Catalog | undefined {
-	return BUNDLED[tag];
+	return loaded.get(tag);
+}
+
+async function downloadCatalog(tag: string, url: URL): Promise<Catalog> {
+	let raw: unknown;
+	try {
+		const response = await fetch(url);
+		if (!response.ok) throw new Error(`HTTP ${response.status}`);
+		raw = await response.json();
+	} catch (cause) {
+		throw new TranslationLoadError(`translation ${tag}`, { cause });
+	}
+	const result = validateCatalog(raw);
+	if (!result.ok) throw new TranslationLoadError(`translation ${tag}: ${result.error}`);
+	loaded.set(tag, result.strings);
+	return result.strings;
+}
+
+export async function loadBundledCatalog(tag: string): Promise<Catalog | undefined> {
+	const cached = loaded.get(tag);
+	const url = Object.hasOwn(TRANSLATIONS, tag) ? TRANSLATIONS[tag] : undefined;
+	if (cached || !url) return cached;
+	let download = downloads.get(tag);
+	if (!download) {
+		download = downloadCatalog(tag, url).finally(() => downloads.delete(tag));
+		downloads.set(tag, download);
+	}
+	return download;
 }
 
 export function canonicalLocale(tag: string): string | null {

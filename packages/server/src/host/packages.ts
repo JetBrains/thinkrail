@@ -32,8 +32,13 @@ function target(workspaceId: string | undefined): PiPackagesTarget {
 
 const disabledPackages = (): ReadonlySet<string> => new Set(getConfig().disabledPackages);
 
-export function packagesList(params: { workspaceId?: string }): Promise<PiPackagesCatalog> {
-	return piPackagesCatalog(target(params.workspaceId), disabledPackages());
+export function packagesList(params: {
+	workspaceId?: string;
+	force?: boolean;
+}): Promise<PiPackagesCatalog> {
+	return piPackagesCatalog(target(params.workspaceId), disabledPackages(), {
+		fresh: params.force === true,
+	});
 }
 
 /** A confirmed install turns the package on: its identity leaves `disabledPackages` before the row returns. */

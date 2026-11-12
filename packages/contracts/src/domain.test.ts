@@ -22,10 +22,15 @@ import {
 	isLiveResource,
 	isLocalePreference,
 	isPlanReviewResult,
+	isQuestionPanelHeight,
 	isRetriedAttempt,
+	isValidTemplateName,
+	isWindowsDeviceName,
 	JBCENTRAL_QUOTA_REFRESH_SECONDS,
+	LINE_WIDTH_COLUMNS,
 	normalizeFontSettings,
 	parsePiPackageInput,
+	QUESTION_PANEL_HEIGHT_PERCENT,
 	REQUEST_IMAGE_BASE64_BUDGET,
 	type ResourceRecord,
 	resourceHistoryCursor,
@@ -34,6 +39,7 @@ import {
 	TODO_NUDGE_PREFIX,
 	tallyResources,
 } from "./domain";
+import { WS_MAX_FRAME_BYTES } from "./wsProtocol";
 
 describe("isRetriedAttempt", () => {
 	const failed = { role: "assistant", stopReason: "error" };
@@ -135,13 +141,27 @@ describe("config defaults", () => {
 		}
 	});
 
-	test("chat and file lines default to 120-symbol pane-bounded measures", () => {
+	test("chat lines default to an 80-symbol and file lines to a 120-symbol pane-bounded measure", () => {
+		expect(LINE_WIDTH_COLUMNS).toEqual({ min: 40, max: 240, default: { chat: 80, file: 120 } });
 		expect(DEFAULT_CONFIG).toMatchObject({
-			chatLineWidth: 120,
-			fileLineWidth: 120,
+			chatLineWidth: LINE_WIDTH_COLUMNS.default.chat,
+			fileLineWidth: LINE_WIDTH_COLUMNS.default.file,
 			chatLineWidthBounded: true,
 			fileLineWidthBounded: true,
 		});
+	});
+
+	test("the question panel caps at 60% of the chat by default, in whole percents from 40 to 100", () => {
+		expect(DEFAULT_CONFIG.questionPanelHeight).toBe(QUESTION_PANEL_HEIGHT_PERCENT.default);
+		expect(QUESTION_PANEL_HEIGHT_PERCENT).toEqual({ min: 40, max: 100, default: 60 });
+		for (const valid of [40, 60, 100]) expect(isQuestionPanelHeight(valid)).toBe(true);
+		for (const invalid of [39, 101, 60.5, "60", null]) {
+			expect(isQuestionPanelHeight(invalid)).toBe(false);
+		}
+	});
+
+	test("voice input is on by default", () => {
+		expect(DEFAULT_CONFIG.voiceInputEnabled).toBe(true);
 	});
 });
 
@@ -188,10 +208,11 @@ describe("image payload ceiling", () => {
 		expect(IMAGE_MAX_BASE64_BYTES).toBe(4.5 * 1024 * 1024);
 	});
 
-	test("the request-wide image budget leaves headroom under Anthropic's 32MB per-request cap", () => {
-		expect(REQUEST_IMAGE_BASE64_BUDGET).toBe(24 * 1024 * 1024);
-		expect(REQUEST_IMAGE_BASE64_BUDGET).toBeLessThan(32 * 1024 * 1024);
-		expect(REQUEST_IMAGE_BASE64_BUDGET).toBeGreaterThan(IMAGE_MAX_BASE64_BYTES * 4);
+	test("a message's image budget leaves room for its text under the 16MB WebSocket frame cap", () => {
+		expect(WS_MAX_FRAME_BYTES).toBe(16 * 1024 * 1024);
+		expect(REQUEST_IMAGE_BASE64_BUDGET).toBe(12 * 1024 * 1024);
+		expect(REQUEST_IMAGE_BASE64_BUDGET).toBeLessThan(WS_MAX_FRAME_BYTES);
+		expect(REQUEST_IMAGE_BASE64_BUDGET).toBeGreaterThan(IMAGE_MAX_BASE64_BYTES * 2);
 	});
 
 	test("the provider-accepted media types are exactly png/jpeg/gif/webp", () => {
@@ -595,4 +616,57 @@ describe("font settings", () => {
 		expect(isFontWeightOffset(15)).toBe(false);
 		expect(isFontWeightOffset(140)).toBe(false);
 	});
+});
+
+describe("template names", () => {
+	const deviceNames = [
+		"CON",
+		"con",
+		"CON.notes",
+		"con .notes",
+		"NUL ",
+		"nul.tar.gz",
+		"PRN",
+		"AUX",
+		"COM1",
+		"com9",
+		"LPT1",
+		"lpt9",
+		"COM¹",
+		"lpt²",
+		"Lpt³.txt",
+	];
+
+	for (const name of deviceNames) {
+		test(`${JSON.stringify(name)} is a Windows device name and not a template name`, () => {
+			expect(isWindowsDeviceName(name)).toBe(true);
+			expect(isValidTemplateName(name)).toBe(false);
+		});
+	}
+
+	for (const name of ["../x", "a/b", "a\\b", ".hidden", "", "a:b", ":b", "a:", "a\0b"]) {
+		test(`rejects ${JSON.stringify(name)}`, () => {
+			expect(isValidTemplateName(name)).toBe(false);
+		});
+	}
+
+	for (const name of [
+		"greet",
+		"My_Template-2",
+		"a",
+		"foo.bar",
+		"my template",
+		"COM0",
+		"COM10",
+		"LPT10",
+		"conductor",
+		"nulled",
+		"report.con",
+		"con-notes",
+	]) {
+		test(`accepts ${JSON.stringify(name)}`, () => {
+			expect(isWindowsDeviceName(name)).toBe(false);
+			expect(isValidTemplateName(name)).toBe(true);
+		});
+	}
 });

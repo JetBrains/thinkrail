@@ -1,7 +1,15 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { afterEach, beforeEach, expect, onTestFinished, test } from "bun:test";
+import {
+	chmodSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
@@ -15,10 +23,13 @@ import type {
 	Workspace,
 	WorkspaceCreation,
 	WorkspaceCreationRemoved,
+	WorkspaceFsChangedPayload,
+	WorkspacePathMatch,
 	WorkspaceWatchReadyResult,
 } from "@thinkrail/contracts";
 import {
 	BRANCH_STATUS_PROTOCOL_VERSION,
+	INITIAL_TERMINAL_TAB_KEY,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	WS_METHODS,
 } from "@thinkrail/contracts";
@@ -40,12 +51,16 @@ import {
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
 import { addComment, getReviewSnapshot } from "../reviews";
 import { resetConfigCache } from "../settings";
+import { listTerminals } from "../terminal";
 import { todoReviewRecord } from "../todos";
-import { stopAllWatches } from "../watch";
+import { setTrashImplementationForTests } from "../trash";
+import { setWatchPublisher, stopAllWatches } from "../watch";
 import {
 	awaitWorkspaceCreation,
+	getWorkspace,
 	setWorkspaceCreationHandoff,
 	setWorkspaceCreationPublisher,
+	setWorkspaceReview,
 } from "../workspaces";
 import {
 	handleRequest,
@@ -136,6 +151,8 @@ beforeEach(() => {
 
 afterEach(() => {
 	stopAllWatches();
+	setWatchPublisher(null);
+	setTrashImplementationForTests(undefined);
 	resetConfigCache();
 	resetFeedbackForTests();
 	resetSurveyForTests();
@@ -150,6 +167,69 @@ afterEach(() => {
 test("every contract method has a registered handler", () => {
 	const unregistered = Object.values(WS_METHODS).filter((m) => requestMethodDiagnostic(m) !== m);
 	expect(unregistered).toEqual([]);
+});
+
+test("file mutation handlers invalidate watcher-ignored paths after success", async () => {
+	const directory = join(repo, "node_modules", "demo");
+	mkdirSync(directory, { recursive: true });
+	writeFileSync(join(directory, "source.txt"), "content");
+	writeFileSync(
+		join(dataDir, "workspaces.json"),
+		JSON.stringify([
+			{
+				id: "w1",
+				projectId: "p1",
+				name: "Default",
+				worktreePath: repo,
+				createdAt: 1,
+			},
+		]),
+	);
+	const frames: WorkspaceFsChangedPayload[] = [];
+	setWatchPublisher((payload) => frames.push(payload));
+	setTrashImplementationForTests(async (input) => {
+		if (typeof input !== "string") throw new Error("expected one path");
+		rmSync(input, { recursive: true });
+	});
+
+	expect(
+		await handleRequest(
+			"fs.copy",
+			{
+				sourceWorkspaceId: "w1",
+				sourcePath: "node_modules/demo/source.txt",
+				destinationWorkspaceId: "w1",
+				destinationDirectory: "node_modules/demo",
+			},
+			CTX,
+		),
+	).toEqual({ path: "node_modules/demo/source copy.txt" });
+	expect(
+		await handleRequest(
+			"fs.delete",
+			{ workspaceId: "w1", path: "node_modules/demo/source copy.txt" },
+			CTX,
+		),
+	).toEqual({ ok: true });
+	expect(
+		await handleRequest("fs.delete", { workspaceId: "w1", path: "node_modules/demo" }, CTX),
+	).toEqual({ ok: true });
+	expect(frames.filter((frame) => frame.paths.length > 0)).toEqual([
+		{
+			workspaceId: "w1",
+			paths: ["node_modules/demo/source copy.txt"],
+			truncated: false,
+			skillChange: "unknown",
+		},
+		{
+			workspaceId: "w1",
+			paths: ["node_modules/demo/source copy.txt"],
+			truncated: false,
+			skillChange: "unknown",
+		},
+		{ workspaceId: "w1", paths: ["node_modules/demo"], truncated: false, skillChange: "unknown" },
+	]);
+	expect(existsSync(directory)).toBe(false);
 });
 
 test("clone handlers resolve the destination and return an opened local project", async () => {
@@ -254,6 +334,84 @@ test("branch status reports a review-free branch, and workspace.push publishes i
 		aheadOfBase: 1,
 		review: null,
 	});
+});
+
+test("branch status measures the branch a managed workspace's terminal switched to", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Switched" },
+		CTX,
+	)) as Workspace;
+	const remote = join(dataDir, "switched.git");
+	mkdirSync(remote);
+	git(remote, "init", "--bare");
+	git(repo, "remote", "add", "origin", remote);
+	await handleRequest(
+		"workspace.push",
+		{ workspaceId: workspace.id, branch: workspace.branch },
+		CTX,
+	);
+	git(workspace.worktreePath, "switch", "-c", "feature/terminal");
+
+	const rows = (await handleRequest(
+		"workspace.list",
+		{ projectId: "p1", includeDiffStats: false },
+		CTX,
+	)) as Workspace[];
+	expect(rows.find((row) => row.id === workspace.id)).toMatchObject({
+		branch: "feature/terminal",
+	});
+	expect(
+		await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX),
+	).toMatchObject({ published: false, review: null });
+});
+
+test("a workspace on its base branch gets no review lookup and drops a stored foreign review", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "On base" },
+		CTX,
+	)) as Workspace;
+	git(repo, "remote", "add", "origin", "https://github.com/fake-owner/fake-repo.git");
+	const bin = join(dataDir, "bin");
+	const ghCalls = join(dataDir, "gh-calls");
+	mkdirSync(bin);
+	writeFileSync(join(bin, "gh"), `#!/bin/sh\necho "$@" >> ${JSON.stringify(ghCalls)}\necho "[]"\n`);
+	chmodSync(join(bin, "gh"), 0o755);
+	const savedPath = process.env.PATH;
+	process.env.PATH = `${bin}${delimiter}${savedPath ?? ""}`;
+	onTestFinished(() => {
+		process.env.PATH = savedPath;
+	});
+	git(repo, "switch", "-c", "elsewhere");
+	git(workspace.worktreePath, "switch", "main");
+	await handleRequest("workspace.list", { projectId: "p1", includeDiffStats: false }, CTX);
+	setWorkspaceReview(
+		workspace.id,
+		{ kind: "pull-request", number: 501, state: "merged", url: "https://example.test/501" },
+		"main",
+	);
+
+	expect(
+		await handleRequest(
+			"workspace.branchStatus",
+			{ workspaceId: workspace.id, skipFetch: true },
+			CTX,
+		),
+	).toMatchObject({ onBase: true, review: null });
+	expect(getWorkspace(workspace.id)).toMatchObject({ branch: "main" });
+	expect(getWorkspace(workspace.id).review).toBeUndefined();
+
+	setWorkspaceReview(workspace.id, { kind: "pull-request", number: 501, state: "open" }, "main");
+	expect(
+		await handleRequest(
+			"workspace.openReview",
+			{ workspaceId: workspace.id, allowCached: true },
+			CTX,
+		),
+	).toBeNull();
+	expect(getWorkspace(workspace.id).review).toBeUndefined();
+	expect(existsSync(ghCalls)).toBe(false);
 });
 
 test("a CI poll re-reads the review without fetching origin; a focus read still fetches", async () => {
@@ -601,7 +759,7 @@ test("extension.list reflects disabledExtensions written through settings.update
 			title: "Web access",
 			description: expect.any(String),
 			enabled: true,
-			tools: ["web_search", "fetch_content", "get_search_content"],
+			tools: ["web_search", "source_check", "fetch_content", "get_search_content", "web_enable"],
 			hasChildExtensions: true,
 		},
 	]);
@@ -1121,6 +1279,20 @@ test("a review send that names its chat lands every file's drafts there as one p
 		setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 		cleanup();
 	}
+});
+
+test("a path resolved into a Default it had to ensure gets the Default's first terminal", async () => {
+	const match = (await handleRequest(
+		"workspace.resolvePath",
+		{ path: join(repo, "README.md") },
+		CTX,
+	)) as WorkspacePathMatch;
+	expect(match).toMatchObject({ projectId: "p1", relativePath: "README.md" });
+	expect(getWorkspace(match.workspaceId)).toMatchObject({ kind: "default" });
+	expect(getWorkspace(match.workspaceId).initialTerminalPending).toBeUndefined();
+	expect(listTerminals(match.workspaceId)).toEqual([
+		{ tabKey: INITIAL_TERMINAL_TAB_KEY, title: "Terminal 1" },
+	]);
 });
 
 test("workspace mutation handlers reject the Default before any side effect", async () => {

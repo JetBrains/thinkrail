@@ -1,11 +1,12 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import {
 	BUNDLED_LOCALES,
-	bundledCatalog,
+	type Catalog,
 	completePlurals,
 	EN,
 	fallbackChain,
 	languageName,
+	loadBundledCatalog,
 	localeTagFromFileName,
 	resolveLocale,
 	validateCatalog,
@@ -72,6 +73,16 @@ describe("resolveLocale", () => {
 		expect(resolveLocale("system", chinese, ["zh-TW"])).toBe("en");
 		expect(resolveLocale("system", chinese, ["zh-Hant-TW"])).toBe("en");
 		expect(resolveLocale("system", chinese, ["zh-HK"])).toBe("en");
+	});
+
+	test("a Traditional Chinese system locale reaches the Traditional catalog", () => {
+		const chinese = ["en", "zh-CN", "zh-TW"];
+		for (const system of ["zh-TW", "zh-Hant-TW", "zh-Hant", "zh-HK", "zh-MO"])
+			expect(resolveLocale("system", chinese, [system])).toBe("zh-TW");
+		for (const system of ["zh-CN", "zh-Hans", "zh-SG", "zh"])
+			expect(resolveLocale("system", chinese, [system])).toBe("zh-CN");
+		expect(fallbackChain("zh-TW")).toEqual(["zh-TW", "zh", "en"]);
+		expect(BUNDLED_LOCALES).not.toContain("zh");
 	});
 
 	test("a region-only difference still matches", () => {
@@ -162,9 +173,72 @@ test("the bundled English catalog passes its own validation", () => {
 
 const PLURAL_FORM = /_(?:zero|one|two|few|many|other)$/;
 
+const TRANSLATED = await Promise.all(
+	BUNDLED_LOCALES.filter((tag) => tag !== "en").map(async (tag) => {
+		const catalog: Catalog = await Bun.file(new URL(`../${tag}.json`, import.meta.url)).json();
+		return [tag, catalog] as const;
+	}),
+);
+
+let freshImports = 0;
+
+async function freshLocales(): Promise<typeof import("./index")> {
+	freshImports += 1;
+	return import(`./index.ts?fresh=${freshImports}`);
+}
+
+describe("bundled catalogs load on demand", () => {
+	afterEach(() => mock.restore());
+
+	test("English is ready at import; concurrent loads share one download and stay cached", async () => {
+		const fetches = spyOn(globalThis, "fetch");
+		const locales = await freshLocales();
+		expect(locales.bundledCatalog("en")).toBe(EN);
+		expect(locales.bundledCatalog("es")).toBeUndefined();
+		const [first, second] = await Promise.all([
+			locales.loadBundledCatalog("es"),
+			locales.loadBundledCatalog("es"),
+		]);
+		expect(first && Object.keys(first).length).toBeGreaterThan(0);
+		expect(second).toBe(first);
+		expect(await locales.loadBundledCatalog("es")).toBe(first);
+		expect(locales.bundledCatalog("es")).toBe(first);
+		expect(fetches).toHaveBeenCalledTimes(1);
+	});
+
+	test("a tag with no bundled catalog loads nothing", async () => {
+		expect(await loadBundledCatalog("de")).toBeUndefined();
+		expect(await loadBundledCatalog("constructor")).toBeUndefined();
+	});
+
+	test.each([
+		["a network failure", new TypeError("Failed to fetch")],
+		["an HTTP error", new Response("", { status: 503 })],
+		["an HTML fallback page", new Response("<!doctype html>")],
+		["JSON that is not a catalog", new Response('"oops"')],
+	])(
+		"%s rejects as TranslationLoadError, caches nothing, and a later load retries",
+		async (_, failure) => {
+			const fetches = spyOn(globalThis, "fetch");
+			if (failure instanceof Response) fetches.mockResolvedValueOnce(failure);
+			else fetches.mockRejectedValueOnce(failure);
+			const locales = await freshLocales();
+			await expect(locales.loadBundledCatalog("ru")).rejects.toMatchObject({
+				name: "TranslationLoadError",
+			});
+			expect(locales.bundledCatalog("ru")).toBeUndefined();
+			expect(await locales.loadBundledCatalog("ru")).toBeDefined();
+			expect(fetches).toHaveBeenCalledTimes(2);
+		},
+	);
+});
+
 describe("bundled non-English catalogs follow en.json", () => {
-	for (const tag of BUNDLED_LOCALES.filter((tag) => tag !== "en")) {
-		const catalog = bundledCatalog(tag) ?? {};
+	for (const [tag, catalog] of TRANSLATED) {
+		test(`${tag}: the catalog is not empty`, () => {
+			expect(Object.keys(catalog).length).toBeGreaterThan(0);
+		});
+
 		const keys = Object.keys(catalog);
 
 		test(`${tag}: every string passes validation against English`, () => {

@@ -3,8 +3,9 @@ import { useT } from "@thinkrail/locales/react";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { useEffect, useMemo, useState } from "react";
 import { isConnectedGeneration, useAppStore } from "@/store";
-import { errorText, getTransport, wsErrorCode } from "@/transport";
+import { errorText, getTransport, hostUrl, wsErrorCode } from "@/transport";
 import { ChatActionsContext } from "./ChatActions";
+import { ChatMediaContext } from "./ChatImage";
 import { startDetailPolling } from "./detailPolling";
 import { messagesToRuntime } from "./hydrate";
 import { deriveInteractionStates, InteractionStatesContext } from "./interactionState";
@@ -30,6 +31,7 @@ function useSubagentTranscript({ workspaceId, parentSessionId, childSessionId }:
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
 	const status = useAppStore((state) => state.status);
 	const [messages, setMessages] = useState<TranscriptMessage[] | null>(null);
+	const [polls, setPolls] = useState(0);
 	const [live, setLive] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
@@ -48,6 +50,7 @@ function useSubagentTranscript({ workspaceId, parentSessionId, childSessionId }:
 			onResult: (response) => {
 				if (!current()) return;
 				setMessages(response.messages);
+				setPolls((count) => count + 1);
 				setError(null);
 				setLive(isLiveTranscriptStatus(response.status));
 			},
@@ -80,45 +83,47 @@ function useSubagentTranscript({ workspaceId, parentSessionId, childSessionId }:
 		}),
 		[runtime],
 	);
-	return { messages, live, error, rows, messageActions, interactionContext };
+	return { messages, polls, live, error, rows, messageActions, interactionContext };
 }
 
 export function SubagentTranscriptPane(scope: TranscriptScope) {
 	const t = useT();
-	const { messages, live, error, rows, messageActions, interactionContext } =
+	const { messages, polls, live, error, rows, messageActions, interactionContext } =
 		useSubagentTranscript(scope);
 	return (
-		<ChatActionsContext.Provider value={null}>
-			<InteractionStatesContext.Provider value={interactionContext}>
-				<div
-					data-testid="subagent-transcript"
-					data-live={live || undefined}
-					className="flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto"
-				>
-					{error ? (
-						<span role="alert" className="text-feedback-error tr-text-ui">
-							{error}
-						</span>
-					) : messages === null ? (
-						<span className="text-text-muted tr-text-metadata">{t("common.loading")}</span>
-					) : rows.length === 0 ? (
-						<span className="text-text-muted tr-text-metadata italic">
-							{t("chat.subagentTranscript.empty")}
-						</span>
-					) : (
-						rows.map((row) => (
-							<div key={row.id}>
-								<ChatTurnView
-									row={row}
-									agentResponded={messageActions.agentRespondedByUserId.get(row.id) ?? false}
-									isFinalAnswer={messageActions.finalAnswerRowIds.has(row.id)}
-								/>
-							</div>
-						))
-					)}
-				</div>
-			</InteractionStatesContext.Provider>
-		</ChatActionsContext.Provider>
+		<ChatMediaContext.Provider value={{ resolveUrl: hostUrl, retryEpoch: polls }}>
+			<ChatActionsContext.Provider value={null}>
+				<InteractionStatesContext.Provider value={interactionContext}>
+					<div
+						data-testid="subagent-transcript"
+						data-live={live || undefined}
+						className="relative flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto"
+					>
+						{error ? (
+							<span role="alert" className="text-feedback-error tr-text-ui">
+								{error}
+							</span>
+						) : messages === null ? (
+							<span className="text-text-muted tr-text-metadata">{t("common.loading")}</span>
+						) : rows.length === 0 ? (
+							<span className="text-text-muted tr-text-metadata italic">
+								{t("chat.subagentTranscript.empty")}
+							</span>
+						) : (
+							rows.map((row) => (
+								<div key={row.id}>
+									<ChatTurnView
+										row={row}
+										agentResponded={messageActions.agentRespondedByUserId.get(row.id) ?? false}
+										isFinalAnswer={messageActions.finalAnswerRowIds.has(row.id)}
+									/>
+								</div>
+							))
+						)}
+					</div>
+				</InteractionStatesContext.Provider>
+			</ChatActionsContext.Provider>
+		</ChatMediaContext.Provider>
 	);
 }
 

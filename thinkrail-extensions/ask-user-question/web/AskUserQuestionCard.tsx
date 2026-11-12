@@ -1,13 +1,16 @@
+import { RiArrowDownSLine as CollapseGlyph, RiArrowUpSLine as ExpandGlyph } from "@remixicon/react";
 import { ASK_DISCUSS_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { resultText, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
 import type { AskUserQuestionResult } from "@thinkrail/pi-ask-user-question/core";
 import { AttentionLine } from "@thinkrail/ui/attention-line";
-import { Button } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import { hasPlatformModifier, isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import {
+	type FocusEvent,
 	type KeyboardEvent,
+	type PointerEvent,
 	type ReactNode,
 	useEffect,
 	useLayoutEffect,
@@ -16,14 +19,15 @@ import {
 	useState,
 } from "react";
 import { ModeHint, TabChip } from "./controls";
+import { forgetDockState, requestDockFocus, setDockCollapsed, useDockState } from "./dockState";
 import {
 	activeQuestionPage,
 	createQuestionAttentionClaim,
-	currentQuestionPageStart,
 	focusCurrentQuestionPage,
 	focusQuestionAttention,
 	focusTargetKind,
 	hasCoarsePointer,
+	isCardBackground,
 	isInsidePreview,
 	isTextEntryTarget,
 	shouldClaimQuestionFocus,
@@ -35,6 +39,7 @@ import {
 	AnsweredReceipt,
 	ClosedRecord,
 	ComposingCard,
+	DockedStub,
 	SupersededRecord,
 	WaitingCard,
 } from "./record";
@@ -61,7 +66,6 @@ const panelDomId = (toolCallId: string) => `ask-panel-${toolCallId}`;
 const tabDomId = (toolCallId: string, page: number) => `ask-tab-${toolCallId}-${page}`;
 
 const claimQuestionAttention = createQuestionAttentionClaim();
-const ATTENTION_SETTLE_FRAMES = 30;
 
 interface CachedCardState {
 	states: Record<number, QState>;
@@ -81,6 +85,7 @@ function PageStack({ toolCallId, children }: { toolCallId: string; children: Rea
 		const grid = gridRef.current;
 		if (!holder || !grid) return;
 		const keep = (rawWidth: number, height: number) => {
+			if (rawWidth === 0) return;
 			const width = Math.round(rawWidth);
 			const kept = stackHeights.get(toolCallId);
 			const next = kept && kept.width === width ? Math.max(kept.height, height) : height;
@@ -118,9 +123,13 @@ export function AskUserQuestionCard({
 	const t = useT();
 	const localFocusScope = useRef<object>({}).current;
 	const focusScope = interaction?.focusScope ?? localFocusScope;
-	const revealElement = interaction?.revealElement;
-	const cancelAutomaticReveal = interaction?.cancelAutomaticReveal;
+	const placement = interaction?.placement;
+	const docked = placement === "dock";
+	const dock = useDockState(toolCallId);
+	const collapsed = docked && dock.collapsed;
+	const handledFocusRequest = useRef(dock.focusRequest);
 	const cardRef = useRef<HTMLElement>(null);
+	const bodyRef = useRef<HTMLDivElement>(null);
 	const primaryRef = useRef<HTMLButtonElement>(null);
 	const questions = useMemo(() => parseQuestions(args), [args]);
 	const resolvedResult =
@@ -160,12 +169,15 @@ export function AskUserQuestionCard({
 
 	useEffect(() => {
 		if (awaiting) {
-			cardStateCache.set(toolCallId, { states, tab, submitted, hostProtocol });
+			if (placement !== "stub") {
+				cardStateCache.set(toolCallId, { states, tab, submitted, hostProtocol });
+			}
 			return;
 		}
 		cardStateCache.delete(toolCallId);
 		stackHeights.delete(toolCallId);
-	}, [toolCallId, awaiting, states, tab, submitted, hostProtocol]);
+		forgetDockState(toolCallId);
+	}, [toolCallId, awaiting, placement, states, tab, submitted, hostProtocol]);
 
 	useEffect(() => {
 		setNudgeSpoken(false);
@@ -191,71 +203,46 @@ export function AskUserQuestionCard({
 		const frame = requestAnimationFrame(() => {
 			const card = cardRef.current;
 			if (!card) return;
-			revealElement?.(currentQuestionPageStart(card), {
-				block: "nearest",
-				provenance: "user-navigation",
-				runway: "release",
-				stability: "bounded",
-			});
+			bodyRef.current?.scrollTo({ top: 0 });
 			focusCurrentQuestionPage(card);
 		});
 		return () => cancelAnimationFrame(frame);
-	}, [revealElement, tab]);
+	}, [tab]);
 
 	useEffect(() => {
 		if (!awaiting || !canRespond || streaming || questions.length === 0 || submitted) return;
-		let frame: number | null = null;
-		let attempts = 0;
-		let userTookOver = false;
-		const yieldToUser = () => {
-			userTookOver = true;
-			cancelAutomaticReveal?.();
-		};
-		const settleAttention = () => {
+		if (placement === "stub") return;
+		const frame = requestAnimationFrame(() => {
 			const card = cardRef.current;
-			if (!card || userTookOver) return;
-			if (attempts === 0) {
-				revealElement?.(currentQuestionPageStart(card), {
-					block: "start",
-					provenance: "automatic-attention",
-					runway: "release",
-					stability: "bounded",
-				});
-			}
-			if (!card.contains(document.activeElement)) {
-				const kind = focusTargetKind(document.activeElement, card);
-				if (shouldClaimQuestionFocus(kind, hasCoarsePointer())) focusQuestionAttention(card);
-			}
-			attempts += 1;
-			if (attempts < ATTENTION_SETTLE_FRAMES) {
-				frame = requestAnimationFrame(settleAttention);
-			}
-		};
-		frame = requestAnimationFrame(() => {
-			if (!claimQuestionAttention(focusScope, toolCallId)) return;
+			if (!card || !claimQuestionAttention(focusScope, toolCallId)) return;
 			setAnnounced(true);
-			settleAttention();
-			window.addEventListener("pointerdown", yieldToUser, { capture: true, once: true });
-			window.addEventListener("keydown", yieldToUser, { capture: true, once: true });
-			window.addEventListener("wheel", yieldToUser, { capture: true, once: true, passive: true });
+			if (card.contains(document.activeElement)) return;
+			const kind = focusTargetKind(document.activeElement, card);
+			if (shouldClaimQuestionFocus(kind, hasCoarsePointer())) focusQuestionAttention(card);
 		});
-		return () => {
-			if (frame != null) cancelAnimationFrame(frame);
-			window.removeEventListener("pointerdown", yieldToUser, { capture: true });
-			window.removeEventListener("keydown", yieldToUser, { capture: true });
-			window.removeEventListener("wheel", yieldToUser, { capture: true });
-		};
+		return () => cancelAnimationFrame(frame);
 	}, [
 		awaiting,
 		canRespond,
-		cancelAutomaticReveal,
 		focusScope,
+		placement,
 		questions.length,
-		revealElement,
 		streaming,
 		submitted,
 		toolCallId,
 	]);
+
+	useEffect(() => {
+		if (!docked || dock.focusRequest === handledFocusRequest.current) return;
+		handledFocusRequest.current = dock.focusRequest;
+		const frame = requestAnimationFrame(() => {
+			const card = cardRef.current;
+			if (!card) return;
+			if (hasCoarsePointer()) focusCurrentQuestionPage(card);
+			else focusQuestionAttention(card);
+		});
+		return () => cancelAnimationFrame(frame);
+	}, [docked, dock.focusRequest]);
 
 	const stateFor = (qi: number): QState => states[qi] ?? emptyQState();
 	const patch = (qi: number, next: Partial<QState>) =>
@@ -280,6 +267,7 @@ export function AskUserQuestionCard({
 		});
 	};
 
+	if (docked && !awaiting) return null;
 	if (resolvedResult) {
 		return (
 			<AnsweredReceipt
@@ -296,9 +284,12 @@ export function AskUserQuestionCard({
 		return <ClosedRecord error={status === "error"} rawText={resultText(result)} />;
 	}
 	if (streaming || questions.length === 0) return <ComposingCard count={questions.length} />;
+	if (placement === "stub") {
+		return <DockedStub count={questions.length} onOpen={() => requestDockFocus(toolCallId)} />;
+	}
 	if (submitted) {
 		return (
-			<WaitingCard>
+			<WaitingCard docked={docked}>
 				<span data-testid="ask-sent">{t("tools.ask.sent")}</span>
 			</WaitingCard>
 		);
@@ -308,7 +299,7 @@ export function AskUserQuestionCard({
 	const lastPage = questions.length - 1;
 	const idx = Math.min(tab, lastPage);
 	const q = questions[idx];
-	if (!q) return <WaitingCard>{t("tools.ask.preparing")}</WaitingCard>;
+	if (!q) return <WaitingCard docked={docked}>{t("tools.ask.preparing")}</WaitingCard>;
 
 	const showContinue = idx < lastPage;
 	const canSubmit = canRespond && answers.length > 0;
@@ -348,7 +339,7 @@ export function AskUserQuestionCard({
 	};
 
 	const onCardKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-		if (isImeComposing(event.nativeEvent)) return;
+		if (collapsed || isImeComposing(event.nativeEvent)) return;
 		if (!(event.target instanceof Node) || !event.currentTarget.contains(event.target)) return;
 		if (isInsidePreview(event.target)) return;
 		if (
@@ -375,6 +366,18 @@ export function AskUserQuestionCard({
 			return;
 		}
 		if (
+			event.target === event.currentTarget &&
+			(event.key === "ArrowUp" || event.key === "ArrowDown") &&
+			!event.shiftKey &&
+			!event.altKey &&
+			!event.ctrlKey &&
+			!event.metaKey
+		) {
+			event.preventDefault();
+			focusCurrentQuestionPage(event.currentTarget);
+			return;
+		}
+		if (
 			!multipleQuestions ||
 			event.altKey ||
 			event.ctrlKey ||
@@ -388,169 +391,249 @@ export function AskUserQuestionCard({
 		if (next !== idx) setTab(next);
 	};
 
+	const closeNote = () => {
+		if (stateFor(idx).noteFor !== null) patch(idx, { noteFor: null });
+	};
+
+	const onCardPointerDown = (event: PointerEvent<HTMLElement>) => {
+		if (isCardBackground(event.target, event.currentTarget)) closeNote();
+	};
+
+	const onCardBlur = (event: FocusEvent<HTMLElement>) => {
+		if (event.currentTarget.contains(event.relatedTarget) || !document.hasFocus()) return;
+		closeNote();
+	};
+
+	const selectPage = (page: number) => {
+		setTab(page);
+		if (collapsed) setDockCollapsed(toolCallId, false);
+	};
+
+	const tabs = multipleQuestions ? (
+		<div
+			role="tablist"
+			aria-label={t("tools.ask.tabsLabel")}
+			className={cn(
+				"flex items-center gap-4 overflow-x-auto",
+				docked ? "min-w-0" : "border-border-default border-b px-12 py-8",
+			)}
+		>
+			{questions.map((question, i) => (
+				<TabChip
+					key={question.question}
+					id={tabDomId(toolCallId, i)}
+					controls={panelDomId(toolCallId)}
+					label={question.header || t("tools.ask.questionTab", { number: i + 1 })}
+					active={idx === i}
+					answered={answeredIndices.has(i)}
+					discuss={discussIndices.has(i)}
+					onClick={() => selectPage(i)}
+				/>
+			))}
+		</div>
+	) : null;
+
+	const pages = (
+		<PageStack toolCallId={toolCallId}>
+			{questions.map((question, page) => {
+				const active = page === idx;
+				const pageState = stateFor(page);
+				return (
+					<div
+						key={question.question}
+						data-ask-active={active}
+						aria-hidden={active ? undefined : true}
+						inert={!active}
+						{...(active && multipleQuestions
+							? {
+									role: "tabpanel",
+									id: panelDomId(toolCallId),
+									"aria-labelledby": tabDomId(toolCallId, idx),
+								}
+							: {})}
+						className={cn("col-start-1 row-start-1 min-w-0", !active && "invisible")}
+					>
+						<GhostPage value={!active}>
+							<QuestionBody
+								question={question}
+								state={pageState}
+								pageKeys={multipleQuestions}
+								discussAvailable={discussAvailable}
+								primaryEnabled={page < lastPage || canSubmit}
+								onFocusPrimary={focusPrimary}
+								onOpenFile={onOpenFile}
+								onSelect={(label, cursor) =>
+									patch(page, selectOptionPatch(pageState, label, cursor))
+								}
+								onToggleMulti={(label, cursor) =>
+									patch(page, toggleMultiPatch(pageState, label, cursor))
+								}
+								onCursor={(cursor) => {
+									if (cursor !== pageState.cursor) patch(page, { cursor });
+								}}
+								onCustomText={(text) => patch(page, customTextPatch(text))}
+								onToggleCustom={() => patch(page, toggleCustomPatch(pageState))}
+								onReopenCustom={() => {
+									if (pageState.customText.trim())
+										patch(page, customTextPatch(pageState.customText));
+								}}
+								onOpenNote={(label, cursor) =>
+									patch(page, openNotePatch(pageState, !!question.multiSelect, label, cursor))
+								}
+								onCloseNote={() => patch(page, { noteFor: null })}
+								onNote={(label, text) =>
+									patch(page, { notes: { ...pageState.notes, [label]: text } })
+								}
+								onToggleDiscuss={() => patch(page, { discuss: !pageState.discuss })}
+								onDiscussReason={(reason) => patch(page, discussReasonPatch(pageState, reason))}
+								onDiscussText={(text) => patch(page, { discussText: text })}
+								onTogglePreview={() => patch(page, { previewExpanded: !pageState.previewExpanded })}
+							/>
+						</GhostPage>
+					</div>
+				);
+			})}
+		</PageStack>
+	);
+
+	const footer = (
+		<div className="flex flex-col gap-8 sm:flex-row sm:items-center sm:justify-between">
+			<ModeHint
+				multiSelect={!!q.multiSelect}
+				multipleQuestions={multipleQuestions}
+				previewKeys={!q.multiSelect && q.options.some(hasPreview)}
+				discussKey={discussAvailable}
+			/>
+			<div className="flex items-center justify-end gap-12">
+				{nudgeVisible ? (
+					<span
+						aria-hidden={nudgeSpoken || undefined}
+						data-testid="ask-needs-choice"
+						className="shrink-0 whitespace-nowrap text-feedback-warning tr-text-metadata"
+					>
+						{t("tools.ask.needsChoice")}
+					</span>
+				) : null}
+				<span role="status" aria-live="polite" className="sr-only">
+					{nudgeVisible && nudgeSpoken ? t("tools.ask.needsChoiceAnnouncement") : ""}
+				</span>
+				<Button
+					variant="ghost"
+					size="l"
+					tabIndex={0}
+					data-testid="ask-skip"
+					onClick={() => reply({ answers: [], cancelled: true })}
+					disabled={!canRespond}
+					className="shrink-0"
+				>
+					{t("tools.ask.skip")}
+				</Button>
+				{showContinue ? (
+					<Button
+						ref={primaryRef}
+						variant="primary"
+						size="l"
+						tabIndex={0}
+						data-testid="ask-continue"
+						onKeyDown={onPrimaryKeyDown}
+						onClick={() => setTab(idx + 1)}
+						className="shrink-0"
+					>
+						{t("tools.ask.next")}
+					</Button>
+				) : (
+					<Button
+						ref={primaryRef}
+						variant="primary"
+						size="l"
+						tabIndex={0}
+						data-testid="ask-submit"
+						onKeyDown={onPrimaryKeyDown}
+						onClick={() => reply({ answers, cancelled: false })}
+						disabled={!canSubmit}
+						className="shrink-0"
+					>
+						{t("tools.ask.submit")}
+					</Button>
+				)}
+			</div>
+		</div>
+	);
+
+	const cardProps = {
+		ref: cardRef,
+		"data-testid": "ask-user-question",
+		"data-tone": canRespond ? "active" : "idle",
+		"aria-label": t("tools.ask.cardLabel"),
+		"aria-keyshortcuts": "Shift+Escape Meta+Enter Control+Enter",
+		tabIndex: -1,
+		onKeyDown: onCardKeyDown,
+		onPointerDown: onCardPointerDown,
+		onBlur: onCardBlur,
+	};
+
+	if (docked) {
+		return (
+			<section
+				{...cardProps}
+				data-placement="dock"
+				data-collapsed={collapsed}
+				className="@container flex min-h-0 flex-col border-primary border-t-2 bg-container-elevated-bg outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset motion-safe:animate-reveal"
+			>
+				<div className="flex shrink-0 items-center gap-12 border-border-default border-b px-12 py-4">
+					<div className="shrink-0">
+						<AttentionLine announced={announced} />
+					</div>
+					<div className="flex min-w-0 flex-1 justify-end">
+						{tabs ?? (
+							<span className="truncate text-text-muted tr-text-metadata">
+								{q.header || t("tools.ask.questionTab", { number: 1 })}
+							</span>
+						)}
+					</div>
+					<IconButton
+						icon={collapsed ? ExpandGlyph : CollapseGlyph}
+						label={collapsed ? t("tools.ask.expand") : t("tools.ask.collapse")}
+						aria-expanded={!collapsed}
+						tabIndex={0}
+						data-testid="ask-collapse"
+						onClick={() => setDockCollapsed(toolCallId, !collapsed)}
+						className="shrink-0"
+					/>
+				</div>
+				<div
+					ref={bodyRef}
+					data-testid="ask-dock-body"
+					className={cn("min-h-0 overflow-y-auto p-12", collapsed && "hidden")}
+				>
+					{pages}
+				</div>
+				<div
+					className={cn(
+						"shrink-0 border-border-default border-t px-12 py-8",
+						collapsed && "hidden",
+					)}
+				>
+					{footer}
+				</div>
+			</section>
+		);
+	}
+
 	return (
 		<div className="flex flex-col gap-4 motion-safe:animate-reveal">
 			{canRespond ? <AttentionLine announced={announced} /> : null}
 			<section
-				ref={cardRef}
-				data-testid="ask-user-question"
-				data-tone={canRespond ? "active" : "idle"}
-				aria-label={t("tools.ask.cardLabel")}
-				aria-keyshortcuts="Shift+Escape Meta+Enter Control+Enter"
-				onKeyDown={onCardKeyDown}
+				{...cardProps}
 				className={cn(
-					"@container overflow-hidden rounded-lg border bg-clip-padding bg-container-elevated-bg",
+					"@container overflow-hidden rounded-lg border bg-clip-padding bg-container-elevated-bg outline-none focus-visible:ring-2 focus-visible:ring-primary",
 					canRespond ? "border-primary ring-2 ring-primary-soft" : "border-border-default",
 				)}
 			>
-				{multipleQuestions ? (
-					<div
-						role="tablist"
-						aria-label={t("tools.ask.tabsLabel")}
-						className="flex items-center gap-4 overflow-x-auto border-border-default border-b px-12 py-8"
-					>
-						{questions.map((question, i) => (
-							<TabChip
-								key={question.question}
-								id={tabDomId(toolCallId, i)}
-								controls={panelDomId(toolCallId)}
-								label={question.header || t("tools.ask.questionTab", { number: i + 1 })}
-								active={idx === i}
-								answered={answeredIndices.has(i)}
-								discuss={discussIndices.has(i)}
-								onClick={() => setTab(i)}
-							/>
-						))}
-					</div>
-				) : null}
-
+				{tabs}
 				<div className="flex flex-col gap-12 p-12">
-					<PageStack toolCallId={toolCallId}>
-						{questions.map((question, page) => {
-							const active = page === idx;
-							const pageState = stateFor(page);
-							return (
-								<div
-									key={question.question}
-									data-ask-active={active}
-									aria-hidden={active ? undefined : true}
-									inert={!active}
-									{...(active && multipleQuestions
-										? {
-												role: "tabpanel",
-												id: panelDomId(toolCallId),
-												"aria-labelledby": tabDomId(toolCallId, idx),
-											}
-										: {})}
-									className={cn("col-start-1 row-start-1 min-w-0", !active && "invisible")}
-								>
-									<GhostPage value={!active}>
-										<QuestionBody
-											question={question}
-											state={pageState}
-											pageKeys={multipleQuestions}
-											discussAvailable={discussAvailable}
-											primaryEnabled={page < lastPage || canSubmit}
-											onFocusPrimary={focusPrimary}
-											onOpenFile={onOpenFile}
-											onSelect={(label, cursor) =>
-												patch(page, selectOptionPatch(pageState, label, cursor))
-											}
-											onToggleMulti={(label, cursor) =>
-												patch(page, toggleMultiPatch(pageState, label, cursor))
-											}
-											onCursor={(cursor) => {
-												if (cursor !== pageState.cursor) patch(page, { cursor });
-											}}
-											onCustomText={(text) => patch(page, customTextPatch(text))}
-											onToggleCustom={() => patch(page, toggleCustomPatch(pageState))}
-											onReopenCustom={() => {
-												if (pageState.customText.trim())
-													patch(page, customTextPatch(pageState.customText));
-											}}
-											onOpenNote={(label, cursor) =>
-												patch(page, openNotePatch(pageState, !!question.multiSelect, label, cursor))
-											}
-											onCloseNote={() => patch(page, { noteFor: null })}
-											onNote={(label, text) =>
-												patch(page, { notes: { ...pageState.notes, [label]: text } })
-											}
-											onToggleDiscuss={() => patch(page, { discuss: !pageState.discuss })}
-											onDiscussReason={(reason) =>
-												patch(page, discussReasonPatch(pageState, reason))
-											}
-											onDiscussText={(text) => patch(page, { discussText: text })}
-											onTogglePreview={() =>
-												patch(page, { previewExpanded: !pageState.previewExpanded })
-											}
-										/>
-									</GhostPage>
-								</div>
-							);
-						})}
-					</PageStack>
-
-					<div className="flex flex-col gap-8 sm:flex-row sm:items-center sm:justify-between">
-						<ModeHint
-							multiSelect={!!q.multiSelect}
-							multipleQuestions={multipleQuestions}
-							previewKeys={!q.multiSelect && q.options.some(hasPreview)}
-							discussKey={discussAvailable}
-						/>
-						<div className="flex items-center justify-end gap-12">
-							{nudgeVisible ? (
-								<span
-									aria-hidden={nudgeSpoken || undefined}
-									data-testid="ask-needs-choice"
-									className="shrink-0 whitespace-nowrap text-feedback-warning tr-text-metadata"
-								>
-									{t("tools.ask.needsChoice")}
-								</span>
-							) : null}
-							<span role="status" aria-live="polite" className="sr-only">
-								{nudgeVisible && nudgeSpoken ? t("tools.ask.needsChoiceAnnouncement") : ""}
-							</span>
-							<Button
-								variant="ghost"
-								size="l"
-								tabIndex={0}
-								data-testid="ask-skip"
-								onClick={() => reply({ answers: [], cancelled: true })}
-								disabled={!canRespond}
-								className="shrink-0"
-							>
-								{t("tools.ask.skip")}
-							</Button>
-							{showContinue ? (
-								<Button
-									ref={primaryRef}
-									variant="primary"
-									size="l"
-									tabIndex={0}
-									data-testid="ask-continue"
-									onKeyDown={onPrimaryKeyDown}
-									onClick={() => setTab(idx + 1)}
-									className="shrink-0"
-								>
-									{t("tools.ask.next")}
-								</Button>
-							) : (
-								<Button
-									ref={primaryRef}
-									variant="primary"
-									size="l"
-									tabIndex={0}
-									data-testid="ask-submit"
-									onKeyDown={onPrimaryKeyDown}
-									onClick={() => reply({ answers, cancelled: false })}
-									disabled={!canSubmit}
-									className="shrink-0"
-								>
-									{t("tools.ask.submit")}
-								</Button>
-							)}
-						</div>
-					</div>
+					{pages}
+					{footer}
 				</div>
 			</section>
 		</div>

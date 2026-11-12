@@ -1,13 +1,19 @@
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import {
+	type ReactNode,
+	type RefCallback,
+	type RefObject,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import { createPortal } from "react-dom";
 import type { ReviewThread, SurfaceReview } from "../registry";
 import { mapPreviewSelection } from "./previewAnchor";
 import { ReviewComposer } from "./ReviewComposer";
 import { markReviewRegions, type SourceLineRange, stampedSelectionLines } from "./sourceLines";
-import { useScrollViewState } from "./useScrollViewState";
 
 export interface ComposerInsert {
 	line: number;
@@ -27,8 +33,8 @@ export function PreviewCommenting({
 	testid = "markdown-preview",
 	surfaceClassName = "relative h-full overflow-auto bg-container-workspace-bg motion-safe:animate-reveal",
 	canCommentSelection,
-	viewState,
-	onViewState,
+	scrollerRef,
+	attachScroller,
 	children,
 }: {
 	source: string;
@@ -36,15 +42,11 @@ export function PreviewCommenting({
 	testid?: string;
 	surfaceClassName?: string;
 	canCommentSelection?: (selection: Selection, scroller: HTMLElement) => boolean;
-	viewState?: unknown;
-	onViewState?: (state: unknown) => void;
+	scrollerRef: RefObject<HTMLDivElement | null>;
+	attachScroller: RefCallback<HTMLDivElement>;
 	children: (composer: ComposerInsert | null) => ReactNode;
 }) {
 	const t = useT();
-	const { elementRef: scrollerRef, attach: attachScroller } = useScrollViewState<HTMLDivElement>(
-		viewState,
-		onViewState,
-	);
 	const iconRef = useRef<HTMLButtonElement>(null);
 	const draggingRef = useRef(false);
 	const [selection, setSelection] = useState<SourceLineRange | null>(null);

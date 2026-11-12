@@ -1,8 +1,11 @@
 import { MermaidView } from "@thinkrail/ext-visualize/web";
+import { cn } from "@thinkrail/ui/utils";
 import { type ComponentProps, memo, type ReactNode, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useHighlightedCode } from "@/lib/highlightCode";
+import { CONTENT_WIDTH_BREAKOUT } from "./contentWidth";
+import { HighlightedHtml } from "./HighlightedHtml";
 import { createMarkdownSplitter } from "./markdownBlocks";
 
 const CHAT_PROSE =
@@ -17,9 +20,10 @@ interface MarkdownProps {
 	rehypePlugins?: ReactMarkdownProps["rehypePlugins"];
 	urlTransform?: ReactMarkdownProps["urlTransform"];
 	components?: ReactMarkdownProps["components"];
+	wideBlocks?: boolean;
 }
 
-interface MarkdownBlockProps extends Omit<MarkdownProps, "text" | "className"> {
+interface MarkdownBlockProps extends Omit<MarkdownProps, "text" | "className" | "wideBlocks"> {
 	raw: string;
 	separated: boolean;
 }
@@ -29,13 +33,14 @@ export const Markdown = memo(function Markdown({
 	className = CHAT_PROSE,
 	remarkPlugins,
 	components,
+	wideBlocks = false,
 	...rest
 }: MarkdownProps) {
 	return (
 		<div className={className}>
 			<ReactMarkdown
 				remarkPlugins={withDefaultPlugins(remarkPlugins)}
-				components={withDefaultComponents(components)}
+				components={withDefaultComponents(components, wideBlocks)}
 				{...rest}
 			>
 				{text}
@@ -49,12 +54,16 @@ export const BlockMarkdown = memo(function BlockMarkdown({
 	className = CHAT_PROSE,
 	remarkPlugins,
 	components,
+	wideBlocks = false,
 	...rest
 }: MarkdownProps) {
 	const [split] = useState(createMarkdownSplitter);
 	const { blocks } = useMemo(() => split(text), [split, text]);
 	const plugins = useMemo(() => withDefaultPlugins(remarkPlugins), [remarkPlugins]);
-	const merged = useMemo(() => withDefaultComponents(components), [components]);
+	const merged = useMemo(
+		() => withDefaultComponents(components, wideBlocks),
+		[components, wideBlocks],
+	);
 	return (
 		<div className={className}>
 			{blocks.map((block) => (
@@ -92,6 +101,18 @@ function Table({ children }: { children?: ReactNode }) {
 	);
 }
 
+function WideTable({ children }: { children?: ReactNode }) {
+	return (
+		<div className={cn("overflow-x-auto", CONTENT_WIDTH_BREAKOUT)}>
+			<table>{children}</table>
+		</div>
+	);
+}
+
+function WidePre({ children }: { children?: ReactNode }) {
+	return <pre className={CONTENT_WIDTH_BREAKOUT}>{children}</pre>;
+}
+
 function Anchor({ href, children }: { href?: string | undefined; children?: ReactNode }) {
 	return (
 		<a href={href} target="_blank" rel="noopener noreferrer">
@@ -120,7 +141,7 @@ function CodeBlock({
 		}
 		return <pre className="overflow-auto rounded-sm bg-container-elevated-bg p-8">{code}</pre>;
 	}
-	return <ShikiBlock code={code} lang={lang} />;
+	return <HighlightBlock code={code} lang={lang} />;
 }
 
 function MermaidBlock({ code }: { code: string }) {
@@ -130,7 +151,7 @@ function MermaidBlock({ code }: { code: string }) {
 		return () => clearTimeout(timer);
 	}, [code]);
 
-	const source = <ShikiBlock code={code} lang="mermaid" />;
+	const source = <HighlightBlock code={code} lang="mermaid" />;
 	if (settled !== code) return source;
 	return (
 		<div className="whitespace-normal">
@@ -139,7 +160,7 @@ function MermaidBlock({ code }: { code: string }) {
 	);
 }
 
-function ShikiBlock({ code, lang }: { code: string; lang: string }) {
+function HighlightBlock({ code, lang }: { code: string; lang: string }) {
 	const html = useHighlightedCode(code, lang);
 
 	if (html === null) {
@@ -150,9 +171,9 @@ function ShikiBlock({ code, lang }: { code: string; lang: string }) {
 		);
 	}
 	return (
-		<div
+		<HighlightedHtml
+			html={html}
 			className="overflow-auto rounded-sm [&_pre]:!m-0 [&_pre]:!bg-container-elevated-bg [&_pre]:p-8"
-			dangerouslySetInnerHTML={{ __html: html }}
 		/>
 	);
 }
@@ -163,11 +184,17 @@ const DEFAULT_COMPONENTS: ReactMarkdownProps["components"] = {
 	a: Anchor,
 	table: Table,
 };
+const WIDE_COMPONENTS: ReactMarkdownProps["components"] = {
+	...DEFAULT_COMPONENTS,
+	pre: WidePre,
+	table: WideTable,
+};
 
 function withDefaultPlugins(plugins: ReactMarkdownProps["remarkPlugins"]) {
 	return plugins ? [remarkGfm, ...plugins] : DEFAULT_REMARK_PLUGINS;
 }
 
-function withDefaultComponents(components: ReactMarkdownProps["components"]) {
-	return components ? { ...DEFAULT_COMPONENTS, ...components } : DEFAULT_COMPONENTS;
+function withDefaultComponents(components: ReactMarkdownProps["components"], wideBlocks: boolean) {
+	const defaults = wideBlocks ? WIDE_COMPONENTS : DEFAULT_COMPONENTS;
+	return components ? { ...defaults, ...components } : defaults;
 }

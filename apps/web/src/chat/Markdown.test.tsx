@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { cachedHighlight, highlightCode } from "@/lib/highlightCode";
-import { shikiLanguageId } from "@/lib/highlighter";
+import { cachedHighlight, chatLanguageId, highlightCode } from "@/lib/highlightCode";
 import { longMarkdown } from "../../../../e2e/perf/longMarkdown";
+import { CONTENT_WIDTH_BREAKOUT } from "./contentWidth";
 import { BlockMarkdown, fenceLanguage, Markdown } from "./Markdown";
 import { MARKDOWN_EDGE_FIXTURES } from "./markdownFixtures.test";
 
@@ -53,21 +53,38 @@ describe("BlockMarkdown", () => {
 		expect(blocks).toBe(whole);
 		expect(blocks).toContain("<span>link</span>");
 	});
+
+	test("lets only wide-block hosts break tables and fenced code out of the column", () => {
+		const text =
+			"Intro with `inline`\n\n```\nfirst\nsecond\n```\n\n| a | b |\n| - | - |\n| 1 | 2 |";
+		const breakout = (html: string) =>
+			[...html.matchAll(/<(\w+) class="([^"]*)"/g)]
+				.filter(([, , classes]) =>
+					classes?.includes(CONTENT_WIDTH_BREAKOUT.replaceAll("&", "&amp;")),
+				)
+				.map(([, tag]) => tag);
+		expect(breakout(renderToStaticMarkup(<BlockMarkdown text={text} wideBlocks />))).toEqual([
+			"pre",
+			"div",
+		]);
+		expect(breakout(renderToStaticMarkup(<BlockMarkdown text={text} />))).toEqual([]);
+		expect(breakout(renderToStaticMarkup(<Markdown text={text} />))).toEqual([]);
+	});
 });
 
 test("static renders never read the highlight cache", { timeout: 20_000 }, async () => {
 	const code = "const cached = 2;";
-	expect(await highlightCode(code, "ts", "static-seed")).toContain("shiki");
-	expect(cachedHighlight(code, "ts")).toContain("shiki");
+	expect(await highlightCode(code, "ts", "static-seed")).toContain("highlights");
+	expect(cachedHighlight(code, "ts")).toContain("highlights");
 	const html = renderToStaticMarkup(<Markdown text={`\`\`\`ts\n${code}\n\`\`\``} />);
 	expect(html).toContain(code);
-	expect(html).not.toContain("shiki");
+	expect(html).not.toContain("highlights");
 });
 
 describe("fenceLanguage", () => {
 	const components = {
 		code: ({ className }: { className?: string | undefined }) => (
-			<i>{shikiLanguageId(fenceLanguage(className) ?? "")}</i>
+			<i>{chatLanguageId(fenceLanguage(className) ?? "")}</i>
 		),
 	};
 

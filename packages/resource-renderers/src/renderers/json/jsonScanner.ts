@@ -38,8 +38,10 @@ class JsonScanner {
 	private dialect: JsonDialect = "json";
 	private readonly nodes = new Map<string, JsonNode>();
 	private readonly lineStarts = [0];
+	private readonly text: string;
 
-	constructor(private readonly text: string) {
+	constructor(text: string) {
+		this.text = text;
 		for (let index = 0; index < text.length; index += 1) {
 			if (text.charCodeAt(index) === 10) this.lineStarts.push(index + 1);
 		}

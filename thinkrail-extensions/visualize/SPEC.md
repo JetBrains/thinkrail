@@ -73,11 +73,15 @@ of anchoring review to real files; the tool guideline asks the agent to keep an 
 passed as `before` when it should stay visible. The workspace and chat come from `useResourceScope`, which the chat transcript provides to
 its rows, so review sends land in the chat that shows the card; with no host or scope (a subagent transcript)
 the card shows only the links. The
-registration is primary and expanded by default; its title or diagram/comparison/file summary is available
-without rendering. Invalid or streaming arguments remain defensive and tool errors preserve readable
-result text.
+registration is primary, expanded by default and `width: "content"`; its title or diagram/comparison/file
+summary is available without rendering. A diagram or comparison grows with its content; a file preview fills
+its fixed frame, has no intrinsic width and so keeps the chat column's width. Invalid or streaming arguments
+remain defensive and tool errors preserve readable result text.
 
-`MermaidView` derives mermaid's strict-mode theme from the host's CSS variables and re-renders after a
+`MermaidView` renders a diagram at its natural size — `useMaxWidth: false` for every diagram kind in
+mermaid's default config, scaled down to the available width by CSS — so a content-width parent can size to
+it; with mermaid's default (`width="100%"`) a diagram has no intrinsic width and never grows. It derives
+mermaid's strict-mode theme from the host's CSS variables and re-renders after a
 completed `data-theme` swap, or after a font settings change that moves the code family (resolved from
 `.tr-code-block` through `@thinkrail/ui/fonts`' `watchFont`, re-rendered once that face has loaded) or a
 change to the custom face set, which can change a family's metrics without its name; weight-only changes do
@@ -87,4 +91,4 @@ shadows and orthogonal edges, which clash with the app's flat surfaces, and re-l
 pan/zoom controls. The fullscreen canvas owns modifier-wheel zoom and WebKit gesture pinch from its
 local gesture-start baseline so desktop page zoom does not claim the gesture. Renderer failure shows
 the error and a plain source block matching the app CodeBlock's unhighlighted branch; it never imports
-the app's shiki highlighter. `args` and pan/zoom math retain focused unit coverage.
+the app's chat highlighter. `args` and pan/zoom math retain focused unit coverage.

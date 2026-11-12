@@ -9,7 +9,6 @@ import {
 import type { BackgroundCommandSummary, SubagentResourceSummary } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
-import { useState } from "react";
 import {
 	actionKey,
 	type Resource,
@@ -27,7 +26,8 @@ export function ResourcesDock({
 	commands,
 	subagents,
 	finishedCount,
-	freshCount = 0,
+	collapsed: collapsedChoice,
+	onCollapsedChange,
 	now,
 	authoritative,
 	staleness = null,
@@ -40,7 +40,8 @@ export function ResourcesDock({
 	commands: BackgroundCommandSummary[];
 	subagents: SubagentResourceSummary[];
 	finishedCount: number;
-	freshCount?: number;
+	collapsed: boolean | null;
+	onCollapsedChange: (collapsed: boolean) => void;
 	now: number;
 	authoritative: boolean;
 	staleness?: ResourcesStaleness | null;
@@ -55,11 +56,10 @@ export function ResourcesDock({
 		resource.kind === "command"
 			? onStopCommand(resource.summary.id)
 			: onStopSubagent(resource.summary.childSessionId);
-	const [collapsedChoice, setCollapsedChoice] = useState<boolean | null>(null);
 	const rows = sortLive(toResources(commands, subagents));
 	if (rows.length === 0 && finishedCount === 0) return null;
-	const collapsible = rows.length > EXPANDED_ROW_LIMIT;
-	const collapsed = collapsible && (collapsedChoice ?? true);
+	const live = rows.length > 0;
+	const collapsed = live && (collapsedChoice ?? rows.length > EXPANDED_ROW_LIMIT);
 	const Chevron = collapsed ? RiArrowUpSLine : RiArrowDownSLine;
 	const activeLabel = (
 		<>
@@ -108,64 +108,47 @@ export function ResourcesDock({
 					))}
 				</ul>
 			)}
-			{collapsible || finishedCount > 0 || (!authoritative && rows.length > 0) ? (
-				<div className="flex min-w-0 items-center gap-4">
-					{collapsible ? (
-						<button
-							type="button"
-							data-testid="resources-dock-toggle"
-							aria-expanded={!collapsed}
-							onClick={() => setCollapsedChoice(!collapsed)}
-							className={cn(lineClass, controlClass, "shrink-0")}
-						>
-							{activeLabel}
-							{commands.length > 0 ? (
-								<span className="inline-flex items-center gap-4">
-									<RiTerminalBoxLine className="size-12" />
-									{commands.length}
-								</span>
-							) : null}
-							{subagents.length > 0 ? (
-								<span className="inline-flex items-center gap-4">
-									<RiRobot2Line className="size-12" />
-									{subagents.length}
-								</span>
-							) : null}
-							<Chevron className="size-14 shrink-0" />
-						</button>
-					) : !authoritative && rows.length > 0 ? (
-						<span className={cn(lineClass, "shrink-0")}>{activeLabel}</span>
-					) : null}
-					{finishedCount > 0 ? (
-						<button
-							type="button"
-							data-testid="resources-dock-finished"
-							onClick={onOpenFinished}
-							className={cn(lineClass, controlClass, "flex-1")}
-						>
-							<RiCheckLine className="size-14 shrink-0" />
-							<span className="whitespace-nowrap">
-								{t("resources.dock.finished", { count: finishedCount })}
+			<div className="flex min-w-0 items-center gap-4">
+				{live ? (
+					<button
+						type="button"
+						data-testid="resources-dock-toggle"
+						aria-expanded={!collapsed}
+						onClick={() => onCollapsedChange(!collapsed)}
+						className={cn(lineClass, controlClass, "shrink-0")}
+					>
+						{activeLabel}
+						{commands.length > 0 ? (
+							<span className="inline-flex items-center gap-4">
+								<RiTerminalBoxLine className="size-12" />
+								{commands.length}
 							</span>
-							{freshCount > 0 ? (
-								<>
-									<span aria-hidden className="text-text-subtle">
-										·
-									</span>
-									<span
-										data-testid="resources-dock-fresh"
-										className="whitespace-nowrap text-primary"
-									>
-										{t("resources.dock.fresh", { count: freshCount })}
-									</span>
-								</>
-							) : null}
-							<span className="flex-1" />
-							<span className="truncate text-text-subtle">{t("resources.dock.open")}</span>
-						</button>
-					) : null}
-				</div>
-			) : null}
+						) : null}
+						{subagents.length > 0 ? (
+							<span className="inline-flex items-center gap-4">
+								<RiRobot2Line className="size-12" />
+								{subagents.length}
+							</span>
+						) : null}
+						<Chevron className="size-14 shrink-0" />
+					</button>
+				) : null}
+				{finishedCount > 0 ? (
+					<button
+						type="button"
+						data-testid="resources-dock-finished"
+						onClick={onOpenFinished}
+						className={cn(lineClass, controlClass, "flex-1")}
+					>
+						<RiCheckLine className="size-14 shrink-0" />
+						<span className="whitespace-nowrap">
+							{t("resources.dock.finished", { count: finishedCount })}
+						</span>
+						<span className="flex-1" />
+						<span className="truncate text-text-subtle">{t("resources.dock.open")}</span>
+					</button>
+				) : null}
+			</div>
 		</div>
 	);
 }

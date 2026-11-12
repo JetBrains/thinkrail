@@ -1,5 +1,6 @@
 import type { Workspace } from "@thinkrail/contracts";
 import {
+	isNavigationChange,
 	selectAttentionCenterTab,
 	selectCurrentRouteChatTarget,
 	selectWorkspaceById,
@@ -105,6 +106,12 @@ function isUserNavigationEdge(
 	);
 }
 
+const supersedeHooks = new Set<() => void>();
+
+export function supersedePendingRoute(): void {
+	for (const supersede of supersedeHooks) supersede();
+}
+
 export function startNavigation({ driver, listWorkspaces }: NavigationDeps): () => void {
 	let generation = 0;
 	let pending: { generation: number; location: NavigationLocation } | null = null;
@@ -178,7 +185,7 @@ export function startNavigation({ driver, listWorkspaces }: NavigationDeps): () 
 			return;
 		}
 		applyRoute(() => now.setWorkspaces(location.projectId, rows));
-		const workspace = rows.find((w) => w.id === location.workspaceId);
+		const workspace = rows.find((w) => w.id === location.workspaceId && w.deletionPending !== true);
 		if (!workspace) {
 			applyRoute(() => useAppStore.getState().selectProject(location.projectId));
 			resolvePending(gen);
@@ -211,6 +218,13 @@ export function startNavigation({ driver, listWorkspaces }: NavigationDeps): () 
 		void attempt(generation);
 	};
 
+	const supersede = () => {
+		if (!pending) return;
+		pending = null;
+		syncNow();
+	};
+	supersedeHooks.add(supersede);
+
 	const unsubscribeDriver = driver.onIncoming(acceptFragment);
 	const unsubscribeStore = useAppStore.subscribe((state, previous) => {
 		if (
@@ -219,13 +233,7 @@ export function startNavigation({ driver, listWorkspaces }: NavigationDeps): () 
 		) {
 			armedPush = true;
 		}
-		if (
-			!applyingRoute &&
-			pending &&
-			(state.selectedProjectId !== previous.selectedProjectId ||
-				state.activeWorkspaceId !== previous.activeWorkspaceId ||
-				state.navTickByWorkspace !== previous.navTickByWorkspace)
-		) {
+		if (!applyingRoute && pending && isNavigationChange(state, previous)) {
 			pending = null;
 		}
 		if (state.welcomeGeneration !== previous.welcomeGeneration && pending) {
@@ -243,6 +251,7 @@ export function startNavigation({ driver, listWorkspaces }: NavigationDeps): () 
 	return () => {
 		unsubscribeDriver();
 		unsubscribeStore();
+		supersedeHooks.delete(supersede);
 		pending = null;
 	};
 }

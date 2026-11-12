@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
-import type { AgentMessage, ToolResponseMessage } from "@thinkrail/contracts";
+import type { AgentMessage, ToolResponseMessage, TranscriptMessage } from "@thinkrail/contracts";
 import {
 	assistantToolCallsAreExecutable,
 	isToolResponsePending,
@@ -36,7 +36,7 @@ export type Respondability =
 	| { ok: false; reason: "unknown_call" | "already_responded" | "not_awaiting" | "superseded" };
 
 export function assessRespondability(
-	messages: readonly AgentMessage[],
+	messages: readonly (AgentMessage | TranscriptMessage)[],
 	toolCallId: string,
 	interactive: InteractiveTools,
 ): Respondability {
@@ -75,7 +75,7 @@ export function assessRespondability(
 }
 
 export function hasPendingToolResult(
-	messages: readonly AgentMessage[],
+	messages: readonly (AgentMessage | TranscriptMessage)[],
 	toolCallId: string,
 ): boolean {
 	return (messages as readonly MessageView[]).some(
@@ -133,7 +133,7 @@ export function buildToolResponseMessage(
 	content: string,
 	toolCallId: string,
 	response: unknown,
-): Pick<ToolResponseMessage, "customType" | "content" | "display" | "details"> {
+): Pick<ToolResponseMessage, "customType" | "display" | "details"> & { content: string } {
 	return {
 		customType: TOOL_RESPONSE_CUSTOM_TYPE,
 		content,

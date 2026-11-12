@@ -23,7 +23,7 @@ import {
 } from "@thinkrail/ui/dropdown-menu";
 import { cn } from "@thinkrail/ui/utils";
 import { useState, useSyncExternalStore } from "react";
-import { toast, useAppStore } from "@/store";
+import { type MarkdownOutlineSide, toast, useAppStore } from "@/store";
 import {
 	deriveSystemThemePair,
 	getThemes,
@@ -474,7 +474,36 @@ export function AppearanceSettings() {
 			/>
 			<SettingsGroup title={t("settings.appearance.editorGroup")}>
 				<LineWidthControl kind="file" />
+				<MarkdownOutlineSideRow />
 			</SettingsGroup>
 		</SettingsPageContainer>
+	);
+}
+
+function MarkdownOutlineSideRow() {
+	const t = useT();
+	const side = useAppStore((state) => state.markdownOutlineSide);
+	const setSide = useAppStore((state) => state.setMarkdownOutlineSide);
+	const options: SegmentedControlOption<MarkdownOutlineSide>[] = [
+		{ id: "left", label: t("settings.appearance.markdownOutlineSide.left") },
+		{ id: "right", label: t("settings.appearance.markdownOutlineSide.right") },
+	];
+	return (
+		<div className={SETTINGS_ROWS_CONTAINER}>
+			<SettingsRow
+				label={t("settings.appearance.markdownOutlineSide")}
+				description={t("settings.appearance.markdownOutlineSide.description")}
+				control={
+					<SegmentedControl
+						name="markdown-outline-side"
+						label={t("settings.appearance.markdownOutlineSide")}
+						options={options}
+						value={side}
+						onSelect={setSide}
+						testId="markdown-outline-side-control"
+					/>
+				}
+			/>
+		</div>
 	);
 }
