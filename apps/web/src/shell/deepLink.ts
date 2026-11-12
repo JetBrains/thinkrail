@@ -1,5 +1,6 @@
 import type { NativeDeepLinkBridge, NativeOpenFileRequest } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
+import { supersedePendingRoute } from "../navigation";
 import { openFileAtLine } from "../panels/openTabs";
 import { resolveWorkspaceFile } from "../panels/workspaceForPath";
 import { toast, useAppStore } from "../store";
@@ -45,7 +46,10 @@ export async function openDeepLink(
 	navigateToWorkspace = paletteNavigator.navigateToWorkspace,
 ): Promise<void> {
 	await waitForWelcome();
+	supersedePendingRoute();
+	const stillWanted = paletteNavigator.beginPick();
 	const found = await resolveWorkspaceFile(request.file);
+	if (!stillWanted()) return;
 	if (!found) {
 		toast.error(t("shell.deepLink.notInProject", { path: request.file }));
 		return;

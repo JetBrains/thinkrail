@@ -19,6 +19,7 @@ const defaultRow: Workspace = {
 	worktreePath: "/repo",
 };
 const reads: string[] = [];
+let holdResolution: ((release: () => void) => void) | null = null;
 const actualTransport = await import("../transport");
 mock.module("../transport", () => ({
 	...actualTransport,
@@ -26,9 +27,12 @@ mock.module("../transport", () => ({
 		request: (method: string, params: { path?: string }) => {
 			if (method === "workspace.resolvePath" && params.path) {
 				const relativePath = params.path.startsWith("/repo/") ? params.path.slice(6) : "";
-				return Promise.resolve(
-					relativePath ? { workspaceId: "w-default", projectId: "p1", relativePath } : null,
-				);
+				const match = relativePath
+					? { workspaceId: "w-default", projectId: "p1", relativePath }
+					: null;
+				const hold = holdResolution;
+				holdResolution = null;
+				return hold ? new Promise((resolve) => hold(() => resolve(match))) : Promise.resolve(match);
 			}
 			if (method === "workspace.list") return Promise.resolve([defaultRow]);
 			if (method === "fs.readFile" && params.path) {
@@ -43,6 +47,7 @@ mock.module("../transport", () => ({
 }));
 
 const { useAppStore } = await import("../store");
+const { startNavigation } = await import("../navigation/restore");
 const { getNativeDeepLinkBridge, installDeepLinks, openDeepLink } = await import("./deepLink");
 const initial = useAppStore.getInitialState();
 const entered: string[] = [];
@@ -57,9 +62,15 @@ const fileTab = (path: string) =>
 		(tab) => tab.kind === "file" && tab.path === path,
 	);
 
+const heldResolution = () =>
+	new Promise<() => void>((resolve) => {
+		holdResolution = resolve;
+	});
+
 beforeEach(() => {
 	reads.length = 0;
 	entered.length = 0;
+	holdResolution = null;
 	useAppStore.setState(initial, true);
 	useAppStore.setState({
 		projects: [project],
@@ -94,6 +105,69 @@ test("a file the host cannot read reports the failed open", async () => {
 	expect(reads).toEqual(["missing.ts"]);
 	expect(fileTab("missing.ts")).toBeUndefined();
 	expect(toasts()).toEqual([t("shell.deepLink.openFailed", { path: "/repo/missing.ts" })]);
+});
+
+test("a navigation while the path still resolves abandons the link", async () => {
+	const held = heldResolution();
+	const opening = openDeepLink({ file: "/repo/src/a.ts", line: 4 }, navigate);
+	const release = await held;
+	useAppStore.getState().selectProject("p1");
+	release();
+	await opening;
+	expect(entered).toEqual([]);
+	expect(reads).toEqual([]);
+	expect(toasts()).toEqual([]);
+	expect(useAppStore.getState().selectedProjectId).toBe("p1");
+	expect(useAppStore.getState().activeWorkspaceId).toBeNull();
+});
+
+test("a link supersedes a startup route still loading, whose late landing then cannot overtake it", async () => {
+	useAppStore.setState({ welcomeGeneration: 0 });
+	const routeRow: Workspace = {
+		id: "w-route",
+		projectId: "p1",
+		name: "route",
+		branch: "route",
+		baseBranch: "main",
+		worktreePath: "/worktrees/route",
+	};
+	let landRoute: (rows: Workspace[]) => void = () => {};
+	const stop = startNavigation({
+		driver: {
+			read: () => "#/v1/projects/p1/workspaces/w-route",
+			replace: () => {},
+			push: () => {},
+			onIncoming: () => () => {},
+		},
+		listWorkspaces: () =>
+			new Promise((resolve) => {
+				landRoute = resolve;
+			}),
+	});
+	try {
+		const held = heldResolution();
+		const opening = openDeepLink({ file: "/repo/src/a.ts", line: 2 }, navigate);
+		useAppStore.setState({ welcomeGeneration: 1 });
+		const release = await held;
+		landRoute([defaultRow, routeRow]);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(useAppStore.getState().activeWorkspaceId).toBeNull();
+		release();
+		await opening;
+		expect(entered).toEqual(["w-default"]);
+		expect(reads).toEqual(["src/a.ts"]);
+	} finally {
+		stop();
+	}
+});
+
+test("a slow resolution with no navigation meanwhile still opens the file", async () => {
+	const held = heldResolution();
+	const opening = openDeepLink({ file: "/repo/src/a.ts", line: 4 }, navigate);
+	(await held)();
+	await opening;
+	expect(entered).toEqual(["w-default"]);
+	expect(reads).toEqual(["src/a.ts"]);
 });
 
 test("a refused workspace entry opens no file", async () => {

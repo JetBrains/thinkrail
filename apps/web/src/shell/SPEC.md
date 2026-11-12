@@ -220,13 +220,16 @@ Letter chords match physical `KeyboardEvent.code`, never layout-dependent `key`.
 **Desktop deep links.** `main.tsx` calls `installDeepLinks` once. It reads the optional
 `NativeDeepLinkBridge` (`__THINKRAIL_NATIVE_DEEP_LINKS__`, [[module-contracts]]) from the preload; a browser
 has none and the installer is a no-op there. Requests run one at a time in arrival order. Each waits for the
-first welcome, then asks `panels/workspaceForPath.resolveWorkspaceFile` for the open workspace that holds
-the absolute path — the host matches real paths, so a `/tmp` or symlinked spelling of either side resolves.
-Nothing outside the open projects is opened. A path no open workspace contains, or a workspace root itself,
-toasts `shell.deepLink.notInProject` and changes nothing. Otherwise the link enters the workspace through the
-shared `paletteNavigator` (Find in Files' entry: the row loaded when this client lacks it, a deleting or
-vanished workspace refused, a newer navigation overtakes it), then calls `openFileAtLine(..., "keep")` with
-the match's workspace-relative path, so opening and revealing name the same tab. Monaco clamps a
+first welcome, supersedes a still-pending incoming route (`supersedePendingRoute`, [[submodule-web-navigation]]:
+on a cold launch the restored last location would otherwise land later, count as a navigation and drop the
+link) and begins a `paletteNavigator.beginPick()` guard, then asks `panels/workspaceForPath.resolveWorkspaceFile`
+for the open workspace that holds the absolute path — the host matches real paths, so a `/tmp` or symlinked
+spelling of either side resolves. A later pick or any navigation while the path resolves drops the link
+silently. Nothing outside the open projects is opened. A path no open workspace contains, or a workspace root
+itself, toasts `shell.deepLink.notInProject` and changes nothing. Otherwise the link enters the workspace
+through the shared `paletteNavigator` (Find in Files' entry: the row loaded when this client lacks it, a
+deleting or vanished workspace refused, a newer navigation overtakes it), then calls
+`openFileAtLine(..., "keep")` with the match's workspace-relative path, so opening and revealing name the same tab. Monaco clamps a
 line or column past the end of the file. When the host refuses the read (missing, a directory, `.git`, a
 symlink escaping the worktree, too large), no tab appears and `shell.deepLink.openFailed` says so. The
 workspace has already been entered by then.
