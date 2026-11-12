@@ -68,6 +68,7 @@ import {
 	workspaceFiles,
 } from "../extensions";
 import { displayTranscriptMessages } from "../history";
+import { findImageBlock, type ImageBlock, type ImageSource, projectImages } from "../images";
 import { logger } from "../log";
 import {
 	dataDir,
@@ -1317,7 +1318,7 @@ async function prepareSessionEntry(
 					}
 				: null;
 		}
-		const baseEvent = projectSessionEvent(event, terminal);
+		const baseEvent = projectSessionEvent(event, terminal, sessionId);
 		const projected =
 			baseEvent.type === "queue_update" && hasQueuedImages(entry)
 				? { ...baseEvent, hasImages: true as const }
@@ -1526,7 +1527,7 @@ async function createParentSessionInternal(
 		askForToolCall: (toolCallId, input, title, choices, signal) =>
 			selectForToolCall(
 				sessionId,
-				{ toolCallId, toolInput: input },
+				{ toolCallId, toolInput: projectImages(input, sessionId) as Record<string, unknown> },
 				title,
 				choices,
 				signal ? { signal } : undefined,
@@ -2227,8 +2228,32 @@ async function getSessionMessagesInternal(
 		entry = sessions.get(sessionId);
 		if (!entry) throw new Error(`Unknown session: ${sessionId}`);
 	}
-	return { summary: summaryOf(sessionId, entry), messages: transcriptMessages(entry.session) };
+	return {
+		summary: summaryOf(sessionId, entry),
+		messages: projectImages(transcriptMessages(entry.session), sessionId) as TranscriptMessage[],
+	};
 }
+
+function findMessageImage(messages: Iterable<unknown>, hash: string): ImageBlock | null {
+	for (const message of messages) {
+		if (typeof message !== "object" || message === null || !("content" in message)) continue;
+		const found = findImageBlock(message.content, hash);
+		if (found) return found;
+	}
+	return null;
+}
+
+export const sessionImageSource: ImageSource = {
+	isServable: (sessionId) => sessions.has(sessionId) && !hasDeletionTombstone(sessionId),
+	find: (sessionId, hash) => {
+		const entry = sessions.get(sessionId);
+		if (!entry || hasDeletionTombstone(sessionId)) return null;
+		const persisted = entry.session.sessionManager
+			.getEntries()
+			.flatMap((candidate) => (candidate.type === "message" ? [candidate.message] : []));
+		return findMessageImage(entry.session.messages, hash) ?? findMessageImage(persisted, hash);
+	},
+};
 
 export function getSessionMessages(
 	sessionId: string,

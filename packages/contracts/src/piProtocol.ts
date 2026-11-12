@@ -15,7 +15,16 @@ export type {
 } from "@earendil-works/pi-ai";
 
 import type { AgentEvent, AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { ImageContent, Message, Model, StopReason, TextContent } from "@earendil-works/pi-ai";
+import type {
+	AssistantMessage,
+	ImageContent,
+	Model,
+	StopReason,
+	SystemMessage,
+	TextContent,
+	ToolResultMessage,
+	UserMessage,
+} from "@earendil-works/pi-ai";
 import type { ProviderAuthKind, ProviderWarning } from "./domain";
 
 const NON_EXECUTABLE_TOOL_CALL_STOP_REASONS: ReadonlySet<string> = new Set([
@@ -104,7 +113,11 @@ export function canMarkCompletionUnread(state: SessionState): boolean {
 }
 
 type WithWireMessage<E> = E extends { message: AgentMessage }
-	? Omit<E, "message"> & { message: WireAgentMessage }
+	? Omit<E, "message" | "toolResults"> & { message: WireAgentMessage } & (E extends {
+				toolResults: unknown;
+			}
+				? { toolResults: WireToolResultMessage[] }
+				: unknown)
 	: E;
 
 export type PiEvent =
@@ -312,10 +325,38 @@ export interface ToolResponseDetails {
 	response: unknown;
 }
 
+export interface RefImage {
+	type: "image";
+	mimeType: string;
+	ref: string;
+	width?: number;
+	height?: number;
+}
+
+export type WireImage = RefImage | ImageContent;
+
+export type WireUserMessage = Omit<UserMessage, "content"> & {
+	content: string | (TextContent | WireImage)[];
+};
+
+export type WireToolResultMessage = Omit<ToolResultMessage, "content"> & {
+	content: (TextContent | WireImage)[];
+};
+
+export type WireMessage =
+	| SystemMessage
+	| WireUserMessage
+	| AssistantMessage
+	| WireToolResultMessage;
+
+export function isRefImage(image: WireImage): image is RefImage {
+	return "ref" in image && typeof image.ref === "string";
+}
+
 export interface WireCustomMessage<T = unknown> {
 	role: "custom";
 	customType: string;
-	content: string | (TextContent | ImageContent)[];
+	content: string | (TextContent | WireImage)[];
 	display: boolean;
 	details?: T;
 	timestamp: number;
@@ -328,7 +369,7 @@ export interface WireCompactionSummary {
 	timestamp: number;
 }
 
-export type TranscriptMessage = Message | WireCustomMessage | WireCompactionSummary;
+export type TranscriptMessage = WireMessage | WireCustomMessage | WireCompactionSummary;
 
 export interface WireBranchSummary {
 	role: "branchSummary";

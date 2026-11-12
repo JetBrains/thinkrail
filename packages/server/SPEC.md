@@ -96,6 +96,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `watch` | per-worktree fs watcher → debounced `workspace.fsChanged` invalidation push | [watch/SPEC.md](src/watch/SPEC.md) |
 | `terminal` | workspace-scoped `bun-pty` terminals | [terminal/SPEC.md](src/terminal/SPEC.md) |
 | `agent` | in-process pi sessions + current/retained runtime generations + one-shot completions | [agent/SPEC.md](src/agent/SPEC.md) |
+| `images` | image bytes off the WebSocket: `ImageContent` → `WireImage` reference projection, the bounded reference cache, and `GET /images/…` | [images/SPEC.md](src/images/SPEC.md) |
 | `extensions` | the server registry of ThinkRail extensions (`@thinkrail/ext-*/server`): ordered descriptors + public specifiers, inline flattening, owner-scoped skill resolution | [extensions/SPEC.md](src/extensions/SPEC.md) |
 | `auth` | provider status/login plus native JetBrains Central lifecycle and quota orchestration | [auth/SPEC.md](src/auth/SPEC.md) |
 | `assist` | ad-hoc one-shot tasks (plan summaries, PR descriptions) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
@@ -115,7 +116,7 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `fonts`, `speech`, `history`, `search`, `templates`, `analytics`, `feedback`, `trash` (a chat's folder), `log`, `persistence` (`dataDir`, for the crash report)
+- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `fonts`, `speech`, `history`, `search`, `templates`, `analytics`, `feedback`, `trash` (a chat's folder), `log`, `persistence` (`dataDir`, for the crash report), `images` (the `/images` route, its source seam, and forgetting a deleted chat)
 - `search` → `contracts`, `git` (`gitAsyncStream` for `ls-files` and `grep`), `log`; `history`, `spec` and `todos` for types only — `host/search.ts` injects every reader (projects, workspace records, the history index's `sessions()`, spec snapshots, stored plans, the file check `fs.readableFileSize` and the text check `fs.classifyBytes`), the Default provisioning (`workspaces.listWorkspaces`) and the root watch (`watch.ensureWatch`, prewarm); it opens no file itself but the bounded text search's direct read of a chat folder's walked files (`git grep` reads a repository's) — files and specs preview client-side over `fs.readFile`
 - `workspaces` → `projects`, `git`, `persistence`
 - `branch-review` → `git`, `subprocess`
@@ -149,13 +150,14 @@ the host from env via `bootHost` for dev/e2e.
   `trash` (a chat delete's recoverable transcript move), `resourceHistory` (records its owners' lifecycle and reads
   what they no longer hold), `extensions` (the registry's flattened parent and
   child inline extensions plus, in unbundled dev, its skill roots), `history` (`displayTranscript` — the
-  JSONL display projection `getMessages` shares with search so compaction keeps pre-cut turns reviewable)
-  — otherwise the pi runtime alone; auth
+  JSONL display projection `getMessages` shares with search so compaction keeps pre-cut turns reviewable),
+  `images` (projects every host→page image at its wire seams, and `imageDimensions` for the oversized-image
+  guard) — otherwise the pi runtime alone; auth
   passes desired opaque Central paths through its public generation seam
 - `extensions` → `@thinkrail/ext-*/server` + `@thinkrail/extension-api/server` (external); `buildSupport.ts`
   (build-only) also reads it to stage the extensions' skill roots
 - `resourceHistory` → `persistence` (`dataDir`), `log`
-- `persistence`, `dialog`, `history`, `templates`, `subprocess`, `trash` → (leaves)
+- `persistence`, `dialog`, `history`, `templates`, `subprocess`, `trash`, `images` → (leaves)
 
 Rules: features never import `host`, and never each other except the edges above. The graph is acyclic.
 `agent`'s WS surface (`session.*` + `pi.event` forwarding) attaches to `host`. Features that push on their

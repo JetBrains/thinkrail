@@ -111,6 +111,7 @@ export type * from "./piProtocol";
 export {
 	assistantToolCallsAreExecutable,
 	canMarkCompletionUnread,
+	isRefImage,
 	isSessionWorking,
 	isTranscriptMessageRole,
 	sameModel,

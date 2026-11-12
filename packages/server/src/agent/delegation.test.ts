@@ -170,6 +170,16 @@ test("host embedding: projection, per-workspace service, transcript store, casca
 		),
 	).toBe(true);
 
+	const shot = {
+		type: "image" as const,
+		data: Buffer.from("child-screenshot-bytes").toString("base64"),
+		mimeType: "image/png",
+	};
+	childManager.appendMessage({ role: "user", content: [shot], timestamp: Date.now() });
+	const withImage = JSON.stringify(readChildTranscript("ws-del", sessionId, child.sessionId));
+	expect(withImage).not.toContain(shot.data);
+	expect(withImage).toContain(`/images/${sessionId}/`);
+
 	await removeSession(sessionId);
 	expect(service.findChild(child.sessionId)).toBeUndefined();
 	const afterDispose = readChildTranscript("ws-del", sessionId, child.sessionId);

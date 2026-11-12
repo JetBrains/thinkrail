@@ -225,10 +225,31 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   fallback, routine or primary, card or bare — passes through one common result-content layer. Once a result
   completes, each valid canonical image block appends a bounded in-card preview with an explicit full-screen
   dialog action; multiple images retain block order. This is content-type behavior, not a `read` special case,
-  and it does not promote or auto-expand the tool. The result bytes are already in the transcript, so preview
-  needs no host fetch and works for paths outside the workspace. Previewable blocks require non-empty data
-  and one of `contracts`' shared raster media types (PNG/JPEG/GIF/WebP); malformed shapes and unsupported
-  media types are ignored, while canonical content arrays are never serialized into base64 JSON.
+  and it does not promote or auto-expand the tool.
+  - **Bytes load over HTTP.** A result image arrives as a `WireImage` reference (#1180,
+    [[submodule-server-images]]), and the preview fetches it from the host, so it works for paths outside the
+    workspace and for MCP images. Previewable blocks need a host reference or non-empty inline data, and one
+    of `contracts`' shared raster media types (PNG/JPEG/GIF/WebP). Malformed shapes and unsupported media
+    types are ignored.
+  - **`ChatImage` renders every chat image** (tool thumbnails, full screen, and the attachment dialog) and
+    stays presentational. A small `ChatMediaContext` supplies `resolveUrl` (the transport's `hostUrl`) and a
+    `retryEpoch`. `ChatView` provides it, and its epoch advances when that chat's reconnect transcript resync
+    lands. `SubagentTranscriptDialog` provides it too, and its epoch advances per poll.
+  - **The box is reserved.** The `<img>` carries the host-sniffed `width`/`height`. `ChatImage` owns its
+    sizing through a `fit` (`thumbnail` caps at 240px, `screen` caps at 78vh). The height attribute stays
+    definite while `w-auto` follows the aspect ratio, so the box exists before the bytes arrive and when
+    they fail. Callers never pass size classes, because `w-auto` or `h-auto` on a sized image would
+    collapse that box.
+  - **The tile.** "Image unavailable" overlays that same box, with a minimum size when the box is unknown
+    or small. It shows the label and an explicitly tabbable Retry (macOS WebKit skips buttons without a
+    tab stop).
+  - **Retry.** Retry makes a cache-busting reload. The tile retries by itself when the epoch advances,
+    and stays up until the new load succeeds, so there is no flicker. It never retries on the raw
+    reconnect, because after a host restart the image is servable again only once the transcript re-read
+    has re-registered it.
+  - **Keys are occurrences.** An image's React key is its slot (owner identity plus ordinal), never its
+    content, so repeated images do not collide. An attachment dialog opened on the optimistic echo also
+    stays open when the host's message replaces the echo.
 - `activity` — one contiguous run of routine work stays one **collapsed outer disclosure** whose header
   summarizes every atomic step (thinking blocks + routine tool calls). Expanding it preserves tools before
   the first thought as direct rows, then renders each non-empty thinking block as a nested disclosure. When
@@ -1301,7 +1322,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   as compact "attached file" chips above the text (no inline preview; click opens the image in a dialog,
   the diagram-fullscreen pattern). The chip label is the picked file's name, carried on the echo turn as
   `attachmentNames` (UI-side only — pi's `ImageContent` has no filename), index-aligned with the image
-  blocks; a hydrated turn has no names and falls back to mime-type labels) —
+  blocks; a hydrated turn has no names and falls back to mime-type labels; the echo's blocks are inline,
+  the host's are `WireImage` references, and both render through `ChatImage`) —
   it shows exactly what was typed (the raw command) until a re-fetch replaces it with pi's real persisted
   record. **The `/` menu merge**
   (`ChatView`): pi's `commands` snapshot (`session.getCommands`, frozen at session-create time) minus its

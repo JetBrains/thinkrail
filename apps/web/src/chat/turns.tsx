@@ -18,9 +18,9 @@ import type {
 	ChatHandoffDetails,
 	ContinueInWorkspaceRequestDetails,
 	GitDiffScope,
-	ImageContent,
 	ReviewFixDetails,
-	UserMessage,
+	WireImage,
+	WireUserMessage,
 } from "@thinkrail/contracts";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import { type Translator, useT } from "@thinkrail/locales/react";
@@ -41,6 +41,7 @@ import { type AssistantFailure, errorTurnText, subscriptionLimit } from "./assis
 import { AssistantMarkdown } from "./assistantLinks";
 import { BackgroundCommandResult, SubagentResult } from "./BackgroundResult";
 import { useChatActions } from "./ChatActions";
+import { ChatImage } from "./ChatImage";
 import { CopyButton } from "./CopyButton";
 import { CONTENT_WIDTH_BREAKOUT } from "./contentWidth";
 import { NoticeLink } from "./ExtraUsageNotice";
@@ -193,17 +194,11 @@ function ChatTurnViewImpl({
  */
 export const ChatTurnView = memo(ChatTurnViewImpl);
 
-function userAttachments(content: UserMessage["content"], names?: string[]) {
+function userAttachments(content: WireUserMessage["content"], names?: string[]) {
 	if (typeof content === "string") return [];
-	const seen = new Map<string, number>();
 	return content
 		.filter((c) => c.type === "image")
-		.map((img, i) => {
-			const tail = img.data.slice(-24);
-			const n = seen.get(tail) ?? 0;
-			seen.set(tail, n + 1);
-			return { key: `${tail}-${n}`, label: names?.[i] ?? img.mimeType, img };
-		});
+		.map((img, i) => ({ key: `attachment-${i}`, label: names?.[i] ?? img.mimeType, img }));
 }
 
 const USER_BUBBLE_BASE =
@@ -218,7 +213,7 @@ const USER_BUBBLE = cn("max-w-[85%]", USER_BUBBLE_BASE);
 const USER_SIDE_UNBOUNDED_CLAMP =
 	"[[data-line-width-bounded=false]_&]:max-w-[calc(100cqw-2*var(--chat-gutter))]";
 
-function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
+function AttachmentChip({ label, img }: { label: string; img: WireImage }) {
 	const t = useT();
 	const [open, setOpen] = useState(false);
 	return (
@@ -236,11 +231,7 @@ function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
 						<DialogTitle>{label}</DialogTitle>
 					</DialogHeader>
 					<div className="relative min-h-0 flex-1 overflow-auto">
-						<img
-							src={`data:${img.mimeType};base64,${img.data}`}
-							alt=""
-							className="max-h-[80vh] max-w-full rounded-sm"
-						/>
+						<ChatImage image={img} label={label} fit="screen" />
 					</div>
 				</DialogContent>
 			</Dialog>
@@ -288,7 +279,7 @@ function UserTurn({
 	agentResponded,
 }: {
 	id: string;
-	message: UserMessage;
+	message: WireUserMessage;
 	attachmentNames?: string[] | undefined;
 	agentResponded: boolean;
 }) {

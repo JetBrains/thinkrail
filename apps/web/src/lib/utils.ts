@@ -1,4 +1,4 @@
-import type { UserMessage } from "@thinkrail/contracts";
+import type { WireUserMessage } from "@thinkrail/contracts";
 import type { Translator } from "@thinkrail/locales/react";
 import { browserPlatform, isApplePlatform } from "@thinkrail/ui/keyboard";
 
@@ -125,7 +125,7 @@ export function randomUuid(): string {
 	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-export function userText(content: UserMessage["content"]): string {
+export function userText(content: WireUserMessage["content"]): string {
 	if (typeof content === "string") return content;
 	return content
 		.filter((c) => c.type === "text")

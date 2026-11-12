@@ -20,6 +20,14 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   `ToolProminence`, `ToolWidth`, `ToolRegistrationOptions`, `ToolInteraction`, `ToolInteractionState`,
   `ToolPlacement`, `WebExtension`, `defineWebExtension`, and the pure argument/result readers from
   `toolHelpers` and `toolResultContent`.
+- **Images are references.** `parseToolResultContent(result).images` returns `contracts`' `WireImage`s,
+  in block order.
+  - A host reference (`ref` plus optional `width`/`height`) is accepted when its `ref` lies under
+    `IMAGES_ROUTE`.
+  - An inline block is accepted when its `data` is non-empty.
+  - Either kind must have one of `ACCEPTED_IMAGE_TYPES`.
+  - Extension renderers never load image bytes themselves: the chat's common result layer renders every
+    image (#1180).
 - **Interactive tools.** A tool whose `execute` waits for the person's response is *interactive*. The
   contract is tool-agnostic on both sides and keyed by `toolCallId`; the host learns a tool's name only
   from the two declarations below:
