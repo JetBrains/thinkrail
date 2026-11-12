@@ -284,7 +284,22 @@ re-opened transcripts provider-valid.
     result: pi's value for programmatic callers (bash puts up to 1 MiB of raw output there), never
     persisted and never rendered, so forwarding it would only grow every live frame and the browser
     store. `entry_appended` is projected to `{ entryType }` only: extension and pi-internal entry payloads
-    never cross the wire. The live entry retains
+    never cross the wire. **Image bytes never cross it either.** Every image is projected to a reference
+    through `images.projectImages(…, sessionId)` ([[submodule-server-images]]) at each of agent's wire seams:
+    - `projectSessionEvent`, which covers every event, `turn_end.toolResults` and `agent_end.messages`;
+    - `getSessionMessages`;
+    - `readChildTranscript`, scoped to the **parent** chat;
+    - an MCP approval's `toolInput`, where its `ExtUiRequest` is built, so `pi.extensionUi` and
+      `session.state.needsInput` carry refs too.
+
+    The host observers (turns, analytics, continuations, todos) therefore read the projected event. None of
+    them reads image data. pi's own objects are never mutated: model context, persistence and the
+    oversized-image guard still see the bytes. The image source the host injects is agent's live lookup:
+    - the owning chat's `sessionManager.getEntries()` plus `session.messages`, which also covers compacted
+      history and in-flight messages;
+    - tombstoned chats are not servable.
+
+    The live entry retains
     that settlement in `SessionSummary.lastSettlement` for reconnect after Pi removed a failed attempt from its rebuilt
     context; a new `agent_start` exposes explicit `null` (no current terminal) so an older persisted failure
     cannot reappear mid-run, while disk sessions remain transcript-authoritative. A live summary also
@@ -294,7 +309,8 @@ re-opened transcripts provider-valid.
     while Pi reports the corresponding text entry pending. That transient mirror exists solely because Pi's
     destructive queue API returns text but drops image blocks; Pi's queue events remain authoritative for
     membership/order. The host projects only a conservative `hasImages` aggregate into summaries/events, so
-    image bytes do not ride the ordinary read stream.
+    queued image bytes do not ride the ordinary read stream. The destructive queue replies stay inline,
+    because the composer re-sends them.
 
     Pi ≥ 1.5.1 clears a delivered image-only (empty-text) queued message itself (upstream #8612); the host
     override that counted such deliveries and synthesized the emptying `queue_update` is gone, and the
@@ -730,8 +746,8 @@ re-opened transcripts provider-valid.
     has no image codec (the autoResize tradeoff above), so the guard transforms the **outgoing context
     only** — session file and transcript stay untouched, and a stuck chat recovers on its very next
     message. The count-aware cap also degrades a raw >2000px `read`-tool image to a note instead of a
-    brick once a session crosses 21 images. Pure core (`guardOversizedImages`, `imageDimensions`)
-    unit-tested with hand-built header bytes.
+    brick once a session crosses 21 images. Pure core (`guardOversizedImages`, plus `imageDimensions` now
+    owned by `images`) unit-tested with hand-built header bytes.
   - `skillCatalog` — the skill-listing budget (#1210): an inline extension in `buildResourceLoader`'s
     shared factories and the opt-in `childExtensionFactories` — never the tool-free base set, since it
     registers `skill_search` (pi-delegation decision #25), so a child gets it only with `extensions: true`

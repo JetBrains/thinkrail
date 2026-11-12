@@ -197,9 +197,25 @@ the palette ranks with — kept here so host-side search can rank with the same 
     `session_info_changed` / `thinking_level_changed` / host-projected `entry_appended { entryType }`
     members, plus `bash_execution_update` — mirrored
     for union fidelity only; the host never calls `executeBash`, so the UI never receives it).
-    Every message an event carries (`message_*`, `turn_end`, `agent_end.messages`) is typed as
-    **`WireAgentMessage`** — `TranscriptMessage` plus the `WireBranchSummary` / `WireBashExecution`
-    mirrors — never pi-agent-core's `AgentMessage`. That type is `Message` plus whatever
+    Every message an event carries (`message_*`, `turn_end` with its `toolResults`, `agent_end.messages`) is
+    typed as **`WireAgentMessage`** — `TranscriptMessage` plus the `WireBranchSummary` / `WireBashExecution`
+    mirrors — never pi-agent-core's `AgentMessage`.
+    **Image blocks travel as `WireImage`** (#1180, `IMAGE_REFS_PROTOCOL_VERSION` v119). `WireImage` is a union:
+    - `RefImage` (`{type:"image", mimeType, ref, width?, height?}`) is what the host sends in every host→page
+      payload. Its `ref` is a host-relative path under **`IMAGES_ROUTE`** (`/images/`), fetched over HTTP
+      ([[submodule-server-images]]).
+    - pi's inline `ImageContent` is the other member. It covers the page's optimistic echo and a page talking to
+      an older host.
+
+    `WireUserMessage` / `WireToolResultMessage` and `WireCustomMessage.content` carry `WireImage`; with
+    `AssistantMessage` they form **`WireMessage`**, the base of `TranscriptMessage`. A consumer must narrow
+    (`"ref" in image`) before it reads `data`, so a forgotten consumer fails to compile instead of rendering an
+    empty `data:` URL. The union is not a projection guarantee: the host's wire tests prove no `data` leaves it.
+    Opaque tool fields (`result`, `partialResult`, `args`) stay `any`, and page parsing of them stays
+    defensive. Page→host shapes (`session.prompt` / `steer` / `followUp` / `nudge` images) and the
+    composer-restore replies keep inline `ImageContent`.
+    There is no gating, by the user's decision: an older page against this host is unsupported until it
+    reloads. That type is `Message` plus whatever
     `CustomAgentMessages` augmentation the compilation happens to include: pi-coding-agent adds the
     custom roles only in Node builds, and pi-agent-core itself no longer adds them, so the same
     `PiEvent` would otherwise mean two different unions on the server and in the browser (where the
@@ -246,7 +262,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
     **`QueuedMessageContent`** shapes, which return each drained message's text and optional images exactly
     once so the composer can restore complete content without making ordinary queue broadcasts heavy.
     `session.getMessages` returns `{ summary, messages }` (the transcript is
-    **`TranscriptMessage[]`** — the pi-canonical `Message` union widened with **`WireCustomMessage`**, a
+    **`TranscriptMessage[]`** — the wire `WireMessage` union widened with **`WireCustomMessage`**, a
     type-only mirror of pi-coding-agent's Node-only `CustomMessage`, so extension-injected messages like
     the ask replies cross the wire, and with **`WireCompactionSummary`** (mirror of the Node-only
     `CompactionSummaryMessage`: `summary`/`tokensBefore`/`timestamp`), the resolved-context record of a

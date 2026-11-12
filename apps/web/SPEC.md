@@ -410,12 +410,12 @@ themselves.
   ([[module-ext-ask-user-question]]); the rest of the app has not been swept yet (known gap).
 - **Every host route the app composes is proxied by the Vite dev server.** The app reaches the host
   over the `/ws` and `/speech` sockets (the dictation stream, `transport/speech.ts`), over the two byte routes `/files` and `/blob` (images, PDFs, notebooks, markdown-relative
-  images), always composed through one function (`panels/resourcePane.resourceBytesUrl`), and over
-  `/fonts/` (custom font files and uploads, composed by `transport/fonts.ts`), all on the transport's HTTP
-  origin. Under `bun run dev` that origin is Vite, and a route Vite does not proxy answers the SPA
+  images), always composed through one function (`panels/resourcePane.resourceBytesUrl`), over
+  `/fonts/` (custom font files and uploads, composed by `transport/fonts.ts`), and over `/images/` (chat
+  image references, resolved with `hostUrl`), all on the transport's HTTP origin. Under `bun run dev` that origin is Vite, and a route Vite does not proxy answers the SPA
   `index.html` with status 200 — an `<img>` shows nothing and a PDF fetch "succeeds" with HTML, while the
-  host-served build and the e2e suite stay green. `vite.config.ts` therefore proxies `/files`, `/blob` and
-  `/fonts` beside `/ws` and `/speech` (an unproxied socket upgrade is simply never answered, so dictation
+  host-served build and the e2e suite stay green. `vite.config.ts` therefore proxies `/files`, `/blob`,
+  `/fonts` and `/images` beside `/ws` and `/speech` (an unproxied socket upgrade is simply never answered, so dictation
   hung on "starting"), and `devProxy.test.ts` pins the list to the composers' constants.
 - **`typecheck` runs two projects.** `tsconfig.json` checks the browser app with DOM types only;
   `tsconfig.test.json` checks tests, `scripts/`, and `vite.config.ts` with Bun types. Every

@@ -43,7 +43,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   send `X-Content-Type-Options: nosniff`; active same-origin types (`text/html`,
   `application/xhtml+xml`, `image/svg+xml`) additionally receive
   `Content-Security-Policy: sandbox; default-src 'none'`, so direct navigation cannot execute repository
-  script, the **`/fonts/<file>`** route (`fontRoutes.ts`, ahead of the static fallback) over the
+  script, the **`GET /images/<sessionId>/<sha>`** route, delegated to [[submodule-server-images]]'s `serveImage`.
+  It serves chat images as references, by allow-listed raster type only, with `no-store`; the host injects its
+  source (agent's live lookup plus the tombstone check), calls `forgetImageSession` on every `session.deleted`,
+  and calls `resetImages` on stop. Then the **`/fonts/<file>`** route (`fontRoutes.ts`, ahead of the static fallback) over the
   [[submodule-server-fonts]] folder — the host's one HTTP write route and the only route that checks its
   method: `GET` serves a font by its extension's type (`font/ttf|otf|woff|woff2`) with
   `Cache-Control: no-cache` (list URLs carry a content version) and 404s any name `fontFileKind` refuses,
@@ -961,8 +964,9 @@ enabled/confirmed choice before entering analytics attribution.
     a probe client received 0 frames.
   - **Why finite, why this value.** Memory grows only while a client reads slower than the host writes,
     up to the limit per socket. A limit of `0` (unlimited) would let one slow client exhaust the host.
-    A resync larger than 256 MiB, for example several mounted chats of ~70 MB each, brings the loop
-    back. That is the accepted bound until image bytes leave the socket (#1180).
+    A resync larger than 256 MiB brings the loop back. Since #1180 image bytes leave the socket
+    (`WireImage` references), so a transcript's size is its text. The limit still covers the
+    composer-restore replies that hand images back inline.
   - **Broadcasts.** `server.publish` results stay ignored, so pushes past the limit are still dropped
     silently (#1179).
 - The host is the single place features are wired together — features never reach back into it.
