@@ -217,8 +217,9 @@ Before each post-initialization install CTA, download, or CLI event, the current
 attempted so consent granted on the page can affect only a subsequent action; a page records that touch
 at most once per consented journey, so later actions on it never drop a bridge its download created
 (see [[submodule-website-attribution]]). Only the four exact stable
-GitHub desktop aliases are downloads. Their CTA location comes from the containing hero, install
-section, quick start, final CTA, or blog post; one recognized activation emits `install_cta_clicked`
+GitHub desktop aliases are downloads. Their CTA location comes from the containing post-header install
+row (`post_header`, checked before the post), blog post, final CTA, quick start, install section, hero, or
+site `header` (the title bar and its install popover); one recognized activation emits `install_cta_clicked`
 (`desktop`) followed by `download_started`. When a consented journey context is available, the activation
 creates and stores a canonical per-download bridge ID before `download_started`, and that event carries
 the same ID. A later desktop download replaces only the stored latest bridge ID; a download without
@@ -243,11 +244,13 @@ the survey again. Choice order is shuffled for each response, except a custom an
 last. Required steps leave Continue disabled until the answer is valid. The first-try note and
 the email are optional. A filled-in email has to satisfy the browser's email field before
 Finish enables; a blank email does not. While Finish is disabled, a muted note on the same line as the
-button reads “— please enter a valid email or leave it blank”. Opening the blog-post picker's command-line disclosure emits only
-`install_cta_clicked` (`cli`); closing it does not, and the landing's always-visible command tabs emit
+button reads “— please enter a valid email or leave it blank”. Opening the command-line disclosure of the
+blog-post picker or of the header popover's picker emits only `install_cta_clicked` (`cli`, `blog_post` or
+`header`); closing it does not, and the landing's always-visible command tabs emit
 nothing. That open is browsing, not install intent: a
 primary-button click on a `[data-copy]` control whose value is a known install command emits
-`install_command_copied` with its `sh`/`powershell`/`cmd` shell and hero, install-section, or blog-post location
+`install_command_copied` with its `sh`/`powershell`/`cmd` shell and hero, install-section, blog-post, `header`
+(title-bar chip, popover) or `post_header` (post-row chip) location
 (other copy values emit nothing; selecting and copying the text manually is not observed). Any other
 link into the `JetBrains/thinkrail` repository (exact repo, `#`/`?` suffix, or sub-path; never a
 sibling repository or a desktop alias) emits `github_clicked` with a `repo`/`releases`/`other` target
@@ -255,8 +258,8 @@ and a location from the containing blog post, final CTA, quick start, install se
 or the vibecoding `#top`), header, footer, terminal, or mock-callout tooltip — `other` when none
 contains it. GitHub clicks are a separate signal: GTM reporting counts only `download_started` and
 `install_command_copied` as install intent, because a repository visit mixes starring and browsing with
-installing. A primary-button click on a `[data-share-install-link]` control in the hero or quick start
-emits `install_link_share_clicked`; it records the activation, not whether the share sheet completed.
+installing. A primary-button click on a `[data-share-install-link]` control in the hero, quick start,
+title bar (`header`) or post row (`post_header`) emits `install_link_share_clicked`; it records the activation, not whether the share sheet completed.
 Each of these events attempts the live navigation touch first, like the existing actions. No page or
 child module carries analytics imports, vendor configuration, or another loader; controls expose only
 the `data-copy` / `data-share-install-link` markers the delegation reads. The one exception is

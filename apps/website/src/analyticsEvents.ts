@@ -83,11 +83,13 @@ const stableDesktopArtifacts = {
 } as const satisfies Record<string, DesktopArtifact>;
 
 const locationSelectors = [
+	["post_header", ".blog-post-header"],
 	["blog_post", ".blog-post"],
 	["final_cta", "#cta"],
 	["quick_start", "#quick-start"],
 	["install_section", "#install"],
 	["hero", "#readme"],
+	["header", "header"],
 ] as const satisfies ReadonlyArray<readonly [WebsiteCtaLocation, string]>;
 
 const githubLocationSelectors = [
@@ -104,6 +106,21 @@ const githubLocationSelectors = [
 	["mock_hint", "#mock-tooltip"],
 ] as const satisfies ReadonlyArray<readonly [WebsiteGithubLocation, string]>;
 
+const commandCopyLocations = [
+	"hero",
+	"install_section",
+	"blog_post",
+	"header",
+	"post_header",
+] as const satisfies ReadonlyArray<WebsiteInstallCommandCopiedProperties["cta_location"]>;
+
+const linkShareLocations = [
+	"hero",
+	"quick_start",
+	"header",
+	"post_header",
+] as const satisfies ReadonlyArray<WebsiteInstallLinkShareClickedProperties["cta_location"]>;
+
 const installCommandShells = new Map<string, WebsiteInstallCommandCopiedProperties["shell"]>([
 	[installCommands.macos, "sh"],
 	[installCommands.windows.powershell, "powershell"],
@@ -114,6 +131,13 @@ const initializedDocuments = new WeakSet<object>();
 
 function hasOwn<Value extends object>(value: Value, key: PropertyKey): key is keyof Value {
 	return Object.hasOwn(value, key);
+}
+
+function isOneOf<Value extends string>(
+	value: string | undefined,
+	values: readonly Value[],
+): value is Value {
+	return values.some((candidate) => candidate === value);
 }
 
 function hasClosest(value: unknown): value is ClosestElement {
@@ -206,12 +230,7 @@ export function installCommandCopiedEvent(
 	| undefined {
 	const shell = installCommandShells.get(button.getAttribute("data-copy") ?? "");
 	const ctaLocation = ctaLocationForElement(button);
-	if (
-		shell === undefined ||
-		(ctaLocation !== "hero" && ctaLocation !== "install_section" && ctaLocation !== "blog_post")
-	) {
-		return undefined;
-	}
+	if (shell === undefined || !isOneOf(ctaLocation, commandCopyLocations)) return undefined;
 	return {
 		event: "install_command_copied",
 		properties: { content_key: contentKey, cta_location: ctaLocation, shell },
@@ -225,15 +244,18 @@ export function installLinkShareClickedEvent(
 	| { event: "install_link_share_clicked"; properties: WebsiteInstallLinkShareClickedProperties }
 	| undefined {
 	const ctaLocation = ctaLocationForElement(button);
-	if (ctaLocation !== "hero" && ctaLocation !== "quick_start") return undefined;
+	if (!isOneOf(ctaLocation, linkShareLocations)) return undefined;
 	return {
 		event: "install_link_share_clicked",
 		properties: { content_key: contentKey, cta_location: ctaLocation },
 	};
 }
 
-export function cliDisclosureLocation(disclosure: CliDisclosure): "blog_post" | undefined {
-	return disclosure.matches(".blog-post details.cli-disclosure") ? "blog_post" : undefined;
+export function cliDisclosureLocation(
+	disclosure: CliDisclosure,
+): "blog_post" | "header" | undefined {
+	if (disclosure.matches(".blog-post details.cli-disclosure")) return "blog_post";
+	return disclosure.matches("header details.cli-disclosure") ? "header" : undefined;
 }
 
 export function cliDisclosureOpenedEvent(

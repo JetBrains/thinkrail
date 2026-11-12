@@ -77,9 +77,13 @@ function captureLog(): { capture: Capture; events: CapturedEvent[] } {
 }
 
 function elementAt(selector: string) {
+	return elementWithin(selector);
+}
+
+function elementWithin(...selectors: string[]) {
 	return {
 		closest(candidate: string) {
-			return candidate === selector ? this : null;
+			return selectors.includes(candidate) ? this : null;
 		},
 	};
 }
@@ -182,8 +186,17 @@ describe("CTA classification", () => {
 		["#quick-start", "quick_start"],
 		["#cta", "final_cta"],
 		[".blog-post", "blog_post"],
+		[".blog-post-header", "post_header"],
+		["header", "header"],
 	] as const)("derives %s as %s", (selector, expected) => {
 		expect(ctaLocationForElement(elementAt(selector))).toBe(expected);
+	});
+
+	test("attributes the post-header install row to the row, not the post or a header", () => {
+		expect(ctaLocationForElement(elementWithin("header", ".blog-post-header", ".blog-post"))).toBe(
+			"post_header",
+		);
+		expect(ctaLocationForElement(elementWithin(".blog-post", "header"))).toBe("blog_post");
 	});
 
 	test("does not invent a location for an unrelated element", () => {
@@ -209,6 +222,12 @@ describe("CTA classification", () => {
 			},
 		});
 		expect(cliDisclosureOpenedEvent(contentKey, disclosure(true, "details.other"))).toBeUndefined();
+		expect(
+			cliDisclosureOpenedEvent("landing", disclosure(true, "header details.cli-disclosure")),
+		).toEqual({
+			event: "install_cta_clicked",
+			properties: { content_key: "landing", cta_location: "header", install_method: "cli" },
+		});
 	});
 });
 
@@ -287,6 +306,19 @@ describe("install command copies and link shares", () => {
 		});
 	});
 
+	test.each([
+		["header", "header"],
+		[".blog-post-header", "post_header"],
+	] as const)("attributes a command-chip copy in %s to %s", (selector, ctaLocation) => {
+		const button = attributeElement(selector, "[data-copy]", {
+			"data-copy": installCommands.macos,
+		});
+		expect(installCommandCopiedEvent("blog/the-chat", button)).toEqual({
+			event: "install_command_copied",
+			properties: { content_key: "blog/the-chat", cta_location: ctaLocation, shell: "sh" },
+		});
+	});
+
 	test("ignores unknown copied values and copies outside the install controls", () => {
 		expect(
 			installCommandCopiedEvent(
@@ -300,9 +332,15 @@ describe("install command copies and link shares", () => {
 				attributeElement("#cta", "[data-copy]", { "data-copy": installCommands.macos }),
 			),
 		).toBeUndefined();
+		expect(
+			installCommandCopiedEvent(
+				"vibecoding",
+				attributeElement("#quick-start", "[data-copy]", { "data-copy": installCommands.macos }),
+			),
+		).toBeUndefined();
 	});
 
-	test("derives share locations only for the hero and quick start", () => {
+	test("derives share locations only for the hero, quick start, and the header controls", () => {
 		expect(installLinkShareClickedEvent("landing", elementAt("#readme"))).toEqual({
 			event: "install_link_share_clicked",
 			properties: { content_key: "landing", cta_location: "hero" },
@@ -311,7 +349,21 @@ describe("install command copies and link shares", () => {
 			event: "install_link_share_clicked",
 			properties: { content_key: "vibecoding", cta_location: "quick_start" },
 		});
+		expect(installLinkShareClickedEvent("blog/the-chat", elementAt("header"))).toEqual({
+			event: "install_link_share_clicked",
+			properties: { content_key: "blog/the-chat", cta_location: "header" },
+		});
+		expect(
+			installLinkShareClickedEvent(
+				"blog/the-chat",
+				elementWithin("header", ".blog-post-header", ".blog-post"),
+			),
+		).toEqual({
+			event: "install_link_share_clicked",
+			properties: { content_key: "blog/the-chat", cta_location: "post_header" },
+		});
 		expect(installLinkShareClickedEvent("landing", elementAt("#install"))).toBeUndefined();
+		expect(installLinkShareClickedEvent("blog/the-chat", elementAt(".blog-post"))).toBeUndefined();
 	});
 });
 
@@ -336,6 +388,44 @@ describe("analytics event initialization", () => {
 					platform: "macos",
 					architecture: "arm64",
 					artifact: "dmg",
+				},
+			},
+		]);
+	});
+
+	test("attributes a download from the header install panel to the header", () => {
+		const document = new FakeDocument();
+		const log = captureLog();
+		const url = Object.keys(stableDesktopAliases)[2] as string;
+		initAnalyticsEvents(
+			document,
+			"/blog/the-chat/",
+			log.capture,
+			() => {},
+			() => {},
+			() => undefined,
+		);
+		log.events.length = 0;
+
+		document.dispatch("click", { button: 0, target: desktopAnchor(url, "header") });
+
+		expect(log.events).toEqual([
+			{
+				event: "install_cta_clicked",
+				properties: {
+					content_key: "blog/the-chat",
+					cta_location: "header",
+					install_method: "desktop",
+				},
+			},
+			{
+				event: "download_started",
+				properties: {
+					content_key: "blog/the-chat",
+					cta_location: "header",
+					platform: "linux",
+					architecture: "x64",
+					artifact: "tar.gz",
 				},
 			},
 		]);
