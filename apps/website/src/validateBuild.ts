@@ -30,6 +30,57 @@ function attributeValues(content: string, attributes: string[]): string[] {
 	return [...content.matchAll(expression)].map((match) => match[1] ?? "");
 }
 
+export function splitSiteHeader(html: string): { header: string; body: string } {
+	const start = html.indexOf("<header");
+	const close = start < 0 ? -1 : html.indexOf("</header>", start);
+	if (close < 0) return { header: "", body: html };
+	const end = close + "</header>".length;
+	return { header: html.slice(start, end), body: html.slice(0, start) + html.slice(end) };
+}
+
+export function validateHeaderInstall(path: string, html: string): string[] {
+	const failures: string[] = [];
+	const { header } = splitSiteHeader(html);
+	const panel = /\sdata-install-popover[\s=>]/g;
+	if (html.match(panel)?.length !== 1 || header.match(panel)?.length !== 1) {
+		failures.push(`${path}: expected one install panel in the site header`);
+	}
+	for (const url of desktopDownloadUrls) {
+		if (occurrences(header, url) !== 1) {
+			failures.push(`${path}: header install panel must offer ${url} once`);
+		}
+	}
+	return failures;
+}
+
+export function validatePostInstall(path: string, html: string): string[] {
+	const failures: string[] = [];
+	const picker = 'data-install-picker="blog"';
+	if (
+		occurrences(html, picker) !== 1 ||
+		html.indexOf("Browser UI via command line", html.indexOf(picker)) < 0
+	) {
+		failures.push(`${path}: blog install picker is missing`);
+	}
+	const row = 'data-install-launcher="post"';
+	const postHeader = html.indexOf('class="blog-post-header"');
+	const rowIndex = html.indexOf(row);
+	if (
+		occurrences(html, row) !== 1 ||
+		postHeader < 0 ||
+		rowIndex < postHeader ||
+		rowIndex > html.indexOf("</header>", postHeader)
+	) {
+		failures.push(`${path}: post header install row is missing`);
+	}
+	return failures;
+}
+
+export function duplicateIds(html: string): string[] {
+	const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1] ?? "");
+	return [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))];
+}
+
 export function relativeLinkTargets(pagePath: string, html: string): string[] {
 	const page = `https://thinkrail.ai/${pagePath.replace(/index\.html$/, "")}`;
 	return [
@@ -135,13 +186,17 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 	const islandPages = ["vibecoding", "agenticDevelopment", "agenticIde"] as const;
 	const staticPages = ["landing", "blog", "introducingThinkRail", "claim"] as const;
 	const installPages = [
-		{ name: "landing", html: pages.landing, expectedDownloads: 1 },
+		{ name: "landing", html: splitSiteHeader(pages.landing).body, expectedDownloads: 1 },
 		{
 			name: "introducingThinkRail",
-			html: pages.introducingThinkRail,
+			html: splitSiteHeader(pages.introducingThinkRail).body,
 			expectedDownloads: 2,
 		},
-		...islandPages.map((name) => ({ name, html: pages[name], expectedDownloads: 1 })),
+		...islandPages.map((name) => ({
+			name,
+			html: splitSiteHeader(pages[name]).body,
+			expectedDownloads: 1,
+		})),
 	] as const;
 
 	for (const name of islandPages) {
@@ -232,11 +287,10 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		failures.push("landing: install command tabs are missing");
 	}
 	for (const [path, html] of htmlPages) {
+		if (!analyticsFreePages.has(path)) failures.push(...validateHeaderInstall(path, html));
+		for (const id of duplicateIds(html)) failures.push(`${path} duplicate id: ${id}`);
 		if (!/^blog\/[^/]+\/index\.html$/.test(path)) continue;
-		const picker = html.indexOf('data-install-picker="blog"');
-		if (picker < 0 || html.indexOf("Browser UI via command line", picker) < 0) {
-			failures.push(`${path}: blog install picker is missing`);
-		}
+		failures.push(...validatePostInstall(path, html));
 		for (const url of relativeLinkTargets(path, html)) {
 			if (!(await outputPathExists(distDirectory, url))) {
 				failures.push(`${path}: missing local output for ${url}`);
@@ -247,12 +301,13 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		failures.push("landing: browser UI command-line option is missing");
 	}
 	for (const name of islandPages) {
-		for (const forbiddenCommandLineCopy of [
-			"Browser UI via command line",
-			"raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh",
-			"raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1",
-		]) {
-			if (pages[name].includes(forbiddenCommandLineCopy)) {
+		const { body } = splitSiteHeader(pages[name]);
+		for (const [content, forbiddenCommandLineCopy] of [
+			[pages[name], "Browser UI via command line"],
+			[body, "raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh"],
+			[body, "raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1"],
+		] as const) {
+			if (content.includes(forbiddenCommandLineCopy)) {
 				failures.push(`${name}: command-line option leaked: ${forbiddenCommandLineCopy}`);
 			}
 		}
@@ -306,12 +361,6 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		for (const stylesheet of stylesheetUrls(pages[name])) {
 			if (ideStyles.has(stylesheet)) failures.push(`shared route stylesheet: ${stylesheet}`);
 		}
-	}
-
-	for (const name of islandPages) {
-		const ids = [...pages[name].matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
-		const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index);
-		for (const id of new Set(duplicateIds)) failures.push(`${name} duplicate id: ${id}`);
 	}
 
 	for (const icon of ["favicon.ico", "apple-touch-icon.png"]) {

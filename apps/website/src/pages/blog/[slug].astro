@@ -1,6 +1,7 @@
 ---
 import { render } from "astro:content";
 import { type BlogPost, postAuthor, postPath, publishedPosts } from "../../blogCollection";
+import InstallLauncher from "../../components/InstallLauncher.astro";
 import InstallPicker from "../../components/InstallPicker.astro";
 import BlogLayout from "../../layouts/BlogLayout.astro";
 import { formatPostDate, readingTimeMinutes } from "../../postMeta";
@@ -62,6 +63,7 @@ const author = await postAuthor(post);
 					)
 				}
 			</div>
+			<InstallLauncher placement="post" />
 		</header>
 
 		<div class="blog-post-content">
@@ -69,7 +71,7 @@ const author = await postAuthor(post);
 		</div>
 
 		<section class="blog-post-install" aria-label="Install ThinkRail">
-			<InstallPicker />
+			<InstallPicker idPrefix="blog" />
 		</section>
 
 		<nav class="blog-post-nav">

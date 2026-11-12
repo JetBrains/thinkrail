@@ -81,12 +81,16 @@ The parent owns the route-composition edges; the vibecoding leaf has no sibling 
 src/pages/{vibecoding,agentic-development,agentic-ide}/index.astro ──▶ src/vibecoding (through index.ts)
 src/pages/{vibecoding,agentic-development,agentic-ide}/index.astro ──▶ src/components/Analytics.astro
 landing + blog shells                                              ──▶ src/components/Analytics.astro
-src/main.ts, src/vibecoding                                        ──▶ src/installLinkShare.ts
+src/main.ts, src/vibecoding                                        ──▶ src/installLinkShare.ts, src/installCommands.ts, src/githubStars.ts
 ```
 
 `src/installLinkShare.ts` is the one framework-free phone "send link" helper both route families use: phone/tablet
-detection (Android, iPhone/iPad/iPod, or a touch Mac), the share URL, and native-share-then-clipboard delivery. It
-imports nothing, so the vibecoding island can reuse it without reaching the IDE shell.
+detection (Android, iPhone/iPad/iPod, or a touch Mac), the share URL, and native-share-then-clipboard delivery.
+`src/installCommands.ts` owns the install commands and `installCommandFor`, the title-bar command for a detected
+OS (PowerShell on Windows, `install.sh` otherwise). `src/githubStars.ts` fetches the repository's star count from
+the GitHub API and formats it (thousands as `1.2k`) for the title bar, the hero, and the promo header; nothing
+shows until it returns. All three import nothing, so the vibecoding island can reuse them without reaching the
+IDE shell.
 
 - **Fonts are self-hosted; the site makes no external font request.** Packages and stacks are copied
   from the app's `typography.json`, not imported — and `src/fonts.test.ts` reads that JSON at test time
@@ -104,7 +108,8 @@ imports nothing, so the vibecoding island can reuse it without reaching the IDE 
   included once by every route family. `src/components/IdeShell.astro` is the one IDE shell the landing
   and blog render through — icon sprite, skip link, title bar (workspace name
   parameterized: `website` on the landing, `blog` on blog pages, each with the matching
-  `workspace/<name> · from main` branch label, and GitHub + Discord icon links), the left project rail, the right files rail +
+  `workspace/<name> · from main` branch label, then GitHub (stars) · Discord · install launcher · theme toggle,
+  plus the right-rail drawer toggle below 1180px), the one install popover, the left project rail, the right files rail +
   terminal, the status bar, the post-download thank-you dialog (`DownloadThanks.astro`), and the
   `main.ts` script import; the center column is its default slot
   and the right rail's Files rows its `filetree` slot. The left rail carries the site's real
@@ -171,13 +176,36 @@ imports nothing, so the vibecoding island can reuse it without reaching the IDE 
   `irm …/install.ps1 | iex`, Command Prompt launches `powershell -c "irm …/install.ps1 | iex"`, and
   macOS, Linux, and WSL share `install.sh`. Every command stays in the static DOM; JS turns that
   fallback into tabs. Nightly/version examples live in release documentation rather than the marketing page.
+- **An install control is always at hand.** `src/components/InstallLauncher.astro` is a command chip
+  (`InstallCommand.astro`: `$ <command>` + a `data-copy` button) followed by an accent **Install ▾** button. It
+  renders compact in every title bar and wide as the last item of every post's `.blog-post-header`, one line
+  above the divider, where the command ellipsizes and the button stays on the line. The title-bar chip
+  narrows below 1280px and leaves below 1080px so it never meets the breadcrumb; below 420px the title-bar
+  Install shows only its icons (the label stays its accessible name) so a 320px title bar fits. The static chip carries the
+  `install.sh` command; `main.ts` swaps in `installCommandFor` the detected OS. Every Install button is a
+  `popovertarget` invoker of IdeShell's single native `popover` (`#install-popover`, marked
+  `data-install-popover`, inside the title bar `<header>`): `InstallPicker idPrefix="header"` plus "Star on
+  GitHub" and "Questions? Join Discord". It opens without JS at the browser's default (centred) placement; with
+  JS, `main.ts` records the invoker that was clicked and, on `beforetoggle`, places the panel right-aligned
+  under it, kept within the viewport horizontally and re-placed on resize and scroll; once that invoker
+  scrolls out of the editor's visible area, the panel closes. Escape and outside clicks close
+  it natively; browsers without the Popover API keep it hidden. One panel rather than one per invoker keeps
+  element IDs and download links single per page; CSS anchor positioning alone cannot serve two invokers with
+  one popover across today's browsers. `validateBuild.ts` requires unique element IDs on every page and, on
+  every page except the analytics-free ones, exactly one `data-install-popover` inside the first `<header>`
+  offering each desktop download once; on every post, the `data-install-launcher="post"` row inside `.blog-post-header`
+  and the end picker with its command-line option. Per-page download-link counts (landing, the introducing
+  post, the promo routes) and the promo routes' no-CLI check apply outside that header.
 - **Phone visitors get a "Send link to my computer" action** above the hero actions. It is in the static DOM
   but `hidden`, and `main.ts` reveals it only on a detected phone or tablet (the download link stays visible
   below it; no platform is hidden). Activation opens the native share sheet with the current page URL, its
   query replaced by `utm_source=send_to_computer&utm_medium=share` and its fragment by the hero anchor, so
   the later desktop visit records a tagged first touch. Without Web Share, or when sharing fails for any
   reason except the visitor dismissing the sheet, it copies the link and briefly shows "Link copied". The
-  control carries `data-share-install-link` for analytics delegation and nothing else.
+  control carries `data-share-install-link` for analytics delegation and nothing else. The same device check
+  (not viewport width — a narrow desktop window keeps the panel) hides the launchers' chips and Install buttons
+  (`data-install-desktop`) and reveals their `data-send-link` share button instead: an icon in the title bar,
+  labelled in the post row; its link carries no fragment.
 
 ## Analytics and consent
 
@@ -217,8 +245,9 @@ Before each post-initialization install CTA, download, or CLI event, the current
 attempted so consent granted on the page can affect only a subsequent action; a page records that touch
 at most once per consented journey, so later actions on it never drop a bridge its download created
 (see [[submodule-website-attribution]]). Only the four exact stable
-GitHub desktop aliases are downloads. Their CTA location comes from the containing hero, install
-section, quick start, final CTA, or blog post; one recognized activation emits `install_cta_clicked`
+GitHub desktop aliases are downloads. Their CTA location comes from the containing post-header install
+row (`post_header`, checked before the post), blog post, final CTA, quick start, install section, hero, or
+site `header` (the title bar and its install popover); one recognized activation emits `install_cta_clicked`
 (`desktop`) followed by `download_started`. When a consented journey context is available, the activation
 creates and stores a canonical per-download bridge ID before `download_started`, and that event carries
 the same ID. A later desktop download replaces only the stored latest bridge ID; a download without
@@ -243,11 +272,13 @@ the survey again. Choice order is shuffled for each response, except a custom an
 last. Required steps leave Continue disabled until the answer is valid. The first-try note and
 the email are optional. A filled-in email has to satisfy the browser's email field before
 Finish enables; a blank email does not. While Finish is disabled, a muted note on the same line as the
-button reads “— please enter a valid email or leave it blank”. Opening the blog-post picker's command-line disclosure emits only
-`install_cta_clicked` (`cli`); closing it does not, and the landing's always-visible command tabs emit
+button reads “— please enter a valid email or leave it blank”. Opening the command-line disclosure of the
+blog-post picker or of the header popover's picker emits only `install_cta_clicked` (`cli`, `blog_post` or
+`header`); closing it does not, and the landing's always-visible command tabs emit
 nothing. That open is browsing, not install intent: a
 primary-button click on a `[data-copy]` control whose value is a known install command emits
-`install_command_copied` with its `sh`/`powershell`/`cmd` shell and hero, install-section, or blog-post location
+`install_command_copied` with its `sh`/`powershell`/`cmd` shell and hero, install-section, blog-post, `header`
+(title-bar chip, popover) or `post_header` (post-row chip) location
 (other copy values emit nothing; selecting and copying the text manually is not observed). Any other
 link into the `JetBrains/thinkrail` repository (exact repo, `#`/`?` suffix, or sub-path; never a
 sibling repository or a desktop alias) emits `github_clicked` with a `repo`/`releases`/`other` target
@@ -255,8 +286,8 @@ and a location from the containing blog post, final CTA, quick start, install se
 or the vibecoding `#top`), header, footer, terminal, or mock-callout tooltip — `other` when none
 contains it. GitHub clicks are a separate signal: GTM reporting counts only `download_started` and
 `install_command_copied` as install intent, because a repository visit mixes starring and browsing with
-installing. A primary-button click on a `[data-share-install-link]` control in the hero or quick start
-emits `install_link_share_clicked`; it records the activation, not whether the share sheet completed.
+installing. A primary-button click on a `[data-share-install-link]` control in the hero, quick start,
+title bar (`header`) or post row (`post_header`) emits `install_link_share_clicked`; it records the activation, not whether the share sheet completed.
 Each of these events attempts the live navigation touch first, like the existing actions. No page or
 child module carries analytics imports, vendor configuration, or another loader; controls expose only
 the `data-copy` / `data-share-install-link` markers the delegation reads. The one exception is
@@ -381,15 +412,20 @@ current desktop-first hierarchy rather than freezing obsolete CLI-only instructi
   terminal replay).
 - **A post may have hand-authored sub-pages** at `src/pages/blog/<slug>/<page>.astro` (e.g.
   `/blog/the-chat/languages/`, the list of highlighted languages linked from that post). They render
-  through `BlogLayout` but are not posts: no collection entry, no index/RSS/Files-list row, no install
-  picker. Their data is copied, not imported — the site never depends on `apps/web`.
-- **Every article ends with the install picker.** `src/components/InstallPicker.astro` is the
-  blog picker markup (OS tabs, desktop downloads, **Browser UI via command line** disclosure with Windows
-  shell tabs). `src/pages/blog/[slug].astro` renders it in a `.blog-post-install`
-  section after the post body. It sits inside `.blog-post`,
-  so its downloads, copies, and disclosure opens report `blog_post`, and outside `.blog-post-content`, so
-  the prose cascade never restyles it. `main.ts` drives that picker; posts keep their
-  own prose install guidance, and `validateBuild.ts` requires the picker on every article.
+  through `BlogLayout` but are not posts: no collection entry, no index/RSS/Files-list row, no post-row
+  launcher or end-of-post picker (the shell's title bar still carries its own). Their data is copied, not
+  imported — the site never depends on `apps/web`.
+- **Every article opens with the install row and ends with the install picker.** The wide
+  `InstallLauncher` (command chip + **Install ▾**, opening the shell's popover) is the last item of
+  `.blog-post-header`, so its chip copies and phone shares report `post_header`.
+  `src/components/InstallPicker.astro` is the picker markup (OS tabs, desktop downloads, **Browser UI via
+  command line** disclosure with Windows shell tabs); its `idPrefix` prop (`blog` after the post body,
+  `header` in the popover) keeps each instance's tab and panel IDs unique. `src/pages/blog/[slug].astro`
+  renders the end picker in a `.blog-post-install` section after the post body, inside `.blog-post`, so its
+  downloads, copies, and disclosure opens report `blog_post`, and outside `.blog-post-content`, so the prose
+  cascade never restyles it. `main.ts` drives every picker on the page independently with the same detected
+  OS, scoping tab selection, keyboard navigation, and Windows shell selection to its instance. Posts keep
+  their own prose install guidance but no "go to the landing page to install" detours.
   Post cards are whole-card links that signal hover on the border alone (no underline, no movement)
   and share the landing feature cards' surface, which keeps the `--elevated` tag chips visible on
   them. Theming: BaseHead (theme guard, fonts, analytics) + the `src/theme.ts` toggle via the
@@ -409,11 +445,6 @@ current desktop-first hierarchy rather than freezing obsolete CLI-only instructi
     shared entity keeps every one of them a cheap follow-up.
 - **Author guide**: `content/blog/BLOG.md` documents the frontmatter schema, the author profiles,
   Markdown features, embeds, and the local preview loop (`bun run dev` hot-reloads posts).
-  them. Theming: BaseHead (theme guard + fonts) + the `src/theme.ts` toggle via the shell's `main.ts`
-  — same behavior as the landing page, one implementation; Analytics remains the separate shared head
-  initializer.
-- **Author guide**: `content/blog/BLOG.md` documents the frontmatter schema, Markdown features,
-  embeds, and the local preview loop (`bun run dev` hot-reloads posts).
 - **Deployment**: alongside the main site via the same `site.yml` workflow; changes to
   `apps/website/content/blog/**` trigger a rebuild.
 

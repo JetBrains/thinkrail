@@ -1,0 +1,24 @@
+---
+import InstallCommand from "./InstallCommand.astro";
+
+interface Props {
+	placement: "titlebar" | "post";
+}
+
+const { placement } = Astro.props;
+---
+
+<div class:list={["install-launch", `install-launch-${placement}`]} data-install-launcher={placement}>
+	<InstallCommand />
+	<button type="button" class="install-launch-btn" popovertarget="install-popover" data-install-desktop>
+		<svg class="i" aria-hidden="true"><use href="#i-download" /></svg>
+		<span class="install-launch-label">Install</span>
+		<svg class="i" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+	</button>
+	<button type="button" class="install-launch-btn install-launch-share" data-send-link data-share-install-link="" hidden>
+		<svg class="i" aria-hidden="true"><use href="#i-send" /></svg>
+		<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
+		<span class="install-launch-label send-link-label">Send link to my computer</span>
+		<span class="install-launch-label send-link-done" aria-live="polite">Link copied</span>
+	</button>
+</div>
