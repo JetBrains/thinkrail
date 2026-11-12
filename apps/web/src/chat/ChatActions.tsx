@@ -30,7 +30,6 @@ export interface ChatActions {
 	openSubagentTranscript: (childSessionId: string) => void;
 	respondToTool: (toolCallId: string, response: unknown) => Promise<void>;
 	resultOpener: (target: ResultTarget) => (() => void) | undefined;
-	markResultSeen?: ((target: ResultTarget) => void) | undefined;
 	revealChatElement: (element: HTMLElement, options: ChatRevealOptions) => void;
 	readMcpOutput?: ((toolCallId: string) => Promise<McpReadOutputResult>) | undefined;
 	openMcpSettings?: (() => void) | undefined;

@@ -332,7 +332,6 @@ test("Resources keeps a chat's archived history: the dock sums it, the inspector
 	const dock = page.getByTestId("resources-dock");
 	const finishedLine = dock.getByTestId("resources-dock-finished");
 	await expect(finishedLine).toContainText("30 finished");
-	await expect(dock.getByTestId("resources-dock-fresh")).toHaveCount(0);
 	await expect(dock.locator('[data-testid="resource-command"]')).toHaveCount(0);
 	await expect(page.getByTestId("resources-trigger")).toHaveAttribute("data-active-count", "0");
 	await shot(dock, "chat-resources", "history-dock");

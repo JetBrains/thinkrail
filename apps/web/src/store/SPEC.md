@@ -29,8 +29,8 @@ pages in lives on the same projection as `older`, one contiguous run per kind ri
 chain (else drops it, rather than show a list with a silent hole), a new connection generation drops it (a
 restart may surface interrupted runs inside it), and `appendChatResourceHistory` keeps a page only if the
 chain still ends where the page was asked from. `selectChatResourceGroups(snapshot, includeMcp, older)`
-hands back every held finished record per kind (window then run, newest first), the window alone as
-`recentFinished` (the only records that can be new), and what the host holds beyond them (`remaining`);
+hands back every held finished record per kind (window then run, newest first) and what the host holds
+beyond them (`remaining`);
 `selectChatResourceOldest` names the next page's anchor. Components do not derive these independently.
 `chatResources.ts` is the store's private implementation file for resource projection/state/scope/read
 types and the `staleChatResources` state transform. A parent settling does not clear its still-running

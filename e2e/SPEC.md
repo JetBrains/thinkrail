@@ -143,7 +143,8 @@ restart; it proves the dock's finished total, the inspector's per-kind fold, a r
 page, the archived log and an interrupted run's missing log. An archived in-flight record carries no
 authority — the host reads it as interrupted — so this is not a seeded running resource. `resetApp` clears
 the archive with the rest of the lane's state. Tagged provider-backed probes launch real commands and
-children through agent tools, inspect bounded plain-text logs/transcripts in the inspector, verify chat
+children through agent tools, inspect bounded plain-text logs/transcripts in the inspector, fold a
+one-row dock and keep that fold across the inspector, verify chat
 isolation, reload and closed-inspector completion, and exercise individual Stop and confirmed Stop all. They never
 select a model or seed a running-resource catalog. SDK faux-provider unit tests are not evidence of
 browser agent execution. `attention-background-work.live` pins the background-work unread hold end to end:
@@ -155,7 +156,9 @@ publishes an unread completion and the worktree row shows running, not a dot; wi
 absolute path of the runner's `bun`, since the host's hermetic `PATH` has none. It adds a user server
 through the Settings form while the workspace's persisted chat is open (entering a workspace auto-opens
 its latest chat, so the test waits for that tab first instead of racing it), sees it Connected · 4 tools
-once that chat reloads, and disabled for that chat from the Resources inspector, then removes it; it opens a chat from a not-running
+once that chat reloads, selects it in the Resources inspector — its detail lists the chat's seeded
+`mcp__fixture__echo` call (transcript text, not execution authority) and expands it into the transcript's
+card body — and disables it for that chat from the detail header, then removes it; it opens a chat from a not-running
 server's row, reconnects that server per chat once it fails and shows its masked log, and names an
 unreadable user `mcp.json` with an edit hint; and it proves a repository-defined server flags the chat's
 attention marker, waits for Review & approve, and starts once approved. Each test removes the `mcp.json`
