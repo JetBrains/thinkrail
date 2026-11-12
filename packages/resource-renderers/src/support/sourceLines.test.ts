@@ -207,7 +207,10 @@ function textNode(value: string) {
 }
 
 function imageNode(alt: string | null) {
-	return { ...fakeNode("IMG", null), getAttribute: (name: string) => (name === "alt" ? alt : null) };
+	return {
+		...fakeNode("IMG", null),
+		getAttribute: (name: string) => (name === "alt" ? alt : null),
+	};
 }
 
 function headingTree() {
@@ -291,7 +294,9 @@ test("stampedHeadings reads an image in a heading as its alt text", () => {
 		fakeNode("H2", root, { dataset: { mdLineStart: "5" }, childNodes: [imageNode(null)] }),
 		fakeNode("H2", root, { dataset: { mdLineStart: "7" }, childNodes: [textNode("Install")] }),
 	];
-	const container = Object.assign(root, { querySelectorAll: () => nodes }) as unknown as HTMLElement;
+	const container = Object.assign(root, {
+		querySelectorAll: () => nodes,
+	}) as unknown as HTMLElement;
 	expect(stampedHeadings(container).map(({ line, text }) => ({ line, text }))).toEqual([
 		{ line: 1, text: "Overview" },
 		{ line: 3, text: "See Diagram below" },
