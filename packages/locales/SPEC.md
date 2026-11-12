@@ -59,7 +59,9 @@ halves) renders through, so they cannot drift onto separate instances.
     system locale usually carries a region the catalog does not name: `zh-Hans-CN` reaches `zh-CN`
     (both maximize to `zh-Hans`) where a base-language comparison alone stops at `zh` and misses it.
     Scripts never cross: `zh-HK` and `zh-Hant` maximize to `zh-Hant` and reach the Taiwan catalog
-    `zh-TW`, never the Simplified one; without a Traditional catalog they fall through to `en`.
+    `zh-TW`, never the Simplified one; without a Traditional catalog they fall through to `en`. The
+    fallback chain keeps that line too: a string `zh-TW` lacks falls back through `zh`, which names no
+    bundled catalog, to English, not to Simplified Chinese.
   - `baseLanguage(tag)` and `fallbackChain(tag)` (`[tag, base, "en"]`, deduped).
 - **`@thinkrail/locales/react`** (browser): the initialized i18next instance (`i18n`), `useT()` — the
   `Translator` for render, a value that is **replaced whenever the language or its strings change** (a
