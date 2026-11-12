@@ -282,9 +282,9 @@ Linux is not planned: `hiddenInset` is a no-op under GTK and `hidden` removes de
 WM-provided resize handles. Fully custom macOS chrome (`titleBarStyle: "hidden"` with drawn traffic lights)
 was rejected because the platform provides real ones.
 
-**Geometry contract.** The desktop publishes three CSS custom properties on `<html>`: the two inset
-properties plus `--window-chrome-drag-region` (`drag` | `no-drag`), which tells the page whether its
-header is the title bar. The drag flag rides only the initial preload global (it is a per-policy constant);
+**Geometry contract.** The desktop publishes two CSS custom properties on `<html>`, the two insets, plus the
+`data-window-chrome-drag-region` attribute (`drag` | `no-drag`), which tells the page whether its header is
+the title bar. The drag flag rides only the initial preload global (it is a per-policy constant);
 geometry updates arrive as `windowChromeChanged { insetLeft, insetRight }`. The web consumes the properties
 with `0px` fallbacks, so a browser-hosted client and the neutral E2E-host window (`about:blank`, no
 preload) are unaffected and the *web client still has no desktop branch*. The preload validates geometry,
@@ -300,7 +300,8 @@ neutral E2E-host window (`THINKRAIL_DESKTOP_E2E_HOST=1`) keeps the default nativ
 nothing.
 
 **Dragging.** The desktop's only contribution is the `drag` flag: the web header's `window-drag` utility
-resolves to `-webkit-app-region: drag` only when `--window-chrome-drag-region` says so, and Electrobun's
+resolves to `-webkit-app-region: drag` only when `data-window-chrome-drag-region` says so (an attribute, because
+Chromium 156 WebView2 computes a `var()` app-region as `none`), and Electrobun's
 own injected preload rewrites app-region declarations from same-origin stylesheets into a mirrored custom
 property it hit-tests against on `mousedown`. A decorated window (Linux, the neutral window)
 publishes `no-drag` and so never acquires a second, partial drag strip.
@@ -500,6 +501,16 @@ three gaps, closed by the project:
   ICO) through `user32` and sends it to the splash and the main window, sized for the window's DPI. A
   failure is reported and non-fatal.
 
+  `WM_SETICON` stores the handle rather than copying the icon, so each icon must outlive its window.
+  They are set once per window and never destroyed: four handles for the life of the process, which
+  the OS reclaims at exit; nothing grows, so a `DestroyIcon` pass would only matter if icons were
+  re-applied. They are not re-applied on `WM_DPICHANGED` either: after a move to a monitor with another
+  scale, Windows rescales the loaded frames, so the Alt+Tab and Task Manager icon can read slightly soft
+  until a restart. The native caption icon is never shown (`hiddenInset` with the app's own controls),
+  and a pinned taskbar button takes its icon from the launcher. Re-applying would mean subclassing the
+  window procedure from Bun FFI with a callback on the native message thread, which is out of proportion
+  to that effect; the decision is deliberate.
+
 Removal gates for both live in [[electrobun-compatibility]].
 
 **Taskbar identity.** A pinned shortcut targets the launcher while the window belongs to `bun.exe`, and
@@ -591,8 +602,10 @@ only the private pipeline's verified final DMG is a signed release. The handoff 
 belong to [[module-ci-release]].
 
 Linux uses native WebKitGTK without CEF and declares Ubuntu 24.04+/glibc 2.38 plus `libgtk-3-0`,
-`libwebkit2gtk-4.1-0`, `libayatana-appindicator3-1`, and `librsvg2-2`. Xvfb software-rendering flags are
-CI-only and are never shipped as user configuration.
+`libwebkit2gtk-4.1-0`, `libayatana-appindicator3-1`, and `librsvg2-2`. Desktop notifications also need
+`libnotify-bin`: Electrobun shows them by running the `notify-send` it provides, and without it they are
+dropped.
+Xvfb software-rendering flags are CI-only and are never shipped as user configuration.
 
 ## Auto-update policy
 

@@ -23,7 +23,8 @@ e2e).
   persistence.
 - **Public surface:** `createServer(options) → Promise<RunningServer>`
   (`{ port, startAttributionClaim, stop, shutdown }`) — saved-choice attribution waits for the launcher's
-  explicit UI-readiness call; `stop()` is synchronous resource disposal for low-level tests while `shutdown()` is the idempotent,
+  explicit UI-readiness call; `stop()` is synchronous resource disposal for low-level tests (Linux worktree
+  watchers finish closing over the next turns, see `watch`) while `shutdown()` is the idempotent,
   bounded production lifecycle (settle sessions + drain turn receipts/analytics and dispose sockets/PTYS/watchers)
   every launcher must await — the public
   factory starts Central artifact watching and applies the initial current PI runtime before binding a socket
@@ -103,7 +104,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `dialog` | the host's native folder picker | [dialog/SPEC.md](src/dialog/SPEC.md) |
 | `editors` | detect installed editors/IDEs, launch one at a worktree, reveal a worktree in the file manager | [editors/SPEC.md](src/editors/SPEC.md) |
 | `history` | prompt recall + conversation search over pi's session files | [history/SPEC.md](src/history/SPEC.md) |
-| `search` | the search palette's host providers (file names and specs from one root, plans, chat transcripts — chats and workspaces are the palette's own rows) and the transcript preview, ranked with the shared matcher | [search/SPEC.md](src/search/SPEC.md) |
+| `search` | the search palette's host providers (file names and specs from one root, plans, chat transcripts — chats and workspaces are the palette's own rows) and the transcript preview, ranked with the shared matcher; Find in Files' bounded text search over the same root | [search/SPEC.md](src/search/SPEC.md) |
 | `templates` | file CRUD over pi's prompt-template dirs (global + project scoped) | [templates/SPEC.md](src/templates/SPEC.md) |
 
 `src/index.ts` re-exports `host` + the `agent` barrel's `registerBundledRuntime` seam; explicit package
@@ -114,8 +115,8 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `fonts`, `speech`, `history`, `search`, `templates`, `analytics`, `feedback`, `log`, `persistence` (`dataDir`, for the crash report)
-- `search` → `contracts`, `git` (`gitAsyncStream` for `ls-files`), `log`; `history`, `spec` and `todos` for types only — `host/search.ts` injects every reader (projects, workspace records, the history index's `sessions()`, spec snapshots, stored plans, the file check `fs.readableFileSize`), the Default provisioning (`workspaces.listWorkspaces`) and the root watch (`watch.ensureWatch`, prewarm); it opens no file itself (files and specs preview client-side over `fs.readFile`)
+- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `fonts`, `speech`, `history`, `search`, `templates`, `analytics`, `feedback`, `trash` (a chat's folder), `log`, `persistence` (`dataDir`, for the crash report)
+- `search` → `contracts`, `git` (`gitAsyncStream` for `ls-files` and `grep`), `log`; `history`, `spec` and `todos` for types only — `host/search.ts` injects every reader (projects, workspace records, the history index's `sessions()`, spec snapshots, stored plans, the file check `fs.readableFileSize` and the text check `fs.classifyBytes`), the Default provisioning (`workspaces.listWorkspaces`) and the root watch (`watch.ensureWatch`, prewarm); it opens no file itself but the bounded text search's direct read of a chat folder's walked files (`git grep` reads a repository's) — files and specs preview client-side over `fs.readFile`
 - `workspaces` → `projects`, `git`, `persistence`
 - `branch-review` → `git`, `subprocess`
 - `pr` → `workspaces`, `git`, `todos`, `branch-review` (provider detection + gh-output parsing + the shared CLI runner), `github` (`ghSetupProblem` — the named compare-fallback reason)
@@ -146,7 +147,9 @@ the host from env via `bootHost` for dev/e2e.
 - `agent` → `log`, `persistence` (`dataDir` for delegation plus session lifecycle/receipt load-save operations),
   `trash` (a chat delete's recoverable transcript move), `resourceHistory` (records its owners' lifecycle and reads
   what they no longer hold), `extensions` (the registry's flattened parent and
-  child inline extensions plus, in unbundled dev, its skill roots) — otherwise the pi runtime alone; auth
+  child inline extensions plus, in unbundled dev, its skill roots), `history` (`displayTranscript` — the
+  JSONL display projection `getMessages` shares with search so compaction keeps pre-cut turns reviewable)
+  — otherwise the pi runtime alone; auth
   passes desired opaque Central paths through its public generation seam
 - `extensions` → `@thinkrail/ext-*/server` + `@thinkrail/extension-api/server` (external); `buildSupport.ts`
   (build-only) also reads it to stage the extensions' skill roots

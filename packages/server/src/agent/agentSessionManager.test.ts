@@ -23,7 +23,12 @@ import {
 	fauxAssistantMessage,
 	fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
-import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import {
+	AgentSession,
+	ModelRuntime,
+	SessionManager,
+	SettingsManager,
+} from "@earendil-works/pi-coding-agent";
 import type {
 	AgentSettlement,
 	ExtUiRequest,
@@ -53,6 +58,7 @@ import {
 	getSessionStats,
 	hasSession,
 	initializeSessionStates,
+	isHostMessagePending,
 	listAvailableModels,
 	listSessionStates,
 	listSessions,
@@ -60,9 +66,11 @@ import {
 	markWorkspaceUnread,
 	nudgeSession,
 	promptSession,
+	readFinalAssistantTexts,
 	refreshAgentReviewTool,
 	refreshAvailableModels,
 	refreshExtensionTools,
+	refreshSkillAdmission,
 	refreshSubagentTools,
 	reloadSessionResources,
 	removeQueuedSession,
@@ -71,6 +79,7 @@ import {
 	renameSession,
 	requestSessionReload,
 	respondToTool,
+	sendHostMessageToSession,
 	setAgentReviewEnabledResolver,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
@@ -80,10 +89,12 @@ import {
 	setSessionStatePublisher,
 	setSkillAdmissionResolver,
 	setSubagentsEnabledResolver,
+	settleCredentialWritesForShutdown,
 	settleSessionsForShutdown,
 	steerSession,
 	toWireModel,
 } from "./agentSessionManager";
+import { writeCacheWarmingMode } from "./cacheWarming";
 import { setDisabledExtensionsResolver } from "./extensions";
 import { configurePiRuntime } from "./piRuntime";
 import { admissionContextFor } from "./skillAdmission";
@@ -334,6 +345,32 @@ afterAll(() => {
 	else process.env.THINKRAIL_DATA_DIR = priorDataDir;
 	if (priorOffline === undefined) delete process.env.PI_OFFLINE;
 	else process.env.PI_OFFLINE = priorOffline;
+});
+
+test("host shutdown settles credential writes on a live chat's retained runtime, not only the active one", async () => {
+	const s = await createSession({
+		cwd: tmpCwd("trpi-settle-creds-"),
+		workspaceId: "ws-settle-creds",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const retained = await ModelRuntime.create({
+		credentials: new InMemoryCredentialStore(),
+		modelsPath: null,
+		allowModelNetwork: false,
+	});
+	const liveSettle = jest.spyOn(runtime, "settleCredentialWrites");
+	const activeSettle = jest.spyOn(retained, "settleCredentialWrites");
+	configurePiRuntime(retained);
+	try {
+		await settleCredentialWritesForShutdown();
+		expect(liveSettle).toHaveBeenCalledTimes(1);
+		expect(activeSettle).toHaveBeenCalledTimes(1);
+	} finally {
+		configurePiRuntime(runtime);
+		liveSettle.mockRestore();
+		activeSettle.mockRestore();
+		await removeSession(s.sessionId);
+	}
 });
 
 test("session creation publishes a domain summary for other frontends", async () => {
@@ -1273,79 +1310,79 @@ test("re-enabling an extension while its disable reload runs reloads again to ad
 	}
 });
 
-test.each([
-	false,
-	true,
-])("a streaming chat applies only the latest extension policy at agent_settled (enabled: %s)", async (enabledAtSettlement) => {
-	const slow = createFauxCore({
-		provider: "faux-extension-policy",
-		api: "faux-extension-policy",
-		models: [modelDef("faux-extension-policy")],
-		tokensPerSecond: 2000,
-	});
-	runtime.registerProvider("faux-extension-policy", cfg(slow, "faux-extension-policy"));
-	let disabled = new Set<string>();
-	setDisabledExtensionsResolver(() => disabled);
-	let release = () => {};
-	const gate = new Promise<void>((resolve) => {
-		release = resolve;
-	});
-	let started = () => {};
-	const requestStarted = new Promise<void>((resolve) => {
-		started = resolve;
-	});
-	let firstState = "";
-	let automaticContinuationState = "";
-	let sessionId: string | undefined;
-	try {
-		const cwd = tmpCwd("trpi-extension-streaming-toggle-");
-		writeFileSync(join(cwd, "probe.txt"), "probe\n");
-		slow.setResponses([
-			async (context) => {
-				firstState = visualizeToolState(context);
-				started();
-				await gate;
-				return fauxAssistantMessage(fauxToolCall("read", { path: join(cwd, "probe.txt") }));
-			},
-			(context) => {
-				automaticContinuationState = visualizeToolState(context);
-				return fauxAssistantMessage("AUTOMATIC_WORK_DONE");
-			},
-			(context) => fauxAssistantMessage(`NEXT_TURN_${visualizeToolState(context)}`),
-		]);
-		const session = await createSession({
-			cwd,
-			workspaceId: "ws-extension-streaming-toggle",
-			model: toWireModel(slow.getModel()),
+test.each([false, true])(
+	"a streaming chat applies only the latest extension policy at agent_settled (enabled: %s)",
+	async (enabledAtSettlement) => {
+		const slow = createFauxCore({
+			provider: "faux-extension-policy",
+			api: "faux-extension-policy",
+			models: [modelDef("faux-extension-policy")],
+			tokensPerSecond: 2000,
 		});
-		sessionId = session.sessionId;
-		const firstTurn = promptSession(sessionId, "Start the gated turn.");
-		await requestStarted;
+		runtime.registerProvider("faux-extension-policy", cfg(slow, "faux-extension-policy"));
+		let disabled = new Set<string>();
+		setDisabledExtensionsResolver(() => disabled);
+		let release = () => {};
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		let started = () => {};
+		const requestStarted = new Promise<void>((resolve) => {
+			started = resolve;
+		});
+		let firstState = "";
+		let automaticContinuationState = "";
+		let sessionId: string | undefined;
+		try {
+			const cwd = tmpCwd("trpi-extension-streaming-toggle-");
+			writeFileSync(join(cwd, "probe.txt"), "probe\n");
+			slow.setResponses([
+				async (context) => {
+					firstState = visualizeToolState(context);
+					started();
+					await gate;
+					return fauxAssistantMessage(fauxToolCall("read", { path: join(cwd, "probe.txt") }));
+				},
+				(context) => {
+					automaticContinuationState = visualizeToolState(context);
+					return fauxAssistantMessage("AUTOMATIC_WORK_DONE");
+				},
+				(context) => fauxAssistantMessage(`NEXT_TURN_${visualizeToolState(context)}`),
+			]);
+			const session = await createSession({
+				cwd,
+				workspaceId: "ws-extension-streaming-toggle",
+				model: toWireModel(slow.getModel()),
+			});
+			sessionId = session.sessionId;
+			const firstTurn = promptSession(sessionId, "Start the gated turn.");
+			await requestStarted;
 
-		disabled = new Set(["visualize"]);
-		refreshExtensionTools();
-		disabled = new Set();
-		refreshExtensionTools();
-		if (!enabledAtSettlement) {
 			disabled = new Set(["visualize"]);
 			refreshExtensionTools();
-		}
-		expect(firstState).toBe("VISUALIZE_ON");
-		release();
-		await firstTurn;
-		expect(automaticContinuationState).toBe("VISUALIZE_ON");
-		await promptSession(sessionId, "Check the next turn.");
+			disabled = new Set();
+			refreshExtensionTools();
+			if (!enabledAtSettlement) {
+				disabled = new Set(["visualize"]);
+				refreshExtensionTools();
+			}
+			expect(firstState).toBe("VISUALIZE_ON");
+			release();
+			await firstTurn;
+			expect(automaticContinuationState).toBe("VISUALIZE_ON");
+			await promptSession(sessionId, "Check the next turn.");
 
-		expect(seen(sessionId)).toContain(
-			enabledAtSettlement ? "NEXT_TURN_VISUALIZE_ON" : "NEXT_TURN_VISUALIZE_OFF",
-		);
-	} finally {
-		release();
-		setDisabledExtensionsResolver(() => new Set());
-		if (sessionId) await removeSession(sessionId);
-		runtime.unregisterProvider("faux-extension-policy");
-	}
-});
+			expect(seen(sessionId)).toContain(
+				enabledAtSettlement ? "NEXT_TURN_VISUALIZE_ON" : "NEXT_TURN_VISUALIZE_OFF",
+			);
+		} finally {
+			release();
+			setDisabledExtensionsResolver(() => new Set());
+			if (sessionId) await removeSession(sessionId);
+			runtime.unregisterProvider("faux-extension-policy");
+		}
+	},
+);
 
 test("repeated streaming policy changes resolve only the latest value at settlement", async () => {
 	const slow = createFauxCore({
@@ -1471,7 +1508,7 @@ test("disabling an idle parent lets its running background child finish and deli
 	}
 });
 
-test("buildSessionSettings disables image autoResize, and the override survives a settings.reload() and a trust change", async () => {
+test("buildSessionSettings disables image autoResize, and the override survives a settings.reload(), a trust change and a persisted setting", async () => {
 	const settings = buildSessionSettings(tmpCwd("trpi-settings-"), false);
 	expect(settings.getImageAutoResize()).toBe(false);
 	expect(settings.isProjectTrusted()).toBe(false);
@@ -1480,6 +1517,66 @@ test("buildSessionSettings disables image autoResize, and the override survives 
 	settings.setProjectTrusted(true);
 	expect(settings.isProjectTrusted()).toBe(true);
 	expect(settings.getImageAutoResize()).toBe(false);
+	settings.setCacheWarmingMode("off");
+	expect(settings.getImageAutoResize()).toBe(false);
+	await settings.flush();
+	settings.setCacheWarmingMode("streaming");
+	await settings.flush();
+});
+
+test("every session's cache-warming getter follows pi's settings.json: chats, delegated children and sessions created mid-write", async () => {
+	const settingsPath = join(process.env.PI_CODING_AGENT_DIR ?? "", "settings.json");
+	const chat = buildSessionSettings(tmpCwd("trpi-cache-warming-"), false);
+	const child = buildSessionSettings(tmpCwd("trpi-cache-warming-child-"), true);
+	try {
+		expect(chat.getCacheWarmingMode()).toBe("streaming");
+		expect(child.getCacheWarmingMode()).toBe("streaming");
+		await chat.reload();
+		expect(chat.getCacheWarmingMode()).toBe("streaming");
+
+		expect(await writeCacheWarmingMode("idle")).toEqual({ mode: "idle", source: "user" });
+		expect(chat.getCacheWarmingMode()).toBe("idle");
+		expect(child.getCacheWarmingMode()).toBe("idle");
+		const late = buildSessionSettings(tmpCwd("trpi-cache-warming-late-"), false);
+		expect(late.getCacheWarmingMode()).toBe("idle");
+
+		// Only the file matters: a session's own stale snapshot cannot keep a child warming.
+		await writeCacheWarmingMode("off");
+		for (const settings of [chat, child, late]) expect(settings.getCacheWarmingMode()).toBe("off");
+		expect(
+			(JSON.parse(readFileSync(settingsPath, "utf8")) as { cacheWarming?: string }).cacheWarming,
+		).toBe("off");
+
+		// An edit from the pi CLI is seen as well, without a reload.
+		writeFileSync(settingsPath, JSON.stringify({ cacheWarming: "streaming" }));
+		expect(chat.getCacheWarmingMode()).toBe("streaming");
+		rmSync(settingsPath, { force: true });
+		expect(child.getCacheWarmingMode()).toBe("streaming");
+	} finally {
+		rmSync(settingsPath, { force: true });
+	}
+});
+
+test("a live chat's warmer reads the mode through the file-backed getter", async () => {
+	const settingsPath = join(process.env.PI_CODING_AGENT_DIR ?? "", "settings.json");
+	const s = await createSession({
+		cwd: tmpCwd("trpi-cache-warming-live-"),
+		workspaceId: "ws-cache-warming",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const applied = jest.spyOn(SettingsManager.prototype, "setCacheWarmingMode");
+	try {
+		await writeCacheWarmingMode("off");
+		// The host writes once; no per-session setter runs, yet every live getter already answers "off".
+		expect(applied.mock.calls.map(([mode]) => mode)).toEqual(["off"]);
+		expect(
+			buildSessionSettings(tmpCwd("trpi-cache-warming-probe-"), false).getCacheWarmingMode(),
+		).toBe("off");
+	} finally {
+		applied.mockRestore();
+		rmSync(settingsPath, { force: true });
+		await removeSession(s.sessionId);
+	}
 });
 
 test("a prompt image reaches the transcript raw — the autoResize override survives pi's loader reload", async () => {
@@ -1814,65 +1911,64 @@ test("graceful shutdown persists an accepted answer and aborts its continuation"
 	}
 });
 
-test.each([
-	"removeSession",
-	"removeWorkspaceSessions",
-	"archiveDuringDelete",
-])("%s drains queued input while allowing an accepted answer to persist", async (teardown) => {
-	const gate = installAskToolGate(`ask-${teardown}-accepted-gate`);
-	const toolCallId = `accepted-on-${teardown}`;
-	const cwd = tmpCwd("trpi-removal-accepted-");
-	const manager = SessionManager.inMemory(cwd);
-	setSessionManagerFactory(() => manager);
-	fauxA.setResponses([
-		gatedQuestionMessage(toolCallId),
-		fauxAssistantMessage("REMOVAL_CONTINUATION_RAN"),
-	]);
-	const session = await createSession({
-		cwd,
-		workspaceId: "ws-removal-accepted",
-		model: toWireModel(fauxA.getModel()),
-	});
-	const prompting = promptSession(session.sessionId, "Ask before continuing.");
-	prompting.catch(() => {});
-	try {
-		await waitForPath(gate.startedPath);
-		await followUpSession(session.sessionId, "QUEUED_BEFORE_REMOVAL");
-		const result = gatedQuestionAnswer();
-		const answering = respondToTool(session.sessionId, toolCallId, result);
-		const removing =
-			teardown === "removeSession"
-				? removeSession(session.sessionId)
-				: teardown === "removeWorkspaceSessions"
-					? removeWorkspaceSessions("ws-removal-accepted")
-					: Promise.all([
-							deleteSession(session.sessionId, "ws-removal-accepted", cwd),
-							removeWorkspaceSessions("ws-removal-accepted"),
-						]);
-		if (teardown === "archiveDuringDelete") {
-			await expect(abortSession(session.sessionId, true)).rejects.toThrow("Unknown session");
-		} else {
-			await followUpSession(session.sessionId, "QUEUED_DURING_REMOVAL");
+test.each(["removeSession", "removeWorkspaceSessions", "archiveDuringDelete"])(
+	"%s drains queued input while allowing an accepted answer to persist",
+	async (teardown) => {
+		const gate = installAskToolGate(`ask-${teardown}-accepted-gate`);
+		const toolCallId = `accepted-on-${teardown}`;
+		const cwd = tmpCwd("trpi-removal-accepted-");
+		const manager = SessionManager.inMemory(cwd);
+		setSessionManagerFactory(() => manager);
+		fauxA.setResponses([
+			gatedQuestionMessage(toolCallId),
+			fauxAssistantMessage("REMOVAL_CONTINUATION_RAN"),
+		]);
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-removal-accepted",
+			model: toWireModel(fauxA.getModel()),
+		});
+		const prompting = promptSession(session.sessionId, "Ask before continuing.");
+		prompting.catch(() => {});
+		try {
+			await waitForPath(gate.startedPath);
+			await followUpSession(session.sessionId, "QUEUED_BEFORE_REMOVAL");
+			const result = gatedQuestionAnswer();
+			const answering = respondToTool(session.sessionId, toolCallId, result);
+			const removing =
+				teardown === "removeSession"
+					? removeSession(session.sessionId)
+					: teardown === "removeWorkspaceSessions"
+						? removeWorkspaceSessions("ws-removal-accepted")
+						: Promise.all([
+								deleteSession(session.sessionId, "ws-removal-accepted", cwd),
+								removeWorkspaceSessions("ws-removal-accepted"),
+							]);
+			if (teardown === "archiveDuringDelete") {
+				await expect(abortSession(session.sessionId, true)).rejects.toThrow("Unknown session");
+			} else {
+				await followUpSession(session.sessionId, "QUEUED_DURING_REMOVAL");
+			}
+			gate.release();
+			await Promise.all([answering, removing, prompting]);
+			const messages = manager.buildSessionContext().messages;
+			const persisted = messages.find(
+				(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+			);
+			if (persisted?.role !== "toolResult") throw new Error("native result was not persisted");
+			expect(JSON.stringify(persisted.details)).toBe(JSON.stringify(result));
+			expect(messages.filter((message) => message.role === "user")).toHaveLength(1);
+			expect(seen(session.sessionId)).not.toContain("REMOVAL_CONTINUATION_RAN");
+			expect(hasSession(session.sessionId)).toBe(false);
+		} finally {
+			gate.release();
+			gate.remove();
+			if (hasSession(session.sessionId)) await removeSession(session.sessionId);
+			await prompting.catch(() => {});
+			setSessionManagerFactory(() => SessionManager.inMemory());
 		}
-		gate.release();
-		await Promise.all([answering, removing, prompting]);
-		const messages = manager.buildSessionContext().messages;
-		const persisted = messages.find(
-			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
-		);
-		if (persisted?.role !== "toolResult") throw new Error("native result was not persisted");
-		expect(JSON.stringify(persisted.details)).toBe(JSON.stringify(result));
-		expect(messages.filter((message) => message.role === "user")).toHaveLength(1);
-		expect(seen(session.sessionId)).not.toContain("REMOVAL_CONTINUATION_RAN");
-		expect(hasSession(session.sessionId)).toBe(false);
-	} finally {
-		gate.release();
-		gate.remove();
-		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
-		await prompting.catch(() => {});
-		setSessionManagerFactory(() => SessionManager.inMemory());
-	}
-});
+	},
+);
 
 test("an answer accepted before execute persists before Stop aborts the continuation", async () => {
 	const gate = installAskToolGate("ask-answer-stop-gate");
@@ -2757,6 +2853,67 @@ test("removing a queued message while a question is live re-queues the rest with
 	}
 });
 
+test("a queued host message survives an edit of the user's queue in its place and reaches the agent; Stop drops it and tells its sender", async () => {
+	const cwd = tmpCwd("trpi-host-message-queue-");
+	const workspaceId = "ws-host-message-queue";
+	const session = await createSession({ cwd, workspaceId, model: toWireModel(fauxA.getModel()) });
+	const kept = { marker: "kept" };
+	const stopped = { marker: "stopped" };
+	const dropped: string[] = [];
+	const release = Promise.withResolvers<void>();
+	let pendingAfterEdit = false;
+	fauxA.setResponses([
+		async () => {
+			await followUpSession(session.sessionId, "USER_BEFORE_HOST");
+			await sendHostMessageToSession(session.sessionId, "test-host", "HOST_KEPT", kept, {
+				onDropped: () => dropped.push("kept"),
+			});
+			await followUpSession(session.sessionId, "USER_REMOVED");
+			await removeQueuedSession(session.sessionId, "followUp", 1);
+			pendingAfterEdit = isHostMessagePending(session.sessionId, kept);
+			return fauxAssistantMessage("FIRST");
+		},
+		fauxAssistantMessage("USER_HANDLED"),
+		fauxAssistantMessage("HOST_HANDLED"),
+		async () => {
+			await sendHostMessageToSession(session.sessionId, "test-host", "HOST_STOPPED", stopped, {
+				onDropped: () => dropped.push("stopped"),
+			});
+			await release.promise;
+			return fauxAssistantMessage("STOPPED_TURN");
+		},
+	]);
+	try {
+		await promptSession(session.sessionId, "start");
+		expect(pendingAfterEdit).toBe(true);
+		expect(isHostMessagePending(session.sessionId, kept)).toBe(false);
+		const transcript = JSON.stringify(
+			(await getSessionMessages(session.sessionId, workspaceId, cwd)).messages,
+		);
+		expect(transcript).toContain("HOST_HANDLED");
+		expect(transcript).not.toContain("USER_REMOVED");
+		expect(transcript.indexOf("USER_BEFORE_HOST")).toBeGreaterThan(-1);
+		expect(transcript.indexOf("USER_BEFORE_HOST")).toBeLessThan(transcript.indexOf("HOST_KEPT"));
+
+		const running = promptSession(session.sessionId, "again");
+		for (let attempt = 0; attempt < 200; attempt++) {
+			if (isHostMessagePending(session.sessionId, stopped)) break;
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		expect(isHostMessagePending(session.sessionId, stopped)).toBe(true);
+		const stopping = abortSession(session.sessionId, true);
+		expect(dropped).toEqual(["stopped"]);
+		expect(isHostMessagePending(session.sessionId, stopped)).toBe(false);
+		release.resolve();
+		await stopping;
+		await running.catch(() => {});
+		expect(dropped).toEqual(["stopped"]);
+	} finally {
+		release.resolve();
+		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
+	}
+});
+
 test("an accepted answer persists and its RPC settles when Stop races before turn_end", async () => {
 	const toolCallId = "answer-stop-race";
 	const question = {
@@ -3345,6 +3502,22 @@ test("summaries and state records carry the first prompt's head as a display fal
 	const attached = await getSessionMessages(compacted, "ws-first-prompt", cwd);
 	expect(attached.summary.firstPrompt).toBe("The real first prompt");
 	expect(attached.messages.some((message) => message.role === "user")).toBe(true);
+	expect(
+		attached.messages.some(
+			(message) =>
+				message.role === "user" &&
+				typeof message.content === "string" &&
+				message.content.includes("The real first prompt"),
+		),
+	).toBe(true);
+	expect(
+		attached.messages.some(
+			(message) =>
+				message.role === "user" &&
+				typeof message.content === "string" &&
+				message.content === "A later prompt",
+		),
+	).toBe(true);
 	expect(SessionManager.open(listedPath(unnamed, cwd)).getSessionName()).toBeUndefined();
 
 	fauxA.setResponses([fauxAssistantMessage("noted"), fauxAssistantMessage("ok")]);
@@ -3921,7 +4094,7 @@ test("removing one queued image message returns its complete content", async () 
 	await removeSession(s.sessionId);
 });
 
-test("a delivered image-only steer clears its queue chip despite pi's empty-text defect", async () => {
+test("a delivered image-only steer clears its queue chip (pi #8612)", async () => {
 	const slow = createFauxCore({
 		provider: "faux-steer-image",
 		api: "faux-steer-image",
@@ -3993,7 +4166,7 @@ test("a delivered image-only steer clears its queue chip despite pi's empty-text
 	}
 }, 20000);
 
-test("a delivered image-only follow-up clears its queue chip despite pi's empty-text defect", async () => {
+test("a delivered image-only follow-up clears its queue chip (pi #8612)", async () => {
 	const slow = createFauxCore({
 		provider: "faux-followup-image",
 		api: "faux-followup-image",
@@ -4064,7 +4237,7 @@ test("a delivered image-only follow-up clears its queue chip despite pi's empty-
 	}
 }, 20000);
 
-test("an idle image-only prompt never inflates the stuck-delivery counters", async () => {
+test("an idle image-only prompt leaves a later image-only steer's queue chip intact until delivery", async () => {
 	const slow = createFauxCore({
 		provider: "faux-prompt-image",
 		api: "faux-prompt-image",
@@ -4297,4 +4470,92 @@ test("an extension failing in session_start reaches the client, named, before th
 		setExtUiPublisher(() => {});
 		rmSync(extensionPath, { force: true });
 	}
+});
+
+test("switching other agents' skills host-wide reloads an open chat's skill set", async () => {
+	const claudeDir = tmpCwd("trpi-other-agent-claude-");
+	const skillDir = join(claudeDir, "skills", "tr-other-agent-probe");
+	mkdirSync(skillDir, { recursive: true });
+	writeFileSync(
+		join(skillDir, "SKILL.md"),
+		"---\nname: tr-other-agent-probe\ndescription: A personal skill another agent keeps.\n---\nBody.\n",
+	);
+	const priorClaudeDir = process.env.CLAUDE_CONFIG_DIR;
+	process.env.CLAUDE_CONFIG_DIR = claudeDir;
+	let otherAgentSkills = false;
+	setSkillAdmissionResolver(() =>
+		admissionContextFor({ piResourceTrust: "granted" }, {}, otherAgentSkills),
+	);
+	const probe = (sessionId: string) =>
+		getSessionCommands(sessionId).some((command) => command.name === "skill:tr-other-agent-probe");
+	let sessionId: string | undefined;
+	try {
+		({ sessionId } = await createSession({
+			cwd: tmpCwd("trpi-other-agent-skills-"),
+			workspaceId: "ws-other-agent-skills",
+			model: toWireModel(fauxA.getModel()),
+		}));
+		expect(probe(sessionId)).toBe(false);
+		otherAgentSkills = true;
+		await refreshSkillAdmission();
+		expect(probe(sessionId)).toBe(true);
+		otherAgentSkills = false;
+		await refreshSkillAdmission();
+		expect(probe(sessionId)).toBe(false);
+	} finally {
+		if (sessionId) await removeSession(sessionId);
+		setSkillAdmissionResolver(() => admissionContextFor({ piResourceTrust: "granted" }));
+		if (priorClaudeDir === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+		else process.env.CLAUDE_CONFIG_DIR = priorClaudeDir;
+	}
+});
+
+test("readFinalAssistantTexts reads live and on-disk chats without attaching them", async () => {
+	fauxA.setResponses([fauxAssistantMessage("LIVE_FINAL")]);
+	const cwd = tmpCwd("trpi-final-");
+	const live = await createSession({
+		cwd,
+		workspaceId: "ws-final",
+		model: toWireModel(fauxA.getModel()),
+	});
+	await promptSession(live.sessionId, "hello");
+	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	const disk = writeFixtureSession(dir, {
+		cwd,
+		messages: [
+			{ role: "user", text: "do it", timestamp: 1 },
+			{ role: "assistant", text: "DISK_EARLIER", timestamp: 2 },
+			{ role: "user", text: "and then", timestamp: 3 },
+			{ role: "assistant", text: "DISK_FINAL", timestamp: 4 },
+		],
+	});
+	const silent = writeFixtureSession(dir, {
+		cwd,
+		messages: [{ role: "user", text: "only asked", timestamp: 1 }],
+	});
+	const foreign = writeFixtureSession(dir, {
+		cwd: tmpCwd("trpi-final-other-"),
+		messages: [
+			{ role: "user", text: "x", timestamp: 1 },
+			{ role: "assistant", text: "FOREIGN", timestamp: 2 },
+		],
+	});
+
+	const texts = await readFinalAssistantTexts("ws-final", cwd, [
+		live.sessionId,
+		disk.id,
+		silent.id,
+		foreign.id,
+		"missing",
+	]);
+
+	expect(texts.get(live.sessionId)).toBe("LIVE_FINAL");
+	expect(texts.get(disk.id)).toBe("DISK_FINAL");
+	expect(texts.get(silent.id)).toBeNull();
+	expect(texts.get(foreign.id)).toBeNull();
+	expect(texts.get("missing")).toBeNull();
+	expect(hasSession(disk.id)).toBe(false);
+	expect(
+		(await readFinalAssistantTexts("ws-elsewhere", cwd, [live.sessionId])).get(live.sessionId),
+	).toBeNull();
 });

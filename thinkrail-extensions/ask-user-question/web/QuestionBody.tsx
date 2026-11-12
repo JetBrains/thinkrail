@@ -158,7 +158,6 @@ export function QuestionBody({
 				<MessageCircleQuestion className="mt-2 size-16 shrink-0 text-text-muted" />
 				<p
 					data-testid={tid("ask-question-text")}
-					data-ask-page-start="true"
 					className="min-w-0 flex-1 tr-title-dialog text-text-default"
 				>
 					{question.question}

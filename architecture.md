@@ -39,7 +39,8 @@ packages/locales    UI string catalogs (bundled en.json) + pure catalog rules; .
                     instance ── depends on ─▶ nothing in the workspace (i18next, react-i18next)
 packages/shared     shellEnv (server-side only)
 packages/spec-graph portable pi extension: spec_* tools + skill (bundled into every session by packages/server;
-                    its pi-free core/ read model also backs the host's spec.graph read method)
+                    its pi-free core/ read model also backs the host's spec.graph read method and the
+                    palette's ranked section search — the engine the agent's spec_search uses)
 packages/pi-delegation         portable pure-pi package: the delegation core — controlled child sessions
                     for live session parents or independent resource owners
 packages/pi-dag               portable durable backend DAGs over pi-delegation; host-owned resources;
@@ -115,7 +116,15 @@ dependency. This keeps test process drivers outside both launchers and the serve
    switch on: it enters Default for that setup chat, because a fresh repo has nothing to isolate yet
    ([[submodule-web-panels]]); and an **existing worktree** the user explicitly attaches in place
    (`kind: "external"`), which ThinkRail may forget but never mutates (see
-   [[submodule-server-workspaces]]). The shell is built first,
+   [[submodule-server-workspaces]]). **A third `kind`-marked exception is ThinkRail-owned and never
+   git:** a **chat without a project** (`kind: "chat"`) is its own folder under `~/.thinkrail/chats`
+   inside the one built-in **Chats container** (`Project.kind: "chats"`, not a repository, never
+   closed), held apart in `chats.json`; files, terminal and Plan work there, nothing git-, review- or
+   spec-backed does, the host refuses every repository door for it, `GIT_CEILING_DIRECTORIES` keeps
+   git from walking up out of its folder, deleting it trashes the conversation and the folder as a
+   whole, and **Continue in workspace** hands it over — the chat's own agent writes a summary, the host
+   creates a workspace chat whose first message is that summary, and the chat keeps the link (see
+   [[submodule-server-workspaces]], [[submodule-server-host]]). The shell is built first,
    `pi` connected last. **Open PR** is a deterministic, host-side push + open/update of the branch's
    GitHub PR through the user's own `gh` CLI (no stored tokens, no provider REST API), body rendered from
    the verified plan, with a compare-URL fallback when `gh`/GitHub isn't available (see
@@ -399,8 +408,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
     mailbox** (`awaitToolResponse`) — the first per-session host service an extension receives. The
     mailbox, restart repair, late responses, composer supersede, Stop/Submit, needs-input and the web
     `interaction` props are **tool-agnostic**: keyed by `toolCallId`, told which tool names wait for a
-    person by the descriptor's `interactiveTools` and the renderer's `interactive` flag, and never
-    naming a tool in `contracts`, `agent` or `apps/web`. `ask_user_question` is the first client of that
+    person by the descriptor's `interactiveTools` and the renderer's `interactive` flag (plus `dock`, which
+    moves an awaited call's live form from the transcript into the chat's interaction dock above the
+    composer), and never naming a tool in `contracts`, `agent` or `apps/web`. `ask_user_question` is the first client of that
     contract, not a special case; the extension is deletable without touching the core (the vanilla
     package then falls back to pi's `ctx.ui` dialogs, which the host already renders). Product rule: a
     built-in (registry) extension wins a same-name tool collision with a user package while it is
@@ -511,5 +521,6 @@ dependency. This keeps test process drivers outside both launchers and the serve
   This includes PR revalidation on window focus; terminal-busy checks are close actions and Central quota
   resumes on visibility changes, not ordinary focus. Sync and fire-and-forget cases use
   `@thinkrail/shared/spawn`; bespoke bounded runners set the option directly. Exempt: spawns that inherit
-  an existing terminal's stdio (the `update`/`uninstall` CLI subcommands, the build script) and shell
-  probes that are no-ops on win32 (`shellEnv`).
+  an existing terminal's stdio (the `update`/`uninstall` CLI subcommands, the build script), shell
+  probes that are no-ops on win32 (`shellEnv`), and the file-manager reveal (`explorer.exe` honors the
+  hide flag by opening its folder window invisibly).

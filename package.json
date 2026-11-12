@@ -12,14 +12,15 @@
 		"catalog": {
 			"@changesets/changelog-github": "1.0.1",
 			"@changesets/cli": "3.0.3",
-			"@earendil-works/pi-agent-core": "1.5.0",
-			"@earendil-works/pi-ai": "1.5.0",
-			"@earendil-works/pi-coding-agent": "1.5.0",
-			"@earendil-works/pi-tui": "1.5.0",
+			"@earendil-works/pi-agent-core": "1.5.2",
+			"@earendil-works/pi-ai": "1.5.2",
+			"@earendil-works/pi-coding-agent": "1.5.2",
+			"@earendil-works/pi-tui": "1.5.2",
 			"@fontsource-variable/geist": "5.3.0",
 			"@fontsource-variable/jetbrains-mono": "5.3.0",
 			"@fontsource-variable/orbitron": "5.3.0",
-			"@posthog/cli": "0.18.10",
+			"@posthog/cli": "0.18.12",
+			"@resvg/resvg-js": "2.6.2",
 			"@remixicon/react": "4.9.0",
 			"@pierre/highlights": "0.4.0",
 			"@tailwindcss/vite": "4.3.3",
@@ -109,7 +110,7 @@
 	"devDependencies": {
 		"@changesets/changelog-github": "catalog:",
 		"@changesets/cli": "catalog:",
-		"@biomejs/biome": "2.5.0",
+		"@biomejs/biome": "2.6.3",
 		"@earendil-works/pi-coding-agent": "catalog:",
 		"@thinkrail/artifact-tests": "workspace:*",
 		"@thinkrail/contracts": "workspace:*",
@@ -132,6 +133,6 @@
 	],
 	"patchedDependencies": {
 		"@pierre/diffs@1.6.4": "patches/@pierre%2Fdiffs@1.6.4.patch",
-		"@earendil-works/pi-ai@1.5.0": "patches/@earendil-works%2Fpi-ai@1.5.0.patch"
+		"@earendil-works/pi-ai@1.5.2": "patches/@earendil-works%2Fpi-ai@1.5.2.patch"
 	}
 }

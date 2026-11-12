@@ -46,9 +46,9 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   host's fs events, the review store and an opened tab use;
 - **`ResourcePreview`** — a self-loading file view, or with `before` (another file) a before/after diff of two
   workspace files, with the registry's toggle, the unplaced strip, review commenting and Send review, and
-  caller slots (`leading`, `actions`, controlled `rendererId` / `layout`, and an opaque `viewState` it tags
+  caller slots (`leading`, `actions`, controlled `rendererId` / `layout`, an opaque `viewState` it tags
   with the renderer implementation that wrote it, so a renderer switch never restores another renderer's
-  state and a caller needs no reset). Its `compact` flag (carried to the lazy views as
+  state and a caller needs no reset, and a `reveal` it forwards to the view renderer). Its `compact` flag (carried to the lazy views as
   `ResourceEnvironment.compact`, and reset by an explicit `compact={false}`) drops the renderer toggles,
   Send review and the HTML notice with its viewport presets — the chrome a small embedded frame cannot
   afford; the views themselves are unchanged;
@@ -57,6 +57,22 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   state), every action an explicit tab stop; nothing without a host and a workspace scope. It is the one
   framed preview of visualize's file card and the questionnaire's previews ([[module-ext-visualize]],
   [[module-ext-ask-user-question]]) — lifted from visualize when the second consumer arrived;
+- **`ResourceReveal`** and **`SOURCE_RENDERER_ID`** (`thinkrail/code`) — the open-at-a-line contract: a
+  text view that receives `ResourceViewProps.reveal` (`{ line, column?, length?, tick }`) scrolls that line
+  into view and marks it (the Pierre file view through its virtualizer's `revealLine`, retried over a few
+  frames until the line is laid out, then `selectedLines`; the desktop Monaco view through
+  `revealLineNow`, an immediate scroll on a fresh mount and later alike — a smooth scroll to a far line is
+  cut short by the next layout — selecting `column`..`column + length`) and then reports the applied `tick`
+  through `ResourceViewProps.onRevealHandled`, so a caller that keeps the reveal (a tab) can drop it and a
+  remount restores the saved view state rather than the old hit; a caller repeats a reveal of the same line
+  by bumping `tick`, and names the source renderer by id so a Markdown or HTML file opens at a line rather
+  than as its rendered document. The rendered Markdown view honours `reveal` too, without a mark:
+  it scrolls the block whose source-line stamp (`data-md-line-start`, frontmatter offset applied — both
+  of its branches stamp) is the last one at or before `line` to the top — the first block when `line`
+  precedes them all (a preamble hit on the blank line after the frontmatter) — waiting for the document to
+  render if it has not yet, and reports the tick through `onRevealHandled` like the code views, so a spec
+  opens at a heading and a remount keeps the reading position; the other rich renderers ignore `reveal`,
+  so a reveal through them is a plain open;
 - the pieces every surface composes a renderer from, so a file tab, a diff tab, a Changes section and
   `ResourcePreview` run one sequence:
   - `useRendererSelection(resource, intent, rendererId)` — candidates for the environment's phone class, the
@@ -105,7 +121,9 @@ A host wraps renderers in `ResourceHostProvider` with one static `ResourceHost` 
   content and live refresh (`null` paths mean "anything may have changed": a truncated batch or a new
   connection, whose missed pushes are never replayed). A read may come back without `meta` from a host that
   predates resource metadata; the preview shows it as provisional text, exactly as the file and diff panes do.
-- `FileReview` (a render-prop component: `{ workspaceId, path, kind, sessionId?, children(review) }`) and
+- `FileReview` (a render-prop component: `{ workspaceId, path, kind, sessionId?, children(review) }`, where
+  `review` is `undefined` when the host keeps no review for that file — no threads, no commenting, and the
+  preview renders without both) and
   `ReviewSend` — the host's review surface and Send review control; the optional session routes sends. The
   seam is a component, not a hook on the host object: passing hooks around as values breaks React's rules and
   made the React Compiler bail out of the preview; a before/after nests two `FileReview`s.
@@ -157,9 +175,11 @@ stored a `lazy` there, and the first `RendererView` without a stored component s
 the in-flight load. That choice is stored once and never switched: a lazy and a direct component are
 different types, and swapping them would remount a live editor. A lazy made while a load was in flight is
 resolved for every later mount, so it does not suspend again. A failed preload, in the load or in `warm`,
-logs a warning instead of rejecting. A failed load is forgotten, together with a `lazy` a mount stored for
-it while it was in flight, so the next mount retries and a real failure reaches the pane's error
-boundary.
+logs a warning instead of rejecting. A failed load is forgotten so the next load retries it. A `lazy` that a
+mount stored while the load was in flight stays stored and failed, so every re-render of that mount throws
+to the pane's error boundary instead of making a fresh `lazy`. React retries a failed render, and an engine
+that refetches failed module imports (Chromium 156+) would otherwise loop on the chunk request. The next
+load, such as a hover or idle preload, replaces the failed `lazy` with the loaded component.
 
 **Review-draft scratch is read per slot.** A pane that keeps transient authoring across remounts provides
 `ReviewDraftContext` with a `ReviewDraftPersistence` (`rendererId`, `read(key)`, `subscribe`, `update(key,
@@ -310,6 +330,11 @@ mounted document that the next text change keeps on screen), but advertises no d
 pane's unplaced strip, **Show in Source** selects the code renderer, and diff authoring is available only
 in Source. It is selected by registry match rather than a path branch in the pane. Scopes whose modified
 side is historical receive no review surface or mutation actions.
+When a review surface is available but the selected renderer has no anchors for the current intent,
+the unplaced strip explains how to start a comment and offers a renderer with anchor support, even
+before the first thread exists. The action uses the same renderer selection as **Show in Source**;
+supported previews and historical scopes do not show this fallback.
+
 
 **The rendered diff focuses on its changes the way Pierre does.** The merged document is parsed once
 and a prose-root block is *changed* when it is or contains `ins`, `del`, or a `[data-diff-node]`
@@ -409,9 +434,18 @@ its mandatory `lineRange` plus `structural { scheme: "json-pointer", ref }`; a p
 or one now naming a node outside the host-reanchored line range, is reported unplaced. The collapsible
 unified diff comes from a `jsondiffpatch` instance with move detection
 and stable object hashes, tinting added/removed/changed/moved nodes and showing primitive replacements as
-old → new. Removed nodes and comments stay on `review.base` with base scanner lines; all other selections
-use the modified document and `review.worktree`. Invalid source renders no tree, leaving Source as the
-alternate candidate.
+old → new. A branch whose subtree holds changes carries a dot, and every changed or change-holding row
+shows a hover tooltip naming its own change and listing the leaf changes beneath it (accessor-style
+relative path, kind, value or old → new — a replacement drops the redundant "Changed" word; capped at
+eight, then "…and N more"). Classification walks base and rendered paths together, so a removal keeps
+its true base pointer (what the Removed section and base threads resolve against) and attaches to its
+rendered parent even inside reordered or shifted array items. Paths render accessor-style from typed
+segments — `[n]` only for array indexes, `.key` only for identifier-safe keys, `["…"]` otherwise — so
+distinct pointers never share a label. The derivation attaches each change once to its holder and folds
+holders into parents deepest-first, so every ancestor keeps only a total and its first eight changes —
+linear in touched nodes, never changes × depth. Removed nodes and comments stay on `review.base` with
+base scanner lines; all other selections use the modified document and `review.worktree`. Invalid
+source renders no tree, leaving Source as the alternate candidate.
 
 `thinkrail/notebook` accepts nbformat-4 JSON and reuses the tolerant positional JSON scanner to bind every
 rendered cell to its raw cell-object line range. Nbformat 4.5 ids are the `ipynb-cell` structural ref;

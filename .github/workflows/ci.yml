@@ -105,7 +105,7 @@ jobs:
     timeout-minutes: 30
     needs: changes
     if: needs.changes.outputs.app == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
@@ -120,10 +120,15 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Start Playwright Chromium and WebKit download
         run: .github/scripts/install-playwright.sh start webkit
+      - name: Install WebKit system libraries
+        uses: ./.github/actions/apt-packages
+        timeout-minutes: 10
+        with:
+          set: webkit
       - run: bun run build:web
       - name: Install Playwright Chromium and WebKit
         timeout-minutes: 8
-        run: .github/scripts/install-playwright.sh wait
+        run: .github/scripts/install-playwright.sh wait webkit
       # `bun run e2e` boots the host on an isolated port + state dir, runs this job's slice of the
       # @agent-free suite headless, then tears it all down. It reuses the web build above.
       - run: bun run e2e
@@ -237,8 +242,10 @@ jobs:
       - name: Start Playwright Chromium download
         run: .github/scripts/install-playwright.sh start
       - name: Install desktop runtime packages
-        uses: ./.github/actions/desktop-apt
+        uses: ./.github/actions/apt-packages
         timeout-minutes: 10
+        with:
+          set: desktop
       - name: Start virtual display
         run: |
           for attempt in 1 2 3; do
@@ -283,7 +290,18 @@ jobs:
   ci-passed:
     name: CI passed
     timeout-minutes: 5
-    needs: [changes, lint, test, pi-packages, e2e-shard, binary-shard, binary-windows, desktop-shard, desktop-windows]
+    needs:
+      [
+        changes,
+        lint,
+        test,
+        pi-packages,
+        e2e-shard,
+        binary-shard,
+        binary-windows,
+        desktop-shard,
+        desktop-windows,
+      ]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:

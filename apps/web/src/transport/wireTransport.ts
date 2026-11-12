@@ -1,6 +1,7 @@
 import type {
 	Ack,
 	AppConfig,
+	ChatContinuation,
 	ExtUiRequest,
 	HostUpdateNotice,
 	LoginPush,
@@ -35,6 +36,7 @@ import {
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
+	TEXT_SEARCH_PROTOCOL_VERSION,
 	TOOL_RESPONSE_PROTOCOL_VERSION,
 	TURN_CHANGES_PROTOCOL_VERSION,
 	USER_THEMES_PROTOCOL_VERSION,
@@ -42,7 +44,7 @@ import {
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
 import { currentLocale } from "@thinkrail/locales/react";
-import { isConnectedGeneration, useAppStore } from "../store";
+import { isChatsContainer, isConnectedGeneration, useAppStore } from "../store";
 import { githubStarToast } from "./githubStar";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 import { WsTransport } from "./transport";
@@ -99,6 +101,10 @@ export function supportsRichAnchors(protocolVersion: number | null): boolean {
 
 export function supportsTurnChanges(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= TURN_CHANGES_PROTOCOL_VERSION;
+}
+
+export function supportsTextSearch(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= TEXT_SEARCH_PROTOCOL_VERSION;
 }
 
 export function runHostUpdate(): Promise<Ack> {
@@ -263,8 +269,13 @@ export function applyWorkspaceListRefresh(
 	workspaces: readonly Workspace[],
 ): void {
 	const store = useAppStore.getState();
-	if (!store.projects.some((project) => project.id === projectId)) return;
-	for (const workspace of workspaces) store.updateWorkspace(workspace);
+	const project = store.projects.find((candidate) => candidate.id === projectId);
+	if (!project) return;
+	const held = new Set(store.workspaces[projectId]?.map((workspace) => workspace.id));
+	for (const workspace of workspaces) {
+		if (held.has(workspace.id)) store.updateWorkspace(workspace);
+		else if (isChatsContainer(project)) store.addWorkspace(workspace);
+	}
 	const listed = new Set(workspaces.map((workspace) => workspace.id));
 	for (const workspaceId of heldAtRequest) {
 		if (listed.has(workspaceId)) continue;
@@ -495,6 +506,9 @@ export function initTransport(): WsTransport {
 		useAppStore.getState().updateWorkspace(data as Workspace);
 	});
 
+	transport.subscribe(WS_CHANNELS.chatContinuation, (data) => {
+		useAppStore.getState().applyChatContinuation(data as ChatContinuation);
+	});
 	transport.subscribe(WS_CHANNELS.workspaceRemoved, (data) => {
 		const { projectId, id } = data as WorkspaceRemoved;
 		retireWorkspace(projectId, id);

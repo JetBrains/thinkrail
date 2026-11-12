@@ -29,8 +29,20 @@ import {
 	tryCurrentBranch,
 } from "../git";
 import { logger } from "../log";
-import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "../persistence";
-import { getProjects, listProjects } from "../projects";
+import {
+	dataDir,
+	landsInChatsRoot,
+	loadProjects,
+	loadWorkspaces,
+	saveWorkspaces,
+} from "../persistence";
+import { assertOutsideChatsRoot, getProjects, listProjects } from "../projects";
+import {
+	assertNotChatsContainer,
+	assertNotChatWorkspace,
+	isChatsContainer,
+	isChatWorkspace,
+} from "./chats";
 import { creationBranchReserved, creationRecords, repointCreationBases } from "./creationRecords";
 import { gitWorktreeEntries } from "./worktreeRegistry";
 
@@ -113,6 +125,7 @@ function creationPaths(): Set<string> {
 function openProjectById(projectId: string): Project {
 	const project = listProjects().find((candidate) => candidate.id === projectId);
 	if (!project) throw new Error(`Unknown project: ${projectId}`);
+	assertNotChatsContainer(project);
 	return project;
 }
 
@@ -130,6 +143,7 @@ export async function listExistingWorktrees(
 	return entries.flatMap((entry): ExistingWorktreeCandidate[] => {
 		const path = canonicalPath(entry.path);
 		if (entry.prunable || path === projectPath || representedPaths.has(path)) return [];
+		if (landsInChatsRoot(entry.path)) return [];
 		return entry.branch
 			? [{ path: entry.path, branch: entry.branch, status: "available" }]
 			: [{ path: entry.path, status: "detached" }];
@@ -142,6 +156,7 @@ export async function openExistingWorktree(
 ): Promise<Workspace> {
 	const project = openProjectById(projectId);
 	if (!requestedPath) throw new Error("An existing worktree path is required");
+	assertOutsideChatsRoot(requestedPath, "attached as a workspace");
 	const wantedPath = canonicalPath(requestedPath);
 	const projectPath = canonicalPath(project.path);
 	if (wantedPath === projectPath) return ensureDefaultWorkspace(project);
@@ -474,6 +489,7 @@ export function renameWorkspace(
 	if (peek?.kind === "default") throw new Error("The Default workspace cannot be renamed");
 	if (peek?.kind === "external")
 		throw new Error("An existing worktree cannot be renamed by ThinkRail");
+	if (peek) assertNotChatWorkspace(peek, "renamed");
 	const live = syncManagedBranch(id);
 	const ws = loadWorkspaces().find((w) => w.id === id);
 	if (!ws) throw new Error(`Unknown workspace: ${id}`);
@@ -574,6 +590,7 @@ export function setWorkspaceDiffBase(id: string, ref: string | null): Workspace 
 	const all = loadWorkspaces();
 	const ws = all.find((w) => w.id === id);
 	if (!ws) throw new Error(`Unknown workspace: ${id}`);
+	assertNotChatWorkspace(ws, "given a diff base");
 	const wanted = ref?.trim();
 	if (ref !== null && !wanted) throw new Error("A diff base must be a ref or null");
 	if (wanted) assertSafeRef(wanted);
@@ -625,7 +642,7 @@ export function backfillWorkspaceActivity(id: string, at: number): Workspace | n
 
 export function recordWorkspaceHead(id: string): void {
 	const workspace = loadWorkspaces().find((candidate) => candidate.id === id);
-	if (!workspace) return;
+	if (!workspace || isChatWorkspace(workspace)) return;
 	const sha = headShaAt(workspace.worktreePath, { onTimeout: "return" });
 	if (!sha) return;
 	const previous = observedHeadSha.get(id);
@@ -642,6 +659,7 @@ function setSettledOverride(id: string, override: "settled" | "active"): Workspa
 	const ws = all.find((workspace) => workspace.id === id);
 	if (!ws) throw new Error(`Unknown workspace: ${id}`);
 	if (ws.kind === "default") throw new Error("The Default workspace cannot be settled");
+	assertNotChatWorkspace(ws, "settled");
 	ws.settledOverride = override;
 	ws.settledAt = Date.now();
 	saveWorkspaces(all);
@@ -685,7 +703,7 @@ export function setWorkspaceReview(
 ): Workspace | null {
 	const all = loadWorkspaces();
 	const ws = all.find((workspace) => workspace.id === id);
-	if (!ws || ws.branch !== branch) return null;
+	if (!ws || ws.branch !== branch || isChatWorkspace(ws)) return null;
 	const next = review ? reviewSnapshot(review) : undefined;
 	const observed = observedActivityAt.get(id) ?? 0;
 	const activityChanged = observed > (ws.lastActiveAt ?? 0);
@@ -703,6 +721,7 @@ export async function listWorkspaces(
 	opts: { includeDiffStats?: boolean } = {},
 ): Promise<Workspace[]> {
 	const project = getProjects().find((p) => p.id === projectId);
+	if (project && isChatsContainer(project)) return projectRows(projectId);
 	if (project) ensureDefaultWorkspace(project);
 	for (const workspace of loadWorkspaces()) {
 		if (workspace.projectId === projectId && workspace.kind === "external") {
@@ -746,6 +765,7 @@ export function forgetWorkspace(id: string): Workspace | null {
 	const ws = all.find((w) => w.id === id);
 	if (!ws) return null;
 	if (ws.kind === "default") throw new Error("The Default workspace cannot be removed");
+	assertNotChatWorkspace(ws, "removed here; delete the chat instead");
 	saveWorkspaces(all.filter((w) => w.id !== id));
 	observedActivityAt.delete(id);
 	observedHeadSha.delete(id);
@@ -754,7 +774,7 @@ export function forgetWorkspace(id: string): Workspace | null {
 }
 
 export async function reclaimWorktree(ws: Workspace): Promise<void> {
-	if (ws.kind === "default" || ws.kind === "external") return;
+	if (ws.kind === "default" || ws.kind === "external" || isChatWorkspace(ws)) return;
 	const project = loadProjects().find((p) => p.id === ws.projectId);
 	if (!project) return;
 	if (resolve(ws.worktreePath) === resolve(project.path)) return;
@@ -774,6 +794,7 @@ export async function removeWorkspace(id: string): Promise<void> {
 
 export async function workspaceDiffStats(id: string): Promise<DiffStats> {
 	const ws = getWorkspace(id);
+	assertNotChatWorkspace(ws, "diffed");
 	const stats = await diffStats(ws);
 	if (!stats) throw new Error(`Could not read the diff stats of ${ws.name}`);
 	return stats;

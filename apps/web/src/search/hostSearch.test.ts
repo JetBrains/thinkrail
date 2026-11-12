@@ -72,6 +72,15 @@ const hitOf = (kind: SearchGroup["kind"], id: string): SearchHit => {
 			return { ...base, kind, path: id };
 		case "spec":
 			return { ...base, kind, path: id, specId: id, size: 1 };
+		case "section":
+			return {
+				...base,
+				kind,
+				path: id,
+				specId: id,
+				snippet: id,
+				section: { heading: id, line: 1, matched: 1, terms: 1 },
+			};
 		case "plan":
 			return { ...base, kind, sessionId: id };
 		case "transcript":

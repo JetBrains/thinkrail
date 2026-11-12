@@ -5,6 +5,7 @@ import {
 	isSubagentMaxConcurrent,
 	RECENT_MODELS_LIMIT,
 	type ReviewFixDetails,
+	SEARCH_KINDS,
 	SETTLE_IDLE_DAYS,
 	SUBAGENT_MAX_CONCURRENT,
 } from "./domain";
@@ -13,10 +14,14 @@ import {
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
 	ASK_DISCUSS_PROTOCOL_VERSION,
 	BRANCH_STATUS_PROTOCOL_VERSION,
+	CACHE_WARMING_MODES,
+	CACHE_WARMING_SETTINGS_PROTOCOL_VERSION,
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
+	CHATS_PROTOCOL_VERSION,
 	CLIENT_ERROR_REPORT_PROTOCOL_VERSION,
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
+	CONTINUATION_PROTOCOL_VERSION,
 	CUSTOM_ENDPOINT_ID_PREFIX,
 	CUSTOM_ENDPOINTS_PROTOCOL_VERSION,
 	completionDelivery,
@@ -30,6 +35,7 @@ import {
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
+	isCacheWarmingMode,
 	isCustomEndpointId,
 	isTodoReviewFixMessage,
 	isToolResponsePending,
@@ -40,6 +46,7 @@ import {
 	MODEL_PICKER_PROTOCOL_VERSION,
 	normalizeSessionTitle,
 	ONBOARDING_PROTOCOL_VERSION,
+	OTHER_AGENT_SKILLS_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
@@ -48,6 +55,7 @@ import {
 	PROJECT_TRUST_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	PROVIDER_WARNINGS_PROTOCOL_VERSION,
+	QUESTION_PANEL_PROTOCOL_VERSION,
 	RESOURCE_HISTORY_PROTOCOL_VERSION,
 	RESOURCE_META_PROTOCOL_VERSION,
 	REVIEW_ACTIONS_PROTOCOL_VERSION,
@@ -57,11 +65,13 @@ import {
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	SESSION_TITLE_MAX_LENGTH,
+	SPEC_SECTIONS_PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
 	TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION,
+	TEXT_SEARCH_PROTOCOL_VERSION,
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 	TOOL_RESPONSE_CUSTOM_TYPE,
@@ -247,6 +257,16 @@ test("tool responses replace the ask-only answer method at v93", () => {
 	expect(WS_METHODS.sessionAnswerQuestion).toBe("session.answerQuestion");
 });
 
+test("the cache-warming setting names its two methods at v111", () => {
+	expect(CACHE_WARMING_SETTINGS_PROTOCOL_VERSION).toBe(111);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CACHE_WARMING_SETTINGS_PROTOCOL_VERSION);
+	expect(WS_METHODS.cacheWarmingGet).toBe("cacheWarming.get");
+	expect(WS_METHODS.cacheWarmingSet).toBe("cacheWarming.set");
+	expect(CACHE_WARMING_MODES).toEqual(["off", "streaming", "idle"]);
+	expect(isCacheWarmingMode("idle")).toBe(true);
+	expect(isCacheWarmingMode("always")).toBe(false);
+});
+
 test("voice input is pinned to v107", () => {
 	expect(SPEECH_PROTOCOL_VERSION).toBe(107);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SPEECH_PROTOCOL_VERSION);
@@ -304,6 +324,41 @@ test("host search and its previews are pinned to v106", () => {
 	expect(WS_METHODS.searchPreview).toBe("search.preview");
 });
 
+test("spec sections in search are pinned to v113", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SPEC_SECTIONS_PROTOCOL_VERSION);
+	expect(SPEC_SECTIONS_PROTOCOL_VERSION).toBe(113);
+	expect(SEARCH_KINDS).toContain("section");
+});
+
+test("find in files is pinned to v112", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(TEXT_SEARCH_PROTOCOL_VERSION);
+	expect(TEXT_SEARCH_PROTOCOL_VERSION).toBe(112);
+	expect(WS_METHODS.searchText).toBe("search.text");
+	expect(WS_CHANNELS.searchTextResults).toBe("search.textResults");
+});
+
+test("the question panel height setting is pinned to v114", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(QUESTION_PANEL_PROTOCOL_VERSION);
+	expect(QUESTION_PANEL_PROTOCOL_VERSION).toBe(114);
+	expect(DEFAULT_CONFIG.questionPanelHeight).toBe(60);
+});
+
+test("continue in workspace is pinned to v110", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CONTINUATION_PROTOCOL_VERSION);
+	expect(CONTINUATION_PROTOCOL_VERSION).toBe(110);
+	expect(WS_METHODS.chatContinue).toBe("chat.continue");
+	expect(WS_METHODS.chatContinuationStatus).toBe("chat.continuationStatus");
+	expect(WS_CHANNELS.chatContinuation).toBe("chat.continuation");
+});
+
+test("chats without a project are pinned to v109", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CHATS_PROTOCOL_VERSION);
+	expect(CHATS_PROTOCOL_VERSION).toBe(109);
+	expect(WS_METHODS.chatCreate).toBe("chat.create");
+	expect(WS_METHODS.chatDelete).toBe("chat.delete");
+	expect(WS_METHODS.chatInspect).toBe("chat.inspect");
+});
+
 test("project rename is pinned to v85", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PROJECT_RENAME_PROTOCOL_VERSION);
 	expect(PROJECT_RENAME_PROTOCOL_VERSION).toBe(85);
@@ -354,6 +409,12 @@ test("the GitHub star ask is pinned to v103", () => {
 	expect(GITHUB_STAR_PROTOCOL_VERSION).toBe(103);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(GITHUB_STAR_PROTOCOL_VERSION);
 	expect(WS_CHANNELS.feedbackGithubStar).toBe("feedback.githubStar");
+});
+
+test("the other agents' skills opt-in is pinned to v108", () => {
+	expect(OTHER_AGENT_SKILLS_PROTOCOL_VERSION).toBe(108);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(OTHER_AGENT_SKILLS_PROTOCOL_VERSION);
+	expect(DEFAULT_CONFIG.otherAgentSkills).toBe(false);
 });
 
 test("in-app surveys are pinned to v97", () => {
@@ -609,9 +670,9 @@ test("extension settings are pinned to v105", () => {
 	expect(DEFAULT_CONFIG.extensionSettings).toEqual({});
 });
 
-test("the Shift+Enter terminal setting is pinned to v108", () => {
-	expect(TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION).toBe(108);
-	expect(PROTOCOL_VERSION).toBe(108);
+test("the Shift+Enter terminal setting is pinned to v115", () => {
+	expect(TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION).toBe(115);
+	expect(PROTOCOL_VERSION).toBe(115);
 	expect(DEFAULT_CONFIG.terminalShiftEnterNewline).toBe(true);
 });
 

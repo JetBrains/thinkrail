@@ -11,7 +11,7 @@ import {
 	searchHitFields,
 } from "@thinkrail/contracts";
 import type { HistorySession, HistoryState } from "../history";
-import type { SpecSnapshot } from "../spec";
+import type { SpecSections, SpecSnapshot } from "../spec";
 import type { StoredPlanFile } from "../todos";
 import type { FileListCache } from "./files";
 import {
@@ -21,7 +21,6 @@ import {
 	type Deadline,
 	emptyGroup,
 	groupOf,
-	lineAround,
 	snippetAround,
 } from "./hits";
 
@@ -29,16 +28,18 @@ export interface SearchRoot {
 	readonly root: string;
 	readonly projectId: string;
 	readonly workspaceId: string;
+	/** A chat without a project is never a repository: its files are walked, never asked of git. */
+	readonly git: boolean;
 }
 
 export interface ProviderInput {
+	readonly text: string;
 	readonly terms: readonly MatchTerm[];
 	readonly limit: number;
 	readonly deadline: Deadline;
 }
 
 const SCAN_CHECK_EVERY = 1_000;
-const MIN_BODY_TERM_LENGTH = 3;
 const TRANSCRIPT_TEXT_PREVIEW = 160;
 
 const preparedContent = new WeakMap<object, PreparedContent>();
@@ -80,6 +81,7 @@ export type FileStat = (root: string, path: string) => number | "missing" | null
 
 type FileHit = Extract<SearchHit, { kind: "file" }>;
 type SpecHit = Extract<SearchHit, { kind: "spec" }>;
+type SectionHit = Extract<SearchHit, { kind: "section" }>;
 type TranscriptHit = Extract<SearchHit, { kind: "transcript" }>;
 
 export function searchFiles(
@@ -88,7 +90,7 @@ export function searchFiles(
 	input: ProviderInput,
 	stat: FileStat,
 ): SearchGroup {
-	const view = lists.peek(root.root);
+	const view = lists.peek(root.root, root.git);
 	if (!view) return emptyGroup("file", "indexing");
 	const { list, state } = view;
 	const hits: FileHit[] = [];
@@ -169,8 +171,6 @@ export function searchSpecs(
 	input: ProviderInput,
 ): SearchGroup {
 	const hits: SpecHit[] = [];
-	const folded = foldedTermsOf(input);
-	const bodyTerms = folded.some((text) => text.length >= MIN_BODY_TERM_LENGTH);
 	const { entries, built, rebuilding } = snapshot(root.root);
 	const state = !built ? "indexing" : rebuilding ? "refreshing" : "ready";
 	for (const entry of entries) {
@@ -181,35 +181,59 @@ export function searchSpecs(
 			input.terms,
 			searchHitFields({ kind: "spec", title: entry.title, specId: entry.id, path: entry.path }),
 		);
-		const base = {
+		if (!match) continue;
+		hits.push({
 			id: `spec:${root.workspaceId}:${entry.path}`,
-			kind: "spec" as const,
+			kind: "spec",
 			title: entry.title,
 			subtitle: entry.path,
+			tier: match.tier,
+			score: match.score,
+			ranges: rangesOf(match),
 			size: Buffer.byteLength(entry.content),
 			projectId: root.projectId,
 			workspaceId: root.workspaceId,
 			path: entry.path,
 			specId: entry.id,
-		};
-		if (match) {
-			hits.push({ ...base, tier: match.tier, score: match.score, ranges: rangesOf(match) });
-			continue;
-		}
-		if (!bodyTerms) continue;
-		const body = matchContent(folded, preparedOf(entry, entry.content));
-		const first = body?.ranges[0];
-		if (!first) continue;
-		const snippet = lineAround(entry.content, first);
-		hits.push({
-			...base,
-			snippet,
-			tier: MATCH_TIER.content,
-			score: 0,
-			ranges: { snippet: wireRanges(contentRanges(folded, prepareContent(snippet))) },
 		});
 	}
 	return buildGroup("spec", hits, input.limit, { state });
+}
+
+export function searchSections(
+	root: SearchRoot,
+	sections: (root: string) => SpecSections,
+	input: ProviderInput,
+): SearchGroup {
+	const index = sections(root.root);
+	const state = !index.built ? "indexing" : index.rebuilding ? "refreshing" : "ready";
+	const { hits, total } = index.search(input.text, input.limit);
+	return {
+		kind: "section",
+		hits: hits.map(
+			(hit): SectionHit => ({
+				id: `section:${root.workspaceId}:${hit.path}:${hit.heading}#${hit.occurrence}`,
+				kind: "section",
+				title: hit.title,
+				subtitle: hit.path,
+				snippet: hit.snippet,
+				tier: MATCH_TIER.content,
+				score: hit.score,
+				ranges: {
+					title: hit.ranges.title,
+					heading: hit.ranges.heading,
+					snippet: hit.ranges.snippet,
+				},
+				projectId: root.projectId,
+				workspaceId: root.workspaceId,
+				path: hit.path,
+				specId: hit.id,
+				section: { heading: hit.heading, line: hit.line, matched: hit.matched, terms: hit.terms },
+			}),
+		),
+		total,
+		state,
+	};
 }
 
 export interface ChatLabel {

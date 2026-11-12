@@ -68,7 +68,14 @@ export function UnplacedReviewStrip({
 		card?.scrollIntoView({ block: "center" });
 		focus.review.onFocusHandled();
 	}, [focus]);
-	if (entries.length === 0) return null;
+	const commentingTarget =
+		reviews.length > 0 && renderer.capabilities.anchors[intent].length === 0
+			? candidates.find(
+					(candidate) =>
+						candidate.id !== renderer.id && candidate.capabilities.anchors[intent].length > 0,
+				)
+			: undefined;
+	if (entries.length === 0 && !commentingTarget) return null;
 
 	return (
 		<div
@@ -76,9 +83,30 @@ export function UnplacedReviewStrip({
 			data-testid="review-unplaced-strip"
 			className="max-h-[40vh] shrink-0 overflow-auto border-border-default border-b bg-container-header-bg p-8"
 		>
-			<p className="px-4 tr-text-eyebrow text-text-muted">
-				{t("panels.unplacedReview.title", { renderer: t(renderer.labelKey) })}
-			</p>
+			{commentingTarget ? (
+				<div
+					data-testid="review-commenting-fallback"
+					className="flex items-center justify-between gap-8 px-4"
+				>
+					<p className="tr-text-ui text-text-muted">
+						{t("panels.unplacedReview.commentingUnavailable", {
+							renderer: t(commentingTarget.labelKey),
+						})}
+					</p>
+					<Button
+						variant="soft-primary"
+						size="m"
+						onClick={() => onSelectRenderer(commentingTarget.id)}
+					>
+						{t("panels.unplacedReview.commentIn", { renderer: t(commentingTarget.labelKey) })}
+					</Button>
+				</div>
+			) : null}
+			{entries.length > 0 ? (
+				<p className="px-4 tr-text-eyebrow text-text-muted">
+					{t("panels.unplacedReview.title", { renderer: t(renderer.labelKey) })}
+				</p>
+			) : null}
 			{entries.map(({ review, thread }) => {
 				const target = candidates.find(
 					(candidate) =>
