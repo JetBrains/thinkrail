@@ -42,6 +42,7 @@ import { AssistantMarkdown } from "./assistantLinks";
 import { BackgroundCommandResult, SubagentResult } from "./BackgroundResult";
 import { useChatActions } from "./ChatActions";
 import { CopyButton } from "./CopyButton";
+import { CONTENT_WIDTH_BREAKOUT } from "./contentWidth";
 import { NoticeLink } from "./ExtraUsageNotice";
 import { ToolPromptSlot } from "./ExtUiPrompt";
 import { FileChip } from "./FileChip";
@@ -53,7 +54,7 @@ import { type ChatRow, LARGE_USER_MESSAGE, type TurnDividerData } from "./rows";
 import { formatElapsed, formatTokens } from "./SessionStatsBar";
 import { ToolCard } from "./ToolCard";
 import { ToolRendererBody } from "./ToolRendererBody";
-import { getToolChrome, getToolSummary } from "./toolRegistry";
+import { getToolChrome, getToolSummary, getToolWidth } from "./toolRegistry";
 import type { CompactionState } from "./types";
 
 function ChatTurnViewImpl({
@@ -618,7 +619,12 @@ function ToolRow({
 			streaming: row.streaming,
 		};
 		return (
-			<div className="tr-text-ui text-text-default">
+			<div
+				className={cn(
+					"tr-text-ui text-text-default",
+					getToolWidth(row.toolName) === "content" && CONTENT_WIDTH_BREAKOUT,
+				)}
+			>
 				<ToolRendererBody
 					{...renderProps}
 					imageLabel={getToolSummary(t, row.toolName, renderProps)}

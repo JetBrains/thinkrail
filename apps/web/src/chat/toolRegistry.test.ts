@@ -6,6 +6,7 @@ import {
 	getToolChrome,
 	getToolRenderer,
 	getToolSummary,
+	getToolWidth,
 	isDockedTool,
 	registerToolRenderer,
 	registerToolRendererPrefix,
@@ -60,6 +61,16 @@ describe("toolRegistry chrome", () => {
 	it("honors a registered 'bare' chrome (renderer owns its frame)", () => {
 		registerToolRenderer("bare-chrome-tool", () => null, { chrome: "bare" });
 		expect(getToolChrome("bare-chrome-tool")).toBe("bare");
+	});
+});
+
+describe("toolRegistry width", () => {
+	it("keeps a renderer in the chat column unless it opts into content width", () => {
+		registerToolRenderer("column-tool", () => null);
+		registerToolRenderer("content-tool", () => null, { width: "content" });
+		expect(getToolWidth("column-tool")).toBe("column");
+		expect(getToolWidth("never-registered-width")).toBe("column");
+		expect(getToolWidth("content-tool")).toBe("content");
 	});
 });
 

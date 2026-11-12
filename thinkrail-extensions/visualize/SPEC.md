@@ -73,9 +73,10 @@ of anchoring review to real files; the tool guideline asks the agent to keep an 
 passed as `before` when it should stay visible. The workspace and chat come from `useResourceScope`, which the chat transcript provides to
 its rows, so review sends land in the chat that shows the card; with no host or scope (a subagent transcript)
 the card shows only the links. The
-registration is primary and expanded by default; its title or diagram/comparison/file summary is available
-without rendering. Invalid or streaming arguments remain defensive and tool errors preserve readable
-result text.
+registration is primary, expanded by default and `width: "content"`; its title or diagram/comparison/file
+summary is available without rendering. A diagram or comparison grows with its content; a file preview fills
+its fixed frame, has no intrinsic width and so keeps the chat column's width. Invalid or streaming arguments
+remain defensive and tool errors preserve readable result text.
 
 `MermaidView` renders a diagram at its natural size — `useMaxWidth: false` for every diagram kind in
 mermaid's default config, scaled down to the available width by CSS — so a content-width parent can size to

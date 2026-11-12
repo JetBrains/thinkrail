@@ -13,15 +13,21 @@ import "./subagent/register";
 import "./web/register";
 import { WriteCard } from "./WriteCard";
 
-registerToolRenderer("bash", BashCard, { summary: ({ args }) => strArg(args, "command") });
+registerToolRenderer("bash", BashCard, {
+	summary: ({ args }) => strArg(args, "command"),
+	width: "content",
+});
 registerToolRenderer("read", ReadCard, {
 	summary: ({ args, workspaceRoot }) => projectRelativePath(strArg(args, "path"), workspaceRoot),
+	width: "content",
 });
 registerToolRenderer("edit", EditCard, {
 	summary: ({ args, workspaceRoot }) => projectRelativePath(strArg(args, "path"), workspaceRoot),
+	width: "content",
 });
 registerToolRenderer("write", WriteCard, {
 	summary: ({ args, workspaceRoot }) => projectRelativePath(strArg(args, "path"), workspaceRoot),
+	width: "content",
 });
 
 for (const toolName of [

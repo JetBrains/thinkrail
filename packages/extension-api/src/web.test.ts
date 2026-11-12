@@ -23,6 +23,7 @@ describe("defineWebExtension", () => {
 			summary,
 			chrome: "bare",
 			prominence: "primary",
+			width: "content",
 			defaultExpanded: true,
 			interactive: true,
 			dock: true,
