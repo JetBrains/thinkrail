@@ -186,7 +186,7 @@ test("file mutation handlers invalidate watcher-ignored paths after success", as
 	setWatchPublisher((payload) => frames.push(payload));
 	setTrashImplementationForTests(async (input) => {
 		if (typeof input !== "string") throw new Error("expected one path");
-		rmSync(input);
+		rmSync(input, { recursive: true });
 	});
 
 	expect(
@@ -208,7 +208,10 @@ test("file mutation handlers invalidate watcher-ignored paths after success", as
 			CTX,
 		),
 	).toEqual({ ok: true });
-	expect(frames).toEqual([
+	expect(
+		await handleRequest("fs.delete", { workspaceId: "w1", path: "node_modules/demo" }, CTX),
+	).toEqual({ ok: true });
+	expect(frames.filter((frame) => frame.paths.length > 0)).toEqual([
 		{
 			workspaceId: "w1",
 			paths: ["node_modules/demo/source copy.txt"],
@@ -221,7 +224,9 @@ test("file mutation handlers invalidate watcher-ignored paths after success", as
 			truncated: false,
 			skillChange: "unknown",
 		},
+		{ workspaceId: "w1", paths: ["node_modules/demo"], truncated: false, skillChange: "unknown" },
 	]);
+	expect(existsSync(directory)).toBe(false);
 });
 
 test("clone handlers resolve the destination and return an opened local project", async () => {

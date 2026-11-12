@@ -19,7 +19,7 @@ function isContained(root: string, candidate: string): boolean {
 	return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
 }
 
-function posixRelative(root: string, abs: string): string {
+export function posixRelative(root: string, abs: string): string {
 	return relative(root, abs).split(sep).join("/");
 }
 
@@ -63,7 +63,7 @@ function resolveUnderRoot(root: string, path: string, followLeaf: boolean): stri
 	return abs;
 }
 
-function resolveInWorktree(
+export function resolveInWorktree(
 	workspaceId: string,
 	path: string,
 	followLeaf: boolean,

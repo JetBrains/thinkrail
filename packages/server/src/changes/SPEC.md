@@ -61,7 +61,8 @@ The platform decision behind it is [[architecture]] decision #19; the rules belo
 - **Whole-file revert, by the file's status in the scope** (read from the two sides, not from a status
   word): present in both → write the original bytes (bytes, so binary files are covered); **absent in
   the original** (added or untracked) → rename the CAS-verified worktree file to a hidden same-directory
-  claim, then move that claim to the OS trash; **absent in the worktree** (deleted) → restore the original
+  claim, then move that claim to the OS trash (`trash.claimAndTrashFile`, shared with the Files tree's
+  Delete); **absent in the worktree** (deleted) → restore the original
   bytes, creating missing parent directories. Undo uses the same claim before an inverse removes a file.
   The rename occurs in the synchronous verify pass, so a later agent write recreates the real path and
   cannot become the object an awaited trash helper removes. If trash fails, the claim is restored only

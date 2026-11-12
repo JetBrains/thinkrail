@@ -85,7 +85,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `github` | read-only local `gh` auth status (shell-out) for the New-Workspace surface | [github/SPEC.md](src/github/SPEC.md) |
 | `branch-review` | best-effort GitHub PR / GitLab MR for a workspace branch, with an open PR's checks, review decision, and merge state | [branch-review/SPEC.md](src/branch-review/SPEC.md) |
 | `pr` | `pr.open` / `workspace.push`: push the workspace branch + open/update its GitHub PR, body from the plan, commits, or a template; ready / merge / reopen it and delete its remote branch | [pr/SPEC.md](src/pr/SPEC.md) |
-| `fs` | contained worktree file reads, copy/delete, and the one byte classification (text/mime/sha-256) | [fs/SPEC.md](src/fs/SPEC.md) |
+| `fs` | read dirs/files inside a worktree (path-contained), the Files tree's copy + delete-to-trash, and the one byte classification (text/mime/sha-256) | [fs/SPEC.md](src/fs/SPEC.md) |
 | `changes` | host-owned revert of a hunk or a file's whole change in the worktree, with undo receipts | [changes/SPEC.md](src/changes/SPEC.md) |
 | `turns` | per-agent-run worktree snapshots → the change set each run produced (`workspace.turns`, `turn.changed`) | [turns/SPEC.md](src/turns/SPEC.md) |
 | `trash` | move a path to the OS trash through the bundled helpers (never `unlink`) | [trash/SPEC.md](src/trash/SPEC.md) |
@@ -122,7 +122,7 @@ the host from env via `bootHost` for dev/e2e.
 - `pr` → `workspaces`, `git`, `todos`, `branch-review` (provider detection + gh-output parsing + the shared CLI runner), `github` (`ghSetupProblem` — the named compare-fallback reason)
 - `projects` → `git` (shared runner), `persistence`
 - `git` → `subprocess` (every child that talks to a network or another CLI), `fs` (`resourceMeta`/`decodeText` — a diff side's content classification is the same one `fs.readFile` reports)
-- `fs` → `persistence` (workspace lookup), `trash` (recoverable file deletion)
+- `fs` → `persistence` (workspace lookup), `trash` (`claimAndTrashFile` — the Files tree's Delete, the same claim-then-trash path `changes` uses)
 - `changes` → `git` (the scope→range resolver + the original side's blob at its resolved oid), `fs` (path containment + byte identity), `persistence` (workspace lookup), `trash` (a revert that removes a file)
 - `turns` → `git` (`snapshotWorktree` + the `turn` scope's `gitStatus`), `persistence` (`turns.json`), `log`; it never imports `agent` — `host` feeds it the session event stream and resolves a session to its workspace, the same composition the run analytics observer uses
 - `github` → `subprocess` (both `gh auth status` probes run under the same bounded runner as `git`/`branch-review`)

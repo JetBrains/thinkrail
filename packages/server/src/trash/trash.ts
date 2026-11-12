@@ -1,7 +1,7 @@
 /// <reference path="./procfs.d.ts" />
 
 import { execFile } from "node:child_process";
-import { linkSync, renameSync, rmSync } from "node:fs";
+import { linkSync, lstatSync, readlinkSync, renameSync, rmSync, symlinkSync } from "node:fs";
 import { promisify } from "node:util";
 import processMountinfo from "@stroncium/procfs/lib/parsers/processMountinfo.js";
 import procfsParsers from "@stroncium/procfs/lib/parsers.js";
@@ -62,6 +62,17 @@ function recoveryError(error: unknown, recovery: string): Error {
 	return new Error(`${message} The claimed file was preserved at ${recovery}.`, { cause: error });
 }
 
+function restoreClaim(claim: string, path: string): void {
+	const claimed = lstatSync(claim);
+	if (claimed.isDirectory()) {
+		renameSync(claim, path);
+		return;
+	}
+	if (claimed.isSymbolicLink()) symlinkSync(readlinkSync(claim), path);
+	else linkSync(claim, path);
+	rmSync(claim, { force: true });
+}
+
 export async function claimAndTrashFile(
 	path: string,
 	claim: string,
@@ -72,12 +83,11 @@ export async function claimAndTrashFile(
 		await trashFile(claim);
 	} catch (error) {
 		try {
-			linkSync(claim, path);
+			restoreClaim(claim, path);
 		} catch {
 			renameSync(claim, recovery);
 			throw recoveryError(error, recovery);
 		}
-		rmSync(claim, { force: true });
 		throw error;
 	}
 }

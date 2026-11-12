@@ -2,7 +2,7 @@
 id: submodule-server-fs
 type: submodule-design
 status: active
-title: fs — contained worktree filesystem
+title: fs — contained worktree reads, copy and delete
 parent: module-server
 depends-on: [module-contracts, submodule-server-trash]
 tags: [public-surface-checked]
@@ -10,8 +10,11 @@ tags: [public-surface-checked]
 
 ## Responsibility
 
-Read and mutate files inside a workspace's worktree, path-contained, and decide **what a resource's
-bytes are** — the one byte-level classification every content read in the host shares.
+Read directories and files inside a workspace's worktree, path-contained; carry out the Files tree's two
+user-initiated mutations — **copy** an entry into a worktree folder and **delete** one to the OS trash —
+under the same containment; and decide **what a resource's bytes are** — the one byte-level
+classification every content read in the host shares. Agent and review writes are not this module's:
+`changes` owns review reverts and pi writes through its own tools.
 
 ## Boundary
 
@@ -44,10 +47,29 @@ bytes are** — the one byte-level classification every content read in the host
   the root itself. `reviews` normalizes anchors through it. It keeps host
   semantics, so a backslash on POSIX stays part of a file name; callers that hold model-written paths turn
   `\` into `/` themselves.
-  `copyWorkspaceFile` copies one regular file between contained workspace directories without overwriting:
-  a collision gains ` copy`, then ` copy N`, and the returned path is the actual worktree-relative name.
-  `deleteWorkspaceFile` accepts only a regular file, claims it under a hidden same-directory name before
-  awaiting the OS trash, and restores it on trash failure so a concurrent recreation is never removed.
+  **`copyWorktreeEntry({ sourceWorkspaceId, sourcePath, destinationWorkspaceId, destinationDirectory })`**
+  (`mutations.ts`) copies a file, folder or symlink into a folder of the same or another workspace — a
+  copy, never a move. The source resolves through its contained parent without following its leaf, the
+  destination folder through the full chain; `.git`, escapes and the worktree root itself (it has no
+  contained parent) are refused. The
+  first free name among `name`, `name copy`, `name copy 2`, … (` copy N` goes before a file's extension,
+  never inside a folder's name) is claimed with an exclusive create (`COPYFILE_EXCL`, non-recursive
+  `mkdir`, `symlink`), so a copy never overwrites anything, including an entry another writer creates
+  meanwhile. A folder is planned before anything is written — an async, iterative walk over `lstat`
+  kinds that never follows a symlink, skips nested `.git`, refuses sockets/FIFOs/devices and stops with
+  `CodedError("COPY_TOO_LARGE")` past `MAX_COPY_ENTRIES` (10,000) — so pasting a folder into itself
+  copies a finite snapshot and an oversized tree writes nothing. Entries are then created in plan order
+  (parents first) with async I/O only; a symlink is recreated verbatim, never dereferenced. A failure
+  mid-copy leaves the partial copy in place and throws — this module never hard-deletes, not even its own
+  output. It answers the copy's worktree-relative path plus every path it wrote, for the host's
+  invalidation. **`deleteWorktreeEntry(workspaceId, path)`** moves a file, folder or symlink to the OS
+  trash through `trash.claimAndTrashFile` — the same claim-then-trash path `changes` uses: renamed to a
+  hidden `.thinkrail-delete-<uuid>` sibling before the awaited trash move, so a path the agent recreates
+  meanwhile is never the object trashed, and restored (or preserved as `.thinkrail-recovery-<uuid>`) when
+  the trash fails. The leaf is not followed, so deleting a symlink removes the link, never its target;
+  `.git`, escapes and the worktree root are refused. It reports whether the entry was a folder, whose
+  unlisted contents the host's invalidation must treat as unknown. Neither mutation checks whether an
+  agent is running — the user's explicit action wins, and the web says so before a delete.
   **Content classification** (`content.ts`, pure, no dependency): `CONTENT_SNIFF_BYTES` names the shared
   8 KiB bounded-head size; `classifyBytes(bytes)` → `{ text, mime? }` — **mime** is what the *bytes*
   prove (magic numbers for png/jpeg/gif/webp/avif/bmp/ico/pdf/zip/gzip/woff/woff2; AVIF accepts `avif` or
@@ -71,10 +93,11 @@ bytes are** — the one byte-level classification every content read in the host
   fallback and treating
   `null` bytes as absence (`hash`/`byteLength` null, `text: true` — nothing to decode, and the empty
   string it pairs with is valid text).
-- **Public surface (barrel):** `readDir`, `readFile`, `readableFileSize`, `copyWorkspaceFile`, `deleteWorkspaceFile`, `resolveWorktreeFile`, `workspaceRelativePath`, `classifyBytes`,
-  `CONTENT_SNIFF_BYTES`, `mimeFromPath`, `hashBytes`, `decodeText`, `resourceMeta`.
-- **Allowed deps:** `persistence` (workspace lookup); `trash` (recoverable deletion); `contracts` (`FileNode`, `ResourceMeta`); `shared`
-  (`CodedError`); Node `fs`/`path`/`crypto`.
+- **Public surface (barrel):** `readDir`, `readFile`, `readableFileSize`, `resolveWorktreeFile`, `workspaceRelativePath`,
+  `copyWorktreeEntry`, `deleteWorktreeEntry`, `classifyBytes`, `CONTENT_SNIFF_BYTES`, `mimeFromPath`,
+  `hashBytes`, `decodeText`, `resourceMeta`.
+- **Allowed deps:** `persistence` (workspace lookup); `trash` (`claimAndTrashFile`, the delete);
+  `contracts` (`FileNode`, `ResourceMeta`); `shared` (`CodedError`); Node `fs`/`path`/`crypto`.
 - **Forbidden:** `host`; sibling features.
 
 ## Get right
@@ -83,6 +106,8 @@ bytes are** — the one byte-level classification every content read in the host
   and nowhere else: `reviews` captures anchors with them, `git` stamps both diff sides with them, and
   `changes` guards its writes with them. Two implementations would let a comment's `contentHash` and a
   revert's `expect` hash disagree about the same bytes.
+- **A mutation never overwrites and never hard-deletes.** Every create is exclusive, and the only removal
+  is the OS trash; that is what makes a mistaken paste or delete recoverable without an undo of its own.
 - **Extension never beats the bytes.** A `.md` file whose content is a PNG reports `image/png`; the
   filename is consulted only when the bytes say nothing, so a mislabelled resource cannot talk a
   renderer into parsing it as text.

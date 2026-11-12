@@ -126,7 +126,7 @@ import {
 	surveyResponse,
 } from "../feedback";
 import { fontsDir, listInstalledFonts, readUserFonts } from "../fonts";
-import { copyWorkspaceFile, deleteWorkspaceFile, readDir, readFile } from "../fs";
+import { copyWorktreeEntry, deleteWorktreeEntry, readDir, readFile } from "../fs";
 import {
 	commitsAheadOf,
 	countPushDivergence,
@@ -922,19 +922,18 @@ const handlers: WsHandlers = {
 		);
 	},
 	"fs.copy": (p) => {
-		void ensureWatch(p.sourceWorkspaceId);
 		void ensureWatch(p.destinationWorkspaceId);
 		return withChangeLock(p.destinationWorkspaceId, async () => {
-			const result = await copyWorkspaceFile(p);
-			notifyWorkspacePathsChanged(p.destinationWorkspaceId, [result.path]);
-			return result;
+			const { path, written } = await copyWorktreeEntry(p);
+			notifyWorkspacePathsChanged(p.destinationWorkspaceId, written);
+			return { path };
 		});
 	},
 	"fs.delete": (p) => {
 		void ensureWatch(p.workspaceId);
 		return withChangeLock(p.workspaceId, async () => {
-			await deleteWorkspaceFile(p.workspaceId, p.path);
-			notifyWorkspacePathsChanged(p.workspaceId, [p.path]);
+			const { path, directory } = await deleteWorktreeEntry(p.workspaceId, p.path);
+			notifyWorkspacePathsChanged(p.workspaceId, [path], { subtrees: directory });
 			return { ok: true } as const;
 		});
 	},

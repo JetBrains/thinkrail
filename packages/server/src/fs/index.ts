@@ -6,5 +6,11 @@ export {
 	mimeFromPath,
 	resourceMeta,
 } from "./content";
-export * from "./files";
-export * from "./mutations";
+export {
+	readableFileSize,
+	readDir,
+	readFile,
+	resolveWorktreeFile,
+	workspaceRelativePath,
+} from "./files";
+export { copyWorktreeEntry, deleteWorktreeEntry } from "./mutations";
