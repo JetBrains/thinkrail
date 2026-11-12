@@ -81,14 +81,16 @@ The parent owns the route-composition edges; the vibecoding leaf has no sibling 
 src/pages/{vibecoding,agentic-development,agentic-ide}/index.astro ──▶ src/vibecoding (through index.ts)
 src/pages/{vibecoding,agentic-development,agentic-ide}/index.astro ──▶ src/components/Analytics.astro
 landing + blog shells                                              ──▶ src/components/Analytics.astro
-src/main.ts, src/vibecoding                                        ──▶ src/installLinkShare.ts, src/installCommands.ts
+src/main.ts, src/vibecoding                                        ──▶ src/installLinkShare.ts, src/installCommands.ts, src/githubStars.ts
 ```
 
 `src/installLinkShare.ts` is the one framework-free phone "send link" helper both route families use: phone/tablet
 detection (Android, iPhone/iPad/iPod, or a touch Mac), the share URL, and native-share-then-clipboard delivery.
 `src/installCommands.ts` owns the install commands and `installCommandFor`, the title-bar command for a detected
-OS (PowerShell on Windows, `install.sh` otherwise). Both import nothing, so the vibecoding island can reuse them
-without reaching the IDE shell.
+OS (PowerShell on Windows, `install.sh` otherwise). `src/githubStars.ts` fetches the repository's star count from
+the GitHub API and formats it (thousands as `1.2k`) for the title bar, the hero, and the promo header; nothing
+shows until it returns. All three import nothing, so the vibecoding island can reuse them without reaching the
+IDE shell.
 
 - **Fonts are self-hosted; the site makes no external font request.** Packages and stacks are copied
   from the app's `typography.json`, not imported — and `src/fonts.test.ts` reads that JSON at test time

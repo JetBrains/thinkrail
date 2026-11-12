@@ -1,5 +1,6 @@
 import { initDownloadThanks } from "./downloadThanks";
 import { deriveEditorTabs } from "./editorTabs";
+import { fetchStarCount } from "./githubStars";
 import { heroDownloadTarget } from "./heroDownload";
 import { initImageZoom } from "./imageZoom";
 import { installCommandFor } from "./installCommands";
@@ -550,20 +551,15 @@ if (navToggle && railRight && backdrop) {
 
 const starBadges = document.querySelectorAll<HTMLElement>(".gh-stars");
 if (starBadges.length > 0) {
-	fetch("https://api.github.com/repos/JetBrains/thinkrail")
-		.then((response) => (response.ok ? response.json() : null))
-		.then((data: { stargazers_count?: number } | null) => {
-			if (typeof data?.stargazers_count !== "number") return;
-			const n = data.stargazers_count;
-			const formatted = n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
-			for (const stars of starBadges) {
-				const count = stars.querySelector<HTMLElement>("[data-gh-stars-count]");
-				if (count) count.textContent = formatted;
-				else stars.textContent = formatted;
-				stars.hidden = false;
-			}
-		})
-		.catch(() => {});
+	void fetchStarCount().then((formatted) => {
+		if (!formatted) return;
+		for (const stars of starBadges) {
+			const count = stars.querySelector<HTMLElement>("[data-gh-stars-count]");
+			if (count) count.textContent = formatted;
+			else stars.textContent = formatted;
+			stars.hidden = false;
+		}
+	});
 }
 
 const railNote = document.getElementById("rail-note");

@@ -1,5 +1,6 @@
 import { Check, ChevronDown, Copy, Download, Send } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { fetchStarCount } from "../githubStars";
 import { installCommandFor } from "../installCommands";
 import { DiscordIcon } from "./DiscordIcon";
 import { GithubIcon } from "./GithubIcon";
@@ -14,10 +15,18 @@ import {
 const panelId = "install-popover";
 const focusRing =
 	"focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
-const iconLink = `inline-flex h-9 w-9 items-center justify-center rounded-sm text-text-muted transition-colors hover:bg-container-card-bg hover:text-text-default ${focusRing}`;
+const iconLink = `inline-flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-sm px-1.5 text-text-muted transition-colors hover:bg-container-card-bg hover:text-text-default ${focusRing}`;
 const accentButton = `inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-sm bg-primary text-[13px] font-semibold whitespace-nowrap text-primary-foreground transition-opacity hover:opacity-90 ${focusRing}`;
 const panelLink =
 	"inline-flex items-center gap-1.5 text-text-muted transition-colors hover:text-text-default";
+
+function useStarCount(): string | undefined {
+	const [stars, setStars] = useState<string>();
+	useEffect(() => {
+		void fetchStarCount().then(setStars);
+	}, []);
+	return stars;
+}
 
 function InstallCommand() {
 	const command = installCommandFor(useDetectedInstallPlatform());
@@ -70,6 +79,7 @@ function SendLinkIcon() {
 
 export function HeaderActions() {
 	const mobile = useIsMobileDevice();
+	const stars = useStarCount();
 
 	return (
 		<div className="flex min-w-0 items-center gap-2">
@@ -79,6 +89,7 @@ export function HeaderActions() {
 				className={iconLink}
 			>
 				<GithubIcon className="h-6 w-6" />
+				{stars && <span className="font-mono text-[12px]">{stars}</span>}
 			</a>
 			<a
 				href="https://thinkrail.ai/discord"
