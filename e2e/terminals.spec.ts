@@ -1,6 +1,3 @@
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { expect, test, type WebSocketRoute } from "@playwright/test";
 import { INITIAL_TERMINAL_TAB_KEY } from "@thinkrail/contracts";
 import {
@@ -516,40 +513,59 @@ test("Ctrl+C still interrupts while an input method is active", async ({ page })
 	await expect(term).toContainText("TR_INTERRUPTED_42");
 });
 
-test("Shift+Enter sends Meta+Enter without a stray carriage return", async ({ page }) => {
+test("Ctrl+Shift+C copies the selection off macOS, Ctrl+Shift+V pastes it, neither sends ^C", async ({
+	page,
+}) => {
+	test.skip(process.platform === "darwin", "Cmd+C copies on macOS");
+	const writes: string[] = [];
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		const server = ws.connectToServer();
+		ws.onMessage((message) => {
+			try {
+				const frame = JSON.parse(message.toString()) as {
+					method?: string;
+					params?: { data?: string };
+				};
+				if (frame.method === "terminal.write" && frame.params?.data) writes.push(frame.params.data);
+			} catch {}
+			server.send(message);
+		});
+		server.onMessage((message) => ws.send(message));
+	});
+	await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
 	await waitTerminalReady(page);
-	const capture = join(mkdtempSync(join(tmpdir(), "tr-shift-enter-")), "bytes.txt");
+	const term = visibleTerminalScreen(page);
+	const clipboard = () => page.evaluate(() => navigator.clipboard.readText());
+	const writtenAfter = (mark: number) => writes.slice(mark).join("");
 
-	await runInTerminal(page, `cat -v > ${capture}`);
-	await expect.poll(() => existsSync(capture)).toBe(true);
-	await visibleTerminal(page).locator(".xterm-helper-textarea").focus();
-	await page.keyboard.type("A");
+	await runInTerminal(page, "echo TR_COPY_$((21 + 21))");
+	const output = term.locator(":scope > div").filter({ hasText: /^TR_COPY_42\s*$/ });
+	await expect(output).toHaveCount(1);
+	await page.evaluate(() => navigator.clipboard.writeText("TR_BEFORE"));
+	const box = await output.boundingBox();
+	if (!box) throw new Error("terminal row has no box");
+	await page.mouse.dblclick(box.x + 4, box.y + box.height / 2);
+	const copyMark = writes.length;
+	await page.keyboard.press("Control+Shift+C");
+	await expect.poll(clipboard).toBe("TR_COPY_42");
+	const pasteMark = writes.length;
+	await page.keyboard.press("Control+Shift+V");
+	await expect.poll(() => writtenAfter(pasteMark)).toContain("TR_COPY_42");
+	await page.keyboard.press("Control+U");
 
-	const cdp = await page.context().newCDPSession(page);
-	await cdp.send("Input.dispatchKeyEvent", {
-		type: "keyDown",
-		key: "Enter",
-		code: "Enter",
-		modifiers: 8,
-		windowsVirtualKeyCode: 13,
-		text: "\r",
-	});
-	await cdp.send("Input.dispatchKeyEvent", {
-		type: "keyUp",
-		key: "Enter",
-		code: "Enter",
-		modifiers: 8,
-		windowsVirtualKeyCode: 13,
-	});
-	await page.keyboard.type("B");
+	await page.evaluate(() => navigator.clipboard.writeText("TR_UNCHANGED"));
+	await page.keyboard.type("echo TR_AFTER_$((1 + 1))");
+	await page.keyboard.press("Control+Shift+C");
 	await page.keyboard.press("Enter");
+	await expect(term.locator(":scope > div").filter({ hasText: /^TR_AFTER_2\s*$/ })).toHaveCount(1);
+	expect(writtenAfter(copyMark)).not.toContain("\x03");
+	expect(await clipboard()).toBe("TR_UNCHANGED");
 
-	await page.keyboard.press("Control+d");
-
-	// Cooked tty: ESC CR becomes "A", ESC, newline (icrnl), so cat -v writes "A^[\n"; a leaked CR would add a blank line and a doubled key a repeated character.
-	await expect.poll(() => readFileSync(capture, "utf8")).toBe("A^[\nB\n");
+	const interruptMark = writes.length;
+	await page.keyboard.press("Control+C");
+	await expect.poll(() => writtenAfter(interruptMark)).toContain("\x03");
 });
 
 test("a held Korean syllable reaches the shell before a paste or a rescued chord", async ({

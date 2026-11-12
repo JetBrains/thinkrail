@@ -1,10 +1,7 @@
 import { expect, test } from "bun:test";
-import {
-	TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION,
-	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
-} from "@thinkrail/contracts";
+import { WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ShiftEnterSetting, WindowsShellSettings } from "./TerminalSettings";
+import { WindowsShellSettings } from "./TerminalSettings";
 
 test("the Windows shell picker is hidden off Windows", () => {
 	const markup = renderToStaticMarkup(
@@ -47,24 +44,4 @@ test("Windows shows all four choices with the configured one active", () => {
 	expect(markup).toContain('data-testid="terminal-shell-pwsh" data-active="false"');
 	expect(markup).toContain('data-testid="terminal-shell-powershell" data-active="false"');
 	expect(markup).toContain('data-testid="terminal-shell-cmd" data-active="true"');
-});
-
-test("the Shift+Enter switch is hidden against older hosts and shown otherwise", () => {
-	const hidden = renderToStaticMarkup(
-		<ShiftEnterSetting
-			protocolVersion={TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION - 1}
-			checked
-			onChange={() => {}}
-		/>,
-	);
-	expect(hidden).toBe("");
-
-	const shown = renderToStaticMarkup(
-		<ShiftEnterSetting
-			protocolVersion={TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION}
-			checked
-			onChange={() => {}}
-		/>,
-	);
-	expect(shown).toContain("terminal-shift-enter-toggle");
 });

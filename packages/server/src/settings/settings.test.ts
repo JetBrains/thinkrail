@@ -368,18 +368,6 @@ test("reviewAutoFix defaults off; an old config without it loads the default; to
 	expect(getConfig().reviewAutoFix).toBe(true);
 });
 
-test("terminalShiftEnterNewline defaults on; an old config loads the default; turning off round-trips; non-boolean rejected", () => {
-	expect(DEFAULT_CONFIG.terminalShiftEnterNewline).toBe(true);
-	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
-	resetConfigCache();
-	expect(getConfig().terminalShiftEnterNewline).toBe(true);
-	expect(updateConfig({ terminalShiftEnterNewline: false }).terminalShiftEnterNewline).toBe(false);
-	resetConfigCache();
-	expect(getConfig().terminalShiftEnterNewline).toBe(false);
-	const invalid = { terminalShiftEnterNewline: "nope" } as unknown as AppConfigUpdate;
-	expect(() => updateConfig(invalid)).toThrow("terminalShiftEnterNewline must be a boolean");
-});
-
 test("agentReviewEnabled defaults off; an old config loads the default; toggling on round-trips; non-boolean rejected", () => {
 	expect(DEFAULT_CONFIG.agentReviewEnabled).toBe(false);
 	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));

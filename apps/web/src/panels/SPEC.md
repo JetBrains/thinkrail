@@ -1076,9 +1076,7 @@ a project picker, the prompt hero, and the reused
   Windows hosts at `protocolVersion >= WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION`, a **Windows shell** picker
   (Auto / PowerShell 7 (pwsh) / Windows PowerShell / Command Prompt,
   `settings.update { terminalWindowsShell }` — see `submodule-server-terminal`'s shell-selection decision
-  for what each choice spawns), plus a **Shift+Enter inserts a newline** switch
-  (`store.terminalShiftEnterNewline`, default on, `settings.update { terminalShiftEnterNewline }`, shown only at
-  `protocolVersion >= TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION`, read live by open terminals — see the terminal key chords decision). The protocol gate keeps a newer independently shipped client from presenting
+  for what each choice spawns). The protocol gate keeps a newer independently shipped client from presenting
   a setting an older host preserves but does not act on. The Windows-shell
   half is split into a **props-driven** `WindowsShellSettings` component rather than reading the store
   inline like the replay picker: zustand's React binding feeds `renderToStaticMarkup` its frozen
@@ -2595,23 +2593,16 @@ own section. The kebab menu (`plan-menu`, a
   key handler intercepts keydown at `keyCode === 229` and derives the control bytes from `event.code`
   (which stays accurate under an IME) via `imeControlBytes`, writing them to the PTY itself; anything
   that isn't a rescued chord is left to normal text input.
-- **Terminal key chords.** The same single key handler (xterm allows one) asks the pure
-  `terminalKeys.terminalKeyDecision(event, platform, hasSelection, shiftEnterNewline)`: nothing while an IME
-  is composing, then `terminalKeyAction` (the chords below), and only then the keyCode-229 IME rescue. The
-  chords come first because an IME that reports 229 without composing must not turn Ctrl+Shift+C into the
-  rescue's `^C` (SIGINT to the foreground job) or let Shift+Enter fall through to xterm's plain `\r`.
-  **Ctrl+Shift+C** copies `term.getSelection()` through `copyText` off Apple platforms — Linux and Windows
-  terminals have no Cmd+C, and a bare Ctrl+C must stay SIGINT — and is swallowed whether or not anything is
-  selected, so it can never send `^C`. **Shift+Enter** (not while an IME is composing) writes `ESC CR` (`\x1b\r`, Meta+Enter) through the
-  same `terminal.write` path as typed input: Claude Code reads it as "newline, don't submit" and zsh inserts a
-  literal newline. bash's readline has no binding for `ESC CR`: it rings the bell and leaves the line pending
-  (checked with bash 5.2 and macOS bash 3.2), and the setting's description says so. Keydown and keypress are both swallowed and `preventDefault`ed (xterm's handler
-  contract only stops its own processing; Chromium would otherwise open inspect-element on Ctrl+Shift+C), because xterm would otherwise emit a plain `\r`
-  from either. The Shift+Enter half is the Terminal setting **Shift+Enter inserts a newline**
-  (`terminalShiftEnterNewline`, default on); off, Shift+Enter behaves as plain Enter. Against a host below
-  `TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION` (or while the protocol is unknown) the handler treats the setting as
-  off (`shiftEnterNewlineActive`): such a host can neither store the preference nor show its switch, so the
-  key must not change behaviour there.
+- **Terminal copy chord.** xterm allows one custom key handler, so `TerminalInstance` asks the pure
+  `terminalKeys.terminalKeyDecision(event, platform, hasSelection)`: nothing while an IME is composing, then
+  the copy chord, and only then the keyCode-229 rescue above (`imeControlBytes` lives beside it). The chord
+  comes first because an IME that reports 229 without composing would otherwise turn Ctrl+Shift+C into the
+  rescue's `^C`. Off Apple platforms (where Cmd+C already copies) **Ctrl+Shift+C** copies
+  `term.getSelection()` through `copyText`, as GNOME Terminal, Konsole and Windows Terminal do; without a
+  selection it does nothing. Either way the keydown is swallowed and `preventDefault`ed (Chromium would
+  otherwise open inspect-element), so it never writes `^C`; xterm itself encodes Ctrl+letter only without
+  Shift. Plain Ctrl+C stays xterm's SIGINT, and macOS keeps xterm's defaults. Ctrl+Shift+V needs no handler:
+  xterm leaves it unencoded, so Chromium's paste-as-plain-text reaches xterm's own paste listener.
 - **Korean IME replacement bridge (WebKit).** WebKit — Safari and the desktop app's WKWebView — drives
   the macOS Korean input method without `composition*` events: a syllable's first jamo lands as an
   `insertText` input, every re-composition of it (`ㄱ`→`가`→`간`) as `insertReplacementText`, the next

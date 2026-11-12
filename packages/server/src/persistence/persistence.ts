@@ -674,10 +674,6 @@ export function loadConfig(): AppConfig {
 			typeof value.terminalReplayKb === "number" && Number.isFinite(value.terminalReplayKb)
 				? value.terminalReplayKb
 				: DEFAULT_CONFIG.terminalReplayKb,
-		terminalShiftEnterNewline:
-			typeof value.terminalShiftEnterNewline === "boolean"
-				? value.terminalShiftEnterNewline
-				: DEFAULT_CONFIG.terminalShiftEnterNewline,
 		composerGrowthLimit: isComposerGrowthLimit(value.composerGrowthLimit)
 			? value.composerGrowthLimit
 			: DEFAULT_CONFIG.composerGrowthLimit,

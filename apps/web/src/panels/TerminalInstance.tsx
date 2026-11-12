@@ -23,7 +23,7 @@ import { errorText, getTransport } from "../transport";
 import { createPtySizeSync, runAfterTerminalRelayout } from "./ptySizeSync";
 import { stripAnsiDim, terminalContrastFloor } from "./terminalContrast";
 import { createTerminalImeBridge } from "./terminalImeBridge";
-import { SHIFT_ENTER_SEQUENCE, shiftEnterNewlineActive, terminalKeyDecision } from "./terminalKeys";
+import { terminalKeyDecision } from "./terminalKeys";
 import { createTerminalPrebindBuffer } from "./terminalPrebindBuffer";
 
 const RESIZE_DEBOUNCE_MS = 60;
@@ -182,26 +182,17 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		const onTerminalResize = term.onResize(updateScrollEdges);
 		updateScrollEdges();
 
-		const writeToPty = (data: string): void => {
-			const id = serverIdRef.current;
-			if (id) sendTerminalWrite(getTransport().request("terminal.write", { id, data }));
-		};
 		term.attachCustomKeyEventHandler((event) => {
-			const { protocolVersion, terminalShiftEnterNewline } = useAppStore.getState();
-			const decision = terminalKeyDecision(
-				event,
-				platformFamily(),
-				term.hasSelection(),
-				shiftEnterNewlineActive(protocolVersion, terminalShiftEnterNewline),
-			);
+			const decision = terminalKeyDecision(event, platformFamily(), term.hasSelection());
 			if (decision === null) return true;
 			if (typeof decision === "object") {
-				writeToPty(decision.write);
+				const id = serverIdRef.current;
+				const data = decision.write;
+				if (id) sendTerminalWrite(getTransport().request("terminal.write", { id, data }));
 				return false;
 			}
 			event.preventDefault();
 			if (decision === "copy") void copyText(term.getSelection());
-			else if (decision === "newline") writeToPty(SHIFT_ENTER_SEQUENCE);
 			return false;
 		});
 

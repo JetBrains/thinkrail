@@ -476,15 +476,13 @@ the palette ranks with — kept here so host-side search can rank with the same 
   latest protocol; **`JBCENTRAL_QUOTA_PROTOCOL_VERSION`** likewise pins the v59 quota read + settings;
   **`WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION`** pins the v62 Windows-shell setting so a later web client
   hides it against a host that can preserve but cannot apply that config field;
-  **`TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION`** pins the v115 `terminalShiftEnterNewline` setting so a later web
-  client hides its switch against an older host that would reject the whole `settings.update`;
   **`PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION`** pins the v67 review reshape — the reviewer chat is gone, so
   `TodoPlan.reviewerSessionId` and `ReviewComment.reflection` left the wire, `todo.startReview` returns
   a bare ack, and its detached failure arrives on the additive `review.failed` push (`ReviewFailedPayload`)
   since the review has no chat to carry it. An older client reads the dropped fields as absent, so the pin
   is what lets a client tell "this host has no reviewer chat" from "this host is older" rather than inferring it;
   **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, analyticsConsentConfirmed, terminalReplayKb,
-  terminalWindowsShell, terminalShiftEnterNewline, composerGrowthLimit, questionPanelHeight, chatLineWidth, fileLineWidth, chatLineWidthBounded,
+  terminalWindowsShell, composerGrowthLimit, questionPanelHeight, chatLineWidth, fileLineWidth, chatLineWidthBounded,
   fileLineWidthBounded, voiceInputEnabled, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
   favoriteModels, recentModels, reviewAutoFix, agentReviewEnabled, subagentsEnabled, subagentMaxConcurrent,
   jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, disabledExtensions, extensionSettings, otherAgentSkills,

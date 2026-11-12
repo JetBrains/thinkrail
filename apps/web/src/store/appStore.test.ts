@@ -4230,17 +4230,6 @@ test("applyConfig projects and validates the Windows terminal shell", () => {
 	);
 });
 
-test("applyConfig projects the Shift+Enter newline switch and defaults a malformed value on", () => {
-	useAppStore.getState().applyConfig({ ...DEFAULT_CONFIG, terminalShiftEnterNewline: false });
-	expect(useAppStore.getState()).toHaveProperty("terminalShiftEnterNewline", false);
-
-	useAppStore.getState().applyConfig({
-		...DEFAULT_CONFIG,
-		terminalShiftEnterNewline: "off",
-	} as unknown as AppConfig);
-	expect(useAppStore.getState()).toHaveProperty("terminalShiftEnterNewline", true);
-});
-
 test("applyConfig projects the composer growth limit", () => {
 	useAppStore.getState().applyConfig({
 		...DEFAULT_CONFIG,

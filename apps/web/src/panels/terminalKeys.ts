@@ -1,38 +1,22 @@
-import { TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION } from "@thinkrail/contracts";
-import type { platformFamily } from "@/lib/utils";
-
-export const SHIFT_ENTER_SEQUENCE = "\x1b\r";
+import type { platformFamily } from "@/lib";
 
 const IME_SENTINEL_KEYCODE = 229;
 
 export type TerminalKeyEvent = Pick<
 	KeyboardEvent,
-	"type" | "key" | "code" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey"
+	"type" | "code" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey"
 >;
 
-export type TerminalKeyAction = "copy" | "newline" | "swallow";
+export type TerminalKeyAction = "copy" | "swallow";
 
 export type TerminalKeyDecision = TerminalKeyAction | { write: string } | null;
-
-export function shiftEnterNewlineActive(protocolVersion: number | null, enabled: boolean): boolean {
-	return (
-		enabled && protocolVersion !== null && protocolVersion >= TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION
-	);
-}
 
 export function terminalKeyAction(
 	event: TerminalKeyEvent,
 	platform: ReturnType<typeof platformFamily>,
 	hasSelection: boolean,
-	shiftEnterNewline: boolean,
 ): TerminalKeyAction | null {
-	if (event.type !== "keydown" && event.type !== "keypress") return null;
-	if (event.altKey || event.metaKey) return null;
-	if (event.key === "Enter" && event.shiftKey && !event.ctrlKey) {
-		if (!shiftEnterNewline) return null;
-		return event.type === "keydown" ? "newline" : "swallow";
-	}
-	if (event.type !== "keydown") return null;
+	if (event.type !== "keydown" || event.altKey || event.metaKey) return null;
 	if (platform !== "apple" && event.ctrlKey && event.shiftKey && event.code === "KeyC") {
 		return hasSelection ? "copy" : "swallow";
 	}
@@ -52,10 +36,9 @@ export function terminalKeyDecision(
 	event: TerminalKeyEvent & Pick<KeyboardEvent, "keyCode" | "isComposing">,
 	platform: ReturnType<typeof platformFamily>,
 	hasSelection: boolean,
-	shiftEnterNewline: boolean,
 ): TerminalKeyDecision {
 	if (event.isComposing) return null;
-	const action = terminalKeyAction(event, platform, hasSelection, shiftEnterNewline);
+	const action = terminalKeyAction(event, platform, hasSelection);
 	if (action !== null) return action;
 	if (event.type !== "keydown" || event.keyCode !== IME_SENTINEL_KEYCODE) return null;
 	const bytes = imeControlBytes(event);

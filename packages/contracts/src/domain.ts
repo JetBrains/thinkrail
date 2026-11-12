@@ -1484,8 +1484,6 @@ export interface AppConfig extends ThemePreference {
 	jbcentralQuotaRefreshSeconds: number;
 	/** Which shell new workspace terminals start on Windows; ignored on other platforms. */
 	terminalWindowsShell: TerminalWindowsShell;
-	/** Shift+Enter in a terminal sends Meta+Enter (a newline in Claude Code) instead of Enter. */
-	terminalShiftEnterNewline: boolean;
 	/** Idle days after which a quiet workspace settles onto its project's shelf; `null` = never. */
 	settleIdleDays: number | null;
 	disabledExtensions: string[];
@@ -1839,7 +1837,6 @@ export const DEFAULT_CONFIG: AppConfig = {
 	notificationsEnabled: true,
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
 	terminalWindowsShell: "auto",
-	terminalShiftEnterNewline: true,
 	composerGrowthLimit: "half-chat",
 	questionPanelHeight: QUESTION_PANEL_HEIGHT_PERCENT.default,
 	chatLineWidth: LINE_WIDTH_COLUMNS.default,

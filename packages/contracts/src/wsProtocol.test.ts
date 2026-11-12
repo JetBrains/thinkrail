@@ -70,7 +70,6 @@ import {
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
-	TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION,
 	TEXT_SEARCH_PROTOCOL_VERSION,
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
@@ -338,7 +337,7 @@ test("find in files is pinned to v112", () => {
 });
 
 test("the question panel height setting is pinned to v114", () => {
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(QUESTION_PANEL_PROTOCOL_VERSION);
+	expect(PROTOCOL_VERSION).toBe(114);
 	expect(QUESTION_PANEL_PROTOCOL_VERSION).toBe(114);
 	expect(DEFAULT_CONFIG.questionPanelHeight).toBe(60);
 });
@@ -668,12 +667,6 @@ test("extension settings are pinned to v105", () => {
 	expect(EXTENSION_SETTINGS_PROTOCOL_VERSION).toBe(105);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(EXTENSION_SETTINGS_PROTOCOL_VERSION);
 	expect(DEFAULT_CONFIG.extensionSettings).toEqual({});
-});
-
-test("the Shift+Enter terminal setting is pinned to v115", () => {
-	expect(TERMINAL_SHIFT_ENTER_PROTOCOL_VERSION).toBe(115);
-	expect(PROTOCOL_VERSION).toBe(115);
-	expect(DEFAULT_CONFIG.terminalShiftEnterNewline).toBe(true);
 });
 
 test("ask_user_question discuss answers are pinned to v105, after background workspace creation", () => {
