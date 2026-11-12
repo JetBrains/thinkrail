@@ -738,7 +738,11 @@ const handlers: WsHandlers = {
 	"workspace.rename": (p) => {
 		return renameWorkspace(p.id, p.name).workspace;
 	},
-	"workspace.resolvePath": (p) => resolveWorkspacePath(p.path),
+	"workspace.resolvePath": async (p) => {
+		const match = await resolveWorkspacePath(p.path);
+		if (match) provisionInitialTerminal(getWorkspace(match.workspaceId));
+		return match;
+	},
 	"workspace.list": async (p, ctx) => {
 		if (!seesChats(ctx.protocolVersion) && isChatsContainerId(p.projectId)) return [];
 		const rows = (

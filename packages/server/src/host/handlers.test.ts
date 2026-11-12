@@ -24,10 +24,12 @@ import type {
 	WorkspaceCreation,
 	WorkspaceCreationRemoved,
 	WorkspaceFsChangedPayload,
+	WorkspacePathMatch,
 	WorkspaceWatchReadyResult,
 } from "@thinkrail/contracts";
 import {
 	BRANCH_STATUS_PROTOCOL_VERSION,
+	INITIAL_TERMINAL_TAB_KEY,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	WS_METHODS,
 } from "@thinkrail/contracts";
@@ -49,6 +51,7 @@ import {
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
 import { addComment, getReviewSnapshot } from "../reviews";
 import { resetConfigCache } from "../settings";
+import { listTerminals } from "../terminal";
 import { todoReviewRecord } from "../todos";
 import { setTrashImplementationForTests } from "../trash";
 import { setWatchPublisher, stopAllWatches } from "../watch";
@@ -1276,6 +1279,20 @@ test("a review send that names its chat lands every file's drafts there as one p
 		setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 		cleanup();
 	}
+});
+
+test("a path resolved into a Default it had to ensure gets the Default's first terminal", async () => {
+	const match = (await handleRequest(
+		"workspace.resolvePath",
+		{ path: join(repo, "README.md") },
+		CTX,
+	)) as WorkspacePathMatch;
+	expect(match).toMatchObject({ projectId: "p1", relativePath: "README.md" });
+	expect(getWorkspace(match.workspaceId)).toMatchObject({ kind: "default" });
+	expect(getWorkspace(match.workspaceId).initialTerminalPending).toBeUndefined();
+	expect(listTerminals(match.workspaceId)).toEqual([
+		{ tabKey: INITIAL_TERMINAL_TAB_KEY, title: "Terminal 1" },
+	]);
 });
 
 test("workspace mutation handlers reject the Default before any side effect", async () => {
