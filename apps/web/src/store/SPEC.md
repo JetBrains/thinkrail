@@ -793,7 +793,9 @@ the scope and compare target it belongs to, so another scope or target branch st
 every ancestor of a path and records it as seen in one write, so the auto-reveal can tell on return whether
 the active file changed meanwhile; every write is idempotent (an unchanged view keeps its identity) and a
 removed workspace's view is dropped in `applyWorkspaceRemoved`. Persistence lives outside the store, in
-`panels/filesTreeState`. **`selectActiveFilePath`** is the path of the active file or diff tab, else `null`.
+`panels/filesTreeState`. **`fileClipboard`** (`setFileClipboard`) is the Files tree's in-app Copy: one
+`{ workspaceId, path }`, session-only, dropped in `applyWorkspaceRemoved` with its workspace.
+**`selectActiveFilePath`** is the path of the active file or diff tab, else `null`.
 **`diffScopeByWorkspace`** + **`setDiffScope(workspaceId, scope)`** hold *what* each workspace's Changes
 panel is diffing (read through **`selectDiffScope`**, which defaults to the shared, referentially stable
 `BRANCH_SCOPE`); keyed **per workspace**, not app-wide like `changesView`, because a scope belongs to that
