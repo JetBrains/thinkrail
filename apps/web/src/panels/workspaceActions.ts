@@ -1,5 +1,6 @@
 import {
 	type EditorInfo,
+	PROJECT_ORDER_PROTOCOL_VERSION,
 	PROJECT_RENAME_PROTOCOL_VERSION,
 	type Project,
 	WORKSPACE_RENAME_PROTOCOL_VERSION,
@@ -302,6 +303,25 @@ export function renameProject(project: Project, name: string): void {
 	void getTransport()
 		.request("project.rename", { id: project.id, name })
 		.catch((err) => toast.error(errorText(err, t("panels.workspaceActions.renameProjectFailed"))));
+}
+
+export function canMoveProject(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= PROJECT_ORDER_PROTOCOL_VERSION;
+}
+
+export async function moveProject(
+	id: string,
+	targetId: string,
+	placement: "before" | "after",
+): Promise<boolean> {
+	try {
+		const moved = await getTransport().request("project.move", { id, targetId, placement });
+		useAppStore.getState().applyProjectUpdated(moved);
+		return true;
+	} catch (err) {
+		toast.error(errorText(err, t("panels.workspaceActions.moveProjectFailed")));
+		return false;
+	}
 }
 
 export function renameWorkspace(workspace: Workspace, name: string): void {

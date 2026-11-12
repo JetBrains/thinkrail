@@ -52,6 +52,7 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	canMarkCompletionUnread,
+	compareProjectRank,
 	customMessageText,
 	DEFAULT_CONFIG,
 	type ExtensionSettingValues,
@@ -142,7 +143,6 @@ import {
 	selectFilesTreeView,
 	selectLayoutIdentityPlacement,
 	selectLayoutResourcePlacement,
-	selectOrderedProjects,
 	selectRepoProjects,
 	selectSupportsMcp,
 	selectWorkspaceById,
@@ -1060,7 +1060,6 @@ interface AppState {
 	/** The operations this client started: the one that follows the new chat when the host reports `started`. */
 	initiatedContinuations: Record<string, true>;
 	expandedProjectIds: Record<string, true>;
-	projectOrder: string[];
 	workspaceSettlingSupported: boolean;
 	settledShelfExpanded: Record<string, true>;
 	settledShelfShown: Record<string, number>;
@@ -1230,8 +1229,6 @@ interface AppState {
 	showMoreSettled: (projectId: string, count: number) => void;
 	expandProject: (projectId: string) => void;
 	hydrateExpandedProjects: (projectIds: readonly string[]) => void;
-	hydrateProjectOrder: (projectIds: readonly string[]) => void;
-	moveProject: (id: string, targetId: string, placement: "before" | "after") => void;
 	selectMain: () => void;
 	activateWorkspace: (workspace: Pick<Workspace, "id" | "projectId">) => void;
 	activateWorkspaceFromRoute: (
@@ -1548,7 +1545,11 @@ interface AppState {
 	dismissToast: (id: string) => void;
 }
 
-function sortProjects(projects: Project[]): Project[] {
+function sortOpenProjects(projects: Project[]): Project[] {
+	return [...projects].sort(compareProjectRank);
+}
+
+function sortRecentProjects(projects: Project[]): Project[] {
 	return [...projects].sort((a, b) => b.lastOpened - a.lastOpened);
 }
 
@@ -2436,7 +2437,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 	chatContinuations: {},
 	initiatedContinuations: {},
 	expandedProjectIds: nullProto<Record<string, true>>(),
-	projectOrder: [],
 	workspaceSettlingSupported: false,
 	settledShelfExpanded: nullProto<Record<string, true>>(),
 	settledShelfShown: nullProto<Record<string, number>>(),
@@ -2745,7 +2745,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		speech,
 	) =>
 		set((state) => {
-			const openProjects = sortProjects(projects.filter((project) => project.closed !== true));
+			const openProjects = sortOpenProjects(projects.filter((project) => project.closed !== true));
 			return {
 				protocolVersion,
 				welcomeProtocolVersion: protocolVersion,
@@ -2755,7 +2755,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					: {},
 				mcpByWorkspace: selectSupportsMcp({ protocolVersion }) ? state.mcpByWorkspace : {},
 				projects: openProjects,
-				recentProjects: sortProjects(recentProjects),
+				recentProjects: sortRecentProjects(recentProjects),
 				hostPlatform: hostPlatform ?? null,
 				hostUpdate: hostUpdate ?? null,
 				hostAppVersion: hostAppVersion ?? null,
@@ -2770,10 +2770,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 	applyHostUpdate: (hostUpdate) => set({ hostUpdate }),
 	installProjectSnapshot: (projects, recentProjects) =>
 		set((state) => {
-			const openProjects = sortProjects(projects.filter((project) => project.closed !== true));
+			const openProjects = sortOpenProjects(projects.filter((project) => project.closed !== true));
 			return {
 				projects: openProjects,
-				recentProjects: sortProjects(recentProjects),
+				recentProjects: sortRecentProjects(recentProjects),
 				...reconcileProjectNavigation(state, openProjects),
 				...pruneExpandedProjects(state, openProjects),
 			};
@@ -2783,10 +2783,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const projects =
 				project.closed === true
 					? state.projects.filter((candidate) => candidate.id !== project.id)
-					: sortProjects(upsertProject(state.projects, project));
+					: sortOpenProjects(upsertProject(state.projects, project));
 			return {
 				projects,
-				recentProjects: sortProjects(upsertProject(state.recentProjects, project)),
+				recentProjects: sortRecentProjects(upsertProject(state.recentProjects, project)),
 				...reconcileProjectNavigation(state, projects),
 				...pruneExpandedProjects(state, projects),
 			};
@@ -2937,28 +2937,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 			if (shown === (state.settledShelfShown[projectId] ?? SETTLED_SHELF_PAGE)) return {};
 			return { settledShelfShown: { ...state.settledShelfShown, [projectId]: shown } };
 		}),
-	hydrateProjectOrder: (projectIds) => set({ projectOrder: [...new Set(projectIds)] }),
-
-	moveProject: (id, targetId, placement) =>
-		set((state) => {
-			const visible = selectOrderedProjects(state).map((project) => project.id);
-			if (id === targetId || !visible.includes(id) || !visible.includes(targetId)) return state;
-			const moved = visible.filter((projectId) => projectId !== id);
-			moved.splice(moved.indexOf(targetId) + (placement === "after" ? 1 : 0), 0, id);
-			if (moved.every((projectId, index) => projectId === visible[index])) return state;
-			const open = new Set(visible);
-			const saved = new Set(state.projectOrder);
-			const all = [...saved, ...visible.filter((projectId) => !saved.has(projectId))];
-			let index = 0;
-			const projectOrder = all.map((projectId) => {
-				if (!open.has(projectId)) return projectId;
-				const next = moved[index];
-				index += 1;
-				return next ?? projectId;
-			});
-			return { projectOrder };
-		}),
-
 	hydrateExpandedProjects: (projectIds) =>
 		set(() => ({
 			expandedProjectIds: Object.fromEntries(projectIds.map((id) => [id, true as const])),

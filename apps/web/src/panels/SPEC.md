@@ -28,17 +28,6 @@ treatment.
 
 ## Boundary
 
-The Projects rail alone supports a client-local manual project order: drag a project-name button
-(not its chevron, Create workspace button, or rename input) and drop before/after a project group.
-An insertion line marks the destination; children travel with the project without changing their own
-order, expansion, or navigation. Escape, outside/external drops and missing source/target projects
-leave order unchanged. The project context menu offers Move up/down, disabled at the boundaries,
-for keyboard and touch use, restoring focus to the same name. Native drag/drop avoids adding a second
-layout engine; touch uses the existing long-press menu rather than competing for that gesture.
-`projectOrder` mirrors the store's ID preference through the native stable adapter when available,
-otherwise host-qualified localStorage, hydrated before React mounts. Reads are untrusted and writes
-best-effort. Other project pickers and Recents keep their existing ordering; no host protocol changes.
-
 - **Owns:** `ChatsSection` + `chatActions.ts` — the **Chats without a project** home. The section tops the
   Projects panel whenever the host speaks `CHATS_PROTOCOL_VERSION` (the host ensures the container at boot;
   an empty section reads "Chats without a project appear here", and the container never counts as a
@@ -100,8 +89,25 @@ best-effort. Other project pickers and Recents keep their existing ordering; no 
   ~700ms long press is its touch equivalent. With a project-name button focused, the standard Context Menu
   key or Shift+F10 opens the same menu for keyboard-only use; arrow/activate/Escape keys work normally.
   The menu is neutral: **Plus Create workspace**, **FolderOpen Open existing worktree…**, separator,
-  **ArrowUp Move up**, **ArrowDown Move down**, separator, **Pencil Rename** (only when the host's protocol is at least `PROJECT_RENAME_PROTOCOL_VERSION`), **X Close
-  project**. Rename swaps the project name for the same inline input as workspace rename (Enter/blur
+  **ArrowUp Move up** / **ArrowDown Move down** + separator (only when the host's protocol is at least
+  `PROJECT_ORDER_PROTOCOL_VERSION`; disabled at either end), **Pencil Rename** (only when the host's protocol is at least `PROJECT_RENAME_PROTOCOL_VERSION`), **X Close
+  project**. **Project order is host-owned** (`Project.rank`, architecture Decision 9: projects are domain
+  state), so every window and client shows one arrangement and converges on the `project.updated` push;
+  `workspaceActions.moveProject` sends `project.move`, applies the authoritative answer, and toasts a
+  refusal. Three equivalent gestures place a project before/after a neighbour: dragging its name button
+  (not the chevron, `+`, or rename input), the menu's Move up/down, and **Alt+Shift+↑/↓** on the focused
+  name (`aria-keyshortcuts`, the workbench's reorder chord). The drag is `@dnd-kit/core`'s, like the
+  workbench's tab drag, with a `MouseSensor` (5 px activation, so a click still selects and a drag never
+  navigates; touch keeps scrolling and reorders through the long-press menu) and `pointerWithin`: each
+  project group carries before/after half drop zones that light the workbench's `border-primary`
+  insertion line, zones whose move would be a no-op stay disabled, the source dims, and a `DragOverlay`
+  chip names the project. Escape or a drop outside a zone changes nothing. The Chats section sits outside
+  that drag context, so it is never draggable or a drop target and no project can land above it; the
+  host refuses the container at either end anyway. After a keyboard or menu move focus returns to the
+  moved name; every completed move fills the rail's polite `role="status"` region ("… moved to position
+  2 of 3"), while dnd-kit's own announcements stay silent and its screen-reader instructions are the
+  localized keyboard hint the name button is described by. A project opened or reopened lands on top;
+  the rest keep their order. Rename swaps the project name for the same inline input as workspace rename (Enter/blur
   commits a changed trimmed name via `project.rename`, Escape cancels) and waits for the `project.updated`
   push — no optimistic label; rejection raises an error toast. Create is exactly the direct `+` flow. Open existing worktree opens the
   `ExistingWorktreeDialog` chooser fed by `workspace.listExisting` (branch + absolute path per row;

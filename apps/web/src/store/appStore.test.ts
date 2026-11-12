@@ -2771,6 +2771,19 @@ test("applyProjectUpdated reopens and reorders the same project without duplicat
 	expect(state.recentProjects[0]?.closed).toBeUndefined();
 });
 
+test("open projects follow the host's rank while Recents stay newest opened first", () => {
+	const p1 = project();
+	const p2 = project({ id: "p2", path: "/projects/two", slug: "project-two", lastOpened: 200 });
+	useAppStore.getState().installProjectSnapshot([p1, p2], [p1, p2]);
+	expect(useAppStore.getState().projects.map((candidate) => candidate.id)).toEqual(["p2", "p1"]);
+
+	useAppStore.getState().applyProjectUpdated({ ...p1, rank: 201 });
+
+	const state = useAppStore.getState();
+	expect(state.projects.map((candidate) => candidate.id)).toEqual(["p1", "p2"]);
+	expect(state.recentProjects.map((candidate) => candidate.id)).toEqual(["p2", "p1"]);
+});
+
 test("applyProjectUpdated closes the last project to the no-project state", () => {
 	const p1 = project();
 	useAppStore.setState({

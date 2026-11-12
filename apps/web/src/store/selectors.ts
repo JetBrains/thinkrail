@@ -76,23 +76,6 @@ import {
 	finishedChain,
 } from "./chatResources";
 
-export function selectOrderedProjects(state: {
-	projects: Project[];
-	projectOrder: readonly string[];
-}): Project[] {
-	const projects = selectRepoProjects(state);
-	if (state.projectOrder.length === 0) return projects;
-	const remaining = new Map(projects.map((project) => [project.id, project]));
-	const ordered: Project[] = [];
-	for (const id of state.projectOrder) {
-		const project = remaining.get(id);
-		if (!project) continue;
-		ordered.push(project);
-		remaining.delete(id);
-	}
-	return [...remaining.values(), ...ordered];
-}
-
 export function selectLoginBusy(state: {
 	activeLogin: LoginState | null;
 	loginStarting: boolean;

@@ -93,8 +93,10 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   edge in one Zustand write; route validation and capability reads never observe a partial welcome.
   `installSpeechStatus` replaces `speech` whole on each `speech.changed` push.
   `installProjectSnapshot` remains the project-only primitive for focused
-  callers. **`projects`** is the open rail, while **`recentProjects`** is the last-opened-ordered set of every
-  known open + closed project; the server omits closed records whose folder no longer exists.
+  callers. **`projects`** is the open rail in the host's order (`compareProjectRank` over `Project.rank`, so
+  every repository listing and fallback follows the user's arrangement), while **`recentProjects`** is the
+  last-opened-ordered set of every known open + closed project; the server omits closed records whose
+  folder no longer exists.
   **`applyProjectUpdated(project)`** is the one full-snapshot updater for
   `project.updated` pushes and authoritative project-mutation responses: it upserts/sorts Recents and either
   upserts/sorts the rail or removes the row when `closed === true`. Both actions reconcile stale navigation
@@ -119,13 +121,6 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   **`hydrateExpandedProjects(projectIds)`** seeds the set at boot from the `panels/projectExpansion`
   persistence module — the store itself still touches no storage: that module owns the localStorage
   mirror (host-qualified key, best-effort writes, untrusted reads) and subscribes to changes.
-  **`projectOrder: string[]`** is a client-local preference, separate from host project snapshots.
-  **`selectOrderedProjects`** projects the rail: new/unranked projects first in their existing newest-opened
-  order, then saved IDs in manual order. Opening a new project never disturbs the existing projects'
-  relative order; without a preference the existing order is unchanged. **`moveProject(id, targetId, placement)`**
-  handles both drag and menu moves atomically, preserving closed projects' rank slots and rejecting
-  absent/self/no-op moves. Snapshots, renames and activity never rewrite this preference; closing and
-  reopening retains rank. Hydration comes from `panels/projectOrder`, not storage inside the store.
   **Settled shelf.** `selectors.ts` owns **`selectWorkspacePartition(state, projectId, now)`** — the one
   derivation of a project's rows into `live` and `settled` (each settled row carrying its reason:
   `override`, `review merged|closed`, or `idle since`), consumed by the rail, the topbar's *Switch to*

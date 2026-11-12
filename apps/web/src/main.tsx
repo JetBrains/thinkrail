@@ -12,7 +12,6 @@ import { useLocaleSync } from "./i18n";
 import { initNavigation } from "./navigation";
 import { initFilesTreePersistence } from "./panels/filesTreeState";
 import { initProjectExpansionPersistence } from "./panels/projectExpansion";
-import { initProjectOrderPersistence } from "./panels/projectOrder";
 import { initSearchPreferences } from "./search";
 import { AppResourceHost } from "./shell/AppResourceHost";
 import { Shell } from "./shell/Shell";
@@ -36,7 +35,6 @@ setErrorBoundaryReporter((error, reportId) =>
 initChatPreferencesPersistence();
 initModelVisibilityPersistence();
 initProjectExpansionPersistence();
-initProjectOrderPersistence();
 initFilesTreePersistence();
 initSearchPreferences();
 initNavigation();
