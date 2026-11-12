@@ -41,6 +41,7 @@ export {
 export {
 	backfillWorkspaceActivity,
 	branchMoveOwed,
+	checkWorkspaceRemoval,
 	completeInitialTerminalReservation,
 	ensureWorkspaceScratchDir,
 	forgetWorkspace,
@@ -63,6 +64,7 @@ export {
 	setWorkspaceSkillOverride,
 	setWorkspaceSubagentMaxConcurrent,
 	setWorkspaceSubagentsOverride,
+	stageWorktreeRemoval,
 	syncWorkspaceBranch,
 	unsettleWorkspace,
 	type WorkspaceLifecycleEvent,

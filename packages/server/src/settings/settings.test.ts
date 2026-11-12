@@ -1005,6 +1005,20 @@ test("the settle idle window defaults to 7 days, accepts null for never, and rej
 	expect(getConfig().settleIdleDays).toBeNull();
 });
 
+test("settled-removal suggestions are off by default and accept 1 to 365 days", () => {
+	expect(DEFAULT_CONFIG.settledRemovalDays).toBeNull();
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ settledRemovalDays: "later" }));
+	resetConfigCache();
+	expect(getConfig().settledRemovalDays).toBeNull();
+
+	expect(() => updateConfig({ settledRemovalDays: 0 })).toThrow(
+		"settledRemovalDays must be a whole number of days from 1 to 365, or null",
+	);
+	expect(updateConfig({ settledRemovalDays: 30 }).settledRemovalDays).toBe(30);
+	resetConfigCache();
+	expect(getConfig().settledRemovalDays).toBe(30);
+});
+
 test("locale defaults to system, keeps an unavailable tag, and rejects non-canonical values", () => {
 	expect(DEFAULT_CONFIG.locale).toBe("system");
 	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ locale: 42 }));

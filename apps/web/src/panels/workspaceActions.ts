@@ -273,6 +273,27 @@ export function removeWorkspace(workspaceId: string): void {
 		.catch((err) => toast.error(errorText(err, t("panels.workspaceActions.removeFailed"))));
 }
 
+/** One guarded request per row, so a long list never outlives a request timeout; the host rechecks each. */
+export async function removeSettledWorkspaces(
+	workspaces: readonly Pick<Workspace, "id" | "lastActiveAt">[],
+): Promise<{ removed: number; kept: number }> {
+	let removed = 0;
+	let kept = 0;
+	for (const workspace of workspaces) {
+		const result = await getTransport()
+			.request("workspace.removeSettled", {
+				id: workspace.id,
+				...(workspace.lastActiveAt === undefined ? {} : { lastActiveAt: workspace.lastActiveAt }),
+			})
+			.catch(() => null);
+		if (result?.removed) removed += 1;
+		else kept += 1;
+	}
+	if (removed > 0) toast.success(t("panels.settledRemoval.removed", { count: removed }));
+	if (kept > 0) toast.warning(t("panels.settledRemoval.kept", { count: kept }));
+	return { removed, kept };
+}
+
 export function openWorkspaceIn(workspace: Workspace, editor: EditorInfo): void {
 	if (editor.kind === "terminal") {
 		useAppStore.getState().activateWorkspace(workspace);

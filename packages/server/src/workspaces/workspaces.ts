@@ -1,5 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	lstatSync,
+	mkdirSync,
+	readdirSync,
+	rmdirSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { rm } from "node:fs/promises";
 import { basename, isAbsolute, join, relative, resolve } from "node:path";
 import {
@@ -11,6 +19,7 @@ import {
 	type Project,
 	type SubagentOverride,
 	type Workspace,
+	type WorkspaceRemovalCheck,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
@@ -18,11 +27,15 @@ import {
 	assertSafeRef,
 	canonicalPath,
 	changedFileArgs,
+	countPushDivergence,
+	countPushTargetDivergence,
 	currentBranch,
 	git,
 	gitAsync,
 	headBranchAt,
 	headShaAt,
+	isSafeRef,
+	originUrls,
 	resolveDefaultBranch,
 	resolveDiffRange,
 	SLOW_GIT_TIMEOUT_MS,
@@ -142,6 +155,8 @@ function openProjectById(projectId: string): Project {
 	return project;
 }
 
+const stagedRemovalPaths = new Set<string>();
+
 export async function listExistingWorktrees(
 	projectId: string,
 ): Promise<ExistingWorktreeCandidate[]> {
@@ -152,6 +167,7 @@ export async function listExistingWorktrees(
 		...loadProjects().map((knownProject) => canonicalPath(knownProject.path)),
 		...loadWorkspaces().map((workspace) => canonicalPath(workspace.worktreePath)),
 		...creationPaths(),
+		...stagedRemovalPaths,
 	]);
 	return entries.flatMap((entry): ExistingWorktreeCandidate[] => {
 		const path = canonicalPath(entry.path);
@@ -177,10 +193,16 @@ export async function openExistingWorktree(
 		if (creationPaths().has(wantedPath))
 			throw new Error("This worktree is still being created by ThinkRail");
 	};
+	const assertNotStaged = () => {
+		if (stagedRemovalPaths.has(wantedPath))
+			throw new Error("This worktree is being removed by ThinkRail");
+	};
+	assertNotStaged();
 	assertNotCreating();
 
 	const entries = await gitWorktreeEntries(project.path);
 	assertNotCreating();
+	assertNotStaged();
 	const entry = entries.find(
 		(candidate) => !candidate.prunable && canonicalPath(candidate.path) === wantedPath,
 	);
@@ -803,6 +825,148 @@ export async function reclaimWorktree(ws: Workspace): Promise<void> {
 export async function removeWorkspace(id: string): Promise<void> {
 	const ws = forgetWorkspace(id);
 	if (ws) await reclaimWorktree(ws);
+}
+
+export interface StagedWorktreeRemoval {
+	restore(): Promise<boolean>;
+	discard(): Promise<boolean>;
+}
+
+export async function stageWorktreeRemoval(ws: Workspace): Promise<StagedWorktreeRemoval | null> {
+	if (ws.kind === "external") {
+		return { restore: async () => true, discard: async () => true };
+	}
+	if (ws.kind === "default") return null;
+	const project = loadProjects().find((p) => p.id === ws.projectId);
+	if (!project || resolve(ws.worktreePath) === resolve(project.path)) return null;
+	const staged = `${ws.worktreePath}.removing-${randomUUID()}`;
+	const reserved = canonicalPath(staged);
+	stagedRemovalPaths.add(reserved);
+	const moved = await gitAsync(project.path, ["worktree", "move", ws.worktreePath, staged], {
+		timeoutMs: SLOW_GIT_TIMEOUT_MS,
+	});
+	if (!moved.ok) {
+		stagedRemovalPaths.delete(reserved);
+		return null;
+	}
+	const physical = canonicalPath(staged);
+	stagedRemovalPaths.add(physical);
+	return {
+		restore: async () => {
+			try {
+				if (existsSync(ws.worktreePath)) {
+					if (readdirSync(ws.worktreePath).length > 0) {
+						log.warn(`worktree for ${ws.id} stays staged at ${staged}: destination was recreated`);
+						return false;
+					}
+					rmdirSync(ws.worktreePath);
+				}
+			} catch {
+				return false;
+			}
+			const back = await gitAsync(project.path, ["worktree", "move", staged, ws.worktreePath], {
+				timeoutMs: SLOW_GIT_TIMEOUT_MS,
+			});
+			if (back.ok) {
+				stagedRemovalPaths.delete(reserved);
+				stagedRemovalPaths.delete(physical);
+			}
+			return back.ok;
+		},
+		discard: async () => {
+			const removed = await gitAsync(project.path, ["worktree", "remove", staged], {
+				timeoutMs: SLOW_GIT_TIMEOUT_MS,
+			});
+			if (removed.ok) {
+				stagedRemovalPaths.delete(reserved);
+				stagedRemovalPaths.delete(physical);
+			}
+			return removed.ok;
+		},
+	};
+}
+
+const REMOVAL_CHECK_CONCURRENCY = 4;
+
+function nulFieldCount(output: string): number {
+	return output.split("\0").filter((field) => field.length > 0).length;
+}
+
+async function uncommittedFiles(ws: Workspace): Promise<number | null> {
+	const [status, flags] = await Promise.all([
+		gitAsync(
+			ws.worktreePath,
+			["status", "--porcelain=v1", "-z", "--untracked-files=normal", "--no-renames"],
+			{ raw: true },
+		),
+		gitAsync(ws.worktreePath, ["ls-files", "-v", "-z"], { raw: true }),
+	]);
+	if (!status.ok || !flags.ok) return null;
+	const hidesEdits = flags.out.split("\0").some((entry) => /^[a-zS]/.test(entry));
+	return hidesEdits ? null : nulFieldCount(status.out);
+}
+
+async function unpushedCommits(ws: Workspace): Promise<number | null> {
+	const head = await gitAsync(ws.worktreePath, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
+	if (!head.ok || head.out.trim() !== ws.branch) return null;
+	const origin = await originUrls(ws.worktreePath);
+	if (origin.push !== null && origin.push !== origin.fetch) {
+		const target = await countPushTargetDivergence(ws.worktreePath, ws.branch, origin.push).catch(
+			() => null,
+		);
+		if (!target) return null;
+		if (!target.published) {
+			if (!isSafeRef(ws.baseBranch)) return null;
+			const counted = await gitAsync(ws.worktreePath, [
+				"rev-list",
+				"--count",
+				"--end-of-options",
+				`${ws.baseBranch}..HEAD`,
+				"--",
+			]);
+			if (!counted.ok) return null;
+			const parsed = Number.parseInt(counted.out, 10);
+			return Number.isSafeInteger(parsed) ? parsed : null;
+		}
+		return target.ahead ?? null;
+	}
+	const divergence = await countPushDivergence(ws.worktreePath, ws.branch);
+	if (divergence) return divergence.ahead;
+	const remotes = await gitAsync(ws.worktreePath, ["remote"]);
+	if (!remotes.ok) return null;
+	if (!remotes.out.trim()) return 0;
+	const counted = await gitAsync(ws.worktreePath, [
+		"rev-list",
+		"--count",
+		"HEAD",
+		"--not",
+		"--remotes",
+		"--",
+	]);
+	if (!counted.ok) return null;
+	const parsed = Number.parseInt(counted.out, 10);
+	return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+export async function checkWorkspaceRemoval(ids: string[]): Promise<WorkspaceRemovalCheck[]> {
+	const byId = new Map(loadWorkspaces().map((workspace) => [workspace.id, workspace]));
+	const results: WorkspaceRemovalCheck[] = new Array(ids.length);
+	const queue = ids.map((id, index) => ({ id, index }));
+	await Promise.all(
+		Array.from({ length: Math.min(REMOVAL_CHECK_CONCURRENCY, queue.length) }, async () => {
+			for (let next = queue.shift(); next !== undefined; next = queue.shift()) {
+				const ws = byId.get(next.id);
+				const [dirty, unpushed] = ws
+					? await Promise.all([
+							uncommittedFiles(ws).catch(() => null),
+							unpushedCommits(ws).catch(() => null),
+						])
+					: [null, null];
+				results[next.index] = { id: next.id, dirty, unpushed };
+			}
+		}),
+	);
+	return results;
 }
 
 export async function workspaceDiffStats(id: string): Promise<DiffStats> {

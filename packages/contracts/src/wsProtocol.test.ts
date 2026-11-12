@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
 	DEFAULT_CONFIG,
+	isSettledRemovalDays,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
 	RECENT_MODELS_LIMIT,
@@ -65,6 +66,7 @@ import {
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	SESSION_TITLE_MAX_LENGTH,
+	SETTLED_REMOVAL_PROTOCOL_VERSION,
 	SPEC_SECTIONS_PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
@@ -323,6 +325,18 @@ test("host search and its previews are pinned to v106", () => {
 	expect(WS_METHODS.searchPreview).toBe("search.preview");
 });
 
+test("settled workspace removal is pinned to v115", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SETTLED_REMOVAL_PROTOCOL_VERSION);
+	expect(SETTLED_REMOVAL_PROTOCOL_VERSION).toBe(115);
+	expect(WS_METHODS.workspaceRemovalCheck).toBe("workspace.removalCheck");
+	expect(WS_METHODS.workspaceRemoveSettled).toBe("workspace.removeSettled");
+	expect(DEFAULT_CONFIG.settledRemovalDays).toBeNull();
+	expect(isSettledRemovalDays(null)).toBe(true);
+	expect(isSettledRemovalDays(30)).toBe(true);
+	expect(isSettledRemovalDays(0)).toBe(false);
+	expect(isSettledRemovalDays(1.5)).toBe(false);
+});
+
 test("spec sections in search are pinned to v113", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SPEC_SECTIONS_PROTOCOL_VERSION);
 	expect(SPEC_SECTIONS_PROTOCOL_VERSION).toBe(113);
@@ -337,7 +351,7 @@ test("find in files is pinned to v112", () => {
 });
 
 test("the question panel height setting is pinned to v114", () => {
-	expect(PROTOCOL_VERSION).toBe(114);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(QUESTION_PANEL_PROTOCOL_VERSION);
 	expect(QUESTION_PANEL_PROTOCOL_VERSION).toBe(114);
 	expect(DEFAULT_CONFIG.questionPanelHeight).toBe(60);
 });

@@ -24,6 +24,7 @@ import {
 	isLineWidth,
 	isLocalePreference,
 	isQuestionPanelHeight,
+	isSettledRemovalDays,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
 	isTerminalWindowsShell,
@@ -729,6 +730,9 @@ export function loadConfig(): AppConfig {
 		settleIdleDays: isSettleIdleDays(value.settleIdleDays)
 			? value.settleIdleDays
 			: DEFAULT_CONFIG.settleIdleDays,
+		settledRemovalDays: isSettledRemovalDays(value.settledRemovalDays)
+			? value.settledRemovalDays
+			: DEFAULT_CONFIG.settledRemovalDays,
 		disabledExtensions: storedNameList(value.disabledExtensions),
 		extensionSettings: storedExtensionSettings(value.extensionSettings),
 		otherAgentSkills: typeof value.otherAgentSkills === "boolean" ? value.otherAgentSkills : true,

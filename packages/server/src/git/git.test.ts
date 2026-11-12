@@ -1228,6 +1228,17 @@ test("countPushDivergence reports ahead/behind; null without the remote ref", as
 	expect(await countPushDivergence(repo, "main")).toEqual({ ahead: 1, behind: 0 });
 });
 
+test("countPushDivergence ignores a local branch named origin/<branch>", async () => {
+	git(dataDir, "init", "--bare", "origin.git");
+	git(repo, "remote", "add", "origin", join(dataDir, "origin.git"));
+	git(repo, "push", "-u", "origin", "main");
+	writeFileSync(join(repo, "next.txt"), "next\n");
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "next");
+	git(repo, "branch", "origin/main", "HEAD");
+	expect(await countPushDivergence(repo, "main")).toEqual({ ahead: 1, behind: 0 });
+});
+
 test("countPushDivergence reports behind when the branch was rewritten (force-push needed)", async () => {
 	git(dataDir, "init", "--bare", "origin.git");
 	git(repo, "remote", "add", "origin", join(dataDir, "origin.git"));

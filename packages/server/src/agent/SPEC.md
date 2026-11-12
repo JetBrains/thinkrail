@@ -476,7 +476,10 @@ re-opened transcripts provider-valid.
     in the same pending set; `getSessionWorkspaceId(sessionId)` (the live session→workspace
     lookup the host's `set_title` handler keys on) and `getSessionAttribution(sessionId)` (the same, also for a
     session still preparing — the extension-UI publisher's scope, since `session_start` runs before
-    registration); `removeSession`/`disposeAllSessions`;
+    registration); **`hasBusySession(workspaceId)`** (true while a session
+    there is preparing, compacting, holding an admitted prompt's pre-flight or held reservation, working,
+    waiting for input, or holding queued messages — the host's
+    long-settled removal guard); `removeSession`/`disposeAllSessions`;
     **`removeWorkspaceSessions(workspaceId, cwd?)`** (the **archive teardown**: close session admission for
     the workspace before its first await, capture every registered parent, synchronously close its resource
     owners, and start parent abort/removal while concurrently draining preparations from the retired

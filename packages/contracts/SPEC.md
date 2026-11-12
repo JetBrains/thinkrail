@@ -368,7 +368,11 @@ the palette ranks with — kept here so host-side search can rank with the same 
   plus session state, never a wire field; **`WORKSPACE_SETTLE_PROTOCOL_VERSION`** (v78) pins the fields
   together with **`workspace.settle`** / **`workspace.unsettle`** (`{ id }` — Default rejected server-side;
   the response is the updated record and the `workspace.updated` push converges every client). Settling
-  never touches disk; `workspace.remove` stays the only teardown, one row at a time),
+  never touches disk; `workspace.remove` stays the unguarded teardown. **`SETTLED_REMOVAL_PROTOCOL_VERSION`**
+  (v115) adds **`workspace.removalCheck { ids }`** → `WorkspaceRemovalCheck[]` (uncommitted files and
+  unpushed commits per row, `null` when git could not answer) and **`workspace.removeSettled { id,
+  lastActiveAt? }`** → `SettledRemovalResult` (`{ removed: true }` or `{ removed: false, reason:
+  "changed" | "running" | "unsafe" }`), the host-rechecked removal behind the long-settled review),
   **`OpenBranchReview`** (the review reference for the active branch: PR vs MR + number, plus an optional
   **`state`** — `"open" | "merged" | "closed"`, absent on a pre-v78 host and read as open — and
   **`changedAt`**, the ms time the provider merged or closed it; v88 adds lookup-only **`details`** for an
@@ -527,7 +531,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`SUBAGENT_CONCURRENCY_PROTOCOL_VERSION`** = v79) is how many subagents one chat runs at once — more
   spawns queue — overridden only by `Workspace.subagentMaxConcurrentOverride`; **`settleIdleDays`** (default `7`, `null` = never; on the wire
   from `WORKSPACE_SETTLE_PROTOCOL_VERSION` = v78) is the idle window after which a quiet workspace settles
-  into its project's shelf — a host-wide number because "how long is quiet" is a habit, not a project fact; `agentReviewEnabled` (default `false`, on the
+  into its project's shelf — a host-wide number because "how long is quiet" is a habit, not a project fact;
+  **`settledRemovalDays`** (default `null` = never, 1–365, `isSettledRemovalDays`; v115) is how long a row
+  stays settled before the client suggests reviewing it for removal — opt-in because removal deletes chats; `agentReviewEnabled` (default `false`, on the
   wire from `AGENT_REVIEW_SETTING_PROTOCOL_VERSION` = v68) gates the worker's in-session `request_review`
   tool and applies live to open sessions — the Review button is independent (see [[submodule-server-host-plan-review]]); `disabledExtensions` (default `[]`, on the wire
   from `EXTENSION_CATALOG_PROTOCOL_VERSION` = v82) names the host-registry extensions the user switched off —

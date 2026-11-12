@@ -1,4 +1,7 @@
-import { WORKSPACE_SETTLE_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import {
+	SETTLED_REMOVAL_PROTOCOL_VERSION,
+	WORKSPACE_SETTLE_PROTOCOL_VERSION,
+} from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { toast, useAppStore } from "../store";
@@ -51,12 +54,43 @@ export function toChoice(days: number | null): IdleChoice {
 	return days === null ? "never" : (String(days) as IdleChoice);
 }
 
+const REMOVAL_CHOICES: readonly IdleChoiceSpec[] = [
+	{
+		id: "never",
+		days: null,
+		hint: "settings.workspaces.idle.defaultHint",
+		description: "settings.workspaces.removal.never",
+		testId: "settled-removal-never",
+	},
+	{
+		id: "14",
+		days: 14,
+		description: "settings.workspaces.removal.twoWeeks",
+		testId: "settled-removal-14",
+	},
+	{
+		id: "30",
+		days: 30,
+		description: "settings.workspaces.removal.month",
+		testId: "settled-removal-30",
+	},
+	{
+		id: "90",
+		days: 90,
+		description: "settings.workspaces.removal.quarter",
+		testId: "settled-removal-90",
+	},
+];
+
 export function WorkspacesSettings() {
 	const t = useT();
 	const settleIdleDays = useAppStore((s) => s.settleIdleDays);
+	const settledRemovalDays = useAppStore((s) => s.settledRemovalDays);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const supported =
 		protocolVersion !== null && protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION;
+	const removalSupported =
+		protocolVersion !== null && protocolVersion >= SETTLED_REMOVAL_PROTOCOL_VERSION;
 
 	const select = (choice: IdleChoice) => {
 		const next = choice === "never" ? null : Number(choice);
@@ -64,6 +98,14 @@ export function WorkspacesSettings() {
 		getTransport()
 			.request("settings.update", { config: { settleIdleDays: next } })
 			.catch(() => toast.error(t("settings.workspaces.changeFailed")));
+	};
+
+	const selectRemoval = (choice: IdleChoice) => {
+		const next = choice === "never" ? null : Number(choice);
+		if (next === settledRemovalDays) return;
+		getTransport()
+			.request("settings.update", { config: { settledRemovalDays: next } })
+			.catch(() => toast.error(t("settings.workspaces.removal.changeFailed")));
 	};
 
 	return (
@@ -90,6 +132,34 @@ export function WorkspacesSettings() {
 					onSelect={select}
 				/>
 			</div>
+			{removalSupported ? (
+				<div className="flex flex-col gap-8" data-testid="settings-settled-removal">
+					<div className="flex flex-col gap-4">
+						<h3 className="tr-title-section text-text-default">
+							{t("settings.workspaces.removal.title")}
+						</h3>
+						<p className="text-text-muted tr-text-metadata">
+							{t("settings.workspaces.removal.description")}
+						</p>
+					</div>
+					<SettingsRadioCards
+						name="settled-removal-days"
+						label={t("settings.workspaces.removal.title")}
+						choices={REMOVAL_CHOICES.map(({ days, hint, description, ...choice }) => ({
+							...choice,
+							label:
+								days === null
+									? t("settings.workspaces.idle.neverLabel")
+									: t("settings.workspaces.idle.days", { count: days }),
+							...(hint ? { hint: t(hint) } : {}),
+							description: t(description),
+						}))}
+						value={toChoice(settledRemovalDays)}
+						disabled={!supported}
+						onSelect={selectRemoval}
+					/>
+				</div>
+			) : null}
 		</section>
 	);
 }

@@ -4,9 +4,11 @@ import { currentTranslator } from "@thinkrail/locales/react";
 import { useAppStore } from "./appStore";
 import {
 	selectAutoSettledCounts,
+	selectSettledRemovalCandidates,
 	selectWorkspacePartition,
 	selectWorkspaceSettledReason,
 	settledReasonTitle,
+	settledSince,
 } from "./selectors";
 
 const DAY = 24 * 60 * 60_000;
@@ -292,6 +294,47 @@ test("only rows the shelf took on its own count toward the first-move notice", (
 	expect(
 		selectAutoSettledCounts({ ...base, workspaceSettlingSupported: false, workspaces }, NOW),
 	).toEqual([]);
+});
+
+test("removal candidates are rows settled for at least settledRemovalDays, by when they reached the shelf", () => {
+	const workspaces = {
+		p1: [
+			ws("home", { kind: "default", lastActiveAt: NOW - 90 * DAY }),
+			ws("idle-long", { lastActiveAt: NOW - 40 * DAY }),
+			ws("idle-short", { lastActiveAt: NOW - 20 * DAY }),
+			ws("merged-long", {
+				review: { kind: "pull-request", number: 1, state: "merged", changedAt: NOW - 30 * DAY },
+				lastActiveAt: NOW - 31 * DAY,
+			}),
+			ws("parked-long", { settledOverride: "settled", settledAt: NOW - 30 * DAY }),
+			ws("parked-unknown", { settledOverride: "settled" }),
+			ws("pinned", { settledOverride: "active", lastActiveAt: NOW - 90 * DAY }),
+		],
+		p2: [ws("p2-idle", { projectId: "p2", lastActiveAt: NOW - 60 * DAY })],
+	};
+	const ids = (settledRemovalDays: number | null) =>
+		selectSettledRemovalCandidates(
+			{ ...base, workspaces, settledRemovalDays, protocolVersion: 115 },
+			NOW,
+		).map((row) => row.workspace.id);
+	expect(ids(null)).toEqual([]);
+	expect(ids(30).sort()).toEqual(["idle-long", "merged-long", "p2-idle", "parked-long"]);
+	expect(ids(60)).toEqual([]);
+	expect(
+		selectSettledRemovalCandidates(
+			{ ...base, workspaces, settledRemovalDays: 30, protocolVersion: 106 },
+			NOW,
+		),
+	).toEqual([]);
+	expect(
+		settledSince(
+			{
+				workspace: ws("x", { lastActiveAt: NOW - 10 * DAY }),
+				reason: { kind: "idle", since: NOW - 10 * DAY },
+			},
+			3,
+		),
+	).toBe(NOW - 7 * DAY);
 });
 
 test("settled capability survives reconnect limbo until the next welcome decides", () => {

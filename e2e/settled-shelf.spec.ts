@@ -167,3 +167,44 @@ test("the settle window is a host setting that survives a reload", async ({ page
 	await page.getByTestId("settings-nav-workspaces").click();
 	await expect(page.getByTestId("settle-idle-14")).toHaveAttribute("data-active", "true");
 });
+
+test("long-settled workspaces are suggested for removal, reviewed, and only clean ones removed", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-workspaces").click();
+	await expect(page.getByTestId("settled-removal-never")).toHaveAttribute("data-active", "true");
+	await page.getByTestId("settled-removal-30").click();
+	await expect(page.getByTestId("settled-removal-30")).toHaveAttribute("data-active", "true");
+	await page.keyboard.press("Escape");
+
+	const clean = await createWorkspaceViaDialog(page);
+	const dirty = await createWorkspaceViaDialog(page);
+	await createWorkspaceViaDialog(page);
+	writeFileSync(join(dirty.worktreePath, "draft.txt"), "draft\n");
+	ageWorkspace(clean.id, 60);
+	ageWorkspace(dirty.id, 60);
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+
+	const notice = page.getByTestId("toast").filter({ hasText: "2 workspaces can be removed" });
+	await expect(notice).toBeVisible();
+	await notice.getByTestId("toast-action").click();
+
+	const dialog = page.getByTestId("settled-removal-dialog");
+	const rows = dialog.getByTestId("settled-removal-row");
+	await expect(rows).toHaveCount(2);
+	await expect(rows.filter({ hasText: dirty.name })).toHaveAttribute("data-flag", "dirty");
+	await expect(rows.filter({ hasText: clean.name })).toHaveAttribute("data-flag", "safe");
+	await dialog.getByTestId("confirm-settled-removal").click();
+	await expect(dialog).toBeHidden();
+
+	await expect(
+		page.getByTestId("toast").filter({ hasText: "Removed 1 settled workspace" }),
+	).toBeVisible();
+	const shelf = page.getByTestId("settled-shelf");
+	await expect(shelf).toHaveAttribute("data-count", "1");
+	await expect(page.getByTestId("settled-shelf-review-removal")).toHaveText("Review 1");
+	await expect(worktreeRows(page)).toHaveCount(1);
+});

@@ -23,6 +23,7 @@ import {
 	SEARCH_PROTOCOL_VERSION,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
+	SETTLED_REMOVAL_PROTOCOL_VERSION,
 	type SessionResourceHistory,
 	type SessionResources,
 	type SessionState,
@@ -397,6 +398,10 @@ export function supportsWorkspaceSettling(protocolVersion: number | null): boole
 	return protocolVersion !== null && protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION;
 }
 
+export function supportsSettledRemoval(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= SETTLED_REMOVAL_PROTOCOL_VERSION;
+}
+
 export const SETTLED_SHELF_PAGE = 10;
 export const SETTLED_SHELF_MORE = 25;
 const DAY_MS = 24 * 60 * 60_000;
@@ -531,6 +536,39 @@ export function selectAutoSettledCounts(
 		if (count > 0) counts.push({ projectId, count });
 	}
 	return counts;
+}
+
+/** When a settled row reached the shelf; `null` for a hand-parked row from before `settledAt` existed. */
+export function settledSince(row: SettledRow, settleIdleDays: number | null): number | null {
+	switch (row.reason.kind) {
+		case "override":
+			return row.reason.since ?? null;
+		case "review":
+			return row.workspace.review?.changedAt ?? null;
+		case "idle":
+			return settleIdleDays === null ? null : row.reason.since + settleIdleDays * DAY_MS;
+	}
+}
+
+/** Settled rows across loaded projects that have stayed on the shelf for `settledRemovalDays`. */
+export function selectSettledRemovalCandidates(
+	state: PartitionState & {
+		workspaces: Record<string, Workspace[]>;
+		settledRemovalDays: number | null;
+		protocolVersion: number | null;
+	},
+	now: number,
+): SettledRow[] {
+	const days = state.settledRemovalDays;
+	if (days === null || !supportsSettledRemoval(state.protocolVersion)) return [];
+	const candidates: SettledRow[] = [];
+	for (const projectId of Object.keys(state.workspaces)) {
+		for (const row of selectWorkspacePartition(state, projectId, now).settled) {
+			const since = settledSince(row, state.settleIdleDays);
+			if (since !== null && now - since >= days * DAY_MS) candidates.push(row);
+		}
+	}
+	return candidates;
 }
 
 export function selectWorkspaceNeedsAttention(

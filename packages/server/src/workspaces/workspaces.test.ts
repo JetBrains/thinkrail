@@ -18,6 +18,7 @@ import { setSyncGitTimeoutForTests } from "../git";
 import { createWorkspace } from "./creations";
 import {
 	backfillWorkspaceActivity,
+	checkWorkspaceRemoval,
 	completeInitialTerminalReservation,
 	ensureWorkspaceScratchDir,
 	forgetWorkspace,
@@ -37,6 +38,7 @@ import {
 	setWorkspaceReview,
 	setWorkspaceSubagentMaxConcurrent,
 	setWorkspaceSubagentsOverride,
+	stageWorktreeRemoval,
 	syncWorkspaceBranch,
 	unsettleWorkspace,
 	type WorkspaceLifecycleEvent,
@@ -787,6 +789,66 @@ test("forgetWorkspace drops the record + returns it, but leaves the worktree for
 	expect(registeredWorktrees(repo)).not.toContain(ws.worktreePath);
 
 	expect(forgetWorkspace(ws.id)).toBeNull();
+});
+
+test("stageWorktreeRemoval moves the checkout aside intact; restore returns it, discard removes it keeping the branch", async () => {
+	const ws = await createWorkspace("p1");
+	writeFileSync(join(ws.worktreePath, "draft.txt"), "draft\n");
+	const staged = await stageWorktreeRemoval(ws);
+	if (!staged) throw new Error("expected a staged removal");
+	expect(existsSync(ws.worktreePath)).toBe(false);
+	expect(await staged.discard()).toBe(false);
+	expect(await staged.restore()).toBe(true);
+	expect(readFileSync(join(ws.worktreePath, "draft.txt"), "utf8")).toBe("draft\n");
+
+	const again = await stageWorktreeRemoval(ws);
+	if (!again) throw new Error("expected a staged removal");
+	mkdirSync(ws.worktreePath);
+	writeFileSync(join(ws.worktreePath, "recreated.txt"), "x\n");
+	expect(await again.restore()).toBe(false);
+	rmSync(ws.worktreePath, { recursive: true });
+	expect(await again.restore()).toBe(true);
+
+	rmSync(join(ws.worktreePath, "draft.txt"));
+	const clean = await stageWorktreeRemoval(ws);
+	if (!clean) throw new Error("expected a staged removal");
+	expect(await clean.discard()).toBe(true);
+	expect(existsSync(ws.worktreePath)).toBe(false);
+	expect(gitOut(repo, "show-ref", "--verify", `refs/heads/${ws.branch}`)).not.toBe("");
+});
+
+test("removal counts commits the split push target lacks even when the fetch remote has them", async () => {
+	const ws = await createWorkspace("p1");
+	writeFileSync(join(ws.worktreePath, "work.txt"), "work\n");
+	git(ws.worktreePath, "add", "-A");
+	git(ws.worktreePath, "commit", "-m", "work");
+	const fetchRemote = join(dataDir, "fetch.git");
+	const pushRemote = join(dataDir, "push.git");
+	git(dataDir, "init", "--bare", fetchRemote);
+	git(dataDir, "init", "--bare", pushRemote);
+	git(repo, "remote", "add", "origin", fetchRemote);
+	git(ws.worktreePath, "push", "origin", ws.branch);
+	git(repo, "config", "remote.origin.pushurl", pushRemote);
+	const [check] = await checkWorkspaceRemoval([ws.id]);
+	expect(check?.unpushed).toBe(1);
+});
+
+test("removal fails closed when a split push target lacks the branch and the base no longer resolves", async () => {
+	git(repo, "branch", "feature/base");
+	const ws = await createWorkspace("p1", undefined, "feature/base");
+	writeFileSync(join(ws.worktreePath, "work.txt"), "work\n");
+	git(ws.worktreePath, "add", "-A");
+	git(ws.worktreePath, "commit", "-m", "work");
+	const fetchRemote = join(dataDir, "fetch.git");
+	const pushRemote = join(dataDir, "push.git");
+	git(dataDir, "init", "--bare", fetchRemote);
+	git(dataDir, "init", "--bare", pushRemote);
+	git(repo, "remote", "add", "origin", fetchRemote);
+	git(ws.worktreePath, "push", "origin", ws.branch);
+	git(repo, "config", "remote.origin.pushurl", pushRemote);
+	git(repo, "branch", "-D", "feature/base");
+	const [check] = await checkWorkspaceRemoval([ws.id]);
+	expect(check?.unpushed).toBeNull();
 });
 
 test.skipIf(process.platform === "win32").each([false, true])(

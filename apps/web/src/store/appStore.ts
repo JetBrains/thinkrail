@@ -62,6 +62,7 @@ import {
 	isLineWidth,
 	isLocalePreference,
 	isQuestionPanelHeight,
+	isSettledRemovalDays,
 	isSettleIdleDays,
 	isSubagentCompletionMessage,
 	isSubagentMaxConcurrent,
@@ -1062,6 +1063,8 @@ interface AppState {
 	workspaceSettlingSupported: boolean;
 	settledShelfExpanded: Record<string, true>;
 	settledShelfShown: Record<string, number>;
+	/** The open settled-removal review: one project's candidates, or every loaded project's (`null`). */
+	settledRemovalReview: { projectId: string | null } | null;
 	selectedProjectId: string | null;
 	activeWorkspaceId: string | null;
 	/** The active workspace counts as live while this holds, whatever the idle window says. */
@@ -1156,6 +1159,7 @@ interface AppState {
 	subagentsEnabled: boolean;
 	subagentMaxConcurrent: number;
 	settleIdleDays: number | null;
+	settledRemovalDays: number | null;
 	jbcentralQuotaEnabled: boolean;
 	jbcentralQuotaRefreshSeconds: number;
 	terminalReplayKb: number;
@@ -1226,6 +1230,7 @@ interface AppState {
 	toggleProjectExpanded: (projectId: string) => void;
 	toggleSettledShelf: (projectId: string, expanded?: boolean) => void;
 	showMoreSettled: (projectId: string, count: number) => void;
+	setSettledRemovalReview: (review: { projectId: string | null } | null) => void;
 	expandProject: (projectId: string) => void;
 	hydrateExpandedProjects: (projectIds: readonly string[]) => void;
 	selectMain: () => void;
@@ -1578,6 +1583,9 @@ function configPatch(config: AppConfig) {
 		settleIdleDays: isSettleIdleDays(config.settleIdleDays)
 			? config.settleIdleDays
 			: DEFAULT_CONFIG.settleIdleDays,
+		settledRemovalDays: isSettledRemovalDays(config.settledRemovalDays)
+			? config.settledRemovalDays
+			: DEFAULT_CONFIG.settledRemovalDays,
 		jbcentralQuotaEnabled: config.jbcentralQuotaEnabled ?? DEFAULT_CONFIG.jbcentralQuotaEnabled,
 		jbcentralQuotaRefreshSeconds:
 			config.jbcentralQuotaRefreshSeconds ?? DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
@@ -2435,6 +2443,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	workspaceSettlingSupported: false,
 	settledShelfExpanded: nullProto<Record<string, true>>(),
 	settledShelfShown: nullProto<Record<string, number>>(),
+	settledRemovalReview: null,
 	selectedProjectId: null,
 	activeWorkspaceId: null,
 	activeWorkspaceLiveLatch: false,
@@ -2519,6 +2528,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	subagentsEnabled: DEFAULT_CONFIG.subagentsEnabled,
 	subagentMaxConcurrent: DEFAULT_CONFIG.subagentMaxConcurrent,
 	settleIdleDays: DEFAULT_CONFIG.settleIdleDays,
+	settledRemovalDays: DEFAULT_CONFIG.settledRemovalDays,
 	jbcentralQuotaEnabled: DEFAULT_CONFIG.jbcentralQuotaEnabled,
 	jbcentralQuotaRefreshSeconds: DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
@@ -2932,6 +2942,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			if (shown === (state.settledShelfShown[projectId] ?? SETTLED_SHELF_PAGE)) return {};
 			return { settledShelfShown: { ...state.settledShelfShown, [projectId]: shown } };
 		}),
+	setSettledRemovalReview: (review) => set(() => ({ settledRemovalReview: review })),
 	hydrateExpandedProjects: (projectIds) =>
 		set(() => ({
 			expandedProjectIds: Object.fromEntries(projectIds.map((id) => [id, true as const])),

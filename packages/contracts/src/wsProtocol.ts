@@ -71,6 +71,7 @@ import type {
 	SearchQueryResult,
 	SessionResources,
 	SessionStateRecord,
+	SettledRemovalResult,
 	SpecGraphSnapshot,
 	SubagentCompletionDetails,
 	SubagentOverride,
@@ -86,6 +87,7 @@ import type {
 	UserFontsSnapshot,
 	UserThemesSnapshot,
 	Workspace,
+	WorkspaceRemovalCheck,
 } from "./domain";
 import { isDelegationRunDetails } from "./domain";
 import type {
@@ -141,7 +143,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 114;
+export const PROTOCOL_VERSION = 115;
+export const SETTLED_REMOVAL_PROTOCOL_VERSION = 115;
 export const QUESTION_PANEL_PROTOCOL_VERSION = 114;
 export const SPEC_SECTIONS_PROTOCOL_VERSION = 113;
 export const TEXT_SEARCH_PROTOCOL_VERSION = 112;
@@ -425,6 +428,8 @@ export const WS_METHODS = {
 	chatContinuationStatus: "chat.continuationStatus",
 	workspaceSettle: "workspace.settle",
 	workspaceUnsettle: "workspace.unsettle",
+	workspaceRemovalCheck: "workspace.removalCheck",
+	workspaceRemoveSettled: "workspace.removeSettled",
 	workspaceMarkUnread: "workspace.markUnread",
 	workspaceMarkRead: "workspace.markRead",
 	workspaceWatchReady: "workspace.watchReady",
@@ -995,6 +1000,11 @@ export interface WsMethodMap {
 	"workspace.setDiffBase": { params: { id: string; ref: string | null }; result: Workspace };
 	"workspace.settle": { params: { id: string }; result: Workspace };
 	"workspace.unsettle": { params: { id: string }; result: Workspace };
+	"workspace.removalCheck": { params: { ids: string[] }; result: WorkspaceRemovalCheck[] };
+	"workspace.removeSettled": {
+		params: { id: string; lastActiveAt?: number };
+		result: SettledRemovalResult;
+	};
 	"workspace.markUnread": { params: { id: string }; result: { record: SessionStateRecord | null } };
 	"workspace.markRead": { params: { id: string }; result: { records: SessionStateRecord[] } };
 	"workspace.watchReady": {
