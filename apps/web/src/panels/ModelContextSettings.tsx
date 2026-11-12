@@ -267,6 +267,28 @@ function ContextLimitControl({
 	);
 }
 
+export function ModelContextLoadFailed({
+	pending,
+	onRetry,
+}: {
+	pending: boolean;
+	onRetry: () => void;
+}) {
+	const t = useT();
+	return (
+		<div
+			className="flex items-center gap-8 border-border-muted border-b py-12"
+			role="alert"
+			data-testid="model-context-load-failed"
+		>
+			<p className="tr-text-ui text-text-muted">{t("settings.modelContext.loadFailed")}</p>
+			<Button variant="ghost" size="m" disabled={pending} onClick={onRetry}>
+				{t("common.retry")}
+			</Button>
+		</div>
+	);
+}
+
 export function ModelContextControls({
 	protocolVersion,
 	settings,
@@ -310,12 +332,7 @@ export function ModelContextControls({
 	return (
 		<SettingsGroup title={t("settings.modelContext.title")} testId="settings-model-context">
 			{failed ? (
-				<div className="flex items-center gap-8 border-border-muted border-b py-12" role="alert">
-					<p className="tr-text-ui text-text-muted">{t("settings.modelContext.loadFailed")}</p>
-					<Button variant="ghost" size="m" disabled={pending} onClick={onRetry}>
-						{t("common.retry")}
-					</Button>
-				</div>
+				<ModelContextLoadFailed pending={pending} onRetry={onRetry} />
 			) : rows === null ? (
 				<div className="flex items-center justify-between gap-12 border-border-muted border-b py-12">
 					<span className="tr-text-ui text-text-default">{t("settings.modelContext.global")}</span>

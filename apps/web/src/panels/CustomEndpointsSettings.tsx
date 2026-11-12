@@ -46,6 +46,7 @@ import {
 } from "./customEndpointDraft";
 import {
 	isContextWindowText,
+	ModelContextLoadFailed,
 	type ModelContextState,
 	tokenRange,
 	useModelContextSettings,
@@ -110,6 +111,7 @@ function ModelFacts({ model }: { model: CustomEndpointModel }) {
 
 export interface ModelRowContext {
 	setting: ModelContextSetting | undefined;
+	failed: boolean;
 	change: (contextWindow: number | null) => Promise<boolean>;
 }
 
@@ -136,7 +138,8 @@ export function EndpointModelItem({
 		commit: (draft) =>
 			context?.change(draft.trim() === "" ? null : Number(draft.trim())) ?? Promise.resolve(false),
 	});
-	const locked = busy || !model.selected || context?.setting === undefined;
+	const locked =
+		busy || !model.selected || context?.failed === true || context?.setting === undefined;
 	return (
 		<li
 			data-testid="custom-endpoints-row"
@@ -176,9 +179,11 @@ export function EndpointModelItem({
 							aria-label={t("settings.modelContext.controlLabel", { name: model.id })}
 							aria-describedby={invalid ? errorId : undefined}
 							title={
-								context.setting === undefined
-									? t("settings.customEndpoints.contextSaveFirst")
-									: t("settings.customEndpoints.contextHint", { range: tokenRange(t, limits) })
+								context.failed
+									? t("settings.modelContext.loadFailed")
+									: context.setting === undefined
+										? t("settings.customEndpoints.contextSaveFirst")
+										: t("settings.customEndpoints.contextHint", { range: tokenRange(t, limits) })
 							}
 							placeholder={
 								model.contextWindow === null
@@ -222,6 +227,7 @@ export function modelRowContext(
 		setting: context.settings?.find(
 			(setting) => setting.provider === endpointId && setting.id === modelId,
 		),
+		failed: context.failed,
 		change: (contextWindow) =>
 			endpointId === undefined
 				? Promise.resolve(false)
@@ -454,6 +460,9 @@ function EndpointDialog({
 									setShown(MODEL_PAGE);
 								}}
 							/>
+						) : null}
+						{draft.models.length > 0 && modelContext?.failed ? (
+							<ModelContextLoadFailed pending={modelContext.pending} onRetry={modelContext.retry} />
 						) : null}
 						{draft.models.length > 0 ? (
 							<ul className="flex flex-col" data-testid="custom-endpoints-models">

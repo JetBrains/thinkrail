@@ -885,7 +885,9 @@ a project picker, the prompt hero, and the reused
   the shared auto-save input pattern, an emptied field or the reset icon returns to the detected window,
   and Escape reverts the draft without closing the dialog. The field is disabled while the dialog is
   busy, for an unused row, and for a model pi doesn't serve yet (an unsaved server or newly found model —
-  its title asks to save the server first). Re-detecting keeps selections and saved
+  its title asks to save the server first). A failed context read or write is not an unsaved model: every
+  field locks with the load-failure title, and the list is headed by the same `ModelContextLoadFailed`
+  line and Retry that `ModelContextControls` shows. Re-detecting keeps selections and saved
   facts the server doesn't report, takes reported ones, drops a saved max output once a new context is
   reported, keeps models the server no longer lists, and keeps existing rows first with newly found ones appended; an unchanged saved address stays as written. The
   pure draft rules live in `customEndpointDraft`; probe failures render as localized inline status and

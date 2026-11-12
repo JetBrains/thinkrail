@@ -8,6 +8,7 @@ import {
 	modelRowContext,
 } from "./CustomEndpointsSettings";
 import type { EndpointModelRow } from "./customEndpointDraft";
+import { ModelContextLoadFailed } from "./ModelContextSettings";
 
 const row: EndpointModelRow = {
 	id: "relay/glm",
@@ -30,7 +31,7 @@ const setting: ModelContextSetting = {
 
 function render({
 	model = row,
-	context = { setting, change: () => Promise.resolve(true) },
+	context = { setting, failed: false, change: () => Promise.resolve(true) },
 	busy = false,
 }: {
 	model?: EndpointModelRow;
@@ -76,7 +77,11 @@ test("a saved model without an override offers an empty field over the detected 
 
 test("a user-set window shows its value with a way back to the detected one", () => {
 	const html = render({
-		context: { setting: { ...setting, override: 262_144 }, change: () => Promise.resolve(true) },
+		context: {
+			setting: { ...setting, override: 262_144 },
+			failed: false,
+			change: () => Promise.resolve(true),
+		},
 	});
 	expect(contextInput(html)).toContain('value="262144"');
 	expect(html).toContain('data-testid="custom-endpoints-context-reset"');
@@ -85,12 +90,30 @@ test("a user-set window shows its value with a way back to the detected one", ()
 
 test("a model pi doesn't serve yet, an unused model or a busy dialog can't be changed", () => {
 	const unsaved = contextInput(
-		render({ context: { setting: undefined, change: () => Promise.resolve(false) } }),
+		render({
+			context: { setting: undefined, failed: false, change: () => Promise.resolve(false) },
+		}),
 	);
 	expect(unsaved).toContain('disabled=""');
 	expect(unsaved).toContain("Save the server to set this model&#x27;s context window");
 	expect(contextInput(render({ model: { ...row, selected: false } }))).toContain('disabled=""');
 	expect(contextInput(render({ busy: true }))).toContain('disabled=""');
+});
+
+test("a failed context read locks the field and offers Retry instead of asking to save the server", () => {
+	for (const failed of [
+		{ setting, failed: true, change: () => Promise.resolve(false) },
+		{ setting: undefined, failed: true, change: () => Promise.resolve(false) },
+	]) {
+		const input = contextInput(render({ context: failed }));
+		expect(input).toContain('disabled=""');
+		expect(input).toContain("Couldn&#x27;t load pi context settings.");
+		expect(input).not.toContain("Save the server");
+	}
+	const alert = renderToStaticMarkup(<ModelContextLoadFailed pending={false} onRetry={() => {}} />);
+	expect(alert).toContain('role="alert"');
+	expect(alert).toContain("Couldn&#x27;t load pi context settings.");
+	expect(alert).toMatch(/<button[^>]*>.*Retry.*<\/button>/);
 });
 
 test("a row targets its own endpoint's model and an unsaved endpoint sends nothing", async () => {
@@ -107,6 +130,8 @@ test("a row targets its own endpoint's model and an unsaved endpoint sends nothi
 	};
 	const saved = modelRowContext(state, "custom-gw", "relay/glm");
 	expect(saved.setting).toBe(setting);
+	expect(saved.failed).toBe(false);
+	expect(modelRowContext({ ...state, failed: true }, "custom-gw", "relay/glm").failed).toBe(true);
 	expect(await saved.change(131_072)).toBe(true);
 	expect(await saved.change(null)).toBe(true);
 	expect(calls).toEqual([
