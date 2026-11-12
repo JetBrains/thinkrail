@@ -876,7 +876,7 @@ a project picker, the prompt hero, and the reused
   listing rarely reports the window whoever runs the server set, and pi's 128K default then sizes
   compaction and budgets for the wrong model). The row shows only the facts the server reported
   (context, thinking, images, tools; "No tools" in warning tone), and an unreported fact is simply absent
-  and left to pi's default. From `CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION` (v115) it also carries a
+  and left to pi's default. From `CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION` (v116) it also carries a
   compact **context window** field (`custom-endpoints-context`) that is not part of the draft: it reads
   and writes the model's `modelOverrides` value through the same `useModelContextSettings` hook as
   `ModelContextSettings` (`model.contextSettings` / a targeted `model.setContextWindow`), so a re-Detect

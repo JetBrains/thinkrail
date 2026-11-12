@@ -755,7 +755,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   a number must satisfy **`isModelContextWindow`** within the target's
   **`modelContextWindowLimits(provider)`** — **`MODEL_CONTEXT_WINDOW_LIMITS`** (272,000–1,000,000) for
   `available` and every provider but a custom server's — the app's editing policy rather than a verified
-  provider capacity, enforced on both sides. From **`CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION`** (v115) the
+  provider capacity, enforced on both sides. From **`CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION`** (v116) the
   list also carries every available `custom-*` provider model (`isCustomEndpointId`), editable only by a
   targeted save within **`CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS`** (1,024–10,000,000: a guard against typos,
   wide enough for any served window); an older host refuses that target as ineligible. External values

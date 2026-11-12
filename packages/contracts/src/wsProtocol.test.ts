@@ -474,9 +474,9 @@ test("model context settings name their two methods at v76", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION);
 });
 
-test("custom server models take a targeted context window from v115, outside the GPT preset", () => {
-	expect(PROTOCOL_VERSION).toBe(115);
-	expect(CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION).toBe(115);
+test("custom server models take a targeted context window from v116, outside the GPT preset", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION);
+	expect(CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION).toBe(116);
 	const custom = `${CUSTOM_ENDPOINT_ID_PREFIX}gateway`;
 	expect(modelContextWindowLimits(custom)).toBe(CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS);
 	expect(modelContextWindowLimits("openai")).toBe(MODEL_CONTEXT_WINDOW_LIMITS);
