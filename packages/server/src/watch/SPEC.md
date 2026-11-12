@@ -143,7 +143,13 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
     for a remote dir appearing or vanishing — `git pack-refs` deletes an emptied `refs/remotes/<remote>/`
     and the next push recreates it. Unlike the sources above these match exact names: the shared dir
     serves every worktree of the repo, so another branch's ref update must not nudge this one, and a ref
-    update always ends in a rename onto the ref's own name. Whenever the nudge fires, the target set is
+    update always ends in a rename onto the ref's own name. Name matching alone is not enough, because
+    `packed-refs` and the `refs/remotes` directory are shared by every worktree. A `git pack-refs`, or a
+    push that recreates a packed-away remote dir, used to nudge every watched worktree of the repo at
+    once (15 of 15 in a probe). So a ref event only schedules a **check**: after the debounce it re-derives
+    this worktree's remote-tracking refs by value (loose refs over `packed-refs`, per remote) and nudges
+    only when they differ from the last-known state. Every other nudge refreshes that baseline, and a
+    reftable repo, whose refs it cannot read, stays conservative and always nudges. Whenever the nudge fires, the target set is
     re-derived and every one of these watches is closed and re-created, never diffed against the old set:
     `git pack-refs` and the next push can delete and recreate a remote dir within one debounce, under the
     same path and often (ext4) the same inode, so a kept watch would stay bound to the deleted dir. A

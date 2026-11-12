@@ -157,6 +157,7 @@ function scheduleRepoMeta(workspaceId: string, watcher: TreeWatcher): void {
 		live.metaTimer = null;
 		live.watcher.recheck();
 		syncRemoteRefWatch(workspaceId, live);
+		if (live.remoteRefs) live.remoteRefs.state = remoteRefState(live.remoteRefs);
 		deliver("repo-meta", workspaceId, () => publishRepoMeta?.(workspaceId));
 	}, REPO_META_DEBOUNCE_MS);
 	if (entry) entry.metaTimer = timer;
@@ -192,6 +193,50 @@ function subdirectories(dir: string): string[] {
 
 type RefWatchTarget = [dir: string, name: string | null];
 
+const PACKED_REF = /^([0-9a-f]{40}|[0-9a-f]{64}) refs\/remotes\/([^/\s]+)\/(.+)$/;
+
+function remoteRefState({ gitDir, commonDir }: Pick<RemoteRefWatch, "gitDir" | "commonDir">) {
+	if (isDirectory(join(commonDir, "reftable"))) return null;
+	const branch = headBranch(gitDir);
+	if (branch === null) return "";
+	const values = new Map<string, string>();
+	let packed = "";
+	try {
+		packed = readFileSync(join(commonDir, "packed-refs"), "utf8");
+	} catch {}
+	for (const line of packed.split("\n")) {
+		const match = PACKED_REF.exec(line);
+		if (match?.[3] === branch && match[1] && match[2]) values.set(match[2], match[1]);
+	}
+	const remotes = join(commonDir, "refs", "remotes");
+	for (const remote of subdirectories(remotes)) {
+		try {
+			values.set(remote, readFileSync(join(remotes, remote, branch), "utf8").trim());
+		} catch {}
+	}
+	return [...values]
+		.sort(([left], [right]) => left.localeCompare(right))
+		.map(([remote, value]) => `${remote}=${value}`)
+		.join("\n");
+}
+
+function scheduleRemoteRefCheck(workspaceId: string, rootWatcher: TreeWatcher): void {
+	const entry = entries.get(workspaceId);
+	const remoteRefs = entry?.remoteRefs;
+	if (!entry || entry.watcher !== rootWatcher || !remoteRefs) return;
+	if (remoteRefs.timer) clearTimeout(remoteRefs.timer);
+	remoteRefs.timer = setTimeout(() => {
+		const live = entries.get(workspaceId);
+		if (!live || live.watcher !== rootWatcher || live.remoteRefs !== remoteRefs) return;
+		remoteRefs.timer = null;
+		syncRemoteRefWatch(workspaceId, live);
+		const state = remoteRefState(remoteRefs);
+		if (state !== null && state === remoteRefs.state) return;
+		remoteRefs.state = state;
+		scheduleRepoMeta(workspaceId, rootWatcher);
+	}, REPO_META_DEBOUNCE_MS);
+}
+
 function remoteRefTargets(gitDir: string, commonDir: string): RefWatchTarget[] {
 	const packedRefs: RefWatchTarget = [commonDir, "packed-refs"];
 	const refs = join(commonDir, "refs");
@@ -224,7 +269,7 @@ function watchRefDir(
 	try {
 		const watcher = watch(dir, { recursive: false }, (_event, filename) => {
 			if (name === null || typeof filename !== "string" || filename === name)
-				scheduleRepoMeta(workspaceId, rootWatcher);
+				scheduleRemoteRefCheck(workspaceId, rootWatcher);
 		});
 		watcher.on("error", () => {
 			watcher.close();
@@ -286,6 +331,8 @@ interface RemoteRefWatch {
 	gitDir: string;
 	commonDir: string;
 	watchers: FSWatcher[];
+	state: string | null;
+	timer: ReturnType<typeof setTimeout> | null;
 }
 
 interface WatchEntry {
@@ -422,7 +469,8 @@ export function ensureWatch(
 				.flatMap((dir) => watchGitDir(workspaceId, dir, watcher) ?? []);
 		const commonDir = gitDir ? resolveCommonGitDir(gitDir) : null;
 		if (gitDir && commonDir) {
-			entry.remoteRefs = { gitDir, commonDir, watchers: [] };
+			entry.remoteRefs = { gitDir, commonDir, watchers: [], state: null, timer: null };
+			entry.remoteRefs.state = remoteRefState(entry.remoteRefs);
 			syncRemoteRefWatch(workspaceId, entry);
 		}
 		return ready;
@@ -443,6 +491,7 @@ export function stopWatch(workspaceId: string): void {
 	if (entry.metaTimer) clearTimeout(entry.metaTimer);
 	for (const metaWatcher of entry.metaWatchers) metaWatcher.close();
 	entry.coalescer.dispose();
+	if (entry.remoteRefs?.timer) clearTimeout(entry.remoteRefs.timer);
 	for (const watcher of entry.remoteRefs?.watchers ?? []) watcher.close();
 	entry.watcher.close();
 }
