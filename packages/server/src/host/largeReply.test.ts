@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Project, Workspace, WsResult } from "@thinkrail/contracts";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import { configurePiRuntime } from "../agent";
 import { resetAnalyticsForTests } from "../analytics";
 import { resetJbcentralStateForTests } from "../auth";
 import { resetConfigCache } from "../settings";
@@ -31,6 +32,7 @@ beforeAll(async () => {
 	process.env.PI_OFFLINE = "1";
 	resetConfigCache();
 	await resetJbcentralStateForTests();
+	configurePiRuntime(null);
 	server = await createServer({ port: 0, host: "127.0.0.1" });
 });
 
@@ -38,6 +40,7 @@ afterAll(async () => {
 	await server.shutdown();
 	resetAnalyticsForTests();
 	await resetJbcentralStateForTests();
+	configurePiRuntime(null);
 	resetConfigCache();
 	for (const [key, value] of [
 		["PI_CODING_AGENT_DIR", saved.agent],

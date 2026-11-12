@@ -16,7 +16,7 @@ test("every channel the host broadcasts is one every socket subscribes to at ope
 	const published = new Set<string>();
 	for (const file of await sourceFiles()) {
 		for (const match of readFileSync(file, "utf8").matchAll(
-			/(?:\.publish|publishScoped)\(\s*WS_CHANNELS\.(\w+)/g,
+			/(?:publishScoped|fanOut)\(\s*WS_CHANNELS\.(\w+)/g,
 		)) {
 			published.add(match[1] ?? "");
 		}
@@ -30,4 +30,12 @@ test("every channel the host broadcasts is one every socket subscribes to at ope
 	);
 	expect(published.size).toBeGreaterThan(10);
 	expect([...published].filter((channel) => !subscribed.has(channel))).toEqual([]);
+});
+
+test("no push bypasses the per-socket sender that closes a client past the buffer limit", async () => {
+	const files = await sourceFiles();
+	const nativePublishes = files.filter((file) =>
+		/\.publish\(\s*[^)\s]/.test(readFileSync(file, "utf8")),
+	);
+	expect(nativePublishes).toEqual([]);
 });
