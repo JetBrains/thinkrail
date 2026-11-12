@@ -2596,6 +2596,16 @@ own section. The kebab menu (`plan-menu`, a
   key handler intercepts keydown at `keyCode === 229` and derives the control bytes from `event.code`
   (which stays accurate under an IME) via `imeControlBytes`, writing them to the PTY itself; anything
   that isn't a rescued chord is left to normal text input.
+- **Terminal copy chord.** xterm allows one custom key handler, so `TerminalInstance` asks the pure
+  `terminalKeys.terminalKeyDecision(event, platform, hasSelection)`: nothing while an IME is composing, then
+  the copy chord, and only then the keyCode-229 rescue above (`imeControlBytes` lives beside it). The chord
+  comes first because an IME that reports 229 without composing would otherwise turn Ctrl+Shift+C into the
+  rescue's `^C`. Off Apple platforms (where Cmd+C already copies) **Ctrl+Shift+C** copies
+  `term.getSelection()` through `copyText`, as GNOME Terminal, Konsole and Windows Terminal do; without a
+  selection it does nothing. Either way the keydown is swallowed and `preventDefault`ed (Chromium would
+  otherwise open inspect-element), so it never writes `^C`; xterm itself encodes Ctrl+letter only without
+  Shift. Plain Ctrl+C stays xterm's SIGINT, and macOS keeps xterm's defaults. Ctrl+Shift+V needs no handler:
+  xterm leaves it unencoded, so Chromium's paste-as-plain-text reaches xterm's own paste listener.
 - **Korean IME replacement bridge (WebKit).** WebKit — Safari and the desktop app's WKWebView — drives
   the macOS Korean input method without `composition*` events: a syllable's first jamo lands as an
   `insertText` input, every re-composition of it (`ㄱ`→`가`→`간`) as `insertReplacementText`, the next
