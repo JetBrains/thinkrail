@@ -221,6 +221,14 @@ runs:
         [ -f "$update_archive_path" ] || { echo "::error::desktop update archive not found at $update_archive_path"; exit 1; }
         path="apps/desktop/dist/$name"
         cp "$source" "$path"
+        if [ "$TARGET" = 'bun-linux-x64' ] || [ "$TARGET" = 'bun-linux-arm64' ]; then
+          stage=$(mktemp -d)
+          tar -xzf "$path" -C "$stage"
+          repack="$PWD/$path.repack"
+          (cd "$stage" && shopt -s dotglob && tar -czf "$repack" --owner=0 --group=0 --numeric-owner -- *)
+          mv "$repack" "$path"
+          rm -rf "$stage"
+        fi
         {
           echo "name=$name"
           echo "path=$path"

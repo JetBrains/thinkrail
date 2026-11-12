@@ -166,12 +166,34 @@ describe("pushBranch", () => {
 		},
 	);
 
+	posix("a managed reftable workspace whose branch read times out aborts the push", async () => {
+		sh(repo, "refs", "migrate", "--ref-format=reftable");
+		const pushed = withHangingGit('*" symbolic-ref "*', () =>
+			pushBranch({ workspaceId: "w1", branch: "feature" }),
+		);
+		await expect(pushed).rejects.toThrow(expect.objectContaining({ code: "GIT_TIMEOUT" }));
+		expect(sh(remote, "for-each-ref", "refs/heads")).toBe("");
+	});
+
 	posix("a core.sshCommand probe that times out pushes nothing", async () => {
 		const pushed = withHangingGit('*" core.sshCommand "*', () =>
 			pushBranch({ workspaceId: "w1", branch: "feature" }),
 		);
 		await expect(pushed).rejects.toThrow(/^Could not read core\.sshCommand: timed out/);
 		expect(sh(remote, "for-each-ref", "refs/heads")).toBe("");
+	});
+
+	test("a managed workspace switched in its terminal pushes the live branch, never the stale one", async () => {
+		sh(repo, "switch", "-q", "-c", "feature-live");
+		await expect(pushBranch({ workspaceId: "w1", branch: "feature" })).rejects.toThrow(
+			/moved from "feature" to "feature-live"/,
+		);
+		expect(sh(remote, "for-each-ref", "refs/heads")).toBe("");
+
+		await pushBranch({ workspaceId: "w1", branch: "feature-live" });
+		expect(sh(remote, "for-each-ref", "--format=%(refname)", "refs/heads")).toBe(
+			"refs/heads/feature-live",
+		);
 	});
 
 	test("a repository without origin names the missing remote", async () => {

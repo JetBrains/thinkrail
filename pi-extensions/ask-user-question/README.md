@@ -11,22 +11,31 @@ pi install npm:@thinkrail/pi-ask-user-question
 
 - **`ask_user_question` tool.** Each question has a short `header`, two to four options (`label`,
   `description`, an optional markdown `preview`, and an optional `recommendedReason` for the option marked
-  `(Recommended)`), and `multiSelect` when several answers are valid. One call carries every question the
-  agent can ask now. The run pauses until you answer.
+  `(Recommended)`), and `multiSelect` when several answers are valid. A question can carry its own
+  markdown `preview` — what the question is about, such as the design being approved — shown above the
+  options. A single option is allowed for one purpose: confirming an inference ("Looks right"). One call
+  carries every question the agent can ask now. The run pauses until you answer.
 - **A questionnaire in the terminal.**
-  - One page per question; confirming the last one submits. **Submit answers** on the last page sends
-    what you have answered so far.
-  - ↑↓ to move (in single-select this also selects), Space to toggle in multi-select, Enter to confirm.
-  - **Other** for your own answer: type on its row.
-  - `n` attaches a note to an option.
+  - One page per question: **Next →** (or Tab / →) moves on, Shift+Tab / ← goes back. **Submit answers**
+    on the last page — or Ctrl+Enter anywhere, where the terminal reports it — sends what you have
+    answered so far.
+  - ↑↓ only move; Enter picks an option (checks or unchecks it in multi-select) and never moves on.
+  - **Other** for your own answer: type on its row; Enter or Esc in its editor keeps the text.
+  - Space attaches a note to an option (picking it first); the saved note gets its own row, and in
+    single-select the note follows your choice.
+  - `d` marks the question **discuss first**, with an optional line on what to explain; the agent then
+    explains the question instead of guessing and asks it again later. Choosing an option cancels it.
   - The recommended option shows a `Why:` line.
-  - An option's markdown preview appears beside the list on wide terminals and below it on narrow ones.
+  - The question's preview prints above the options. An option's preview appears beside the list on wide
+    terminals and below it on narrow ones; an option without one says so.
   - Esc skips the questionnaire. **Chat about this** ends the turn so you can answer in your own words.
 - **Dialogs in RPC hosts.** In editors that drive pi over RPC (VS Code, Zed, …) the questions arrive one
-  native dialog at a time: a choice list with "Other…" and "Chat about this". A multi-select question
-  takes the numbers of the options you pick (`1,3`), optionally followed by `; your own answer`.
+  native dialog at a time: a choice list with "Other…", "Discuss this…" and "Chat about this". A
+  multi-select question takes the numbers of the options you pick (`1,3`), optionally followed by
+  `; your own answer`, or `?` and a note to discuss it first.
 - **Readable answers.** The tool result tells the model exactly what you chose, your own answers, your
-  notes, and which questions you left unanswered. The transcript shows a compact summary.
+  notes, the questions to discuss first, and which questions you left unanswered. The transcript shows a
+  compact summary.
 
 Without an interactive UI (`pi -p`, JSON mode) the tool reports that it cannot ask, so the agent states its
 assumptions instead.
@@ -47,6 +56,10 @@ export default createAskUserQuestionExtension({
   announce: (toolCallId) => myHost.expect(toolCallId),
   // Optional: describe your UI to the model.
   guidance: { description: "…", promptGuidelines: ["…"] },
+  // Optional: let previews name workspace files (previewFile / previewBefore) your UI can render, and
+  // check each path before the question is shown. Off by default: terminals and dialogs print the path.
+  filePreviews: true,
+  checkFile: async (path, cwd) => assertInsideWorkspace(path, cwd),
 });
 ```
 

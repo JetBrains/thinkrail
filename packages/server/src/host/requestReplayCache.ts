@@ -10,12 +10,15 @@ export class RequestReplayConflictError extends Error {
 export type ReplayLoad = Record<string, { pending: number; settled: number; abandoned: number }>;
 
 export class RequestReplayOverflowError extends CodedError {
-	constructor(readonly load: ReplayLoad | null) {
+	readonly load: ReplayLoad | null;
+
+	constructor(load: ReplayLoad | null) {
 		super(
 			"REQUEST_REPLAY_OVERFLOW",
 			"replay namespace is full: unacknowledged results must be read first",
 		);
 		this.name = "RequestReplayOverflowError";
+		this.load = load;
 	}
 }
 
@@ -30,8 +33,11 @@ export class RequestAbandonedError extends Error {
 
 export class AbandonmentReportBudget {
 	private readonly reported = new Set<string>();
+	private readonly allowance: number;
 
-	constructor(private readonly allowance = 10) {}
+	constructor(allowance = 10) {
+		this.allowance = allowance;
+	}
 
 	admit(method: string): boolean {
 		if (this.reported.has(method) || this.reported.size >= this.allowance) return false;
@@ -88,15 +94,21 @@ export function heaviestReplayMethod(load: ReplayLoad): string | undefined {
 
 export class RequestReplayCache<T> {
 	private readonly clients = new Map<string, ClientNamespace<T>>();
+	private readonly maxRequestsPerClient: number;
+	private readonly maxWeightPerClient: number;
 
+	private readonly maxTrackedPerClient: number;
 	private readonly liveLowWater: number;
 	private readonly trackedLowWater: number;
 
 	constructor(
-		private readonly maxRequestsPerClient = 512,
-		private readonly maxWeightPerClient = 16 * 1024 * 1024,
-		private readonly maxTrackedPerClient = 2048,
+		maxRequestsPerClient = 512,
+		maxWeightPerClient = 16 * 1024 * 1024,
+		maxTrackedPerClient = 2048,
 	) {
+		this.maxRequestsPerClient = maxRequestsPerClient;
+		this.maxWeightPerClient = maxWeightPerClient;
+		this.maxTrackedPerClient = maxTrackedPerClient;
 		this.liveLowWater = Math.floor(maxRequestsPerClient * 0.9);
 		this.trackedLowWater = Math.floor(maxTrackedPerClient * 0.9);
 	}

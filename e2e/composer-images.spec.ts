@@ -1,5 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject, revealWorkbenchTool } from "./fixtures/app";
+
+declare global {
+	interface Window {
+		__releaseDraftImageDecode?: () => void;
+	}
+}
 
 async function openChatComposer(page: import("@playwright/test").Page): Promise<void> {
 	await openFixtureProject(page);
@@ -135,4 +141,93 @@ test("/compact preserves attached images and its draft until the images are remo
 	await page.getByRole("button", { name: "Remove image" }).click();
 	await expect(page.getByTestId("composer-command-error")).toHaveCount(0);
 	await expect(input).toHaveValue(command);
+});
+
+test("draft image attachments survive a chat tab remount", async ({ page }, testInfo) => {
+	await openChatComposer(page);
+	await page.getByTestId("chat-input").fill("Keep this text and image together");
+	await pastePng(page, 640, 480);
+	await expect(page.getByTestId("composer-image")).toHaveCount(1);
+	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+	await revealWorkbenchTool(page, "files");
+	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
+	await expect(page.getByTestId("chat-input")).toHaveCount(0);
+	await chatTab.getByRole("tab").click();
+	await expect(page.getByTestId("chat-input")).toHaveValue("Keep this text and image together");
+	await page.screenshot({ path: testInfo.outputPath("draft-image-after-remount.png") });
+	await expect(page.getByTestId("composer-image")).toHaveCount(1);
+	await expect(page.getByTestId("composer-image")).toHaveAttribute("data-width", "640");
+	await expect(page.getByTestId("composer-image")).toHaveAttribute("data-height", "480");
+});
+
+test("draft images are isolated by chat and removed images do not return after remount", async ({
+	page,
+}) => {
+	await openChatComposer(page);
+	await pastePng(page, 640, 480);
+	await expect(page.getByTestId("composer-image")).toHaveCount(1);
+	await page.getByTestId("new-chat").first().click();
+	const chats = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+	await expect(chats).toHaveCount(2);
+	await expect(page.getByTestId("composer-image")).toHaveCount(0);
+	await pastePng(page, 320, 240);
+	await expect(page.getByTestId("composer-image")).toHaveAttribute("data-width", "320");
+	await chats.first().getByRole("tab").click();
+	await expect(page.getByTestId("composer-image")).toHaveAttribute("data-width", "640");
+	await page.getByTestId("composer-image").getByRole("button").click();
+	await expect(page.getByTestId("composer-image")).toHaveCount(0);
+	await chats.last().getByRole("tab").click();
+	await expect(page.getByTestId("composer-image")).toHaveAttribute("data-width", "320");
+	await chats.first().getByRole("tab").click();
+	await expect(page.getByTestId("composer-image")).toHaveCount(0);
+});
+
+test("pending image decoding survives a chat remount and keeps Send disabled", async ({ page }) => {
+	await openChatComposer(page);
+	await page.getByTestId("chat-input").fill("Wait for my image");
+	await page.evaluate(() => {
+		const original = window.createImageBitmap.bind(window);
+		const gate = new Promise<void>((resolve) => {
+			window.__releaseDraftImageDecode = resolve;
+		});
+		Object.defineProperty(window, "createImageBitmap", {
+			configurable: true,
+			value: async (image: ImageBitmapSource, options?: ImageBitmapOptions) => {
+				await gate;
+				return original(image, options);
+			},
+		});
+	});
+	await pastePng(page, 640, 480);
+	await expect(page.getByTestId("composer-image-pending")).toHaveCount(1);
+	await expect(page.getByTestId("chat-send")).toBeDisabled();
+	const chat = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+	await revealWorkbenchTool(page, "files");
+	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
+	await expect(page.getByTestId("chat-input")).toHaveCount(0);
+	await chat.getByRole("tab").click();
+	await expect(page.getByTestId("composer-image-pending")).toHaveCount(1);
+	await expect(page.getByTestId("chat-send")).toBeDisabled();
+	await page.evaluate(() => window.__releaseDraftImageDecode?.());
+	await expect(page.getByTestId("composer-image-pending")).toHaveCount(0);
+	await expect(page.getByTestId("composer-image")).toHaveAttribute("data-width", "640");
+	await expect(page.getByTestId("chat-send")).toBeEnabled();
+});
+
+test("an accepted composer submission clears its image draft across remounts", async ({ page }) => {
+	await openChatComposer(page);
+	await page.getByTestId("chat-input").fill("My image draft");
+	await pastePng(page, 640, 480);
+	await expect(page.getByTestId("composer-image")).toHaveCount(1);
+	await expect(page.getByTestId("chat-send")).toBeEnabled();
+	await page.getByTestId("chat-send").click();
+	await expect(page.getByTestId("chat-input")).toHaveValue("");
+	await expect(page.getByTestId("composer-image")).toHaveCount(0);
+	const chat = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+	await revealWorkbenchTool(page, "files");
+	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
+	await expect(page.getByTestId("chat-input")).toHaveCount(0);
+	await chat.getByRole("tab").click();
+	await expect(page.getByTestId("chat-input")).toHaveValue("");
+	await expect(page.getByTestId("composer-image")).toHaveCount(0);
 });

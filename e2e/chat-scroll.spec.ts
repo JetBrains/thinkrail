@@ -8,6 +8,12 @@ import {
 } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
+import {
+	interceptAppWire,
+	playStreamReplay,
+	streamedMarkdown,
+	textStreamReplay,
+} from "./fixtures/streamReplay";
 
 const BASE_TS = 1_700_850_000_000;
 const NATIVE_SCROLL_INTENT_EXPIRY_MS = 650;
@@ -185,6 +191,32 @@ async function moveIntoStableHistory(
 		if (latestDistance(order, geometry) > 100) return geometry;
 	}
 	throw new Error("chat did not remain positioned in history");
+}
+
+const chatTabs = (page: Page) => page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+
+async function readTopVisibleRow(chatScroll: Locator): Promise<{ id: string; top: number }> {
+	return chatScroll.evaluate((root) => {
+		const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
+		if (!scroller) throw new Error("missing Virtuoso scroller");
+		const viewportTop = scroller.getBoundingClientRect().top;
+		for (const row of scroller.querySelectorAll<HTMLElement>("[data-chat-row-id]")) {
+			const rect = row.getBoundingClientRect();
+			if (rect.bottom > viewportTop + 1) {
+				return { id: row.dataset.chatRowId ?? "", top: rect.top - viewportTop };
+			}
+		}
+		throw new Error("no visible chat row");
+	});
+}
+
+async function switchAwayAndBack(page: Page): Promise<void> {
+	await expect(chatTabs(page)).toHaveCount(1);
+	await page.getByTestId("new-chat").first().click();
+	await expect(chatTabs(page)).toHaveCount(2);
+	await expect(chatTabs(page).first()).toHaveAttribute("data-active", "false");
+	await chatTabs(page).first().getByRole("tab").click();
+	await expect(chatTabs(page).first()).toHaveAttribute("data-active", "true");
 }
 
 async function openTallChat(
@@ -655,6 +687,181 @@ for (const testCase of orderCases) {
 				);
 			}
 			await expect(page.getByTestId("stream-indicator")).toHaveCount(0);
+		} finally {
+			rmSync(session.path, { force: true });
+		}
+	});
+
+	test(`${testCase.order} restores a history reading position across a tab switch`, async ({
+		page,
+	}) => {
+		const { session, chatScroll } = await openTallChat(page, testCase.order);
+		try {
+			await moveIntoStableHistory(page, chatScroll, testCase.order, testCase.historyWheel);
+			for (let step = 0; step < 3; step += 1) {
+				await page.mouse.wheel(0, testCase.historyWheel);
+				await waitForScrollStability(chatScroll);
+			}
+			await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+			const reading = await readTopVisibleRow(chatScroll);
+
+			await switchAwayAndBack(page);
+
+			await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+			await waitForScrollStability(chatScroll);
+			const restored = await readTopVisibleRow(chatScroll);
+			expect(restored.id).toBe(reading.id);
+			expect(Math.abs(restored.top - reading.top)).toBeLessThanOrEqual(2);
+		} finally {
+			rmSync(session.path, { force: true });
+		}
+	});
+
+	test(`${testCase.order} restores a history reading position across a tab switch while working`, async ({
+		page,
+	}) => {
+		const wire = await interceptAppWire(page);
+		const { session, chatScroll } = await openTallChat(page, testCase.order);
+		try {
+			const replay = textStreamReplay(
+				session.id,
+				streamedMarkdown(`${testCase.order} detached stream`, 2_000),
+				BASE_TS + 200_000,
+			);
+			const opening = replay.steps.slice(0, 20);
+			await playStreamReplay(wire(), { ...replay, steps: opening }, 0);
+			await expect(chatScroll).toHaveAttribute("data-streaming", "true");
+			await waitForScrollStability(chatScroll);
+			await moveIntoStableHistory(page, chatScroll, testCase.order, testCase.historyWheel);
+			for (let step = 0; step < 3; step += 1) {
+				await page.mouse.wheel(0, testCase.historyWheel);
+				await waitForScrollStability(chatScroll);
+			}
+			const reading = await readTopVisibleRow(chatScroll);
+
+			await switchAwayAndBack(page);
+
+			await expect(chatScroll).toHaveAttribute("data-streaming", "true");
+			await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+			await expect(page.getByTestId(testCase.buttonTestId)).toHaveText("Follow response");
+			await waitForScrollStability(chatScroll);
+			const restored = await readTopVisibleRow(chatScroll);
+			expect(restored.id).toBe(reading.id);
+			expect(Math.abs(restored.top - reading.top)).toBeLessThanOrEqual(2);
+
+			await playStreamReplay(wire(), { ...replay, steps: replay.steps.slice(opening.length) }, 0);
+			await expect(chatScroll).toHaveAttribute("data-streaming", "false");
+			await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+			await expect(page.getByTestId(testCase.buttonTestId)).toHaveText("Latest");
+			await waitForScrollStability(chatScroll);
+			const settled = await readTopVisibleRow(chatScroll);
+			expect(settled.id).toBe(reading.id);
+			expect(Math.abs(settled.top - reading.top)).toBeLessThanOrEqual(2);
+		} finally {
+			rmSync(session.path, { force: true });
+		}
+	});
+
+	test(`${testCase.order} keeps restoring a reading position when the response settles meanwhile`, async ({
+		page,
+	}) => {
+		const wire = await interceptAppWire(page);
+		const { session, chatScroll } = await openTallChat(page, testCase.order);
+		type HeldFrames = Window & { releaseHeldFrames?: () => void };
+		try {
+			const replay = textStreamReplay(
+				session.id,
+				streamedMarkdown(`${testCase.order} settling stream`, 2_000),
+				BASE_TS + 200_000,
+			);
+			const opening = replay.steps.slice(0, 20);
+			await playStreamReplay(wire(), { ...replay, steps: opening }, 0);
+			await expect(chatScroll).toHaveAttribute("data-streaming", "true");
+			await waitForScrollStability(chatScroll);
+			await moveIntoStableHistory(page, chatScroll, testCase.order, testCase.historyWheel);
+			for (let step = 0; step < 3; step += 1) {
+				await page.mouse.wheel(0, testCase.historyWheel);
+				await waitForScrollStability(chatScroll);
+			}
+			const reading = await readTopVisibleRow(chatScroll);
+
+			await page.getByTestId("new-chat").first().click();
+			await expect(chatTabs(page).first()).toHaveAttribute("data-active", "false");
+			await page.evaluate(() => {
+				const request = window.requestAnimationFrame.bind(window);
+				const cancel = window.cancelAnimationFrame.bind(window);
+				const held = new Map<number, FrameRequestCallback>();
+				const released = new Map<number, number>();
+				let nextHeld = -1;
+				window.requestAnimationFrame = (callback) => {
+					held.set(nextHeld, callback);
+					return nextHeld--;
+				};
+				window.cancelAnimationFrame = (id) => {
+					if (!held.delete(id)) cancel(released.get(id) ?? id);
+				};
+				(window as HeldFrames).releaseHeldFrames = () => {
+					window.requestAnimationFrame = request;
+					for (const [id, callback] of held) released.set(id, request(callback));
+					held.clear();
+				};
+			});
+			await chatTabs(page).first().getByRole("tab").click();
+			await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+			await playStreamReplay(wire(), { ...replay, steps: replay.steps.slice(opening.length) }, 0);
+			await expect(chatScroll).toHaveAttribute("data-streaming", "false");
+			await page.evaluate(() => (window as HeldFrames).releaseHeldFrames?.());
+
+			await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+			await waitForScrollStability(chatScroll);
+			const restored = await readTopVisibleRow(chatScroll);
+			expect(restored.id).toBe(reading.id);
+			expect(Math.abs(restored.top - reading.top)).toBeLessThanOrEqual(2);
+		} finally {
+			await page
+				.evaluate(() => (window as HeldFrames).releaseHeldFrames?.())
+				.catch(() => undefined);
+			rmSync(session.path, { force: true });
+		}
+	});
+
+	test(`${testCase.order} lets the reader move right after a restored tab switch`, async ({
+		page,
+	}) => {
+		const { session, chatScroll } = await openTallChat(page, testCase.order);
+		try {
+			await moveIntoStableHistory(page, chatScroll, testCase.order, testCase.historyWheel);
+			for (let step = 0; step < 3; step += 1) {
+				await page.mouse.wheel(0, testCase.historyWheel);
+				await waitForScrollStability(chatScroll);
+			}
+			const reading = await readTopVisibleRow(chatScroll);
+
+			await switchAwayAndBack(page);
+			await moveMouseToChatViewport(page, chatScroll);
+			await page.mouse.wheel(0, -testCase.historyWheel);
+
+			await waitForScrollStability(chatScroll);
+			await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+			const moved = await readTopVisibleRow(chatScroll);
+			expect(moved.id === reading.id && Math.abs(moved.top - reading.top) <= 2).toBe(false);
+		} finally {
+			rmSync(session.path, { force: true });
+		}
+	});
+
+	test(`${testCase.order} keeps following the latest edge across a tab switch`, async ({
+		page,
+	}) => {
+		const { session, chatScroll } = await openTallChat(page, testCase.order);
+		try {
+			await switchAwayAndBack(page);
+
+			await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
+			await waitForScrollStability(chatScroll);
+			expect(
+				latestDistance(testCase.order, await readChatScrollGeometry(chatScroll)),
+			).toBeLessThanOrEqual(1);
 		} finally {
 			rmSync(session.path, { force: true });
 		}

@@ -667,24 +667,27 @@ describe("website analytics", () => {
 	test.each([
 		["missing", null],
 		["invalid", "not-a-uuid"],
-	] as const)("creates and persists a random journey ID when the stored value is %s", (_, stored) => {
-		const dom = installDom("site.example", { storedJourney: stored, randomUuid: newJourneyId });
-		const consent = createConsent(true);
-		const analytics = createWebsiteAnalytics({
-			productionHostname: "site.example",
-			postHogProjectKey: expectedPostHogProjectKey,
-			marketingConsent: consent.adapter,
-		});
+	] as const)(
+		"creates and persists a random journey ID when the stored value is %s",
+		(_, stored) => {
+			const dom = installDom("site.example", { storedJourney: stored, randomUuid: newJourneyId });
+			const consent = createConsent(true);
+			const analytics = createWebsiteAnalytics({
+				productionHostname: "site.example",
+				postHogProjectKey: expectedPostHogProjectKey,
+				marketingConsent: consent.adapter,
+			});
 
-		analytics.init();
-		dom.loadPostHog();
+			analytics.init();
+			dom.loadPostHog();
 
-		expect(dom.values.get(journeyStorageKey)).toBe(newJourneyId);
-		expect(dom.vendorCalls).toContainEqual({
-			method: "register",
-			properties: { journey_id: newJourneyId },
-		});
-	});
+			expect(dom.values.get(journeyStorageKey)).toBe(newJourneyId);
+			expect(dom.vendorCalls).toContainEqual({
+				method: "register",
+				properties: { journey_id: newJourneyId },
+			});
+		},
+	);
 
 	test("bounds the pre-load queue and keeps the most recent captures", () => {
 		const dom = installDom("site.example");

@@ -24,8 +24,8 @@ const GERMAN = {
 	"chat.todo.planDocName": "Plan · {{title}}",
 };
 
-test("default names translate at render; a name set by the user or agent shows verbatim", () => {
-	applyLocale("de", { de: GERMAN });
+test("default names translate at render; a name set by the user or agent shows verbatim", async () => {
+	await applyLocale("de", { de: GERMAN });
 	const t = currentTranslator();
 	expect(chatName(t, "")).toBe("Unterhaltung");
 	expect(chatName(t, "  ")).toBe("Unterhaltung");
@@ -43,7 +43,7 @@ test("terminal defaults are a language-neutral pattern that numbering reads back
 	expect(defaultTerminalIndex("My Terminal 2")).toBeNull();
 });
 
-test("Changes and diff tab names tag every non-default scope in the current language", () => {
+test("Changes and diff tab names tag every non-default scope in the current language", async () => {
 	const en = currentTranslator();
 	expect(changesTabName(en, { kind: "branch" })).toBe("Changes");
 	expect(changesTabName(en, { kind: "uncommitted" })).toBe("Changes · uncommitted");
@@ -57,7 +57,7 @@ test("Changes and diff tab names tag every non-default scope in the current lang
 	expect(changesTabName(en, turn)).toMatch(/^Changes · turn /);
 	expect(diffTabName(en, turn, "src/a.ts")).toMatch(/^a\.ts · turn /);
 
-	applyLocale("de", { de: GERMAN });
+	await applyLocale("de", { de: GERMAN });
 	const de = currentTranslator();
 	expect(changesTabName(de, { kind: "uncommitted" })).toBe("Änderungen · nicht festgeschrieben");
 	expect(diffTabName(de, { kind: "uncommitted" }, "src/a.ts")).toBe("a.ts · nicht festgeschrieben");

@@ -109,6 +109,39 @@ test("Changes tab shows the active worktree's diff and swaps per workspace", asy
 	await expect(page.getByTestId("changes-empty")).toBeVisible();
 });
 
+test("JSON tree diff marks change-holding nodes and summarizes changes on hover", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+
+	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
+	writeFileSync(
+		join(worktree, "sample.json"),
+		'{\n  "project": "renamed",\n  "features": ["tree", "diff"]\n}\n',
+	);
+
+	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("change-item").filter({ hasText: "sample.json" }).dblclick();
+	await page.getByTestId("view-toggle-json").click();
+	const jsonDiff = page.getByTestId("json-diff");
+	const features = jsonDiff.locator('[data-json-pointer="/features"] > [data-json-nested-changes]');
+	await expect(features).toBeVisible();
+	await expect(jsonDiff.locator("[data-json-nested-changes]")).toHaveCount(2);
+
+	await features.hover();
+	const tooltip = page.getByRole("tooltip");
+	await expect(tooltip).toContainText('[1]Removed"anchors"');
+	await expect(tooltip).toContainText('[1]Added"diff"');
+	await page.mouse.move(0, 0, { steps: 4 });
+	await jsonDiff.locator('[data-json-pointer="/project"] > div').hover();
+	await expect(tooltip).toContainText("Changed");
+	await page.mouse.move(0, 0, { steps: 4 });
+	await jsonDiff.locator('[data-json-pointer=""] > [data-json-nested-changes]').hover();
+	await expect(tooltip).toContainText('project"sample-project"→"renamed"');
+	await expect(tooltip).toContainText("features[1]Added");
+});
+
 test("Rendered markdown diff of a large repetitive file never blocks the main thread", async ({
 	page,
 }) => {
