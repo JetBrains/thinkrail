@@ -155,9 +155,9 @@ loanwords decline as Russian words, ThinkRail concepts stay Russian.
 
 | English | Russian |
 |---|---|
-| push, pull, fetch, merge, rebase, squash, cherry-pick, stash, pull request, worktree | Latin, indeclinable: «Push: {{count}} коммит», «Squash и merge», «Создать merge-коммит»; a merged PR is «принят» |
+| push, pull, fetch, merge, rebase, squash, cherry-pick, stash, pull request, worktree, diff | Latin, indeclinable: «Push: {{count}} коммит», «Squash и merge», «Создать merge-коммит»; a merged PR is «принят» |
 | commit (noun / verb), uncommitted | «коммит» (declined), «сделать коммит», «незакоммиченные изменения» / «Не закоммичено» |
-| branch; workspace; checkout (working copy) | «ветка» (never «ветвь»); «рабочая область»; «рабочая копия» |
+| branch; workspace; workbench; checkout (working copy) | «ветка» (never «ветвь»); «рабочая область»; «рабочая зона»; «рабочая копия» |
 | prompt / request | «промпт» / «запрос» |
 | clone, remote, revert, hunk | «клонировать», «удалённый репозиторий» / «Удалённые», «отменить изменения в файле», «фрагмент» |
 
