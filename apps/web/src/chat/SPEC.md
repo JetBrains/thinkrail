@@ -235,12 +235,18 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
     stays presentational. A small `ChatMediaContext` supplies `resolveUrl` (the transport's `hostUrl`) and a
     `retryEpoch`. `ChatView` provides it, and its epoch advances when that chat's reconnect transcript resync
     lands. `SubagentTranscriptDialog` provides it too, and its epoch advances per poll.
-  - **The box is reserved.** The `<img>` carries the host-sniffed `width`/`height`, so the box is reserved
-    before the bytes arrive and stays when they fail. The "Image unavailable" tile overlays that same box
-    with the label and a keyboard-reachable Retry (a cache-busting reload).
-  - **Retry after a reconnect.** The tile retries by itself when the epoch advances. It never retries on the
-    raw reconnect, because after a host restart the image is servable again only once the transcript
-    re-read has re-registered it.
+  - **The box is reserved.** The `<img>` carries the host-sniffed `width`/`height`. `ChatImage` owns its
+    sizing through a `fit` (`thumbnail` caps at 240px, `screen` caps at 78vh). The height attribute stays
+    definite while `w-auto` follows the aspect ratio, so the box exists before the bytes arrive and when
+    they fail. Callers never pass size classes, because `w-auto` or `h-auto` on a sized image would
+    collapse that box.
+  - **The tile.** "Image unavailable" overlays that same box, with a minimum size when the box is unknown
+    or small. It shows the label and an explicitly tabbable Retry (macOS WebKit skips buttons without a
+    tab stop).
+  - **Retry.** Retry makes a cache-busting reload. The tile retries by itself when the epoch advances,
+    and stays up until the new load succeeds, so there is no flicker. It never retries on the raw
+    reconnect, because after a host restart the image is servable again only once the transcript re-read
+    has re-registered it.
   - **Keys are occurrences.** An image's React key is its slot (owner identity plus ordinal), never its
     content, so repeated images do not collide. An attachment dialog opened on the optimistic echo also
     stays open when the host's message replaces the echo.

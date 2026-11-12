@@ -20,12 +20,7 @@ function ToolResultImage({ image, label }: { image: WireImage; label: string }) 
 			data-testid="tool-result-image-preview"
 			className="relative flex min-h-64 w-full items-center justify-center overflow-hidden rounded-sm border border-border-default bg-sunken"
 		>
-			<ChatImage
-				image={image}
-				label={label}
-				testId="tool-result-image-thumbnail"
-				className="block max-h-[240px] w-auto object-contain"
-			/>
+			<ChatImage image={image} label={label} fit="thumbnail" testId="tool-result-image-thumbnail" />
 			<Dialog open={open} onOpenChange={setOpen}>
 				<DialogTrigger asChild>
 					<IconButton
@@ -45,7 +40,7 @@ function ToolResultImage({ image, label }: { image: WireImage; label: string }) 
 						<DialogTitle>{label}</DialogTitle>
 					</DialogHeader>
 					<div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-sunken">
-						<ChatImage image={image} label={label} className="max-h-full w-auto object-contain" />
+						<ChatImage image={image} label={label} fit="screen" />
 					</div>
 				</DialogContent>
 			</Dialog>

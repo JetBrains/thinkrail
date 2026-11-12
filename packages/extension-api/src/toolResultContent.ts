@@ -21,12 +21,12 @@ function imageOf(candidate: {
 	const { mimeType } = candidate;
 	if (typeof mimeType !== "string" || !acceptedImageTypes.has(mimeType)) return null;
 	if (typeof candidate.ref === "string" && candidate.ref.startsWith(IMAGES_ROUTE)) {
-		const sized = positiveInteger(candidate.width) && positiveInteger(candidate.height);
+		const { width, height } = candidate;
 		return {
 			type: "image",
 			mimeType,
 			ref: candidate.ref,
-			...(sized ? { width: candidate.width as number, height: candidate.height as number } : {}),
+			...(positiveInteger(width) && positiveInteger(height) ? { width, height } : {}),
 		};
 	}
 	if (typeof candidate.data === "string" && candidate.data.length > 0) {

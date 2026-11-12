@@ -133,3 +133,32 @@ test("an image tool result previews inline and opens full screen", async ({ page
 	await expect(dialog).toBeHidden();
 	await expect(fullScreen).toBeFocused();
 });
+
+test("an image that cannot load shows the unavailable tile, and Retry recovers it", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const chat = seedWorkspaceSession(repoCwd(), {
+		name: "image retry",
+		messages: [{ role: "user", text: "read the mockup image", timestamp: BASE_TS }],
+	});
+	appendToolImageResult(chat.path, chat.id);
+	await page.route("**/images/**", (route) => route.fulfill({ status: 404, body: "not found" }));
+
+	await expect(defaultWorkspaceRow(page)).toBeVisible();
+	await enterDefaultWorkspace(page);
+	const step = await expandActivityStep(page, "read");
+	const tile = step.getByTestId("chat-image-unavailable");
+	await expect(tile).toBeVisible();
+	await expect(tile).toContainText(IMAGE_PATH);
+	const tileBox = await tile.boundingBox();
+	expect(tileBox?.width).toBeGreaterThanOrEqual(160);
+	expect(tileBox?.height).toBeGreaterThanOrEqual(90);
+
+	await page.unroute("**/images/**");
+	const retry = step.getByTestId("chat-image-retry");
+	await expect(retry).toHaveAccessibleName(`Retry loading ${IMAGE_PATH}`);
+	await retry.click();
+	await expect(tile).toBeHidden();
+	await expectDecoded(step.getByTestId("tool-result-image-thumbnail"));
+});

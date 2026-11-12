@@ -26,7 +26,7 @@ export function imageLoadView(
 	const reconnected = state.failedEpoch !== null && state.failedEpoch !== epoch;
 	return {
 		query: reconnected ? `epoch-${epoch}` : state.query,
-		unavailable: state.failedEpoch !== null && !reconnected,
+		unavailable: state.failedEpoch !== null,
 	};
 }
 
@@ -40,8 +40,12 @@ export function imageLoadSucceeded(state: ImageLoadState, epoch: number): ImageL
 		: { failedEpoch: null, query: imageLoadView(state, epoch).query };
 }
 
-export function imageLoadRetried(nonce: string): ImageLoadState {
-	return { failedEpoch: null, query: `manual-${nonce}` };
+export function imageLoadRetried(
+	state: ImageLoadState,
+	epoch: number,
+	nonce: string,
+): ImageLoadState {
+	return { failedEpoch: state.failedEpoch === null ? null : epoch, query: `manual-${nonce}` };
 }
 
 export function chatImageUrl(
@@ -55,14 +59,19 @@ export function chatImageUrl(
 	return query === null ? url : `${url}?retry=${encodeURIComponent(query)}`;
 }
 
+const FIT_CLASS = {
+	thumbnail: "max-h-[240px]",
+	screen: "max-h-[78vh]",
+} as const;
+
 interface ChatImageProps {
 	image: WireImage;
 	label: string;
-	className?: string;
+	fit: keyof typeof FIT_CLASS;
 	testId?: string;
 }
 
-export function ChatImage({ image, label, className, testId }: ChatImageProps) {
+export function ChatImage({ image, label, fit, testId }: ChatImageProps) {
 	const t = useT();
 	const media = useContext(ChatMediaContext);
 	const frame = useRef<HTMLSpanElement>(null);
@@ -83,7 +92,7 @@ export function ChatImage({ image, label, className, testId }: ChatImageProps) {
 			data-state={unavailable ? "unavailable" : undefined}
 			className={cn(
 				"relative inline-flex max-w-full outline-none",
-				unavailable && box === null && "min-h-96 min-w-160",
+				unavailable && (box === null || box.width < 160 || box.height < 96) && "min-h-96 min-w-160",
 			)}
 		>
 			{src === null ? null : (
@@ -95,28 +104,37 @@ export function ChatImage({ image, label, className, testId }: ChatImageProps) {
 					decoding="async"
 					{...box}
 					onError={() => setLoad(imageLoadFailed(load, epoch))}
-					onLoad={() => setLoad(imageLoadSucceeded(load, epoch))}
-					className={cn("h-auto max-w-full", className, unavailable && "invisible")}
+					onLoad={() => {
+						if (frame.current?.contains(document.activeElement)) {
+							frame.current.focus({ preventScroll: true });
+						}
+						setLoad(imageLoadSucceeded(load, epoch));
+					}}
+					className={cn(
+						"w-auto max-w-full object-contain",
+						box === null && "h-auto",
+						FIT_CLASS[fit],
+						unavailable && "invisible",
+					)}
 				/>
 			)}
 			{unavailable ? (
 				<span
 					data-testid="chat-image-unavailable"
-					className="absolute inset-0 flex flex-col items-center justify-center gap-8 rounded-sm border border-border-default bg-sunken p-8 text-center text-text-muted tr-text-metadata"
+					className="absolute inset-0 flex flex-col items-center justify-center gap-4 overflow-hidden rounded-sm border border-border-default bg-sunken p-8 text-center text-text-muted tr-text-metadata"
 				>
-					<ImageIcon aria-hidden="true" className="size-20" />
+					<ImageIcon aria-hidden="true" className="size-20 shrink-0" />
 					<span>{t("chat.image.unavailable")}</span>
+					<span className="max-w-full truncate text-text-subtle">{label}</span>
 					{src === null ? null : (
 						<Button
 							variant="outline"
 							size="s"
 							iconLeft={RefreshIcon}
+							tabIndex={0}
 							data-testid="chat-image-retry"
 							aria-label={t("chat.image.retryLabel", { label })}
-							onClick={() => {
-								frame.current?.focus({ preventScroll: true });
-								setLoad(imageLoadRetried(String(Date.now())));
-							}}
+							onClick={() => setLoad(imageLoadRetried(load, epoch, String(Date.now())))}
 						>
 							{t("chat.image.retry")}
 						</Button>

@@ -70,6 +70,15 @@ export function imageRefHash(block: ImageBlock): string {
 	return memoOf(block).hash;
 }
 
+export function findImageBlock(blocks: unknown, hash: string): ImageBlock | null {
+	if (!Array.isArray(blocks)) return null;
+	for (const block of blocks) {
+		if (typeof block !== "object" || block === null || !isImageBlock(block)) continue;
+		if (block.data.length > 0 && memoOf(block).hash === hash) return block;
+	}
+	return null;
+}
+
 function cacheKey(sessionId: string, hash: string): string {
 	return `${sessionId}/${hash}`;
 }

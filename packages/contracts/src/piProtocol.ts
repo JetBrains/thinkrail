@@ -20,6 +20,7 @@ import type {
 	ImageContent,
 	Model,
 	StopReason,
+	SystemMessage,
 	TextContent,
 	ToolResultMessage,
 	UserMessage,
@@ -342,7 +343,11 @@ export type WireToolResultMessage = Omit<ToolResultMessage, "content"> & {
 	content: (TextContent | WireImage)[];
 };
 
-export type WireMessage = WireUserMessage | AssistantMessage | WireToolResultMessage;
+export type WireMessage =
+	| SystemMessage
+	| WireUserMessage
+	| AssistantMessage
+	| WireToolResultMessage;
 
 export function isRefImage(image: WireImage): image is RefImage {
 	return "ref" in image && typeof image.ref === "string";

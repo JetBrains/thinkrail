@@ -297,7 +297,9 @@ re-opened transcripts provider-valid.
     oversized-image guard still see the bytes. The image source the host injects is agent's live lookup, `sessionImageSource`:
     - the owning chat's `sessionManager.getEntries()` plus `session.messages`, which also covers compacted
       history and in-flight messages;
-    - tombstoned chats are not servable.
+    - only a chat live in this host and not tombstoned is servable. So deletion, archive teardown
+      (`removeWorkspaceSessions`) and dispose all stop its images. After a restart, a chat serves again
+      once the page's resync re-attaches it.
 
     The live entry retains
     that settlement in `SessionSummary.lastSettlement` for reconnect after Pi removed a failed attempt from its rebuilt
@@ -1348,8 +1350,8 @@ re-opened transcripts provider-valid.
   session-lifecycle debug traces); `persistence` (`dataDir` for delegation plus the narrow session
   receipt stores); `trash` (the recoverable-delete primitive); `history` (`displayTranscript` only — `getMessages` must
   emit the same display projection the search index extracts, including turns Pi summarized away from
-  model context); Node.
-- **Forbidden:** `host`; sibling features other than `log`, `trash`, `history` (`displayTranscript` only) and those narrow persistence surfaces (session
+  model context); `images` (projection, `imageDimensions`, and the hash its live source compares); Node.
+- **Forbidden:** `host`; sibling features other than `log`, `trash`, `history` (`displayTranscript` only), `images` and those narrow persistence surfaces (session
   worktree `cwd` remains an input, never a workspace-registry lookup); Central process/filesystem knowledge—the
   caller supplies only the desired opaque extension paths for a candidate.
 

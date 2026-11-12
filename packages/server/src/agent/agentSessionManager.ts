@@ -68,7 +68,7 @@ import {
 	workspaceFiles,
 } from "../extensions";
 import { displayTranscriptMessages } from "../history";
-import { type ImageBlock, type ImageSource, imageRefHash, projectImages } from "../images";
+import { findImageBlock, type ImageBlock, type ImageSource, projectImages } from "../images";
 import { logger } from "../log";
 import {
 	dataDir,
@@ -2234,23 +2234,6 @@ async function getSessionMessagesInternal(
 	};
 }
 
-function findImageBlock(value: unknown, hash: string): ImageBlock | null {
-	if (!Array.isArray(value)) return null;
-	for (const block of value) {
-		if (
-			typeof block === "object" &&
-			block !== null &&
-			block.type === "image" &&
-			typeof block.data === "string" &&
-			typeof block.mimeType === "string" &&
-			block.data.length > 0 &&
-			imageRefHash(block) === hash
-		)
-			return block;
-	}
-	return null;
-}
-
 function findMessageImage(messages: Iterable<unknown>, hash: string): ImageBlock | null {
 	for (const message of messages) {
 		if (typeof message !== "object" || message === null || !("content" in message)) continue;
@@ -2261,7 +2244,7 @@ function findMessageImage(messages: Iterable<unknown>, hash: string): ImageBlock
 }
 
 export const sessionImageSource: ImageSource = {
-	isServable: (sessionId) => !hasDeletionTombstone(sessionId),
+	isServable: (sessionId) => sessions.has(sessionId) && !hasDeletionTombstone(sessionId),
 	find: (sessionId, hash) => {
 		const entry = sessions.get(sessionId);
 		if (!entry || hasDeletionTombstone(sessionId)) return null;

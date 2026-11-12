@@ -48,8 +48,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   any method but `GET`/`HEAD` with 405; the host injects its
   source (agent's live lookup plus the tombstone check), calls `forgetImageSession` on every `session.deleted`,
   and calls `resetImages` on stop. Then the **`/fonts/<file>`** route (`fontRoutes.ts`, ahead of the static fallback) over the
-  [[submodule-server-fonts]] folder — the host's one HTTP write route and the only route that checks its
-  method: `GET` serves a font by its extension's type (`font/ttf|otf|woff|woff2`) with
+  [[submodule-server-fonts]] folder — the host's one HTTP write route, and besides `/images` (GET/HEAD only)
+  the only route that checks its method: `GET` serves a font by its extension's type (`font/ttf|otf|woff|woff2`) with
   `Cache-Control: no-cache` (list URLs carry a content version) and 404s any name `fontFileKind` refuses,
   a collection, or a missing file; `PUT` (behind the upload guard below) answers 400 for a refused name,
   else stores the body through `saveUserFont` and answers that file's entry as JSON: 200, 413 `too-large`

@@ -7,7 +7,12 @@ import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/prov
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { Project, RefImage, TranscriptMessage, Workspace } from "@thinkrail/contracts";
 import { IMAGES_ROUTE, isRefImage, PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
-import { configurePiRuntime, configurePiRuntimeFactory, setSessionManagerFactory } from "../agent";
+import {
+	configurePiRuntime,
+	configurePiRuntimeFactory,
+	removeWorkspaceSessions,
+	setSessionManagerFactory,
+} from "../agent";
 import { resetAnalyticsForTests } from "../analytics";
 import { resetJbcentralStateForTests } from "../auth";
 import { resetConfigCache } from "../settings";
@@ -110,7 +115,7 @@ function gitRepo(path: string): string {
 
 async function connect() {
 	const socket = new WebSocket(
-		`ws://127.0.0.1:${server.port}/ws?client=image-refs&protocol=${PROTOCOL_VERSION}`,
+		`ws://127.0.0.1:${server.port}/ws?client=image-refs-${crypto.randomUUID()}&protocol=${PROTOCOL_VERSION}`,
 	);
 	const raw = new Map<string, string>();
 	const welcomed = new Promise<void>((resolve) => {
@@ -139,45 +144,53 @@ async function connect() {
 	};
 }
 
+async function openWorkspace(client: Awaited<ReturnType<typeof connect>>, name: string) {
+	const { frame: opened } = await client.request("project.open", {
+		path: gitRepo(join(root, name)),
+	});
+	const project = opened.result as Project;
+	const { frame: listed } = await client.request("workspace.list", {
+		projectId: project.id,
+		includeDiffStats: false,
+	});
+	const [workspace] = listed.result as Workspace[];
+	if (!workspace) throw new Error("the opened project lists no workspace");
+	return workspace;
+}
+
+async function seededImageRef(client: Awaited<ReturnType<typeof connect>>, workspace: Workspace) {
+	const manager = SessionManager.create(workspace.worktreePath);
+	const data = SCREENSHOT.toString("base64");
+	manager.appendMessage({
+		role: "user",
+		content: [
+			{ type: "text", text: "what is on this screenshot?" },
+			{ type: "image", data, mimeType: "image/png" },
+		],
+		timestamp: 1,
+	});
+	manager.appendMessage(fauxAssistantMessage("a login form", { timestamp: 2 }));
+	const sessionId = manager.getSessionId();
+	const { frame, text } = await client.request("session.getMessages", {
+		workspaceId: workspace.id,
+		sessionId,
+	});
+	const messages = (frame.result as { messages: TranscriptMessage[] }).messages;
+	const user = messages.find((message) => message.role === "user");
+	const blocks = user && typeof user.content !== "string" ? user.content : [];
+	const image = blocks.find(
+		(block): block is RefImage => block.type === "image" && isRefImage(block),
+	);
+	if (!image) throw new Error("the transcript has no image reference");
+	return { sessionId, image, text, data };
+}
+
 test("a transcript's images leave as references the route serves until the chat is deleted", async () => {
 	const client = await connect();
 	try {
-		const { frame: opened } = await client.request("project.open", {
-			path: gitRepo(join(root, "repo")),
-		});
-		const project = opened.result as Project;
-		const { frame: listed } = await client.request("workspace.list", {
-			projectId: project.id,
-			includeDiffStats: false,
-		});
-		const [workspace] = listed.result as Workspace[];
-		if (!workspace) throw new Error("the opened project lists no workspace");
-
-		const manager = SessionManager.create(workspace.worktreePath);
-		const data = SCREENSHOT.toString("base64");
-		manager.appendMessage({
-			role: "user",
-			content: [
-				{ type: "text", text: "what is on this screenshot?" },
-				{ type: "image", data, mimeType: "image/png" },
-			],
-			timestamp: 1,
-		});
-		manager.appendMessage(fauxAssistantMessage("a login form", { timestamp: 2 }));
-		const sessionId = manager.getSessionId();
-
-		const { frame, text } = await client.request("session.getMessages", {
-			workspaceId: workspace.id,
-			sessionId,
-		});
+		const workspace = await openWorkspace(client, "repo");
+		const { sessionId, image, text, data } = await seededImageRef(client, workspace);
 		expect(text).not.toContain(data);
-		const messages = (frame.result as { messages: TranscriptMessage[] }).messages;
-		const user = messages.find((message) => message.role === "user");
-		const blocks = user && typeof user.content !== "string" ? user.content : [];
-		const image = blocks.find(
-			(block): block is RefImage => block.type === "image" && isRefImage(block),
-		);
-		if (!image) throw new Error("the transcript has no image reference");
 		expect(image.ref.startsWith(`${IMAGES_ROUTE}${sessionId}/`)).toBe(true);
 		expect({ width: image.width, height: image.height }).toEqual({ width: 800, height: 600 });
 
@@ -192,6 +205,20 @@ test("a transcript's images leave as references the route serves until the chat 
 		await client.request("session.delete", { workspaceId: workspace.id, sessionId });
 		const gone = await fetch(`http://127.0.0.1:${server.port}${image.ref}`);
 		expect(gone.status).toBe(404);
+	} finally {
+		client.close();
+	}
+}, 30_000);
+
+test("tearing down a workspace's sessions stops serving their images", async () => {
+	const client = await connect();
+	try {
+		const workspace = await openWorkspace(client, "teardown-repo");
+		const { image } = await seededImageRef(client, workspace);
+		const url = `http://127.0.0.1:${server.port}${image.ref}`;
+		expect((await fetch(url)).status).toBe(200);
+		await removeWorkspaceSessions(workspace.id);
+		expect((await fetch(url)).status).toBe(404);
 	} finally {
 		client.close();
 	}

@@ -10,7 +10,7 @@ export function projectSessionEvent(
 	return projectImages(allowlistedEvent(event, terminal), sessionId) as PiEvent;
 }
 
-function allowlistedEvent(event: AgentSessionEvent, terminal: AgentSettlement | null): unknown {
+function allowlistedEvent(event: AgentSessionEvent, terminal: AgentSettlement | null): PiEvent {
 	if (event.type === "agent_settled") return { type: "agent_settled", terminal };
 	if (event.type === "entry_appended")
 		return { type: "entry_appended", entryType: event.entry.type };

@@ -49,8 +49,8 @@ looped reconnects; see the host SPEC's outbound-limit bullet.
   - **`serveImage(pathname)`** behaves as follows:
     - It validates a pi-session-id-shaped segment and a 64-hex sha, and ignores the query string
       (Retry's cache-buster).
-    - On every request, hit or miss, and again after a miss resolves, it checks that the session is
-      still servable.
+    - On every request, hit or miss, it checks that the session is still servable before it looks the
+      image up. The lookup is synchronous, so a deletion cannot slip in between.
     - It serves only `ACCEPTED_IMAGE_TYPES` (PNG, JPEG, GIF, WebP) and refuses anything else with 404,
       so a block that declares `text/html` never becomes a host-origin document.
     - Success sets `Content-Type`, `Content-Length`, `Cache-Control: no-store`, `nosniff` and the
@@ -61,9 +61,9 @@ looped reconnects; see the host SPEC's outbound-limit bullet.
   - **`imageDimensions(base64)`** reads the PNG/JPEG/GIF/WebP header from at most 256 KiB. The
     oversized-image guard in `agent` shares it.
 - **Public surface (barrel):** `projectImages`, `imageDimensions`, `Dimensions`, `setImageSource`,
-  `ImageSource`, `ImageBlock`, `imageRefHash`, `forgetImageSession`, `resetImages`, `serveImage`.
-- **Allowed deps:** `contracts` (`IMAGES_ROUTE`, `ACCEPTED_IMAGE_TYPES`, `WireImage`), `log`, and Node
-  `crypto`.
+  `ImageSource`, `ImageBlock`, `imageRefHash`, `findImageBlock`, `forgetImageSession`, `resetImages`,
+  `serveImage`.
+- **Allowed deps:** `contracts` (`IMAGES_ROUTE`, `ACCEPTED_IMAGE_TYPES`, `RefImage`), and Node `crypto`.
 - **Forbidden:**
   - `host`, `agent` and every other feature. `agent` imports this module, and `host` injects the source.
   - Any persistent image store, and any disk read.
@@ -81,5 +81,9 @@ looped reconnects; see the host SPEC's outbound-limit bullet.
 - **Composer-bound replies stay inline.** Queue restore (`clearQueue`, `removeQueued`,
   `abort{restoreQueue}`) and `workspace.dismissCreation` hand images back to the composer, which
   re-sends them. They are not projected, and the host's 256 MiB outbound limit still covers them.
+- **A live chat serves, nothing else.** agent's source serves only a chat that is live in this host and
+  not tombstoned, so deletion, archive teardown and dispose all stop its images.
+  - A miss heals only from image blocks in message `content`.
+  - An image a tool tucked into `details` is servable while it is cached, and is a tile after eviction.
 - **A hash is an identifier, not a secret.** The host has no auth ([[architecture]] Decision 7). The
   route's protections are its type allow-list and its servable check, not URL secrecy.

@@ -29,7 +29,7 @@ function render(image: WireImage, value: ChatMedia | null) {
 		createElement(
 			ChatMediaContext.Provider,
 			{ value },
-			createElement(ChatImage, { image, label: "shot.png", testId: "thumb" }),
+			createElement(ChatImage, { image, label: "shot.png", fit: "thumbnail", testId: "thumb" }),
 		),
 	);
 }
@@ -59,12 +59,12 @@ describe("ChatImage", () => {
 });
 
 describe("image load state", () => {
-	it("a failure shows the tile until the chat's resync epoch advances, then reloads once", () => {
+	it("a failure keeps the tile through the resync epoch's reload until the image loads", () => {
 		const failed = imageLoadFailed(INITIAL_IMAGE_LOAD, 3);
 		expect(imageLoadView(failed, 3)).toEqual({ query: null, unavailable: true });
 
 		const afterResync = imageLoadView(failed, 4);
-		expect(afterResync).toEqual({ query: "epoch-4", unavailable: false });
+		expect(afterResync).toEqual({ query: "epoch-4", unavailable: true });
 		expect(chatImageUrl(refImage, { ...media, retryEpoch: 4 }, afterResync.query)).toBe(
 			`http://host.test${REF}?retry=epoch-4`,
 		);
@@ -77,12 +77,19 @@ describe("image load state", () => {
 		expect(imageLoadView(failedAgain, 4)).toEqual({ query: "epoch-4", unavailable: true });
 	});
 
-	it("a manual retry requests a fresh URL immediately", () => {
+	it("a manual retry requests a fresh URL at once and keeps the tile until it loads", () => {
 		const failed = imageLoadFailed(INITIAL_IMAGE_LOAD, 3);
-		const retried = imageLoadRetried("1");
-		expect(imageLoadView(retried, 3)).toEqual({ query: "manual-1", unavailable: false });
-		expect(imageLoadView(imageLoadRetried("2"), 3).query).not.toBe(imageLoadView(retried, 3).query);
-		expect(imageLoadView(failed, 3).unavailable).toBe(true);
+		const retried = imageLoadRetried(failed, 3, "1");
+		expect(imageLoadView(retried, 3)).toEqual({ query: "manual-1", unavailable: true });
+		expect(imageLoadView(imageLoadRetried(retried, 3, "2"), 3).query).toBe("manual-2");
+		expect(imageLoadView(imageLoadSucceeded(retried, 3), 3)).toEqual({
+			query: "manual-1",
+			unavailable: false,
+		});
+		expect(imageLoadView(imageLoadFailed(retried, 3), 3)).toEqual({
+			query: "manual-1",
+			unavailable: true,
+		});
 	});
 
 	it("a successful first load never reloads on later reconnects", () => {

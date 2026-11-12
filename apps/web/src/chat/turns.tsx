@@ -231,7 +231,7 @@ function AttachmentChip({ label, img }: { label: string; img: WireImage }) {
 						<DialogTitle>{label}</DialogTitle>
 					</DialogHeader>
 					<div className="relative min-h-0 flex-1 overflow-auto">
-						<ChatImage image={img} label={label} className="max-h-[80vh] w-auto rounded-sm" />
+						<ChatImage image={img} label={label} fit="screen" />
 					</div>
 				</DialogContent>
 			</Dialog>
