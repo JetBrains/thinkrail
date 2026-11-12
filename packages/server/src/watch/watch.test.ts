@@ -432,8 +432,9 @@ test("a linked worktree's nested submodule git dirs never nudge repo metadata", 
 
 	const nudges: string[] = [];
 	setRepoMetaPublisher((id) => nudges.push(id));
-	void ensureWatch("ws1");
-	await sleep(100);
+	await ensureWatch("ws1");
+	await sleep(550);
+	nudges.length = 0;
 
 	mkdirSync(join(objects, "ab"));
 	writeFileSync(join(objects, "ab", "cdef"), "blob\n");

@@ -63,6 +63,12 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   recency, and a prewarm can never demote a real watcher (including across an inode-change
   re-creation). Correctness under eviction rides the existing recovery paths: the next real call
   re-creates the watcher and its fresh conservative startup nudge covers the blind window.
+- **On macOS a fresh watcher may report writes made just before it started.** FSEvents coalesces over a
+  short latency, so a `.git` pointer or `HEAD` written moments before `ensureWatch` can arrive as the
+  watcher's first events and produce one repo-metadata nudge. In the product that is one redundant
+  refresh at watch start. A test that asserts silence therefore awaits `ensureWatch`, waits past the
+  debounce, and clears what it collected before acting. The submodule test failed on macOS until it did
+  this, because it counted its own setup writes.
 - **On Linux each directory gets its own watcher, and ignored folders get none.** Bun's recursive watch
   there adds an inotify watch per directory, so a large git-ignored folder used up
   `fs.inotify.max_user_watches` and every start failed (#852); Bun keeps all watches on one inotify
