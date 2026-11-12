@@ -188,9 +188,9 @@ without reaching the IDE shell.
   scrolls out of the editor's visible area, the panel closes. Escape and outside clicks close
   it natively; browsers without the Popover API keep it hidden. One panel rather than one per invoker keeps
   element IDs and download links single per page; CSS anchor positioning alone cannot serve two invokers with
-  one popover across today's browsers. `validateBuild.ts` requires, on every page except the analytics-free
-  ones, exactly one `data-install-popover` inside the first `<header>` offering each desktop download once,
-  and unique element IDs; on every post, the `data-install-launcher="post"` row inside `.blog-post-header`
+  one popover across today's browsers. `validateBuild.ts` requires unique element IDs on every page and, on
+  every page except the analytics-free ones, exactly one `data-install-popover` inside the first `<header>`
+  offering each desktop download once; on every post, the `data-install-launcher="post"` row inside `.blog-post-header`
   and the end picker with its command-line option. Per-page download-link counts (landing, the introducing
   post, the promo routes) and the promo routes' no-CLI check apply outside that header.
 - **Phone visitors get a "Send link to my computer" action** above the hero actions. It is in the static DOM
