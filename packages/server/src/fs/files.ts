@@ -8,7 +8,7 @@ import {
 	realpathSync,
 	statSync,
 } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { FileNode, ResourceMeta } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { loadWorkspaces } from "../persistence";
@@ -19,7 +19,7 @@ function isContained(root: string, candidate: string): boolean {
 	return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
 }
 
-function posixRelative(root: string, abs: string): string {
+export function posixRelative(root: string, abs: string): string {
 	return relative(root, abs).split(sep).join("/");
 }
 
@@ -33,8 +33,13 @@ function isGitMetadataPath(root: string, candidate: string): boolean {
 	return relative(root, candidate).split(sep).includes(".git");
 }
 
-function assertExistingAncestorContained(root: string, abs: string): void {
+export function isWorktreeContent(realRoot: string, real: string): boolean {
+	return isContained(realRoot, real) && !isGitMetadataPath(realRoot, real);
+}
+
+function containedRealPath(root: string, abs: string): string {
 	const realRoot = realpathSync(root);
+	const missing: string[] = [];
 	let cursor = abs;
 	while (true) {
 		let real: string;
@@ -46,36 +51,40 @@ function assertExistingAncestorContained(root: string, abs: string): void {
 			if (code !== "ENOENT" && code !== "ENOTDIR") throw error;
 			const parent = dirname(cursor);
 			if (parent === cursor) throw error;
+			missing.unshift(basename(cursor));
 			cursor = parent;
 			continue;
 		}
 		if (!isContained(realRoot, real)) throw new Error("Path escapes the worktree");
 		if (isGitMetadataPath(realRoot, real)) throw new Error("The .git directory is not readable");
-		return;
+		return join(real, ...missing);
 	}
 }
 
-function resolveUnderRoot(root: string, path: string, followLeaf: boolean): string {
+function resolveUnderRoot(
+	root: string,
+	path: string,
+	followLeaf: boolean,
+): { abs: string; real: string } {
 	const abs = resolve(root, path);
 	if (!isContained(resolve(root), abs)) throw new Error("Path escapes the worktree");
 	if (isGitMetadataPath(resolve(root), abs)) throw new Error("The .git directory is not readable");
-	assertExistingAncestorContained(root, followLeaf ? abs : dirname(abs));
-	return abs;
+	return { abs, real: containedRealPath(root, followLeaf ? abs : dirname(abs)) };
 }
 
-function resolveInWorktree(
+export function resolveInWorktree(
 	workspaceId: string,
 	path: string,
 	followLeaf: boolean,
-): { root: string; abs: string } {
+): { root: string; abs: string; real: string } {
 	const ws = loadWorkspaces().find((workspace) => workspace.id === workspaceId);
 	if (!ws) throw new Error(`Unknown workspace: ${workspaceId}`);
-	return { root: ws.worktreePath, abs: resolveUnderRoot(ws.worktreePath, path, followLeaf) };
+	return { root: ws.worktreePath, ...resolveUnderRoot(ws.worktreePath, path, followLeaf) };
 }
 
 export function readableFileSize(root: string, path: string): number | "missing" | null {
 	try {
-		const stats = statSync(resolveUnderRoot(root, path, true));
+		const stats = statSync(resolveUnderRoot(root, path, true).abs);
 		return stats.isFile() ? stats.size : "missing";
 	} catch (error) {
 		const code =
@@ -151,10 +160,14 @@ export function readFile(
 	return { content: meta.text ? decodeText(bytes) : "", meta };
 }
 
-export function resolveWorktreeFile(
+export function resolveWorktreeFile(workspaceId: string, path: string): string {
+	return resolveInWorktree(workspaceId, path, true).abs;
+}
+
+export function resolveWorktreeEntry(
 	workspaceId: string,
 	path: string,
-	options: { followLeaf?: boolean } = {},
-): string {
-	return resolveInWorktree(workspaceId, path, options.followLeaf !== false).abs;
+): { abs: string; parent: string } {
+	const { abs, real } = resolveInWorktree(workspaceId, path, false);
+	return { abs, parent: real };
 }

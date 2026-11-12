@@ -173,6 +173,10 @@ export interface FileReveal {
 	length?: number;
 	tick: number;
 }
+export interface FileClipboard {
+	workspaceId: string;
+	path: string;
+}
 export interface ChatTab {
 	kind: "chat";
 	id: string;
@@ -1363,6 +1367,8 @@ interface AppState {
 	setChangesView: (view: "list" | "tree") => void;
 	filesMode: FilesMode;
 	setFilesMode: (mode: FilesMode) => void;
+	fileClipboard: FileClipboard | null;
+	setFileClipboard: (clipboard: FileClipboard | null) => void;
 	filesTreeByWorkspace: Record<string, FilesTreeView>;
 	hydrateFilesTree: (views: Record<string, FilesTreeView>) => void;
 	setFilesTreeExpanded: (workspaceId: string, paths: readonly string[], expanded: boolean) => void;
@@ -2523,6 +2529,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	reviewFocusRequest: null,
 	changesView: "tree",
 	filesMode: "all",
+	fileClipboard: null,
 	filesTreeByWorkspace: {},
 	changesLayout: "stacked",
 	diffScopeByWorkspace: {},
@@ -2904,6 +2911,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 				specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
 				diffScopeByWorkspace: omitKey(state.diffScopeByWorkspace, workspaceId),
 				filesTreeByWorkspace: omitKey(state.filesTreeByWorkspace, workspaceId),
+				fileClipboard:
+					state.fileClipboard?.workspaceId === workspaceId ? null : state.fileClipboard,
 				reviewsByWorkspace: omitKey(state.reviewsByWorkspace, workspaceId),
 				changesRequest:
 					state.changesRequest?.workspaceId === workspaceId ? null : state.changesRequest,
@@ -3483,6 +3492,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		),
 	setChangesView: (view) => set({ changesView: view }),
 	setFilesMode: (filesMode) => set({ filesMode }),
+	setFileClipboard: (fileClipboard) => set({ fileClipboard }),
 	hydrateFilesTree: (filesTreeByWorkspace) => set({ filesTreeByWorkspace }),
 	setFilesTreeExpanded: (workspaceId, paths, expanded) =>
 		set((s) =>

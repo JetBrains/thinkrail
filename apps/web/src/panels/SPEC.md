@@ -322,7 +322,19 @@ treatment.
   the editor. Right-clicking a file or folder row (a touch long-press, or the Context Menu key / Shift+F10 on
   a focused row) opens its menu: **Copy path** (absolute, through `joinWorkspacePath`) and **Copy relative
   path** (worktree-relative). A compacted folder copies its deepest path, matching its label, and copying
-  neither opens nor selects the row. A failed first status read shows no marks; a failed refresh keeps the
+  neither opens nor selects the row. The row stays highlighted while its menu is open. From a host at
+  `FS_MUTATIONS_PROTOCOL_VERSION` (v118) the menu adds the tree's two mutations, both host-owned and
+  watcher-refreshed, never patched into the rows (`fileTreeActions`): **Copy** puts the row's entry — file,
+  folder or link, a compacted folder's deepest folder — on the session-only in-app clipboard
+  (`store.fileClipboard`, not the OS clipboard, cleared with its workspace or when its entry is deleted);
+  **Paste** (only while the clipboard holds an entry) asks `fs.copy` for a copy beside a file or inside a
+  folder — across workspaces too, never a move — under the host's ` copy` / ` copy N` name, then expands
+  that folder, and an empty tree offers the same Paste as a button next to *Empty*; **Delete** asks for
+  confirmation and `fs.delete` moves the entry to the OS trash. The confirmation says when an agent is
+  working in the workspace but does not block — the user's explicit action wins, as with a hunk revert —
+  and an open tab of a deleted file keeps its stale-content contract. Failures toast; a folder past the
+  host's copy bound and an entry that changed under the paste or delete (`ENTRY_CHANGED`) get their own
+  messages. A failed first status read shows no marks; a failed refresh keeps the
   last ones, like the Changed list. The tree's look is remembered per workspace across reloads (`store.filesTreeByWorkspace`:
   All expanded folders, Changed-tree collapsed folders shared by every scope, scroll per view through
   `RememberedScrollArea` — a Changed view's scroll belongs to its scope and compare target, so changing
@@ -2220,7 +2232,8 @@ own section. The kebab menu (`plan-menu`, a
   feature, not speculative dots or reused status chrome. This remains a restrained hierarchy — no hero,
   duplicate root, preview pane, or graph canvas. `FileTree` shares the same file gesture model
   (preview/keep) but keeps its own directory behaviour — a whole-row click toggles dirs, no collision
-  there. File and folder rows also carry the copy-path context menu described with `FilesPanel`.
+  there. File and folder rows also carry the copy-path, Copy / Paste and Delete context menu described with
+  `FilesPanel`.
 - **Chat deep-links remain arrangement-agnostic.** A shell-owned **`LayoutIntent`** names the singleton tool;
   the shell resolves its current side/group, reveals it in place, and selects it locally. `changesRequest`
   and `specRequest` add the one path to focus/open without naming a layout destination. A divider chip that

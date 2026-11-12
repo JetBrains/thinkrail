@@ -173,7 +173,16 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   while unwatched still records activity, while an unchanged HEAD is a no-op. It runs inside the registration's guarded
   region, and a throw there — from it or from anything after `entries.set` — tears the fresh entry down
   (`stopWatch`) rather than leaving a registered watcher whose readiness never settles.
-- **Public surface (barrel):** `ensureWatch`, `stopWatch`, `stopAllWatches`, `setWatchPublisher`,
-  `setRepoMetaPublisher`, `setWatchStartedPublisher`, `setSkillPathClassifier`, `setIgnoredPathsResolver`.
+- **Host-owned mutations (fourth seam):** `notifyWorkspacePathsChanged(workspaceId, paths, { subtrees? })`
+  publishes one immediate invalidation after a successful host mutation (the Files tree's copy and
+  delete). It bypasses the coalescer and the ignore filter, so a copy into `node_modules` or a gitignored,
+  unwatched folder still converges; the later native frame, if any, is a harmless duplicate. The same
+  100-path cap applies (`truncated: true` past it), and skill relevance comes from the same injected
+  classifier over every listed path, before the cap. `subtrees` says each path also stands for
+  descendants the call does not list (a deleted folder): a path the classifier rejects then contributes
+  `unknown`, never false-clean — the same rule as a null filename.
+- **Public surface (barrel):** `ensureWatch`, `notifyWorkspacePathsChanged`, `stopWatch`, `stopAllWatches`,
+  `setWatchPublisher`, `setRepoMetaPublisher`, `setWatchStartedPublisher`, `setSkillPathClassifier`,
+  `setIgnoredPathsResolver`.
 - **Allowed deps:** `persistence` (workspace lookup), `log`; `contracts` (payload type); Bun/Node.
 - **Forbidden:** `host`; sibling features; any pi package.

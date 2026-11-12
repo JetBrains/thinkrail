@@ -579,11 +579,16 @@ channel fan-out, and the process-boot wrapper both launchers share.
     recoverable), yet chat history is purged with the worktree — a deliberate scope choice, not a leak.
 - **Change mutations are serialized per workspace, on their own chain** (`reviewLock.ts`'s
   `createKeyedLock` mints both): `change.revert`/`change.undo` run under **`withChangeLock(workspaceId)`**
-  so two reverts cannot interleave their load→verify→write passes, while reviews and changes —
+  so two reverts cannot interleave their load→verify→write passes — and the Files tree's `fs.copy` (on the
+  destination workspace) and `fs.delete` take the same chain, so a paste or delete never interleaves with
+  a revert of the same worktree, while reviews and changes —
   independent resources — never queue behind each other. The agent is deliberately **not** paused: the
-  `changes` module's compare-and-swap makes the race safe, and the fs watcher's `fsChanged` tick re-reads
+  `changes` module's compare-and-swap and `fs`'s per-step identity checks (`ENTRY_CHANGED`) make the
+  race safe, and the fs watcher's `fsChanged` tick re-reads
   the open tabs after a write exactly as it does after an agent edit (so both handlers `ensureWatch`
-  first). The named failures travel as `WsResponse.errorCode`
+  first). `fs.copy`/`fs.delete` also publish their own invalidation on success through
+  `watch.notifyWorkspacePathsChanged` (every path the copy wrote; a deleted folder as an unlisted subtree),
+  because the watcher never reports `node_modules` or an unwatched gitignored folder. The named failures travel as `WsResponse.errorCode`
   (`STALE_VIEW`/`SCOPE_IMMUTABLE`/`RANGE_INVALID`/`RECEIPT_UNKNOWN`/`UNSUPPORTED_CHANGE`) through the same `CodedError`
   mapping `UNKNOWN_COMMIT` uses — the dispatch names no codes of its own, so a code added in `contracts`
   and thrown by a feature reaches the client with no host-side allowlist to update.
