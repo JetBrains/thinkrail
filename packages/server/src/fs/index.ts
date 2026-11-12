@@ -10,6 +10,7 @@ export {
 	readableFileSize,
 	readDir,
 	readFile,
+	resolveWorktreeEntry,
 	resolveWorktreeFile,
 	workspaceRelativePath,
 } from "./files";

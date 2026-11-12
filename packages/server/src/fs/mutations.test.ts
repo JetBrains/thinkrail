@@ -1,5 +1,7 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, mock, spyOn, test } from "bun:test";
+import * as fs from "node:fs";
 import {
+	chmodSync,
 	existsSync,
 	lstatSync,
 	mkdirSync,
@@ -7,10 +9,13 @@ import {
 	readdirSync,
 	readFileSync,
 	readlinkSync,
+	realpathSync,
+	renameSync,
 	rmSync,
 	symlinkSync,
 	writeFileSync,
 } from "node:fs";
+import * as fsPromises from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { setTrashImplementationForTests } from "../trash";
@@ -33,7 +38,7 @@ function copy(sourcePath: string, destinationDirectory: string, destinationWorks
 }
 
 beforeEach(() => {
-	dataDir = mkdtempSync(join(tmpdir(), "trpi-fs-mutations-"));
+	dataDir = realpathSync(mkdtempSync(join(tmpdir(), "trpi-fs-mutations-")));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
 	root = join(dataDir, "worktree");
 	other = join(dataDir, "other");
@@ -59,11 +64,52 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	mock.restore();
 	setTrashImplementationForTests(undefined);
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
 });
+
+type Hookable = typeof fs | typeof fsPromises;
+
+function hook<T extends Hookable>(
+	module: T,
+	name: keyof T,
+	path: string,
+	fire: <V>(value: V) => V,
+): void {
+	const real = module[name] as (...args: unknown[]) => unknown;
+	const spy = spyOn(module, name);
+	spy.mockImplementation(((...args: unknown[]) => {
+		const result = real.apply(module, args);
+		if (args[0] !== path) return result;
+		return result instanceof Promise ? result.then(fire) : fire(result);
+	}) as Parameters<typeof spy.mockImplementation>[0]);
+}
+
+function afterFirstCall(
+	path: string,
+	act: () => void,
+	sync: keyof typeof fs,
+	async?: keyof typeof fsPromises,
+): void {
+	let done = false;
+	const fire = <V>(value: V): V => {
+		if (!done) {
+			done = true;
+			act();
+		}
+		return value;
+	};
+	hook(fs, sync, path, fire);
+	if (async) hook(fsPromises, async, path, fire);
+}
+
+function replaceWithLink(path: string, target: string): void {
+	renameSync(path, `${path}-moved`);
+	symlinkSync(target, path);
+}
 
 test("copyName adds ' copy' then ' copy N' before a file's extension, never inside a folder's name", () => {
 	expect(copyName("x.ts", "file", 0)).toBe("x.ts");
@@ -74,12 +120,18 @@ test("copyName adds ' copy' then ' copy N' before a file's extension, never insi
 	expect(copyName("my.folder", "dir", 1)).toBe("my.folder copy");
 });
 
-test("copyWorktreeEntry copies bytes under the first free name and never overwrites", async () => {
+test("copyWorktreeEntry copies bytes and mode under the first free name and never overwrites", async () => {
+	chmodSync(join(root, "src", "note.bin"), 0o750);
 	expect(await copy("src/note.bin", "src")).toEqual({
 		path: "src/note copy.bin",
 		written: ["src/note copy.bin"],
 	});
 	expect([...readFileSync(join(root, "src", "note copy.bin"))]).toEqual([0, 1, 2, 255]);
+	expect(lstatSync(join(root, "src", "note copy.bin")).mode & 0o777).toBe(0o750);
+	const large = new Uint8Array(300 * 1024).map((_, index) => index % 251);
+	writeFileSync(join(root, "src", "large.bin"), large);
+	await copy("src/large.bin", ".");
+	expect(readFileSync(join(root, "large.bin")).equals(large)).toBe(true);
 	writeFileSync(join(root, "src", "note copy 2.bin"), "kept");
 
 	expect((await copy("src/note.bin", "src")).path).toBe("src/note copy 3.bin");
@@ -134,6 +186,7 @@ test("copies are refused outside the worktrees, into .git, of the root, and into
 	await expect(copy("src/note.bin", ".git")).rejects.toThrow(".git");
 	await expect(copy(".", "src")).rejects.toThrow("Path escapes the worktree");
 	await expect(copy("src", "src/note.bin")).rejects.toThrow("not a folder");
+	await expect(copy("src/note.bin", "src/missing")).rejects.toMatchObject({ code: "ENOENT" });
 	expect(readdirSync(outside)).toEqual(["secret.txt"]);
 });
 
@@ -172,4 +225,101 @@ test("a failed trash restores the deleted file or folder", async () => {
 	await expect(deleteWorktreeEntry("w1", "src")).rejects.toThrow("trash unavailable");
 	expect(readdirSync(join(root, "src"))).toEqual(["note.bin"]);
 	expect(readdirSync(root)).toEqual(["src"]);
+});
+
+test("a delete whose folder turns into an outside link after validation never trashes outside", async () => {
+	writeFileSync(join(root, "src", "secret.txt"), "intended");
+	afterFirstCall(
+		join(root, "src"),
+		() => replaceWithLink(join(root, "src"), outside),
+		"realpathSync",
+	);
+
+	const failure = await deleteWorktreeEntry("w1", "src/secret.txt").catch(
+		(error: unknown) => error,
+	);
+
+	expect(failure).toMatchObject({ code: "ENTRY_CHANGED" });
+	expect(trashed).toEqual([]);
+	expect(readdirSync(outside)).toEqual(["secret.txt"]);
+	expect(readFileSync(join(outside, "secret.txt"), "utf8")).toBe("secret");
+	expect(readFileSync(join(root, "src-moved", "secret.txt"), "utf8")).toBe("intended");
+});
+
+test("a paste whose destination turns into an outside link after validation writes nothing outside", async () => {
+	mkdirSync(join(root, "dest"));
+	afterFirstCall(
+		join(root, "dest"),
+		() => replaceWithLink(join(root, "dest"), outside),
+		"realpathSync",
+	);
+
+	const failure = await copy("src/note.bin", "dest").catch((error: unknown) => error);
+
+	expect(failure).toMatchObject({ code: "ENTRY_CHANGED" });
+	expect(readdirSync(outside)).toEqual(["secret.txt"]);
+});
+
+test("a paste whose destination turns into an outside link once the copy is created writes no bytes", async () => {
+	const destination = join(root, "dest");
+	mkdirSync(destination);
+	afterFirstCall(
+		join(destination, "note.bin"),
+		() => replaceWithLink(destination, outside),
+		"openSync",
+		"open",
+	);
+
+	const failure = await copy("src/note.bin", "dest").catch((error: unknown) => error);
+
+	expect(failure).toMatchObject({ code: "ENTRY_CHANGED" });
+	expect(readdirSync(outside)).toEqual(["secret.txt"]);
+	expect(readFileSync(join(root, "dest-moved", "note.bin"))).toHaveLength(0);
+});
+
+test("a folder paste whose new copy turns into an outside link stops and keeps what it wrote", async () => {
+	mkdirSync(join(root, "dest"));
+	mkdirSync(join(root, "pkg"));
+	writeFileSync(join(root, "pkg", "a.txt"), "a");
+	const created = join(root, "dest", "pkg");
+	afterFirstCall(created, () => replaceWithLink(created, outside), "mkdirSync", "mkdir");
+
+	const failure = await copy("pkg", "dest").catch((error: unknown) => error);
+
+	expect(failure).toMatchObject({ code: "ENTRY_CHANGED" });
+	expect(readdirSync(outside)).toEqual(["secret.txt"]);
+	expect(existsSync(join(root, "dest", "pkg-moved"))).toBe(true);
+});
+
+test("a copied file replaced by an outside link after it was examined never copies outside bytes", async () => {
+	const source = join(root, "src", "a.txt");
+	writeFileSync(source, "a");
+	const replace = () => {
+		rmSync(source);
+		symlinkSync(join(outside, "secret.txt"), source);
+	};
+	afterFirstCall(source, replace, "lstatSync", "lstat");
+
+	const failure = await copy("src/a.txt", "src").catch((error: unknown) => error);
+
+	expect(failure).toMatchObject({ code: "ENTRY_CHANGED" });
+	expect(readdirSync(join(root, "src")).sort()).toEqual(["a.txt", "note.bin"]);
+});
+
+test("a copied folder whose subfolder turns into an outside link mid-copy never copies outside bytes", async () => {
+	mkdirSync(join(root, "pkg", "sub"), { recursive: true });
+	writeFileSync(join(root, "pkg", "sub", "secret.txt"), "inside");
+	const sub = join(root, "pkg", "sub");
+	afterFirstCall(
+		join(root, "pkg copy", "sub"),
+		() => replaceWithLink(sub, outside),
+		"mkdirSync",
+		"mkdir",
+	);
+
+	const failure = await copy("pkg", ".").catch((error: unknown) => error);
+
+	expect(failure).toMatchObject({ code: "ENTRY_CHANGED" });
+	expect(readdirSync(join(root, "pkg copy", "sub"))).toEqual([]);
+	expect(readFileSync(join(root, "pkg", "sub-moved", "secret.txt"), "utf8")).toBe("inside");
 });

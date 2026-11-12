@@ -37,10 +37,13 @@ export async function pasteInto(workspaceId: string, destinationDirectory: strin
 			useAppStore.getState().setFilesTreeExpanded(workspaceId, [destinationDirectory], true);
 		}
 	} catch (error) {
+		const code = wsErrorCode(error);
 		toast.error(
-			wsErrorCode(error) === "COPY_TOO_LARGE"
+			code === "COPY_TOO_LARGE"
 				? t("panels.fileTree.pasteTooLarge")
-				: errorText(error),
+				: code === "ENTRY_CHANGED"
+					? t("panels.fileTree.pasteChanged")
+					: errorText(error),
 			t("panels.fileTree.pasteFailed"),
 		);
 	}
@@ -53,6 +56,11 @@ export async function deleteEntry(workspaceId: string, path: string): Promise<vo
 		const clipboard = clipboardAfterDelete(store.fileClipboard, workspaceId, path);
 		if (clipboard !== store.fileClipboard) store.setFileClipboard(clipboard);
 	} catch (error) {
-		toast.error(errorText(error), t("panels.fileTree.deleteFailed"));
+		toast.error(
+			wsErrorCode(error) === "ENTRY_CHANGED"
+				? t("panels.fileTree.deleteChanged", { name: path.slice(path.lastIndexOf("/") + 1) })
+				: errorText(error),
+			t("panels.fileTree.deleteFailed"),
+		);
 	}
 }

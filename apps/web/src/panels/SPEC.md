@@ -303,7 +303,7 @@ treatment.
   a focused row) opens its menu: **Copy path** (absolute, through `joinWorkspacePath`) and **Copy relative
   path** (worktree-relative). A compacted folder copies its deepest path, matching its label, and copying
   neither opens nor selects the row. The row stays highlighted while its menu is open. From a host at
-  `FS_MUTATIONS_PROTOCOL_VERSION` (v115) the menu adds the tree's two mutations, both host-owned and
+  `FS_MUTATIONS_PROTOCOL_VERSION` (v118) the menu adds the tree's two mutations, both host-owned and
   watcher-refreshed, never patched into the rows (`fileTreeActions`): **Copy** puts the row's entry — file,
   folder or link, a compacted folder's deepest folder — on the session-only in-app clipboard
   (`store.fileClipboard`, not the OS clipboard, cleared with its workspace or when its entry is deleted);
@@ -313,7 +313,8 @@ treatment.
   confirmation and `fs.delete` moves the entry to the OS trash. The confirmation says when an agent is
   working in the workspace but does not block — the user's explicit action wins, as with a hunk revert —
   and an open tab of a deleted file keeps its stale-content contract. Failures toast; a folder past the
-  host's copy bound gets its own message. A failed first status read shows no marks; a failed refresh keeps the
+  host's copy bound and an entry that changed under the paste or delete (`ENTRY_CHANGED`) get their own
+  messages. A failed first status read shows no marks; a failed refresh keeps the
   last ones, like the Changed list. The tree's look is remembered per workspace across reloads (`store.filesTreeByWorkspace`:
   All expanded folders, Changed-tree collapsed folders shared by every scope, scroll per view through
   `RememberedScrollArea` — a Changed view's scroll belongs to its scope and compare target, so changing

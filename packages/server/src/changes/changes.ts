@@ -17,7 +17,7 @@ import type {
 	Workspace,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
-import { classifyBytes, decodeText, hashBytes, resolveWorktreeFile } from "../fs";
+import { classifyBytes, decodeText, hashBytes, resolveWorktreeEntry } from "../fs";
 import { readBlobBytesAtAsync, readPathModeAtAsync, resolveDiffRange } from "../git";
 import { loadWorkspaces } from "../persistence";
 import { claimAndTrashFile } from "../trash";
@@ -145,10 +145,11 @@ function writeAtomic(abs: string, state: FileState): void {
 	}
 }
 
-async function trashWorktreeFile(abs: string): Promise<string> {
+async function trashWorktreeFile(abs: string, parent: string): Promise<string> {
 	const claimed = join(dirname(abs), `.thinkrail-revert-${receiptId()}`);
 	const recovery = join(dirname(abs), `.thinkrail-recovery-${receiptId()}`);
-	await claimAndTrashFile(abs, claimed, recovery);
+	const { dev, ino } = lstatSync(abs, { bigint: true });
+	await claimAndTrashFile(abs, claimed, recovery, { parent, dev, ino });
 	return claimed;
 }
 
@@ -280,7 +281,7 @@ function revertedRange(
 
 export async function revertChange(params: RevertChangeParams): Promise<ChangeReceipt> {
 	const original = await originalSide(params);
-	const abs = resolveWorktreeFile(params.workspaceId, params.path, { followLeaf: false });
+	const { abs, parent } = resolveWorktreeEntry(params.workspaceId, params.path);
 	const modified = worktreeState(abs, params.path);
 	assertSameView(params, original, modified);
 	assertNotModeOnly(params.path, original, modified);
@@ -306,7 +307,7 @@ export async function revertChange(params: RevertChangeParams): Promise<ChangeRe
 				`There is no change to revert for ${params.path} in this scope.`,
 			);
 		}
-		const claimed = await trashWorktreeFile(abs);
+		const claimed = await trashWorktreeFile(abs, parent);
 		return record({
 			...change,
 			before: modified,
@@ -328,7 +329,7 @@ export async function undoChange(params: UndoChangeParams): Promise<ChangeReceip
 			`This change can no longer be undone (receipt ${params.receiptId} is not held by the host).`,
 		);
 	}
-	const abs = resolveWorktreeFile(params.workspaceId, held.receipt.path, { followLeaf: false });
+	const { abs, parent } = resolveWorktreeEntry(params.workspaceId, held.receipt.path);
 	const current = worktreeState(abs, held.receipt.path);
 	const modeMoved =
 		held.receipt.after.mode !== null &&
@@ -343,7 +344,7 @@ export async function undoChange(params: UndoChangeParams): Promise<ChangeReceip
 	let trashed: string | undefined;
 	if (held.before.bytes === null) {
 		if (current.bytes !== null) {
-			const claimed = await trashWorktreeFile(abs);
+			const claimed = await trashWorktreeFile(abs, parent);
 			trashed = claimed;
 		}
 	} else {

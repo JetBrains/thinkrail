@@ -83,6 +83,24 @@ test("an oversized folder paste explains itself instead of echoing the host", as
 	);
 });
 
+test("an entry that changed under a paste or a delete explains itself", async () => {
+	useAppStore.getState().setFileClipboard({ workspaceId: "w1", path: "src/app" });
+	answer = () => Promise.reject(new RequestError("ENTRY_CHANGED", "src/app changed"));
+	await pasteInto("w1", ".");
+	await deleteEntry("w1", "src/main.ts");
+	expect(useAppStore.getState().toasts.map(({ title, message }) => ({ title, message }))).toEqual([
+		{
+			title: "Couldn't paste",
+			message:
+				"Files changed while they were being copied, so the paste stopped. Anything already copied was kept.",
+		},
+		{
+			title: "Couldn't delete",
+			message: "main.ts changed while it was being deleted, so it was left in place.",
+		},
+	]);
+});
+
 test("delete trashes through the host and forgets a clipboard entry inside it", async () => {
 	useAppStore.getState().setFileClipboard({ workspaceId: "w1", path: "src/app/main.ts" });
 	answer = () => Promise.reject(new Error("trash unavailable"));

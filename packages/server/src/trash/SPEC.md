@@ -22,18 +22,23 @@ compiled artifact. The one way anything in the host destroys a user's file.
   Linux path also needs the statically installed `@stroncium/procfs` `processMountinfo` parser that a
   compiled bundle cannot reach through a template-literal `require`. `setTrashImplementationForTests`
   swaps the whole implementation for tests that must not touch a real recycle bin.
-  **`claimAndTrashFile(path, claim, recovery)`** is the one claim-then-trash path for a worktree entry
-  that a live writer (the agent) may recreate: it synchronously renames `path` to the caller-named hidden
-  `claim` before awaiting the trash move, so a recreation lands on the real path and is never the object
-  trashed. When the trash fails it restores the claim without overwriting — a hard link for a file, a
-  recreated link for a symlink, a `rename` for a folder (which only replaces an *empty* folder) — and,
-  if a concurrent recreation still wins, preserves the claim at `recovery` and names that path in the
-  thrown error. Callers choose the names (`changes` keeps its ULID receipt names, `fs` uses a UUID).
-- **Public surface (barrel):** `trashFile`, `claimAndTrashFile`, `setBundledTrashHelpers`, `setTrashImplementationForTests`,
-  `TrashImplementation`, `BundledTrashHelpers`.
+  **`claimAndTrashFile(path, claim, recovery, expected)`** is the one claim-then-trash path for a worktree
+  entry that a live writer (the agent) may recreate: it synchronously renames `path` to the caller-named
+  hidden `claim` before awaiting the trash move, so a recreation lands on the real path and is never the
+  object trashed. `expected` (`ClaimedEntry`: the validated real `parent` plus the leaf's `dev`/`ino`) is
+  what the caller checked in the same synchronous pass; before awaiting anything, the claim must still be
+  that inode and its folder must still resolve to that parent, or the claim is put back and
+  `CodedError("ENTRY_CHANGED")` is thrown — so a folder swapped for a link between the caller's check and
+  the rename never gets an entry outside the worktree trashed. When the trash (or that check) fails it
+  restores the claim without overwriting — a hard link for a file, a recreated link for a symlink, a
+  `rename` for a folder (which only replaces an *empty* folder) — and, if a concurrent recreation still
+  wins, preserves the claim at `recovery` and names that path in the thrown error. Callers choose the
+  names (`changes` keeps its ULID receipt names, `fs` uses a UUID).
+- **Public surface (barrel):** `trashFile`, `claimAndTrashFile`, `ClaimedEntry`, `setBundledTrashHelpers`,
+  `setTrashImplementationForTests`, `TrashImplementation`, `BundledTrashHelpers`.
 - **Allowed deps:** `trash` + `@stroncium/procfs` (external — its deep imports name their `.js` files,
   since Node ESM, which hosts the workflow harness, rejects directory and extensionless specifiers);
-  Node `child_process`/`fs`/`util`.
+  `shared` (`CodedError`); Node `child_process`/`fs`/`path`/`util`.
 - **Forbidden:** `host`; sibling features; any permanent-`unlink` fallback.
 
 ## Consumers

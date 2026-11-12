@@ -1,5 +1,6 @@
 export {
 	type BundledTrashHelpers,
+	type ClaimedEntry,
 	claimAndTrashFile,
 	setBundledTrashHelpers,
 	setTrashImplementationForTests,

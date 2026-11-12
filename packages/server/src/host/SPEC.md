@@ -583,7 +583,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   destination workspace) and `fs.delete` take the same chain, so a paste or delete never interleaves with
   a revert of the same worktree, while reviews and changes —
   independent resources — never queue behind each other. The agent is deliberately **not** paused: the
-  `changes` module's compare-and-swap makes the race safe, and the fs watcher's `fsChanged` tick re-reads
+  `changes` module's compare-and-swap and `fs`'s per-step identity checks (`ENTRY_CHANGED`) make the
+  race safe, and the fs watcher's `fsChanged` tick re-reads
   the open tabs after a write exactly as it does after an agent edit (so both handlers `ensureWatch`
   first). `fs.copy`/`fs.delete` also publish their own invalidation on success through
   `watch.notifyWorkspacePathsChanged` (every path the copy wrote; a deleted folder as an unlisted subtree),

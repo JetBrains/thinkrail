@@ -285,9 +285,9 @@ test("user-selectable fonts are pinned to v102", () => {
 	expect(WS_CHANNELS.fontsChanged).toBe("fonts.changed");
 });
 
-test("Files tree copy and delete are pinned to v115", () => {
-	expect(FS_MUTATIONS_PROTOCOL_VERSION).toBe(115);
-	expect(PROTOCOL_VERSION).toBe(115);
+test("Files tree copy and delete are pinned to v118", () => {
+	expect(FS_MUTATIONS_PROTOCOL_VERSION).toBe(118);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(FS_MUTATIONS_PROTOCOL_VERSION);
 	expect(WS_METHODS.fsCopy).toBe("fs.copy");
 	expect(WS_METHODS.fsDelete).toBe("fs.delete");
 });
