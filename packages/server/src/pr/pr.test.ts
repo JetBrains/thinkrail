@@ -176,8 +176,21 @@ describe("compareQuickPullUrl", () => {
 
 	test("caps the body for URL-length safety and omits it when empty", () => {
 		const long = compareQuickPullUrl("a/b", "main", "x", "t", "y".repeat(10_000));
-		expect(long.length).toBeLessThan(6_000);
+		expect(long).toHaveLength(4_000);
 		expect(compareQuickPullUrl("a/b", "main", "x", "t", "")).not.toContain("body=");
+	});
+
+	test("trims a multibyte body by whole code points until the encoded URL fits", () => {
+		const body = "修复到期日漂移并补回归测试".repeat(500);
+		const url = compareQuickPullUrl("o/r", "main", "feature", "标题", body);
+		expect(url.length).toBeLessThanOrEqual(4_000);
+		expect(url.length).toBeGreaterThan(4_000 - 9);
+		expect(body.startsWith(new URL(url).searchParams.get("body") ?? "")).toBe(true);
+		for (let pad = 0; pad < 12; pad++) {
+			const emoji = `${"x".repeat(pad)}${"😀".repeat(2_000)}`;
+			const sent = new URL(compareQuickPullUrl("o/r", "main", "f", "t", emoji)).searchParams;
+			expect(sent.get("body")).toMatch(/^x*(?:😀)+$/u);
+		}
 	});
 });
 
