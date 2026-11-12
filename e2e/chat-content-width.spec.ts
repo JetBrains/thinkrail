@@ -2,11 +2,11 @@ import { realpathSync } from "node:fs";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
 	enterDefaultWorkspace,
-	expandDisclosure,
 	hideAuxiliaryWorkbench,
 	openFixtureProject,
 	openPersistedChat,
 } from "./fixtures/app";
+import { clickTranscriptControl } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
@@ -181,6 +181,11 @@ async function expectParentWidth(block: Locator): Promise<void> {
 		.toBeLessThanOrEqual(1);
 }
 
+async function expandTranscriptDisclosure(toggle: Locator): Promise<void> {
+	if ((await toggle.getAttribute("aria-expanded")) !== "true") await clickTranscriptControl(toggle);
+	await expect(toggle).toHaveAttribute("aria-expanded", "true");
+}
+
 async function setFitToPane(page: Page, bounded: boolean): Promise<void> {
 	if (!(await page.getByTestId("settings-dialog").isVisible())) {
 		await page.getByTestId("open-settings").click();
@@ -214,9 +219,9 @@ test("wide code blocks and tool results grow past the chat column only while it 
 	await expect(card).toHaveAttribute("data-expanded", "true");
 	await expect(card.getByTestId("mermaid-svg").locator("svg")).toBeVisible({ timeout: 20_000 });
 	const group = page.getByTestId("activity-group");
-	await expandDisclosure(group.getByTestId("activity-group-toggle"));
+	await expandTranscriptDisclosure(group.getByTestId("activity-group-toggle"));
 	const wideStep = group.locator('[data-testid="activity-step"]').first();
-	await expandDisclosure(wideStep.getByTestId("activity-step-toggle"));
+	await expandTranscriptDisclosure(wideStep.getByTestId("activity-step-toggle"));
 	const wideOutput = wideStep.getByTestId("tool-bash").locator("xpath=..");
 
 	try {
