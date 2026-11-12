@@ -143,9 +143,10 @@ the default tool renderer until step 2 — never visualize, whose renderer exist
 
 **Wrapping a third-party pi package** has no step 1 (nothing of ours to publish). Its server half lands
 alone, composing the package unchanged plus any ThinkRail policy, while app-local renderers keep rendering
-the same tool names; the web half follows when its renderers' dependencies are in the SDK. A raw-`.ts`
-package that fails the repo's strict `tsc` is imported through a declaration-paired JavaScript re-export
-(`piWebAccess.js` + `.d.ts`): bundlers and Bun follow the `.js`, `tsc` stops at the declaration.
+the same tool names; the web half follows when its renderers' dependencies are in the SDK. A package
+without types the repo's strict `tsc` accepts (raw `.ts` that fails it, or untyped compiled JavaScript) is
+imported through a declaration-paired JavaScript re-export (`piWebAccess.js` + `.d.ts`): bundlers and Bun
+follow the `.js`, `tsc` stops at the declaration.
 
 ## Members
 
@@ -153,4 +154,4 @@ package that fails the repo's strict `tsc` is imported through a declaration-pai
 | --- | --- | --- |
 | `visualize` | `@thinkrail/pi-visualize` | shipped. `./server` injects the **strict** mermaid validator (`mermaid` at the web renderer's catalog version, initialised through `linkedom` — required: DOMPurify needs a real `document` for flowchart/class/state/gantt/mindmap, verified under Bun). `./web` carries the diagram/comparison cards and exports `MermaidView`. The guarantee is syntax parsing, not SVG/layout success; the browser renderer keeps its fallback. |
 | `ask-user-question` | `@thinkrail/pi-ask-user-question` | shipped; the first interactive tool. `./server` is session-only: `sessionExtensions` composes the portable tool with ThinkRail's wording and an asker over the host's interactive-tool mailbox (`awaitToolResponse`); `interactiveTools` declares `ask_user_question` with a `describeResponse` that renders a late answer in the package's own envelope wording. `./web` registers the questionnaire card `interactive`, fed entirely by the host through `ToolRenderProps.interaction`; the plan page renders it through the tool registry like the chat does. [[module-ext-ask-user-question]]. |
-| `web-access` | third-party `pi-web-access` | shipped (server half). `./server` composes the package unchanged for parents and children (the host keeps its headless-search policy, which must outlive the switch) and loads its `librarian` skill (`skillPackages`); the first extension with skills. Renderers stay app-local (`apps/web/src/chat/tools/web`) until `Markdown`, `Collapsible` and `ToolFileLink` join the SDK. [[module-ext-web-access]]. |
+| `web-access` | third-party `pi-web-access` | shipped (server half). `./server` composes the package unchanged for parents and children (the host keeps its headless-search policy, which must outlive the switch) and ships its own `librarian` skill (upstream dropped it; `skillPackages` names the extension's own package); the first extension with skills. Renderers stay app-local (`apps/web/src/chat/tools/web`) until `Markdown`, `Collapsible` and `ToolFileLink` join the SDK. [[module-ext-web-access]]. |

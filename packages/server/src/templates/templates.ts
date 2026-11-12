@@ -13,17 +13,16 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
-import type { Template, TemplateInfo, TemplateScope } from "@thinkrail/contracts";
+import {
+	isValidTemplateName,
+	type Template,
+	type TemplateInfo,
+	type TemplateScope,
+} from "@thinkrail/contracts";
 
 export interface TemplateDirs {
 	globalDir: string;
 	projectDir?: string;
-}
-
-export function isValidTemplateName(name: string): boolean {
-	if (name.length === 0) return false;
-	if (name.startsWith(".")) return false;
-	return !name.includes("/") && !name.includes("\\") && !name.includes("\0") && !name.includes(":");
 }
 
 export function templateDirs(cwd?: string, agentDir: string = getAgentDir()): TemplateDirs {

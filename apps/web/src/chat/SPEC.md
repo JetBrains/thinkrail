@@ -656,6 +656,14 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
 - **Composer focus on arrival** (`composerFocusRequest`, see `store/SPEC.md`): `ChatView` subscribes to
   `selectComposerFocusRequested` for its own chat. When it holds, the view clears the request and refocuses
   its composer, so typing goes straight to the chat a palette pick opened.
+- **Extension edits to the draft** (`composerEdit`, see `store/SPEC.md`): pi's `setEditorText` /
+  `pasteToEditor` reach the chat as its runtime's pending edit. `ChatView` applies it in a layout effect
+  through **`ComposerHandle.applyEdit(kind, text)`** and then consumes it, so an edit for a chat that is
+  not shown waits for its composer to mount. `applyEdit` goes through `replaceDraft`, the path
+  `insertText` and the mention/slash picks use, so it ends a template slot session and history recall
+  like they do. A replacement puts the caret at the end. A paste replaces the selection of a focused
+  composer, as pi's TUI editor pastes at its cursor, and appends to an unfocused one. Neither moves
+  focus: only a composer that already holds it gets the new caret.
 - **Jump-to-message** (`chatLocationRequest` — set by `useHistorySearch.ts`'s `openMessage` on Enter over
   a mapped message hit; see `store/SPEC.md` for the store-level request/clear contract and
   the workbench shell integration's open/reopen/hydrate half) — `ChatTranscript` is the sole consumer. Once
@@ -997,7 +1005,12 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   reads as a section header (emphasis-weight name, vendor glyph), each group after the first is set
   off by a divider, and its rows are indented under the header and drop their own vendor glyph and
   provider word (the header carries both) — a flat, unpadded list made headers and models hard to tell
-  apart. Pinned models are never repeated inside groups. Headers, counts and rows are matched by the pickers' own cmdk `filter`
+  apart. Pinned models are never repeated inside groups. A group lists its models newest first by the
+  version in the name (`newestFirst`; pi has no release date): parenthesised suffixes and parameter
+  sizes (`120B`, `8x22B`) are not versions, equal versions keep pi's order, and names without one go
+  last. The sort is display-only and per group — provider order, Pinned, Recent and the Default row
+  keep their own order, the catalog itself is never reordered, and a search still ranks rows by score
+  (ties fall back to this order). Headers, counts and rows are matched by the pickers' own cmdk `filter`
   (`chat/pickerGroups.ts`, a port of cmdk's default scorer), so a header matches when any of its models
   does and its count equals the rows it reveals. With no query and no models the list reads "No models to
   show. Connect a provider, or show hidden models in Settings → Models → Visible models."; "No models
@@ -1347,7 +1360,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   "foo … bar" to "foo … foo". `Escape` ends the session
   (`setSlots(null)`), leaving the text as-is. A genuine text edit (the textarea's own `onChange` — never a
   programmatic `onChange(text)` call; those end the session outright instead, since none of
-  `pickMention`/`pickSlash`/arrow-recall/`insertText` participate in slot tracking) diffs the old/new value
+  `pickMention`/`pickSlash`/arrow-recall/`insertText`/`applyEdit` participate in slot tracking) diffs the old/new value
   around the post-edit `selectionStart` (a common-prefix/suffix scan) into `(editStart, removedLen,
   insertedLen)`, re-tracks every slot via `shiftSlots`, and flags the slot the edit landed in
   `filled: true` **and** `edited: true`; an edit that consumes the **entire** prior value (a
@@ -1427,10 +1440,10 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
     leading blank line leaked into the body on every pick and every edit-reopen, and **compounded** by one
     more `\n` per edit-save cycle (the leaked line got saved back into the body field and re-wrapped the
     next save). `templateText.test.ts` pins the round-trip/stability properties this fix depends on.
-  - **Fields**: name (validated client-side against the exact same rule as the server's
-    `isValidTemplateName`, `packages/server/src/templates/templates.ts` — duplicated rather than shared,
-    since it's a 4-line pure predicate and the server module is server-only), a scope radio (Global / This
-    project; "This project" is disabled with no active workspace), description, argument-hint, and a body
+  - **Fields**: name (validated client-side with `isValidTemplateName` from `@thinkrail/contracts`, the
+    same function the server's template gate calls, so the two cannot drift; it rejects Windows reserved
+    device names on every OS), a scope radio (Global / This project; "This project" is
+    disabled with no active workspace), description, argument-hint, and a body
     `Textarea` with a static one-line syntax hint (`$1, $ARGUMENTS, ${1:-default} — pi prompt-template
     syntax`; the real grammar is parsed by the `prompt` module / expanded by pi — this line is documentation
     text only, not itself parsed).

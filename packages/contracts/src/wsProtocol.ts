@@ -142,6 +142,7 @@ export type TemplateReadLocation =
 	| { workspaceId?: never; projectId?: never };
 
 export const PROTOCOL_VERSION = 116;
+export const EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION = 115;
 export const CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION = 116;
 export const QUESTION_PANEL_PROTOCOL_VERSION = 114;
 export const SPEC_SECTIONS_PROTOCOL_VERSION = 113;

@@ -221,6 +221,7 @@ export function isFileComparison<T extends { kind: string; before?: string | und
 	return tab.kind === "diff" && tab.before !== undefined;
 }
 export type ChangesLayout = "stacked" | "single";
+export type MarkdownOutlineSide = "left" | "right";
 type FilesMode = "all" | "changed";
 export type FilesScrollView = "all" | "changedList" | "changedTree";
 export interface FilesTreeView {
@@ -503,6 +504,12 @@ export interface ChatReadingAnchor {
 	offset: number;
 }
 
+export interface ComposerEdit {
+	id: string;
+	kind: "replace" | "paste";
+	text: string;
+}
+
 export interface SessionRuntime {
 	turns: ChatTurn[];
 	turnIdByMessageIndex?: (string | null)[];
@@ -521,6 +528,7 @@ export interface SessionRuntime {
 	stats: SessionStats | null;
 	commands: SlashCommandInfo[];
 	draft: string;
+	composerEdit: ComposerEdit | null;
 	promptImages: PromptImagesState;
 	readingAnchor: ChatReadingAnchor | null;
 	pendingExtUi: ExtUiDialogRequest | null;
@@ -555,6 +563,7 @@ function newRuntime(
 		stats: null,
 		commands: [],
 		draft: "",
+		composerEdit: null,
 		promptImages: newPromptImagesState(),
 		readingAnchor: null,
 		pendingExtUi: null,
@@ -954,6 +963,19 @@ function reduceExtUi(
 	request: Exclude<ExtUiRequest, { kind: "setTitle" }>,
 ): SessionRuntime {
 	switch (request.kind) {
+		case "setEditorText":
+			return { ...rt, composerEdit: { id: request.id, kind: "replace", text: request.text } };
+		case "pasteToEditor": {
+			const pending = rt.composerEdit;
+			return {
+				...rt,
+				composerEdit: {
+					id: request.id,
+					kind: pending?.kind ?? "paste",
+					text: `${pending?.text ?? ""}${request.text}`,
+				},
+			};
+		}
 		case "dismiss":
 			if (rt.pendingExtUi?.id === request.id) {
 				const [next, ...rest] = rt.extUiQueue;
@@ -1168,6 +1190,8 @@ interface AppState {
 	fileLineWidthBounded: boolean;
 	voiceInputEnabled: boolean;
 	chatMessageOrder: ChatMessageOrder;
+	markdownOutlineVisible: boolean | null;
+	markdownOutlineSide: MarkdownOutlineSide;
 	defaultModel: WireModel | undefined;
 	defaultEffort: ThinkingLevel | undefined;
 	reviewModel: WireModel | undefined;
@@ -1489,6 +1513,7 @@ interface AppState {
 	setStats: (sessionId: string, stats: SessionStats) => void;
 	setCommands: (sessionId: string, commands: SlashCommandInfo[]) => void;
 	setChatDraft: (sessionId: string, text: string) => void;
+	consumeComposerEdit: (sessionId: string, editId: string) => void;
 	updateChatPromptImages: (
 		sessionId: string,
 		update: (current: PromptImagesState) => PromptImagesState,
@@ -1524,6 +1549,8 @@ interface AppState {
 	closeSearch: () => void;
 	setDoubleShiftSearch: (enabled: boolean) => void;
 	setChatMessageOrder: (order: ChatMessageOrder) => void;
+	setMarkdownOutlineVisible: (visible: boolean) => void;
+	setMarkdownOutlineSide: (side: MarkdownOutlineSide) => void;
 	applyConfig: (config: AppConfig) => void;
 	requestToolView: (workspaceId: string, tool: LayoutToolId) => void;
 	requestChangesView: (workspaceId: string, path: string | null, scope?: GitDiffScope) => void;
@@ -2207,6 +2234,8 @@ const REPLAYABLE_EXT_UI: ReadonlySet<ExtUiRequest["kind"]> = new Set([
 	"setStatus",
 	"setWidget",
 	"setTitle",
+	"setEditorText",
+	"pasteToEditor",
 	"notice",
 ]);
 
@@ -2531,6 +2560,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	fileLineWidthBounded: DEFAULT_CONFIG.fileLineWidthBounded,
 	voiceInputEnabled: DEFAULT_CONFIG.voiceInputEnabled,
 	chatMessageOrder: "oldest-first",
+	markdownOutlineVisible: null,
+	markdownOutlineSide: "right",
 	customLayoutPresets: DEFAULT_CONFIG.customLayoutPresets,
 	defaultModel: DEFAULT_CONFIG.defaultModel,
 	defaultEffort: DEFAULT_CONFIG.defaultEffort,
@@ -4628,6 +4659,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, commands }))),
 	setChatDraft: (sessionId, draft) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, draft }))),
+	consumeComposerEdit: (sessionId, editId) =>
+		set((s) =>
+			withRuntime(s, sessionId, (rt) =>
+				rt.composerEdit?.id === editId ? { ...rt, composerEdit: null } : rt,
+			),
+		),
 	updateChatPromptImages: (sessionId, update) =>
 		set((s) =>
 			withRuntime(s, sessionId, (rt) => {
@@ -4750,6 +4787,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closeSurveyWindow: () => set({ surveyWindowOpen: false }),
 	setInAppSurvey: (survey) => set({ inAppSurvey: survey }),
 	setChatMessageOrder: (chatMessageOrder) => set({ chatMessageOrder }),
+	setMarkdownOutlineVisible: (markdownOutlineVisible) => set({ markdownOutlineVisible }),
+	setMarkdownOutlineSide: (markdownOutlineSide) => set({ markdownOutlineSide }),
 	applyConfig: (config) => set(configPatch(config)),
 	requestToolView: (workspaceId, tool) =>
 		set((state) =>

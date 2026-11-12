@@ -62,6 +62,12 @@ export function isTextEntryTarget(target: EventTarget | null): boolean {
 	);
 }
 
+const FOCUSABLE = "a[href], button, input, label, select, textarea, [tabindex]";
+
+export function isCardBackground(target: EventTarget | null, card: HTMLElement): boolean {
+	return target instanceof Element && target.closest(FOCUSABLE) === card;
+}
+
 export function isInsidePreview(target: EventTarget | null): boolean {
 	return target instanceof Element && !!target.closest("[data-ask-preview]");
 }

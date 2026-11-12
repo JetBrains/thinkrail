@@ -1,7 +1,7 @@
 import { lstatSync, mkdirSync, realpathSync, statSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
-import type { Project, WsParams } from "@thinkrail/contracts";
+import { isWindowsDeviceName, type Project, type WsParams } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { gitAsync } from "../git";
 import {
@@ -68,7 +68,7 @@ export function inspectCloneDestination(parentPath: string, requestedName: strin
 		name.length > 255 ||
 		/[/\\<>:"|?*\p{Cc}]/u.test(name) ||
 		/[. ]$/.test(name) ||
-		/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name)
+		isWindowsDeviceName(name)
 	)
 		invalid("Enter a single valid folder name, without path separators.");
 	const resolved = resolveProjectPath(parentPath.trim());

@@ -115,6 +115,11 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `USER_FONT_EXTENSIONS` naming the host's `/fonts/` route and its upload guard,
   `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
   `parsePiPackageInput` (§ pi packages),
+  **`isValidTemplateName(name)`** (the one prompt-template name rule — the host's traversal gate in
+  [[submodule-server-templates]] and the web template editor's inline check call this same function) +
+  **`isWindowsDeviceName(name)`** (`CON`, `PRN`, `AUX`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9` and the
+  `¹²³` variants, any case, alone or before spaces or an extension, as Windows 10 reads `NUL .md` as `NUL`;
+  also the clone destination's device-name check),
   `JBCENTRAL_QUOTA_REFRESH_SECONDS`, `isJbcentralQuotaRefreshSeconds`, `isJbcentralConnected`,
   `SESSION_RENAME_PROTOCOL_VERSION`, `SESSION_TITLE_MAX_LENGTH`, `normalizeSessionTitle`,
   `FIRST_PROMPT_MAX_LENGTH` + **`firstPromptHead(text)`** + **`firstPromptOfTexts(texts)`** +
@@ -273,7 +278,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
     it into the session, and an older host simply omits it (the client shows its generic label).
   - the **extension-UI frames** **`ExtUiRequest`** / **`ExtUiResponse`** — our wire shape for pi's in-process
     `uiContext` calls (`select`/`confirm`/`input`/`editor` round-trip; `notify`/`setStatus`/`setWidget`/
-    `setTitle`/`dismiss` are fire-and-forget), carried on the `pi.extensionUi` channel. One member is
+    `setTitle`/`setEditorText`/`pasteToEditor`/`dismiss` are fire-and-forget), carried on the
+    `pi.extensionUi` channel. `setEditorText` and `pasteToEditor` (`EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION`,
+    v115) carry `text` for the addressed session's composer: the first replaces the draft (an empty string
+    clears it), the second inserts like a paste. Older clients ignore the unknown kinds. One member is
     host-authored, not pi's: `notice` (v99) carries a closed `ProviderWarning` code for a session, such
     as the Anthropic extra-usage warning. It has no text, so the client localizes it, and older clients
     ignore the unknown kind. A round-trip

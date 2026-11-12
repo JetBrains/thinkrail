@@ -309,6 +309,17 @@ async function assertAskUserQuestionRoundTrip(
 	);
 }
 
+async function assertRegistryExtensionsRegisterTools(socket: WebSocket): Promise<void> {
+	const catalog = (await within(rpc(socket, "extension.list", {}), 10_000, "extension.list")) as {
+		name: string;
+		tools: string[];
+	}[];
+	assert(catalog.length > 0, "extension.list returned no registry extensions");
+	for (const { name, tools } of catalog) {
+		assert(tools.length > 0, `registry extension ${name} registered no tools in the artifact`);
+	}
+}
+
 async function assertOAuthLoginReachesAuthUrl(socket: WebSocket): Promise<void> {
 	let loginId: string | undefined;
 	const authUrl = new Promise<string>((resolve, reject) => {
@@ -622,6 +633,7 @@ export default function syntheticExternalExtension(pi) {
 		);
 		await assertStrictVisualizeValidation(socket, workspace.id, created.sessionId);
 		await assertAskUserQuestionRoundTrip(socket, workspace.id, created.sessionId);
+		await assertRegistryExtensionsRegisterTools(socket);
 		await within(
 			rpc(socket, "session.dispose", { sessionId: created.sessionId }),
 			10_000,
