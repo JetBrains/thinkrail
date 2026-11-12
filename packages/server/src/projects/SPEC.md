@@ -24,8 +24,8 @@ bootstrap it into one so it can be opened.
   with the named `NOT_GIT` code), records the root in the host's resolved spelling (git prints `C:/…` on
   Windows; architecture Decision 22), dedupes by root,
   and assigns a stable unique readable `slug`; `getProjects` returns all known records with slug backfill,
-  `listProjects` returns open records by `lastOpened`, and `listRecentProjects` returns open + closed records
-  by `lastOpened`, synchronously dropping only *closed* records whose folder the last completed check
+  `listProjects` returns open records in the user's order (`compareProjectRank`), and `listRecentProjects`
+  returns open + closed records by `lastOpened`, synchronously dropping only *closed* records whose folder the last completed check
   found definitively gone (missing, or no longer a directory). Open records are never checked, so a
   temporarily unmounted drive loses nothing; other filesystem errors do not prove deletion, and a record
   not yet checked stays listed. **`refreshRecentProjectFolders(budgetMs)`** re-stats closed records'
@@ -34,7 +34,15 @@ bootstrap it into one so it can be opened.
   filter is display-only: stored records are untouched. A persisted
   optional **`Project.closed: true`** is the entire membership state: absence means open, so existing
   records migrate as open. **`openProject`** finds a known root even when closed, clears `closed`, bumps
-  `lastOpened`, preserves its id, persists, and publishes the full snapshot; **`closeProject`** marks that
+  `lastOpened`, preserves its id, persists, and publishes the full snapshot; a new or reopened project
+  gets a `rank` above every open repository, so it lands on top, while reopening one already open pins
+  its current rank, so an open never moves a project the user arranged.
+  **`moveProject(id, targetId, "before" | "after")`** is the one order mutation, over open repositories
+  only (the Chats container and closed records are unknown to it; self and no-op moves change nothing):
+  the moved record takes the midpoint of its new neighbours' ranks (one rank past the edge at either
+  end), so a move persists and publishes that one record; only when the neighbours leave no
+  representable room (equal ranks, or a gap halved to nothing) are all open repositories renumbered,
+  each changed record published. **`closeProject`** marks that
   same record closed and publishes it without deleting the project, repository, workspace records, or
   live runtimes. **`renameProject`** replaces only the display `name` (whitespace-collapsed, trimmed,
   1–100 chars) and publishes the record; the folder-derived `slug`, `path`, and id never change, so
@@ -152,7 +160,7 @@ and truncating first can separate a secret suffix from the URL prefix needed to 
 
 - **Public surface (barrel):** `cloneProject`, `inspectCloneDestination`, `startProjectClone`, `cancelProjectClone`, `openProject`, `listProjects`, `listRecentProjects`,
   `assertOutsideChatsRoot`,
-  `refreshRecentProjectFolders`, `closeProject`, `renameProject`,
+  `refreshRecentProjectFolders`, `closeProject`, `renameProject`, `moveProject`,
   `getProjects`, `setProjectPublisher`, `setProjectPathGuard`, `inspectProjectPath`, `initProject`, `createProject`, `setProjectTrust`,
   `setProjectSkillEnabled`, `setProjectGroupEnabled`, `acknowledgeProjectSkills`,
   `approveProjectMcpServer`, `setProjectMcpOverride`, `grantProjectMcpTool`, `revokeProjectMcpTool`,

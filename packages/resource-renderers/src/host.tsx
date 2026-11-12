@@ -74,9 +74,14 @@ export interface ResourceHost {
 	ReviewSend: ComponentType<ResourceReviewSendProps>;
 }
 
+export type MarkdownOutlineSide = "left" | "right";
+
 export interface ResourcePreferences {
 	fileLineWidth: number;
 	fileLineWidthBounded: boolean;
+	markdownOutlineVisible: boolean | null;
+	setMarkdownOutlineVisible: (visible: boolean) => void;
+	markdownOutlineSide: MarkdownOutlineSide;
 }
 
 const ResourceHostContext = createContext<ResourceHost | null>(null);

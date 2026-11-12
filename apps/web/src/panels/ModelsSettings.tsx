@@ -14,6 +14,7 @@ import { useModelPreferences } from "@/chat/useModelPreferences";
 import { selectCatalogModel, selectPickerModels, toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { CacheWarmingSettings } from "./CacheWarmingSettings";
+import { useCustomEndpoints } from "./CustomEndpointsSettings";
 import { ModelContextSettings } from "./ModelContextSettings";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
 import { SettingsRow } from "./SettingsRow";
@@ -38,6 +39,7 @@ export function ModelsSettings() {
 		[allModels, hiddenModels],
 	);
 	const preferences = useModelPreferences(visibleModels);
+	const customEndpoints = useCustomEndpoints();
 	const [resolvedDefault, setResolvedDefault] = useState<ModelDefault | null>(null);
 	const [loadFailed, setLoadFailed] = useState(false);
 	const [saving, setSaving] = useState(false);
@@ -217,7 +219,7 @@ export function ModelsSettings() {
 				/>
 			</SettingsGroup>
 
-			<ModelContextSettings />
+			<ModelContextSettings customEndpoints={customEndpoints} />
 
 			<CacheWarmingSettings />
 		</SettingsPageContainer>

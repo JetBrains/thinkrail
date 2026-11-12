@@ -214,6 +214,12 @@ export function createWebUiContext(
 		setTitle(title) {
 			publish({ id: nextId(), sessionId, kind: "setTitle", title });
 		},
+		pasteToEditor(text) {
+			publish({ id: nextId(), sessionId, kind: "pasteToEditor", text });
+		},
+		setEditorText(text) {
+			publish({ id: nextId(), sessionId, kind: "setEditorText", text });
+		},
 
 		onTerminalInput: () => () => {},
 		setWorkingMessage: () => {},
@@ -223,8 +229,6 @@ export function createWebUiContext(
 		setFooter: () => {},
 		setHeader: () => {},
 		custom: (() => Promise.resolve(undefined)) as ExtensionUIContext["custom"],
-		pasteToEditor: () => {},
-		setEditorText: () => {},
 		getEditorText: () => "",
 		addAutocompleteProvider: () => {},
 		setEditorComponent: () => {},
