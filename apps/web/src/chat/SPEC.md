@@ -801,7 +801,18 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   toward latest, and its scroll-end ended the momentum before it reached the edge. The hook shadows the
   scroller's own `scrollBy`/`scrollTo` for its lifetime and restores them on cleanup; this relies on
   Virtuoso moving its scroller only through those two methods (verified for react-virtuoso 4.18.7, re-verify
-  on upgrade), and only displacement those calls apply synchronously is attributed. A return gesture rearms
+  on upgrade), and only displacement those calls apply synchronously is attributed.
+  `patches/react-virtuoso@4.18.19.patch` (root `patchedDependencies`, ESM build only — every consumer
+  imports it) makes Virtuoso's upward scrolling compensation consume each `lastJumpDueToItemResize` once.
+  Unpatched, that value changes only with `scrollHeight`, so a clamp jump already paired with its own shrink
+  at the bottom is added again to the next unrelated measurement: an item shrinking by 297 px just before the
+  first wheel notch up turned a 1 px correction into `scrollBy(298)`, the browser clamped it to the latest
+  edge, and the notch was lost. The 80-column default (#732) produced that geometry. Resetting the jump on
+  every height-preserving scroll state was rejected: one usually lands between a jump and its shrink, and
+  the correct `-211 + 212` pairing became `scrollBy(-211)`. Upstream: petyosi/react-virtuoso#1571 (the
+  same code is on its `master`). Bun skips a patch for a mismatched version silently, so "scrolling up
+  through variable-height history never jumps visible content" in `e2e/chat-scroll.spec.ts` is the guard.
+  Removal gate: a Virtuoso release that consumes the jump once. A return gesture rearms
   once only when it reaches the physical latest edge within the shared 1px geometry tolerance; directions
   invert with order, and touch/trackpad intent survives through momentum. No 50px near-edge threshold and no
   geometry change alone may rearm. Expanding or collapsing an Activity, Thinking, tool, or message
