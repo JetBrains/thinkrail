@@ -76,7 +76,9 @@ standalone render) or a host older than MCP hides them.
 ## Boundary
 
 - **Owns:** these renderers, the `mcpResult` readers, and their registration.
-- **Public surface:** the side-effect `register` only (per-file imports, as in the parent).
+- **Public surface:** the side-effect `register`; `mcpResult`'s pure readers (the parent chat's
+  Resources MCP server detail reads `MCP_TOOL_PREFIX`, `readMcpToolDetails` and `mcpArgsSummary`).
+  Per-file imports, as in the parent.
 - **Allowed deps:** parent chat primitives (`toolRegistry`, `ChatActions`, `foldState`), sibling
   `Collapsible`; `@thinkrail/extension-api/web`; `contracts` (type-only — `McpToolDetails`,
   `McpResultSummary`, `McpContentBlockSummary`, `McpReadOutputResult`); `@thinkrail/ui/*`;
