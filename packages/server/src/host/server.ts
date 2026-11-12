@@ -282,6 +282,7 @@ interface SocketData {
 }
 
 const CLIENT_REPLAY_RETENTION_MS = 60_000;
+const WS_OUTBOUND_BUFFER_LIMIT_BYTES = 256 * 1024 * 1024;
 const RECENT_FOLDER_CHECK_BUDGET_MS = 250;
 
 const log = logger("host");
@@ -303,6 +304,20 @@ function formatReplayLoad(load: ReplayLoad): string {
 				`${method} ${pending} pending/${settled} settled/${abandoned} abandoned`,
 		)
 		.join(", ");
+}
+
+function sendReply(
+	ws: Bun.ServerWebSocket<SocketData>,
+	frame: string,
+	methodDiagnostic: string,
+): void {
+	if (ws.send(frame) !== 0) return;
+	if (ws.readyState === WebSocket.OPEN) {
+		log.warn(
+			`${methodDiagnostic} reply dropped with ${ws.getBufferedAmount()} bytes buffered; closing the socket`,
+		);
+	}
+	ws.close();
 }
 
 function countMethods(methods: readonly string[]): string {
@@ -454,6 +469,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		},
 		websocket: {
 			maxPayloadLength: WS_MAX_FRAME_BYTES,
+			backpressureLimit: WS_OUTBOUND_BUFFER_LIMIT_BYTES,
 			open(ws) {
 				if (ws.data.speechSocket) {
 					ws.data.speech = createSpeechRelay(ws);
@@ -607,7 +623,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 						},
 						methodDiagnostic,
 					);
-					if (ws.send(response) === 0) ws.close();
+					sendReply(ws, response, methodDiagnostic);
 				} catch (err) {
 					const error = err instanceof Error ? err.message : String(err);
 					if (err instanceof RequestReplayOverflowError && err.load) {
@@ -621,7 +637,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 						error,
 						...(code ? { errorCode: code } : {}),
 					});
-					if (ws.send(reply) === 0) ws.close();
+					sendReply(ws, reply, methodDiagnostic);
 				}
 			},
 			drain(ws) {

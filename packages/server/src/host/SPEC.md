@@ -944,8 +944,27 @@ enabled/confirmed choice before entering analytics attribution.
   `WS_MAX_FRAME_BYTES` (16 MiB, [[module-contracts]]); the 12 MiB `REQUEST_IMAGE_BASE64_BUDGET` leaves
   room under it for the prompt text, and `WsTransport.request` refuses a larger frame before it is sent
   ([[submodule-web-transport]]). Raising the cap instead was tried and rejected: pi echoes a prompt's
-  images back through `pi.event` several times, and past Bun's outbound backpressure limit those frames
-  are dropped (#1179, #1180); providers also reject a whole request near 20 MB.
+  images back through `pi.event` several times, multiplying the outbound volume against the buffer limit
+  below (#1179, #1180); providers also reject a whole request near 20 MB.
+- **The outbound buffer limit is 256 MiB (`WS_OUTBOUND_BUFFER_LIMIT_BYTES`), well above any reconnect
+  resync.**
+  - **The default and the failure.** uWS checks the buffered amount *before* each send. Under Bun's
+    16 MiB default, a reply over 16 MiB (a screenshot-heavy `session.getMessages`, 39 MB) was accepted,
+    and the next send returned `0`, meaning dropped. The reply path reads `0` as a dead socket and
+    closes. The page then re-read every mounted transcript on reconnect (`useTranscriptSync`), and the
+    same big reply closed the socket again. That loop ran for hours, with every welcome stacking
+    another full `session.stateList` scan until each one was abandoned.
+  - **Past the limit, the close stays.** `sendReply` warns with the method and the buffered bytes,
+    then closes. Bun's graceful close flushes what is already buffered, and the page replays its
+    unresolved ids.
+  - **`closeOnBackpressureLimit` is rejected.** It closes with 1006 and discards the buffered frame:
+    a probe client received 0 frames.
+  - **Why finite, why this value.** Memory grows only while a client reads slower than the host writes,
+    up to the limit per socket. A limit of `0` (unlimited) would let one slow client exhaust the host.
+    A resync larger than 256 MiB, for example several mounted chats of ~70 MB each, brings the loop
+    back. That is the accepted bound until image bytes leave the socket (#1180).
+  - **Broadcasts.** `server.publish` results stay ignored, so pushes past the limit are still dropped
+    silently (#1179).
 - The host is the single place features are wired together — features never reach back into it.
 - **A font upload must carry `X-ThinkRail-Request: font-upload`** (`USER_FONT_UPLOAD_HEADER`), else 403.
   The host has no auth, no Origin check and no CORS ([[architecture]] Decision 7). A cross-origin upload
