@@ -1682,10 +1682,12 @@ because the open inspector watches the workspace), and **Calls in this chat** �
 collapsed row (state, tool, argument one-liner, clock time) that expands into the transcript's own
 `ToolRendererBody`, so the card is identical. The pure `mcpServerCalls` reads the chat's turns: an
 `mcp__*` call belongs to its result's `details.server` (pi's unsanitized name). Without it — still
-running, or thrown with `details: {}` — it belongs to the snapshot's server whose pi tool-name prefix it
-carries (`mcp__<name with every non-word character as _>__`, longest prefix first so `a__b` beats `a`;
-a 64-character hash-shortened name matches on its kept head). Splitting the name at its first `__`
-lost `my-server` and `a__b` (review of #1331). The three resource tools belong to their `server`
+running, or thrown with `details: {}` — it belongs to the one snapshot server whose pi tool-name prefix
+it carries (`mcp__<name with every non-word character as _>__`; a 64-character hash-shortened name
+matches on its kept head). When several do (`a` and `a__b` both own `mcp__a__b__lookup`), the call is
+ambiguous and listed under none until its details arrive: an omitted call beats a misattributed one.
+Splitting the name at its first `__` lost `my-server`, and picking the longest prefix misattributed
+`a`'s tools (review of #1331). The three resource tools belong to their `server`
 argument, and a listing across every server belongs to none. It is the chat's own transcript only — not subagents' calls nor other chats' (user-settled,
 2026-11). *Rejected:* a host-side per-server call log (a new contract for what the transcript already
 records) and putting the status line on `McpServerResourceSummary` (the store already holds it while

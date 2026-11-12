@@ -30,17 +30,17 @@ function ownerByToolName(
 	toolName: string,
 	servers: readonly string[],
 ): { server: string; tool: string } | null {
-	const longest = (owns: (prefix: string) => boolean) =>
-		servers
-			.map((server) => ({ server, prefix: piToolPrefix(server) }))
-			.filter(({ prefix }) => owns(prefix))
-			.sort((a, b) => b.prefix.length - a.prefix.length)[0];
-	const exact = longest((prefix) => toolName.startsWith(prefix));
-	if (exact) return { server: exact.server, tool: toolName.slice(exact.prefix.length) };
-	if (toolName.length !== PI_TOOL_NAME_LIMIT || !PI_HASHED_TAIL.test(toolName)) return null;
-	const head = toolName.slice(0, -9);
-	const hashed = longest((prefix) => prefix.startsWith(head));
-	return hashed ? { server: hashed.server, tool: toolName } : null;
+	const hashed = toolName.length === PI_TOOL_NAME_LIMIT && PI_HASHED_TAIL.test(toolName);
+	const head = hashed ? toolName.slice(0, -9) : toolName;
+	const owners = servers
+		.map((server) => ({ server, prefix: piToolPrefix(server) }))
+		.filter(({ prefix }) => head.startsWith(prefix) || (hashed && prefix.startsWith(head)));
+	const [owner] = owners;
+	if (!owner || owners.length > 1) return null;
+	return {
+		server: owner.server,
+		tool: head.startsWith(owner.prefix) ? toolName.slice(owner.prefix.length) : toolName,
+	};
 }
 
 function callServer(

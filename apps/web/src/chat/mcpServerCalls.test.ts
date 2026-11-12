@@ -78,7 +78,7 @@ test("a call the turn can no longer execute is marked dead", () => {
 	expect(mcpServerCalls(turns, {}, "github", ["github"])[0]?.dead).toBe(true);
 });
 
-test("a call without result details belongs to the known server whose pi tool-name prefix it carries", () => {
+test("a call without result details belongs to the one known server whose pi tool-name prefix it carries", () => {
 	const longServer = "company-internal-knowledge-base-with-a-very-long-name";
 	const longFull = `mcp__${longServer.replace(/-/g, "_")}__search_everything`;
 	const hashed = `${longFull.slice(0, 55)}_0123abcd`;
@@ -88,7 +88,7 @@ test("a call without result details belongs to the known server whose pi tool-na
 			[
 				call("pending", "mcp__my_server__lookup"),
 				call("thrown", "mcp__my_server__fetch"),
-				call("nested", "mcp__a__b__tool"),
+				call("ambiguous", "mcp__a__b__lookup"),
 				call("plain", "mcp__a__tool"),
 				call("named", "mcp__a__b__other"),
 				call("hashed", hashed),
@@ -101,17 +101,19 @@ test("a call without result details belongs to the known server whose pi tool-na
 		named: done({ server: "a", tool: "b__other" }),
 	};
 	const servers = ["my-server", "a", "a__b", longServer];
-	const owned = (server: string) =>
-		mcpServerCalls(turns, results, server, servers).map((item) => [item.toolCallId, item.tool]);
+	const owned = (server: string, known = servers) =>
+		mcpServerCalls(turns, results, server, known).map((item) => [item.toolCallId, item.tool]);
 	expect(hashed).toHaveLength(64);
 	expect(owned("my-server")).toEqual([
 		["thrown", "fetch"],
 		["pending", "lookup"],
 	]);
-	expect(owned("a__b")).toEqual([["nested", "tool"]]);
 	expect(owned("a")).toEqual([
 		["named", "b__other"],
 		["plain", "tool"],
 	]);
+	expect(owned("a__b")).toEqual([]);
+	expect(owned("a__b", ["a__b"])).toEqual([["ambiguous", "lookup"]]);
 	expect(owned(longServer)).toEqual([["hashed", hashed]]);
+	expect(owned("my-server", ["my-server", "my_server"])).toEqual([]);
 });
