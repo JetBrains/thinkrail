@@ -223,3 +223,43 @@ test("tearing down a workspace's sessions stops serving their images", async () 
 		client.close();
 	}
 }, 30_000);
+
+test("a subagent transcript's images are servable at once, its parent chat attached on read", async () => {
+	const client = await connect();
+	try {
+		const workspace = await openWorkspace(client, "child-repo");
+		const parent = SessionManager.create(workspace.worktreePath);
+		parent.appendMessage({ role: "user", content: "delegate the screenshot", timestamp: 1 });
+		parent.appendMessage(fauxAssistantMessage("delegated", { timestamp: 2 }));
+		const parentSessionId = parent.getSessionId();
+		const childDir = join(root, "data", "delegation", workspace.id, parentSessionId);
+		const child = SessionManager.create(workspace.worktreePath, childDir);
+		const data = SCREENSHOT.toString("base64");
+		child.appendMessage({
+			role: "user",
+			content: [{ type: "image", data, mimeType: "image/png" }],
+			timestamp: 3,
+		});
+		child.appendMessage(fauxAssistantMessage("a login form", { timestamp: 4 }));
+
+		const { frame, text } = await client.request("subagent.getTranscript", {
+			workspaceId: workspace.id,
+			parentSessionId,
+			childSessionId: child.getSessionId(),
+		});
+		expect(text).not.toContain(data);
+		const messages = (frame.result as { messages: TranscriptMessage[] }).messages;
+		const user = messages.find((message) => message.role === "user");
+		const blocks = user && typeof user.content !== "string" ? user.content : [];
+		const image = blocks.find(
+			(block): block is RefImage => block.type === "image" && isRefImage(block),
+		);
+		if (!image) throw new Error("the child transcript has no image reference");
+		expect(image.ref.startsWith(`${IMAGES_ROUTE}${parentSessionId}/`)).toBe(true);
+		const served = await fetch(`http://127.0.0.1:${server.port}${image.ref}`);
+		expect(served.status).toBe(200);
+		expect(Buffer.from(await served.arrayBuffer()).equals(SCREENSHOT)).toBe(true);
+	} finally {
+		client.close();
+	}
+}, 30_000);

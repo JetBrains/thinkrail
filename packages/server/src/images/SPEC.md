@@ -73,9 +73,12 @@ looped reconnects; see the host SPEC's outbound-limit bullet.
 - **The source scope is the owning chat.**
   - A subagent's images are registered under the **parent** chat's id, so deleting that chat retires
     them too.
-  - After an eviction or a host restart, a child's image waits for the next transcript poll or
-    reopen. There is no disk tier: no workspace is in the URL, and `SessionManager.open` may rewrite a
-    file.
+  - `subagent.getTranscript` attaches the parent chat before it reads the child (host), so a child's
+    images are servable as soon as its transcript arrives, even after a host restart. Without that,
+    the read could beat the parent's own resync, and a finished child stops polling and would keep a
+    tile.
+  - After an eviction, a child's image waits for the next transcript poll or reopen. There is no disk
+    tier: no workspace is in the URL, and `SessionManager.open` may rewrite a file.
   - After a host restart, a page's resync re-reads every mounted transcript, and that re-registers it.
     The page's tile retries only after that resync (chat SPEC), never on the raw reconnect.
 - **Composer-bound replies stay inline.** Queue restore (`clearQueue`, `removeQueued`,

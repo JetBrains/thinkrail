@@ -1412,8 +1412,11 @@ const handlers: WsHandlers = {
 		);
 		return { ok: true, targeted } as const;
 	},
-	"subagent.getTranscript": (p) => {
-		getWorkspace(p.workspaceId);
+	"subagent.getTranscript": async (p) => {
+		const workspace = getWorkspace(p.workspaceId);
+		await ensureSessionAttached(p.parentSessionId, p.workspaceId, workspace.worktreePath).catch(
+			() => false,
+		);
 		return readChildTranscript(p.workspaceId, p.parentSessionId, p.childSessionId);
 	},
 	"session.extUiReply": (params) => {
