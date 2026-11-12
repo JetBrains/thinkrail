@@ -422,6 +422,22 @@ test("custom server models take targeted saves in their own range and stay out o
 	expect(providers["custom-gw"]?.modelOverrides).toEqual({ relay: { contextWindow: 8_192 } });
 });
 
+test("a hand-written custom-* provider on another API takes targeted saves in the custom range", async () => {
+	const pi = await runtime([
+		["openai", "openai-responses"],
+		["custom-responses", "openai-responses"],
+	]);
+	const target = { provider: "custom-responses", id: "gpt-5.5" };
+	await setModelContextWindow(target, 8_192);
+	expect(pi.getModel("custom-responses", "gpt-5.5")?.contextWindow).toBe(8_192);
+	const shared = await setModelContextWindow("available", 1_000_000);
+	expect(
+		shared.find((entry) => entry.provider === "custom-responses" && entry.id === "gpt-5.5"),
+	).toEqual({ ...target, name: "GPT-5.5", contextWindow: 8_192, override: 8_192 });
+	await setModelContextWindow(target, null);
+	expect(pi.getModel("custom-responses", "gpt-5.5")?.contextWindow).toBe(272_000);
+});
+
 test("a user's custom server window survives a re-detected save and Default returns to the detected one", async () => {
 	customServer([{ id: "relay", contextWindow: 65_536 }]);
 	const pi = await runtime();

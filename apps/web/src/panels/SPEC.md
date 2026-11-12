@@ -1194,14 +1194,19 @@ a project picker, the prompt hero, and the reused
   come from that same resolved, Pi-clamped model. Both triggers are disabled, and choices in an already-open
   picker are ignored, while a save or re-read is in flight. At v76, **`ModelContextSettings`** adds
   one Default / 1M / Custom selector over every eligible GPT model the host returns as
-  `ModelContextSetting[]` (a `custom-*` server's rows are left to that server's dialog); a collapsed
-  **By each model** disclosure reveals one selector per provider/model pair, so the same model on
+  `ModelContextSetting[]`. Rows of a server the **Custom servers** group lists are left to that server's
+  dialog: `ModelsSettings` passes the same `useCustomEndpoints` state, and the block stays on its loading
+  line until that list answers, so rows never flash in and out (a failed list, or a host without the
+  group, hides none). Any other `custom-*` provider — say a hand-written `openai-responses` one the dialog
+  can't represent — keeps its row under By each model, bounded by `modelContextWindowLimits`, and never
+  joins the shared control. A collapsed **By each model** disclosure reveals one selector per
+  provider/model pair, so the same model on
   different providers stays independently editable. Selection is keyed on the explicit `override`
   (Default = `null`, the catalog value pi reports). The shared control summarizes only the rows the
   contracts' `isSharedModelContextTarget` admits — it shows "Customized by model" when their overrides
-  differ, counts the external rows it leaves alone, and is omitted when it would govern none — and
-  choosing a shared preset replaces those rows' overrides in one `model.setContextWindow` call. Custom reveals a whole-number field bounded by the contracts' 272K–1M
-  range that saves on Enter or blur — except a blur onto a sibling preset of the same control, so picking
+  differ, counts the non-`custom-*` external rows it leaves alone, and is omitted when it would govern none — and
+  choosing a shared preset replaces those rows' overrides in one `model.setContextWindow` call. Custom reveals a whole-number field bounded by the row's
+  `modelContextWindowLimits` (the contracts' 272K–1M range but for a `custom-*` row) that saves on Enter or blur — except a blur onto a sibling preset of the same control, so picking
   Default/1M never first commits a half-typed value; the copy labels it an app policy, not a verified provider limit, and
   external values outside it stay visible but cannot be re-applied. Drafts are UI-local and are dropped
   when their authoritative override changes; inputs are not remounted, and after a disabled save focus

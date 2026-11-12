@@ -8,6 +8,7 @@ import {
 	type ModelContextSetting,
 	type ModelContextTarget,
 	type ModelContextWindowLimits,
+	modelContextWindowLimits,
 	type WsMethodMap,
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
@@ -18,6 +19,7 @@ import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
+import type { CustomEndpointsState } from "./CustomEndpointsSettings";
 import { SettingsGroup } from "./SettingsGroup";
 
 const PRESETS = [
@@ -59,6 +61,7 @@ function ContextLimitControl({
 	controlLabel = label,
 	description,
 	override,
+	limits = MODEL_CONTEXT_WINDOW_LIMITS,
 	disabled,
 	testId,
 	revision,
@@ -68,13 +71,14 @@ function ContextLimitControl({
 	controlLabel?: string;
 	description: string;
 	override: number | null | undefined;
+	limits?: ModelContextWindowLimits;
 	disabled: boolean;
 	testId: string;
 	revision: string;
 	onChange: (override: number | null) => void;
 }) {
 	const t = useT();
-	const range = tokenRange(t);
+	const range = tokenRange(t, limits);
 	const id = useId();
 	const inputRef = useRef<HTMLInputElement>(null);
 	const restoreFocus = useRef<HTMLElement | null>(null);
@@ -102,10 +106,10 @@ function ContextLimitControl({
 			: (PRESETS.find((preset) => preset.override === override)?.id ?? "custom");
 	const isCustomActive = selected === "custom";
 	const text = draft.text.trim();
-	const showError = text !== "" && !isContextWindowText(text);
+	const showError = text !== "" && !isContextWindowText(text, limits);
 
 	const commitValue = () => {
-		if (disabled || !isContextWindowText(text) || text === draft.submitted) return false;
+		if (disabled || !isContextWindowText(text, limits) || text === draft.submitted) return false;
 		const value = Number(text);
 		if (value === override) return false;
 		setDraft({ ...draft, submitted: text });
@@ -289,9 +293,25 @@ export function ModelContextLoadFailed({
 	);
 }
 
+export function customServerIds(
+	customEndpoints: CustomEndpointsState | null,
+): ReadonlySet<string> | null {
+	if (customEndpoints?.endpoints) return new Set(customEndpoints.endpoints.map(({ id }) => id));
+	return customEndpoints === null || customEndpoints.failed ? new Set() : null;
+}
+
+export function modelContextRows(
+	settings: ModelContextSetting[] | null,
+	customServers: ReadonlySet<string> | null,
+): ModelContextSetting[] | null {
+	if (settings === null || customServers === null) return null;
+	return settings.filter((model) => !customServers.has(model.provider));
+}
+
 export function ModelContextControls({
 	protocolVersion,
 	settings,
+	customServers,
 	pending,
 	failed,
 	onChange,
@@ -299,6 +319,7 @@ export function ModelContextControls({
 }: {
 	protocolVersion: number | null;
 	settings: ModelContextSetting[] | null;
+	customServers: ReadonlySet<string> | null;
 	pending: boolean;
 	failed: boolean;
 	onChange: (target: ModelContextTarget, override: number | null) => void;
@@ -308,9 +329,10 @@ export function ModelContextControls({
 	const [expanded, setExpanded] = useState(false);
 	const rowsId = useId();
 	if (!supported(protocolVersion)) return null;
-	const rows = settings?.filter((model) => !isCustomEndpointId(model.provider)) ?? null;
-	const shared = rows?.filter(isSharedModelContextTarget) ?? [];
-	const external = (rows?.length ?? 0) - shared.length;
+	const rows = modelContextRows(settings, customServers);
+	const gpt = rows?.filter((model) => !isCustomEndpointId(model.provider)) ?? [];
+	const shared = gpt.filter(isSharedModelContextTarget);
+	const external = gpt.length - shared.length;
 	const first = shared[0]?.override;
 	const sharedOverride = shared.every((model) => model.override === first) ? first : undefined;
 	const revision = JSON.stringify(rows?.map((model) => [model.provider, model.id, model.override]));
@@ -404,6 +426,7 @@ export function ModelContextControls({
 													})
 										}
 										override={model.override}
+										limits={modelContextWindowLimits(model.provider)}
 										disabled={pending}
 										testId={`context-limit-${model.provider}-${model.id}`}
 										onChange={(override) =>
@@ -480,7 +503,11 @@ export function useModelContextSettings(minimumProtocol: number): ModelContextSt
 	};
 }
 
-export function ModelContextSettings() {
+export function ModelContextSettings({
+	customEndpoints,
+}: {
+	customEndpoints: CustomEndpointsState | null;
+}) {
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
 	const context = useModelContextSettings(CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION);
 	if (!context) return null;
@@ -488,6 +515,7 @@ export function ModelContextSettings() {
 		<ModelContextControls
 			protocolVersion={protocolVersion}
 			settings={context.settings}
+			customServers={customServerIds(customEndpoints)}
 			pending={context.pending}
 			failed={context.failed}
 			onRetry={context.retry}
