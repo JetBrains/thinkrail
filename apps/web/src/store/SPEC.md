@@ -606,7 +606,11 @@ selector to hide its Projects rail and pane, so onboarding has the whole window.
   the chat preference seam from host-qualified browser localStorage or the native shell's injected
   backend-profile/window-scoped adapter. It defaults oldest-first. `setChatMessageOrder` changes it
   without a server round trip, and `applyConfig` can never overwrite it. `ChatView` projects each
-  runtime from order without rewriting canonical turns. **`hiddenModels: ModelRef[]`** (`{ provider, id }` pairs) is a client-local model visibility
+  runtime from order without rewriting canonical turns. **`markdownOutlineVisible: boolean | null`**
+  (`null` until the reader shows or hides the Markdown outline) and **`markdownOutlineSide: "left" |
+  "right"`** (default right) are client-local the same way: `shell/markdownOutlinePreference` hydrates and
+  persists them, `setMarkdownOutlineVisible` / `setMarkdownOutlineSide` change them, and `applyConfig` never
+  touches them. **`hiddenModels: ModelRef[]`** (`{ provider, id }` pairs) is a client-local model visibility
   preference with pure **`hydrateHiddenModels(list)`** / **`setModelVisibility(model, visible)`** /
   **`toggleModelVisibility(model)`** actions; the store touches no storage — `chat/modelVisibility`
   hydrates and persists it, and `applyConfig` can never overwrite it. **`selectPickerModels(models,

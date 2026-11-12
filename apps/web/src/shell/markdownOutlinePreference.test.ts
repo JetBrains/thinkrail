@@ -1,50 +1,49 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import type { StablePreferenceAdapter } from "../clientPreferences";
-import {
-	MARKDOWN_OUTLINE_VISIBLE_KEY,
-	markdownOutlineStorageKey,
-	parseMarkdownOutlineVisible,
-	readMarkdownOutlineVisible,
-	writeMarkdownOutlineVisible,
-} from "./markdownOutlinePreference";
+import { useAppStore } from "../store";
+import { initMarkdownOutlinePersistence } from "./markdownOutlinePreference";
 
-function memoryAdapter(initial: string | null = null): StablePreferenceAdapter & {
-	value: string | null;
+function memoryAdapter(initial: Record<string, string> = {}): StablePreferenceAdapter & {
+	values: Map<string, string>;
 } {
+	const values = new Map(Object.entries(initial));
 	return {
-		value: initial,
-		getItem() {
-			return this.value;
+		values,
+		getItem: (key) => values.get(key) ?? null,
+		setItem: (key, value) => {
+			values.set(key, value);
 		},
-		setItem(_key: string, value: string) {
-			this.value = value;
-		},
-		removeItem() {
-			this.value = null;
+		removeItem: (key) => {
+			values.delete(key);
 		},
 	};
 }
 
-test("parseMarkdownOutlineVisible accepts only explicit booleans", () => {
-	expect(parseMarkdownOutlineVisible("true")).toBe(true);
-	expect(parseMarkdownOutlineVisible("false")).toBe(false);
-	expect(parseMarkdownOutlineVisible(null)).toBeNull();
-	expect(parseMarkdownOutlineVisible("yes")).toBeNull();
+let stop: (() => void) | null = null;
+
+afterEach(() => {
+	stop?.();
+	stop = null;
+	useAppStore.setState({ markdownOutlineVisible: null, markdownOutlineSide: "right" });
 });
 
-test("the host-qualified browser key is namespaced", () => {
-	expect(markdownOutlineStorageKey("http://localhost:31415")).toBe(
-		`thinkrail-markdown-outline-visible:http://localhost:31415`,
-	);
+test("an untouched client keeps the width-driven default and the right edge", () => {
+	stop = initMarkdownOutlinePersistence(memoryAdapter({ "markdown-outline-side": "middle" }));
+	expect(useAppStore.getState().markdownOutlineVisible).toBeNull();
+	expect(useAppStore.getState().markdownOutlineSide).toBe("right");
 });
 
-test("read and write go through the stable preference adapter", () => {
-	const adapter = memoryAdapter();
-	expect(readMarkdownOutlineVisible(adapter)).toBeNull();
-	writeMarkdownOutlineVisible(true, adapter);
-	expect(adapter.value).toBe("true");
-	expect(readMarkdownOutlineVisible(adapter)).toBe(true);
-	writeMarkdownOutlineVisible(false, adapter);
-	expect(readMarkdownOutlineVisible(adapter)).toBe(false);
-	expect(adapter.getItem(MARKDOWN_OUTLINE_VISIBLE_KEY)).toBe("false");
+test("stored choices hydrate the store and later changes are written back", () => {
+	const adapter = memoryAdapter({
+		"markdown-outline-visible": "false",
+		"markdown-outline-side": "left",
+	});
+	stop = initMarkdownOutlinePersistence(adapter);
+	expect(useAppStore.getState().markdownOutlineVisible).toBe(false);
+	expect(useAppStore.getState().markdownOutlineSide).toBe("left");
+
+	useAppStore.getState().setMarkdownOutlineVisible(true);
+	useAppStore.getState().setMarkdownOutlineSide("right");
+	expect(adapter.values.get("markdown-outline-visible")).toBe("true");
+	expect(adapter.values.get("markdown-outline-side")).toBe("right");
 });

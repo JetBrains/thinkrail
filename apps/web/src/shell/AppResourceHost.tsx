@@ -11,7 +11,7 @@ import {
 	type ResourceReviewSendProps,
 	registerBundledResourceRenderers,
 } from "@thinkrail/resource-renderers";
-import { type ReactNode, useCallback, useMemo, useState, useSyncExternalStore } from "react";
+import { type ReactNode, useMemo } from "react";
 import { Markdown } from "../chat/Markdown";
 import { cssColorToHex, usePhoneViewport } from "../lib";
 import { CODE_LANGUAGES, codeLanguageId } from "../lib/codeLanguages";
@@ -27,12 +27,6 @@ import {
 } from "../store";
 import { resolveThinkrailEditorTheme, THINKRAIL_PIERRE_THEME } from "../themes";
 import { getTransport, wsErrorCode } from "../transport";
-import {
-	markdownOutlineSideSnapshot,
-	readMarkdownOutlineVisible,
-	subscribeMarkdownOutlineSide,
-	writeMarkdownOutlineVisible,
-} from "./markdownOutlinePreference";
 
 registerBundledResourceRenderers();
 
@@ -112,17 +106,9 @@ export const PALETTE_PREVIEW_HOST: ResourceHost = {
 export function AppResourceHost({ children }: { children: ReactNode }) {
 	const fileLineWidth = useAppStore((state) => state.fileLineWidth);
 	const fileLineWidthBounded = useAppStore((state) => state.fileLineWidthBounded);
-	const [markdownOutlineVisible, setMarkdownOutlineVisibleState] = useState<boolean | null>(() =>
-		readMarkdownOutlineVisible(),
-	);
-	const setMarkdownOutlineVisible = useCallback((visible: boolean) => {
-		writeMarkdownOutlineVisible(visible);
-		setMarkdownOutlineVisibleState(visible);
-	}, []);
-	const markdownOutlineSide = useSyncExternalStore(
-		subscribeMarkdownOutlineSide,
-		markdownOutlineSideSnapshot,
-	);
+	const markdownOutlineVisible = useAppStore((state) => state.markdownOutlineVisible);
+	const markdownOutlineSide = useAppStore((state) => state.markdownOutlineSide);
+	const setMarkdownOutlineVisible = useAppStore((state) => state.setMarkdownOutlineVisible);
 	const mobile = usePhoneViewport();
 	const preferences = useMemo<ResourcePreferences>(
 		() => ({

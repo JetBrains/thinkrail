@@ -997,7 +997,8 @@ a project picker, the prompt hero, and the reused
   the same list, never typed, after a free-text CSS stack proved unclear in review. Whether an OS file drop
   reaches the page in WKWebView, WebKitGTK and WebView2 is unconfirmed; **Choose files…** is the path that
   never depends on it. An **Editor** group hosts the file
-  `LineWidthControl`); **`LineWidthControl({kind})`** (`LineWidthSettings.tsx`, no page of its own — the
+  `LineWidthControl` and a **Markdown outline position** segmented control (Left / Right) over the store's
+  client-local `markdownOutlineSide`, applied at once with no host round trip); **`LineWidthControl({kind})`** (`LineWidthSettings.tsx`, no page of its own — the
   `chat` control sits in Chat, the `file` one in Appearance → Editor — a 40–240 integer **Line width** field
   on the auto-save input pattern plus an independent host-synchronized **Fit to pane** switch
   (`${kind}-line-width-bounded`); defaults are 120/on. A changed authoritative width from

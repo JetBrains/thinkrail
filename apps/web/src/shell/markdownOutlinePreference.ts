@@ -1,107 +1,61 @@
 import { getStablePreferenceAdapter, type StablePreferenceAdapter } from "../clientPreferences";
 import { STORAGE_PREFIX } from "../constants/branding";
+import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 
-export const MARKDOWN_OUTLINE_VISIBLE_KEY = "markdown-outline-visible";
+const VISIBLE_KEY = "markdown-outline-visible";
+const SIDE_KEY = "markdown-outline-side";
 
-export function markdownOutlineStorageKey(httpBase: string): string {
-	return `${STORAGE_PREFIX}${MARKDOWN_OUTLINE_VISIBLE_KEY}:${httpBase}`;
+interface PreferenceStorage {
+	read(key: string): string | null;
+	write(key: string, value: string): void;
 }
 
-export function parseMarkdownOutlineVisible(value: string | null): boolean | null {
-	if (value === "true") return true;
-	if (value === "false") return false;
-	return null;
+function preferenceStorage(stable: StablePreferenceAdapter | null): PreferenceStorage {
+	if (stable) {
+		return {
+			read: (key) => stable.getItem(key),
+			write: (key, value) => stable.setItem(key, value),
+		};
+	}
+	const httpBase = getTransport().httpBase();
+	return {
+		read: (key) => window.localStorage.getItem(`${STORAGE_PREFIX}${key}:${httpBase}`),
+		write: (key, value) =>
+			window.localStorage.setItem(`${STORAGE_PREFIX}${key}:${httpBase}`, value),
+	};
 }
 
-function browserStorage(): Storage | null {
+function read(storage: PreferenceStorage, key: string): string | null {
 	try {
-		return window.localStorage;
+		return storage.read(key);
 	} catch {
 		return null;
 	}
 }
 
-export function readMarkdownOutlineVisible(
-	stablePreferences: StablePreferenceAdapter | null = getStablePreferenceAdapter(),
-): boolean | null {
-	if (stablePreferences) {
-		try {
-			return parseMarkdownOutlineVisible(stablePreferences.getItem(MARKDOWN_OUTLINE_VISIBLE_KEY));
-		} catch {
-			return null;
-		}
-	}
+function write(storage: PreferenceStorage, key: string, value: string): void {
 	try {
-		return parseMarkdownOutlineVisible(
-			browserStorage()?.getItem(markdownOutlineStorageKey(getTransport().httpBase())) ?? null,
-		);
-	} catch {
-		return null;
-	}
-}
-
-export function writeMarkdownOutlineVisible(
-	visible: boolean,
-	stablePreferences: StablePreferenceAdapter | null = getStablePreferenceAdapter(),
-): void {
-	const encoded = visible ? "true" : "false";
-	if (stablePreferences) {
-		try {
-			stablePreferences.setItem(MARKDOWN_OUTLINE_VISIBLE_KEY, encoded);
-		} catch {}
-		return;
-	}
-	try {
-		browserStorage()?.setItem(markdownOutlineStorageKey(getTransport().httpBase()), encoded);
+		storage.write(key, value);
 	} catch {}
 }
 
-export type MarkdownOutlineSide = "left" | "right";
-
-export const MARKDOWN_OUTLINE_SIDE_KEY = "markdown-outline-side";
-
-export function parseMarkdownOutlineSide(value: string | null): MarkdownOutlineSide {
-	return value === "left" ? "left" : "right";
-}
-
-function sideStorageKey(): string {
-	return `${STORAGE_PREFIX}${MARKDOWN_OUTLINE_SIDE_KEY}:${getTransport().httpBase()}`;
-}
-
-export function readMarkdownOutlineSide(
+export function initMarkdownOutlinePersistence(
 	stablePreferences: StablePreferenceAdapter | null = getStablePreferenceAdapter(),
-): MarkdownOutlineSide {
-	try {
-		if (stablePreferences)
-			return parseMarkdownOutlineSide(stablePreferences.getItem(MARKDOWN_OUTLINE_SIDE_KEY));
-		return parseMarkdownOutlineSide(browserStorage()?.getItem(sideStorageKey()) ?? null);
-	} catch {
-		return "right";
-	}
-}
-
-const sideListeners = new Set<() => void>();
-let cachedSide: MarkdownOutlineSide | null = null;
-
-export function writeMarkdownOutlineSide(
-	side: MarkdownOutlineSide,
-	stablePreferences: StablePreferenceAdapter | null = getStablePreferenceAdapter(),
-): void {
-	try {
-		if (stablePreferences) stablePreferences.setItem(MARKDOWN_OUTLINE_SIDE_KEY, side);
-		else browserStorage()?.setItem(sideStorageKey(), side);
-	} catch {}
-	cachedSide = side;
-	for (const listener of sideListeners) listener();
-}
-
-export function subscribeMarkdownOutlineSide(listener: () => void): () => void {
-	sideListeners.add(listener);
-	return () => sideListeners.delete(listener);
-}
-
-export function markdownOutlineSideSnapshot(): MarkdownOutlineSide {
-	cachedSide ??= readMarkdownOutlineSide();
-	return cachedSide;
+): () => void {
+	const storage = preferenceStorage(stablePreferences);
+	const store = useAppStore.getState();
+	const visible = read(storage, VISIBLE_KEY);
+	if (visible === "true" || visible === "false")
+		store.setMarkdownOutlineVisible(visible === "true");
+	store.setMarkdownOutlineSide(read(storage, SIDE_KEY) === "left" ? "left" : "right");
+	return useAppStore.subscribe((state, previous) => {
+		if (
+			state.markdownOutlineVisible !== null &&
+			state.markdownOutlineVisible !== previous.markdownOutlineVisible
+		)
+			write(storage, VISIBLE_KEY, String(state.markdownOutlineVisible));
+		if (state.markdownOutlineSide !== previous.markdownOutlineSide)
+			write(storage, SIDE_KEY, state.markdownOutlineSide);
+	});
 }
