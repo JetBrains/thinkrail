@@ -183,8 +183,9 @@ without reaching the IDE shell.
   `popovertarget` invoker of IdeShell's single native `popover` (`#install-popover`, marked
   `data-install-popover`, inside the title bar `<header>`): `InstallPicker idPrefix="header"` plus "Star on
   GitHub" and "Questions? Join Discord". It opens without JS at the browser's default (centred) placement; with
-  JS, `main.ts` records the invoker that was clicked and, on `beforetoggle`, anchors the panel under it
-  (right-aligned, clamped to the viewport, re-anchored on resize and scroll). Escape and outside clicks close
+  JS, `main.ts` records the invoker that was clicked and, on `beforetoggle`, places the panel right-aligned
+  under it, kept within the viewport horizontally and re-placed on resize and scroll; once that invoker
+  scrolls out of the editor's visible area, the panel closes. Escape and outside clicks close
   it natively; browsers without the Popover API keep it hidden. One panel rather than one per invoker keeps
   element IDs and download links single per page; CSS anchor positioning alone cannot serve two invokers with
   one popover across today's browsers. `validateBuild.ts` requires, on every page except the analytics-free

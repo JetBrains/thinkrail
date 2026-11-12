@@ -365,6 +365,11 @@ if (installPopover) {
 	const follow = () => {
 		if (!open || !invoker) return;
 		const rect = invoker.getBoundingClientRect();
+		const view = editor?.contains(invoker) ? editor.getBoundingClientRect() : undefined;
+		if (view && (rect.bottom <= view.top || rect.top >= view.bottom)) {
+			installPopover.hidePopover();
+			return;
+		}
 		installPopover.style.setProperty("--install-popover-top", `${rect.bottom + 6}px`);
 		installPopover.style.setProperty(
 			"--install-popover-right",
