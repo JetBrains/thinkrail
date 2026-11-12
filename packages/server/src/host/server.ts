@@ -196,7 +196,7 @@ import {
 	requestMethodDiagnostic,
 	workspaceCreationHandoff,
 } from "./handlers";
-import { HeldSnapshots } from "./heldSnapshots";
+import { HeldSnapshots, terminalsMayResume } from "./heldSnapshots";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { trackLoginOutcome } from "./loginAnalytics";
 import {
@@ -482,6 +482,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				const replaced = sockets.get(ws.data.clientKey);
 				sockets.set(ws.data.clientKey, ws);
 				ws.data.held = new HeldSnapshots({
+					quarantined: () => ws.data.slowSince !== undefined,
 					getBufferedAmount: () => ws.getBufferedAmount(),
 					send: (frame) =>
 						sendOrQuarantine(ws, frame, `${WS_CHANNELS.piEvent} push`, warnSlowConsumer),
@@ -653,8 +654,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				if (ws.data.speechSocket) return;
 				if (settleSlowConsumer(ws) !== "healthy") return;
 				if (sockets.get(ws.data.clientKey) !== ws) return;
-				const flush = ws.data.held?.drain();
-				if (flush === "backpressured" || flush === "dropped") return;
+				if (!terminalsMayResume(ws.data.held?.drain())) return;
 				terminalBackpressured.delete(ws.data.clientKey);
 				resumeClientTerminals(ws.data.clientKey);
 			},
@@ -680,6 +680,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const backpressureReconciler = setInterval(() => {
 		for (const socket of sockets.values()) {
 			if (settleSlowConsumer(socket) === "healthy") socket.data.held?.drain();
+			else socket.data.held?.clear();
 		}
 		const drained = drainedClientKeys(terminalBackpressured, (clientKey) =>
 			sockets.get(clientKey)?.getBufferedAmount(),

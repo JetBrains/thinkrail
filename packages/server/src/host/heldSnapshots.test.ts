@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { PiEvent, SessionEventPayload } from "@thinkrail/contracts";
-import { HeldSnapshots, snapshotKey } from "./heldSnapshots";
+import { HeldSnapshots, snapshotKey, terminalsMayResume } from "./heldSnapshots";
 import type { SendOutcome } from "./socketSend";
 
 const partial = { role: "assistant", content: [], timestamp: 0 } as never;
@@ -25,7 +25,9 @@ const event = (sessionId: string, piEvent: PiEvent): SessionEventPayload => ({
 function fakeSocket(outcomes: SendOutcome[] = []) {
 	const socket = {
 		buffered: 0,
+		slow: false,
 		sent: [] as string[],
+		quarantined: () => socket.slow,
 		getBufferedAmount: () => socket.buffered,
 		send(frame: string): SendOutcome {
 			socket.sent.push(frame);
@@ -165,4 +167,35 @@ test("a deleted session's held snapshots are forgotten", () => {
 	socket.buffered = 0;
 	held.drain();
 	expect(socket.sent).toEqual(["x"]);
+});
+
+test("a socket quarantined by any send drops its held snapshots and holds no new ones", () => {
+	const socket = fakeSocket();
+	const held = new HeldSnapshots(socket);
+	socket.buffered = 1;
+	held.deliver(event("s", toolUpdate("t1", "a")), "a");
+	socket.slow = true;
+	expect(held.deliver(event("s", toolUpdate("t1", "b")), "b")).toBe("dropped");
+	expect(held.size).toBe(0);
+	expect(socket.sent).toEqual([]);
+});
+
+test("a dropped frame behind an empty barrier clears the other sessions' held snapshots", () => {
+	const socket = fakeSocket(["dropped"]);
+	const held = new HeldSnapshots(socket);
+	socket.buffered = 1;
+	held.deliver(event("other", toolUpdate("t1", "x")), "x");
+	expect(held.deliver(event("s", { type: "agent_settled", terminal: null }), "settled")).toBe(
+		"dropped",
+	);
+	expect(held.size).toBe(0);
+});
+
+test("terminal output resumes on a drain only once no snapshot is left waiting for an empty buffer", () => {
+	expect(terminalsMayResume(undefined)).toBe(true);
+	expect(terminalsMayResume("idle")).toBe(true);
+	expect(terminalsMayResume("flushed")).toBe(true);
+	expect(terminalsMayResume("waiting")).toBe(false);
+	expect(terminalsMayResume("backpressured")).toBe(false);
+	expect(terminalsMayResume("dropped")).toBe(false);
 });

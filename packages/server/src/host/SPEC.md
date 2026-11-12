@@ -1014,12 +1014,15 @@ enabled/confirmed choice before entering analytics attribution.
     or `pi.extensionUi`), it sends that session's held frames synchronously. It keeps going through
     `-1` (accepted) and stops only if the socket is quarantined. A held frame is therefore exactly a
     delayed send.
-  - **Flushing in a pause.** Bun's `drain` fires on writable progress, not on an empty buffer: a probe
-    saw it fire repeatedly with tens of MiB still buffered. So `drain` and the 1 s reconciler flush held frames
-    only at `getBufferedAmount() === 0`. A flush that hits backpressure stops there, and the terminal
-    latch is then not lifted on that drain.
-  - **Clearing.** Held frames clear on close or replacement, on `session.deleted`, and on quarantine.
-    They never carry over to a reconnect.
+  - **Flushing in a pause.** Bun's `drain` fires on writable progress, not on an empty buffer: a
+    probe saw it fire repeatedly with tens of MiB still buffered. So `drain` and the 1 s reconciler
+    flush held frames only at `getBufferedAmount() === 0`. A flush that hits backpressure stops
+    there. A drain that leaves held frames waiting or backpressured does not lift the terminal latch
+    either, so continuous terminal output cannot keep the buffer from ever emptying
+    (`terminalsMayResume`).
+  - **Clearing.** Held frames clear on close or replacement, on `session.deleted`, and on quarantine:
+    a quarantined socket takes no new snapshot, and the reconciler clears what it held. They never
+    carry over to a reconnect.
   - **Rejected.** Assistant `message_end` does not discard a held partial. A mid-stream client that
     missed `message_start` needs that partial to create the turn; `message_end` alone renders nothing.
     Stateless skipping was rejected too, because a tool that goes quiet would show stale output until

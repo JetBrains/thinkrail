@@ -12,11 +12,16 @@ export function snapshotKey({ sessionId, event }: SessionEventPayload): string |
 }
 
 export interface SnapshotSocket {
+	quarantined(): boolean;
 	getBufferedAmount(): number;
 	send(frame: string): SendOutcome;
 }
 
 export type HeldFlush = "idle" | "waiting" | "flushed" | "backpressured" | "dropped";
+
+export function terminalsMayResume(flush: HeldFlush | undefined): boolean {
+	return flush === undefined || flush === "idle" || flush === "flushed";
+}
 
 export class HeldSnapshots {
 	private readonly held = new Map<string, { sessionId: string; frame: string }>();
@@ -31,6 +36,10 @@ export class HeldSnapshots {
 	}
 
 	deliver(payload: SessionEventPayload, frame: string): SendOutcome | "held" {
+		if (this.socket.quarantined()) {
+			this.held.clear();
+			return "dropped";
+		}
 		const key = snapshotKey(payload);
 		if (key !== undefined) {
 			this.held.delete(key);
@@ -40,7 +49,9 @@ export class HeldSnapshots {
 			}
 		}
 		if (!this.barrier(payload.sessionId)) return "dropped";
-		return this.socket.send(frame);
+		const outcome = this.socket.send(frame);
+		if (outcome === "dropped") this.held.clear();
+		return outcome;
 	}
 
 	barrier(sessionId: string): boolean {
