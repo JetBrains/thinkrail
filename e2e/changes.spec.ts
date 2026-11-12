@@ -647,7 +647,7 @@ test("A target that advanced past the fork point adds no phantom changes (merge-
 	await expect(page.getByTestId("change-item").filter({ hasText: "upstream.txt" })).toHaveCount(0);
 });
 
-test("A change row's action menu opens from the ⌄ button and from right-click; Copy path writes the relative path", async ({
+test("A change row's action menu opens from the ⌄ button and from right-click; Copy relative path writes the relative path", async ({
 	page,
 	context,
 }) => {

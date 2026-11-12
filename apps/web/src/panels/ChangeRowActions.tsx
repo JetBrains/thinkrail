@@ -75,7 +75,7 @@ export function ChangeRowActions({
 					}}
 				>
 					<Copy />
-					{t("panels.changeRowActions.copyPath")}
+					{t("panels.changeRowActions.copyRelativePath")}
 				</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>
