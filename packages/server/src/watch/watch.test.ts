@@ -912,6 +912,37 @@ test("a linked worktree push refreshes remote metadata, and only for its own bra
 	expect(nudges).toHaveLength(0);
 }, 15_000);
 
+test("repacking refs or another branch's push never nudges a worktree whose remote refs held still", async () => {
+	const repo = seedRepoWithRemote();
+	git(repo, "push", "-q", "origin", "main");
+	git(repo, "worktree", "add", "-q", "--no-track", "-b", "feat", worktree, "main");
+	const other = join(dataDir, "other");
+	git(repo, "worktree", "add", "-q", "--no-track", "-b", "other", other, "main");
+	git(worktree, "push", "-q", "origin", "HEAD");
+	git(other, "push", "-q", "origin", "HEAD");
+	const nudges: string[] = [];
+	setRepoMetaPublisher((id) => nudges.push(id));
+	await ensureWatch("ws1");
+	await sleep(550);
+	nudges.length = 0;
+
+	git(repo, "pack-refs", "--all");
+	await sleep(700);
+	expect(nudges).toHaveLength(0);
+
+	commitIn(other, "other.txt");
+	git(other, "push", "-q", "origin", "HEAD");
+	await sleep(700);
+	expect(nudges).toHaveLength(0);
+
+	commitIn(worktree, "mine.txt");
+	await sleep(550);
+	nudges.length = 0;
+	git(worktree, "push", "-q", "origin", "HEAD");
+	await waitFor(() => nudges.length > 0, 4000);
+	expect(nudges).toEqual(["ws1"]);
+}, 20_000);
+
 test("a push without an upstream refreshes remote metadata across pack-refs and a branch switch", async () => {
 	const repo = seedRepoWithRemote();
 	git(repo, "push", "-q", "origin", "main");
