@@ -26,11 +26,7 @@ export function BackgroundCommandResult({
 }) {
 	const t = useT();
 	const actions = useChatActions();
-	const [expanded, fold, toggleRef] = useFold(`${id}:result`, false);
-	const toggle: typeof fold = (event) => {
-		if (!expanded) actions?.markResultSeen?.({ kind: "command", id: details.id });
-		fold(event);
-	};
+	const [expanded, toggle, toggleRef] = useFold(`${id}:result`, false);
 	return (
 		<div
 			data-testid="background-command-completion"
@@ -86,12 +82,7 @@ export function SubagentResult({
 }) {
 	const t = useT();
 	const actions = useChatActions();
-	const [expanded, fold, toggleRef] = useFold(`${id}:result`, false);
-	const toggle: typeof fold = (event) => {
-		if (!expanded)
-			actions?.markResultSeen?.({ kind: "subagent", childSessionId: details.childSessionId });
-		fold(event);
-	};
+	const [expanded, toggle, toggleRef] = useFold(`${id}:result`, false);
 	const report = completionReport(text);
 	return (
 		<div

@@ -55,10 +55,12 @@ import {
 	type MentionCandidate,
 	type SubmitBehavior,
 } from "./Composer";
+import { DEFAULT_DOCK_FOLD, type DockFold, dockCollapsed, withDockCollapsed } from "./dockFold";
 import { ExtraUsageNotice } from "./ExtraUsageNotice";
 import { mentionLookup } from "./fileTargets";
 import { HistoryOverlay } from "./HistoryOverlay";
 import { awaitingToolCallIdOf } from "./interactionState";
+import { McpServerDetail } from "./McpServerDetail";
 import { parseModelRef, RunModelLabel } from "./ModelEffortLabel";
 import type { ModelSelection } from "./ModelEffortPicker";
 import {
@@ -72,6 +74,7 @@ import { QueueStrip } from "./QueueStrip";
 import { deriveRecentPrompts } from "./recentPrompts";
 import {
 	CommandLogView,
+	mcpResourceId,
 	newestResourceId,
 	ResourcesAttention,
 	ResourcesButton,
@@ -82,7 +85,6 @@ import { SkillsDialog } from "./SkillsDialog";
 import { SubagentTranscriptDialog, SubagentTranscriptPane } from "./SubagentTranscriptDialog";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { useChatResources, useCommandLog } from "./useChatResources";
-import { inspectedResult, resultTargetKey, useFreshResults } from "./useFreshResults";
 import { useModelCatalog } from "./useModelCatalog";
 import { useModelPreferences } from "./useModelPreferences";
 import { useSessionStats } from "./useSessionStats";
@@ -227,17 +229,23 @@ export default function ChatView({
 	const composerRef = useRef<ComposerHandle>(null);
 	const transcriptRef = useRef<ChatTranscriptHandle>(null);
 	const resources = useChatResources(workspaceId, sessionId);
-	const freshResults = useFreshResults(
-		workspaceId,
-		sessionId,
-		resources.groups.recentFinished,
-		resources.visible && resources.authoritative,
-	);
-	const freshIds = new Set([
-		...freshResults.commands.map((command) => command.id),
-		...freshResults.subagents.map((child) => child.childSessionId),
-	]);
 	const resourcesTrigger = useRef<HTMLButtonElement>(null);
+	const [dockedToolCallId, setDockedToolCallId] = useState<string | null>(null);
+	const [dockFoldState, setDockFoldState] = useState<{
+		workspaceId: string;
+		sessionId: string;
+		fold: DockFold;
+	} | null>(null);
+	const dockFold =
+		dockFoldState?.workspaceId === workspaceId && dockFoldState.sessionId === sessionId
+			? dockFoldState.fold
+			: DEFAULT_DOCK_FOLD;
+	const setDockCollapsed = (collapsed: boolean) =>
+		setDockFoldState({
+			workspaceId,
+			sessionId,
+			fold: withDockCollapsed(dockFold, dockedToolCallId, collapsed),
+		});
 	const [stopAllOpen, setStopAllOpen] = useState(false);
 	const [inspector, setInspector] = useState<{
 		workspaceId: string;
@@ -282,8 +290,7 @@ export default function ChatView({
 	);
 	const openFinished = () =>
 		openInspector(
-			newestResourceId(freshResults.commands, freshResults.subagents) ??
-				newestResourceId(resources.groups.finishedCommands, resources.groups.finishedSubagents) ??
+			newestResourceId(resources.groups.finishedCommands, resources.groups.finishedSubagents) ??
 				undefined,
 		);
 	const setInspectorOpen = useCallback(
@@ -318,13 +325,13 @@ export default function ChatView({
 		)
 			? inspectorSelectedId
 			: null;
+	const selectedMcpServer =
+		inspectorOpen && inspectorSelectedId
+			? (resources.groups.mcpServers?.find(
+					(server) => mcpResourceId(server.name) === inspectorSelectedId,
+				)?.name ?? null)
+			: null;
 	const commandLog = useCommandLog(workspaceId, sessionId, selectedCommandId);
-	const markResultSeen = freshResults.markSeen;
-	const inspected = inspectedResult(resources.groups, selectedCommandId, selectedSubagentId);
-	const inspectedKey = inspected ? resultTargetKey(inspected) : null;
-	useEffect(() => {
-		if (inspected) markResultSeen(inspected);
-	}, [inspectedKey, markResultSeen]);
 	const now = useNow();
 	const returnToResources = (event: Event) => {
 		event.preventDefault();
@@ -613,7 +620,6 @@ export default function ChatView({
 		behavior: Exclude<SubmitBehavior, "interrupt">,
 	) => {
 		const queued = behavior !== "send";
-		freshResults.markAllSeen();
 		if (!queued && (text || attachments.length > 0)) {
 			transcriptRef.current?.armImmediateTurn();
 			useAppStore.getState().appendUserMessage(sessionId, text, attachments);
@@ -822,7 +828,6 @@ export default function ChatView({
 											: null
 									}
 									working={resources.authoritative && resources.groups.activeCount > 0}
-									freshCount={freshResults.count}
 									open={inspectorOpen}
 									onClick={() => setInspectorOpen(!inspectorOpen)}
 								/>
@@ -850,7 +855,6 @@ export default function ChatView({
 				focusComposer={focusComposer}
 				openSubagentTranscript={setTranscriptChildId}
 				resultOpener={resultOpener}
-				markResultSeen={markResultSeen}
 				onTryAgain={onTryAgain}
 				historyOpen={historyState.open}
 				inspectorOpen={inspectorOpen}
@@ -860,6 +864,7 @@ export default function ChatView({
 				openProviderSettings={openProviderSettings}
 				findModel={findModel}
 				dockTarget={dockTarget}
+				onDockedInteractionChange={setDockedToolCallId}
 				resourcesOverlay={
 					resources.visible ? (
 						<ResourcesInspector
@@ -873,7 +878,6 @@ export default function ChatView({
 							staleness={resources.staleness}
 							error={resources.projection?.error ?? null}
 							actions={resources.actions}
-							newIds={freshIds}
 							expanded={inspectorExpanded}
 							onExpandedChange={setFinishedExpanded}
 							{...(resources.loadOlder ? { onLoadMore: resources.loadOlder } : {})}
@@ -907,6 +911,12 @@ export default function ChatView({
 										parentSessionId={sessionId}
 										childSessionId={selectedSubagentId}
 									/>
+								) : selectedMcpServer ? (
+									<McpServerDetail
+										workspaceId={workspaceId}
+										sessionId={sessionId}
+										server={selectedMcpServer}
+									/>
 								) : null
 							}
 						/>
@@ -931,7 +941,8 @@ export default function ChatView({
 					commands={resources.groups.commands}
 					subagents={resources.groups.subagents}
 					finishedCount={resources.groups.finishedCount}
-					freshCount={freshResults.count}
+					collapsed={dockCollapsed(dockFold, dockedToolCallId)}
+					onCollapsedChange={setDockCollapsed}
 					now={now}
 					authoritative={resources.authoritative}
 					staleness={resources.staleness}

@@ -348,7 +348,6 @@ export function selectChatResourceGroups(
 		subagents,
 		finishedCommands,
 		finishedSubagents,
-		recentFinished: { finishedCommands: recentCommands, finishedSubagents: recentSubagents },
 		history,
 		finishedCount: resourceTallyTotal(history.commands) + resourceTallyTotal(history.subagents),
 		remaining: {

@@ -1,10 +1,10 @@
 import { RiPlugLine } from "@remixicon/react";
 import type { McpServerResourceSummary } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
-import { useT } from "@thinkrail/locales/react";
+import { type Translator, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
-import { useId } from "react";
+import { type KeyboardEvent, useId } from "react";
 import { type McpStateTone, mcpStateTone, mcpStatusLabel } from "@/lib";
 import type { ResourceActions } from "./resourceRow";
 
@@ -59,104 +59,112 @@ const STATE_DOT: Record<McpStateTone, string> = {
 	neutral: "bg-text-subtle",
 };
 
-function mcpActionKey(name: string): string {
+export function mcpResourceId(name: string): string {
 	return `mcp:${name}`;
 }
 
-function McpRow({
+function McpGlyph({ server }: { server: McpServerResourceSummary }) {
+	return (
+		<span className="relative inline-flex size-16 shrink-0 items-center justify-center">
+			<RiPlugLine className="size-14 text-text-muted" />
+			<span
+				aria-hidden
+				className={cn(
+					"-right-2 -bottom-2 absolute size-6 rounded-full ring-2 ring-container-elevated-bg",
+					STATE_DOT[mcpStateTone(server.state, server.toolCount)],
+				)}
+			/>
+		</span>
+	);
+}
+
+function McpStateText({ server }: { server: McpServerResourceSummary }) {
+	const t = useT();
+	return (
+		<span
+			data-testid="resource-mcp-state"
+			className={cn(
+				"whitespace-nowrap tr-text-metadata",
+				STATE_TEXT[mcpStateTone(server.state, server.toolCount)],
+			)}
+		>
+			{mcpStatusLabel(t, server.state, server.toolCount)}
+		</span>
+	);
+}
+
+function transportLabel(t: Translator, server: McpServerResourceSummary): string {
+	return server.transport === "http" ? t("mcp.transport.http") : t("resources.mcp.stdioOnHost");
+}
+
+function McpOption({
 	server,
-	authoritative,
-	actions,
-	describedBy,
-	onAction,
+	selected,
+	onSelect,
 }: {
 	server: McpServerResourceSummary;
-	authoritative: boolean;
-	actions: ResourceActions;
-	describedBy: string;
-	onAction: (id: McpRowActionId) => void;
+	selected: boolean;
+	onSelect: () => void;
 }) {
 	const t = useT();
-	const tone = mcpStateTone(server.state, server.toolCount);
-	const action = actions[mcpActionKey(server.name)];
+	const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+		if (event.target !== event.currentTarget) return;
+		if (event.key === "Enter" || event.key === " ") {
+			event.preventDefault();
+			onSelect();
+		}
+	};
 	return (
-		<li
+		<div
+			role="none"
 			data-testid="resource-mcp"
 			data-name={server.name}
 			data-state={server.state}
-			className="grid min-h-32 min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-8 rounded-sm px-8 py-4 hover:bg-control-bg-hovered"
+			data-resource-id={mcpResourceId(server.name)}
+			data-selected={selected || undefined}
+			className={cn(
+				"min-h-32 min-w-0 rounded-sm px-8 py-4 hover:bg-control-bg-hovered",
+				selected && "bg-control-bg-selected",
+			)}
 		>
-			<span className="relative mt-2 inline-flex size-16 shrink-0 items-center justify-center">
-				<RiPlugLine className="size-14 text-text-muted" />
+			<div
+				role="option"
+				aria-selected={selected}
+				aria-label={t("resources.row.accessibleName", {
+					name: server.name,
+					activity: transportLabel(t, server),
+					state: mcpStatusLabel(t, server.state, server.toolCount),
+				})}
+				tabIndex={0}
+				onClick={onSelect}
+				onKeyDown={onKeyDown}
+				className="flex min-w-0 cursor-default items-center gap-8 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
+			>
+				<McpGlyph server={server} />
 				<span
-					aria-hidden
-					className={cn(
-						"-right-2 -bottom-2 absolute size-6 rounded-full ring-2 ring-container-elevated-bg",
-						STATE_DOT[tone],
-					)}
-				/>
-			</span>
-			<span className="flex min-w-0 flex-col gap-2">
-				<span className="flex min-w-0 items-baseline gap-8">
-					<span
-						className="min-w-0 flex-1 truncate tr-title-compact text-text-default"
-						title={server.name}
-					>
-						{server.name}
-					</span>
-					<span
-						data-testid="resource-mcp-state"
-						className={cn("whitespace-nowrap tr-text-metadata", STATE_TEXT[tone])}
-					>
-						{mcpStatusLabel(t, server.state, server.toolCount)}
-					</span>
+					className="min-w-0 flex-1 truncate tr-title-compact text-text-default"
+					title={server.name}
+				>
+					{server.name}
 				</span>
-				<span className="flex min-w-0 flex-wrap items-center gap-x-8 gap-y-2 text-text-muted tr-text-metadata">
-					<span>
-						{server.transport === "http" ? t("mcp.transport.http") : t("resources.mcp.stdioOnHost")}
-						{server.state === "pending-reload" ? ` · ${t("resources.mcp.pendingReload")}` : ""}
-					</span>
-					{mcpRowActions(server).map((item) => (
-						<Button
-							key={item.id}
-							variant="soft-primary"
-							size="s"
-							data-testid={`resource-mcp-${item.id}`}
-							aria-describedby={item.id === "disable" ? describedBy : undefined}
-							disabled={!authoritative || !!action?.pending}
-							onClick={() => onAction(item.id)}
-						>
-							{t(item.label)}
-						</Button>
-					))}
-				</span>
-				{action?.error ? (
-					<span role="alert" className="break-words text-feedback-error tr-text-metadata">
-						{action.error}
-					</span>
-				) : null}
-			</span>
-		</li>
+				<McpStateText server={server} />
+			</div>
+		</div>
 	);
 }
 
 export function McpServerSection({
 	servers,
-	authoritative,
-	actions,
-	onSetEnabled,
-	onReconnect,
+	selectedId,
+	onSelect,
 	onOpenSettings,
 }: {
 	servers: McpServerResourceSummary[];
-	authoritative: boolean;
-	actions: ResourceActions;
-	onSetEnabled: (name: string, enabled: boolean) => void;
-	onReconnect: (name: string) => void;
+	selectedId: string | null;
+	onSelect: (resourceId: string) => void;
 	onOpenSettings: () => void;
 }) {
 	const t = useT();
-	const hintId = useId();
 	return (
 		<section
 			data-testid="resources-mcp"
@@ -179,28 +187,96 @@ export function McpServerSection({
 			{servers.length === 0 ? (
 				<p className="px-8 py-4 text-text-subtle tr-text-metadata">{t("resources.mcp.empty")}</p>
 			) : (
-				<>
-					<ul className="flex flex-col gap-2">
-						{servers.map((server) => (
-							<McpRow
-								key={server.name}
-								server={server}
-								authoritative={authoritative}
-								actions={actions}
-								describedBy={hintId}
-								onAction={(id) => {
-									if (id === "settings") onOpenSettings();
-									else if (id === "reconnect") onReconnect(server.name);
-									else onSetEnabled(server.name, id === "enable");
-								}}
-							/>
-						))}
-					</ul>
-					<p id={hintId} className="px-8 text-text-subtle tr-text-metadata">
-						{t("resources.mcp.disableHint")}
-					</p>
-				</>
+				servers.map((server) => (
+					<McpOption
+						key={server.name}
+						server={server}
+						selected={mcpResourceId(server.name) === selectedId}
+						onSelect={() => onSelect(mcpResourceId(server.name))}
+					/>
+				))
 			)}
 		</section>
+	);
+}
+
+export function McpDetailHeader({
+	server,
+	authoritative,
+	actions,
+	onSetEnabled,
+	onReconnect,
+	onOpenSettings,
+}: {
+	server: McpServerResourceSummary;
+	authoritative: boolean;
+	actions: ResourceActions;
+	onSetEnabled: (name: string, enabled: boolean) => void;
+	onReconnect: (name: string) => void;
+	onOpenSettings: () => void;
+}) {
+	const t = useT();
+	const hintId = useId();
+	const action = actions[mcpResourceId(server.name)];
+	const offered = mcpRowActions(server);
+	const onAction = (id: McpRowActionId) => {
+		if (id === "settings") onOpenSettings();
+		else if (id === "reconnect") onReconnect(server.name);
+		else onSetEnabled(server.name, id === "enable");
+	};
+	return (
+		<div
+			data-testid="resource-mcp-detail"
+			data-name={server.name}
+			className="flex shrink-0 flex-col gap-8 border-border-muted border-b p-12"
+		>
+			<div className="flex min-w-0 flex-wrap items-center gap-8">
+				<McpGlyph server={server} />
+				<span className="min-w-0 truncate tr-title-dialog" title={server.name}>
+					{server.name}
+				</span>
+				<McpStateText server={server} />
+				<span className="flex-1" />
+				{offered.map((item) => (
+					<Button
+						key={item.id}
+						variant="outline"
+						size="m"
+						data-testid={`resource-mcp-${item.id}`}
+						aria-describedby={item.id === "disable" || item.id === "enable" ? hintId : undefined}
+						disabled={!authoritative || !!action?.pending}
+						onClick={() => onAction(item.id)}
+					>
+						{t(item.label)}
+					</Button>
+				))}
+			</div>
+			<dl className="flex flex-wrap gap-x-16 gap-y-4 text-text-muted tr-text-metadata">
+				<div className="flex gap-4">
+					<dt className="text-text-default">{t("resources.detail.transport")}</dt>
+					<dd>{transportLabel(t, server)}</dd>
+				</div>
+				{server.registered ? (
+					<div className="flex gap-4">
+						<dd>{t("resources.mcp.registered")}</dd>
+					</div>
+				) : null}
+				{server.state === "pending-reload" ? (
+					<div className="flex gap-4">
+						<dd>{t("resources.mcp.pendingReload")}</dd>
+					</div>
+				) : null}
+			</dl>
+			{action?.error ? (
+				<p role="alert" className="break-words text-feedback-error tr-text-metadata">
+					{action.error}
+				</p>
+			) : null}
+			{offered.some((item) => item.id === "disable" || item.id === "enable") ? (
+				<p id={hintId} className="text-text-subtle tr-text-metadata">
+					{t("resources.mcp.disableHint")}
+				</p>
+			) : null}
+		</div>
 	);
 }
