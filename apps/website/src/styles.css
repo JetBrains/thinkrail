@@ -2262,6 +2262,17 @@ a.tree-row.selected .i {
 	}
 }
 
+@media (max-width: 420px) {
+	.install-launch-titlebar .install-launch-btn .install-launch-label {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+	}
+}
+
 @media (max-width: 1180px) {
 	.cols {
 		grid-template-columns: 200px minmax(0, 1fr);

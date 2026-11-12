@@ -180,7 +180,8 @@ IDE shell.
   (`InstallCommand.astro`: `$ <command>` + a `data-copy` button) followed by an accent **Install ▾** button. It
   renders compact in every title bar and wide as the last item of every post's `.blog-post-header`, one line
   above the divider, where the command ellipsizes and the button stays on the line. The title-bar chip
-  narrows below 1280px and leaves below 1080px so it never meets the breadcrumb. The static chip carries the
+  narrows below 1280px and leaves below 1080px so it never meets the breadcrumb; below 420px the title-bar
+  Install shows only its icons (the label stays its accessible name) so a 320px title bar fits. The static chip carries the
   `install.sh` command; `main.ts` swaps in `installCommandFor` the detected OS. Every Install button is a
   `popovertarget` invoker of IdeShell's single native `popover` (`#install-popover`, marked
   `data-install-popover`, inside the title bar `<header>`): `InstallPicker idPrefix="header"` plus "Star on
