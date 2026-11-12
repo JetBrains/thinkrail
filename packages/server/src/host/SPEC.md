@@ -694,7 +694,16 @@ channel fan-out, and the process-boot wrapper both launchers share.
   this is a catalog invalidation, never an output broadcast. Resource ownership and teardown stay in agent.
 - **Session-state composition:** before serving, the host supplies every workspace `{id,cwd}`, initializes
   lifecycle/receipt metadata, and installs the workspace→project resolver. `session.stateList` returns the
-  complete all-workspace snapshot; `session.state` broadcasts full records (each carries the chat's `title`,
+  complete all-workspace snapshot.
+  - **Coalescing.** Concurrent requests share scans through `trailingSingleFlight`
+    (`sessionStateList.ts`): a request never joins a scan that began before it arrived. Such a scan
+    could miss a state change the page applied just before asking, and then overwrite it with an older
+    record. Every request that arrives during a running scan shares the next one, so a reconnect storm
+    costs at most the running scan plus one, never one full transcript scan per request.
+  - **Old sockets.** The shared scan covers every workspace, and a socket that cannot see chats gets
+    its records filtered by `isChatWorkspaceId`.
+
+  `session.state` broadcasts full records (each carries the chat's `title`,
   so a rename while a client was away reaches it through the next snapshot); completion acknowledgement and
   nudge handlers validate workspace/session identity through the same registry. The WS open handler
   subscribes every client after welcome. `session.activityList` remains an inert `[]` compatibility method
