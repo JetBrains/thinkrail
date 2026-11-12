@@ -1,6 +1,7 @@
 import { RiArrowDownSLine, RiArrowRightSLine } from "@remixicon/react";
 import {
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
+	CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION,
 	isCustomEndpointId,
 	isModelContextWindow,
 	isSharedModelContextTarget,
@@ -308,6 +309,15 @@ export function modelContextRows(
 	return settings.filter((model) => !customServers.has(model.provider));
 }
 
+export function modelContextLimitsFor(
+	provider: string,
+	protocolVersion: number | null,
+): ModelContextWindowLimits {
+	return supported(protocolVersion, CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION)
+		? modelContextWindowLimits(provider)
+		: MODEL_CONTEXT_WINDOW_LIMITS;
+}
+
 export function ModelContextControls({
 	protocolVersion,
 	settings,
@@ -426,7 +436,7 @@ export function ModelContextControls({
 													})
 										}
 										override={model.override}
-										limits={modelContextWindowLimits(model.provider)}
+										limits={modelContextLimitsFor(model.provider, protocolVersion)}
 										disabled={pending}
 										testId={`context-limit-${model.provider}-${model.id}`}
 										onChange={(override) =>

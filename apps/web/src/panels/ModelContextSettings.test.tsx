@@ -1,11 +1,19 @@
 import { expect, test } from "bun:test";
 import {
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
+	CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION,
+	CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS,
+	MODEL_CONTEXT_WINDOW_LIMITS,
 	type ModelContextSetting,
 } from "@thinkrail/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { CustomEndpointsState } from "./CustomEndpointsSettings";
-import { customServerIds, ModelContextControls, modelContextRows } from "./ModelContextSettings";
+import {
+	customServerIds,
+	ModelContextControls,
+	modelContextLimitsFor,
+	modelContextRows,
+} from "./ModelContextSettings";
 
 const setting: ModelContextSetting = {
 	provider: "openai",
@@ -170,4 +178,16 @@ test("custom server rows wait for the server list instead of flashing in and out
 			],
 		}),
 	).toEqual(new Set(["custom-gw"]));
+});
+
+test("a custom provider gets the wider range only from a host that accepts it", () => {
+	expect(modelContextLimitsFor("custom-responses", CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION)).toEqual(
+		CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS,
+	);
+	expect(
+		modelContextLimitsFor("custom-responses", CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION - 1),
+	).toEqual(MODEL_CONTEXT_WINDOW_LIMITS);
+	expect(modelContextLimitsFor("openai", CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION)).toEqual(
+		MODEL_CONTEXT_WINDOW_LIMITS,
+	);
 });

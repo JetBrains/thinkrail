@@ -1198,8 +1198,8 @@ a project picker, the prompt hero, and the reused
   dialog: `ModelsSettings` passes the same `useCustomEndpoints` state, and the block stays on its loading
   line until that list answers, so rows never flash in and out (a failed list, or a host without the
   group, hides none). Any other `custom-*` provider — say a hand-written `openai-responses` one the dialog
-  can't represent — keeps its row under By each model, bounded by `modelContextWindowLimits`, and never
-  joins the shared control. A collapsed **By each model** disclosure reveals one selector per
+  can't represent — keeps its row under By each model, bounded by `modelContextWindowLimits` (the GPT range on a host older
+  than `CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION`, which still enforces it), and never joins the shared control. A collapsed **By each model** disclosure reveals one selector per
   provider/model pair, so the same model on
   different providers stays independently editable. Selection is keyed on the explicit `override`
   (Default = `null`, the catalog value pi reports). The shared control summarizes only the rows the
