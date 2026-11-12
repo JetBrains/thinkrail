@@ -3,15 +3,23 @@ import { existsSync, mkdirSync, readdirSync, rmdirSync, rmSync, statSync } from 
 import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
-import type {
-	McpProjectOverride,
-	McpToolGrant,
-	Project,
-	ProjectPathStatus,
+import {
+	compareProjectRank,
+	type McpProjectOverride,
+	type McpToolGrant,
+	type Project,
+	type ProjectPathStatus,
+	projectRank,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { canonicalPath, git, gitAsync, INDEX_WRITE_TIMEOUT_MS, throwOnTimeout } from "../git";
-import { landsInChatsRoot, loadProjects, loadWorkspaces, saveProjects } from "../persistence";
+import {
+	isChatsContainer,
+	landsInChatsRoot,
+	loadProjects,
+	loadWorkspaces,
+	saveProjects,
+} from "../persistence";
 
 type ProjectPublisher = (project: Project) => void;
 
@@ -156,6 +164,7 @@ function openResolvedProject(path: string, displayName?: string, ownBootstrap?: 
 	const projects = getProjects();
 	const existing = projects.find((p) => p.path === root);
 	if (existing) {
+		existing.rank = existing.closed === true ? rankOnTop(projects) : projectRank(existing);
 		delete existing.closed;
 		existing.lastOpened = Date.now();
 		saveProjects(projects);
@@ -178,6 +187,7 @@ function openResolvedProject(path: string, displayName?: string, ownBootstrap?: 
 		path: root,
 		slug: uniqueSlug(slugify(basename(root)), taken),
 		lastOpened: Date.now(),
+		rank: rankOnTop(projects),
 		piResourceTrust: piTrustSeed?.(root) ? "granted" : "untrusted",
 	};
 	projects.push(project);
@@ -191,7 +201,49 @@ function newestFirst(projects: Project[]): Project[] {
 }
 
 export function listProjects(): Project[] {
-	return newestFirst(getProjects().filter((project) => project.closed !== true));
+	return getProjects()
+		.filter((project) => project.closed !== true)
+		.sort(compareProjectRank);
+}
+
+function openRepositories(projects: Project[]): Project[] {
+	return projects
+		.filter((project) => project.closed !== true && !isChatsContainer(project))
+		.sort(compareProjectRank);
+}
+
+function rankOnTop(projects: Project[]): number {
+	const top = openRepositories(projects)[0];
+	return top ? Math.max(Date.now(), projectRank(top) + 1) : Date.now();
+}
+
+export function moveProject(id: string, targetId: string, placement: "before" | "after"): Project {
+	const projects = getProjects();
+	const open = openRepositories(projects);
+	const project = open.find((candidate) => candidate.id === id);
+	if (!project) throw new Error(`Unknown project: ${id}`);
+	const target = open.find((candidate) => candidate.id === targetId);
+	if (!target) throw new Error(`Unknown project: ${targetId}`);
+	if (project === target) return project;
+	const order = open.filter((candidate) => candidate !== project);
+	const index = order.indexOf(target) + (placement === "after" ? 1 : 0);
+	order.splice(index, 0, project);
+	if (order.every((candidate, position) => candidate === open[position])) return project;
+
+	const above = order[index - 1];
+	const below = order[index + 1];
+	const ceiling = above ? projectRank(above) : Number.POSITIVE_INFINITY;
+	const floor = below ? projectRank(below) : Number.NEGATIVE_INFINITY;
+	const rank = above && below ? (ceiling + floor) / 2 : above ? ceiling - 1 : floor + 1;
+	const ranks: Array<[Project, number]> =
+		rank > floor && rank < ceiling
+			? [[project, rank]]
+			: order.map((candidate, position) => [candidate, order.length - position]);
+	const changed = ranks.filter(([candidate, value]) => candidate.rank !== value);
+	for (const [candidate, value] of changed) candidate.rank = value;
+	saveProjects(projects);
+	for (const [candidate] of changed) emit(candidate);
+	return project;
 }
 
 const goneFolders = new Set<string>();

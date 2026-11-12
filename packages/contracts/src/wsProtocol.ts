@@ -141,9 +141,10 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 116;
+export const PROTOCOL_VERSION = 117;
 export const EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION = 115;
 export const CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION = 116;
+export const PROJECT_ORDER_PROTOCOL_VERSION = 117;
 export const QUESTION_PANEL_PROTOCOL_VERSION = 114;
 export const SPEC_SECTIONS_PROTOCOL_VERSION = 113;
 export const TEXT_SEARCH_PROTOCOL_VERSION = 112;
@@ -387,6 +388,7 @@ export const WS_METHODS = {
 	projectList: "project.list",
 	projectClose: "project.close",
 	projectRename: "project.rename",
+	projectMove: "project.move",
 	projectInspect: "project.inspect",
 	projectInit: "project.init",
 	projectCreate: "project.create",
@@ -912,6 +914,10 @@ export interface WsMethodMap {
 	"project.list": { params: Record<string, never>; result: Project[] };
 	"project.close": { params: { id: string }; result: Ack };
 	"project.rename": { params: { id: string; name: string }; result: Project };
+	"project.move": {
+		params: { id: string; targetId: string; placement: "before" | "after" };
+		result: Project;
+	};
 	"project.inspect": { params: { path: string }; result: ProjectPathStatus };
 	"project.init": { params: { path: string }; result: Project };
 	"project.create": {
