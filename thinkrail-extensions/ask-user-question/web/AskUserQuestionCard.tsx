@@ -8,7 +8,9 @@ import { Button, IconButton } from "@thinkrail/ui/button";
 import { hasPlatformModifier, isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import {
+	type FocusEvent,
 	type KeyboardEvent,
+	type PointerEvent,
 	type ReactNode,
 	useEffect,
 	useLayoutEffect,
@@ -25,6 +27,7 @@ import {
 	focusQuestionAttention,
 	focusTargetKind,
 	hasCoarsePointer,
+	isCardBackground,
 	isInsidePreview,
 	isTextEntryTarget,
 	shouldClaimQuestionFocus,
@@ -363,6 +366,18 @@ export function AskUserQuestionCard({
 			return;
 		}
 		if (
+			event.target === event.currentTarget &&
+			(event.key === "ArrowUp" || event.key === "ArrowDown") &&
+			!event.shiftKey &&
+			!event.altKey &&
+			!event.ctrlKey &&
+			!event.metaKey
+		) {
+			event.preventDefault();
+			focusCurrentQuestionPage(event.currentTarget);
+			return;
+		}
+		if (
 			!multipleQuestions ||
 			event.altKey ||
 			event.ctrlKey ||
@@ -374,6 +389,19 @@ export function AskUserQuestionCard({
 		if (next == null) return;
 		event.preventDefault();
 		if (next !== idx) setTab(next);
+	};
+
+	const closeNote = () => {
+		if (stateFor(idx).noteFor !== null) patch(idx, { noteFor: null });
+	};
+
+	const onCardPointerDown = (event: PointerEvent<HTMLElement>) => {
+		if (isCardBackground(event.target, event.currentTarget)) closeNote();
+	};
+
+	const onCardBlur = (event: FocusEvent<HTMLElement>) => {
+		if (event.currentTarget.contains(event.relatedTarget) || !document.hasFocus()) return;
+		closeNote();
 	};
 
 	const selectPage = (page: number) => {
@@ -538,7 +566,10 @@ export function AskUserQuestionCard({
 		"data-tone": canRespond ? "active" : "idle",
 		"aria-label": t("tools.ask.cardLabel"),
 		"aria-keyshortcuts": "Shift+Escape Meta+Enter Control+Enter",
+		tabIndex: -1,
 		onKeyDown: onCardKeyDown,
+		onPointerDown: onCardPointerDown,
+		onBlur: onCardBlur,
 	};
 
 	if (docked) {
@@ -547,7 +578,7 @@ export function AskUserQuestionCard({
 				{...cardProps}
 				data-placement="dock"
 				data-collapsed={collapsed}
-				className="@container flex min-h-0 flex-col border-primary border-t-2 bg-container-elevated-bg motion-safe:animate-reveal"
+				className="@container flex min-h-0 flex-col border-primary border-t-2 bg-container-elevated-bg outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset motion-safe:animate-reveal"
 			>
 				<div className="flex shrink-0 items-center gap-12 border-border-default border-b px-12 py-4">
 					<div className="shrink-0">
@@ -595,7 +626,7 @@ export function AskUserQuestionCard({
 			<section
 				{...cardProps}
 				className={cn(
-					"@container overflow-hidden rounded-lg border bg-clip-padding bg-container-elevated-bg",
+					"@container overflow-hidden rounded-lg border bg-clip-padding bg-container-elevated-bg outline-none focus-visible:ring-2 focus-visible:ring-primary",
 					canRespond ? "border-primary ring-2 ring-primary-soft" : "border-border-default",
 				)}
 			>

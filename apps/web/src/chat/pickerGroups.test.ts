@@ -87,6 +87,26 @@ describe("pickerGroups", () => {
 		expect(groups("", collapsed, [gpt])[1]).toMatchObject({ count: 1, models: ["o3"] });
 	});
 
+	test("pinned models leave their group before it lists newest first; providers and the catalog keep pi's order", () => {
+		const opus45 = model("anthropic", "claude-opus-4-5", "Claude Opus 4.5");
+		const sonnet5 = model("anthropic", "claude-sonnet-5", "Claude Sonnet 5");
+		const opus55 = model("anthropic", "claude-opus-5-5", "Claude Opus 5.5");
+		const gpt5 = model("openai", "gpt-5", "GPT-5");
+		const gpt61 = model("openai", "gpt-6.1", "GPT-6.1");
+		const versioned = [opus45, sonnet5, opus55, gpt5, gpt61];
+		const grouped = pickerGroups(currentTranslator(), versioned, {
+			pinned: [gpt61, opus45],
+			query: "",
+			expansion: collapsed,
+			row,
+		});
+		expect(grouped.map((g) => [g.provider, g.models.map((m) => m.id)])).toEqual([
+			["anthropic", ["claude-opus-5-5", "claude-sonnet-5"]],
+			["openai", ["gpt-5"]],
+		]);
+		expect(versioned).toEqual([opus45, sonnet5, opus55, gpt5, gpt61]);
+	});
+
 	test("searching expands groups, shows filtered counts and drops groups with no match", () => {
 		expect(groups("sonnet")).toEqual([
 			{

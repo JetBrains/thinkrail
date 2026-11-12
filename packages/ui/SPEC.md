@@ -156,8 +156,10 @@ moved here from the app when the resource renderers became a package, because bo
 - Context and dropdown menus share menu geometry and token classes: content surface, radius/shadow,
   item/icon spacing, separators, semantic action colors, focus rows, and viewport collision behavior.
   Context menus add pointer-position right-click/touch long-press anchoring; features own enabled gestures
-  and actions. Dropdowns are vertically bounded by the smaller of 60vh and Radix's available height,
-  scrollable with horizontal overflow hidden so long rows truncate rather than scroll.
+  and actions — a trigger opts into the keyboard gesture (Context Menu key or Shift+F10, anchored below the
+  trigger) by passing `openContextMenuFromKeyboard` as its `onKeyDown`. Dropdowns are vertically bounded by
+  the smaller of 60vh and Radix's available height, scrollable with horizontal overflow hidden so long rows
+  truncate rather than scroll.
 - Toast exposes `ToastProvider`/`Toast`/`ToastViewport`/`ToastTitle`/`ToastDescription`/`ToastAction`/
   `ToastClose` and `toastVariants` (`error`/`success`/`warning`/`info`). Severity is a uniform semantic
   border (`border-feedback-*-muted`) on a neutral `bg-container-elevated-bg` background. `ToastAction` is

@@ -39,6 +39,7 @@ const TRANSLATIONS: Readonly<Record<string, URL>> = {
 	ja: new URL("../ja.json", import.meta.url),
 	ru: new URL("../ru.json", import.meta.url),
 	"zh-CN": new URL("../zh-CN.json", import.meta.url),
+	"zh-TW": new URL("../zh-TW.json", import.meta.url),
 };
 
 export const BUNDLED_LOCALES: readonly string[] = ["en", ...Object.keys(TRANSLATIONS)];

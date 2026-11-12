@@ -39,7 +39,7 @@ const COMPAT = {
 } as const;
 const OUTPUT_LIMITS = { min: 256, max: 16_384 } as const;
 const CHAT_MODES = new Set(["chat", "completion", "responses"]);
-const MANAGED_MODEL_FIELDS = ["contextWindow", "maxTokens", "reasoning", "input"] as const;
+const MANAGED_MODEL_FIELDS = ["maxTokens", "reasoning", "input"] as const;
 const CHAT_TEMPLATE_THINKING = "qwen-chat-template";
 
 type Json = Record<string, unknown>;
@@ -333,7 +333,7 @@ function readModel(raw: unknown, overrides: Json): CustomEndpointModel | undefin
 	const compat = isObject(override) && isObject(override.compat) ? override.compat : raw.compat;
 	return {
 		id: raw.id,
-		contextWindow: positiveInt(model.contextWindow),
+		contextWindow: positiveInt(raw.contextWindow),
 		maxTokens: positiveInt(model.maxTokens),
 		reasoning: typeof model.reasoning === "boolean" ? model.reasoning : null,
 		vision: Array.isArray(model.input) ? strings(model.input).includes("image") : null,

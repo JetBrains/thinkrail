@@ -87,30 +87,43 @@ function toDisplayName(raw: string): string | null {
 	return name.length > 0 ? name : null;
 }
 
-function branchExists(repoPath: string, branch: string): boolean {
-	return git(repoPath, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`], {
-		action: "check the branch name",
-	}).ok;
+function existingHeads(project: Project): Set<string> {
+	const result = git(
+		project.path,
+		["for-each-ref", "--format=%(refname:lstrip=2)", "refs/heads/"],
+		{
+			action: "list the project's branches",
+		},
+	);
+	const heads = new Set<string>();
+	if (result.ok) {
+		for (const name of result.out.split("\n")) {
+			if (name !== "") heads.add(name.toLowerCase());
+		}
+	}
+	return heads;
 }
 
-function nameTaken(project: Project, candidate: string): boolean {
+function nameTakenAmong(heads: ReadonlySet<string>, project: Project, candidate: string): boolean {
 	return (
-		creationBranchReserved(project.id, candidate) ||
-		branchExists(project.path, candidate) ||
-		existsSync(managedWorktreePath(project, candidate))
+		heads.has(candidate.toLowerCase()) ||
+		existsSync(managedWorktreePath(project, candidate)) ||
+		creationBranchReserved(project.id, candidate)
 	);
 }
 
 function uniqueBranch(project: Project, base: string): string {
-	if (!nameTaken(project, base)) return base;
+	const heads = existingHeads(project);
+	if (!nameTakenAmong(heads, project, base)) return base;
 	let n = 2;
-	while (nameTaken(project, `${base}-${n}`)) n += 1;
+	while (nameTakenAmong(heads, project, `${base}-${n}`)) n += 1;
 	return `${base}-${n}`;
 }
 
 function nextAutoBranch(project: Project): string {
+	const heads = existingHeads(project);
 	let n = 1;
-	while (nameTaken(project, `workspace-${n}`)) n += 1;
+	while (nameTakenAmong(heads, project, `workspace-${n}`)) n += 1;
 	return `workspace-${n}`;
 }
 

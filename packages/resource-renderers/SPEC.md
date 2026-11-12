@@ -50,8 +50,8 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   with the renderer implementation that wrote it, so a renderer switch never restores another renderer's
   state and a caller needs no reset, and a `reveal` it forwards to the view renderer). Its `compact` flag (carried to the lazy views as
   `ResourceEnvironment.compact`, and reset by an explicit `compact={false}`) drops the renderer toggles,
-  Send review and the HTML notice with its viewport presets — the chrome a small embedded frame cannot
-  afford; the views themselves are unchanged;
+  Send review, the HTML notice with its viewport presets and the Markdown outline — the chrome a small
+  embedded frame cannot afford; the views themselves are unchanged;
 - **`FramedResourcePreview`** — `ResourcePreview` in a caller-sized frame with **Open in tab** (the file, or
   the comparison for a diff) and **Full screen** (a dialog with the full chrome, sharing renderer and view
   state), every action an explicit tab stop; nothing without a host and a workspace scope. It is the one
@@ -69,7 +69,8 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   than as its rendered document. The rendered Markdown view honours `reveal` too, without a mark:
   it scrolls the block whose source-line stamp (`data-md-line-start`, frontmatter offset applied — both
   of its branches stamp) is the last one at or before `line` to the top — the first block when `line`
-  precedes them all (a preamble hit on the blank line after the frontmatter) — waiting for the document to
+  precedes them all (a preamble hit on the blank line after the frontmatter), opening any closed
+  `<details>` around it first — waiting for the document to
   render if it has not yet, and reports the tick through `onRevealHandled` like the code views, so a spec
   opens at a heading and a remount keeps the reading position; the other rich renderers ignore `reveal`,
   so a reveal through them is a plain open;
@@ -130,8 +131,10 @@ A host wraps renderers in `ResourceHostProvider` with one static `ResourceHost` 
 Build the value once (the app does at module scope). Its functions are memo inputs: `documentComponents`
 defines its link and image components per call, so a new `bytesUrl`/`openFile` identity would remount every
 link and image in open previews and notebook cells. The reader's line-width preference
-(`fileLineWidth` / `fileLineWidthBounded`) arrives separately through `ResourcePreferencesProvider`; only
-`MonacoEditor` reads it, so a width change re-renders nothing else. The phone class arrives the same way
+(`fileLineWidth` / `fileLineWidthBounded`) arrives separately through `ResourcePreferencesProvider`;
+`MonacoEditor` reads those fields. The Markdown preview reads the outline's `markdownOutlineVisible`
+(`null` until the reader chooses) / `setMarkdownOutlineVisible` and `markdownOutlineSide` from the same
+value; the host persists them. A preference object identity change re-renders both consumers. The phone class arrives the same way
 through `ResourceEnvironmentProvider` (the registry's `ResourceEnvironment`, `{ mobile }`); only
 `ResourcePreview` reads it — panes resolve with their own viewport reading — so a viewport flip re-renders
 only the previews that must re-resolve their renderer. A subtree that belongs to one workspace and chat
@@ -434,9 +437,18 @@ its mandatory `lineRange` plus `structural { scheme: "json-pointer", ref }`; a p
 or one now naming a node outside the host-reanchored line range, is reported unplaced. The collapsible
 unified diff comes from a `jsondiffpatch` instance with move detection
 and stable object hashes, tinting added/removed/changed/moved nodes and showing primitive replacements as
-old → new. Removed nodes and comments stay on `review.base` with base scanner lines; all other selections
-use the modified document and `review.worktree`. Invalid source renders no tree, leaving Source as the
-alternate candidate.
+old → new. A branch whose subtree holds changes carries a dot, and every changed or change-holding row
+shows a hover tooltip naming its own change and listing the leaf changes beneath it (accessor-style
+relative path, kind, value or old → new — a replacement drops the redundant "Changed" word; capped at
+eight, then "…and N more"). Classification walks base and rendered paths together, so a removal keeps
+its true base pointer (what the Removed section and base threads resolve against) and attaches to its
+rendered parent even inside reordered or shifted array items. Paths render accessor-style from typed
+segments — `[n]` only for array indexes, `.key` only for identifier-safe keys, `["…"]` otherwise — so
+distinct pointers never share a label. The derivation attaches each change once to its holder and folds
+holders into parents deepest-first, so every ancestor keeps only a total and its first eight changes —
+linear in touched nodes, never changes × depth. Removed nodes and comments stay on `review.base` with
+base scanner lines; all other selections use the modified document and `review.worktree`. Invalid
+source renders no tree, leaving Source as the alternate candidate.
 
 `thinkrail/notebook` accepts nbformat-4 JSON and reuses the tolerant positional JSON scanner to bind every
 rendered cell to its raw cell-object line range. Nbformat 4.5 ids are the `ipynb-cell` structural ref;
@@ -619,6 +631,24 @@ content's own height.
   (through `resourcePane.resourceBytesUrl`, injected into `documentComponents` so the markdown layer never
   reaches for the transport itself). A cross-file link's `#fragment` is not yet followed (opens the
   file only).
+- **The Markdown preview has a heading outline.** It is read from the rendered document, not a second
+  parse: the stamped `h1`–`h6` elements (`stampedHeadings`, through a MutationObserver on the preview
+  scroller, so a file change, a spliced review card or an opened `<details>` refreshes it) — so the outline
+  lists exactly the headings GFM, alerts and raw HTML produce, CJK or duplicate titles included, and names
+  each by its source-line stamp, the anchor the line reveal and review comments already use; it never
+  coordinates slug ids across review segments. Entries nest under the nearest shallower heading (a skipped
+  level still nests) as nested lists. Selecting one opens any closed `<details>` around the heading and
+  scrolls only the preview scroller to it, smoothly unless the reader prefers reduced motion. The current
+  section — the last laid-out heading at or
+  above the scroller top, else the first — is `aria-current="location"`; scroll events are coalesced to
+  one binary search per animation frame, so a long document reads O(log n) heading rects per frame, and
+  headings inside closed `<details>` are skipped from the search rather than measured. The active entry
+  stays visible by adjusting only the outline list's own scroll, never an ancestor's (an enclosing
+  transcript must not jump). The outline shows with two or more headings; a toggle (`aria-pressed`)
+  hides it, and `markdownOutlineVisible` keeps that choice; before any choice it starts open only when
+  the preview frame is at least `MARKDOWN_OUTLINE_NARROW_WIDTH` (720px) wide. `markdownOutlineSide`
+  places it left or right, in DOM order matching the visual order. A `compact` frame drops it with the
+  rest of the chrome. Rendered diffs and source view have no outline.
 - **Document markdown renders sanitized raw HTML; chat markdown does not.** READMEs place logos and
   banners with `<p align="center"><img src width>`, float images with `<img align="right">`, fold
   sections in `<details>`, and ship theme-aware logos as `<picture><source media srcset>`; shown as

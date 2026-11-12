@@ -4,7 +4,8 @@
 	"private": true,
 	"type": "module",
 	"exports": {
-		"./server": "./server/index.ts"
+		"./server": "./server/index.ts",
+		"./package.json": "./package.json"
 	},
 	"scripts": {
 		"test": "bun test",
@@ -12,12 +13,16 @@
 	},
 	"dependencies": {
 		"@thinkrail/extension-api": "workspace:*",
-		"jiti": "2.7.0",
-		"pi-web-access": "0.13.0"
+		"pi-web-access": "0.45.0"
 	},
 	"devDependencies": {
 		"@earendil-works/pi-coding-agent": "catalog:",
 		"@types/bun": "catalog:",
 		"typescript": "catalog:"
+	},
+	"pi": {
+		"skills": [
+			"./skills"
+		]
 	}
 }

@@ -114,6 +114,8 @@ test("rejects invalid folder names and depths before creating anything", async (
 		"bad\0name",
 		"NUL",
 		"CON.txt",
+		"con .git",
+		"COM¹",
 		"name.",
 	]) {
 		await expect(cloneProject({ url, parentPath: root, name })).rejects.toThrow();

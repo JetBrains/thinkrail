@@ -96,7 +96,9 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   `setWorkspaceDiffBase`); **branch name made unique
   against refs, worktree dirs *and* the project's in-flight creations** — archiving leaves the branch behind and renaming frees a
   branch name whose worktree directory stays occupied, so candidate names skip both, and a creation holds its
-  name from the first instant; path
+  name from the first instant; allocation lists heads once (`for-each-ref`, compared case-insensitively — a
+  case-only twin is the same ref file on macOS/Windows) and stays synchronous so a name is reserved atomically
+  (issue #1229: one `show-ref` per candidate blocked the event loop ~1 s at 100 `workspace-N` branches); path
   `dataDir/worktrees/<project-slug>/<branch>`; **seeds the ephemeral per-workspace scratch dir**
   (`WORKSPACE_CONTEXT_DIR`, with a self-ignoring `*` `.gitignore` — zero git footprint) in the
   new worktree, the home for temp docs (task-specs / working files) that stay out of git yet remain

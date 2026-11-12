@@ -44,6 +44,7 @@ import {
 	ContextMenuItem,
 	ContextMenuSeparator,
 	ContextMenuTrigger,
+	openContextMenuFromKeyboard,
 } from "@thinkrail/ui/context-menu";
 import {
 	DropdownMenu,
@@ -818,21 +819,7 @@ function ProjectRow({
 	return (
 		<>
 			<ContextMenu open={menuOpen} onOpenChange={setMenuOpen}>
-				<ContextMenuTrigger
-					asChild
-					onKeyDown={(event) => {
-						if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
-						event.preventDefault();
-						const rect = event.currentTarget.getBoundingClientRect();
-						event.currentTarget.dispatchEvent(
-							new MouseEvent("contextmenu", {
-								bubbles: true,
-								clientX: rect.left,
-								clientY: rect.bottom,
-							}),
-						);
-					}}
-				>
+				<ContextMenuTrigger asChild onKeyDown={openContextMenuFromKeyboard}>
 					{row}
 				</ContextMenuTrigger>
 				<ContextMenuContent
