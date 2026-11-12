@@ -51,11 +51,10 @@ classification every content read in the host shares. Agent and review writes ar
   (`mutations.ts`) copies a file, folder or symlink into a folder of the same or another workspace — a
   copy, never a move. The source resolves through its contained parent without following its leaf, the
   destination folder through the full chain; `.git`, escapes and the worktree root itself (it has no
-  contained parent) are refused. The
-  first free name among `name`, `name copy`, `name copy 2`, … (` copy N` goes before a file's extension,
-  never inside a folder's name) is claimed with an exclusive create (`COPYFILE_EXCL`, non-recursive
-  `mkdir`, `symlink`), so a copy never overwrites anything, including an entry another writer creates
-  meanwhile. A folder is planned before anything is written — an async, iterative walk over `lstat`
+  contained parent) are refused. The first free name among `name`, `name copy`, `name copy 2`, …
+  (` copy N` goes before a file's extension, never inside a folder's name) is claimed with an exclusive
+  create (`COPYFILE_EXCL`, non-recursive `mkdir`, `symlink`), so a copy never overwrites anything,
+  including an entry another writer creates meanwhile. A folder is planned before anything is written — an async, iterative walk over `lstat`
   kinds that never follows a symlink, skips nested `.git`, refuses sockets/FIFOs/devices and stops with
   `CodedError("COPY_TOO_LARGE")` past `MAX_COPY_ENTRIES` (10,000) — so pasting a folder into itself
   copies a finite snapshot and an oversized tree writes nothing. Entries are then created in plan order
