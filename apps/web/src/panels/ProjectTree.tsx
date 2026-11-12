@@ -782,6 +782,7 @@ function ProjectRow({
 					aria-keyshortcuts={canMove ? "Alt+Shift+ArrowUp Alt+Shift+ArrowDown" : undefined}
 					{...(draggable ? dragListeners : {})}
 					onKeyDown={(event) => {
+						if (!canMove) return;
 						if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
 						if (!event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey) return;
 						event.preventDefault();

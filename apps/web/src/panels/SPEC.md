@@ -93,12 +93,15 @@ treatment.
   `PROJECT_ORDER_PROTOCOL_VERSION`; disabled at either end), **Pencil Rename** (only when the host's protocol is at least `PROJECT_RENAME_PROTOCOL_VERSION`), **X Close
   project**. **Project order is host-owned** (`Project.rank`, architecture Decision 9: projects are domain
   state), so every window and client shows one arrangement and converges on the `project.updated` push;
-  `workspaceActions.moveProject` sends `project.move`, applies the authoritative answer, and toasts a
-  refusal. Three equivalent gestures place a project before/after a neighbour: dragging its name button
-  (not the chevron, `+`, or rename input), the menu's Move up/down, and **Alt+Shift+↑/↓** on the focused
-  name (`aria-keyshortcuts`, the workbench's reorder chord). The drag is `@dnd-kit/core`'s, like the
-  workbench's tab drag, with a `MouseSensor` (5 px activation, so a click still selects and a drag never
-  navigates; touch keeps scrolling and reorders through the long-press menu) and `pointerWithin`: each
+  `workspaceActions.moveProject` sends `project.move` and toasts a refusal; its reply is never applied as
+  state, because a reconnect can replay a cached reply over a newer welcome snapshot, and the host has
+  already pushed the moved ranks. Three equivalent gestures place a project before/after a neighbour:
+  dragging its name button (not the chevron, `+`, or rename input), the menu's Move up/down, and
+  **Alt+Shift+↑/↓** on the focused name (`aria-keyshortcuts`, the workbench's reorder chord); below
+  `PROJECT_ORDER_PROTOCOL_VERSION` none of them is offered and the chord passes through untouched. The
+  drag is `@dnd-kit/core`'s, like the workbench's tab drag, with a `MouseSensor` (5 px activation, so a
+  click still selects and a drag never navigates; touch keeps scrolling and reorders through the
+  long-press menu) and `pointerWithin`: each
   project group carries before/after half drop zones that light the workbench's `border-primary`
   insertion line, zones whose move would be a no-op stay disabled, the source dims, and a `DragOverlay`
   chip names the project. Escape or a drop outside a zone changes nothing. The Chats section sits outside

@@ -315,8 +315,7 @@ export async function moveProject(
 	placement: "before" | "after",
 ): Promise<boolean> {
 	try {
-		const moved = await getTransport().request("project.move", { id, targetId, placement });
-		useAppStore.getState().applyProjectUpdated(moved);
+		await getTransport().request("project.move", { id, targetId, placement });
 		return true;
 	} catch (err) {
 		toast.error(errorText(err, t("panels.workspaceActions.moveProjectFailed")));

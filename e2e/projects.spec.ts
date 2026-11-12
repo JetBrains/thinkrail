@@ -1,6 +1,7 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import { PROJECT_ORDER_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import {
 	createWorkspaceViaDialog,
 	defaultWorkspaceRow,
@@ -222,6 +223,49 @@ test("keyboard and menu moves keep focus and announce, and an opened project lan
 	await page.getByTestId("add-project-menu").click();
 	await page.getByRole("menuitem").filter({ hasText: secondRepo }).click();
 	await expect(names).toHaveText(["second-project", "third-project", "sample-project"]);
+});
+
+test("a host before the project order protocol ignores Alt+Shift+arrows on a project name", async ({
+	page,
+}) => {
+	const methods: unknown[] = [];
+	await page.routeWebSocket(/\/ws(?:\?|$)/, (browserSocket) => {
+		const serverSocket = browserSocket.connectToServer();
+		browserSocket.onMessage((message) => {
+			methods.push(parseWsFrame(message)?.method);
+			serverSocket.send(message);
+		});
+		serverSocket.onMessage((message) => {
+			const frame = parseWsFrame(message);
+			if (frame?.channel !== "server.welcome") {
+				browserSocket.send(message);
+				return;
+			}
+			browserSocket.send(
+				JSON.stringify({
+					...frame,
+					data: {
+						...(frame.data as Record<string, unknown>),
+						protocolVersion: PROJECT_ORDER_PROTOCOL_VERSION - 1,
+					},
+				}),
+			);
+		});
+	});
+	await openFixtureProject(page);
+	await openSecondProject(page);
+	const names = page.getByTestId("project-name");
+	await expect(names).toHaveText(["second-project", "sample-project"]);
+	const secondName = names.filter({ hasText: "second-project" });
+	await expect(secondName).not.toHaveAttribute("aria-keyshortcuts");
+
+	await secondName.focus();
+	methods.length = 0;
+	await page.keyboard.press("Alt+Shift+ArrowDown");
+	await page.keyboard.press("Enter");
+	await expect.poll(() => methods).toContain("workspace.list");
+	expect(methods).not.toContain("project.move");
+	await expect(names).toHaveText(["second-project", "sample-project"]);
 });
 
 test("opens a git repo as a project via the directory picker", async ({ page }) => {
