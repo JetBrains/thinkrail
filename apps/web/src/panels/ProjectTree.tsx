@@ -431,7 +431,6 @@ export function ProjectTree() {
 									onRegisterNameButton={(element) => registerProjectNameButton(project.id, element)}
 									onRestoreFocus={() => focusProjectNameOrAdd(project.id)}
 									canMove={canMove}
-									draggable={canMove && projects.length > 1}
 									onMoveUp={
 										previous ? () => void move(project, previous.id, "before", true) : undefined
 									}
@@ -671,7 +670,6 @@ function ProjectRow({
 	onRegisterNameButton,
 	onRestoreFocus,
 	canMove,
-	draggable,
 	onMoveUp,
 	onMoveDown,
 }: {
@@ -692,11 +690,11 @@ function ProjectRow({
 	onRegisterNameButton: (element: HTMLButtonElement | null) => void;
 	onRestoreFocus: () => void;
 	canMove: boolean;
-	draggable: boolean;
 	onMoveUp: (() => void) | undefined;
 	onMoveDown: (() => void) | undefined;
 }) {
 	const t = useT();
+	const draggable = canMove && (onMoveUp !== undefined || onMoveDown !== undefined);
 	const {
 		attributes: dragAttributes,
 		listeners: dragListeners,
