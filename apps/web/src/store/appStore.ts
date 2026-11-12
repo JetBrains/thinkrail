@@ -221,6 +221,7 @@ export function isFileComparison<T extends { kind: string; before?: string | und
 	return tab.kind === "diff" && tab.before !== undefined;
 }
 export type ChangesLayout = "stacked" | "single";
+export type MarkdownOutlineSide = "left" | "right";
 type FilesMode = "all" | "changed";
 export type FilesScrollView = "all" | "changedList" | "changedTree";
 export interface FilesTreeView {
@@ -1168,6 +1169,8 @@ interface AppState {
 	fileLineWidthBounded: boolean;
 	voiceInputEnabled: boolean;
 	chatMessageOrder: ChatMessageOrder;
+	markdownOutlineVisible: boolean | null;
+	markdownOutlineSide: MarkdownOutlineSide;
 	defaultModel: WireModel | undefined;
 	defaultEffort: ThinkingLevel | undefined;
 	reviewModel: WireModel | undefined;
@@ -1524,6 +1527,8 @@ interface AppState {
 	closeSearch: () => void;
 	setDoubleShiftSearch: (enabled: boolean) => void;
 	setChatMessageOrder: (order: ChatMessageOrder) => void;
+	setMarkdownOutlineVisible: (visible: boolean) => void;
+	setMarkdownOutlineSide: (side: MarkdownOutlineSide) => void;
 	applyConfig: (config: AppConfig) => void;
 	requestToolView: (workspaceId: string, tool: LayoutToolId) => void;
 	requestChangesView: (workspaceId: string, path: string | null, scope?: GitDiffScope) => void;
@@ -2531,6 +2536,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	fileLineWidthBounded: DEFAULT_CONFIG.fileLineWidthBounded,
 	voiceInputEnabled: DEFAULT_CONFIG.voiceInputEnabled,
 	chatMessageOrder: "oldest-first",
+	markdownOutlineVisible: null,
+	markdownOutlineSide: "right",
 	customLayoutPresets: DEFAULT_CONFIG.customLayoutPresets,
 	defaultModel: DEFAULT_CONFIG.defaultModel,
 	defaultEffort: DEFAULT_CONFIG.defaultEffort,
@@ -4750,6 +4757,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closeSurveyWindow: () => set({ surveyWindowOpen: false }),
 	setInAppSurvey: (survey) => set({ inAppSurvey: survey }),
 	setChatMessageOrder: (chatMessageOrder) => set({ chatMessageOrder }),
+	setMarkdownOutlineVisible: (markdownOutlineVisible) => set({ markdownOutlineVisible }),
+	setMarkdownOutlineSide: (markdownOutlineSide) => set({ markdownOutlineSide }),
 	applyConfig: (config) => set(configPatch(config)),
 	requestToolView: (workspaceId, tool) =>
 		set((state) =>
