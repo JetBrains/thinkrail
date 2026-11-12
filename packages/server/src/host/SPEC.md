@@ -675,7 +675,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   the initiating open flow selects Project Home, while a close fallback remains per-client view state.
 - **Workspace lifecycle fan-out:** `createServer` installs the `workspaces` module's publisher
   (`setWorkspacePublisher`), mapping each domain event `kind` → its `WS_CHANNELS.workspace*` channel
-  (`created`/`updated` → the full record; `removed` → `{ projectId, id }`) and `server.publish`ing it. This
+  (`created`/`updated` → the full record; `removed` → `{ projectId, id }`) and publishing it. This
   is the **single** place workspace membership changes reach the wire — create/rename/archive all flow
   through it, so every client (including the initiator) converges by reacting, never by per-client optimism.
   The two new channels are `ws.subscribe`d in the WS `open` handler alongside `workspace.updated`.
@@ -798,7 +798,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   just unlabelled. Every id-carrying push
   (`project.updated`, `workspace.*`, `session.*`, `terminal.tabs`, `workspace.fsChanged`,
   `turn.changed`, `mcp.status`, `session.resourcesChanged`, `pi.event`) goes through one
-  `publishScoped` sender that iterates the sockets for a chat or container id and broadcasts otherwise —
+  `publishScoped` sender that leaves out the sockets that cannot see a chat or container id —
   `pi.event` is scoped by the workspace the agent publishes beside each event, so a detached session's
   disk-only rename is scoped like a live one's; `pi.extensionUi` for a chat session — live, or still starting
   (an extension's `session_start` notice, an MCP startup notice; `getSessionAttribution`) — goes only to
@@ -938,7 +938,7 @@ enabled/confirmed choice before entering analytics attribution.
   (published from auth's Central/runtime invalidation seam and on a successful provider login) + **`host.updateAvailable`** (published for each
   retained CLI-update lifecycle replacement) use push channels. Every
   **broadcast** push channel a client should hear must be `ws.subscribe`d in the WS
-  `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Six channels are deliberately
+  `open` handler — the push sender skips a socket that is not subscribed, silently. Six channels are deliberately
   **not** subscribed and not broadcast: `feedback.interview`, `feedback.githubStar`, `terminal.data`, `terminal.exit`,
   `terminal.detached` and `search.textResults` are sent with `ws.send` to one addressed client. Adding an addressed channel means
   wiring a publisher, not a subscription.
@@ -967,9 +967,16 @@ enabled/confirmed choice before entering analytics attribution.
     closes. The page then re-read every mounted transcript on reconnect (`useTranscriptSync`), and the
     same big reply closed the socket again. That loop ran for hours, with every welcome stacking
     another full `session.stateList` scan until each one was abandoned.
-  - **Past the limit, the close stays.** `sendReply` warns with the method and the buffered bytes,
-    then closes. Bun's graceful close flushes what is already buffered, and the page replays its
-    unresolved ids.
+  - **Past the limit, the close stays.** Every reply and push goes through `sendOrClose`
+    (`socketSend.ts`). A frame refused with `0` on an open socket makes it warn, with the method or
+    channel and the buffered bytes, and close that socket only. The warning carries a
+    `SlowConsumerError` (`WS_SLOW_CONSUMER`), so Error Tracking counts how often it happens. `-1` means
+    buffered, never resent or closed. Bun's graceful close flushes what is already buffered. A client
+    that has not drained after about 20 s (measured: 18 s still delivered the close frame, 20 s did
+    not) is force-closed and the rest discarded, well inside the 60 s replay retention. The page
+    replays its unresolved ids and re-hydrates (Decision 8). A transcript that was streaming repairs at
+    its settlement, as after any reconnect. `outboundBufferLimitBytes` on `createServer` lowers the
+    limit for the wire test only.
   - **`closeOnBackpressureLimit` is rejected.** It closes with 1006 and discards the buffered frame:
     a probe client received 0 frames.
   - **Why finite, why this value.** Memory grows only while a client reads slower than the host writes,
@@ -977,8 +984,15 @@ enabled/confirmed choice before entering analytics attribution.
     A resync larger than 256 MiB brings the loop back. Since #1180 image bytes leave the socket
     (`WireImage` references), so a transcript's size is its text. The limit still covers the
     composer-restore replies that hand images back inline.
-  - **Broadcasts.** `server.publish` results stay ignored, so pushes past the limit are still dropped
-    silently (#1179).
+  - **Pushes are sent per socket, never by `server.publish` (#1179).** A native topic publish cannot
+    name the socket that dropped a frame, and for a frame under 16 KiB it reports the status from
+    before uWS drains its queue. So a burst of small pushes could cross the limit, lose its tail
+    (`agent_settled` included) and leave the tab streaming forever while it kept talking to the host.
+    A fully silent client is different: Bun's idle timeout already closes it. `publishScoped` and
+    `pi.extensionUi`'s audience filter share one `fanOut` loop: subscription, then the socket filter,
+    then `sendOrClose`. A test rejects any `.publish(` call in the server source. Addressed sends
+    (search results, MCP login, feedback asks) use the same rule; the terminal publisher keeps its
+    own latch.
 - The host is the single place features are wired together — features never reach back into it.
 - **A font upload must carry `X-ThinkRail-Request: font-upload`** (`USER_FONT_UPLOAD_HEADER`), else 403.
   The host has no auth, no Origin check and no CORS ([[architecture]] Decision 7). A cross-origin upload
