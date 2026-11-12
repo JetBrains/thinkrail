@@ -24,7 +24,7 @@ export function terminalKeyAction(
 }
 
 // xterm #6065: an active IME reports keyCode 229, so xterm's chord table drops Ctrl+<letter>/Escape — see panels/SPEC.md.
-export function imeControlBytes(event: TerminalKeyEvent): string | null {
+function imeControlBytes(event: TerminalKeyEvent): string | null {
 	if (event.altKey || event.metaKey) return null;
 	if (event.code === "Escape") return "\x1b";
 	if (!event.ctrlKey) return null;
