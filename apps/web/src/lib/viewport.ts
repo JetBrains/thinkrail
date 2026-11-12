@@ -1,24 +1,33 @@
-import { useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
-const PHONE_QUERIES = ["(pointer: coarse)", "(max-width: 767px)"] as const;
+const PHONE_QUERY = "(pointer: coarse), (max-width: 767px)";
 
-function mediaQueries(): MediaQueryList[] {
-	if (typeof window === "undefined" || typeof window.matchMedia !== "function") return [];
-	return PHONE_QUERIES.map((query) => window.matchMedia(query));
+function mediaQuery(query: string): MediaQueryList | null {
+	if (typeof window === "undefined" || typeof window.matchMedia !== "function") return null;
+	return window.matchMedia(query);
+}
+
+function matchesMediaQuery(query: string): boolean {
+	return mediaQuery(query)?.matches ?? false;
+}
+
+export function useMediaQuery(query: string): boolean {
+	const subscribe = useCallback(
+		(onChange: () => void) => {
+			const list = mediaQuery(query);
+			list?.addEventListener("change", onChange);
+			return () => list?.removeEventListener("change", onChange);
+		},
+		[query],
+	);
+	const matches = useCallback(() => matchesMediaQuery(query), [query]);
+	return useSyncExternalStore(subscribe, matches, () => false);
 }
 
 export function isPhoneViewport(): boolean {
-	return mediaQueries().some((query) => query.matches);
-}
-
-function subscribePhoneViewport(onChange: () => void): () => void {
-	const queries = mediaQueries();
-	for (const query of queries) query.addEventListener("change", onChange);
-	return () => {
-		for (const query of queries) query.removeEventListener("change", onChange);
-	};
+	return matchesMediaQuery(PHONE_QUERY);
 }
 
 export function usePhoneViewport(): boolean {
-	return useSyncExternalStore(subscribePhoneViewport, isPhoneViewport, () => false);
+	return useMediaQuery(PHONE_QUERY);
 }

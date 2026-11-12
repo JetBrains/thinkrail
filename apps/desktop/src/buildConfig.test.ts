@@ -28,11 +28,12 @@ test("selects real Bun and preserves the physical runtime resources without reti
 		name: "ThinkRail",
 		identifier: "ai.thinkrail.app",
 		version,
+		urlSchemes: ["thinkrail"],
 	});
 	expect(config.runtime).toEqual({ exitOnLastWindowClosed: true });
 	expect(config.build).toMatchObject({
 		mainProcess: "bun",
-		bun: { entrypoint: "src/index.ts", version: rootManifest.packageManager.replace(/^bun@/, "") },
+		bun: { entrypoint: "src/entry.ts", version: rootManifest.packageManager.replace(/^bun@/, "") },
 		views: { preload: { entrypoint: "src/preload.ts", format: "iife" } },
 		copy: { "../web/dist": "views/web", ".stage/runtime": "runtime" },
 		mac: { bundleCEF: false, icons: "../../packages/shared/assets/icon.iconset" },
@@ -52,6 +53,14 @@ test("generated server runtime threads the opener and desktop proxies explicit r
 	const launcher = readFileSync(resolve(desktopDir, "src/index.ts"), "utf8");
 	expect(launcher).toContain('mainWindow.webview.on("dom-ready"');
 	expect(launcher).toContain("host.server.startAttributionClaim()");
+});
+
+test("the desktop entry installs the deep-link bootstrap before the launcher", () => {
+	const entry = readFileSync(resolve(desktopDir, "src/entry.ts"), "utf8");
+	const bootstrap = entry.indexOf('import "./deepLinkBootstrap";');
+	const launcher = entry.indexOf('import "./index";');
+	expect(bootstrap).toBeGreaterThanOrEqual(0);
+	expect(launcher).toBeGreaterThan(bootstrap);
 });
 
 test("uses the exact npm bootstrap pin while Bun owns the workspace dependency graph", () => {

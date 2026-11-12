@@ -59,7 +59,7 @@ export function ModelSelector({
 	onSelect,
 	refreshing,
 	onRefresh,
-	container,
+	container = null,
 	className,
 	placeholder,
 	defaultOption,
@@ -182,6 +182,7 @@ export function ModelSelector({
 		<Popover
 			open={open}
 			onOpenChange={(next) => {
+				if (next && disabled) return;
 				setOpen(next);
 				if (next) {
 					onRefresh(false);
@@ -193,7 +194,7 @@ export function ModelSelector({
 			<PopoverTrigger
 				data-testid="model-selector"
 				data-open={open}
-				disabled={disabled}
+				aria-disabled={disabled || undefined}
 				className={cn(
 					"flex h-32 max-w-[220px] items-center gap-8 rounded-sm border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected",
 					className,
@@ -204,7 +205,13 @@ export function ModelSelector({
 				</span>
 				<ChevronDown className="size-16 shrink-0 text-text-muted" />
 			</PopoverTrigger>
-			<PopoverContent align="start" container={container} className="w-340 p-0">
+			<PopoverContent
+				align="start"
+				container={container}
+				collisionBoundary={container}
+				collisionPadding={8}
+				className="flex max-h-[var(--radix-popover-content-available-height)] w-340 max-w-[var(--radix-popover-content-available-width)] flex-col p-0"
+			>
 				<Command className="min-h-0 flex-1 bg-transparent" filter={pickerFilter(groups, groupRow)}>
 					<CommandInput
 						placeholder={t("chat.modelPicker.search")}

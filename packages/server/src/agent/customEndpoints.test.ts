@@ -58,6 +58,23 @@ async function runtime() {
 
 type Route = (request: Request) => unknown;
 
+function fetchRewrittenTo(backend: string): typeof fetch {
+	const target = new URL(backend);
+	const realFetch = globalThis.fetch;
+	return Object.assign(
+		(input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+			const raw =
+				typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+			const url = new URL(raw);
+			url.protocol = target.protocol;
+			url.hostname = target.hostname;
+			url.port = target.port;
+			return realFetch(url, init);
+		},
+		{ preconnect: realFetch.preconnect },
+	);
+}
+
 function serve(routes: Record<string, Route>, auth?: string) {
 	const seen: string[] = [];
 	server = Bun.serve({
@@ -85,6 +102,7 @@ function model(id: string, patch: Partial<CustomEndpointModel> = {}): CustomEndp
 		reasoning: null,
 		vision: null,
 		tools: null,
+		chatTemplateThinking: null,
 		...patch,
 	};
 }
@@ -219,7 +237,14 @@ test("probes fill facts from Ollama, llama.cpp and LM Studio without a server ki
 		}),
 	});
 	expect(await probeCustomEndpoint({ baseUrl: `${llama.url}/v1` })).toMatchObject({
-		models: [model("gemma", { contextWindow: 8_192, reasoning: true, tools: false })],
+		models: [
+			model("gemma", {
+				contextWindow: 8_192,
+				reasoning: true,
+				tools: false,
+				chatTemplateThinking: true,
+			}),
+		],
 	});
 	server?.stop(true);
 
@@ -244,6 +269,143 @@ test("probes fill facts from Ollama, llama.cpp and LM Studio without a server ki
 	});
 	expect(await probeCustomEndpoint({ baseUrl: `${gateway.url}/v1` })).toMatchObject({
 		models: [model("text-only", { vision: false })],
+	});
+});
+
+const ollamaShowRoutes = {
+	"GET /v1/models": () => ({
+		data: [
+			{ id: "kimi-k3.1-pro" },
+			{ id: "qwen3:14b" },
+			{ id: "nemotron-3-ultra" },
+			{ id: "listed", max_model_len: 8_192 },
+		],
+	}),
+	"POST /api/show": async (request: Request) => {
+		const { model: id } = (await request.json()) as { model: string };
+		if (id === "qwen3:14b")
+			return {
+				capabilities: ["completion", "tools"],
+				parameters: "temperature 0.7\nnum_ctx 40960",
+				model_info: { "general.architecture": "qwen3", "qwen3.context_length": 262_144 },
+			};
+		if (id === "nemotron-3-ultra")
+			return {
+				capabilities: ["completion"],
+				model_info: { "general.architecture": "", ".context_length": 262_144 },
+			};
+		if (id === "listed")
+			return {
+				capabilities: ["completion"],
+				parameters: "num_ctx 4096",
+				model_info: { "general.architecture": "qwen2", "qwen2.context_length": 131_072 },
+			};
+		return {
+			capabilities: ["completion", "thinking", "tools", "vision"],
+			model_info: {
+				"general.architecture": "kimi-k3",
+				"kimi-k3.context_length": 1_048_576,
+				"kimi-k3.vision.context_length": 4_096,
+			},
+		};
+	},
+} satisfies Record<string, Route>;
+
+test("a local Ollama leaves model_info context unknown unless num_ctx or the listing set one", async () => {
+	const ollama = serve({
+		...ollamaShowRoutes,
+		"GET /api/version": () => ({ version: "0.12.0" }),
+	});
+	expect(await probeCustomEndpoint({ baseUrl: `${ollama.url}/v1` })).toEqual({
+		ok: true,
+		baseUrl: `${ollama.url}/v1`,
+		models: [
+			model("kimi-k3.1-pro", { reasoning: true, vision: true, tools: true }),
+			model("qwen3:14b", { contextWindow: 40_960, reasoning: false, vision: false, tools: true }),
+			model("nemotron-3-ultra", { reasoning: false, vision: false, tools: false }),
+			model("listed", { contextWindow: 8_192, reasoning: false, vision: false, tools: false }),
+		],
+	});
+});
+
+test("a source-built local Ollama reporting version 0.0.0 is not treated as cloud", async () => {
+	const ollama = serve({
+		"GET /v1/models": () => ({ data: [{ id: "qwen3:14b" }] }),
+		"GET /api/version": () => ({ version: "0.0.0" }),
+		"POST /api/show": () => ({
+			capabilities: ["completion", "thinking"],
+			model_info: { "general.architecture": "qwen3", "qwen3.context_length": 262_144 },
+		}),
+	});
+	expect(await probeCustomEndpoint({ baseUrl: `${ollama.url}/v1` })).toEqual({
+		ok: true,
+		baseUrl: `${ollama.url}/v1`,
+		models: [model("qwen3:14b", { reasoning: true, vision: false, tools: false })],
+	});
+});
+
+test("Ollama cloud uses model_info context length unless num_ctx or the listing set one", async () => {
+	const ollama = serve({
+		...ollamaShowRoutes,
+		"GET /api/version": () => ({ version: "0.0.0" }),
+	});
+	const realFetch = globalThis.fetch;
+	globalThis.fetch = fetchRewrittenTo(ollama.url);
+	try {
+		expect(await probeCustomEndpoint({ baseUrl: "https://ollama.com/v1" })).toEqual({
+			ok: true,
+			baseUrl: "https://ollama.com/v1",
+			models: [
+				model("kimi-k3.1-pro", {
+					contextWindow: 1_048_576,
+					reasoning: true,
+					vision: true,
+					tools: true,
+				}),
+				model("qwen3:14b", { contextWindow: 40_960, reasoning: false, vision: false, tools: true }),
+				model("nemotron-3-ultra", {
+					contextWindow: 262_144,
+					reasoning: false,
+					vision: false,
+					tools: false,
+				}),
+				model("listed", { contextWindow: 8_192, reasoning: false, vision: false, tools: false }),
+			],
+		});
+		for (const baseUrl of ["https://notollama.com/v1", "https://ollama.com.example/v1"]) {
+			expect(await probeCustomEndpoint({ baseUrl })).toMatchObject({
+				ok: true,
+				baseUrl,
+				models: [
+					model("kimi-k3.1-pro", { reasoning: true, vision: true, tools: true }),
+					model("qwen3:14b", {
+						contextWindow: 40_960,
+						reasoning: false,
+						vision: false,
+						tools: true,
+					}),
+					model("nemotron-3-ultra", { reasoning: false, vision: false, tools: false }),
+					model("listed", { contextWindow: 8_192, reasoning: false, vision: false, tools: false }),
+				],
+			});
+		}
+	} finally {
+		globalThis.fetch = realFetch;
+	}
+});
+
+test("a failed Ollama version check does not read model_info", async () => {
+	const ollama = serve({
+		"GET /v1/models": () => ({ data: [{ id: "qwen3:14b" }] }),
+		"POST /api/show": () => ({
+			capabilities: ["completion"],
+			model_info: { "general.architecture": "qwen3", "qwen3.context_length": 262_144 },
+		}),
+	});
+	expect(await probeCustomEndpoint({ baseUrl: `${ollama.url}/v1` })).toEqual({
+		ok: true,
+		baseUrl: `${ollama.url}/v1`,
+		models: [model("qwen3:14b")],
 	});
 });
 
@@ -329,7 +491,7 @@ test("saved endpoints become available pi models, and a keyless one gets pi's pl
 	expect((await listCustomEndpoints())[0]?.hasApiKey).toBe(false);
 });
 
-test("edits keep hand-added fields, clear managed overrides and guard the saved key", async () => {
+test("edits keep hand-added fields and the user's context window, clear managed overrides and guard the saved key", async () => {
 	await runtime();
 	writeFileSync(
 		path,
@@ -343,13 +505,13 @@ test("edits keep hand-added fields, clear managed overrides and guard the saved 
 					authHeader: true,
 					compat: { supportsStore: false },
 					models: [{ id: "a", contextWindow: 8_000, maxTokens: 2_000, temperature: 0.2 }],
-					modelOverrides: { a: { contextWindow: 4_000, name: "Alias" } },
+					modelOverrides: { a: { contextWindow: 4_000, maxTokens: 1_000, name: "Alias" } },
 				},
 			},
 		}),
 	);
 	const [listed] = await listCustomEndpoints();
-	expect(listed?.models[0]).toEqual(model("a", { contextWindow: 4_000, maxTokens: 2_000 }));
+	expect(listed?.models[0]).toEqual(model("a", { contextWindow: 8_000, maxTokens: 1_000 }));
 
 	await saveCustomEndpoint({
 		id: "custom-gw",
@@ -363,7 +525,7 @@ test("edits keep hand-added fields, clear managed overrides and guard the saved 
 		apiKey: "sk-saved",
 		authHeader: true,
 		compat: { supportsStore: false },
-		modelOverrides: { a: { name: "Alias" } },
+		modelOverrides: { a: { contextWindow: 4_000, name: "Alias" } },
 	});
 	expect(saved?.models).toEqual([expect.objectContaining({ id: "a", temperature: 0.2 })]);
 
@@ -655,4 +817,112 @@ test("invalid drafts are refused before models.json is touched", async () => {
 	];
 	for (const draft of bad) await expect(saveCustomEndpoint(draft)).rejects.toThrow();
 	expect(() => readFileSync(path)).toThrow();
+});
+
+test("a chat template that takes enable_thinking gets pi's chat-template thinking format", async () => {
+	await runtime();
+	const [endpoint] = await saveCustomEndpoint({
+		name: "llama",
+		baseUrl: "http://127.0.0.1:8080/v1",
+		models: [
+			model("hybrid", { contextWindow: 32_768, reasoning: true, chatTemplateThinking: true }),
+			model("plain", { contextWindow: 32_768 }),
+		],
+	});
+	const id = endpoint?.id ?? "";
+	const saved = providers()[id] as { models: Record<string, unknown>[] };
+	expect(saved.models[0]?.compat).toEqual({ thinkingFormat: "qwen-chat-template" });
+	expect(saved.models[1]).not.toHaveProperty("compat");
+	expect(endpoint?.models.map((m) => m.chatTemplateThinking)).toEqual([true, null]);
+
+	const config = JSON.parse(readFileSync(path, "utf8"));
+	config.providers[id].models[1].compat = { thinkingFormat: "qwen", supportsStore: false };
+	config.providers[id].modelOverrides = { hybrid: { compat: { thinkingFormat: "openai" } } };
+	writeFileSync(path, JSON.stringify(config));
+	await saveCustomEndpoint({
+		id,
+		name: "llama",
+		baseUrl: "http://127.0.0.1:8080/v1",
+		models: [
+			model("hybrid", { contextWindow: 32_768, reasoning: true, chatTemplateThinking: true }),
+			model("plain", { contextWindow: 32_768 }),
+		],
+	});
+	const edited = providers()[id] as { models: Record<string, unknown>[]; modelOverrides?: unknown };
+	expect(edited.modelOverrides).toBeUndefined();
+	expect(edited.models[1]?.compat).toEqual({ thinkingFormat: "qwen", supportsStore: false });
+
+	await saveCustomEndpoint({
+		id,
+		name: "llama",
+		baseUrl: "http://127.0.0.1:8080/v1",
+		models: [
+			model("hybrid", { contextWindow: 32_768, reasoning: true, chatTemplateThinking: false }),
+		],
+	});
+	expect((providers()[id] as { models: Record<string, unknown>[] }).models[0]).not.toHaveProperty(
+		"compat",
+	);
+});
+
+test("a draft from a client that predates chatTemplateThinking leaves the saved format alone", async () => {
+	await runtime();
+	const [endpoint] = await saveCustomEndpoint({
+		name: "llama",
+		baseUrl: "http://127.0.0.1:8080/v1",
+		models: [model("hybrid", { reasoning: true, chatTemplateThinking: true })],
+	});
+	const id = endpoint?.id ?? "";
+	const { chatTemplateThinking: _omitted, ...older } = model("hybrid", { reasoning: true });
+	await saveCustomEndpoint(
+		JSON.parse(
+			JSON.stringify({ id, name: "llama", baseUrl: "http://127.0.0.1:8080/v1", models: [older] }),
+		),
+	);
+	expect((providers()[id] as { models: Record<string, unknown>[] }).models[0]?.compat).toEqual({
+		thinkingFormat: "qwen-chat-template",
+	});
+});
+
+test("pi turns a chat-template model's thinking off and on through enable_thinking", async () => {
+	const bodies: Record<string, unknown>[] = [];
+	const chunk = (delta: Record<string, unknown>, finish: string | null = null) =>
+		`data: ${JSON.stringify({ id: "c", object: "chat.completion.chunk", created: 1, model: "hybrid", choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
+	const { url } = serve({
+		"POST /v1/chat/completions": async (request) => {
+			bodies.push(JSON.parse(await request.text()));
+			return new Response(
+				`${chunk({ role: "assistant", content: "OK" })}${chunk({}, "stop")}data: [DONE]\n\n`,
+				{
+					headers: { "content-type": "text/event-stream" },
+				},
+			);
+		},
+	});
+	const pi = await runtime();
+	const [endpoint] = await saveCustomEndpoint({
+		name: "llama",
+		baseUrl: `${url}/v1`,
+		models: [
+			model("hybrid", { contextWindow: 32_768, reasoning: true, chatTemplateThinking: true }),
+			model("unreported", { contextWindow: 32_768, reasoning: true }),
+		],
+	});
+	const unreported = settledAvailableModels(pi).find(
+		(m) => m.provider === endpoint?.id && m.id === "unreported",
+	);
+	const saved = settledAvailableModels(pi).find(
+		(m) => m.provider === endpoint?.id && m.id === "hybrid",
+	);
+	if (!saved || !unreported) throw new Error("the saved models are not available");
+	const context = { messages: [{ role: "user" as const, content: "hi", timestamp: Date.now() }] };
+	await pi.completeSimple(saved, context);
+	await pi.completeSimple(saved, context, { reasoning: "medium" });
+	expect(bodies.map((body) => body.chat_template_kwargs)).toMatchObject([
+		{ enable_thinking: false },
+		{ enable_thinking: true },
+	]);
+	expect(bodies.every((body) => !("reasoning_effort" in body))).toBe(true);
+	await pi.completeSimple(unreported, context);
+	expect(bodies.at(-1)).not.toHaveProperty("chat_template_kwargs");
 });

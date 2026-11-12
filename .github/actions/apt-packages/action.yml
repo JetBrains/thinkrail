@@ -1,0 +1,39 @@
+name: Install cached apt packages
+description: >-
+  Installs one package set listed beside this action (`<set>.txt`) through a .deb cache keyed by the exact package
+  versions apt plans to install.
+
+inputs:
+  set:
+    description: The package set to install, `desktop` or `webkit`.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - id: plan
+      shell: bash
+      env:
+        LIST: ${{ github.action_path }}/${{ inputs.set }}.txt
+        SET: ${{ inputs.set }}
+      run: |
+        mapfile -t packages < "$LIST"
+        sudo apt-get update
+        plan=$(apt-get -s install --no-install-recommends "${packages[@]}" | { grep '^Inst ' || true; } | sort)
+        echo "key=$SET-apt-$(sha256sum <<< "$plan" | cut -c1-16)" >> "$GITHUB_OUTPUT"
+    - uses: actions/cache@v6
+      with:
+        path: ~/.cache/${{ inputs.set }}-apt
+        key: ${{ steps.plan.outputs.key }}
+        restore-keys: ${{ inputs.set }}-apt-
+    - shell: bash
+      env:
+        LIST: ${{ github.action_path }}/${{ inputs.set }}.txt
+        SET: ${{ inputs.set }}
+      run: |
+        mapfile -t packages < "$LIST"
+        cache=~/.cache/$SET-apt
+        mkdir -p "$cache/partial"
+        sudo apt-get install -y --no-install-recommends -o Dir::Cache::Archives="$cache" "${packages[@]}"
+        sudo apt-get autoclean -o Dir::Cache::Archives="$cache"
+        sudo chown -R "$(id -u):$(id -g)" "$cache"

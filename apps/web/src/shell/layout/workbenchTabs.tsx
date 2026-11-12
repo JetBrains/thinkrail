@@ -17,11 +17,19 @@ import {
 	ContextMenuSeparator,
 	ContextMenuTrigger,
 } from "@thinkrail/ui/context-menu";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { Fragment, memo, type ReactNode, useEffect, useRef, useState } from "react";
-import { chatLabel, DOUBLE_CLICK_SETTLE_MS, type LayoutAttention, tupleKey } from "../../lib";
+import {
+	chatLabel,
+	copyText,
+	DOUBLE_CLICK_SETTLE_MS,
+	joinWorkspacePath,
+	type LayoutAttention,
+	tupleKey,
+} from "../../lib";
 import {
 	type AuxiliaryRailControlProps,
 	RAIL_ENTRY_BUTTON_CLASS,
@@ -92,6 +100,7 @@ export interface TabStripProps {
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
 	splitGeometry?: { horizontal: boolean; vertical: boolean };
 	trailing?: ReactNode;
+	worktreePath: string;
 }
 
 const GROUP_TABS_LABELS = {
@@ -144,6 +153,7 @@ export const TabStrip = memo(function TabStrip({
 	renderTabAdornment,
 	splitGeometry,
 	trailing,
+	worktreePath,
 }: TabStripProps) {
 	const t = useT();
 	const scroller = useRef<HTMLDivElement>(null);
@@ -250,6 +260,7 @@ export const TabStrip = memo(function TabStrip({
 							{...(chatFirstPrompts ? { chatFirstPrompts } : {})}
 							canFocusAdjacentGroup={canFocusAdjacentGroup}
 							renderTabAdornment={renderTabAdornment}
+							worktreePath={worktreePath}
 							draggingTab={draggingTab}
 							panelId={panelId}
 							{...(splitGeometry ? { splitGeometry } : {})}
@@ -398,6 +409,7 @@ export interface WorkbenchTabProps {
 	chatFirstPrompts?: WorkbenchProps["chatFirstPrompts"];
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
+	worktreePath: string;
 	draggingTab: LayoutTab | null;
 	panelId: string;
 	splitGeometry?: { horizontal: boolean; vertical: boolean };
@@ -428,6 +440,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 	chatFirstPrompts,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
+	worktreePath,
 	draggingTab,
 	panelId,
 	splitGeometry,
@@ -486,6 +499,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 	};
 	const onNameKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
 		event.stopPropagation();
+		if (isImeComposing(event.nativeEvent)) return;
 		if (event.key === "Enter") {
 			event.preventDefault();
 			restoreTabFocusRef.current = true;
@@ -579,6 +593,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 		: -1;
 	const currentAuxiliaryLimit = currentAuxiliary === "bottom" ? maxBottomGroups : maxSideGroups;
 	const name = layoutTabName(t, tab, chatFirstPrompts);
+	const filePath = tab.kind === "file" || tab.kind === "diff" ? tab.path : null;
 	const chatTitle =
 		tab.kind === "chat" ? chatLabel(t, tab.name, chatFirstPrompts?.[tab.sessionId]) : undefined;
 	const groupRemoval = removeLayoutGroup(t, document, location);
@@ -794,6 +809,23 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 						? t(rail?.vertical ? "workbench.tab.moveDownLast" : "workbench.tab.moveRightLast")
 						: t(rail?.vertical ? "workbench.tab.moveDown" : "workbench.tab.moveRight")}
 				</ContextMenuItem>
+				{filePath ? (
+					<>
+						<ContextMenuSeparator />
+						<ContextMenuItem
+							data-testid="tab-copy-path"
+							onSelect={() => void copyText(joinWorkspacePath(worktreePath, filePath))}
+						>
+							{t("workbench.tab.copyPath")}
+						</ContextMenuItem>
+						<ContextMenuItem
+							data-testid="tab-copy-relative-path"
+							onSelect={() => void copyText(filePath)}
+						>
+							{t("workbench.tab.copyRelativePath")}
+						</ContextMenuItem>
+					</>
+				) : null}
 				{location.area === "center" ? (
 					<>
 						<ContextMenuSeparator />

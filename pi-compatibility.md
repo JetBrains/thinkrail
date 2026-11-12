@@ -17,41 +17,54 @@ The installed version comes only from the root dependency catalog, not a second 
 
 ## Last re-check
 
-The compaction output-cap upgrade ([upstream #11036](https://github.com/earendil-works/pi/pull/11036))
-was checked against the installed catalog version. **No removal gate is satisfied.**
+Pi 1.5.2 was checked against the installed dist (1.5.0 → 1.5.1 → 1.5.2; every private symbol re-grepped,
+`agent-session.js`, `sdk.js`, `settings-defaults.js`, the extension loader/runner, `mcp-servers.js`, the
+MCP extension, `package-manager.js`, `model-resolver.js` and pi-ai's providers diffed). **One gate is
+met**: pi now clears a delivered image-only queued message itself (#8612), so the host's
+`stuckEmptyDeliveries` override is gone; the text-only queue API still needs the queued-image copy, whose
+entry below now stands alone. **Two adaptations were added**: the
+cache-warming default and the shutdown wait for credential writes (both below). Everything else stays,
+with this evidence:
 
-- MCP loader/writers remain private; management/status still use commands, notifications and logs.
-  `openUrl` remains the public sign-in URL seam. The one parity change is single-leading-BOM acceptance,
-  now shared by the host loader, writers and raw-entry occupancy/fingerprint reads. Config and host
-  tests cover both scopes, approved overrides, malformed occupied names and refused-write preservation.
-- `AgentSession.dispose()` still does not emit extension shutdown; reload dispatch is sequential,
-  and MCP clears its server list before awaiting closure. Keep ordered cleanup and late-start admission.
-  Codemode still needs a worker/WASM artifact surface we do not package. Raw `structuredContent` is
-  still ephemeral, not a bounded durable transcript presentation.
-- Delivered queue removal and `clearQueue()` remain text-only. SDK creation still does not initialize
-  a headless terminal theme. Extension loading still needs Jiti/virtual-module adaptation in artifacts,
-  static OAuth/Bedrock registration and the image-resize override. Artifact probes also exercise a
-  value import from `pi-ai/models` through the external extension loader.
-- Public trust detection does not replace resource-kind discovery/exclusion reloads; session discovery
-  and prompt-template APIs still do not cover the host's read/edit surfaces. Keep their parity tests.
-- Pi now sizes history, turn-prefix and branch summaries without reserve-derived output caps. Reasoning
-  inheritance and rejection of incomplete `length` summaries remain. One public-compaction canary checks
-  turn-prefix answer room across different reserves without pinning provider option policy; lifecycle
-  tests retain cancellation and incomplete-summary rejection coverage.
-  Restored truncated-call recovery now omits the paired tool result too, but does not replace
-  `sessionRepair`'s host-restart and questionnaire repair. No host summarizer, effort-default change,
-  reserve tuning, wire migration or session migration is introduced.
-- Pi 1.3's resumed tool-loadout restore adds one host seam, the registry-tool reconcile at attach below.
-- The bundled chat catalogue changes from 1,554 to 1,599 provider/model pairs: 71 removed and 116 added.
-  Removed pairs include `openai-codex/gpt-5.5` and `openai-codex/gpt-5.3-codex-spark`;
-  `openai/gpt-5.5` remains. This is a bundled-catalogue change, not a claim that providers retired those
-  APIs; stored, refreshed and custom catalogues can differ. Release notes must advise users to check
-  their default and restored-chat model before continuing. Unavailable defaults/resumed models follow
-  the existing, different host/Pi selection rules in [[submodule-server-agent]]; the host still does not
-  surface Pi's `modelFallbackMessage`. This upgrade adds no fallback or warning UI.
-- Since Pi 1.3, `kimi-coding` uses OpenAI Chat Completions at
-  `https://api.kimi.com/coding/v1`. Users with custom `models.json` base URL overrides must include
-  `/v1`; the host does not rewrite those overrides. Include this migration notice in release notes.
+- The Anthropic SSE framing defect is unchanged upstream (`consumeLine` is byte-identical; #10390 still
+  open): the unpatched 1.5.1 dist fails all three "defects the patch fixes" cases. The message-threads
+  code moved the hunks by ~175 lines, so the patch was regenerated from a clean dist, not renamed.
+- MCP: pi moved the *entry* validator into `@earendil-works/pi-mcp` as public `validateMcpServerConfig`
+  (with `isMcpServerOverride`, `mcpNamespace`, `createMcpToolName`, `limitMcpContent`,
+  `normalizeMcpInputSchema`), but pi's own fields (`exposure`, `toolExposure`, `auth`), the file loader
+  and the writers remain private in `core/mcp-servers.js` / `extensions/mcp/config.js`; the loader parity
+  fixture passes unchanged. `/mcp` status and sign-in wording did not change; sign-in moved onto pi-mcp's
+  `startMcpSignIn` / `completeMcpSignIn` behind the same `openUrl` seam. `AgentSession.dispose()` still
+  emits no shutdown; `AgentSession.reload()` now throws while streaming or compacting, which the host's
+  reload gate already refuses earlier. Codemode is still unpackaged; raw `structuredContent` is still
+  ephemeral.
+- `_isActivatedOnRegistration`, the provider-registration queues with `extensionPath`,
+  `getAllRegisteredTools`, the `sk-ant-oat` predicate, `getPackageIdentity`, `clearExtensionCache`,
+  `defaultModelPerProvider`, `"pi-virtual"`, `formatSkillsForPrompt`, `findCutPoint` / `generateSummary`
+  and the single-`appendFileSync` session append are all still private and unchanged in shape.
+  `isOfflineModeEnabled` is now exported from `core/package-manager.js` but not from the package root, so
+  the port stays. `defaultModelPerProvider` moved 17 providers (Anthropic/Bedrock → Claude Opus 5.5,
+  Azure → GPT-6.1 Sol, Google/Vertex → Gemini 4 Argon, …) and added `qwen-token-plan-individual-cn`; the
+  mirror follows. The Jiti loader now imports extensions by `realpath`; the bundled seams are unaffected,
+  only `check:seams`' allowlist text changed with pi's rewritten opaque imports.
+- `PackageManager` progress gains a `result` event the host does not consume; `GrepOperations.readFile`
+  is deprecated and `ReadOperations.createReadStream` added — the host has no custom operations.
+  OpenAI-compatible requests omit `tools: []` (vLLM/LiteLLM 400s); `compat.requiresToolsWithToolHistory`
+  is the opt-back-in for old LiteLLM→Anthropic proxies. Anthropic message threads are on by default for
+  `anthropic` on api.anthropic.com, keyed by pi's session id and cleaned in `dispose()`; host `context` /
+  `before_agent_start` handlers only cause pi's full-request fallback.
+- 1.5.2 on top of 1.5.1 touches no SDK surface the host uses: pi-ai bumps the Claude Code version it
+  reports for Anthropic OAuth, the interactive mode offers Continue / Fork / Cancel for a session whose cwd
+  is gone, and `/import` of such a session no longer leaves a stray copy. The SSE patch applies at the same
+  offsets. 1.5.2 adds four catalogue entries (`radius/claude-fable-5-2`, `meta/muse-ember-1.0`,
+  `opencode/minimax-m3.1-flash-free`, `openrouter/nex-agi/nex-n2.6`) on top of the 1.5.1 delta below.
+- The bundled chat catalogue changes from 1,592 to 1,639 provider/model pairs in 1.5.1: 66 added (Claude Fable 5.2
+  on Anthropic, Bedrock, OpenRouter, Vercel and OpenCode; Kimi K3.1 Pro; Gemini 4 Argon, GPT-6.1 Terra and
+  Mistral Large 4 on Radius; the `qwen-token-plan-individual-cn` provider) and 19 removed (older
+  OpenRouter MiniMax/Mercury/Llama aliases, Fireworks `gpt-oss-120b`, Vercel Gemini batch aliases). The
+  default `anthropic` model is now `claude-opus-5-5`. Release notes must say both and advise users to
+  check their default and restored-chat model; unavailable models follow the existing selection rules in
+  [[submodule-server-agent]], and the host still does not surface Pi's `modelFallbackMessage`.
 
 ## Upgrade contract
 
@@ -70,12 +83,17 @@ private dist path in production is not a replacement; such imports remain confin
 ### Configuration loader and writers
 
 **Owner:** [[submodule-server-agent-mcp]], `agent/mcp/config.ts` and `writers.ts`.
-Pi's public `loadConfig` hook replaces its loader wholesale; its loader, validator and writers are
-not public exports. The host ports their file semantics to apply project policy and perform safe
-multi-client writes. **Removal gate:** a public loader/validator/writer surface preserving entry
-provenance and allowing admission before project overrides merge. Verify the port against the
+Pi's public `loadConfig` hook replaces its loader wholesale; its loader and writers are not public
+exports, and since pi 1.5.1 only the shared *entry* validator is (`@earendil-works/pi-mcp`'s
+`validateMcpServerConfig`, which leaves pi's `exposure` / `toolExposure` / `auth` checks private). The
+host ports their file semantics to apply project policy and perform safe multi-client writes.
+**Removal gate:** a public loader/validator/writer surface preserving entry provenance and allowing
+admission before project overrides merge; adopting pi-mcp's partial validator alone would add a direct
+dependency for half the rules and is deferred until the loader follows. Verify the port against the
 installed `core/mcp-servers` and `extensions/mcp/config`; run `agent/mcp/config.test.ts` and
-`host/mcp.test.ts`. Host containment, stale-write checks and private policy remain host obligations.
+`host/mcp.test.ts`. The parity fixture lists one entry per validation rule pi has, so a new config
+field (pi 1.5 added `oauth.clientRegistration: "auto"`) shows up as a parity failure before it reaches
+users. Host containment, stale-write checks and private policy remain host obligations.
 
 ### Runtime status, management and sign-in outcomes
 
@@ -126,13 +144,17 @@ full-output paths; run `mcp/results.test.ts`, `mcpEngine.test.ts`, web MCP card 
 
 ## Other pi-sensitive host seams
 
-**Registry-tool reconcile at attach** — [[submodule-server-agent]], `agentSessionManager.ts`. Pi ≥ 1.3
+**Registry-tool reconcile at attach and reload** — [[submodule-server-agent]], `agentSessionManager.ts`. Pi ≥ 1.3
 restores a resumed chat's recorded tool loadout and keeps recorded removals inactive, so a tool withheld
-while its registry extension was disabled would stay off after re-enabling. Attach re-activates enabled
-registry-extension tools by mirroring Pi's private `_isActivatedOnRegistration` (declarable exposure,
-`defaultActive !== false`); re-check that rule on upgrades. If the host ever calls `navigateTree`, which
-re-runs the restore, reconcile after it too. **Removal gate:** a public Pi way to keep host-withheld tools
-apart from the recorded selection. Run the manager's restart regressions on upgrades.
+while its registry extension was disabled would stay off after re-enabling. Pi's own `reload()` activates
+every extension tool again, but an extension's `session_start` can replay the same record
+(`pi-web-access`'s activation selection does, on reloads too), so the reconcile runs at attach and after
+every successful gated resource reload. It re-activates enabled registry-extension tools by mirroring
+Pi's private `_isActivatedOnRegistration` (declarable exposure, `defaultActive !== false`); re-check that
+rule on upgrades. If the host ever calls `navigateTree`, which re-runs the restore, reconcile after it
+too. **Removal gate:** a public Pi way to keep host-withheld tools apart from the recorded selection, so
+neither Pi's restore nor an extension reading the transcript sees them as removals. Run the manager's
+restart and toggle-reload regressions on upgrades.
 
 - **Anthropic extra-usage warning parity** — [[submodule-server-agent]], `agent/anthropicExtraUsage.ts`.
   Pi's warning exists only in interactive mode (`maybeWarnAboutAnthropicSubscriptionAuth`), and its
@@ -186,7 +208,7 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   carries no target version; pi skips pinned npm versions in update checks; pi classifies `git@host:…`
   and `github:…` sources as local paths.
 - **Anthropic SSE framing patch** — [[submodule-server-agent]] (Provider stream framing),
-  `patches/@earendil-works%2Fpi-ai@1.4.0.patch` on `dist/api/anthropic-messages.js`. Unpatched, two
+  `patches/@earendil-works%2Fpi-ai@1.5.2.patch` on `dist/api/anthropic-messages.js`. Unpatched, two
   streams fail with the non-retryable "Could not parse Anthropic SSE event": a valid CRLF stream whose
   `\r\n` is split across network chunks, and a stream cut off mid-event. Patched, the first succeeds and
   the second ends with a retryable truncation error such as "stream ended before message_stop".
@@ -194,9 +216,11 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   [upstream #10390](https://github.com/earendil-works/pi/issues/10390)). Bun silently skips a patch whose
   version doesn't match, so every pi bump runs `agent/anthropicStreamFraming.test.ts` against the
   unpatched release. Its "defects the patch fixes" group decides: when it passes, delete the patch and its
-  `patchedDependencies` entry; when it fails, port the patch to the new version. If only the "behavior
-  the patch keeps" group fails, pi changed that behavior: decide whether to follow it before porting
-  anything.
+  `patchedDependencies` entry; when it fails, port the patch to the new version. Port by regenerating the
+  file from a clean 1.x dist, not by renaming it: Bun applies hunks at their recorded lines and silently
+  produces a broken module when the context moved (1.5.0 shifted it by two lines), and only the framing
+  test catches that. If only the "behavior the patch keeps" group fails, pi changed that behavior: decide
+  whether to follow it before porting anything.
 - **Registry tool precedence** — [[submodule-server-extensions]], `preferRegistryTools` in the session
   loader's `extensionsOverride`. It relies on three pi facts:
   - pi keeps every extension and gives a tool name to its first registration
@@ -222,11 +246,14 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   queues still carry `extensionPath` and are filled before `extensionsOverride` runs; run the provider-owner
   regressions in `agent/extensions.test.ts`, `agent/delegation.test.ts` and `pi-delegation`'s
   `service.test.ts` on every upgrade.
-- **Image-only queued input** — [[submodule-server-agent]], queue projection. The host compensates for
-  pi's text-only delivered-message removal ([upstream #8612](https://github.com/earendil-works/pi/issues/8612))
-  and retains image content lost by the destructive queue API. Remove the corresponding workaround
-  when the installed implementation handles that case natively; verify the queue/image regressions,
-  not just the issue state.
+- **Queued-message images** — [[submodule-server-agent]], queue projection. Pi's queue API is text-only:
+  `getSteeringMessages()` / `getFollowUpMessages()` / `clearQueue()` return strings and drop image blocks,
+  so the host keeps a transient per-lane copy of browser-queued message content (images included) while
+  pi reports the matching text pending, and projects only a `hasImages` aggregate. Pi 1.5.1 fixed the
+  related delivery defect (#8612: an image-only delivery now leaves the queue), so the host's
+  `stuckEmptyDeliveries` override is gone; the copy stays. **Removal gate:** pi's queue API returning the
+  full queued message content (or a per-message handle), so a restore can rebuild images from pi. Run the
+  manager's queue/image regressions (image-only steer, follow-up and prompt; `clearQueue` content).
 - **Bundled extension loading and image handling** — [[submodule-server-agent]], [[module-cli]],
   [[module-desktop]]. Forced Jiti transformation, virtual-module identity, static provider registration,
   and the image-resize override bridge resources a single-file artifact cannot discover or load.
@@ -239,6 +266,15 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   Remove the ChatGPT rule when the installed `providers/openai.js` filters OAuth chat models itself, and
   the listing rule when pi narrows a rerouted provider's catalog to what its endpoint serves; run
   `modelAvailability.test.ts` and `runtimeGenerations.test.ts`.
+- **Restored model selection** — [[submodule-server-agent]], `piBranchSelection` in
+  `agentSessionManager.ts`. A reopened chat is checked against its saved model before pi restores it,
+  and that must be pi's virtual-aware `getBranchSelection` (a registered virtual `model_change` holds
+  over the physical responses it routed), not `buildSessionContext().model` (the last physical
+  response) — else a still-registered router whose last target is gone reads as unavailable and every
+  send is refused. Pi exports neither it nor `isVirtualModel`, so the host mirrors the walk and matches
+  the `"pi-virtual"` API. **Removal gate:** pi exports `getBranchSelection` or otherwise reports the
+  restored selection publicly. `runtimeGenerations.test.ts` pins parity against the installed dist ("the
+  restored selection mirrors pi's virtual-aware branch selection"); rerun it on every pi bump.
 - **Default-model preference** — [[submodule-server-agent]], `modelDefaults.ts`. Pi's
   `defaultModelPerProvider` is not exported, so the host mirrors it for new-chat, reviewer, and
   one-shot defaults. Remove the mirror when a public export or initial-model resolver exists; until
@@ -256,6 +292,14 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   discovery and prompt-template/frontmatter rules where public APIs cannot serve its read/edit UI.
   Prefer public discovery/parsing APIs when they meet those needs; retain parity coverage in history,
   template and composer tests until then.
+- **Context edits on summarized display turns** — [[submodule-server-history]], `displayTranscript.ts`
+  (`projectContextEntry`). The display projection puts the turns the latest compaction summarized back
+  in front of its marker, and they must carry the branch's latest `context_edit` the way pi projects kept
+  entries, or an omitted recovery attempt (`replacement: null`) comes back once a later compaction
+  advances past it. Pi's per-entry `projectContextEntry` is exported from `core/session-manager.js` but not
+  the package root, so the host mirrors it. **Removal gate:** pi exporting `projectContextEntry`, or a
+  projection that keeps summarized entries, from the package root. On upgrades run
+  `history/displayTranscript.test.ts`, whose parity test compares the mirror with pi's dist function.
 - **Subagent usage totals from child transcripts** — [[submodule-server-agent]], `subagentUsage.ts`.
   Pi's session-total loop (`AgentSession.getSessionStats`) is not exported for a bare session file, so
   the host mirrors which entries carry spend (`usage`, compaction/branch-summary `usage`, assistant and
@@ -263,13 +307,14 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   helper over entries or a file. Until then `delegation.test.ts` ("the subagent totals mirror matches pi's
   own totals for every spend source") pins parity with pi's `getSessionStats` on one transcript that
   carries every spend source, including off-branch spend; rerun it on every pi bump.
-- **Rollback of a failed usage append** — [[submodule-server-agent]], `recordSessionUsage`.
-  `SessionManager._appendEntry` adds the entry to memory and moves the leaf before `_persist`, and a
-  failed `appendFileSync` can leave a torn partial line. The host therefore restores the previous leaf
-  and truncates an existing transcript back to its pre-append size; `delegation.test.ts` pins both
-  ("a usage write pi kept only in memory never cuts the reopened history", "a torn usage append is cut
-  back…"). Remove the leaf restore when a failed persist leaves pi's memory and leaf unchanged; remove the
-  truncation only when pi also guarantees that a failed append leaves no torn bytes.
+- **Cut-back of a failed usage append** — [[submodule-server-agent]], `recordSessionUsage`. Since pi 1.5
+  (`#11460`) a failed `_persist` removes the entry from memory and restores the leaf, so the host's leaf
+  restore is gone and a failed append reports `false`. Pi still appends with one `appendFileSync`, which
+  can leave a torn partial line, so the host truncates an existing transcript back to its pre-append size;
+  `delegation.test.ts` pins both ("a failed usage write leaves pi's memory and leaf untouched…" against a
+  real read-only file, "a torn usage append is cut back…"). **Removal gate:** pi guarantees that a failed
+  append leaves no torn bytes. If pi ever stops rolling back memory, the first test fails: that is a
+  reason to reinstate the restore, not to weaken the test.
 
 - **Detached result hold** — [[module-pi-subagents]] (Result delivery) and
   [[module-pi-background-commands]], applied by [[submodule-server-agent]]'s `turn_end` and
@@ -279,8 +324,17 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   pushed result duplicated one the agent had already pulled. The owners hold outcomes and send them
   only at step boundaries or to an idle parent. **Removal gate:** a per-message queue handle an
   extension can withdraw, delivered at the next step rather than at run end — even then, keep the
-  claim-on-pull rule. Run the `pi-subagents` and `pi-background-commands` suites and
-  `agent/chatResources.test.ts`.
+  claim-on-pull rule. The owners also hold later idle deliveries behind a wake pi defers inside
+  `agent_settled` (the parent still reads idle, and each deferred request starts its own run); drop
+  that hold once pi coalesces deferred wakes or reports the pending run. Run the `pi-subagents` and
+  `pi-background-commands` suites and `agent/chatResources.test.ts`.
+- **Skill catalog budget** — [[submodule-server-agent]], `skillCatalog.ts`. Pi's
+  `formatSkillsForPrompt` lists every admitted skill with its full description and no cap, so a machine
+  with other agents' skills put 1,395 skills (~165K tokens) in every request (#1210). A host
+  `before_agent_start` handler replaces the `skills` section with a budgeted, ranked listing only when
+  pi's would overrun the budget, registers `skill_search` over the full set, and hints distinctly
+  matching unlisted skills after the user turn. Remove it when pi caps
+  or defers its skill listing natively; verify with `skillCatalog.test.ts`.
 - **Skill bodies across compaction** — [[submodule-server-agent]], `skillCarryover.ts`. Pi's compaction
   summarizes loaded skill text away (a `read` result reaches the summarizer cut to 2000 characters) and
   nothing re-supplies it, so a host `context` handler re-attaches compacted skill bodies to every
@@ -289,6 +343,28 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   It skips virtual selections by matching pi's unexported `"pi-virtual"` model API, since a `context`
   handler sees only the selection, not the routed model; replace that check when pi exposes the
   dispatched model (or `isVirtualModel`) to `context` handlers.
+
+- **Cache-warming default** — [[submodule-server-agent]], `cacheWarming.ts` (`applyCacheWarmingDefault`).
+  Pi 1.5.1 defaults `cacheWarming` to `idle`, which spends tokens in every idle chat, and reads the mode
+  from the snapshot its `SettingsManager` loaded (`globalSettings`, rebuilt by every persisting setter's
+  `save()`), so neither an in-memory `applyOverrides` nor a one-time default survives pi's own writes.
+  The host therefore replaces `getCacheWarmingMode` on every session's `SettingsManager` — chats and
+  delegated children alike — with a getter that answers from pi's `settings.json` (mtime-cached) and falls
+  back to `streaming` while the file names no valid mode; the Settings control writes that file through
+  pi's own `setCacheWarmingMode`, and no per-session fan-out exists. **Removal gate:** a public way to give
+  the SDK a cache-warming default without touching the user's file (a `createAgentSession` /
+  `SettingsManager` option, or pi re-reading the file at each decision), or pi returning to a default that
+  costs nothing while idle. On upgrades re-check that `sdk.js` still obtains the mode through
+  `settingsManager.getCacheWarmingMode()` and that `CacheWarmer` consults it before every warm
+  (`validateRun`); run `cacheWarming.test.ts` (it asserts pi's own default is `idle` so a change upstream
+  shows up) and the manager's cache-warming tests.
+- **Credential writes at host exit** — [[submodule-server-agent]], `settleCredentialWritesForShutdown`.
+  Pi 1.5.1 waits for an in-flight OAuth refresh in `AgentSessionRuntime.dispose()` (#11692: the refresh
+  spends its single-use token before the rotated one is saved); the host does not use that runtime, so its
+  graceful shutdown calls the public `ModelRuntime.settleCredentialWrites()` itself, on the active
+  generation and on every runtime a live chat still holds. Not a workaround but a pi fact the host must
+  mirror: re-check on upgrades that credential writes are still tracked per `ModelRuntime` (a process-wide
+  settle would let the host call it once) and run the manager's shutdown-settle test.
 
 ## Context-budget limitations
 

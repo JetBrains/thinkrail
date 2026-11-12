@@ -55,7 +55,7 @@ function discoverFor(ctx: ExtensionContext): AgentDefinition[] {
 function agentListLines(definitions: AgentDefinition[]): string {
 	return definitions
 		.map((d) => {
-			const model = d.model === undefined ? "call or parent" : `pinned ${d.model}`;
+			const model = d.model === undefined ? "parent unless set" : `pinned ${d.model}`;
 			const thinking =
 				d.thinking === undefined ? "" : `; thinking: ${d.thinking} (overrides suffix)`;
 			const tools = d.tools?.join(", ") ?? "pi defaults: read, bash, edit, write";
@@ -125,6 +125,7 @@ function createOwner(options: SubagentsExtensionOptions, retained: boolean): Sub
 	let closed = false;
 	let flushing = false;
 	let flushScheduled = false;
+	let wakeDeferred = false;
 	let turnEnd: { runContinues: boolean } | undefined;
 	let owedWake = false;
 	const pending = new Set<HeldCompletion>();
@@ -175,6 +176,10 @@ function createOwner(options: SubagentsExtensionOptions, retained: boolean): Sub
 					if (!closed) pending.add(completion);
 					break;
 				}
+				if (completion === carrier && parentIdle()) {
+					wakeDeferred = true;
+					scheduleFlush();
+				}
 			}
 			return deliveredWake;
 		} finally {
@@ -185,7 +190,7 @@ function createOwner(options: SubagentsExtensionOptions, retained: boolean): Sub
 	function flushCompletions(flush: { atTurnEnd?: boolean } = {}): void {
 		if (closed) return;
 		if (parentIdle()) {
-			if (!flushScheduled) deliver({ idle: true });
+			if (!wakeDeferred) deliver({ idle: true });
 			return;
 		}
 		if (flush.atTurnEnd && turnEnd && deliver({ idle: false, ...turnEnd })) owedWake = true;
@@ -196,6 +201,7 @@ function createOwner(options: SubagentsExtensionOptions, retained: boolean): Sub
 		flushScheduled = true;
 		setTimeout(() => {
 			flushScheduled = false;
+			wakeDeferred = false;
 			flushCompletions();
 		}, 0);
 	}
@@ -224,6 +230,7 @@ function createOwner(options: SubagentsExtensionOptions, retained: boolean): Sub
 		pi.on("turn_start", () => {
 			turnEnd = undefined;
 			owedWake = false;
+			wakeDeferred = false;
 		});
 		pi.on("agent_end", () => {
 			turnEnd = undefined;
@@ -284,9 +291,10 @@ calls in ONE message to run subagents in parallel; sequence dependent steps your
 Set run_in_background for long tasks: you get the session id immediately, and the subagent's report
 is delivered to you automatically, before your next step while you work or as a new turn when you
 are idle. Do not poll get_subagent_result or sleep to wait; to wait, end your turn. Use
-get_subagent_result only to check a run's status or re-read a finished report. Set model to choose
-an available model for an unpinned agent; a definition's pinned model always wins, ignoring the
-invocation model and its suffix. A model reference with no whole-reference match may end in
+get_subagent_result only to check a run's status or re-read a finished report. Leave model out to
+run on your own model. Set model only to choose another available model for an unpinned agent; a
+definition's pinned model always wins, ignoring the invocation model and its suffix. A model
+reference with no whole-reference match may end in
 :<thinking> (${THINKING_LEVELS.join(", ")}). Whole-reference matches keep their meaning;
 ambiguous references fail rather than being reinterpreted. Explicit definition thinking overrides
 a suffix; without either, thinking inherits the parent. Pi clamps thinking to model capabilities.
@@ -305,7 +313,7 @@ ${known}`,
 					model: Type.Optional(
 						Type.String({
 							description:
-								'Available model for an unpinned agent: "provider/id" or "provider/id:thinking". Whole-reference matches win; a definition pin ignores this value, and definition thinking overrides a suffix.',
+								'Leave out to use the parent model. Otherwise an available model for an unpinned agent: "provider/id" or "provider/id:thinking" (a bare id or unique id prefix also works). Whole-reference matches win; a definition pin ignores this value, and definition thinking overrides a suffix.',
 						}),
 					),
 					run_in_background: Type.Optional(

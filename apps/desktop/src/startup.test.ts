@@ -92,6 +92,9 @@ mock.module(${JSON.stringify(runtimePath)}, () => {
   };
 });
 const updateInfo = { version: "0.0.1", hash: "abc", updateAvailable: false, updateReady: false, error: "" };
+mock.module(${JSON.stringify(join(desktopDir, "src/deepLinkBootstrap.ts"))}, () => ({
+  deliverDeepLinkWhenReady: () => {},
+}));
 mock.module("electrobun/main", () => ({
   default: {
     app: { isPackaged: true },

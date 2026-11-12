@@ -463,18 +463,23 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		activity: string | undefined,
 		startedAt: number,
 		baseline: RunBaseline,
+		last?: AssistantMessage,
 	): DelegationRunDetails {
 		const { session, record } = entry;
 		const stats = session.getSessionStats();
 		const { contextUsage } = stats;
+		const model = last
+			? `${last.provider}/${last.model}`
+			: session.model && `${session.model.provider}/${session.model.id}`;
+		const thinkingLevel = last ? last.thinkingLevel : session.thinkingLevel;
 		return {
 			childSessionId: record.sessionId,
 			...(record.info.roleName !== undefined ? { roleName: record.info.roleName } : {}),
 			...(record.info.roleSource !== undefined ? { roleSource: record.info.roleSource } : {}),
 			task,
 			status,
-			...(session.model ? { model: `${session.model.provider}/${session.model.id}` } : {}),
-			thinkingLevel: session.thinkingLevel,
+			...(model !== undefined ? { model } : {}),
+			...(thinkingLevel !== undefined ? { thinkingLevel } : {}),
 			usage: {
 				input: stats.tokens.input - baseline.input,
 				output: stats.tokens.output - baseline.output,
@@ -509,7 +514,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		const activeRun = entry.activeRun;
 
 		const pushUpdate = (status: RunLifecycleStatus) => {
-			const details = buildDetails(entry, task, status, turns, activity, startedAt, baseline);
+			const details = buildDetails(entry, task, status, turns, activity, startedAt, baseline, last);
 			if (entry.snapshot?.task === task) entry.snapshot = { ...entry.snapshot, status, details };
 			opts.onUpdate?.(details);
 			if ("parentSessionId" in entry.record)
@@ -590,7 +595,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			status = "completed";
 		}
 		const finalText = textOf(last);
-		const details = buildDetails(entry, task, status, turns, activity, startedAt, baseline);
+		const details = buildDetails(entry, task, status, turns, activity, startedAt, baseline, last);
 		return {
 			historyEntryId: session.sessionManager.getLeafId(),
 			...(last ? { stopReason: last.stopReason } : {}),

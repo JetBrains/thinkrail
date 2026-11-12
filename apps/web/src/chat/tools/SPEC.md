@@ -37,10 +37,20 @@ renderers are registered by the host's `extensions/registry.ts`. Unregistered to
   summary, and renders findings as the shared fold-out `ReviewPackageComments` (comment→item mapping
   and the row primitive both live in `reviewPackage.ts` + `ReviewPackageComments.tsx`, reused by the
   `reviewFix`/review-package renderers). Registered `primary` + `defaultExpanded`; `data-verdict` +
-  `data-testid="request-review-card"` are the test hooks.
+  `data-testid="request-review-card"` are the test hooks. When the call settles without a parseable
+  verdict it renders the tool's own text as a plain error receipt (`data-testid="request-review-error"`)
+  and falls back to `tools.requestReview.noVerdict` only when the result carries no text: `request_review`
+  refuses a plan step with no change set, and that refusal is the only thing the reader can act on — a
+  bare "no verdict" line hides it.
 - **Ask user question** is owned by [[module-ext-ask-user-question]], outside this module. Its card
-  registers bare and `interactive` through the public web entrypoint; the plan page renders it through the
-  registry.
+  registers bare, `interactive` and `dock` through the public web entrypoint (the chat renders an awaited
+  call in its interaction dock — see the parent spec); the plan page renders it through the registry.
+- **`StartWorkspaceCard`** — the card for the host-owned `start_workspace` tool (capability: the server
+  `agent` workspace tools + the `host` workspace-tools seam). It reads the started ids from `details`
+  defensively and shows the prompt (folded when long), the branch/base/model meta, and the workspace's
+  **live** name through `ChatActions.WorkspaceName`: the child renames its workspace from `workspace-N` on
+  its first turn. **Open workspace** goes through `ChatActions.openWorkspace`. Registered `primary` +
+  `defaultExpanded`. `workspace_status` keeps the default renderer — its text report is the product.
 - **Visualize** is owned by [[module-ext-visualize]], outside this module. Its primary/default-expanded
   registration and named `MermaidView` reach chat through the public web entrypoint.
 - **Spec-graph tools** — one defensive `SpecToolCard` registered for all seven `spec_*` names. Each keeps
@@ -58,7 +68,7 @@ renderers are registered by the host's `extensions/registry.ts`. Unregistered to
 - **`subagent/`** — delegation renderers for `pi-subagents`: `AgentCard` (the `Agent` tool — **primary**;
   also registered for `get_subagent_result`, routine) and the pure `runDetails` readers/formatters (the
   parent chat's background result row reuses them); own child spec ([subagent/SPEC.md](subagent/SPEC.md)).
-- **Shared pieces** — `CodeBlock` (shiki), `Collapsible` ("Show all N lines" fold for long output;
+- **Shared pieces** — `CodeBlock` (Pierre highlighting), `Collapsible` ("Show all N lines" fold for long output;
   callers supply a stable tool-call-derived id so state and geometry anchoring survive virtualization),
   `ToolFileLink` + exact-reference linked text backed by the parent chat module's shared
   `workspaceFileTarget` + `lib`'s `projectRelativePath`. Pure `toolHelpers` (arg readers, `resultText`,
@@ -68,9 +78,11 @@ renderers are registered by the host's `extensions/registry.ts`. Unregistered to
 ## Boundary
 
 - **Public surface:** the side-effect `register` import + shared `CodeBlock`/`Collapsible` for sibling
-  renderers. No barrel (chat pulls shiki — per-file imports, as in the parent).
+  renderers, and pure readers the parent reuses outside a card: `subagent/runDetails` (result rows) and
+  `mcp/mcpResult` (the Resources MCP server detail). No barrel (chat pulls the highlighter — per-file
+  imports, as in the parent).
 - **Allowed deps:** parent chat primitives (`toolRegistry`, `Markdown`, `ChatActions`, `interactionState`,
-  `fileTargets`, `foldState`);
+  `fileTargets`, `foldState`, `HighlightedHtml`);
   `contracts` (types and pure guards); `@thinkrail/ui/*` (including
   `attention-line`, the "Your input is needed" line shared with extension prompts);
   `@thinkrail/extension-api/web`; `lib`; `@remixicon/react`.

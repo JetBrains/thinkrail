@@ -109,6 +109,22 @@ describe("typography source", () => {
 		expect(Object.values(typography.lineHeights)).not.toContain(1.65);
 	});
 
+	it("keeps the code stack's system fallbacks for icons, CJK and emoji", () => {
+		const stack = resolveFamily(typography, "code").stack;
+		for (const family of [
+			"JetBrainsMono Nerd Font Mono",
+			"Symbols Nerd Font Mono",
+			"Sarasa Mono SC",
+			"Noto Sans Mono CJK SC",
+			"PingFang SC",
+			"Apple Color Emoji",
+			"DejaVu Sans Mono",
+		]) {
+			expect(stack, family).toContain(family);
+		}
+		expect(stack.at(-1)).toBe("monospace");
+	});
+
 	it("names a semantic style for the document base instead of repeating one", () => {
 		expect(isRef(typography.rootStyle)).toBe(true);
 		expect(typography.rootStyle.$ref).toBe("ui.default");

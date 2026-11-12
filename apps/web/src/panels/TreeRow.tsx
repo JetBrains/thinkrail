@@ -6,7 +6,12 @@ import {
 	RiFolderFill,
 	RiFolderLine,
 } from "@remixicon/react";
-import type { MouseEvent, ReactNode, Ref } from "react";
+import type { ComponentPropsWithoutRef, MouseEvent, ReactNode, Ref } from "react";
+
+type MenuTriggerHandlers = Pick<
+	ComponentPropsWithoutRef<"button">,
+	"onKeyDown" | "onPointerDown" | "onPointerMove" | "onPointerCancel" | "onPointerUp"
+>;
 
 export function TreeRow({
 	ref,
@@ -14,6 +19,7 @@ export function TreeRow({
 	kind,
 	expanded,
 	active,
+	highlighted = false,
 	subtle = false,
 	dataStatus,
 	dataViewed,
@@ -24,13 +30,19 @@ export function TreeRow({
 	onClick,
 	onDoubleClick,
 	onContextMenu,
+	onKeyDown,
+	onPointerDown,
+	onPointerMove,
+	onPointerCancel,
+	onPointerUp,
 	onWarm,
-}: {
+}: MenuTriggerHandlers & {
 	ref?: Ref<HTMLButtonElement> | undefined;
 	testid: string;
 	kind: "dir" | "file";
 	expanded?: boolean;
 	active?: boolean;
+	highlighted?: boolean;
 	subtle?: boolean;
 	dataStatus?: string | undefined;
 	dataViewed?: boolean;
@@ -59,11 +71,16 @@ export function TreeRow({
 			onClick={onClick}
 			onDoubleClick={onDoubleClick}
 			onContextMenu={onContextMenu}
+			onKeyDown={onKeyDown}
+			onPointerDown={onPointerDown}
+			onPointerMove={onPointerMove}
+			onPointerCancel={onPointerCancel}
+			onPointerUp={onPointerUp}
 			onPointerEnter={onWarm && (() => onWarm("hover"))}
 			onFocus={onWarm && (() => onWarm("focus"))}
 			className={`flex h-panel-row w-full min-w-0 items-center gap-4 rounded-sm px-4 text-left tr-text-ui ${tone} outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${
 				highlight === "self"
-					? `hover:bg-control-bg-hovered ${active ? "bg-control-bg-selected" : ""}`
+					? `hover:bg-control-bg-hovered ${active || highlighted ? "bg-control-bg-selected" : ""}`
 					: ""
 			}`}
 		>

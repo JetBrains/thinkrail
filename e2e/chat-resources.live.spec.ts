@@ -135,23 +135,25 @@ test("natural command completion refreshes the closed inspector and survives tra
 	await openWorkspaceChat(page);
 	await send(
 		page,
-		'Call background_command once with action start, name resource-finish, timeout 60, and command "sleep 12; printf RESOURCE_DONE". Then reply with the single word started. Do not call output or list, and do not wait for completion.',
+		'Call background_command once with action start, name resource-finish, timeout 60, and command "sleep 25; printf RESOURCE_DONE". Then reply with the single word started. Do not call output or list, and do not wait for completion.',
 	);
 	const trigger = page.getByTestId("resources-trigger");
 	await expect(trigger).toHaveAttribute("data-active-count", "1", { timeout: 180_000 });
+	const dock = page.getByTestId("resources-dock");
+	const fold = dock.getByTestId("resources-dock-toggle");
+	await expect(fold).toHaveAttribute("aria-expanded", "true");
+	await fold.click();
+	await expect(dock).toHaveAttribute("data-collapsed", "true");
+	await expect(dock.locator(commandRows)).toHaveCount(0);
 	const inspector = await openResources(page);
 	await expect(inspector.locator(commandRows)).toHaveAttribute("data-status", "running");
 	await page.keyboard.press("Escape");
-	await expect(page.getByTestId("resources-dock").locator(commandRows)).toHaveAttribute(
-		"data-status",
-		"running",
-	);
+	await expect(dock).toHaveAttribute("data-collapsed", "true");
+	await fold.click();
+	await expect(dock.locator(commandRows)).toHaveAttribute("data-status", "running");
 	await expect(trigger).toHaveAttribute("data-active-count", "0", { timeout: 60_000 });
-	const dock = page.getByTestId("resources-dock");
 	await expect(dock.locator(commandRows)).toHaveCount(0);
 	await expect(dock.getByTestId("resources-dock-finished")).toContainText("1 finished");
-	await expect(dock.getByTestId("resources-dock-fresh")).toHaveText("1 new");
-	await expect(trigger).toHaveAttribute("data-fresh-count", "1");
 	const result = page.getByTestId("background-command-completion");
 	await expect(result).toHaveAttribute("data-status", "completed", { timeout: 60_000 });
 	await expect(result).toHaveAttribute("data-expanded", "false");
@@ -160,9 +162,7 @@ test("natural command completion refreshes the closed inspector and survives tra
 	await expect(page.getByTestId("turn-divider")).toHaveCount(2);
 	await result.getByTestId("background-result-toggle").click();
 	await expect(result.getByTestId("background-result-body")).toContainText("RESOURCE_DONE");
-	await expect(dock.getByTestId("resources-dock-fresh")).toHaveCount(0);
 	await expect(dock.getByTestId("resources-dock-finished")).toContainText("1 finished");
-	await expect(trigger).not.toHaveAttribute("data-fresh-count");
 	await result.getByTestId("background-result-open").click();
 	await expect(inspector).toBeVisible();
 	const row = inspector.locator(commandRows).filter({ hasText: "resource-finish" });

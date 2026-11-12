@@ -244,6 +244,8 @@ export interface SkillCatalogEntry {
 	plugin?: string;
 	group: string;
 	decision: SkillDecision;
+	/** pi's `disable-model-invocation`: callable only as `/skill:`, never listed in the prompt. */
+	manualOnly?: boolean;
 }
 
 /** The tool call a dialog is about; absent when it is not tied to one (a command, startup, parallel calls). */
@@ -292,6 +294,7 @@ export type ExtUiRequest =
 	| { id: string; sessionId: string; kind: "setStatus"; key: string; text: string | null }
 	| { id: string; sessionId: string; kind: "setWidget"; key: string; content: string[] | null }
 	| { id: string; sessionId: string; kind: "setTitle"; title: string }
+	| { id: string; sessionId: string; kind: "setEditorText" | "pasteToEditor"; text: string }
 	| { id: string; sessionId: string; kind: "notice"; notice: ProviderWarning }
 	| { id: string; sessionId: string; kind: "dismiss" };
 

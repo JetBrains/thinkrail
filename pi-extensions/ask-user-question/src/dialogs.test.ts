@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { type AskUserQuestionArgs, CHAT_LABEL } from "./core.ts";
+import { type AskUserQuestionArgs, CHAT_LABEL, DISCUSS_LABEL } from "./core.ts";
 import { askWithDialogs, optionLine, parseMultiAnswer } from "./dialogs.ts";
 
 type Reply = string | undefined | ((signal: AbortSignal | undefined) => string | undefined);
@@ -75,6 +75,7 @@ describe("askWithDialogs", () => {
 			"date-fns (Recommended) — small — Why: lightest",
 			"luxon — rich",
 			"Other…",
+			DISCUSS_LABEL,
 			CHAT_LABEL,
 		]);
 		expect(prompts[0]?.title).toContain("Lib: Which library?");
@@ -208,5 +209,69 @@ describe("parseMultiAnswer", () => {
 		});
 		expect(parseMultiAnswer("9", targets, 0)).toBeNull();
 		expect(parseMultiAnswer("   ", targets, 0)).toBeNull();
+	});
+});
+
+describe("askWithDialogs — discuss and previews", () => {
+	test("Discuss this… asks what to explain and reports the question for discussion", async () => {
+		const { outcome, prompts } = ask([library], [DISCUSS_LABEL, "  why does it matter?  "]);
+		expect(await outcome).toEqual({
+			kind: "answered",
+			result: {
+				cancelled: false,
+				answers: [
+					{
+						questionIndex: 0,
+						question: "Which library?",
+						kind: "discuss",
+						answer: null,
+						notes: "why does it matter?",
+					},
+				],
+			},
+		});
+		expect(prompts.map((prompt) => prompt.kind)).toEqual(["select", "input"]);
+	});
+
+	test("a dismissed discussion input returns to the options", async () => {
+		const { outcome } = ask([library], [DISCUSS_LABEL, undefined, optionLine(luxon)]);
+		expect((await outcome).kind).toBe("answered");
+	});
+
+	test("a multi-select input starting with ? discusses the question", async () => {
+		const { outcome } = ask([targets], ["? which targets exist?"]);
+		expect(await outcome).toEqual({
+			kind: "answered",
+			result: {
+				cancelled: false,
+				answers: [
+					{
+						questionIndex: 0,
+						question: "Which targets?",
+						kind: "discuss",
+						answer: null,
+						notes: "which targets exist?",
+					},
+				],
+			},
+		});
+	});
+
+	test("question previews and file previews go into the title", async () => {
+		const { prompts } = ask(
+			[
+				{
+					...library,
+					preview: "Today: moment.js everywhere.",
+					options: [
+						{ ...luxon, previewFile: "mockups/luxon.html", previewBefore: "mockups/now.html" },
+						dateFns,
+					],
+				},
+			],
+			[CHAT_LABEL],
+		);
+		expect(prompts[0]?.title).toContain("Today: moment.js everywhere.");
+		expect(prompts[0]?.title).toContain("Preview · luxon:\nmockups/now.html → mockups/luxon.html");
 	});
 });

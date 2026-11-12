@@ -17,7 +17,15 @@ import {
 	DialogFooter,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
-import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from "react";
+import {
+	useCallback,
+	useEffect,
+	useInsertionEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useNow } from "@/components/useNow";
 import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
@@ -27,6 +35,7 @@ import {
 	selectCanRenameChat,
 	selectCatalogModel,
 	selectCompactionTurnIds,
+	selectComposerFocusRequested,
 	selectPickerModels,
 	selectSkillsStale,
 	selectSupportsMcp,
@@ -35,7 +44,7 @@ import {
 	useAppStore,
 	workspaceName,
 } from "@/store";
-import { errorText, getTransport, watchMcpWorkspace } from "@/transport";
+import { errorText, getTransport, watchMcpWorkspace, wsErrorCode } from "@/transport";
 import type { ResultTarget } from "./ChatActions";
 import { ChatHeader } from "./ChatHeader";
 import ChatTranscript, { type ChatTranscriptHandle } from "./ChatTranscript";
@@ -46,9 +55,12 @@ import {
 	type MentionCandidate,
 	type SubmitBehavior,
 } from "./Composer";
+import { DEFAULT_DOCK_FOLD, type DockFold, dockCollapsed, withDockCollapsed } from "./dockFold";
 import { ExtraUsageNotice } from "./ExtraUsageNotice";
 import { mentionLookup } from "./fileTargets";
 import { HistoryOverlay } from "./HistoryOverlay";
+import { awaitingToolCallIdOf } from "./interactionState";
+import { McpServerDetail } from "./McpServerDetail";
 import { parseModelRef, RunModelLabel } from "./ModelEffortLabel";
 import type { ModelSelection } from "./ModelEffortPicker";
 import {
@@ -57,10 +69,12 @@ import {
 	parseNativeChatCommand,
 	prepareNameChatCommand,
 } from "./nativeCommands";
+import type { PromptImagesOwner } from "./promptImages";
 import { QueueStrip } from "./QueueStrip";
 import { deriveRecentPrompts } from "./recentPrompts";
 import {
 	CommandLogView,
+	mcpResourceId,
 	newestResourceId,
 	ResourcesAttention,
 	ResourcesButton,
@@ -71,7 +85,6 @@ import { SkillsDialog } from "./SkillsDialog";
 import { SubagentTranscriptDialog, SubagentTranscriptPane } from "./SubagentTranscriptDialog";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { useChatResources, useCommandLog } from "./useChatResources";
-import { inspectedResult, resultTargetKey, useFreshResults } from "./useFreshResults";
 import { useModelCatalog } from "./useModelCatalog";
 import { useModelPreferences } from "./useModelPreferences";
 import { useSessionStats } from "./useSessionStats";
@@ -98,7 +111,23 @@ export default function ChatView({
 	const t = useT();
 	const sessionExists = useAppStore((s) => s.sessions[sessionId] !== undefined);
 	const isStreaming = useAppStore((s) => s.sessions[sessionId]?.isStreaming ?? false);
+	const awaitingResponse = useAppStore(
+		(s) => awaitingToolCallIdOf(s.sessions[sessionId]?.hostState ?? null) != null,
+	);
 	const draft = useAppStore((s) => s.sessions[sessionId]?.draft ?? "");
+	const composerEdit = useAppStore((s) => s.sessions[sessionId]?.composerEdit ?? null);
+	const imageDraft = useAppStore(
+		(s) => s.sessions[sessionId]?.promptImages ?? EMPTY_RUNTIME.promptImages,
+	);
+	const imageOwner = useMemo<PromptImagesOwner>(
+		() => ({
+			state: imageDraft,
+			read: () =>
+				useAppStore.getState().sessions[sessionId]?.promptImages ?? EMPTY_RUNTIME.promptImages,
+			update: (change) => useAppStore.getState().updateChatPromptImages(sessionId, change),
+		}),
+		[imageDraft, sessionId],
+	);
 	const queue = useAppStore((s) => s.sessions[sessionId]?.queue ?? EMPTY_RUNTIME.queue);
 	const sessionModel = useAppStore((s) => s.sessions[sessionId]?.model ?? null);
 	const thinkingLevel = useAppStore(
@@ -127,6 +156,8 @@ export default function ChatView({
 	const canRenameChat = useAppStore(selectCanRenameChat);
 	const supportsMcp = useAppStore(selectSupportsMcp);
 	const composerGrowthLimit = useAppStore((state) => state.composerGrowthLimit);
+	const questionPanelHeight = useAppStore((state) => state.questionPanelHeight);
+	const [dockTarget, setDockTarget] = useState<HTMLDivElement | null>(null);
 	const chatLineWidth = useAppStore((state) => state.chatLineWidth);
 	const chatLineWidthBounded = useAppStore((state) => state.chatLineWidthBounded);
 	const chatMessageOrder = useAppStore((state) => state.chatMessageOrder);
@@ -198,17 +229,23 @@ export default function ChatView({
 	const composerRef = useRef<ComposerHandle>(null);
 	const transcriptRef = useRef<ChatTranscriptHandle>(null);
 	const resources = useChatResources(workspaceId, sessionId);
-	const freshResults = useFreshResults(
-		workspaceId,
-		sessionId,
-		resources.groups.recentFinished,
-		resources.visible && resources.authoritative,
-	);
-	const freshIds = new Set([
-		...freshResults.commands.map((command) => command.id),
-		...freshResults.subagents.map((child) => child.childSessionId),
-	]);
 	const resourcesTrigger = useRef<HTMLButtonElement>(null);
+	const [dockedToolCallId, setDockedToolCallId] = useState<string | null>(null);
+	const [dockFoldState, setDockFoldState] = useState<{
+		workspaceId: string;
+		sessionId: string;
+		fold: DockFold;
+	} | null>(null);
+	const dockFold =
+		dockFoldState?.workspaceId === workspaceId && dockFoldState.sessionId === sessionId
+			? dockFoldState.fold
+			: DEFAULT_DOCK_FOLD;
+	const setDockCollapsed = (collapsed: boolean) =>
+		setDockFoldState({
+			workspaceId,
+			sessionId,
+			fold: withDockCollapsed(dockFold, dockedToolCallId, collapsed),
+		});
 	const [stopAllOpen, setStopAllOpen] = useState(false);
 	const [inspector, setInspector] = useState<{
 		workspaceId: string;
@@ -253,8 +290,7 @@ export default function ChatView({
 	);
 	const openFinished = () =>
 		openInspector(
-			newestResourceId(freshResults.commands, freshResults.subagents) ??
-				newestResourceId(resources.groups.finishedCommands, resources.groups.finishedSubagents) ??
+			newestResourceId(resources.groups.finishedCommands, resources.groups.finishedSubagents) ??
 				undefined,
 		);
 	const setInspectorOpen = useCallback(
@@ -289,13 +325,13 @@ export default function ChatView({
 		)
 			? inspectorSelectedId
 			: null;
+	const selectedMcpServer =
+		inspectorOpen && inspectorSelectedId
+			? (resources.groups.mcpServers?.find(
+					(server) => mcpResourceId(server.name) === inspectorSelectedId,
+				)?.name ?? null)
+			: null;
 	const commandLog = useCommandLog(workspaceId, sessionId, selectedCommandId);
-	const markResultSeen = freshResults.markSeen;
-	const inspected = inspectedResult(resources.groups, selectedCommandId, selectedSubagentId);
-	const inspectedKey = inspected ? resultTargetKey(inspected) : null;
-	useEffect(() => {
-		if (inspected) markResultSeen(inspected);
-	}, [inspectedKey, markResultSeen]);
 	const now = useNow();
 	const returnToResources = (event: Event) => {
 		event.preventDefault();
@@ -365,9 +401,10 @@ export default function ChatView({
 					"--chat-transcript-width",
 					`calc(${chatLineWidth}ch + 2 * var(--chat-gutter))`,
 				);
+				element.style.setProperty("--question-panel-height", String(questionPanelHeight));
 			}
 		},
-		[chatLineWidth],
+		[chatLineWidth, questionPanelHeight],
 	);
 
 	const {
@@ -507,7 +544,7 @@ export default function ChatView({
 		const superseded = () => selection !== pairSelection.current;
 		useAppStore.getState().setCurrentModel(sessionId, model);
 		if (level) useAppStore.getState().setThinkingLevel(sessionId, level);
-		getTransport()
+		void getTransport()
 			.request("session.setModel", { sessionId, model })
 			.then(
 				() => (level && !superseded() ? requestLevel(level, previous.level) : undefined),
@@ -583,7 +620,6 @@ export default function ChatView({
 		behavior: Exclude<SubmitBehavior, "interrupt">,
 	) => {
 		const queued = behavior !== "send";
-		freshResults.markAllSeen();
 		if (!queued && (text || attachments.length > 0)) {
 			transcriptRef.current?.armImmediateTurn();
 			useAppStore.getState().appendUserMessage(sessionId, text, attachments);
@@ -600,8 +636,10 @@ export default function ChatView({
 			.request(method, params)
 			.catch((err) => {
 				useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
-				if (queued) restoreTextToDraft(text);
-				else {
+				const tooLarge = wsErrorCode(err) === "FRAME_TOO_LARGE";
+				if (queued || tooLarge) restoreTextToDraft(text);
+				if (tooLarge) composerRef.current?.restoreAttachments(attachments);
+				if (!queued) {
 					const streaming = useAppStore.getState().sessions[sessionId]?.isStreaming ?? false;
 					transcriptRef.current?.cancelImmediateTurn(streaming);
 				}
@@ -735,6 +773,22 @@ export default function ChatView({
 		else composerRef.current?.openHistory();
 	}, [historyOpenRequest, sessionId, historyOverlayOpen, cycleScope]);
 
+	useLayoutEffect(() => {
+		const composer = composerRef.current;
+		if (!composerEdit || !composer) return;
+		composer.applyEdit(composerEdit.kind, composerEdit.text);
+		useAppStore.getState().consumeComposerEdit(sessionId, composerEdit.id);
+	}, [composerEdit, sessionId]);
+
+	const composerFocusRequested = useAppStore((s) =>
+		selectComposerFocusRequested(s, workspaceId, sessionId),
+	);
+	useEffect(() => {
+		if (!composerFocusRequested) return;
+		useAppStore.getState().clearComposerFocusRequest();
+		composerRef.current?.refocus();
+	}, [composerFocusRequested]);
+
 	const widgetEntries = Object.entries(extUiWidget);
 	const disableNotice = () => {
 		setDisablingNotice(true);
@@ -774,7 +828,6 @@ export default function ChatView({
 											: null
 									}
 									working={resources.authoritative && resources.groups.activeCount > 0}
-									freshCount={freshResults.count}
 									open={inspectorOpen}
 									onClick={() => setInspectorOpen(!inspectorOpen)}
 								/>
@@ -802,15 +855,16 @@ export default function ChatView({
 				focusComposer={focusComposer}
 				openSubagentTranscript={setTranscriptChildId}
 				resultOpener={resultOpener}
-				markResultSeen={markResultSeen}
 				onTryAgain={onTryAgain}
 				historyOpen={historyState.open}
 				inspectorOpen={inspectorOpen}
 				stillRunning={stillRunning}
 				readMcpOutput={supportsMcp ? readMcpOutput : undefined}
 				openMcpSettings={supportsMcp ? openMcpSettings : undefined}
-				openProviderSettings={supportsMcp ? openProviderSettings : undefined}
+				openProviderSettings={openProviderSettings}
 				findModel={findModel}
+				dockTarget={dockTarget}
+				onDockedInteractionChange={setDockedToolCallId}
 				resourcesOverlay={
 					resources.visible ? (
 						<ResourcesInspector
@@ -824,7 +878,6 @@ export default function ChatView({
 							staleness={resources.staleness}
 							error={resources.projection?.error ?? null}
 							actions={resources.actions}
-							newIds={freshIds}
 							expanded={inspectorExpanded}
 							onExpandedChange={setFinishedExpanded}
 							{...(resources.loadOlder ? { onLoadMore: resources.loadOlder } : {})}
@@ -858,11 +911,23 @@ export default function ChatView({
 										parentSessionId={sessionId}
 										childSessionId={selectedSubagentId}
 									/>
+								) : selectedMcpServer ? (
+									<McpServerDetail
+										workspaceId={workspaceId}
+										sessionId={sessionId}
+										server={selectedMcpServer}
+										servers={resources.groups.mcpServers?.map((server) => server.name) ?? []}
+									/>
 								) : null
 							}
 						/>
 					) : null
 				}
+			/>
+			<div
+				ref={setDockTarget}
+				data-testid="chat-dock"
+				className="flex max-h-[calc(var(--question-panel-height)*1cqh)] min-h-0 flex-col"
 			/>
 			{widgetEntries.length > 0 ? (
 				<div className="shrink-0 border-border-default border-t bg-container-elevated-bg px-12 py-4 text-text-muted tr-text-metadata">
@@ -877,7 +942,8 @@ export default function ChatView({
 					commands={resources.groups.commands}
 					subagents={resources.groups.subagents}
 					finishedCount={resources.groups.finishedCount}
-					freshCount={freshResults.count}
+					collapsed={dockCollapsed(dockFold, dockedToolCallId)}
+					onCollapsedChange={setDockCollapsed}
 					now={now}
 					authoritative={resources.authoritative}
 					staleness={resources.staleness}
@@ -912,12 +978,17 @@ export default function ChatView({
 					onOpenMessage={openMessage}
 					onSaveAsTemplate={onSaveAsTemplateHit}
 					onDeleteChat={(wsId, id) => void onDeleteHistoryChat(wsId, id)}
+					canDeleteChat={(wsId) =>
+						selectWorkspaceById(useAppStore.getState(), wsId)?.kind !== "chat"
+					}
 				/>
 				<Composer
 					ref={composerRef}
 					value={draft}
 					onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
+					imageOwner={imageOwner}
 					isStreaming={isStreaming}
+					awaitingResponse={awaitingResponse}
 					growthLimit={composerGrowthLimit}
 					commands={mergedCommands}
 					templatePending={templatePending}

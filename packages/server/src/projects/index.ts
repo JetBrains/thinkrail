@@ -7,6 +7,7 @@ export {
 export {
 	acknowledgeProjectSkills,
 	approveProjectMcpServer,
+	assertOutsideChatsRoot,
 	closeProject,
 	createProject,
 	getProjects,
@@ -15,6 +16,7 @@ export {
 	inspectProjectPath,
 	listProjects,
 	listRecentProjects,
+	moveProject,
 	openProject,
 	refreshRecentProjectFolders,
 	renameProject,
@@ -22,6 +24,7 @@ export {
 	setPiTrustSeed,
 	setProjectGroupEnabled,
 	setProjectMcpOverride,
+	setProjectPathGuard,
 	setProjectPublisher,
 	setProjectSkillEnabled,
 	setProjectTrust,

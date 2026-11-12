@@ -1,5 +1,6 @@
 import type { UserMessage } from "@thinkrail/contracts";
 import type { Translator } from "@thinkrail/locales/react";
+import { browserPlatform, isApplePlatform } from "@thinkrail/ui/keyboard";
 
 export const DOUBLE_CLICK_SETTLE_MS = 250;
 
@@ -205,23 +206,40 @@ function canonicalPosixPath(path: string): string {
 	return `${prefix}${segments.join("/")}`;
 }
 
-export function projectRelativePath(path: string, workspaceRoot?: string | undefined): string {
-	const canonical = canonicalPosixPath(path);
-	if (!canonical || !isAbsolutePath(canonical)) return canonical;
-
-	const root = workspaceRoot ? trimTrailingSlashes(canonicalPosixPath(workspaceRoot)) : "";
+function rootRelative(canonical: string, workspaceRoot: string): string | null {
+	const root = trimTrailingSlashes(canonicalPosixPath(workspaceRoot));
 	const ignoreCase = hasWindowsDriveRoot(canonical) && hasWindowsDriveRoot(root);
 	const comparableCanonical = ignoreCase ? canonical.toLowerCase() : canonical;
 	const comparableRoot = ignoreCase ? root.toLowerCase() : root;
 	const rootPrefix = comparableRoot.endsWith("/") ? comparableRoot : `${comparableRoot}/`;
 	if (
-		comparableRoot &&
-		(comparableCanonical === comparableRoot || comparableCanonical.startsWith(rootPrefix))
+		!comparableRoot ||
+		(comparableCanonical !== comparableRoot && !comparableCanonical.startsWith(rootPrefix))
 	) {
-		return canonical.slice(root.length).replace(/^\/+/, "") || fileName(canonical);
+		return null;
 	}
+	return canonical.slice(root.length).replace(/^\/+/, "");
+}
 
-	return canonical;
+export function projectRelativePath(path: string, workspaceRoot?: string | undefined): string {
+	const canonical = canonicalPosixPath(path);
+	if (!canonical || !isAbsolutePath(canonical)) return canonical;
+	const relative = workspaceRoot ? rootRelative(canonical, workspaceRoot) : null;
+	if (relative === null) return canonical;
+	return relative || fileName(canonical);
+}
+
+export function pathWithinRoot(path: string, root: string): string | null {
+	const canonical = canonicalPosixPath(path);
+	return isAbsolutePath(canonical) && isAbsolutePath(root) ? rootRelative(canonical, root) : null;
+}
+
+export function joinWorkspacePath(worktreePath: string, path: string): string {
+	if (!worktreePath || path.startsWith("/") || hasWindowsDriveRoot(path)) return path;
+	const windows = /^(?:[A-Za-z]:\\|\\\\)/.test(worktreePath);
+	const separator = windows ? "\\" : "/";
+	const root = worktreePath.endsWith(separator) ? worktreePath : `${worktreePath}${separator}`;
+	return `${root}${windows ? path.replaceAll("/", "\\") : path}`;
 }
 
 let colorCanvas: CanvasRenderingContext2D | null | undefined;
@@ -278,30 +296,13 @@ export function cssColorToHex(color: string): string {
 	return `#${channels.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
 }
 
-const APPLE_PLATFORM = /Mac|iPhone|iPad|iPod/;
-
-function browserPlatform(): string {
-	return typeof navigator === "undefined" ? "" : (navigator.platform ?? "");
-}
-
-function isApplePlatform(platform: string): boolean {
-	return APPLE_PLATFORM.test(platform);
-}
+export { hasPlatformModifier } from "@thinkrail/ui/keyboard";
 
 export function platformFamily(platform = browserPlatform()) {
 	if (isApplePlatform(platform)) return "apple";
 	if (/^Win/.test(platform)) return "windows";
 	if (/Linux/.test(platform)) return "linux";
 	return "other";
-}
-
-export function hasPlatformModifier(
-	event: Pick<KeyboardEvent, "ctrlKey" | "metaKey">,
-	platform = browserPlatform(),
-): boolean {
-	return isApplePlatform(platform)
-		? event.metaKey && !event.ctrlKey
-		: event.ctrlKey && !event.metaKey;
 }
 
 export function platformShortcutLabel(

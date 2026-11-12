@@ -1,7 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import {
 	chmodSync,
-	linkSync,
 	lstatSync,
 	mkdirSync,
 	readFileSync,
@@ -18,10 +17,10 @@ import type {
 	Workspace,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
-import { classifyBytes, decodeText, hashBytes, resolveWorktreeFile } from "../fs";
+import { classifyBytes, decodeText, hashBytes, resolveWorktreeEntry } from "../fs";
 import { readBlobBytesAtAsync, readPathModeAtAsync, resolveDiffRange } from "../git";
 import { loadWorkspaces } from "../persistence";
-import { trashFile } from "../trash";
+import { claimAndTrashFile } from "../trash";
 import { revertedText, spanFits, splitLines } from "./textSplice";
 
 export interface RevertChangeParams {
@@ -146,31 +145,12 @@ function writeAtomic(abs: string, state: FileState): void {
 	}
 }
 
-function claimForTrash(abs: string): string {
+async function trashWorktreeFile(abs: string, parent: string): Promise<string> {
 	const claimed = join(dirname(abs), `.thinkrail-revert-${receiptId()}`);
-	renameSync(abs, claimed);
+	const recovery = join(dirname(abs), `.thinkrail-recovery-${receiptId()}`);
+	const { dev, ino } = lstatSync(abs, { bigint: true });
+	await claimAndTrashFile(abs, claimed, recovery, { parent, dev, ino });
 	return claimed;
-}
-
-function recoveryError(error: unknown, recovery: string): Error {
-	const message = error instanceof Error ? error.message : String(error);
-	return new Error(`${message} The claimed file was preserved at ${recovery}.`, { cause: error });
-}
-
-async function trashClaim(claimed: string, abs: string): Promise<void> {
-	try {
-		await trashFile(claimed);
-	} catch (error) {
-		try {
-			linkSync(claimed, abs);
-		} catch {
-			const recovery = join(dirname(abs), `.thinkrail-recovery-${receiptId()}`);
-			renameSync(claimed, recovery);
-			throw recoveryError(error, recovery);
-		}
-		rmSync(claimed, { force: true });
-		throw error;
-	}
 }
 
 function record(change: {
@@ -301,7 +281,7 @@ function revertedRange(
 
 export async function revertChange(params: RevertChangeParams): Promise<ChangeReceipt> {
 	const original = await originalSide(params);
-	const abs = resolveWorktreeFile(params.workspaceId, params.path, { followLeaf: false });
+	const { abs, parent } = resolveWorktreeEntry(params.workspaceId, params.path);
 	const modified = worktreeState(abs, params.path);
 	assertSameView(params, original, modified);
 	assertNotModeOnly(params.path, original, modified);
@@ -327,8 +307,7 @@ export async function revertChange(params: RevertChangeParams): Promise<ChangeRe
 				`There is no change to revert for ${params.path} in this scope.`,
 			);
 		}
-		const claimed = claimForTrash(abs);
-		await trashClaim(claimed, abs);
+		const claimed = await trashWorktreeFile(abs, parent);
 		return record({
 			...change,
 			before: modified,
@@ -350,7 +329,7 @@ export async function undoChange(params: UndoChangeParams): Promise<ChangeReceip
 			`This change can no longer be undone (receipt ${params.receiptId} is not held by the host).`,
 		);
 	}
-	const abs = resolveWorktreeFile(params.workspaceId, held.receipt.path, { followLeaf: false });
+	const { abs, parent } = resolveWorktreeEntry(params.workspaceId, held.receipt.path);
 	const current = worktreeState(abs, held.receipt.path);
 	const modeMoved =
 		held.receipt.after.mode !== null &&
@@ -365,8 +344,7 @@ export async function undoChange(params: UndoChangeParams): Promise<ChangeReceip
 	let trashed: string | undefined;
 	if (held.before.bytes === null) {
 		if (current.bytes !== null) {
-			const claimed = claimForTrash(abs);
-			await trashClaim(claimed, abs);
+			const claimed = await trashWorktreeFile(abs, parent);
 			trashed = claimed;
 		}
 	} else {

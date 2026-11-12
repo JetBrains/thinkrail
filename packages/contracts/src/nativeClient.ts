@@ -86,6 +86,16 @@ export interface NativeNotificationBridge {
 	isWindowFocused?: () => boolean;
 }
 
+export interface NativeOpenFileRequest {
+	file: string;
+	line: number;
+	column?: number;
+}
+
+export interface NativeDeepLinkBridge {
+	subscribe(listener: (request: NativeOpenFileRequest) => void): () => void;
+}
+
 export type NativeQuitHint = "hidden" | "armed" | "release" | "quitting";
 
 export type NativeCommand = "close-item" | "open-settings";

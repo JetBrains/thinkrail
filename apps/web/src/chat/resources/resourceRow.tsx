@@ -333,25 +333,18 @@ export interface ResourceRowProps {
 	 * `listitem`: a dock row whose name and activity are one Inspect button.
 	 */
 	role?: "option" | "listitem";
-	fresh?: boolean;
 	onSelect: () => void;
 	onStop: () => void;
 }
 
 const ACCESSIBLE_ACTIVITY_LIMIT = 80;
 
-function accessibleName(
-	t: Translator,
-	name: string,
-	activity: string,
-	state: string,
-	fresh: boolean,
-): string {
+function accessibleName(t: Translator, name: string, activity: string, state: string): string {
 	const trimmed =
 		activity.length > ACCESSIBLE_ACTIVITY_LIMIT
 			? `${activity.slice(0, ACCESSIBLE_ACTIVITY_LIMIT - 1)}…`
 			: activity;
-	return t(fresh ? "resources.row.accessibleNameNew" : "resources.row.accessibleName", {
+	return t("resources.row.accessibleName", {
 		name,
 		activity: trimmed,
 		state,
@@ -366,7 +359,6 @@ export function ResourceRow({
 	stopAllPending = false,
 	selected = false,
 	role = "listitem",
-	fresh = false,
 	onSelect,
 	onStop,
 }: ResourceRowProps) {
@@ -430,7 +422,6 @@ export function ResourceRow({
 		"data-resource-id": id,
 		"data-status": resource.summary.status,
 		"data-state": state,
-		"data-fresh": fresh || undefined,
 	};
 	const rowClass =
 		"group grid min-h-32 min-w-0 items-center gap-8 rounded-sm px-8 py-4 hover:bg-control-bg-hovered";
@@ -444,13 +435,13 @@ export function ResourceRow({
 				className={cn(
 					rowClass,
 					"grid-cols-[minmax(0,1fr)_auto]",
-					selected ? "bg-control-bg-selected" : fresh && "bg-primary-subtle",
+					selected && "bg-control-bg-selected",
 				)}
 			>
 				<div
 					role="option"
 					aria-selected={selected}
-					aria-label={accessibleName(t, name, activity, label, fresh)}
+					aria-label={accessibleName(t, name, activity, label)}
 					tabIndex={0}
 					onClick={onSelect}
 					onKeyDown={onKeyDown}
@@ -464,15 +455,8 @@ export function ResourceRow({
 							</span>
 							{meta}
 						</span>
-						<span className="flex min-w-0 items-baseline gap-4">
-							{fresh ? (
-								<span className="shrink-0 rounded-full bg-primary-subtle px-4 tr-text-label-pill text-primary">
-									{t("resources.row.new")}
-								</span>
-							) : null}
-							<span className={activityClass} title={activity}>
-								{activity}
-							</span>
+						<span className={activityClass} title={activity}>
+							{activity}
 						</span>
 						{failure}
 					</span>

@@ -234,7 +234,7 @@ async function main(): Promise<number> {
 		...(selected ? { THINKRAIL_PERF_SCENARIOS: selected } : {}),
 	};
 	const result = await runE2eProcess(
-		[bun, "x", "playwright", "test", "-c", "playwright.perf.config.ts", ...playwrightArgs],
+		[bun, "x", "playwright", "test", "-c", "e2e/playwright.perf.config.ts", ...playwrightArgs],
 		{ env },
 	);
 	const interruption = processRunnerInterruption();

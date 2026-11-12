@@ -15,7 +15,7 @@ import { fontsDir, MAX_FONT_FILE_BYTES, MAX_FONT_FILES, readUserFonts } from "..
 import { buildTestCollection, buildTestFont } from "../fonts/testFonts";
 import { resetConfigCache } from "../settings";
 import { serveUserFonts } from "./fontRoutes";
-import { createServer } from "./server";
+import { createServer, type RunningServer } from "./server";
 
 const saved = {
 	THINKRAIL_DATA_DIR: process.env.THINKRAIL_DATA_DIR,
@@ -187,9 +187,12 @@ test("other methods, a CORS preflight included, are not allowed", async () => {
 test("the host routes /fonts/ and nudges only sockets that speak the fonts protocol", async () => {
 	resetConfigCache();
 	await resetJbcentralStateForTests();
-	const server = await createServer({ port: 0, host: "127.0.0.1", analytics: { mute: true } });
+	configurePiRuntime(null);
+	configurePiRuntimeFactory();
 	const sockets: WebSocket[] = [];
+	let server: RunningServer | undefined;
 	try {
+		server = await createServer({ port: 0, host: "127.0.0.1", analytics: { mute: true } });
 		const base = `127.0.0.1:${server.port}`;
 		const put = await fetch(`http://${base}/fonts/Wired.ttf`, {
 			method: "PUT",
@@ -245,7 +248,7 @@ test("the host routes /fonts/ and nudges only sockets that speak the fonts proto
 		expect(count(FONTS_PROTOCOL_VERSION - 1, nudge)).toBe(0);
 	} finally {
 		for (const socket of sockets) socket.close();
-		await server.shutdown();
+		await server?.shutdown();
 		resetAnalyticsForTests();
 		resetConfigCache();
 		await resetJbcentralStateForTests();
