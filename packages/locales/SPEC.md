@@ -148,6 +148,24 @@ so the files diff cleanly.
   `lng`, … as options — `{{ordinal}}` switched a terminal-group label to ordinal plural rules and rendered
   its raw key. A catalog test rejects such names.
 
+## Russian terminology
+
+`ru.json` follows one glossary: git operations and GitHub entities stay Latin as in git, established
+loanwords decline as Russian words, ThinkRail concepts stay Russian.
+
+| English | Russian |
+|---|---|
+| push, pull, fetch, merge, rebase, squash, cherry-pick, stash, pull request, worktree | Latin, indeclinable: «Push: {{count}} коммит», «Squash и merge», «Создать merge-коммит»; a merged PR is «принят» |
+| commit (noun / verb), uncommitted | «коммит» (declined), «сделать коммит», «незакоммиченные изменения» / «Не закоммичено» |
+| branch; workspace; checkout (working copy) | «ветка» (never «ветвь»); «рабочая область»; «рабочая копия» |
+| prompt / request | «промпт» / «запрос» |
+| clone, remote, revert, hunk | «клонировать», «удалённый репозиторий» / «Удалённые», «отменить изменения в файле», «фрагмент» |
+
+A Latin verb does not conjugate: buttons and menu items use the bare term («Push», «Merge в {{base}}»),
+sentences wrap it («выполнить push», «после merge», «выполняется push»). Never write a Russian-row
+term in Latin or give a Latin term an English plural («В этой branch нет commits», «Выполнить clone»,
+«worktrees»).
+
 ## Deferred
 
 Locale-aware number formats (token counts, cost and context percentages still use English separators),
