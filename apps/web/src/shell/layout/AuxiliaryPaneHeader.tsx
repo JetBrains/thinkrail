@@ -7,8 +7,10 @@ import { type ComponentPropsWithoutRef, forwardRef, type ReactNode } from "react
 import { tupleKey } from "../../lib";
 import type { LayoutTab } from "./types";
 
-const TITLE_CLASS =
-	"flex min-w-0 flex-1 items-center truncate px-12 tr-title-compact text-text-default";
+// The flex box centres the title vertically. `truncate` goes on an inner span,
+// since text directly inside a flex container gets no ellipsis.
+const TITLE_CLASS = "flex min-w-0 flex-1 items-center px-12 tr-title-compact text-text-default";
+const TITLE_TEXT_CLASS = "min-w-0 truncate";
 
 function DraggableTitle({ title, tab }: { title: string; tab: LayoutTab }) {
 	const { setNodeRef, listeners, isDragging } = useDraggable({
@@ -23,7 +25,7 @@ function DraggableTitle({ title, tab }: { title: string; tab: LayoutTab }) {
 			data-dragging={isDragging || undefined}
 			className={cn(TITLE_CLASS, "cursor-grab select-none data-[dragging]:cursor-grabbing")}
 		>
-			{title}
+			<span className={TITLE_TEXT_CLASS}>{title}</span>
 		</span>
 	);
 }
@@ -50,7 +52,7 @@ export const AuxiliaryPaneHeader = forwardRef<
 				<DraggableTitle title={title} tab={dragTab} />
 			) : (
 				<span data-testid="auxiliary-pane-title" className={TITLE_CLASS}>
-					{title}
+					<span className={TITLE_TEXT_CLASS}>{title}</span>
 				</span>
 			)}
 			{actions}
