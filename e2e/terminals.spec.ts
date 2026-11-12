@@ -513,6 +513,61 @@ test("Ctrl+C still interrupts while an input method is active", async ({ page })
 	await expect(term).toContainText("TR_INTERRUPTED_42");
 });
 
+test("Ctrl+Shift+C copies the selection off macOS, Ctrl+Shift+V pastes it, neither sends ^C", async ({
+	page,
+}) => {
+	test.skip(process.platform === "darwin", "Cmd+C copies on macOS");
+	const writes: string[] = [];
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		const server = ws.connectToServer();
+		ws.onMessage((message) => {
+			try {
+				const frame = JSON.parse(message.toString()) as {
+					method?: string;
+					params?: { data?: string };
+				};
+				if (frame.method === "terminal.write" && frame.params?.data) writes.push(frame.params.data);
+			} catch {}
+			server.send(message);
+		});
+		server.onMessage((message) => ws.send(message));
+	});
+	await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+	const term = visibleTerminalScreen(page);
+	const clipboard = () => page.evaluate(() => navigator.clipboard.readText());
+	const writtenAfter = (mark: number) => writes.slice(mark).join("");
+
+	await runInTerminal(page, "echo TR_COPY_$((21 + 21))");
+	const output = term.locator(":scope > div").filter({ hasText: /^TR_COPY_42\s*$/ });
+	await expect(output).toHaveCount(1);
+	await page.evaluate(() => navigator.clipboard.writeText("TR_BEFORE"));
+	const box = await output.boundingBox();
+	if (!box) throw new Error("terminal row has no box");
+	await page.mouse.dblclick(box.x + 4, box.y + box.height / 2);
+	const copyMark = writes.length;
+	await page.keyboard.press("Control+Shift+C");
+	await expect.poll(clipboard).toBe("TR_COPY_42");
+	const pasteMark = writes.length;
+	await page.keyboard.press("Control+Shift+V");
+	await expect.poll(() => writtenAfter(pasteMark)).toContain("TR_COPY_42");
+	await page.keyboard.press("Control+U");
+
+	await page.evaluate(() => navigator.clipboard.writeText("TR_UNCHANGED"));
+	await page.keyboard.type("echo TR_AFTER_$((1 + 1))");
+	await page.keyboard.press("Control+Shift+C");
+	await page.keyboard.press("Enter");
+	await expect(term.locator(":scope > div").filter({ hasText: /^TR_AFTER_2\s*$/ })).toHaveCount(1);
+	expect(writtenAfter(copyMark)).not.toContain("\x03");
+	expect(await clipboard()).toBe("TR_UNCHANGED");
+
+	const interruptMark = writes.length;
+	await page.keyboard.press("Control+C");
+	await expect.poll(() => writtenAfter(interruptMark)).toContain("\x03");
+});
+
 test("a held Korean syllable reaches the shell before a paste or a rescued chord", async ({
 	page,
 }) => {

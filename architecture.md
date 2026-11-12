@@ -418,7 +418,8 @@ dependency. This keeps test process drivers outside both launchers and the serve
     Third: web-access — the first wrap of a **third-party** pi package (`pi-web-access`), so there is no
     package of ours to publish and delivery collapses to the server half; its renderers stay app-local
     until the components they use join the SDK. It loads everything the package declares, as `pi install`
-    would — tools and its `librarian` skill — and is the first extension with skills, so the switch now
+    would, plus the `librarian` skill upstream later dropped, which the extension now owns — and is the
+    first extension with skills, so the switch now
     drops an extension's skills with its tools (launchers stage them under an owner folder so ownership
     survives flattening). Detail: [[module-thinkrail-extensions]].
 

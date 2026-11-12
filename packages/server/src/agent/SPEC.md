@@ -557,15 +557,15 @@ re-opened transcripts provider-valid.
     pi's own `emitError` sites omit it (`runner.js` message_end, `agent-session.js` command/`<runtime>`),
     and synthesising one there would record the *host's* stack — pointing the reader at
     `prepareSessionEntry` instead of the extension, which is the opposite of why the line exists.
-    **Members split three ways, not two.** *Untranslatable* ones are inert no-ops and rightly so — they take a
+    **Members distinguish browser calls from terminal-only calls.** *Untranslatable* ones are inert no-ops and rightly so — they take a
     TUI `Component` factory a web host cannot render (`setFooter`, `setHeader`, `setEditorComponent`,
     `custom`, `setWidget`'s factory overload; the string-array overload **is** rendered).
     *Translatable* ones must behave: **`theme` is a real `Theme`** (`plainTextTheme`) whose every
-    decorator returns its input unchanged. *Translatable but unimplemented* is the third group and is named
-    here so the split does not read as exhaustive: `setEditorText` / `pasteToEditor` are forwarded to the
-    host by pi's own rpc mode and a web composer could honour them; ours stay inert until something needs
-    them. What separates the theme from that group is the cost of being inert — an unimplemented editor
-    call loses one feature, an unimplemented theme kills the whole extension on its first line. `getAllThemes: []` / `getTheme: undefined` match pi's own
+    decorator returns its input unchanged. `setEditorText` and `pasteToEditor` publish fire-and-forget
+    frames of their own kinds for that session's browser composer: a replacement (an empty string clears
+    the draft) and a paste. The paste keeps pi's TUI meaning, not its RPC mode's (which delegates to
+    `setEditorText`), because the browser composer has a caret. `getEditorText` remains empty because the
+    host cannot synchronously read a browser-local draft. `getAllThemes: []` / `getTheme: undefined` match pi's own
     rpc mode; `setTheme`'s `{success:true}` is a known lie, tracked separately — a web host has no TUI
     theme to switch to, so pi's rpc-mode form (`{success:false}`) is the honest answer.
     `plainTextTheme` subclasses pi's `Theme` and overrides `fg`/`bg`/`style`/`bold`/`italic`/`underline`/
@@ -902,12 +902,14 @@ re-opened transcripts provider-valid.
     reload records the generation it started under, and its completion reconciles with a reload allowed
     only if the generation moved, judging the **new** loader. An unchanged resend or a skill-less toggle
     during a reload therefore costs nothing extra. Settings are the
-    source of truth across restarts: Pi ≥ 1.3 restores a resumed chat's recorded tool loadout, keeping
-    recorded removals inactive, so attach first re-activates every tool of an enabled registry extension
+    source of truth across restarts and reloads: Pi ≥ 1.3 restores a resumed chat's recorded tool
+    loadout, keeping recorded removals inactive, and an extension may replay that record in its own
+    `session_start`, reloads included (`pi-web-access` does, [[module-ext-web-access]]), so attach and
+    every successful gated resource reload first re-activate every tool of an enabled registry extension
     that Pi's activated-on-registration rule would activate (declarable exposure, not `defaultActive:
-    false`), then withholds disabled ones. Built-in, MCP, subagent and review tools keep Pi's restored
-    selection. A registry tool switched off by anything other than Settings therefore returns after a
-    restart, as it does on Pi `reload()`.
+    false`), then withhold disabled ones. Built-in, MCP, subagent and review tools keep Pi's restored
+    selection. A registry tool switched off by anything other than Settings — the extension's own
+    activation policy included — therefore returns after a restart or a reload.
     **Installed pi packages** have a switch of the same global shape, `setDisabledPackagesResolver`
     (the `disabledPackages` setting; keys are [[submodule-server-agent-packages]] identities, since pi has
     no "whole package off" concept and the user chose a ThinkRail setting over writing pi filter entries).
@@ -1088,7 +1090,7 @@ re-opened transcripts provider-valid.
     tools + its `before_agent_start` rule), **`pi-thinkrail-workflow`** (the workflow-router rule +
     workflow skills), and **`pi-todos`** (the `todo_*` tools + its skill) — and the **ThinkRail extensions
     from the server registry** ([[submodule-server-extensions]]; `visualize`, `ask-user-question`, and
-    `web-access` with `pi-web-access`'s tools and `librarian` skill) as named inline extensions. Existing personal aliases are Claude
+    `web-access` with `pi-web-access`'s tools and its own `librarian` skill) as named inline extensions. Existing personal aliases are Claude
     (`${CLAUDE_CONFIG_DIR:-~/.claude}/skills`), Codex (`${CODEX_HOME:-~/.codex}/skills`), Copilot
     (`~/.copilot/skills`), and Gemini (`${GEMINI_CLI_HOME:-~}/.gemini/skills`), **plus each installed Claude
     plugin's `skills/` dir** (read from `~/.claude/plugins/installed_plugins.json` — the resolved `installPath`,
@@ -1308,8 +1310,8 @@ re-opened transcripts provider-valid.
   `pi-thinkrail-workflow` + `pi-todos` (the bundled pi packages — parent sessions load the set through
   resource-loader paths or launcher factories; delegated children value-import `pi-spec-graph`); the sibling `extensions` registry module (the ThinkRail extensions' inline factories and
   skill roots — `agent` never imports an `@thinkrail/ext-*` package or its pi package directly; the barrel
-  stays Node-loadable for the workflow harness ([[module-workflow-tests]]) because a registry extension
-  over raw third-party `.ts` loads it lazily, see [[module-ext-web-access]]); `typebox` (the host tools' parameter schemas); `jsonc-parser` (targeted
+  stays Node-loadable for the workflow harness ([[module-workflow-tests]]): web access's third-party
+  package is compiled JavaScript, imported when its factory runs, see [[module-ext-web-access]]); `typebox` (the host tools' parameter schemas); `jsonc-parser` (targeted
   `models.json` edits in `modelsFile`, `modelContext` and `customEndpoints`); global `fetch` (only
   `customEndpoints`' user-initiated probes of the address the user typed); `trash` (reached only through the
   sibling **`trash` module** — see [[submodule-server-trash]]: one path, globbing disabled, allowed to

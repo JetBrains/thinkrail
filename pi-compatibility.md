@@ -144,13 +144,17 @@ full-output paths; run `mcp/results.test.ts`, `mcpEngine.test.ts`, web MCP card 
 
 ## Other pi-sensitive host seams
 
-**Registry-tool reconcile at attach** — [[submodule-server-agent]], `agentSessionManager.ts`. Pi ≥ 1.3
+**Registry-tool reconcile at attach and reload** — [[submodule-server-agent]], `agentSessionManager.ts`. Pi ≥ 1.3
 restores a resumed chat's recorded tool loadout and keeps recorded removals inactive, so a tool withheld
-while its registry extension was disabled would stay off after re-enabling. Attach re-activates enabled
-registry-extension tools by mirroring Pi's private `_isActivatedOnRegistration` (declarable exposure,
-`defaultActive !== false`); re-check that rule on upgrades. If the host ever calls `navigateTree`, which
-re-runs the restore, reconcile after it too. **Removal gate:** a public Pi way to keep host-withheld tools
-apart from the recorded selection. Run the manager's restart regressions on upgrades.
+while its registry extension was disabled would stay off after re-enabling. Pi's own `reload()` activates
+every extension tool again, but an extension's `session_start` can replay the same record
+(`pi-web-access`'s activation selection does, on reloads too), so the reconcile runs at attach and after
+every successful gated resource reload. It re-activates enabled registry-extension tools by mirroring
+Pi's private `_isActivatedOnRegistration` (declarable exposure, `defaultActive !== false`); re-check that
+rule on upgrades. If the host ever calls `navigateTree`, which re-runs the restore, reconcile after it
+too. **Removal gate:** a public Pi way to keep host-withheld tools apart from the recorded selection, so
+neither Pi's restore nor an extension reading the transcript sees them as removals. Run the manager's
+restart and toggle-reload regressions on upgrades.
 
 - **Anthropic extra-usage warning parity** — [[submodule-server-agent]], `agent/anthropicExtraUsage.ts`.
   Pi's warning exists only in interactive mode (`maybeWarnAboutAnthropicSubscriptionAuth`), and its
