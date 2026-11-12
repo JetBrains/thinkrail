@@ -916,6 +916,7 @@ export default function ChatView({
 										workspaceId={workspaceId}
 										sessionId={sessionId}
 										server={selectedMcpServer}
+										servers={resources.groups.mcpServers?.map((server) => server.name) ?? []}
 									/>
 								) : null
 							}

@@ -1680,10 +1680,13 @@ none — and there is no immediate per-server stop.
 for that server with their time, read from the store's held `mcp.status` snapshot of this chat (fresh
 because the open inspector watches the workspace), and **Calls in this chat** — newest first, each a
 collapsed row (state, tool, argument one-liner, clock time) that expands into the transcript's own
-`ToolRendererBody`, so the card is identical. The pure `mcpServerCalls` reads the chat's turns: `mcp__*`
-calls belong to `details.server` (pi's unsanitized name), else the name parsed from the tool name; the
-three resource tools belong to their `server` argument, and a listing across every server belongs to
-none. It is the chat's own transcript only — not subagents' calls nor other chats' (user-settled,
+`ToolRendererBody`, so the card is identical. The pure `mcpServerCalls` reads the chat's turns: an
+`mcp__*` call belongs to its result's `details.server` (pi's unsanitized name). Without it — still
+running, or thrown with `details: {}` — it belongs to the snapshot's server whose pi tool-name prefix it
+carries (`mcp__<name with every non-word character as _>__`, longest prefix first so `a__b` beats `a`;
+a 64-character hash-shortened name matches on its kept head). Splitting the name at its first `__`
+lost `my-server` and `a__b` (review of #1331). The three resource tools belong to their `server`
+argument, and a listing across every server belongs to none. It is the chat's own transcript only — not subagents' calls nor other chats' (user-settled,
 2026-11). *Rejected:* a host-side per-server call log (a new contract for what the transcript already
 records) and putting the status line on `McpServerResourceSummary` (the store already holds it while
 the detail can show). pi's `mcp.log` and a state-change timeline are deferred.

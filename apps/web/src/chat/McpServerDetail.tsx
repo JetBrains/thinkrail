@@ -98,10 +98,12 @@ export function McpServerDetail({
 	workspaceId,
 	sessionId,
 	server,
+	servers,
 }: {
 	workspaceId: string;
 	sessionId: string;
 	server: string;
+	servers: readonly string[];
 }) {
 	const { turns, toolResults } = useAppStore(
 		useShallow((s) => {
@@ -112,7 +114,12 @@ export function McpServerDetail({
 	const status = useAppStore((s) =>
 		serverStatus(s.mcpByWorkspace[workspaceId]?.sessions[sessionId]?.snapshot.servers, server),
 	);
-	return <McpServerDetailView status={status} calls={mcpServerCalls(turns, toolResults, server)} />;
+	return (
+		<McpServerDetailView
+			status={status}
+			calls={mcpServerCalls(turns, toolResults, server, servers)}
+		/>
+	);
 }
 
 export function McpServerDetailView({

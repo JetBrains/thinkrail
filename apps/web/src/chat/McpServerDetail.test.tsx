@@ -36,7 +36,7 @@ test("the MCP detail shows pi's last status and this chat's calls to the server,
 				detail: "connection refused",
 				updatedAt: Date.UTC(2026, 10, 12, 9, 31),
 			}}
-			calls={mcpServerCalls(turns, results, "github")}
+			calls={mcpServerCalls(turns, results, "github", ["github", "docs"])}
 		/>,
 	);
 	expect(html).toContain('data-testid="resource-mcp-status"');
@@ -54,7 +54,10 @@ test("the MCP detail shows pi's last status and this chat's calls to the server,
 
 test("a server this chat never called says so and omits an absent status", () => {
 	const html = renderToStaticMarkup(
-		<McpServerDetailView status={undefined} calls={mcpServerCalls(turns, results, "linear")} />,
+		<McpServerDetailView
+			status={undefined}
+			calls={mcpServerCalls(turns, results, "linear", ["github", "docs", "linear"])}
+		/>,
 	);
 	expect(html).not.toContain('data-testid="resource-mcp-status"');
 	expect(html).toContain("No calls to this server in this chat yet.");

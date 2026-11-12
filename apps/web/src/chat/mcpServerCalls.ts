@@ -1,5 +1,5 @@
 import { assistantToolCallsAreExecutable } from "@thinkrail/contracts";
-import { MCP_TOOL_PREFIX, mcpCallTitle, readMcpToolDetails } from "./tools/mcp/mcpResult";
+import { MCP_TOOL_PREFIX, readMcpToolDetails } from "./tools/mcp/mcpResult";
 import type { ChatTurn, ToolResultState } from "./types";
 
 const MCP_RESOURCE_TOOLS: ReadonlySet<string> = new Set([
@@ -19,12 +19,42 @@ export interface McpServerCall {
 	at: number;
 }
 
+const PI_TOOL_NAME_LIMIT = 64;
+const PI_HASHED_TAIL = /_[0-9a-f]{8}$/;
+
+function piToolPrefix(server: string): string {
+	return `${MCP_TOOL_PREFIX}${server.replace(/[^A-Za-z0-9_]/g, "_")}__`;
+}
+
+function ownerByToolName(
+	toolName: string,
+	servers: readonly string[],
+): { server: string; tool: string } | null {
+	const longest = (owns: (prefix: string) => boolean) =>
+		servers
+			.map((server) => ({ server, prefix: piToolPrefix(server) }))
+			.filter(({ prefix }) => owns(prefix))
+			.sort((a, b) => b.prefix.length - a.prefix.length)[0];
+	const exact = longest((prefix) => toolName.startsWith(prefix));
+	if (exact) return { server: exact.server, tool: toolName.slice(exact.prefix.length) };
+	if (toolName.length !== PI_TOOL_NAME_LIMIT || !PI_HASHED_TAIL.test(toolName)) return null;
+	const head = toolName.slice(0, -9);
+	const hashed = longest((prefix) => prefix.startsWith(head));
+	return hashed ? { server: hashed.server, tool: toolName } : null;
+}
+
 function callServer(
 	toolName: string,
 	args: Record<string, unknown>,
 	result: unknown,
+	servers: readonly string[],
 ): { server: string; tool: string } | null {
-	if (toolName.startsWith(MCP_TOOL_PREFIX)) return mcpCallTitle(toolName, result);
+	if (toolName.startsWith(MCP_TOOL_PREFIX)) {
+		const details = readMcpToolDetails(result);
+		return details?.server
+			? { server: details.server, tool: details.tool }
+			: ownerByToolName(toolName, servers);
+	}
 	if (!MCP_RESOURCE_TOOLS.has(toolName)) return null;
 	const server =
 		typeof args.server === "string" ? args.server : (readMcpToolDetails(result)?.server ?? "");
@@ -35,6 +65,7 @@ export function mcpServerCalls(
 	turns: readonly ChatTurn[],
 	toolResults: Readonly<Record<string, ToolResultState>>,
 	server: string,
+	servers: readonly string[],
 ): McpServerCall[] {
 	const calls: McpServerCall[] = [];
 	for (const turn of turns) {
@@ -44,7 +75,7 @@ export function mcpServerCalls(
 		for (const block of message.content) {
 			if (block.type !== "toolCall") continue;
 			const result = toolResults[block.id];
-			const title = callServer(block.name, block.arguments, result?.raw);
+			const title = callServer(block.name, block.arguments, result?.raw, servers);
 			if (!title || title.server !== server) continue;
 			calls.push({
 				toolCallId: block.id,
