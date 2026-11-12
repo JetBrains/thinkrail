@@ -1,5 +1,5 @@
 import { cn } from "@thinkrail/ui/utils";
-import { type ReactNode, type RefObject, useMemo } from "react";
+import { type ReactNode, type RefObject, useEffect, useEffectEvent, useMemo, useRef } from "react";
 import {
 	type ResourceHost,
 	type ResourceMarkdown,
@@ -22,7 +22,12 @@ import {
 } from "./outlineHeadings";
 import { type ComposerInsert, PreviewCommenting } from "./PreviewCommenting";
 import { ReviewThreadCard } from "./ReviewThreadCard";
-import { frontmatterOffset, indivisibleSpans, snapSplitLine } from "./sourceLines";
+import {
+	frontmatterOffset,
+	indivisibleSpans,
+	revealSourceLine,
+	snapSplitLine,
+} from "./sourceLines";
 import { useElementSize } from "./useElementSize";
 import { useScrollViewState } from "./useScrollViewState";
 
@@ -57,6 +62,7 @@ export function MarkdownDocument({
 	Markdown,
 	links,
 	headingIds,
+	stampLines = false,
 }: {
 	content: string;
 	workspaceId: string;
@@ -64,20 +70,24 @@ export function MarkdownDocument({
 	Markdown: ResourceMarkdown;
 	links: Pick<ResourceHost, "bytesUrl" | "openFile">;
 	headingIds?: readonly string[];
+	stampLines?: boolean;
 }) {
 	const components = useMemo(
 		() => documentComponents({ workspaceId, path }, links),
 		[path, workspaceId, links],
 	);
+	const stripped = stripFrontmatter(content);
 	return (
 		<Markdown
-			text={stripFrontmatter(content)}
+			text={stripped}
 			className={DOCUMENT_PROSE}
 			remarkPlugins={[
 				remarkGithubAlerts,
 				headingIds ? headingIdPlugin(headingIds) : remarkHeadingIds,
 			]}
-			rehypePlugins={documentRehypePlugins()}
+			rehypePlugins={documentRehypePlugins(
+				stampLines ? frontmatterOffset(content, stripped) : undefined,
+			)}
 			components={{ ...alertComponents, ...components }}
 		/>
 	);
@@ -137,18 +147,20 @@ export function MarkdownSplicedArticle({
 	Markdown,
 	components,
 	inserts,
+	articleRef,
 }: {
 	content: string;
 	headings: readonly OutlineHeading[];
 	Markdown: ResourceMarkdown;
 	components: ResourceMarkdownProps["components"];
 	inserts: readonly FlowInsert[];
+	articleRef?: RefObject<HTMLElement | null>;
 }) {
 	const stripped = stripFrontmatter(content);
 	const rawOffset = frontmatterOffset(content, stripped);
 	const segments = splicedSegments(stripped, rawOffset, [...inserts]);
 	return (
-		<article className="mx-auto max-w-[78ch] px-24 py-16">
+		<article ref={articleRef} className="mx-auto max-w-[78ch] px-24 py-16">
 			{segments.map((segment) => (
 				<div key={segment.key}>
 					{segment.text && (
@@ -220,6 +232,8 @@ export default function MarkdownPreview({
 	review,
 	viewState,
 	onViewState,
+	reveal,
+	onRevealHandled,
 }: ResourceViewProps) {
 	const { workspaceId, path } = resource;
 	const text = content.kind === "text" ? content.text : "";
@@ -233,6 +247,15 @@ export default function MarkdownPreview({
 		viewState,
 		onViewState,
 	);
+	const articleRef = useRef<HTMLElement>(null);
+	const revealLine = reveal?.line;
+	const revealTick = reveal?.tick;
+	const revealHandled = useEffectEvent((tick: number) => onRevealHandled?.(tick));
+	useEffect(() => {
+		const article = articleRef.current;
+		if (!article || revealLine === undefined || revealTick === undefined) return;
+		return revealSourceLine(article, revealLine, () => revealHandled(revealTick));
+	}, [revealLine, revealTick]);
 	const headings = useMemo(() => extractMarkdownOutline(text), [text]);
 	const headingIds = useMemo(
 		() => flattenOutlineHeadings(headings).map((entry) => entry.heading.id),
@@ -240,7 +263,7 @@ export default function MarkdownPreview({
 	);
 	const documentView = !review ? (
 		<div ref={attachScroller} data-testid="markdown-preview" className={PREVIEW_SCROLLER}>
-			<article className="mx-auto max-w-[78ch] px-24 py-16">
+			<article ref={articleRef} className="mx-auto max-w-[78ch] px-24 py-16">
 				<MarkdownDocument
 					content={text}
 					workspaceId={workspaceId}
@@ -248,6 +271,7 @@ export default function MarkdownPreview({
 					Markdown={Markdown}
 					links={links}
 					headingIds={headingIds}
+					stampLines
 				/>
 			</article>
 		</div>
@@ -279,6 +303,7 @@ export default function MarkdownPreview({
 						headings={headings}
 						Markdown={Markdown}
 						components={{ ...alertComponents, ...components }}
+						articleRef={articleRef}
 						inserts={
 							composer
 								? [...threadInserts, { key: "composer", line: composer.line, node: composer.node }]

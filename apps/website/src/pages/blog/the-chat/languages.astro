@@ -1,0 +1,93 @@
+---
+import BlogLayout from "../../../layouts/BlogLayout.astro";
+
+const languages: { name: string; files: string[] }[] = [
+	{ name: "TypeScript", files: [".ts", ".cts", ".mts"] },
+	{ name: "TSX", files: [".tsx"] },
+	{ name: "JavaScript", files: [".js", ".cjs", ".mjs"] },
+	{ name: "JSX", files: [".jsx"] },
+	{ name: "JSON", files: [".json"] },
+	{ name: "JSON with Comments", files: [".jsonc", ".code-workspace"] },
+	{ name: "Shell", files: [".sh", ".bash", ".zsh"] },
+	{ name: "Python", files: [".py", ".pyw", ".pyi"] },
+	{ name: "CSS", files: [".css"] },
+	{ name: "SCSS", files: [".scss"] },
+	{ name: "HTML", files: [".html", ".htm", ".xhtml", ".shtml"] },
+	{ name: "Markdown", files: [".md", ".markdown", ".mdown", ".mkdn", ".mdx"] },
+	{ name: "YAML", files: [".yaml", ".yml"] },
+	{ name: "TOML", files: [".toml"] },
+	{ name: "Rust", files: [".rs"] },
+	{ name: "Go", files: [".go"] },
+	{ name: "Java", files: [".java"] },
+	{ name: "Kotlin", files: [".kt", ".kts"] },
+	{ name: "Scala", files: [".scala"] },
+	{ name: "Swift", files: [".swift"] },
+	{ name: "C", files: [".c", ".h"] },
+	{ name: "C++", files: [".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx"] },
+	{ name: "C#", files: [".cs", ".csx", ".cake"] },
+	{ name: "SQL", files: [".sql"] },
+	{ name: "XML", files: [".xml", ".xsd", ".xsl", ".xslt", ".svg"] },
+	{ name: "Dockerfile", files: ["Dockerfile", "Containerfile", ".dockerfile"] },
+	{ name: "INI", files: [".ini", ".properties", ".gitconfig", ".editorconfig"] },
+	{ name: "Diff", files: [".diff", ".patch"] },
+	{ name: "GraphQL", files: [".graphql", ".gql"] },
+	{ name: "Vue", files: [".vue"] },
+	{ name: "Svelte", files: [".svelte"] },
+	{ name: "Astro", files: [".astro"] },
+	{ name: "Prisma", files: [".prisma"] },
+	{ name: "Lua", files: [".lua"] },
+	{ name: "Ruby", files: [".rb", ".rbx", ".rake", ".gemspec", "Rakefile", "Gemfile"] },
+	{ name: "PHP", files: [".php", ".php4", ".php5", ".phtml"] },
+];
+const title = "Supported languages";
+---
+
+<BlogLayout
+	title={`${title} — ThinkRail Blog`}
+	description={`The ${languages.length} programming and markup languages ThinkRail highlights.`}
+>
+	<article class="blog-post">
+		<header class="blog-post-header">
+			<h1 class="blog-post-title">{title}</h1>
+		</header>
+
+		<div class="blog-post-content">
+			<p>
+				ThinkRail highlights these {languages.length} programming and markup languages in the files and diffs
+				it opens, using <a href="https://shiki.style/">Shiki</a>. Languages marked “Chat” are also highlighted
+				in code blocks inside the agent's replies.
+			</p>
+			<table>
+				<thead>
+					<tr>
+						<th>Language</th>
+						<th>Files</th>
+					</tr>
+				</thead>
+				<tbody>
+					{
+						languages.map((language) => (
+							<tr>
+								<td>{language.name}</td>
+								<td>
+									{language.files.map((file, index) => (
+										<>
+											{index > 0 && " "}
+											<code>{file}</code>
+										</>
+									))}
+								</td>
+							</tr>
+						))
+					}
+				</tbody>
+			</table>
+		</div>
+
+		<nav class="blog-post-nav">
+			<a href="/blog/the-chat/" class="blog-nav-prev">← The Chat</a>
+			<a href="/blog/" class="blog-nav-home">All Posts</a>
+			<span></span>
+		</nav>
+	</article>
+</BlogLayout>

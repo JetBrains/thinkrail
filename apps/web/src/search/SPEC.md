@@ -17,13 +17,14 @@ topbar search button. It owns the presentation, the query grammar, ranking and l
 store-derived work items, and the host-search controller (`search.query` / `search.preview`); the
 command catalog and its handlers, the way a host hit opens and the file preview renderer are composed
 and injected by `shell`. It finds and jumps — it never mutates a setting in place (every setting row
-opens its Settings section), and every verb runs through the command it was listed as.
+opens its Settings section), and every verb runs through the command it was listed as (Start work through
+the injected `PaletteStart`).
 
 ## Boundary
 
-- **Public surface:** `SearchPalette`, `SearchPaletteProps`, `PaletteHost`, `SearchSettings`,
-  `initSearchPreferences`, `createDoubleShiftDetector`, `buildWorkItems`, `waitingItems`, `commandItems`,
-  `SearchScope`, `PaletteItem`, `PaletteFile`.
+- **Public surface:** `SearchPalette`, `SearchPaletteProps`, `PaletteHost`, `PaletteStart`, `PaletteAsk`,
+  `SearchSettings`, `initSearchPreferences`, `createDoubleShiftDetector`, `buildWorkItems`,
+  `waitingItems`, `commandItems`, `SearchScope`, `PaletteItem`, `PaletteFile`.
 - **Allowed deps:** `contracts` (the shared matcher and the search DTOs), `commands`, `store`
   (`selectHostSearchAvailable` / `selectHostReachable`, the welcome generation), `transport`
   (`search.query` / `search.preview`, and the backend endpoint for browser preference keys), `clientPreferences`, `constants`, `components`, `lib`,
@@ -38,7 +39,8 @@ opens its Settings section), and every verb runs through the command it was list
 A leading prefix selects a scope and its chip, and a chip writes the prefix back: `@` work (projects,
 workspaces, chats, transcripts, plans), `>` commands and settings, `/` files, `#` specs — the last two
 exist only when the last welcome's host serves `search.query` (`selectHostSearchAvailable`) and a
-context project gives them a root; otherwise a prefix whose scope is not offered searches the rest of the query in All (an older host
+context project gives them a root — `#` only a repository's (a chat without a project has files but no
+specs, so its palette offers no Specs scope); otherwise a prefix whose scope is not offered searches the rest of the query in All (an older host
 also shows a notice), so a doubled prefix (`##`, `//src`) never lands in an empty scope. `#<digits>` is a
 pull-request number, never the specs scope — it matches the `#N` keyword of the workspace that carries
 that review. Quoted text is one contiguous literal term — never matched as an acronym or a subsequence —
@@ -101,11 +103,12 @@ welcome from a host that does not search removes the host scopes and rows.
 **Result lifecycle** — the invariants: a reply for the input on screen keeps every hit the previous page
 showed (`mergeHostGroups`), so rows go only when the query changes; while a new input is pending the
 previous host rows stay, re-matched against the current terms on the host's own fields
-(`searchHitFields`) — a body or message row only while every term is in its snippet (`matchContent`), so a
-multi-term row whose later term lies outside the snippet leaves while stale and returns with the reply —
-so Enter only ever opens a row the typed text matches; a fresh row carries the host's matcher result
+(`searchHitFields`) — a message row only while every term is in its snippet (`matchContent`), so a
+multi-term row whose later term lies outside the snippet leaves while stale and returns with the reply, and
+a section row only while every term is somewhere in its spec title, heading and snippet (the engine ranks
+by words, so this keeps only rows it would surely return) — so Enter only ever opens a row the typed text matches; a fresh row carries the host's matcher result
 (`PaletteItem.match`) and ranks with the local rows by the same tiers; the host is asked only for what the
-palette cannot list itself — files, specs, plans and message text — while chats and workspaces are the
+palette cannot list itself — files, specs, spec sections, plans and message text — while chats and workspaces are the
 store's rows (a chat row previews its transcript, the Default workspace is found by its branch), so no
 section mixes local and host rows and one row per id holds by construction. Rows that land while the user
 holds a selection are marked late in the very state that shows them (the controller notes arrivals from
@@ -130,6 +133,31 @@ active IME's Escape leaves it open. A host row opens through the injected `Palet
 scopes are offered only when the host searches files and specs and a context project gives them a root,
 and the placeholder names files and specs exactly then.
 
+## Spec sections
+
+`#` asks the host for spec titles **and** sections; All never asks for sections (`scopeKinds`), so they
+stay out of the mixed list. A section row is the host's `section` hit — ranked by words by the engine the
+agent's `spec_search` uses, so both answer a question with the same sections — titled `Spec › Heading`
+with the spec's name muted (`PaletteItem.titleLead`), the section's best line beneath with the matched
+words highlighted, and an `n/m words` badge. Its group, **Sections**, follows the title matches by tier.
+`↵` opens the spec in the Specs tool scrolled to the heading (`requestSpecView` with the heading line);
+`Mod+I` previews the rendered spec at the section (`PaletteFile.line`).
+
+## Ask the agent
+
+Word search cannot meet a question that shares no words with the spec (a paraphrase, another language),
+so whenever `#` has text its **last** row is «Ask the agent: “<text>”», naming the workspace it opens
+in — last before rows that landed while a selection was held, which go after it as they go after Start
+work, so a late Sections reply never moves a selected Ask row. `↵` on it, or `Alt+↵` from any row (`askEligible`, the one rule the row, the shortcut and its footer
+hint share), closes the palette and calls the injected `PaletteAsk.ask(text)`: shell starts a **new**
+chat in the context workspace — the active one, on Project Home the project's Default — with the text
+as typed and the visible note «Find the answer in this project's specs and cite the sections.», so the
+agent searches with its own model's words and the current chat is not interrupted. The row is always
+there rather than only when results look weak: a fixed place keeps muscle memory, where a "weak results"
+heuristic misfires both ways. While the host is unreachable the row is disabled with the host rows'
+offline reason and `Alt+↵` does nothing (the chat start could only wait out the reconnect and drop the
+question), and like Start work it is never remembered by the learning store.
+
 ## Preview pane
 
 `Mod+I` opens a pane — on a viewport at least `md` wide; below it the pane, its toggle and its chord are
@@ -141,7 +169,7 @@ search still focuses the right message, or none — and a chat without a transcr
 **file or spec**
 rendered by the shell-injected `renderFilePreview` over `PaletteItem.file` (`{ workspaceId, path, size }`)
 — the shared resource renderers, so code highlights, images and sandboxed HTML display, and a `SPEC.md`
-renders as markdown, the same path as a preview tab; or the local **metadata card** (`PaletteItem.preview`)
+renders as markdown (scrolled to `line` for a section), the same path as a preview tab; or the local **metadata card** (`PaletteItem.preview`)
 for a project, workspace or chat without a transcript hit. A host preview is read only once the
 selection rests on its row for 150 ms, so sweeping the mouse or arrows across rows reads only the row it
 stops on, and a file or spec whose hit is over `MAX_SEARCH_PREVIEW_BYTES` (2 MiB) is not read at all — the
@@ -152,6 +180,29 @@ refused rather than read, and an embedded image over the cap does not render her
 unreachable a loaded preview stays, a new one asks nothing and says to reconnect, and the next welcome
 refreshes it once. The pane has a definite height while shown, so a code view fills it. A plan row and a
 command have no preview.
+
+## Start from the typed text
+
+Whenever the query has a term in the All or Work scope and shell injects a `PaletteStart` (a context
+project gives the dialog its project) — `startEligible`, the one rule the row, the shortcut and its
+footer hint share — the last section before rows that land late is **Start work**: one row «Start work with “<text>”…» showing its
+`Mod+↵` chord. `↵` on it, or `Mod+↵` from any row, closes the palette and calls the injected
+`PaletteStart.openDialog(text)` — shell opens its Create-workspace dialog with the text as the prompt,
+so the target, base branch and model are chosen where they always are, and a Create dialog already open
+is kept as it is, its draft untouched (`openDialog` then returns `false`, and the palette hands focus back
+to that dialog instead of leaving it nowhere). The prompt is the text as typed (`startPrompt`: only a scope prefix
+stripped, one the palette does not offer included, as the parser drops it — inner whitespace, quotes
+and tokens untouched), never the matcher's normalized terms. Nothing starts without the dialog: a held
+`↵` / `Mod+↵` acts once in the palette, and the dialog ignores the key's repeats, so the same press never
+submits it (the field keeps creation out of the finder: Warp walked its "search and run" box back,
+Claude bound creation to an explicit `n:` mode). Like New workspace, the row is offered offline too (the
+dialog itself needs the host to create). It is never remembered by the learning store and never counted
+as a result in the live region. Rows a host reply brings while a selection is held land after every row
+on screen, the Start row included, and never become the top hit, so a selected Start row does not move.
+An implicit selection follows the ranking as host rows land, a lone Start row's too — like any first row
+it may be overtaken while results stream in, and `Mod+↵` is the start that never depends on rows.
+Holding a lone Start row as a selection was rejected: every host-only match would then land below it,
+and plain search would open the Create dialog on `↵`.
 
 ## Interaction
 
@@ -165,7 +216,8 @@ and so does `Alt+1…n` on Windows and Linux when Alt types no character there �
 with AltGr or Option on a digit key (`#`, `@`, `|`) stays the input's, and macOS has no digit chord at all,
 since Option always types one (a chip writes its prefix into the query, so the prefix is the one source
 of scope). `Mod+I` toggles the preview pane where it is shown, `Mod+K` closes the palette (the chord that
-opened it).
+opened it), `Mod+↵` starts work from the typed text and `Alt+↵` asks the agent from a `#` query (both
+above).
 Escape clears the query, then closes; an untrusted (synthetic) Escape — the desktop close-item command —
 closes outright. Closing without a pick returns focus to the element that held it when the palette
 opened (the composer an accidental double Shift interrupted, the topbar button); a pick leaves focus to

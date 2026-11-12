@@ -221,8 +221,13 @@
 }
 
 @utility window-drag {
-	-webkit-app-region: var(--window-chrome-drag-region, no-drag);
-	app-region: var(--window-chrome-drag-region, no-drag);
+	-webkit-app-region: no-drag;
+	app-region: no-drag;
+
+	:root[data-window-chrome-drag-region="drag"] & {
+		-webkit-app-region: drag;
+		app-region: drag;
+	}
 }
 @utility window-no-drag {
 	-webkit-app-region: no-drag;
@@ -243,18 +248,6 @@
 	--diffs-foreground: var(--code-foreground);
 	--diffs-fg: var(--code-foreground);
 	--diffs-fg-number-override: var(--text-muted);
-	--diffs-token-comment: var(--code-comment);
-	--diffs-token-constant: var(--code-constant);
-	--diffs-token-keyword: var(--code-keyword);
-	--diffs-token-parameter: var(--code-variable);
-	--diffs-token-function: var(--code-function);
-	--diffs-token-string: var(--code-string);
-	--diffs-token-string-expression: var(--code-string);
-	--diffs-token-punctuation: var(--code-punctuation);
-	--diffs-token-link: var(--primary);
-	--diffs-token-inserted: var(--code-inserted);
-	--diffs-token-deleted: var(--code-deleted);
-	--diffs-token-changed: var(--code-changed);
 	--diffs-addition-color-override: var(--feedback-success);
 	--diffs-deletion-color-override: var(--feedback-error);
 	--diffs-modified-color-override: var(--primary);
@@ -272,7 +265,7 @@
 	--diffs-bg: var(--container-content-bg);
 }
 .pierre-file-surface {
-	--diffs-background: var(--container-workspace-bg);
+	--code-background: var(--container-workspace-bg);
 	--diffs-bg: var(--container-workspace-bg);
 	--diffs-bg-context-override: var(--container-workspace-bg);
 }

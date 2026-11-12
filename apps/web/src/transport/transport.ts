@@ -1,5 +1,5 @@
 import type { WsMethodName, WsParams, WsResult, WsServerMessage } from "@thinkrail/contracts";
-import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import { PROTOCOL_VERSION, WS_CHANNELS, WS_MAX_FRAME_BYTES } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { randomId } from "../lib";
 import { RequestError, RequestTimeoutError } from "./requestError";
@@ -28,6 +28,7 @@ const NON_REPLAYABLE_CHANNELS: ReadonlySet<string> = new Set([
 	WS_CHANNELS.providerChanged,
 	WS_CHANNELS.feedbackInterview,
 	WS_CHANNELS.feedbackGithubStar,
+	WS_CHANNELS.searchTextResults,
 ]);
 
 let clientId: string | undefined;
@@ -42,6 +43,13 @@ function withClientId(url: string): string {
 	u.searchParams.set("client", pageClientId());
 	u.searchParams.set("protocol", String(PROTOCOL_VERSION));
 	return u.toString();
+}
+
+function exceedsFrameCap(frame: string): boolean {
+	return (
+		frame.length * 3 > WS_MAX_FRAME_BYTES &&
+		new TextEncoder().encode(frame).byteLength > WS_MAX_FRAME_BYTES
+	);
 }
 
 export interface RequestOptions {
@@ -116,6 +124,12 @@ export class WsTransport {
 		const { sessionId, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
 		const id = `trpi_${++this.seq}`;
 		const frame = JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) });
+		if (exceedsFrameCap(frame)) {
+			const limit = WS_MAX_FRAME_BYTES / (1024 * 1024);
+			return Promise.reject(
+				new RequestError("FRAME_TOO_LARGE", t("app.transport.frameTooLarge", { limit })),
+			);
+		}
 		return new Promise<WsResult<M>>((resolve, reject) => {
 			const timer = setTimeout(() => {
 				this.pending.delete(id);

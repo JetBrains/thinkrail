@@ -85,7 +85,7 @@ export function McpFullOutputBody({
 	if (state.kind === "failed") {
 		return (
 			<p role="alert" className="flex flex-wrap items-center gap-8 text-feedback-error tr-text-ui">
-				<span className="break-words">{state.message}</span>
+				<span className="min-w-0">{state.message}</span>
 				<button
 					type="button"
 					data-testid="mcp-full-output-retry"
@@ -167,8 +167,8 @@ function McpFullOutput({
 					{t("mcp.fullOutput.title")}
 				</button>
 			</DialogTrigger>
-			<DialogContent data-testid="mcp-full-output-dialog" className="max-h-[85vh] max-w-3xl">
-				<DialogHeader className="pr-24">
+			<DialogContent data-testid="mcp-full-output-dialog" className="max-w-3xl">
+				<DialogHeader>
 					<DialogTitle>{t("mcp.fullOutput.title")}</DialogTitle>
 					<DialogDescription className="truncate">{title}</DialogDescription>
 				</DialogHeader>

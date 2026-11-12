@@ -34,8 +34,10 @@ export {
 	isLiveResource,
 	isLocalePreference,
 	isPlanReviewResult,
+	isQuestionPanelHeight,
 	isRetriedAttempt,
 	isSettleIdleDays,
+	isSkillGroupEnabled,
 	isSubagentMaxConcurrent,
 	isSystemThemePair,
 	isTerminalWindowsShell,
@@ -50,8 +52,10 @@ export {
 	MAX_SEARCH_QUERY_LENGTH,
 	normalizeFontSettings,
 	normalizeThemePreference,
+	OTHER_AGENT_SKILL_GROUPS,
 	PLAN_REVIEW_VERDICTS,
 	parsePiPackageInput,
+	QUESTION_PANEL_HEIGHT_PERCENT,
 	RECENT_MODELS_LIMIT,
 	REQUEST_IMAGE_BASE64_BUDGET,
 	RESOURCE_HISTORY_MAX_PAGE_LIMIT,
@@ -63,12 +67,15 @@ export {
 	resourceTallyTotal,
 	SEARCH_KINDS,
 	SETTLE_IDLE_DAYS,
+	SKILL_LISTING_MAX_TOKENS,
+	SKILL_LISTING_MIN_TOKENS,
 	SUBAGENT_MAX_CONCURRENT,
 	SURVEY_OPEN_TEXT_LIMIT,
 	SYSTEM_LOCALE_PREFERENCE,
 	surveyRatingValues,
 	TERMINAL_REPLAY_KB,
 	TERMINAL_WINDOWS_SHELLS,
+	TEXT_SEARCH_LIMITS,
 	THEME_MODES,
 	TODO_NUDGE_PREFIX,
 	tallyResources,
@@ -108,4 +115,15 @@ export type { QuitConfirmationDependencies } from "./quitConfirmation";
 export { createQuitConfirmation, QUIT_CONFIRMATION } from "./quitConfirmation";
 export type { SearchFieldSource } from "./searchFields";
 export { searchHitFields } from "./searchFields";
+export type * from "./speech";
+export {
+	isSpeechErrorCode,
+	isSpeechModel,
+	parseSpeechClientMessage,
+	parseSpeechServerMessage,
+	SPEECH_ERROR_CODES,
+	SPEECH_MODELS,
+	SPEECH_SAMPLE_RATE,
+	SPEECH_SOCKET_ROUTE,
+} from "./speech";
 export * from "./wsProtocol";

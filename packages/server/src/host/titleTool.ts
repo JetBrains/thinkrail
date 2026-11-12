@@ -7,11 +7,19 @@ import {
 	type TitleToolHost,
 } from "../agent";
 import { logger } from "../log";
-import { getWorkspace, renameWorkspace } from "../workspaces";
+import { branchMoveOwed, getWorkspace, renameWorkspace } from "../workspaces";
 
 const log = logger("host");
 
 const MAX_WORKSPACE_NAME = 60;
+
+const RETRY_BRANCH_MOVE =
+	"To rename the branch, call set_title again with workspace_name and branch after HEAD is back on the workspace's own branch";
+
+const KEPT_BRANCH_REASON = {
+	detached: ` unchanged: HEAD is detached or unreadable. ${RETRY_BRANCH_MOVE}`,
+	"not-own": ` unchanged: it was checked out in this worktree outside ThinkRail. ${RETRY_BRANCH_MOVE}`,
+} satisfies Record<NonNullable<ReturnType<typeof renameWorkspace>["branchKept"]>, string>;
 
 export interface AgentTitleDeps {
 	workspaceOf: (sessionId: string) => string | undefined;
@@ -58,7 +66,8 @@ export async function applyAgentTitle(
 
 	const lines: string[] = [];
 	if (chatTitle) lines.push(await applyChatTitle(deps, sessionId, workspaceId, chatTitle));
-	if (workspaceName) lines.push(applyWorkspaceName(workspaceId, workspaceName, params.branch));
+	if (workspaceName)
+		lines.push(applyWorkspaceName(sessionId, workspaceId, workspaceName, params.branch));
 	return lines.join("\n");
 }
 
@@ -90,13 +99,26 @@ async function applyChatTitle(
 	}
 }
 
-function applyWorkspaceName(workspaceId: string, name: string, branch: string | undefined) {
+function applyWorkspaceName(
+	sessionId: string,
+	workspaceId: string,
+	name: string,
+	branch: string | undefined,
+) {
 	try {
 		const workspace = getWorkspace(workspaceId);
 		if (workspace.kind) return "Workspace name kept: this workspace is not renamable.";
-		if (!isNameable(workspace)) return "Workspace name kept: this workspace is already named.";
-		const renamed = renameWorkspace(workspaceId, name, branch ? { branch } : {});
-		return `Workspace renamed to "${renamed.name}" (branch ${renamed.branch}).`;
+		const branchOnly = workspace.renamed === true;
+		if (branchOnly && !(branch?.trim() && branchMoveOwed(workspace, sessionId)))
+			return "Workspace name kept: this workspace is already named.";
+		const { workspace: renamed, branchKept } = renameWorkspace(
+			workspaceId,
+			branchOnly ? workspace.name : name,
+			{ ...(branch ? { branch } : {}), by: sessionId },
+		);
+		const note = branchKept ? KEPT_BRANCH_REASON[branchKept] : "";
+		const lead = branchOnly ? "Workspace name kept as" : "Workspace renamed to";
+		return `${lead} "${renamed.name}" (branch ${renamed.branch}${note}).`;
 	} catch (error) {
 		log.warn(`set_title workspace write failed (${workspaceId})`);
 		return `Workspace name not set: ${errorText(error)}`;

@@ -27,10 +27,11 @@ ref off the workspace-create critical path.
   `timed out after <n>s — …` wording as the async runners; the rest of git's process group is
   then killed, so hooks, filters and credential helpers do not outlive it. `worktree remove` and whole-tree
   reads (`gitUncommittedPaths`' tracked diff and untracked listing) pass **`SLOW_GIT_TIMEOUT_MS`** (5 minutes)
-  instead, so a large but healthy repository still finishes. Index writers (the initial `add -A` + `commit` of
-  `initProject`, `gitCommitPaths`' add and commit) pass **`INDEX_WRITE_TIMEOUT_MS`**: the same 5 minutes, but
-  `null` (no deadline) on Windows, where the timeout kill is `TerminateProcess` and git cannot remove
-  `index.lock`. `renameWorkspace`'s `branch -m` also passes `null`: a kill between deleting the old ref and
+  instead, so a large but healthy repository still finishes. Index writers (`gitCommitPaths`' add and commit,
+  and through `gitAsync` the initial `add -A` + `commit` of `projects`' bootstrap) pass
+  **`INDEX_WRITE_TIMEOUT_MS`**: the same 5 minutes, but `null` (no deadline) on Windows, where the timeout
+  kill is `TerminateProcess` and git cannot remove `index.lock`; an async caller spells that `null` as an
+  unbounded `timeoutMs`. `renameWorkspace`'s `branch -m` also passes `null`: a kill between deleting the old ref and
   creating the new one leaves the worktree without a branch, and nothing here can recover it. Known gap: a Windows read that refreshes the index (`status`, `diff`) and hits its deadline
   can still leave `index.lock` behind. **A timeout is not an answer, so sync git throws on it by default:**
   `git`/`gitBytes` throw a **`GitTimeoutError`** (`CodedError("GIT_TIMEOUT")`, so error tracking tells a
@@ -47,7 +48,8 @@ ref off the workspace-create critical path.
   fast; `undefined` restores it. `gitAsync(cwd, args, opts?)` and
   **`gitAsyncBytes(cwd, args, opts?)`** are the bounded async twins over `subprocess.runBounded`; the latter
   preserves stdout as `Uint8Array`, while stderr remains decoded diagnostics. They keep network-bound ops
-  like `fetch` **and request-path historical reads** off the event loop: this module owns only the
+  like `fetch`, **request-path historical reads** and `projects`' repository bootstrap off the event loop:
+  this module owns only the
   git-shaped 55s budget and stalled/stderr wording, never child-lifetime mechanics. `opts.env` lets a
   caller run prompt-free with its own environment and pins blob diagnostics to English; the captured runners'
   optional `opts.redactStderr` transforms diagnostics before any truncation or timeout wording (clone uses
@@ -138,8 +140,10 @@ ref off the workspace-create critical path.
   point** ↔ worktree — what the workspace changed *since diverging*, so a base that advanced underneath it
   (a fetch moving `origin/main`, upstream work landing) never surfaces as phantom changes; while the base
   hasn't diverged the merge-base *is* its tip, and a normal nonzero `merge-base` (missing base, unrelated
-  histories, unborn `HEAD`) falls back to the raw ref, keeping the old error surfaces — and keeping the
-  file list ancestry-consistent with `listCommits`' `base..HEAD`; a timeout or launch failure throws
+  histories) falls back to the raw ref, keeping the old error surfaces — and keeping the
+  file list ancestry-consistent with `listCommits`' `base..HEAD`; an **unborn `HEAD`** whose base names no
+  commit (and `uncommitted` on one) diffs from the empty tree instead, add-style like a root commit; a
+  timeout or launch failure throws
   instead of impersonating that semantic outcome. The same distinction keeps a timed-out commit probe
   from becoming `UNKNOWN_COMMIT`, and a timed-out parent probe from becoming a root commit;
   `uncommitted`: `git diff HEAD` + untracked, sides = `HEAD` ↔ worktree; `commit`: `git diff <sha>^ <sha>`, no
@@ -258,10 +262,20 @@ ref off the workspace-create critical path.
   (`symbolic-ref --short HEAD`, unborn-safe; detached → literal `HEAD`), consumed by the `workspaces`
   module for a user-owned workspace's folder-truth `branch`, with **`tryCurrentBranch`** its fallible form
   (`null` when the path is not a readable worktree root, so a refresh never persists an I/O failure as a
-  detach); **`canonicalPath(path)`** — the symlink-resolved form any path compared against git output must
+  detach); **`headBranchAt(worktreePath)`** (`head.ts`) — the checked-out branch read from
+  files with no spawn: `<worktreePath>/.git` is the gitdir, or a gitfile `gitdir: <path>` (relative to the
+  worktree), and that gitdir's own `HEAD` (per-worktree, so `commondir` never matters) reading
+  `ref: refs/heads/<x>` gives `x` (unborn included); a sha or anything else is `null` (detached), and so is
+  a missing or unreadable `.git` in the worktree itself, so an enclosing repo's branch is never answered.
+  A reftable repo writes the stub `ref: refs/heads/.invalid` to every `HEAD`, so that text alone falls back
+  to `git symbolic-ref -q HEAD`, which needs no path compare because discovery
+  stops at the `.git` already found. The gitfile parse mirrors `watch`'s `resolveExternalGitDir` on
+  purpose: the two modules have no sibling edge. Consumed by `workspaces` for managed workspaces;
+  **`canonicalPath(path)`** — the symlink-resolved form any path compared against git output must
   take (git resolves symlinks, a caller's path does not), shared with `workspaces`' worktree-identity
-  checks; `prefetchBranch(projectId, ref)` — best-effort background
-  `git fetch` of a configured remote ref (via `gitAsync`), so a later `createWorkspace` branches off a
+  checks; `prefetchBranch(projectId, ref, signal?)` — best-effort background
+  `git fetch` of a configured remote ref (via `gitAsync`; an aborted `signal` — Stop on `start_workspace`
+  — kills it), so a later `createWorkspace` branches off a
   fresh tip without the network round-trip on its critical path (local/unknown ref or offline → no-op).
   Its ref is
   **wire-supplied and passes the same `isSafeRef` gate `createWorkspace` uses** before it reaches git:
@@ -351,12 +365,20 @@ ref off the workspace-create critical path.
   `null`. Returning the canonical sha lets the adopted-commit review resolver reject an abbreviated /
   non-canonical id, and the shared cap guarantees it never accepts a commit past the newest
   `COMMIT_LIST_MAX` — for which no adopted item is ever emitted. Kept in lock-step with `listCommits`.
-  **`ignoredPaths(worktreePath, paths)`** → the subset git ignores (`git -c core.quotePath=false
-  check-ignore -- <paths>`, arguments chunked under 24k chars for Windows' command-line limit; tracked files
-  never count, and a path inside an ignored folder does). The host uses it to mark `fs.readDir` nodes
-  `gitignored`, so the Files tree can dim them. It never throws: a non-repository, a failure or a timeout
-  reports nothing. Names git must C-quote (a `"`, `\` or control character) are never reported, because
-  `check-ignore -z` needs stdin, which the bounded runners do not offer.
+  **`ignoredPaths(worktreePath, paths)`** → the subset git ignores (tracked files never count, and a path
+  inside an ignored folder does). Every path is passed as `./<path>`, so `:!x` is never read as pathspec
+  magic, which would fail the run (`check-ignore` refuses `--literal-pathspecs`). One `--no-index` run
+  reads every path from `--stdin -z`; only its matches get the index check, which takes them as arguments
+  (one index pass per run, about 3× faster than `--stdin`, which rescans the index per path) in batches
+  of at most 512 paths and 24,000 characters, four at a time, each with its own 10 s deadline. That
+  check's output C-quotes a name with a `"`, `\` or control character (`-z` needs `--stdin`), so each
+  line is unquoted before use. A sparse checkout skips the `--no-index` run, which doesn't read a
+  `.gitignore` that exists only in the index (skip-worktree); its mark is `info/sparse-checkout` in the
+  worktree's git dir, which `git sparse-checkout disable` leaves behind, costing only speed. The host uses
+  it to mark `fs.readDir` nodes `gitignored`, so the Files tree can dim them. It never throws: a non-repository, a failure or a
+  timeout adds only what git printed before it stopped, so a path git refuses (inside a submodule, beyond
+  a symlink) drops its whole index batch. Known limit: the index check still reads glob characters, so
+  `a*` is not reported while a tracked `ab` exists.
 - **Public surface (barrel):** `git`, `gitAsync`, `gitAsyncBytes`, `gitAsyncStream`, `gitRunHook`, `nonInteractiveGitEnv`, `SLOW_GIT_TIMEOUT_MS`, `INDEX_WRITE_TIMEOUT_MS`, `throwOnTimeout`,
   `setSyncGitTimeoutForTests`,
   `remoteRefOid`, `remoteRefOidAsync`, `remoteTrackingRef`, `gitStatus`,
@@ -364,7 +386,8 @@ ref off the workspace-create critical path.
   `readBlobAt`, `readBlobBytesAt`, `readBlobBytesAtAsync`, `readBlobStreamAtAsync`, `readBlobSizeAtAsync`,
   `readPathModeAtAsync`, `readCommitSubject`, `commitsAheadOf`, `originUrls`, `countPushTargetDivergence`,
   `PushTargetStatus`,
-  `gitCommitPaths`, `gitHeadSha`, `headShaAt`, `listCommits`, `listCommitsSince`,
+  `gitCommitPaths`, `gitHeadSha`, `headShaAt`, `headBranchAt`, `listCommits`,
+  `listCommitsSince`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
   `canonicalPath`, `resolveListedCommit`, `prefetchBranch`, `countPushDivergence`, `listRemotes`, `remoteNameOf`,
@@ -392,8 +415,10 @@ ref off the workspace-create critical path.
   the other end — it returns *no* stats (and logs why) rather than a fabricated `+0 −0`. A review surface that
   calls a dirty worktree clean is the worst failure this product can have.
 - `gitStatus` reports the **live** current branch for a user-owned (`kind: "default" | "external"`)
-  workspace (its branch moves out-of-band — a terminal `git checkout` — and the persisted snapshot
-  self-heals only at list time; the Changes header must not lag).
+  workspace, whose branch moves out-of-band (a terminal `git checkout`) and the Changes header must not lag.
+  A managed workspace's branch moves out-of-band too; `gitStatus` deliberately reports its **stored**
+  branch, which converges through `workspaces`' `syncWorkspaceBranch` (repo-metadata nudge, list, rename,
+  push), so between a terminal switch and that nudge the header may show the old branch.
 - **A network git call is bounded by us, not talked out of waiting.** A `fetch` whose remote wants a
   passphrase blocks on `/dev/tty` forever, and the only thing that ever ended that wait was the *client's*
   60s request timeout (`transport.ts` `DEFAULT_TIMEOUT_MS`, not overridden for `workspace.create`) — which

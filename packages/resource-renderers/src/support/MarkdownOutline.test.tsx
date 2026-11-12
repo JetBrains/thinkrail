@@ -128,7 +128,12 @@ test("the toggle hides the outline", () => {
 
 const host: ResourceHost = {
 	markdown: Markdown,
-	code: { languages: [], languageId: () => null, theme: () => ({ name: "test", settings: [] }) },
+	code: {
+		languages: [],
+		languageId: () => null,
+		pierreTheme: { name: "test", appearance: "dark", style: {} },
+		editorTheme: () => ({ rules: [], colors: {} }),
+	},
 	bytesUrl: testLinks.bytesUrl,
 	openFile: testLinks.openFile,
 	openComparison: () => {},
