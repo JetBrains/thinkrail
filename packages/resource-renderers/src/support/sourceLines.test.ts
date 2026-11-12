@@ -1,10 +1,13 @@
 import { expect, test } from "bun:test";
 import {
+	closedDetailsAround,
 	frontmatterOffset,
 	indivisibleSpans,
+	openDetailsAround,
 	revealSourceLine,
 	snapSplitLine,
 	sourceBlockAt,
+	stampedHeadings,
 } from "./sourceLines";
 
 const DOC = [
@@ -164,4 +167,96 @@ test("revealSourceLine waits for a document still rendering and reports once it 
 	} finally {
 		globalThis.MutationObserver = RealObserver;
 	}
+});
+
+interface FakeNode {
+	tagName: string;
+	parentElement: FakeNode | null;
+	dataset: { mdLineStart?: string };
+	textContent: string;
+	attributes: Set<string>;
+	hasAttribute(name: string): boolean;
+	setAttribute(name: string, value: string): void;
+}
+
+function fakeNode(tagName: string, parentElement: FakeNode | null, extra: Partial<FakeNode> = {}) {
+	const attributes = new Set<string>();
+	const node: FakeNode = {
+		tagName,
+		parentElement,
+		dataset: {},
+		textContent: "",
+		attributes,
+		hasAttribute: (name) => attributes.has(name),
+		setAttribute: (name) => {
+			attributes.add(name);
+		},
+		...extra,
+	};
+	return node;
+}
+
+function headingTree() {
+	const root = fakeNode("DIV", null);
+	const details = fakeNode("DETAILS", root);
+	const summary = fakeNode("SUMMARY", details);
+	const heading = (tag: string, parent: FakeNode, line: string, text: string) =>
+		fakeNode(tag, parent, { dataset: { mdLineStart: line }, textContent: text });
+	const nodes = [
+		heading("H1", root, "4", "  Title\n  one "),
+		heading("H2", root, "", "Unstamped"),
+		heading("H2", root, "7", "   "),
+		heading("H3", summary, "9", "In summary"),
+		heading("H2", details, "11", "中文"),
+		heading("H2", root, "14", "中文"),
+	];
+	const container = Object.assign(root, {
+		querySelectorAll: () => nodes,
+	}) as unknown as HTMLElement;
+	return { container, details, nodes };
+}
+
+test("stampedHeadings keeps stamped, named headings with their source line, depth and closed-details state", () => {
+	const { container } = headingTree();
+	expect(
+		stampedHeadings(container).map(({ line, depth, text, hidden }) => ({
+			line,
+			depth,
+			text,
+			hidden,
+		})),
+	).toEqual([
+		{ line: 4, depth: 1, text: "Title one", hidden: false },
+		{ line: 9, depth: 3, text: "In summary", hidden: false },
+		{ line: 11, depth: 2, text: "中文", hidden: true },
+		{ line: 14, depth: 2, text: "中文", hidden: false },
+	]);
+});
+
+test("openDetailsAround opens every closed details that hides an element, and only those", () => {
+	const { container, details, nodes } = headingTree();
+	const hidden = nodes[4] as unknown as Element;
+	const summary = nodes[3] as unknown as Element;
+	expect(closedDetailsAround(summary, container)).toEqual([]);
+	expect(closedDetailsAround(hidden, container)).toEqual([details as unknown as HTMLElement]);
+	openDetailsAround(hidden, container);
+	expect(details.hasAttribute("open")).toBe(true);
+	expect(closedDetailsAround(hidden, container)).toEqual([]);
+});
+
+test("revealSourceLine opens a closed details before scrolling its block", () => {
+	const details = fakeNode("DETAILS", null);
+	const scrolled: string[] = [];
+	const block = {
+		...fakeNode("H2", details),
+		dataset: { mdLineStart: "5" },
+		scrollIntoView: () => scrolled.push(details.hasAttribute("open") ? "open" : "closed"),
+	};
+	const container = {
+		querySelectorAll: () => [block],
+		querySelector: () => block,
+	} as unknown as HTMLElement;
+	details.parentElement = container as unknown as FakeNode;
+	revealSourceLine(container, 5, () => {})();
+	expect(scrolled).toEqual(["open"]);
 });

@@ -31,7 +31,7 @@ export function PreviewCommenting({
 	source,
 	review,
 	testid = "markdown-preview",
-	surfaceClassName = "relative h-full min-h-0 min-w-0 flex-1 overflow-auto bg-container-workspace-bg motion-safe:animate-reveal",
+	surfaceClassName = "relative h-full overflow-auto bg-container-workspace-bg motion-safe:animate-reveal",
 	canCommentSelection,
 	scrollerRef,
 	attachScroller,
