@@ -1,14 +1,16 @@
 import { RiCheckLine as Check, RiArrowDownSLine as ChevronDown } from "@remixicon/react";
 import type { ThinkingLevel } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
+import { LEVEL_LABEL } from "./modelPicker";
 
 export function ThinkingSelector({
 	level,
 	levels,
 	onSelect,
-	container,
+	container = null,
 	className,
 	disabled = false,
 }: {
@@ -19,23 +21,37 @@ export function ThinkingSelector({
 	className?: string;
 	disabled?: boolean;
 }) {
+	const t = useT();
 	const [open, setOpen] = useState(false);
 	return (
-		<Popover open={open} onOpenChange={setOpen}>
+		<Popover
+			open={open}
+			onOpenChange={(next) => {
+				if (next && disabled) return;
+				setOpen(next);
+			}}
+		>
 			<PopoverTrigger
 				data-testid="thinking-selector"
 				data-open={open}
-				disabled={disabled || levels.length === 0}
+				disabled={levels.length === 0}
+				aria-disabled={disabled || undefined}
 				className={cn(
-					"flex h-32 items-center gap-8 rounded-sm border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected",
+					"flex h-32 items-center gap-8 rounded-sm border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text aria-disabled:border-control-disabled-border aria-disabled:bg-control-disabled-bg aria-disabled:text-control-disabled-text data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected",
 					className,
 				)}
 			>
-				<span className="tr-text-eyebrow text-text-muted">Effort</span>
-				<span className="capitalize">{level}</span>
+				<span className="tr-text-eyebrow text-text-muted">{t("chat.modelPicker.effort")}</span>
+				<span className="capitalize">{t(LEVEL_LABEL[level])}</span>
 				<ChevronDown className="size-16 shrink-0 text-text-muted" />
 			</PopoverTrigger>
-			<PopoverContent align="start" container={container} className="w-[160px] p-4">
+			<PopoverContent
+				align="start"
+				container={container}
+				collisionBoundary={container}
+				collisionPadding={8}
+				className="max-h-[var(--radix-popover-content-available-height)] w-[160px] overflow-y-auto p-4"
+			>
 				{levels.map((l) => (
 					<button
 						key={l}
@@ -52,7 +68,7 @@ export function ThinkingSelector({
 						<span className="flex w-14 shrink-0 justify-center">
 							{l === level ? <Check className="size-14 text-primary" /> : null}
 						</span>
-						{l}
+						{t(LEVEL_LABEL[l])}
 					</button>
 				))}
 			</PopoverContent>

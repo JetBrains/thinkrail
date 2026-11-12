@@ -28,6 +28,20 @@ test("parseVerdict extracts a fenced json verdict and stamps host-owned id/title
 	});
 });
 
+test("parseVerdict reads a reviewer's backslashes as path separators", () => {
+	const result = parseVerdict(
+		JSON.stringify({
+			verdict: "request_changes",
+			findings: [{ id: "f1", path: "src\\x.ts", startLine: 2, body: "b" }],
+			readingOrder: [{ path: "C:\\repo\\src\\x.ts", why: "w" }],
+		}),
+		ID,
+		TITLE,
+	);
+	expect(result?.findings[0]?.path).toBe("src/x.ts");
+	expect(result?.readingOrder).toEqual([{ path: "C:/repo/src/x.ts", why: "w" }]);
+});
+
 test("parseVerdict accepts an approve with no findings and no fence (bare json)", () => {
 	const result = parseVerdict('{ "verdict": "approve", "findings": [] }', ID, TITLE);
 	expect(result?.verdict).toBe("approve");

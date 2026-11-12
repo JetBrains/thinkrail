@@ -3,11 +3,10 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import type { TodoPlan } from "@thinkrail/contracts";
-import { findBranchReviewOutcome, forgetOpenBranchReview } from "../branch-review";
+import { findBranchReviewOutcome, forgetOpenBranchReview, githubSlug } from "../branch-review";
 import {
 	compareQuickPullUrl,
 	ghPrFlow,
-	githubSlug,
 	isPushAuthFailure,
 	openPr,
 	type PrCommandRunner,
@@ -115,6 +114,12 @@ describe("githubSlug", () => {
 		["https://github.com/acme/widgets", "acme/widgets"],
 		["git@github.com:acme/widgets.git", "acme/widgets"],
 		["ssh://git@github.com/acme/widgets", "acme/widgets"],
+		["ssh://git@github.com:22/o/r.git", "o/r"],
+		["ssh://git@github.com/o/r.git", "o/r"],
+		["https://GitHub.com/o/r", "o/r"],
+		["https://user:tok@github.com/o/r/", "o/r"],
+		["https://github.com/o/r.git/", "o/r"],
+		["GIT@GitHub.com:o/r.git", "o/r"],
 		["https://gitlab.com/acme/widgets.git", null],
 		["/tmp/some/bare/repo.git", null],
 	])("%s → %p", (url, slug) => {
@@ -227,6 +232,27 @@ describe("ghPrFlow", () => {
 			"--base",
 			"release/x",
 		]);
+	});
+
+	test("every gh call targets the repository the branch was pushed to, never gh's fetch-URL default", async () => {
+		const { run, calls } = runner({
+			"gh pr list": { ok: true, out: "[]" },
+			"gh pr create": { ok: true, out: "https://github.com/acme/widgets/pull/9" },
+		});
+		await ghPrFlow("/w", "feat/x", input, run);
+		expect(calls.length).toBeGreaterThan(0);
+		for (const call of calls) {
+			expect(call.slice(call.indexOf("--repo"), call.indexOf("--repo") + 2)).toEqual([
+				"--repo",
+				input.slug,
+			]);
+		}
+		const edit = runner({
+			"gh pr list": { ok: true, out: '[{"number":9}]' },
+			"gh pr edit": { ok: true, out: "" },
+		});
+		await ghPrFlow("/w", "feat/x", input, edit.run);
+		expect(edit.calls.find((c) => c[2] === "edit")).toContain("--repo");
 	});
 
 	test("draft flag reaches gh pr create", async () => {
@@ -451,7 +477,7 @@ describe("openPr — push lifecycle and cache invalidation", () => {
 		sh(repo, "commit", "-q", "-m", "feature");
 		sh(remote, "init", "-q", "--bare");
 		sh(repo, "remote", "add", "origin", "https://github.com/acme/widgets.git");
-		sh(repo, "remote", "set-url", "--push", "origin", remote);
+		sh(repo, "config", `url.${remote}.pushInsteadOf`, "https://github.com/acme/widgets.git");
 
 		writeFileSync(reviewMode, "closed\n");
 		if (process.platform === "win32") {

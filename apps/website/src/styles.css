@@ -11,7 +11,15 @@
 :root {
 	--font-sans: "Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	--font-mono:
-		"JetBrains Mono Variable", "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
+		"JetBrains Mono Variable", "JetBrains Mono", "JetBrainsMono Nerd Font Mono",
+		"JetBrainsMono Nerd Font", "JetBrainsMonoNL Nerd Font Mono", "Symbols Nerd Font Mono",
+		"Symbols Nerd Font", "MesloLGS NF", "Hack Nerd Font Mono", "FiraCode Nerd Font Mono",
+		"CaskaydiaCove Nerd Font Mono", "Sarasa Mono SC", "Sarasa Mono TC", "Sarasa Mono J",
+		"Noto Sans Mono CJK SC", "Noto Sans Mono CJK TC", "Noto Sans Mono CJK JP", "Source Han Mono SC",
+		"Noto Sans Mono", "Fira Code", "SF Mono", Menlo, Consolas, "Cascadia Mono", "Cascadia Code",
+		"DejaVu Sans Mono", "PingFang SC", "Hiragino Sans GB", "Hiragino Sans", "Microsoft YaHei",
+		"Microsoft JhengHei", "Noto Sans CJK SC", "Apple Symbols", "Segoe UI Symbol",
+		"Noto Sans Symbols 2", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", monospace;
 	--font-display:
 		"Orbitron Variable", "Orbitron", "Geist Variable", "Geist", -apple-system, BlinkMacSystemFont,
 		"Segoe UI", sans-serif;
@@ -427,11 +435,13 @@ code {
 	display: block;
 }
 
-.gh-btn {
+.gh-btn,
+.discord-btn {
 	color: var(--muted);
 }
 
-.gh-btn:hover {
+.gh-btn:hover,
+.discord-btn:hover {
 	text-decoration: none;
 }
 
@@ -690,10 +700,6 @@ a.tree-row:hover {
 	color: var(--text);
 	background: var(--container-workspace-bg);
 	border-bottom-color: var(--container-workspace-bg);
-}
-
-.tab.active .i {
-	color: var(--text);
 }
 
 /* The scrolling editor pane */
@@ -957,8 +963,20 @@ p.hero-lede {
 	max-width: 100%;
 }
 
-.install-picker-hero {
-	margin: 22px 0 8px;
+.cli-install .install-os-tabs {
+	max-width: 100%;
+	margin-bottom: -1px;
+	overflow-x: auto;
+	overflow-y: hidden;
+	scrollbar-width: none;
+}
+
+.cli-install .install-os-tabs::-webkit-scrollbar {
+	display: none;
+}
+
+.cli-install .install-line {
+	margin: 12px;
 }
 
 .send-link {
@@ -1112,8 +1130,7 @@ html.install-tabs-ready .install-panel {
 	background: var(--container-header-bg);
 }
 
-.cli-disclosure > summary,
-.install-reference > summary {
+.cli-disclosure > summary {
 	display: flex;
 	min-height: 34px;
 	align-items: center;
@@ -1127,25 +1144,21 @@ html.install-tabs-ready .install-panel {
 	list-style: none;
 }
 
-.cli-disclosure > summary::-webkit-details-marker,
-.install-reference > summary::-webkit-details-marker {
+.cli-disclosure > summary::-webkit-details-marker {
 	display: none;
 }
 
-.cli-disclosure > summary:hover,
-.install-reference > summary:hover {
+.cli-disclosure > summary:hover {
 	color: var(--text);
 	background: var(--hover);
 }
 
-.cli-disclosure > summary::after,
-.install-reference > summary::after {
+.cli-disclosure > summary::after {
 	content: "⌄";
 	transition: transform 150ms ease;
 }
 
-.cli-disclosure[open] > summary::after,
-.install-reference[open] > summary::after {
+.cli-disclosure[open] > summary::after {
 	transform: rotate(180deg);
 }
 
@@ -1205,8 +1218,41 @@ html.install-tabs-ready .windows-shell-tabs {
 .hero-ctas {
 	display: flex;
 	flex-wrap: wrap;
+	align-items: flex-start;
 	gap: 12px;
-	margin-top: 26px;
+	margin-top: 22px;
+}
+
+.hero-download {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 8px;
+}
+
+a.hero-download-other {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	color: var(--muted);
+	font-family: var(--font-mono);
+	font-size: 12px;
+	line-height: 1;
+	text-decoration: none;
+}
+
+a.hero-download-other:hover {
+	color: var(--text);
+	text-decoration: none;
+}
+
+.hero-ctas .gh-stars:not([hidden]) {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	margin-left: 2px;
+	padding-left: 9px;
+	border-left: 1px solid var(--border2);
 }
 
 .btn {
@@ -1306,10 +1352,6 @@ html.install-tabs-ready .windows-shell-tabs {
 	font-size: 14.5px;
 }
 
-.feature-card h3 .i {
-	color: var(--accent);
-}
-
 .feature-card p {
 	font-size: 13.5px;
 	margin: 0;
@@ -1355,16 +1397,6 @@ html.install-tabs-ready .windows-shell-tabs {
 .chat-msg.assistant {
 	font-size: 14.5px;
 	color: var(--muted);
-}
-
-.chat-msg.assistant p {
-	font-size: 14.5px;
-	margin: 0 0 10px;
-}
-
-.chat-msg.assistant ol {
-	margin: 0;
-	font-size: 14px;
 }
 
 .chat-done {
@@ -1483,10 +1515,6 @@ html.anim .chat-demo [data-step].on {
 	background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
-.spec-row.depth-0 .i {
-	color: var(--accent);
-}
-
 .spec-row.depth-1 {
 	padding-left: 32px;
 }
@@ -1539,6 +1567,11 @@ html.anim .chat-demo [data-step].on {
 	border-top: 1px solid var(--border);
 }
 
+.desktop-download-row.is-current {
+	box-shadow: inset 2px 0 0 var(--accent);
+	padding-left: 10px;
+}
+
 .desktop-download-platform,
 .desktop-download-compatibility {
 	display: block;
@@ -1570,33 +1603,12 @@ p.install-fineprint {
 	line-height: 1.55;
 }
 
-p.install-linux-note a,
-p.install-fineprint a {
-	text-decoration: underline;
-	text-underline-offset: 3px;
-}
-
-.install-reference {
-	margin-top: 18px;
-	border: 1px solid var(--border2);
-	border-radius: 4px;
-	overflow: hidden;
-	background: var(--container-header-bg);
-}
-
-.install-reference-body {
-	display: grid;
-	gap: 10px;
-	padding: 12px;
-	border-top: 1px solid var(--border);
-}
-
-.install-cli-row > span {
-	display: block;
-	margin-bottom: 5px;
-	color: var(--muted);
+h3.install-cli-heading {
+	margin: 22px 0 8px;
+	color: var(--text);
 	font-family: var(--font-mono);
-	font-size: 10.5px;
+	font-size: 12px;
+	font-weight: 600;
 }
 
 /* ── Footer section ─────────────────────────────────────────────────────── */
@@ -1729,11 +1741,6 @@ p.footer-fineprint {
 a.tree-row.selected {
 	background: color-mix(in srgb, var(--accent) 16%, transparent);
 	color: var(--text);
-}
-
-.ft-row.active .i,
-a.tree-row.selected .i {
-	color: var(--accent);
 }
 
 .ft-row.dim {
@@ -1974,11 +1981,6 @@ html:not(.anim) .term-caret {
 		opacity 150ms ease-out;
 }
 
-[data-mock-hint]:hover .i {
-	color: var(--muted);
-	opacity: 0.85;
-}
-
 /* Re-enable pointer events for the tooltip layer */
 .mock-tooltip-layer {
 	position: fixed;
@@ -2039,6 +2041,41 @@ html:not(.anim) .term-caret {
 	width: 14px;
 	height: 14px;
 	fill: currentColor;
+}
+
+a.hero-download-other .i {
+	width: 12px;
+	height: 12px;
+}
+
+.feature-card h3 .i {
+	color: var(--accent);
+}
+
+.tab.active .i {
+	color: var(--text);
+}
+
+.hero-ctas .gh-stars .i {
+	width: 12px;
+	height: 12px;
+}
+
+.spec-row.depth-0 .i {
+	color: var(--accent);
+}
+
+.ft-row.active .i {
+	color: var(--accent);
+}
+
+[data-mock-hint]:hover .i {
+	color: var(--muted);
+	opacity: 0.85;
+}
+
+a.tree-row.selected .i {
+	color: var(--accent);
 }
 
 .mock-tooltip.visible {
@@ -2168,9 +2205,15 @@ html:not(.anim) .term-caret {
 		flex-wrap: wrap;
 	}
 
-	.hero-ctas .btn {
-		flex: 1;
+	.hero-ctas .btn,
+	.hero-download {
+		flex: 1 1 auto;
 		justify-content: center;
+		white-space: nowrap;
+	}
+
+	.hero-download .btn {
+		width: 100%;
 	}
 
 	/* Give the depth-0 "main spec" row more room for its label so the badge never wraps. */
@@ -2189,20 +2232,6 @@ html:not(.anim) .term-caret {
 		max-width: 100%;
 		padding: 7px 11px;
 		line-height: 1.4;
-	}
-
-	.chat-msg.assistant,
-	.chat-msg.assistant p,
-	.chat-msg.assistant ol {
-		line-height: 1.4;
-	}
-
-	.chat-msg.assistant p {
-		margin-bottom: 6px;
-	}
-
-	.chat-msg.assistant ol {
-		margin: 6px 0;
 	}
 
 	.chat-msg.assistant li {
@@ -2242,6 +2271,11 @@ html:not(.anim) .term-caret {
 	.sb-license {
 		flex-basis: 100%;
 	}
+}
+
+.cli-install .install-tab {
+	flex: none;
+	white-space: nowrap;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2419,6 +2453,7 @@ html:not(.anim) .term-caret {
 /* ── Blog Post Content ──────────────────────────────────────────────────── */
 
 .blog-post-content {
+	container-type: inline-size;
 	font-size: var(--text-lg);
 	line-height: 1.75;
 }
@@ -2466,6 +2501,32 @@ html:not(.anim) .term-caret {
 .blog-post-content ol {
 	margin-bottom: var(--space-lg);
 	padding-left: var(--space-xl);
+}
+
+.chat-msg.assistant p {
+	font-size: 14.5px;
+	margin: 0 0 10px;
+}
+
+.chat-msg.assistant ol {
+	margin: 0;
+	font-size: 14px;
+}
+
+@media (max-width: 560px) {
+	.chat-msg.assistant,
+	.chat-msg.assistant p,
+	.chat-msg.assistant ol {
+		line-height: 1.4;
+	}
+
+	.chat-msg.assistant p {
+		margin-bottom: 6px;
+	}
+
+	.chat-msg.assistant ol {
+		margin: 6px 0;
+	}
 }
 
 .blog-post-content li {
@@ -2549,6 +2610,69 @@ html:not(.anim) .term-caret {
 	border: 1px solid var(--blog-border);
 }
 
+.blog-post-content table {
+	width: 100%;
+	margin: var(--space-lg) 0;
+	border-collapse: collapse;
+}
+
+.blog-post-content th,
+.blog-post-content td {
+	padding: var(--space-sm) var(--space-md);
+	border-bottom: 1px solid var(--blog-border);
+	text-align: left;
+	vertical-align: middle;
+}
+
+.blog-post-content thead:not(:has(th:not(:empty))) {
+	display: none;
+}
+
+.blog-post-content td:has(> a > img) {
+	width: 67%;
+}
+
+@container (max-width: 520px) {
+	.blog-post-content tr:has(> td > a > img) > td {
+		display: block;
+		width: auto;
+	}
+
+	.blog-post-content tr:has(> td > a > img) > td:first-child {
+		border-bottom: none;
+	}
+}
+
+.image-zoom {
+	max-width: 95vw;
+	max-height: 95vh;
+	padding: 0;
+	border: none;
+	background: transparent;
+	cursor: zoom-out;
+}
+
+.image-zoom::backdrop {
+	background: rgb(0 0 0 / 0.8);
+}
+
+.image-zoom img {
+	display: block;
+	max-width: 95vw;
+	max-height: 95vh;
+	border-radius: 0.5rem;
+}
+
+.blog-post-content table img {
+	display: block;
+	width: 100%;
+	margin: 0;
+}
+
+.blog-post-content table a > img {
+	cursor: zoom-in;
+}
+
 .blog-post-content iframe {
 	max-width: 100%;
 	margin: var(--space-lg) 0;
@@ -2594,6 +2718,10 @@ html:not(.anim) .term-caret {
 
 /* ── Blog Post Navigation ───────────────────────────────────────────────── */
 
+.blog-post-install {
+	margin-top: var(--space-2xl);
+}
+
 .blog-post-nav {
 	display: grid;
 	grid-template-columns: 1fr auto 1fr;
@@ -2608,6 +2736,12 @@ html:not(.anim) .term-caret {
 	text-decoration: none;
 	font-size: var(--text-sm);
 	transition: color var(--transition-fast);
+}
+
+p.install-linux-note a,
+p.install-fineprint a {
+	text-decoration: underline;
+	text-underline-offset: 3px;
 }
 
 .blog-post-nav a:hover {
@@ -2647,4 +2781,187 @@ html:not(.anim) .term-caret {
 	.blog-nav-next {
 		text-align: center;
 	}
+}
+
+/* ── Download thanks ────────────────────────────────────────────────────── */
+
+.download-thanks {
+	width: min(640px, calc(100vw - 32px));
+	max-height: min(760px, calc(100dvh - 32px));
+	overflow: auto;
+	margin: auto;
+	padding: 18px 20px 20px;
+	border: 1px solid var(--border2);
+	border-radius: 6px;
+	background: var(--container-workspace-bg);
+	color: var(--text);
+}
+
+.download-thanks::backdrop {
+	background: color-mix(in srgb, black 55%, transparent);
+}
+
+.download-thanks-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.download-thanks-head h2 {
+	margin: 0;
+	font-size: 18px;
+	font-weight: 600;
+}
+
+.download-thanks-note {
+	margin: 6px 0 0;
+	color: var(--muted);
+	font-size: 13.5px;
+}
+
+.download-thanks-close {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--muted);
+	cursor: pointer;
+}
+
+.download-thanks-close:hover {
+	background: var(--hover);
+	color: var(--text);
+}
+
+.download-thanks .feature-grid {
+	margin: 14px 0;
+}
+
+a.feature-card {
+	color: inherit;
+	text-decoration: none;
+}
+
+a.feature-card:hover {
+	color: inherit;
+	text-decoration: none;
+	border-color: color-mix(in srgb, var(--accent) 55%, var(--border2));
+}
+
+.download-survey {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 10px;
+}
+
+.download-survey h3 {
+	margin: 0;
+}
+
+.download-survey [data-survey-welcome],
+.download-survey [data-survey-answered] {
+	margin: 0;
+	color: var(--muted);
+	font-size: 13.5px;
+}
+
+.download-survey-action {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.download-survey-progress,
+.download-survey-hint {
+	margin: 0;
+	color: var(--muted);
+	font-family: var(--font-mono);
+	font-size: 12px;
+}
+
+.download-survey-question {
+	width: 100%;
+	min-inline-size: 0;
+	margin: 4px 0 0;
+	padding: 0;
+	border: 0;
+}
+
+.download-survey-question:focus-visible,
+.download-survey-thanks:focus-visible {
+	outline-offset: 6px;
+	border-radius: 4px;
+}
+
+.download-survey-question legend {
+	margin: 0 0 8px;
+	padding: 0;
+	font-size: 14.5px;
+	font-weight: 600;
+}
+
+.download-survey-choices {
+	display: grid;
+	gap: 8px;
+}
+
+.download-survey-choices.columns {
+	grid-template-columns: 1fr 1fr;
+	column-gap: 18px;
+}
+
+.download-survey-choice {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	font-size: 13.5px;
+	cursor: pointer;
+}
+
+.download-survey-choice input {
+	margin-top: 2px;
+	accent-color: var(--accent);
+}
+
+.download-survey-text {
+	width: 100%;
+	margin-top: 6px;
+	padding: 8px 10px;
+	border: 1px solid var(--border2);
+	border-radius: 4px;
+	background: var(--input);
+	color: var(--text);
+	font: inherit;
+	font-size: 13.5px;
+}
+
+.download-survey-thanks {
+	margin: 4px 0 0;
+	font-size: 14.5px;
+}
+
+.download-survey .btn:disabled,
+.download-survey .btn:disabled:hover {
+	background: var(--control-primary-bg);
+	border-color: var(--control-primary-bg);
+	color: var(--control-primary-text);
+	opacity: 0.45;
+	cursor: default;
+}
+
+@media (max-width: 560px) {
+	.download-survey-choices.columns {
+		grid-template-columns: 1fr;
+	}
+}
+
+.download-thanks [hidden] {
+	display: none;
 }

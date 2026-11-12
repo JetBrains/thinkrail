@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TodoStore } from "pi-todos/core";
 import { setOneShotRunner } from "../assist";
+import { previewPr } from "../pr/pr";
 import { generateTodoSummary } from "./todos";
 
 // generateTodoSummary: the host-side auto-draft of a completed plan's note when the agent left none.
@@ -53,20 +54,29 @@ function seedDone(store: TodoStore): void {
 	store.update(b.id, { status: "done" });
 }
 
-test("generates and persists a summary when the completed plan has none", async () => {
+test("generates and persists a PR-body summary when the completed plan has none", async () => {
 	let seen = "";
+	let seenSystem = "";
+	const draft =
+		"## Summary\n\nShipped the EV ranker end to end.\n\n" +
+		"## Changes\n\n_no cross-cutting notes_\n\n" +
+		"## Testing\n\n- pytest \u2192 3 pass";
 	setOneShotRunner(async (req) => {
 		seen = req.prompt;
-		return { text: "Shipped the EV ranker end to end.", model: { provider: "p", id: "m" } };
+		seenSystem = req.system ?? "";
+		return { text: draft, model: { provider: "p", id: "m" } };
 	});
 	const store = new TodoStore(repo, SESSION);
 	seedDone(store);
 
 	const result = await generateTodoSummary({ workspaceId: "w1", sessionId: SESSION });
-	expect(result.summary).toBe("Shipped the EV ranker end to end.");
-	expect(new TodoStore(repo, SESSION).read().summary).toBe("Shipped the EV ranker end to end.");
+	expect(result.summary).toBe(draft);
+	expect(new TodoStore(repo, SESSION).read().summary).toBe(draft);
 	expect(seen).toContain("Rework ranking");
 	expect(seen).toContain("verified: pytest");
+	expect(seenSystem).toContain("## Summary");
+	expect(seenSystem).toContain("## Changes");
+	expect(seenSystem).toContain("## Testing");
 });
 
 test("discards the draft when the plan's step set changed during generation", async () => {
@@ -118,6 +128,22 @@ test("returns null (no model call) when the plan is not fully done", async () =>
 	expect(new TodoStore(repo, SESSION).read().summary).toBeUndefined();
 });
 
+test("previewPr drives summary generation on the host side so the PR body is never empty", async () => {
+	const draft =
+		"## Summary\n\nShipped end to end.\n\n" +
+		"## Changes\n\n_no cross-cutting notes_\n\n" +
+		"## Testing\n\n- pytest \u2192 3 pass";
+	setOneShotRunner(async () => ({ text: draft, model: { provider: "p", id: "m" } }));
+	const store = new TodoStore(repo, SESSION);
+	seedDone(store);
+	expect(new TodoStore(repo, SESSION).read().summary).toBeUndefined();
+
+	const preview = await previewPr({ workspaceId: "w1", sessionId: SESSION });
+	expect(new TodoStore(repo, SESSION).read().summary).toBe(draft);
+	expect(preview.body).toContain("## Summary");
+	expect(preview.body).toContain("## Testing");
+});
+
 test("a concurrent request shares the in-flight draft instead of getting null", async () => {
 	let calls = 0;
 	setOneShotRunner(async () => {
@@ -132,7 +158,9 @@ test("a concurrent request shares the in-flight draft instead of getting null", 
 		generateTodoSummary({ workspaceId: "w1", sessionId: SESSION }),
 		generateTodoSummary({ workspaceId: "w1", sessionId: SESSION }),
 	]);
-	expect(chat.summary).toBe("One shared draft.");
-	expect(plan.summary).toBe("One shared draft.");
+	expect(chat.summary).toContain("One shared draft.");
+	expect(chat.summary).toContain("## Changes");
+	expect(chat.summary).toContain("## Testing");
+	expect(plan.summary).toBe(chat.summary);
 	expect(calls).toBe(1);
 });

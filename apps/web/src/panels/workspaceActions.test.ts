@@ -1,10 +1,23 @@
-import { expect, test } from "bun:test";
-import { WORKSPACE_RENAME_PROTOCOL_VERSION, type Workspace } from "@thinkrail/contracts";
+import { afterEach, expect, spyOn, test } from "bun:test";
+import {
+	type Project,
+	WORKSPACE_RENAME_PROTOCOL_VERSION,
+	WORKSPACE_SETTLE_PROTOCOL_VERSION,
+	type Workspace,
+} from "@thinkrail/contracts";
+import { useAppStore } from "../store";
+import * as wireTransport from "../transport/wireTransport";
 import {
 	canRenameWorkspace,
+	canSettleWorkspace,
 	createRenameController,
+	moveProject,
 	workspaceRenameValue,
 } from "./workspaceActions";
+
+let restoreTransport: () => void = () => {};
+
+afterEach(() => restoreTransport());
 
 const managed: Workspace = {
 	id: "w1",
@@ -106,4 +119,45 @@ test("reset abandons an open or pending edit so a later capable welcome renames 
 	expect(renamed).toEqual([]);
 	rename.reset();
 	expect(editing).toEqual([true, false]);
+});
+
+test("settling is offered for a worktree only — never the Default workspace or a chat without a project", () => {
+	expect(canSettleWorkspace(WORKSPACE_SETTLE_PROTOCOL_VERSION, managed)).toBe(true);
+	expect(
+		canSettleWorkspace(WORKSPACE_SETTLE_PROTOCOL_VERSION, { ...managed, kind: "default" }),
+	).toBe(false);
+	expect(canSettleWorkspace(WORKSPACE_SETTLE_PROTOCOL_VERSION, { ...managed, kind: "chat" })).toBe(
+		false,
+	);
+	expect(canSettleWorkspace(WORKSPACE_SETTLE_PROTOCOL_VERSION - 1, managed)).toBe(false);
+});
+
+test("a replayed move reply never reopens a project the host's newer snapshot closed", async () => {
+	const project = (id: string, rank: number): Project => ({
+		id,
+		name: id,
+		path: `/projects/${id}`,
+		slug: id,
+		lastOpened: 100,
+		rank,
+	});
+	const moved = project("p1", 300);
+	const target = project("p2", 200);
+	useAppStore.getState().installProjectSnapshot([target], [{ ...moved, closed: true }, target]);
+	const requests: [string, unknown][] = [];
+	const transport = {
+		request: (method: string, params: unknown) => {
+			requests.push([method, params]);
+			return Promise.resolve(moved);
+		},
+	} as unknown as ReturnType<typeof wireTransport.getTransport>;
+	const spy = spyOn(wireTransport, "getTransport").mockReturnValue(transport);
+	restoreTransport = () => spy.mockRestore();
+
+	expect(await moveProject("p1", "p2", "before")).toBe(true);
+
+	expect(requests).toEqual([["project.move", { id: "p1", targetId: "p2", placement: "before" }]]);
+	const state = useAppStore.getState();
+	expect(state.projects.map((candidate) => candidate.id)).toEqual(["p2"]);
+	expect(state.recentProjects.find((candidate) => candidate.id === "p1")?.closed).toBe(true);
 });

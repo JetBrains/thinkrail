@@ -5,11 +5,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TodoStore } from "pi-todos/core";
 import { gitCommitPaths } from "../git";
-import { enqueueTodoMutation, reconcileChangeArtifacts } from "./artifacts";
+import { reconcileChangeArtifacts } from "./artifacts";
 import {
 	clearAllPendingReviews,
 	dropReviewRecord,
 	putReviewRecord,
+	readAutoCycles,
 	readReviewRecords,
 	setAutoCycles,
 } from "./reviews";
@@ -280,47 +281,36 @@ test("a path-list fallback redo resets the review record (no sha to watermark ag
 	expect(readReviewRecords(repo, SESSION)[todo.id]).toBeUndefined();
 });
 
-test("todo.remove prunes the item's review record; the plan summary rides listTodos", async () => {
+test("removeTodo drops a pending/in_progress item plus its baseline + review record", async () => {
 	const store = new TodoStore(repo, SESSION);
-	const { id } = committedItem(store, "step", "impl.ts");
-	approveTodoReview({ workspaceId: "w1", sessionId: SESSION, id });
-	await removeTodo({ workspaceId: "w1", sessionId: SESSION, id });
-	expect(readReviewRecords(repo, SESSION)).toEqual({});
+	const pending = store.add({ title: "pending work" });
+	const active = store.add({ title: "active work" });
+	store.update(active.id, { status: "in_progress" });
+	setAutoCycles(repo, SESSION, active.id, 1);
 
-	store.setSummary("Everything landed; suite green.");
-	const plan = await listTodos({ workspaceId: "w1", sessionId: SESSION });
-	expect(plan.summary).toBe("Everything landed; suite green.");
+	await removeTodo({ workspaceId: "w1", sessionId: SESSION, id: pending.id });
+	await removeTodo({ workspaceId: "w1", sessionId: SESSION, id: active.id });
+
+	const plan = new TodoStore(repo, SESSION).read();
+	expect(plan.todos.find((t) => t.id === pending.id)).toBeUndefined();
+	expect(plan.todos.find((t) => t.id === active.id)).toBeUndefined();
+	expect(readAutoCycles(repo, SESSION, active.id)).toBeUndefined();
 });
 
-test("todo.remove rejects while the item is pending an agent review, leaving it in place", async () => {
+test("removeTodo refuses a done item \u2014 completed steps are the plan's history", async () => {
 	const store = new TodoStore(repo, SESSION);
 	const { id } = committedItem(store, "step", "impl.ts");
-	startTodoReview({ workspaceId: "w1", sessionId: SESSION, id });
 
-	// Removing a `reviewing` item would strand the host's in-flight claim until the review resolves,
-	// and let the verdict file orphan findings against an id that no longer exists — see host/SPEC.md.
 	await expect(removeTodo({ workspaceId: "w1", sessionId: SESSION, id })).rejects.toThrow(
-		/currently under review/,
+		/already done/,
 	);
-	expect(store.get(id)).toBeDefined();
+	expect(new TodoStore(repo, SESSION).get(id)).toBeDefined();
 });
 
-test("todo.remove rechecks the host's active-review guard after waiting in the mutation queue", async () => {
-	const store = new TodoStore(repo, SESSION);
-	const { id } = committedItem(store, "step", "impl.ts");
-	let release!: () => void;
-	const gate = new Promise<void>((resolve) => {
-		release = resolve;
-	});
-	const blocker = enqueueTodoMutation("w1", () => gate);
-	let active = false;
-	const removal = removeTodo({ workspaceId: "w1", sessionId: SESSION, id }, () => active);
-	active = true;
-	release();
-	await blocker;
-
-	await expect(removal).rejects.toThrow(/currently under review/);
-	expect(store.get(id)).toBeDefined();
+test("removeTodo on an unknown id is a no-op (idempotent)", async () => {
+	await expect(
+		removeTodo({ workspaceId: "w1", sessionId: SESSION, id: "t_nope" }),
+	).resolves.toEqual({ ok: true });
 });
 
 test("renderFixPackage names changed paths for the fallback change set", () => {

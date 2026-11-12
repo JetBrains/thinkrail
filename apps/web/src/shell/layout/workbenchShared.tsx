@@ -1,4 +1,5 @@
 import { type CollisionDetection, pointerWithin, useDroppable } from "@dnd-kit/core";
+import type { Translator } from "@thinkrail/locales/react";
 import {
 	type ImperativePanelGroupHandle,
 	ResizableHandle,
@@ -18,6 +19,7 @@ import { type LayoutAttention, readLayoutNavigationClock, tupleKey } from "../..
 import type { AuxiliaryRailEntry } from "./auxiliaryPresentation";
 import {
 	type CenterSplitDirection,
+	type ChatFirstPrompts,
 	canJoinAuxiliaryGroup,
 	canPlaceLayoutTab,
 	collectCenterGroups,
@@ -43,6 +45,7 @@ export interface LayoutTabFocusRequest {
 	key: string;
 	location: LayoutGroupLocation;
 	tabId?: string;
+	onlyIfFocusLost?: true;
 }
 
 export interface PreparedLayoutClose {
@@ -52,6 +55,7 @@ export interface PreparedLayoutClose {
 
 export interface WorkbenchProps {
 	workspaceId: string;
+	worktreePath: string;
 	document: WorkspaceLayoutDocument;
 	attention: LayoutAttention;
 	maxSideGroups: number;
@@ -73,6 +77,7 @@ export interface WorkbenchProps {
 		prepare: (latestDocument?: WorkspaceLayoutDocument) => PreparedLayoutClose,
 	) => void;
 	onRenameChat?: (sessionId: string, titleInput: string, currentTitle: string) => void;
+	chatFirstPrompts?: ChatFirstPrompts;
 	onNewChat: (groupId: string) => void;
 	onNewTerminal: (
 		groupId: string,
@@ -143,6 +148,19 @@ export function isResizeArrowKey(key: string): boolean {
 	return ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(key);
 }
 
+function setLayoutFlagged(
+	group: ImperativePanelGroupHandle,
+	sizes: number[],
+	flag: { current: boolean },
+) {
+	flag.current = true;
+	try {
+		group.setLayout(sizes);
+	} finally {
+		flag.current = false;
+	}
+}
+
 export function useCommittedSizes(
 	current: readonly number[],
 	projectionEpoch: string,
@@ -172,12 +190,7 @@ export function useCommittedSizes(
 	const restore = useCallback(() => {
 		const group = groupRef.current;
 		if (!group || group.getLayout().length !== currentRef.current.length) return;
-		restoring.current = true;
-		try {
-			group.setLayout([...currentRef.current]);
-		} finally {
-			restoring.current = false;
-		}
+		setLayoutFlagged(group, [...currentRef.current], restoring);
 	}, [groupRef]);
 	const cancelStaleGesture = useCallback(() => {
 		const active = dragging.current || keyboard.current;
@@ -349,8 +362,12 @@ export function useHorizontalOverflow(
 	return overflow;
 }
 
-export function tabSearchKeywords(tab: LayoutTab): string[] {
-	const name = layoutTabName(tab);
+export function tabSearchKeywords(
+	t: Translator,
+	tab: LayoutTab,
+	chatFirstPrompts: ChatFirstPrompts | undefined,
+): string[] {
+	const name = layoutTabName(t, tab, chatFirstPrompts);
 	switch (tab.kind) {
 		case "file":
 		case "diff":
@@ -394,10 +411,32 @@ export function railControlId(entry: AuxiliaryRailEntry): string {
 		: encodedElementId("layout-rail-control", entry.key);
 }
 
+function isFocusLost(active: Element | null): boolean {
+	return (
+		!active ||
+		active === active.ownerDocument.body ||
+		!active.isConnected ||
+		active.getClientRects().length === 0
+	);
+}
+
+function focusRestsInSelectedPanel(tab: HTMLElement | null, active: Element | null): boolean {
+	if (!tab || isFocusLost(active)) return false;
+	if (tab.getAttribute("aria-selected") !== "true" && tab.getAttribute("aria-pressed") !== "true") {
+		return false;
+	}
+	const panelId = tab.getAttribute("aria-controls");
+	const panel = panelId ? globalThis.document.getElementById(panelId) : null;
+	return panel?.contains(active) ?? false;
+}
+
 export function focusLayoutRequest(request: LayoutTabFocusRequest): void {
+	const active = globalThis.document.activeElement;
+	if (request.onlyIfFocusLost && !isFocusLost(active)) return;
 	const tab = request.tabId
 		? globalThis.document.getElementById(tabDomId(request.location, request.tabId))
 		: null;
+	if (focusRestsInSelectedPanel(tab, active)) return;
 	const pane = globalThis.document.getElementById(groupDomId(request.location));
 	const rail = globalThis.document
 		.getElementById(railGroupDomId(request.location))
@@ -558,6 +597,7 @@ export function findLayoutGroupTabs(
 
 export interface SharedGroupProps {
 	workspaceId: string;
+	worktreePath: string;
 	document: WorkspaceLayoutDocument;
 	readAttention: () => LayoutAttention;
 	selectionEpochRef: React.MutableRefObject<number>;
@@ -582,6 +622,7 @@ export interface SharedGroupProps {
 	onHideSide: (region: LayoutAuxiliaryRegion) => void;
 	onRevealTool: (tool: LayoutToolId) => void;
 	onRenameChat: WorkbenchProps["onRenameChat"];
+	chatFirstPrompts: WorkbenchProps["chatFirstPrompts"];
 	canFocusAdjacentGroup: boolean;
 }
 

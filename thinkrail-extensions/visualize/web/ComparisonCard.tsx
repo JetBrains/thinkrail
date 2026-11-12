@@ -1,14 +1,20 @@
 import { RiCheckLine as Check, RiCloseLine as X } from "@remixicon/react";
 import { strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
+import { useT } from "@thinkrail/locales/react";
 import { parseComparisonOptions } from "./args";
 import { MermaidView } from "./MermaidView";
 
 export function ComparisonCard({ args }: ToolRenderProps) {
+	const t = useT();
 	const title = strArg(args, "title");
 	const options = parseComparisonOptions(args.options);
 
 	if (options.length === 0) {
-		return <span className="text-text-muted tr-text-metadata italic">(no options)</span>;
+		return (
+			<span className="text-text-muted tr-text-metadata italic">
+				{t("visualize.comparison.empty")}
+			</span>
+		);
 	}
 	return (
 		<div data-testid="tool-visualize-comparison" className="flex flex-col gap-8">
@@ -26,7 +32,7 @@ export function ComparisonCard({ args }: ToolRenderProps) {
 							<span className="tr-text-ui text-text-default">{opt.name}</span>
 							{opt.recommended ? (
 								<span className="rounded-sm bg-primary px-8 py-2 text-text-on-primary tr-text-metadata">
-									Recommended
+									{t("visualize.comparison.recommended")}
 								</span>
 							) : null}
 						</div>

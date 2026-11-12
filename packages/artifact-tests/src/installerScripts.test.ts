@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
 	chmodSync,
@@ -20,6 +20,8 @@ const roots: string[] = [];
 const binaryBody = "controlled thinkrail artifact\n";
 const binaryHash = createHash("sha256").update(binaryBody).digest("hex");
 const powershell = Bun.which("powershell.exe") ?? Bun.which("pwsh");
+const POWERSHELL_TEST_TIMEOUT_MS = 30_000;
+const POWERSHELL_WARM_UP_TIMEOUT_MS = 120_000;
 
 interface Fixture {
 	root: string;
@@ -53,6 +55,11 @@ function makeFixture(): Fixture {
 		fakeBin,
 		"uname",
 		`if [ "\${1:-}" = "-m" ]; then printf '%s\\n' "\${FAKE_UNAME_M:-x86_64}"; else printf '%s\\n' "\${FAKE_UNAME_S:-Linux}"; fi\n`,
+	);
+	writeTool(
+		fakeBin,
+		"sysctl",
+		`[ "$*" = "-n sysctl.proc_translated" ] || exit 1\nprintf '%s\\n' "\${FAKE_PROC_TRANSLATED:-0}"\n`,
 	);
 	writeTool(
 		fakeBin,
@@ -285,52 +292,120 @@ describe("install.sh validation", () => {
 });
 
 describe.skipIf(process.platform !== "win32" || !powershell)("install.ps1 validation", () => {
+	beforeAll(() => {
+		if (!powershell) throw new Error("PowerShell is unavailable");
+		const warmUp = Bun.spawnSync(
+			[powershell, "-NoProfile", "-NonInteractive", "-Command", "exit 0"],
+			{ stdout: "pipe", stderr: "pipe" },
+		);
+		expect(warmUp.exitCode).toBe(0);
+	}, POWERSHELL_WARM_UP_TIMEOUT_MS);
+
+	test(
+		"recognizes its bin dir on PATH whichever separator an entry is spelled with",
+		() => {
+			if (!powershell) throw new Error("PowerShell is unavailable");
+			const fixture = makeFixture();
+			const definition = /^function Test-ThinkRailOnPath \{[\s\S]*?^\}/m.exec(
+				readFileSync(powershellInstaller, "utf8"),
+			)?.[0];
+			if (!definition) throw new Error("install.ps1 defines no Test-ThinkRailOnPath");
+			const script = join(fixture.root, "on-path.ps1");
+			writeFileSync(
+				script,
+				[
+					definition,
+					"$dir = 'C:\\Users\\me\\.thinkrail\\bin'",
+					"Write-Output (Test-ThinkRailOnPath -Dir $dir -PathEntries @('C:/Users/me/.thinkrail/bin'))",
+					"Write-Output (Test-ThinkRailOnPath -Dir $dir -PathEntries @('c:/users/ME/.thinkrail/bin/'))",
+					"Write-Output (Test-ThinkRailOnPath -Dir $dir -PathEntries @('C:\\Users\\me\\.thinkrail\\bin\\'))",
+					"Write-Output (Test-ThinkRailOnPath -Dir 'C:/Users/me/.thinkrail/bin' -PathEntries @('C:\\Users\\me\\.thinkrail\\bin'))",
+					"Write-Output (Test-ThinkRailOnPath -Dir $dir -PathEntries @('C:/Other/bin'))",
+				].join("\n"),
+			);
+			const child = Bun.spawnSync(
+				[
+					powershell,
+					"-NoProfile",
+					"-NonInteractive",
+					"-ExecutionPolicy",
+					"Bypass",
+					"-File",
+					script,
+				],
+				{ stdout: "pipe", stderr: "pipe" },
+			);
+			expect(child.stderr.toString()).toBe("");
+			expect(child.stdout.toString().trim().split(/\r?\n/)).toEqual([
+				"True",
+				"True",
+				"True",
+				"True",
+				"False",
+			]);
+		},
+		POWERSHELL_TEST_TIMEOUT_MS,
+	);
+
 	test.each([
 		["stable", "v1.2.3", "Invalid version"],
 		["stable", "1.2.3-nightly.4", "does not belong to the stable channel"],
 		["nightly", "1.2.3", "does not belong to the nightly channel"],
-	])("rejects %s/%s before network access", (channel, requested, message) => {
-		const fixture = makeFixture();
-		const result = runPowerShellInstaller(fixture, channel, requested);
-		expect(result.exitCode).not.toBe(0);
-		expect(`${result.stdout}\n${result.stderr}`).toContain(message);
-		expect(existsSync(join(fixture.root, "powershell-network.log"))).toBe(false);
-	});
+	])(
+		"rejects %s/%s before network access",
+		(channel, requested, message) => {
+			const fixture = makeFixture();
+			const result = runPowerShellInstaller(fixture, channel, requested);
+			expect(result.exitCode).not.toBe(0);
+			expect(`${result.stdout}\n${result.stderr}`).toContain(message);
+			expect(existsSync(join(fixture.root, "powershell-network.log"))).toBe(false);
+		},
+		POWERSHELL_TEST_TIMEOUT_MS,
+	);
 
-	test.each([
-		"C:/isolated/100%",
-		"C:/isolated/unsafe!prefix",
-	])("rejects the cmd-unsafe prefix %s before network access", (prefix) => {
-		const fixture = makeFixture();
-		const result = runPowerShellInstaller(fixture, "stable", "1.2.3", "v1.2.3", prefix);
-		expect(result.exitCode).not.toBe(0);
-		expect(`${result.stdout}\n${result.stderr}`).toContain("Invalid prefix");
-		expect(existsSync(join(fixture.root, "powershell-network.log"))).toBe(false);
-	});
+	test.each(["C:/isolated/100%", "C:/isolated/unsafe!prefix"])(
+		"rejects the cmd-unsafe prefix %s before network access",
+		(prefix) => {
+			const fixture = makeFixture();
+			const result = runPowerShellInstaller(fixture, "stable", "1.2.3", "v1.2.3", prefix);
+			expect(result.exitCode).not.toBe(0);
+			expect(`${result.stdout}\n${result.stderr}`).toContain("Invalid prefix");
+			expect(existsSync(join(fixture.root, "powershell-network.log"))).toBe(false);
+		},
+		POWERSHELL_TEST_TIMEOUT_MS,
+	);
 
-	test("rejects a resolved stable tag before constructing an artifact URL", () => {
-		const fixture = makeFixture();
-		const result = runPowerShellInstaller(fixture, "stable", "latest", "v1.2.3-nightly.4");
-		expect(result.exitCode).not.toBe(0);
-		expect(`${result.stdout}\n${result.stderr}`).toContain(
-			"Invalid resolved tag for the stable channel",
-		);
-		expect(readFileSync(join(fixture.root, "powershell-network.log"), "utf8").trim()).toBe("api");
-	});
+	test(
+		"rejects a resolved stable tag before constructing an artifact URL",
+		() => {
+			const fixture = makeFixture();
+			const result = runPowerShellInstaller(fixture, "stable", "latest", "v1.2.3-nightly.4");
+			expect(result.exitCode).not.toBe(0);
+			expect(`${result.stdout}\n${result.stderr}`).toContain(
+				"Invalid resolved tag for the stable channel",
+			);
+			expect(readFileSync(join(fixture.root, "powershell-network.log"), "utf8").trim()).toBe("api");
+		},
+		POWERSHELL_TEST_TIMEOUT_MS,
+	);
 
 	test.each([
 		["stable", "1.2.3", "v1.2.3"],
 		["nightly", "1.2.3-nightly.7", "v1.2.3-nightly.7"],
-	])("constructs the exact %s artifact target", (channel, requested, tag) => {
-		const fixture = makeFixture();
-		const result = runPowerShellInstaller(fixture, channel, requested);
-		expect(result.exitCode).not.toBe(0);
-		const requests = readFileSync(join(fixture.root, "powershell-network.log"), "utf8")
-			.trim()
-			.split(/\r?\n/);
-		expect(requests).toHaveLength(1);
-		expect(requests[0]).toContain(`/releases/download/${tag}/thinkrail-windows-x64.exe`);
-	});
+	])(
+		"constructs the exact %s artifact target",
+		(channel, requested, tag) => {
+			const fixture = makeFixture();
+			const result = runPowerShellInstaller(fixture, channel, requested);
+			expect(result.exitCode).not.toBe(0);
+			const requests = readFileSync(join(fixture.root, "powershell-network.log"), "utf8")
+				.trim()
+				.split(/\r?\n/);
+			expect(requests).toHaveLength(1);
+			expect(requests[0]).toContain(`/releases/download/${tag}/thinkrail-windows-x64.exe`);
+		},
+		POWERSHELL_TEST_TIMEOUT_MS,
+	);
 });
 
 describe("install.sh controlled installation", () => {
@@ -341,35 +416,56 @@ describe("install.sh controlled installation", () => {
 		["nightly", "1.2.3-nightly.7", "v1.2.3-nightly.7", "Linux", "aarch64", "thinkrail-linux-arm64"],
 		["stable", "1.2.3", "v1.2.3", "Darwin", "arm64", "thinkrail-darwin-arm64"],
 		["nightly", "1.2.3-nightly.7", "v1.2.3-nightly.7", "Darwin", "arm64", "thinkrail-darwin-arm64"],
-	])("selects the exact %s %s target (%s, %s/%s, %s)", (channel, version, tag, unameS, unameM, assetName) => {
+		["stable", "1.2.3", "v1.2.3", "Darwin", "x86_64", "thinkrail-darwin-x64"],
+		["nightly", "1.2.3-nightly.7", "v1.2.3-nightly.7", "Darwin", "x86_64", "thinkrail-darwin-x64"],
+	])(
+		"selects the exact %s %s target (%s, %s/%s, %s)",
+		(channel, version, tag, unameS, unameM, assetName) => {
+			const fixture = makeFixture();
+			const result = runInstaller(
+				fixture,
+				[
+					"--channel",
+					channel,
+					"--version",
+					version,
+					"--prefix",
+					shellPath(fixture.prefix),
+					"--no-modify-path",
+				],
+				{ FAKE_UNAME_S: unameS, FAKE_UNAME_M: unameM, FAKE_ASSET_NAME: assetName },
+			);
+			expect(result.exitCode).toBe(0);
+			const requests = curlRequests(fixture);
+			expect(requests).toHaveLength(2);
+			expect(requests[0]).toContain(`/releases/download/${tag}/${assetName}`);
+			expect(requests[1]).toContain(`/releases/download/${tag}/SHA256SUMS`);
+			const metadata = JSON.parse(
+				readFileSync(join(fixture.home, ".config", "thinkrail", "install.json"), "utf8"),
+			);
+			expect(metadata).toMatchObject({ channel, version, tag, path_entry_added: false });
+			expect(
+				readdirSync(join(fixture.home, ".config", "thinkrail")).filter((name) =>
+					name.includes(".tmp."),
+				),
+			).toEqual([]);
+		},
+	);
+
+	test("installs the native arm64 CLI from a Rosetta shell on Apple Silicon", () => {
 		const fixture = makeFixture();
 		const result = runInstaller(
 			fixture,
-			[
-				"--channel",
-				channel,
-				"--version",
-				version,
-				"--prefix",
-				shellPath(fixture.prefix),
-				"--no-modify-path",
-			],
-			{ FAKE_UNAME_S: unameS, FAKE_UNAME_M: unameM, FAKE_ASSET_NAME: assetName },
+			["--version", "1.2.3", "--prefix", shellPath(fixture.prefix), "--no-modify-path"],
+			{
+				FAKE_UNAME_S: "Darwin",
+				FAKE_UNAME_M: "x86_64",
+				FAKE_PROC_TRANSLATED: "1",
+				FAKE_ASSET_NAME: "thinkrail-darwin-arm64",
+			},
 		);
 		expect(result.exitCode).toBe(0);
-		const requests = curlRequests(fixture);
-		expect(requests).toHaveLength(2);
-		expect(requests[0]).toContain(`/releases/download/${tag}/${assetName}`);
-		expect(requests[1]).toContain(`/releases/download/${tag}/SHA256SUMS`);
-		const metadata = JSON.parse(
-			readFileSync(join(fixture.home, ".config", "thinkrail", "install.json"), "utf8"),
-		);
-		expect(metadata).toMatchObject({ channel, version, tag, path_entry_added: false });
-		expect(
-			readdirSync(join(fixture.home, ".config", "thinkrail")).filter((name) =>
-				name.includes(".tmp."),
-			),
-		).toEqual([]);
+		expect(curlRequests(fixture)[0]).toContain("/releases/download/v1.2.3/thinkrail-darwin-arm64");
 	});
 
 	test("installs under a Unix prefix containing Unicode and safe punctuation", () => {

@@ -6,6 +6,7 @@ import {
 	createWorkspaceViaDialog,
 	enterDefaultWorkspace,
 	openFixtureProject,
+	revealWorkbenchTool,
 } from "./fixtures/app";
 import { gitAs } from "./fixtures/git";
 
@@ -25,8 +26,8 @@ test("Open PR: no origin errors, with origin pushes, re-press follows the same b
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
 
-	await page.getByTestId("chat-plan-toggle").click();
-	await page.getByTestId("chat-plan-popover").getByTestId("todo-open-plan").click();
+	await revealWorkbenchTool(page, "plan");
+	await page.getByTestId("plan-rail-pane").getByTestId("todo-open-plan").click();
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();
 	const openPr = pane.getByTestId("plan-open-pr");
@@ -90,11 +91,12 @@ test("Open PR is disabled in the Default workspace, whose branch is its own base
 	await page.getByTestId("new-chat").first().click();
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 
-	await page.getByTestId("chat-plan-toggle").click();
-	await page.getByTestId("chat-plan-popover").getByTestId("todo-open-plan").click();
+	await revealWorkbenchTool(page, "plan");
+	await page.getByTestId("plan-rail-pane").getByTestId("todo-open-plan").click();
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();
 	const openPr = pane.getByTestId("plan-open-pr");
 	await expect(openPr).toBeDisabled();
-	await expect(openPr).toHaveAttribute("title", /base branch/);
+	await openPr.hover({ force: true });
+	await expect(page.getByRole("tooltip")).toContainText(/base branch/);
 });

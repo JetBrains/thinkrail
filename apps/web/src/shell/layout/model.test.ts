@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { applyLocale, currentTranslator } from "@thinkrail/locales/react";
 import type { LayoutAttention } from "../../lib";
 import {
 	adoptToolSelections,
@@ -27,8 +28,8 @@ import {
 	resizeSideGroups,
 	resizeSideRegion,
 	revealTool,
-	SEPARATE_PANES_REASON,
 	selectTab,
+	separatePanesReason,
 	setAuxiliaryGroupFolded,
 	setBottomAlignment,
 	setSideGroupFolded,
@@ -43,9 +44,14 @@ import {
 	withAvailablePlacementId,
 } from "./model";
 import { BUILTIN_LAYOUT_PRESETS } from "./presets";
-import type { LayoutCenterTab, LayoutTerminalTab, WorkspaceLayoutDocument } from "./types";
+import type {
+	LayoutCenterTab,
+	LayoutFileTab,
+	LayoutTerminalTab,
+	WorkspaceLayoutDocument,
+} from "./types";
 
-const file = (id: string): LayoutCenterTab => ({
+const file = (id: string): LayoutFileTab => ({
 	kind: "file",
 	id,
 	name: `${id}.ts`,
@@ -71,8 +77,8 @@ function baseDocument(tabs: LayoutCenterTab[] = []): WorkspaceLayoutDocument {
 	};
 }
 
-function mutation<T extends { document: WorkspaceLayoutDocument } | { reason: string }>(result: T) {
-	if ("reason" in result) throw new Error(result.reason);
+function mutation(result: LayoutOperationResult) {
+	if (isLayoutUnavailable(result)) throw new Error(result.reason);
 	return result;
 }
 
@@ -101,11 +107,11 @@ describe("workspace layout model", () => {
 		expect(revealTool(document, "files", 1)).toEqual({
 			reason: "There is no auxiliary group available for this tool.",
 		});
-		const twoPanes = mutation(createAuxiliaryGroup(document, "right", toolTab("changes"), 1, 6));
+		const twoPanes = mutation(createAuxiliaryGroup(document, "right", toolTab("plan"), 1, 6));
 		const atLimit = mutation(revealTool(twoPanes.document, "files", 2)).document;
 		expect(atLimit.right.groups.map((group) => group.tabs.map((tab) => tab.id))).toEqual([
 			["terminal:right"],
-			["tool:changes", "tool:files"],
+			["tool:plan", "tool:files"],
 		]);
 	});
 
@@ -116,10 +122,18 @@ describe("workspace layout model", () => {
 			tabKey: `t${n}`,
 			name: `Terminal ${n}`,
 		});
-		expect(describeLayoutGroup([])).toBe("(empty)");
-		expect(describeLayoutGroup([toolTab("changes"), toolTab("review")])).toBe("(Changes, Review)");
+		expect(describeLayoutGroup(currentTranslator(), [])).toBe("(empty)");
+		expect(describeLayoutGroup(currentTranslator(), [toolTab("plan"), toolTab("review")])).toBe(
+			"(TODO List, Review)",
+		);
 		expect(
-			describeLayoutGroup([terminal(1), terminal(2), terminal(3), terminal(4), terminal(5)]),
+			describeLayoutGroup(currentTranslator(), [
+				terminal(1),
+				terminal(2),
+				terminal(3),
+				terminal(4),
+				terminal(5),
+			]),
 		).toBe("(Terminal 1, Terminal 2, Terminal 3, +2)");
 	});
 
@@ -133,7 +147,7 @@ describe("workspace layout model", () => {
 			visible: true,
 			groups: [{ id: "bottom-folded", weight: 1, folded: true, tabs: [] }],
 		};
-		const attention = reconcileAttention(document);
+		const attention = reconcileAttention(document, undefined);
 		expect(
 			mutation(showSide(document, "right", 6, attention)).document.right.groups[0]?.folded,
 		).toBe(false);
@@ -145,8 +159,73 @@ describe("workspace layout model", () => {
 	test("canonical tool labels override stale persisted display copy", () => {
 		const legacyFiles = { ...toolTab("files"), name: "All files" };
 		expect(toolTab("files").name).toBe("Files");
-		expect(layoutTabName(legacyFiles)).toBe("Files");
-		expect(layoutTabName(file("one"))).toBe("one.ts");
+		expect(layoutTabName(currentTranslator(), legacyFiles)).toBe("Files");
+		expect(layoutTabName(currentTranslator(), file("one"))).toBe("one.ts");
+	});
+
+	test("default chat, terminal, Changes, diff and plan names follow the current language", async () => {
+		await applyLocale("de", {
+			de: {
+				"store.chatTab.defaultName": "Unterhaltung",
+				"store.terminal.defaultTitle": "Konsole {{index}}",
+				"changes.tab.name": "Änderungen",
+				"chat.todo.planDocName": "Plan: {{title}}",
+			},
+		});
+		try {
+			const t = currentTranslator();
+			const chat = (name: string) => ({ kind: "chat", id: "c", name, sessionId: "s" }) as const;
+			expect(layoutTabName(t, chat(""))).toBe("Unterhaltung");
+			expect(layoutTabName(t, chat("Fix login"))).toBe("Fix login");
+			const prompts = { s: "Please refactor the authentication module so that tokens refresh" };
+			expect(layoutTabName(t, chat(""), prompts)).toBe(
+				"Please refactor the authentication module so\u2026",
+			);
+			expect(layoutTabName(t, chat("Fix login"), prompts)).toBe("Fix login");
+			expect(layoutTabName(t, chat(""), { other: "x" })).toBe("Unterhaltung");
+			expect(describeLayoutGroup(t, [chat(""), toolTab("plan")], prompts)).toContain(
+				"Please refactor the authentication module so\u2026",
+			);
+			const plan = {
+				kind: "document",
+				id: "d",
+				name: "",
+				documentKind: "todo-plan",
+				sourceId: "s",
+				docPath: "TODO.md",
+			} as const;
+			expect(layoutTabName(t, plan)).toBe("Plan: Unterhaltung");
+			expect(layoutTabName(t, plan, prompts)).toBe(
+				"Plan: Please refactor the authentication module so\u2026",
+			);
+			expect(layoutTabName(t, { kind: "terminal", id: "t", name: "Terminal 2", tabKey: "k" })).toBe(
+				"Konsole 2",
+			);
+			expect(
+				layoutTabName(t, { kind: "changes", id: "x", name: "", scope: { kind: "branch" } }),
+			).toBe("Änderungen");
+			expect(
+				layoutTabName(t, {
+					kind: "diff",
+					id: "d",
+					name: "a.ts",
+					path: "src/a.ts",
+					scope: { kind: "branch" },
+				}),
+			).toBe("a.ts");
+			expect(
+				layoutTabName(t, {
+					kind: "document",
+					id: "p",
+					name: "",
+					documentKind: "todo-plan",
+					sourceId: "s",
+					docPath: "TODO.md",
+				}),
+			).toBe("Plan: Unterhaltung");
+		} finally {
+			await applyLocale("en", {});
+		}
 	});
 
 	test("opens one canonical tab and keeps preview promotion one-way", () => {
@@ -236,7 +315,7 @@ describe("workspace layout model", () => {
 		for (const tab of [...source.tabs]) document = closeLayoutTab(document, tab.id).document;
 		expect(collectCenterGroups(document.center)).toHaveLength(4);
 		document = mutation(
-			removeLayoutGroup(document, { area: "center", groupId: source.id }),
+			removeLayoutGroup(currentTranslator(), document, { area: "center", groupId: source.id }),
 		).document;
 		expect(collectCenterGroups(document.center)).toHaveLength(3);
 
@@ -263,7 +342,7 @@ describe("workspace layout model", () => {
 		};
 		let document = baseDocument([file("one"), terminal]);
 		const intoToolPane = moveTabToGroup(document, terminal, { area: "right", groupId: "right-a" });
-		expect(intoToolPane).toEqual({ reason: SEPARATE_PANES_REASON });
+		expect(intoToolPane).toEqual({ reason: separatePanesReason(currentTranslator()) });
 		document = mutation(createAuxiliaryGroup(document, "right", terminal, 1, 6)).document;
 		const terminalPane = document.right.groups[1];
 		if (!terminalPane) throw new Error("Missing terminal pane fixture");
@@ -273,7 +352,7 @@ describe("workspace layout model", () => {
 		});
 		expect(
 			moveTabToGroup(document, toolTab("files"), { area: "right", groupId: terminalPane.id }),
-		).toEqual({ reason: SEPARATE_PANES_REASON });
+		).toEqual({ reason: separatePanesReason(currentTranslator()) });
 		const renamedTerminal = { ...terminal, name: "Build shell" };
 		document = mutation(openCenterTab(document, renamedTerminal, "center-a", "preview")).document;
 		expect(
@@ -307,17 +386,17 @@ describe("workspace layout model", () => {
 		};
 		let document = baseDocument([file("one"), terminal]);
 		document = mutation(createAuxiliaryGroup(document, "bottom", terminal, 0, 1)).document;
+		const [bottomGroup] = document.bottom.groups;
+		if (!bottomGroup) throw new Error("expected one bottom group");
 		expect(findTabLocation(document, terminal.id)).toEqual({
 			area: "bottom",
-			groupId: document.bottom.groups[0]?.id,
+			groupId: bottomGroup.id,
 		});
 		expect(document.bottom.visible).toBe(true);
 		expect(
-			isLayoutUnavailable(createAuxiliaryGroup(document, "bottom", toolTab("changes"), 1, 1)),
+			isLayoutUnavailable(createAuxiliaryGroup(document, "bottom", toolTab("plan"), 1, 1)),
 		).toBe(true);
-		document = mutation(
-			createAuxiliaryGroup(document, "bottom", toolTab("changes"), 1, 2),
-		).document;
+		document = mutation(createAuxiliaryGroup(document, "bottom", toolTab("plan"), 1, 2)).document;
 		expect(document.bottom.groups).toHaveLength(2);
 		expect(
 			isLayoutUnavailable(
@@ -339,13 +418,13 @@ describe("workspace layout model", () => {
 		document = closeLayoutTab(document, terminal.id).document;
 		expect(document.bottom.groups).toHaveLength(2);
 		expect(document.bottom.groups[0]?.tabs).toEqual([]);
-		expect(document.bottom.groups[1]?.tabs).toEqual([toolTab("changes")]);
+		expect(document.bottom.groups[1]?.tabs).toEqual([toolTab("plan")]);
 		expect(document.bottom.visible).toBe(true);
-		document = closeLayoutTab(document, "tool:changes").document;
+		document = closeLayoutTab(document, "tool:plan").document;
 		expect(document.bottom.groups.map((group) => group.tabs)).toEqual([[], []]);
 		expect(document.bottom.visible).toBe(true);
-		expect(document.toolRestoreTargets.changes?.region).toBe("bottom");
-		const revealed = mutation(revealTool(document, "changes", 6, 2));
+		expect(document.toolRestoreTargets.plan?.region).toBe("bottom");
+		const revealed = mutation(revealTool(document, "plan", 6, 2));
 		expect(findTabLocation(revealed.document, revealed.focusTabId ?? "missing")?.area).toBe(
 			"bottom",
 		);
@@ -418,11 +497,12 @@ describe("workspace layout model", () => {
 		const hidden = hideBottom(shown.document, attention);
 		expect(hidden.document.bottom.visible).toBe(false);
 		expect(hidden.focusGroupId).toBe("center-a");
+		expect(hidden.focusOnlyIfLost).toBe(true);
 
 		const restorable = baseDocument();
-		restorable.toolRestoreTargets.changes = { region: "bottom", index: 0 };
+		restorable.toolRestoreTargets.plan = { region: "bottom", index: 0 };
 		const restored = mutation(showBottom(restorable, 6, 3));
-		expect(findTabLocation(restored.document, "tool:changes")?.area).toBe("bottom");
+		expect(findTabLocation(restored.document, "tool:plan")?.area).toBe("bottom");
 		expect(restored.document.bottom.visible).toBe(true);
 	});
 
@@ -518,20 +598,21 @@ describe("workspace layout model", () => {
 		const hidden = hideSide(revealed.document, "right", attention);
 		expect(hidden.document.right.visible).toBe(false);
 		expect(hidden.focusGroupId).toBe("center-a");
+		expect(hidden.focusOnlyIfLost).toBe(true);
 		expect(hidden.focusTabId).toBeUndefined();
 
 		let atLimit = baseDocument();
 		atLimit = mutation(
-			moveTabToGroup(atLimit, toolTab("changes"), { area: "right", groupId: "right-a" }),
+			moveTabToGroup(atLimit, toolTab("plan"), { area: "right", groupId: "right-a" }),
 		).document;
-		atLimit = closeLayoutTab(atLimit, "tool:changes").document;
+		atLimit = closeLayoutTab(atLimit, "tool:plan").document;
 		atLimit = mutation(setSideGroupFolded(atLimit, "right", "right-a", true)).document;
-		const joined = mutation(revealTool(atLimit, "changes", 1));
+		const joined = mutation(revealTool(atLimit, "plan", 1));
 		expect(joined.document.right.groups).toHaveLength(1);
 		expect(joined.document.right.groups[0]?.folded).toBe(false);
 		expect(joined.document.right.groups[0]?.tabs.map((tab) => tab.id)).toEqual([
 			"tool:files",
-			"tool:changes",
+			"tool:plan",
 		]);
 
 		const legacy = baseDocument();
@@ -565,19 +646,19 @@ describe("workspace layout model", () => {
 		const document = baseDocument();
 		expect(resizeSideRegion(document, "right", document.right.width)).toBe(document);
 		expect(resizeSideGroups(document, "right", [100])).toBe(document);
-		const blocked = createSideGroup(document, "right", toolTab("changes"), 1, 1);
+		const blocked = createSideGroup(document, "right", toolTab("plan"), 1, 1);
 		expect(isLayoutUnavailable(blocked)).toBe(true);
 		const retainedSource = createSideGroup(document, "right", toolTab("files"), 0, 1);
-		expect(retainedSource).toEqual({ reason: "This region is limited to 1 groups." });
+		expect(retainedSource).toEqual({ reason: "This region is limited to 1 group." });
 
-		let grown = mutation(createSideGroup(document, "right", toolTab("changes"), 1, 2)).document;
+		let grown = mutation(createSideGroup(document, "right", toolTab("plan"), 1, 2)).document;
 		expect(createSideGroup(grown, "right", toolTab("files"), grown.right.groups.length, 1)).toEqual(
-			{ reason: "This region is limited to 1 groups." },
+			{ reason: "This region is limited to 1 group." },
 		);
 		expect(grown.right.groups).toHaveLength(2);
 		expect(grown.right.groups.map((group) => group.tabs[0]?.id)).toEqual([
 			"tool:files",
-			"tool:changes",
+			"tool:plan",
 		]);
 		expect(grown.right.groups.map((group) => group.weight)).toEqual([0.5, 0.5]);
 		expect(validateLayoutDocument(grown, 1)).toContain("Too many right groups.");
@@ -600,13 +681,13 @@ describe("workspace layout model", () => {
 
 	test("inserts side groups at boundaries while retaining the source frame slot", () => {
 		let document = baseDocument();
-		document = mutation(createSideGroup(document, "right", toolTab("changes"), 1, 6)).document;
+		document = mutation(createSideGroup(document, "right", toolTab("plan"), 1, 6)).document;
 		document = mutation(createSideGroup(document, "right", toolTab("review"), 2, 6)).document;
 
 		document = mutation(createSideGroup(document, "right", toolTab("files"), 2, 6)).document;
 		expect(document.right.groups.map((group) => group.tabs[0]?.id)).toEqual([
 			undefined,
-			"tool:changes",
+			"tool:plan",
 			"tool:files",
 			"tool:review",
 		]);
@@ -614,7 +695,7 @@ describe("workspace layout model", () => {
 		document = mutation(createSideGroup(document, "right", toolTab("files"), 3, 6)).document;
 		expect(document.right.groups.map((group) => group.tabs[0]?.id)).toEqual([
 			undefined,
-			"tool:changes",
+			"tool:plan",
 			undefined,
 			"tool:files",
 			"tool:review",
@@ -622,11 +703,11 @@ describe("workspace layout model", () => {
 
 		let joined = baseDocument();
 		joined = mutation(
-			moveTabToGroup(joined, toolTab("changes"), { area: "right", groupId: "right-a" }),
+			moveTabToGroup(joined, toolTab("plan"), { area: "right", groupId: "right-a" }),
 		).document;
 		const splitBelow = mutation(createSideGroup(joined, "right", toolTab("files"), 1, 6));
 		expect(splitBelow.document.right.groups.map((group) => group.tabs[0]?.id)).toEqual([
-			"tool:changes",
+			"tool:plan",
 			"tool:files",
 		]);
 	});
@@ -709,7 +790,7 @@ describe("workspace layout model", () => {
 		const left = document.left.groups[0];
 		if (!right || !left) throw new Error("missing side group");
 		right.tabs = [toolTab("specs"), toolTab("files")];
-		left.tabs = [toolTab("projects"), toolTab("changes")];
+		left.tabs = [toolTab("projects"), toolTab("plan")];
 		const source = reconcileAttention(document, undefined);
 		const target = {
 			...source,
@@ -724,7 +805,7 @@ describe("workspace layout model", () => {
 			selectedByGroup: {
 				...source.selectedByGroup,
 				"right-a": "tool:files",
-				"left-a": "tool:changes",
+				"left-a": "tool:plan",
 			},
 		};
 		const targetWithoutFiles = structuredClone(document);
@@ -843,8 +924,16 @@ describe("workspace layout model", () => {
 			lastFocusedSideGroupId: {},
 			navigationClockByGroup: {},
 		});
-		expect(fromUntrustedPlainObjects.selectedByGroup.constructor).toBe("one");
-		expect(fromUntrustedPlainObjects.navigationClockByGroup.constructor).toBe(0);
+		expect(
+			Object.getOwnPropertyDescriptor(fromUntrustedPlainObjects.selectedByGroup, "constructor")
+				?.value,
+		).toBe("one");
+		expect(
+			Object.getOwnPropertyDescriptor(
+				fromUntrustedPlainObjects.navigationClockByGroup,
+				"constructor",
+			)?.value,
+		).toBe(0);
 	});
 
 	test("session pruning removes both chat and registered TODO references without touching neighbors", () => {
@@ -884,7 +973,7 @@ describe("workspace layout model", () => {
 
 	test("successful generated mutation sequences preserve every layout invariant", () => {
 		const directions = ["left", "right", "up", "down"] as const;
-		const tools = ["projects", "specs", "files", "changes", "review"] as const;
+		const tools = ["projects", "specs", "files", "plan", "review"] as const;
 		for (const initialSeed of [1, 7, 29, 97, 313]) {
 			let seed = initialSeed;
 			const random = () => {
@@ -964,7 +1053,7 @@ describe("workspace layout model", () => {
 					}
 					default: {
 						const side = random() % 2 === 0 ? "left" : "right";
-						result = setSideVisibility(document, side, !document[side].visible);
+						result = { document: setSideVisibility(document, side, !document[side].visible) };
 					}
 				}
 				if (!isLayoutUnavailable(result)) document = result.document;

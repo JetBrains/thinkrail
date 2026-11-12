@@ -2,15 +2,25 @@ import {
 	RiPuzzleLine as Puzzle,
 	RiRefreshLine as RefreshCw,
 	RiShieldCheckLine as ShieldCheck,
+	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
-import type { Project, SkillCatalogEntry, Workspace } from "@thinkrail/contracts";
+import {
+	isSkillGroupEnabled,
+	OTHER_AGENT_SKILL_GROUPS,
+	type Project,
+	SKILL_LISTING_MAX_TOKENS,
+	type SkillCatalogEntry,
+	type Workspace,
+} from "@thinkrail/contracts";
+import type { MessageKey } from "@thinkrail/locales";
+import { T, type Translator, t as translate, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useState } from "react";
-import { LoadingRegion } from "@/components/Skeleton";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport, reloadSessionResourcesWithSkillBaseline } from "@/transport";
 import {
@@ -19,14 +29,17 @@ import {
 	trustGrantParams,
 	untrustedNoticeText,
 } from "./projectTrust";
+import { skillCatalogSize } from "./skillCatalogSize";
 import { useProjectTrustSummary } from "./useProjectTrustSummary";
 
-const TIER_META: Record<string, { label: string; hint: string; rank: number }> = {
-	bundled: { label: "ThinkRail", hint: "Bundled with the app.", rank: 0 },
-	pi: { label: "Pi", hint: "Pi-native / configured.", rank: 1 },
-	personal: { label: "Personal", hint: "Your own libraries (~/.claude, ~/.codex, …).", rank: 2 },
-	project: { label: "Project", hint: "Committed to the repo — gated behind trust.", rank: 4 },
+const TIER_META: Record<string, { label: MessageKey | null; hint: MessageKey; rank: number }> = {
+	bundled: { label: null, hint: "chat.skills.tier.bundledHint", rank: 0 },
+	pi: { label: null, hint: "chat.skills.tier.piHint", rank: 1 },
+	personal: { label: "chat.skills.tier.personal", hint: "chat.skills.tier.personalHint", rank: 2 },
+	project: { label: "chat.skills.tier.project", hint: "chat.skills.tier.projectHint", rank: 4 },
 };
+
+const TIER_BRAND: Record<string, string> = { bundled: "ThinkRail", pi: "Pi" };
 
 interface Group {
 	key: string;
@@ -36,7 +49,7 @@ interface Group {
 	items: SkillCatalogEntry[];
 }
 
-function groupCatalog(entries: SkillCatalogEntry[]): Group[] {
+function groupCatalog(t: Translator, entries: SkillCatalogEntry[]): Group[] {
 	const byKey = new Map<string, { isPlugin: boolean; items: SkillCatalogEntry[] }>();
 	for (const entry of entries) {
 		const group = byKey.get(entry.group) ?? { isPlugin: Boolean(entry.plugin), items: [] };
@@ -48,8 +61,8 @@ function groupCatalog(entries: SkillCatalogEntry[]): Group[] {
 			const meta = TIER_META[key];
 			return {
 				key,
-				label: meta?.label ?? key,
-				hint: group.isPlugin ? "Claude plugin" : (meta?.hint ?? ""),
+				label: meta?.label ? t(meta.label) : (TIER_BRAND[key] ?? key),
+				hint: group.isPlugin ? t("chat.skills.pluginHint") : meta ? t(meta.hint) : "",
 				isPlugin: group.isPlugin,
 				items: group.items,
 				rank: group.isPlugin ? 3 : (meta?.rank ?? 5),
@@ -81,22 +94,22 @@ export function SkillsDialog({
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 }) {
+	const t = useT();
 	const project = useAppStore((s) => s.projects.find((p) => p.id === projectId));
+	const otherAgentSkills = useAppStore((s) => s.otherAgentSkills);
 	const [entries, setEntries] = useState<SkillCatalogEntry[] | null>(null);
 	const [busy, setBusy] = useState(false);
 	const workspaceId = workspace?.workspaceId;
 	const trustSummary = useProjectTrustSummary(projectId, open);
 
 	const refresh = useCallback(async () => {
-		try {
+		const load = async () =>
 			setEntries(
 				workspaceId
 					? await getTransport().request("skills.state", { workspaceId })
 					: await getTransport().request("project.skills", { projectId }),
 			);
-		} catch {
-			setEntries([]);
-		}
+		await load().catch(() => setEntries([]));
 	}, [workspaceId, projectId]);
 
 	useEffect(() => {
@@ -108,37 +121,35 @@ export function SkillsDialog({
 	const mutate = async (request: () => Promise<Project | Workspace>, failure: string) => {
 		if (busy) return;
 		setBusy(true);
-		try {
+		const run = async () => {
 			const result = await request();
 			if (!isWorkspace(result)) useAppStore.getState().applyProjectUpdated(result);
 			await refresh();
-		} catch (err) {
-			toast.error(errorText(err), failure);
-		} finally {
-			setBusy(false);
-		}
+		};
+		await run()
+			.catch((err: unknown) => toast.error(errorText(err), failure))
+			.finally(() => setBusy(false));
 	};
 
 	const reload = async () => {
 		if (busy || !workspace) return;
 		setBusy(true);
-		try {
+		const run = async () => {
 			const { syncedTick } = await reloadSessionResourcesWithSkillBaseline(workspace.workspaceId, {
 				sessionId: workspace.sessionId,
 			});
 			workspace.onReloaded?.(syncedTick);
-			toast.success("This chat now uses the updated skills.", "Skills reloaded");
-		} catch (err) {
-			toast.error(errorText(err), "Couldn't reload skills");
-		} finally {
-			setBusy(false);
-		}
+			toast.success(translate("chat.skills.reloadedBody"), translate("chat.skills.reloadedTitle"));
+		};
+		await run()
+			.catch((err: unknown) => toast.error(errorText(err), translate("chat.skills.reloadFailed")))
+			.finally(() => setBusy(false));
 	};
 
 	const setGroupEnabled = (group: string, enabled: boolean) =>
 		void mutate(
 			() => getTransport().request("project.setGroupEnabled", { id: projectId, group, enabled }),
-			"Couldn't update group",
+			translate("chat.skills.groupUpdateFailed"),
 		);
 
 	const setSkillEnabled = (name: string, enabled: boolean) =>
@@ -151,11 +162,11 @@ export function SkillsDialog({
 							override: enabled ? "on" : "off",
 						})
 					: getTransport().request("project.setSkillEnabled", { id: projectId, name, enabled }),
-			"Couldn't update skill",
+			translate("chat.skills.skillUpdateFailed"),
 		);
 
-	const disabledGroups = new Set(project?.disabledGroups ?? []);
-	const pluginsDisabled = disabledGroups.has("@plugins");
+	const groupEnabled = (key: string) => isSkillGroupEnabled(project, key, otherAgentSkills);
+	const pluginsDisabled = !groupEnabled("@plugins");
 	const catalogAliases = (entries ?? [])
 		.filter((entry) => entry.decision === "untrusted")
 		.map((entry) => entry.name);
@@ -166,16 +177,24 @@ export function SkillsDialog({
 			aliasSkills: [...new Set([...trustSummary.aliasSkills, ...catalogAliases])],
 		},
 	);
-	const trustEnables = trustNotice.kind === "untrusted" ? trustEnablesText(trustNotice) : null;
-	const groups = groupCatalog(entries ?? []);
+	const trustEnables = trustNotice.kind === "untrusted" ? trustEnablesText(t, trustNotice) : null;
+	const groups = groupCatalog(t, entries ?? []);
 	const hasPlugins = groups.some((g) => g.isPlugin);
 	const isLeadingKey = (key: string) => key === "bundled" || key === "pi";
 	const leadingGroups = groups.filter((g) => isLeadingKey(g.key));
 	const otherGroups = groups.filter((g) => !isLeadingKey(g.key));
+	const size = entries ? skillCatalogSize(entries) : null;
+	const otherAgentsOff =
+		!otherAgentSkills &&
+		groups.some(
+			(g) =>
+				(g.isPlugin || OTHER_AGENT_SKILL_GROUPS.includes(g.key)) &&
+				!groupEnabled(g.isPlugin ? "@plugins" : g.key),
+		);
 
 	const renderGroup = (group: Group) => {
 		const lockedByMaster = group.isPlugin && pluginsDisabled;
-		const groupOn = !lockedByMaster && !disabledGroups.has(group.key);
+		const groupOn = !lockedByMaster && groupEnabled(group.key);
 		return (
 			<div key={group.key} data-testid="skill-group" data-group={group.key} data-on={groupOn}>
 				<div
@@ -187,7 +206,7 @@ export function SkillsDialog({
 					{group.isPlugin ? (
 						<Puzzle className="size-14 shrink-0 text-text-muted" aria-hidden />
 					) : null}
-					<span className="tr-text-eyebrow text-text-default">{group.label}</span>
+					<span className="truncate tr-text-eyebrow text-text-default">{group.label}</span>
 					<span className="min-w-0 flex-1 truncate text-text-muted tr-text-metadata">
 						{group.hint}
 					</span>
@@ -197,8 +216,8 @@ export function SkillsDialog({
 					<SkillSwitch
 						checked={groupOn}
 						busy={busy}
-						blockedReason={lockedByMaster ? "Off — turn on All plugins first" : undefined}
-						label={`Enable ${group.label} skill group`}
+						blockedReason={lockedByMaster ? t("chat.skills.blockedByPlugins") : undefined}
+						label={t("chat.skills.enableGroup", { group: group.label })}
 						testId="group-toggle"
 						onCheckedChange={(enabled) => setGroupEnabled(group.key, enabled)}
 					/>
@@ -213,8 +232,8 @@ export function SkillsDialog({
 								groupOn
 									? undefined
 									: lockedByMaster
-										? "Off — turn on All plugins first"
-										: `Off — turn on ${group.label} first`
+										? t("chat.skills.blockedByPlugins")
+										: t("chat.skills.blockedByGroup", { group: group.label })
 							}
 							onToggle={(enabled) => setSkillEnabled(entry.name, enabled)}
 							onAcknowledge={() =>
@@ -224,7 +243,7 @@ export function SkillsDialog({
 											id: projectId,
 											names: [entry.name],
 										}),
-									"Couldn't confirm skill",
+									translate("chat.skills.acknowledgeFailed"),
 								)
 							}
 						/>
@@ -236,80 +255,116 @@ export function SkillsDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent data-testid="skills-dialog" className="max-w-[560px] gap-12 p-12">
+			<DialogContent data-testid="skills-dialog" className="max-w-[640px] gap-12 p-12">
 				<div className="flex items-center justify-between gap-8 pr-[2rem]">
-					<DialogTitle className="tr-text-ui text-text-default">Skills</DialogTitle>
+					<DialogTitle className="tr-text-ui text-text-default">
+						{t("chat.skills.title")}
+					</DialogTitle>
 					{workspace ? (
 						<IconTooltip
 							label={
-								workspace.streaming
-									? "Available once the current turn finishes"
-									: "Apply to this chat"
+								workspace.streaming ? t("chat.skills.reloadBusy") : t("chat.skills.reloadHint")
 							}
 							wrapTrigger
 						>
 							<Button
-								size="sm"
+								size="m"
 								variant="outline"
+								iconLeft={RefreshCw}
 								data-testid="skills-reload"
 								disabled={busy || workspace.streaming}
 								onClick={() => void reload()}
 							>
-								<RefreshCw className="size-14" />
-								Reload
+								{t("chat.skills.reload")}
 							</Button>
 						</IconTooltip>
 					) : null}
 				</div>
+
+				{size ? (
+					<p
+						data-testid="skills-size"
+						data-large={size.large}
+						className={cn(
+							"tr-text-metadata",
+							size.large ? "text-feedback-warning" : "text-text-muted",
+						)}
+					>
+						{size.budgeted
+							? t("chat.skills.sizeBudgeted", {
+									count: size.count,
+									tokens: size.tokens.toLocaleString(),
+									limit: SKILL_LISTING_MAX_TOKENS.toLocaleString(),
+								})
+							: t("chat.skills.size", { count: size.count, tokens: size.tokens.toLocaleString() })}
+						{size.large ? ` ${t("chat.skills.sizeLarge")}` : null}
+					</p>
+				) : null}
+
+				{otherAgentsOff ? (
+					<p
+						data-testid="skills-other-agents-off"
+						className="rounded-sm border border-border-default bg-container-elevated-bg px-12 py-8 text-text-muted tr-text-metadata"
+					>
+						{t("chat.skills.otherAgentsOff")}
+					</p>
+				) : null}
 
 				{workspace?.stale ? (
 					<div
 						data-testid="skills-stale"
 						className="rounded-sm border border-border-default bg-container-elevated-bg px-12 py-8 text-text-muted tr-text-metadata"
 					>
-						This worktree's skills changed on disk —{" "}
-						<span className="text-text-default">Reload</span> to apply them to this chat.
+						<T
+							i18nKey="chat.skills.staleNotice"
+							components={[<span key="reload" className="text-text-default" />]}
+						/>
 					</div>
 				) : null}
 
 				{trustNotice.kind === "untrusted" ? (
 					<div
 						data-testid="skills-trust-all"
-						className="flex items-center gap-8 rounded-sm border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-12 py-8"
+						className="flex flex-col gap-8 rounded-sm border border-feedback-warning-muted bg-container-elevated-bg px-12 py-8"
 					>
-						<span className="flex min-w-0 flex-1 flex-col gap-2">
-							<span className="tr-text-ui text-text-default">
-								{untrustedNoticeText(trustNotice)}
+						<div className="flex items-start gap-8">
+							<TriangleAlert className="mt-2 size-14 shrink-0 text-feedback-warning" aria-hidden />
+							<span className="flex min-w-0 flex-1 flex-col gap-2">
+								<span className="tr-text-ui text-text-default">
+									{untrustedNoticeText(t, trustNotice)}
+								</span>
+								{trustEnables ? (
+									<span className="text-text-muted tr-text-metadata">{trustEnables}</span>
+								) : null}
 							</span>
-							{trustEnables ? (
-								<span className="text-text-muted tr-text-metadata">{trustEnables}</span>
-							) : null}
-						</span>
-						<Button
-							size="sm"
-							disabled={busy}
-							onClick={() =>
-								void mutate(
-									() =>
-										getTransport().request(
-											"project.setTrust",
-											trustGrantParams(projectId, trustNotice),
-										),
-									"Couldn't trust project",
-								)
-							}
-							className="shrink-0"
-						>
-							Trust project
-						</Button>
+						</div>
+						<div className="flex justify-end">
+							<Button
+								variant="outline"
+								size="m"
+								disabled={busy}
+								onClick={() =>
+									void mutate(
+										() =>
+											getTransport().request(
+												"project.setTrust",
+												trustGrantParams(projectId, trustNotice),
+											),
+										translate("chat.skills.trustFailed"),
+									)
+								}
+							>
+								{t("chat.skills.trustProject")}
+							</Button>
+						</div>
 					</div>
 				) : null}
 
-				<div className="max-h-[50vh] overflow-y-auto">
+				<div className="relative max-h-[50vh] overflow-y-auto">
 					{entries === null ? (
 						<LoadingRegion rows={4} className="px-8 py-12" />
 					) : entries.length === 0 ? (
-						<p className="px-8 py-12 text-text-muted tr-text-ui">No skills discovered.</p>
+						<p className="px-8 py-12 text-text-muted tr-text-ui">{t("chat.skills.empty")}</p>
 					) : (
 						<>
 							{leadingGroups.map(renderGroup)}
@@ -319,12 +374,12 @@ export function SkillsDialog({
 									className="sticky top-0 z-20 flex h-32 items-center gap-8 border-border-default border-y bg-container-header-bg px-8"
 								>
 									<span className="min-w-0 flex-1 tr-text-eyebrow text-text-default">
-										All plugins
+										{t("chat.skills.allPlugins")}
 									</span>
 									<SkillSwitch
 										checked={!pluginsDisabled}
 										busy={busy}
-										label="Enable all plugins"
+										label={t("chat.skills.enableAllPlugins")}
 										testId="all-plugins-toggle"
 										onCheckedChange={(enabled) => setGroupEnabled("@plugins", enabled)}
 									/>
@@ -354,10 +409,11 @@ function SkillSwitch({
 	testId: string;
 	onCheckedChange: (checked: boolean) => void;
 }) {
+	const t = useT();
 	const disabled = busy || blockedReason !== undefined;
 	const tooltip = busy
-		? "Saving skill settings…"
-		: (blockedReason ?? `${checked ? "On" : "Off"} — turn ${checked ? "off" : "on"}`);
+		? t("chat.skills.saving")
+		: (blockedReason ?? (checked ? t("chat.skills.switchOn") : t("chat.skills.switchOff")));
 	return (
 		<IconTooltip label={tooltip} wrapTrigger={disabled}>
 			<Switch
@@ -386,33 +442,41 @@ function SkillRow({
 	onToggle: (enabled: boolean) => void;
 	onAcknowledge: () => void;
 }) {
+	const t = useT();
 	const loaded = entry.decision === "load";
 	return (
 		<div
 			data-testid="skill-row"
 			data-skill={entry.name}
 			data-decision={entry.decision}
-			className="flex items-center gap-8 py-8 pr-8 pl-12 hover:bg-control-bg-hovered"
+			className="flex items-center gap-12 py-12 pr-8 pl-12 hover:bg-control-bg-hovered"
 		>
-			<span className="flex min-w-0 flex-1 flex-col">
-				<span className="truncate tr-text-ui text-text-default">{entry.name}</span>
+			<span className="flex min-w-0 flex-1 flex-col gap-4">
+				<span className="truncate tr-title-card text-text-default">{entry.name}</span>
 				{entry.description ? (
-					<span className="truncate text-text-muted tr-text-metadata">{entry.description}</span>
+					<span title={entry.description} className="line-clamp-2 text-text-muted tr-text-metadata">
+						{entry.description}
+					</span>
 				) : null}
 			</span>
 			{entry.decision === "pending-ack" ? (
-				<Button size="sm" data-testid="skill-ack" disabled={busy} onClick={onAcknowledge}>
-					<ShieldCheck className="size-14" />
-					Enable
+				<Button
+					size="m"
+					iconLeft={ShieldCheck}
+					data-testid="skill-ack"
+					disabled={busy}
+					onClick={onAcknowledge}
+				>
+					{t("chat.skills.enable")}
 				</Button>
 			) : (
 				<SkillSwitch
 					checked={entry.decision === "untrusted" || blockedReason ? false : loaded}
 					busy={busy}
 					blockedReason={
-						entry.decision === "untrusted" ? "Off — trust this project first" : blockedReason
+						entry.decision === "untrusted" ? t("chat.skills.blockedByTrust") : blockedReason
 					}
-					label={`Enable skill ${entry.name}`}
+					label={t("chat.skills.enableSkill", { skill: entry.name })}
 					testId="skill-toggle"
 					onCheckedChange={onToggle}
 				/>

@@ -24,6 +24,8 @@ describe("defineWebExtension", () => {
 			chrome: "bare",
 			prominence: "primary",
 			defaultExpanded: true,
+			interactive: true,
+			dock: true,
 		};
 		const descriptor = {
 			name: "example",

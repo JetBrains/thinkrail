@@ -37,6 +37,59 @@ test("Windows picker: a PowerShell FolderBrowserDialog, -Sta, owned by a top-mos
 	}
 });
 
+for (const picker of pickersFor("win32")) {
+	const shell = picker.cmd[0] ?? "";
+	test.skipIf(process.platform !== "win32" || (shell === "pwsh.exe" && !Bun.which(shell)))(
+		`Windows picker preserves Unicode through ${shell} stdout under a legacy code page`,
+		async () => {
+			const flag = picker.cmd.indexOf("-EncodedCommand");
+			expect(flag).toBeGreaterThan(-1);
+			const script = Buffer.from(picker.cmd[flag + 1] ?? "", "base64").toString("utf16le");
+			const lines = script.split("\n");
+			const gui = lines.indexOf("Add-Type -AssemblyName System.Windows.Forms");
+			const output = lines.at(-1) ?? "";
+			expect(gui).toBeGreaterThan(0);
+			expect(output).toBe("if ($ok) { Write-Output $d.SelectedPath }");
+			const headless = [
+				...lines.slice(0, gui),
+				"$d = [pscustomobject]@{ SelectedPath = $env:THINKRAIL_TEST_PICKED_PATH }",
+				"$ok = [bool]$env:THINKRAIL_TEST_PICKED_PATH",
+				output,
+			].join("\n");
+			const cmd = [...picker.cmd];
+			cmd[flag + 1] = Buffer.from(
+				`[Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding(936)\n${headless}`,
+				"utf16le",
+			).toString("base64");
+			for (const path of [
+				"C:\\Users\\tester\\Documents\\ascii-test",
+				"C:\\Users\\tester\\Documents\\中文测试",
+				"C:\\test folder\\日本語-🚀",
+				"C:\\café\\проект",
+				"C:\\",
+				"\\\\server\\share\\中文",
+				"",
+			]) {
+				const proc = Bun.spawn(cmd, {
+					stdout: "pipe",
+					stderr: "pipe",
+					env: { ...process.env, THINKRAIL_TEST_PICKED_PATH: path },
+					windowsHide: true,
+					timeout: 10_000,
+				});
+				const [stdout, stderr, code] = await Promise.all([
+					new Response(proc.stdout).text(),
+					new Response(proc.stderr).text(),
+					proc.exited,
+				]);
+				expect(code, stderr).toBe(0);
+				expect(picker.parse(stdout)).toBe(path || null);
+			}
+		},
+		30_000,
+	);
+}
+
 test("pickers distinguish cancellation from a failed non-zero exit", () => {
 	const execution = { stdout: "", stderr: "", code: 1 };
 	expect(
@@ -131,13 +184,27 @@ test("picker exhaustion throws a diagnostic instead of cancellation", async () =
 	).rejects.toThrow("Failed to open display");
 });
 
-test("picker output is trimmed, trailing separators dropped, empty → null", () => {
-	const parse = pickersFor("darwin")[0]?.parse;
-	if (!parse) throw new Error("expected a darwin picker");
-	expect(parse("/Users/me/project/\n")).toBe("/Users/me/project");
-	expect(parse("C:\\Users\\me\\project\\")).toBe("C:\\Users\\me\\project");
-	expect(parse("   ")).toBeNull();
-	expect(parse("")).toBeNull();
+test("picker output is trimmed, the platform's trailing separators dropped, empty → null", () => {
+	const posix = pickersFor("darwin")[0]?.parse;
+	const windows = pickersFor("win32")[0]?.parse;
+	if (!posix || !windows) throw new Error("expected darwin and win32 pickers");
+	expect(posix("/Users/me/project/\n")).toBe("/Users/me/project");
+	expect(posix("/Users/me/odd\\")).toBe("/Users/me/odd\\");
+	expect(windows("C:\\Users\\me\\project\\\r\n")).toBe("C:\\Users\\me\\project");
+	for (const parse of [posix, windows]) {
+		expect(parse("   ")).toBeNull();
+		expect(parse("")).toBeNull();
+	}
+});
+
+test("a picked filesystem root stays a root", () => {
+	const posix = pickersFor("linux")[0]?.parse;
+	const windows = pickersFor("win32")[0]?.parse;
+	if (!posix || !windows) throw new Error("expected linux and win32 pickers");
+	expect(posix("/\n")).toBe("/");
+	expect(windows("C:\\")).toBe("C:\\");
+	expect(windows("D:/")).toBe("D:/");
+	expect(windows("\\\\server\\share\\")).toBe("\\\\server\\share\\");
 });
 
 test("THINKRAIL_PICK_DIR overrides the native picker", async () => {

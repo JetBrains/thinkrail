@@ -30,7 +30,7 @@ export function nativeUpdatesEnabled(input: NativeUpdateEnablement): boolean {
 	} catch {
 		return false;
 	}
-	return ["darwin-arm64", "linux-arm64", "linux-x64", "win32-x64"].includes(
+	return ["darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64", "win32-x64"].includes(
 		`${input.platform}-${input.arch}`,
 	);
 }

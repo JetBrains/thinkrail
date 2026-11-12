@@ -14,7 +14,7 @@ import { join, resolve } from "node:path";
 const actionPath = resolve(import.meta.dir, "../../../.github/actions/build-binary/action.yml");
 const action = Bun.YAML.parse(readFileSync(actionPath, "utf8")) as {
 	outputs: Record<string, { value: string }>;
-	runs: { steps: { id?: string; name?: string; run?: string }[] };
+	runs: { steps: { id?: string; name?: string; run?: string; env?: Record<string, string> }[] };
 };
 const roots: string[] = [];
 
@@ -36,6 +36,22 @@ const targets = [
 			nightly: {
 				manifest: "canary-macos-arm64-update.json",
 				archive: "canary-macos-arm64-ThinkRail-canary.app.tar.zst",
+			},
+		},
+	},
+	{
+		target: "bun-darwin-x64",
+		stable: "macos-x64-ThinkRail.dmg",
+		nightly: "canary-macos-x64-ThinkRail-canary.dmg",
+		published: "thinkrail-desktop-darwin-x64.dmg",
+		updates: {
+			stable: {
+				manifest: "stable-macos-x64-update.json",
+				archive: "stable-macos-x64-ThinkRail.app.tar.zst",
+			},
+			nightly: {
+				manifest: "canary-macos-x64-update.json",
+				archive: "canary-macos-x64-ThinkRail-canary.app.tar.zst",
 			},
 		},
 	},
@@ -89,14 +105,66 @@ const targets = [
 	},
 ] as const;
 
+function writeSetupArtifact(path: string, sentinel: string) {
+	if (!path.endsWith(".tar.gz")) {
+		writeFileSync(path, sentinel);
+		return;
+	}
+	const stage = mkdtempSync(join(tmpdir(), "thinkrail-release-payload-"));
+	roots.push(stage);
+	// The Linux setup fixtures must be real tarballs: the collector repacks them.
+	writeFileSync(join(stage, "payload.txt"), sentinel);
+	const built = Bun.spawnSync(
+		["tar", "-czf", path, "--owner=1001", "--group=1001", "--numeric-owner", "-C", stage, "."],
+		{ env: { ...process.env, COPYFILE_DISABLE: "1" } },
+	);
+	if (built.exitCode !== 0) throw new Error(`setup tarball fixture failed: ${built.stderr}`);
+}
+
+function readTarEntries(path: string) {
+	const archive = Bun.gunzipSync(readFileSync(path));
+	const decoder = new TextDecoder();
+	const entries: { name: string; uid: number; gid: number }[] = [];
+	for (let offset = 0; offset + 512 <= archive.length; ) {
+		const header = archive.subarray(offset, offset + 512);
+		if (header.every((byte) => byte === 0)) break;
+		const text = (start: number, end: number) =>
+			decoder.decode(header.subarray(start, end)).replace(/\0.*$/s, "");
+		const octal = (start: number, end: number) =>
+			Number.parseInt(text(start, end).trim() || "0", 8);
+		const size = octal(124, 136);
+		if (!"xgLK".includes(String.fromCharCode(header[156] ?? 0))) {
+			const prefix = text(345, 500);
+			const name = text(0, 100);
+			entries.push({
+				name: prefix ? `${prefix}/${name}` : name,
+				uid: octal(108, 116),
+				gid: octal(116, 124),
+			});
+		}
+		offset += 512 + Math.ceil(size / 512) * 512;
+	}
+	return entries;
+}
+
+function readSetupArtifact(path: string): string {
+	if (!path.endsWith(".tar.gz")) return readFileSync(path, "utf8");
+	const stage = mkdtempSync(join(tmpdir(), "thinkrail-release-extract-"));
+	roots.push(stage);
+	const extracted = Bun.spawnSync(["tar", "-xzf", path, "-C", stage]);
+	if (extracted.exitCode !== 0)
+		throw new Error(`setup tarball extraction failed: ${extracted.stderr}`);
+	return readFileSync(join(stage, "payload.txt"), "utf8");
+}
+
 function fixture(): string {
 	const root = mkdtempSync(join(tmpdir(), "thinkrail-release-collector-"));
 	roots.push(root);
 	const artifacts = join(root, "apps/desktop/artifacts");
 	mkdirSync(artifacts, { recursive: true });
 	for (const target of targets) {
-		writeFileSync(join(artifacts, target.nightly), `nightly:${target.target}`);
-		writeFileSync(join(artifacts, target.stable), `stable:${target.target}`);
+		writeSetupArtifact(join(artifacts, target.nightly), `nightly:${target.target}`);
+		writeSetupArtifact(join(artifacts, target.stable), `stable:${target.target}`);
 		for (const channel of ["stable", "nightly"] as const) {
 			const update = target.updates[channel];
 			writeFileSync(join(artifacts, update.manifest), `${channel}:${target.target}:manifest`);
@@ -142,7 +210,7 @@ function collect(root: string, target: string, channel: string) {
 	});
 }
 
-function stampIdentity(channel: string, key: string) {
+function stampIdentity(channel: string, key: string, extra: Record<string, string> = {}) {
 	const script = action.runs.steps.find(
 		(step) => step.name === "Stamp shared release identity",
 	)?.run;
@@ -161,6 +229,7 @@ function stampIdentity(channel: string, key: string) {
 			VERSION: "1.2.3",
 			CHANNEL: channel,
 			POSTHOG_PROJECT_KEY: key,
+			...extra,
 		},
 		stdout: "pipe",
 		stderr: "pipe",
@@ -195,6 +264,38 @@ test.each([
 	const { result, stamped } = stampIdentity(channel, key);
 	expect(result.exitCode).not.toBe(0);
 	expect(stamped).toBeUndefined();
+});
+
+test("a source-map upload key without its project id fails closed before stamping", () => {
+	const missing = stampIdentity("stable", "phc_release", { POSTHOG_CLI_API_KEY_SET: "true" });
+	expect(missing.result.exitCode).not.toBe(0);
+	expect(missing.stamped).toBeUndefined();
+	const paired = stampIdentity("stable", "phc_release", {
+		POSTHOG_CLI_API_KEY_SET: "true",
+		POSTHOG_CLI_PROJECT_ID: "1",
+	});
+	expect(paired.result.exitCode).toBe(0);
+	expect(
+		stampIdentity("stable", "phc_release", { POSTHOG_CLI_API_KEY_SET: "false" }).result.exitCode,
+	).toBe(0);
+});
+
+test("source-map credentials reach only the web and desktop build steps", () => {
+	const credentialed = action.runs.steps
+		.filter((step) => step.env && "POSTHOG_CLI_API_KEY" in step.env)
+		.map((step) => step.name);
+	expect(credentialed).toEqual([
+		"Build web UI",
+		"Build and smoke desktop app",
+		"Package desktop installer",
+	]);
+});
+
+test("the Electrobun toolchain downloads with retries before the first desktop build", () => {
+	const runs = action.runs.steps.map((step) => step.run ?? "");
+	const download = runs.findIndex((run) => run.includes(".github/scripts/prepare-electrobun.sh"));
+	expect(download).toBeGreaterThanOrEqual(0);
+	expect(download).toBeLessThan(runs.findIndex((run) => run.includes("bun run desktop:build")));
 });
 
 test("Windows packaging places System32 tar ahead of Git tar", () => {
@@ -256,13 +357,19 @@ for (const target of targets) {
 			const root = fixture();
 			const result = collect(root, target.target, channel);
 			expect(result.exitCode).toBe(0);
-			expect(readFileSync(join(root, "apps/desktop/dist", target.published), "utf8")).toBe(
-				`${channel}:${target.target}`,
-			);
+			const publishedPath = join(root, "apps/desktop/dist", target.published);
+			expect(readSetupArtifact(publishedPath)).toBe(`${channel}:${target.target}`);
+			if (target.target.startsWith("bun-linux-")) {
+				const entries = readTarEntries(publishedPath);
+				expect(entries.map(({ name }) => name)).not.toContain(".");
+				expect(entries.map(({ name }) => name)).not.toContain("./");
+				expect(entries.length).toBeGreaterThan(0);
+				expect(entries.every(({ uid, gid }) => uid === 0 && gid === 0)).toBe(true);
+			}
 			const update = target.updates[channel];
 			const updateManifestPath = `apps/desktop/artifacts/${update.manifest}`;
 			const updateArchivePath = `apps/desktop/artifacts/${update.archive}`;
-			const appArchivePath = target.target === "bun-darwin-arm64" ? updateArchivePath : "";
+			const appArchivePath = target.target.startsWith("bun-darwin") ? updateArchivePath : "";
 			expect(readFileSync(join(root, "outputs"), "utf8")).toBe(
 				`name=${target.published}\npath=apps/desktop/dist/${target.published}\napp-archive-path=${appArchivePath}\nupdate-manifest-path=${updateManifestPath}\nupdate-archive-path=${updateArchivePath}\n`,
 			);
@@ -283,40 +390,43 @@ test("refuses a missing requested installer instead of collecting a stale channe
 	expect(collect(root, "bun-darwin-arm64", "stable").exitCode).not.toBe(0);
 });
 
-test.each([
-	"stable",
-	"nightly",
-] as const)("refuses a missing requested %s macOS app archive instead of falling back to another artifact", (channel) => {
-	const root = fixture();
-	const appArchivePath = `apps/desktop/artifacts/${targets[0].updates[channel].archive}`;
-	rmSync(join(root, appArchivePath));
-	const result = collect(root, targets[0].target, channel);
-	expect(result.exitCode).not.toBe(0);
-	expect(result.stdout.toString()).toContain(
-		`::error::desktop app archive not found at ${appArchivePath}`,
-	);
-	expect(existsSync(join(root, "outputs"))).toBe(false);
-});
+test.each(["stable", "nightly"] as const)(
+	"refuses a missing requested %s macOS app archive instead of falling back to another artifact",
+	(channel) => {
+		const root = fixture();
+		const appArchivePath = `apps/desktop/artifacts/${targets[0].updates[channel].archive}`;
+		rmSync(join(root, appArchivePath));
+		const result = collect(root, targets[0].target, channel);
+		expect(result.exitCode).not.toBe(0);
+		expect(result.stdout.toString()).toContain(
+			`::error::desktop app archive not found at ${appArchivePath}`,
+		);
+		expect(existsSync(join(root, "outputs"))).toBe(false);
+	},
+);
 
 test.each([
 	["manifest", "manifest"],
 	["archive", "archive"],
-] as const)("refuses a missing requested update %s instead of falling back to another artifact", (kind, field) => {
-	const root = fixture();
-	const expected = targets[1].updates.nightly[field];
-	const expectedPath = `apps/desktop/artifacts/${expected}`;
-	rmSync(join(root, expectedPath));
-	const result = collect(root, targets[1].target, "nightly");
-	expect(result.exitCode).not.toBe(0);
-	expect(result.stdout.toString()).toContain(
-		`::error::desktop update ${kind} not found at ${expectedPath}`,
-	);
-	expect(existsSync(join(root, "outputs"))).toBe(false);
-});
+] as const)(
+	"refuses a missing requested update %s instead of falling back to another artifact",
+	(kind, field) => {
+		const root = fixture();
+		const expected = targets[2].updates.nightly[field];
+		const expectedPath = `apps/desktop/artifacts/${expected}`;
+		rmSync(join(root, expectedPath));
+		const result = collect(root, targets[2].target, "nightly");
+		expect(result.exitCode).not.toBe(0);
+		expect(result.stdout.toString()).toContain(
+			`::error::desktop update ${kind} not found at ${expectedPath}`,
+		);
+		expect(existsSync(join(root, "outputs"))).toBe(false);
+	},
+);
 
-test.each([
-	["bun-darwin-x64", "stable"],
-	["bun-darwin-arm64", "production"],
-])("refuses an unsupported target/channel: %s %s", (target, channel) => {
-	expect(collect(fixture(), target, channel).exitCode).not.toBe(0);
-});
+test.each([["bun-darwin-arm64", "production"]])(
+	"refuses an unsupported target/channel: %s %s",
+	(target, channel) => {
+		expect(collect(fixture(), target, channel).exitCode).not.toBe(0);
+	},
+);

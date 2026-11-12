@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 import { BUILTIN_AGENTS } from "./builtins";
+import { isThinkingLevel } from "./thinking";
 
 export interface AgentDefinition {
 	name: string;
@@ -18,8 +19,6 @@ export interface AgentDefinition {
 	extensions?: boolean;
 	systemPrompt: string;
 }
-
-const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 
 function unquote(value: string): string {
 	const first = value[0];
@@ -69,9 +68,7 @@ export function parseAgentDefinition(
 		...(filePath !== undefined ? { filePath } : {}),
 		...(tools !== undefined ? { tools: parseNameList(tools) } : {}),
 		...(model !== undefined ? { model } : {}),
-		...(thinking !== undefined && THINKING_LEVELS.has(thinking)
-			? { thinking: thinking as ThinkingLevel }
-			: {}),
+		...(thinking !== undefined && isThinkingLevel(thinking) ? { thinking } : {}),
 		...(Number.isFinite(maxTurns) && maxTurns > 0 ? { maxTurns } : {}),
 		...(fields.get("inherit_project_context") === "true" ? { inheritProjectContext: true } : {}),
 		...(skills !== undefined ? { skills: parseNameList(skills) } : {}),

@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { currentTranslator } from "@thinkrail/locales/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { phaseLabel, StreamStatusSlot, streamStatus } from "./StreamIndicator";
@@ -103,10 +104,11 @@ test("the status slot keeps one fixed shell while idle content stays inaccessibl
 });
 
 test("phaseLabel names every phase (and falls back to a generic tool label)", () => {
-	expect(phaseLabel({ phase: "working" })).toBe("Working…");
-	expect(phaseLabel({ phase: "thinking" })).toBe("Thinking…");
-	expect(phaseLabel({ phase: "writing" })).toBe("Writing…");
-	expect(phaseLabel({ phase: "running-tool", toolName: "bash" })).toBe("Running bash…");
-	expect(phaseLabel({ phase: "running-tool" })).toBe("Running tool…");
-	expect(phaseLabel({ phase: "compacting" })).toBe("Compacting context…");
+	const t = currentTranslator();
+	expect(phaseLabel(t, { phase: "working" })).toBe("Working…");
+	expect(phaseLabel(t, { phase: "thinking" })).toBe("Thinking…");
+	expect(phaseLabel(t, { phase: "writing" })).toBe("Writing…");
+	expect(phaseLabel(t, { phase: "running-tool", toolName: "bash" })).toBe("Running bash…");
+	expect(phaseLabel(t, { phase: "running-tool" })).toBe("Running tool…");
+	expect(phaseLabel(t, { phase: "compacting" })).toBe("Compacting context…");
 });

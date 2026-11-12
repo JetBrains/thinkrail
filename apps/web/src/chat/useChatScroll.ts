@@ -10,8 +10,9 @@ import {
 	useState,
 } from "react";
 import type { VirtuosoHandle } from "react-virtuoso";
+import type { ChatReadingAnchor } from "@/store";
 import type { ChatRevealOptions } from "./ChatActions";
-import type { ChatMessageOrder, StreamingResponseMovement } from "./chatPreferences";
+import type { ChatMessageOrder } from "./chatPreferences";
 import type { FoldAnchorResolver } from "./foldState";
 import {
 	createReadingBandController,
@@ -33,6 +34,12 @@ interface ScrollContainerProps {
 interface RowLocation {
 	id: string;
 	index: number;
+}
+
+export interface ChatReadingPosition {
+	restore: ChatReadingAnchor | null;
+	resolveIndex: (rowId: string) => number;
+	save: (anchor: ChatReadingAnchor | null) => void;
 }
 
 type RowRevealResult = "cancelled" | "found" | "missing";
@@ -211,9 +218,12 @@ export function useChatScroll(
 	latestRow: RowLocation | null,
 	firstItemIndex: number,
 	rowHeightEstimates: readonly number[],
-	movement: StreamingResponseMovement,
+	readingPosition: ChatReadingPosition,
 ): ChatScroll {
 	const edge = latestEdge(messageOrder);
+	const readingPositionRef = useRef(readingPosition);
+	const readingRestorePending = useRef(readingPosition.restore !== null);
+	const readingRestoreGeneration = useRef<number | null>(null);
 	const firstItemIndexRef = useRef(firstItemIndex);
 	const rowHeightEstimatesRef = useRef(rowHeightEstimates);
 	const scrollerRef = useRef<HTMLElement | null>(null);
@@ -241,6 +251,8 @@ export function useChatScroll(
 	const touchMomentum = useRef(false);
 	const touchMovingTowardLatest = useRef<boolean | null>(null);
 	const previousTouchScrollTop = useRef(0);
+	const scrollApiShift = useRef(0);
+	const scrollSinceEnd = useRef(false);
 	const programmaticScrollTop = useRef<number | null>(null);
 	const touchSettleTimer = useRef<number | null>(null);
 	const nativeResume = useRef<(() => void) | null>(null);
@@ -335,7 +347,7 @@ export function useChatScroll(
 			cancelFrame: (id) => cancelAnimationFrame(id),
 			onStateChange: setSnapshot,
 		},
-		{ streaming: isStreaming, latestEdge: edge, movement, mountPending: true },
+		{ streaming: isStreaming, latestEdge: edge, mountPending: true },
 	);
 
 	const guardActive = useCallback(() => {
@@ -394,9 +406,55 @@ export function useChatScroll(
 		const actual = boundedScrollTop(scroller);
 		programmaticScrollTop.current = actual;
 		previousTouchScrollTop.current = actual;
+		scrollApiShift.current = 0;
 		headerAnchorScrollTop.current = actual;
 		rebaseGuard();
 	}, [rebaseGuard]);
+
+	const materializeRow = useCallback(
+		(
+			generation: number,
+			resolveIndex: () => number,
+			align: "start" | "center" | "end",
+			offset = 0,
+		) => {
+			const scroller = scrollerRef.current;
+			if (!scroller) return;
+			virtuosoRef.current?.getState(({ ranges }) => {
+				if (generation !== rowRevealGeneration.current) return;
+				const index = resolveIndex();
+				if (index < 0) return;
+				const viewport = scroller.getBoundingClientRect();
+				const anchor = Array.from(
+					scroller.querySelectorAll<HTMLElement>("[data-chat-row-index]"),
+				).find((row) => Number.isInteger(Number(row.dataset.chatRowIndex)));
+				if (!anchor) return;
+				const heights = [...rowHeightEstimatesRef.current];
+				const currentFirstItemIndex = firstItemIndexRef.current;
+				const rangeOffset =
+					currentFirstItemIndex > 0 &&
+					ranges.some((range) => range.startIndex >= currentFirstItemIndex)
+						? currentFirstItemIndex
+						: 0;
+				for (const range of ranges) {
+					const start = Math.max(0, range.startIndex - rangeOffset);
+					const end = Math.min(heights.length - 1, range.endIndex - rangeOffset);
+					for (let measuredIndex = start; measuredIndex <= end; measuredIndex += 1) {
+						heights[measuredIndex] = range.size;
+					}
+				}
+				const anchorIndex = Number(anchor.dataset.chatRowIndex);
+				const anchorTop = scroller.scrollTop + anchor.getBoundingClientRect().top - viewport.top;
+				const rowTop = estimatedRowTop(heights, anchorIndex, anchorTop, index);
+				const target =
+					alignedRowScrollTop(rowTop, heights[index] ?? 40, scroller.clientHeight, align) - offset;
+				scroller.scrollTop = Math.min(scrollBounds(scroller).maxScrollTop, Math.max(0, target));
+				recordProgrammaticScrollPosition();
+			});
+		},
+		[recordProgrammaticScrollPosition, virtuosoRef],
+	);
+
 	useInsertionEffect(() => {
 		firstItemIndexRef.current = firstItemIndex;
 		rowHeightEstimatesRef.current = rowHeightEstimates;
@@ -404,6 +462,7 @@ export function useChatScroll(
 		isStreamingRef.current = isStreaming;
 		latestRowIdRef.current = latestRow?.id ?? null;
 		recordProgrammaticScrollPositionRef.current = recordProgrammaticScrollPosition;
+		readingPositionRef.current = readingPosition;
 	});
 
 	const resumeNativeMotion = useCallback(() => {
@@ -486,7 +545,6 @@ export function useChatScroll(
 			const complete = () => {
 				afterChange = true;
 				if (provenance === "user") controller.rebaseFollowCap();
-				controller.refreshAnchor();
 				rebaseGuard();
 			};
 			const scroller = scrollerRef.current;
@@ -625,17 +683,16 @@ export function useChatScroll(
 		observedLifecycle.current = { isStreaming, settlementTick };
 		if (settlementTick !== previous.settlementTick) {
 			pendingImmediateTurn.current = false;
-			cancelRowReveal();
+			const restoring =
+				readingRestorePending.current &&
+				readingRestoreGeneration.current === rowRevealGeneration.current;
+			if (!restoring) cancelRowReveal();
 			controller.settle();
 			if (isStreaming) controller.setStreaming(true);
 			return;
 		}
 		if (isStreaming !== previous.isStreaming) controller.setStreaming(isStreaming);
 	}, [cancelRowReveal, controller, isStreaming, settlementTick]);
-
-	useLayoutEffect(() => {
-		controller.setMovement(movement);
-	}, [controller, movement]);
 
 	useEffect(() => {
 		if (!snapshot.moving) clearFoldResizeObserver();
@@ -675,6 +732,67 @@ export function useChatScroll(
 		if (!scrollerElement || !streamEdgeElement) return;
 		controller.contentChanged();
 	}, [controller, isStreaming, scrollerElement, streamEdgeElement]);
+
+	useLayoutEffect(() => {
+		const anchor = readingPositionRef.current.restore;
+		if (!scrollerElement || !anchor || !readingRestorePending.current) return;
+		readerLeft();
+		const generation = rowRevealGeneration.current;
+		readingRestoreGeneration.current = generation;
+		const anchorTarget = () => {
+			const row = mountedChatRow(scrollerElement, anchor.rowId);
+			if (!row) return null;
+			const viewportTop = scrollerElement.getBoundingClientRect().top;
+			return (
+				scrollerElement.scrollTop + row.getBoundingClientRect().top - viewportTop - anchor.offset
+			);
+		};
+		let attempts = 0;
+		let frame: number | null = null;
+		const restore = () => {
+			frame = null;
+			if (generation !== rowRevealGeneration.current) {
+				readingRestorePending.current = false;
+				return;
+			}
+			attempts += 1;
+			const target = anchorTarget();
+			if (target !== null) {
+				readingRestorePending.current = false;
+				controller.restoreScrollTop(target);
+				controller.stabilizeAnchor(anchorTarget);
+				return;
+			}
+			if (attempts > ROW_MATERIALIZATION_FRAMES) {
+				readingRestorePending.current = false;
+				controller.returnToEdge();
+				return;
+			}
+			if (attempts === 1 || attempts % 5 === 0) {
+				materializeRow(
+					generation,
+					() => readingPositionRef.current.resolveIndex(anchor.rowId),
+					"start",
+					anchor.offset,
+				);
+			}
+			frame = requestAnimationFrame(restore);
+		};
+		restore();
+		return () => {
+			if (frame !== null) cancelAnimationFrame(frame);
+		};
+	}, [controller, materializeRow, readerLeft, scrollerElement]);
+
+	useLayoutEffect(
+		() => () => {
+			if (readingRestorePending.current || controller.isMountPending()) return;
+			const scroller = scrollerRef.current;
+			const row = scroller && !controller.getSnapshot().following ? topVisibleRow(scroller) : null;
+			readingPositionRef.current.save(row ? { rowId: row.id, offset: row.top } : null);
+		},
+		[controller],
+	);
 
 	useLayoutEffect(() => {
 		if (!headerElement || edge !== "top") return;
@@ -752,7 +870,27 @@ export function useChatScroll(
 
 	useEffect(() => {
 		if (!scrollerElement) return;
+		const methods = ["scrollBy", "scrollTo"] as const;
+		for (const method of methods) {
+			const native = scrollerElement[method];
+			Object.defineProperty(scrollerElement, method, {
+				configurable: true,
+				value: (...args: unknown[]) => {
+					const before = scrollerElement.scrollTop;
+					Reflect.apply(native, scrollerElement, args);
+					scrollApiShift.current += scrollerElement.scrollTop - before;
+				},
+			});
+		}
+		return () => {
+			for (const method of methods) Reflect.deleteProperty(scrollerElement, method);
+		};
+	}, [scrollerElement]);
+
+	useEffect(() => {
+		if (!scrollerElement) return;
 		previousTouchScrollTop.current = boundedScrollTop(scrollerElement);
+		scrollApiShift.current = 0;
 		const onScroll = () => {
 			const nextScrollTop = boundedScrollTop(scrollerElement);
 			const headerHeight = headerElementRef.current?.getBoundingClientRect().height ?? 0;
@@ -760,7 +898,12 @@ export function useChatScroll(
 				headerAnchorScrollTop.current = nextScrollTop;
 			}
 			const delta = nextScrollTop - previousTouchScrollTop.current;
+			const scrollApiDelta = scrollApiShift.current;
+			const readerDelta = delta - scrollApiDelta;
+			const scrollApiOnly = scrollApiDelta !== 0 && Math.abs(readerDelta) < 0.5;
 			previousTouchScrollTop.current = nextScrollTop;
+			scrollApiShift.current = 0;
+			if (!scrollApiOnly) scrollSinceEnd.current = true;
 			const expectedProgrammaticScrollTop = programmaticScrollTop.current;
 			if (
 				expectedProgrammaticScrollTop !== null &&
@@ -784,16 +927,17 @@ export function useChatScroll(
 			const wheelMoving = wheelIntentUntil.current > now;
 			const wheelReturning = returnIntentUntil.current > now;
 			if (
-				!touchMomentum.current &&
-				!pointerMoving &&
-				!keyboardMoving &&
-				!wheelMoving &&
-				!wheelReturning
+				scrollApiOnly ||
+				(!touchMomentum.current &&
+					!pointerMoving &&
+					!keyboardMoving &&
+					!wheelMoving &&
+					!wheelReturning)
 			) {
 				if (!reachedLatestEdge(scrollerElement, "bottom")) checkGuard();
 				return;
 			}
-			const movedTowardLatest = edge === "bottom" ? delta > 0 : delta < 0;
+			const movedTowardLatest = edge === "bottom" ? readerDelta > 0 : readerDelta < 0;
 			touchMovingTowardLatest.current = movedTowardLatest;
 			nativeResume.current = null;
 			cancelRowReveal();
@@ -814,6 +958,8 @@ export function useChatScroll(
 			guardAnchor.current = null;
 		};
 		const onScrollEnd = () => {
+			if (!scrollSinceEnd.current) return;
+			scrollSinceEnd.current = false;
 			if (activePointerId.current !== null) return;
 			const now = performance.now();
 			if (
@@ -1003,43 +1149,6 @@ export function useChatScroll(
 					return current ? rowAlignmentTarget(scroller, current, align) : null;
 				}, true);
 			};
-			const materialize = () => {
-				virtuosoRef.current?.getState(({ ranges }) => {
-					if (generation !== rowRevealGeneration.current) return;
-					const index = resolveIndex();
-					if (index < 0) return;
-					const viewport = scroller.getBoundingClientRect();
-					const anchor = Array.from(
-						scroller.querySelectorAll<HTMLElement>("[data-chat-row-index]"),
-					).find((row) => Number.isInteger(Number(row.dataset.chatRowIndex)));
-					if (!anchor) return;
-					const heights = [...rowHeightEstimatesRef.current];
-					const currentFirstItemIndex = firstItemIndexRef.current;
-					const rangeOffset =
-						currentFirstItemIndex > 0 &&
-						ranges.some((range) => range.startIndex >= currentFirstItemIndex)
-							? currentFirstItemIndex
-							: 0;
-					for (const range of ranges) {
-						const start = Math.max(0, range.startIndex - rangeOffset);
-						const end = Math.min(heights.length - 1, range.endIndex - rangeOffset);
-						for (let measuredIndex = start; measuredIndex <= end; measuredIndex += 1) {
-							heights[measuredIndex] = range.size;
-						}
-					}
-					const anchorIndex = Number(anchor.dataset.chatRowIndex);
-					const anchorTop = scroller.scrollTop + anchor.getBoundingClientRect().top - viewport.top;
-					const rowTop = estimatedRowTop(heights, anchorIndex, anchorTop, index);
-					const target = alignedRowScrollTop(
-						rowTop,
-						heights[index] ?? 40,
-						scroller.clientHeight,
-						align,
-					);
-					scroller.scrollTop = Math.min(scrollBounds(scroller).maxScrollTop, Math.max(0, target));
-					recordProgrammaticScrollPosition();
-				});
-			};
 			const waitForAlignedRow = () => {
 				if (generation !== rowRevealGeneration.current) return;
 				attempts += 1;
@@ -1047,7 +1156,7 @@ export function useChatScroll(
 				if (!row) {
 					revealStarted = false;
 					alignedFrames = 0;
-					if (attempts === 1 || attempts % 5 === 0) materialize();
+					if (attempts === 1 || attempts % 5 === 0) materializeRow(generation, resolveIndex, align);
 				} else if (!revealStarted) {
 					startMeasuredReveal();
 				} else if (!controller.getSnapshot().moving) {
@@ -1076,7 +1185,7 @@ export function useChatScroll(
 				controller.cancelReveal();
 			};
 		},
-		[cancelRowReveal, controller, readerLeft, recordProgrammaticScrollPosition, virtuosoRef],
+		[cancelRowReveal, controller, materializeRow, readerLeft],
 	);
 
 	const scrollToLatest = useCallback(() => {
@@ -1103,6 +1212,7 @@ export function useChatScroll(
 			const scrollTop = scroller ? boundedScrollTop(scroller) : 0;
 			interactionStartScrollTop.current = scrollTop;
 			previousTouchScrollTop.current = scrollTop;
+			scrollApiShift.current = 0;
 			activePointerId.current = event.pointerId;
 			activePointerType.current = event.pointerType;
 			pointerMayContinueScroll.current = event.pointerType !== "touch" && event.target === scroller;

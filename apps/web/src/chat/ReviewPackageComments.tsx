@@ -2,7 +2,7 @@ import { RiArrowRightSLine as ChevronRight } from "@remixicon/react";
 import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
 import { useFold } from "./foldState";
-import type { ReviewPackageItem } from "./reviewPackage";
+import { packageFileLabels, type ReviewPackageItem } from "./reviewPackage";
 
 function keyPackageItems(items: ReviewPackageItem[]): { key: string; item: ReviewPackageItem }[] {
 	const seen = new Map<string, number>();
@@ -14,7 +14,15 @@ function keyPackageItems(items: ReviewPackageItem[]): { key: string; item: Revie
 	});
 }
 
-function PackageCommentRow({ foldId, item }: { foldId: string; item: ReviewPackageItem }) {
+function PackageCommentRow({
+	foldId,
+	item,
+	fileLabel,
+}: {
+	foldId: string;
+	item: ReviewPackageItem;
+	fileLabel: string | undefined;
+}) {
 	const [expanded, toggle, toggleRef] = useFold(foldId);
 	const detail = item.fragment ?? item.locator;
 	return (
@@ -33,6 +41,15 @@ function PackageCommentRow({ foldId, item }: { foldId: string; item: ReviewPacka
 						expanded && "rotate-90",
 					)}
 				/>
+				{fileLabel ? (
+					<span
+						data-testid="review-package-item-file"
+						title={item.path ?? undefined}
+						className="shrink-0 tr-code-text text-text-muted"
+					>
+						{fileLabel}
+					</span>
+				) : null}
 				{item.lineRef && (
 					<span className="shrink-0 tr-code-text text-text-subtle">{item.lineRef}</span>
 				)}
@@ -62,10 +79,16 @@ export function ReviewPackageComments({
 	items: ReviewPackageItem[];
 }): ReactNode {
 	if (items.length === 0) return null;
+	const fileLabels = packageFileLabels(items);
 	return (
 		<ul className="mt-4 flex flex-col">
 			{keyPackageItems(items).map(({ key, item }) => (
-				<PackageCommentRow key={key} foldId={`${foldPrefix}:${key}`} item={item} />
+				<PackageCommentRow
+					key={key}
+					foldId={`${foldPrefix}:${key}`}
+					item={item}
+					fileLabel={item.path === null ? undefined : fileLabels.get(item.path)}
+				/>
 			))}
 		</ul>
 	);

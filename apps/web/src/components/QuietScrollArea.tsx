@@ -1,5 +1,12 @@
 import { cn } from "@thinkrail/ui/utils";
-import { type ComponentPropsWithoutRef, type ReactNode, useEffect, useState } from "react";
+import {
+	type ComponentPropsWithoutRef,
+	type ReactNode,
+	type RefCallback,
+	useCallback,
+	useEffect,
+	useState,
+} from "react";
 
 type QuietScrollAxis = "vertical" | "both";
 type QuietScrollSurface = "sidebar" | "terminal";
@@ -232,6 +239,7 @@ interface QuietScrollAreaProps extends Omit<ComponentPropsWithoutRef<"div">, "ch
 	children: ReactNode;
 	viewportClassName?: string | undefined;
 	viewportTestId?: string | undefined;
+	viewportRef?: RefCallback<HTMLDivElement> | undefined;
 	surface?: QuietScrollSurface | undefined;
 	axis?: QuietScrollAxis | undefined;
 }
@@ -241,12 +249,20 @@ export function QuietScrollArea({
 	className,
 	viewportClassName,
 	viewportTestId,
+	viewportRef,
 	surface = "sidebar",
 	axis = "vertical",
 	...props
 }: QuietScrollAreaProps) {
 	const [root, setRoot] = useState<HTMLDivElement | null>(null);
 	const [viewport, setViewport] = useState<HTMLDivElement | null>(null);
+	const attachViewport = useCallback(
+		(node: HTMLDivElement | null) => {
+			setViewport(node);
+			viewportRef?.(node);
+		},
+		[viewportRef],
+	);
 	return (
 		<div
 			ref={setRoot}
@@ -255,7 +271,7 @@ export function QuietScrollArea({
 			{...props}
 		>
 			<div
-				ref={setViewport}
+				ref={attachViewport}
 				data-testid={viewportTestId}
 				className={cn("quiet-scroll-viewport size-full overflow-auto", viewportClassName)}
 			>

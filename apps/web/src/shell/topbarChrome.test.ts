@@ -49,7 +49,7 @@ test("the trailing topbar action cluster owns the no-drag boundary", () => {
 		}
 	}
 	expect(closeStart).toBeDefined();
-	const buttons = [...header.matchAll(/<button\b/g)];
+	const buttons = [...header.matchAll(/<(?:button|Button|IconButton)\b/g)];
 	expect(buttons.length).toBeGreaterThan(0);
 	for (const button of buttons) {
 		expect(button.index).toBeGreaterThanOrEqual(openingEnd);

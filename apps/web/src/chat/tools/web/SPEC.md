@@ -6,12 +6,15 @@ title: web tool renderers (search / fetch / stored content)
 parent: submodule-web-chat-tools
 depends-on: [module-contracts]
 tags: [chat, web-tools]
+references: [module-ext-web-access]
 ---
 
 ## Responsibility
 
-Presentational renderers for all three tools exposed by the pinned **`pi-web-access`** extension, joined to
-that capability by **tool name**: `WebSearchCard` (`web_search`), `WebFetchCard` (`fetch_content`), and
+Presentational renderers for three of the tools exposed by **`pi-web-access`** (its `source_check` and
+`web_enable` use the default renderer) — composed on the server by
+the `web-access` ThinkRail extension ([[module-ext-web-access]]), which has no `./web` half yet — joined
+to that capability by **tool name**: `WebSearchCard` (`web_search`), `WebFetchCard` (`fetch_content`), and
 `WebStoredContentCard` (`get_search_content`). `register.ts` wires all three via `registerToolRenderer`
 (+ collapsed-header summaries) and is imported for its side effect by the parent `tools/register`.
 
@@ -20,7 +23,7 @@ that capability by **tool name**: `WebSearchCard` (`web_search`), `WebFetchCard`
 - **Owns:** `WebSearchCard` (query + provider + synthesized answer/sources), `WebFetchCard` (fetched URL or
   local-video path + extracted content), `WebStoredContentCard` (response id + selected query/URL + recovered
   full content), their shared folded Markdown result body, and registration.
-- **Public surface:** none beyond the side-effect `register` (no barrel — chat pulls shiki; per-file like
+- **Public surface:** none beyond the side-effect `register` (no barrel — chat pulls the highlighter; per-file like
   its siblings).
 - **Allowed deps:** sibling/parent chat primitives (`toolRegistry`, `ToolFileLink`, `Collapsible`,
   `Markdown`); `@thinkrail/extension-api/web` (`ToolRenderProps`/`ToolStatus` + pure helpers); `@remixicon/react`.

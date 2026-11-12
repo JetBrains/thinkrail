@@ -4,7 +4,7 @@ type: module-design
 status: draft
 title: Shared host UI primitives
 parent: architecture
-depends-on: [module-contracts]
+depends-on: [module-contracts, module-locales]
 references: [web-color, web-spacing, web-typography]
 ---
 
@@ -16,43 +16,166 @@ feature state, theme selection, and token generation stay with the app.
 ## Boundary
 
 Primitives expose per-file `@thinkrail/ui/<primitive>` subpaths, not a root component barrel; this keeps
-lazy chunks independent and preserves the shadcn convention. `./utils` exposes `cn`; `./theme` exposes
+lazy chunks independent and preserves the shadcn convention. `./utils` exposes `cn`; `./keyboard` exposes
+`isImeComposing`, `yieldEscapeToIme` and the platform modifier (`isApplePlatform`, `hasPlatformModifier`:
+Cmd on Apple, Ctrl elsewhere — shared so the app's shortcuts and an extension's card read one definition); `./theme` exposes
 only `onThemeSwap`, a DOM MutationObserver subscription to the completed `data-theme` signal, with
-explicit cleanup. It knows nothing about the theme catalog or preferences.
+explicit cleanup. It knows nothing about the theme catalog or preferences. `./fonts` is the same seam for
+the font settings: `onFontsChange` / `fontsRevision` over the `data-fonts` signal, `resolveFont(className)`
+(the computed family, size, weight and ligatures of a generated typography class, for surfaces that take
+fonts as JS options), `fontsLoaded` (resolves once the faces for that family, size and weight have
+loaded), and `watchFont(className, fields, onChange)` — how such a surface follows the class: the latest
+change wins once its faces load, a change to none of the listed fields is skipped, and a new face set (the
+`data-font-faces` signal) re-applies an unchanged font. It knows nothing about the settings or the runtime
+that publishes them.
 
-Workspace imports may reach `contracts` only. External dependencies are React, Radix, cmdk,
+Workspace imports may reach `contracts` and `@thinkrail/locales/react` (the shared i18next instance, for
+primitive-owned strings such as the dialog's screen-reader Close and the toast's Dismiss label) only. External dependencies are React, Radix, cmdk,
 react-resizable-panels, Remix Icon, class-variance-authority, clsx and tailwind-merge. Host internals,
 pi, app stores, transport and theme runtime are forbidden. Tokens remain global CSS variables generated
 under `apps/web/src/styles`; utilities follow [[web-color]], [[web-spacing]] and [[web-typography]].
 The app's Tailwind sources and adoption guards include this package and extension web halves.
 
+## Button system
+
+`button` is the one implementation of an action button: `Button` (text, optional `iconLeft` /
+`iconRight`), `IconButton` (icon only — `label` is required and becomes both the `aria-label` and the shared
+`IconTooltip`), and `buttonVariants` for a non-button element that must look like one (a link) — it
+returns the same merged class list the components render, compounds resolved — with
+`buttonDataAttributes` giving such an element the same `data-slot` / `data-variant` / `data-size` /
+`data-icon-only` / `data-selected` contract the components render (the panel tool rails, the Monaco
+comment widget), and `withIconClass(Icon, classes)` for a tinted or animated glyph (a success check, a
+working pulse) — created once at module scope, never during render, so the icon keeps its identity. Neither
+component accepts a native `title`: an explanation is `tooltip` (on `IconButton` it overrides the label's
+tooltip text), rendered through the same `IconTooltip`, so it also shows on a disabled button — the
+place a reason for being unavailable matters most. While `disabled`, a button moves its tooltip trigger to
+the `wrapTrigger` span automatically, so the tooltip survives the disabled button's `pointer-events:
+none`; the value, not the prop's presence, decides, because a Radix trigger such as
+`DropdownMenuTrigger asChild` injects `disabled={false}` into every child and a wrapper would take a
+text button's `min-w-0` truncation away. The button element remounts inside the span when `disabled`
+flips; an explicit `wrapTrigger` keeps the span permanently (and isolates a second Radix trigger), and
+`wrapTrigger={false}` opts out. Every
+ordinary action in the app, the renderer package and extension web halves renders through it; a raw
+`<button>` carrying a button skin is rejected by `apps/web/src/styles/buttonUsage.test.ts` unless that
+test's documented specialized list names it.
+
+- **Variants** (exactly five): `primary` (accent fill — the main action of a surface), `soft-primary`
+  (accent tint + accent text; also every former transparent "green ghost"), `outline` (neutral bordered),
+  `ghost` (no surface, muted text, neutral hover fill — the default for `IconButton`), `destructive` (danger
+  fill; confirms irreversible actions). A call site picks the variant that matches the action's existing
+  look; there is no `soft-default` and no colour override at a call site. `tone` (`warning` | `danger`)
+  is the one sanctioned label colour: on `ghost` and `outline` it keeps the feedback colour in every state
+  (rest, hover, focus-visible, pressed, selected — disabled still wins), because a colour set at the call
+  site loses to ghost's own state text in focus and pressed, exactly when the control is used.
+- **Sizes** (exactly three; border-box, same for every variant and state, radius `rounded-sm`, type
+  `tr-text-button` — the 14px interface face at weight 470, one step above ordinary UI text): `s` 20px
+  high, 4px text padding, 14px icon, 4px icon↔text gap, 20px square icon-only; `m` 24 / 8 / 16 / 4 / 24;
+  `l` 32 / 12 / 20 / 6 / 32 (the default for `Button`; `IconButton` defaults to `m`). At `s` the gap equals the side padding: a 12px icon read as
+  lighter than the 14px label beside it, so the icon was raised to 14px and the gap to 4px to keep the pair
+  legible. Icon weight follows the icon size only — Remix Icon ships Line/Fill, not stroke weights, so
+  there is no per-size weight to match and none is simulated with CSS. Icons never shrink; text buttons
+  size to content unless the layout asks for `w-full`.
+- **States** live in the component, not at the call site: hover uses the variant's hover role
+  (soft-primary: `control-soft-primary-bg-hovered` plus a `primary-muted` border, so its accent label
+  stays AA); pressed (`:active`, pointer down or Space held) looks exactly like hover — the same `active:` classes mirror the `hover:` ones, so a keyboard press without a pointer shows it too — and never moves geometry; focus-visible is a 2px `primary` outline with a 2px offset in every variant, so
+  it stays visible over a primary or destructive fill and on every surface (`ghost`, which has no surface
+  of its own, also takes its hover fill and default text while focused, so the focused button reads as a
+  control and not only as a ring around empty space) — except a `ghost` icon-only button, which draws the
+  ring 2px inside its square, because those sit flush in 28px header strips and rails whose
+  `overflow: hidden` would clip an outer ring; disabled keeps the element in
+  place on the `control-disabled-*` / `control-primary-disabled-*` / `control-destructive-disabled-*` roles
+  (never opacity, never hidden) through the `button-disabled` variant the app stylesheet defines — a
+  `data-disabled` element, or a natively `:disabled` one that is not loading, so a button inside a disabled
+  `<fieldset>` takes the skin too; `loading` swaps the icon (with `spinIcon`, it instead rotates the button's own icon in place — the refresh idiom of `apps/web/src/components` *Loading vocabulary* — and under reduced motion shows the static spinner glyph instead, so the state stays visible) (or, with no icon, overlays the label it keeps
+  transparent for width and the accessible name) for a spinner at the size's icon size, sets `aria-busy` (a caller's own `aria-busy` survives on a button that is not loading — the busy-but-clickable mic), and natively disables the
+  element so the action cannot run twice; `selected` — or an open Radix trigger (`data-state="open"`) — is
+  the persistent toggle/open fill (`control-bg-selected`) for `outline` and `ghost`, distinct from pressed;
+  `soft-primary` shows selected as its hover look (`primary-muted` border on the hover tint), the one
+  accent step that keeps its label AA, so an expanded accent chip still reads as expanded. Toggles keep
+  `aria-pressed`; disclosures keep `aria-expanded`.
+- **Rows**: a list row that paints its own hover or selected fill uses the same roles as ghost's fills
+  (`control-bg-hovered` / `control-bg-selected`), so a ghost action on it would show no feedback. Such a
+  row carries `data-row`, and a `ghost` button inside it takes `container-elevated-bg` for hover, pressed,
+  focus-visible and selected instead — the raised look row actions had before the system — so a hovered
+  row action and an open row menu stay visible against the filled row. Marked rows: project and workspace
+  rows, change rows, todo rows, every cmdk `CommandItem`, and a history-overlay row only while it is
+  selected — those rows sit on the overlay's elevated surface and fill only when selected, so an unselected
+  row keeps ghost's own hover fill.
+- **Call sites own placement only**: margins, self/flex/grid placement, `w-full`, positioning, responsive
+  visibility and whole-button hover reveal. Height, padding, gap, radius, colours, borders, typography and
+  state skins are rejected by the adoption guard. Documented exceptions live in that guard with a reason
+  (red-on-hover raw actions that `tone` does not express; extension select options that must wrap long
+  labels).
+- **Not buttons**: tabs, menu items, switches, toggle segments, radio/segmented options, tree and list rows,
+  disclosure headers, chips, inline text links, the composer send pill, native window controls and large
+  choice cards keep their own primitives or components.
+- The dialog close button and `ToastClose` are `IconButton ghost m`.
+
 ## Primitive invariants
 
 The per-file surface is `button`, `switch`, `dialog`, `dropdown-menu`, `context-menu`, `menu-styles`,
-`popover`, `command` (cmdk combobox body), `textarea`, `tooltip`, `resizable`, and `toast`, alongside
-`utils` and `theme`. `menu-styles` is shared by the menu primitives and custom app menu rows.
+`popover`, `command` (cmdk combobox body), `textarea`, `tooltip`, `resizable`, `toast`, `toggle-segment`
+(the slim header toggle: active segment on `control-bg-selected` + `text-default`, `data-active` /
+`aria-pressed`), `skeleton` (`SkeletonRows` / `LoadingRegion`, the one loading placeholder; its usage rules
+live in the web components spec), and `attention-line` (`AttentionLine`, the "Your input is needed · Agent is
+waiting" line; `announced` hides the visible line from assistive tech once the always-mounted polite
+region carries the announcement, `live={false}` drops the region), alongside `utils`, `keyboard`, `theme` and `fonts`.
+`menu-styles` is shared by the menu primitives and custom app menu rows. `toggle-segment` and `skeleton`
+moved here from the app when the resource renderers became a package, because both the app and
+[[module-resource-renderers]] use them; `attention-line` moved for the same reason when the
+`ask_user_question` card became an extension web half, because the app's extension prompts use it too.
 
-- Button variants are `default`/`destructive`/`outline`/`ghost`; destructive confirms irreversible
-  actions. Switch exposes native disabled behavior and `role="switch"`/`aria-checked`, not visible On/Off
-  text. Every modal dialog's overlay carries `data-modal-layer`, and `useModalLayerOpen()` reports whether one is open: it lets callers tell "covered by a modal" from their own visibility without a dialog registry, independent of how `aria-hidden` treats live regions. Dialog accepts `hideClose` for chromeless surfaces. `DialogPanel` renders Radix content in place
+- Switch exposes native disabled behavior and `role="switch"`/`aria-checked`, not visible On/Off
+  text. Every modal dialog's overlay carries `data-modal-layer`, and `useModalLayerOpen()` reports whether one is open: it lets callers tell "covered by a modal" from their own visibility without a dialog registry, independent of how `aria-hidden` treats live regions. Dialog accepts `hideClose` for chromeless surfaces. `DialogContent` contains what it holds: width and max height keep a window gutter, the body scrolls by default, long text wraps, and `DialogFooter` wraps its actions and then their labels (a footer `Button` grows past its fixed height only then). A caller adding a pinned footer scrolls an inner `min-h-0 flex-1` body; one portalling popovers into the content element sets `overflow-visible` and scrolls an inner body. An inner scroll body is `relative`: otherwise an absolutely positioned descendant (an `sr-only` label) takes the dialog as its containing block and stretches the dialog's own scroll area, giving it a second scrollbar. Flex rows of data still need `min-w-0`. `DialogPanel` renders Radix content in place
   without a portal or overlay for caller-positioned, non-modal dialogs; title/role semantics, Escape
   dismissal, and focus return remain Radix-owned while surrounding UI stays interactive.
+- **An active IME owns the key** ([[module-web]]'s text-field rule). `isImeComposing` is `isComposing`
+  or the legacy `keyCode` 229 sentinel, the same test cmdk applies. The sentinel is needed because
+  `compositionend` may come before the final keydown, leaving `isComposing` false while the IME still
+  owns that event. `DialogContent`, `DialogPanel` and `PopoverContent` wrap the caller's
+  `onEscapeKeyDown` in `yieldEscapeToIme`. A composing Escape is `preventDefault`ed, so Radix's
+  document-level Escape listener keeps the layer open, and the caller's handler never sees it. Menus hold
+  no text fields and stay unwrapped. `keyboard.test.ts` scans the app, ui, `resource-renderers` and
+  extension web sources: a file with both a key handler and a text field must use the guard. The scan is
+  file-level, and each allow-list entry carries its reason.
 - React 19 refs pass through controls; dialog/popover portals preserve accessible focus and scroll
   behavior. Popover accepts a host Dialog container for scroll-lock compatibility.
 - Icon-only controls use `IconTooltip` with `aria-label`, not native `title`; one root `TooltipProvider`
   sets the delay. Native `title` remains only for non-control truncation fallbacks or surfaces outside
   the provider (the app's review widgets). `wrapTrigger` supplies the interactive flex span for a disabled
   control or another Radix trigger, isolating their `data-state` values; callers do not hand-roll that
-  wrapper. App, SDK, and extension web call-site tests enforce this convention.
+  wrapper, and `Button`/`IconButton` apply it themselves while disabled. App, SDK,
+  and extension web call-site tests enforce the no-hand-rolled-span convention. `IconTooltip` opens on
+  hover and on *keyboard-visible* focus only: focus that does not match `:focus-visible` (a dialog's or
+  popover's autofocus after a pointer open, focus returning to a clicked trigger) never opens it, because
+  an open tooltip is the topmost dismissable layer and would swallow the Escape meant for the dialog. For
+  the same reason an open `IconTooltip` closes itself synchronously on Escape in a window capture
+  listener, before Radix's document-level layer handling, so one Escape dismisses the tooltip *and* the
+  dialog, popover or menu beneath it. Tooltip content stacks at `z-150`, above dialogs and the toast
+  viewport (`z-[100]`), so a toast's own close tooltip is never painted under the toast.
 - Context and dropdown menus share menu geometry and token classes: content surface, radius/shadow,
   item/icon spacing, separators, semantic action colors, focus rows, and viewport collision behavior.
   Context menus add pointer-position right-click/touch long-press anchoring; features own enabled gestures
-  and actions. Dropdowns are vertically bounded by the smaller of 60vh and Radix's available height,
-  scrollable with horizontal overflow hidden so long rows truncate rather than scroll.
+  and actions — a trigger opts into the keyboard gesture (Context Menu key or Shift+F10, anchored below the
+  trigger) by passing `openContextMenuFromKeyboard` as its `onKeyDown`. Dropdowns are vertically bounded by
+  the smaller of 60vh and Radix's available height, scrollable with horizontal overflow hidden so long rows
+  truncate rather than scroll.
 - Toast exposes `ToastProvider`/`Toast`/`ToastViewport`/`ToastTitle`/`ToastDescription`/`ToastAction`/
-  `ToastClose` and `toastVariants` (`error`/`success`/`info`). Severity is a presentational left accent;
-  queue ownership and notification lifetimes stay in the app (`panels/Toaster` composes the primitives).
+  `ToastClose` and `toastVariants` (`error`/`success`/`warning`/`info`). Severity is a uniform semantic
+  border (`border-feedback-*-muted`) on a neutral `bg-container-elevated-bg` background. `ToastAction` is
+  unstyled: the caller supplies the control through `asChild`. Queue ownership, icons, and notification
+  lifetimes stay in the app (`panels/Toaster` composes the primitives).
+- `DialogContent` and `DialogPanel` stay open for a press that began in the toast viewport (the viewport
+  records its `pointerdown`s; `isToastPress` reads them) and for focus landing in the viewport, so a toast's
+  action or close works over a dialog. Radix would do this through its
+  dismissable-layer branch, but the dialog and the toast resolve different copies of that module; the
+  dialog's copy also defers an outside press to its `click`, by when a closed toast is already detached,
+  so the record is per event, not per element. Unifying the copies is not the fix: Radix then makes each
+  toast the topmost layer, and the first Escape would close an error toast instead of the dialog.
+- Resizable handles paint a 1 px line at their leading edge; the pointer hit area extends only into the
+  following panel (fine-pointer margin 1 px), so the preceding panel's trailing-edge scrollbar stays
+  usable. There is no grip variant.
 - Primitives use only the host's token utilities, never shadcn's default oklch palette.
 
-Code highlighting is deliberately absent: `CodeBlock` and shiki depend on the app's theme registration
+Code highlighting is deliberately absent: `CodeBlock` and its highlighter depend on the app's theme registration
 and remain app-local until a second extension requires that seam.

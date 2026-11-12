@@ -1,4 +1,4 @@
-import type { MermaidValidator } from "@thinkrail.ai/pi-visualize";
+import type { MermaidValidator } from "@thinkrail/pi-visualize";
 import { parseHTML } from "linkedom";
 
 type Mermaid = typeof import("mermaid")["default"];

@@ -4,7 +4,7 @@ import type {
 	ExtensionUIContext,
 	ExtensionUIDialogOptions,
 } from "@earendil-works/pi-coding-agent";
-import type { ExtUiRequest, ExtUiResponse } from "@thinkrail/contracts";
+import type { ExtUiRequest, ExtUiResponse, ProviderWarning } from "@thinkrail/contracts";
 import { plainTextTheme } from "./plainTextTheme";
 
 /** Clients whose protocol version is below `belowProtocol`; absent means every client. */
@@ -84,6 +84,10 @@ export function notifyExtUi(
 	publish({ id: nextId(), sessionId, kind: "notify", message, level }, audience);
 }
 
+export function publishSessionNotice(sessionId: string, notice: ProviderWarning): void {
+	publish({ id: nextId(), sessionId, kind: "notice", notice });
+}
+
 const MAX_EXTENSION_ERROR_CHARS = 500;
 const ANONYMOUS_ENTRYPOINTS = new Set(["SKILL.md", "index.ts", "index.js"]);
 
@@ -105,60 +109,83 @@ export function notifyExtensionError(sessionId: string, error: ExtensionError): 
 	);
 }
 
-export function createWebUiContext(sessionId: string): ExtensionUIContext {
-	const bridgeDialog = (
-		request: DialogRequest,
-		opts?: ExtensionUIDialogOptions,
-	): Promise<string | boolean | null> =>
-		new Promise((resolve) => {
-			const { id } = request;
-			let settled = false;
-			let timer: ReturnType<typeof setTimeout> | undefined;
-			const finish = (value: string | boolean | null, dismiss: boolean): void => {
-				if (settled) return;
-				settled = true;
-				pending.delete(id);
-				stateChanged(sessionId);
-				if (timer) clearTimeout(timer);
-				opts?.signal?.removeEventListener("abort", onAbort);
-				if (dismiss) publish({ id, sessionId, kind: "dismiss" });
-				resolve(value);
-			};
-			const onAbort = (): void => finish(null, true);
-			pending.set(id, { sessionId, request, finish });
+function bridgeDialog(
+	sessionId: string,
+	request: DialogRequest,
+	opts?: ExtensionUIDialogOptions,
+): Promise<string | boolean | null> {
+	return new Promise((resolve) => {
+		const { id } = request;
+		let settled = false;
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const finish = (value: string | boolean | null, dismiss: boolean): void => {
+			if (settled) return;
+			settled = true;
+			pending.delete(id);
 			stateChanged(sessionId);
-			if (opts?.signal) {
-				if (opts.signal.aborted) return finish(null, true);
-				opts.signal.addEventListener("abort", onAbort, { once: true });
-			}
-			if (typeof opts?.timeout === "number")
-				timer = setTimeout(() => finish(null, true), opts.timeout);
-			publish(request);
-		});
+			if (timer) clearTimeout(timer);
+			opts?.signal?.removeEventListener("abort", onAbort);
+			if (dismiss) publish({ id, sessionId, kind: "dismiss" });
+			resolve(value);
+		};
+		const onAbort = (): void => finish(null, true);
+		pending.set(id, { sessionId, request, finish });
+		stateChanged(sessionId);
+		if (opts?.signal) {
+			if (opts.signal.aborted) return finish(null, true);
+			opts.signal.addEventListener("abort", onAbort, { once: true });
+		}
+		if (typeof opts?.timeout === "number")
+			timer = setTimeout(() => finish(null, true), opts.timeout);
+		publish(request);
+	});
+}
+
+export async function selectForToolCall(
+	sessionId: string,
+	call: { toolCallId: string; toolInput: Record<string, unknown> },
+	title: string,
+	options: string[],
+	opts?: ExtensionUIDialogOptions,
+): Promise<string | undefined> {
+	const v = await bridgeDialog(
+		sessionId,
+		{ id: nextId(), sessionId, kind: "select", title, options, ...call },
+		opts,
+	);
+	return typeof v === "string" ? v : undefined;
+}
+
+export function createWebUiContext(
+	sessionId: string,
+	currentToolCall: () => string | undefined = () => undefined,
+): ExtensionUIContext {
+	const anchor = (): { toolCallId?: string } => {
+		const toolCallId = currentToolCall();
+		return toolCallId ? { toolCallId } : {};
+	};
+	const dialog = (request: DialogRequest, opts?: ExtensionUIDialogOptions) =>
+		bridgeDialog(sessionId, { ...request, ...anchor() }, opts);
 
 	return {
 		async select(title, options, opts) {
-			const v = await bridgeDialog(
-				{ id: nextId(), sessionId, kind: "select", title, options },
-				opts,
-			);
+			const v = await dialog({ id: nextId(), sessionId, kind: "select", title, options }, opts);
 			return typeof v === "string" ? v : undefined;
 		},
 		async confirm(title, message, opts) {
 			return (
-				(await bridgeDialog({ id: nextId(), sessionId, kind: "confirm", title, message }, opts)) ===
-				true
+				(await dialog({ id: nextId(), sessionId, kind: "confirm", title, message }, opts)) === true
 			);
 		},
 		async input(title, placeholder, opts) {
-			const v = await bridgeDialog(
+			const v = await dialog(
 				{ id: nextId(), sessionId, kind: "input", title, ...(placeholder ? { placeholder } : {}) },
 				opts,
 			);
 			return typeof v === "string" ? v : undefined;
 		},
 		async editor(title, prefill) {
-			const v = await bridgeDialog({
+			const v = await dialog({
 				id: nextId(),
 				sessionId,
 				kind: "editor",
@@ -187,6 +214,12 @@ export function createWebUiContext(sessionId: string): ExtensionUIContext {
 		setTitle(title) {
 			publish({ id: nextId(), sessionId, kind: "setTitle", title });
 		},
+		pasteToEditor(text) {
+			publish({ id: nextId(), sessionId, kind: "pasteToEditor", text });
+		},
+		setEditorText(text) {
+			publish({ id: nextId(), sessionId, kind: "setEditorText", text });
+		},
 
 		onTerminalInput: () => () => {},
 		setWorkingMessage: () => {},
@@ -196,8 +229,6 @@ export function createWebUiContext(sessionId: string): ExtensionUIContext {
 		setFooter: () => {},
 		setHeader: () => {},
 		custom: (() => Promise.resolve(undefined)) as ExtensionUIContext["custom"],
-		pasteToEditor: () => {},
-		setEditorText: () => {},
 		getEditorText: () => "",
 		addAutocompleteProvider: () => {},
 		setEditorComponent: () => {},

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "bun:test";
 import {
-	mcpArgEntries,
 	mcpArgsSummary,
 	mcpCallTitle,
 	mcpCliAction,
@@ -130,14 +129,6 @@ describe("text and arguments", () => {
 		).toBe('rich result\n[Resource file:///notes/a.md "a.md" (text/markdown)]');
 		expect(mcpText(undefined)).toBe("");
 		expect(mcpText("plain")).toBe("plain");
-	});
-
-	it("shows string arguments raw and others as JSON", () => {
-		expect(mcpArgEntries({ query: "auth bug", limit: 5, filter: { state: "open" } })).toEqual([
-			{ key: "query", value: "auth bug" },
-			{ key: "limit", value: "5" },
-			{ key: "filter", value: '{\n  "state": "open"\n}' },
-		]);
 	});
 
 	it("summarizes arguments as pi's collapsed key=value pairs, cut to one line", () => {

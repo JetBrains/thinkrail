@@ -1,80 +1,133 @@
-import {
-	RiCheckLine as Check,
-	RiRefreshLine as RefreshCw,
-	RiCloseLine as X,
-} from "@remixicon/react";
+import { RiCheckLine as Check, RiRefreshLine as RefreshCw } from "@remixicon/react";
 import type { GithubAuthStatus } from "@thinkrail/contracts";
+import { T, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
-import { useEffect, useState } from "react";
+import { SkeletonRows } from "@thinkrail/ui/skeleton";
+import { useCallback, useEffect, useReducer, useRef } from "react";
 import { getTransport } from "@/transport";
+import { SettingsGroup } from "./SettingsGroup";
+import { SettingsNotice } from "./SettingsNotice";
+
+let lastStatus: GithubAuthStatus | null = null;
+
+export interface GithubProbe {
+	status: GithubAuthStatus | null;
+	failed: boolean;
+	pending: number | null;
+}
+
+export type GithubProbeEvent =
+	| { type: "start"; id: number }
+	| { type: "answer"; id: number; status: GithubAuthStatus }
+	| { type: "reject"; id: number };
+
+export function githubProbe(probe: GithubProbe, event: GithubProbeEvent): GithubProbe {
+	if (event.type === "start") return { ...probe, pending: event.id };
+	if (event.id !== probe.pending) return probe;
+	return event.type === "answer"
+		? { status: event.status, failed: false, pending: null }
+		: { ...probe, failed: true, pending: null };
+}
 
 export function GithubSettings() {
-	const [gh, setGh] = useState<GithubAuthStatus | null>(null);
-	const [refreshing, setRefreshing] = useState(false);
+	const [probe, dispatch] = useReducer(githubProbe, {
+		status: lastStatus,
+		failed: false,
+		pending: null,
+	});
+	const requests = useRef(0);
 
-	useEffect(() => {
-		let cancelled = false;
+	const run = useCallback((method: "github.authStatus" | "github.refresh") => {
+		const id = ++requests.current;
+		dispatch({ type: "start", id });
 		getTransport()
-			.request("github.authStatus", {})
-			.then((s) => !cancelled && setGh(s))
-			.catch(() => !cancelled && setGh({ connected: false }));
-		return () => {
-			cancelled = true;
-		};
+			.request(method, {})
+			.then(
+				(status) => dispatch({ type: "answer", id, status }),
+				() => dispatch({ type: "reject", id }),
+			);
 	}, []);
 
-	const refresh = async () => {
-		setRefreshing(true);
-		try {
-			setGh(await getTransport().request("github.refresh", {}));
-		} catch {
-			setGh({ connected: false });
-		} finally {
-			setRefreshing(false);
-		}
-	};
+	useEffect(() => run("github.authStatus"), [run]);
 
-	const connected = gh?.connected ?? false;
+	useEffect(() => {
+		if (probe.status) lastStatus = probe.status;
+	}, [probe.status]);
 
 	return (
-		<section data-testid="settings-github" className="flex flex-col gap-8">
-			<div className="flex flex-col gap-4">
-				<h3 className="tr-title-section text-text-default">Local GitHub</h3>
-				<p className="text-text-muted tr-text-metadata">
-					Authenticate the GitHub CLI to create workspaces from remote branches.
-				</p>
-			</div>
-			<div className="flex items-center gap-8 rounded-sm border border-border-default bg-control-bg px-12 py-8">
-				<span
-					data-testid="settings-gh-status"
-					data-connected={connected}
-					className={`inline-flex items-center gap-4 tr-text-ui ${
-						connected ? "text-feedback-success" : "text-text-muted"
-					}`}
-				>
-					{connected ? <Check className="size-14" /> : <X className="size-14" />}
-					{connected ? "Connected" : "Not connected"}
-				</span>
-				{connected && gh?.login ? (
-					<span className="truncate text-text-muted tr-text-ui">{gh.login}</span>
-				) : null}
-				<Button
-					variant="outline"
-					size="sm"
-					data-testid="settings-gh-refresh"
-					disabled={refreshing}
-					onClick={() => void refresh()}
-					className="ml-auto"
-				>
-					<RefreshCw className={`size-14 ${refreshing ? "animate-spin" : ""}`} />
-					Refresh
-				</Button>
-			</div>
-			<p className="text-text-muted tr-text-metadata">
-				The GitHub CLI (<code className="tr-code-text">gh</code>) is read locally on the host.
-				Authenticate with <code className="tr-code-text">gh auth login</code> to enable creating
-				workspaces from remote branches.
-			</p>
-		</section>
+		<GithubStatusView
+			status={probe.status}
+			checking={probe.pending !== null}
+			failed={probe.failed}
+			onRefresh={() => run("github.refresh")}
+		/>
+	);
+}
+
+export function GithubStatusView({
+	status,
+	checking,
+	failed,
+	onRefresh,
+}: {
+	status: GithubAuthStatus | null;
+	checking: boolean;
+	failed: boolean;
+	onRefresh: () => void;
+}) {
+	const t = useT();
+	const refreshButton = (
+		<Button
+			variant="outline"
+			size="m"
+			iconLeft={RefreshCw}
+			loading={checking}
+			spinIcon
+			data-testid="settings-gh-refresh"
+			onClick={onRefresh}
+		>
+			{t("settings.github.refresh")}
+		</Button>
+	);
+
+	return (
+		<div data-testid="settings-github" className="flex flex-col">
+			<SettingsGroup
+				title={t("settings.github.title")}
+				description={t("settings.github.description")}
+			>
+				<div data-testid="settings-gh-status" data-connected={status?.connected}>
+					{status?.connected ? (
+						<div className="flex items-center gap-8 rounded-sm bg-control-bg px-12 py-8">
+							<Check className="size-14 text-feedback-success" />
+							<span className="tr-text-ui text-feedback-success">
+								{t("settings.github.connected")}
+							</span>
+							{status.login ? (
+								<span className="min-w-0 truncate text-text-muted tr-text-metadata">
+									{status.login}
+								</span>
+							) : null}
+							<div className="ml-auto shrink-0">{refreshButton}</div>
+						</div>
+					) : status ? (
+						<SettingsNotice variant="warning" action={refreshButton}>
+							<p>
+								<T
+									i18nKey="settings.github.notConnected"
+									components={[<code key="command" className="tr-code-text" />]}
+								/>
+							</p>
+						</SettingsNotice>
+					) : failed ? (
+						<SettingsNotice variant="error" action={refreshButton}>
+							<p>{t("settings.github.checkFailed")}</p>
+						</SettingsNotice>
+					) : (
+						<SkeletonRows rows={1} label={t("settings.github.checking")} />
+					)}
+				</div>
+			</SettingsGroup>
+		</div>
 	);
 }

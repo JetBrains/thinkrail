@@ -108,18 +108,6 @@ export function mcpText(result: unknown): string {
 		.join("\n");
 }
 
-export interface McpArgEntry {
-	key: string;
-	value: string;
-}
-
-export function mcpArgEntries(args: Record<string, unknown>): McpArgEntry[] {
-	return Object.entries(args).map(([key, value]) => ({
-		key,
-		value: typeof value === "string" ? value : (JSON.stringify(value, null, 2) ?? String(value)),
-	}));
-}
-
 const ARGS_SUMMARY_CHARS = 100;
 
 export function mcpArgsSummary(args: Record<string, unknown>): string {

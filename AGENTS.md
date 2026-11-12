@@ -10,6 +10,8 @@ session state.
 - Use `architecture.md` for system topology, cross-module decisions, and repo-wide invariants.
 - For a pi upgrade or a host workaround around pi, read `pi-compatibility.md`: verify every applicable
   removal gate against the installed SDK, update the registry, and report what was removed or retained.
+  An Electrobun upgrade or a host workaround around Electrobun/Hutch does the same with
+  `electrobun-compatibility.md`.
 - Read the owning `SPEC.md` when work is governed by or may alter a module boundary, contract,
   invariant, documented behavior, or architecture decision.
 - Localized work does not require unrelated specs or a full repository map.
@@ -39,8 +41,10 @@ Clear, fractal module boundaries are a top-priority requirement:
 
 ## Repo-wide invariants
 
-- `apps/web` depends on `contracts`, `ui`, `extension-api/web`, and `thinkrail-extensions/*/web` only,
-  never `server` or `shared`.
+- `apps/web` depends on `contracts`, `locales`, `ui`, `extension-api/web`, `resource-renderers`, and
+  `thinkrail-extensions/*/web` only, never `server` or `shared`.
+- User-facing UI text is a key in `packages/locales/en.json` rendered through `@thinkrail/locales/react`;
+  the lint gate rejects hardcoded JSX text and text attributes.
 - Never value-import `pi` into browser-bundled code. Import types only from the `pi-ai` /
   `pi-agent-core` package roots; `@earendil-works/pi-coding-agent` is server-only.
 - One id model: UI tab id versus `session.sessionId`; there is no separate pi UUID.
@@ -52,6 +56,11 @@ Clear, fractal module boundaries are a top-priority requirement:
 - Automatic work ends at `agent_settled`, never `agent_end`; retries, compaction, recovery, or queued
   continuations may follow an attempt-level `agent_end`.
 - UI panels are layout-agnostic; the shell arranges them.
+- Errors are reported to PostHog Error Tracking unconditionally, but only as a classifier — type, `code`,
+  source/scope/request method and ThinkRail-only stack frames — never `message` text. Give a failure worth
+  telling apart a `CodedError` code rather than relying on its message. Host diagnostics that carry an
+  error go through `logger(scope)`, not `console.*`. The allow-list lives in
+  `packages/server/src/analytics/SPEC.md`.
 - The transport host endpoint is a parameter, defaulting to same-origin; `server.welcome` carries the
   protocol version.
 
@@ -62,7 +71,8 @@ utilities mapped to generated semantic CSS-var tokens: never inline style object
 palette names, or unknown token utilities. Read `apps/web/src/styles/COLOR.md` for color work and
 `apps/web/src/styles/SPACING.md` for spacing work. Use `@remixicon/react` icons (Line by default, Fill
 when active) and owned shadcn/Radix primitives from `@thinkrail/ui/<primitive>`; `cn()` lives in
-`@thinkrail/ui/utils`. These rules also apply to `packages/ui` and extension web halves.
+`@thinkrail/ui/utils`. These rules also apply to `packages/ui`, `packages/resource-renderers`, and extension
+web halves.
 
 For conversation rendering or tool presentation, read `apps/web/src/chat/SPEC.md`. Presentational
 renderers remain props-driven; only `ChatView` integrates store and transport. A server capability and
@@ -130,7 +140,7 @@ Green gates are necessary but not sufficient:
 ## Stack
 
 Bun + Turbo monorepo · TypeScript strict · React 19 + Zustand + Tailwind v4 · in-process `pi`
-(Node >= 22.19). App state lives under `~/.thinkrail`.
+(Node >= 22.23.4 for development; `pi` itself needs >= 22.19). App state lives under `~/.thinkrail`.
 
 Dependencies pin exact versions. Cross-cutting dependencies are pinned once in the root
 `workspaces.catalog` and referenced through `catalog:`; peer dependencies and local protocols are the

@@ -5,7 +5,6 @@ import {
 	type ExtensionUIContext,
 	getAgentDir,
 	SessionManager,
-	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type { LoginFrame, LoginPush } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
@@ -19,14 +18,14 @@ import {
 	redactMcpText,
 } from "./mcp";
 import { reconnectMcpServer, refreshMcpStatus } from "./mcpSessions";
+import { createPiSettings } from "./packages";
 import { getPiRuntimeGeneration } from "./piRuntime";
 import { createWebUiContext } from "./webUiContext";
 
 const PROBE_SHUTDOWN_MS = 3_000;
 const PROBE_DEADLINE_MS = 10 * 60_000;
 const SIGNED_IN = /^Signed in to MCP server "/;
-const PASTE_HINT =
-	"Open the sign-in page. If the browser runs on another device, the localhost page it ends on will fail to load — paste that page's address here.";
+const SIGN_IN_INSTRUCTIONS = "Finish signing in in your browser.";
 
 export type McpProbeAction = "login" | "test" | "logout";
 
@@ -125,7 +124,7 @@ async function openProbe(
 ): Promise<AgentSession> {
 	const { cwd, projectTrusted, policy } = options;
 	const agentDir = getAgentDir();
-	const settingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted });
+	const settingsManager = createPiSettings(cwd, agentDir, { projectTrusted, packages: "none" });
 	const loadConfig = () => {
 		const loaded = loadHostMcpConfig({ agentDir, cwd, projectTrusted, policy });
 		return {
@@ -152,7 +151,7 @@ async function openProbe(
 				if (!isAllowedSignInUrl(url)) {
 					throw new Error("The server sent a sign-in address that is not https or loopback.");
 				}
-				frame(probe, { kind: "authUrl", url, instructions: PASTE_HINT });
+				frame(probe, { kind: "authUrl", url, instructions: SIGN_IN_INSTRUCTIONS });
 			},
 		}).extensions,
 	});

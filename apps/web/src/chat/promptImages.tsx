@@ -1,5 +1,7 @@
 import { RiCloseLine as X } from "@remixicon/react";
 import { REQUEST_IMAGE_BASE64_BUDGET } from "@thinkrail/contracts";
+import { t as translate, useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	type ClipboardEvent,
@@ -9,19 +11,21 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { randomUuid } from "../lib";
+import {
+	newPromptImagesState,
+	type PromptImage,
+	type PromptImageError,
+	type PromptImagesState,
+} from "../store";
 import { FileChip } from "./FileChip";
-import { type AttachedImage, fileToAttachedImage } from "./imageAttachment";
+import { fileToAttachedImage } from "./imageAttachment";
 import type { ChatAttachment } from "./types";
 
-export interface PromptImage extends AttachedImage {
-	id: string;
-	name: string;
-}
-
-export interface PromptImageError {
-	id: string;
-	name: string;
-	reason: string;
+export interface PromptImagesOwner {
+	state: PromptImagesState;
+	read: () => PromptImagesState;
+	update: (change: (current: PromptImagesState) => PromptImagesState) => void;
 }
 
 export interface PromptImagesController {
@@ -58,114 +62,126 @@ export function imagePasteDropHandlers(controller: Pick<PromptImagesController, 
 	};
 }
 
-export function usePromptImages(): PromptImagesController {
-	const [images, setImages] = useState<PromptImage[]>([]);
-	const imagesRef = useRef<PromptImage[]>([]);
-	const [pending, setPending] = useState(0);
-	const [errors, setErrors] = useState<PromptImageError[]>([]);
-	// Bumped on reset; a stale-generation decode discards its results (still balancing pending).
-	const generation = useRef(0);
-
-	const commit = useCallback((next: PromptImage[]) => {
-		imagesRef.current = next;
-		setImages(next);
-	}, []);
+export function usePromptImages(owner?: PromptImagesOwner): PromptImagesController {
+	const [local, setLocal] = useState(newPromptImagesState);
+	const localRef = useRef(local);
+	const { images, pending, errors } = owner?.state ?? local;
+	const read = useCallback(() => owner?.read() ?? localRef.current, [owner]);
+	const update = useCallback(
+		(change: (current: PromptImagesState) => PromptImagesState) => {
+			if (owner) owner.update(change);
+			else {
+				localRef.current = change(localRef.current);
+				setLocal(localRef.current);
+			}
+		},
+		[owner],
+	);
 
 	const addFiles = useCallback(
 		(files: File[]) => {
 			const picked = files.filter((f) => f.type.startsWith("image/"));
 			if (picked.length === 0) return;
-			const startedGeneration = generation.current;
-			setPending((n) => n + picked.length);
-			void (async () => {
-				try {
-					const settled = await Promise.allSettled(picked.map(fileToAttachedImage));
-					if (startedGeneration !== generation.current) return;
-					let used = imagesRef.current.reduce((sum, p) => sum + p.content.data.length, 0);
+			const startedGeneration = read().generation;
+			update((current) => ({ ...current, pending: current.pending + picked.length }));
+			const decode = async () => {
+				const settled = await Promise.allSettled(picked.map(fileToAttachedImage));
+				update((current) => {
+					if (current.generation !== startedGeneration) return current;
+					let used = current.images.reduce((sum, p) => sum + p.content.data.length, 0);
 					const additions: PromptImage[] = [];
 					const nextErrors: PromptImageError[] = [];
 					settled.forEach((result, i) => {
-						const name = picked[i]?.name || "image";
+						const name = picked[i]?.name || translate("chat.promptImages.fallbackName");
 						if (result.status !== "fulfilled" || result.value === null) {
 							nextErrors.push({
-								id: crypto.randomUUID(),
+								id: randomUuid(),
 								name,
-								reason: "unsupported image format",
+								reason: translate("chat.promptImages.unsupported"),
 							});
 							return;
 						}
 						const size = result.value.content.data.length;
 						if (used + size > REQUEST_IMAGE_BASE64_BUDGET) {
 							nextErrors.push({
-								id: crypto.randomUUID(),
+								id: randomUuid(),
 								name,
-								reason: "message image limit reached",
+								reason: translate("chat.promptImages.limitReached"),
 							});
 							return;
 						}
 						used += size;
-						additions.push({ id: crypto.randomUUID(), name, ...result.value });
+						additions.push({ id: randomUuid(), name, ...result.value });
 					});
-					if (additions.length > 0) commit([...imagesRef.current, ...additions]);
-					if (nextErrors.length > 0) setErrors((prev) => [...prev, ...nextErrors]);
-				} finally {
-					setPending((n) => n - picked.length);
-				}
-			})();
+					return {
+						...current,
+						images: [...current.images, ...additions],
+						errors: [...current.errors, ...nextErrors],
+					};
+				});
+			};
+			void decode().finally(() =>
+				update((current) =>
+					current.generation !== startedGeneration
+						? current
+						: { ...current, pending: current.pending - picked.length },
+				),
+			);
 		},
-		[commit],
+		[read, update],
 	);
 
 	const removeImage = useCallback(
-		(id: string) => commit(imagesRef.current.filter((p) => p.id !== id)),
-		[commit],
+		(id: string) =>
+			update((current) => ({
+				...current,
+				images: current.images.filter((p) => p.id !== id),
+			})),
+		[update],
 	);
 
 	const dismissError = useCallback(
-		(id: string) => setErrors((prev) => prev.filter((p) => p.id !== id)),
-		[],
+		(id: string) =>
+			update((current) => ({
+				...current,
+				errors: current.errors.filter((p) => p.id !== id),
+			})),
+		[update],
 	);
 
 	const restore = useCallback(
 		(attachments: ChatAttachment[]) => {
 			if (attachments.length === 0) return;
-			commit([
-				...attachments.map((attachment) => ({ id: crypto.randomUUID(), ...attachment })),
-				...imagesRef.current,
-			]);
+			update((current) => ({
+				...current,
+				images: [
+					...attachments.map((attachment) => ({ id: randomUuid(), ...attachment })),
+					...current.images,
+				],
+			}));
 		},
-		[commit],
+		[update],
 	);
 
 	const reset = useCallback(() => {
-		generation.current += 1;
-		commit([]);
-		setErrors([]);
-	}, [commit]);
+		update(newPromptImagesState);
+	}, [update]);
 
 	return { images, pending, errors, addFiles, removeImage, dismissError, restore, reset };
 }
-
-// Padding presets for the chip strip. Both surfaces align the strip with the input field's left
-// edge and leave the same 12px gap below it; they differ only in structure — the composer strip
-// sits above a `p-12` input shell (so it owns its own left/top padding), while the dialog textarea
-// is flush (so only the bottom gap is needed).
-export const PROMPT_IMAGE_CHIPS_PADDING = {
-	composer: "px-12 pt-12",
-	dialog: "pb-12",
-} as const;
 
 export function PromptImageChips({
 	controller,
 	leading,
 	testId = "composer-images",
-	className = PROMPT_IMAGE_CHIPS_PADDING.composer,
+	className = "px-12 pt-12",
 }: {
 	controller: PromptImagesController;
 	leading?: ReactNode;
 	testId?: string;
 	className?: string;
 }) {
+	const t = useT();
 	const { images, pending, errors, removeImage, dismissError } = controller;
 	if (!leading && images.length === 0 && pending === 0 && errors.length === 0) return null;
 	return (
@@ -177,17 +193,17 @@ export function PromptImageChips({
 					data-testid="composer-image-error"
 					tone="error"
 					icon={false}
-					title={`Couldn't attach ${err.name} — ${err.reason}`}
-					label={`Couldn't attach ${err.name}`}
+					title={t("chat.promptImages.attachFailedDetail", { name: err.name, reason: err.reason })}
+					label={t("chat.promptImages.attachFailed", { name: err.name })}
 					meta={`— ${err.reason}`}
 					trailing={
 						<button
 							type="button"
-							aria-label="Dismiss"
+							aria-label={t("common.dismiss")}
 							onClick={() => dismissError(err.id)}
 							className="hover:opacity-80"
 						>
-							<X className="size-12" />
+							<X className="size-14" />
 						</button>
 					}
 				/>
@@ -203,14 +219,12 @@ export function PromptImageChips({
 					label={img.name}
 					meta={img.width && img.height ? ` · ${img.width}×${img.height}` : undefined}
 					trailing={
-						<button
-							type="button"
-							aria-label="Remove image"
+						<IconButton
+							icon={X}
+							size="s"
+							label={t("chat.promptImages.remove")}
 							onClick={() => removeImage(img.id)}
-							className="text-text-muted hover:text-text-default"
-						>
-							<X className="size-12" />
-						</button>
+						/>
 					}
 				/>
 			))}
@@ -219,7 +233,7 @@ export function PromptImageChips({
 					data-testid="composer-image-pending"
 					label={
 						<span className="text-text-muted">
-							{pending === 1 ? "Attaching…" : `Attaching ${pending}…`}
+							{t("chat.promptImages.attaching", { count: pending })}
 						</span>
 					}
 				/>

@@ -1,10 +1,19 @@
 import { expect, test } from "bun:test";
 import {
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
+	CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION,
+	CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS,
+	MODEL_CONTEXT_WINDOW_LIMITS,
 	type ModelContextSetting,
 } from "@thinkrail/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ModelContextControls } from "./ModelContextSettings";
+import type { CustomEndpointsState } from "./CustomEndpointsSettings";
+import {
+	customServerIds,
+	ModelContextControls,
+	modelContextLimitsFor,
+	modelContextRows,
+} from "./ModelContextSettings";
 
 const setting: ModelContextSetting = {
 	provider: "openai",
@@ -17,11 +26,13 @@ const setting: ModelContextSetting = {
 function render({
 	protocolVersion = CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
 	settings = [setting],
+	customServers = new Set(),
 	pending = false,
 	failed = false,
 }: {
 	protocolVersion?: number | null;
 	settings?: ModelContextSetting[] | null;
+	customServers?: ReadonlySet<string> | null;
 	pending?: boolean;
 	failed?: boolean;
 } = {}) {
@@ -29,6 +40,7 @@ function render({
 		<ModelContextControls
 			protocolVersion={protocolVersion}
 			settings={settings}
+			customServers={customServers}
 			pending={pending}
 			failed={failed}
 			onChange={() => {}}
@@ -50,7 +62,7 @@ test("one Default/1M/Custom selector appears while individual settings start col
 	expect(html).toContain('aria-expanded="false"');
 	expect(html).not.toContain('data-testid="context-limit-openai-gpt-5.5"');
 	expect(html).toContain("pi CLI");
-	expect(html).toContain("restart the host");
+	expect(html).toContain("host restart");
 });
 
 test("pending settings keep the authoritative 1M override but disable changes", () => {
@@ -60,13 +72,14 @@ test("pending settings keep the authoritative 1M override but disable changes", 
 	expect(html.match(/type="radio"[^>]*disabled/g)).toHaveLength(3);
 });
 
-test("non-preset overrides expose an editable Custom field within the app range", () => {
+test("non-preset overrides expose an editable Custom field that auto-saves", () => {
 	const html = render({ settings: [{ ...setting, override: 500_000, contextWindow: 500_000 }] });
 	expect(html).toContain('data-testid="context-limit-all-input"');
 	expect(html).toContain('value="500000"');
-	expect(html).toContain('data-testid="context-limit-all-apply"');
-	expect(html).toContain('min="272000"');
-	expect(html).toContain('max="1000000"');
+	expect(html).toContain("data-settings-draft-input");
+	expect(html).toContain('aria-invalid="false"');
+	expect(html).not.toContain('data-testid="context-limit-all-apply"');
+	expect(html).not.toContain("undefined");
 });
 
 test("different overrides show Customized instead of claiming a uniform preset", () => {
@@ -79,6 +92,7 @@ test("different overrides show Customized instead of claiming a uniform preset",
 	expect(html).toContain("Customized by model");
 	expect(html).toContain('data-context-override="mixed"');
 	expect(html).not.toContain('checked=""');
+	expect(html).not.toContain("undefined");
 });
 
 test("the shared control summarizes only rows it governs and names the external ones it leaves alone", () => {
@@ -106,4 +120,74 @@ test("failed reads replace stale controls with an actionable retry", () => {
 test("empty and loading states do not invent eligible models", () => {
 	expect(render({ settings: [] })).not.toContain('type="radio"');
 	expect(render({ settings: null, pending: true })).not.toContain('type="radio"');
+});
+
+test("custom server rows belong to their server's dialog, not the GPT block", () => {
+	const custom: ModelContextSetting = {
+		provider: "custom-gw",
+		id: "relay",
+		name: "relay",
+		contextWindow: 8_192,
+		override: 8_192,
+	};
+	const customServers = new Set(["custom-gw"]);
+	const html = render({ settings: [setting, custom], customServers });
+	expect(html).toContain("1 available model");
+	expect(html).not.toContain("kept at a limit");
+	expect(html).not.toContain("custom-gw");
+	expect(render({ settings: [custom], customServers })).toContain("No eligible models");
+});
+
+test("a hand-written custom-* provider the Custom servers dialog cannot show keeps a targeted row", () => {
+	const responses: ModelContextSetting = {
+		provider: "custom-responses",
+		id: "gpt-5.5",
+		name: "GPT-5.5",
+		contextWindow: 272_000,
+		override: null,
+	};
+	const customServers = new Set(["custom-gw"]);
+	expect(modelContextRows([setting, responses], customServers)).toEqual([setting, responses]);
+	const html = render({ settings: [setting, responses], customServers });
+	expect(html).toContain("1 available model");
+	expect(html).not.toContain("kept at a limit");
+	const alone = render({ settings: [responses], customServers });
+	expect(alone).not.toContain("No eligible models");
+	expect(alone).not.toContain('data-testid="context-limit-all"');
+	expect(alone).toContain('data-testid="model-context-customize"');
+});
+
+test("custom server rows wait for the server list instead of flashing in and out", () => {
+	const loading: CustomEndpointsState = {
+		endpoints: null,
+		failed: false,
+		load: () => Promise.resolve(),
+		replace: () => {},
+	};
+	expect(customServerIds(loading)).toBeNull();
+	expect(modelContextRows([setting], null)).toBeNull();
+	expect(render({ customServers: null })).not.toContain('type="radio"');
+	expect(customServerIds({ ...loading, failed: true })).toEqual(new Set());
+	expect(customServerIds(null)).toEqual(new Set());
+	expect(
+		customServerIds({
+			...loading,
+			failed: true,
+			endpoints: [
+				{ id: "custom-gw", name: "Gateway", baseUrl: "http://gw", hasApiKey: false, models: [] },
+			],
+		}),
+	).toEqual(new Set(["custom-gw"]));
+});
+
+test("a custom provider gets the wider range only from a host that accepts it", () => {
+	expect(modelContextLimitsFor("custom-responses", CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION)).toEqual(
+		CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS,
+	);
+	expect(
+		modelContextLimitsFor("custom-responses", CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION - 1),
+	).toEqual(MODEL_CONTEXT_WINDOW_LIMITS);
+	expect(modelContextLimitsFor("openai", CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION)).toEqual(
+		MODEL_CONTEXT_WINDOW_LIMITS,
+	);
 });

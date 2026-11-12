@@ -1,8 +1,15 @@
 import type { NativeCommand, NativeQuitHint, NativeShortcutsBridge } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
+import { platformShortcutLabel } from "../lib";
+import { useAppStore } from "../store";
 import { requestClose } from "./closeRequestChannel";
 import { createWebShortcuts, hasWebShortcuts, shortcutPlatform } from "./shortcutCommands";
-import { hasDismissibleLayer, isInTerminal } from "./shortcutLayers";
+import {
+	hasDismissibleLayer,
+	hasLayer,
+	isInTerminal,
+	MODAL_LAYER_SELECTOR,
+} from "./shortcutLayers";
 
 const NATIVE_SHORTCUTS_GLOBAL = "__THINKRAIL_NATIVE_SHORTCUTS__";
 
@@ -19,6 +26,16 @@ export function getNativeShortcutsBridge(value: unknown): NativeShortcutsBridge 
 	}
 }
 
+function readNativeShortcutsBridge() {
+	return getNativeShortcutsBridge(Reflect.get(globalThis, NATIVE_SHORTCUTS_GLOBAL));
+}
+
+export function readSettingsShortcutLabel(): string | null {
+	return shortcutPlatform(readNativeShortcutsBridge() !== null) === "browser"
+		? null
+		: platformShortcutLabel(",");
+}
+
 function dismissTopLayer() {
 	const doc = globalThis.document;
 	if (!hasDismissibleLayer(doc)) return false;
@@ -31,6 +48,10 @@ function dismissTopLayer() {
 		}),
 	);
 	return true;
+}
+
+function openSettingsUnlessModal() {
+	if (!hasLayer(globalThis.document, MODAL_LAYER_SELECTOR)) useAppStore.getState().openSettings();
 }
 
 function subscribeToNativeShortcuts(
@@ -70,9 +91,7 @@ function intervalScope() {
 }
 
 export function useAppShortcuts() {
-	const [bridge] = useState(() =>
-		getNativeShortcutsBridge(Reflect.get(globalThis, NATIVE_SHORTCUTS_GLOBAL)),
-	);
+	const [bridge] = useState(readNativeShortcutsBridge);
 	const [quitHint, setQuitHint] = useState<NativeQuitHint>("hidden");
 
 	useEffect(() => {
@@ -85,6 +104,7 @@ export function useAppShortcuts() {
 			closeItem: () => {
 				if (!dismissTopLayer()) requestClose();
 			},
+			openSettings: openSettingsUnlessModal,
 			quit: () => {
 				bridge.quit().catch((error: unknown) => {
 					console.error("[shortcuts] quit failed", error);

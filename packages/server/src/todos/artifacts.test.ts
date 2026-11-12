@@ -15,14 +15,12 @@ import {
 	unattributedChanges,
 } from "./artifacts";
 import {
-	dropItemBaseline,
 	otherSessionWindows,
 	readBaselines,
 	removeSessionBaselines,
 	writeBaselines,
 } from "./baselines";
 import { putReviewRecord, readReviewRecords } from "./reviews";
-import { removeTodo } from "./todos";
 
 const SESSION = "sess-artifacts";
 const STORE_PATH = storeRel(SESSION);
@@ -181,7 +179,7 @@ test("an in-progress reconcile aborts when the item finishes during its git read
 		expect(readBaselines(root, SESSION)[todo.id]).toBeUndefined();
 		expect(store.get(todo.id)?.artifacts).toBeUndefined();
 		await reconcileChangeArtifacts(store, root, SESSION, async () => ["work.ts"]);
-		expect(store.get(todo.id)?.artifacts).toEqual([{ kind: "change", path: "work.ts" }]);
+		expect(store.get(todo.id)?.artifacts).toBeUndefined();
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -282,7 +280,7 @@ test("baselines persist on disk — a fresh process (new read) still sees the wi
 	}
 });
 
-test("no baseline (direct pending→done) reports the current set but NEVER commits it", async () => {
+test("no baseline (bundled done, pending→done direct): no artifacts, no commit — honest unattribution", async () => {
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({ title: "step" });
@@ -299,10 +297,7 @@ test("no baseline (direct pending→done) reports the current set but NEVER comm
 			},
 		);
 		expect(called).toBe(false);
-		expect(store.get(todo.id)?.artifacts).toEqual([
-			{ kind: "change", path: "x.ts" },
-			{ kind: "change", path: "y.ts" },
-		]);
+		expect(store.get(todo.id)?.artifacts).toEqual(undefined);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -342,6 +337,8 @@ test("reconcile is idempotent — a done item already carrying a change set is l
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({ title: "step" });
+		store.update(todo.id, { status: "in_progress" });
+		await reconcileChangeArtifacts(store, root, SESSION, async () => []);
 		store.update(todo.id, { status: "done" });
 		await reconcileChangeArtifacts(store, root, SESSION, async () => ["x.ts"]);
 		await reconcileChangeArtifacts(store, root, SESSION, async () => ["x.ts", "z.ts"]);
@@ -358,6 +355,8 @@ test("change artifacts merge with (never replace) the agent's file/spec artifact
 			title: "step",
 			artifacts: [{ kind: "spec", path: "SPEC.md", specId: "s1" }],
 		});
+		store.update(todo.id, { status: "in_progress" });
+		await reconcileChangeArtifacts(store, root, SESSION, async () => []);
 		store.update(todo.id, { status: "done" });
 		await reconcileChangeArtifacts(store, root, SESSION, async () => ["impl.ts"]);
 		expect(store.get(todo.id)?.artifacts).toEqual([
@@ -1007,18 +1006,13 @@ test("an orphan baseline (its item removed from the plan) is pruned by the next 
 	}
 });
 
-test("dropItemBaseline closes one removed item's window; removeSessionBaselines drops the whole sidecar", async () => {
+test("removeSessionBaselines drops the whole sidecar and is idempotent", async () => {
 	const { root } = tempStore();
 	try {
 		writeBaselines(root, SESSION, {
 			t1: { paths: [], head: null },
 			t2: { paths: ["a.ts"], head: "h1" },
 		});
-		dropItemBaseline(root, SESSION, "t1");
-		expect(Object.keys(readBaselines(root, SESSION))).toEqual(["t2"]);
-		dropItemBaseline(root, SESSION, "absent");
-		expect(Object.keys(readBaselines(root, SESSION))).toEqual(["t2"]);
-
 		expect(otherSessionWindows(root, "sess-other")).toBe(true);
 		removeSessionBaselines(root, SESSION);
 		expect(existsSync(join(root, WORKSPACE_TODOS_DIR, `${SESSION}.baselines.json`))).toBe(false);
@@ -1044,56 +1038,12 @@ test("a pending reset drops the persisted baseline", async () => {
 	}
 });
 
-test("a UI removal landing during an in-flight reconcile leaves no orphan window", async () => {
-	const dataDir = mkdtempSync(join(tmpdir(), "todos-race-data-"));
-	const worktree = mkdtempSync(join(tmpdir(), "todos-race-wt-"));
-	const prevDataDir = process.env.THINKRAIL_DATA_DIR;
-	process.env.THINKRAIL_DATA_DIR = dataDir;
-	try {
-		execFileSync("git", ["init", "-b", "main"], { cwd: worktree, stdio: "ignore" });
-		execFileSync("git", ["config", "commit.gpgsign", "false"], { cwd: worktree, stdio: "ignore" });
-		execFileSync(
-			"git",
-			["-c", "user.email=t@t", "-c", "user.name=t", "commit", "--allow-empty", "-m", "init"],
-			{ cwd: worktree, stdio: "ignore" },
-		);
-		saveWorkspaces([
-			{
-				id: "ws-todo-race",
-				projectId: "p1",
-				name: "race",
-				branch: "main",
-				baseBranch: "main",
-				worktreePath: worktree,
-				createdAt: 0,
-			} as Workspace,
-		]);
-		writeFileSync(join(worktree, "dirty.ts"), "work\n");
-		const store = new TodoStore(worktree, SESSION);
-		const todo = store.add({ title: "step" });
-		store.update(todo.id, { status: "in_progress" });
-
-		const reconcile = maybeAttachChangeArtifacts("ws-todo-race", SESSION);
-		expect(readBaselines(worktree, SESSION)[todo.id]?.paths).toEqual(["dirty.ts"]);
-		await new Promise((resolve) => setTimeout(resolve, 0));
-		const removal = removeTodo({ workspaceId: "ws-todo-race", sessionId: SESSION, id: todo.id });
-		await Promise.all([reconcile, removal]);
-
-		expect(store.get(todo.id)).toBeUndefined();
-		expect(readBaselines(worktree, SESSION)[todo.id]).toBeUndefined();
-		expect(otherSessionWindows(worktree, "sess-other")).toBe(false);
-	} finally {
-		if (prevDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
-		else process.env.THINKRAIL_DATA_DIR = prevDataDir;
-		rmSync(dataDir, { recursive: true, force: true });
-		rmSync(worktree, { recursive: true, force: true });
-	}
-});
-
 test("unattributedChanges keeps only what no item claims — change paths and app state drop", async () => {
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({ title: "step" });
+		store.update(todo.id, { status: "in_progress" });
+		await reconcileChangeArtifacts(store, root, SESSION, async () => []);
 		store.update(todo.id, { status: "done" });
 		await reconcileChangeArtifacts(store, root, SESSION, async () => ["claimed.ts"]);
 		const rows: GitFileChange[] = [

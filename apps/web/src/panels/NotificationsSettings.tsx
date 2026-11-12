@@ -1,5 +1,7 @@
+import { RiArrowDownSLine, RiArrowRightSLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
 	type NotificationChannel,
 	type NotificationPermissionState,
@@ -7,59 +9,48 @@ import {
 } from "@/notifications";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
+import { SettingsNotice } from "./SettingsNotice";
+import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
 import { SettingsSwitch } from "./SettingsSwitch";
 
-const NOTIFICATIONS_DESCRIPTION =
-	"Get an out-of-app notification when a worktree needs you — an agent asks a question, finishes, or fails. Notifications only appear while this window isn't focused.";
+function HowToEnableInstructions() {
+	const t = useT();
+	const [expanded, setExpanded] = useState(false);
+	const stepsId = useId();
 
-function PermissionRow({
-	kind,
-	permission,
-	onAllow,
-}: {
-	kind: NotificationChannel["kind"];
-	permission: NotificationPermissionState;
-	onAllow: () => void;
-}) {
-	if (kind === "os") {
-		return (
-			<p className="text-text-muted tr-text-metadata">
-				Your operating system delivers these notifications.
-			</p>
-		);
-	}
-	if (permission === "granted") {
-		return (
-			<p className="text-text-muted tr-text-metadata">Your browser is allowing notifications.</p>
-		);
-	}
-	if (permission === "denied") {
-		return (
-			<p className="text-feedback-error tr-text-metadata">
-				Notifications are blocked for this site. Re-enable them in your browser's site settings.
-			</p>
-		);
-	}
-	if (permission === "unsupported") {
-		return (
-			<p className="text-text-muted tr-text-metadata">
-				This browser doesn't support notifications.
-			</p>
-		);
-	}
 	return (
-		<div className="flex items-center justify-between gap-12">
-			<span className="text-text-muted tr-text-metadata">
-				Your browser hasn't granted permission yet.
-			</span>
-			<Button variant="outline" data-testid="notifications-allow" onClick={onAllow}>
-				Allow in browser
-			</Button>
+		<div className="flex flex-col">
+			<button
+				type="button"
+				aria-expanded={expanded}
+				aria-controls={stepsId}
+				onClick={() => setExpanded((v) => !v)}
+				className="flex items-center gap-4 tr-text-metadata text-text-muted transition-colors hover:text-text-default"
+			>
+				{expanded ? (
+					<RiArrowDownSLine className="size-14" />
+				) : (
+					<RiArrowRightSLine className="size-14" />
+				)}
+				{t("settings.notifications.howToEnable")}
+			</button>
+			{expanded ? (
+				<ol
+					id={stepsId}
+					className="mt-8 ml-24 list-decimal space-y-4 tr-text-metadata text-text-muted"
+				>
+					<li>{t("settings.notifications.step.lock")}</li>
+					<li>{t("settings.notifications.step.find")}</li>
+					<li>{t("settings.notifications.step.allow")}</li>
+					<li>{t("settings.notifications.step.refresh")}</li>
+				</ol>
+			) : null}
 		</div>
 	);
 }
 
 export function NotificationsSettings() {
+	const t = useT();
 	const enabled = useAppStore((s) => s.notificationsEnabled);
 	const [channelKind] = useState<NotificationChannel["kind"]>(
 		() => selectNotificationChannel().kind,
@@ -75,8 +66,8 @@ export function NotificationsSettings() {
 				setPermission(result);
 				if (result === "denied") {
 					toast.error(
-						"Notifications are blocked for this site. Re-enable them in your browser's site settings.",
-						"Notifications blocked",
+						t("settings.notifications.blockedToast"),
+						t("settings.notifications.blockedToastTitle"),
 					);
 				}
 			});
@@ -85,33 +76,65 @@ export function NotificationsSettings() {
 	const setEnabled = (notificationsEnabled: boolean) => {
 		getTransport()
 			.request("settings.update", { config: { notificationsEnabled } })
-			.catch(() => toast.error("Couldn't change the notification setting"));
-		// Turning the toggle on is a user gesture, so request browser permission right here: the feature
-		// works immediately instead of waiting for the first out-of-focus attention event.
-		if (notificationsEnabled) requestPermission();
+			.catch(() => toast.error(t("settings.notifications.changeFailed")));
+		if (notificationsEnabled && permission === "default") {
+			requestPermission();
+		}
 	};
 
-	return (
-		<section data-testid="settings-notifications" className="flex flex-col gap-16">
-			<div className="flex flex-col gap-4">
-				<h3 className="tr-title-section text-text-default">Notifications</h3>
-				<p className="text-text-muted tr-text-metadata">{NOTIFICATIONS_DESCRIPTION}</p>
-			</div>
+	const browserPermission = enabled && channelKind === "browser" ? permission : "granted";
 
-			<div className="flex flex-col gap-8">
-				<div className="flex items-center justify-between gap-12 rounded-sm border border-border-default bg-control-bg px-12 py-8">
-					<span className="tr-title-compact text-text-default">Enable notifications</span>
+	return (
+		<div data-testid="settings-notifications" className={SETTINGS_ROWS_CONTAINER}>
+			<SettingsRow
+				label={t("settings.notifications.enable")}
+				description={
+					channelKind === "os"
+						? t("settings.notifications.osDescription")
+						: t("settings.notifications.browserDescription")
+				}
+				control={
 					<SettingsSwitch
 						checked={enabled}
-						label="Enable notifications"
+						label={t("settings.notifications.enable")}
 						testId="notifications-toggle"
 						onChange={setEnabled}
 					/>
+				}
+			/>
+
+			{browserPermission === "default" ? (
+				<div className="border-border-muted border-b py-12">
+					<SettingsNotice
+						variant="info"
+						testId="notifications-permission-prompt"
+						action={
+							<Button
+								variant="outline"
+								size="m"
+								data-testid="notifications-allow"
+								onClick={requestPermission}
+							>
+								{t("settings.notifications.allowInBrowser")}
+							</Button>
+						}
+					>
+						{t("settings.notifications.notGranted")}
+					</SettingsNotice>
 				</div>
-				{enabled && (
-					<PermissionRow kind={channelKind} permission={permission} onAllow={requestPermission} />
-				)}
-			</div>
-		</section>
+			) : browserPermission === "denied" || browserPermission === "unsupported" ? (
+				<div className="border-border-muted border-b py-12">
+					<SettingsNotice
+						variant="warning"
+						testId="notifications-permission-warning"
+						action={browserPermission === "denied" ? <HowToEnableInstructions /> : null}
+					>
+						{browserPermission === "unsupported"
+							? t("settings.notifications.unsupported")
+							: t("settings.notifications.blocked")}
+					</SettingsNotice>
+				</div>
+			) : null}
+		</div>
 	);
 }

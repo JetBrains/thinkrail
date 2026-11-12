@@ -20,7 +20,14 @@ describe("deriveMessageActions", () => {
 			{
 				kind: "divider",
 				id: "divider-1",
-				data: { elapsedMs: 1, toolCount: 0, specs: [], changedFiles: [] },
+				data: {
+					outcome: "done",
+					elapsedMs: 1,
+					toolCount: 0,
+					specs: [],
+					changedFiles: [],
+					receipt: null,
+				},
 			},
 			user("user-2"),
 			markdown("answer-2"),
@@ -35,6 +42,45 @@ describe("deriveMessageActions", () => {
 			"user-3": false,
 		});
 		expect([...state.finalAnswerRowIds].sort()).toEqual(["answer-1", "answer-2"]);
+	});
+
+	test("an incoming result opens its own round, so the answer before it stays final", () => {
+		const rows: ChatRow[] = [
+			user("user-1"),
+			markdown("answer-1"),
+			{
+				kind: "divider",
+				id: "divider-1",
+				data: {
+					outcome: "done",
+					elapsedMs: 1,
+					toolCount: 0,
+					specs: [],
+					changedFiles: [],
+					receipt: null,
+				},
+			},
+			{
+				kind: "backgroundCommandCompletion",
+				id: "result-1",
+				details: {
+					id: "bg-1",
+					sessionId: "s",
+					name: "e2e",
+					status: "completed",
+					startedAt: 0,
+					finishedAt: 1,
+					exitCode: 0,
+					output: { text: "", truncated: false },
+				},
+			},
+			markdown("reaction-1"),
+		];
+
+		const state = deriveMessageActions(rows, false);
+
+		expect([...state.finalAnswerRowIds].sort()).toEqual(["answer-1", "reaction-1"]);
+		expect(state.agentRespondedByUserId.get("user-1")).toBe(true);
 	});
 
 	test("marks only the trailing unanswered prompt as responded while streaming", () => {
@@ -55,5 +101,34 @@ describe("deriveMessageActions", () => {
 		);
 
 		expect(state.finalAnswerRowIds.size).toBe(0);
+	});
+	test("a result delivered mid-run does not make the narration before it a final answer", () => {
+		const details = {
+			childSessionId: "child-1",
+			task: "review",
+			status: "completed",
+			usage: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				cost: 0,
+				turns: 0,
+				contextTokens: 0,
+			},
+			durationMs: 0,
+		} as const;
+		const rows: ChatRow[] = [
+			user("user-1"),
+			markdown("narration"),
+			{
+				kind: "subagentCompletion",
+				id: "result",
+				details: { ...details, delivery: "run" },
+				text: "",
+			},
+			markdown("answer"),
+		];
+		expect([...deriveMessageActions(rows, false).finalAnswerRowIds]).toEqual(["answer"]);
 	});
 });

@@ -1,0 +1,155 @@
+import { describe, expect, test } from "bun:test";
+import {
+	type ChangeBlock,
+	changeBlockContentKeys,
+	changeBlockId,
+	computeActionBlocks,
+	computeChangeBlocks,
+	createAskAgentRequest,
+} from "./changeBlocks";
+
+describe("computeChangeBlocks", () => {
+	test("returns separate engine-neutral spans for separated edits", () => {
+		expect(computeChangeBlocks("a\nb\nc\nd\ne\n", "a\nB\nc\nd\nE\n", false)).toEqual([
+			{ original: { start: 2, count: 1 }, modified: { start: 2, count: 1 } },
+			{ original: { start: 5, count: 1 }, modified: { start: 5, count: 1 } },
+		]);
+	});
+
+	test("keeps insertion and deletion points as zero-count spans", () => {
+		expect(computeChangeBlocks("a\nc\n", "a\nb\nc\n", false)).toEqual([
+			{ original: { start: 2, count: 0 }, modified: { start: 2, count: 1 } },
+		]);
+		expect(computeChangeBlocks("a\nb\nc\n", "a\nc\n", false)).toEqual([
+			{ original: { start: 2, count: 1 }, modified: { start: 2, count: 0 } },
+		]);
+	});
+
+	test("treats a CR-only file as one line", () => {
+		expect(computeChangeBlocks("one\rtwo", "one\rTWO", false)).toEqual([
+			{ original: { start: 1, count: 1 }, modified: { start: 1, count: 1 } },
+		]);
+	});
+
+	test("uses the rendered diff's whitespace policy", () => {
+		expect(computeChangeBlocks("const value = 1;\n", "  const value = 1;\n", false)).toHaveLength(
+			1,
+		);
+		expect(computeChangeBlocks("const value = 1;\n", "  const value = 1;\n", true)).toEqual([]);
+	});
+
+	test("a deleted file has no per-block actions", () => {
+		expect(computeActionBlocks("one\ntwo\n", null, false)).toEqual([]);
+	});
+
+	test("an EOF deletion anchors Ask agent to the preceding worktree line", () => {
+		const [block] = computeActionBlocks("one\ntwo\nthree\n", "one\ntwo\n", false);
+		if (!block) throw new Error("missing deletion block");
+		const request = createAskAgentRequest(block, "one\ntwo\n");
+
+		expect(request.draft.selectors).toEqual([
+			{ kind: "lineRange", startLine: 2, endLine: 2 },
+			{ kind: "diffHunk", hunkHeader: "@@ -3,1 +3,0 @@" },
+		]);
+		expect(request.notice).toBe("This comment refers to removed lines.");
+	});
+
+	test("a top-of-file deletion anchors Ask agent to line one", () => {
+		const [block] = computeActionBlocks("zero\none\ntwo\n", "one\ntwo\n", false);
+		if (!block) throw new Error("missing deletion block");
+		const request = createAskAgentRequest(block, "one\ntwo\n");
+
+		expect(request.draft.selectors[0]).toEqual({
+			kind: "lineRange",
+			startLine: 1,
+			endLine: 1,
+		});
+		expect(request.notice).toBe("This comment refers to removed lines.");
+	});
+
+	test("a deletion from an empty worktree file produces a whole-file Ask agent comment", () => {
+		const [block] = computeActionBlocks("only\n", "", false);
+		if (!block) throw new Error("missing deletion block");
+		const request = createAskAgentRequest(block, "");
+
+		expect(request.draft.selectors).toEqual([{ kind: "diffHunk", hunkHeader: "@@ -1,1 +1,0 @@" }]);
+	});
+});
+
+function changeBlockContentKey(block: ChangeBlock, original: string, modified: string): string {
+	const key = changeBlockContentKeys([block], original, modified).get(changeBlockId(block));
+	if (!key) throw new Error("expected a key for the block");
+	return key;
+}
+
+describe("changeBlockContentKeys", () => {
+	test("keys a hunk by what it removes and adds, not by where it sits", () => {
+		const original = "a\nb\nc\nd\n";
+		const shifted = "x\ny\na\nb\nc\nd\n";
+		const [block] = computeChangeBlocks(original, "a\nB\nc\nd\n", false);
+		const [shiftedBlock] = computeChangeBlocks(shifted, "x\ny\na\nB\nc\nd\n", false);
+		if (!block || !shiftedBlock) throw new Error("expected one block each");
+		expect(changeBlockContentKey(block, original, "a\nB\nc\nd\n")).toBe(
+			changeBlockContentKey(shiftedBlock, shifted, "x\ny\na\nB\nc\nd\n"),
+		);
+	});
+
+	test("removing a kept duplicate never transfers its decision to the remaining hunk", () => {
+		const original = "a\nx\na\ny\na\n";
+		const modified = "A\nx\nA\ny\nA\n";
+		const keys = [
+			...changeBlockContentKeys(
+				computeChangeBlocks(original, modified, false),
+				original,
+				modified,
+			).values(),
+		];
+		expect(new Set(keys).size).toBe(3);
+		const after = "a\nx\nA\ny\nA\n";
+		const remaining = [
+			...changeBlockContentKeys(
+				computeChangeBlocks(original, after, false),
+				original,
+				after,
+			).values(),
+		];
+		expect(remaining).not.toContain(keys[0]);
+		const last = "a\nx\na\ny\nA\n";
+		const final = [
+			...changeBlockContentKeys(
+				computeChangeBlocks(original, last, false),
+				original,
+				last,
+			).values(),
+		];
+		expect(final).not.toContain(keys[0]);
+		const firstPair = "A\nx\nA\ny\na\n";
+		const firstPairKeys = [
+			...changeBlockContentKeys(
+				computeChangeBlocks(original, firstPair, false),
+				original,
+				firstPair,
+			).values(),
+		];
+		expect(remaining).not.toContain(firstPairKeys[0]);
+	});
+
+	test("a different edit at the same place gets a different key", () => {
+		const original = "a\nb\nc\n";
+		const [one] = computeChangeBlocks(original, "a\nB\nc\n", false);
+		const [two] = computeChangeBlocks(original, "a\nBB\nc\n", false);
+		if (!one || !two) throw new Error("expected one block each");
+		expect(changeBlockContentKey(one, original, "a\nB\nc\n")).not.toBe(
+			changeBlockContentKey(two, original, "a\nBB\nc\n"),
+		);
+	});
+
+	test("a pure deletion and a pure addition of the same text do not collide", () => {
+		const [deletion] = computeChangeBlocks("a\nb\n", "a\n", false);
+		const [addition] = computeChangeBlocks("a\n", "a\nb\n", false);
+		if (!deletion || !addition) throw new Error("expected one block each");
+		expect(changeBlockContentKey(deletion, "a\nb\n", "a\n")).not.toBe(
+			changeBlockContentKey(addition, "a\n", "a\nb\n"),
+		);
+	});
+});

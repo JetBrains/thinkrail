@@ -1,6 +1,12 @@
 import { existsSync, writeFileSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
-import { openAppFresh, openFixtureProject } from "./fixtures/app";
+import {
+	expandModelGroup,
+	modelGroupToggle,
+	openAppFresh,
+	openFixtureProject,
+	revealModelGroups,
+} from "./fixtures/app";
 import {
 	assertOnlyReviewedArgv,
 	centralInvocationCount,
@@ -30,6 +36,11 @@ async function centralModelsOfferedToNewChats(page: Page): Promise<number> {
 	const dialog = page.getByTestId("new-workspace-dialog");
 	await expect(dialog).toBeVisible();
 	await dialog.getByTestId("model-selector").click();
+	// Groups other than the current model's start collapsed; a withdrawn provider has no group at all.
+	await revealModelGroups(page);
+	if ((await modelGroupToggle(page, "e2e-central").count()) > 0) {
+		await expandModelGroup(page, "e2e-central");
+	}
 	const count = await page.locator(CENTRAL_MODEL).count();
 	await page.keyboard.press("Escape");
 	await page.keyboard.press("Escape");

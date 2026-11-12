@@ -1,8 +1,12 @@
 import { RiErrorWarningLine, RiStackFill, RiStackLine } from "@remixicon/react";
-import { Button } from "@thinkrail/ui/button";
+import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton, withIconClass } from "@thinkrail/ui/button";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import type { ComponentProps } from "react";
+
+const StackFillLive = withIconClass(RiStackFill, "motion-safe:animate-working");
+const StackLineLive = withIconClass(RiStackLine, "motion-safe:animate-working");
 
 export function ResourcesButton({
 	activeCount,
@@ -15,30 +19,36 @@ export function ResourcesButton({
 	open: boolean;
 	working?: boolean;
 }) {
-	const Icon = open ? RiStackFill : RiStackLine;
+	const t = useT();
 	const live = working ?? (activeCount !== null && activeCount > 0);
-	const countLabel = activeCount === null ? "active count unavailable" : `${activeCount} active`;
+	const Icon = open ? (live ? StackFillLive : RiStackFill) : live ? StackLineLive : RiStackLine;
 	return (
 		<IconTooltip
-			label={activeCount === null ? "Resources — active count unavailable" : "Resources"}
+			label={
+				activeCount === null
+					? t("resources.button.tooltipUnavailable")
+					: t("resources.button.label")
+			}
 			wrapTrigger
 		>
 			<Button
 				variant="ghost"
-				size="sm"
-				className={cn(
-					"h-panel-header-control shrink-0 gap-4 tr-text-metadata aria-expanded:bg-control-bg-selected",
-					className,
-				)}
+				size="m"
+				iconLeft={Icon}
+				selected={open}
+				className={cn("shrink-0", className)}
 				data-testid="resources-trigger"
 				data-active-count={activeCount ?? "unknown"}
 				data-live={live || undefined}
-				aria-label={`Resources, ${countLabel}`}
+				aria-label={
+					activeCount === null
+						? t("resources.button.ariaUnavailable")
+						: t("resources.button.ariaActive", { count: activeCount })
+				}
 				aria-expanded={open}
 				{...props}
 			>
-				<Icon className={cn("size-14", live && "motion-safe:animate-working")} />
-				<span className="hidden @[480px]:inline">Resources</span>
+				<span className="hidden @[480px]:inline">{t("resources.button.label")}</span>
 				<span className="tabular-nums">{activeCount ?? "—"}</span>
 			</Button>
 		</IconTooltip>
@@ -46,20 +56,19 @@ export function ResourcesButton({
 }
 
 export function ResourcesAttention({ count, onOpen }: { count: number; onOpen: () => void }) {
-	const label = `${count} MCP server${count === 1 ? " needs" : "s need"} attention — open MCP settings`;
+	const t = useT();
+	const label = t("resources.attention.label", { count });
 	return (
-		<IconTooltip label={label}>
-			<Button
-				variant="ghost"
-				size="icon"
-				data-testid="resources-mcp-attention"
-				data-count={count}
-				aria-label={label}
-				onClick={onOpen}
-				className="shrink-0 text-feedback-warning hover:text-feedback-warning"
-			>
-				<RiErrorWarningLine className="size-14" />
-			</Button>
-		</IconTooltip>
+		<IconButton
+			variant="ghost"
+			size="m"
+			icon={RiErrorWarningLine}
+			label={label}
+			data-testid="resources-mcp-attention"
+			data-count={count}
+			onClick={onOpen}
+			tone="warning"
+			className="shrink-0"
+		/>
 	);
 }

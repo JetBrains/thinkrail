@@ -1,11 +1,25 @@
 import { randomUUID } from "node:crypto";
-import { rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmdirSync, rmSync, statSync } from "node:fs";
+import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
-import type { McpProjectOverride, Project, ProjectPathStatus } from "@thinkrail/contracts";
+import {
+	compareProjectRank,
+	type McpProjectOverride,
+	type McpToolGrant,
+	type Project,
+	type ProjectPathStatus,
+	projectRank,
+} from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
-import { canonicalPath, git } from "../git";
-import { loadProjects, loadWorkspaces, saveProjects } from "../persistence";
+import { canonicalPath, git, gitAsync, INDEX_WRITE_TIMEOUT_MS, throwOnTimeout } from "../git";
+import {
+	isChatsContainer,
+	landsInChatsRoot,
+	loadProjects,
+	loadWorkspaces,
+	saveProjects,
+} from "../persistence";
 
 type ProjectPublisher = (project: Project) => void;
 
@@ -19,19 +33,40 @@ function emit(project: Project): void {
 	publishProject?.(project);
 }
 
-function resolveProjectPath(path: string): string {
+let guardProjectPath: ((path: string) => void) | null = null;
+
+export function setProjectPathGuard(fn: ((path: string) => void) | null): void {
+	guardProjectPath = fn;
+}
+
+export function assertProjectPathAllowed(path: string): void {
+	guardProjectPath?.(path);
+}
+
+export function resolveProjectPath(path: string): string {
 	const home =
 		(process.platform === "win32" ? process.env.USERPROFILE : process.env.HOME) || homedir();
-	const expanded = path === "~" ? home : path.startsWith("~/") ? join(home, path.slice(2)) : path;
+	const underHome =
+		path.startsWith("~/") || (process.platform === "win32" && path.startsWith("~\\"));
+	const expanded = path === "~" ? home : underHome ? join(home, path.slice(2)) : path;
 	if (!isAbsolute(expanded)) {
-		throw new Error(`Project path must be absolute or start with ~/: ${path}`);
+		const homeForms = process.platform === "win32" ? "~/ or ~\\" : "~/";
+		throw new Error(`Project path must be absolute or start with ${homeForms}: ${path}`);
 	}
 	return resolve(expanded);
 }
 
 function gitToplevel(path: string): string | null {
-	const result = git(path, ["rev-parse", "--show-toplevel"]);
-	return result.ok ? result.out || null : null;
+	const result = git(path, ["rev-parse", "--show-toplevel"], {
+		action: "read the repository root",
+	});
+	if (!result.ok && /dubious ownership/i.test(result.err))
+		throw new Error(`Git refused to open ${path}:\n${result.err}`);
+	return result.ok && result.out ? resolve(result.out) : null;
+}
+
+function gitStepFailed(step: string, path: string, err: string): Error {
+	return new Error(err ? `${step} failed: ${path}\n${err}` : `${step} failed: ${path}`);
 }
 
 function slugify(name: string): string {
@@ -77,14 +112,59 @@ export function getProjects(): Project[] {
 	return projects;
 }
 
-export function openProject(inputPath: string): Project {
-	const path = resolveProjectPath(inputPath);
+/** The one reserved-root door check, before any filesystem or git side effect; the path keeps its spelling. */
+export function assertOutsideChatsRoot(path: string, use = "opened as a project"): void {
+	if (landsInChatsRoot(path)) {
+		throw new CodedError(
+			"CHATS_CONTAINER",
+			`Chats without a project live here; this folder cannot be ${use}.`,
+		);
+	}
+}
+
+const bootstraps = new Map<string, Promise<void>>();
+
+function pendingBootstrap(path: string): Promise<void> | undefined {
+	return bootstraps.get(canonicalPath(path));
+}
+
+function refuseWhileBootstrapping(path: string, own?: string): void {
+	const key = canonicalPath(path);
+	if (key !== own && bootstraps.has(key))
+		throw new CodedError(
+			"PROJECT_BOOTSTRAPPING",
+			`This folder is still being set up as a git repository: ${path}`,
+		);
+}
+
+async function holdingBootstrap<T>(path: string, run: (own: string) => Promise<T>): Promise<T> {
+	const own = canonicalPath(path);
+	const settled = Promise.withResolvers<void>();
+	bootstraps.set(own, settled.promise);
+	try {
+		return await run(own);
+	} finally {
+		bootstraps.delete(own);
+		settled.resolve();
+	}
+}
+
+export function openProject(inputPath: string, displayName?: string): Project {
+	return openResolvedProject(resolveProjectPath(inputPath), displayName);
+}
+
+function openResolvedProject(path: string, displayName?: string, ownBootstrap?: string): Project {
+	assertProjectPathAllowed(path);
+	assertOutsideChatsRoot(path);
+	refuseWhileBootstrapping(path, ownBootstrap);
 	const root = gitToplevel(path);
 	if (!root) throw new CodedError("NOT_GIT", `Not a git repository: ${path}`);
+	refuseWhileBootstrapping(root, ownBootstrap);
 
 	const projects = getProjects();
 	const existing = projects.find((p) => p.path === root);
 	if (existing) {
+		existing.rank = existing.closed === true ? rankOnTop(projects) : projectRank(existing);
 		delete existing.closed;
 		existing.lastOpened = Date.now();
 		saveProjects(projects);
@@ -100,12 +180,14 @@ export function openProject(inputPath: string): Project {
 		);
 
 	const taken = new Set(projects.map((p) => p.slug));
+	const label = displayName?.replace(/\s+/g, " ").trim();
 	const project: Project = {
 		id: randomUUID(),
-		name: basename(root),
+		name: label && label.length <= PROJECT_NAME_MAX_LENGTH ? label : basename(root),
 		path: root,
 		slug: uniqueSlug(slugify(basename(root)), taken),
 		lastOpened: Date.now(),
+		rank: rankOnTop(projects),
 		piResourceTrust: piTrustSeed?.(root) ? "granted" : "untrusted",
 	};
 	projects.push(project);
@@ -119,11 +201,90 @@ function newestFirst(projects: Project[]): Project[] {
 }
 
 export function listProjects(): Project[] {
-	return newestFirst(getProjects().filter((project) => project.closed !== true));
+	return getProjects()
+		.filter((project) => project.closed !== true)
+		.sort(compareProjectRank);
+}
+
+function openRepositories(projects: Project[]): Project[] {
+	return projects
+		.filter((project) => project.closed !== true && !isChatsContainer(project))
+		.sort(compareProjectRank);
+}
+
+function rankOnTop(projects: Project[]): number {
+	const top = openRepositories(projects)[0];
+	return top ? Math.max(Date.now(), projectRank(top) + 1) : Date.now();
+}
+
+export function moveProject(id: string, targetId: string, placement: "before" | "after"): Project {
+	const projects = getProjects();
+	const open = openRepositories(projects);
+	const project = open.find((candidate) => candidate.id === id);
+	if (!project) throw new Error(`Unknown project: ${id}`);
+	const target = open.find((candidate) => candidate.id === targetId);
+	if (!target) throw new Error(`Unknown project: ${targetId}`);
+	if (project === target) return project;
+	const order = open.filter((candidate) => candidate !== project);
+	const index = order.indexOf(target) + (placement === "after" ? 1 : 0);
+	order.splice(index, 0, project);
+	if (order.every((candidate, position) => candidate === open[position])) return project;
+
+	const above = order[index - 1];
+	const below = order[index + 1];
+	const ceiling = above ? projectRank(above) : Number.POSITIVE_INFINITY;
+	const floor = below ? projectRank(below) : Number.NEGATIVE_INFINITY;
+	const rank = above && below ? (ceiling + floor) / 2 : above ? ceiling - 1 : floor + 1;
+	const ranks: Array<[Project, number]> =
+		rank > floor && rank < ceiling
+			? [[project, rank]]
+			: order.map((candidate, position) => [candidate, order.length - position]);
+	const changed = ranks.filter(([candidate, value]) => candidate.rank !== value);
+	for (const [candidate, value] of changed) candidate.rank = value;
+	saveProjects(projects);
+	for (const [candidate] of changed) emit(candidate);
+	return project;
+}
+
+const goneFolders = new Set<string>();
+const folderChecks = new Map<string, Promise<void>>();
+
+function checkFolder(path: string): Promise<void> {
+	const pending = folderChecks.get(path);
+	if (pending) return pending;
+	const check = stat(path)
+		.then(
+			(stats) => !stats.isDirectory(),
+			(error) => {
+				const code = (error as { code?: string }).code;
+				return code === "ENOENT" || code === "ENOTDIR";
+			},
+		)
+		.then((gone) => {
+			if (gone) goneFolders.add(path);
+			else goneFolders.delete(path);
+			folderChecks.delete(path);
+		});
+	folderChecks.set(path, check);
+	return check;
+}
+
+export async function refreshRecentProjectFolders(budgetMs: number): Promise<void> {
+	const checks = getProjects()
+		.filter((project) => project.closed === true)
+		.map((project) => checkFolder(project.path));
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const budget = new Promise<void>((resolve) => {
+		timer = setTimeout(resolve, budgetMs);
+	});
+	await Promise.race([Promise.all(checks), budget]);
+	clearTimeout(timer);
 }
 
 export function listRecentProjects(): Project[] {
-	return newestFirst(getProjects());
+	return newestFirst(
+		getProjects().filter((project) => project.closed !== true || !goneFolders.has(project.path)),
+	);
 }
 
 export function closeProject(id: string): Project {
@@ -131,6 +292,22 @@ export function closeProject(id: string): Project {
 	const project = projects.find((candidate) => candidate.id === id);
 	if (!project) throw new Error(`Unknown project: ${id}`);
 	project.closed = true;
+	saveProjects(projects);
+	emit(project);
+	return project;
+}
+
+const PROJECT_NAME_MAX_LENGTH = 100;
+
+export function renameProject(id: string, requestedName: string): Project {
+	const name = requestedName.replace(/\s+/g, " ").trim();
+	if (!name || name.length > PROJECT_NAME_MAX_LENGTH)
+		throw new Error(`Invalid project name: ${requestedName}`);
+	const projects = getProjects();
+	const project = projects.find((candidate) => candidate.id === id);
+	if (!project) throw new Error(`Unknown project: ${id}`);
+	if (project.name === name) return project;
+	project.name = name;
 	saveProjects(projects);
 	emit(project);
 	return project;
@@ -210,6 +387,49 @@ export function setProjectMcpOverride(
 	return project;
 }
 
+function setOwn<T>(record: Record<string, T>, key: string, value: T): void {
+	Object.defineProperty(record, key, {
+		value,
+		enumerable: true,
+		configurable: true,
+		writable: true,
+	});
+}
+
+export function grantProjectMcpTool(
+	id: string,
+	name: string,
+	target: string,
+	tool: string,
+): Project {
+	const projects = getProjects();
+	const project = projects.find((p) => p.id === id);
+	if (!project) throw new Error(`Unknown project: ${id}`);
+	const grants: Record<string, McpToolGrant> = { ...project.mcpToolGrants };
+	const current = Object.hasOwn(grants, name) ? grants[name] : undefined;
+	const tools = current?.target === target ? current.tools.filter((t) => t !== tool) : [];
+	setOwn(grants, name, { target, tools: [...tools, tool] });
+	project.mcpToolGrants = grants;
+	saveProjects(projects);
+	return project;
+}
+
+export function revokeProjectMcpTool(id: string, name: string, tool: string): Project {
+	const projects = getProjects();
+	const project = projects.find((p) => p.id === id);
+	if (!project) throw new Error(`Unknown project: ${id}`);
+	const grants: Record<string, McpToolGrant> = { ...project.mcpToolGrants };
+	const current = Object.hasOwn(grants, name) ? grants[name] : undefined;
+	if (!current) return project;
+	const tools = current.tools.filter((t) => t !== tool);
+	if (tools.length === 0) delete grants[name];
+	else setOwn(grants, name, { target: current.target, tools });
+	if (Object.keys(grants).length === 0) delete project.mcpToolGrants;
+	else project.mcpToolGrants = grants;
+	saveProjects(projects);
+	return project;
+}
+
 export function acknowledgeProjectSkills(id: string, names: string[]): Project {
 	const projects = getProjects();
 	const project = projects.find((p) => p.id === id);
@@ -235,10 +455,17 @@ export function setProjectGroupEnabled(id: string, group: string, enabled: boole
 	const projects = getProjects();
 	const project = projects.find((p) => p.id === id);
 	if (!project) throw new Error(`Unknown project: ${id}`);
-	const groups = new Set(project.disabledGroups ?? []);
-	if (enabled) groups.delete(group);
-	else groups.add(group);
-	project.disabledGroups = [...groups];
+	const disabled = new Set(project.disabledGroups ?? []);
+	const on = new Set(project.enabledGroups ?? []);
+	if (enabled) {
+		disabled.delete(group);
+		on.add(group);
+	} else {
+		disabled.add(group);
+		on.delete(group);
+	}
+	project.disabledGroups = [...disabled];
+	project.enabledGroups = [...on];
 	saveProjects(projects);
 	return project;
 }
@@ -259,32 +486,104 @@ function inspectResolvedProjectPath(path: string): ProjectPathStatus {
 }
 
 export function inspectProjectPath(inputPath: string): ProjectPathStatus {
-	return inspectResolvedProjectPath(resolveProjectPath(inputPath));
+	const path = resolveProjectPath(inputPath);
+	assertOutsideChatsRoot(path);
+	return inspectResolvedProjectPath(path);
 }
 
-export function initProject(inputPath: string): Project {
+export async function initProject(inputPath: string): Promise<Project> {
 	const path = resolveProjectPath(inputPath);
+	assertProjectPathAllowed(path);
+	assertOutsideChatsRoot(path);
+	const pending = pendingBootstrap(path);
+	if (pending) {
+		await pending;
+		return initProject(inputPath);
+	}
 	const status = inspectResolvedProjectPath(path);
 	if (status.kind === "missing") throw new Error(`No such folder: ${path}`);
 	if (status.kind === "notDirectory") throw new Error(`Not a folder: ${path}`);
 	if (status.kind === "repo") return openProject(path);
+	return holdingBootstrap(path, async (own) => {
+		await bootstrapRepository(path);
+		return openResolvedProject(path, undefined, own);
+	});
+}
 
-	const init = git(path, ["init", "-b", "main"]);
-	if (!init.ok) throw new Error(`git init failed: ${path}`);
+export async function createProject(
+	parentPath: string,
+	requestedName: string,
+	displayName?: string,
+): Promise<Project> {
+	const name = requestedName.trim();
+	if (!name || name === "." || name === ".." || /[/\\\0]/.test(name)) {
+		throw new Error(`Invalid project folder name: ${requestedName}`);
+	}
+	const parent = resolveProjectPath(parentPath);
+	const path = join(parent, name);
+	assertProjectPathAllowed(path);
+	assertOutsideChatsRoot(path);
+	mkdirSync(parent, { recursive: true });
+	const pending = pendingBootstrap(path);
+	if (pending) {
+		await pending;
+		return createProject(parentPath, requestedName, displayName);
+	}
+	let created = false;
 	try {
-		const added = git(path, ["add", "-A"]);
-		if (!added.ok) throw new Error(`git add failed: ${path}`);
+		if (!statSync(path).isDirectory()) throw new Error(`Not a folder: ${path}`);
+		if (readdirSync(path).length > 0)
+			throw new Error(`Folder already exists and isn't empty: ${path}`);
+	} catch (err) {
+		if (!(err instanceof Error && "code" in err && err.code === "ENOENT")) throw err;
+		mkdirSync(path);
+		created = true;
+	}
+	return holdingBootstrap(path, async (own) => {
+		try {
+			await bootstrapRepository(path);
+			return openResolvedProject(path, displayName, own);
+		} catch (err) {
+			rmSync(join(path, ".git"), { recursive: true, force: true });
+			if (created && readdirSync(path).length === 0) rmdirSync(path);
+			throw err;
+		}
+	});
+}
+
+async function bootstrapStep(
+	path: string,
+	step: string,
+	args: string[],
+	opts: { timeoutMs?: number } = {},
+): Promise<void> {
+	const result = throwOnTimeout(await gitAsync(path, args, opts), `run ${step}`);
+	if (!result.ok) throw gitStepFailed(step, path, result.err);
+}
+
+async function bootstrapRepository(path: string): Promise<void> {
+	const gitDir = join(path, ".git");
+	const createdGitDir = !existsSync(gitDir);
+	const indexWrite = { timeoutMs: INDEX_WRITE_TIMEOUT_MS ?? Number.POSITIVE_INFINITY };
+	try {
+		await bootstrapStep(path, "git init", ["init", "-b", "main"]);
+		await bootstrapStep(path, "git add", ["add", "-A"], indexWrite);
 
 		const identity: string[] = [];
-		if (!git(path, ["config", "user.name"]).out) identity.push("-c", "user.name=ThinkRail");
-		if (!git(path, ["config", "user.email"]).out)
+		const identityProbe = { action: "read the git identity" };
+		if (!git(path, ["config", "user.name"], identityProbe).out)
+			identity.push("-c", "user.name=ThinkRail");
+		if (!git(path, ["config", "user.email"], identityProbe).out)
 			identity.push("-c", "user.email=thinkrail@localhost");
-		const commit = git(path, [...identity, "commit", "--allow-empty", "-m", "Initial commit"]);
-		if (!commit.ok) throw new Error(`git commit failed: ${path}`);
+		const noAutoGc = ["-c", "maintenance.auto=false", "-c", "gc.auto=0"];
+		await bootstrapStep(
+			path,
+			"git commit",
+			[...identity, ...noAutoGc, "commit", "--allow-empty", "-m", "Initial commit"],
+			indexWrite,
+		);
 	} catch (err) {
-		rmSync(join(path, ".git"), { recursive: true, force: true });
+		if (createdGitDir) rmSync(gitDir, { recursive: true, force: true });
 		throw err;
 	}
-
-	return openProject(path);
 }

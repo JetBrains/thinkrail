@@ -11,7 +11,7 @@ function tool(name: string): ExtensionFactory {
 }
 
 describe("listExtensionCatalog", () => {
-	it("lists the shipped visualize extension with its copy, tool and enabled state", async () => {
+	it("lists the shipped extensions with their copy, tools and enabled state", async () => {
 		expect(await listExtensionCatalog(new Set())).toEqual([
 			{
 				name: "visualize",
@@ -21,9 +21,51 @@ describe("listExtensionCatalog", () => {
 				tools: ["visualize"],
 				hasChildExtensions: false,
 			},
+			{
+				name: "ask-user-question",
+				title: "Ask user question",
+				description: expect.any(String),
+				enabled: true,
+				tools: ["ask_user_question"],
+				hasChildExtensions: false,
+				settings: [{ key: "richPreviews", default: true }],
+			},
+			{
+				name: "web-access",
+				title: "Web access",
+				description: expect.any(String),
+				enabled: true,
+				tools: ["web_search", "source_check", "fetch_content", "get_search_content", "web_enable"],
+				hasChildExtensions: true,
+			},
 		]);
-		const [entry] = await listExtensionCatalog(new Set(["visualize", "retired"]));
-		expect(entry?.enabled).toBe(false);
+		const [visualize, ask] = await listExtensionCatalog(new Set(["visualize", "retired"]));
+		expect(visualize?.enabled).toBe(false);
+		expect(ask?.enabled).toBe(true);
+	});
+
+	it("records a session factory's tools with its declared setting defaults", async () => {
+		const read: boolean[] = [];
+		const entries: ServerExtensionEntry[] = [
+			{
+				specifier: "@acme/settings/server",
+				extension: {
+					name: "settings-demo",
+					extensions: [],
+					settings: { rich: { type: "boolean", default: false } },
+					sessionExtensions: (session) => [
+						(pi) => {
+							read.push(session.setting("rich"));
+							pi.registerTool({ name: "demo" } as Parameters<ExtensionAPI["registerTool"]>[0]);
+						},
+					],
+				},
+			},
+		];
+		const [entry] = await listExtensionCatalog(new Set(), entries);
+		expect(entry?.tools).toEqual(["demo"]);
+		expect(entry?.settings).toEqual([{ key: "rich", default: false }]);
+		expect(read).toEqual([false]);
 	});
 
 	it("records parent tools against a stub, never children, and survives a throwing factory", async () => {
@@ -58,5 +100,33 @@ describe("listExtensionCatalog", () => {
 			{ name: "bare", title: "bare", enabled: false, tools: [], hasChildExtensions: false },
 		]);
 		expect(child).not.toHaveBeenCalled();
+	});
+
+	it("lists per-session tools through an inert session that never answers", async () => {
+		let response: Promise<unknown> | undefined;
+		const entries: ServerExtensionEntry[] = [
+			{
+				specifier: "@acme/asker/server",
+				extension: {
+					name: "asker",
+					extensions: [tool("static")],
+					sessionExtensions: (session) => {
+						response = session.awaitToolResponse("call", undefined);
+						response.catch(() => undefined);
+						return [tool("asked")];
+					},
+				},
+			},
+		];
+		expect(await listExtensionCatalog(new Set(), entries)).toEqual([
+			{
+				name: "asker",
+				title: "asker",
+				enabled: true,
+				tools: ["static", "asked"],
+				hasChildExtensions: false,
+			},
+		]);
+		await expect(response).rejects.toThrow("no session");
 	});
 });

@@ -5,41 +5,70 @@ import {
 	RiIndeterminateCircleLine,
 	RiLoader4Line,
 	RiRobot2Line,
+	RiShutDownLine,
 	RiStopFill,
 	RiTerminalBoxLine,
 	RiTimeLine,
 } from "@remixicon/react";
-import type { BackgroundCommandSummary, SubagentResourceSummary } from "@thinkrail/contracts";
+import {
+	type BackgroundCommandStatus,
+	type BackgroundCommandSummary,
+	compareResourceHistory,
+	type DelegationRunStatus,
+	type ResourceRecord,
+	resourceHistoryCursor,
+	resourceRecordId,
+	type SubagentResourceSummary,
+} from "@thinkrail/contracts";
+import { type Translator, useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import type { KeyboardEvent, ReactNode } from "react";
 
 export type ResourceAction = { pending: boolean; error: string | null };
 export type ResourceActions = Record<string, ResourceAction>;
 
-export type Resource =
-	| { kind: "command"; summary: BackgroundCommandSummary }
-	| { kind: "subagent"; summary: SubagentResourceSummary };
+export type Resource = ResourceRecord;
 
-export type ResourceState = "working" | "queued" | "stopping" | "done" | "failed" | "stopped";
+export type ResourcesStaleness = "disconnected" | "refreshFailed" | "unavailable" | "refreshing";
 
-export function resourceId(resource: Resource): string {
-	return resource.kind === "command" ? resource.summary.id : resource.summary.childSessionId;
+export type ResourceState =
+	| "working"
+	| "queued"
+	| "stopping"
+	| "done"
+	| "failed"
+	| "stopped"
+	| "interrupted";
+
+export type ResourceTarget =
+	| { kind: "command"; id: string }
+	| { kind: "subagent"; childSessionId: string };
+
+export function resourceTarget(resource: Resource): ResourceTarget {
+	return resource.kind === "command"
+		? { kind: "command", id: resource.summary.id }
+		: { kind: "subagent", childSessionId: resource.summary.childSessionId };
 }
+
+export const resourceId: (resource: Resource) => string = resourceRecordId;
 
 export function actionKey(resource: Resource): string {
 	return `${resource.kind}:${resourceId(resource)}`;
 }
 
-export function resourceState(resource: Resource): ResourceState {
-	if (resource.kind === "command") {
-		const { status, exitCode } = resource.summary;
-		if (status === "running") return "working";
-		if (status === "stopping") return "stopping";
-		if (status === "stopped") return "stopped";
-		if (status === "error") return "failed";
-		return exitCode === 0 ? "done" : "failed";
-	}
-	switch (resource.summary.status) {
+export function commandState(
+	status: BackgroundCommandStatus,
+	exitCode: number | null | undefined,
+): ResourceState {
+	if (status === "running") return "working";
+	if (status === "stopping") return "stopping";
+	if (status === "stopped") return "stopped";
+	if (status === "error") return "failed";
+	return exitCode === 0 ? "done" : "failed";
+}
+
+export function subagentState(status: DelegationRunStatus): ResourceState {
+	switch (status) {
 		case "queued":
 			return "queued";
 		case "running":
@@ -53,6 +82,13 @@ export function resourceState(resource: Resource): ResourceState {
 	}
 }
 
+export function resourceState(resource: Resource): ResourceState {
+	if (resource.summary.interrupted) return "interrupted";
+	return resource.kind === "command"
+		? commandState(resource.summary.status, resource.summary.exitCode)
+		: subagentState(resource.summary.status);
+}
+
 export function isLiveState(state: ResourceState): boolean {
 	return state === "working" || state === "queued" || state === "stopping";
 }
@@ -61,10 +97,6 @@ export function startedAt(resource: Resource): number {
 	return resource.kind === "command"
 		? resource.summary.startedAt
 		: Date.parse(resource.summary.createdAt);
-}
-
-export function finishedAt(resource: Resource): number | undefined {
-	return resource.kind === "command" ? resource.summary.finishedAt : undefined;
 }
 
 export function toResources(
@@ -85,43 +117,55 @@ export function sortLive(resources: readonly Resource[]): Resource[] {
 export function sortSettled(resources: readonly Resource[]): Resource[] {
 	return resources
 		.slice()
-		.sort((a, b) => (finishedAt(b) ?? startedAt(b)) - (finishedAt(a) ?? startedAt(a)));
+		.sort((a, b) => compareResourceHistory(resourceHistoryCursor(a), resourceHistoryCursor(b)));
 }
 
-export function resourceName(resource: Resource): string {
+export function newestResourceId(
+	commands: readonly BackgroundCommandSummary[],
+	subagents: readonly SubagentResourceSummary[],
+): string | null {
+	const newest = sortSettled(toResources(commands, subagents))[0];
+	return newest ? resourceId(newest) : null;
+}
+
+export function resourceName(t: Translator, resource: Resource): string {
 	return resource.kind === "command"
 		? resource.summary.name
-		: (resource.summary.roleName ?? "Subagent");
+		: (resource.summary.roleName ?? t("resources.subagent.defaultName"));
 }
 
 export function resourceActivity(resource: Resource): string {
 	return resource.kind === "command" ? resource.summary.command : resource.summary.task;
 }
 
-export function stateLabel(state: ResourceState, kind: Resource["kind"]): string {
+export function stateLabel(t: Translator, state: ResourceState, kind: Resource["kind"]): string {
 	switch (state) {
 		case "working":
-			return kind === "command" ? "Running" : "Working";
+			return kind === "command" ? t("resources.state.running") : t("resources.state.working");
 		case "queued":
-			return "Queued";
+			return t("resources.state.queued");
 		case "stopping":
-			return "Stopping…";
+			return t("resources.state.stopping");
 		case "done":
-			return "Done";
+			return t("resources.state.done");
 		case "failed":
-			return "Failed";
+			return t("resources.state.failed");
 		case "stopped":
-			return "Stopped";
+			return t("resources.state.stopped");
+		case "interrupted":
+			return t("resources.state.interrupted");
 	}
 }
 
-export function formatElapsed(ms: number): string {
+export function formatElapsed(t: Translator, ms: number): string {
 	const minutes = Math.max(0, Math.floor(ms / 60_000));
-	if (minutes < 1) return "<1 min";
-	if (minutes < 60) return `${minutes} min`;
+	if (minutes < 1) return t("resources.elapsed.underMinute");
+	if (minutes < 60) return t("resources.elapsed.minutes", { minutes });
 	const hours = Math.floor(minutes / 60);
 	const rest = minutes % 60;
-	return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
+	return rest === 0
+		? t("resources.elapsed.hours", { hours })
+		: t("resources.elapsed.hoursMinutes", { hours, minutes: rest });
 }
 
 function runMs(resource: Resource, now: number): number | null {
@@ -136,9 +180,9 @@ function runMs(resource: Resource, now: number): number | null {
 	return end === undefined ? null : end - start;
 }
 
-export function elapsedLabel(resource: Resource, now: number): string | null {
+export function elapsedLabel(t: Translator, resource: Resource, now: number): string | null {
 	const ms = runMs(resource, now);
-	return ms === null ? null : formatElapsed(ms);
+	return ms === null ? null : formatElapsed(t, ms);
 }
 
 const STATE_TEXT: Record<ResourceState, string> = {
@@ -148,6 +192,7 @@ const STATE_TEXT: Record<ResourceState, string> = {
 	done: "text-feedback-success",
 	failed: "text-feedback-error",
 	stopped: "text-text-subtle",
+	interrupted: "text-text-subtle",
 };
 
 const STATE_DOT: Record<ResourceState, string> = {
@@ -157,6 +202,7 @@ const STATE_DOT: Record<ResourceState, string> = {
 	done: "bg-feedback-success",
 	failed: "bg-feedback-error",
 	stopped: "bg-text-subtle",
+	interrupted: "bg-text-subtle",
 };
 
 export function StateIcon({ state }: { state: ResourceState }) {
@@ -168,6 +214,8 @@ export function StateIcon({ state }: { state: ResourceState }) {
 			return <RiCloseCircleFill className={className} />;
 		case "stopped":
 			return <RiIndeterminateCircleLine className={className} />;
+		case "interrupted":
+			return <RiShutDownLine className={className} />;
 		case "queued":
 			return <RiTimeLine className={className} />;
 		case "stopping":
@@ -182,15 +230,17 @@ export function StateIcon({ state }: { state: ResourceState }) {
 }
 
 export function StateText({ state, kind }: { state: ResourceState; kind: Resource["kind"] }) {
+	const t = useT();
 	return (
 		<span className={cn("inline-flex items-center gap-4 whitespace-nowrap", STATE_TEXT[state])}>
 			<StateIcon state={state} />
-			{stateLabel(state, kind)}
+			{stateLabel(t, state, kind)}
 		</span>
 	);
 }
 
 export function ExitBadge({ exitCode }: { exitCode: number }) {
+	const t = useT();
 	return (
 		<span
 			className={cn(
@@ -200,21 +250,23 @@ export function ExitBadge({ exitCode }: { exitCode: number }) {
 					: "border-feedback-error-muted text-feedback-error",
 			)}
 		>
-			exit {exitCode}
+			{t("resources.row.exit", { code: exitCode })}
 		</span>
 	);
 }
 
 export function KindGlyph({
-	resource,
+	kind,
 	state,
 	className,
+	dotRingClassName = "ring-container-elevated-bg",
 }: {
-	resource: Resource;
+	kind: Resource["kind"];
 	state: ResourceState;
 	className?: string;
+	dotRingClassName?: string;
 }) {
-	const Icon = resource.kind === "command" ? RiTerminalBoxLine : RiRobot2Line;
+	const Icon = kind === "command" ? RiTerminalBoxLine : RiRobot2Line;
 	return (
 		<span
 			className={cn("relative inline-flex size-16 shrink-0 items-center justify-center", className)}
@@ -223,7 +275,8 @@ export function KindGlyph({
 			<span
 				aria-hidden
 				className={cn(
-					"-right-2 -bottom-2 absolute size-6 rounded-full ring-2 ring-container-elevated-bg",
+					"-right-2 -bottom-2 absolute size-6 rounded-full ring-2",
+					dotRingClassName,
 					STATE_DOT[state],
 				)}
 			/>
@@ -286,12 +339,16 @@ export interface ResourceRowProps {
 
 const ACCESSIBLE_ACTIVITY_LIMIT = 80;
 
-function accessibleName(name: string, activity: string, state: string): string {
+function accessibleName(t: Translator, name: string, activity: string, state: string): string {
 	const trimmed =
 		activity.length > ACCESSIBLE_ACTIVITY_LIMIT
 			? `${activity.slice(0, ACCESSIBLE_ACTIVITY_LIMIT - 1)}…`
 			: activity;
-	return `${name}: ${trimmed}, ${state}`;
+	return t("resources.row.accessibleName", {
+		name,
+		activity: trimmed,
+		state,
+	});
 }
 
 export function ResourceRow({
@@ -305,13 +362,14 @@ export function ResourceRow({
 	onSelect,
 	onStop,
 }: ResourceRowProps) {
+	const t = useT();
 	const state = resourceState(resource);
 	const live = isLiveState(state);
 	const id = resourceId(resource);
-	const name = resourceName(resource);
+	const name = resourceName(t, resource);
 	const activity = resourceActivity(resource);
-	const label = stateLabel(state, resource.kind);
-	const elapsed = elapsedLabel(resource, now);
+	const label = stateLabel(t, state, resource.kind);
+	const elapsed = elapsedLabel(t, resource, now);
 	const exitCode = resource.kind === "command" ? resource.summary.exitCode : undefined;
 	const stopDisabled =
 		!authoritative ||
@@ -343,7 +401,7 @@ export function ResourceRow({
 		<span className="hidden shrink-0 items-center gap-2 group-hover:inline-flex group-focus-within:inline-flex">
 			{live ? (
 				<RowActionButton
-					label={action?.pending ? "Stopping…" : "Stop"}
+					label={action?.pending ? t("resources.action.stopping") : t("resources.action.stop")}
 					testId="resource-stop"
 					disabled={stopDisabled}
 					danger
@@ -383,13 +441,13 @@ export function ResourceRow({
 				<div
 					role="option"
 					aria-selected={selected}
-					aria-label={accessibleName(name, activity, label)}
+					aria-label={accessibleName(t, name, activity, label)}
 					tabIndex={0}
 					onClick={onSelect}
 					onKeyDown={onKeyDown}
 					className="grid min-w-0 cursor-default grid-cols-[auto_minmax(0,1fr)] items-center gap-8 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
 				>
-					<KindGlyph resource={resource} state={state} />
+					<KindGlyph kind={resource.kind} state={state} />
 					<span className="flex min-w-0 flex-col">
 						<span className="flex min-w-0 items-baseline gap-8">
 							<span className={cn("min-w-0 flex-1 truncate", nameClass)} title={name}>
@@ -409,12 +467,12 @@ export function ResourceRow({
 	}
 	return (
 		<li {...dataAttributes} className={cn(rowClass, "grid-cols-[auto_minmax(0,1fr)_auto]")}>
-			<KindGlyph resource={resource} state={state} />
+			<KindGlyph kind={resource.kind} state={state} />
 			<span className="flex min-w-0 flex-col">
 				<button
 					type="button"
 					data-testid="resource-inspect"
-					title={`Inspect ${name}`}
+					title={t("resources.row.inspect", { name })}
 					onClick={onSelect}
 					className="flex min-w-0 items-baseline gap-8 rounded-xs text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
 				>

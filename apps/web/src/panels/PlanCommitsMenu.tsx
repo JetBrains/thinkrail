@@ -3,6 +3,8 @@ import {
 	RiGitCommitLine as GitCommitHorizontal,
 } from "@remixicon/react";
 import type { GitCommit } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -24,6 +26,7 @@ export function PlanCommitsMenu({
 	reloadSignal: number;
 	onOpenCommit: (sha: string) => void;
 }) {
+	const t = useT();
 	const now = useNow();
 	const [open, setOpen] = useState(false);
 	const [commits, setCommits] = useState<GitCommit[] | null>(null);
@@ -47,20 +50,22 @@ export function PlanCommitsMenu({
 
 	return (
 		<DropdownMenu open={open} onOpenChange={setOpen}>
-			<DropdownMenuTrigger
-				data-testid="plan-commits-trigger"
-				data-open={open}
-				title="Commits on this branch"
-				className="flex h-24 shrink-0 items-center gap-4 rounded-sm px-4 tr-text-metadata text-text-subtle outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected data-[open=true]:text-text-default"
-			>
-				<GitCommitHorizontal className="size-12 shrink-0" />
-				<span>
-					{count} {count === 1 ? "commit" : "commits"}
-				</span>
-				<ChevronDown className="size-14 shrink-0" />
+			<DropdownMenuTrigger asChild>
+				<Button
+					variant="ghost"
+					size="m"
+					iconLeft={GitCommitHorizontal}
+					iconRight={ChevronDown}
+					data-testid="plan-commits-trigger"
+					data-open={open}
+					tooltip={t("plan.commitsMenu.title")}
+					className="shrink-0"
+				>
+					{t("plan.commitsMenu.count", { count })}
+				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent data-testid="plan-commits-menu" align="start" className="max-w-[24rem]">
-				<DropdownMenuLabel>Commits</DropdownMenuLabel>
+				<DropdownMenuLabel>{t("plan.commitsMenu.label")}</DropdownMenuLabel>
 				{commits.map((commit) => (
 					<DropdownMenuItem
 						key={commit.sha}
@@ -74,7 +79,7 @@ export function PlanCommitsMenu({
 							<span className="truncate tr-text-metadata text-text-muted">
 								{commit.shortSha} · {commit.author}
 								{commit.committedAt
-									? ` · ${relativeTime(Date.parse(commit.committedAt), now)}`
+									? ` · ${relativeTime(t, Date.parse(commit.committedAt), now)}`
 									: ""}
 							</span>
 						</span>

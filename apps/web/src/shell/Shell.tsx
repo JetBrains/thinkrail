@@ -1,51 +1,82 @@
 import {
 	RiCircleLine as Circle,
 	RiCircleFill,
+	RiSearchLine,
 	RiSettings3Line as Settings,
 } from "@remixicon/react";
-import { IconTooltip } from "@thinkrail/ui/tooltip";
+import type { MessageKey } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
 import { useEffect, useState } from "react";
+import { useContinuations } from "../chat/continuations";
+import { openFindInFiles } from "../findInFiles";
+import {
+	applyFontPreference,
+	DEFAULT_FONT_PREFERENCE,
+	installUserFonts,
+	writeFontsHint,
+} from "../fonts";
+import { platformShortcutLabel } from "../lib";
 import { NotificationPermissionPrompt, useAttentionNotifications } from "../notifications";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
-import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
+import { canStartProjectlessChat } from "../panels/chatActions";
 import { NewWorkspaceDialog } from "../panels/NewWorkspaceDialog";
 import { SettingsDialog } from "../panels/SettingsDialog";
+import { SurveyInvitationDialog } from "../panels/SurveyInvitationDialog";
+import { SurveyWindow } from "../panels/SurveyWindow";
 import { Toaster } from "../panels/Toaster";
-import { useOpenBranchReview } from "../panels/useOpenBranchReview";
+import { useBranchStatus } from "../panels/useBranchStatus";
+import { useCreationChatHandoff, WorkspaceCreationView } from "../panels/WorkspaceCreation";
+import { SearchSettings } from "../search";
 import {
+	isChatWorkspace,
 	SettingsSection,
 	selectActiveWorkspace,
 	selectAnalyticsConsentPromptOpen,
 	selectContextProject,
+	selectContextRepoProject,
+	selectOnboardingActive,
 	useAppStore,
 } from "../store";
 import {
 	applyThemePreference,
+	clearUserThemes,
+	installUserThemes,
 	onSystemAppearanceChange,
 	readThemeHint,
 	writeThemeHint,
 } from "../themes";
-import { type ConnectionStatus, runHostUpdate, supportsHostUpdateRun } from "../transport";
-import { UpdateReadyButton, UpdateSettings, useUpdates } from "../updates";
+import {
+	type ConnectionStatus,
+	hostUrl,
+	runHostUpdate,
+	supportsFonts,
+	supportsHostUpdateRun,
+	supportsUserThemes,
+} from "../transport";
+import { UpdateInstallSurfaces, UpdateReadyButton, UpdateSettings, useUpdates } from "../updates";
 import { AppShortcuts } from "./AppShortcuts";
 import { BrandLogo } from "./BrandLogo";
+import { toggleBottomPanel, toggleLeftSide, toggleRightSide } from "./chordActions";
+import { FindInFilesHost } from "./FindInFilesHost";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
 import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
 import { LocationBar } from "./locationBar";
 import { NativeWindowControls } from "./NativeWindowControls";
 import { PROJECT_HOME_PROJECTS_REGION_ID, ProjectHome } from "./ProjectHome";
-import { SessionSwitcher } from "./SessionSwitcher";
+import { SearchPaletteHost } from "./SearchPaletteHost";
+import { readSettingsShortcutLabel } from "./useAppShortcuts";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
 import { useNativeWindowControls } from "./useNativeWindowControls";
 import { WorkspaceWorkbench } from "./WorkspaceWorkbench";
 
-const STATUS_LABEL: Record<ConnectionStatus, string> = {
-	connected: "Connected",
-	connecting: "Connecting…",
-	disconnected: "Disconnected",
-};
+const STATUS_LABEL = {
+	connected: "shell.connection.connected",
+	connecting: "shell.connection.connecting",
+	disconnected: "shell.connection.disconnected",
+} satisfies Record<ConnectionStatus, MessageKey>;
 
 const STATUS_DOT: Record<ConnectionStatus, string> = {
 	connected: "text-feedback-success",
@@ -54,32 +85,66 @@ const STATUS_DOT: Record<ConnectionStatus, string> = {
 };
 
 export function Shell() {
+	const t = useT();
 	useLocalLayoutState();
 	useAttentionNotifications();
+	useContinuations();
 	const status = useAppStore((s) => s.status);
 	const analyticsConsentOpen = useAppStore(selectAnalyticsConsentPromptOpen);
+	const onboardingActive = useAppStore(selectOnboardingActive);
 	const StatusDot = status === "connected" ? RiCircleFill : Circle;
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
 	const contextProject = useAppStore(selectContextProject);
-	const { review: openReview, url: openReviewUrl } = useOpenBranchReview(activeWorkspace, status);
+	const contextRepoProject = useAppStore(selectContextRepoProject);
+	const activeChat = activeWorkspace !== null && isChatWorkspace(activeWorkspace);
+	const {
+		review: openReview,
+		url: openReviewUrl,
+		status: branchStatus,
+		noteOpenReview,
+		refreshBranchStatus,
+	} = useBranchStatus(activeChat ? null : activeWorkspace, status, { pollChecks: true });
 	const locationReview =
 		openReview && openReviewUrl ? { ...openReview, url: openReviewUrl } : openReview;
 	const hasActiveWorkspace = activeWorkspaceId != null;
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const updates = useUpdates(supportsHostUpdateRun(protocolVersion) ? runHostUpdate : null);
 	const windowControls = useNativeWindowControls();
-	const [newWorkspaceProjectId, setNewWorkspaceProjectId] = useState<string | null>(null);
-	const sessionSwitcherOpen = useAppStore((s) => s.sessionSwitcherOpen);
+	const [newWorkspace, setNewWorkspace] = useState<{
+		projectId: string | null;
+		initialPrompt?: string;
+	} | null>(null);
+	const activeCreation = useAppStore((s) =>
+		s.activeCreationId ? s.workspaceCreations[s.activeCreationId] : undefined,
+	);
+	const workspaceRetryDraft = useAppStore((s) => s.workspaceRetryDraft);
+	useCreationChatHandoff();
+	const canStartChat = useAppStore(canStartProjectlessChat);
+	const openNewWork = (initialPrompt?: string): boolean => {
+		if (!contextRepoProject && !canStartChat) return false;
+		if (newWorkspace !== null || workspaceRetryDraft !== null) return false;
+		setNewWorkspace({
+			projectId: contextRepoProject?.id ?? null,
+			...(initialPrompt === undefined ? {} : { initialPrompt }),
+		});
+		return true;
+	};
 
 	const homeProjects = useCollapsibleRegion<HTMLDivElement>(PROJECT_HOME_PROJECTS_REGION_ID);
+	const [searchShortcut] = useState(() => platformShortcutLabel("K"));
 
 	const [themeHint] = useState(readThemeHint);
+	const [settingsShortcut] = useState(readSettingsShortcutLabel);
 	const welcomeGeneration = useAppStore((s) => s.welcomeGeneration);
 	const theme = useAppStore((s) => s.theme);
 	const themeMode = useAppStore((s) => s.themeMode);
 	const systemThemePair = useAppStore((s) => s.systemThemePair);
+	const userThemes = useAppStore((s) => s.userThemes);
+	const userThemesUnsupported = welcomeGeneration > 0 && !supportsUserThemes(protocolVersion);
 	useEffect(() => {
+		if (userThemes) installUserThemes(userThemes.files);
+		else if (userThemesUnsupported) clearUserThemes();
 		const preference =
 			welcomeGeneration === 0
 				? themeHint
@@ -88,41 +153,50 @@ export function Shell() {
 		apply();
 		if (welcomeGeneration > 0) writeThemeHint(preference);
 		return preference.themeMode === "system" ? onSystemAppearanceChange(apply) : undefined;
-	}, [themeHint, welcomeGeneration, theme, themeMode, systemThemePair]);
+	}, [
+		themeHint,
+		welcomeGeneration,
+		theme,
+		themeMode,
+		systemThemePair,
+		userThemes,
+		userThemesUnsupported,
+	]);
+	const interfaceFont = useAppStore((s) => s.interfaceFont);
+	const codeFont = useAppStore((s) => s.codeFont);
+	const codeFontSize = useAppStore((s) => s.codeFontSize);
+	const codeLigatures = useAppStore((s) => s.codeLigatures);
+	const fontWeightOffset = useAppStore((s) => s.fontWeightOffset);
+	const userFonts = useAppStore((s) => s.userFonts);
+	const fontsSupported = supportsFonts(protocolVersion);
+	useEffect(() => {
+		if (welcomeGeneration === 0) return;
+		if (!fontsSupported) {
+			installUserFonts([]);
+			applyFontPreference(DEFAULT_FONT_PREFERENCE);
+			writeFontsHint(DEFAULT_FONT_PREFERENCE, []);
+			return;
+		}
+		const preference = { interfaceFont, codeFont, codeFontSize, codeLigatures, fontWeightOffset };
+		if (userFonts) installUserFonts(userFonts.files, hostUrl);
+		applyFontPreference(preference);
+		if (userFonts) writeFontsHint(preference, userFonts.files);
+	}, [
+		welcomeGeneration,
+		fontsSupported,
+		interfaceFont,
+		codeFont,
+		codeFontSize,
+		codeLigatures,
+		fontWeightOffset,
+		userFonts,
+	]);
 	useGlobalHotkeys({
-		onProjects: hasActiveWorkspace
-			? () => {
-					if (!activeWorkspaceId) return;
-					useAppStore.getState().enqueueLayoutIntent({
-						kind: "toggle-side",
-						workspaceId: activeWorkspaceId,
-						side: "left",
-					});
-				}
-			: homeProjects.toggle,
-		...(hasActiveWorkspace
-			? {
-					onWorkspace: () => {
-						if (!activeWorkspaceId) return;
-						useAppStore.getState().enqueueLayoutIntent({
-							kind: "toggle-side",
-							workspaceId: activeWorkspaceId,
-							side: "right",
-						});
-					},
-					onBottom: () => {
-						if (!activeWorkspaceId) return;
-						useAppStore.getState().enqueueLayoutIntent({
-							kind: "toggle-bottom",
-							workspaceId: activeWorkspaceId,
-						});
-					},
-				}
-			: {}),
-		...(contextProject
-			? { onNewWorkspace: () => setNewWorkspaceProjectId(contextProject.id) }
-			: {}),
-		onSessionSwitcher: () => useAppStore.getState().toggleSessionSwitcher(),
+		onProjects: () => toggleLeftSide(homeProjects.toggle),
+		...(hasActiveWorkspace ? { onWorkspace: toggleRightSide, onBottom: toggleBottomPanel } : {}),
+		...(contextRepoProject || canStartChat ? { onNewWorkspace: () => void openNewWork() } : {}),
+		onSearch: () => useAppStore.getState().openSearch(),
+		onFindInFiles: openFindInFiles,
 	});
 	return (
 		<div data-testid="shell" className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr]">
@@ -142,7 +216,10 @@ export function Shell() {
 							project={contextProject}
 							workspace={activeWorkspace}
 							review={activeWorkspace ? locationReview : null}
-							onNewWorkspace={() => setNewWorkspaceProjectId(contextProject.id)}
+							branchStatus={branchStatus}
+							noteOpenReview={noteOpenReview}
+							refreshBranchStatus={refreshBranchStatus}
+							onNewWorkspace={() => openNewWork()}
 						/>
 					) : null}
 				</div>
@@ -156,12 +233,21 @@ export function Shell() {
 							onOpen={() => useAppStore.getState().openSettings(SettingsSection.Updates)}
 						/>
 					) : null}
+					<IconButton
+						variant="ghost"
+						size="m"
+						icon={RiSearchLine}
+						label={t("shell.search.open")}
+						tooltip={t("shell.search.openWithShortcut", { shortcut: searchShortcut })}
+						data-testid="open-search"
+						onClick={() => useAppStore.getState().openSearch()}
+					/>
 					<JbcentralQuotaTopbar />
 					<span
 						data-testid="connection-status"
 						data-status={status}
 						role="status"
-						aria-label={STATUS_LABEL[status]}
+						aria-label={t(STATUS_LABEL[status])}
 						className="inline-flex items-center gap-8 tr-text-ui text-text-muted"
 					>
 						<StatusDot
@@ -169,20 +255,22 @@ export function Shell() {
 							className={`size-8 shrink-0 fill-current ${STATUS_DOT[status]}`}
 						/>
 						<span aria-hidden="true" className="hidden sm:inline">
-							{STATUS_LABEL[status]}
+							{t(STATUS_LABEL[status])}
 						</span>
 					</span>
-					<IconTooltip label="Settings">
-						<button
-							type="button"
-							data-testid="open-settings"
-							aria-label="Settings"
-							onClick={() => useAppStore.getState().openSettings()}
-							className="flex size-28 items-center justify-center rounded-sm text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-						>
-							<Settings className="size-16" />
-						</button>
-					</IconTooltip>
+					<IconButton
+						variant="ghost"
+						size="m"
+						icon={Settings}
+						label={t("shell.topbar.settings")}
+						tooltip={
+							settingsShortcut
+								? t("shell.topbar.settingsWithShortcut", { shortcut: settingsShortcut })
+								: t("shell.topbar.settings")
+						}
+						data-testid="open-settings"
+						onClick={() => useAppStore.getState().openSettings()}
+					/>
 				</div>
 				<div
 					aria-hidden="true"
@@ -199,14 +287,27 @@ export function Shell() {
 				) : null}
 				<SettingsDialog
 					layoutSettings={<LayoutSettings />}
+					keyboardSettings={<SearchSettings />}
 					updateSettings={updates ? <UpdateSettings updates={updates} /> : undefined}
 				/>
-				{newWorkspaceProjectId !== null ? (
+				{newWorkspace !== null ? (
 					<NewWorkspaceDialog
 						open
-						projectId={newWorkspaceProjectId}
+						projectId={newWorkspace.projectId}
+						{...(newWorkspace.initialPrompt === undefined
+							? {}
+							: { initialPrompt: newWorkspace.initialPrompt })}
 						onOpenChange={(isOpen) => {
-							if (!isOpen) setNewWorkspaceProjectId(null);
+							if (!isOpen) setNewWorkspace(null);
+						}}
+					/>
+				) : workspaceRetryDraft !== null ? (
+					<NewWorkspaceDialog
+						open
+						projectId={workspaceRetryDraft.projectId}
+						retryDraft={workspaceRetryDraft}
+						onOpenChange={(isOpen) => {
+							if (!isOpen) useAppStore.getState().clearWorkspaceRetry();
 						}}
 					/>
 				) : null}
@@ -216,19 +317,26 @@ export function Shell() {
 					<WorkspaceWorkbench workspaceId={activeWorkspaceId} />
 				</div>
 			) : (
-				<ProjectHome projects={homeProjects} />
+				<ProjectHome
+					projects={homeProjects}
+					{...(activeCreation ? { main: <WorkspaceCreationView creation={activeCreation} /> } : {})}
+				/>
 			)}
-			{analyticsConsentOpen ? <AnalyticsConsentDialog /> : <InterviewPromptDialog />}
-			<SessionSwitcher
-				open={sessionSwitcherOpen}
-				onOpenChange={(open) => {
-					const store = useAppStore.getState();
-					if (open) store.openSessionSwitcher();
-					else store.closeSessionSwitcher();
-				}}
+			{onboardingActive ? null : analyticsConsentOpen ? (
+				<AnalyticsConsentDialog />
+			) : (
+				<SurveyInvitationDialog />
+			)}
+			<SurveyWindow />
+			<SearchPaletteHost
+				onNewWorkspace={(_projectId, initialPrompt) => openNewWork(initialPrompt)}
+				onToggleProjectsHome={homeProjects.toggle}
+				hasUpdateSettings={updates !== null}
 			/>
+			<FindInFilesHost />
 			<NotificationPermissionPrompt />
 			<Toaster />
+			<UpdateInstallSurfaces updates={updates} />
 			<AppShortcuts />
 		</div>
 	);

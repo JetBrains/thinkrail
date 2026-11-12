@@ -1,37 +1,70 @@
 import {
 	RiFolderOpenLine as FolderOpen,
 	RiHome2Line as House,
-	type RemixiconComponentType as LucideIcon,
+	RiChat3Line,
 	RiRocketLine as Rocket,
 	RiSparkling2Line as Sparkles,
 } from "@remixicon/react";
-import { cn } from "@thinkrail/ui/utils";
-import { type ComponentPropsWithoutRef, forwardRef, useEffect, useState } from "react";
+import { useT } from "@thinkrail/locales/react";
+import { useEffect, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { PRODUCT_NAME } from "../constants/branding";
-import { useAppStore } from "../store";
-import { getTransport } from "../transport";
+import {
+	selectOnboardingEligible,
+	selectRepoProjects,
+	selectSupportsOnboarding,
+	toast,
+	useAppStore,
+} from "../store";
+import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
+import { ConnectedLine, type ConnectedSummary } from "./ConnectedLine";
+import { connectedProviderName } from "./ConnectProviderOptions";
+import { canStartProjectlessChat, startProjectlessChat } from "./chatActions";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
+import { OnboardingWizard } from "./OnboardingWizard";
 import { ProjectTrustNotice } from "./ProjectTrustNotice";
 import { ProviderWarningBanner } from "./ProviderWarningBanner";
+import {
+	setupDialogRequest,
+	startProjectSetupChat,
+	type WorkspaceDialogRequest,
+} from "./setupPrompt";
 import { useOpenProject } from "./useOpenProject";
-
-const SETUP_PROMPT = "/skill:setting-up-a-project ";
-
-const SETUP_NOTE =
-	"Runs the setting-up-a-project skill — the agent drafts your project's specs, starting from its goal, before building.";
+import { useHasProvider } from "./useProviderStatus";
+import { Card, CardSkeleton } from "./WelcomeCard";
 
 export function WelcomePanel() {
-	const projects = useAppStore((s) => s.projects);
+	const t = useT();
+	const projects = useAppStore(useShallow(selectRepoProjects));
 	const recentProjects = useAppStore((s) => s.recentProjects);
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
-	const [dialog, setDialog] = useState<{
-		projectId: string;
-		prompt: string;
-		note?: string;
-	} | null>(null);
+	const protocolVersion = useAppStore((s) => s.protocolVersion);
+	const supportsOnboarding = useAppStore(selectSupportsOnboarding);
+	const onboardingEligible = useAppStore(selectOnboardingEligible);
+	const hasProvider = useHasProvider();
+	const [dialog, setDialog] = useState<WorkspaceDialogRequest | null>(null);
 	const [hasSpecs, setHasSpecs] = useState<boolean | null>(null);
+	const wizard = useAppStore((s) => s.onboardingWizard);
+	const setWizard = useAppStore((s) => s.setOnboardingWizard);
+	const [justConnected, setJustConnected] = useState<ConnectedSummary | null>(null);
+
+	useEffect(() => {
+		if (wizard !== "pending" || protocolVersion === null) return;
+		if (!onboardingEligible || hasProvider === true) setWizard("hidden");
+		else if (hasProvider === false) setWizard("shown");
+	}, [wizard, setWizard, protocolVersion, onboardingEligible, hasProvider]);
+
+	useEffect(() => {
+		if (hasProvider === false) setJustConnected(null);
+	}, [hasProvider]);
+
+	const dismissOnboarding = () => {
+		getTransport()
+			.request("settings.update", { config: { onboardingDismissed: true } })
+			.catch((err) => toast.error(errorText(err), t("panels.onboarding.dismissFailed")));
+	};
 
 	const project = projects.find((p) => p.id === selectedProjectId) ?? projects[0] ?? null;
 
@@ -56,104 +89,177 @@ export function WelcomePanel() {
 		};
 	}, [project?.id]);
 
-	const { openProject, pickAndOpen, enterHostPath, dialogs } = useOpenProject((opened) =>
-		useAppStore.getState().selectProject(opened.id, { reveal: true }),
-	);
+	const { openProject, pickAndOpen, enterHostPath, startNewProject, cloneRepository, dialogs } =
+		useOpenProject((opened, { setup }) => {
+			useAppStore.getState().selectProject(opened.id, { reveal: true });
+			if (setup) void startProjectSetupChat(opened.id);
+		});
 	const noProjects = project == null;
+	const canStartChat = useAppStore(canStartProjectlessChat);
+	const showWizard = wizard === "shown" && noProjects;
+
+	useEffect(() => {
+		if (wizard === "shown" && !noProjects) setWizard("hidden");
+	}, [wizard, noProjects, setWizard]);
 
 	const projectFolderCard = (projectId: string) => (
 		<Card
 			icon={House}
-			title="Work in project folder"
-			subtitle="Chats, changes, and terminals run directly in your project folder — no isolation."
+			title={t("panels.welcome.projectFolderTitle")}
+			subtitle={t("panels.welcome.projectFolderSubtitle")}
 			onClick={() => void enterDefaultWorkspace(projectId)}
 			className="motion-safe:animate-reveal"
 		/>
 	);
 
-	const openProjectCard = () => (
+	const openProjectCard = (primary: boolean) => (
 		<AddProjectMenu
 			recentProjects={recentProjects}
 			onOpen={() => void pickAndOpen()}
 			onEnterHostPath={enterHostPath}
+			onClone={cloneRepository}
 			onOpenRecent={(path) => void openProject(path)}
 			align="start"
 		>
 			<Card
-				cta
-				primary
+				cta={primary}
+				primary={primary}
 				icon={FolderOpen}
-				title="Open project"
-				subtitle="Choose a local git repository to work in."
+				title={t("panels.welcome.openProjectTitle")}
+				subtitle={t("panels.welcome.openProjectSubtitle")}
 			/>
 		</AddProjectMenu>
 	);
 
+	const chatCard = () =>
+		canStartChat ? (
+			<Card
+				icon={RiChat3Line}
+				title={t("panels.welcome.chatTitle")}
+				subtitle={t("panels.welcome.chatSubtitle")}
+				onClick={() => void startProjectlessChat()}
+				className="motion-safe:animate-reveal"
+			/>
+		) : null;
+
+	const noProjectCards = () =>
+		supportsOnboarding ? (
+			<>
+				<Card
+					cta
+					primary
+					icon={Sparkles}
+					title={t("panels.welcome.startNewTitle")}
+					subtitle={t("panels.welcome.startNewSubtitle")}
+					onClick={startNewProject}
+				/>
+				{openProjectCard(false)}
+				{chatCard()}
+			</>
+		) : (
+			<>
+				{openProjectCard(true)}
+				{chatCard()}
+			</>
+		);
+
 	return (
 		<div
 			data-testid="welcome"
-			className="flex h-full min-h-0 flex-col items-center justify-center overflow-auto px-24 py-24 text-center"
+			className="flex h-full min-h-0 flex-col items-center justify-center-safe overflow-auto px-24 py-24 text-center"
 		>
-			<h1
-				data-testid="welcome-title"
-				className="tr-brand-hero max-w-[640px] break-words text-primary"
-			>
-				{project ? project.name : PRODUCT_NAME}
-			</h1>
+			{showWizard ? (
+				<OnboardingWizard
+					projectCards={noProjectCards()}
+					onConnected={dismissOnboarding}
+					onSkip={() => {
+						setWizard("hidden");
+						dismissOnboarding();
+					}}
+				/>
+			) : (
+				<>
+					<h1
+						data-testid="welcome-title"
+						className="tr-brand-hero max-w-[640px] break-words text-primary"
+					>
+						{project
+							? project.name
+							: justConnected
+								? t("panels.welcome.connectedTitle")
+								: PRODUCT_NAME}
+					</h1>
+					{noProjects && justConnected ? (
+						<div className="mt-12">
+							<ConnectedLine summary={justConnected} />
+						</div>
+					) : null}
 
-			<ProviderWarningBanner />
-			{project ? <ProjectTrustNotice projectId={project.id} /> : null}
-
-			<div className="mt-24 flex flex-wrap justify-center gap-12">
-				{noProjects ? (
-					openProjectCard()
-				) : hasSpecs === null ? (
-					<>
-						<CardSkeleton />
-						<CardSkeleton />
-					</>
-				) : hasSpecs ? (
-					<>
-						<Card
-							cta
-							primary
-							icon={Rocket}
-							title="Start building"
-							subtitle="Cut an isolated worktree + branch, then pair with the agent to build it."
-							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
-							className="motion-safe:animate-reveal"
-						/>
-						{projectFolderCard(project.id)}
-					</>
-				) : (
-					<>
-						<Card
-							cta
-							primary
-							icon={Sparkles}
-							title="Set up project"
-							tag="spec-first"
-							subtitle="Draft the project's specs with the agent before building, starting from its goal."
-							onClick={() =>
-								setDialog({
-									projectId: project.id,
-									prompt: SETUP_PROMPT,
-									note: SETUP_NOTE,
+					{wizard === "pending" ? null : (
+						<ProviderWarningBanner
+							hasProvider={hasProvider}
+							onConnected={(p) =>
+								setJustConnected({
+									provider: connectedProviderName(p, t),
+									models: null,
+									defaultModel: null,
 								})
 							}
-							className="motion-safe:animate-reveal"
 						/>
-						<Card
-							icon={Rocket}
-							title="Start building"
-							subtitle="Cut an isolated worktree + branch and pair with the agent."
-							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
-							className="motion-safe:animate-reveal"
-						/>
-						{projectFolderCard(project.id)}
-					</>
-				)}
-			</div>
+					)}
+					{project ? <ProjectTrustNotice projectId={project.id} /> : null}
+
+					<div className="mt-24 flex flex-wrap justify-center gap-12">
+						{noProjects && wizard === "pending" ? (
+							<>
+								<CardSkeleton />
+								<CardSkeleton />
+							</>
+						) : noProjects ? (
+							noProjectCards()
+						) : hasSpecs === null ? (
+							<>
+								<CardSkeleton />
+								<CardSkeleton />
+							</>
+						) : hasSpecs ? (
+							<>
+								<Card
+									cta
+									primary
+									icon={Rocket}
+									title={t("panels.welcome.startBuildingTitle")}
+									subtitle={t("panels.welcome.startBuildingSubtitle")}
+									onClick={() => setDialog({ projectId: project.id, prompt: "" })}
+									className="motion-safe:animate-reveal"
+								/>
+								{projectFolderCard(project.id)}
+							</>
+						) : (
+							<>
+								<Card
+									cta
+									primary
+									icon={Sparkles}
+									title={t("panels.welcome.setupTitle")}
+									tag={t("panels.welcome.setupTag")}
+									subtitle={t("panels.welcome.setupSubtitle")}
+									onClick={() => setDialog(setupDialogRequest(project.id))}
+									className="motion-safe:animate-reveal"
+								/>
+								<Card
+									icon={Rocket}
+									title={t("panels.welcome.startBuildingTitle")}
+									subtitle={t("panels.welcome.startBuildingSecondarySubtitle")}
+									onClick={() => setDialog({ projectId: project.id, prompt: "" })}
+									className="motion-safe:animate-reveal"
+								/>
+								{projectFolderCard(project.id)}
+							</>
+						)}
+					</div>
+				</>
+			)}
 
 			{dialog ? (
 				<NewWorkspaceDialog
@@ -170,61 +276,3 @@ export function WelcomePanel() {
 		</div>
 	);
 }
-
-function CardSkeleton() {
-	return (
-		<div
-			role="status"
-			aria-label="Loading"
-			aria-busy="true"
-			className="flex h-[150px] w-[220px] flex-col items-start justify-between rounded-sm border border-border-default bg-container-workspace-bg p-16"
-		>
-			<span className="size-24 shrink-0 animate-pulse rounded-full bg-control-bg-hovered" />
-			<span className="flex w-full flex-col gap-8">
-				<span className="h-3 w-3/4 animate-pulse rounded-sm bg-control-bg-hovered" />
-				<span className="h-3 w-full animate-pulse rounded-sm bg-control-bg-hovered" />
-			</span>
-		</div>
-	);
-}
-
-type CardProps = {
-	cta?: boolean;
-	primary?: boolean;
-	icon: LucideIcon;
-	title: string;
-	subtitle: string;
-	tag?: string;
-} & ComponentPropsWithoutRef<"button">;
-
-const Card = forwardRef<HTMLButtonElement, CardProps>(function Card(
-	{ cta, primary, icon: Icon, title, subtitle, tag, className, ...rest },
-	ref,
-) {
-	return (
-		<button
-			ref={ref}
-			type="button"
-			data-testid={cta ? "welcome-cta" : "welcome-action"}
-			{...rest}
-			className={cn(
-				"relative flex h-[150px] w-[220px] flex-col items-start justify-between rounded-sm border bg-clip-padding p-16 text-left transition-colors",
-				primary
-					? "border-primary-muted bg-primary-subtle hover:bg-primary-soft"
-					: "border-border-default bg-container-workspace-bg hover:border-primary-muted hover:bg-container-elevated-bg",
-				className,
-			)}
-		>
-			{tag ? (
-				<span className="absolute top-12 right-12 rounded-full border border-primary-muted bg-clip-padding bg-primary-subtle px-8 py-2 tr-text-label-pill text-primary">
-					{tag}
-				</span>
-			) : null}
-			<Icon className={cn("size-24", primary ? "text-primary" : "text-text-muted")} />
-			<span className="w-full">
-				<span className="block tr-title-card text-text-default">{title}</span>
-				<span className="mt-2 block text-text-muted tr-text-metadata leading-snug">{subtitle}</span>
-			</span>
-		</button>
-	);
-});

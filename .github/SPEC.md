@@ -31,36 +31,134 @@ pipeline.
 Workflow Bun setup reads the root `package.json` `packageManager` pin through `bun-version-file`.
 Desktop's packaged runtime remains Electrobun-owned (see [[module-desktop]]).
 
-PR and merge-queue gates cover dependency/boundary/seam/spec-surface conformance, lint/typecheck, unit
-and no-agent browser tests. Linux and Windows run native CLI artifact smoke; Linux also runs browser tests
-against the compiled binary. Desktop PR coverage builds the Linux target, runs native-window and shared
+PR and merge-queue gates cover dependency/boundary/seam/spec-surface conformance, lint/typecheck, unit and
+no-agent browser tests. Linux and Windows run native CLI artifact smoke; Linux also runs browser tests
+against the compiled binary. Desktop coverage builds the Linux target, runs native-window and shared
 artifact probes under Xvfb with test-only software-rendering flags, and runs desktop-backed browser tests.
-Real-provider tests remain explicitly authorized and separate.
+Windows also builds the desktop app and runs its native smoke, without browser tests (below).
+The Linux binary and desktop suites and the Windows desktop smoke run on every merge group but on a PR
+only when its change can affect artifacts (change classifier below). Real-provider tests remain explicitly authorized and separate.
 
 The three browser suites dominate wall time, so each runs as a matrix of Playwright shards on separate
-runners ([[module-browser-e2e]] owns the slicing). The ruleset's required check names "E2E (no-agent)",
-"Binary smoke & e2e" and "Desktop smoke & e2e" belong to aggregate gate jobs that succeed only when every
-shard of their matrix succeeded; renaming a gate without updating the ruleset blocks the merge queue.
-Shard counts trade runner minutes for wall time and are tuned against observed per-job durations.
+runners ([[module-browser-e2e]] owns the slicing). Shard counts trade runner minutes for wall time and are
+tuned against observed per-job durations. The source suite gets three jobs to the artifact suites' four
+runners because each of its jobs runs two lanes, and because it alone is the critical path of every app PR
+that does not touch artifacts.
+
+**Required gate.** The ruleset requires one check, "CI passed": an aggregate job that succeeds only when the
+change classifier, conformance/lint/typecheck and unit tests succeeded and every other job either succeeded
+or was skipped by the classifier. CI can then add, rename or skip jobs without a ruleset edit; renaming "CI
+passed" itself blocks the merge queue. Every job carries a timeout a few times its healthy duration, so a
+hung process fails its job, and with it "CI passed", within minutes instead of holding a runner for GitHub's
+six-hour default.
+
+**Change classifier.** A `changes` job diffs the PR or merge group against its base, counting a rename as
+both its old and new path. When every changed path lies outside the app — the website and its analytics
+package, the website workflows, README and PR screenshots, the root README, CONTRIBUTING, CODE_OF_CONDUCT
+and LICENSE, and GitHub's issue/PR templates, CODEOWNERS and this spec — the classifier skips the pi-package, browser, binary,
+Windows and desktop jobs; any other path, or a failed diff, runs them all. The exclusion list is a path
+allow-list, never a file-type rule: Markdown is product input here (skills ship in the artifacts, specs feed
+conformance gates). In the merge queue it diffs against the target branch, not the event's `base_sha`: that
+is the previous entry's group head, and with HEADGREEN grouping a green head merges every entry ahead, so a
+site PR queued behind an app PR must still run the full set. Conformance, lint/typecheck and unit tests
+always run; they are cheap and cover the website too. A second output, `artifacts`, gates the Linux binary
+and desktop suites and the Windows desktop smoke; the Linux suites replay the no-agent browser suite against built artifacts and cost over half of
+CI's runner time: on a PR they run only when a path feeds building or packaging — the CLI and desktop apps,
+artifact tests, shared's native icon set, its generator, release identity and Windows file identity, the
+server's build support and bundled-runtime registration, the artifact Playwright runners, CI workflows,
+actions and scripts, patches and the root manifests and lockfile — and in a merge group they always run,
+so main never lands an artifact they have not exercised. An artifact-only defect in an unrelated change
+therefore surfaces at enqueue time instead of on the PR; it was 1 in 56 failed runs before the split. That
+includes the shared no-agent specs and fixtures the artifact suites replay: only the artifact runners and
+configs are classifier paths, so a harness change that breaks only the binary or desktop replay is also
+caught at enqueue. The Windows unit-and-binary job stays on every app PR: it is mostly native unit gates,
+not an artifact replay.
+
+Browser jobs retry the Playwright browser download a bounded number of times, a network fault that otherwise
+ejects an entry from the merge queue; inside a job Playwright retries a failed test once on CI (source and
+artifact configs alike), a test that passes on that retry is reported flaky and does not fail the job, and
+no job is re-run automatically. They install Chromium without `--with-deps`: the runner image already
+carries its shared libraries, and the extra apt packages (CJK/Thai/X fonts) feed no assertion while their
+Ubuntu-mirror download was the slowest step of the job, often for minutes. A missing library fails
+Chromium's launch loudly. The one exception is the source no-agent E2E job, which also runs the
+questionnaire specs under WebKit. The image lacks WebKit's libraries, so that job installs the `webkit` set of
+`.github/actions/apt-packages` (below): Playwright's Ubuntu 26.04 WebKit package list without its four
+GStreamer plugin packages (`gstreamer1.0-libav`, `-plugins-bad`, `-plugins-base`, `-plugins-good`) and without
+its font and X-server group. The plugins load only to play media, which no spec does, yet on a bare Ubuntu 26.04
+they alone add 163 of the list's 375 packages (94 of 221 MB: libavcodec, onnxruntime, tensorflow-lite, codecs,
+a soundfont). Before the
+cache, every shard fetched that set from the Azure Ubuntu mirror, which now and then trickles one file: apt
+pipelines a host's downloads over one connection and a trickle never trips its idle timeout, so the queue
+stalled until the 420 s wait failed, in 27 of 478 shard runs (6–10 November 2026). Because the list names
+Ubuntu 26.04 packages, the job pins `ubuntu-26.04`, and `install-playwright.sh wait webkit` launches headless
+WebKit once, so a missing library fails that step by name instead of every WebKit test. The browsers
+themselves are not cached: the Playwright CDN download takes seconds, no slower than an Actions-cache
+restore of the same bytes. Linux jobs, here and in the website workflows,
+install dependencies without the Actions cache for the same reason: a cold `bun install --frozen-lockfile` on a hosted runner takes 3–4 s,
+while restoring the ~600 MB Bun cache took 12–16 s before an install of 1–3 s, and every PR and merge-group
+ref saved its own copy, crowding the 10 GB quota the apt cache depends on. Jobs download only Chromium's headless shell,
+the one binary headless tests launch, and start it in the background right after `bun install`; a wait
+step joins it, failing with its status, just before the browser tests, so the download overlaps the build
+instead of preceding it.
+
+The Lint & Typecheck job and the website workflows (`site.yml`, `site-preview.yml`) set up Node 22 before
+installing: the website typecheck and build run Astro 7.4 and its TypeScript content mapper under Node, which
+need >= 22.23.4, and the runner image's preinstalled Node is not guaranteed to be that recent.
+
+Jobs that typecheck or build the desktop app first download Electrobun's Hutch toolchain (Hutch, Cottontail,
+the Electrobun core and its Bun toolchain, all GitHub release assets) through
+`.github/scripts/prepare-electrobun.sh`, which retries `electrobun prepare` a bounded number of times;
+`electrobun build` and the typecheck's own `prepare` then find it in `~/.hutch`. Before that step, a dropped
+release download (`ReleaseDownloadFailed`, a timed-out Hutch index) failed whole desktop jobs, 6 in two weeks.
+
 Native artifact smokes run only in shard 1: repeating an identical probe per shard adds no coverage and
 multiplies exposure to runner-environment faults.
 
-Linux desktop jobs start Xvfb as their own step and proceed only once an X client connects to the exported
-`DISPLAY`; a server that never answers is restarted a bounded number of times, then fails the job. Only the
-virtual display is retried, never the smoke or the browser tests: once the display is proven, every
-application failure fails CI.
+Linux desktop jobs install their GTK/WebKitGTK runtime, and the source E2E job WebKit's libraries, through
+`.github/actions/apt-packages` (sets `desktop.txt` and `webkit.txt` beside it), from `.deb` files cached under a
+hash of the exact package versions apt plans to install after `apt-get update`. A
+mirror update or a different runner image changes that plan and so the key: the previous cache is restored
+by prefix, only the changed packages download, and `apt-get autoclean` drops versions the archive no longer
+offers, so a slow Ubuntu mirror costs little between image releases and while an image rolls out. A cache
+saved on a PR or merge-group ref is private to that ref, so the `CI cache` workflow seeds both sets on every
+push to main, on the runner image each consumer pins, the one scope every PR and merge group can restore. The install step is bounded at ten minutes: a
+mirror that trickles bytes never trips apt's own timeouts and would otherwise hold the job for hours. The
+jobs start Xvfb as their own step and proceed only once an X client connects to the exported `DISPLAY`; a
+server that never answers is restarted a bounded number of times, then fails the job. Beyond the suites'
+single Playwright retry, only the virtual display is retried: once it is proven, the smoke and browser tests
+get no further environment retries.
 
 A platform's native behavior is proven only on that platform. Windows remains a PR gate because its
-executable, environment, path, and trash behavior differs materially from POSIX hosts. Its subprocess
-unit gate also exercises native descendant-console behavior, which the Linux unit run cannot prove, and
-its desktop window-chrome unit gate binds the `user32.dll` frame symbols the frameless title bar relies on
-([[module-desktop]]); neither needs the Electrobun devkit. Native macOS and Linux ARM64 acceptance belongs
-to the release matrix.
+executable, environment, path, and trash behavior differs materially from POSIX hosts. Its subprocess unit
+gate also exercises native descendant-console behavior, which the Linux unit run cannot prove. Its
+desktop window-chrome unit gate binds the `user32.dll` frame symbols the frameless title bar relies on,
+round-trips the window icon through a real window, and stamps an AppUserModelID onto real shortcuts
+([[module-desktop]]). Neither gate needs the
+Electrobun devkit. Its binary smoke also checks the compiled exe's icon and file properties
+([[module-artifact-tests]]). A separate Windows desktop job builds the desktop app and runs the native
+desktop smoke, which checks the branded `bun.exe`, `launcher.exe` and uninstaller. Only a Windows build
+runs the desktop `postBuild` branding over Hutch's output ([[module-desktop]]). Before this job existed, a
+branding defect first failed in the nightly release build. Its path gate (`bun run test:windows-paths`) runs
+the suites that pin architecture Decision 22 on the one host where git prints `C:/…`, node prints `C:\…`,
+and `\` is not a file-name character: stored directories, chat lifecycle in Default and external workspaces,
+POSIX wire paths, git object names, picker roots, and `install.ps1`'s PATH check. A suite joins the gate only
+once it passes on Windows. A test whose premise NTFS cannot hold, such as a `:` in a ref name or an
+unprivileged symlink, is skipped there and stays covered on Linux. The gate runs with a 30 s per-test budget
+instead of Bun's 5 s default: each git spawn costs ~40 ms there (the workspace suite runs about 14× slower
+than on Linux, one passing test reached 4.2 s), and a runner stall such as on-access scanning of a fresh
+install turns that into timeouts. Tests with an explicit timeout keep it. The runner's `TEMP` is an 8.3 short
+name (`C:\Users\RUNNER~1\…`) while git reports the long one, so path fixtures are rooted at
+`realpathSync.native`, the spelling git and the OS agree on. The installer file contributes only its
+`install.ps1` suite, because its `install.sh` tests rightly reject the `~` such a prefix carries. Native
+macOS and Linux ARM64 acceptance belongs to the release matrix. The Windows jobs install Bun and their
+dependencies without the Actions cache: restoring it took longer than a fresh install, and with no Windows
+job on main every PR and merge group kept its own copy, about half of the repository's cache quota.
 
 ## Native build contract
 
 The private native matrix checks out an explicit public source commit and invokes
-`.github/actions/build-binary`. The action accepts `version`, `channel`, and a host-matching `target`.
+`.github/actions/build-binary`. The action accepts `version`, `channel`, and a host-matching `target`,
+plus optional `posthog-cli-api-key` / `posthog-cli-project-id` for source-map upload (below).
 Its stable public outputs are:
 
 - `artifact-name` / `artifact-path` — native CLI;
@@ -69,8 +167,10 @@ Its stable public outputs are:
 - `desktop-update-manifest-path` / `desktop-update-archive-path` — Electrobun's updater metadata and
   full application archive, both non-empty on every desktop target.
 
-The recipe stamps the shared version, builds and smokes the CLI, invokes the normal Electrobun dev and
-channel builds, runs expanded-app and first-install smoke, then collects exact target/channel outputs.
+The recipe stamps the shared version, builds and smokes the CLI, downloads the Electrobun toolchain through
+`prepare-electrobun.sh` (above), invokes the normal Electrobun dev and channel builds, runs expanded-app and
+first-install smoke, then collects exact target/channel outputs. Before that step joined the recipe, a
+dropped Cottontail download failed the linux-arm64 build of the 0.3.1 stable release.
 Update outputs preserve Electrobun's generated basenames and compressed bytes. The manifest is the exact
 `<stable|canary>-<macos|win|linux>-<arm64|x64>-update.json`. Its `artifact.file` is the archive basename:
 `stable-<platform>-ThinkRail[.app].tar.zst` for stable or
@@ -86,24 +186,40 @@ Supported desktop assets:
 
 | Target | Native runner | Published asset |
 | --- | --- | --- |
-| `bun-darwin-arm64` | `macos-14` | `thinkrail-desktop-darwin-arm64.dmg` |
-| `bun-windows-x64` | `windows-latest` | `thinkrail-desktop-windows-x64.zip` |
+| `bun-darwin-arm64` | `macos-15` | `thinkrail-desktop-darwin-arm64.dmg` |
+| `bun-darwin-x64` | `macos-15-intel` | `thinkrail-desktop-darwin-x64.dmg` |
+| `bun-windows-x64` | `windows-2022` | `thinkrail-desktop-windows-x64.zip` |
 | `bun-linux-x64` | `ubuntu-24.04` | `thinkrail-desktop-linux-x64.tar.gz` |
 | `bun-linux-arm64` | `ubuntu-24.04-arm` | `thinkrail-desktop-linux-arm64.tar.gz` |
 
-Windows and Linux aliases name untouched framework installers. The Windows ZIP contains its setup
-executable and adjacent payload; Linux's tarball contains the installer and README. For macOS, the
-private SRE flow replaces the unsigned framework DMG with a conventional DMG containing the signed
-expanded app, under the same published alias. The app archive is a private signing intermediate, never
-a public release asset.
+The private pipeline owns these runner baselines. **Intel runner watch:** `macos-15-intel` runs only the
+x64 build and the finalized-DMG install smoke. Stapling, DMG creation and signature checks for both
+architectures stay on arm64 `macos-15`, because `xcrun stapler` fails on the Intel image
+([runner-images#14924](https://github.com/actions/runner-images/issues/14924)). `macos-26-intel` is avoided
+because its `iconservicesagent` crash-loop hangs app-launch tests
+([#14751](https://github.com/actions/runner-images/issues/14751)); Electrobun keeps its own Intel desktop
+validation on `macos-15-intel` for the same reason. Also watch Intel GPU hangs
+([#14836](https://github.com/actions/runner-images/issues/14836)) and slow Intel runners
+([#13358](https://github.com/actions/runner-images/issues/13358)). GitHub calls `macos-15-intel` its last
+hosted x86_64 image, available until about August 2027; before then, choose between a self-hosted Intel
+runner and dropping the Intel builds. Re-check these issues whenever a macOS runner image changes.
+
+Linux aliases name framework installers; updater archives keep their bytes untouched. The Windows ZIP contains its setup executable and
+adjacent payload; the private pipeline signs both and repacks the payload (see Signing). Linux's tarball
+contains the installer and README, repacked by the collector as root-owned top-level members with no
+`./` entry: Hutch archives its staging root with the runner's UID/GID, and root extracting that `./`
+entry rewrites the target directory's owner, mode and mtime — `/root` owned by UID 1001 breaks SSH key
+login (#1002). Removal gate: [[electrobun-compatibility]]. For macOS, the private SRE flow replaces the unsigned framework DMG
+with a conventional DMG containing the signed expanded app, under the same published alias. The app
+archive is a private signing intermediate, never a public release asset.
 
 On Windows, the packaging invocation puts System32 first so Hutch's bare `tar` resolves to Windows
 bsdtar; Git's GNU tar interprets drive-letter paths as remote `host:path` operands. The collector resolves
 exact framework filenames. Stable installers omit the `stable-` prefix; nightly
 uses Electrobun's `canary` prefix/suffix. Full updater archives and metadata are handed to the private
-pipeline under their raw framework names; patch generation remains disabled. Electrobun 2.0.1 has no
-macOS x64 core. Linux requires Ubuntu 24.04+/glibc 2.38 and the declared GTK, WebKitGTK,
-AppIndicator, and librsvg dependencies. CEF and additional installer formats are outside this contract.
+pipeline under their raw framework names; patch generation remains disabled. Linux requires Ubuntu
+24.04+/glibc 2.38 and the declared GTK, WebKitGTK, AppIndicator, and librsvg dependencies. CEF and
+additional installer formats are outside this contract.
 
 ## Release identity and trust
 
@@ -116,9 +232,33 @@ is a public ingestion key, not a service credential, so hosted native jobs may r
 workflow passes it from its secret store and the stamp step never echoes it. The private workflow's own commit
 is never product identity.
 
+The version itself comes from `.github/scripts/next-version.sh`, the one public version policy. It reads
+`git tag -l` unless `--tags` supplies the list. The release controller passes the git tags plus the
+versions its update feed still advertises, so deleting a release and its tag never frees that number.
+`--tags` is therefore a consumed interface, not a test-only hook.
+
 Signing credentials and access to `codesign.labs.jb.gg` stay in the protected private pipeline. Hosted
-native jobs receive no service credentials; protected internal jobs perform service calls but do not
-build product source or assemble archives. CodeSign and checksum actions are private and versioned with
+native jobs receive no service credentials except one owner-approved exception: a PostHog personal API
+key (error-tracking write, organization read) for source-map upload. PostHog's `posthog-cli` must stamp
+chunk ids into the JS before packaging and needs that key to do so, and the maps must never ship, so the
+upload cannot move to a later protected job. The key reaches only the web build, `desktop:build` and desktop
+packaging steps (never smokes; the identity-stamping step sees only whether it is set) and is absent from PR CI, whose builds are unchanged. Protected internal
+jobs otherwise perform service calls but do not build product source or assemble archives.
+
+**Source maps.** When `posthog-cli-api-key` is set, those steps receive
+`THINKRAIL_SOURCEMAPS_RELEASE=<version>` and the CLI credentials (EU host). The web build emits hidden
+maps and runs `posthog-cli sourcemap process --release-mode symbol-set --delete-after` (release
+`thinkrail@<version>`); desktop's `preBuild` injects the runtime bundle's chunk id itself and uploads it
+([[module-desktop]]). `@posthog/cli` is pinned once in the root catalog, and its npm wrapper downloads the
+native binary on first use without any integrity check, so every invocation goes through the root
+`posthog-cli` script (`apps/web/posthogCli.ts`): it refuses a wrapper version other than the pinned one and
+a binary whose SHA-256 is not one of the seven pinned per platform — taken from archives whose digests
+matched PostHog's GitHub release — before the binary sees the key or rewrites shipped JS. Bumping
+`@posthog/cli` means re-pinning. Builds fail rather than package any
+web `.map`, and turbo hashes the release variable so a cache hit restores the injected, map-free output.
+The CLI binary embeds its own map instead ([[module-cli]]).
+
+CodeSign and checksum actions are private and versioned with
 the release workflow.
 
 The pipeline fails closed: it builds every target, signs and verifies the required artifacts, computes
@@ -129,8 +269,15 @@ its signing policy is decided.
 
 ## Signing and notarization
 
-Windows signing covers the CLI and setup stub; the hash-keyed adjacent payload remains byte-identical.
-The macOS CLI keeps its independent Developer ID signing path.
+Windows signing covers the CLI, the setup stub, and every PE file in the stub's adjacent payload: the
+launcher, `bun.exe`, framework DLLs and tools, the bundled `uninstall` helper that installs and applies
+updates, and runtime libraries. Unsigned framework binaries drew Defender ML quarantines during installs
+and updates. The private pipeline extracts the payload, signs its PE files, repacks it without touching
+other members, and publishes those same bytes as the Windows update archive. The payload's framework
+`hash` is identity metadata, not a content digest, so repacking keeps it valid. Publication requires the
+finalized ZIP to pass the first-install smoke on a hosted Windows runner.
+The macOS CLI keeps its independent Developer ID signing path for both `thinkrail-darwin-arm64` and
+`thinkrail-darwin-x64`.
 
 Desktop macOS signing consumes Electrobun's expanded `.app.tar.zst`, because Hutch writes final version
 metadata after `postBuild` and compresses the inner app before `postWrap`. Hosted macOS prepares native
@@ -150,12 +297,13 @@ precedes stable; each target needs an observed installed-version A to version B 
 The public build handoff now includes the raw Electrobun manifest and full archive; the private runtime feed
 and publication automation are not yet live. Runtime policy belongs to [[module-desktop]].
 
-The private pipeline consumes those raw names, finalizes the macOS application through the existing signing
-flow, and creates its update archive from those final bytes. It assigns each finalized archive an immutable,
-version-qualified protocol-compatible basename and changes only `artifact.file` in the corresponding
-framework manifest before publication. Other manifest identity fields remain framework-generated. Payloads
-are uploaded and made publicly retrievable before their channel manifests. This updater handoff adds no new
-signing, notarization, verification, or publication gate; the existing platform requirements remain in force.
+The private pipeline consumes those raw names, finalizes the macOS application and the Windows payload
+through the existing signing flow, and creates their update archives from those final bytes. It assigns
+each finalized archive an immutable, version-qualified protocol-compatible basename and changes only
+`artifact.file` in the corresponding framework manifest before publication. Other manifest identity fields
+remain framework-generated. Payloads are uploaded and made publicly retrievable before their channel
+manifests. This updater handoff adds no new signing, notarization, verification, or publication gate; the
+existing platform requirements remain in force.
 
 Native update acceptance is **manual-first**. It uses finalized release bytes in disposable installations,
 records both versions and per-target results, and covers check-stops-at-available, explicit download, distinct
@@ -176,9 +324,14 @@ artifact URL, download the native CLI plus `SHA256SUMS`, verify it, and stage re
 destination directory before an atomic rename. Prefix checks are representation-based rather than ASCII-only:
 Unicode and benign `@`/`+` components remain valid, while each platform rejects characters that would corrupt
 metadata or startup-shell syntax. Git Bash writes native-readable Windows metadata; malformed shell PATH blocks
-are preserved rather than rewritten. CLI self-update binds metadata to the running executable and invokes these
-installers rather than duplicating download/checksum logic. Controlled script tests own these
-regressions; finalized Windows PowerShell/Git-Bash and custom-volume behavior remains release qualification.
+are preserved rather than rewritten. On macOS, `install.sh` selects arm64 when the shell runs under Rosetta
+(`sysctl.proc_translated` is 1) even though `uname -m` reports `x86_64`, so Apple Silicon always gets the
+native CLI and a translated x64 install moves to arm64 on its next self-update. CLI self-update binds
+metadata to the running executable and invokes these installers rather than duplicating download/checksum
+logic. Controlled script tests own these regressions; finalized Windows PowerShell/Git-Bash and custom-volume behavior remains release qualification.
+The `install.ps1` suite starts PowerShell once in a warm-up hook with its own budget before its timed tests:
+the first `powershell.exe` launch on a fresh hosted runner has taken up to 31 s (2–14 s in passing runs),
+a one-time environment cost that no single test's budget should absorb.
 
 Website deployment contains no signing credentials. CODEOWNERS and the main-branch rules protect the
 public recipes; local builds and public PR jobs never publish user-facing release artifacts.

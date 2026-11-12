@@ -5,7 +5,7 @@ description: "Use at the start of new project onboarding, PR lifecycle work incl
 
 # Choosing a Workflow
 
-The root router of the workflow family in `packages/pi-thinkrail-workflow`. It classifies new
+The root router of the workflow family. It classifies new
 workflow-eligible work and names the workflow skill that governs it — nothing more. Work already routed
 resumes its active workflow instead. A routed skill's steps live in that skill alone; read it, don't run
 it from memory.

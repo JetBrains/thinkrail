@@ -1,3 +1,4 @@
+import type { Translator } from "@thinkrail/locales/react";
 import type { ReactNode } from "react";
 
 export { languageFromPath, numArg, resultText, strArg } from "./toolHelpers";
@@ -9,6 +10,28 @@ export {
 
 export type ToolStatus = "running" | "done" | "error";
 
+export type ToolPlacement = "dock" | "stub";
+
+export interface ToolInteractionState<R = unknown> {
+	response?: R | undefined;
+	superseded: boolean;
+	ended: boolean;
+	accepting: boolean;
+}
+
+export interface ToolInteraction<R = unknown> {
+	state: ToolInteractionState<R>;
+	respond: (response: R) => Promise<void>;
+	focusScope: object;
+	prepareLayoutChange: (
+		anchor: () => HTMLElement | null,
+		provenance?: "user" | "automatic",
+	) => () => void;
+	focusComposer: () => void;
+	hostProtocol?: number | undefined;
+	placement?: ToolPlacement | undefined;
+}
+
 export interface ToolRenderProps {
 	toolCallId: string;
 	toolName: string;
@@ -18,6 +41,7 @@ export interface ToolRenderProps {
 	workspaceRoot?: string | undefined;
 	onOpenFile?: ((path: string) => void) | undefined;
 	streaming: boolean;
+	interaction?: ToolInteraction | undefined;
 }
 
 export type ToolChrome = "card" | "bare";
@@ -26,13 +50,15 @@ export type ToolProminence = "routine" | "primary";
 
 export type ToolRenderer = (props: ToolRenderProps) => ReactNode;
 
-export type ToolSummary = (props: ToolRenderProps) => string;
+export type ToolSummary = (props: ToolRenderProps, t: Translator) => string;
 
 export interface ToolRegistrationOptions {
 	summary?: ToolSummary;
 	chrome?: ToolChrome;
 	prominence?: ToolProminence;
 	defaultExpanded?: boolean;
+	interactive?: boolean;
+	dock?: boolean;
 }
 
 export interface WebExtension {

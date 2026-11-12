@@ -1,3 +1,4 @@
+import { type Translator, useT } from "@thinkrail/locales/react";
 import { RunningIcon } from "@/components/RunningIcon";
 import type { ChatTurn } from "./types";
 
@@ -28,22 +29,25 @@ export function streamStatus(turns: ChatTurn[], currentAssistantId: string | nul
 	return { phase: "working" };
 }
 
-export function phaseLabel({ phase, toolName }: StreamStatus): string {
+export function phaseLabel(t: Translator, { phase, toolName }: StreamStatus): string {
 	switch (phase) {
 		case "thinking":
-			return "Thinking…";
+			return t("chat.activity.thinkingLive");
 		case "writing":
-			return "Writing…";
+			return t("chat.stream.writing");
 		case "running-tool":
-			return toolName ? `Running ${toolName}…` : "Running tool…";
+			return toolName
+				? t("chat.stream.runningTool", { tool: toolName })
+				: t("chat.stream.runningAnyTool");
 		case "compacting":
-			return "Compacting context…";
+			return t("chat.compaction.running");
 		default:
-			return "Working…";
+			return t("chat.activity.working");
 	}
 }
 
 export function StreamIndicator({ status }: { status: StreamStatus }) {
+	const t = useT();
 	return (
 		<div
 			data-testid="stream-indicator"
@@ -55,7 +59,7 @@ export function StreamIndicator({ status }: { status: StreamStatus }) {
 			<span aria-hidden="true" className="flex shrink-0">
 				<RunningIcon className="size-16 text-primary" />
 			</span>
-			<span className="min-w-0 truncate">{phaseLabel(status)}</span>
+			<span className="min-w-0 truncate">{phaseLabel(t, status)}</span>
 		</div>
 	);
 }

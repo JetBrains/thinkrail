@@ -1,5 +1,6 @@
 import { expect, spyOn, test } from "bun:test";
 import type { McpListResult, McpServerSummary } from "@thinkrail/contracts";
+import { currentTranslator } from "@thinkrail/locales/react";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { Children, isValidElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -45,12 +46,16 @@ function row(overrides: Partial<McpServerRow> = {}, summary: Partial<McpServerSu
 	return value;
 }
 
+function uncounted({ toolCount: _toolCount, ...value }: McpServerRow): McpServerRow {
+	return value;
+}
+
 function render(value: McpServerRow, options: { readOnly?: boolean; error?: string } = {}) {
 	return renderToStaticMarkup(
 		<TooltipProvider>
 			<McpServerRowView
 				row={value}
-				view={mcpRowView(value, 0)}
+				view={mcpRowView(currentTranslator(), value, 0)}
 				readOnly={options.readOnly ?? false}
 				busy={false}
 				error={options.error}
@@ -76,9 +81,11 @@ test("a row shows the status, scope and transport chips, exposure, and an enable
 
 test("a pending repository entry offers Review & approve and locks its switch and exposure", () => {
 	const html = render(
-		row(
-			{ state: "pending-approval", toolCount: undefined, attention: true, approvalPending: true },
-			{ scope: "project", approval: { state: "pending", fingerprint: "f" } },
+		uncounted(
+			row(
+				{ state: "pending-approval", attention: true, approvalPending: true },
+				{ scope: "project", approval: { state: "pending", fingerprint: "f" } },
+			),
 		),
 	);
 	expect(html).toMatch(/data-testid="mcp-server-action"[^>]*data-action="review"/);
@@ -93,19 +100,17 @@ test("rows offer the status table's per-state actions: Reconnect and Show log, R
 		[...html.matchAll(/data-testid="mcp-server-(action|secondary)" data-action="([a-z-]+)"/g)].map(
 			([, slot, action]) => `${slot}:${action}`,
 		);
-	const failed = render(row({ state: "failed", toolCount: undefined, attention: true }));
+	const failed = render(uncounted(row({ state: "failed", attention: true })));
 	expect(actions(failed)).toEqual(["secondary:show-log", "action:reconnect"]);
 	expect(failed).toContain("Show log");
 	expect(failed).toContain("Reconnect");
-	expect(actions(render(row({ state: "disconnected", toolCount: undefined })))).toEqual([
-		"action:reconnect",
-	]);
-	const reload = render(row({ state: "pending-reload", toolCount: undefined }));
+	expect(actions(render(uncounted(row({ state: "disconnected" }))))).toEqual(["action:reconnect"]);
+	const reload = render(uncounted(row({ state: "pending-reload" })));
 	expect(actions(reload)).toEqual(["action:reload"]);
 	expect(reload).toContain("Reload now");
-	const idle = { state: "not-running" as const, toolCount: undefined };
-	expect(actions(render(row(idle)))).toEqual(["action:open-chat"]);
-	const http = render(row(idle, { transport: "http" }));
+	const idle = { state: "not-running" as const };
+	expect(actions(render(uncounted(row(idle))))).toEqual(["action:open-chat"]);
+	const http = render(uncounted(row(idle, { transport: "http" })));
 	expect(actions(http)).toEqual(["secondary:test-connection", "action:open-chat"]);
 	expect(http).toContain("Open a chat");
 });
@@ -120,16 +125,20 @@ function menuItems(value: McpServerRow): string[] {
 			visit(child.props.children);
 		});
 	};
-	visit(
-		McpServerRowView({
+	let tree: ReactNode = null;
+	const Capture = () => {
+		tree = McpServerRowView({
 			row: value,
-			view: mcpRowView(value, 0),
+			view: mcpRowView(currentTranslator(), value, 0),
 			readOnly: false,
 			busy: false,
 			error: undefined,
 			onCommand: () => {},
-		}),
-	);
+		});
+		return null;
+	};
+	renderToStaticMarkup(<Capture />);
+	visit(tree);
 	return items;
 }
 
@@ -261,7 +270,7 @@ test("a stale approval refreshes the summary without approving changed content u
 });
 
 test("read-only rows disable every control and row errors render as alerts", () => {
-	const html = render(row({ state: "not-running", toolCount: undefined }, { transport: "http" }), {
+	const html = render(uncounted(row({ state: "not-running" }, { transport: "http" })), {
 		readOnly: true,
 		error: "MCP_CONFIG_INVALID: bad",
 	});
@@ -272,9 +281,30 @@ test("read-only rows disable every control and row errors render as alerts", () 
 	expect(html).toContain("MCP_CONFIG_INVALID: bad");
 });
 
-test("the banner states the per-chat confirm and the empty state offers import and the host notice", () => {
+test("a row lists its always-allowed tools, each with its own way to ask again", () => {
+	const html = render(
+		row(
+			{},
+			{
+				alwaysAllowed: [
+					{ tool: "mcp__fixture__create_issue", label: "create_issue" },
+					{ tool: "mcp__fixture__comment", label: "comment" },
+				],
+			},
+		),
+	);
+	expect(html).toContain('data-testid="mcp-always-allowed"');
+	expect(html.match(/data-testid="mcp-always-allowed-tool"/g)).toHaveLength(2);
+	expect(html).toContain('aria-label="Ask again before create_issue in this project"');
+	expect(render(row())).not.toContain("mcp-always-allowed");
+	expect(
+		render(row({}, { alwaysAllowed: [{ tool: "t", label: "t" }] }), { readOnly: true }),
+	).toMatch(/data-testid="mcp-always-allowed-revoke"[^>]*disabled=""/);
+});
+
+test("the banner states the in-chat confirm and the empty state offers import and the host notice", () => {
 	expect(renderToStaticMarkup(<McpConfirmBanner />)).toContain(
-		"ThinkRail asks before MCP calls that may change data (per chat); no saved rules yet.",
+		"ThinkRail asks in the chat before MCP calls that may change data. Always allow trusts a tool in every chat of this project; those tools are listed on their server below.",
 	);
 	const empty = renderToStaticMarkup(
 		<McpEmptyState disabled={false} onAdd={() => {}} onImport={() => {}} onPreset={() => {}} />,

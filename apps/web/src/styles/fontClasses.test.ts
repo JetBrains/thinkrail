@@ -1,8 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const SRC = new URL("..", import.meta.url).pathname;
+const SRC = fileURLToPath(new URL("..", import.meta.url));
 const BARE_FONT_VAR = /font-\[var\(--font-[a-z-]*\)\]/g;
 
 function sourceFiles(dir: string): string[] {

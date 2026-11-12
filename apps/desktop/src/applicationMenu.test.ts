@@ -6,6 +6,7 @@ import {
 	isNativeCommand,
 	QUIT_SHORTCUT_ACTION,
 	readMenuAction,
+	readMenuLabels,
 } from "./applicationMenu";
 
 const editMenu: ApplicationMenuItemConfig = {
@@ -28,6 +29,8 @@ test("builds the native macOS application, edit, and window menus", () => {
 		{
 			submenu: [
 				{ role: "about" },
+				{ type: "separator" },
+				{ label: "Settings…", action: "open-settings", accelerator: "CommandOrControl+," },
 				{ type: "separator" },
 				{ role: "hide", accelerator: "CommandOrControl+H" },
 				{ role: "hideOthers", accelerator: "CommandOrControl+Alt+H" },
@@ -87,7 +90,29 @@ test("reads the action from an application-menu-clicked event", () => {
 
 test("recognizes forwarded native commands only", () => {
 	expect(isNativeCommand("close-item")).toBe(true);
+	expect(isNativeCommand("open-settings")).toBe(true);
 	expect(isNativeCommand(QUIT_SHORTCUT_ACTION)).toBe(false);
 	expect(isNativeCommand(null)).toBe(false);
 	expect(isNativeCommand("toString")).toBe(false);
+});
+
+test("translated labels rename the custom items and fall back to English per label", () => {
+	const labels = readMenuLabels({
+		"desktop.menu.edit": "Bearbeiten",
+		"desktop.menu.window": "",
+		"desktop.menu.quit": 3,
+		"desktop.menu.close": "x".repeat(81),
+		"desktop.menu.settings": "Einstellungen…",
+	});
+	expect(labels).toEqual({
+		"desktop.menu.edit": "Bearbeiten",
+		"desktop.menu.settings": "Einstellungen…",
+		"desktop.menu.quit": "Quit ThinkRail",
+		"desktop.menu.window": "Window",
+		"desktop.menu.close": "Close",
+	});
+	const menu = desktopApplicationMenu("darwin", labels);
+	expect(menu?.[1]).toMatchObject({ label: "Bearbeiten" });
+	expect(JSON.stringify(menu)).toContain("Einstellungen…");
+	expect(desktopApplicationMenu("win32", labels)?.[0]).toMatchObject({ label: "Bearbeiten" });
 });

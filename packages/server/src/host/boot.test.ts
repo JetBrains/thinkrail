@@ -1,19 +1,29 @@
 import { afterEach, beforeAll, beforeEach, expect, spyOn, test } from "bun:test";
-import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
-import type { HostUpdateNotice, ServerWelcome } from "@thinkrail/contracts";
-import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import type {
+	HostUpdateNotice,
+	ServerWelcome,
+	WorkspaceFsChangedPayload,
+} from "@thinkrail/contracts";
+import { PROTOCOL_VERSION, WS_CHANNELS, WS_MAX_FRAME_BYTES } from "@thinkrail/contracts";
 import { isPortFree } from "@thinkrail/shared/freePort";
-import { configurePiRuntime, configurePiRuntimeFactory } from "../agent";
+import {
+	configurePiRuntime,
+	configurePiRuntimeFactory,
+	refreshSubagentConcurrency,
+} from "../agent";
+import { delegationServiceFor, removeWorkspaceDelegation } from "../agent/delegation";
 import {
 	getAdditionalAnalyticsCapture,
 	initializeAnalytics,
 	resetAnalyticsForTests,
 } from "../analytics";
 import { resetJbcentralStateForTests } from "../auth";
+import { logger } from "../log";
 import { resetConfigCache, updateConfig } from "../settings";
 import { type BootedHost, bootHost } from "./boot";
 import { handleRequest } from "./handlers";
@@ -350,6 +360,87 @@ test("the host forwards successful login generation metadata into the basic even
 	}
 });
 
+test("failed wire requests and logged host errors become sanitized exception reports", async () => {
+	const b = await boot({ port: 0, host: "127.0.0.1", portMode: "exact" });
+	const events: { event: string; properties: Record<string, unknown> }[] = [];
+	initializeAnalytics({
+		posthogApiKey: TEST_KEY,
+		additionalEnabled: false,
+		env: {},
+		fetchImpl: (async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+			events.push(...JSON.parse(String(init?.body)).batch);
+			return new Response("{}");
+		}) as typeof fetch,
+	});
+	const missing = join(process.env.THINKRAIL_DATA_DIR ?? tmpdir(), "private-client-project");
+	const collector = await collectSocket(b.port, "error-reports");
+	try {
+		collector.socket.send(
+			JSON.stringify({ id: "fail", method: "project.open", params: { path: missing } }),
+		);
+		const frame = await collector.waitForFrame((candidate) => candidate.id === "fail");
+		expect(frame.ok).toBe(false);
+		logger("probe").warn("probe failed", new Error(`could not read ${missing}`));
+		const exceptions = () => events.filter((event) => event.event === "$exception");
+		const deadline = Date.now() + 2_000;
+		while (exceptions().length < 2 && Date.now() < deadline) await Bun.sleep(5);
+		expect(
+			exceptions()
+				.map((event) => event.properties.source)
+				.sort(),
+		).toEqual(["host_logged", "request"]);
+		expect(
+			exceptions().find((event) => event.properties.source === "request")?.properties,
+		).toMatchObject({ handled: true, request_method: "project.open" });
+		expect(
+			exceptions().find((event) => event.properties.source === "host_logged")?.properties.scope,
+		).toBe("probe");
+		expect(JSON.stringify(exceptions())).not.toContain("private-client-project");
+	} finally {
+		collector.socket.close();
+	}
+});
+
+test("boot applies the stored environment before serving, and launch variables win", async () => {
+	const dir = process.env.THINKRAIL_DATA_DIR;
+	if (!dir) throw new Error("missing fixture data directory");
+	const agentDir = mkdtempSync(join(tmpdir(), "thinkrail-boot-agent-"));
+	tmpDirs.push(agentDir);
+	const priorAgentDir = process.env.PI_CODING_AGENT_DIR;
+	delete process.env.PI_CODING_AGENT_DIR;
+	delete (globalThis as Record<symbol, unknown>)[Symbol.for("thinkrail.shellEnv.launchKeys")];
+	process.env.TR_BOOT_LAUNCH = "launch";
+	writeFileSync(
+		join(dir, "environment.json"),
+		JSON.stringify({
+			agentDir,
+			vars: [
+				{ name: "TR_BOOT_STORED", value: "stored" },
+				{ name: "TR_BOOT_LAUNCH", value: "stored" },
+				{ name: "THINKRAIL_PORT", value: "1" },
+			],
+		}),
+	);
+	try {
+		await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+		expect(Bun.env.PI_CODING_AGENT_DIR).toBe(agentDir);
+		expect(process.env.TR_BOOT_STORED).toBe("stored");
+		expect(process.env.TR_BOOT_LAUNCH).toBe("launch");
+		expect(process.env.THINKRAIL_PORT).toBeUndefined();
+		const status = await handleRequest("environment.get", {}, { clientKey: "client" });
+		expect(status).toMatchObject({
+			restartRequired: false,
+			launchOverridden: ["TR_BOOT_LAUNCH"],
+			effectiveAgentDir: agentDir,
+		});
+	} finally {
+		delete process.env.TR_BOOT_STORED;
+		delete process.env.TR_BOOT_LAUNCH;
+		if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
+	}
+});
+
 test('portMode "exact" binds the requested port', async () => {
 	const requested = grabFreePort();
 	const b = await boot({ port: requested, host: "localhost", portMode: "exact" });
@@ -405,6 +496,27 @@ test("stop() releases the port", async () => {
 	expect(await isPortFree(b.port)).toBe(true);
 });
 
+test("stop() returns the resolvers createServer installed to their defaults", async () => {
+	const dir = process.env.THINKRAIL_DATA_DIR;
+	if (!dir) throw new Error("missing fixture data directory");
+	writeFileSync(join(dir, "config.json"), JSON.stringify({ subagentMaxConcurrent: 16 }));
+	const b = await boot({ port: 0, host: "127.0.0.1", portMode: "exact" });
+	const workspaceId = "boot-stopped-limit";
+	try {
+		const service = delegationServiceFor(workspaceId);
+		const resized: number[] = [];
+		service.setMaxConcurrentPerParent = (slots) => {
+			resized.push(slots);
+		};
+		refreshSubagentConcurrency(workspaceId);
+		b.server.stop();
+		refreshSubagentConcurrency(workspaceId);
+		expect(resized).toEqual([16]);
+	} finally {
+		removeWorkspaceDelegation(workspaceId);
+	}
+});
+
 test("boot permits two hosts for the same data directory", async () => {
 	const first = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
 	const second = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
@@ -415,6 +527,160 @@ test("boot permits two hosts for the same data directory", async () => {
 		fetch(`http://localhost:${second.port}/health`),
 	]);
 	expect(await Promise.all(responses.map((response) => response.text()))).toEqual(["ok", "ok"]);
+});
+
+test("welcome omits closed projects whose folders are gone", async () => {
+	const dir = process.env.THINKRAIL_DATA_DIR;
+	if (!dir) throw new Error("missing fixture data directory");
+	writeFileSync(
+		join(dir, "projects.json"),
+		JSON.stringify([
+			{ id: "open", name: "open", path: join(dir, "unplugged"), slug: "open", lastOpened: 3 },
+			{
+				id: "gone",
+				name: "gone",
+				path: join(dir, "gone"),
+				slug: "gone",
+				lastOpened: 2,
+				closed: true,
+			},
+			{ id: "kept", name: "kept", path: dir, slug: "kept", lastOpened: 1, closed: true },
+		]),
+	);
+	const b = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+	const collector = await collectSocket(b.port, "recents");
+	const frame = await collector.waitForFrame(
+		(candidate) => candidate.channel === WS_CHANNELS.serverWelcome,
+	);
+
+	const welcome = frame.data as ServerWelcome;
+	expect(welcome.projects.filter((project) => project.kind !== "chats").map((p) => p.id)).toEqual([
+		"open",
+	]);
+	expect(welcome.projects.filter((project) => project.kind === "chats")).toHaveLength(1);
+	expect(welcome.recentProjects?.map((project) => project.id)).toEqual(["open", "kept"]);
+});
+
+test.if(process.platform === "linux")(
+	"on Linux a project skill under a git-ignored folder still reports a skill change",
+	async () => {
+		const dir = process.env.THINKRAIL_DATA_DIR;
+		if (!dir) throw new Error("missing fixture data directory");
+		const worktree = join(dir, "repo");
+		const skill = join(worktree, ".claude", "skills", "demo", "SKILL.md");
+		const venv = join(worktree, ".claude", "skills", "demo", ".venv");
+		mkdirSync(venv, { recursive: true });
+		expect(Bun.spawnSync(["git", "init", "-q", worktree]).success).toBe(true);
+		writeFileSync(join(worktree, ".gitignore"), ".claude/\ntmp/\n");
+		mkdirSync(join(worktree, "tmp"));
+		writeFileSync(skill, "v1\n");
+		writeFileSync(
+			join(dir, "workspaces.json"),
+			JSON.stringify([
+				{
+					id: "skills",
+					projectId: "p",
+					name: "skills",
+					branch: "main",
+					worktreePath: worktree,
+					baseBranch: "main",
+				},
+			]),
+		);
+		const b = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+		const collector = await collectSocket(b.port, "skills");
+		collector.socket.send(
+			JSON.stringify({
+				id: "ready",
+				method: "workspace.watchReady",
+				params: { workspaceId: "skills" },
+			}),
+		);
+		expect((await collector.waitForFrame((frame) => frame.id === "ready")).ok).toBe(true);
+		writeFileSync(join(worktree, "tmp", "out.txt"), "x\n");
+		writeFileSync(join(venv, "out.txt"), "x\n");
+		writeFileSync(skill, "v2\n");
+		await collector.waitForFrame(
+			(frame) =>
+				frame.channel === WS_CHANNELS.workspaceFsChanged &&
+				(frame.data as WorkspaceFsChangedPayload).skillChange === "detected",
+		);
+		const paths = collector.frames.flatMap((frame) =>
+			frame.channel === WS_CHANNELS.workspaceFsChanged
+				? (frame.data as WorkspaceFsChangedPayload).paths
+				: [],
+		);
+		expect(paths.filter((path) => path.startsWith("tmp/") || path.includes("/.venv/"))).toEqual([]);
+	},
+);
+
+test.if(process.platform === "linux")(
+	"on Linux a doc in a subfolder of the git-ignored scratch dir still sends an event",
+	async () => {
+		const dir = process.env.THINKRAIL_DATA_DIR;
+		if (!dir) throw new Error("missing fixture data directory");
+		const worktree = join(dir, "repo");
+		const scratch = join(worktree, ".thinkrail", "context");
+		mkdirSync(join(scratch, "topic"), { recursive: true });
+		expect(Bun.spawnSync(["git", "init", "-q", worktree]).success).toBe(true);
+		writeFileSync(join(worktree, ".gitignore"), ".thinkrail/\n");
+		writeFileSync(join(scratch, ".gitignore"), "*\n");
+		writeFileSync(join(scratch, "topic", "doc.md"), "v1\n");
+		writeFileSync(
+			join(dir, "workspaces.json"),
+			JSON.stringify([
+				{
+					id: "scratch",
+					projectId: "p",
+					name: "scratch",
+					branch: "main",
+					worktreePath: worktree,
+					baseBranch: "main",
+				},
+			]),
+		);
+		const b = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+		const collector = await collectSocket(b.port, "scratch");
+		collector.socket.send(
+			JSON.stringify({
+				id: "ready",
+				method: "workspace.watchReady",
+				params: { workspaceId: "scratch" },
+			}),
+		);
+		expect((await collector.waitForFrame((frame) => frame.id === "ready")).ok).toBe(true);
+		writeFileSync(join(scratch, "topic", "doc.md"), "v2\n");
+		mkdirSync(join(scratch, "fresh"));
+		writeFileSync(join(scratch, "fresh", "new.md"), "x\n");
+		const published = (path: string) => (frame: SocketFrame) =>
+			frame.channel === WS_CHANNELS.workspaceFsChanged &&
+			(frame.data as WorkspaceFsChangedPayload).paths.includes(path);
+		await collector.waitForFrame(published(".thinkrail/context/topic/doc.md"));
+		await collector.waitForFrame(published(".thinkrail/context/fresh/new.md"));
+	},
+);
+
+test.each([
+	["exactly at the frame cap reaches its handler", WS_MAX_FRAME_BYTES, "answered"],
+	["one byte over the frame cap closes the socket", WS_MAX_FRAME_BYTES + 1, "closed"],
+])("a request frame %s", async (_name, bytes, expected) => {
+	const b = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+	const collector = await collectSocket(b.port, "frame-cap");
+	const closed = new Promise<string>((resolve) =>
+		collector.socket.addEventListener("close", () => resolve("closed")),
+	);
+	const envelope = JSON.stringify({ id: "cap", method: "project.list", params: { padding: "" } });
+	const padding = "A".repeat(bytes - envelope.length);
+	collector.socket.send(JSON.stringify({ id: "cap", method: "project.list", params: { padding } }));
+
+	const outcome = await Promise.race([
+		collector
+			.waitForFrame((candidate) => candidate.id === "cap")
+			.then((frame) => (frame.ok ? "answered" : "failed")),
+		closed,
+	]);
+	expect(outcome).toBe(expected);
+	collector.socket.close();
 });
 
 test("shutdown is idempotent and releases the port", async () => {
@@ -722,6 +988,7 @@ async function withFakeLoginShell(run: () => Promise<void>): Promise<void> {
 	process.env.SHELL = shell;
 	delete process.env.TERM;
 	delete process.env.BOOT_LOGIN_CANARY;
+	delete (globalThis as Record<symbol, unknown>)[Symbol.for("thinkrail.shellEnv.pending")];
 	try {
 		await run();
 	} finally {

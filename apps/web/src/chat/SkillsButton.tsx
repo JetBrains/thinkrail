@@ -1,4 +1,6 @@
 import { RiBookOpenLine as BookOpen } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 
@@ -13,22 +15,21 @@ export function SkillsButton({
 	stale?: boolean;
 	className?: string;
 }) {
+	const t = useT();
 	return (
-		<IconTooltip label={stale ? "Skills changed on disk — reload" : "Skills"}>
-			<button
-				type="button"
+		<IconTooltip label={stale ? t("chat.skills.buttonStale") : t("chat.skills.title")}>
+			<Button
+				variant="ghost"
+				size="s"
+				iconLeft={BookOpen}
 				data-testid={testId}
 				data-stale={stale ? "true" : undefined}
 				onClick={onOpen}
-				className={cn(
-					"flex shrink-0 items-center gap-4 rounded-sm px-8 py-2 text-text-muted tr-text-metadata outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary",
-					className,
-				)}
+				className={cn("shrink-0", className)}
 			>
-				<BookOpen className="size-14" />
-				Skills
+				{t("chat.skills.title")}
 				{stale ? <span className="size-6 rounded-full bg-feedback-warning" aria-hidden /> : null}
-			</button>
+			</Button>
 		</IconTooltip>
 	);
 }

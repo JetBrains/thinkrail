@@ -6,6 +6,8 @@ import {
 	RiRobot2Line as Robot,
 } from "@remixicon/react";
 import type { GitCommit, GitDiffScope } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -14,12 +16,12 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { useRef, useState } from "react";
-import { LoadingRegion } from "@/components/Skeleton";
 import { useNow } from "@/components/useNow";
-import { relativeTime } from "@/lib";
+import { relativeTime, turnTimeLabel } from "@/lib";
 import { getTransport } from "../transport";
-import { scopeLabel, scopeTitle, turnScope, turnTimeLabel } from "./changesModel";
+import { scopeLabel, scopeTitle, turnScope } from "./changesModel";
 import { useWorkspaceTurns } from "./useWorkspaceTurns";
 
 export function ChangesScopeMenu({
@@ -31,6 +33,7 @@ export function ChangesScopeMenu({
 	scope: GitDiffScope;
 	onSelectScope: (scope: GitDiffScope) => void;
 }) {
+	const t = useT();
 	const now = useNow();
 	const [open, setOpen] = useState(false);
 	const [commits, setCommits] = useState<GitCommit[] | null>(null);
@@ -39,6 +42,7 @@ export function ChangesScopeMenu({
 	const generation = useRef(0);
 	const turns = useWorkspaceTurns(workspaceId);
 	const latestTurn = turns.at(-1);
+	const label = scopeLabel(t, scope, commits ?? [], turns);
 
 	const load = () => {
 		const mine = ++generation.current;
@@ -69,18 +73,22 @@ export function ChangesScopeMenu({
 				if (next) load();
 			}}
 		>
-			<DropdownMenuTrigger
-				data-testid="changes-scope-trigger"
-				data-open={open}
-				aria-label="Diff scope"
-				title={scopeTitle(scope, commits ?? [], turns)}
-				className="flex h-panel-header-control min-w-0 items-center gap-4 rounded-sm px-4 tr-text-metadata text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected data-[open=true]:text-text-default"
-			>
-				<GitCompare className="size-14 shrink-0" />
-				<span data-testid="changes-scope-label" className="truncate">
-					{scopeLabel(scope, commits ?? [], turns)}
-				</span>
-				<ChevronDown className="size-16 shrink-0" />
+			<DropdownMenuTrigger asChild>
+				<Button
+					variant="ghost"
+					size="m"
+					iconLeft={GitCompare}
+					iconRight={ChevronDown}
+					data-testid="changes-scope-trigger"
+					data-open={open}
+					aria-label={t("changes.scope.title", { label })}
+					tooltip={scopeTitle(t, scope, commits ?? [], turns)}
+					className="min-w-0"
+				>
+					<span data-testid="changes-scope-label" className="truncate">
+						{label}
+					</span>
+				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="start" className="max-w-[22rem]">
 				<DropdownMenuItem
@@ -89,7 +97,7 @@ export function ChangesScopeMenu({
 					onSelect={() => onSelectScope({ kind: "branch" })}
 				>
 					<Check className={scope.kind === "branch" ? "" : "invisible"} />
-					All changes
+					{t("changes.scope.all")}
 				</DropdownMenuItem>
 				<DropdownMenuItem
 					data-testid="changes-scope-uncommitted"
@@ -98,7 +106,9 @@ export function ChangesScopeMenu({
 					onSelect={() => onSelectScope({ kind: "uncommitted" })}
 				>
 					<Check className={scope.kind === "uncommitted" ? "" : "invisible"} />
-					{hasUncommitted === false ? "No uncommitted changes" : "Uncommitted changes"}
+					{hasUncommitted === false
+						? t("changes.scopeMenu.noUncommitted")
+						: t("changes.scopeMenu.uncommitted")}
 				</DropdownMenuItem>
 				<DropdownMenuItem
 					data-testid="changes-scope-last-turn"
@@ -113,13 +123,13 @@ export function ChangesScopeMenu({
 					/>
 					<Robot />
 					{latestTurn
-						? `Last turn · ${latestTurn.changes.length} ${latestTurn.changes.length === 1 ? "file" : "files"}`
-						: "No agent turn changed files yet"}
+						? t("changes.scopeMenu.lastTurnFiles", { count: latestTurn.changes.length })
+						: t("changes.scopeMenu.noTurns")}
 				</DropdownMenuItem>
 				{turns.length > 1 ? (
 					<>
 						<DropdownMenuSeparator />
-						<DropdownMenuLabel>Agent turns</DropdownMenuLabel>
+						<DropdownMenuLabel>{t("changes.scopeMenu.turns")}</DropdownMenuLabel>
 						{[...turns]
 							.reverse()
 							.slice(0, 10)
@@ -138,12 +148,14 @@ export function ChangesScopeMenu({
 										<span className="flex min-w-0 flex-col">
 											<span className="truncate">
 												{turn.id === latestTurn?.id
-													? "Last turn"
-													: `Turn ${turnTimeLabel(turn.startedAt)}`}
+													? t("changes.scope.lastTurn")
+													: t("changes.scope.turn", { time: turnTimeLabel(t, turn.startedAt) })}
 											</span>
 											<span className="truncate tr-text-metadata text-text-muted">
-												{turn.changes.length} {turn.changes.length === 1 ? "file" : "files"} ·{" "}
-												{relativeTime(turn.settledAt, now)}
+												{t("changes.scopeMenu.turnMeta", {
+													count: turn.changes.length,
+													time: relativeTime(t, turn.settledAt, now),
+												})}
 											</span>
 										</span>
 									</DropdownMenuItem>
@@ -152,11 +164,15 @@ export function ChangesScopeMenu({
 					</>
 				) : null}
 				<DropdownMenuSeparator />
-				<DropdownMenuLabel>Commits</DropdownMenuLabel>
+				<DropdownMenuLabel>{t("changes.scopeMenu.commits")}</DropdownMenuLabel>
 				{commits === null ? (
-					<LoadingRegion rows={3} label="Loading commits" className="px-8 py-4" />
+					<LoadingRegion
+						rows={3}
+						label={t("changes.scopeMenu.loadingCommits")}
+						className="px-8 py-4"
+					/>
 				) : commits.length === 0 ? (
-					<DropdownMenuItem disabled>No commits on this branch</DropdownMenuItem>
+					<DropdownMenuItem disabled>{t("changes.scopeMenu.noCommits")}</DropdownMenuItem>
 				) : (
 					commits.map((commit) => {
 						const active = scope.kind === "commit" && scope.sha === commit.sha;
@@ -175,7 +191,7 @@ export function ChangesScopeMenu({
 									<span className="truncate tr-text-metadata text-text-muted">
 										{commit.shortSha} · {commit.author}
 										{commit.committedAt
-											? ` · ${relativeTime(Date.parse(commit.committedAt), now)}`
+											? ` · ${relativeTime(t, Date.parse(commit.committedAt), now)}`
 											: ""}
 									</span>
 								</span>

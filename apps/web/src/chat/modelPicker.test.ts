@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { WireModel } from "@thinkrail/contracts";
+import { currentTranslator } from "@thinkrail/locales/react";
 import {
 	billsPerToken,
 	COSTLY_LEVELS,
@@ -12,8 +13,11 @@ import {
 	levelPosition,
 	levelTone,
 	litBars,
+	newestFirst,
 	trailingLevel,
 } from "./modelPicker";
+
+const t = currentTranslator();
 
 const model = (overrides: Partial<WireModel> & Pick<WireModel, "id">): WireModel => ({
 	name: overrides.id,
@@ -54,15 +58,15 @@ describe("costLabel / kindLabel", () => {
 	});
 
 	test("names what the model draws on: plan, quota, the env variable, or the key", () => {
-		expect(kindLabel(model({ id: "m", auth: { kind: "oauth" } }))).toBe("plan");
-		expect(kindLabel(model({ id: "m", auth: { kind: "oauth", detail: "Pro/Max" } }))).toBe(
+		expect(kindLabel(t, model({ id: "m", auth: { kind: "oauth" } }))).toBe("plan");
+		expect(kindLabel(t, model({ id: "m", auth: { kind: "oauth", detail: "Pro/Max" } }))).toBe(
 			"Pro/Max",
 		);
-		expect(kindLabel(model({ id: "m", auth: { kind: "central" } }))).toBe("quota");
-		expect(kindLabel(model({ id: "m", auth: { kind: "env", detail: "X_KEY" } }))).toBe("X_KEY");
-		expect(kindLabel(model({ id: "m", auth: { kind: "api-key" } }))).toBe("API key");
-		expect(kindLabel(model({ id: "m", auth: { kind: "other" } }))).toBeNull();
-		expect(kindLabel(model({ id: "m" }))).toBeNull();
+		expect(kindLabel(t, model({ id: "m", auth: { kind: "central" } }))).toBe("quota");
+		expect(kindLabel(t, model({ id: "m", auth: { kind: "env", detail: "X_KEY" } }))).toBe("X_KEY");
+		expect(kindLabel(t, model({ id: "m", auth: { kind: "api-key" } }))).toBe("API key");
+		expect(kindLabel(t, model({ id: "m", auth: { kind: "other" } }))).toBeNull();
+		expect(kindLabel(t, model({ id: "m" }))).toBeNull();
 	});
 });
 
@@ -97,17 +101,17 @@ describe("litBars", () => {
 
 describe("describeAuth", () => {
 	test("spells out the kind and appends pi's detail", () => {
-		expect(describeAuth(model({ id: "m" }))).toBeNull();
-		expect(describeAuth(model({ id: "m", auth: { kind: "oauth" } }))).toBe("subscription");
-		expect(describeAuth(model({ id: "m", auth: { kind: "env", detail: "X_KEY" } }))).toBe(
+		expect(describeAuth(t, model({ id: "m" }))).toBeNull();
+		expect(describeAuth(t, model({ id: "m", auth: { kind: "oauth" } }))).toBe("subscription");
+		expect(describeAuth(t, model({ id: "m", auth: { kind: "env", detail: "X_KEY" } }))).toBe(
 			"environment key · X_KEY",
 		);
 	});
 });
 
 describe("groupByProvider", () => {
-	test("keeps catalog order and lifts the first known auth per provider", () => {
-		const groups = groupByProvider([
+	test("keeps the providers' catalog order and lifts the first known auth per provider", () => {
+		const groups = groupByProvider(t, [
 			model({ id: "a", provider: "openai" }),
 			model({ id: "b", provider: "anthropic", auth: { kind: "oauth" } }),
 			model({ id: "c", provider: "openai", auth: { kind: "api-key", detail: "OPENAI_API_KEY" } }),
@@ -116,6 +120,75 @@ describe("groupByProvider", () => {
 			["openai", ["a", "c"], "API key · OPENAI_API_KEY"],
 			["anthropic", ["b"], "subscription"],
 		]);
+	});
+});
+
+describe("newestFirst", () => {
+	test("orders by the name's version, newest first, ignoring dated suffixes", () => {
+		const names = [
+			"Claude Fable 5",
+			"Claude Haiku 4.5 (latest)",
+			"Claude Haiku 4.5",
+			"Claude Haiku 5.5",
+			"Claude Opus 4.10",
+			"Claude Opus 4.8",
+			"Claude Opus 5.5",
+			"GPT-4o (2024-08-06)",
+			"Deep Research Preview (Apr-21-2026)",
+			"Claude Sonnet 5.5",
+		];
+		const sorted = newestFirst(names.map((name) => model({ id: name, name })));
+		expect(sorted.map((m) => m.name)).toEqual([
+			"Claude Haiku 5.5",
+			"Claude Opus 5.5",
+			"Claude Sonnet 5.5",
+			"Claude Fable 5",
+			"Claude Opus 4.10",
+			"Claude Opus 4.8",
+			"Claude Haiku 4.5 (latest)",
+			"Claude Haiku 4.5",
+			"GPT-4o (2024-08-06)",
+			"Deep Research Preview (Apr-21-2026)",
+		]);
+	});
+
+	test("skips parameter sizes such as 120b when reading the version", () => {
+		const names = [
+			"gpt-oss-120b",
+			"Pixtral 12B",
+			"Ministral 14B 3.0",
+			"GPT-6.1 Sol",
+			"Ministral 8B (latest)",
+			"Mixtral 8x22B Instruct",
+		];
+		const sorted = newestFirst(names.map((name) => model({ id: name, name })));
+		expect(sorted.map((m) => m.name)).toEqual([
+			"GPT-6.1 Sol",
+			"Ministral 14B 3.0",
+			"gpt-oss-120b",
+			"Pixtral 12B",
+			"Ministral 8B (latest)",
+			"Mixtral 8x22B Instruct",
+		]);
+	});
+
+	test("equal versions and unversioned names keep catalog order, not alphabetical", () => {
+		const names = ["Zeta", "Claude Sonnet 5.5", "Alpha", "Claude Opus 5.5"];
+		const sorted = newestFirst(names.map((name) => model({ id: name, name })));
+		expect(sorted.map((m) => m.name)).toEqual([
+			"Claude Sonnet 5.5",
+			"Claude Opus 5.5",
+			"Zeta",
+			"Alpha",
+		]);
+	});
+
+	test("groupByProvider lists each group newest first", () => {
+		const [group] = groupByProvider(t, [
+			model({ id: "old", name: "Claude Opus 4.5" }),
+			model({ id: "new", name: "Claude Opus 5.5" }),
+		]);
+		expect(group?.models.map((m) => m.id)).toEqual(["new", "old"]);
 	});
 });
 

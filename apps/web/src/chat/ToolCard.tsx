@@ -4,7 +4,9 @@ import {
 	RiLoader4Line as Loader2,
 	RiCloseLine as X,
 } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
+import { ToolPromptSlot } from "./ExtUiPrompt";
 import { useFold } from "./foldState";
 import { ToolRendererBody } from "./ToolRendererBody";
 import { getToolSummary, resolveProminence } from "./toolRegistry";
@@ -29,6 +31,7 @@ export function ToolCard({
 	workspaceRoot?: string | undefined;
 	onOpenFile?: ((path: string) => void) | undefined;
 }) {
+	const t = useT();
 	const status = tool?.status ?? (dead ? "error" : "running");
 	const isError = status === "error";
 	const renderProps = {
@@ -41,7 +44,7 @@ export function ToolCard({
 		onOpenFile,
 		streaming,
 	};
-	const summary = getToolSummary(toolName, renderProps);
+	const summary = getToolSummary(t, toolName, renderProps);
 
 	const autoExpand = isError || (resolveProminence(toolName).defaultExpanded && status === "done");
 	const [expanded, toggle, toggleRef] = useFold(toolCallId, autoExpand);
@@ -87,6 +90,7 @@ export function ToolCard({
 					<ToolRendererBody {...renderProps} imageLabel={summary} />
 				</div>
 			) : null}
+			<ToolPromptSlot toolCallId={toolCallId} className="mx-8 mb-8" />
 		</div>
 	);
 }

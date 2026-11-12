@@ -1,3 +1,4 @@
+export type { ErrorSource } from "./errors";
 export type {
 	AcquisitionCampaignProperties,
 	AdditionalAnalyticsCapture,
@@ -33,11 +34,18 @@ export {
 } from "./events";
 export {
 	type AnalyticsOptions,
+	captureSurveyResponse,
+	type ErrorReport,
 	getAdditionalAnalyticsCapture,
 	initializeAnalytics,
+	reportClientError,
+	reportError,
+	reportFatalError,
 	resetAnalyticsForTests,
+	type SurveyEndpoint,
 	setAdditionalAnalyticsEnabled,
 	shutdownAnalytics,
 	startAttributionClaim,
+	surveyEndpoint,
 	track,
 } from "./service";

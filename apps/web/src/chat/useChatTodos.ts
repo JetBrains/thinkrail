@@ -6,11 +6,12 @@ import type {
 	TodoPlan,
 } from "@thinkrail/contracts";
 import { TODO_NUDGE_PREFIX, WS_CHANNELS } from "@thinkrail/contracts";
+import { t as translate } from "@thinkrail/locales/react";
 import { useCallback, useEffect, useInsertionEffect, useRef, useState } from "react";
 import { tupleKey } from "../lib";
 import {
 	isConnectedGeneration,
-	selectChatTitle,
+	selectChatName,
 	selectHasNormalizedSessionState,
 	toast,
 	useAppStore,
@@ -28,6 +29,33 @@ export function shouldRefreshTodos(event: PiEvent): boolean {
 	return event.type === "tool_execution_end" || event.type === "agent_settled";
 }
 
+const todoRefetchBus = new Map<string, Set<() => void>>();
+export function subscribeTodoRefetch(key: string, listener: () => void): () => void {
+	let set = todoRefetchBus.get(key);
+	if (!set) {
+		set = new Set();
+		todoRefetchBus.set(key, set);
+	}
+	set.add(listener);
+	return () => {
+		const current = todoRefetchBus.get(key);
+		current?.delete(listener);
+		if (current && current.size === 0) todoRefetchBus.delete(key);
+	};
+}
+export function signalTodoRefetch(key: string, except?: () => void): void {
+	const listeners = todoRefetchBus.get(key);
+	if (!listeners) return;
+	for (const listener of [...listeners]) {
+		if (listener === except) continue;
+		try {
+			listener();
+		} catch (error) {
+			console.error("[useChatTodos] refetch listener threw; ignored to keep bus delivering", error);
+		}
+	}
+}
+
 // The content eligibility for an auto-drafted plan summary: every step done and no summary yet (agent- or
 // previously auto-authored). The host-capability gate (`supportsPlanSummaryGeneration`) is applied
 // separately, so the request fires only when this holds AND the connected host advertises v69+.
@@ -39,13 +67,52 @@ export function planIsCompleteWithoutSummary(
 	return items.length > 0 && items.every((todo) => todo.status === "done");
 }
 
+export function useAutoPlanSummary(workspaceId: string, sessionId: string): void {
+	const triedRef = useRef(false);
+	const identity = tupleKey("chat-todos", workspaceId, sessionId);
+	useEffect(() => {
+		triedRef.current = false;
+		let cancelled = false;
+		// When a completed plan carries no agent-authored summary, ask the host to draft one once (a
+		// best-effort cheap-model one-shot). Re-armed if the plan re-opens or its summary clears.
+		const check = async (): Promise<void> => {
+			if (cancelled || triedRef.current) return;
+			// Only ask hosts that advertise the capability (v69+); an older host has no such method.
+			if (!supportsPlanSummaryGeneration(useAppStore.getState().protocolVersion)) return;
+			const plan = await getTransport()
+				.request("todo.list", { workspaceId, sessionId })
+				.catch(() => null);
+			if (cancelled || !plan) return;
+			if (!planIsCompleteWithoutSummary(plan)) {
+				triedRef.current = false;
+				return;
+			}
+			triedRef.current = true;
+			const res = await getTransport()
+				.request("todo.generateSummary", { workspaceId, sessionId })
+				.catch(() => null);
+			if (cancelled || !res?.summary) return;
+			signalTodoRefetch(identity);
+		};
+		const unsub = getTransport().subscribe(WS_CHANNELS.piEvent, (payload) => {
+			const event = payload as SessionEventPayload;
+			if (event.sessionId !== sessionId) return;
+			if (shouldRefreshTodos(event.event)) void check();
+		});
+		void check();
+		return () => {
+			cancelled = true;
+			unsub();
+		};
+	}, [workspaceId, sessionId, identity]);
+}
+
 export interface ChatTodos {
 	data: TodoPlan | null;
 	failed: boolean;
-	add: (title: string, surface?: "chat" | "page") => Promise<void>;
+	add: (title: string, surface?: "chat" | "page" | "rail") => Promise<void>;
 	remove: (id: string) => Promise<void>;
 	openPlan: () => void;
-	notifyOpened: (surface: "popup") => void;
 	openChanges: (target: { sha: string } | { path: string }) => void;
 	startReview: (id: string) => Promise<void>;
 	reviewAll: () => Promise<{ total: number; alreadyRunning?: boolean }>;
@@ -59,6 +126,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 	const identity = tupleKey("chat-todos", workspaceId, sessionId);
 	const currentIdentity = useRef(identity);
 	const readGeneration = useRef(0);
+	const selfListenerRef = useRef<(() => void) | null>(null);
 	const initializedIdentity = useRef<string | null>(null);
 	useInsertionEffect(() => {
 		currentIdentity.current = identity;
@@ -123,6 +191,8 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 			if (event.sessionId !== sessionId) return;
 			if (shouldRefreshTodos(event.event)) scheduleRefetch();
 		});
+		selfListenerRef.current = scheduleRefetch;
+		const unsubscribeBus = subscribeTodoRefetch(identity, scheduleRefetch);
 		// A plan review runs as a hidden subagent (no piEvent for this session) and writes its verdict to the
 		// review record; the host re-broadcasts reviewChanged when it lands, so refetch the plan to show it.
 		// The same broadcast fires for any review edit (a finding deleted/resolved can clear a step's
@@ -137,7 +207,10 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 			(payload) => {
 				const failure = payload as ReviewFailedPayload;
 				if (failure.workspaceId !== workspaceId || failure.sessionId !== sessionId) return;
-				toast.error(failure.message, `Review of “${failure.itemTitle}” failed`);
+				toast.error(
+					failure.message,
+					translate("chat.todo.reviewFailed", { item: failure.itemTitle }),
+				);
 			},
 		);
 		return () => {
@@ -145,36 +218,16 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 			readGeneration.current += 1;
 			if (refetch) clearTimeout(refetch);
 			unsubscribe();
+			unsubscribeBus();
 			unsubscribeReview();
 			unsubscribeReviewFailed();
 		};
 	}, [connectionGeneration, identity, live, sessionId, status, workspaceId]);
 
-	// When a completed plan carries no agent-authored summary, ask the host to draft one once (a
-	// best-effort cheap-model one-shot). Re-armed if the plan re-opens or its summary clears.
-	const summaryTriedRef = useRef(false);
-	useEffect(() => {
-		if (!data) return;
-		if (!planIsCompleteWithoutSummary(data)) {
-			summaryTriedRef.current = false;
-			return;
-		}
-		// Only ask hosts that advertise the capability (v69+); an older host has no such method.
-		if (!supportsPlanSummaryGeneration(useAppStore.getState().protocolVersion)) return;
-		if (summaryTriedRef.current) return;
-		summaryTriedRef.current = true;
-		const requestIdentity = identity;
-		getTransport()
-			.request("todo.generateSummary", { workspaceId, sessionId })
-			.then((res) => {
-				const summary = res.summary;
-				if (!summary || !live(requestIdentity)) return;
-				setData((prev) => (prev && !prev.summary ? { ...prev, summary } : prev));
-			})
-			.catch(() => {});
-	}, [data, identity, live, sessionId, workspaceId]);
+	const broadcastWrite = (key: string): void =>
+		signalTodoRefetch(key, selfListenerRef.current ?? undefined);
 
-	const add = async (rawTitle: string, surface: "chat" | "page" = "chat") => {
+	const add = async (rawTitle: string, surface: "chat" | "page" | "rail" = "chat") => {
 		const title = rawTitle.trim();
 		if (!title) return;
 		const requestIdentity = identity;
@@ -194,6 +247,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 				? { ...prev, todos: [...prev.todos, todo] }
 				: prev,
 		);
+		broadcastWrite(requestIdentity);
 		void nudgeAgent(workspaceId, sessionId, title);
 	};
 
@@ -221,44 +275,17 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		return true;
 	};
 
-	const remove = async (id: string) => {
-		const requestIdentity = identity;
-		setData((current) =>
-			current
-				? {
-						todos: current.todos.filter((t) => t.id !== id),
-						groups: current.groups
-							.map((g) => ({ ...g, todos: g.todos.filter((t) => t.id !== id) }))
-							.filter((g) => g.todos.length > 0),
-					}
-				: current,
-		);
-		try {
-			await getTransport().request("todo.remove", { workspaceId, sessionId, id });
-			if (live(requestIdentity)) {
-				await reloadPlan();
-			}
-		} catch (err) {
-			if (live(requestIdentity)) await reloadPlan();
-			console.warn("todo remove failed:", errorText(err));
-		}
-	};
-
-	const notifyOpened = (surface: "page" | "popup") => {
-		void getTransport()
-			.request("todo.list", { workspaceId, sessionId, opened: surface })
-			.catch(() => {});
-	};
-
 	const openPlan = () => {
 		const state = useAppStore.getState();
-		const title = selectChatTitle(state, workspaceId, sessionId);
-		notifyOpened("page");
+		const title = selectChatName(state, workspaceId, sessionId);
+		void getTransport()
+			.request("todo.list", { workspaceId, sessionId, opened: "page" })
+			.catch(() => {});
 		state.openDoc({
 			kind: "plan",
 			id: `${workspaceId}:plan:${sessionId}`,
 			workspaceId,
-			name: `Plan · ${title}`,
+			name: title,
 			sessionId,
 		});
 	};
@@ -267,7 +294,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		const store = useAppStore.getState();
 		if ("sha" in target) {
 			store.setDiffScope(workspaceId, { kind: "commit", sha: target.sha });
-			store.enqueueLayoutIntent({ kind: "reveal-tool", workspaceId, tool: "changes" });
+			store.revealChanges(workspaceId);
 			return;
 		}
 		store.setDiffScope(workspaceId, { kind: "branch" });
@@ -277,6 +304,29 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 	const startReview = async (id: string) => {
 		await getTransport().request("todo.startReview", { workspaceId, sessionId, id });
 		await reloadPlan(); // the `reviewing` mark is host-derived — never patched locally
+		broadcastWrite(identity); // and tell sibling hooks about it
+	};
+
+	const remove = async (id: string): Promise<void> => {
+		const requestIdentity = identity;
+		setData((prev) => {
+			if (!prev) return prev;
+			return {
+				...prev,
+				todos: prev.todos.filter((t) => t.id !== id),
+				groups: prev.groups.map((g) => ({ ...g, todos: g.todos.filter((t) => t.id !== id) })),
+			};
+		});
+		try {
+			await getTransport().request("todo.remove", { workspaceId, sessionId, id });
+		} catch (error) {
+			if (live(requestIdentity)) await reloadPlan(); // roll the optimistic patch back from authority
+			toast.error(errorText(error), translate("chat.todo.removeFailed"));
+			return;
+		}
+		if (!live(requestIdentity)) return;
+		await reloadPlan();
+		broadcastWrite(identity);
 	};
 
 	const reviewAll = async () => {
@@ -285,6 +335,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 			sessionId,
 		});
 		await reloadPlan(); // the first item's `reviewing` mark is host-derived — re-read to show it
+		broadcastWrite(identity);
 		return { total, ...(alreadyRunning ? { alreadyRunning } : {}) };
 	};
 
@@ -294,7 +345,6 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		add,
 		remove,
 		openPlan,
-		notifyOpened: (surface: "popup") => notifyOpened(surface),
 		openChanges,
 		startReview,
 		reviewAll,

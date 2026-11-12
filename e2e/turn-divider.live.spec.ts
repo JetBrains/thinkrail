@@ -1,10 +1,15 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import {
 	openWorkspaceChat,
 	revealWorkbenchTool,
 	routineActivityRows,
 	waitForAgentSettled,
 } from "./fixtures/app";
+
+async function expectChangedFilesShown(page: Page): Promise<void> {
+	await expect(page.getByTestId("tab-files")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("files-mode-changed")).toHaveAttribute("aria-pressed", "true");
+}
 
 test("turn-divider files-changed chip opens the file's diff and highlights its row in Changes", {
 	tag: "@agent",
@@ -28,7 +33,7 @@ test("turn-divider files-changed chip opens the file's diff and highlights its r
 	await expect(chip).toContainText("file changed");
 
 	await chip.click();
-	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
+	await expectChangedFilesShown(page);
 	const row = page.getByTestId("change-item").filter({ hasText: "notes.txt" });
 	await expect(row).toBeVisible();
 	await expect(row).toHaveAttribute("data-active", "true");
@@ -93,7 +98,7 @@ test("a multi-artifact chip expands into the round's list instead of guessing wh
 	const list = page.getByTestId("turn-divider-files-list");
 	await expect(list).toBeVisible();
 	await expect(list.getByTestId("turn-divider-files-list-item")).toHaveCount(2);
-	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
+	await expectChangedFilesShown(page);
 	await expect(page.getByTestId("diff-view")).toHaveCount(0);
 	await expect(page.getByTestId("change-item").filter({ hasText: "beta.txt" })).not.toHaveAttribute(
 		"data-active",
@@ -101,7 +106,7 @@ test("a multi-artifact chip expands into the round's list instead of guessing wh
 	);
 
 	await list.getByTestId("turn-divider-files-list-item").filter({ hasText: "beta.txt" }).click();
-	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
+	await expectChangedFilesShown(page);
 	await expect(page.getByTestId("changes-review")).toBeVisible();
 	await expect(page.locator('[data-testid="changes-section"][data-path="beta.txt"]')).toBeVisible();
 	const row = page.getByTestId("change-item").filter({ hasText: "beta.txt" });
@@ -118,7 +123,7 @@ test("a spec written while the Specs tab is closed still counts as a spec", {
 	await openWorkspaceChat(page);
 
 	await revealWorkbenchTool(page, "changes");
-	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
+	await expectChangedFilesShown(page);
 
 	await page
 		.getByTestId("chat-input")
@@ -174,10 +179,10 @@ test("the two artifact chips are a switch: one list at a time, and re-clicking c
 	await filesChip.click();
 	await expect(filesList).toBeVisible();
 	await expect(specsList).toHaveCount(0);
-	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
+	await expectChangedFilesShown(page);
 
 	await filesChip.click();
 	await expect(filesList).toHaveCount(0);
 	await expect(specsList).toHaveCount(0);
-	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
+	await expectChangedFilesShown(page);
 });

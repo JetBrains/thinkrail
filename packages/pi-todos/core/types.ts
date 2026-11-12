@@ -66,6 +66,12 @@ export interface TodoUpdateResult {
 	paused: Todo[];
 }
 
+export type TodoPromoteFailure = "unknown-id" | "grouped-step" | "empty-title" | "title-collision";
+
+export type TodoPromoteResult =
+	| { ok: true; group: TodoGroup }
+	| { ok: false; reason: TodoPromoteFailure };
+
 export interface TodoPatch {
 	title?: string;
 	status?: TodoStatus;

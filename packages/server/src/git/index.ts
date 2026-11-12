@@ -7,17 +7,22 @@ export {
 } from "./diffScope";
 export {
 	canonicalPath,
+	commitsAheadOf,
 	countPushDivergence,
+	countPushTargetDivergence,
 	currentBranch,
 	gitCommitPaths,
 	gitDiffFile,
 	gitHeadSha,
 	gitStatus,
 	gitUncommittedPaths,
+	headShaAt,
 	listBranches,
 	listCommits,
 	listCommitsSince,
 	listRemotes,
+	originUrls,
+	type PushTargetStatus,
 	prefetchBranch,
 	readBlobAt,
 	readBlobBytesAt,
@@ -27,10 +32,24 @@ export {
 	readCommitSubject,
 	readPathModeAtAsync,
 	remoteRefOid,
+	remoteRefOidAsync,
 	resolveDefaultBranch,
 	resolveListedCommit,
 	tryCurrentBranch,
 } from "./git";
-export { git, gitAsync, gitAsyncBytes, gitAsyncStream, nonInteractiveGitEnv } from "./gitExec";
+export {
+	git,
+	gitAsync,
+	gitAsyncBytes,
+	gitAsyncStream,
+	gitRunHook,
+	INDEX_WRITE_TIMEOUT_MS,
+	nonInteractiveGitEnv,
+	SLOW_GIT_TIMEOUT_MS,
+	setSyncGitTimeoutForTests,
+	throwOnTimeout,
+} from "./gitExec";
+export { headBranchAt } from "./head";
+export { ignoredPaths } from "./ignored";
 export { assertSafeRef, isSafeRef, remoteNameOf, remoteTrackingRef } from "./refs";
 export { snapshotWorktree } from "./snapshot";

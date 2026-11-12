@@ -1,7 +1,15 @@
 import { describe, expect, it } from "bun:test";
 import type { SessionStats } from "@thinkrail/contracts";
+import { applyLocale, currentTranslator } from "@thinkrail/locales/react";
+import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { contextPart, formatTokens, SessionStatsBar, usageParts } from "./SessionStatsBar";
+import {
+	contextPart,
+	formatElapsed,
+	formatTokens,
+	SessionStatsBar,
+	usageParts,
+} from "./SessionStatsBar";
 
 function stats(overrides: Partial<SessionStats> = {}): SessionStats {
 	return {
@@ -22,6 +30,15 @@ describe("SessionStatsBar pi-style formatting", () => {
 			"1.2M",
 			"10M",
 		]);
+	});
+
+	it("switches units by the rounded value so no label reads 10.0k or 1000k", () => {
+		expect(
+			[9_949, 9_950, 9_999, 999_499, 999_500, 999_999, 9_949_999, 9_950_000].map(formatTokens),
+		).toEqual(["9.9k", "10k", "10k", "999k", "1.0M", "1.0M", "9.9M", "10M"]);
+		expect(
+			[999_499_999, 999_500_000, 1_200_000_000, 9_950_000_000, 12_400_000_000].map(formatTokens),
+		).toEqual(["999M", "1.0B", "1.2B", "10B", "12B"]);
 	});
 
 	it("orders the available pi fields and omits zero values", () => {
@@ -59,9 +76,22 @@ describe("SessionStatsBar pi-style formatting", () => {
 			cost: 0.125,
 			contextUsage: { tokens: 120_000, contextWindow: 200_000, percent: 60 },
 		});
-		const markup = renderToStaticMarkup(SessionStatsBar({ stats: value }));
+		const markup = renderToStaticMarkup(createElement(SessionStatsBar, { stats: value }));
 		expect(markup.replace(/<[^>]+>/g, "")).toBe("↑12k·↓342·$0.125·▰▰▰▱▱60.0%/200k");
 		expect(markup).toContain("flex-nowrap");
 		expect(markup.match(/whitespace-nowrap/g)).toHaveLength(4);
 	});
+});
+
+it("formats a turn's elapsed time with the interface language's units", async () => {
+	expect(formatElapsed(currentTranslator(), 5_000)).toBe("5s");
+	expect(formatElapsed(currentTranslator(), 65_000)).toBe("1m 5s");
+	await applyLocale("ru", {
+		ru: { "chat.elapsed.minutesSeconds": "{{minutes}} мин {{seconds}} с" },
+	});
+	try {
+		expect(formatElapsed(currentTranslator(), 65_000)).toBe("1 мин 5 с");
+	} finally {
+		await applyLocale("en", {});
+	}
 });

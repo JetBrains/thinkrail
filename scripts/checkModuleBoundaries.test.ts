@@ -14,7 +14,7 @@ const modules = {
 	"packages/pi-background-commands": "pi-background-commands",
 	"packages/pi-subagents": "pi-subagents",
 	"packages/pi-dag": "pi-dag",
-	"pi-extensions/visualize": "@thinkrail.ai/pi-visualize",
+	"pi-extensions/visualize": "@thinkrail/pi-visualize",
 	"packages/server": "@thinkrail/server",
 	"apps/web": "@thinkrail/web",
 	"apps/cli": "@thinkrail/cli",
@@ -139,15 +139,15 @@ test("keeps published pi packages free of host imports and unwired from the host
 		"pi-extensions/visualize/src/leak.ts",
 		'import "@thinkrail/server"; import "pi-delegation";',
 	);
-	write(root, "packages/server/src/early.ts", 'import "@thinkrail.ai/pi-visualize";');
+	write(root, "packages/server/src/early.ts", 'import "@thinkrail/pi-visualize";');
 	write(
 		root,
 		"apps/web/src/early.ts",
-		'import type { VisualizeParams } from "@thinkrail.ai/pi-visualize";',
+		'import type { VisualizeParams } from "@thinkrail/pi-visualize";',
 	);
 	expect(moduleBoundaryViolations(root)).toEqual([
-		'apps/web/src/early.ts: import "@thinkrail.ai/pi-visualize" creates forbidden apps/web -> pi-extensions/visualize edge',
-		'packages/server/src/early.ts: import "@thinkrail.ai/pi-visualize" creates forbidden packages/server -> pi-extensions/visualize edge',
+		'apps/web/src/early.ts: import "@thinkrail/pi-visualize" creates forbidden apps/web -> pi-extensions/visualize edge',
+		'packages/server/src/early.ts: import "@thinkrail/pi-visualize" creates forbidden packages/server -> pi-extensions/visualize edge',
 		'pi-extensions/visualize/src/leak.ts: import "@thinkrail/server" creates forbidden pi-extensions/visualize -> packages/server edge',
 		'pi-extensions/visualize/src/leak.ts: import "pi-delegation" creates forbidden pi-extensions/visualize -> packages/pi-delegation edge',
 	]);
@@ -210,12 +210,49 @@ test("rejects manifest, type-only, dynamic, CommonJS, and relative cross-boundar
 	]);
 });
 
+test("scans JSX in plain JavaScript sources", () => {
+	const root = fixture();
+	write(
+		root,
+		"apps/web/src/component.js",
+		'const server = require("@thinkrail/server");\nexport const view = <div />;',
+	);
+
+	expect(moduleBoundaryViolations(root)).toEqual([
+		'apps/web/src/component.js: import "@thinkrail/server" creates forbidden apps/web -> packages/server edge',
+	]);
+});
+
+test("parses .cjs sources as CommonJS", () => {
+	const root = fixture();
+	write(
+		root,
+		"apps/web/src/config.cjs",
+		'const server = require("@thinkrail/server");\nif (!server) return;\nmodule.exports = server;',
+	);
+
+	expect(moduleBoundaryViolations(root)).toEqual([
+		'apps/web/src/config.cjs: import "@thinkrail/server" creates forbidden apps/web -> packages/server edge',
+	]);
+});
+
+test("fails on a source file it cannot parse", () => {
+	const root = fixture();
+	write(
+		root,
+		"apps/web/src/broken.ts",
+		'import { x } from "@thinkrail/server";\nexport const y = x +;',
+	);
+
+	expect(() => moduleBoundaryViolations(root)).toThrow(/cannot parse apps\/web\/src\/broken\.ts: /);
+});
+
 function sdkFixture(): string {
 	const root = fixture();
 	for (const [moduleRoot, name] of Object.entries({
 		"packages/ui": "@thinkrail/ui",
 		"packages/extension-api": "@thinkrail/extension-api",
-		"pi-extensions/future": "@thinkrail.ai/pi-future",
+		"pi-extensions/future": "@thinkrail/pi-future",
 		"thinkrail-extensions/future": "@thinkrail/ext-future",
 		"thinkrail-extensions/another": "@thinkrail/ext-another",
 	})) {
@@ -273,16 +310,17 @@ for (const [host, entry, relativeBase] of [
 	["apps/web", "web", "../../../thinkrail-extensions"],
 	["packages/server", "server", "../../../thinkrail-extensions"],
 ] as const) {
-	test.each(
-		hostEntryLeaks.filter((suffix) => suffix !== `/${entry}`),
-	)(`${host} rejects extension entry %s`, (suffix) => {
-		const root = sdkFixture();
-		const specifier = `@thinkrail/ext-future${suffix}`;
-		write(root, `${host}/src/leak.ts`, `export type { Value } from "${specifier}";`);
-		const violations = moduleBoundaryViolations(root);
-		expect(violations).toHaveLength(1);
-		expect(violations[0]).toContain(`only public @thinkrail/ext-future/${entry}`);
-	});
+	test.each(hostEntryLeaks.filter((suffix) => suffix !== `/${entry}`))(
+		`${host} rejects extension entry %s`,
+		(suffix) => {
+			const root = sdkFixture();
+			const specifier = `@thinkrail/ext-future${suffix}`;
+			write(root, `${host}/src/leak.ts`, `export type { Value } from "${specifier}";`);
+			const violations = moduleBoundaryViolations(root);
+			expect(violations).toHaveLength(1);
+			expect(violations[0]).toContain(`only public @thinkrail/ext-future/${entry}`);
+		},
+	);
 	test(`${host} rejects relative imports even into the correct extension half`, () => {
 		const root = sdkFixture();
 		write(root, `${host}/src/leak.ts`, `require("${relativeBase}/future/${entry}/index");`);
@@ -300,40 +338,38 @@ test("discovers new pi and ThinkRail extensions and rejects host and sibling dep
 	write(
 		root,
 		"thinkrail-extensions/future/web/pi.ts",
-		'import type { Value } from "@thinkrail.ai/pi-future";',
+		'import type { Value } from "@thinkrail/pi-future"; import { value } from "@thinkrail/pi-future";',
 	);
-	write(
-		root,
-		"thinkrail-extensions/future/server/sibling.ts",
-		'import "@thinkrail.ai/pi-visualize";',
-	);
-	expect(moduleBoundaryViolations(root)).toHaveLength(5);
+	write(root, "thinkrail-extensions/future/server/sibling.ts", 'import "@thinkrail/pi-visualize";');
+	const violations = moduleBoundaryViolations(root);
+	expect(violations).toHaveLength(5);
+	expect(violations.filter((violation) => violation.includes("web/pi.ts"))).toEqual([
+		expect.stringContaining("pi value import"),
+	]);
 });
 
-test.each([
-	"dependencies",
-	"devDependencies",
-	"optionalDependencies",
-	"peerDependencies",
-])("checks discovered SDK and extension manifest %s edges", (section) => {
-	const root = sdkFixture();
-	for (const [moduleRoot, name] of Object.entries({
-		"packages/ui": "@thinkrail/ui",
-		"packages/extension-api": "@thinkrail/extension-api",
-		"pi-extensions/future": "@thinkrail.ai/pi-future",
-		"thinkrail-extensions/future": "@thinkrail/ext-future",
-	})) {
-		write(
-			root,
-			`${moduleRoot}/package.json`,
-			JSON.stringify({
-				name,
-				[section]: { "@thinkrail/web": "workspace:*" },
-			}),
-		);
-	}
-	expect(moduleBoundaryViolations(root)).toHaveLength(4);
-});
+test.each(["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"])(
+	"checks discovered SDK and extension manifest %s edges",
+	(section) => {
+		const root = sdkFixture();
+		for (const [moduleRoot, name] of Object.entries({
+			"packages/ui": "@thinkrail/ui",
+			"packages/extension-api": "@thinkrail/extension-api",
+			"pi-extensions/future": "@thinkrail/pi-future",
+			"thinkrail-extensions/future": "@thinkrail/ext-future",
+		})) {
+			write(
+				root,
+				`${moduleRoot}/package.json`,
+				JSON.stringify({
+					name,
+					[section]: { "@thinkrail/web": "workspace:*" },
+				}),
+			);
+		}
+		expect(moduleBoundaryViolations(root)).toHaveLength(4);
+	},
+);
 
 test("SDK sources cannot reach host internals or each other", () => {
 	const root = sdkFixture();
@@ -354,18 +390,16 @@ for (const [file, relativeSpecifier] of [
 	["apps/web/src/leak.ts", "../../../packages/extension-api/src/web"],
 	["thinkrail-extensions/future/web/leak.ts", "../../../packages/extension-api/src/web"],
 ] as const) {
-	test.each([
-		"",
-		"/server",
-		"/web/helpers",
-		"/web/../server",
-	])(`${file} rejects extension-api entry %s`, (suffix) => {
-		const root = sdkFixture();
-		write(root, file, `export * from "@thinkrail/extension-api${suffix}";`);
-		const violations = moduleBoundaryViolations(root);
-		expect(violations).toHaveLength(1);
-		expect(violations[0]).toContain("only public @thinkrail/extension-api/web");
-	});
+	test.each(["", "/server", "/web/helpers", "/web/../server"])(
+		`${file} rejects extension-api entry %s`,
+		(suffix) => {
+			const root = sdkFixture();
+			write(root, file, `export * from "@thinkrail/extension-api${suffix}";`);
+			const violations = moduleBoundaryViolations(root);
+			expect(violations).toHaveLength(1);
+			expect(violations[0]).toContain("only public @thinkrail/extension-api/web");
+		},
+	);
 	test(`${file} rejects extension-api relative bypass`, () => {
 		const root = sdkFixture();
 		write(root, file, `import type { Value } from "${relativeSpecifier}";`);
@@ -439,12 +473,7 @@ test("accepts SDK edges, extension manifest unions, same-half sources, and publi
 		[
 			"thinkrail-extensions/future",
 			"@thinkrail/ext-future",
-			[
-				"@thinkrail/ui",
-				"@thinkrail/extension-api",
-				"@thinkrail/contracts",
-				"@thinkrail.ai/pi-future",
-			],
+			["@thinkrail/ui", "@thinkrail/extension-api", "@thinkrail/contracts", "@thinkrail/pi-future"],
 		],
 		[
 			"apps/web",
@@ -491,7 +520,7 @@ test("accepts SDK edges, extension manifest unions, same-half sources, and publi
 	write(
 		root,
 		"thinkrail-extensions/future/server/index.ts",
-		'import "@thinkrail/extension-api/server"; import "@thinkrail.ai/pi-future"; import "@earendil-works/pi-coding-agent"; import "./helpers";',
+		'import "@thinkrail/extension-api/server"; import "@thinkrail/pi-future"; import "@earendil-works/pi-coding-agent"; import "./helpers";',
 	);
 	write(
 		root,
@@ -504,4 +533,64 @@ test("accepts SDK edges, extension manifest unions, same-half sources, and publi
 		'import "@thinkrail/ext-future/server"; import "@thinkrail/ext-another/server"; import "@thinkrail/extension-api/server";',
 	);
 	expect(moduleBoundaryViolations(root)).toEqual([]);
+});
+
+test("keeps resource renderers on contracts and ui, consumed by the web app only", () => {
+	const root = fixture();
+	write(
+		root,
+		"packages/ui/package.json",
+		JSON.stringify({
+			name: "@thinkrail/ui",
+			dependencies: { "@thinkrail/contracts": "workspace:*" },
+		}),
+	);
+	write(
+		root,
+		"packages/resource-renderers/package.json",
+		JSON.stringify({
+			name: "@thinkrail/resource-renderers",
+			dependencies: { "@thinkrail/contracts": "workspace:*", "@thinkrail/ui": "workspace:*" },
+		}),
+	);
+	write(
+		root,
+		"packages/resource-renderers/src/view.tsx",
+		'import type { ReviewAnchor } from "@thinkrail/contracts"; import "@thinkrail/ui/button";',
+	);
+	write(root, "apps/web/src/pane.tsx", 'import "@thinkrail/resource-renderers";');
+	expect(moduleBoundaryViolations(root)).toEqual([]);
+
+	write(root, "packages/resource-renderers/src/leak.ts", 'import "@thinkrail/server";');
+	expect(moduleBoundaryViolations(root)).toEqual([
+		'packages/resource-renderers/src/leak.ts: import "@thinkrail/server" creates forbidden packages/resource-renderers -> packages/server edge',
+	]);
+});
+
+test("locales is a leaf every UI surface and the host may import", () => {
+	const root = fixture();
+	for (const [moduleRoot, name, dependencies] of [
+		["packages/locales", "@thinkrail/locales", []],
+		["packages/ui", "@thinkrail/ui", ["@thinkrail/locales"]],
+		["apps/web", "@thinkrail/web", ["@thinkrail/contracts", "@thinkrail/locales"]],
+	] as const) {
+		write(
+			root,
+			`${moduleRoot}/package.json`,
+			JSON.stringify({
+				name,
+				dependencies: Object.fromEntries(dependencies.map((dep) => [dep, "workspace:*"])),
+			}),
+		);
+	}
+	write(root, "apps/web/src/a.ts", 'import "@thinkrail/locales/react";');
+	write(root, "packages/ui/a.ts", 'import "@thinkrail/locales/react";');
+	write(root, "packages/server/src/a.ts", 'import "@thinkrail/locales";');
+	write(root, "apps/desktop/src/a.ts", 'import "@thinkrail/locales";');
+	expect(moduleBoundaryViolations(root)).toEqual([]);
+
+	write(root, "packages/locales/src/b.ts", 'import "@thinkrail/contracts";');
+	expect(moduleBoundaryViolations(root)).toEqual([
+		'packages/locales/src/b.ts: import "@thinkrail/contracts" creates forbidden packages/locales -> packages/contracts edge',
+	]);
 });

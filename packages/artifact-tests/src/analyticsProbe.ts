@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { removeTree } from "@thinkrail/shared/removeTree";
+import { toolHomeEnv } from "@thinkrail/shared/toolHomes";
 import { channel, posthogProjectKey, version } from "@thinkrail/shared/version";
 import {
 	type ArtifactHostAdapter,
@@ -27,11 +28,18 @@ export function startAnalyticsCollector() {
 	const events: CollectedEvent[] = [];
 	const errors: unknown[] = [];
 	let requests = 0;
+	let surveyReads = 0;
 	const server = Bun.serve({
 		hostname: "127.0.0.1",
 		port: 0,
 		async fetch(request) {
 			requests += 1;
+			const url = new URL(request.url);
+			if (request.method === "GET" && url.pathname === "/api/surveys/") {
+				surveyReads += 1;
+				if (!url.searchParams.get("token")) errors.push(new Error("survey list without a token"));
+				return Response.json({ surveys: [] });
+			}
 			try {
 				assert(request.method === "POST", "collector expected POST");
 				assert(new URL(request.url).pathname === "/batch/", "collector expected /batch/");
@@ -62,6 +70,9 @@ export function startAnalyticsCollector() {
 		get requests() {
 			return requests;
 		},
+		get surveyReads() {
+			return surveyReads;
+		},
 		stop: () => server.stop(true),
 	};
 }
@@ -80,16 +91,12 @@ export function analyticsProbeEnvironment(
 	return hostEnvironment(
 		{
 			...overrides,
-			HOME: join(root, "home"),
-			USERPROFILE: join(root, "home"),
+			...toolHomeEnv(join(root, "home")),
 			LOCALAPPDATA: join(root, "local"),
 			APPDATA: join(root, "roaming"),
 			XDG_CONFIG_HOME: join(root, "config"),
 			XDG_DATA_HOME: join(root, "xdg-data"),
 			XDG_CACHE_HOME: join(root, "cache"),
-			CLAUDE_CONFIG_DIR: join(root, "home", ".claude"),
-			CODEX_HOME: join(root, "home", ".codex"),
-			GEMINI_CLI_HOME: join(root, "home"),
 			THINKRAIL_DATA_DIR: join(root, "data"),
 			PI_CODING_AGENT_DIR: join(root, "agent"),
 			PI_OFFLINE: "1",
@@ -101,11 +108,26 @@ export function analyticsProbeEnvironment(
 	);
 }
 
+const EXCEPTION_KEYS = new Set([
+	"app_version",
+	"arch",
+	"build",
+	"channel",
+	"os",
+	"source",
+	"handled",
+	"code",
+	"scope",
+	"request_method",
+]);
+
 export function assertDesktopLaunch(
-	events: CollectedEvent[],
+	collected: CollectedEvent[],
 	expected: { app_version: string; channel: string; os: string; arch: string },
 	expectAppInstalled: boolean,
 ): string {
+	const events = collected.filter((event) => event.event !== "$exception");
+	const exceptions = collected.filter((event) => event.event === "$exception");
 	const expectedNames = expectAppInstalled ? ["app_installed", "app_started"] : ["app_started"];
 	assert(
 		events.map((event) => event.event).join(",") === expectedNames.join(","),
@@ -134,6 +156,20 @@ export function assertDesktopLaunch(
 			"person profile processing must be off",
 		);
 		assert(event.properties.$geoip_disable === true, "GeoIP enrichment must be off");
+	}
+	for (const exception of exceptions) {
+		assert(
+			exception.distinct_id === first.distinct_id,
+			"error report used another installation id",
+		);
+		assert(
+			exception.properties.$process_person_profile === false,
+			"error report person profile processing must be off",
+		);
+		const extra = Object.keys(exception.properties).filter(
+			(key) => !key.startsWith("$") && !EXCEPTION_KEYS.has(key),
+		);
+		assert(extra.length === 0, `unexpected $exception properties: ${extra.join(",")}`);
 	}
 	return first.distinct_id;
 }

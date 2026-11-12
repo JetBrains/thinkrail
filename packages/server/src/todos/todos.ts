@@ -16,7 +16,7 @@ import {
 } from "pi-todos/core";
 import { suggestPlanSummary } from "../assist";
 import { gitStatus, listCommits, readCommitSubject, resolveListedCommit } from "../git";
-import { getWorkspace } from "../workspaces";
+import { getWorkspace, isChatWorkspace } from "../workspaces";
 import { enqueueTodoMutation, settleChangeArtifacts, unattributedChanges } from "./artifacts";
 import { dropItemBaseline, readBaselines, removeSessionBaselines } from "./baselines";
 import {
@@ -178,6 +178,7 @@ export async function listTodos(params: {
 		),
 	};
 	if (plan.summary) wire.summary = plan.summary;
+	if (isChatWorkspace(getWorkspace(params.workspaceId))) return wire;
 	const unattributed = await resolveUnattributed(params.workspaceId, root, params.sessionId, plan);
 	if (unattributed.length > 0) wire.unattributed = unattributed;
 	const adoptedCommits = await resolveAdoptedCommits(params.workspaceId, plan, records, pending);
@@ -301,31 +302,6 @@ export function updateTodo(params: {
 	});
 }
 
-export function removeTodo(
-	params: {
-		workspaceId: string;
-		sessionId: string;
-		id: string;
-	},
-	isUnderActiveReview: () => boolean = () => false,
-): Promise<{
-	ok: true;
-}> {
-	return enqueueTodoMutation(params.workspaceId, () => {
-		const root = getWorkspace(params.workspaceId).worktreePath;
-		if (readReviewMeta(root, params.sessionId).pending[params.id] || isUnderActiveReview()) {
-			throw new Error(
-				`TODO "${params.id}" is currently under review — cancel or wait for the review to finish before removing it.`,
-			);
-		}
-		new TodoStore(root, params.sessionId).remove(params.id);
-		dropItemBaseline(root, params.sessionId, params.id);
-		dropReviewRecord(root, params.sessionId, params.id);
-		clearAutoCycles(root, params.sessionId, params.id);
-		return { ok: true } as const;
-	});
-}
-
 const ADOPTED_COMMIT_ID = /^commit:([0-9a-f]{4,64})$/;
 
 function adoptedCommitSha(id: string): string | undefined {
@@ -373,6 +349,33 @@ function reviewedWatermark(
 	item: StoredItem,
 ): string[] {
 	return readReviewMeta(root, sessionId).pending[id]?.shas ?? commitShas(item);
+}
+
+export function removeTodo(
+	params: { workspaceId: string; sessionId: string; id: string },
+	isUnderActiveReview: () => boolean = () => false,
+): Promise<{ ok: true }> {
+	return enqueueTodoMutation(params.workspaceId, () => {
+		const root = getWorkspace(params.workspaceId).worktreePath;
+		const store = new TodoStore(root, params.sessionId);
+		const item = store.get(params.id);
+		if (!item) return { ok: true } as const;
+		if (item.status === "done") {
+			throw new Error(
+				`TODO "${params.id}" is already done \u2014 completed steps are the plan's history and can't be removed from the UI.`,
+			);
+		}
+		if (readReviewMeta(root, params.sessionId).pending[params.id] || isUnderActiveReview()) {
+			throw new Error(
+				`TODO "${params.id}" is currently under review \u2014 cancel or wait for the review to finish before removing it.`,
+			);
+		}
+		store.remove(params.id);
+		dropItemBaseline(root, params.sessionId, params.id);
+		dropReviewRecord(root, params.sessionId, params.id);
+		clearAutoCycles(root, params.sessionId, params.id);
+		return { ok: true } as const;
+	});
 }
 
 export function approveTodoReview(

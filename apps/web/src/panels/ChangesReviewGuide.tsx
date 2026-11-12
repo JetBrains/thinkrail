@@ -4,11 +4,16 @@ import {
 	RiRobot2Line as Robot,
 } from "@remixicon/react";
 import type { GitFileChange, ReviewComment, ReviewGuide } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import type { ChangesTab } from "../store";
 import { splitPath } from "./changesModel";
 import { sendReviewBatch, sendReviewComment } from "./reviewSend";
 import { ownsReviewShortcut } from "./reviewShortcuts";
+
+const NEXT_KEY = "n";
+const PREVIOUS_KEY = "p";
 
 export type GuideStep =
 	| { kind: "read"; path: string; why: string; order: number }
@@ -76,6 +81,7 @@ export function ChangesReviewGuide({
 	comments: readonly ReviewComment[] | undefined;
 	onReveal: (path: string, commentId?: string) => void;
 }) {
+	const t = useT();
 	const { workspaceId } = tab;
 	const steps = useMemo(() => guideSteps(guide, comments), [guide, comments]);
 	const [cursorAt, setCursorAt] = useState<{ key: string; index: number } | null>(null);
@@ -107,17 +113,17 @@ export function ChangesReviewGuide({
 		if (index !== null) go(index);
 	};
 	const next = () => stepFrom(cursor, 1);
-	const previous = () => stepFrom(cursor < 0 ? 0 : cursor, -1);
+	const previous = () => stepFrom(Math.max(cursor, 0), -1);
 
 	useEffect(() => {
 		if (steps.length === 0) return;
 		const onKey = (event: KeyboardEvent) => {
 			if (!ownsReviewShortcut(event, tab)) return;
 			if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-			if (event.key === "n") {
+			if (event.key === NEXT_KEY) {
 				event.preventDefault();
 				next();
-			} else if (event.key === "p") {
+			} else if (event.key === PREVIOUS_KEY) {
 				event.preventDefault();
 				previous();
 			}
@@ -133,7 +139,7 @@ export function ChangesReviewGuide({
 			className="flex w-[280px] shrink-0 flex-col border-border-default border-r bg-container-sidebar-bg"
 		>
 			<div className="min-h-0 flex-1 overflow-auto">
-				<GuideHeading>Review guide · agent</GuideHeading>
+				<GuideHeading>{t("changes.guide.heading")}</GuideHeading>
 				{guide ? (
 					<p
 						data-testid="changes-review-guide-summary"
@@ -146,18 +152,20 @@ export function ChangesReviewGuide({
 									: "bg-feedback-warning-subtle text-feedback-warning"
 							}`}
 						>
-							{guide.verdict === "approve" ? "approved" : "changes requested"}
+							{guide.verdict === "approve"
+								? t("changes.guide.approved")
+								: t("changes.guide.changesRequested")}
 						</span>
 						{guide.summary}
 					</p>
 				) : (
 					<p className="px-12 pb-8 tr-text-metadata text-text-subtle">
-						No reviewer summary yet — start an agent review from the plan.
+						{t("changes.guide.noSummary")}
 					</p>
 				)}
 				{readSteps.length > 0 ? (
 					<>
-						<GuideHeading>Suggested reading order</GuideHeading>
+						<GuideHeading>{t("changes.guide.readingOrder")}</GuideHeading>
 						<ol className="flex flex-col">
 							{steps.map((step, index) =>
 								step.kind === "read" ? (
@@ -197,9 +205,11 @@ export function ChangesReviewGuide({
 						</ol>
 					</>
 				) : null}
-				<GuideHeading>Findings ({findings.length})</GuideHeading>
+				<GuideHeading>{t("changes.guide.findings", { count: findings.length })}</GuideHeading>
 				{findings.length === 0 ? (
-					<p className="px-12 pb-8 tr-text-metadata text-text-subtle">No open reviewer findings.</p>
+					<p className="px-12 pb-8 tr-text-metadata text-text-subtle">
+						{t("changes.guide.noFindings")}
+					</p>
 				) : (
 					<ul className="flex flex-col gap-4 px-8 pb-8">
 						{steps.map((step, index) =>
@@ -221,7 +231,9 @@ export function ChangesReviewGuide({
 										>
 											<span className="flex items-center gap-4 tr-text-metadata text-text-subtle">
 												<Robot className="size-12" />
-												{step.comment.status === "sent" ? "sent to the agent" : "open"}
+												{step.comment.status === "sent"
+													? t("changes.guide.findingSent")
+													: t("changes.guide.findingOpen")}
 											</span>
 											<span className="tr-text-metadata text-text-default">
 												{step.comment.body}
@@ -231,15 +243,15 @@ export function ChangesReviewGuide({
 											) : null}
 										</button>
 										{step.comment.status === "draft" ? (
-											<button
-												type="button"
+											<Button
+												size="s"
 												data-testid="changes-review-guide-fix"
 												disabled={sending}
 												onClick={() => send(() => sendReviewComment(workspaceId, step.comment.id))}
-												className="mt-8 rounded-sm bg-primary px-8 py-2 tr-text-metadata text-text-on-primary hover:bg-control-primary-bg-hovered"
+												className="mt-8"
 											>
-												Fix this one
-											</button>
+												{t("changes.guide.fixOne")}
+											</Button>
 										) : null}
 									</div>
 								</li>
@@ -249,41 +261,45 @@ export function ChangesReviewGuide({
 				)}
 			</div>
 			<div className="flex shrink-0 items-center gap-4 border-border-default border-t px-8 py-4">
-				<button
-					type="button"
+				<IconButton
+					variant="outline"
+					icon={ChevronLeft}
+					label={t("changes.guide.previous", { key: PREVIOUS_KEY.toUpperCase() })}
 					data-testid="changes-review-guide-prev"
-					aria-label="Previous step (P)"
 					disabled={steps.length === 0}
 					onClick={previous}
-					className="flex size-24 items-center justify-center rounded-sm border border-control-border-default text-text-muted hover:bg-control-bg-hovered disabled:text-control-disabled-text"
-				>
-					<ChevronLeft className="size-14" />
-				</button>
-				<button
-					type="button"
+				/>
+				<Button
+					size="m"
+					iconRight={ChevronRight}
 					data-testid="changes-review-guide-next"
 					disabled={steps.length === 0}
 					onClick={next}
-					className="flex h-24 flex-1 items-center justify-center gap-4 whitespace-nowrap rounded-sm bg-primary px-8 tr-text-metadata text-text-on-primary hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
+					className="flex-1"
 				>
-					{cursor < 0 ? "Start" : cursor + 1 < steps.length ? "Next" : "Restart"}
+					{cursor < 0
+						? t("changes.guide.start")
+						: cursor + 1 < steps.length
+							? t("common.next")
+							: t("changes.guide.restart")}
 					<span className="tabular-nums">
 						{cursor < 0 ? "" : `${cursor + 1} / ${steps.length}`}
 					</span>
-					<kbd className="rounded-xs border border-current px-4 tr-code-text">N</kbd>
-					<ChevronRight className="size-14" />
-				</button>
-				<button
-					type="button"
+					<kbd className="rounded-xs border border-current px-4 tr-code-text">
+						{NEXT_KEY.toUpperCase()}
+					</kbd>
+				</Button>
+				<Button
+					variant="outline"
+					size="m"
+					iconLeft={Robot}
 					data-testid="changes-review-guide-apply"
 					disabled={sending || openFindingIds.length === 0}
 					onClick={() => send(() => sendReviewBatch(workspaceId, openFindingIds))}
-					title="Send every open finding to the agent"
-					className="flex h-24 items-center gap-4 rounded-sm border border-control-border-default px-8 tr-text-metadata text-text-muted hover:bg-control-bg-hovered disabled:text-control-disabled-text"
+					tooltip={t("changes.guide.applyTitle")}
 				>
-					<Robot className="size-14" />
-					Apply fixes
-				</button>
+					{t("changes.guide.apply")}
+				</Button>
 			</div>
 		</aside>
 	);

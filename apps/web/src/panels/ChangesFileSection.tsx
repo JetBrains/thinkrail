@@ -1,5 +1,7 @@
 import {
 	RiCheckLine as Check,
+	RiCheckboxBlankLine as CheckboxBlank,
+	RiCheckboxFill as CheckboxChecked,
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
 	RiFileCopyLine as Copy,
@@ -8,34 +10,44 @@ import {
 	RiArrowGoBackLine as Revert,
 } from "@remixicon/react";
 import type { GitDiffScope, GitFileChange } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
+import type { HunkTriage, ReviewDraftPersistence } from "@thinkrail/resource-renderers";
+import {
+	RendererToggles,
+	ReviewDraftContext,
+	rendererImplementationKey,
+} from "@thinkrail/resource-renderers";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { copyText, isPhoneViewport } from "@/lib";
-import type { HunkTriage } from "@/resources";
 import { statusLetter } from "../chat/planView";
-import { LoadingRegion } from "../components/Skeleton";
 import {
 	type ChangesTabSection,
 	type DiffTabView,
+	selectChangesTabSection,
 	selectDiffTabTargetRef,
 	selectWorkspaceTick,
 	useAppStore,
 } from "../store";
 import { errorText, getTransport } from "../transport";
-import { estimatedSectionHeight, splitPath, statusNameClass } from "./changesModel";
+import {
+	estimatedSectionHeight,
+	splitPath,
+	stackedDiffBounded,
+	statusNameClass,
+} from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { DiffSurfaceBody, useDiffSurface } from "./DiffSurface";
 import { HeaderIconButton } from "./HeaderIconButton";
 import { openDiffInTab } from "./openTabs";
-import { rendererImplementationKey, rendererTestId } from "./resourcePane";
-import { ReviewDraftContext } from "./resources/reviewDraftState";
 import type { SectionContent, SectionContentCache } from "./sectionContentCache";
-import { ToggleSegment } from "./ToggleSegment";
 import { useLiveTabContent } from "./useLiveTabContent";
 
 const PENDING_CONTENT = {
@@ -78,6 +90,7 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 	onToggleCollapsed: (change: GitFileChange) => void;
 	onSetViewed: (path: string, viewed: boolean) => void;
 }) {
+	const t = useT();
 	const path = change.path;
 	const onToggleViewed = () => onSetViewed(path, !viewed);
 	const toggleCollapsed = () => onToggleCollapsed(change);
@@ -172,9 +185,17 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 		triage,
 	});
 	const { renderer, candidates, implementationKey, mobile, hunkActions } = surface;
-	const reviewDrafts = useMemo(
-		() => ({ rendererId: renderer.id, values: section?.reviewDrafts, update: updateReviewDraft }),
-		[renderer.id, section?.reviewDrafts, updateReviewDraft],
+	const reviewDrafts = useMemo<ReviewDraftPersistence>(
+		() => ({
+			rendererId: renderer.id,
+			read: (key) =>
+				selectChangesTabSection(useAppStore.getState(), workspaceId, tabId, path)?.reviewDrafts?.[
+					key
+				],
+			subscribe: useAppStore.subscribe,
+			update: updateReviewDraft,
+		}),
+		[path, renderer.id, tabId, updateReviewDraft, workspaceId],
 	);
 	const view = mobile ? "inline" : (tabView ?? "split");
 	const { dir, base } = splitPath(path);
@@ -195,7 +216,8 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 		}
 	};
 	const changedLines = (change.added ?? 0) + (change.removed ?? 0);
-	const ownsScroller = mode === "single" || renderer.capabilities.boundedDiff === true;
+	const bounded = stackedDiffBounded(renderer.capabilities.boundedDiff, surface.lineCount);
+	const ownsScroller = mode === "single" || bounded;
 
 	return (
 		<section
@@ -215,16 +237,19 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 				className={`${mode === "stacked" ? "sticky top-0 z-10" : ""} flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-8`}
 			>
 				{mode === "stacked" ? (
-					<button
-						type="button"
+					<IconButton
+						size="s"
+						icon={collapsed ? ChevronRight : ChevronDown}
+						label={
+							collapsed
+								? t("changes.section.expandFile", { name: base })
+								: t("changes.section.collapseFile", { name: base })
+						}
 						data-testid="changes-section-toggle"
-						aria-label={collapsed ? `Expand ${base}` : `Collapse ${base}`}
 						aria-expanded={!collapsed}
 						onClick={toggleCollapsed}
-						className="flex size-20 shrink-0 items-center justify-center rounded-sm text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-					>
-						{collapsed ? <ChevronRight className="size-16" /> : <ChevronDown className="size-16" />}
-					</button>
+						className="shrink-0"
+					/>
 				) : null}
 				<span
 					className={`w-16 shrink-0 text-center tr-text-metadata ${statusNameClass(change.status) || "text-text-muted"}`}
@@ -249,49 +274,44 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 						data-testid="changes-section-kept"
 						className={`shrink-0 tr-text-metadata tabular-nums ${allKept ? "text-feedback-success" : "text-text-subtle"}`}
 					>
-						{keptCount}/{hunkKeys.length} kept
+						{t("changes.section.kept", { kept: keptCount, total: hunkKeys.length })}
 					</span>
 				) : null}
 				<span className="ml-auto flex shrink-0 items-center gap-4">
-					{content && candidates.length >= 2
-						? candidates.map((candidate) => (
-								<ToggleSegment
-									key={candidate.id}
-									testid={rendererTestId(candidate.id)}
-									label={candidate.label}
-									active={candidate.id === renderer.id}
-									onClick={() => selectRenderer(candidate.id)}
-								/>
-							))
-						: null}
+					{content ? (
+						<RendererToggles
+							candidates={candidates}
+							renderer={renderer}
+							onRendererId={selectRenderer}
+						/>
+					) : null}
 					{hunkActions ? (
 						<HeaderIconButton
 							testid="changes-section-revert"
-							label="Revert file"
+							label={t("changes.section.revertFile")}
 							onClick={() => void hunkActions.revertFile()}
-						>
-							<Revert className="size-14" />
-						</HeaderIconButton>
+							icon={Revert}
+						/>
 					) : null}
 					<HeaderIconButton
 						testid="changes-section-open-tab"
-						label="Open as its own tab"
+						label={t("changes.section.openOwnTab")}
 						onClick={openAsTab}
-					>
-						<OpenAsTab className="size-14" />
-					</HeaderIconButton>
+						icon={OpenAsTab}
+					/>
 					<DropdownMenu>
-						<DropdownMenuTrigger
-							data-testid="changes-section-menu"
-							aria-label={`Actions for ${path}`}
-							className="flex size-24 items-center justify-center rounded-sm text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:bg-control-bg-selected"
-						>
-							<More className="size-14" />
+						<DropdownMenuTrigger asChild>
+							<IconButton
+								icon={More}
+								label={t("changes.section.actions", { path })}
+								data-testid="changes-section-menu"
+								wrapTrigger
+							/>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end">
 							<DropdownMenuItem onSelect={openAsTab}>
 								<OpenAsTab />
-								Open as tab
+								{t("changes.section.openAsTab")}
 							</DropdownMenuItem>
 							<DropdownMenuItem
 								onSelect={() => {
@@ -299,38 +319,31 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 								}}
 							>
 								<Copy />
-								Copy path
+								{t("changes.section.copyRelativePath")}
 							</DropdownMenuItem>
 							{hunkActions ? (
 								<DropdownMenuItem onSelect={() => void hunkActions.revertFile()}>
 									<Revert />
-									Revert file
+									{t("changes.section.revertFile")}
 								</DropdownMenuItem>
 							) : null}
 							<DropdownMenuItem onSelect={onToggleViewed}>
 								<Check />
-								{viewed ? "Mark as not viewed" : "Mark as viewed"}
+								{viewed ? t("changes.section.markNotViewed") : t("changes.section.markViewed")}
 							</DropdownMenuItem>
 						</DropdownMenuContent>
 					</DropdownMenu>
-					<button
-						type="button"
+					<Button
+						variant="ghost"
+						size="m"
+						iconLeft={viewed ? CheckboxChecked : CheckboxBlank}
+						selected={viewed}
 						data-testid="changes-section-viewed"
 						aria-pressed={viewed}
 						onClick={onToggleViewed}
-						className="flex h-24 items-center gap-4 rounded-sm px-8 tr-text-metadata text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 					>
-						<span
-							className={`flex size-14 items-center justify-center rounded-xs border ${
-								viewed
-									? "border-primary bg-primary text-text-on-primary"
-									: "border-control-border-active"
-							}`}
-						>
-							{viewed ? <Check className="size-10" /> : null}
-						</span>
-						Viewed
-					</button>
+						{t("changes.section.viewed")}
+					</Button>
 				</span>
 			</div>
 			{!bodyVisible ? (
@@ -341,8 +354,8 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 					>
 						<span>
 							{changedLines > 0
-								? `Large change — ${changedLines} lines, collapsed by default.`
-								: "Collapsed by default."}
+								? t("changes.section.largeCollapsed", { count: changedLines })
+								: t("changes.section.collapsed")}
 						</span>
 						<button
 							type="button"
@@ -350,14 +363,14 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 							onClick={toggleCollapsed}
 							className="text-text-muted underline-offset-2 hover:text-text-default hover:underline"
 						>
-							Expand
+							{t("changes.section.expand")}
 						</button>
 						<button
 							type="button"
 							onClick={openAsTab}
 							className="text-text-muted underline-offset-2 hover:text-text-default hover:underline"
 						>
-							Open as tab
+							{t("changes.section.openAsTab")}
 						</button>
 					</div>
 				) : null
@@ -366,14 +379,14 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 					data-testid="changes-section-error"
 					className="flex items-center gap-8 px-12 py-8 tr-text-metadata text-feedback-error"
 				>
-					<span>Could not read this diff: {error}</span>
+					<span>{t("changes.section.readFailed", { error })}</span>
 					<button
 						type="button"
 						data-testid="changes-section-retry"
 						onClick={() => setError(null)}
 						className="text-text-muted underline-offset-2 hover:text-text-default hover:underline"
 					>
-						Retry
+						{t("common.retry")}
 					</button>
 				</div>
 			) : !content ? (
@@ -392,13 +405,7 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 						viewState={ownsScroller ? section?.viewState : undefined}
 						onViewState={ownsScroller ? saveViewState : undefined}
 						onSelectRenderer={selectRenderer}
-						bodyClassName={
-							mode === "single"
-								? "min-h-0 flex-1"
-								: renderer.capabilities.boundedDiff
-									? "h-[60vh]"
-									: ""
-						}
+						bodyClassName={mode === "single" ? "min-h-0 flex-1" : bounded ? "h-[60vh]" : ""}
 					/>
 				</ReviewDraftContext>
 			)}

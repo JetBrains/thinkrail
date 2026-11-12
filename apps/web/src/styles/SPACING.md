@@ -25,15 +25,16 @@ styles/spacingUsage.test.ts    the adoption guard
 
 ## The scale
 
-`spacing.json` declares the steps **`0 · 2 · 4 · 8 · 12 · 16 · 24 · 32 · 40 · 64`**. The **step name IS
+`spacing.json` declares the steps **`0 · 2 · 4 · 6 · 8 · 12 · 16 · 24 · 32 · 40 · 64`**. The **step name IS
 its pixel value** — `"8": "8px"` — so an instruction that names a number maps to exactly one token and
 one family of utilities. `0` is the identity step (no spacing).
 
 The scale is an **intentionally defined primitive set, not an inventory of current usage**: a step may
 exist ahead of any consumer. `32`/`40`/`64` are reserved primitives with no rhythm call sites — they are
-canonical, not orphans, and are not removed for lack of use. Conversely, adding a step (a `6`, say) is a
-deliberate design decision, not a mechanical one — the audit found 6px used four ways, each resolved
-into an existing role rather than minting a new step.
+canonical, not orphans, and are not removed for lack of use. Conversely, adding a step is a deliberate design decision, not a mechanical one. `6` was added for
+one decided consumer — the icon↔text gap of the L button (`packages/ui` Button system: S 4 · M 4 · L 6,
+below the button's side padding except at S, where it equals it). The earlier audit's four unrelated 6px uses stay resolved into
+existing roles; a new 6px rhythm needs its own decision, not this step's existence.
 
 `spacing.json` is the authored source; no other authored source restates a canonical rhythm length. The
 generated output necessarily materializes those values as `--space-<n>` custom properties. They are read
@@ -57,8 +58,8 @@ Tailwind v4 drives **spacing (`p`/`m`/`gap`) and sizing (`w`/`h`/`size`/inset/tr
 is is a layout constraint, not rhythm** — sizing is deliberately *not* policed by the spacing gate, and
 sizing values are free-form px, not the canonical step set.
 
-Tailwind's **named container presets stay a separate scale**: `max-w-lg` / `max-w-sm` (and the rest of
-`w`/`min-w`/`max-w`/`basis` t-shirt names) resolve through `--container-*` (32rem / 24rem), independent
+Tailwind's **named container presets stay a separate scale**: `max-w-lg` (and the rest of the
+`w`/`min-w`/`max-w`/`basis` t-shirt names) resolves through `--container-*` (32rem), independent
 of `--spacing`. They are **not** spacing aliases and must never be migrated to numeric utilities — a
 mechanical `lg`→`16` rewrite would collapse a 32rem column to 16px. `spacingUsage.test.ts` pins this
 (the gate never polices a width/sizing prefix, and the container presets we depend on stay named).
@@ -79,7 +80,7 @@ mapped into Tailwind by `index.css`'s `@theme inline` — the same shape as `--p
 | `--panel-header-row-height` | `28px` | `h-` / `w-panel-header-row` | the height of every header strip (tab strips, pane headers, chat toolbar, bottom tool rail) and the width of its full-height square actions |
 | `--panel-header-control-height` | `calc(var(--panel-header-row-height) - var(--space-4))` | `h-panel-header-control` | every control floating inside a header strip, so it keeps clearing the strip’s 1px border whenever the header height changes |
 | `--panel-row-height` | `22px` | `h-` / `min-h-` / `size-panel-row` | every side-pane row (file, change, spec, project, workspace) and the row-height icon buttons inside them |
-| `--panel-inset` | `var(--space-8)` | `p-panel-inset` | the content inset of every tool pane (Projects, Specs, Files, Changes, Review) |
+| `--panel-inset` | `var(--space-8)` | `p-panel-inset` | the content inset of every tool pane (Projects, Specs, Files, Review) |
 | `--tree-indent` | `var(--space-8)` | `pl-tree-indent` | per-depth indentation of the Files, Changes and Specs trees |
 | `--chat-gutter` | `var(--space-32)` base, `var(--space-48)` for panels ≥600px (responsive) | `px-` / `p-chat-gutter` | chat row gutters, stream-status strip, activity breadcrumbs, composer inset, and the gutter terms of the transcript-width calc; responsive via container query on descendants and ResizeObserver on the chat container |
 
@@ -102,7 +103,7 @@ The shared source scanner covers app source, `packages/ui`, and every `thinkrail
 - a spacing utility names a **canonical step** — `p-8`, `gap-4` — or a **declared rhythm role** —
   `p-panel-inset`: an `index.css` `--spacing-<role>: var(--<role>)` whose `tokens.css` value is
   `var(--space-<step>)`; the retired t-shirt aliases (`p-xs`), unknown alphabetic suffixes
-  (`p-bananas`), a sizing role used as rhythm (`p-panel-row`) and any off-scale number (`p-6`, `py-1`,
+  (`p-bananas`), a sizing role used as rhythm (`p-panel-row`) and any off-scale number (`p-10`, `py-1`,
   `gap-0.5`) are rejected; only prefix-appropriate Tailwind keywords such as `ml-auto`, `gap-px`, and
   `space-x-reverse` remain valid;
 - a length is **never a raw pixel value** at the call site (`py-[3px]`), and a step is **never re-spelled
@@ -110,9 +111,9 @@ The shared source scanner covers app source, `packages/ui`, and every `thinkrail
 - keyword suffixes that are not rhythm stay fine (`ml-auto`, `gap-px` hairline);
 - the **bracket escape hatch is closed** to the documented measured/geometry expressions that are not
   rhythm steps: `pr-[2rem]` (a close-button reserve), `pl-[1.6em]` (an em-relative list indent), and the
-  icon-aligned `pl-[calc(0.875rem+var(--space-8))]` /
-  `pl-[calc(1.125rem+var(--space-8))]` indents. Any other arbitrary spacing utility fails the guard; adding
-  one is a design decision recorded here, not a silent escape from the scale;
+  icon-aligned `pl-[calc(0.875rem+var(--space-8))]` / `pl-[calc(1.125rem+var(--space-8))]` indents. Any
+  other arbitrary spacing utility fails the guard; adding one is a design decision recorded here, not a
+  silent escape from the scale;
 - the scale is a defined primitive set, so a step is **not** required to have a consumer — the gate has no
   orphan/reachability check that could reject a reserved primitive (`32`/`40`/`64`);
 - handwritten CSS declarations throughout those source roots are covered, including multiline declarations and

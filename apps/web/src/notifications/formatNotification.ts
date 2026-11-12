@@ -1,4 +1,5 @@
 import type { SessionCompletion } from "@thinkrail/contracts";
+import { t } from "@thinkrail/locales/react";
 
 /** Why a worktree's attention dot lit up, captured when the event is enqueued. */
 export type AttentionReason =
@@ -16,7 +17,7 @@ export interface AttentionEvent {
 /** Where a click on the emitted notification should land. */
 export type NotificationTarget =
 	| { kind: "chat"; workspaceId: string; sessionId: string }
-	| { kind: "switcher" };
+	| { kind: "search" };
 
 /** A ready-to-show notification derived from one flush of accumulated events. */
 export interface NotificationSpec {
@@ -33,19 +34,19 @@ const APP_NAME = "ThinkRail";
 const AGGREGATE_TAG = "thinkrail-attention";
 
 export function reasonLabel(reason: AttentionReason): string {
-	if (reason.kind === "needs-input") return "Waiting for your input";
+	if (reason.kind === "needs-input") return t("notifications.reason.needsInput");
 	const completion = reason.completion;
 	switch (completion.outcome) {
 		case "succeeded":
-			return "The agent finished";
+			return t("notifications.reason.succeeded");
 		case "interrupted":
-			return "The run was interrupted";
+			return t("notifications.reason.interrupted");
 		case "cancelled":
-			return "The run was cancelled";
+			return t("notifications.reason.cancelled");
 		case "failed":
 			return completion.failure === "length"
-				? "Stopped — the context is full"
-				: "The agent run failed";
+				? t("notifications.reason.contextFull")
+				: t("notifications.reason.failed");
 	}
 }
 
@@ -55,7 +56,7 @@ function truncate(text: string): string {
 
 /**
  * Collapse a window's accumulated attention events into one notification: a single worktree opens
- * its chat on click, several open the session switcher. Returns null when nothing passed.
+ * its chat on click, several open search. Returns null when nothing passed.
  */
 export function formatNotification(events: readonly AttentionEvent[]): NotificationSpec | null {
 	const [event] = events;
@@ -73,8 +74,8 @@ export function formatNotification(events: readonly AttentionEvent[]): Notificat
 	}
 	return {
 		title: APP_NAME,
-		body: truncate(`${events.length} worktrees need your attention`),
+		body: truncate(t("notifications.aggregate.body", { count: events.length })),
 		tag: AGGREGATE_TAG,
-		target: { kind: "switcher" },
+		target: { kind: "search" },
 	};
 }

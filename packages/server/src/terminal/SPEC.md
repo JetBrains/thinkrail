@@ -28,7 +28,7 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   caller returns `null`), so the host counts only input that actually reached a PTY as workspace activity;
   the `TerminalDeliveryResult` type shared with the host publisher adapter.
 - **Allowed deps:** `persistence`, `contracts` (`WS_CHANNELS`, `TerminalWindowsShell`), `bun-pty`,
-  `Bun.which`, `process.env`.
+  `Bun.which`, `Bun.spawnSync` (`id -un`), `process.env`.
 - **Forbidden:** `host`; sibling features. No WebSocket type crosses this boundary — clients are opaque keys.
 
 ## Decisions
@@ -43,7 +43,7 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
     `powershell.exe`. No further fallback to `cmd.exe` — `powershell.exe` ships on every supported
     Windows release, so it is already the guaranteed floor. `defaultWhich` passes an explicit
     `{ PATH: process.env.PATH }` rather than calling `Bun.which` bare, the same trap `editors`'
-    `defaultWhich` guards against: `Bun.which` alone reads the PATH snapshotted at process start, not
+    `pathWhich` guards against: `Bun.which` alone reads the PATH snapshotted at process start, not
     `resolveShellEnv()`'s later-repaired live `process.env.PATH`.
   - `"pwsh"` / `"powershell"` / `"cmd"`: literal pins to `pwsh.exe` / `powershell.exe` / `cmd.exe` — no
     existence check, no silent substitution. A pin that turns out to be missing fails to spawn the same
@@ -78,6 +78,32 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
 - **macOS PTYs start the user's shell in login mode (`-l`)** to match Terminal.app and the platform's
   terminal convention; other platforms keep a plain interactive shell. The PTY itself supplies
   interactivity, so no explicit `-i` is needed.
+- **The PTY environment is the user's, not the launcher's** (`ptyEnv.ts`). The host inherits whatever
+  started it — a terminal emulator, an IDE, `turbo`, Claude Code — and a verbatim copy handed every shell
+  that context: `TERM_PROGRAM`/`TERMINAL_EMULATOR`/`ITERM_*`/`VSCODE_*`/`TMUX`/`CLAUDECODE` made tools adapt
+  to a terminal that isn't there, and runner-set `FORCE_COLOR`/`CLICOLOR_FORCE`/`DEBUG_COLORS` could
+  override a tool's own colour detection. Those, a launching pi's markers (`PI_CODING_AGENT`, `AI_AGENT`, and
+  the bash tool's `PI_SESSION_ID`/`PI_SESSION_FILE`/`PI_PROVIDER`/`PI_MODEL`/`PI_REASONING_LEVEL`), the
+  host's own variables (`THINKRAIL_*`, `ELECTROBUN_*`, `JITI_*`, `BUN_PTY_LIB`), per-shell bookkeeping (`PWD`, `OLDPWD`, `SHLVL`, `_`) and the
+  parent terminal's `WINDOW`/`TERMCAP`/`COLUMNS`/`LINES` (bun-pty strips those itself only from its own
+  `process.env` default, which a copied map bypasses) are dropped. VS Code's askpass overrides go with their
+  support variables: a `VSCODE_GIT_ASKPASS_*` variable drops `GIT_ASKPASS`, a `VSCODE_SSH_ASKPASS_*` variable
+  drops `SSH_ASKPASS`/`SSH_ASKPASS_REQUIRE` — otherwise the orphaned `askpass.sh` exits 0 with empty output
+  and Git accepts blank credentials instead of prompting. A helper with no VS Code support variables is the
+  user's own and is kept; the terminal identifies itself as `TERM=xterm-256color`, `COLORTERM=truecolor`,
+  `TERM_PROGRAM=ThinkRail`. `NO_COLOR` is kept: it is the user's standing preference, not a runner's
+  override. Other `PI_*` names are user pi configuration and are kept, never filtered by prefix:
+  `PI_CODING_AGENT_DIR` set at launch or by Settings → Environment must reach a `pi` run in the terminal,
+  or it would silently switch to `~/.pi/agent` (auth, models, settings, sessions) while the host uses the
+  configured folder ([[submodule-server-environment]]). Dropping is safe on Unix because the shell re-sources the user's own startup files. The
+  filtered map is the child's *whole* environment: bun-pty >= 0.5 does not merge it over the host's native
+  environment (0.4 did, so a variable the host started with reached the shell whatever the filter said).
+  On Unix, `USER` and `LOGNAME` are stamped from `id -un`, resolved once per process from a fixed system
+  path (`/usr/bin:/bin:/run/current-system/sw/bin`, never the launcher's `PATH`) under a short timeout: the
+  PTY registers no utmpx session, so a shell without them asks `getlogin()`, which reads a reused pty
+  device's stale record and can report another user (#427). Bun's `os.userInfo().username` is not a substitute — it reads `$USER`
+  and falls back to `unknown` instead of resolving the uid. When `id` fails, the inherited values are kept
+  rather than replaced by a guess.
 - **A shell is keyed by `(workspaceId, tabKey)`**, never by a socket, a client, or a component. `tabKey` is
   durable and client-supplied; PTY ids are per-run and **never persisted** (attaching to an id that outlived
   its process is Theia's `Couldn't attach - can't find terminal with id`).
@@ -172,22 +198,43 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   into the body, where it stops being a re-derivable summary and becomes literal bytes that every later
   snapshot replays and re-persists: one bad mode then outlives the run that observed it, across restarts.
 - Attach hands back the recording and then **discards** held batcher output — the replay already contains it.
+- Pending output is capped in UTF-16 code units. Trimming the oldest output must drop an entire surrogate
+  pair when the boundary bisects it, so the delivered tail never gains an orphaned low surrogate.
 
 ## Validation
 
 - `outputRecorder.test.ts` — bounds, line/escape-safe trimming, alt-screen exclusion (incl. a switch split
   across reads and enter+exit in one read), mode restoration, mouse tracking never restored, and `restore()`
   keeping mode sequences out of the body (incl. a recording persisted by a host that still replayed them).
-- `outputBatcher.test.ts` — batching, backpressure, truncation, `reset`.
+- `outputBatcher.test.ts` — batching, backpressure, Unicode-safe truncation, `reset`.
 - `shellBusy.test.ts` — child detection, including that an unanswerable platform reports *not* busy.
 - `shellArgs.test.ts` — shell executable precedence across Unix and Windows plus platform-specific
   arguments; `auto`'s pwsh-then-powershell resolution via an injected `WhichFn`; every explicit preference
   is a literal pin regardless of what `which` reports; `ComSpec`/`COMSPEC` no longer influence the result.
+- `ptyEnv.test.ts` — launcher identity (incl. a launching pi's markers), colour forcing and host-internal
+  variables are dropped while the user's own variables (incl. `NO_COLOR`, `PI_CODING_AGENT_DIR` and other
+  pi configuration) survive; parent-terminal `WINDOW`/`TERMCAP`/`COLUMNS`/`LINES` are
+  dropped; VS Code's askpass overrides leave with their support variables, per pair, while standalone
+  helpers stay; `USER`/`LOGNAME` come from the account on Unix only and are kept when no account
+  resolves; the resolved name maps back to the host uid; a real PTY spawned by a host *started* with
+  leaked variables and no `USER` sees only the filtered environment, its account checked through `id -u`
+  rather than the implementation's own lookup.
 - `terminalManager.test.ts` — transactional durable reservation without spawn, catalog bounds, rejection
   of malformed write data and out-of-range or non-integer grid sizes on resize and attach, attach
   idempotency (incl. concurrent), takeover, displaced-client rejection, tab-list broadcast, close/busy,
-  revive. Replay-persistence and natural-exit cases use bounded publisher-observed data/exit conditions as
+  revive, and a real shell whose `USER`/`LOGNAME` map back to the host uid despite a leaked `LOGNAME=root` and
+  which still sees the host's `PI_CODING_AGENT_DIR`.
+  Replay-persistence and natural-exit cases use bounded publisher-observed data/exit conditions as
   readiness edges, never elapsed time; their expected output marker never appears contiguously in the command
-  input, so terminal echo cannot impersonate command execution.
+  input, so terminal echo cannot impersonate command execution. "Any output" is not a replay readiness edge:
+  a shell's first frame may be mode-only (bash's `ESC[?2004h`), which the recorder never stores, so a revive
+  test persists only after its printed marker arrives and asserts the replay contains it. A non-forced close
+  that expects "not busy" also waits for a printed marker first: until startup finishes, rc files run short
+  child processes (`$(groups)`, `lesspipe`, `dircolors`) that correctly make the shell read as busy.
+  Every test that waits on a real shell carries the file's terminal budget, not Bun's 5 s default (a
+  developer's dotfiles alone can take seconds to start one). Shells get a temp `HISTFILE` and `ZDOTDIR`:
+  macOS's `/etc/zshrc` rebuilds `HISTFILE` from `ZDOTDIR`, so a temp `HISTFILE` alone still appended to the
+  developer's real history.
 - `e2e/terminals.spec.ts` — the rapid re-entry regression, reload survival, second-client takeover,
-  cross-client tab convergence.
+  cross-client tab convergence, addressed-output isolation. Its output markers likewise never appear
+  contiguously in the typed command: keystroke echo reaches the screen first, split across output batches.

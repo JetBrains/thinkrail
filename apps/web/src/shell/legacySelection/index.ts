@@ -1,1 +1,1 @@
-export * from "./legacySelection";
+export { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./legacySelection";

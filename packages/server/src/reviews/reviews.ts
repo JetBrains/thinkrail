@@ -8,7 +8,7 @@ import {
 	rmSync,
 	writeFileSync,
 } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type {
 	GitDiffScope,
 	ReviewAnchor,
@@ -19,7 +19,7 @@ import type {
 	ReviewGuide,
 	ReviewSnapshot,
 } from "@thinkrail/contracts";
-import { classifyBytes, decodeText } from "../fs";
+import { classifyBytes, decodeText, workspaceRelativePath } from "../fs";
 import {
 	diffBaseRef,
 	readBlobAt,
@@ -164,10 +164,16 @@ function persistAndPublish(workspaceId: string, snapshot: ReviewSnapshot): void 
 }
 
 function worktreeFilePath(worktreePath: string, path: string): string {
-	const abs = resolve(worktreePath, path);
-	const rel = relative(worktreePath, abs);
-	if (rel.startsWith("..") || isAbsolute(rel)) throw new Error("Path escapes the worktree");
-	return abs;
+	const rel = workspaceRelativePath(worktreePath, path);
+	if (rel === null) throw new Error("Path escapes the worktree");
+	return resolve(worktreePath, rel);
+}
+
+function anchorPath(workspaceId: string, path: string): string {
+	const rel = workspaceRelativePath(getWorkspace(workspaceId).worktreePath, path);
+	if (rel === null) throw new Error("Path escapes the worktree");
+	if (rel === "") throw new Error("A comment anchor must name a file, not the worktree root.");
+	return rel;
 }
 
 function readWorktreeFile(worktreePath: string, path: string): string | null {
@@ -335,7 +341,11 @@ export async function addComment(input: AddCommentInput): Promise<ReviewComment>
 	if (input.kind === "review" && input.anchor)
 		throw new Error("A review-level comment carries no anchor.");
 	let anchor = input.anchor
-		? { ...input.anchor, selectors: validateSelectors(input.anchor.selectors) }
+		? {
+				...input.anchor,
+				path: anchorPath(input.workspaceId, input.anchor.path),
+				selectors: validateSelectors(input.anchor.selectors),
+			}
 		: null;
 	if (anchor?.side === "base") {
 		const ws = getWorkspace(input.workspaceId);
@@ -382,8 +392,13 @@ export async function addComment(input: AddCommentInput): Promise<ReviewComment>
 }
 
 export async function setReviewGuide(workspaceId: string, guide: ReviewGuide): Promise<void> {
+	const root = getWorkspace(workspaceId).worktreePath;
+	const readingOrder = guide.readingOrder.map((step) => ({
+		...step,
+		path: workspaceRelativePath(root, step.path) || step.path,
+	}));
 	return mutateSnapshot(workspaceId, (snapshot) => {
-		snapshot.review.guide = guide;
+		snapshot.review.guide = { ...guide, readingOrder };
 		persistAndPublish(workspaceId, snapshot);
 	});
 }

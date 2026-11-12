@@ -7,6 +7,7 @@ export interface SettingsRadioChoice<T extends string> {
 	hint?: string;
 	description: string;
 	testId: string;
+	disabled?: boolean;
 }
 
 export function SettingsRadioCards<T extends string>({
@@ -28,6 +29,7 @@ export function SettingsRadioCards<T extends string>({
 		<div role="radiogroup" aria-label={label} className="flex flex-col gap-4">
 			{choices.map((choice) => {
 				const active = choice.id === value;
+				const choiceDisabled = disabled || choice.disabled === true;
 				return (
 					<label
 						key={choice.id}
@@ -35,7 +37,7 @@ export function SettingsRadioCards<T extends string>({
 						data-active={active}
 						className={cn(
 							"flex items-center gap-8 rounded-sm border px-12 py-8 text-left transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
-							disabled ? "cursor-default" : "cursor-pointer",
+							choiceDisabled ? "cursor-default" : "cursor-pointer",
 							active
 								? "border-primary-muted bg-clip-padding bg-primary-subtle"
 								: "border-border-default hover:bg-control-bg-hovered",
@@ -46,7 +48,7 @@ export function SettingsRadioCards<T extends string>({
 							name={name}
 							value={choice.id}
 							checked={active}
-							disabled={disabled}
+							disabled={choiceDisabled}
 							onChange={() => onSelect(choice.id)}
 							className="sr-only"
 						/>

@@ -1,5 +1,14 @@
 import { describe, expect, it } from "bun:test";
-import { workspaceFileTarget } from "./fileTargets";
+import { mentionLookup, workspaceFileTarget } from "./fileTargets";
+
+describe("mentionLookup", () => {
+	it("splits a typed @-path into the folder to list and the name prefix, either separator", () => {
+		expect(mentionLookup("src\\Comp")).toEqual({ dir: "src", prefix: "comp" });
+		expect(mentionLookup("src/components/")).toEqual({ dir: "src/components", prefix: "" });
+		expect(mentionLookup(".\\docs\\RE")).toEqual({ dir: "docs", prefix: "re" });
+		expect(mentionLookup("READ")).toEqual({ dir: "", prefix: "read" });
+	});
+});
 
 describe("workspaceFileTarget", () => {
 	it("canonicalizes only paths contained by the active worktree", () => {

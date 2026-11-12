@@ -1,11 +1,14 @@
 import {
 	type PromptHit,
 	type QueueLane,
+	type ResourceKind,
 	type SessionQueueContent,
+	type SubagentResourceSummary,
 	sameModel,
 	type TemplateInfo,
 	type ThinkingLevel,
 } from "@thinkrail/contracts";
+import { t as translate, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
 	Dialog,
@@ -14,11 +17,17 @@ import {
 	DialogFooter,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
-import { Popover, PopoverAnchor, PopoverTrigger } from "@thinkrail/ui/popover";
-import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from "react";
+import {
+	useCallback,
+	useEffect,
+	useInsertionEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useNow } from "@/components/useNow";
-import { registerWebExtensions } from "@/extensions";
 import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
 import {
 	EMPTY_RUNTIME,
@@ -26,15 +35,18 @@ import {
 	selectCanRenameChat,
 	selectCatalogModel,
 	selectCompactionTurnIds,
+	selectComposerFocusRequested,
+	selectPickerModels,
 	selectSkillsStale,
 	selectSupportsMcp,
 	selectWorkspaceById,
 	toast,
 	useAppStore,
+	workspaceName,
 } from "@/store";
-import { errorText, getTransport, watchMcpWorkspace } from "@/transport";
+import { errorText, getTransport, watchMcpWorkspace, wsErrorCode } from "@/transport";
+import type { ResultTarget } from "./ChatActions";
 import { ChatHeader } from "./ChatHeader";
-import { ChatPlanContent, ChatPlanStripContent } from "./ChatPlan";
 import ChatTranscript, { type ChatTranscriptHandle } from "./ChatTranscript";
 import {
 	Composer,
@@ -43,8 +55,13 @@ import {
 	type MentionCandidate,
 	type SubmitBehavior,
 } from "./Composer";
-import { ExtUiDialog } from "./ExtUiDialog";
+import { DEFAULT_DOCK_FOLD, type DockFold, dockCollapsed, withDockCollapsed } from "./dockFold";
+import { ExtraUsageNotice } from "./ExtraUsageNotice";
+import { mentionLookup } from "./fileTargets";
 import { HistoryOverlay } from "./HistoryOverlay";
+import { awaitingToolCallIdOf } from "./interactionState";
+import { McpServerDetail } from "./McpServerDetail";
+import { parseModelRef, RunModelLabel } from "./ModelEffortLabel";
 import type { ModelSelection } from "./ModelEffortPicker";
 import {
 	compactSubmissionError,
@@ -52,11 +69,13 @@ import {
 	parseNativeChatCommand,
 	prepareNameChatCommand,
 } from "./nativeCommands";
-import { hostSessionGlance, sessionGlance } from "./planView";
+import type { PromptImagesOwner } from "./promptImages";
 import { QueueStrip } from "./QueueStrip";
 import { deriveRecentPrompts } from "./recentPrompts";
 import {
 	CommandLogView,
+	mcpResourceId,
+	newestResourceId,
 	ResourcesAttention,
 	ResourcesButton,
 	ResourcesDock,
@@ -71,12 +90,14 @@ import { useModelPreferences } from "./useModelPreferences";
 import { useSessionStats } from "./useSessionStats";
 import "./tools/register";
 import type { ChatAttachment } from "./types";
-import { useChatTodos } from "./useChatTodos";
 import { useHistorySearch } from "./useHistorySearch";
 
-registerWebExtensions();
-
 const TRY_AGAIN_PROMPT = "Try again.";
+const NOTHING_EXPANDED: Partial<Record<ResourceKind, boolean>> = {};
+
+function renderSubagentModel({ model, thinkingLevel }: SubagentResourceSummary) {
+	return <RunModelLabel model={model} thinkingLevel={thinkingLevel} />;
+}
 
 export default function ChatView({
 	sessionId,
@@ -87,32 +108,45 @@ export default function ChatView({
 	workspaceId: string;
 	onOpenFile?: ((path: string) => void) | undefined;
 }) {
+	const t = useT();
 	const sessionExists = useAppStore((s) => s.sessions[sessionId] !== undefined);
 	const isStreaming = useAppStore((s) => s.sessions[sessionId]?.isStreaming ?? false);
+	const awaitingResponse = useAppStore(
+		(s) => awaitingToolCallIdOf(s.sessions[sessionId]?.hostState ?? null) != null,
+	);
 	const draft = useAppStore((s) => s.sessions[sessionId]?.draft ?? "");
+	const composerEdit = useAppStore((s) => s.sessions[sessionId]?.composerEdit ?? null);
+	const imageDraft = useAppStore(
+		(s) => s.sessions[sessionId]?.promptImages ?? EMPTY_RUNTIME.promptImages,
+	);
+	const imageOwner = useMemo<PromptImagesOwner>(
+		() => ({
+			state: imageDraft,
+			read: () =>
+				useAppStore.getState().sessions[sessionId]?.promptImages ?? EMPTY_RUNTIME.promptImages,
+			update: (change) => useAppStore.getState().updateChatPromptImages(sessionId, change),
+		}),
+		[imageDraft, sessionId],
+	);
 	const queue = useAppStore((s) => s.sessions[sessionId]?.queue ?? EMPTY_RUNTIME.queue);
 	const sessionModel = useAppStore((s) => s.sessions[sessionId]?.model ?? null);
 	const thinkingLevel = useAppStore(
 		(s) => s.sessions[sessionId]?.thinkingLevel ?? EMPTY_RUNTIME.thinkingLevel,
 	);
-	const pendingExtUi = useAppStore((s) => s.sessions[sessionId]?.pendingExtUi ?? null);
 	const extUiStatus = useAppStore(
 		(s) => s.sessions[sessionId]?.extUiStatus ?? EMPTY_RUNTIME.extUiStatus,
 	);
 	const extUiWidget = useAppStore(
 		(s) => s.sessions[sessionId]?.extUiWidget ?? EMPTY_RUNTIME.extUiWidget,
 	);
+	const notice = useAppStore((s) => s.sessions[sessionId]?.notice ?? null);
+	const [disablingNotice, setDisablingNotice] = useState(false);
 	const commands = useAppStore((s) => s.sessions[sessionId]?.commands ?? EMPTY_RUNTIME.commands);
 	const stats = useAppStore((s) => s.sessions[sessionId]?.stats ?? null);
 	const statsRefreshTick = useAppStore((s) => s.sessions[sessionId]?.statsRefreshTick ?? 0);
 	const syncedConnectionGeneration = useAppStore(
 		(s) => s.sessions[sessionId]?.syncedConnectionGeneration ?? 0,
 	);
-	const hostState = useAppStore((s) => s.sessions[sessionId]?.hostState ?? null);
-	const sessionGlanceState = useAppStore((s) => {
-		const rt = s.sessions[sessionId];
-		return rt ? sessionGlance(rt) : "waiting";
-	});
 	const recentPrompts = useAppStore(
 		useShallow((s) => deriveRecentPrompts(s.sessions[sessionId]?.turns ?? [])),
 	);
@@ -122,11 +156,26 @@ export default function ChatView({
 	const canRenameChat = useAppStore(selectCanRenameChat);
 	const supportsMcp = useAppStore(selectSupportsMcp);
 	const composerGrowthLimit = useAppStore((state) => state.composerGrowthLimit);
+	const questionPanelHeight = useAppStore((state) => state.questionPanelHeight);
+	const [dockTarget, setDockTarget] = useState<HTMLDivElement | null>(null);
 	const chatLineWidth = useAppStore((state) => state.chatLineWidth);
 	const chatLineWidthBounded = useAppStore((state) => state.chatLineWidthBounded);
 	const chatMessageOrder = useAppStore((state) => state.chatMessageOrder);
-	const { models, refreshing: modelsRefreshing, refresh: onRefreshModels } = useModelCatalog();
-	const modelPreferences = useModelPreferences(models);
+	const {
+		models: allModels,
+		refreshing: modelsRefreshing,
+		refresh: onRefreshModels,
+	} = useModelCatalog();
+	const hiddenModels = useAppStore((s) => s.hiddenModels);
+	const visibleModels = useMemo(
+		() => selectPickerModels(allModels, hiddenModels, []),
+		[allModels, hiddenModels],
+	);
+	const models = useMemo(
+		() => selectPickerModels(allModels, hiddenModels, [sessionModel]),
+		[allModels, hiddenModels, sessionModel],
+	);
+	const modelPreferences = useModelPreferences(visibleModels);
 	const projectId = useAppStore(
 		(s) =>
 			Object.values(s.workspaces)
@@ -142,10 +191,10 @@ export default function ChatView({
 	const workspaceNames = useMemo(() => {
 		const map: Record<string, string> = {};
 		for (const list of Object.values(workspaces)) {
-			for (const w of list) map[w.id] = w.name;
+			for (const w of list) map[w.id] = workspaceName(t, w);
 		}
 		return map;
-	}, [workspaces]);
+	}, [t, workspaces]);
 
 	const currentModel = selectCatalogModel(models, sessionModel) ?? sessionModel;
 	const refreshStats = useSessionStats({
@@ -159,8 +208,6 @@ export default function ChatView({
 
 	const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 	const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
-	const plan = useChatTodos(workspaceId, sessionId);
-	const [planOpen, setPlanOpen] = useState(false);
 	const [slashActive, setSlashActive] = useState(false);
 	const [templates, setTemplates] = useState<TemplateInfo[]>([]);
 	const [templatesEmpty, setTemplatesEmpty] = useState(false);
@@ -183,12 +230,29 @@ export default function ChatView({
 	const transcriptRef = useRef<ChatTranscriptHandle>(null);
 	const resources = useChatResources(workspaceId, sessionId);
 	const resourcesTrigger = useRef<HTMLButtonElement>(null);
+	const [dockedToolCallId, setDockedToolCallId] = useState<string | null>(null);
+	const [dockFoldState, setDockFoldState] = useState<{
+		workspaceId: string;
+		sessionId: string;
+		fold: DockFold;
+	} | null>(null);
+	const dockFold =
+		dockFoldState?.workspaceId === workspaceId && dockFoldState.sessionId === sessionId
+			? dockFoldState.fold
+			: DEFAULT_DOCK_FOLD;
+	const setDockCollapsed = (collapsed: boolean) =>
+		setDockFoldState({
+			workspaceId,
+			sessionId,
+			fold: withDockCollapsed(dockFold, dockedToolCallId, collapsed),
+		});
 	const [stopAllOpen, setStopAllOpen] = useState(false);
 	const [inspector, setInspector] = useState<{
 		workspaceId: string;
 		sessionId: string;
 		open: boolean;
 		selectedId: string | null;
+		expanded: Partial<Record<ResourceKind, boolean>>;
 	} | null>(null);
 	const inspectorOpen =
 		inspector?.workspaceId === workspaceId && inspector.sessionId === sessionId && inspector.open;
@@ -196,6 +260,10 @@ export default function ChatView({
 		inspector?.workspaceId === workspaceId && inspector.sessionId === sessionId
 			? inspector.selectedId
 			: null;
+	const inspectorExpanded =
+		inspector?.workspaceId === workspaceId && inspector.sessionId === sessionId
+			? inspector.expanded
+			: NOTHING_EXPANDED;
 	const openInspector = useCallback(
 		(selectedId?: string) =>
 			setInspector((previous) => ({
@@ -207,9 +275,24 @@ export default function ChatView({
 					(previous?.workspaceId === workspaceId && previous.sessionId === sessionId
 						? previous.selectedId
 						: null),
+				expanded: NOTHING_EXPANDED,
 			})),
 		[workspaceId, sessionId],
 	);
+	const setFinishedExpanded = useCallback(
+		(kind: ResourceKind, expanded: boolean) =>
+			setInspector((previous) =>
+				previous?.workspaceId === workspaceId && previous.sessionId === sessionId
+					? { ...previous, expanded: { ...previous.expanded, [kind]: expanded } }
+					: previous,
+			),
+		[workspaceId, sessionId],
+	);
+	const openFinished = () =>
+		openInspector(
+			newestResourceId(resources.groups.finishedCommands, resources.groups.finishedSubagents) ??
+				undefined,
+		);
 	const setInspectorOpen = useCallback(
 		(open: boolean) => {
 			if (open) openInspector();
@@ -222,7 +305,7 @@ export default function ChatView({
 			setInspector((previous) =>
 				previous?.workspaceId === workspaceId && previous.sessionId === sessionId
 					? { ...previous, selectedId }
-					: { workspaceId, sessionId, open: true, selectedId },
+					: { workspaceId, sessionId, open: true, selectedId, expanded: NOTHING_EXPANDED },
 			),
 		[workspaceId, sessionId],
 	);
@@ -241,6 +324,12 @@ export default function ChatView({
 			(child) => child.childSessionId === inspectorSelectedId,
 		)
 			? inspectorSelectedId
+			: null;
+	const selectedMcpServer =
+		inspectorOpen && inspectorSelectedId
+			? (resources.groups.mcpServers?.find(
+					(server) => mcpResourceId(server.name) === inspectorSelectedId,
+				)?.name ?? null)
 			: null;
 	const commandLog = useCommandLog(workspaceId, sessionId, selectedCommandId);
 	const now = useNow();
@@ -267,11 +356,35 @@ export default function ChatView({
 		() => useAppStore.getState().openSettings(SettingsSection.Providers),
 		[],
 	);
+	const findModel = useCallback(
+		(ref: string) => selectCatalogModel(allModels, parseModelRef(ref)),
+		[allModels],
+	);
 	const readMcpOutput = useCallback(
 		(toolCallId: string) =>
 			getTransport().request("mcp.readOutput", { workspaceId, sessionId, toolCallId }),
 		[workspaceId, sessionId],
 	);
+
+	const resultOpener = useMemo(() => {
+		const { commands, finishedCommands, subagents, finishedSubagents } = resources.groups;
+		const commandIds = new Set(
+			resources.visible ? [...commands, ...finishedCommands].map((command) => command.id) : [],
+		);
+		const subagentIds = new Set(
+			resources.visible
+				? [...subagents, ...finishedSubagents].map((child) => child.childSessionId)
+				: [],
+		);
+		return (target: ResultTarget): (() => void) | undefined => {
+			if (target.kind === "command")
+				return commandIds.has(target.id) ? () => openInspector(target.id) : undefined;
+			const { childSessionId } = target;
+			return subagentIds.has(childSessionId)
+				? () => openInspector(childSessionId)
+				: () => setTranscriptChildId(childSessionId);
+		};
+	}, [resources.visible, resources.groups, openInspector, setTranscriptChildId]);
 
 	const stillRunning = useMemo(
 		() =>
@@ -281,28 +394,18 @@ export default function ChatView({
 		[resources.visible, resources.authoritative, resources.groups.activeCount, openInspector],
 	);
 
-	// Responsive chat gutter: 48px for panels ≥600px, 32px for narrower panels.
-	// Set on the container itself so --chat-transcript-width calc uses the correct value.
-	const chatViewElementRef = useRef<HTMLDivElement | null>(null);
-	const chatViewRef = useCallback((element: HTMLDivElement | null) => {
-		chatViewElementRef.current = element;
-	}, []);
-	useEffect(() => {
-		const element = chatViewElementRef.current;
-		if (!element) return;
-		const updateGutter = () => {
-			const gutter = element.clientWidth >= 600 ? 48 : 32;
-			element.style.setProperty("--chat-gutter", `${gutter}px`);
-			element.style.setProperty(
-				"--chat-transcript-width",
-				`calc(${chatLineWidth}ch + ${2 * gutter}px)`,
-			);
-		};
-		updateGutter();
-		const observer = new ResizeObserver(updateGutter);
-		observer.observe(element);
-		return () => observer.disconnect();
-	}, [chatLineWidth]);
+	const chatViewRef = useCallback(
+		(element: HTMLDivElement | null) => {
+			if (element) {
+				element.style.setProperty(
+					"--chat-transcript-width",
+					`calc(${chatLineWidth}ch + 2 * var(--chat-gutter))`,
+				);
+				element.style.setProperty("--question-panel-height", String(questionPanelHeight));
+			}
+		},
+		[chatLineWidth, questionPanelHeight],
+	);
 
 	const {
 		state: historyState,
@@ -346,13 +449,14 @@ export default function ChatView({
 	const mergedCommands = useMemo(
 		() =>
 			mergeNativeChatCommands(
+				t,
 				[
 					...commands.filter((command) => command.source !== "prompt"),
 					...templates.map(templateToSlashCommand),
 				],
 				canRenameChat,
 			),
-		[canRenameChat, commands, templates],
+		[canRenameChat, commands, t, templates],
 	);
 
 	useEffect(() => {
@@ -360,9 +464,7 @@ export default function ChatView({
 			setMentionCandidates([]);
 			return;
 		}
-		const slash = mentionQuery.lastIndexOf("/");
-		const dir = slash >= 0 ? mentionQuery.slice(0, slash) : "";
-		const prefix = (slash >= 0 ? mentionQuery.slice(slash + 1) : mentionQuery).toLowerCase();
+		const { dir, prefix } = mentionLookup(mentionQuery);
 		let cancelled = false;
 		const timer = setTimeout(() => {
 			getTransport()
@@ -399,7 +501,7 @@ export default function ChatView({
 					if (useAppStore.getState().sessions[sessionId]?.thinkingLevel === level) {
 						useAppStore.getState().setThinkingLevel(sessionId, previous);
 					}
-					toast.error(errorText(error), "Couldn't change the effort level");
+					toast.error(errorText(error), translate("chat.view.effortChangeFailed"));
 				}),
 		[sessionId],
 	);
@@ -442,7 +544,7 @@ export default function ChatView({
 		const superseded = () => selection !== pairSelection.current;
 		useAppStore.getState().setCurrentModel(sessionId, model);
 		if (level) useAppStore.getState().setThinkingLevel(sessionId, level);
-		getTransport()
+		void getTransport()
 			.request("session.setModel", { sessionId, model })
 			.then(
 				() => (level && !superseded() ? requestLevel(level, previous.level) : undefined),
@@ -453,7 +555,10 @@ export default function ChatView({
 							useAppStore.getState().setThinkingLevel(sessionId, previous.level);
 						}
 					}
-					toast.error(errorText(error), `Couldn't switch to ${model.name}`);
+					toast.error(
+						errorText(error),
+						translate("chat.view.modelSwitchFailed", { model: model.name }),
+					);
 				},
 			)
 			.then(() => refreshStats());
@@ -531,8 +636,10 @@ export default function ChatView({
 			.request(method, params)
 			.catch((err) => {
 				useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
-				if (queued) restoreTextToDraft(text);
-				else {
+				const tooLarge = wsErrorCode(err) === "FRAME_TOO_LARGE";
+				if (queued || tooLarge) restoreTextToDraft(text);
+				if (tooLarge) composerRef.current?.restoreAttachments(attachments);
+				if (!queued) {
 					const streaming = useAppStore.getState().sessions[sessionId]?.isStreaming ?? false;
 					transcriptRef.current?.cancelImmediateTurn(streaming);
 				}
@@ -597,14 +704,21 @@ export default function ChatView({
 			.catch(() => {});
 	};
 
-	const onHistoryOpen = () => openOverlay(draft);
-
-	const onManageTemplates = () => useAppStore.getState().openSettings(SettingsSection.Templates);
-
 	const onDismissHistory = () => {
 		closeHistory();
 		composerRef.current?.refocus();
 	};
+
+	const onHistoryOutsidePress = () => {
+		closeHistory();
+		setTimeout(() => {
+			if (document.activeElement === document.body) composerRef.current?.refocus();
+		});
+	};
+
+	const onHistoryOpen = () => (historyState.open ? onDismissHistory() : openOverlay(draft));
+
+	const onManageTemplates = () => useAppStore.getState().openSettings(SettingsSection.Templates);
 
 	const onInsertHit = (hit: PromptHit) => {
 		composerRef.current?.insertText(hit.text);
@@ -630,7 +744,7 @@ export default function ChatView({
 			closeHistory();
 			useAppStore.getState().deleteChat(targetWorkspaceId, targetSessionId);
 		} catch (err) {
-			toast.error(errorText(err), "Couldn't delete the chat");
+			toast.error(errorText(err), translate("chat.view.deleteFailed"));
 		}
 	};
 
@@ -659,21 +773,31 @@ export default function ChatView({
 		else composerRef.current?.openHistory();
 	}, [historyOpenRequest, sessionId, historyOverlayOpen, cycleScope]);
 
-	const planGlanceState = useMemo(
-		() => hostSessionGlance(hostState, sessionGlanceState),
-		[hostState, sessionGlanceState],
-	);
+	useLayoutEffect(() => {
+		const composer = composerRef.current;
+		if (!composerEdit || !composer) return;
+		composer.applyEdit(composerEdit.kind, composerEdit.text);
+		useAppStore.getState().consumeComposerEdit(sessionId, composerEdit.id);
+	}, [composerEdit, sessionId]);
 
-	const onExtUiReply = (value: string | boolean | null) => {
-		if (!pendingExtUi) return;
-		const id = pendingExtUi.id;
-		useAppStore.getState().clearPendingExtUi(sessionId, id);
-		getTransport()
-			.request("session.extUiReply", { response: { id, value } })
-			.catch(() => {});
-	};
+	const composerFocusRequested = useAppStore((s) =>
+		selectComposerFocusRequested(s, workspaceId, sessionId),
+	);
+	useEffect(() => {
+		if (!composerFocusRequested) return;
+		useAppStore.getState().clearComposerFocusRequest();
+		composerRef.current?.refocus();
+	}, [composerFocusRequested]);
 
 	const widgetEntries = Object.entries(extUiWidget);
+	const disableNotice = () => {
+		setDisablingNotice(true);
+		getTransport()
+			.request("provider.disableWarning", { warning: "anthropicExtraUsage" })
+			.then(() => useAppStore.getState().silenceNotice("anthropicExtraUsage"))
+			.catch((err) => toast.error(errorText(err), translate("chat.extraUsage.disableFailed")))
+			.finally(() => setDisablingNotice(false));
+	};
 	const focusComposer = useCallback(() => composerRef.current?.refocus(), []);
 	// Keep a stable `onTryAgain` identity (it is passed to every transcript row) while always calling the
 	// latest `performSend` closure.
@@ -691,62 +815,37 @@ export default function ChatView({
 			data-message-order={chatMessageOrder}
 			className="flex h-full min-h-0 min-w-0 flex-col bg-container-workspace-bg [container-type:size]"
 		>
-			<Popover
-				open={planOpen}
-				onOpenChange={(next) => {
-					if (next && !planOpen) plan.notifyOpened("popup");
-					setPlanOpen(next);
-				}}
-			>
-				<PopoverAnchor asChild>
-					<div className="shrink-0">
-						<ChatHeader
-							resources={
-								resources.visible ? (
-									<span className="flex shrink-0 items-center gap-2">
-										<ResourcesButton
-											ref={resourcesTrigger}
-											activeCount={
-												resources.authoritative
-													? resources.groups.activeCount + resources.groups.mcpActiveCount
-													: null
-											}
-											working={resources.authoritative && resources.groups.activeCount > 0}
-											open={inspectorOpen}
-											onClick={() => setInspectorOpen(!inspectorOpen)}
-										/>
-										{resources.groups.mcpAttentionCount > 0 ? (
-											<ResourcesAttention
-												count={resources.groups.mcpAttentionCount}
-												onOpen={openMcpSettings}
-											/>
-										) : null}
-									</span>
-								) : null
-							}
-							stats={stats}
-							statusEntries={Object.entries(extUiStatus)}
-							left={
-								plan.data ? (
-									<PopoverTrigger asChild>
-										<button
-											type="button"
-											data-testid="chat-plan-toggle"
-											data-open={planOpen}
-											className="flex min-w-0 max-w-full items-center gap-4 overflow-clip whitespace-nowrap text-text-muted tr-text-metadata hover:text-text-default"
-										>
-											<ChatPlanStripContent plan={plan} open={planOpen} glance={planGlanceState} />
-										</button>
-									</PopoverTrigger>
-								) : null
-							}
-							skillsStale={skillsStale}
-							{...(projectId ? { onOpenSkills: () => setSkillsOpen(true) } : {})}
-						/>
-					</div>
-				</PopoverAnchor>
-				<ChatPlanContent plan={plan} glance={planGlanceState} />
-			</Popover>
+			<div className="shrink-0">
+				<ChatHeader
+					resources={
+						resources.visible ? (
+							<span className="flex shrink-0 items-center gap-2">
+								<ResourcesButton
+									ref={resourcesTrigger}
+									activeCount={
+										resources.authoritative
+											? resources.groups.activeCount + resources.groups.mcpActiveCount
+											: null
+									}
+									working={resources.authoritative && resources.groups.activeCount > 0}
+									open={inspectorOpen}
+									onClick={() => setInspectorOpen(!inspectorOpen)}
+								/>
+								{resources.groups.mcpAttentionCount > 0 ? (
+									<ResourcesAttention
+										count={resources.groups.mcpAttentionCount}
+										onOpen={openMcpSettings}
+									/>
+								) : null}
+							</span>
+						) : null
+					}
+					stats={stats}
+					statusEntries={Object.entries(extUiStatus)}
+					skillsStale={skillsStale}
+					{...(projectId ? { onOpenSkills: () => setSkillsOpen(true) } : {})}
+				/>
+			</div>
 			<ChatTranscript
 				ref={transcriptRef}
 				sessionId={sessionId}
@@ -755,13 +854,17 @@ export default function ChatView({
 				workspaceRoot={workspaceRoot}
 				focusComposer={focusComposer}
 				openSubagentTranscript={setTranscriptChildId}
+				resultOpener={resultOpener}
 				onTryAgain={onTryAgain}
 				historyOpen={historyState.open}
 				inspectorOpen={inspectorOpen}
 				stillRunning={stillRunning}
 				readMcpOutput={supportsMcp ? readMcpOutput : undefined}
 				openMcpSettings={supportsMcp ? openMcpSettings : undefined}
-				openProviderSettings={supportsMcp ? openProviderSettings : undefined}
+				openProviderSettings={openProviderSettings}
+				findModel={findModel}
+				dockTarget={dockTarget}
+				onDockedInteractionChange={setDockedToolCallId}
 				resourcesOverlay={
 					resources.visible ? (
 						<ResourcesInspector
@@ -772,9 +875,13 @@ export default function ChatView({
 							now={now}
 							authoritative={resources.authoritative}
 							loading={resources.loading}
-							stale={resources.stale}
+							staleness={resources.staleness}
 							error={resources.projection?.error ?? null}
 							actions={resources.actions}
+							expanded={inspectorExpanded}
+							onExpandedChange={setFinishedExpanded}
+							{...(resources.loadOlder ? { onLoadMore: resources.loadOlder } : {})}
+							retained={resources.retained}
 							selectedId={inspectorSelectedId}
 							onSelect={selectResource}
 							onRetry={resources.retry}
@@ -784,9 +891,19 @@ export default function ChatView({
 							onMcpSetEnabled={resources.setMcpEnabled}
 							onMcpReconnect={resources.reconnectMcp}
 							onOpenMcpSettings={openMcpSettings}
+							renderSubagentModel={renderSubagentModel}
 							detail={
 								selectedCommandId ? (
-									<CommandLogView {...commandLog} onRetry={commandLog.retry} />
+									<CommandLogView
+										{...commandLog}
+										onRetry={commandLog.retry}
+										interrupted={
+											resources.groups.finishedCommands.find(
+												(command) => command.id === selectedCommandId,
+											)?.interrupted === true
+										}
+										retained={resources.retained}
+									/>
 								) : selectedSubagentId ? (
 									<SubagentTranscriptPane
 										key={selectedSubagentId}
@@ -794,11 +911,23 @@ export default function ChatView({
 										parentSessionId={sessionId}
 										childSessionId={selectedSubagentId}
 									/>
+								) : selectedMcpServer ? (
+									<McpServerDetail
+										workspaceId={workspaceId}
+										sessionId={sessionId}
+										server={selectedMcpServer}
+										servers={resources.groups.mcpServers?.map((server) => server.name) ?? []}
+									/>
 								) : null
 							}
 						/>
 					) : null
 				}
+			/>
+			<div
+				ref={setDockTarget}
+				data-testid="chat-dock"
+				className="flex max-h-[calc(var(--question-panel-height)*1cqh)] min-h-0 flex-col"
 			/>
 			{widgetEntries.length > 0 ? (
 				<div className="shrink-0 border-border-default border-t bg-container-elevated-bg px-12 py-4 text-text-muted tr-text-metadata">
@@ -812,12 +941,26 @@ export default function ChatView({
 				<ResourcesDock
 					commands={resources.groups.commands}
 					subagents={resources.groups.subagents}
+					finishedCount={resources.groups.finishedCount}
+					collapsed={dockCollapsed(dockFold, dockedToolCallId)}
+					onCollapsedChange={setDockCollapsed}
 					now={now}
 					authoritative={resources.authoritative}
+					staleness={resources.staleness}
 					actions={resources.actions}
 					onInspect={openInspector}
+					onOpenFinished={openFinished}
 					onStopCommand={resources.stopCommand}
 					onStopSubagent={resources.stopSubagent}
+				/>
+			) : null}
+			{notice === "anthropicExtraUsage" ? (
+				<ExtraUsageNotice
+					context="chat"
+					className="mx-12 mb-8 shrink-0"
+					onDismiss={() => useAppStore.getState().dismissSessionNotice(sessionId)}
+					onDisable={disableNotice}
+					disabling={disablingNotice}
 				/>
 			) : null}
 			<div className="relative shrink-0">
@@ -829,17 +972,23 @@ export default function ChatView({
 					onToggleStage={toggleStage}
 					onMoveSelection={moveSelection}
 					onClose={onDismissHistory}
+					onOutsidePress={onHistoryOutsidePress}
 					onInsert={onInsertHit}
 					onInsertAndSend={onInsertAndSendHit}
 					onOpenMessage={openMessage}
 					onSaveAsTemplate={onSaveAsTemplateHit}
 					onDeleteChat={(wsId, id) => void onDeleteHistoryChat(wsId, id)}
+					canDeleteChat={(wsId) =>
+						selectWorkspaceById(useAppStore.getState(), wsId)?.kind !== "chat"
+					}
 				/>
 				<Composer
 					ref={composerRef}
 					value={draft}
 					onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
+					imageOwner={imageOwner}
 					isStreaming={isStreaming}
+					awaitingResponse={awaitingResponse}
 					growthLimit={composerGrowthLimit}
 					commands={mergedCommands}
 					templatePending={templatePending}
@@ -871,19 +1020,15 @@ export default function ChatView({
 				workspaceId={workspaceId}
 				initialBody={saveAsTemplateHit?.text ?? ""}
 			/>
-			{pendingExtUi ? (
-				<ExtUiDialog key={pendingExtUi.id} request={pendingExtUi} onReply={onExtUiReply} />
-			) : null}
 			<Dialog open={stopAllOpen} onOpenChange={setStopAllOpen}>
 				<DialogContent onCloseAutoFocus={returnToResources}>
-					<DialogTitle>Stop all subagents?</DialogTitle>
+					<DialogTitle>{t("chat.view.stopAllTitle")}</DialogTitle>
 					<DialogDescription>
-						Stop {resources.groups.subagents.length} active subagents in this chat? The main chat
-						and future delegation are unaffected.
+						{t("chat.view.stopAllDescription", { count: resources.groups.subagents.length })}
 					</DialogDescription>
 					<DialogFooter>
 						<Button variant="ghost" onClick={() => setStopAllOpen(false)}>
-							Cancel
+							{t("common.cancel")}
 						</Button>
 						<Button
 							data-testid="resources-stop-all-confirm"
@@ -897,7 +1042,7 @@ export default function ChatView({
 								setStopAllOpen(false);
 							}}
 						>
-							Stop {resources.groups.subagents.length} subagents
+							{t("chat.view.stopAllConfirm", { count: resources.groups.subagents.length })}
 						</Button>
 					</DialogFooter>
 				</DialogContent>

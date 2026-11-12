@@ -5,7 +5,7 @@ status: active
 title: Native artifact test harnesses
 parent: architecture
 depends-on: [module-cli, module-server, module-shared]
-references: [module-desktop, module-browser-e2e, module-ci-release, module-ext-visualize]
+references: [module-desktop, module-browser-e2e, module-ci-release, module-ext-visualize, module-ext-ask-user-question]
 tags: [testing, artifacts, public-surface-checked]
 ---
 
@@ -20,19 +20,23 @@ It consumes finished artifacts; it does not build the application or supply appl
 - **Owns:** artifact locators, isolated environments, native/installer smoke entrypoints, shared host
   probes, their fixtures and helper unit tests, and the public build action's desktop packaging-invocation
   and artifact-collector contract tests.
-- **Public surface:** `locateDesktopLauncher`
-- **Allowed deps:** CLI's public artifact-name helper; server's sanctioned history-fixture export;
-  shared release identity and retrying teardown; read-only access to
+- **Public surface:** `locateDesktopLauncher`, `waitForDocument`, `within`
+- **Allowed deps:** CLI's public artifact-name helper; server's sanctioned history-fixture export; shared
+  release identity, its Windows file identity and icon, and retrying teardown; `resedit` to read Windows
+  executable resources;
+  read-only access to
   `.github/actions/build-binary/action.yml` for executing its packaging invocation and collector in
   isolated fixture directories; Bun/Node and native installer tools.
 - **Forbidden:** application or SDK source internals, Electrobun imports/dependency, a fake host or agent,
   production packages importing this package, or real-user state mutation during tests.
 
 The root smoke commands execute the CLI, desktop and installer entrypoints directly. Browser E2E
-orchestration stays in [[module-browser-e2e]] and imports the pure locator through this package's barrel.
+orchestration stays in [[module-browser-e2e]] and imports the pure locator, ready-document poller and timer-clearing `within` deadline through this package's barrel.
 Unit tests and strict typechecking use ordinary workspace Turbo tasks; there is no package build step,
 SDK preparation, declaration generation, or Playwright test discovery here. Product unit tests remain
-with their owning modules.
+with their owning modules. The process-tree lifecycle test reads a fixture pid file only once it parses as
+a positive integer, and its grandchild writes an empty file first so that path runs every time; it never
+signals a pid ≤ 0, which would reach the test runner's whole process group.
 
 ## Artifact verification
 
@@ -41,17 +45,43 @@ fixture value-imports a bare `@earendil-works/pi-coding-agent` specifier and sur
 its model name, so the load exercises pi's virtual-module mapping through the transform path the host
 forces — a bundle missing the `PI_BUNDLED_NODE` define fails this probe; [[submodule-server-agent]] owns
 the seam),
-exercise the bundled factories/skills, run **one scripted provider turn** — the fixture also registers a
-pi-ai faux `streamSimple` under its own `api` name that always calls `visualize` with a dangling flowchart
-edge, so the probe asserts the strict mermaid parse error reaches the transcript as an `isError` tool
-result (the packaged host composes the ThinkRail extension registry, never the portable package's
-best-effort probe; [[module-ext-visualize]]) — start pi's bundled MCP engine in a real chat (a written-out
+exercise the bundled factories/skills (`extension.list` must report a tool for every registry extension,
+so an extension entry the bundle cannot load — `pi-web-access`'s lazily imported `dist` included — fails),
+run **two scripted provider turns** — the fixture also registers a
+pi-ai faux `streamSimple` under its own `api` name that calls `visualize` with a dangling flowchart edge,
+so the probe asserts the strict mermaid parse error reaches the transcript as an `isError` tool result
+(the packaged host composes the ThinkRail extension registry, never the portable package's best-effort
+probe; [[module-ext-visualize]]), and on a second prompt calls `ask_user_question`, so the probe sees the
+session block with `needsInput.kind === "tool-response"`, answers through `session.respondToTool`, and reads
+the answer back as the call's non-error tool result (the registry's per-session composition and the host
+mailbox inside the artifact; [[module-ext-ask-user-question]]) — start pi's bundled MCP engine in a real chat (a written-out
 stdio fixture must report *connected · 1 tool* and an in-probe HTTP server that answers 401 with
 protected-resource metadata *needs sign-in*, read back through `mcp.list`, which proves the lazily imported
 MCP runtime executes inside the artifact), reach an OAuth URL without a provider turn, verify health/UI
 and transcript trash, and shut down. CLI-specific probes also check its exit-only and embedded-cache behavior.
+On Windows both smokes first read executables' resources, without running them:
+- the CLI smoke reads the built exe;
+- the desktop smoke reads the bundle's `bin/bun.exe`, `bin/launcher.exe` and `Resources/uninstall`.
+
+Each executable must pass two checks, and each fails the release before publication:
+- **Icon.** The group the shell shows is the first in resource order; in a Bun exe, Bun's named
+  `IDI_MYICON` shadows any numbered group. That group must include the ICO's largest frame and hold
+  only frames of that ICO. The reference ICO is shared's `windowsIconPath` for the CLI, and the bundle's
+  own `Resources/app.ico` for the desktop.
+- **VERSIONINFO.** It must equal [[module-shared]]'s `windowsFileIdentity` for the checkout's release
+  identity, so a smoke runs in the same stamped checkout that built the artifact.
+
+The resource-directory walk is local because `pe-library` refuses Bun's `.bun` section after `.rsrc`;
+`resedit` parses the icon-group and version structures.
 Native desktop smoke loads the real UI and verifies route/preload messaging plus the production external
-navigation handler. On macOS it also drives the title-bar double-click path end to end: a no-drag
+navigation path against a cross-origin loopback server that stands in for the internet. A scripted
+navigation, a plain link, a `_blank` link and `window.open` must each record exactly one external open and
+no main-frame commit (`did-commit-navigation`) to their URL, so the window never left its origin. A request
+reaching the probe server is not that evidence: WebView2 documents that a cancelled navigation may still send
+its GET, and Windows CI saw exactly that beside a native `allowed:false` verdict. A commit to the URL fails
+the smoke with the recorded `will-navigate` verdicts quoted. A sandboxed `srcdoc` iframe that
+updates in place must fetch both of its images, so previews still render under the navigation rules. The
+server is `unref`ed: a failed launch cannot keep the smoke alive. On macOS it also drives the title-bar double-click path end to end: a no-drag
 double-click must not act, and the header double-click's recorded action and resulting window state must
 match the machine's `AppleActionOnDoubleClick` setting mapped as [[module-desktop]] documents (unset,
 `Maximize` and `Fill` zoom). Linux skips it because its decorated window has no web drag region;
@@ -59,27 +89,43 @@ Windows skips it because its native caption hit already maximizes on double-clic
 Restore successor in the live webview; the launcher must record exactly one `toggleMaximize` request per
 click and publish the matching `maximized` state, proving the real bridge request leg and native state
 push rather than a fake bridge. Close is not probed: it shares the native-X `requestClose()` path, and the
-subsequent external-navigation probe needs the window. Desktop-backed Playwright uses the launcher's opt-in neutral-window seam so it is the
+subsequent external-navigation probes need the window. Desktop-backed Playwright uses the launcher's opt-in neutral-window seam so it is the
 only hydrated client. The live-window ready/control seam remains in the launcher, never a runtime import
 of this package.
 
 Normal artifact children set `CI=1` to mute every analytics tier without changing the production runtime mode; `THINKRAIL_NO_ANALYTICS`
 alone suppresses only additional events. `bun run smoke:desktop --analytics [launcher]` instead runs a
-controlled hidden-host probe against a loopback PostHog collector, never the vendor endpoint. It removes
+controlled hidden-host probe against a loopback PostHog collector, never the vendor endpoint. The collector
+also answers the host's in-app survey list read (`GET /api/surveys/?token=…`) with an empty list, so a keyed
+human launch neither fails the probe nor offers a survey; muted launches must make no request at all. It removes
 inherited CI/test/optional mutes and proxies for human-mode launches, checks first packaged initialization
 emits `app_installed` before `app_started`, checks restart emits only `app_started`, and pins standard
-desktop/release/platform provenance plus one UUID across both (including additional opt-out). It then proves
+desktop/release/platform provenance plus one UUID across both (including additional opt-out). Any
+`$exception` error report a launch happens to emit stays outside that launch sequence but must share the
+UUID, stay personless, and carry only allow-listed plain properties. It then proves
 CI and test mutes independently. No UI action or confirmation is simulated; delivery is checked after normal
 host shutdown. The expected release identity is the shared identity used to build the artifact, so the
 probe needs a release-stamped (keyed) artifact; an unstamped build correctly emits nothing.
 
 Every host owns isolated home, data, agent and cache directories; environment overrides respect Windows'
 case-insensitive keys. The native UI launch pre-creates its home directory: on macOS the window never
-reaches DOM-ready when `XDG_CACHE_HOME` is set while `HOME` names a missing directory. Readiness polling owns a finite deadline and observes early root exit; because the launcher writes its ready, route and navigation-probe documents non-atomically, the smoke treats a missing or half-written JSON file as "not yet" and keeps polling rather than failing on a torn read. When a live
-launched root or validated ready-document app/launcher PIDs need failure cleanup, teardown is bounded and
-awaited before shared retrying removal of the temporary installation root. A setup root may exit successfully
-before its app handoff is ready; after that exit, the harness does not infer or discover descendants from the
-setup process. First-install smoke runs the actual DMG app, Windows ZIP setup, or Linux tarball installer,
+reaches DOM-ready when `XDG_CACHE_HOME` is set while `HOME` names a missing directory. Readiness polling owns a finite deadline and observes early root exit. The desktop ready deadline is
+120 s: on the `win25-vs2026/20261030.294` Windows runner image a cold WebView2 profile reached its first
+DOM-ready in 8–30 s when it passed and missed a 30 s deadline in half the sampled runs, while later launches
+on the same runner start in under a second. Each launch logs its time to ready so the headroom stays
+visible in CI. Because the launcher writes its ready, route and navigation-probe documents non-atomically, every reader (desktop and installer smoke, desktop-backed Playwright's `waitForDocument`) treats a missing,
+half-written or field-incomplete JSON file as "not yet" and keeps polling rather than failing on a torn read;
+a timeout names the raw contents. The writer stays non-atomic on purpose: tolerant readers already close the
+race, and a Windows rename would add its own transient-lock failure.
+
+A smoke failure must stay diagnosable: it is printed before cleanup starts, and a cleanup failure never
+replaces it — the original error comes first, with cleanup errors as secondary (`runWithCleanup`); a
+cleanup-only failure is labelled as cleanup. Each first-install step names itself in its error. Failure cleanup
+is bounded and awaited before shared retrying removal of the temporary installation root, and targets the live
+launched root, the app/launcher PIDs of any ready document that parses, and on Windows every process whose
+executable path or command line lies under the root (short and long path forms). The Windows root scan exists
+because a setup root may exit successfully before its app handoff is ready; the harness never infers
+descendants from an exited setup process, and an installed app left running there locks the root (`EBUSY`). First-install smoke runs the actual DMG app, Windows ZIP setup, or Linux tarball installer,
 observes the installer's automatic app launch, checks health and normal control-file shutdown, and waits for
 installer/host/launcher exit. The harness-only installer UI autoclose flag dismisses completion dialogs, not
 errors or assertions.

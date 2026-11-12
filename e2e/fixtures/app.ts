@@ -1,4 +1,12 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	copyFileSync,
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
@@ -17,6 +25,8 @@ import {
 	E2E_CENTRAL_STATE,
 	E2E_DATA_DIR,
 	E2E_FIXTURE_REPO,
+	E2E_GH_LOG,
+	E2E_GH_SCENARIO,
 	E2E_PI_AGENT_DIR,
 	E2E_PI_MODELS_SEED,
 	E2E_PICK_DIR_POINTER,
@@ -49,6 +59,7 @@ function resetState(): void {
 	rmSync(join(E2E_DATA_DIR, "projects.json"), { force: true });
 	rmSync(join(E2E_DATA_DIR, "turns.json"), { force: true });
 	removeTree(join(E2E_DATA_DIR, "reviews"));
+	removeTree(join(E2E_DATA_DIR, "resource-history"));
 	removeTree(join(E2E_DATA_DIR, "worktrees"));
 	removeTree(join(E2E_PI_AGENT_DIR, "sessions"));
 	if (isRealCentralE2e()) {
@@ -74,6 +85,17 @@ function resetState(): void {
 		}
 	} catch {}
 
+	try {
+		gitQuiet(E2E_FIXTURE_REPO, "remote", "remove", "origin");
+	} catch {}
+	for (const key of ["core.sshCommand", "ssh.variant"]) {
+		try {
+			gitQuiet(E2E_FIXTURE_REPO, "config", "--unset-all", key);
+		} catch {}
+	}
+	rmSync(E2E_GH_SCENARIO, { force: true });
+	rmSync(E2E_GH_LOG, { force: true });
+
 	git(E2E_FIXTURE_REPO, "worktree", "prune");
 	for (let sweep = 0; sweep < 2; sweep += 1) {
 		const branches = gitText(
@@ -94,8 +116,26 @@ function resetState(): void {
 	}
 
 	rmSync(join(E2E_DATA_DIR, "workspaces.json"), { force: true });
+	resetChats();
 
 	writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
+}
+
+function resetChats(): void {
+	const file = join(E2E_DATA_DIR, "chats.json");
+	let container: unknown = null;
+	try {
+		container = JSON.parse(readFileSync(file, "utf8")).container ?? null;
+	} catch {}
+	removeTree(join(E2E_DATA_DIR, "chats"));
+	if (!container) {
+		rmSync(file, { force: true });
+		return;
+	}
+	mkdirSync(join(E2E_DATA_DIR, "chats"), { recursive: true });
+	const staged = `${file}.reset`;
+	writeFileSync(staged, `${JSON.stringify({ version: 1, container, chats: [] })}\n`);
+	renameSync(staged, file);
 }
 
 export async function stagePlainFolder(page: Page): Promise<string> {
@@ -108,7 +148,7 @@ export async function stagePlainFolder(page: Page): Promise<string> {
 	return E2E_PLAIN_DIR;
 }
 
-function loadPersistedWorkspaces(): Workspace[] {
+export function loadPersistedWorkspaces(): Workspace[] {
 	try {
 		return JSON.parse(readFileSync(join(E2E_DATA_DIR, "workspaces.json"), "utf8")) as Workspace[];
 	} catch {
@@ -121,7 +161,7 @@ async function disposeLiveSessions(page: Page): Promise<void> {
 	if (workspaces.length === 0) return;
 	const health = await page.request.get("/health");
 	const hostUrl = new URL(health.url());
-	health.dispose();
+	await health.dispose();
 	const port = Number(hostUrl.port) || (hostUrl.protocol === "https:" ? 443 : 80);
 	const wire = await E2eWire.connect(port);
 	try {
@@ -157,9 +197,13 @@ export async function createWorkspaceViaDialog(page: Page): Promise<Workspace> {
 	return created;
 }
 
-export async function openAppFresh(page: Page): Promise<void> {
+export async function resetApp(page: Page): Promise<void> {
 	await disposeLiveSessions(page);
 	resetState();
+}
+
+export async function openAppFresh(page: Page): Promise<void> {
+	await resetApp(page);
 	await page.goto("/");
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 }
@@ -179,14 +223,20 @@ export async function enterDefaultWorkspace(page: Page): Promise<void> {
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
 }
 
+// Use this helper when a pane must be visible; rail controls toggle on each click. "files" means Files in All mode, "changes" Files in Changed mode.
 export async function revealWorkbenchTool(
 	page: Page,
-	tool: "projects" | "specs" | "files" | "changes" | "review",
+	tool: "projects" | "specs" | "files" | "changes" | "review" | "plan",
 ): Promise<void> {
-	const control = page.getByTestId(`tool-rail-${tool}`);
+	const railTool = tool === "changes" ? "files" : tool;
+	const control = page.getByTestId(`tool-rail-${railTool}`);
 	await expect(control).toBeVisible();
 	if ((await control.getAttribute("aria-pressed")) !== "true") await control.click();
 	await expect(control).toHaveAttribute("aria-pressed", "true");
+	if (railTool !== "files") return;
+	const mode = page.getByTestId(tool === "changes" ? "files-mode-changed" : "files-mode-all");
+	if ((await mode.getAttribute("aria-pressed")) !== "true") await mode.click();
+	await expect(mode).toHaveAttribute("aria-pressed", "true");
 }
 
 export async function openPersistedChat(page: Page, title: string): Promise<void> {
@@ -323,6 +373,39 @@ export async function expandActivityStep(page: Page, tool: string): Promise<Loca
 		await expect(step).toHaveAttribute("data-expanded", "true");
 	}
 	return step;
+}
+
+/** Opens an `aria-expanded` disclosure (a Settings theme list, layout Advanced, …) unless it is already open. */
+export async function expandDisclosure(toggle: Locator): Promise<void> {
+	await expect(toggle).toBeVisible();
+	if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+	await expect(toggle).toHaveAttribute("aria-expanded", "true");
+}
+
+export function modelGroupToggle(page: Page, provider: string): Locator {
+	return page.locator(`[data-testid="model-group-toggle"][data-provider="${provider}"]`);
+}
+
+/**
+ * Model pickers collapse every provider group except the current model's, so an option of another
+ * provider renders only once its group is expanded.
+ */
+export async function expandModelGroup(page: Page, provider: string): Promise<void> {
+	await expandDisclosure(modelGroupToggle(page, provider));
+}
+
+/**
+ * Waits until an open picker has rendered its catalog — its provider groups, or the empty-catalog
+ * hint — first unfolding a composer picker's pinned/recent shortlist. An absent group is then
+ * evidence, not a not-yet-rendered list.
+ */
+export async function revealModelGroups(page: Page): Promise<void> {
+	const showAll = page.getByTestId("model-show-all");
+	const groups = page.getByTestId("model-group-toggle");
+	const empty = page.getByText("No models to show.", { exact: false });
+	await expect(showAll.or(groups).or(empty).first()).toBeVisible();
+	if (await showAll.isVisible()) await showAll.click();
+	await expect(groups.or(empty).first()).toBeVisible();
 }
 
 export function visibleTerminal(page: Page): Locator {

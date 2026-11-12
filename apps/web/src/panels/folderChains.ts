@@ -11,6 +11,7 @@ export interface FolderChain {
 }
 
 export interface ResolvedFolderChain<TNode extends FolderChainNode> extends FolderChain {
+	deepest: TNode;
 	children: readonly TNode[];
 }
 
@@ -45,12 +46,14 @@ export async function resolveFolderChain<TNode extends FolderChainNode>(
 	readChildren: (path: string) => Promise<readonly TNode[]>,
 ): Promise<ResolvedFolderChain<TNode>> {
 	let chain = startFolderChain(start);
+	let deepest = start;
 	let children = await readChildren(chain.path);
 
 	for (;;) {
 		const extension = extendFolderChain(chain, children);
-		if (!extension) return { ...chain, children };
+		if (!extension) return { ...chain, deepest, children };
 		chain = extension.chain;
+		deepest = extension.directory;
 		children = await readChildren(extension.directory.path);
 	}
 }

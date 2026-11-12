@@ -1,4 +1,3 @@
-import { StringEnum } from "@earendil-works/pi-ai/compat";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { TODO_STATUSES, type Todo, type TodoPatch, type TodoPlan } from "../core/index.ts";
@@ -7,6 +6,7 @@ import {
 	errorResult,
 	formatTodo,
 	storeFor,
+	stringEnum,
 	textResult,
 	withNudges,
 } from "./shared.ts";
@@ -14,7 +14,7 @@ import {
 const parameters = Type.Object({
 	id: Type.String({ description: "Id of the item to update." }),
 	status: Type.Optional(
-		StringEnum(TODO_STATUSES, {
+		stringEnum(TODO_STATUSES, {
 			description:
 				"New lifecycle status: pending | in_progress | done. Setting in_progress auto-returns any other in_progress item to pending (one step in work at a time).",
 		}),
@@ -59,7 +59,7 @@ function planCompleteNudge(plan: TodoPlan): string | undefined {
 	if (existing) {
 		return `plan complete — a summary from an earlier completion is still here; EXTEND it with todo_plan_summary so it keeps covering EVERYTHING done across the whole plan (carry the earlier points forward, add the new work) — do not rewrite it down to only the latest step. Current summary to build on:\n${existing}`;
 	}
-	return "plan complete — write a cumulative overall summary with todo_plan_summary covering EVERYTHING done across all tasks, not just the last step.";
+	return "plan complete — write a cumulative overall summary with todo_plan_summary covering EVERYTHING done across all tasks, not just the last step, in PR-body shape (## Summary / ## Changes / ## Testing).";
 }
 
 export function registerTodoUpdate(pi: ExtensionAPI): void {

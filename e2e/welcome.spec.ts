@@ -1,6 +1,6 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
 	openAppFresh,
@@ -10,8 +10,19 @@ import {
 } from "./fixtures/app";
 import { git } from "./fixtures/git";
 import { E2E_FIXTURE_REPO, E2E_PLAIN_DIR } from "./fixtures/paths";
+import { E2eWire } from "./fixtures/wire";
 
 const FIXTURE_SPECS = ["SPEC.md", join("module-a", "SPEC.md")];
+
+async function hostReportsConnectedProvider(page: Page): Promise<boolean> {
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+	try {
+		const report = await wire.request("provider.status", {});
+		return report.providers.some((provider) => provider.configured);
+	} finally {
+		wire.close();
+	}
+}
 
 test("opens a clean ThinkRail with no projects imported", async ({ page }) => {
 	await openAppFresh(page);
@@ -22,26 +33,39 @@ test("opens a clean ThinkRail with no projects imported", async ({ page }) => {
 	await expect(page.getByTestId("terminal-panel")).toHaveCount(0);
 
 	await expect(page.getByTestId("welcome-title")).toHaveText("ThinkRail");
-	await expect(page.getByTestId("welcome-cta")).toContainText("Open project");
-	await expect(page.getByTestId("welcome-action")).toHaveCount(0);
+	await expect(page.getByTestId("onboarding-wizard")).toHaveCount(0);
+	await expect(page.getByTestId("welcome-cta")).toContainText("Start a new project");
+	await expect(page.getByTestId("welcome-action")).toHaveCount(2);
+	await expect(page.getByTestId("welcome-action").nth(1)).toContainText("Chat without a project");
 
-	await page.getByTestId("welcome-cta").click();
+	await page.getByTestId("welcome-action").filter({ hasText: "Open project" }).click();
 	await expect(page.getByTestId("menu-open-project")).toBeVisible();
 });
 
-test("the Welcome provider warning only shows when no provider is connected, and opens Settings", async ({
+test("the Welcome provider warning only shows when no provider is connected, and opens the focused connect dialog", async ({
 	page,
 }) => {
 	await openAppFresh(page);
 
 	const banner = page.getByTestId("welcome-provider-warning");
-	if (await banner.isVisible()) {
+	if (await hostReportsConnectedProvider(page)) {
+		await expect(banner).toHaveCount(0);
+	} else {
 		await expect(banner).toContainText("No model provider connected");
 		await page.getByTestId("welcome-connect-provider").click();
-		await expect(page.getByTestId("settings-dialog")).toBeVisible();
-		await expect(page.getByTestId("settings-providers")).toBeVisible();
-	} else {
-		await expect(banner).toHaveCount(0);
+		const dialog = page.getByTestId("connect-provider-dialog");
+		await expect(dialog).toBeVisible();
+		await expect(dialog.getByTestId("connect-provider-list")).toBeVisible();
+		await expect(dialog.getByTestId("connect-detected")).toHaveCount(0);
+		await expect(
+			dialog.locator('[data-testid="provider-signin-row"][data-provider="anthropic"]'),
+		).toHaveCount(1);
+		await expect(
+			dialog
+				.getByTestId("connect-detected-central")
+				.or(dialog.getByTestId("connect-provider-list").getByTestId("jetbrains-ai-row")),
+		).toBeVisible();
+		await expect(dialog.getByTestId("jbcentral-quota-settings")).toHaveCount(0);
 	}
 });
 
@@ -239,7 +263,7 @@ test("opening a non-git folder from the Welcome screen offers to initialise a re
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await expect(page.getByTestId("welcome")).toBeVisible();
 
-	await page.getByTestId("welcome-cta").click();
+	await page.getByTestId("welcome-action").filter({ hasText: "Open project" }).click();
 	await page.getByTestId("menu-open-project").click();
 
 	const confirmInit = page.getByTestId("confirm-init-repo");

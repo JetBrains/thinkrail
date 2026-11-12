@@ -13,7 +13,7 @@ tags: [testing, workflow-system, pi]
 The headless workflow-test suite: drives a **real in-process pi agent** through the workflow skills
 ([[module-thinkrail-workflow]]) with **no browser and no HTTP host**, and decides pass/fail with a
 strict verdict model. Run on demand via `bun run test:workflows` (own Playwright config,
-`playwright.workflows.config.ts` — no `webServer`; deliberately retains the local PI-auth setup rather than
+`e2e/playwright.workflows.config.ts` — no `webServer`; deliberately retains the local PI-auth setup rather than
 the browser agent suite's real-Central mode). Its isolated `PI_CODING_AGENT_DIR` + pinned model are cloned by
 `env.ts` **per worker process** (pid-suffixed, auth + settings copied in): workers must never share one agent
 dir — a dying worker's session dispose overlapping the next worker's newborn session in the shared
@@ -48,12 +48,12 @@ user?, dialog?, stopWhen?, forbid?, watchdog?, expect, judge?, record? }`.
   rendering; deltas APPEND, `partialResult` REPLACES.
 - `workspace` — throwaway git cwds under the e2e data dir (`empty` / `code-only` / `specced` /
   custom seed).
-- `dialog` — answers `ask_user_question` rounds through the **production `answerQuestion` bridge**,
+- `dialog` — answers `ask_user_question` rounds through the **production `respondToTool` bridge**,
   walking a ladder: script matchers → persona (validated; malformed → next rung) → deterministic
   fallback (`skip` / `pickRecommended`). An unscripted interview can never hang a run, and neither
   can a *throwing* script (scenario-author code): it degrades straight to the deterministic fallback
   with the error recorded on the round — never an unhandled rejection. Delivery failures are rounds
-  too: `answerQuestion` can reject after the fact (a slow persona answer superseded by the user
+  too: `respondToTool` can reject after the fact (a slow persona answer superseded by the user
   simulator's next message), which is recorded on the round, not thrown — scenarios that must win
   that race script their rounds (the script rung answers synchronously at `tool_execution_start`).
   A live answer resolves the blocking tool and continues its current run; a restart-repaired ack answer

@@ -51,6 +51,34 @@ test("a live rendered-diff refresh preserves the reader's scroll position", asyn
 	await expect.poll(() => diff.evaluate((node) => node.scrollTop)).toBeGreaterThan(diffTop * 0.8);
 });
 
+test("a live rendered-diff refresh keeps an expanded run expanded", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const path = join(workspace.worktreePath, "expand-refresh.md");
+	const doc = (ending: string) =>
+		`${Array.from({ length: 12 }, (_, index) =>
+			index === 10 ? `Paragraph ${index} ${ending}.` : `Paragraph ${index} stays put.`,
+		).join("\n\n")}\n`;
+	commitFile(workspace.worktreePath, "expand-refresh.md", doc("original"), "add expand fixture");
+	writeFileSync(path, doc("first edit"));
+
+	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-uncommitted").click();
+	const change = page.getByTestId("change-item").filter({ hasText: "expand-refresh.md" });
+	await fsExpect(change).toBeVisible();
+	await change.dblclick();
+	const diff = page.getByTestId("rendered-diff");
+	await fsExpect(diff.locator("ins").filter({ hasText: "first" })).toBeVisible();
+	await expect(diff).not.toContainText("Paragraph 0 stays put.");
+	await diff.getByTestId("rendered-diff-collapsed").first().click();
+	await expect(diff).toContainText("Paragraph 0 stays put.");
+
+	writeFileSync(path, doc("second edit"));
+	await fsExpect(diff.locator("ins").filter({ hasText: "second" })).toBeVisible();
+	await expect(diff).toContainText("Paragraph 0 stays put.");
+});
+
 test("worktree changes on disk appear live in Specs, Files, Changes, and an open file tab", async ({
 	page,
 }) => {

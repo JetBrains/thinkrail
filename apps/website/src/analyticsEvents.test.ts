@@ -190,28 +190,21 @@ describe("CTA classification", () => {
 		expect(ctaLocationForElement(elementAt("footer"))).toBeUndefined();
 	});
 
-	test("captures CLI disclosures only when they open", () => {
-		const contentKey = "landing";
+	test("captures the blog-post CLI disclosure only when it opens", () => {
+		const contentKey = "blog/thinkrail-0-2-0-review-the-turn";
 		expect(
-			cliDisclosureOpenedEvent(contentKey, disclosure(false, "details.cli-disclosure")),
+			cliDisclosureOpenedEvent(contentKey, disclosure(false, ".blog-post details.cli-disclosure")),
 		).toBeUndefined();
 		expect(
-			cliDisclosureOpenedEvent(contentKey, disclosure(true, "details.cli-disclosure")),
-		).toEqual({
-			event: "install_cta_clicked",
-			properties: {
-				content_key: "landing",
-				cta_location: "hero",
-				install_method: "cli",
-			},
-		});
+			cliDisclosureOpenedEvent("landing", disclosure(true, "details.cli-disclosure")),
+		).toBeUndefined();
 		expect(
-			cliDisclosureOpenedEvent(contentKey, disclosure(true, "details.install-reference")),
+			cliDisclosureOpenedEvent(contentKey, disclosure(true, ".blog-post details.cli-disclosure")),
 		).toEqual({
 			event: "install_cta_clicked",
 			properties: {
-				content_key: "landing",
-				cta_location: "install_section",
+				content_key: "blog/thinkrail-0-2-0-review-the-turn",
+				cta_location: "blog_post",
 				install_method: "cli",
 			},
 		});
@@ -277,6 +270,20 @@ describe("install command copies and link shares", () => {
 		expect(installCommandCopiedEvent("landing", button)).toEqual({
 			event: "install_command_copied",
 			properties: { content_key: "landing", cta_location: "install_section", shell },
+		});
+	});
+
+	test("attributes a copy from the blog install picker to the post", () => {
+		const button = attributeElement(".blog-post", "[data-copy]", {
+			"data-copy": installCommands.windows.powershell,
+		});
+		expect(installCommandCopiedEvent("blog/thinkrail-0-2-0-review-the-turn", button)).toEqual({
+			event: "install_command_copied",
+			properties: {
+				content_key: "blog/thinkrail-0-2-0-review-the-turn",
+				cta_location: "blog_post",
+				shell: "powershell",
+			},
 		});
 	});
 
@@ -446,7 +453,7 @@ describe("analytics event initialization", () => {
 		const touches: number[] = [];
 		initAnalyticsEvents(
 			document,
-			"/",
+			"/blog/thinkrail-workspaces/",
 			log.capture,
 			() => {},
 			() => touches.push(1),
@@ -454,10 +461,10 @@ describe("analytics event initialization", () => {
 		log.events.length = 0;
 
 		document.dispatch("toggle", {
-			target: disclosure(false, "details.install-reference"),
+			target: disclosure(false, ".blog-post details.cli-disclosure"),
 		});
 		document.dispatch("toggle", {
-			target: disclosure(true, "details.install-reference"),
+			target: disclosure(true, ".blog-post details.cli-disclosure"),
 		});
 
 		expect(touches).toEqual([1]);
@@ -465,8 +472,8 @@ describe("analytics event initialization", () => {
 			{
 				event: "install_cta_clicked",
 				properties: {
-					content_key: "landing",
-					cta_location: "install_section",
+					content_key: "blog/thinkrail-workspaces",
+					cta_location: "blog_post",
 					install_method: "cli",
 				},
 			},

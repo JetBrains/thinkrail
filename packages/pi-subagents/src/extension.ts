@@ -2,9 +2,11 @@ import type {
 	ExtensionAPI,
 	ExtensionContext,
 	ExtensionFactory,
+	TurnEndEvent,
 } from "@earendil-works/pi-coding-agent";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import {
+	type ChildHandle,
 	createDelegationService,
 	DEFAULT_SCOPE,
 	type DelegationRunDetails,
@@ -12,13 +14,19 @@ import {
 	defaultDelegationRoot,
 	deriveChildSessionFile,
 	type RunOutcome,
+	type RunSnapshot,
 	type RunStatus,
 } from "pi-delegation";
 import { Type } from "typebox";
 import { type AgentDefinition, discoverAgentDefinitions } from "./definitions";
 import { RECURSION_GUARD_TOOLS, toSpawnMapping } from "./mapping";
+import { THINKING_LEVELS } from "./thinking";
 
 export const SUBAGENT_COMPLETION_MESSAGE = "subagent-completion";
+
+export type CompletionDelivery = "wake" | "run" | "appended";
+
+export type SubagentCompletionDetails = DelegationRunDetails & { delivery?: CompletionDelivery };
 
 const MAX_RESULT_CHARS = 50_000;
 
@@ -32,7 +40,7 @@ export interface SubagentsExtensionOptions {
 
 export interface Subagents {
 	extension: ExtensionFactory;
-	flushCompletions(): void;
+	flushCompletions(options?: { atTurnEnd?: boolean }): void;
 	dispose(): void;
 }
 
@@ -47,9 +55,11 @@ function discoverFor(ctx: ExtensionContext): AgentDefinition[] {
 function agentListLines(definitions: AgentDefinition[]): string {
 	return definitions
 		.map((d) => {
-			const model = d.model === undefined ? "call or parent" : `pinned ${d.model}`;
+			const model = d.model === undefined ? "parent unless set" : `pinned ${d.model}`;
+			const thinking =
+				d.thinking === undefined ? "" : `; thinking: ${d.thinking} (overrides suffix)`;
 			const tools = d.tools?.join(", ") ?? "pi defaults: read, bash, edit, write";
-			return `- "${d.name}" (${d.source}): ${d.description} [model: ${model}; tools: ${tools}]`;
+			return `- "${d.name}" (${d.source}): ${d.description} [model: ${model}${thinking}; tools: ${tools}]`;
 		})
 		.join("\n");
 }
@@ -66,6 +76,14 @@ export function boundedText(run: {
 	return text.length > MAX_RESULT_CHARS ? `${text.slice(0, MAX_RESULT_CHARS)}\n[truncated]` : text;
 }
 
+function pulledReport(snapshot: RunSnapshot & { status: RunStatus }): string {
+	const report = boundedText(snapshot);
+	if (snapshot.status === "error") return `Run error: ${report}`;
+	if (snapshot.status !== "aborted") return report;
+	const reason = snapshot.details.abortReason ? ` (${snapshot.details.abortReason})` : "";
+	return snapshot.finalText ? `Run aborted${reason}:\n\n${report}` : `Run aborted${reason}.`;
+}
+
 export function createSubagentsExtension(
 	options: SubagentsExtensionOptions = {},
 ): ExtensionFactory {
@@ -78,12 +96,39 @@ export function createSubagents(
 	return createOwner(options, true);
 }
 
+interface HeldCompletion {
+	outcome: RunOutcome;
+	roleName: string;
+	child: ChildHandle;
+	stopped: boolean;
+}
+
+type DeliveryMode = { idle: true } | { idle: false; runContinues: boolean };
+
+function wakes(completion: HeldCompletion): boolean {
+	return !completion.stopped && completion.outcome.details.abortReason !== "user";
+}
+
+function deliveryOf(mode: DeliveryMode, batchWakes: boolean, index: number): CompletionDelivery {
+	if (mode.idle) return !batchWakes ? "appended" : index === 0 ? "wake" : "run";
+	return mode.runContinues || batchWakes ? "run" : "appended";
+}
+
+function eligibleTurn(event: TurnEndEvent, ctx: ExtensionContext): boolean {
+	const stopReason = event.message.role === "assistant" ? event.message.stopReason : undefined;
+	return (stopReason === "stop" || stopReason === "toolUse") && ctx.signal?.aborted !== true;
+}
+
 function createOwner(options: SubagentsExtensionOptions, retained: boolean): Subagents {
 	let parentSessionId: string | undefined;
-	let sender: { send: ExtensionAPI["sendMessage"] } | undefined;
+	let sender: { send: ExtensionAPI["sendMessage"]; isIdle: () => boolean } | undefined;
 	let closed = false;
 	let flushing = false;
-	const pending = new Set<{ outcome: RunOutcome; roleName: string; childSessionId: string }>();
+	let flushScheduled = false;
+	let wakeDeferred = false;
+	let turnEnd: { runContinues: boolean } | undefined;
+	let owedWake = false;
+	const pending = new Set<HeldCompletion>();
 
 	function dispose(): void {
 		closed = true;
@@ -91,36 +136,78 @@ function createOwner(options: SubagentsExtensionOptions, retained: boolean): Sub
 		pending.clear();
 	}
 
-	function flushCompletions(): void {
-		if (flushing || closed) return;
+	function parentIdle(): boolean {
+		try {
+			return sender?.isIdle() ?? false;
+		} catch {
+			return false;
+		}
+	}
+
+	function deliver(mode: DeliveryMode): boolean {
+		if (flushing || closed || !sender || !(options.canDeliverCompletion?.() ?? true)) return false;
 		flushing = true;
 		try {
-			for (const completion of [...pending]) {
-				if (closed || !sender || !(options.canDeliverCompletion?.() ?? true)) break;
+			for (const completion of pending) {
+				if (completion.child.snapshot?.collected) pending.delete(completion);
+			}
+			const batch = [...pending];
+			const batchWakes = batch.some(wakes);
+			const carrier = mode.idle ? batch.findLast(wakes) : undefined;
+			const ordered = carrier ? [...batch.filter((c) => c !== carrier), carrier] : batch;
+			let deliveredWake = false;
+			for (const [index, completion] of ordered.entries()) {
+				if (closed || !sender) break;
+				const delivery = deliveryOf(mode, batchWakes, index);
+				const { outcome, roleName, child } = completion;
 				pending.delete(completion);
-				const { outcome, roleName, childSessionId } = completion;
 				try {
 					sender.send(
 						{
 							customType: SUBAGENT_COMPLETION_MESSAGE,
-							content: `Subagent "${roleName}" (${childSessionId}) ${outcome.status}:\n\n${boundedText(outcome)}`,
+							content: `Subagent "${roleName}" (${child.sessionId}) ${outcome.status}:\n\n${boundedText(outcome)}`,
 							display: true,
-							details: outcome.details,
+							details: { ...outcome.details, delivery } satisfies SubagentCompletionDetails,
 						},
-						{ deliverAs: "followUp", triggerTurn: outcome.details.abortReason !== "user" },
+						{ triggerTurn: completion === carrier },
 					);
+					deliveredWake ||= wakes(completion);
 				} catch {
 					if (!closed) pending.add(completion);
 					break;
 				}
+				if (completion === carrier && parentIdle()) {
+					wakeDeferred = true;
+					scheduleFlush();
+				}
 			}
+			return deliveredWake;
 		} finally {
 			flushing = false;
 		}
 	}
 
+	function flushCompletions(flush: { atTurnEnd?: boolean } = {}): void {
+		if (closed) return;
+		if (parentIdle()) {
+			if (!wakeDeferred) deliver({ idle: true });
+			return;
+		}
+		if (flush.atTurnEnd && turnEnd && deliver({ idle: false, ...turnEnd })) owedWake = true;
+	}
+
+	function scheduleFlush(): void {
+		if (closed || flushScheduled) return;
+		flushScheduled = true;
+		setTimeout(() => {
+			flushScheduled = false;
+			wakeDeferred = false;
+			flushCompletions();
+		}, 0);
+	}
+
 	const extension: ExtensionFactory = (pi) => {
-		const binding = { send: pi.sendMessage };
+		const binding = { send: pi.sendMessage, isIdle: () => false };
 		const delegationRoot = options.delegationRoot ?? defaultDelegationRoot();
 		const scope = options.scope ?? DEFAULT_SCOPE;
 		const isEnabled = () => !closed && (options.isEnabled?.() ?? true);
@@ -131,10 +218,37 @@ function createOwner(options: SubagentsExtensionOptions, retained: boolean): Sub
 			erroredRunDetails.delete(event.toolCallId);
 			return event.isError ? { details } : undefined;
 		});
-		pi.on("turn_end", (_event, ctx) => {
+		pi.on("turn_end", (event, ctx) => {
 			erroredRunDetails.clear();
 			registerAgentTool(ctx);
+			const runContinues =
+				event.message.role === "assistant" && event.message.stopReason === "toolUse";
+			turnEnd = eligibleTurn(event, ctx) ? { runContinues } : undefined;
+			if (turnEnd && deliver({ idle: false, ...turnEnd })) return { continue: true };
+			return undefined;
 		});
+		pi.on("turn_start", () => {
+			turnEnd = undefined;
+			owedWake = false;
+			wakeDeferred = false;
+		});
+		pi.on("agent_end", () => {
+			turnEnd = undefined;
+		});
+		pi.on("agent_before_settle", () => {
+			const wake = deliver({ idle: false, runContinues: owedWake }) || owedWake;
+			owedWake = false;
+			return wake ? { continue: true } : undefined;
+		});
+		pi.on("agent_settled", (event) => {
+			turnEnd = undefined;
+			owedWake = false;
+			if (event.aborted) for (const completion of pending) completion.stopped = true;
+			scheduleFlush();
+		});
+		pi.on("session_compact", () => scheduleFlush());
+		pi.on("session_compact_failed", () => scheduleFlush());
+		pi.on("session_tree", () => scheduleFlush());
 		pi.on("session_shutdown", async (event, ctx) => {
 			if (sender === binding) sender = undefined;
 			if (!retained || event.reason !== "reload") dispose();
@@ -174,10 +288,17 @@ function createOwner(options: SubagentsExtensionOptions, retained: boolean): Sub
 The subagent works autonomously and non-interactively: give it one complete, self-contained task
 (everything it must know goes in the task text) and it returns a final report. Issue several Agent
 calls in ONE message to run subagents in parallel; sequence dependent steps yourself across turns.
-Set run_in_background for long tasks — you get the session id immediately, a completion message
-arrives when it finishes, and get_subagent_result fetches the result on demand. Set model to choose
-an available model for an unpinned agent; a definition's pinned model always wins. Subagents cannot
-call MCP tools (mcp__*, tool_search, the MCP resource tools): call those yourself and put what the
+Set run_in_background for long tasks: you get the session id immediately, and the subagent's report
+is delivered to you automatically, before your next step while you work or as a new turn when you
+are idle. Do not poll get_subagent_result or sleep to wait; to wait, end your turn. Use
+get_subagent_result only to check a run's status or re-read a finished report. Leave model out to
+run on your own model. Set model only to choose another available model for an unpinned agent; a
+definition's pinned model always wins, ignoring the invocation model and its suffix. A model
+reference with no whole-reference match may end in
+:<thinking> (${THINKING_LEVELS.join(", ")}). Whole-reference matches keep their meaning;
+ambiguous references fail rather than being reinterpreted. Explicit definition thinking overrides
+a suffix; without either, thinking inherits the parent. Pi clamps thinking to model capabilities.
+Subagents cannot call MCP tools (mcp__*, tool_search, the MCP resource tools): call those yourself and put what the
 subagent needs in the task.
 
 Available subagent types:
@@ -192,7 +313,7 @@ ${known}`,
 					model: Type.Optional(
 						Type.String({
 							description:
-								'Available model for an unpinned agent, preferably "provider/id"; a definition pin wins',
+								'Leave out to use the parent model. Otherwise an available model for an unpinned agent: "provider/id" or "provider/id:thinking" (a bare id or unique id prefix also works). Whole-reference matches win; a definition pin ignores this value, and definition thinking overrides a suffix.',
 						}),
 					),
 					run_in_background: Type.Optional(
@@ -222,6 +343,7 @@ ${known}`,
 							createdBy: "tool:Agent",
 							roleName: definition.name,
 							roleSource: definition.source,
+							...(params.run_in_background ? { detached: true } : {}),
 						},
 						session: mapping.session,
 					});
@@ -243,11 +365,7 @@ ${known}`,
 						run
 							.then((outcome) => {
 								if (closed) return;
-								pending.add({
-									outcome,
-									roleName: definition.name,
-									childSessionId: child.sessionId,
-								});
+								pending.add({ outcome, roleName: definition.name, child, stopped: false });
 								flushCompletions();
 							})
 							.catch(() => {});
@@ -281,7 +399,9 @@ ${known}`,
 			});
 		}
 
-		pi.on("before_agent_start", (_event, ctx) => {
+		pi.on("before_agent_start", (event, ctx) => {
+			if (event.messageType === "user")
+				for (const completion of pending) completion.stopped = false;
 			registerAgentTool(ctx);
 		});
 
@@ -290,6 +410,7 @@ ${known}`,
 			if (parentSessionId !== undefined && parentSessionId !== sessionId)
 				throw new Error("Subagents belong to a different session");
 			parentSessionId ??= sessionId;
+			binding.isIdle = () => sessionCtx.isIdle();
 			if (!closed) sender = binding;
 			registerAgentTool(sessionCtx);
 			pi.registerTool({
@@ -333,19 +454,14 @@ ${known}`,
 							content: [
 								{
 									type: "text",
-									text: `Still ${status}. Ask again later or continue with other work.`,
+									text: `Still ${status}. Its report is delivered to you automatically when it finishes: continue with other work or end your turn instead of polling.`,
 								},
 							],
 							details: snapshot.details,
 						};
 					}
-					const report = boundedText({
-						status,
-						finalText: snapshot.finalText,
-						errorMessage: snapshot.errorMessage,
-					});
 					return {
-						content: [{ type: "text", text: status === "error" ? `Run error: ${report}` : report }],
+						content: [{ type: "text", text: pulledReport({ ...snapshot, status }) }],
 						details: snapshot.details,
 					};
 				},

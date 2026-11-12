@@ -1,7 +1,14 @@
 import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openAppFresh, openFixtureProject } from "./fixtures/app";
+import {
+	createWorkspaceViaDialog,
+	expandModelGroup,
+	modelGroupToggle,
+	openAppFresh,
+	openFixtureProject,
+	revealModelGroups,
+} from "./fixtures/app";
 import {
 	assertOnlyReviewedArgv,
 	centralInvocations,
@@ -58,7 +65,12 @@ test("connects and follows external add, replacement, and remove without a host 
 	writeFileSync(E2E_CENTRAL_ARTIFACT, replacement);
 	await waitForCentralState(page, "configured");
 	await page.getByTestId("settings-nav-models").click();
-	await page.getByTestId("settings-models").getByTestId("model-selector").click();
+	await page
+		.getByTestId("settings-models")
+		.getByTestId("default-model-row")
+		.getByTestId("model-selector")
+		.click();
+	await expandModelGroup(page, "e2e-central");
 	await expect(
 		page.locator('[data-testid="model-option"][data-model-id="e2e-central-model-v2"]'),
 	).toBeVisible();
@@ -235,6 +247,8 @@ test("disconnect removes Central from new chats while an existing live chat keep
 
 	await createWorkspaceViaDialog(page);
 	await page.getByTestId("model-selector").click();
+	await revealModelGroups(page);
+	await expandModelGroup(page, "e2e-central");
 	await page.locator('[data-testid="model-option"][data-model-id="e2e-central-model"]').click();
 	await expect(page.getByTestId("model-selector")).toContainText("Synthetic JetBrains AI model");
 
@@ -249,6 +263,8 @@ test("disconnect removes Central from new chats while an existing live chat keep
 	const dialog = page.getByTestId("new-workspace-dialog");
 	await expect(dialog).toBeVisible();
 	await dialog.getByTestId("model-selector").click();
+	await revealModelGroups(page);
+	await expect(modelGroupToggle(page, "e2e-central")).toHaveCount(0);
 	await expect(
 		page.locator('[data-testid="model-option"][data-model-id="e2e-central-model"]'),
 	).toHaveCount(0);

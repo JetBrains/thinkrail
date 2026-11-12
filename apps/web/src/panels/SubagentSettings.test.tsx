@@ -5,6 +5,7 @@ import {
 	type SubagentOverride,
 	type Workspace,
 } from "@thinkrail/contracts";
+import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import { SubagentSettings } from "./SubagentSettings";
 
@@ -36,16 +37,18 @@ function render({
 	activeWorkspace?: Workspace;
 } = {}): string {
 	return renderToStaticMarkup(
-		<SubagentSettings
-			protocolVersion={protocolVersion}
-			globalEnabled={globalEnabled}
-			globalLimit={globalLimit}
-			workspace={activeWorkspace ?? null}
-			onGlobalEnabledChange={() => {}}
-			onWorkspaceEnabledChange={() => {}}
-			onGlobalLimitChange={() => {}}
-			onWorkspaceLimitChange={() => {}}
-		/>,
+		<TooltipProvider>
+			<SubagentSettings
+				protocolVersion={protocolVersion}
+				globalEnabled={globalEnabled}
+				globalLimit={globalLimit}
+				workspace={activeWorkspace ?? null}
+				onGlobalEnabledChange={() => {}}
+				onWorkspaceEnabledChange={() => {}}
+				onGlobalLimitChange={() => {}}
+				onWorkspaceLimitChange={() => {}}
+			/>
+		</TooltipProvider>,
 	);
 }
 
@@ -71,15 +74,17 @@ test("hosts older than the concurrency protocol get only the Allow row", () => {
 	expect(markup).not.toContain("subagent-limit-");
 });
 
-test("without an active workspace the table has only the Global column", () => {
+test("without an active workspace only the global rows render", () => {
 	const markup = render({ globalLimit: 7 });
-	expect(markup).toContain(">Global</th>");
+	expect(element(markup, "subagents-global-toggle")).toContain('aria-checked="true"');
+	expect(markup).toContain("Per chat at once");
 	expect(markup).not.toContain('data-testid="subagents-workspace-heading"');
 	expect(markup).not.toContain('data-testid="subagents-workspace-toggle"');
 	const input = element(markup, "subagent-limit-global-input");
 	expect(input).toContain('min="1"');
 	expect(input).toContain('max="16"');
 	expect(input).toContain('value="7"');
+	expect(input).toContain("data-settings-draft-input");
 });
 
 test("an inheriting workspace mirrors the global values and marks them Global", () => {

@@ -1,3 +1,4 @@
+export { detectAccounts } from "./detectAccounts";
 export {
 	connectJbcentral,
 	disconnectJbcentral,
@@ -18,6 +19,7 @@ export {
 	logoutProvider,
 	resolveLogin,
 	setLoginPublisher,
+	setLogoutPublisher,
 	startLogin,
 } from "./providerLogin";
 export {

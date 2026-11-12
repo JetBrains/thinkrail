@@ -2,27 +2,44 @@ import {
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
 	type BackgroundCommandSummary,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
+	CHATS_PROTOCOL_VERSION,
+	canMarkCompletionUnread,
+	DEFAULT_WORKSPACE_NAME,
+	firstPromptOfTexts,
 	type GitDiffScope,
+	isLiveResource,
 	isSessionWorking,
 	MCP_PROTOCOL_VERSION,
 	type McpServerResourceSummary,
 	MODEL_PICKER_PROTOCOL_VERSION,
+	ONBOARDING_PROTOCOL_VERSION,
+	PROJECT_CLONE_PROTOCOL_VERSION,
 	PROJECT_TRUST_PROTOCOL_VERSION,
 	type Project,
+	RESOURCE_HISTORY_PROTOCOL_VERSION,
+	type ResourceKind,
+	type ResourceRecord,
+	resourceTallyTotal,
+	SEARCH_PROTOCOL_VERSION,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
+	type SessionResourceHistory,
 	type SessionResources,
 	type SessionState,
 	type SessionStateRecord,
 	type SpecGraphNode,
 	type SubagentResourceSummary,
 	sameModel,
+	tallyResources,
 	type WireModel,
+	WORKSPACE_READ_STATE_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	type Workspace,
 } from "@thinkrail/contracts";
+import type { Translator } from "@thinkrail/locales/react";
 import type { LoginState } from "../auth";
 import {
+	chatDisplayName,
 	compactAge,
 	isAbsolutePath,
 	isMcpActiveState,
@@ -32,6 +49,7 @@ import {
 	normalizePath,
 	readLayoutSelection,
 	relativeTime,
+	userText,
 } from "../lib";
 import type {
 	LayoutAuxiliaryRegion,
@@ -40,13 +58,23 @@ import type {
 	WorkspaceLayoutDocument,
 } from "../shell/layout";
 import type {
+	ChangesTabSection,
 	ClosedChat,
+	ComposerFocusRequest,
 	EditorTab,
+	FilesTreeView,
+	MarkedUnread,
+	PendingMarkUnread,
 	RouteChatTarget,
 	SessionRuntime,
 	TerminalTab,
 } from "./appStore";
-import type { ChatResourceRead, ChatResourceScope, ChatResourceState } from "./chatResources";
+import {
+	type ChatResourceRead,
+	type ChatResourceScope,
+	type ChatResourceState,
+	finishedChain,
+} from "./chatResources";
 
 export function selectLoginBusy(state: {
 	activeLogin: LoginState | null;
@@ -93,12 +121,72 @@ interface ProtocolState {
 	protocolVersion: number | null;
 }
 
+export function selectHostSearchAvailable(state: {
+	welcomeProtocolVersion: number | null;
+}): boolean {
+	return (
+		state.welcomeProtocolVersion !== null && state.welcomeProtocolVersion >= SEARCH_PROTOCOL_VERSION
+	);
+}
+
+export function selectHostReachable(
+	state: ProtocolState & { status: string; welcomeGeneration: number },
+): boolean {
+	return (
+		state.status === "connected" && state.welcomeGeneration > 0 && state.protocolVersion !== null
+	);
+}
+
+export function selectHostSearchReady(
+	state: ProtocolState & { status: string; welcomeGeneration: number },
+): boolean {
+	return (
+		selectHostReachable(state) &&
+		state.protocolVersion !== null &&
+		state.protocolVersion >= SEARCH_PROTOCOL_VERSION
+	);
+}
+
 export function selectCanRenameChat(state: ProtocolState): boolean {
 	return state.protocolVersion !== null && state.protocolVersion >= SESSION_RENAME_PROTOCOL_VERSION;
 }
 
 export function selectSupportsProjectTrust(state: ProtocolState): boolean {
 	return state.protocolVersion !== null && state.protocolVersion >= PROJECT_TRUST_PROTOCOL_VERSION;
+}
+
+export function selectSupportsProjectClone(state: ProtocolState): boolean {
+	return state.protocolVersion !== null && state.protocolVersion >= PROJECT_CLONE_PROTOCOL_VERSION;
+}
+
+export function selectSupportsOnboarding(state: ProtocolState): boolean {
+	return state.protocolVersion !== null && state.protocolVersion >= ONBOARDING_PROTOCOL_VERSION;
+}
+
+type OnboardingState = ProtocolState & {
+	onboardingDismissed: boolean;
+	projects: readonly Pick<Project, "kind">[];
+	recentProjects: readonly unknown[];
+};
+
+function hasRepoProject(projects: readonly Pick<Project, "kind">[]): boolean {
+	return projects.some((project) => !isChatsContainer(project));
+}
+
+export function selectOnboardingEligible(state: OnboardingState): boolean {
+	return (
+		!state.onboardingDismissed &&
+		selectSupportsOnboarding(state) &&
+		!hasRepoProject(state.projects) &&
+		state.recentProjects.length === 0
+	);
+}
+
+export function selectOnboardingActive(
+	state: OnboardingState & { onboardingWizard: "pending" | "shown" | "hidden" },
+): boolean {
+	if (state.onboardingWizard === "shown") return !hasRepoProject(state.projects);
+	return state.onboardingWizard === "pending" && selectOnboardingEligible(state);
 }
 
 export function selectSupportsMcp(state: ProtocolState): boolean {
@@ -188,26 +276,30 @@ export function selectChatResourcesLoading(
 	);
 }
 
-export function selectChatResourcesStale(
+export type ChatResourcesStaleness =
+	| "disconnected"
+	| "refreshFailed"
+	| "unavailable"
+	| "refreshing";
+
+export function selectChatResourcesStaleness(
 	state: ChatResourceState,
 	scope: ChatResourceScope,
-): boolean {
+): ChatResourcesStaleness | null {
+	if (selectChatResourceAuthority(state, scope)) return null;
+	if (state.status !== "connected" || !supportsChatResources(state.protocolVersion))
+		return "disconnected";
 	const projection = selectChatResourceProjection(state, scope);
-	return (
-		!selectChatResourceAuthority(state, scope) &&
-		(!!projection?.snapshot ||
-			!!projection?.error ||
-			state.status !== "connected" ||
-			!supportsChatResources(state.protocolVersion))
-	);
+	if (projection?.error) return projection.retrying ? "refreshFailed" : "unavailable";
+	return projection?.snapshot ? "refreshing" : null;
 }
 
 export function isActiveBackgroundCommand(command: BackgroundCommandSummary): boolean {
-	return command.status === "running" || command.status === "stopping";
+	return isLiveResource({ kind: "command", summary: command });
 }
 
 export function isActiveSubagent(child: SubagentResourceSummary): boolean {
-	return child.status === "queued" || child.status === "running";
+	return isLiveResource({ kind: "subagent", summary: child });
 }
 
 export function orderMcpResources(
@@ -225,30 +317,61 @@ export function orderMcpResources(
 export function selectChatResourceGroups(
 	snapshot: SessionResources | null | undefined,
 	includeMcp = true,
+	older: readonly ResourceRecord[] = [],
 ) {
 	const commands: BackgroundCommandSummary[] = [];
 	const subagents: SubagentResourceSummary[] = [];
-	const finishedCommands: BackgroundCommandSummary[] = [];
-	const finishedSubagents: SubagentResourceSummary[] = [];
+	const recentCommands: BackgroundCommandSummary[] = [];
+	const recentSubagents: SubagentResourceSummary[] = [];
 	for (const command of snapshot?.commands ?? []) {
-		(isActiveBackgroundCommand(command) ? commands : finishedCommands).push(command);
+		(isActiveBackgroundCommand(command) ? commands : recentCommands).push(command);
 	}
 	for (const child of snapshot?.subagents ?? []) {
-		(isActiveSubagent(child) ? subagents : finishedSubagents).push(child);
+		(isActiveSubagent(child) ? subagents : recentSubagents).push(child);
 	}
+	const held = { snapshot: snapshot ?? null, older };
+	const finishedCommands = finishedChain(held, "command").flatMap((record) =>
+		record.kind === "command" ? [record.summary] : [],
+	);
+	const finishedSubagents = finishedChain(held, "subagent").flatMap((record) =>
+		record.kind === "subagent" ? [record.summary] : [],
+	);
 	const mcpServers =
 		includeMcp && snapshot?.mcpServers ? orderMcpResources(snapshot.mcpServers) : null;
+	const history: SessionResourceHistory = snapshot?.history ?? {
+		commands: tallyResources(recentCommands.map((summary) => ({ kind: "command", summary }))),
+		subagents: tallyResources(recentSubagents.map((summary) => ({ kind: "subagent", summary }))),
+	};
+	const left = (total: number, held: number) => (snapshot?.history ? Math.max(0, total - held) : 0);
 	return {
 		commands,
 		subagents,
 		finishedCommands,
 		finishedSubagents,
+		history,
+		finishedCount: resourceTallyTotal(history.commands) + resourceTallyTotal(history.subagents),
+		remaining: {
+			command: left(resourceTallyTotal(history.commands), finishedCommands.length),
+			subagent: left(resourceTallyTotal(history.subagents), finishedSubagents.length),
+		} satisfies Record<ResourceKind, number>,
 		activeCount: commands.length + subagents.length,
 		mcpServers,
 		mcpActiveCount: mcpServers?.filter((server) => isMcpActiveState(server.state)).length ?? 0,
 		mcpAttentionCount:
 			mcpServers?.filter((server) => isMcpAttentionState(server.state)).length ?? 0,
 	};
+}
+
+export function selectChatResourceOldest(
+	state: ChatResourceState,
+	scope: ChatResourceScope,
+	kind: ResourceKind,
+): ResourceRecord | undefined {
+	return finishedChain(selectChatResourceProjection(state, scope), kind).at(-1);
+}
+
+export function supportsResourceHistory(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= RESOURCE_HISTORY_PROTOCOL_VERSION;
 }
 
 export function selectHasNormalizedSessionState(state: ProtocolState): boolean {
@@ -283,27 +406,29 @@ export type SettledReason =
 	| { kind: "idle"; since: number };
 
 /** Chip text; `settledReasonTitle` is the long form. */
-export function settledReasonLabel(reason: SettledReason, now: number): string {
+export function settledReasonLabel(t: Translator, reason: SettledReason, now: number): string {
 	switch (reason.kind) {
 		case "override":
-			return "by you";
+			return t("store.settled.byYou");
 		case "review":
-			return reason.state;
+			return reason.state === "merged" ? t("store.settled.merged") : t("store.settled.closed");
 		case "idle":
-			return `idle ${compactAge(reason.since, now)}`;
+			return t("store.settled.idle", { age: compactAge(t, reason.since, now) });
 	}
 }
 
-export function settledReasonTitle(reason: SettledReason, now: number): string {
+export function settledReasonTitle(t: Translator, reason: SettledReason, now: number): string {
 	switch (reason.kind) {
 		case "override":
 			return reason.since === undefined
-				? "Settled by you"
-				: `Settled by you ${relativeTime(reason.since, now)}`;
+				? t("store.settled.byYouTitle")
+				: t("store.settled.byYouTitleAt", { time: relativeTime(t, reason.since, now) });
 		case "review":
-			return reason.state === "merged" ? "Pull request merged" : "Pull request closed";
+			return reason.state === "merged"
+				? t("store.settled.prMergedTitle")
+				: t("store.settled.prClosedTitle");
 		case "idle":
-			return `Idle for ${compactAge(reason.since, now)}`;
+			return t("store.settled.idleTitle", { age: compactAge(t, reason.since, now) });
 	}
 }
 
@@ -330,7 +455,12 @@ export function selectWorkspaceSettledReason(
 	workspace: Workspace,
 	now: number,
 ): SettledReason | null {
-	if (!state.workspaceSettlingSupported || isDefaultWorkspace(workspace)) return null;
+	if (
+		!state.workspaceSettlingSupported ||
+		isDefaultWorkspace(workspace) ||
+		isChatWorkspace(workspace)
+	)
+		return null;
 	if (
 		selectWorkspaceIsRunning(state, workspace.id) ||
 		selectWorkspaceNeedsAttention(state, workspace.id)
@@ -411,12 +541,72 @@ export function selectWorkspaceNeedsAttention(
 	);
 }
 
+export function supportsWorkspaceReadState(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= WORKSPACE_READ_STATE_PROTOCOL_VERSION;
+}
+
+export function supportsProjectlessChats(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= CHATS_PROTOCOL_VERSION;
+}
+
+export type WorkspaceReadAction = "markRead" | "markUnread";
+
+export function selectWorkspaceReadAction(
+	state: SessionStateProjection,
+	workspaceId: string,
+): WorkspaceReadAction | null {
+	const records = Object.values(state.sessionStateByWorkspace[workspaceId] ?? {});
+	if (records.some((record) => record.state.completionUnread)) return "markRead";
+	if (records.some((record) => canMarkCompletionUnread(record.state))) return "markUnread";
+	return null;
+}
+
+interface MarkedUnreadState {
+	markingUnreadWorkspaces: Record<string, PendingMarkUnread>;
+	markedUnreadBySession: Record<string, MarkedUnread>;
+}
+
+export function selectCompletionMarkedUnread(
+	state: MarkedUnreadState,
+	record: SessionStateRecord,
+	options: { heldOnly?: boolean } = {},
+): boolean {
+	if (!record.state.completionUnread || !record.state.completion) return false;
+	const completionId = record.state.completion.completionId;
+	const pending = state.markingUnreadWorkspaces[record.workspaceId];
+	if (pending?.candidates[record.sessionId] === completionId) return true;
+	const mark = state.markedUnreadBySession[record.sessionId];
+	return (
+		mark !== undefined && mark.completionId === completionId && (!options.heldOnly || mark.held)
+	);
+}
+
+export type SessionAttention = "needs-input" | "error" | "unread" | "running";
+
+export function getSessionAttention(state: SessionState): SessionAttention | null {
+	if (state.needsInput !== null) return "needs-input";
+	if (state.completionUnread && state.completion?.outcome === "failed") return "error";
+	if (state.completionUnread) return "unread";
+	if (isSessionWorking(state)) return "running";
+	return null;
+}
+
 export function selectWorkspaceIsRunning(
 	state: SessionStateProjection,
 	workspaceId: string,
 ): boolean {
 	return Object.values(state.sessionStateByWorkspace[workspaceId] ?? {}).some((record) =>
 		isSessionWorking(record.state),
+	);
+}
+
+export function selectWorkspaceSettleBlocked(
+	state: SessionStateProjection,
+	workspaceId: string,
+): boolean {
+	return (
+		selectWorkspaceIsRunning(state, workspaceId) ||
+		selectWorkspaceNeedsAttention(state, workspaceId)
 	);
 }
 
@@ -441,7 +631,7 @@ export function selectProjectIsRunning(state: SessionStateProjection, projectId:
 	);
 }
 
-interface CompletionAckState extends SessionStateProjection {
+interface CompletionAckState extends SessionStateProjection, MarkedUnreadState {
 	status: string;
 	connectionGeneration: number;
 	sessions: Record<string, SessionRuntime>;
@@ -463,7 +653,8 @@ export function selectReadyCompletionAck(
 		!runtime ||
 		runtime.syncedConnectionGeneration !== state.connectionGeneration ||
 		runtime.hostState?.completion?.completionId !== completion.completionId ||
-		state.renderedCompletionBySession[sessionId] !== completion.completionId
+		state.renderedCompletionBySession[sessionId] !== completion.completionId ||
+		selectCompletionMarkedUnread(state, record, { heldOnly: true })
 	) {
 		return null;
 	}
@@ -539,9 +730,16 @@ export function selectLayoutResourcePlacement(
 	workspaceId: string,
 	resource: LayoutTab,
 ): LayoutResourcePlacement | null {
+	return selectLayoutIdentityPlacement(state, workspaceId, layoutResourceIdentity(resource));
+}
+
+export function selectLayoutIdentityPlacement(
+	state: LayoutDocumentState,
+	workspaceId: string,
+	identity: string,
+): LayoutResourcePlacement | null {
 	const document = state.layoutDocumentsByWorkspace[workspaceId];
 	if (!document) return null;
-	const identity = layoutResourceIdentity(resource);
 	return findLayoutPlacement(document, (tab) => layoutResourceIdentity(tab) === identity);
 }
 
@@ -588,6 +786,53 @@ export function selectChatAttended(
 		return false;
 	const tab = selectAttentionCenterTab(state, workspaceId);
 	return tab?.kind === "chat" && tab.sessionId === sessionId;
+}
+
+export function selectComposerFocusRequested(
+	state: ChatAttentionState & {
+		composerFocusRequest: ComposerFocusRequest | null;
+		navTickByWorkspace: Record<string, number>;
+	},
+	workspaceId: string,
+	sessionId: string,
+): boolean {
+	const request = state.composerFocusRequest;
+	return (
+		request !== null &&
+		request.workspaceId === workspaceId &&
+		(request.sessionId === null || request.sessionId === sessionId) &&
+		selectWorkspaceNavTick(state, workspaceId) === request.navTick &&
+		selectChatAttended(state, workspaceId, sessionId)
+	);
+}
+
+export function selectComposerFocusRequestStale(
+	state: ChatAttentionState & {
+		composerFocusRequest: ComposerFocusRequest | null;
+		navTickByWorkspace: Record<string, number>;
+		routeChatTarget: RouteChatTarget | null;
+	},
+	workspaceId: string,
+): boolean {
+	const request = state.composerFocusRequest;
+	if (!request || request.workspaceId !== workspaceId) return false;
+	if (state.activeWorkspaceId !== workspaceId) return true;
+	if (selectWorkspaceNavTick(state, workspaceId) !== request.navTick) return true;
+	if (
+		!state.layoutDocumentsByWorkspace[workspaceId] ||
+		!state.layoutAttentionByWorkspace[workspaceId]
+	) {
+		return false;
+	}
+	if (request.sessionId && selectCurrentRouteChatTarget(state)?.sessionId === request.sessionId) {
+		return false;
+	}
+	const tab = selectAttentionCenterTab(state, workspaceId);
+	if (!tab) return false;
+	return !(
+		tab.kind === "chat" &&
+		(request.sessionId === null || tab.sessionId === request.sessionId)
+	);
 }
 
 export function selectAttentionCenterResourceCacheKey(
@@ -638,6 +883,46 @@ export function isUserOwnedWorkspace(workspace: Pick<Workspace, "kind">): boolea
 	return isDefaultWorkspace(workspace) || isExternalWorkspace(workspace);
 }
 
+/** A chat without a project: its own folder in the Chats container, never a git checkout. */
+export function isChatWorkspace(workspace: Pick<Workspace, "kind">): boolean {
+	return workspace.kind === "chat";
+}
+
+export function isChatsContainer(project: Pick<Project, "kind">): boolean {
+	return project.kind === "chats";
+}
+
+/** Every repository project — the Chats container is never one of them. */
+export function selectRepoProjects(state: Pick<ProjectContextState, "projects">): Project[] {
+	return state.projects.filter((project) => !isChatsContainer(project));
+}
+
+export function selectChatsContainer(state: Pick<ProjectContextState, "projects">): Project | null {
+	return state.projects.find(isChatsContainer) ?? null;
+}
+
+/** The chats without a project, newest activity first. */
+export function selectChatWorkspaces(
+	state: Pick<ProjectContextState, "projects" | "workspaces">,
+): Workspace[] {
+	const container = selectChatsContainer(state);
+	if (!container) return [];
+	return [...(state.workspaces[container.id] ?? [])].sort(
+		(a, b) => (b.lastActiveAt ?? 0) - (a.lastActiveAt ?? 0),
+	);
+}
+
+/** The title pi gave a chat's conversation, from the host's state records; `null` until the agent names it. */
+export function selectChatWorkspaceTitle(
+	state: { sessionStateByWorkspace: Record<string, Record<string, SessionStateRecord>> },
+	workspaceId: string,
+): string | null {
+	for (const record of Object.values(state.sessionStateByWorkspace[workspaceId] ?? {})) {
+		if (record.title) return record.title;
+	}
+	return null;
+}
+
 export function selectActiveWorkspace(state: ActiveWorkspaceState): Workspace | null {
 	return state.activeWorkspaceId ? selectWorkspaceById(state, state.activeWorkspaceId) : null;
 }
@@ -657,9 +942,32 @@ export function selectActiveWorkspaceProjectId(state: ActiveWorkspaceState): str
 	return selectActiveWorkspace(state)?.projectId ?? null;
 }
 
+/** The active workspace when it has a repository: a chat without a project has none to scope to. */
+export function selectActiveRepoWorkspaceId(state: ActiveWorkspaceState): string | undefined {
+	const active = selectActiveWorkspace(state);
+	return active && !isChatWorkspace(active) ? active.id : undefined;
+}
+
 export function selectContextProject(state: ProjectContextState): Project | null {
 	const projectId = selectActiveWorkspace(state)?.projectId ?? state.selectedProjectId;
 	return state.projects.find((project) => project.id === projectId) ?? null;
+}
+
+/** Find in Files has a root: the active workspace, else a context project that is not the Chats container. */
+export function selectHasTextSearchScope(state: ProjectContextState): boolean {
+	if (selectActiveWorkspace(state)) return true;
+	const project = selectContextProject(state);
+	return project !== null && !isChatsContainer(project);
+}
+
+/** The repository new work is created in: the context project unless it is the Chats container, else the first repository. */
+export function selectContextRepoProject(state: ProjectContextState): Project | null {
+	const context = selectContextProject(state);
+	if (context && !isChatsContainer(context)) return context;
+	const selected = state.projects.find(
+		(project) => project.id === state.selectedProjectId && !isChatsContainer(project),
+	);
+	return selected ?? selectRepoProjects(state)[0] ?? null;
 }
 
 export interface HistoryTarget {
@@ -679,6 +987,20 @@ export function selectActiveEditorTab(
 	return (state.tabsByWorkspace[workspaceId] ?? []).find((tab) => tab.id === activeId) ?? null;
 }
 
+export function selectWorkspaceChatTab(
+	state: {
+		tabsByWorkspace: Record<string, EditorTab[]>;
+		activeTabByWorkspace: Record<string, string | null>;
+	},
+	workspaceId: string,
+): Extract<EditorTab, { kind: "chat" }> | null {
+	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
+	const active = selectActiveEditorTab(state, workspaceId);
+	if (active?.kind === "chat") return active;
+	const fallback = tabs.findLast((t) => t.kind === "chat");
+	return fallback?.kind === "chat" ? fallback : null;
+}
+
 export function selectHistoryTarget(state: {
 	activeWorkspaceId: string | null;
 	tabsByWorkspace: Record<string, EditorTab[]>;
@@ -686,10 +1008,18 @@ export function selectHistoryTarget(state: {
 }): HistoryTarget | null {
 	const workspaceId = state.activeWorkspaceId;
 	if (!workspaceId) return null;
-	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
-	const active = selectActiveEditorTab(state, workspaceId);
-	const chat = active?.kind === "chat" ? active : tabs.findLast((t) => t.kind === "chat");
+	const chat = selectWorkspaceChatTab(state, workspaceId);
 	return chat ? { workspaceId, tabId: chat.id, sessionId: chat.sessionId } : null;
+}
+
+export function selectRailPlanSessionId(
+	state: {
+		tabsByWorkspace: Record<string, EditorTab[]>;
+		activeTabByWorkspace: Record<string, string | null>;
+	},
+	workspaceId: string,
+): string | null {
+	return selectWorkspaceChatTab(state, workspaceId)?.sessionId ?? null;
 }
 
 export interface KnownChatLocation {
@@ -772,6 +1102,31 @@ export function selectDiffScope(
 	return state.diffScopeByWorkspace[workspaceId] ?? BRANCH_SCOPE;
 }
 
+const EMPTY_FILES_TREE_VIEW: FilesTreeView = {
+	expanded: [],
+	changedCollapsed: [],
+	scroll: {},
+	seenActivePath: null,
+};
+
+export function selectFilesTreeView(
+	state: { filesTreeByWorkspace: Record<string, FilesTreeView> },
+	workspaceId: string,
+): FilesTreeView {
+	return state.filesTreeByWorkspace[workspaceId] ?? EMPTY_FILES_TREE_VIEW;
+}
+
+export function selectActiveFilePath(
+	state: {
+		tabsByWorkspace: Record<string, EditorTab[]>;
+		activeTabByWorkspace: Record<string, string | null>;
+	},
+	workspaceId: string,
+): string | null {
+	const tab = selectActiveEditorTab(state, workspaceId);
+	return tab?.kind === "file" || tab?.kind === "diff" ? normalizePath(tab.path) : null;
+}
+
 export function selectDiffBaseRef(state: ActiveWorkspaceState, workspaceId: string): string {
 	const workspace = selectWorkspaceById(state, workspaceId);
 	return workspace ? (workspace.diffBase ?? workspace.baseBranch) : "";
@@ -782,6 +1137,30 @@ export function selectDiffTabTargetRef(
 	tab: { workspaceId: string; scope: GitDiffScope },
 ): string {
 	return tab.scope.kind === "branch" ? selectDiffBaseRef(state, tab.workspaceId) : "";
+}
+
+export function selectChangesTabSection(
+	state: { tabsByWorkspace: Record<string, EditorTab[]> },
+	workspaceId: string,
+	tabId: string,
+	path: string,
+): ChangesTabSection | undefined {
+	const tab = state.tabsByWorkspace[workspaceId]?.find((candidate) => candidate.id === tabId);
+	return tab?.kind === "changes" ? tab.sections[path] : undefined;
+}
+
+export function selectChangesTabRendererIds(
+	state: { tabsByWorkspace: Record<string, EditorTab[]> },
+	workspaceId: string,
+	tabId: string,
+): Record<string, string> {
+	const tab = state.tabsByWorkspace[workspaceId]?.find((candidate) => candidate.id === tabId);
+	const ids: Record<string, string> = {};
+	if (tab?.kind !== "changes") return ids;
+	for (const [path, section] of Object.entries(tab.sections)) {
+		if (section.rendererId) ids[path] = section.rendererId;
+	}
+	return ids;
 }
 
 export function matchesWorktreePath(reported: string, rel: string): boolean {
@@ -795,14 +1174,124 @@ export function specPathMatcher(nodes: SpecGraphNode[]): (path: string) => boole
 	return (reported) => paths.some((rel) => matchesWorktreePath(reported, rel));
 }
 
-export function selectChatTitle(
+export function workspaceName(
+	t: Translator,
+	workspace: { kind?: Workspace["kind"] | undefined; name: string },
+): string {
+	return workspace.kind === "default" && workspace.name === DEFAULT_WORKSPACE_NAME
+		? t("store.workspace.defaultName")
+		: workspace.name;
+}
+
+export function selectChatName(
 	state: { tabsByWorkspace: Record<string, EditorTab[]> },
 	workspaceId: string,
 	sessionId: string,
 ): string {
 	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
-	const chatTab = tabs.find((t) => t.kind === "chat" && t.sessionId === sessionId);
-	return (chatTab?.name ?? "Chat").trim() || "Chat";
+	return tabs.find((tab) => tab.kind === "chat" && tab.sessionId === sessionId)?.name ?? "";
+}
+
+export interface ChatFirstPromptState {
+	sessions: Record<string, SessionRuntime>;
+	sessionStateByWorkspace: Record<string, Record<string, SessionStateRecord>>;
+	closedChatsByWorkspace: Record<string, ClosedChat[]>;
+}
+
+function* userTurnTexts(turns: SessionRuntime["turns"]): Generator<string> {
+	for (const turn of turns) if (turn.kind === "user") yield userText(turn.message.content);
+}
+
+export function selectKnownChatTitle(
+	state: {
+		sessionStateByWorkspace: Record<string, Record<string, SessionStateRecord>>;
+		layoutDocumentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
+		closedChatsByWorkspace: Record<string, ClosedChat[]>;
+	},
+	workspaceId: string,
+	sessionId: string,
+): string | null {
+	const reported = state.sessionStateByWorkspace[workspaceId]?.[sessionId]?.title;
+	if (reported !== undefined) return reported || null;
+	const document = state.layoutDocumentsByWorkspace[workspaceId];
+	if (document) {
+		const visit = (node: WorkspaceLayoutDocument["center"]): string | null => {
+			if (node.kind === "split") {
+				return visit(node.children[0]) ?? visit(node.children[1]);
+			}
+			for (const tab of node.tabs) {
+				if (tab.kind === "chat" && tab.sessionId === sessionId) return tab.name;
+			}
+			return null;
+		};
+		const fromLayout = visit(document.center);
+		if (fromLayout) return fromLayout;
+	}
+	const closed = state.closedChatsByWorkspace[workspaceId] ?? [];
+	return closed.find((chat) => chat.sessionId === sessionId)?.title ?? null;
+}
+
+export function selectChatFirstPrompt(
+	state: ChatFirstPromptState,
+	workspaceId: string,
+	sessionId: string,
+): string | undefined {
+	const reported =
+		state.sessionStateByWorkspace[workspaceId]?.[sessionId]?.firstPrompt ??
+		state.closedChatsByWorkspace[workspaceId]?.find((chat) => chat.sessionId === sessionId)
+			?.firstPrompt;
+	if (reported) return reported;
+	const runtime = state.sessions[sessionId];
+	return runtime ? firstPromptOfTexts(userTurnTexts(runtime.turns)) : undefined;
+}
+
+export function selectChatWorkspaceFirstPrompt(
+	state: ChatFirstPromptState,
+	workspaceId: string,
+): string | undefined {
+	for (const sessionId of Object.keys(state.sessionStateByWorkspace[workspaceId] ?? {})) {
+		const prompt = selectChatFirstPrompt(state, workspaceId, sessionId);
+		if (prompt) return prompt;
+	}
+	return undefined;
+}
+
+export function selectRecordFirstPrompts(state: ChatFirstPromptState): Record<string, string> {
+	const prompts: Record<string, string> = {};
+	for (const [workspaceId, records] of Object.entries(state.sessionStateByWorkspace)) {
+		for (const sessionId of Object.keys(records)) {
+			const prompt = selectChatFirstPrompt(state, workspaceId, sessionId);
+			if (prompt) prompts[sessionId] = prompt;
+		}
+	}
+	return prompts;
+}
+
+export function selectUnnamedChatFirstPrompts(
+	state: { tabsByWorkspace: Record<string, EditorTab[]> } & ChatFirstPromptState,
+	workspaceId: string,
+): Record<string, string> {
+	const prompts: Record<string, string> = {};
+	for (const tab of state.tabsByWorkspace[workspaceId] ?? []) {
+		if ((tab.kind !== "chat" && tab.kind !== "plan") || tab.name.trim()) continue;
+		if (tab.sessionId in prompts) continue;
+		const prompt = selectChatFirstPrompt(state, workspaceId, tab.sessionId);
+		if (prompt) prompts[tab.sessionId] = prompt;
+	}
+	return prompts;
+}
+
+export function selectChatTitle(
+	t: Translator,
+	state: { tabsByWorkspace: Record<string, EditorTab[]> } & ChatFirstPromptState,
+	workspaceId: string,
+	sessionId: string,
+): string {
+	return chatDisplayName(
+		t,
+		selectChatName(state, workspaceId, sessionId),
+		selectChatFirstPrompt(state, workspaceId, sessionId),
+	);
 }
 
 export function selectCompactionTurnIds(
@@ -823,6 +1312,29 @@ export function selectWorkspaceTick(
 	return state.fsChangesByWorkspace[workspaceId]?.tick ?? 0;
 }
 
+export function fsChangedPaths(change: {
+	paths: readonly string[];
+	truncated: boolean;
+}): readonly string[] | null {
+	return change.truncated || change.paths.length === 0 ? null : change.paths;
+}
+
+interface FileChangeState {
+	connectionGeneration: number;
+	fsChangesByWorkspace: Record<string, { paths: readonly string[]; truncated: boolean }>;
+}
+
+export function selectFileChangeSince(
+	state: FileChangeState,
+	previous: FileChangeState,
+	workspaceId: string,
+): readonly string[] | null | undefined {
+	if (state.connectionGeneration !== previous.connectionGeneration) return null;
+	const change = state.fsChangesByWorkspace[workspaceId];
+	if (!change || change === previous.fsChangesByWorkspace[workspaceId]) return undefined;
+	return fsChangedPaths(change);
+}
+
 export function selectCurrentRouteChatTarget(state: {
 	routeChatTarget: RouteChatTarget | null;
 	activeWorkspaceId: string | null;
@@ -831,6 +1343,21 @@ export function selectCurrentRouteChatTarget(state: {
 	const target = state.routeChatTarget;
 	if (!target || state.activeWorkspaceId !== target.workspaceId) return null;
 	return selectWorkspaceNavTick(state, target.workspaceId) === target.navTick ? target : null;
+}
+
+interface NavigationState {
+	activeWorkspaceId: string | null;
+	selectedProjectId: string | null;
+	navTickByWorkspace: Record<string, number>;
+}
+
+/** A change of the active workspace, the selected project or a counted tab switch: it overtakes a pending navigation. */
+export function isNavigationChange(state: NavigationState, previous: NavigationState): boolean {
+	return (
+		state.activeWorkspaceId !== previous.activeWorkspaceId ||
+		state.selectedProjectId !== previous.selectedProjectId ||
+		state.navTickByWorkspace !== previous.navTickByWorkspace
+	);
 }
 
 export function selectWorkspaceNavTick(
@@ -874,24 +1401,6 @@ export function selectActiveTerminalId(state: TerminalState): string | null {
 	return state.activeTerminalByWorkspace[state.activeWorkspaceId] ?? null;
 }
 
-export function selectLastOpenChatSession(
-	state: {
-		tabsByWorkspace: Record<string, { kind: string; id: string; sessionId?: string }[]>;
-		activeTabByWorkspace: Record<string, string | null>;
-	},
-	workspaceId: string,
-): string | null {
-	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
-	const activeId = state.activeTabByWorkspace[workspaceId];
-	const active = tabs.find((t) => t.id === activeId);
-	if (active?.kind === "chat" && active.sessionId) return active.sessionId;
-	for (let i = tabs.length - 1; i >= 0; i--) {
-		const tab = tabs[i];
-		if (tab?.kind === "chat" && tab.sessionId) return tab.sessionId;
-	}
-	return null;
-}
-
 export function selectReviewDraftCount(
 	state: { reviewsByWorkspace: Record<string, { comments: { status: string }[] }> },
 	workspaceId: string | null,
@@ -913,4 +1422,17 @@ export function selectAgentReviewCommentCount(
 	return snapshot.comments.filter(
 		(c) => c.author === "agent" && c.status !== "resolved" && c.status !== "dismissed",
 	).length;
+}
+
+export type ModelRef = Pick<WireModel, "provider" | "id">;
+
+export function selectPickerModels(
+	models: readonly WireModel[],
+	hidden: readonly ModelRef[],
+	keep: readonly (ModelRef | null | undefined)[],
+): WireModel[] {
+	return models.filter(
+		(model) =>
+			!hidden.some((h) => sameModel(h, model)) || keep.some((kept) => sameModel(kept, model)),
+	);
 }

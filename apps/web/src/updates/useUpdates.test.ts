@@ -25,6 +25,9 @@ function nativeState(revision: number, status: NativeUpdateState["status"]): Nat
 		progress: null,
 		error: null,
 		failedPhase: null,
+		installStep: null,
+		log: [],
+		lastInstall: null,
 	};
 }
 
@@ -50,6 +53,7 @@ function nativeBridge(state = nativeState(1, "idle")): NativeUpdateBridge {
 		checkForUpdates: async () => {},
 		downloadUpdate: async () => {},
 		restartToUpdate: async () => {},
+		dismissInstallResult: async () => {},
 		subscribe: () => () => {},
 	};
 }
@@ -68,6 +72,7 @@ describe("native update shell subscription", () => {
 			checkForUpdates: async () => {},
 			downloadUpdate: async () => {},
 			restartToUpdate: async () => {},
+			dismissInstallResult: async () => {},
 			subscribe: (listener) => {
 				order.push("subscribe");
 				push = listener;

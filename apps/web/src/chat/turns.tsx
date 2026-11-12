@@ -1,25 +1,30 @@
 import {
 	RiBookOpenLine as BookOpen,
+	RiCheckLine as Check,
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
 	RiArrowUpSLine as ChevronUp,
+	RiErrorWarningLine as CircleAlert,
 	RiTimeLine as Clock,
 	RiEyeLine as Eye,
 	RiFileTextLine as FileText,
 	RiContractUpDownLine as FoldVertical,
 	RiLoopRightLine as RotateCw,
 	RiStackLine as Stack,
-	RiAlertLine as TriangleAlert,
+	RiStopCircleLine as StopCircle,
 	RiToolsLine as Wrench,
 } from "@remixicon/react";
 import type {
+	ChatHandoffDetails,
+	ContinueInWorkspaceRequestDetails,
 	GitDiffScope,
 	ImageContent,
 	ReviewFixDetails,
 	UserMessage,
 } from "@thinkrail/contracts";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
-import { Button } from "@thinkrail/ui/button";
+import { type Translator, useT } from "@thinkrail/locales/react";
+import { Button, withIconClass } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
 import { cn } from "@thinkrail/ui/utils";
 import {
@@ -32,9 +37,13 @@ import {
 import { CustomIcon } from "@/components/CustomIcon";
 import { parseSkillInvocation, projectRelativePath, type SkillInvocation, userText } from "@/lib";
 import { ActivityGroup } from "./ActivityGroup";
+import { type AssistantFailure, errorTurnText, subscriptionLimit } from "./assistantFailure";
 import { AssistantMarkdown } from "./assistantLinks";
-import { BackgroundCommandCompletion } from "./BackgroundCommandCompletion";
+import { BackgroundCommandResult, SubagentResult } from "./BackgroundResult";
+import { useChatActions } from "./ChatActions";
 import { CopyButton } from "./CopyButton";
+import { NoticeLink } from "./ExtraUsageNotice";
+import { ToolPromptSlot } from "./ExtUiPrompt";
 import { FileChip } from "./FileChip";
 import { useFold, useSelection } from "./foldState";
 import { Markdown } from "./Markdown";
@@ -45,7 +54,6 @@ import { formatElapsed, formatTokens } from "./SessionStatsBar";
 import { ToolCard } from "./ToolCard";
 import { ToolRendererBody } from "./ToolRendererBody";
 import { getToolChrome, getToolSummary } from "./toolRegistry";
-import { SubagentCompletionCard } from "./tools/subagent/SubagentCompletionCard";
 import type { CompactionState } from "./types";
 
 function ChatTurnViewImpl({
@@ -90,6 +98,7 @@ function ChatTurnViewImpl({
 			return (
 				<ErrorTurn
 					text={row.text}
+					failure={row.failure}
 					onTryAgain={row.recovery === "try-again" ? onTryAgain : undefined}
 				/>
 			);
@@ -115,9 +124,20 @@ function ChatTurnViewImpl({
 				/>
 			);
 		case "markdown":
-			return isFinalAnswer ? (
-				<MessageWithCopy messageRole="assistant" side="left" getText={() => row.text}>
-					<div className="w-full min-w-0 pl-24 tr-text-reading text-text-default [&>div>*:last-child]:mb-0 [&_ol]:list-inside [&_ul]:list-inside">
+			return (
+				<MessageWithCopy
+					messageRole="assistant"
+					side="left"
+					copyable={isFinalAnswer}
+					getText={() => row.text}
+				>
+					<div
+						className={cn(
+							"tr-text-reading text-text-default",
+							isFinalAnswer &&
+								"w-full min-w-0 pl-24 [&>div>*:last-child]:mb-0 [&_ol]:list-inside [&_ul]:list-inside [&_li>p:first-child]:inline",
+						)}
+					>
 						<AssistantMarkdown
 							text={row.text}
 							workspaceRoot={workspaceRoot}
@@ -125,25 +145,17 @@ function ChatTurnViewImpl({
 						/>
 					</div>
 				</MessageWithCopy>
-			) : (
-				<div
-					data-testid="chat-message"
-					data-role="assistant"
-					className="tr-text-reading text-text-default"
-				>
-					<AssistantMarkdown
-						text={row.text}
-						workspaceRoot={workspaceRoot}
-						onOpenFile={onOpenFile}
-					/>
-				</div>
 			);
 		case "backgroundCommandCompletion":
-			return <BackgroundCommandCompletion details={row.details} />;
+			return <BackgroundCommandResult id={row.id} details={row.details} />;
 		case "subagentCompletion":
-			return <SubagentCompletionCard id={row.id} details={row.details} text={row.text} />;
+			return <SubagentResult id={row.id} details={row.details} text={row.text} />;
 		case "reviewFix":
 			return <ReviewFixCard id={row.id} details={row.details} />;
+		case "continuationRequest":
+			return <ContinuationRequestCard details={row.details} />;
+		case "handoff":
+			return <HandoffCard details={row.details} />;
 		case "tool":
 			return <ToolRow row={row} workspaceRoot={workspaceRoot} onOpenFile={onOpenFile} />;
 		case "activity":
@@ -194,7 +206,7 @@ function userAttachments(content: UserMessage["content"], names?: string[]) {
 }
 
 const USER_BUBBLE_BASE =
-	"whitespace-pre-wrap break-words rounded-lg border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-12 py-8 tr-text-reading text-text-muted";
+	"whitespace-pre-wrap [overflow-wrap:anywhere] rounded-lg border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-12 py-8 tr-text-reading text-text-muted";
 const USER_BUBBLE = cn("max-w-[85%]", USER_BUBBLE_BASE);
 
 // In unbounded chat-width mode the transcript row is a fixed measure that can be far wider than the
@@ -206,25 +218,23 @@ const USER_SIDE_UNBOUNDED_CLAMP =
 	"[[data-line-width-bounded=false]_&]:max-w-[calc(100cqw-2*var(--chat-gutter))]";
 
 function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
+	const t = useT();
 	const [open, setOpen] = useState(false);
 	return (
 		<>
 			<FileChip
 				data-testid="chat-attachment-chip"
 				title={label}
-				aria-label={`View attachment ${label}`}
+				aria-label={t("chat.turn.viewAttachment", { label })}
 				onClick={() => setOpen(true)}
 				label={label}
 			/>
 			<Dialog open={open} onOpenChange={setOpen}>
-				<DialogContent
-					data-testid="chat-attachment-dialog"
-					className="flex max-h-[90vh] w-auto max-w-[95vw] flex-col gap-8"
-				>
+				<DialogContent data-testid="chat-attachment-dialog" className="w-auto max-w-[95vw] gap-8">
 					<DialogHeader>
 						<DialogTitle>{label}</DialogTitle>
 					</DialogHeader>
-					<div className="min-h-0 flex-1 overflow-auto">
+					<div className="relative min-h-0 flex-1 overflow-auto">
 						<img
 							src={`data:${img.mimeType};base64,${img.data}`}
 							alt=""
@@ -239,11 +249,13 @@ function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
 function MessageWithCopy({
 	messageRole,
 	side,
+	copyable = true,
 	getText,
 	children,
 }: {
 	messageRole: "user" | "assistant";
 	side: "left" | "right";
+	copyable?: boolean;
 	getText: () => string;
 	children: ReactNode;
 }) {
@@ -252,16 +264,18 @@ function MessageWithCopy({
 			data-testid="chat-message"
 			data-role={messageRole}
 			className={cn(
-				"group relative flex flex-col",
-				side === "right" ? "items-end" : "items-start",
+				copyable && "group relative flex flex-col",
+				copyable && (side === "right" ? "items-end" : "items-start"),
 				side === "right" && USER_SIDE_UNBOUNDED_CLAMP,
 			)}
 		>
 			{children}
-			<CopyButton
-				getText={getText}
-				className={cn("absolute z-10", side === "right" ? "right-0 bottom-8" : "bottom-0 left-0")}
-			/>
+			{copyable ? (
+				<CopyButton
+					getText={getText}
+					className={cn("absolute z-10", side === "right" ? "right-0 bottom-8" : "bottom-0 left-0")}
+				/>
+			) : null}
 		</div>
 	);
 }
@@ -277,6 +291,7 @@ function UserTurn({
 	attachmentNames?: string[] | undefined;
 	agentResponded: boolean;
 }) {
+	const t = useT();
 	const text = userText(message.content);
 	const attachments = userAttachments(message.content, attachmentNames);
 	const skill = parseSkillInvocation(text);
@@ -317,7 +332,7 @@ function UserTurn({
 					) : null}
 					<div data-testid="review-package-card" className="whitespace-normal">
 						<span data-testid="review-package-summary" className="block text-text-default">
-							{reviewPackageLabel(review)}
+							{reviewPackageLabel(t, review)}
 						</span>
 						<ReviewPackageComments foldPrefix={id} items={review.items} />
 					</div>
@@ -342,6 +357,7 @@ function PlainUserTurn({
 	attachments: ReturnType<typeof userAttachments>;
 	agentResponded: boolean;
 }) {
+	const t = useT();
 	const large = text.length > LARGE_USER_MESSAGE;
 	const [expanded, toggle, toggleRef] = useFold(`${id}:user-collapse`, !agentResponded);
 	const collapsed = large && !expanded;
@@ -381,7 +397,7 @@ function PlainUserTurn({
 							) : (
 								<ChevronDown className="size-16 shrink-0" />
 							)}
-							{expanded ? "Show less" : "Show more"}
+							{expanded ? t("chat.turn.showLess") : t("chat.turn.showMore")}
 						</button>
 					) : null}
 				</div>
@@ -397,6 +413,7 @@ function SkillInvocationCard({
 	foldId: string;
 	invocation: SkillInvocation;
 }) {
+	const t = useT();
 	const [expanded, toggle, toggleRef] = useFold(foldId);
 	return (
 		<div
@@ -410,12 +427,16 @@ function SkillInvocationCard({
 				type="button"
 				data-testid="skill-invocation-toggle"
 				aria-expanded={expanded}
-				aria-label={`${expanded ? "Hide" : "Show"} instructions for ${invocation.name}`}
+				aria-label={
+					expanded
+						? t("chat.turn.hideSkillInstructions", { skill: invocation.name })
+						: t("chat.turn.showSkillInstructions", { skill: invocation.name })
+				}
 				onClick={toggle}
 				className="flex w-full items-center gap-4 px-12 py-8 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				<BookOpen className="size-14 shrink-0 text-text-muted" aria-hidden="true" />
-				<span className="shrink-0 tr-text-ui text-text-muted">Skill</span>
+				<span className="shrink-0 tr-text-ui text-text-muted">{t("chat.turn.skill")}</span>
 				<span className="shrink-0 text-text-subtle" aria-hidden="true">
 					·
 				</span>
@@ -444,12 +465,15 @@ function SkillInvocationCard({
 }
 
 function ReviewFixCard({ id, details }: { id: string; details: ReviewFixDetails }) {
+	const t = useT();
 	const items = reviewFixCommentsToItems(details.comments);
-	const noun = details.comments.length === 1 ? "finding" : "findings";
 	const summary =
 		details.comments.length > 0
-			? `Requested a fix on \u201c${details.itemTitle}\u201d \u00b7 ${details.comments.length} ${noun}`
-			: `Requested a fix on \u201c${details.itemTitle}\u201d`;
+			? t("chat.turn.reviewFixFindings", {
+					item: details.itemTitle,
+					count: details.comments.length,
+				})
+			: t("chat.turn.reviewFix", { item: details.itemTitle });
 	return (
 		<div
 			data-testid="review-fix-card"
@@ -471,6 +495,107 @@ function ReviewFixCard({ id, details }: { id: string; details: ReviewFixDetails 
 	);
 }
 
+const HOST_CARD_CLASS =
+	"max-w-[85%] overflow-hidden rounded-lg border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-12 py-8";
+
+function ContinuationRequestCard({ details }: { details: ContinueInWorkspaceRequestDetails }) {
+	const t = useT();
+	const actions = useChatActions();
+	const continuation = actions?.continuationOf?.(details.operationId);
+	const phase = continuation?.phase ?? "summarizing";
+	const status =
+		phase === "requested"
+			? t("chat.turn.continuation.requested")
+			: phase === "summarizing"
+				? t("chat.turn.continuation.summarizing")
+				: phase === "creating"
+					? t("chat.turn.continuation.creating")
+					: phase === "started"
+						? continuation?.firstMessage === "failed"
+							? t("chat.turn.continuation.startedNoMessage")
+							: t("chat.turn.continuation.started")
+						: phase === "lost"
+							? t("chat.turn.continuation.lost")
+							: t("chat.turn.continuation.failed", { reason: continuation?.reason ?? "" });
+	const opened =
+		phase === "started" && continuation?.workspaceId
+			? {
+					workspaceId: continuation.workspaceId,
+					projectId: continuation.projectId,
+					sessionId: continuation.sessionId,
+				}
+			: null;
+	return (
+		<div data-testid="continuation-card" data-phase={phase} className={HOST_CARD_CLASS}>
+			<span className="block tr-text-reading text-text-default">
+				{t("chat.turn.continuation.title", { project: details.projectName })}
+			</span>
+			<p
+				data-testid="continuation-status"
+				className={cn(
+					"mt-4 tr-text-metadata",
+					phase === "failed" || phase === "lost" ? "text-feedback-error" : "text-text-muted",
+				)}
+			>
+				{status}
+			</p>
+			{opened ? (
+				<Button
+					type="button"
+					variant="outline"
+					size="m"
+					data-testid="continuation-open"
+					className="mt-8"
+					onClick={() => actions?.openWorkspace?.(opened)}
+				>
+					{t("chat.turn.continuation.open")}
+				</Button>
+			) : phase === "failed" || phase === "lost" ? (
+				<Button
+					type="button"
+					variant="outline"
+					size="m"
+					data-testid="continuation-retry"
+					className="mt-8"
+					onClick={() => actions?.retryContinuation?.(details)}
+				>
+					{t("chat.turn.continuation.retry")}
+				</Button>
+			) : null}
+		</div>
+	);
+}
+
+function HandoffCard({ details }: { details: ChatHandoffDetails }) {
+	const t = useT();
+	const actions = useChatActions();
+	return (
+		<div data-testid="handoff-card" className={HOST_CARD_CLASS}>
+			<span className="block tr-text-reading text-text-default">
+				{details.sourceTitle
+					? t("chat.turn.handoff.titled", { title: details.sourceTitle })
+					: t("chat.turn.handoff.title")}
+			</span>
+			<div
+				data-testid="handoff-summary"
+				className="mt-4 tr-text-reading text-text-muted [&>div>*:last-child]:mb-0"
+			>
+				<Markdown text={details.summary} />
+			</div>
+			<Button
+				type="button"
+				variant="outline"
+				size="m"
+				data-testid="handoff-open-source"
+				className="mt-8"
+				onClick={() => actions?.openHandoffSource?.(details)}
+			>
+				{t("chat.turn.handoff.open")}
+			</Button>
+		</div>
+	);
+}
+
 function ToolRow({
 	row,
 	workspaceRoot,
@@ -480,6 +605,7 @@ function ToolRow({
 	workspaceRoot?: string | undefined;
 	onOpenFile?: ((path: string) => void) | undefined;
 }) {
+	const t = useT();
 	if (getToolChrome(row.toolName) === "bare") {
 		const renderProps: ToolRenderProps = {
 			toolCallId: row.toolCallId,
@@ -493,7 +619,11 @@ function ToolRow({
 		};
 		return (
 			<div className="tr-text-ui text-text-default">
-				<ToolRendererBody {...renderProps} imageLabel={getToolSummary(row.toolName, renderProps)} />
+				<ToolRendererBody
+					{...renderProps}
+					imageLabel={getToolSummary(t, row.toolName, renderProps)}
+				/>
+				<ToolPromptSlot toolCallId={row.toolCallId} className="mt-8" />
 			</div>
 		);
 	}
@@ -536,12 +666,16 @@ function CompactionTurn({
 	tokensAfter?: number | undefined;
 	resuming?: boolean | undefined;
 }) {
+	const t = useT();
 	const [open, toggle, toggleRef] = useFold(id);
-	const label = resuming ? "Context compacted — resuming…" : "Context compacted";
+	const label = resuming ? t("chat.compaction.resuming") : t("chat.compaction.done");
 	const tokens =
 		tokensAfter === undefined
-			? `${formatTokens(tokensBefore)} tokens`
-			: `${formatTokens(tokensBefore)} → ${formatTokens(tokensAfter)} tokens`;
+			? t("chat.compaction.tokens", { tokens: formatTokens(tokensBefore) })
+			: t("chat.compaction.tokensChange", {
+					before: formatTokens(tokensBefore),
+					after: formatTokens(tokensAfter),
+				});
 	return (
 		<div data-testid="chat-compaction" data-chat-fold-root className="flex flex-col gap-8">
 			<button
@@ -567,26 +701,56 @@ function CompactionTurn({
 	);
 }
 
-function ErrorTurn({ text, onTryAgain }: { text: string; onTryAgain?: (() => void) | undefined }) {
+function ErrorTurn({
+	text,
+	failure,
+	onTryAgain,
+}: {
+	text: string;
+	failure?: AssistantFailure | undefined;
+	onTryAgain?: (() => void) | undefined;
+}) {
+	const t = useT();
+	const openProviderSettings = useChatActions()?.openProviderSettings;
+	const limit = subscriptionLimit({ text, failure });
 	return (
 		<div
 			data-testid="chat-message"
 			data-role="error"
-			className="flex items-start gap-8 rounded-sm border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-12 py-8 text-feedback-error tr-text-ui"
+			className="flex flex-col gap-8 rounded-sm border border-feedback-error-muted bg-container-elevated-bg px-12 py-8 text-text-default tr-text-ui"
 		>
-			<TriangleAlert className="mt-2 size-12 shrink-0" />
-			<span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{text}</span>
-			{onTryAgain ? (
-				<Button
-					variant="outline"
-					size="sm"
-					data-testid="agent-try-again"
-					className="shrink-0"
-					onClick={onTryAgain}
-				>
-					<RotateCw className="size-12" />
-					Try again
-				</Button>
+			<div className="flex items-start gap-8">
+				<CircleAlert className="mt-2 size-12 shrink-0 text-feedback-error" aria-hidden />
+				<span className="min-w-0 flex-1 whitespace-pre-wrap break-words">
+					{errorTurnText(t, { text, failure })}
+				</span>
+			</div>
+			{limit ? (
+				<div className="flex flex-wrap items-center justify-end gap-x-16 gap-y-4">
+					<NoticeLink href={limit.url}>{t(limit.label)}</NoticeLink>
+					{openProviderSettings ? (
+						<Button
+							variant="outline"
+							size="m"
+							data-testid="agent-open-provider-settings"
+							onClick={openProviderSettings}
+						>
+							{t("chat.failure.openProviderSettings")}
+						</Button>
+					) : null}
+				</div>
+			) : onTryAgain ? (
+				<div className="flex justify-end">
+					<Button
+						variant="outline"
+						size="m"
+						iconLeft={RotateCw}
+						data-testid="agent-try-again"
+						onClick={onTryAgain}
+					>
+						{t("chat.turn.tryAgain")}
+					</Button>
+				</div>
 			) : null}
 		</div>
 	);
@@ -599,31 +763,35 @@ function CompactionNotice({
 	tokensAfter,
 	resuming,
 }: CompactionState) {
+	const t = useT();
 	if (status === "failed") {
 		return (
 			<div
 				data-testid="compaction-notice"
 				data-status="failed"
-				className="flex items-start gap-8 rounded-md border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-12 py-8 text-feedback-error tr-text-ui"
+				className="flex items-start gap-8 rounded-sm border border-feedback-error-muted bg-container-elevated-bg px-12 py-8 text-text-default tr-text-ui"
 			>
-				<TriangleAlert className="mt-2 size-12 shrink-0" />
+				<CircleAlert className="mt-2 size-12 shrink-0 text-feedback-error" aria-hidden />
 				<span className="min-w-0 whitespace-pre-wrap break-words">
-					{detail || "Compaction failed."}
+					{detail || t("chat.compaction.failed")}
 				</span>
 			</div>
 		);
 	}
 	const label =
 		status === "running"
-			? "Compacting context…"
+			? t("chat.compaction.running")
 			: status === "cancelled"
-				? "Compaction cancelled"
+				? t("chat.compaction.cancelled")
 				: resuming
-					? "Context compacted — resuming…"
-					: "Context compacted";
+					? t("chat.compaction.resuming")
+					: t("chat.compaction.done");
 	const tokens =
 		tokensBefore != null && tokensAfter != null
-			? `${formatTokens(tokensBefore)} → ${formatTokens(tokensAfter)} tokens`
+			? t("chat.compaction.tokensChange", {
+					before: formatTokens(tokensBefore),
+					after: formatTokens(tokensAfter),
+				})
 			: null;
 	return (
 		<div
@@ -653,6 +821,7 @@ function RetryIndicator({
 	maxAttempts: number;
 	delayMs: number;
 }) {
+	const t = useT();
 	const [draining, setDraining] = useState(false);
 	useEffect(() => {
 		const raf = requestAnimationFrame(() => setDraining(true));
@@ -667,8 +836,9 @@ function RetryIndicator({
 		>
 			<span className="flex items-center gap-4">
 				<RotateCw className="size-12 shrink-0" />
-				{source === "summarization" ? "Retrying summarization" : "Retrying"} ({attempt}/
-				{maxAttempts})…
+				{source === "summarization"
+					? t("chat.retry.summarization", { attempt, max: maxAttempts })
+					: t("chat.retry.turn", { attempt, max: maxAttempts })}
 			</span>
 			<div className="h-4 w-full overflow-hidden rounded-full bg-border-default">
 				<div
@@ -680,13 +850,13 @@ function RetryIndicator({
 	);
 }
 
-function FileDiffGlyph({ className }: { className?: string }) {
-	return <CustomIcon name="file-diff-line" className={className} />;
+function FileDiffGlyph({ className }: { className?: string | undefined }) {
+	return <CustomIcon name="file-diff-line" className={cn("size-14 shrink-0", className)} />;
 }
 
 interface ArtifactGroup {
 	id: "specs" | "files";
-	icon: typeof FileText | ((props: { className?: string }) => ReactNode);
+	icon: typeof FileText | ((props: { className?: string | undefined }) => ReactNode);
 	paths: string[];
 	label: (count: number) => string;
 	expanded: boolean;
@@ -694,6 +864,10 @@ interface ArtifactGroup {
 	reveal: () => void;
 	stats?: ReadonlyMap<string, { added: number; removed: number }>;
 }
+
+const WorkingStack = withIconClass(Stack, "motion-safe:animate-working");
+
+const FOOTER_ITEM = "flex shrink-0 items-center gap-4 whitespace-nowrap";
 
 function ArtifactChip({
 	group,
@@ -708,11 +882,15 @@ function ArtifactChip({
 	const many = paths.length > 1;
 	const first = paths[0];
 	return (
-		<button
-			type="button"
+		<Button
+			variant="soft-primary"
+			size="s"
+			iconLeft={Icon}
+			{...(many ? { iconRight: expanded ? ChevronDown : ChevronRight } : {})}
 			data-testid={`turn-divider-${id}`}
 			data-expanded={many && expanded ? true : undefined}
 			aria-expanded={many ? expanded : undefined}
+			selected={many && expanded}
 			aria-controls={many && expanded ? listId : undefined}
 			onClick={(event) => {
 				if (!many) {
@@ -722,21 +900,9 @@ function ArtifactChip({
 				if (!expanded) reveal();
 				onSelect(event);
 			}}
-			className={cn(
-				"flex items-center gap-4 rounded-sm px-4 text-primary hover:bg-control-bg-hovered",
-				many && expanded && "bg-control-bg-selected",
-			)}
 		>
-			<Icon className="size-12 shrink-0" />
 			{label(paths.length)}
-			{many ? (
-				expanded ? (
-					<ChevronDown className="size-16 shrink-0" />
-				) : (
-					<ChevronRight className="size-16 shrink-0" />
-				)
-			) : null}
-		</button>
+		</Button>
 	);
 }
 
@@ -782,6 +948,37 @@ function ArtifactList({
 	);
 }
 
+const ROUND_STATUS = {
+	done: { icon: Check, label: "chat.divider.done", timedLabel: "chat.divider.doneIn" },
+	stopped: {
+		icon: StopCircle,
+		label: "chat.divider.stopped",
+		timedLabel: "chat.divider.stoppedAfter",
+	},
+	error: { icon: CircleAlert, label: null, timedLabel: "chat.divider.errorAfter" },
+} as const;
+
+function roundStatus(t: Translator, outcome: TurnDividerData["outcome"], elapsed: string | null) {
+	if (!outcome) return elapsed ? { outcome, icon: Clock, text: elapsed } : null;
+	const { icon, label, timedLabel } = ROUND_STATUS[outcome];
+	const text = elapsed ? t(timedLabel, { elapsed }) : label && t(label);
+	return text ? { outcome, icon, text } : null;
+}
+
+function RoundStatus({ status }: { status: NonNullable<ReturnType<typeof roundStatus>> }) {
+	const { outcome, icon: Icon, text } = status;
+	return (
+		<span
+			data-testid={outcome ? "turn-divider-status" : undefined}
+			data-outcome={outcome ?? undefined}
+			className={cn(FOOTER_ITEM, outcome === "error" && "text-feedback-error")}
+		>
+			<Icon className="size-12 shrink-0" aria-hidden />
+			{text}
+		</span>
+	);
+}
+
 export interface StillRunning {
 	count: number;
 	onOpen: () => void;
@@ -806,7 +1003,8 @@ export function TurnDivider({
 	onReveal: (tab: "specs" | "changes") => void;
 	stillRunning?: StillRunning | undefined;
 }) {
-	const { elapsedMs, toolCount, specs, changedFiles, receipt } = data;
+	const t = useT();
+	const { outcome, elapsedMs, toolCount, specs, changedFiles, receipt } = data;
 	const [selected, select] = useSelection(`${id}:artifacts`);
 	const stats = receipt
 		? new Map(
@@ -833,7 +1031,7 @@ export function TurnDivider({
 			id: "specs",
 			icon: FileText,
 			paths: specs,
-			label: (n) => `${n} ${n === 1 ? "spec" : "specs"}`,
+			label: (n) => t("chat.divider.specs", { count: n }),
 			expanded: selected === "specs",
 			onOpen: onOpenSpec,
 			reveal: () => onReveal("specs"),
@@ -843,9 +1041,13 @@ export function TurnDivider({
 			icon: FileDiffGlyph,
 			paths: changedFiles,
 			label: (n) =>
-				`${n} ${n === 1 ? "file changed" : "files changed"}${
-					totals ? ` · +${totals.added} −${totals.removed}` : ""
-				}`,
+				totals
+					? t("chat.divider.filesChangedWithTotals", {
+							count: n,
+							added: totals.added,
+							removed: totals.removed,
+						})
+					: t("chat.divider.filesChanged", { count: n }),
 			expanded: selected === "files",
 			onOpen: onOpenChange,
 			reveal: () => onReveal("changes"),
@@ -855,12 +1057,9 @@ export function TurnDivider({
 	const groups = allGroups.filter((group) => group.paths.length > 0);
 	const running = stillRunning && stillRunning.count > 0 ? stillRunning : null;
 
-	if (
-		toolCount === 0 &&
-		groups.length === 0 &&
-		!running &&
-		(elapsedMs == null || elapsedMs < 1000)
-	) {
+	const elapsed = elapsedMs != null && elapsedMs >= 1000 ? formatElapsed(t, elapsedMs) : null;
+	const status = roundStatus(t, outcome, elapsed);
+	if (!status && toolCount === 0 && groups.length === 0 && !running) {
 		return <div data-testid="turn-divider" className="my-4 h-px bg-border-muted" />;
 	}
 	return (
@@ -870,50 +1069,47 @@ export function TurnDivider({
 			className="my-4 flex flex-col gap-4 text-text-muted tr-text-metadata"
 		>
 			<div className="flex items-center gap-8">
-				<span className="h-px flex-1 bg-border-muted" />
-				{toolCount > 0 ? (
-					<span className="flex items-center gap-4">
-						<Wrench className="size-12 shrink-0" />
-						{toolCount} {toolCount === 1 ? "tool call" : "tool calls"}
-					</span>
-				) : null}
-				{groups.map((group) => (
-					<ArtifactChip
-						key={group.id}
-						group={group}
-						listId={`${id}-${group.id}-list`}
-						onSelect={(event) => select(group.id, event)}
-					/>
-				))}
-				{receipt && onReviewTurn ? (
-					<button
-						type="button"
-						data-testid="turn-divider-review"
-						onClick={() => onReviewTurn(receipt.scope)}
-						className="flex items-center gap-4 rounded-sm px-4 text-primary hover:bg-control-bg-hovered"
-					>
-						<Eye className="size-12 shrink-0" />
-						Review turn
-					</button>
-				) : null}
-				{elapsedMs != null && elapsedMs >= 1000 ? (
-					<span className="flex items-center gap-4">
-						<Clock className="size-12 shrink-0" />
-						{formatElapsed(elapsedMs)}
-					</span>
-				) : null}
-				{running ? (
-					<button
-						type="button"
-						data-testid="turn-divider-running"
-						onClick={running.onOpen}
-						className="flex items-center gap-4 rounded-full border border-primary-muted bg-primary-subtle px-8 text-primary hover:bg-primary-soft"
-					>
-						<Stack className="size-12 shrink-0 motion-safe:animate-working" />
-						{running.count} still running
-					</button>
-				) : null}
-				<span className="h-px flex-1 bg-border-muted" />
+				<span className="h-px min-w-0 flex-1 bg-border-muted" />
+				<div className="flex min-w-0 flex-wrap items-center justify-center gap-x-8 gap-y-4">
+					{status ? <RoundStatus status={status} /> : null}
+					{toolCount > 0 ? (
+						<span className={FOOTER_ITEM}>
+							<Wrench className="size-12 shrink-0" />
+							{t("chat.divider.toolCalls", { count: toolCount })}
+						</span>
+					) : null}
+					{groups.map((group) => (
+						<ArtifactChip
+							key={group.id}
+							group={group}
+							listId={`${id}-${group.id}-list`}
+							onSelect={(event) => select(group.id, event)}
+						/>
+					))}
+					{receipt && onReviewTurn ? (
+						<Button
+							variant="soft-primary"
+							size="s"
+							iconLeft={Eye}
+							data-testid="turn-divider-review"
+							onClick={() => onReviewTurn(receipt.scope)}
+						>
+							{t("chat.divider.reviewTurn")}
+						</Button>
+					) : null}
+					{running ? (
+						<Button
+							variant="soft-primary"
+							size="s"
+							iconLeft={WorkingStack}
+							data-testid="turn-divider-running"
+							onClick={running.onOpen}
+						>
+							{t("chat.divider.stillRunning", { count: running.count })}
+						</Button>
+					) : null}
+				</div>
+				<span className="h-px min-w-0 flex-1 bg-border-muted" />
 			</div>
 			{groups
 				.filter((group) => group.paths.length > 1 && group.expanded)

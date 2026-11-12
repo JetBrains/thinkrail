@@ -1,11 +1,34 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionSessionServices } from "@thinkrail/extension-api/server";
 import extension from "./index";
 
 type ExecResult = { content: Array<{ type: string; text: string }>; details: unknown };
 type CapturedTool = {
 	name: string;
-	execute: (id: string, params: unknown) => Promise<ExecResult>;
+	promptGuidelines?: string[];
+	execute: (
+		id: string,
+		params: unknown,
+		signal?: unknown,
+		onUpdate?: unknown,
+		ctx?: { cwd: string },
+	) => Promise<ExecResult>;
+};
+
+const checked: Array<{ path: string; cwd: string }> = [];
+
+const session: ExtensionSessionServices = {
+	expectToolResponse: () => {},
+	awaitToolResponse: async () => ({ kind: "deferred" }),
+	setting: () => false,
+	workspaceFiles: {
+		check: async (path, cwd) => {
+			checked.push({ path, cwd });
+			if (path === "missing.html") throw new Error("no such file");
+		},
+		scratchDir: ".thinkrail/context/mockups/",
+	},
 };
 
 function loadTool(): CapturedTool {
@@ -15,7 +38,7 @@ function loadTool(): CapturedTool {
 			captured = def;
 		},
 	};
-	const factory = extension.extensions[0];
+	const factory = extension.sessionExtensions?.(session)[0];
 	if (!factory) throw new Error("server half declares no extension factory");
 	factory(fakePi as unknown as ExtensionAPI);
 	if (!captured) throw new Error("factory did not register a tool");
@@ -23,11 +46,12 @@ function loadTool(): CapturedTool {
 }
 
 describe("visualize server half", () => {
-	test("composes one parent extension named visualize and no children or skills", () => {
+	test("composes one per-session parent extension named visualize and no children or skills", () => {
 		expect(extension.name).toBe("visualize");
 		expect(extension.title).toBe("Visualize");
 		expect(extension.description).toBeTruthy();
-		expect(extension.extensions).toHaveLength(1);
+		expect(extension.extensions).toHaveLength(0);
+		expect(extension.sessionExtensions?.(session)).toHaveLength(1);
 		expect(extension).not.toHaveProperty("childExtensions");
 		expect(extension).not.toHaveProperty("skillPackages");
 		expect(loadTool().name).toBe("visualize");
@@ -105,5 +129,26 @@ describe("visualize server half", () => {
 		} finally {
 			if (parseDescriptor) Object.defineProperty(mermaid, "parse", parseDescriptor);
 		}
+	});
+
+	test("checks every file path through the host's workspace files", async () => {
+		checked.length = 0;
+		const tool = loadTool();
+		const run = (params: unknown) =>
+			tool.execute("id", params, undefined, undefined, { cwd: "/workspace" });
+		await expect(
+			run({ type: "file", path: ".thinkrail/context/mockups/after.html", before: "before.html" }),
+		).resolves.toBeDefined();
+		expect(checked).toEqual([
+			{ path: ".thinkrail/context/mockups/after.html", cwd: "/workspace" },
+			{ path: "before.html", cwd: "/workspace" },
+		]);
+		await expect(run({ type: "file", path: "missing.html" })).rejects.toThrow(
+			/cannot show `path` \(missing\.html\): no such file/,
+		);
+	});
+
+	test("points the mockup guideline at the gitignored scratch directory", () => {
+		expect(loadTool().promptGuidelines?.[0]).toContain("`.thinkrail/context/mockups/`");
 	});
 });

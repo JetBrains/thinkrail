@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import type { AskUserQuestionAckDetails, AskUserQuestionArgs } from "@thinkrail/contracts";
+import type { ToolResponsePendingDetails } from "@thinkrail/contracts";
 import { defaultSessionDirFor, writeFixtureSession } from "./testFixtures";
 
 describe("writeFixtureSession — pinned against pi's real SessionManager", () => {
@@ -50,8 +50,8 @@ describe("writeFixtureSession — pinned against pi's real SessionManager", () =
 						],
 					},
 				],
-			} satisfies AskUserQuestionArgs;
-			const ack: AskUserQuestionAckDetails = { kind: "ack" };
+			};
+			const ack: ToolResponsePendingDetails = { kind: "ack" };
 			const { path } = writeFixtureSession(dir, {
 				id: "pin-toolcall-1",
 				cwd: "/tmp/thinkrail-toolcall-pin",
@@ -154,4 +154,19 @@ describe("writeFixtureSession — pinned against pi's real SessionManager", () =
 			rmSync(agentDir, { recursive: true, force: true });
 		}
 	});
+});
+
+test("pi records a new transcript's cwd in resolved spelling (stored directories rely on it)", async () => {
+	const dir = mkdtempSync(join(tmpdir(), "trpi-fixture-cwd-"));
+	try {
+		const cwd = resolve(dir, "repo");
+		const sessionDir = join(dir, "sessions");
+		const manager = SessionManager.create(`${cwd}${sep}.${sep}`, sessionDir);
+		manager.appendMessage({ role: "user", content: "hello", timestamp: 1_700_000_000_000 });
+
+		expect(manager.getCwd()).toBe(cwd);
+		expect((await SessionManager.list(cwd, sessionDir)).map((info) => info.cwd)).toEqual([cwd]);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
 });

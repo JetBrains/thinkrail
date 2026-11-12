@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { PiEvent, Project, Workspace } from "@thinkrail/contracts";
 import { layoutOpenOptionsForNavigation, selectAttentionCenterTab, useAppStore } from "../store";
 import type { NavigationDriver } from "./driver";
-import { startNavigation } from "./restore";
+import { startNavigation, supersedePendingRoute } from "./restore";
 
 type WorkspaceLayoutDocument = Parameters<
 	typeof selectAttentionCenterTab
@@ -260,6 +260,21 @@ test("fresh user navigation wins over a delayed workspace response", async () =>
 	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w2");
 });
 
+test("an outside intent supersedes a pending route: its late read lands nothing and the URL follows the store", async () => {
+	const d = fakeDriver("#/v1/projects/p1/workspaces/w1");
+	const { calls, listWorkspaces } = fakeLists();
+	stop = startNavigation({ driver: d.driver, listWorkspaces });
+	installWelcome([project("p1")]);
+	await settle();
+	supersedePendingRoute();
+	expect(d.fragment).toBe("#/v1");
+	calls[0]?.resolve([workspace("w1")]);
+	await settle();
+	expect(useAppStore.getState().activeWorkspaceId).toBeNull();
+	expect(d.fragment).toBe("#/v1");
+	expect(d.pushes).toEqual([]);
+});
+
 test("same-workspace center navigation wins over a delayed route response", async () => {
 	const d = fakeDriver("");
 	const { calls, listWorkspaces } = fakeLists();
@@ -490,7 +505,7 @@ test("a workspace-level route retains existing local attention and canonicalizes
 	calls[0]?.resolve([workspace("w1")]);
 	await settle();
 	const state = useAppStore.getState();
-	expect(selectAttentionCenterTab(state, "w1")?.sessionId).toBe("s1");
+	expect(selectAttentionCenterTab(state, "w1")).toMatchObject({ kind: "chat", sessionId: "s1" });
 	expect(state.routeChatTarget).toBeNull();
 	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1/chats/s1");
 	expect(d.pushes.length).toBe(pushesBefore);

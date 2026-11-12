@@ -1,4 +1,5 @@
 import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
+import { type Translator, useT } from "@thinkrail/locales/react";
 import type { ReactNode } from "react";
 import { Collapsible, countLines } from "./Collapsible";
 import { ToolFileLink } from "./ToolFileLink";
@@ -61,6 +62,8 @@ export function specToolPaths(
 ): string[] {
 	const details = objectValue(result)?.details;
 	switch (toolName) {
+		case "spec_search":
+			return uniquePaths(objectsField(details, "hits").map((hit) => stringField(hit, "path")));
 		case "spec_grep":
 			return uniquePaths(
 				objectsField(details, "matches").map((match) => stringField(match, "path")),
@@ -151,8 +154,13 @@ function LinkedResultText({
 	);
 }
 
-export function specToolSummary({ toolName, args }: ToolRenderProps): string {
+export function specToolSummary({ toolName, args }: ToolRenderProps, t: Translator): string {
 	switch (toolName) {
+		case "spec_search": {
+			const query = args.query;
+			const first = Array.isArray(query) ? query[0] : query;
+			return typeof first === "string" ? first : "";
+		}
 		case "spec_grep":
 			return strArg(args, "pattern");
 		case "spec_graph":
@@ -160,7 +168,7 @@ export function specToolSummary({ toolName, args }: ToolRenderProps): string {
 		case "spec_create":
 			return strArg(args, "path");
 		case "spec_validate":
-			return "graph";
+			return t("tools.spec.validateSummary");
 		default:
 			return strArg(args, "id");
 	}
@@ -175,12 +183,15 @@ export function SpecToolCard({
 	workspaceRoot,
 	onOpenFile,
 }: ToolRenderProps) {
+	const t = useT();
 	const output = resultText(result);
 	if (status === "running") {
-		return <span className="text-text-muted tr-text-metadata">Inspecting specs…</span>;
+		return <span className="text-text-muted tr-text-metadata">{t("tools.spec.inspecting")}</span>;
 	}
 	if (!output) {
-		return <span className="text-text-muted tr-text-metadata italic">(no result)</span>;
+		return (
+			<span className="text-text-muted tr-text-metadata italic">{t("tools.spec.noResult")}</span>
+		);
 	}
 	const content = (
 		<pre

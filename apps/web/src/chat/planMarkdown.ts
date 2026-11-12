@@ -1,4 +1,5 @@
 import type { TodoItem, TodoPlan } from "@thinkrail/contracts";
+import type { Translator } from "@thinkrail/locales/react";
 import {
 	changeSetStat,
 	flatItems,
@@ -32,12 +33,14 @@ function flattenInline(text: string): string {
 		.join(" · ");
 }
 
-function itemLines(item: TodoItem): string[] {
+function itemLines(t: Translator, item: TodoItem): string[] {
 	const head = `- ${checkbox(item)} ${item.title}`;
 	const summary = [
 		...(item.status === "done" && item.summary ? [`    - _${flattenInline(item.summary)}_`] : []),
 		...(item.status === "done" && item.verification
-			? [`    - Verified: ${flattenInline(item.verification)}`]
+			? [
+					`    - ${t("chat.planExport.verified", { verification: flattenInline(item.verification) })}`,
+				]
 			: []),
 	];
 	const set = itemChangeSet(item);
@@ -47,7 +50,7 @@ function itemLines(item: TodoItem): string[] {
 	}
 	const { count, added, removed } = changeSetStat(set.files);
 	const stat = plusMinus(added, removed);
-	const countText = `${count} ${count === 1 ? "file" : "files"}`;
+	const countText = t("chat.planExport.files", { count });
 	const statLine = [`\`${set.sha.slice(0, 7)}\``, countText, ...(stat ? [stat] : [])].join(" · ");
 	return [
 		`${head} — ${statLine}`,
@@ -59,10 +62,14 @@ function itemLines(item: TodoItem): string[] {
 	];
 }
 
-export function planToMarkdown(plan: TodoPlan, title: string): string {
+export function planToMarkdown(t: Translator, plan: TodoPlan, title: string): string {
 	const all = flatItems(plan);
 	const done = all.filter((t) => t.status === "done").length;
-	const lines: string[] = [`# TODO — ${title}`, "", `Progress: ${done}/${all.length}`];
+	const lines: string[] = [
+		`# ${t("chat.planExport.title", { title })}`,
+		"",
+		t("chat.planExport.progress", { done, total: all.length }),
+	];
 	if (all.length > 0 && done === all.length) {
 		const reviewables = reviewableItems(plan);
 		const reviewed = reviewables.filter(reviewSettled).length;
@@ -70,10 +77,18 @@ export function planToMarkdown(plan: TodoPlan, title: string): string {
 		const overall = planCompletionSummary(plan);
 		// Only worth a section when it adds something over the Progress line above.
 		if (overall || files > 0 || reviewables.length > 0) {
-			const facts = [`${done} ${done === 1 ? "step" : "steps"} done`];
-			if (files > 0) facts.push(`${files} ${files === 1 ? "file" : "files"}`);
-			if (reviewables.length > 0) facts.push(`${reviewed}/${reviewables.length} reviewed`);
-			lines.push("", "## Summary", "", facts.join(" · "), ...(overall ? ["", overall] : []));
+			const facts = [t("chat.planExport.stepsDone", { count: done })];
+			if (files > 0) facts.push(t("chat.planExport.files", { count: files }));
+			if (reviewables.length > 0) {
+				facts.push(t("chat.planExport.reviewed", { reviewed, total: reviewables.length }));
+			}
+			lines.push(
+				"",
+				`## ${t("chat.planExport.summary")}`,
+				"",
+				facts.join(" · "),
+				...(overall ? ["", overall] : []),
+			);
 		}
 	}
 
@@ -82,30 +97,34 @@ export function planToMarkdown(plan: TodoPlan, title: string): string {
 		lines.push(
 			"",
 			`## ${group.title} — ${progress.done}/${progress.total}`,
-			...group.todos.flatMap(itemLines),
+			...group.todos.flatMap((item) => itemLines(t, item)),
 		);
 	}
 	if (plan.todos.length > 0) {
 		lines.push(
 			"",
-			...(plan.groups.length > 0 ? ["### Other"] : []),
-			...plan.todos.flatMap(itemLines),
+			...(plan.groups.length > 0 ? [`### ${t("chat.planExport.other")}`] : []),
+			...plan.todos.flatMap((item) => itemLines(t, item)),
 		);
 	}
 	const adopted = plan.adoptedCommits ?? [];
 	const unattributed = plan.unattributed ?? [];
 	if (all.length === 0 && adopted.length === 0 && unattributed.length === 0) {
-		lines.push("", "_No items yet._");
+		lines.push("", `_${t("chat.planExport.empty")}_`);
 	}
 
 	if (adopted.length > 0) {
-		lines.push("", "## Committed outside the plan", ...adopted.flatMap(itemLines));
+		lines.push(
+			"",
+			`## ${t("chat.planExport.committedOutside")}`,
+			...adopted.flatMap((item) => itemLines(t, item)),
+		);
 	}
 
 	if (unattributed.length > 0) {
 		lines.push(
 			"",
-			"## Outside the plan",
+			`## ${t("chat.planExport.outside")}`,
 			...unattributed.map((f) => {
 				const fileStat = plusMinus(f.added ?? 0, f.removed ?? 0);
 				return `- \`${statusLetter(f.status)}\` ${f.path}${fileStat ? ` · ${fileStat}` : ""}`;

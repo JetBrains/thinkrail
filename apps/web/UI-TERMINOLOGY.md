@@ -92,13 +92,13 @@ Children:
 
 | Canonical name | Implementation | `data-testid` | Responsibility |
 |---|---|---|---|
-| Add-Project Button / Menu | `panels/AddProjectMenu.tsx` → `AddProjectMenu` (the rail "+") | `add-project-menu` | Open project / Open GitHub (soon) / Recents dropdown |
+| Add-Project Button / Menu | `panels/AddProjectMenu.tsx` → `AddProjectMenu` (the rail "+") | `add-project-menu` | Open project / Enter host path… / Clone repository… / Recents dropdown |
 | Project Row | inline row in `ProjectTree` | `project-item` | A project (git repo); clicking selects it (project home) |
 | — Project Expander | chevron control | `project-expand` | Expands/collapses the project's workspace list |
 | — Project Name | inline `<button>` | `project-name` | Selects the project (project home) |
 | — Workspace Count | inline `<span>` | `project-workspace-count` | Collapsed-row count of the project's worktree workspaces |
 | — Add-Workspace Button | inline "+" | `add-workspace` | Opens the New Workspace Dialog |
-| — Project Actions Menu | Context Menu on the row | `project-actions` | Create workspace (`project-menu-create-workspace`) / Close project (`project-menu-close`) |
+| — Project Actions Menu | Context Menu on the row | `project-actions` | Create workspace (`project-menu-create-workspace`) / Open existing worktree (`project-menu-open-existing-worktree`) / Rename (`project-menu-rename` → inline `project-name-input`) / Close project (`project-menu-close`) |
 | Workspace Row | inline row in `ProjectTree` | `workspace-item` | A workspace (git worktree); two-line: name + branch |
 | — Workspace Name | inline `<span>` | `workspace-name` | Display name |
 | — Workspace Branch | inline `<span>` | `workspace-branch` | Git branch (muted, proportional metadata; hidden if it equals the name) |
@@ -163,7 +163,7 @@ Children:
 |---|---|---|---|
 | Center Group | `CenterGroupView` in `Workbench` | `center-group` | One leaf: tab strip + locally selected body |
 | Group Header | `TabStrip` plus injected group controls in `Workbench` | `center-tab-strip` | Fixed one-row chrome containing the ARIA tablist, scrolling, searchable overflow, and group actions |
-| Tab | `WorkbenchTab` | `editor-tab` / `terminal-tab` | One canonical placement; `data-preview` marks a preview |
+| Tab | `WorkbenchTab` | `editor-tab` / `terminal-tab` | One canonical placement; `data-preview` marks a preview; file and diff tabs offer Copy path / Copy relative path (`tab-copy-path` / `tab-copy-relative-path`) |
 | — Tab Close | inline `X` action | `editor-tab-close` | Close the placement (not the underlying durable resource) |
 | New-Chat Button | injected center action | `new-chat` | Open a fresh chat tab |
 | Chat-History Menu | `shell/WorkspaceChatHistory.tsx` | `chat-history` | Reopen or delete closed/disk-only chats |
@@ -176,11 +176,11 @@ Tab-body components:
 | Canonical name | Implementation | Tab kind | Responsibility |
 |---|---|---|---|
 | File Pane | `panels/FilePane.tsx` → `FilePane` | `FileTab` | Registry-dispatched file viewer; richer formats get renderer toggles |
-| — Code File | `panels/MonacoEditor.tsx` / `panels/resources/code/PierreFile.tsx` (lazy) | — | Read-only Monaco source on desktop, Pierre source on phones |
-| — Markdown Preview | `panels/MarkdownPreview.tsx` → `MarkdownPreview` (lazy) | — | Rendered markdown (document skin) |
+| — Code File | `resource-renderers/support/MonacoEditor.tsx` / `resource-renderers/renderers/code/PierreFile.tsx` (lazy) | — | Read-only Monaco source on desktop, Pierre source on phones |
+| — Markdown Preview | `resource-renderers/support/MarkdownPreview.tsx` → `MarkdownPreview` (lazy) | — | Rendered markdown (document skin) |
 | Diff Pane | `panels/DiffPane.tsx` → `DiffPane` | `DiffTab` | File diff; Split\|Inline or Source\|Rendered toggle |
-| — Source Diff | `panels/resources/code/PierreDiff.tsx` (lazy) | — | Read-only Pierre split/unified source diff with review and hunk actions |
-| — Rendered Diff | `panels/RenderedDiff.tsx` → `RenderedDiff` (lazy) | — | Rich markdown diff (`<ins>`/`<del>`) |
+| — Source Diff | `resource-renderers/renderers/code/PierreDiff.tsx` (lazy) | — | Read-only Pierre split/unified source diff with review and hunk actions |
+| — Rendered Diff | `resource-renderers/support/RenderedDiff.tsx` → `RenderedDiff` (lazy) | — | Rich markdown diff (`<ins>`/`<del>`) |
 | Changes Review Pane | `panels/ChangesReviewPane.tsx` → `ChangesReviewPane` | `ChangesTab` | Every changed file of one scope as sections; **Stacked** \| **One file** modes (its own section below) |
 | Chat View | `chat/ChatView.tsx` → `ChatView` (lazy) | `chat` | The agent conversation (its own section below) |
 | Document Pane | `WorkspaceWorkbench` reference renderer | `document` | Rehydratable virtual documents such as TODO plans |
@@ -199,7 +199,7 @@ The agent conversation, rendered inside a Chat tab in the Center Tabbed Area.
 - **Position:** Fills the Editor Pane. Vertically: Chat Header (top) → Message List (middle, scrolls) →
   Composer (bottom).
 - **Responsibility:** render pi's canonical message / content-block model as folded rows; own the
-  composer, history overlay, plan popover, and dialogs.
+  composer, history overlay, and dialogs.
 
 ## Chat Header
 
@@ -208,8 +208,6 @@ The agent conversation, rendered inside a Chat tab in the Center Tabbed Area.
 - **Parent:** Chat View.
 - **Position:** Slim top bar of the Chat View.
 - **Children / slots:**
-  - **Plan Strip** — `ChatPlanStripContent` (from `chat/ChatPlan.tsx`), passed into the header's `left`
-    slot; opens the **Plan Popover** (`ChatPlanContent`) over the chat.
   - **Status Entries** — inline muted `statusEntries` text (extension status).
   - **Session Stats Bar** — `chat/SessionStatsBar.tsx` → `SessionStatsBar` (token/cost stats).
   - **Resources Trigger** — `chat/resources/ResourcesButton.tsx` → `ResourcesButton`
@@ -258,12 +256,13 @@ Row / message renderers (all in `chat/turns.tsx` unless noted):
 |---|---|---|---|---|
 | Turn Dispatcher | `ChatTurnView` | — | — | Dispatches a derived row to its renderer |
 | User Message | `UserTurn` | `chat-message` (`data-role="user"`) | `user` | A user prompt bubble |
-| Assistant Markdown | `chat/Markdown.tsx` → `Markdown` | — | `markdown` | Assistant text (GFM + shiki) |
+| Assistant Markdown | `chat/Markdown.tsx` → `Markdown` | — | `markdown` | Assistant text (GFM + Pierre highlighting) |
 | System Notice | `SystemTurn` | `chat-message` | `system` | Web-local system notice |
 | Error Turn | `ErrorTurn` | `chat-message` | `error` | Persistent tinted failure notice (never folded) |
 | Retry Indicator | `RetryIndicator` | `retry-indicator` | `retry` | Retry countdown (turn / summarization) |
 | Tool Card | `chat/ToolCard.tsx` → `ToolCard` | `tool-card` (`-toggle`) | `tool` | A primary tool call (collapsible frame) |
 | Activity Group | `chat/ActivityGroup.tsx` → `ActivityGroup` | — | `activity` | Folded run of routine steps ("N steps · …") |
+| Ext-UI Prompt | `chat/ExtUiPrompt.tsx` → `ExtUiPrompt` | `ext-ui-prompt` | — | An extension's in-chat question (`pi.extensionUi` dialog): on its tool's card, else docked above the composer |
 | Turn Divider | `TurnDivider` | `turn-divider` / `turn-divider-<id>` | `divider` | Round-end summary + artifact chips |
 | — Artifact Chip | `ArtifactChip` | `turn-divider-specs` / `turn-divider-files` | — | "N specs" / "N files changed" deep-link/disclosure; with a host turn receipt the files chip reads `N files changed · +a −r` |
 | — Artifact List | `ArtifactList` | `<testid>-list` / `-list-item` | — | Expanded per-path list (per-file `+/−` from the receipt) |
@@ -288,7 +287,7 @@ Built-in tool renderers (in `chat/tools/` unless noted):
 | Read Card | `ReadCard.tsx` → `ReadCard` | routine | File read (path + highlighted file) |
 | Write Card | `ReadCard.tsx` → `WriteCard` | routine | File write |
 | Edit Card | `EditCard.tsx` → `EditCard` | routine | Edit (removed/added line diff) |
-| Ask-User-Question Card | `AskUserQuestionCard.tsx` → `AskUserQuestionCard` | primary, "bare" | Inline questionnaire |
+| Ask-User-Question Card | `thinkrail-extensions/ask-user-question/web/` → `AskUserQuestionCard` | primary, "bare" | Inline questionnaire |
 | Visualization Card | `thinkrail-extensions/visualize/web/` → `VisualizationCard` | primary, expanded | Mermaid diagram / comparison cards |
 | Web Card(s) | `tools/web/` | routine | Search/fetch renderers |
 | Default Tool Renderer | `DefaultToolRenderer` | routine | Fallback for unregistered tools |
@@ -333,19 +332,20 @@ Children / associated surfaces:
 ## Chat Plan (TODO plan)
 
 - **Canonical name:** Chat Plan.
-- **Implementation:** `chat/ChatPlan.tsx` (`ChatPlanStripContent` = the Plan Strip in the Chat Header;
-  `ChatPlanContent` = the Plan Popover body) + `chat/TodoList.tsx` → `TodoList`.
-- **Parent:** Chat Header (strip) → Popover (body).
-- **Responsibility:** surface the chat's `pi-todos` plan (group-first, status-ordered). There is no
-  side-tool Todo tab — the plan lives in the conversation.
+- **Implementation:** `chat/TodoList.tsx` → `TodoList` + `panels/PlanRailPane.tsx` → `PlanRailPane`
+  (rail body) + `panels/PlanPane.tsx` → `PlanPane` (center-tab page, opened via `openPlan`).
+- **Parent:** Right side-rail tool (`plan`) for the compact TODO list; center editor tab for the
+  document-scale Plan page.
+- **Responsibility:** surface the chat's `pi-todos` plan (group-first, status-ordered). The TODO list
+  is a side-rail tool next to Files / Specs / Review.
 
 ---
 
 # Changes Review Tab
 
 The continuous review surface for one diff scope: every changed file of the scope as a **File Section** in a
-center tab. A single click on a Changes row, or the chat's **Review-Turn Chip**, opens it; the Changes Tool is
-its navigator.
+center tab. A single click on a Changes row, or the chat's **Review-Turn Chip**, opens it; the Changed mode of the
+Files tool is its navigator.
 
 - **Canonical name:** Changes Review Tab; its body is the **Changes Review Pane**.
 - **Implementation:** `panels/ChangesReviewPane.tsx` → `ChangesReviewPane`, rendering
@@ -374,7 +374,7 @@ its navigator.
 | — Viewed | inline toggle button | `changes-section-viewed` (`aria-pressed`) | Marks the file viewed in this tab |
 | — Collapsed Notice | inline | `changes-section-collapsed` / `changes-section-expand` | Large or generated file collapsed by default: Expand / Open as tab |
 | — Section states | inline | `changes-section-loading` / `changes-section-error` / `changes-section-retry` | Height-reserving placeholder; failed read + Retry |
-| Hunk Toolbar | `HunkToolbar` in `panels/resources/code/PierreDiff.tsx` | `hunk-toolbar` (`data-kept`) | Per-hunk Source Diff actions: Revert (`hunk-revert`), Ask agent (`hunk-ask-agent`) |
+| Hunk Toolbar | `HunkToolbar` in `resource-renderers/renderers/code/PierreDiff.tsx` | `hunk-toolbar` (`data-kept`) | Per-hunk Source Diff actions: Revert (`hunk-revert`), Ask agent (`hunk-ask-agent`) |
 | — Keep | inline toggle button | `hunk-keep` (`aria-pressed`) | "Keep" / "Kept" hunk triage; review tab in a mutable scope only |
 | Triage Bar | inline in `ChangesReviewPane` (Stacked) | `changes-review-triage` | Bottom bar: `n of N reviewed` |
 | — Progress Bar | inline | `changes-review-progress` | Viewed fraction |
@@ -408,7 +408,7 @@ leaves a compact restore rail. Side arrangement is workspace-shared; selection a
 
 Every Side Group has a **Group Header**; folding retains that header as a 27px row while its linked
 body stays native-hidden and unmounted. Initial Balanced placement puts Projects on the left, Specs and
-Files in the first right group, then Changes and Review in the second; the default terminal catalog
+Files in the first right group, then Review in the second; the default terminal catalog
 joins that last group. This is startup behavior, not a fixed hierarchy.
 
 ## Side Tools
@@ -417,20 +417,19 @@ joins that last group. This is startup behavior, not a fixed hierarchy.
 |---|---|---|
 | Projects | `tab-projects`, body `left-nav` | `panels/ProjectTree.tsx`; projects and workspaces |
 | Specs | `tab-specs` | `panels/SpecsPanel.tsx`; automatically refreshed read-only spec graph, with error-only `specs-retry` |
-| Files | `tab-files` | `panels/FileTree.tsx`; worktree file tree |
-| Changes | `tab-changes` | `panels/ChangesPanel.tsx`; scoped git changes, Changes Review Tab navigator, diff opens |
+| Files | `tab-files` | `panels/FilesPanel.tsx`; **All | Changed** switch (`files-mode-all` / `files-mode-changed`, app-wide `store.filesMode`, default All) over `panels/FileTree.tsx` (worktree tree; changed files carry a status-coloured name + letter `file-status`, folders containing changes an amber name + dot `file-folder-dot`; git-ignored rows `data-status="ignored"` in the subtle colour; the active file/diff tab's row selected and auto-revealed; right-click Copy path / Copy relative path on a file or folder row, `file-copy-path` / `file-copy-relative-path`, and from v118 Copy / Paste / Delete, `file-tree-copy` / `file-tree-paste` / `file-tree-delete` with the `file-tree-delete-confirm` confirmation; an empty tree's Paste button `file-tree-paste-root`) plus the **Collapse All Button** `files-collapse-all` or `panels/ChangesPanel.tsx` (below) |
 | Review | `tab-review` | `panels/ReviewPanel.tsx`; review accordion and send actions |
 
 `WorkspaceWorkbench` owns the long-lived Specs and Review reads so badges, review flags, and artifact
 classification remain current even while those tool bodies are not selected.
 
-## Changes Tool
+## Changes mode (Files tool)
 
-The Changes body keeps its own feature toolbar: scope menu, target-branch picker, and List\|Tree toggle
+The Changed mode of the Files tool keeps its own feature toolbar, under the All | Changed switch row: scope menu, target-branch picker, and List\|Tree toggle
 (Tree by default). A single click on a row opens the scope's **Changes review tab** — every changed file as
 a stacked section, or one at a time in its **One file** mode — and the sidebar is that tab's navigator
 (the row of the section in view is active, viewed files carry a mark); double-click or *Open as tab* opens
-the per-file diff tab. `ChangesPanel` remains arrangement-agnostic; only its side placement changed.
+the per-file diff tab. `ChangesPanel` remains arrangement-agnostic and is fed its git status by `FilesPanel`.
 
 | Canonical name | Implementation | `data-testid` | Responsibility |
 |---|---|---|---|
@@ -439,7 +438,7 @@ the per-file diff tab. `ChangesPanel` remains arrangement-agnostic; only its sid
 | — Last Turn | menu item | `changes-scope-last-turn` | "Last turn · N files": the newest agent run; disabled until a run changed files |
 | — Agent Turns | menu items under "Agent turns" | `changes-scope-turn` (`data-turn`) | Recent agent runs, newest first (only when there is more than one) |
 | Branch Picker | `panels/BranchPicker.tsx` → `BranchPicker` | `changes-target-picker` | Target branch (`vs <base>`) |
-| Changes View Toggle | `panels/ToggleSegment.tsx` | `changes-toggle-list` / `changes-toggle-tree` | List \| Tree |
+| Changes View Toggle | `ui/toggle-segment.tsx` | `changes-toggle-list` / `changes-toggle-tree` | List \| Tree |
 | Changes List Row | inline in `ChangesPanel` | `change-item` (`data-active`, `data-viewed`) | Flat changed-file row |
 | Changes Tree | `panels/ChangesTree.tsx` | file rows `change-item`, folders `change-tree-folder` | Folder tree of changed files |
 | Viewed Mark | `panels/ViewedMark.tsx` → `ViewedMark` | `change-viewed` | Check glyph on a row the review tab marked viewed |
@@ -523,7 +522,6 @@ App-level dialog/popover instances built on those primitives:
 | Confirm Popover | `panels/ConfirmPopover.tsx` → `ConfirmPopover` | Popover | Anchored yes/no from a dedicated action control (template delete) |
 | Template Editor Dialog | `chat/TemplateEditorDialog.tsx` → `TemplateEditorDialog` | Dialog | Create/edit a prompt template |
 | Skills Dialog | `chat/SkillsDialog.tsx` → `SkillsDialog` | Dialog | Skills manager (chat + project modes) |
-| Ext-UI Dialog | `chat/ExtUiDialog.tsx` → `ExtUiDialog` | Dialog | `pi.extensionUi` bridge dialog |
 | Login Dialog | `auth/` → `LoginDialog` | Dialog | Provider OAuth / API-key login |
 
 **⚠ Naming notes (primitives):**
@@ -590,7 +588,7 @@ its alternatives in parentheses.
 **Chat**
 
 - **Chat View** — the whole conversation surface.
-- **Chat Header** — its top bar. **Plan Strip**, **Session Stats Bar**, **Resources Trigger**, **Skills Button**.
+- **Chat Header** — its top bar. **Session Stats Bar**, **Resources Trigger**, **Skills Button**.
 - **Resources** — **Resources Trigger**, **Resources Dock**, **Resources Inspector**, **Resource Row**,
   **Command Log View**, **Subagent Transcript Pane**, **Stop-All Action**, **Still-Running Chip**.
 - **Message List** (alt: Transcript). Units: **Turn** (pi message), **Row** (derived render unit).
@@ -604,7 +602,7 @@ its alternatives in parentheses.
   **Send Button**, **History-Open Button**, **Slot Hint Chip**.
 - **History Overlay** — **Results List**, **Preview Pane**, **Scope Picker**, **Jump Action**,
   **Save-as-Template Action**.
-- **Chat Plan** — **Plan Strip** + **Plan Popover** + **Todo List**.
+- **Chat Plan** — **TODO List** (right-rail tool, `PlanRailPane`) + **Plan Page** (center-tab, `PlanPane`, opened via `openPlan`).
 
 **Changes review**
 
@@ -619,8 +617,8 @@ its alternatives in parentheses.
 **Sides**
 
 - **Left Side**, **Right Side**, **Side Group**, **Hidden-Side Rail**.
-- Singleton tools: **Projects**, **Specs**, **Files**, **Changes**, **Review**.
-- **Specs Panel**, **Files Panel** (alt: File Tree), **Changes Panel**, **Review Panel**.
+- Singleton tools: **Projects**, **Specs**, **Files**, **Review**.
+- **Specs Panel**, **Files Panel** (alt: File Tree; its **Changed** mode renders the **Changes Panel**), **Review Panel**.
 - **Changes Header** (no component): **Changes Scope Menu** (with **Last Turn** / **Agent Turns**),
   **Branch Picker**, **Changes View Toggle**.
 - **Changes List** / **Changes Tree**, **Change-Row Actions**, **Tree Row**, **Viewed Mark**,
@@ -641,7 +639,8 @@ its alternatives in parentheses.
 - **Modal** = the **Dialog** primitive. **Dropdown Menu**, **Context Menu**, **Popover**, **Command**,
   **Tooltip**, **Toast**, **Resizable**, **Error Boundary**.
 - App dialogs: **New Workspace Dialog**, **Confirm Dialog**, **Notice Dialog**, **Confirm Popover**,
-  **Template Editor Dialog**, **Skills Dialog**, **Ext-UI Dialog**, **Login Dialog**.
+  **Template Editor Dialog**, **Skills Dialog**, **Login Dialog**. (Extension dialogs are not a modal: see
+  **Ext-UI Prompt**.)
 
 **Terms that do NOT map to a ThinkRail region (avoid or use only as noted)**
 

@@ -5,6 +5,7 @@ import {
 	RiRecordCircleLine as CircleDot,
 	RiShieldCheckLine as ShieldCheck,
 } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
 import { Markdown } from "./Markdown";
 import { verificationStatus } from "./planView";
 
@@ -29,18 +30,21 @@ export function VerificationGlyph({ verification }: { verification: string }) {
 	const status = verificationStatus(verification);
 	const Icon = status === "claimed" ? ShieldCheck : CircleAlert;
 	return (
-		<Icon
-			data-testid="todo-verification-glyph"
-			data-status={status}
-			aria-label={verification}
-			className={`size-14 shrink-0 ${
-				status === "claimed" ? "text-feedback-success" : "text-feedback-warning"
-			}`}
-		/>
+		<span title={verification} className="inline-flex">
+			<Icon
+				data-testid="todo-verification-glyph"
+				data-status={status}
+				aria-label={verification}
+				className={`size-14 shrink-0 ${
+					status === "claimed" ? "text-feedback-success" : "text-feedback-warning"
+				}`}
+			/>
+		</span>
 	);
 }
 
 export function VerificationBadge({ verification }: { verification: string }) {
+	const t = useT();
 	const status = verificationStatus(verification);
 	const Icon = status === "claimed" ? ShieldCheck : CircleAlert;
 	return (
@@ -49,8 +53,8 @@ export function VerificationBadge({ verification }: { verification: string }) {
 			data-status={status}
 			title={
 				status === "claimed"
-					? "Verification as reported by the agent — not re-run by the host"
-					: "The agent reports this step was not verified"
+					? t("chat.plan.verificationClaimed")
+					: t("chat.plan.verificationMissing")
 			}
 			className="flex min-w-0 items-start gap-4 tr-text-metadata"
 		>

@@ -6,6 +6,7 @@ import { printStartupMark } from "@thinkrail/shared/startupMark";
 import { channel, posthogProjectKey, version } from "@thinkrail/shared/version";
 import { type CliOptions, parseArgs, parseSubcommand, USAGE } from "./args";
 import { openUiThenStartAttribution } from "./attributionReadiness";
+import { BINARY_SOURCE_MAP_BASE } from "./binarySourceMap";
 import { runUninstall } from "./uninstall";
 import { createCliHostUpdate, runUpdate } from "./update";
 
@@ -72,6 +73,7 @@ async function bootstrap(build: BuildKind): Promise<void> {
 			posthogApiKey: posthogProjectKey,
 			channel,
 			build,
+			...(build === "binary" ? { remapBase: BINARY_SOURCE_MAP_BASE } : {}),
 			mute: options.noAnalytics,
 			...(options.open ? { openExternal: openBrowser } : {}),
 		},

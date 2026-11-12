@@ -1,4 +1,5 @@
 import { dlopen, FFIType } from "bun:ffi";
+import { desktopError } from "./errorReporting";
 
 export interface KeyState {
 	keyDown: boolean;
@@ -6,6 +7,7 @@ export interface KeyState {
 	cmdDown: boolean;
 	mouseAfterKey: boolean;
 	keyAfterModifiers: boolean;
+	sinceKeyDown: number | null;
 }
 
 const HID_SYSTEM_STATE = 1;
@@ -49,6 +51,7 @@ export function decodeKeyState(sample: KeySample): KeyState {
 		cmdDown: (sample.flags & COMMAND_FLAG) !== 0n,
 		mouseAfterKey: sample.sinceMouseUp < sample.sinceKeyDown,
 		keyAfterModifiers: sample.sinceKeyDown < sample.sinceFlagsChanged,
+		sinceKeyDown: Number.isFinite(sample.sinceKeyDown) ? sample.sinceKeyDown : null,
 	};
 }
 
@@ -75,7 +78,7 @@ export function createKeyStateReader(platform: NodeJS.Platform) {
 			});
 		} catch (error) {
 			unavailable = true;
-			console.error("[desktop] could not read keyboard state", error);
+			desktopError("keyboard", "could not read keyboard state", error);
 			return null;
 		}
 	};

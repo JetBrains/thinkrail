@@ -1,19 +1,38 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { afterEach, beforeEach, expect, onTestFinished, test } from "bun:test";
+import {
+	chmodSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
-import { createFauxCore } from "@earendil-works/pi-ai/providers/faux";
+import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type {
+	AppConfig,
 	Project,
 	Template,
 	TemplateInfo,
 	WireModel,
 	Workspace,
+	WorkspaceCreation,
+	WorkspaceCreationRemoved,
+	WorkspaceFsChangedPayload,
+	WorkspacePathMatch,
 	WorkspaceWatchReadyResult,
 } from "@thinkrail/contracts";
-import { WORKSPACE_SETTLE_PROTOCOL_VERSION, WS_METHODS } from "@thinkrail/contracts";
+import {
+	BRANCH_STATUS_PROTOCOL_VERSION,
+	INITIAL_TERMINAL_TAB_KEY,
+	WORKSPACE_SETTLE_PROTOCOL_VERSION,
+	WS_METHODS,
+} from "@thinkrail/contracts";
 import { TodoStore } from "pi-todos/core";
 import {
 	type CreateSessionResult,
@@ -21,17 +40,34 @@ import {
 	disposeAllSessions,
 	setSessionManagerFactory,
 } from "../agent";
-import { recordAcceptedMessage, resetFeedbackForTests, setFeedbackPublisher } from "../feedback";
+import { initializeAnalytics, resetAnalyticsForTests, shutdownAnalytics } from "../analytics";
+import {
+	configureSurveySource,
+	recordAcceptedMessage,
+	resetFeedbackForTests,
+	resetSurveyForTests,
+	setFeedbackPublisher,
+} from "../feedback";
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
 import { addComment, getReviewSnapshot } from "../reviews";
 import { resetConfigCache } from "../settings";
+import { listTerminals } from "../terminal";
 import { todoReviewRecord } from "../todos";
-import { stopAllWatches } from "../watch";
+import { setTrashImplementationForTests } from "../trash";
+import { setWatchPublisher, stopAllWatches } from "../watch";
+import {
+	awaitWorkspaceCreation,
+	getWorkspace,
+	setWorkspaceCreationHandoff,
+	setWorkspaceCreationPublisher,
+	setWorkspaceReview,
+} from "../workspaces";
 import {
 	handleRequest,
 	openReviewForClient,
 	requestMethodDiagnostic,
 	shouldRefreshOpenReview,
+	workspaceCreationHandoff,
 } from "./handlers";
 
 const CTX = { clientKey: "test-client" };
@@ -39,6 +75,9 @@ const CTX = { clientKey: "test-client" };
 let dataDir: string;
 let repo: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
+const savedTestAgentDir = process.env.PI_CODING_AGENT_DIR;
+
+let handlerFaux: ReturnType<typeof createFauxCore> | null = null;
 
 async function setupDefaultModelRuntime(): Promise<() => void> {
 	const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
@@ -61,6 +100,7 @@ async function setupDefaultModelRuntime(): Promise<() => void> {
 		maxTokens: 4_096,
 	};
 	const faux = createFauxCore({ provider: "handler", api: "faux", models: [model] });
+	handlerFaux = faux;
 	runtime.registerProvider("handler", {
 		api: "faux",
 		baseUrl: "http://faux.local",
@@ -90,8 +130,10 @@ function gitText(cwd: string, ...args: string[]): string {
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "trpi-handlers-test-"));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
+	process.env.PI_CODING_AGENT_DIR = join(dataDir, "pi");
 	resetConfigCache();
 	resetFeedbackForTests();
+	resetSurveyForTests();
 	repo = join(dataDir, "repo");
 	mkdirSync(repo);
 	git(repo, "init", "-b", "main");
@@ -109,16 +151,103 @@ beforeEach(() => {
 
 afterEach(() => {
 	stopAllWatches();
+	setWatchPublisher(null);
+	setTrashImplementationForTests(undefined);
 	resetConfigCache();
 	resetFeedbackForTests();
+	resetSurveyForTests();
+	resetAnalyticsForTests();
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
+	if (savedTestAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+	else process.env.PI_CODING_AGENT_DIR = savedTestAgentDir;
 });
 
 test("every contract method has a registered handler", () => {
 	const unregistered = Object.values(WS_METHODS).filter((m) => requestMethodDiagnostic(m) !== m);
 	expect(unregistered).toEqual([]);
+});
+
+test("file mutation handlers invalidate watcher-ignored paths after success", async () => {
+	const directory = join(repo, "node_modules", "demo");
+	mkdirSync(directory, { recursive: true });
+	writeFileSync(join(directory, "source.txt"), "content");
+	writeFileSync(
+		join(dataDir, "workspaces.json"),
+		JSON.stringify([
+			{
+				id: "w1",
+				projectId: "p1",
+				name: "Default",
+				worktreePath: repo,
+				createdAt: 1,
+			},
+		]),
+	);
+	const frames: WorkspaceFsChangedPayload[] = [];
+	setWatchPublisher((payload) => frames.push(payload));
+	setTrashImplementationForTests(async (input) => {
+		if (typeof input !== "string") throw new Error("expected one path");
+		rmSync(input, { recursive: true });
+	});
+
+	expect(
+		await handleRequest(
+			"fs.copy",
+			{
+				sourceWorkspaceId: "w1",
+				sourcePath: "node_modules/demo/source.txt",
+				destinationWorkspaceId: "w1",
+				destinationDirectory: "node_modules/demo",
+			},
+			CTX,
+		),
+	).toEqual({ path: "node_modules/demo/source copy.txt" });
+	expect(
+		await handleRequest(
+			"fs.delete",
+			{ workspaceId: "w1", path: "node_modules/demo/source copy.txt" },
+			CTX,
+		),
+	).toEqual({ ok: true });
+	expect(
+		await handleRequest("fs.delete", { workspaceId: "w1", path: "node_modules/demo" }, CTX),
+	).toEqual({ ok: true });
+	expect(frames.filter((frame) => frame.paths.length > 0)).toEqual([
+		{
+			workspaceId: "w1",
+			paths: ["node_modules/demo/source copy.txt"],
+			truncated: false,
+			skillChange: "unknown",
+		},
+		{
+			workspaceId: "w1",
+			paths: ["node_modules/demo/source copy.txt"],
+			truncated: false,
+			skillChange: "unknown",
+		},
+		{ workspaceId: "w1", paths: ["node_modules/demo"], truncated: false, skillChange: "unknown" },
+	]);
+	expect(existsSync(directory)).toBe(false);
+});
+
+test("clone handlers resolve the destination and return an opened local project", async () => {
+	const input = {
+		operationId: "clone-handler",
+		url: pathToFileURL(repo).href,
+		parentPath: dataDir,
+		name: "cloned",
+	};
+	const destination = (await handleRequest("project.cloneDestination", input, CTX)) as {
+		path: string;
+	};
+	const project = (await handleRequest("project.clone", input, CTX)) as Project;
+	expect(project.path).toBe(destination.path);
+	expect(gitText(project.path, "rev-parse", "HEAD")).toBe(gitText(repo, "rev-parse", "HEAD"));
+	expect(
+		await handleRequest("project.cancelClone", { operationId: input.operationId }, CTX),
+	).toEqual({ ok: true });
 });
 
 test("open-review cache reuse is opt-in so older clients remain fresh", () => {
@@ -156,6 +285,273 @@ test("starting a PR mutation reactivates a parked workspace before any network a
 	expect(after?.lastActiveAt ?? 0).toBeGreaterThanOrEqual(workspace.lastActiveAt ?? 0);
 });
 
+test("branch status reports a review-free branch, and workspace.push publishes it", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Ship segment" },
+		CTX,
+	)) as Workspace;
+	writeFileSync(join(workspace.worktreePath, "ship.txt"), "ship\n");
+	git(workspace.worktreePath, "add", "-A");
+	git(workspace.worktreePath, "commit", "-m", "ship");
+	writeFileSync(join(workspace.worktreePath, "dirty.txt"), "dirty\n");
+
+	const local = await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX);
+	expect(local).toEqual({
+		hasOrigin: false,
+		provider: null,
+		published: false,
+		pushesElsewhere: false,
+		aheadOfBase: 1,
+		onBase: false,
+		review: null,
+	});
+
+	const remote = join(dataDir, "origin.git");
+	mkdirSync(remote);
+	git(remote, "init", "--bare");
+	git(repo, "remote", "add", "origin", remote);
+	expect(
+		await handleRequest(
+			"workspace.push",
+			{ workspaceId: workspace.id, branch: workspace.branch },
+			CTX,
+		),
+	).toEqual({
+		dirtyFiles: 1,
+	});
+	const published = await handleRequest(
+		"workspace.branchStatus",
+		{ workspaceId: workspace.id },
+		CTX,
+	);
+	expect(published).toMatchObject({
+		hasOrigin: true,
+		provider: null,
+		published: true,
+		ahead: 0,
+		behind: 0,
+		aheadOfBase: 1,
+		review: null,
+	});
+});
+
+test("branch status measures the branch a managed workspace's terminal switched to", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Switched" },
+		CTX,
+	)) as Workspace;
+	const remote = join(dataDir, "switched.git");
+	mkdirSync(remote);
+	git(remote, "init", "--bare");
+	git(repo, "remote", "add", "origin", remote);
+	await handleRequest(
+		"workspace.push",
+		{ workspaceId: workspace.id, branch: workspace.branch },
+		CTX,
+	);
+	git(workspace.worktreePath, "switch", "-c", "feature/terminal");
+
+	const rows = (await handleRequest(
+		"workspace.list",
+		{ projectId: "p1", includeDiffStats: false },
+		CTX,
+	)) as Workspace[];
+	expect(rows.find((row) => row.id === workspace.id)).toMatchObject({
+		branch: "feature/terminal",
+	});
+	expect(
+		await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX),
+	).toMatchObject({ published: false, review: null });
+});
+
+test("a workspace on its base branch gets no review lookup and drops a stored foreign review", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "On base" },
+		CTX,
+	)) as Workspace;
+	git(repo, "remote", "add", "origin", "https://github.com/fake-owner/fake-repo.git");
+	const bin = join(dataDir, "bin");
+	const ghCalls = join(dataDir, "gh-calls");
+	mkdirSync(bin);
+	writeFileSync(join(bin, "gh"), `#!/bin/sh\necho "$@" >> ${JSON.stringify(ghCalls)}\necho "[]"\n`);
+	chmodSync(join(bin, "gh"), 0o755);
+	const savedPath = process.env.PATH;
+	process.env.PATH = `${bin}${delimiter}${savedPath ?? ""}`;
+	onTestFinished(() => {
+		process.env.PATH = savedPath;
+	});
+	git(repo, "switch", "-c", "elsewhere");
+	git(workspace.worktreePath, "switch", "main");
+	await handleRequest("workspace.list", { projectId: "p1", includeDiffStats: false }, CTX);
+	setWorkspaceReview(
+		workspace.id,
+		{ kind: "pull-request", number: 501, state: "merged", url: "https://example.test/501" },
+		"main",
+	);
+
+	expect(
+		await handleRequest(
+			"workspace.branchStatus",
+			{ workspaceId: workspace.id, skipFetch: true },
+			CTX,
+		),
+	).toMatchObject({ onBase: true, review: null });
+	expect(getWorkspace(workspace.id)).toMatchObject({ branch: "main" });
+	expect(getWorkspace(workspace.id).review).toBeUndefined();
+
+	setWorkspaceReview(workspace.id, { kind: "pull-request", number: 501, state: "open" }, "main");
+	expect(
+		await handleRequest(
+			"workspace.openReview",
+			{ workspaceId: workspace.id, allowCached: true },
+			CTX,
+		),
+	).toBeNull();
+	expect(getWorkspace(workspace.id).review).toBeUndefined();
+	expect(existsSync(ghCalls)).toBe(false);
+});
+
+test("a CI poll re-reads the review without fetching origin; a focus read still fetches", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Poll" },
+		CTX,
+	)) as Workspace;
+	const remote = join(dataDir, "poll.git");
+	mkdirSync(remote);
+	git(remote, "init", "--bare");
+	git(repo, "remote", "add", "origin", remote);
+	await handleRequest(
+		"workspace.push",
+		{ workspaceId: workspace.id, branch: workspace.branch },
+		CTX,
+	);
+	const other = join(dataDir, "poll-other");
+	git(dataDir, "clone", "--branch", workspace.branch, remote, other);
+	git(other, "config", "user.email", "t@thinkrail.test");
+	git(other, "config", "user.name", "test");
+	writeFileSync(join(other, "teammate.txt"), "teammate\n");
+	git(other, "add", "-A");
+	git(other, "commit", "-m", "teammate");
+	git(other, "push", "origin", workspace.branch);
+
+	expect(
+		await handleRequest(
+			"workspace.branchStatus",
+			{ workspaceId: workspace.id, skipFetch: true },
+			CTX,
+		),
+	).toMatchObject({ published: true, behind: 0 });
+	expect(
+		await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX),
+	).toMatchObject({ published: true, behind: 1 });
+});
+
+test("a split origin measures the branch against where it is pushed, not where it is fetched", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Split origin" },
+		CTX,
+	)) as Workspace;
+	writeFileSync(join(workspace.worktreePath, "ship.txt"), "ship\n");
+	git(workspace.worktreePath, "add", "-A");
+	git(workspace.worktreePath, "commit", "-m", "ship");
+	const fetchRepo = join(dataDir, "fetch.git");
+	const pushRepo = join(dataDir, "push.git");
+	for (const bare of [fetchRepo, pushRepo]) {
+		mkdirSync(bare);
+		git(bare, "init", "--bare");
+	}
+	git(repo, "remote", "add", "origin", fetchRepo);
+	git(repo, "remote", "set-url", "--push", "origin", pushRepo);
+	git(repo, "push", fetchRepo, "main");
+	await handleRequest(
+		"workspace.push",
+		{ workspaceId: workspace.id, branch: workspace.branch },
+		CTX,
+	);
+
+	const other = join(dataDir, "other");
+	git(dataDir, "clone", fetchRepo, other);
+	git(other, "config", "user.email", "t@thinkrail.test");
+	git(other, "config", "user.name", "test");
+	git(other, "switch", "-c", workspace.branch);
+	writeFileSync(join(other, "unrelated.txt"), "unrelated\n");
+	git(other, "add", "-A");
+	git(other, "commit", "-m", "unrelated on the fetch side");
+	git(other, "push", "origin", workspace.branch);
+	git(workspace.worktreePath, "fetch", "origin");
+	git(other, "push", "origin", "--delete", workspace.branch);
+
+	expect(
+		await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX),
+	).toMatchObject({ published: true, pushesElsewhere: true, ahead: 0, behind: 0 });
+
+	const pushed = join(dataDir, "pushed");
+	git(dataDir, "clone", "--branch", workspace.branch, pushRepo, pushed);
+	git(pushed, "config", "user.email", "t@thinkrail.test");
+	git(pushed, "config", "user.name", "test");
+	writeFileSync(join(pushed, "later.txt"), "later\n");
+	git(pushed, "add", "-A");
+	git(pushed, "commit", "-m", "later on the push side");
+	git(pushed, "push", "origin", workspace.branch);
+
+	git(workspace.worktreePath, "fetch", "--prune", "origin");
+
+	expect(
+		await handleRequest(
+			"workspace.branchStatus",
+			{ workspaceId: workspace.id, allowCached: true },
+			CTX,
+		),
+	).toMatchObject({ published: true, ahead: 0, behind: 1 });
+});
+
+test("a split origin whose push repository can't be read reports publication as unknown", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Unreachable push" },
+		CTX,
+	)) as Workspace;
+	const fetchRepo = join(dataDir, "fetch-only.git");
+	mkdirSync(fetchRepo);
+	git(fetchRepo, "init", "--bare");
+	git(repo, "remote", "add", "origin", fetchRepo);
+	git(workspace.worktreePath, "push", fetchRepo, `HEAD:refs/heads/${workspace.branch}`);
+	git(workspace.worktreePath, "fetch", "origin");
+	git(repo, "remote", "set-url", "--push", "origin", join(dataDir, "missing.git"));
+
+	const status = await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX);
+	expect(status).toMatchObject({ hasOrigin: true, pushesElsewhere: true, published: null });
+	expect(status).not.toHaveProperty("ahead");
+});
+
+test("a pre-v87 client's source-less PR preview keeps the session's plan body", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Legacy preview" },
+		CTX,
+	)) as Workspace;
+	writeFileSync(join(workspace.worktreePath, "ship.txt"), "ship\n");
+	git(workspace.worktreePath, "add", "-A");
+	git(workspace.worktreePath, "commit", "-m", "ship it");
+	const params = { workspaceId: workspace.id, sessionId: "legacy-session" };
+
+	const legacy = (await handleRequest("pr.preview", params, {
+		...CTX,
+		protocolVersion: BRANCH_STATUS_PROTOCOL_VERSION - 1,
+	})) as { body: string };
+	expect(legacy.body).toContain("## Committed outside the plan");
+	const current = (await handleRequest("pr.preview", params, CTX)) as {
+		body: string;
+		source: string;
+	};
+	expect(current).toMatchObject({ source: "commits", body: "- ship it" });
+});
+
 test("request diagnostics expose only registered method names", async () => {
 	expect(requestMethodDiagnostic("workspace.list")).toBe("workspace.list");
 	expect(requestMethodDiagnostic("host.update")).toBe("host.update");
@@ -181,6 +577,23 @@ test("host.update invokes only the context-injected parameterless operation", as
 
 test("retired session activity returns the empty compatibility snapshot", async () => {
 	expect(await handleRequest("session.activityList", {}, CTX)).toEqual([]);
+});
+
+test("the retired ask answer method and respondToTool both refuse an unknown session the same way", async () => {
+	await expect(
+		handleRequest(
+			"session.answerQuestion",
+			{ sessionId: "nope", toolCallId: "tc", result: {} },
+			CTX,
+		),
+	).rejects.toThrow("Unknown session: nope");
+	await expect(
+		handleRequest(
+			"session.respondToTool",
+			{ sessionId: "nope", toolCallId: "tc", response: {} },
+			CTX,
+		),
+	).rejects.toThrow("Unknown session: nope");
 });
 
 test("template reads resolve a project's current checkout and reject ambiguous locations", async () => {
@@ -215,6 +628,49 @@ test("template reads resolve a project's current checkout and reject ambiguous l
 	} finally {
 		if (savedAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
 		else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
+	}
+});
+
+test("a background create hands the finished workspace a terminal and the held chat", async () => {
+	const cleanup = await setupDefaultModelRuntime();
+	setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd, { id: "kickoff-chat" }));
+	const removed: WorkspaceCreationRemoved[] = [];
+	setWorkspaceCreationPublisher((event) => {
+		if (event.kind === "removed") removed.push(event.removed);
+	});
+	setWorkspaceCreationHandoff(workspaceCreationHandoff);
+	try {
+		const models = (await handleRequest("model.list", {}, CTX)) as WireModel[];
+		const selected = models.find((model) => model.provider === "handler");
+		if (!selected) throw new Error("handler test model was not available");
+		handlerFaux?.setResponses([
+			async () => {
+				await Bun.sleep(4_000);
+				return fauxAssistantMessage("done");
+			},
+		]);
+		const started = Date.now();
+		const creation = (await handleRequest(
+			"workspace.startCreate",
+			{ projectId: "p1", kickoff: { text: "Start here", model: selected } },
+			CTX,
+		)) as WorkspaceCreation;
+		expect(creation).toMatchObject({ state: "running", kickoff: { text: "Start here" } });
+		const workspace = await awaitWorkspaceCreation(creation.id);
+		expect(Date.now() - started).toBeLessThan(3_000);
+
+		expect(workspace.initialTerminalPending).toBeUndefined();
+		expect(removed).toHaveLength(1);
+		expect(removed[0]).toMatchObject({ id: creation.id, workspace: { id: creation.id } });
+		expect(removed[0]?.sessionId).toEqual(expect.any(String));
+		expect(await handleRequest("workspace.listCreations", {}, CTX)).toEqual([]);
+	} finally {
+		setWorkspaceCreationHandoff(null);
+		setWorkspaceCreationPublisher(null);
+		disposeAllSessions();
+		configurePiRuntime(null);
+		setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+		cleanup();
 	}
 });
 
@@ -255,6 +711,30 @@ test("model.default and new session creation share the AppConfig default resolut
 	}
 });
 
+test("settings.update merges extension settings per key and rejects a malformed value", async () => {
+	await handleRequest(
+		"settings.update",
+		{ config: { extensionSettings: { "ask-user-question": { richPreviews: false } } } },
+		CTX,
+	);
+	const config = (await handleRequest(
+		"settings.update",
+		{ config: { extensionSettings: { "ask-user-question": { other: true } } } },
+		CTX,
+	)) as AppConfig;
+	expect(config.extensionSettings["ask-user-question"]).toEqual({
+		richPreviews: false,
+		other: true,
+	});
+	await expect(
+		handleRequest(
+			"settings.update",
+			{ config: { extensionSettings: { "ask-user-question": { richPreviews: "no" } } } } as never,
+			CTX,
+		),
+	).rejects.toThrow("extensionSettings must map extension names to boolean settings");
+});
+
 test("extension.list reflects disabledExtensions written through settings.update", async () => {
 	expect(await handleRequest("extension.list", {}, CTX)).toEqual([
 		{
@@ -265,18 +745,39 @@ test("extension.list reflects disabledExtensions written through settings.update
 			tools: ["visualize"],
 			hasChildExtensions: false,
 		},
+		{
+			name: "ask-user-question",
+			title: "Ask user question",
+			description: expect.any(String),
+			enabled: true,
+			tools: ["ask_user_question"],
+			hasChildExtensions: false,
+			settings: [{ key: "richPreviews", default: true }],
+		},
+		{
+			name: "web-access",
+			title: "Web access",
+			description: expect.any(String),
+			enabled: true,
+			tools: ["web_search", "source_check", "fetch_content", "get_search_content", "web_enable"],
+			hasChildExtensions: true,
+		},
 	]);
 	await handleRequest(
 		"settings.update",
-		{ config: { disabledExtensions: ["visualize", "retired"] } },
+		{ config: { disabledExtensions: ["visualize", "web-access", "retired"] } },
 		CTX,
 	);
 	expect(await handleRequest("extension.list", {}, CTX)).toMatchObject([
 		{ name: "visualize", enabled: false },
+		{ name: "ask-user-question", enabled: true },
+		{ name: "web-access", enabled: false },
 	]);
 	await handleRequest("settings.update", { config: { disabledExtensions: [] } }, CTX);
 	expect(await handleRequest("extension.list", {}, CTX)).toMatchObject([
 		{ name: "visualize", enabled: true },
+		{ name: "ask-user-question", enabled: true },
+		{ name: "web-access", enabled: true },
 	]);
 });
 
@@ -298,13 +799,212 @@ test("feedback.respond persists a popup action through the handler", async () =>
 		acceptedMessages: 10,
 		nextInvitationAt: 20,
 		dismissed: false,
+		submittedSurveyId: null,
+		submittedIteration: null,
+		lastInvitedAt: null,
+		githubStarAsked: false,
+	});
+});
+
+const SURVEY_SUBMISSION_ID = "00000000-0000-4000-8000-000000000001";
+
+const remoteSurvey: { iteration: number | null; status: number } = { iteration: 0, status: 200 };
+
+function launchSurvey(iteration = 0): void {
+	remoteSurvey.iteration = iteration;
+	remoteSurvey.status = 200;
+	configureSurveySource({
+		apiKey: "phc_test",
+		fetchImpl: (() => {
+			if (remoteSurvey.status !== 200) {
+				return Promise.resolve(new Response("down", { status: remoteSurvey.status }));
+			}
+			const surveys =
+				remoteSurvey.iteration === null
+					? []
+					: [
+							{
+								id: "survey-1",
+								name: "in-app-feedback",
+								start_date: "2026-10-28T00:00:00.000Z",
+								current_iteration: remoteSurvey.iteration,
+								questions: [{ id: "q1", type: "open", question: "How is it?" }],
+							},
+						];
+			return Promise.resolve(new Response(JSON.stringify({ surveys }), { status: 200 }));
+		}) as unknown as typeof fetch,
+	});
+}
+
+function bootSurveyAnalytics(sent: string[], overrides: { mute?: boolean } = {}): void {
+	initializeAnalytics({
+		posthogApiKey: "phc_test",
+		appVersion: "0.0.0-dev",
+		channel: "dev",
+		build: "source",
+		additionalEnabled: false,
+		env: {},
+		...overrides,
+		fetchImpl: ((_url: string, init?: RequestInit) => {
+			if (typeof init?.body === "string") sent.push(init.body);
+			return Promise.resolve(new Response("{}", { status: 200 }));
+		}) as unknown as typeof fetch,
+	});
+}
+
+function submitSurvey(overrides: Record<string, unknown> = {}) {
+	return handleRequest(
+		"feedback.survey.submit",
+		{
+			submissionId: SURVEY_SUBMISSION_ID,
+			surveyId: "survey-1",
+			iteration: 0,
+			answers: { q1: "Good" },
+			...overrides,
+		},
+		CTX,
+	);
+}
+
+function storedFeedback(): Record<string, unknown> {
+	return JSON.parse(readFileSync(join(dataDir, "feedback.json"), "utf8")) as Record<
+		string,
+		unknown
+	>;
+}
+
+test("feedback.survey stays hidden until a launched survey exists and a sent answer hides it", async () => {
+	expect(await handleRequest("feedback.survey", {}, CTX)).toEqual({ survey: null });
+	await expect(submitSurvey()).rejects.toMatchObject({ code: "SURVEY_UNAVAILABLE" });
+
+	const sent: string[] = [];
+	bootSurveyAnalytics(sent, { mute: true });
+	launchSurvey();
+	expect(await handleRequest("feedback.survey", {}, CTX)).toMatchObject({
+		survey: { id: "survey-1", iteration: 0 },
+	});
+	expect(await submitSurvey()).toEqual({ ok: true });
+	expect(await handleRequest("feedback.survey", {}, CTX)).toEqual({ survey: null });
+	expect(storedFeedback()).toMatchObject({ submittedSurveyId: "survey-1", submittedIteration: 0 });
+	await shutdownAnalytics();
+	expect(sent.some((body) => body.includes('"survey sent"') && body.includes('"Good"'))).toBe(true);
+});
+
+test("feedback.survey.submit refuses a different survey version without completing either", async () => {
+	const sent: string[] = [];
+	bootSurveyAnalytics(sent);
+	launchSurvey(1);
+	await expect(submitSurvey({ iteration: 0 })).rejects.toMatchObject({ code: "SURVEY_CHANGED" });
+	await expect(submitSurvey({ iteration: 1, surveyId: "survey-0" })).rejects.toMatchObject({
+		code: "SURVEY_CHANGED",
+	});
+	await expect(submitSurvey({ iteration: 1, answers: {} })).rejects.toMatchObject({
+		code: "SURVEY_INVALID",
+	});
+	await expect(submitSurvey({ submissionId: "nope" })).rejects.toMatchObject({
+		code: "SURVEY_INVALID",
+	});
+	expect(await handleRequest("feedback.survey", {}, CTX)).toMatchObject({
+		survey: { id: "survey-1", iteration: 1 },
+	});
+	await shutdownAnalytics();
+	expect(sent.some((body) => body.includes('"survey sent"'))).toBe(false);
+});
+
+test("feedback.survey.submit re-reads PostHog instead of trusting the displayed copy", async () => {
+	const sent: string[] = [];
+	bootSurveyAnalytics(sent);
+	launchSurvey(0);
+	expect(await handleRequest("feedback.survey", {}, CTX)).toMatchObject({
+		survey: { iteration: 0 },
+	});
+
+	remoteSurvey.iteration = 1;
+	await expect(submitSurvey()).rejects.toMatchObject({ code: "SURVEY_CHANGED" });
+	remoteSurvey.iteration = null;
+	await expect(submitSurvey({ iteration: 1 })).rejects.toMatchObject({
+		code: "SURVEY_UNAVAILABLE",
+	});
+	remoteSurvey.iteration = 0;
+	remoteSurvey.status = 503;
+	await expect(submitSurvey()).rejects.toMatchObject({ code: "SURVEY_NOT_SENT" });
+	await shutdownAnalytics();
+	expect(sent.some((body) => body.includes('"survey sent"'))).toBe(false);
+	expect(existsSync(join(dataDir, "feedback.json"))).toBe(false);
+});
+
+test("a completion that cannot be saved still counts as sent and never sends the answers twice", async () => {
+	const sent: string[] = [];
+	bootSurveyAnalytics(sent);
+	launchSurvey();
+	expect(await handleRequest("feedback.survey", {}, CTX)).toMatchObject({
+		survey: { id: "survey-1" },
+	});
+	const blocked = join(dataDir, "blocked");
+	writeFileSync(blocked, "not a directory");
+	process.env.THINKRAIL_DATA_DIR = blocked;
+	try {
+		expect(await submitSurvey()).toEqual({ ok: true });
+		await expect(submitSurvey()).rejects.toMatchObject({ code: "SURVEY_UNAVAILABLE" });
+		expect(await handleRequest("feedback.survey", {}, CTX)).toEqual({ survey: null });
+	} finally {
+		process.env.THINKRAIL_DATA_DIR = dataDir;
+	}
+	await shutdownAnalytics();
+	expect(sent.filter((body) => body.includes('"survey sent"'))).toHaveLength(1);
+});
+
+test("feedback.survey speaks the app language and a vanished translation restarts the survey", async () => {
+	const sent: string[] = [];
+	bootSurveyAnalytics(sent);
+	let translations: Record<string, unknown> = { es: { question: "¿Qué tal?" } };
+	configureSurveySource({
+		apiKey: "phc_test",
+		fetchImpl: (() =>
+			Promise.resolve(
+				new Response(
+					JSON.stringify({
+						surveys: [
+							{
+								id: "survey-1",
+								name: "in-app-feedback",
+								start_date: "2026-10-28T00:00:00.000Z",
+								questions: [{ id: "q1", type: "open", question: "How is it?", translations }],
+							},
+						],
+					}),
+				),
+			)) as unknown as typeof fetch,
+	});
+	expect(await handleRequest("feedback.survey", { language: "es-MX" }, CTX)).toMatchObject({
+		survey: { language: "es", questions: [{ question: "¿Qué tal?" }] },
+	});
+	expect(await handleRequest("feedback.survey", {}, CTX)).not.toMatchObject({
+		survey: { language: "es" },
+	});
+
+	translations = {};
+	await expect(submitSurvey({ language: "es" })).rejects.toMatchObject({ code: "SURVEY_CHANGED" });
+	translations = { es: { question: "¿Qué tal?" } };
+	expect(await submitSurvey({ language: "es" })).toEqual({ ok: true });
+	await shutdownAnalytics();
+	expect(sent.some((body) => body.includes('"$survey_language":"es"'))).toBe(true);
+});
+
+test("feedback.survey.submit does not complete a survey whose answers were not sent", async () => {
+	launchSurvey();
+	await expect(submitSurvey()).rejects.toMatchObject({ code: "SURVEY_NOT_SENT" });
+	expect(await handleRequest("feedback.survey", {}, CTX)).toMatchObject({
+		survey: { id: "survey-1" },
 	});
 });
 
 test("feedback.respond rejects an action outside the wire union", async () => {
-	await expect(handleRequest("feedback.respond", { action: "later" }, CTX)).rejects.toThrow(
-		"Invalid interview response",
-	);
+	for (const action of ["later", "book"]) {
+		await expect(handleRequest("feedback.respond", { action }, CTX)).rejects.toThrow(
+			"Invalid invitation response",
+		);
+	}
 });
 
 test("project.setTrust grants pi-level resource trust only when the request asks for resources", async () => {
@@ -528,6 +1228,73 @@ test("todo.requestFix on a chat that isn't on disk rolls the record back and nev
 	expect(after?.sessionId).toBeUndefined();
 });
 
+test("a review send that names its chat lands every file's drafts there as one package", async () => {
+	const cleanup = await setupDefaultModelRuntime();
+	let sessions = 0;
+	setSessionManagerFactory((cwd) => {
+		sessions += 1;
+		return SessionManager.inMemory(cwd, { id: `review-send-${sessions}` });
+	});
+	try {
+		const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
+		const workspace = rows[0];
+		if (!workspace) throw new Error("expected a workspace");
+		writeFileSync(join(repo, "NOTES.md"), "notes\n");
+		const chat = (await handleRequest(
+			"session.create",
+			{ workspaceId: workspace.id },
+			CTX,
+		)) as CreateSessionResult;
+		const draft = (path: string) =>
+			addComment({
+				workspaceId: workspace.id,
+				kind: "inline",
+				anchor: {
+					path,
+					side: "worktree",
+					contentHash: "",
+					selectors: [{ kind: "lineRange", startLine: 1, endLine: 1 }],
+				},
+				body: `about ${path}`,
+			});
+		const ids = [(await draft("README.md")).id, (await draft("NOTES.md")).id];
+
+		const sent = (await handleRequest(
+			"review.sendBatch",
+			{ workspaceId: workspace.id, sessionId: chat.sessionId },
+			CTX,
+		)) as { sessions: { sessionId: string }[] };
+
+		expect(sent.sessions.map((session) => session.sessionId)).toEqual([chat.sessionId]);
+		const comments = (await getReviewSnapshot(workspace.id)).comments.filter((comment) =>
+			ids.includes(comment.id),
+		);
+		expect(comments.map((comment) => [comment.status, comment.sessionId])).toEqual([
+			["sent", chat.sessionId],
+			["sent", chat.sessionId],
+		]);
+	} finally {
+		disposeAllSessions();
+		configurePiRuntime(null);
+		setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+		cleanup();
+	}
+});
+
+test("a path resolved into a Default it had to ensure gets the Default's first terminal", async () => {
+	const match = (await handleRequest(
+		"workspace.resolvePath",
+		{ path: join(repo, "README.md") },
+		CTX,
+	)) as WorkspacePathMatch;
+	expect(match).toMatchObject({ projectId: "p1", relativePath: "README.md" });
+	expect(getWorkspace(match.workspaceId)).toMatchObject({ kind: "default" });
+	expect(getWorkspace(match.workspaceId).initialTerminalPending).toBeUndefined();
+	expect(listTerminals(match.workspaceId)).toEqual([
+		{ tabKey: INITIAL_TERMINAL_TAB_KEY, title: "Terminal 1" },
+	]);
+});
+
 test("workspace mutation handlers reject the Default before any side effect", async () => {
 	const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
 	const def = rows[0];
@@ -572,12 +1339,21 @@ test("resource handlers scope every read/control to a registered workspace and a
 			CTX,
 		)) as CreateSessionResult;
 		const scope = { workspaceId: workspace.id, sessionId: parent.sessionId };
+		const none = { done: 0, failed: 0, stopped: 0, interrupted: 0 };
 		expect(await handleRequest("session.resources", scope, CTX)).toEqual({
 			...scope,
 			commands: [],
 			subagents: [],
 			mcpServers: [],
+			history: { commands: none, subagents: none },
 		});
+		expect(
+			await handleRequest(
+				"session.resourceHistory",
+				{ ...scope, kind: "command", before: { at: 1, id: "older" }, limit: 5 },
+				CTX,
+			),
+		).toEqual({ kind: "command", items: [], hasMore: false });
 		expect(
 			await handleRequest("backgroundCommand.output", { ...scope, commandId: "missing" }, CTX),
 		).toEqual({ available: false });
@@ -595,6 +1371,7 @@ test("resource handlers scope every read/control to a registered workspace and a
 		for (const workspaceId of [other.id, "missing-workspace"]) {
 			const calls = [
 				["session.resources", { ...scope, workspaceId }],
+				["session.resourceHistory", { ...scope, workspaceId, kind: "subagent" }],
 				["backgroundCommand.output", { ...scope, workspaceId, commandId: "missing" }],
 				["backgroundCommand.stop", { ...scope, workspaceId, commandId: "missing" }],
 				["subagent.stop", { ...children, workspaceId, childSessionId: "missing" }],
@@ -619,6 +1396,19 @@ test("resource handlers scope every read/control to a registered workspace and a
 		]) {
 			await expect(handleRequest("session.resources", params, CTX)).rejects.toThrow(
 				"Invalid resource ids",
+			);
+		}
+		for (const params of [
+			{ ...scope, kind: "terminal" },
+			{ ...scope, kind: "command", limit: 0 },
+			{ ...scope, kind: "command", limit: 1.5 },
+			{ ...scope, kind: "command", before: { at: 1, id: "../secret" } },
+			{ ...scope, kind: "command", before: { at: "1", id: "older" } },
+			{ ...scope, kind: "command", before: { at: 1, id: "older", path: "/tmp" } },
+			{ ...scope, kind: "subagent", path: "/tmp/secret" },
+		]) {
+			await expect(handleRequest("session.resourceHistory", params, CTX)).rejects.toThrow(
+				/Invalid resource (?:history|ids)/,
 			);
 		}
 		for (const commandId of ["/tmp/output", "..", "C:\\output", "bad\u0000id"]) {

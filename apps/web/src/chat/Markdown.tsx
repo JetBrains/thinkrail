@@ -3,13 +3,13 @@ import { type ComponentProps, memo, type ReactNode, useEffect, useMemo, useState
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useHighlightedCode } from "@/lib/highlightCode";
+import { HighlightedHtml } from "./HighlightedHtml";
 import { createMarkdownSplitter } from "./markdownBlocks";
 
 const CHAT_PROSE =
 	"tr-prose-chat max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_a]:text-primary [&_a]:underline [&_li]:my-2 [&_ol]:my-8 [&_ol]:list-decimal [&_ol]:pl-16 [&_p]:my-8 [&_table]:border-collapse [&_td]:border [&_td]:border-border-muted [&_td]:px-8 [&_td]:py-4 [&_th]:border [&_th]:border-border-muted [&_th]:px-8 [&_th]:py-4 [&_th]:text-left [&_ul]:my-8 [&_ul]:list-disc [&_ul]:pl-16";
 
 type ReactMarkdownProps = ComponentProps<typeof ReactMarkdown>;
-export type MarkdownRehypePlugins = ReactMarkdownProps["rehypePlugins"];
 
 interface MarkdownProps {
 	text: string;
@@ -101,6 +101,10 @@ function Anchor({ href, children }: { href?: string | undefined; children?: Reac
 	);
 }
 
+export function fenceLanguage(className: string | undefined) {
+	return /language-([\w+#]+)/.exec(className ?? "")?.[1];
+}
+
 function CodeBlock({
 	className,
 	children,
@@ -108,7 +112,7 @@ function CodeBlock({
 	className?: string | undefined;
 	children?: ReactNode;
 }) {
-	const lang = /language-(\w+)/.exec(className ?? "")?.[1];
+	const lang = fenceLanguage(className);
 	const code = String(children ?? "").replace(/\n$/, "");
 	if (lang === "mermaid") return <MermaidBlock code={code} />;
 	if (!lang) {
@@ -117,7 +121,7 @@ function CodeBlock({
 		}
 		return <pre className="overflow-auto rounded-sm bg-container-elevated-bg p-8">{code}</pre>;
 	}
-	return <ShikiBlock code={code} lang={lang} />;
+	return <HighlightBlock code={code} lang={lang} />;
 }
 
 function MermaidBlock({ code }: { code: string }) {
@@ -127,7 +131,7 @@ function MermaidBlock({ code }: { code: string }) {
 		return () => clearTimeout(timer);
 	}, [code]);
 
-	const source = <ShikiBlock code={code} lang="mermaid" />;
+	const source = <HighlightBlock code={code} lang="mermaid" />;
 	if (settled !== code) return source;
 	return (
 		<div className="whitespace-normal">
@@ -136,7 +140,7 @@ function MermaidBlock({ code }: { code: string }) {
 	);
 }
 
-function ShikiBlock({ code, lang }: { code: string; lang: string }) {
+function HighlightBlock({ code, lang }: { code: string; lang: string }) {
 	const html = useHighlightedCode(code, lang);
 
 	if (html === null) {
@@ -147,9 +151,9 @@ function ShikiBlock({ code, lang }: { code: string; lang: string }) {
 		);
 	}
 	return (
-		<div
+		<HighlightedHtml
+			html={html}
 			className="overflow-auto rounded-sm [&_pre]:!m-0 [&_pre]:!bg-container-elevated-bg [&_pre]:p-8"
-			dangerouslySetInnerHTML={{ __html: html }}
 		/>
 	);
 }

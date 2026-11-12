@@ -14,7 +14,7 @@ type Listener = () => void;
 
 export class EventLog {
 	readonly events: PiEvent[] = [];
-	private listeners = new Set<Listener>();
+	private readonly listeners = new Set<Listener>();
 
 	push(event: PiEvent): void {
 		this.events.push(event);

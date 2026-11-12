@@ -1,0 +1,10 @@
+#!/bin/sh
+# `core.sshCommand = github-ssh <bare repo>` (ssh.variant simple): serves git's remote command from the bare repo.
+bare=$1
+shift 2
+case "$1" in
+git-upload-pack*) exec git upload-pack "$bare" ;;
+git-receive-pack*) exec git receive-pack "$bare" ;;
+esac
+echo "github-ssh: unsupported remote command: $1" >&2
+exit 1

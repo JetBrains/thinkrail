@@ -10,17 +10,20 @@ tags: [analytics, privacy]
 
 ## Responsibility and boundary
 
-Host-only product analytics shared by CLI/source/desktop, delivered personless to PostHog EU.
-The module owns the closed event vocabulary, catalog bucketing, installation identity usage, delivery,
-consent gates and bounded shutdown. Host alone observes feature outcomes and captures events; feature
+Host-only product analytics and error reports shared by CLI/source/desktop, delivered personless to
+PostHog EU. The module owns the closed event vocabulary, catalog bucketing, installation identity usage,
+exception sanitization, delivery, consent gates and bounded shutdown. Host alone observes feature outcomes and captures events; feature
 modules remain analytics-free. Sibling dependency edges belong to [[module-server]].
 
-- **Public surface:** initialization, basic capture, consent-scoped additional capture, additional-data
-  enablement, shutdown/test reset, event types, bucket helpers and `BuildKind`.
+- **Public surface:** initialization, basic capture, consent-scoped additional capture, the survey endpoint
+  and response capture (`surveyEndpoint`, `SurveyEndpoint`, `captureSurveyResponse`), additional-data
+  enablement, error reports (`reportError`, `reportFatalError`, `reportClientError`, `ErrorReport`, `ErrorSource`),
+  shutdown/test reset, event types, bucket helpers and `BuildKind`.
 - **Allowed deps:** persistence, log, contracts types, pi-ai's built-in catalog, Node, and `posthog-node`
-  inside the sink only.
+  inside the sink only (`errors.ts` is SDK-free; the sink adapts it into `before_send`).
 - **Forbidden:** importing host/feature siblings; being imported outside host; exposing the installation
-  UUID on the wire; copying rich feature payloads into telemetry; browser autocapture or a native-only sink.
+  UUID on the wire; copying rich feature payloads into telemetry except the survey response documented
+  below; browser autocapture or a native-only sink.
 
 ## Events
 
@@ -50,18 +53,31 @@ bounded browser-derived strings, never resource identities or arbitrary product 
 | Event | Signal |
 | --- | --- |
 | `setup_state_observed` | Provider/model/project readiness (`yes/no/unknown`); first current observation and changes, not every poll. |
-| `setup_action_finished` | Explicit setup operation, outcome and fixed failure category; automatic Default provisioning is excluded. `directory_pick` is the native folder picker (succeeded / cancelled / failed, never the path); `project_open` reports the typed `not_git` / `already_open` reasons from the projects module's coded errors, and every untyped failure stays `unknown` — reasons are never derived from error text. |
+| `setup_action_finished` | Explicit setup operation, outcome and fixed failure category; automatic Default provisioning is excluded. `directory_pick` is the native folder picker (succeeded / cancelled / failed, never the path); `project_create` is the in-app new-project bootstrap; `project_open` reports the typed `not_git` / `already_open` reasons from the projects module's coded errors, and every untyped failure stays `unknown` — reasons are never derived from error text. |
 | `agent_run_started` | Work-cycle origin, workspace kind and catalog-bucketed provider/model. |
 | `agent_run_settled` | Final outcome, elapsed-time/retry/compaction buckets; only `agent_settled`, never attempt-level `agent_end`. |
 | `task_completed` | Nonempty task-group completion transition after artifact reconciliation, change evidence and whether verification was recorded. |
-| `plan_opened` | The plan surfaced for the user, by `surface` (`page`/`popup`); a deliberate open action, not every plan refetch. |
-| `plan_item_added` | A user-added plan item (`origin:"user"`), by `surface` (`chat`/`page`); the user curating the plan, not agent re-plans. |
+| `plan_opened` | The plan surfaced for the user, by `surface` (`page`/`rail`); a deliberate open action, not every plan refetch. |
+| `plan_item_added` | A user-added plan item (`origin:"user"`), by `surface` (`chat`/`page`/`rail`); the user curating the plan, not agent re-plans. |
 | `review_decided` | Actual user/agent approval or changes-requested decision, not aborted-review cleanup. |
 | `review_comment_added` | A review comment created on a file/diff/doc, by `author` (`user`/`agent`) and `kind`; the human draft flow and the reviewer agent's findings, distinguished — not draft edits. |
 | `review_comment_sent` | One event **per comment** delivered to the agent (the value moment), with `outdated` (`yes`/`no`); per-comment so added→sent→resolved is a countable funnel, and `outdated` is the re-anchoring quality signal. Delivery, not proof the agent acted usefully. |
 | `review_comment_resolved` | A comment's terminal outcome, by `actor` (`user`/`agent`) and `outcome` (`resolved`/`dismissed`); the human update and the agent `resolve_comment` tool, not draft deletes or Clear. An agent `resolved` is the agent's claim, never proof the concern was fixed. |
 | `pr_action_finished` | Outcome/category; created PRs remain distinct from updates, pushes and compare-page handoffs; `source` = `plan_page` when driven from the plan page's PR stage, else `other`. |
 | `acquisition_linked` | One successful browser-claim redemption, carrying the transient journey/bridge ids and normalized first/last acquisition fields. |
+
+`survey sent` stays outside both unions: it is the user's explicit submission, not usage telemetry.
+`captureSurveyResponse` sends it once per finished survey through the **basic** client, so it leaves whatever
+the additional preference or grant and under `--no-analytics`, but never from unkeyed, CI or `NODE_ENV=test`
+runs (no client exists). It is personless (`$process_person_profile: false`), keyed by the installation ID,
+carries the standard environment properties plus `$survey_id`, `$survey_iteration`, `$survey_submission_id`,
+`$survey_completed`, `$survey_language` (the PostHog translation shown, when one was), `$survey_questions`
+(`id` and original question text) and `$survey_response_<question id>` — the
+answer text, rating or choice. It is the one payload allowed to contain what the user wrote; the survey
+window says so before the first question. It returns whether the client accepted the event (queued, not
+delivered), so the host records completion only then. No `survey shown` or `survey dismissed` is sent.
+`surveyEndpoint()` exposes the key, host (`THINKRAIL_POSTHOG_HOST` wins) and fetch the survey list must use,
+or null whenever no client exists; the host is the only caller of both.
 
 The review-comment funnel is host-observed off existing wire/tool actions: `review_comment_added`
 off the `review.commentAdd` handler (human, `author:user`) and each plan-review finding the host files
@@ -79,9 +95,9 @@ twice. No comment body, path, anchor text or line numbers are ever copied — on
 `author`/`kind`/`actor`/`outcome`/`outdated` enums.
 
 The plan/TODO funnel rides existing wire actions, never browser autocapture: the host captures
-`plan_opened` off a deliberate `todo.list { opened }` call (the plan page open or the chat popup open —
-not the automatic refetches), `plan_item_added` off a successful `todo.add` (`surface` names the in-chat add row or
-the plan page's add row), and stamps the `source` discriminator on
+`plan_opened` off a deliberate `todo.list { opened }` call (the plan page open or the TODO rail open —
+not the automatic refetches), `plan_item_added` off a successful `todo.add` (`surface` names the TODO rail add row, the chat's
+add path, or the plan page's add row), and stamps the `source` discriminator on
 `pr_action_finished` from the `pr.open` caller (`plan_page` when the plan page's PR button drove it). The
 plan page's Review stage runs through pi-subagents delegation ([[submodule-server-host]]'s plan review),
 whose asynchronous verdict is decoupled from the triggering surface, so `review_decided` carries no source
@@ -107,6 +123,71 @@ after re-enabling.
 Internal/unknown work never inflates user activation. A normal stop or agent-declared task/verification
 status is not proof of value, correctness or a passed test. Arrival order is not execution order.
 
+## Error reports
+
+PostHog Error Tracking `$exception` events are basic-tier: always on under the same gate as basic events
+(keyed build, not CI/test), unaffected by `analyticsEnabled`, `--no-analytics` or `THINKRAIL_NO_ANALYTICS`,
+and never campaign-enriched. Closed `source`: `host_crash` (crashLog's uncaught/unhandled, level `fatal`,
+`scope` = the crash kind and root mechanism `onuncaughtexception`/`onunhandledrejection`, sent with
+`captureExceptionImmediate` and awaited at most 1 s before exit — a reachable PostHog answers in a fraction
+of that, and every extra second keeps a faulted host running), `host_logged` (a host
+`log.warn/error` carrying an error, with its `scope`), `request` (every failed WS request, CodedErrors
+included — revisitable; PostHog itself excludes expected 4xx outcomes — with `request_method` only for a
+registered method), `ui` (`client.reportError`; `scope` = kind[:boundary], render = handled) and `desktop`
+(handled desktop main-process errors, with their scope). An error `code` passes only as `^[A-Z][A-Z0-9_]+$`.
+
+The privacy guarantee is an allow-list, not a deny-list. Capture uses posthog-node 5.57.2's
+`captureException` through a `PostHog` subclass whose overridden (protected)
+`createErrorPropertiesBuilder` keeps the SDK's coercers and node parser but **no frame modifiers**: the
+default ones read ±7 source lines per frame from disk, make paths relative to `cwd` (still
+`../../Users/<name>/…`) and derive module names. `@posthog/core`, pinned to posthog-node's own core, is
+imported only for that builder. The sink's typed (doc-less) `before_send` then **rebuilds** every
+`$exception` from scratch: ≤ 5 exceptions of identifier-only `type`, a classifier `value`,
+`mechanism.{handled,synthetic,type}` (the root's `handled` comes from the report, because the SDK's capture
+APIs take no hint and always default it to true; causes stay handled, and a mechanism without `handled`, as
+the SDK writes for chained causes, counts as handled), and frames carrying only `platform`, identifier-only `function`,
+normalized `filename`, `lineno`, `colno`, `in_app` and a UUID-shaped `chunk_id`. Context lines, `vars`,
+`abs_path`, `module` or any field a later SDK adds can never pass. Absolute filenames inside the app
+root (repo root from source, the bundle dir when packaged, `Resources/app` for desktop via `appRoot`)
+become root-relative; loopback/`views:` web URLs become `web/…`/`views/…`; `node:` and `native` stay
+as-is; everything else becomes `<external>` with function `?` — user extensions and project files leave
+no name. A relative filename can only come from the CLI binary's embedded source map (Bun remaps frames
+relative to its compile directory) and resolves solely through the launcher's `remapBase` to a
+repo-relative JS/TS path, never through `cwd`.
+
+Source maps make reported frames readable without shipping more than the CLI's own map
+([[module-ci-release]] owns the upload). PostHog resolves Node frames only by `chunk_id` and browser
+frames by `chunk_id` (or a public URL we do not have): the SDK's core builder copies chunk ids from the
+`_posthogChunkIds` registry an injected bundle writes (the desktop runtime), and UI reports carry their
+own `chunkIds` (URL → id) which the host passes as the internal `$thinkrail_chunk_ids` property the
+sanitizer consumes and never forwards. The CLI binary embeds its map, so its frames arrive already
+resolved.
+
+**No message text is ever sent.** Error messages routinely carry third-party prose — git stderr (a
+pre-push hook's output reaches `pr.open`'s thrown message), DNS/TLS diagnostics with private hostnames,
+provider and extension errors — and no redaction makes arbitrary prose personal-data-free. The root
+exception's `value` is therefore a classifier built only from the validated allow-listed fields —
+`source`, then `request_method` or `scope`, then `code` (e.g. `request pr.open PUSH_AUTH_FAILED`,
+`ui render:chat`) — and causes carry an empty `value`; PostHog groups by type and resolved frames, so the
+classifier only names the issue. A message also hides in every V8/Bun stack header, and a multi-line one
+(git stderr, a test runner's traceback) can contain lines shaped like frames that the SDK's parser would
+turn into "in-app" frames; so the SDK only ever sees `reportableError(error)` — the class plus each
+exception's and cause's stack with its message cut out (a stack whose message cannot be located is
+dropped, and non-`Error` values carry no stack) — and the browser cuts its message out of its own stack
+before `client.reportError`, which carries no message field at all. A wire-level test pins the
+exact property-key set of the SDK's actual request body, including the `$lib`/`$lib_version`/
+`$is_server`/`$geoip_disable` the SDK adds after `before_send`, so an SDK upgrade that adds a field
+fails CI rather than leaking.
+
+`enableExceptionAutocapture` stays off: its own `uncaughtException` listener defers exit to ours, so its
+asynchronous capture would be lost. The SDK's rate limiter applies only to autocapture, so the service
+dedupes reports with the same (source, scope, method, type, code, throw site — the stack's top frame)
+for 60 s and caps 100 per launch, at most 50 from any one source so a noisy source cannot starve the
+rest; the fatal crash report bypasses both.
+Browser stacks arrive raw and are rewritten from WebKit/Gecko `fn@url:line:col` into V8 lines the node
+parser reads; the browser never holds a vendor client. Errors before host analytics initializes
+(desktop/CLI pre-boot) are not reported; desktop main-process bundles carry no source maps.
+
 ## Preference and delivery
 
 `analyticsEnabled` is the additional-data preference and host delivery gate; `analyticsConsentConfirmed` records
@@ -119,9 +200,11 @@ update that explicitly includes `analyticsEnabled` changes the grant; unrelated 
 it. Settings changes write preference and confirmation together. Window behavior belongs to
 [[submodule-web-panels]]. Confirmed later launches do not prime or reopen.
 
-Only builds stamped with a project key report (see Data boundary); unkeyed source/dev builds, CI and
+Only builds stamped with a project key report (see Data boundary), plus a source dev host that opts in
+with `THINKRAIL_DEV_POSTHOG=1` and `THINKRAIL_POSTHOG_PROJECT_KEY`. Other unkeyed source/dev builds, CI and
 `NODE_ENV=test` create no vendor clients and claim no installation marker. `--no-analytics` / `THINKRAIL_NO_ANALYTICS` suppress only
-additional events without changing consent. Host-side analytics is the sole environment-policy reader
+additional events without changing consent; they do not suppress an explicitly sent survey. Host-side
+analytics is the sole environment-policy reader
 across launchers. Browser attribution is additionally limited to binary/desktop human runs with both
 preference and confirmation true, an injected launcher opener, and no prior attempt. Source, CI/test,
 per-run suppression, explicit off, and CLI `--no-open` do not consume the attempt. The dialog's
@@ -155,14 +238,18 @@ Counts describe installations, not people. Every event carries `app_version`, `c
 plus its
 closed properties. Only built-in provider/model names pass raw; custom values become `custom`, preserving
 the existing explicit `jbcentral` login name. No chat/file contents, paths/names, resource IDs, credentials,
-arbitrary errors, token/cost counts or recordings are collected.
+error messages, token/cost counts or recordings are collected; error reports carry only the
+allow-listed shape above.
 
 The sink uses the launcher-supplied public key, EU endpoint, disabled GeoIP enrichment and
 `$process_person_profile: false`; key/endpoint/fetch injection supports tests and self-hosting. The
 repository carries no key: release CI stamps it into [[module-shared]]'s version seam, so source, dev
-and locally built artifacts (`channel=dev`, `0.0.0-*`) can never pollute production data. A 2026-10-06
+and locally built artifacts (`channel=dev`, `0.0.0-*`) do not report. A 2026-10-06
 spike of 275 `app_installed` from unstamped dev desktop/binary harness runs without `CI=1` motivated
-this; the `CI`/test mutes alone relied on every harness remembering them. The `phc_` key stays a public
+this; the `CI`/test mutes alone relied on every harness remembering them. The source dev host is the one
+exception: `THINKRAIL_DEV_POSTHOG=1` together with `THINKRAIL_POSTHOG_PROJECT_KEY` passes that key into
+`bootHost` and creates a real client, which sends basic events and survey answers. A normal dev run leaves
+the switch unset and stays unkeyed. CLI and desktop source runs still use the empty stamped key. The `phc_` key stays a public
 ingestion key extractable from shipped binaries, so this stops accidental pollution, not deliberate abuse. Personless
 processing does not remove UUID linkage; vendor IP-discard/retention policy is separate. Automated/schema,
 consent-revocation, migration, host-trigger and packaged loopback-delivery tests pin these boundaries.

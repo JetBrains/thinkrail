@@ -1,4 +1,5 @@
-import { readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { readFile, stat } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import type {
 	BranchList,
@@ -28,12 +29,17 @@ import {
 	resolveDiffRange,
 } from "./diffScope";
 import {
+	type GitResult,
+	type GitSyncOptions,
 	git,
 	gitAsync,
 	gitAsyncBytes,
 	gitAsyncStream,
 	gitBytes,
+	INDEX_WRITE_TIMEOUT_MS,
 	nonInteractiveGitEnv,
+	SLOW_GIT_TIMEOUT_MS,
+	throwOnTimeout,
 } from "./gitExec";
 import { isSafeRef, remoteNameOf } from "./refs";
 
@@ -44,6 +50,8 @@ function workspace(workspaceId: string): Workspace {
 	if (!ws) throw new Error(`Unknown workspace: ${workspaceId}`);
 	return ws;
 }
+
+const COMMIT_PATHS = "commit the TODO's changes";
 
 export function gitCommitPaths(
 	workspaceId: string,
@@ -56,6 +64,7 @@ export function gitCommitPaths(
 	if (!unmerged.ok || unmerged.out) return null;
 	const indexOut = git(cwd, ["rev-parse", "--git-path", "index"]);
 	if (!indexOut.ok || !indexOut.out) return null;
+	const before = headShaAt(cwd);
 	const indexPath = isAbsolute(indexOut.out) ? indexOut.out : resolve(cwd, indexOut.out);
 	let saved: Buffer | null = null;
 	try {
@@ -63,33 +72,88 @@ export function gitCommitPaths(
 	} catch {
 		saved = null;
 	}
-	const restore = (): null => {
+	const restoreIndex = (result: GitResult): null => {
 		try {
 			if (saved === null) rmSync(indexPath, { force: true });
 			else writeFileSync(indexPath, saved);
 		} catch {}
+		throwOnTimeout(result, COMMIT_PATHS);
 		return null;
 	};
-	if (!git(cwd, ["--literal-pathspecs", "add", "-A", "--", ...paths]).ok) return restore();
-	if (git(cwd, ["--literal-pathspecs", "diff", "--cached", "--quiet", "--", ...paths]).ok)
-		return restore();
-	if (!git(cwd, ["--literal-pathspecs", "commit", "--no-verify", "-m", message, "--", ...paths]).ok)
-		return restore();
-	const head = git(cwd, ["rev-parse", "HEAD"]);
-	if (!head.ok) return null;
-	return { sha: head.out };
+	const writer = { timeoutMs: INDEX_WRITE_TIMEOUT_MS, action: COMMIT_PATHS };
+	const staging = { ...writer, onTimeout: "return" as const };
+	const added = git(cwd, ["--literal-pathspecs", "add", "-A", "--", ...paths], staging);
+	if (!added.ok) return restoreIndex(added);
+	const staged = git(
+		cwd,
+		["--literal-pathspecs", "diff", "--cached", "--quiet", "--", ...paths],
+		staging,
+	);
+	if (staged.ok || staged.failure === "timeout") return restoreIndex(staged);
+	const committed = git(
+		cwd,
+		["--literal-pathspecs", "commit", "--no-verify", "-m", message, "--", ...paths],
+		staging,
+	);
+	const sha = headShaAt(cwd, writer);
+	if (committed.ok) return sha ? { sha } : null;
+	if (sha === before) return restoreIndex(committed);
+	return sha && isOurCommit(cwd, { sha, before, message, paths }, writer) ? { sha } : null;
+}
+
+function isOurCommit(
+	cwd: string,
+	commit: { sha: string; before: string | null; message: string; paths: string[] },
+	opts: GitSyncOptions,
+) {
+	if (parentOf(cwd, commit.sha, opts) !== commit.before) return false;
+	const body = git(cwd, ["log", "-1", "--format=%B", "--end-of-options", commit.sha, "--"], opts);
+	if (!body.ok || body.out !== commit.message.trim()) return false;
+	const touched = git(
+		cwd,
+		[
+			"--literal-pathspecs",
+			"diff-tree",
+			"--quiet",
+			"-r",
+			"--root",
+			"--end-of-options",
+			commit.sha,
+			"--",
+			...commit.paths,
+		],
+		opts,
+	);
+	return !touched.ok && !touched.err;
+}
+
+function parentOf(cwd: string, sha: string, opts: GitSyncOptions) {
+	const parent = git(
+		cwd,
+		["rev-parse", "--verify", "--quiet", "--end-of-options", `${sha}^`],
+		opts,
+	);
+	return parent.ok && parent.out ? parent.out : null;
 }
 
 export function gitHeadSha(workspaceId: string): string | null {
-	const cwd = workspace(workspaceId).worktreePath;
-	const head = git(cwd, ["rev-parse", "--verify", "--quiet", "HEAD"]);
+	return headShaAt(workspace(workspaceId).worktreePath);
+}
+
+export function headShaAt(repoPath: string, opts: GitSyncOptions = {}): string | null {
+	const head = git(repoPath, ["rev-parse", "--verify", "--quiet", "HEAD"], {
+		action: "read HEAD",
+		...opts,
+	});
 	return head.ok && head.out ? head.out : null;
 }
 
 export function readCommitSubject(workspaceId: string, sha: string): string | null {
 	if (!/^[0-9a-f]{4,64}$/.test(sha)) return null;
 	const cwd = workspace(workspaceId).worktreePath;
-	const out = git(cwd, ["log", "-1", "--format=%s", "--end-of-options", `${sha}^{commit}`, "--"]);
+	const out = git(cwd, ["log", "-1", "--format=%s", "--end-of-options", `${sha}^{commit}`, "--"], {
+		action: "read the commit subject",
+	});
 	return out.ok ? plainText(out.out) : null;
 }
 
@@ -100,13 +164,17 @@ export function resolveListedCommit(workspaceId: string, sha: string): string | 
 	const cwd = ws.worktreePath;
 	const canonical = resolveCommitOid(cwd, sha);
 	if (!canonical) return null;
-	const listed = git(cwd, [
-		"rev-list",
-		`--max-count=${COMMIT_LIST_MAX}`,
-		"--end-of-options",
-		`${diffBaseRef(ws)}..HEAD`,
-		"--",
-	]);
+	const listed = git(
+		cwd,
+		[
+			"rev-list",
+			`--max-count=${COMMIT_LIST_MAX}`,
+			"--end-of-options",
+			`${diffBaseRef(ws)}..HEAD`,
+			"--",
+		],
+		{ action: "list the branch commits" },
+	);
 	if (!listed.ok) return null;
 	return listed.out.split("\n").includes(canonical) ? canonical : null;
 }
@@ -173,16 +241,18 @@ export async function listBranches(projectId: string): Promise<BranchList> {
 }
 
 export function listRemotes(repoPath: string): string[] {
-	return lines(git(repoPath, ["remote"]).out);
+	return lines(git(repoPath, ["remote"], { action: "list the remotes" }).out);
 }
 
 export function resolveDefaultBranch(repoPath: string): string {
 	const originHeadRef = `${REMOTE_REF_PREFIX}origin/HEAD`;
-	const originHead = git(repoPath, ["symbolic-ref", originHeadRef]);
+	const action = "resolve the default branch";
+	const originHead = git(repoPath, ["symbolic-ref", originHeadRef], { action });
 	const originDefault = originHead.ok ? refWithin(originHead.out, REMOTE_REF_PREFIX) : null;
 	if (originDefault) return originDefault;
 	const rows = lines(
-		git(repoPath, ["for-each-ref", "--format=%(refname)\t%(symref)", "refs/remotes"]).out,
+		git(repoPath, ["for-each-ref", "--format=%(refname)\t%(symref)", "refs/remotes"], { action })
+			.out,
 	).map((line) => line.split("\t"));
 	const otherHead = rows.find(
 		([ref, symref]) =>
@@ -206,39 +276,68 @@ export function canonicalPath(path: string): string {
 	}
 }
 
-export function tryCurrentBranch(repoPath: string): string | null {
-	const head = git(repoPath, ["symbolic-ref", "--short", "HEAD"]);
-	if (head.ok && head.out) return head.out;
-	const topLevel = git(repoPath, ["rev-parse", "--show-toplevel"]);
+const HEAD_BRANCH_ARGS = ["symbolic-ref", "--short", "HEAD"];
+const TOP_LEVEL_ARGS = ["rev-parse", "--show-toplevel"];
+const READ_BRANCH = "read the current branch";
+
+function detachedAtTopLevel(repoPath: string, topLevel: GitResult): "HEAD" | null {
 	return topLevel.ok && canonicalPath(topLevel.out) === canonicalPath(repoPath) ? "HEAD" : null;
+}
+
+export function tryCurrentBranch(repoPath: string): string | null {
+	const head = git(repoPath, HEAD_BRANCH_ARGS, { action: READ_BRANCH });
+	if (head.ok && head.out) return head.out;
+	return detachedAtTopLevel(repoPath, git(repoPath, TOP_LEVEL_ARGS, { action: READ_BRANCH }));
 }
 
 export function currentBranch(repoPath: string): string {
 	return tryCurrentBranch(repoPath) ?? "HEAD";
 }
 
+async function currentBranchAsync(repoPath: string): Promise<string> {
+	const head = throwOnTimeout(await gitAsync(repoPath, HEAD_BRANCH_ARGS), READ_BRANCH);
+	if (head.ok && head.out) return head.out;
+	const topLevel = throwOnTimeout(await gitAsync(repoPath, TOP_LEVEL_ARGS), READ_BRANCH);
+	return detachedAtTopLevel(repoPath, topLevel) ?? "HEAD";
+}
+
+function remoteRefArgs(ref: string): string[] {
+	return ["rev-parse", "--verify", "--quiet", "--end-of-options", `${REMOTE_REF_PREFIX}${ref}`];
+}
+
+const RESOLVE_REMOTE_BRANCH = "resolve a remote branch";
+
+function remoteOidFrom(result: GitResult): string | null {
+	throwOnTimeout(result, RESOLVE_REMOTE_BRANCH);
+	return result.ok && result.out !== "" ? result.out : null;
+}
+
 export function remoteRefOid(repoPath: string, ref: string): string | null {
 	if (!isSafeRef(ref)) return null;
-	const remote = `${REMOTE_REF_PREFIX}${ref}`;
-	const result = git(repoPath, ["rev-parse", "--verify", "--quiet", "--end-of-options", remote]);
-	return result.ok && result.out !== "" ? result.out : null;
+	return remoteOidFrom(git(repoPath, remoteRefArgs(ref), { action: RESOLVE_REMOTE_BRANCH }));
+}
+
+export async function remoteRefOidAsync(repoPath: string, ref: string): Promise<string | null> {
+	if (!isSafeRef(ref)) return null;
+	return remoteOidFrom(await gitAsync(repoPath, remoteRefArgs(ref)));
 }
 
 export async function prefetchBranch(
 	projectId: string,
 	ref: string,
+	signal?: AbortSignal,
 ): Promise<{ ok: boolean; moved: boolean }> {
 	const project = loadProjects().find((p) => p.id === projectId);
 	if (!project || !isSafeRef(ref)) return { ok: false, moved: false };
 	const remoteName = remoteNameOf(ref, listRemotes(project.path));
 	if (!remoteName) return { ok: false, moved: false };
-	const before = remoteRefOid(project.path, ref);
+	const before = await remoteRefOidAsync(project.path, ref);
 	const result = await gitAsync(
 		project.path,
 		["fetch", remoteName, "--", ref.slice(`${remoteName}/`.length)],
-		{ network: true },
+		{ network: true, ...(signal ? { signal } : {}) },
 	);
-	const after = remoteRefOid(project.path, ref);
+	const after = await remoteRefOidAsync(project.path, ref);
 	const moved = after !== null && after !== before;
 	return { ok: result.ok, moved };
 }
@@ -284,17 +383,25 @@ function lineCount(content: string): number {
 }
 
 const UNTRACKED_COUNT_MAX_BYTES = 2 * 1024 * 1024;
+const UNTRACKED_COUNT_TOTAL_BYTES = 32 * 1024 * 1024;
 
-function untrackedAdded(worktreePath: string, path: string): number | undefined {
-	try {
-		const abs = resolve(worktreePath, path);
-		if (statSync(abs).size > UNTRACKED_COUNT_MAX_BYTES) return undefined;
-		const bytes = readFileSync(abs);
-		if (!classifyBytes(bytes).text) return undefined;
-		return lineCount(decodeText(bytes));
-	} catch {
-		return undefined;
+async function untrackedLineCounts(
+	worktreePath: string,
+	paths: readonly string[],
+): Promise<Map<string, number>> {
+	const counts = new Map<string, number>();
+	let budget = UNTRACKED_COUNT_TOTAL_BYTES;
+	for (const path of paths) {
+		try {
+			const abs = resolve(worktreePath, path);
+			const { size } = await stat(abs);
+			if (size > UNTRACKED_COUNT_MAX_BYTES || size > budget) continue;
+			budget -= size;
+			const bytes = await readFile(abs);
+			if (classifyBytes(bytes).text) counts.set(path, lineCount(decodeText(bytes)));
+		} catch {}
 	}
+	return counts;
 }
 
 function diffFailure(stderr: string): Error {
@@ -321,14 +428,16 @@ function parseNameStatus(output: string): Array<{ code: string; path: string }> 
 
 export function gitUncommittedPaths(workspaceId: string): string[] {
 	const cwd = workspace(workspaceId).worktreePath;
+	const slow = { raw: true, timeoutMs: SLOW_GIT_TIMEOUT_MS };
 	const tracked = git(
 		cwd,
 		["diff", "--name-only", "-z", "--no-ext-diff", "--end-of-options", "HEAD", "--"],
-		{ raw: true },
+		{ ...slow, action: "read the changed files" },
 	);
 	if (!tracked.ok) throw diffFailure(tracked.err);
 	const untracked = git(cwd, ["ls-files", "-z", "--others", "--exclude-standard"], {
-		raw: true,
+		...slow,
+		action: "read the untracked files",
 	});
 	if (!untracked.ok) throw diffFailure(untracked.err);
 	return [...new Set([...nulFields(tracked.out), ...nulFields(untracked.out)])].sort();
@@ -354,9 +463,10 @@ export async function gitStatus(workspaceId: string, scope?: GitDiffScope): Prom
 			{ raw: true },
 		);
 		if (!untracked.ok) throw diffFailure(untracked.err);
-		for (const path of nulFields(untracked.out)) {
-			if (!path) continue;
-			const added = untrackedAdded(ws.worktreePath, path);
+		const paths = nulFields(untracked.out).filter((path) => path !== "");
+		const counts = await untrackedLineCounts(ws.worktreePath, paths);
+		for (const path of paths) {
+			const added = counts.get(path);
 			changes.push({
 				path,
 				status: "untracked",
@@ -367,16 +477,22 @@ export async function gitStatus(workspaceId: string, scope?: GitDiffScope): Prom
 
 	changes.sort((a, b) => a.path.localeCompare(b.path));
 	const branch =
-		ws.kind === "default" || ws.kind === "external" ? currentBranch(ws.worktreePath) : ws.branch;
+		ws.kind === "default" || ws.kind === "external"
+			? await currentBranchAsync(ws.worktreePath)
+			: ws.branch;
 	return { branch, changes };
 }
 
+function objectName(ref: string, path: string): string {
+	return `${ref}:${process.platform === "win32" ? path.replaceAll("\\", "/") : path}`;
+}
+
 function blobArgs(ref: string, path: string): string[] {
-	return ["cat-file", "blob", "--", `${ref}:${path}`];
+	return ["cat-file", "blob", "--", objectName(ref, path)];
 }
 
 export function readBlobAt(worktreePath: string, ref: string, path: string): string | null {
-	return blobFrom(git(worktreePath, blobArgs(ref, path), { raw: true }));
+	return blobFrom(git(worktreePath, blobArgs(ref, path), { raw: true, onTimeout: "return" }));
 }
 
 export function readBlobBytesAt(
@@ -387,6 +503,7 @@ export function readBlobBytesAt(
 	return strictBlobFrom(
 		gitBytes(worktreePath, blobArgs(ref, path), {
 			env: { ...nonInteractiveGitEnv(), LC_ALL: "C" },
+			action: "read the file diff",
 		}),
 	);
 }
@@ -484,7 +601,7 @@ export async function readBlobSizeAtAsync(
 	path: string,
 ): Promise<number | null> {
 	const output = strictBlobFrom(
-		await gitAsync(worktreePath, ["cat-file", "-s", "--", `${ref}:${path}`], {
+		await gitAsync(worktreePath, ["cat-file", "-s", "--", objectName(ref, path)], {
 			env: { ...nonInteractiveGitEnv(), LC_ALL: "C" },
 		}),
 	);
@@ -526,7 +643,7 @@ function strictBlobFrom<T>(shown: {
 	ok: boolean;
 	out: T;
 	err: string;
-	failure?: "timeout" | "launch";
+	failure?: GitResult["failure"];
 }): T | null {
 	if (shown.ok) return shown.out;
 	if (!shown.failure && blobIsMissing(shown.err)) return null;
@@ -664,6 +781,79 @@ export async function listCommitsSince(
 	return commits;
 }
 
+export interface OriginUrls {
+	fetch: string | null;
+	push: string | null;
+}
+
+export async function originUrls(worktreePath: string): Promise<OriginUrls> {
+	const [url, pushurl] = await Promise.all([
+		gitAsync(worktreePath, ["config", "--get", "remote.origin.url"]),
+		gitAsync(worktreePath, ["config", "--get", "remote.origin.pushurl"]),
+	]);
+	const fetch = url.ok && url.out ? url.out : null;
+	return { fetch, push: pushurl.ok && pushurl.out ? pushurl.out : fetch };
+}
+
+export type PushTargetStatus =
+	| { published: false }
+	| ({ published: true } & Partial<PushDivergence>);
+
+export async function countPushTargetDivergence(
+	worktreePath: string,
+	branch: string,
+	pushUrl: string,
+): Promise<PushTargetStatus> {
+	if (!isSafeRef(branch)) throw new Error(`Not a usable git ref: ${branch}`);
+	const ref = `refs/heads/${branch}`;
+	const listed = await gitAsync(worktreePath, ["ls-remote", "--end-of-options", pushUrl, ref], {
+		network: true,
+	});
+	if (!listed.ok) throw new Error(`Could not read the push target: ${listed.err || "git failed"}`);
+	const tip = listed.out
+		.split("\n")
+		.find((line) => line.endsWith(`\t${ref}`))
+		?.split("\t")[0];
+	if (!tip) return { published: false };
+	const present = async () =>
+		(await gitAsync(worktreePath, ["cat-file", "-e", "--end-of-options", `${tip}^{commit}`])).ok;
+	if (!(await present())) {
+		await gitAsync(
+			worktreePath,
+			["fetch", "--no-tags", "--no-write-fetch-head", "--end-of-options", pushUrl, ref],
+			{ network: true },
+		);
+		if (!(await present())) return { published: true };
+	}
+	const counted = await gitAsync(worktreePath, [
+		"rev-list",
+		"--left-right",
+		"--count",
+		"--end-of-options",
+		`${tip}...HEAD`,
+		"--",
+	]);
+	const [behindStr, aheadStr] = counted.out.split(/\s+/);
+	const behind = Number(behindStr);
+	const ahead = Number(aheadStr);
+	return counted.ok && Number.isSafeInteger(ahead) && Number.isSafeInteger(behind)
+		? { published: true, ahead, behind }
+		: { published: true };
+}
+
+export async function commitsAheadOf(worktreePath: string, baseRef: string): Promise<number> {
+	if (!isSafeRef(baseRef)) return 0;
+	const counted = await gitAsync(worktreePath, [
+		"rev-list",
+		"--count",
+		"--end-of-options",
+		`${baseRef}..HEAD`,
+		"--",
+	]);
+	const count = counted.ok ? Number(counted.out) : 0;
+	return Number.isSafeInteger(count) && count > 0 ? count : 0;
+}
+
 export interface PushDivergence {
 	/** Local commits origin/<branch> lacks (a plain push would deliver these). */
 	ahead: number;
@@ -696,7 +886,7 @@ export async function countPushDivergence(
 	if (counted.failure)
 		throw new Error(`Could not measure push divergence: ${counted.err || "git failed"}`);
 	if (!counted.ok) {
-		if (remoteRefOid(worktreePath, `origin/${branch}`) === null) return null;
+		if ((await remoteRefOidAsync(worktreePath, `origin/${branch}`)) === null) return null;
 		throw new Error(`Could not measure push divergence: ${counted.err || "git failed"}`);
 	}
 	const [behindStr, aheadStr] = counted.out.split(/\s+/);

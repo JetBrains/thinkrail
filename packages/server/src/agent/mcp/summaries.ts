@@ -1,12 +1,14 @@
 import type { McpConfigFileError, McpExposure, McpServerSummary } from "@thinkrail/contracts";
 import {
 	fingerprintMcpEntry,
+	grantedMcpTools,
 	isRecord,
 	type LoadedMcpFiles,
 	loadHostMcpConfig,
 	loadMcpConfigFiles,
 	type McpConfigFileEntry,
 	type McpProjectPolicy,
+	mcpToolLabel,
 	validateMcpServerConfig,
 } from "./config";
 import { maskMcpEndpoint, redactMcpText } from "./redact";
@@ -80,6 +82,7 @@ export function summarizeMcpServers(options: {
 		const repoOverride = entry.scope === "global" ? overrides.get(entry.name) : undefined;
 		const transport = typeof raw.url === "string" || raw.type === "http" ? "http" : "stdio";
 		const fingerprint = fingerprintMcpEntry(entry.name, entry.raw);
+		const granted = isEffective ? grantedMcpTools(policy, entry.name, live.config) : [];
 		const configError = [
 			configErrorFor(entry, written.errors),
 			repoOverride ? configErrorFor(repoOverride, written.errors) : undefined,
@@ -118,6 +121,14 @@ export function summarizeMcpServers(options: {
 						}
 					: {}),
 			...(configError ? { configError: redactMcpText(configError) } : {}),
+			...(granted.length > 0
+				? {
+						alwaysAllowed: granted.map((tool) => ({
+							tool,
+							label: mcpToolLabel(entry.name, tool),
+						})),
+					}
+				: {}),
 		});
 	}
 	return summaries;

@@ -80,7 +80,10 @@ plan; the model reaches for it to say "make the plan look like this, keep the pr
   shared raw-input scratchpad, see below); `done` items inside groups are preserved (rejoin a fresh
   group of the same title, else carried over under their original group, appended after the fresh
   groups); **agent + open items inside a group** are **dropped** — that is the legitimate "removed a
-  step". A leftover **agent `done` item in the loose lane** (out of contract — a loose item is a
+  step". **Promote-born empty groups** (a group whose `todos[]` is empty — see the first-class rule
+  below) are carried forward with their original id when the fresh plan doesn't re-emit the same
+  title; dropping them would silently lose a parked user ask the promotion contract promises to
+  preserve. A leftover **agent `done` item in the loose lane** (out of contract — a loose item is a
   pre-work note the agent should have promoted or removed, not completed in place) is carried into a
   `"Completed"` group rather than left in the loose lane, so a `done` loose item is never silently
   lost. Consequence: re-writing the same plan is a **no-op on progress** (no status reset, no
@@ -89,12 +92,51 @@ plan; the model reaches for it to say "make the plan look like this, keep the pr
 **Loose lane = shared raw-input scratchpad.** `TodoPlan.todos` (the lane the UI renders as "Other")
 carries unprocessed items from **both** origins: `user` items the human types from the UI, and `agent`
 items the agent drops via `todo_add` with no `group`/`after`. Loose is deliberately *pre-work* — raw
-notes, kernels, half-formed asks. When the agent takes a loose item into work it **promotes** it
-(authors a fresh group with a proper title + decomposed steps) and removes the raw loose item;
-promote-on-work is discipline that lives in the skill, not a structural guard. The structural guards
-that DO hold: `WritePlan` has no `todos` field (`todo_write` reconciles `groups` only, so a re-plan
-never mints or edits loose items); a loose item that reaches `done` on a re-plan is carried out of the
-loose lane into `"Completed"` so the lane never retains a completed item.
+notes, kernels, half-formed asks. When the agent takes a loose item into work it **promotes** it in a
+single atomic step with `TodoStore.promote(id, titleOverride?)`: the loose item is spliced out of the
+lane and a group with the **same id** (and the item's title, unless overridden) appears in the groups
+list, ready for `add` to append decomposition. One write, no duplicate window — a session that dies
+right after promotion still leaves a consistent plan (the user's ask shown as its own group). The group
+is intentionally created empty (an empty-group state is first-class, see below).
+
+`promote` returns a **discriminated result** (`TodoPromoteResult`): `{ ok: true, group }` on success,
+or `{ ok: false, reason }` with one of four `TodoPromoteFailure` members. The result shape exists
+precisely because agent recovery differs per failure — a `title-collision` is retryable with a
+disambiguating `title:`, a `grouped-step` is not promotable at all, an `unknown-id` points at a stale
+id, an `empty-title` needs a non-empty override. In every failure case the loose item is left in
+place so a retry can succeed, and the `todo_promote` tool wrapper emits one tailored error per
+reason so the agent never falls back to the deprecated `todo_add group:` + `todo_remove` dance.
+The four reasons:
+
+1. `unknown-id` — the id is nowhere in the plan;
+2. `grouped-step` — the id is a step inside an existing group (promotion applies only to loose-lane
+   items);
+3. `empty-title` — the normalized title is empty (after `decodeUnicode` + `flattenTitle` — a blank
+   group has no addressable task for `todo_add group:` to target);
+4. `title-collision` — the normalized title collides with an existing group; silently merging the
+   loose item into the pre-existing group would add no step, so a second identical ask would just
+   vanish; reject instead and let the caller supply a unique override.
+
+The structural guards that still hold: `WritePlan` has no `todos` field (`todo_write`
+reconciles `groups` only, so a re-plan never mints or edits loose items); a loose item that reaches
+`done` on a re-plan is carried out of the loose lane into `"Completed"` so the lane never retains a
+completed item.
+
+**Empty groups are first-class — for promotion, not as a landing pad after `remove`.** `sanitizeGroup`
+and `write` keep groups whose `todos[]` is empty — a freshly promoted ask lives as an empty group
+until the agent decomposes it, and dropping it on read or write would silently undo `promote`.
+`groupStatus` returns `pending` for an empty group; the skill tells the agent to immediately add the
+first substantive step and flip it `in_progress`, so an empty group is only ever a transient state
+between `promote` and the first `add`. The host UI renders this transient state as a visible
+"planning…" line under the group heading (`plan-group-planning` / `todo-group-planning` in
+`apps/web/src/panels/PlanPane.tsx` and `apps/web/src/chat/TodoList.tsx`) instead of an empty header,
+so a reader never sees the group as a broken half-rendered row.
+
+`remove` keeps that promotion-only invariant without leaving a `remove`-born ghost: it snapshots
+per-group item counts before the delete and prunes a group iff its count went from `>0` to `0` in
+this very call. A promote-born group that was ALREADY empty before `remove` is preserved
+(parked-user-ask invariant); a group that LOSES its last item in `remove` is pruned, so the user is
+never stuck with a permanent "planning…" row and no tool to delete it.
 
 **Titles are one-line, normalized at the write boundary.** Item titles and group titles are the item
 bullets and `##` group headings of the markdown export, which is a shipped artifact (the plan page's
@@ -132,8 +174,26 @@ The `index.ts` barrel:
   tools' param enums. (There is **no** priority concept; priorities were dropped.)
 
 Writes are atomic (temp file + `rename`); a session id is validated as a safe path segment before it
-becomes a filename, and `\uXXXX` escape-decoding is applied to **agent-authored** text only, never the
-user's own input.
+becomes a filename.
+
+**Escape decoding is a narrow write-time rescue, split by field class AND (inside Markdown fields)
+by syntax.** `\uXXXX` is unambiguous (no Windows path, regex, or source snippet writes `\u`
+literally), so it is decoded on every agent-authored write across every text field; a `(?<!\\)`
+lookbehind leaves `\\u` alone. `\n` is AMBIGUOUS — an LLM may emit it as a Markdown newline
+substitute (`summary = "a\\n\\nb"`, `verification = "- a\\n- b"`) OR as a legitimate backslash-prefix
+identifier (Windows path `C:\\new file`, regex pattern `/\\n/g`, code snippet). Even inside a
+Markdown-rendered field we can't rescue every `\n` without mangling paths, so the rescue is
+*structural*: `\n` is decoded only when it precedes a Markdown separator — another `\n`
+(paragraph break), a bullet / ordered list / heading / blockquote / fenced block / thematic break
+marker. Any other `\n` (short prose, path, pattern) stays verbatim. `\r` and `\t` are not
+rescued (too rare as intentional Markdown separators, too close to Windows line endings and
+hard-tab indentation). The rescue applies ONLY to the plan-level `summary`, the per-item
+`summary`, and the per-item `verification` (the three fields rendered as Markdown by the UI and by
+`renderPrBody`); every other agent-written field (titles, group names, notes, commit subjects,
+artifact labels) only runs `decodeUnicode`. All decoding is gated on origin: user-authored text is
+never rescued. `\\n` (escaped backslash + n) is left alone via a negative lookbehind. Reads are
+pass-through: stored text surfaces verbatim, so old on-disk data is never silently mutated on
+reload.
 
 ## Boundary
 

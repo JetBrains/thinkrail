@@ -3,8 +3,8 @@ import type {
 	AskUserQuestionAnswer,
 	AskUserQuestionItem,
 	AskUserQuestionResult,
-} from "@thinkrail/contracts";
-import { answerQuestion, completeOnce } from "@thinkrail/server/agent";
+} from "@thinkrail/pi-ask-user-question/core";
+import { completeOnce, respondToTool } from "@thinkrail/server/agent";
 import type { EventLog } from "./events";
 
 export interface DialogScriptEntry {
@@ -144,7 +144,7 @@ export function attachDialog(
 		const round: AnsweredRound = { questions, result, rung, ...(error ? { error } : {}) };
 		answered.push(round);
 		try {
-			await answerQuestion(sessionId, toolCallId, result);
+			await respondToTool(sessionId, toolCallId, result);
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
 			round.error = round.error ? `${round.error}; delivery: ${message}` : `delivery: ${message}`;

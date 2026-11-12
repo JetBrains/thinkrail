@@ -1,5 +1,7 @@
 import { RiPencilLine as Pencil, RiCloseLine as X } from "@remixicon/react";
 import type { QueueLane, SessionQueueState } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
 
 export function QueueStrip({
 	queue,
@@ -10,19 +12,20 @@ export function QueueStrip({
 	onEdit: (kind: QueueLane, index: number) => void;
 	onRemove: (kind: QueueLane, index: number) => void;
 }) {
+	const t = useT();
 	const items = [
 		...queue.steering.map((text, index) => ({
 			kind: "steering" as const,
 			index,
-			label: "Steering",
-			hint: "delivers at the agent's next step",
+			label: t("chat.queue.steering"),
+			hint: t("chat.queue.steeringHint"),
 			text,
 		})),
 		...queue.followUp.map((text, index) => ({
 			kind: "followUp" as const,
 			index,
-			label: "Follow-up",
-			hint: "runs after the agent finishes",
+			label: t("chat.queue.followUp"),
+			hint: t("chat.queue.followUpHint"),
 			text,
 		})),
 	];
@@ -44,24 +47,24 @@ export function QueueStrip({
 					<span className="min-w-0 flex-1 truncate">
 						<span className="text-text-default">{item.label}:</span> {item.text}
 					</span>
-					<button
-						type="button"
+					<IconButton
+						icon={Pencil}
+						size="s"
 						data-testid="queue-item-edit"
-						aria-label={`Edit queued message: ${item.text}`}
+						label={t("chat.queue.edit", { text: item.text })}
+						tooltip={t("common.edit")}
 						onClick={() => onEdit(item.kind, item.index)}
-						className="flex size-20 shrink-0 items-center justify-center rounded-xs hover:bg-control-bg-hovered hover:text-text-default"
-					>
-						<Pencil className="size-12" />
-					</button>
-					<button
-						type="button"
+						className="shrink-0"
+					/>
+					<IconButton
+						icon={X}
+						size="s"
 						data-testid="queue-item-remove"
-						aria-label={`Remove queued message: ${item.text}`}
+						label={t("chat.queue.remove", { text: item.text })}
+						tooltip={t("common.remove")}
 						onClick={() => onRemove(item.kind, item.index)}
-						className="flex size-20 shrink-0 items-center justify-center rounded-xs hover:bg-control-bg-hovered hover:text-text-default"
-					>
-						<X className="size-12" />
-					</button>
+						className="shrink-0"
+					/>
 				</div>
 			))}
 		</div>

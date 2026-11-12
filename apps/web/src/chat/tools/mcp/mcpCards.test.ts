@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { ToolRenderProps, ToolStatus } from "@thinkrail/extension-api/web";
+import { currentTranslator } from "@thinkrail/locales/react";
+import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { type ChatActions, ChatActionsContext } from "../../ChatActions";
@@ -41,10 +43,11 @@ const SIGN_IN_TEXT = 'MCP server "linear" requires sign-in. Run /mcp to sign in.
 
 function actions(overrides: Partial<ChatActions> = {}): ChatActions {
 	return {
-		answerQuestion: async () => {},
+		respondToTool: async () => {},
 		cancelAutomaticReveal: () => {},
 		focusComposer: () => {},
 		openSubagentTranscript: () => {},
+		resultOpener: () => undefined,
 		revealChatElement: () => {},
 		readMcpOutput: async () => ({ available: false, reason: "expired" }),
 		openMcpSettings: () => {},
@@ -69,7 +72,11 @@ function render(node: ReactNode, provider: ChatActions | null = actions()): stri
 
 function renderTool(rendererProps: ToolRenderProps, provider: ChatActions | null = actions()) {
 	return render(
-		createElement(ToolRendererBody, { ...rendererProps, imageLabel: "tool output" }),
+		createElement(
+			TooltipProvider,
+			null,
+			createElement(ToolRendererBody, { ...rendererProps, imageLabel: "tool output" }),
+		),
 		provider,
 	);
 }
@@ -93,26 +100,40 @@ describe("registration", () => {
 
 	it("summarizes each card for collapsed headers", () => {
 		expect(
-			getToolSummary("mcp__fixture__echo", props("mcp__fixture__echo", { text: "hi" }, null)),
+			getToolSummary(
+				currentTranslator(),
+				"mcp__fixture__echo",
+				props("mcp__fixture__echo", { text: "hi" }, null),
+			),
 		).toBe('text="hi"');
-		expect(getToolSummary("list_mcp_resources", props("list_mcp_resources", {}, null))).toBe(
-			"all servers",
-		);
 		expect(
 			getToolSummary(
+				currentTranslator(),
+				"list_mcp_resources",
+				props("list_mcp_resources", {}, null),
+			),
+		).toBe("all servers");
+		expect(
+			getToolSummary(
+				currentTranslator(),
 				"list_mcp_resource_templates",
 				props("list_mcp_resource_templates", { server: "docs" }, null),
 			),
 		).toBe("docs");
 		expect(
 			getToolSummary(
+				currentTranslator(),
 				"read_mcp_resource",
 				props("read_mcp_resource", { server: "docs", uri: "file:///a.md" }, null),
 			),
 		).toBe("docs · file:///a.md");
-		expect(getToolSummary("tool_search", props("tool_search", { query: "notes" }, null))).toBe(
-			"notes",
-		);
+		expect(
+			getToolSummary(
+				currentTranslator(),
+				"tool_search",
+				props("tool_search", { query: "notes" }, null),
+			),
+		).toBe("notes");
 	});
 });
 

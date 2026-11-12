@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
 	openFixtureProject,
@@ -8,6 +8,7 @@ import {
 	revealWorkbenchTool,
 } from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
+import { pierreLines, selectPierreLine } from "./fixtures/pierre";
 
 const section = (page: Page, path: string) =>
 	page.locator(`[data-testid="changes-section"][data-path="${path}"]`);
@@ -67,6 +68,14 @@ async function seedChanges(page: Page) {
 	return mutations;
 }
 
+async function scrollDiffUntilVisible(page: Page, path: string, target: Locator, deltaY: number) {
+	await expect(async () => {
+		await section(page, path).getByTestId("diff-view").hover();
+		await page.mouse.wheel(0, deltaY);
+		await expect(target).toBeInViewport({ timeout: 500 });
+	}).toPass();
+}
+
 async function wheelAway(page: Page, path: string) {
 	await section(page, path).getByTestId("changes-section-header").hover();
 	await page.mouse.wheel(0, 80000);
@@ -105,11 +114,15 @@ test("Changes keeps unsaved composer selection and text through virtualization a
 	await page.getByTestId("changes-review-prev").click();
 	await expect(first.getByTestId("review-composer-input")).toHaveValue("Unsaved hunk question");
 	expect(mutations).toEqual([]);
-	await first.getByTestId("review-composer-cancel").click();
+	const cancel = first.getByTestId("review-composer-cancel");
+	await scrollDiffUntilVisible(page, "draft-00.ts", cancel, 80000);
+	await cancel.click();
 	await page.getByTestId("changes-review-next").click();
 	await page.getByTestId("changes-review-prev").click();
 	await expect(first.getByTestId("review-composer-input")).toHaveCount(0);
-	await first.getByTestId("hunk-ask-agent").click();
+	const askAgent = first.getByTestId("hunk-ask-agent");
+	await scrollDiffUntilVisible(page, "draft-00.ts", askAgent, -80000);
+	await askAgent.click();
 	await expect(first.getByTestId("review-composer-input")).not.toHaveValue("Unsaved hunk question");
 	await first.getByTestId("review-composer-input").fill("Saved hunk question");
 	await first.getByTestId("review-composer-save").click();
@@ -138,25 +151,29 @@ test("Changes retains unsaved draft-thread edits through virtualization and hono
 	await page.getByTestId("changes-review-prev").click();
 	await expect(first.getByTestId("review-thread-edit")).toHaveValue("Unsaved thread edit");
 	expect(mutations).toEqual(savedMutations);
-	await first.getByTestId("review-thread-edit").press("Escape");
+	const threadEdit = first.getByTestId("review-thread-edit");
+	await scrollDiffUntilVisible(page, "draft-00.ts", threadEdit, 80000);
+	await threadEdit.press("Escape");
 	await page.getByTestId("changes-review-next").click();
 	await page.getByTestId("changes-review-prev").click();
-	await expect(first.getByTestId("review-thread-edit")).toHaveValue("Original saved draft");
-	await first.getByTestId("review-thread-edit").fill("Explicitly saved edit");
+	await expect(threadEdit).toHaveValue("Original saved draft");
+	await scrollDiffUntilVisible(page, "draft-00.ts", threadEdit, 80000);
+	await threadEdit.fill("Explicitly saved edit");
 	await pressPlatformShortcut(page, "Enter");
 	await expect
 		.poll(() => mutations.filter((method) => method === "review.commentUpdate").length)
 		.toBe(1);
 	await page.getByTestId("changes-review-next").click();
 	await page.getByTestId("changes-review-prev").click();
-	await expect(first.getByTestId("review-thread-edit")).toHaveValue("Explicitly saved edit");
-	await first.getByTestId("review-thread-edit").fill("Saved on blur");
+	await expect(threadEdit).toHaveValue("Explicitly saved edit");
+	await scrollDiffUntilVisible(page, "draft-00.ts", threadEdit, 80000);
+	await threadEdit.fill("Saved on blur");
 	await page.getByTestId("changes-review-next").click();
 	await expect
 		.poll(() => mutations.filter((method) => method === "review.commentUpdate").length)
 		.toBe(2);
 	await page.getByTestId("changes-review-prev").click();
-	await expect(first.getByTestId("review-thread-edit")).toHaveValue("Saved on blur");
+	await expect(threadEdit).toHaveValue("Saved on blur");
 });
 
 test("notebook drafts remain attached to their cell after the renderer reparses on remount", async ({
@@ -193,10 +210,56 @@ test("rich Changes composers share the same preservation and cancellation policy
 	await rich.getByTestId("view-toggle-json").click();
 	await expect(rich.getByTestId("review-composer-input")).toHaveValue("Unsaved structural note");
 	await page.getByTestId("changes-review-layout-stacked").click();
+	await expect(page.getByTestId("changes-review-walk")).toHaveCount(0);
 	await expect(rich.getByTestId("review-composer-input")).toHaveValue("Unsaved structural note");
 	expect(mutations).toEqual([]);
 	await rich.getByTestId("review-composer-cancel").click();
 	await rich.getByTestId("view-toggle-code").click();
 	await rich.getByTestId("view-toggle-json").click();
 	await expect(rich.getByTestId("review-composer-input")).toHaveCount(0);
+});
+
+test("a diff composer stays shown while a scroll-up shrinks the virtual window to its line", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
+	writeFileSync(
+		join(worktree, "draft-long.ts"),
+		`${Array.from({ length: 1500 }, (_, line) => `export const value${line} = ${line};`).join("\n")}\n`,
+	);
+	await revealWorkbenchTool(page, "changes");
+	await row(page, "draft-long.ts").dblclick();
+	const diff = page.getByTestId("diff-view");
+	await expect(pierreLines(diff, "value3 =").last()).toBeVisible();
+	await expect(async () => {
+		await diff.hover();
+		await page.mouse.wheel(0, 300);
+		await expect(pierreLines(diff, "value404 =").last()).toBeInViewport({ timeout: 300 });
+	}).toPass();
+	await selectPierreLine(diff, "value404 =");
+	await page.getByTestId("review-composer-input").fill("Keep me on line 405");
+	const sweep = await diff.evaluate(async (scroller, text) => {
+		const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+		const lineRendered = () =>
+			[...scroller.querySelectorAll("*")]
+				.flatMap((node) =>
+					node.shadowRoot ? [...node.shadowRoot.querySelectorAll("[data-line]")] : [],
+				)
+				.some((line) => line.textContent?.includes(text));
+		const composerShown = () =>
+			(document.querySelector('[data-testid="review-composer"]')?.getClientRects().length ?? 0) > 0;
+		for (let top = scroller.scrollTop; top >= 0; top -= 10) {
+			scroller.scrollTop = top;
+			await frame();
+			await frame();
+			if (!lineRendered()) return { leftWindowAt: top, composerLostAt: null };
+			if (!composerShown()) return { leftWindowAt: null, composerLostAt: top };
+		}
+		return { leftWindowAt: null, composerLostAt: null };
+	}, "value404 =");
+	expect(sweep.composerLostAt).toBeNull();
+	expect(sweep.leftWindowAt).not.toBeNull();
+	await expect(page.getByTestId("review-composer-input")).toHaveValue("Keep me on line 405");
 });

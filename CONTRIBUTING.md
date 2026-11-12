@@ -18,8 +18,9 @@ bug reports, include:
 
 ## Development setup
 
-**Prerequisites:** [Bun](https://bun.sh) 1.4.0 (the repository's pinned package manager and runtime),
-Node.js ≥ 22.19 (required by the in-process `pi` engine), and an authenticated `pi` provider for agent work.
+**Prerequisites:** [Bun](https://bun.sh) 1.4.4 (the repository's pinned package manager and runtime),
+Node.js ≥ 22.23.4 (the in-process `pi` engine needs ≥ 22.19; the website build and typecheck need
+≥ 22.23.4 for Astro 7.4), and an authenticated `pi` provider for agent work.
 
 ```bash
 git clone <repo-url>
@@ -68,6 +69,10 @@ bun run typecheck   # tsc across all packages
 bun run test        # unit tests (root tooling + each package)
 ```
 
+`typecheck` runs TypeScript 7's native `tsc`. TypeScript 7 ships no `tsserver`, so an editor set to "use the
+workspace TypeScript version" falls back to its bundled one; for the same checker as CI, use a TypeScript 7
+language-server integration (for VS Code, the TypeScript Native Preview extension).
+
 Every change that touches the app is verified by the end-to-end suite against the
 real UI. The no-agent gate builds once and automatically uses isolated parallel
 shards (half the available CPUs, capped at eight):
@@ -108,6 +113,36 @@ repo alongside the code — top-level specs at the root
 **The spec leads the code:** a change that moves or blurs a boundary, contract, or
 decision updates the relevant `SPEC.md` first, then the code and the tests that pin
 it. See [`AGENTS.md`](AGENTS.md) for the spec workflow.
+
+## Translations
+
+ThinkRail's interface strings live in one file,
+[`packages/locales/en.json`](packages/locales/en.json): a flat JSON object of named keys
+(`"settings.language.title": "Language"`). A translation is the same file with the values translated.
+
+1. Copy `en.json` into `~/.thinkrail/locales/` as your language's code — `de.json`, `pt-BR.json`,
+   `zh-Hant.json`. Keep the keys; translate the values. Strings you leave out stay in English.
+2. Keep every `{{placeholder}}` exactly as written (a string whose placeholders differ from English is
+   ignored) and keep `<0>…</0>` markers around the same words. Keep literals the user must type
+   verbatim too — a protocol answer such as OpenSSH's `yes`, a JSON key, a flag, or a command — even
+   when the prose around them is translated.
+3. Counters come in plural forms: English has `key_one` and `key_other`; write the forms your language
+   uses from `_zero`, `_one`, `_two`, `_few`, `_many`, `_other`
+   ([CLDR plural rules](https://www.unicode.org/cldr/charts/latest/supplemental/language_plural_rules.html)).
+   Russian, for example, uses `_one` (1, 21, 31…), `_few` (2–4, 22–24…), `_many` (5–20…) and `_other`:
+   `"tools.read.firstLines_one": "первая {{count}} строка"`,
+   `"tools.read.firstLines_few": "первые {{count}} строки"`,
+   `"tools.read.firstLines_many": "первые {{count}} строк"`. Each form may show `{{count}}` or leave it
+   out; a form you skip falls back to your `_other`, so a counter never switches to English.
+4. Open **Settings → Language** and pick your language. ThinkRail reloads the file every time you save,
+   and the page shows a problem with the file if it can't be read.
+
+To ship a translation built-in for everyone, open a pull request that adds it as
+`packages/locales/<code>.json`, adds a `TRANSLATIONS` entry
+`"<code>": new URL("../<code>.json", import.meta.url)` in `packages/locales/src/index.ts`, and adds the
+language to the built-in list in `README.md` — nothing else needs to change. It may be partial;
+`bun run test` checks it against `en.json` (keys, placeholders, markup, plural forms). Agent replies,
+tool output, skills, and prompts are not part of the interface and are not translated.
 
 ## Submitting changes
 

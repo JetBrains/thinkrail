@@ -7,9 +7,14 @@ import {
 	type SubagentOverride,
 	type Workspace,
 } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
-import { useEffect, useState } from "react";
+import { workspaceName } from "../store";
+import { SettingsGroup, SettingsSubheading } from "./SettingsGroup";
+import { SettingsRow } from "./SettingsRow";
 import { SettingsSwitch } from "./SettingsSwitch";
+import { SETTINGS_INPUT, useSettingsDraft } from "./settingsDraft";
 
 function parseLimit(draft: string): number | null {
 	if (!/^\d+$/.test(draft)) return null;
@@ -28,30 +33,31 @@ function SourceTag({
 	testId: string;
 	onReset: () => void;
 }) {
+	const t = useT();
 	if (!custom) {
 		return (
 			<span
 				data-testid={testId}
 				data-source="global"
-				className="rounded-sm border border-border-default px-4 text-text-subtle tr-text-metadata"
+				className="rounded-sm px-4 text-text-subtle tr-text-metadata"
 			>
-				Global
+				{t("settings.subagents.source.global")}
 			</span>
 		);
 	}
 	return (
-		<button
-			type="button"
+		<Button
+			variant="soft-primary"
+			size="s"
+			iconRight={RiArrowGoBackLine}
 			data-testid={testId}
 			data-source="custom"
 			aria-label={resetLabel}
-			title="Use global"
+			tooltip={t("settings.subagents.source.useGlobal")}
 			onClick={onReset}
-			className="inline-flex items-center gap-2 rounded-sm border border-primary-muted px-4 text-primary tr-text-metadata outline-none hover:bg-primary-subtle focus-visible:ring-2 focus-visible:ring-primary"
 		>
-			Custom
-			<RiArrowGoBackLine aria-hidden className="size-12" />
-		</button>
+			{t("settings.subagents.source.custom")}
+		</Button>
 	);
 }
 
@@ -72,61 +78,44 @@ function LimitField({
 	testId: string;
 	onCommit: (value: number | null) => void;
 }) {
-	const savedText = saved === undefined ? "" : String(saved);
-	const [draft, setDraft] = useState(savedText);
-	useEffect(() => setDraft(savedText), [savedText]);
-	const parsed = parseLimit(draft);
-	const empty = draft === "";
-	const invalid = parsed === null && !(allowEmpty && empty);
+	const t = useT();
+	const { invalid, inputProps } = useSettingsDraft({
+		saved: saved === undefined ? "" : String(saved),
+		isValid: (draft) => parseLimit(draft) !== null || (allowEmpty && draft === ""),
+		commit: (draft) => {
+			onCommit(parseLimit(draft));
+			return undefined;
+		},
+	});
 	const errorId = `${testId}-error`;
 
-	const commit = () => {
-		if (invalid) {
-			setDraft(savedText);
-			return;
-		}
-		if (draft !== savedText) onCommit(parsed);
-	};
-
 	return (
-		<span className="flex flex-col gap-2">
+		<span className="flex flex-col items-end gap-2">
 			<input
 				type="number"
 				min={SUBAGENT_MAX_CONCURRENT.min}
 				max={SUBAGENT_MAX_CONCURRENT.max}
 				step={1}
 				inputMode="numeric"
-				value={draft}
+				{...inputProps}
 				placeholder={placeholder === undefined ? undefined : String(placeholder)}
 				disabled={disabled}
 				aria-label={label}
-				aria-invalid={invalid}
 				aria-describedby={invalid ? errorId : undefined}
 				data-testid={testId}
-				data-settings-draft-input
-				onChange={(event) => setDraft(event.currentTarget.value)}
-				onBlur={commit}
-				onKeyDown={(event) => {
-					if (event.key === "Enter") {
-						event.preventDefault();
-						commit();
-					} else if (event.key === "Escape") {
-						setDraft(savedText);
-					}
-				}}
-				className="w-56 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 text-right tr-text-ui text-text-default outline-none placeholder:text-text-subtle focus:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text aria-invalid:border-feedback-error"
+				className={cn(SETTINGS_INPUT, "w-64 text-right")}
 			/>
 			{invalid ? (
 				<span id={errorId} className="text-feedback-error tr-text-metadata">
-					Use {SUBAGENT_MAX_CONCURRENT.min}–{SUBAGENT_MAX_CONCURRENT.max}
+					{t("settings.subagents.limitRange", {
+						min: SUBAGENT_MAX_CONCURRENT.min,
+						max: SUBAGENT_MAX_CONCURRENT.max,
+					})}
 				</span>
 			) : null}
 		</span>
 	);
 }
-
-const ROW_HEADER = "px-12 py-8 text-left align-middle font-normal";
-const CELL = "px-8 py-8 align-middle";
 
 export function SubagentSettings({
 	protocolVersion,
@@ -147,6 +136,7 @@ export function SubagentSettings({
 	onGlobalLimitChange: (value: number) => void;
 	onWorkspaceLimitChange: (value: number | null) => void;
 }) {
+	const t = useT();
 	if (protocolVersion === null || protocolVersion < SUBAGENT_SETTINGS_PROTOCOL_VERSION) {
 		return null;
 	}
@@ -155,123 +145,102 @@ export function SubagentSettings({
 	const workspaceEnabled = enabledOverride === undefined ? globalEnabled : enabledOverride === "on";
 	const rawLimitOverride = workspace?.subagentMaxConcurrentOverride;
 	const limitOverride = isSubagentMaxConcurrent(rawLimitOverride) ? rawLimitOverride : undefined;
+	const workspaceLabel = workspace ? workspaceName(t, workspace) : "";
 
 	return (
-		<div
-			data-testid="settings-subagents"
-			className="flex flex-col gap-8 border-border-default border-t pt-16"
+		<SettingsGroup
+			testId="settings-subagents"
+			title={t("settings.subagents.title")}
+			description={t("settings.subagents.description")}
 		>
-			<div className="flex flex-col gap-4">
-				<h3 className="tr-title-section text-text-default">Subagents</h3>
-				<p className="text-text-muted tr-text-metadata">
-					Let chats delegate work to specialized agents.
-					{workspace
-						? " A workspace follows the global column until you change one of its values."
-						: ""}{" "}
-					Work already running always finishes.
-				</p>
-			</div>
-			<div className="overflow-hidden rounded-sm border border-border-default bg-control-bg">
-				<table data-testid="subagents-table" className="w-full table-fixed border-collapse">
-					<colgroup>
-						<col />
-						<col className="w-128" />
-						{workspace ? <col className="w-144" /> : null}
-					</colgroup>
-					<thead>
-						<tr className="text-text-muted tr-text-metadata">
-							<td className={ROW_HEADER} />
-							<th scope="col" className={cn(CELL, "text-left font-normal")}>
-								Global
-							</th>
-							{workspace ? (
-								<th
-									scope="col"
-									data-testid="subagents-workspace-heading"
-									title={workspace.name}
-									className={cn(CELL, "text-left font-normal")}
-								>
-									<span className="block">This workspace</span>
-									<span className="block break-words text-text-subtle">{workspace.name}</span>
-								</th>
-							) : null}
-						</tr>
-					</thead>
-					<tbody>
-						<tr className="border-border-default border-t">
-							<th scope="row" className={ROW_HEADER}>
-								<span className="block tr-title-compact text-text-default">Allow subagents</span>
-							</th>
-							<td className={CELL}>
-								<SettingsSwitch
-									checked={globalEnabled}
-									label="Allow subagents globally"
-									testId="subagents-global-toggle"
-									onChange={onGlobalEnabledChange}
+			<SettingsRow
+				label={t("settings.subagents.allow")}
+				description={
+					globalEnabled
+						? t("settings.subagents.allowOnDescription")
+						: t("settings.subagents.allowOffDescription")
+				}
+				control={
+					<SettingsSwitch
+						checked={globalEnabled}
+						label={t("settings.subagents.allowGlobally")}
+						testId="subagents-global-toggle"
+						onChange={onGlobalEnabledChange}
+					/>
+				}
+			/>
+			{limitSupported ? (
+				<SettingsRow
+					label={t("settings.subagents.perChat")}
+					description={t("settings.subagents.perChatDescription")}
+					control={
+						<LimitField
+							saved={globalLimit}
+							allowEmpty={false}
+							label={t("settings.subagents.globalLimitLabel")}
+							testId="subagent-limit-global-input"
+							onCommit={(value) => {
+								if (value !== null) onGlobalLimitChange(value);
+							}}
+						/>
+					}
+				/>
+			) : null}
+			{workspace ? (
+				<SettingsSubheading
+					testId="subagents-workspace-heading"
+					titleAttribute={workspaceLabel}
+					title={t("settings.subagents.workspaceHeading")}
+					description={t("settings.subagents.workspaceDescription", { name: workspaceLabel })}
+				/>
+			) : null}
+			{workspace ? (
+				<SettingsRow
+					label={t("settings.subagents.allow")}
+					control={
+						<span className="flex items-center gap-8">
+							<SourceTag
+								custom={enabledOverride !== undefined}
+								resetLabel={t("settings.subagents.resetEnabled", { name: workspaceLabel })}
+								testId="subagents-workspace-source"
+								onReset={() => onWorkspaceEnabledChange(null)}
+							/>
+							<SettingsSwitch
+								checked={workspaceEnabled}
+								label={t("settings.subagents.allowInWorkspace", { name: workspaceLabel })}
+								testId="subagents-workspace-toggle"
+								onChange={(enabled) => onWorkspaceEnabledChange(enabled ? "on" : "off")}
+							/>
+						</span>
+					}
+				/>
+			) : null}
+			{workspace && limitSupported ? (
+				<SettingsRow
+					label={t("settings.subagents.perChat")}
+					control={
+						<span className="flex items-start gap-8">
+							<span className="flex h-32 items-center">
+								<SourceTag
+									custom={limitOverride !== undefined}
+									resetLabel={t("settings.subagents.resetLimit", { name: workspaceLabel })}
+									testId="subagent-limit-workspace-source"
+									onReset={() => onWorkspaceLimitChange(null)}
 								/>
-							</td>
-							{workspace ? (
-								<td className={CELL}>
-									<span className="flex flex-wrap items-center gap-4">
-										<SettingsSwitch
-											checked={workspaceEnabled}
-											label={`Allow subagents in ${workspace.name}`}
-											testId="subagents-workspace-toggle"
-											onChange={(enabled) => onWorkspaceEnabledChange(enabled ? "on" : "off")}
-										/>
-										<SourceTag
-											custom={enabledOverride !== undefined}
-											resetLabel={`Custom — use the global subagent setting in ${workspace.name}`}
-											testId="subagents-workspace-source"
-											onReset={() => onWorkspaceEnabledChange(null)}
-										/>
-									</span>
-								</td>
-							) : null}
-						</tr>
-						{limitSupported ? (
-							<tr className="border-border-default border-t">
-								<th scope="row" className={ROW_HEADER}>
-									<span className="block tr-title-compact text-text-default">Per chat at once</span>
-									<span className="block text-text-muted tr-text-metadata">More wait in line.</span>
-								</th>
-								<td className={CELL}>
-									<LimitField
-										saved={globalLimit}
-										allowEmpty={false}
-										label="Global subagents per chat"
-										testId="subagent-limit-global-input"
-										onCommit={(value) => {
-											if (value !== null) onGlobalLimitChange(value);
-										}}
-									/>
-								</td>
-								{workspace ? (
-									<td className={CELL}>
-										<span className="flex flex-wrap items-center gap-4">
-											<LimitField
-												saved={limitOverride}
-												placeholder={globalLimit}
-												allowEmpty
-												disabled={!workspaceEnabled}
-												label={`Subagents per chat in ${workspace.name}`}
-												testId="subagent-limit-workspace-input"
-												onCommit={onWorkspaceLimitChange}
-											/>
-											<SourceTag
-												custom={limitOverride !== undefined}
-												resetLabel={`Custom — use the global subagent limit in ${workspace.name}`}
-												testId="subagent-limit-workspace-source"
-												onReset={() => onWorkspaceLimitChange(null)}
-											/>
-										</span>
-									</td>
-								) : null}
-							</tr>
-						) : null}
-					</tbody>
-				</table>
-			</div>
-		</div>
+							</span>
+							<LimitField
+								saved={limitOverride}
+								placeholder={globalLimit}
+								allowEmpty
+								disabled={!workspaceEnabled}
+								label={t("settings.subagents.workspaceLimitLabel", { name: workspaceLabel })}
+								testId="subagent-limit-workspace-input"
+								onCommit={onWorkspaceLimitChange}
+							/>
+						</span>
+					}
+				/>
+			) : null}
+		</SettingsGroup>
 	);
 }

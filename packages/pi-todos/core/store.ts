@@ -14,6 +14,7 @@ import {
 	type TodoOrigin,
 	type TodoPatch,
 	type TodoPlan,
+	type TodoPromoteResult,
 	type TodoStatus,
 	type TodoUpdateResult,
 	type WriteItem,
@@ -73,14 +74,37 @@ function freshId(prefix: string): string {
 	return `${prefix}_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
 }
 
-function decodeEscapes(s: string): string {
-	return s.includes("\\u")
-		? s.replace(/\\u([0-9a-fA-F]{4})/g, (_m, hex) => String.fromCharCode(Number.parseInt(hex, 16)))
-		: s;
+const MARKDOWN_NL_PARAGRAPH = /(?<!\\)\\n\\n/g;
+const MARKDOWN_NL_STRUCTURE = /(?<!\\)\\n(?=[-*+] |\d+\. |#{1,6} |> |```|-{3,}|={3,})/g;
+
+function decodeUnicode(s: string): string {
+	if (!s.includes("\\u")) return s;
+	return s.replace(/(?<!\\)\\u([0-9a-fA-F]{4})/g, (_m, hex) =>
+		String.fromCharCode(Number.parseInt(hex, 16)),
+	);
+}
+
+function decodeMarkdown(s: string): string {
+	const unicoded = decodeUnicode(s);
+	if (!unicoded.includes("\\n")) return unicoded;
+	return unicoded.replace(MARKDOWN_NL_PARAGRAPH, "\n\n").replace(MARKDOWN_NL_STRUCTURE, "\n");
 }
 
 function decodeIfAgent(s: string, origin: TodoOrigin): string {
-	return origin === "agent" ? decodeEscapes(s) : s;
+	return origin === "agent" ? decodeUnicode(s) : s;
+}
+
+function decodeMarkdownIfAgent(s: string, origin: TodoOrigin): string {
+	return origin === "agent" ? decodeMarkdown(s) : s;
+}
+
+function decodeArtifactsIfAgent(raw: unknown, origin: TodoOrigin): unknown {
+	if (origin !== "agent" || !Array.isArray(raw)) return raw;
+	return raw.map((entry) => {
+		if (typeof entry !== "object" || entry === null) return entry;
+		const o = entry as Record<string, unknown>;
+		return typeof o.label === "string" ? { ...o, label: decodeUnicode(o.label) } : o;
+	});
 }
 
 // Titles are single-line by contract (item bullets and `##` group headings in the markdown export). A
@@ -90,7 +114,7 @@ function flattenTitle(s: string): string {
 	return s.replace(/\s+/g, " ").trim();
 }
 
-function sanitizeArtifacts(raw: unknown, origin: TodoOrigin): TodoArtifact[] | undefined {
+function sanitizeArtifacts(raw: unknown): TodoArtifact[] | undefined {
 	if (!Array.isArray(raw)) return undefined;
 	const out: TodoArtifact[] = [];
 	for (const entry of raw) {
@@ -100,7 +124,7 @@ function sanitizeArtifacts(raw: unknown, origin: TodoOrigin): TodoArtifact[] | u
 		const artifact: TodoArtifact = { kind: o.kind as TodoArtifact["kind"] };
 		if (typeof o.path === "string" && o.path) artifact.path = o.path;
 		if (typeof o.sha === "string" && o.sha) artifact.sha = o.sha;
-		if (typeof o.label === "string" && o.label) artifact.label = decodeIfAgent(o.label, origin);
+		if (typeof o.label === "string" && o.label) artifact.label = o.label;
 		if (typeof o.specId === "string" && o.specId) artifact.specId = o.specId;
 		if (artifact.kind === "commit" ? !artifact.sha : !artifact.path) continue;
 		out.push(artifact);
@@ -116,19 +140,17 @@ function sanitize(raw: unknown): Todo | null {
 	const origin: TodoOrigin = isOrigin(o.origin) ? o.origin : "agent";
 	const todo: Todo = {
 		id: o.id,
-		title: flattenTitle(decodeIfAgent(o.title, origin)),
+		title: flattenTitle(o.title),
 		status: isStatus(o.status) ? o.status : "pending",
 		origin,
 		createdAt: typeof o.createdAt === "string" ? o.createdAt : now,
 		updatedAt: typeof o.updatedAt === "string" ? o.updatedAt : now,
 	};
-	if (typeof o.note === "string" && o.note) todo.note = decodeIfAgent(o.note, origin);
-	if (typeof o.summary === "string" && o.summary) todo.summary = decodeIfAgent(o.summary, origin);
-	if (typeof o.verification === "string" && o.verification)
-		todo.verification = decodeIfAgent(o.verification, origin);
-	if (typeof o.commitSubject === "string" && o.commitSubject)
-		todo.commitSubject = decodeIfAgent(o.commitSubject, origin);
-	const artifacts = sanitizeArtifacts(o.artifacts, origin);
+	if (typeof o.note === "string" && o.note) todo.note = o.note;
+	if (typeof o.summary === "string" && o.summary) todo.summary = o.summary;
+	if (typeof o.verification === "string" && o.verification) todo.verification = o.verification;
+	if (typeof o.commitSubject === "string" && o.commitSubject) todo.commitSubject = o.commitSubject;
+	const artifacts = sanitizeArtifacts(o.artifacts);
 	if (artifacts) todo.artifacts = artifacts;
 	return todo;
 }
@@ -140,10 +162,9 @@ function sanitizeGroup(raw: unknown): TodoGroup | null {
 	const todos = Array.isArray(o.todos)
 		? o.todos.map(sanitize).filter((t): t is Todo => t !== null)
 		: [];
-	if (todos.length === 0) return null;
 	return {
 		id: typeof o.id === "string" ? o.id : freshId("g"),
-		title: flattenTitle(decodeEscapes(o.title)),
+		title: flattenTitle(o.title),
 		todos,
 	};
 }
@@ -167,9 +188,9 @@ function makeTodo(
 		updatedAt: now,
 	};
 	if (note) todo.note = decodeIfAgent(note, origin);
-	if (summary) todo.summary = decodeIfAgent(summary, origin);
-	if (verification) todo.verification = decodeIfAgent(verification, origin);
-	const clean = sanitizeArtifacts(artifacts, origin);
+	if (summary) todo.summary = decodeMarkdownIfAgent(summary, origin);
+	if (verification) todo.verification = decodeMarkdownIfAgent(verification, origin);
+	const clean = sanitizeArtifacts(decodeArtifactsIfAgent(artifacts, origin));
 	if (clean) todo.artifacts = clean;
 	return todo;
 }
@@ -197,9 +218,7 @@ export class TodoStore {
 			? file.groups.map(sanitizeGroup).filter((g): g is TodoGroup => g !== null)
 			: [];
 		const plan: TodoPlan = { todos, groups };
-		// Plan-level summary: agent-authored always (written via todo_plan_summary), so decode escapes.
-		if (typeof file?.summary === "string" && file.summary)
-			plan.summary = decodeEscapes(file.summary);
+		if (typeof file?.summary === "string" && file.summary) plan.summary = file.summary;
 		return plan;
 	}
 
@@ -210,7 +229,7 @@ export class TodoStore {
 	 */
 	setSummary(summary: string): void {
 		const plan = this.read();
-		const text = decodeEscapes(summary.trim());
+		const text = decodeMarkdown(summary.trim());
 		if (text) plan.summary = text;
 		else delete plan.summary;
 		this.write(plan);
@@ -247,7 +266,7 @@ export class TodoStore {
 			this.write(plan);
 			return todo;
 		}
-		const groupTitle = input.group ? flattenTitle(decodeEscapes(input.group)) : undefined;
+		const groupTitle = input.group ? flattenTitle(decodeUnicode(input.group)) : undefined;
 		if (groupTitle) {
 			let group = plan.groups.find((g) => g.title === groupTitle);
 			if (!group) {
@@ -304,11 +323,12 @@ export class TodoStore {
 			else delete todo.note;
 		}
 		if (patch.summary !== undefined) {
-			if (patch.summary) todo.summary = decodeIfAgent(patch.summary, todo.origin);
+			if (patch.summary) todo.summary = decodeMarkdownIfAgent(patch.summary, todo.origin);
 			else delete todo.summary;
 		}
 		if (patch.verification !== undefined) {
-			if (patch.verification) todo.verification = decodeIfAgent(patch.verification, todo.origin);
+			if (patch.verification)
+				todo.verification = decodeMarkdownIfAgent(patch.verification, todo.origin);
 			else delete todo.verification;
 		}
 		if (patch.commitSubject !== undefined) {
@@ -316,7 +336,7 @@ export class TodoStore {
 			else delete todo.commitSubject;
 		}
 		if (patch.artifacts !== undefined) {
-			const clean = sanitizeArtifacts(patch.artifacts, todo.origin);
+			const clean = sanitizeArtifacts(decodeArtifactsIfAgent(patch.artifacts, todo.origin));
 			if (clean) todo.artifacts = clean;
 			else delete todo.artifacts;
 		}
@@ -329,10 +349,36 @@ export class TodoStore {
 		const plan = this.read();
 		const before = countItems(plan);
 		plan.todos = plan.todos.filter((t) => t.id !== id);
+		const prevCounts = new Map<string, number>();
+		for (const group of plan.groups) prevCounts.set(group.id, group.todos.length);
 		for (const group of plan.groups) group.todos = group.todos.filter((t) => t.id !== id);
+		plan.groups = plan.groups.filter((group) => {
+			if (group.todos.length > 0) return true;
+			return (prevCounts.get(group.id) ?? 0) === 0;
+		});
 		if (countItems(plan) === before) return false;
 		this.write(plan);
 		return true;
+	}
+
+	promote(id: string, titleOverride?: string): TodoPromoteResult {
+		const plan = this.read();
+		const idx = plan.todos.findIndex((t) => t.id === id);
+		if (idx === -1) {
+			const inGroup = plan.groups.some((g) => g.todos.some((t) => t.id === id));
+			return { ok: false, reason: inGroup ? "grouped-step" : "unknown-id" };
+		}
+		const item = plan.todos[idx] as Todo;
+		const title = flattenTitle(
+			titleOverride !== undefined ? decodeUnicode(titleOverride) : item.title,
+		);
+		if (!title) return { ok: false, reason: "empty-title" };
+		if (plan.groups.some((g) => g.title === title)) return { ok: false, reason: "title-collision" };
+		plan.todos.splice(idx, 1);
+		const group: TodoGroup = { id: item.id, title, todos: [] };
+		plan.groups.push(group);
+		this.write(plan);
+		return { ok: true, group };
 	}
 
 	replaceAll(plan: WritePlan): TodoPlan {
@@ -350,7 +396,7 @@ export class TodoStore {
 		const consumed = new Set<string>();
 		const reconcile = (groupTitle: string, w: WriteItem): Todo => {
 			const hit = existingByKey
-				.get(`${groupTitle}\u0000${flattenTitle(decodeEscapes(w.title))}`)
+				.get(`${groupTitle}\u0000${flattenTitle(decodeUnicode(w.title))}`)
 				?.find((t) => !consumed.has(t.id));
 			if (!hit) {
 				return makeTodo(
@@ -366,7 +412,7 @@ export class TodoStore {
 			consumed.add(hit.id);
 			const merged: Todo = { ...hit };
 			if (w.note !== undefined) {
-				const note = decodeEscapes(w.note);
+				const note = decodeUnicode(w.note);
 				if (note) merged.note = note;
 				else delete merged.note;
 				merged.updatedAt = nowIso();
@@ -374,11 +420,16 @@ export class TodoStore {
 			return merged;
 		};
 		const freshGroups: TodoGroup[] = (plan.groups ?? []).map((g) => {
-			const title = flattenTitle(decodeEscapes(g.title));
+			const title = flattenTitle(decodeUnicode(g.title));
 			return { id: freshId("g"), title, todos: g.todos.map((w) => reconcile(title, w)) };
 		});
 		const resultLoose = current.todos.filter((t) => t.origin === "user" || t.status !== "done");
 		const carriedGroups: TodoGroup[] = [];
+		for (const old of current.groups) {
+			if (old.todos.length > 0) continue;
+			if (freshGroups.some((g) => g.title === old.title)) continue;
+			carriedGroups.push({ id: old.id, title: old.title, todos: [] });
+		}
 		const carriedLooseDone: Todo[] = [];
 		for (const old of current.groups) {
 			const carriedDone: Todo[] = [];
@@ -420,7 +471,7 @@ export class TodoStore {
 		const file: TodoFile = {
 			version: CURRENT_VERSION,
 			todos: plan.todos,
-			groups: plan.groups.filter((g) => g.todos.length > 0),
+			groups: plan.groups,
 		};
 		if (plan.summary) file.summary = plan.summary;
 		mkdirSync(dirname(this.file), { recursive: true });

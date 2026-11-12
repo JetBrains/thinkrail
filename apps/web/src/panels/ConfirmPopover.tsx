@@ -1,4 +1,5 @@
 import { RiAlertLine as TriangleAlert } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { Popover, PopoverContent } from "@thinkrail/ui/popover";
 import { type ComponentProps, type ReactNode, useId } from "react";
@@ -8,8 +9,8 @@ export function ConfirmPopover({
 	onOpenChange,
 	title,
 	description,
-	confirmLabel = "Confirm",
-	cancelLabel = "Cancel",
+	confirmLabel,
+	cancelLabel,
 	destructive = false,
 	confirmTestId,
 	onConfirm,
@@ -30,6 +31,7 @@ export function ConfirmPopover({
 	align?: ComponentProps<typeof PopoverContent>["align"];
 	children: ReactNode;
 }) {
+	const t = useT();
 	const titleId = useId();
 	const descId = useId();
 	return (
@@ -56,19 +58,19 @@ export function ConfirmPopover({
 					</p>
 				) : null}
 				<div className="flex justify-end gap-8 pt-4">
-					<Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
-						{cancelLabel}
+					<Button variant="outline" size="m" onClick={() => onOpenChange(false)}>
+						{cancelLabel ?? t("common.cancel")}
 					</Button>
 					<Button
-						variant={destructive ? "destructive" : "default"}
-						size="sm"
+						variant={destructive ? "destructive" : "primary"}
+						size="m"
 						data-testid={confirmTestId}
 						onClick={() => {
 							onConfirm();
 							onOpenChange(false);
 						}}
 					>
-						{confirmLabel}
+						{confirmLabel ?? t("common.confirm")}
 					</Button>
 				</div>
 			</PopoverContent>

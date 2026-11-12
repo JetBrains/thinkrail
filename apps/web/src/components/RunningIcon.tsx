@@ -1,80 +1,115 @@
+import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import { useId } from "react";
-import { BRAND_MARK_PATH, BRAND_MARK_SIZE } from "../constants/branding";
+import { BRAND_MARK_SEGMENTS } from "../constants/branding";
 
-const MARK_SCALE = 22.5 / Math.hypot(BRAND_MARK_SIZE.width / 2, BRAND_MARK_SIZE.height / 2);
-const MARK_X = (32 - (BRAND_MARK_SIZE.width / 2) * MARK_SCALE).toFixed(3);
-const MARK_Y = (32 - (BRAND_MARK_SIZE.height / 2) * MARK_SCALE).toFixed(3);
-const MARK_TRANSFORM = `translate(${MARK_X} ${MARK_Y}) scale(${MARK_SCALE.toFixed(5)})`;
+const FRAME_HALVES = [
+	"M20 195 V110 A90 90 0 0 1 110 20 H650 A90 90 0 0 1 740 110 V552",
+	"M20 225 V650 A90 90 0 0 0 110 740 H650 A90 90 0 0 0 740 650 V548",
+] as const;
+
+const STROKES: ReadonlyArray<{
+	d: string;
+	join: "miter" | "round";
+	width: number;
+	clip: keyof typeof BRAND_MARK_SEGMENTS;
+	className: string;
+}> = [
+	{
+		d: "M0 20 H312",
+		join: "miter",
+		width: 40,
+		clip: "tHorizontal",
+		className: "motion-safe:animate-loader-t-bar",
+	},
+	{
+		d: "M0 90 H130 V449.5",
+		join: "miter",
+		width: 40,
+		clip: "tVertical",
+		className: "motion-safe:animate-loader-t-stem",
+	},
+	{
+		d: "M340 20 H401 C444.6 20 481 55.5 481 98.5 V190 C481 235 462 272 432 290 L540 466",
+		join: "round",
+		width: 46,
+		clip: "rUpperTail",
+		className: "motion-safe:animate-loader-r-tail",
+	},
+	{
+		d: "M200 449.5 V321 C200 270 245 228 304 228 H374 C394 228 410 213 410 194 V120 C410 102 398 90 380 90 H180",
+		join: "miter",
+		width: 44,
+		clip: "rBowl",
+		className: "motion-safe:animate-loader-r-bowl",
+	},
+	{
+		d: "M200 335 V140",
+		join: "miter",
+		width: 40,
+		clip: "rBowl",
+		className: "motion-safe:animate-loader-r-stem",
+	},
+	{
+		d: "M269 449.5 V332 C269 312 285 300 305 300 H350 L457 466",
+		join: "miter",
+		width: 46,
+		clip: "rLowerLeg",
+		className: "motion-safe:animate-loader-r-leg",
+	},
+];
 
 export function RunningIcon({ className }: { className?: string | undefined }) {
-	const tailGradient = useId();
+	const t = useT();
+	const id = useId();
+	const clipId = (name: string) => `${id}-${name}`;
+
 	return (
 		<span
 			data-testid="running-icon"
 			data-running="true"
 			role="img"
-			aria-label="Agent working"
+			aria-label={t("components.runningIcon.label")}
 			className={cn("inline-flex shrink-0 items-center justify-center", className)}
 		>
-			<svg aria-hidden="true" viewBox="0 0 64 64" className="size-full">
+			<svg aria-hidden="true" viewBox="0 0 760 760" className="size-full">
 				<defs>
-					<linearGradient
-						id={tailGradient}
-						gradientUnits="userSpaceOnUse"
-						x1="32"
-						y1="4"
-						x2="10.426"
-						y2="14.152"
-					>
-						<stop offset="0" stopColor="currentColor" stopOpacity="0.9" />
-						<stop offset="1" stopColor="currentColor" stopOpacity="0" />
-					</linearGradient>
+					{Object.entries(BRAND_MARK_SEGMENTS).map(([name, d]) => (
+						<clipPath key={name} id={clipId(name)}>
+							<path d={d} />
+						</clipPath>
+					))}
 				</defs>
-				<circle
-					cx="32"
-					cy="32"
-					r="28"
-					fill="none"
-					stroke="currentColor"
-					strokeWidth="4"
-					className="motion-safe:opacity-30"
-				/>
-				<path
-					d={BRAND_MARK_PATH}
-					fill="currentColor"
-					transform={MARK_TRANSFORM}
-					className="motion-safe:animate-working-pulse"
-				/>
-				<g
-					data-testid="running-icon-train"
-					className="origin-[32px_32px] [transform-box:view-box] motion-safe:animate-working-train motion-reduce:hidden"
-				>
-					<circle
-						cx="32"
-						cy="32"
-						r="28"
+				{FRAME_HALVES.map((d) => (
+					<path
+						key={d}
+						data-testid="running-icon-frame"
+						d={d}
 						fill="none"
-						stroke={`url(#${tailGradient})`}
-						strokeWidth="4"
-						pathLength="100"
-						strokeDasharray="14 86"
-						transform="rotate(-140.4 32 32)"
+						stroke="currentColor"
+						strokeWidth="40"
+						strokeLinejoin="round"
+						strokeDasharray="1000 1000"
+						pathLength="1000"
+						className="motion-safe:animate-loader-frame"
 					/>
-					<circle cx="32" cy="4" r="3.8" fill="currentColor" />
+				))}
+				<g transform="translate(101.5 155)">
+					{STROKES.map((stroke) => (
+						<path
+							key={stroke.d}
+							d={stroke.d}
+							fill="none"
+							stroke="currentColor"
+							strokeWidth={stroke.width}
+							strokeLinejoin={stroke.join}
+							strokeDasharray="1000 1000"
+							pathLength="1000"
+							clipPath={`url(#${clipId(stroke.clip)})`}
+							className={stroke.className}
+						/>
+					))}
 				</g>
-				<path
-					d={BRAND_MARK_PATH}
-					pathLength="1000"
-					fill="none"
-					stroke="currentColor"
-					strokeWidth="36"
-					strokeLinecap="round"
-					strokeLinejoin="round"
-					strokeDasharray="90 243.33"
-					transform={MARK_TRANSFORM}
-					className="motion-safe:animate-working-trace motion-reduce:hidden"
-				/>
 			</svg>
 		</span>
 	);

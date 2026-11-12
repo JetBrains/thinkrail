@@ -1,4 +1,5 @@
 import { RiSearchLine as Search } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
 import { Command as CommandPrimitive } from "cmdk";
 import type * as React from "react";
 import { cn } from "./utils";
@@ -33,10 +34,16 @@ function CommandInput({
 	);
 }
 
-function CommandList({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.List>) {
+function CommandList({
+	className,
+	label,
+	...props
+}: React.ComponentProps<typeof CommandPrimitive.List>) {
+	const t = useT();
 	return (
 		<CommandPrimitive.List
 			className={cn("max-h-[280px] overflow-y-auto overflow-x-hidden p-4", className)}
+			label={label ?? t("common.suggestions")}
 			{...props}
 		/>
 	);
@@ -66,6 +73,7 @@ function CommandGroup({
 function CommandItem({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.Item>) {
 	return (
 		<CommandPrimitive.Item
+			data-row
 			className={cn(
 				"flex cursor-pointer items-center gap-4 rounded-sm px-8 py-4 tr-text-ui text-text-default outline-none data-[selected=true]:bg-control-bg-selected",
 				className,

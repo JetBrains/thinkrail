@@ -6,6 +6,7 @@ import { designSourceFiles, designSourceLabel } from "../../scripts/designSource
 import { normalizeEol } from "../../scripts/generatedFiles";
 import {
 	allStyles,
+	fontSizePx,
 	loadTypography,
 	proseRootClassName,
 	resolveStyle,
@@ -14,6 +15,9 @@ import {
 
 const typography = loadTypography();
 const SRC = fileURLToPath(new URL("..", import.meta.url));
+const RENDERERS = fileURLToPath(
+	new URL("../../../../packages/resource-renderers/src/", import.meta.url),
+);
 
 const FILES = designSourceFiles();
 const read = (p: string) => normalizeEol(readFileSync(p, "utf8"));
@@ -27,12 +31,16 @@ const PRIMITIVE_ALLOWLIST = new Set([
 	"index.css",
 	"styles/tokens.css",
 	"styles/global.css",
-	"panels/monacoSetup.ts",
+	"packages/resource-renderers/src/support/monacoSetup.ts",
 	"panels/TerminalInstance.tsx",
+	"packages/resource-renderers/src/renderers/code/pierreVirtualizer.ts",
 	"thinkrail-extensions/visualize/web/mermaid.ts",
 ]);
 
 const componentFiles = () => FILES.filter((p) => !PRIMITIVE_ALLOWLIST.has(rel(p)));
+
+const TOKEN_WRITERS = new Set(["panels/FontPicker.tsx"]);
+const isTokenWriter = (label: string) => label.startsWith("fonts/") || TOKEN_WRITERS.has(label);
 
 describe("component usage", () => {
 	it("has no arbitrary font-size or leading values", () => {
@@ -122,6 +130,14 @@ describe("component usage", () => {
 		expect(textStyles.filter((style) => !live.has(style.id)).map((style) => style.id)).toEqual([]);
 	});
 
+	it("overrides typography tokens only from the fonts module and the font picker's rows", () => {
+		const write = /setProperty\(\s*["'`]--tr-|["'`]--tr-[a-z0-9-]+["'`]\s*:/;
+		const writers = FILES.filter((path) => write.test(code(path))).map(rel);
+		expect(writers.filter((label) => !isTokenWriter(label))).toEqual([]);
+		for (const label of TOKEN_WRITERS)
+			expect(writers, `${label} is a token writer`).toContain(label);
+	});
+
 	it("gives every <pre> and <code> element its own typography class", () => {
 		const proseRoots = Object.keys(typography.proseSystems).map((s) =>
 			proseRootClassName(typography, s),
@@ -142,7 +158,7 @@ describe("component usage", () => {
 
 describe("markdown prose systems", () => {
 	const chat = code(join(SRC, "chat/Markdown.tsx"));
-	const preview = code(join(SRC, "panels/MarkdownPreview.tsx"));
+	const preview = code(join(RENDERERS, "support/MarkdownPreview.tsx"));
 
 	it("gives each markdown surface exactly one generated prose system", () => {
 		expect(chat).toContain(proseRootClassName(typography, "chat"));
@@ -156,7 +172,7 @@ describe("markdown prose systems", () => {
 			/\[&[^\]]*\]:(?:text-(?!primary|muted|hint|text|balance|pretty|left|center|right)|font-|leading-|tracking-)/g;
 		for (const [label, src] of [
 			["chat/Markdown.tsx", chat],
-			["panels/MarkdownPreview.tsx", preview],
+			["resource-renderers/support/MarkdownPreview.tsx", preview],
 		] as const)
 			expect(
 				[...src.matchAll(perElementType)].map((m) => m[0]),
@@ -173,7 +189,7 @@ describe("markdown prose systems", () => {
 			h5: { fontSize: "s12", fontWeight: "medium" },
 			h6: { fontSize: "s10", fontWeight: "medium", textTransform: "uppercase" },
 			inlineCode: { fontFamily: "code", fontSize: "s13" },
-			codeBlock: { fontFamily: "code", fontSize: "s13" },
+			codeBlock: { fontFamily: "code", fontSize: "code" },
 			tableBody: { fontSize: "s12", fontWeight: "light" },
 			tableHeader: { fontSize: "s12", fontWeight: "semibold" },
 		};
@@ -182,7 +198,7 @@ describe("markdown prose systems", () => {
 	});
 
 	it("gives the document surface headings larger than its body text", () => {
-		const px = (id: string) => typography.fontSizes[resolveStyle(typography, id).fontSize];
+		const px = (id: string) => fontSizePx(typography, resolveStyle(typography, id).fontSize);
 		const body = px("doc.body") as number;
 		expect(body).toBe(14);
 		expect(px("doc.h1")).toBe(24);

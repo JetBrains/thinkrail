@@ -1,22 +1,27 @@
 import type { ContextUsage, SessionStats } from "@thinkrail/contracts";
+import { type Translator, useT } from "@thinkrail/locales/react";
 
 export function formatTokens(count: number): string {
 	if (count < 1_000) return count.toString();
-	if (count < 10_000) return `${(count / 1_000).toFixed(1)}k`;
-	if (count < 1_000_000) return `${Math.round(count / 1_000)}k`;
-	if (count < 10_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
-	return `${Math.round(count / 1_000_000)}M`;
+	if (count < 9_950) return `${(count / 1_000).toFixed(1)}k`;
+	if (count < 999_500) return `${Math.round(count / 1_000)}k`;
+	if (count < 9_950_000) return `${(count / 1_000_000).toFixed(1)}M`;
+	if (count < 999_500_000) return `${Math.round(count / 1_000_000)}M`;
+	if (count < 9_950_000_000) return `${(count / 1_000_000_000).toFixed(1)}B`;
+	return `${Math.round(count / 1_000_000_000)}B`;
 }
 
 export function formatCost(cost: number): string {
 	return `$${cost.toFixed(3)}`;
 }
 
-export function formatElapsed(ms: number): string {
+export function formatElapsed(t: Translator, ms: number): string {
 	const totalSec = Math.round(ms / 1000);
-	const m = Math.floor(totalSec / 60);
-	const s = totalSec % 60;
-	return m > 0 ? `${m}m ${s}s` : `${s}s`;
+	const minutes = Math.floor(totalSec / 60);
+	const seconds = totalSec % 60;
+	return minutes > 0
+		? t("chat.elapsed.minutesSeconds", { minutes, seconds })
+		: t("chat.elapsed.seconds", { seconds });
 }
 
 export function usageParts(stats: SessionStats): string[] {
@@ -43,6 +48,7 @@ export function contextPart(usage: ContextUsage): { bar: string; text: string } 
 }
 
 export function SessionStatsBar({ stats }: { stats: SessionStats | null }) {
+	const t = useT();
 	if (!stats) return null;
 	const parts = usageParts(stats);
 	const context = stats.contextUsage ? contextPart(stats.contextUsage) : null;
@@ -52,7 +58,7 @@ export function SessionStatsBar({ stats }: { stats: SessionStats | null }) {
 		<div
 			data-testid="session-stats"
 			className="flex min-w-0 flex-nowrap items-center justify-end gap-x-4 overflow-hidden text-text-muted tr-text-metadata"
-			title="Cumulative usage: ↑ input · ↓ output · R cache read · W cache write"
+			title={t("chat.stats.usageLegend")}
 		>
 			{parts.map((part, index) => (
 				<span key={part} className="flex items-center gap-4 whitespace-nowrap">
@@ -61,7 +67,10 @@ export function SessionStatsBar({ stats }: { stats: SessionStats | null }) {
 				</span>
 			))}
 			{context ? (
-				<span className="flex items-center gap-4 whitespace-nowrap" title="Context window used">
+				<span
+					className="flex items-center gap-4 whitespace-nowrap"
+					title={t("chat.stats.contextUsed")}
+				>
 					{parts.length > 0 ? <span aria-hidden="true">·</span> : null}
 					<span aria-hidden="true" className="text-primary">
 						{context.bar}

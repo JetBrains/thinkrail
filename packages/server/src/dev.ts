@@ -1,5 +1,6 @@
 import type { Provider } from "@earendil-works/pi-ai";
 import type { OAuthCredentials, OAuthLoginCallbacks } from "@earendil-works/pi-ai/oauth";
+import { parsePort } from "@thinkrail/shared/freePort";
 import { configurePiRuntimeGenerationInitializer } from "./agent";
 import { bootHost } from "./host";
 
@@ -15,8 +16,19 @@ if (process.env.THINKRAIL_E2E_FAKE_OAUTH === "1") {
 				],
 			});
 			if (!choice) throw new Error("Login cancelled");
-			callbacks.onAuth({ url: "https://e2e.test/authorize?probe=1" });
-			const code = (await callbacks.onManualCodeInput?.()) ?? "";
+			let code: string;
+			if (choice === "api") {
+				callbacks.onAuth({
+					url: "https://e2e.test/authorize?probe=1&redirect_uri=https%3A%2F%2Fe2e.test%2Fcode",
+					instructions: "Copy the code the sign-in page shows and paste it here.",
+				});
+				code = await callbacks.onPrompt({ message: "Paste the code E2E shows after you sign in:" });
+			} else {
+				callbacks.onAuth({
+					url: "https://e2e.test/authorize?probe=1&redirect_uri=http%3A%2F%2F127.0.0.1%3A1455%2Fcallback",
+				});
+				code = (await callbacks.onManualCodeInput?.()) ?? "";
+			}
 			callbacks.onProgress?.("Exchanging authorization code…");
 			return {
 				refresh: "e2e-refresh",
@@ -81,14 +93,31 @@ if (process.env.THINKRAIL_E2E_FAKE_OAUTH === "1") {
 
 const host = process.env.THINKRAIL_HOST ?? "localhost";
 const staticDir = process.env.THINKRAIL_STATIC_DIR;
-const envPort = process.env.THINKRAIL_PORT;
+const rawPort = process.env.THINKRAIL_PORT;
+const envPort = parsePort(rawPort);
+if (rawPort !== undefined && envPort === undefined) {
+	console.warn(
+		`thinkrail dev: ignoring invalid THINKRAIL_PORT=${rawPort}; using a free port from 24242`,
+	);
+}
+const posthogApiKey =
+	process.env.THINKRAIL_DEV_POSTHOG === "1" ? process.env.THINKRAIL_POSTHOG_PROJECT_KEY : undefined;
+if (posthogApiKey) {
+	console.log(
+		"thinkrail dev: THINKRAIL_DEV_POSTHOG is on, so this run sends basic analytics and survey answers",
+	);
+}
 
 const { port } = await bootHost({
-	port: envPort ? Number(envPort) : 24242,
+	port: envPort ?? 24242,
 	host,
-	portMode: envPort ? "exact" : "free",
+	portMode: envPort === undefined ? "free" : "exact",
 	resolveShellEnv: true,
 	...(staticDir ? { staticDir } : {}),
-	analytics: { channel: "dev", build: "source" },
+	analytics: {
+		channel: "dev",
+		build: "source",
+		...(posthogApiKey ? { posthogApiKey } : {}),
+	},
 });
 console.log(`thinkrail host: http://${host}:${port}`);

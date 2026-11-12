@@ -5,6 +5,7 @@ import {
 	DefaultResourceLoader,
 	getAgentDir,
 	type InlineExtension,
+	type LoadExtensionsResult,
 	ModelRuntime,
 	SessionManager,
 	SettingsManager,
@@ -113,6 +114,27 @@ function repairResourceTranscript(manager: SessionManager): void {
 	const replay = scanReplayTools(manager.buildSessionContext().messages);
 	if (replay.issues.length)
 		throw new DelegationError("invalid-child-transcript", replay.issues.join("; "));
+}
+
+function withoutRegistrationsOf(
+	result: LoadExtensionsResult,
+	paths: readonly string[],
+): LoadExtensionsResult {
+	const owners = new Set(
+		result.extensions.flatMap((extension) =>
+			paths.includes(extension.resolvedPath) || paths.includes(extension.path)
+				? [extension.path]
+				: [],
+		),
+	);
+	const queued = ({ extensionPath }: { extensionPath: string }) => !owners.has(extensionPath);
+	const { runtime } = result;
+	runtime.pendingProviderRegistrations = runtime.pendingProviderRegistrations.filter(queued);
+	runtime.pendingNativeProviderRegistrations =
+		runtime.pendingNativeProviderRegistrations.filter(queued);
+	runtime.pendingVirtualModelRegistrations =
+		runtime.pendingVirtualModelRegistrations.filter(queued);
+	return result;
 }
 
 function abortActiveRun(entry: ChildEntry, reason?: string): Promise<void> {
@@ -441,17 +463,23 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		activity: string | undefined,
 		startedAt: number,
 		baseline: RunBaseline,
+		last?: AssistantMessage,
 	): DelegationRunDetails {
 		const { session, record } = entry;
 		const stats = session.getSessionStats();
-		const contextUsage = stats.contextUsage ?? session.getContextUsage();
+		const { contextUsage } = stats;
+		const model = last
+			? `${last.provider}/${last.model}`
+			: session.model && `${session.model.provider}/${session.model.id}`;
+		const thinkingLevel = last ? last.thinkingLevel : session.thinkingLevel;
 		return {
 			childSessionId: record.sessionId,
 			...(record.info.roleName !== undefined ? { roleName: record.info.roleName } : {}),
 			...(record.info.roleSource !== undefined ? { roleSource: record.info.roleSource } : {}),
 			task,
 			status,
-			...(session.model ? { model: `${session.model.provider}/${session.model.id}` } : {}),
+			...(model !== undefined ? { model } : {}),
+			...(thinkingLevel !== undefined ? { thinkingLevel } : {}),
 			usage: {
 				input: stats.tokens.input - baseline.input,
 				output: stats.tokens.output - baseline.output,
@@ -486,9 +514,19 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		const activeRun = entry.activeRun;
 
 		const pushUpdate = (status: RunLifecycleStatus) => {
-			const details = buildDetails(entry, task, status, turns, activity, startedAt, baseline);
+			const details = buildDetails(entry, task, status, turns, activity, startedAt, baseline, last);
 			if (entry.snapshot?.task === task) entry.snapshot = { ...entry.snapshot, status, details };
 			opts.onUpdate?.(details);
+			if ("parentSessionId" in entry.record)
+				emit(
+					{
+						type: "run-progress",
+						sessionId: entry.record.sessionId,
+						parentSessionId: entry.record.parentSessionId,
+						details,
+					},
+					entry,
+				);
 		};
 
 		const unsubscribe = session.subscribe((event) => {
@@ -557,7 +595,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			status = "completed";
 		}
 		const finalText = textOf(last);
-		const details = buildDetails(entry, task, status, turns, activity, startedAt, baseline);
+		const details = buildDetails(entry, task, status, turns, activity, startedAt, baseline, last);
 		return {
 			historyEntryId: session.sessionManager.getLeafId(),
 			...(last ? { stopReason: last.stopReason } : {}),
@@ -768,6 +806,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		thinkingLevel: SessionOptions["thinkingLevel"],
 		factories: InlineExtension[],
 		manager: SessionManager,
+		providerExtensionPaths: readonly string[] = [],
 	): Promise<AgentSession> {
 		const settingsManager =
 			bindings.buildChildSettings?.(cwd, projectTrusted) ??
@@ -784,6 +823,13 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			agentDir: getAgentDir(),
 			settingsManager,
 			noExtensions: true,
+			additionalExtensionPaths: [...providerExtensionPaths],
+			...(providerExtensionPaths.length > 0
+				? {
+						extensionsOverride: (result: LoadExtensionsResult) =>
+							withoutRegistrationsOf(result, providerExtensionPaths),
+					}
+				: {}),
 			extensionFactories: childFactories,
 			noPromptTemplates: true,
 			noThemes: true,
@@ -911,6 +957,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			options.thinkingLevel ?? parent.thinkingLevel,
 			bindings.childExtensionFactories ?? [],
 			manager,
+			model ? (parent.providerExtensionPaths?.(model.provider) ?? []) : [],
 		);
 		const current = bindings.resolveParent?.(parentSessionId);
 		const parentClosed = parentLifetimes.get(parentSessionId) !== parentLifetime || !current;

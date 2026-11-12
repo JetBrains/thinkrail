@@ -234,7 +234,7 @@ describe("container-width presets are not spacing", () => {
 				(h) => h.slice(h.lastIndexOf(" ") + 1),
 			),
 		);
-		for (const preset of ["max-w-lg", "max-w-sm"]) expect(named.has(preset)).toBe(true);
+		for (const preset of ["max-w-lg"]) expect(named.has(preset)).toBe(true);
 	});
 });
 

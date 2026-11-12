@@ -242,3 +242,87 @@ test("the overlay follows native hints and a refused quit re-arms", async ({ pag
 	await page.keyboard.press("Control+q");
 	await expect(hint).toHaveAttribute("data-hint", "armed");
 });
+
+function openSettingsCommand(page: Page) {
+	return page.evaluate(() => window.__e2eShortcuts.command("open-settings"));
+}
+
+async function expectSettingsTooltip(page: Page, text: string): Promise<void> {
+	await page.getByTestId("open-settings").hover();
+	await expect(page.getByRole("tooltip")).toHaveText(text);
+	await page.mouse.move(0, 0);
+}
+
+test("native open-settings opens Settings, keeps it as is, and yields to other dialogs", async ({
+	page,
+}) => {
+	await installNativeShortcuts(page, "MacIntel");
+	await openFixtureProject(page);
+	await expectSettingsTooltip(page, "Settings (⌘,)");
+	const settings = page.getByTestId("settings-dialog");
+
+	await page.locator("body").click();
+	await page.keyboard.press("Meta+Comma");
+	await expect(settings).toHaveCount(0);
+
+	await openSettingsCommand(page);
+	await expect(settings).toBeVisible();
+	await page.getByTestId("settings-nav-terminal").click();
+	await openSettingsCommand(page);
+	await expect(settings).toBeVisible();
+	await expect(page.getByTestId("settings-nav-terminal")).toHaveAttribute("data-active", "true");
+	await page.keyboard.press("Escape");
+	await expect(settings).toHaveCount(0);
+
+	await pressPlatformShortcut(page, "n");
+	await expect(page.getByTestId("new-workspace-dialog")).toBeVisible();
+	await openSettingsCommand(page);
+	await expect(settings).toHaveCount(0);
+	await expect(page.getByTestId("new-workspace-dialog")).toBeVisible();
+});
+
+test("Windows Ctrl+, opens Settings, from a terminal too; Shift+Comma does not", async ({
+	page,
+}) => {
+	await installNativeShortcuts(page, "Win32");
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await expectSettingsTooltip(page, "Settings (Ctrl+,)");
+	const settings = page.getByTestId("settings-dialog");
+
+	await waitTerminalReady(page);
+	await visibleTerminal(page).locator(".xterm-helper-textarea").focus();
+	await page.keyboard.press("Control+Comma");
+	await expect(settings).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(settings).toHaveCount(0);
+
+	await page.getByTestId("chat-input").click();
+	await page.keyboard.press("Control+Shift+Comma");
+	await expect(settings).toHaveCount(0);
+	await page.keyboard.press("Control+Comma");
+	await expect(settings).toBeVisible();
+});
+
+test("the browser binds no Settings shortcut", async ({ page }) => {
+	await page.addInitScript(() => {
+		Object.defineProperty(Navigator.prototype, "platform", { get: () => "Linux x86_64" });
+	});
+	await openAppFresh(page);
+	await expectSettingsTooltip(page, "Settings");
+	await page.locator("body").click();
+	const prevented = await page.evaluate(() => {
+		const event = new KeyboardEvent("keydown", {
+			key: ",",
+			code: "Comma",
+			ctrlKey: true,
+			bubbles: true,
+			cancelable: true,
+		});
+		document.body.dispatchEvent(event);
+		return event.defaultPrevented;
+	});
+	expect(prevented).toBe(false);
+	await page.keyboard.press("Control+Comma");
+	await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
+});

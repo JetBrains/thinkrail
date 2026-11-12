@@ -10,20 +10,33 @@ tags: [host, public-surface-checked]
 
 ## Responsibility
 
-Run one child process to completion under a wall-clock budget, and return what it wrote. The single
+Run one child process to completion under a wall-clock budget, and return what it wrote — or, for a
+long-lived host-owned child, own the same spawn and tree-kill mechanics without a deadline. The single
 answer to "how does this host spawn something that might never come back" — the lifetime mechanics only,
 never what a particular child's output means.
 
 ## Boundary
 
-- **Owns:** `runBounded(argv, { timeoutMs, cwd?, env?, stdout? })` →
-  `{ ok, out, err, timedOut, launchFailed, waitedMs }`: capture both streams and complete on the child's
+- **Owns:** `runBounded(argv, { timeoutMs, cwd?, env?, stdout?, signal?, idleTimeoutMs?, onStderr?, stdin? })` →
+  `{ ok, out, err, timedOut, launchFailed, waitedMs, aborted? }`: capture both streams and complete on the child's
   **exit**; stdout defaults to decoded text, while `stdout: "bytes"` preserves it as `Uint8Array` for
   callers reading opaque content (stderr remains text diagnostics). POSIX children are detached
-  process-group leaders, while Windows children retain a nonvisual console. Expiry kills the POSIX group
-  or the direct Windows child. A failed launch is a result (`ok: false`, `launchFailed: true`, the launch
-  error as `err`), never a throw; callers can distinguish infrastructure failure from a child that ran
-  and exited nonzero.
+  process-group leaders, while Windows children retain a nonvisual console. Expiry or cancellation kills
+  the POSIX group; Windows asynchronously runs `taskkill /PID <pid> /T /F` with a five-second budget,
+  waits for it to exit, and falls back to killing the direct child if taskkill fails. A failed launch is a result (`ok: false`,
+  `launchFailed: true`, the launch error as `err`), never a throw; callers can distinguish infrastructure
+  failure from a child that ran
+  and exited nonzero. A pre-aborted `signal` launches nothing. An in-flight abort competes with exit and
+  expiry. Both abort and expiry stop the tree and wait for the direct child's exit before returning,
+  so callers may safely clean up a partial clone directory. Only cancellation carries `aborted: true` (`ok: false`, neither
+  timeout nor launch failure), retaining captured stdout/stderr with the same drain grace. Once exit or
+  expiry wins, later aborts have no effect; the listener is removed before draining.
+  **`idleTimeoutMs`** is a second, resettable deadline: any stdout or stderr bytes restart it, and its expiry
+  is reported exactly like `timeoutMs` (`timedOut: true`, tree killed) — the bound for a child that may
+  legitimately run for hours as long as it keeps talking (a large `git checkout --progress`).
+  **`onStderr`** receives each decoded stderr chunk as it arrives (the full text is still captured in
+  `err`); it is a pass-through, never parsed here, and a callback that throws is ignored so the drain and the
+  idle deadline keep working.
 - **Also owns:** `streamBounded(argv, { timeoutMs, cwd?, env? })` → `{ stdout, exited }` — the same
   spawn, deadline, group kill and stderr capture, for the one caller that must relay a child's stdout
   while it is still being produced (the host's `/blob` route). Completion is still the child's exit,
@@ -34,9 +47,27 @@ never what a particular child's output means.
   to the exit, and only the hang is bounded. The `stdout` stream **closes** only after a zero exit and
   **errors** after a nonzero exit, an expiry or a failed launch, so a consumer can never mistake a
   truncated relay for a complete one; cancelling the stream kills the child. `exited` resolves to the
-  same shape `runBounded` returns, minus `out`.
-- **Public surface:** `runBounded`, `streamBounded`, `BoundedRun`, `BoundedBytesRun`, `BoundedRunOptions`,
-  `BoundedBytesRunOptions`, `BoundedStream`, `BoundedStreamOptions`.
+  same shape `runBounded` returns, minus `out`. Streaming does not accept an abort signal; consumers
+  cancel its stdout stream instead.
+- **Also owns:** `spawnSupervised(argv, { cwd?, env? })` → `{ pid, exited, stop, stderrTail }` for
+  the one long-lived host-owned child (the `speech` engine).
+  - It uses the same spawn shape: POSIX group leader, Windows hidden but not detached, stdin ignored,
+    and both pipes drained from spawn. Stdout is discarded, and the last 4 KB of stderr is kept for
+    diagnosis.
+  - It has no deadline; the caller owns the lifetime. `stop()` runs the same tree kill as expiry and
+    resolves on the direct child's exit.
+  - `exited` is the exit code, or `null` after a signal or a failed launch, and is never a throw.
+  - `exitWithParent` (POSIX only) runs the child under a tiny `/bin/sh` watchdog.
+    - The watchdog holds a stdin pipe from the host and kills the child when that pipe reaches EOF.
+      That happens when the host dies, even by SIGKILL, which no exit handler sees.
+    - It passes the child's exit code through. A child killed by a signal makes the watchdog re-raise
+      that signal on itself, so `exited` stays `null` as for an unwatched child. The group kill still
+      stops both.
+    - Why it exists: Playwright and crash-killed hosts left detached engines holding ~1 GB each,
+      found running hours later.
+- **Public surface:** `runBounded`, `streamBounded`, `spawnSupervised`, `BoundedRun`, `BoundedBytesRun`,
+  `BoundedRunOptions`, `BoundedBytesRunOptions`, `BoundedStream`, `BoundedStreamOptions`, `Supervised`,
+  `SupervisedOptions`.
 - **Allowed deps:** Bun/Node process APIs. Nothing else — it knows no feature, no wire type, no
   persistence.
 - **Forbidden:** message wording, retry, truncation, or any policy about a specific program. `git`'s
@@ -48,7 +79,7 @@ never what a particular child's output means.
     would grow this surface for one caller in another package.
   - `dialog`'s `selectDirectory` (`dialog.ts`) — still the EOF-gated shape this module replaces, around
     `zenity`/`kdialog`/`osascript`, whose forked helpers inherit stdio. Unmigrated because a picker's real
-    budget is a human at a dialog: it needs a cancellation seam, which `runBounded` does not offer.
+    budget is a human at a dialog: wiring its lifetime to the runner's cancellation seam is still deferred.
 
   `github`'s `githubAuthStatus` (`github.ts`) used to be a third — a `spawnSync` HTTPS call on the single
   event loop — until it moved onto `runBounded`, which is also why `ghSetupProblem` no longer hand-rolls its
@@ -57,7 +88,7 @@ never what a particular child's output means.
 
   The census above is about *unbounded waits*, not about every spawn in the repo — the rest are already
   bounded or cannot wait on anything: `git`'s sync `git()` and `terminal/shellBusy` go through
-  `@thinkrail/shared/spawn`'s `spawnSyncCaptured` (`shared/shellEnv` keeps its own `Bun.spawnSync` — a
+  `@thinkrail/shared/spawn`'s `spawnSyncCaptured` (`shared/shellEnv` keeps its own timed `Bun.spawn` — a
   win32 no-op), and `editors`, `cli/bootstrap` and `cli/powershell` are fire-and-forget
   `@thinkrail/shared/spawn` `spawnDetached`s whose output nobody reads. `trash`'s helper `execFile` is the
   one true straggler: unbounded, but a local trash helper with no network and no prompt, so it fails the
@@ -76,7 +107,7 @@ never what a particular child's output means.
   makes the grace run to full term every time. A `git fetch` that answered at 54.9s of its 55s came back as
   the stalled wording with `ok: false`, and its healthy process group was SIGKILLed on the way out. Pinned
   by a test whose child exits immediately behind a pipe-holding grandchild under a 250ms budget.
-- **The drain grace (250ms) runs on *both* outcomes, exit and expiry.** It cannot truncate the child's own
+- **The drain grace (250ms) runs on exit, expiry and cancellation.** It cannot truncate the child's own
   output: a pipe holds at most its buffer, and a child that writes more than that is *blocked* until the
   reader drains it — so at exit everything left is already buffered and drains in microseconds; the grace
   only covers scheduler latency. Anything arriving after it can only come from a process that is not our
@@ -120,14 +151,15 @@ never what a particular child's output means.
   a fast legible failure beats a prompt only the launching shell can see. It also puts the child outside the
   host terminal's signal group, so the budget — never a `Ctrl-C` on the host — is what ends a stalled call.
   Surfacing the passphrase request in the UI (#209's headline ask, as opposed to its "at minimum" clause)
-  stays unbuilt and needs the cancellation seam `dialog` wants above.
+  stays unbuilt; the runner's cancellation seam does not itself provide a prompt UI.
 - **Windows children are hidden, not detached.** `windowsHide: true` with `detached: false` preserves a
   nonvisual console for ordinary descendants to inherit. Detachment removes that console: the immediate
   child stays hidden, but a helper it launches can allocate a visible console. This is why a focus-triggered
   `gh` lookup could still flash `tzutil`, Git, and SSH windows despite hiding the direct child. Windows
-  does not support the POSIX group-kill path; expiry still terminates only the direct child, not a promised
-  whole tree. Non-detached children participate in libuv's normal job lifetime; this runner is for bounded
-  host-owned work, not independently surviving daemons. The native Windows regression uses a no-console
+  does not support the POSIX group-kill path; expiry and stream cancellation use the same asynchronous
+  taskkill tree termination as abort. Direct-child fallback cannot guarantee termination of descendants.
+  Non-detached children participate in libuv's normal job lifetime; this runner is for bounded host-owned
+  work, not independently surviving daemons. The native Windows regression uses a no-console
   driver, the real runner, and an ordinary console grandchild, with a detached positive control. It checks
   native console ownership/window state rather than option presence, output success, or browser DOM.
 - **The env defaults to the live `process.env`, not the launch-time snapshot** — `boot`'s
@@ -135,9 +167,10 @@ never what a particular child's output means.
   from the snapshot silently misses that repair. Both halves are pinned separately — a caller's `env`/`cwd`
   arriving at the child, and a post-startup mutation being visible to one spawned without `env` — because a
   test that only asserts the defaults cannot tell the two apart.
-- `stdin` is always `ignore`, and both output streams are always piped and **read from the moment of
-  spawn**; text is decoded incrementally and byte stdout is accumulated without decoding — an undrained
-  pipe is how a chatty child deadlocks. The readers are
+- `stdin` is `ignore` unless `runBounded`'s caller passes a `Blob`, which Bun writes while the output
+  streams drain (a child that exits without reading it is still an ordinary exit). Both output streams are
+  always piped and **read from the moment of spawn**; text is decoded incrementally and byte stdout is
+  accumulated without decoding — an undrained pipe is how a chatty child deadlocks. The readers are
   cancelled once the outcome is decided *and* the grace above has run, never before it. Every
   timer is `unref`'d, so a bounded wait never holds shutdown open, and `waitedMs` comes from
   `performance.now()`, so a clock adjustment cannot render a negative wait.

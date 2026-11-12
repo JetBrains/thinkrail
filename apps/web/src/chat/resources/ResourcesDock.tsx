@@ -1,40 +1,91 @@
 import {
 	RiArrowDownSLine,
 	RiArrowUpSLine,
+	RiCheckLine,
 	RiLoader4Line,
 	RiRobot2Line,
 	RiTerminalBoxLine,
 } from "@remixicon/react";
 import type { BackgroundCommandSummary, SubagentResourceSummary } from "@thinkrail/contracts";
-import { useState } from "react";
-import { actionKey, type ResourceActions, ResourceRow, sortLive, toResources } from "./resourceRow";
+import { useT } from "@thinkrail/locales/react";
+import { cn } from "@thinkrail/ui/utils";
+import {
+	actionKey,
+	type Resource,
+	type ResourceActions,
+	ResourceRow,
+	type ResourcesStaleness,
+	resourceId,
+	sortLive,
+	toResources,
+} from "./resourceRow";
 
 const EXPANDED_ROW_LIMIT = 4;
 
 export function ResourcesDock({
 	commands,
 	subagents,
+	finishedCount,
+	collapsed: collapsedChoice,
+	onCollapsedChange,
 	now,
 	authoritative,
+	staleness = null,
 	actions,
 	onInspect,
+	onOpenFinished,
 	onStopCommand,
 	onStopSubagent,
 }: {
 	commands: BackgroundCommandSummary[];
 	subagents: SubagentResourceSummary[];
+	finishedCount: number;
+	collapsed: boolean | null;
+	onCollapsedChange: (collapsed: boolean) => void;
 	now: number;
 	authoritative: boolean;
+	staleness?: ResourcesStaleness | null;
 	actions: ResourceActions;
 	onInspect: (resourceId: string) => void;
+	onOpenFinished: () => void;
 	onStopCommand: (commandId: string) => void;
 	onStopSubagent: (childSessionId: string) => void;
 }) {
-	const [collapsedChoice, setCollapsedChoice] = useState<boolean | null>(null);
+	const t = useT();
+	const stop = (resource: Resource) =>
+		resource.kind === "command"
+			? onStopCommand(resource.summary.id)
+			: onStopSubagent(resource.summary.childSessionId);
 	const rows = sortLive(toResources(commands, subagents));
-	if (rows.length === 0) return null;
-	const collapsed = collapsedChoice ?? rows.length > EXPANDED_ROW_LIMIT;
+	if (rows.length === 0 && finishedCount === 0) return null;
+	const live = rows.length > 0;
+	const collapsed = live && (collapsedChoice ?? rows.length > EXPANDED_ROW_LIMIT);
 	const Chevron = collapsed ? RiArrowUpSLine : RiArrowDownSLine;
+	const activeLabel = (
+		<>
+			{!authoritative ? (
+				<RiLoader4Line className="size-12 shrink-0 animate-spin motion-reduce:animate-none" />
+			) : (
+				<span
+					aria-hidden
+					className="size-6 shrink-0 rounded-full bg-primary motion-safe:animate-working"
+				/>
+			)}
+			<span>
+				{authoritative
+					? t("resources.dock.active", { count: rows.length })
+					: staleness === "disconnected"
+						? t("resources.dock.activeReconnecting", { count: rows.length })
+						: staleness === "refreshFailed" || staleness === "unavailable"
+							? t("resources.dock.activeOutOfDate", { count: rows.length })
+							: t("resources.dock.activeUpdating", { count: rows.length })}
+			</span>
+		</>
+	);
+	const lineClass =
+		"flex min-h-28 min-w-0 items-center gap-8 rounded-sm px-8 text-text-muted tr-text-metadata";
+	const controlClass =
+		"outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary";
 	return (
 		<div
 			data-testid="resources-dock"
@@ -51,56 +102,53 @@ export function ResourcesDock({
 							authoritative={authoritative}
 							action={actions[actionKey(resource)]}
 							stopAllPending={!!actions.all?.pending}
-							onSelect={() =>
-								onInspect(
-									resource.kind === "command"
-										? resource.summary.id
-										: resource.summary.childSessionId,
-								)
-							}
-							onStop={() =>
-								resource.kind === "command"
-									? onStopCommand(resource.summary.id)
-									: onStopSubagent(resource.summary.childSessionId)
-							}
+							onSelect={() => onInspect(resourceId(resource))}
+							onStop={() => stop(resource)}
 						/>
 					))}
 				</ul>
 			)}
-			<button
-				type="button"
-				data-testid="resources-dock-toggle"
-				aria-expanded={!collapsed}
-				onClick={() => setCollapsedChoice(!collapsed)}
-				className="flex min-h-28 w-full items-center gap-8 rounded-sm px-8 text-text-muted tr-text-metadata outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-			>
-				{authoritative ? (
-					<span
-						aria-hidden
-						className="size-6 shrink-0 rounded-full bg-primary motion-safe:animate-working"
-					/>
-				) : (
-					<RiLoader4Line className="size-12 shrink-0 animate-spin motion-reduce:animate-none" />
-				)}
-				<span>
-					{rows.length} active{authoritative ? "" : " · reconnecting"}
-				</span>
-				{commands.length > 0 ? (
-					<span className="inline-flex items-center gap-4">
-						<RiTerminalBoxLine className="size-12" />
-						{commands.length}
-					</span>
+			<div className="flex min-w-0 items-center gap-4">
+				{live ? (
+					<button
+						type="button"
+						data-testid="resources-dock-toggle"
+						aria-expanded={!collapsed}
+						onClick={() => onCollapsedChange(!collapsed)}
+						className={cn(lineClass, controlClass, "shrink-0")}
+					>
+						{activeLabel}
+						{commands.length > 0 ? (
+							<span className="inline-flex items-center gap-4">
+								<RiTerminalBoxLine className="size-12" />
+								{commands.length}
+							</span>
+						) : null}
+						{subagents.length > 0 ? (
+							<span className="inline-flex items-center gap-4">
+								<RiRobot2Line className="size-12" />
+								{subagents.length}
+							</span>
+						) : null}
+						<Chevron className="size-14 shrink-0" />
+					</button>
 				) : null}
-				{subagents.length > 0 ? (
-					<span className="inline-flex items-center gap-4">
-						<RiRobot2Line className="size-12" />
-						{subagents.length}
-					</span>
+				{finishedCount > 0 ? (
+					<button
+						type="button"
+						data-testid="resources-dock-finished"
+						onClick={onOpenFinished}
+						className={cn(lineClass, controlClass, "flex-1")}
+					>
+						<RiCheckLine className="size-14 shrink-0" />
+						<span className="whitespace-nowrap">
+							{t("resources.dock.finished", { count: finishedCount })}
+						</span>
+						<span className="flex-1" />
+						<span className="truncate text-text-subtle">{t("resources.dock.open")}</span>
+					</button>
 				) : null}
-				<span className="flex-1" />
-				<span className="text-text-subtle">{collapsed ? "show" : "hide"}</span>
-				<Chevron className="size-14 shrink-0" />
-			</button>
+			</div>
 		</div>
 	);
 }

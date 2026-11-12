@@ -1,16 +1,21 @@
 import {
 	assistantToolCallsAreExecutable,
 	type BackgroundCommandCompletionDetails,
-	type DelegationRunDetails,
+	type ChatHandoffDetails,
+	type ContinueInWorkspaceRequestDetails,
+	completionDelivery,
 	type GitDiffScope,
 	type GitFileChange,
 	type ReviewFixDetails,
+	type SubagentCompletionDetails,
 	type TurnChangeSet,
 	type UserMessage,
 } from "@thinkrail/contracts";
 import { strArg } from "@thinkrail/extension-api/web";
 import { projectRelativePath } from "../lib";
+import { type AssistantFailure, assistantFailure } from "./assistantFailure";
 import type { ChatMessageOrder } from "./chatPreferences";
+import { pulledResult, resultKey } from "./pulledResults";
 import { resolveProminence } from "./toolRegistry";
 import type { ChatTurn, CompactionState, FailureRecovery, ToolResultState } from "./types";
 
@@ -41,7 +46,13 @@ export type ActivityStep = RoutineToolStep | ThinkingStep;
 export type ChatRow =
 	| { kind: "user"; id: string; message: UserMessage; attachmentNames?: string[] }
 	| { kind: "system"; id: string; text: string }
-	| { kind: "error"; id: string; text: string; recovery?: FailureRecovery }
+	| {
+			kind: "error";
+			id: string;
+			text: string;
+			failure?: AssistantFailure;
+			recovery?: FailureRecovery;
+	  }
 	| ({ kind: "compaction"; id: string } & CompactionState)
 	| {
 			kind: "retry";
@@ -53,8 +64,10 @@ export type ChatRow =
 	  }
 	| { kind: "markdown"; id: string; text: string }
 	| { kind: "backgroundCommandCompletion"; id: string; details: BackgroundCommandCompletionDetails }
-	| { kind: "subagentCompletion"; id: string; details: DelegationRunDetails; text: string }
+	| { kind: "subagentCompletion"; id: string; details: SubagentCompletionDetails; text: string }
 	| { kind: "reviewFix"; id: string; details: ReviewFixDetails; text: string }
+	| { kind: "continuationRequest"; id: string; details: ContinueInWorkspaceRequestDetails }
+	| { kind: "handoff"; id: string; details: ChatHandoffDetails }
 	| ({ kind: "tool"; id: string } & ToolCallData)
 	| {
 			kind: "activity";
@@ -63,6 +76,18 @@ export type ChatRow =
 			live: boolean;
 	  }
 	| { kind: "divider"; id: string; data: TurnDividerData };
+
+export function rowsHaveToolCall(rows: readonly ChatRow[], toolCallId: string): boolean {
+	return rows.some((row) => {
+		if (row.kind === "tool") return row.toolCallId === toolCallId;
+		if (row.kind !== "activity") return false;
+		return row.steps.some((step) =>
+			step.kind === "tool"
+				? step.toolCallId === toolCallId
+				: step.tools.some((tool) => tool.toolCallId === toolCallId),
+		);
+	});
+}
 
 export function projectRows(rows: ChatRow[], messageOrder: ChatMessageOrder): ChatRow[] {
 	if (messageOrder === "oldest-first" || rows.length < 2) return rows;
@@ -105,6 +130,28 @@ function nestRoutineRun(steps: ActivityStep[]): ActivityStep[] {
 	return nested;
 }
 
+export function opensRound(turn: ChatTurn): boolean {
+	switch (turn.kind) {
+		case "user":
+		case "reviewFix":
+		case "continuationRequest":
+		case "handoff":
+			return true;
+		case "backgroundCommandCompletion":
+		case "subagentCompletion":
+			return completionDelivery(turn.details) !== "run";
+		default:
+			return false;
+	}
+}
+
+function roundStartMs(turn: ChatTurn): number | null {
+	if (!opensRound(turn)) return null;
+	const at =
+		turn.kind === "user" ? turn.message.timestamp : "timestamp" in turn ? turn.timestamp : null;
+	return typeof at === "number" && Number.isFinite(at) ? at : null;
+}
+
 export function deriveRows(
 	turns: ChatTurn[],
 	toolResults: Record<string, ToolResultState>,
@@ -115,6 +162,11 @@ export function deriveRows(
 ): ChatRow[] {
 	const rows: ChatRow[] = [];
 	let run: ActivityStep[] = [];
+	const received = new Set<string>();
+	for (const turn of turns) {
+		const key = resultKey(turn);
+		if (key) received.add(key);
+	}
 
 	const flushRun = (live = false) => {
 		const first = run[0];
@@ -154,7 +206,16 @@ export function deriveRows(
 						dead,
 						streaming: turn.streaming,
 					};
-					if (resolveProminence(block.name).prominence === "primary") {
+					const pulled = pulledResult(block.name, block.arguments, data.tool);
+					if (pulled && !received.has(pulled.key)) {
+						received.add(pulled.key);
+						flushRun();
+						rows.push(
+							pulled.kind === "subagentCompletion"
+								? { kind: pulled.kind, id: block.id, details: pulled.details, text: pulled.text }
+								: { kind: pulled.kind, id: block.id, details: pulled.details },
+						);
+					} else if (resolveProminence(block.name).prominence === "primary") {
 						flushRun();
 						rows.push({ kind: "tool", id: block.id, ...data });
 					} else {
@@ -174,13 +235,14 @@ export function deriveRows(
 					});
 					break;
 				case "system":
-					rows.push({ kind: "system", id: turn.id, text: turn.text });
+					if (turn.text !== undefined) rows.push({ kind: "system", id: turn.id, text: turn.text });
 					break;
 				case "error":
 					rows.push({
 						kind: "error",
 						id: turn.id,
 						text: turn.text,
+						...(turn.failure ? { failure: turn.failure } : {}),
 						...(turn.recovery ? { recovery: turn.recovery } : {}),
 					});
 					break;
@@ -198,7 +260,7 @@ export function deriveRows(
 					});
 					break;
 				case "backgroundCommandCompletion":
-					rows.push(turn);
+					rows.push({ kind: "backgroundCommandCompletion", id: turn.id, details: turn.details });
 					break;
 				case "subagentCompletion":
 					rows.push({
@@ -211,11 +273,16 @@ export function deriveRows(
 				case "reviewFix":
 					rows.push({ kind: "reviewFix", id: turn.id, details: turn.details, text: turn.text });
 					break;
+				case "continuationRequest":
+					rows.push({ kind: "continuationRequest", id: turn.id, details: turn.details });
+					break;
+				case "handoff":
+					rows.push({ kind: "handoff", id: turn.id, details: turn.details });
+					break;
 			}
 		}
-		const roundEnded =
-			turn.kind !== "user" &&
-			(turns[i + 1]?.kind === "user" || (i === turns.length - 1 && !isStreaming));
+		const next = turns[i + 1];
+		const roundEnded = !opensRound(turn) && (next ? opensRound(next) : !isStreaming);
 		if (roundEnded) {
 			flushRun();
 			const data = turnDivider(turns, i, isSpec, agentTurns, workspaceRoot);
@@ -232,6 +299,7 @@ export interface TurnReceipt {
 }
 
 export interface TurnDividerData {
+	outcome: "done" | "stopped" | "error" | null;
 	elapsedMs: number | null;
 	toolCount: number;
 	specs: string[];
@@ -276,19 +344,21 @@ export function turnDivider(
 	agentTurns: readonly TurnChangeSet[] = [],
 	workspaceRoot?: string,
 ): TurnDividerData | null {
-	let userIdx = -1;
+	let openerIdx = -1;
 	for (let i = endIndex; i >= 0; i--) {
-		if (turns[i]?.kind === "user") {
-			userIdx = i;
+		const turn = turns[i];
+		if (turn && opensRound(turn)) {
+			openerIdx = i;
 			break;
 		}
 	}
-	if (userIdx < 0) return null;
+	const opener = turns[openerIdx];
+	if (!opener) return null;
 
 	let toolCount = 0;
 	const written = new Map<string, boolean>();
 	let endMs: number | null = null;
-	for (let i = userIdx + 1; i <= endIndex; i++) {
+	for (let i = openerIdx + 1; i <= endIndex; i++) {
 		const turn = turns[i];
 		if (turn?.kind === "assistant") {
 			if (turn.message.timestamp) endMs = turn.message.timestamp;
@@ -308,13 +378,12 @@ export function turnDivider(
 		}
 	}
 
-	const user = turns[userIdx];
-	const startMs = user?.kind === "user" ? user.message.timestamp : null;
+	const startMs = roundStartMs(opener);
 	const elapsedMs = startMs != null && endMs != null ? endMs - startMs : null;
 
-	const nextUser = turns[endIndex + 1];
-	const nextStartMs = nextUser?.kind === "user" ? (nextUser.message.timestamp ?? null) : null;
-	const receipt = matchTurnReceipt(agentTurns, startMs ?? null, nextStartMs);
+	const next = turns[endIndex + 1];
+	const nextStartMs = next && opensRound(next) ? roundStartMs(next) : null;
+	const receipt = matchTurnReceipt(agentTurns, startMs, nextStartMs);
 	const specs: string[] = [];
 	const changedFiles: string[] = [];
 	for (const [path, isSpecPath] of written) (isSpecPath ? specs : changedFiles).push(path);
@@ -326,7 +395,35 @@ export function turnDivider(
 			} else changedFiles.push(change.path);
 		}
 	}
-	return { elapsedMs, toolCount, specs, changedFiles, receipt };
+	return {
+		outcome: roundOutcome(turns, openerIdx, endIndex),
+		elapsedMs,
+		toolCount,
+		specs,
+		changedFiles,
+		receipt,
+	};
+}
+
+function roundOutcome(
+	turns: ChatTurn[],
+	openerIdx: number,
+	endIndex: number,
+): TurnDividerData["outcome"] {
+	let closer: "done" | "error" | null = null;
+	for (let i = endIndex; i > openerIdx; i--) {
+		const turn = turns[i];
+		if (turn?.kind === "assistant") {
+			const { message } = turn;
+			if (assistantFailure(message)) return "error";
+			if (message.stopReason === "aborted") return "stopped";
+			return closer ?? (message.stopReason === "stop" ? "done" : null);
+		}
+		if (closer) continue;
+		if (turn?.kind === "system" && turn.text === undefined) closer = "done";
+		else if (turn?.kind === "error" && turn.failure) closer = "error";
+	}
+	return closer;
 }
 
 export function rowIndexForTurn(rows: ChatRow[], turnId: string): number {
@@ -341,11 +438,11 @@ function valueEqual(a: unknown, b: unknown): boolean {
 		for (let i = 0; i < a.length; i++) if (!valueEqual(a[i], b[i])) return false;
 		return true;
 	}
-	const aKeys = Object.keys(a as Record<string, unknown>);
-	const bKeys = Object.keys(b as Record<string, unknown>);
+	const aKeys = Object.keys(a);
+	const bKeys = Object.keys(b);
 	if (aKeys.length !== bKeys.length) return false;
 	for (const key of aKeys) {
-		if (!Object.hasOwn(b as Record<string, unknown>, key)) return false;
+		if (!Object.hasOwn(b, key)) return false;
 		if (!valueEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]))
 			return false;
 	}

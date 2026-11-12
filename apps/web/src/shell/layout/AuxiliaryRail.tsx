@@ -1,3 +1,6 @@
+import type { MessageKey } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
+import { buttonDataAttributes, buttonVariants } from "@thinkrail/ui/button";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { Fragment, forwardRef, type ReactNode, useRef, useState } from "react";
@@ -15,15 +18,30 @@ export interface AuxiliaryRailControlProps {
 	onFocus: () => void;
 }
 
+const RAIL_TOOLBAR_LABELS = {
+	left: "workbench.rail.leftTools",
+	right: "workbench.rail.rightTools",
+	bottom: "workbench.rail.bottomTools",
+} as const satisfies Record<LayoutAuxiliaryRegion, MessageKey>;
+
 export function railEntryFrameClass(region: LayoutAuxiliaryRegion | "center"): string {
 	return cn(
-		"relative flex w-32 shrink-0 items-center rounded-sm text-text-muted data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default",
+		"relative flex w-32 shrink-0 items-center justify-center",
 		region === "bottom" ? "h-panel-header-control" : "h-32",
 	);
 }
 
-export const RAIL_ENTRY_BUTTON_CLASS =
-	"relative flex h-full min-w-0 flex-1 items-center justify-center rounded-sm outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary";
+export const RAIL_ENTRY_BUTTON_CLASS = buttonVariants({
+	variant: "ghost",
+	size: "m",
+	shape: "icon",
+});
+
+export function railEntryButtonProps(active: boolean) {
+	return buttonDataAttributes({ variant: "ghost", size: "m", iconOnly: true, selected: active });
+}
+
+export const RAIL_ICON = "size-16 shrink-0";
 
 export function railTooltipSide(
 	region: LayoutAuxiliaryRegion | "center",
@@ -40,13 +58,13 @@ export const AuxiliaryRailToolButton = forwardRef<
 		onActivate: () => void;
 	}
 >(function AuxiliaryRailToolButton({ entry, controls, control, onActivate }, ref) {
+	const t = useT();
 	const { region } = entry;
 	const active = entry.selected && entry.expanded;
 	const tab = toolTab(entry.tool);
-	const name = layoutTabName(tab);
+	const name = layoutTabName(t, tab);
 	return (
 		<div data-active={active} className={railEntryFrameClass(region)}>
-			{active ? <AuxiliaryRailIndicator region={region} /> : null}
 			<IconTooltip label={name} side={railTooltipSide(region)}>
 				<button
 					ref={ref}
@@ -56,31 +74,17 @@ export const AuxiliaryRailToolButton = forwardRef<
 					aria-label={name}
 					aria-pressed={active}
 					aria-controls={controls}
+					{...railEntryButtonProps(active)}
 					{...control}
 					onClick={onActivate}
 					className={RAIL_ENTRY_BUTTON_CLASS}
 				>
-					{tabIcon(tab, active)}
+					{tabIcon(tab, active, RAIL_ICON)}
 				</button>
 			</IconTooltip>
 		</div>
 	);
 });
-
-export function AuxiliaryRailIndicator({ region }: { region: LayoutAuxiliaryRegion }) {
-	return (
-		<span
-			aria-hidden="true"
-			data-testid="rail-selection-indicator"
-			className={cn(
-				"pointer-events-none absolute rounded-full bg-primary",
-				region === "bottom" ? "bottom-0 left-8 h-2 w-16" : "top-8 h-16 w-2",
-				region === "left" && "-left-4",
-				region === "right" && "-right-4",
-			)}
-		/>
-	);
-}
 
 export function AuxiliaryRail({
 	region,
@@ -95,6 +99,7 @@ export function AuxiliaryRail({
 	renderBoundary?: (paneIndex: number) => ReactNode;
 	trailing?: ReactNode;
 }) {
+	const t = useT();
 	const root = useRef<HTMLDivElement>(null);
 	const [focused, setFocused] = useState<string | null>(null);
 	const activeKey = entries.some((entry) => entry.key === focused)
@@ -117,7 +122,7 @@ export function AuxiliaryRail({
 		<div
 			ref={root}
 			role="toolbar"
-			aria-label={`${region[0]?.toUpperCase()}${region.slice(1)} tools`}
+			aria-label={t(RAIL_TOOLBAR_LABELS[region])}
 			aria-orientation={horizontal ? "horizontal" : "vertical"}
 			data-testid={region === "bottom" ? "bottom-tool-rail" : `${region}-layout-rail`}
 			className={cn(

@@ -10,9 +10,13 @@ export function setOneShotRunner(fn: OneShotRunner | null): void {
 
 const PLAN_SUMMARY_SYSTEM =
 	"Summarize a COMPLETED work plan for a reviewer, from its finished steps (each step's title and the " +
-	"agent's own note/verification). Write a short handoff in GitHub Markdown: a one-sentence lead, then a " +
-	"compact bullet list of what shipped across the WHOLE plan \u2014 not a single step. No headings, no " +
-	"'Summary:' label, no preamble; never claim anything the steps don't state. Keep it under ~120 words.";
+	"agent's own note/verification), as the body of a pull request. Output GitHub Markdown with exactly " +
+	"three H2 sections in order and nothing before them: '## Summary' (what shipped and why in short " +
+	"prose), '## Changes' (plan-scale cross-cutting notes \u2014 migrations, scope drift, new/dropped deps, " +
+	"renames; write '_no cross-cutting notes_' if none), '## Testing' (end-to-end checks beyond " +
+	"per-step verification, each as a bullet in the shape 'check \u2192 result', or the honest " +
+	"'_not verified_'). No preamble before `## Summary`; never claim anything the steps don't state. " +
+	"Keep the whole body under ~160 words.";
 
 const PLAN_SUMMARY_TIMEOUT_MS = 20_000;
 const PLAN_SUMMARY_MAX_TOKENS = 400;
@@ -25,7 +29,7 @@ export interface PlanSummaryStep {
 }
 
 /**
- * Draft a completed plan's overall handoff note from its finished steps \u2014 best-effort, cheap-model,
+ * Draft a completed plan's overall handoff note from its finished steps — best-effort, cheap-model,
  * time-boxed. Returns Markdown prose or `null` (never throws) when nothing is authenticated, it times
  * out, there are no steps, or the output is unusable. The caller builds the step list (assist reads no
  * store state) and decides whether to persist the result.
@@ -73,7 +77,60 @@ export function toPlanSummary(raw: string): string | null {
 		.trim()
 		.slice(0, PLAN_SUMMARY_MAX_LENGTH)
 		.trim();
-	return hasTitleContent(text) ? text : null;
+	if (!hasTitleContent(text)) return null;
+	return ensurePrBodyShape(text);
+}
+
+function ensurePrBodyShape(text: string): string {
+	const sections = splitBySections(text);
+	if (sections.ordered) return text;
+	const summaryBody = sections.summary ?? (sections.preamble || "_no summary_");
+	const changesBody = sections.changes ?? "_no cross-cutting notes_";
+	const testingBody = sections.testing ?? "_not verified_";
+	return `## Summary\n\n${summaryBody}\n\n## Changes\n\n${changesBody}\n\n## Testing\n\n${testingBody}`;
+}
+
+interface Sections {
+	ordered: boolean;
+	preamble: string;
+	summary?: string;
+	changes?: string;
+	testing?: string;
+}
+
+function splitBySections(text: string): Sections {
+	const HEADING = /^## +(Summary|Changes|Testing)\b.*$/gim;
+	const matches = [...text.matchAll(HEADING)];
+	const spans = matches.map((m) => ({
+		name: m[1] as "Summary" | "Changes" | "Testing",
+		headingStart: m.index ?? 0,
+		bodyStart: (m.index ?? 0) + m[0].length,
+	}));
+	const body = (name: "Summary" | "Changes" | "Testing"): string | undefined => {
+		const idx = spans.findIndex((s) => s.name === name);
+		if (idx < 0) return undefined;
+		// Stop at the next heading so a later section cannot be absorbed when an earlier one is missing.
+		const end = spans[idx + 1]?.headingStart ?? text.length;
+		const span = spans[idx];
+		if (!span) return undefined;
+		const slice = text.slice(span.bodyStart, end).trim();
+		return slice || undefined;
+	};
+	const names = spans.map((s) => s.name);
+	const ordered =
+		names.length === 3 &&
+		names[0] === "Summary" &&
+		names[1] === "Changes" &&
+		names[2] === "Testing";
+	const preamble = text.slice(0, spans[0]?.headingStart ?? text.length).trim();
+	const out: Sections = { ordered, preamble };
+	const s = body("Summary");
+	const c = body("Changes");
+	const t = body("Testing");
+	if (s) out.summary = s;
+	if (c) out.changes = c;
+	if (t) out.testing = t;
+	return out;
 }
 
 function hasTitleContent(value: string): boolean {
@@ -82,4 +139,75 @@ function hasTitleContent(value: string): boolean {
 
 function clip(text: string, max: number): string {
 	return text.length <= max ? text : `${text.slice(0, max)}…`;
+}
+
+const PR_DESCRIPTION_SYSTEM =
+	"Write the description of a pull request from its branch facts: the commit subjects, a diff stat, " +
+	"and, when present, the author's work plan. Output GitHub Markdown only, no preamble and no code " +
+	"fence around the whole body. Explain what changed and why for a reviewer; never invent tests, " +
+	"issues, or behavior the facts do not show. When a TEMPLATE is given, reproduce its headings, " +
+	"checklists, and order exactly and fill each section's body; leave a section's placeholder text " +
+	"when the facts do not answer it. Without a template use '## Summary', '## Changes', '## Testing'. " +
+	"Keep it under ~300 words.";
+
+const PR_DESCRIPTION_TIMEOUT_MS = 30_000;
+const PR_DESCRIPTION_MAX_TOKENS = 900;
+const PR_DESCRIPTION_MAX_LENGTH = 6000;
+
+export interface PrDescriptionInput {
+	branch: string;
+	base: string;
+	commits: string[];
+	diffStat: string;
+	plan?: string | undefined;
+	template?: string | undefined;
+}
+
+/**
+ * Draft a PR/MR description from bounded branch facts — best-effort, cheap-model, time-boxed. Returns
+ * Markdown or `null` (never throws) when nothing is authenticated, it times out, there is nothing to
+ * describe, or the output is unusable. The caller gathers and bounds the input.
+ */
+export async function suggestPrDescription(input: PrDescriptionInput): Promise<string | null> {
+	const prompt = buildPrDescriptionPrompt(input);
+	if (!prompt) return null;
+	try {
+		const { text } = await runOneShot({
+			system: PR_DESCRIPTION_SYSTEM,
+			prompt,
+			tier: "cheap",
+			maxTokens: PR_DESCRIPTION_MAX_TOKENS,
+			signal: AbortSignal.timeout(PR_DESCRIPTION_TIMEOUT_MS),
+		});
+		return toPrDescription(text);
+	} catch {
+		return null;
+	}
+}
+
+function buildPrDescriptionPrompt(input: PrDescriptionInput): string | null {
+	const commits = input.commits.map((c) => c.trim()).filter(Boolean);
+	const stat = input.diffStat.trim();
+	if (commits.length === 0 && !stat) return null;
+	const parts = [`Branch: ${clip(input.branch, 200)} → ${clip(input.base, 200)}`];
+	if (commits.length > 0) {
+		parts.push(`Commits (oldest first):\n${commits.map((c) => `- ${clip(c, 200)}`).join("\n")}`);
+	}
+	if (stat) parts.push(`Diff stat:\n${clip(stat, 6000)}`);
+	const plan = input.plan?.trim();
+	if (plan) parts.push(`Work plan:\n${clip(plan, 4000)}`);
+	const template = input.template?.trim();
+	if (template) parts.push(`TEMPLATE:\n${clip(template, 6000)}`);
+	return parts.join("\n\n");
+}
+
+export function toPrDescription(raw: string): string | null {
+	const text = raw
+		.trim()
+		.replace(/^```(?:markdown|md)?\n/i, "")
+		.replace(/\n```$/, "")
+		.trim()
+		.slice(0, PR_DESCRIPTION_MAX_LENGTH)
+		.trim();
+	return hasTitleContent(text) ? text : null;
 }

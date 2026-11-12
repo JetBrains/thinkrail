@@ -8,6 +8,7 @@ import {
 	useSensor,
 	useSensors,
 } from "@dnd-kit/core";
+import { useT } from "@thinkrail/locales/react";
 import {
 	type ImperativePanelGroupHandle,
 	ResizableHandle,
@@ -15,7 +16,13 @@ import {
 	ResizablePanelGroup,
 } from "@thinkrail/ui/resizable";
 import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from "react";
-import { readLayoutNavigationClock, readLayoutSelection, tupleKey } from "../../lib";
+import {
+	type LayoutAttention,
+	nullProto,
+	readLayoutNavigationClock,
+	readLayoutSelection,
+	tupleKey,
+} from "../../lib";
 import { projectWorkbenchRatio, restoreWorkbenchRatio } from "./auxiliaryPresentation";
 import { closeRequestTarget } from "./closeRequest";
 import {
@@ -86,6 +93,7 @@ export type { LayoutTabFocusRequest, WorkbenchProps } from "./workbenchShared";
 
 export function Workbench({
 	workspaceId,
+	worktreePath,
 	document,
 	attention,
 	maxSideGroups,
@@ -104,10 +112,12 @@ export function Workbench({
 	readNavigationTick,
 	onRequestClose,
 	onRenameChat,
+	chatFirstPrompts,
 	onNewChat,
 	onNewTerminal,
 	onGestureCanceled,
 }: WorkbenchProps) {
+	const t = useT();
 	const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 	const [draggingTab, setDraggingTab] = useState<LayoutTab | null>(null);
 	const tabSelectionEpoch = useRef(0);
@@ -176,6 +186,7 @@ export function Workbench({
 						key: createLayoutId("focus"),
 						location,
 						...(result.focusTabId ? { tabId: result.focusTabId } : {}),
+						...(result.focusOnlyIfLost ? { onlyIfFocusLost: true } : {}),
 					});
 				}
 			}
@@ -221,8 +232,7 @@ export function Workbench({
 			if (location.area === "bottom") {
 				onAttentionChange({
 					...attention,
-					lastFocusedSideGroupId: Object.assign(
-						Object.create(null),
+					lastFocusedSideGroupId: nullProto<LayoutAttention["lastFocusedSideGroupId"]>(
 						attention.lastFocusedSideGroupId,
 						{ bottom: location.groupId },
 					),
@@ -315,14 +325,13 @@ export function Workbench({
 								nextAttention = {
 									...nextAttention,
 									lastFocusedCenterGroupId: focusLocation.groupId,
-									navigationClockByGroup: Object.assign(
-										Object.create(null),
+									navigationClockByGroup: nullProto<Record<string, number>>(
 										nextAttention.navigationClockByGroup,
 										{
 											[focusLocation.groupId]:
 												(readLayoutNavigationClock(nextAttention, focusLocation.groupId) ?? 0) + 1,
 										},
-									) as Record<string, number>,
+									),
 								};
 							}
 						}
@@ -413,7 +422,7 @@ export function Workbench({
 			case "split":
 				result =
 					tab.kind === "tool"
-						? { reason: "Tools stay in a side region." }
+						? { reason: t("workbench.layout.toolsStayInSide") }
 						: splitCenterGroup(document, target.groupId, target.direction, tab);
 				break;
 			case "auxiliary-edge":
@@ -426,7 +435,7 @@ export function Workbench({
 								target.index,
 								target.region === "bottom" ? maxBottomGroups : maxSideGroups,
 							)
-						: { reason: "That tab type cannot move to an auxiliary region." };
+						: { reason: t("workbench.drag.tabTypeAuxiliary") };
 				break;
 		}
 		if (isLayoutUnavailable(result)) return;
@@ -699,14 +708,11 @@ export function Workbench({
 				return;
 			}
 			if (target.location.area !== "center") {
-				onAttentionChange({
-					...currentAttention,
-					lastFocusedSideGroupId: Object.assign(
-						Object.create(null),
-						currentAttention.lastFocusedSideGroupId,
-						{ [target.location.area]: target.location.groupId },
-					),
-				});
+				const lastFocusedSideGroupId = nullProto<LayoutAttention["lastFocusedSideGroupId"]>(
+					currentAttention.lastFocusedSideGroupId,
+				);
+				lastFocusedSideGroupId[target.location.area] = target.location.groupId;
+				onAttentionChange({ ...currentAttention, lastFocusedSideGroupId });
 				setLocalFocusRequest({
 					workspaceId,
 					key: createLayoutId("focus-group"),
@@ -717,14 +723,13 @@ export function Workbench({
 			const nextAttention = {
 				...currentAttention,
 				lastFocusedCenterGroupId: target.location.groupId,
-				navigationClockByGroup: Object.assign(
-					Object.create(null),
+				navigationClockByGroup: nullProto<Record<string, number>>(
 					currentAttention.navigationClockByGroup,
 					{
 						[target.location.groupId]:
 							(readLayoutNavigationClock(currentAttention, target.location.groupId) ?? 0) + 1,
 					},
-				) as Record<string, number>,
+				),
 			};
 			onAttentionChange(nextAttention);
 			setLocalFocusRequest({
@@ -754,6 +759,7 @@ export function Workbench({
 	);
 	const shared: SharedGroupProps = {
 		workspaceId,
+		worktreePath,
 		document,
 		readAttention,
 		selectionEpochRef: tabSelectionEpoch,
@@ -774,6 +780,7 @@ export function Workbench({
 		onHideSide: hideSideRegion,
 		onRevealTool: revealMissingTool,
 		onRenameChat,
+		chatFirstPrompts,
 		canFocusAdjacentGroup,
 	};
 	const sideStack = (side: LayoutSide) => (
@@ -1038,7 +1045,7 @@ export function Workbench({
 				{draggingTab ? (
 					<div className="flex max-w-224 items-center gap-4 rounded-sm border border-primary bg-container-elevated-bg px-8 py-4 tr-text-ui text-text-default shadow-lg">
 						{tabIcon(draggingTab)}
-						<span className="truncate">{layoutTabName(draggingTab)}</span>
+						<span className="truncate">{layoutTabName(t, draggingTab, chatFirstPrompts)}</span>
 					</div>
 				) : null}
 			</DragOverlay>

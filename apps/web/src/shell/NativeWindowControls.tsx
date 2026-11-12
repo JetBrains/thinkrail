@@ -5,6 +5,7 @@ import {
 	RiSubtractLine,
 } from "@remixicon/react";
 import type { NativeWindowState } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 
 const BUTTON_CLASS =
@@ -23,6 +24,7 @@ export function NativeWindowControls({
 	onToggleMaximize(): void;
 	onClose(): void;
 }) {
+	const t = useT();
 	if (state.fullScreen) return null;
 	const MaximizeIcon = state.maximized ? RiCheckboxMultipleBlankLine : RiCheckboxBlankLine;
 	return (
@@ -33,7 +35,7 @@ export function NativeWindowControls({
 			<button
 				type="button"
 				data-testid="window-minimize"
-				aria-label="Minimize"
+				aria-label={t("shell.windowControls.minimize")}
 				onClick={onMinimize}
 				className={cn(BUTTON_CLASS, BUTTON_HOVER_CLASS)}
 			>
@@ -42,7 +44,9 @@ export function NativeWindowControls({
 			<button
 				type="button"
 				data-testid="window-maximize"
-				aria-label={state.maximized ? "Restore" : "Maximize"}
+				aria-label={
+					state.maximized ? t("shell.windowControls.restore") : t("shell.windowControls.maximize")
+				}
 				data-maximized={state.maximized}
 				onClick={onToggleMaximize}
 				className={cn(BUTTON_CLASS, BUTTON_HOVER_CLASS)}
@@ -52,7 +56,7 @@ export function NativeWindowControls({
 			<button
 				type="button"
 				data-testid="window-close"
-				aria-label="Close"
+				aria-label={t("common.close")}
 				onClick={onClose}
 				className={cn(BUTTON_CLASS, CLOSE_HOVER_CLASS)}
 			>

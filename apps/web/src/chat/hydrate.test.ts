@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import type { TranscriptMessage } from "@thinkrail/contracts";
-import { ASK_USER_ANSWERS_CUSTOM_TYPE } from "@thinkrail/contracts";
+import { TOOL_RESPONSE_CUSTOM_TYPE } from "@thinkrail/contracts";
 import { messagesToRuntime } from "./hydrate";
+import { deriveRows } from "./rows";
 import { readRunDetails } from "./tools/subagent/runDetails";
 
 type Message = TranscriptMessage;
@@ -71,6 +72,52 @@ test("an assistant turn that ended in a provider error hydrates a following erro
 	expect(err?.kind === "error" ? err.recovery : undefined).toBe("try-again");
 });
 
+test("a failed round keeps its error before a later user-stopped result that woke nobody", () => {
+	const user = { role: "user", content: "start it", timestamp: 1 } as const;
+	const failed = {
+		role: "assistant",
+		content: [],
+		stopReason: "error",
+		errorMessage: "provider overloaded",
+		timestamp: 2,
+	};
+	const stopped = {
+		role: "custom",
+		customType: "background-command-completion",
+		content: "Cancelled background command",
+		display: true,
+		timestamp: 3,
+		details: {
+			id: "bg-1",
+			sessionId: "s",
+			name: "e2e",
+			status: "stopped",
+			startedAt: 1,
+			finishedAt: 3,
+			exitCode: null,
+			output: { text: "", truncated: false },
+		},
+	};
+	const hydrated = messagesToRuntime([user, failed, stopped] as unknown as Message[]);
+	expect(hydrated.turns.map((t) => t.kind)).toEqual([
+		"user",
+		"assistant",
+		"error",
+		"backgroundCommandCompletion",
+	]);
+	expect(deriveRows(hydrated.turns, hydrated.toolResults, false).map((r) => r.kind)).toEqual([
+		"user",
+		"error",
+		"divider",
+		"backgroundCommandCompletion",
+	]);
+
+	const woke = { ...stopped, details: { ...stopped.details, status: "completed", exitCode: 0 } };
+	expect(messagesToRuntime([user, failed, woke] as unknown as Message[]).turns.at(-1)?.kind).toBe(
+		"error",
+	);
+});
+
 test("an assistant turn that ended at length hydrates a visible truncation failure", () => {
 	const { turns } = messagesToRuntime([
 		{ role: "user", content: "hi", timestamp: 1 },
@@ -79,7 +126,7 @@ test("an assistant turn that ended at length hydrates a visible truncation failu
 
 	expect(turns.map((turn) => turn.kind)).toEqual(["user", "assistant", "error"]);
 	const error = turns.find((turn) => turn.kind === "error");
-	expect(error?.kind === "error" && error.text.toLowerCase()).toContain("truncated");
+	expect(error?.kind === "error" && error.failure).toBe("truncated");
 	expect(error?.kind === "error" ? error.recovery : undefined).toBe("try-again");
 });
 
@@ -225,6 +272,7 @@ test("a subagent-completion custom message hydrates as its own subagentCompletio
 	const turn = turns[1];
 	expect(turn?.kind === "subagentCompletion" && turn.details.childSessionId).toBe("child-1");
 	expect(turn?.kind === "subagentCompletion" && turn.text).toContain("the report");
+	expect(turn?.kind === "subagentCompletion" && turn.timestamp).toBe(2);
 	expect(turnIdByMessageIndex[1]).toBe(turns[1]?.id ?? null);
 });
 
@@ -253,6 +301,47 @@ test("a todo-review-fix custom message hydrates as its own reviewFix turn", () =
 	expect(turn?.kind === "reviewFix" && turn.details.comments[0]?.id).toBe("c_1");
 	expect(turn?.kind === "reviewFix" && turn.text).toContain("Address each review comment");
 	expect(turnIdByMessageIndex[1]).toBe(turns[1]?.id ?? null);
+});
+
+test("a continuation request and a handoff hydrate as their own cards, each with its details", () => {
+	const request = { operationId: "op1", projectId: "p1", projectName: "repo" };
+	const handoff = {
+		operationId: "op1",
+		sourceWorkspaceId: "chat-1",
+		sourceSessionId: "s-chat",
+		summary: "The brief.",
+	};
+	const { turns, turnIdByMessageIndex } = messagesToRuntime([
+		{ role: "user", content: "go", timestamp: 1 },
+		{
+			role: "custom",
+			customType: "continue-in-workspace-request",
+			content: "Write the summary.",
+			display: true,
+			details: request,
+			timestamp: 2,
+		},
+		{
+			role: "custom",
+			customType: "chat-handoff",
+			content: "<handoff>",
+			display: true,
+			details: handoff,
+			timestamp: 3,
+		},
+		{
+			role: "custom",
+			customType: "chat-handoff",
+			content: "malformed",
+			display: true,
+			details: { operationId: "op2" },
+			timestamp: 4,
+		},
+	] as unknown as Message[]);
+	expect(turns.map((turn) => turn.kind)).toEqual(["user", "continuationRequest", "handoff"]);
+	expect(turns[1]?.kind === "continuationRequest" && turns[1].details).toEqual(request);
+	expect(turns[2]?.kind === "handoff" && turns[2].details).toEqual(handoff);
+	expect(turnIdByMessageIndex[2]).toBe(turns[2]?.id ?? null);
 });
 
 test("a failed tool result maps to error status", () => {
@@ -331,22 +420,42 @@ test("a resolved toolResult keeps its structured `details` (a legacy blocking-er
 		},
 	] as unknown as Message[]);
 	expect(toolResults.ask2?.status).toBe("done");
-	expect((toolResults.ask2?.raw as { details: unknown }).details).toEqual(details);
+	expect((toolResults.ask2?.raw as { details: unknown } | undefined)?.details).toEqual(details);
 });
 
-test("an ask-user-answers custom message indexes into askAnswers and never becomes a turn", () => {
-	const result = {
-		answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
-		cancelled: false,
-	};
-	const { turns, askAnswers } = messagesToRuntime([
+test("a tool-response custom message indexes into toolResponses and never becomes a turn", () => {
+	const response = { answers: [{ questionIndex: 0, question: "Q?", kind: "text", answer: "A" }] };
+	const { turns, toolResponses } = messagesToRuntime([
 		{
 			role: "assistant",
 			content: [{ type: "toolCall", id: "ask3", name: "ask_user_question", arguments: {} }],
 		},
 		{
 			role: "custom",
-			customType: ASK_USER_ANSWERS_CUSTOM_TYPE,
+			customType: TOOL_RESPONSE_CUSTOM_TYPE,
+			content: "User has answered your questions: …",
+			display: true,
+			details: { toolCallId: "ask3", response },
+			timestamp: 2,
+		},
+	] as unknown as Message[]);
+	expect(turns).toHaveLength(1);
+	expect(toolResponses.ask3).toEqual(response);
+});
+
+test("a legacy ask-user-answers custom message (details.result) indexes into toolResponses too", () => {
+	const result = {
+		answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
+		cancelled: false,
+	};
+	const { turns, toolResponses } = messagesToRuntime([
+		{
+			role: "assistant",
+			content: [{ type: "toolCall", id: "ask3", name: "ask_user_question", arguments: {} }],
+		},
+		{
+			role: "custom",
+			customType: "ask-user-answers",
 			content: "User has answered your questions: …",
 			display: true,
 			details: { toolCallId: "ask3", result },
@@ -354,32 +463,48 @@ test("an ask-user-answers custom message indexes into askAnswers and never becom
 		},
 	] as unknown as Message[]);
 	expect(turns).toHaveLength(1);
-	expect(askAnswers.ask3).toEqual(result as never);
+	expect(toolResponses.ask3).toEqual(result);
 });
 
-test("an answers message with malformed details is ignored — the guard validates shape, not just tag", () => {
-	const { askAnswers } = messagesToRuntime([
+test("a response message with malformed details is ignored — the guard validates the envelope, not just the tag", () => {
+	const { toolResponses } = messagesToRuntime([
 		{
 			role: "custom",
-			customType: ASK_USER_ANSWERS_CUSTOM_TYPE,
+			customType: TOOL_RESPONSE_CUSTOM_TYPE,
 			content: "looks right, isn't",
 			display: true,
 			timestamp: 1,
 		},
 		{
 			role: "custom",
-			customType: ASK_USER_ANSWERS_CUSTOM_TYPE,
-			content: "still not right",
+			customType: TOOL_RESPONSE_CUSTOM_TYPE,
+			content: "no tool call id",
 			display: true,
-			details: { toolCallId: 42, result: { answers: "nope", cancelled: "nope" } },
+			details: { toolCallId: 42, response: {} },
 			timestamp: 2,
 		},
+		{
+			role: "custom",
+			customType: TOOL_RESPONSE_CUSTOM_TYPE,
+			content: "no response key",
+			display: true,
+			details: { toolCallId: "ask4" },
+			timestamp: 3,
+		},
+		{
+			role: "custom",
+			customType: "ask-user-answers",
+			content: "legacy without a result",
+			display: true,
+			details: { toolCallId: "ask5" },
+			timestamp: 4,
+		},
 	] as unknown as Message[]);
-	expect(Object.keys(askAnswers)).toHaveLength(0);
+	expect(Object.keys(toolResponses)).toHaveLength(0);
 });
 
 test("unknown custom messages are ignored entirely", () => {
-	const { turns, askAnswers } = messagesToRuntime([
+	const { turns, toolResponses } = messagesToRuntime([
 		{
 			role: "custom",
 			customType: "someone-elses-extension",
@@ -389,7 +514,7 @@ test("unknown custom messages are ignored entirely", () => {
 		},
 	] as unknown as Message[]);
 	expect(turns).toHaveLength(0);
-	expect(Object.keys(askAnswers)).toHaveLength(0);
+	expect(Object.keys(toolResponses)).toHaveLength(0);
 });
 
 test("a compaction summary becomes its own turn without claiming a jump anchor", () => {

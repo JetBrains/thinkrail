@@ -1,3 +1,4 @@
+import { t } from "@thinkrail/locales/react";
 import { messagesToRuntime } from "../chat/hydrate";
 import {
 	type CenterNavigationStamp,
@@ -10,19 +11,49 @@ import {
 	createSessionWithSkillBaseline,
 	errorText,
 	getSessionMessagesWithSkillBaseline,
+	getTransport,
+	wsErrorCode,
 } from "../transport";
+import { startProjectlessChat } from "./chatActions";
+
+function sendPrompt(sessionId: string, text: string): void {
+	useAppStore.getState().appendUserMessage(sessionId, text);
+	void getTransport()
+		.request("session.prompt", { sessionId, text })
+		.catch((err) => useAppStore.getState().appendErrorTurn(sessionId, errorText(err)));
+}
+
+/** One chat = one folder: a second conversation in a chat without a project is a new chat, not a tab. */
+async function createSessionOrSiblingChat(
+	workspaceId: string,
+	prompt: string | undefined,
+): Promise<Awaited<ReturnType<typeof createSessionWithSkillBaseline>> | null> {
+	try {
+		return await createSessionWithSkillBaseline({ workspaceId });
+	} catch (err) {
+		if (wsErrorCode(err) !== "CHAT_HAS_SESSION") throw err;
+		await startProjectlessChat(prompt ? { text: prompt } : {});
+		return null;
+	}
+}
 
 export async function startChatInTab(
 	workspaceId: string,
-	preferredGroupId?: string,
+	{
+		preferredGroupId,
+		prompt,
+		draft,
+	}: { preferredGroupId?: string; prompt?: string; draft?: string } = {},
 ): Promise<void> {
 	const navigation = useAppStore.getState().beginCenterNavigation(workspaceId, preferredGroupId);
 	useAppStore.getState().beginChatStart(workspaceId);
 	try {
+		const created = await createSessionOrSiblingChat(workspaceId, prompt);
+		if (!created) return;
 		const {
 			result: { sessionId, model, thinkingLevel },
 			syncedTick,
-		} = await createSessionWithSkillBaseline({ workspaceId });
+		} = created;
 		const store = useAppStore.getState();
 		store.openChatSession(
 			workspaceId,
@@ -32,13 +63,15 @@ export async function startChatInTab(
 			syncedTick,
 			layoutOpenOptionsForNavigation(store, workspaceId, navigation),
 		);
+		if (prompt) sendPrompt(sessionId, prompt);
+		else if (draft) store.setChatDraft(sessionId, draft);
 	} catch {
 		const state = useAppStore.getState();
 		if (
 			layoutOpenOptionsForNavigation(state, workspaceId, navigation).activate !== false &&
 			!state.removedWorkspaceIds[workspaceId]
 		) {
-			toast.error("The agent session could not be created.", "Couldn't start the chat");
+			toast.error(t("panels.openChat.sessionCreateFailed"), t("panels.openChat.startFailed"));
 		}
 	} finally {
 		useAppStore.getState().endChatStart(workspaceId);
@@ -70,7 +103,7 @@ export async function openChatInTab(
 		? { ...routedOptions, activate: false }
 		: routedOptions;
 	const tab = (store.tabsByWorkspace[workspaceId] ?? []).find(
-		(t) => t.kind === "chat" && t.sessionId === sessionId,
+		(candidate) => candidate.kind === "chat" && candidate.sessionId === sessionId,
 	);
 	if (tab) {
 		store.openTab(tab, "keep", true, options);
@@ -118,7 +151,7 @@ export async function openChatInTab(
 			!settled.removedWorkspaceIds[workspaceId] &&
 			!settled.deletedSessionsByWorkspace[workspaceId]?.[sessionId]
 		) {
-			toast.error("The chat could not be restored.", "Couldn't open the chat");
+			toast.error(t("panels.openChat.restoreFailed"), t("panels.openChat.openFailed"));
 		}
 	} catch (err) {
 		const current = useAppStore.getState();
@@ -128,9 +161,25 @@ export async function openChatInTab(
 			!current.removedWorkspaceIds[workspaceId] &&
 			!current.deletedSessionsByWorkspace[workspaceId]?.[sessionId]
 		) {
-			toast.error(errorText(err), "Couldn't open the chat");
+			toast.error(errorText(err), t("panels.openChat.openFailed"));
 		}
 	} finally {
 		useAppStore.getState().endChatStart(workspaceId);
 	}
+}
+
+export async function promptWorkspaceChat(
+	workspaceId: string,
+	sessionId: string | null,
+	text: string,
+): Promise<void> {
+	if (!sessionId) return startChatInTab(workspaceId, { prompt: text });
+	await openChatInTab(workspaceId, sessionId);
+	const runtime = useAppStore.getState().sessions[sessionId];
+	if (!runtime) return;
+	if (runtime.isStreaming) {
+		await getTransport().request("session.followUp", { sessionId, text });
+		return;
+	}
+	sendPrompt(sessionId, text);
 }

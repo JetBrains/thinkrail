@@ -1,25 +1,24 @@
-import type {
-	AgentSettlement,
-	AskUserAnswersDetails,
-	TranscriptMessage,
-} from "@thinkrail/contracts";
+import type { AgentSettlement, TranscriptMessage } from "@thinkrail/contracts";
 import {
 	customMessageText,
-	isAskUserAnswersMessage,
 	isBackgroundCommandCompletionMessage,
+	isChatHandoffMessage,
+	isContinueInWorkspaceRequestMessage,
 	isControlMessage,
 	isRetriedAttempt,
 	isSubagentCompletionMessage,
 	isTodoReviewFixMessage,
+	readToolResponseMessage,
 } from "@thinkrail/contracts";
-import { userText } from "../lib";
-import { assistantFailureText } from "./assistantFailure";
+import { randomUuid, userText } from "../lib";
+import { assistantFailure } from "./assistantFailure";
+import { insertRoundCloser } from "./roundCloser";
 import type { ChatTurn, ToolResultState } from "./types";
 
 export interface HydratedRuntime {
 	turns: ChatTurn[];
 	toolResults: Record<string, ToolResultState>;
-	askAnswers: Record<string, AskUserAnswersDetails["result"]>;
+	toolResponses: Record<string, unknown>;
 	turnIdByMessageIndex: (string | null)[];
 }
 
@@ -34,7 +33,7 @@ function transcriptTurnId(
 ): string {
 	return options.idScope
 		? `${options.idScope}:${message.role}:${message.timestamp}:${index}`
-		: crypto.randomUUID();
+		: randomUuid();
 }
 
 export function messagesToRuntime(
@@ -44,9 +43,10 @@ export function messagesToRuntime(
 ): HydratedRuntime {
 	const turns: ChatTurn[] = [];
 	const toolResults: Record<string, ToolResultState> = {};
-	const askAnswers: HydratedRuntime["askAnswers"] = {};
+	const toolResponses: HydratedRuntime["toolResponses"] = {};
 	const turnIdByMessageIndex: HydratedRuntime["turnIdByMessageIndex"] = [];
 	for (const [index, message] of messages.entries()) {
+		const toolResponse = readToolResponseMessage(message);
 		let turnId: string | null = null;
 		if (message.role === "user") {
 			if (!isControlMessage(userText(message.content))) {
@@ -72,11 +72,16 @@ export function messagesToRuntime(
 				status: message.isError ? "error" : "done",
 				raw: { content: message.content, details: message.details },
 			};
-		} else if (isAskUserAnswersMessage(message)) {
-			askAnswers[message.details.toolCallId] = message.details.result;
+		} else if (toolResponse) {
+			toolResponses[toolResponse.toolCallId] = toolResponse.response;
 		} else if (isBackgroundCommandCompletionMessage(message)) {
 			turnId = transcriptTurnId(message, index, options);
-			turns.push({ kind: "backgroundCommandCompletion", id: turnId, details: message.details });
+			turns.push({
+				kind: "backgroundCommandCompletion",
+				id: turnId,
+				details: message.details,
+				timestamp: message.timestamp,
+			});
 		} else if (isSubagentCompletionMessage(message)) {
 			turnId = transcriptTurnId(message, index, options);
 			turns.push({
@@ -84,6 +89,7 @@ export function messagesToRuntime(
 				id: turnId,
 				details: message.details,
 				text: customMessageText(message.content),
+				timestamp: message.timestamp,
 			});
 		} else if (isTodoReviewFixMessage(message)) {
 			turnId = transcriptTurnId(message, index, options);
@@ -92,6 +98,23 @@ export function messagesToRuntime(
 				id: turnId,
 				details: message.details,
 				text: customMessageText(message.content),
+				timestamp: message.timestamp,
+			});
+		} else if (isContinueInWorkspaceRequestMessage(message)) {
+			turnId = transcriptTurnId(message, index, options);
+			turns.push({
+				kind: "continuationRequest",
+				id: turnId,
+				details: message.details,
+				timestamp: message.timestamp,
+			});
+		} else if (isChatHandoffMessage(message)) {
+			turnId = transcriptTurnId(message, index, options);
+			turns.push({
+				kind: "handoff",
+				id: turnId,
+				details: message.details,
+				timestamp: message.timestamp,
 			});
 		}
 		turnIdByMessageIndex.push(turnId);
@@ -102,18 +125,20 @@ export function messagesToRuntime(
 	);
 	const persistedTerminal =
 		lastConversationMessage?.role === "assistant" ? lastConversationMessage : null;
-	const failure = assistantFailureText(
+	const failure = assistantFailure(
 		lastSettlement === undefined ? persistedTerminal : lastSettlement,
 	);
-	if (failure)
-		turns.push({
-			kind: "error",
-			id: options.idScope
-				? `${options.idScope}:error:${persistedTerminal?.timestamp ?? "settlement"}`
-				: crypto.randomUUID(),
-			text: failure,
-			recovery: "try-again",
-		});
+	const closed = failure
+		? insertRoundCloser(turns, {
+				kind: "error",
+				id: options.idScope
+					? `${options.idScope}:error:${persistedTerminal?.timestamp ?? "settlement"}`
+					: randomUuid(),
+				text: failure.message,
+				failure: failure.failure,
+				recovery: "try-again",
+			})
+		: turns;
 
-	return { turns, toolResults, askAnswers, turnIdByMessageIndex };
+	return { turns: closed, toolResults, toolResponses, turnIdByMessageIndex };
 }

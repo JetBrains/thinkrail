@@ -21,9 +21,15 @@ semantics, and shipping the result keeps `apps/web` — which may import `contra
 second copy of it.
 
 Unlike the agent's own tools (which own status), the host's write surface is the **user's** edit lever:
-`todo.add` tags new items `origin: "user"` so the agent's `todo_write` re-plans never drop them, and
-`todo.remove` deletes by id. `todo.update` exists on the wire (accepts status/title/note) but no current
-UI path calls it — status stays agent-owned (see [[module-pi-todos]]). `updateTodo` unwraps the store's
+`todo.add` tags new items `origin: "user"` so the agent's `todo_write` re-plans never drop them.
+`todo.update` exists on the wire (accepts status/title/note) but no current UI path calls it — status
+stays agent-owned (see [[module-pi-todos]]). `todo.remove` is the user's queue-cancel action,
+constrained by `removeTodo`'s **done-guard**: pending / in_progress items can be removed (the UI
+shows a hover "Remove" button on them); a `done` item is rejected because completed steps are the
+plan's audit trail. The host also layers an active-review guard (`isItemUnderActiveReview`) so a
+mid-review cancellation can't strand review bookkeeping. The agent's own `todo_remove` tool goes
+through `TodoStore.remove` directly and does not run through this gate. A UI removal also drops the
+item's baseline, review record and auto-review cycle count. `updateTodo` unwraps the store's
 `TodoUpdateResult` (`{ todo, paused }` — `paused` = items auto-demoted to keep one `in_progress`); the
 wire response stays a bare `TodoItem` — the UI re-reads the whole plan on change, so demotions arrive
 with the next `todo.list`.
@@ -43,10 +49,10 @@ already occupies the queue or a done item precedes the active one. The queued pa
 window in production — missing means capture failed, so later completion degrades to the no-baseline
 path-list fallback rather than excluding work from a late baseline. The
 whole path is best-effort and never throws into the event stream. The same chain serializes **every host
-plan/sidecar writer** — the UI's `todo.add` / `todo.update` / `todo.remove` and `session.delete`'s window
-removal enqueue behind any in-flight reconcile (`enqueueTodoMutation`) — because a reconcile reads plan +
-baselines, awaits git, and ends with a whole-map baseline write: an unqueued removal landing inside that
-window would be resurrected by the stale write, exactly the permanent-orphan case below. Agent-side
+plan/sidecar writer** — the UI's `todo.add` / `todo.update` and `session.delete`'s window removal
+enqueue behind any in-flight reconcile (`enqueueTodoMutation`) — a reconcile reads plan + baselines,
+awaits git, and ends with a whole-map baseline write; an unqueued write landing inside that window
+would be resurrected by the stale pass. Agent-side
 `todo_*` plan writes can't be queued (they happen inside pi), so a reconcile fingerprints both the plan
 and persisted baseline sidecar it read and re-checks the authoritative fingerprint before each
 corresponding write. Drift aborts that stale pass before it can open a too-late baseline, commit a
@@ -65,15 +71,15 @@ window shared too (`markOtherSessionWindowsShared`) — the flag is **sticky**, 
 exclusive for its whole life?" is what the gate needs and can't be re-derived once the other closed.
 (Two items of *one* plan can't overlap: `pi-todos` keeps exactly one item `in_progress` and a demoted
 item's window is dropped — pinned by a test, since the gate leans on it.) **Windows never outlive their
-owner**: a baseline whose item has vanished from the plan is pruned at the top of every reconcile, the
-UI's `todo.remove` drops the removed item's baseline directly (no `todo_*` tool end fires for a UI edit),
+owner**: a baseline whose item has vanished from the plan is pruned at the top of every reconcile,
 and `session.delete` removes the chat's whole sidecar (`removeSessionTodoWindows`) — an orphan would read
 as a permanently open foreign window and force every sibling chat into the fallback forever. On `done`:
 
 - **Commit the item's delta.** `git.gitCommitPaths` commits **exactly the delta paths** — the item's own
   work, never "everything currently dirty" — `--no-verify` (the commit must not run/fail the
   user's hooks; author/committer stay the user's own config — it's their branch). It
-  preserves the user's index across any failure (see [[submodule-server-git]]). The item gets **one
+  preserves the user's index across any failure, unless HEAD moved to a commit that is not ours (see
+  [[submodule-server-git]]). The item gets **one
   `commit` artifact** (the sha, `label` = the item title) and **nothing else**: the commit is
   self-sufficient — its file list is *derived*, never denormalized into the JSON (see the `listTodos`
   decoration below).
@@ -113,9 +119,12 @@ as a permanently open foreign window and force every sibling chat into the fallb
 - **Commit gate (safety on the user's branch).** A commit may only contain work the item can be *proven*
   to own, so all four must hold — else **no commit**, and the live-diff `change` path-list artifacts stand
   in (branch scope; `change` survives **only** as this fallback):
-  1. **A recorded baseline.** No baseline = no observed window (an item flipped straight to `done`, a plan
-     predating the sidecar), and then every dirty path in the worktree merely *looks* like the item's
-     delta. Reportable, never committable.
+  1. **A recorded baseline.** No baseline = no observed window (an item flipped straight to `done`, a
+     plan predating the sidecar). The reconcile has no honest basis for claiming anything the step
+     did, so **`deltaPaths` is empty**: no commit, **no `change` artifacts**, nothing. The dirty paths
+     surface in `unattributed` instead, which is the correct place for "work the reconcile can't
+     attribute" — claiming every dirty path would grab sibling steps' work and user WIP into a
+     bundled-done step.
   2. **No foreign dirt left** — every path dirty at the baseline is clean again by `done`. This is what
      quietly disables auto-commit in a Default workspace holding the user's WIP, the intended guard.
   3. **A window never shared** (`shared` unset) and no other chat mid-work right now — concurrent windows
@@ -237,8 +246,7 @@ that is then re-edited uncommitted appears in both `adoptedCommits` (the commit'
 change set is **reviewable** — the gate is that artifact presence, so research/verification steps never
 demand review and no LLM attribution is involved. The user's decision lives in a second host-owned
 sidecar, `.thinkrail/context/todos/<sessionId>.reviews.json` (read-modify-write, atomic, same lifecycle
-as the baselines: `todo.remove` prunes the item's record, `session.delete` removes the file; orphan
-records are inert either way) — deliberately **not** the agent-writable todos JSON: an agent re-plan must
+as the baselines: `session.delete` removes the file; orphan records are inert) — deliberately **not** the agent-writable todos JSON: an agent re-plan must
 never flip a review decision. A record is `reviewed` or `changes_requested` plus **`reviewedShas`, the
 watermark**: the sha set the reviewer actually acted on. For a HUMAN action that is the item's commit
 shas at that moment; for the AGENT flow the pending mark carries the truth — **`startTodoReview` stamps
@@ -252,13 +260,18 @@ re-reviews instead of the original diff — and the `feedback` echo) and `TodoPl
 completion note, agent-authored via `todo_plan_summary`; item `summary` rides the item DTO as stored).
 
 - **`generateTodoSummary` (`todo.generateSummary`)** is the host's best-effort fallback for that note: when
-  a plan is **fully done but carries no `summary`**, the client asks the host to draft one. It returns an
-  existing agent note untouched, `null` when the plan isn't complete or the draft fails, else the freshly
-  drafted note. The slow model call (`assist.suggestPlanSummary` over the done steps' title/summary/
-  verification) runs OUTSIDE the write lock; the final re-check + `setSummary` runs inside
-  `enqueueTodoMutation` and never clobbers a note that landed meanwhile or a plan that re-opened, with one
-  in-flight generation per session — a concurrent caller (the chat and the Plan page both ask) awaits and
-  shares that generation's result rather than getting `null`, so no surface is left summary-less. It never overwrites the agent's own `todo_plan_summary`.
+  a plan is **fully done but carries no `summary`**, the host drafts one. It returns an existing agent note
+  untouched, `null` when the plan isn't complete or the draft fails, else the freshly drafted note. The
+  slow model call (`assist.suggestPlanSummary` over the done steps' title/summary/verification) runs
+  OUTSIDE the write lock; the final re-check + `setSummary` runs inside `enqueueTodoMutation` and never
+  clobbers a note that landed meanwhile or a plan that re-opened, with one in-flight generation per
+  session — a concurrent caller awaits and shares that generation's result rather than getting `null`,
+  so no surface is left summary-less. It never overwrites the agent's own `todo_plan_summary`.
+  **`previewPr` (and therefore `openPr`) awaits `generateTodoSummary` before `renderPrBody` reads
+  `plan.summary`**, so a chat whose UI anchor is torn down (chat closed to history, Plan page closed)
+  can't race `pr.preview` / `pr.open` to an empty summary. The in-flight dedup keeps the extra call
+  idempotent: if the UI's `useAutoPlanSummary` already triggered a draft, `previewPr` awaits its
+  promise instead of starting a second generation.
 
 - **`approveTodoReview`** records `reviewed` + the watermark — the pending mark's start-time shas when
   an agent review is in flight, else the current shas (throws on unknown or non-reviewable ids →
@@ -331,19 +344,16 @@ before the already-enqueued replacement pass has reconciled the current plan.
   0),
   `addTodo(...) → TodoItem` (validates a non-empty title; tags `origin: "user"`),
   `updateTodo(...) → TodoItem` (throws on unknown id → a `{ ok:false }` WS response),
-  `removeTodo(...) → Promise<{ ok:true }>` (idempotent; enqueued on the per-workspace reconcile chain —
-  see the sidecar-writer serialization above — as is `removeSessionTodoWindows`;
-  **throws while the item is `pending` an agent review** —
-  a removal mid-review would strand `host`'s in-flight bookkeeping (the per-item review claim and the
-  fix latch, both memory-only) and let the verdict file findings against an id that no longer exists;
-  the client disables Remove on a `reviewing` row the same way it already disables Start review). This
-  durable check alone only covers start→verdict: the verdict clears `pending` while the fix delivery it
-  triggers is still in flight, so `host/todoReview.ts`'s `todo.remove` handler layers
-  `isItemUnderActiveReview` (the in-memory latches) in front of this call — closing the verdict→delivery
-  tail the durable mark can't see. See host/SPEC.md.),
   `approveTodoReview(...)` / `requestTodoFix(...) → { pkg, previous }` / `rollbackTodoFix(...)` + the
   pure `renderFixPackage` (the review ops; the send itself is `host`'s composition), and the
   `TodoReviewRecord` type. **Mapping only** — no plan logic; `TodoStore` owns disk.
+  **`listStoredPlans(root) → StoredPlanFile[]`** is the Git-free reader the search palette's host
+  providers use: it enumerates `<root>/.thinkrail/context/todos/<sessionId>.json` (sidecars such as
+  `.baselines.json` are skipped by the id grammar) and hands each plan back as a lazy
+  `TodoStore.read()` — no artifact settling, no git, no review decoration. A read parses a file only when
+  its `mtime` or size changed since the last read (a bounded per-file memo), so a search over every open
+  project's plans costs one `stat` per plan per keystroke; an empty plan is never memoized, since
+  `TodoStore.read()` also answers empty when the read itself failed.
 - **Allowed deps:** `workspaces` (worktree-path lookup via `getWorkspace`, which throws on unknown);
   `git` (`gitStatus` — the uncommitted changed-path set + the commit-scope DTO decoration;
   `gitCommitPaths` — the per-done-item delta commit; `gitHeadSha` — the baseline's head;

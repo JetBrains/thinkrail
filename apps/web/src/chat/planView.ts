@@ -1,5 +1,4 @@
 import {
-	type AskUserQuestionResult,
 	type GitFileChange,
 	isSessionWorking,
 	type ReviewComment,
@@ -9,8 +8,12 @@ import {
 	type TodoItem,
 	type TodoPlan,
 } from "@thinkrail/contracts";
-import type { ToolStatus } from "@thinkrail/extension-api/web";
-import { type AskState, deriveAskStates } from "./askState";
+import {
+	deriveInteractionStates,
+	type InteractionState,
+	latestPendingInteraction,
+	type PendingInteraction,
+} from "./interactionState";
 import type { ChatTurn, ToolResultState } from "./types";
 
 export type ItemChangeSet =
@@ -44,8 +47,9 @@ export function itemRevisions(item: TodoItem): ItemRevision[] {
 export function statusLetter(status: GitFileChange["status"]): string {
 	switch (status) {
 		case "added":
-		case "untracked":
 			return "A";
+		case "untracked":
+			return "U";
 		case "deleted":
 			return "D";
 		case "renamed":
@@ -190,18 +194,6 @@ export function planStaleSummary(plan: TodoPlan): string | undefined {
 	return all.some((t) => t.status !== "done") ? plan.summary : undefined;
 }
 
-export function stripStatus(
-	glance: PlanGlance,
-	summary: { done: number; total: number; current: TodoItem | undefined },
-): { show: boolean; showLabel: boolean; title?: string } {
-	const openLeft = summary.total - summary.done > 0;
-	return {
-		show: glance !== "waiting" || openLeft,
-		showLabel: glance !== "working" || !summary.current,
-		...(summary.current ? { title: summary.current.title } : {}),
-	};
-}
-
 export interface PlanSections {
 	activeGroups: TodoGroupItem[];
 	activeLoose: TodoItem[];
@@ -235,9 +227,12 @@ export function planSections(plan: TodoPlan): PlanSections {
 
 export type PlanGlance = "working" | "waiting_question" | "waiting";
 
-export function planGlance(isStreaming: boolean, askStates: Record<string, AskState>): PlanGlance {
-	const awaiting = Object.values(askStates).some(
-		(state) => !state.answer && !state.superseded && !state.terminal,
+export function planGlance(
+	isStreaming: boolean,
+	interactions: Record<string, InteractionState>,
+): PlanGlance {
+	const awaiting = Object.values(interactions).some(
+		(state) => state.response === undefined && !state.superseded && !state.terminal,
 	);
 	if (awaiting) return "waiting_question";
 	return isStreaming ? "working" : "waiting";
@@ -255,7 +250,7 @@ export function hostSessionGlance(
 interface GlanceInputs {
 	isStreaming: boolean;
 	turns: ChatTurn[];
-	askAnswers: Record<string, AskUserQuestionResult>;
+	toolResponses: Record<string, unknown>;
 	toolResults: Record<string, ToolResultState>;
 	hostState?: SessionState | null;
 }
@@ -268,19 +263,22 @@ const glanceByTurns = new WeakMap<
 function transcriptGlance({
 	isStreaming,
 	turns,
-	askAnswers,
+	toolResponses,
 	toolResults,
 }: GlanceInputs): PlanGlance {
 	const cached = glanceByTurns.get(turns);
 	if (
 		cached?.isStreaming === isStreaming &&
-		cached.askAnswers === askAnswers &&
+		cached.toolResponses === toolResponses &&
 		cached.toolResults === toolResults
 	) {
 		return cached.glance;
 	}
-	const glance = planGlance(isStreaming, deriveAskStates(turns, askAnswers, toolResults));
-	glanceByTurns.set(turns, { isStreaming, askAnswers, toolResults, glance });
+	const glance = planGlance(
+		isStreaming,
+		deriveInteractionStates(turns, toolResponses, toolResults),
+	);
+	glanceByTurns.set(turns, { isStreaming, toolResponses, toolResults, glance });
 	return glance;
 }
 
@@ -313,41 +311,11 @@ export function lastAgentText(rt: { turns: ChatTurn[] }): string | undefined {
 	return undefined;
 }
 
-export interface PendingAsk {
-	toolCallId: string;
-	args: Record<string, unknown>;
-	result: unknown;
-	status: ToolStatus;
-	streaming: boolean;
-}
-
-/**
- * The session's currently-awaiting `ask_user_question` — the one the user still has to answer (no answer,
- * not superseded, not terminal) — reconstructed as the tool render props the shared `AskUserQuestionCard`
- * needs, so the plan page can host the SAME card. Undefined when nothing is awaiting. Latest wins.
- */
-export function pendingAsk(rt: {
+export function pendingInteraction(rt: {
 	turns: ChatTurn[];
-	askAnswers: Record<string, AskUserQuestionResult>;
+	toolResponses: Record<string, unknown>;
 	toolResults: Record<string, ToolResultState>;
-}): PendingAsk | undefined {
-	const states = deriveAskStates(rt.turns, rt.askAnswers, rt.toolResults);
-	let found: PendingAsk | undefined;
-	for (const turn of rt.turns) {
-		if (turn.kind !== "assistant") continue;
-		for (const block of turn.message.content) {
-			if (block.type !== "toolCall" || block.name !== "ask_user_question") continue;
-			const state = states[block.id];
-			if (!state || state.answer || state.superseded || state.terminal) continue;
-			const tool = rt.toolResults[block.id];
-			found = {
-				toolCallId: block.id,
-				args: (block.arguments ?? {}) as Record<string, unknown>,
-				result: tool?.raw,
-				status: tool?.status ?? "running",
-				streaming: turn.streaming,
-			};
-		}
-	}
-	return found;
+}): PendingInteraction | undefined {
+	const states = deriveInteractionStates(rt.turns, rt.toolResponses, rt.toolResults);
+	return latestPendingInteraction(rt.turns, rt.toolResults, states);
 }

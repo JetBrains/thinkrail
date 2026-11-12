@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fingerprintMcpEntry } from "./config";
+import { fingerprintMcpEntry, mcpTargetOf } from "./config";
 import { summarizeMcpConfigErrors, summarizeMcpServers } from "./summaries";
 
 const root = mkdtempSync(join(tmpdir(), "mcp-summaries-"));
@@ -47,7 +47,11 @@ test("summaries cover scope, approval states, replacement, folded overrides, rec
 				agentDir,
 				cwd,
 				projectTrusted: true,
-				policy: { approvals, overrides: { docs: { enabled: false, exposure: "hidden" } } },
+				policy: {
+					approvals,
+					overrides: { docs: { enabled: false, exposure: "hidden" } },
+					toolGrants: {},
+				},
 			}).map((summary) => [`${summary.scope}:${summary.name}`, summary]),
 		);
 
@@ -126,7 +130,10 @@ test("an entry that is not an object keeps its row, and an unreadable file is li
 		'{ "mcpServers": { "gh": { "url": "https://gh.example/mcp", "headers": { "Authorization": ghp_abcdefghijklmnopqrstuvwx1234 } } } }',
 	);
 	const files = { agentDir, cwd, projectTrusted: true };
-	const summaries = summarizeMcpServers({ ...files, policy: { approvals: {}, overrides: {} } });
+	const summaries = summarizeMcpServers({
+		...files,
+		policy: { approvals: {}, overrides: {}, toolGrants: {} },
+	});
 	expect(summaries.map((summary) => [summary.scope, summary.name, summary.configError])).toEqual([
 		["user", "bad", 'server "bad" must be an object'],
 		["user", "docs", undefined],
@@ -176,7 +183,7 @@ test("folded project overrides retain validation errors regardless of approval",
 			agentDir,
 			cwd,
 			projectTrusted: true,
-			policy: { approvals, overrides: {} },
+			policy: { approvals, overrides: {}, toolGrants: {} },
 		});
 		expect(rows).toHaveLength(5);
 		for (const row of rows) {
@@ -202,4 +209,36 @@ test("folded project overrides retain validation errors regardless of approval",
 		);
 		expect(JSON.stringify(rows)).not.toContain("fixture-secret");
 	}
+});
+
+test("always-allowed tools are listed only while the server keeps the command or URL they were granted for", () => {
+	const agentDir = join(root, "grant-agent");
+	const cwd = join(root, "grant-project");
+	mkdirSync(agentDir, { recursive: true });
+	mkdirSync(cwd, { recursive: true });
+	const write = (url: string, headers: Record<string, string>) =>
+		writeFileSync(
+			join(agentDir, "mcp.json"),
+			JSON.stringify({ mcpServers: { "my-docs": { url, headers } } }),
+		);
+	const grantedFor = (url: string) => mcpTargetOf({ url });
+	const listed = (target: string) =>
+		summarizeMcpServers({
+			agentDir,
+			cwd,
+			projectTrusted: false,
+			policy: {
+				approvals: {},
+				overrides: {},
+				toolGrants: { "my-docs": { target, tools: ["mcp__my_docs__search_all"] } },
+			},
+		})[0]?.alwaysAllowed;
+
+	write("https://docs.example/mcp", { "X-Team": "a" });
+	const target = grantedFor("https://docs.example/mcp");
+	expect(listed(target)).toEqual([{ tool: "mcp__my_docs__search_all", label: "search_all" }]);
+	write("https://docs.example/mcp", { "X-Team": "b" });
+	expect(listed(target)).toEqual([{ tool: "mcp__my_docs__search_all", label: "search_all" }]);
+	write("https://elsewhere.example/mcp", { "X-Team": "b" });
+	expect(listed(target)).toBeUndefined();
 });

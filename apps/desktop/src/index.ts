@@ -1,7 +1,14 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { NativeCommand, NativeQuitHint, NativeWindowState } from "@thinkrail/contracts";
+import type {
+	NativeCommand,
+	NativeOpenFileRequest,
+	NativeQuitHint,
+	NativeWindowState,
+} from "@thinkrail/contracts";
+import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
 import { channel, posthogProjectKey, version } from "@thinkrail/shared/version";
 import Electrobun, {
 	ApplicationMenu,
@@ -15,11 +22,19 @@ import {
 	isNativeCommand,
 	QUIT_SHORTCUT_ACTION,
 	readMenuAction,
+	readMenuLabels,
 } from "./applicationMenu";
 import { attributionClaimOnFirstReadiness } from "./attributionReadiness";
-import { installExternalNavigation } from "./externalNavigation";
-import { preferNativeHostBridge, usesNativeHostBridge } from "./hostTransport";
+import { deliverDeepLinkWhenReady } from "./deepLinkBootstrap";
+import { desktopError, setDesktopErrorReporter } from "./errorReporting";
+import { installExternalNavigation, windowNavigationRules } from "./externalNavigation";
 import { createKeyStateReader } from "./keyState";
+import {
+	type DesktopDialogLabels,
+	readDialogLabels,
+	readNativeLabels,
+	writeNativeLabels,
+} from "./nativeLabels";
 import { createPageZoomGestureHandler, nextPageZoom } from "./pageZoom";
 import {
 	injectInitialDesktopPreferences,
@@ -34,10 +49,20 @@ import type { DesktopRpc } from "./rpc";
 import { ptyLibraryName, runtimeTarget } from "./runtimeTarget";
 import type { DesktopServerRuntime } from "./serverRuntime";
 import {
+	handOffStartupSplash,
+	openStartupSplash,
+	type StartupSplash,
+	splashMessage,
+} from "./splash";
+import {
 	createTitleBarDoubleClickHandler,
 	type TitleBarDoubleClickResult,
 } from "./titleBarDoubleClick";
-import { createElectrobunQuitCoordinator, createElectrobunUpdateController } from "./updates";
+import {
+	createElectrobunQuitCoordinator,
+	createElectrobunUpdateController,
+	readPendingInstallVersion,
+} from "./updates";
 import {
 	desktopWindowChrome,
 	injectInitialWindowChrome,
@@ -49,6 +74,17 @@ import {
 	windowChromePreloadSeed,
 } from "./windowChrome";
 import { loadWindowsFrameApi, restoreWindowsFrameControls } from "./windowsFrame";
+import {
+	desktopAppUserModelId,
+	loadWindowsShellApi,
+	stampTaskbarShortcuts,
+	taskbarShortcutCandidates,
+} from "./windowsTaskbarIdentity";
+import {
+	applyWindowsWindowIcon,
+	loadWindowsIconApi,
+	type WindowsHandle,
+} from "./windowsWindowIcon";
 
 type BeforeQuitEvent = ReturnType<typeof Electrobun.events.events.app.beforeQuit>;
 
@@ -82,6 +118,33 @@ function titleBarProbeScript(testIds: string[]): string {
 	poll();
 })();`;
 }
+function linkProbeScript(url: string, target: string): string {
+	return `(() => {
+	const link = document.createElement("a");
+	link.href = ${JSON.stringify(url)};
+	link.target = ${JSON.stringify(target)};
+	link.rel = "noopener noreferrer";
+	document.body.append(link);
+	link.click();
+	link.remove();
+})();`;
+}
+const NAVIGATION_PROBE_SCRIPTS: Record<string, (url: string) => string> = {
+	navigate: (url) => `window.location.assign(${JSON.stringify(url)});`,
+	"navigate-link": (url) => linkProbeScript(url, ""),
+	"navigate-blank-link": (url) => linkProbeScript(url, "_blank"),
+	"navigate-window-open": (url) =>
+		`window.open(${JSON.stringify(url)}, "_blank", "noopener,noreferrer");`,
+	"navigate-srcdoc": (url) => `(() => {
+	const frame = document.createElement("iframe");
+	frame.setAttribute("sandbox", "");
+	frame.addEventListener("load", () => {
+		frame.srcdoc = ${JSON.stringify(`<img src="${url}-2">`)};
+	}, { once: true });
+	frame.srcdoc = ${JSON.stringify(`<img src="${url}-1">`)};
+	document.body.append(frame);
+})();`,
+};
 const WINDOW_CONTROLS_PROBE_TARGETS: Record<string, { testId: string; label: string }> = {
 	"window-controls-maximize": { testId: "window-maximize", label: "Maximize" },
 	"window-controls-restore": { testId: "window-maximize", label: "Restore" },
@@ -99,6 +162,64 @@ function windowControlsProbeScript(target: { testId: string; label: string }): s
 })();`;
 }
 let startupQuitCoordinator: ReturnType<typeof createElectrobunQuitCoordinator> | undefined;
+let startupSplash: StartupSplash | undefined;
+
+function setWindowsAppUserModelId(): void {
+	if (process.platform !== "win32") return;
+	try {
+		loadWindowsShellApi().setProcessAppUserModelId(desktopAppUserModelId(channel));
+	} catch (error) {
+		desktopError("windows_app_id", "could not set the Windows AppUserModelID", error);
+	}
+}
+
+function stampWindowsTaskbarShortcuts(): void {
+	if (process.platform !== "win32") return;
+	try {
+		const appDir = dirname(PATHS.RESOURCES_FOLDER);
+		const shell = loadWindowsShellApi();
+		const candidates = taskbarShortcutCandidates(appDir, process.env.APPDATA);
+		const { failures } = shell.withComApartment(() =>
+			stampTaskbarShortcuts(
+				candidates.paths,
+				join(appDir, "bin", "launcher.exe"),
+				desktopAppUserModelId(channel),
+				shell.openShortcut,
+			),
+		);
+		const [failure] = [...candidates.failures, ...failures];
+		if (failure) {
+			desktopError(
+				"windows_app_id",
+				"could not stamp a Windows shortcut's AppUserModelID",
+				failure,
+			);
+		}
+	} catch (error) {
+		desktopError("windows_app_id", "could not stamp the Windows shortcuts' AppUserModelID", error);
+	}
+}
+
+function setWindowsWindowIcon(window: { readonly ptr: WindowsHandle | null }): void {
+	if (process.platform !== "win32" || !window.ptr) return;
+	try {
+		applyWindowsWindowIcon(
+			window.ptr,
+			join(PATHS.RESOURCES_FOLDER, "app.ico"),
+			loadWindowsIconApi(),
+		);
+	} catch (error) {
+		desktopError("windows_icon", "could not set the Windows window icon", error);
+	}
+}
+
+function desktopUserData(): string {
+	return process.env.THINKRAIL_DESKTOP_USER_DATA ?? Utils.paths.userData;
+}
+
+function nativeLabelsPath(): string {
+	return join(desktopUserData(), "native-labels.json");
+}
 
 function writeReady(path: string, payload: unknown): void {
 	mkdirSync(dirname(path), { recursive: true });
@@ -106,7 +227,14 @@ function writeReady(path: string, payload: unknown): void {
 }
 
 async function start(): Promise<void> {
-	const applicationMenuInstalled = installDesktopApplicationMenu(ApplicationMenu, process.platform);
+	setWindowsAppUserModelId();
+	const savedLabels = readNativeLabels(nativeLabelsPath());
+	let dialogLabels: DesktopDialogLabels = readDialogLabels(savedLabels);
+	const applicationMenuInstalled = installDesktopApplicationMenu(
+		ApplicationMenu,
+		process.platform,
+		readMenuLabels(savedLabels),
+	);
 	let menuTarget: {
 		hintVisible(): boolean;
 		showHint(hint: NativeQuitHint): void;
@@ -128,7 +256,11 @@ async function start(): Promise<void> {
 		now: () => performance.now(),
 		every,
 	});
-	const commandGate = createRepeatGate({ isKeyDown: () => readKeys()?.keyDown ?? null, every });
+	const commandGate = createRepeatGate({
+		isKeyDown: () => readKeys()?.keyDown ?? null,
+		sinceKeyDown: () => readKeys()?.sinceKeyDown ?? null,
+		every,
+	});
 	ApplicationMenu.on("application-menu-clicked", (event) => {
 		const action = readMenuAction(event);
 		const target = menuTarget;
@@ -140,9 +272,39 @@ async function start(): Promise<void> {
 		runtimeDir,
 		ptyLibraryName(runtimeTarget(process.platform, process.arch)),
 	);
+	const userData = desktopUserData();
+	const pendingInstallVersion = readPendingInstallVersion(userData);
+	const neutral = process.env.THINKRAIL_DESKTOP_E2E_HOST === "1";
+	const updateController = await createElectrobunUpdateController({
+		isPackaged: Electrobun.app.isPackaged,
+		version,
+		channel,
+		platform: process.platform,
+		arch: process.arch,
+		userData,
+		restartToUpdate: () => quitCoordinator.restartToUpdate(),
+	});
+	// Electrobun resolves and caches ../Resources from cwd; leave the bundle only after those reads.
+	try {
+		process.chdir(homedir());
+	} catch (error) {
+		desktopError("cwd", "could not leave the app bundle working directory", error);
+	}
+	const shellEnv = resolveShellEnv();
+	if (!neutral && process.env.THINKRAIL_DESKTOP_HIDDEN !== "1") {
+		startupSplash = await openStartupSplash(
+			(options) => {
+				const splash = new BrowserWindow(options);
+				setWindowsWindowIcon(splash);
+				return splash;
+			},
+			splashMessage(dialogLabels, pendingInstallVersion),
+		);
+	}
 	const serverRuntime = (await import(
 		pathToFileURL(join(runtimeDir, "server-runtime.ts")).href
 	)) as DesktopServerRuntime;
+	await shellEnv;
 	const host = await serverRuntime.startDesktopHost({
 		runtimeDir,
 		staticDir: join(PATHS.VIEWS_FOLDER, "web"),
@@ -153,18 +315,20 @@ async function start(): Promise<void> {
 			? { openExternal: (url: string) => Utils.openExternal(url) }
 			: {}),
 	});
-	const quitCoordinator = createElectrobunQuitCoordinator(() => host.server.shutdown());
+	setDesktopErrorReporter(host.reportError);
+	const quitCoordinator = createElectrobunQuitCoordinator(
+		() => host.server.shutdown(),
+		() => dialogLabels,
+	);
 	startupQuitCoordinator = quitCoordinator;
 	Electrobun.events.on("before-quit", (event: BeforeQuitEvent) => {
 		quitCoordinator.handleBeforeQuit(event);
 	});
 	const origin = `http://127.0.0.1:${host.port}`;
-	const userData = process.env.THINKRAIL_DESKTOP_USER_DATA ?? Utils.paths.userData;
 	const routes = new RouteStore(join(userData, "routes.json"));
 	const preferences = new PreferenceStore(join(userData, "preferences.json"));
 	const initialRoute = routes.read(BACKEND_PROFILE_ID, WINDOW_ID);
 	const initialPreferences = preferences.read(BACKEND_PROFILE_ID, WINDOW_ID);
-	const neutral = process.env.THINKRAIL_DESKTOP_E2E_HOST === "1";
 	const titleBarProbePath = neutral
 		? undefined
 		: process.env.THINKRAIL_DESKTOP_TITLE_BAR_PROBE_FILE;
@@ -190,14 +354,6 @@ async function start(): Promise<void> {
 	const handlePageZoomGesture = createPageZoomGestureHandler({
 		getPageZoom: () => mainWindow.getPageZoom(),
 		setPageZoom: (zoom) => mainWindow.setPageZoom(zoom),
-	});
-	const updateController = await createElectrobunUpdateController({
-		isPackaged: Electrobun.app.isPackaged,
-		version,
-		channel,
-		platform: process.platform,
-		arch: process.arch,
-		restartToUpdate: quitCoordinator.restartToUpdate,
 	});
 	let handleTitleBarDoubleClick: () => Promise<void> = async () => {};
 	const rpc = BrowserView.defineRPC<DesktopRpc>({
@@ -234,6 +390,10 @@ async function start(): Promise<void> {
 					await updateController.restartToUpdate();
 					return undefined;
 				},
+				dismissInstallResult: async () => {
+					await updateController.dismissInstallResult();
+					return undefined;
+				},
 				showNotification: (input): undefined => {
 					Utils.showNotification({
 						title: input.title,
@@ -255,6 +415,14 @@ async function start(): Promise<void> {
 					mainWindow.setPageZoom(nextPageZoom(mainWindow.getPageZoom(), action));
 				},
 				pageZoomGestureRequested: handlePageZoomGesture,
+				menuLabelsChanged: ({ labels }) => {
+					const menuLabels = readMenuLabels(labels);
+					dialogLabels = readDialogLabels(labels);
+					if (!neutral) writeNativeLabels(nativeLabelsPath(), { ...menuLabels, ...dialogLabels });
+					if (applicationMenuInstalled) {
+						installDesktopApplicationMenu(ApplicationMenu, process.platform, menuLabels);
+					}
+				},
 				routeChanged: ({ hash }) => {
 					if (!neutral) routes.write(BACKEND_PROFILE_ID, WINDOW_ID, hash);
 				},
@@ -286,12 +454,7 @@ async function start(): Promise<void> {
 		preloadSource === null
 			? null
 			: injectInitialWindowChrome(
-					injectInitialDesktopPreferences(
-						usesNativeHostBridge(process.platform)
-							? preferNativeHostBridge(preloadSource)
-							: preloadSource,
-						initialPreferences,
-					),
+					injectInitialDesktopPreferences(preloadSource, initialPreferences),
 					windowChromePreloadSeed(windowChrome),
 				);
 	mainWindow = new BrowserWindow({
@@ -302,8 +465,7 @@ async function start(): Promise<void> {
 		hidden:
 			process.env.THINKRAIL_DESKTOP_HIDDEN === "1" ||
 			process.env.THINKRAIL_DESKTOP_E2E_HOST === "1",
-		navigationRules: neutral ? null : JSON.stringify(["^*", `${origin}/*`]),
-		frame: { x: 80, y: 60, width: 1440, height: 920 },
+		frame: { width: 1440, height: 920 },
 		...(neutral
 			? {}
 			: {
@@ -313,7 +475,9 @@ async function start(): Promise<void> {
 						: {}),
 				}),
 	});
+	setWindowsWindowIcon(mainWindow);
 	if (!neutral) {
+		mainWindow.webview.setNavigationRules(windowNavigationRules(origin));
 		handleTitleBarDoubleClick = createTitleBarDoubleClickHandler({
 			enabled: windowChrome.titleBarDoubleClick,
 			window: mainWindow,
@@ -333,7 +497,7 @@ async function start(): Promise<void> {
 				try {
 					restoreWindowsFrameControls(handle, loadWindowsFrameApi());
 				} catch (error) {
-					console.error("[desktop] could not restore the Windows frame controls", error);
+					desktopError("windows_frame", "could not restore the Windows frame controls", error);
 				}
 			}
 		}
@@ -357,16 +521,45 @@ async function start(): Promise<void> {
 	const navigationProbePath = neutral
 		? undefined
 		: process.env.THINKRAIL_DESKTOP_NAVIGATION_PROBE_FILE;
+	const navigationProbeOrigin = navigationProbePath
+		? process.env.THINKRAIL_DESKTOP_NAVIGATION_PROBE_ORIGIN
+		: undefined;
+	const navigationProbe = {
+		opened: [] as string[],
+		verdicts: [] as string[],
+		commits: [] as string[],
+	};
 	const removeNavigationListeners = installExternalNavigation(
 		Electrobun.events,
 		mainWindow.webview.id,
 		origin,
 		(url) => {
-			if (navigationProbePath) writeReady(navigationProbePath, { url });
-			else Utils.openExternal(url);
+			if (!navigationProbePath) {
+				Utils.openExternal(url);
+				return;
+			}
+			navigationProbe.opened.push(url);
+			writeReady(navigationProbePath, navigationProbe);
 		},
 	);
 	mainWindow.on("close", removeNavigationListeners);
+	if (navigationProbePath) {
+		const record = (into: string[]) => (event: { data: { detail: unknown } }) => {
+			into.push(String(event.data.detail).slice(0, 2_048));
+			writeReady(navigationProbePath, navigationProbe);
+		};
+		const probes = [
+			[`will-navigate-${mainWindow.webview.id}`, record(navigationProbe.verdicts)],
+			[`did-commit-navigation-${mainWindow.webview.id}`, record(navigationProbe.commits)],
+		] as const;
+		for (const [name, listener] of probes) Electrobun.events.on(name, listener);
+		mainWindow.on("close", () => {
+			for (const [name, listener] of probes) Electrobun.events.off(name, listener);
+		});
+	}
+	const releaseStartupSplash = startupSplash
+		? handOffStartupSplash(startupSplash, mainWindow)
+		: undefined;
 	mainWindow.on("focus", () => rpc.send.windowFocusChanged({ focused: true }));
 	mainWindow.on("blur", () => rpc.send.windowFocusChanged({ focused: false }));
 	updateController.subscribe((state) => rpc.send.updateStateChanged(state));
@@ -376,6 +569,12 @@ async function start(): Promise<void> {
 		command: (command) => rpc.send.nativeCommand({ command }),
 	};
 
+	const revealDeepLink = (request: NativeOpenFileRequest) => {
+		if (mainWindow.isMinimized()) mainWindow.unminimize();
+		mainWindow.show();
+		mainWindow.activate();
+		rpc.send.openFile(request);
+	};
 	let ready = false;
 	const startAttributionClaim = attributionClaimOnFirstReadiness(() =>
 		host.server.startAttributionClaim(),
@@ -383,6 +582,9 @@ async function start(): Promise<void> {
 	mainWindow.webview.on("dom-ready", () => {
 		if (ready) return;
 		ready = true;
+		releaseStartupSplash?.();
+		startupSplash = undefined;
+		if (!neutral) deliverDeepLinkWhenReady(revealDeepLink);
 		startAttributionClaim();
 		updateController.start();
 		const readyPath = process.env.THINKRAIL_DESKTOP_READY_FILE;
@@ -397,21 +599,26 @@ async function start(): Promise<void> {
 				mode: neutral ? "host" : "ui",
 			});
 		}
+		setTimeout(stampWindowsTaskbarShortcuts, 0);
 	});
 
 	const controlPath = process.env.THINKRAIL_DESKTOP_CONTROL_FILE;
 	if (controlPath) {
-		let navigationProbeStarted = false;
+		const navigationProbeCommands = new Set<string>();
 		const titleBarProbeCommands = new Set<string>();
 		const windowControlsProbeCommands = new Set<string>();
 		const poll = setInterval(() => {
 			if (!existsSync(controlPath)) return;
 			if (navigationProbePath || titleBarProbePath || windowControlsProbePath) {
 				const command = readFileSync(controlPath, "utf8");
-				if (command === "navigate" && navigationProbePath && !navigationProbeStarted) {
-					navigationProbeStarted = true;
+				const navigationProbeScript =
+					navigationProbeOrigin && Object.hasOwn(NAVIGATION_PROBE_SCRIPTS, command)
+						? NAVIGATION_PROBE_SCRIPTS[command]
+						: undefined;
+				if (navigationProbeScript && !navigationProbeCommands.has(command)) {
+					navigationProbeCommands.add(command);
 					mainWindow.webview.executeJavascript(
-						'window.location.assign("https://example.invalid/thinkrail-navigation-probe");',
+						navigationProbeScript(`${navigationProbeOrigin}/${command}`),
 					);
 				}
 				const titleBarTargets =
@@ -443,14 +650,16 @@ try {
 	await start();
 } catch (error) {
 	const message = error instanceof Error ? error.message : String(error);
-	console.error(message);
+	desktopError("startup", message, error);
+	startupSplash?.hide();
 	try {
+		const labels = readDialogLabels(readNativeLabels(nativeLabelsPath()));
 		await Utils.showMessageBox({
 			type: "error",
-			title: "ThinkRail could not start",
-			message: "ThinkRail could not start",
+			title: labels["desktop.dialog.startFailed"],
+			message: labels["desktop.dialog.startFailed"],
 			detail: message,
-			buttons: ["Quit"],
+			buttons: [labels["desktop.dialog.quit"]],
 		});
 	} finally {
 		if (startupQuitCoordinator) await startupQuitCoordinator.quit();

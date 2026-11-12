@@ -1,6 +1,7 @@
 import type {
 	NativeCommand,
 	NativeNotificationInput,
+	NativeOpenFileRequest,
 	NativeQuitHint,
 	NativeUpdateState,
 	NativeWindowState,
@@ -20,6 +21,7 @@ export type DesktopRpc = {
 			checkForUpdates: { params: undefined; response: undefined };
 			downloadUpdate: { params: undefined; response: undefined };
 			restartToUpdate: { params: undefined; response: undefined };
+			dismissInstallResult: { params: undefined; response: undefined };
 			showNotification: { params: NativeNotificationInput; response: undefined };
 		};
 		messages: {
@@ -29,11 +31,13 @@ export type DesktopRpc = {
 			titleBarDoubleClick: undefined;
 			pageZoomRequested: { action: PageZoomAction };
 			pageZoomGestureRequested: PageZoomGesture;
+			menuLabelsChanged: { labels: Record<string, string> };
 		};
 	};
 	webview: {
 		requests: Record<string, never>;
 		messages: {
+			openFile: NativeOpenFileRequest;
 			updateStateChanged: NativeUpdateState;
 			windowChromeChanged: WindowChromeGeometry;
 			windowStateChanged: NativeWindowState;

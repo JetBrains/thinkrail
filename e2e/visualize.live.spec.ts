@@ -107,3 +107,24 @@ test("visualize (comparison) renders option cards with a recommended pick", {
 	await expect(body).toContainText("GraphQL");
 	await expect(body.locator('[data-recommended="true"]').first()).toBeVisible();
 });
+
+test("a proposed UI change is shown as a rendered before/after mockup file", {
+	tag: "@agent",
+}, async ({ page }) => {
+	test.setTimeout(240_000);
+	await openChatAndSend(
+		page,
+		"I want to change the empty state of a todo list from a plain 'No items' line to a friendly illustration-free card with a heading and a short hint. Show me what you propose — before and after. Do not edit any project files.",
+	);
+	await waitForAgentSettled(page, 210_000);
+	const card = page
+		.locator('[data-testid="tool-card"][data-tool="visualize"]')
+		.filter({ has: page.getByTestId("tool-visualize-file") })
+		.last();
+	await expect(card).toBeVisible();
+	await expect(card).toHaveAttribute("data-status", "done");
+	const links = card.getByTestId("tool-visualize-file-link");
+	await expect(links.first()).toContainText(".thinkrail/context/mockups/");
+	await expect(card.getByTestId("resource-preview-diff")).toBeVisible();
+	await expect(card.getByTestId("resource-preview-diff").locator("iframe")).toHaveCount(2);
+});

@@ -1,12 +1,13 @@
 import type { DelegationRunStatus, TranscriptMessage } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { useEffect, useMemo, useState } from "react";
 import { isConnectedGeneration, useAppStore } from "@/store";
 import { errorText, getTransport, wsErrorCode } from "@/transport";
-import { AskStatesContext, deriveAskStates } from "./askState";
 import { ChatActionsContext } from "./ChatActions";
 import { startDetailPolling } from "./detailPolling";
 import { messagesToRuntime } from "./hydrate";
+import { deriveInteractionStates, InteractionStatesContext } from "./interactionState";
 import { deriveMessageActions } from "./messageActions";
 import { deriveRows } from "./rows";
 import { ChatTurnView } from "./turns";
@@ -70,37 +71,39 @@ function useSubagentTranscript({ workspaceId, parentSessionId, childSessionId }:
 		[runtime, live],
 	);
 	const messageActions = useMemo(() => deriveMessageActions(rows, live), [rows, live]);
-	const askContext = useMemo(
+	const interactionContext = useMemo(
 		() => ({
 			states: runtime
-				? deriveAskStates(runtime.turns, runtime.askAnswers, runtime.toolResults)
+				? deriveInteractionStates(runtime.turns, runtime.toolResponses, runtime.toolResults)
 				: {},
 			focusScope: {},
 		}),
 		[runtime],
 	);
-	return { messages, live, error, rows, messageActions, askContext };
+	return { messages, live, error, rows, messageActions, interactionContext };
 }
 
 export function SubagentTranscriptPane(scope: TranscriptScope) {
-	const { messages, live, error, rows, messageActions, askContext } = useSubagentTranscript(scope);
+	const t = useT();
+	const { messages, live, error, rows, messageActions, interactionContext } =
+		useSubagentTranscript(scope);
 	return (
 		<ChatActionsContext.Provider value={null}>
-			<AskStatesContext.Provider value={askContext}>
+			<InteractionStatesContext.Provider value={interactionContext}>
 				<div
 					data-testid="subagent-transcript"
 					data-live={live || undefined}
-					className="flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto"
+					className="relative flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto"
 				>
 					{error ? (
 						<span role="alert" className="text-feedback-error tr-text-ui">
 							{error}
 						</span>
 					) : messages === null ? (
-						<span className="text-text-muted tr-text-metadata">Loading…</span>
+						<span className="text-text-muted tr-text-metadata">{t("common.loading")}</span>
 					) : rows.length === 0 ? (
 						<span className="text-text-muted tr-text-metadata italic">
-							Nothing in the transcript yet.
+							{t("chat.subagentTranscript.empty")}
 						</span>
 					) : (
 						rows.map((row) => (
@@ -114,7 +117,7 @@ export function SubagentTranscriptPane(scope: TranscriptScope) {
 						))
 					)}
 				</div>
-			</AskStatesContext.Provider>
+			</InteractionStatesContext.Provider>
 		</ChatActionsContext.Provider>
 	);
 }
@@ -127,6 +130,7 @@ export function SubagentTranscriptDialog({
 	onOpenChange: (open: boolean) => void;
 	onCloseAutoFocus?: (event: Event) => void;
 }) {
+	const t = useT();
 	const status = useAppStore((state) => state.status);
 	return (
 		<Dialog open onOpenChange={onOpenChange}>
@@ -137,11 +141,11 @@ export function SubagentTranscriptDialog({
 			>
 				<div className="flex min-w-0 items-baseline gap-8 pr-8">
 					<DialogTitle className="shrink-0 tr-text-ui text-text-default">
-						Subagent transcript
+						{t("chat.subagentTranscript.title")}
 					</DialogTitle>
 					<span className="min-w-0 truncate text-text-muted tr-text-metadata">
 						{scope.childSessionId}
-						{status !== "connected" ? " · stale" : ""}
+						{status !== "connected" ? ` · ${t("chat.subagentTranscript.stale")}` : ""}
 					</span>
 				</div>
 				<SubagentTranscriptPane key={scope.childSessionId} {...scope} />

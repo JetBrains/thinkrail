@@ -1,9 +1,16 @@
 import type { GitDiffScope, ReviewAnchor } from "@thinkrail/contracts";
-import { useMemo } from "react";
-import type { AnchorDraft, ReviewThread, ReviewThreadActions, SurfaceReview } from "@/resources";
+import { t } from "@thinkrail/locales/react";
+import type {
+	AnchorDraft,
+	ReviewThread,
+	ReviewThreadActions,
+	SurfaceReview,
+} from "@thinkrail/resource-renderers";
+import { useMemo, useState } from "react";
 import { toast, useAppStore } from "../store";
 import { errorText, getTransport, supportsRichAnchors } from "../transport";
-import { fileThreads } from "./reviewModel";
+import { scopeKey } from "./changesModel";
+import { fileThreads, sameThreads } from "./reviewModel";
 import { sendReviewComment } from "./reviewSend";
 
 export interface FileReview {
@@ -16,34 +23,38 @@ export function useFileReview(
 	path: string,
 	kind: "inline" | "diff",
 	scope?: GitDiffScope,
+	chatSessionId?: string,
 ): FileReview {
 	const comments = useAppStore((state) => state.reviewsByWorkspace[workspaceId]?.comments);
-	const worktreeThreads = useMemo(() => fileThreads(comments, path, "worktree"), [comments, path]);
-	const baseThreads = useMemo(() => fileThreads(comments, path, "base"), [comments, path]);
+	const worktreeThreads = useStableThreads(
+		useMemo(() => fileThreads(comments, path, "worktree"), [comments, path]),
+	);
+	const baseThreads = useStableThreads(
+		useMemo(() => fileThreads(comments, path, "base"), [comments, path]),
+	);
 	const focusRequest = useAppStore((state) => state.reviewFocusRequest);
-	const focusId =
-		focusRequest && focusRequest.workspaceId === workspaceId ? focusRequest.commentId : null;
+	const focusId = reviewFocusId(focusRequest, workspaceId, kind, scope);
 	const worktreeFocus = useMemo(
 		() => resolveFocus(worktreeThreads, focusId),
 		[worktreeThreads, focusId],
 	);
 	const baseFocus = useMemo(() => resolveFocus(baseThreads, focusId), [baseThreads, focusId]);
 	const worktreeCommenting = useMemo(
-		() => sideCommenting(workspaceId, path, kind, "worktree", scope),
-		[workspaceId, path, kind, scope],
+		() => sideCommenting(workspaceId, path, kind, "worktree", scope, chatSessionId),
+		[workspaceId, path, kind, scope, chatSessionId],
 	);
 	const baseCommenting = useMemo(
-		() => sideCommenting(workspaceId, path, kind, "base", scope),
-		[workspaceId, path, kind, scope],
+		() => sideCommenting(workspaceId, path, kind, "base", scope, chatSessionId),
+		[workspaceId, path, kind, scope, chatSessionId],
 	);
 	const actions = useMemo<ReviewThreadActions>(
 		() => ({
-			onSendComment: (id) => sendReviewComment(workspaceId, id),
+			onSendComment: (id) => sendReviewComment(workspaceId, id, chatSessionId),
 			onDeleteComment: async (id) => {
 				try {
 					await getTransport().request("review.commentDelete", { workspaceId, id });
 				} catch (error) {
-					toast.error(errorText(error), "Couldn't delete the draft");
+					toast.error(errorText(error), t("panels.reviewCommenting.deleteFailed"));
 					throw error;
 				}
 			},
@@ -51,12 +62,12 @@ export function useFileReview(
 				try {
 					await getTransport().request("review.commentUpdate", { workspaceId, id, body });
 				} catch (error) {
-					toast.error(errorText(error), "Couldn't update the comment");
+					toast.error(errorText(error), t("panels.reviewCommenting.updateFailed"));
 					throw error;
 				}
 			},
 		}),
-		[workspaceId],
+		[workspaceId, chatSessionId],
 	);
 	const onFocusHandled = useMemo(
 		() => () => useAppStore.getState().clearReviewFocus(focusId ?? undefined),
@@ -93,6 +104,26 @@ export function useFileReview(
 	);
 }
 
+function useStableThreads(threads: ReviewThread[]): ReviewThread[] {
+	const [stable, setStable] = useState(threads);
+	if (stable === threads || sameThreads(stable, threads)) return stable;
+	setStable(threads);
+	return threads;
+}
+
+export function reviewFocusId(
+	request: ReturnType<typeof useAppStore.getState>["reviewFocusRequest"],
+	workspaceId: string,
+	kind: "inline" | "diff",
+	scope?: GitDiffScope,
+): string | null {
+	if (!request || request.workspaceId !== workspaceId) return null;
+	const target = request.surface;
+	if (target.kind !== kind) return null;
+	if (target.kind === "diff" && (!scope || scopeKey(scope) !== scopeKey(target.scope))) return null;
+	return request.commentId;
+}
+
 function resolveFocus(
 	threads: ReviewThread[],
 	focusId: string | null,
@@ -114,9 +145,6 @@ export function commentKindForDraft(
 		: "file";
 }
 
-export const RICH_ANCHOR_HOST_TOO_OLD =
-	"This host is older than the review surface: it would not keep a region or cell comment. Update the host, or comment on the source instead.";
-
 export function draftNeedsRichAnchors(draft: AnchorDraft): boolean {
 	return draft.selectors.some(
 		(selector) => selector.kind === "region" || selector.kind === "structural",
@@ -129,13 +157,14 @@ function sideCommenting(
 	kind: "inline" | "diff",
 	side: ReviewAnchor["side"],
 	scope: GitDiffScope | undefined,
+	chatSessionId: string | undefined,
 ): SurfaceReview["commenting"] {
 	const add = (draft: AnchorDraft, body: string) => {
 		if (
 			draftNeedsRichAnchors(draft) &&
 			!supportsRichAnchors(useAppStore.getState().protocolVersion)
 		) {
-			return Promise.reject(new Error(RICH_ANCHOR_HOST_TOO_OLD));
+			return Promise.reject(new Error(t("panels.reviewCommenting.hostTooOld")));
 		}
 		return getTransport().request("review.commentAdd", {
 			workspaceId,
@@ -150,7 +179,7 @@ function sideCommenting(
 			try {
 				await add(draft, text);
 			} catch (error) {
-				toast.error(errorText(error), "Couldn't save the comment");
+				toast.error(errorText(error), t("panels.reviewCommenting.saveFailed"));
 				throw error;
 			}
 		},
@@ -159,10 +188,10 @@ function sideCommenting(
 			try {
 				comment = await add(draft, text);
 			} catch (error) {
-				toast.error(errorText(error), "Couldn't save the comment");
+				toast.error(errorText(error), t("panels.reviewCommenting.saveFailed"));
 				throw error;
 			}
-			await sendReviewComment(workspaceId, comment.id);
+			await sendReviewComment(workspaceId, comment.id, chatSessionId);
 		},
 	};
 }

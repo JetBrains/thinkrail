@@ -70,3 +70,35 @@ export function chipClass(tone: ChipTone, interactive = false): string {
 			),
 	);
 }
+
+export type SplitTone = "primary" | "warning" | "neutral";
+
+const SPLIT_TONE: Record<SplitTone, { frame: string; hover: string }> = {
+	primary: {
+		frame: "border-primary-soft bg-primary-subtle text-primary",
+		hover: "hover:bg-primary-soft data-[state=open]:bg-primary-soft",
+	},
+	warning: {
+		frame: "border-feedback-warning-muted bg-feedback-warning-subtle text-feedback-warning",
+		hover: "hover:bg-feedback-warning-muted data-[state=open]:bg-feedback-warning-muted",
+	},
+	neutral: {
+		frame: "border-control-border-default text-text-muted",
+		hover:
+			"hover:bg-control-bg-hovered hover:text-text-default data-[state=open]:bg-control-bg-selected",
+	},
+};
+
+export function splitFrameClass(tone: SplitTone): string {
+	return cn(
+		"inline-flex h-20 shrink-0 items-stretch overflow-hidden rounded-sm border",
+		SPLIT_TONE[tone].frame,
+	);
+}
+
+export function splitPartClass(tone: SplitTone): string {
+	return cn(
+		"window-no-drag flex items-center gap-4 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary disabled:opacity-60 [&_svg]:size-12 [&_svg]:shrink-0",
+		SPLIT_TONE[tone].hover,
+	);
+}

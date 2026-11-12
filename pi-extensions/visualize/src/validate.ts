@@ -5,7 +5,20 @@ export interface MermaidSource {
 	source: string;
 }
 
+export interface FileSource {
+	location: "path" | "before";
+	path: string;
+}
+
+export function fileSources(params: VisualizeParams): FileSource[] {
+	if (params.type !== "file") return [];
+	const sources: FileSource[] = [{ location: "path", path: params.path ?? "" }];
+	if (params.before !== undefined) sources.push({ location: "before", path: params.before });
+	return sources;
+}
+
 export function mermaidSources(params: VisualizeParams): MermaidSource[] {
+	if (params.type === "file") return [];
 	if (params.type === "diagram") {
 		return [{ location: "mermaid", source: params.mermaid ?? "" }];
 	}
@@ -14,11 +27,37 @@ export function mermaidSources(params: VisualizeParams): MermaidSource[] {
 	);
 }
 
+function samePath(left: string, right: string): boolean {
+	const normalize = (path: string) =>
+		path
+			.trim()
+			.replaceAll("\\", "/")
+			.replace(/^(\.\/)+/, "");
+	return normalize(left) === normalize(right);
+}
+
 export function validateShape(params: VisualizeParams): void {
 	if (params.type === "diagram") {
 		if (!params.mermaid || params.mermaid.trim() === "") {
 			throw new Error(
 				'visualize: `mermaid` is required and must be a non-empty string when type is "diagram".',
+			);
+		}
+		return;
+	}
+
+	if (params.type === "file") {
+		if (!params.path || params.path.trim() === "") {
+			throw new Error(
+				'visualize: `path` is required and must be a non-empty string when type is "file".',
+			);
+		}
+		if (params.before !== undefined && params.before.trim() === "") {
+			throw new Error("visualize: `before` must be a non-empty path when given.");
+		}
+		if (params.before !== undefined && samePath(params.before, params.path)) {
+			throw new Error(
+				"visualize: `before` names the same file as `path`; omit `before` to show one file, or point it at a copy of the previous version.",
 			);
 		}
 		return;

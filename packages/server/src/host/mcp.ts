@@ -32,7 +32,12 @@ import {
 	writeMcpServerEntry,
 } from "../agent";
 import { logger } from "../log";
-import { approveProjectMcpServer, getProjects, setProjectMcpOverride } from "../projects";
+import {
+	approveProjectMcpServer,
+	getProjects,
+	revokeProjectMcpTool,
+	setProjectMcpOverride,
+} from "../projects";
 import { getWorkspace, listAllWorkspaceRecords, listWorkspaceRecords } from "../workspaces";
 
 const log = logger("host");
@@ -152,7 +157,7 @@ function ownedSession(workspaceId: string, sessionId: string): void {
 function reloadLiveSessions(workspaceIds: readonly string[]): void {
 	const sessionIds = workspaceIds.flatMap((workspaceId) => liveSessionIdsOf(workspaceId));
 	void reconcileMcpSessions(sessionIds).catch((error) => {
-		log.warn("MCP config change was not applied to the open chats", error as Error);
+		log.warn("MCP config change was not applied to the open chats", error);
 	});
 }
 
@@ -245,6 +250,22 @@ export function mcpSetProjectOverride(params: {
 			...(params.exposure !== undefined ? { exposure: params.exposure } : {}),
 		});
 		return projectWorkspaces(project);
+	});
+}
+
+export function mcpRevokeToolGrant(params: {
+	workspaceId: string;
+	name: string;
+	tool: string;
+}): Promise<McpListResult> {
+	const name = serverName(params.name);
+	if (typeof params.tool !== "string" || params.tool.length === 0) {
+		throw new CodedError("MCP_CONFIG_INVALID", "Name the MCP tool to stop always allowing.");
+	}
+	const { tool } = params;
+	return mutateManaged(params.workspaceId, ({ project }) => {
+		revokeProjectMcpTool(project.id, name, tool);
+		return [];
 	});
 }
 

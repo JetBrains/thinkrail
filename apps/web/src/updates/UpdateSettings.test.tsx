@@ -18,6 +18,9 @@ function nativeState(
 		progress: null,
 		error: null,
 		failedPhase: null,
+		installStep: null,
+		log: [],
+		lastInstall: null,
 		...overrides,
 	};
 }
@@ -42,6 +45,7 @@ function nativeUpdates(
 		checkForUpdates: () => {},
 		downloadUpdate: () => {},
 		restartToUpdate: () => {},
+		dismissInstallResult: () => {},
 	};
 }
 
@@ -295,4 +299,33 @@ test("failed lifecycle and request rejection offer retry plus fixed manual fallb
 		expect(markup).not.toContain("private server diagnostic");
 		expect(renderAffordance(updates)).toContain("Update failed");
 	}
+});
+
+test("a failed last install explains its cause in Settings and keeps the topbar chip", () => {
+	const failedInstall = {
+		outcome: "failed",
+		fromVersion: "0.1.0-nightly.45",
+		toVersion: "0.1.0-nightly.46",
+		failedStep: "swapping",
+		detail: "AccessDenied",
+		log: [],
+	} as const;
+	const state = nativeState("ready", {
+		availableVersion: "0.1.0-nightly.46",
+		lastInstall: failedInstall,
+	});
+	const markup = render(nativeUpdates(state));
+	expect(markup).toContain("update-last-install");
+	expect(markup).toContain("Another program is using ThinkRail&#x27;s install folder");
+	expect(markup).toContain("Install &amp; Restart");
+	const chip = renderAffordance(nativeUpdates(state));
+	expect(chip).toContain("Update didn&#x27;t install");
+	const installed = renderAffordance(
+		nativeUpdates(
+			nativeState("idle", {
+				lastInstall: { ...failedInstall, outcome: "installed", failedStep: null, detail: null },
+			}),
+		),
+	);
+	expect(installed).toBe("");
 });

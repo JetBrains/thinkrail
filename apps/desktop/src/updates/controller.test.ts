@@ -64,7 +64,7 @@ class FakeUpdater implements NativeUpdaterDependency {
 	}
 }
 
-function scheduledController(updater: FakeUpdater, restartToUpdate = async () => {}) {
+function scheduledController(updater: FakeUpdater, restartToUpdate = async () => true) {
 	const scheduled: Array<{ delay: number; callback: () => void; cancelled: boolean }> = [];
 	const controller = createNativeUpdateController({
 		enabled: true,
@@ -119,6 +119,7 @@ test("enables only supported packaged production identities and blocks artifact 
 	for (const channel of ["stable", "canary"]) {
 		for (const [platform, arch] of [
 			["darwin", "arm64"],
+			["darwin", "x64"],
 			["win32", "x64"],
 			["linux", "x64"],
 			["linux", "arm64"],
@@ -132,7 +133,10 @@ test("enables only supported packaged production identities and blocks artifact 
 	expect(nativeUpdatesEnabled({ ...enabled, baseUrl: "not a URL" })).toBe(false);
 	expect(nativeUpdatesEnabled({ ...enabled, baseUrl: "http://updates.example.test" })).toBe(false);
 	expect(nativeUpdatesEnabled({ ...enabled, artifactTestSeam: true })).toBe(false);
-	expect(nativeUpdatesEnabled({ ...enabled, platform: "darwin", arch: "x64" })).toBe(false);
+	expect(nativeUpdatesEnabled({ ...enabled, platform: "darwin", arch: "x64" })).toBe(true);
+	expect(nativeUpdatesEnabled({ ...enabled, platform: "win32", arch: "arm64" as never })).toBe(
+		false,
+	);
 	expect(hasDesktopArtifactTestSeam({ THINKRAIL_DESKTOP_READY_FILE: "/tmp/ready" })).toBe(true);
 	expect(hasDesktopArtifactTestSeam({})).toBe(false);
 });
@@ -263,6 +267,7 @@ test("install clicked from updateReady waits for the coalesced download acknowle
 	let restartCalls = 0;
 	const { controller } = scheduledController(updater, async () => {
 		restartCalls += 1;
+		return true;
 	});
 	await findAvailable(controller);
 	await controller.downloadUpdate();
@@ -324,7 +329,7 @@ test("check and download failures retain their retry phase", async () => {
 
 test("a prepared package survives an unrelated failed check and installs without a feed recheck", async () => {
 	const updater = new FakeUpdater();
-	const restart = deferred<void>();
+	const restart = deferred<boolean>();
 	let restartCalls = 0;
 	const { controller } = scheduledController(updater, () => {
 		restartCalls += 1;
@@ -354,7 +359,7 @@ test("a prepared package survives an unrelated failed check and installs without
 	expect(updater.checkCalls).toBe(checkCallsAfterPreparation + 1);
 	expect(restartCalls).toBe(1);
 	expect((await controller.getState()).status).toBe("installing");
-	restart.resolve(undefined);
+	restart.resolve(true);
 	await settle();
 });
 
@@ -364,6 +369,7 @@ test("a failed installation retains the local package and retry dispatches insta
 	const { controller } = scheduledController(updater, async () => {
 		restartCalls += 1;
 		if (restartCalls === 1) throw new Error("restart was refused");
+		return true;
 	});
 	await prepareUpdate(controller, updater);
 	const checked = updater.checkCalls;

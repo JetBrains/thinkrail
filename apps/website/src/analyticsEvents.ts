@@ -206,7 +206,10 @@ export function installCommandCopiedEvent(
 	| undefined {
 	const shell = installCommandShells.get(button.getAttribute("data-copy") ?? "");
 	const ctaLocation = ctaLocationForElement(button);
-	if (shell === undefined || (ctaLocation !== "hero" && ctaLocation !== "install_section")) {
+	if (
+		shell === undefined ||
+		(ctaLocation !== "hero" && ctaLocation !== "install_section" && ctaLocation !== "blog_post")
+	) {
 		return undefined;
 	}
 	return {
@@ -229,12 +232,8 @@ export function installLinkShareClickedEvent(
 	};
 }
 
-export function cliDisclosureLocation(
-	disclosure: CliDisclosure,
-): "hero" | "install_section" | undefined {
-	if (disclosure.matches("details.cli-disclosure")) return "hero";
-	if (disclosure.matches("details.install-reference")) return "install_section";
-	return undefined;
+export function cliDisclosureLocation(disclosure: CliDisclosure): "blog_post" | undefined {
+	return disclosure.matches(".blog-post details.cli-disclosure") ? "blog_post" : undefined;
 }
 
 export function cliDisclosureOpenedEvent(

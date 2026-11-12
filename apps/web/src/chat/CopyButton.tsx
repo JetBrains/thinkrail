@@ -1,28 +1,32 @@
 import { RiCheckLine as Check, RiFileCopyLine as Copy } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useRef, useState } from "react";
 import { copyText } from "@/lib";
 
 export function CopyButton({
 	getText,
-	label = "Copy message",
+	label,
 	className,
 }: {
 	getText: () => string;
 	label?: string;
 	className?: string | undefined;
 }) {
+	const t = useT();
+	const accessibleLabel = label ?? t("chat.copyMessage");
 	const [copied, setCopied] = useState(false);
 	const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	useEffect(() => () => (timer.current ? clearTimeout(timer.current) : undefined), []);
 
 	return (
-		<button
-			type="button"
+		<IconButton
+			size="s"
+			icon={copied ? Check : Copy}
 			data-testid="chat-copy"
 			data-copied={copied || undefined}
-			aria-label={label}
-			title={label}
+			label={accessibleLabel}
 			onClick={() => {
 				void (async () => {
 					if (!(await copyText(getText()))) return;
@@ -32,11 +36,9 @@ export function CopyButton({
 				})();
 			}}
 			className={cn(
-				"flex h-lh w-24 shrink-0 items-center justify-center rounded-sm text-text-muted opacity-0 transition hover:bg-control-bg-hovered hover:text-text-default focus-visible:opacity-100 group-hover:opacity-100 data-[copied]:opacity-100",
+				"shrink-0 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 data-[copied]:opacity-100",
 				className,
 			)}
-		>
-			{copied ? <Check className="size-14" /> : <Copy className="size-14" />}
-		</button>
+		/>
 	);
 }

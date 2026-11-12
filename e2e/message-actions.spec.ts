@@ -9,7 +9,7 @@ async function restoreChatWidthBounded(page: Page): Promise<void> {
 	if (!(await page.getByTestId("settings-dialog").isVisible())) {
 		await page.getByTestId("open-settings").click();
 	}
-	await page.getByTestId("settings-nav-line-width").click();
+	await page.getByTestId("settings-nav-chat").click();
 	const bounded = page.getByTestId("chat-line-width-bounded");
 	if ((await bounded.getAttribute("data-active")) !== "true") {
 		await bounded.click();
@@ -105,7 +105,7 @@ test("an unbounded transcript keeps the user message within the visible pane", a
 	// Unbounded chat width fixes the transcript row to the measure, wider than a narrow pane. A
 	// right-aligned user message used to be pushed to the far edge of that row and clip on the left;
 	// it must stay within the horizontally-scrollable viewport (readable without scrolling right).
-	const pasted = `Refactoring of our own escaped react-markdown output ${"same risk class as the shiki path in chat/Markdown ".repeat(
+	const pasted = `Refactoring of our own escaped react-markdown output ${"same risk class as the code path in chat/Markdown ".repeat(
 		6,
 	)}`;
 	await openFixtureProject(page);
@@ -124,7 +124,7 @@ test("an unbounded transcript keeps the user message within the visible pane", a
 
 	try {
 		await page.getByTestId("open-settings").click();
-		await page.getByTestId("settings-nav-line-width").click();
+		await page.getByTestId("settings-nav-chat").click();
 		const bounded = page.getByTestId("chat-line-width-bounded");
 		await expect(bounded).toHaveAttribute("data-active", "true");
 		await bounded.click();

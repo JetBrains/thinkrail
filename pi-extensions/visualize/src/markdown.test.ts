@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { comparisonMarkdown, mermaidFence } from "./markdown.ts";
+import { comparisonMarkdown, fileMarkdown, mermaidFence } from "./markdown.ts";
 
 describe("mermaidFence", () => {
 	test("wraps the source in a mermaid fence", () => {
@@ -57,5 +57,14 @@ describe("comparisonMarkdown", () => {
 		const out = comparisonMarkdown("Choices", options);
 		expect(out).toContain("Choices");
 		expect(out.indexOf("Choices")).toBeLessThan(out.indexOf("Option A"));
+	});
+});
+
+describe("fileMarkdown", () => {
+	test("names the shown file, the before side, and the title", () => {
+		expect(fileMarkdown({ path: "mock.html" })).toBe("Showing `mock.html` rendered.");
+		expect(fileMarkdown({ title: "Settings", path: "after.html", before: "before.html" })).toBe(
+			"### Settings\n\nShowing `after.html` (before: `before.html`) rendered as a before/after diff.",
+		);
 	});
 });

@@ -1,10 +1,18 @@
-import { isAbsolutePath, projectRelativePath } from "@/lib";
+import { isAbsolutePath, normalizePath, projectRelativePath } from "@/lib";
 
 const URI_SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:/;
 const WINDOWS_ABSOLUTE_PATH = /^[A-Za-z]:[\\/]/;
 
 export function hasUriScheme(value: string): boolean {
 	return URI_SCHEME.test(value);
+}
+
+export function mentionLookup(query: string): { dir: string; prefix: string } {
+	const path = normalizePath(query);
+	const slash = path.lastIndexOf("/");
+	return slash >= 0
+		? { dir: path.slice(0, slash), prefix: path.slice(slash + 1).toLowerCase() }
+		: { dir: "", prefix: path.toLowerCase() };
 }
 
 export function isWindowsAbsolutePath(value: string): boolean {

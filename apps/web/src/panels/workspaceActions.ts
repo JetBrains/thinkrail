@@ -1,8 +1,13 @@
 import {
 	type EditorInfo,
+	PROJECT_ORDER_PROTOCOL_VERSION,
+	PROJECT_RENAME_PROTOCOL_VERSION,
+	type Project,
 	WORKSPACE_RENAME_PROTOCOL_VERSION,
 	type Workspace,
 } from "@thinkrail/contracts";
+import { t } from "@thinkrail/locales/react";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import {
 	type FocusEvent,
 	type KeyboardEvent,
@@ -16,6 +21,11 @@ import { supportsWorkspaceSettling, toast, useAppStore } from "../store";
 import { errorText, getTransport, prewarmWorkspaceSkillLoad } from "../transport";
 
 const PREWARM_WORKSPACE_LIMIT = 8;
+
+export function goToProjectHome(projectId: string): void {
+	useAppStore.getState().selectProject(projectId, { reveal: true });
+	void loadProjectWorkspaces(projectId).catch(() => {});
+}
 
 export async function loadProjectWorkspaces(projectId: string): Promise<Workspace[]> {
 	const rows = await getTransport().request("workspace.list", { projectId });
@@ -39,19 +49,44 @@ export function canRenameWorkspace(protocolVersion: number | null, workspace: Wo
 }
 
 export function canSettleWorkspace(protocolVersion: number | null, workspace: Workspace): boolean {
-	return supportsWorkspaceSettling(protocolVersion) && workspace.kind !== "default";
+	return (
+		supportsWorkspaceSettling(protocolVersion) &&
+		workspace.kind !== "default" &&
+		workspace.kind !== "chat"
+	);
 }
 
 export function settleWorkspace(workspaceId: string): void {
 	void getTransport()
 		.request("workspace.settle", { id: workspaceId })
-		.catch((err) => toast.error(errorText(err, "Couldn't settle the workspace")));
+		.catch((err) => toast.error(errorText(err, t("panels.workspaceActions.settleFailed"))));
 }
 
 export function unsettleWorkspace(workspaceId: string): void {
 	void getTransport()
 		.request("workspace.unsettle", { id: workspaceId })
-		.catch((err) => toast.error(errorText(err, "Couldn't keep the workspace active")));
+		.catch((err) => toast.error(errorText(err, t("panels.workspaceActions.keepActiveFailed"))));
+}
+
+export function markWorkspaceUnread(workspaceId: string): void {
+	if (!useAppStore.getState().beginMarkWorkspaceUnread(workspaceId)) return;
+	void getTransport()
+		.request("workspace.markUnread", { id: workspaceId })
+		.then(({ record }) => useAppStore.getState().finishMarkWorkspaceUnread(workspaceId, record))
+		.catch((err) => {
+			useAppStore.getState().finishMarkWorkspaceUnread(workspaceId, null);
+			toast.error(errorText(err, t("panels.workspaceActions.markUnreadFailed")));
+		});
+}
+
+export function markWorkspaceRead(workspaceId: string): void {
+	void getTransport()
+		.request("workspace.markRead", { id: workspaceId })
+		.then(({ records }) => {
+			const store = useAppStore.getState();
+			for (const record of records) store.applySessionState(record);
+		})
+		.catch((err) => toast.error(errorText(err, t("panels.workspaceActions.markReadFailed"))));
 }
 
 export function workspaceRenameValue(currentName: string, input: string): string | null {
@@ -129,7 +164,7 @@ export function createRenameController<T>(options: {
 	};
 }
 
-export interface WorkspaceRename {
+export interface InlineRename {
 	editing: boolean;
 	nameRef: RefObject<HTMLInputElement | null>;
 	start(): void;
@@ -140,19 +175,21 @@ export interface WorkspaceRename {
 	onMenuCloseAutoFocus(event: Event): void;
 }
 
-type RenameControllerOptions = Parameters<typeof createRenameController<Workspace>>[0];
+type Renameable = { id: string; name: string };
 
-function useRenameController(options: RenameControllerOptions): RenameController<Workspace> {
+function useRenameController<T>(
+	options: Parameters<typeof createRenameController<T>>[0],
+): RenameController<T> {
 	const [controller] = useState(() => createRenameController(options));
 	return controller;
 }
 
-export function useWorkspaceRename(options: {
-	workspace: Workspace | null;
+export function useInlineRename<T extends Renameable>(options: {
+	target: T | null;
 	canRename: boolean;
-	onRename: (workspace: Workspace, name: string) => void;
-}): WorkspaceRename {
-	const { workspace, canRename, onRename } = options;
+	onRename: (target: T, name: string) => void;
+}): InlineRename {
+	const { target, canRename, onRename } = options;
 	const [editing, setEditing] = useState(false);
 	const nameRef = useRef<HTMLInputElement>(null);
 	const enterRenameRef = useRef(false);
@@ -160,16 +197,16 @@ export function useWorkspaceRename(options: {
 	useInsertionEffect(() => {
 		onRenameRef.current = onRename;
 	});
-	const controller = useRenameController({
+	const controller = useRenameController<T>({
 		canRename: false,
-		onRename: (target, name) => onRenameRef.current(target, name),
+		onRename: (renamed, name) => onRenameRef.current(renamed, name),
 		onEditingChange: setEditing,
 	});
 
-	const workspaceId = workspace?.id ?? null;
+	const targetId = target?.id ?? null;
 	useEffect(() => {
 		controller.reset();
-	}, [controller, workspaceId]);
+	}, [controller, targetId]);
 
 	useEffect(() => {
 		controller.setCanRename(canRename);
@@ -188,13 +225,14 @@ export function useWorkspaceRename(options: {
 		editing,
 		nameRef,
 		start() {
-			if (!workspace) return;
+			if (!target) return;
 			enterRenameRef.current = true;
-			controller.start(workspace, workspace.name);
+			controller.start(target, target.name);
 		},
 		inputProps: {
 			onBlur: (event) => controller.commit(event.currentTarget.value),
 			onKeyDown: (event) => {
+				if (isImeComposing(event.nativeEvent)) return;
 				if (event.key === "Enter") {
 					event.preventDefault();
 					event.currentTarget.blur();
@@ -233,7 +271,7 @@ export function useEditors(): EditorInfo[] {
 export function removeWorkspace(workspaceId: string): void {
 	void getTransport()
 		.request("workspace.remove", { id: workspaceId })
-		.catch((err) => toast.error(errorText(err, "Failed to remove workspace")));
+		.catch((err) => toast.error(errorText(err, t("panels.workspaceActions.removeFailed"))));
 }
 
 export function openWorkspaceIn(workspace: Workspace, editor: EditorInfo): void {
@@ -244,17 +282,51 @@ export function openWorkspaceIn(workspace: Workspace, editor: EditorInfo): void 
 	}
 	void getTransport()
 		.request("workspace.openIn", { id: workspace.id, editor: editor.id })
-		.catch((err) => toast.error(errorText(err, `Failed to open in ${editor.label}`)));
+		.catch((err) =>
+			toast.error(
+				errorText(err, t("panels.workspaceActions.openInFailed", { editor: editor.label })),
+			),
+		);
 }
 
 export function revealWorkspace(workspace: Workspace): void {
 	void getTransport()
 		.request("workspace.reveal", { id: workspace.id })
-		.catch((err) => toast.error(errorText(err, "Failed to reveal workspace")));
+		.catch((err) => toast.error(errorText(err, t("panels.workspaceActions.revealFailed"))));
+}
+
+export function canRenameProject(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= PROJECT_RENAME_PROTOCOL_VERSION;
+}
+
+export function renameProject(project: Project, name: string): void {
+	void getTransport()
+		.request("project.rename", { id: project.id, name })
+		.catch((err) => toast.error(errorText(err, t("panels.workspaceActions.renameProjectFailed"))));
+}
+
+export function canMoveProject(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= PROJECT_ORDER_PROTOCOL_VERSION;
+}
+
+export async function moveProject(
+	id: string,
+	targetId: string,
+	placement: "before" | "after",
+): Promise<boolean> {
+	try {
+		await getTransport().request("project.move", { id, targetId, placement });
+		return true;
+	} catch (err) {
+		toast.error(errorText(err, t("panels.workspaceActions.moveProjectFailed")));
+		return false;
+	}
 }
 
 export function renameWorkspace(workspace: Workspace, name: string): void {
 	void getTransport()
 		.request("workspace.rename", { id: workspace.id, name })
-		.catch((err) => toast.error(errorText(err, "Failed to rename workspace")));
+		.catch((err) =>
+			toast.error(errorText(err, t("panels.workspaceActions.renameWorkspaceFailed"))),
+		);
 }

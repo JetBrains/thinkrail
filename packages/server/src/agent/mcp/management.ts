@@ -47,7 +47,7 @@ function configPath(scope: McpServerScope, worktree: string): string {
 function readRawEntry(path: string, name: string): unknown {
 	if (!existsSync(path)) return undefined;
 	try {
-		const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
+		const parsed: unknown = JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, ""));
 		const servers = isRecord(parsed) ? parsed.mcpServers : undefined;
 		return isRecord(servers) && Object.hasOwn(servers, name) ? servers[name] : undefined;
 	} catch {

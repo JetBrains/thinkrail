@@ -10,11 +10,12 @@ export {
 	type McpProjectPolicy,
 	mcpNamespace,
 	mcpPolicyOf,
+	mcpToolLabel,
 	normalizeExposureForHost,
 	projectMcpConfigPath,
 	validateMcpServerConfig,
 } from "./config";
-export { createMcpEngine } from "./engine";
+export { createMcpEngine, HOST_BUILTIN_EXTENSION_NAMES } from "./engine";
 export { readMcpServerLog } from "./log";
 export {
 	effectiveMcpServerConfig,
@@ -31,6 +32,7 @@ export {
 } from "./results";
 export {
 	createMcpSessionHost,
+	MCP_CONFIRM_ALWAYS,
 	MCP_CONFIRM_CHAT,
 	MCP_CONFIRM_DENY,
 	MCP_CONFIRM_ONCE,

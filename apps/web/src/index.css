@@ -7,7 +7,10 @@
 @import "./styles/global.css";
 
 @source "../../../packages/ui";
+@source "../../../packages/resource-renderers/src";
 @source "../../../thinkrail-extensions/*/web/**/*.{ts,tsx}";
+
+@custom-variant button-disabled (&:is([data-disabled="true"], :disabled:not([data-loading])));
 
 /*
  * Map the ThinkRail design tokens (tokens.css) onto Tailwind's theme namespaces. `inline` makes the
@@ -68,26 +71,128 @@
 		}
 	}
 
-	/* The "agent working" brand badge (`components/RunningIcon`): the ring train, the monogram pulsing once per lap, and three sparks (90-unit dashes on the pathLength-1000 outline) tracing the monogram. */
-	--animate-working-train: working-train 1.875s linear infinite;
-	@keyframes working-train {
-		to {
-			transform: rotate(360deg);
+	/* The loading placeholder stays invisible through a short grace so fast reads never flash it. */
+	--animate-loading-in: loading-in 150ms ease-out 300ms both;
+	@keyframes loading-in {
+		from {
+			opacity: 0;
 		}
-	}
-	--animate-working-pulse: working-pulse 1.875s ease-in-out infinite;
-	@keyframes working-pulse {
-		0%,
-		100% {
+		to {
 			opacity: 1;
 		}
-		50% {
-			opacity: 0.25;
+	}
+
+	/* The "agent working" brand badge (`components/RunningIcon`): the split frame and the six monogram strokes draw and erase on one 3.263s cycle. */
+	--animate-loader-frame: loader-frame 3.263s infinite;
+	@keyframes loader-frame {
+		0% {
+			stroke-dashoffset: 1000;
+			animation-timing-function: linear;
+		}
+		37.606%,
+		59.341% {
+			stroke-dashoffset: 0;
+			animation-timing-function: linear;
+		}
+		96.947%,
+		100% {
+			stroke-dashoffset: -1000;
 		}
 	}
-	--animate-working-trace: working-trace 6.75s linear infinite;
-	@keyframes working-trace {
-		to {
+	--animate-loader-t-bar: loader-t-bar 3.263s -2.036s infinite;
+	@keyframes loader-t-bar {
+		0% {
+			stroke-dashoffset: 1000;
+			animation-timing-function: linear;
+		}
+		8.693%,
+		44.299% {
+			stroke-dashoffset: 0;
+			animation-timing-function: linear;
+		}
+		52.991%,
+		100% {
+			stroke-dashoffset: -1000;
+		}
+	}
+	--animate-loader-t-stem: loader-t-stem 3.263s -2.036s infinite;
+	@keyframes loader-t-stem {
+		0% {
+			stroke-dashoffset: 1000;
+			animation-timing-function: linear;
+		}
+		13.638%,
+		44.299% {
+			stroke-dashoffset: 0;
+			animation-timing-function: linear;
+		}
+		57.936%,
+		100% {
+			stroke-dashoffset: -1000;
+		}
+	}
+	--animate-loader-r-tail: loader-r-tail 3.263s -2.036s infinite;
+	@keyframes loader-r-tail {
+		0% {
+			stroke-dashoffset: 1000;
+			animation-timing-function: linear;
+		}
+		16.708%,
+		44.299% {
+			stroke-dashoffset: 0;
+			animation-timing-function: linear;
+		}
+		61.007%,
+		100% {
+			stroke-dashoffset: -1000;
+		}
+	}
+	--animate-loader-r-bowl: loader-r-bowl 3.263s -1.491s infinite;
+	@keyframes loader-r-bowl {
+		0% {
+			stroke-dashoffset: 1000;
+			animation-timing-function: linear;
+		}
+		20.35%,
+		44.299% {
+			stroke-dashoffset: 0;
+			animation-timing-function: linear;
+		}
+		64.649%,
+		100% {
+			stroke-dashoffset: -1000;
+		}
+	}
+	--animate-loader-r-stem: loader-r-stem 3.263s -1.491s infinite;
+	@keyframes loader-r-stem {
+		0%,
+		3.19% {
+			stroke-dashoffset: 1000;
+			animation-timing-function: linear;
+		}
+		7.648%,
+		47.489% {
+			stroke-dashoffset: 0;
+			animation-timing-function: linear;
+		}
+		51.946%,
+		100% {
+			stroke-dashoffset: -1000;
+		}
+	}
+	--animate-loader-r-leg: loader-r-leg 3.263s -1.491s infinite;
+	@keyframes loader-r-leg {
+		0% {
+			stroke-dashoffset: 1000;
+			animation-timing-function: linear;
+		}
+		11.535%,
+		44.299% {
+			stroke-dashoffset: 0;
+			animation-timing-function: linear;
+		}
+		55.834%,
+		100% {
 			stroke-dashoffset: -1000;
 		}
 	}
@@ -116,35 +221,33 @@
 }
 
 @utility window-drag {
-	-webkit-app-region: var(--window-chrome-drag-region, no-drag);
-	app-region: var(--window-chrome-drag-region, no-drag);
+	-webkit-app-region: no-drag;
+	app-region: no-drag;
+
+	:root[data-window-chrome-drag-region="drag"] & {
+		-webkit-app-region: drag;
+		app-region: drag;
+	}
 }
 @utility window-no-drag {
 	-webkit-app-region: no-drag;
 	app-region: no-drag;
 }
 
+.xterm .xterm-rows {
+	font-variant-ligatures: none;
+}
+
 .pierre-code-surface {
 	color-scheme: inherit;
 	--diffs-font-family: var(--tr-font-family-code);
 	--diffs-header-font-family: var(--tr-font-family-code);
-	--diffs-font-size: var(--tr-font-size-s11);
-	--diffs-line-height: var(--tr-line-height-default);
+	--diffs-font-size: var(--tr-font-size-code-dense);
+	--diffs-line-height: var(--tr-code-row-height);
+	font-variant-ligatures: var(--tr-font-ligatures-code);
 	--diffs-foreground: var(--code-foreground);
 	--diffs-fg: var(--code-foreground);
 	--diffs-fg-number-override: var(--text-muted);
-	--diffs-token-comment: var(--code-comment);
-	--diffs-token-constant: var(--code-constant);
-	--diffs-token-keyword: var(--code-keyword);
-	--diffs-token-parameter: var(--code-variable);
-	--diffs-token-function: var(--code-function);
-	--diffs-token-string: var(--code-string);
-	--diffs-token-string-expression: var(--code-string);
-	--diffs-token-punctuation: var(--code-punctuation);
-	--diffs-token-link: var(--primary);
-	--diffs-token-inserted: var(--code-inserted);
-	--diffs-token-deleted: var(--code-deleted);
-	--diffs-token-changed: var(--code-changed);
 	--diffs-addition-color-override: var(--feedback-success);
 	--diffs-deletion-color-override: var(--feedback-error);
 	--diffs-modified-color-override: var(--primary);
@@ -162,7 +265,7 @@
 	--diffs-bg: var(--container-content-bg);
 }
 .pierre-file-surface {
-	--diffs-background: var(--container-workspace-bg);
+	--code-background: var(--container-workspace-bg);
 	--diffs-bg: var(--container-workspace-bg);
 	--diffs-bg-context-override: var(--container-workspace-bg);
 }
@@ -187,26 +290,6 @@
 	   click (Monaco stacks zones and content widgets in one context). */
 	position: relative;
 	z-index: 60;
-}
-.review-add-icon {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	/* Never part of the text selection it floats over — a selectable node here lets a drag extend into
-	   the button and repaint the document tail as selected. */
-	user-select: none;
-	width: 22px;
-	height: 22px;
-	border-radius: var(--radius-sm);
-	border: 1px solid var(--border-default);
-	background: var(--container-elevated-bg);
-	color: var(--primary);
-	cursor: pointer;
-	/* Elevation: it floats OVER text, so it must read as a button above the page, not a hole in it. */
-	box-shadow: 0 2px 8px color-mix(in srgb, var(--container-header-bg) 70%, transparent);
-}
-.review-add-icon:hover {
-	background: var(--control-bg-hovered);
 }
 /* The rendered preview's ::selection: translucent (the muted alpha step of the theme's selection),
    because Chrome paints a multi-block selection wall-to-wall — with the theme's OPAQUE selection over
@@ -302,32 +385,6 @@
 	display: flex;
 	gap: var(--space-8);
 }
-/* Typography comes from the generated `tr-text-action` class on the node. */
-.review-composer-btn {
-	padding: var(--space-2) var(--space-8);
-	border-radius: var(--radius-sm);
-	border: 1px solid var(--border-default);
-	background: var(--container-elevated-bg);
-	color: var(--text);
-	cursor: pointer;
-}
-.review-composer-btn:hover {
-	background: var(--control-bg-hovered);
-}
-.review-composer-btn:disabled {
-	opacity: 0.5;
-	pointer-events: none;
-}
-.review-composer-btn-primary {
-	border-color: var(--primary);
-	background: var(--primary);
-	color: var(--text-on-primary);
-}
-.review-composer-btn-quiet {
-	border-color: transparent;
-	background: transparent;
-	color: var(--text-subtle);
-}
 
 /* In-flow review thread cards (ReviewThreadCard + reviewWidgets.attachReviewThreads): the comment
    sits IN the document flow directly below its anchor — spliced between markdown segments in the
@@ -410,28 +467,6 @@
 	outline: none;
 	border-color: var(--control-border-active);
 }
-.review-thread-action {
-	display: flex;
-	flex-shrink: 0;
-	align-items: center;
-	justify-content: center;
-	width: 20px;
-	height: 20px;
-	border: 0;
-	border-radius: var(--radius-sm);
-	background: transparent;
-	color: var(--text-subtle);
-	cursor: pointer;
-}
-.review-thread-action:hover {
-	background: var(--control-bg-hovered);
-	color: var(--text);
-}
-.review-thread-action:disabled {
-	opacity: 0.5;
-	pointer-events: none;
-}
-
 /* The preview's in-flow composer + the commented-region mark (parity with Monaco's decorations). */
 .review-composer-flow {
 	margin: var(--space-8) 0 var(--space-8) var(--space-12);

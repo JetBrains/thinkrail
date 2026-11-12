@@ -1,4 +1,3 @@
-import { RiDraggable as GripVertical } from "@remixicon/react";
 import type { ComponentProps } from "react";
 import {
 	type ImperativePanelGroupHandle,
@@ -23,32 +22,26 @@ export const ResizablePanel = Panel;
 
 export function ResizableHandle({
 	direction = "horizontal",
-	withHandle = false,
+	hitAreaMargins = { coarse: 15, fine: 1 },
 	className,
 	...props
 }: ComponentProps<typeof PanelResizeHandle> & {
 	direction?: "horizontal" | "vertical";
-	withHandle?: boolean;
 }) {
 	const isVertical = direction === "vertical";
 	return (
 		<PanelResizeHandle
 			aria-orientation={isVertical ? "horizontal" : "vertical"}
+			hitAreaMargins={hitAreaMargins}
 			className={cn(
-				"relative flex shrink-0 items-center justify-center bg-border-default transition-colors",
-				"data-[resize-handle-state=hover]:bg-primary data-[resize-handle-state=drag]:bg-primary",
+				"relative z-10 shrink-0 before:absolute before:bg-border-default before:transition-colors before:content-['']",
+				"data-[resize-handle-state=hover]:before:bg-primary data-[resize-handle-state=drag]:before:bg-primary",
 				isVertical
-					? "h-px w-full cursor-row-resize after:absolute after:inset-x-0 after:top-1/2 after:h-8 after:-translate-y-1/2 after:content-['']"
-					: "w-px cursor-col-resize after:absolute after:inset-y-0 after:left-1/2 after:w-8 after:-translate-x-1/2 after:content-['']",
+					? "-mb-8 h-9 w-full cursor-row-resize before:inset-x-0 before:top-0 before:h-px"
+					: "-mr-8 w-9 cursor-col-resize before:inset-y-0 before:left-0 before:w-px",
 				className,
 			)}
 			{...props}
-		>
-			{withHandle && (
-				<div className="z-10 flex items-center justify-center rounded-sm border border-border-default bg-control-bg px-px py-2">
-					<GripVertical className={cn("size-10 text-text-muted", isVertical && "rotate-90")} />
-				</div>
-			)}
-		</PanelResizeHandle>
+		/>
 	);
 }

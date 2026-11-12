@@ -133,6 +133,8 @@ test("a shell start failure explains recovery and retries the same tab", async (
 	const takeBack = terminal.getByTestId("terminal-take-back");
 	await expect(takeBack).toHaveAttribute("aria-disabled", "false");
 	releaseSuccess?.();
+	const cdp = await page.context().newCDPSession(page);
+	await cdp.send("Emulation.setCPUThrottlingRate", { rate: 10 });
 	await takeBack.click();
 	await waitTerminalReady(page);
 	await expect(terminal).toHaveAttribute("data-failed", "false");
@@ -142,6 +144,7 @@ test("a shell start failure explains recovery and retries the same tab", async (
 		"",
 	);
 	await expect(terminal.locator(".xterm-helper-textarea")).toBeFocused();
+	await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
 	await page.getByTestId("terminal-tab-close").click();
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(0);
 });
@@ -462,12 +465,12 @@ test("a terminal's output never reaches another client", async ({ page, context 
 	await worktreeRow(page2, "workspace-2").click();
 	await waitTerminalReady(page2);
 
-	await runInTerminal(page, "echo TR_SECRET_FROM_A");
-	await expect(visibleTerminalScreen(page)).toContainText("TR_SECRET_FROM_A");
-	await runInTerminal(page2, "echo TR_SECRET_FROM_B");
-	await expect(visibleTerminalScreen(page2)).toContainText("TR_SECRET_FROM_B");
+	await runInTerminal(page, "echo TR_SECRET_FROM_A_$((20 + 22))");
+	await expect(visibleTerminalScreen(page)).toContainText("TR_SECRET_FROM_A_42");
+	await runInTerminal(page2, "echo TR_SECRET_FROM_B_$((20 + 22))");
+	await expect(visibleTerminalScreen(page2)).toContainText("TR_SECRET_FROM_B_42");
 
-	expect(framesToB.some((frame) => frame.includes("TR_SECRET_FROM_B"))).toBe(true);
+	expect(framesToB.some((frame) => frame.includes("TR_SECRET_FROM_B_42"))).toBe(true);
 
 	expect(framesToB.some((frame) => frame.includes("TR_SECRET_FROM_A"))).toBe(false);
 
@@ -508,6 +511,122 @@ test("Ctrl+C still interrupts while an input method is active", async ({ page })
 
 	await runInTerminal(page, "echo TR_INTERRUPTED_$((21 + 21))");
 	await expect(term).toContainText("TR_INTERRUPTED_42");
+});
+
+test("Ctrl+Shift+C copies the selection off macOS, Ctrl+Shift+V pastes it, neither sends ^C", async ({
+	page,
+}) => {
+	test.skip(process.platform === "darwin", "Cmd+C copies on macOS");
+	const writes: string[] = [];
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		const server = ws.connectToServer();
+		ws.onMessage((message) => {
+			try {
+				const frame = JSON.parse(message.toString()) as {
+					method?: string;
+					params?: { data?: string };
+				};
+				if (frame.method === "terminal.write" && frame.params?.data) writes.push(frame.params.data);
+			} catch {}
+			server.send(message);
+		});
+		server.onMessage((message) => ws.send(message));
+	});
+	await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+	const term = visibleTerminalScreen(page);
+	const clipboard = () => page.evaluate(() => navigator.clipboard.readText());
+	const writtenAfter = (mark: number) => writes.slice(mark).join("");
+
+	await runInTerminal(page, "echo TR_COPY_$((21 + 21))");
+	const output = term.locator(":scope > div").filter({ hasText: /^TR_COPY_42\s*$/ });
+	await expect(output).toHaveCount(1);
+	await page.evaluate(() => navigator.clipboard.writeText("TR_BEFORE"));
+	const box = await output.boundingBox();
+	if (!box) throw new Error("terminal row has no box");
+	await page.mouse.dblclick(box.x + 4, box.y + box.height / 2);
+	const copyMark = writes.length;
+	await page.keyboard.press("Control+Shift+C");
+	await expect.poll(clipboard).toBe("TR_COPY_42");
+	const pasteMark = writes.length;
+	await page.keyboard.press("Control+Shift+V");
+	await expect.poll(() => writtenAfter(pasteMark)).toContain("TR_COPY_42");
+	await page.keyboard.press("Control+U");
+
+	await page.evaluate(() => navigator.clipboard.writeText("TR_UNCHANGED"));
+	await page.keyboard.type("echo TR_AFTER_$((1 + 1))");
+	await page.keyboard.press("Control+Shift+C");
+	await page.keyboard.press("Enter");
+	await expect(term.locator(":scope > div").filter({ hasText: /^TR_AFTER_2\s*$/ })).toHaveCount(1);
+	expect(writtenAfter(copyMark)).not.toContain("\x03");
+	expect(await clipboard()).toBe("TR_UNCHANGED");
+
+	const interruptMark = writes.length;
+	await page.keyboard.press("Control+C");
+	await expect.poll(() => writtenAfter(interruptMark)).toContain("\x03");
+});
+
+test("a held Korean syllable reaches the shell before a paste or a rescued chord", async ({
+	page,
+}) => {
+	const writes: string[] = [];
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		const server = ws.connectToServer();
+		ws.onMessage((message) => {
+			const text = message.toString();
+			try {
+				const frame = JSON.parse(text) as {
+					method?: string;
+					params?: { data?: string };
+				};
+				if (frame.method === "terminal.write" && frame.params?.data) writes.push(frame.params.data);
+			} catch {}
+			server.send(message);
+		});
+		server.onMessage((message) => ws.send(message));
+	});
+
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+	const textarea = visibleTerminal(page).locator(".xterm-helper-textarea");
+	await textarea.focus();
+	const composeSyllable = (jamo: string, syllable: string) =>
+		textarea.evaluate(
+			(element, typed) => {
+				const input = (inputType: string, data: string) =>
+					element.dispatchEvent(new InputEvent("input", { inputType, data, bubbles: true }));
+				input("insertText", typed.jamo);
+				input("insertReplacementText", typed.syllable);
+			},
+			{ jamo, syllable },
+		);
+
+	const ordered = (...marks: string[]) =>
+		writes.flatMap((data) => marks.filter((mark) => data.includes(mark)));
+	await composeSyllable("ㄱ", "가");
+	await textarea.evaluate((element) => {
+		const clipboardData = new DataTransfer();
+		clipboardData.setData("text/plain", "XYZ");
+		element.dispatchEvent(
+			new ClipboardEvent("paste", { clipboardData, bubbles: true, cancelable: true }),
+		);
+	});
+	await expect.poll(() => ordered("가", "XYZ")).toEqual(["가", "XYZ"]);
+
+	await composeSyllable("ㄴ", "나");
+	const cdp = await page.context().newCDPSession(page);
+	for (const type of ["keyDown", "keyUp"] as const) {
+		await cdp.send("Input.dispatchKeyEvent", {
+			type,
+			code: "KeyU",
+			modifiers: 2,
+			windowsVirtualKeyCode: 229,
+		});
+	}
+	await expect.poll(() => ordered("나", "\x15")).toEqual(["나", "\x15"]);
 });
 
 test("a shell that dies while detached is not re-attached as if alive", async ({ page }) => {

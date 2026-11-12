@@ -6,10 +6,40 @@ import {
 	createWebUiContext,
 	notifyExtensionError,
 	resolveExtUi,
+	selectForToolCall,
 	setExtUiPublisher,
 } from "./webUiContext";
 
 const ESC = "\u001b";
+
+test("extension editor calls address their own chat's composer and keep paste apart from replace", () => {
+	const frames: ExtUiRequest[] = [];
+	setExtUiPublisher((frame) => frames.push(frame));
+	try {
+		const first = createWebUiContext("editor-a");
+		const second = createWebUiContext("editor-b");
+		first.setEditorText("Draft 中文\nnext line");
+		second.pasteToEditor("Pasted draft");
+		first.setEditorText("");
+		expect(frames).toEqual([
+			{
+				id: expect.any(String),
+				sessionId: "editor-a",
+				kind: "setEditorText",
+				text: "Draft 中文\nnext line",
+			},
+			{
+				id: expect.any(String),
+				sessionId: "editor-b",
+				kind: "pasteToEditor",
+				text: "Pasted draft",
+			},
+			{ id: expect.any(String), sessionId: "editor-a", kind: "setEditorText", text: "" },
+		]);
+	} finally {
+		setExtUiPublisher(() => {});
+	}
+});
 
 test("extension-UI bridge: confirm round-trips, a cancel resolves undefined, dispose dismisses", async () => {
 	const frames: ExtUiRequest[] = [];
@@ -38,6 +68,37 @@ test("extension-UI bridge: confirm round-trips, a cancel resolves undefined, dis
 	expect(await inputP).toBeUndefined();
 	expect(frames.some((f) => f.kind === "dismiss" && f.id === inputFrame.id)).toBe(true);
 
+	setExtUiPublisher(() => {});
+});
+
+test("extension-UI bridge: a dialog names the running tool call it is about, if any", async () => {
+	const frames: ExtUiRequest[] = [];
+	setExtUiPublisher((f) => frames.push(f));
+	let running: string | undefined = "call-7";
+	const ui = createWebUiContext("sess-anchor", () => running);
+
+	const anchored = ui.confirm("Run rm?", "It deletes files.");
+	expect(frames.at(-1)).toMatchObject({ kind: "confirm", toolCallId: "call-7" });
+	running = undefined;
+	const loose = ui.input("Paste the code");
+	expect(frames.at(-1)).not.toHaveProperty("toolCallId");
+	const explicit = selectForToolCall(
+		"sess-anchor",
+		{ toolCallId: "call-9", toolInput: { path: "/etc/hosts" } },
+		"Allow?",
+		["Deny", "Allow once"],
+	);
+	expect(frames.at(-1)).toMatchObject({
+		kind: "select",
+		toolCallId: "call-9",
+		toolInput: { path: "/etc/hosts" },
+	});
+	resolveExtUi({ id: frames.at(-1)?.id ?? "", value: "Allow once" });
+	expect(await explicit).toBe("Allow once");
+
+	cancelExtUiForSession("sess-anchor");
+	expect(await anchored).toBe(false);
+	expect(await loose).toBeUndefined();
 	setExtUiPublisher(() => {});
 });
 

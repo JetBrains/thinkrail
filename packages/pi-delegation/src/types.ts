@@ -16,6 +16,7 @@ export interface ChildInfo {
 	createdBy: string;
 	roleName?: string;
 	roleSource?: string;
+	detached?: boolean;
 }
 
 export interface SessionOptions {
@@ -99,6 +100,7 @@ export interface DelegationRunDetails {
 	task: string;
 	status: RunLifecycleStatus;
 	model?: string;
+	thinkingLevel?: ThinkingLevel;
 	usage: {
 		input: number;
 		output: number;
@@ -116,6 +118,12 @@ export interface DelegationRunDetails {
 export type LifecycleEvent =
 	| { type: "child-created"; record: SpawnRecord }
 	| { type: "run-queued" | "run-started"; sessionId: string; parentSessionId: string }
+	| {
+			type: "run-progress";
+			sessionId: string;
+			parentSessionId: string;
+			details: DelegationRunDetails;
+	  }
 	| { type: "run-terminal"; sessionId: string; parentSessionId: string; outcome: RunOutcome }
 	| { type: "child-disposed"; sessionId: string; parentSessionId: string };
 
@@ -181,6 +189,8 @@ export type ParentContext = Pick<ExtensionContext, "cwd" | "model" | "thinkingLe
 	Partial<Pick<ExtensionContext, "isProjectTrusted">> & {
 		modelRuntime?: ModelRuntime;
 		modelRegistry?: ExtensionContext["modelRegistry"];
+		/** Loaded paths that registered `provider`, within the child's trust; its children load them. */
+		providerExtensionPaths?: (provider: string) => readonly string[];
 	};
 
 export interface DelegationBindings {

@@ -1,5 +1,6 @@
 import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import type { ExtensionCatalogEntry } from "@thinkrail/contracts";
+import { extensionSessionServices, type HostSessionServices } from "./inline";
 import { type ServerExtensionEntry, serverExtensions } from "./registry";
 
 const inert: unknown = new Proxy(() => inert, {
@@ -24,17 +25,35 @@ async function recordToolNames(factory: ExtensionFactory): Promise<string[]> {
 	return tools;
 }
 
+const inertSession: HostSessionServices = {
+	expectToolResponse: () => {},
+	awaitToolResponse: () => Promise.reject(new Error("the Settings catalog has no session")),
+	workspaceFiles: {
+		check: () => Promise.reject(new Error("the Settings catalog has no workspace")),
+		scratchDir: "",
+	},
+};
+
 type ExtensionDescription = Omit<ExtensionCatalogEntry, "enabled">;
 
 async function describeEntry(entry: ServerExtensionEntry): Promise<ExtensionDescription> {
 	const { extension } = entry;
-	const tools = (await Promise.all(extension.extensions.map(recordToolNames))).flat();
+	const factories = [
+		...extension.extensions,
+		...(extension.sessionExtensions?.(extensionSessionServices(extension, inertSession)) ?? []),
+	];
+	const tools = (await Promise.all(factories.map(recordToolNames))).flat();
+	const settings = Object.entries(extension.settings ?? {}).map(([key, setting]) => ({
+		key,
+		default: setting.default,
+	}));
 	return {
 		name: extension.name,
 		title: extension.title ?? extension.name,
 		...(extension.description ? { description: extension.description } : {}),
 		tools: [...new Set(tools)],
 		hasChildExtensions: (extension.childExtensions?.length ?? 0) > 0,
+		...(settings.length > 0 ? { settings } : {}),
 	};
 }
 

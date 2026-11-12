@@ -45,7 +45,7 @@ standalone render) or a host older than MCP hides them.
 - **Full output** appears when `details.fullOutputPath` is recorded and the provider offers
   `readMcpOutput`; `ChatView` implements it as `mcp.readOutput({ workspaceId, sessionId, toolCallId })`.
   The card never sends or links the path — the host reads exactly the file the result recorded. The text
-  opens in a dialog sized to content (up to 85vh) instead of inline, because up to 1 MiB in a row would
+  opens in a dialog sized to content (bounded by the dialog primitive) instead of inline, because up to 1 MiB in a row would
   distort the virtualized transcript's geometry. States: loading, text (noting host truncation),
   *expired* (pi's temporary file is gone), *unavailable*, and a request failure with Try again. A loaded
   answer is kept while the card stays mounted; a failure re-reads on the next open. Like the shared image
@@ -76,17 +76,21 @@ standalone render) or a host older than MCP hides them.
 ## Boundary
 
 - **Owns:** these renderers, the `mcpResult` readers, and their registration.
-- **Public surface:** the side-effect `register` only (per-file imports, as in the parent).
+- **Public surface:** the side-effect `register`; `mcpResult`'s pure readers (the parent chat's
+  Resources MCP server detail reads `MCP_TOOL_PREFIX`, `readMcpToolDetails` and `mcpArgsSummary`).
+  Per-file imports, as in the parent.
 - **Allowed deps:** parent chat primitives (`toolRegistry`, `ChatActions`, `foldState`), sibling
   `Collapsible`; `@thinkrail/extension-api/web`; `contracts` (type-only — `McpToolDetails`,
   `McpResultSummary`, `McpContentBlockSummary`, `McpReadOutputResult`); `@thinkrail/ui/*`;
-  `@remixicon/react`.
+  `@remixicon/react`; `@thinkrail/locales` (UI strings).
 - **Forbidden:** value-importing pi or any MCP package; `store`/`transport`. Listing rows are local parse
   views of pi's text JSON, not a wire contract.
 
 ## Get right
 
 - MCP calls stay **routine** like any other tool: a needs-sign-in failure folds into the activity run,
-  and the chat resources attention marker remains the at-a-glance signal.
+  and the chat resources attention marker remains the at-a-glance signal. The call's approval is not
+  these renderers' concern: the host anchors it to the call and the tool shell renders it, popping the
+  step out of a collapsed fold while it waits (chat SPEC › Extension dialogs).
 - `tool_search` and the three resource tools are exact registrations; only `mcp__` resolves by prefix.
 - Token-utility styling only (no raw hex / inline `style`).

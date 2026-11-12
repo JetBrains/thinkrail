@@ -1,5 +1,11 @@
+import { currentTranslator } from "@thinkrail/locales/react";
 import { useEffect } from "react";
-import { selectWorkspaceById, useAppStore } from "@/store";
+import {
+	selectCompletionMarkedUnread,
+	selectWorkspaceById,
+	useAppStore,
+	workspaceName,
+} from "@/store";
 import { createAttentionNotificationEngine, type TimerHandle } from "./attentionNotificationEngine";
 import { createAttentionObserver } from "./attentionObserver";
 import { selectNotificationChannel } from "./channel";
@@ -14,12 +20,14 @@ type AppState = ReturnType<typeof useAppStore.getState>;
 
 function collectCandidates(state: AppState): AttentionCandidate[] {
 	const candidates: AttentionCandidate[] = [];
+	const t = currentTranslator();
 	for (const records of Object.values(state.sessionStateByWorkspace)) {
 		for (const record of Object.values(records)) {
+			const workspace = selectWorkspaceById(state, record.workspaceId);
 			candidates.push({
 				sessionId: record.sessionId,
 				workspaceId: record.workspaceId,
-				worktreeName: selectWorkspaceById(state, record.workspaceId)?.name ?? "",
+				worktreeName: workspace ? workspaceName(t, workspace) : "",
 				state: record.state,
 			});
 		}
@@ -29,10 +37,10 @@ function collectCandidates(state: AppState): AttentionCandidate[] {
 
 function navigate(spec: NotificationSpec): void {
 	const state = useAppStore.getState();
-	if (spec.target.kind === "switcher") {
+	if (spec.target.kind === "search") {
 		// Several worktrees need attention — surface the cross-workspace palette so the user picks
 		// one, instead of just focusing a window that may not be showing the right chat.
-		state.openSessionSwitcher();
+		state.openSearch();
 		return;
 	}
 	const projectId = selectWorkspaceById(state, spec.target.workspaceId)?.projectId;
@@ -61,7 +69,7 @@ export function useAttentionNotifications(): void {
 				const state = useAppStore.getState();
 				for (const records of Object.values(state.sessionStateByWorkspace)) {
 					const record = records[sessionId];
-					if (record) return isLit(record.state);
+					if (record) return isLit(record.state) && !selectCompletionMarkedUnread(state, record);
 				}
 				return false;
 			},

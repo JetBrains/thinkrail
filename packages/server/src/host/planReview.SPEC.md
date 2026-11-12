@@ -45,14 +45,14 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
 
 - **The reviewer uses the host's new-chat defaults with the repository's reviewer profile.** `runReview`
   resolves the child's model as the pinned `reviewModel`, else `resolveNewChatModel({})`: AppConfig's
-  `defaultModel`, falling back to the first available model (or no model when none are available) — never
+  `defaultModel`, falling back to pi's `settings.json` default, then the preferred available model (or no model when none are available) — never
   the worker's silently inherited model. The reviewer's **effort** resolves the same way: the pinned
   `reviewEffort`, else AppConfig's `defaultEffort`, falling back to `medium`; the resolver clamps it for
   the selected model when one is available. `runReview` passes `thinkingLevel` **unconditionally** — an
   omitted level makes pi-delegation inherit the parent worker's effort, so an unset setting would silently
   run the reviewer at the worker's effort instead of the default. `runReviewSubagent` spawns the child
-  with `contextFiles: true` and `extensions: true`, and `REVIEWER_TOOLS` carries `spec_grep`/`spec_get`/
-  `spec_graph` alongside `read`/`grep`/`find`/`ls`/`bash`, reproducing the built-in `reviewer` agent's
+  with `contextFiles: true` and `extensions: true`, and `REVIEWER_TOOLS` carries `spec_search`/`spec_grep`/
+  `spec_get`/`spec_graph` alongside `read`/`grep`/`find`/`ls`/`bash`, reproducing the built-in `reviewer` agent's
   context/tool policy so plan review follows repository guidance and can audit invariants. Only the
   system prompt + JSON output contract differ (the host parses the verdict).
 - **The host owns the reviewer's role, the package owns only facts.** `reviewerRole.ts` holds the
@@ -68,7 +68,8 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
   Any invalid output is a failed review, not a silent approve: the mark is cleared and the item returns to
   unreviewed. `parseVerdict` also **constructs the result explicitly** (verdict/summary/readingOrder/findings only — `readingOrder`
   is the reviewer's optional ordered `{ path, why }` list, capped at `REVIEW_READING_ORDER_LIMIT` by the
-  contract validator; **every accepted verdict** replaces the workspace review's `guide` through
+  contract validator; a backslash in any finding or reading-order path is read as a separator and turned
+  into `/` here, since the model may write Windows paths on any host (architecture Decision 22); **every accepted verdict** replaces the workspace review's `guide` through
   `reviews.setReviewGuide` — summary and order empty when the reviewer gave none — in the SAME
   `withReviewLock` hold as its findings and successful verdict record. A queued Clear therefore removes
   guide and findings together, never only the guide before filing resumes. Rejected, filing/record-failed,
@@ -121,6 +122,13 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
   `canAutoFix`. So `requestReviewTool`'s description/promptGuidelines must NOT hardcode “always fix and
   re-review” — they tell the worker to follow the tool result's stated next action, so a stronger
   system-level prompt can't override the configured stop.
+- **The static tool guidance scopes the call to steps with a change set.** `reviewableItem` refuses a
+  step with no `commit`/`change` artifact (`has no change set to review`), and a plan routinely holds
+  steps that change no files — running checks, opening a PR, replying to a comment. Guidance that said
+  "call it after every step you mark done" made the worker issue a call the host was certain to refuse
+  on each of those, surfacing a failed tool card every time. So the description and promptGuidelines
+  say to call it when the step changed files and to skip it otherwise; the refusal stays as the guard
+  for a mis-scoped call. Pinned by the guidance test in `agent/requestReviewTool.test.ts`.
 - **The worker-facing finding identity is the persisted comment, not the model's id.** `fileFinding`
   persists each finding as a new `rc_*` comment; the model's own ids (`f1`…) are transient. On the tool
   path the tool result *is* the delivery, so when the worker is asked to fix (`canAutoFix`), `recordVerdict`

@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, mock, spyOn, test } from "bun:test";
+import * as fs from "node:fs";
 import {
 	chmodSync,
 	existsSync,
@@ -6,6 +7,7 @@ import {
 	mkdtempSync,
 	readdirSync,
 	readFileSync,
+	renameSync,
 	rmSync,
 	statSync,
 	symlinkSync,
@@ -106,6 +108,7 @@ beforeEach(() => {
 	git("config", "user.email", "t@thinkrail.test");
 	git("config", "user.name", "test");
 	git("config", "commit.gpgsign", "false");
+	git("config", "core.autocrlf", "false");
 	write("a.ts", "one\ntwo\nthree\n");
 	commitAll("init");
 	workspaceId = `w${++nextWorkspace}`;
@@ -132,6 +135,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	mock.restore();
 	setTrashImplementationForTests(undefined);
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
@@ -419,6 +423,37 @@ test("a whole-file revert of an added or untracked file moves it to the trash", 
 	expect(trashed).toHaveLength(2);
 	expect(trashed[0]).toBe(untrackedClaim);
 	expectTrashClaim(trashed[1]);
+});
+
+test("a whole-file revert whose folder turns into an outside link mid-claim trashes nothing outside", async () => {
+	const outside = join(dataDir, "outside");
+	const folder = join(repo, "pkg");
+	mkdirSync(outside);
+	mkdirSync(folder);
+	writeFileSync(join(outside, "fresh.txt"), "fresh\n");
+	write("pkg/fresh.txt", "fresh\n");
+	const realpath = fs.realpathSync;
+	let swapped = false;
+	spyOn(fs, "realpathSync").mockImplementation(((...args: Parameters<typeof fs.realpathSync>) => {
+		const result = realpath(...args);
+		if (!swapped && args[0] === folder) {
+			swapped = true;
+			renameSync(folder, `${folder}-moved`);
+			symlinkSync(outside, folder);
+		}
+		return result;
+	}) as typeof fs.realpathSync);
+
+	await expect(
+		revert(
+			"pkg/fresh.txt",
+			{ kind: "file" },
+			{ originalHash: null, modifiedHash: hash("fresh\n") },
+		),
+	).rejects.toMatchObject({ code: "ENTRY_CHANGED" });
+	expect(trashed).toEqual([]);
+	expect(readdirSync(outside)).toEqual(["fresh.txt"]);
+	expect(readFileSync(join(repo, "pkg-moved", "fresh.txt"), "utf8")).toBe("fresh\n");
 });
 
 test("a write landing while revert trashes its claim survives and the receipt restores prior bytes", async () => {

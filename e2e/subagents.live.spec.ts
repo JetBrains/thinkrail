@@ -46,7 +46,7 @@ test("foreground parallel fan-out: live Agent cards, report fold, child transcri
 	await expect(dialog).not.toBeVisible();
 });
 
-test("background run: completion card arrives live, with report + transcript", {
+test("background run: collapsed result row arrives live, with report + Resources transcript", {
 	tag: "@agent",
 }, async ({ page }) => {
 	test.setTimeout(300_000);
@@ -64,18 +64,19 @@ test("background run: completion card arrives live, with report + transcript", {
 	const completion = page.getByTestId("subagent-completion");
 	await expect(completion).toBeVisible({ timeout: 180_000 });
 	await expect(completion).toHaveAttribute("data-status", "completed");
-	await expect(completion).toContainText("echo finished");
+	await expect(completion).toHaveAttribute("data-expanded", "false");
+	await expect(completion).toContainText("echo");
+	await expect(completion).toContainText("Done");
+	await expect(completion.getByTestId("background-result-body")).toHaveCount(0);
 
-	await completion.getByTestId("subagent-completion-report-toggle").click();
-	await expect(completion.getByTestId("subagent-completion-report")).toContainText(
-		"CHARLIE-MARKER",
-	);
+	await completion.getByTestId("background-result-toggle").click();
+	await expect(completion.getByTestId("background-result-body")).toContainText("CHARLIE-MARKER");
 
-	await completion.getByTestId("subagent-completion-transcript").click();
-	const dialog = page.getByTestId("subagent-transcript-dialog");
-	await expect(dialog).toBeVisible();
+	await completion.getByTestId("background-result-open").click();
+	const inspector = page.getByTestId("resources-inspector");
+	await expect(inspector).toBeVisible();
 	await expect(
-		dialog
+		inspector
 			.getByTestId("subagent-transcript")
 			.locator('[data-testid="chat-message"][data-role="assistant"]')
 			.last(),

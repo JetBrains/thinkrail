@@ -1,7 +1,8 @@
 import type { SessionManager } from "@earendil-works/pi-coding-agent";
 import { assistantToolCallsAreExecutable } from "@thinkrail/contracts";
 import { scanReplayTools } from "pi-delegation";
-import { ASK_ACK_TEXT, ASK_USER_QUESTION_TOOL_NAME } from "./askUserQuestion";
+import type { InteractiveTools } from "../extensions";
+import { TOOL_RESPONSE_PENDING_TEXT } from "./toolResponses";
 
 export interface RepairedToolCall {
 	toolCallId: string;
@@ -13,7 +14,10 @@ const GENERIC_REPAIR_TEXT =
 const TRUNCATED_REPAIR_TEXT =
 	"Tool call was not executed because the response hit the output token limit and its arguments may be truncated.";
 
-export function repairDanglingToolCalls(sessionManager: SessionManager): RepairedToolCall[] {
+export function repairDanglingToolCalls(
+	sessionManager: SessionManager,
+	interactive: InteractiveTools,
+): RepairedToolCall[] {
 	const { messages } = sessionManager.buildSessionContext();
 	const { danglingTail: dangling } = scanReplayTools(messages);
 	const assistant = messages.findLast((message) => message.role === "assistant");
@@ -21,8 +25,7 @@ export function repairDanglingToolCalls(sessionManager: SessionManager): Repaire
 		!!assistant && assistantToolCallsAreExecutable(assistant.stopReason);
 
 	for (const toolCall of dangling) {
-		const isAnswerableAsk =
-			danglingCallsAreExecutable && toolCall.toolName === ASK_USER_QUESTION_TOOL_NAME;
+		const awaitsResponse = danglingCallsAreExecutable && interactive.has(toolCall.toolName);
 		sessionManager.appendMessage({
 			role: "toolResult",
 			toolCallId: toolCall.toolCallId,
@@ -30,15 +33,15 @@ export function repairDanglingToolCalls(sessionManager: SessionManager): Repaire
 			content: [
 				{
 					type: "text",
-					text: isAnswerableAsk
-						? ASK_ACK_TEXT
+					text: awaitsResponse
+						? TOOL_RESPONSE_PENDING_TEXT
 						: danglingCallsAreExecutable
 							? GENERIC_REPAIR_TEXT
 							: TRUNCATED_REPAIR_TEXT,
 				},
 			],
-			isError: !isAnswerableAsk,
-			...(isAnswerableAsk ? { details: { kind: "ack" } } : {}),
+			isError: !awaitsResponse,
+			...(awaitsResponse ? { details: { kind: "ack" } } : {}),
 			timestamp: Date.now(),
 		});
 	}

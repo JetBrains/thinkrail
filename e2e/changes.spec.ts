@@ -15,6 +15,54 @@ import { largeRepetitiveMarkdownEdited } from "./fixtures/repo";
 const diffText = (page: Page, text: string) =>
 	page.getByTestId("diff-view").getByText(text, { exact: false }).last();
 
+test("Files All mode marks changed files, and Changed mode lists them with a count", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await expect(worktreeRows(page)).toHaveCount(1);
+
+	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
+	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nmarked by e2e\n");
+
+	await revealWorkbenchTool(page, "files");
+	await expect(page.getByTestId("files-mode-all")).toHaveAttribute("aria-pressed", "true");
+	const readme = page.getByTestId("file-node").filter({ hasText: "README.md" });
+	await expect(readme.getByTestId("file-status")).toHaveText("M");
+	await expect(page.getByTestId("files-mode-changed")).toHaveText("Changed 1");
+
+	await page.getByTestId("files-mode-changed").click();
+	await expect(page.getByTestId("change-item").filter({ hasText: "README.md" })).toBeVisible();
+	await page.getByTestId("files-mode-all").click();
+	await expect(readme).toBeVisible();
+});
+
+test("Files All mode marks nested changes, remembers expanded folders across modes, and collapses all", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await expect(worktreeRows(page)).toHaveCount(1);
+
+	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
+	writeFileSync(join(worktree, "styles", "COLOR.md"), "# colors\n\nedited by e2e\n");
+
+	await revealWorkbenchTool(page, "files");
+	const styles = page.getByTestId("file-node").filter({ hasText: /^styles$/ });
+	await expect(styles.getByTestId("file-folder-dot")).toBeVisible();
+	await styles.click();
+	const color = page.getByTestId("file-node").filter({ hasText: "COLOR.md" });
+	await expect(color.getByTestId("file-status")).toHaveText("M");
+
+	await page.getByTestId("files-mode-changed").click();
+	await page.getByTestId("files-mode-all").click();
+	await expect(color).toBeVisible();
+
+	await page.getByTestId("files-collapse-all").click();
+	await expect(color).toHaveCount(0);
+	await expect(styles.getByTestId("file-folder-dot")).toBeVisible();
+});
+
 test("Changes tab shows the active worktree's diff and swaps per workspace", async ({ page }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
@@ -59,6 +107,39 @@ test("Changes tab shows the active worktree's diff and swaps per workspace", asy
 	await expect(worktreeRows(page)).toHaveCount(2);
 	await revealWorkbenchTool(page, "changes");
 	await expect(page.getByTestId("changes-empty")).toBeVisible();
+});
+
+test("JSON tree diff marks change-holding nodes and summarizes changes on hover", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+
+	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
+	writeFileSync(
+		join(worktree, "sample.json"),
+		'{\n  "project": "renamed",\n  "features": ["tree", "diff"]\n}\n',
+	);
+
+	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("change-item").filter({ hasText: "sample.json" }).dblclick();
+	await page.getByTestId("view-toggle-json").click();
+	const jsonDiff = page.getByTestId("json-diff");
+	const features = jsonDiff.locator('[data-json-pointer="/features"] > [data-json-nested-changes]');
+	await expect(features).toBeVisible();
+	await expect(jsonDiff.locator("[data-json-nested-changes]")).toHaveCount(2);
+
+	await features.hover();
+	const tooltip = page.getByRole("tooltip");
+	await expect(tooltip).toContainText('[1]Removed"anchors"');
+	await expect(tooltip).toContainText('[1]Added"diff"');
+	await page.mouse.move(0, 0, { steps: 4 });
+	await jsonDiff.locator('[data-json-pointer="/project"] > div').hover();
+	await expect(tooltip).toContainText("Changed");
+	await page.mouse.move(0, 0, { steps: 4 });
+	await jsonDiff.locator('[data-json-pointer=""] > [data-json-nested-changes]').hover();
+	await expect(tooltip).toContainText('project"sample-project"→"renamed"');
+	await expect(tooltip).toContainText("features[1]Added");
 });
 
 test("Rendered markdown diff of a large repetitive file never blocks the main thread", async ({
@@ -362,10 +443,13 @@ test("Changes has a List|Tree toggle (Tree by default); Tree groups files into f
 	await expect(compactFolder).toContainText("docs/guides");
 	const fileNode = page.getByTestId("change-item").filter({ hasText: "notes.md" });
 	await expect(fileNode).toBeVisible();
+	await expect(compactFolder).not.toContainText("+3");
 	await compactFolder.click();
 	await expect(fileNode).toBeHidden();
+	await expect(compactFolder).toContainText("+3");
 	await compactFolder.click();
 	await expect(fileNode).toBeVisible();
+	await expect(compactFolder).not.toContainText("+3");
 	await expect(fileNode).toHaveAttribute("data-status", "untracked");
 	await expect(fileNode).toContainText("+3");
 
@@ -563,7 +647,7 @@ test("A target that advanced past the fork point adds no phantom changes (merge-
 	await expect(page.getByTestId("change-item").filter({ hasText: "upstream.txt" })).toHaveCount(0);
 });
 
-test("A change row's action menu opens from the ⌄ button and from right-click; Copy path writes the relative path", async ({
+test("A change row's action menu opens from the ⌄ button and from right-click; Copy relative path writes the relative path", async ({
 	page,
 	context,
 }) => {
@@ -778,8 +862,14 @@ test("Change rows stay one aligned, fully-highlighted row — menu slot included
 	expect(await background(longRow)).toBe("rgba(0, 0, 0, 0)");
 
 	await page.getByTestId("changes-toggle-tree").click();
-	const folderBadge = page.getByTestId("change-tree-folder").filter({ hasText: "packages" });
-	const fileBadge = page.getByTestId("change-item").filter({ hasText: "ForTheChangesPanel.ts" });
+	const collapsedFolder = page.getByTestId("change-tree-folder").filter({ hasText: "deeply" });
+	await collapsedFolder.click();
+	const folderBadge = collapsedFolder.getByText(/^\+\d+/);
+	await expect(folderBadge).toBeVisible();
+	const fileBadge = page
+		.getByTestId("change-item")
+		.filter({ hasText: "ForTheChangesPanel.ts" })
+		.getByText(/^\+\d+/);
 	const folderRight = await rightEdge(folderBadge);
 	const fileRight = await rightEdge(fileBadge);
 	expect(Math.abs(folderRight - fileRight)).toBeLessThanOrEqual(1);
@@ -832,10 +922,12 @@ test("A commit scope keeps the header readable: short sha on the pill, subject i
 
 	const label = page.getByTestId("changes-scope-label");
 	await expect(label).toHaveText(/^[0-9a-f]{7,}$/);
-	await expect(page.getByTestId("changes-scope-trigger")).toHaveAttribute(
-		"title",
-		/e2e scope commit/,
+	await expect(page.getByTestId("changes-scope-trigger")).toHaveAccessibleName(
+		/^Diff scope: [0-9a-f]{7,}$/,
 	);
+	await page.getByTestId("changes-scope-trigger").hover();
+	await expect(page.getByRole("tooltip")).toContainText(/e2e scope commit/);
+	await page.mouse.move(0, 0);
 	await expect(page.getByTestId("changes-target-picker")).toContainText("main");
 });
 
@@ -943,6 +1035,7 @@ test("A failed read says so — it never renders as an empty (clean) change set"
 	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("changes-target-picker").click();
 	await page.locator('[data-testid="branch-option"][data-branch="doomed"]').click();
+	await expect(page.getByTestId("changes-target-picker")).toContainText("doomed");
 	await expect(page.getByTestId("change-item").filter({ hasText: "README.md" })).toHaveCount(1);
 	gitQuiet(worktree, "branch", "-D", "doomed");
 
@@ -978,7 +1071,7 @@ test("A source diff keeps its scroll position across a tab switch", async ({ pag
 	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "scroll-code.ts" }).dblclick();
 	const diff = page.getByTestId("diff-view");
-	await expect(diffText(page, "edited 399")).toBeVisible();
+	await expect(diffText(page, "edited 0")).toBeVisible();
 	const top = await diff.evaluate((node) => {
 		node.scrollTop = (node.scrollHeight - node.clientHeight) * 0.6;
 		return node.scrollTop;
@@ -988,8 +1081,8 @@ test("A source diff keeps its scroll position across a tab switch", async ({ pag
 	await page.locator('[data-testid="editor-tab"][data-kind="chat"]').click();
 	await expect(diff).toHaveCount(0);
 	await page.locator('[data-testid="editor-tab"][data-kind="diff"]').click();
-	await expect(diffText(page, "edited 399")).toBeVisible();
 	await expect.poll(() => diff.evaluate((node) => node.scrollTop)).toBe(top);
+	await expect(diffText(page, "edited 238")).toBeVisible();
 });
 
 test("Closing a diff tab removes its Pierre surface", async ({ page }) => {
@@ -1007,4 +1100,91 @@ test("Closing a diff tab removes its Pierre surface", async ({ page }) => {
 	await diffTab.getByTestId("editor-tab-close").click();
 	await expect(diffTab).toHaveCount(0);
 	await expect(page.getByTestId("diff-view")).toHaveCount(0);
+});
+
+test("large diffs render virtualized and wide rewrites wait behind a notice", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const lines = (count: number, mark: string) =>
+		Array.from({ length: count }, (_, index) => `${mark} line ${index + 1}`).join("\n");
+	writeFileSync(join(workspace.worktreePath, "ADDED.txt"), `${lines(20_000, "added")}\n`);
+
+	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("change-item").filter({ hasText: "ADDED.txt" }).dblclick();
+	const diffView = page.getByTestId("diff-view");
+	await expect(pierreLines(diffView, "added line 1").first()).toBeVisible();
+	expect(await pierreLines(diffView).count()).toBeLessThan(1_000);
+	expect(await diffView.evaluate((node) => node.scrollTop)).toBe(0);
+
+	commitFile(workspace.worktreePath, "REWRITE.txt", `${lines(3_000, "before")}\n`, "add rewrite");
+	writeFileSync(join(workspace.worktreePath, "REWRITE.txt"), `${lines(3_000, "after")}\n`);
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-uncommitted").click();
+	await page.getByTestId("change-item").filter({ hasText: "REWRITE.txt" }).dblclick();
+	await expect(page.getByTestId("diff-too-large").locator("p")).toHaveText(
+		"This diff is too expensive to show automatically. Rendering it can freeze the app for a while.",
+	);
+	await page.getByTestId("diff-show-anyway").click();
+	await expect(page.getByTestId("diff-too-large")).toHaveCount(0);
+	await expect(pierreLines(diffView, "after line 1").first()).toBeVisible();
+
+	const reordered = lines(1_500, "same");
+	commitFile(workspace.worktreePath, "REORDER.txt", reordered, "add reorder");
+	writeFileSync(
+		join(workspace.worktreePath, "REORDER.txt"),
+		reordered.split("\n").reverse().join("\n"),
+	);
+	await page.getByTestId("change-item").filter({ hasText: "REORDER.txt" }).dblclick();
+	await expect(page.getByTestId("diff-too-large").locator("p")).toHaveText(
+		"This diff is too expensive to show automatically. Rendering it can freeze the app for a while.",
+	);
+	await expect(diffView).toHaveCount(0);
+});
+
+test("a large source diff in the stacked review renders virtualized in a bounded viewport", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const lines = Array.from({ length: 20_000 }, (_, index) => `stacked line ${index + 1}`);
+	writeFileSync(join(workspace.worktreePath, "STACKED.txt"), `${lines.join("\n")}\n`);
+
+	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("change-item").filter({ hasText: "STACKED.txt" }).click();
+	const section = page.getByTestId("changes-section").filter({ hasText: "STACKED.txt" });
+	const diffView = section.getByTestId("diff-view");
+	await expect(pierreLines(diffView, "stacked line 1").first()).toBeVisible();
+	expect(await pierreLines(diffView).count()).toBeLessThan(1_000);
+	const { clientHeight, scrollHeight } = await diffView.evaluate((node) => ({
+		clientHeight: node.clientHeight,
+		scrollHeight: node.scrollHeight,
+	}));
+	expect(clientHeight).toBeLessThan(scrollHeight);
+});
+
+test("a small edit in a large stacked file stays virtualized when context expands", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const lines = Array.from({ length: 3_000 }, (_, index) => `context line ${index + 1}`);
+	commitFile(workspace.worktreePath, "CONTEXT.txt", `${lines.join("\n")}\n`, "add context");
+	lines[1_500] = "edited context line 1501";
+	writeFileSync(join(workspace.worktreePath, "CONTEXT.txt"), `${lines.join("\n")}\n`);
+
+	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-uncommitted").click();
+	await page.getByTestId("change-item").filter({ hasText: "CONTEXT.txt" }).click();
+	const section = page.getByTestId("changes-section").filter({ hasText: "CONTEXT.txt" });
+	const diffView = section.getByTestId("diff-view");
+	await expect(pierreLines(diffView, "edited context line 1501").first()).toBeVisible();
+	const height = await diffView.evaluate((node) => node.clientHeight);
+	await pierreCollapsedContext(diffView)
+		.filter({ visible: true })
+		.first()
+		.click({ modifiers: ["Shift"] });
+	await expect.poll(() => diffView.evaluate((node) => node.scrollHeight)).toBeGreaterThan(height);
+	expect(await diffView.evaluate((node) => node.clientHeight)).toBe(height);
+	expect(await pierreLines(diffView).count()).toBeLessThan(1_000);
 });

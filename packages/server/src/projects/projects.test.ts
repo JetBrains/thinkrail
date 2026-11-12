@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, mock, test } from "bun:test";
 import {
+	chmodSync,
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
@@ -8,23 +9,45 @@ import {
 	rmSync,
 	writeFileSync,
 } from "node:fs";
+import * as fsPromises from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join, resolve } from "node:path";
+import type { Project } from "@thinkrail/contracts";
+import { setSyncGitTimeoutForTests } from "../git";
 import {
 	approveProjectMcpServer,
 	closeProject,
+	createProject,
 	getProjects,
+	grantProjectMcpTool,
 	initProject,
 	inspectProjectPath,
 	isProjectTrusted,
 	listProjects,
 	listRecentProjects,
+	moveProject,
 	openProject,
+	refreshRecentProjectFolders,
+	renameProject,
+	revokeProjectMcpTool,
 	setPiTrustSeed,
+	setProjectGroupEnabled,
 	setProjectMcpOverride,
 	setProjectPublisher,
 	setProjectTrust,
 } from "./projects";
+
+const realStat = fsPromises.stat;
+const hungStatPaths = new Set<string>();
+let hungStatCalls = 0;
+mock.module("node:fs/promises", () => ({
+	...fsPromises,
+	stat: (path: string, ...rest: []) => {
+		if (!hungStatPaths.has(path)) return realStat(path, ...rest);
+		hungStatCalls += 1;
+		return new Promise(() => {});
+	},
+}));
 
 function gitOut(cwd: string, ...args: string[]): string {
 	const r = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "ignore" });
@@ -47,13 +70,13 @@ function makeRepo(path: string): void {
 	git(path, "commit", "-m", "init");
 }
 
-function withoutUserGitConfig<T>(run: () => T): T {
+async function withoutUserGitConfig<T>(run: () => T | Promise<T>): Promise<Awaited<T>> {
 	const savedGlobal = process.env.GIT_CONFIG_GLOBAL;
 	const savedSystem = process.env.GIT_CONFIG_SYSTEM;
 	process.env.GIT_CONFIG_GLOBAL = "/dev/null";
 	process.env.GIT_CONFIG_SYSTEM = "/dev/null";
 	try {
-		return run();
+		return await run();
 	} finally {
 		if (savedGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL;
 		else process.env.GIT_CONFIG_GLOBAL = savedGlobal;
@@ -66,7 +89,7 @@ let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 
 beforeEach(() => {
-	dataDir = mkdtempSync(join(tmpdir(), "trpi-proj-test-"));
+	dataDir = realpathSync.native(mkdtempSync(join(tmpdir(), "trpi-proj-test-")));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
 });
 
@@ -152,7 +175,7 @@ test("inspectProjectPath: a git repo (and any subdirectory) is `repo`", () => {
 	expect(inspectProjectPath(sub)).toEqual({ kind: "repo" });
 });
 
-test("host-home paths resolve consistently across inspect, open, and init", () => {
+test("host-home paths resolve consistently across inspect, open, and init", async () => {
 	const home = join(dataDir, "host-home");
 	const repo = join(home, "repo");
 	const plain = join(home, "plain");
@@ -167,7 +190,9 @@ test("host-home paths resolve consistently across inspect, open, and init", () =
 		expect(inspectProjectPath("~/repo")).toEqual({ kind: "repo" });
 		expect(openProject("~/repo").path).toBe(realpathSync(repo));
 		expect(inspectProjectPath("~/plain")).toEqual({ kind: "initable" });
-		expect(withoutUserGitConfig(() => initProject("~/plain")).path).toBe(realpathSync(plain));
+		expect((await withoutUserGitConfig(() => initProject("~/plain"))).path).toBe(
+			realpathSync(plain),
+		);
 	} finally {
 		if (savedHome === undefined) delete process.env.HOME;
 		else process.env.HOME = savedHome;
@@ -176,18 +201,42 @@ test("host-home paths resolve consistently across inspect, open, and init", () =
 	}
 });
 
-test("relative project paths are rejected instead of using the host process cwd", () => {
-	for (const operation of [openProject, inspectProjectPath, initProject]) {
+test.skipIf(process.platform !== "win32")(
+	"on Windows a home path may use the native separator",
+	() => {
+		const home = join(dataDir, "host-home");
+		const repo = join(home, "repo");
+		makeRepo(repo);
+		const savedUserProfile = process.env.USERPROFILE;
+		process.env.USERPROFILE = home;
+		try {
+			expect(inspectProjectPath("~\\repo")).toEqual({ kind: "repo" });
+			expect(openProject("~\\repo").path).toBe(realpathSync(repo));
+			expect(() => openProject("relative\\project")).toThrow(
+				"must be absolute or start with ~/ or ~\\",
+			);
+		} finally {
+			if (savedUserProfile === undefined) delete process.env.USERPROFILE;
+			else process.env.USERPROFILE = savedUserProfile;
+		}
+	},
+);
+
+test("relative project paths are rejected instead of using the host process cwd", async () => {
+	for (const operation of [openProject, inspectProjectPath]) {
 		expect(() => operation("relative/project")).toThrow("must be absolute or start with ~/");
 	}
+	await expect(initProject("relative/project")).rejects.toThrow(
+		"must be absolute or start with ~/",
+	);
 });
 
-test("initProject: initialises a plain folder, commits its contents, and opens it", () => {
+test("initProject: initialises a plain folder, commits its contents, and opens it", async () => {
 	const dir = join(dataDir, "plain");
 	mkdirSync(dir);
 	writeFileSync(join(dir, "hello.txt"), "hi\n");
 
-	const project = withoutUserGitConfig(() => initProject(dir));
+	const project = await withoutUserGitConfig(() => initProject(dir));
 	expect(project.path).toBe(realpathSync(dir));
 	expect(existsSync(join(dir, ".git"))).toBe(true);
 	expect(gitOut(dir, "rev-parse", "HEAD")).not.toBe("");
@@ -195,11 +244,11 @@ test("initProject: initialises a plain folder, commits its contents, and opens i
 	expect(listProjects()).toHaveLength(1);
 });
 
-test("initProject: an empty folder gets an empty initial commit (a HEAD), so worktrees work", () => {
+test("initProject: an empty folder gets an empty initial commit (a HEAD), so worktrees work", async () => {
 	const dir = join(dataDir, "empty");
 	mkdirSync(dir);
 
-	withoutUserGitConfig(() => initProject(dir));
+	await withoutUserGitConfig(() => initProject(dir));
 	expect(gitOut(dir, "rev-parse", "HEAD")).not.toBe("");
 	expect(gitOut(dir, "ls-tree", "-r", "HEAD", "--name-only")).toBe("");
 	const wt = join(dataDir, "wt");
@@ -207,26 +256,348 @@ test("initProject: an empty folder gets an empty initial commit (a HEAD), so wor
 	expect(existsSync(wt)).toBe(true);
 });
 
-test("initProject: commits even with no configured git identity (the -c fallback)", () => {
+test("createProject: makes the folder and missing parents, bootstraps a repo, and opens it", async () => {
+	const parent = join(dataDir, "nested", "parent");
+
+	const project = await withoutUserGitConfig(() => createProject(parent, " my-app ", " My  App "));
+	const path = join(parent, "my-app");
+	expect(project.path).toBe(realpathSync(path));
+	expect(project.name).toBe("My App");
+	expect(gitOut(path, "rev-parse", "HEAD")).not.toBe("");
+	expect(listProjects().map((p) => p.id)).toEqual([project.id]);
+});
+
+test("createProject: preserves Unicode parent and project names on disk and in saved records", async () => {
+	const parent = join(dataDir, "中文测试");
+	const path = join(parent, "项目-🚀");
+	const project = await withoutUserGitConfig(() => createProject(parent, "项目-🚀"));
+
+	expect(project.path).toBe(realpathSync(path));
+	expect(project.name).toBe("项目-🚀");
+	expect(resolve(gitOut(path, "rev-parse", "--show-toplevel"))).toBe(project.path);
+	expect(gitOut(path, "rev-parse", "HEAD")).not.toBe("");
+	expect(getProjects().map((p) => p.path)).toEqual([project.path]);
+});
+
+test("createProject: reuses an empty folder but rejects a non-empty one or a file", async () => {
+	mkdirSync(join(dataDir, "empty"));
+	expect((await withoutUserGitConfig(() => createProject(dataDir, "empty"))).path).toBe(
+		realpathSync(join(dataDir, "empty")),
+	);
+
+	mkdirSync(join(dataDir, "full"));
+	writeFileSync(join(dataDir, "full", "a.txt"), "a\n");
+	await expect(createProject(dataDir, "full")).rejects.toThrow("already exists and isn't empty");
+	expect(existsSync(join(dataDir, "full", ".git"))).toBe(false);
+
+	writeFileSync(join(dataDir, "file"), "x\n");
+	await expect(createProject(dataDir, "file")).rejects.toThrow("Not a folder");
+});
+
+test("createProject: a folder inside an enclosing repo becomes its own project", async () => {
+	const outer = join(dataDir, "outer");
+	makeRepo(outer);
+
+	const project = await withoutUserGitConfig(() => createProject(outer, "inner"));
+	expect(project.path).toBe(realpathSync(join(outer, "inner")));
+	expect(resolve(gitOut(join(outer, "inner"), "rev-parse", "--show-toplevel"))).toBe(
+		realpathSync(join(outer, "inner")),
+	);
+});
+
+async function withFailingCommitHook<T>(
+	hookBody: string,
+	run: () => T | Promise<T>,
+): Promise<Awaited<T>> {
+	const hooks = join(dataDir, "hooks");
+	mkdirSync(hooks, { recursive: true });
+	writeFileSync(join(hooks, "pre-commit"), `#!/bin/sh\n${hookBody}\nexit 1\n`, { mode: 0o755 });
+	const config = join(dataDir, "gitconfig");
+	writeFileSync(config, `[core]\n\thooksPath = "${hooks.replaceAll("\\", "/")}"\n`);
+	const keys = ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS"] as const;
+	const saved = keys.map((key) => process.env[key]);
+	process.env.GIT_CONFIG_GLOBAL = config;
+	delete process.env.GIT_CONFIG_COUNT;
+	delete process.env.GIT_CONFIG_PARAMETERS;
+	try {
+		return await run();
+	} finally {
+		keys.forEach((key, index) => {
+			const value = saved[index];
+			if (value === undefined) delete process.env[key];
+			else process.env[key] = value;
+		});
+	}
+}
+
+test("createProject: a failed bootstrap removes the folder it made, but nothing written into it meanwhile", async () => {
+	const parent = join(dataDir, "parent");
+	await expect(withFailingCommitHook(":", () => createProject(parent, "clean"))).rejects.toThrow(
+		"git commit failed",
+	);
+	expect(existsSync(join(parent, "clean"))).toBe(false);
+
+	await expect(
+		withFailingCommitHook("echo kept > hook-output.txt", () => createProject(parent, "busy")),
+	).rejects.toThrow("git commit failed");
+	expect(existsSync(join(parent, "busy", ".git"))).toBe(false);
+	expect(readFileSync(join(parent, "busy", "hook-output.txt"), "utf8")).toBe("kept\n");
+	expect(listProjects()).toEqual([]);
+});
+
+test("createProject: rejects names that are not one plain folder name", async () => {
+	for (const name of ["", "  ", ".", "..", "a/b", "a\\b"]) {
+		await expect(createProject(dataDir, name)).rejects.toThrow("Invalid project folder name");
+	}
+	await expect(createProject("relative", "app")).rejects.toThrow(
+		"must be absolute or start with ~/",
+	);
+});
+
+test("initProject: commits even with no configured git identity (the -c fallback)", async () => {
 	const dir = join(dataDir, "noid");
 	mkdirSync(dir);
 	writeFileSync(join(dir, "file.txt"), "x\n");
 
-	withoutUserGitConfig(() => initProject(dir));
+	await withoutUserGitConfig(() => initProject(dir));
 	expect(gitOut(dir, "rev-parse", "HEAD")).not.toBe("");
 	expect(gitOut(dir, "log", "-1", "--format=%an")).toBe("ThinkRail");
 });
 
-test("initProject: an existing repo is opened, not re-initialised (dedupe, history preserved)", () => {
+test("initProject: an existing repo is opened, not re-initialised (dedupe, history preserved)", async () => {
 	const repo = join(dataDir, "repo");
 	makeRepo(repo);
 	const originalHead = gitOut(repo, "rev-parse", "HEAD");
 
-	const first = initProject(repo);
-	const second = initProject(repo);
+	const first = await initProject(repo);
+	const second = await initProject(repo);
 	expect(second.id).toBe(first.id);
 	expect(listProjects()).toHaveLength(1);
 	expect(gitOut(repo, "rev-parse", "HEAD")).toBe(originalHead);
+});
+
+const posix = test.skipIf(process.platform === "win32");
+
+async function withGitWrapper<T>(caseBody: string, run: () => T | Promise<T>): Promise<Awaited<T>> {
+	const executable = Bun.which("git");
+	if (!executable) throw new Error("git not found");
+	const bin = join(dataDir, "bin");
+	mkdirSync(bin, { recursive: true });
+	writeFileSync(
+		join(bin, "git"),
+		`#!/bin/sh\ncase " $* " in ${caseBody} esac\nexec ${JSON.stringify(executable)} "$@"\n`,
+	);
+	chmodSync(join(bin, "git"), 0o755);
+	const path = process.env.PATH;
+	process.env.PATH = `${bin}${delimiter}${path ?? ""}`;
+	try {
+		return await run();
+	} finally {
+		if (path === undefined) delete process.env.PATH;
+		else process.env.PATH = path;
+	}
+}
+
+posix("a timed-out top-level probe is an error, never an init offer for a real repo", async () => {
+	const repo = join(dataDir, "slow-repo");
+	makeRepo(repo);
+	writeFileSync(join(repo, "untracked.txt"), "keep me untracked\n");
+	const head = gitOut(repo, "rev-parse", "HEAD");
+
+	setSyncGitTimeoutForTests(300);
+	try {
+		await withGitWrapper('*" --show-toplevel "*) sleep 30;;', async () => {
+			expect(() => inspectProjectPath(repo)).toThrow(
+				expect.objectContaining({ code: "GIT_TIMEOUT" }),
+			);
+			await expect(initProject(repo)).rejects.toMatchObject({ code: "GIT_TIMEOUT" });
+			expect(() => openProject(repo)).toThrow(expect.objectContaining({ code: "GIT_TIMEOUT" }));
+		});
+	} finally {
+		setSyncGitTimeoutForTests(undefined);
+	}
+
+	expect(gitOut(repo, "rev-parse", "HEAD")).toBe(head);
+	expect(gitOut(repo, "status", "--porcelain")).toBe("?? untracked.txt");
+	expect(listProjects()).toHaveLength(0);
+});
+
+posix("initProject keeps a .git it did not create when the initial commit fails", async () => {
+	const dir = join(dataDir, "has-git-dir");
+	mkdirSync(join(dir, ".git"), { recursive: true });
+	writeFileSync(join(dir, ".git", "sentinel"), "user data\n");
+	writeFileSync(join(dir, "file.txt"), "x\n");
+
+	await withGitWrapper('*" add "*) exit 1;;', async () => {
+		await expect(withoutUserGitConfig(() => initProject(dir))).rejects.toThrow(/git add failed/);
+	});
+
+	expect(readFileSync(join(dir, ".git", "sentinel"), "utf8")).toBe("user data\n");
+});
+
+posix("initProject shows git's own error when the initial commit fails", async () => {
+	const dir = join(dataDir, "add-stderr");
+	mkdirSync(dir);
+	writeFileSync(join(dir, "file.txt"), "x\n");
+
+	await withGitWrapper(
+		'*" add "*) echo "fatal: detected dubious ownership in repository" >&2; exit 128;;',
+		async () => {
+			await expect(withoutUserGitConfig(() => initProject(dir))).rejects.toThrow(
+				/git add failed: .*\nfatal: detected dubious ownership in repository/,
+			);
+		},
+	);
+});
+
+posix("a repository git refuses to trust is an error, never an init offer", async () => {
+	const repo = join(dataDir, "untrusted-repo");
+	makeRepo(repo);
+	const head = gitOut(repo, "rev-parse", "HEAD");
+
+	await withGitWrapper(
+		'*" --show-toplevel "*) echo "fatal: detected dubious ownership in repository" >&2; exit 128;;',
+		async () => {
+			expect(() => inspectProjectPath(repo)).toThrow(/dubious ownership/);
+			await expect(initProject(repo)).rejects.toThrow(/dubious ownership/);
+		},
+	);
+
+	expect(gitOut(repo, "rev-parse", "HEAD")).toBe(head);
+	expect(listProjects()).toHaveLength(0);
+});
+
+posix("initProject removes the .git it created when the initial commit fails", async () => {
+	const dir = join(dataDir, "fresh");
+	mkdirSync(dir);
+	writeFileSync(join(dir, "file.txt"), "x\n");
+
+	await withGitWrapper('*" add "*) exit 1;;', async () => {
+		await expect(withoutUserGitConfig(() => initProject(dir))).rejects.toThrow(/git add failed/);
+	});
+
+	expect(existsSync(join(dir, ".git"))).toBe(false);
+});
+
+posix(
+	"a git identity probe that times out fails the init instead of committing as ThinkRail",
+	async () => {
+		const dir = join(dataDir, "slow-identity");
+		mkdirSync(dir);
+		writeFileSync(join(dir, "file.txt"), "x\n");
+
+		setSyncGitTimeoutForTests(2_000);
+		try {
+			await withGitWrapper('*" config user.email "*) sleep 30;;', async () => {
+				await expect(initProject(dir)).rejects.toMatchObject({
+					code: "GIT_TIMEOUT",
+					message: expect.stringMatching(/^Could not read the git identity/),
+				});
+			});
+		} finally {
+			setSyncGitTimeoutForTests(undefined);
+		}
+
+		expect(existsSync(join(dir, ".git"))).toBe(false);
+		expect(listProjects()).toHaveLength(0);
+	},
+);
+
+posix("initProject keeps the host event loop running while git adds and commits", async () => {
+	const dir = join(dataDir, "slow-init");
+	mkdirSync(dir);
+	writeFileSync(join(dir, "hello.txt"), "hi\n");
+
+	await withGitWrapper('*" add "*|*" commit "*) sleep 1;;', async () => {
+		const started = performance.now();
+		const init = withoutUserGitConfig(() => initProject(dir));
+		await Bun.sleep(100);
+		expect(performance.now() - started).toBeLessThan(1_000);
+		await init;
+	});
+
+	expect(gitOut(dir, "rev-parse", "HEAD")).not.toBe("");
+});
+
+async function untilExists(path: string): Promise<void> {
+	const deadline = performance.now() + 5_000;
+	while (!existsSync(path)) {
+		if (performance.now() > deadline) throw new Error(`timed out waiting for ${path}`);
+		await Bun.sleep(10);
+	}
+}
+
+const firstAddFailsLate = (marker: string) =>
+	`*" add "*) if [ ! -e ${JSON.stringify(marker)} ]; then : > ${JSON.stringify(marker)}; sleep 1; exit 1; fi;;`;
+
+posix(
+	"an overlapping init waits for the in-flight bootstrap and its cleanup, then re-evaluates",
+	async () => {
+		const dir = join(dataDir, "contended");
+		mkdirSync(dir);
+		writeFileSync(join(dir, "file.txt"), "x\n");
+
+		await withoutUserGitConfig(() =>
+			withGitWrapper(firstAddFailsLate(join(dataDir, "add-delayed")), async () => {
+				const settled: string[] = [];
+				const first = initProject(dir).finally(() => settled.push("first"));
+				await untilExists(join(dir, ".git", "HEAD"));
+				expect(() => openProject(dir)).toThrow(
+					expect.objectContaining({ code: "PROJECT_BOOTSTRAPPING" }),
+				);
+				const second = initProject(dir).finally(() => settled.push("second"));
+
+				await expect(first).rejects.toThrow(/git add failed/);
+				const project = await second;
+				expect(settled).toEqual(["first", "second"]);
+				expect(project.path).toBe(dir);
+			}),
+		);
+
+		expect(gitOut(dir, "ls-tree", "--name-only", "HEAD")).toBe("file.txt");
+		expect(listProjects().map((p) => p.path)).toEqual([dir]);
+	},
+);
+
+posix(
+	"overlapping requests for a folder createProject is bootstrapping wait for its cleanup",
+	async () => {
+		const parent = join(dataDir, "parent");
+		const dir = join(parent, "app");
+
+		await withoutUserGitConfig(() =>
+			withGitWrapper(firstAddFailsLate(join(dataDir, "add-delayed")), async () => {
+				const first = createProject(parent, "app");
+				await untilExists(join(dir, ".git", "HEAD"));
+				expect(() => openProject(dir)).toThrow(
+					expect.objectContaining({ code: "PROJECT_BOOTSTRAPPING" }),
+				);
+				const retried = createProject(parent, "app", "Retried");
+				const init = initProject(dir);
+
+				await expect(first).rejects.toThrow(/git add failed/);
+				const [created, opened] = await Promise.all([retried, init]);
+				expect(created.name).toBe("Retried");
+				expect(opened.id).toBe(created.id);
+			}),
+		);
+
+		expect(gitOut(dir, "rev-parse", "HEAD")).not.toBe("");
+		expect(listProjects()).toHaveLength(1);
+	},
+);
+
+posix("the initial commit cannot start git's automatic maintenance", async () => {
+	const dir = join(dataDir, "no-gc");
+	mkdirSync(dir);
+	writeFileSync(join(dir, "hello.txt"), "hi\n");
+	const calls = join(dataDir, "commit-calls.log");
+
+	await withGitWrapper(`*" commit "*) printf '%s\\n' "$*" >> ${JSON.stringify(calls)};;`, () =>
+		withoutUserGitConfig(() => initProject(dir)),
+	);
+
+	expect(readFileSync(calls, "utf8")).toContain("-c maintenance.auto=false -c gc.auto=0 commit");
 });
 
 test("legacy project records default to open in both projections", () => {
@@ -282,10 +653,114 @@ test("closeProject rejects an unknown id instead of reporting a success with no 
 	expect(published).toEqual([]);
 });
 
-test("setProjectTrust: persists a revocable, fail-closed trust decision", () => {
+test("renameProject changes only the display name, publishes it, and survives close/reopen", () => {
 	const repo = join(dataDir, "repo");
 	makeRepo(repo);
-	const project = initProject(repo);
+	const project = openProject(repo);
+	const published: string[] = [];
+	setProjectPublisher((snapshot) => published.push(snapshot.name));
+
+	const renamed = renameProject(project.id, "  My\n  Project  ");
+
+	expect(renamed).toMatchObject({
+		id: project.id,
+		name: "My Project",
+		path: project.path,
+		slug: project.slug,
+	});
+	expect(published).toEqual(["My Project"]);
+	closeProject(project.id);
+	expect(openProject(repo).name).toBe("My Project");
+	expect(() => renameProject(project.id, "   ")).toThrow("Invalid project name");
+	expect(() => renameProject(project.id, "x".repeat(101))).toThrow("Invalid project name");
+	expect(() => renameProject("missing", "Name")).toThrow("Unknown project: missing");
+});
+
+function seedProjects(...records: Array<Partial<Project> & Pick<Project, "id" | "lastOpened">>) {
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify(
+			records.map((record) => ({
+				name: record.id,
+				path: `/p/${record.id}`,
+				slug: record.id,
+				...record,
+			})),
+		),
+	);
+}
+
+const openIds = () => listProjects().map((project) => project.id);
+
+test("moveProject places a project before or after another, publishing and persisting only that record", () => {
+	seedProjects(
+		{ id: "a", lastOpened: 400 },
+		{ id: "b", lastOpened: 300 },
+		{ id: "c", lastOpened: 200 },
+	);
+	const published: string[] = [];
+	setProjectPublisher((snapshot) => published.push(snapshot.id));
+
+	moveProject("c", "a", "before");
+	expect(openIds()).toEqual(["c", "a", "b"]);
+	moveProject("c", "b", "after");
+	expect(openIds()).toEqual(["a", "b", "c"]);
+	moveProject("a", "c", "before");
+	expect(openIds()).toEqual(["b", "a", "c"]);
+	expect(published).toEqual(["c", "c", "a"]);
+	expect(listRecentProjects().map((project) => project.id)).toEqual(["a", "b", "c"]);
+
+	moveProject("a", "c", "before");
+	moveProject("a", "a", "after");
+	expect(published).toEqual(["c", "c", "a"]);
+	expect(() => moveProject("a", "missing", "before")).toThrow("Unknown project: missing");
+});
+
+test("moveProject ignores closed projects and renumbers the open ones when neighbours leave no room", () => {
+	seedProjects(
+		{ id: "a", lastOpened: 300 },
+		{ id: "b", lastOpened: 300 },
+		{ id: "gone", lastOpened: 250, closed: true },
+		{ id: "c", lastOpened: 200 },
+	);
+	expect(() => moveProject("a", "gone", "after")).toThrow("Unknown project: gone");
+	const published: string[] = [];
+	setProjectPublisher((snapshot) => published.push(snapshot.id));
+
+	moveProject("c", "a", "after");
+
+	expect(openIds()).toEqual(["a", "c", "b"]);
+	expect(published.toSorted()).toEqual(["a", "b", "c"]);
+	expect(getProjects().find((project) => project.id === "gone")?.rank).toBeUndefined();
+});
+
+test("opening puts a new or reopened project on top without disturbing the others' order", () => {
+	const [first, second, third] = [
+		join(dataDir, "first"),
+		join(dataDir, "second"),
+		join(dataDir, "third"),
+	] as const;
+	for (const repo of [first, second, third]) makeRepo(repo);
+	const a = openProject(first);
+	const b = openProject(second);
+	moveProject(a.id, b.id, "before");
+	expect(openIds()).toEqual([a.id, b.id]);
+
+	const c = openProject(third);
+	expect(openIds()).toEqual([c.id, a.id, b.id]);
+	openProject(second);
+	expect(openIds()).toEqual([c.id, a.id, b.id]);
+
+	closeProject(a.id);
+	expect(openIds()).toEqual([c.id, b.id]);
+	openProject(first);
+	expect(openIds()).toEqual([a.id, c.id, b.id]);
+});
+
+test("setProjectTrust: persists a revocable, fail-closed trust decision", async () => {
+	const repo = join(dataDir, "repo");
+	makeRepo(repo);
+	const project = await initProject(repo);
 
 	expect(project.trusted).toBeUndefined();
 	expect(isProjectTrusted(project.id)).toBe(false);
@@ -301,10 +776,10 @@ test("setProjectTrust: persists a revocable, fail-closed trust decision", () => 
 	expect(() => setProjectTrust("nope", true)).toThrow();
 });
 
-test("setProjectTrust: pi-level resource trust needs its own explicit grant, and a revoke clears both", () => {
+test("setProjectTrust: pi-level resource trust needs its own explicit grant, and a revoke clears both", async () => {
 	const repo = join(dataDir, "repo");
 	makeRepo(repo);
-	const project = initProject(repo);
+	const project = await initProject(repo);
 	const published: Array<{ trusted: boolean | undefined; piResourceTrust: string | undefined }> =
 		[];
 	setProjectPublisher(({ trusted, piResourceTrust }) =>
@@ -341,7 +816,9 @@ function writeProjects(records: object[]): void {
 	writeFileSync(join(dataDir, "projects.json"), JSON.stringify(records));
 }
 
-function storedProjects(): Array<{ id: string; piResourceTrust?: string; trusted?: boolean }> {
+function storedProjects(): Array<
+	Pick<Project, "mcpToolGrants"> & { id: string; piResourceTrust?: string; trusted?: boolean }
+> {
 	return JSON.parse(readFileSync(join(dataDir, "projects.json"), "utf8"));
 }
 
@@ -362,7 +839,7 @@ test("a record that predates pi-level trust is not grandfathered: it stays as st
 	expect(asked).toEqual([]);
 });
 
-test("a newly added project starts untrusted unless pi already trusts its path", () => {
+test("a newly added project starts untrusted unless pi already trusts its path", async () => {
 	const plain = join(dataDir, "plain");
 	const piTrusted = join(dataDir, "pi-trusted");
 	makeRepo(plain);
@@ -372,7 +849,7 @@ test("a newly added project starts untrusted unless pi already trusts its path",
 
 	expect(openProject(plain).piResourceTrust).toBe("untrusted");
 	expect(openProject(piTrusted).piResourceTrust).toBe("granted");
-	expect(initProject(plain).piResourceTrust).toBe("untrusted");
+	expect((await initProject(plain)).piResourceTrust).toBe("untrusted");
 });
 
 test("MCP approvals and per-project overrides persist in the project record and clear cleanly", () => {
@@ -404,4 +881,131 @@ test("MCP approvals and per-project overrides persist in the project record and 
 	expect(cleared.mcpOverrides).toBeUndefined();
 	expect(storedProjects()[0]).not.toHaveProperty("mcpOverrides");
 	expect(() => approveProjectMcpServer("nope", "x", "y")).toThrow();
+});
+
+test("MCP tool grants: deduplicated per server, reset by a new target, removed with the last tool", () => {
+	const repo = join(dataDir, "mcp-grants");
+	makeRepo(repo);
+	const project = openProject(repo);
+
+	grantProjectMcpTool(project.id, "linear", "t1", "mcp__linear__create_issue");
+	grantProjectMcpTool(project.id, "linear", "t1", "mcp__linear__create_issue");
+	grantProjectMcpTool(project.id, "linear", "t1", "mcp__linear__comment");
+	grantProjectMcpTool(project.id, "__proto__", "t9", "mcp____proto____x");
+	expect(storedProjects()[0]?.mcpToolGrants).toEqual({
+		linear: { target: "t1", tools: ["mcp__linear__create_issue", "mcp__linear__comment"] },
+		["__proto__"]: { target: "t9", tools: ["mcp____proto____x"] },
+	});
+
+	const moved = grantProjectMcpTool(project.id, "linear", "t2", "mcp__linear__comment");
+	expect(moved.mcpToolGrants?.linear).toEqual({ target: "t2", tools: ["mcp__linear__comment"] });
+
+	expect(
+		revokeProjectMcpTool(project.id, "linear", "missing").mcpToolGrants?.linear?.tools,
+	).toEqual(["mcp__linear__comment"]);
+	revokeProjectMcpTool(project.id, "linear", "mcp__linear__comment");
+	const cleared = revokeProjectMcpTool(project.id, "__proto__", "mcp____proto____x");
+	expect(cleared.mcpToolGrants).toBeUndefined();
+	expect(storedProjects()[0]).not.toHaveProperty("mcpToolGrants");
+});
+
+test("recent projects omit closed records whose folders are definitively gone", async () => {
+	const repo = join(dataDir, "repo");
+	makeRepo(repo);
+	const blocker = join(dataDir, "blocker");
+	writeFileSync(blocker, "not a folder");
+	const closed = (id: string, path: string, lastOpened: number) => ({
+		id,
+		name: id,
+		path,
+		slug: id,
+		lastOpened,
+		closed: true,
+	});
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([
+			closed("missing", join(dataDir, "missing"), 5),
+			closed("file", blocker, 4),
+			closed("nested", join(blocker, "child"), 3),
+			closed("kept", repo, 2),
+			{ id: "open-gone", name: "o", path: join(dataDir, "unplugged"), slug: "o", lastOpened: 1 },
+		]),
+	);
+
+	await refreshRecentProjectFolders(1_000);
+
+	expect(listRecentProjects().map((project) => project.id)).toEqual(["kept", "open-gone"]);
+	expect(getProjects()).toHaveLength(5);
+});
+
+test("recent projects follow the last completed folder check of a closed record", async () => {
+	const folder = join(dataDir, "moved");
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([
+			{ id: "moved", name: "moved", path: folder, slug: "moved", lastOpened: 1, closed: true },
+		]),
+	);
+	expect(listRecentProjects().map((project) => project.id)).toEqual(["moved"]);
+
+	await refreshRecentProjectFolders(1_000);
+	expect(listRecentProjects()).toEqual([]);
+
+	mkdirSync(folder);
+	await refreshRecentProjectFolders(1_000);
+	expect(listRecentProjects().map((project) => project.id)).toEqual(["moved"]);
+});
+
+test("a folder check that outlasts the budget neither blocks the refresh nor repeats", async () => {
+	const hung = join(dataDir, "hung");
+	hungStatPaths.add(hung);
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([
+			{ id: "hung", name: "hung", path: hung, slug: "hung", lastOpened: 1, closed: true },
+		]),
+	);
+	const calls = hungStatCalls;
+
+	await refreshRecentProjectFolders(10);
+	await refreshRecentProjectFolders(10);
+
+	expect(hungStatCalls - calls).toBe(1);
+	expect(listRecentProjects().map((project) => project.id)).toEqual(["hung"]);
+});
+
+test.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+	"recent projects keep a closed record whose folder cannot be inspected",
+	async () => {
+		const locked = join(dataDir, "locked");
+		const folder = join(locked, "repo");
+		mkdirSync(folder, { recursive: true });
+		writeFileSync(
+			join(dataDir, "projects.json"),
+			JSON.stringify([
+				{ id: "locked", name: "locked", path: folder, slug: "locked", lastOpened: 1, closed: true },
+			]),
+		);
+		chmodSync(locked, 0o000);
+		try {
+			await refreshRecentProjectFolders(1_000);
+		} finally {
+			chmodSync(locked, 0o755);
+		}
+
+		expect(listRecentProjects().map((project) => project.id)).toEqual(["locked"]);
+	},
+);
+
+test("a skill group switch records an explicit project choice in exactly one list", () => {
+	const dir = join(dataDir, "skills project");
+	makeRepo(dir);
+	const { id } = openProject(dir);
+	const on = setProjectGroupEnabled(id, "personal", true);
+	expect(on.enabledGroups).toEqual(["personal"]);
+	expect(on.disabledGroups).toEqual([]);
+	const off = setProjectGroupEnabled(id, "personal", false);
+	expect(off.enabledGroups).toEqual([]);
+	expect(off.disabledGroups).toEqual(["personal"]);
 });

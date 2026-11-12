@@ -24,6 +24,8 @@ import {
 	type ThinkingLevel,
 	type WireModel,
 } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import {
 	Command,
 	CommandEmpty,
@@ -36,41 +38,49 @@ import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { type CSSProperties, forwardRef, useImperativeHandle, useMemo, useState } from "react";
+import { ModelEffortPill, TONE_TEXT } from "./ModelEffortLabel";
 import {
 	CENTRAL_KIND_TAG,
 	COSTLY_LEVELS,
 	costLabel,
 	describeAuth,
-	EFFORT_BAR_HEIGHTS,
 	formatContext,
 	groupByProvider,
 	kindLabel,
 	LEVEL_HINT,
+	LEVEL_LABEL,
 	type LevelTone,
 	levelPosition,
 	levelTone,
-	litBars,
-	modelKey,
 	trailingLevel,
 } from "./modelPicker";
 import { ProviderGlyph } from "./ProviderGlyph";
+import {
+	GROUPED_ROW,
+	type GroupExpansion,
+	groupRowValue,
+	initialGroupExpansion,
+	NO_MODELS_HINT,
+	type PickerGroup,
+	PROVIDER_GROUP,
+	pickerEmptyState,
+	pickerFilter,
+	pickerGroups,
+	rowValue,
+	toggleGroup,
+} from "./pickerGroups";
 import type { ModelPreferences } from "./useModelPreferences";
 
 export interface ModelEffortPickerHandle {
-	/** Opens the popover with the search prefilled — the `/model` slash command's entry. */
 	open: (query?: string) => void;
 }
 
-/** The pre-session "Default" row: what the host would pick when the caller sends no explicit pair. */
 export interface DefaultPairOption {
-	/** The host's `model.default` answer, or `null` while it is still being asked. */
 	resolved: ModelDefault | null;
-	/** True while the held pair is the default rather than an explicit choice. */
 	active: boolean;
 	onSelect: () => void;
 }
 
-/** A model choice, carrying a level only when the user picked both at once (`opus high`). */
 export interface ModelSelection {
 	model: WireModel;
 	level?: ThinkingLevel;
@@ -81,7 +91,6 @@ export interface ModelEffortPickerProps {
 	current: WireModel | null;
 	level: ThinkingLevel;
 	onSelect: (selection: ModelSelection) => void;
-	/** A level change for the current model alone. */
 	onSelectLevel: (level: ThinkingLevel) => void;
 	refreshing: boolean;
 	onRefresh: (force: boolean) => void;
@@ -91,11 +100,18 @@ export interface ModelEffortPickerProps {
 	className?: string;
 }
 
+function rowKeywords(model: WireModel): string[] {
+	return [model.name, model.id, model.provider, ...model.thinkingLevels];
+}
+
+function groupRow(model: WireModel) {
+	return { value: rowValue("all", model), keywords: rowKeywords(model) };
+}
+
 function hasKindGlyph(model: WireModel): boolean {
 	return model.auth !== undefined && model.auth.kind !== "other";
 }
 
-/** The connection-kind mark: key = API key, ∞ = subscription, { } = environment key, JCP = JetBrains AI. */
 function KindGlyph({ model, className }: { model: WireModel; className?: string }) {
 	switch (model.auth?.kind) {
 		case "api-key":
@@ -120,38 +136,6 @@ function KindGlyph({ model, className }: { model: WireModel; className?: string 
 	}
 }
 
-function EffortBars({
-	level,
-	levels,
-	className,
-}: {
-	level: ThinkingLevel;
-	levels: readonly ThinkingLevel[];
-	className?: string;
-}) {
-	const lit = litBars(level, levels);
-	return (
-		<span aria-hidden className={cn("inline-flex h-12 shrink-0 items-end gap-2", className)}>
-			{EFFORT_BAR_HEIGHTS.map((height, index) => (
-				<span
-					key={height}
-					className={cn("w-2 rounded-xs bg-current", height, index >= lit && "opacity-30")}
-				/>
-			))}
-		</span>
-	);
-}
-
-const TONE_TEXT: Record<LevelTone, string> = {
-	cool: "text-feedback-info",
-	accent: "text-primary",
-	hot: "text-feedback-warning",
-};
-
-/**
- * The rail between two adjacent levels: solid within a tone, a blend where the tone changes. Tones
- * only ever warm up along a model's levels, so the cooling pairs just stay solid.
- */
 const TONE_SEGMENT: Record<`${LevelTone}>${LevelTone}`, string> = {
 	"cool>cool": "bg-feedback-info",
 	"cool>accent": "bg-[linear-gradient(90deg,var(--feedback-info),var(--primary))]",
@@ -174,11 +158,6 @@ const LEVEL_GLYPH: Record<ThinkingLevel, RemixiconComponentType> = {
 	max: Fire,
 };
 
-/**
- * The effort slider: a thick rail hiding a cool→warm gradient that the handle uncovers as it moves,
- * with the level word riding on the handle. A native range input does the dragging, keyboard and
- * touch; the labels beneath are the same levels as buttons.
- */
 function EffortSlider({
 	model,
 	level,
@@ -190,6 +169,7 @@ function EffortSlider({
 	defaultLevel: ThinkingLevel | undefined;
 	onSelectLevel: (level: ThinkingLevel) => void;
 }) {
+	const t = useT();
 	const levels = model.thinkingLevels;
 	const index = levels.indexOf(level);
 	const Glyph = LEVEL_GLYPH[level];
@@ -199,7 +179,7 @@ function EffortSlider({
 			className="flex shrink-0 flex-col gap-4 border-border-default border-t px-12 pt-8 pb-4"
 		>
 			<div className="flex items-center gap-4 text-text-muted tr-text-metadata">
-				<span>Effort</span>
+				<span>{t("chat.modelPicker.effort")}</span>
 				<span aria-hidden>·</span>
 				<span className="truncate">{model.name}</span>
 			</div>
@@ -229,8 +209,8 @@ function EffortSlider({
 					max={levels.length - 1}
 					step={1}
 					value={Math.max(0, index)}
-					aria-label={`Effort for ${model.name}`}
-					aria-valuetext={level}
+					aria-label={t("chat.modelPicker.effortFor", { model: model.name })}
+					aria-valuetext={t(LEVEL_LABEL[level])}
 					data-testid="thinking-slider"
 					onChange={(event) => {
 						const next = levels[Number(event.target.value)];
@@ -243,7 +223,7 @@ function EffortSlider({
 					className="pointer-events-none absolute top-2 left-[clamp(32px,var(--effort),calc(100%-32px))] flex h-24 min-w-64 -translate-x-1/2 items-center justify-center gap-4 rounded-full border border-control-border-active bg-container-elevated-bg px-8 text-text-default tr-text-label-pill capitalize shadow-[var(--shadow-sm)] transition-[left] duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] peer-focus-visible:ring-2 peer-focus-visible:ring-primary motion-reduce:transition-none"
 				>
 					<Glyph className={cn("size-12 shrink-0", TONE_TEXT[levelTone(level)])} />
-					{level}
+					{t(LEVEL_LABEL[level])}
 				</div>
 			</div>
 			<div className="flex justify-between px-2">
@@ -272,7 +252,7 @@ function EffortSlider({
 									active ? "text-text-default" : "text-text-subtle hover:text-text-muted",
 								)}
 							>
-								{candidate}
+								{t(LEVEL_LABEL[candidate])}
 								{candidate === defaultLevel ? (
 									<span
 										aria-hidden
@@ -285,11 +265,11 @@ function EffortSlider({
 				})}
 			</div>
 			<div className="flex items-center gap-8 text-text-subtle tr-text-metadata">
-				<span className="truncate">{LEVEL_HINT[level]}</span>
+				<span className="truncate">{t(LEVEL_HINT[level])}</span>
 				{COSTLY_LEVELS.has(level) ? (
 					<span className="flex shrink-0 items-center gap-4 text-feedback-warning">
 						<Flash className="size-12" />
-						uses your limits faster
+						{t("chat.modelPicker.costlyWarning")}
 					</span>
 				) : null}
 			</div>
@@ -298,7 +278,8 @@ function EffortSlider({
 }
 
 function RowMeta({ model, withProvider }: { model: WireModel; withProvider: boolean }) {
-	const kind = kindLabel(model);
+	const t = useT();
+	const kind = kindLabel(t, model);
 	const cost = costLabel(model);
 	return (
 		<span className="flex min-w-0 items-center gap-4 truncate text-text-muted tr-text-metadata">
@@ -313,7 +294,7 @@ function RowMeta({ model, withProvider }: { model: WireModel; withProvider: bool
 			{cost ? (
 				<>
 					{withProvider || kind ? <span aria-hidden>·</span> : null}
-					<span className="shrink-0">{cost} per M</span>
+					<span className="shrink-0">{t("chat.modelPicker.costPerMillion", { cost })}</span>
 				</>
 			) : null}
 			{withProvider || kind || cost ? <span aria-hidden>·</span> : null}
@@ -321,9 +302,6 @@ function RowMeta({ model, withProvider }: { model: WireModel; withProvider: bool
 		</span>
 	);
 }
-
-const FOOTER_LINK =
-	"flex items-center gap-4 rounded-sm px-4 py-2 tr-text-metadata text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-default disabled:text-text-subtle disabled:hover:bg-transparent";
 
 export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffortPickerProps>(
 	function ModelEffortPicker(
@@ -342,12 +320,17 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 		},
 		handleRef,
 	) {
+		const t = useT();
 		const [open, setOpen] = useState(false);
 		const [query, setQuery] = useState("");
 		const [showAll, setShowAll] = useState(false);
+		const [expansion, setExpansion] = useState<GroupExpansion>(() =>
+			initialGroupExpansion(null, []),
+		);
 
 		const openWith = (next: string) => {
 			setQuery(next);
+			setExpansion(initialGroupExpansion(current, preferences.favorites));
 			setOpen(true);
 			onRefresh(false);
 		};
@@ -360,9 +343,17 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 			setShowAll(false);
 		};
 
-		const groups = useMemo(() => groupByProvider(models), [models]);
+		const providers = useMemo(() => groupByProvider(t, models).map((g) => g.provider), [t, models]);
 		const shortlist = preferences.favorites.length > 0 || preferences.recents.length > 0;
 		const folded = shortlist && !showAll && query.trim() === "";
+		const searching = query !== "";
+		const groups = pickerGroups(t, models, {
+			pinned: preferences.favorites,
+			query,
+			expansion,
+			row: groupRow,
+		});
+		const emptyState = pickerEmptyState(query, models.length);
 
 		const pickModel = (model: WireModel) => {
 			const typedLevel = trailingLevel(query, model);
@@ -382,51 +373,82 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 		const renderModel = (model: WireModel, section: string) => {
 			const favorite = preferences.isFavorite(model);
 			const isCurrent = !defaultOption?.active && sameModel(model, current);
+			const grouped = section === "all";
 			return (
 				<CommandItem
-					key={`${section}:${modelKey(model)}`}
-					value={`${section}:${modelKey(model)}`}
-					keywords={[model.name, model.id, model.provider, ...model.thinkingLevels]}
+					key={rowValue(section, model)}
+					value={rowValue(section, model)}
+					keywords={rowKeywords(model)}
 					data-testid="model-option"
 					data-model-id={model.id}
 					data-provider={model.provider}
-					title={describeAuth(model) ?? undefined}
+					title={describeAuth(t, model) ?? undefined}
 					onSelect={() => pickModel(model)}
 					className={cn(
 						"group/row items-start gap-8 py-4",
+						grouped && GROUPED_ROW,
 						isCurrent && "bg-primary-subtle data-[selected=true]:bg-primary-subtle",
 					)}
 				>
-					<ProviderGlyph provider={model.provider} className="mt-2 text-text-muted" />
+					{grouped ? null : (
+						<ProviderGlyph provider={model.provider} className="mt-2 text-text-muted" />
+					)}
 					<span className="flex min-w-0 flex-1 flex-col">
 						<span className="truncate">{model.name}</span>
-						<RowMeta model={model} withProvider={section !== "all"} />
+						<RowMeta model={model} withProvider={!grouped} />
 					</span>
 					{isCurrent ? <Check className="mt-2 size-14 shrink-0 text-primary" /> : null}
 					{preferences.supported ? (
-						<button
-							type="button"
+						<IconButton
+							icon={favorite ? StarFill : StarLine}
+							size="s"
 							data-testid="model-favorite-toggle"
 							data-favorite={favorite}
-							aria-label={favorite ? `Unstar ${model.name}` : `Star ${model.name}`}
+							label={
+								favorite
+									? t("chat.modelPicker.unpin", { model: model.name })
+									: t("chat.modelPicker.pin", { model: model.name })
+							}
 							aria-pressed={favorite}
+							selected={favorite}
+							tone={favorite ? "warning" : undefined}
 							onClick={(event) => {
 								event.stopPropagation();
 								preferences.toggleFavorite(model);
 							}}
 							className={cn(
-								"mt-2 flex size-16 shrink-0 items-center justify-center rounded-sm outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary",
-								favorite
-									? "text-feedback-warning"
-									: "text-text-subtle opacity-0 group-hover/row:opacity-100 group-data-[selected=true]/row:opacity-100 focus-visible:opacity-100",
+								"mt-2 shrink-0",
+								!favorite &&
+									"opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100 group-data-[selected=true]/row:opacity-100",
 							)}
-						>
-							{favorite ? <StarFill className="size-12" /> : <StarLine className="size-12" />}
-						</button>
+						/>
 					) : null}
 				</CommandItem>
 			);
 		};
+
+		const renderGroupHeader = (group: PickerGroup) => (
+			<CommandItem
+				value={groupRowValue(group.provider)}
+				data-testid="model-group-toggle"
+				data-provider={group.provider}
+				aria-expanded={group.expanded}
+				onSelect={() => setExpansion((prev) => toggleGroup(prev, group.provider, searching))}
+				className="gap-8 py-8"
+			>
+				<ProviderGlyph provider={group.provider} className="text-text-muted" />
+				<span className="min-w-0 flex-1 truncate tr-text-emphasis">{group.provider}</span>
+				{group.auth ? (
+					<span className="min-w-0 truncate text-text-subtle tr-text-metadata">{group.auth}</span>
+				) : null}
+				<span className="shrink-0 text-text-muted tr-text-metadata">{group.count}</span>
+				{group.expanded ? (
+					<ChevronDown className="size-14 shrink-0 text-text-muted" />
+				) : (
+					<ChevronRight className="size-14 shrink-0 text-text-muted" />
+				)}
+			</CommandItem>
+		);
 
 		const effortLevels = current?.thinkingLevels ?? [];
 		const isDefaultPair = current !== null && preferences.isDefault(current, level);
@@ -450,37 +472,28 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 						className,
 					)}
 				>
-					{defaultOption?.active ? (
-						<Sparkles className="size-14 shrink-0 text-text-muted" />
-					) : pillModel ? (
-						<ProviderGlyph provider={pillModel.provider} className="size-14 text-text-muted" />
-					) : null}
-					<span className="truncate">
-						{defaultOption?.active ? "Default" : (pillModel?.name ?? "Select model")}
-					</span>
-					{pillModel ? (
-						<>
-							{defaultOption?.active ? (
-								<span className="truncate text-text-muted tr-text-metadata">{pillModel.name}</span>
-							) : null}
-							<span
-								data-testid="thinking-selector"
-								data-level={pillLevel}
-								className="flex shrink-0 items-center gap-4 text-text-muted tr-text-metadata capitalize"
-							>
-								<EffortBars
-									level={pillLevel}
-									levels={pillModel.thinkingLevels}
-									className={TONE_TEXT[levelTone(pillLevel)]}
-								/>
-								{pillLevel}
-							</span>
-							{hasKindGlyph(pillModel) ? (
-								<IconTooltip label={describeAuth(pillModel)} wrapTrigger>
-									<KindGlyph model={pillModel} className="text-text-muted" />
-								</IconTooltip>
-							) : null}
-						</>
+					<ModelEffortPill
+						icon={
+							defaultOption?.active ? (
+								<Sparkles className="size-14 shrink-0 text-text-muted" />
+							) : pillModel ? (
+								<ProviderGlyph provider={pillModel.provider} className="size-14 text-text-muted" />
+							) : null
+						}
+						name={
+							defaultOption?.active
+								? t("common.default")
+								: (pillModel?.name ?? t("chat.modelPicker.selectModel"))
+						}
+						detail={defaultOption?.active ? pillModel?.name : undefined}
+						level={pillModel ? pillLevel : undefined}
+						levels={pillModel?.thinkingLevels ?? []}
+						levelTestId="thinking-selector"
+					/>
+					{pillModel && hasKindGlyph(pillModel) ? (
+						<IconTooltip label={describeAuth(t, pillModel)} wrapTrigger>
+							<KindGlyph model={pillModel} className="text-text-muted" />
+						</IconTooltip>
 					) : null}
 					<ChevronDown className="size-14 shrink-0 text-text-muted" />
 				</PopoverTrigger>
@@ -489,14 +502,24 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 					container={container}
 					className="flex max-h-[var(--radix-popover-content-available-height)] w-[min(360px,calc(100vw-16px))] flex-col p-0"
 				>
-					<Command className="min-h-0 flex-1 bg-transparent">
+					<Command
+						className="min-h-0 flex-1 bg-transparent"
+						filter={pickerFilter(groups, groupRow)}
+					>
 						<CommandInput
-							placeholder="Search models… (append a level: opus high)"
+							placeholder={t("chat.modelPicker.searchWithLevel")}
 							value={query}
 							onValueChange={setQuery}
 						/>
-						<CommandList className="max-h-[340px] min-h-0 flex-1">
-							<CommandEmpty>No models found.</CommandEmpty>
+						<CommandList className="max-h-340 min-h-0 flex-1">
+							{emptyState === "no-match" ? (
+								<CommandEmpty>{t("chat.modelPicker.noMatch")}</CommandEmpty>
+							) : null}
+							{emptyState === "no-models" ? (
+								<p className="px-8 py-12 text-center text-text-muted tr-text-ui">
+									{t(NO_MODELS_HINT)}
+								</p>
+							) : null}
 							{defaultOption ? (
 								<CommandGroup>
 									<CommandItem
@@ -515,11 +538,14 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 									>
 										<Sparkles className="mt-2 size-16 shrink-0 text-text-muted" />
 										<span className="flex min-w-0 flex-1 flex-col">
-											<span>Default</span>
+											<span>{t("common.default")}</span>
 											<span className="truncate text-text-muted tr-text-metadata">
 												{defaultOption.resolved?.model
-													? `Follows Settings → Models · ${defaultOption.resolved.model.name} · ${defaultOption.resolved.thinkingLevel}`
-													: "Follows Settings → Models"}
+													? t("chat.modelPicker.followsDefaultPair", {
+															model: defaultOption.resolved.model.name,
+															level: defaultOption.resolved.thinkingLevel,
+														})
+													: t("chat.modelPicker.followsDefault")}
 											</span>
 										</span>
 										{defaultOption.active ? (
@@ -529,12 +555,12 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 								</CommandGroup>
 							) : null}
 							{preferences.favorites.length > 0 ? (
-								<CommandGroup heading="Favorites">
+								<CommandGroup heading={t("chat.modelPicker.pinned")}>
 									{preferences.favorites.map((m) => renderModel(m, "fav"))}
 								</CommandGroup>
 							) : null}
 							{preferences.recents.length > 0 ? (
-								<CommandGroup heading="Recent">
+								<CommandGroup heading={t("chat.modelPicker.recent")}>
 									{preferences.recents.map((m) => renderModel(m, "recent"))}
 								</CommandGroup>
 							) : null}
@@ -548,27 +574,18 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 									>
 										<ChevronRight className="mt-2 size-16 shrink-0" />
 										<span className="flex min-w-0 flex-1 flex-col">
-											<span>All models</span>
+											<span>{t("chat.modelPicker.allModels")}</span>
 											<span className="truncate tr-text-metadata">
-												{groups.map((g) => g.provider).join(" · ")} · {models.length}
+												{providers.join(" · ")} · {models.length}
 											</span>
 										</span>
 									</CommandItem>
 								</CommandGroup>
 							) : (
 								groups.map((group) => (
-									<CommandGroup
-										key={group.provider}
-										heading={
-											<span className="flex items-center gap-8">
-												<span className="truncate">{group.provider}</span>
-												{group.auth ? (
-													<span className="ml-auto truncate text-text-subtle">{group.auth}</span>
-												) : null}
-											</span>
-										}
-									>
-										{group.models.map((m) => renderModel(m, "all"))}
+									<CommandGroup key={group.provider} className={PROVIDER_GROUP}>
+										{renderGroupHeader(group)}
+										{group.expanded ? group.models.map((m) => renderModel(m, "all")) : null}
 									</CommandGroup>
 								))
 							)}
@@ -582,47 +599,45 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 							onSelectLevel={onSelectLevel}
 						/>
 					) : null}
-					<div className="flex shrink-0 items-center gap-8 border-border-default border-t px-8 py-4">
+					<div className="flex shrink-0 flex-wrap items-center gap-x-8 gap-y-4 border-border-default border-t px-8 py-4">
 						{preferences.supported && current ? (
-							<button
-								type="button"
+							<Button
+								variant="ghost"
+								size="s"
+								iconLeft={isDefaultPair ? Check : Pin}
 								data-testid="model-set-default"
 								data-default={isDefaultPair}
 								disabled={isDefaultPair}
 								onClick={() => preferences.setDefault(current, level)}
-								className={FOOTER_LINK}
 							>
-								{isDefaultPair ? (
-									<Check className="size-12 shrink-0 text-primary" />
-								) : (
-									<Pin className="size-12 shrink-0" />
-								)}
-								{isDefaultPair ? "Default for new chats" : "Set as default"}
-							</button>
+								{isDefaultPair ? t("chat.modelPicker.isDefault") : t("chat.modelPicker.setDefault")}
+							</Button>
 						) : null}
 						{resetLevel ? (
-							<button
-								type="button"
+							<Button
+								variant="ghost"
+								size="s"
+								iconLeft={RefreshCw}
 								data-testid="thinking-reset"
 								onClick={() => onSelectLevel(resetLevel)}
-								className={FOOTER_LINK}
 							>
-								<RefreshCw className="size-12 shrink-0" />
-								reset to {resetLevel}
-							</button>
+								{t("chat.modelPicker.resetTo", { level: resetLevel })}
+							</Button>
 						) : null}
-						<span className="flex-1" />
-						<button
-							type="button"
+						<Button
+							variant="outline"
+							size="m"
+							iconLeft={RefreshCw}
+							loading={refreshing}
+							spinIcon
 							data-testid="model-refresh"
 							data-refreshing={refreshing}
 							disabled={refreshing}
 							onClick={() => onRefresh(true)}
-							className={FOOTER_LINK}
+							className="ml-auto"
 						>
-							<RefreshCw className={cn("size-12 shrink-0", refreshing && "animate-spin")} />
-							{refreshing ? "Updating…" : "Refresh"}
-						</button>
+							{refreshing ? t("chat.modelPicker.updating") : t("chat.modelPicker.refresh")}
+						</Button>
 					</div>
 				</PopoverContent>
 			</Popover>

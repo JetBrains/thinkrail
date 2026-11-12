@@ -118,9 +118,10 @@ The on-disk file `version` is `6` (`3` added artifacts, `4` added the `commit` k
 
 ## Boundary
 
-- **Allowed deps:** `@earendil-works/pi-coding-agent` + `@earendil-works/pi-ai/compat` (`StringEnum`) —
-  **types/compat only**, as peer deps — and `typebox`, and Node built-ins (`node:fs`/`node:path`/
-  `node:crypto`). `core/` uses Node built-ins only.
+- **Allowed deps:** `@earendil-works/pi-coding-agent` (types and public truncation helpers) and
+  `typebox`, as peer deps, and Node built-ins.
+  `core/` uses Node built-ins only. The tool layer's response-only temporary files do not change
+  ownership of the canonical TODO store (see [[submodule-pi-todos-tools]]).
 - **Forbidden:** any `@thinkrail/*` package, `apps/web`, `packages/server` internals — reached only by
   tool *name*, never by import. The host reaches this package one way only: `pi-todos/core`
   (value-import, pi-free) for the viewer, plus the extension entry via `additionalExtensionPaths`.

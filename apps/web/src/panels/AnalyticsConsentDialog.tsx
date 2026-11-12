@@ -1,3 +1,4 @@
+import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
 	Dialog,
@@ -7,41 +8,26 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
-import { useEffect, useRef, useState } from "react";
-import { ANALYTICS_DESCRIPTION, AnalyticsSharingSwitch } from "./AnalyticsPreferences";
-import { useAnalyticsConsent } from "./useAnalyticsConsent";
+import { AnalyticsConsentChoice } from "./AnalyticsPreferences";
+import { useConsentDraft } from "./useAnalyticsConsent";
 
 export function AnalyticsConsentDialog() {
-	const [draft, setDraft] = useState(true);
-	const primed = useRef(false);
-	const { pending, error, save, prime } = useAnalyticsConsent();
-
-	useEffect(() => {
-		if (primed.current) return;
-		primed.current = true;
-		prime();
-	}, [prime]);
+	const t = useT();
+	const { draft, toggle, pending, error, confirm } = useConsentDraft();
 
 	return (
 		<Dialog
 			open
 			onOpenChange={(open) => {
-				if (!open) save(draft);
+				if (!open) void confirm();
 			}}
 		>
-			<DialogContent data-testid="analytics-consent-dialog">
+			<DialogContent data-testid="analytics-consent-dialog" className="max-w-[30rem] gap-16">
 				<DialogHeader>
-					<DialogTitle>Help improve ThinkRail</DialogTitle>
-					<DialogDescription>{ANALYTICS_DESCRIPTION}</DialogDescription>
+					<DialogTitle>{t("panels.analyticsConsent.title")}</DialogTitle>
+					<DialogDescription>{t("panels.analyticsConsent.subtitle")}</DialogDescription>
 				</DialogHeader>
-				<AnalyticsSharingSwitch
-					enabled={draft}
-					disabled={pending}
-					onChange={(enabled) => {
-						setDraft(enabled);
-						if (!enabled) save(false);
-					}}
-				/>
+				<AnalyticsConsentChoice enabled={draft} disabled={pending} onChange={toggle} />
 				{error && (
 					<p role="alert" className="tr-text-metadata text-feedback-error">
 						{error}
@@ -51,9 +37,9 @@ export function AnalyticsConsentDialog() {
 					<Button
 						disabled={pending}
 						data-testid="analytics-consent-confirm"
-						onClick={() => save(draft)}
+						onClick={() => void confirm()}
 					>
-						{pending ? "Saving…" : "Done"}
+						{pending ? t("panels.analyticsConsent.saving") : t("common.done")}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

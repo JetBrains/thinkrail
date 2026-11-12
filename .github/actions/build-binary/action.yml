@@ -16,6 +16,14 @@ inputs:
   posthog-project-key:
     description: "Public PostHog project key baked into release analytics; never committed"
     required: true
+  posthog-cli-api-key:
+    description: "Optional PostHog personal API key (error tracking write) that uploads web and desktop-runtime source maps"
+    required: false
+    default: ""
+  posthog-cli-project-id:
+    description: "PostHog project id receiving the source maps; required with posthog-cli-api-key"
+    required: false
+    default: ""
 outputs:
   artifact-name:
     description: "CLI artifact filename"
@@ -48,8 +56,13 @@ runs:
         VERSION: ${{ inputs.version }}
         CHANNEL: ${{ inputs.channel }}
         POSTHOG_PROJECT_KEY: ${{ inputs.posthog-project-key }}
+        POSTHOG_CLI_API_KEY_SET: ${{ inputs.posthog-cli-api-key != '' }}
+        POSTHOG_CLI_PROJECT_ID: ${{ inputs.posthog-cli-project-id }}
       run: |
         set -eu
+        if [ "${POSTHOG_CLI_API_KEY_SET:-false}" = true ] && [ -z "${POSTHOG_CLI_PROJECT_ID:-}" ]; then
+          echo "::error::posthog-cli-api-key needs posthog-cli-project-id"; exit 1
+        fi
         case "$CHANNEL" in
           nightly|stable) ;;
           *) echo "::error::unsupported release channel $CHANNEL"; exit 1 ;;
@@ -69,6 +82,11 @@ runs:
 
     - name: Build web UI
       shell: bash
+      env:
+        THINKRAIL_SOURCEMAPS_RELEASE: ${{ inputs.posthog-cli-api-key != '' && inputs.version || '' }}
+        POSTHOG_CLI_API_KEY: ${{ inputs.posthog-cli-api-key }}
+        POSTHOG_CLI_PROJECT_ID: ${{ inputs.posthog-cli-project-id }}
+        POSTHOG_CLI_HOST: https://eu.posthog.com
       run: bun run build:web
 
     - name: Compile single-file CLI binary
@@ -97,13 +115,22 @@ runs:
       shell: bash
       run: bun run smoke:binary "${{ steps.resolve-cli.outputs.path }}"
 
+    - name: Download the Electrobun toolchain
+      shell: bash
+      run: bash .github/scripts/prepare-electrobun.sh
+
     - name: Build and smoke desktop app
       shell: bash
       env:
         TARGET: ${{ inputs.target }}
+        THINKRAIL_SOURCEMAPS_RELEASE: ${{ inputs.posthog-cli-api-key != '' && inputs.version || '' }}
+        POSTHOG_CLI_API_KEY: ${{ inputs.posthog-cli-api-key }}
+        POSTHOG_CLI_PROJECT_ID: ${{ inputs.posthog-cli-project-id }}
+        POSTHOG_CLI_HOST: https://eu.posthog.com
       run: |
         set -eu
         bun run desktop:build
+        unset THINKRAIL_SOURCEMAPS_RELEASE POSTHOG_CLI_API_KEY POSTHOG_CLI_PROJECT_ID POSTHOG_CLI_HOST
         launcher=$(bun -e 'import { locateDesktopLauncher } from "@thinkrail/artifact-tests"; console.log(locateDesktopLauncher("apps/desktop"));')
         case "$TARGET" in
           bun-linux-*)
@@ -118,6 +145,10 @@ runs:
       env:
         TARGET: ${{ inputs.target }}
         CHANNEL: ${{ inputs.channel }}
+        THINKRAIL_SOURCEMAPS_RELEASE: ${{ inputs.posthog-cli-api-key != '' && inputs.version || '' }}
+        POSTHOG_CLI_API_KEY: ${{ inputs.posthog-cli-api-key }}
+        POSTHOG_CLI_PROJECT_ID: ${{ inputs.posthog-cli-project-id }}
+        POSTHOG_CLI_HOST: https://eu.posthog.com
       run: |
         set -eu
         if [ "$TARGET" = bun-windows-x64 ]; then
@@ -148,10 +179,14 @@ runs:
         esac
         app_archive_path=''
         case "$TARGET" in
-          bun-darwin-arm64)
-            platform='macos-arm64'
+          bun-darwin-arm64|bun-darwin-x64)
+            case "$TARGET" in
+              bun-darwin-arm64) arch='arm64' ;;
+              *) arch='x64' ;;
+            esac
+            platform="macos-$arch"
             source="${prefix}${platform}-ThinkRail${suffix}.dmg"
-            name='thinkrail-desktop-darwin-arm64.dmg'
+            name="thinkrail-desktop-darwin-$arch.dmg"
             update_archive_name="${environment}-${platform}-ThinkRail${suffix}.app.tar.zst"
             app_archive_path="apps/desktop/artifacts/$update_archive_name"
             ;;
@@ -186,6 +221,14 @@ runs:
         [ -f "$update_archive_path" ] || { echo "::error::desktop update archive not found at $update_archive_path"; exit 1; }
         path="apps/desktop/dist/$name"
         cp "$source" "$path"
+        if [ "$TARGET" = 'bun-linux-x64' ] || [ "$TARGET" = 'bun-linux-arm64' ]; then
+          stage=$(mktemp -d)
+          tar -xzf "$path" -C "$stage"
+          repack="$PWD/$path.repack"
+          (cd "$stage" && shopt -s dotglob && tar -czf "$repack" --owner=0 --group=0 --numeric-owner -- *)
+          mv "$repack" "$path"
+          rm -rf "$stage"
+        fi
         {
           echo "name=$name"
           echo "path=$path"

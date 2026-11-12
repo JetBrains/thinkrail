@@ -1,10 +1,14 @@
+import { join } from "node:path";
 import { Updater, Utils } from "electrobun/main";
+import { desktopError } from "../errorReporting";
+import type { DesktopDialogLabels } from "../nativeLabels";
 import {
 	createNativeUpdateController,
 	type NativeUpdateController,
 	type NativeUpdaterDependency,
 } from "./controller";
 import { hasDesktopArtifactTestSeam, nativeUpdatesEnabled } from "./enablement";
+import { createUpdateJournalStore, UPDATE_JOURNAL_FILE } from "./journal";
 import { createDesktopQuitCoordinator, type DesktopQuitCoordinator } from "./quitCoordinator";
 
 export interface ElectrobunUpdateControllerOptions {
@@ -13,7 +17,19 @@ export interface ElectrobunUpdateControllerOptions {
 	channel: string;
 	platform: NodeJS.Platform;
 	arch: string;
-	restartToUpdate(): Promise<void>;
+	userData: string;
+	restartToUpdate(): Promise<boolean>;
+}
+
+function updateJournal(userData: string) {
+	return createUpdateJournalStore(join(userData, UPDATE_JOURNAL_FILE), (error) => {
+		desktopError("updates", "update journal failed", error);
+	});
+}
+
+export function readPendingInstallVersion(userData: string): string | null {
+	const journal = updateJournal(userData).read();
+	return journal?.state === "pending" ? journal.toVersion : null;
 }
 
 const electrobunUpdater: NativeUpdaterDependency = {
@@ -27,6 +43,7 @@ const electrobunUpdater: NativeUpdaterDependency = {
 
 export function createElectrobunQuitCoordinator(
 	shutdown: () => Promise<void>,
+	dialogLabels: () => DesktopDialogLabels,
 ): DesktopQuitCoordinator {
 	return createDesktopQuitCoordinator({
 		shutdown,
@@ -36,16 +53,17 @@ export function createElectrobunQuitCoordinator(
 		applyUpdate: () => Updater.applyUpdate(),
 		getUpdateError: () => Updater.updateInfo().error,
 		reportUpdateFailure: async (message) => {
+			const labels = dialogLabels();
 			await Utils.showMessageBox({
 				type: "error",
-				title: "ThinkRail could not restart",
-				message: "ThinkRail could not restart to install the update",
+				title: labels["desktop.dialog.updateRestartFailedTitle"],
+				message: labels["desktop.dialog.updateRestartFailed"],
 				detail: message,
-				buttons: ["Quit"],
+				buttons: [labels["desktop.dialog.quit"]],
 			});
 		},
 		reportLifecycleError: (error) => {
-			console.error("[desktop] update lifecycle failed", error);
+			desktopError("updates", "update lifecycle failed", error);
 		},
 	});
 }
@@ -68,5 +86,6 @@ export async function createElectrobunUpdateController(
 		channel: local.channel || options.channel,
 		updater: electrobunUpdater,
 		restartToUpdate: options.restartToUpdate,
+		journal: updateJournal(options.userData),
 	});
 }

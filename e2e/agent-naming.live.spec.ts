@@ -29,9 +29,7 @@ test("the agent names the workspace once via set_title: name, ASCII branch, lock
 		.fill("Add a one-line description of this project to the top of README.md.");
 	await page.getByTestId("chat-send").click();
 
-	const done = page
-		.locator('[data-testid="chat-message"][data-role="system"]')
-		.filter({ hasText: "Done" });
+	const done = page.locator('[data-testid="turn-divider-status"][data-outcome="done"]');
 	await expect(done).toBeVisible({ timeout: 80_000 });
 
 	const isFlagged = (): boolean =>

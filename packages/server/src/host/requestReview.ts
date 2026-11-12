@@ -88,6 +88,10 @@ export function itemTitleOf(
 	});
 }
 
+function agentPath(path: string): string {
+	return path.replaceAll("\\", "/");
+}
+
 export function parseVerdict(
 	finalText: string | undefined,
 	itemId: string,
@@ -103,13 +107,13 @@ export function parseVerdict(
 		return null;
 	}
 	if (typeof parsed !== "object" || parsed === null) return null;
-	const candidate = { ...(parsed as object), itemId, itemTitle };
+	const candidate = { ...parsed, itemId, itemTitle };
 	if (!isPlanReviewResult(candidate)) return null;
 	const findings: ReviewFixComment[] = candidate.findings.map((f) => ({
 		id: f.id,
 		kind: f.kind ?? "inline",
 		body: f.body,
-		...(f.path ? { path: f.path } : {}),
+		...(f.path ? { path: agentPath(f.path) } : {}),
 		...(f.startLine !== undefined ? { startLine: f.startLine } : {}),
 		...(f.endLine !== undefined ? { endLine: f.endLine } : {}),
 	}));
@@ -121,7 +125,12 @@ export function parseVerdict(
 		itemTitle,
 		...(candidate.summary !== undefined ? { summary: candidate.summary } : {}),
 		...(candidate.readingOrder !== undefined
-			? { readingOrder: candidate.readingOrder.map((step) => ({ path: step.path, why: step.why })) }
+			? {
+					readingOrder: candidate.readingOrder.map((step) => ({
+						path: agentPath(step.path),
+						why: step.why,
+					})),
+				}
 			: {}),
 		findings,
 	};
@@ -159,7 +168,7 @@ export function composeText(result: PlanReviewResult, outcome: VerdictOutcome): 
 	}
 	const head = `Review verdict: REQUEST_CHANGES — step "${result.itemTitle}".`;
 	const next = outcome.canAutoFix
-		? "Address each finding below (re-open the step, fix it, mark it done with a fresh commit), then request_review again."
+		? "Fix each finding below NOW without asking the user: set the step back to in_progress (todo_update), apply the fixes, mark it done, then call request_review again."
 		: "The automated fix cycle is spent or auto-fix is off: do NOT fix now. Report these findings to the user and wait for their direction.";
 	return `${head} ${next}${rationale}${findings}`;
 }
@@ -340,7 +349,7 @@ async function recordVerdict(
 				at: Date.now(),
 			});
 		} catch (error) {
-			log.warn(`review guide was not recorded for ${params.workspaceId}`, error as Error);
+			log.warn(`review guide was not recorded for ${params.workspaceId}`, error);
 		}
 	};
 	if (result.verdict === "approve") {
@@ -576,7 +585,7 @@ export async function maybeAutoReReview(
 			startPlanReview(workspaceId, sessionId, item.id, runSubagent);
 		}
 	} catch (err) {
-		console.warn(`auto re-review skipped (${workspaceId}/${sessionId}): ${err}`);
+		log.warn(`auto re-review skipped (${workspaceId}/${sessionId})`, err);
 	}
 }
 

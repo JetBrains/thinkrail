@@ -50,7 +50,7 @@ it too),
 `-v`/`--version` (print the baked version and exit), `-h`/`--help`, and one positional `project-dir` (a
 git repo to open as a project on boot, best-effort). Env defaults: `THINKRAIL_PORT` / `THINKRAIL_HOST` /
 `THINKRAIL_STATIC_DIR` (flag > env > default). `THINKRAIL_NO_ANALYTICS` is documented in `--help` but
-deliberately **not** parsed here — the host's analytics module is its single reader (see below).
+deliberately **not** parsed here — the host's analytics module is its single reader (see below). Ports must be plain decimals 0-65535: an empty or non-decimal `--port`, or an empty `--host`, throws; an empty or invalid `THINKRAIL_PORT` / `THINKRAIL_HOST` is ignored and the default is used.
 
 ## Update advisory
 
@@ -133,7 +133,10 @@ worktrees and any uncommitted work in them. pi's own state (`~/.pi`) is never to
   against**. Being installed is not the same as having added the entry: `-NoModifyPath`, an entry that was
   already present, a failed registry write and a Git-Bash `install.sh` install all record an install
   without touching the Windows PATH, and legacy metadata predates the flag — all of those are *not ours*,
-  so the PATH is left alone and the user is told which dir to check. The edit itself runs as an embedded PowerShell script —
+  so the PATH is left alone and the user is told which dir to check. Both sides read `/` and `\` in an entry as the same separator, so a
+  user's own `C:/…/bin` entry counts as already present: install never appends a duplicate it would then
+  record as its own, which the uninstaller would remove together with the user's entry. The edit itself runs
+  as an embedded PowerShell script —
   the exact inverse of install.ps1's `Add-ThinkRailToUserPath` (same `HKCU\Environment` handling,
   preserving the value's `REG_EXPAND_SZ` kind, comparing entries raw *and* `%VAR%`-expanded, then
   broadcasting `WM_SETTINGCHANGE`) — because round-tripping a raw PATH value through a pipe would risk
@@ -176,6 +179,12 @@ zero analytics traffic. CI/test suppression remains host-owned and covers both t
 
 ## Single-file binary (`build:binary`)
 
+The binary embeds its source map (`--sourcemap`, ~+17 MB on top of the bytecode build; Bun's `--compile`
+embeds a map whenever it emits one, so no upload path avoids the size) so Bun resolves error stacks
+on-device, bytecode included; the build deletes the external `.map` it also writes, refuses to embed web
+`.map` files, and compiles from `BINARY_SOURCE_MAP_BASE` (`apps/cli`), which the launcher passes as
+analytics `remapBase` for binary builds because remapped frames are relative to that directory.
+
 `bun run build:binary` produces a **standalone `thinkrail` executable** — one self-contained file per
 platform — via `bun build --compile`. Bun bundles the host *and* transparently embeds the `bun-pty` native
 lib; the extra steps are the **web UI** (a directory the host normally serves), the **bundled pi
@@ -183,23 +192,23 @@ extensions** (which the server path-loads out of `node_modules` in dev — impos
 and `trash`'s **native helper sidecars** (which macOS/Windows must execute from real filesystem paths):
 
 - `scripts/build-binary.ts` consumes `@thinkrail/server/build-support`, writes three **transient** generated modules, runs
-  `bun build --compile --no-compile-autoload-bunfig --target=<host|--target>` on
+  `bun build --compile --no-compile-autoload-bunfig --bytecode --format=esm --sourcemap --target=<host|--target>` on
   `src/compiled-entry.ts`, then deletes them (so the artifact cannot execute a project-local
   `bunfig.toml` preload before ThinkRail boots, and the working tree + `tsc` stay clean); each generated
   module has a committed `.d.ts` type contract `tsc` resolves against
   when the `.ts` is absent:
   - `src/web-assets.generated.ts` — enumerates `apps/web/dist`: a Bun file-attribute import per asset +
     a `{ route, data }[]` manifest + a content-hash version.
-  - `src/bundled-extensions.generated.ts` — **value-imports the four bundled pi-package entries**
-    (`pi-web-access`, `pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`), resolved from the
+  - `src/bundled-extensions.generated.ts` — **value-imports the three bundled pi-package entries**
+    (`pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`), resolved from the
     *server package's* module context (absolute paths — they aren't deps of `cli`), so Bun compiles the
-    raw `.ts` and their real deps (`yaml`, `unpdf`, …) into the binary; the `pi-web-access` factory is named
-    by `BuildRuntimeSources.webAccessIndex`, not by position. ThinkRail extensions listed in the server
+    raw `.ts` and their real deps (`yaml`, …) into the binary. ThinkRail extensions listed in the server
     registry ([[submodule-server-extensions]]) get no generated entry — `@thinkrail/server` imports them
-    statically, so `bun build --compile` carries them (and their deps such as `linkedom`) through the normal
-    server graph. Plus every `BuildRuntimeSources.skillRoots` dir (`pi-spec-graph`/`pi-thinkrail-workflow`/
-    `pi-todos` `skills/`, the server's own host skills in `packages/server/skills`, and any registry
-    extension's `skillPackages` roots) embedded like web assets
+    statically, so `bun build --compile` carries them (and their deps such as `linkedom`, or
+    `pi-web-access` with `unpdf`) through the normal server graph. Plus every `BuildRuntimeSources.skillRoots`
+    entry (`pi-spec-graph`/`pi-thinkrail-workflow`/`pi-todos` `skills/` and the server's own host skills in
+    `packages/server/skills` under the `host/` route; each registry extension's `skillPackages` roots under
+    `extensions/<name>/`, so a switched-off extension's folder can be left out of pi's skill inputs) embedded like web assets
     (matching what dev wires via `additionalSkillPaths` — parity, not a superset). Its `.d.ts` types the
     factories via the server's exported `BundledExtensionFactory`, so `cli` still never imports
     `@earendil-works/pi-coding-agent`.
@@ -218,8 +227,34 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   automatically; **no photon wasm** — the agent's read tool is set to send images raw, server-side.
   Skills must be staged to the *real* filesystem: pi reads `SKILL.md` via plain fs and embeds the path in
   the system prompt.)
+- **Bytecode.** `--bytecode` embeds JSC bytecode next to the bundle, so a launch skips parsing the
+  ~25MB host graph: `/health` is ready about 0.3s sooner on darwin-arm64 and about 0.7s sooner on
+  linux-x64. `--format=esm` is required because `compiled-entry.ts` uses top-level `await`; without it
+  `--bytecode` emits CJS, which rejects it. The cost is size: about +41MB on linux-x64 and about +42MB
+  on darwin-arm64. This relies on the root Bun pin being 1.4.1+: Bun 1.4.0 embedded about +109MB on
+  linux-x64 and crashed cross-target bytecode builds at launch (oven-sh/bun#18416). The runtime that reads
+  the bytecode is the Bun that wrote it, so a version mismatch cannot silently disable it. Bun 1.4.3
+  also optimizes bytecode at build time; if a build aborts there (oven-sh/bun#44926), add
+  `--no-optimize-bytecode`. Minification is not applied: it renames identifiers that stack frames and
+  `constructor.name` checks read.
 - Cross-compile with `--target=bun-darwin-arm64|bun-linux-x64|bun-windows-x64|…`; each bundles that
   platform's matching `bun-pty` lib. The binary is platform-specific and self-extracts a few MB on first run.
+- **Windows identity.** A compiled exe otherwise inherits everything from `bun.exe`: Bun's icon and
+  its VERSIONINFO ("Bun"/"Oven", Bun's version). So Explorer, Task Manager, Properties and the firewall
+  prompt would all name Bun. For a Windows target the build therefore passes Bun's `--windows-icon`,
+  `-title`, `-description`, `-publisher`, `-copyright` and `-version` flags.
+  - The strings come from [[module-shared]]'s `windowsFileIdentity`. Task Manager shows the description,
+    so it equals the product name.
+  - The icon is [[module-shared]]'s `windowsIconPath`, from the native icon set both launchers ship.
+  - Bun applies these flags only on a Windows host. The release and CI Windows builds run on Windows; a
+    cross-compile from macOS/Linux skips them with a warning and keeps Bun's identity.
+  - Bun keeps its own named `IDI_MYICON` group, which the shell picks before numbered groups, and maps
+    it to icon #1 only (oven-sh/bun#32428). The ICO must therefore list its 256 frame first; the shell
+    downsamples it for smaller sizes.
+  - The output file is deleted before compiling, because writing metadata into an existing exe can fail
+    (oven-sh/bun#24079).
+  - Post-editing the exe is not an option: `pe-library`/`resedit` refuse the `.bun` section Bun places
+    after `.rsrc`.
 - **Verify by booting the artifact** (not just building it): extension wiring regressions surface only at
   runtime — e.g. path-loading broke silently for every extension added after the binary build first landed.
   [[module-artifact-tests]]'s CLI smoke (root: `bun run smoke:binary`, after `build:binary`) boots the built binary
@@ -240,16 +275,19 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   require; the fixture is seeded at the **host-reported `worktreePath`**, never the smoke's own temp path,
   because the host stores git's symlink-resolved root — macOS `/var` → `/private/var`, Windows' 8.3 `TEMP`
   — so a fixture written at an unresolved path lands in an encoded session dir the host never scans, and
-  the delete then truthfully no-ops while the file stays put), creates an offline session so every bundled
+  the delete then truthfully no-ops while the file stays put; its header cwd is `resolve(worktreePath)`, as
+  pi writes one, so a stored directory spelled unlike pi's header, #766, fails the probe instead of matching
+  itself), creates an offline session so every bundled
   factory is evaluated, verifies both macOS/Windows helpers were staged from the artifact, and SIGTERM
-  exits 0. CI builds + smokes the binary on every PR on **ubuntu and windows** (each its host target), with
-  `e2e:binary` on ubuntu; macOS binary coverage stays release-matrix-only. The Windows leg is not optional
+  exits 0. CI builds + smokes the binary on **ubuntu and windows** (each its host target): windows on every PR that
+  touches the app, ubuntu with `e2e:binary` on every merge group and on PRs whose change can affect artifacts (see
+  `module-ci-release`); macOS binary coverage stays release-matrix-only. The Windows leg is not optional
   polish: the host reaches that extension only when its Central inspection says *installed and supported*,
   so the whole assertion is Windows-executable-shaped, and an ubuntu-only smoke let #255 ship a release
   matrix that failed for two days while publishing nothing (see `module-ci-release`). It does not prompt a
   provider; real turn behavior stays in `e2e:agent`. The smoke's **broad-net sibling** is `bun run e2e:binary` (root
-  `playwright.binary.config.ts`): the whole no-agent e2e suite executed against this binary — also in CI
-  on every PR. And `bun run check:seams` (root `scripts/check-binary-seams.ts`) is the build-time canary
+  `e2e/playwright.binary.config.ts`): the whole no-agent e2e suite executed against this binary — in CI on
+  those same runs. And `bun run check:seams` (root `scripts/check-binary-seams.ts`) is the build-time canary
   for the seam class: it fails when a pi bump introduces a new bundler-opaque dynamic import the server's
   `registerBundledRuntime` doesn't statically register. The scan **excludes `pi-coding-agent/dist/bundle/`**
   (recorded as a skipped dir in the script, stale-checked like the allowlist): pi ≥ 0.84.3 ships a bundled
@@ -297,10 +335,10 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   `src/index.ts` (the run-from-source `bootstrap()`: shell env → server → browser open → signal handlers),
   and the binary build (`scripts/build-binary.ts`,
   `scripts/artifactName.ts` — exposed as `@thinkrail/cli/artifact` and the one place the artifact filename
-  rule lives, including the `.exe` Bun
-  appends for a Windows target, so the build's output path and the smoke's default input cannot disagree
-  the way they did on Windows; the release action re-derives the same name in bash because it is also the
-  published-asset contract, see `module-ci-release`),
+  rule lives, including the `.exe` Bun appends for a Windows target, so the build's output path and the
+  smoke's default input cannot disagree the way they did on Windows. It also holds the Windows-target
+  rule. The release action re-derives the same name in bash because it is also the published-asset
+  contract, see `module-ci-release`),
   `src/compiled-entry.ts`, `src/web-assets.generated.*`, `src/bundled-extensions.generated.*`,
   `src/runtime-assets.generated.*`),
   `src/update.ts` (the `update`
@@ -311,7 +349,9 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
 - **Allowed deps:** `@thinkrail/server` (`bootHost`, `registerBundledRuntime`, build-support, `dataDir` — the
   uninstaller has to name the app state dir, and must name the *same* one the host uses),
   `@thinkrail/shared/startupMark` (the shared boot
-  signature renderer) + `@thinkrail/shared/version` (the shared release identity), Bun/Node; the generated build module may
+  signature renderer) + `@thinkrail/shared/version` (the shared release identity) +
+  `@thinkrail/shared/windowsIdentity` (the Windows file properties and ICO the build stamps), Bun/Node;
+  the generated build module may
   value-import the bundled extension packages' entries (resolved via the server package — build-time
   only, deleted after compile).
 - **Forbidden:** product feature/domain logic; reaching into the server's internals (use only its public

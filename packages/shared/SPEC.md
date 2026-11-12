@@ -16,17 +16,25 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 
 ## Boundary
 
-- **Owns:** host-side runtime helpers that are neither engine- nor transport-specific.
-- **Public surface:** `@thinkrail/shared/shellEnv` → `resolveShellEnv()`, `mergePath()`,
-  `loginShellImports()`, `parseLoginShellEnv()`, `LOGIN_ENV_MARKER`, `localeRepair()`;
-  `@thinkrail/shared/freePort` → `findFreePort()`, `isPortFree()`;
+- **Owns:** host-side runtime helpers that are neither engine- nor transport-specific, and the native
+  brand icon set both launchers ship (`assets/` and its generator, `scripts/generate-icons.ts`).
+- **Public surface:** `@thinkrail/shared/shellEnv` → `resolveShellEnv()`, `repairShellEnv()`, `mergePath()`,
+  `loginShellImports()`, `parseLoginShellEnv()`, `LOGIN_ENV_MARKER`, `localeRepair()`, `launchEnvKeys()`;
+  `@thinkrail/shared/freePort` → `findFreePort()`, `isPortFree()`, `parsePort()`;
   `@thinkrail/shared/startupMark` → the static recursive wordmark plus the pure responsive/ANSI renderer
   and interactive-output gate used by every launcher;
   `@thinkrail/shared/version` → the baked `{ version, channel, commit }` release identity shared by CLI,
   desktop, and host provenance (with a committed `0.0.0-dev` source default);
+  `@thinkrail/shared/windowsIdentity` → `windowsFileIdentity()`, the Windows file properties both
+  launchers stamp on their executables, `windowsProductName()`, the per-channel product name alone, and
+  `windowsIconPath`, the ICO they embed;
   `@thinkrail/shared/paths` → the worktree-relative path conventions (`WORKSPACE_INTERNAL_DIR`,
   `WORKSPACE_CONTEXT_DIR`, `WORKSPACE_TODOS_DIR`);
   `@thinkrail/shared/codedError` → `CodedError` + `errorCodeOf()`;
+  `@thinkrail/shared/toolHomes` → `toolHomeEnv(home)`, the environment that points every agent tool's
+  config home (Claude Code, Codex, Gemini, Copilot, Kimi, Grok) under one sandbox home and clears the
+  overrides that would reach outside it — the single list every hermetic host spawner (e2e, workflow
+  harness, artifact probes) applies, so a new detection source cannot leak the developer's real sign-ins;
   `@thinkrail/shared/removeTree` → `removeTree()`, the retrying recursive remove every teardown of a tree
   a child process ran from goes through;
   `@thinkrail/shared/spawn` → `spawnSyncCaptured()` + `spawnSyncCapturedBytes()` + `spawnDetached()`, the
@@ -35,24 +43,38 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   probing; the minimum supported version and the global opaque PI-extension path; a one-directional auth
   verdict; an artifact-location watcher; `add pi` / `remove pi` / `login` / `update --install` actions; and
   the per-OS official install plan. It never edits PI model or credential configuration.
-- **/spawn** — `spawnSyncCaptured()` (sync capture → `{ launched, exitCode, stdout, stderr }`),
+- **/spawn** — `spawnSyncCaptured()` (sync capture → `{ launched, exitCode, timedOut, stdout, stderr }`;
+  `timeoutMs` runs the child in its own process group (POSIX), sends the child `SIGTERM` at the deadline
+  and, once it exits, `SIGKILL`s the whole group, so grandchildren holding a hang (a hook, an ssh helper)
+  die with it; `SIGTERM` first lets git remove its `.lock` files, which a `SIGKILL` would leave behind and
+  so lock the repo for every later write; a direct child that ignores `SIGTERM` is not bounded; it sets
+  `timedOut`, so a caller can name a hang rather than read it as an ordinary nonzero exit. A child in its
+  own group misses the terminal's Ctrl-C, and the blocked host cannot run its `SIGINT` handler until the
+  child exits, so when the host has a controlling terminal a small `/bin/sh` supervisor stays in the
+  host's group, starts the command in a new group (`setsid`, else `set -m`) and turns Ctrl-C, a terminal
+  hang-up or a quit into a group `SIGTERM`, so closing the terminal never orphans a hung command. Without a terminal the child is spawned detached directly, so the desktop host pays
+  no extra fork),
   `spawnSyncCapturedBytes()` (the same launch and exit semantics with **`stdout` left as bytes**, for a
   caller reading binary child output the UTF-8 decoder would replace — stderr stays decoded text, since a
   diagnostic is only ever read as text) and
   `spawnDetached()` (fire-and-forget `unref`) over `Bun.spawnSync` / `Bun.spawn`, always
-  `windowsHide: true`. Bun 1.4.0 maps that option to libuv `UV_PROCESS_WINDOWS_HIDE`; the seam prevents
-  background console spawns from omitting it. The two bespoke bounded runners (`server/subprocess`
+  `windowsHide: true` except where a `spawnDetached` caller passes `windowsHide: false` to launch a GUI
+  app whose own window is the point (the file-manager reveal). Bun 1.4.0 maps that option to libuv
+  `UV_PROCESS_WINDOWS_HIDE`; the seam prevents background console spawns from omitting it. The two bespoke bounded runners (`server/subprocess`
   `runBounded`, `jbcentral`'s version/quota runner) set it directly.
 - **Allowed deps:** Bun/Node runtime (`@types/bun`); `contracts` **types** (`JbcentralInstall`, the wire shape `jbcentralInstall`
-  returns — kept in the wire so the server can carry it to the card verbatim).
+  returns — kept in the wire so the server can carry it to the card verbatim); the icon generator's
+  build-only `@resvg/resvg-js` and `resedit`.
 - **Forbidden:** importing `server` / `web` / any `pi` package; being imported by `web` (it carries
   Bun/Node code that must not reach the browser bundle).
 
 ## Contents
 
-- **/shellEnv** — `resolveShellEnv()`: make the host's environment safe for the shells it spawns, because a
-  GUI-launched host (Finder/Dock, launchd, a systemd unit, a container) inherits a stripped-down one. Four
-  independent repairs:
+- **/shellEnv** — `resolveShellEnv()` (one cached async run per process; `repairShellEnv()` is the
+  uncached worker that tests drive with an injected probe, and `loginShellProbe(timeout)` builds the
+  default probe with a test-sized deadline): make the host's environment safe for the shells it spawns,
+  because a GUI-launched host (Finder/Dock, launchd, a systemd unit, a container) inherits a
+  stripped-down one. Four independent repairs:
   - **`PATH`** — always adopt the user's login PATH so the in-process agent's bash/tools and the git hooks
     they trigger find `git`/`node`/`bun`/etc., keeping whatever the launching terminal had added on top.
   - **login-shell environment** — import the rest of the user's login-shell environment once at startup,
@@ -60,7 +82,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
     and `models.json` / `mcp.json` `${VAR}` references (often copied from vendor docs) rely on. Skipped
     when `TERM` is set (a host launched from a terminal already carries the shell's environment). Variables
     already set for the process win; `PATH` keeps its own repair above; `PWD`/`OLDPWD`/`SHLVL`/`_` and
-    `PI_*` / `THINKRAIL_*` are never imported. One marker-delimited `env -0` probe of the login shell
+    `PI_*` / `THINKRAIL_*` are never imported (a pi config folder or `PI_*` variable the user wants comes
+    from the stored host environment instead, [[submodule-server-environment]]). One marker-delimited `env -0` probe of the login shell
     (`-l -i`, then `-l`) serves both this import and the PATH repair; rc-file chatter before the marker
     (`LOGIN_ENV_MARKER`) is ignored. Trade-off recorded: the host, every process it spawns (stdio MCP
     servers included) and every `!command` resolution then see the secrets the shell exports — the user's
@@ -80,7 +103,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   terminals copy it (`server/src/terminal`), and so does the in-process agent's own bash.
 - **/freePort** — `findFreePort(preferred, host?)`: the first free port at or above `preferred`, so a
   host can pick an open port instead of colliding with one already running. `isPortFree(port, host?)`:
-  the underlying single-port check.
+  the underlying single-port check. `parsePort(value)`: strict port parse (plain decimal digits, 0-65535, else `undefined`), so an empty,
+  `0x10`, `1e3` or out-of-range `THINKRAIL_PORT` is ignored instead of becoming port 0 or `NaN`.
 - **/startupMark** — the launchers' one boot signature: a committed 42×20 `TR` silhouette built from a
   cyclic `THINKRAIL·` field, composed with the product identity, a caller-supplied honest status, and its
   resolved endpoint. At 72+ columns it is a right-hand lockup; from 42–71 it stacks, and below 42 it uses
@@ -95,6 +119,34 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   `--version`, desktop package metadata, analytics, and `server.welcome.appVersion` cannot drift. It
   contains identity data plus the release-only public `posthogProjectKey` (empty in source, so
   unstamped builds never report) and has no launcher dependency.
+- **/windowsIdentity** — `windowsFileIdentity({ version, channel })`: what Windows shows for a ThinkRail
+  executable. The product name, which also serves as the file description Task Manager displays, is
+  `ThinkRail` on stable, `ThinkRail Nightly` on nightly and `ThinkRail Dev` on unstamped builds. The
+  publisher and copyright are JetBrains s.r.o., as in `LICENSE` and the signing certificate. The version
+  takes the four numeric parts Windows requires: `X.Y.Z` plus the prerelease's trailing number
+  (`0.3.0-nightly.6` → `0.3.0.6`), else `.0`. An unknown channel or a part above 65535 throws, so a
+  release build fails rather than ship wrong properties. The CLI compile, the desktop `postBuild` and
+  both Windows smokes (CLI and desktop) derive from it, so they cannot disagree. The mapping is lossy
+  by design: a stable `0.3.0.0` sorts below the nightlies `0.3.0.N` that preceded it, since four numbers
+  cannot say "pre-release". That order is never compared: stable and nightly are separate installs that
+  never replace each other's files, no MSI versioning is involved, each channel's own sequence is
+  monotonic, and the product name already tells the channels apart. Encodings that force the order
+  (`.65535` for stable, nightlies under the previous patch) only misreport the version, so they are
+  rejected.
+- **/assets** — the native icon set: the hand-authored `icon.svg` and the rasters generated from it.
+  Never hand-edit a raster; regenerate them with `bun run --cwd packages/shared generate-icons`
+  (`@resvg/resvg-js` rasterizes straight from the vector, `resedit` packs the ICO). The outputs are the
+  macOS iconset, the Linux 512 px PNG, and the Windows ICO, whose path `windowsIconPath` exports.
+  - **Artwork.** The mark keeps its rounded-square silhouette: the ThinkRail glyph in the dark-family
+    brand green (`#8dff4f`) on a solid black tile. Translucent glass, highlights, and decorative edging
+    are excluded so small taskbar frames stay crisp.
+  - **ICO frames.** PNG-compressed at 256/128/80/72/64/56/48/40/36/32/28/24/20/16: Microsoft's
+    documented minimum (16/24/32/48/256), plus 64/128 and every small and big icon size Windows asks for
+    between 125% and 250% scaling. `LoadImage` picks the closest frame that does not exceed the requested
+    size, so a missing size would be upscaled and blurry. An earlier 4-frame BMP ICO lacked the Windows
+    11 taskbar's 24 px frame and read as blurry there.
+  - **Frame order.** Frames are ordered largest first, because Bun's compiler keeps a named icon group
+    that maps only icon #1 (oven-sh/bun#32428, [[module-cli]]).
 - **/codedError** — `CodedError(code, message)` + `errorCodeOf(err)`: an error carrying a wire
   `WsErrorCode`, so a failure a client must react to *specifically* travels as a name rather than a string
   to pattern-match. It lives here because both ends of the seam need it and neither may import the other:
@@ -172,8 +224,11 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   postconditions map to a closed adapter outcome. `watchJbcentralArtifact(onChange)` observes only that
   reviewed location and reports invalidation events for add, remove, and replacement; it handles a not-yet-
   existing extension directory by re-arming from the nearest existing parent, and an existence-only poll
-  repairs dropped add/remove filesystem events. It never opens or fingerprints the generated file. The caller
-  debounces events and rechecks existence through the ordinary inspection API.
+  repairs dropped add/remove filesystem events. Each newly installed watch re-checks once: an artifact that
+  appeared, or a deeper directory that now exists, while the watch was being moved emits no event for it, so
+  the watcher invalidates or re-arms deeper right away instead of leaving it to the poll (a late poll hit
+  re-ran the runtime rebuild after a first Connect had already settled). It never opens or fingerprints the
+  generated file. The caller debounces events and rechecks existence through the ordinary inspection API.
 
   **A directory event is not an artifact event.** `fs.watch` is per-directory, and the re-arm above means the
   watched directory is routinely an *ancestor* — when the artifact directory has not been created, the
@@ -213,17 +268,41 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 ## Get right (shellEnv)
 
 - Runs **once at startup, before creating any `AgentSession`**.
+- **Launch keys are snapshotted before any repair.** The first `resolveShellEnv()` call records the
+  names already in `process.env` (same `Symbol.for` state, so bundled copies share it); `launchEnvKeys()`
+  returns that set, or the current names when no repair ever ran. The stored host environment
+  ([[submodule-server-environment]]) uses it so an explicit launch variable beats the stored record while
+  a login-shell import or locale repair does not.
+- **Async, one run per process, awaited before the first spawn.** `resolveShellEnv()` returns one
+  promise cached on a `Symbol.for` global key, so every caller awaits that same run, even from a second
+  bundled copy of the module (the desktop shell and its server bundle). A GUI launch pays for the login
+  shell (~100 ms typical, seconds with nvm/conda), and a sync probe stalls the whole boot for it. The
+  async probe lets a launcher overlap it with work that spawns nothing (bundle import, logging init) and
+  await it before the first spawn.
+  Gating each spawn site instead was rejected: the sites are many (git, PTY, editors, Central, pi tools,
+  extensions), and a missed one silently gets the stripped PATH. The login-shell and `launchctl` probes
+  run in parallel; the `launchctl` `SSH_AUTH_SOCK` applies only when the login-env import did not set it.
+- **Output counts only up to its end marker.** The probe prints `LOGIN_ENV_END` after `env -0`, and output
+  without it is a failed probe, so a cut-off read never applies a truncated `PATH` or silently drops
+  variables. Bytes after the marker are drained and discarded until the shell exits, because an EXIT trap
+  or logout file that writes more than the pipe buffer would otherwise block the shell until the deadline.
+  Once the shell has exited with the marker read, the read is cancelled, so a background job that an rc
+  file leaves holding the pipe cannot hold the run open. A 100ms bound after the exit only covers a shell
+  that exits without the marker while such a job keeps the pipe open.
+- **The deadline kills the whole probe.** The shell starts in its own process group, and at 5s the group
+  gets SIGKILL: interactive zsh and bash ignore the default SIGTERM, and a hung rc command would outlive
+  its shell.
 - No-op on win32 (GUI processes already inherit the registry PATH). Elsewhere it **always** probes: spawn
-  a login shell `[$SHELL||/bin/zsh, -l, -i, -c, <print LOGIN_ENV_MARKER>; env -0]` (retry without `-i` on
-  non-zero exit) with PATH reset to the OS base dirs (so rc files compute their canonical PATH instead of
-  layering onto whatever the launcher passed), 5s timeout, parse the `\0`-separated entries after the
-  marker, then `mergePath(current, login)` — the login PATH, preceded by the current entries it lacks (an
-  activated venv, `nix develop`, direnv) so a terminal launch keeps its explicit additions ahead. Never
-  throws — on any failure it leaves PATH untouched.
+  a login shell `[$SHELL||/bin/zsh, -l, -i, -c, <print LOGIN_ENV_MARKER>; env -0 && <print
+  LOGIN_ENV_END>]` (retry without `-i` on non-zero exit) with PATH reset to the OS base dirs (so rc files
+  compute their canonical PATH instead of layering onto whatever the launcher passed), 5s deadline, parse
+  the `\0`-separated entries between the markers, then `mergePath(current, login)` — the login PATH,
+  preceded by the current entries it lacks (an activated venv, `nix develop`, direnv) so a terminal
+  launch keeps its explicit additions ahead. Never throws — on any failure it leaves PATH untouched.
 - There is no "PATH already looks complete" short-circuit. One existed, keyed on user-dir markers, and
   `/usr/local/bin` was among them; it heads macOS `/etc/paths` and every Linux default PATH, so the probe
   never ran for Dock-launched hosts and every session lost Homebrew/bun (`command not found`, failing git
-  hooks, stuck subagents). The one-time ~100–300 ms probe per app start is cheaper than guessing.
+  hooks, stuck subagents). The one-time login-shell probe per app start is cheaper than guessing.
 
 ## Get right (jbcentral)
 
@@ -267,3 +346,6 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   `SO_REUSEPORT`), so a bind-and-catch check is unreliable. A refused connection means free.
 - `findFreePort` scans upward from `preferred` (predictable: `24242 → 24243 → …`) and falls back to an
   OS-assigned ephemeral port if the whole scan range is taken.
+- Its answer is a snapshot: another process may bind the port before the caller does, and a later connect
+  probe of an ephemeral-range port can self-connect. Callers bind promptly; tests never re-probe the result
+  (that re-probe flaked under parallel package tests).

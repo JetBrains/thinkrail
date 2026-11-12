@@ -1,13 +1,13 @@
 import { strArg } from "@thinkrail/extension-api/web";
 import { projectRelativePath } from "@/lib";
 import { registerToolRenderer } from "../toolRegistry";
-import { AskUserQuestionCard } from "./AskUserQuestionCard";
 import { BashCard } from "./BashCard";
 import { EditCard } from "./EditCard";
 import { ReadCard } from "./ReadCard";
 import { RequestReviewCard, requestReviewSummary } from "./RequestReviewCard";
 import { ResolveCommentCard } from "./ResolveCommentCard";
 import { SpecToolCard, specToolSummary } from "./SpecToolCard";
+import { StartWorkspaceCard, startWorkspaceSummary } from "./StartWorkspaceCard";
 import "./mcp/register";
 import "./subagent/register";
 import "./web/register";
@@ -25,6 +25,7 @@ registerToolRenderer("write", WriteCard, {
 });
 
 for (const toolName of [
+	"spec_search",
 	"spec_grep",
 	"spec_get",
 	"spec_graph",
@@ -46,4 +47,8 @@ registerToolRenderer("request_review", RequestReviewCard, {
 	defaultExpanded: true,
 });
 
-registerToolRenderer("ask_user_question", AskUserQuestionCard, { chrome: "bare" });
+registerToolRenderer("start_workspace", StartWorkspaceCard, {
+	summary: startWorkspaceSummary,
+	prominence: "primary",
+	defaultExpanded: true,
+});

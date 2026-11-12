@@ -236,6 +236,20 @@ test("a model-authored Thinking heading stays bounded and appears only while fol
 	);
 });
 
+async function scrollCodeLineToViewportCenter(block: Locator, line: string) {
+	await block.evaluate((element, lineText) => {
+		const scroller = element.closest<HTMLElement>("[data-virtuoso-scroller]");
+		if (!scroller) throw new Error("missing Virtuoso scroller");
+		const lines = (element.textContent ?? "").split("\n");
+		const index = lines.indexOf(lineText);
+		if (index < 0) throw new Error(`missing code line: ${lineText}`);
+		const rect = element.getBoundingClientRect();
+		const viewport = scroller.getBoundingClientRect();
+		const lineCenter = rect.top + (rect.height * (index + 0.5)) / lines.length;
+		scroller.scrollTop += lineCenter - (viewport.top + viewport.height / 2);
+	}, line);
+}
+
 for (const order of ["oldest-first", "newest-first"] as const) {
 	test(`${order} disclosure expansion preserves following and detached reading anchors`, async ({
 		page,
@@ -350,15 +364,23 @@ for (const order of ["oldest-first", "newest-first"] as const) {
 			}
 			throw new Error("fold toggle did not enter the chat viewport");
 		};
-		const maximumAnchorDeviation = (toggle: Locator, top: number) =>
-			toggle.evaluate(async (element, expectedTop) => {
-				let maximum = 0;
-				for (let frame = 0; frame < 48; frame += 1) {
-					await new Promise(requestAnimationFrame);
-					maximum = Math.max(maximum, Math.abs(element.getBoundingClientRect().top - expectedTop));
-				}
-				return maximum;
-			}, top);
+		const maximumAnchorDeviation = async (anchor: Locator, top: number, activate?: Locator) =>
+			anchor.evaluate(
+				async (element, { expectedTop, toggle }) => {
+					if (toggle instanceof HTMLElement) toggle.click();
+					let maximum = 0;
+					for (let frame = 0; frame < 48; frame += 1) {
+						await new Promise(requestAnimationFrame);
+						if (!element.isConnected) throw new Error("the reading anchor was remounted");
+						maximum = Math.max(
+							maximum,
+							Math.abs(element.getBoundingClientRect().top - expectedTop),
+						);
+					}
+					return maximum;
+				},
+				{ expectedTop: top, toggle: activate ? await activate.elementHandle() : null },
+			);
 		const expectDetachedToggleAnchor = async (
 			toggle: Locator,
 			activation: "keyboard" | "pointer" = "pointer",
@@ -389,42 +411,36 @@ for (const order of ["oldest-first", "newest-first"] as const) {
 		await expectDetachedToggleAnchor(activityToggle);
 		await expectDetachedToggleAnchor(messageToggle);
 
-		const retainedPreviewAnchor = page.getByText("coalescer regression line 5", { exact: true });
-		await retainedPreviewAnchor.evaluate((element) => {
-			const scroller = element.closest<HTMLElement>("[data-virtuoso-scroller]");
-			if (!scroller) throw new Error("missing Virtuoso scroller");
-			const target = element.getBoundingClientRect();
-			const viewport = scroller.getBoundingClientRect();
-			scroller.scrollTop += target.top + target.height / 2 - (viewport.top + viewport.height / 2);
-		});
+		const retainedPreviewAnchor = page.locator("code", { hasText: "coalescer regression line 5" });
+		await scrollCodeLineToViewportCenter(retainedPreviewAnchor, "coalescer regression line 5");
 		await page.evaluate(() => new Promise(requestAnimationFrame));
 		expect((await readChatViewportIntersection(longOutputToggle)).intersects).toBe(false);
 		const retainedPreviewTop = (await retainedPreviewAnchor.boundingBox())?.y;
 		expect(retainedPreviewTop).toBeDefined();
-		await longOutputToggle.evaluate((element) => element.click());
+		expect(
+			await maximumAnchorDeviation(
+				retainedPreviewAnchor,
+				retainedPreviewTop ?? 0,
+				longOutputToggle,
+			),
+		).toBeLessThanOrEqual(2);
 		await expect(longOutputToggle).toHaveAttribute("aria-expanded", "false");
-		expect(
-			await maximumAnchorDeviation(retainedPreviewAnchor, retainedPreviewTop ?? 0),
-		).toBeLessThanOrEqual(2);
 		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
-		await longOutputToggle.evaluate((element) => element.click());
-		await expect(longOutputToggle).toHaveAttribute("aria-expanded", "true");
 		expect(
-			await maximumAnchorDeviation(retainedPreviewAnchor, retainedPreviewTop ?? 0),
+			await maximumAnchorDeviation(
+				retainedPreviewAnchor,
+				retainedPreviewTop ?? 0,
+				longOutputToggle,
+			),
 		).toBeLessThanOrEqual(2);
+		await expect(longOutputToggle).toHaveAttribute("aria-expanded", "true");
 		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
 
-		const clippedPreviewAnchor = page.getByText("coalescer regression line 30", { exact: true });
-		await clippedPreviewAnchor.evaluate((element) => {
-			const scroller = element.closest<HTMLElement>("[data-virtuoso-scroller]");
-			if (!scroller) throw new Error("missing Virtuoso scroller");
-			const target = element.getBoundingClientRect();
-			const viewport = scroller.getBoundingClientRect();
-			scroller.scrollTop += target.top + target.height / 2 - (viewport.top + viewport.height / 2);
-		});
+		const clippedPreviewAnchor = page.locator("code", { hasText: "coalescer regression line 30" });
+		await scrollCodeLineToViewportCenter(clippedPreviewAnchor, "coalescer regression line 30");
 		await page.evaluate(() => new Promise(requestAnimationFrame));
 		expect((await readChatViewportIntersection(longOutputToggle)).intersects).toBe(false);
-		await longOutputToggle.evaluate((element) => element.click());
+		await longOutputToggle.evaluate((element: HTMLElement) => element.click());
 		await expect(longOutputToggle).toHaveAttribute("aria-expanded", "false");
 		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
 		const collapsedOutputBoundary = await longOutputToggle.evaluate((element) => {
@@ -461,14 +477,16 @@ for (const order of ["oldest-first", "newest-first"] as const) {
 		expect((await readChatViewportIntersection(activityToggle)).intersects).toBe(false);
 		const anchorTop = (await offscreenAnchor.boundingBox())?.y;
 		expect(anchorTop).toBeDefined();
-		await activityToggle.evaluate((element) => element.click());
+		expect(
+			await maximumAnchorDeviation(offscreenAnchor, anchorTop ?? 0, activityToggle),
+		).toBeLessThanOrEqual(2);
 		await expect(activityToggle).toHaveAttribute("aria-expanded", "false");
-		expect(await maximumAnchorDeviation(offscreenAnchor, anchorTop ?? 0)).toBeLessThanOrEqual(2);
 		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
 		expect((await readChatViewportIntersection(activityToggle)).intersects).toBe(false);
-		await activityToggle.evaluate((element) => element.click());
+		expect(
+			await maximumAnchorDeviation(offscreenAnchor, anchorTop ?? 0, activityToggle),
+		).toBeLessThanOrEqual(2);
 		await expect(activityToggle).toHaveAttribute("aria-expanded", "true");
-		expect(await maximumAnchorDeviation(offscreenAnchor, anchorTop ?? 0)).toBeLessThanOrEqual(2);
 		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
 		await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
 
@@ -503,17 +521,11 @@ for (const order of ["oldest-first", "newest-first"] as const) {
 			return element.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
 		});
 		expect(Math.abs(nestedHeaderOffset - parentBreadcrumbHeight)).toBeLessThanOrEqual(2);
-		await thinkingToggle.evaluate((element) => element.click());
+		await thinkingToggle.evaluate((element: HTMLElement) => element.click());
 		await expect(thinkingToggle).toHaveAttribute("aria-expanded", "true");
 		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
-		const activityContent = page.getByText("coalescer regression line 30", { exact: true });
-		await activityContent.evaluate((element) => {
-			const scroller = element.closest<HTMLElement>("[data-virtuoso-scroller]");
-			if (!scroller) throw new Error("missing Virtuoso scroller");
-			const target = element.getBoundingClientRect();
-			const viewport = scroller.getBoundingClientRect();
-			scroller.scrollTop += target.top + target.height / 2 - (viewport.top + viewport.height / 2);
-		});
+		const activityContent = page.locator("code", { hasText: "coalescer regression line 30" });
+		await scrollCodeLineToViewportCenter(activityContent, "coalescer regression line 30");
 		await page.evaluate(() => new Promise(requestAnimationFrame));
 		await expect(trail).toBeVisible();
 		await trail
@@ -585,6 +597,7 @@ test("sticky activity breadcrumbs expose the off-screen Activity â†’ Thinking â†
 		await expect
 			.poll(async () => (await readChatScrollGeometry(chatScroll)).distanceFromEnd)
 			.toBeLessThanOrEqual(1);
+		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
 	};
 	await assertFollowingLatest();
 
@@ -607,9 +620,9 @@ test("sticky activity breadcrumbs expose the off-screen Activity â†’ Thinking â†
 				scroller.scrollTop +=
 					element.getBoundingClientRect().top - scroller.getBoundingClientRect().top + 80;
 			});
-			return trail.count();
+			return trail.isVisible();
 		})
-		.toBe(1);
+		.toBe(true);
 	await expect(trail).toBeVisible();
 	await expect(trail.getByTestId("activity-breadcrumb-segment")).toHaveCount(3);
 	await expect(trail.locator('[data-kind="activity"]')).toBeVisible();

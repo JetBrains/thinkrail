@@ -1,3 +1,6 @@
+import { logger } from "../log";
+
+const log = logger("review");
 const chains = new Map<string, Promise<void>>();
 const active = new Set<string>();
 
@@ -56,7 +59,7 @@ export function enqueuePlanReview(
 	if (!claimItemReview(sessionId, itemId)) return false;
 	onPlanChain(workspaceId, sessionId, run)
 		.catch((err) => {
-			console.warn(`plan review failed (${itemId}): ${err instanceof Error ? err.message : err}`);
+			log.warn(`plan review failed (${itemId})`, err);
 		})
 		.finally(() => {
 			active.delete(item);

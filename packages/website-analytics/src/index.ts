@@ -7,6 +7,11 @@ const bridgeProperty = "bridge_id";
 const captureQueueLimit = 100;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+export type PostHogCaptureResult = {
+	event: string;
+	properties: Record<string, unknown>;
+};
+
 export type PostHogOptions = {
 	api_host: string;
 	ui_host: string;
@@ -15,6 +20,8 @@ export type PostHogOptions = {
 	cookieless_mode: "always";
 	respect_dnt: true;
 	disable_session_recording: true;
+	disable_surveys: true;
+	before_send(event: PostHogCaptureResult | null): PostHogCaptureResult | null;
 };
 
 export type WebsiteAnalyticsConfiguration = {
@@ -61,7 +68,7 @@ export type WebsiteInstallCtaClickedProperties = {
 
 export type WebsiteInstallCommandCopiedProperties = {
 	content_key: string;
-	cta_location: "hero" | "install_section";
+	cta_location: "hero" | "install_section" | "blog_post";
 	shell: "sh" | "powershell" | "cmd";
 };
 
@@ -74,6 +81,27 @@ export type WebsiteGithubClickedProperties = {
 export type WebsiteInstallLinkShareClickedProperties = {
 	content_key: string;
 	cta_location: "hero" | "quick_start";
+};
+
+export type WebsiteSurveyQuestionRef = {
+	id: string;
+	question: string;
+};
+
+export type WebsiteSurveyShownProperties = {
+	$survey_id: string;
+	content_key: string;
+	cta_location?: WebsiteCtaLocation;
+};
+
+export type WebsiteSurveyDismissedProperties = WebsiteSurveyShownProperties;
+
+export type WebsiteSurveySentProperties = WebsiteSurveyShownProperties & {
+	$survey_submission_id: string;
+	$survey_completed: boolean;
+	$survey_questions: WebsiteSurveyQuestionRef[];
+} & {
+	[response: `$survey_response_${string}`]: string | string[];
 };
 
 export type WebsiteDownloadStartedProperties = {
@@ -92,6 +120,9 @@ export type WebsiteAnalyticsEventProperties = {
 	install_command_copied: WebsiteInstallCommandCopiedProperties;
 	github_clicked: WebsiteGithubClickedProperties;
 	install_link_share_clicked: WebsiteInstallLinkShareClickedProperties;
+	"survey shown": WebsiteSurveyShownProperties;
+	"survey sent": WebsiteSurveySentProperties;
+	"survey dismissed": WebsiteSurveyDismissedProperties;
 };
 
 export type WebsiteAnalyticsEventName = keyof WebsiteAnalyticsEventProperties;
@@ -127,7 +158,44 @@ declare global {
 	}
 }
 
-const configurationForKey = (postHogProjectKey: string): WebsiteAnalyticsConfiguration => ({
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null;
+}
+
+function isFirstPartyScript(filename: unknown, hostname: string): boolean {
+	if (typeof filename !== "string") return false;
+	try {
+		const url = new URL(filename);
+		return url.hostname === hostname && url.pathname.endsWith(".js");
+	} catch {
+		return false;
+	}
+}
+
+function hasFirstPartyScriptFrame(properties: Record<string, unknown>, hostname: string): boolean {
+	const exceptions = properties.$exception_list;
+	if (!Array.isArray(exceptions)) return false;
+	return exceptions.some((exception) => {
+		if (!isRecord(exception) || !isRecord(exception.stacktrace)) return false;
+		const frames = exception.stacktrace.frames;
+		return (
+			Array.isArray(frames) &&
+			frames.some((frame) => isRecord(frame) && isFirstPartyScript(frame.filename, hostname))
+		);
+	});
+}
+
+const firstPartyExceptionsOnly =
+	(hostname: string) =>
+	(event: PostHogCaptureResult | null): PostHogCaptureResult | null => {
+		if (event?.event !== "$exception") return event;
+		return hasFirstPartyScriptFrame(event.properties, hostname) ? event : null;
+	};
+
+const configurationFor = (
+	postHogProjectKey: string,
+	productionHostname: string,
+): WebsiteAnalyticsConfiguration => ({
 	postHog: {
 		projectKey: postHogProjectKey,
 		scriptUrl: `${postHogProxyHost}/static/array.js`,
@@ -139,6 +207,8 @@ const configurationForKey = (postHogProjectKey: string): WebsiteAnalyticsConfigu
 			cookieless_mode: "always",
 			respect_dnt: true,
 			disable_session_recording: true,
+			disable_surveys: true,
+			before_send: firstPartyExceptionsOnly(productionHostname),
 		},
 	},
 	gtm: {
@@ -203,7 +273,7 @@ export function createWebsiteAnalytics({
 	marketingConsent,
 }: WebsiteAnalyticsOptions): WebsiteAnalytics {
 	const productionConfiguration = postHogProjectKey
-		? configurationForKey(postHogProjectKey)
+		? configurationFor(postHogProjectKey, productionHostname)
 		: undefined;
 	let initialized = false;
 	let consentGranted: boolean | undefined;

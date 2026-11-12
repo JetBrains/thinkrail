@@ -1,12 +1,16 @@
 import type {
+	NativeDeepLinkBridge,
+	NativeMenuBridge,
 	NativeNotificationBridge,
 	NativeNotificationInput,
+	NativeOpenFileRequest,
 	NativeUpdateBridge,
 	NativeUpdateState,
 	NativeWindowControlsBridge,
 	NativeWindowState,
 } from "@thinkrail/contracts";
 import Electrobun, { Electroview } from "electrobun/view";
+import { installExternalLinkRouting } from "./externalNavigation";
 import { handlePageZoomShortcut, installPageZoomGestures } from "./pageZoom";
 import {
 	INITIAL_DESKTOP_PREFERENCES_GLOBAL,
@@ -32,14 +36,14 @@ interface DesktopPreferenceAdapter {
 }
 
 const initialWindowChrome = takePreloadGlobal(INITIAL_WINDOW_CHROME_GLOBAL);
-const windowChromeStyle = createWindowChromeStyleWriter(
-	() => document.documentElement?.style ?? null,
-);
+const windowChromeStyle = createWindowChromeStyleWriter(() => document.documentElement ?? null);
 document.addEventListener("DOMContentLoaded", windowChromeStyle.flush, { once: true });
 windowChromeStyle.update(initialWindowChrome);
 
 const updateListeners = new Set<(state: NativeUpdateState) => void>();
 const windowStateListeners = new Set<(state: NativeWindowState) => void>();
+const deepLinkListeners = new Set<(request: NativeOpenFileRequest) => void>();
+const pendingDeepLinks: NativeOpenFileRequest[] = [];
 let nativeWindowFocused = document.hasFocus();
 window.addEventListener("focus", () => {
 	nativeWindowFocused = true;
@@ -50,6 +54,13 @@ const rpc = Electroview.defineRPC<DesktopRpc>({
 	handlers: {
 		requests: {},
 		messages: {
+			openFile: (request) => {
+				if (deepLinkListeners.size === 0) {
+					pendingDeepLinks.push(request);
+					return;
+				}
+				for (const listener of deepLinkListeners) listener(request);
+			},
 			updateStateChanged: (state) => {
 				for (const listener of updateListeners) listener(state);
 			},
@@ -67,6 +78,7 @@ const rpc = Electroview.defineRPC<DesktopRpc>({
 });
 const electroview = new Electrobun.Electroview({ rpc });
 installTitleBarDoubleClick(window, () => electroview.rpc?.send.titleBarDoubleClick());
+installExternalLinkRouting(window);
 window.addEventListener("keydown", (event) =>
 	handlePageZoomShortcut(event, navigator.platform, (action) => {
 		electroview.rpc?.send.pageZoomRequested({ action });
@@ -81,6 +93,7 @@ const updateBridge: NativeUpdateBridge = Object.freeze({
 	checkForUpdates: () => rpc.request.checkForUpdates(),
 	downloadUpdate: () => rpc.request.downloadUpdate(),
 	restartToUpdate: () => rpc.request.restartToUpdate(),
+	dismissInstallResult: () => rpc.request.dismissInstallResult(),
 	subscribe: (listener: (state: NativeUpdateState) => void) => {
 		updateListeners.add(listener);
 		return () => updateListeners.delete(listener);
@@ -103,6 +116,20 @@ const notificationBridge: NativeNotificationBridge = Object.freeze({
 		rpc.request.showNotification(input).catch(() => undefined);
 	},
 	isWindowFocused: () => nativeWindowFocused,
+});
+const deepLinkBridge: NativeDeepLinkBridge = Object.freeze({
+	subscribe: (listener: (request: NativeOpenFileRequest) => void) => {
+		deepLinkListeners.add(listener);
+		const queued = pendingDeepLinks.splice(0);
+		for (const request of queued) listener(request);
+		return () => deepLinkListeners.delete(listener);
+	},
+});
+Object.defineProperty(globals, "__THINKRAIL_NATIVE_DEEP_LINKS__", {
+	value: deepLinkBridge,
+	writable: false,
+	configurable: false,
+	enumerable: false,
 });
 Object.defineProperty(globals, "__THINKRAIL_NATIVE_NOTIFICATIONS__", {
 	value: notificationBridge,
@@ -128,6 +155,17 @@ if (readWindowChromeFlag(initialWindowChrome, "windowControls") === true) {
 		enumerable: false,
 	});
 }
+const menuBridge: NativeMenuBridge = Object.freeze({
+	setLabels: (labels: Readonly<Record<string, string>>) => {
+		electroview.rpc?.send.menuLabelsChanged({ labels: { ...labels } });
+	},
+});
+Object.defineProperty(globals, "__THINKRAIL_NATIVE_MENU__", {
+	value: menuBridge,
+	writable: false,
+	configurable: false,
+	enumerable: false,
+});
 const injectedPreferences = takePreloadGlobal(INITIAL_DESKTOP_PREFERENCES_GLOBAL);
 const preferences = new Map<string, string>();
 if (typeof injectedPreferences === "object" && injectedPreferences !== null) {

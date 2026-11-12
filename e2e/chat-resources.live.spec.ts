@@ -104,9 +104,7 @@ test("command logs and Stop stay scoped through parent Stop, view closure, reloa
 	await expect(parentTab).toHaveAttribute("data-active", "false");
 	await expect(trigger).toHaveAttribute("data-active-count", "0");
 	const newChatResources = await openResources(page);
-	await expect(
-		newChatResources.getByText("Nothing is running in the background.", { exact: true }),
-	).toBeVisible();
+	await expect(newChatResources.getByTestId("resources-empty")).toBeVisible();
 	await expect(page.locator(commandRows)).toHaveCount(0);
 	await page.keyboard.press("Escape");
 	await parentTab.locator("button").first().click();
@@ -137,29 +135,39 @@ test("natural command completion refreshes the closed inspector and survives tra
 	await openWorkspaceChat(page);
 	await send(
 		page,
-		'Call background_command once with action start, name resource-finish, timeout 60, and command "sleep 12; printf RESOURCE_DONE". Then reply with the single word started. Do not call output or list, and do not wait for completion.',
+		'Call background_command once with action start, name resource-finish, timeout 60, and command "sleep 25; printf RESOURCE_DONE". Then reply with the single word started. Do not call output or list, and do not wait for completion.',
 	);
 	const trigger = page.getByTestId("resources-trigger");
 	await expect(trigger).toHaveAttribute("data-active-count", "1", { timeout: 180_000 });
+	const dock = page.getByTestId("resources-dock");
+	const fold = dock.getByTestId("resources-dock-toggle");
+	await expect(fold).toHaveAttribute("aria-expanded", "true");
+	await fold.click();
+	await expect(dock).toHaveAttribute("data-collapsed", "true");
+	await expect(dock.locator(commandRows)).toHaveCount(0);
 	const inspector = await openResources(page);
 	await expect(inspector.locator(commandRows)).toHaveAttribute("data-status", "running");
 	await page.keyboard.press("Escape");
-	await expect(page.getByTestId("resources-dock").locator(commandRows)).toHaveAttribute(
-		"data-status",
-		"running",
-	);
+	await expect(dock).toHaveAttribute("data-collapsed", "true");
+	await fold.click();
+	await expect(dock.locator(commandRows)).toHaveAttribute("data-status", "running");
 	await expect(trigger).toHaveAttribute("data-active-count", "0", { timeout: 60_000 });
-	await expect(page.getByTestId("resources-dock")).toHaveCount(0);
-	await expect(page.getByTestId("background-command-completion")).toHaveAttribute(
-		"data-status",
-		"completed",
-		{ timeout: 60_000 },
-	);
+	await expect(dock.locator(commandRows)).toHaveCount(0);
+	await expect(dock.getByTestId("resources-dock-finished")).toContainText("1 finished");
+	const result = page.getByTestId("background-command-completion");
+	await expect(result).toHaveAttribute("data-status", "completed", { timeout: 60_000 });
+	await expect(result).toHaveAttribute("data-expanded", "false");
+	await expect(result.getByTestId("background-result-teaser")).toContainText("RESOURCE_DONE");
 	await waitForAgentSettled(page, 120_000);
-	await openResources(page);
+	await expect(page.getByTestId("turn-divider")).toHaveCount(2);
+	await result.getByTestId("background-result-toggle").click();
+	await expect(result.getByTestId("background-result-body")).toContainText("RESOURCE_DONE");
+	await expect(dock.getByTestId("resources-dock-finished")).toContainText("1 finished");
+	await result.getByTestId("background-result-open").click();
+	await expect(inspector).toBeVisible();
 	const row = inspector.locator(commandRows).filter({ hasText: "resource-finish" });
 	await expect(row).toHaveAttribute("data-status", "completed");
-	await row.getByRole("option").click();
+	await expect(row).toHaveAttribute("data-selected", "true");
 	await expect(inspector.getByTestId("command-log-output")).toContainText("RESOURCE_DONE");
 	await page.keyboard.press("Escape");
 	await page.reload();

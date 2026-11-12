@@ -4,6 +4,8 @@ import {
 	RiTerminalBoxFill,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
+import type { MessageKey } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
@@ -11,8 +13,9 @@ import { type LayoutAttention, tupleKey } from "../../lib";
 import {
 	AuxiliaryRail,
 	type AuxiliaryRailControlProps,
-	AuxiliaryRailIndicator,
 	RAIL_ENTRY_BUTTON_CLASS,
+	RAIL_ICON,
+	railEntryButtonProps,
 	railEntryFrameClass,
 	railTooltipSide,
 } from "./AuxiliaryRail";
@@ -39,6 +42,29 @@ import type { DropTarget, SharedGroupProps } from "./workbenchShared";
 import { DropZone, groupPanelId, railControlId, railGroupDomId } from "./workbenchShared";
 import { WorkbenchTab } from "./workbenchTabs";
 
+const EMPTY_GROUP_LABELS = {
+	left: "workbench.rail.emptyLeftGroup",
+	right: "workbench.rail.emptyRightGroup",
+} as const satisfies Record<"left" | "right", MessageKey>;
+
+const JOIN_GROUP_LABELS = {
+	left: "workbench.rail.joinLeftGroup",
+	right: "workbench.rail.joinRightGroup",
+	bottom: "workbench.rail.joinBottomGroup",
+} as const satisfies Record<LayoutAuxiliaryRegion, MessageKey>;
+
+const NEW_PANE_HERE_LABELS = {
+	left: "workbench.rail.newLeftPaneHere",
+	right: "workbench.rail.newRightPaneHere",
+	bottom: "workbench.rail.newBottomPaneHere",
+} as const satisfies Record<LayoutAuxiliaryRegion, MessageKey>;
+
+const HIDDEN_SIDE_GROUP_LABELS = {
+	left: "workbench.rail.createLeftGroupHidden",
+	right: "workbench.rail.createRightGroupHidden",
+	bottom: "workbench.rail.createBottomGroupHidden",
+} as const satisfies Record<LayoutAuxiliaryRegion, MessageKey>;
+
 export function AuxiliaryRailButton({
 	entry,
 	control,
@@ -52,6 +78,7 @@ export function AuxiliaryRailButton({
 	shared: SharedGroupProps;
 	onActivate: () => void;
 }) {
+	const t = useT();
 	const unplaced = isUnplacedRailEntry(entry);
 	const group =
 		entry.groupId && !unplaced
@@ -75,22 +102,21 @@ export function AuxiliaryRailButton({
 	const active = entry.selected && entry.expanded;
 	const name =
 		entry.kind === "tool"
-			? layoutTabName(toolTab(entry.tool))
+			? layoutTabName(t, toolTab(entry.tool))
 			: entry.kind === "terminals"
-				? `Terminal group ${ordinal}, ${entry.tabs.length} ${entry.tabs.length === 1 ? "session" : "sessions"}`
+				? t("workbench.rail.terminalGroup", { position: ordinal, count: entry.tabs.length })
 				: entry.region === "bottom"
-					? "Terminal"
-					: `Empty ${entry.region} group ${ordinal}`;
+					? t("workbench.rail.terminal")
+					: t(EMPTY_GROUP_LABELS[entry.region], { position: ordinal });
 	return (
-		<div data-active={active} className={railEntryFrameClass(entry.region)}>
-			{active ? <AuxiliaryRailIndicator region={entry.region} /> : null}
+		<div ref={setNodeRef} data-active={active} className={railEntryFrameClass(entry.region)}>
 			<IconTooltip
 				label={
 					entry.kind === "terminals" ? (
 						<span>
 							{name}
 							<br />
-							{entry.tabs.map((tab) => layoutTabName(tab)).join(", ")}
+							{entry.tabs.map((tab) => layoutTabName(t, tab)).join(", ")}
 						</span>
 					) : (
 						name
@@ -99,7 +125,6 @@ export function AuxiliaryRailButton({
 				side={railTooltipSide(entry.region)}
 			>
 				<button
-					ref={setNodeRef}
 					type="button"
 					id={railControlId(entry)}
 					data-testid={
@@ -116,32 +141,38 @@ export function AuxiliaryRailButton({
 					aria-controls={
 						group ? groupPanelId({ area: entry.region, groupId: group.id }) : undefined
 					}
+					{...railEntryButtonProps(active)}
 					{...control}
 					onClick={onActivate}
-					data-drop-label={dropEnabled ? `Join ${entry.region} group ${ordinal}` : undefined}
+					data-drop-label={
+						dropEnabled ? t(JOIN_GROUP_LABELS[entry.region], { position: ordinal }) : undefined
+					}
 					data-drop-active={isOver || undefined}
 					data-drop-hint={(dropEnabled && !isOver) || undefined}
 					className={cn(
 						RAIL_ENTRY_BUTTON_CLASS,
-						"data-[drop-hint]:bg-primary-subtle data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary",
+						"data-[drop-hint]:bg-primary-subtle data-[drop-hint]:ring-1 data-[drop-hint]:ring-inset data-[drop-hint]:ring-primary-soft data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary",
 						unplaced && "text-text-subtle",
 					)}
 				>
 					{entry.kind === "tool" ? (
-						tabIcon(toolTab(entry.tool), active)
+						tabIcon(toolTab(entry.tool), active, RAIL_ICON)
 					) : entry.kind === "terminals" || entry.region === "bottom" ? (
 						active ? (
-							<RiTerminalBoxFill className="size-14 shrink-0" />
+							<RiTerminalBoxFill className={RAIL_ICON} />
 						) : (
-							<SquareTerminal className="size-14 shrink-0" />
+							<SquareTerminal className={RAIL_ICON} />
 						)
 					) : (
-						<PanelsTopLeft className="size-14 shrink-0" />
+						<PanelsTopLeft className={RAIL_ICON} />
 					)}
 					{entry.kind === "terminals" && ordinal > 1 ? (
 						<span
 							aria-hidden="true"
-							className="absolute right-0 bottom-0 rounded-sm bg-container-header-bg px-2 tr-text-metadata"
+							className={cn(
+								"absolute -right-4 rounded-sm bg-container-header-bg px-2 tr-text-metadata",
+								entry.region === "bottom" ? "bottom-0" : "-bottom-4",
+							)}
 						>
 							{ordinal}
 						</span>
@@ -163,6 +194,7 @@ export function AuxiliaryRegionRail({
 	attention: LayoutAttention;
 	trailing?: ReactNode;
 }) {
+	const t = useT();
 	const entries = projectAuxiliaryRail(shared.document, attention, region);
 	const groups = shared.document[region].groups;
 	const draggedAuxiliary =
@@ -210,7 +242,7 @@ export function AuxiliaryRegionRail({
 			<DropZone
 				id={tupleKey("dnd-rail-boundary", region, String(paneIndex))}
 				target={{ kind: "auxiliary-edge", region, index: paneIndex }}
-				label={`New ${region} pane here`}
+				label={t(NEW_PANE_HERE_LABELS[region])}
 				className={cn(
 					"absolute",
 					region === "bottom"
@@ -231,7 +263,7 @@ export function AuxiliaryRegionRail({
 						<DropZone
 							id={tupleKey("dnd-hidden-side-edge", region)}
 							target={{ kind: "auxiliary-edge", region, index: groups.length }}
-							label={`Create ${region} group in hidden side`}
+							label={t(HIDDEN_SIDE_GROUP_LABELS[region])}
 							className="relative min-h-32 w-32 flex-1"
 						/>
 					) : (
@@ -296,6 +328,7 @@ export function AuxiliaryRegionRail({
 									onRenameChat={shared.onRenameChat}
 									canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 									renderTabAdornment={shared.renderTabAdornment}
+									worktreePath={shared.worktreePath}
 									draggingTab={shared.draggingTab}
 									panelId={groupPanelId(location)}
 									onKeyDown={(event) => {

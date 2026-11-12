@@ -1,7 +1,10 @@
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
 	enterDefaultWorkspace,
+	expandDisclosure,
 	openFixtureProject,
 	revealWorkbenchTool,
 } from "./fixtures/app";
@@ -23,26 +26,52 @@ async function openAppearance(page: Page) {
 	return dialog;
 }
 
-async function readThemeOptions(page: Page): Promise<ThemeOption[]> {
+/** Opens Appearance with its fixed-mode theme list, which the page keeps in a collapsed disclosure. */
+async function openThemeList(page: Page) {
 	const dialog = await openAppearance(page);
-	const options = await dialog.locator('[data-testid^="theme-option-"]').evaluateAll((nodes) =>
-		nodes.map((node) => ({
-			id: node.getAttribute("data-theme-id") ?? "",
-			label: node.textContent?.trim() ?? "",
-			appearance: node.getAttribute("data-appearance") === "light" ? "light" : "dark",
-			contrast: node.getAttribute("data-contrast") === "high" ? "high" : "normal",
-			active: node.getAttribute("data-active") === "true",
-		})),
-	);
+	await expandDisclosure(dialog.getByTestId("theme-toggle"));
+	return dialog;
+}
+
+async function readThemeOptions(page: Page): Promise<ThemeOption[]> {
+	const dialog = await openThemeList(page);
+	const options: ThemeOption[] = await dialog
+		.locator('[data-testid^="theme-option-"]')
+		.evaluateAll((nodes) =>
+			nodes.map((node) => ({
+				id: node.getAttribute("data-theme-id") ?? "",
+				label: node.textContent?.trim() ?? "",
+				appearance: node.getAttribute("data-appearance") === "light" ? "light" : "dark",
+				contrast: node.getAttribute("data-contrast") === "high" ? "high" : "normal",
+				active: node.getAttribute("data-active") === "true",
+			})),
+		);
 	await page.keyboard.press("Escape");
 	await expect(dialog).toBeHidden();
 	return options;
 }
 
 async function pickTheme(page: Page, theme: string): Promise<void> {
-	const dialog = await openAppearance(page);
+	const dialog = await openThemeList(page);
 	await dialog.locator(`[data-theme-id="${theme}"]`).click();
 	await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+	await page.keyboard.press("Escape");
+	await expect(dialog).toBeHidden();
+}
+
+async function restoreSystemPairLight(
+	page: Page,
+	light: string,
+	fixedAppearance: ThemeOption["appearance"],
+): Promise<void> {
+	const dialog = page.getByTestId("settings-dialog");
+	if (!(await dialog.isVisible())) await openAppearance(page);
+	await dialog.getByTestId("theme-mode-system").click();
+	const trigger = dialog.getByTestId("system-theme-light-trigger");
+	if (!(await trigger.isVisible())) await expandDisclosure(dialog.getByTestId("theme-pair-toggle"));
+	await trigger.click();
+	await page.getByTestId(`system-theme-light-option-${light}`).click();
+	await dialog.getByTestId(`theme-mode-${fixedAppearance}`).click();
 	await page.keyboard.press("Escape");
 	await expect(dialog).toBeHidden();
 }
@@ -105,34 +134,38 @@ test("system mode follows each client and retains its explicit pair", async ({ p
 
 	const dialog = await openAppearance(page);
 	await dialog.getByTestId("theme-mode-system").click();
-	await expect(page.locator("html")).toHaveAttribute("data-theme", initialLight?.id ?? "");
-	await expect(dialog.getByTestId("system-theme-current")).toContainText("Light");
-	await expect(dialog.getByTestId("system-theme-light-trigger")).toHaveAccessibleName(
-		`Light theme: ${initialLight?.label}`,
-	);
-	await dialog.getByTestId("system-theme-light-trigger").click();
-	await page.getByTestId(`system-theme-light-option-${alternateLight?.id}`).click();
-	await expect(page.locator("html")).toHaveAttribute("data-theme", alternateLight?.id ?? "");
-
-	await page.emulateMedia({ colorScheme: "dark" });
-	await expect(page.locator("html")).toHaveAttribute("data-theme", fixed?.id ?? "");
-	await expect(dialog.getByTestId("system-theme-current")).toContainText("Dark");
-
 	const peer = await page.context().newPage();
-	await peer.emulateMedia({ colorScheme: "light" });
-	await peer.goto("/");
-	await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await expect(peer.locator("html")).toHaveAttribute("data-theme", alternateLight?.id ?? "");
+	try {
+		await expect(page.locator("html")).toHaveAttribute("data-theme", initialLight?.id ?? "");
+		await expect(dialog.getByTestId("system-theme-current")).toContainText("Light");
+		await expandDisclosure(dialog.getByTestId("theme-pair-toggle"));
+		await expect(dialog.getByTestId("system-theme-light-trigger")).toHaveAccessibleName(
+			`Light theme: ${initialLight?.label}`,
+		);
+		await dialog.getByTestId("system-theme-light-trigger").click();
+		await page.getByTestId(`system-theme-light-option-${alternateLight?.id}`).click();
+		await expect(page.locator("html")).toHaveAttribute("data-theme", alternateLight?.id ?? "");
 
-	await dialog.getByTestId("theme-mode-fixed").click();
-	await expect(page.locator("html")).toHaveAttribute("data-theme", fixed?.id ?? "");
-	await expect(peer.locator("html")).toHaveAttribute("data-theme", fixed?.id ?? "");
+		await page.emulateMedia({ colorScheme: "dark" });
+		await expect(page.locator("html")).toHaveAttribute("data-theme", fixed?.id ?? "");
+		await expect(dialog.getByTestId("system-theme-current")).toContainText("Dark");
 
-	await dialog.getByTestId("theme-mode-system").click();
-	await expect(page.locator("html")).toHaveAttribute("data-theme", fixed?.id ?? "");
-	await expect(peer.locator("html")).toHaveAttribute("data-theme", alternateLight?.id ?? "");
-	await dialog.getByTestId("theme-mode-fixed").click();
-	await peer.close();
+		await peer.emulateMedia({ colorScheme: "light" });
+		await peer.goto("/");
+		await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await expect(peer.locator("html")).toHaveAttribute("data-theme", alternateLight?.id ?? "");
+
+		await dialog.getByTestId(`theme-mode-${fixed?.appearance}`).click();
+		await expect(page.locator("html")).toHaveAttribute("data-theme", fixed?.id ?? "");
+		await expect(peer.locator("html")).toHaveAttribute("data-theme", fixed?.id ?? "");
+
+		await dialog.getByTestId("theme-mode-system").click();
+		await expect(page.locator("html")).toHaveAttribute("data-theme", fixed?.id ?? "");
+		await expect(peer.locator("html")).toHaveAttribute("data-theme", alternateLight?.id ?? "");
+	} finally {
+		await peer.close();
+		await restoreSystemPairLight(page, initialLight?.id ?? "", fixed?.appearance ?? "dark");
+	}
 });
 
 test("Monaco opens files and re-themes under every discovered manifest", async ({ page }) => {
@@ -172,7 +205,78 @@ test("Monaco opens files and re-themes under every discovered manifest", async (
 	await expect(page.getByTestId("editor-pane")).toContainText("plain-text-fixture");
 });
 
-test("selected workspace tabs and rail entries keep their surface and edge marker under every manifest", async ({
+async function keywordToken(page: Page) {
+	const keyword = page
+		.locator('[data-testid="editor-pane"]:visible .view-line span span', { hasText: /export/ })
+		.first();
+	await expect(keyword).not.toHaveClass(/\bmtk1\b/);
+	return keyword.evaluate((node) => ({
+		className: node.className,
+		color: getComputedStyle(node).color,
+	}));
+}
+
+test("Monaco keeps syntax colours across a light/dark swap", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	writeFileSync(join(workspace.worktreePath, "swap.ts"), "export const answer = 42;\n");
+	writeFileSync(join(workspace.worktreePath, "later.ts"), "export const later = 7;\n");
+	const options = await readThemeOptions(page);
+	const light = options.find(
+		(option) => option.appearance === "light" && option.contrast === "normal",
+	);
+	const dark = options.find(
+		(option) => option.appearance === "dark" && option.contrast === "normal",
+	);
+	const defaultTheme = options.find((option) => option.active)?.id;
+	expect(light && dark).toBeTruthy();
+	await pickTheme(page, light?.id ?? "");
+
+	await revealWorkbenchTool(page, "files");
+	await page.getByTestId("file-node").filter({ hasText: "swap.ts" }).dblclick();
+	await expect(page.getByTestId("editor-pane")).toContainText("answer");
+	const before = await keywordToken(page);
+
+	await pickTheme(page, dark?.id ?? "");
+	await expect.poll(async () => (await keywordToken(page)).color).not.toBe(before.color);
+	const after = await keywordToken(page);
+
+	await page.getByTestId("file-node").filter({ hasText: "later.ts" }).dblclick();
+	await expect(page.locator('[data-testid="editor-pane"]:visible')).toContainText("later");
+	expect(await keywordToken(page)).toEqual(after);
+	await pickTheme(page, defaultTheme ?? "");
+});
+
+test("an editor preloaded before a theme swap opens in the current theme", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	writeFileSync(join(workspace.worktreePath, "swap.ts"), "export const answer = 42;\n");
+	const options = await readThemeOptions(page);
+	const defaultTheme = options.find((option) => option.active)?.id;
+	const light = options.find(
+		(option) => option.appearance === "light" && option.contrast === "normal",
+	);
+	const dark = options.find(
+		(option) => option.appearance === "dark" && option.contrast === "normal",
+	);
+	expect(light && dark).toBeTruthy();
+	await pickTheme(page, dark?.id ?? "");
+	await pickTheme(page, light?.id ?? "");
+
+	await revealWorkbenchTool(page, "files");
+	await page.getByTestId("file-node").filter({ hasText: "swap.ts" }).dblclick();
+	await expect(page.getByTestId("editor-pane")).toContainText("answer");
+	await expectEditorMatchesTheme(page);
+	const first = await keywordToken(page);
+
+	await pickTheme(page, dark?.id ?? "");
+	await expect.poll(async () => (await keywordToken(page)).color).not.toBe(first.color);
+	await pickTheme(page, light?.id ?? "");
+	await expect.poll(async () => (await keywordToken(page)).color).toBe(first.color);
+	await pickTheme(page, defaultTheme ?? "");
+});
+
+test("selected workspace tabs keep their surface and edge marker, and rail entries their surface, under every manifest", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -180,6 +284,7 @@ test("selected workspace tabs and rail entries keep their surface and edge marke
 
 	const options = await readThemeOptions(page);
 	expect(options.length).toBeGreaterThanOrEqual(2);
+	const defaultTheme = options.find((option) => option.active)?.id;
 
 	await revealWorkbenchTool(page, "files");
 	const files = page.getByTestId("file-node");
@@ -232,11 +337,10 @@ test("selected workspace tabs and rail entries keep their surface and edge marke
 			expect(tab.markerHeight).toBe("2px");
 		}
 		const tool = page.getByTestId("tab-files");
-		await expect(page.getByTestId("tool-rail-files")).toHaveAttribute("aria-pressed", "true");
-		await expect(tool).toHaveCSS("background-color", state.expectedFill);
-		const marker = tool.getByTestId("rail-selection-indicator");
-		await expect(marker).toHaveCSS("background-color", state.expectedMarker);
-		await expect(marker).toHaveCSS("width", "2px");
-		await expect(marker).toHaveCSS("height", "16px");
+		const toolButton = page.getByTestId("tool-rail-files");
+		await expect(toolButton).toHaveAttribute("aria-pressed", "true");
+		await expect(toolButton).toHaveCSS("background-color", state.expectedFill);
+		await expect(tool.getByTestId("rail-selection-indicator")).toHaveCount(0);
 	}
+	await pickTheme(page, defaultTheme ?? "");
 });

@@ -21,7 +21,7 @@ Usage:
   $(basename "$0") latest-stable   [--tags=...]
   $(basename "$0") latest-nightly  [--tags=...]
 
-Tags come from \`git tag -l\` unless --tags is provided (for testing).
+Tags come from \`git tag -l\` unless --tags is provided (tests; the release controller adds feed versions).
 EOF
     exit 1
 }
