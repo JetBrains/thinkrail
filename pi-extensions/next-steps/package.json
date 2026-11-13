@@ -1,0 +1,62 @@
+{
+	"name": "@thinkrail/pi-next-steps",
+	"version": "0.0.0",
+	"description": "A pi extension adding a `suggest_next_steps` tool: when the agent finishes a turn it offers one-click next messages, sent with Alt+1…9 in the terminal and shown as chips in hosts such as ThinkRail, the agentic IDE built on pi.",
+	"license": "Apache-2.0",
+	"type": "module",
+	"keywords": [
+		"pi-package",
+		"pi",
+		"pi-coding-agent",
+		"extension",
+		"suggestions",
+		"next-steps",
+		"quick-replies"
+	],
+	"homepage": "https://thinkrail.ai/?utm_source=pi-package&utm_medium=referral&utm_campaign=pi-next-steps&utm_content=homepage",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/JetBrains/thinkrail.git",
+		"directory": "pi-extensions/next-steps"
+	},
+	"bugs": "https://github.com/JetBrains/thinkrail/issues",
+	"author": "ThinkRail",
+	"files": [
+		"index.ts",
+		"src/**/*.ts",
+		"!src/**/*.test.ts",
+		"README.md",
+		"LICENSE"
+	],
+	"exports": {
+		".": "./index.ts",
+		"./index.ts": "./index.ts",
+		"./core": "./src/core.ts",
+		"./package.json": "./package.json"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"pi": {
+		"extensions": [
+			"./index.ts"
+		]
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"test": "bun test"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "*",
+		"@earendil-works/pi-tui": "*",
+		"typebox": "*"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "catalog:",
+		"@earendil-works/pi-tui": "catalog:",
+		"@types/bun": "catalog:",
+		"typebox": "catalog:",
+		"typescript": "catalog:"
+	}
+}
