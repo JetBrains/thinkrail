@@ -433,7 +433,20 @@ the palette ranks with — kept here so host-side search can rank with the same 
   name, refused with `COPY_TOO_LARGE` for a folder past the host's entry bound, stopped with
   `ENTRY_CHANGED` when an entry changes under it) and `fs.delete` (`{ workspaceId, path }` → ack, a move to
   the OS trash, `ENTRY_CHANGED` when the entry changed while it was claimed); a client hides both from
-  older hosts,
+  older hosts, and from **`ARTIFACTS_PROTOCOL_VERSION`** (v121) two more: `fs.rename` (`{ workspaceId, path,
+  name }` → `{ path }`, in place, refused with `ENTRY_EXISTS` when another entry holds the name) and
+  `fs.move` (`fs.copy`'s params → `{ path }`, the Cut-and-Paste move, same or another workspace, refused
+  with `ENTRY_EXISTS` instead of renaming, and for a folder into itself),
+  the **Artifacts** tool's wire from the same version: `artifacts.list` (`{ workspaceId }` →
+  **`WorkspaceArtifactsSnapshot`**: `dir` (the artifacts folder, `.thinkrail/context`), `artifacts`
+  (**`WorkspaceArtifact`**: worktree-relative `path`, `state: "live" | "deleted"` — deleted means gone from
+  disk but restorable from the host's kept copy — `size`, `changedAt`, `firstSeenAt`, the writing chat's
+  optional `sessionId`) and `outputs` (**`WorkspaceIgnoredOutput`** rows — an ignored file or folder an
+  agent run produced, with its live `files` count and `filesTruncated` — or `null` where there is no git),
+  `artifacts.restore` / `artifacts.discard` (`{ workspaceId, path }` → ack; a deleted row only, otherwise
+  `ARTIFACT_UNKNOWN`; restore refuses a path that exists again with `ENTRY_EXISTS`; discard sends the kept
+  copy to the OS trash), and the pathless **`workspace.artifactsChanged`** nudge
+  (**`WorkspaceArtifactsChangedPayload`**: `{ workspaceId }`) — clients re-list,
   **`ResourceMeta`** (what a resource's bytes *are*, host-decided and pinned by
   `RESOURCE_META_PROTOCOL_VERSION` = v75: sha-256 `hash` + `byteLength`, both `null` when the resource is
   absent; `text` = valid UTF-8, BOM-aware, and not claimed by a recognized binary magic number (an ASCII

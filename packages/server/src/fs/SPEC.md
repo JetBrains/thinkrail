@@ -2,7 +2,7 @@
 id: submodule-server-fs
 type: submodule-design
 status: active
-title: fs — contained worktree reads, copy and delete
+title: fs — contained worktree reads, copy, move and delete
 parent: module-server
 depends-on: [module-contracts, submodule-server-trash]
 tags: [public-surface-checked]
@@ -10,8 +10,9 @@ tags: [public-surface-checked]
 
 ## Responsibility
 
-Read directories and files inside a workspace's worktree, path-contained; carry out the Files tree's two
-user-initiated mutations — **copy** an entry into a worktree folder and **delete** one to the OS trash —
+Read directories and files inside a workspace's worktree, path-contained; carry out the user-initiated
+mutations of the Files tree and the Artifacts tool — **copy** an entry into a worktree folder, **rename**
+or **move** one, and **delete** one to the OS trash —
 under the same containment; and decide **what a resource's bytes are** — the one byte-level
 classification every content read in the host shares. Agent and review writes are not this module's:
 `changes` owns review reverts and pi writes through its own tools.
@@ -70,9 +71,20 @@ classification every content read in the host shares. Agent and review writes ar
   meanwhile is never the object trashed, and restored (or preserved as `.thinkrail-recovery-<uuid>`) when
   the trash fails. The leaf is not followed, so deleting a symlink removes the link, never its target;
   `.git`, escapes and the worktree root are refused. It reports whether the entry was a folder, whose
-  unlisted contents the host's invalidation must treat as unknown. Neither mutation checks whether an
+  unlisted contents the host's invalidation must treat as unknown.
+  **`renameWorktreeEntry(workspaceId, path, name)`** renames an entry in its folder (no `/`, `\`, NUL,
+  `.`, `..` or `.git` in the name) and **`moveWorktreeEntry`** (`copyWorktreeEntry`'s params) moves one into
+  a folder of the same or another workspace — the Files tree's and Artifacts' Rename and Cut-and-Paste.
+  Both resolve like the delete (source leaf not followed, destination folder fully resolved), never
+  replace another entry (`CodedError("ENTRY_EXISTS")`, though a case-only rename of the same inode is
+  allowed), refuse a folder moved into itself, and treat pasting into the entry's own folder as a no-op.
+  The free-name check and the `rename` run in one synchronous pass; Node has no `renameat2`
+  `RENAME_NOREPLACE`, so a writer creating that exact name between those two syscalls is the residual
+  window. A move across filesystems (`EXDEV`) falls back to a copy followed by the claimed delete-to-trash
+  of the source. Each answers `{ from, path, directory, written }` for the host's invalidation.
+  None of these mutations checks whether an
   agent is running — the user's explicit action wins, and the web says so before a delete.
-  **Both mutations race a live agent, so no check is trusted across an `await`** (the per-workspace
+  **Every mutation races a live agent, so no check is trusted across an `await`** (the per-workspace
   change lock serializes host mutations, not the agent's own writes). A delete validates containment,
   `lstat`s the leaf and renames it into its claim in one synchronous pass, and the claim is accepted only
   when it still carries the validated `dev`/`ino` inside the validated real parent. A copy records the
@@ -118,7 +130,8 @@ classification every content read in the host shares. Agent and review writes ar
   string it pairs with is valid text).
 - **Public surface (barrel):** `readDir`, `readFile`, `readableFileSize`, `resolveWorktreeFile`,
   `resolveWorktreeEntry`, `workspaceRelativePath`,
-  `copyWorktreeEntry`, `deleteWorktreeEntry`, `classifyBytes`, `CONTENT_SNIFF_BYTES`, `mimeFromPath`,
+  `copyWorktreeEntry`, `deleteWorktreeEntry`, `renameWorktreeEntry`, `moveWorktreeEntry`, `MovedEntry`,
+  `classifyBytes`, `CONTENT_SNIFF_BYTES`, `mimeFromPath`,
   `hashBytes`, `decodeText`, `resourceMeta`.
 - **Allowed deps:** `persistence` (workspace lookup); `trash` (`claimAndTrashFile`, the delete);
   `contracts` (`FileNode`, `ResourceMeta`); `shared` (`CodedError`); Node

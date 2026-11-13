@@ -12,6 +12,7 @@ import type {
 	WsChannel,
 } from "@thinkrail/contracts";
 import {
+	ARTIFACTS_PROTOCOL_VERSION,
 	CONTINUATION_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
@@ -98,6 +99,7 @@ import {
 	surveyEndpoint,
 	track,
 } from "../analytics";
+import { setArtifactsPublisher } from "../artifacts";
 import {
 	cancelAllLogins,
 	initializeJbcentralRuntime,
@@ -1124,6 +1126,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setTurnPublisher((turn) => {
 		publishScoped(WS_CHANNELS.turnChanged, turn, { workspaceId: turn.workspaceId });
 	});
+	setArtifactsPublisher((workspaceId) => {
+		publishScoped(
+			WS_CHANNELS.workspaceArtifactsChanged,
+			{ workspaceId },
+			{ workspaceId, belowProtocol: ARTIFACTS_PROTOCOL_VERSION },
+		);
+	});
 	setSessionPublisher((payload, workspaceId) => {
 		runObservation.observe(payload.sessionId, payload.event);
 		observeContinuation(payload.sessionId, payload.event);
@@ -1318,6 +1327,7 @@ function restoreSeamDefaults(): void {
 	setMcpStatusPublisher(() => {});
 	setSessionResourcesPublisher(() => {});
 	setTurnPublisher(() => {});
+	setArtifactsPublisher(null);
 	setSessionPublisher(() => {});
 	setExtUiPublisher(() => {});
 	setLoginPublisher(() => {});
