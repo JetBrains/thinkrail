@@ -73,7 +73,10 @@ equals `border-default` is not a second weight, it is a second name).
 
 Keyboard focus has one look: a 1px `focus-ring` outline from the `index.css` utilities. A base rule
 gives every `:focus-visible` element the outset ring, so no element falls back to the browser's ring;
-`outline-none` opts out. Apply the utilities explicitly as
+`outline-none` opts out, so it is allowed only beside another indicator: a `focus-ring*` utility, a
+`focus:` / `data-[selected=true]:` / `data-[highlighted]:` background (menu and list rows), or an entry
+with its reason in the test's exception list (a frame that draws the ring for its field, a `tabIndex=-1`
+programmatic target, a list's only text field). Apply the utilities explicitly as
 `focus-visible:focus-ring` or `focus-visible:focus-ring-inset`; a container that shows focus for a child
 uses `has-[:focus-visible]:focus-ring`, and also `focus-visible:focus-ring` if it can take focus itself.
 When the container holds other focusable controls with their own ring, scope it to the field

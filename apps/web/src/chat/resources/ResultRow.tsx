@@ -105,8 +105,7 @@ export function ResultRow({
 	const { name, state, durationMs, exitCode } = resultFacts(source);
 	const command = source.kind === "command";
 	const line = teaser ?? (command ? outputTeaser(source.details.output.text) : "");
-	const headerClass =
-		"flex min-w-0 flex-1 items-center gap-4 rounded-sm px-4 py-2 text-left outline-none";
+	const headerClass = "flex min-w-0 flex-1 items-center gap-4 rounded-sm px-4 py-2 text-left";
 	const header = (
 		<>
 			{onToggle ? (
