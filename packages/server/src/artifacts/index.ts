@@ -4,6 +4,7 @@ export {
 	listArtifacts,
 	noteArtifactPathsChanged,
 	observeArtifactSessionEvent,
+	prepareArtifactsDestination,
 	reconcileArtifacts,
 	removeWorkspaceArtifacts,
 	restoreArtifact,

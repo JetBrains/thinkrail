@@ -24,8 +24,8 @@ client the same answer.
 - **Owns:** `<dataDir>/artifacts/<workspaceId>/` — `index.json` (artifact records + ignored-output records)
   and `kept/<uuid>` — plus the in-memory per-workspace running set, explicit writers and run window.
 - **Public surface (barrel):** `listArtifacts`, `reconcileArtifacts`, `restoreArtifact`, `discardArtifact`,
-  `withUserRemoval`, `observeArtifactSessionEvent`, `ArtifactSessionEvent`, `noteArtifactPathsChanged`,
-  `setArtifactsPublisher`, `removeWorkspaceArtifacts`.
+  `withUserRemoval`, `prepareArtifactsDestination`, `observeArtifactSessionEvent`, `ArtifactSessionEvent`,
+  `noteArtifactPathsChanged`, `setArtifactsPublisher`, `removeWorkspaceArtifacts`.
 - **Allowed deps:** `persistence` (`dataDir`, workspace records), `git` (`gitAsync` for the ignored-root
   listing), `trash` (a discarded kept copy goes to the OS trash), `log`; `contracts`, `shared/paths`,
   `shared/artifactsDir`, `shared/codedError`; Node `fs`/`path`/`crypto`.
@@ -70,9 +70,17 @@ nudge per workspace.
 
 **User removals** go through `withUserRemoval(workspaceId, path, mutation)`: the path (or folder) is
 marked for the mutation's lifetime and reconciled right after it succeeds, so the host's own Delete,
-Cut and Rename never read as "deleted not by you", while a failed mutation leaves no mark. A user
-deletion made outside ThinkRail (a terminal `rm`) cannot be told from an agent's and shows as deleted;
-the user discards it once.
+Cut and Rename never read as "deleted not by you", while a failed mutation leaves no mark. The mark is
+the entry's real location — its parent folder resolved, the leaf itself not followed — so a removal made
+through a link to the artifacts folder (`artifacts-alias/report.md`) is still the user's, while removing
+such a link is no removal of artifacts at all. A user deletion made outside ThinkRail (a terminal `rm`)
+cannot be told from an agent's and shows as deleted; the user discards it once.
+
+**Pasting into the folder.** `prepareArtifactsDestination(workspaceId, directory)` reseeds the artifacts
+folder (`seedArtifactsDir`, its `.gitignore` included) when a copy or move targets it or a folder inside
+it, so Paste into artifacts works before the first chat created the folder — a Default workspace is seeded
+only at session start — or after someone cleaned it. In a Default workspace this writes into the user's
+repository, which is acceptable because the user asked for that paste.
 
 **Restore** first reseeds the artifacts folder through `shared`'s `seedArtifactsDir` (after a
 `git clean -fdx` the folder is gone, and recreating it without its `.gitignore` would let `git add -A` stage

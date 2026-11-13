@@ -507,11 +507,33 @@ export function reconcileArtifacts(workspaceId: string): boolean {
 	return changed;
 }
 
+function entryPath(workspaceId: string, path: string): string {
+	const workspace = workspaceOf(workspaceId);
+	if (!workspace) return path;
+	try {
+		const root = realpathSync(workspace.worktreePath);
+		const abs = resolve(workspace.worktreePath, path);
+		const entry = join(realpathSync(dirname(abs)), basename(abs));
+		return isInside(root, entry) ? relative(root, entry).split(sep).join("/") : path;
+	} catch {
+		return path;
+	}
+}
+
+export function prepareArtifactsDestination(workspaceId: string, directory: string): void {
+	const workspace = workspaceOf(workspaceId);
+	if (!workspace) return;
+	const path = entryPath(workspaceId, directory);
+	if (path === WORKSPACE_CONTEXT_DIR || isArtifactPath(path))
+		seedArtifactsDir(workspace.worktreePath);
+}
+
 export async function withUserRemoval<T>(
 	workspaceId: string,
-	path: string,
+	requested: string,
 	mutation: () => Promise<T>,
 ): Promise<T> {
+	const path = entryPath(workspaceId, requested);
 	if (!touchesArtifacts(path)) return mutation();
 	let marks = removals.get(workspaceId);
 	if (!marks) {

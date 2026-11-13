@@ -95,6 +95,7 @@ import {
 import {
 	discardArtifact,
 	listArtifacts,
+	prepareArtifactsDestination,
 	removeWorkspaceArtifacts,
 	restoreArtifact,
 	withUserRemoval,
@@ -956,6 +957,7 @@ const handlers: WsHandlers = {
 	"fs.copy": (p) => {
 		void ensureWatch(p.destinationWorkspaceId);
 		return withChangeLock(p.destinationWorkspaceId, async () => {
+			prepareArtifactsDestination(p.destinationWorkspaceId, p.destinationDirectory);
 			const { path, written } = await copyWorktreeEntry(p);
 			notifyWorkspacePathsChanged(p.destinationWorkspaceId, written);
 			return { path };
@@ -995,6 +997,7 @@ const handlers: WsHandlers = {
 				? withChangeLock(first, operation)
 				: withChangeLock(first, () => withChangeLock(second, operation));
 		return locked(async () => {
+			prepareArtifactsDestination(p.destinationWorkspaceId, p.destinationDirectory);
 			const moved = await withUserRemoval(p.sourceWorkspaceId, p.sourcePath, async () =>
 				moveWorktreeEntry(p),
 			);

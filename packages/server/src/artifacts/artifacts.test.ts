@@ -539,3 +539,22 @@ test("copies on another disk stop at the workspace's limit: later files are list
 		expect.objectContaining({ path: `${CONTEXT}/a.md`, state: "deleted" }),
 	]);
 });
+
+test("a user removal through a linked folder is still the user's, and removing the link itself is not a removal", async () => {
+	write(`${CONTEXT}/report.md`, "report");
+	write(`${CONTEXT}/keep.md`, "keep");
+	reconcileArtifacts("w1");
+	symlinkSync(join(root, CONTEXT), join(root, "artifacts-alias"));
+	await withUserRemoval("w1", "artifacts-alias/report.md", async () => {
+		rmSync(join(root, "artifacts-alias", "report.md"));
+	});
+	expect((await listArtifacts("w1")).artifacts.map((a) => `${a.state} ${a.path}`)).toEqual([
+		`live ${CONTEXT}/keep.md`,
+	]);
+	await withUserRemoval("w1", "artifacts-alias", async () => {
+		rmSync(join(root, "artifacts-alias"));
+	});
+	expect((await listArtifacts("w1")).artifacts.map((a) => `${a.state} ${a.path}`)).toEqual([
+		`live ${CONTEXT}/keep.md`,
+	]);
+});

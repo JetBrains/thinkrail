@@ -305,6 +305,46 @@ test("user file mutations keep the artifact index honest", async () => {
 	expect(await list()).toEqual([]);
 });
 
+test("a paste into the artifacts folder seeds it first when it does not exist yet", async () => {
+	writeFileSync(join(repo, "notes.md"), "notes\n");
+	writeFileSync(join(repo, "todo.md"), "todo\n");
+	writeFileSync(
+		join(dataDir, "workspaces.json"),
+		JSON.stringify([{ id: "wa", projectId: "p1", name: "a", worktreePath: repo, createdAt: 1 }]),
+	);
+	expect(existsSync(join(repo, ".thinkrail"))).toBe(false);
+	expect(
+		await handleRequest(
+			"fs.copy",
+			{
+				sourceWorkspaceId: "wa",
+				sourcePath: "notes.md",
+				destinationWorkspaceId: "wa",
+				destinationDirectory: ".thinkrail/context",
+			},
+			CTX,
+		),
+	).toEqual({ path: ".thinkrail/context/notes.md" });
+	expect(readFileSync(join(repo, ".thinkrail", "context", ".gitignore"), "utf8")).toBe("*\n");
+	rmSync(join(repo, ".thinkrail"), { recursive: true });
+	expect(
+		await handleRequest(
+			"fs.move",
+			{
+				sourceWorkspaceId: "wa",
+				sourcePath: "todo.md",
+				destinationWorkspaceId: "wa",
+				destinationDirectory: ".thinkrail/context",
+			},
+			CTX,
+		),
+	).toEqual({ path: ".thinkrail/context/todo.md" });
+	expect(readFileSync(join(repo, ".thinkrail", "context", ".gitignore"), "utf8")).toBe("*\n");
+	expect(gitText(repo, "status", "--porcelain", "--untracked-files=all")).not.toContain(
+		".thinkrail",
+	);
+});
+
 test("clone handlers resolve the destination and return an opened local project", async () => {
 	const input = {
 		operationId: "clone-handler",
