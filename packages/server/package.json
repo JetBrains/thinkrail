@@ -21,6 +21,7 @@
 		"@stroncium/procfs": "1.2.1",
 		"@thinkrail/contracts": "workspace:*",
 		"@thinkrail/ext-ask-user-question": "workspace:*",
+		"@thinkrail/ext-next-steps": "workspace:*",
 		"@thinkrail/ext-visualize": "workspace:*",
 		"@thinkrail/ext-web-access": "workspace:*",
 		"@thinkrail/extension-api": "workspace:*",
