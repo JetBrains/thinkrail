@@ -1,7 +1,7 @@
 ---
 id: module-ext-next-steps
 type: module-design
-status: draft
+status: active
 title: Next-step suggestions extension
 parent: module-thinkrail-extensions
 depends-on: [module-extension-api, module-locales, module-pi-next-steps]
