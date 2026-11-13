@@ -89,6 +89,8 @@ When the container holds other focusable controls with their own ring, scope it 
   the inset ring covers it.
 - **Deep inset** (`focus-ring-inset-deep`, 4px in) is for a tab that draws an active underline or edge
   border: the ring clears both, so focus reads apart from the selected underline.
+- **Resize handles** show focus on the divider itself: the 1px line becomes a 3px `focus-ring` line. A ring
+  around the handle would frame its invisible 9px hit area, which reaches into the next panel.
 - **Text fields** (input, textarea, composer shell, inline rename) keep the `control-border-active` border
   swap and add the outset ring.
 - **Selected and focused** stay apart: where selection draws an accent border or ring, focus uses the
