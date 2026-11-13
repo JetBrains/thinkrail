@@ -3123,7 +3123,6 @@
 	"workbench.tab.removeToolFromGroup": "Quitar la herramienta del grupo",
 	"workbench.tab.renameChat": "Cambiar el nombre del chat",
 	"workbench.tab.showTool": "Mostrar {{name}}",
-	"workbench.tab.splitCenterOnly": "Solo las pestañas centrales pueden dividir el centro.",
 	"workbench.tab.splitNeedsHeight": "Este grupo necesita {{size}}px de alto para dividirse.",
 	"workbench.tab.splitNeedsWidth": "Este grupo necesita {{size}}px de ancho para dividirse.",
 	"workbench.tabs.bottomGroupTabs": "pestañas del grupo inferior",

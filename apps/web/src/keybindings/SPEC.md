@@ -28,8 +28,13 @@ store-free: it matches and describes, and never handles a key or knows what a bi
 
 - **Ids** are dotted and match the palette command id where one exists (`view.toggleLeft`,
   `workspace.new`, `files.findInFiles`, `chat.history`, `region.next`, `focus.composer`, `view.changes`,
-  `focus.group1`…); `search.open` has no palette row, and `view.files` is shown by the older
-  `view.show.files` row.
+  `focus.group1`…, and the active-tab commands `tab.close`, `group.splitRight`,
+  `tab.moveToPreviousGroup` / `tab.moveToNextGroup`, which are also the workbench's tab-action ids);
+  `search.open` has no palette row, and `view.files` is shown by the older `view.show.files` row.
+- **Tab chords** (VS Code's keymap; [[submodule-web-shell]], *Global chords*, owns what they do):
+  `tab.close` is `Mod+W` (display-only) and `Mod+Alt+W`, `group.splitRight` is `Mod+\` (`Backslash`),
+  and the group moves are `⌃⌘←` / `⌃⌘→` on Apple and `Ctrl+Alt+←` / `Ctrl+Alt+→` elsewhere (`Mod+Alt`
+  would collide with the Mac browsers' tab switching).
 - **Region and focus chords:** `region.next` `F6` and `region.previous` `Shift+F6` (no modifier, so
   `Ctrl+F6` stays the workbench's group cycling), `focus.composer` `Mod+L`, `focus.projects` `Mod+0`,
   `focus.group1…9` `Mod+1…9` (`FOCUS_GROUP_BINDINGS` lists them in group order), `focus.terminal`
@@ -41,20 +46,29 @@ store-free: it matches and describes, and never handles a key or knows what a bi
   the label `CommandShortcut` renders. Modifiers are exact: `mod` is ⌘ on Apple and Ctrl elsewhere
   (`platformFamily`, the same rule as `hasPlatformModifier`), `ctrl` is literal Control on every platform
   (`Ctrl+R` is ⌃R on a Mac), and a modifier the chord does not name must be up. Tolerating a modifier
-  means listing a second chord — `workspace.new` is `Mod+N` and `Mod+Alt+N`, the only binding that
-  accepts Alt.
-- **No two bindings share a chord on any platform**, so `matchKeybinding` returns at most one id and
-  table order never decides a match. A tested invariant.
-- **The shown chord is the first chord**, except that `keybindingShortcut(id, { browser: true })` skips a
-  `browserReserved` one: browsers keep Cmd/Ctrl+N for a new window and never deliver it, so a browser
-  tab advertises `Mod+Alt+N` while the desktop webview advertises `Mod+N`. Both chords match everywhere.
+  means listing a second chord — `workspace.new` is `Mod+N` and `Mod+Alt+N`. Alt belongs only to that
+  alias, `tab.close`'s `Mod+Alt+W` and the non-Apple group moves (a tested list). **No Alt chord matches
+  while AltGraph is held** (`getModifierState("AltGraph")`): Windows reports AltGr as Ctrl+Alt, so a
+  layout's AltGr character must never fire `Mod+Alt+N`, `Mod+Alt+W` or a group move.
+- **A chord may name a `platform`** (`apple` / `other`): it matches and is shown only on that family,
+  so one binding is `⌃⌘←` on a Mac and `Ctrl+Alt+←` elsewhere. **A `displayOnly` chord is shown but never
+  matched:** `Mod+W` closes a tab on the desktop, but the native menu (macOS) and `shortcutCommands`
+  (Windows/Linux) own it — binding it here too would close twice from the two window listeners, and in
+  a browser the page never receives it.
+- **No two bindings share a chord on any platform**, display-only chords included, so
+  `matchKeybinding` returns at most one id and table order never decides a match. A tested invariant.
+- **The shown chord is the first chord of the platform** (`keybindingShortcut(id, { browser, platform })`),
+  except that `browser: true` skips a `browserReserved` one: browsers keep Cmd/Ctrl+N for a new window
+  and Cmd/Ctrl+W for closing the browser tab and never deliver them, so a browser tab advertises
+  `Mod+Alt+N` / `Mod+Alt+W` while the desktop webview advertises `Mod+N` / `Mod+W`. `Mod+N` and its alias
+  both match everywhere; `Mod+W` never matches here.
 - **Labels** for tooltips and prose (`⌘K`, `Ctrl+K`, `⌥⌘N`, `Ctrl+Alt+N`) come from `keybindingLabel`
-  (the shown chord) and `keybindingLabels` (every chord, table order), joining `shortcutKeys`'s caps, so
-  chrome that names a table chord never spells it by hand.
+  (the shown chord) and `keybindingLabels` (every chord of the platform, table order), joining
+  `shortcutKeys`'s caps, so chrome that names a table chord never spells it by hand.
 - **IME:** the binder ignores every table chord while `event.isComposing`, so an input method keeps its
   keys; only `Ctrl+R`'s reload guard still swallows the key.
 - **Not here:** `shell/shortcutCommands.ts` (close/quit/settings — native-owned and typed-key matched on
-  purpose), the desktop page-zoom chords `Mod+=` / `Mod+-` / `Mod+Numpad0` (the preload binds them,
+  purpose; `tab.close` only shows its `Mod+W`), the desktop page-zoom chords `Mod+=` / `Mod+-` / `Mod+Numpad0` (the preload binds them,
   [[module-desktop]]; the palette's zoom rows only show them), the double-Shift gesture, and
   feature-local keys (the palette's own `Mod+K` / `Mod+I`, Monaco, xterm). User rebinding, when it
   comes, is an override map over `KEYBINDINGS`.

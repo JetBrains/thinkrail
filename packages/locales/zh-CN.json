@@ -3169,7 +3169,6 @@
 	"workbench.tab.removeToolFromGroup": "从分组中移除工具",
 	"workbench.tab.renameChat": "重命名会话",
 	"workbench.tab.showTool": "显示 {{name}}",
-	"workbench.tab.splitCenterOnly": "只有中间区域的标签页才能拆分中间区域。",
 	"workbench.tab.splitNeedsHeight": "拆分此分组需要 {{size}}px 高度。",
 	"workbench.tab.splitNeedsWidth": "拆分此分组需要 {{size}}px 宽度。",
 	"workbench.tabs.bottomGroupTabs": "底部分组标签页",

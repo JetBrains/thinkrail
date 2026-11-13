@@ -3,6 +3,13 @@ import type { NativePageZoomAction, Workspace } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { type KeybindingId, keybindingShortcut } from "../keybindings";
 import { commandItems } from "../search";
+import {
+	type LayoutCenterTab,
+	type TabAction,
+	tabActions,
+	toolTab,
+	type WorkspaceLayoutDocument,
+} from "./layout";
 import { buildCommands, type PaletteCatalogDeps } from "./paletteCatalog";
 
 const workspace: Workspace = {
@@ -15,6 +22,55 @@ const workspace: Workspace = {
 };
 
 const noop = () => {};
+
+const readme: LayoutCenterTab = {
+	kind: "file",
+	id: "readme",
+	name: "README.md",
+	path: "README.md",
+};
+
+const layout: WorkspaceLayoutDocument = {
+	version: 2,
+	center: {
+		kind: "split",
+		id: "split",
+		direction: "horizontal",
+		weights: [0.5, 0.5],
+		children: [
+			{
+				kind: "group",
+				id: "center-a",
+				tabs: [readme],
+				previewTabId: "readme",
+			},
+			{ kind: "group", id: "center-b", tabs: [] },
+		],
+	},
+	left: {
+		visible: true,
+		width: 0.2,
+		groups: [{ id: "left-a", weight: 1, folded: false, tabs: [toolTab("projects")] }],
+	},
+	right: { visible: false, width: 0.2, groups: [] },
+	bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+	toolRestoreTargets: {},
+};
+
+function readmeActions(): TabAction[] {
+	return tabActions(currentTranslator(), {
+		document: layout,
+		tab: readme,
+		location: { area: "center", groupId: "center-a" },
+		preview: true,
+		reorder: { previous: undefined, next: undefined },
+		maxSideGroups: 6,
+		maxBottomGroups: 3,
+		canFocusAdjacentGroup: true,
+		canRenameChat: false,
+		worktreePath: "/tmp/w1",
+	});
+}
 
 function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 	return {
@@ -35,6 +91,7 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 		settled: false,
 		settleBlocked: false,
 		settingsGroups: [],
+		tabActions: [],
 		actions: {
 			newWorkspace: noop,
 			newProjectlessChat: noop,
@@ -64,6 +121,7 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 			copyPath: noop,
 			openIn: noop,
 			openSettings: noop,
+			runTabAction: noop,
 		},
 		...overrides,
 	};
@@ -131,9 +189,17 @@ describe("palette project and Settings commands", () => {
 			"focus.projects",
 			"focus.terminal",
 			"focus.group1",
+			"tab.close",
+			"group.splitRight",
+			"tab.moveToNextGroup",
 		];
 		for (const nativeShortcuts of [false, true]) {
-			const catalog = deps({ historyAvailable: true, findInFilesAvailable: true, nativeShortcuts });
+			const catalog = deps({
+				historyAvailable: true,
+				findInFilesAvailable: true,
+				nativeShortcuts,
+				tabActions: readmeActions(),
+			});
 			for (const id of bound) {
 				expect(row(id, catalog)?.shortcut).toEqual(
 					keybindingShortcut(id, { browser: !nativeShortcuts }),
@@ -227,5 +293,35 @@ describe("palette Settle availability", () => {
 			currentTranslator()("search.palette.offlineReason"),
 		);
 		expect(row("workspace.settle", deps({ canSettle: false }))).toBeUndefined();
+	});
+});
+
+describe("palette active-tab commands", () => {
+	test("list what the tab menu offers and can run now, under the Active tab group", () => {
+		const catalog = deps({ tabActions: readmeActions() });
+		expect(row("tab.close", catalog)?.title).toBe("Close tab");
+		expect(row("tab.close", catalog)?.subtitle).toBe("Active tab");
+		expect(row("group.splitDown", catalog)?.title).toBe("Split down");
+		expect(row("tab.keepPreview", catalog)?.title).toBe("Keep preview");
+		expect(row("tab.copyRelativePath", catalog)?.title).toBe("Copy relative path");
+		expect(row("tab.moveTo.center-b", catalog)?.title).toBe("Move to center pane (empty)");
+		expect(row("tab.focus", catalog)).toBeUndefined();
+		expect(row("tab.reorderNext", catalog)).toBeUndefined();
+		expect(row("tab.moveToPreviousGroup", catalog)).toBeUndefined();
+	});
+
+	test("an unavailable tab command is left out, and a pick runs the workbench's action by id", () => {
+		const ran: string[] = [];
+		const narrow = readmeActions().map((action) =>
+			action.id === "group.splitRight" ? { ...action, unavailable: { label: "no room" } } : action,
+		);
+		const catalog = deps({
+			tabActions: narrow,
+			actions: { ...deps().actions, runTabAction: (id) => ran.push(id) },
+		});
+		expect(row("group.splitRight", catalog)).toBeUndefined();
+		row("group.splitDown", catalog)?.run?.();
+		row("tab.moveToNextGroup", catalog)?.run?.();
+		expect(ran).toEqual(["group.splitDown", "tab.moveToNextGroup"]);
 	});
 });

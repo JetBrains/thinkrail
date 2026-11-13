@@ -58,6 +58,7 @@ import { UpdateInstallSurfaces, UpdateReadyButton, UpdateSettings, useUpdates } 
 import { AppShortcuts } from "./AppShortcuts";
 import { BrandLogo } from "./BrandLogo";
 import {
+	closeActiveItem,
 	focusCenterGroup,
 	focusChatComposer,
 	focusProjects,
@@ -82,6 +83,7 @@ import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
 import { useNativeWindowControls } from "./useNativeWindowControls";
 import { WorkspaceWorkbench } from "./WorkspaceWorkbench";
+import { runActiveTabAction } from "./workbenchCommands";
 
 const STATUS_LABEL = {
 	connected: "shell.connection.connected",
@@ -214,8 +216,11 @@ export function Shell() {
 					onTerminal: focusTerminal,
 					onFiles: () => showFiles("all"),
 					...(activeChat ? {} : { onChanges: () => showFiles("changed") }),
+					onSplitRight: runActiveTabAction,
+					onMoveTab: runActiveTabAction,
 				}
 			: {}),
+		onCloseTab: closeActiveItem,
 		...(contextRepoProject || canStartChat ? { onNewWorkspace: () => void openNewWork() } : {}),
 		onSearch: () => useAppStore.getState().openSearch(),
 		onFindInFiles: openFindInFiles,
