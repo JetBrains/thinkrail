@@ -4,7 +4,7 @@ type: module-design
 status: draft
 title: Next-step suggestions extension
 parent: module-thinkrail-extensions
-depends-on: [module-extension-api, module-locales]
+depends-on: [module-extension-api, module-locales, module-pi-next-steps]
 references: [submodule-web-chat, submodule-server-assist]
 ---
 
@@ -17,16 +17,16 @@ They show as chips above the composer. A click (or Alt+N) sends one as the user'
 
 ## Boundary
 
-- `./server` default-exports `defineServerExtension({ name: "next-steps", title, description, extensions })`.
-  It has one static **parent-only** factory registering `suggest_next_steps({ suggestions: string[] })`,
-  with no session services, children, skills or settings. Imports: `extension-api/server`, pi types and
-  `typebox`.
+- `./server` default-exports `defineServerExtension({ name: "next-steps", title, description, extensions })`,
+  composing the portable package ([[module-pi-next-steps]]) unchanged as one **parent-only** factory:
+  `extensions: [createNextStepsExtension()]`. It uses no session services, children, skills or settings.
+  The package's terminal row never appears here, because ThinkRail binds pi as `"rpc"`. Imports:
+  `extension-api/server` and `@thinkrail/pi-next-steps`.
 - `./web` default-exports a descriptor that registers the tool as a **routine** row (summary "Suggested N
   next steps", the list as its body), plus the `composerSuggestions` reader ([[module-extension-api]]).
   The reader prefers the result's normalized `details.suggestions` and falls back to the call's
-  arguments. Strings are `nextSteps.*` keys.
-- The two halves duplicate the tool name rather than share a module, because halves never import each
-  other.
+  arguments. It type-imports the details shape from the package's `./core`; the boundary rules allow
+  only type imports of an extension's own pi package. Strings are `nextSteps.*` keys.
 
 ## Decisions
 
@@ -44,12 +44,15 @@ They show as chips above the composer. A click (or Alt+N) sends one as the user'
   typically offers about three, and `execute` only trims, collapses whitespace and drops empty or
   case-insensitive duplicate items. A forgotten call simply means no chips. That's the accepted cost of
   relying on the model.
-- **No portable pi package.** Unlike visualize and ask-user-question, nothing outside ThinkRail could
-  use the tool, since the pi TUI has no chips. The tool therefore lives in `./server`.
+- **The tool is a published pi package.** The first cut kept the tool in `./server`, reasoning that a
+  terminal has no chips. pi's TUI turned out to offer the same affordance through a widget above the
+  editor plus Alt+N shortcuts, so the capability moved to [[module-pi-next-steps]] before its first
+  merge. The tool guidance is the package's host-neutral wording.
 
 ## Verification
 
-Package tests cover the descriptor shape, guidance, normalization and `terminate`, plus the web reader.
+Package tests cover the descriptor shape and that it composes the published factory, plus the web
+reader. The tool's own behavior is tested in [[module-pi-next-steps]].
 Chat tests cover the derivation and chips. `e2e/next-steps.spec.ts` covers seeded transcripts: chips,
 reload, click keeps the draft, Alt+N focus scope, and the off switch. `e2e/next-steps.live.spec.ts`
 (`@agent`) checks that a real agent ends a finished turn with the call.
