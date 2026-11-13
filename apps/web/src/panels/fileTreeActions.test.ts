@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, expect, mock, test } from "bun:test";
-import { ARTIFACTS_PROTOCOL_VERSION, FS_MUTATIONS_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import { FS_MUTATIONS_PROTOCOL_VERSION } from "@thinkrail/contracts";
 
 const requests: { method: string; params: unknown }[] = [];
 let answer: () => Promise<unknown> = () => Promise.resolve({ ok: true });
@@ -23,7 +23,6 @@ const {
 	pasteInto,
 	renameEntry,
 	supportsFileMutations,
-	supportsMoves,
 } = await import("./fileTreeActions");
 
 function reset(): void {
@@ -125,8 +124,6 @@ test("delete trashes through the host and forgets a clipboard entry inside it", 
 });
 
 test("a cut pastes as a move, once, and a taken name says so", async () => {
-	expect(supportsMoves(ARTIFACTS_PROTOCOL_VERSION - 1)).toBe(false);
-	expect(supportsMoves(ARTIFACTS_PROTOCOL_VERSION)).toBe(true);
 	useAppStore.getState().setFileClipboard({ workspaceId: "w1", path: "notes.md", cut: true });
 	answer = () => Promise.reject(new RequestError("ENTRY_EXISTS", "taken"));
 	await pasteInto("w1", ".thinkrail/context");

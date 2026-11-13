@@ -52,7 +52,7 @@ import {
 } from "./artifactActions";
 import { type ArtifactRow, artifactRows, type OutputRow } from "./artifactsModel";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { deleteEntry, pasteInto, renameEntry, supportsMoves } from "./fileTreeActions";
+import { deleteEntry, pasteInto, renameEntry } from "./fileTreeActions";
 import { HeaderIconButton } from "./HeaderIconButton";
 import { openChatInTab } from "./openChat";
 import { openFileInTab } from "./openTabs";
@@ -83,7 +83,9 @@ export function ArtifactsPanel({
 	const specs = useAppStore((s) => s.specsByWorkspace[workspaceId]);
 	const showIgnored = useAppStore((s) => s.artifactsShowIgnored);
 	const mentionTarget = useAppStore((s) => selectArtifactMentionTarget(s, workspaceId));
-	const canPaste = useAppStore((s) => supportsMoves(s.protocolVersion) && s.fileClipboard !== null);
+	const canPaste = useAppStore(
+		(s) => supportsArtifacts(s.protocolVersion) && s.fileClipboard !== null,
+	);
 	const [onlyThisChat, setOnlyThisChat] = useState(false);
 	const [highlightSince, setHighlightSince] = useState<number | null>(null);
 	const [removal, setRemoval] = useState<RemovalRequest | null>(null);
@@ -534,7 +536,7 @@ function EntryMenu({
 	const t = useT();
 	const [open, setOpen] = useState(false);
 	const canMention = useAppStore((s) => selectArtifactMentionTarget(s, workspaceId) !== null);
-	const mutations = useAppStore((s) => supportsMoves(s.protocolVersion));
+	const mutations = useAppStore((s) => supportsArtifacts(s.protocolVersion));
 	const copyPath = (absolute: boolean) => {
 		const worktreePath = selectWorkspaceById(useAppStore.getState(), workspaceId)?.worktreePath;
 		void copyText(absolute ? joinWorkspacePath(worktreePath ?? "", path) : path);

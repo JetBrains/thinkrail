@@ -67,7 +67,7 @@ classification every content read in the host shares. Agent and review writes ar
   It answers the copy's worktree-relative path plus every path it wrote, for the host's invalidation.
   **`deleteWorktreeEntry(workspaceId, path)`** moves a file, folder or symlink to the OS trash through
   `trash.claimAndTrashFile` — the same claim-then-trash path `changes` uses: renamed to a hidden
-  `.thinkrail-delete-<uuid>` sibling before the awaited trash move, so a path the agent recreates
+  `.thinkrail-delete-<uuid>` sibling (`DELETE_CLAIM_PREFIX`, from `@thinkrail/shared/paths`) before the awaited trash move, so a path the agent recreates
   meanwhile is never the object trashed, and restored (or preserved as `.thinkrail-recovery-<uuid>`) when
   the trash fails. The leaf is not followed, so deleting a symlink removes the link, never its target;
   `.git`, escapes and the worktree root are refused. It reports whether the entry was a folder, whose
@@ -134,7 +134,7 @@ classification every content read in the host shares. Agent and review writes ar
   `classifyBytes`, `CONTENT_SNIFF_BYTES`, `mimeFromPath`,
   `hashBytes`, `decodeText`, `resourceMeta`.
 - **Allowed deps:** `persistence` (workspace lookup); `trash` (`claimAndTrashFile`, the delete);
-  `contracts` (`FileNode`, `ResourceMeta`); `shared` (`CodedError`); Node
+  `contracts` (`FileNode`, `ResourceMeta`); `shared` (`CodedError`, `DELETE_CLAIM_PREFIX`); Node
   `fs`/`path`/`crypto`/`stream`/`timers`.
 - **Forbidden:** `host`; sibling features.
 

@@ -20,6 +20,7 @@ import { basename, dirname, extname, join, sep } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { setImmediate as nextTurn } from "node:timers/promises";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { DELETE_CLAIM_PREFIX } from "@thinkrail/shared/paths";
 import { claimAndTrashFile } from "../trash";
 import { isWorktreeContent, posixRelative, resolveInWorktree } from "./files";
 
@@ -303,7 +304,7 @@ export async function deleteWorktreeEntry(
 	const token = randomUUID();
 	await claimAndTrashFile(
 		abs,
-		join(dirname(abs), `.thinkrail-delete-${token}`),
+		join(dirname(abs), `${DELETE_CLAIM_PREFIX}${token}`),
 		join(dirname(abs), `.thinkrail-recovery-${token}`),
 		{ parent: real, dev: stats.dev, ino: stats.ino },
 	);

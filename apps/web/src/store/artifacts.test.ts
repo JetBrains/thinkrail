@@ -1,7 +1,7 @@
 import { beforeEach, expect, test } from "bun:test";
-import type { WorkspaceArtifactsSnapshot } from "@thinkrail/contracts";
+import { ARTIFACTS_PROTOCOL_VERSION, type WorkspaceArtifactsSnapshot } from "@thinkrail/contracts";
 import { useAppStore } from "./appStore";
-import { selectArtifactsTick } from "./selectors";
+import { selectArtifactsTick, supportsArtifacts } from "./selectors";
 
 const snapshot = (firstSeenAt: number): WorkspaceArtifactsSnapshot => ({
 	workspaceId: "w1",
@@ -48,4 +48,10 @@ test("a removed workspace takes no snapshot", () => {
 	useAppStore.getState().noteArtifactsChanged("w1");
 	expect(useAppStore.getState().artifactsByWorkspace).toEqual({});
 	expect(useAppStore.getState().artifactsTickByWorkspace).toEqual({});
+});
+
+test("artifacts, Cut and Paste into artifacts wait for a host that serves them", () => {
+	expect(supportsArtifacts(null)).toBe(false);
+	expect(supportsArtifacts(ARTIFACTS_PROTOCOL_VERSION - 1)).toBe(false);
+	expect(supportsArtifacts(ARTIFACTS_PROTOCOL_VERSION)).toBe(true);
 });

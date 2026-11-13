@@ -972,6 +972,14 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 	}
 }
 
+function pasteComposerEdit(rt: SessionRuntime, id: string, text: string): SessionRuntime {
+	const pending = rt.composerEdit;
+	return {
+		...rt,
+		composerEdit: { id, kind: pending?.kind ?? "paste", text: `${pending?.text ?? ""}${text}` },
+	};
+}
+
 function reduceExtUi(
 	rt: SessionRuntime,
 	request: Exclude<ExtUiRequest, { kind: "setTitle" }>,
@@ -979,17 +987,8 @@ function reduceExtUi(
 	switch (request.kind) {
 		case "setEditorText":
 			return { ...rt, composerEdit: { id: request.id, kind: "replace", text: request.text } };
-		case "pasteToEditor": {
-			const pending = rt.composerEdit;
-			return {
-				...rt,
-				composerEdit: {
-					id: request.id,
-					kind: pending?.kind ?? "paste",
-					text: `${pending?.text ?? ""}${request.text}`,
-				},
-			};
-		}
+		case "pasteToEditor":
+			return pasteComposerEdit(rt, request.id, request.text);
 		case "dismiss":
 			if (rt.pendingExtUi?.id === request.id) {
 				const [next, ...rest] = rt.extUiQueue;
@@ -4715,14 +4714,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		),
 	pasteIntoComposer: (sessionId, text) =>
 		set((s) =>
-			withRuntime(s, sessionId, (rt) => ({
-				...rt,
-				composerEdit: {
-					id: randomId("composer-paste"),
-					kind: rt.composerEdit?.kind ?? "paste",
-					text: `${rt.composerEdit?.text ?? ""}${text}`,
-				},
-			})),
+			withRuntime(s, sessionId, (rt) => pasteComposerEdit(rt, randomId("composer-paste"), text)),
 		),
 	updateChatPromptImages: (sessionId, update) =>
 		set((s) =>

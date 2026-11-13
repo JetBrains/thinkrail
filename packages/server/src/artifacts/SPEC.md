@@ -45,12 +45,19 @@ artifact is restored before it can be opened.
 
 ## Reconcile
 
-`reconcile` walks the artifacts folder (symlinks never followed, at most 5 000 entries) and diffs it
-against the index: a new path gains a record and a link; a changed size/mtime updates the record (and its
-writer when known); an inode change relinks; a missing record whose inode now sits at a new path is a
-**rename** (the row moves, keeping its first-seen time and chat); any other missing record becomes
-`deleted` while its kept copy exists — unless the removal is the user's. A walk cut short by the bound
-never marks anything deleted. The host triggers it from file-change nudges under the folder, from every
+`reconcile` walks the artifacts folder (at most 5 000 entries) and diffs it against the index. The walk
+never follows a link: `.thinkrail` and `context` must be real directories — a folder replaced by a link is
+not walked and marks nothing deleted, while a missing one means everything in it is gone — and no entry
+inside is followed. It skips dependency and cache folders (the same set ignored outputs drop, so a mockup
+app's `node_modules` neither floods the list nor exhausts the bound) and the `fs` delete claims
+(`DELETE_CLAIM_PREFIX`), which are the user's own trash in flight, not a rename. A new path gains a record
+and a link; a changed size/mtime updates the record (and its writer when known); an inode change relinks;
+a missing record whose file now sits at a new path is a **rename** (the row moves, keeping its first-seen
+time and chat); any other missing record becomes `deleted` while its kept copy exists — unless the
+removal is the user's. Rename by inode alone is trusted only while a hard-linked kept copy holds the
+inode; a record kept as a copy (or not kept) must also match size and mtime, because a freed inode is
+reused at once on ext4 and XFS, and a different file taking it would otherwise inherit the row and
+discard the kept copy. A walk cut short by the bound never marks anything deleted. The host triggers it from file-change nudges under the folder, from every
 agent run start, tool end and settle, and from `artifacts.list`; each change publishes one pathless
 nudge per workspace.
 
@@ -60,15 +67,21 @@ Cut and Rename never read as "deleted not by you", while a failed mutation leave
 deletion made outside ThinkRail (a terminal `rm`) cannot be told from an agent's and shows as deleted;
 the user discards it once.
 
-**Restore** links the kept copy back (a copy when it is one), refusing a path that exists again
-(`ENTRY_EXISTS`) or one whose nearest existing parent resolves outside the worktree. **Discard** moves the
-kept copy under its original file name into a staging folder and sends that to the OS trash, so the
-trash shows a recognizable name.
+**Restore** links the kept copy back, refusing a path that exists again (`ENTRY_EXISTS`) or one whose
+nearest existing parent resolves outside the worktree. It copies instead when the kept copy is a copy,
+or when its inode is still linked elsewhere — the agent moved the file into the project, and a link back
+would make editing the artifact edit that project file — and then keeps the restored file afresh. The
+restored file's stat is applied before the next reconcile, so a restore is never read as a change and
+never moves the row to whichever chat is running. **Discard** moves the kept copy under its original file
+name into a staging folder and sends that to the OS trash, so the trash shows a recognizable name; it
+drops the row only if it is still the same record, since the agent may have written the path again
+meanwhile.
 
 ## Attribution
 
 A record's chat is the session that last created or changed it. `write`, `edit` and `spec_create`
-name their target in `tool_execution_start` args, so their writer is exact even with concurrent chats.
+name their target in `tool_execution_start` args (resolved as pi resolves it, a leading `@` dropped), so
+their writer is exact even with concurrent chats.
 Any other change (a shell command, a tool writing on its own) is attributed only while exactly one
 session of the workspace is running; otherwise the record keeps the chat it had. Like [[submodule-server-turns]]
 this is not exclusive attribution, and a session that never settles (a host crash) stays "running" until

@@ -1,6 +1,8 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, mock, spyOn, test } from "bun:test";
+import * as fs from "node:fs";
 import {
 	existsSync,
+	lstatSync,
 	mkdirSync,
 	mkdtempSync,
 	readdirSync,
@@ -8,6 +10,7 @@ import {
 	realpathSync,
 	renameSync,
 	rmSync,
+	symlinkSync,
 	utimesSync,
 	writeFileSync,
 } from "node:fs";
@@ -18,6 +21,7 @@ import {
 	artifactsStoreRoot,
 	discardArtifact,
 	isArtifactPath,
+	isSameFile,
 	listArtifacts,
 	observeArtifactSessionEvent,
 	reconcileArtifacts,
@@ -71,6 +75,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	mock.restore();
 	resetArtifactsForTests();
 	setTrashImplementationForTests(undefined);
 	rmSync(dataDir, { recursive: true, force: true });
@@ -282,4 +287,107 @@ test("ignored entries collapse under a listed folder and skip dependency folders
 		["coverage", "dir"],
 		["docs/notes.md", "file"],
 	]);
+});
+
+function linksUnsupported(): void {
+	spyOn(fs, "linkSync").mockImplementation(() => {
+		throw Object.assign(new Error("cross-device link"), { code: "EXDEV" });
+	});
+}
+
+test("an inode is a rename only while a hard link holds it, otherwise size and time must match too", () => {
+	const file = { dev: "1", ino: "7", size: 10, mtimeMs: 100 };
+	expect(isSameFile({ ...file, kept: "k" }, { ...file, size: 99 })).toBe(true);
+	expect(isSameFile({ ...file, kept: "k", keptCopy: true }, { ...file, size: 99 })).toBe(false);
+	expect(isSameFile({ ...file, kept: "k", keptCopy: true }, file)).toBe(true);
+	expect(isSameFile({ ...file }, { ...file, mtimeMs: 200 })).toBe(false);
+	expect(isSameFile({ ...file, kept: "k" }, { ...file, ino: "8" })).toBe(false);
+});
+
+test("the scan skips dependency folders and delete claims inside the artifacts folder", async () => {
+	write(`${CONTEXT}/app/index.html`, "<h1>app</h1>");
+	write(`${CONTEXT}/app/node_modules/pkg/index.js`, "x");
+	write(`${CONTEXT}/.thinkrail-delete-123/trashing.md`, "x");
+	expect((await listArtifacts("w1")).artifacts.map((a) => a.path)).toEqual([
+		`${CONTEXT}/app/index.html`,
+	]);
+});
+
+test("an artifacts folder replaced by a link is never walked and marks nothing deleted", async () => {
+	write(`${CONTEXT}/a.md`, "a");
+	reconcileArtifacts("w1");
+	const outside = join(dataDir, "outside");
+	mkdirSync(outside);
+	writeFileSync(join(outside, "secret.md"), "secret");
+	rmSync(join(root, CONTEXT), { recursive: true });
+	symlinkSync(outside, join(root, CONTEXT));
+	expect((await listArtifacts("w1")).artifacts).toEqual([
+		expect.objectContaining({ path: `${CONTEXT}/a.md`, state: "live" }),
+	]);
+});
+
+test("restoring a file the agent moved into the project copies it instead of sharing its inode", async () => {
+	write(`${CONTEXT}/TASK-x.md`, "design");
+	reconcileArtifacts("w1");
+	mkdirSync(join(root, "docs"));
+	renameSync(join(root, CONTEXT, "TASK-x.md"), join(root, "docs", "SPEC.md"));
+	expect((await listArtifacts("w1")).artifacts[0]?.state).toBe("deleted");
+	restoreArtifact("w1", `${CONTEXT}/TASK-x.md`);
+	const restored = join(root, CONTEXT, "TASK-x.md");
+	expect(lstatSync(restored).ino).not.toBe(lstatSync(join(root, "docs", "SPEC.md")).ino);
+	writeFileSync(restored, "changed");
+	expect(readFileSync(join(root, "docs", "SPEC.md"), "utf8")).toBe("design");
+	rmSync(restored);
+	expect((await listArtifacts("w1")).artifacts[0]?.state).toBe("deleted");
+	restoreArtifact("w1", `${CONTEXT}/TASK-x.md`);
+	expect(readFileSync(restored, "utf8")).toBe("changed");
+});
+
+test("a path the agent writes again while its kept copy goes to the trash keeps its new row", async () => {
+	write(`${CONTEXT}/a.md`, "old");
+	reconcileArtifacts("w1");
+	rmSync(join(root, CONTEXT, "a.md"));
+	reconcileArtifacts("w1");
+	setTrashImplementationForTests(async (input) => {
+		if (typeof input !== "string") throw new Error("expected one path");
+		rmSync(input, { recursive: true });
+		write(`${CONTEXT}/a.md`, "new");
+		reconcileArtifacts("w1");
+	});
+	await discardArtifact("w1", `${CONTEXT}/a.md`);
+	expect((await listArtifacts("w1")).artifacts).toEqual([
+		expect.objectContaining({ path: `${CONTEXT}/a.md`, state: "live", size: 3 }),
+	]);
+});
+
+test("with copies instead of links, a restore keeps the artifact's chat", async () => {
+	linksUnsupported();
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
+	write(`${CONTEXT}/a.md`, "a");
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_settled" });
+	rmSync(join(root, CONTEXT, "a.md"));
+	expect((await listArtifacts("w1")).artifacts[0]).toMatchObject({
+		state: "deleted",
+		sessionId: "s1",
+	});
+	await observeArtifactSessionEvent("w1", "s2", { type: "agent_start" });
+	restoreArtifact("w1", `${CONTEXT}/a.md`);
+	expect((await listArtifacts("w1")).artifacts[0]).toMatchObject({
+		state: "live",
+		sessionId: "s1",
+	});
+	expect(readFileSync(join(root, CONTEXT, "a.md"), "utf8")).toBe("a");
+});
+
+test("a write tool's @-prefixed path names its writer like pi resolves it", async () => {
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
+	await observeArtifactSessionEvent("w1", "s2", { type: "agent_start" });
+	await observeArtifactSessionEvent("w1", "s2", {
+		type: "tool_execution_start",
+		toolName: "write",
+		args: { path: `@${CONTEXT}/x.md` },
+	});
+	write(`${CONTEXT}/x.md`, "x");
+	await observeArtifactSessionEvent("w1", "s2", { type: "tool_execution_end", toolName: "write" });
+	expect((await listArtifacts("w1")).artifacts[0]?.sessionId).toBe("s2");
 });

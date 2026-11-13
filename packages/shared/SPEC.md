@@ -171,7 +171,9 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   tree), `WORKSPACE_CONTEXT_DIR` (its `context/` folder — the workspace's artifacts: temp docs and
   everything the agent produces for the user, kept until the user removes them, see
   [[submodule-server-artifacts]]), and `WORKSPACE_TODOS_DIR` (`context/todos/` — the chat TODO plans, one
-  JSON per session; host state, not artifacts). The pi-free `pi-todos/core` can't import this package (it stays vanilla-`pi`-installable),
+  JSON per session; host state, not artifacts), and `DELETE_CLAIM_PREFIX` (`.thinkrail-delete-` — the name
+  `fs` gives an entry it has claimed for the trash, which the artifacts scan must not mistake for a
+  rename). The pi-free `pi-todos/core` can't import this package (it stays vanilla-`pi`-installable),
   so it keeps a local mirror of the todos path; this module is the host-side source of truth. Distinct
   from the *home* state dir `~/.thinkrail` (server `persistence`). (The `.gitignore` *body* the host seeds
   into the scratch dir — a lone `*` — is a one-off inlined at that call site, not a path, so it lives

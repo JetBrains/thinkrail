@@ -2,7 +2,7 @@ import { type Dirent, lstatSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { gitAsync } from "../git";
 
-const DEPENDENCY_AND_CACHE_DIRS: ReadonlySet<string> = new Set([
+export const DEPENDENCY_AND_CACHE_DIRS: ReadonlySet<string> = new Set([
 	".git",
 	".thinkrail",
 	"node_modules",

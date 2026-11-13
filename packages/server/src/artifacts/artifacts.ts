@@ -21,11 +21,21 @@ import type {
 	WorkspaceIgnoredOutput,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
-import { WORKSPACE_CONTEXT_DIR, WORKSPACE_TODOS_DIR } from "@thinkrail/shared/paths";
+import {
+	DELETE_CLAIM_PREFIX,
+	WORKSPACE_CONTEXT_DIR,
+	WORKSPACE_TODOS_DIR,
+} from "@thinkrail/shared/paths";
 import { logger } from "../log";
 import { dataDir, isChatWorkspace, loadWorkspaces } from "../persistence";
 import { trashFile } from "../trash";
-import { countOutputFiles, listIgnoredRoots, type OutputKind, outputChangedSince } from "./outputs";
+import {
+	countOutputFiles,
+	DEPENDENCY_AND_CACHE_DIRS,
+	listIgnoredRoots,
+	type OutputKind,
+	outputChangedSince,
+} from "./outputs";
 
 const log = logger("artifacts");
 
@@ -232,8 +242,40 @@ function requireWorkspace(workspaceId: string): Workspace {
 	return workspace;
 }
 
+function statFile(root: string, path: string): ScannedFile | null {
+	const stat = lstatSync(join(root, path), { bigint: true, throwIfNoEntry: false });
+	if (!stat?.isFile()) return null;
+	return {
+		path,
+		dev: String(stat.dev),
+		ino: String(stat.ino),
+		size: Number(stat.size),
+		mtimeMs: Number(stat.mtimeMs),
+	};
+}
+
+function contextFolder(root: string): "real" | "missing" | "foreign" {
+	let dir = root;
+	for (const part of WORKSPACE_CONTEXT_DIR.split("/")) {
+		dir = join(dir, part);
+		const entry = lstatSync(dir, { throwIfNoEntry: false });
+		if (!entry) return "missing";
+		if (!entry.isDirectory()) return "foreign";
+	}
+	return "real";
+}
+
+function skippedEntry(entry: Dirent): boolean {
+	return (
+		entry.name.startsWith(DELETE_CLAIM_PREFIX) ||
+		(entry.isDirectory() && DEPENDENCY_AND_CACHE_DIRS.has(entry.name))
+	);
+}
+
 function scanContext(root: string): { files: Map<string, ScannedFile>; complete: boolean } {
 	const files = new Map<string, ScannedFile>();
+	const folder = contextFolder(root);
+	if (folder !== "real") return { files, complete: folder === "missing" };
 	const queue = [WORKSPACE_CONTEXT_DIR];
 	let seen = 0;
 	for (let dir = queue.shift(); dir !== undefined; dir = queue.shift()) {
@@ -246,6 +288,7 @@ function scanContext(root: string): { files: Map<string, ScannedFile>; complete:
 			return { files, complete: false };
 		}
 		for (const entry of entries) {
+			if (skippedEntry(entry)) continue;
 			if (++seen > MAX_ARTIFACT_SCAN_ENTRIES) return { files, complete: false };
 			const path = `${dir}/${entry.name}`;
 			if (!isArtifactPath(path)) continue;
@@ -254,15 +297,8 @@ function scanContext(root: string): { files: Map<string, ScannedFile>; complete:
 				continue;
 			}
 			if (!entry.isFile()) continue;
-			const stat = lstatSync(join(root, path), { bigint: true, throwIfNoEntry: false });
-			if (!stat?.isFile()) continue;
-			files.set(path, {
-				path,
-				dev: String(stat.dev),
-				ino: String(stat.ino),
-				size: Number(stat.size),
-				mtimeMs: Number(stat.mtimeMs),
-			});
+			const file = statFile(root, path);
+			if (file) files.set(path, file);
 		}
 	}
 	return { files, complete: true };
@@ -324,6 +360,15 @@ function writerOf(workspaceId: string, path: string): string | undefined {
 	return active?.size === 1 ? [...active][0] : undefined;
 }
 
+export function isSameFile(
+	record: Pick<ArtifactRecord, "dev" | "ino" | "size" | "mtimeMs" | "kept" | "keptCopy">,
+	file: Pick<ScannedFile, "dev" | "ino" | "size" | "mtimeMs">,
+): boolean {
+	if (file.dev !== record.dev || file.ino !== record.ino) return false;
+	if (record.kept && !record.keptCopy) return true;
+	return file.size === record.size && file.mtimeMs === record.mtimeMs;
+}
+
 function applyStat(record: ArtifactRecord, file: ScannedFile): void {
 	record.dev = file.dev;
 	record.ino = file.ino;
@@ -359,9 +404,7 @@ function reconcile(workspace: Workspace): boolean {
 	}
 
 	for (const record of missing.splice(0)) {
-		const moved = [...unseen.values()].find(
-			(file) => file.dev === record.dev && file.ino === record.ino,
-		);
+		const moved = [...unseen.values()].find((file) => isSameFile(record, file));
 		if (!moved) {
 			missing.push(record);
 			continue;
@@ -429,7 +472,7 @@ export async function withUserRemoval<T>(
 	path: string,
 	mutation: () => Promise<T>,
 ): Promise<T> {
-	if (!isArtifactPath(path) && !touchesArtifacts(path)) return mutation();
+	if (!touchesArtifacts(path)) return mutation();
 	let marks = removals.get(workspaceId);
 	if (!marks) {
 		marks = new Map();
@@ -558,16 +601,21 @@ export function restoreArtifact(workspaceId: string, path: string): void {
 	if (!isInside(realpathSync(root), realpathSync(existing)))
 		throw new Error("Path escapes the worktree");
 	mkdirSync(dirname(target), { recursive: true });
-	if (record.keptCopy) copyFileSync(kept, target, constants.COPYFILE_EXCL);
-	else {
+	const shared = lstatSync(kept).nlink > 1;
+	let linked = false;
+	if (!record.keptCopy && !shared) {
 		try {
 			linkSync(kept, target);
+			linked = true;
 		} catch (error) {
 			if (!LINK_UNSUPPORTED.has((error as NodeJS.ErrnoException).code)) throw error;
-			copyFileSync(kept, target, constants.COPYFILE_EXCL);
 		}
 	}
+	if (!linked) copyFileSync(kept, target, constants.COPYFILE_EXCL);
+	const restored = statFile(root, path);
+	if (restored) applyStat(record, restored);
 	record.state = "live";
+	if (shared) keep(workspaceId, root, record);
 	reconcile(workspace);
 	save(workspaceId, load(workspaceId));
 	publish(workspaceId);
@@ -575,7 +623,7 @@ export function restoreArtifact(workspaceId: string, path: string): void {
 
 export async function discardArtifact(workspaceId: string, path: string): Promise<void> {
 	requireWorkspace(workspaceId);
-	const { kept, dir } = deletedRecord(workspaceId, path);
+	const { record, kept, dir } = deletedRecord(workspaceId, path);
 	const staging = join(dir, "discard", randomUUID());
 	const staged = join(staging, basename(path));
 	mkdirSync(staging, { recursive: true });
@@ -589,7 +637,7 @@ export async function discardArtifact(workspaceId: string, path: string): Promis
 		rmSync(staging, { recursive: true, force: true });
 	}
 	const state = load(workspaceId);
-	state.records.delete(path);
+	if (state.records.get(path) === record) state.records.delete(path);
 	save(workspaceId, state);
 	publish(workspaceId);
 }
@@ -601,7 +649,8 @@ function toolPath(args: unknown): string | null {
 }
 
 function rememberWriter(workspace: Workspace, sessionId: string, args: unknown): void {
-	const path = toolPath(args);
+	const raw = toolPath(args);
+	const path = raw?.startsWith("@") ? raw.slice(1) : raw;
 	if (!path) return;
 	const root = resolve(workspace.worktreePath);
 	const abs = resolve(root, path);

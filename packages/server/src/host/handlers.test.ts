@@ -42,6 +42,7 @@ import {
 	setSessionManagerFactory,
 } from "../agent";
 import { initializeAnalytics, resetAnalyticsForTests, shutdownAnalytics } from "../analytics";
+import { reconcileArtifacts } from "../artifacts";
 import {
 	configureSurveySource,
 	recordAcceptedMessage,
@@ -245,6 +246,7 @@ test("user file mutations keep the artifact index honest", async () => {
 	);
 	setTrashImplementationForTests(async (input) => {
 		if (typeof input !== "string") throw new Error("expected one path");
+		reconcileArtifacts("wa");
 		rmSync(input, { recursive: true });
 	});
 	const list = async () =>

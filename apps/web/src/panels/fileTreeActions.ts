@@ -1,4 +1,4 @@
-import { ARTIFACTS_PROTOCOL_VERSION, FS_MUTATIONS_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import { FS_MUTATIONS_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { fileName } from "../lib";
 import { type FileClipboard, toast, useAppStore } from "../store";
@@ -22,10 +22,6 @@ export function clipboardAfterDelete(
 	if (clipboard?.workspaceId !== workspaceId) return clipboard;
 	const inside = clipboard.path === deletedPath || clipboard.path.startsWith(`${deletedPath}/`);
 	return inside ? null : clipboard;
-}
-
-export function supportsMoves(protocolVersion: number | null): boolean {
-	return protocolVersion !== null && protocolVersion >= ARTIFACTS_PROTOCOL_VERSION;
 }
 
 export async function pasteInto(workspaceId: string, destinationDirectory: string): Promise<void> {

@@ -27,7 +27,6 @@ const PARTIAL_SUFFIX_TAILS = [
 const SNIPPET_CHARS = 160;
 const SNIPPET_LEAD = 48;
 const SNIPPET_WORD_SLACK = 16;
-const TASK_SPEC = TASK_SPEC_TYPE;
 const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})/;
 const LIST_MARKER = /^\s*(?:[-*+]|\d+[.)])\s+/;
 const QUOTE_MARKER = /^\s*>\s?/;
@@ -351,7 +350,7 @@ function compareText(a: string, b: string): number {
 function compareScored(a: Scored, b: Scored): number {
 	return (
 		b.score - a.score ||
-		Number(a.file.type === TASK_SPEC) - Number(b.file.type === TASK_SPEC) ||
+		Number(a.file.type === TASK_SPEC_TYPE) - Number(b.file.type === TASK_SPEC_TYPE) ||
 		compareText(a.file.path, b.file.path) ||
 		a.section.line - b.section.line
 	);
