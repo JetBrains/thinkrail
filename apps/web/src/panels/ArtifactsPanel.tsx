@@ -162,7 +162,11 @@ export function ArtifactsPanel({
 					) : null}
 				</div>
 			</div>
-			<QuietScrollArea className="min-h-0 flex-1" viewportClassName="p-panel-inset">
+			<QuietScrollArea
+				data-focus-default
+				className="min-h-0 flex-1"
+				viewportClassName="p-panel-inset"
+			>
 				{failed ? (
 					<div
 						role="alert"

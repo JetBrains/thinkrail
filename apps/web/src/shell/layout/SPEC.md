@@ -222,7 +222,8 @@ and Project Home projects pane (`home`). The shell's tracker marks the one holdi
 stacking, so the veil stays inside it. Folded groups and hidden sides render no section and are no region. `F6` and the focus chords land in a
 region by one rule: the element last focused inside it, if still rendered and focusable there (the root
 itself is never remembered); else a `[data-focus-default]`, innermost markers first (a tool body may hold a
-more specific default, as Files marks its tree or changes list below its mode toolbar) — or, when that
+more specific default, as Files marks its tree or changes list below its mode toolbar, and Artifacts its
+list below its chat filter) — or, when that
 marker is not itself focusable, its first tabbable descendant; else the selected tab; else the root (sections are
 `tabIndex=-1`) or its first tabbable. The defaults are the chat composer's textarea, a terminal's xterm
 host (its helper textarea), the Monaco editor container (its input), the Project Home projects tree

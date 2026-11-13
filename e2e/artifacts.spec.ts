@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
+	enterDefaultWorkspace,
+	loadPersistedWorkspaces,
 	openFixtureProject,
 	openWorkspaceChat,
 	revealWorkbenchTool,
@@ -140,4 +142,21 @@ test("a workspace without agent runs shows no ignored outputs, and its remove di
 		"Its 2 artifacts are deleted with it.",
 	);
 	await page.getByRole("button", { name: "Cancel" }).click();
+});
+
+test("F6 into the Artifacts group lands on the list, not on its chat filter", async ({ page }) => {
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	const root = loadPersistedWorkspaces().find((workspace) => workspace.kind === "default");
+	if (!root) throw new Error("no Default workspace was persisted");
+	writeArtifact(root.worktreePath, "notes.md", "notes\n");
+	await revealWorkbenchTool(page, "artifacts");
+	await expect(artifact(page, "notes.md")).toBeVisible();
+	const body = page.locator('[data-tool-body="artifacts"]');
+	for (let press = 0; press < 12; press++) {
+		if (await body.evaluate((element) => element.contains(document.activeElement))) break;
+		await page.keyboard.press("F6");
+	}
+	await expect(artifact(page, "notes.md").getByTestId("artifact-open")).toBeFocused();
 });
