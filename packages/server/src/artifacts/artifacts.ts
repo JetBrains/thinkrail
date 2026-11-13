@@ -33,8 +33,8 @@ const STORAGE_ID = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,198}[A-Za-z0-9])?$/;
 const STORE_VERSION = 1;
 const CONTEXT_PREFIX = `${WORKSPACE_CONTEXT_DIR}/`;
 const SCAFFOLD = `${WORKSPACE_CONTEXT_DIR}/.gitignore`;
-export const MAX_ARTIFACT_SCAN_ENTRIES = 5_000;
-export const KEPT_COPY_MAX_BYTES = 100 * 1024 * 1024;
+const MAX_ARTIFACT_SCAN_ENTRIES = 5_000;
+const KEPT_COPY_MAX_BYTES = 100 * 1024 * 1024;
 const LINK_UNSUPPORTED = new Set<unknown>(["EXDEV", "EPERM", "EMLINK", "ENOTSUP", "EOPNOTSUPP"]);
 const WRITER_TOOLS = new Set(["write", "edit", "spec_create"]);
 

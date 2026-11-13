@@ -17,7 +17,6 @@ export {
 export {
 	copyWorktreeEntry,
 	deleteWorktreeEntry,
-	type MovedEntry,
 	moveWorktreeEntry,
 	renameWorktreeEntry,
 } from "./mutations";

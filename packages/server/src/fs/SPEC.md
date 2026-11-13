@@ -130,7 +130,7 @@ classification every content read in the host shares. Agent and review writes ar
   string it pairs with is valid text).
 - **Public surface (barrel):** `readDir`, `readFile`, `readableFileSize`, `resolveWorktreeFile`,
   `resolveWorktreeEntry`, `workspaceRelativePath`,
-  `copyWorktreeEntry`, `deleteWorktreeEntry`, `renameWorktreeEntry`, `moveWorktreeEntry`, `MovedEntry`,
+  `copyWorktreeEntry`, `deleteWorktreeEntry`, `renameWorktreeEntry`, `moveWorktreeEntry`,
   `classifyBytes`, `CONTENT_SNIFF_BYTES`, `mimeFromPath`,
   `hashBytes`, `decodeText`, `resourceMeta`.
 - **Allowed deps:** `persistence` (workspace lookup); `trash` (`claimAndTrashFile`, the delete);

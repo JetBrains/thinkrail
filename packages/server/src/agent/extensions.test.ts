@@ -1,5 +1,5 @@
 import { describe, expect, it, spyOn } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -558,7 +558,7 @@ describe("registry extensions", () => {
 		return {
 			extension,
 			execute: (params: unknown) =>
-				tool.definition.execute("call", params, undefined, undefined, undefined as never),
+				tool.definition.execute("call", params, undefined, undefined, { cwd } as never),
 		};
 	}
 
@@ -574,9 +574,13 @@ describe("registry extensions", () => {
 		try {
 			const { extension, execute } = await visualizeTool(project, agentDir);
 			expect(extension.path).toBe("<inline:visualize>");
-			await expect(
-				execute({ type: "diagram", mermaid: "flowchart LR\n A --> B" }),
-			).resolves.toMatchObject({ details: { type: "diagram" } });
+			const drawn = await execute({ type: "diagram", mermaid: "flowchart LR\n A --> B" });
+			expect(drawn).toMatchObject({ details: { type: "diagram" } });
+			const saved = /Saved to `(\.thinkrail\/context\/visualize\/[^`]+\.md)`/.exec(
+				drawn.content.map((part) => (part.type === "text" ? part.text : "")).join(""),
+			)?.[1];
+			expect(saved).toBeDefined();
+			expect(readFileSync(join(project, saved as string), "utf8")).toContain("```mermaid");
 			await expect(execute({ type: "diagram", mermaid: "flowchart LR\n A -->" })).rejects.toThrow(
 				/invalid Mermaid syntax in `mermaid`[\s\S]*Parse error/,
 			);

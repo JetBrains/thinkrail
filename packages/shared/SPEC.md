@@ -168,9 +168,10 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   consumers agree (today: `workspaces` *creates* the scratch dir and git *ignores* it):
   `WORKSPACE_INTERNAL_DIR` (`.thinkrail` — the repo-local host-managed dir, today holding the ephemeral
   scratch, the intended home for future host files like a cached spec index; **not** hidden from the file
-  tree), `WORKSPACE_CONTEXT_DIR` (its `context/` scratch dir for temp docs), and `WORKSPACE_TODOS_DIR`
-  (`context/todos/` — the chat TODO plans, one JSON per session, so they're ephemeral with the rest of
-  the scratch). The pi-free `pi-todos/core` can't import this package (it stays vanilla-`pi`-installable),
+  tree), `WORKSPACE_CONTEXT_DIR` (its `context/` folder — the workspace's artifacts: temp docs and
+  everything the agent produces for the user, kept until the user removes them, see
+  [[submodule-server-artifacts]]), and `WORKSPACE_TODOS_DIR` (`context/todos/` — the chat TODO plans, one
+  JSON per session; host state, not artifacts). The pi-free `pi-todos/core` can't import this package (it stays vanilla-`pi`-installable),
   so it keeps a local mirror of the todos path; this module is the host-side source of truth. Distinct
   from the *home* state dir `~/.thinkrail` (server `persistence`). (The `.gitignore` *body* the host seeds
   into the scratch dir — a lone `*` — is a one-off inlined at that call site, not a path, so it lives

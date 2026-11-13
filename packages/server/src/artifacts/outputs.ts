@@ -2,7 +2,7 @@ import { type Dirent, lstatSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { gitAsync } from "../git";
 
-export const DEPENDENCY_AND_CACHE_DIRS: ReadonlySet<string> = new Set([
+const DEPENDENCY_AND_CACHE_DIRS: ReadonlySet<string> = new Set([
 	".git",
 	".thinkrail",
 	"node_modules",
@@ -22,7 +22,7 @@ export const DEPENDENCY_AND_CACHE_DIRS: ReadonlySet<string> = new Set([
 ]);
 
 const MAX_ROOTS = 5_000;
-export const MAX_OUTPUT_WALK_ENTRIES = 20_000;
+const MAX_OUTPUT_WALK_ENTRIES = 20_000;
 const LIST_TIMEOUT_MS = 10_000;
 const MTIME_SLACK_MS = 1_000;
 

@@ -66,12 +66,6 @@ export function artifactRows(
 	return { artifacts, outputs };
 }
 
-export function contextFolderOf(dir: string, path: string, kind: "file" | "dir"): string {
-	if (kind === "dir") return path;
-	const slash = path.lastIndexOf("/");
-	return slash < 0 ? dir : path.slice(0, slash);
-}
-
 export function mentionText(path: string): string {
 	return `@${path} `;
 }
