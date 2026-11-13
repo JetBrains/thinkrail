@@ -82,7 +82,6 @@ function ContextLimitControl({
 	const range = tokenRange(t, limits);
 	const id = useId();
 	const inputRef = useRef<HTMLInputElement>(null);
-	const restoreFocus = useRef<HTMLElement | null>(null);
 	const skipBlurCommit = useRef(false);
 	const initialDraft = {
 		revision,
@@ -92,13 +91,6 @@ function ContextLimitControl({
 	};
 	const [draft, setDraft] = useState(initialDraft);
 	if (draft.revision !== revision) setDraft(initialDraft);
-
-	useEffect(() => {
-		const previous = restoreFocus.current;
-		if (disabled || !previous) return;
-		restoreFocus.current = null;
-		if (document.activeElement === document.body && previous.isConnected) previous.focus();
-	}, [disabled]);
 
 	const selected = draft.custom
 		? "custom"
@@ -161,9 +153,8 @@ function ContextLimitControl({
 									name: controlLabel,
 								})}
 								className="peer sr-only inset-0"
-								onChange={(event) => {
+								onChange={() => {
 									if (disabled) return;
-									restoreFocus.current = event.currentTarget;
 									setDraft(initialDraft);
 									onChange(preset.override);
 								}}
@@ -252,7 +243,7 @@ function ContextLimitControl({
 									if (isImeComposing(event.nativeEvent)) return;
 									if (event.key === "Enter") {
 										event.preventDefault();
-										if (commitValue()) restoreFocus.current = event.currentTarget;
+										commitValue();
 									} else if (event.key === "Escape") {
 										setDraft(initialDraft);
 									}

@@ -24,6 +24,7 @@ import {
 	revealLineNow,
 	syncFileModel,
 } from "./monacoSetup";
+import { focusCommentCardWhenRendered } from "./revealFocus";
 import {
 	applyReviewDecorations,
 	attachReviewCommenting,
@@ -178,6 +179,8 @@ export default function MonacoEditor({
 		if (line === null) return;
 		if (freshMount) revealLineNow(codeEditor, line);
 		else codeEditor.revealLineInCenter(line);
+		const focusId = review.focus?.id;
+		if (focusId) focusCommentCardWhenRendered(() => containerRef.current, focusId);
 		review.onFocusHandled();
 	}, [review]);
 

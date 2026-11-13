@@ -179,6 +179,7 @@ export function WorkspaceSegment({
 				<input
 					ref={nameRef}
 					data-testid="scope-name"
+					data-focus-slot="scope-workspace"
 					data-editing
 					type="text"
 					spellCheck={false}
@@ -191,6 +192,7 @@ export function WorkspaceSegment({
 				<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
 					<DropdownMenuTrigger
 						data-testid="scope-workspace"
+						data-focus-slot="scope-workspace"
 						aria-label={t("shell.location.workspace.label", { name })}
 						className={pillClass}
 					>

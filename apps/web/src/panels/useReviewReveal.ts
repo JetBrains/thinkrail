@@ -1,4 +1,5 @@
 import type { GitFileChange, GitStatus } from "@thinkrail/contracts";
+import { focusFirstControl } from "@thinkrail/ui/focus";
 import {
 	type RefObject,
 	useCallback,
@@ -15,7 +16,7 @@ const END_NOTE_HEIGHT = 48;
 const HANDOFF_MAX_FRAMES = 30;
 const USER_SCROLL_EVENTS = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
 
-type SettleTarget = { path: string; commentId?: string };
+type SettleTarget = { path: string; commentId?: string; focus?: boolean };
 
 interface ReviewRevealInput {
 	workspaceId: string;
@@ -37,6 +38,7 @@ interface ReviewReveal {
 	onTotalListHeightChanged: () => void;
 	handoffPath: string | null;
 	startHandoff: (path: string | null) => void;
+	focusNextCommentReveal: (focus: boolean) => void;
 }
 
 export function useReviewReveal({
@@ -60,6 +62,10 @@ export function useReviewReveal({
 	const restoredStacked = useRef(false);
 	const [handoffPath, setHandoffPath] = useState<string | null>(null);
 	const settling = useRef<SettleTarget | null>(null);
+	const focusCommentReveal = useRef(false);
+	const focusNextCommentReveal = useCallback((focus: boolean) => {
+		focusCommentReveal.current = focus;
+	}, []);
 	const releaseSettling = useCallback(() => {
 		const commentId = settling.current?.commentId;
 		settling.current = null;
@@ -129,6 +135,10 @@ export function useReviewReveal({
 		);
 		if (!card) return false;
 		card.scrollIntoView({ block: "center" });
+		if (settling.current?.focus) {
+			settling.current = { ...settling.current, focus: false };
+			focusFirstControl(card);
+		}
 		return true;
 	}, []);
 	const spyActiveSection = useCallback(() => {
@@ -168,9 +178,11 @@ export function useReviewReveal({
 		};
 		releaseSettling();
 		consumeReveal(workspaceId, tabId, target);
+		const focus = focusCommentReveal.current;
+		focusCommentReveal.current = false;
 		if (layout === "stacked") {
 			restoredStacked.current = true;
-			scrollToSection(index, target);
+			scrollToSection(index, focus ? { ...target, focus } : target);
 		}
 	}, [
 		consumeReveal,
@@ -260,5 +272,6 @@ export function useReviewReveal({
 		onTotalListHeightChanged,
 		handoffPath,
 		startHandoff: setHandoffPath,
+		focusNextCommentReveal,
 	};
 }

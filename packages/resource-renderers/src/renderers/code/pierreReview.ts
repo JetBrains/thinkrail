@@ -1,6 +1,7 @@
 import type { AnnotationSide, FileDiffMetadata, Hunk, SelectedLineRange } from "@pierre/diffs";
 import type { MessageKey } from "@thinkrail/locales";
 import { t } from "@thinkrail/locales/react";
+import { focusFirstControl } from "@thinkrail/ui/focus";
 import { type RefObject, useEffect } from "react";
 import type { AnchorDraft, ResourceDiffProps, ReviewThread, SurfaceReview } from "../../registry";
 import type { PierreVirtualizer } from "./pierreVirtualizer";
@@ -235,6 +236,7 @@ export function usePierreFocus(
 			if (!target || !rendered || handled) return;
 			handled = true;
 			target.scrollIntoView({ block: "center" });
+			focusFirstControl(target);
 			onFocusHandled();
 			sizeObserver.disconnect();
 			mutationObserver.disconnect();

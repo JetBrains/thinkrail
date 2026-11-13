@@ -1,6 +1,7 @@
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
+import { focusFirstControl } from "@thinkrail/ui/focus";
 import {
 	type ReactNode,
 	type RefCallback,
@@ -61,6 +62,7 @@ export function PreviewCommenting({
 		const card = scroller.querySelector(`[data-comment-id="${focusId}"]`);
 		if (card) {
 			card.scrollIntoView({ block: "center" });
+			focusFirstControl(card);
 			review.onFocusHandled();
 		}
 	}, [focusId, review]);

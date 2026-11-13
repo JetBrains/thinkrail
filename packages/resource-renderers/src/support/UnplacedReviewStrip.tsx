@@ -1,5 +1,6 @@
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { focusFirstControl } from "@thinkrail/ui/focus";
 import { useEffect, useMemo, useRef } from "react";
 import {
 	anchorLabel,
@@ -9,6 +10,7 @@ import {
 	type SurfaceReview,
 } from "../registry";
 import { ReviewThreadCard } from "./ReviewThreadCard";
+import { commentCard } from "./revealFocus";
 
 export interface UnplacedReviewEntry {
 	review: SurfaceReview;
@@ -62,10 +64,11 @@ export function UnplacedReviewStrip({
 	const focus = focusedUnplacedEntry(entries);
 	useEffect(() => {
 		if (!focus) return;
-		const card = [
-			...(rootRef.current?.querySelectorAll<HTMLElement>("[data-comment-id]") ?? []),
-		].find((element) => element.dataset.commentId === focus.thread.id);
-		card?.scrollIntoView({ block: "center" });
+		const card = rootRef.current ? commentCard(rootRef.current, focus.thread.id) : undefined;
+		if (card) {
+			card.scrollIntoView({ block: "center" });
+			focusFirstControl(card);
+		}
 		focus.review.onFocusHandled();
 	}, [focus]);
 	const commentingTarget =

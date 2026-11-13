@@ -164,7 +164,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 						{hasComments ? t("review.panel.allFinished") : t("review.panel.empty")}
 					</p>
 				) : (
-					<ul className="motion-safe:animate-reveal">
+					<ul data-focus-list="review-files" className="motion-safe:animate-reveal">
 						{files.map((file) => {
 							const isOpen = expanded.has(file.path);
 							const finishable = file.total === 0 && file.resolved > 0;
@@ -173,12 +173,15 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 									key={file.path ?? "@review"}
 									data-testid="review-file-section"
 									data-path={file.path ?? ""}
+									data-focus-row={file.path ?? ""}
 									data-expanded={isOpen}
 								>
 									<div className="flex items-center hover:bg-control-bg-hovered">
 										<button
 											type="button"
 											data-testid="review-file-row"
+											data-focus-row-primary
+											data-focus-fallback={`review-comments:${file.path ?? ""}`}
 											className="flex min-w-0 flex-1 items-center gap-8 px-4 py-4 text-left tr-text-ui focus-visible:focus-ring-inset"
 											onClick={() => toggleFile(file)}
 										>
@@ -259,7 +262,7 @@ function FileSection({
 	const drafts = fileComments.filter((c) => c.status === "draft");
 	const resolved = fileComments.filter((c) => c.status === "resolved");
 	return (
-		<div className="px-4 pb-4 pl-12">
+		<div data-focus-list={`review-comments:${path ?? ""}`} className="px-4 pb-4 pl-12">
 			{drafts.length > 0 && (
 				<div className="flex items-center justify-end gap-4 px-4 py-4">
 					<SendReviewButton workspaceId={workspaceId} path={path} testid="review-panel-send" />
@@ -384,6 +387,7 @@ function CommentRow({
 	return (
 		<div
 			data-testid="review-comment"
+			data-focus-row={comment.id}
 			data-status={statusLabel(comment)}
 			data-anchor={comment.anchorState}
 			className="group relative"
@@ -391,6 +395,7 @@ function CommentRow({
 			<button
 				type="button"
 				data-testid="review-comment-open"
+				data-focus-row-primary
 				onClick={() => (comment.sessionId ? onOpenChat(comment.sessionId) : onNavigate())}
 				title={comment.sessionId ? t("review.panel.openDiscussion") : t("review.panel.showInFile")}
 				className="flex w-full items-start gap-8 rounded-sm px-4 py-4 text-left hover:bg-control-bg-hovered focus-visible:focus-ring-inset"

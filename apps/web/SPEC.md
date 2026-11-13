@@ -419,6 +419,17 @@ themselves.
   host-served build and the e2e suite stay green. `vite.config.ts` therefore proxies `/files`, `/blob`,
   `/fonts` and `/images` beside `/ws` and `/speech` (an unproxied socket upgrade is simply never answered, so dictation
   hung on "starting"), and `devProxy.test.ts` pins the list to the composers' constants.
+- **Focus recovery is markup, not per-surface code.** A surface whose action can remove, replace or
+  disable the focused control emits the shell engine's vocabulary ([[submodule-web-shell]], *Focus
+  recovery*): `data-focus-list="<key>"` on a logical list's container (containers may share a key — Drafts
+  and In progress, Plan groups; keys are unique per surface, e.g. `files:<folder>`,
+  `review-comments:<path>`), `data-focus-row="<id>"` on each row with a stable domain id (path, workspace,
+  comment, template name — never an index), `data-focus-row-primary` on the control a row lands on,
+  `data-focus-fallback="<key>"` on the control that takes focus when that list empties (its add or parent
+  control), and `data-focus-slot="<name>"` on each element of a pair that replaces one another (an inline
+  rename input and its pill, the outline toggle drawn in two places). Only show / jump actions focus
+  explicitly, on what they revealed, with `preventScroll` after their own scroll. `resource-renderers` emits
+  the same attributes and never imports the shell.
 - **`typecheck` runs two projects.** `tsconfig.json` checks the browser app with DOM types only;
   `tsconfig.test.json` checks tests, `scripts/`, and `vite.config.ts` with Bun types. Every
   test file is checked; the test project has no exclude list. A test never shares its base name with a

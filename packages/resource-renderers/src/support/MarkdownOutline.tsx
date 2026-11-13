@@ -132,6 +132,7 @@ export function MarkdownOutline({
 				<IconButton
 					icon={icons.closed}
 					label={label}
+					data-focus-slot="markdown-outline-toggle"
 					data-testid="markdown-outline-toggle"
 					aria-pressed={false}
 					onClick={() => onOpenChange(true)}
@@ -154,6 +155,7 @@ export function MarkdownOutline({
 				<IconButton
 					icon={icons.open}
 					label={label}
+					data-focus-slot="markdown-outline-toggle"
 					data-testid="markdown-outline-toggle"
 					aria-pressed
 					selected

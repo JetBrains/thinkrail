@@ -14,7 +14,7 @@ The responsive composition root: top-level app chrome, active-project/workspace 
 
 ## Boundary
 
-- **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-project/workspace routing; single Settings, analytics-consent, survey-invitation, survey-window, attention-notification permission-preface, and Toaster mounts plus the keyboard-opened Create workspace dialog, the `Mod+K` / double-Shift search palette host and the `Mod+Shift+F` Find in Files host (and the once-mounted attention-notification observer from [[submodule-web-notifications]]); theme application and global shortcuts; the command catalog the palette runs ([[submodule-web-commands]], [[submodule-web-search]]); the injected Layout, Keyboard and optional application Update settings sections; and integration of the workbench engine with store, persistence, panels, transport-backed domain state, and error boundaries.
+- **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-project/workspace routing; single Settings, analytics-consent, survey-invitation, survey-window, attention-notification permission-preface, and Toaster mounts plus the keyboard-opened Create workspace dialog, the `Mod+K` / double-Shift search palette host and the `Mod+Shift+F` Find in Files host (and the once-mounted attention-notification observer from [[submodule-web-notifications]]); theme application and global shortcuts; focus recovery (*Focus recovery*); the command catalog the palette runs ([[submodule-web-commands]], [[submodule-web-search]]); the injected Layout, Keyboard and optional application Update settings sections; and integration of the workbench engine with store, persistence, panels, transport-backed domain state, and error boundaries.
 - **Public surface:** `Shell`.
 - **Allowed deps:** child layout modules; `updates`; `search` + `commands` (the palette and the command contract it composes for it); `keybindings` (the app-wide chord table `useGlobalHotkeys` matches through and the palette's shortcuts read); `findInFiles` (the window `FindInFilesHost` composes); `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types, wire constants, and the shared `createQuitConfirmation` rule), `@thinkrail/ui/*`, `@thinkrail/locales` (UI strings), `i18n` (`useLocaleSync`, mounted once), `components/ErrorBoundary`, `components/QuietScrollArea`, `constants`, `lib`, `themes`, and `clientPreferences` (`markdownOutlinePreference` persists the store's Markdown outline visibility and side per client, through the same adapter `layoutState` uses).
 - **Forbidden:** server/shared/pi imports; being imported by panels/store/transport; putting arrangement knowledge into a feature panel; or sending current frame/view state through transport.
@@ -292,3 +292,54 @@ Quit confirmation runs the shared contracts `createQuitConfirmation` rule in bot
 "reset")`; a browser has no rows. Their shortcuts `Mod+=`, `Mod+-` and `Mod+Numpad0` (key cap `Num 0`, the
 Windows key name) are display-only — the desktop preload owns those chords ([[module-desktop]], *Native page zoom*), so they are in no web table, like
 the native menu's `Mod+,` on the Settings row. The web keeps no zoom state.
+
+## Focus recovery
+
+An action that removes, replaces or disables the focused control must not drop focus to `<body>`.
+`focusRecovery.ts`, installed once from `Shell` beside the region tracker, owns that for every surface;
+surfaces only emit the markup vocabulary ([[module-web]], *Get right*), never recovery code. On `focusin`
+it records the element with its context: for each enclosing `data-focus-list` (innermost first, bounded)
+the list key, the enclosing `data-focus-row` id and the ids of the next and previous rows of that logical
+list at that moment (refreshed while the element stays mounted and the page mutates), its slot
+(`data-focus-slot`, else its `data-testid` outside rows), its region, and its layer (the nearest
+dialog / alertdialog / menu). Entering a layer keeps the record focused before it as the layer's
+*opener*; focus landing on a layer container itself (Radix moves it there when the focused element inside
+is removed) records nothing.
+
+A `MutationObserver` on `<body>` (children, `disabled` / `hidden` / `inert`) and `focusout` schedule one
+animation-frame check. Focus is **lost** only when the recorded element is disconnected, disabled, inert or
+unrendered **and** focus rests on `<body>`, nothing, the element itself or a container of its layer chain.
+A still-focusable element with focus on `<body>` (a click on empty space) is forgotten, so its later
+removal never pulls focus anywhere. When the record's layer has closed, recovery resolves from its opener
+instead — back on the opener itself when it is still there (a confirm dialog whose opener row will vanish
+after the host's push), else the opener's rows. Resolution, first match wins:
+
+1. **Same row or slot** — the same row id under the same list key (rows may sit in several containers
+   sharing one key, so a comment moving Drafts → In progress is followed) → its `data-focus-row-primary`,
+   else its first own focusable; else a focusable replacement with the same slot in the same region.
+2. **Nearest enabled sibling**, for a control still in the page but disabled (or replaced by a disabled
+   twin with its slot — a disabled `IconButton` remounts inside its tooltip wrapper): the closest focusable
+   among its container's controls, previous first, climbing at most three ancestors and never past its
+   region or layer.
+3. **Neighbour row**, list by list outward: the containing row again (outer lists only), the next recorded
+   row, the previous, the list's `data-focus-fallback`, the list's first focusable; then the outermost
+   list's enclosing `data-focus-default`.
+4. **Safety net** — the active region's F6 landing target (`regionLandingTarget`, the record's region when
+   the active one is gone); inside a live dialog, its first focusable. A control that sat in no region and
+   no dialog (a field a page or extension injected into `<body>`) gets no safety net: focus stays where the
+   browser put it.
+
+A control that was only disabled (still in the page, or replaced by its disabled slot twin) gets focus
+back when it re-enables, provided focus still rests where recovery put it and no key or pointer press
+happened since — a field that disables while its save is pending keeps the keyboard across the save.
+
+While nothing matches and the innermost list is not in the page (a Settings page re-fetching behind a
+skeleton), it re-resolves every frame for a bounded grace (~3 s) before the safety net, and abandons the
+moment focus rests anywhere else. It scrolls only for what the user was looking at: an
+`IntersectionObserver` follows the focused element, and when it was on screen as it was lost the target
+is focused and brought into view (`block: "nearest"`, a no-op when it already shows); when it was off
+screen — a virtualized list unmounting a row the reader scrolled away from — the target is focused with
+`preventScroll`, so the scroll is never yanked back. Landing focus off screen for no reason would hide
+where it is. It keeps its own ticket, apart from the focus chords' single wait (`focusWhenSettled`), so a recovery
+never cancels a chord's pending landing; any focus, a chord's included, ends a recovery. Show and jump
+actions do not rely on it: they focus what they revealed themselves.

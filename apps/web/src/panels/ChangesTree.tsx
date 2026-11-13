@@ -20,7 +20,7 @@ export function ChangesTree({
 	...rowProps
 }: ChangeRowProps & { changes: readonly GitFileChange[] }) {
 	return (
-		<ul className="flex flex-col motion-safe:animate-reveal">
+		<ul data-focus-list="changes" className="flex flex-col motion-safe:animate-reveal">
 			{buildChangesTree(changes).map((node) => (
 				<ChangeNodeRow key={node.path} node={node} {...rowProps} />
 			))}
@@ -33,7 +33,7 @@ function ChangeNodeRow({ node, ...rowProps }: ChangeRowProps & { node: ChangeTre
 
 	if (node.kind === "file") {
 		return (
-			<li>
+			<li data-focus-row={node.path}>
 				<ChangeRowActions
 					path={node.path}
 					active={isActive(node.path)}
@@ -43,6 +43,7 @@ function ChangeNodeRow({ node, ...rowProps }: ChangeRowProps & { node: ChangeTre
 					{({ onContextMenu }) => (
 						<TreeRow
 							testid="change-item"
+							path={node.path}
 							onContextMenu={onContextMenu}
 							kind="file"
 							highlight="wrapper"
@@ -68,10 +69,11 @@ function ChangeNodeRow({ node, ...rowProps }: ChangeRowProps & { node: ChangeTre
 
 	const expanded = !isCollapsed(node.path);
 	return (
-		<li>
+		<li data-focus-row={node.path}>
 			<div className="flex min-w-0 items-center">
 				<TreeRow
 					testid="change-tree-folder"
+					path={node.path}
 					kind="dir"
 					expanded={expanded}
 					label={node.name}
@@ -81,7 +83,7 @@ function ChangeNodeRow({ node, ...rowProps }: ChangeRowProps & { node: ChangeTre
 				<span className={ROW_MENU_SLOT} />
 			</div>
 			{expanded && (
-				<ul className="flex flex-col pl-tree-indent">
+				<ul data-focus-list={`changes:${node.path}`} className="flex flex-col pl-tree-indent">
 					{node.children.map((child) => (
 						<ChangeNodeRow key={child.path} node={child} {...rowProps} />
 					))}

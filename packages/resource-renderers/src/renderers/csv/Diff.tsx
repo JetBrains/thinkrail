@@ -1,4 +1,5 @@
 import { useT } from "@thinkrail/locales/react";
+import { focusFirstControl } from "@thinkrail/ui/focus";
 import { useEffect, useMemo, useRef } from "react";
 import type { ResourceDiffProps, ReviewThread, SurfaceReview } from "../../registry";
 import { ReviewComposer } from "../../support/ReviewComposer";
@@ -131,6 +132,7 @@ export default function CsvDiff({
 		if (!card) return;
 		handledFocusRef.current = focusId;
 		card.scrollIntoView({ block: "center" });
+		focusFirstControl(card);
 		focusSurface?.onFocusHandled();
 	}, [focusId, focusSurface, placed]);
 

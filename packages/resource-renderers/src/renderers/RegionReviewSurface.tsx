@@ -1,6 +1,7 @@
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
+import { focusFirstControl } from "@thinkrail/ui/focus";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	type CSSProperties,
@@ -126,6 +127,7 @@ export function RegionReviewSurface({
 		if (!card || !threads.some(({ thread }) => thread.id === focusId)) return;
 		handledFocusRef.current = focusId;
 		card.scrollIntoView({ block: "center" });
+		focusFirstControl(card);
 		focusedSurface?.onFocusHandled();
 	}, [focusId, focusedSurface, threads]);
 

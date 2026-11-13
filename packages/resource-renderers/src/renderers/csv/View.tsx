@@ -1,4 +1,5 @@
 import { useT } from "@thinkrail/locales/react";
+import { focusFirstControl } from "@thinkrail/ui/focus";
 import { useEffect, useMemo, useRef } from "react";
 import { TableVirtuoso, type TableVirtuosoHandle } from "react-virtuoso";
 import type { ResourceViewProps, ReviewThread } from "../../registry";
@@ -81,6 +82,7 @@ export default function CsvView({
 		if (!card) return;
 		handledFocusRef.current = focusId;
 		card.scrollIntoView({ block: "center" });
+		focusFirstControl(card);
 		review?.onFocusHandled();
 	}, [focusId, placed, review]);
 
