@@ -606,10 +606,10 @@ re-opened transcripts provider-valid.
     `colors.accent` is an RGB value) and report pi's detected light/dark appearance. No honest plain
     answer exists for any of them. They cost nothing while an extension colours *through* the theme —
     every such path returns plain text — and only bite one that reads a mode or colour and then emits ANSI
-    on its own, which is the unsanitised-bridge gap tracked outside this module. Its colour table exists
-    **only** to satisfy the constructor signature: every method that would turn a colour into an escape is
-    overridden, and the members that still answer for the terminal read the constructor's *mode* or pi's
-    terminal guesses, never an escape. A pi
+    on its own into text the bridge does not carry, such as a `pi.setSessionName` title (the bridge
+    strips displayed text, below). Its colour table exists **only** to satisfy the constructor signature:
+    every method that would turn a colour into an escape is overridden, and the members that still answer
+    for the terminal read the constructor's *mode* or pi's terminal guesses, never an escape. A pi
     bump that changes the palette breaks the build as a *notice that the theme surface moved*, not as a
     defect.
     **Rejected alternatives** (the one place these decisions are recorded): (1) `{} as
@@ -617,11 +617,19 @@ re-opened transcripts provider-valid.
     `rpc` mode, but `ctx.ui.theme` is called by the **extension**, not by pi's renderer, and pi's own rpc
     mode hands out a live theme. (2) An object literal implementing `Theme` structurally — impossible
     without a cast: `Theme` carries private fields. (3) A real `Theme` built from blank colours, no
-    overrides — pi maps `""` to the *default-colour* escape (`\x1b[39m`), not to nothing, so status text
-    would reach the browser as literal escape bytes. (4) Forwarding pi's exported `theme` singleton — it
+    overrides — pi maps `""` to the *default-colour* escape (`\x1b[39m`), not to nothing, so themed text
+    outside the bridge's frames would keep escapes. (4) Forwarding pi's exported `theme` singleton — it
     is a `Proxy` that throws `Theme not initialized` until `initTheme()` runs, and `initTheme` is called
     only from pi's own CLI entrypoints, never when pi is embedded via `createAgentSession`. Every
     embedder of pi-as-a-library hits this; an upstream fix would not reach us until a deliberate pi bump.
+    **Every extension string the bridge publishes for display is plain text** (#890): stripping, not
+    rendering colours, keeps one look with `plainTextTheme`. Each member strips its own fields, not
+    `publish`, so the stored dialog snapshot stays plain. A complete sequence goes; a broken one (no
+    final byte or terminator) loses only its control byte. A non-string passes unchanged: pi loads
+    extensions untyped, and a throw outside pi's handlers kills the host. A `select` answer maps back by
+    index to a copy of the options as passed; options that differ only in colour look alike and the first
+    wins. Built-ins fail: `util.stripVTControlCharacters` leaves OSC tails, `Bun.stripANSI` is missing in
+    the Node workflow harness, and pi-tui's `stripTerminalSequences` keeps DCS strings.
   - `toolResponses` — the host half of **interactive tools** (tools whose `execute` waits for the person):
     the per-session response mailbox (`ToolResponseWaiters`), respondability, restart repair support and
     late responses. The mailbox is **tool-agnostic**: every entry is keyed by `toolCallId`, the response is
