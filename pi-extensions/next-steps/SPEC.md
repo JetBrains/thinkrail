@@ -1,7 +1,7 @@
 ---
 id: module-pi-next-steps
 type: module-design
-status: draft
+status: active
 title: "@thinkrail/pi-next-steps — one-click next messages for vanilla pi"
 parent: module-pi-extensions
 tags: [pi-extension, suggestions]
