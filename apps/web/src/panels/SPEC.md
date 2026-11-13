@@ -127,7 +127,7 @@ treatment.
   else the previous, else Add project. `ProjectTree` also owns the `NewWorkspaceDialog` the per-project `+` opens **and** each
   workspace row's hover-revealed **kebab menu** (`MoreVertical`, controlled `DropdownMenu`) — right-clicking
   anywhere on the row opens that exact menu at the kebab without selecting/activating the workspace, while
-  the kebab remains the touch and keyboard-focus path. Its actions are a `DropdownMenuSub` **"Open in"**
+  the kebab remains the touch path (keyboard users open the menu from the row, see *Sidebar trees*). Its actions are a `DropdownMenuSub` **"Open in"**
   (rendered only when at least one editor was detected), **Copy path**, and **Reveal in file manager**. A
   ThinkRail-managed worktree additionally gets **Rename** when the connected host's protocol is at least
   `WORKSPACE_RENAME_PROTOCOL_VERSION`, plus **Remove workspace**; an external row gets only **Remove from
@@ -149,7 +149,7 @@ treatment.
   capable host, an expanded project renders its **live** rows from `selectWorkspacePartition` newest
   created first (never re-sorted by activity, so rows stay put while agents work), then a **`Settled · N`** disclosure header (collapsed by default, store-held
   per browser) whose body lists the settled rows **slim** — single line, name only, a small **reason chip**
-  (`merged` / `closed` / `idle 2w` / `by you`, long form in its tooltip), a hover **↩ Keep active** beside the kebab — ten at
+  (`merged` / `closed` / `idle 2w` / `by you`, long form in its tooltip), a hover **↩ Keep active** beside the kebab (also in the menu) — ten at
   a time with a *Show 25 more* row. Live rows gain a hover **✓ Settle** beside the kebab (also in the menu
   and on right-click); it is disabled while the row's agent works or a result is unread, absent on Default.
   On a v86+ host the same menu section carries one read toggle from `selectWorkspaceReadAction`: **Mark as
@@ -330,7 +330,7 @@ treatment.
   (`store.fileClipboard`, not the OS clipboard, cleared with its workspace or when its entry is deleted);
   **Paste** (only while the clipboard holds an entry) asks `fs.copy` for a copy beside a file or inside a
   folder — across workspaces too, never a move — under the host's ` copy` / ` copy N` name, then expands
-  that folder, and an empty tree offers the same Paste as a button next to *Empty*; **Delete** asks for
+  that folder, and an empty tree offers the same Paste as a button next to *Empty*; **Delete** (also the Delete key on a row) asks for
   confirmation and `fs.delete` moves the entry to the OS trash. The confirmation says when an agent is
   working in the workspace but does not block — the user's explicit action wins, as with a hunk revert —
   and an open tab of a deleted file keeps its stale-content contract. Failures toast; a folder past the
@@ -2223,7 +2223,7 @@ own section. The kebab menu (`plan-menu`, a
 - `SpecsPanel` is a compact **document-first tree**: spec nodes are container **and** document, so the
   controls make both roles explicit. Hierarchy uses fixed per-depth indentation + chevrons, deliberately
   **without connector rails or branch elbows** (persistent lines overloaded the narrow rail). The padded
-  **chevron alone** expands/collapses, while the rest of the row is a native document button whose
+  **chevron alone** expands/collapses (→ / ← from the keyboard), while the rest of the row is a native document button whose
   **single click previews** the rendered spec — and whose **double click keeps** it — through the same
   `fs.readFile` → `openTab` flow as `FileTree` (see the Preview tabs bullet; reading down a spec graph is
   the case the reusable slot exists for). Every row stays on one line: indentation → chevron →
@@ -2525,8 +2525,47 @@ own section. The kebab menu (`plan-menu`, a
   selects that placement instead of duplicating it. Preview placement and attention commit locally. Unit
   and E2E tests pin double-click coalescing, stale-read rejection, per-group isolation, local identity
   convergence, and promote-by-keyboard/touch.
+- **Sidebar trees share one keyboard model (`treeNavigation.tsx`).** Files, Changes (both views), Specs,
+  Chats and Projects are each a `Tree` — a `ul role=tree` with **one Tab stop** (roving tabindex) — whose
+  rows' focusable controls are `useTreeItem` treeitems (`aria-level`, `aria-expanded` on expandables,
+  `aria-current` for the selected row) under `li role=none`; the tree is a `div role=tree` and every
+  list inside it is `role=none`, so the hierarchy is the explicit `aria-level` (VS Code's flat-tree
+  markup) rather than nested `group`s, which Biome's semantic-element rules reject on lists. Chats and
+  Projects are two trees (Projects: project → workspaces and creations → the Settled header as an
+  expandable item → settled rows and *Show more*). No tree is virtualized, so the model is DOM-driven:
+  the visible rows are the tree's treeitems in DOM order, parent and first child come from `aria-level`,
+  and →/← click the row's `[data-tree-toggle]` (a Files/Changes folder row is its own toggle; Specs,
+  projects and the Settled header use their chevron), so every tree keeps its own expansion state and
+  markup.
+  - **The tab stop is the current row:** the last focused row (focus-in, so clicks and focus recovery move
+    it); a row that becomes selected while focus is elsewhere (a file opened from the palette) takes it
+    over; else the last selected row, else the first. A `MutationObserver` re-elects when the current row
+    leaves the DOM, because rows load per directory and per project asynchronously. Only the current row
+    carries `data-focus-default`, so F6, `Mod+0` and `Mod+Shift+E/G` land on it ([[submodule-web-shell]]
+    prefers the innermost default; its focusable test counts `tabIndex=-1` buttons, so without the marker
+    landing took the first row). Of Chats and Projects only the tree holding the active workspace marks
+    its default (Projects when none is active). Known gap: a chord that first reveals a hidden Files
+    lands before the tree has loaded, on its toolbar — landing resolves on the first frame with a target.
+  - **Keys** are feature-local (`event.key` in the tree, not the global keybinding table): ↑/↓, Home/End;
+    → expands, else enters the first child; ← collapses, else goes to the parent; type-ahead matches the
+    row label's prefix (a ~500 ms buffer; Space joins only a live buffer, otherwise it activates). Letters
+    belong to a focused tree, so the Changes review's `V`/`J`/`N` do not fire from a focused Changes row.
+    Enter is the button's own click; `Mod+Enter` is the row's double-click — Files and Specs open kept,
+    Changes opens its kept diff with `claimPreview`; rows without a double-click treat it as Enter.
+  - **Row keys live in each row**, through `treeRowKey`: Shift+F10 / the Menu key open the row's menu
+    (context-menu rows through `openContextMenuFromKeyboard`, dropdown rows through `isContextMenuKey`,
+    after which the menu returns focus to the row); **Delete** opens the menu's own confirmation (file,
+    Remove workspace except on Default, Delete chat — a pending deletion retries directly —, Close project;
+    nothing on Changes and Specs rows); **F2** renames a project or managed workspace where the menu offers
+    Rename (chats have no rename). A pending chat stays focusable (`aria-disabled`) so its Retry is
+    reachable.
+  - **Inner row buttons leave the Tab order** (`tabIndex=-1`: chevrons, kebabs, Settle / Keep active, the
+    project's Create workspace `+`, a creation's retry / dismiss); each action stays reachable — arrows
+    expand, the row's menu carries the rest (Create workspace, Settle, Keep active), a creation's actions are
+    in the creation view its row opens. dnd-kit's draggable `attributes` stay unspread on the project name
+    (they would add a second tab stop); dragging needs only its listeners.
 - **Row actions: one menu, two triggers.** Every **file** row (both views) is wrapped in
-  **`ChangeRowActions`**: a hover/focus-revealed `⌄` button *and* right-click on the row open the same
+  **`ChangeRowActions`**: a hover-revealed `⌄` button *and* right-click on the row (Shift+F10 / Menu key on it) open the same
   dropdown. The `⌄` is not garnish — it is the **touch path**, where right-click does not exist (mobile-first).
   Items: **View** (the same action as a plain click) and **Copy relative path**. Deliberately
   nothing else: the panel is **read-only** — no discard-file/-folder/-all — and no “Open in ‹external app›”,

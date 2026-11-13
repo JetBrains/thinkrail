@@ -29,6 +29,7 @@ import {
 	specRoleLabel,
 	specRoleTag,
 } from "./specTree";
+import { Tree, treeToggleProps, useTreeItem } from "./treeNavigation";
 
 export function SpecsPanel({
 	workspaceId,
@@ -69,7 +70,15 @@ export function SpecsPanel({
 				<p className="px-4 py-4 tr-text-metadata text-text-muted">{t("panels.specs.empty")}</p>
 			)
 		) : (
-			<ul className="flex flex-col motion-safe:animate-reveal">
+			<Tree
+				label={t("panels.specs.label")}
+				focusList="specs"
+				className="flex flex-col motion-safe:animate-reveal"
+				onOpenKept={(id) => {
+					const node = nodes.find((each) => each.id === id);
+					if (node) void openFileInTab(workspaceId, node.path, "keep");
+				}}
+			>
 				{roots.map((root) => (
 					<SpecNodeRow
 						key={root.node.id}
@@ -79,7 +88,7 @@ export function SpecsPanel({
 						depth={0}
 					/>
 				))}
-			</ul>
+			</Tree>
 		);
 	return (
 		<div className="flex min-h-0 flex-col">
@@ -145,9 +154,16 @@ function SpecNodeRow({
 	const trailingRole = isMainSpec ? t("panels.specs.mainSpec") : specRoleTag(t, node.type);
 	const DocumentIcon = specRoleIcon(node.type, isActive || isMainSpec);
 	const Chevron = expanded ? ChevronDown : ChevronRight;
+	const treeItem = useTreeItem(node.id, {
+		level: depth + 1,
+		label: specDisplayTitle(node.title),
+		expanded: children.length > 0 ? expanded : undefined,
+		selected: isActive,
+		openKept: true,
+	});
 
 	return (
-		<li>
+		<li role="none" data-focus-row={node.id}>
 			<div
 				className={cn(
 					"group flex h-panel-row min-w-0 items-stretch rounded-sm px-4 transition-colors",
@@ -159,6 +175,7 @@ function SpecNodeRow({
 				{children.length > 0 ? (
 					<button
 						type="button"
+						{...treeToggleProps(node.id)}
 						data-testid="spec-toggle"
 						aria-label={
 							expanded
@@ -176,14 +193,15 @@ function SpecNodeRow({
 				)}
 				<button
 					type="button"
+					{...treeItem}
 					data-testid="spec-node"
+					data-focus-row-primary
 					data-spec-id={node.id}
 					data-spec-type={node.type}
 					data-spec-role={trailingRole}
 					data-main-spec={isMainSpec ? "true" : undefined}
 					data-active={isActive}
 					data-depth={depth}
-					aria-current={isActive ? "page" : undefined}
 					aria-label={t("panels.specs.open", {
 						title: node.title,
 						role: isMainSpec ? t("panels.specs.mainSpec") : role,
@@ -221,7 +239,11 @@ function SpecNodeRow({
 				</button>
 			</div>
 			{children.length > 0 && expanded && (
-				<ul className="flex flex-col pl-tree-indent">
+				<ul
+					role="none"
+					data-focus-list={`specs:${node.id}`}
+					className="flex flex-col pl-tree-indent"
+				>
 					{children.map((child) => (
 						<SpecNodeRow
 							key={child.node.id}

@@ -193,7 +193,7 @@ for (const kind of [
 		await openDefault(page);
 		const other = await createWorkspaceViaDialog(page);
 		await waitTerminalReady(page);
-		await defaultWorkspaceRow(page).getByRole("button").first().click();
+		await defaultWorkspaceRow(page).getByRole("treeitem").click();
 		await waitTerminalReady(page);
 		if (kind === "aligned-side") {
 			await page.getByRole("button", { name: "Bottom panel alignment" }).click();

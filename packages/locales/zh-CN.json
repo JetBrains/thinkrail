@@ -1408,7 +1408,6 @@
 	"panels.workspaceCreation.interruptedAt": "在 {{percent}}% 处中断",
 	"panels.workspaceCreation.interruptedReason": "检出文件时 ThinkRail 关闭了。请重试或丢弃。",
 	"panels.workspaceCreation.interruptedTitle": "{{name}} 的创建被中断",
-	"panels.workspaceCreation.listLabel": "正在创建的工作区",
 	"panels.workspaceCreation.preparing": "正在准备工作树…",
 	"panels.workspaceCreation.promptHeld": "检出完成后，你的会话会从这里开始：",
 	"panels.workspaceCreation.promptKept": "你的提示词已保留：",

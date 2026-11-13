@@ -288,7 +288,7 @@ test("a hidden local frame keeps the host terminal reserved without attaching un
 	const workspace = await createWorkspaceWithoutOpening(page);
 	await pressPlatformShortcut(page, "b");
 	const workspaceRow = page.getByTestId("workspace-item").filter({ hasText: workspace.name });
-	await workspaceRow.getByRole("button").first().click();
+	await workspaceRow.getByRole("treeitem").click();
 	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
 	await expect(page.getByTestId("terminal-instance")).toHaveCount(0);
 	const catalog = await requestOverWire<{ tabs: Array<{ tabKey: string }> }>(
@@ -333,7 +333,7 @@ test("a completed initial-terminal handshake never recreates a terminal after ex
 	await revealFirstProjectWorkspaces(page);
 	const workspaceRow = page.getByTestId("workspace-item").filter({ hasText: workspace.name });
 	await expect(workspaceRow).toBeVisible();
-	await workspaceRow.getByRole("button").first().click();
+	await workspaceRow.getByRole("treeitem").click();
 	await expect(page.getByTestId("workspace-workbench")).toHaveAttribute(
 		"data-layout-status",
 		"settled",
@@ -761,7 +761,7 @@ test("bottom visibility and alignment stay local to each window and survive its 
 	await peer.goto("/");
 	await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await revealFirstProjectWorkspaces(peer);
-	await defaultWorkspaceRow(peer).getByRole("button").first().click();
+	await defaultWorkspaceRow(peer).getByRole("treeitem").click();
 	await expect(peer.getByTestId("bottom-panel")).toBeVisible();
 
 	await setBottomAlignment(page, "Full width");

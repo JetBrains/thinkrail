@@ -1316,7 +1316,6 @@
 	"panels.workspaceCreation.interruptedAt": "在 {{percent}}% 時中斷",
 	"panels.workspaceCreation.interruptedReason": "ThinkRail 在檢出檔案時關閉了。請重試或捨棄。",
 	"panels.workspaceCreation.interruptedTitle": "建立 {{name}} 的作業已中斷",
-	"panels.workspaceCreation.listLabel": "正在建立的工作區",
 	"panels.workspaceCreation.preparing": "正在準備工作樹…",
 	"panels.workspaceCreation.promptHeld": "檢出完成後，對話就會在這裡開始：",
 	"panels.workspaceCreation.promptKept": "已保留你的提示詞：",

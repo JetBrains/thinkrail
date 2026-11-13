@@ -321,7 +321,7 @@ export async function openWorkspaceChat(page: Page): Promise<Workspace> {
 		if ((await worktreeRows(page).count()) === 0) {
 			workspace = await createWorkspaceViaDialog(page);
 		}
-		await worktreeRows(page).first().getByRole("button").first().click();
+		await worktreeRows(page).first().getByRole("treeitem").click();
 		await expect(activeWorktreeRow(page)).toHaveCount(1, {
 			timeout: 5_000,
 		});

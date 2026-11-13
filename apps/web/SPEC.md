@@ -409,7 +409,8 @@ themselves.
   `<button>` without an explicit `tabindex` out of the Tab order and does not focus one on click. Chromium
   hides both; Playwright's macOS WebKit reproduces the Tab half only. A surface that must work from the keyboard gives every control an
   explicit tab stop — the questionnaire card does, pinned by a markup test and a WebKit e2e lane
-  ([[module-ext-ask-user-question]]); the rest of the app has not been swept yet (known gap).
+  ([[module-ext-ask-user-question]]), and so do the sidebar trees' roving rows
+  ([[submodule-web-panels]], *Sidebar trees*); the rest of the app has not been swept yet (known gap).
 - **Every host route the app composes is proxied by the Vite dev server.** The app reaches the host
   over the `/ws` and `/speech` sockets (the dictation stream, `transport/speech.ts`), over the two byte routes `/files` and `/blob` (images, PDFs, notebooks, markdown-relative
   images), always composed through one function (`panels/resourcePane.resourceBytesUrl`), over
