@@ -217,10 +217,13 @@ re-opened transcripts provider-valid.
       written only when reported; otherwise pi's defaults apply — 128K context, with pi's overflow
       recovery compacting and retrying once when the server returns a recognized "context exceeded"
       error (accepted gap: a server that silently truncates, like local Ollama with no Modelfile
-      `num_ctx`, gives it nothing to recover from). `maxTokens` is the reported max output when it fits
-      the context, else ¼ of a known context clamped to 256–16K (pi's 16K default would fail vLLM's
-      prompt + `max_tokens` check on a small context, and compaction cannot recover from that), else
-      omitted. Cost is zero. A new provider
+      `num_ctx`, gives it nothing to recover from). `maxTokens` is the draft's max output when it fits
+      the context, else ¼ of the context clamped to 256–16K (pi's 16K default would fail vLLM's prompt +
+      `max_tokens` check on a small context, and compaction cannot recover from that). With no detected
+      context the draft's value is kept, or omitted when there is none. A user window only widens a
+      detected context and is not used without one, as pi-ai clamps each request to the window pi uses
+      and fitting down would only lose a saved value (#1350). The fit runs only on Save, so a larger user
+      window never raises a value that fits. Cost is zero. A new provider
       gets conservative compat (`supportsStore: false`, `supportsDeveloperRole: false`, `maxTokensField:
       "max_tokens"`) because pi detects compat from the URL and would send OpenAI-only fields to an unknown
       host; every OpenAI-compatible server accepts these. An edit keeps the provider's `compat` and every

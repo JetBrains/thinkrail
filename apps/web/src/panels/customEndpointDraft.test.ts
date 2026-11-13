@@ -84,6 +84,24 @@ test("re-detecting keeps saved facts the server doesn't report and refreshes the
 	expect(smaller.models[0]).toMatchObject({ contextWindow: 4_096, maxTokens: null });
 });
 
+test("re-detecting keeps a saved max output unless a different context replaces the saved one", () => {
+	const redetect = (before: CustomEndpointModel, reported: CustomEndpointModel) =>
+		mergeProbe(editEndpointDraft({ ...saved, models: [before] }), {
+			ok: true,
+			baseUrl: saved.baseUrl,
+			models: [reported],
+		}).models[0];
+	const handSet = model("a", { contextWindow: 131_072, maxTokens: 32_000 });
+	expect(redetect(handSet, model("a", { contextWindow: 131_072 }))?.maxTokens).toBe(32_000);
+	expect(redetect(handSet, model("a", { contextWindow: 262_144 }))?.maxTokens).toBeNull();
+	expect(
+		redetect(handSet, model("a", { contextWindow: 131_072, maxTokens: 8_000 }))?.maxTokens,
+	).toBe(8_000);
+	expect(
+		redetect(model("a", { maxTokens: 32_000 }), model("a", { contextWindow: 131_072 })),
+	).toMatchObject({ contextWindow: 131_072, maxTokens: 32_000 });
+});
+
 test("re-detecting keeps existing rows in place and appends newly found models", () => {
 	const merged = mergeProbe(editEndpointDraft(saved), {
 		ok: true,
