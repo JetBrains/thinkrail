@@ -56,7 +56,7 @@ not reproduce.
 | `project.create` Start a new project… | `panels/useOpenProject.startNewProject` (`CreateProjectDialog`; a setup intent starts the setup chat) | a host serving `project.create` (v94), online | yes |
 | Reopen a recent project | `AddProjectMenu` recents | a recent path | Row UI |
 | `chat.history` Search chat history (`Ctrl+R`) | `shell/chordActions.openChatHistory` | a chat tab | yes |
-| `view.show.{specs,files,review,plan}` (every `LayoutToolId` but `projects`) | `store.requestToolView` | active workspace | yes |
+| `view.show.{specs,files,artifacts,review,plan}` (every `LayoutToolId` but `projects`) | `store.requestToolView` | active workspace | yes |
 | `view.toggleLeft/Right/Bottom` (`Mod+B`/`Mod+J`/`Mod+Shift+J`) | `shell/chordActions` (the functions the chords run) | right/bottom need a workspace | yes |
 | `view.zoomIn` / `zoomOut` / `zoomReset` Zoom in / out / Reset zoom (`Mod+=` / `Mod+-` / `Mod+Numpad0`, the desktop preload's chords) | `NativePageZoomBridge.request` | the desktop page-zoom bridge | yes |
 | `settings.open` and every Settings section (incl. Keyboard's double-Shift row, Extensions, MCP servers) | `store.openSettings(section)`; the native menu's `Mod+,` is shown where it exists | protocol-gated sections only | yes |

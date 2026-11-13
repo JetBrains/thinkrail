@@ -4976,7 +4976,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 							? {
 									artifactsSeenByWorkspace: {
 										...s.artifactsSeenByWorkspace,
-										[workspaceId]: artifactsWatermark(snapshot),
+										[workspaceId]: artifactsWatermark(snapshot, true),
 									},
 								}
 							: {}),

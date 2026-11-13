@@ -558,3 +558,28 @@ test("a user removal through a linked folder is still the user's, and removing t
 		`live ${CONTEXT}/keep.md`,
 	]);
 });
+
+test("a worktree that is gone for a while marks nothing deleted", async () => {
+	write(`${CONTEXT}/a.md`, "a");
+	reconcileArtifacts("w1");
+	renameSync(root, `${root}-away`);
+	expect((await listArtifacts("w1")).artifacts).toEqual([
+		expect.objectContaining({ path: `${CONTEXT}/a.md`, state: "live" }),
+	]);
+	renameSync(`${root}-away`, root);
+	expect((await listArtifacts("w1")).artifacts[0]?.state).toBe("live");
+});
+
+test("discarding a kept copy while its workspace is removed leaves no store behind", async () => {
+	write(`${CONTEXT}/a.md`, "a");
+	reconcileArtifacts("w1");
+	rmSync(join(root, CONTEXT, "a.md"));
+	reconcileArtifacts("w1");
+	setTrashImplementationForTests(async (input) => {
+		if (typeof input !== "string") throw new Error("expected one path");
+		removeWorkspaceArtifacts("w1");
+		rmSync(input, { recursive: true, force: true });
+	});
+	await discardArtifact("w1", `${CONTEXT}/a.md`);
+	expect(existsSync(join(artifactsStoreRoot(), "w1"))).toBe(false);
+});

@@ -11,6 +11,7 @@ import {
 	realpathSync,
 	renameSync,
 	rmSync,
+	statSync,
 	writeFileSync,
 } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -298,6 +299,7 @@ function skippedEntry(entry: Dirent): boolean {
 
 function scanContext(root: string): { files: Map<string, ScannedFile>; complete: boolean } {
 	const files = new Map<string, ScannedFile>();
+	if (!statSync(root, { throwIfNoEntry: false })?.isDirectory()) return { files, complete: false };
 	const folder = contextFolder(root);
 	if (folder !== "real") return { files, complete: folder === "missing" };
 	const queue = [WORKSPACE_CONTEXT_DIR];
@@ -740,7 +742,8 @@ export function restoreArtifact(workspaceId: string, path: string): void {
 }
 
 export async function discardArtifact(workspaceId: string, path: string): Promise<void> {
-	requireWorkspace(workspaceId);
+	const workspace = requireWorkspace(workspaceId);
+	const generation = generations.get(workspaceId) ?? 0;
 	const { record, kept, dir } = deletedRecord(workspaceId, path);
 	const staging = join(dir, "discard", randomUUID());
 	const staged = join(staging, basename(path));
@@ -749,11 +752,12 @@ export async function discardArtifact(workspaceId: string, path: string): Promis
 	try {
 		await trashFile(staged);
 	} catch (error) {
-		renameSync(staged, kept);
+		if (current(workspace, generation)) renameSync(staged, kept);
 		throw error;
 	} finally {
 		removeQuietly(staging);
 	}
+	if (!current(workspace, generation)) return;
 	const state = load(workspaceId);
 	if (state.records.get(path) === record) state.records.delete(path);
 	save(workspaceId, state);

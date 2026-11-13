@@ -31,11 +31,12 @@ import {
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { cn } from "@thinkrail/ui/utils";
-import { type ReactElement, type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactElement, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { QuietScrollArea } from "@/components/QuietScrollArea";
 import { copyText, fileName, firstClickOnly, joinWorkspacePath } from "../lib";
 import {
 	artifactsWatermark,
+	hostLacksArtifacts,
 	selectChatTitle,
 	selectWorkspaceById,
 	supportsArtifacts,
@@ -82,7 +83,7 @@ export function ArtifactsPanel({
 	onRetry: () => void;
 }) {
 	const t = useT();
-	const supported = useAppStore((s) => supportsArtifacts(s.protocolVersion));
+	const unsupported = useAppStore((s) => hostLacksArtifacts(s.protocolVersion));
 	const snapshot = useAppStore((s) => s.artifactsByWorkspace[workspaceId]);
 	const specs = useAppStore((s) => s.specsByWorkspace[workspaceId]);
 	const showIgnored = useAppStore((s) => s.artifactsShowIgnored);
@@ -99,8 +100,8 @@ export function ArtifactsPanel({
 		const store = useAppStore.getState();
 		if (highlightSince === null)
 			setHighlightSince(store.artifactsSeenByWorkspace[workspaceId] ?? 0);
-		store.markArtifactsSeen(workspaceId, artifactsWatermark(snapshot));
-	}, [snapshot, workspaceId, highlightSince]);
+		store.markArtifactsSeen(workspaceId, artifactsWatermark(snapshot, showIgnored));
+	}, [snapshot, workspaceId, highlightSince, showIgnored]);
 
 	const sessionId = allChats ? null : mentionTarget;
 	const rows = useMemo(
@@ -112,7 +113,7 @@ export function ArtifactsPanel({
 	);
 	const requestRemoval: RequestRemoval = (path, kept) => setRemoval({ path, kept, open: true });
 
-	if (!supported) {
+	if (unsupported) {
 		return (
 			<p data-testid="artifacts-unsupported" className="p-16 text-text-subtle tr-text-ui">
 				{t("panels.artifacts.unsupported")}
@@ -565,6 +566,7 @@ function EntryMenu({
 }) {
 	const t = useT();
 	const [open, setOpen] = useState(false);
+	const mentionOnCloseRef = useRef(false);
 	const canMention = useAppStore((s) => selectArtifactMentionTarget(s, workspaceId) !== null);
 	const mutations = useAppStore((s) => supportsArtifacts(s.protocolVersion));
 	const copyPath = (absolute: boolean) => {
@@ -580,7 +582,15 @@ function EntryMenu({
 			<ContextMenuTrigger asChild onKeyDown={openContextMenuFromKeyboard}>
 				{children(open)}
 			</ContextMenuTrigger>
-			<ContextMenuContent data-testid="artifact-actions" onCloseAutoFocus={onCloseAutoFocus}>
+			<ContextMenuContent
+				data-testid="artifact-actions"
+				onCloseAutoFocus={(event) => {
+					if (!mentionOnCloseRef.current) return onCloseAutoFocus?.(event);
+					mentionOnCloseRef.current = false;
+					event.preventDefault();
+					mentionArtifact(workspaceId, path);
+				}}
+			>
 				{deleted ? (
 					<ContextMenuItem
 						data-testid="artifact-menu-restore"
@@ -595,7 +605,9 @@ function EntryMenu({
 							data-testid="artifact-mention"
 							disabled={!canMention}
 							title={canMention ? undefined : t("panels.artifacts.mentionNoChat")}
-							onSelect={() => mentionArtifact(workspaceId, path)}
+							onSelect={() => {
+								mentionOnCloseRef.current = true;
+							}}
 						>
 							<RiAtLine />
 							{t("panels.artifacts.mention")}

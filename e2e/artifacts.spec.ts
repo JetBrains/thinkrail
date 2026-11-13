@@ -117,11 +117,20 @@ test("a new artifact lights the rail until the tab is opened, and a cut file pas
 	await expect(page.getByTestId("artifacts-paste")).toHaveCount(0);
 });
 
-test("Mention in chat puts the artifact's path into the open chat's composer", async ({ page }) => {
+test("Mention in chat from the keyboard puts the path into the open chat's composer, closing its history", async ({
+	page,
+}) => {
 	const workspace = await openWorkspaceChat(page);
 	writeArtifact(workspace.worktreePath, "plan.md", "plan\n");
 	await showArtifacts(page);
-	await rowAction(page, "plan.md", "artifact-mention");
+	await page.getByTestId("chat-input").focus();
+	await page.keyboard.press("Control+r");
+	await expect(page.getByTestId("history-overlay")).toBeVisible();
+	await artifact(page, "plan.md").getByTestId("artifact-open").focus();
+	await page.keyboard.press("Shift+F10");
+	await page.getByTestId("artifact-mention").press("Enter");
+	await expect(page.getByTestId("history-overlay")).toHaveCount(0);
+	await expect(page.getByTestId("chat-input")).toBeFocused();
 	await expect(page.getByTestId("chat-input")).toHaveValue(`@${CONTEXT}/plan.md `);
 });
 

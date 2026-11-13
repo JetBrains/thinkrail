@@ -192,8 +192,8 @@ async function runChatDeletion(workspace: Workspace): Promise<void> {
 	removeWorkspaceReviews(id);
 	forgetWorkspaceChanges(id);
 	forgetWorkspaceTurns(id);
-	removeWorkspaceArtifacts(id);
 	if (isUnderChatsRoot(cwd) && existsSync(cwd)) await trashFile(cwd);
 	dropChatRecord(id);
+	removeWorkspaceArtifacts(id);
 	log.info(`deleted chat ${id}`);
 }

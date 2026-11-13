@@ -56,8 +56,10 @@ app's `node_modules` neither floods the list nor exhausts the bound) and build-o
 `build`, `out`, `.next`, `target`, `coverage`): an agent-built mockup inside the artifacts folder rebuilds
 hashed assets on every run, and each old hash would otherwise stay forever as a "deleted" row with a kept
 copy. Unlike ignored outputs elsewhere, which do list `dist/`, a build inside the artifacts folder is
-scaffolding, not something the agent produced for the user and the `fs` delete claims
-(`DELETE_CLAIM_PREFIX`), which are the user's own trash in flight, not a rename. A new path gains a record
+scaffolding, not something the agent produced for the user. It also skips the `fs` delete claims
+(`DELETE_CLAIM_PREFIX`), which are the user's own trash in flight, not a rename. A worktree root that is
+not there (an unmounted drive, a moved project folder) is an incomplete scan, so its rows stay live until it
+returns. A new path gains a record
 and a link; a changed size/mtime updates the record (and its writer when known); an inode change relinks;
 a missing record whose file now sits at a new path is a **rename** (the row moves, keeping its first-seen
 time and chat); any other missing record becomes `deleted` while its kept copy exists — unless the
@@ -131,7 +133,9 @@ a project has no git, so its snapshot reports `outputs: null`.
 ## Lifetime
 
 The store follows its workspace: `host` calls `removeWorkspaceArtifacts` when a workspace or chat is
-removed, alongside its other per-workspace state; the worktree's own teardown is not awaited. The index
+removed, alongside its other per-workspace state — after the workspace or chat record is gone, so a listing
+racing the removal cannot rebuild the store — and the worktree's own teardown is not awaited. An async step
+(a discard's trash move, an output walk) that outlives the removal writes nothing back. The index
 is validated on load; an unreadable index starts empty rather than failing the workspace. Removing store
 entries is best-effort: a kept copy another process holds open (Windows refuses to unlink a hard-linked
 file Excel or a scanner has open) is logged and left behind, never allowed to abort a reconcile, a user's

@@ -1,7 +1,11 @@
 import { expect, test } from "bun:test";
-import type { SpecGraphNode, WorkspaceArtifactsSnapshot } from "@thinkrail/contracts";
+import {
+	ARTIFACTS_PROTOCOL_VERSION,
+	type SpecGraphNode,
+	type WorkspaceArtifactsSnapshot,
+} from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
-import { artifactsWatermark, selectArtifactsUnseen } from "../store";
+import { artifactsWatermark, hostLacksArtifacts, selectArtifactsUnseen } from "../store";
 import { artifactRows, artifactTimeLabel, mentionText } from "./artifactsModel";
 
 const snapshot: WorkspaceArtifactsSnapshot = {
@@ -114,14 +118,33 @@ test("the chat filter keeps that chat's rows and the toggle hides ignored output
 });
 
 test("the watermark is the newest arrival, and only something newer than what was seen is unseen", () => {
-	expect(artifactsWatermark(snapshot)).toBe(40);
+	expect(artifactsWatermark(snapshot, true)).toBe(40);
 	const state = (seen: number | undefined) => ({
 		artifactsByWorkspace: { w1: snapshot },
 		artifactsSeenByWorkspace: seen === undefined ? {} : { w1: seen },
+		artifactsShowIgnored: true,
 	});
 	expect(selectArtifactsUnseen(state(40), "w1")).toBe(false);
 	expect(selectArtifactsUnseen(state(39), "w1")).toBe(true);
 	expect(selectArtifactsUnseen(state(undefined), "w2")).toBe(false);
+});
+
+test("a change in hidden ignored outputs is not something new", () => {
+	const watermark = artifactsWatermark(snapshot, false);
+	expect(watermark).toBeLessThan(artifactsWatermark(snapshot, true));
+	const state = (artifactsShowIgnored: boolean) => ({
+		artifactsByWorkspace: { w1: snapshot },
+		artifactsSeenByWorkspace: { w1: watermark },
+		artifactsShowIgnored,
+	});
+	expect(selectArtifactsUnseen(state(false), "w1")).toBe(false);
+	expect(selectArtifactsUnseen(state(true), "w1")).toBe(true);
+});
+
+test("only a host known to be older lacks artifacts, not one still connecting", () => {
+	expect(hostLacksArtifacts(null)).toBe(false);
+	expect(hostLacksArtifacts(ARTIFACTS_PROTOCOL_VERSION - 1)).toBe(true);
+	expect(hostLacksArtifacts(ARTIFACTS_PROTOCOL_VERSION)).toBe(false);
 });
 
 test("a mention is the composer's own @path form", () => {

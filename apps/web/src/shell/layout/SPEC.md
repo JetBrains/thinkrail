@@ -264,8 +264,8 @@ Balanced, Focus, and Review are web-owned resource-free frame definitions with a
 Balanced and Review show it; Focus hides it. Balanced and Focus start with one center group; Review provides
 its deliberate vertical pair. Balanced's lower right group opens on the TODO List with Review beside it: on a
 fresh workspace the plan is what there is to look at, while review comments only exist once there is a diff.
-Artifacts sits with the reference tools — after Specs and Files in Balanced's and Review's upper group, and
-last in Focus's one group; it is appended to `LAYOUT_TOOLS` so every existing tool keeps its default
+Artifacts sits with the reference tools — after Specs and Files in Balanced's upper right group and
+Review's lower reference group, and last in Focus's one group; it is appended to `LAYOUT_TOOLS` so every existing tool keeps its default
 restore index, and a saved frame from before it shows it as an unplaced entry until placed. Custom presets use the same grammar and capture geometry,
 topology, tools, folds, and empty structural slots, never workspace resources or terminal count. Preset node
 ids are template-local labels: instantiation mints frontend-local frame ids and returns the old→new group map

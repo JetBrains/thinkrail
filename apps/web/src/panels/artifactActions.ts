@@ -17,7 +17,7 @@ export function mentionArtifact(workspaceId: string, path: string): void {
 	const sessionId = selectArtifactMentionTarget(store, workspaceId);
 	if (!sessionId) return;
 	store.pasteIntoComposer(sessionId, mentionText(path));
-	store.requestComposerFocus(workspaceId, sessionId);
+	store.requestComposerFocus(workspaceId, sessionId, { dismissHistory: true });
 }
 
 export function revealArtifact(workspaceId: string, path: string): void {

@@ -33,7 +33,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   `@thinkrail/shared/artifactsDir` → `seedArtifactsDir(root)`, the one way anything in the host creates the
   artifacts folder: each path part is created non-recursively and must be a real directory (a link is
   refused, never followed), and the self-ignoring `*` `.gitignore` is written only when absent
-  (exclusive create). `workspaces` seeds at session start, `artifacts` before a restore, and extensions
+  (exclusive create). `workspaces` seeds at session start, `artifacts` before a restore and before a
+paste into the folder, and extensions
   through `WorkspaceFiles.ensureArtifactsDir` before saving — so recreating a folder someone cleaned never
   leaves files git would stage;
   `@thinkrail/shared/codedError` → `CodedError` + `errorCodeOf()`;

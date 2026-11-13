@@ -874,7 +874,8 @@ and settle do not depend on it. `setArtifactsPublisher` fans
 the index's change out as the pathless `workspace.artifactsChanged` nudge to v121+ sockets of that
 workspace. `fs.delete`, `fs.rename` and `fs.move` run their mutation inside `withUserRemoval` (a move locks
 both workspaces in id order), `fs.copy` and `fs.move` first call `prepareArtifactsDestination` for their
-destination folder, and `workspace.remove` / `chat.delete` call `removeWorkspaceArtifacts`.
+destination folder, and `workspace.remove` / `chat.delete` call `removeWorkspaceArtifacts` once the
+workspace or chat record is gone.
 
 `RunningServer.startAttributionClaim()` is the explicit launcher-readiness signal and rechecks the saved
 enabled/confirmed choice before entering analytics attribution.

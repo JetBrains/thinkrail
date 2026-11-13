@@ -330,7 +330,8 @@ treatment.
   folder or link, a compacted folder's deepest folder — on the session-only in-app clipboard
   (`store.fileClipboard`, not the OS clipboard, cleared with its workspace or when its entry is deleted);
   **Paste** (only while the clipboard holds an entry) asks `fs.copy` for a copy beside a file or inside a
-  folder — across workspaces too, never a move — under the host's ` copy` / ` copy N` name, then expands
+  folder — across workspaces too, a copy unless the entry was cut (below) — under the host's ` copy` /
+  ` copy N` name, then expands
   that folder, and an empty tree offers the same Paste as a button next to *Empty*; **Delete** asks for
   confirmation and `fs.delete` moves the entry to the OS trash. From `ARTIFACTS_PROTOCOL_VERSION` (v121)
   the menu also has **Cut**: the same clipboard entry marked `cut`, which the next Paste (here or in the
@@ -2264,15 +2265,18 @@ own section. The kebab menu (`plan-menu`, a
   remembered across mounts. Unattributed artifacts belong to no chat. Whenever the filter hides rows, a
   line under the list counts them ("N more from other chats") with **Show all chats**, so the default never
   makes a workspace look emptier than it is. Paste puts the Files clipboard into the artifacts folder. Every row has one context menu: Mention in chat
-  (pastes `@<path> ` into the attended chat's composer through `pasteIntoComposer` and focuses it; disabled
+  (pastes `@<path> ` into the attended chat's composer through `pasteIntoComposer` and focuses it, closing the chat's history overlay as `Mod+L` does — run once the row
+menu has closed, because a closing menu returns focus to its row; disabled
   without one), Reveal in Files, the two Copy paths, Copy / Cut (the shared Files clipboard; a cut pastes
   through `fs.move`), Rename (inline, `fs.rename`), Restore for a deleted row, and Delete — `fs.delete` for a
   live file, `artifacts.discard` for a kept copy, both behind a confirmation. **New** means newer than this
   client's per-workspace seen watermark (`artifactsSeenByWorkspace`, the newest `firstSeenAt` / output
   `changedAt`, so only host timestamps are compared): the first snapshot of a workspace is taken as seen, a
   showing panel advances the watermark, rows newer than the watermark it opened with stay highlighted while
-  it shows, and `selectArtifactsUnseen` drives the rail dot. The watermarks and the ignored toggle persist
-  per client (`shell/artifactsPreference.ts`).
+  it shows, and `selectArtifactsUnseen` drives the rail dot. While the eye toggle hides ignored outputs,
+  their changes neither advance the watermark nor light the dot. The watermarks and the ignored toggle persist
+  per client (`shell/artifactsPreference.ts`). "Update the ThinkRail host" shows only once a welcome reports
+  a host older than v121; between sockets the panel keeps its last snapshot.
 - **Chat deep-links remain arrangement-agnostic.** A shell-owned **`LayoutIntent`** names the singleton tool;
   the shell resolves its current side/group, reveals it in place, and selects it locally. `changesRequest`
   and `specRequest` add the one path to focus/open without naming a layout destination. A divider chip that

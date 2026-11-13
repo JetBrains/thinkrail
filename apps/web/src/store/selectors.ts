@@ -1314,9 +1314,17 @@ export function supportsArtifacts(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= ARTIFACTS_PROTOCOL_VERSION;
 }
 
-export function artifactsWatermark(snapshot: WorkspaceArtifactsSnapshot): number {
+export function hostLacksArtifacts(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion < ARTIFACTS_PROTOCOL_VERSION;
+}
+
+export function artifactsWatermark(
+	snapshot: WorkspaceArtifactsSnapshot,
+	includeOutputs: boolean,
+): number {
 	let watermark = 0;
 	for (const artifact of snapshot.artifacts) watermark = Math.max(watermark, artifact.firstSeenAt);
+	if (!includeOutputs) return watermark;
 	for (const output of snapshot.outputs ?? []) watermark = Math.max(watermark, output.changedAt);
 	return watermark;
 }
@@ -1325,13 +1333,15 @@ export function selectArtifactsUnseen(
 	state: {
 		artifactsByWorkspace: Record<string, WorkspaceArtifactsSnapshot>;
 		artifactsSeenByWorkspace: Record<string, number>;
+		artifactsShowIgnored: boolean;
 	},
 	workspaceId: string,
 ): boolean {
 	const snapshot = state.artifactsByWorkspace[workspaceId];
 	return (
 		snapshot !== undefined &&
-		artifactsWatermark(snapshot) > (state.artifactsSeenByWorkspace[workspaceId] ?? 0)
+		artifactsWatermark(snapshot, state.artifactsShowIgnored) >
+			(state.artifactsSeenByWorkspace[workspaceId] ?? 0)
 	);
 }
 
