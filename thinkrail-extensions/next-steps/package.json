@@ -14,8 +14,8 @@
 	"dependencies": {
 		"@thinkrail/extension-api": "workspace:*",
 		"@thinkrail/locales": "workspace:*",
-		"react": "catalog:",
-		"typebox": "catalog:"
+		"@thinkrail/pi-next-steps": "workspace:*",
+		"react": "catalog:"
 	},
 	"devDependencies": {
 		"@earendil-works/pi-coding-agent": "catalog:",
