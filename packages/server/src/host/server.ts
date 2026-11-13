@@ -196,6 +196,7 @@ import {
 	requestMethodDiagnostic,
 	workspaceCreationHandoff,
 } from "./handlers";
+import { HeldSnapshots, terminalsMayResume } from "./heldSnapshots";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { trackLoginOutcome } from "./loginAnalytics";
 import {
@@ -285,6 +286,7 @@ interface SocketData {
 	speech?: SpeechRelay;
 	speechSocket?: true;
 	slowSince?: number;
+	held?: HeldSnapshots;
 }
 
 const CLIENT_REPLAY_RETENTION_MS = 60_000;
@@ -479,6 +481,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				}
 				const replaced = sockets.get(ws.data.clientKey);
 				sockets.set(ws.data.clientKey, ws);
+				ws.data.held = new HeldSnapshots({
+					quarantined: () => ws.data.slowSince !== undefined,
+					getBufferedAmount: () => ws.getBufferedAmount(),
+					send: (frame) =>
+						sendOrQuarantine(ws, frame, `${WS_CHANNELS.piEvent} push`, warnSlowConsumer),
+				});
 				if (replaced && replaced !== ws) replaced.close();
 				terminalBackpressured.delete(ws.data.clientKey);
 				const pendingReap = reapTimers.get(ws.data.clientKey);
@@ -646,6 +654,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				if (ws.data.speechSocket) return;
 				if (settleSlowConsumer(ws) !== "healthy") return;
 				if (sockets.get(ws.data.clientKey) !== ws) return;
+				if (!terminalsMayResume(ws.data.held?.drain())) return;
 				terminalBackpressured.delete(ws.data.clientKey);
 				resumeClientTerminals(ws.data.clientKey);
 			},
@@ -654,6 +663,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					ws.data.speech?.close();
 					return;
 				}
+				ws.data.held?.clear();
 				const { clientKey } = ws.data;
 				if (stopping) return;
 				if (sockets.get(clientKey) === ws) {
@@ -668,7 +678,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 
 	const backpressureReconciler = setInterval(() => {
-		for (const socket of sockets.values()) settleSlowConsumer(socket);
+		for (const socket of sockets.values()) {
+			if (settleSlowConsumer(socket) === "healthy") socket.data.held?.drain();
+			else socket.data.held?.clear();
+		}
 		const drained = drainedClientKeys(terminalBackpressured, (clientKey) =>
 			sockets.get(clientKey)?.getBufferedAmount(),
 		);
@@ -681,32 +694,47 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 	}, BACKPRESSURE_RECONCILE_MS);
 
+	type PushSocket = Bun.ServerWebSocket<SocketData>;
 	const fanOut = (
 		channel: string,
-		frame: string,
-		admits: (socket: Bun.ServerWebSocket<SocketData>) => boolean,
+		admits: (socket: PushSocket) => boolean,
+		deliver: (socket: PushSocket) => void,
 	): void => {
 		for (const socket of sockets.values()) {
-			if (socket.isSubscribed(channel) && admits(socket)) {
-				sendOrQuarantine(socket, frame, `${channel} push`, warnSlowConsumer);
-			}
+			if (socket.isSubscribed(channel) && admits(socket)) deliver(socket);
 		}
+	};
+
+	const pushTo =
+		(channel: string, frame: string, afterSession?: string) =>
+		(socket: PushSocket): void => {
+			if (afterSession !== undefined && socket.data.held?.barrier(afterSession) === false) return;
+			sendOrQuarantine(socket, frame, `${channel} push`, warnSlowConsumer);
+		};
+
+	const admitsScope = (scope: {
+		workspaceId?: string;
+		projectId?: string;
+		belowProtocol?: number;
+	}): ((socket: PushSocket) => boolean) => {
+		const aboutChats =
+			(scope.workspaceId !== undefined && isChatWorkspaceId(scope.workspaceId)) ||
+			(scope.projectId !== undefined && isChatsContainerId(scope.projectId));
+		const floor = scope.belowProtocol ?? 0;
+		return ({ data: { protocolVersion } }) =>
+			protocolVersion >= floor && (!aboutChats || seesChats(protocolVersion));
 	};
 
 	const publishScoped = (
 		channel: string,
 		data: unknown,
 		scope: { workspaceId?: string; projectId?: string; belowProtocol?: number } = {},
+		afterSession?: string,
 	) => {
-		const aboutChats =
-			(scope.workspaceId !== undefined && isChatWorkspaceId(scope.workspaceId)) ||
-			(scope.projectId !== undefined && isChatsContainerId(scope.projectId));
-		const floor = scope.belowProtocol ?? 0;
 		fanOut(
 			channel,
-			JSON.stringify({ channel, data }),
-			({ data: { protocolVersion } }) =>
-				protocolVersion >= floor && (!aboutChats || seesChats(protocolVersion)),
+			admitsScope(scope),
+			pushTo(channel, JSON.stringify({ channel, data }), afterSession),
 		);
 	};
 
@@ -1047,13 +1075,19 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 
 	setSessionStatePublisher((record: SessionStateRecord) => {
 		stampSessionActivity(record);
-		publishScoped(WS_CHANNELS.sessionState, record, { workspaceId: record.workspaceId });
+		publishScoped(
+			WS_CHANNELS.sessionState,
+			record,
+			{ workspaceId: record.workspaceId },
+			record.sessionId,
+		);
 	});
 
 	setSessionDeletedPublisher((payload: SessionDeletedPayload) => {
 		forgetImageSession(payload.sessionId);
 		runObservation.forget(payload.sessionId);
 		taskObservation.forget(payload.sessionId);
+		for (const socket of sockets.values()) socket.data.held?.forgetSession(payload.sessionId);
 		publishScoped(WS_CHANNELS.sessionDeleted, payload, { workspaceId: payload.workspaceId });
 	});
 
@@ -1097,7 +1131,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		if (payload.event.type === "tool_execution_start") {
 			taskObservation.toolStarted(workspaceId, payload.sessionId, payload.event);
 		}
-		publishScoped(WS_CHANNELS.piEvent, payload, { workspaceId });
+		const frame = JSON.stringify({ channel: WS_CHANNELS.piEvent, data: payload });
+		fanOut(WS_CHANNELS.piEvent, admitsScope({ workspaceId }), (socket) => {
+			if (socket.data.held) socket.data.held.deliver(payload, frame);
+			else pushTo(WS_CHANNELS.piEvent, frame)(socket);
+		});
 		if (isTodoToolEnd(payload.event)) {
 			const observeCompletion = taskObservation.toolFinished(payload.sessionId, payload.event);
 			if (isChatWorkspaceId(workspaceId)) void observeCompletion();
@@ -1114,10 +1152,14 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		const aboutChat = workspaceId !== undefined && isChatWorkspaceId(workspaceId);
 		fanOut(
 			WS_CHANNELS.piExtensionUi,
-			JSON.stringify({ channel: WS_CHANNELS.piExtensionUi, data: request }),
 			({ data: { protocolVersion } }) =>
 				(!audience || protocolVersion < audience.belowProtocol) &&
 				(!aboutChat || seesChats(protocolVersion)),
+			pushTo(
+				WS_CHANNELS.piExtensionUi,
+				JSON.stringify({ channel: WS_CHANNELS.piExtensionUi, data: request }),
+				request.sessionId,
+			),
 		);
 	});
 

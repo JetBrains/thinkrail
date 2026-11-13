@@ -1002,6 +1002,33 @@ enabled/confirmed choice before entering analytics attribution.
     then `sendOrQuarantine`. A test rejects any `.publish(` call in the server source. Addressed sends
     (search results, MCP login, feedback asks) use the same rule. The terminal publisher keeps its
     own latch and treats a quarantined socket as unavailable.
+- **A backpressured socket gets stream snapshots conflated, not dropped (#1179).**
+  - **Why.** Streaming is O(n²) on the wire: each `message_update` and `tool_execution_update` repeats
+    the whole response or output so far. Without conflation, a slow tab piles that up until
+    quarantine.
+  - **What is held.** `HeldSnapshots` (`heldSnapshots.ts`) lives on the socket's `SocketData`. It
+    applies after subscription and audience admission. While `getBufferedAmount() > 0`, it keeps the
+    newest serialized frame per session's assistant message or tool call, instead of sending it. The
+    frame is serialized once per publication. Host observers still see every event.
+  - **Barrier.** Before a later frame of the same session (a non-snapshot Pi event, `session.state`,
+    or `pi.extensionUi`), it sends that session's held frames synchronously. It keeps going through
+    `-1` (accepted) and stops only if the socket is quarantined. A held frame is therefore exactly a
+    delayed send.
+  - **Flushing in a pause.** Bun's `drain` fires on writable progress, not on an empty buffer: a
+    probe saw it fire repeatedly with tens of MiB still buffered. So `drain` and the 1 s reconciler
+    flush held frames only at `getBufferedAmount() === 0`. A flush that hits backpressure stops
+    there. A drain that leaves held frames waiting or backpressured does not lift the terminal latch
+    either, so continuous terminal output cannot keep the buffer from ever emptying
+    (`terminalsMayResume`).
+  - **Clearing.** Held frames clear on close or replacement, on `session.deleted`, and on quarantine:
+    a quarantined socket takes no new snapshot, and the reconciler clears what it held. They never
+    carry over to a reconnect.
+  - **Rejected.** Assistant `message_end` does not discard a held partial. A mid-stream client that
+    missed `message_start` needs that partial to create the turn; `message_end` alone renders nothing.
+    Stateless skipping was rejected too, because a tool that goes quiet would show stale output until
+    it ends. Dropping held frames at the next session boundary was rejected for the same reason.
+  - **Bound.** One frame per pending stream key; there is no byte budget. Quarantine stays the safety
+    net for everything else.
 - The host is the single place features are wired together — features never reach back into it.
 - **A font upload must carry `X-ThinkRail-Request: font-upload`** (`USER_FONT_UPLOAD_HEADER`), else 403.
   The host has no auth, no Origin check and no CORS ([[architecture]] Decision 7). A cross-origin upload
