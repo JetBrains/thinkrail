@@ -28,6 +28,7 @@ const session: ExtensionSessionServices = {
 			if (path === "missing.html") throw new Error("no such file");
 		},
 		scratchDir: ".thinkrail/context/mockups/",
+		artifactsDir: "",
 	},
 };
 

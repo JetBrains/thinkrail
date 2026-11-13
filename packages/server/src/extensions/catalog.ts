@@ -31,6 +31,7 @@ const inertSession: HostSessionServices = {
 	workspaceFiles: {
 		check: () => Promise.reject(new Error("the Settings catalog has no workspace")),
 		scratchDir: "",
+		artifactsDir: "",
 	},
 };
 

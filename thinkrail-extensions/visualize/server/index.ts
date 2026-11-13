@@ -1,6 +1,7 @@
 import { defineServerExtension } from "@thinkrail/extension-api/server";
 import { createVisualizeExtension } from "@thinkrail/pi-visualize";
 import { strictMermaidValidator } from "./mermaid";
+import { visualizationSaver } from "./save";
 
 export default defineServerExtension({
 	name: "visualize",
@@ -13,6 +14,13 @@ export default defineServerExtension({
 			validateMermaid: strictMermaidValidator,
 			checkFile: session.workspaceFiles.check,
 			scratchDir: session.workspaceFiles.scratchDir,
+			...(session.workspaceFiles.artifactsDir
+				? {
+						saveVisualization: visualizationSaver(
+							`${session.workspaceFiles.artifactsDir}visualize/`,
+						),
+					}
+				: {}),
 		}),
 	],
 });

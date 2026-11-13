@@ -43,7 +43,7 @@ describe("server extension registry", () => {
 			names({
 				expectToolResponse: () => {},
 				awaitToolResponse: () => Promise.resolve({ kind: "deferred" as const }),
-				workspaceFiles: { check: async () => {}, scratchDir: "" },
+				workspaceFiles: { check: async () => {}, scratchDir: "", artifactsDir: "" },
 			}),
 		).toEqual(["visualize", "ask-user-question", "web-access"]);
 		expect(

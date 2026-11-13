@@ -1,6 +1,7 @@
 import { realpath, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { WorkspaceFiles } from "@thinkrail/extension-api/server";
+import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 
 export const MOCKUP_DIR = ".thinkrail/context/mockups/";
 
@@ -24,4 +25,8 @@ export async function checkWorkspaceFile(path: string, cwd: string): Promise<voi
 	}
 }
 
-export const workspaceFiles: WorkspaceFiles = { check: checkWorkspaceFile, scratchDir: MOCKUP_DIR };
+export const workspaceFiles: WorkspaceFiles = {
+	check: checkWorkspaceFile,
+	scratchDir: MOCKUP_DIR,
+	artifactsDir: `${WORKSPACE_CONTEXT_DIR}/`,
+};

@@ -8,6 +8,7 @@ export type ToolResponse =
 export interface WorkspaceFiles {
 	check(path: string, cwd: string): Promise<void>;
 	scratchDir: string;
+	artifactsDir: string;
 }
 
 export interface ExtensionSessionServices {

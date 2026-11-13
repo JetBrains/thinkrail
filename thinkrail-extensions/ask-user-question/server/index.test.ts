@@ -52,7 +52,11 @@ function compose(
 			if (key !== "richPreviews") throw new Error(`unexpected setting ${key}`);
 			return richPreviews();
 		},
-		workspaceFiles: { check, scratchDir: ".thinkrail/context/mockups/" },
+		workspaceFiles: {
+			check,
+			scratchDir: ".thinkrail/context/mockups/",
+			artifactsDir: ".thinkrail/context/",
+		},
 	};
 	const factories = askUserQuestion.sessionExtensions?.(session) ?? [];
 	let tool: CapturedTool | undefined;
