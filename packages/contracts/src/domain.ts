@@ -1415,7 +1415,7 @@ export function isFontWeightOffset(value: unknown): value is number {
 	);
 }
 
-export type LayoutToolId = "projects" | "specs" | "files" | "review" | "plan";
+export type LayoutToolId = "projects" | "specs" | "files" | "review" | "plan" | "artifacts";
 
 export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";
 

@@ -113,6 +113,7 @@ export function Workbench({
 	onRequestClose,
 	onRenameChat,
 	chatFirstPrompts,
+	toolAttention,
 	onNewChat,
 	onNewTerminal,
 	onGestureCanceled,
@@ -781,6 +782,7 @@ export function Workbench({
 		onRevealTool: revealMissingTool,
 		onRenameChat,
 		chatFirstPrompts,
+		toolAttention,
 		canFocusAdjacentGroup,
 	};
 	const sideStack = (side: LayoutSide) => (

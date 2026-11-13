@@ -737,7 +737,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **layout preset DTO** — portable **`LayoutPreset`**, the bounded resource-free frame grammar synchronized
   in `AppConfig.customLayoutPresets`: center topology, left/right/bottom group geometry, visibility/folds,
   bottom alignment, and singleton tools (`plan`, the TODO List, is accepted from
-  `LAYOUT_PLAN_PRESET_PROTOCOL_VERSION` = v94), but no workspace, file, diff, chat, document, terminal, preview,
+  `LAYOUT_PLAN_PRESET_PROTOCOL_VERSION` = v94, `artifacts` from `ARTIFACTS_PROTOCOL_VERSION` = v121), but no workspace, file, diff, chat, document, terminal, preview,
   attention, or current/default-selection identity. Every current-layout type—including the projected
   `WorkspaceLayoutDocument`, `WorkbenchFrame`, and `WorkspaceViewState`—is web-local and deliberately absent
   from contracts. There is no current-layout method or push channel.

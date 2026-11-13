@@ -100,6 +100,7 @@ export function AuxiliaryRailButton({
 		disabled: !dropEnabled,
 	});
 	const active = entry.selected && entry.expanded;
+	const attention = entry.kind === "tool" && shared.toolAttention?.has(entry.tool) === true;
 	const name =
 		entry.kind === "tool"
 			? layoutTabName(t, toolTab(entry.tool))
@@ -136,7 +137,8 @@ export function AuxiliaryRailButton({
 					}
 					data-rail-entry={entry.key}
 					data-group-id={entry.groupId ?? undefined}
-					aria-label={name}
+					aria-label={attention ? t("workbench.rail.toolAttention", { tool: name }) : name}
+					data-attention={attention || undefined}
 					aria-pressed={active}
 					aria-controls={
 						group ? groupPanelId({ area: entry.region, groupId: group.id }) : undefined
@@ -166,6 +168,13 @@ export function AuxiliaryRailButton({
 					) : (
 						<PanelsTopLeft className={RAIL_ICON} />
 					)}
+					{attention ? (
+						<span
+							aria-hidden="true"
+							data-testid="tool-rail-attention"
+							className="absolute top-4 right-4 size-6 rounded-full bg-primary"
+						/>
+					) : null}
 					{entry.kind === "terminals" && ordinal > 1 ? (
 						<span
 							aria-hidden="true"

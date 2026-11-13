@@ -24,6 +24,7 @@ import { ErrorBoundary } from "../components/ErrorBoundary";
 import { preloadedLazy } from "../components/preloadedLazy";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { chatDisplayName, type LayoutAttention, layoutResourceIdentity } from "../lib";
+import { ArtifactsPanel } from "../panels/ArtifactsPanel";
 import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
 import { FilesPanel } from "../panels/FilesPanel";
@@ -34,6 +35,7 @@ import { ReviewPanel, selectActiveReviewedPath } from "../panels/ReviewPanel";
 import { reviewFlagForPaths, reviewFlags, tabReviewPaths } from "../panels/reviewModel";
 import { SpecsPanel } from "../panels/SpecsPanel";
 import { TerminalWorkbenchBody, useTerminalClose } from "../panels/TerminalWorkbench";
+import { useWorkspaceArtifacts } from "../panels/useWorkspaceArtifacts";
 import { useWorkspaceReview } from "../panels/useWorkspaceReview";
 import { useWorkspaceSpecs } from "../panels/useWorkspaceSpecs";
 import { useLoadWorkspaceTurns } from "../panels/useWorkspaceTurns";
@@ -47,6 +49,7 @@ import {
 	isExternalWorkspace,
 	isFileComparison,
 	type LayoutIntent,
+	selectArtifactsUnseen,
 	selectCanRenameChat,
 	selectChatWorkspaceFirstPrompt,
 	selectChatWorkspaceTitle,
@@ -368,6 +371,12 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	);
 	const repositoryId = isChat ? null : workspaceId;
 	const specs = useWorkspaceSpecs(repositoryId);
+	const artifacts = useWorkspaceArtifacts(workspaceId);
+	const artifactsUnseen = useAppStore((state) => selectArtifactsUnseen(state, workspaceId));
+	const toolAttention = useMemo(
+		() => new Set<LayoutToolId>(artifactsUnseen ? ["artifacts"] : []),
+		[artifactsUnseen],
+	);
 	const review = useWorkspaceReview(repositoryId);
 	useLoadWorkspaceTurns(repositoryId);
 	useIdleEditorPreload(workspaceId);
@@ -686,6 +695,14 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				</QuietScrollArea>
 			),
 			files: <FilesPanel key={workspaceId} workspaceId={workspaceId} />,
+			artifacts: (
+				<ArtifactsPanel
+					key={workspaceId}
+					workspaceId={workspaceId}
+					failed={artifacts.failed}
+					onRetry={artifacts.reload}
+				/>
+			),
 			review: isChat ? (
 				<ChatUnavailable />
 			) : (
@@ -722,7 +739,17 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			);
 		}
 		return bodies;
-	}, [isChat, railPlanSessionId, review.failed, specs.failed, specs.reload, t, workspaceId]);
+	}, [
+		artifacts.failed,
+		artifacts.reload,
+		isChat,
+		railPlanSessionId,
+		review.failed,
+		specs.failed,
+		specs.reload,
+		t,
+		workspaceId,
+	]);
 	const renderToolBody = useCallback((tool: LayoutToolId) => toolBodies[tool], [toolBodies]);
 
 	const isDefault = workspace != null && isDefaultWorkspace(workspace);
@@ -906,6 +933,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				readNavigationTick={() => selectWorkspaceNavTick(useAppStore.getState(), workspaceId)}
 				{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
 				chatFirstPrompts={chatFirstPrompts}
+				toolAttention={toolAttention}
 				onRequestClose={(tab, prepare) => {
 					if (tab.kind === "terminal") {
 						const close = () => {
