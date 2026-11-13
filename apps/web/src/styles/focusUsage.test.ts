@@ -27,7 +27,7 @@ const splitVariants = (token: string) => {
 	return parts;
 };
 
-const HAND_WRITTEN = /^!?-?(ring(-|$)|outline-(?!none$|hidden$))/;
+const HAND_WRITTEN = /^!?-?(ring(?!-0$|-transparent$)(-|$)|outline-(?!none$|hidden$))/;
 
 const handWrittenFocus = (token: string) => {
 	const parts = splitVariants(token);
@@ -189,7 +189,7 @@ describe("focus indicator adoption", () => {
 			"focus-within:ring-1",
 			"peer-focus-visible:ring-primary",
 			"group-focus-visible:ring-2",
-			"has-[:focus-visible]:ring-0",
+			"has-[:focus-visible]:ring-1",
 			"focus-visible:outline-2",
 			"focus-visible:outline-primary",
 			"focus-visible:-outline-offset-2",
@@ -200,6 +200,8 @@ describe("focus indicator adoption", () => {
 			"focus-visible:focus-ring",
 			"has-[:focus-visible]:focus-ring",
 			"focus-visible:outline-none",
+			"has-[:focus-visible]:ring-0",
+			"focus-within:ring-transparent",
 			"focus-visible:opacity-100",
 			"focus:bg-control-bg-selected",
 			"data-[highlighted]:bg-control-bg-selected",

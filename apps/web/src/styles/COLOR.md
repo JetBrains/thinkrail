@@ -92,7 +92,9 @@ When the container holds other focusable controls with their own ring, scope it 
 - **Text fields** (input, textarea, composer shell, inline rename) keep the `control-border-active` border
   swap and add the outset ring.
 - **Selected and focused** stay apart: where selection draws an accent border or ring, focus uses the
-  outset ring, so the gap shows which row has focus.
+  outset ring, so the gap shows which row has focus. Where the focusable child fills the selected row and
+  an outset ring would spill into the next row (Specs tree rows), the row drops its selection ring while a
+  child has focus (`has-[:focus-visible]:ring-0`); removing a ring is not a focus style.
 
 No component writes its own `ring-*` or `outline-*` focus style; `styles/focusUsage.test.ts` enforces this,
 and `themes/schema.test.ts` holds `focus-ring` to APCA Lc 45 on every resting surface and `hover`.
