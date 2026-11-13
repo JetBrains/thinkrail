@@ -8,6 +8,7 @@ import {
 	realpathSync,
 	renameSync,
 	rmSync,
+	utimesSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -228,6 +229,9 @@ test("ignored outputs of a run are folder rows without dependencies or caches", 
 	git("init", "-q");
 	writeFileSync(join(root, ".gitignore"), "dist/\nnode_modules/\nold/\n.cache/\n");
 	write("old/stale.txt", "from before");
+	const hourAgo = new Date(Date.now() - 3_600_000);
+	utimesSync(join(root, "old", "stale.txt"), hourAgo, hourAgo);
+	utimesSync(join(root, "old"), hourAgo, hourAgo);
 	await listArtifacts("w1");
 	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
 	await Bun.sleep(5);

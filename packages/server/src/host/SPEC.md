@@ -861,6 +861,15 @@ channel fan-out, and the process-boot wrapper both launchers share.
   calls `invalidateRoot(worktreePath)` so a watched workspace's file list and spec snapshot refresh on the
   next keystroke. `fs.readFile` forwards `maxBytes` to `fs`.
 
+**Artifacts wiring** ([[submodule-server-artifacts]]): the `workspace.fsChanged` publisher reconciles the
+workspace's artifact index when a batch is truncated or touches `.thinkrail/context` (`touchesArtifacts`);
+the session-event tee maps `agent_start`, `agent_settled`, `tool_execution_start` (tool name + args) and
+`tool_execution_end` into `observeArtifactSessionEvent`, and an `agent_start` also `ensureWatch`es the
+workspace, so a working agent is watched even when no client looks at it. `setArtifactsPublisher` fans
+the index's change out as the pathless `workspace.artifactsChanged` nudge to v121+ sockets of that
+workspace. `fs.delete`, `fs.rename` and `fs.move` run their mutation inside `withUserRemoval` (a move locks
+both workspaces in id order), and `workspace.remove` / `chat.delete` call `removeWorkspaceArtifacts`.
+
 `RunningServer.startAttributionClaim()` is the explicit launcher-readiness signal and rechecks the saved
 enabled/confirmed choice before entering analytics attribution.
 

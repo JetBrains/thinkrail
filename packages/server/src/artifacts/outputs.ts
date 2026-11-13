@@ -24,6 +24,7 @@ export const DEPENDENCY_AND_CACHE_DIRS: ReadonlySet<string> = new Set([
 const MAX_ROOTS = 5_000;
 export const MAX_OUTPUT_WALK_ENTRIES = 20_000;
 const LIST_TIMEOUT_MS = 10_000;
+const MTIME_SLACK_MS = 1_000;
 
 export type OutputKind = "file" | "dir";
 
@@ -83,7 +84,7 @@ function walk(abs: string, visit: (path: string, entry: Dirent) => boolean): boo
 
 function modifiedSince(path: string, since: number): boolean {
 	const stat = lstatSync(path, { throwIfNoEntry: false });
-	return stat !== undefined && stat.mtimeMs >= since;
+	return stat !== undefined && stat.mtimeMs >= since - MTIME_SLACK_MS;
 }
 
 export function outputChangedSince(abs: string, kind: OutputKind, since: number): boolean {

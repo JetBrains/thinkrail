@@ -92,7 +92,13 @@ import {
 	type SendMode,
 	track,
 } from "../analytics";
-import { discardArtifact, listArtifacts, restoreArtifact, withUserRemoval } from "../artifacts";
+import {
+	discardArtifact,
+	listArtifacts,
+	removeWorkspaceArtifacts,
+	restoreArtifact,
+	withUserRemoval,
+} from "../artifacts";
 import { suggestPrDescription } from "../assist";
 import {
 	cancelLogin,
@@ -848,6 +854,7 @@ const handlers: WsHandlers = {
 			removeWorkspaceReviews(ws.id);
 			forgetWorkspaceChanges(ws.id);
 			forgetWorkspaceTurns(ws.id);
+			removeWorkspaceArtifacts(ws.id);
 			stopWatch(ws.id);
 			closeWorkspaceTerminals(ws.id);
 			void archiveTeardown(ws);

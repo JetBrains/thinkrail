@@ -82,12 +82,13 @@ by snapshot. The first `agent_start` in a workspace opens a run window and lists
 entry without descending, so a folder is one row. Roots under a dependency or cache folder
 (`node_modules`, `.venv`, `__pycache__`, `.turbo`, `.cache`, …) and `.thinkrail` are dropped. When the last
 running session settles — and on `artifacts.list` while one runs — a root that is new since the window
-opened, or holds anything modified since, is recorded. Rows are live, never copied: the listing counts the
+opened, or holds anything modified since (with one second of slack: file times can lag the clock by a
+tick, and the baseline listing runs while the agent may already be writing), is recorded. Rows are live, never copied: the listing counts the
 folder's files (bounded at 20 000 entries) and drops a root that no longer exists. A chat without a
 project has no git, so its snapshot reports `outputs: null`.
 
 ## Lifetime
 
 The store follows its workspace: `host` calls `removeWorkspaceArtifacts` when a workspace or chat is
-removed, after the worktree itself is gone. The index is validated on load; an unreadable index starts
-empty rather than failing the workspace.
+removed, alongside its other per-workspace state; the worktree's own teardown is not awaited. The index
+is validated on load; an unreadable index starts empty rather than failing the workspace.
