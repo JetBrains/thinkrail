@@ -42,11 +42,13 @@ export function focusChatComposer(): void {
 	const target = selectHistoryTarget(state);
 	if (!target) return;
 	const { workspaceId, sessionId } = target;
-	if (!selectChatAttended(state, workspaceId, sessionId))
-		void openChatInTab(workspaceId, sessionId);
+	const attended = (current: typeof state) =>
+		selectChatAttended(current, workspaceId, sessionId, { ignoreHistory: true });
+	if (!attended(state)) void openChatInTab(workspaceId, sessionId);
 	whenSettled(
-		() => (selectChatAttended(useAppStore.getState(), workspaceId, sessionId) ? target : null),
-		() => useAppStore.getState().requestComposerFocus(workspaceId, sessionId),
+		() => (attended(useAppStore.getState()) ? target : null),
+		() =>
+			useAppStore.getState().requestComposerFocus(workspaceId, sessionId, { dismissHistory: true }),
 	);
 }
 
@@ -79,7 +81,7 @@ export function showFiles(mode: "all" | "changed"): void {
 	if (!workspaceId) return;
 	state.setFilesMode(mode);
 	state.requestToolView(workspaceId, "files");
-	focusToolBody("files");
+	focusToolBody("files", (body) => body.querySelector(`[data-files-mode="${mode}"]`) !== null);
 }
 
 export function focusTerminal(): void {

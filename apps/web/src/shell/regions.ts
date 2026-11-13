@@ -211,12 +211,15 @@ export function focusRegionOfKind(kind: RegionKind): void {
 	);
 }
 
-export function focusToolBody(tool: LayoutToolId): void {
+export function focusToolBody(
+	tool: LayoutToolId,
+	ready: (body: HTMLElement) => boolean = () => true,
+): void {
 	focusWhenSettled(() => {
 		const body = document.querySelector<HTMLElement>(
 			`${REGION_SELECTOR} [data-tool-body="${tool}"]`,
 		);
-		return body && isShown(body) ? focusInsideTarget(body) : null;
+		return body && isShown(body) && ready(body) ? focusInsideTarget(body) : null;
 	});
 }
 

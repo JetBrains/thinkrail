@@ -149,6 +149,13 @@ test("Mod+0 focuses Projects, and Mod+Shift+E / Mod+Shift+G open Files in All / 
 	await expect(page.getByTestId("files-mode-changed")).toHaveAttribute("aria-pressed", "true");
 	await expectFocusInside(files);
 
+	await pressPlatformShortcut(page, "Shift+E");
+	await page.getByTestId("file-node").filter({ hasText: "README.md" }).focus();
+	await pressPlatformShortcut(page, "l");
+	await expect(page.getByTestId("chat-input")).toBeFocused();
+	await pressPlatformShortcut(page, "Shift+G");
+	await expectFocusInside(files.locator('[data-files-mode="changed"]'));
+
 	await goProjectHome(page);
 	const home = page.locator('[data-region-kind="home"]');
 	await page.getByTestId("open-search").focus();
@@ -161,7 +168,7 @@ test("Mod+0 focuses Projects, and Mod+Shift+E / Mod+Shift+G open Files in All / 
 	await expectFocusInside(home);
 });
 
-test("Mod+1 and Mod+2 focus center groups in visual order, and Mod+L returns to the chat", async ({
+test("Mod+1 and Mod+2 focus center groups in visual order, and Mod+L returns to the chat, closing its history", async ({
 	page,
 }) => {
 	await openChatWorkbench(page);
@@ -183,6 +190,12 @@ test("Mod+1 and Mod+2 focus center groups in visual order, and Mod+L returns to 
 	await pressPlatformShortcut(page, "l");
 	await expect(page.getByTestId("chat-input")).toBeFocused();
 	await expect(groups.nth(0)).toHaveAttribute("data-region-active", "");
+
+	await page.keyboard.press("Control+r");
+	await expect(page.getByTestId("history-overlay")).toBeVisible();
+	await pressPlatformShortcut(page, "l");
+	await expect(page.getByTestId("history-overlay")).toHaveCount(0);
+	await expect(page.getByTestId("chat-input")).toBeFocused();
 });
 
 test("the palette lists the focus commands with their chords and runs them after it closes", async ({

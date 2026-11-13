@@ -47,7 +47,7 @@ export function FilesPanel({ workspaceId }: { workspaceId: string }) {
 	};
 
 	return (
-		<div className="flex h-full min-h-0 flex-col">
+		<div data-files-mode={mode} className="flex h-full min-h-0 flex-col">
 			<div
 				data-testid="files-mode-toggle"
 				role="toolbar"

@@ -226,15 +226,18 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   group N of that order (no group N: nothing, the chord still swallowed). `Mod+L` focuses the attended
   chat's composer — `selectHistoryTarget`'s chat (the selected tab of the last-focused center group, else
   the workspace's most recent chat tab), opened through `openChatInTab` first when it is not attended —
-  by `requestComposerFocus` once it is; with no chat it does nothing but still swallows the browser's
-  address-bar chord. `Mod+0` reveals the Projects tool (`requestToolView`) and focuses inside it; on
+  by `requestComposerFocus` once it is. The chat's own history overlay does not count as covering it: the
+  chord's request carries `dismissHistory`, and `ChatView` closes that overlay before focusing the input
+  (waiting for an unobscured chat would never end — the overlay stays open until something closes it).
+  With no chat it does nothing but still swallows the browser's address-bar chord. `Mod+0` reveals the Projects tool (`requestToolView`) and focuses inside it; on
   Project Home it expands a collapsed projects pane and lands there. `` Ctrl+` `` from inside a terminal
   returns to the region active before it (else the first center group); elsewhere it focuses the visible
   terminal (the workspace's active one first), else reveals that terminal wherever it is placed — its side
   or bottom shown and its group unfolded, through the `select-terminal` intent and the layout's
   `revealPlacedTab` (the reveal `reveal-tool` uses) — else creates one with `addTerminal`. `Mod+Shift+E` / `Mod+Shift+G` set
-  Files to All / Changed (`setFilesMode`), reveal it and focus inside its body; Changes is not bound in a
-  chat without a project. Every focus move waits, a bounded number of animation frames, for no modal layer
+  Files to All / Changed (`setFilesMode`), reveal it and focus inside its body once that mode has rendered
+  (`data-files-mode`), so a row remembered from the other mode, about to unmount, never takes focus;
+  Changes is not bound in a chat without a project. Every focus move waits, a bounded number of animation frames, for no modal layer
   and a rendered target, then gives up silently; a newer focus chord cancels an older wait. That wait is
   what lets the same functions run as palette rows (Focus next / previous region, Focus chat input,
   Focus Projects, Focus terminal, one Focus center group N per existing group, Show Changes, and Show
