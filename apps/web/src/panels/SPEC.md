@@ -2269,7 +2269,10 @@ own section. The kebab menu (`plan-menu`, a
 menu has closed, because a closing menu returns focus to its row; disabled
   without one), Reveal in Files, the two Copy paths, Copy / Cut (the shared Files clipboard; a cut pastes
   through `fs.move`), Rename (inline, `fs.rename`), Restore for a deleted row, and Delete — `fs.delete` for a
-  live file, `artifacts.discard` for a kept copy, both behind a confirmation. **New** means newer than this
+  live file, `artifacts.discard` for a kept copy, both behind a confirmation. The sections emit the shell's
+  focus-recovery markup (lists `artifacts` and `artifacts-outputs[:<folder>]`, the path as row id, the name
+  as the row's landing control), so a delete, restore or rename moves focus to the row or its neighbour
+  instead of `<body>`. **New** means newer than this
   client's per-workspace seen watermark (`artifactsSeenByWorkspace`, the newest `firstSeenAt` / output
   `changedAt`, so only host timestamps are compared): the first snapshot of a workspace is taken as seen, a
   showing panel advances the watermark, rows newer than the watermark it opened with stay highlighted while

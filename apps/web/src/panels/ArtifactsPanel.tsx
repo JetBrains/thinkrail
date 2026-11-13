@@ -202,6 +202,7 @@ export function ArtifactsPanel({
 						{rows.artifacts.length > 0 ? (
 							<Section
 								testid="artifacts-section"
+								focusList="artifacts"
 								title={t("panels.artifacts.sectionArtifacts")}
 								count={rows.artifacts.length}
 							>
@@ -218,6 +219,7 @@ export function ArtifactsPanel({
 						{rows.outputs?.length ? (
 							<Section
 								testid="artifacts-outputs-section"
+								focusList="artifacts-outputs"
 								title={t("panels.artifacts.sectionOutputs")}
 								count={rows.outputs.length}
 							>
@@ -285,11 +287,13 @@ function EmptyArtifacts({ onlyThisChat }: { onlyThisChat: boolean }) {
 
 function Section({
 	testid,
+	focusList,
 	title,
 	count,
 	children,
 }: {
 	testid: string;
+	focusList: string;
 	title: string;
 	count: number;
 	children: ReactNode;
@@ -300,7 +304,9 @@ function Section({
 				<span>{title}</span>
 				<span>{count}</span>
 			</h3>
-			<ul className="flex flex-col">{children}</ul>
+			<ul data-focus-list={focusList} className="flex flex-col">
+				{children}
+			</ul>
 		</section>
 	);
 }
@@ -367,6 +373,7 @@ function ArtifactRowView({
 		<li
 			data-testid="artifact-row"
 			data-path={artifact.path}
+			data-focus-row={artifact.path}
 			data-state={artifact.state}
 			data-fresh={fresh || undefined}
 		>
@@ -404,6 +411,7 @@ function ArtifactRowView({
 									<button
 										type="button"
 										data-testid="artifact-open"
+										data-focus-row-primary
 										disabled={deleted}
 										onClick={firstClickOnly(() => open("preview"))}
 										onDoubleClick={() => open("keep")}
@@ -462,7 +470,12 @@ function OutputRowView({
 	const { output, fresh } = row;
 	const node: FileNode = { path: output.path, name: output.path, kind: output.kind };
 	return (
-		<li data-testid="artifact-output" data-path={output.path} data-fresh={fresh || undefined}>
+		<li
+			data-testid="artifact-output"
+			data-path={output.path}
+			data-focus-row={output.path}
+			data-fresh={fresh || undefined}
+		>
 			<OutputNode
 				node={node}
 				workspaceId={workspaceId}
@@ -531,12 +544,15 @@ function OutputNode({
 				)}
 			</EntryMenu>
 			{isDir && expanded ? (
-				<ul className="flex flex-col pl-tree-indent">
+				<ul
+					data-focus-list={`artifacts-outputs:${node.path}`}
+					className="flex flex-col pl-tree-indent"
+				>
 					{children === null ? (
 						<LoadingRegion rows={2} className="px-4 py-4" />
 					) : (
 						children.map((child) => (
-							<li key={child.path}>
+							<li key={child.path} data-focus-row={child.path}>
 								<OutputNode node={child} workspaceId={workspaceId} onRemove={onRemove} />
 							</li>
 						))

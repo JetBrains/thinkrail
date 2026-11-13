@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import {
@@ -168,4 +168,30 @@ test("F6 into the Artifacts group lands on the list, not on its chat filter", as
 		await page.keyboard.press("F6");
 	}
 	await expect(artifact(page, "notes.md").getByTestId("artifact-open")).toBeFocused();
+});
+
+test("deleting an artifact from the keyboard focuses the next artifact", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	for (const [index, name] of ["a.md", "b.md", "c.md"].entries()) {
+		writeArtifact(workspace.worktreePath, name, `${name}\n`);
+		const time = new Date(Date.now() - (3 - index) * 60_000);
+		utimesSync(join(workspace.worktreePath, CONTEXT, name), time, time);
+	}
+	await showArtifacts(page);
+	const open = (name: string) => artifact(page, name).getByTestId("artifact-open");
+	await expect(page.getByTestId("artifact-open")).toHaveText(["c.md", "b.md", "a.md"]);
+
+	await open("b.md").focus();
+	await page.keyboard.press("Shift+F10");
+	await page.getByTestId("artifact-delete").click();
+	await page.getByTestId("artifact-delete-confirm").click();
+	await expect(artifact(page, "b.md")).toHaveCount(0);
+	await expect(open("a.md")).toBeFocused();
+
+	await page.keyboard.press("Shift+F10");
+	await page.getByTestId("artifact-delete").click();
+	await page.getByTestId("artifact-delete-confirm").click();
+	await expect(artifact(page, "a.md")).toHaveCount(0);
+	await expect(open("c.md")).toBeFocused();
 });
