@@ -38,8 +38,11 @@ A kept copy is a **hard link** to the live file, so it costs no disk while the f
 current content: pi's `write`/`edit` write in place, which the link shares. A writer that replaces the
 file (a rename onto it, another inode) is caught at the next reconcile, which relinks. Where linking fails
 (the worktree is on another filesystem than the data dir — a Default workspace on a second disk) the copy
-is a real copy, refreshed on change and only for files up to 100 MB; a larger one is not protected, and
-when it vanishes its row goes with it. Kept copies live in the data dir rather than the worktree so an
+is a real copy, refreshed on change, and it costs disk even while the file lives — so real copies are
+bounded: a file over 100 MB is not copied, nor one that would take the workspace's real copies (live and
+deleted together) past 1 GB. A file left without a copy is still listed but not protected, and when it
+vanishes its row goes with it. Hard links have no such bound: they cost nothing until a file is deleted,
+and a deleted artifact keeps its copy until the user removes it. Kept copies live in the data dir rather than the worktree so an
 agent's `git clean -fdx` or `rm -rf .thinkrail` cannot take them along; the price is that a deleted
 artifact is restored before it can be opened.
 
@@ -49,7 +52,11 @@ artifact is restored before it can be opened.
 never follows a link: `.thinkrail` and `context` must be real directories — a folder replaced by a link is
 not walked and marks nothing deleted, while a missing one means everything in it is gone — and no entry
 inside is followed. It skips dependency and cache folders (the same set ignored outputs drop, so a mockup
-app's `node_modules` neither floods the list nor exhausts the bound) and the `fs` delete claims
+app's `node_modules` neither floods the list nor exhausts the bound) and build-output folders (`dist`,
+`build`, `out`, `.next`, `target`, `coverage`): an agent-built mockup inside the artifacts folder rebuilds
+hashed assets on every run, and each old hash would otherwise stay forever as a "deleted" row with a kept
+copy. Unlike ignored outputs elsewhere, which do list `dist/`, a build inside the artifacts folder is
+scaffolding, not something the agent produced for the user and the `fs` delete claims
 (`DELETE_CLAIM_PREFIX`), which are the user's own trash in flight, not a rename. A new path gains a record
 and a link; a changed size/mtime updates the record (and its writer when known); an inode change relinks;
 a missing record whose file now sits at a new path is a **rename** (the row moves, keeping its first-seen

@@ -30,6 +30,7 @@ import {
 	resetArtifactsForTests,
 	restoreArtifact,
 	setArtifactsPublisher,
+	setCopyLimitsForTests,
 	touchesArtifacts,
 	withUserRemoval,
 } from "./artifacts";
@@ -77,6 +78,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	mock.restore();
+	setCopyLimitsForTests(null);
 	resetArtifactsForTests();
 	setTrashImplementationForTests(undefined);
 	rmSync(dataDir, { recursive: true, force: true });
@@ -508,4 +510,32 @@ test("a kept copy that cannot be removed is left behind without failing the user
 	});
 	expect((await listArtifacts("w1")).artifacts).toEqual([]);
 	expect(() => removeWorkspaceArtifacts("w1")).not.toThrow();
+});
+
+test("build folders inside the artifacts folder are not artifacts", async () => {
+	write(`${CONTEXT}/app/src/main.ts`, "main");
+	for (const dir of ["dist", "build", "out", ".next", "target", "coverage"])
+		write(`${CONTEXT}/app/${dir}/index-abc.js`, "built");
+	expect((await listArtifacts("w1")).artifacts.map((a) => a.path)).toEqual([
+		`${CONTEXT}/app/src/main.ts`,
+	]);
+});
+
+test("copies on another disk stop at the workspace's limit: later files are listed but not kept", async () => {
+	linksUnsupported();
+	setCopyLimitsForTests({ perFile: 100, perWorkspace: 10 });
+	write(`${CONTEXT}/a.md`, "aaaaaa");
+	reconcileArtifacts("w1");
+	await Bun.sleep(5);
+	write(`${CONTEXT}/b.md`, "bbbbbb");
+	reconcileArtifacts("w1");
+	expect((await listArtifacts("w1")).artifacts.map((a) => a.path).sort()).toEqual([
+		`${CONTEXT}/a.md`,
+		`${CONTEXT}/b.md`,
+	]);
+	rmSync(join(root, CONTEXT, "a.md"));
+	rmSync(join(root, CONTEXT, "b.md"));
+	expect((await listArtifacts("w1")).artifacts).toEqual([
+		expect.objectContaining({ path: `${CONTEXT}/a.md`, state: "deleted" }),
+	]);
 });

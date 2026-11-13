@@ -45,7 +45,16 @@ const STORE_VERSION = 1;
 const CONTEXT_PREFIX = `${WORKSPACE_CONTEXT_DIR}/`;
 const SCAFFOLD = `${WORKSPACE_CONTEXT_DIR}/.gitignore`;
 const MAX_ARTIFACT_SCAN_ENTRIES = 5_000;
-const KEPT_COPY_MAX_BYTES = 100 * 1024 * 1024;
+const COPY_LIMITS = { perFile: 100 * 1024 * 1024, perWorkspace: 1024 * 1024 * 1024 };
+let copyLimits = COPY_LIMITS;
+const BUILD_DIRS: ReadonlySet<string> = new Set([
+	"dist",
+	"build",
+	"out",
+	".next",
+	"target",
+	"coverage",
+]);
 const LINK_UNSUPPORTED = new Set<unknown>(["EXDEV", "EPERM", "EMLINK", "ENOTSUP", "EOPNOTSUPP"]);
 const WRITER_TOOLS = new Set(["write", "edit", "spec_create"]);
 
@@ -282,7 +291,8 @@ function contextFolder(root: string): "real" | "missing" | "foreign" {
 function skippedEntry(entry: Dirent): boolean {
 	return (
 		entry.name.startsWith(DELETE_CLAIM_PREFIX) ||
-		(entry.isDirectory() && DEPENDENCY_AND_CACHE_DIRS.has(entry.name))
+		(entry.isDirectory() &&
+			(DEPENDENCY_AND_CACHE_DIRS.has(entry.name) || BUILD_DIRS.has(entry.name)))
 	);
 }
 
@@ -339,6 +349,14 @@ function dropKept(workspaceId: string, record: ArtifactRecord): void {
 	delete record.keptCopy;
 }
 
+function copyFits(workspaceId: string, record: ArtifactRecord): boolean {
+	if (record.size > copyLimits.perFile) return false;
+	let copied = 0;
+	for (const other of load(workspaceId).records.values())
+		if (other !== record && other.keptCopy) copied += other.size;
+	return copied + record.size <= copyLimits.perWorkspace;
+}
+
 function keep(workspaceId: string, root: string, record: ArtifactRecord): void {
 	dropKept(workspaceId, record);
 	const name = randomUUID();
@@ -357,7 +375,7 @@ function keep(workspaceId: string, root: string, record: ArtifactRecord): void {
 			return;
 		}
 	}
-	if (record.size > KEPT_COPY_MAX_BYTES) return;
+	if (!copyFits(workspaceId, record)) return;
 	try {
 		copyFileSync(source, target);
 		record.kept = name;
@@ -837,6 +855,10 @@ export function removeWorkspaceArtifacts(workspaceId: string): void {
 	removals.delete(workspaceId);
 	const dir = storeDir(workspaceId);
 	if (dir) removeQuietly(dir);
+}
+
+export function setCopyLimitsForTests(limits: typeof COPY_LIMITS | null): void {
+	copyLimits = limits ?? COPY_LIMITS;
 }
 
 export function resetArtifactsForTests(): void {
