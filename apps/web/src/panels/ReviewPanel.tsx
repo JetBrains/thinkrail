@@ -208,7 +208,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 													data-testid="review-file-done"
 													aria-label={t("review.panel.finishFile")}
 													onClick={() => void finishFile(file.path)}
-													className="flex shrink-0 items-center py-4 pr-4 pl-4 text-text-subtle hover:text-feedback-success focus-visible:focus-ring"
+													className="flex shrink-0 items-center py-4 pr-4 pl-4 text-text-subtle hover:text-feedback-success focus-visible:focus-ring-inset"
 												>
 													<CheckCircle2 className="size-14" />
 												</button>
