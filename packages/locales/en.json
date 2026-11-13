@@ -1232,6 +1232,8 @@
 	"panels.projectTrust.trustFailed": "Couldn't trust project",
 	"panels.providerWarning.connect": "Connect a provider",
 	"panels.providerWarning.message": "No model provider connected — the agent can't run.",
+	"panels.removeWorkspace.artifacts_one": "Its {{count}} artifact is deleted with it.",
+	"panels.removeWorkspace.artifacts_other": "Its {{count}} artifacts are deleted with it.",
 	"panels.removeWorkspace.confirmExternal": "Remove from ThinkRail",
 	"panels.removeWorkspace.description": "Deletes this workspace's chats, terminals, and its worktree. The git branch <0>{{branch}}</0> is kept.",
 	"panels.removeWorkspace.descriptionExternal": "Removes this workspace's ThinkRail chats and terminals. The existing checkout, files, and branch <0>{{branch}}</0> stay untouched.",

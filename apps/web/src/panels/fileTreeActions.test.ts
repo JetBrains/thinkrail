@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, expect, mock, test } from "bun:test";
-import { FS_MUTATIONS_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import { ARTIFACTS_PROTOCOL_VERSION, FS_MUTATIONS_PROTOCOL_VERSION } from "@thinkrail/contracts";
 
 const requests: { method: string; params: unknown }[] = [];
 let answer: () => Promise<unknown> = () => Promise.resolve({ ok: true });
@@ -16,8 +16,15 @@ mock.module("../transport", () => ({
 
 const { useAppStore } = await import("../store");
 const { RequestError } = await import("../transport");
-const { clipboardAfterDelete, deleteEntry, pasteDestination, pasteInto, supportsFileMutations } =
-	await import("./fileTreeActions");
+const {
+	clipboardAfterDelete,
+	deleteEntry,
+	pasteDestination,
+	pasteInto,
+	renameEntry,
+	supportsFileMutations,
+	supportsMoves,
+} = await import("./fileTreeActions");
 
 function reset(): void {
 	requests.length = 0;
@@ -114,5 +121,37 @@ test("delete trashes through the host and forgets a clipboard entry inside it", 
 		method: "fs.delete",
 		params: { workspaceId: "w1", path: "src" },
 	});
+	expect(useAppStore.getState().fileClipboard).toBeNull();
+});
+
+test("a cut pastes as a move, once, and a taken name says so", async () => {
+	expect(supportsMoves(ARTIFACTS_PROTOCOL_VERSION - 1)).toBe(false);
+	expect(supportsMoves(ARTIFACTS_PROTOCOL_VERSION)).toBe(true);
+	useAppStore.getState().setFileClipboard({ workspaceId: "w1", path: "notes.md", cut: true });
+	answer = () => Promise.reject(new RequestError("ENTRY_EXISTS", "taken"));
+	await pasteInto("w1", ".thinkrail/context");
+	expect(useAppStore.getState().toasts[0]?.message).toBe("notes.md already exists in this folder.");
+	expect(useAppStore.getState().fileClipboard).not.toBeNull();
+	answer = () => Promise.resolve({ path: ".thinkrail/context/notes.md" });
+	await pasteInto("w1", ".thinkrail/context");
+	expect(requests.at(-1)).toEqual({
+		method: "fs.move",
+		params: {
+			sourceWorkspaceId: "w1",
+			sourcePath: "notes.md",
+			destinationWorkspaceId: "w1",
+			destinationDirectory: ".thinkrail/context",
+		},
+	});
+	expect(useAppStore.getState().fileClipboard).toBeNull();
+});
+
+test("renaming the copied entry empties the clipboard", async () => {
+	useAppStore.getState().setFileClipboard({ workspaceId: "w1", path: "a.md" });
+	answer = () => Promise.resolve({ path: "b.md" });
+	await renameEntry("w1", "a.md", "b.md");
+	expect(requests).toEqual([
+		{ method: "fs.rename", params: { workspaceId: "w1", path: "a.md", name: "b.md" } },
+	]);
 	expect(useAppStore.getState().fileClipboard).toBeNull();
 });

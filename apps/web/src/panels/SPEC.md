@@ -135,7 +135,8 @@ treatment.
   The Default gets neither mutation. "Open in" comes from the host-wide `editor.list`; GUI entries call
   `workspace.openIn`, while terminal-kind Vim activates the workspace and runs through `addTerminal`'s
   one-shot `initialCommand`. Copy writes `worktreePath`; Reveal calls `workspace.reveal`. These requests,
-  `editor.list`, the project workspace-list load, the remove confirm (`RemoveWorkspaceDialog`), and the
+  `editor.list`, the project workspace-list load, the remove confirm (`RemoveWorkspaceDialog`, which for a
+  workspace ThinkRail made also says how many artifacts go with it, from the loaded artifacts snapshot), and the
   inline-rename controller below (`createRenameController` / `useInlineRename`, shared with project rename) live once in
   `workspaceActions.ts` so the shell's topbar workspace menu ([[submodule-web-shell-location-bar]]) offers
   the same actions — including the capability-aware pending rename — without a second implementation. The
@@ -331,7 +332,10 @@ treatment.
   **Paste** (only while the clipboard holds an entry) asks `fs.copy` for a copy beside a file or inside a
   folder — across workspaces too, never a move — under the host's ` copy` / ` copy N` name, then expands
   that folder, and an empty tree offers the same Paste as a button next to *Empty*; **Delete** asks for
-  confirmation and `fs.delete` moves the entry to the OS trash. The confirmation says when an agent is
+  confirmation and `fs.delete` moves the entry to the OS trash. From `ARTIFACTS_PROTOCOL_VERSION` (v121)
+  the menu also has **Cut**: the same clipboard entry marked `cut`, which the next Paste (here or in the
+  Artifacts tool) turns into `fs.move` — refused with "already exists" rather than renamed — and then clears.
+  The confirmation says when an agent is
   working in the workspace but does not block — the user's explicit action wins, as with a hunk revert —
   and an open tab of a deleted file keeps its stale-content contract. Failures toast; a folder past the
   host's copy bound and an entry that changed under the paste or delete (`ENTRY_CHANGED`) get their own
