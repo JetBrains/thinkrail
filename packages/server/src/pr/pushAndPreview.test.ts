@@ -352,4 +352,15 @@ describe("gitlab new-MR hand-off", () => {
 		expect(url.searchParams.get("merge_request[title]")).toBe("Ship");
 		expect(url.searchParams.get("merge_request[description]")).toBe("Body");
 	});
+
+	test("a multibyte description is trimmed until the encoded URL fits", async () => {
+		sh(repo, "remote", "set-url", "origin", "https://gitlab.com/acme/widgets.git");
+		sh(repo, "config", `url.${remote}.pushInsteadOf`, "https://gitlab.com/acme/widgets.git");
+		const body = "修复到期日漂移并补回归测试".repeat(500);
+		const url = (await openPr({ workspaceId: "w1", title: "标题", body })).compareUrl ?? "";
+		expect(url.length).toBeLessThanOrEqual(4_000);
+		expect(url.length).toBeGreaterThan(4_000 - 9);
+		const description = new URL(url).searchParams.get("merge_request[description]") ?? "";
+		expect(body.startsWith(description)).toBe(true);
+	});
 });
