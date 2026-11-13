@@ -35,10 +35,24 @@ export function isNextStepsDetails(value: unknown): value is NextStepsDetails {
 	);
 }
 
-export function suggestionsAtLeaf(entry: SessionEntry | null | undefined): string[] {
-	if (entry?.type !== "message") return [];
-	const message = entry.message;
-	if (message.role !== "toolResult" || message.toolName !== NEXT_STEPS_TOOL_NAME) return [];
-	if (message.isError || !isNextStepsDetails(message.details)) return [];
-	return message.details.suggestions;
+const OUT_OF_CONVERSATION: ReadonlySet<SessionEntry["type"]> = new Set([
+	"thinking_level_change",
+	"model_change",
+	"usage",
+	"custom",
+	"label",
+	"session_info",
+]);
+
+export function suggestionsOnBranch(branch: readonly SessionEntry[]): string[] {
+	for (let index = branch.length - 1; index >= 0; index--) {
+		const entry = branch[index];
+		if (!entry || OUT_OF_CONVERSATION.has(entry.type)) continue;
+		if (entry.type !== "message") return [];
+		const message = entry.message;
+		if (message.role !== "toolResult" || message.toolName !== NEXT_STEPS_TOOL_NAME) return [];
+		if (message.isError || !isNextStepsDetails(message.details)) return [];
+		return message.details.suggestions;
+	}
+	return [];
 }
