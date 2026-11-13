@@ -41,7 +41,8 @@
 	"pi": {
 		"extensions": [
 			"./index.ts"
-		]
+		],
+		"video": "https://github.com/JetBrains/thinkrail/raw/refs/heads/main/.github/readme-assets/pi-packages/next-steps.mp4"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",
