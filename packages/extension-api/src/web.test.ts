@@ -28,6 +28,7 @@ describe("defineWebExtension", () => {
 			defaultExpanded: true,
 			interactive: true,
 			dock: true,
+			composerSuggestions: () => ["Run the tests"],
 		};
 		const descriptor = {
 			name: "example",

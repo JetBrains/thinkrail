@@ -58,6 +58,11 @@ export type ToolRenderer = (props: ToolRenderProps) => ReactNode;
 
 export type ToolSummary = (props: ToolRenderProps, t: Translator) => string;
 
+export type ComposerSuggestionsReader = (
+	args: Record<string, unknown>,
+	result: unknown,
+) => readonly string[];
+
 export interface ToolRegistrationOptions {
 	summary?: ToolSummary;
 	chrome?: ToolChrome;
@@ -66,6 +71,7 @@ export interface ToolRegistrationOptions {
 	defaultExpanded?: boolean;
 	interactive?: boolean;
 	dock?: boolean;
+	composerSuggestions?: ComposerSuggestionsReader;
 }
 
 export interface GlobalOverlayProps {

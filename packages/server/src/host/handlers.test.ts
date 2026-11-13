@@ -875,6 +875,14 @@ test("extension.list reflects disabledExtensions written through settings.update
 			tools: ["web_search", "source_check", "fetch_content", "get_search_content", "web_enable"],
 			hasChildExtensions: true,
 		},
+		{
+			name: "next-steps",
+			title: "Next-step suggestions",
+			description: expect.any(String),
+			enabled: true,
+			tools: ["suggest_next_steps"],
+			hasChildExtensions: false,
+		},
 	]);
 	await handleRequest(
 		"settings.update",
@@ -885,12 +893,14 @@ test("extension.list reflects disabledExtensions written through settings.update
 		{ name: "visualize", enabled: false },
 		{ name: "ask-user-question", enabled: true },
 		{ name: "web-access", enabled: false },
+		{ name: "next-steps", enabled: true },
 	]);
 	await handleRequest("settings.update", { config: { disabledExtensions: [] } }, CTX);
 	expect(await handleRequest("extension.list", {}, CTX)).toMatchObject([
 		{ name: "visualize", enabled: true },
 		{ name: "ask-user-question", enabled: true },
 		{ name: "web-access", enabled: true },
+		{ name: "next-steps", enabled: true },
 	]);
 });
 

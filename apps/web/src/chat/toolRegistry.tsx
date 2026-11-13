@@ -13,6 +13,7 @@ import type { ReactNode } from "react";
 
 interface ToolRegistration extends ToolRegistrationOptions {
 	renderer: ToolRenderer;
+	extension?: string | undefined;
 }
 
 const registry = new Map<string, ToolRegistration>();
@@ -22,8 +23,9 @@ export function registerToolRenderer(
 	toolName: string,
 	renderer: ToolRenderer,
 	options: ToolRegistrationOptions = {},
+	extension?: string,
 ): void {
-	registry.set(toolName, { renderer, ...options });
+	registry.set(toolName, { renderer, ...options, extension });
 }
 
 export function registerToolRendererPrefix(
@@ -63,6 +65,19 @@ export function isInteractiveTool(toolName: string): boolean {
 export function isDockedTool(toolName: string): boolean {
 	const registration = resolveRegistration(toolName);
 	return registration?.interactive === true && registration.dock === true;
+}
+
+export function readComposerSuggestions(
+	toolName: string,
+	args: Record<string, unknown>,
+	result: unknown,
+	disabledExtensions: readonly string[] = [],
+): readonly string[] | null {
+	const registration = resolveRegistration(toolName);
+	const reader = registration?.composerSuggestions;
+	if (!reader) return null;
+	if (registration.extension && disabledExtensions.includes(registration.extension)) return null;
+	return reader(args, result);
 }
 
 export function getToolChrome(toolName: string): ToolChrome {

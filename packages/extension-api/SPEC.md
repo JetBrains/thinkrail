@@ -17,9 +17,10 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
 ## Boundary
 
 - `./web` exposes `ToolStatus`, `ToolRenderProps`, `ToolRenderer`, `ToolSummary`, `ToolChrome`,
-  `ToolProminence`, `ToolWidth`, `ToolRegistrationOptions`, `ToolInteraction`, `ToolInteractionState`,
-  `ToolPlacement`, `WebExtension`, `GlobalOverlayProps`, `ExtensionCommand`, `ExtensionChord`,
-  `ExtensionShortcut`, `ExtensionShortcutKey`, `defineWebExtension`, and the pure argument/result readers from `toolHelpers` and `toolResultContent`.
+  `ToolProminence`, `ToolWidth`, `ComposerSuggestionsReader`, `ToolRegistrationOptions`, `ToolInteraction`,
+  `ToolInteractionState`, `ToolPlacement`, `WebExtension`, `GlobalOverlayProps`, `ExtensionCommand`,
+  `ExtensionChord`, `ExtensionShortcut`, `ExtensionShortcutKey`, `defineWebExtension`, and the pure
+  argument/result readers from `toolHelpers` and `toolResultContent`.
 - **Images are references.** `parseToolResultContent(result).images` returns `contracts`' `WireImage`s,
   in block order.
   - A host reference (`ref` plus optional `width`/`height`) is accepted when its `ref` lies under
@@ -50,6 +51,12 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   files a successful call put in front of the person (`presented(args, details)`) and which of them the
   person chose (`picked(args, details)`), as raw path strings the host resolves. The host feeds them to
   its artifact index and never learns a tool's argument shape itself; a failed call counts for nothing.
+- `ToolRegistrationOptions.composerSuggestions` (`ComposerSuggestionsReader`, `(args, result) =>
+  readonly string[]`) marks a tool whose call carries **next messages for the user**. The reader is pure:
+  it pulls the strings out of a call's arguments and result. When such a call ends a finished turn, the
+  chat shows the strings as one-click chips above the composer. The decision of *when* is the chat's
+  ([[submodule-web-chat]]). Like `interactive`, the host learns which tools qualify only from this
+  declaration. First consumer: [[module-ext-next-steps]].
 - `ToolRegistrationOptions.width` (`ToolWidth`) is `"column"` by default; `"content"` lets the chat grow
   the renderer's frame past its text column to the content's width, up to the pane, while the user fits
   chat to the pane. It is opt-in because only the extension knows its content reads better wide; the
