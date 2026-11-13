@@ -56,6 +56,7 @@ function compose(
 			check,
 			scratchDir: ".thinkrail/context/mockups/",
 			artifactsDir: ".thinkrail/context/",
+			ensureArtifactsDir: async () => {},
 		},
 	};
 	const factories = askUserQuestion.sessionExtensions?.(session) ?? [];

@@ -28,7 +28,7 @@ client the same answer.
   `setArtifactsPublisher`, `removeWorkspaceArtifacts`.
 - **Allowed deps:** `persistence` (`dataDir`, workspace records), `git` (`gitAsync` for the ignored-root
   listing), `trash` (a discarded kept copy goes to the OS trash), `log`; `contracts`, `shared/paths`,
-  `shared/codedError`; Node `fs`/`path`/`crypto`.
+  `shared/artifactsDir`, `shared/codedError`; Node `fs`/`path`/`crypto`.
 - **Forbidden:** `host`, `agent`, `watch`, pi. `host` feeds it session events and change nudges and
   publishes its nudges; it never watches files itself.
 
@@ -67,8 +67,10 @@ Cut and Rename never read as "deleted not by you", while a failed mutation leave
 deletion made outside ThinkRail (a terminal `rm`) cannot be told from an agent's and shows as deleted;
 the user discards it once.
 
-**Restore** links the kept copy back, refusing a path that exists again (`ENTRY_EXISTS`) or one whose
-nearest existing parent resolves outside the worktree. It copies instead when the kept copy is a copy,
+**Restore** first reseeds the artifacts folder through `shared`'s `seedArtifactsDir` (after a
+`git clean -fdx` the folder is gone, and recreating it without its `.gitignore` would let `git add -A` stage
+the restored draft), then links the kept copy back, refusing a path that exists again (`ENTRY_EXISTS`) or
+one whose nearest existing parent resolves outside the worktree. It copies instead when the kept copy is a copy,
 or when its inode is still linked elsewhere — the agent moved the file into the project, and a link back
 would make editing the artifact edit that project file — and then keeps the restored file afresh. The
 restored file's stat is applied before the next reconcile, so a restore is never read as a change and

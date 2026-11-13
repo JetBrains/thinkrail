@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -26,8 +26,15 @@ test("names a saved visualization by its time and title", () => {
 	expect(visualizationSlug({ type: "comparison" })).toBe("comparison");
 });
 
-test("writes a new file per visualization and never overwrites one", async () => {
-	const save = visualizationSaver(".thinkrail/context/visualize/", () => at);
+test("asks the host to prepare the artifacts folder, then writes a new file per visualization and never overwrites one", async () => {
+	const prepared: string[] = [];
+	const save = visualizationSaver(
+		".thinkrail/context/visualize/",
+		async (dir) => {
+			prepared.push(dir);
+		},
+		() => at,
+	);
 	const params = { type: "diagram" as const, title: "Flow", mermaid: "flowchart LR\n A --> B" };
 	const first = await save({ params, markdown: "one", cwd });
 	const second = await save({ params, markdown: "two", cwd });
@@ -35,6 +42,7 @@ test("writes a new file per visualization and never overwrites one", async () =>
 	expect(second).toBe(".thinkrail/context/visualize/20261113-090507-flow-2.md");
 	expect(readFileSync(join(cwd, first as string), "utf8")).toBe("one\n");
 	expect(readFileSync(join(cwd, second as string), "utf8")).toBe("two\n");
+	expect(prepared).toEqual([cwd, cwd]);
 });
 
 test("the server half saves diagrams into the workspace's artifacts folder", async () => {
@@ -46,6 +54,10 @@ test("the server half saves diagrams into the workspace's artifacts folder", asy
 			check: async () => {},
 			scratchDir: ".thinkrail/context/mockups/",
 			artifactsDir: ".thinkrail/context/",
+			ensureArtifactsDir: async (dir) => {
+				mkdirSync(join(dir, ".thinkrail", "context"), { recursive: true });
+				writeFileSync(join(dir, ".thinkrail", "context", ".gitignore"), "*\n");
+			},
 		},
 	};
 	let execute:

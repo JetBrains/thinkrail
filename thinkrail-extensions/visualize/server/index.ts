@@ -18,6 +18,7 @@ export default defineServerExtension({
 				? {
 						saveVisualization: visualizationSaver(
 							`${session.workspaceFiles.artifactsDir}visualize/`,
+							session.workspaceFiles.ensureArtifactsDir,
 						),
 					}
 				: {}),

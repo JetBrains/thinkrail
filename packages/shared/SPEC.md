@@ -29,7 +29,13 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   launchers stamp on their executables, `windowsProductName()`, the per-channel product name alone, and
   `windowsIconPath`, the ICO they embed;
   `@thinkrail/shared/paths` → the worktree-relative path conventions (`WORKSPACE_INTERNAL_DIR`,
-  `WORKSPACE_CONTEXT_DIR`, `WORKSPACE_TODOS_DIR`);
+  `WORKSPACE_CONTEXT_DIR`, `WORKSPACE_TODOS_DIR`, `DELETE_CLAIM_PREFIX`);
+  `@thinkrail/shared/artifactsDir` → `seedArtifactsDir(root)`, the one way anything in the host creates the
+  artifacts folder: each path part is created non-recursively and must be a real directory (a link is
+  refused, never followed), and the self-ignoring `*` `.gitignore` is written only when absent
+  (exclusive create). `workspaces` seeds at session start, `artifacts` before a restore, and extensions
+  through `WorkspaceFiles.ensureArtifactsDir` before saving — so recreating a folder someone cleaned never
+  leaves files git would stage;
   `@thinkrail/shared/codedError` → `CodedError` + `errorCodeOf()`;
   `@thinkrail/shared/toolHomes` → `toolHomeEnv(home)`, the environment that points every agent tool's
   config home (Claude Code, Codex, Gemini, Copilot, Kimi, Grok) under one sandbox home and clears the

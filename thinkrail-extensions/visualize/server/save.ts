@@ -26,9 +26,11 @@ export function visualizationSlug(params: SavedVisualization["params"]): string 
 
 export function visualizationSaver(
 	dir: string,
+	ensureArtifactsDir: (cwd: string) => Promise<void>,
 	now: () => Date = () => new Date(),
 ): VisualizationSaver {
 	return async ({ params, markdown, cwd }) => {
+		await ensureArtifactsDir(cwd);
 		const folder = resolve(cwd, dir);
 		await mkdir(folder, { recursive: true });
 		const base = `${visualizationStamp(now())}-${visualizationSlug(params)}`;

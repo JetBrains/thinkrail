@@ -75,7 +75,12 @@ describe("registryInlineExtensions with per-session factories", () => {
 		const services: HostSessionServices = {
 			expectToolResponse: () => {},
 			awaitToolResponse: async () => ({ kind: "deferred" }),
-			workspaceFiles: { check: async () => {}, scratchDir: "", artifactsDir: "" },
+			workspaceFiles: {
+				check: async () => {},
+				ensureArtifactsDir: async () => {},
+				scratchDir: "",
+				artifactsDir: "",
+			},
 		};
 		labels.set(services.expectToolResponse, label);
 		return services;
@@ -244,7 +249,12 @@ describe("extensionSessionServices", () => {
 	const host: HostSessionServices = {
 		expectToolResponse: () => {},
 		awaitToolResponse: async () => ({ kind: "deferred" }),
-		workspaceFiles: { check: async () => {}, scratchDir: "", artifactsDir: "" },
+		workspaceFiles: {
+			check: async () => {},
+			ensureArtifactsDir: async () => {},
+			scratchDir: "",
+			artifactsDir: "",
+		},
 	};
 	const extension = {
 		name: "demo",

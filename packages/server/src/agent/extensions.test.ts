@@ -581,6 +581,9 @@ describe("registry extensions", () => {
 			)?.[1];
 			expect(saved).toBeDefined();
 			expect(readFileSync(join(project, saved as string), "utf8")).toContain("```mermaid");
+			expect(readFileSync(join(project, ".thinkrail", "context", ".gitignore"), "utf8")).toBe(
+				"*\n",
+			);
 			await expect(execute({ type: "diagram", mermaid: "flowchart LR\n A -->" })).rejects.toThrow(
 				/invalid Mermaid syntax in `mermaid`[\s\S]*Parse error/,
 			);

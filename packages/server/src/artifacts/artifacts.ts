@@ -20,6 +20,7 @@ import type {
 	WorkspaceArtifactsSnapshot,
 	WorkspaceIgnoredOutput,
 } from "@thinkrail/contracts";
+import { seedArtifactsDir } from "@thinkrail/shared/artifactsDir";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
 	DELETE_CLAIM_PREFIX,
@@ -596,6 +597,7 @@ export function restoreArtifact(workspaceId: string, path: string): void {
 	const target = resolve(root, path);
 	if (lstatSync(target, { throwIfNoEntry: false }))
 		throw new CodedError("ENTRY_EXISTS", `${path} already exists`);
+	seedArtifactsDir(root);
 	let existing = dirname(target);
 	while (!lstatSync(existing, { throwIfNoEntry: false })) existing = dirname(existing);
 	if (!isInside(realpathSync(root), realpathSync(existing)))

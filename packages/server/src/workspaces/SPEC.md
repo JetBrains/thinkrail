@@ -355,7 +355,8 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   without it are treated as complete and never backfilled, so an upgrade cannot resurrect a default terminal
   the user previously closed. No layout revision participates.
 - **`ensureWorkspaceScratchDir(ws)`** — idempotent seed of the gitignored `WORKSPACE_CONTEXT_DIR`
-  scratch dir (mkdir + self-ignoring `*` `.gitignore`); the host calls it on **session create** for
+  scratch dir (mkdir + self-ignoring `*` `.gitignore`, through `shared`'s `seedArtifactsDir`, which owns the
+  hardening below; this function adds the missing-root check); the host calls it on **session create** for
   every workspace, so the Default workspace writes into the user's repo only when a chat actually
   starts there (worktree creation still seeds eagerly at create; this also self-heals a worktree
   whose scratch dir was deleted). Hardened, because in the Default workspace it runs against
@@ -420,5 +421,5 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   `recordChatContinuation`, `dropChatRecord`, `setChatPublishers`, `assertNotChatsContainer`,
   `assertNotChatWorkspace`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`, `log`; `contracts`;
-  `@thinkrail/shared/paths` (the scratch-dir path convention), `@thinkrail/shared/codedError`; Node.
+  `@thinkrail/shared/artifactsDir` (the scratch-dir seeding), `@thinkrail/shared/codedError`; Node.
 - **Forbidden:** `host`; reaching into another feature's internals (use its barrel).

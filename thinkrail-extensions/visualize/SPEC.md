@@ -51,7 +51,9 @@ out of `.git`, else the tool result asks the model to write it first — the sam
 `fs.readFile` then serves, so the card never reports what the tool accepted as unreadable. `scratchDir` is
 `.thinkrail/context/mockups/`, inside the host's gitignored scratch dir, so mockups never become project
 changes. **Every diagram and comparison is kept as an artifact**: `server/save.ts` is the injected
-`saveVisualization`, writing the result's markdown to `<artifactsDir>visualize/<YYYYMMDD-HHMMSS>-<slug>.md`
+`saveVisualization`. It first asks the host to `ensureArtifactsDir` (so a folder that `git clean -fdx`
+removed comes back with its self-ignoring `.gitignore`, never as files git would stage), then writes the
+result's markdown to `<artifactsDir>visualize/<YYYYMMDD-HHMMSS>-<slug>.md`
 (`artifactsDir` is `.thinkrail/context/`; the slug comes from the title, Unicode letters kept, else the
 type) with an exclusive create and a `-2`, `-3`, … suffix on collision, so an earlier visualization is never
 overwritten. The markdown renderer draws its ```` ```mermaid ```` fences, so the Artifacts tool opens it as

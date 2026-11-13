@@ -29,6 +29,7 @@ const session: ExtensionSessionServices = {
 		},
 		scratchDir: ".thinkrail/context/mockups/",
 		artifactsDir: "",
+		ensureArtifactsDir: async () => {},
 	},
 };
 

@@ -429,3 +429,13 @@ test("a writer hint ends with its tool call, so a failed edit never names a late
 	expect((await listArtifacts("w1")).artifacts[0]).toMatchObject({ path: `${CONTEXT}/later.md` });
 	expect((await listArtifacts("w1")).artifacts[0]?.sessionId).toBeUndefined();
 });
+
+test("restoring after the whole artifacts folder was cleaned recreates its self-ignoring .gitignore", async () => {
+	write(`${CONTEXT}/report.md`, "report");
+	reconcileArtifacts("w1");
+	rmSync(join(root, ".thinkrail"), { recursive: true });
+	expect((await listArtifacts("w1")).artifacts[0]?.state).toBe("deleted");
+	restoreArtifact("w1", `${CONTEXT}/report.md`);
+	expect(readFileSync(join(root, CONTEXT, ".gitignore"), "utf8")).toBe("*\n");
+	expect(readFileSync(join(root, CONTEXT, "report.md"), "utf8")).toBe("report");
+});
