@@ -96,13 +96,7 @@ export function focusTerminal(): void {
 		null;
 	if (!terminalTarget(tabKey)) {
 		if (tabKey === null) state.addTerminal(workspaceId);
-		else {
-			const bottom = state.layoutDocumentsByWorkspace[workspaceId]?.bottom;
-			if (bottom && !(bottom.visible && bottom.groups.some((group) => !group.folded))) {
-				state.enqueueLayoutIntent({ kind: "toggle-bottom", workspaceId });
-			}
-			state.setActiveTerminalTab(workspaceId, tabKey);
-		}
+		else state.setActiveTerminalTab(workspaceId, tabKey);
 	}
 	const target = useAppStore.getState().activeTerminalByWorkspace[workspaceId] ?? tabKey;
 	focusWhenSettled(() => terminalTarget(target));

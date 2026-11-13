@@ -230,8 +230,9 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   address-bar chord. `Mod+0` reveals the Projects tool (`requestToolView`) and focuses inside it; on
   Project Home it expands a collapsed projects pane and lands there. `` Ctrl+` `` from inside a terminal
   returns to the region active before it (else the first center group); elsewhere it focuses the visible
-  terminal (the workspace's active one first), else reveals the bottom (`toggle-bottom` while hidden) and
-  selects the active terminal, else creates one with `addTerminal`. `Mod+Shift+E` / `Mod+Shift+G` set
+  terminal (the workspace's active one first), else reveals that terminal wherever it is placed — its side
+  or bottom shown and its group unfolded, through the `select-terminal` intent and the layout's
+  `revealPlacedTab` (the reveal `reveal-tool` uses) — else creates one with `addTerminal`. `Mod+Shift+E` / `Mod+Shift+G` set
   Files to All / Changed (`setFilesMode`), reveal it and focus inside its body; Changes is not bound in a
   chat without a project. Every focus move waits, a bounded number of animation frames, for no modal layer
   and a rendered target, then gives up silently; a newer focus chord cancels an older wait. That wait is
