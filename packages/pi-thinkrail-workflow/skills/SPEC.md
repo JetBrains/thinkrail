@@ -146,14 +146,17 @@ flowchart LR
 8. The spec tree is the only durable record; how and when durable content reaches it is the
    workflow's call — written straight into the tree as decisions land (no temp doc at all), promoted
    incrementally from a task-spec as decisions settle, or promoted when the work lands. What never
-   varies: durable content is in the tree before its temp doc is cleaned up, and there is no
+   varies: durable content is in the tree before its temp doc is retired, and there is no
    parallel durable plan/state format.
 9. Temp docs are optional and belong to their workflow. When used, the task-spec is the default
    spine — design, plan, pipeline state, and review notes live as its sections; extra working files
    (resume state, scratch plans) are declared by naming their shape. **All temp docs live in the
    workspace's gitignored `.thinkrail/context/`** (host-seeded per worktree — see the server's
-   workspaces module — so they never reach the committed tree). The owning workflow also owns cleanup
-   — delete when the work lands, by default; a temp doc never becomes the record.
+   workspaces module — so they never reach the committed tree). **A workflow never deletes a temp
+   doc:** it stays as one of the user's artifacts (ThinkRail's Artifacts tool), and only the user
+   removes it. The owning workflow retires it instead — a task-spec gets `status: done`, which takes it
+   out of spec search; a reusable working file is overwritten the next time. A temp doc never becomes
+   the record.
 
 **Scaling**
 10. Scale by route and composition, not by prose: work that needs no workflow decision bypasses the

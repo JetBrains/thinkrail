@@ -75,7 +75,11 @@ tabs; an empty group is a one-entry cluster. Tools placed nowhere (after *Remove
 trailing, dimmed cluster behind a last separator; activating one restores it to its recorded target.
 Exactly one entry per expanded pane is pressed and none in a folded or hidden one, so the pressed set
 reads as "panes currently open". Clicking an unpressed entry selects it in *its* pane (revealing or
-unfolding the pane); clicking the pressed one folds that pane.
+unfolding the pane); clicking the pressed one folds that pane. A tool entry shows the shell's
+`renderTabAdornment` for its tool — the same adornment its pane-header tab shows (Review's draft count,
+Artifacts' new-arrivals dot) — whether the tool is placed (a rail-mode `WorkbenchTab`) or parked in the
+trailing unplaced cluster (`AuxiliaryRailButton`), so a badge never depends on where the tool sits. The
+layout only draws what it is given; what an adornment means is the shell's business.
 
 **Tools and terminals never share a pane.** A group holding tools is a tool pane; terminals live only in
 tool-free groups (`canJoinAuxiliaryGroup`). Joining a tool into a pane that shows terminals, or a terminal
@@ -218,7 +222,8 @@ and Project Home projects pane (`home`). The shell's tracker marks the one holdi
 stacking, so the veil stays inside it. Folded groups and hidden sides render no section and are no region. `F6` and the focus chords land in a
 region by one rule: the element last focused inside it, if still rendered and focusable there (the root
 itself is never remembered); else a `[data-focus-default]`, innermost markers first (a tool body may hold a
-more specific default, as Files marks its tree or changes list below its mode toolbar) — or, when that
+more specific default, as Files marks its tree or changes list below its mode toolbar, and Artifacts its
+list below its chat filter) — or, when that
 marker is not itself focusable, its first tabbable descendant; else the selected tab; else the root (sections are
 `tabIndex=-1`) or its first tabbable. The defaults are the chat composer's textarea, a terminal's xterm
 host (its helper textarea), the Monaco editor container (its input), the Project Home projects tree
@@ -258,12 +263,16 @@ it with the tab's file path without importing store or transport.
 Balanced, Focus, and Review are web-owned resource-free frame definitions with a below-center bottom slot:
 Balanced and Review show it; Focus hides it. Balanced and Focus start with one center group; Review provides
 its deliberate vertical pair. Balanced's lower right group opens on the TODO List with Review beside it: on a
-fresh workspace the plan is what there is to look at, while review comments only exist once there is a diff. Custom presets use the same grammar and capture geometry,
+fresh workspace the plan is what there is to look at, while review comments only exist once there is a diff.
+Artifacts sits with the reference tools — after Specs and Files in Balanced's upper right group and
+Review's lower reference group, and last in Focus's one group; it is appended to `LAYOUT_TOOLS` so every existing tool keeps its default
+restore index, and a saved frame from before it shows it as an unplaced entry until placed. Custom presets use the same grammar and capture geometry,
 topology, tools, folds, and empty structural slots, never workspace resources or terminal count. Preset node
 ids are template-local labels: instantiation mints frontend-local frame ids and returns the old→new group map
 used to rehome every workspace view. Only custom definitions cross the wire through settings; a set that
-places the TODO List (`plan`) is saved only to a host at `LAYOUT_PLAN_PRESET_PROTOCOL_VERSION` or newer — an
-older host's validator rejects the tool, so Layout settings explains that instead of sending it. Built-in preset
+places the TODO List (`plan`) is saved only to a host at `LAYOUT_PLAN_PRESET_PROTOCOL_VERSION` or newer, and one
+that places Artifacts only to a host at `ARTIFACTS_PROTOCOL_VERSION` or newer — an older host's validator
+rejects the tool, so Layout settings explains that instead of sending it. Built-in preset
 names are display copy: `layoutPresetName` renders them through the locale catalog by preset id while the
 definition keeps its stable `name`; custom preset names are user data and render verbatim.
 

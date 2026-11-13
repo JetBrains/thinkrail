@@ -19,7 +19,8 @@ explicit, authenticated, on-demand runs.
 ## Execution model
 
 Per-test isolation is `resetState()` in `fixtures/app.ts`: it clears the host's `projects.json`,
-`workspaces.json`, every chat in `chats.json` and the `chats/` folders, turns, reviews, worktrees and pi
+`workspaces.json`, every chat in `chats.json` and the `chats/` folders, turns, reviews, artifact indexes and
+kept copies, worktrees and pi
 sessions, and resets the fixture repository, so a chat without a project created by one test never
 reaches the next. The Chats container the host ensured at boot is kept (an empty `chats/` root and the
 record), because a fresh install always has it: a cold start in a test is the cold start a user gets.

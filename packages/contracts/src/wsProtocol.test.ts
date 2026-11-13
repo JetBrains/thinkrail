@@ -12,6 +12,7 @@ import {
 import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	ARTIFACTS_PROTOCOL_VERSION,
 	ASK_DISCUSS_PROTOCOL_VERSION,
 	BRANCH_STATUS_PROTOCOL_VERSION,
 	CACHE_WARMING_MODES,
@@ -299,6 +300,17 @@ test("Files tree copy and delete are pinned to v118", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(FS_MUTATIONS_PROTOCOL_VERSION);
 	expect(WS_METHODS.fsCopy).toBe("fs.copy");
 	expect(WS_METHODS.fsDelete).toBe("fs.delete");
+});
+
+test("workspace artifacts, rename and move are pinned to v121", () => {
+	expect(ARTIFACTS_PROTOCOL_VERSION).toBe(121);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ARTIFACTS_PROTOCOL_VERSION);
+	expect(WS_METHODS.artifactsList).toBe("artifacts.list");
+	expect(WS_METHODS.artifactsRestore).toBe("artifacts.restore");
+	expect(WS_METHODS.artifactsDiscard).toBe("artifacts.discard");
+	expect(WS_METHODS.fsRename).toBe("fs.rename");
+	expect(WS_METHODS.fsMove).toBe("fs.move");
+	expect(WS_CHANNELS.workspaceArtifactsChanged).toBe("workspace.artifactsChanged");
 });
 
 test("background workspace creation is pinned to v104", () => {
