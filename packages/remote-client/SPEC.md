@@ -26,7 +26,9 @@ uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `loc
     the snapshot pushes `server.welcome` and `remote.hostRoutes` are kept and replayed to a later subscriber,
     because the host sends them once as the channel opens — before any screen subscribes).
   - `deviceConnector.ts` — `connectRemoteProject` (first pairing, link + token) and `connectSavedHost`
-    (token-less `resume`), sharing one WebRTC + auto-reconnect machinery; persistent device key. A connection's
+    (token-less `resume`), sharing one WebRTC + auto-reconnect machinery; persistent device key, kept in the `KeyValueStore` the caller
+    passes (`keyStore`; `browserStore` — `localStorage` — by default, so a shell whose `localStorage` is not stable
+    across launches, the desktop's, gives its own and keeps its identity). A connection's
     `ConnectionEvents` (`onLost`, `onOpenChange`, `onRetryFailed`, `onRoutes`) are given when it is created, so
     none is missed or replayed. `connectSavedHost` returns at once and its reconnect loop makes every attempt,
     the first included: a host not reachable yet is retried like a dropped one. Pairing makes its own first
@@ -66,6 +68,10 @@ uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `loc
   - `signalingRoute.ts` — `SignalingPipe` (one route's frame exchange: `ready` with any TURN servers,
     `listen`, `send`, `close`), `createBrokerPipe`, `createNostrPipe`, `pickSignalingPipe` and
     `openSignaling`, the route choice above.
+  - `hostStatus.ts` — how a host's connection reads on a screen, shared by every shell: `hostStatusOf` (the
+    controller's status; never connected reads connecting), `failureOf` (`network` for `RelayUnreachableError`,
+    a `RemoteConnectError` code, or an unexpected message) and `recoveryOf` (`repair` — pair again, `reconnect`,
+    or `none` — only an app update helps). The words are each shell's own.
   - `hostRegistry.ts` — the locally-stored set of paired hosts over an injected `KeyValueStore`; a host keeps
     every advertised `relayUrls` (older entries only the one `relayUrl`) and its Nostr route; `update`
     replaces one in place (never re-adding a forgotten host), `withRoutes` merges the routes a host sent.
@@ -82,9 +88,10 @@ uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `loc
     disconnected; `onRoutes` hands back the saved host merged with the routes it sent, and later retries dial
     them; `reconnectNow` retries every host now. `stop` closes everything, and a pairing landing after it is closed.
 - **Public surface:** the `index.ts` barrel — the controller (`createRemoteSessions` and its types), the
-  registry, `connectRemoteProject` (the IDE's open-by-link), `DeviceWireClient`, and the errors
-  (`RemoteConnectError`, `RelayUnreachableError`, `RemoteRequestError`). The channel adapter, the wire client
-  factory and `connectSavedHost` are internal.
+  registry and `browserStore`, the status helpers (`hostStatusOf`, `failureOf`, `recoveryOf`),
+  `DeviceWireClient`, and the errors (`RemoteConnectError`, `RelayUnreachableError`, `RemoteRequestError`). The
+  channel adapter, the wire client factory and the connectors (`connectSavedHost`, `connectRemoteProject`) are
+  internal: every shell pairs and reconnects through the controller.
 - **Allowed deps:** `contracts` (broker + signaling + pairing + session types), `nostr-signaling` (the
   internet route), platform browser APIs. Never `server`, `pi`, `web`, or any UI package.
 - **Forbidden:** value-importing `pi`/`server`; a WebRTC or crypto library of its own (use the platform; the

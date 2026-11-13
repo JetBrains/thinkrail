@@ -28,7 +28,7 @@ routes on every (re)connect, and the saved host keeps the Nostr route. Pairing s
 host-authorized: the QR's one-time token, then the device key, and pairing is one handshake: the controller
 (`pair`) keeps the connection that paired. Each computer's status — Connected, Connecting…, or unreachable with
 the last failure — is the controller's (`snapshot().statuses`, which `App` reads through `hostView.ts`'s
-`useRemoteSessions` with the sessions, clients and access); `hostStatus.ts` (`hostStatusOf`) turns a failure into
+`useRemoteSessions` with the sessions, clients and access); `remote-client`'s `hostStatusOf` turns a failure into
 `network` (no route answered — `RelayUnreachableError` — shown as "check the phone's internet and that
 phone access is on"), a `RemoteConnectError` code with its own what-to-do line (expired QR, phone access off, app
 older than the computer, no direct route, …), or the raw message of anything unexpected. A computer lost for
@@ -134,8 +134,8 @@ the tab badged with the Needs-you count; a tap lands in that chat (a row whose c
   `@capacitor/barcode-scanner`; cancel is silent, a non-pairing QR or denied camera is reported, and a device
   with no camera — the iOS Simulator, where the native scanner shows nothing and never answers — says so and
   opens the paste field),
-  `PairForm.tsx`, `theme.ts`, `storeHost.ts`, and a `localStorage` `KeyValueStore` (`deviceStore.ts`; the
-  Capacitor WKWebView persists it on-device). Live status comes from the controller's `session.state` stream; lists are read on screen
+  `PairForm.tsx`, `theme.ts`, `storeHost.ts`; saved computers, the device key and preferences live in
+  `remote-client`'s `browserStore` (`localStorage`, which the Capacitor WKWebView persists on-device). Live status comes from the controller's `session.state` stream; lists are read on screen
   entry, and a workspace's chats re-read when a session appears or leaves in it.
 - **Allowed deps:** the sibling `store`, `transport`, `extensions`, `themes` barrels, `shell/chatReconciliation`, and the
   chat hooks `chat/useTranscriptSync`, `chat/useSessionStats`, `chat/useModelCatalog`;

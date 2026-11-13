@@ -1,7 +1,7 @@
 import { RiComputerLine } from "@remixicon/react";
 import { BUNDLED_LOCALES, languageName, resolveLocale, SYSTEM_LOCALE } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
-import type { SavedHost } from "@thinkrail/remote-client";
+import type { HostStatus, SavedHost } from "@thinkrail/remote-client";
 import { Button } from "@thinkrail/ui/button";
 import {
 	SegmentedControl,
@@ -14,7 +14,7 @@ import {
 } from "@thinkrail/ui/settings";
 import { type ReactNode, useState } from "react";
 import type { PairState } from "./App";
-import { failureText, type HostStatus } from "./hostStatus";
+import { failureText } from "./hostStatus";
 import { Screen } from "./layout";
 import { PairActions } from "./PairForm";
 import type { ContrastChoice, DevicePreferences, ThemeChoice } from "./preferences";

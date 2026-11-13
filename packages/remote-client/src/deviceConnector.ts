@@ -17,6 +17,7 @@ import {
 import { hostRejection, isTerminalConnectError, RemoteConnectError } from "./connectError";
 import { toDeviceChannel } from "./deviceChannel";
 import { createDeviceWireClient, type DeviceWireClient } from "./deviceWireClient";
+import type { KeyValueStore } from "./hostRegistry";
 import { createReconnectLoop } from "./reconnectLoop";
 import { RelayUnreachableError } from "./relayPicker";
 import { openSignaling, type SignalingPipe } from "./signalingRoute";
@@ -142,9 +143,15 @@ interface DeviceKey {
 	publicKeyRaw: string;
 }
 
-/** A stable per-browser Ed25519 identity, so a reconnect re-authorizes as the same (already-paired) device. */
-async function loadOrCreateDeviceKey(): Promise<DeviceKey> {
-	const stored = localStorage.getItem(DEVICE_KEY_STORAGE);
+/** The browser's own storage, where a device keeps its key unless its shell gives a steadier one. */
+export const browserStore: KeyValueStore = {
+	read: (key) => localStorage.getItem(key),
+	write: (key, value) => localStorage.setItem(key, value),
+};
+
+/** A stable per-device Ed25519 identity, so a reconnect re-authorizes as the same (already-paired) device. */
+async function loadOrCreateDeviceKey(store: KeyValueStore): Promise<DeviceKey> {
+	const stored = store.read(DEVICE_KEY_STORAGE);
 	if (stored) {
 		try {
 			const parsed = JSON.parse(stored) as { privateJwk: JsonWebKey; publicKeyRaw: string };
@@ -167,7 +174,7 @@ async function loadOrCreateDeviceKey(): Promise<DeviceKey> {
 	const privateJwk = await crypto.subtle.exportKey("jwk", keyPair.privateKey);
 	const publicKeyRaw = (await crypto.subtle.exportKey("jwk", keyPair.publicKey)).x;
 	if (!publicKeyRaw) throw new Error("could not derive the device key");
-	localStorage.setItem(DEVICE_KEY_STORAGE, JSON.stringify({ privateJwk, publicKeyRaw }));
+	store.write(DEVICE_KEY_STORAGE, JSON.stringify({ privateJwk, publicKeyRaw }));
 	return { privateKey: keyPair.privateKey, publicKeyRaw };
 }
 
@@ -180,6 +187,8 @@ interface OpenParams {
 	token?: string;
 	label: string;
 	events: ConnectionEvents;
+	/** Where the device key lives. */
+	keyStore: KeyValueStore;
 }
 
 /**
@@ -191,7 +200,7 @@ interface OpenParams {
  */
 function openRemote(params: OpenParams): { connection: RemoteConnection; paired: Promise<void> } {
 	const { events } = params;
-	const keyReady = loadOrCreateDeviceKey();
+	const keyReady = loadOrCreateDeviceKey(params.keyStore);
 	const tokenIdReady = params.token !== undefined ? tokenIdOf(params.token) : undefined;
 	const client = createDeviceWireClient();
 
@@ -454,11 +463,11 @@ function openRemote(params: OpenParams): { connection: RemoteConnection; paired:
  */
 export async function connectRemoteProject(
 	link: string,
-	options: { label: string } & ConnectionEvents,
+	options: { label: string; keyStore?: KeyValueStore } & ConnectionEvents,
 ): Promise<RemoteConnection> {
 	const pairing = parsePairingUri(link);
 	if (!pairing) throw new RemoteConnectError("invalid_link", "Invalid pairing link");
-	const { label, ...events } = options;
+	const { label, keyStore = browserStore, ...events } = options;
 	const { connection, paired } = openRemote({
 		relayUrls: pairing.signalingUrls,
 		nostr: pairing.nostr,
@@ -467,6 +476,7 @@ export async function connectRemoteProject(
 		token: pairing.token,
 		label,
 		events,
+		keyStore,
 	});
 	await paired;
 	return connection;
@@ -486,6 +496,7 @@ export function connectSavedHost(
 		label: string;
 	},
 	events: ConnectionEvents = {},
+	keyStore: KeyValueStore = browserStore,
 ): RemoteConnection {
 	const relayUrls =
 		host.relayUrls && host.relayUrls.length > 0
@@ -499,5 +510,6 @@ export function connectSavedHost(
 		hostKey: host.hostKey,
 		label: host.label,
 		events,
+		keyStore,
 	}).connection;
 }

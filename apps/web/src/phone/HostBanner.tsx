@@ -1,8 +1,9 @@
 import { RiQrScan2Line } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
+import { type HostFailure, recoveryOf } from "@thinkrail/remote-client";
 import { Button } from "@thinkrail/ui/button";
 import type { PairState } from "./App";
-import { failureText, type HostFailure, recoveryOf } from "./hostStatus";
+import { failureText } from "./hostStatus";
 import { usePairing } from "./PairForm";
 
 /**
