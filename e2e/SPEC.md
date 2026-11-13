@@ -384,6 +384,12 @@ resize usability rather than treating a cancellation toast alone as success. `pr
 covers the no-workspace branch: the fresh start screen and Project Home carry the left tool rail and
 plain Projects pane header with no right/bottom rail, the rail entry / Hide / `Mod+B` toggle with their
 focus endpoints, and rail/header geometry that matches the workbench across a workspace round trip.
+`keyboard-regions.spec.ts` walks the Balanced ring with `F6` / `Shift+F6` (from the composer and from
+inside xterm), asserting the one `data-region-active` root and the veil through attributes and the
+`::after` content rather than pixels, then the focus chords: `Mod+L` from a terminal, `Mod+0` in the
+workbench and on Project Home (collapsed pane included), `Mod+1` / `Mod+2` over a split center,
+`` Ctrl+` `` in and back out and with the bottom hidden, `Mod+Shift+E` / `Mod+Shift+G` landing inside
+Files in the matching mode, and the palette rows with their chords, run after the palette closes.
 
 ## Isolation contract
 

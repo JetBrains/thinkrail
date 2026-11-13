@@ -210,6 +210,22 @@ recursive center splits without keying the workbench by workspace. The canceled-
 
 Pointer is never the sole arrangement path. Keyboard controls and shadcn menus cover group/tab focus, select/close/keep/reorder/move, directional center splits, absolute and adjacent auxiliary-group creation, explicit group remove/merge, fold/show/hide/tool restore, bottom alignment, and keyboard separator resize, always with an unavailable reason. A tab can reproduce every interior pointer placement through move plus New group. The optional chat-rename menu item replaces the tab label with an inline editor and commits through a shell-injected callback: layout identifies the chat tab and owns the transient edit interaction but never imports transport/store or performs the domain mutation. Resource strips implement WAI-ARIA tabs and visible roving focus. Rails are named toolbars of pressed buttons: arrows move focus, Enter/Space activates, and `aria-controls` links each existing group. Tool bodies are named regions and terminal bodies are tabpanels. A folded auxiliary group retains a linked native-hidden region while unmounting the body; its selected edge-rail control is the focus endpoint when no tab renders. A local fold moves focus to that control and expansion returns it to the selected tab. Separators expose orientation and current/min/max values. `Ctrl+F6` visits upper-row groups in visual order, then visible bottom groups left-to-right.
 
+**Regions.** Every rendered group section is a keyboard region: it carries `data-region` (its group id)
+and `data-region-kind` (`left` | `center` | `right` | `bottom`), beside the shell's top bar (`topbar`)
+and Project Home projects pane (`home`). The shell's tracker marks the one holding focus
+`data-region-active` and veils the others ([[submodule-web-shell]], *Global chords*;
+[COLOR.md](../../styles/COLOR.md), *Active region*); a region root is positioned and isolates its
+stacking, so the veil stays inside it. Folded groups and hidden sides render no section and are no region. `F6` and the focus chords land in a
+region by one rule: the element last focused inside it, if still rendered and focusable there (the root
+itself is never remembered); else a `[data-focus-default]`, innermost markers first (a tool body may hold a
+more specific default, as Files marks its tree or changes list below its mode toolbar) — or, when that
+marker is not itself focusable, its first tabbable descendant; else the selected tab; else the root (sections are
+`tabIndex=-1`) or its first tabbable. The defaults are the chat composer's textarea, a terminal's xterm
+host (its helper textarea), the Monaco editor container (its input), the Project Home projects tree
+and the body of a selected auxiliary
+tool, which the panel section marks `data-focus-default` with `data-tool-body=<tool>` — so entering a tool
+group lands in the tool rather than on its rail button.
+
 Center resource strips and auxiliary terminal-session strips have bounded readable tab widths and no fixed previous/next controls: wheel, trackpad, touch,
 roving-keyboard navigation, active reveal, and the searchable keyboard overflow list scroll the same list.
 Native scrollbars stay hidden; pointer-transparent edge fades appear only where clipped and update without

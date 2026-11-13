@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { type NativeQuitHint, QUIT_CONFIRMATION } from "@thinkrail/contracts";
+import { matchKeybinding } from "../keybindings";
 import {
 	createWebShortcuts,
 	hasWebShortcuts,
@@ -8,7 +9,6 @@ import {
 	type ShortcutPlatform,
 	shortcutPlatform,
 } from "./shortcutCommands";
-import { globalHotkeyCommand } from "./useGlobalHotkeys";
 
 const { holdMs, pollMs } = QUIT_CONFIRMATION;
 const TERMINAL = new EventTarget();
@@ -169,18 +169,11 @@ test("only windows and linux bind web chords", () => {
 	expect(hasWebShortcuts("linux")).toBe(true);
 });
 
-test("no table chord is also a global hotkey", () => {
-	const available = {
-		projects: true,
-		workspace: true,
-		bottom: true,
-		newWorkspace: true,
-		search: true,
-	};
+test("no table chord is also a keybinding", () => {
 	for (const platform of ["Win32", "Linux x86_64"]) {
 		for (const command of SHORTCUT_COMMANDS) {
 			for (const { code } of Object.values(command.chords).flat()) {
-				expect(globalHotkeyCommand(chord(code), available, false, platform)).toBeNull();
+				expect(matchKeybinding(chord(code), platform)).toBeNull();
 			}
 		}
 	}

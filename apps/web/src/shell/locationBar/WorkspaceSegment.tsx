@@ -28,7 +28,8 @@ import {
 } from "@thinkrail/ui/dropdown-menu";
 import { useEffect, useMemo, useState } from "react";
 import { RunningIcon } from "../../components/RunningIcon";
-import { copyText, platformShortcutLabel } from "../../lib";
+import { keybindingLabel } from "../../keybindings";
+import { copyText } from "../../lib";
 import { RemoveWorkspaceDialog } from "../../panels/RemoveWorkspaceDialog";
 import {
 	canRenameWorkspace,
@@ -359,7 +360,7 @@ export function WorkspaceSegment({
 							<Plus />
 							{t("shell.location.workspace.new")}
 							<span className="ml-auto pl-8 text-text-subtle tr-text-metadata">
-								{platformShortcutLabel("N")}
+								{keybindingLabel("workspace.new")}
 							</span>
 						</DropdownMenuItem>
 					</DropdownMenuContent>

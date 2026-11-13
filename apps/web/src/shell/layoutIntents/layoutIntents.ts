@@ -35,6 +35,7 @@ import {
 	primaryCenterGroupId,
 	reconcileAttention,
 	removeSessionLayoutTabs,
+	revealPlacedTab,
 	revealTool,
 	selectTab,
 	setAuxiliaryGroupFolded,
@@ -450,11 +451,7 @@ export function useLayoutIntentProcessing(
 							candidate.kind === "terminal" && candidate.tabKey === layoutIntent.tabKey,
 					);
 				if (!tab) break;
-				const location = findTabLocation(document, tab.id);
-				if (location) {
-					changeAttention(selectTab(attention, location, tab.id));
-					requestFocus({ workspaceId, key: layoutIntent.id, location, tabId: tab.id });
-				}
+				result = revealPlacedTab(document, tab.id) ?? undefined;
 				break;
 			}
 			case "toggle-side":

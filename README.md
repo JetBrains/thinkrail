@@ -44,7 +44,7 @@ For latest version, see the [Releases page](https://github.com/JetBrains/thinkra
 
   * Once a GitHub PR is open, ThinkRail shows its CI checks and review decision, and lets you mark it ready, merge it, reopen it, or delete the remote branch.
 
-- **An IDE around the agent.** ThinkRail comes with Monaco editor tabs, a file tree integrated with git to show code changes as they happen, terminals, and document support. Rendered Markdown previews have a heading outline that follows the section you're reading; hide it or move it to either side.
+- **An IDE around the agent.** ThinkRail comes with Monaco editor tabs, a file tree integrated with git to show code changes as they happen, terminals, and document support. Rendered Markdown previews have a heading outline that follows the section you're reading; hide it or move it to either side. The pane you're typing in stays at full contrast while the rest is dimmed, and VS Code-style keys move you around: `F6` steps between panes, `⌘L` jumps to the chat input, `⌘0` to Projects, `⌘1`–`⌘9` to an editor group, and `` ⌃` `` to the terminal.
 
 - **Powerful chat features.** You can open several concurrent work sessions per workspace, each with its own model. Send a prompt, or queue it as a follow-up, delegate to subagents, and work together on a shared plan: the agent updates it, and you review and edit.
 

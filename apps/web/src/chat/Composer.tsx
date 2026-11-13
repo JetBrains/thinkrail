@@ -689,6 +689,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							ref={ref}
 							data-testid="chat-input"
 							data-dictation-fallback
+							data-focus-default
 							value={value}
 							onScroll={syncBackdropScroll}
 							onChange={(e) => {
