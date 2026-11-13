@@ -64,6 +64,8 @@ export const CenterGroupView = memo(function CenterGroupView({
 			id={groupDomId(location)}
 			data-testid="center-group"
 			data-group-id={group.id}
+			data-region={group.id}
+			data-region-kind="center"
 			tabIndex={-1}
 			aria-label={
 				group.tabs.length === 0 ? t("workbench.center.emptyGroup") : t("workbench.center.group")

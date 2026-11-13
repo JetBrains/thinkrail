@@ -202,7 +202,7 @@ export default function MonacoEditor({
 
 	return (
 		<>
-			<div ref={containerRef} className="h-full w-full text-left" />
+			<div ref={containerRef} data-focus-default className="h-full w-full text-left" />
 			<MonacoReviewZones
 				zones={reviewZones}
 				review={review}

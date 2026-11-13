@@ -251,6 +251,20 @@
 	}
 }
 
+/* Active region (COLOR.md): isolation keeps a region's veil inside it, under portals and handles. */
+[data-region] {
+	position: relative;
+	isolation: isolate;
+}
+:root[data-region-tracking] [data-region]:not([data-region-active])::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: 2147483647;
+	pointer-events: none;
+	background: var(--region-inactive-scrim);
+}
+
 .xterm .xterm-rows {
 	font-variant-ligatures: none;
 }

@@ -178,6 +178,8 @@ export const BottomGroupView = memo(function BottomGroupView({
 			id={groupDomId(location)}
 			data-testid="bottom-group"
 			data-group-id={group.id}
+			data-region={group.id}
+			data-region-kind="bottom"
 			data-tools={group.tabs.flatMap((tab) => (tab.kind === "tool" ? [tab.tool] : [])).join(" ")}
 			data-folded="false"
 			tabIndex={-1}
@@ -209,6 +211,8 @@ export const BottomGroupView = memo(function BottomGroupView({
 				id={groupPanelId(location)}
 				role={selected?.kind === "terminal" ? "tabpanel" : undefined}
 				aria-labelledby={selected ? tabDomId(location, selected.id) : undefined}
+				data-focus-default={selected?.kind === "tool" || undefined}
+				data-tool-body={selected?.kind === "tool" ? selected.tool : undefined}
 				className="relative min-h-0 flex-1 overflow-auto"
 			>
 				{selected ? (

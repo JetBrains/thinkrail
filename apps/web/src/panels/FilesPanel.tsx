@@ -84,7 +84,7 @@ export function FilesPanel({ workspaceId }: { workspaceId: string }) {
 			{mode === "all" ? (
 				<AllFiles workspaceId={workspaceId} marks={marks} />
 			) : (
-				<div className="min-h-0 flex-1">
+				<div data-focus-default className="min-h-0 flex-1">
 					<ChangesPanel workspaceId={workspaceId} status={status} error={error} reload={reload} />
 				</div>
 			)}
@@ -111,20 +111,22 @@ function AllFiles({ workspaceId, marks }: { workspaceId: string; marks: ChangeMa
 	}, [activePath, workspaceId]);
 
 	return (
-		<RememberedScrollArea
-			workspaceId={workspaceId}
-			view="all"
-			restore={!revealOnMount}
-			className="min-h-0 flex-1"
-			viewportClassName="p-panel-inset"
-		>
-			<FileTree
+		<div data-focus-default className="contents">
+			<RememberedScrollArea
 				workspaceId={workspaceId}
-				marks={marks}
-				activePath={activePath}
-				revealTarget={revealTarget}
-				onRevealed={() => setRevealTarget(null)}
-			/>
-		</RememberedScrollArea>
+				view="all"
+				restore={!revealOnMount}
+				className="min-h-0 flex-1"
+				viewportClassName="p-panel-inset"
+			>
+				<FileTree
+					workspaceId={workspaceId}
+					marks={marks}
+					activePath={activePath}
+					revealTarget={revealTarget}
+					onRevealed={() => setRevealTarget(null)}
+				/>
+			</RememberedScrollArea>
+		</div>
 	);
 }

@@ -69,11 +69,13 @@
 	--editor-find-match-bg: color-mix(in srgb, var(--warning) 40%, transparent); /* Monaco's active find match */
 	--widget-shadow: color-mix(in srgb, var(--text) 20%, transparent); /* Monaco widget, sticky-scroll, and scrollbar shadows */
 	--media-checker-tile: color-mix(in srgb, var(--text) 20%, transparent); /* the transparency checkerboard tile behind images and vector previews: the text colour at the soft (20%) step — the contrast of the conventional #ccc-on-white checkerboard — over the content canvas, so a dark logo on a transparent PNG stays visible on a dark theme and a light one on a light theme; index.css's `.media-backdrop` is the only consumer */
+	--region-inactive-scrim: color-mix(in srgb, var(--background) 40%, transparent); /* the pointer-transparent veil over every region except the one holding focus: the workspace canvas pulls each colour toward the background, so contrast drops while hues stay (a selected tab's accent underline is still accent). Light-on-dark text reads as dimmer only at a higher step, so dark appearances take `strong` and light ones `muted` (user-chosen strength, 2026-11-13); index.css's `[data-region]::after` is the only consumer */
 }
 
 /* Roles that take a different alpha step in a dark appearance (`darkAlpha`). */
 :root[data-theme-appearance="dark"] {
 	--focus-ring: color-mix(in srgb, var(--accent) 80%, transparent);
+	--region-inactive-scrim: color-mix(in srgb, var(--background) 60%, transparent);
 }
 
 /* Appearance-level effects. The theme engine stamps `data-theme-appearance` before React mounts, so

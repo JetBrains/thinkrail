@@ -5,29 +5,55 @@ import { useAppStore } from "../store";
 import { openChatHistory } from "./chordActions";
 import { hasLayer, isInTerminal, MODAL_LAYER_SELECTOR } from "./shortcutLayers";
 
+type ChordHandler = (binding: KeybindingId) => void;
+
 type GlobalHotkeyActions = {
-	onProjects: () => void;
-	onWorkspace?: () => void;
-	onBottom?: () => void;
-	onNewWorkspace?: () => void;
-	onSearch?: () => void;
-	onFindInFiles?: () => void;
+	onProjects: ChordHandler;
+	onWorkspace?: ChordHandler;
+	onBottom?: ChordHandler;
+	onNewWorkspace?: ChordHandler;
+	onSearch?: ChordHandler;
+	onFindInFiles?: ChordHandler;
+	onNextRegion?: ChordHandler;
+	onPreviousRegion?: ChordHandler;
+	onComposer?: ChordHandler;
+	onFocusProjects?: ChordHandler;
+	onFocusGroup?: ChordHandler;
+	onTerminal?: ChordHandler;
+	onFiles?: ChordHandler;
+	onChanges?: ChordHandler;
 };
 
 const CHORD_ACTIONS = {
 	"view.toggleLeft": "onProjects",
 	"view.toggleRight": "onWorkspace",
 	"view.toggleBottom": "onBottom",
+	"view.files": "onFiles",
+	"view.changes": "onChanges",
 	"workspace.new": "onNewWorkspace",
 	"search.open": "onSearch",
 	"files.findInFiles": "onFindInFiles",
+	"region.next": "onNextRegion",
+	"region.previous": "onPreviousRegion",
+	"focus.composer": "onComposer",
+	"focus.projects": "onFocusProjects",
+	"focus.terminal": "onTerminal",
+	"focus.group1": "onFocusGroup",
+	"focus.group2": "onFocusGroup",
+	"focus.group3": "onFocusGroup",
+	"focus.group4": "onFocusGroup",
+	"focus.group5": "onFocusGroup",
+	"focus.group6": "onFocusGroup",
+	"focus.group7": "onFocusGroup",
+	"focus.group8": "onFocusGroup",
+	"focus.group9": "onFocusGroup",
 } as const satisfies Record<Exclude<KeybindingId, "chat.history">, keyof GlobalHotkeyActions>;
 
 type GlobalHotkeyCommand = keyof typeof CHORD_ACTIONS;
 
 type GlobalHotkeyEvent = Pick<
 	KeyboardEvent,
-	"altKey" | "code" | "ctrlKey" | "metaKey" | "shiftKey"
+	"altKey" | "code" | "ctrlKey" | "isComposing" | "metaKey" | "shiftKey"
 >;
 
 export function globalHotkeyCommand(
@@ -35,10 +61,12 @@ export function globalHotkeyCommand(
 	actions: GlobalHotkeyActions,
 	modalOpen: boolean,
 	platform?: string,
+	inTerminal = false,
 ): GlobalHotkeyCommand | null {
-	if (modalOpen) return null;
+	if (modalOpen || event.isComposing) return null;
 	const id = matchKeybinding(event, platform);
 	if (id === null || id === "chat.history") return null;
+	if (id === "focus.composer" && inTerminal && event.ctrlKey) return null;
 	return actions[CHORD_ACTIONS[id]] ? id : null;
 }
 
@@ -66,11 +94,17 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
 			const current = actionsRef.current;
-			const command = globalHotkeyCommand(event, current, hasOpenModal());
+			const command = globalHotkeyCommand(
+				event,
+				current,
+				hasOpenModal(),
+				undefined,
+				isInTerminal(event.target),
+			);
 			if (command) {
 				event.preventDefault();
 				event.stopPropagation();
-				if (!event.repeat) current[CHORD_ACTIONS[command]]?.();
+				if (!event.repeat) current[CHORD_ACTIONS[command]]?.(command);
 				return;
 			}
 

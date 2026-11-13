@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+	FOCUS_GROUP_BINDINGS,
 	KEYBINDINGS,
 	type KeybindingId,
 	keybindingLabel,
@@ -69,6 +70,33 @@ describe.each(Object.entries(PLATFORMS))("keybindings on %s", (family, platform)
 		).toBeNull();
 	});
 
+	test("region, focus and tool chords match on their physical keys", () => {
+		expect(matchKeybinding(press("F6"), platform)).toBe("region.next");
+		expect(matchKeybinding(press("F6", { shiftKey: true }), platform)).toBe("region.previous");
+		expect(matchKeybinding(press("KeyL", mod), platform)).toBe("focus.composer");
+		expect(matchKeybinding(press("Digit0", mod), platform)).toBe("focus.projects");
+		for (const [index, id] of FOCUS_GROUP_BINDINGS.entries()) {
+			expect(matchKeybinding(press(`Digit${index + 1}`, mod), platform)).toBe(id);
+		}
+		expect(matchKeybinding(press("Backquote", { ctrlKey: true }), platform)).toBe("focus.terminal");
+		expect(matchKeybinding(press("KeyE", { ...mod, shiftKey: true }), platform)).toBe("view.files");
+		expect(matchKeybinding(press("KeyG", { ...mod, shiftKey: true }), platform)).toBe(
+			"view.changes",
+		);
+	});
+
+	test("Numpad0 and Mod+Shift+0 never focus Projects, and Ctrl+F6 stays the workbench's", () => {
+		expect(matchKeybinding(press("Numpad0", mod), platform)).toBeNull();
+		expect(matchKeybinding(press("Digit0", { ...mod, shiftKey: true }), platform)).toBeNull();
+		expect(matchKeybinding(press("Digit0"), platform)).toBeNull();
+		expect(matchKeybinding(press("F6", { ctrlKey: true }), platform)).toBeNull();
+		expect(matchKeybinding(press("F6", { ctrlKey: true, shiftKey: true }), platform)).toBeNull();
+		expect(matchKeybinding(press("F6", mod), platform)).toBeNull();
+		expect(matchKeybinding(press("KeyE", mod), platform)).toBeNull();
+		expect(matchKeybinding(press("KeyL", { ...mod, shiftKey: true }), platform)).toBeNull();
+		expect(matchKeybinding(press("Backquote"), platform)).toBeNull();
+	});
+
 	test("a missing, extra or wrong modifier does not match", () => {
 		expect(matchKeybinding(press("KeyB"), platform)).toBeNull();
 		expect(matchKeybinding(press("KeyB", other), platform)).toBeNull();
@@ -83,10 +111,14 @@ describe.each(Object.entries(PLATFORMS))("keybindings on %s", (family, platform)
 	});
 });
 
-test("Ctrl+R is literal Control on Apple, where Cmd+R stays the browser's", () => {
+test("Ctrl+R and Ctrl+` are literal Control on Apple, where Cmd+R and Cmd+` stay the system's", () => {
 	expect(matchKeybinding(press("KeyR", { ctrlKey: true }), PLATFORMS.apple)).toBe("chat.history");
 	expect(matchKeybinding(press("KeyR", { metaKey: true }), PLATFORMS.apple)).toBeNull();
 	expect(matchKeybinding(press("KeyB", { ctrlKey: true }), PLATFORMS.apple)).toBeNull();
+	expect(matchKeybinding(press("Backquote", { ctrlKey: true }), PLATFORMS.apple)).toBe(
+		"focus.terminal",
+	);
+	expect(matchKeybinding(press("Backquote", { metaKey: true }), PLATFORMS.apple)).toBeNull();
 });
 
 test("every chord resolves to its own binding and no two bindings share a chord on a platform", () => {
@@ -118,6 +150,14 @@ describe("keybinding shortcuts", () => {
 		expect(keybindingShortcut("search.open")).toEqual({ key: "K", mod: true });
 		expect(keybindingShortcut("files.findInFiles")).toEqual({ key: "F", mod: true, shift: true });
 		expect(keybindingShortcut("chat.history")).toEqual({ key: "R", ctrl: true });
+		expect(keybindingShortcut("region.next")).toEqual({ key: "F6" });
+		expect(keybindingShortcut("region.previous")).toEqual({ key: "F6", shift: true });
+		expect(keybindingShortcut("focus.composer")).toEqual({ key: "L", mod: true });
+		expect(keybindingShortcut("focus.projects")).toEqual({ key: "0", mod: true });
+		expect(keybindingShortcut("focus.group3")).toEqual({ key: "3", mod: true });
+		expect(keybindingShortcut("focus.terminal")).toEqual({ key: "`", ctrl: true });
+		expect(keybindingShortcut("view.files")).toEqual({ key: "E", mod: true, shift: true });
+		expect(keybindingShortcut("view.changes")).toEqual({ key: "G", mod: true, shift: true });
 	});
 
 	test("New workspace shows Mod+N where the page receives it and Mod+Alt+N in a browser", () => {
@@ -137,6 +177,9 @@ describe("keybinding shortcuts", () => {
 		expect(keybindingLabel("search.open", { platform: PLATFORMS.apple })).toBe("⌘K");
 		expect(keybindingLabel("search.open", { platform: PLATFORMS.windows })).toBe("Ctrl+K");
 		expect(keybindingLabel("chat.history", { platform: PLATFORMS.apple })).toBe("⌃R");
+		expect(keybindingLabel("focus.terminal", { platform: PLATFORMS.apple })).toBe("⌃`");
+		expect(keybindingLabel("focus.terminal", { platform: PLATFORMS.linux })).toBe("Ctrl+`");
+		expect(keybindingLabel("region.previous", { platform: PLATFORMS.windows })).toBe("Shift+F6");
 		expect(keybindingLabel("workspace.new", { browser: true, platform: PLATFORMS.linux })).toBe(
 			"Ctrl+Alt+N",
 		);

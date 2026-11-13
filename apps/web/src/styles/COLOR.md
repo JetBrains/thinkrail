@@ -63,6 +63,7 @@ equals `border-default` is not a second weight, it is a second name).
 | Border | `border-default` · `border-muted` | |
 | Primary | `primary` + `primary-subtle` · `-soft` · `-muted`, `on-primary-soft` | |
 | Focus | `focus-ring` | the keyboard focus indicator, from `accent` (full in a light appearance, `firm` 80% in a dark one); its own role so it can diverge from `primary`. Use it only through the focus utilities (*Focus ring*) |
+| Region | `region-inactive-scrim` | `publish: false`; the veil over every region but the active one (*Active region*), from `background` (the workspace canvas) at `muted` (40%) in a light appearance and `strong` (60%) in a dark one (the strength the user chose from screenshots) |
 | Feedback | `feedback-{info,success,warning,error}` + the `-subtle` / `-muted` steps in use | a solid border is the solid colour, so there is no `-border` tier |
 | Chat bubble | `bubble-user-bg` · `bubble-user-border` | tinted from the manifest's own `bubbleAccent`. The standard and High Contrast palettes ship it **equal to their `accent`** — the user bubble wears the brand colour; the Minimal palettes re-point it to a neutral grey so user content does not compete with action/attention colours. That separate key is the knob (per `themes/SPEC.md`): a theme decides how the bubble reads without touching a component |
 | Effects | `overlay` · `sunken` | written per light/dark by the theme engine |
@@ -109,6 +110,19 @@ There is no `text-strong` and no `text-link` utility: they duplicate other token
 exists as a variable for `global.css`'s bare-anchor fallback alone. That fallback lives in the CSS base
 layer so an explicit semantic text utility on a link-shaped control always wins the cascade.
 
+## Active region
+
+The focus ring says which control has the keyboard; the active region says which pane does. A region is
+a `[data-region]` root (the top bar, the Project Home projects pane, each workbench group) and the shell
+marks the one holding focus `data-region-active` ([shell/layout/SPEC.md](../shell/layout/SPEC.md),
+*Arrangement and accessibility*). Every other region is **muted, not greyed**: `index.css` lays a
+pointer-transparent `::after` in `region-inactive-scrim` over it, which pulls every colour toward the
+canvas, so contrast drops while hues stay and a selected tab's accent underline is still accent. A scrim rather than `opacity`
+leaves xterm, Monaco and iframes painting as before and lets each appearance pick its step: light-on-dark
+text reads as dimmer only at a higher step, so dark appearances take 60% and light ones 40% (chosen from
+screenshots, 2026-11-13). Each region root is positioned and
+`isolation: isolate`, so its veil never covers another region, a portal, a toast or a resize handle.
+
 ## Transparency: one form only
 
 **A tint is a token, mixed `in srgb`, on the alpha scale.**
@@ -138,7 +152,8 @@ re-highlight after a swap. Chat and Pierre diffs keep the live CSS-variable form
 to hex for its strict theme API. All consumers therefore name the same semantic tokens everything else does, with one name per value.
 The roles these consumers *share* with components (`--container-*-bg`, `--text-muted`) stay published and
 mapped in `@theme inline`; the ones **only** they read (`--editor-selection-*`,
-`--editor-find-match-bg`, `--widget-shadow`, and the stylesheet-only `--media-checker-tile`) are
+`--editor-find-match-bg`, `--widget-shadow`, and the stylesheet-only `--media-checker-tile` and
+`--region-inactive-scrim`) are
 `publish: false` and unmapped — a utility nothing can use is dead weight. Values that strict JS consumers
 need reach them canonicalised to hex via `cssColorToHex` (`lib/utils.ts`), because the built CSS is minified
 and Monaco/xterm accept hex only.
