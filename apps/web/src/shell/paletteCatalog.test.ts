@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Workspace } from "@thinkrail/contracts";
+import type { NativePageZoomAction, Workspace } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { type KeybindingId, keybindingShortcut } from "../keybindings";
 import { commandItems } from "../search";
@@ -29,6 +29,7 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 		centerGroupCount: 1,
 		canCreateProject: true,
 		nativeShortcuts: false,
+		pageZoom: null,
 		readAction: null,
 		canSettle: true,
 		settled: false,
@@ -179,6 +180,32 @@ describe("palette focus commands", () => {
 		row("view.changes", catalog)?.run?.();
 		expect(shown).toEqual(["all", "changed"]);
 		expect(row("view.changes", deps({ changesAvailable: false }))).toBeUndefined();
+	});
+});
+
+describe("palette page zoom commands", () => {
+	const zoomRows = ["view.zoomIn", "view.zoomOut", "view.zoomReset"] as const;
+
+	test("are offered only where the desktop exposes the page zoom bridge", () => {
+		for (const id of zoomRows) expect(row(id, deps())).toBeUndefined();
+		const catalog = deps({ pageZoom: { request: noop }, activeWorkspace: null });
+		expect(zoomRows.map((id) => row(id, catalog)?.title)).toEqual([
+			"Zoom in",
+			"Zoom out",
+			"Reset zoom",
+		]);
+	});
+
+	test("show the preload's chords and run the matching request", () => {
+		const requested: NativePageZoomAction[] = [];
+		const catalog = deps({ pageZoom: { request: (action) => requested.push(action) } });
+		expect(zoomRows.map((id) => row(id, catalog)?.shortcut)).toEqual([
+			{ key: "=", mod: true },
+			{ key: "-", mod: true },
+			{ key: "Num 0", mod: true },
+		]);
+		for (const id of zoomRows) row(id, catalog)?.run?.();
+		expect(requested).toEqual(["in", "out", "reset"]);
 	});
 });
 

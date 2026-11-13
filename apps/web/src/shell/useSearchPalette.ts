@@ -68,6 +68,7 @@ import {
 	toggleRightSide,
 } from "./chordActions";
 import { collectCenterGroups } from "./layout";
+import { readNativePageZoomBridge } from "./nativePageZoom";
 import { type HostHitTargets, openHostHit } from "./openHostHit";
 import { createPaletteBackfill } from "./paletteBackfill";
 import {
@@ -164,6 +165,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 	);
 	const editors = useEditors();
 	const [nativeShortcuts] = useState(() => readSettingsShortcutLabel() !== null);
+	const [pageZoom] = useState(readNativePageZoomBridge);
 
 	const online = useAppStore(selectHostReachable);
 	const hostSearch = useAppStore(selectHostSearchAvailable);
@@ -250,6 +252,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			historyAvailable: historySessionId !== null,
 			canCreateProject: selectSupportsOnboarding({ protocolVersion }),
 			nativeShortcuts,
+			pageZoom,
 			findInFilesAvailable: supportsTextSearch(protocolVersion) && textSearchScoped,
 			changesAvailable: activeWorkspace !== null && !isChatWorkspace(activeWorkspace),
 			centerGroupCount: activeLayout ? collectCenterGroups(activeLayout.center).length : 0,
@@ -334,6 +337,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		settled,
 		settleBlocked,
 		nativeShortcuts,
+		pageZoom,
 		options,
 		contextProject,
 		contextRepoProject,

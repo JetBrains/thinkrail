@@ -54,5 +54,7 @@ store-free: it matches and describes, and never handles a key or knows what a bi
 - **IME:** the binder ignores every table chord while `event.isComposing`, so an input method keeps its
   keys; only `Ctrl+R`'s reload guard still swallows the key.
 - **Not here:** `shell/shortcutCommands.ts` (close/quit/settings — native-owned and typed-key matched on
-  purpose), the double-Shift gesture, and feature-local keys (the palette's own `Mod+K` / `Mod+I`,
-  Monaco, xterm). User rebinding, when it comes, is an override map over `KEYBINDINGS`.
+  purpose), the desktop page-zoom chords `Mod+=` / `Mod+-` / `Mod+Numpad0` (the preload binds them,
+  [[module-desktop]]; the palette's zoom rows only show them), the double-Shift gesture, and
+  feature-local keys (the palette's own `Mod+K` / `Mod+I`, Monaco, xterm). User rebinding, when it
+  comes, is an override map over `KEYBINDINGS`.

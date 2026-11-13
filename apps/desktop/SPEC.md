@@ -244,6 +244,14 @@ yields gestures claimed by page content and forwards validated scales; the main 
 at gesture start and applies each absolute scale against that baseline, bounded to 50%–200%, so updates never
 compound or introduce a second zoom owner. The web app owns no duplicate shortcut, gesture, or zoom state.
 
+The web app claims the main-row `Mod+0` (focus Projects, [[submodule-web-keybindings]]) in its capture
+phase, so the preload yields it and reset stays on `Mod+Numpad0`: the numpad key types `0` for the preload's
+`key` match and is not the web's `Digit0`. The preload also exposes the frozen non-enumerable
+`__THINKRAIL_NATIVE_PAGE_ZOOM__` `NativePageZoomBridge` ([[module-contracts]]) on every desktop platform:
+`request("in" | "out" | "reset")` sends the same `pageZoomRequested` message as the chords. The web palette's
+Zoom in / Zoom out / Reset zoom rows ([[submodule-web-shell]]) call it, so a keyboard without a numpad can
+still reset zoom; they display `Mod+=`, `Mod+-` and `Mod+Numpad0` and bind nothing.
+
 ## Native window chrome
 
 The web topbar ([[submodule-web-shell]]) is the window's title bar wherever the framework lets native

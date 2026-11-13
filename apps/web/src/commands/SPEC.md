@@ -23,7 +23,7 @@ whoever composes the catalog, today `shell`.
   command's `shortcut` is display-only. For an app-wide chord it is `keybindingShortcut(id)` from
   [[submodule-web-keybindings]], the table `shell`'s `useGlobalHotkeys` binds through, so the shown and
   the bound chord cannot drift; any other chord keeps its single owner (`shortcutCommands`, the native
-  menu, or a feature's own key map). The palette calls the same handler the chord runs.
+  menu or desktop preload, or a feature's own key map). The palette calls the same handler the chord runs.
 
 ## Contract
 
@@ -58,6 +58,7 @@ not reproduce.
 | `chat.history` Search chat history (`Ctrl+R`) | `shell/chordActions.openChatHistory` | a chat tab | yes |
 | `view.show.{specs,files,review,plan}` (every `LayoutToolId` but `projects`) | `store.requestToolView` | active workspace | yes |
 | `view.toggleLeft/Right/Bottom` (`Mod+B`/`Mod+J`/`Mod+Shift+J`) | `shell/chordActions` (the functions the chords run) | right/bottom need a workspace | yes |
+| `view.zoomIn` / `zoomOut` / `zoomReset` Zoom in / out / Reset zoom (`Mod+=` / `Mod+-` / `Mod+Numpad0`, the desktop preload's chords) | `NativePageZoomBridge.request` | the desktop page-zoom bridge | yes |
 | `settings.open` and every Settings section (incl. Keyboard's double-Shift row, Extensions, MCP servers) | `store.openSettings(section)`; the native menu's `Mod+,` is shown where it exists | protocol-gated sections only | yes |
 | Theme, extension and MCP server switches | their Settings sections — the palette opens them, never flips them in place | — | Settings |
 | `workspace.markRead` / `markUnread` | `panels/workspaceActions` | `supportsWorkspaceReadState` + `selectWorkspaceReadAction` | yes |

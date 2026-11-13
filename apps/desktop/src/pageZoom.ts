@@ -1,4 +1,6 @@
-export type PageZoomAction = "in" | "out" | "reset";
+import type { NativePageZoomAction, NativePageZoomBridge } from "@thinkrail/contracts";
+
+export type PageZoomAction = NativePageZoomAction;
 
 export type PageZoomGesture =
 	| { phase: "start" }
@@ -50,6 +52,12 @@ export function handlePageZoomShortcut(
 	if (!action) return;
 	event.preventDefault();
 	request(action);
+}
+
+export function createPageZoomBridge(
+	request: (action: PageZoomAction) => void,
+): NativePageZoomBridge {
+	return Object.freeze({ request });
 }
 
 export function installPageZoomGestures(

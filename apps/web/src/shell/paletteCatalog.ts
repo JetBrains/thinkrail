@@ -28,12 +28,15 @@ import {
 	RiListCheck3,
 	RiMailUnreadLine,
 	RiNodeTree,
+	RiResetLeftLine,
 	RiSearchEyeLine,
 	RiSettings3Line,
 	RiSparkling2Line,
 	RiTerminalBoxLine,
+	RiZoomInLine,
+	RiZoomOutLine,
 } from "@remixicon/react";
-import type { EditorInfo, Workspace } from "@thinkrail/contracts";
+import type { EditorInfo, NativePageZoomBridge, Workspace } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import type { Command } from "../commands";
@@ -68,6 +71,7 @@ export interface PaletteCatalogDeps {
 	readonly historyAvailable: boolean;
 	readonly canCreateProject: boolean;
 	readonly nativeShortcuts: boolean;
+	readonly pageZoom: NativePageZoomBridge | null;
 	readonly findInFilesAvailable: boolean;
 	readonly changesAvailable: boolean;
 	readonly centerGroupCount: number;
@@ -270,6 +274,39 @@ function focusCommands(deps: PaletteCatalogDeps): Command[] {
 	return commands;
 }
 
+function pageZoomCommands({ t, pageZoom }: PaletteCatalogDeps): Command[] {
+	if (!pageZoom) return [];
+	return [
+		{
+			id: "view.zoomIn",
+			title: t("commands.view.zoomIn"),
+			group: "view",
+			icon: RiZoomInLine,
+			keywords: ["zoom", "bigger", "larger", "scale"],
+			shortcut: { key: "=", mod: true },
+			run: () => pageZoom.request("in"),
+		},
+		{
+			id: "view.zoomOut",
+			title: t("commands.view.zoomOut"),
+			group: "view",
+			icon: RiZoomOutLine,
+			keywords: ["zoom", "smaller", "scale"],
+			shortcut: { key: "-", mod: true },
+			run: () => pageZoom.request("out"),
+		},
+		{
+			id: "view.zoomReset",
+			title: t("commands.view.zoomReset"),
+			group: "view",
+			icon: RiResetLeftLine,
+			keywords: ["zoom", "actual size", "100%", "scale"],
+			shortcut: { key: "Num 0", mod: true },
+			run: () => pageZoom.request("reset"),
+		},
+	];
+}
+
 function viewCommands(deps: PaletteCatalogDeps): Command[] {
 	const { t, actions, activeWorkspace } = deps;
 	const commands: Command[] = [];
@@ -352,7 +389,7 @@ function viewCommands(deps: PaletteCatalogDeps): Command[] {
 			},
 		);
 	}
-	commands.push({
+	commands.push(...pageZoomCommands(deps), {
 		id: "settings.open",
 		title: t("commands.settings.open"),
 		group: "settings",
