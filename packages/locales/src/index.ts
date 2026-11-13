@@ -37,6 +37,7 @@ export const DESKTOP_DIALOG_KEYS = [
 const TRANSLATIONS: Readonly<Record<string, URL>> = {
 	es: new URL("../es.json", import.meta.url),
 	ja: new URL("../ja.json", import.meta.url),
+	pl: new URL("../pl.json", import.meta.url),
 	ru: new URL("../ru.json", import.meta.url),
 	"zh-CN": new URL("../zh-CN.json", import.meta.url),
 	"zh-TW": new URL("../zh-TW.json", import.meta.url),
