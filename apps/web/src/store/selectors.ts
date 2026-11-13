@@ -1,5 +1,6 @@
 import {
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	ARTIFACTS_PROTOCOL_VERSION,
 	type BackgroundCommandSummary,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	CHATS_PROTOCOL_VERSION,
@@ -35,6 +36,7 @@ import {
 	WORKSPACE_READ_STATE_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	type Workspace,
+	type WorkspaceArtifactsSnapshot,
 } from "@thinkrail/contracts";
 import type { Translator } from "@thinkrail/locales/react";
 import type { LoginState } from "../auth";
@@ -1306,6 +1308,38 @@ export function selectCompactionTurnIds(
 			.filter((turn) => turn.kind === "compaction")
 			.map((turn) => turn.id),
 	);
+}
+
+export function supportsArtifacts(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= ARTIFACTS_PROTOCOL_VERSION;
+}
+
+export function artifactsWatermark(snapshot: WorkspaceArtifactsSnapshot): number {
+	let watermark = 0;
+	for (const artifact of snapshot.artifacts) watermark = Math.max(watermark, artifact.firstSeenAt);
+	for (const output of snapshot.outputs ?? []) watermark = Math.max(watermark, output.changedAt);
+	return watermark;
+}
+
+export function selectArtifactsUnseen(
+	state: {
+		artifactsByWorkspace: Record<string, WorkspaceArtifactsSnapshot>;
+		artifactsSeenByWorkspace: Record<string, number>;
+	},
+	workspaceId: string,
+): boolean {
+	const snapshot = state.artifactsByWorkspace[workspaceId];
+	return (
+		snapshot !== undefined &&
+		artifactsWatermark(snapshot) > (state.artifactsSeenByWorkspace[workspaceId] ?? 0)
+	);
+}
+
+export function selectArtifactsTick(
+	state: { artifactsTickByWorkspace: Record<string, number>; connectionGeneration: number },
+	workspaceId: string,
+): string {
+	return `${state.connectionGeneration}:${state.artifactsTickByWorkspace[workspaceId] ?? 0}`;
 }
 
 export function selectWorkspaceTick(

@@ -2240,6 +2240,29 @@ own section. The kebab menu (`plan-menu`, a
   (preview/keep) but keeps its own directory behaviour — a whole-row click toggles dirs, no collision
   there. File and folder rows also carry the copy-path, Copy / Paste and Delete context menu described with
   `FilesPanel`.
+- **`ArtifactsPanel` is the Artifacts tool's body** — a reader of the host's artifact index
+  ([[submodule-server-artifacts]]). Like specs, the `artifacts.list` snapshot lands in the store
+  (`artifactsByWorkspace`) through **`useWorkspaceArtifacts`**, which the workbench calls for every
+  workspace (chats included) so the rail can show new arrivals while the tool is hidden; it re-reads on the
+  host's `workspace.artifactsChanged` nudge and on reconnect (`selectArtifactsTick`, passed to
+  `useWorkspaceRead` instead of the fs tick, because the host already reconciles on file changes and an fs
+  tick per agent edit would re-list for nothing). The panel is two sections, newest first: **Artifacts**
+  (files under `.thinkrail/context/`; a two-line row: name and age, then the folder inside the artifacts
+  folder — or `Task spec · <status>` joined from the spec snapshot by path — and a chip naming the writing
+  chat that opens it) and **Other agent files · ignored** (one row per ignored output, a folder lazily
+  expandable through `fs.readDir`, with its file count), hidden by the header's eye toggle. A row the host
+  marks `deleted` reads "Deleted, not by you" with Restore; opening it waits for the restore. The header's
+  All chats / This chat filter follows the workspace's attended chat (`selectArtifactMentionTarget`), and
+  Paste puts the Files clipboard into the artifacts folder. Every row has one context menu: Mention in chat
+  (pastes `@<path> ` into the attended chat's composer through `pasteIntoComposer` and focuses it; disabled
+  without one), Reveal in Files, the two Copy paths, Copy / Cut (the shared Files clipboard; a cut pastes
+  through `fs.move`), Rename (inline, `fs.rename`), Restore for a deleted row, and Delete — `fs.delete` for a
+  live file, `artifacts.discard` for a kept copy, both behind a confirmation. **New** means newer than this
+  client's per-workspace seen watermark (`artifactsSeenByWorkspace`, the newest `firstSeenAt` / output
+  `changedAt`, so only host timestamps are compared): the first snapshot of a workspace is taken as seen, a
+  showing panel advances the watermark, rows newer than the watermark it opened with stay highlighted while
+  it shows, and `selectArtifactsUnseen` drives the rail dot. The watermarks and the ignored toggle persist
+  per client (`shell/artifactsPreference.ts`).
 - **Chat deep-links remain arrangement-agnostic.** A shell-owned **`LayoutIntent`** names the singleton tool;
   the shell resolves its current side/group, reveals it in place, and selects it locally. `changesRequest`
   and `specRequest` add the one path to focus/open without naming a layout destination. A divider chip that

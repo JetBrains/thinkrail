@@ -45,6 +45,7 @@ import type {
 	UserThemesSnapshot,
 	WireModel,
 	Workspace,
+	WorkspaceArtifactsSnapshot,
 	WorkspaceCreation,
 	WorkspaceCreationRemoved,
 	WorkspaceFsChangedPayload,
@@ -130,6 +131,7 @@ import {
 } from "./mcp";
 import { newPromptImagesState, type PromptImagesState } from "./promptImageState";
 import {
+	artifactsWatermark,
 	type HistoryTarget,
 	isChatResourceConnectionCurrent,
 	isChatResourceReadCurrent,
@@ -176,6 +178,12 @@ export interface FileReveal {
 export interface FileClipboard {
 	workspaceId: string;
 	path: string;
+	cut?: true;
+}
+
+export interface ArtifactsPreferences {
+	seen: Record<string, number>;
+	showIgnored: boolean;
 }
 export interface ChatTab {
 	kind: "chat";
@@ -1154,6 +1162,10 @@ interface AppState {
 		navigation: CenterNavigationStamp | null;
 	} | null;
 	specsByWorkspace: Record<string, SpecGraphNode[]>;
+	artifactsByWorkspace: Record<string, WorkspaceArtifactsSnapshot>;
+	artifactsTickByWorkspace: Record<string, number>;
+	artifactsSeenByWorkspace: Record<string, number>;
+	artifactsShowIgnored: boolean;
 	reviewsByWorkspace: Record<string, ReviewSnapshot>;
 	reviewFocusRequest: {
 		workspaceId: string;
@@ -1527,6 +1539,7 @@ interface AppState {
 	setCommands: (sessionId: string, commands: SlashCommandInfo[]) => void;
 	setChatDraft: (sessionId: string, text: string) => void;
 	consumeComposerEdit: (sessionId: string, editId: string) => void;
+	pasteIntoComposer: (sessionId: string, text: string) => void;
 	updateChatPromptImages: (
 		sessionId: string,
 		update: (current: PromptImagesState) => PromptImagesState,
@@ -1576,6 +1589,11 @@ interface AppState {
 	requestSpecView: (workspaceId: string, path: string, line?: number) => void;
 	clearSpecRequest: () => void;
 	setWorkspaceSpecs: (workspaceId: string, nodes: SpecGraphNode[]) => void;
+	setWorkspaceArtifacts: (workspaceId: string, snapshot: WorkspaceArtifactsSnapshot) => void;
+	noteArtifactsChanged: (workspaceId: string) => void;
+	markArtifactsSeen: (workspaceId: string, watermark: number) => void;
+	setArtifactsShowIgnored: (show: boolean) => void;
+	hydrateArtifactsPreferences: (preferences: ArtifactsPreferences) => void;
 	setWorkspaceReview: (workspaceId: string, snapshot: ReviewSnapshot) => void;
 	requestReviewFocus: (workspaceId: string, commentId: string, surface: ReviewFocusSurface) => void;
 	clearReviewFocus: (commentId?: string) => void;
@@ -2531,6 +2549,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 	changesRequest: null,
 	specRequest: null,
 	specsByWorkspace: {},
+	artifactsByWorkspace: {},
+	artifactsTickByWorkspace: {},
+	artifactsSeenByWorkspace: {},
+	artifactsShowIgnored: true,
 	reviewsByWorkspace: {},
 	reviewFocusRequest: null,
 	changesView: "tree",
@@ -2915,6 +2937,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 				sessionStateByWorkspace: omitKey(state.sessionStateByWorkspace, workspaceId),
 				skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
 				specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
+				artifactsByWorkspace: omitKey(state.artifactsByWorkspace, workspaceId),
+				artifactsTickByWorkspace: omitKey(state.artifactsTickByWorkspace, workspaceId),
+				artifactsSeenByWorkspace: omitKey(state.artifactsSeenByWorkspace, workspaceId),
 				diffScopeByWorkspace: omitKey(state.diffScopeByWorkspace, workspaceId),
 				filesTreeByWorkspace: omitKey(state.filesTreeByWorkspace, workspaceId),
 				fileClipboard:
@@ -4688,6 +4713,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 				rt.composerEdit?.id === editId ? { ...rt, composerEdit: null } : rt,
 			),
 		),
+	pasteIntoComposer: (sessionId, text) =>
+		set((s) =>
+			withRuntime(s, sessionId, (rt) => ({
+				...rt,
+				composerEdit: {
+					id: randomId("composer-paste"),
+					kind: rt.composerEdit?.kind ?? "paste",
+					text: `${rt.composerEdit?.text ?? ""}${text}`,
+				},
+			})),
+		),
 	updateChatPromptImages: (sessionId, update) =>
 		set((s) =>
 			withRuntime(s, sessionId, (rt) => {
@@ -4938,6 +4974,48 @@ export const useAppStore = create<AppState>((set, get) => ({
 				? {}
 				: { specsByWorkspace: { ...s.specsByWorkspace, [workspaceId]: nodes } },
 		),
+	setWorkspaceArtifacts: (workspaceId, snapshot) =>
+		set((s) =>
+			s.removedWorkspaceIds[workspaceId]
+				? {}
+				: {
+						artifactsByWorkspace: { ...s.artifactsByWorkspace, [workspaceId]: snapshot },
+						...(s.artifactsSeenByWorkspace[workspaceId] === undefined
+							? {
+									artifactsSeenByWorkspace: {
+										...s.artifactsSeenByWorkspace,
+										[workspaceId]: artifactsWatermark(snapshot),
+									},
+								}
+							: {}),
+					},
+		),
+	noteArtifactsChanged: (workspaceId) =>
+		set((s) =>
+			s.removedWorkspaceIds[workspaceId]
+				? {}
+				: {
+						artifactsTickByWorkspace: {
+							...s.artifactsTickByWorkspace,
+							[workspaceId]: (s.artifactsTickByWorkspace[workspaceId] ?? 0) + 1,
+						},
+					},
+		),
+	markArtifactsSeen: (workspaceId, watermark) =>
+		set((s) =>
+			s.removedWorkspaceIds[workspaceId] ||
+			watermark <= (s.artifactsSeenByWorkspace[workspaceId] ?? 0)
+				? {}
+				: {
+						artifactsSeenByWorkspace: { ...s.artifactsSeenByWorkspace, [workspaceId]: watermark },
+					},
+		),
+	setArtifactsShowIgnored: (artifactsShowIgnored) => set({ artifactsShowIgnored }),
+	hydrateArtifactsPreferences: ({ seen, showIgnored }) =>
+		set((s) => ({
+			artifactsSeenByWorkspace: { ...seen, ...s.artifactsSeenByWorkspace },
+			artifactsShowIgnored: showIgnored,
+		})),
 	requestReviewFocus: (workspaceId, commentId, surface) =>
 		set((state) =>
 			state.removedWorkspaceIds[workspaceId]
