@@ -722,11 +722,14 @@ re-opened transcripts provider-valid.
   - `artifactsGuard` — keeps the agent's output in the workspace for the Artifacts tool
     ([[submodule-server-artifacts]]): a `before_agent_start` system-prompt section (`thinkrail-artifacts`)
     telling the agent to put every non-code output it produces under `.thinkrail/context/` and never to
-    delete or move files out of it, plus a `tool_call` hook that blocks `write`/`edit` into a temporary
-    folder (`/tmp`, `/var/tmp`, `os.tmpdir()`, `$TMPDIR`/`$TEMP`/`$TMP`, real paths included) outside the
-    session's own folder, with a reason naming the `.thinkrail/context/` path to use. Only temporary folders
-    are refused: an edit the user asked for elsewhere (`~/.zshrc`) goes through and is not an artifact,
-    and a workspace that itself lives under `/tmp` (the e2e fixtures) is inside its own folder. A shell
+    delete or move files out of it, plus a `tool_call` hook that blocks a `write` that would **create a new
+    file** in a temporary folder (`/tmp`, `/var/tmp`, `os.tmpdir()`, `$TMPDIR`/`$TEMP`/`$TMP`, real paths
+    included) outside the session's own folder, with a reason naming the `.thinkrail/context/` path to use.
+    `edit`, and a `write` over a file that already exists there, go through: refusing them turned a user's
+    "fix /tmp/repro.py" into a `sed` through bash, which is no longer a reviewable diff, while what the guard
+    exists for — the agent parking a new output where it disappears — is always a new file. Elsewhere
+    nothing is refused: an edit the user asked for (`~/.zshrc`) goes through and is not an artifact, and a
+    workspace that itself lives under `/tmp` (the e2e fixtures) is inside its own folder. A shell
     command's writes cannot be gated; the rule asks for them. The path is resolved the way pi's tools do it
     (leading `@` dropped, `~` expanded, relative to `ctx.cwd`). One of `buildResourceLoader`'s shared
     factories and of the delegated-child base set.

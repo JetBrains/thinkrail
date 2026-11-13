@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -36,7 +36,7 @@ test("temporary folders outside the workspace are refused, everything else is al
 	expect(temporaryWriteTarget(home, workspace)).toBeNull();
 });
 
-test("the extension adds the artifacts rule and blocks write and edit into a temporary folder", async () => {
+test("the extension adds the artifacts rule and refuses only a new file in a temporary folder", async () => {
 	const handlers = new Map<string, (event: unknown, ctx: unknown) => unknown>();
 	const pi = {
 		on: (name: string, handler: (event: unknown, ctx: unknown) => unknown) => {
@@ -51,11 +51,16 @@ test("the extension adds the artifacts rule and blocks write and edit into a tem
 
 	const call = (toolName: string, path: string) =>
 		handlers.get("tool_call")?.({ toolName, input: { path } }, { cwd: workspace });
-	expect(call("write", "/tmp/report.md")).toMatchObject({
+	const fresh = join(base, "report.md");
+	const existing = join(base, "repro.py");
+	writeFileSync(existing, "print('bug')\n");
+	expect(call("write", fresh)).toMatchObject({
 		block: true,
 		reason: expect.stringContaining(".thinkrail/context/report.md"),
 	});
-	expect(call("edit", "/tmp/report.md")).toMatchObject({ block: true });
+	expect(call("write", existing)).toBeUndefined();
+	expect(call("edit", existing)).toBeUndefined();
+	expect(call("edit", fresh)).toBeUndefined();
 	expect(call("write", ".thinkrail/context/report.md")).toBeUndefined();
-	expect(call("read", "/tmp/report.md")).toBeUndefined();
+	expect(call("read", fresh)).toBeUndefined();
 });

@@ -8,7 +8,7 @@ export const ARTIFACTS_SECTION = "thinkrail-artifacts";
 
 export const ARTIFACTS_RULE = [
 	`Keep everything you produce for the user in this workspace's \`${WORKSPACE_CONTEXT_DIR}/\` folder: reports, notes, plans, mockups, screenshots, generated images, exported data and any other output that is not project code. It stays out of git, and the user finds it in the Artifacts tab.`,
-	"- Never put such output in /tmp or another temporary folder: it disappears there and the user never sees it.",
+	"- Never create such output in /tmp or another temporary folder: it disappears there and the user never sees it. Editing an existing file there that the user points you to is fine.",
 	`- Never delete or move files out of \`${WORKSPACE_CONTEXT_DIR}/\`; only the user removes artifacts. Update a file in place rather than replacing it.`,
 ].join("\n");
 
@@ -64,9 +64,11 @@ export const artifactsGuard: ExtensionFactory = (pi) => {
 		event.systemPromptOptions.sections[ARTIFACTS_SECTION] = ARTIFACTS_RULE;
 	});
 	pi.on("tool_call", (event, ctx) => {
-		if (event.toolName !== "write" && event.toolName !== "edit") return undefined;
+		if (event.toolName !== "write") return undefined;
 		const path = event.input.path;
-		if (typeof path !== "string" || !temporaryWriteTarget(path, ctx.cwd)) return undefined;
+		if (typeof path !== "string") return undefined;
+		const target = temporaryWriteTarget(path, ctx.cwd);
+		if (!target || lstatSync(target, { throwIfNoEntry: false })) return undefined;
 		return {
 			block: true,
 			reason: `${path} is in a temporary folder, where files disappear and the user never sees them. Write it inside the workspace under ${WORKSPACE_CONTEXT_DIR}/ instead (for example ${WORKSPACE_CONTEXT_DIR}/${basename(path)}).`,
