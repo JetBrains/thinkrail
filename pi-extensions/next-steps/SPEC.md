@@ -63,6 +63,11 @@ Package tests cover:
 
 `check:pi-packages` loads the packed tarball under Node and runs the execute/terminate/render cases.
 
-Manual terminal check (tmux, pi at the catalog version): resuming a seeded session shows the row, and
-Alt+2 submits and clears it. Still unverified: a real model turn ending in the call, and a check
-directly in Ghostty or iTerm2 rather than through tmux.
+Manual terminal check with real model turns (tmux, pi at the catalog version, the packed tarball loaded
+with `-e`, Claude Sonnet 5.5):
+- a bug-fix turn ended with final text, then the call, and the turn ended with no extra round trip;
+- the row appeared above the editor;
+- Alt+2 sent that suggestion and a new turn produced a fresh row;
+- resuming the session with `-c` restored the row.
+
+Not checked directly in Ghostty or iTerm2, only through tmux.
