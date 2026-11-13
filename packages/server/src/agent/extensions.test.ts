@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { DefaultPackageManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { SPEC_SECTION } from "pi-spec-graph";
 import { type HostSessionServices, registryInlineExtensions, workspaceFiles } from "../extensions";
+import { artifactsGuard } from "./artifactsGuard";
 import {
 	buildResourceLoader,
 	bumpPackagesRevision,
@@ -905,8 +906,12 @@ describe("registry extensions", () => {
 		}
 	});
 
-	it("guards every child's images and compacted skills from the tool-free base set, and offers the skill catalog only to opted-in children", () => {
-		expect(childBaseExtensionFactories()).toEqual([oversizedImageGuard, skillCarryover]);
+	it("guards every child's images, artifacts and compacted skills from the tool-free base set, and offers the skill catalog only to opted-in children", () => {
+		expect(childBaseExtensionFactories()).toEqual([
+			oversizedImageGuard,
+			artifactsGuard,
+			skillCarryover,
+		]);
 		expect(childExtensionFactories("w1")).not.toContain(oversizedImageGuard);
 		expect(childExtensionFactories("w1")).not.toContain(skillCarryover);
 		expect(childExtensionFactories("w1")).toContain(skillCatalog);

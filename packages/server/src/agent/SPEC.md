@@ -719,6 +719,17 @@ re-opened transcripts provider-valid.
     the manager bullet above). Pure over pi's `SessionManager` (compaction-aware via
     `buildSessionContext`; idempotent; appends only missing results from the active tail batch) —
     unit-tested against `SessionManager.inMemory`, including failed-attempt and historical-gap replay.
+  - `artifactsGuard` — keeps the agent's output in the workspace for the Artifacts tool
+    ([[submodule-server-artifacts]]): a `before_agent_start` system-prompt section (`thinkrail-artifacts`)
+    telling the agent to put every non-code output it produces under `.thinkrail/context/` and never to
+    delete or move files out of it, plus a `tool_call` hook that blocks `write`/`edit` into a temporary
+    folder (`/tmp`, `/var/tmp`, `os.tmpdir()`, `$TMPDIR`/`$TEMP`/`$TMP`, real paths included) outside the
+    session's own folder, with a reason naming the `.thinkrail/context/` path to use. Only temporary folders
+    are refused: an edit the user asked for elsewhere (`~/.zshrc`) goes through and is not an artifact,
+    and a workspace that itself lives under `/tmp` (the e2e fixtures) is inside its own folder. A shell
+    command's writes cannot be gated; the rule asks for them. The path is resolved the way pi's tools do it
+    (leading `@` dropped, `~` expanded, relative to `ctx.cwd`). One of `buildResourceLoader`'s shared
+    factories and of the delegated-child base set.
   - `imageGuard` — the oversized-image guard: an inline extension (`oversizedImageGuard`, one of
     `buildResourceLoader`'s shared factories and the whole delegated-child base set) hooked on pi's
     **`context` event** (fired before every LLM
@@ -1061,7 +1072,8 @@ re-opened transcripts provider-valid.
     (rationale + the listed-children carve-out: core decision #25). **Every** child, opted in or not,
     also loads the core's base set (`childBaseExtensionFactories`, same decision): `oversizedImageGuard`,
     since a child's `read` returns raw images under the shared settings (see the `buildSessionSettings`
-    bullet), and `skillCarryover`, since children auto-compact under those settings too.
+    bullet), `artifactsGuard`, since a child writes files like its parent, and `skillCarryover`, since
+    children auto-compact under those settings too.
     A child on an extension-registered provider's model also loads that provider's **owning
     extension** (core decision #32: such a provider may serve only sessions its extension observed):
     `liveParentContext.providerExtensionPaths(provider)` answers from a process-wide owner map that
@@ -1248,7 +1260,7 @@ re-opened transcripts provider-valid.
     extension, because it compensates for the host's UI and must also cover a user's own install of
     `pi-web-access`, which runs exactly when that extension is switched off;
     `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet),
-    `skillCarryover` (see its bullet), **and the
+    `artifactsGuard` (see its bullet), `skillCarryover` (see its bullet), **and the
     caller's `extraFactories`** — per-session host bindings (the workspace-bound subagents extension),
     value-imported so dev and the compiled binary take the same path. pi's own built-in extensions
     (`llama.cpp`, `codemode`, `tool-search`, `mcp`) are loaded only by pi's CLI; an SDK host opts in per
