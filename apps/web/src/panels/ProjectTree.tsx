@@ -62,7 +62,8 @@ import { type MouseEvent, type ReactNode, useCallback, useEffect, useRef, useSta
 import { useShallow } from "zustand/react/shallow";
 import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
-import { copyText, platformShortcutLabel } from "@/lib";
+import { keybindingLabels } from "@/keybindings";
+import { copyText } from "@/lib";
 import { useNow } from "../components/useNow";
 import {
 	isDefaultWorkspace,
@@ -701,9 +702,10 @@ function ProjectRow({
 		listeners: dragListeners,
 		setNodeRef: setDragNode,
 	} = useDraggable({ id: project.id, disabled: !draggable });
+	const [newWorkspaceShortcut = "", newWorkspaceAlias = ""] = keybindingLabels("workspace.new");
 	const createWorkspaceLabel = t("panels.projectTree.createWorkspaceShortcut", {
-		shortcut: platformShortcutLabel("N"),
-		altShortcut: platformShortcutLabel("N", { alt: true }),
+		shortcut: newWorkspaceShortcut,
+		altShortcut: newWorkspaceAlias,
 	});
 	const Chevron = isExpanded ? ChevronDown : ChevronRight;
 	const Folder = isSelected ? RiFolderFill : RiFolderLine;

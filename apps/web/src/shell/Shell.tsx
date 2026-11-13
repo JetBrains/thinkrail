@@ -16,7 +16,7 @@ import {
 	installUserFonts,
 	writeFontsHint,
 } from "../fonts";
-import { platformShortcutLabel } from "../lib";
+import { keybindingLabel } from "../keybindings";
 import { NotificationPermissionPrompt, useAttentionNotifications } from "../notifications";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
 import { canStartProjectlessChat } from "../panels/chatActions";
@@ -132,7 +132,7 @@ export function Shell() {
 	};
 
 	const homeProjects = useCollapsibleRegion<HTMLDivElement>(PROJECT_HOME_PROJECTS_REGION_ID);
-	const [searchShortcut] = useState(() => platformShortcutLabel("K"));
+	const [searchShortcut] = useState(() => keybindingLabel("search.open"));
 
 	const [themeHint] = useState(readThemeHint);
 	const [settingsShortcut] = useState(readSettingsShortcutLabel);

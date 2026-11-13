@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Workspace } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
+import { type KeybindingId, keybindingShortcut } from "../keybindings";
 import { commandItems } from "../search";
 import { buildCommands, type PaletteCatalogDeps } from "./paletteCatalog";
 
@@ -104,6 +105,25 @@ describe("palette project and Settings commands", () => {
 			key: "N",
 			mod: true,
 		});
+	});
+
+	test("every chord-bound command shows its keybinding's shortcut", () => {
+		const bound: readonly KeybindingId[] = [
+			"workspace.new",
+			"files.findInFiles",
+			"chat.history",
+			"view.toggleLeft",
+			"view.toggleRight",
+			"view.toggleBottom",
+		];
+		for (const nativeShortcuts of [false, true]) {
+			const catalog = deps({ historyAvailable: true, findInFilesAvailable: true, nativeShortcuts });
+			for (const id of bound) {
+				expect(row(id, catalog)?.shortcut).toEqual(
+					keybindingShortcut(id, { browser: !nativeShortcuts }),
+				);
+			}
+		}
 	});
 });
 

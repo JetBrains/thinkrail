@@ -4,7 +4,7 @@ type: submodule-design
 status: active
 title: commands — the app command contract
 parent: module-web
-references: [submodule-web-search, submodule-web-shell]
+references: [submodule-web-search, submodule-web-shell, submodule-web-keybindings]
 tags: [ui, commands, public-surface-checked]
 ---
 
@@ -20,9 +20,10 @@ whoever composes the catalog, today `shell`.
   `isCommandEnabled`, `shortcutKeys`.
 - **Allowed deps:** `lib` (platform family), `@thinkrail/locales` (the group-label `MessageKey`s), `@remixicon/react` types.
 - **Forbidden:** importing `store`, `transport`, `panels`, `chat`, `shell` or `search`; binding keys. A
-  command's `shortcut` is display-only — the chord keeps its single owner (`useGlobalHotkeys`,
-  `shortcutCommands`, the native menu, or a feature's own key map) and the palette calls the same
-  handler.
+  command's `shortcut` is display-only. For an app-wide chord it is `keybindingShortcut(id)` from
+  [[submodule-web-keybindings]], the table `shell`'s `useGlobalHotkeys` binds through, so the shown and
+  the bound chord cannot drift; any other chord keeps its single owner (`shortcutCommands`, the native
+  menu, or a feature's own key map). The palette calls the same handler the chord runs.
 
 ## Contract
 

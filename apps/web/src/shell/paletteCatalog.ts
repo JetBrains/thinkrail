@@ -31,6 +31,7 @@ import type { EditorInfo, Workspace } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import type { Command } from "../commands";
+import { keybindingShortcut } from "../keybindings";
 import type { SettingsNavGroup } from "../panels/settingsNav";
 import type { PaletteItem } from "../search";
 import type { SettingsSection } from "../store";
@@ -105,7 +106,7 @@ function workCommands(deps: PaletteCatalogDeps): Command[] {
 			group: "work",
 			icon: RiAddLine,
 			keywords: ["create", "start", "task", "worktree"],
-			shortcut: deps.nativeShortcuts ? { key: "N", mod: true } : { key: "N", mod: true, alt: true },
+			shortcut: keybindingShortcut("workspace.new", { browser: !deps.nativeShortcuts }),
 			run: () => actions.newWorkspace(contextProjectId),
 		});
 	}
@@ -197,7 +198,7 @@ function viewCommands(deps: PaletteCatalogDeps): Command[] {
 			group: "navigation",
 			icon: RiFileSearchLine,
 			keywords: ["grep", "text", "content", "occurrences"],
-			shortcut: { key: "F", mod: true, shift: true },
+			shortcut: keybindingShortcut("files.findInFiles"),
 			run: actions.findInFiles,
 		});
 	}
@@ -208,7 +209,7 @@ function viewCommands(deps: PaletteCatalogDeps): Command[] {
 			group: "navigation",
 			icon: RiHistoryLine,
 			keywords: ["recall", "prompt", "transcript"],
-			shortcut: { key: "R", ctrl: true },
+			shortcut: keybindingShortcut("chat.history"),
 			run: actions.openHistory,
 		});
 	}
@@ -230,7 +231,7 @@ function viewCommands(deps: PaletteCatalogDeps): Command[] {
 		group: "view",
 		icon: RiLayoutLeftLine,
 		keywords: ["sidebar", "left", "hide", "show"],
-		shortcut: { key: "B", mod: true },
+		shortcut: keybindingShortcut("view.toggleLeft"),
 		run: actions.toggleLeft,
 	});
 	if (activeWorkspace) {
@@ -241,7 +242,7 @@ function viewCommands(deps: PaletteCatalogDeps): Command[] {
 				group: "view",
 				icon: RiLayoutRightLine,
 				keywords: ["sidebar", "right", "hide", "show"],
-				shortcut: { key: "J", mod: true },
+				shortcut: keybindingShortcut("view.toggleRight"),
 				run: actions.toggleRight,
 			},
 			{
@@ -250,7 +251,7 @@ function viewCommands(deps: PaletteCatalogDeps): Command[] {
 				group: "view",
 				icon: RiLayoutBottomLine,
 				keywords: ["terminal", "bottom", "hide", "show"],
-				shortcut: { key: "J", mod: true, shift: true },
+				shortcut: keybindingShortcut("view.toggleBottom"),
 				run: actions.toggleBottom,
 			},
 		);
