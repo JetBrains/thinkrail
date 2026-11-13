@@ -70,7 +70,7 @@ export function PhoneDeviceRow({
 							if (event.key === "Enter") commit();
 							else if (event.key === "Escape") setDraft(null);
 						}}
-						className="min-w-0 rounded-sm border border-control-border-active bg-control-bg px-4 tr-text-ui text-text-default outline-none"
+						className="min-w-0 rounded-sm border border-control-border-active bg-control-bg px-4 tr-text-ui text-text-default focus-visible:focus-ring"
 					/>
 				)}
 				<span className="tr-text-metadata text-text-muted">
