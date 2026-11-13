@@ -269,6 +269,16 @@ function Section({
 	);
 }
 
+function NewDot() {
+	return (
+		<span
+			aria-hidden="true"
+			data-testid="artifact-new"
+			className="size-6 shrink-0 rounded-full bg-primary"
+		/>
+	);
+}
+
 function artifactIcon(row: ArtifactRow) {
 	if (row.taskSpecStatus !== null) return RiListCheck3;
 	const name = row.name.toLowerCase();
@@ -324,7 +334,6 @@ function ArtifactRowView({
 			data-path={artifact.path}
 			data-state={artifact.state}
 			data-fresh={fresh || undefined}
-			className={cn("rounded-sm", fresh && "bg-primary-subtle")}
 		>
 			<EntryMenu
 				workspaceId={workspaceId}
@@ -370,6 +379,7 @@ function ArtifactRowView({
 										{name}
 									</button>
 								)}
+								{fresh ? <NewDot /> : null}
 								<span className="shrink-0 text-text-subtle tr-text-metadata">
 									{relativeTime(t, artifact.changedAt, now)}
 								</span>
@@ -419,24 +429,22 @@ function OutputRowView({
 	const { output, fresh } = row;
 	const node: FileNode = { path: output.path, name: output.path, kind: output.kind };
 	return (
-		<li
-			data-testid="artifact-output"
-			data-path={output.path}
-			data-fresh={fresh || undefined}
-			className={cn("rounded-sm", fresh && "bg-primary-subtle")}
-		>
+		<li data-testid="artifact-output" data-path={output.path} data-fresh={fresh || undefined}>
 			<OutputNode
 				node={node}
 				workspaceId={workspaceId}
 				onRemove={onRemove}
 				trailing={
-					output.kind === "dir" ? (
-						<span className="shrink-0 pr-4 text-text-subtle tr-text-metadata">
-							{output.filesTruncated
-								? t("panels.artifacts.filesTruncated", { count: output.files })
-								: t("panels.artifacts.files", { count: output.files })}
-						</span>
-					) : undefined
+					<>
+						{fresh ? <NewDot /> : null}
+						{output.kind === "dir" ? (
+							<span className="shrink-0 pr-4 text-text-subtle tr-text-metadata">
+								{output.filesTruncated
+									? t("panels.artifacts.filesTruncated", { count: output.files })
+									: t("panels.artifacts.files", { count: output.files })}
+							</span>
+						) : null}
+					</>
 				}
 			/>
 		</li>

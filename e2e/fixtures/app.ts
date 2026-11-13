@@ -226,7 +226,7 @@ export async function enterDefaultWorkspace(page: Page): Promise<void> {
 // Use this helper when a pane must be visible; rail controls toggle on each click. "files" means Files in All mode, "changes" Files in Changed mode.
 export async function revealWorkbenchTool(
 	page: Page,
-	tool: "projects" | "specs" | "files" | "changes" | "review" | "plan",
+	tool: "projects" | "specs" | "files" | "changes" | "review" | "plan" | "artifacts",
 ): Promise<void> {
 	const railTool = tool === "changes" ? "files" : tool;
 	const control = page.getByTestId(`tool-rail-${railTool}`);

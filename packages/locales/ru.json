@@ -3300,7 +3300,6 @@
 	"workbench.rail.terminalGroup_many": "Группа терминалов {{position}}, {{count}} сеансов",
 	"workbench.rail.terminalGroup_one": "Группа терминалов {{position}}: {{count}} сеанс",
 	"workbench.rail.terminalGroup_other": "Группа терминалов {{position}}: {{count}} сеанса",
-	"workbench.rail.toolAttention": "{{tool}} · есть новое",
 	"workbench.rail.toolMissing": "Окно инструмента больше не существует.",
 	"workbench.rail.toolUnavailable": "Окно инструмента недоступно.",
 	"workbench.side.createLeftGroupAbove": "Создать левую группу выше",

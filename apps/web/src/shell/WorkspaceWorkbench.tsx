@@ -373,10 +373,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const specs = useWorkspaceSpecs(repositoryId);
 	const artifacts = useWorkspaceArtifacts(workspaceId);
 	const artifactsUnseen = useAppStore((state) => selectArtifactsUnseen(state, workspaceId));
-	const toolAttention = useMemo(
-		() => new Set<LayoutToolId>(artifactsUnseen ? ["artifacts"] : []),
-		[artifactsUnseen],
-	);
 	const review = useWorkspaceReview(repositoryId);
 	useLoadWorkspaceTurns(repositoryId);
 	useIdleEditorPreload(workspaceId);
@@ -767,6 +763,15 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 
 	const renderTabAdornment = useCallback(
 		(tab: LayoutTab): ReactNode => {
+			if (tab.kind === "tool" && tab.tool === "artifacts" && artifactsUnseen) {
+				return (
+					<span
+						aria-hidden="true"
+						data-testid="artifacts-new-dot"
+						className="m-4 block size-6 rounded-full bg-primary"
+					/>
+				);
+			}
 			if (tab.kind === "tool" && tab.tool === "review" && reviewDraftCount > 0) {
 				return (
 					<span
@@ -793,7 +798,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				</span>
 			) : null;
 		},
-		[reviewDraftCount, reviewFlagByPath, t],
+		[artifactsUnseen, reviewDraftCount, reviewFlagByPath, t],
 	);
 
 	const renderEmptyCenter = useCallback(
@@ -933,7 +938,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				readNavigationTick={() => selectWorkspaceNavTick(useAppStore.getState(), workspaceId)}
 				{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
 				chatFirstPrompts={chatFirstPrompts}
-				toolAttention={toolAttention}
 				onRequestClose={(tab, prepare) => {
 					if (tab.kind === "terminal") {
 						const close = () => {

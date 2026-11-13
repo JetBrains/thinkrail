@@ -75,10 +75,11 @@ tabs; an empty group is a one-entry cluster. Tools placed nowhere (after *Remove
 trailing, dimmed cluster behind a last separator; activating one restores it to its recorded target.
 Exactly one entry per expanded pane is pressed and none in a folded or hidden one, so the pressed set
 reads as "panes currently open". Clicking an unpressed entry selects it in *its* pane (revealing or
-unfolding the pane); clicking the pressed one folds that pane. A tool entry can carry an **attention
-dot**: the shell passes `toolAttention` (a set of tool ids, today only `artifacts` while it has unseen
-arrivals) and the entry adds a small primary dot, `data-attention`, and "· new" to its name. The layout
-only draws what it is given; what counts as new is the owning panel's business.
+unfolding the pane); clicking the pressed one folds that pane. A tool entry shows the shell's
+`renderTabAdornment` for its tool — the same adornment its pane-header tab shows (Review's draft count,
+Artifacts' new-arrivals dot) — whether the tool is placed (a rail-mode `WorkbenchTab`) or parked in the
+trailing unplaced cluster (`AuxiliaryRailButton`), so a badge never depends on where the tool sits. The
+layout only draws what it is given; what an adornment means is the shell's business.
 
 **Tools and terminals never share a pane.** A group holding tools is a tool pane; terminals live only in
 tool-free groups (`canJoinAuxiliaryGroup`). Joining a tool into a pane that shows terminals, or a terminal

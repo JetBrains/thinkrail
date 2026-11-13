@@ -3194,7 +3194,6 @@
 	"workbench.rail.terminal": "Terminal",
 	"workbench.rail.terminalGroup_one": "Terminal group {{position}}, {{count}} session",
 	"workbench.rail.terminalGroup_other": "Terminal group {{position}}, {{count}} sessions",
-	"workbench.rail.toolAttention": "{{tool}} · new",
 	"workbench.rail.toolMissing": "The tool window no longer exists.",
 	"workbench.rail.toolUnavailable": "The tool window is unavailable.",
 	"workbench.side.createLeftGroupAbove": "Create left group above",

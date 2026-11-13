@@ -78,7 +78,6 @@ export interface WorkbenchProps {
 	) => void;
 	onRenameChat?: (sessionId: string, titleInput: string, currentTitle: string) => void;
 	chatFirstPrompts?: ChatFirstPrompts;
-	toolAttention?: ReadonlySet<LayoutToolId>;
 	onNewChat: (groupId: string) => void;
 	onNewTerminal: (
 		groupId: string,
@@ -624,7 +623,6 @@ export interface SharedGroupProps {
 	onRevealTool: (tool: LayoutToolId) => void;
 	onRenameChat: WorkbenchProps["onRenameChat"];
 	chatFirstPrompts: WorkbenchProps["chatFirstPrompts"];
-	toolAttention: WorkbenchProps["toolAttention"];
 	canFocusAdjacentGroup: boolean;
 }
 
