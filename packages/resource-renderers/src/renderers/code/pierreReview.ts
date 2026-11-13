@@ -3,6 +3,7 @@ import type { MessageKey } from "@thinkrail/locales";
 import { t } from "@thinkrail/locales/react";
 import { type RefObject, useEffect } from "react";
 import type { AnchorDraft, ResourceDiffProps, ReviewThread, SurfaceReview } from "../../registry";
+import { revealReviewCard } from "../../support/revealFocus";
 import type { PierreVirtualizer } from "./pierreVirtualizer";
 
 export const COLLAPSED_CONTEXT_THRESHOLD = 3;
@@ -205,6 +206,7 @@ export function usePierreFocus(
 	);
 	const focused = focusedSurface?.review?.focus ?? null;
 	const focusId = focused?.id ?? null;
+	const moveFocus = focused?.moveFocus === true;
 	const focusLine = focused ? (threadLineRange(focused)?.endLine ?? null) : null;
 	const focusSide = focusedSurface?.side;
 	const onFocusHandled = surfaces.find(({ review }) => review?.focus?.id === focusId)?.review
@@ -234,7 +236,7 @@ export function usePierreFocus(
 			}
 			if (!target || !rendered || handled) return;
 			handled = true;
-			target.scrollIntoView({ block: "center" });
+			revealReviewCard(target, moveFocus);
 			onFocusHandled();
 			sizeObserver.disconnect();
 			mutationObserver.disconnect();
@@ -248,5 +250,5 @@ export function usePierreFocus(
 			sizeObserver.disconnect();
 			mutationObserver.disconnect();
 		};
-	}, [focusId, focusLine, focusSide, onFocusHandled, rootRef, virtualizer]);
+	}, [focusId, focusLine, focusSide, moveFocus, onFocusHandled, rootRef, virtualizer]);
 }

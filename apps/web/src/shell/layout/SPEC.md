@@ -224,7 +224,8 @@ marker is not itself focusable, its first tabbable descendant; else the selected
 host (its helper textarea), the Monaco editor container (its input), the Project Home projects tree
 and the body of a selected auxiliary
 tool, which the panel section marks `data-focus-default` with `data-tool-body=<tool>` — so entering a tool
-group lands in the tool rather than on its rail button.
+group lands in the tool rather than on its rail button. The same landing is the focus-recovery safety net
+for a focused control that disappears with no better neighbour ([[submodule-web-shell]], *Focus recovery*).
 
 Center resource strips and auxiliary terminal-session strips have bounded readable tab widths and no fixed previous/next controls: wheel, trackpad, touch,
 roving-keyboard navigation, active reveal, and the searchable keyboard overflow list scroll the same list.

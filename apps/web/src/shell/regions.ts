@@ -1,3 +1,4 @@
+import { TABBABLE_SELECTOR } from "@thinkrail/ui/focus";
 import { hasLayer, MODAL_LAYER_SELECTOR } from "../lib";
 import type { LayoutToolId } from "./layout";
 
@@ -29,20 +30,11 @@ export function orderRegions<T extends RegionBox>(regions: readonly T[]): T[] {
 	);
 }
 
-const REGION_SELECTOR = "[data-region]";
+export const REGION_SELECTOR = "[data-region]";
 const ACTIVE_ATTRIBUTE = "data-region-active";
 const TRACKING_ATTRIBUTE = "data-region-tracking";
 const FOCUS_DEFAULT_SELECTOR = "[data-focus-default]";
 const SELECTED_TAB_SELECTOR = '[role="tab"][aria-selected="true"]';
-const TABBABLE_SELECTOR = [
-	"button:not(:disabled)",
-	"a[href]",
-	"input:not(:disabled)",
-	"select:not(:disabled)",
-	"textarea:not(:disabled)",
-	'[contenteditable="true"]',
-	'[tabindex]:not([tabindex="-1"])',
-].join(",");
 const TERMINAL_SELECTOR = "[data-region] [data-tab-key]";
 const FRAME_BUDGET = 120;
 
@@ -62,7 +54,7 @@ function isShown(element: HTMLElement): boolean {
 	return rect.width > 0 && rect.height > 0;
 }
 
-function canFocus(element: HTMLElement): boolean {
+export function canFocus(element: HTMLElement): boolean {
 	return (
 		element.isConnected &&
 		element.getClientRects().length > 0 &&
@@ -72,7 +64,7 @@ function canFocus(element: HTMLElement): boolean {
 	);
 }
 
-function focusTarget(element: HTMLElement): HTMLElement | null {
+export function focusTarget(element: HTMLElement): HTMLElement | null {
 	if (canFocus(element)) return element;
 	for (const candidate of element.querySelectorAll<HTMLElement>(TABBABLE_SELECTOR)) {
 		if (canFocus(candidate)) return candidate;
@@ -107,6 +99,16 @@ function landingTarget(region: HTMLElement): HTMLElement | null {
 	const tab = region.querySelector<HTMLElement>(SELECTED_TAB_SELECTOR);
 	if (tab && canFocus(tab)) return tab;
 	return focusTarget(region);
+}
+
+export function regionLandingTarget(lastRegion: HTMLElement | null): HTMLElement | null {
+	const region =
+		activeRegion && isShown(activeRegion)
+			? activeRegion
+			: lastRegion && isShown(lastRegion)
+				? lastRegion
+				: null;
+	return region ? landingTarget(region) : null;
 }
 
 function focusInsideTarget(container: HTMLElement): HTMLElement | null {

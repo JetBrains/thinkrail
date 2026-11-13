@@ -310,6 +310,7 @@ function ItemBlock({
 		<li
 			id={`plan-item-${item.id}`}
 			data-testid="plan-item"
+			data-focus-row={item.id}
 			data-status={item.status}
 			data-reviewed={reviewed}
 			data-reviewing={reviewing}
@@ -346,6 +347,7 @@ function ItemBlock({
 							<button
 								type="button"
 								data-testid="plan-item-toggle"
+								data-focus-row-primary
 								aria-expanded={expanded}
 								onClick={() => setExpanded((v) => !v)}
 								title={expanded ? t("plan.item.hideDetails") : t("plan.item.showDetails")}
@@ -587,6 +589,7 @@ function PlanComposer({
 	icon: Icon,
 	placeholder,
 	testId,
+	focusSlot,
 	autoFocus = false,
 	onSubmit,
 	onClose,
@@ -594,6 +597,7 @@ function PlanComposer({
 	icon: typeof Plus;
 	placeholder: string;
 	testId: string;
+	focusSlot?: string;
 	autoFocus?: boolean;
 	onSubmit: (text: string) => Promise<void> | void;
 	onClose?: (() => void) | undefined;
@@ -624,6 +628,7 @@ function PlanComposer({
 			<textarea
 				ref={inputRef}
 				data-testid={testId}
+				data-focus-slot={focusSlot}
 				rows={1}
 				value={draft}
 				onChange={(e) => setDraft(e.target.value)}
@@ -823,6 +828,7 @@ function SessionBlock({
 					size="m"
 					iconLeft={Plus}
 					data-testid="plan-add-task"
+					data-focus-slot="plan-add-task"
 					onClick={() => setAdding((v) => !v)}
 					tooltip={t("plan.session.addTaskTitle")}
 					className="ml-auto shrink-0"
@@ -880,6 +886,7 @@ function SessionBlock({
 				<PlanComposer
 					icon={Plus}
 					testId="plan-add-input"
+					focusSlot="plan-add-task"
 					placeholder={t("plan.session.addPlaceholder")}
 					autoFocus
 					onSubmit={onAdd}
@@ -982,9 +989,9 @@ export default function PlanPane({
 	const flagged = allItems.filter((t) => reviewChangesRequested(t) && t.review?.reviewing !== true);
 	const jumpToItem = (id: string) => {
 		setFocusRequest((prev) => ({ id, tick: (prev?.tick ?? 0) + 1 }));
-		document
-			.getElementById(`plan-item-${id}`)
-			?.scrollIntoView({ behavior: "smooth", block: "center" });
+		const item = document.getElementById(`plan-item-${id}`);
+		item?.scrollIntoView({ behavior: "smooth", block: "center" });
+		item?.querySelector<HTMLElement>("[data-focus-row-primary]")?.focus({ preventScroll: true });
 	};
 	const buildDone = total > 0 && done === total;
 	const staleSummary = planStaleSummary(data);
@@ -1106,7 +1113,7 @@ export default function PlanPane({
 			className="h-full overflow-auto bg-container-content-bg motion-safe:animate-reveal"
 		>
 			{ship.dialogs}
-			<div className="mx-auto max-w-[52rem] px-16 py-16">
+			<div data-focus-list={`plan:${sessionId}`} className="mx-auto max-w-[52rem] px-16 py-16">
 				<header className="mb-16 flex items-center gap-12">
 					<div className="min-w-0 flex-1">
 						<h1 className="truncate tr-heading-sm text-text-default">

@@ -86,7 +86,7 @@ export function FileTree({
 	if (nodes.length === 0) return <EmptyTree workspaceId={workspaceId} />;
 	return (
 		<>
-			<ul className="flex flex-col motion-safe:animate-reveal">
+			<ul data-focus-list="files" className="flex flex-col motion-safe:animate-reveal">
 				{nodes.map((node) => (
 					<FileNodeRow
 						key={node.path}
@@ -238,7 +238,7 @@ function FileNodeRow({
 			: undefined;
 
 	return (
-		<li>
+		<li data-focus-row={node.path}>
 			<FileTreeMenu
 				workspaceId={workspaceId}
 				path={directory?.path ?? node.path}
@@ -249,6 +249,7 @@ function FileNodeRow({
 					<TreeRow
 						ref={revealRow}
 						testid="file-node"
+						path={directory?.path ?? node.path}
 						kind={isDir ? "dir" : "file"}
 						active={!isDir && focus.activePath === node.path}
 						highlighted={menuOpen}
@@ -292,7 +293,10 @@ function FileNodeRow({
 				)}
 			</FileTreeMenu>
 			{isDir && expanded && children && (
-				<ul className="flex flex-col pl-tree-indent">
+				<ul
+					data-focus-list={`files:${directory?.path ?? node.path}`}
+					className="flex flex-col pl-tree-indent"
+				>
 					{children.map((child) => (
 						<FileNodeRow
 							key={child.path}

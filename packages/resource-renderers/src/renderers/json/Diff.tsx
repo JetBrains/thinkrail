@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef } from "react";
 import type { ResourceDiffProps, ReviewThread, SurfaceReview } from "../../registry";
 import { ReviewComposer } from "../../support/ReviewComposer";
 import { ReviewThreadCard } from "../../support/ReviewThreadCard";
+import { revealReviewCard } from "../../support/revealFocus";
 import { diffContentStamp, useStampedComposer } from "../reviewComposerState";
 import { StaleComposerNotice } from "../StaleComposerNotice";
 import { JsonTree, type JsonTreeThread } from "./JsonTree";
@@ -117,7 +118,7 @@ export default function JsonDiff({
 		const card = cardRefs.current.get(focusId);
 		if (!card) return;
 		handledFocusRef.current = focusId;
-		card.scrollIntoView({ block: "center" });
+		revealReviewCard(card, focusSurface?.focus?.moveFocus === true);
 		focusSurface?.onFocusHandled();
 	}, [focusId, focusSurface, placed]);
 

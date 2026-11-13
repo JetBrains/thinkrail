@@ -122,8 +122,9 @@ treatment.
   Escape dismiss. Confirm fires `project.close` and waits for the full `project.updated` push—no optimistic
   removal; success is the
   row disappearing with no toast, while rejection keeps it and raises an error toast. Menu/dialog dismissal
-  restores the source project-name focus; successful close focuses the fallback project name or the Projects
-  view's Add project control. `ProjectTree` also owns the `NewWorkspaceDialog` the per-project `+` opens **and** each
+  restores the source project-name focus; a successful close leaves focus to the shell's recovery engine
+  (the project rows are a `projects` focus list with Add project as its fallback): the next project's name,
+  else the previous, else Add project. `ProjectTree` also owns the `NewWorkspaceDialog` the per-project `+` opens **and** each
   workspace row's hover-revealed **kebab menu** (`MoreVertical`, controlled `DropdownMenu`) — right-clicking
   anywhere on the row opens that exact menu at the kebab without selecting/activating the workspace, while
   the kebab remains the touch and keyboard-focus path. Its actions are a `DropdownMenuSub` **"Open in"**
@@ -573,7 +574,9 @@ while it is invisible; under reduced motion the swap is instant. Reaching done p
 `onboardingDismissed`; the wizard (and with it the hidden rail and held prompts) stays until a project opens. A still-empty
 refresh warns and offers **Check again**
 (re-runs both reads, e.g. after fixing the account elsewhere) and Back to the choices — Back alone could not
-return, since the provider is configured and so no longer listed. The wizard owns no project step of its own and shows no progress strip.
+return, since the provider is configured and so no longer listed. Each step that replaces another moves
+focus to its title (`tabIndex=-1`), so the keyboard never rests on a vanished button; Back focuses the
+picked provider's option when it is still listed, else the options' first control. The wizard owns no project step of its own and shows no progress strip.
 **Skip setup** is on every screen before done except privacy, whose Continue is the only way on; skipping also cancels any
 target-less login still pending in the dialog (`cancelUnownedLogin`, shared with `ConnectProviderDialog`).
 A login is owned by the start that requested it (`startReservedLogin`): when the surface closes before
@@ -1241,8 +1244,9 @@ a project picker, the prompt hero, and the reused
   `modelContextWindowLimits` (the contracts' 272K–1M range but for a `custom-*` row) that saves on Enter or blur — except a blur onto a sibling preset of the same control, so picking
   Default/1M never first commits a half-typed value; the copy labels it an app policy, not a verified provider limit, and
   external values outside it stay visible but cannot be re-applied. Drafts are UI-local and are dropped
-  when their authoritative override changes; inputs are not remounted, and after a disabled save focus
-  returns only to the control that initiated it. Pi's shared configuration is authoritative — there is
+  when their authoritative override changes; inputs are not remounted, and after a disabled save the
+  shell's focus recovery returns focus to the control that held it ([[submodule-web-shell]], *Focus
+  recovery*) — the block keeps no focus logic of its own. Pi's shared configuration is authoritative — there is
   no optimistic value or AppConfig field; reads follow catalog/provider invalidation, fence stale
   replies, disable controls while pending, and replace controls with Retry on failure. The props-driven
   `ModelContextControls` owns presentation and `useModelContextSettings` the reads and writes, shared
@@ -1605,8 +1609,8 @@ a project picker, the prompt hero, and the reused
   branch has no commits. The total diff comes from the workspace record's `diffStats`; each piece
   hides when unknown. Between header and summary lives the **NEXT-ACTION banner** (`plan-next-action`,
   `data-kind`) — the report's one "what now", rendering the FIRST matching state by urgency:
-  `fix` (N steps carry changes_requested → **Show step** scrolls to the first flagged item and
-  auto-expands it via the `focusRequest` token — `{ id, tick }`, tick bumped per click and consumed
+  `fix` (N steps carry changes_requested → **Show step** scrolls to the first flagged item, focuses its
+  toggle (`preventScroll`, the scroll is already smooth) and auto-expands it via the `focusRequest` token — `{ id, tick }`, tick bumped per click and consumed
   once per tick by the target `ItemBlock`, so a re-click re-expands a manually collapsed row and a
   stale request can't reopen it later) → `review`
   (N unsettled reviewables → an inline **Review All** button, same `todo.reviewAll` flow as the
@@ -2401,7 +2405,14 @@ own section. The kebab menu (`plan-menu`, a
   one busy flag, not new mutations. The cursor is the step's identity (a reading step's position in the order — the contract allows one file twice — or a finding id), so a
   finding resolved from under it yields to its successor instead of skipping one. The rail never renders
   on phone-class viewports — 280px of a 390px
-  screen would leave no diff to guide through. Plain-letter shortcuts (`V`, `J`, `N`, `P`) belong to the
+  screen would leave no diff to guide through. A keyboard step (`Alt+↑` / `Alt+↓`, `V` advancing, `J`, `N`,
+  `P`) and a click on a reading step or finding move focus to what it revealed — the section header's first
+  control, or the finding card's first control once `useReviewReveal` scrolls it into view; the
+  `Prev / Next`, guide and bottom-bar buttons keep focus, so they can be pressed again (the reveal reaches
+  the renderer as a review focus with `moveFocus: false`: it scrolls to a finding without focusing it), and
+  one that disables at the end hands focus to its nearest enabled sibling through the shell's recovery
+  engine.
+  Plain-letter shortcuts (`V`, `J`, `N`, `P`) belong to the
   review tab the center is looking at (`ownsReviewShortcut`: the attention group's selected tab, no
   modal or menu layer open, no text-entry target, and no earlier handler consumed the event), so two review scopes split side by side cannot both answer
   one keystroke. **Scale rules**:

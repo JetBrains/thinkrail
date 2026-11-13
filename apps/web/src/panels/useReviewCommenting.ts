@@ -34,11 +34,15 @@ export function useFileReview(
 	);
 	const focusRequest = useAppStore((state) => state.reviewFocusRequest);
 	const focusId = reviewFocusId(focusRequest, workspaceId, kind, scope);
+	const moveFocus = focusId !== null && focusRequest?.moveFocus === true;
 	const worktreeFocus = useMemo(
-		() => resolveFocus(worktreeThreads, focusId),
-		[worktreeThreads, focusId],
+		() => resolveFocus(worktreeThreads, focusId, moveFocus),
+		[worktreeThreads, focusId, moveFocus],
 	);
-	const baseFocus = useMemo(() => resolveFocus(baseThreads, focusId), [baseThreads, focusId]);
+	const baseFocus = useMemo(
+		() => resolveFocus(baseThreads, focusId, moveFocus),
+		[baseThreads, focusId, moveFocus],
+	);
 	const worktreeCommenting = useMemo(
 		() => sideCommenting(workspaceId, path, kind, "worktree", scope, chatSessionId),
 		[workspaceId, path, kind, scope, chatSessionId],
@@ -127,10 +131,11 @@ export function reviewFocusId(
 function resolveFocus(
 	threads: ReviewThread[],
 	focusId: string | null,
-): { id: string; anchor: ReviewAnchor } | null {
+	moveFocus: boolean,
+): { id: string; anchor: ReviewAnchor; moveFocus: boolean } | null {
 	if (!focusId) return null;
 	const thread = threads.find((candidate) => candidate.id === focusId);
-	return thread ? { id: thread.id, anchor: thread.anchor } : null;
+	return thread ? { id: thread.id, anchor: thread.anchor, moveFocus } : null;
 }
 
 export function commentKindForDraft(

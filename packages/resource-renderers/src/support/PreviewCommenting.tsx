@@ -13,6 +13,7 @@ import { createPortal } from "react-dom";
 import type { ReviewThread, SurfaceReview } from "../registry";
 import { mapPreviewSelection } from "./previewAnchor";
 import { ReviewComposer } from "./ReviewComposer";
+import { revealReviewCard } from "./revealFocus";
 import { markReviewRegions, type SourceLineRange, stampedSelectionLines } from "./sourceLines";
 
 export interface ComposerInsert {
@@ -60,7 +61,7 @@ export function PreviewCommenting({
 		if (!focusId || !scroller) return;
 		const card = scroller.querySelector(`[data-comment-id="${focusId}"]`);
 		if (card) {
-			card.scrollIntoView({ block: "center" });
+			revealReviewCard(card, review.focus?.moveFocus === true);
 			review.onFocusHandled();
 		}
 	}, [focusId, review]);

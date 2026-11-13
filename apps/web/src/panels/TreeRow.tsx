@@ -16,6 +16,7 @@ type MenuTriggerHandlers = Pick<
 export function TreeRow({
 	ref,
 	testid,
+	path,
 	kind,
 	expanded,
 	active,
@@ -39,6 +40,7 @@ export function TreeRow({
 }: MenuTriggerHandlers & {
 	ref?: Ref<HTMLButtonElement> | undefined;
 	testid: string;
+	path?: string | undefined;
 	kind: "dir" | "file";
 	expanded?: boolean;
 	active?: boolean;
@@ -64,6 +66,8 @@ export function TreeRow({
 			ref={ref}
 			type="button"
 			data-testid={testid}
+			data-path={path}
+			data-focus-row-primary
 			data-kind={kind}
 			data-active={active ? true : undefined}
 			data-status={dataStatus}

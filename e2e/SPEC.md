@@ -390,6 +390,13 @@ inside xterm), asserting the one `data-region-active` root and the veil through 
 workbench and on Project Home (collapsed pane included), `Mod+1` / `Mod+2` over a split center,
 `` Ctrl+` `` in and back out and with the bottom hidden, `Mod+Shift+E` / `Mod+Shift+G` landing inside
 Files in the matching mode, and the palette rows with their chords, run after the palette closes.
+`focus-recovery.spec.ts` pins one site per rule of the shell's focus recovery: a deleted Files row hands
+focus to the next file in its folder, then the previous; removing an MCP server focuses the next server's
+menu and the empty state's Add inside Settings; Enter in a workspace's inline rename returns to the row;
+Escape in Plan's add-task returns to its button and Show step focuses the step; the Markdown outline toggle
+keeps focus across its two renderings and an entry focuses its heading; One file's Next disabling at the
+last file hands focus to Prev; and the safety net lands a removed unmarked control on its region's landing
+target while a control the user clicked away from never pulls focus back.
 
 ## Isolation contract
 

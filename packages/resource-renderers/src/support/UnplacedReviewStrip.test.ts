@@ -34,7 +34,7 @@ function surface(threads: ReviewThread[], focusId?: string): SurfaceReview {
 			onDeleteComment: async () => {},
 			onUpdateComment: async () => {},
 		},
-		focus: focused ? { id: focused.id, anchor: focused.anchor } : null,
+		focus: focused ? { id: focused.id, anchor: focused.anchor, moveFocus: true } : null,
 		onFocusHandled: () => {},
 	};
 }
