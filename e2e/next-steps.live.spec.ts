@@ -8,7 +8,9 @@ test("the agent ends a finished turn with suggest_next_steps and the chips send 
 	await openWorkspaceChat(page);
 
 	const input = page.getByTestId("chat-input");
-	await input.fill("Add a one-line description of this project to the top of README.md.");
+	await input.fill(
+		"Add a one-line description of this project to the top of README.md, then suggest my next steps.",
+	);
 	await page.getByTestId("chat-send").click();
 
 	const done = page.locator('[data-testid="turn-divider-status"][data-outcome="done"]');
