@@ -33,8 +33,7 @@ import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactElement, type ReactNode, useEffect, useMemo, useState } from "react";
 import { QuietScrollArea } from "@/components/QuietScrollArea";
-import { useNow } from "@/components/useNow";
-import { copyText, fileName, firstClickOnly, joinWorkspacePath, relativeTime } from "../lib";
+import { copyText, fileName, firstClickOnly, joinWorkspacePath } from "../lib";
 import {
 	artifactsWatermark,
 	selectChatTitle,
@@ -50,7 +49,12 @@ import {
 	revealArtifact,
 	selectArtifactMentionTarget,
 } from "./artifactActions";
-import { type ArtifactRow, artifactRows, type OutputRow } from "./artifactsModel";
+import {
+	type ArtifactRow,
+	artifactRows,
+	artifactTimeLabel,
+	type OutputRow,
+} from "./artifactsModel";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { deleteEntry, pasteInto, renameEntry } from "./fileTreeActions";
 import { HeaderIconButton } from "./HeaderIconButton";
@@ -86,7 +90,7 @@ export function ArtifactsPanel({
 	const canPaste = useAppStore(
 		(s) => supportsArtifacts(s.protocolVersion) && s.fileClipboard !== null,
 	);
-	const [onlyThisChat, setOnlyThisChat] = useState(false);
+	const [allChats, setAllChats] = useState(false);
 	const [highlightSince, setHighlightSince] = useState<number | null>(null);
 	const [removal, setRemoval] = useState<RemovalRequest | null>(null);
 
@@ -98,7 +102,7 @@ export function ArtifactsPanel({
 		store.markArtifactsSeen(workspaceId, artifactsWatermark(snapshot));
 	}, [snapshot, workspaceId, highlightSince]);
 
-	const sessionId = onlyThisChat ? mentionTarget : null;
+	const sessionId = allChats ? null : mentionTarget;
 	const rows = useMemo(
 		() =>
 			snapshot && highlightSince !== null
@@ -126,15 +130,15 @@ export function ArtifactsPanel({
 				<ToggleSegment
 					testid="artifacts-filter-all"
 					label={t("panels.artifacts.allChats")}
-					active={!onlyThisChat || mentionTarget === null}
-					onClick={() => setOnlyThisChat(false)}
+					active={sessionId === null}
+					onClick={() => setAllChats(true)}
 				/>
 				<ToggleSegment
 					testid="artifacts-filter-chat"
 					label={t("panels.artifacts.thisChat")}
-					active={onlyThisChat && mentionTarget !== null}
+					active={sessionId !== null}
 					disabled={mentionTarget === null}
-					onClick={() => setOnlyThisChat(true)}
+					onClick={() => setAllChats(false)}
 				/>
 				<div className="ml-auto flex shrink-0">
 					{snapshot?.outputs ? (
@@ -184,7 +188,10 @@ export function ArtifactsPanel({
 						<LoadingRegion rows={6} className="px-4 py-4" />
 					)
 				) : rows.artifacts.length === 0 && !rows.outputs?.length ? (
-					<EmptyArtifacts onlyThisChat={sessionId !== null} />
+					<>
+						<EmptyArtifacts onlyThisChat={sessionId !== null} />
+						<OtherChats count={rows.otherChats} onShow={() => setAllChats(true)} />
+					</>
 				) : (
 					<div className="flex flex-col gap-8 motion-safe:animate-reveal">
 						{rows.artifacts.length > 0 ? (
@@ -219,6 +226,7 @@ export function ArtifactsPanel({
 								))}
 							</Section>
 						) : null}
+						<OtherChats count={rows.otherChats} onShow={() => setAllChats(true)} />
 					</div>
 				)}
 			</QuietScrollArea>
@@ -230,6 +238,27 @@ export function ArtifactsPanel({
 				/>
 			) : null}
 		</div>
+	);
+}
+
+function OtherChats({ count, onShow }: { count: number; onShow: () => void }) {
+	const t = useT();
+	if (count === 0) return null;
+	return (
+		<p
+			data-testid="artifacts-other-chats"
+			className="flex items-center justify-center gap-8 px-4 text-text-subtle tr-text-metadata"
+		>
+			<span>{t("panels.artifacts.otherChats", { count })}</span>
+			<button
+				type="button"
+				data-testid="artifacts-show-all"
+				onClick={onShow}
+				className="text-primary hover:underline"
+			>
+				{t("panels.artifacts.showAllChats")}
+			</button>
+		</p>
 	);
 }
 
@@ -315,7 +344,6 @@ function ArtifactRowView({
 	onRemove: RequestRemoval;
 }) {
 	const t = useT();
-	const now = useNow();
 	const { artifact, name, folder, taskSpecStatus, fresh } = row;
 	const deleted = artifact.state === "deleted";
 	const { editing, nameRef, start, inputProps, onMenuCloseAutoFocus } = useInlineRename({
@@ -347,6 +375,7 @@ function ArtifactRowView({
 			>
 				{(menuOpen) => (
 					<div
+						title={artifactTimeLabel(t, artifact.changedAt)}
 						className={cn(
 							"flex w-full min-w-0 items-start gap-8 rounded-sm px-4 py-4",
 							menuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered",
@@ -382,9 +411,6 @@ function ArtifactRowView({
 									</button>
 								)}
 								{fresh ? <NewDot /> : null}
-								<span className="shrink-0 text-text-subtle tr-text-metadata">
-									{relativeTime(t, artifact.changedAt, now)}
-								</span>
 							</div>
 							<div className="flex min-w-0 items-center gap-8 text-text-subtle tr-text-metadata">
 								{deleted ? (

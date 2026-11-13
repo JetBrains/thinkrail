@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import type { SpecGraphNode, WorkspaceArtifactsSnapshot } from "@thinkrail/contracts";
+import { currentTranslator } from "@thinkrail/locales/react";
 import { artifactsWatermark, selectArtifactsUnseen } from "../store";
-import { artifactRows, mentionText } from "./artifactsModel";
+import { artifactRows, artifactTimeLabel, mentionText } from "./artifactsModel";
 
 const snapshot: WorkspaceArtifactsSnapshot = {
 	workspaceId: "w1",
@@ -82,6 +83,23 @@ test("the chat filter keeps that chat's rows and the toggle hides ignored output
 	});
 	expect(rows.artifacts.map((row) => row.name)).toEqual(["TASK-x.md"]);
 	expect(rows.outputs).toBeNull();
+	expect(rows.otherChats).toBe(2);
+	expect(
+		artifactRows(snapshot, {
+			sessionId: "s1",
+			highlightSince: 0,
+			showIgnored: true,
+			specs: undefined,
+		}).otherChats,
+	).toBe(2);
+	expect(
+		artifactRows(snapshot, {
+			sessionId: null,
+			highlightSince: 0,
+			showIgnored: true,
+			specs: undefined,
+		}).otherChats,
+	).toBe(0);
 	expect(
 		artifactRows(
 			{ ...snapshot, outputs: null },
@@ -108,4 +126,10 @@ test("the watermark is the newest arrival, and only something newer than what wa
 
 test("a mention is the composer's own @path form", () => {
 	expect(mentionText(".thinkrail/context/a.md")).toBe("@.thinkrail/context/a.md ");
+});
+
+test("a row's change time reads as a localized date and time", () => {
+	const label = artifactTimeLabel(currentTranslator(), Date.UTC(2026, 10, 13, 14, 32));
+	expect(label).toStartWith("Changed ");
+	expect(label).toContain("2026");
 });

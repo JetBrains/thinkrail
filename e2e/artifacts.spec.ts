@@ -20,6 +20,12 @@ function writeArtifact(root: string, path: string, content: string): void {
 	writeFileSync(file, content);
 }
 
+async function showArtifacts(page: Page): Promise<void> {
+	await revealWorkbenchTool(page, "artifacts");
+	await page.getByTestId("artifacts-filter-all").click();
+	await expect(page.getByTestId("artifacts-filter-all")).toHaveAttribute("data-active", "true");
+}
+
 async function rowAction(page: Page, path: string, action: string): Promise<void> {
 	await artifact(page, path).getByTestId("artifact-open").click({ button: "right" });
 	await page.getByTestId(action).click();
@@ -35,7 +41,14 @@ test("the Artifacts tab keeps what the agent left: a deleted file stays restorab
 	writeArtifact(root, "mockups/a.html", "<h1>a</h1>\n");
 	await revealWorkbenchTool(page, "artifacts");
 
+	await expect(page.getByTestId("artifacts-filter-chat")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("artifact-row")).toHaveCount(0);
+	await expect(page.getByTestId("artifacts-other-chats")).toContainText("2 more from other chats");
+	await page.getByTestId("artifacts-show-all").click();
 	await expect(artifact(page, "report.md")).toBeVisible();
+	await expect(page.getByTestId("artifacts-other-chats")).toHaveCount(0);
+	await expect(artifact(page, "report.md").locator("[title^='Changed ']")).toHaveCount(1);
+	await expect(artifact(page, "report.md")).not.toContainText("just now");
 	await expect(artifact(page, "mockups/a.html")).toContainText("mockups");
 	await expect(page.locator('[data-testid="artifact-row"][data-path$="/.gitignore"]')).toHaveCount(
 		0,
@@ -85,7 +98,7 @@ test("a new artifact lights the rail until the tab is opened, and a cut file pas
 	writeArtifact(root, "notes.md", "notes\n");
 	await expect(dot).toBeVisible({ timeout: 10_000 });
 
-	await revealWorkbenchTool(page, "artifacts");
+	await showArtifacts(page);
 	await expect(artifact(page, "notes.md")).toHaveAttribute("data-fresh", "true");
 	await expect(dot).toHaveCount(0);
 
@@ -94,7 +107,7 @@ test("a new artifact lights the rail until the tab is opened, and a cut file pas
 	const todo = page.getByTestId("file-node").filter({ hasText: /^todo\.txt/ });
 	await todo.click({ button: "right" });
 	await page.getByTestId("file-tree-cut").click();
-	await revealWorkbenchTool(page, "artifacts");
+	await showArtifacts(page);
 	await page.getByTestId("artifacts-paste").click();
 	await expect(artifact(page, "todo.txt")).toBeVisible();
 	expect(existsSync(join(root, "todo.txt"))).toBe(false);
@@ -105,7 +118,7 @@ test("a new artifact lights the rail until the tab is opened, and a cut file pas
 test("Mention in chat puts the artifact's path into the open chat's composer", async ({ page }) => {
 	const workspace = await openWorkspaceChat(page);
 	writeArtifact(workspace.worktreePath, "plan.md", "plan\n");
-	await revealWorkbenchTool(page, "artifacts");
+	await showArtifacts(page);
 	await rowAction(page, "plan.md", "artifact-mention");
 	await expect(page.getByTestId("chat-input")).toHaveValue(`@${CONTEXT}/plan.md `);
 });
@@ -117,7 +130,7 @@ test("a workspace without agent runs shows no ignored outputs, and its remove di
 	const workspace = await createWorkspaceViaDialog(page);
 	writeArtifact(workspace.worktreePath, "a.md", "a\n");
 	writeArtifact(workspace.worktreePath, "b.md", "b\n");
-	await revealWorkbenchTool(page, "artifacts");
+	await showArtifacts(page);
 	await expect(page.getByTestId("artifact-row")).toHaveCount(2);
 	await expect(page.getByTestId("artifacts-outputs-section")).toHaveCount(0);
 

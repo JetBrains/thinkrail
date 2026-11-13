@@ -2253,13 +2253,17 @@ own section. The kebab menu (`plan-menu`, a
   host's `workspace.artifactsChanged` nudge and on reconnect (`selectArtifactsTick`, passed to
   `useWorkspaceRead` instead of the fs tick, because the host already reconciles on file changes and an fs
   tick per agent edit would re-list for nothing). The panel is two sections, newest first: **Artifacts**
-  (files under `.thinkrail/context/`; a two-line row: name and age, then the folder inside the artifacts
+  (files under `.thinkrail/context/`; a two-line row: the name, then the folder inside the artifacts
   folder — or `Task spec · <status>` joined from the spec snapshot by path — and a chip naming the writing
-  chat that opens it) and **Other agent files · ignored** (one row per ignored output, a folder lazily
+  chat that opens it; no relative age, since the order already says what is newest — the exact change time
+  is the row's hover title) and **Other agent files · ignored** (one row per ignored output, a folder lazily
   expandable through `fs.readDir`, with its file count), hidden by the header's eye toggle. A row the host
-  marks `deleted` reads "Deleted, not by you" with Restore; opening it waits for the restore. The header's
-  All chats / This chat filter follows the workspace's attended chat (`selectArtifactMentionTarget`), and
-  Paste puts the Files clipboard into the artifacts folder. Every row has one context menu: Mention in chat
+  marks `deleted` reads "Deleted, not by you" with Restore; opening it waits for the restore. The panel
+  **opens on This chat**: the attended chat's artifacts (`selectArtifactMentionTarget`), following it as the
+  center switches chats; with no chat attended it shows all, and All chats is a click away but not
+  remembered across mounts. Unattributed artifacts belong to no chat. Whenever the filter hides rows, a
+  line under the list counts them ("N more from other chats") with **Show all chats**, so the default never
+  makes a workspace look emptier than it is. Paste puts the Files clipboard into the artifacts folder. Every row has one context menu: Mention in chat
   (pastes `@<path> ` into the attended chat's composer through `pasteIntoComposer` and focuses it; disabled
   without one), Reveal in Files, the two Copy paths, Copy / Cut (the shared Files clipboard; a cut pastes
   through `fs.move`), Rename (inline, `fs.rename`), Restore for a deleted row, and Delete — `fs.delete` for a

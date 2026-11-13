@@ -4,6 +4,7 @@ import type {
 	WorkspaceArtifactsSnapshot,
 	WorkspaceIgnoredOutput,
 } from "@thinkrail/contracts";
+import { localeOf, type Translator } from "@thinkrail/locales/react";
 
 export interface ArtifactRow {
 	artifact: WorkspaceArtifact;
@@ -21,6 +22,7 @@ export interface OutputRow {
 export interface ArtifactRows {
 	artifacts: ArtifactRow[];
 	outputs: OutputRow[] | null;
+	otherChats: number;
 }
 
 export interface ArtifactRowOptions {
@@ -57,13 +59,26 @@ export function artifactRows(
 			taskSpecStatus: taskSpecs.has(artifact.path) ? (taskSpecs.get(artifact.path) ?? "") : null,
 			fresh: artifact.firstSeenAt > options.highlightSince,
 		}));
+	const shownOutputs = snapshot.outputs === null || !options.showIgnored ? null : snapshot.outputs;
 	const outputs =
-		snapshot.outputs === null || !options.showIgnored
-			? null
-			: snapshot.outputs
-					.filter((output) => mine(output.sessionId))
-					.map((output) => ({ output, fresh: output.changedAt > options.highlightSince }));
-	return { artifacts, outputs };
+		shownOutputs
+			?.filter((output) => mine(output.sessionId))
+			.map((output) => ({ output, fresh: output.changedAt > options.highlightSince })) ?? null;
+	const otherChats =
+		snapshot.artifacts.length -
+		artifacts.length +
+		(shownOutputs?.length ?? 0) -
+		(outputs?.length ?? 0);
+	return { artifacts, outputs, otherChats };
+}
+
+export function artifactTimeLabel(t: Translator, changedAt: number): string {
+	return t("panels.artifacts.changedAt", {
+		time: new Date(changedAt).toLocaleString(localeOf(t), {
+			dateStyle: "medium",
+			timeStyle: "short",
+		}),
+	});
 }
 
 export function mentionText(path: string): string {
