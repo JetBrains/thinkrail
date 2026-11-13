@@ -861,11 +861,16 @@ channel fan-out, and the process-boot wrapper both launchers share.
   calls `invalidateRoot(worktreePath)` so a watched workspace's file list and spec snapshot refresh on the
   next keystroke. `fs.readFile` forwards `maxBytes` to `fs`.
 
-**Artifacts wiring** ([[submodule-server-artifacts]]): the `workspace.fsChanged` publisher reconciles the
-workspace's artifact index when a batch is truncated or touches `.thinkrail/context` (`touchesArtifacts`);
-the session-event tee maps `agent_start`, `agent_settled`, `tool_execution_start` (tool name + args) and
-`tool_execution_end` into `observeArtifactSessionEvent`, and an `agent_start` also `ensureWatch`es the
-workspace, so a working agent is watched even when no client looks at it. `setArtifactsPublisher` fans
+**Artifacts wiring** ([[submodule-server-artifacts]]): the `workspace.fsChanged` publisher hands every
+batch to `noteArtifactPathsChanged` (it reconciles when the batch is truncated or touches
+`.thinkrail/context`, and recounts a recorded ignored output the batch reaches);
+the session-event tee maps `agent_start`, `agent_settled`, `tool_execution_start` (tool call id, name and
+args) and `tool_execution_end` (call id and name) into `observeArtifactSessionEvent`, and an `agent_start` also
+`ensureWatch`es the workspace in watch's bounded **prewarm** tier, so a working agent nobody looks at is
+watched without promoting its watcher for the host's lifetime (on Linux each watched worktree costs one
+inotify watch per folder; background runs in big repositories would otherwise exhaust
+`max_user_watches` for the workspace the user is looking at). The reconciles at every run start, tool end
+and settle do not depend on it. `setArtifactsPublisher` fans
 the index's change out as the pathless `workspace.artifactsChanged` nudge to v121+ sockets of that
 workspace. `fs.delete`, `fs.rename` and `fs.move` run their mutation inside `withUserRemoval` (a move locks
 both workspaces in id order), and `workspace.remove` / `chat.delete` call `removeWorkspaceArtifacts`.

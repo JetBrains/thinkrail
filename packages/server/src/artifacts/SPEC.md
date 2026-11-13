@@ -24,7 +24,7 @@ client the same answer.
 - **Owns:** `<dataDir>/artifacts/<workspaceId>/` — `index.json` (artifact records + ignored-output records)
   and `kept/<uuid>` — plus the in-memory per-workspace running set, explicit writers and run window.
 - **Public surface (barrel):** `listArtifacts`, `reconcileArtifacts`, `restoreArtifact`, `discardArtifact`,
-  `withUserRemoval`, `observeArtifactSessionEvent`, `ArtifactSessionEvent`, `touchesArtifacts`,
+  `withUserRemoval`, `observeArtifactSessionEvent`, `ArtifactSessionEvent`, `noteArtifactPathsChanged`,
   `setArtifactsPublisher`, `removeWorkspaceArtifacts`.
 - **Allowed deps:** `persistence` (`dataDir`, workspace records), `git` (`gitAsync` for the ignored-root
   listing), `trash` (a discarded kept copy goes to the OS trash), `log`; `contracts`, `shared/paths`,
@@ -98,14 +98,26 @@ by snapshot. The first `agent_start` in a workspace opens a run window and lists
 `git ls-files --others --ignored --exclude-standard --directory` — git collapses an ignored folder into one
 entry without descending, so a folder is one row. Roots under a dependency or cache folder
 (`node_modules`, `.venv`, `__pycache__`, `.turbo`, `.cache`, …) and `.thinkrail` are dropped. When the last
-running session settles — and on `artifacts.list` while one runs — a root that is new since the window
-opened, or holds anything modified since (with one second of slack: file times can lag the clock by a
-tick, and the baseline listing runs while the agent may already be writing), is recorded. Rows are live, never copied: the listing counts the
-folder's files (bounded at 20 000 entries) and drops a root that no longer exists. A chat without a
-project has no git, so its snapshot reports `outputs: null`.
+running session settles, a root that is new since the window opened, or holds anything modified since
+(with one second of slack: file times can lag the clock by a tick, and the baseline listing runs while the
+agent may already be writing), is recorded together with its file count (bounded at 20 000 entries).
+Rows are live, never copied.
+
+**Listing never walks an output.** Every walk here is asynchronous and runs only at settle or after a
+change, because `artifacts.list` follows most tool ends and a recorded `target/` or `.next/` walked on each
+listing stalled the host's one event loop — pi runs on it too. The listing reads the cached counts and
+`lstat`s each root once, dropping a root that no longer exists. A change that reaches a recorded root
+(`noteArtifactPathsChanged`, fed by the host's file-change publisher — the user's own Delete, Cut, Paste or
+Rename land there, while the Linux watcher reports nothing inside ignored folders) recounts that root or
+drops it, then nudges the clients; a removed workspace's pending recount is abandoned. A count can
+therefore lag a build the user runs in a terminal until the next settle or touching change. A chat without
+a project has no git, so its snapshot reports `outputs: null`.
 
 ## Lifetime
 
 The store follows its workspace: `host` calls `removeWorkspaceArtifacts` when a workspace or chat is
 removed, alongside its other per-workspace state; the worktree's own teardown is not awaited. The index
-is validated on load; an unreadable index starts empty rather than failing the workspace.
+is validated on load; an unreadable index starts empty rather than failing the workspace. Removing store
+entries is best-effort: a kept copy another process holds open (Windows refuses to unlink a hard-linked
+file Excel or a scanner has open) is logged and left behind, never allowed to abort a reconcile, a user's
+Delete that already succeeded, or the workspace's teardown.

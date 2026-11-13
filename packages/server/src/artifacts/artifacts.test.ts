@@ -23,6 +23,7 @@ import {
 	isArtifactPath,
 	isSameFile,
 	listArtifacts,
+	noteArtifactPathsChanged,
 	observeArtifactSessionEvent,
 	reconcileArtifacts,
 	removeWorkspaceArtifacts,
@@ -438,4 +439,73 @@ test("restoring after the whole artifacts folder was cleaned recreates its self-
 	restoreArtifact("w1", `${CONTEXT}/report.md`);
 	expect(readFileSync(join(root, CONTEXT, ".gitignore"), "utf8")).toBe("*\n");
 	expect(readFileSync(join(root, CONTEXT, "report.md"), "utf8")).toBe("report");
+});
+
+async function recordDistOutput(): Promise<void> {
+	git("init", "-q");
+	writeFileSync(join(root, ".gitignore"), "dist/\n");
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
+	write("dist/a.js", "a");
+	expect((await listArtifacts("w1")).outputs).toEqual([]);
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_settled" });
+}
+
+async function publishedAtLeast(count: number): Promise<void> {
+	const deadline = Date.now() + 5_000;
+	while (published.length < count) {
+		if (Date.now() > deadline)
+			throw new Error(`expected ${count} publishes, saw ${published.length}`);
+		await Bun.sleep(10);
+	}
+}
+
+test("a run's ignored outputs are found when it settles, and a listing never walks them", async () => {
+	await recordDistOutput();
+	expect((await listArtifacts("w1")).outputs).toEqual([
+		expect.objectContaining({ path: "dist", files: 1, sessionId: "s1" }),
+	]);
+	write("dist/b.js", "b");
+	expect((await listArtifacts("w1")).outputs?.[0]?.files).toBe(1);
+});
+
+test("a user change inside a recorded output recounts it and nudges clients", async () => {
+	await recordDistOutput();
+	write("dist/b.js", "b");
+	const before = published.length;
+	noteArtifactPathsChanged("w1", ["dist/b.js"], false);
+	await publishedAtLeast(before + 1);
+	expect((await listArtifacts("w1")).outputs?.[0]?.files).toBe(2);
+});
+
+test("deleting a recorded output drops its row and nudges clients", async () => {
+	await recordDistOutput();
+	rmSync(join(root, "dist"), { recursive: true });
+	const before = published.length;
+	noteArtifactPathsChanged("w1", ["dist"], false);
+	await publishedAtLeast(before + 1);
+	expect((await listArtifacts("w1")).outputs).toEqual([]);
+});
+
+test("a change elsewhere neither recounts outputs nor nudges", async () => {
+	await recordDistOutput();
+	const before = published.length;
+	noteArtifactPathsChanged("w1", ["src/index.ts"], false);
+	await Bun.sleep(50);
+	expect(published.length).toBe(before);
+});
+
+test("a kept copy that cannot be removed is left behind without failing the user's delete or the teardown", async () => {
+	write(`${CONTEXT}/report.csv`, "a,b");
+	reconcileArtifacts("w1");
+	const realRm = fs.rmSync;
+	spyOn(fs, "rmSync").mockImplementation(((path: fs.PathLike, options?: fs.RmOptions) => {
+		if (String(path).startsWith(artifactsStoreRoot()))
+			throw Object.assign(new Error("resource busy"), { code: "EBUSY" });
+		return realRm(path, options);
+	}) as typeof fs.rmSync);
+	await withUserRemoval("w1", `${CONTEXT}/report.csv`, async () => {
+		realRm(join(root, CONTEXT, "report.csv"));
+	});
+	expect((await listArtifacts("w1")).artifacts).toEqual([]);
+	expect(() => removeWorkspaceArtifacts("w1")).not.toThrow();
 });

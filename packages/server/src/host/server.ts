@@ -102,10 +102,9 @@ import {
 } from "../analytics";
 import {
 	type ArtifactSessionEvent,
+	noteArtifactPathsChanged,
 	observeArtifactSessionEvent,
-	reconcileArtifacts,
 	setArtifactsPublisher,
-	touchesArtifacts,
 } from "../artifacts";
 import {
 	cancelAllLogins,
@@ -996,13 +995,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const publishFsChanged = (payload: WorkspaceFsChangedPayload) => {
 		publishScoped(WS_CHANNELS.workspaceFsChanged, payload, { workspaceId: payload.workspaceId });
 		reanchorWorkspace(payload.workspaceId);
-		if (payload.truncated || payload.paths.some(touchesArtifacts)) {
-			try {
-				reconcileArtifacts(payload.workspaceId);
-			} catch (error) {
-				log.warn("artifacts reconcile failed", error);
-			}
-		}
+		noteArtifactPathsChanged(payload.workspaceId, payload.paths, payload.truncated);
 		const changedRoot = loadWorkspaces().find((w) => w.id === payload.workspaceId)?.worktreePath;
 		if (changedRoot) hostSearch().invalidateRoot(changedRoot);
 		if (
@@ -1174,7 +1167,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		void turnTracker.observe(payload.sessionId, payload.event);
 		const artifactEvent = artifactSessionEvent(payload.event);
 		if (artifactEvent) {
-			if (artifactEvent.type === "agent_start") void ensureWatch(workspaceId);
+			if (artifactEvent.type === "agent_start") void ensureWatch(workspaceId, { prewarm: true });
 			void observeArtifactSessionEvent(workspaceId, payload.sessionId, artifactEvent).catch(
 				(error) => log.warn("artifacts observation failed", error),
 			);

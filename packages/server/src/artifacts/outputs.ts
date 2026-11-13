@@ -1,4 +1,5 @@
-import { type Dirent, lstatSync, readdirSync } from "node:fs";
+import type { Dirent } from "node:fs";
+import { lstat, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { gitAsync } from "../git";
 
@@ -61,13 +62,16 @@ export async function listIgnoredRoots(root: string): Promise<Map<string, Output
 	return collapseIgnoredEntries(result.out.split("\0").filter(Boolean));
 }
 
-function walk(abs: string, visit: (path: string, entry: Dirent) => boolean): boolean {
+async function walk(
+	abs: string,
+	visit: (path: string, entry: Dirent) => Promise<boolean> | boolean,
+): Promise<boolean> {
 	const queue = [abs];
 	let seen = 0;
 	for (let dir = queue.shift(); dir !== undefined; dir = queue.shift()) {
 		let entries: Dirent[];
 		try {
-			entries = readdirSync(dir, { withFileTypes: true });
+			entries = await readdir(dir, { withFileTypes: true });
 		} catch {
 			continue;
 		}
@@ -75,36 +79,40 @@ function walk(abs: string, visit: (path: string, entry: Dirent) => boolean): boo
 			if (++seen > MAX_OUTPUT_WALK_ENTRIES) return false;
 			if (entry.isDirectory() && DEPENDENCY_AND_CACHE_DIRS.has(entry.name)) continue;
 			const path = join(dir, entry.name);
-			if (!visit(path, entry)) return true;
+			if (!(await visit(path, entry))) return true;
 			if (entry.isDirectory()) queue.push(path);
 		}
 	}
 	return true;
 }
 
-function modifiedSince(path: string, since: number): boolean {
-	const stat = lstatSync(path, { throwIfNoEntry: false });
+async function modifiedSince(path: string, since: number): Promise<boolean> {
+	const stat = await lstat(path).catch(() => undefined);
 	return stat !== undefined && stat.mtimeMs >= since - MTIME_SLACK_MS;
 }
 
-export function outputChangedSince(abs: string, kind: OutputKind, since: number): boolean {
-	if (modifiedSince(abs, since)) return true;
+export async function outputChangedSince(
+	abs: string,
+	kind: OutputKind,
+	since: number,
+): Promise<boolean> {
+	if (await modifiedSince(abs, since)) return true;
 	if (kind === "file") return false;
 	let changed = false;
-	walk(abs, (path) => {
-		changed = modifiedSince(path, since);
+	await walk(abs, async (path) => {
+		changed = await modifiedSince(path, since);
 		return !changed;
 	});
 	return changed;
 }
 
-export function countOutputFiles(
+export async function countOutputFiles(
 	abs: string,
 	kind: OutputKind,
-): { files: number; truncated: boolean } {
+): Promise<{ files: number; truncated: boolean }> {
 	if (kind === "file") return { files: 1, truncated: false };
 	let files = 0;
-	const complete = walk(abs, (_path, entry) => {
+	const complete = await walk(abs, (_path, entry) => {
 		if (entry.isFile()) files += 1;
 		return true;
 	});

@@ -68,6 +68,8 @@ interface OutputRecord {
 	kind: OutputKind;
 	firstSeenAt: number;
 	changedAt: number;
+	files: number;
+	filesTruncated: boolean;
 	sessionId?: string;
 }
 
@@ -101,6 +103,7 @@ const running = new Map<string, Set<string>>();
 const writers = new Map<string, Map<string, { sessionId: string; toolCallId: string }>>();
 const windows = new Map<string, RunWindow>();
 const removals = new Map<string, Map<string, number>>();
+const generations = new Map<string, number>();
 let publisher: ((workspaceId: string) => void) | null = null;
 
 export function setArtifactsPublisher(publish: ((workspaceId: string) => void) | null): void {
@@ -170,7 +173,7 @@ function parseArtifact(value: unknown): ArtifactRecord | null {
 
 function parseOutput(value: unknown): OutputRecord | null {
 	if (!isObject(value)) return null;
-	const { path, kind, firstSeenAt, changedAt, sessionId } = value;
+	const { path, kind, firstSeenAt, changedAt, files, filesTruncated, sessionId } = value;
 	if (
 		typeof path !== "string" ||
 		!path ||
@@ -179,10 +182,20 @@ function parseOutput(value: unknown): OutputRecord | null {
 		(kind !== "file" && kind !== "dir") ||
 		typeof firstSeenAt !== "number" ||
 		typeof changedAt !== "number" ||
+		typeof files !== "number" ||
+		typeof filesTruncated !== "boolean" ||
 		(sessionId !== undefined && typeof sessionId !== "string")
 	)
 		return null;
-	return { path, kind, firstSeenAt, changedAt, ...(sessionId ? { sessionId } : {}) };
+	return {
+		path,
+		kind,
+		firstSeenAt,
+		changedAt,
+		files,
+		filesTruncated,
+		...(sessionId ? { sessionId } : {}),
+	};
 }
 
 function load(workspaceId: string): WorkspaceArtifacts {
@@ -310,10 +323,18 @@ function keptPath(workspaceId: string, name: string): string | null {
 	return dir ? join(dir, "kept", name) : null;
 }
 
+function removeQuietly(path: string): void {
+	try {
+		rmSync(path, { recursive: true, force: true });
+	} catch (error) {
+		log.warn("artifacts store entry not removed", error);
+	}
+}
+
 function dropKept(workspaceId: string, record: ArtifactRecord): void {
 	if (!record.kept) return;
 	const path = keptPath(workspaceId, record.kept);
-	if (path) rmSync(path, { force: true });
+	if (path) removeQuietly(path);
 	delete record.kept;
 	delete record.keptCopy;
 }
@@ -342,7 +363,7 @@ function keep(workspaceId: string, root: string, record: ArtifactRecord): void {
 		record.kept = name;
 		record.keptCopy = true;
 	} catch (error) {
-		rmSync(target, { force: true });
+		removeQuietly(target);
 		if ((error as NodeJS.ErrnoException).code !== "ENOENT")
 			log.warn("artifact copy not kept", error);
 	}
@@ -482,7 +503,11 @@ export async function withUserRemoval<T>(
 	marks.set(path, (marks.get(path) ?? 0) + 1);
 	try {
 		const result = await mutation();
-		reconcileArtifacts(workspaceId);
+		try {
+			reconcileArtifacts(workspaceId);
+		} catch (error) {
+			log.warn("artifacts reconcile after a user change failed", error);
+		}
 		return result;
 	} finally {
 		const count = (marks.get(path) ?? 1) - 1;
@@ -503,33 +528,93 @@ function toWire(record: ArtifactRecord): WorkspaceArtifact {
 	};
 }
 
+function current(workspace: Workspace, generation: number): boolean {
+	return (generations.get(workspace.id) ?? 0) === generation && workspaceOf(workspace.id) !== null;
+}
+
 async function detectOutputs(workspace: Workspace, window: RunWindow): Promise<boolean> {
+	const generation = generations.get(workspace.id) ?? 0;
 	const before = await window.rootsAtStart;
 	if (!before) return false;
 	const roots = await listIgnoredRoots(workspace.worktreePath);
 	if (!roots) return false;
-	const state = load(workspace.id);
 	const sessionId = window.sessions.size === 1 ? [...window.sessions][0] : undefined;
-	const now = Date.now();
 	let changed = false;
 	for (const [path, kind] of roots) {
-		const prior = state.outputs.get(path);
+		const prior = load(workspace.id).outputs.get(path);
 		if (prior && prior.changedAt >= window.startedAt && prior.kind === kind) continue;
-		const fresh = !before.has(path);
-		if (!fresh && !outputChangedSince(join(workspace.worktreePath, path), kind, window.startedAt))
-			continue;
+		const abs = join(workspace.worktreePath, path);
+		if (before.has(path) && !(await outputChangedSince(abs, kind, window.startedAt))) continue;
+		const { files, truncated } = await countOutputFiles(abs, kind);
+		if (!current(workspace, generation)) return false;
 		const writer = sessionId ?? prior?.sessionId;
-		state.outputs.set(path, {
+		load(workspace.id).outputs.set(path, {
 			path,
 			kind,
-			firstSeenAt: prior?.firstSeenAt ?? now,
-			changedAt: now,
+			firstSeenAt: prior?.firstSeenAt ?? Date.now(),
+			changedAt: Date.now(),
+			files,
+			filesTruncated: truncated,
 			...(writer ? { sessionId: writer } : {}),
 		});
 		changed = true;
 	}
-	if (changed) save(workspace.id, state);
+	if (changed) save(workspace.id, load(workspace.id));
 	return changed;
+}
+
+function overlaps(root: string, path: string): boolean {
+	return path === root || path.startsWith(`${root}/`) || root.startsWith(`${path}/`);
+}
+
+async function refreshOutputs(workspace: Workspace, roots: readonly string[]): Promise<void> {
+	const generation = generations.get(workspace.id) ?? 0;
+	let changed = false;
+	for (const root of roots) {
+		const abs = join(workspace.worktreePath, root);
+		const stat = lstatSync(abs, { throwIfNoEntry: false });
+		const kind: OutputKind | null = stat?.isDirectory() ? "dir" : stat?.isFile() ? "file" : null;
+		const counted = kind ? await countOutputFiles(abs, kind) : null;
+		if (!current(workspace, generation)) return;
+		const outputs = load(workspace.id).outputs;
+		const record = outputs.get(root);
+		if (!record) continue;
+		if (!kind || !counted) outputs.delete(root);
+		else
+			outputs.set(root, {
+				...record,
+				kind,
+				files: counted.files,
+				filesTruncated: counted.truncated,
+			});
+		changed = true;
+	}
+	if (!changed) return;
+	save(workspace.id, load(workspace.id));
+	publish(workspace.id);
+}
+
+export function noteArtifactPathsChanged(
+	workspaceId: string,
+	paths: readonly string[],
+	truncated: boolean,
+): void {
+	const workspace = workspaceOf(workspaceId);
+	if (!workspace) return;
+	if (truncated || paths.some(touchesArtifacts)) {
+		try {
+			if (reconcile(workspace)) publish(workspaceId);
+		} catch (error) {
+			log.warn("artifacts reconcile failed", error);
+		}
+	}
+	const roots = [...load(workspaceId).outputs.keys()].filter((root) =>
+		paths.some((path) => overlaps(root, path)),
+	);
+	if (roots.length > 0)
+		void refreshOutputs(workspace, roots).catch((error) =>
+			log.warn("ignored outputs refresh failed", error),
+		);
 }
 
 function liveOutputs(workspace: Workspace): WorkspaceIgnoredOutput[] {
@@ -537,20 +622,16 @@ function liveOutputs(workspace: Workspace): WorkspaceIgnoredOutput[] {
 	const outputs: WorkspaceIgnoredOutput[] = [];
 	let changed = false;
 	for (const record of state.outputs.values()) {
-		const abs = join(workspace.worktreePath, record.path);
-		const stat = lstatSync(abs, { throwIfNoEntry: false });
-		const kind: OutputKind | null = stat?.isDirectory() ? "dir" : stat?.isFile() ? "file" : null;
-		if (!kind) {
+		if (!lstatSync(join(workspace.worktreePath, record.path), { throwIfNoEntry: false })) {
 			state.outputs.delete(record.path);
 			changed = true;
 			continue;
 		}
-		const { files, truncated } = countOutputFiles(abs, kind);
 		outputs.push({
 			path: record.path,
-			kind,
-			files,
-			filesTruncated: truncated,
+			kind: record.kind,
+			files: record.files,
+			filesTruncated: record.filesTruncated,
 			changedAt: record.changedAt,
 			...(record.sessionId ? { sessionId: record.sessionId } : {}),
 		});
@@ -559,15 +640,10 @@ function liveOutputs(workspace: Workspace): WorkspaceIgnoredOutput[] {
 	return outputs.sort((a, b) => b.changedAt - a.changedAt);
 }
 
-export async function listArtifacts(workspaceId: string): Promise<WorkspaceArtifactsSnapshot> {
+export function listArtifacts(workspaceId: string): WorkspaceArtifactsSnapshot {
 	const workspace = requireWorkspace(workspaceId);
 	if (reconcile(workspace)) publish(workspaceId);
-	let outputs: WorkspaceIgnoredOutput[] | null = null;
-	if (!isChatWorkspace(workspace)) {
-		const window = windows.get(workspaceId);
-		if (window && (await detectOutputs(workspace, window))) publish(workspaceId);
-		outputs = liveOutputs(workspace);
-	}
+	const outputs = isChatWorkspace(workspace) ? null : liveOutputs(workspace);
 	const artifacts = [...load(workspaceId).records.values()]
 		.map(toWire)
 		.sort((a, b) => b.changedAt - a.changedAt);
@@ -636,7 +712,7 @@ export async function discardArtifact(workspaceId: string, path: string): Promis
 		renameSync(staged, kept);
 		throw error;
 	} finally {
-		rmSync(staging, { recursive: true, force: true });
+		removeQuietly(staging);
 	}
 	const state = load(workspaceId);
 	if (state.records.get(path) === record) state.records.delete(path);
@@ -753,13 +829,14 @@ export async function observeArtifactSessionEvent(
 }
 
 export function removeWorkspaceArtifacts(workspaceId: string): void {
+	generations.set(workspaceId, (generations.get(workspaceId) ?? 0) + 1);
 	states.delete(workspaceId);
 	running.delete(workspaceId);
 	writers.delete(workspaceId);
 	windows.delete(workspaceId);
 	removals.delete(workspaceId);
 	const dir = storeDir(workspaceId);
-	if (dir) rmSync(dir, { recursive: true, force: true });
+	if (dir) removeQuietly(dir);
 }
 
 export function resetArtifactsForTests(): void {
@@ -768,5 +845,6 @@ export function resetArtifactsForTests(): void {
 	writers.clear();
 	windows.clear();
 	removals.clear();
+	generations.clear();
 	publisher = null;
 }

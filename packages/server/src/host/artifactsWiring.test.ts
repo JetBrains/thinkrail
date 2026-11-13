@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, mock, spyOn, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -24,6 +24,7 @@ import { listArtifacts } from "../artifacts";
 import { resetJbcentralStateForTests } from "../auth";
 import { saveWorkspaces } from "../persistence";
 import { resetConfigCache } from "../settings";
+import * as watch from "../watch";
 import { createServer, type RunningServer } from "./server";
 
 const saved = {
@@ -73,6 +74,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+	mock.restore();
 	await server?.shutdown();
 	server = undefined;
 	setSessionPublisher(() => {});
@@ -133,6 +135,7 @@ test("an agent run fills the artifact index: its writes, its ignored outputs, an
 	configurePiRuntime(null);
 	configurePiRuntimeFactory(async () => runtime);
 	server = await createServer({ port: 0, analytics: { mute: true } });
+	const watched = spyOn(watch, "ensureWatch");
 	const { sessionId } = await createSession({
 		cwd: repo,
 		workspaceId: "w1",
@@ -152,4 +155,6 @@ test("an agent run fills the artifact index: its writes, its ignored outputs, an
 	expect(snapshot?.outputs).toEqual([
 		expect.objectContaining({ path: "out", kind: "dir", files: 1, sessionId }),
 	]);
+	expect(watched.mock.calls).toContainEqual(["w1", { prewarm: true }]);
+	expect(watched.mock.calls.filter(([, options]) => options?.prewarm !== true)).toEqual([]);
 });
