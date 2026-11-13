@@ -50,7 +50,7 @@ export function ConnectByLinkDialog({ onClose }: { onClose: () => void }) {
 							placeholder={t("panels.connectByLink.placeholder")}
 							aria-label={t("panels.connectByLink.title")}
 							data-testid="connect-by-link-input"
-							className="h-32 w-full rounded-sm border border-control-border-default bg-control-bg pl-24 pr-8 tr-text-ui text-text-default placeholder:text-text-muted outline-none transition-colors focus:border-control-border-active"
+							className="h-32 w-full rounded-sm border border-control-border-default bg-control-bg pl-24 pr-8 tr-text-ui text-text-default placeholder:text-text-muted transition-colors focus:border-control-border-active focus-visible:focus-ring"
 						/>
 					</div>
 					{state.status === "error" ? (

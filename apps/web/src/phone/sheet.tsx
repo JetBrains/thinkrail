@@ -233,7 +233,7 @@ function RenameForm({
 				autoCapitalize="off"
 				autoCorrect="off"
 				spellCheck={false}
-				className="h-touch w-full rounded-md border border-control-border-default bg-control-bg px-12 text-text-default tr-text-reading outline-none focus:border-control-border-active"
+				className="h-touch w-full rounded-md border border-control-border-default bg-control-bg px-12 text-text-default tr-text-reading focus:border-control-border-active focus-visible:focus-ring"
 			/>
 			<Button type="submit" variant="primary" className="h-touch rounded-md" disabled={!changed}>
 				{t("common.save")}

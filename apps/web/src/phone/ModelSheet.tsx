@@ -97,7 +97,7 @@ export const ModelSheet = forwardRef<ModelEffortPickerHandle, ModelSheetProps>(f
 							autoCorrect="off"
 							spellCheck={false}
 							data-testid="model-search"
-							className="h-touch w-full rounded-md border border-control-border-default bg-control-bg px-12 text-text-default tr-text-reading outline-none focus:border-control-border-active"
+							className="h-touch w-full rounded-md border border-control-border-default bg-control-bg px-12 text-text-default tr-text-reading focus:border-control-border-active focus-visible:focus-ring"
 						/>
 					</div>
 				) : null}
