@@ -27,7 +27,7 @@ export function Segment({
 }
 
 export const pillClass =
-	"group/pill window-no-drag inline-flex h-20 min-w-0 items-center gap-4 rounded-sm px-8 text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:bg-control-bg-selected data-[state=open]:text-text-default";
+	"group/pill window-no-drag inline-flex h-20 min-w-0 items-center gap-4 rounded-sm px-8 text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:focus-ring data-[state=open]:bg-control-bg-selected data-[state=open]:text-text-default";
 
 export function PillChevron({ className }: { className?: string | undefined }) {
 	return (
@@ -64,10 +64,7 @@ export function chipClass(tone: ChipTone, interactive = false): string {
 		"inline-flex h-20 shrink-0 items-center gap-4 whitespace-nowrap rounded-full px-8 tr-text-emphasis [&_svg]:size-12 [&_svg]:shrink-0",
 		CHIP_TONE[tone].rest,
 		interactive &&
-			cn(
-				"window-no-drag outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
-				CHIP_TONE[tone].hover,
-			),
+			cn("window-no-drag transition-colors focus-visible:focus-ring", CHIP_TONE[tone].hover),
 	);
 }
 
@@ -98,7 +95,7 @@ export function splitFrameClass(tone: SplitTone): string {
 
 export function splitPartClass(tone: SplitTone): string {
 	return cn(
-		"window-no-drag flex items-center gap-4 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary disabled:opacity-60 [&_svg]:size-12 [&_svg]:shrink-0",
+		"window-no-drag flex items-center gap-4 transition-colors focus-visible:focus-ring-inset disabled:opacity-60 [&_svg]:size-12 [&_svg]:shrink-0",
 		SPLIT_TONE[tone].hover,
 	);
 }

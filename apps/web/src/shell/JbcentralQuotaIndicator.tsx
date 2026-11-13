@@ -45,7 +45,7 @@ export function JbcentralQuotaIndicator({
 					data-testid="jbcentral-quota"
 					data-state="unavailable"
 					onClick={onRetry}
-					className="inline-flex shrink-0 items-center gap-4 whitespace-nowrap rounded-sm text-text-muted tr-text-ui outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+					className="inline-flex shrink-0 items-center gap-4 whitespace-nowrap rounded-sm text-text-muted tr-text-ui hover:text-text-default focus-visible:focus-ring"
 				>
 					<Coins className="size-14" aria-hidden="true" />
 					<span>{t("shell.jbcentralQuota.unavailable")}</span>
@@ -93,7 +93,7 @@ export function JbcentralQuotaIndicator({
 					data-state="stale"
 					aria-label={label}
 					onClick={onRetry}
-					className={`${className} rounded-sm outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary`}
+					className={`${className} rounded-sm hover:text-text-default focus-visible:focus-ring`}
 				>
 					{content}
 				</button>

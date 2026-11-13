@@ -499,7 +499,7 @@ function ExposureMenu({
 					disabled={disabled}
 					className={cn(
 						CHIP_CLASS,
-						"inline-flex items-center gap-2 outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text disabled:hover:bg-transparent",
+						"inline-flex items-center gap-2 hover:bg-control-bg-hovered hover:text-text-default focus-visible:focus-ring disabled:text-control-disabled-text disabled:hover:bg-transparent",
 					)}
 				>
 					{mcpExposureLabel(t, summary.effectiveExposure)}

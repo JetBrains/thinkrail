@@ -15,7 +15,7 @@ export type ButtonIcon = React.ElementType<{
 const variantClasses = cva(
 	[
 		"relative inline-flex select-none items-center justify-center whitespace-nowrap rounded-sm border tr-text-button",
-		"outline-none transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary focus-visible:outline-solid",
+		"transition-colors focus-visible:focus-ring",
 		"button-disabled:pointer-events-none data-[loading=true]:cursor-progress",
 		"[&_svg]:pointer-events-none [&_svg]:shrink-0",
 	],
@@ -57,7 +57,7 @@ const variantClasses = cva(
 			{ shape: "icon", size: "s", className: "size-20" },
 			{ shape: "icon", size: "m", className: "size-24" },
 			{ shape: "icon", size: "l", className: "size-32" },
-			{ variant: "ghost", shape: "icon", className: "focus-visible:-outline-offset-2" },
+			{ variant: "ghost", shape: "icon", className: "focus-visible:focus-ring-inset" },
 			{
 				variant: "ghost",
 				tone: "warning",

@@ -76,7 +76,7 @@ function OutlineList({
 							aria-current={current ? "location" : undefined}
 							title={node.text}
 							className={cn(
-								"flex h-panel-row w-full min-w-0 items-center rounded-sm px-4 text-left tr-text-ui outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
+								"flex h-panel-row w-full min-w-0 items-center rounded-sm px-4 text-left tr-text-ui focus-visible:focus-ring-inset",
 								current
 									? "bg-control-bg-selected text-text-default"
 									: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default",

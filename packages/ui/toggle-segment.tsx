@@ -18,7 +18,7 @@ export function ToggleSegment({
 			data-active={active}
 			aria-pressed={active}
 			disabled={disabled}
-			className={`rounded-sm px-8 py-2 tr-text-metadata ${
+			className={`rounded-sm px-8 py-2 tr-text-metadata focus-visible:focus-ring-inset ${
 				active
 					? "bg-control-bg-selected text-text-default"
 					: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text disabled:hover:bg-transparent"

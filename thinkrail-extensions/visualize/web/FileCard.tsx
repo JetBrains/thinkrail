@@ -15,7 +15,7 @@ function FileLink({
 			type="button"
 			data-testid="tool-visualize-file-link"
 			onClick={() => onOpenFile(path)}
-			className="min-w-0 cursor-pointer truncate rounded-xs text-left text-text-default outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary"
+			className="min-w-0 cursor-pointer truncate rounded-xs text-left text-text-default hover:underline focus-visible:focus-ring"
 		>
 			{path}
 		</button>

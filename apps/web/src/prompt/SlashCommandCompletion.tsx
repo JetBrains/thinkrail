@@ -186,7 +186,7 @@ export function SlashCommandMenu<T extends SlashCommandItem>({
 					data-source={command.source}
 					onClick={() => onSelect(command)}
 					className={cn(
-						"flex w-full items-center gap-8 rounded-sm px-8 py-4 text-left tr-text-ui",
+						"flex w-full items-center gap-8 rounded-sm px-8 py-4 text-left tr-text-ui focus-visible:focus-ring-inset",
 						index === activeIndex ? "bg-control-bg-selected text-text-default" : "text-text-muted",
 					)}
 				>

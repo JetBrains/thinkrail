@@ -123,7 +123,7 @@ export default function CsvView({
 								key={entry.thread.id}
 								type="button"
 								aria-label={t("viewer.region.showComment", { number: entry.number })}
-								className="flex size-20 items-center justify-center rounded-full bg-primary tr-text-metadata text-text-on-primary outline-none focus-visible:ring-2 focus-visible:ring-primary"
+								className="flex size-20 items-center justify-center rounded-full bg-primary tr-text-metadata text-text-on-primary focus-visible:focus-ring"
 								onClick={(event) => {
 									event.stopPropagation();
 									scrollToCard(entry.thread.id);

@@ -253,7 +253,7 @@ export function ChangesPanel({
 												onClick={firstClickOnly(() => openDiff(change.path, "preview"))}
 												onDoubleClick={() => openDiff(change.path, "keep", undefined, true)}
 												title={change.path}
-												className="flex h-panel-row min-w-0 flex-1 items-center gap-8 px-4 text-left tr-text-ui"
+												className="flex h-panel-row min-w-0 flex-1 items-center gap-8 px-4 text-left tr-text-ui focus-visible:focus-ring-inset"
 											>
 												<span
 													className={`flex min-w-0 flex-1 items-baseline ${isViewed(change.path) ? "opacity-60" : ""}`}

@@ -106,7 +106,7 @@ export function DiscussPanel({
 					onDown();
 				}
 			}}
-			className="flex min-w-0 flex-col gap-8 rounded-md border border-feedback-info-muted bg-feedback-info-subtle p-12 outline-none focus-visible:ring-2 focus-visible:ring-primary"
+			className="flex min-w-0 flex-col gap-8 rounded-md border border-feedback-info-muted bg-feedback-info-subtle p-12 focus-visible:focus-ring"
 		>
 			<div className="flex items-start gap-8 tr-text-ui text-text-default">
 				<ChatLine aria-hidden="true" className="mt-2 size-16 shrink-0 text-feedback-info" />
@@ -127,7 +127,7 @@ export function DiscussPanel({
 							data-reason={option}
 							onClick={() => onReason(option)}
 							className={cn(
-								"inline-flex items-center gap-4 rounded-full border px-8 py-2 tr-text-metadata outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
+								"inline-flex items-center gap-4 rounded-full border px-8 py-2 tr-text-metadata transition-colors focus-visible:focus-ring",
 								on
 									? "border-feedback-info bg-container-elevated-bg text-text-default"
 									: "border-border-default text-text-muted hover:bg-control-bg-hovered",

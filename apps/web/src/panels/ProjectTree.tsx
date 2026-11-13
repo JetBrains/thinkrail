@@ -609,7 +609,7 @@ function SettledPartition({
 					data-testid="settled-shelf-toggle"
 					aria-expanded={shelfExpanded}
 					onClick={() => useAppStore.getState().toggleSettledShelf(projectId)}
-					className="flex min-w-0 flex-1 items-center gap-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
+					className="-mx-4 -my-2 flex min-w-0 flex-1 items-center gap-4 rounded-sm px-4 py-2 text-left focus-visible:focus-ring-inset"
 				>
 					{shelfExpanded ? (
 						<ChevronDown className="size-14 shrink-0" />
@@ -639,7 +639,7 @@ function SettledPartition({
 								onClick={() =>
 									useAppStore.getState().showMoreSettled(projectId, shelfShown + SETTLED_SHELF_MORE)
 								}
-								className="flex h-panel-row w-full items-center rounded-sm pl-24 text-left text-text-subtle tr-text-metadata hover:bg-control-bg-hovered hover:text-text-muted"
+								className="flex h-panel-row w-full items-center rounded-sm pl-24 text-left text-text-subtle tr-text-metadata hover:bg-control-bg-hovered hover:text-text-muted focus-visible:focus-ring-inset"
 							>
 								{t("panels.projectTree.showMore", {
 									count: Math.min(SETTLED_SHELF_MORE, remaining),
@@ -752,7 +752,7 @@ function ProjectRow({
 						: t("panels.projectTree.expandProject")
 				}
 				onClick={onToggle}
-				className="flex size-16 shrink-0 items-center justify-center rounded-sm text-text-muted transition-colors hover:text-text-default focus-visible:text-text-default"
+				className="flex size-16 shrink-0 items-center justify-center rounded-sm text-text-muted transition-colors hover:text-text-default focus-visible:text-text-default focus-visible:focus-ring"
 				data-expanded={isExpanded}
 			>
 				<Chevron className="size-16" />
@@ -768,7 +768,10 @@ function ProjectRow({
 						aria-label={t("panels.projectTree.projectName")}
 						defaultValue={project.name}
 						{...renameInputProps}
-						className={cn("w-full min-w-0 border-0 bg-transparent p-0 outline-none", nameClass)}
+						className={cn(
+							"w-full min-w-0 border-0 bg-transparent p-0 focus-visible:focus-ring",
+							nameClass,
+						)}
 					/>
 				</div>
 			) : (
@@ -790,7 +793,7 @@ function ProjectRow({
 						(event.key === "ArrowUp" ? onMoveUp : onMoveDown)?.();
 					}}
 					onClick={onSelect}
-					className="flex min-w-0 flex-1 items-center gap-4 text-left"
+					className="-mx-4 -my-2 flex min-w-0 flex-1 items-center gap-4 rounded-sm px-4 py-2 text-left focus-visible:focus-ring-inset"
 				>
 					{folderIcon}
 					<span className={nameClass}>{project.name}</span>
@@ -993,7 +996,7 @@ function WorkspaceRow({
 		onRename: (_target, name) => onRename(name),
 	});
 
-	const identityClass = `flex min-w-0 flex-1 gap-4 text-left ${isTwoLine ? "items-start" : "items-center"}`;
+	const identityClass = `-mx-4 -my-2 flex min-w-0 flex-1 gap-4 rounded-sm px-4 py-2 text-left focus-visible:focus-ring-inset ${isTwoLine ? "items-start" : "items-center"}`;
 	const identityIcon = isRunning ? (
 		<RunningIcon
 			className={cn("size-14", isTwoLine && "mt-2", isActive ? "text-primary" : "text-text-muted")}
@@ -1087,7 +1090,7 @@ function WorkspaceRow({
 								aria-label={t("panels.projectTree.workspaceName")}
 								defaultValue={workspace.name}
 								{...renameInputProps}
-								className={`w-full min-w-0 truncate border-0 bg-transparent p-0 tr-text-ui leading-tight outline-none ${isActive ? "text-primary" : "text-text-muted"}`}
+								className={`w-full min-w-0 truncate border-0 bg-transparent p-0 tr-text-ui leading-tight focus-visible:focus-ring ${isActive ? "text-primary" : "text-text-muted"}`}
 							/>
 							{branchLabel}
 						</span>

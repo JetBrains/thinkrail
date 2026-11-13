@@ -523,7 +523,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 										<button
 											type="button"
 											onClick={() => setLayout("single")}
-											className="text-text-default underline-offset-2 hover:underline"
+											className="text-text-default underline-offset-2 hover:underline focus-visible:focus-ring"
 										>
 											{t("changes.review.switchToOneFile")}
 										</button>

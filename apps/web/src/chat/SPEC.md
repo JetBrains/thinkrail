@@ -1432,8 +1432,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   now-`bg-transparent` textarea; the input background moves up to the wrapping container instead, clipped
   to the same `rounded-md` so nothing changes visually outside a session). That wrapper
   owns the input border and fill: `bg-clip-padding` keeps the backdrop tint inside the rounded border,
-  while `focus-within:border-control-border-active` is the composer's sole focus indicator rather than a
-  second accent ring on the textarea. The pure `highlightSegments(value, slots, activeIdx)`
+  while focus shows on the wrapper, not the textarea: the `control-border-active` border plus the shared
+  outset focus ring (`styles/COLOR.md`, *Focus ring*). The pure `highlightSegments(value, slots, activeIdx)`
   (from the shared `prompt` module) breaks `value` into ordered
   plain/unfilled/filled/active runs — a slot range is `"active"` when its `slots` index is `activeIdx`
   (`Composer`'s own `slotIdx`), else `"unfilled"`/`"filled"` per its own `filled` flag; everything else is

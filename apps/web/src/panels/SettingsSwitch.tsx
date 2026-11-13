@@ -24,7 +24,7 @@ export function SettingsSwitch({
 			data-active={checked}
 			onClick={() => onChange(!checked)}
 			className={cn(
-				"relative h-20 w-36 shrink-0 rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50",
+				"relative h-20 w-36 shrink-0 rounded-full transition-colors focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-50",
 				checked ? "bg-primary" : "bg-border-default",
 			)}
 		>
