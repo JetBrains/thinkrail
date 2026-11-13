@@ -2215,7 +2215,9 @@ own section. The kebab menu (`plan-menu`, a
   no/dangling parent; default-expanded). There is **no persistent Refresh control or panel toolbar row**:
   routine synchronization is automatic. A fetch **failure renders a distinct inline error hint with Retry**,
   never the "No specs" empty state — offline and empty are different answers. With a previous snapshot, the
-  hint sits above the retained tree; without one, it replaces the loading state. The tree build (`specTree.ts`)
+  hint sits above the retained tree; without one, it replaces the loading state. A **finished task-spec**
+  (`type: task-spec`, `status: done`) is left out of the tree, as the spec tools leave it out of search
+  ([[submodule-spec-graph-core]]); the host still reports it, and the Artifacts tool lists its file. The tree build (`specTree.ts`)
   assumes a well-formed graph — **parent cycles are `spec_validate`'s problem, not the viewer's** (cycle
   members are unreachable from any root and simply don't render) — but the walk is **visited-guarded**,
   so a malformed graph can never hang or loop the UI. Tree only in this slice — no cross-edge display,

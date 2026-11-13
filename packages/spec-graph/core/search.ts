@@ -1,5 +1,10 @@
 import { FIELDS, type Frontmatter, scalar } from "./parse.ts";
-import { matchesFilters, type SpecContentEntry, type SpecFilters } from "./query.ts";
+import {
+	matchesFilters,
+	type SpecContentEntry,
+	type SpecFilters,
+	TASK_SPEC_TYPE,
+} from "./query.ts";
 import { cleanInline, type SpecSection, splitSections } from "./sections.ts";
 import { flatten, stem, tokenize } from "./tokenize.ts";
 
@@ -22,7 +27,7 @@ const PARTIAL_SUFFIX_TAILS = [
 const SNIPPET_CHARS = 160;
 const SNIPPET_LEAD = 48;
 const SNIPPET_WORD_SLACK = 16;
-const TASK_SPEC = "task-spec";
+const TASK_SPEC = TASK_SPEC_TYPE;
 const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})/;
 const LIST_MARKER = /^\s*(?:[-*+]|\d+[.)])\s+/;
 const QUOTE_MARKER = /^\s*>\s?/;
