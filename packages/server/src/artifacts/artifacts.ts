@@ -92,12 +92,12 @@ interface RunWindow {
 export type ArtifactSessionEvent =
 	| { type: "agent_start" }
 	| { type: "agent_settled" }
-	| { type: "tool_execution_start"; toolName: string; args: unknown }
-	| { type: "tool_execution_end"; toolName: string };
+	| { type: "tool_execution_start"; toolCallId: string; toolName: string; args: unknown }
+	| { type: "tool_execution_end"; toolCallId: string; toolName: string };
 
 const states = new Map<string, WorkspaceArtifacts>();
 const running = new Map<string, Set<string>>();
-const writers = new Map<string, Map<string, string>>();
+const writers = new Map<string, Map<string, { sessionId: string; toolCallId: string }>>();
 const windows = new Map<string, RunWindow>();
 const removals = new Map<string, Map<string, number>>();
 let publisher: ((workspaceId: string) => void) | null = null;
@@ -355,7 +355,7 @@ function covered(marks: Map<string, number> | undefined, path: string): boolean 
 
 function writerOf(workspaceId: string, path: string): string | undefined {
 	const explicit = writers.get(workspaceId)?.get(path);
-	if (explicit) return explicit;
+	if (explicit) return explicit.sessionId;
 	const active = running.get(workspaceId);
 	return active?.size === 1 ? [...active][0] : undefined;
 }
@@ -648,7 +648,12 @@ function toolPath(args: unknown): string | null {
 	return typeof path === "string" && path ? path : null;
 }
 
-function rememberWriter(workspace: Workspace, sessionId: string, args: unknown): void {
+function rememberWriter(
+	workspace: Workspace,
+	sessionId: string,
+	toolCallId: string,
+	args: unknown,
+): void {
 	const raw = toolPath(args);
 	const path = raw?.startsWith("@") ? raw.slice(1) : raw;
 	if (!path) return;
@@ -662,13 +667,20 @@ function rememberWriter(workspace: Workspace, sessionId: string, args: unknown):
 		map = new Map();
 		writers.set(workspace.id, map);
 	}
-	map.set(rel, sessionId);
+	map.set(rel, { sessionId, toolCallId });
+}
+
+function forgetToolWriter(workspaceId: string, toolCallId: string): void {
+	const map = writers.get(workspaceId);
+	if (!map) return;
+	for (const [path, writer] of map) if (writer.toolCallId === toolCallId) map.delete(path);
+	if (map.size === 0) writers.delete(workspaceId);
 }
 
 function forgetWriters(workspaceId: string, sessionId: string): void {
 	const map = writers.get(workspaceId);
 	if (!map) return;
-	for (const [path, writer] of map) if (writer === sessionId) map.delete(path);
+	for (const [path, writer] of map) if (writer.sessionId === sessionId) map.delete(path);
 	if (map.size === 0) writers.delete(workspaceId);
 }
 
@@ -711,11 +723,15 @@ export async function observeArtifactSessionEvent(
 			return;
 		}
 		case "tool_execution_start":
-			if (WRITER_TOOLS.has(event.toolName)) rememberWriter(workspace, sessionId, event.args);
+			if (WRITER_TOOLS.has(event.toolName))
+				rememberWriter(workspace, sessionId, event.toolCallId, event.args);
 			return;
-		case "tool_execution_end":
-			if (reconcile(workspace)) publish(workspaceId);
+		case "tool_execution_end": {
+			const changed = reconcile(workspace);
+			forgetToolWriter(workspaceId, event.toolCallId);
+			if (changed) publish(workspaceId);
 			return;
+		}
 		case "agent_settled": {
 			let changed = reconcile(workspace);
 			forgetWriters(workspaceId, sessionId);

@@ -81,7 +81,9 @@ meanwhile.
 
 A record's chat is the session that last created or changed it. `write`, `edit` and `spec_create`
 name their target in `tool_execution_start` args (resolved as pi resolves it, a leading `@` dropped), so
-their writer is exact even with concurrent chats.
+their writer is exact even with concurrent chats. Such a hint lives only for its own tool call: the
+reconcile at that call's `tool_execution_end` reads it and then drops it, so a call that failed without
+writing never names the writer of a file another chat creates later.
 Any other change (a shell command, a tool writing on its own) is attributed only while exactly one
 session of the workspace is running; otherwise the record keeps the chat it had. Like [[submodule-server-turns]]
 this is not exclusive attribution, and a session that never settles (a host crash) stays "running" until

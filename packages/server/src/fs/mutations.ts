@@ -354,7 +354,7 @@ export function renameWorktreeEntry(workspaceId: string, path: string, name: str
 	};
 }
 
-export async function moveWorktreeEntry(params: CopyWorktreeEntryParams): Promise<MovedEntry> {
+export function moveWorktreeEntry(params: CopyWorktreeEntryParams): MovedEntry {
 	const source = resolveInWorktree(params.sourceWorkspaceId, params.sourcePath, false);
 	const destination = resolveInWorktree(
 		params.destinationWorkspaceId,
@@ -378,12 +378,13 @@ export async function moveWorktreeEntry(params: CopyWorktreeEntryParams): Promis
 	if (lstatSync(target, { throwIfNoEntry: false })) throw taken(name);
 	try {
 		renameSync(from, target);
-		const moved = posixRelative(destinationRoot, target);
-		return { from: fromPath, path: moved, directory, written: [moved] };
 	} catch (error) {
 		if (errorCode(error) !== "EXDEV") throw error;
+		throw new CodedError(
+			"MOVE_ACROSS_DEVICES",
+			`${name} is on another file system than the destination, so it was not moved`,
+		);
 	}
-	const copy = await copyWorktreeEntry(params);
-	await deleteWorktreeEntry(params.sourceWorkspaceId, params.sourcePath);
-	return { from: fromPath, path: copy.path, directory, written: copy.written };
+	const moved = posixRelative(destinationRoot, target);
+	return { from: fromPath, path: moved, directory, written: [moved] };
 }

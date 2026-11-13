@@ -334,7 +334,9 @@ treatment.
   that folder, and an empty tree offers the same Paste as a button next to *Empty*; **Delete** asks for
   confirmation and `fs.delete` moves the entry to the OS trash. From `ARTIFACTS_PROTOCOL_VERSION` (v121)
   the menu also has **Cut**: the same clipboard entry marked `cut`, which the next Paste (here or in the
-  Artifacts tool) turns into `fs.move` — refused with "already exists" rather than renamed — and then clears.
+  Artifacts tool) turns into `fs.move` — refused with "already exists" rather than renamed, and with "on
+  another disk" across file systems, where the entry stays on the clipboard so the user can copy it — and
+  clears once it succeeds.
   The confirmation says when an agent is
   working in the workspace but does not block — the user's explicit action wins, as with a hunk revert —
   and an open tab of a deleted file keeps its stale-content contract. Failures toast; a folder past the

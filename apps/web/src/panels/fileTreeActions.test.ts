@@ -152,3 +152,14 @@ test("renaming the copied entry empties the clipboard", async () => {
 	]);
 	expect(useAppStore.getState().fileClipboard).toBeNull();
 });
+
+test("a cut that crosses file systems says so and stays on the clipboard", async () => {
+	const cut = { workspaceId: "w1", path: "notes.md", cut: true as const };
+	useAppStore.getState().setFileClipboard(cut);
+	answer = () => Promise.reject(new RequestError("MOVE_ACROSS_DEVICES", "other file system"));
+	await pasteInto("w2", ".");
+	expect(useAppStore.getState().toasts[0]?.message).toBe(
+		"notes.md is on another disk than this folder, so it can't be moved here. Copy it instead, then delete the original.",
+	);
+	expect(useAppStore.getState().fileClipboard).toEqual(cut);
+});

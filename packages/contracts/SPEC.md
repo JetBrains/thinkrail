@@ -436,7 +436,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   older hosts, and from **`ARTIFACTS_PROTOCOL_VERSION`** (v121) two more: `fs.rename` (`{ workspaceId, path,
   name }` → `{ path }`, in place, refused with `ENTRY_EXISTS` when another entry holds the name) and
   `fs.move` (`fs.copy`'s params → `{ path }`, the Cut-and-Paste move, same or another workspace, refused
-  with `ENTRY_EXISTS` instead of renaming, and for a folder into itself),
+  with `ENTRY_EXISTS` instead of renaming, for a folder into itself, and with `MOVE_ACROSS_DEVICES` when
+  source and destination are on different file systems),
   the **Artifacts** tool's wire from the same version: `artifacts.list` (`{ workspaceId }` →
   **`WorkspaceArtifactsSnapshot`**: `dir` (the artifacts folder, `.thinkrail/context`), `artifacts`
   (**`WorkspaceArtifact`**: worktree-relative `path`, `state: "live" | "deleted"` — deleted means gone from

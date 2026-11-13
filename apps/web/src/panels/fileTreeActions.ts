@@ -53,7 +53,9 @@ export async function pasteInto(workspaceId: string, destinationDirectory: strin
 					? t("panels.fileTree.pasteChanged")
 					: code === "ENTRY_EXISTS"
 						? t("panels.fileTree.pasteExists", { name: fileName(source.path) })
-						: errorText(error),
+						: code === "MOVE_ACROSS_DEVICES"
+							? t("panels.fileTree.moveAcrossDevices", { name: fileName(source.path) })
+							: errorText(error),
 			t("panels.fileTree.pasteFailed"),
 		);
 	}

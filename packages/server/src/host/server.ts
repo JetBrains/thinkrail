@@ -313,9 +313,14 @@ function artifactSessionEvent(event: PiEvent): ArtifactSessionEvent | null {
 		case "agent_settled":
 			return { type: event.type };
 		case "tool_execution_start":
-			return { type: event.type, toolName: event.toolName, args: event.args };
+			return {
+				type: event.type,
+				toolCallId: event.toolCallId,
+				toolName: event.toolName,
+				args: event.args,
+			};
 		case "tool_execution_end":
-			return { type: event.type, toolName: event.toolName };
+			return { type: event.type, toolCallId: event.toolCallId, toolName: event.toolName };
 		default:
 			return null;
 	}

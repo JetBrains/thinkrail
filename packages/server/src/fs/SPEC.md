@@ -80,8 +80,10 @@ classification every content read in the host shares. Agent and review writes ar
   allowed), refuse a folder moved into itself, and treat pasting into the entry's own folder as a no-op.
   The free-name check and the `rename` run in one synchronous pass; Node has no `renameat2`
   `RENAME_NOREPLACE`, so a writer creating that exact name between those two syscalls is the residual
-  window. A move across filesystems (`EXDEV`) falls back to a copy followed by the claimed delete-to-trash
-  of the source. Each answers `{ from, path, directory, written }` for the host's invalidation.
+  window. A move across filesystems (`EXDEV`) is refused with `CodedError("MOVE_ACROSS_DEVICES")` and
+  changes nothing. A copy-then-trash fallback was rejected: the copy skips nested `.git` and is a snapshot,
+  so trashing the source would lose a moved repository's metadata and whatever the agent wrote during the
+  copy. The user copies instead. Each answers `{ from, path, directory, written }` for the host's invalidation.
   None of these mutations checks whether an
   agent is running — the user's explicit action wins, and the web says so before a delete.
   **Every mutation races a live agent, so no check is trusted across an `await`** (the per-workspace

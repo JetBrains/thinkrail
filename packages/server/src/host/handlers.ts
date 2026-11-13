@@ -995,7 +995,7 @@ const handlers: WsHandlers = {
 				? withChangeLock(first, operation)
 				: withChangeLock(first, () => withChangeLock(second, operation));
 		return locked(async () => {
-			const moved = await withUserRemoval(p.sourceWorkspaceId, p.sourcePath, () =>
+			const moved = await withUserRemoval(p.sourceWorkspaceId, p.sourcePath, async () =>
 				moveWorktreeEntry(p),
 			);
 			notifyWorkspacePathsChanged(p.sourceWorkspaceId, [moved.from], {

@@ -115,12 +115,17 @@ test("a write tool names its writer even while other chats run", async () => {
 	await observeArtifactSessionEvent("w1", "s2", { type: "agent_start" });
 	await observeArtifactSessionEvent("w1", "s2", {
 		type: "tool_execution_start",
+		toolCallId: "call-1",
 		toolName: "write",
 		args: { path: `${CONTEXT}/report.md` },
 	});
 	write(`${CONTEXT}/report.md`, "report");
 	write(`${CONTEXT}/from-bash.txt`, "bash");
-	await observeArtifactSessionEvent("w1", "s2", { type: "tool_execution_end", toolName: "write" });
+	await observeArtifactSessionEvent("w1", "s2", {
+		type: "tool_execution_end",
+		toolCallId: "call-1",
+		toolName: "write",
+	});
 	const byPath = new Map((await listArtifacts("w1")).artifacts.map((a) => [a.path, a]));
 	expect(byPath.get(`${CONTEXT}/report.md`)?.sessionId).toBe("s2");
 	expect(byPath.get(`${CONTEXT}/from-bash.txt`)?.sessionId).toBeUndefined();
@@ -129,7 +134,11 @@ test("a write tool names its writer even while other chats run", async () => {
 test("a file made while exactly one chat runs belongs to that chat", async () => {
 	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
 	write(`${CONTEXT}/shot.png`, "png");
-	await observeArtifactSessionEvent("w1", "s1", { type: "tool_execution_end", toolName: "bash" });
+	await observeArtifactSessionEvent("w1", "s1", {
+		type: "tool_execution_end",
+		toolCallId: "call-2",
+		toolName: "bash",
+	});
 	await observeArtifactSessionEvent("w1", "s1", { type: "agent_settled" });
 	write(`${CONTEXT}/later.md`, "by the user");
 	const byPath = new Map((await listArtifacts("w1")).artifacts.map((a) => [a.path, a]));
@@ -384,10 +393,39 @@ test("a write tool's @-prefixed path names its writer like pi resolves it", asyn
 	await observeArtifactSessionEvent("w1", "s2", { type: "agent_start" });
 	await observeArtifactSessionEvent("w1", "s2", {
 		type: "tool_execution_start",
+		toolCallId: "call-1",
 		toolName: "write",
 		args: { path: `@${CONTEXT}/x.md` },
 	});
 	write(`${CONTEXT}/x.md`, "x");
-	await observeArtifactSessionEvent("w1", "s2", { type: "tool_execution_end", toolName: "write" });
+	await observeArtifactSessionEvent("w1", "s2", {
+		type: "tool_execution_end",
+		toolCallId: "call-1",
+		toolName: "write",
+	});
 	expect((await listArtifacts("w1")).artifacts[0]?.sessionId).toBe("s2");
+});
+
+test("a writer hint ends with its tool call, so a failed edit never names a later writer", async () => {
+	await observeArtifactSessionEvent("w1", "a", { type: "agent_start" });
+	await observeArtifactSessionEvent("w1", "b", { type: "agent_start" });
+	await observeArtifactSessionEvent("w1", "a", {
+		type: "tool_execution_start",
+		toolCallId: "edit-1",
+		toolName: "edit",
+		args: { path: `${CONTEXT}/later.md` },
+	});
+	await observeArtifactSessionEvent("w1", "a", {
+		type: "tool_execution_end",
+		toolCallId: "edit-1",
+		toolName: "edit",
+	});
+	write(`${CONTEXT}/later.md`, "from b's shell");
+	await observeArtifactSessionEvent("w1", "b", {
+		type: "tool_execution_end",
+		toolCallId: "bash-1",
+		toolName: "bash",
+	});
+	expect((await listArtifacts("w1")).artifacts[0]).toMatchObject({ path: `${CONTEXT}/later.md` });
+	expect((await listArtifacts("w1")).artifacts[0]?.sessionId).toBeUndefined();
 });

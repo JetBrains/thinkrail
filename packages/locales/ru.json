@@ -1089,6 +1089,7 @@
 	"panels.fileTree.deleteFailed": "Не удалось удалить",
 	"panels.fileTree.deleteTitle": "Удалить {{name}}?",
 	"panels.fileTree.empty": "Пусто",
+	"panels.fileTree.moveAcrossDevices": "{{name}} лежит на другом диске, поэтому его нельзя переместить сюда. Скопируйте его, а затем удалите оригинал.",
 	"panels.fileTree.paste": "Вставить",
 	"panels.fileTree.pasteChanged": "Файлы изменились во время копирования, поэтому вставка остановилась. Уже скопированное сохранено.",
 	"panels.fileTree.pasteExists": "{{name}} уже есть в этой папке.",
