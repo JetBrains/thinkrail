@@ -10,7 +10,7 @@ import {
 	NEXT_STEPS_TOOL_NAME,
 	type NextStepsDetails,
 	normalizeSuggestions,
-	suggestionsAtLeaf,
+	suggestionsOnBranch,
 } from "./core.ts";
 import { renderNextStepsCall, renderNextStepsResult, SuggestionRow } from "./tui.ts";
 
@@ -88,7 +88,7 @@ export function createNextStepsExtension(): ExtensionFactory {
 
 		const showFromLeaf = (ctx: ExtensionContext) => {
 			if (ctx.mode !== "tui" || !ctx.hasUI) return;
-			const suggestions = suggestionsAtLeaf(ctx.sessionManager.getLeafEntry());
+			const suggestions = suggestionsOnBranch(ctx.sessionManager.getBranch());
 			if (suggestions.length === 0) return clear(ctx);
 			offered = suggestions;
 			ctx.ui.setWidget(WIDGET_KEY, (_tui, theme) => new SuggestionRow(suggestions, theme));

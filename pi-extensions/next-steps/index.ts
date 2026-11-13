@@ -6,7 +6,7 @@ export {
 	MAX_SHORTCUTS,
 	NEXT_STEPS_TOOL_NAME,
 	normalizeSuggestions,
-	suggestionsAtLeaf,
+	suggestionsOnBranch,
 } from "./src/core.ts";
 export {
 	createNextStepsExtension,

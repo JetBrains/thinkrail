@@ -4,7 +4,7 @@ import defaultFactory, {
 	createNextStepsExtension,
 	NEXT_STEPS_TOOL_NAME,
 	normalizeSuggestions,
-	suggestionsAtLeaf,
+	suggestionsOnBranch,
 } from "./index.ts";
 import { renderNextStepsResult, SuggestionRow, shortcutLabel } from "./src/tui.ts";
 
@@ -19,7 +19,7 @@ type WidgetFactory = (tui: unknown, theme: Theme) => { render(width: number): st
 interface FakeContext {
 	mode: "tui" | "rpc";
 	hasUI: boolean;
-	sessionManager: { getLeafEntry(): SessionEntry | undefined };
+	sessionManager: { getBranch(): SessionEntry[] };
 	ui: { setWidget(key: string, content: WidgetFactory | undefined): void };
 }
 
@@ -73,7 +73,7 @@ function context(mode: "tui" | "rpc", entry: SessionEntry | undefined) {
 	const ctx: FakeContext = {
 		mode,
 		hasUI: true,
-		sessionManager: { getLeafEntry: () => entry },
+		sessionManager: { getBranch: () => (entry ? [entry] : []) },
 		ui: { setWidget: (_key, content) => widgets.push(content) },
 	};
 	return { ctx, widgets };
@@ -98,12 +98,27 @@ describe("suggest_next_steps tool", () => {
 	});
 });
 
-describe("suggestionsAtLeaf", () => {
+describe("suggestionsOnBranch", () => {
 	test("reads only a successful suggest_next_steps result", () => {
-		expect(suggestionsAtLeaf(leaf(["Open a PR"]))).toEqual(["Open a PR"]);
-		expect(suggestionsAtLeaf(leaf(["Open a PR"], { isError: true }))).toEqual([]);
-		expect(suggestionsAtLeaf(leaf(["Open a PR"], { toolName: "read" }))).toEqual([]);
-		expect(suggestionsAtLeaf(undefined)).toEqual([]);
+		expect(suggestionsOnBranch([leaf(["Open a PR"])])).toEqual(["Open a PR"]);
+		expect(suggestionsOnBranch([leaf(["Open a PR"], { isError: true })])).toEqual([]);
+		expect(suggestionsOnBranch([leaf(["Open a PR"], { toolName: "read" })])).toEqual([]);
+		expect(suggestionsOnBranch([])).toEqual([]);
+	});
+
+	test("skips bookkeeping entries pi appends after the turn, but not later conversation", () => {
+		const thinking = {
+			type: "thinking_level_change",
+			id: "t",
+			parentId: "e1",
+			timestamp: "",
+			thinkingLevel: "off",
+		};
+		const later = { ...leaf([]), message: { role: "user", content: "next", timestamp: 4 } };
+		expect(suggestionsOnBranch([leaf(["Open a PR"]), thinking as SessionEntry])).toEqual([
+			"Open a PR",
+		]);
+		expect(suggestionsOnBranch([leaf(["Open a PR"]), later as SessionEntry])).toEqual([]);
 	});
 });
 
