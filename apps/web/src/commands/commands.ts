@@ -6,6 +6,7 @@ export const COMMAND_GROUP_LABELS = {
 	work: "commands.group.work",
 	navigation: "commands.group.navigation",
 	workspace: "commands.group.workspace",
+	tab: "commands.group.tab",
 	view: "commands.group.view",
 	settings: "commands.group.settings",
 } as const satisfies Record<CommandGroup, MessageKey>;

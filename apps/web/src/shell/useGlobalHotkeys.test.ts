@@ -197,3 +197,65 @@ describe("region and focus chords", () => {
 		expect(globalHotkeyCommand(key("KeyG", { shiftKey: true }), all, false, "Linux")).toBeNull();
 	});
 });
+
+describe("tab chords", () => {
+	const tabs = { ...all, onCloseTab: noop, onSplitRight: noop, onMoveTab: noop };
+	const command = { ctrlKey: false, metaKey: true };
+
+	test("route Mod+Alt+W, Mod+\\ and the platform's move chords, but never bind Mod+W", () => {
+		expect(globalHotkeyCommand(key("KeyW", { altKey: true }), tabs, false, "Linux")).toBe(
+			"tab.close",
+		);
+		expect(globalHotkeyCommand(key("KeyW"), tabs, false, "Linux")).toBeNull();
+		expect(globalHotkeyCommand(key("KeyW", command), tabs, false, "MacIntel")).toBeNull();
+		expect(globalHotkeyCommand(key("Backslash"), tabs, false, "Win32")).toBe("group.splitRight");
+		expect(globalHotkeyCommand(key("Backslash", command), tabs, false, "MacIntel")).toBe(
+			"group.splitRight",
+		);
+		expect(globalHotkeyCommand(key("ArrowRight", { altKey: true }), tabs, false, "Linux")).toBe(
+			"tab.moveToNextGroup",
+		);
+		expect(globalHotkeyCommand(key("ArrowLeft", { metaKey: true }), tabs, false, "MacIntel")).toBe(
+			"tab.moveToPreviousGroup",
+		);
+		expect(
+			globalHotkeyCommand(key("ArrowLeft", { altKey: true }), tabs, false, "MacIntel"),
+		).toBeNull();
+		expect(globalHotkeyCommand(key("Backslash"), all, false, "Linux")).toBeNull();
+	});
+
+	test("leave Ctrl+\\ to a terminal's shell and ⌥⌘W to Monaco's find widget", () => {
+		expect(globalHotkeyCommand(key("Backslash"), tabs, false, "Linux", true)).toBeNull();
+		expect(globalHotkeyCommand(key("Backslash", command), tabs, false, "MacIntel", true)).toBe(
+			"group.splitRight",
+		);
+		expect(
+			globalHotkeyCommand(
+				key("KeyW", { ...command, altKey: true }),
+				tabs,
+				false,
+				"MacIntel",
+				false,
+				true,
+			),
+		).toBeNull();
+		expect(
+			globalHotkeyCommand(key("KeyW", { altKey: true }), tabs, false, "Linux", false, true),
+		).toBe("tab.close");
+	});
+
+	test("ignore an AltGraph chord", () => {
+		const altGraph = { getModifierState: (modifier: string) => modifier === "AltGraph" };
+		expect(
+			globalHotkeyCommand({ ...key("KeyW", { altKey: true }), ...altGraph }, tabs, false, "Win32"),
+		).toBeNull();
+		expect(
+			globalHotkeyCommand(
+				{ ...key("ArrowRight", { altKey: true }), ...altGraph },
+				tabs,
+				false,
+				"Win32",
+			),
+		).toBeNull();
+	});
+});

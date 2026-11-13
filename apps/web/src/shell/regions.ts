@@ -101,6 +101,19 @@ function landingTarget(region: HTMLElement): HTMLElement | null {
 	return focusTarget(region);
 }
 
+const WORKBENCH_REGION_KINDS: ReadonlySet<string> = new Set<RegionKind>([
+	"left",
+	"center",
+	"right",
+	"bottom",
+]);
+
+export function activeWorkbenchGroupId(): string | undefined {
+	if (!activeRegion || !isShown(activeRegion)) return undefined;
+	const { region, regionKind } = activeRegion.dataset;
+	return regionKind !== undefined && WORKBENCH_REGION_KINDS.has(regionKind) ? region : undefined;
+}
+
 export function regionLandingTarget(lastRegion: HTMLElement | null): HTMLElement | null {
 	const region =
 		activeRegion && isShown(activeRegion)

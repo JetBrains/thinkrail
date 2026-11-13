@@ -2958,7 +2958,6 @@
 	"workbench.tab.removeToolFromGroup": "從群組移除工具",
 	"workbench.tab.renameChat": "重新命名對話",
 	"workbench.tab.showTool": "顯示 {{name}}",
-	"workbench.tab.splitCenterOnly": "只有中央分頁可以分割中央區域。",
 	"workbench.tab.splitNeedsHeight": "此群組需要 {{size}}px 的高度才能分割。",
 	"workbench.tab.splitNeedsWidth": "此群組需要 {{size}}px 的寬度才能分割。",
 	"workbench.tabs.bottomGroupTabs": "底部群組分頁",

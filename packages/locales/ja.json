@@ -2922,7 +2922,6 @@
 	"workbench.tab.removeToolFromGroup": "グループからツールを削除",
 	"workbench.tab.renameChat": "チャット名を変更",
 	"workbench.tab.showTool": "{{name}} を表示",
-	"workbench.tab.splitCenterOnly": "中央を分割できるのは中央のタブのみです。",
 	"workbench.tab.splitNeedsHeight": "分割するには、このグループに高さ {{size}}px が必要です。",
 	"workbench.tab.splitNeedsWidth": "分割するには、このグループに幅 {{size}}px が必要です。",
 	"workbench.tabs.bottomGroupTabs": "下部グループのタブ",

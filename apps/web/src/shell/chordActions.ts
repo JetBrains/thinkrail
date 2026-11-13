@@ -10,7 +10,8 @@ import {
 	terminalTarget,
 	whenSettled,
 } from "./regions";
-import { isInTerminal } from "./shortcutLayers";
+import { hasDismissibleLayer, isInTerminal } from "./shortcutLayers";
+import { runActiveTabAction } from "./workbenchCommands";
 
 export function toggleLeftSide(toggleProjectsHome: () => void): void {
 	const state = useAppStore.getState();
@@ -102,4 +103,22 @@ export function focusTerminal(): void {
 	}
 	const target = useAppStore.getState().activeTerminalByWorkspace[workspaceId] ?? tabKey;
 	focusWhenSettled(() => terminalTarget(target));
+}
+
+function dismissTopLayer(): boolean {
+	const doc = globalThis.document;
+	if (!hasDismissibleLayer(doc)) return false;
+	(doc.activeElement ?? doc.body ?? doc).dispatchEvent(
+		new KeyboardEvent("keydown", {
+			key: "Escape",
+			code: "Escape",
+			bubbles: true,
+			cancelable: true,
+		}),
+	);
+	return true;
+}
+
+export function closeActiveItem(): void {
+	if (!dismissTopLayer()) runActiveTabAction("tab.close");
 }

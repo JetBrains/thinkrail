@@ -18,6 +18,7 @@ import {
 	removeLayoutGroup,
 	resizeCenterSplit,
 } from "./model";
+import { centerSplitGeometry } from "./tabActions";
 import type { LayoutCenterGroup, LayoutCenterNode, LayoutCenterSplit } from "./types";
 import type { SharedGroupProps, WorkbenchProps } from "./workbenchShared";
 import {
@@ -49,10 +50,7 @@ export const CenterGroupView = memo(function CenterGroupView({
 	const t = useT();
 	const location: LayoutGroupLocation = { area: "center", groupId: group.id };
 	const [sizeRef, size] = useElementSize();
-	const splitGeometry = {
-		horizontal: size.width >= LAYOUT_LIMITS.minCenterWidth * 2,
-		vertical: size.height >= LAYOUT_LIMITS.minCenterHeight * 2,
-	};
+	const splitGeometry = centerSplitGeometry(size);
 	const selected = group.tabs.find((tab) => tab.id === selectedId) ?? group.tabs[0];
 	const groupRemoval = removeLayoutGroup(t, shared.document, location);
 	const applySelect = (tabId: string, keep?: boolean) => {
@@ -94,6 +92,7 @@ export const CenterGroupView = memo(function CenterGroupView({
 				onHideSide={shared.onHideSide}
 				onRevealTool={shared.onRevealTool}
 				onRenameChat={shared.onRenameChat}
+				registerChatRename={shared.registerChatRename}
 				{...(shared.chatFirstPrompts ? { chatFirstPrompts: shared.chatFirstPrompts } : {})}
 				canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 				renderTabAdornment={shared.renderTabAdornment}
