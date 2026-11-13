@@ -2,13 +2,12 @@ import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
-import { focusFirstControl } from "@thinkrail/ui/focus";
 import { useEffect, useMemo, useRef } from "react";
 import { useResourceHost } from "../../host";
 import type { ResourceDiffProps, ReviewThread, SurfaceReview } from "../../registry";
 import { ReviewComposer } from "../../support/ReviewComposer";
 import { ReviewThreadCard } from "../../support/ReviewThreadCard";
-import { commentCard } from "../../support/revealFocus";
+import { commentCard, revealReviewCard } from "../../support/revealFocus";
 import { useScrollViewState } from "../../support/useScrollViewState";
 import PierreProvider from "../code/PierreProvider";
 import { diffContentStamp, useStampedComposer } from "../reviewComposerState";
@@ -195,8 +194,11 @@ function NotebookDiffSurface({
 		const element = key ? cellRefs.current.get(key) : null;
 		if (!element) return;
 		handledFocusRef.current = focusId;
-		element.scrollIntoView({ block: "center" });
-		focusFirstControl(commentCard(element, focusId) ?? element);
+		revealReviewCard(
+			element,
+			focusSurface.surface.focus?.moveFocus === true,
+			commentCard(element, focusId) ?? element,
+		);
 		focusSurface.surface.onFocusHandled();
 	}, [focusId, focusSurface, layout.baseKey, layout.worktreeKey, placement]);
 

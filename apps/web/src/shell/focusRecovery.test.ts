@@ -3,6 +3,7 @@ import {
 	type FocusContext,
 	type FocusLevel,
 	type FocusLookup,
+	focusOutcome,
 	isFocusLost,
 	nearestControl,
 	resolveFocus,
@@ -140,6 +141,19 @@ describe("focus loss", () => {
 	test("a click on empty space leaves a still-focusable element, which never recovers", () => {
 		expect(isFocusLost("none", true)).toBe(false);
 		expect(isFocusLost("layer", true)).toBe(false);
+		expect(focusOutcome("none", true, false)).toBe("forget");
+	});
+
+	test("a control that disabled and re-enabled before the check gets focus back", () => {
+		expect(focusOutcome("none", true, true)).toBe("restore");
+		expect(focusOutcome("layer", true, true)).toBe("restore");
+		expect(focusOutcome("recorded", true, true)).toBe("keep");
+		expect(focusOutcome("elsewhere", true, true)).toBe("keep");
+	});
+
+	test("a control still disabled at the check recovers to a neighbour", () => {
+		expect(focusOutcome("none", false, true)).toBe("recover");
+		expect(focusOutcome("elsewhere", false, true)).toBe("keep");
 	});
 });
 

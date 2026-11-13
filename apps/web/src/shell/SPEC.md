@@ -331,7 +331,10 @@ after the host's push), else the opener's rows. Resolution, first match wins:
 
 A control that was only disabled (still in the page, or replaced by its disabled slot twin) gets focus
 back when it re-enables, provided focus still rests where recovery put it and no key or pointer press
-happened since — a field that disables while its save is pending keeps the keyboard across the save.
+happened since — a field that disables while its save is pending keeps the keyboard across the save. A
+control that disables and re-enables before the check frame (a save finishing between paints) is already
+blurred yet focusable again at the check; the observed `disabled` / `hidden` / `inert` change on it is
+remembered, so focus goes straight back to it rather than being written off as a click on empty space.
 
 While nothing matches and the innermost list is not in the page (a Settings page re-fetching behind a
 skeleton), it re-resolves every frame for a bounded grace (~3 s) before the safety net, and abandons the

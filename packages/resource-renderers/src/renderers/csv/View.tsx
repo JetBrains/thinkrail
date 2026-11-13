@@ -1,10 +1,10 @@
 import { useT } from "@thinkrail/locales/react";
-import { focusFirstControl } from "@thinkrail/ui/focus";
 import { useEffect, useMemo, useRef } from "react";
 import { TableVirtuoso, type TableVirtuosoHandle } from "react-virtuoso";
 import type { ResourceViewProps, ReviewThread } from "../../registry";
 import { ReviewComposer } from "../../support/ReviewComposer";
 import { ReviewThreadCard } from "../../support/ReviewThreadCard";
+import { revealReviewCard } from "../../support/revealFocus";
 import { contentStamp, useStampedComposer } from "../reviewComposerState";
 import { StaleComposerNotice } from "../StaleComposerNotice";
 import {
@@ -81,8 +81,7 @@ export default function CsvView({
 		const card = cardRefs.current.get(focusId);
 		if (!card) return;
 		handledFocusRef.current = focusId;
-		card.scrollIntoView({ block: "center" });
-		focusFirstControl(card);
+		revealReviewCard(card, review?.focus?.moveFocus === true);
 		review?.onFocusHandled();
 	}, [focusId, placed, review]);
 

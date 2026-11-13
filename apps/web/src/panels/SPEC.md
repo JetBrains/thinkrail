@@ -2408,8 +2408,10 @@ own section. The kebab menu (`plan-menu`, a
   screen would leave no diff to guide through. A keyboard step (`Alt+↑` / `Alt+↓`, `V` advancing, `J`, `N`,
   `P`) and a click on a reading step or finding move focus to what it revealed — the section header's first
   control, or the finding card's first control once `useReviewReveal` scrolls it into view; the
-  `Prev / Next`, guide and bottom-bar buttons keep focus, so they can be pressed again, and one that
-  disables at the end hands focus to its nearest enabled sibling through the shell's recovery engine.
+  `Prev / Next`, guide and bottom-bar buttons keep focus, so they can be pressed again (the reveal reaches
+  the renderer as a review focus with `moveFocus: false`: it scrolls to a finding without focusing it), and
+  one that disables at the end hands focus to its nearest enabled sibling through the shell's recovery
+  engine.
   Plain-letter shortcuts (`V`, `J`, `N`, `P`) belong to the
   review tab the center is looking at (`ownsReviewShortcut`: the attention group's selected tab, no
   modal or menu layer open, no text-entry target, and no earlier handler consumed the event), so two review scopes split side by side cannot both answer

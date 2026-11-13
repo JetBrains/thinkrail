@@ -1,13 +1,12 @@
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
-import { focusFirstControl } from "@thinkrail/ui/focus";
 import { useEffect, useMemo, useRef } from "react";
 import { useResourceHost } from "../../host";
 import { anchorLabel, type ResourceViewProps, type ReviewThread } from "../../registry";
 import { ReviewComposer } from "../../support/ReviewComposer";
 import { ReviewThreadCard } from "../../support/ReviewThreadCard";
-import { commentCard } from "../../support/revealFocus";
+import { commentCard, revealReviewCard } from "../../support/revealFocus";
 import { useScrollViewState } from "../../support/useScrollViewState";
 import { contentStamp, useStampedComposer } from "../reviewComposerState";
 import { StaleComposerNotice } from "../StaleComposerNotice";
@@ -72,8 +71,11 @@ export default function NotebookView({
 		const element = cell ? cellRefs.current.get(cell.ref) : null;
 		if (!element) return;
 		handledFocusRef.current = focusId;
-		element.scrollIntoView({ block: "center" });
-		focusFirstControl(commentCard(element, focusId) ?? element);
+		revealReviewCard(
+			element,
+			review?.focus?.moveFocus === true,
+			commentCard(element, focusId) ?? element,
+		);
 		review?.onFocusHandled();
 	}, [document, focusId, placed, review]);
 

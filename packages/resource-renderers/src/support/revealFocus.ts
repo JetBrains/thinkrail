@@ -8,6 +8,15 @@ export function commentCard(root: ParentNode, commentId: string): HTMLElement | 
 	);
 }
 
+export function revealReviewCard(
+	scrollTarget: Element,
+	moveFocus: boolean,
+	focusTarget: Element = scrollTarget,
+): void {
+	scrollTarget.scrollIntoView({ block: "center" });
+	if (moveFocus) focusFirstControl(focusTarget);
+}
+
 export function focusCommentCardWhenRendered(
 	root: () => ParentNode | null,
 	commentId: string,

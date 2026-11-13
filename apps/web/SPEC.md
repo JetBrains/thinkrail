@@ -427,9 +427,10 @@ themselves.
   comment, template name — never an index), `data-focus-row-primary` on the control a row lands on,
   `data-focus-fallback="<key>"` on the control that takes focus when that list empties (its add or parent
   control), and `data-focus-slot="<name>"` on each element of a pair that replaces one another (an inline
-  rename input and its pill, the outline toggle drawn in two places). Only show / jump actions focus
-  explicitly, on what they revealed, with `preventScroll` after their own scroll. `resource-renderers` emits
-  the same attributes and never imports the shell.
+  rename input and its pill, the outline toggle drawn in two places); a slot name is unique per instance
+  when instances can coexist (the outline appends `useId()`), because recovery takes the first match in the
+  region. Only show / jump actions focus explicitly, on what they revealed, with `preventScroll` after their
+  own scroll. `resource-renderers` emits the same attributes and never imports the shell.
 - **`typecheck` runs two projects.** `tsconfig.json` checks the browser app with DOM types only;
   `tsconfig.test.json` checks tests, `scripts/`, and `vite.config.ts` with Bun types. Every
   test file is checked; the test project has no exclude list. A test never shares its base name with a

@@ -46,8 +46,21 @@ export interface FocusLookup<T> {
 	regionLanding(): T | null;
 }
 
+export type FocusOutcome = "keep" | "recover" | "restore" | "forget";
+
 export function isFocusLost(active: ActiveFocus, recordedFocusable: boolean): boolean {
 	return active !== "elsewhere" && !recordedFocusable;
+}
+
+export function focusOutcome(
+	active: ActiveFocus,
+	recordedFocusable: boolean,
+	disrupted: boolean,
+): FocusOutcome {
+	if (active === "elsewhere") return "keep";
+	if (!recordedFocusable) return "recover";
+	if (active === "recorded") return "keep";
+	return disrupted ? "restore" : "forget";
 }
 
 export function nearestControl(before: number, total: number): number | null {
@@ -92,6 +105,7 @@ interface FocusRecord {
 	readonly opener: FocusRecord | null;
 	readonly depth: number;
 	visible: boolean;
+	disrupted: boolean;
 }
 
 function attributeSelector(name: string, value: string): string {
@@ -178,6 +192,7 @@ function describe(element: HTMLElement, previous: FocusRecord | null): FocusReco
 		opener,
 		depth: opener ? opener.depth + 1 : 0,
 		visible: true,
+		disrupted: false,
 	};
 }
 
@@ -387,10 +402,12 @@ export function installFocusRecovery(): () => void {
 			current.levels = levelsOf(current.element, scopeOf(current.layer));
 		}
 		stale = false;
-		const active = activeFocus(current);
-		if (active === "elsewhere") return;
-		if (isFocusLost(active, stillFocusable(current.element))) recover(current);
-		else if (active !== "recorded") record = null;
+		const focusable = stillFocusable(current.element);
+		const outcome = focusOutcome(activeFocus(current), focusable, current.disrupted);
+		if (outcome === "recover") recover(current);
+		else if (outcome === "restore" && canFocus(current.element)) {
+			current.element.focus({ preventScroll: true });
+		} else if (outcome !== "keep") record = null;
 	};
 
 	const schedule = () => {
@@ -415,19 +432,20 @@ export function installFocusRecovery(): () => void {
 		visibility.observe(target);
 	};
 
-	const forgetComeback = () => {
+	const forgetPending = () => {
 		comeback = null;
+		if (record) record.disrupted = false;
 	};
 
 	const observer = new MutationObserver((mutations) => {
 		if (comeback) schedule();
 		const current = record;
 		if (!current) return;
-		const touched =
-			!current.element.isConnected ||
-			mutations.some(
-				(mutation) => mutation.type === "attributes" && mutation.target.contains(current.element),
-			);
+		const disrupted = mutations.some(
+			(mutation) => mutation.type === "attributes" && mutation.target.contains(current.element),
+		);
+		if (disrupted) current.disrupted = true;
+		const touched = disrupted || !current.element.isConnected;
 		if (!touched && current.levels.length === 0) return;
 		if (!touched) stale = true;
 		schedule();
@@ -435,8 +453,8 @@ export function installFocusRecovery(): () => void {
 
 	document.addEventListener("focusin", onFocusIn);
 	document.addEventListener("focusout", schedule);
-	document.addEventListener("keydown", forgetComeback, true);
-	document.addEventListener("pointerdown", forgetComeback, true);
+	document.addEventListener("keydown", forgetPending, true);
+	document.addEventListener("pointerdown", forgetPending, true);
 	observer.observe(document.body, {
 		childList: true,
 		subtree: true,
@@ -446,8 +464,8 @@ export function installFocusRecovery(): () => void {
 	return () => {
 		document.removeEventListener("focusin", onFocusIn);
 		document.removeEventListener("focusout", schedule);
-		document.removeEventListener("keydown", forgetComeback, true);
-		document.removeEventListener("pointerdown", forgetComeback, true);
+		document.removeEventListener("keydown", forgetPending, true);
+		document.removeEventListener("pointerdown", forgetPending, true);
 		observer.disconnect();
 		visibility.disconnect();
 		cancelAnimationFrame(frame);

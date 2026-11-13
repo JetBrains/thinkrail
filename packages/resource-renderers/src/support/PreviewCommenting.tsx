@@ -1,7 +1,6 @@
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
-import { focusFirstControl } from "@thinkrail/ui/focus";
 import {
 	type ReactNode,
 	type RefCallback,
@@ -14,6 +13,7 @@ import { createPortal } from "react-dom";
 import type { ReviewThread, SurfaceReview } from "../registry";
 import { mapPreviewSelection } from "./previewAnchor";
 import { ReviewComposer } from "./ReviewComposer";
+import { revealReviewCard } from "./revealFocus";
 import { markReviewRegions, type SourceLineRange, stampedSelectionLines } from "./sourceLines";
 
 export interface ComposerInsert {
@@ -61,8 +61,7 @@ export function PreviewCommenting({
 		if (!focusId || !scroller) return;
 		const card = scroller.querySelector(`[data-comment-id="${focusId}"]`);
 		if (card) {
-			card.scrollIntoView({ block: "center" });
-			focusFirstControl(card);
+			revealReviewCard(card, review.focus?.moveFocus === true);
 			review.onFocusHandled();
 		}
 	}, [focusId, review]);

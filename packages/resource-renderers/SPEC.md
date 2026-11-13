@@ -258,11 +258,12 @@ a setter, and a sink for the renderer's hunk content keys; a renderer without it
 Renderers speak the web shell's focus-recovery markup ([[module-web]], *Get right*) without importing it: a
 Pierre diff's scroller is the `hunks:<path>` list and each hunk toolbar a row keyed by its content key
 (`data-block-id` carries `changeBlockId`), with Revert as its primary, so a reverted hunk hands focus to the
-next one. A review focus (**Show in file**) moves keyboard focus as well as the scroll: right after a
-renderer scrolls the revealed thread card (or notebook cell) into view, it focuses the card's first control
-with `preventScroll` (`@thinkrail/ui/focus`'s `focusFirstControl`, with the card lookup in
-`support/revealFocus.ts`); Monaco, whose cards mount in view zones after the line
-reveal, polls a bounded number of frames for the card.
+next one. A review focus always scrolls the revealed thread card (or notebook cell) into view; it moves
+keyboard focus to the card's first control only when `SurfaceReview.focus.moveFocus` asks — **Show in file**
+and the review's keyboard jumps do, a guide's Prev / Next button does not, so its next Enter advances the
+guide instead of sending the draft. Every renderer goes through `support/revealFocus.ts`'s
+`revealReviewCard` (`@thinkrail/ui/focus`'s `focusFirstControl`, with `preventScroll`); Monaco, whose cards
+mount in view zones after the line reveal, polls a bounded number of frames for the card.
 
 `ResourceContent` keeps text, retrievable bytes, and an absent diff side distinct. In particular, absence
 is never represented by a byte payload without a URL. `SurfaceReview` carries authoritative anchors; a

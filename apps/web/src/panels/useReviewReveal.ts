@@ -177,9 +177,9 @@ export function useReviewReveal({
 			...(reveal.commentId ? { commentId: reveal.commentId } : {}),
 		};
 		releaseSettling();
-		consumeReveal(workspaceId, tabId, target);
 		const focus = focusCommentReveal.current;
 		focusCommentReveal.current = false;
+		consumeReveal(workspaceId, tabId, focus ? { ...target, moveFocus: true } : target);
 		if (layout === "stacked") {
 			restoredStacked.current = true;
 			scrollToSection(index, focus ? { ...target, focus } : target);
