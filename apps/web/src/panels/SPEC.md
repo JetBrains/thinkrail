@@ -2544,8 +2544,7 @@ own section. The kebab menu (`plan-menu`, a
     carries `data-focus-default`, so F6, `Mod+0` and `Mod+Shift+E/G` land on it ([[submodule-web-shell]]
     prefers the innermost default; its focusable test counts `tabIndex=-1` buttons, so without the marker
     landing took the first row). Of Chats and Projects only the tree holding the active workspace marks
-    its default (Projects when none is active). Known gap: a chord that first reveals a hidden Files
-    lands before the tree has loaded, on its toolbar — landing resolves on the first frame with a target.
+    its default (Projects when none is active).
   - **Keys** are feature-local (`event.key` in the tree, not the global keybinding table): ↑/↓, Home/End;
     → expands, else enters the first child; ← collapses, else goes to the parent; type-ahead matches the
     row label's prefix (a ~500 ms buffer; Space joins only a live buffer, otherwise it activates). Letters

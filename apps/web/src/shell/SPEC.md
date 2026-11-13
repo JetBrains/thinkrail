@@ -237,7 +237,9 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   `revealPlacedTab` (the reveal `reveal-tool` uses) — else creates one with `addTerminal`. `Mod+Shift+E` / `Mod+Shift+G` set
   Files to All / Changed (`setFilesMode`), reveal it and focus inside its body once that mode has rendered
   (`data-files-mode`), so a row remembered from the other mode, about to unmount, never takes focus;
-  Changes is not bound in a chat without a project. Every focus move waits, a bounded number of animation frames, for no modal layer
+  Changes is not bound in a chat without a project. A tool body still showing a loading skeleton
+  (`aria-busy="true"`) is waited out for a shorter bounded budget before landing, so a chord that first
+  mounts Files lands on its tree's current row rather than the toolbar above the skeleton. Every focus move waits, a bounded number of animation frames, for no modal layer
   and a rendered target, then gives up silently; a newer focus chord cancels an older wait. That wait is
   what lets the same functions run as palette rows (Focus next / previous region, Focus chat input,
   Focus Projects, Focus terminal, one Focus center group N per existing group, Show Changes, and Show

@@ -37,6 +37,8 @@ const FOCUS_DEFAULT_SELECTOR = "[data-focus-default]";
 const SELECTED_TAB_SELECTOR = '[role="tab"][aria-selected="true"]';
 const TERMINAL_SELECTOR = "[data-region] [data-tab-key]";
 const FRAME_BUDGET = 120;
+const BUSY_FRAME_BUDGET = 90;
+const BUSY_SELECTOR = '[aria-busy="true"]';
 
 let activeRegion: HTMLElement | null = null;
 let previousRegion: HTMLElement | null = null;
@@ -230,11 +232,14 @@ export function focusToolBody(
 	tool: LayoutToolId,
 	ready: (body: HTMLElement) => boolean = () => true,
 ): void {
+	let patience = BUSY_FRAME_BUDGET;
 	focusWhenSettled(() => {
 		const body = document.querySelector<HTMLElement>(
 			`${REGION_SELECTOR} [data-tool-body="${tool}"]`,
 		);
-		return body && isShown(body) && ready(body) ? focusInsideTarget(body) : null;
+		if (!body || !isShown(body) || !ready(body)) return null;
+		if (body.querySelector(BUSY_SELECTOR) && patience-- > 0) return null;
+		return focusInsideTarget(body);
 	});
 }
 

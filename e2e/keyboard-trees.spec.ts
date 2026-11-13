@@ -130,6 +130,20 @@ test("Mod+Shift+E lands on the tree's current row, not its first", async ({ page
 	await expect(readme).toBeFocused();
 });
 
+test("Mod+Shift+E that first mounts Files waits for its tree instead of landing on the toolbar", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await expect(filesTree(page)).toHaveCount(0);
+
+	await pressPlatformShortcut(page, "Shift+E");
+	await expect(filesTree(page).getByRole("treeitem").first()).toBeVisible();
+	await expect
+		.poll(() => page.evaluate(() => document.activeElement?.getAttribute("role")))
+		.toBe("treeitem");
+});
+
 test("a workspace row opens its menu on Shift+F10, renames on F2, asks before removal on Delete, and ArrowLeft reaches its project", async ({
 	page,
 }) => {
