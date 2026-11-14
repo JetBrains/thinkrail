@@ -1552,8 +1552,33 @@ keeps a run's first cancellation reason, only a run that teardown cancelled firs
 A run already cancelled when teardown lands keeps its own provenance and reads Stopped — a user stop
 (`"user"`) as well as a foreground child the parent's own Stop cancelled through its tool signal, which
 carries no reason (an AIR review finding on PR #1004: inferring teardown from a missing reason mislabelled
-exactly that run). A user or tool stop that merely settles during teardown stays Stopped. Interrupted work is shown to the user only: it never wakes the parent and nothing tells the
-agent its acknowledged run is gone (user-settled, 2026-10). Work a dead host left in flight is the archive's own derivation. Workspace archive removes the
+exactly that run). A user or tool stop that merely settles during teardown stays Stopped.
+Interrupted commands and detached subagents are reported to the parent on its next prompt-started run
+(#1000, 2026-11, replacing the earlier user-only rule; it still never wakes the parent). A parent-only
+`resourceInterruptions` extension uses the skill hint's path: `before_agent_start`'s `message`, a
+persisted hidden `thinkrail/resource-interruptions` custom message right after the prompt, so every
+later request carries it once, where the model first saw it. It never starts a turn, restores a handle
+or restarts work; opening a restored chat costs nothing. Runs a custom message starts (an extension's
+`triggerTurn`, a tool response, a host message), TODO control prompts, handled slash commands and a
+prompt refused in preflight leave it pending, and so does a steer or follow-up delivered inside such a
+run, because pi raises `before_agent_start` only for a run a prompt starts; the next prompt carries it.
+Rejected: adding it through `context` and persisting a `turn_end` boundary draft (the first PR #1110
+design), which stored the notice after the first turn's tool results rather than where the model read
+it, kept the pending notice in host memory, and relied on the boundary chain pi drops whole on any
+invalid draft ([[module-pi-subagents]] decision log, item 9). Foreground children need no notice:
+their aborted or restart-repaired tool call already tells the parent. The notice reads the complete
+merged history, not the UI's twenty-row window, so a live owner's terminal outcome still wins over an
+inferred interruption.
+Its versioned details record only the `kind:id` identities reported; deduplication reads the raw active
+branch, not the compaction-aware context, so reload, host restart and compaction never repeat a
+notice and no second acknowledgment store exists, while malformed or unknown-version details never
+suppress a run. Each notice holds at most twenty records and twelve thousand characters; the rest wait
+for later prompts. Task/command text is bounded and JSON-encoded as data, a malformed optional archived
+role name is omitted, command times are start times and a child's archived creation time is labelled as
+such. The notice describes host or chat teardown without claiming a crash, is host status even when the
+start acknowledgement has left the visible context, and tells the model its field values are data, not
+instructions.
+Work a dead host left in flight is the archive's own derivation. Workspace archive removes the
 workspace's history after its delegation store; late lifecycle events of a retired delegation service are not
 archived, so they cannot recreate it. Chat deletion leaves the history in place.
 

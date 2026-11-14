@@ -89,7 +89,11 @@ import {
 	shouldWarnAnthropicExtraUsage,
 } from "./anthropicExtraUsage";
 import { applyCacheWarmingDefault } from "./cacheWarming";
-import { archiveCommandHistory, publishSessionResourcesChanged } from "./chatResources";
+import {
+	archiveCommandHistory,
+	interruptedSessionResources,
+	publishSessionResourcesChanged,
+} from "./chatResources";
 import {
 	disposeSessionChildren,
 	hasLiveSessionChildren,
@@ -140,6 +144,7 @@ import {
 } from "./piRuntime";
 import { catalogProviderAuth } from "./providerAuth";
 import { REQUEST_REVIEW_TOOL_NAME } from "./requestReviewTool";
+import { resourceInterruptionExtension } from "./resourceInterruptions";
 import { projectSessionEvent } from "./sessionEventProjection";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import { deriveSessionState } from "./sessionState";
@@ -1579,6 +1584,9 @@ async function createParentSessionInternal(
 				[
 					subagents.extension,
 					createBackgroundCommandsExtension({ service: commands }),
+					resourceInterruptionExtension(sessionId, () =>
+						interruptedSessionResources(workspaceId, sessionId, commands),
+					),
 					...mcpHost.extensions,
 					extraUsageModelSelectExtension(sessionId),
 					withoutSpecRule(workspaceId),
