@@ -636,8 +636,8 @@ re-opened transcripts provider-valid.
     skipped. A `select` left with no string option resolves `undefined` without a dialog, `[]` included:
     a dialog with nothing to pick could only be cancelled by sending a chat message. A `select` answer
     maps back by index to a copy of the options as passed; options that differ only in colour look alike
-    and the first wins. Built-ins fail: `util.stripVTControlCharacters` leaves OSC tails, `Bun.stripANSI` is missing in
-    the Node workflow harness, and pi-tui's `stripTerminalSequences` keeps DCS strings.
+    and the first wins. Built-ins fail: `util.stripVTControlCharacters` leaves OSC tails, `Bun.stripANSI`
+    is missing in the Node workflow harness, and pi-tui's `stripTerminalSequences` keeps DCS strings.
   - `toolResponses` — the host half of **interactive tools** (tools whose `execute` waits for the person):
     the per-session response mailbox (`ToolResponseWaiters`), respondability, restart repair support and
     late responses. The mailbox is **tool-agnostic**: every entry is keyed by `toolCallId`, the response is
