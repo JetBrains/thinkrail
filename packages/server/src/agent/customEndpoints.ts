@@ -428,14 +428,24 @@ function validateDraft(draft: CustomEndpointDraft): void {
 	}
 }
 
-function maxTokensFor(model: CustomEndpointModel): number | null {
-	const context = model.contextWindow;
+function maxTokensFor(model: CustomEndpointModel, userContext: number | null): number | null {
+	const context =
+		model.contextWindow === null ? null : Math.max(model.contextWindow, userContext ?? 0);
 	if (model.maxTokens !== null && (context === null || model.maxTokens < context))
 		return model.maxTokens;
 	return context === null ? null : defaultMaxTokens(context);
 }
 
-function modelConfig(model: CustomEndpointModel, previous: Json | undefined): Json {
+function userContextWindow(overrides: unknown, id: string): number | null {
+	const override = isObject(overrides) ? overrides[id] : undefined;
+	return isObject(override) ? positiveInt(override.contextWindow) : null;
+}
+
+function modelConfig(
+	model: CustomEndpointModel,
+	previous: Json | undefined,
+	userContext: number | null,
+): Json {
 	const next: Json = {
 		...(previous ?? {}),
 		id: model.id,
@@ -446,7 +456,7 @@ function modelConfig(model: CustomEndpointModel, previous: Json | undefined): Js
 	else next.reasoning = model.reasoning;
 	if (model.vision === null) delete next.input;
 	else next.input = model.vision ? ["text", "image"] : ["text"];
-	const maxTokens = maxTokensFor(model);
+	const maxTokens = maxTokensFor(model, userContext);
 	if (model.contextWindow === null) delete next.contextWindow;
 	else next.contextWindow = model.contextWindow;
 	if (maxTokens === null) delete next.maxTokens;
@@ -526,7 +536,13 @@ function providerConfig(draft: CustomEndpointDraft, previous: Json | undefined):
 		api: API,
 		apiKey: draft.apiKey === undefined ? (previousKey ?? NO_KEY) : draft.apiKey.trim() || NO_KEY,
 		compat: previous === undefined ? { ...COMPAT } : previous.compat,
-		models: draft.models.map((model) => modelConfig(model, previousModels.get(model.id))),
+		models: draft.models.map((model) =>
+			modelConfig(
+				model,
+				previousModels.get(model.id),
+				userContextWindow(previous?.modelOverrides, model.id),
+			),
+		),
 	};
 	if (next.compat === undefined) delete next.compat;
 	const overrides = withoutManagedOverrides(

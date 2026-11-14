@@ -932,11 +932,13 @@ a project picker, the prompt hero, and the reused
   busy, for an unused row, and for a model pi doesn't serve yet (an unsaved server or newly found model —
   its title asks to save the server first). A failed context read or write is not an unsaved model: every
   field locks with the load-failure title, and the list is headed by the same `ModelContextLoadFailed`
-  line and Retry that `ModelContextControls` shows. Re-detecting keeps selections and saved
-  facts the server doesn't report, takes reported ones, drops a saved max output once a new context is
-  reported, keeps models the server no longer lists, and keeps existing rows first with newly found ones appended; an unchanged saved address stays as written. The
-  pure draft rules live in `customEndpointDraft`; probe failures render as localized inline status and
-  host save errors render inline; and
+  line and Retry that `ModelContextControls` shows. Re-detecting keeps selections and saved facts the
+  server doesn't report, takes reported ones, keeps models the server no longer lists, and keeps
+  existing rows first with newly found ones appended; an unchanged saved address stays as written.
+  Re-detecting drops a saved max output only when a context was saved and the server now reports a
+  different one: that value may be derived from the old context, and the draft can't tell a derived
+  value from a hand-set one. The pure draft rules live in `customEndpointDraft`; probe failures render
+  as localized inline status and host save errors render inline; and
   the **`JetBrainsAiCard`** — route Central-supported models through the user's JetBrains subscription while
   keeping ThinkRail's embedded PI — a state machine over the typed `JbcentralStatus` +
   `provider.jbcentral*`: absent (official host-OS install guidance + Recheck), outdated — below the host's
