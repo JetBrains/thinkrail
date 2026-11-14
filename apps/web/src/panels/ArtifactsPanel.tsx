@@ -363,8 +363,13 @@ function ArtifactRowView({
 		onRename: (_target, next) => void renameEntry(workspaceId, artifact.path, next),
 	});
 	const Icon = artifactIcon(row);
-	const open = (intent: "preview" | "keep") =>
-		void openFileInTab(workspaceId, artifact.path, intent);
+	const restore = useRowRestore(workspaceId, artifact.path, deleted);
+	const open = (intent: "preview" | "keep") => {
+		if (!deleted) return void openFileInTab(workspaceId, artifact.path, intent);
+		void restore().then((restored) => {
+			if (restored) void openFileInTab(workspaceId, artifact.path, intent);
+		});
+	};
 	const detail =
 		taskSpecStatus !== null
 			? t("panels.artifacts.taskSpec", { status: taskSpecStatus || "—" })
@@ -380,7 +385,7 @@ function ArtifactRowView({
 			<EntryMenu
 				workspaceId={workspaceId}
 				path={artifact.path}
-				deleted={deleted}
+				onRestore={deleted ? () => void restore() : undefined}
 				onRename={start}
 				onRemove={(path) => onRemove(path, deleted)}
 				onCloseAutoFocus={onMenuCloseAutoFocus}
@@ -412,7 +417,6 @@ function ArtifactRowView({
 										type="button"
 										data-testid="artifact-open"
 										data-focus-row-primary
-										disabled={deleted}
 										onClick={firstClickOnly(() => open("preview"))}
 										onDoubleClick={() => open("keep")}
 										className={cn(
@@ -434,7 +438,7 @@ function ArtifactRowView({
 										<button
 											type="button"
 											data-testid="artifact-restore"
-											onClick={() => void restoreArtifact(workspaceId, artifact.path)}
+											onClick={() => void restore()}
 											className="shrink-0 text-primary hover:underline"
 										>
 											{t("panels.artifacts.restore")}
@@ -521,7 +525,6 @@ function OutputNode({
 			<EntryMenu
 				workspaceId={workspaceId}
 				path={node.path}
-				deleted={false}
 				onRemove={(path) => onRemove(path, false)}
 			>
 				{(menuOpen) => (
@@ -563,10 +566,30 @@ function OutputNode({
 	);
 }
 
+function useRowRestore(
+	workspaceId: string,
+	path: string,
+	deleted: boolean,
+): () => Promise<boolean> {
+	const pending = useRef<Promise<boolean> | null>(null);
+	useEffect(() => {
+		if (!deleted) pending.current = null;
+	}, [deleted]);
+	return () => {
+		if (pending.current) return pending.current;
+		const restore = restoreArtifact(workspaceId, path).then((restored) => {
+			if (!restored && pending.current === restore) pending.current = null;
+			return restored;
+		});
+		pending.current = restore;
+		return restore;
+	};
+}
+
 function EntryMenu({
 	workspaceId,
 	path,
-	deleted,
+	onRestore,
 	onRename,
 	onRemove,
 	onCloseAutoFocus,
@@ -574,7 +597,7 @@ function EntryMenu({
 }: {
 	workspaceId: string;
 	path: string;
-	deleted: boolean;
+	onRestore?: (() => void) | undefined;
 	onRename?: () => void;
 	onRemove: (path: string) => void;
 	onCloseAutoFocus?: (event: Event) => void;
@@ -582,6 +605,7 @@ function EntryMenu({
 }) {
 	const t = useT();
 	const [open, setOpen] = useState(false);
+	const deleted = onRestore !== undefined;
 	const mentionOnCloseRef = useRef(false);
 	const canMention = useAppStore((s) => selectArtifactMentionTarget(s, workspaceId) !== null);
 	const mutations = useAppStore((s) => supportsArtifacts(s.protocolVersion));
@@ -608,10 +632,7 @@ function EntryMenu({
 				}}
 			>
 				{deleted ? (
-					<ContextMenuItem
-						data-testid="artifact-menu-restore"
-						onSelect={() => void restoreArtifact(workspaceId, path)}
-					>
+					<ContextMenuItem data-testid="artifact-menu-restore" onSelect={onRestore}>
 						<RiArrowGoBackLine />
 						{t("panels.artifacts.restore")}
 					</ContextMenuItem>
