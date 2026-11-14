@@ -1,4 +1,5 @@
 import { t as globalT, useT } from "@thinkrail/locales/react";
+import { toggleActiveVimMode } from "@thinkrail/resource-renderers";
 import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { openFindInFiles } from "../findInFiles";
@@ -274,6 +275,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				toggleLeft: () => toggleLeftSide(options.toggleProjectsHome),
 				toggleRight: toggleRightSide,
 				toggleBottom: toggleBottomPanel,
+				toggleVim: toggleActiveVimMode,
 				showTool: (workspaceId, tool) => store().requestToolView(workspaceId, tool),
 				showFiles,
 				focusRegion: focusAdjacentRegion,

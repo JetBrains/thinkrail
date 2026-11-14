@@ -47,6 +47,7 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 			toggleLeft: noop,
 			toggleRight: noop,
 			toggleBottom: noop,
+			toggleVim: noop,
 			showTool: noop,
 			showFiles: noop,
 			focusRegion: noop,
@@ -80,6 +81,10 @@ describe("palette project and Settings commands", () => {
 		expect(row("project.create", deps())?.title).toBe("Start a new project…");
 		expect(row("project.create", deps({ canCreateProject: false }))).toBeUndefined();
 		expect(row("project.openPath", deps())?.title).toBe("Open a path on the host…");
+	});
+
+	test("Vim mode is available as a command-palette action", () => {
+		expect(row("view.toggleVim", deps())?.title).toBe("Toggle Vim mode");
 	});
 
 	test("Settings shows the native shortcut only where the native menu owns one", () => {

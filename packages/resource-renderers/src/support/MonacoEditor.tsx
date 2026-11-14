@@ -1,4 +1,6 @@
+import { RiKeyboardLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
 import { onFontsChange } from "@thinkrail/ui/fonts";
 import type { editor } from "monaco-editor/editor/editor.api.js";
 import {
@@ -32,6 +34,12 @@ import {
 	type MonacoReviewZoneState,
 	type ReviewCommenting,
 } from "./reviewWidgets";
+import {
+	createVimController,
+	initialVimState,
+	registerActiveVimToggle,
+	type VimState,
+} from "./vimMode";
 
 function focusLine(review: SurfaceReview): number | null {
 	const range = review.focus?.anchor.selectors.find((selector) => selector.kind === "lineRange");
@@ -86,6 +94,11 @@ export default function MonacoEditor({
 		threads: [],
 		composer: null,
 	});
+	const [vimState, setVimState] = useState<VimState>(initialVimState);
+	const [searchQuery, setSearchQuery] = useState("");
+	const vimControllerRef = useRef<ReturnType<typeof createVimController> | null>(null);
+	const activeVimToggleRef = useRef<ReturnType<typeof registerActiveVimToggle> | null>(null);
+	const searchInputRef = useRef<HTMLInputElement | null>(null);
 
 	useLayoutEffect(() => {
 		latestRef.current = {
@@ -114,6 +127,12 @@ export default function MonacoEditor({
 			options: mount.options,
 		};
 		const menuIcons = decorateEditorContextMenus(codeEditor);
+		const vimController = createVimController(codeEditor, setVimState);
+		const activeVimToggle = registerActiveVimToggle(vimController.toggle);
+		vimControllerRef.current = vimController;
+		activeVimToggleRef.current = activeVimToggle;
+		activeVimToggle.activate();
+		const focusListener = codeEditor.onDidFocusEditorText(activeVimToggle.activate);
 		if (isEditorViewState(mount.viewState)) codeEditor.restoreViewState(mount.viewState);
 		const threads = mount.review ? attachReviewThreads(codeEditor, setReviewZones) : null;
 		const commenting = threads
@@ -124,6 +143,11 @@ export default function MonacoEditor({
 		return () => {
 			const saved = codeEditor.saveViewState();
 			if (saved) latestRef.current.onViewState?.(saved);
+			focusListener.dispose();
+			activeVimToggle.dispose();
+			vimController.dispose();
+			vimControllerRef.current = null;
+			activeVimToggleRef.current = null;
 			menuIcons.dispose();
 			commenting?.dispose();
 			threads?.dispose();
@@ -160,8 +184,22 @@ export default function MonacoEditor({
 	}, [options]);
 
 	useEffect(() => remeasureEditorFonts(font), [font]);
+	useEffect(() => {
+		if (!vimState.searchOpen) return;
+		setSearchQuery("");
+		searchInputRef.current?.focus();
+	}, [vimState.searchOpen]);
 
 	const closeComposer = () => threadsRef.current?.closeComposer();
+	const vimModeLabel =
+		vimState.mode === "normal"
+			? t("viewer.vim.mode.normal")
+			: vimState.mode === "insert"
+				? t("viewer.vim.mode.insert")
+				: t("viewer.vim.mode.visual");
+	const submitSearch = () => vimControllerRef.current?.submitSearch(searchQuery);
+	const cancelSearch = () => vimControllerRef.current?.cancelSearch();
+
 	const layoutReviewZones = () => threadsRef.current?.layout();
 
 	useLayoutEffect(() => {
@@ -204,14 +242,56 @@ export default function MonacoEditor({
 	}, [revealLine, revealColumn, revealLength, revealTick]);
 
 	return (
-		<>
-			<div ref={containerRef} data-focus-default className="h-full w-full text-left" />
+		<div
+			className="relative h-full w-full text-left"
+			onFocusCapture={() => activeVimToggleRef.current?.activate()}
+		>
+			<div ref={containerRef} data-focus-default className="h-full w-full" />
+			<Button
+				variant="ghost"
+				size="s"
+				selected={vimState.enabled}
+				iconLeft={RiKeyboardLine}
+				aria-pressed={vimState.enabled}
+				aria-label={t("viewer.vim.toggle")}
+				data-testid="vim-mode-toggle"
+				onMouseDown={() => activeVimToggleRef.current?.activate()}
+				onClick={() => vimControllerRef.current?.toggle()}
+				className="absolute top-8 right-8 z-10"
+			>
+				{vimState.enabled ? vimModeLabel : t("viewer.vim.off")}
+			</Button>
+			{vimState.searchOpen ? (
+				<div className="absolute top-8 right-8 z-20 flex h-24 items-center gap-4 rounded-sm border border-border-default bg-container-elevated-bg px-8 shadow-lg">
+					<span className="tr-code-text text-text-muted" aria-hidden="true">
+						{vimState.searchDirection === "forward" ? "/" : "?"}
+					</span>
+					<input
+						ref={searchInputRef}
+						value={searchQuery}
+						onChange={(event) => setSearchQuery(event.target.value)}
+						onKeyDown={(event) => {
+							if (event.key === "Enter") {
+								event.preventDefault();
+								submitSearch();
+							} else if (event.key === "Escape") {
+								event.preventDefault();
+								cancelSearch();
+							}
+						}}
+						aria-label={t("viewer.vim.search")}
+						data-testid="vim-search-input"
+						placeholder={t("viewer.vim.searchPlaceholder")}
+						className="h-20 w-[256px] bg-transparent text-text-default outline-none tr-code-text"
+					/>
+				</div>
+			) : null}
 			<MonacoReviewZones
 				zones={reviewZones}
 				review={review}
 				onCloseComposer={closeComposer}
 				onRendered={layoutReviewZones}
 			/>
-		</>
+		</div>
 	);
 }
