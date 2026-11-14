@@ -51,6 +51,26 @@ test("a closed outline leaves only an unpressed toggle on its edge", () => {
 	);
 });
 
+test("each outline's toggle has its own focus slot, so recovery never jumps to another preview", () => {
+	const html = render(
+		[true, false].map((open) => (
+			<MarkdownOutline
+				key={String(open)}
+				headings={headings}
+				scroller={null}
+				open={open}
+				side="right"
+				onOpenChange={() => {}}
+			/>
+		)),
+	);
+	const slots = [...html.matchAll(/data-focus-slot="(markdown-outline-toggle[^"]+)"/g)].map(
+		(match) => match[1],
+	);
+	expect(slots).toHaveLength(2);
+	expect(new Set(slots).size).toBe(2);
+});
+
 test("an outline on the left draws its border on the document side", () => {
 	expect(outline(true, "left")).toMatch(/data-side="left"[^>]*class="[^"]*border-r/);
 });

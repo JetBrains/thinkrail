@@ -59,25 +59,76 @@ equals `border-default` is not a second weight, it is a second name).
 | --- | --- | --- |
 | Text | `text-default` · `text-muted` · `text-subtle` · `text-disabled` · `text-on-primary` | `text-subtle` (from the `hint` palette key) is the secondary-metadata tier (branch lines, spec role labels); `text-disabled` (the default `text` colour @ 60% — a disabled element inherits its enabled semantic colour, dimmed at the token level) is reserved for genuinely disabled UI text |
 | Container | `container-workspace-bg` · `container-sidebar-bg` · `container-terminal-bg` · `container-header-bg` · `container-content-bg` · `container-elevated-bg` | **The opened-document canvas is `workspace`, not `content`**: the Monaco desktop file editor, Pierre phone file, and markdown/spec preview sit on the same surface as the chat column and tab strip, so a document reads as part of the workspace. `content` is the **recessed diff canvas** — Pierre source diffs, rendered diffs, chat code blocks, and the Center Workbench backdrop behind them. `terminal` is a terminal body + xterm canvas (currently sourced from the same palette key as `sidebar`); `elevated` is every raised surface |
-| Control | `control-bg` · `control-bg-hovered` · `control-bg-selected` · `control-primary-bg` · `control-primary-bg-hovered` · `control-primary-text` · `control-border-default` · `control-border-active` · `control-disabled-bg` · `control-disabled-text` · `control-disabled-border` · `control-primary-disabled-bg` · `control-primary-disabled-text` · `control-destructive-bg` · `control-destructive-bg-hovered` · `control-destructive-text` · `control-destructive-disabled-bg` · `control-destructive-disabled-text` · `control-soft-primary-bg-hovered` | The three `control-primary-*` tokens are the primary button/control, and they are **per-theme derivations like every other role** — `control-primary-bg` (from `accentSolid`, the opaque fill a theme may brighten independently of `accent`) fill, `control-primary-bg-hovered` (from `accentHover`) hover fill, `control-primary-text` (from `onAccent`) label. `accentHover` is the accent's **hover step**, its own manifest key so a theme owns that step: a primary button hovers to `control-primary-bg-hovered` (a colour token), never `hover:opacity-*`. `bg-control-primary-bg` equals `bg-primary` only where a theme sets `accentSolid` to its `accent` (Dark, the Minimal pair, High Contrast Dark); Light and High Contrast Light keep a brighter fill. Because the focus indicator is the same `primary` colour, button focus is an *offset* outline (`packages/ui` Button system), never a ring flush against the fill. **Destructive** mirrors the primary trio with its own manifest keys: `control-destructive-bg` (from `danger`), `control-destructive-bg-hovered` (from `dangerHover`, a colour step, never `hover:opacity-*`) and `control-destructive-text` (from `onDanger`, chosen per theme to clear AA on both fills — `themes/schema.test.ts`), with `control-destructive-disabled-bg|text` as the same two @ `strong`. **Soft-primary** rests on `primary-subtle` with a `primary-soft` border and hovers to `control-soft-primary-bg-hovered` (accent @ `wash`) plus a `primary-muted` border — not to `primary-soft`, where Light's accent label drops below AA; `themes/schema.test.ts` holds the accent label to AA on both tints over every surface a button sits on (the recessed `content` canvas is excluded: plain accent text there is already at the AA edge in Light). `control-bg-hovered` is pointer hover only; `control-bg-selected` is the persistent selected/open/active/highlight fill (currently the same palette source). `control-border-default` is the resting form-control border; `control-border-active` (from `borderStrong`) is the **stronger neutral** border of an *active* control — an open selector (`data-[open=true]`), and a focused text input/textarea. It is the border only: the accent focus indicator stays separate (so accent = focus, neutral-strong = active). A shared button's pressed state is **not** a border swap: it looks exactly like its hover (`packages/ui` Button system). Never on inactive/default controls, nor on selected nav rows, tabs, or static surfaces. **Disabled is a first-class control state**, not an opacity utility: **a disabled element inherits the same semantic colour it uses when enabled, resolved at the `strong` (60%) alpha step** — derived at the token level so background, text, icon and border keep explicit ownership and nested content is never dimmed. So the disabled roles are the enabled ones @ 60%: `control-disabled-bg` (from `input`, i.e. `control-bg`), `control-disabled-text` (from `text`, i.e. `text-default`), `control-disabled-border` (from `border`, i.e. `control-border-default`), and the primary pair `control-primary-disabled-bg` (from `accent`) + `control-primary-disabled-text` (from `onAccent`, i.e. `control-primary-text`). There are **no** dedicated `disabled` / `primaryDisabled` / `onPrimaryDisabled` palette keys — a disabled state never carries a colour of its own. Text/icon-only controls take just `control-disabled-text`; non-control disabled text stays on `text-disabled`. Do **not** use `disabled:opacity-*` on a component (it dims nested content and bypasses token ownership). **One documented exception**: the composer's send pill is a primary control that is *inert* most of the time (empty draft), and a 60% accent block there pulls the eye to a control that cannot act — so it rests on `control-bg-selected` + `control-disabled-text` and the switch to the full accent fill is the "ready" signal (`chat/SPEC.md`, *Composer trailing controls*). Any other disabled primary control keeps the 60% pair |
+| Control | `control-bg` · `control-bg-hovered` · `control-bg-selected` · `control-primary-bg` · `control-primary-bg-hovered` · `control-primary-text` · `control-border-default` · `control-border-active` · `control-disabled-bg` · `control-disabled-text` · `control-disabled-border` · `control-primary-disabled-bg` · `control-primary-disabled-text` · `control-destructive-bg` · `control-destructive-bg-hovered` · `control-destructive-text` · `control-destructive-disabled-bg` · `control-destructive-disabled-text` · `control-soft-primary-bg-hovered` | The three `control-primary-*` tokens are the primary button/control, and they are **per-theme derivations like every other role** — `control-primary-bg` (from `accentSolid`, the opaque fill a theme may brighten independently of `accent`) fill, `control-primary-bg-hovered` (from `accentHover`) hover fill, `control-primary-text` (from `onAccent`) label. `accentHover` is the accent's **hover step**, its own manifest key so a theme owns that step: a primary button hovers to `control-primary-bg-hovered` (a colour token), never `hover:opacity-*`. `bg-control-primary-bg` equals `bg-primary` only where a theme sets `accentSolid` to its `accent` (Dark, the Minimal pair, High Contrast Dark); Light and High Contrast Light keep a brighter fill. Button focus is the outset `focus-ring` (see *Focus ring*), so a 1px gap separates it from a `primary` fill. **Destructive** mirrors the primary trio with its own manifest keys: `control-destructive-bg` (from `danger`), `control-destructive-bg-hovered` (from `dangerHover`, a colour step, never `hover:opacity-*`) and `control-destructive-text` (from `onDanger`, chosen per theme to clear AA on both fills — `themes/schema.test.ts`), with `control-destructive-disabled-bg|text` as the same two @ `strong`. **Soft-primary** rests on `primary-subtle` with a `primary-soft` border and hovers to `control-soft-primary-bg-hovered` (accent @ `wash`) plus a `primary-muted` border — not to `primary-soft`, where Light's accent label drops below AA; `themes/schema.test.ts` holds the accent label to AA on both tints over every surface a button sits on (the recessed `content` canvas is excluded: plain accent text there is already at the AA edge in Light). `control-bg-hovered` is pointer hover only; `control-bg-selected` is the persistent selected/open/active/highlight fill (currently the same palette source). `control-border-default` is the resting form-control border; `control-border-active` (from `borderStrong`) is the **stronger neutral** border of an *active* control — an open selector (`data-[open=true]`), and a focused text input/textarea. It is the border only: a focused text field also shows the outset `focus-ring`, so both are visible (accent = focus, neutral-strong = active). A shared button's pressed state is **not** a border swap: it looks exactly like its hover (`packages/ui` Button system). Never on inactive/default controls, nor on selected nav rows, tabs, or static surfaces. **Disabled is a first-class control state**, not an opacity utility: **a disabled element inherits the same semantic colour it uses when enabled, resolved at the `strong` (60%) alpha step** — derived at the token level so background, text, icon and border keep explicit ownership and nested content is never dimmed. So the disabled roles are the enabled ones @ 60%: `control-disabled-bg` (from `input`, i.e. `control-bg`), `control-disabled-text` (from `text`, i.e. `text-default`), `control-disabled-border` (from `border`, i.e. `control-border-default`), and the primary pair `control-primary-disabled-bg` (from `accent`) + `control-primary-disabled-text` (from `onAccent`, i.e. `control-primary-text`). There are **no** dedicated `disabled` / `primaryDisabled` / `onPrimaryDisabled` palette keys — a disabled state never carries a colour of its own. Text/icon-only controls take just `control-disabled-text`; non-control disabled text stays on `text-disabled`. Do **not** use `disabled:opacity-*` on a component (it dims nested content and bypasses token ownership). **One documented exception**: the composer's send pill is a primary control that is *inert* most of the time (empty draft), and a 60% accent block there pulls the eye to a control that cannot act — so it rests on `control-bg-selected` + `control-disabled-text` and the switch to the full accent fill is the "ready" signal (`chat/SPEC.md`, *Composer trailing controls*). Any other disabled primary control keeps the 60% pair |
 | Border | `border-default` · `border-muted` | |
 | Primary | `primary` + `primary-subtle` · `-soft` · `-muted`, `on-primary-soft` | |
+| Focus | `focus-ring` | the keyboard focus indicator, from `accent` (full in a light appearance, `firm` 80% in a dark one); its own role so it can diverge from `primary`. Use it only through the focus utilities (*Focus ring*) |
+| Region | `region-inactive-scrim` | `publish: false`; the veil over every region but the active one (*Active region*), from `background` (the workspace canvas) at `muted` (40%) in a light appearance and `strong` (60%) in a dark one (the strength the user chose from screenshots) |
 | Feedback | `feedback-{info,success,warning,error}` + the `-subtle` / `-muted` steps in use | a solid border is the solid colour, so there is no `-border` tier |
 | Chat bubble | `bubble-user-bg` · `bubble-user-border` | tinted from the manifest's own `bubbleAccent`. The standard and High Contrast palettes ship it **equal to their `accent`** — the user bubble wears the brand colour; the Minimal palettes re-point it to a neutral grey so user content does not compete with action/attention colours. That separate key is the knob (per `themes/SPEC.md`): a theme decides how the bubble reads without touching a component |
 | Effects | `overlay` · `sunken` | written per light/dark by the theme engine |
 | Strict-consumer editor roles | `editor-selection-bg` · `editor-selection-text` · `editor-selection-highlight-bg` · `editor-find-match-bg` · `widget-shadow` | `publish: false`; Monaco/xterm read them directly and no Tailwind utility is emitted |
 | Media | `media-checker-tile` | `publish: false`; the transparency checkerboard tile that `index.css`'s `.media-backdrop` paints behind every image and vector preview, derived from `text` at the `soft` (20%) step so it is light-on-dark in a dark theme and the conventional `#ccc`-on-white in a light one — a dark logo on a transparent PNG must never read as "no image" |
 
+## Focus ring
+
+Keyboard focus has one look: a 1px `focus-ring` outline from the `index.css` utilities. A base rule
+gives every `:focus-visible` element the outset ring, so no element falls back to the browser's ring;
+`outline-none` opts out, so it is allowed only beside another indicator: a `focus-ring*` utility, a
+`focus:` / `data-[selected=true]:` / `data-[highlighted]:` background (menu and list rows), or an entry
+with its reason in the test's exception list (a frame that draws the ring for its field, a `tabIndex=-1`
+programmatic target, a list's only text field). Apply the utilities explicitly as
+`focus-visible:focus-ring` or `focus-visible:focus-ring-inset`; a container that shows focus for a child
+uses `has-[:focus-visible]:focus-ring`, and also `focus-visible:focus-ring` if it can take focus itself.
+When the container holds other focusable controls with their own ring, scope it to the field
+(`has-[textarea:focus-visible]:focus-ring`) so one focus never shows two rings.
+
+- **Outset** (`focus-ring`, 1px gap) is the default.
+- **Inset** (`focus-ring-inset`) is only for a borderless element that sits flush in an
+  `overflow: hidden` or scrolling container, or in a flush strip where an outset ring clips: tabs, tree,
+  list and menu rows, ghost icon-only buttons in header strips. Never on an element with its own border:
+  the inset ring covers it.
+- **Deep inset** (`focus-ring-inset-deep`, 4px in) is for a tab that draws an active underline or edge
+  border: the ring clears both, so focus reads apart from the selected underline.
+- **Resize handles** show focus on the divider itself: the 1px line becomes a 3px `focus-ring` line. A ring
+  around the handle would frame its invisible 9px hit area, which reaches into the next panel. The handle
+  hides its outline with `outline-hidden`, not `outline-none`: forced colors paint the divider's background
+  as Canvas, and `outline-hidden` keeps a system-colour outline there.
+- **Text fields** (input, textarea, composer shell, inline rename) keep the `control-border-active` border
+  swap and add the outset ring.
+- **Selected and focused** stay apart: where selection draws an accent border or ring, focus uses the
+  outset ring, so the gap shows which row has focus. Where the focusable child fills the selected row and
+  an outset ring would spill into the next row (Specs tree rows), the row drops its selection ring while a
+  child has focus (`has-[:focus-visible]:ring-0`); removing a ring is not a focus style.
+
+No component writes its own `ring-*` or `outline-*` focus style; `styles/focusUsage.test.ts` enforces this,
+and `themes/schema.test.ts` holds `focus-ring` to APCA Lc 45 on every resting surface and `hover`.
+A full-accent ring is too loud on dark surfaces, so dark appearances take accent at the `firm` (80%)
+step through the role's `darkAlpha`; that still clears Lc 45 there, while light accents need full strength.
+
 There is no `text-strong` and no `text-link` utility: they duplicate other tokens, and `--text-link`
 exists as a variable for `global.css`'s bare-anchor fallback alone. That fallback lives in the CSS base
 layer so an explicit semantic text utility on a link-shaped control always wins the cascade.
+
+## Active region
+
+The focus ring says which control has the keyboard; the active region says which pane does. A region is
+a `[data-region]` root (the top bar, the Project Home projects pane, each workbench group) and the shell
+marks the one holding focus `data-region-active` ([shell/layout/SPEC.md](../shell/layout/SPEC.md),
+*Arrangement and accessibility*). Every other region is **muted, not greyed**: `index.css` lays a
+pointer-transparent `::after` in `region-inactive-scrim` over it, which pulls every colour toward the
+canvas, so contrast drops while hues stay and a selected tab's accent underline is still accent. A scrim rather than `opacity`
+leaves xterm, Monaco and iframes painting as before and lets each appearance pick its step: light-on-dark
+text reads as dimmer only at a higher step, so dark appearances take 60% and light ones 40% (chosen from
+screenshots, 2026-11-13). Each region root is positioned and
+`isolation: isolate`, so its veil never covers another region, a portal, a toast or a resize handle.
 
 ## Transparency: one form only
 
 **A tint is a token, mixed `in srgb`, on the alpha scale.**
 
 ```
-subtle 10%   ·   wash 12%   ·   soft 20%   ·   muted 40%   ·   strong 60%
+subtle 10%   ·   wash 12%   ·   soft 20%   ·   muted 40%   ·   strong 60%   ·   firm 80%
 ```
 
 `wash` (12%) is the feedback-surface fill step (`feedback-*-subtle`), kept one notch above `subtle`
@@ -101,7 +152,8 @@ re-highlight after a swap. Chat and Pierre diffs keep the live CSS-variable form
 to hex for its strict theme API. All consumers therefore name the same semantic tokens everything else does, with one name per value.
 The roles these consumers *share* with components (`--container-*-bg`, `--text-muted`) stay published and
 mapped in `@theme inline`; the ones **only** they read (`--editor-selection-*`,
-`--editor-find-match-bg`, `--widget-shadow`, and the stylesheet-only `--media-checker-tile`) are
+`--editor-find-match-bg`, `--widget-shadow`, and the stylesheet-only `--media-checker-tile` and
+`--region-inactive-scrim`) are
 `publish: false` and unmapped — a utility nothing can use is dead weight. Values that strict JS consumers
 need reach them canonicalised to hex via `cssColorToHex` (`lib/utils.ts`), because the built CSS is minified
 and Monaco/xterm accept hex only.

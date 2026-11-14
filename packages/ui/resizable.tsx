@@ -37,8 +37,8 @@ export function ResizableHandle({
 				"relative z-10 shrink-0 before:absolute before:bg-border-default before:transition-colors before:content-['']",
 				"data-[resize-handle-state=hover]:before:bg-primary data-[resize-handle-state=drag]:before:bg-primary",
 				isVertical
-					? "-mb-8 h-9 w-full cursor-row-resize before:inset-x-0 before:top-0 before:h-px"
-					: "-mr-8 w-9 cursor-col-resize before:inset-y-0 before:left-0 before:w-px",
+					? "-mb-8 h-9 w-full cursor-row-resize before:inset-x-0 before:top-0 before:h-px focus-visible:outline-hidden focus-visible:before:-top-px focus-visible:before:h-3 focus-visible:before:bg-focus-ring"
+					: "-mr-8 w-9 cursor-col-resize before:inset-y-0 before:left-0 before:w-px focus-visible:outline-hidden focus-visible:before:-left-px focus-visible:before:w-3 focus-visible:before:bg-focus-ring",
 				className,
 			)}
 			{...props}

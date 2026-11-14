@@ -28,7 +28,8 @@ import {
 } from "@thinkrail/ui/dropdown-menu";
 import { useEffect, useMemo, useState } from "react";
 import { RunningIcon } from "../../components/RunningIcon";
-import { copyText, platformShortcutLabel } from "../../lib";
+import { keybindingLabel } from "../../keybindings";
+import { copyText } from "../../lib";
 import { RemoveWorkspaceDialog } from "../../panels/RemoveWorkspaceDialog";
 import {
 	canRenameWorkspace,
@@ -178,18 +179,20 @@ export function WorkspaceSegment({
 				<input
 					ref={nameRef}
 					data-testid="scope-name"
+					data-focus-slot="scope-workspace"
 					data-editing
 					type="text"
 					spellCheck={false}
 					aria-label={t("shell.location.workspace.nameInput")}
 					defaultValue={workspace.name}
 					{...renameInputProps}
-					className="window-no-drag h-20 w-full min-w-0 truncate rounded-sm border-0 bg-control-bg px-8 text-text-default tr-title-section outline-none ring-1 ring-control-border-active"
+					className="window-no-drag h-20 w-full min-w-0 truncate rounded-sm border-0 bg-control-bg px-8 text-text-default tr-title-section ring-1 ring-control-border-active focus-visible:focus-ring"
 				/>
 			) : (
 				<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
 					<DropdownMenuTrigger
 						data-testid="scope-workspace"
+						data-focus-slot="scope-workspace"
 						aria-label={t("shell.location.workspace.label", { name })}
 						className={pillClass}
 					>
@@ -359,7 +362,7 @@ export function WorkspaceSegment({
 							<Plus />
 							{t("shell.location.workspace.new")}
 							<span className="ml-auto pl-8 text-text-subtle tr-text-metadata">
-								{platformShortcutLabel("N")}
+								{keybindingLabel("workspace.new")}
 							</span>
 						</DropdownMenuItem>
 					</DropdownMenuContent>

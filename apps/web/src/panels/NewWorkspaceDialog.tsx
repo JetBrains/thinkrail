@@ -101,7 +101,7 @@ export function reconcileModel(
 }
 
 const PILL =
-	"flex h-32 min-w-0 items-center gap-8 rounded-sm border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected";
+	"flex h-32 min-w-0 items-center gap-8 rounded-sm border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected";
 
 async function refreshProjectWorkspaces(projectId: string): Promise<void> {
 	useAppStore.getState().expandProject(projectId);
@@ -843,7 +843,7 @@ function TargetOption({
 			data-testid={testid}
 			data-active={active}
 			className={cn(
-				"flex h-28 cursor-pointer items-center gap-8 rounded-sm px-12 tr-text-ui transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
+				"flex h-28 cursor-pointer items-center gap-8 rounded-sm px-12 tr-text-ui transition-colors has-[:focus-visible]:focus-ring-inset",
 				active ? "bg-primary-subtle text-primary" : "text-text-muted hover:text-text-default",
 			)}
 		>

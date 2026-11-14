@@ -147,7 +147,7 @@ export function documentComponents(
 					onClick={() => {
 						if (target) openFile(ctx.workspaceId, target);
 					}}
-					className="cursor-pointer text-left text-primary underline decoration-primary-muted underline-offset-2 hover:decoration-primary disabled:cursor-default"
+					className="cursor-pointer text-left text-primary underline decoration-primary-muted underline-offset-2 hover:decoration-primary focus-visible:focus-ring disabled:cursor-default"
 				>
 					{children}
 				</button>

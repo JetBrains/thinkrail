@@ -46,7 +46,7 @@ export function FileChip({
 			<button
 				type="button"
 				onClick={onClick}
-				className={`${chip} transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary`}
+				className={`${chip} transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring`}
 				{...rest}
 			>
 				{content}

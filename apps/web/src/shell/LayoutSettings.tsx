@@ -12,7 +12,12 @@ import {
 	RiDeleteBin6Line as Trash2,
 	RiCloseLine as X,
 } from "@remixicon/react";
-import { LAYOUT_PLAN_PRESET_PROTOCOL_VERSION, type LayoutPreset } from "@thinkrail/contracts";
+import {
+	ARTIFACTS_PROTOCOL_VERSION,
+	LAYOUT_PLAN_PRESET_PROTOCOL_VERSION,
+	type LayoutPreset,
+	type LayoutToolId,
+} from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { t as translate, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
@@ -57,16 +62,28 @@ const PRESET_ICONS: Record<string, typeof RiDashboardLine> = {
 	review: RiLayoutRightLine,
 };
 
+const NEWER_HOST_TOOLS: readonly { tool: LayoutToolId; since: number; message: MessageKey }[] = [
+	{
+		tool: "plan",
+		since: LAYOUT_PLAN_PRESET_PROTOCOL_VERSION,
+		message: "workbench.layoutSettings.planNeedsNewerHost",
+	},
+	{
+		tool: "artifacts",
+		since: ARTIFACTS_PROTOCOL_VERSION,
+		message: "workbench.layoutSettings.artifactsNeedsNewerHost",
+	},
+];
+
 async function updateCustomPresets(customLayoutPresets: LayoutPreset[]): Promise<boolean> {
 	const protocolVersion = useAppStore.getState().protocolVersion ?? 0;
-	if (
-		protocolVersion < LAYOUT_PLAN_PRESET_PROTOCOL_VERSION &&
-		customLayoutPresets.some((preset) => presetPlacesTool(preset, "plan"))
-	) {
-		toast.error(
-			translate("workbench.layoutSettings.planNeedsNewerHost"),
-			translate("workbench.layoutSettings.saveFailed"),
-		);
+	const tooNew = NEWER_HOST_TOOLS.find(
+		({ tool, since }) =>
+			protocolVersion < since &&
+			customLayoutPresets.some((preset) => presetPlacesTool(preset, tool)),
+	);
+	if (tooNew) {
+		toast.error(translate(tooNew.message), translate("workbench.layoutSettings.saveFailed"));
 		return false;
 	}
 	try {
@@ -257,7 +274,7 @@ export function LayoutSettings() {
 										aria-label={t("workbench.layoutSettings.renameNamed", { name: presetName })}
 										data-settings-draft-input
 										maxLength={200}
-										className="min-w-0 flex-1 rounded-sm border border-control-border-default bg-control-bg px-4 py-2 tr-text-ui text-text-default outline-none focus:border-control-border-active"
+										className="min-w-0 flex-1 rounded-sm border border-control-border-default bg-control-bg px-4 py-2 tr-text-ui text-text-default focus:border-control-border-active focus-visible:focus-ring"
 									/>
 								) : (
 									<span className="truncate tr-text-ui text-text-default">{presetName}</span>
@@ -325,7 +342,7 @@ export function LayoutSettings() {
 													});
 												});
 											}}
-											className="rounded-sm p-4 text-text-muted hover:bg-feedback-error-subtle hover:text-feedback-error disabled:text-control-disabled-text"
+											className="rounded-sm p-4 text-text-muted hover:bg-feedback-error-subtle hover:text-feedback-error disabled:text-control-disabled-text focus-visible:focus-ring"
 										>
 											<Trash2 className="size-14" />
 										</button>
@@ -384,7 +401,7 @@ export function LayoutSettings() {
 									? t("workbench.layoutSettings.customLimit", { limit: MAX_CUSTOM_PRESETS })
 									: undefined
 							}
-							className="group flex flex-col rounded-sm bg-control-bg p-12 text-left transition-colors hover:bg-control-bg-hovered disabled:cursor-not-allowed disabled:bg-control-disabled-bg"
+							className="group flex flex-col rounded-sm bg-control-bg p-12 text-left transition-colors hover:bg-control-bg-hovered disabled:cursor-not-allowed disabled:bg-control-disabled-bg focus-visible:focus-ring"
 						>
 							<Plus className="size-24 text-text-muted group-disabled:text-control-disabled-text" />
 							<p className="mt-8 tr-text-ui text-text-default group-disabled:text-control-disabled-text">
@@ -425,7 +442,7 @@ export function LayoutSettings() {
 								placeholder={t("workbench.layoutSettings.namePlaceholder")}
 								aria-label={t("workbench.layoutSettings.nameLabel")}
 								maxLength={200}
-								className="w-full rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none placeholder:text-text-subtle focus:border-control-border-active"
+								className="w-full rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default placeholder:text-text-subtle focus:border-control-border-active focus-visible:focus-ring"
 							/>
 							<div className="flex justify-end gap-8">
 								<Button
@@ -476,7 +493,7 @@ export function LayoutSettings() {
 					onClick={() => setAdvancedOpen((v) => !v)}
 					aria-expanded={advancedOpen}
 					data-testid="layout-advanced-toggle"
-					className="flex w-full items-start gap-8 rounded-sm py-12 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+					className="flex w-full items-start gap-8 rounded-sm py-12 text-left transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring-inset"
 				>
 					<span className="mt-2 shrink-0">
 						{advancedOpen ? (

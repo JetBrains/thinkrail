@@ -205,7 +205,7 @@ function ProjectTemplatesSection({
 	const hasProject = workspaceId != null;
 
 	return (
-		<section className="flex flex-col gap-12">
+		<section data-focus-list="templates:project" className="flex flex-col gap-12">
 			<div className="flex items-center justify-between">
 				<h4 className="tr-text-label-pill text-text-subtle">
 					{t("settings.templates.projectTitle")}
@@ -216,6 +216,7 @@ function ProjectTemplatesSection({
 						size="m"
 						iconLeft={Plus}
 						data-testid="template-new-project"
+						data-focus-fallback="templates:project"
 						onClick={onNew}
 					>
 						{t("settings.templates.new")}
@@ -295,7 +296,7 @@ function GlobalTemplatesSection({
 	};
 
 	return (
-		<section className="flex flex-col gap-12">
+		<section data-focus-list="templates:global" className="flex flex-col gap-12">
 			<div className="flex items-center justify-between">
 				<h4 className="tr-text-label-pill text-text-subtle">
 					{t("settings.templates.globalTitle")}
@@ -305,6 +306,7 @@ function GlobalTemplatesSection({
 					size="m"
 					iconLeft={Plus}
 					data-testid="template-new-global"
+					data-focus-fallback="templates:global"
 					onClick={onNew}
 				>
 					{t("settings.templates.new")}
@@ -399,6 +401,7 @@ function TemplateRow({
 		>
 			<div
 				data-testid="template-row"
+				data-focus-row={template.name}
 				data-name={template.name}
 				data-scope={template.scope}
 				className="group flex items-center gap-8 rounded-sm bg-control-bg px-12 py-8"
@@ -424,6 +427,7 @@ function TemplateRow({
 						icon={Pencil}
 						label={t("common.edit")}
 						data-testid="template-edit"
+						data-focus-row-primary
 						onClick={onEdit}
 					/>
 					<IconTooltip label={t("common.delete")} wrapTrigger>
@@ -432,7 +436,7 @@ function TemplateRow({
 								type="button"
 								data-testid="template-delete"
 								aria-label={t("common.delete")}
-								className="flex size-24 items-center justify-center rounded-sm text-text-muted transition hover:bg-control-bg-hovered hover:text-feedback-error"
+								className="flex size-24 items-center justify-center rounded-sm text-text-muted transition hover:bg-control-bg-hovered hover:text-feedback-error focus-visible:focus-ring"
 							>
 								<Trash2 className="size-14" />
 							</button>

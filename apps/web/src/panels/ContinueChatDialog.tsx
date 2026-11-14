@@ -70,7 +70,7 @@ export function ContinueChatDialog({
 							<DropdownMenuTrigger
 								data-testid="continue-chat-project"
 								aria-labelledby={`${labelId} ${valueId}`}
-								className="flex h-32 items-center justify-between gap-8 rounded-sm border border-control-border-default bg-control-bg px-8 tr-text-ui text-text-default outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+								className="flex h-32 items-center justify-between gap-8 rounded-sm border border-control-border-default bg-control-bg px-8 tr-text-ui text-text-default hover:bg-control-bg-hovered focus-visible:focus-ring"
 							>
 								<span id={valueId} className="truncate">
 									{selected?.name ?? ""}

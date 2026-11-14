@@ -123,6 +123,7 @@ export function TodoAddRow({
 			<Plus className="size-14 shrink-0 text-text-muted" />
 			<input
 				data-testid="todo-add-input"
+				data-focus-fallback="todos"
 				value={draft}
 				onChange={(e) => setDraft(e.target.value)}
 				onKeyDown={(e) => {
@@ -130,7 +131,7 @@ export function TodoAddRow({
 					if (e.key === "Enter") void submit();
 				}}
 				placeholder={t("chat.todo.addPlaceholder")}
-				className="min-w-0 flex-1 bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
+				className="min-w-0 flex-1 bg-transparent tr-text-ui text-text-default focus-visible:focus-ring placeholder:text-text-muted"
 			/>
 			{onOpenPlan ? (
 				<IconButton
@@ -389,6 +390,7 @@ function TodoRow({
 		<li
 			data-testid="todo-row"
 			data-row
+			data-focus-row={todo.id}
 			data-status={todo.status}
 			data-reviewed={reviewed}
 			data-reviewing={reviewing}
@@ -442,6 +444,7 @@ function TodoRow({
 					icon={Close}
 					size="s"
 					data-testid="todo-remove"
+					data-focus-row-primary
 					label={t("chat.todo.remove")}
 					onClick={() => {
 						void onRemove(todo.id);

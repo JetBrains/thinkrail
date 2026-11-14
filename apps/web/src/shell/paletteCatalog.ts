@@ -1,36 +1,47 @@
 import {
 	type RemixiconComponentType,
 	RiAddLine,
+	RiArrowLeftLine,
+	RiArrowRightLine,
 	RiChat3Line,
 	RiChatNewLine,
 	RiCheckDoubleLine,
 	RiEdit2Line,
 	RiExternalLinkLine,
 	RiFileCopyLine,
+	RiFileEditLine,
 	RiFileList3Line,
 	RiFileSearchLine,
+	RiFolder2Line,
 	RiFolderLine,
 	RiFolderOpenLine,
 	RiHistoryLine,
 	RiHome4Line,
 	RiInboxArchiveLine,
 	RiInboxUnarchiveLine,
+	RiInputCursorMove,
 	RiKeyboardLine,
 	RiLayoutBottomLine,
+	RiLayoutColumnLine,
 	RiLayoutLeftLine,
 	RiLayoutRightLine,
 	RiListCheck3,
 	RiMailUnreadLine,
 	RiNodeTree,
+	RiResetLeftLine,
 	RiSearchEyeLine,
 	RiSettings3Line,
+	RiShapesLine,
 	RiSparkling2Line,
 	RiTerminalBoxLine,
+	RiZoomInLine,
+	RiZoomOutLine,
 } from "@remixicon/react";
-import type { EditorInfo, Workspace } from "@thinkrail/contracts";
+import type { EditorInfo, NativePageZoomBridge, Workspace } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import type { Command } from "../commands";
+import { FOCUS_GROUP_BINDINGS, type KeybindingId, keybindingShortcut } from "../keybindings";
 import type { SettingsNavGroup } from "../panels/settingsNav";
 import type { PaletteItem } from "../search";
 import type { SettingsSection } from "../store";
@@ -43,6 +54,7 @@ const TOOL_LABELS: Record<PaletteTool, MessageKey> = {
 	files: "workbench.tool.files",
 	review: "workbench.tool.review",
 	plan: "workbench.tool.plan",
+	artifacts: "workbench.tool.artifacts",
 };
 
 const TOOL_ICONS: Record<PaletteTool, RemixiconComponentType> = {
@@ -50,6 +62,7 @@ const TOOL_ICONS: Record<PaletteTool, RemixiconComponentType> = {
 	files: RiFolderLine,
 	review: RiFileList3Line,
 	plan: RiListCheck3,
+	artifacts: RiShapesLine,
 };
 
 export interface PaletteCatalogDeps {
@@ -61,7 +74,10 @@ export interface PaletteCatalogDeps {
 	readonly historyAvailable: boolean;
 	readonly canCreateProject: boolean;
 	readonly nativeShortcuts: boolean;
+	readonly pageZoom: NativePageZoomBridge | null;
 	readonly findInFilesAvailable: boolean;
+	readonly changesAvailable: boolean;
+	readonly centerGroupCount: number;
 	readonly readAction: "markRead" | "markUnread" | null;
 	readonly canSettle: boolean;
 	readonly settled: boolean;
@@ -83,6 +99,12 @@ export interface PaletteCatalogActions {
 	readonly toggleRight: () => void;
 	readonly toggleBottom: () => void;
 	readonly showTool: (workspaceId: string, tool: PaletteTool) => void;
+	readonly showFiles: (mode: "all" | "changed") => void;
+	readonly focusRegion: (delta: 1 | -1) => void;
+	readonly focusComposer: () => void;
+	readonly focusProjects: () => void;
+	readonly focusTerminal: () => void;
+	readonly focusGroup: (binding: KeybindingId) => void;
 	readonly openHistory: () => void;
 	readonly findInFiles: () => void;
 	readonly markRead: (workspaceId: string) => void;
@@ -105,7 +127,7 @@ function workCommands(deps: PaletteCatalogDeps): Command[] {
 			group: "work",
 			icon: RiAddLine,
 			keywords: ["create", "start", "task", "worktree"],
-			shortcut: deps.nativeShortcuts ? { key: "N", mod: true } : { key: "N", mod: true, alt: true },
+			shortcut: keybindingShortcut("workspace.new", { browser: !deps.nativeShortcuts }),
 			run: () => actions.newWorkspace(contextProjectId),
 		});
 	}
@@ -187,6 +209,107 @@ function workCommands(deps: PaletteCatalogDeps): Command[] {
 	return commands;
 }
 
+function focusCommands(deps: PaletteCatalogDeps): Command[] {
+	const { t, actions, activeWorkspace } = deps;
+	const commands: Command[] = [
+		{
+			id: "region.next",
+			title: t("commands.focus.nextRegion"),
+			group: "navigation",
+			icon: RiArrowRightLine,
+			keywords: ["region", "pane", "panel", "cycle"],
+			shortcut: keybindingShortcut("region.next"),
+			run: () => actions.focusRegion(1),
+		},
+		{
+			id: "region.previous",
+			title: t("commands.focus.previousRegion"),
+			group: "navigation",
+			icon: RiArrowLeftLine,
+			keywords: ["region", "pane", "panel", "cycle"],
+			shortcut: keybindingShortcut("region.previous"),
+			run: () => actions.focusRegion(-1),
+		},
+	];
+	if (deps.historyAvailable) {
+		commands.push({
+			id: "focus.composer",
+			title: t("commands.focus.composer"),
+			group: "navigation",
+			icon: RiInputCursorMove,
+			keywords: ["chat", "input", "prompt", "message"],
+			shortcut: keybindingShortcut("focus.composer"),
+			run: actions.focusComposer,
+		});
+	}
+	commands.push({
+		id: "focus.projects",
+		title: t("commands.focus.projects"),
+		group: "navigation",
+		icon: RiFolder2Line,
+		keywords: ["sidebar", "projects", "workspaces"],
+		shortcut: keybindingShortcut("focus.projects"),
+		run: actions.focusProjects,
+	});
+	if (!activeWorkspace) return commands;
+	commands.push(
+		{
+			id: "focus.terminal",
+			title: t("commands.focus.terminal"),
+			group: "navigation",
+			icon: RiTerminalBoxLine,
+			keywords: ["shell", "console"],
+			shortcut: keybindingShortcut("focus.terminal"),
+			run: actions.focusTerminal,
+		},
+		...FOCUS_GROUP_BINDINGS.slice(0, deps.centerGroupCount).map(
+			(binding, index): Command => ({
+				id: binding,
+				title: t("commands.focus.group", { position: index + 1 }),
+				group: "navigation",
+				icon: RiLayoutColumnLine,
+				keywords: ["group", "editor", "split"],
+				shortcut: keybindingShortcut(binding),
+				run: () => actions.focusGroup(binding),
+			}),
+		),
+	);
+	return commands;
+}
+
+function pageZoomCommands({ t, pageZoom }: PaletteCatalogDeps): Command[] {
+	if (!pageZoom) return [];
+	return [
+		{
+			id: "view.zoomIn",
+			title: t("commands.view.zoomIn"),
+			group: "view",
+			icon: RiZoomInLine,
+			keywords: ["zoom", "bigger", "larger", "scale"],
+			shortcut: { key: "=", mod: true },
+			run: () => pageZoom.request("in"),
+		},
+		{
+			id: "view.zoomOut",
+			title: t("commands.view.zoomOut"),
+			group: "view",
+			icon: RiZoomOutLine,
+			keywords: ["zoom", "smaller", "scale"],
+			shortcut: { key: "-", mod: true },
+			run: () => pageZoom.request("out"),
+		},
+		{
+			id: "view.zoomReset",
+			title: t("commands.view.zoomReset"),
+			group: "view",
+			icon: RiResetLeftLine,
+			keywords: ["zoom", "actual size", "100%", "scale"],
+			shortcut: { key: "Num 0", mod: true },
+			run: () => pageZoom.request("reset"),
+		},
+	];
+}
+
 function viewCommands(deps: PaletteCatalogDeps): Command[] {
 	const { t, actions, activeWorkspace } = deps;
 	const commands: Command[] = [];
@@ -197,7 +320,7 @@ function viewCommands(deps: PaletteCatalogDeps): Command[] {
 			group: "navigation",
 			icon: RiFileSearchLine,
 			keywords: ["grep", "text", "content", "occurrences"],
-			shortcut: { key: "F", mod: true, shift: true },
+			shortcut: keybindingShortcut("files.findInFiles"),
 			run: actions.findInFiles,
 		});
 	}
@@ -208,10 +331,11 @@ function viewCommands(deps: PaletteCatalogDeps): Command[] {
 			group: "navigation",
 			icon: RiHistoryLine,
 			keywords: ["recall", "prompt", "transcript"],
-			shortcut: { key: "R", ctrl: true },
+			shortcut: keybindingShortcut("chat.history"),
 			run: actions.openHistory,
 		});
 	}
+	commands.push(...focusCommands(deps));
 	if (activeWorkspace) {
 		for (const tool of Object.keys(TOOL_LABELS) as PaletteTool[]) {
 			commands.push({
@@ -220,9 +344,22 @@ function viewCommands(deps: PaletteCatalogDeps): Command[] {
 				group: "view",
 				icon: TOOL_ICONS[tool],
 				keywords: ["panel", "tool", tool],
-				run: () => actions.showTool(activeWorkspace.id, tool),
+				...(tool === "files"
+					? { shortcut: keybindingShortcut("view.files"), run: () => actions.showFiles("all") }
+					: { run: () => actions.showTool(activeWorkspace.id, tool) }),
 			});
 		}
+	}
+	if (deps.changesAvailable) {
+		commands.push({
+			id: "view.changes",
+			title: t("commands.view.showChanges"),
+			group: "view",
+			icon: RiFileEditLine,
+			keywords: ["files", "changed", "git", "source control", "diff"],
+			shortcut: keybindingShortcut("view.changes"),
+			run: () => actions.showFiles("changed"),
+		});
 	}
 	commands.push({
 		id: "view.toggleLeft",
@@ -230,7 +367,7 @@ function viewCommands(deps: PaletteCatalogDeps): Command[] {
 		group: "view",
 		icon: RiLayoutLeftLine,
 		keywords: ["sidebar", "left", "hide", "show"],
-		shortcut: { key: "B", mod: true },
+		shortcut: keybindingShortcut("view.toggleLeft"),
 		run: actions.toggleLeft,
 	});
 	if (activeWorkspace) {
@@ -241,7 +378,7 @@ function viewCommands(deps: PaletteCatalogDeps): Command[] {
 				group: "view",
 				icon: RiLayoutRightLine,
 				keywords: ["sidebar", "right", "hide", "show"],
-				shortcut: { key: "J", mod: true },
+				shortcut: keybindingShortcut("view.toggleRight"),
 				run: actions.toggleRight,
 			},
 			{
@@ -250,12 +387,12 @@ function viewCommands(deps: PaletteCatalogDeps): Command[] {
 				group: "view",
 				icon: RiLayoutBottomLine,
 				keywords: ["terminal", "bottom", "hide", "show"],
-				shortcut: { key: "J", mod: true, shift: true },
+				shortcut: keybindingShortcut("view.toggleBottom"),
 				run: actions.toggleBottom,
 			},
 		);
 	}
-	commands.push({
+	commands.push(...pageZoomCommands(deps), {
 		id: "settings.open",
 		title: t("commands.settings.open"),
 		group: "settings",

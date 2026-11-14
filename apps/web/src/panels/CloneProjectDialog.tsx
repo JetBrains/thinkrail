@@ -16,7 +16,7 @@ import { errorText, getTransport, wsErrorCode } from "../transport";
 import { cloneDepth, repositoryFolderName } from "./cloneRepository";
 
 const FIELD_CLASS =
-	"w-full min-w-0 rounded-sm border border-control-border-default bg-control-bg px-12 py-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:border-control-border-active disabled:text-control-disabled-text";
+	"w-full min-w-0 rounded-sm border border-control-border-default bg-control-bg px-12 py-8 tr-text-ui text-text-default placeholder:text-text-muted focus-visible:border-control-border-active focus-visible:focus-ring disabled:text-control-disabled-text";
 
 export function CloneProjectDialog({
 	onClose,

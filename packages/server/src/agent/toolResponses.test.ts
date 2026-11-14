@@ -74,7 +74,12 @@ function composeAsk(waiters: ToolResponseWaiters): {
 		extension &&
 		extensionSessionServices(extension, {
 			...services,
-			workspaceFiles: { check: async () => {}, scratchDir: "" },
+			workspaceFiles: {
+				check: async () => {},
+				ensureArtifactsDir: async () => {},
+				scratchDir: "",
+				artifactsDir: "",
+			},
 		});
 	for (const factory of (session && extension?.sessionExtensions?.(session)) ?? []) factory(pi);
 	if (!tool) throw new Error("the ask-user-question extension registered no tool");

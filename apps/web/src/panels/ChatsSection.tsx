@@ -99,6 +99,7 @@ export function ChatsSection() {
 					variant="ghost"
 					size="s"
 					data-testid="add-chat"
+					data-focus-fallback="chats"
 					disabled={starting}
 					onClick={newChat}
 				/>
@@ -108,7 +109,7 @@ export function ChatsSection() {
 					{t("panels.chats.empty")}
 				</p>
 			) : (
-				<ul className="flex flex-col">
+				<ul data-focus-list="chats" className="flex flex-col">
 					{chats.map((chat) => (
 						<ChatRow
 							key={chat.id}
@@ -173,6 +174,7 @@ function ChatRow({
 				aria-label={label.text}
 				data-testid="chat-item"
 				data-row
+				data-focus-row={workspace.id}
 				data-active={isActive}
 				data-attention={needsAttention || undefined}
 				data-running={isRunning || undefined}
@@ -185,9 +187,10 @@ function ChatRow({
 			>
 				<button
 					type="button"
+					data-focus-row-primary
 					disabled={pending}
 					onClick={() => useAppStore.getState().activateWorkspace(workspace)}
-					className="flex min-w-0 flex-1 items-center gap-4 text-left"
+					className="flex min-w-0 flex-1 items-center gap-4 text-left focus-visible:focus-ring-inset"
 				>
 					{isRunning ? (
 						<RunningIcon className={cn("size-14", isActive ? "text-primary" : "text-text-muted")} />

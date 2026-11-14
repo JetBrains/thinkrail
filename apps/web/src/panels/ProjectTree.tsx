@@ -62,7 +62,8 @@ import { type MouseEvent, type ReactNode, useCallback, useEffect, useRef, useSta
 import { useShallow } from "zustand/react/shallow";
 import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
-import { copyText, platformShortcutLabel } from "@/lib";
+import { keybindingLabels } from "@/keybindings";
+import { copyText } from "@/lib";
 import { useNow } from "../components/useNow";
 import {
 	isDefaultWorkspace,
@@ -183,7 +184,6 @@ export function ProjectTree() {
 	const [existingDialogProjectId, setExistingDialogProjectId] = useState<string | null>(null);
 	const addProjectButtonRef = useRef<HTMLButtonElement>(null);
 	const projectNameButtonsRef = useRef(new Map<string, HTMLButtonElement>());
-	const pendingCloseFocusProjectIdRef = useRef<string | null>(null);
 	const workspaceDialogReturnFocusIdRef = useRef<string | null>(null);
 	const existingDialogReturnFocusIdRef = useRef<string | null>(null);
 
@@ -200,17 +200,6 @@ export function ProjectTree() {
 			(projectButton ?? addProjectButtonRef.current)?.focus();
 		});
 	}, []);
-
-	useEffect(() => {
-		const closedProjectId = pendingCloseFocusProjectIdRef.current;
-		if (!closedProjectId || projects.some((project) => project.id === closedProjectId)) return;
-		pendingCloseFocusProjectIdRef.current = null;
-		let fallbackProjectId = projects[0]?.id;
-		if (selectedProjectId && projects.some((project) => project.id === selectedProjectId)) {
-			fallbackProjectId = selectedProjectId;
-		}
-		focusProjectNameOrAdd(fallbackProjectId);
-	}, [focusProjectNameOrAdd, projects, selectedProjectId]);
 
 	const activeProjectId = useAppStore(selectActiveWorkspaceProjectId);
 	useEffect(() => {
@@ -298,14 +287,9 @@ export function ProjectTree() {
 	};
 
 	const closeProject = (project: Project) => {
-		pendingCloseFocusProjectIdRef.current = project.id;
 		void getTransport()
 			.request("project.close", { id: project.id })
 			.catch((err) => {
-				if (pendingCloseFocusProjectIdRef.current === project.id) {
-					pendingCloseFocusProjectIdRef.current = null;
-				}
-				focusProjectNameOrAdd(project.id);
 				toast.error(errorText(err, t("panels.projectTree.closeFailed", { name: project.name })));
 			});
 	};
@@ -366,6 +350,7 @@ export function ProjectTree() {
 						variant="ghost"
 						size="s"
 						data-testid="add-project-menu"
+						data-focus-fallback="projects"
 					/>
 				</AddProjectMenu>
 			</header>
@@ -384,7 +369,7 @@ export function ProjectTree() {
 				onDragCancel={() => setDraggingProjectId(null)}
 				onDragEnd={dropProject}
 			>
-				<ul className="flex flex-col">
+				<ul data-focus-list="projects" className="flex flex-col">
 					{projects.map((project, index) => {
 						const isExpanded = expandedProjectIds[project.id] === true;
 						const list = workspaces[project.id];
@@ -395,6 +380,7 @@ export function ProjectTree() {
 							<li
 								key={project.id}
 								data-testid="project-group"
+								data-focus-row={project.id}
 								data-dragging={draggingProjectId === project.id || undefined}
 								className="relative data-[dragging]:opacity-40"
 							>
@@ -480,7 +466,10 @@ export function ProjectTree() {
 									/>
 								)}
 								{isExpanded && (creationsByProject[project.id]?.length ?? 0) > 0 && (
-									<ul aria-label={t("panels.workspaceCreation.listLabel")}>
+									<ul
+										data-focus-list={`workspaces:${project.id}`}
+										aria-label={t("panels.workspaceCreation.listLabel")}
+									>
 										{creationsByProject[project.id]?.map((creation) => (
 											<WorkspaceCreationRow
 												key={creation.id}
@@ -587,7 +576,10 @@ function SettledPartition({
 	const t = useT();
 	if (!enabled) {
 		return (
-			<ul className="mt-2 flex flex-col gap-2 motion-safe:animate-reveal">
+			<ul
+				data-focus-list={`workspaces:${projectId}`}
+				className="mt-2 flex flex-col gap-2 motion-safe:animate-reveal"
+			>
 				{partition.live.map((workspace) => renderRow(workspace, null))}
 			</ul>
 		);
@@ -597,7 +589,9 @@ function SettledPartition({
 	const remaining = settledCount - shown.length;
 	return (
 		<div className="mt-2 flex flex-col gap-2 motion-safe:animate-reveal">
-			<ul className="flex flex-col gap-2">{partition.live.map((ws) => renderRow(ws, null))}</ul>
+			<ul data-focus-list={`workspaces:${projectId}`} className="flex flex-col gap-2">
+				{partition.live.map((ws) => renderRow(ws, null))}
+			</ul>
 			<div
 				data-testid="settled-shelf"
 				data-count={settledCount}
@@ -607,9 +601,10 @@ function SettledPartition({
 				<button
 					type="button"
 					data-testid="settled-shelf-toggle"
+					data-focus-fallback={`settled:${projectId}`}
 					aria-expanded={shelfExpanded}
 					onClick={() => useAppStore.getState().toggleSettledShelf(projectId)}
-					className="flex min-w-0 flex-1 items-center gap-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
+					className="-mx-4 -my-2 flex min-w-0 flex-1 items-center gap-4 rounded-sm px-4 py-2 text-left focus-visible:focus-ring-inset"
 				>
 					{shelfExpanded ? (
 						<ChevronDown className="size-14 shrink-0" />
@@ -623,7 +618,11 @@ function SettledPartition({
 				</button>
 			</div>
 			{shelfExpanded ? (
-				<ul className="flex flex-col gap-2" data-testid="settled-shelf-rows">
+				<ul
+					className="flex flex-col gap-2"
+					data-testid="settled-shelf-rows"
+					data-focus-list={`settled:${projectId}`}
+				>
 					{settledCount === 0 ? (
 						<li className="py-4 pr-4 pl-24 text-text-subtle tr-text-metadata">
 							{t("panels.projectTree.nothingSettled")}
@@ -639,7 +638,7 @@ function SettledPartition({
 								onClick={() =>
 									useAppStore.getState().showMoreSettled(projectId, shelfShown + SETTLED_SHELF_MORE)
 								}
-								className="flex h-panel-row w-full items-center rounded-sm pl-24 text-left text-text-subtle tr-text-metadata hover:bg-control-bg-hovered hover:text-text-muted"
+								className="flex h-panel-row w-full items-center rounded-sm pl-24 text-left text-text-subtle tr-text-metadata hover:bg-control-bg-hovered hover:text-text-muted focus-visible:focus-ring-inset"
 							>
 								{t("panels.projectTree.showMore", {
 									count: Math.min(SETTLED_SHELF_MORE, remaining),
@@ -701,9 +700,10 @@ function ProjectRow({
 		listeners: dragListeners,
 		setNodeRef: setDragNode,
 	} = useDraggable({ id: project.id, disabled: !draggable });
+	const [newWorkspaceShortcut = "", newWorkspaceAlias = ""] = keybindingLabels("workspace.new");
 	const createWorkspaceLabel = t("panels.projectTree.createWorkspaceShortcut", {
-		shortcut: platformShortcutLabel("N"),
-		altShortcut: platformShortcutLabel("N", { alt: true }),
+		shortcut: newWorkspaceShortcut,
+		altShortcut: newWorkspaceAlias,
 	});
 	const Chevron = isExpanded ? ChevronDown : ChevronRight;
 	const Folder = isSelected ? RiFolderFill : RiFolderLine;
@@ -752,7 +752,7 @@ function ProjectRow({
 						: t("panels.projectTree.expandProject")
 				}
 				onClick={onToggle}
-				className="flex size-16 shrink-0 items-center justify-center rounded-sm text-text-muted transition-colors hover:text-text-default focus-visible:text-text-default"
+				className="flex size-16 shrink-0 items-center justify-center rounded-sm text-text-muted transition-colors hover:text-text-default focus-visible:text-text-default focus-visible:focus-ring"
 				data-expanded={isExpanded}
 			>
 				<Chevron className="size-16" />
@@ -768,7 +768,10 @@ function ProjectRow({
 						aria-label={t("panels.projectTree.projectName")}
 						defaultValue={project.name}
 						{...renameInputProps}
-						className={cn("w-full min-w-0 border-0 bg-transparent p-0 outline-none", nameClass)}
+						className={cn(
+							"w-full min-w-0 border-0 bg-transparent p-0 focus-visible:focus-ring",
+							nameClass,
+						)}
 					/>
 				</div>
 			) : (
@@ -779,6 +782,7 @@ function ProjectRow({
 					}}
 					type="button"
 					data-testid="project-name"
+					data-focus-row-primary
 					aria-describedby={draggable ? dragAttributes["aria-describedby"] : undefined}
 					aria-keyshortcuts={canMove ? "Alt+Shift+ArrowUp Alt+Shift+ArrowDown" : undefined}
 					{...(draggable ? dragListeners : {})}
@@ -790,7 +794,7 @@ function ProjectRow({
 						(event.key === "ArrowUp" ? onMoveUp : onMoveDown)?.();
 					}}
 					onClick={onSelect}
-					className="flex min-w-0 flex-1 items-center gap-4 text-left"
+					className="-mx-4 -my-2 flex min-w-0 flex-1 items-center gap-4 rounded-sm px-4 py-2 text-left focus-visible:focus-ring-inset"
 				>
 					{folderIcon}
 					<span className={nameClass}>{project.name}</span>
@@ -812,6 +816,7 @@ function ProjectRow({
 				size="s"
 				className="shrink-0"
 				data-testid="add-workspace"
+				data-focus-fallback={`workspaces:${project.id}`}
 				onClick={onAddWorkspace}
 			/>
 		</div>
@@ -993,7 +998,7 @@ function WorkspaceRow({
 		onRename: (_target, name) => onRename(name),
 	});
 
-	const identityClass = `flex min-w-0 flex-1 gap-4 text-left ${isTwoLine ? "items-start" : "items-center"}`;
+	const identityClass = `-mx-4 -my-2 flex min-w-0 flex-1 gap-4 rounded-sm px-4 py-2 text-left focus-visible:focus-ring-inset ${isTwoLine ? "items-start" : "items-center"}`;
 	const identityIcon = isRunning ? (
 		<RunningIcon
 			className={cn("size-14", isTwoLine && "mt-2", isActive ? "text-primary" : "text-text-muted")}
@@ -1063,6 +1068,7 @@ function WorkspaceRow({
 				aria-label={displayName}
 				data-testid="workspace-item"
 				data-row
+				data-focus-row={workspace.id}
 				data-active={isActive}
 				data-kind={workspace.kind ?? "worktree"}
 				data-settled={settled?.kind}
@@ -1087,13 +1093,13 @@ function WorkspaceRow({
 								aria-label={t("panels.projectTree.workspaceName")}
 								defaultValue={workspace.name}
 								{...renameInputProps}
-								className={`w-full min-w-0 truncate border-0 bg-transparent p-0 tr-text-ui leading-tight outline-none ${isActive ? "text-primary" : "text-text-muted"}`}
+								className={`w-full min-w-0 truncate border-0 bg-transparent p-0 tr-text-ui leading-tight focus-visible:focus-ring ${isActive ? "text-primary" : "text-text-muted"}`}
 							/>
 							{branchLabel}
 						</span>
 					</div>
 				) : (
-					<button type="button" onClick={onSelect} className={identityClass}>
+					<button type="button" data-focus-row-primary onClick={onSelect} className={identityClass}>
 						{identityIcon}
 						<span className="flex min-w-0 flex-1 flex-col">
 							<span

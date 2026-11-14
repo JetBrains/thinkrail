@@ -233,6 +233,37 @@
 	-webkit-app-region: no-drag;
 	app-region: no-drag;
 }
+@utility focus-ring {
+	outline: 1px solid var(--color-focus-ring);
+	outline-offset: 1px;
+}
+@utility focus-ring-inset {
+	outline: 1px solid var(--color-focus-ring);
+	outline-offset: -1px;
+}
+@utility focus-ring-inset-deep {
+	outline: 1px solid var(--color-focus-ring);
+	outline-offset: -4px;
+}
+@layer base {
+	:focus-visible {
+		@apply focus-ring;
+	}
+}
+
+/* Active region (COLOR.md): isolation keeps a region's veil inside it, under portals and handles. */
+[data-region] {
+	position: relative;
+	isolation: isolate;
+}
+:root[data-region-tracking] [data-region]:not([data-region-active])::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: 2147483647;
+	pointer-events: none;
+	background: var(--region-inactive-scrim);
+}
 
 .xterm .xterm-rows {
 	font-variant-ligatures: none;
@@ -376,9 +407,9 @@
 .review-composer-input::placeholder {
 	color: var(--text-subtle);
 }
-/* Active/editing is a NEUTRAL border strengthen (control-border-active), not an accent border. */
+/* Focus strengthens the NEUTRAL border (control-border-active) and adds the shared focus ring. */
 .review-composer-input:focus-visible {
-	outline: none;
+	@apply focus-ring;
 	border-color: var(--control-border-active);
 }
 .review-composer-row {
@@ -462,9 +493,9 @@
 	overflow-wrap: break-word;
 	transition: border-color 0.15s;
 }
-/* Active/editing is a NEUTRAL border strengthen (control-border-active), not an accent border. */
+/* Focus strengthens the NEUTRAL border (control-border-active) and adds the shared focus ring. */
 .review-thread-edit:focus-visible {
-	outline: none;
+	@apply focus-ring;
 	border-color: var(--control-border-active);
 }
 /* The preview's in-flow composer + the commented-region mark (parity with Monaco's decorations). */

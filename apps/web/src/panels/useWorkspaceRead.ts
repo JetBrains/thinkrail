@@ -10,14 +10,17 @@ interface WorkspaceReadHandlers<T> {
 
 const isRemoved = (id: string) => Boolean(useAppStore.getState().removedWorkspaceIds[id]);
 
+type ReadTick = (state: ReturnType<typeof useAppStore.getState>, workspaceId: string) => unknown;
+
 export function useWorkspaceRead<T>(
 	workspaceId: string | null,
 	read: (workspaceId: string, readKey: string | undefined) => Promise<T>,
 	handlers: WorkspaceReadHandlers<T>,
 	readKey?: string,
+	readTick: ReadTick = selectWorkspaceTick,
 ): { reload: () => void } {
-	const latest = useRef({ read, handlers, workspaceId, readKey });
-	latest.current = { read, handlers, workspaceId, readKey };
+	const latest = useRef({ read, handlers, workspaceId, readKey, readTick });
+	latest.current = { read, handlers, workspaceId, readKey, readTick };
 	const flightRef = useRef<SingleFlight | null>(null);
 
 	const runRead = useCallback((flight: SingleFlight, id: string, key: string | undefined) => {
@@ -44,9 +47,9 @@ export function useWorkspaceRead<T>(
 		const flight = createSingleFlight();
 		flightRef.current = flight;
 		runRead(flight, workspaceId, readKey);
-		let tick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
+		let tick = latest.current.readTick(useAppStore.getState(), workspaceId);
 		const unsubscribe = useAppStore.subscribe((state) => {
-			const next = selectWorkspaceTick(state, workspaceId);
+			const next = latest.current.readTick(state, workspaceId);
 			if (next === tick) return;
 			tick = next;
 			runRead(flight, workspaceId, readKey);

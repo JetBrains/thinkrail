@@ -122,8 +122,9 @@ treatment.
   Escape dismiss. Confirm fires `project.close` and waits for the full `project.updated` push—no optimistic
   removal; success is the
   row disappearing with no toast, while rejection keeps it and raises an error toast. Menu/dialog dismissal
-  restores the source project-name focus; successful close focuses the fallback project name or the Projects
-  view's Add project control. `ProjectTree` also owns the `NewWorkspaceDialog` the per-project `+` opens **and** each
+  restores the source project-name focus; a successful close leaves focus to the shell's recovery engine
+  (the project rows are a `projects` focus list with Add project as its fallback): the next project's name,
+  else the previous, else Add project. `ProjectTree` also owns the `NewWorkspaceDialog` the per-project `+` opens **and** each
   workspace row's hover-revealed **kebab menu** (`MoreVertical`, controlled `DropdownMenu`) — right-clicking
   anywhere on the row opens that exact menu at the kebab without selecting/activating the workspace, while
   the kebab remains the touch and keyboard-focus path. Its actions are a `DropdownMenuSub` **"Open in"**
@@ -134,7 +135,8 @@ treatment.
   The Default gets neither mutation. "Open in" comes from the host-wide `editor.list`; GUI entries call
   `workspace.openIn`, while terminal-kind Vim activates the workspace and runs through `addTerminal`'s
   one-shot `initialCommand`. Copy writes `worktreePath`; Reveal calls `workspace.reveal`. These requests,
-  `editor.list`, the project workspace-list load, the remove confirm (`RemoveWorkspaceDialog`), and the
+  `editor.list`, the project workspace-list load, the remove confirm (`RemoveWorkspaceDialog`, which for a
+  workspace ThinkRail made also says how many artifacts go with it, from the loaded artifacts snapshot), and the
   inline-rename controller below (`createRenameController` / `useInlineRename`, shared with project rename) live once in
   `workspaceActions.ts` so the shell's topbar workspace menu ([[submodule-web-shell-location-bar]]) offers
   the same actions — including the capability-aware pending rename — without a second implementation. The
@@ -328,9 +330,15 @@ treatment.
   folder or link, a compacted folder's deepest folder — on the session-only in-app clipboard
   (`store.fileClipboard`, not the OS clipboard, cleared with its workspace or when its entry is deleted);
   **Paste** (only while the clipboard holds an entry) asks `fs.copy` for a copy beside a file or inside a
-  folder — across workspaces too, never a move — under the host's ` copy` / ` copy N` name, then expands
+  folder — across workspaces too, a copy unless the entry was cut (below) — under the host's ` copy` /
+  ` copy N` name, then expands
   that folder, and an empty tree offers the same Paste as a button next to *Empty*; **Delete** asks for
-  confirmation and `fs.delete` moves the entry to the OS trash. The confirmation says when an agent is
+  confirmation and `fs.delete` moves the entry to the OS trash. From `ARTIFACTS_PROTOCOL_VERSION` (v121)
+  the menu also has **Cut**: the same clipboard entry marked `cut`, which the next Paste (here or in the
+  Artifacts tool) turns into `fs.move` — refused with "already exists" rather than renamed, and with "on
+  another disk" across file systems, where the entry stays on the clipboard so the user can copy it — and
+  clears once it succeeds.
+  The confirmation says when an agent is
   working in the workspace but does not block — the user's explicit action wins, as with a hunk revert —
   and an open tab of a deleted file keeps its stale-content contract. Failures toast; a folder past the
   host's copy bound and an entry that changed under the paste or delete (`ENTRY_CHANGED`) get their own
@@ -573,7 +581,9 @@ while it is invisible; under reduced motion the swap is instant. Reaching done p
 `onboardingDismissed`; the wizard (and with it the hidden rail and held prompts) stays until a project opens. A still-empty
 refresh warns and offers **Check again**
 (re-runs both reads, e.g. after fixing the account elsewhere) and Back to the choices — Back alone could not
-return, since the provider is configured and so no longer listed. The wizard owns no project step of its own and shows no progress strip.
+return, since the provider is configured and so no longer listed. Each step that replaces another moves
+focus to its title (`tabIndex=-1`), so the keyboard never rests on a vanished button; Back focuses the
+picked provider's option when it is still listed, else the options' first control. The wizard owns no project step of its own and shows no progress strip.
 **Skip setup** is on every screen before done except privacy, whose Continue is the only way on; skipping also cancels any
 target-less login still pending in the dialog (`cancelUnownedLogin`, shared with `ConnectProviderDialog`).
 A login is owned by the start that requested it (`startReservedLogin`): when the surface closes before
@@ -922,11 +932,13 @@ a project picker, the prompt hero, and the reused
   busy, for an unused row, and for a model pi doesn't serve yet (an unsaved server or newly found model —
   its title asks to save the server first). A failed context read or write is not an unsaved model: every
   field locks with the load-failure title, and the list is headed by the same `ModelContextLoadFailed`
-  line and Retry that `ModelContextControls` shows. Re-detecting keeps selections and saved
-  facts the server doesn't report, takes reported ones, drops a saved max output once a new context is
-  reported, keeps models the server no longer lists, and keeps existing rows first with newly found ones appended; an unchanged saved address stays as written. The
-  pure draft rules live in `customEndpointDraft`; probe failures render as localized inline status and
-  host save errors render inline; and
+  line and Retry that `ModelContextControls` shows. Re-detecting keeps selections and saved facts the
+  server doesn't report, takes reported ones, keeps models the server no longer lists, and keeps
+  existing rows first with newly found ones appended; an unchanged saved address stays as written.
+  Re-detecting drops a saved max output only when a context was saved and the server now reports a
+  different one: that value may be derived from the old context, and the draft can't tell a derived
+  value from a hand-set one. The pure draft rules live in `customEndpointDraft`; probe failures render
+  as localized inline status and host save errors render inline; and
   the **`JetBrainsAiCard`** — route Central-supported models through the user's JetBrains subscription while
   keeping ThinkRail's embedded PI — a state machine over the typed `JbcentralStatus` +
   `provider.jbcentral*`: absent (official host-OS install guidance + Recheck), outdated — below the host's
@@ -1241,8 +1253,9 @@ a project picker, the prompt hero, and the reused
   `modelContextWindowLimits` (the contracts' 272K–1M range but for a `custom-*` row) that saves on Enter or blur — except a blur onto a sibling preset of the same control, so picking
   Default/1M never first commits a half-typed value; the copy labels it an app policy, not a verified provider limit, and
   external values outside it stay visible but cannot be re-applied. Drafts are UI-local and are dropped
-  when their authoritative override changes; inputs are not remounted, and after a disabled save focus
-  returns only to the control that initiated it. Pi's shared configuration is authoritative — there is
+  when their authoritative override changes; inputs are not remounted, and after a disabled save the
+  shell's focus recovery returns focus to the control that held it ([[submodule-web-shell]], *Focus
+  recovery*) — the block keeps no focus logic of its own. Pi's shared configuration is authoritative — there is
   no optimistic value or AppConfig field; reads follow catalog/provider invalidation, fence stale
   replies, disable controls while pending, and replace controls with Retry on failure. The props-driven
   `ModelContextControls` owns presentation and `useModelContextSettings` the reads and writes, shared
@@ -1605,8 +1618,8 @@ a project picker, the prompt hero, and the reused
   branch has no commits. The total diff comes from the workspace record's `diffStats`; each piece
   hides when unknown. Between header and summary lives the **NEXT-ACTION banner** (`plan-next-action`,
   `data-kind`) — the report's one "what now", rendering the FIRST matching state by urgency:
-  `fix` (N steps carry changes_requested → **Show step** scrolls to the first flagged item and
-  auto-expands it via the `focusRequest` token — `{ id, tick }`, tick bumped per click and consumed
+  `fix` (N steps carry changes_requested → **Show step** scrolls to the first flagged item, focuses its
+  toggle (`preventScroll`, the scroll is already smooth) and auto-expands it via the `focusRequest` token — `{ id, tick }`, tick bumped per click and consumed
   once per tick by the target `ItemBlock`, so a re-click re-expands a manually collapsed row and a
   stale request can't reopen it later) → `review`
   (N unsettled reviewables → an inline **Review All** button, same `todo.reviewAll` flow as the
@@ -2211,7 +2224,9 @@ own section. The kebab menu (`plan-menu`, a
   no/dangling parent; default-expanded). There is **no persistent Refresh control or panel toolbar row**:
   routine synchronization is automatic. A fetch **failure renders a distinct inline error hint with Retry**,
   never the "No specs" empty state — offline and empty are different answers. With a previous snapshot, the
-  hint sits above the retained tree; without one, it replaces the loading state. The tree build (`specTree.ts`)
+  hint sits above the retained tree; without one, it replaces the loading state. A **finished task-spec**
+  (`type: task-spec`, `status: done`) is left out of the tree, as the spec tools leave it out of search
+  ([[submodule-spec-graph-core]]); the host still reports it, and the Artifacts tool lists its file. The tree build (`specTree.ts`)
   assumes a well-formed graph — **parent cycles are `spec_validate`'s problem, not the viewer's** (cycle
   members are unreachable from any root and simply don't render) — but the walk is **visited-guarded**,
   so a malformed graph can never hang or loop the UI. Tree only in this slice — no cross-edge display,
@@ -2234,6 +2249,39 @@ own section. The kebab menu (`plan-menu`, a
   (preview/keep) but keeps its own directory behaviour — a whole-row click toggles dirs, no collision
   there. File and folder rows also carry the copy-path, Copy / Paste and Delete context menu described with
   `FilesPanel`.
+- **`ArtifactsPanel` is the Artifacts tool's body** — a reader of the host's artifact index
+  ([[submodule-server-artifacts]]). Like specs, the `artifacts.list` snapshot lands in the store
+  (`artifactsByWorkspace`) through **`useWorkspaceArtifacts`**, which the workbench calls for every
+  workspace (chats included) so the rail can show new arrivals while the tool is hidden; it re-reads on the
+  host's `workspace.artifactsChanged` nudge and on reconnect (`selectArtifactsTick`, passed to
+  `useWorkspaceRead` instead of the fs tick, because the host already reconciles on file changes and an fs
+  tick per agent edit would re-list for nothing). The panel is two sections, newest first: **Artifacts**
+  (files under `.thinkrail/context/`; a two-line row: the name, then the folder inside the artifacts
+  folder — or `Task spec · <status>` joined from the spec snapshot by path — and a chip naming the writing
+  chat that opens it; no relative age, since the order already says what is newest — the exact change time
+  is the row's hover title) and **Other agent files · ignored** (one row per ignored output, a folder lazily
+  expandable through `fs.readDir`, with its file count), hidden by the header's eye toggle. A row the host
+  marks `deleted` reads "Deleted, not by you" with Restore; opening it waits for the restore. The panel
+  **opens on This chat**: the attended chat's artifacts (`selectArtifactMentionTarget`), following it as the
+  center switches chats; with no chat attended it shows all, and All chats is a click away but not
+  remembered across mounts. Unattributed artifacts belong to no chat. Whenever the filter hides rows, a
+  line under the list counts them ("N more from other chats") with **Show all chats**, so the default never
+  makes a workspace look emptier than it is. Paste puts the Files clipboard into the artifacts folder. Every row has one context menu: Mention in chat
+  (pastes `@<path> ` into the attended chat's composer through `pasteIntoComposer` and focuses it, closing the chat's history overlay as `Mod+L` does — run once the row
+menu has closed, because a closing menu returns focus to its row; disabled
+  without one), Reveal in Files, the two Copy paths, Copy / Cut (the shared Files clipboard; a cut pastes
+  through `fs.move`), Rename (inline, `fs.rename`), Restore for a deleted row, and Delete — `fs.delete` for a
+  live file, `artifacts.discard` for a kept copy, both behind a confirmation. The sections emit the shell's
+  focus-recovery markup (lists `artifacts` and `artifacts-outputs[:<folder>]`, the path as row id, the name
+  as the row's landing control), so a delete, restore or rename moves focus to the row or its neighbour
+  instead of `<body>`. **New** means newer than this
+  client's per-workspace seen watermark (`artifactsSeenByWorkspace`, the newest `firstSeenAt` / output
+  `changedAt`, so only host timestamps are compared): the first snapshot of a workspace is taken as seen, a
+  showing panel advances the watermark, rows newer than the watermark it opened with stay highlighted while
+  it shows, and `selectArtifactsUnseen` drives the rail dot. While the eye toggle hides ignored outputs,
+  their changes neither advance the watermark nor light the dot. The watermarks and the ignored toggle persist
+  per client (`shell/artifactsPreference.ts`). "Update the ThinkRail host" shows only once a welcome reports
+  a host older than v121; between sockets the panel keeps its last snapshot.
 - **Chat deep-links remain arrangement-agnostic.** A shell-owned **`LayoutIntent`** names the singleton tool;
   the shell resolves its current side/group, reveals it in place, and selects it locally. `changesRequest`
   and `specRequest` add the one path to focus/open without naming a layout destination. A divider chip that
@@ -2401,7 +2449,14 @@ own section. The kebab menu (`plan-menu`, a
   one busy flag, not new mutations. The cursor is the step's identity (a reading step's position in the order — the contract allows one file twice — or a finding id), so a
   finding resolved from under it yields to its successor instead of skipping one. The rail never renders
   on phone-class viewports — 280px of a 390px
-  screen would leave no diff to guide through. Plain-letter shortcuts (`V`, `J`, `N`, `P`) belong to the
+  screen would leave no diff to guide through. A keyboard step (`Alt+↑` / `Alt+↓`, `V` advancing, `J`, `N`,
+  `P`) and a click on a reading step or finding move focus to what it revealed — the section header's first
+  control, or the finding card's first control once `useReviewReveal` scrolls it into view; the
+  `Prev / Next`, guide and bottom-bar buttons keep focus, so they can be pressed again (the reveal reaches
+  the renderer as a review focus with `moveFocus: false`: it scrolls to a finding without focusing it), and
+  one that disables at the end hands focus to its nearest enabled sibling through the shell's recovery
+  engine.
+  Plain-letter shortcuts (`V`, `J`, `N`, `P`) belong to the
   review tab the center is looking at (`ownsReviewShortcut`: the attention group's selected tab, no
   modal or menu layer open, no text-entry target, and no earlier handler consumed the event), so two review scopes split side by side cannot both answer
   one keystroke. **Scale rules**:

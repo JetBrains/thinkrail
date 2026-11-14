@@ -79,7 +79,7 @@ export function ChangesReviewGuide({
 	files: readonly GitFileChange[];
 	guide: ReviewGuide | undefined;
 	comments: readonly ReviewComment[] | undefined;
-	onReveal: (path: string, commentId?: string) => void;
+	onReveal: (path: string, commentId: string | undefined, focus: boolean) => void;
 }) {
 	const t = useT();
 	const { workspaceId } = tab;
@@ -102,18 +102,19 @@ export function ChangesReviewGuide({
 		void Promise.resolve().then(operation).then(done, done);
 	};
 
-	const go = (index: number) => {
+	const go = (index: number, focus: boolean) => {
 		const step = steps[index];
 		if (!step) return;
 		setCursorAt({ key: guideStepKey(step), index });
-		if (step.path) onReveal(step.path, step.kind === "finding" ? step.comment.id : undefined);
+		if (step.path)
+			onReveal(step.path, step.kind === "finding" ? step.comment.id : undefined, focus);
 	};
-	const stepFrom = (from: number, delta: 1 | -1) => {
+	const stepFrom = (from: number, delta: 1 | -1, focus: boolean) => {
 		const index = nextGuideStep(steps, inScope, from, delta);
-		if (index !== null) go(index);
+		if (index !== null) go(index, focus);
 	};
-	const next = () => stepFrom(cursor, 1);
-	const previous = () => stepFrom(Math.max(cursor, 0), -1);
+	const next = (focus: boolean) => stepFrom(cursor, 1, focus);
+	const previous = (focus: boolean) => stepFrom(Math.max(cursor, 0), -1, focus);
 
 	useEffect(() => {
 		if (steps.length === 0) return;
@@ -122,10 +123,10 @@ export function ChangesReviewGuide({
 			if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
 			if (event.key === NEXT_KEY) {
 				event.preventDefault();
-				next();
+				next(true);
 			} else if (event.key === PREVIOUS_KEY) {
 				event.preventDefault();
-				previous();
+				previous(true);
 			}
 		};
 		window.addEventListener("keydown", onKey);
@@ -175,11 +176,11 @@ export function ChangesReviewGuide({
 											data-testid="changes-review-guide-step"
 											data-active={cursor === index ? true : undefined}
 											disabled={!inScope.has(step.path)}
-											onClick={() => go(index)}
-											className={`flex w-full items-start gap-8 border-l-2 px-12 py-4 text-left outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary disabled:opacity-50 disabled:hover:bg-transparent ${
+											onClick={() => go(index, true)}
+											className={`relative flex w-full items-start gap-8 px-12 py-4 text-left hover:bg-control-bg-hovered focus-visible:focus-ring-inset disabled:opacity-50 disabled:hover:bg-transparent ${
 												cursor === index
-													? "border-primary bg-control-bg-selected"
-													: "border-transparent"
+													? "bg-control-bg-selected before:absolute before:inset-y-0 before:left-2 before:w-2 before:bg-primary before:content-['']"
+													: ""
 											}`}
 										>
 											<span
@@ -226,8 +227,8 @@ export function ChangesReviewGuide({
 									>
 										<button
 											type="button"
-											onClick={() => go(index)}
-											className="flex w-full flex-col items-start gap-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
+											onClick={() => go(index, true)}
+											className="flex w-full flex-col items-start gap-2 text-left focus-visible:focus-ring-inset"
 										>
 											<span className="flex items-center gap-4 tr-text-metadata text-text-subtle">
 												<Robot className="size-12" />
@@ -267,14 +268,14 @@ export function ChangesReviewGuide({
 					label={t("changes.guide.previous", { key: PREVIOUS_KEY.toUpperCase() })}
 					data-testid="changes-review-guide-prev"
 					disabled={steps.length === 0}
-					onClick={previous}
+					onClick={() => previous(false)}
 				/>
 				<Button
 					size="m"
 					iconRight={ChevronRight}
 					data-testid="changes-review-guide-next"
 					disabled={steps.length === 0}
-					onClick={next}
+					onClick={() => next(false)}
 					className="flex-1"
 				>
 					{cursor < 0

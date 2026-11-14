@@ -106,6 +106,12 @@ export interface NativeShortcutsBridge {
 	quit(): Promise<void>;
 }
 
+export type NativePageZoomAction = "in" | "out" | "reset";
+
+export interface NativePageZoomBridge {
+	request(action: NativePageZoomAction): void;
+}
+
 /** Translated labels for the desktop's custom native menu items, keyed by catalog key. */
 export interface NativeMenuBridge {
 	setLabels(labels: Readonly<Record<string, string>>): void;

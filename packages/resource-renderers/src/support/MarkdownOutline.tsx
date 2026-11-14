@@ -7,7 +7,7 @@ import {
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { MarkdownOutlineSide } from "../host";
 import {
 	lastElementAtTop,
@@ -76,7 +76,7 @@ function OutlineList({
 							aria-current={current ? "location" : undefined}
 							title={node.text}
 							className={cn(
-								"flex h-panel-row w-full min-w-0 items-center rounded-sm px-4 text-left tr-text-ui outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
+								"flex h-panel-row w-full min-w-0 items-center rounded-sm px-4 text-left tr-text-ui focus-visible:focus-ring-inset",
 								current
 									? "bg-control-bg-selected text-text-default"
 									: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
@@ -109,6 +109,7 @@ export function MarkdownOutline({
 	onOpenChange: (open: boolean) => void;
 }) {
 	const t = useT();
+	const toggleSlot = `markdown-outline-toggle${useId()}`;
 	const listRef = useRef<HTMLDivElement>(null);
 	const tree = useMemo(() => nestOutlineHeadings(headings), [headings]);
 	const active = useActiveHeading(scroller, headings, open);
@@ -132,6 +133,7 @@ export function MarkdownOutline({
 				<IconButton
 					icon={icons.closed}
 					label={label}
+					data-focus-slot={toggleSlot}
 					data-testid="markdown-outline-toggle"
 					aria-pressed={false}
 					onClick={() => onOpenChange(true)}
@@ -154,6 +156,7 @@ export function MarkdownOutline({
 				<IconButton
 					icon={icons.open}
 					label={label}
+					data-focus-slot={toggleSlot}
 					data-testid="markdown-outline-toggle"
 					aria-pressed
 					selected

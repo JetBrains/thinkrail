@@ -55,7 +55,7 @@ function McpCallRow({ call }: { call: McpServerCall }) {
 				data-testid="resource-mcp-call-toggle"
 				aria-expanded={expanded}
 				onClick={() => setExpanded(!expanded)}
-				className="flex w-full cursor-pointer select-none items-center gap-8 px-8 py-4 text-left tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex w-full cursor-pointer select-none items-center gap-8 px-8 py-4 text-left tr-text-metadata focus-visible:focus-ring-inset"
 			>
 				<CallStatus status={status} />
 				<span className="shrink-0 text-text-default">{call.tool}</span>

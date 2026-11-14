@@ -178,6 +178,8 @@ export const BottomGroupView = memo(function BottomGroupView({
 			id={groupDomId(location)}
 			data-testid="bottom-group"
 			data-group-id={group.id}
+			data-region={group.id}
+			data-region-kind="bottom"
 			data-tools={group.tabs.flatMap((tab) => (tab.kind === "tool" ? [tab.tool] : [])).join(" ")}
 			data-folded="false"
 			tabIndex={-1}
@@ -186,7 +188,7 @@ export const BottomGroupView = memo(function BottomGroupView({
 					? t("workbench.bottom.groupNamed", { name: selectedName })
 					: t("workbench.bottom.emptyGroup")
 			}
-			className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-container-sidebar-bg outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+			className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-container-sidebar-bg focus-visible:focus-ring-inset"
 			onFocusCapture={() => shared.onFocusGroup(location, selected?.id)}
 		>
 			<AuxiliaryGroupHeader
@@ -209,6 +211,8 @@ export const BottomGroupView = memo(function BottomGroupView({
 				id={groupPanelId(location)}
 				role={selected?.kind === "terminal" ? "tabpanel" : undefined}
 				aria-labelledby={selected ? tabDomId(location, selected.id) : undefined}
+				data-focus-default={selected?.kind === "tool" || undefined}
+				data-tool-body={selected?.kind === "tool" ? selected.tool : undefined}
 				className="relative min-h-0 flex-1 overflow-auto"
 			>
 				{selected ? (

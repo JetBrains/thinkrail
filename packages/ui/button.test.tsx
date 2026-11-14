@@ -79,24 +79,18 @@ test("inside a data-row, ghost hover, pressed, focus and selected rise to the el
 	for (const variant of VARIANTS.filter((v) => v !== "ghost")) expect(inRow(variant)).toEqual([]);
 });
 
-test("focus is an offset outline in every variant, never a ring", () => {
+test("focus is the shared focus ring in every variant", () => {
 	for (const variant of VARIANTS) {
 		const c = classOf(render(<Button variant={variant}>x</Button>));
-		expect(c).toEqual(
-			expect.arrayContaining([
-				"focus-visible:outline-2",
-				"focus-visible:outline-offset-2",
-				"focus-visible:outline-primary",
-			]),
-		);
-		expect(c.some((x) => x.includes("ring"))).toBe(false);
+		expect(c).toContain("focus-visible:focus-ring");
+		expect(c.filter((x) => /\b(ring-|outline-(?!none))/.test(x))).toEqual([]);
 	}
 });
 
 test("buttonVariants resolves its own compounds, so a link or rail styled with it matches the component", () => {
 	const ghostIcon = buttonVariants({ variant: "ghost", size: "m", shape: "icon" }).split(" ");
-	expect(ghostIcon).toContain("focus-visible:-outline-offset-2");
-	expect(ghostIcon).not.toContain("focus-visible:outline-offset-2");
+	expect(ghostIcon).toContain("focus-visible:focus-ring-inset");
+	expect(ghostIcon).not.toContain("focus-visible:focus-ring");
 	const warning = buttonVariants({ variant: "ghost", tone: "warning" }).split(" ");
 	expect(warning).toContain("text-feedback-warning");
 	expect(warning).not.toContain("text-text-muted");
@@ -292,12 +286,13 @@ test("the disabled skin follows a disabled fieldset too, but never a loading but
 
 test("a ghost icon-only button draws its focus ring inside its square, so a flush strip never clips it", () => {
 	const ghostIcon = classOf(render(<IconButton icon={RiAddLine} label="Hide" />));
-	expect(ghostIcon).toContain("focus-visible:-outline-offset-2");
-	expect(ghostIcon).not.toContain("focus-visible:outline-offset-2");
+	expect(ghostIcon).toContain("focus-visible:focus-ring-inset");
+	expect(ghostIcon).not.toContain("focus-visible:focus-ring");
 	const outlineIcon = classOf(
 		render(<IconButton variant="outline" icon={RiAddLine} label="Comment" />),
 	);
-	expect(outlineIcon).toContain("focus-visible:outline-offset-2");
+	expect(outlineIcon).toContain("focus-visible:focus-ring");
+	expect(outlineIcon).not.toContain("focus-visible:focus-ring-inset");
 });
 
 test("a caller's aria-busy survives on an enabled button that is not loading", () => {

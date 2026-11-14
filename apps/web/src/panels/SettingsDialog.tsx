@@ -96,7 +96,7 @@ export function SettingsDialog({
 												data-active={active}
 												onClick={() => useAppStore.getState().setSettingsSection(id)}
 												className={cn(
-													"flex shrink-0 items-center gap-4 rounded-sm px-4 py-4 text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary md:min-h-28 md:w-full md:px-8 md:py-0",
+													"flex shrink-0 items-center gap-4 rounded-sm px-4 py-4 text-left tr-text-ui transition-colors focus-visible:focus-ring-inset md:min-h-28 md:w-full md:px-8 md:py-0",
 													active
 														? "bg-primary-subtle text-primary"
 														: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
@@ -117,7 +117,7 @@ export function SettingsDialog({
 							data-active={feedbackActive}
 							onClick={() => useAppStore.getState().setSettingsSection(SettingsSection.Feedback)}
 							className={cn(
-								"shrink-0 rounded-sm border border-primary-soft px-8 py-4 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary md:mt-auto md:px-12 md:py-8",
+								"shrink-0 rounded-sm border border-primary-soft px-8 py-4 text-left transition-colors focus-visible:focus-ring md:mt-auto md:px-12 md:py-8",
 								feedbackActive ? "bg-primary-subtle" : "bg-control-bg hover:bg-control-bg-hovered",
 							)}
 						>

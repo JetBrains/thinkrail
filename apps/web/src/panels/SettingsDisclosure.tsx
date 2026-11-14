@@ -27,7 +27,7 @@ export function SettingsDisclosure({
 				onClick={onToggle}
 				aria-expanded={expanded}
 				data-testid={testId}
-				className="flex w-full items-center gap-8 py-12 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex w-full items-center gap-8 py-12 text-left transition-colors focus-visible:focus-ring-inset"
 			>
 				<span className="flex-1 tr-text-ui text-text-default">{label}</span>
 				<span className="truncate tr-text-metadata text-text-muted">{summary}</span>

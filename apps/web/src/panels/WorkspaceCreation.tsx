@@ -213,6 +213,7 @@ export function WorkspaceCreationRow({
 		<li>
 			<div
 				data-testid="workspace-creation-row"
+				data-focus-row={creation.id}
 				data-state={creation.state}
 				data-active={isActive}
 				className={cn(
@@ -222,8 +223,9 @@ export function WorkspaceCreationRow({
 			>
 				<button
 					type="button"
+					data-focus-row-primary
 					onClick={onSelect}
-					className="flex min-w-0 flex-1 items-start gap-4 text-left"
+					className="flex min-w-0 flex-1 items-start gap-4 text-left focus-visible:focus-ring-inset"
 				>
 					<StateIcon
 						creation={creation}

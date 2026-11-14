@@ -98,6 +98,8 @@ export function ProjectHome({
 							<section
 								ref={regionRef}
 								id={PROJECTS_PANE_ID}
+								data-region={PROJECTS_PANE_ID}
+								data-region-kind="home"
 								aria-label={t("shell.projectHome.projects")}
 								aria-hidden={collapsed || undefined}
 								inert={collapsed ? true : undefined}
@@ -120,6 +122,7 @@ export function ProjectHome({
 								>
 									<QuietScrollArea
 										data-testid="left-nav"
+										data-focus-default
 										className="min-h-0 flex-1"
 										viewportClassName="p-panel-inset"
 									>

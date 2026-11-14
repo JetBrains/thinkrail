@@ -4,6 +4,7 @@ import { TableVirtuoso, type TableVirtuosoHandle } from "react-virtuoso";
 import type { ResourceViewProps, ReviewThread } from "../../registry";
 import { ReviewComposer } from "../../support/ReviewComposer";
 import { ReviewThreadCard } from "../../support/ReviewThreadCard";
+import { revealReviewCard } from "../../support/revealFocus";
 import { contentStamp, useStampedComposer } from "../reviewComposerState";
 import { StaleComposerNotice } from "../StaleComposerNotice";
 import {
@@ -80,7 +81,7 @@ export default function CsvView({
 		const card = cardRefs.current.get(focusId);
 		if (!card) return;
 		handledFocusRef.current = focusId;
-		card.scrollIntoView({ block: "center" });
+		revealReviewCard(card, review?.focus?.moveFocus === true);
 		review?.onFocusHandled();
 	}, [focusId, placed, review]);
 
@@ -123,7 +124,7 @@ export default function CsvView({
 								key={entry.thread.id}
 								type="button"
 								aria-label={t("viewer.region.showComment", { number: entry.number })}
-								className="flex size-20 items-center justify-center rounded-full bg-primary tr-text-metadata text-text-on-primary outline-none focus-visible:ring-2 focus-visible:ring-primary"
+								className="flex size-20 items-center justify-center rounded-full bg-primary tr-text-metadata text-text-on-primary focus-visible:focus-ring"
 								onClick={(event) => {
 									event.stopPropagation();
 									scrollToCard(entry.thread.id);

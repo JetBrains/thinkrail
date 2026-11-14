@@ -178,7 +178,7 @@ function ClosedChatRow({
 						defaultValue={chat.title}
 						onKeyDown={onNameKeyDown}
 						onBlur={commitRename}
-						className="min-w-0 flex-1 border-0 bg-transparent p-0 tr-text-ui text-text-default outline-none"
+						className="min-w-0 flex-1 border-0 bg-transparent p-0 tr-text-ui text-text-default focus-visible:focus-ring"
 					/>
 				</div>
 			) : (

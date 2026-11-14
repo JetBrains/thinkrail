@@ -14,6 +14,8 @@ import {
 	RiLayout2Fill,
 	RiLayout2Line,
 	RiListCheck3,
+	RiShapesFill,
+	RiShapesLine,
 	RiTaskFill,
 	RiTaskLine,
 	RiTerminalBoxFill,
@@ -53,6 +55,8 @@ export function tabIcon(tab: LayoutTab, active = false, cls = "size-14 shrink-0"
 					return active ? <RiDiscussFill className={cls} /> : <RiDiscussLine className={cls} />;
 				case "plan":
 					return active ? <RiTaskFill className={cls} /> : <RiTaskLine className={cls} />;
+				case "artifacts":
+					return active ? <RiShapesFill className={cls} /> : <RiShapesLine className={cls} />;
 				default:
 					return active ? <RiLayout2Fill className={cls} /> : <RiLayout2Line className={cls} />;
 			}

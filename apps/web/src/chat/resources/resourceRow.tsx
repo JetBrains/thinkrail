@@ -311,7 +311,7 @@ function RowActionButton({
 				onClick();
 			}}
 			className={cn(
-				"inline-flex size-24 shrink-0 items-center justify-center rounded-sm text-text-muted outline-none hover:bg-control-bg hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text",
+				"inline-flex size-24 shrink-0 items-center justify-center rounded-sm text-text-muted hover:bg-control-bg hover:text-text-default focus-visible:focus-ring-inset disabled:text-control-disabled-text",
 				danger && "hover:bg-feedback-error-subtle hover:text-feedback-error",
 			)}
 		>
@@ -445,7 +445,7 @@ export function ResourceRow({
 					tabIndex={0}
 					onClick={onSelect}
 					onKeyDown={onKeyDown}
-					className="grid min-w-0 cursor-default grid-cols-[auto_minmax(0,1fr)] items-center gap-8 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
+					className="grid min-w-0 cursor-default grid-cols-[auto_minmax(0,1fr)] items-center gap-8 rounded-sm focus-visible:focus-ring"
 				>
 					<KindGlyph kind={resource.kind} state={state} />
 					<span className="flex min-w-0 flex-col">
@@ -474,7 +474,7 @@ export function ResourceRow({
 					data-testid="resource-inspect"
 					title={t("resources.row.inspect", { name })}
 					onClick={onSelect}
-					className="flex min-w-0 items-baseline gap-8 rounded-xs text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
+					className="flex min-w-0 items-baseline gap-8 rounded-xs text-left focus-visible:focus-ring"
 				>
 					<span className={cn("min-w-0 max-w-[60%] shrink-0 truncate", nameClass)}>{name}</span>
 					<span className={cn(activityClass, "flex-1")}>{activity}</span>

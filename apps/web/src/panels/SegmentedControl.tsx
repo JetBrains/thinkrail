@@ -61,7 +61,7 @@ export function SegmentedControl<T extends string>({
 								selected
 									? "rounded-sm bg-control-bg-selected text-text-default"
 									: "text-text-muted hover:text-text-default",
-								"peer-focus-visible:ring-2 peer-focus-visible:ring-inset peer-focus-visible:ring-primary",
+								"peer-focus-visible:focus-ring-inset",
 								"peer-disabled:text-control-disabled-text peer-disabled:hover:text-control-disabled-text",
 							)}
 						>

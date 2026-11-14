@@ -42,7 +42,7 @@ export function VisibleModelsSettings({ models }: Props) {
 				aria-expanded={expanded}
 				aria-controls={listId}
 				onClick={() => setExpanded(!expanded)}
-				className="flex w-full items-start gap-8 py-12 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex w-full items-start gap-8 py-12 text-left transition-colors focus-visible:focus-ring-inset"
 			>
 				<span className="flex flex-1 flex-col gap-2">
 					<span className="tr-text-ui text-text-default">{t("settings.visibleModels.title")}</span>
@@ -71,7 +71,7 @@ export function VisibleModelsSettings({ models }: Props) {
 							onChange={(e) => setSearch(e.target.value)}
 							placeholder={t("settings.visibleModels.searchPlaceholder")}
 							aria-label={t("settings.visibleModels.searchLabel")}
-							className="h-32 w-full rounded-sm border border-control-border-default bg-control-bg pl-24 pr-8 tr-text-ui text-text-default placeholder:text-text-muted outline-none transition-colors focus:border-control-border-active"
+							className="h-32 w-full rounded-sm border border-control-border-default bg-control-bg pl-24 pr-8 tr-text-ui text-text-default placeholder:text-text-muted transition-colors focus:border-control-border-active focus-visible:focus-ring"
 						/>
 					</div>
 

@@ -30,7 +30,7 @@ function DeviceLink({ href, children }: { href: string; children?: ReactNode }) 
 			target="_blank"
 			rel="noopener noreferrer"
 			data-testid="login-device-url"
-			className="inline-flex items-center gap-2 break-all rounded-sm text-primary underline underline-offset-2 outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary"
+			className="inline-flex items-center gap-2 break-all rounded-sm text-primary underline underline-offset-2 hover:opacity-80 focus-visible:focus-ring"
 		>
 			{children}
 			<ExternalLink className="size-12 shrink-0" />
@@ -185,7 +185,7 @@ export function LoginDialog({
 									readOnly
 									value={state.url}
 									data-testid="login-url-field"
-									className="min-w-0 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default outline-none focus-visible:border-control-border-active"
+									className="min-w-0 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default focus-visible:border-control-border-active focus-visible:focus-ring"
 								/>
 							</div>
 						) : null}
@@ -226,7 +226,7 @@ export function LoginDialog({
 												data-option={option.id}
 												onClick={() => onReply(option.id)}
 												className={cn(
-													"flex w-full items-start rounded-sm border bg-clip-padding bg-container-workspace-bg p-12 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary",
+													"flex w-full items-start rounded-sm border bg-clip-padding bg-container-workspace-bg p-12 text-left transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring",
 													recommended ? "border-primary-muted" : "border-border-default",
 												)}
 											>
@@ -250,7 +250,7 @@ export function LoginDialog({
 								type="button"
 								data-testid="login-paste-toggle"
 								onClick={() => setPasteOpen(true)}
-								className="self-start rounded-sm text-text-muted tr-text-metadata underline underline-offset-2 outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+								className="self-start rounded-sm text-text-muted tr-text-metadata underline underline-offset-2 hover:text-text-default focus-visible:focus-ring"
 							>
 								{t("auth.login.pasteToggle")}
 							</button>
@@ -280,7 +280,7 @@ export function LoginDialog({
 											submitPrompt();
 										}
 									}}
-									className="min-w-0 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:border-control-border-active"
+									className="min-w-0 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default placeholder:text-text-muted focus-visible:border-control-border-active focus-visible:focus-ring"
 								/>
 							</div>
 						) : null}

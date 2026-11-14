@@ -32,7 +32,7 @@ function ToastViewport({
 			ref={watchToastPresses}
 			label={label ?? t("common.notificationsRegion", { hotkey: "{hotkey}" })}
 			className={cn(
-				"fixed inset-x-0 bottom-0 z-[100] flex max-h-screen w-full flex-col gap-8 p-12 outline-none sm:inset-x-auto sm:right-0 sm:bottom-0 sm:w-[380px] sm:max-w-[100vw]",
+				"fixed inset-x-0 bottom-0 z-[100] flex max-h-screen w-full flex-col gap-8 p-12 focus-visible:focus-ring-inset sm:inset-x-auto sm:right-0 sm:bottom-0 sm:w-[380px] sm:max-w-[100vw]",
 				className,
 			)}
 			{...props}
