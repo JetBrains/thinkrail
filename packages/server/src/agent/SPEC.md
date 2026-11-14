@@ -628,10 +628,15 @@ re-opened transcripts provider-valid.
     **Every extension string the bridge publishes for display is plain text** (#890): stripping, not
     rendering colours, keeps one look with `plainTextTheme`. Each member strips its own fields, not
     `publish`, so the stored dialog snapshot stays plain. A complete sequence goes; a broken one (no
-    final byte or terminator) loses only its control byte. A non-string passes unchanged: pi loads
-    extensions untyped, and a throw outside pi's handlers kills the host. A `select` answer maps back by
-    index to a copy of the options as passed; options that differ only in colour look alike and the first
-    wins. Built-ins fail: `util.stripVTControlCharacters` leaves OSC tails, `Bun.stripANSI` is missing in
+    final byte or terminator) loses only its control byte. **A non-string is absent text** (#1356): pi
+    loads extensions untyped, a throw outside pi's handlers kills the host, and the page trusts the wire
+    contract's `string` (a non-string title once took the whole page down). So the bridge never throws
+    on one and never forwards one: a title or message becomes `""`, a status clears, a widget line is
+    `""`, a placeholder or prefill is omitted, an option is dropped, and a notify or editor edit is
+    skipped. A `select` left with no string option resolves `undefined` without a dialog, `[]` included:
+    a dialog with nothing to pick could only be cancelled by sending a chat message. A `select` answer
+    maps back by index to a copy of the options as passed; options that differ only in colour look alike
+    and the first wins. Built-ins fail: `util.stripVTControlCharacters` leaves OSC tails, `Bun.stripANSI` is missing in
     the Node workflow harness, and pi-tui's `stripTerminalSequences` keeps DCS strings.
   - `toolResponses` — the host half of **interactive tools** (tools whose `execute` waits for the person):
     the per-session response mailbox (`ToolResponseWaiters`), respondability, restart repair support and
