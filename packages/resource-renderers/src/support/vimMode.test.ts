@@ -25,6 +25,7 @@ function makeEditor(lines: readonly string[]) {
 	let selection: IRange | null = null;
 	let scrollTop = 0;
 	let listener: KeyListener | null = null;
+	let contentListener: (() => void) | null = null;
 	const text = lines.join("\n");
 	const offsets: number[] = [];
 	for (const index of lines.keys()) {
@@ -76,11 +77,31 @@ function makeEditor(lines: readonly string[]) {
 			}
 			return matches;
 		},
+		findNextMatch: (query: string, start: IPosition) =>
+			model
+				.findMatches(query)
+				.find(
+					(candidate) =>
+						candidate.range.startLineNumber * 1_000_000 + candidate.range.startColumn >
+						start.lineNumber * 1_000_000 + start.column,
+				),
+		findPreviousMatch: (query: string, start: IPosition) =>
+			model
+				.findMatches(query)
+				.findLast(
+					(candidate) =>
+						candidate.range.startLineNumber * 1_000_000 + candidate.range.startColumn <
+						start.lineNumber * 1_000_000 + start.column,
+				),
 	};
 	const editor = {
 		onKeyDown: (next: KeyListener) => {
 			listener = next;
 			return { dispose: () => (listener = null) };
+		},
+		onDidChangeModelContent: (next: () => void) => {
+			contentListener = next;
+			return { dispose: () => (contentListener = null) };
 		},
 		getModel: () => model,
 		getPosition: () => current,
@@ -150,6 +171,9 @@ function makeEditor(lines: readonly string[]) {
 				stopPropagation: () => {},
 			} as unknown as KeyboardEvent;
 			listener?.({ browserEvent } as unknown as IKeyboardEvent);
+		},
+		modelChanged() {
+			contentListener?.();
 		},
 	};
 }
@@ -252,6 +276,9 @@ describe("Vim mode", () => {
 		fake.emit("v");
 		fake.emit("V", true);
 		expect(state.visualMode).toBe("line");
+		fake.modelChanged();
+		expect(state.visualMode).toBeNull();
+		expect(state.mode).toBe("normal");
 		fake.emit("Escape");
 		controller.dispose();
 	});
