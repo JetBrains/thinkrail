@@ -44,7 +44,6 @@ import {
 import {
 	assertManagedPathFree,
 	managedPathOwned,
-	managedWorktreeRoot,
 	planManagedWorkspace,
 	registerManagedWorkspace,
 } from "./workspaces";
@@ -99,8 +98,8 @@ function projectOf(record: WorkspaceCreationRecord): Project {
 	return project;
 }
 
-function isManagedPath(path: string): boolean {
-	const rel = relative(resolve(managedWorktreeRoot()), resolve(path));
+function isManagedPath(path: string, root: string): boolean {
+	const rel = relative(resolve(root), resolve(path));
 	return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
 }
 
@@ -248,7 +247,7 @@ async function cleanupCreation(
 		entries = await gitWorktreeEntries(projectPath);
 	}
 	if (taken()) return { clean: true, removed };
-	if (existsSync(record.worktreePath) && isManagedPath(record.worktreePath)) {
+	if (existsSync(record.worktreePath) && isManagedPath(record.worktreePath, record.managedRoot)) {
 		await rm(record.worktreePath, { recursive: true, force: true });
 		removed = true;
 	}
@@ -517,6 +516,7 @@ export function startWorkspaceCreation(
 		name: plan.name,
 		branch: plan.branch,
 		worktreePath: plan.worktreePath,
+		managedRoot: dirname(dirname(plan.worktreePath)),
 		baseBranch: plan.baseBranch,
 		state: "running",
 		phase: "preparing",

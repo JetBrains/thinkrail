@@ -114,8 +114,7 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   `worktree add` of a large monorepo froze the host's only event loop for the whole checkout and outlived the
   client's 60s request): `startWorkspaceCreation(projectId, { name?, baseRef?, kickoff?, origin? })` plans the
   branch and path synchronously, persists a record in `workspace-creations.json` (`state: running`, `phase:
-  preparing`, the full kickoff incl. images, and a host-only `origin: "agent"` for an agent's `start_workspace`,
-  which never reaches the wire view) and returns its `WorkspaceCreation` view before any git runs. The job then
+  preparing`, the full kickoff incl. images, a creation-time `managedRoot` used to constrain cleanup even if the setting changes during the job, and a host-only `origin: "agent"` for an agent's `start_workspace`, which never reaches the wire view) and returns its `WorkspaceCreation` view before any git runs. The job then
   (1) fetches a missing remote base, resolves the OID, and runs `worktree add --no-checkout` through `gitAsync`
   (no file writes, so it is quick), (2) moves to `phase: checking-out` and runs `git checkout --progress
   --no-recurse-submodules -f <branch> --` in the new worktree — the split exists because git reports checkout

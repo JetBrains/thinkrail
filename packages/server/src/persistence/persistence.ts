@@ -581,6 +581,7 @@ export type CreationOrigin = "agent";
 
 export type WorkspaceCreationRecord = Omit<WorkspaceCreation, "kickoff"> & {
 	worktreePath: string;
+	managedRoot: string;
 	renamed?: true;
 	baseOid?: string;
 	kickoff?: WorkspaceKickoff;
@@ -592,6 +593,9 @@ export function loadWorkspaceCreations(): WorkspaceCreationRecord[] {
 		(creation) => ({
 			...creation,
 			worktreePath: storedDirectory(creation.worktreePath),
+			managedRoot: isAbsolutePath(creation.managedRoot)
+				? creation.managedRoot
+				: join(dataDir(), "worktrees"),
 		}),
 	);
 }
