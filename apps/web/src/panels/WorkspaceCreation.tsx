@@ -14,7 +14,7 @@ import { useEffect } from "react";
 import { toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { openChatInTab } from "./openChat";
-import { useTreeItem } from "./treeNavigation";
+import { treeRowControlProps, useTreeItem } from "./treeNavigation";
 
 const HOVER_CONTROL_CLASS =
 	"shrink-0 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100";
@@ -95,7 +95,7 @@ function CreationActions({
 					variant="ghost"
 					size="s"
 					data-testid="workspace-creation-retry"
-					tabIndex={-1}
+					{...treeRowControlProps}
 					onClick={() => retryCreation(creation.id)}
 					className={HOVER_CONTROL_CLASS}
 				/>
@@ -107,7 +107,7 @@ function CreationActions({
 						variant="ghost"
 						size="s"
 						data-testid="workspace-creation-edit-retry"
-						tabIndex={-1}
+						{...treeRowControlProps}
 						onClick={() => editAndRetryCreation(creation)}
 						className={HOVER_CONTROL_CLASS}
 					/>
@@ -127,7 +127,7 @@ function CreationActions({
 					variant="ghost"
 					size="s"
 					data-testid="workspace-creation-dismiss"
-					tabIndex={-1}
+					{...treeRowControlProps}
 					onClick={() => dismissCreation(creation.id)}
 					className={HOVER_CONTROL_CLASS}
 				/>

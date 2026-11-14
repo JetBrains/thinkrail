@@ -107,6 +107,7 @@ import { startProjectSetupChat } from "./setupPrompt";
 import {
 	focusTreeItemOnMenuClose,
 	Tree,
+	treeRowControlProps,
 	treeRowKey,
 	treeToggleProps,
 	useTreeItem,
@@ -861,7 +862,7 @@ function ProjectRow({
 				variant="ghost"
 				size="s"
 				className="shrink-0"
-				tabIndex={-1}
+				{...treeRowControlProps}
 				data-testid="add-workspace"
 				data-focus-fallback={`workspaces:${project.id}`}
 				onClick={onAddWorkspace}
@@ -1093,7 +1094,7 @@ function WorkspaceRow({
 			variant="ghost"
 			size="s"
 			data-testid="workspace-keep-active"
-			tabIndex={-1}
+			{...treeRowControlProps}
 			onClick={onKeepActive}
 			className={HOVER_CONTROL_CLASS}
 		/>
@@ -1108,7 +1109,7 @@ function WorkspaceRow({
 			variant="ghost"
 			size="s"
 			data-testid="workspace-settle"
-			tabIndex={-1}
+			{...treeRowControlProps}
 			disabled={settleBlocked}
 			onClick={onSettle}
 			className={HOVER_CONTROL_CLASS}
@@ -1202,7 +1203,7 @@ function WorkspaceRow({
 								variant="ghost"
 								size="s"
 								data-testid="workspace-menu"
-								tabIndex={-1}
+								{...treeRowControlProps}
 								className={HOVER_CONTROL_CLASS}
 							/>
 						</DropdownMenuTrigger>

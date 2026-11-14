@@ -97,7 +97,7 @@ function pressed(chord: KeyChord, event: KeybindingEvent, apple: boolean): boole
 	return (
 		!chord.displayOnly &&
 		onPlatform(chord, apple) &&
-		!(chord.alt && event.getModifierState?.("AltGraph")) &&
+		!(chord.alt && !apple && event.getModifierState?.("AltGraph")) &&
 		event.code === chord.code &&
 		event.ctrlKey === (chord.ctrl === true || (mod && !apple)) &&
 		event.metaKey === (mod && apple) &&

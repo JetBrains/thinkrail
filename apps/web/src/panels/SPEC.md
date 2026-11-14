@@ -2526,7 +2526,7 @@ own section. The kebab menu (`plan-menu`, a
   and E2E tests pin double-click coalescing, stale-read rejection, per-group isolation, local identity
   convergence, and promote-by-keyboard/touch.
 - **Sidebar trees share one keyboard model (`treeNavigation.tsx`).** Files, Changes (both views), Specs,
-  Chats and Projects are each a `Tree` — a `ul role=tree` with **one Tab stop** (roving tabindex) — whose
+  Chats and Projects are each a `Tree` — a `div role=tree` with **one Tab stop** (roving tabindex) — whose
   rows' focusable controls are `useTreeItem` treeitems (`aria-level`, `aria-expanded` on expandables,
   `aria-current` for the selected row) under `li role=none`; the tree is a `div role=tree` and every
   list inside it is `role=none`, so the hierarchy is the explicit `aria-level` (VS Code's flat-tree
@@ -2558,8 +2558,10 @@ own section. The kebab menu (`plan-menu`, a
     nothing on Changes and Specs rows); **F2** renames a project or managed workspace where the menu offers
     Rename (chats have no rename). A pending chat stays focusable (`aria-disabled`) so its Retry is
     reachable.
-  - **Inner row buttons leave the Tab order** (`tabIndex=-1`: chevrons, kebabs, Settle / Keep active, the
-    project's Create workspace `+`, a creation's retry / dismiss); each action stays reachable — arrows
+  - **Inner row buttons leave the Tab order and the accessibility tree** (`treeRowControlProps`:
+    `tabIndex=-1` and `aria-hidden` — a `tree` may own only treeitems, and these are pointer duplicates:
+    chevrons, kebabs, Settle / Keep active, the project's Create workspace `+`, a creation's retry /
+    dismiss); each action stays reachable — arrows
     expand, the row's menu carries the rest (Create workspace, Settle, Keep active), a creation's actions are
     in the creation view its row opens. dnd-kit's draggable `attributes` stay unspread on the project name
     (they would add a second tab stop); dragging needs only its listeners.

@@ -322,8 +322,10 @@ export function useTreeItem(
 	};
 }
 
+export const treeRowControlProps = { tabIndex: -1, "aria-hidden": true } as const;
+
 export function treeToggleProps(id: string) {
-	return { tabIndex: -1, "data-tree-toggle": id };
+	return { ...treeRowControlProps, "data-tree-toggle": id };
 }
 
 export function focusTreeItemOnMenuClose(event: Event, row: Element | null): void {

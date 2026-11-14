@@ -130,6 +130,24 @@ test("Mod+Shift+E lands on the tree's current row, not its first", async ({ page
 	await expect(readme).toBeFocused();
 });
 
+test("a row selected while focus is elsewhere takes the landing over from the remembered row", async ({
+	page,
+}) => {
+	await openKeyboardFolder(page);
+	const readme = fileRow(page, "README.md");
+	const notes = fileRow(page, "notes.txt");
+	await notes.dblclick();
+	await expect(editorTab(page, "notes.txt")).toBeVisible();
+	await readme.dblclick();
+	await expect(readme).toHaveAttribute("aria-current", "true");
+	await readme.focus();
+
+	await editorTab(page, "notes.txt").click();
+	await expect(notes).toHaveAttribute("aria-current", "true");
+	await pressPlatformShortcut(page, "Shift+E");
+	await expect(notes).toBeFocused();
+});
+
 test("Mod+Shift+E that first mounts Files waits for its tree instead of landing on the toolbar", async ({
 	page,
 }) => {

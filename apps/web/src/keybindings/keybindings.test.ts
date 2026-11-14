@@ -110,14 +110,18 @@ describe.each(Object.entries(PLATFORMS))("keybindings on %s", (family, platform)
 		expect(matchKeybinding(press("ArrowRight", { ...move, shiftKey: true }), platform)).toBeNull();
 	});
 
-	test("no Alt chord matches while AltGraph is held", () => {
+	test("no Alt chord matches while AltGraph is held, except on Apple where Option reports it", () => {
 		const altGr: Modifiers = { ctrlKey: true, altKey: true };
 		for (const code of ["KeyN", "KeyW", "ArrowLeft", "ArrowRight"]) {
-			expect(
-				matchKeybinding(withAltGraph(press(code, { ...mod, altKey: true })), platform),
-			).toBeNull();
-			expect(matchKeybinding(withAltGraph(press(code, altGr)), platform)).toBeNull();
+			const unguarded = family === "apple" ? matchKeybinding(press(code, altGr), platform) : null;
+			expect(matchKeybinding(withAltGraph(press(code, altGr)), platform)).toBe(unguarded);
 		}
+		expect(matchKeybinding(withAltGraph(press("KeyN", { ...mod, altKey: true })), platform)).toBe(
+			family === "apple" ? "workspace.new" : null,
+		);
+		expect(matchKeybinding(withAltGraph(press("KeyW", { ...mod, altKey: true })), platform)).toBe(
+			family === "apple" ? "tab.close" : null,
+		);
 		expect(matchKeybinding(withAltGraph(press("KeyB", mod)), platform)).toBe("view.toggleLeft");
 	});
 

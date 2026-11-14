@@ -15,7 +15,7 @@ import {
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { useRef, useState } from "react";
 import { copyText } from "@/lib";
-import { focusTreeItemOnMenuClose, treeRowKey } from "./treeNavigation";
+import { focusTreeItemOnMenuClose, treeRowControlProps, treeRowKey } from "./treeNavigation";
 
 export const ROW_MENU_SLOT = "mr-4 size-20 shrink-0";
 
@@ -65,7 +65,7 @@ export function ChangeRowActions({
 						icon={ChevronDown}
 						label={t("panels.changeRowActions.menuLabel", { path })}
 						data-testid="change-row-menu"
-						tabIndex={-1}
+						{...treeRowControlProps}
 						wrapTrigger
 						className="mr-4 shrink-0 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
 					/>

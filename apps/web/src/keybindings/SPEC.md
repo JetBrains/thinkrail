@@ -47,9 +47,11 @@ store-free: it matches and describes, and never handles a key or knows what a bi
   (`platformFamily`, the same rule as `hasPlatformModifier`), `ctrl` is literal Control on every platform
   (`Ctrl+R` is ⌃R on a Mac), and a modifier the chord does not name must be up. Tolerating a modifier
   means listing a second chord — `workspace.new` is `Mod+N` and `Mod+Alt+N`. Alt belongs only to that
-  alias, `tab.close`'s `Mod+Alt+W` and the non-Apple group moves (a tested list). **No Alt chord matches
-  while AltGraph is held** (`getModifierState("AltGraph")`): Windows reports AltGr as Ctrl+Alt, so a
-  layout's AltGr character must never fire `Mod+Alt+N`, `Mod+Alt+W` or a group move.
+  alias, `tab.close`'s `Mod+Alt+W` and the non-Apple group moves (a tested list). **Off Apple, no Alt
+  chord matches while AltGraph is held** (`getModifierState("AltGraph")`): Windows reports AltGr as
+  Ctrl+Alt, so a layout's AltGr character must never fire `Mod+Alt+N`, `Mod+Alt+W` or a group move. On a
+  Mac the guard does not apply — Firefox reports Option as AltGraph, and `Mod` is ⌘, so there is no AltGr
+  ambiguity (xterm.js limits its AltGraph check to Windows for the same reason).
 - **A chord may name a `platform`** (`apple` / `other`): it matches and is shown only on that family,
   so one binding is `⌃⌘←` on a Mac and `Ctrl+Alt+←` elsewhere. **A `displayOnly` chord is shown but never
   matched:** `Mod+W` closes a tab on the desktop, but the native menu (macOS) and `shortcutCommands`

@@ -217,7 +217,8 @@ and Project Home projects pane (`home`). The shell's tracker marks the one holdi
 [COLOR.md](../../styles/COLOR.md), *Active region*); a region root is positioned and isolates its
 stacking, so the veil stays inside it. Folded groups and hidden sides render no section and are no region. `F6` and the focus chords land in a
 region by one rule: the element last focused inside it, if still rendered and focusable there (the root
-itself is never remembered); else a `[data-focus-default]`, innermost markers first (a tool body may hold a
+itself is never remembered, nor a treeitem or tab that has since stopped being its roving container's tab
+stop — a row selected while focus was elsewhere, or another selected tab, takes the landing over); else a `[data-focus-default]`, innermost markers first (a tool body may hold a
 more specific default, as Files marks its tree or changes list below its mode toolbar) — or, when that
 marker is not itself focusable, its first tabbable descendant; else the selected tab; else the root (sections are
 `tabIndex=-1`) or its first tabbable. The defaults are the chat composer's textarea, a terminal's xterm

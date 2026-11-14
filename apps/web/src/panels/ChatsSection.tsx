@@ -50,7 +50,13 @@ import {
 	startProjectlessChat,
 	supportsChatContinuation,
 } from "./chatActions";
-import { focusTreeItemOnMenuClose, Tree, treeRowKey, useTreeItem } from "./treeNavigation";
+import {
+	focusTreeItemOnMenuClose,
+	Tree,
+	treeRowControlProps,
+	treeRowKey,
+	useTreeItem,
+} from "./treeNavigation";
 import {
 	loadProjectWorkspaces,
 	markWorkspaceRead,
@@ -254,7 +260,7 @@ function ChatRow({
 							variant="ghost"
 							size="s"
 							data-testid="chat-menu"
-							tabIndex={-1}
+							{...treeRowControlProps}
 							className={HOVER_CONTROL_CLASS}
 						/>
 					</DropdownMenuTrigger>
