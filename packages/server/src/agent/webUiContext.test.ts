@@ -4,6 +4,7 @@ import type { ExtUiRequest } from "@thinkrail/contracts";
 import {
 	cancelExtUiForSession,
 	createWebUiContext,
+	interceptExtUiNotify,
 	notifyExtensionError,
 	notifyExtUi,
 	pendingExtUiDialog,
@@ -212,64 +213,57 @@ test("select reads its options by index, like pi, not through the array's iterat
 	}
 });
 
-test("values that are not strings, from an untyped extension, still reach the page", async () => {
+test("values that are not strings, from an untyped extension, reach the page as absent text", async () => {
 	const frames: ExtUiRequest[] = [];
 	setExtUiPublisher((frame) => frames.push(frame));
+	const intercepted: string[] = [];
+	const release = interceptExtUiNotify("sess-untyped", (message) => {
+		intercepted.push(message);
+		return false;
+	});
 	const ui = createWebUiContext("sess-untyped") as unknown as Record<
 		keyof ExtensionUIContext,
 		(...args: unknown[]) => unknown
 	>;
+	const answer = async (call: unknown, value: string | boolean) => {
+		resolveExtUi({ id: frames.at(-1)?.id ?? "", value });
+		return await call;
+	};
 	try {
-		ui.setWidget("demo", ["a", undefined, null]);
-		ui.setTitle(undefined);
+		const lines: unknown[] = ["a", undefined, null, 3];
+		lines[5] = "f";
+		for (const message of [undefined, null, 42, { text: "hi" }]) ui.notify(message);
+		ui.setStatus("count", 42);
+		ui.setWidget("demo", lines);
+		for (const title of [undefined, null, 42]) ui.setTitle(title);
 		ui.setEditorText(undefined);
-		const confirmed = ui.confirm("Delete it?");
-		resolveExtUi({ id: frames.at(-1)?.id ?? "", value: true });
-		expect(await confirmed).toBe(true);
-		const selected = ui.select(undefined, ["a", null]);
-		resolveExtUi({ id: frames.at(-1)?.id ?? "", value: "a" });
-		expect(await selected).toBe("a");
-		for (const options of [undefined, "one", {}]) {
-			const picked = ui.select("Pick", options);
-			resolveExtUi({ id: frames.at(-1)?.id ?? "", value: "one" });
-			expect(await picked).toBe("one");
+		ui.pasteToEditor(null);
+		expect(await answer(ui.confirm(null, { reason: 1 }), true)).toBe(true);
+		expect(await answer(ui.input(42, 7), "typed")).toBe("typed");
+		expect(await answer(ui.editor(undefined, {}), "edited")).toBe("edited");
+		expect(await answer(ui.select(undefined, ["a", null, 3, "b"]), "b")).toBe("b");
+		const before = frames.length;
+		for (const options of [undefined, "one", {}, [], [null, 3]]) {
+			expect(await ui.select("Pick", options)).toBeUndefined();
 		}
+		expect(frames.length).toBe(before);
+		expect(intercepted).toEqual([]);
 
+		const id = expect.any(String);
+		const sessionId = "sess-untyped";
 		expect(frames).toEqual<unknown[]>([
-			{
-				id: expect.any(String),
-				sessionId: "sess-untyped",
-				kind: "setWidget",
-				key: "demo",
-				content: ["a", undefined, null],
-			},
-			{ id: expect.any(String), sessionId: "sess-untyped", kind: "setTitle", title: undefined },
-			{ id: expect.any(String), sessionId: "sess-untyped", kind: "setEditorText", text: undefined },
-			{ id: expect.any(String), sessionId: "sess-untyped", kind: "confirm", title: "Delete it?" },
-			{
-				id: expect.any(String),
-				sessionId: "sess-untyped",
-				kind: "select",
-				title: undefined,
-				options: ["a", null],
-			},
-			{ id: expect.any(String), sessionId: "sess-untyped", kind: "select", title: "Pick" },
-			{
-				id: expect.any(String),
-				sessionId: "sess-untyped",
-				kind: "select",
-				title: "Pick",
-				options: "one",
-			},
-			{
-				id: expect.any(String),
-				sessionId: "sess-untyped",
-				kind: "select",
-				title: "Pick",
-				options: {},
-			},
+			{ id, sessionId, kind: "setStatus", key: "count", text: null },
+			{ id, sessionId, kind: "setWidget", key: "demo", content: ["a", "", "", "", "", "f"] },
+			{ id, sessionId, kind: "setTitle", title: "" },
+			{ id, sessionId, kind: "setTitle", title: "" },
+			{ id, sessionId, kind: "setTitle", title: "" },
+			{ id, sessionId, kind: "confirm", title: "", message: "" },
+			{ id, sessionId, kind: "input", title: "" },
+			{ id, sessionId, kind: "editor", title: "" },
+			{ id, sessionId, kind: "select", title: "", options: ["a", "b"] },
 		]);
 	} finally {
+		release();
 		setExtUiPublisher(() => {});
 	}
 });
