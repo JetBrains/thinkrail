@@ -1696,6 +1696,7 @@
 	"search.hint.scope": "zakres",
 	"search.hint.select": "wybierz",
 	"search.item.inWorkspace": "{{project}} › {{workspace}}",
+	"search.item.noProject": "Bez projektu",
 	"search.item.projectFolder": "{{project}} · folder projektu",
 	"search.item.settingsPath": "Ustawienia › {{group}}",
 	"search.more.inGroup": "{{count}} więcej w {{group}}",

@@ -1701,6 +1701,7 @@
 	"search.hint.select": "选择",
 	"search.hint.start": "开始",
 	"search.item.inWorkspace": "{{project}} › {{workspace}}",
+	"search.item.noProject": "无项目",
 	"search.item.openFailed": "无法打开该结果",
 	"search.item.projectFolder": "{{project}} · 项目文件夹",
 	"search.item.settingsPath": "设置 › {{group}}",

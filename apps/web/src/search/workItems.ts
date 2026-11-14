@@ -110,6 +110,21 @@ function byFreshness(a: Placement, b: Placement): number {
 	return b.activeAt - a.activeAt || a.project - b.project || a.workspace - b.workspace;
 }
 
+function located(
+	text: string,
+	parts: readonly string[],
+): { subtitle: string; subtitleEmphasis?: NonNullable<PaletteItem["subtitleEmphasis"]> } {
+	const spans: (readonly [number, number])[] = [];
+	let from = 0;
+	for (const part of parts) {
+		const start = part ? text.indexOf(part, from) : -1;
+		if (start === -1) continue;
+		spans.push([start, start + part.length]);
+		from = start + part.length;
+	}
+	return spans.length > 0 ? { subtitle: text, subtitleEmphasis: spans } : { subtitle: text };
+}
+
 const REVIEW_STATE_LABELS: Record<BranchReviewState, MessageKey> = {
 	open: "search.preview.reviewOpen",
 	merged: "search.preview.reviewMerged",
@@ -119,7 +134,12 @@ const REVIEW_STATE_LABELS: Record<BranchReviewState, MessageKey> = {
 export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 	const { t, state } = input;
 	const items: PaletteItem[] = [];
-	const projectNames = new Map(state.projects.map((project) => [project.id, project.name]));
+	const projectNames = new Map(
+		state.projects.map((project) => [
+			project.id,
+			isChatsContainer(project) ? t("search.item.noProject") : project.name,
+		]),
+	);
 	for (const project of state.projects) {
 		if (isChatsContainer(project)) continue;
 		items.push({
@@ -176,20 +196,23 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 			if (projectName === undefined) continue;
 			const label = chatLabel(t, knownTitle, firstPrompt);
 			const title = label.text;
-			const where =
-				workspace && !isChatWorkspace(workspace)
-					? t("search.item.inWorkspace", {
-							project: projectName,
-							workspace: workspaceName(t, workspace),
-						})
-					: projectName;
+			const inWorkspace =
+				workspace && !isChatWorkspace(workspace) ? workspaceName(t, workspace) : null;
+			const location =
+				inWorkspace === null
+					? located(projectName, [projectName])
+					: located(
+							t("search.item.inWorkspace", { project: projectName, workspace: inWorkspace }),
+							[projectName, inWorkspace],
+						);
+			const where = location.subtitle;
 			items.push({
 				id: `chat:${record.sessionId}`,
 				kind: "chat",
 				title,
 				titleSource: label.source,
 				...(label.tooltip ? { titleTooltip: label.tooltip, keywords: [label.tooltip] } : {}),
-				subtitle: where,
+				...location,
 				group: "chats",
 				scope: "work",
 				icon: recordAttention === "running" ? RiLoader4Line : RiChat2Line,
@@ -230,9 +253,12 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 			id: `workspace:${workspace.id}`,
 			kind: "workspace",
 			title: name,
-			subtitle: isDefault
-				? t("search.item.projectFolder", { project: projectName })
-				: `${projectName} · ${workspace.branch}`,
+			...located(
+				isDefault
+					? t("search.item.projectFolder", { project: projectName })
+					: `${projectName} · ${workspace.branch}`,
+				[projectName],
+			),
 			keywords: [
 				...(reviewRef ? [reviewRef] : []),
 				...(isDefault && workspace.branch ? [workspace.branch] : []),
