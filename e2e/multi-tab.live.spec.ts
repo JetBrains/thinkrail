@@ -29,7 +29,7 @@ test("a second tab reopens the same workspace chat and then sees live updates", 
 	await page2.goto("/");
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await revealFirstProjectWorkspaces(page2);
-	await worktreeRows(page2).first().getByRole("button").first().click();
+	await worktreeRows(page2).first().getByRole("treeitem").click();
 	await expect(page2.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 	await expect(page2.getByTestId("chat-history")).toHaveCount(0);
 	await expect(message(page2, "user", "alpha")).toBeVisible({ timeout: 30_000 });

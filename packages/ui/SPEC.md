@@ -160,7 +160,9 @@ moved here from the app when the resource renderers became a package, because bo
   item/icon spacing, separators, semantic action colors, focus rows, and viewport collision behavior.
   Context menus add pointer-position right-click/touch long-press anchoring; features own enabled gestures
   and actions — a trigger opts into the keyboard gesture (Context Menu key or Shift+F10, anchored below the
-  trigger) by passing `openContextMenuFromKeyboard` as its `onKeyDown`. Dropdowns are vertically bounded by
+  trigger) by passing `openContextMenuFromKeyboard` as its `onKeyDown`. `isContextMenuKey` is that
+  gesture's one predicate: a row whose menu is a controlled dropdown opens it on the same keys. Each opener
+  is explicit because macOS WebKit synthesizes no `contextmenu` event from Shift+F10. Dropdowns are vertically bounded by
   the smaller of 60vh and Radix's available height, scrollable with horizontal overflow hidden so long rows
   truncate rather than scroll.
 - Toast exposes `ToastProvider`/`Toast`/`ToastViewport`/`ToastTitle`/`ToastDescription`/`ToastAction`/

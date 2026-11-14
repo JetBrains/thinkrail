@@ -35,7 +35,8 @@ whoever composes the catalog, today `shell`.
   reason wins over it.
 - `title` is already in the user's language: the composer builds the catalog with `useT()`'s translator
   (so the palette matches what the user reads), and `COMMAND_GROUP_LABELS` carries the group keys it
-  translates the same way.
+  translates the same way. The `tab` group (*Active tab*) holds the commands applied to the active tab,
+  so a row such as *Copy path* reads apart from the workspace's.
 - `shortcutKeys` renders macOS glyphs in the system order (`⌃⌥⇧⌘`) and `Ctrl`/`Alt`/`Shift` elsewhere.
 
 ## Coverage
@@ -69,6 +70,7 @@ not reproduce.
 | Remove workspace, close project, stop trusting, layout apply/reset, clear review, MCP approve/remove, stop all subagents, delete template | their confirm dialogs | confirmation | Row UI |
 | Publish / push / open, mark ready, merge, reopen a pull request, delete the remote branch, hand checks or a diverged branch to the agent | `shell/locationBar` topbar review card | branch status + GitHub facts | Row UI |
 | Rename workspace/project/chat | inline editors | an inline editor | Row UI |
-| Split/move/fold tabs and groups, focus adjacent group | Workbench internals | a tab or group | Row UI |
+| Active tab: `tab.close` Close tab (`Mod+W` desktop / `Mod+Alt+W`), keep preview, `group.splitLeft/Right/Up/Down` (`Mod+\` splits right), `tab.moveToPreviousGroup` / `tab.moveToNextGroup` (`Ctrl+Alt+←/→`, `⌃⌘←/→` on a Mac), move to each legal pane, new groups, remove group, hide the region, copy path / relative path, rename chat, focus previous / next group | the mounted Workbench's `tabActions` through `shell/workbenchCommands` (the tab context menu renders the same list) | the active tab (the region tracker's group, else the last-focused center group); only what can run now | yes |
+| Reorder within a strip, Focus tab, Show <tool>, Remove tool from group, fold a pane, bottom alignment | the tab / rail / pane-header menus, `Alt+Shift+←/→`, Delete | a tab or group | Row UI |
 | `/compact`, `/model`, effort, Stop, resources inspector, PR flows, plan review, review fixes | lazy `ChatView`, `PlanPane`, `ChangesReviewPane` | a mounted surface | Row UI |
 | Open/revert a file or hunk, review comment actions | selection surfaces | a selection | Row UI |

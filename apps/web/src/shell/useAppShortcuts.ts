@@ -2,14 +2,9 @@ import type { NativeCommand, NativeQuitHint, NativeShortcutsBridge } from "@thin
 import { useEffect, useState } from "react";
 import { platformShortcutLabel } from "../lib";
 import { useAppStore } from "../store";
-import { requestClose } from "./closeRequestChannel";
+import { closeActiveItem } from "./chordActions";
 import { createWebShortcuts, hasWebShortcuts, shortcutPlatform } from "./shortcutCommands";
-import {
-	hasDismissibleLayer,
-	hasLayer,
-	isInTerminal,
-	MODAL_LAYER_SELECTOR,
-} from "./shortcutLayers";
+import { hasLayer, isInTerminal, MODAL_LAYER_SELECTOR } from "./shortcutLayers";
 
 const NATIVE_SHORTCUTS_GLOBAL = "__THINKRAIL_NATIVE_SHORTCUTS__";
 
@@ -34,20 +29,6 @@ export function readSettingsShortcutLabel(): string | null {
 	return shortcutPlatform(readNativeShortcutsBridge() !== null) === "browser"
 		? null
 		: platformShortcutLabel(",");
-}
-
-function dismissTopLayer() {
-	const doc = globalThis.document;
-	if (!hasDismissibleLayer(doc)) return false;
-	(doc.activeElement ?? doc.body ?? doc).dispatchEvent(
-		new KeyboardEvent("keydown", {
-			key: "Escape",
-			code: "Escape",
-			bubbles: true,
-			cancelable: true,
-		}),
-	);
-	return true;
 }
 
 function openSettingsUnlessModal() {
@@ -101,9 +82,7 @@ export function useAppShortcuts() {
 		const listensForKeys = hasWebShortcuts(platform);
 		const shortcuts = createWebShortcuts({
 			platform,
-			closeItem: () => {
-				if (!dismissTopLayer()) requestClose();
-			},
+			closeItem: closeActiveItem,
 			openSettings: openSettingsUnlessModal,
 			quit: () => {
 				bridge.quit().catch((error: unknown) => {

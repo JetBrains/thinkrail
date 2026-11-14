@@ -213,7 +213,10 @@ export function useInlineRename<T extends Renameable>(options: {
 	}, [controller, canRename]);
 
 	useEffect(() => {
-		if (!editing) return;
+		if (!editing) {
+			enterRenameRef.current = false;
+			return;
+		}
 		const frame = requestAnimationFrame(() => {
 			nameRef.current?.focus();
 			nameRef.current?.select();

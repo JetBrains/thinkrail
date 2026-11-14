@@ -29,7 +29,7 @@ test("editor tabs are scoped to the active workspace", async ({ page }) => {
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-2");
 	await expect(page.getByTestId("scope-branch")).toHaveText("workspace-2");
 
-	await worktreeRow(page, "workspace-1").getByRole("button").first().click();
+	await worktreeRow(page, "workspace-1").getByRole("treeitem").click();
 	await expect(worktreeRow(page, "workspace-1")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
 	await expect(page.getByTestId("scope-branch")).toHaveText("workspace-1");
@@ -43,7 +43,7 @@ test("the selected side tool follows workspace switches", async ({ page }) => {
 	await createWorkspaceViaDialog(page);
 	const workspaces = worktreeRows(page);
 	await expect(workspaces).toHaveCount(2);
-	await worktreeRow(page, "workspace-1").getByRole("button").first().click();
+	await worktreeRow(page, "workspace-1").getByRole("treeitem").click();
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
 
 	const groupInfo = await page.locator('[data-side][data-tools~="specs"]').evaluate((group) => ({
@@ -66,17 +66,17 @@ test("the selected side tool follows workspace switches", async ({ page }) => {
 		page.getByTestId(`${groupInfo.side}-layout-rail`).getByTestId("tool-rail-projects"),
 	).toBeVisible();
 
-	await worktreeRow(page, "workspace-2").getByRole("button").first().click();
+	await worktreeRow(page, "workspace-2").getByRole("treeitem").click();
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-2");
 	await expect(projects).toHaveAttribute("aria-pressed", "true");
-	await defaultWorkspaceRow(page).getByRole("button").first().click();
+	await defaultWorkspaceRow(page).getByRole("treeitem").click();
 	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
 	await expect(projects).toHaveAttribute("aria-pressed", "true");
 
 	const review = page.getByTestId("tool-rail-review");
 	await revealWorkbenchTool(page, "review");
 	await expect(review).toHaveAttribute("aria-pressed", "true");
-	await worktreeRow(page, "workspace-1").getByRole("button").first().click();
+	await worktreeRow(page, "workspace-1").getByRole("treeitem").click();
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
 	await expect(review).toHaveAttribute("aria-pressed", "true");
 	await expect(projects).toHaveAttribute("aria-pressed", "true");
@@ -115,7 +115,7 @@ test("switching workspaces re-targets the mounted workbench instead of remountin
 		(window as unknown as { __switchProbe: () => number }).__switchProbe = () => fadeIns;
 	});
 
-	await worktreeRow(page, "workspace-1").getByRole("button").first().click();
+	await worktreeRow(page, "workspace-1").getByRole("treeitem").click();
 	await expect(worktreeRow(page, "workspace-1")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("editor-tab").filter({ hasText: "README.md" })).toBeVisible();
 	await expect(terminalTabs).toHaveCount(terminalCount);
@@ -129,7 +129,7 @@ test("switching workspaces re-targets the mounted workbench instead of remountin
 		),
 	).toBe(0);
 
-	await defaultWorkspaceRow(page).getByRole("button").first().click();
+	await defaultWorkspaceRow(page).getByRole("treeitem").click();
 	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
 	for (const id of ["workspace-workbench", "center-tabs", "left-nav"]) {
 		await expect(page.getByTestId(id)).toHaveAttribute("data-switch-probe", "before");
@@ -152,7 +152,7 @@ test("a same-id terminal body remounts instead of carrying across workspaces", a
 	await expect(terminal).toHaveAttribute("data-ready", "true");
 	await terminal.evaluate((node) => node.setAttribute("data-switch-probe", "workspace-2"));
 
-	await worktreeRow(page, "workspace-1").getByRole("button").first().click();
+	await worktreeRow(page, "workspace-1").getByRole("treeitem").click();
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
 	await expect(terminal).toHaveAttribute("data-ready", "true");
 	await expect(terminal).not.toHaveAttribute("data-switch-probe", "workspace-2");

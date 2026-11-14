@@ -24,7 +24,6 @@ import {
 	tupleKey,
 } from "../../lib";
 import { projectWorkbenchRatio, restoreWorkbenchRatio } from "./auxiliaryPresentation";
-import { closeRequestTarget } from "./closeRequest";
 import {
 	canCreateAuxiliaryGroup,
 	canJoinAuxiliaryGroup,
@@ -57,6 +56,7 @@ import {
 	setBottomAlignment,
 	splitCenterGroup,
 } from "./model";
+import { centerSplitGeometry, performTabAction, tabActions, tabActionTarget } from "./tabActions";
 import { tabIcon } from "./tabIcon";
 import type { LayoutAuxiliaryRegion, LayoutTab, LayoutToolId } from "./types";
 import {
@@ -71,6 +71,7 @@ import type {
 	DragData,
 	DropTarget,
 	LayoutTabFocusRequest,
+	RegisterChatRename,
 	SharedGroupProps,
 	WorkbenchProps,
 } from "./workbenchShared";
@@ -100,7 +101,7 @@ export function Workbench({
 	maxBottomGroups,
 	projectionEpoch,
 	focusRequest,
-	subscribeCloseRequest,
+	registerTabCommands,
 	renderTabBody,
 	renderTabAdornment,
 	renderToolBody,
@@ -350,19 +351,6 @@ export function Workbench({
 			});
 		},
 		[onAttentionChange, onRequestClose, onUserNavigation, readNavigationTick],
-	);
-
-	useEffect(
-		() =>
-			subscribeCloseRequest?.(() => {
-				const activeElement = globalThis.document.activeElement;
-				if (activeElement?.closest("[data-rail-entry]")) return;
-				const focusedGroupId =
-					activeElement?.closest<HTMLElement>("[data-group-id]")?.dataset.groupId;
-				const tab = closeRequestTarget(documentRef.current, attentionRef.current, focusedGroupId);
-				if (tab) close(tab);
-			}),
-		[close, subscribeCloseRequest],
 	);
 
 	useEffect(() => {
@@ -757,6 +745,99 @@ export function Workbench({
 		},
 		[apply, maxBottomGroups, maxSideGroups],
 	);
+	const renameEditors = useRef(new Map<string, (name: string) => void>());
+	const registerChatRename = useCallback<RegisterChatRename>((tabId, begin) => {
+		renameEditors.current.set(tabId, begin);
+		return () => {
+			if (renameEditors.current.get(tabId) === begin) renameEditors.current.delete(tabId);
+		};
+	}, []);
+	const resolveTabActions = useCallback(
+		(groupId: string | undefined) => {
+			const current = documentRef.current;
+			const target = tabActionTarget(current, attentionRef.current, groupId);
+			if (!target) return null;
+			const { tab, location, index, count, preview } = target;
+			const box =
+				location.area === "center"
+					? globalThis.document.getElementById(groupDomId(location))?.getBoundingClientRect()
+					: undefined;
+			const actions = tabActions(t, {
+				document: current,
+				tab,
+				location,
+				preview,
+				reorder: {
+					previous: index > 0 ? index - 1 : undefined,
+					next: index < count - 1 ? index + 1 : undefined,
+				},
+				maxSideGroups,
+				maxBottomGroups,
+				splitGeometry: box ? centerSplitGeometry(box) : undefined,
+				canFocusAdjacentGroup: visibleFocusableGroups(current).length > 1,
+				canRenameChat: onRenameChat !== undefined,
+				worktreePath,
+				chatFirstPrompts,
+			});
+			return { tab, location, actions };
+		},
+		[chatFirstPrompts, maxBottomGroups, maxSideGroups, onRenameChat, t, worktreePath],
+	);
+	useEffect(
+		() =>
+			registerTabCommands?.({
+				list: (groupId) => resolveTabActions(groupId)?.actions ?? [],
+				run: (groupId, actionId) => {
+					const resolved = resolveTabActions(groupId);
+					const action = resolved?.actions.find(
+						(candidate) => candidate.id === actionId && candidate.unavailable === undefined,
+					);
+					if (!resolved || !action) return;
+					const { tab, location } = resolved;
+					if (
+						action.effect.kind === "close" &&
+						globalThis.document.activeElement?.closest("[data-rail-entry]")
+					) {
+						return;
+					}
+					tabSelectionEpoch.current += 1;
+					performTabAction(action, {
+						apply,
+						select: (keep) => {
+							if (location.area === "center") {
+								selectTabInGroup(location, tab.id, { center: true, keep });
+							} else {
+								onUserNavigation();
+								selectTabInGroup(location, tab.id);
+							}
+							setLocalFocusRequest({
+								workspaceId,
+								key: createLayoutId("focus-tab"),
+								location,
+								tabId: tab.id,
+							});
+						},
+						rename: () => renameEditors.current.get(tab.id)?.(tab.name),
+						focusGroup: (delta) => focusAdjacentGroup(delta, location.groupId),
+						hide: hideSideRegion,
+						revealTool: revealMissingTool,
+						close: () => close(tab),
+					});
+				},
+			}),
+		[
+			apply,
+			close,
+			focusAdjacentGroup,
+			hideSideRegion,
+			onUserNavigation,
+			registerTabCommands,
+			resolveTabActions,
+			revealMissingTool,
+			selectTabInGroup,
+			workspaceId,
+		],
+	);
 	const shared: SharedGroupProps = {
 		workspaceId,
 		worktreePath,
@@ -780,6 +861,7 @@ export function Workbench({
 		onHideSide: hideSideRegion,
 		onRevealTool: revealMissingTool,
 		onRenameChat,
+		registerChatRename,
 		chatFirstPrompts,
 		canFocusAdjacentGroup,
 	};

@@ -3068,7 +3068,6 @@
 	"workbench.tab.removeToolFromGroup": "Usuń narzędzie z grupy",
 	"workbench.tab.renameChat": "Zmień nazwę czatu",
 	"workbench.tab.showTool": "Pokaż {{name}}",
-	"workbench.tab.splitCenterOnly": "Tylko środkowe karty mogą dzielić środek.",
 	"workbench.tab.splitNeedsHeight": "Ta grupa potrzebuje {{size}}px wysokości, aby się podzielić.",
 	"workbench.tab.splitNeedsWidth": "Ta grupa potrzebuje {{size}}px szerokości, aby się podzielić.",
 	"workbench.tabs.bottomGroupTabs": "karty dolnej grupy",

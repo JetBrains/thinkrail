@@ -237,7 +237,7 @@ test("navigating away abandons a pending topbar rename instead of renaming the n
 	// Activate another renamable workspace from the tree while the offline commit is still pending.
 	const first = worktreeRow(page, "workspace-1");
 	const second = worktreeRow(page, "workspace-2");
-	await first.getByRole("button", { name: "workspace-1", exact: true }).click();
+	await first.getByRole("treeitem", { name: "workspace-1", exact: true }).click();
 	await expect(first).toHaveAttribute("data-active", "true");
 	await expect(input).toHaveCount(0);
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
@@ -260,12 +260,12 @@ test("a remove confirmation opened from the topbar is bound to that workspace an
 	const rows = worktreeRows(page);
 	const currentHash = () => page.evaluate(() => window.location.hash);
 	await worktreeRow(page, "workspace-1")
-		.getByRole("button", { name: "workspace-1", exact: true })
+		.getByRole("treeitem", { name: "workspace-1", exact: true })
 		.click();
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
 	const workspace1Hash = await currentHash();
 	await worktreeRow(page, "workspace-2")
-		.getByRole("button", { name: "workspace-2", exact: true })
+		.getByRole("treeitem", { name: "workspace-2", exact: true })
 		.click();
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-2");
 	await expect.poll(currentHash).not.toBe(workspace1Hash);

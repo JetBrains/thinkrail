@@ -15,7 +15,7 @@ The shell-owned, headless workbench engine: the normalized frontend-local frame 
 ## Boundary
 
 - **Owns:** web-local `WorkbenchFrame`/`WorkspaceViewState` types; frame-plus-view projection; pure topology, placement, attention, and policy operations; semantic minimum and independent group-limit checks; one-result drag previews; center/side/bottom renderers; alignment-owned nested composition and side-width projection; tab-strip overflow; ARIA tab/separator behavior; and the terminal visibility gate.
-- **Public surface (`index.ts`):** all current-layout types; workbench renderer/controller; the edge-chrome primitives (`AuxiliaryRail`, `AuxiliaryRailToolButton`, `AuxiliaryPaneHeader`, `AuxiliaryPaneHideButton`); pure mutations, projection, and validation helpers; built-in preset definitions plus instantiate/apply/capture operations and `frameMatchesPreset` (geometry equality ignoring generated ids, which Settings uses to mark the applied preset); attention fallback helpers; and unavailable-reason results. Callers inject resource renderers, the workspace worktree path for file-tab copy actions, and commit complete pure results rather than splicing arrays.
+- **Public surface (`index.ts`):** all current-layout types; workbench renderer/controller; the edge-chrome primitives (`AuxiliaryRail`, `AuxiliaryRailToolButton`, `AuxiliaryPaneHeader`, `AuxiliaryPaneHideButton`); pure mutations, projection, and validation helpers; the tab-action list (`tabActions`, `TabAction`) and the `WorkbenchTabCommands` provider contract; built-in preset definitions plus instantiate/apply/capture operations and `frameMatchesPreset` (geometry equality ignoring generated ids, which Settings uses to mark the applied preset); attention fallback helpers; and unavailable-reason results. Callers inject resource renderers, the workspace worktree path for file-tab copy actions, and commit complete pure results rather than splicing arrays.
 - **External deps:** `@thinkrail/contracts` for the resource-free custom-preset DTO and git diff-scope type only; shell-neutral `lib` attention/id primitives plus `copyText` / `joinWorkspacePath` for file-tab copy actions; React; `@thinkrail/ui/*` (including `@thinkrail/ui/resizable`); `@dnd-kit/core`.
 - **Forbidden:** server/shared/pi imports; domain-resource lifetime; browser persistence or WS calls; feature-panel internals; a mutable third-party docking model; inline component styles; or non-semantic colour values.
 
@@ -212,7 +212,7 @@ projection before paint and rejects the remainder of that gesture until release,
 persistence. The same recovery applies to outer/aligned sides, bottom height, auxiliary stacks, and
 recursive center splits without keying the workbench by workspace. The canceled-drag announcement is reserved for a pointer/keyboard gesture in progress when its base or workspace is replaced, or a tab drag whose tab left the document: `@thinkrail/ui/resizable` reports layout on every group mount and ordinary resize, so a group that merely lived through earlier local transitions announces nothing.
 
-Pointer is never the sole arrangement path. Keyboard controls and shadcn menus cover group/tab focus, select/close/keep/reorder/move, directional center splits, absolute and adjacent auxiliary-group creation, explicit group remove/merge, fold/show/hide/tool restore, bottom alignment, and keyboard separator resize, always with an unavailable reason. A tab can reproduce every interior pointer placement through move plus New group. The optional chat-rename menu item replaces the tab label with an inline editor and commits through a shell-injected callback: layout identifies the chat tab and owns the transient edit interaction but never imports transport/store or performs the domain mutation. Resource strips implement WAI-ARIA tabs and visible roving focus. Rails are named toolbars of pressed buttons: arrows move focus, Enter/Space activates, and `aria-controls` links each existing group. Tool bodies are named regions and terminal bodies are tabpanels. A folded auxiliary group retains a linked native-hidden region while unmounting the body; its selected edge-rail control is the focus endpoint when no tab renders. A local fold moves focus to that control and expansion returns it to the selected tab. Separators expose orientation and current/min/max values. `Ctrl+F6` visits upper-row groups in visual order, then visible bottom groups left-to-right.
+Pointer is never the sole arrangement path. Keyboard controls, shadcn menus (opened from the keyboard too) and the palette's active-tab commands cover group/tab focus, select/close/keep/reorder/move, directional center splits, absolute and adjacent auxiliary-group creation, explicit group remove/merge, fold/show/hide/tool restore, bottom alignment, and keyboard separator resize, always with an unavailable reason. A tab can reproduce every interior pointer placement through move plus New group. The optional chat-rename menu item replaces the tab label with an inline editor and commits through a shell-injected callback: layout identifies the chat tab and owns the transient edit interaction but never imports transport/store or performs the domain mutation. Resource strips implement WAI-ARIA tabs and visible roving focus. Rails are named toolbars of pressed buttons: arrows move focus, Enter/Space activates, and `aria-controls` links each existing group. Tool bodies are named regions and terminal bodies are tabpanels. A folded auxiliary group retains a linked native-hidden region while unmounting the body; its selected edge-rail control is the focus endpoint when no tab renders. A local fold moves focus to that control and expansion returns it to the selected tab. Separators expose orientation and current/min/max values. `Ctrl+F6` visits upper-row groups in visual order, then visible bottom groups left-to-right.
 
 **Regions.** Every rendered group section is a keyboard region: it carries `data-region` (its group id)
 and `data-region-kind` (`left` | `center` | `right` | `bottom`), beside the shell's top bar (`topbar`)
@@ -221,9 +221,11 @@ and Project Home projects pane (`home`). The shell's tracker marks the one holdi
 [COLOR.md](../../styles/COLOR.md), *Active region*); a region root is positioned and isolates its
 stacking, so the veil stays inside it. Folded groups and hidden sides render no section and are no region. `F6` and the focus chords land in a
 region by one rule: the element last focused inside it, if still rendered and focusable there (the root
-itself is never remembered); else a `[data-focus-default]`, innermost markers first (a tool body may hold a
-more specific default, as Files marks its tree or changes list below its mode toolbar, and Artifacts its
-list below its chat filter) — or, when that
+itself is never remembered, nor a treeitem or tab that has since stopped being its roving container's tab
+stop — a row selected while focus was elsewhere, or another selected tab, takes the landing over); else a
+`[data-focus-default]`, innermost markers first (a tool body may hold a more specific default, as Files
+marks its tree or changes list below its mode toolbar, and Artifacts its list below its chat filter) — or,
+when that
 marker is not itself focusable, its first tabbable descendant; else the selected tab; else the root (sections are
 `tabIndex=-1`) or its first tabbable. The defaults are the chat composer's textarea, a terminal's xterm
 host (its helper textarea), the Monaco editor container (its input), the Project Home projects tree
@@ -242,7 +244,7 @@ remains available for restoration. Singleton tool icons have no inline close gly
 from group stays in their menu and on Delete, separate from pane visibility. Terminals and center
 resources retain direct close controls.
 
-An external close request arrives through an injected `subscribeCloseRequest` prop; only requests after subscribe count, so a stale request never closes a tab. A focused edge-rail selector is navigation chrome, not an individual resource close target, and yields a no-op before fallback. Internal pure `closeRequestTarget` picks the selected (else first) tab of the DOM-focused group, else of the last-focused center group; a tool tab, folded group, or hidden region yields no target, with no further fallback. The workbench routes it through its normal close path.
+External close requests are the `tab.close` tab action (*Tab actions* below). A focused edge-rail selector is navigation chrome, not an individual resource close target, and yields a no-op before fallback. A tool tab has no `tab.close` (its menu's *Remove tool from group* is menu-only), so a close request never removes a singleton. The workbench routes it through its normal close path.
 
 Each auxiliary pane header or terminal-session strip trails an add-to-this-pane menu owned by the layout:
 *New terminal* on a terminal or empty pane adds to that pane, while a tool pane offers *New terminal pane
@@ -257,6 +259,41 @@ preview, the four splits) and auxiliary terminals carry no splits. File and diff
 and **Copy relative path** in a separate group; other kinds omit them. Copying identifies the clicked
 tab and does not select or keep it. The shell injects the workspace worktree path so the layout can join
 it with the tab's file path without importing store or transport.
+
+## Tab actions
+
+`tabActions.ts` is the one source of what can be done to a tab: given the tab, its location, the
+document, the group limits and the group's measured split geometry, the pure `tabActions` returns every
+command the tab's context menu shows — with its stable id, label, menu section, and an `unavailable`
+label/reason where it applies but cannot run now — and its effect (a lazily computed `model.ts` result,
+or a select / rename / focus-group / copy / hide / reveal / close request that `performTabAction` hands
+to injected handlers). The context menu renders from it (sections become separators; computed only when
+the menu opens); the shell's palette lists from it through the provider below. Neither keeps an inline
+availability rule, so they cannot drift. Each action names its `surface`: *Focus tab*, the in-strip
+reorders, *Show <tool>* and *Remove tool from group* are menu-only; *Move to previous / next group* is
+palette- and chord-only (the menu already lists every pane by name). Rejected: new `LayoutIntent` kinds
+for these — the operations are pure functions the mounted Workbench applies with its own `apply`, and
+an intent would duplicate that path in the store.
+
+**Move to previous / next group.** A center tab walks the center groups in visual order (the
+`collectCenterGroups` depth-first order, children left→right / top→bottom — the `Ctrl+F6` and `Mod+1…9`
+order); a side or bottom tab walks its own region's groups and skips panes it may not join
+(`canJoinAuxiliaryGroup`). At the first / last group nothing happens — no group is created (unlike VS
+Code). A folded destination unfolds, and focus follows the moved tab (the result's focus ids).
+
+**The provider.** The mounted Workbench registers a `WorkbenchTabCommands` through the injected
+`registerTabCommands` prop: `list(groupId)` resolves the target and returns its actions, measuring the
+group's split geometry from the DOM at that moment; `run(groupId, id)` resolves again, runs the action
+only if it is still listed and available, and otherwise does nothing. The target (`tabActionTarget`) is
+the selected (else first) tab of the given group — the shell passes the region tracker's group — else of
+the last-focused center group; a folded group, a hidden region or an unknown group yields none. A palette
+*Rename chat* reaches the tab's inline editor through a per-tab registration (`registerChatRename`),
+since the editor is the tab's own state.
+
+**Keyboard-opened menus.** Every `WorkbenchTab` context-menu trigger — strip tabs and rail tool entries
+alike — opens its menu on `Shift+F10` and the `ContextMenu` key (`openContextMenuFromKeyboard`; macOS
+WebKit never synthesizes `contextmenu` from `Shift+F10`), anchored below the tab, and Escape returns
+focus to the tab. The strip's and rail's roving handlers ignore both keys.
 
 ## Presets and local persistence
 
@@ -286,7 +323,7 @@ The terminal visibility gate mounts a body only for a terminal locally selected 
 
 ## Render isolation
 
-The workbench is a mounted-body host, so the renderer protects injected feature bodies from arrangement churn. The root `Workbench` owns all transient view state — drag, resize projection, measured sizes, focus-after-close — and owns every attention transition. Groups never mutate attention: the root hands down stable, ref-reading callbacks (`onSelectTab`, `onFocusGroup`, `onApply`, `onFocusAdjacentGroup`, `onHideSide`, `onRevealTool`, `readAttention`) whose identities survive document and attention changes, so a re-render of the root never invalidates a child's props by identity alone.
+The workbench is a mounted-body host, so the renderer protects injected feature bodies from arrangement churn. The root `Workbench` owns all transient view state — drag, resize projection, measured sizes, focus-after-close — and owns every attention transition. Groups never mutate attention: the root hands down stable, ref-reading callbacks (`onSelectTab`, `onFocusGroup`, `onApply`, `onFocusAdjacentGroup`, `onHideSide`, `onRevealTool`, `readAttention`, `registerChatRename`) whose identities survive document and attention changes, so a re-render of the root never invalidates a child's props by identity alone.
 
 The singular `attention` object is not threaded into leaves. Only the region wrappers that enumerate groups (center node/split, the side and bottom stacks) receive it and project each group's `selectedId` as a primitive; leaf group views receive that primitive, never the whole overlay. Leaf group views, the tab strip, the tab, and the stacks are memoized. Two isolation guarantees follow and are the renderer's contract:
 
@@ -299,4 +336,4 @@ The memoization assumes the injected render callbacks are referentially stable: 
 
 ## Internal module structure
 
-The renderer is one submodule behind `index.ts`; its files are internal and import each other directly. `workbenchShared` holds the public prop contracts (`WorkbenchProps`, `SharedGroupProps`, `LayoutTabFocusRequest`), the drag-and-drop primitives, the resize/size/overflow/settle hooks, the DOM-id helpers (group, tab, rail group, rail control), and the shared leaf primitives (`DropZone`, `CenterSplitTarget`, `PanelWithHandle`, `GroupTabBody`). `workbenchTabs` owns the tab strip and tab (including a tab's rail mode); `workbenchCenter`, `workbenchSide` (also the `AuxiliaryGroupHeader` both edge families share), and `workbenchBottom` own their region view families; `workbenchRails` owns the region rail and its droppable entry button; `tabIcon` is the one Line/Fill icon resolver, shared with the shell's Project Home; `Workbench` is the root that composes them and owns state. The rail is the one leaf that renders from `attention` (its entries' selected state), so the root passes it the overlay explicitly like a stack, while its activation runs through `onApply` and the shared `onUserNavigation`. `index.ts` re-exports the component, its public types, and the rail/pane-header primitives Project Home composes.
+The renderer is one submodule behind `index.ts`; its files are internal and import each other directly. `workbenchShared` holds the public prop contracts (`WorkbenchProps`, `SharedGroupProps`, `LayoutTabFocusRequest`), the drag-and-drop primitives, the resize/size/overflow/settle hooks, the DOM-id helpers (group, tab, rail group, rail control), and the shared leaf primitives (`DropZone`, `CenterSplitTarget`, `PanelWithHandle`, `GroupTabBody`). `workbenchTabs` owns the tab strip and tab (including a tab's rail mode); `workbenchCenter`, `workbenchSide` (also the `AuxiliaryGroupHeader` both edge families share), and `workbenchBottom` own their region view families; `workbenchRails` owns the region rail and its droppable entry button; `tabActions` owns the pure tab-command list, its target rule and executor; `tabIcon` is the one Line/Fill icon resolver, shared with the shell's Project Home; `Workbench` is the root that composes them and owns state. The rail is the one leaf that renders from `attention` (its entries' selected state), so the root passes it the overlay explicitly like a stack, while its activation runs through `onApply` and the shared `onUserNavigation`. `index.ts` re-exports the component, its public types, and the rail/pane-header primitives Project Home composes.

@@ -398,7 +398,7 @@ test("one local frame survives workspace switches while resource tabs stay works
 	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
 	await expect.poll(() => width(page.getByTestId("right-stack"))).toBeCloseTo(resized, 0);
 
-	await defaultWorkspaceRow(page).getByRole("button").first().click();
+	await defaultWorkspaceRow(page).getByRole("treeitem").click();
 	await expect(page.getByTestId("editor-tab").filter({ hasText: "README.md" })).toHaveCount(1);
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
 	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
@@ -423,7 +423,7 @@ test("a duplicated tab remints copied surface storage and preserves both layouts
 	await clone.goto("/");
 	await expect(clone.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await revealFirstProjectWorkspaces(clone);
-	await defaultWorkspaceRow(clone).getByRole("button").first().click();
+	await defaultWorkspaceRow(clone).getByRole("treeitem").click();
 	await expect(clone.getByTestId("left-nav")).toBeVisible();
 	const cloneSurfaceId = await clone.evaluate(() =>
 		sessionStorage.getItem("thinkrail:layout-surface-id"),
@@ -1129,7 +1129,7 @@ test("an accepted side-group overage is grandfathered without allowing further g
 	await saveGroupLimit(page, "Maximum side groups", 2);
 	await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
 
-	await defaultWorkspaceRow(page).getByRole("button").first().click();
+	await defaultWorkspaceRow(page).getByRole("treeitem").click();
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
 	await expect(sideGroups(page, "right")).toHaveCount(3);
 	await page.getByTestId("tab-files").click({ button: "right" });
@@ -1256,7 +1256,7 @@ test("another window cannot cancel or rearrange an active tab drag", async ({ pa
 	await page2.goto("/");
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await revealFirstProjectWorkspaces(page2);
-	await defaultWorkspaceRow(page2).getByRole("button").first().click();
+	await defaultWorkspaceRow(page2).getByRole("treeitem").click();
 
 	const dragged = page.getByTestId("editor-tab").filter({ hasText: "notes.txt" });
 	const box = await dragged.boundingBox();
@@ -1286,7 +1286,7 @@ test("another window cannot cancel or adopt an active side resize", async ({ pag
 	await page2.goto("/");
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await revealFirstProjectWorkspaces(page2);
-	await defaultWorkspaceRow(page2).getByRole("button").first().click();
+	await defaultWorkspaceRow(page2).getByRole("treeitem").click();
 
 	const before = await width(page.getByTestId("right-stack"));
 	const handle = page.getByTestId("resize-right");

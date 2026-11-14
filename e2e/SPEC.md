@@ -398,6 +398,14 @@ Escape in Plan's add-task returns to its button and Show step focuses the step; 
 keeps focus across its two renderings and an entry focuses its heading; One file's Next disabling at the
 last file hands focus to Prev; and the safety net lands a removed unmarked control on its region's landing
 target while a control the user clicked away from never pulls focus back.
+`keyboard-trees.spec.ts` pins the sidebar trees' keyboard model: the Files tree is one Tab stop that
+arrows, Home/End, →/← and type-ahead walk; Enter previews, `Mod+Enter` keeps, Delete confirms and trashes
+(focus moving to the next file); after a reload `Mod+Shift+E` lands on the selected row rather than the
+first; a workspace row opens its dropdown on Shift+F10 and returns focus on Escape, renames on F2, asks
+before removal on Delete, and ← reaches its project; a chat row, in its own flat Chats tree, opens its
+menu, ignores F2 and deletes after the confirmation; Specs expand/collapse from the keyboard and Changes
+open their menu and kept diff; the Artifacts tree is one Tab stop that ↓ walks, F2 renames, Delete asks
+(Escape returns to the row, confirming removes it and focuses its neighbour) and `Mod+Enter` keeps.
 
 ## Isolation contract
 

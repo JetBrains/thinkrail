@@ -28,14 +28,23 @@ export type KeybindingId =
 	| "focus.composer"
 	| "focus.projects"
 	| "focus.terminal"
+	| "tab.close"
+	| "tab.moveToPreviousGroup"
+	| "tab.moveToNextGroup"
+	| "group.splitRight"
 	| (typeof FOCUS_GROUP_BINDINGS)[number];
+
+type PlatformScope = "apple" | "other";
 
 interface KeyChord extends CommandShortcut {
 	readonly code: string;
 	readonly browserReserved?: boolean;
+	readonly displayOnly?: boolean;
+	readonly platform?: PlatformScope;
 }
 
-type KeybindingEvent = Pick<KeyboardEvent, "code" | "altKey" | "ctrlKey" | "metaKey" | "shiftKey">;
+type KeybindingEvent = Pick<KeyboardEvent, "code" | "altKey" | "ctrlKey" | "metaKey" | "shiftKey"> &
+	Partial<Pick<KeyboardEvent, "getModifierState">>;
 
 export const KEYBINDINGS: Readonly<Record<KeybindingId, readonly [KeyChord, ...KeyChord[]]>> = {
 	"view.toggleLeft": [{ code: "KeyB", key: "B", mod: true }],
@@ -64,11 +73,31 @@ export const KEYBINDINGS: Readonly<Record<KeybindingId, readonly [KeyChord, ...K
 	"focus.group8": [{ code: "Digit8", key: "8", mod: true }],
 	"focus.group9": [{ code: "Digit9", key: "9", mod: true }],
 	"focus.terminal": [{ code: "Backquote", key: "`", ctrl: true }],
+	"tab.close": [
+		{ code: "KeyW", key: "W", mod: true, browserReserved: true, displayOnly: true },
+		{ code: "KeyW", key: "W", mod: true, alt: true },
+	],
+	"tab.moveToPreviousGroup": [
+		{ code: "ArrowLeft", key: "←", ctrl: true, mod: true, platform: "apple" },
+		{ code: "ArrowLeft", key: "←", ctrl: true, alt: true, platform: "other" },
+	],
+	"tab.moveToNextGroup": [
+		{ code: "ArrowRight", key: "→", ctrl: true, mod: true, platform: "apple" },
+		{ code: "ArrowRight", key: "→", ctrl: true, alt: true, platform: "other" },
+	],
+	"group.splitRight": [{ code: "Backslash", key: "\\", mod: true }],
 };
+
+function onPlatform(chord: KeyChord, apple: boolean): boolean {
+	return chord.platform === undefined || (chord.platform === "apple") === apple;
+}
 
 function pressed(chord: KeyChord, event: KeybindingEvent, apple: boolean): boolean {
 	const mod = chord.mod === true;
 	return (
+		!chord.displayOnly &&
+		onPlatform(chord, apple) &&
+		!(chord.alt && !apple && event.getModifierState?.("AltGraph")) &&
 		event.code === chord.code &&
 		event.ctrlKey === (chord.ctrl === true || (mod && !apple)) &&
 		event.metaKey === (mod && apple) &&
@@ -85,14 +114,31 @@ export function matchKeybinding(event: KeybindingEvent, platform?: string): Keyb
 	return null;
 }
 
+function platformChords(id: KeybindingId, platform?: string): KeyChord[] {
+	const apple = platformFamily(platform) === "apple";
+	return KEYBINDINGS[id].filter((chord) => onPlatform(chord, apple));
+}
+
+function displayShortcut({
+	code: _code,
+	browserReserved: _reserved,
+	displayOnly: _displayOnly,
+	platform: _platform,
+	...shortcut
+}: KeyChord): CommandShortcut {
+	return shortcut;
+}
+
 export function keybindingShortcut(
 	id: KeybindingId,
-	{ browser = false }: { browser?: boolean } = {},
+	{ browser = false, platform }: { browser?: boolean; platform?: string } = {},
 ): CommandShortcut {
-	const chords = KEYBINDINGS[id];
-	const chord = (browser ? chords.find((each) => !each.browserReserved) : undefined) ?? chords[0];
-	const { code: _code, browserReserved: _reserved, ...shortcut } = chord;
-	return shortcut;
+	const chords = platformChords(id, platform);
+	const chord =
+		(browser ? chords.find((each) => !each.browserReserved) : undefined) ??
+		chords[0] ??
+		KEYBINDINGS[id][0];
+	return displayShortcut(chord);
 }
 
 function label(shortcut: CommandShortcut, platform?: string): string {
@@ -103,11 +149,15 @@ export function keybindingLabel(
 	id: KeybindingId,
 	{ browser, platform }: { browser?: boolean; platform?: string } = {},
 ): string {
-	return label(keybindingShortcut(id, browser === undefined ? {} : { browser }), platform);
+	return label(
+		keybindingShortcut(id, {
+			...(browser === undefined ? {} : { browser }),
+			...(platform === undefined ? {} : { platform }),
+		}),
+		platform,
+	);
 }
 
 export function keybindingLabels(id: KeybindingId, platform?: string): string[] {
-	return KEYBINDINGS[id].map(({ code: _code, browserReserved: _reserved, ...shortcut }) =>
-		label(shortcut, platform),
-	);
+	return platformChords(id, platform).map((chord) => label(displayShortcut(chord), platform));
 }

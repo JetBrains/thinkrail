@@ -74,7 +74,6 @@ import {
 	useDeletedChatPlacementReconciliation,
 	useWorkspaceChatCatalogReconciliation,
 } from "./chatReconciliation";
-import { subscribeCloseRequest } from "./closeRequestChannel";
 import {
 	collectAllGroups,
 	findPlacedResource,
@@ -100,6 +99,7 @@ import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./l
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
 import { useIdleEditorPreload } from "./useIdleEditorPreload";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
+import { registerTabCommands } from "./workbenchCommands";
 
 function PlanSummaryAutoDraft({
 	workspaceId,
@@ -926,7 +926,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				maxBottomGroups={layoutPreferences.maxBottomGroups}
 				projectionEpoch={projectionEpoch}
 				{...(focusRequest ? { focusRequest } : {})}
-				subscribeCloseRequest={subscribeCloseRequest}
+				registerTabCommands={registerTabCommands}
 				renderTabBody={renderTabBody}
 				renderTabAdornment={renderTabAdornment}
 				renderToolBody={renderToolBody}

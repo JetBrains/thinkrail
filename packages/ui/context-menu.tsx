@@ -40,8 +40,12 @@ function ContextMenuSeparator({
 	);
 }
 
+function isContextMenuKey(event: Pick<KeyboardEvent, "key" | "shiftKey">): boolean {
+	return event.key === "ContextMenu" || (event.shiftKey && event.key === "F10");
+}
+
 function openContextMenuFromKeyboard(event: React.KeyboardEvent<HTMLElement>) {
-	if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+	if (!isContextMenuKey(event)) return;
 	event.preventDefault();
 	const rect = event.currentTarget.getBoundingClientRect();
 	event.currentTarget.dispatchEvent(
@@ -55,5 +59,6 @@ export {
 	ContextMenuItem,
 	ContextMenuSeparator,
 	ContextMenuTrigger,
+	isContextMenuKey,
 	openContextMenuFromKeyboard,
 };
