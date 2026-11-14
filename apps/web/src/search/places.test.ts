@@ -21,6 +21,8 @@ const inWorkspace = (selected: string) =>
 				},
 			},
 		},
+		workspaces: { p1: [{ id: "w1", projectId: "p1" }] },
+		sessionStateByWorkspace: {},
 		layoutAttentionByWorkspace: {
 			w1: {
 				selectedByGroup: { center: selected },
@@ -34,6 +36,19 @@ const inWorkspace = (selected: string) =>
 describe("currentPlaceIds", () => {
 	test("the selected chat tab is the place, standing for its workspace", () => {
 		expect(currentPlaceIds(inWorkspace("t-a"))).toEqual(["chat:a", "workspace:w1"]);
+	});
+
+	test("a chat without a project is its one chat, before its layout resolves and on any other tab", () => {
+		const chatFolder = {
+			...inWorkspace("t-term"),
+			activeWorkspaceId: "c1",
+			workspaces: { chats: [{ id: "c1", projectId: "chats", kind: "chat" }] },
+			sessionStateByWorkspace: { c1: { "s-c1": {} } },
+		} as unknown as PlaceState;
+		expect(currentPlaceIds(chatFolder)).toEqual(["chat:s-c1", "workspace:c1"]);
+		expect(
+			currentPlaceIds({ ...chatFolder, sessionStateByWorkspace: {} } as unknown as PlaceState),
+		).toEqual(["workspace:c1"]);
 	});
 
 	test("a workspace showing another tab, Project Home and the main screen", () => {
