@@ -19,7 +19,8 @@ explicit, authenticated, on-demand runs.
 ## Execution model
 
 Per-test isolation is `resetState()` in `fixtures/app.ts`: it clears the host's `projects.json`,
-`workspaces.json`, every chat in `chats.json` and the `chats/` folders, turns, reviews, worktrees and pi
+`workspaces.json`, every chat in `chats.json` and the `chats/` folders, turns, reviews, artifact indexes and
+kept copies, worktrees and pi
 sessions, and resets the fixture repository, so a chat without a project created by one test never
 reaches the next. The Chats container the host ensured at boot is kept (an empty `chats/` root and the
 record), because a fresh install always has it: a cold start in a test is the cold start a user gets.
@@ -403,7 +404,8 @@ arrows, Home/End, →/← and type-ahead walk; Enter previews, `Mod+Enter` keeps
 first; a workspace row opens its dropdown on Shift+F10 and returns focus on Escape, renames on F2, asks
 before removal on Delete, and ← reaches its project; a chat row, in its own flat Chats tree, opens its
 menu, ignores F2 and deletes after the confirmation; Specs expand/collapse from the keyboard and Changes
-open their menu and kept diff.
+open their menu and kept diff; the Artifacts tree is one Tab stop that ↓ walks, F2 renames, Delete asks
+(Escape returns to the row, confirming removes it and focuses its neighbour) and `Mod+Enter` keeps.
 
 ## Isolation contract
 

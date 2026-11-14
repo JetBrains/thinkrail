@@ -31,6 +31,7 @@ import {
 	serverExtensions,
 } from "../extensions";
 import { type BundledTrashHelpers, setBundledTrashHelpers } from "../trash";
+import { artifactsGuard } from "./artifactsGuard";
 import { continueInWorkspaceExtension } from "./continueTool";
 import { headlessSearchPolicy } from "./headlessSearch";
 import { oversizedImageGuard } from "./imageGuard";
@@ -405,7 +406,7 @@ export function withoutSpecRule(workspaceId: string): InlineExtension {
 }
 
 export function childBaseExtensionFactories(): InlineExtension[] {
-	return [oversizedImageGuard, skillCarryover];
+	return [oversizedImageGuard, artifactsGuard, skillCarryover];
 }
 
 export function childExtensionFactories(workspaceId: string): InlineExtension[] {
@@ -445,6 +446,7 @@ export async function buildResourceLoader(
 		continueInWorkspaceExtension,
 		workspaceToolsExtension,
 		oversizedImageGuard,
+		artifactsGuard,
 		skillCatalog,
 		skillCarryover,
 		...extraFactories,

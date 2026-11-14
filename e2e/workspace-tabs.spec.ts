@@ -55,7 +55,10 @@ test("the selected side tool follows workspace switches", async ({ page }) => {
 
 	await page.getByTestId("tab-projects").click({ button: "right" });
 	await page
-		.getByRole("menuitem", { name: `Move to ${groupInfo.side} pane (Specs, Files)`, exact: true })
+		.getByRole("menuitem", {
+			name: `Move to ${groupInfo.side} pane (Specs, Files, Artifacts)`,
+			exact: true,
+		})
 		.click();
 	await revealWorkbenchTool(page, "projects");
 	await expect(projects).toHaveAttribute("aria-pressed", "true");

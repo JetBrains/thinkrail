@@ -1,6 +1,7 @@
 import {
 	RiFileCopyLine as Copy,
 	RiFileCopy2Line as CopyEntry,
+	RiScissorsCutLine as Cut,
 	RiClipboardLine as Paste,
 	RiDeleteBinLine as Trash,
 } from "@remixicon/react";
@@ -24,6 +25,7 @@ import {
 	selectFilesTreeView,
 	selectWorkspaceById,
 	selectWorkspaceIsRunning,
+	supportsArtifacts,
 	type TabIntent,
 	useAppStore,
 } from "../store";
@@ -346,6 +348,7 @@ function FileTreeMenu({
 	const t = useT();
 	const [open, setOpen] = useState(false);
 	const mutations = useAppStore((s) => supportsFileMutations(s.protocolVersion));
+	const moves = useAppStore((s) => supportsArtifacts(s.protocolVersion));
 	const canPaste = useAppStore((s) => s.fileClipboard !== null);
 	const copyPath = (absolute: boolean) => {
 		const worktreePath = selectWorkspaceById(useAppStore.getState(), workspaceId)?.worktreePath;
@@ -385,6 +388,17 @@ function FileTreeMenu({
 							<CopyEntry />
 							{t("common.copy")}
 						</ContextMenuItem>
+						{moves ? (
+							<ContextMenuItem
+								data-testid="file-tree-cut"
+								onSelect={() =>
+									useAppStore.getState().setFileClipboard({ workspaceId, path, cut: true })
+								}
+							>
+								<Cut />
+								{t("panels.fileTree.cut")}
+							</ContextMenuItem>
+						) : null}
 						{canPaste ? (
 							<ContextMenuItem
 								data-testid="file-tree-paste"

@@ -72,3 +72,14 @@ test("a parent cycle terminates and leaves well-formed roots intact", () => {
 	]);
 	expect(tree.map((t) => t.node.id)).toEqual(["root"]);
 });
+
+test("a finished task-spec leaves the tree while drafts and other specs stay", () => {
+	const tree = buildSpecTree([
+		node("root"),
+		node("draft", { type: "task-spec", status: "draft", parent: "root" }),
+		node("done", { type: "task-spec", status: "done", parent: "root" }),
+		node("module", { status: "done", parent: "root" }),
+	]);
+	expect(tree.map((root) => root.node.id)).toEqual(["root"]);
+	expect(tree[0]?.children.map((child) => child.node.id)).toEqual(["draft", "module"]);
+});

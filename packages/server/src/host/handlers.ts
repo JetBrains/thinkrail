@@ -92,6 +92,14 @@ import {
 	type SendMode,
 	track,
 } from "../analytics";
+import {
+	discardArtifact,
+	listArtifacts,
+	prepareArtifactsDestination,
+	removeWorkspaceArtifacts,
+	restoreArtifact,
+	withUserRemoval,
+} from "../artifacts";
 import { suggestPrDescription } from "../assist";
 import {
 	cancelLogin,
@@ -126,7 +134,14 @@ import {
 	surveyResponse,
 } from "../feedback";
 import { fontsDir, listInstalledFonts, readUserFonts } from "../fonts";
-import { copyWorktreeEntry, deleteWorktreeEntry, readDir, readFile } from "../fs";
+import {
+	copyWorktreeEntry,
+	deleteWorktreeEntry,
+	moveWorktreeEntry,
+	readDir,
+	readFile,
+	renameWorktreeEntry,
+} from "../fs";
 import {
 	commitsAheadOf,
 	countPushDivergence,
@@ -840,6 +855,7 @@ const handlers: WsHandlers = {
 			removeWorkspaceReviews(ws.id);
 			forgetWorkspaceChanges(ws.id);
 			forgetWorkspaceTurns(ws.id);
+			removeWorkspaceArtifacts(ws.id);
 			stopWatch(ws.id);
 			closeWorkspaceTerminals(ws.id);
 			void archiveTeardown(ws);
@@ -941,6 +957,7 @@ const handlers: WsHandlers = {
 	"fs.copy": (p) => {
 		void ensureWatch(p.destinationWorkspaceId);
 		return withChangeLock(p.destinationWorkspaceId, async () => {
+			prepareArtifactsDestination(p.destinationWorkspaceId, p.destinationDirectory);
 			const { path, written } = await copyWorktreeEntry(p);
 			notifyWorkspacePathsChanged(p.destinationWorkspaceId, written);
 			return { path };
@@ -949,10 +966,61 @@ const handlers: WsHandlers = {
 	"fs.delete": (p) => {
 		void ensureWatch(p.workspaceId);
 		return withChangeLock(p.workspaceId, async () => {
-			const { path, directory } = await deleteWorktreeEntry(p.workspaceId, p.path);
+			const { path, directory } = await withUserRemoval(p.workspaceId, p.path, () =>
+				deleteWorktreeEntry(p.workspaceId, p.path),
+			);
 			notifyWorkspacePathsChanged(p.workspaceId, [path], { subtrees: directory });
 			return { ok: true } as const;
 		});
+	},
+	"fs.rename": (p) => {
+		void ensureWatch(p.workspaceId);
+		return withChangeLock(p.workspaceId, async () => {
+			const moved = await withUserRemoval(p.workspaceId, p.path, async () =>
+				renameWorktreeEntry(p.workspaceId, p.path, p.name),
+			);
+			notifyWorkspacePathsChanged(p.workspaceId, [moved.from, ...moved.written], {
+				subtrees: moved.directory,
+			});
+			return { path: moved.path };
+		});
+	},
+	"fs.move": (p) => {
+		void ensureWatch(p.sourceWorkspaceId);
+		void ensureWatch(p.destinationWorkspaceId);
+		const [first, second] =
+			p.sourceWorkspaceId < p.destinationWorkspaceId
+				? [p.sourceWorkspaceId, p.destinationWorkspaceId]
+				: [p.destinationWorkspaceId, p.sourceWorkspaceId];
+		const locked = <T>(operation: () => Promise<T>) =>
+			first === second
+				? withChangeLock(first, operation)
+				: withChangeLock(first, () => withChangeLock(second, operation));
+		return locked(async () => {
+			prepareArtifactsDestination(p.destinationWorkspaceId, p.destinationDirectory);
+			const moved = await withUserRemoval(p.sourceWorkspaceId, p.sourcePath, async () =>
+				moveWorktreeEntry(p),
+			);
+			notifyWorkspacePathsChanged(p.sourceWorkspaceId, [moved.from], {
+				subtrees: moved.directory,
+			});
+			notifyWorkspacePathsChanged(p.destinationWorkspaceId, moved.written);
+			return { path: moved.path };
+		});
+	},
+	"artifacts.list": (p) => {
+		void ensureWatch(p.workspaceId);
+		return listArtifacts(p.workspaceId);
+	},
+	"artifacts.restore": (p) =>
+		withChangeLock(p.workspaceId, async () => {
+			restoreArtifact(p.workspaceId, p.path);
+			notifyWorkspacePathsChanged(p.workspaceId, [p.path]);
+			return { ok: true } as const;
+		}),
+	"artifacts.discard": async (p) => {
+		await discardArtifact(p.workspaceId, p.path);
+		return { ok: true } as const;
 	},
 	"spec.graph": (p) => {
 		void ensureWatch(p.workspaceId);

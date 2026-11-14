@@ -135,7 +135,8 @@ treatment.
   The Default gets neither mutation. "Open in" comes from the host-wide `editor.list`; GUI entries call
   `workspace.openIn`, while terminal-kind Vim activates the workspace and runs through `addTerminal`'s
   one-shot `initialCommand`. Copy writes `worktreePath`; Reveal calls `workspace.reveal`. These requests,
-  `editor.list`, the project workspace-list load, the remove confirm (`RemoveWorkspaceDialog`), and the
+  `editor.list`, the project workspace-list load, the remove confirm (`RemoveWorkspaceDialog`, which for a
+  workspace ThinkRail made also says how many artifacts go with it, from the loaded artifacts snapshot), and the
   inline-rename controller below (`createRenameController` / `useInlineRename`, shared with project rename) live once in
   `workspaceActions.ts` so the shell's topbar workspace menu ([[submodule-web-shell-location-bar]]) offers
   the same actions — including the capability-aware pending rename — without a second implementation. The
@@ -329,9 +330,15 @@ treatment.
   folder or link, a compacted folder's deepest folder — on the session-only in-app clipboard
   (`store.fileClipboard`, not the OS clipboard, cleared with its workspace or when its entry is deleted);
   **Paste** (only while the clipboard holds an entry) asks `fs.copy` for a copy beside a file or inside a
-  folder — across workspaces too, never a move — under the host's ` copy` / ` copy N` name, then expands
+  folder — across workspaces too, a copy unless the entry was cut (below) — under the host's ` copy` /
+  ` copy N` name, then expands
   that folder, and an empty tree offers the same Paste as a button next to *Empty*; **Delete** (also the Delete key on a row) asks for
-  confirmation and `fs.delete` moves the entry to the OS trash. The confirmation says when an agent is
+  confirmation and `fs.delete` moves the entry to the OS trash. From `ARTIFACTS_PROTOCOL_VERSION` (v121)
+  the menu also has **Cut**: the same clipboard entry marked `cut`, which the next Paste (here or in the
+  Artifacts tool) turns into `fs.move` — refused with "already exists" rather than renamed, and with "on
+  another disk" across file systems, where the entry stays on the clipboard so the user can copy it — and
+  clears once it succeeds.
+  The confirmation says when an agent is
   working in the workspace but does not block — the user's explicit action wins, as with a hunk revert —
   and an open tab of a deleted file keeps its stale-content contract. Failures toast; a folder past the
   host's copy bound and an entry that changed under the paste or delete (`ENTRY_CHANGED`) get their own
@@ -2215,7 +2222,9 @@ own section. The kebab menu (`plan-menu`, a
   no/dangling parent; default-expanded). There is **no persistent Refresh control or panel toolbar row**:
   routine synchronization is automatic. A fetch **failure renders a distinct inline error hint with Retry**,
   never the "No specs" empty state — offline and empty are different answers. With a previous snapshot, the
-  hint sits above the retained tree; without one, it replaces the loading state. The tree build (`specTree.ts`)
+  hint sits above the retained tree; without one, it replaces the loading state. A **finished task-spec**
+  (`type: task-spec`, `status: done`) is left out of the tree, as the spec tools leave it out of search
+  ([[submodule-spec-graph-core]]); the host still reports it, and the Artifacts tool lists its file. The tree build (`specTree.ts`)
   assumes a well-formed graph — **parent cycles are `spec_validate`'s problem, not the viewer's** (cycle
   members are unreachable from any root and simply don't render) — but the walk is **visited-guarded**,
   so a malformed graph can never hang or loop the UI. Tree only in this slice — no cross-edge display,
@@ -2238,6 +2247,41 @@ own section. The kebab menu (`plan-menu`, a
   (preview/keep) but keeps its own directory behaviour — a whole-row click toggles dirs, no collision
   there. File and folder rows also carry the copy-path, Copy / Paste and Delete context menu described with
   `FilesPanel`.
+- **`ArtifactsPanel` is the Artifacts tool's body** — a reader of the host's artifact index
+  ([[submodule-server-artifacts]]). Like specs, the `artifacts.list` snapshot lands in the store
+  (`artifactsByWorkspace`) through **`useWorkspaceArtifacts`**, which the workbench calls for every
+  workspace (chats included) so the rail can show new arrivals while the tool is hidden; it re-reads on the
+  host's `workspace.artifactsChanged` nudge and on reconnect (`selectArtifactsTick`, passed to
+  `useWorkspaceRead` instead of the fs tick, because the host already reconciles on file changes and an fs
+  tick per agent edit would re-list for nothing). The panel is two sections, newest first: **Artifacts**
+  (files under `.thinkrail/context/`; a two-line row: the name, then the folder inside the artifacts
+  folder — or `Task spec · <status>` joined from the spec snapshot by path — and a chip naming the writing
+  chat that opens it; no relative age, since the order already says what is newest — the exact change time
+  is the row's hover title) and **Other agent files · ignored** (one row per ignored output, a folder lazily
+  expandable through `fs.readDir`, with its file count), hidden by the header's eye toggle. A row the host
+  marks `deleted` reads "Deleted, not by you" with Restore; opening it waits for the restore. The panel
+  **opens on This chat**: the attended chat's artifacts (`selectArtifactMentionTarget`), following it as the
+  center switches chats; with no chat attended it shows all, and All chats is a click away but not
+  remembered across mounts. Unattributed artifacts belong to no chat. Whenever the filter hides rows, a
+  line under the list counts them ("N more from other chats") with **Show all chats**, so the default never
+  makes a workspace look emptier than it is. Paste puts the Files clipboard into the artifacts folder. Every row has one context menu: Mention in chat
+  (pastes `@<path> ` into the attended chat's composer through `pasteIntoComposer` and focuses it, closing the chat's history overlay as `Mod+L` does — run once the row
+menu has closed, because a closing menu returns focus to its row; disabled
+  without one), Reveal in Files, Open ‹chat› for an attributed row (the chip's action), the two Copy paths,
+  Copy / Cut (the shared Files clipboard; a cut pastes
+  through `fs.move`), Rename (inline, `fs.rename`), Restore for a deleted row, and Delete — `fs.delete` for a
+  live file, `artifacts.discard` for a kept copy, both behind a confirmation. Each section is its own sidebar
+  tree (see *Sidebar trees*; the heading stays outside it) and emits the shell's
+  focus-recovery markup (lists `artifacts` and `artifacts-outputs[:<folder>]`, the path as row id, the name
+  as the row's landing control), so a delete, restore or rename moves focus to the row or its neighbour
+  instead of `<body>`. **New** means newer than this
+  client's per-workspace seen watermark (`artifactsSeenByWorkspace`, the newest `firstSeenAt` / output
+  `changedAt`, so only host timestamps are compared): the first snapshot of a workspace is taken as seen, a
+  showing panel advances the watermark, rows newer than the watermark it opened with stay highlighted while
+  it shows, and `selectArtifactsUnseen` drives the rail dot. While the eye toggle hides ignored outputs,
+  their changes neither advance the watermark nor light the dot. The watermarks and the ignored toggle persist
+  per client (`shell/artifactsPreference.ts`). "Update the ThinkRail host" shows only once a welcome reports
+  a host older than v121; between sockets the panel keeps its last snapshot.
 - **Chat deep-links remain arrangement-agnostic.** A shell-owned **`LayoutIntent`** names the singleton tool;
   the shell resolves its current side/group, reveals it in place, and selects it locally. `changesRequest`
   and `specRequest` add the one path to focus/open without naming a layout destination. A divider chip that
@@ -2526,14 +2570,15 @@ own section. The kebab menu (`plan-menu`, a
   and E2E tests pin double-click coalescing, stale-read rejection, per-group isolation, local identity
   convergence, and promote-by-keyboard/touch.
 - **Sidebar trees share one keyboard model (`treeNavigation.tsx`).** Files, Changes (both views), Specs,
-  Chats and Projects are each a `Tree` — a `div role=tree` with **one Tab stop** (roving tabindex) — whose
+  Chats, Projects and the Artifacts tool's two sections are each a `Tree` — a `div role=tree` with **one Tab stop** (roving tabindex) — whose
   rows' focusable controls are `useTreeItem` treeitems (`aria-level`, `aria-expanded` on expandables,
   `aria-current` for the selected row) under `li role=none`; the tree is a `div role=tree` and every
   list inside it is `role=none`, so the hierarchy is the explicit `aria-level` (VS Code's flat-tree
   markup) rather than nested `group`s, which Biome's semantic-element rules reject on lists. Chats and
   Projects are two trees (Projects: project → workspaces and creations → the Settled header as an
-  expandable item → settled rows and *Show more*). No tree is virtualized, so the model is DOM-driven:
-  the visible rows are the tree's treeitems in DOM order, parent and first child come from `aria-level`,
+  expandable item → settled rows and *Show more*); so are Artifacts (flat; the name is the treeitem) and
+  Other agent files (an output folder is its own toggle), their headings outside the trees. No tree is
+  virtualized, so the model is DOM-driven: the visible rows are the tree's treeitems in DOM order, parent and first child come from `aria-level`,
   and →/← click the row's `[data-tree-toggle]` (a Files/Changes folder row is its own toggle; Specs,
   projects and the Settled header use their chevron), so every tree keeps its own expansion state and
   markup.
@@ -2544,26 +2589,28 @@ own section. The kebab menu (`plan-menu`, a
     carries `data-focus-default`, so F6, `Mod+0` and `Mod+Shift+E/G` land on it ([[submodule-web-shell]]
     prefers the innermost default; its focusable test counts `tabIndex=-1` buttons, so without the marker
     landing took the first row). Of Chats and Projects only the tree holding the active workspace marks
-    its default (Projects when none is active).
+    its default (Projects when none is active); of the Artifacts tool's, Artifacts when it has rows, else
+    Other agent files.
   - **Keys** are feature-local (`event.key` in the tree, not the global keybinding table): ↑/↓, Home/End;
     → expands, else enters the first child; ← collapses, else goes to the parent; type-ahead matches the
     row label's prefix (a ~500 ms buffer; Space joins only a live buffer, otherwise it activates). Letters
     belong to a focused tree, so the Changes review's `V`/`J`/`N` do not fire from a focused Changes row.
-    Enter is the button's own click; `Mod+Enter` is the row's double-click — Files and Specs open kept,
-    Changes opens its kept diff with `claimPreview`; rows without a double-click treat it as Enter.
+    Enter is the button's own click; `Mod+Enter` is the row's double-click — Files, Specs and Artifacts open
+    kept, Changes opens its kept diff with `claimPreview`; rows without a double-click treat it as Enter.
   - **Row keys live in each row**, through `treeRowKey`: Shift+F10 / the Menu key open the row's menu
     (context-menu rows through `openContextMenuFromKeyboard`, dropdown rows through `isContextMenuKey`,
     after which the menu returns focus to the row); **Delete** opens the menu's own confirmation (file,
-    Remove workspace except on Default, Delete chat — a pending deletion retries directly —, Close project;
-    nothing on Changes and Specs rows); **F2** renames a project or managed workspace where the menu offers
-    Rename (chats have no rename). A pending chat stays focusable (`aria-disabled`) so its Retry is
-    reachable.
+    Remove workspace except on Default, Delete chat — a pending deletion retries directly —, Close project,
+    an artifact's or ignored output's Delete — a deleted artifact discards its kept copy; nothing on Changes
+    and Specs rows); **F2** renames a project, managed workspace or artifact where the
+    menu offers Rename (chats and ignored outputs have no rename). A pending chat and a deleted artifact stay
+    focusable (`aria-disabled`) so their Retry / Restore is reachable.
   - **Inner row buttons leave the Tab order and the accessibility tree** (`treeRowControlProps`:
     `tabIndex=-1` and `aria-hidden` — a `tree` may own only treeitems, and these are pointer duplicates:
     chevrons, kebabs, Settle / Keep active, the project's Create workspace `+`, a creation's retry /
-    dismiss); each action stays reachable — arrows
-    expand, the row's menu carries the rest (Create workspace, Settle, Keep active), a creation's actions are
-    in the creation view its row opens. dnd-kit's draggable `attributes` stay unspread on the project name
+    dismiss, an artifact's chat chip and Restore); each action stays reachable — arrows expand, the row's
+    menu carries the rest (Create workspace, Settle, Keep active, Open ‹chat›, Restore), a creation's
+    actions are in the creation view its row opens. dnd-kit's draggable `attributes` stay unspread on the project name
     (they would add a second tab stop); dragging needs only its listeners.
 - **Row actions: one menu, two triggers.** Every **file** row (both views) is wrapped in
   **`ChangeRowActions`**: a hover-revealed `⌄` button *and* right-click on the row (Shift+F10 / Menu key on it) open the same

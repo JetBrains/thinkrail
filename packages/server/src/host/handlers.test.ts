@@ -21,6 +21,7 @@ import type {
 	TemplateInfo,
 	WireModel,
 	Workspace,
+	WorkspaceArtifactsSnapshot,
 	WorkspaceCreation,
 	WorkspaceCreationRemoved,
 	WorkspaceFsChangedPayload,
@@ -41,6 +42,7 @@ import {
 	setSessionManagerFactory,
 } from "../agent";
 import { initializeAnalytics, resetAnalyticsForTests, shutdownAnalytics } from "../analytics";
+import { reconcileArtifacts } from "../artifacts";
 import {
 	configureSurveySource,
 	recordAcceptedMessage,
@@ -230,6 +232,117 @@ test("file mutation handlers invalidate watcher-ignored paths after success", as
 		{ workspaceId: "w1", paths: ["node_modules/demo"], truncated: false, skillChange: "unknown" },
 	]);
 	expect(existsSync(directory)).toBe(false);
+});
+
+test("user file mutations keep the artifact index honest", async () => {
+	const context = join(repo, ".thinkrail", "context");
+	mkdirSync(join(context, "mockups"), { recursive: true });
+	writeFileSync(join(context, "a.md"), "a");
+	writeFileSync(join(context, "b.md"), "b");
+	writeFileSync(join(context, "c.md"), "c");
+	writeFileSync(
+		join(dataDir, "workspaces.json"),
+		JSON.stringify([{ id: "wa", projectId: "p1", name: "a", worktreePath: repo, createdAt: 1 }]),
+	);
+	setTrashImplementationForTests(async (input) => {
+		if (typeof input !== "string") throw new Error("expected one path");
+		reconcileArtifacts("wa");
+		rmSync(input, { recursive: true });
+	});
+	const list = async () =>
+		(
+			(await handleRequest(
+				"artifacts.list",
+				{ workspaceId: "wa" },
+				CTX,
+			)) as WorkspaceArtifactsSnapshot
+		).artifacts
+			.map((artifact) => `${artifact.state} ${artifact.path}`)
+			.sort();
+	expect(await list()).toEqual([
+		"live .thinkrail/context/a.md",
+		"live .thinkrail/context/b.md",
+		"live .thinkrail/context/c.md",
+	]);
+
+	await handleRequest("fs.delete", { workspaceId: "wa", path: ".thinkrail/context/a.md" }, CTX);
+	expect(
+		await handleRequest(
+			"fs.rename",
+			{ workspaceId: "wa", path: ".thinkrail/context/b.md", name: "renamed.md" },
+			CTX,
+		),
+	).toEqual({ path: ".thinkrail/context/renamed.md" });
+	expect(
+		await handleRequest(
+			"fs.move",
+			{
+				sourceWorkspaceId: "wa",
+				sourcePath: ".thinkrail/context/c.md",
+				destinationWorkspaceId: "wa",
+				destinationDirectory: ".",
+			},
+			CTX,
+		),
+	).toEqual({ path: "c.md" });
+	expect(await list()).toEqual(["live .thinkrail/context/renamed.md"]);
+
+	rmSync(join(context, "renamed.md"));
+	expect(await list()).toEqual(["deleted .thinkrail/context/renamed.md"]);
+	await handleRequest(
+		"artifacts.restore",
+		{ workspaceId: "wa", path: ".thinkrail/context/renamed.md" },
+		CTX,
+	);
+	expect(readFileSync(join(context, "renamed.md"), "utf8")).toBe("b");
+	rmSync(join(context, "renamed.md"));
+	await list();
+	await handleRequest(
+		"artifacts.discard",
+		{ workspaceId: "wa", path: ".thinkrail/context/renamed.md" },
+		CTX,
+	);
+	expect(await list()).toEqual([]);
+});
+
+test("a paste into the artifacts folder seeds it first when it does not exist yet", async () => {
+	writeFileSync(join(repo, "notes.md"), "notes\n");
+	writeFileSync(join(repo, "todo.md"), "todo\n");
+	writeFileSync(
+		join(dataDir, "workspaces.json"),
+		JSON.stringify([{ id: "wa", projectId: "p1", name: "a", worktreePath: repo, createdAt: 1 }]),
+	);
+	expect(existsSync(join(repo, ".thinkrail"))).toBe(false);
+	expect(
+		await handleRequest(
+			"fs.copy",
+			{
+				sourceWorkspaceId: "wa",
+				sourcePath: "notes.md",
+				destinationWorkspaceId: "wa",
+				destinationDirectory: ".thinkrail/context",
+			},
+			CTX,
+		),
+	).toEqual({ path: ".thinkrail/context/notes.md" });
+	expect(readFileSync(join(repo, ".thinkrail", "context", ".gitignore"), "utf8")).toBe("*\n");
+	rmSync(join(repo, ".thinkrail"), { recursive: true });
+	expect(
+		await handleRequest(
+			"fs.move",
+			{
+				sourceWorkspaceId: "wa",
+				sourcePath: "todo.md",
+				destinationWorkspaceId: "wa",
+				destinationDirectory: ".thinkrail/context",
+			},
+			CTX,
+		),
+	).toEqual({ path: ".thinkrail/context/todo.md" });
+	expect(readFileSync(join(repo, ".thinkrail", "context", ".gitignore"), "utf8")).toBe("*\n");
+	expect(gitText(repo, "status", "--porcelain", "--untracked-files=all")).not.toContain(
+		".thinkrail",
+	);
 });
 
 test("clone handlers resolve the destination and return an opened local project", async () => {

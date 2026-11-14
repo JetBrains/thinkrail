@@ -614,7 +614,7 @@ test("side groups expose broad per-panel above and below split targets", async (
 
 	const groups = sideGroups(page, "right");
 	await expect(groups).toHaveCount(3);
-	await expect(groups.nth(0)).toHaveAttribute("data-tools", "specs");
+	await expect(groups.nth(0)).toHaveAttribute("data-tools", "specs artifacts");
 	await expect(groups.nth(1)).toHaveAttribute("data-tools", "files");
 	await expect(groups.nth(2)).toHaveAttribute("data-tools", /review/);
 
@@ -623,7 +623,7 @@ test("side groups expose broad per-panel above and below split targets", async (
 	expect(belowHeight).toBeGreaterThan(40);
 
 	await expect(groups).toHaveCount(4);
-	await expect(groups.nth(0)).toHaveAttribute("data-tools", "specs");
+	await expect(groups.nth(0)).toHaveAttribute("data-tools", "specs artifacts");
 	await expect(groups.nth(1)).toContainText("Empty group");
 	await expect(groups.nth(2)).toHaveAttribute("data-tools", /review/);
 	await expect(groups.nth(3)).toHaveAttribute("data-tools", "files");
@@ -640,7 +640,7 @@ test("side groups expose broad per-panel above and below split targets", async (
 	await expect(page.getByTestId("tool-rail-review")).toHaveAttribute("aria-pressed", "false");
 	await page.getByTestId("tool-rail-review").click({ delay: 100 });
 	await expect(groups).toHaveCount(5);
-	await expect(groups.nth(0)).toHaveAttribute("data-tools", "specs");
+	await expect(groups.nth(0)).toHaveAttribute("data-tools", "specs artifacts");
 	await expect(groups.nth(2)).toHaveAttribute("data-tools", "files");
 	await expect(groups.nth(3)).toHaveAttribute("data-tools", /review/);
 });

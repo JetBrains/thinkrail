@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
@@ -260,4 +260,54 @@ test("Specs and Changes rows expand, collapse and keep-open from the keyboard", 
 		"data-preview",
 		"false",
 	);
+});
+
+test("Artifacts is its own tree: arrows walk it, F2 renames, Delete asks before removing and Mod+Enter keeps", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const context = join(workspace.worktreePath, ".thinkrail", "context");
+	mkdirSync(context, { recursive: true });
+	for (const [index, name] of ["older.md", "newer.md"].entries()) {
+		writeFileSync(join(context, name), `${name}\n`);
+		const time = new Date(Date.now() - (2 - index) * 60_000);
+		utimesSync(join(context, name), time, time);
+	}
+	await revealWorkbenchTool(page, "artifacts");
+	await page.getByTestId("artifacts-filter-all").click();
+	const tree = page.getByRole("tree", { name: "Artifacts" });
+	const items = tree.getByRole("treeitem");
+	await expect(items).toHaveText(["newer.md", "older.md"]);
+	const newer = items.filter({ hasText: "newer.md" });
+	const older = items.filter({ hasText: "older.md" });
+
+	await page.getByRole("toolbar", { name: "Artifacts" }).getByRole("button").last().focus();
+	await page.keyboard.press("Tab");
+	await expect(newer).toBeFocused();
+	await expect(tree.locator('[tabindex="0"]')).toHaveCount(1);
+	await page.keyboard.press("ArrowDown");
+	await expect(older).toBeFocused();
+
+	await page.keyboard.press("F2");
+	const rename = page.getByTestId("artifact-name-input");
+	await expect(rename).toBeFocused();
+	await page.keyboard.press("Escape");
+	await expect(rename).toHaveCount(0);
+	await expect(older).toBeFocused();
+
+	await page.keyboard.press("Delete");
+	const confirm = page.getByTestId("confirm-dialog");
+	await expect(confirm).toContainText("Delete older.md?");
+	await page.keyboard.press("Escape");
+	await expect(confirm).toHaveCount(0);
+	await expect(older).toBeFocused();
+	await page.keyboard.press("Delete");
+	await page.getByTestId("artifact-delete-confirm").click();
+	await expect(older).toHaveCount(0);
+	expect(existsSync(join(context, "older.md"))).toBe(false);
+	await expect(newer).toBeFocused();
+
+	await pressPlatformShortcut(page, "Enter");
+	await expect(editorTab(page, "newer.md")).toHaveAttribute("data-preview", "false");
 });
