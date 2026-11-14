@@ -183,7 +183,8 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 		const current = options;
 		if (!current || !scroller) return;
 		if (!holdsFocus()) park();
-		if (item.rowId === current.newestRowId || item.rowId === current.latestRowId) {
+		const latestRow = item.rowId === current.newestRowId || item.rowId === current.latestRowId;
+		if (latestRow && item.id === item.rowId) {
 			current.scrollToLatest();
 			whenMounted(item.id);
 			return;

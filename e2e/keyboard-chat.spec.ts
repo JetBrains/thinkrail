@@ -336,6 +336,84 @@ test("PgUp/PgDn in the composer scroll the transcript and Latest from the keyboa
 	}
 });
 
+function seedTallLatestActivity(name: string) {
+	const reads = Array.from({ length: 30 }, (_, index) => `read-${index + 1}`);
+	const session = seedWorkspaceSession(repoCwd(), {
+		name,
+		messages: [
+			...Array.from({ length: 30 }, (_, index) => [
+				{
+					role: "user" as const,
+					text: `older request ${index + 1}`,
+					timestamp: BASE_TS + index * 2_000,
+				},
+				{
+					role: "assistant" as const,
+					text: `older answer ${index + 1}: ${"history keeps going. ".repeat(8)}`,
+					timestamp: BASE_TS + index * 2_000 + 1_000,
+				},
+			]).flat(),
+			{ role: "user", text: "Read every file.", timestamp: BASE_TS + 100_000 },
+			{
+				role: "assistant",
+				content: reads.map((id) => ({
+					type: "toolCall" as const,
+					id,
+					name: "read",
+					arguments: { path: "README.md" },
+				})),
+				stopReason: "toolUse",
+				timestamp: BASE_TS + 101_000,
+			},
+			...reads.map((toolCallId, index) => ({
+				role: "toolResult" as const,
+				toolCallId,
+				toolName: "read",
+				content: [{ type: "text" as const, text: "# sample-project" }],
+				isError: false,
+				timestamp: BASE_TS + 102_000 + index,
+			})),
+		],
+	});
+	utimesSync(session.path, new Date(BASE_TS + 200_000), new Date(BASE_TS + 200_000));
+	return session;
+}
+
+test("a nested step of the newest group is revealed itself when its row comes back", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const session = seedTallLatestActivity("keyboard tall latest group");
+	try {
+		await enterDefaultWorkspace(page);
+		const chatScroll = page.getByTestId("chat-scroll");
+		await waitForScrollStability(chatScroll);
+		await enterTranscript(page);
+		const group = activityRow(page);
+		await expect(group).toBeFocused();
+		await page.keyboard.press("ArrowRight");
+		await page.keyboard.press("ArrowRight");
+		const first = item(page, "read-1");
+		await expect(first).toBeFocused();
+		await expect(first).toBeInViewport();
+
+		await moveMouseToChatViewport(page, chatScroll);
+		for (let notch = 0; notch < 60 && (await first.count()) > 0; notch += 1) {
+			await page.mouse.wheel(0, -400);
+			await page.evaluate(() => new Promise(requestAnimationFrame));
+		}
+		await expect(first).toHaveCount(0);
+		await expect(page.locator("[data-transcript-feed]")).toBeFocused();
+
+		await page.keyboard.press("k");
+		await expect(first).toBeFocused();
+		await waitForScrollStability(chatScroll);
+		await expect(first).toBeInViewport();
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
 test("the focused item keeps the keyboard when its row unmounts, and the next key brings it back", async ({
 	page,
 }) => {
