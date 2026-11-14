@@ -305,20 +305,30 @@ export function planManagedWorkspace(
 	};
 }
 
-export function managedPathOwned(path: string): boolean {
+export function managedPathOwned(path: string, opts: { excludeCreationId?: string } = {}): boolean {
 	const wanted = canonicalPath(path);
-	const within = (candidate: string) => {
-		const rel = relative(wanted, canonicalPath(candidate));
+	const contains = (ancestor: string, child: string) => {
+		const rel = relative(canonicalPath(ancestor), canonicalPath(child));
 		return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
 	};
 	return (
-		loadWorkspaces().some((workspace) => canonicalPath(workspace.worktreePath) === wanted) ||
-		loadProjects().some((project) => within(project.path))
+		loadWorkspaces().some(
+			(workspace) =>
+				contains(workspace.worktreePath, wanted) || contains(wanted, workspace.worktreePath),
+		) ||
+		loadProjects().some((project) => contains(wanted, project.path)) ||
+		creationRecords().some(
+			(creation) =>
+				creation.id !== opts.excludeCreationId && contains(creation.worktreePath, wanted),
+		)
 	);
 }
 
-export function assertManagedPathFree(path: string): void {
-	if (managedPathOwned(path))
+export function assertManagedPathFree(
+	path: string,
+	opts: { excludeCreationId?: string } = {},
+): void {
+	if (managedPathOwned(path, opts))
 		throw new CodedError(
 			"WORKSPACE_PATH_TAKEN",
 			`The workspace folder is already open in ThinkRail: ${path}`,
@@ -330,7 +340,7 @@ export function registerManagedWorkspace(
 		renamed?: true;
 	},
 ): Workspace {
-	assertManagedPathFree(entry.worktreePath);
+	assertManagedPathFree(entry.worktreePath, { excludeCreationId: entry.id });
 	const all = loadWorkspaces();
 	const workspace: Workspace = {
 		id: entry.id,

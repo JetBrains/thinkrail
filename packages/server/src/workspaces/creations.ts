@@ -227,7 +227,7 @@ async function cleanupCreation(
 ): Promise<CleanupResult> {
 	const untouched = { clean: true, removed: false };
 	const taken = () => {
-		if (!managedPathOwned(record.worktreePath)) return false;
+		if (!managedPathOwned(record.worktreePath, { excludeCreationId: record.id })) return false;
 		log.warn(`left ${record.worktreePath} alone: ThinkRail has it open now`);
 		return true;
 	};
@@ -267,7 +267,7 @@ async function prepare(id: string, project: Project, signal: AbortSignal): Promi
 	let record = findCreation(id);
 	if (!record) throw new CreationAborted();
 	assertOutsideChatsRoot(record.worktreePath, "used for a managed workspace");
-	assertManagedPathFree(record.worktreePath);
+	assertManagedPathFree(record.worktreePath, { excludeCreationId: record.id });
 	if (record.baseOid && !(await cleanupCreation(project.path, record)).clean)
 		fail("WORKTREE_ADD_FAILED", `Could not clear the earlier attempt at ${record.worktreePath}`);
 	if (record.baseOid)
@@ -357,7 +357,7 @@ function checkoutConfig(projectPath: string): string[] {
 async function checkOut(id: string, projectPath: string, signal: AbortSignal): Promise<void> {
 	const record = findCreation(id);
 	if (!record?.baseOid) throw new CreationAborted();
-	assertManagedPathFree(record.worktreePath);
+	assertManagedPathFree(record.worktreePath, { excludeCreationId: record.id });
 	const progress = progressFeed(id);
 	const checkout = await gitAsync(
 		record.worktreePath,
