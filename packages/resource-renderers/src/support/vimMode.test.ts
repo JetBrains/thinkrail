@@ -23,6 +23,7 @@ function position(lineNumber: number, column: number): IPosition {
 function makeEditor(lines: readonly string[]) {
 	let current = position(1, 1);
 	let selection: IRange | null = null;
+	let scrollTop = 0;
 	let listener: KeyListener | null = null;
 	const text = lines.join("\n");
 	const offsets: number[] = [];
@@ -115,6 +116,11 @@ function makeEditor(lines: readonly string[]) {
 				endColumn: 1,
 			} as IRange,
 		],
+		getTopForLineNumber: (lineNumber: number) => (lineNumber - 1) * 20,
+		getLayoutInfo: () => ({ height: 100 }),
+		setScrollTop: (next: number) => {
+			scrollTop = next;
+		},
 		revealPositionInCenter: () => {},
 		revealRangeInCenter: () => {},
 		revealLineNearTop: () => {},
@@ -129,11 +135,14 @@ function makeEditor(lines: readonly string[]) {
 		get selection() {
 			return selection;
 		},
-		emit(key: string, shiftKey = false) {
+		get scrollTop() {
+			return scrollTop;
+		},
+		emit(key: string, shiftKey = false, ctrlKey = false) {
 			const browserEvent = {
 				key,
 				shiftKey,
-				ctrlKey: false,
+				ctrlKey,
 				metaKey: false,
 				altKey: false,
 				isComposing: false,
@@ -203,8 +212,24 @@ describe("Vim mode", () => {
 		fake.emit("f");
 		fake.emit("b");
 		expect(fake.position).toEqual(position(1, 9));
+		const counted = makeEditor(["a b c d"]);
+		const countedController = createVimController(counted.editor, () => {});
+		countedController.toggle();
+		counted.emit("2");
+		counted.emit("t");
+		counted.emit(" ");
+		expect(counted.position).toEqual(position(1, 3));
+		countedController.dispose();
 		fake.emit("G");
 		expect(fake.position.lineNumber).toBe(3);
+		const viewport = makeEditor(Array.from({ length: 20 }, (_, index) => `line ${index}`));
+		const viewportController = createVimController(viewport.editor, () => {});
+		viewportController.toggle();
+		viewport.emit("G");
+		viewport.emit("z");
+		viewport.emit("b");
+		expect(viewport.scrollTop).toBeGreaterThan(0);
+		viewportController.dispose();
 		fake.emit("g");
 		fake.emit("g");
 		expect(fake.position.lineNumber).toBe(1);
@@ -218,6 +243,8 @@ describe("Vim mode", () => {
 
 		fake.emit("V");
 		expect(state.visualMode).toBe("line");
+		fake.emit("a", false, true);
+		expect(state.mode).toBe("visual");
 		fake.emit("Escape");
 		fake.emit("v");
 		expect(state.visualMode).toBe("character");

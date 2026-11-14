@@ -282,7 +282,7 @@ export default function MonacoEditor({
 						aria-label={t("viewer.vim.search")}
 						data-testid="vim-search-input"
 						placeholder={t("viewer.vim.searchPlaceholder")}
-						className="h-20 w-[256px] bg-transparent text-text-default outline-none tr-code-text"
+						className="h-20 w-[256px] bg-transparent text-text-default outline-none focus-visible:focus-ring tr-code-text"
 					/>
 				</div>
 			) : null}

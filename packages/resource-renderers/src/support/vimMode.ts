@@ -163,19 +163,19 @@ function findCharacter(
 	before: boolean,
 	count: number,
 ): IPosition {
-	let current = position;
+	const line = model.getLineContent(position.lineNumber);
+	let cursor = direction === "forward" ? position.column : position.column - 2;
+	let found = -1;
 	for (let repetition = 0; repetition < count; repetition += 1) {
-		const line = model.getLineContent(current.lineNumber);
-		const start = direction === "forward" ? current.column : current.column - 2;
-		const found =
+		found =
 			direction === "forward"
-				? line.indexOf(character, Math.max(0, start))
-				: line.lastIndexOf(character, Math.max(0, start));
+				? line.indexOf(character, Math.max(0, cursor))
+				: line.lastIndexOf(character, Math.max(0, cursor));
 		if (found < 0) return position;
-		const column = found + 1 + (before ? (direction === "forward" ? -1 : 1) : 0);
-		current = { lineNumber: current.lineNumber, column: Math.max(1, column) };
+		cursor = direction === "forward" ? found + 1 : found - 1;
 	}
-	return current;
+	const column = found + 1 + (before ? (direction === "forward" ? -1 : 1) : 0);
+	return { lineNumber: position.lineNumber, column: Math.max(1, column) };
 }
 
 function matchingBracket(model: editor.ITextModel, position: IPosition): IPosition | null {
@@ -205,6 +205,14 @@ function matchingBracket(model: editor.ITextModel, position: IPosition): IPositi
 		}
 	}
 	return null;
+}
+
+function revealLineNearBottom(codeEditor: editor.IStandaloneCodeEditor, lineNumber: number): void {
+	const lineTop = codeEditor.getTopForLineNumber(lineNumber);
+	const nextLineTop = codeEditor.getTopForLineNumber(lineNumber + 1);
+	const lineHeight = Math.max(1, nextLineTop - lineTop);
+	const viewportHeight = codeEditor.getLayoutInfo().height;
+	codeEditor.setScrollTop(Math.max(0, lineTop - viewportHeight + lineHeight));
 }
 
 function visibleLine(
@@ -466,6 +474,8 @@ export function createVimController(
 			}
 		}
 
+		if (hasModifier) return;
+
 		if (pending) {
 			const command = pending;
 			pending = null;
@@ -489,6 +499,7 @@ export function createVimController(
 				const line = currentPosition()?.lineNumber ?? null;
 				if (line !== null) {
 					if (lowerKey === "t") codeEditor.revealLineNearTop(line);
+					else if (lowerKey === "b") revealLineNearBottom(codeEditor, line);
 					else codeEditor.revealLineInCenter(line);
 				}
 				consume(event);
