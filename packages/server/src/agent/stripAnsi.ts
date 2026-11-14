@@ -37,7 +37,6 @@ function sequenceEnd(text: string, at: number): number | undefined {
 }
 
 export function stripAnsi(text: string): string {
-	if (typeof text !== "string") return text;
 	let out = "";
 	let from = 0;
 	for (let i = 0; i < text.length; i++) {
@@ -47,4 +46,8 @@ export function stripAnsi(text: string): string {
 		i = from - 1;
 	}
 	return from === 0 ? text : out + text.slice(from);
+}
+
+export function plainText(value: unknown): string {
+	return typeof value === "string" ? stripAnsi(value) : "";
 }

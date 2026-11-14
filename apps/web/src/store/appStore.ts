@@ -4757,8 +4757,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 		),
 	applyExtUi: (request) =>
 		set((s): Partial<AppState> => {
-			if (request.kind === "setTitle")
-				return renameChat(s, request.sessionId, request.title) ?? bufferExtUiOrphan(s, request);
+			if (request.kind === "setTitle") {
+				const title = typeof request.title === "string" ? request.title : "";
+				return renameChat(s, request.sessionId, title) ?? bufferExtUiOrphan(s, request);
+			}
 			if (!s.sessions[request.sessionId]) return bufferExtUiOrphan(s, request);
 			return withRuntime(s, request.sessionId, (rt) => reduceExtUi(rt, request));
 		}),
