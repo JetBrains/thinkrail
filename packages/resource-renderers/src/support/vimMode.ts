@@ -59,10 +59,6 @@ export function toggleActiveVimMode(): void {
 	activeToggle?.();
 }
 
-function positionKey(position: IPosition): number {
-	return position.lineNumber * 1_000_000 + position.column;
-}
-
 function isWordCharacter(value: string | undefined): boolean {
 	return value !== undefined && /[A-Za-z0-9_]/u.test(value);
 }
@@ -86,9 +82,14 @@ function moveWordBackward(model: editor.ITextModel, position: IPosition): IPosit
 function moveWordEnd(model: editor.ITextModel, position: IPosition): IPosition {
 	const text = model.getValue();
 	let offset = model.getOffsetAt(position);
+	if (isWordCharacter(text[offset]) && isWordCharacter(text[offset + 1])) {
+		while (offset < text.length && isWordCharacter(text[offset + 1])) offset += 1;
+		return model.getPositionAt(offset);
+	}
+	offset += 1;
 	while (offset < text.length && !isWordCharacter(text[offset])) offset += 1;
 	while (offset < text.length && isWordCharacter(text[offset + 1])) offset += 1;
-	return model.getPositionAt(offset);
+	return model.getPositionAt(Math.min(offset, text.length));
 }
 
 function movePosition(
@@ -246,6 +247,7 @@ export function createVimController(
 	let state = INITIAL_STATE;
 	let count = "";
 	let anchor: IPosition | null = null;
+	let visualPosition: IPosition | null = null;
 	let pending: PendingCommand | null = null;
 	let lastSearch: { query: string; direction: VimSearchDirection; wholeWord: boolean } | null =
 		null;
@@ -259,6 +261,8 @@ export function createVimController(
 	};
 
 	const currentPosition = () => codeEditor.getPosition();
+	const motionPosition = () =>
+		state.mode === "visual" ? (visualPosition ?? currentPosition()) : currentPosition();
 
 	const recordJump = (target: IPosition) => {
 		const current = currentPosition();
@@ -285,6 +289,7 @@ export function createVimController(
 
 	const setVisualPosition = (position: IPosition) => {
 		if (!anchor) anchor = currentPosition() ?? position;
+		visualPosition = position;
 		if (state.visualMode === "line") {
 			const model = codeEditor.getModel();
 			const end = Math.max(anchor.lineNumber, position.lineNumber);
@@ -336,36 +341,42 @@ export function createVimController(
 		direction: VimSearchDirection,
 		repetitions = 1,
 		wholeWord = false,
+		saveSearch = true,
 	) => {
 		const model = codeEditor.getModel();
 		const current = currentPosition();
 		if (!model || !current || query.length === 0) return;
 		const selection = codeEditor.getSelection();
-		let searchPosition =
+		let searchPosition: IPosition =
 			direction === "forward"
 				? (selection?.getEndPosition() ?? current)
 				: (selection?.getStartPosition() ?? current);
 		const searchQuery = wholeWord ? `\\b${escapeRegex(query)}\\b` : query;
-		const matches = model.findMatches(searchQuery, false, wholeWord, false, null, false);
-		if (matches.length === 0) return;
-		recordJump(matches[0]?.range.getStartPosition() ?? current);
+		let match: ReturnType<editor.ITextModel["findNextMatch"]> | null = null;
 		for (let index = 0; index < repetitions; index += 1) {
-			const currentOffset = positionKey(searchPosition);
-			const match =
+			match =
 				direction === "forward"
-					? (matches.find(
-							(candidate) => positionKey(candidate.range.getStartPosition()) > currentOffset,
-						) ?? matches[0])
-					: (matches.findLast(
-							(candidate) => positionKey(candidate.range.getStartPosition()) < currentOffset,
-						) ?? matches[matches.length - 1]);
+					? model.findNextMatch(searchQuery, searchPosition, wholeWord, false, null, false)
+					: model.findPreviousMatch(searchQuery, searchPosition, wholeWord, false, null, false);
+			if (!match) {
+				searchPosition =
+					direction === "forward"
+						? { lineNumber: 1, column: 1 }
+						: model.getPositionAt(model.getValueLength());
+				match =
+					direction === "forward"
+						? model.findNextMatch(searchQuery, searchPosition, wholeWord, false, null, false)
+						: model.findPreviousMatch(searchQuery, searchPosition, wholeWord, false, null, false);
+			}
 			if (!match) return;
 			searchPosition =
 				direction === "forward" ? match.range.getEndPosition() : match.range.getStartPosition();
-			codeEditor.setSelection(match.range);
-			codeEditor.revealRangeInCenter(match.range);
 		}
-		lastSearch = { query, direction, wholeWord };
+		if (!match) return;
+		recordJump(match.range.getStartPosition());
+		codeEditor.setSelection(match.range);
+		codeEditor.revealRangeInCenter(match.range);
+		if (saveSearch) lastSearch = { query, direction, wholeWord };
 	};
 
 	const jumpHistoryBy = (delta: -1 | 1) => {
@@ -392,6 +403,7 @@ export function createVimController(
 		const enabled = !state.enabled;
 		count = "";
 		anchor = null;
+		visualPosition = null;
 		pending = null;
 		update({ enabled, mode: "normal", visualMode: null, searchOpen: false });
 		codeEditor.focus();
@@ -407,6 +419,7 @@ export function createVimController(
 		if (state.mode === "insert") {
 			if (key !== "Escape") return;
 			consume(event);
+			visualPosition = null;
 			update({ mode: "normal", visualMode: null });
 			return;
 		}
@@ -415,6 +428,7 @@ export function createVimController(
 			consume(event);
 			count = "";
 			anchor = null;
+			visualPosition = null;
 			pending = null;
 			update({ mode: "normal", visualMode: null });
 			return;
@@ -434,7 +448,9 @@ export function createVimController(
 			if (lowerKey === "v") {
 				consume(event);
 				anchor = currentPosition();
+				visualPosition = anchor;
 				update({ mode: "visual", visualMode: "block" });
+				if (visualPosition) setVisualPosition(visualPosition);
 				return;
 			}
 			if (lowerKey === "o" || lowerKey === "i") {
@@ -443,7 +459,7 @@ export function createVimController(
 				return;
 			}
 			const visible = codeEditor.getVisibleRanges()[0];
-			const current = currentPosition();
+			const current = motionPosition();
 			if (visible && current) {
 				const page = Math.max(1, visible.endLineNumber - visible.startLineNumber);
 				const delta =
@@ -481,7 +497,7 @@ export function createVimController(
 			pending = null;
 			if (command.kind === "character" && key.length === 1) {
 				const model = codeEditor.getModel();
-				const position = currentPosition();
+				const position = motionPosition();
 				if (model && position)
 					applyPosition(
 						findCharacter(model, position, key, command.direction, command.before, command.count),
@@ -491,7 +507,7 @@ export function createVimController(
 			}
 			if (command.kind === "g" && lowerKey === "g") {
 				const model = codeEditor.getModel();
-				if (model) applyPosition(lineStart(model, command.count, false));
+				if (model) applyPosition(lineStart(model, command.count, false), true);
 				consume(event);
 				return;
 			}
@@ -555,15 +571,18 @@ export function createVimController(
 			consume(event);
 			count = "";
 			anchor = currentPosition();
+			visualPosition = anchor;
 			update({ mode: "visual", visualMode: key === "V" ? "line" : "character" });
+			if (visualPosition) setVisualPosition(visualPosition);
 			return;
 		}
 
 		if (state.mode === "visual" && (key === "o" || key === "O")) {
-			const position = currentPosition();
+			const position = motionPosition();
 			if (position && anchor) {
 				const previousAnchor = anchor;
 				anchor = position;
+				visualPosition = previousAnchor;
 				setVisualPosition(previousAnchor);
 			}
 			consume(event);
@@ -583,6 +602,7 @@ export function createVimController(
 					: lastSearch.direction,
 				repetitions,
 				lastSearch.wholeWord,
+				false,
 			);
 			return;
 		}
@@ -654,7 +674,7 @@ export function createVimController(
 
 		if (key === "^" || key === "0" || key === "$") {
 			consume(event);
-			const position = currentPosition();
+			const position = motionPosition();
 			const model = codeEditor.getModel();
 			if (position && model) {
 				const next =
@@ -698,7 +718,7 @@ export function createVimController(
 		}
 
 		const model = codeEditor.getModel();
-		const position = currentPosition();
+		const position = motionPosition();
 		if (!model || !position) return;
 		const next = movePosition(model, position, lowerKey, clampCount(count));
 		if (!next) return;
@@ -708,11 +728,25 @@ export function createVimController(
 	};
 
 	const listener = codeEditor.onKeyDown(onKeyDown);
+	const modelContentListener = codeEditor.onDidChangeModelContent(() => {
+		count = "";
+		anchor = null;
+		visualPosition = null;
+		pending = null;
+		lastSearch = null;
+		marks.clear();
+		jumpHistory = [];
+		jumpIndex = -1;
+		update({ mode: "normal", visualMode: null, searchOpen: false });
+	});
 	return {
 		toggle,
 		submitSearch,
 		cancelSearch,
-		dispose: () => listener.dispose(),
+		dispose: () => {
+			listener.dispose();
+			modelContentListener.dispose();
+		},
 	};
 }
 

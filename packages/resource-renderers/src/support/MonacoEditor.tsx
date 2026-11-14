@@ -2,6 +2,7 @@ import { RiKeyboardLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { onFontsChange } from "@thinkrail/ui/fonts";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import type { editor } from "monaco-editor/editor/editor.api.js";
 import {
 	useEffect,
@@ -131,7 +132,6 @@ export default function MonacoEditor({
 		const activeVimToggle = registerActiveVimToggle(vimController.toggle);
 		vimControllerRef.current = vimController;
 		activeVimToggleRef.current = activeVimToggle;
-		activeVimToggle.activate();
 		const focusListener = codeEditor.onDidFocusEditorText(activeVimToggle.activate);
 		if (isEditorViewState(mount.viewState)) codeEditor.restoreViewState(mount.viewState);
 		const threads = mount.review ? attachReviewThreads(codeEditor, setReviewZones) : null;
@@ -271,6 +271,7 @@ export default function MonacoEditor({
 						value={searchQuery}
 						onChange={(event) => setSearchQuery(event.target.value)}
 						onKeyDown={(event) => {
+							if (isImeComposing(event.nativeEvent)) return;
 							if (event.key === "Enter") {
 								event.preventDefault();
 								submitSearch();
