@@ -1128,7 +1128,9 @@ test("a relative path is looked up from the directory the shell is in", async ({
 	await expect(activeEditorLine(page)).toHaveText("2");
 });
 
-test("Mod+click reveals a printed folder in Files, a compacted one included", async ({ page }) => {
+test("Mod+click reveals a printed folder in Files, again after a collapse, a compacted one included", async ({
+	page,
+}) => {
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
 	mkdirSync(join(workspace.worktreePath, "assets", "icons"), { recursive: true });
@@ -1144,6 +1146,10 @@ test("Mod+click reveals a printed folder in Files, a compacted one included", as
 	await modClick(page, folder);
 	await expect(page.getByTestId("tool-rail-files")).toHaveAttribute("aria-pressed", "true");
 	await expect(page.getByTestId("files-mode-all")).toHaveAttribute("aria-pressed", "true");
+	await expect(fileTreeRow(page, "file", "readme.txt")).toBeVisible();
+	await fileTreeRow(page, "dir", "assets").click();
+	await expect(fileTreeRow(page, "file", "readme.txt")).toHaveCount(0);
+	await modClick(page, folder);
 	await expect(fileTreeRow(page, "file", "readme.txt")).toBeVisible();
 
 	// `media` holds only `fonts`, so the tree shows one compact `media/fonts` row keyed by its deepest

@@ -34,7 +34,13 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { type ChangeMarks, statusMarkClass } from "./changesModel";
 import { holdEditorWarm, useEditorWarm, warmOnHover } from "./editorWarm";
 import { deleteEntry, pasteDestination, pasteInto, supportsFileMutations } from "./fileTreeActions";
-import { folderRevealPaths, type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
+import {
+	folderRevealMissed,
+	folderRevealPaths,
+	listingMissesReveal,
+	type ResolvedFolderChain,
+	resolveFolderChain,
+} from "./folderChains";
 import { openFileInTab } from "./openTabs";
 import { TreeRow } from "./TreeRow";
 import { Tree, treeRowKey } from "./treeNavigation";
@@ -49,9 +55,13 @@ interface DeleteRequest {
 	open: boolean;
 }
 
+export interface RevealTarget {
+	path: string;
+}
+
 interface TreeFocus {
 	activePath: string | null;
-	revealTarget: string | null;
+	revealTarget: RevealTarget | null;
 	onRevealed: () => void;
 }
 
@@ -85,6 +95,11 @@ export function FileTree({
 
 	const loading = nodes === null;
 	useEffect(() => (loading ? holdEditorWarm() : undefined), [loading]);
+	const { onRevealed } = focus;
+	const rootMissed = nodes !== null && listingMissesReveal(nodes, focus.revealTarget?.path ?? null);
+	useEffect(() => {
+		if (rootMissed) onRevealed();
+	}, [rootMissed, onRevealed]);
 
 	if (nodes === null) return <LoadingRegion rows={8} className="px-4 py-4" />;
 	if (nodes.length === 0) return <EmptyTree workspaceId={workspaceId} />;
@@ -219,6 +234,9 @@ function FileNodeRow({
 				pendingExpand.current = false;
 				setPathsExpanded(result.paths, true);
 			},
+			onFailure: () => {
+				if (!listingMissesReveal([node], focus.revealTarget?.path ?? null)) focus.onRevealed();
+			},
 			onSwitch: () => {
 				pendingExpand.current = false;
 				setDirectory(null);
@@ -240,9 +258,15 @@ function FileNodeRow({
 	const fileStatus = isDir ? undefined : marks.files.get(node.path);
 	const dirChanged = isDir && marks.dirs.has(directory?.path ?? node.path);
 	const ignored = (directory?.deepest ?? node).gitignored === true;
-	const revealedFolder = directory ? folderRevealPaths(directory, focus.revealTarget) : null;
+	const revealPath = focus.revealTarget?.path ?? null;
+	const revealedFolder = directory ? folderRevealPaths(directory, revealPath) : null;
+	const missedReveal = directory ? folderRevealMissed(directory, revealPath) : false;
+	const { onRevealed } = focus;
+	useEffect(() => {
+		if (missedReveal) onRevealed();
+	}, [missedReveal, onRevealed]);
 	const revealRow =
-		revealedFolder || (!isDir && focus.revealTarget === node.path)
+		revealedFolder || (!isDir && revealPath === node.path)
 			? (row: HTMLButtonElement | null) => {
 					if (!row) return;
 					if (revealedFolder && !expanded) {

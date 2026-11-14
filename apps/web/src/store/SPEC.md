@@ -814,7 +814,8 @@ the active file changed meanwhile; **`revealFolderInFiles(workspaceId, path)`** 
 reveal (a terminal folder link) in one write — `filesMode: "all"`, the folder and its ancestors expanded, a
 `reveal-tool` intent for **Files**, and the transient **`filesRevealRequest`** (`{ workspaceId, path }`,
 dropped with its workspace in `applyWorkspaceRemoved`, cleared by **`clearFilesRevealRequest`** once the tree
-has taken it), leaving `seenActivePath` alone; every write is idempotent (an unchanged view keeps its identity) and a
+has taken it, and dropped by a store subscription as soon as another workspace — or none — becomes active, so
+a request whose Files panel never mounted cannot fire later), leaving `seenActivePath` alone; every write is idempotent (an unchanged view keeps its identity) and a
 removed workspace's view is dropped in `applyWorkspaceRemoved`. Persistence lives outside the store, in
 `panels/filesTreeState`. **`fileClipboard`** (`setFileClipboard`) is the in-app clipboard Files and
 Artifacts share: one `{ workspaceId, path, cut? }`, where `cut` turns the next Paste into a move;

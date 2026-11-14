@@ -26,6 +26,26 @@ export function folderRevealPaths(
 	return target !== null && chain.paths.includes(target) ? chain.paths : null;
 }
 
+function reaches(entry: string, target: string): boolean {
+	return target === entry || target.startsWith(`${entry}/`);
+}
+
+export function listingMissesReveal(
+	listing: readonly Pick<FolderChainNode, "path">[],
+	target: string | null,
+): boolean {
+	return target !== null && !listing.some((entry) => reaches(entry.path, target));
+}
+
+export function folderRevealMissed(
+	chain: FolderChain & { children: readonly Pick<FolderChainNode, "path">[] },
+	target: string | null,
+): boolean {
+	if (target === null || chain.paths.includes(target)) return false;
+	if (!chain.paths.some((path) => target.startsWith(`${path}/`))) return false;
+	return listingMissesReveal(chain.children, target);
+}
+
 function hasSingleDirectoryChild<TNode extends FolderChainNode>(
 	children: readonly TNode[],
 ): children is readonly [TNode & { kind: "dir" }] {

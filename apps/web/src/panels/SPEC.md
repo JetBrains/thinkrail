@@ -327,7 +327,12 @@ treatment.
   consumes into the same reveal target and which also skips the scroll restore when it is pending at mount.
   A folder row takes it once its compact chain is read, when the folder is any path that chain stands for
   (`folderChains.folderRevealPaths`): a compact row is keyed by its deepest folder, so revealing `assets`
-  where the row reads `assets/icons` expands every folder the row stands for, not just `assets`. It never
+  where the row reads `assets/icons` expands every folder the row stands for, not just `assets`. Every
+  request — the active file's or a folder's — becomes a fresh `RevealTarget` object, so asking for the same
+  path again re-reveals it even if the last one was never taken. A target the tree cannot show is dropped
+  rather than left to fire on some later load: the root listing or a loaded folder row on its way that
+  reaches no entry for it (`folderChains.listingMissesReveal` / `folderRevealMissed` — a deleted file, a
+  filtered `.git`), or a failed read of a folder on its way, clears it. It never
   touches `seenActivePath`, so the active file's own reveal is unaffected. Clicks still open
   the editor. Right-clicking a file or folder row (a touch long-press, or the Context Menu key / Shift+F10 on
   a focused row) opens its menu: **Copy path** (absolute, through `joinWorkspacePath`) and **Copy relative
@@ -2808,7 +2813,9 @@ menu has closed, because a closing menu returns focus to its row; disabled
   double click) through **`openFileAtLine`** with the printed `{ line, column }` when a line was printed
   (so a Markdown or HTML file opens as source at the line), else `openFileInTab`; a folder runs
   `store.revealFolderInFiles`. Paths need a host at `TERMINAL_LINKS_PROTOCOL_VERSION` and a live PTY id —
-  `resolveTerminalPaths` sends nothing otherwise, so an older host links URLs only.
+  `resolveTerminalPaths` sends nothing otherwise, so an older host links URLs only. The host answers only
+  the client the PTY is attached to. On a Windows host there is no process-table lookup, so a relative path
+  resolves against the worktree root only (not the shell's `cd`).
   **Parsing** (`terminalLinkParse.parseTerminalLinks`, pure) over-collects and lets the host decide: any
   http(s) URL; a `file://` URL (its path decoded segment by segment with `decodeURIComponent`, so `%23` and
   `%3F` come back as `#` and `?`; a malformed escape is no link); Python's `File "x.py", line 12`; a quoted

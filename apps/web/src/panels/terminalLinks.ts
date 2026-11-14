@@ -200,6 +200,7 @@ export function createTerminalLinkProvider(options: TerminalLinkProviderOptions)
 					return target ? [{ link, range, target }] : [];
 				}),
 			).then((answered) => {
+				// One counter for every row on purpose: a dropped row is asked again on the next mouse move.
 				if (ask !== latestAsk) return;
 				const links = nonOverlapping(answered.flat()).map(({ link, range, target }) =>
 					toLink(line.text.slice(link.start, link.end), range, target),

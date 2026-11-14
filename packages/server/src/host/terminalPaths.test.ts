@@ -209,7 +209,7 @@ symlinkTest("a symlink is followed only while its target stays in the workspace"
 describe("resolveTerminalPaths", () => {
 	test("malformed candidate lists are rejected before any lookup", async () => {
 		const reject = (candidates: unknown) =>
-			expect(resolveTerminalPaths("never-attached", candidates)).rejects.toThrow(
+			expect(resolveTerminalPaths("never-attached", candidates, "client")).rejects.toThrow(
 				"Invalid path candidates",
 			);
 		await reject("src");
@@ -226,6 +226,7 @@ describe("resolveTerminalPaths", () => {
 				Array.from({ length: MAX_TERMINAL_PATH_CANDIDATES }, () =>
 					"x".repeat(MAX_TERMINAL_PATH_LENGTH),
 				),
+				"client",
 			),
 		).rejects.toThrow("Unknown terminal");
 	});

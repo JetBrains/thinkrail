@@ -70,9 +70,10 @@ export async function locateTerminalPaths(
 export async function resolveTerminalPaths(
 	id: string,
 	candidates: unknown,
+	caller: string,
 ): Promise<TerminalPathTarget[]> {
 	assertPathCandidates(candidates);
-	const scope = terminalCwds(id);
+	const scope = terminalCwds(id, caller);
 	if (!scope) throw new Error("Unknown terminal");
 	return locateTerminalPaths(scope, candidates);
 }

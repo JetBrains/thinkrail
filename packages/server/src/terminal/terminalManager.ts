@@ -319,8 +319,9 @@ export function attachTerminal(
 
 export function terminalCwds(
 	id: string,
+	caller: string,
 ): { workspaceId: string; cwds: () => Promise<string[]> } | null {
-	const entry = terminals.get(id);
+	const entry = attachedEntry(id, caller);
 	if (!entry) return null;
 	const { pid } = entry.pty;
 	return { workspaceId: entry.workspaceId, cwds: () => workingDirectories(pid) };

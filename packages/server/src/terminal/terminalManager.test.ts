@@ -376,8 +376,21 @@ test(
 );
 
 test("an unknown terminal names no working directories", () => {
-	expect(terminalCwds("never-existed")).toBeNull();
+	expect(terminalCwds("never-existed", "client-1")).toBeNull();
 });
+
+test(
+	"only the attached client may ask for a terminal's working directories",
+	async () => {
+		const attached = attachTerminal(WS, "tab-cwd-owner", "client-1");
+		expect(terminalCwds(attached.id, "client-1")?.workspaceId).toBe(WS);
+		expect(terminalCwds(attached.id, "client-2")).toBeNull();
+		attachTerminal(WS, "tab-cwd-owner", "client-2");
+		expect(terminalCwds(attached.id, "client-1")).toBeNull();
+		expect(terminalCwds(attached.id, "client-2")?.workspaceId).toBe(WS);
+	},
+	TERMINAL_TEST_TIMEOUT_MS,
+);
 
 const unixTerminalTest = process.platform === "win32" ? test.skip : test;
 
@@ -391,7 +404,7 @@ unixTerminalTest(
 		writeTerminal(attached.id, "cd sub && printf 'TR_%s\\n' MOVED\r", "client-1");
 		await waitForTerminalOutput(attached.id, "TR_MOVED");
 		const expected = realpathSync(sub);
-		const terminal = terminalCwds(attached.id);
+		const terminal = terminalCwds(attached.id, "client-1");
 		expect(terminal?.workspaceId).toBe(WS);
 		const deadline = Date.now() + TERMINAL_CONDITION_TIMEOUT_MS;
 		let cwds = (await terminal?.cwds()) ?? [];

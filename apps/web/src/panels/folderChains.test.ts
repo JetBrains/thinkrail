@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { type FolderChainNode, folderRevealPaths, resolveFolderChain } from "./folderChains";
+import {
+	type FolderChainNode,
+	folderRevealMissed,
+	folderRevealPaths,
+	listingMissesReveal,
+	resolveFolderChain,
+} from "./folderChains";
 
 function dir(name: string, path = name): FolderChainNode {
 	return { kind: "dir", name, path };
@@ -65,4 +71,32 @@ test("revealing any folder a compact row stands for expands the whole row", () =
 	expect(folderRevealPaths(chain, "assets/icons/svg")).toBeNull();
 	expect(folderRevealPaths(chain, "asset")).toBeNull();
 	expect(folderRevealPaths(chain, null)).toBeNull();
+});
+
+test("a listing misses a reveal target that is neither one of its entries nor inside one", () => {
+	const listing = [dir("src"), file("README.md")];
+	expect(listingMissesReveal(listing, "src")).toBe(false);
+	expect(listingMissesReveal(listing, "src/auth/login.ts")).toBe(false);
+	expect(listingMissesReveal(listing, "README.md")).toBe(false);
+	expect(listingMissesReveal(listing, "docs")).toBe(true);
+	expect(listingMissesReveal(listing, "srcx/a.ts")).toBe(true);
+	expect(listingMissesReveal([], "src")).toBe(true);
+	expect(listingMissesReveal(listing, null)).toBe(false);
+});
+
+test("a loaded folder row gives up a reveal target inside it that its listing cannot reach", () => {
+	const chain = {
+		label: "assets/icons",
+		path: "assets/icons",
+		paths: ["assets", "assets/icons"],
+		children: [file("logo.svg", "assets/icons/logo.svg"), dir("svg", "assets/icons/svg")],
+	};
+	expect(folderRevealMissed(chain, "assets/icons/logo.svg")).toBe(false);
+	expect(folderRevealMissed(chain, "assets/icons/svg/a.svg")).toBe(false);
+	expect(folderRevealMissed(chain, "assets")).toBe(false);
+	expect(folderRevealMissed(chain, "assets/icons")).toBe(false);
+	expect(folderRevealMissed(chain, "assets/icons/gone.svg")).toBe(true);
+	expect(folderRevealMissed(chain, "assets/fonts/a.woff2")).toBe(true);
+	expect(folderRevealMissed(chain, "docs/a.md")).toBe(false);
+	expect(folderRevealMissed(chain, null)).toBe(false);
 });

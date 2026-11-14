@@ -892,7 +892,9 @@ enabled/confirmed choice before entering analytics attribution.
 - **Terminal link lookup is composed here (`terminalPaths.ts`).** The `terminal.resolvePaths` handler only
   delegates. `resolveTerminalPaths` validates the wire's candidate list first (an array of at most
   `MAX_TERMINAL_PATH_CANDIDATES` non-empty strings of at most `MAX_TERMINAL_PATH_LENGTH`), then asks
-  `terminal`'s `terminalCwds(id)` for the PTY's workspace (an unknown id is an error). `locateTerminalPaths`
+  `terminal`'s `terminalCwds(id, ctx.clientKey)` for the PTY's workspace — an unknown id and a terminal
+  attached to another client are the same "Unknown terminal" error, so the lookup is no oracle for terminals
+  the caller does not hold. `locateTerminalPaths`
   expands a leading `~` / `~/` to the host's home, and only when some candidate is still relative runs the
   lazy `cwds()` probe (a failing probe leaves the root; relative answers are ignored); the bases are those
   directories then the worktree root. Every absolute path a candidate could mean goes through `workspaces`'

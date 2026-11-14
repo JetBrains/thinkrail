@@ -1196,8 +1196,8 @@ const handlers: WsHandlers = {
 	"terminal.close": (p) => {
 		return closeTerminalTab(p.workspaceId, p.tabKey, p.force ?? false);
 	},
-	"terminal.resolvePaths": async (p) => ({
-		targets: await resolveTerminalPaths(p.id, p.candidates),
+	"terminal.resolvePaths": async (p, ctx) => ({
+		targets: await resolveTerminalPaths(p.id, p.candidates, ctx.clientKey),
 	}),
 	"skill.list": (params) => {
 		const { projectId } = params;

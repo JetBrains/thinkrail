@@ -100,7 +100,9 @@ function urlLinks(text: string, masked: Span[]): TerminalLink[] {
 			continue;
 		}
 		const location = INNER_LOCATION.exec(url);
-		const rawPath = url.slice("file://".length, location ? location.index : undefined);
+		const hosted = url.slice("file://".length, location ? location.index : undefined);
+		const rawPath = hosted.startsWith("localhost/") ? hosted.slice("localhost".length) : hosted;
+		if (!rawPath.startsWith("/")) continue;
 		let path: string;
 		try {
 			path = rawPath.split("/").map(decodeURIComponent).join("/");

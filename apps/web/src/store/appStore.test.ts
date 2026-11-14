@@ -3738,6 +3738,26 @@ test("revealFolderInFiles shows the folder in All files without touching the act
 	expect(useAppStore.getState().filesRevealRequest).toBeNull();
 });
 
+test("a pending folder reveal is dropped once another workspace becomes active", () => {
+	const other = pushedWorkspace({ id: "w2", name: "w2" });
+	useAppStore.setState({
+		workspaces: { p1: [pushedWorkspace(), other] },
+		activeWorkspaceId: "w1",
+		filesRevealRequest: null,
+		removedWorkspaceIds: nullProto<Record<string, true>>(),
+	});
+	useAppStore.getState().revealFolderInFiles("w1", "src");
+	useAppStore.getState().activateWorkspace(pushedWorkspace());
+	expect(useAppStore.getState().filesRevealRequest).toMatchObject({ workspaceId: "w1" });
+	useAppStore.getState().activateWorkspace(other);
+	expect(useAppStore.getState().activeWorkspaceId).toBe("w2");
+	expect(useAppStore.getState().filesRevealRequest).toBeNull();
+
+	useAppStore.getState().revealFolderInFiles("w2", "src");
+	useAppStore.getState().selectMain();
+	expect(useAppStore.getState().filesRevealRequest).toBeNull();
+});
+
 test("selectActiveFilePath follows the active file tab and ignores other tabs", () => {
 	const file: FileTab = {
 		kind: "file",

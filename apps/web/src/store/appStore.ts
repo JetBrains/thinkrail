@@ -5098,6 +5098,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 		),
 }));
 
+useAppStore.subscribe((state, previous) => {
+	const request = state.filesRevealRequest;
+	if (
+		request !== null &&
+		state.activeWorkspaceId !== previous.activeWorkspaceId &&
+		request.workspaceId !== state.activeWorkspaceId
+	) {
+		state.clearFilesRevealRequest();
+	}
+});
+
 useAppStore.subscribe((state) => {
 	const unattended =
 		Object.entries(state.markingUnreadWorkspaces).some(

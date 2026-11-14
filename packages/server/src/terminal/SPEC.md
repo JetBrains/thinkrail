@@ -26,9 +26,11 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   `resetTerminalState` (test seam), `setTerminalPublisher`,
   `setTerminalTabsPublisher`; an accepted `writeTerminal` returns its owning workspace id (a displaced
   caller returns `null`), so the host counts only input that actually reached a PTY as workspace activity;
-  **`terminalCwds(id)`** — the PTY's workspace plus a lazy `cwds()` promise of the absolute directories a path
-  it printed is most likely relative to (foreground program first, then the shell), or `null` for an unknown
-  id; the `TerminalDeliveryResult` type shared with the host publisher adapter.
+  **`terminalCwds(id, caller)`** — the PTY's workspace plus a lazy `cwds()` promise of the absolute directories
+  a path it printed is most likely relative to (foreground program first, then the shell), or `null` for an
+  unknown id *and* for a caller the PTY is not attached to — the same attached-client gate `writeTerminal`
+  and `resizeTerminal` use, so another client learns nothing about the terminal's directories; the
+  `TerminalDeliveryResult` type shared with the host publisher adapter.
 - **Allowed deps:** `persistence`, `contracts` (`WS_CHANNELS`, `TerminalWindowsShell`), `bun-pty`,
   `Bun.which`, `Bun.spawnSync` (`id -un`), `Bun.spawn` (`ps`, `lsof` — argv only, never a shell command line),
   Node `fs` and `fs/promises` (`/proc`), `process.env`.
@@ -185,10 +187,11 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   output is relative to whatever program wrote it — `cd sub && pytest` prints `tests/x.py` relative to `sub`,
   not to the worktree. There is no shell integration (no injected rc file or OSC 7), so the host asks the OS:
   the *foreground* process is the deepest descendant of the PTY's `pid`, following the newest (highest-pid)
-  child at each level, bounded to 16 levels and to pids not yet visited. `terminalCwds(id).cwds()` answers
+  child at each level, bounded to 16 levels and to pids not yet visited. `terminalCwds(id, caller).cwds()` answers
   `[foreground cwd, shell cwd]`, deduplicated, absent entries dropped; the worktree root is the caller's last
   resort. The cwd is sampled at hover time, not when the line was printed, so output of a program that has
-  since exited resolves from the shell's directory.
+  since exited resolves from the shell's directory. **Windows has no process-table lookup**: `cwds()` answers
+  nothing there, so a relative path resolves against the worktree root only.
 - **The link probe never blocks the event loop.** It runs on every hover over a new row (no modifier needed)
   and the host loop also streams every agent session, so — unlike busy-close below — it is asynchronous and
   shares only the `/proc` path, pid check and pid-list parser with `shellBusy.ts`, never its synchronous

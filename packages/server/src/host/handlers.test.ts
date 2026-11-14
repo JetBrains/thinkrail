@@ -217,6 +217,13 @@ test("terminal.resolvePaths names only existing entries the terminal's workspace
 			),
 		).rejects.toThrow("Unknown terminal");
 		await expect(
+			handleRequest(
+				"terminal.resolvePaths",
+				{ id, candidates: ["src/a.ts"] },
+				{ clientKey: "another-client" },
+			),
+		).rejects.toThrow("Unknown terminal");
+		await expect(
 			handleRequest("terminal.resolvePaths", { id, candidates: [""] }, CTX),
 		).rejects.toThrow("Invalid path candidates");
 	} finally {

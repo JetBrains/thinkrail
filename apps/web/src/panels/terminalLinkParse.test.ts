@@ -320,6 +320,14 @@ describe("file URLs", () => {
 		]);
 	});
 
+	test("a localhost host is the local disk; any other host is not a link", () => {
+		expect(links("file://localhost/etc/hosts:2")).toEqual([
+			path("file://localhost/etc/hosts:2", "/etc/hosts", 2),
+		]);
+		expect(links("see file://server/share/x.txt")).toEqual([]);
+		expect(links("file://server/share/x.txt:3")).toEqual([]);
+	});
+
 	test("a malformed escape is not a link", () => {
 		expect(links("file:///home/me/a%E0%A4%A.ts")).toEqual([]);
 	});
