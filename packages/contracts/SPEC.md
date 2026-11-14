@@ -437,7 +437,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   name }` → `{ path }`, in place, refused with `ENTRY_EXISTS` when another entry holds the name) and
   `fs.move` (`fs.copy`'s params → `{ path }`, the Cut-and-Paste move, same or another workspace, refused
   with `ENTRY_EXISTS` instead of renaming, for a folder into itself, and with `MOVE_ACROSS_DEVICES` when
-  source and destination are on different file systems),
+  source and destination are on different file systems), and from **`FS_REVEAL_PROTOCOL_VERSION`** (v122)
+  `fs.reveal` (`{ workspaceId, path }` → ack: the host's file manager opens the entry's folder with the entry
+  selected; the path must stay inside the worktree, a symlink row selects the link itself, and it fails
+  when the entry is gone; a client hides it from older hosts),
   the **Artifacts** tool's wire from the same version: `artifacts.list` (`{ workspaceId }` →
   **`WorkspaceArtifactsSnapshot`**: `dir` (the artifacts folder, `.thinkrail/context`), `artifacts`
   (**`WorkspaceArtifact`**: worktree-relative `path`, `state: "live" | "deleted"` — deleted means gone from

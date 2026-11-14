@@ -143,7 +143,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 121;
+export const PROTOCOL_VERSION = 122;
+export const FS_REVEAL_PROTOCOL_VERSION = 122;
 export const ARTIFACTS_PROTOCOL_VERSION = 121;
 export const IMAGE_REFS_PROTOCOL_VERSION = 120;
 export const IMAGES_ROUTE = "/images/";
@@ -459,6 +460,7 @@ export const WS_METHODS = {
 	fsDelete: "fs.delete",
 	fsRename: "fs.rename",
 	fsMove: "fs.move",
+	fsReveal: "fs.reveal",
 	artifactsList: "artifacts.list",
 	artifactsRestore: "artifacts.restore",
 	artifactsDiscard: "artifacts.discard",
@@ -1124,6 +1126,7 @@ export interface WsMethodMap {
 		};
 		result: { path: string };
 	};
+	"fs.reveal": { params: { workspaceId: string; path: string }; result: Ack };
 	"artifacts.list": { params: { workspaceId: string }; result: WorkspaceArtifactsSnapshot };
 	"artifacts.restore": { params: { workspaceId: string; path: string }; result: Ack };
 	"artifacts.discard": { params: { workspaceId: string; path: string }; result: Ack };

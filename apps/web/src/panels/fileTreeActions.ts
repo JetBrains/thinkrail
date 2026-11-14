@@ -1,4 +1,8 @@
-import { FS_MUTATIONS_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import {
+	FS_MUTATIONS_PROTOCOL_VERSION,
+	FS_REVEAL_PROTOCOL_VERSION,
+	type HostPlatform,
+} from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { fileName } from "../lib";
 import { type FileClipboard, toast, useAppStore } from "../store";
@@ -6,6 +10,22 @@ import { errorText, getTransport, wsErrorCode } from "../transport";
 
 export function supportsFileMutations(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= FS_MUTATIONS_PROTOCOL_VERSION;
+}
+
+export function supportsFileReveal(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= FS_REVEAL_PROTOCOL_VERSION;
+}
+
+/** Reveal runs on the host, so it is named after the host's file manager, not the viewer's. */
+export function revealLabelKey(
+	hostPlatform: HostPlatform | null,
+):
+	| "panels.fileTree.revealFinder"
+	| "panels.fileTree.revealExplorer"
+	| "panels.fileTree.revealFileManager" {
+	if (hostPlatform === "darwin") return "panels.fileTree.revealFinder";
+	if (hostPlatform === "win32") return "panels.fileTree.revealExplorer";
+	return "panels.fileTree.revealFileManager";
 }
 
 export function pasteDestination(path: string, kind: "dir" | "file"): string {
@@ -90,5 +110,13 @@ export async function deleteEntry(workspaceId: string, path: string): Promise<vo
 				: errorText(error),
 			t("panels.fileTree.deleteFailed"),
 		);
+	}
+}
+
+export async function revealEntry(workspaceId: string, path: string): Promise<void> {
+	try {
+		await getTransport().request("fs.reveal", { workspaceId, path });
+	} catch (error) {
+		toast.error(errorText(error), t("panels.fileTree.revealFailed"));
 	}
 }

@@ -9,8 +9,9 @@ tags: [public-surface-checked]
 
 ## Responsibility
 
-Detect which editors/IDEs the host actually has installed, launch one detached at a worktree, and reveal a
-worktree in the host's file manager — the workspace row's "Open in" menu.
+Detect which editors/IDEs the host actually has installed, launch one detached at a worktree, reveal a
+worktree in the host's file manager — the workspace row's "Open in" menu — and select one worktree entry
+in it, the Files tree's Reveal.
 
 ## Boundary
 
@@ -30,6 +31,19 @@ worktree in the host's file manager — the workspace row's "Open in" menu.
   client's failure toast fires instead of Explorer falling back to Documents), hands `explorer` a
   backslash-normalized path (it also opens Documents for a forward-slash path), and launches with
   `windowsHide: false` — `explorer` applies the hide flag to the folder window it opens.
+  `selectInFileManager(path)` opens the folder holding `path` with `path` selected: `open -R` (macOS),
+  `explorer /select,"<backslash path>"` (Windows), and on Linux `org.freedesktop.FileManager1.ShowItems` over
+  `gdbus` (Nautilus, Dolphin, Nemo…), falling back to `xdg-open` on the parent folder where no file manager
+  owns that D-Bus name. The Linux URI and folder reach a fixed `sh -c` script as positional arguments, and
+  a `'` in the URI is percent-encoded so it cannot end the GVariant string. Explorer splits its command
+  line on commas, so an unquoted `a,b.txt` would hand it a second object to *open*: the Windows object is
+  quoted here and spawned with `windowsVerbatimArguments` so the runtime does not re-quote it, and a path
+  containing `"` (impossible on Windows) is refused rather than escaped. Its missing-entry check uses
+  `lstat`, so a dangling symlink is still selected instead of reported missing. The caller (`host`)
+  resolves and contains the path first; this module only launches. Like `revealInFileManager` it is
+  fire-and-forget: on a host with no desktop session (headless Linux, a server reached remotely) the
+  launcher starts and fails on its own, so nothing opens and no error comes back — only a launcher that
+  cannot be spawned at all throws.
 - **Vim is `kind: "terminal"`, not launched here.** It has no GUI window of its own — spawning it detached
   with no attached TTY would just print "Warning: Output is not to a terminal" and exit. The **client**
   handles that case itself: open/focus the clicked workspace's embedded terminal and run `vim .` there
@@ -48,18 +62,20 @@ worktree in the host's file manager — the workspace row's "Open in" menu.
   path text, is unchanged; a missing editor costs no main-thread syscalls at all. DrvFS entries are not
   skipped: an editor installed only on the Windows side is still found.
 - **`WhichFn`/`SpawnFn` are injectable seams**, not mocks of `Bun.which`/`Bun.spawn`:
-  `listAvailableEditors`/`openEditor` take an optional `which`, and `openEditor`/`revealInFileManager` an
+  `listAvailableEditors`/`openEditor` take an optional `which`, and `openEditor`/`revealInFileManager`/
+  `selectInFileManager` an
   optional `spawn` (defaulting to `pathWhich` over the live PATH and `@thinkrail/shared/spawn`'s
   `spawnDetached` respectively) — so unit tests can fake which
   binaries "exist" and assert what would launch, without depending on what's installed on the machine
-  running the tests or actually spawning a process. `revealInFileManager` also takes an optional
+  running the tests or actually spawning a process. `revealInFileManager`/`selectInFileManager` also take an optional
   `platform` (default `process.platform`), the same testable-parameter pattern `dialog`'s `pickersFor`
   uses, so its darwin/win32/linux branches are each asserted directly rather than only on whichever OS
   runs the test.
-- **Public surface (barrel):** `listAvailableEditors`, `openEditor`, `revealInFileManager`, `WhichFn`,
-  `SpawnFn`.
+- **Public surface (barrel):** `listAvailableEditors`, `openEditor`, `revealInFileManager`,
+  `selectInFileManager`, `WhichFn`, `SpawnFn`.
 - **Allowed deps:** `Bun.which`, `node:fs/promises` (`readdir`), `@thinkrail/shared/spawn` (`spawnDetached`),
-  `node:fs` (`existsSync`), `node:path` (`win32.normalize`), `process.env`/`process.platform`,
+  `node:fs` (`existsSync`, `lstatSync`), `node:path` (`win32.normalize`, `dirname`), `node:url`
+  (`pathToFileURL`), `process.env`/`process.platform`,
   `contracts` (the `EditorInfo` wire type).
 - **Forbidden:** `host`; sibling features (`workspaces` resolves `worktreePath` before calling in — this
   module never looks up a workspace itself).

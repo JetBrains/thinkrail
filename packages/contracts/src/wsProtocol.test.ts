@@ -36,6 +36,7 @@ import {
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
 	FS_MUTATIONS_PROTOCOL_VERSION,
+	FS_REVEAL_PROTOCOL_VERSION,
 	GITHUB_STAR_PROTOCOL_VERSION,
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
@@ -311,6 +312,12 @@ test("workspace artifacts, rename and move are pinned to v121", () => {
 	expect(WS_METHODS.fsRename).toBe("fs.rename");
 	expect(WS_METHODS.fsMove).toBe("fs.move");
 	expect(WS_CHANNELS.workspaceArtifactsChanged).toBe("workspace.artifactsChanged");
+});
+
+test("revealing a Files tree entry in the host's file manager is pinned to v122", () => {
+	expect(FS_REVEAL_PROTOCOL_VERSION).toBe(122);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(FS_REVEAL_PROTOCOL_VERSION);
+	expect(WS_METHODS.fsReveal).toBe("fs.reveal");
 });
 
 test("background workspace creation is pinned to v104", () => {

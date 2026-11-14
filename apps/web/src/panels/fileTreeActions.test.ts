@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, expect, mock, test } from "bun:test";
-import { FS_MUTATIONS_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import { FS_MUTATIONS_PROTOCOL_VERSION, FS_REVEAL_PROTOCOL_VERSION } from "@thinkrail/contracts";
 
 const requests: { method: string; params: unknown }[] = [];
 let answer: () => Promise<unknown> = () => Promise.resolve({ ok: true });
@@ -22,7 +22,10 @@ const {
 	pasteDestination,
 	pasteInto,
 	renameEntry,
+	revealEntry,
+	revealLabelKey,
 	supportsFileMutations,
+	supportsFileReveal,
 } = await import("./fileTreeActions");
 
 function reset(): void {
@@ -162,4 +165,30 @@ test("a cut that crosses file systems says so and stays on the clipboard", async
 		"notes.md is on another disk than this folder, so it can't be moved here. Copy it instead, then delete the original.",
 	);
 	expect(useAppStore.getState().fileClipboard).toEqual(cut);
+});
+
+test("reveal stays hidden until the host serves it", () => {
+	expect(supportsFileReveal(null)).toBe(false);
+	expect(supportsFileReveal(FS_REVEAL_PROTOCOL_VERSION - 1)).toBe(false);
+	expect(supportsFileReveal(FS_REVEAL_PROTOCOL_VERSION)).toBe(true);
+});
+
+test("reveal is named after the host's file manager, not the viewer's", () => {
+	expect(revealLabelKey("darwin")).toBe("panels.fileTree.revealFinder");
+	expect(revealLabelKey("win32")).toBe("panels.fileTree.revealExplorer");
+	expect(revealLabelKey("linux")).toBe("panels.fileTree.revealFileManager");
+	expect(revealLabelKey(null)).toBe("panels.fileTree.revealFileManager");
+});
+
+test("reveal asks the host to select the entry and explains a failure", async () => {
+	await revealEntry("w1", "src/app");
+	expect(requests).toEqual([
+		{ method: "fs.reveal", params: { workspaceId: "w1", path: "src/app" } },
+	]);
+	expect(useAppStore.getState().toasts).toEqual([]);
+
+	answer = () => Promise.reject(new Error("Path not found: src/app"));
+	await revealEntry("w1", "src/app");
+	expect(useAppStore.getState().toasts[0]?.message).toBe("Path not found: src/app");
+	expect(useAppStore.getState().toasts[0]?.title).toBe("Couldn't reveal in the file manager");
 });

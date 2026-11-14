@@ -592,7 +592,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   the open tabs after a write exactly as it does after an agent edit (so both handlers `ensureWatch`
   first). `fs.copy`/`fs.delete` also publish their own invalidation on success through
   `watch.notifyWorkspacePathsChanged` (every path the copy wrote; a deleted folder as an unlisted subtree),
-  because the watcher never reports `node_modules` or an unwatched gitignored folder. The named failures travel as `WsResponse.errorCode`
+  because the watcher never reports `node_modules` or an unwatched gitignored folder. `fs.reveal` changes
+  nothing, so it takes neither the chain nor a watch: it contains the entry with `fs.resolveWorktreeEntry`
+  (leaf not followed, so a symlink row selects the link) and hands it to `editors.selectInFileManager`. The named failures travel as `WsResponse.errorCode`
   (`STALE_VIEW`/`SCOPE_IMMUTABLE`/`RANGE_INVALID`/`RECEIPT_UNKNOWN`/`UNSUPPORTED_CHANGE`) through the same `CodedError`
   mapping `UNKNOWN_COMMIT` uses — the dispatch names no codes of its own, so a code added in `contracts`
   and thrown by a feature reaches the client with no host-side allowlist to update.

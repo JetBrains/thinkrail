@@ -156,7 +156,7 @@ export function spawnSyncCapturedBytes(
 
 export function spawnDetached(
 	argv: readonly string[],
-	options: SpawnEnvironment & { windowsHide?: boolean } = {},
+	options: SpawnEnvironment & { windowsHide?: boolean; windowsVerbatimArguments?: boolean } = {},
 ): boolean {
 	if (argv.length === 0) return false;
 	try {
@@ -166,6 +166,7 @@ export function spawnDetached(
 			stdout: "ignore",
 			stderr: "ignore",
 			windowsHide: options.windowsHide ?? true,
+			...(options.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}),
 			detached: process.platform !== "win32",
 		}).unref();
 		return true;
