@@ -527,6 +527,8 @@ function tabActionIcon({ effect, section }: TabAction): RemixiconComponentType {
 			return effect.delta < 0 ? RiArrowLeftLine : RiArrowRightLine;
 		case "hide":
 			return HIDE_ICONS[effect.region];
+		case "revealFile":
+			return RiFolderOpenLine;
 		default:
 			return TAB_SECTION_ICONS[section];
 	}
@@ -545,7 +547,11 @@ function tabCommands({ t, tabActions, nativeShortcuts, actions }: PaletteCatalog
 				title: action.id === "tab.close" ? t("commands.tab.close") : action.label,
 				group: "tab",
 				icon: tabActionIcon(action),
-				keywords: ["tab", "editor", "group", "pane"],
+				keywords:
+					action.effect.kind === "revealFile"
+						? ["tab", "file", "finder", "explorer", "file manager"]
+						: ["tab", "editor", "group", "pane"],
+				...(action.effect.kind === "revealFile" ? { mutates: true } : {}),
 				...(isKeybindingId(action.id)
 					? { shortcut: keybindingShortcut(action.id, { browser: !nativeShortcuts }) }
 					: {}),

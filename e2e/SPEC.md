@@ -116,9 +116,10 @@ SDK reserve-independence canary owns that assertion.
 
 ## File-manager reveal
 
-`reveal-file-actions.spec.ts` drives Files-tree and file/diff-tab context menus through the real UI.
+`reveal-file-actions.spec.ts` drives Files-tree and file/diff-tab context menus and the **Active tab**
+palette command through the real UI.
 The wire seam captures and answers every `workspace.reveal` request, so browser coverage never opens
-the machine's file manager. It checks clicked-path identity, compact folders, keyboard menus, unchanged
+the machine's file manager. It checks clicked and active tab paths, compact folders, keyboard menus, unchanged
 active/preview tabs, host-platform labels, old-host/disconnected gating and one error notice. Injectable
 launcher unit tests own platform arguments and path validation; real Explorer selection requires a
 separate Windows desktop probe.

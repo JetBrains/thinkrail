@@ -425,6 +425,8 @@ classification remain current even while those tool bodies are not selected.
 
 Files-tree rows and file/diff-tab context menus also offer **Reveal in Finder** on macOS,
 **Show in Explorer** on Windows, or **Reveal in file manager** on other hosts (`file-reveal`).
+The command palette offers the same action under **Active tab** (`command:tab.revealFile`) for an
+active file or diff tab when the connected host supports item reveal.
 The action targets the clicked item without opening or activating it. A compact folder row targets
 its deepest folder; a diff tab targets its current worktree path. Missing targets report an error.
 The item stays visible but disabled while disconnected or connected to an older host.

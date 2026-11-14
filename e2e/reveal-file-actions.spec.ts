@@ -6,7 +6,12 @@ import {
 	type WsClientMessage,
 	type WsParams,
 } from "@thinkrail/contracts";
-import { createWorkspaceViaDialog, openFixtureProject, revealWorkbenchTool } from "./fixtures/app";
+import {
+	createWorkspaceViaDialog,
+	openFixtureProject,
+	pressPlatformShortcut,
+	revealWorkbenchTool,
+} from "./fixtures/app";
 
 async function observeRevealWire(
 	page: Page,
@@ -88,6 +93,13 @@ async function openFiles(page: Page) {
 	return workspace;
 }
 
+async function openRevealCommand(page: Page) {
+	await pressPlatformShortcut(page, "k");
+	await expect(page.getByTestId("search-palette")).toBeVisible();
+	await page.getByTestId("search-input").fill(">reveal");
+	return page.locator('[data-testid="search-row"][data-item-id="command:tab.revealFile"]');
+}
+
 test("Files reveal targets the clicked file, folder and deepest compact folder without opening them", async ({
 	page,
 }) => {
@@ -145,6 +157,28 @@ test("file-tab reveal preserves active and preview tabs and supports keyboard me
 	await expect(notes).toHaveAttribute("data-active", "false");
 	await expect(notes).toHaveAttribute("data-preview", "true");
 	await expect.poll(() => wire.requests.at(-1)).toEqual({ id: workspace.id, path: "notes.txt" });
+});
+
+test("the Active tab reveal command targets the active preview without keeping it", async ({
+	page,
+}) => {
+	const wire = await observeRevealWire(page);
+	const workspace = await openFiles(page);
+	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
+	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).click();
+	const readme = page.getByTestId("editor-tab").filter({ hasText: "README.md" });
+	const notes = page.getByTestId("editor-tab").filter({ hasText: "notes.txt" });
+	await expect(notes).toHaveAttribute("data-active", "true");
+	await expect(notes).toHaveAttribute("data-preview", "true");
+
+	const reveal = await openRevealCommand(page);
+	await expect(reveal).toContainText("Active tab");
+	await reveal.click();
+	await expect(page.getByTestId("search-palette")).toBeHidden();
+	await expect.poll(() => wire.requests).toEqual([{ id: workspace.id, path: "notes.txt" }]);
+	await expect(readme).toHaveAttribute("data-active", "false");
+	await expect(notes).toHaveAttribute("data-active", "true");
+	await expect(notes).toHaveAttribute("data-preview", "true");
 });
 
 test("an inactive diff tab reveals its current worktree path", async ({ page }) => {
@@ -213,6 +247,15 @@ test("old hosts and disconnected menus cannot queue reveal for reconnect", async
 	const row = page.getByTestId("file-node").filter({ hasText: "README.md" });
 	await row.click({ button: "right" });
 	await expect(page.getByTestId("file-reveal")).toHaveAttribute("aria-disabled", "true");
+	await page.keyboard.press("Escape");
+	await row.click();
+	await expect(page.getByTestId("editor-tab").filter({ hasText: "README.md" })).toHaveAttribute(
+		"data-active",
+		"true",
+	);
+	const reveal = await openRevealCommand(page);
+	await expect(page.locator('[data-item-id="command:workspace.reveal"]')).toBeVisible();
+	await expect(reveal).toHaveCount(0);
 	await page.keyboard.press("Escape");
 	wire.setProtocolVersion(WORKSPACE_ITEM_REVEAL_PROTOCOL_VERSION);
 	await page.reload();

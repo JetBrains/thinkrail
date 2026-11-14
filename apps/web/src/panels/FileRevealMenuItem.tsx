@@ -13,15 +13,7 @@ export async function revealWorkspaceItem(workspaceId: string, path: string): Pr
 	}
 }
 
-export function FileRevealMenuItem({
-	workspaceId,
-	path,
-	showIcon = false,
-}: {
-	workspaceId: string;
-	path: string;
-	showIcon?: boolean;
-}) {
+export function useFileRevealAction() {
 	const t = useT();
 	const enabled = useAppStore(selectCanRevealWorkspaceItem);
 	const status = useAppStore((state) => state.status);
@@ -32,19 +24,25 @@ export function FileRevealMenuItem({
 			: platform === "win32"
 				? t("panels.fileReveal.explorer")
 				: t("panels.fileReveal.generic");
-	const unavailable =
-		status !== "connected"
+	const unavailableReason = enabled
+		? undefined
+		: status !== "connected"
 			? t("panels.fileReveal.offline")
 			: t("panels.fileReveal.unsupportedHost");
+	return { label, unavailableReason };
+}
+
+export function FileRevealMenuItem({ workspaceId, path }: { workspaceId: string; path: string }) {
+	const { label, unavailableReason } = useFileRevealAction();
 	return (
 		<ContextMenuItem
 			data-testid="file-reveal"
-			disabled={!enabled}
-			title={enabled ? undefined : unavailable}
-			aria-description={enabled ? undefined : unavailable}
+			disabled={unavailableReason !== undefined}
+			title={unavailableReason}
+			aria-description={unavailableReason}
 			onSelect={() => void revealWorkspaceItem(workspaceId, path)}
 		>
-			{showIcon ? <RiFolderOpenLine /> : null}
+			<RiFolderOpenLine />
 			{label}
 		</ContextMenuItem>
 	);

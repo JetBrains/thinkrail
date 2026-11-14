@@ -325,9 +325,9 @@ treatment.
   a focused row) opens its menu: **Copy path** (absolute, through `joinWorkspacePath`) and **Copy relative
   path** (worktree-relative). A compacted folder copies its deepest path, matching its label, and copying
   neither opens nor selects the row. **Reveal in Finder** / **Show in Explorer** / **Reveal in file manager**
-  targets the same path and names the host's file manager. The shared `FileRevealMenuItem` uses a folder
-  icon in the Files tree and a text label in file/diff tab menus to match nearby actions. It sends
-  `workspace.reveal` with the row's workspace and relative path after rechecking
+  targets the same path and names the host's file manager. The Files menu uses a folder icon.
+  The shared reveal action also supplies the shell's tab actions with the label and availability.
+  It sends `workspace.reveal` with the target's workspace and relative path after rechecking
   `selectCanRevealWorkspaceItem`. The action is disabled offline or before
   `WORKSPACE_ITEM_REVEAL_PROTOCOL_VERSION`, and failures use the shared error-toast convention.
   The row stays highlighted while its menu is open. From a host at
