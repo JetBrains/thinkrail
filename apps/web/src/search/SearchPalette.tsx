@@ -299,7 +299,7 @@ function PaletteContent({
 	};
 
 	const remember = (item: PaletteItem) => {
-		const next = recordPick(readLearning(), parsed.text, item.id, Date.now());
+		const next = recordPick(readLearning(), parsed.text, item.id, Date.now(), currentPlaces);
 		setLearning(next);
 		writeLearning(next);
 	};

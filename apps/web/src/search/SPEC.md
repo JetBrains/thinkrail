@@ -85,7 +85,9 @@ palette — plus anything run from the palette: up to five rows by `lastUsed`, n
 now (`currentPlaceIds`, read when the palette opens) nor a row Waiting or Actions already shows.
 `initSearchPreferences` watches the store's location (the active workspace's attention center chat tab,
 else the workspace, else Project Home) and stamps a visit when the place changes; a chat's visit retires
-its workspace's stamp, so one place is one row. Visits order Recent only — typed-query ranking keeps
+its workspace's stamp, and a pick of a row the current place already covers (its workspace, picked from
+its chat — a navigation that changes nothing, so no visit follows) stamps the place instead, so one place
+is one row while the pick still feeds frecency and adaptive learning. Visits order Recent only — typed-query ranking keeps
 counting palette picks, so habitual places never outrank what a query has learned.
 
 A chat or workspace row's second line names where it lives: its project and workspace
