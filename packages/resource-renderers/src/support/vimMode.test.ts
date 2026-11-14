@@ -272,6 +272,7 @@ describe("Vim mode", () => {
 		fake.emit("Escape");
 		fake.emit("v");
 		expect(state.visualMode).toBe("character");
+		expect(fake.selection).not.toBeNull();
 		fake.emit("Escape");
 		fake.emit("v");
 		fake.emit("V", true);
