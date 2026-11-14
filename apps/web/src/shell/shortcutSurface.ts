@@ -3,6 +3,8 @@ import type { ShortcutSurface } from "../keybindings";
 const SURFACE_SELECTORS: readonly (readonly [string, ShortcutSurface])[] = [
 	[".xterm", "terminal"],
 	['[data-testid="chat-composer"]', "composer"],
+	["[data-transcript-feed]", "transcript"],
+	['[data-testid="history-overlay"]', "history"],
 	['[data-testid="changes-review"]', "review"],
 	['[role="tree"]', "trees"],
 	['[role="tablist"], [role="tab"]', "tabs"],

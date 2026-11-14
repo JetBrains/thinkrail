@@ -2,9 +2,11 @@ import type { RemixiconComponentType } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { buttonDataAttributes, buttonVariants } from "@thinkrail/ui/button";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { Fragment, forwardRef, type ReactNode, useRef, useState } from "react";
+import { HJKL_KEYS } from "../../keybindings";
 import {
 	type AuxiliaryRailEntry,
 	type AuxiliaryRailToolEntry,
@@ -182,6 +184,7 @@ export function AuxiliaryRail({
 			)}
 			onKeyDown={(event) => {
 				if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+				if (isImeComposing(event.nativeEvent)) return;
 				if (!(event.target instanceof HTMLElement) || !root.current?.contains(event.target)) return;
 				const current = event.target.closest<HTMLButtonElement>(RAIL_CONTROLS);
 				if (!current) return;
@@ -189,16 +192,23 @@ export function AuxiliaryRail({
 					root.current.querySelectorAll<HTMLButtonElement>(RAIL_CONTROLS),
 				);
 				const index = controls.indexOf(current);
-				const nextKey = horizontal ? "ArrowRight" : "ArrowDown";
-				const previousKey = horizontal ? "ArrowLeft" : "ArrowUp";
+				const [previousKeys, nextKeys] = horizontal
+					? [
+							["ArrowLeft", HJKL_KEYS.left.key],
+							["ArrowRight", HJKL_KEYS.right.key],
+						]
+					: [
+							["ArrowUp", HJKL_KEYS.up.key],
+							["ArrowDown", HJKL_KEYS.down.key],
+						];
 				const next =
 					event.key === "Home"
 						? 0
 						: event.key === "End"
 							? controls.length - 1
-							: event.key === nextKey
+							: nextKeys.includes(event.key)
 								? (index + 1) % controls.length
-								: event.key === previousKey
+								: previousKeys.includes(event.key)
 									? (index - 1 + controls.length) % controls.length
 									: null;
 				if (next === null) return;

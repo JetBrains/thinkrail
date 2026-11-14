@@ -59,6 +59,7 @@ import {
 	type PromptImagesOwner,
 	usePromptImages,
 } from "./promptImages";
+import { composerTranscriptStep, isEnterTranscriptKey } from "./transcriptNavigation";
 import type { ChatAttachment } from "./types";
 import type { ModelPreferences } from "./useModelPreferences";
 
@@ -195,6 +196,8 @@ interface ComposerProps {
 		behavior: SubmitBehavior,
 	) => ComposerSubmitDisposition;
 	onAbort: () => void;
+	onEnterTranscript?: () => void;
+	onScrollTranscript?: (direction: -1 | 1) => void;
 	onHistoryOpen?: () => void;
 	onPickTemplate?: (name: string) => void;
 	onManageTemplates?: () => void;
@@ -209,6 +212,7 @@ export interface ComposerHandle {
 	restoreAttachments: (attachments: ChatAttachment[]) => void;
 	openHistory: () => void;
 	refocus: () => void;
+	ownsEscape: () => boolean;
 }
 
 export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
@@ -235,6 +239,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		onSelectThinking,
 		onSubmit,
 		onAbort,
+		onEnterTranscript,
+		onScrollTranscript,
 		onHistoryOpen,
 		onPickTemplate,
 		onManageTemplates,
@@ -444,6 +450,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			if (slot) focusSelection(slot.start, slot.end);
 			else focusSelection(caret);
 		},
+		ownsEscape: () =>
+			ref.current !== null &&
+			ref.current === document.activeElement &&
+			(menuOpen || slots !== null),
 	}));
 
 	const submit = (behavior: SubmitBehavior) => {
@@ -497,6 +507,26 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			}
 		}
 		if (slashCompletion.handleKeyDown(e)) return;
+		if (onEnterTranscript && isEnterTranscriptKey(e)) {
+			e.preventDefault();
+			const { selectionStart, selectionEnd } = e.currentTarget;
+			const atStart = selectionStart === 0 && selectionEnd === 0;
+			if (composerTranscriptStep(draftNeedsExpansion, atStart) === "enter") onEnterTranscript();
+			else focusSelection(0);
+			return;
+		}
+		if (
+			onScrollTranscript &&
+			(e.key === "PageUp" || e.key === "PageDown") &&
+			!e.altKey &&
+			!e.ctrlKey &&
+			!e.metaKey &&
+			!e.shiftKey
+		) {
+			e.preventDefault();
+			onScrollTranscript(e.key === "PageUp" ? -1 : 1);
+			return;
+		}
 		const recallAt = recallIdxRef.current;
 		if (e.key === "ArrowUp" && (value === "" || recallAt !== null) && recentPrompts.length > 0) {
 			e.preventDefault();

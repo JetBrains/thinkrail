@@ -218,8 +218,8 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   lists the catalog's `shortcutRows` for this client (`desktop` is the native-shortcut bridge read the
   palette makes) as surface sections under a filter matching a row's title or key label. The section of
   the surface focused just before it opened comes first: `shortcutSurface.ts` maps the element Radix is
-  about to move focus from (a terminal, the chat input, Changes review, a tree, a tab strip, a rail
-  entry), else the order is fixed. Rows are reference only and hold nothing focusable, so the filter's
+  about to move focus from (a terminal, the chat input, the chat transcript, the chat history overlay,
+  Changes review, a tree, a tab strip, a rail entry), else the order is fixed. Rows are reference only and hold nothing focusable, so the filter's
   ↑ / ↓ / PageUp / PageDown scroll the list. Esc closes it and so does `Mod+?` — handled by the dialog,
   since global chords are suppressed behind a modal — and focus returns to where it was. Settings →
   Keyboard renders the same `ShortcutsReference` (its own filter) under the double-Shift switch, injected
@@ -401,4 +401,7 @@ screen — a virtualized list unmounting a row the reader scrolled away from —
 `preventScroll`, so the scroll is never yanked back. Landing focus off screen for no reason would hide
 where it is. It keeps its own ticket, apart from the focus chords' single wait (`focusWhenSettled`), so a recovery
 never cancels a chord's pending landing; any focus, a chord's included, ends a recovery. Show and jump
-actions do not rely on it: they focus what they revealed themselves.
+actions do not rely on it: they focus what they revealed themselves. Neither does a virtualized list whose
+focused row unmounts: the chat transcript moves focus to its own list container in the row's unmount
+cleanup, before the browser drops it, so recovery sees focus held and the list keeps its cursor
+([[submodule-web-chat]], *Transcript keyboard model*).
