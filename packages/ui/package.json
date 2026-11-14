@@ -13,6 +13,7 @@
 		"./focus": "./focus.ts",
 		"./fonts": "./fonts.ts",
 		"./keyboard": "./keyboard.ts",
+		"./keycaps": "./keycaps.tsx",
 		"./menu-styles": "./menu-styles.ts",
 		"./popover": "./popover.tsx",
 		"./resizable": "./resizable.tsx",

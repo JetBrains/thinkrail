@@ -1186,6 +1186,7 @@ interface AppState {
 	notificationPromptOpen: boolean;
 	searchOpen: boolean;
 	searchSession: number;
+	shortcutsOpen: boolean;
 	doubleShiftSearch: boolean;
 	theme: ThemeId;
 	themeMode: ThemeMode;
@@ -1572,6 +1573,8 @@ interface AppState {
 	closeNotificationPrompt: () => void;
 	openSearch: () => void;
 	closeSearch: () => void;
+	openShortcuts: () => void;
+	closeShortcuts: () => void;
 	setDoubleShiftSearch: (enabled: boolean) => void;
 	setChatMessageOrder: (order: ChatMessageOrder) => void;
 	setMarkdownOutlineVisible: (visible: boolean) => void;
@@ -2577,6 +2580,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	notificationPromptOpen: false,
 	searchOpen: false,
 	searchSession: 0,
+	shortcutsOpen: false,
 	doubleShiftSearch: true,
 	theme: DEFAULT_CONFIG.theme,
 	themeMode: DEFAULT_CONFIG.themeMode,
@@ -4830,6 +4834,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closeNotificationPrompt: () => set({ notificationPromptOpen: false }),
 	openSearch: () => set((state) => ({ searchOpen: true, searchSession: state.searchSession + 1 })),
 	closeSearch: () => set((state) => (state.searchOpen ? { searchOpen: false } : state)),
+	openShortcuts: () => set((state) => (state.shortcutsOpen ? state : { shortcutsOpen: true })),
+	closeShortcuts: () => set((state) => (state.shortcutsOpen ? { shortcutsOpen: false } : state)),
 	setDoubleShiftSearch: (doubleShiftSearch) =>
 		set((state) => (state.doubleShiftSearch === doubleShiftSearch ? state : { doubleShiftSearch })),
 	showSurveyInvitation: () =>

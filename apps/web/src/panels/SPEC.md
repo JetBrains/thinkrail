@@ -80,9 +80,10 @@ treatment.
   **always-visible chevron** + folder/name + a collapsed-only plain workspace count + an **always-visible Create
   workspace `+` in a fixed right-edge column**. That `+` is the **same control as the Projects-header Add
   project `+`** — both are `IconButton` ghost `s`, so they render identically and their glyphs
-  line up on one vertical axis (both sit at the row's `pr-xs` right edge). The Create workspace `+` carries a
-  tooltip and accessible name naming the shell's `Mod+N` chord and its `Mod+Alt+N` browser alias through `lib`'s
-  `platformShortcutLabel` (see `submodule-web-shell` global chords); the context-menu item stays plain.
+  line up on one vertical axis (both sit at the row's `pr-xs` right edge). The Create workspace `+`'s tooltip
+  shows the one `workspace.new` chord that reaches this client as keycaps — `Mod+N` on the desktop, the
+  `Mod+Alt+N` alias in a browser — from `ProjectTree`'s `nativeShortcuts` prop, which the shell sets (see
+  `submodule-web-shell` global chords); the context-menu item stays plain.
   Long names truncate before the count/action; there is deliberately **no visible Close or overflow icon**.
   Hover highlights the full row and the highlight remains while its **project context menu** is open.
   Right-click opens that PR-#167-styled menu at the pointer without selecting/navigating; a scroll-cancelled
@@ -2472,7 +2473,10 @@ menu has closed, because a closing menu returns focus to its row; disabled
   Plain-letter shortcuts (`V`, `J`, `N`, `P`) belong to the
   review tab the center is looking at (`ownsReviewShortcut`: the attention group's selected tab, no
   modal or menu layer open, no text-entry target, and no earlier handler consumed the event), so two review scopes split side by side cannot both answer
-  one keystroke. **Scale rules**:
+  one keystroke. These keys, and the trees' `F2` / `Delete` / `Mod+Enter` / project reorder, are compared
+  against the [[submodule-web-keybindings]] catalog's constants (`REVIEW_KEYS`, `TREE_KEYS`), which the
+  keyboard cheatsheet lists; the Prev / Next file buttons show `Alt+↓` / `Alt+↑` (`⌥↓` / `⌥↑` on a Mac)
+  as tooltip caps rather than in their label. **Scale rules**:
   a section whose file changed more than 400 lines, or whose path is a lock/generated file, mounts
   collapsed behind *Expand* / *Open as tab*; a scope with more than 50 files shows a dismissable notice
   offering *One file*; nothing switches mode on its own, because a review surface that re-arranges

@@ -62,7 +62,7 @@ import { type MouseEvent, type ReactNode, useCallback, useEffect, useRef, useSta
 import { useShallow } from "zustand/react/shallow";
 import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
-import { keybindingLabels } from "@/keybindings";
+import { keybindingKeys, TREE_KEYS } from "@/keybindings";
 import { copyText } from "@/lib";
 import { useNow } from "../components/useNow";
 import {
@@ -161,7 +161,7 @@ function groupCreationsByProject(
 	return grouped;
 }
 
-export function ProjectTree() {
+export function ProjectTree({ nativeShortcuts = false }: { nativeShortcuts?: boolean }) {
 	const t = useT();
 	const projects = useAppStore(useShallow(selectRepoProjects));
 	const recentProjects = useAppStore((s) => s.recentProjects);
@@ -438,6 +438,9 @@ export function ProjectTree() {
 									onRegisterNameButton={(element) => registerProjectNameButton(project.id, element)}
 									onRestoreFocus={() => focusProjectNameOrAdd(project.id)}
 									canMove={canMove}
+									newWorkspaceShortcut={keybindingKeys("workspace.new", {
+										browser: !nativeShortcuts,
+									})}
 									onMoveUp={
 										previous ? () => void move(project, previous.id, "before", true) : undefined
 									}
@@ -700,6 +703,7 @@ function ProjectRow({
 	canMove,
 	onMoveUp,
 	onMoveDown,
+	newWorkspaceShortcut,
 }: {
 	project: Project;
 	isSelected: boolean;
@@ -720,6 +724,7 @@ function ProjectRow({
 	canMove: boolean;
 	onMoveUp: (() => void) | undefined;
 	onMoveDown: (() => void) | undefined;
+	newWorkspaceShortcut: readonly string[];
 }) {
 	const t = useT();
 	const draggable = canMove && (onMoveUp !== undefined || onMoveDown !== undefined);
@@ -728,11 +733,6 @@ function ProjectRow({
 		listeners: dragListeners,
 		setNodeRef: setDragNode,
 	} = useDraggable({ id: project.id, disabled: !draggable });
-	const [newWorkspaceShortcut = "", newWorkspaceAlias = ""] = keybindingLabels("workspace.new");
-	const createWorkspaceLabel = t("panels.projectTree.createWorkspaceShortcut", {
-		shortcut: newWorkspaceShortcut,
-		altShortcut: newWorkspaceAlias,
-	});
 	const Chevron = isExpanded ? ChevronDown : ChevronRight;
 	const Folder = isSelected ? RiFolderFill : RiFolderLine;
 	const [menuOpen, setMenuOpen] = useState(false);
@@ -835,10 +835,10 @@ function ProjectRow({
 							return;
 						}
 						if (!canMove) return;
-						if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+						if (event.key !== TREE_KEYS.moveUp.key && event.key !== TREE_KEYS.moveDown.key) return;
 						if (!event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey) return;
 						event.preventDefault();
-						(event.key === "ArrowUp" ? onMoveUp : onMoveDown)?.();
+						(event.key === TREE_KEYS.moveUp.key ? onMoveUp : onMoveDown)?.();
 					}}
 					onClick={onSelect}
 					className="-mx-4 -my-2 flex min-w-0 flex-1 items-center gap-4 rounded-sm px-4 py-2 text-left focus-visible:focus-ring-inset"
@@ -858,7 +858,8 @@ function ProjectRow({
 			)}
 			<IconButton
 				icon={Plus}
-				label={createWorkspaceLabel}
+				label={t("panels.projectTree.createWorkspace")}
+				tooltipShortcut={newWorkspaceShortcut}
 				variant="ghost"
 				size="s"
 				className="shrink-0"

@@ -23,6 +23,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { Fragment, memo, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { TAB_KEYS } from "../../keybindings";
 import { chatLabel, DOUBLE_CLICK_SETTLE_MS, type LayoutAttention, tupleKey } from "../../lib";
 import {
 	type AuxiliaryRailControlProps,
@@ -236,13 +237,13 @@ export const TabStrip = memo(function TabStrip({
 							panelId={panelId}
 							{...(splitGeometry ? { splitGeometry } : {})}
 							onKeyDown={(event) => {
-								if (event.altKey && event.shiftKey && event.key === "ArrowLeft") {
+								if (event.altKey && event.shiftKey && event.key === TAB_KEYS.moveBefore.key) {
 									event.preventDefault();
 									if (index > 0) {
 										const moved = moveTabToGroup(document, tab, location, index - 1);
 										if (!isLayoutUnavailable(moved)) applyResult(moved);
 									}
-								} else if (event.altKey && event.shiftKey && event.key === "ArrowRight") {
+								} else if (event.altKey && event.shiftKey && event.key === TAB_KEYS.moveAfter.key) {
 									event.preventDefault();
 									if (index < tabs.length - 1) {
 										const moved = moveTabToGroup(document, tab, location, index + 1);
@@ -260,7 +261,7 @@ export const TabStrip = memo(function TabStrip({
 								} else if (event.key === "End") {
 									event.preventDefault();
 									selectAt(tabs.length - 1);
-								} else if (event.key === "Delete") {
+								} else if (event.key === TAB_KEYS.close.key) {
 									event.preventDefault();
 									closeTab(tab);
 								}
@@ -356,6 +357,7 @@ export interface WorkbenchTabProps {
 	reorderIndexes?: { previous: number | undefined; next: number | undefined };
 	rail?: AuxiliaryRailControlProps & {
 		entryKey: string;
+		shortcut?: readonly string[] | undefined;
 		vertical: boolean;
 		beforeIndex: number;
 		afterIndex: number;
@@ -674,7 +676,11 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 							/>
 						</div>
 					) : rail ? (
-						<IconTooltip label={name} side={railTooltipSide(location.area)}>
+						<IconTooltip
+							label={name}
+							shortcut={rail.shortcut}
+							side={railTooltipSide(location.area)}
+						>
 							{tabButton}
 						</IconTooltip>
 					) : (

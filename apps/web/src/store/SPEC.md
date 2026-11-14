@@ -563,7 +563,10 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   and an aggregate attention notification ([[submodule-web-notifications]]) open the same instance;
   **`searchSession`** advances on every `openSearch()`, so a notification click on an already-open palette
   remounts it on the empty query (its Waiting view). The palette's query, scope and selection are its own
-  component state, never store state. The
+  component state, never store state. The ephemeral **`shortcutsOpen`** plus **`openShortcuts()`** /
+  **`closeShortcuts()`** is the keyboard-shortcuts dialog's render flag ([[submodule-web-shell]]), so its
+  chord, the rail icon and the palette row open the one instance; its filter and section order stay
+  component state. The
   client-local **`doubleShiftSearch`** + **`setDoubleShiftSearch()`** mirror the double-Shift preference
   `search` persists through the stable preference adapter (not host config: Sticky Keys and single-Shift
   IME conflicts belong to the client — the desktop adapter keeps it per backend profile and window, a
